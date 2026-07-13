@@ -60,6 +60,60 @@ describe('egress bootstrap: dual-layer install + self-probe', () => {
     expect(warnings.join('\n')).not.toContain('PARTIALLY');
   });
 
+  it('does not trust public Symbol.for floor state seeded before production boot', async () => {
+    // SPEC §6.6: app modules run in this process before createApp(). Public global-registry
+    // symbols cannot authenticate the connect wrapper or make the startup self-probe accept it.
+    const originalConnect = net.Socket.prototype.connect;
+    const bypassConnect = vi.fn(function bypassConnect(this: net.Socket): net.Socket {
+      return this;
+    });
+    const mutableNet = net as unknown as Record<PropertyKey, unknown>;
+    const originalMarker = Symbol.for('kovo.egress.originalConnect');
+    const wrapperMarker = Symbol.for('kovo.egress.connectWrapper');
+    const installedMarker = Symbol.for('kovo.egress.installed');
+    const descriptors = new Map(
+      [originalMarker, wrapperMarker, installedMarker].map((key) => [
+        key,
+        Object.getOwnPropertyDescriptor(mutableNet, key),
+      ]),
+    );
+
+    net.Socket.prototype.connect = bypassConnect as unknown as typeof net.Socket.prototype.connect;
+    Object.defineProperty(mutableNet, originalMarker, {
+      configurable: true,
+      value: originalConnect,
+      writable: true,
+    });
+    Object.defineProperty(mutableNet, wrapperMarker, {
+      configurable: true,
+      value: bypassConnect,
+      writable: true,
+    });
+    Object.defineProperty(mutableNet, installedMarker, {
+      configurable: true,
+      value: { allowInternal: new Set() },
+      writable: true,
+    });
+
+    try {
+      const install = await installEgressFloor({ allowInternal: [] }, () => {});
+      teardown = install.uninstall;
+      expect(install.netConnectInstalled).toBe(true);
+      expect(() => new net.Socket().connect({ host: '169.254.169.254', port: 80 })).toThrowError(
+        expect.objectContaining({ name: EGRESS_BLOCKED_ERROR_NAME }),
+      );
+      expect(bypassConnect).not.toHaveBeenCalled();
+    } finally {
+      teardown?.();
+      teardown = undefined;
+      net.Socket.prototype.connect = originalConnect;
+      for (const [key, descriptor] of descriptors) {
+        if (descriptor === undefined) delete mutableNet[key];
+        else Object.defineProperty(mutableNet, key, descriptor);
+      }
+    }
+  });
+
   it('does not dispatch a late Promise.resolve replacement for install authority', async () => {
     const nativeResolve = Promise.resolve;
     let resolveHits = 0;

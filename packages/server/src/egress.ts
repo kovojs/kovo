@@ -1277,13 +1277,6 @@ function ipInCidr(ip: string, cidr: string): boolean {
 // real socket. When the host is already an IP literal, no lookup runs; we classify it directly.
 // ---------------------------------------------------------------------------
 
-const ORIGINAL_CONNECT = Symbol.for('kovo.egress.originalConnect');
-const ORIGINAL_HTTP_AGENT_ADD_REQUEST = Symbol.for('kovo.egress.originalHttpAgentAddRequest');
-const FLOOR_INSTALLED = Symbol.for('kovo.egress.installed');
-const FLOOR_WRAPPER = Symbol.for('kovo.egress.connectWrapper');
-const HTTP_AGENT_FLOOR_WRAPPER = Symbol.for('kovo.egress.httpAgentWrapper');
-const FLOOR_HARDENING = Symbol.for('kovo.egress.hardening');
-
 interface ConnectOptions {
   host?: string;
   port?: number | string;
@@ -1294,17 +1287,22 @@ interface ConnectOptions {
 
 type ConnectFn = (...args: unknown[]) => net.Socket;
 
-interface FlooredNetModule {
-  [ORIGINAL_CONNECT]?: ConnectFn;
-  [ORIGINAL_HTTP_AGENT_ADD_REQUEST]?: AddRequestFn;
-  [FLOOR_INSTALLED]?: EgressPolicy;
-  [FLOOR_WRAPPER]?: ConnectFn;
-  [HTTP_AGENT_FLOOR_WRAPPER]?: AddRequestFn;
-  [FLOOR_HARDENING]?: {
+interface NetConnectFloorState {
+  hardening: {
     mode: EgressHardeningMode;
     warn: (message: string) => void;
   };
+  httpAgentWrapper?: AddRequestFn;
+  originalConnect: ConnectFn;
+  originalHttpAgentAddRequest?: AddRequestFn;
+  policy: EgressPolicy;
+  wrapper: ConnectFn;
 }
+
+// SPEC §6.6: app modules execute in this process before createApp(). Floor identity and policy
+// therefore stay in module-private closure state; Symbol.for properties on the public node:net
+// module are forgeable and cannot authenticate either the wrapper or the startup self-probe.
+let netConnectFloorState: NetConnectFloorState | undefined;
 
 type AddRequestFn = (
   this: http.Agent,
@@ -1342,23 +1340,20 @@ export function installNetConnectFloor(
   warn: (message: string) => void = (m) => console.warn(`[kovo egress] ${m}`),
 ): () => void {
   const proto = net.Socket.prototype as unknown as { connect: ConnectFn };
-  const flooredNet = net as unknown as FlooredNetModule;
 
-  if (flooredNet[ORIGINAL_CONNECT]) {
+  if (netConnectFloorState !== undefined) {
     // Already installed — just swap the active policy.
-    flooredNet[FLOOR_INSTALLED] = policy;
-    installHttpAgentReuseFloor(flooredNet);
-    applyNetConnectHardening(flooredNet, proto, hardening, warn);
-    return makeUninstall(flooredNet, proto);
+    netConnectFloorState.policy = policy;
+    installHttpAgentReuseFloor(netConnectFloorState);
+    applyNetConnectHardening(netConnectFloorState, proto, hardening, warn);
+    return makeUninstall(netConnectFloorState, proto);
   }
 
   const original = proto.connect;
-  flooredNet[ORIGINAL_CONNECT] = original;
-  flooredNet[FLOOR_INSTALLED] = policy;
+  let state: NetConnectFloorState;
 
   const patchedConnect = function patchedConnect(this: net.Socket, ...args: unknown[]): net.Socket {
-    const activePolicy = flooredNet[FLOOR_INSTALLED];
-    if (!activePolicy) return egressApply(original, this, args);
+    const activePolicy = state.policy;
 
     const options = normalizeConnectOptions(args);
     if (!options || options.host === undefined || options.host === '') {
@@ -1438,28 +1433,33 @@ export function installNetConnectFloor(
     return egressApply(original, this, args);
   } as ConnectFn;
 
-  flooredNet[FLOOR_WRAPPER] = patchedConnect;
+  state = {
+    hardening: { mode: hardening, warn },
+    originalConnect: original,
+    policy,
+    wrapper: patchedConnect,
+  };
+  netConnectFloorState = state;
   proto.connect = patchedConnect;
-  installHttpAgentReuseFloor(flooredNet);
-  applyNetConnectHardening(flooredNet, proto, hardening, warn);
+  installHttpAgentReuseFloor(state);
+  applyNetConnectHardening(state, proto, hardening, warn);
 
-  return makeUninstall(flooredNet, proto);
+  return makeUninstall(state, proto);
 }
 
-function installHttpAgentReuseFloor(flooredNet: FlooredNetModule): void {
+function installHttpAgentReuseFloor(state: NetConnectFloorState): void {
   const agentProto = http.Agent.prototype as unknown as { addRequest: AddRequestFn };
-  if (flooredNet[ORIGINAL_HTTP_AGENT_ADD_REQUEST]) return;
+  if (state.originalHttpAgentAddRequest !== undefined) return;
 
   const original = agentProto.addRequest;
-  flooredNet[ORIGINAL_HTTP_AGENT_ADD_REQUEST] = original;
+  state.originalHttpAgentAddRequest = original;
 
   const patchedAddRequest = function patchedAddRequest(
     this: http.Agent,
     req: http.ClientRequest,
     options: AgentRequestOptions,
   ): void {
-    const activePolicy = flooredNet[FLOOR_INSTALLED];
-    if (!activePolicy) return egressApply(original, this, [req, options]);
+    const activePolicy = state.policy;
 
     const blocked = evaluateHttpAgentRequest(this, options, activePolicy);
     if (blocked) {
@@ -1472,7 +1472,7 @@ function installHttpAgentReuseFloor(flooredNet: FlooredNetModule): void {
     return egressApply(original, this, [req, options]);
   };
 
-  flooredNet[HTTP_AGENT_FLOOR_WRAPPER] = patchedAddRequest;
+  state.httpAgentWrapper = patchedAddRequest;
   agentProto.addRequest = patchedAddRequest;
 }
 
@@ -1538,42 +1538,33 @@ function evaluateHttpAgentRequest(
   return null;
 }
 
-function makeUninstall(flooredNet: FlooredNetModule, proto: { connect: ConnectFn }): () => void {
+function makeUninstall(state: NetConnectFloorState, proto: { connect: ConnectFn }): () => void {
   return () => {
-    const original = flooredNet[ORIGINAL_CONNECT];
-    if (original) {
-      egressObjectDefineProperty(proto, 'connect', {
-        value: original,
+    if (netConnectFloorState !== state) return;
+    egressObjectDefineProperty(proto, 'connect', {
+      value: state.originalConnect,
+      writable: true,
+      configurable: true,
+    });
+    if (state.originalHttpAgentAddRequest !== undefined) {
+      egressObjectDefineProperty(http.Agent.prototype, 'addRequest', {
+        value: state.originalHttpAgentAddRequest,
         writable: true,
         configurable: true,
       });
-      const originalAddRequest = flooredNet[ORIGINAL_HTTP_AGENT_ADD_REQUEST];
-      if (originalAddRequest) {
-        egressObjectDefineProperty(http.Agent.prototype, 'addRequest', {
-          value: originalAddRequest,
-          writable: true,
-          configurable: true,
-        });
-      }
-      delete flooredNet[ORIGINAL_CONNECT];
-      delete flooredNet[ORIGINAL_HTTP_AGENT_ADD_REQUEST];
-      delete flooredNet[FLOOR_INSTALLED];
-      delete flooredNet[FLOOR_WRAPPER];
-      delete flooredNet[HTTP_AGENT_FLOOR_WRAPPER];
-      delete flooredNet[FLOOR_HARDENING];
     }
+    netConnectFloorState = undefined;
   };
 }
 
 function applyNetConnectHardening(
-  flooredNet: FlooredNetModule,
+  state: NetConnectFloorState,
   proto: { connect: ConnectFn },
   mode: EgressHardeningMode,
   warn: (message: string) => void,
 ): void {
-  const wrapper = flooredNet[FLOOR_WRAPPER];
-  if (!wrapper) return;
-  flooredNet[FLOOR_HARDENING] = { mode, warn };
+  const wrapper = state.wrapper;
+  state.hardening = { mode, warn };
   if (mode === 'off') {
     egressObjectDefineProperty(proto, 'connect', {
       value: wrapper,
@@ -1670,7 +1661,7 @@ export function isNetConnectFloorInstalled(): boolean {
 
 /** The policy currently enforced by the net-connect floor, if installed. */
 export function activeEgressPolicy(): EgressPolicy | undefined {
-  return (net as unknown as FlooredNetModule)[FLOOR_INSTALLED];
+  return netConnectFloorState?.policy;
 }
 
 /** Inspect whether the active net-connect hook is still Kovo's wrapper (SPEC §6.6 self-probe). */
@@ -1680,13 +1671,11 @@ export function netConnectFloorTamperStatus(): {
   hardening: EgressHardeningMode;
 } {
   const proto = net.Socket.prototype as unknown as { connect: ConnectFn };
-  const flooredNet = net as unknown as FlooredNetModule;
-  const wrapper = flooredNet[FLOOR_WRAPPER];
-  const original = flooredNet[ORIGINAL_CONNECT];
-  const installed = Boolean(original && wrapper && proto.connect === wrapper);
+  const state = netConnectFloorState;
+  const installed = state !== undefined && proto.connect === state.wrapper;
   return {
     installed,
-    tampered: Boolean(original && wrapper && proto.connect !== wrapper),
-    hardening: flooredNet[FLOOR_HARDENING]?.mode ?? 'off',
+    tampered: state !== undefined && proto.connect !== state.wrapper,
+    hardening: state?.hardening.mode ?? 'off',
   };
 }
