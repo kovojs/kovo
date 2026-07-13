@@ -85,21 +85,13 @@ app's check time; all must preserve SPEC.md §11.1 soundness.
     still succeeds; `pnpm exec vitest run packages/cli/src/index.kovo-build.test.ts --testNamePattern "skips project-mode Drizzle analysis|loads TypeScript app modules|fails before artifact emission when the derived kovo check graph"`
     passed.
 
-- [x] **3. Content-addressed incremental cache for the analysis.** Impact: **high**
-      (repeat runs / dev / CI with warm cache) · Effort: medium-high · Risk: medium (cache
-      invalidation must be sound — it gates security). Persist analysis facts keyed on the
-      content hashes of the input files; unchanged files reuse cached facts. Most edits touch
-      a handful of files; today every run re-analyzes everything from scratch.
-  - Evidence (2026-06-28): `packages/cli/src/commands/build-export.ts` persists Drizzle
-    static build facts under `.kovo/cache/static-build-analysis`, keyed by analyzed source
-    content plus a Drizzle analyzer source/package fingerprint, and `--no-cache` bypasses
-    the cache; `packages/server/src/vite.ts` persists the same aggregate fact family for the
-    Vite data-plane gate. `pnpm exec vitest run packages/cli/src/index.kovo-build.test.ts
---testNamePattern "reuses cached Drizzle static analysis|skips project-mode Drizzle
-analysis|runs Drizzle security extractors"` passed. `examples/commerce` cold
-    `pnpm exec kovo build ./src/app.tsx --preset node` preserved the expected KV414/KV407
-    diagnostics at 32.67s real/33.89s user; the warm-cache rerun preserved the same
-    diagnostics at 14.36s real/8.74s user.
+- [x] **3. Content-addressed process-local analysis reuse.** Impact: **high**
+      (repeat build/dev calls) · Effort: medium-high · Risk: medium (security facts must never
+      accept app-writable cross-run authority).
+  - Evidence: `packages/server/src/internal/data-plane-static-analysis.ts` keeps one exact-source
+    canonical preimage per analysis lane, returns a fresh validated snapshot per caller, evicts
+    failures, and writes no disk facts. The focused 62-test server/CLI security matrix passes,
+    including mutation, resolver-hook, and outside-root symlink regressions.
 
 - [x] **4. De-duplicate analysis across the composite `check` pipeline.** Impact: **high**
       (the "minutes" multiplier) · Effort: medium · Risk: low. `build:prod`, `vp test` (kovo

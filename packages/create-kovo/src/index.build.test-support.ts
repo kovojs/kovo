@@ -142,7 +142,7 @@ export function buildProductionArtifact(
   root: string,
   options: { maxOldSpaceSizeMb?: number } = {},
 ): void {
-  // CI restores **/.kovo/cache, so this prod-artifact gate must prove current source, not cache.
+  // CI may restore TypeScript build-info; this prod-artifact gate still proves a fully cold source.
   rmSync(join(root, '.kovo/cache'), { force: true, recursive: true });
   const env = nonParanoidStarterEnv(root);
   if (options.maxOldSpaceSizeMb !== undefined) {

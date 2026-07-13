@@ -24,16 +24,14 @@ jobs:
         with:
           # Match the default Postgres starter's declared production runtime floor.
           node-version: 24.10.0
-      # Restore Kovo's content-addressed build cache (static security analysis, compiler output,
-      # tsc build-info). Keys are content-hashed and project-relative, so a restore turns a cold
-      # `kovo build` (tens of seconds) into a warm one (seconds). Per-file invalidation lives inside
-      # the cache, so the broad restore-key is safe.
+      # Restore only TypeScript's incremental build-info. Compiler and static-security facts stay
+      # process-private and are never accepted from an app-writable cross-run cache (SPEC §2).
       - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
-          path: .kovo/cache
-          key: kovo-cache-${{ runner.os }}-${{ github.sha }}
+          path: .kovo/cache/*.tsbuildinfo
+          key: kovo-tsc-${{ runner.os }}-${{ github.sha }}
           restore-keys: |
-            kovo-cache-${{ runner.os }}-
+            kovo-tsc-${{ runner.os }}-
       - run: vp install --frozen-lockfile
       # Run the package script, not bare `vp check`: the script also enforces the
       # sound TypeScript subset, endpoint posture, and production graph proof.

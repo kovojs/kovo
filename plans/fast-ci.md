@@ -51,14 +51,11 @@ Created 2026-07-02. Goal: reduce Kovo CI wall-clock time by caching expensive se
 ## Phase 2 - Stop Repeating Setup Boilerplate
 
 - [x] Create a reusable workflow setup block or composite local action for common CI setup.
-  - Implementation notes: centralize checkout, `setup-vp`, `vp install`, compiler cache key, compiler cache restore, and optional `better-sqlite3` rebuild. Keep command semantics identical.
+  - Implementation notes: centralize checkout, `setup-vp`, `vp install`, exact TypeScript build-info restore, and optional `better-sqlite3` rebuild. Keep command semantics identical.
   - Evidence to add: CI workflow diff shows repeated setup reduced while job commands still run under `vp exec` where required by `rules/github-workflows.md`.
-  - Evidence: `.github/actions/kovo-setup/action.yml` centralizes post-checkout `setup-vp`, `vp install`, compiler build-id computation, compiler cache restore, and optional `vp exec pnpm rebuild better-sqlite3`. It now passes `version: 0.1.24`, matching `package.json`/`pnpm-lock.yaml`, after CI run `28564514690` showed one setup shard failing on mutable `vite-plus/latest` registry resolution. Local validation: `pnpm run check:vp`; `git diff --check`; Ruby YAML parse of CI, Pages, race-repeat, and both local actions. Checkout remains explicit in each job because local repository actions cannot be loaded until after checkout.
-- [x] Standardize compiler cache keys across jobs.
-  - Implementation notes: compute the compiler build id once per job through the shared setup and keep the current package/compiler source hash inputs. Do not broaden the key so far that stale compiler artifacts can cross source changes.
-  - Evidence to add: CI run shows cache restore/save behavior for `.kovo/cache` on static-safety, build, test, starter, conformance, kovo-check, Pages, and race-repeat jobs.
-  - Evidence: `.github/actions/kovo-setup/action.yml` keeps the existing key shape `kovo-compiler-${{ runner.os }}-${{ steps.compiler-cache-key.outputs.id }}-${{ hashFiles('packages/compiler/src/**', 'packages/*/package.json', 'pnpm-lock.yaml') }}` and is used by static-safety, build, test, starter, conformance, kovo-check, Pages, and race-repeat jobs.
-  - Evidence: CI run `28564988478` shows compiler cache hits for static-safety, build, test, starter-packages, integration, kovo-check, browser, and starter-packed with the standardized `kovo-compiler-Linux-@kovojs/compiler@0.1.0/...` key.
+  - Evidence: `.github/actions/kovo-setup/action.yml` centralizes post-checkout `setup-vp`, `vp install`, only `**/.kovo/cache/*.tsbuildinfo`, and optional `vp exec pnpm rebuild better-sqlite3`; security-bearing compiler/static facts are process-private.
+- [x] Retire cross-run compiler/security-fact cache restores and standardize TypeScript build-info keys.
+  - Evidence: `.github/actions/kovo-setup/action.yml` uses `kovo-tsc-${runner.os}-${node-version}-...` and restores only `.tsbuildinfo`; the generated starter uses the same narrow cache family. `scripts/compiler-build-id.mjs` is deleted.
 - [x] Avoid duplicate artifact downloads inside matrix jobs.
   - Implementation notes: starter shards should download `kovo-packed-starter` only when `starter-needs-packed` is true, as today; verify no unconditional artifact downloads were introduced by refactoring.
   - Evidence to add: one non-packed starter shard log shows no artifact download, and one packed starter shard log shows the artifact download.
@@ -121,9 +118,8 @@ Created 2026-07-02. Goal: reduce Kovo CI wall-clock time by caching expensive se
 - [x] No required proof disappears.
   - Evidence to add: checklist mapping every pre-plan CI job/step to an optimized job/step that still runs on pull requests and `main` pushes.
   - Evidence: CI run `28564988478` passed required static-safety, three root test shards, eight starter shards, starter-packages, starter-packed, three integration shards, build, browser, conformance, kovo-check, and aggregate check jobs on the normal push path. Pages run `28564988445` also passed for the same commit.
-- [x] Cache hits are visible and keyed safely.
-  - Evidence to add: logs showing Playwright and compiler cache restores, with keys including OS and relevant tool/package versions.
-  - Evidence: CI run `28564988478` logs show `kovo-playwright-Linux-1.60.0-chromium-...`, `kovo-playwright-Linux-1.60.0-all-...`, and `kovo-compiler-Linux-@kovojs/compiler@0.1.0/...` cache hits and restores. The setup action logs also show `vp-version: 0.1.24`.
+- [ ] Cache hits are visible and keyed safely.
+  - Evidence needed: final CI logs show Playwright and `kovo-tsc-*` restores; no `kovo-compiler-*` or cross-run static-analysis fact restore remains.
 - [x] Local and workflow syntax checks pass.
   - Evidence to add: `pnpm run check:vp`, `git diff --check`, and a successful GitHub Actions run for the optimized commit.
   - Evidence: for the latest batch, `vp exec vitest --run packages/conformance-fixtures/src/command-fixtures.test.ts packages/conformance-fixtures/src/package-exports.test.ts scripts/ci-shards.test.mjs` passed; `pnpm run check:vp` passed in the integration worktree; `git diff --check` passed; Ruby YAML parse passed for `.github/workflows/ci.yml`, `.github/workflows/pages.yml`, `.github/workflows/race-repeat.yml`, `.github/actions/kovo-setup/action.yml`, and `.github/actions/playwright-install/action.yml`; GitHub CI run `28564988478` and Pages run `28564988445` passed for `2d5310d37`.

@@ -1,5 +1,5 @@
 name: Kovo setup
-description: Install the pinned Kovo CI toolchain and restore compiler cache.
+description: Install the pinned Kovo CI toolchain and restore incremental TypeScript build info.
 
 inputs:
   node-version:
@@ -21,17 +21,14 @@ runs:
         version: ${{ inputs.vp-version }}
     - run: vp install --frozen-lockfile
       shell: bash
-    - id: compiler-cache-key
-      run: echo "id=$(vp exec node scripts/compiler-build-id.mjs)" >> "$GITHUB_OUTPUT"
-      shell: bash
     - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
       with:
         path: |
-          .kovo/cache
-          **/.kovo/cache
-        key: kovo-compiler-${{ runner.os }}-${{ steps.compiler-cache-key.outputs.id }}-${{ hashFiles('packages/compiler/src/**', 'packages/*/package.json', 'pnpm-lock.yaml') }}
+          .kovo/cache/*.tsbuildinfo
+          **/.kovo/cache/*.tsbuildinfo
+        key: kovo-tsc-${{ runner.os }}-${{ inputs.node-version }}-${{ hashFiles('**/tsconfig*.json', 'packages/*/package.json', 'pnpm-lock.yaml') }}
         restore-keys: |
-          kovo-compiler-${{ runner.os }}-${{ steps.compiler-cache-key.outputs.id }}-
+          kovo-tsc-${{ runner.os }}-${{ inputs.node-version }}-
     - if: ${{ inputs['rebuild-better-sqlite3'] == 'true' }}
       run: vp exec pnpm rebuild better-sqlite3
       shell: bash
