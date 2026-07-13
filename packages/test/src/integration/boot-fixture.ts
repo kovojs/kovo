@@ -1,3 +1,4 @@
+/* oxlint-disable typescript/unbound-method -- Boot-captured controls are invoked through verifierApply. */
 // Generic "boot a single-file Kovo fixture and serve it" — the reusable
 // generalization of examples/commerce/scripts/serve.mjs.
 //
@@ -7,11 +8,11 @@
 // are served from disk when present, and app-matched requests are dispatched to
 // the fixture handler with a per-request `db`. Everything else (client modules,
 // Vite internals) falls through to Vite.
-import { createReadStream } from 'node:fs';
-import { realpath, stat } from 'node:fs/promises';
-import { createServer as createHttpServer, type Server } from 'node:http';
+import { realpath } from 'node:fs/promises';
+import { createServer as createHttpServer, ServerResponse, type Server } from 'node:http';
 import path from 'node:path';
 
+import { createFrameworkFileSystemBoundary } from '@kovojs/core/internal/filesystem';
 import { toNodeHandler } from '@kovojs/server';
 import { shouldHandleKovoAppShellViteRequest } from '@kovojs/server/internal/app-shell-vite';
 import { createServer as createViteServer } from 'vite';
@@ -30,6 +31,7 @@ import {
   verifierDefineProperty,
   verifierFreeze,
   verifierGetOwnPropertyDescriptor,
+  verifierGetPrototypeOf,
   verifierNullRecord,
   verifierReflectGet,
   verifierStringSlice,
@@ -45,6 +47,10 @@ const nativePathJoin = path.join;
 const nativePathRelative = path.relative;
 const nativePathResolve = path.resolve;
 const nativePathSeparator = path.sep;
+const nativeRealpath = realpath;
+const nativeServerResponseEnd = ServerResponse.prototype.end;
+const nativeServerResponseWriteHead = ServerResponse.prototype.writeHead;
+const nativeUint8ArrayPrototype = globalThis.Uint8Array.prototype;
 
 /** A booted fixture server: its `origin`, the live `db`, a per-test `reset`, and `close`. */
 export interface BootedFixture {
@@ -331,41 +337,54 @@ async function tryServeBuiltAsset(
   const pathname = decodeURIComponentControl(verifierUrlPathname(rawUrl, 'http://x'));
   if (!verifierStringStartsWith(pathname, '/assets/')) return false;
   const assetsRoot = pathResolve(distDir, 'assets');
-  const requestedPath = pathResolve(assetsRoot, verifierStringSlice(pathname, '/assets/'.length));
+  const relativeAssetPath = verifierStringSlice(pathname, '/assets/'.length);
+  const requestedPath = pathResolve(assetsRoot, relativeAssetPath);
   if (!pathContains(assetsRoot, requestedPath)) return false;
 
   try {
     // Canonical containment rejects a symlinked dist root, a symlinked assets root, and symlinks
     // under dist/assets. Each trust tier must remain a strict descendant of the one above it.
-    const canonicalFixture = await realpath(pathResolve(distDir, '..'));
-    const canonicalDist = await realpath(distDir);
+    const canonicalFixture = await nativeRealpath(pathResolve(distDir, '..'));
+    const canonicalDist = await nativeRealpath(distDir);
     if (
       canonicalDist !== pathResolve(canonicalFixture, 'dist') ||
       !pathContains(canonicalFixture, canonicalDist)
     ) {
       return false;
     }
-    const canonicalRoot = await realpath(assetsRoot);
+    const canonicalRoot = await nativeRealpath(assetsRoot);
     if (
       canonicalRoot !== pathResolve(canonicalDist, 'assets') ||
       !pathContains(canonicalDist, canonicalRoot)
     ) {
       return false;
     }
-    const filePath = await realpath(requestedPath);
-    if (!pathContains(canonicalRoot, filePath)) return false;
-    const info = await stat(filePath);
-    if (!info.isFile()) return false;
-    res.writeHead(200, {
-      'cache-control': 'public, max-age=31536000, immutable',
-      'content-type': staticMime(pathExtname(filePath)),
-      'x-content-type-options': 'nosniff',
-    });
-    createReadStream(filePath).pipe(res);
+    const fileSystem = await createFrameworkFileSystemBoundary(assetsRoot);
+    if (fileSystem.root !== canonicalRoot) return false;
+    const loaded = await fileSystem.readFile(relativeAssetPath);
+    if (loaded === undefined || !isVerifierByteArray(loaded.body)) return false;
+    verifierApply(nativeServerResponseWriteHead, res, [
+      200,
+      {
+        'cache-control': 'public, max-age=31536000, immutable',
+        'content-length': loaded.size,
+        'content-type': staticMime(pathExtname(loaded.fileName)),
+        'x-content-type-options': 'nosniff',
+      },
+    ]);
+    verifierApply(nativeServerResponseEnd, res, [loaded.body]);
     return true;
   } catch {
     return false;
   }
+}
+
+function isVerifierByteArray(value: unknown): value is Uint8Array {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    verifierGetPrototypeOf(value) === nativeUint8ArrayPrototype
+  );
 }
 
 function staticMime(extension: string): string {

@@ -1,10 +1,13 @@
 import { mkdir, rm, symlink, writeFile } from 'node:fs/promises';
+import { createRequire, syncBuiltinESMExports } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { bootFixture, type BootedFixture } from './boot-fixture.js';
+
+const mutableFs = createRequire(import.meta.url)('node:fs') as typeof import('node:fs');
 
 let booted: BootedFixture | undefined;
 let distDir: string | undefined;
@@ -82,6 +85,43 @@ describe('fixture static asset security', () => {
 
     const response = await fetch(`${booted.origin}/assets/leak.txt`);
     await expect(response.text()).resolves.not.toContain('fixture-symlink-secret');
+  });
+
+  it('binds served static bytes to the checked file when the path is swapped at open', async () => {
+    const fixtureDir = fileURLToPath(
+      new URL('../../../../tests/integration/fixtures/bootstrap-order/', import.meta.url),
+    );
+    secretDir = path.join(fixtureDir, 'dist-secret');
+    distDir = path.join(fixtureDir, 'dist');
+    const assetsDir = path.join(distDir, 'assets');
+    const assetPath = path.join(assetsDir, 'race.txt');
+    const secretPath = path.join(secretDir, 'secret.txt');
+    await mkdir(secretDir, { recursive: true });
+    await mkdir(assetsDir, { recursive: true });
+    await writeFile(assetPath, 'fixture-public-asset');
+    await writeFile(secretPath, 'fixture-open-race-secret');
+    booted = await bootFixture(fixtureDir);
+
+    const originalCreateReadStream = mutableFs.createReadStream;
+    let swaps = 0;
+    try {
+      mutableFs.createReadStream = ((filePath, ...options) => {
+        if (filePath === assetPath) {
+          swaps += 1;
+          mutableFs.unlinkSync(assetPath);
+          mutableFs.symlinkSync(secretPath, assetPath);
+        }
+        return Reflect.apply(originalCreateReadStream, mutableFs, [filePath, ...options]);
+      }) as typeof mutableFs.createReadStream;
+      syncBuiltinESMExports();
+
+      const response = await fetch(`${booted.origin}/assets/race.txt`);
+      await expect(response.text()).resolves.not.toContain('fixture-open-race-secret');
+    } finally {
+      mutableFs.createReadStream = originalCreateReadStream;
+      syncBuiltinESMExports();
+    }
+    expect(swaps).toBe(0);
   });
 
   it('C201 rejects inherited MIME authority and keeps known/unknown static types explicit', async () => {
