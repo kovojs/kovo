@@ -1,5 +1,10 @@
 import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
 
+import {
+  compilerArrayAppend,
+  compilerArrayLength,
+  compilerOwnDataValue,
+} from '../compiler-security-intrinsics.js';
 import { type CompilerDiagnostic, type DiagnosticFactory } from '../diagnostics.js';
 import { componentQueryShapes, queryShapePaths } from '../analyze/query-shapes.js';
 import { componentRegistryNamespace } from '../component-names.js';
@@ -436,18 +441,58 @@ export function validateDirectDbAccess(
   diagnostics: DiagnosticFactory,
   model: ComponentModuleModel,
 ): CompilerDiagnostic[] {
-  return handlerWriteSinks(model).map((sink) => handlerWriteSinkDiagnostic(diagnostics, sink));
+  const sinks = handlerWriteSinks(model);
+  const result: CompilerDiagnostic[] = [];
+  const sinkLength = compilerArrayLength(sinks, 'Handler write sinks');
+  for (let index = 0; index < sinkLength; index += 1) {
+    const sink = compilerOwnDataValue(sinks, index, 'Handler write sinks') as
+      | HandlerWriteSinkFact
+      | undefined;
+    if (!sink) throw new TypeError(`Handler write sinks[${index}] must be own data.`);
+    compilerArrayAppend(
+      result,
+      handlerWriteSinkDiagnostic(diagnostics, sink),
+      'Direct-db diagnostics',
+    );
+  }
+  return result;
 }
 
 export function validateWebhookRecordChanges(
   diagnostics: DiagnosticFactory,
   model: ComponentModuleModel,
 ): CompilerDiagnostic[] {
-  return webhookHandlers(model).flatMap((handler) =>
-    (handler.webhookRecordChanges ?? []).flatMap((fact) =>
-      webhookRecordChangeDiagnostic(diagnostics, fact),
-    ),
-  );
+  const handlers = webhookHandlers(model);
+  const result: CompilerDiagnostic[] = [];
+  const handlerLength = compilerArrayLength(handlers, 'Webhook handlers');
+  for (let handlerIndex = 0; handlerIndex < handlerLength; handlerIndex += 1) {
+    const handler = compilerOwnDataValue(handlers, handlerIndex, 'Webhook handlers');
+    if (!handler || typeof handler !== 'object') {
+      throw new TypeError(`Webhook handlers[${handlerIndex}] must be own data.`);
+    }
+    const facts = (handler as { webhookRecordChanges?: readonly WebhookRecordChangeFact[] })
+      .webhookRecordChanges;
+    if (!facts) continue;
+    const factLength = compilerArrayLength(facts, `Webhook handler ${handlerIndex} record changes`);
+    for (let factIndex = 0; factIndex < factLength; factIndex += 1) {
+      const fact = compilerOwnDataValue(
+        facts,
+        factIndex,
+        `Webhook handler ${handlerIndex} record changes`,
+      ) as WebhookRecordChangeFact | undefined;
+      if (!fact) {
+        throw new TypeError(
+          `Webhook handler ${handlerIndex} record changes[${factIndex}] must be own data.`,
+        );
+      }
+      appendCompilerDiagnostics(
+        result,
+        webhookRecordChangeDiagnostic(diagnostics, fact),
+        'Webhook record-change diagnostics',
+      );
+    }
+  }
+  return result;
 }
 
 function webhookRecordChangeDiagnostic(
@@ -455,8 +500,21 @@ function webhookRecordChangeDiagnostic(
   fact: WebhookRecordChangeFact,
 ): CompilerDiagnostic[] {
   const length = Math.max(1, fact.span.end - fact.span.start);
-  const declared = fact.declaredWriteKeys.filter((key) => key !== 'UNRESOLVED');
-  if (fact.domainKey === 'UNRESOLVED' || fact.declaredWriteKeys.includes('UNRESOLVED')) {
+  const declared: string[] = [];
+  let hasUnresolved = false;
+  const declaredLength = compilerArrayLength(fact.declaredWriteKeys, 'Webhook declared writes');
+  for (let index = 0; index < declaredLength; index += 1) {
+    const key = compilerOwnDataValue(fact.declaredWriteKeys, index, 'Webhook declared writes');
+    if (typeof key !== 'string') {
+      throw new TypeError(`Webhook declared writes[${index}] must be an own string.`);
+    }
+    if (key === 'UNRESOLVED') {
+      hasUnresolved = true;
+    } else {
+      compilerArrayAppend(declared, key, 'Resolved webhook declared writes');
+    }
+  }
+  if (fact.domainKey === 'UNRESOLVED' || hasUnresolved) {
     return [
       {
         ...diagnostics.at('KV406', { start: fact.span.start, length }),
@@ -472,9 +530,11 @@ function webhookRecordChangeDiagnostic(
     ];
   }
 
-  if (declared.includes(fact.domainKey)) return [];
+  if (denseStringArrayIncludes(declared, fact.domainKey, 'Resolved webhook declared writes')) {
+    return [];
+  }
 
-  const declaredLabel = declared.length === 0 ? 'none' : declared.join(', ');
+  const declaredLabel = declared.length === 0 ? 'none' : joinDenseStrings(declared, ', ');
   return [
     {
       ...diagnostics.at(
@@ -574,9 +634,62 @@ export function unhandledUpdateCoverageDiagnostics(
   diagnostics: DiagnosticFactory,
   updateCoverage: readonly QueryUpdateCoverageFact[],
 ): CompilerDiagnostic[] {
-  return updateCoverage
-    .filter((fact) => fact.status === 'UNHANDLED')
-    .map((fact) => kv311Diagnostic(diagnostics, fact));
+  const result: CompilerDiagnostic[] = [];
+  const factLength = compilerArrayLength(updateCoverage, 'Query update coverage facts');
+  for (let index = 0; index < factLength; index += 1) {
+    const fact = compilerOwnDataValue(updateCoverage, index, 'Query update coverage facts') as
+      | QueryUpdateCoverageFact
+      | undefined;
+    if (!fact) throw new TypeError(`Query update coverage facts[${index}] must be own data.`);
+    if (fact.status !== 'UNHANDLED') continue;
+    compilerArrayAppend(
+      result,
+      kv311Diagnostic(diagnostics, fact),
+      'Unhandled coverage diagnostics',
+    );
+  }
+  return result;
+}
+
+function appendCompilerDiagnostics(
+  target: CompilerDiagnostic[],
+  values: readonly CompilerDiagnostic[],
+  label: string,
+): void {
+  const length = compilerArrayLength(values, label);
+  for (let index = 0; index < length; index += 1) {
+    const value = compilerOwnDataValue(values, index, label) as CompilerDiagnostic | undefined;
+    if (!value) throw new TypeError(`${label}[${index}] must be own data.`);
+    compilerArrayAppend(target, value, label);
+  }
+}
+
+function denseStringArrayIncludes(
+  values: readonly string[],
+  search: string,
+  label: string,
+): boolean {
+  const length = compilerArrayLength(values, label);
+  for (let index = 0; index < length; index += 1) {
+    const value = compilerOwnDataValue(values, index, label);
+    if (typeof value !== 'string') throw new TypeError(`${label}[${index}] must be an own string.`);
+    if (value === search) return true;
+  }
+  return false;
+}
+
+function joinDenseStrings(values: readonly string[], separator: string): string {
+  let result = '';
+  const length = compilerArrayLength(values, 'Dense string values');
+  for (let index = 0; index < length; index += 1) {
+    const value = compilerOwnDataValue(values, index, 'Dense string values');
+    if (typeof value !== 'string') {
+      throw new TypeError(`Dense string values[${index}] must be an own string.`);
+    }
+    if (index > 0) result += separator;
+    result += value;
+  }
+  return result;
 }
 
 function fragmentTargetUsageNames(model: ComponentModuleModel): string[] {

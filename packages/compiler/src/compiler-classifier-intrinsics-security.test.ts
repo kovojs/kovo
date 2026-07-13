@@ -159,6 +159,143 @@ export const CartTotal = component({
     expect(result?.diagnostics.filter((diagnostic) => diagnostic.code === 'KV236')).toHaveLength(1);
   });
 
+  it('does not suppress direct-db write diagnostics through handler Array.flatMap replacement', () => {
+    const nativeFlatMap = Array.prototype.flatMap;
+    const nativeApply = Reflect.apply;
+    let poisonHits = 0;
+    let result: ReturnType<typeof compileComponentModule> | undefined;
+    try {
+      Array.prototype.flatMap = function poisonedHandlerSinkFlatMap<T, U>(
+        callback: (value: T, index: number, array: T[]) => U | readonly U[],
+        thisArg?: unknown,
+      ): U[] {
+        const first = this[0] as { handlerWriteSinks?: unknown } | undefined;
+        if (Array.isArray(first?.handlerWriteSinks)) {
+          poisonHits += 1;
+          return [];
+        }
+        return nativeApply(nativeFlatMap, this, [callback, thisArg]);
+      };
+      result = compileComponentModule({
+        fileName: 'cart.mutation.ts',
+        source: `
+export const addToCart = mutation({
+  input: addToCartInput,
+  handler(input, request) {
+    request.db.insert(cartItems).values(input);
+    return input.productId;
+  },
+});
+`,
+      });
+    } finally {
+      Array.prototype.flatMap = nativeFlatMap;
+    }
+    expect(result?.diagnostics.filter((diagnostic) => diagnostic.code === 'KV330')).toHaveLength(1);
+    expect(poisonHits).toBe(0);
+  });
+
+  it('does not suppress direct-db write facts through late Set.has replacement', () => {
+    const nativeHas = Set.prototype.has;
+    const nativeApply = Reflect.apply;
+    let poisonHits = 0;
+    let result: ReturnType<typeof compileComponentModule> | undefined;
+    try {
+      Set.prototype.has = function poisonedWriteOperationHas(value: unknown): boolean {
+        if (value === 'insert' && new Error().stack?.includes('isHandlerWriteSinkOperation')) {
+          poisonHits += 1;
+          return false;
+        }
+        return nativeApply(nativeHas, this, [value]);
+      };
+      result = compileComponentModule({
+        fileName: 'cart.mutation.ts',
+        source: `
+export const addToCart = mutation({
+  input: addToCartInput,
+  handler(input, request) {
+    request.db.insert(cartItems).values(input);
+    return input.productId;
+  },
+});
+`,
+      });
+    } finally {
+      Set.prototype.has = nativeHas;
+    }
+    expect(result?.diagnostics.filter((diagnostic) => diagnostic.code === 'KV330')).toHaveLength(1);
+    expect(poisonHits).toBe(0);
+  });
+
+  it('does not suppress direct-db paths through late Array.push replacement', () => {
+    const nativePush = Array.prototype.push;
+    const nativeApply = Reflect.apply;
+    let poisonHits = 0;
+    let result: ReturnType<typeof compileComponentModule> | undefined;
+    try {
+      Array.prototype.push = function poisonedWritePathPush<T>(...values: T[]): number {
+        const first = values[0] as { path?: unknown; terminalName?: unknown } | undefined;
+        if (first?.path === 'request.db.insert' && first.terminalName === 'insert') {
+          poisonHits += 1;
+          return this.length;
+        }
+        return nativeApply(nativePush, this, values);
+      };
+      result = compileComponentModule({
+        fileName: 'cart.mutation.ts',
+        source: `
+export const addToCart = mutation({
+  input: addToCartInput,
+  handler(input, request) {
+    request.db.insert(cartItems).values(input);
+    return input.productId;
+  },
+});
+`,
+      });
+    } finally {
+      Array.prototype.push = nativePush;
+    }
+    expect(result?.diagnostics.filter((diagnostic) => diagnostic.code === 'KV330')).toHaveLength(1);
+    expect(poisonHits).toBe(0);
+  });
+
+  it('does not suppress direct-db facts through late Map.set replacement', () => {
+    const nativeSet = Map.prototype.set;
+    const nativeApply = Reflect.apply;
+    let poisonHits = 0;
+    let result: ReturnType<typeof compileComponentModule> | undefined;
+    try {
+      Map.prototype.set = function poisonedWriteFactSet<Key, Value>(
+        key: Key,
+        value: Value,
+      ): Map<Key, Value> {
+        const fact = value as { operationKind?: unknown; surface?: unknown } | undefined;
+        if (fact?.operationKind === 'insert' && fact.surface === 'mutation') {
+          poisonHits += 1;
+          return this;
+        }
+        return nativeApply(nativeSet, this, [key, value]);
+      };
+      result = compileComponentModule({
+        fileName: 'cart.mutation.ts',
+        source: `
+export const addToCart = mutation({
+  input: addToCartInput,
+  handler(input, request) {
+    request.db.insert(cartItems).values(input);
+    return input.productId;
+  },
+});
+`,
+      });
+    } finally {
+      Map.prototype.set = nativeSet;
+    }
+    expect(result?.diagnostics.filter((diagnostic) => diagnostic.code === 'KV330')).toHaveLength(1);
+    expect(poisonHits).toBe(0);
+  });
+
   it('does not publish a captured server secret through stateful Array.filter replacement', () => {
     const nativeFilter = Array.prototype.filter;
     const nativeApply = Reflect.apply;

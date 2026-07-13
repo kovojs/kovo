@@ -12,21 +12,26 @@ import type { SessionAuthorityFact } from '@kovojs/core/internal/graph';
 import { offsetToPosition, type CompilerDiagnostic } from '../diagnostics.js';
 import {
   compilerArrayAppend,
+  compilerArrayJoin,
   compilerArrayLength,
   compilerCreateMap,
   compilerCreateSet,
+  compilerDefineOwnDataProperty,
   compilerJsonStringify,
   compilerMapForEach,
   compilerMapGet,
   compilerMapSet,
   compilerOwnDataValue,
+  compilerSetOwnDataProperty,
   compilerSetAdd,
   compilerSetDelete,
   compilerSetHas,
   compilerSha256Hex,
   compilerSnapshotDenseArray,
   compilerStringIncludes,
+  compilerStringEndsWith,
   compilerStringSlice,
+  compilerStringSplit,
   compilerStringStartsWith,
   compilerStringToLowerCase,
 } from '../compiler-security-intrinsics.js';
@@ -93,23 +98,61 @@ const ENDPOINT_FACTORY_IDENTITY = frameworkExport('@kovojs/server', 'endpoint');
 const MUTATION_FACTORY_IDENTITY = frameworkExport('@kovojs/server', 'mutation');
 const TASK_FACTORY_IDENTITY = frameworkExport('@kovojs/server', 'task');
 const WEBHOOK_FACTORY_IDENTITY = frameworkExport('@kovojs/server', 'webhook');
-const HANDLER_WRITE_SINK_OPERATIONS = new Set<HandlerWriteSinkOperationKind>([
-  'batch',
-  'delete',
-  'execute',
-  'insert',
-  'put',
-  'run',
-  'update',
-]);
-const WEBHOOK_TRANSACTION_RAW_DRIVER_ESCAPE_PROPERTIES = new Set([
-  '$client',
-  'client',
-  'pglite',
-  'session',
-  'sqlite',
-]);
-const TASK_CONTEXT_COMPOSITION_METHODS = new Set(['runMutation', 'runQuery', 'schedule']);
+const HANDLER_WRITE_SINK_OPERATIONS = compilerCreateSet<HandlerWriteSinkOperationKind>();
+compilerSetAdd(HANDLER_WRITE_SINK_OPERATIONS, 'batch');
+compilerSetAdd(HANDLER_WRITE_SINK_OPERATIONS, 'delete');
+compilerSetAdd(HANDLER_WRITE_SINK_OPERATIONS, 'execute');
+compilerSetAdd(HANDLER_WRITE_SINK_OPERATIONS, 'insert');
+compilerSetAdd(HANDLER_WRITE_SINK_OPERATIONS, 'put');
+compilerSetAdd(HANDLER_WRITE_SINK_OPERATIONS, 'run');
+compilerSetAdd(HANDLER_WRITE_SINK_OPERATIONS, 'update');
+
+const WEBHOOK_TRANSACTION_RAW_DRIVER_ESCAPE_PROPERTIES = compilerCreateSet<string>();
+compilerSetAdd(WEBHOOK_TRANSACTION_RAW_DRIVER_ESCAPE_PROPERTIES, '$client');
+compilerSetAdd(WEBHOOK_TRANSACTION_RAW_DRIVER_ESCAPE_PROPERTIES, 'client');
+compilerSetAdd(WEBHOOK_TRANSACTION_RAW_DRIVER_ESCAPE_PROPERTIES, 'pglite');
+compilerSetAdd(WEBHOOK_TRANSACTION_RAW_DRIVER_ESCAPE_PROPERTIES, 'session');
+compilerSetAdd(WEBHOOK_TRANSACTION_RAW_DRIVER_ESCAPE_PROPERTIES, 'sqlite');
+
+const TASK_CONTEXT_COMPOSITION_METHODS = compilerCreateSet<string>();
+compilerSetAdd(TASK_CONTEXT_COMPOSITION_METHODS, 'runMutation');
+compilerSetAdd(TASK_CONTEXT_COMPOSITION_METHODS, 'runQuery');
+compilerSetAdd(TASK_CONTEXT_COMPOSITION_METHODS, 'schedule');
+
+function appendDenseValues<Value>(target: Value[], values: readonly Value[], label: string): void {
+  const length = compilerArrayLength(values, label);
+  for (let index = 0; index < length; index += 1) {
+    const value = compilerOwnDataValue(values, index, label) as Value | undefined;
+    if (value === undefined) throw new TypeError(`${label}[${index}] must be own data.`);
+    compilerArrayAppend(target, value, label);
+  }
+}
+
+function ownOptionalString(
+  values: readonly (string | undefined)[],
+  index: number,
+  label: string,
+): string | undefined {
+  const value = compilerOwnDataValue(values, index, label);
+  if (value !== undefined && typeof value !== 'string') {
+    throw new TypeError(`${label}[${index}] must be an own string or undefined.`);
+  }
+  return value;
+}
+
+function denseStringArrayIncludes(
+  values: readonly string[],
+  search: string,
+  label: string,
+): boolean {
+  const length = compilerArrayLength(values, label);
+  for (let index = 0; index < length; index += 1) {
+    const value = compilerOwnDataValue(values, index, label);
+    if (typeof value !== 'string') throw new TypeError(`${label}[${index}] must be an own string.`);
+    if (value === search) return true;
+  }
+  return false;
+}
 
 /**
  * @internal FN7 (plans/compiler-refactoring.md): the canonical source parse. The scanner uses it,
@@ -176,10 +219,25 @@ export function parseComponentModule(
 ): ComponentModuleModel {
   const sourceFile = parseSourceFile(fileName, source);
   if (options.frameworkIdentityFiles?.length) {
-    registerFrameworkIdentityProject(
-      sourceFile,
-      options.frameworkIdentityFiles.map((file) => parseSourceFile(file.fileName, file.source)),
+    const identityFiles: ts.SourceFile[] = [];
+    const identityFileLength = compilerArrayLength(
+      options.frameworkIdentityFiles,
+      'Framework identity files',
     );
+    for (let index = 0; index < identityFileLength; index += 1) {
+      const file = compilerOwnDataValue(
+        options.frameworkIdentityFiles,
+        index,
+        'Framework identity files',
+      ) as { fileName: string; source: string } | undefined;
+      if (!file) throw new TypeError(`Framework identity files[${index}] must be own data.`);
+      compilerArrayAppend(
+        identityFiles,
+        parseSourceFile(file.fileName, file.source),
+        'Framework identity source files',
+      );
+    }
+    registerFrameworkIdentityProject(sourceFile, identityFiles);
   }
   const componentFactories = componentFactoryBindings(sourceFile);
   const calls: CallExpressionModel[] = [];
@@ -191,7 +249,17 @@ export function parseComponentModule(
   const moduleScopeBindings: ModuleScopeBindingModel[] = [];
   const moduleSpecifiers: ModuleSpecifierModel[] = [];
   const mutationHandlers: MutationHandlerModel[] = [];
-  const namedImports = sourceFile.statements.flatMap((statement) => namedImportModels(statement));
+  const namedImports: NamedImportModel[] = [];
+  const statementLength = compilerArrayLength(sourceFile.statements, 'Source file statements');
+  for (let index = 0; index < statementLength; index += 1) {
+    const statement = compilerOwnDataValue(
+      sourceFile.statements,
+      index,
+      'Source file statements',
+    ) as ts.Statement | undefined;
+    if (!statement) throw new TypeError(`Source file statements[${index}] must be own data.`);
+    appendDenseValues(namedImports, namedImportModels(statement), 'Named import models');
+  }
   const renderSourceReturns: StringRenderModel[] = [];
   const taskRunHandlers: TaskRunHandlerModel[] = [];
   const webhookHandlers: WebhookHandlerModel[] = [];
@@ -200,8 +268,14 @@ export function parseComponentModule(
 
   const visit = (node: ts.Node): void => {
     const specifier = moduleSpecifierModel(node);
-    if (specifier) moduleSpecifiers.push(specifier);
-    moduleScopeBindings.push(...moduleScopeBindingModels(sourceFile, source, node));
+    if (specifier) {
+      compilerArrayAppend(moduleSpecifiers, specifier, 'Module specifier models');
+    }
+    appendDenseValues(
+      moduleScopeBindings,
+      moduleScopeBindingModels(sourceFile, source, node),
+      'Module-scope binding models',
+    );
 
     if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && isExportedVariable(node)) {
       const model = componentModelFromInitializer(
@@ -213,39 +287,65 @@ export function parseComponentModule(
         node.initializer,
         componentFactories,
       );
-      if (model) components.push(model);
+      if (model) compilerArrayAppend(components, model, 'Component models');
     }
     if (ts.isJsxElement(node) || ts.isJsxSelfClosingElement(node)) {
-      jsxElements.push(
+      compilerArrayAppend(
+        jsxElements,
         jsxElementModel(sourceFile, source, node, moduleScopeObjectEntries, namedImports),
+        'JSX element models',
       );
     }
     if (ts.isJsxExpression(node)) {
       const comment = jsxCommentModel(sourceFile, source, node);
-      if (comment) jsxComments.push(comment);
-      if (node.expression) jsxExpressions.push(jsxExpressionModel(sourceFile, source, node));
+      if (comment) compilerArrayAppend(jsxComments, comment, 'JSX comment models');
+      if (node.expression) {
+        compilerArrayAppend(
+          jsxExpressions,
+          jsxExpressionModel(sourceFile, source, node),
+          'JSX expression models',
+        );
+      }
     }
     if (
       ts.isCallExpression(node) &&
       (ts.isIdentifier(node.expression) || ts.isPropertyAccessExpression(node.expression))
     ) {
-      calls.push(callExpressionModel(sourceFile, source, node));
+      compilerArrayAppend(calls, callExpressionModel(sourceFile, source, node), 'Call models');
       if (isFrameworkExpression(sourceFile, node.expression, ENDPOINT_FACTORY_IDENTITY)) {
-        endpointHandlers.push(...endpointHandlerModels(sourceFile, source, node));
+        appendDenseValues(
+          endpointHandlers,
+          endpointHandlerModels(sourceFile, source, node),
+          'Endpoint handler models',
+        );
       }
       if (isFrameworkExpression(sourceFile, node.expression, MUTATION_FACTORY_IDENTITY)) {
-        mutationHandlers.push(...mutationHandlerModels(sourceFile, source, node));
+        appendDenseValues(
+          mutationHandlers,
+          mutationHandlerModels(sourceFile, source, node),
+          'Mutation handler models',
+        );
       }
       if (isFrameworkExpression(sourceFile, node.expression, TASK_FACTORY_IDENTITY)) {
-        taskRunHandlers.push(...taskRunHandlerModels(sourceFile, source, node));
+        appendDenseValues(
+          taskRunHandlers,
+          taskRunHandlerModels(sourceFile, source, node),
+          'Task run handler models',
+        );
       }
       if (isFrameworkExpression(sourceFile, node.expression, WEBHOOK_FACTORY_IDENTITY)) {
-        webhookHandlers.push(...webhookHandlerModels(sourceFile, source, node, domainBindings));
+        appendDenseValues(
+          webhookHandlers,
+          webhookHandlerModels(sourceFile, source, node, domainBindings),
+          'Webhook handler models',
+        );
       }
     }
     if (isExportedRenderSourceFunction(node)) {
-      renderSourceReturns.push(
-        ...stringRenderReturnsFromFunctionBody(sourceFile, source, node.body),
+      appendDenseValues(
+        renderSourceReturns,
+        stringRenderReturnsFromFunctionBody(sourceFile, source, node.body),
+        'String render models',
       );
     }
 
@@ -272,7 +372,7 @@ export function parseComponentModule(
   };
   // FN7: keep the scanner's SourceFile non-enumerable so post-parse phases (StyleX extraction)
   // reuse it rather than re-parsing the component, while the model stays a serializable fact bag.
-  Object.defineProperty(model, 'sourceFile', { enumerable: false });
+  compilerDefineOwnDataProperty(model, 'sourceFile', sourceFile, false);
   return model;
 }
 
@@ -1005,28 +1105,54 @@ function mutationHandlerAuthorityIsStaticallyInspectable(call: ts.CallExpression
 }
 
 export function taskRunHandlers(model: ComponentModuleModel): TaskRunHandlerModel[] {
-  return [...model.taskRunHandlers];
+  return compilerSnapshotDenseArray(model.taskRunHandlers, 'Task run handlers');
 }
 
 export function endpointHandlers(model: ComponentModuleModel): MutationHandlerModel[] {
-  return [...model.endpointHandlers];
+  return compilerSnapshotDenseArray(model.endpointHandlers, 'Endpoint handlers');
 }
 
 export function webhookHandlers(model: ComponentModuleModel): WebhookHandlerModel[] {
-  return [...model.webhookHandlers];
+  return compilerSnapshotDenseArray(model.webhookHandlers, 'Webhook handlers');
 }
 
 export function handlerWriteSinks(model: ComponentModuleModel): HandlerWriteSinkFact[] {
-  return [
-    ...model.endpointHandlers.flatMap((handler) => handler.handlerWriteSinks ?? []),
-    ...model.mutationHandlers.flatMap((handler) => handler.handlerWriteSinks ?? []),
-    ...model.taskRunHandlers.flatMap((handler) => handler.handlerWriteSinks ?? []),
-    ...model.webhookHandlers.flatMap((handler) => handler.handlerWriteSinks ?? []),
-  ];
+  const result: HandlerWriteSinkFact[] = [];
+  appendHandlerWriteSinks(result, model.endpointHandlers, 'Endpoint handler write sinks');
+  appendHandlerWriteSinks(result, model.mutationHandlers, 'Mutation handler write sinks');
+  appendHandlerWriteSinks(result, model.taskRunHandlers, 'Task handler write sinks');
+  appendHandlerWriteSinks(result, model.webhookHandlers, 'Webhook handler write sinks');
+  return result;
 }
 
 export function webhookRecordChanges(model: ComponentModuleModel): WebhookRecordChangeFact[] {
-  return model.webhookHandlers.flatMap((handler) => handler.webhookRecordChanges ?? []);
+  const result: WebhookRecordChangeFact[] = [];
+  const handlerLength = compilerArrayLength(model.webhookHandlers, 'Webhook handlers');
+  for (let index = 0; index < handlerLength; index += 1) {
+    const handler = compilerOwnDataValue(model.webhookHandlers, index, 'Webhook handlers') as
+      | WebhookHandlerModel
+      | undefined;
+    if (!handler) throw new TypeError(`Webhook handlers[${index}] must be own data.`);
+    appendDenseValues(
+      result,
+      handler.webhookRecordChanges ?? [],
+      `Webhook handler ${index} record changes`,
+    );
+  }
+  return result;
+}
+
+function appendHandlerWriteSinks<Handler extends MutationHandlerModel>(
+  target: HandlerWriteSinkFact[],
+  handlers: readonly Handler[],
+  label: string,
+): void {
+  const handlerLength = compilerArrayLength(handlers, label);
+  for (let index = 0; index < handlerLength; index += 1) {
+    const handler = compilerOwnDataValue(handlers, index, label) as Handler | undefined;
+    if (!handler) throw new TypeError(`${label}[${index}] must be own data.`);
+    appendDenseValues(target, handler.handlerWriteSinks ?? [], `${label}[${index}]`);
+  }
 }
 
 function stringLiteralArrayValuesFromExpression(expression: ts.Expression): string[] | null {
@@ -2513,13 +2639,27 @@ function endpointHandlerModels(
   call: ts.CallExpression,
 ): MutationHandlerModel[] {
   const owner = endpointOwner(call);
-  return handlerPropertyEntries(sourceFile, source, call).map(({ body, model }) => ({
-    ...model,
-    handlerWriteSinks: handlerWriteSinkFacts(sourceFile, source, body, {
-      owner,
-      surface: 'endpoint',
-    }),
-  }));
+  const entries = handlerPropertyEntries(sourceFile, source, call);
+  const result: MutationHandlerModel[] = [];
+  const entryLength = compilerArrayLength(entries, 'Endpoint handler entries');
+  for (let index = 0; index < entryLength; index += 1) {
+    const entry = compilerOwnDataValue(entries, index, 'Endpoint handler entries') as
+      | HandlerPropertyEntry
+      | undefined;
+    if (!entry) throw new TypeError(`Endpoint handler entries[${index}] must be own data.`);
+    compilerArrayAppend(
+      result,
+      {
+        ...entry.model,
+        handlerWriteSinks: handlerWriteSinkFacts(sourceFile, source, entry.body, {
+          owner,
+          surface: 'endpoint',
+        }),
+      },
+      'Endpoint handler models',
+    );
+  }
+  return result;
 }
 
 interface HandlerPropertyEntry {
@@ -2605,35 +2745,58 @@ function webhookHandlerModels(
   const declaredWriteKeys = definition
     ? webhookDeclaredWriteKeys(sourceFile, definition, domainBindings)
     : [];
-  return handlerPropertyEntries(sourceFile, source, call).map(({ body, model, parameters }) => ({
-    ...model,
-    handlerWriteSinks: [
-      ...handlerWriteSinkFacts(sourceFile, source, body, {
-        owner,
-        surface: 'webhook',
-      }),
-      ...webhookTransactionRawDriverEscapeFacts(sourceFile, body, {
-        contextParamName: model.paramNames[1],
-        owner,
-      }),
-    ].sort((left, right) => left.span.start - right.span.start),
-    webhookRecordChanges: webhookRecordChangeFacts(sourceFile, body, {
-      contextParamName: model.paramNames[1],
-      declaredWriteKeys,
-      domainBindings,
+  const entries = handlerPropertyEntries(sourceFile, source, call);
+  const result: WebhookHandlerModel[] = [];
+  const entryLength = compilerArrayLength(entries, 'Webhook handler entries');
+  for (let index = 0; index < entryLength; index += 1) {
+    const entry = compilerOwnDataValue(entries, index, 'Webhook handler entries') as
+      | HandlerPropertyEntry
+      | undefined;
+    if (!entry) throw new TypeError(`Webhook handler entries[${index}] must be own data.`);
+    const contextParamName = ownOptionalString(entry.model.paramNames, 1, 'Webhook parameters');
+    const handlerWriteSinks = handlerWriteSinkFacts(sourceFile, source, entry.body, {
       owner,
-      recordChangeParamNames: webhookRecordChangeParamNames(parameters[1]?.name),
-    }),
-    declaredWriteKeys,
-    owner,
-    runMutationEdges: taskCompositionEdges(
-      sourceFile,
-      source,
-      body,
-      model.paramNames[1],
-      'runMutation',
-    ),
-  }));
+      surface: 'webhook',
+    });
+    appendDenseValues(
+      handlerWriteSinks,
+      webhookTransactionRawDriverEscapeFacts(sourceFile, entry.body, {
+        contextParamName,
+        owner,
+      }),
+      'Webhook handler write sinks',
+    );
+    const recordChangeParameter = compilerOwnDataValue(
+      entry.parameters,
+      1,
+      'Webhook handler parameters',
+    ) as ts.ParameterDeclaration | undefined;
+    compilerArrayAppend(
+      result,
+      {
+        ...entry.model,
+        handlerWriteSinks: sortHandlerWriteSinkFacts(handlerWriteSinks),
+        webhookRecordChanges: webhookRecordChangeFacts(sourceFile, entry.body, {
+          contextParamName,
+          declaredWriteKeys,
+          domainBindings,
+          owner,
+          recordChangeParamNames: webhookRecordChangeParamNames(recordChangeParameter?.name),
+        }),
+        declaredWriteKeys,
+        owner,
+        runMutationEdges: taskCompositionEdges(
+          sourceFile,
+          source,
+          entry.body,
+          contextParamName,
+          'runMutation',
+        ),
+      },
+      'Webhook handler models',
+    );
+  }
+  return result;
 }
 
 function taskRunHandlerModels(
@@ -2646,13 +2809,20 @@ function taskRunHandlerModels(
 
   const key = taskKey(sourceFile, call);
   const cron = staticStringObjectProperty(definition, 'cron');
-
-  return definition.properties.flatMap((property) => {
+  const result: TaskRunHandlerModel[] = [];
+  const propertyLength = compilerArrayLength(definition.properties, 'Task definition properties');
+  for (let index = 0; index < propertyLength; index += 1) {
+    const property = compilerOwnDataValue(
+      definition.properties,
+      index,
+      'Task definition properties',
+    ) as ts.ObjectLiteralElementLike | undefined;
+    if (!property) throw new TypeError(`Task definition properties[${index}] must be own data.`);
     const handler = runHandlerModel(sourceFile, source, property);
-    if (!handler) return [];
-    const ctxParam = handler.model.paramNames[1];
-
-    return [
+    if (!handler) continue;
+    const ctxParam = ownOptionalString(handler.model.paramNames, 1, 'Task handler parameters');
+    compilerArrayAppend(
+      result,
       {
         ...handler.model,
         ...(cron === undefined ? {} : { cron }),
@@ -2671,17 +2841,30 @@ function taskRunHandlerModels(
         runQueryEdges: taskCompositionEdges(sourceFile, source, handler.body, ctxParam, 'runQuery'),
         scheduleEdges: taskCompositionEdges(sourceFile, source, handler.body, ctxParam, 'schedule'),
       },
-    ];
-  });
+      'Task run handler models',
+    );
+  }
+  return result;
 }
 
 function taskDefinitionObject(call: ts.CallExpression): ts.ObjectLiteralExpression | null {
-  const definition = call.arguments.length >= 2 ? call.arguments[1] : call.arguments[0];
+  const argumentLength = compilerArrayLength(call.arguments, 'Handler factory arguments');
+  const definition = callArgument(call, argumentLength >= 2 ? 1 : 0);
   return definition && ts.isObjectLiteralExpression(definition) ? definition : null;
 }
 
+function callArgument(call: ts.CallExpression, index: number): ts.Expression | undefined {
+  const length = compilerArrayLength(call.arguments, 'Handler factory arguments');
+  if (index < 0 || index >= length) return undefined;
+  const argument = compilerOwnDataValue(call.arguments, index, 'Handler factory arguments') as
+    | ts.Expression
+    | undefined;
+  if (!argument) throw new TypeError(`Handler factory arguments[${index}] must be own data.`);
+  return argument;
+}
+
 function taskKey(sourceFile: ts.SourceFile, call: ts.CallExpression): string {
-  const [first] = call.arguments;
+  const first = callArgument(call, 0);
   if (first && ts.isStringLiteralLike(first)) return first.text;
 
   const exported = exportedConstInitializerName(call);
@@ -2692,7 +2875,7 @@ function taskKey(sourceFile: ts.SourceFile, call: ts.CallExpression): string {
 }
 
 function mutationOwner(sourceFile: ts.SourceFile, call: ts.CallExpression): HandlerWriteSinkOwner {
-  const [first] = call.arguments;
+  const first = callArgument(call, 0);
   const firstValue = first ? unwrapExpression(first) : undefined;
   if (firstValue && ts.isStringLiteralLike(firstValue)) {
     return { kind: 'key', value: firstValue.text };
@@ -2720,14 +2903,19 @@ function mutationDirectDbTargetIdentities(
   body: ts.ConciseBody,
   parameters: ts.NodeArray<ts.ParameterDeclaration>,
 ): ReadonlySet<string> {
-  const requestParamNames = new Set<string>();
-  const targets = new Set<string>();
+  const requestParamNames = compilerCreateSet<string>();
+  const targets = compilerCreateSet<string>();
 
-  for (const parameter of parameters) {
+  const parameterLength = compilerArrayLength(parameters, 'Mutation handler parameters');
+  for (let index = 0; index < parameterLength; index += 1) {
+    const parameter = compilerOwnDataValue(parameters, index, 'Mutation handler parameters') as
+      | ts.ParameterDeclaration
+      | undefined;
+    if (!parameter) throw new TypeError(`Mutation handler parameters[${index}] must be own data.`);
     collectDirectDbBindingNames(parameter.name, targets);
     if (ts.isIdentifier(parameter.name) && isRequestLikeParamName(parameter.name.text)) {
-      requestParamNames.add(parameter.name.text);
-      targets.add(`${parameter.name.text}.db`);
+      compilerSetAdd(requestParamNames, parameter.name.text);
+      compilerSetAdd(targets, `${parameter.name.text}.db`);
     }
   }
 
@@ -2739,11 +2927,11 @@ function mutationDirectDbTargetIdentities(
       ? unwrappedInitializer.text
       : undefined;
     const requestLikeInitializer =
-      initializerName !== undefined && requestParamNames.has(initializerName);
+      initializerName !== undefined && compilerSetHas(requestParamNames, initializerName);
     if (!target && !requestLikeInitializer) return;
 
     if (ts.isIdentifier(name)) {
-      targets.add(name.text);
+      compilerSetAdd(targets, name.text);
       return;
     }
     collectDirectDbBindingNames(name, targets);
@@ -2760,13 +2948,24 @@ function mutationDirectDbTargetIdentities(
 
 function collectDirectDbBindingNames(name: ts.BindingName, targets: Set<string>): void {
   if (ts.isIdentifier(name)) {
-    if (name.text === 'db' || looksLikeDbTargetIdentity(name.text)) targets.add(name.text);
+    if (name.text === 'db' || looksLikeDbTargetIdentity(name.text)) {
+      compilerSetAdd(targets, name.text);
+    }
     return;
   }
 
   if (!ts.isObjectBindingPattern(name)) return;
 
-  for (const element of name.elements) {
+  const elementLength = compilerArrayLength(name.elements, 'Direct-db object binding elements');
+  for (let index = 0; index < elementLength; index += 1) {
+    const element = compilerOwnDataValue(
+      name.elements,
+      index,
+      'Direct-db object binding elements',
+    ) as ts.BindingElement | undefined;
+    if (!element) {
+      throw new TypeError(`Direct-db object binding elements[${index}] must be own data.`);
+    }
     const propertyName = element.propertyName;
     const bindingName = element.name;
     const bindsDbProperty =
@@ -2779,16 +2978,27 @@ function collectDirectDbBindingNames(name: ts.BindingName, targets: Set<string>)
 
 function collectBindingIdentifiers(name: ts.BindingName, targets: Set<string>): void {
   if (ts.isIdentifier(name)) {
-    targets.add(name.text);
+    compilerSetAdd(targets, name.text);
     return;
   }
 
   if (ts.isObjectBindingPattern(name)) {
-    for (const element of name.elements) collectBindingIdentifiers(element.name, targets);
+    const elementLength = compilerArrayLength(name.elements, 'Object binding elements');
+    for (let index = 0; index < elementLength; index += 1) {
+      const element = compilerOwnDataValue(name.elements, index, 'Object binding elements') as
+        | ts.BindingElement
+        | undefined;
+      if (!element) throw new TypeError(`Object binding elements[${index}] must be own data.`);
+      collectBindingIdentifiers(element.name, targets);
+    }
     return;
   }
 
-  for (const element of name.elements) {
+  const elementLength = compilerArrayLength(name.elements, 'Array binding elements');
+  for (let index = 0; index < elementLength; index += 1) {
+    const element = compilerOwnDataValue(name.elements, index, 'Array binding elements') as
+      | ts.ArrayBindingElement
+      | undefined;
     if (ts.isBindingElement(element)) collectBindingIdentifiers(element.name, targets);
   }
 }
@@ -2806,7 +3016,9 @@ function mutationDirectDbTargetIdentityFromExpression(
 ): string | undefined {
   const unwrapped = unwrapExpression(expression);
   const identity = expressionTargetIdentity(unwrapped);
-  if (identity && (targets.has(identity) || looksLikeDbTargetIdentity(identity))) return identity;
+  if (identity && (compilerSetHas(targets, identity) || looksLikeDbTargetIdentity(identity))) {
+    return identity;
+  }
   return undefined;
 }
 
@@ -2814,7 +3026,7 @@ function expressionTargetIdentity(expression: ts.Expression): string | undefined
   if (ts.isIdentifier(expression)) return expression.text;
   if (ts.isPropertyAccessExpression(expression)) return propertyAccessPath(expression) ?? undefined;
   const receiver = callExpressionReceiverSegments(expression);
-  if (receiver) return receiver.join('.');
+  if (receiver) return compilerArrayJoin(receiver, '.');
   if (ts.isCallExpression(expression)) {
     if (ts.isIdentifier(expression.expression)) return `${expression.expression.text}()`;
     if (ts.isPropertyAccessExpression(expression.expression)) {
@@ -2826,19 +3038,21 @@ function expressionTargetIdentity(expression: ts.Expression): string | undefined
 }
 
 function looksLikeDbTargetIdentity(identity: string): boolean {
-  const normalized = identity.toLowerCase();
-  return normalized.includes('db') || normalized.includes('database');
+  const normalized = compilerStringToLowerCase(identity);
+  return compilerStringIncludes(normalized, 'db') || compilerStringIncludes(normalized, 'database');
 }
 
-const requestLikeContextParamNames = new Set(['context', 'ctx']);
+const requestLikeContextParamNames = compilerCreateSet<string>();
+compilerSetAdd(requestLikeContextParamNames, 'context');
+compilerSetAdd(requestLikeContextParamNames, 'ctx');
 
 function isRequestLikeParamName(param: string): boolean {
-  if (requestLikeContextParamNames.has(param)) return true;
-  return param.toLowerCase().endsWith('request');
+  if (compilerSetHas(requestLikeContextParamNames, param)) return true;
+  return compilerStringEndsWith(compilerStringToLowerCase(param), 'request');
 }
 
 function webhookOwner(sourceFile: ts.SourceFile, call: ts.CallExpression): HandlerWriteSinkOwner {
-  const [first] = call.arguments;
+  const first = callArgument(call, 0);
   if (first && ts.isStringLiteralLike(first)) return { kind: 'path', value: first.text };
 
   const definition = taskDefinitionObject(call);
@@ -2851,7 +3065,7 @@ function webhookOwner(sourceFile: ts.SourceFile, call: ts.CallExpression): Handl
 }
 
 function endpointOwner(call: ts.CallExpression): HandlerWriteSinkOwner {
-  const [first] = call.arguments;
+  const first = callArgument(call, 0);
   if (first && ts.isStringLiteralLike(first)) return { kind: 'path', value: first.text };
 
   return { kind: 'path', value: 'UNRESOLVED' };
@@ -2862,19 +3076,44 @@ function webhookDeclaredWriteKeys(
   definition: ts.ObjectLiteralExpression,
   domainBindings: ReadonlyMap<string, string>,
 ): string[] {
-  const writes = definition.properties.find(
-    (property): property is ts.PropertyAssignment =>
-      ts.isPropertyAssignment(property) && propertyNameText(property.name) === 'writes',
+  let writes: ts.PropertyAssignment | undefined;
+  const propertyLength = compilerArrayLength(
+    definition.properties,
+    'Webhook definition properties',
   );
+  for (let index = 0; index < propertyLength; index += 1) {
+    const property = compilerOwnDataValue(
+      definition.properties,
+      index,
+      'Webhook definition properties',
+    ) as ts.ObjectLiteralElementLike | undefined;
+    if (!property) throw new TypeError(`Webhook definition properties[${index}] must be own data.`);
+    if (ts.isPropertyAssignment(property) && propertyNameText(property.name) === 'writes') {
+      writes = property;
+      break;
+    }
+  }
   if (!writes) return [];
 
   const initializer = unwrapExpression(writes.initializer);
   if (!ts.isArrayLiteralExpression(initializer)) return ['UNRESOLVED'];
 
-  return initializer.elements.map((element) => {
+  const result: string[] = [];
+  const elementLength = compilerArrayLength(initializer.elements, 'Webhook writes elements');
+  for (let index = 0; index < elementLength; index += 1) {
+    const element = compilerOwnDataValue(initializer.elements, index, 'Webhook writes elements') as
+      | ts.Expression
+      | ts.SpreadElement
+      | undefined;
+    if (!element) throw new TypeError(`Webhook writes elements[${index}] must be own data.`);
     const expression = ts.isSpreadElement(element) ? element.expression : element;
-    return domainKeyFromExpression(sourceFile, expression, domainBindings) ?? 'UNRESOLVED';
-  });
+    compilerArrayAppend(
+      result,
+      domainKeyFromExpression(sourceFile, expression, domainBindings) ?? 'UNRESOLVED',
+      'Webhook declared write keys',
+    );
+  }
+  return result;
 }
 
 function webhookTransactionRawDriverEscapeFacts(
@@ -2887,8 +3126,9 @@ function webhookTransactionRawDriverEscapeFacts(
 ): HandlerWriteSinkFact[] {
   if (options.contextParamName === undefined) return [];
 
-  const txTargets = new Set([`${options.contextParamName}.tx`]);
-  const facts = new Map<string, HandlerWriteSinkFact>();
+  const txTargets = compilerCreateSet<string>();
+  compilerSetAdd(txTargets, `${options.contextParamName}.tx`);
+  const facts = compilerCreateMap<string, HandlerWriteSinkFact>();
 
   const addTxAlias = (name: ts.BindingName, initializer: ts.Expression | undefined): void => {
     if (!initializer) return;
@@ -2896,7 +3136,7 @@ function webhookTransactionRawDriverEscapeFacts(
     if (identity !== `${options.contextParamName}.tx`) return;
 
     if (ts.isIdentifier(name)) {
-      txTargets.add(name.text);
+      compilerSetAdd(txTargets, name.text);
       return;
     }
 
@@ -2908,9 +3148,9 @@ function webhookTransactionRawDriverEscapeFacts(
 
     if (ts.isPropertyAccessExpression(node)) {
       const propertyName = node.name.text;
-      if (WEBHOOK_TRANSACTION_RAW_DRIVER_ESCAPE_PROPERTIES.has(propertyName)) {
+      if (compilerSetHas(WEBHOOK_TRANSACTION_RAW_DRIVER_ESCAPE_PROPERTIES, propertyName)) {
         const targetIdentity = expressionTargetIdentity(unwrapExpression(node.expression));
-        if (targetIdentity !== undefined && txTargets.has(targetIdentity)) {
+        if (targetIdentity !== undefined && compilerSetHas(txTargets, targetIdentity)) {
           const path = `${targetIdentity}.${propertyName}`;
           const fact: HandlerWriteSinkFact = {
             canonicalTarget: {
@@ -2923,7 +3163,7 @@ function webhookTransactionRawDriverEscapeFacts(
             span: { end: node.getEnd(), start: node.getStart(sourceFile) },
             surface: 'webhook',
           };
-          facts.set(handlerWriteSinkFactKey(fact), fact);
+          compilerMapSet(facts, handlerWriteSinkFactKey(fact), fact);
         }
       }
     }
@@ -2932,7 +3172,7 @@ function webhookTransactionRawDriverEscapeFacts(
   };
 
   visit(body);
-  return [...facts.values()].sort((left, right) => left.span.start - right.span.start);
+  return sortedHandlerWriteSinkFacts(facts);
 }
 
 function webhookRecordChangeFacts(
@@ -2947,19 +3187,60 @@ function webhookRecordChangeFacts(
   },
 ): WebhookRecordChangeFact[] {
   const contextParamName = options.contextParamName;
-  if (!contextParamName && options.recordChangeParamNames.length === 0) return [];
+  if (
+    !contextParamName &&
+    compilerArrayLength(options.recordChangeParamNames, 'Webhook recordChange parameter names') ===
+      0
+  ) {
+    return [];
+  }
 
   const facts: WebhookRecordChangeFact[] = [];
   const visit = (node: ts.Node): void => {
     if (ts.isCallExpression(node)) {
       const fact = webhookRecordChangeFact(sourceFile, node, options);
-      if (fact) facts.push(fact);
+      if (fact) compilerArrayAppend(facts, fact, 'Webhook record-change facts');
     }
     ts.forEachChild(node, visit);
   };
 
   visit(body);
-  return facts.sort((left, right) => left.span.start - right.span.start);
+  return sortWebhookRecordChangeFacts(facts);
+}
+
+function sortWebhookRecordChangeFacts(
+  facts: readonly WebhookRecordChangeFact[],
+): WebhookRecordChangeFact[] {
+  const result: WebhookRecordChangeFact[] = [];
+  const length = compilerArrayLength(facts, 'Webhook record-change facts to sort');
+  for (let index = 0; index < length; index += 1) {
+    const fact = compilerOwnDataValue(facts, index, 'Webhook record-change facts to sort') as
+      | WebhookRecordChangeFact
+      | undefined;
+    if (!fact) {
+      throw new TypeError(`Webhook record-change facts to sort[${index}] must be own data.`);
+    }
+    const resultLength = compilerArrayLength(result, 'Sorted webhook record-change facts');
+    compilerArrayAppend(result, fact, 'Sorted webhook record-change facts');
+    let insertionIndex = resultLength;
+    while (insertionIndex > 0) {
+      const previous = compilerOwnDataValue(
+        result,
+        insertionIndex - 1,
+        'Sorted webhook record-change facts',
+      ) as WebhookRecordChangeFact | undefined;
+      if (!previous) {
+        throw new TypeError(
+          `Sorted webhook record-change facts[${insertionIndex - 1}] must be own data.`,
+        );
+      }
+      if (previous.span.start <= fact.span.start) break;
+      compilerSetOwnDataProperty(result, insertionIndex, previous);
+      insertionIndex -= 1;
+    }
+    compilerSetOwnDataProperty(result, insertionIndex, fact);
+  }
+  return result;
 }
 
 function webhookRecordChangeFact(
@@ -2984,11 +3265,18 @@ function webhookRecordChangeFact(
     ) {
       return null;
     }
-  } else if (!ts.isIdentifier(callee) || !options.recordChangeParamNames.includes(callee.text)) {
+  } else if (
+    !ts.isIdentifier(callee) ||
+    !denseStringArrayIncludes(
+      options.recordChangeParamNames,
+      callee.text,
+      'Webhook recordChange parameter names',
+    )
+  ) {
     return null;
   }
 
-  const [domainArgument] = call.arguments;
+  const domainArgument = callArgument(call, 0);
   const domainKey =
     domainArgument === undefined
       ? 'UNRESOLVED'
@@ -3009,19 +3297,29 @@ function webhookRecordChangeFact(
 function webhookRecordChangeParamNames(name: ts.BindingName | undefined): string[] {
   if (!name || !ts.isObjectBindingPattern(name)) return [];
 
-  return name.elements.flatMap((element) => {
+  const result: string[] = [];
+  const elementLength = compilerArrayLength(name.elements, 'Webhook context binding elements');
+  for (let index = 0; index < elementLength; index += 1) {
+    const element = compilerOwnDataValue(
+      name.elements,
+      index,
+      'Webhook context binding elements',
+    ) as ts.BindingElement | undefined;
+    if (!element)
+      throw new TypeError(`Webhook context binding elements[${index}] must be own data.`);
     const propertyName = element.propertyName;
     if (
       propertyName !== undefined &&
       (!ts.isIdentifier(propertyName) || propertyName.text !== 'recordChange')
     ) {
-      return [];
+      continue;
     }
     const bindingName = element.name;
-    if (!ts.isIdentifier(bindingName)) return [];
-    if (propertyName === undefined && bindingName.text !== 'recordChange') return [];
-    return [bindingName.text];
-  });
+    if (!ts.isIdentifier(bindingName)) continue;
+    if (propertyName === undefined && bindingName.text !== 'recordChange') continue;
+    compilerArrayAppend(result, bindingName.text, 'Webhook recordChange parameter names');
+  }
+  return result;
 }
 
 function domainKeyFromExpression(
@@ -3030,12 +3328,14 @@ function domainKeyFromExpression(
   domainBindings: ReadonlyMap<string, string>,
 ): string | undefined {
   const unwrapped = unwrapExpression(expression);
-  if (ts.isIdentifier(unwrapped)) return domainBindings.get(unwrapped.text) ?? 'UNRESOLVED';
+  if (ts.isIdentifier(unwrapped)) {
+    return compilerMapGet(domainBindings, unwrapped.text) ?? 'UNRESOLVED';
+  }
   if (!ts.isCallExpression(unwrapped)) return undefined;
   if (!isFrameworkExpression(sourceFile, unwrapped.expression, DOMAIN_FACTORY_IDENTITY)) {
     return undefined;
   }
-  const [key] = unwrapped.arguments;
+  const key = callArgument(unwrapped, 0);
   return key && ts.isStringLiteralLike(key) ? key.text : 'UNRESOLVED';
 }
 
@@ -3069,17 +3369,35 @@ function functionBodyModel(
   body: ts.ConciseBody,
   parameters: ts.NodeArray<ts.ParameterDeclaration>,
 ): MutationHandlerModel {
+  const paramNames: (string | undefined)[] = [];
+  const params: string[] = [];
+  const paramSpans: SourceSpan[] = [];
+  const parameterLength = compilerArrayLength(parameters, 'Handler parameters');
+  for (let index = 0; index < parameterLength; index += 1) {
+    const parameter = compilerOwnDataValue(parameters, index, 'Handler parameters') as
+      | ts.ParameterDeclaration
+      | undefined;
+    if (!parameter) throw new TypeError(`Handler parameters[${index}] must be own data.`);
+    compilerArrayAppend(paramNames, parameterName(parameter.name), 'Handler parameter names');
+    compilerArrayAppend(
+      params,
+      compilerStringSlice(source, parameter.getStart(sourceFile), parameter.getEnd()),
+      'Handler parameter sources',
+    );
+    compilerArrayAppend(
+      paramSpans,
+      { end: parameter.getEnd(), start: parameter.getStart(sourceFile) },
+      'Handler parameter spans',
+    );
+  }
   return {
-    body: source.slice(body.getStart(sourceFile), body.getEnd()),
+    body: compilerStringSlice(source, body.getStart(sourceFile), body.getEnd()),
     bodyEnd: body.getEnd(),
     bodyPropertyAccesses: propertyAccessPathModels(sourceFile, body),
     bodyStart: body.getStart(sourceFile),
-    paramNames: parameters.map((param) => parameterName(param.name)),
-    params: parameters.map((param) => source.slice(param.getStart(sourceFile), param.getEnd())),
-    paramSpans: parameters.map((param) => ({
-      end: param.getEnd(),
-      start: param.getStart(sourceFile),
-    })),
+    paramNames,
+    params,
+    paramSpans,
   };
 }
 
@@ -3103,10 +3421,22 @@ function handlerWriteSinkFacts(
   body: ts.ConciseBody,
   options: HandlerWriteSinkFactOptions,
 ): HandlerWriteSinkFact[] {
-  const facts = new Map<string, HandlerWriteSinkFact>();
+  const facts = compilerCreateMap<string, HandlerWriteSinkFact>();
   const bodyPropertyAccesses = propertyAccessPathModels(sourceFile, body);
 
-  for (const access of bodyPropertyAccesses) {
+  const accessLength = compilerArrayLength(
+    bodyPropertyAccesses,
+    'Handler write-sink property accesses',
+  );
+  for (let index = 0; index < accessLength; index += 1) {
+    const access = compilerOwnDataValue(
+      bodyPropertyAccesses,
+      index,
+      'Handler write-sink property accesses',
+    ) as PropertyAccessPathModel | undefined;
+    if (!access) {
+      throw new TypeError(`Handler write-sink property accesses[${index}] must be own data.`);
+    }
     if (!isHandlerWriteSinkOperation(access.terminalName)) continue;
     const fact = resolvedHandlerWriteSinkFact(access, options);
     if (
@@ -3115,19 +3445,67 @@ function handlerWriteSinkFacts(
     ) {
       continue;
     }
-    facts.set(handlerWriteSinkFactKey(fact), fact);
+    compilerMapSet(facts, handlerWriteSinkFactKey(fact), fact);
   }
 
   const visit = (node: ts.Node): void => {
     if (ts.isCallExpression(node)) {
       const unresolved = unresolvedHandlerWriteSinkFact(sourceFile, source, node, options);
-      if (unresolved) facts.set(handlerWriteSinkFactKey(unresolved), unresolved);
+      if (unresolved) compilerMapSet(facts, handlerWriteSinkFactKey(unresolved), unresolved);
     }
     ts.forEachChild(node, visit);
   };
 
   visit(body);
-  return [...facts.values()].sort((left, right) => left.span.start - right.span.start);
+  return sortedHandlerWriteSinkFacts(facts);
+}
+
+function sortedHandlerWriteSinkFacts(
+  facts: ReadonlyMap<string, HandlerWriteSinkFact>,
+): HandlerWriteSinkFact[] {
+  const result: HandlerWriteSinkFact[] = [];
+  compilerMapForEach(facts, (fact) => {
+    insertHandlerWriteSinkFact(result, fact);
+  });
+  return result;
+}
+
+function sortHandlerWriteSinkFacts(facts: readonly HandlerWriteSinkFact[]): HandlerWriteSinkFact[] {
+  const result: HandlerWriteSinkFact[] = [];
+  const length = compilerArrayLength(facts, 'Handler write-sink facts to sort');
+  for (let index = 0; index < length; index += 1) {
+    const fact = compilerOwnDataValue(facts, index, 'Handler write-sink facts to sort') as
+      | HandlerWriteSinkFact
+      | undefined;
+    if (!fact) throw new TypeError(`Handler write-sink facts to sort[${index}] must be own data.`);
+    insertHandlerWriteSinkFact(result, fact);
+  }
+  return result;
+}
+
+function insertHandlerWriteSinkFact(
+  result: HandlerWriteSinkFact[],
+  fact: HandlerWriteSinkFact,
+): void {
+  const length = compilerArrayLength(result, 'Sorted handler write-sink facts');
+  compilerArrayAppend(result, fact, 'Sorted handler write-sink facts');
+  let insertionIndex = length;
+  while (insertionIndex > 0) {
+    const previous = compilerOwnDataValue(
+      result,
+      insertionIndex - 1,
+      'Sorted handler write-sink facts',
+    ) as HandlerWriteSinkFact | undefined;
+    if (!previous) {
+      throw new TypeError(
+        `Sorted handler write-sink facts[${insertionIndex - 1}] must be own data.`,
+      );
+    }
+    if (previous.span.start <= fact.span.start) break;
+    compilerSetOwnDataProperty(result, insertionIndex, previous);
+    insertionIndex -= 1;
+  }
+  compilerSetOwnDataProperty(result, insertionIndex, fact);
 }
 
 function resolvedHandlerWriteSinkFact(
@@ -3136,8 +3514,8 @@ function resolvedHandlerWriteSinkFact(
 ): HandlerWriteSinkFact {
   const operationKind = handlerWriteSinkOperation(access.terminalName);
   const suffix = `.${access.terminalName}`;
-  const targetIdentity = access.path.endsWith(suffix)
-    ? access.path.slice(0, -1 * suffix.length)
+  const targetIdentity = compilerStringEndsWith(access.path, suffix)
+    ? compilerStringSlice(access.path, 0, -1 * suffix.length)
     : 'UNRESOLVED';
   return {
     canonicalTarget: {
@@ -3181,7 +3559,7 @@ function unresolvedHandlerWriteSinkFact(
     const receiver = source
       .slice(callee.expression.getStart(sourceFile), callee.expression.getEnd())
       .trim();
-    if (TASK_CONTEXT_COMPOSITION_METHODS.has(receiver)) return null;
+    if (compilerSetHas(TASK_CONTEXT_COMPOSITION_METHODS, receiver)) return null;
     return {
       canonicalTarget: { identity: 'UNRESOLVED', provenance: 'computed-member' },
       operationKind: 'UNRESOLVED',
@@ -3199,7 +3577,7 @@ function unresolvedHandlerWriteSinkFact(
 }
 
 function isHandlerWriteSinkOperation(name: string): boolean {
-  return HANDLER_WRITE_SINK_OPERATIONS.has(name as HandlerWriteSinkOperationKind);
+  return compilerSetHas(HANDLER_WRITE_SINK_OPERATIONS, name as HandlerWriteSinkOperationKind);
 }
 
 function handlerWriteSinkOperation(name: string): HandlerWriteSinkOperationKind {
@@ -3207,15 +3585,7 @@ function handlerWriteSinkOperation(name: string): HandlerWriteSinkOperationKind 
 }
 
 function handlerWriteSinkFactKey(fact: HandlerWriteSinkFact): string {
-  return [
-    fact.surface,
-    fact.owner.kind,
-    fact.owner.value,
-    fact.operationKind,
-    fact.path,
-    fact.span.start,
-    fact.span.end,
-  ].join('\0');
+  return `${fact.surface}\0${fact.owner.kind}\0${fact.owner.value}\0${fact.operationKind}\0${fact.path}\0${fact.span.start}\0${fact.span.end}`;
 }
 
 function taskCompositionEdges(
@@ -3282,25 +3652,43 @@ export function propertyAccessPathModels(
   const pushElementAccessRoot = (node: ts.Expression): void => {
     const rootPath = elementAccessRootPath(node);
     if (!rootPath) return;
-    paths.push({
-      end: node.getEnd(),
-      path: rootPath,
-      start: node.getStart(sourceFile),
-      terminalName: rootPath.split('.').at(-1) ?? rootPath,
-    });
+    const segments = compilerStringSplit(rootPath, '.');
+    const segmentLength = compilerArrayLength(segments, 'Property-access root segments');
+    const terminalName =
+      segmentLength === 0
+        ? rootPath
+        : (compilerOwnDataValue(
+            segments,
+            segmentLength - 1,
+            'Property-access root segments',
+          ) as string);
+    compilerArrayAppend(
+      paths,
+      {
+        end: node.getEnd(),
+        path: rootPath,
+        start: node.getStart(sourceFile),
+        terminalName,
+      },
+      'Property-access path models',
+    );
   };
 
   const visit = (node: ts.Node): void => {
     if (ts.isPropertyAccessExpression(node) && !isReceiverOfOuterAccess(node)) {
       const path = propertyAccessPath(node);
       if (path) {
-        paths.push({
-          end: node.getEnd(),
-          ...propertyAccessInferredType(sourceFile, node),
-          path,
-          start: node.getStart(sourceFile),
-          terminalName: node.name.text,
-        });
+        compilerArrayAppend(
+          paths,
+          {
+            end: node.getEnd(),
+            ...propertyAccessInferredType(sourceFile, node),
+            path,
+            start: node.getStart(sourceFile),
+            terminalName: node.name.text,
+          },
+          'Property-access path models',
+        );
       } else {
         // SPEC §4.8/§4.9 (A1): the dotted-path grammar could not represent this access because
         // its receiver bottoms out at a computed/element access (`rows[i].name`, `rows[0].name`).
