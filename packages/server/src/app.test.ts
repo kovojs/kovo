@@ -43,12 +43,18 @@ function attestedLiveTargetHeader(
   buildToken: string,
   props: Record<string, unknown> = {},
   csrf?: { secret: string; sessionId: (request: unknown) => string | undefined },
+  sourceUrl?: string,
 ): string {
   // SPEC §9.3: the live-target attestation is bound to the CSRF secret + session principal, so an
   // app configured with `csrf` must mint the test attestation under the same keyring/principal.
   const token = createLiveTargetAttestation(
     { component, props, target },
-    { buildToken, ...(csrf === undefined ? {} : { csrf }), request: {} },
+    {
+      buildToken,
+      ...(csrf === undefined ? {} : { csrf }),
+      request: {},
+      ...(sourceUrl === undefined ? {} : { sourceUrl }),
+    },
   );
   return `${target}#${component}@${token}:${JSON.stringify(props)}`;
 }
@@ -2934,8 +2940,9 @@ describe('server createApp request shell', () => {
       new Request('https://example.test/_m/cart/add', {
         body: form,
         headers: {
+          'Kovo-Current-Url': 'https://example.test/cart',
           'Kovo-Fragment': 'true',
-          'Kovo-Live-Targets': `${attestedLiveTargetHeader('cart', 'components/cart/badge', appLiveTargetAttestationAudience(app), {}, csrf)}`,
+          'Kovo-Live-Targets': `${attestedLiveTargetHeader('cart', 'components/cart/badge', appLiveTargetAttestationAudience(app), {}, csrf, 'https://example.test/cart')}`,
           'Kovo-Targets': 'cart=cart',
           origin: 'https://example.test',
         },
@@ -3103,8 +3110,9 @@ describe('server createApp request shell', () => {
         body: enhancedForm,
         headers: {
           Cookie: 'sid=victim',
+          'Kovo-Current-Url': 'https://example.test/',
           'Kovo-Fragment': 'true',
-          'Kovo-Live-Targets': `${attestedLiveTargetHeader('cart', 'components/cart/badge', appLiveTargetAttestationAudience(app))}`,
+          'Kovo-Live-Targets': `${attestedLiveTargetHeader('cart', 'components/cart/badge', appLiveTargetAttestationAudience(app), {}, undefined, 'https://example.test/')}`,
           'Kovo-Targets': 'cart=cart',
         },
         method: 'POST',
@@ -3175,8 +3183,9 @@ describe('server createApp request shell', () => {
       new Request('https://example.test/_m/cart/add', {
         body: form,
         headers: {
+          'Kovo-Current-Url': 'https://example.test/',
           'Kovo-Fragment': 'true',
-          'Kovo-Live-Targets': `${attestedLiveTargetHeader('cart-panel', 'components/cart/panel', appLiveTargetAttestationAudience(app), { cartId: 'c1' })}`,
+          'Kovo-Live-Targets': `${attestedLiveTargetHeader('cart-panel', 'components/cart/panel', appLiveTargetAttestationAudience(app), { cartId: 'c1' }, undefined, 'https://example.test/')}`,
           'Kovo-Targets': 'cart-panel=cart',
         },
         method: 'POST',
@@ -3278,11 +3287,15 @@ describe('server createApp request shell', () => {
       new Request('https://example.test/_m/runtime-registry/add', {
         body: new FormData(),
         headers: {
+          'Kovo-Current-Url': 'https://example.test/',
           'Kovo-Fragment': 'true',
           'Kovo-Live-Targets': attestedLiveTargetHeader(
             'cart-panel',
             'components/runtime-registry/cart-panel',
             appLiveTargetAttestationAudience(app),
+            {},
+            undefined,
+            'https://example.test/',
           ),
           'Kovo-Targets': 'cart-panel=runtimeRegistryCart',
         },

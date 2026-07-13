@@ -13,6 +13,8 @@ import type { LiveTargetAttestationAuthority } from './live-target-app-identity.
 import type { RegisteredQueryDefinition } from './query.js';
 import type { AwaitableGeneratedFragmentRenderable } from './renderable.js';
 import type { MutationReplayStore } from './replay.js';
+import { isNativeRequest } from './request-carrier.js';
+import { requestCreateUrl, requestUrl, requestUrlSnapshot } from './request-body-intrinsics.js';
 import { runtimeEnvironmentValue } from './runtime-environment-authority.js';
 import {
   readHeader,
@@ -153,6 +155,8 @@ export interface MutationWireRequest<
   liveTargetAttestationAuthority?: LiveTargetAttestationAuthority;
   /** App-bound live-target signing audience; distinct from the public render-plan token. */
   liveTargetAudience?: string;
+  /** Canonical document URL context that minted the live-target descriptor. */
+  liveTargetSourceUrl?: string;
   csrf?: CsrfOptions<Request> | false;
   currentUrl?: string;
   failureTarget?: string;
@@ -279,6 +283,8 @@ export interface MutationWireRequestOptions<
   liveTargetAttestationAuthority?: LiveTargetAttestationAuthority;
   /** App-bound live-target signing audience; defaults to buildToken for direct internal callers. */
   liveTargetAudience?: string;
+  /** Canonical document URL context used to verify live-target descriptors. */
+  liveTargetSourceUrl?: string;
   csrf?: CsrfOptions<Request> | false;
   currentUrl?: string;
   failureTarget?: string;
@@ -492,6 +498,9 @@ export function mutationWireRequestFromHeaders<Request>(
     ...(options.liveTargetAudience === undefined
       ? {}
       : { liveTargetAudience: options.liveTargetAudience }),
+    ...(options.liveTargetSourceUrl === undefined
+      ? {}
+      : { liveTargetSourceUrl: options.liveTargetSourceUrl }),
     ...(options.db === undefined ? {} : { db: options.db }),
     ...(options.onError === undefined ? {} : { onError: options.onError }),
     ...(options.sessionProvider === undefined ? {} : { sessionProvider: options.sessionProvider }),
@@ -539,7 +548,7 @@ export function snapshotVerifiedLiveTargetDescriptors<Request>(
   descriptors: unknown,
   options: Pick<
     MutationWireRequestOptions<Request>,
-    'buildToken' | 'csrf' | 'liveTargetAudience' | 'request'
+    'buildToken' | 'csrf' | 'liveTargetAudience' | 'liveTargetSourceUrl' | 'request'
   >,
 ): readonly MutationLiveTargetDescriptor[] {
   if (descriptors === undefined) return [];
@@ -742,6 +751,7 @@ export function createLiveTargetAttestation<Request>(
     buildToken: string;
     csrf?: CsrfOptions<Request> | false;
     request: Request;
+    sourceUrl?: string;
   },
 ): string {
   const payload = liveTargetAttestationPayload(descriptor, options);
@@ -763,7 +773,7 @@ function verifyLiveTargetDescriptor<Request>(
   descriptor: MutationLiveTargetDescriptor,
   options: Pick<
     MutationWireRequestOptions<Request>,
-    'buildToken' | 'csrf' | 'liveTargetAudience' | 'request'
+    'buildToken' | 'csrf' | 'liveTargetAudience' | 'liveTargetSourceUrl' | 'request'
   >,
 ): boolean {
   if (descriptor.attestation === undefined) {
@@ -778,6 +788,9 @@ function verifyLiveTargetDescriptor<Request>(
       buildToken: options.liveTargetAudience,
       ...(options.csrf === undefined ? {} : { csrf: options.csrf }),
       request: options.request,
+      ...(options.liveTargetSourceUrl === undefined
+        ? {}
+        : { sourceUrl: options.liveTargetSourceUrl }),
     });
   } catch {
     return false;
@@ -803,6 +816,7 @@ function liveTargetAttestationPayload<Request>(
     buildToken: string;
     csrf?: CsrfOptions<Request> | false;
     request: Request;
+    sourceUrl?: string;
   },
 ): string {
   if (typeof options.buildToken !== 'string' || options.buildToken.length === 0) {
@@ -817,8 +831,19 @@ function liveTargetAttestationPayload<Request>(
     component: descriptor.component,
     principal: principal ?? 'anonymous',
     props: descriptor.props,
+    sourceUrl: liveTargetSourceContext(options.request, options.sourceUrl),
     target: descriptor.target,
   });
+}
+
+function liveTargetSourceContext(request: unknown, supplied?: string): string {
+  const raw = supplied ?? (isNativeRequest(request) ? requestUrl(request) : undefined);
+  if (raw === undefined) return '';
+  const snapshot = requestUrlSnapshot(requestCreateUrl(raw));
+  if (snapshot.protocol !== 'http:' && snapshot.protocol !== 'https:') {
+    throw new TypeError('Live-target source context requires an absolute HTTP(S) URL.');
+  }
+  return `${snapshot.origin}${snapshot.pathname}${snapshot.search}`;
 }
 
 function snapshotLiveTargetDescriptor(value: unknown): MutationLiveTargetDescriptor {

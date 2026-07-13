@@ -23,10 +23,11 @@ function attestedLiveTargetHeader(
   component: string,
   buildToken: string,
   props: Record<string, unknown> = {},
+  sourceUrl?: string,
 ): string {
   const token = createLiveTargetAttestation(
     { component, props, target },
-    { buildToken, request: {} },
+    { buildToken, request: {}, ...(sourceUrl === undefined ? {} : { sourceUrl }) },
   );
   return `${target}#${component}@${token}:${JSON.stringify(props)}`;
 }
@@ -74,11 +75,14 @@ describe('server app mutation request boundary', () => {
     const request = new Request('https://shop.example.test/_m/private/update', {
       body: new FormData(),
       headers: {
+        'Kovo-Current-Url': 'https://shop.example.test/',
         'Kovo-Fragment': 'true',
         'Kovo-Live-Targets': attestedLiveTargetHeader(
           'private-region',
           'components/private/region',
           appLiveTargetAttestationAudience(app),
+          {},
+          'https://shop.example.test/',
         ),
         'Kovo-Targets': 'private-region=private-record',
       },
@@ -666,7 +670,7 @@ describe('server app mutation request boundary', () => {
       headers: {
         Referer: 'https://shop.example.test/cart',
         'Kovo-Fragment': 'true',
-        'Kovo-Live-Targets': `${attestedLiveTargetHeader('cart-badge', 'components/cart/badge', appLiveTargetAttestationAudience(app))}`,
+        'Kovo-Live-Targets': `${attestedLiveTargetHeader('cart-badge', 'components/cart/badge', appLiveTargetAttestationAudience(app), {}, 'https://shop.example.test/cart')}`,
         'Kovo-Targets': 'cart-badge=cart',
       },
       method: 'POST',
@@ -726,11 +730,14 @@ describe('server app mutation request boundary', () => {
       const request = new Request('https://shop.example.test/_m/cart/map-poison', {
         body: new FormData(),
         headers: {
+          'Kovo-Current-Url': 'https://shop.example.test/',
           'Kovo-Fragment': 'true',
           'Kovo-Live-Targets': attestedLiveTargetHeader(
             'cart-badge',
             'components/cart/map-poison',
             appLiveTargetAttestationAudience(app),
+            {},
+            'https://shop.example.test/',
           ),
           'Kovo-Targets': 'cart-badge=cart-map-poison',
         },
@@ -823,6 +830,8 @@ describe('server app mutation request boundary', () => {
             'cart-badge',
             'components/cart/array-census',
             appLiveTargetAttestationAudience(app),
+            {},
+            'https://shop.example.test/cart-array-census',
           ),
           'Kovo-Targets': 'cart-badge=cart-array-census',
         },

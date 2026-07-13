@@ -710,6 +710,7 @@ async function renderKovoHmrLiveTargetRefreshResponse(
     buildToken,
     liveTargetAttestationAuthority,
     liveTargetAudience,
+    liveTargetSourceUrl: targetUrl.href,
     ...(app.csrf === undefined ? {} : { csrf: app.csrf }),
     headers: request.headers,
     liveTargetRenderers: app.liveTargetRenderers,

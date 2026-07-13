@@ -214,6 +214,43 @@ describe('mutation wire headers', () => {
     ).toEqual([]);
   });
 
+  it('binds live-target descriptors to the exact document URL context that minted them', () => {
+    const descriptor = {
+      component: 'components/contextual/contextual',
+      props: {},
+      target: 'contextual',
+    };
+    const request = new Request('https://app.test/public?view=summary');
+    const token = createLiveTargetAttestation(descriptor, {
+      buildToken: 'context-bound-audience',
+      request,
+    });
+    const headers = {
+      'Kovo-Live-Targets': `contextual#components/contextual/contextual@${token}:{}`,
+    };
+
+    expect(
+      mutationWireRequestFromHeaders({
+        buildToken: 'context-build',
+        headers,
+        liveTargetAudience: 'context-bound-audience',
+        liveTargetSourceUrl: 'https://app.test/public?view=summary',
+        rawInput: {},
+        request: new Request('https://app.test/_m/save', { method: 'POST' }),
+      }).liveTargetDescriptors,
+    ).toHaveLength(1);
+    expect(
+      mutationWireRequestFromHeaders({
+        buildToken: 'context-build',
+        headers,
+        liveTargetAudience: 'context-bound-audience',
+        liveTargetSourceUrl: 'https://app.test/admin?view=summary',
+        rawInput: {},
+        request: new Request('https://app.test/_m/save', { method: 'POST' }),
+      }).liveTargetDescriptors,
+    ).toEqual([]);
+  });
+
   it('fails closed when live-target attestation is asked to use an unresolved principal', () => {
     const request = { sessionId: 'unknown' };
     const csrf = {

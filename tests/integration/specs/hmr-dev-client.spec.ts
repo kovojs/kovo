@@ -42,11 +42,12 @@ type OnModuleDiagnostics = Exclude<KovoVitePluginOptions['onModuleDiagnostics'],
 
 function liveTargetToken(
   app: Parameters<typeof createAppLiveTargetAttestation>[0],
+  request: Request,
   target: string,
   component: string,
   props: Record<string, unknown> = {},
 ): string {
-  return createAppLiveTargetAttestation(app, { component, props, target }, {});
+  return createAppLiveTargetAttestation(app, { component, props, target }, request);
 }
 
 test('dev HMR client applies server-rendered live-target fragments without reloading', async ({
@@ -54,12 +55,12 @@ test('dev HMR client applies server-rendered live-target fragments without reloa
 }) => {
   let renderVersion = 1;
   let app!: ReturnType<typeof createApp>;
-  const renderCard = () => `<section
+  const renderCard = (request: Request) => `<section
       kovo-fragment-target="hmr-card"
       kovo-c="hmr-card"
       kovo-deps="hmr"
       kovo-live-component="hmr/Card"
-      kovo-live-token="${liveTargetToken(app, 'hmr-card', 'hmr/Card', { id: 'one' })}"
+      kovo-live-token="${liveTargetToken(app, request, 'hmr-card', 'hmr/Card', { id: 'one' })}"
       kovo-props='{"id":"one"}'>
       <label for="hmr-input">Draft</label>
       <input id="hmr-input" kovo-key="input" value="server ${renderVersion}">
@@ -70,15 +71,15 @@ test('dev HMR client applies server-rendered live-target fragments without reloa
     render(context) {
       expect(context.props).toEqual({ id: 'one' });
       expect(context.target).toBe('hmr-card');
-      return renderCard();
+      return renderCard(context.request);
     },
   };
   app = createApp({
     liveTargetRenderers: [renderer],
     routes: [
       route('/', {
-        page() {
-          return `<main>${renderCard()}</main>`;
+        page(_context, request) {
+          return `<main>${renderCard(request)}</main>`;
         },
       }),
     ],
@@ -162,13 +163,19 @@ test('dev HMR client refreshes query-backed live targets from server state', asy
     queries: {
       product: productQuery.args((props: { productId: string }) => ({ id: props.productId })),
     },
-    render({ product, productId }: { product: { id: string; stock: number }; productId: string }) {
+    render(
+      { product, productId }: { product: { id: string; stock: number }; productId: string },
+      _state: unknown,
+      { request }: { request: Request },
+    ) {
       return jsx('section', {
         'kovo-c': 'product-card',
         'kovo-deps': `product:${product.id}`,
         'kovo-fragment-target': 'product-card',
         'kovo-live-component': 'hmr/ProductCard',
-        'kovo-live-token': liveTargetToken(app, 'product-card', 'hmr/ProductCard', { productId }),
+        'kovo-live-token': liveTargetToken(app, request, 'product-card', 'hmr/ProductCard', {
+          productId,
+        }),
         'kovo-props': JSON.stringify({ productId }),
         children: [
           jsx('label', { children: 'Note', for: 'product-note' }),
@@ -435,7 +442,7 @@ test('Vite source edits surface and recover from compiler diagnostics', async ({
         refreshable: true,
       }),
     );
-    expectKovoSourceEditEvent(recoveryEvents, 'kovo:full-reload');
+    expectKovoSourceEditEvent(recoveryEvents, 'kovo:component-render');
 
     await expect(page.locator('#hmr-source-output')).toHaveText('Version recovered');
   } finally {

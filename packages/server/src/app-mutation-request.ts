@@ -213,6 +213,7 @@ export async function handleAppMutationRequest(
     buildToken,
     liveTargetAttestationAuthority,
     liveTargetAudience,
+    liveTargetSourceUrl: requestUrlSnapshot(sourceUrl).href,
     ...(app.csrf === undefined ? {} : { csrf: app.csrf }),
     currentUrl: appRequestUrl(sourceUrl),
     ...(app.mutationReplayStore === undefined ? {} : { replayStore: app.mutationReplayStore }),
@@ -283,6 +284,7 @@ async function renderPreBodyCsrfFailure(
     buildToken,
     liveTargetAttestationAuthority,
     liveTargetAudience,
+    liveTargetSourceUrl: requestUrlSnapshot(sourceUrl).href,
     ...(app.csrf === undefined ? {} : { csrf: app.csrf }),
     currentUrl: appRequestUrl(sourceUrl),
     headers: request.headers,
@@ -490,11 +492,11 @@ function defaultMutationRedirectTo(request: Request, currentUrl: string): string
 }
 
 function mutationSourceUrl(request: Request, mutationUrl: URL): URL {
-  const referer = requestHeader(request, 'referer');
-  if (!referer) return mutationUrl;
+  const source = requestHeader(request, 'kovo-current-url') ?? requestHeader(request, 'referer');
+  if (!source) return mutationUrl;
   try {
     const mutationSnapshot = requestUrlSnapshot(mutationUrl);
-    const url = requestCreateUrl(referer, mutationSnapshot.href);
+    const url = requestCreateUrl(source, mutationSnapshot.href);
     return requestUrlSnapshot(url).origin === mutationSnapshot.origin ? url : mutationUrl;
   } catch {
     return mutationUrl;

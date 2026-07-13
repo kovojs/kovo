@@ -28,10 +28,11 @@ function attestedLiveTargetHeader(
   component: string,
   buildToken: string,
   props: Record<string, unknown> = {},
+  sourceUrl?: string,
 ): string {
   const token = createLiveTargetAttestation(
     { component, props, target },
-    { buildToken, request: {} },
+    { buildToken, request: {}, ...(sourceUrl === undefined ? {} : { sourceUrl }) },
   );
   return `${target}#${component}@${token}:${JSON.stringify(props)}`;
 }
@@ -1171,16 +1172,14 @@ describe('server app shell Vite dev seam', () => {
         });
       });
 
-      const response = await fetch(
-        `http://127.0.0.1:${(server.address() as AddressInfo).port}/@kovo/hmr/refresh/live-targets?oldBuild=old-build`,
-        {
-          headers: {
-            'Kovo-Current-Url': '/cart?tab=summary',
-            'Kovo-Live-Targets': `${attestedLiveTargetHeader('cart-badge', 'src/components/CartBadge', appLiveTargetAttestationAudience(app), { count: 3 })}`,
-          },
-          method: 'POST',
+      const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+      const response = await fetch(`${origin}/@kovo/hmr/refresh/live-targets?oldBuild=old-build`, {
+        headers: {
+          'Kovo-Current-Url': '/cart?tab=summary',
+          'Kovo-Live-Targets': `${attestedLiveTargetHeader('cart-badge', 'src/components/CartBadge', appLiveTargetAttestationAudience(app), { count: 3 }, `${origin}/cart?tab=summary`)}`,
         },
-      );
+        method: 'POST',
+      });
       const body = await response.text();
 
       expect(response.status).toBe(200);
@@ -1250,20 +1249,20 @@ describe('server app shell Vite dev seam', () => {
           resolve();
         });
       });
-      const response = await fetch(
-        `http://127.0.0.1:${(server.address() as AddressInfo).port}/@kovo/hmr/refresh/live-targets`,
-        {
-          headers: {
-            'Kovo-Current-Url': '/cart',
-            'Kovo-Live-Targets': attestedLiveTargetHeader(
-              'cart-badge',
-              'src/components/CartBadge',
-              appLiveTargetAttestationAudience(app),
-            ),
-          },
-          method: 'POST',
+      const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+      const response = await fetch(`${origin}/@kovo/hmr/refresh/live-targets`, {
+        headers: {
+          'Kovo-Current-Url': '/cart',
+          'Kovo-Live-Targets': attestedLiveTargetHeader(
+            'cart-badge',
+            'src/components/CartBadge',
+            appLiveTargetAttestationAudience(app),
+            {},
+            `${origin}/cart`,
+          ),
         },
-      );
+        method: 'POST',
+      });
       const body = await response.text();
 
       expect(response.status).toBe(200);

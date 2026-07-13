@@ -912,6 +912,15 @@ function snapshotEnhancedMutationWireRequest<Request>(
       csrfDescriptor === undefined || !('value' in csrfDescriptor)
         ? undefined
         : (csrfDescriptor.value as CsrfOptions<Request> | false | undefined);
+    const sourceUrlDescriptor = witnessGetOwnPropertyDescriptor(snapshot, 'liveTargetSourceUrl');
+    if (
+      sourceUrlDescriptor !== undefined &&
+      (!('value' in sourceUrlDescriptor) || typeof sourceUrlDescriptor.value !== 'string')
+    ) {
+      throw new TypeError(
+        'Mutation wire request liveTargetSourceUrl must be a stable own string property.',
+      );
+    }
     const sourceDescriptors = witnessGetOwnPropertyDescriptor(wireRequest, 'liveTargetDescriptors');
     if (sourceDescriptors !== undefined && !('value' in sourceDescriptors)) {
       throw new TypeError(
@@ -923,6 +932,9 @@ function snapshotEnhancedMutationWireRequest<Request>(
       {
         buildToken: descriptor.value,
         liveTargetAudience,
+        ...(sourceUrlDescriptor === undefined
+          ? {}
+          : { liveTargetSourceUrl: sourceUrlDescriptor.value as string }),
         ...(csrf === undefined ? {} : { csrf }),
         request: requestDescriptor.value as Request,
       },
