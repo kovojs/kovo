@@ -14,12 +14,18 @@ const NativeReflect = globalThis.Reflect;
 const NativeTypeError = globalThis.TypeError;
 const nativeArrayIsArray = NativeArray.isArray;
 const nativeGetOwnPropertyDescriptor = NativeObject.getOwnPropertyDescriptor;
-const nativePromiseResolve = NativePromise.resolve;
 const nativePromiseThen = NativePromise.prototype.then;
 const nativeReflectApply = NativeReflect.apply;
 
-function tableApply<Return>(method: Function, receiver: unknown, args: readonly unknown[]): Return {
-  return nativeReflectApply(method, receiver, args) as Return;
+function tableArrayIsArray(value: unknown): value is readonly unknown[] {
+  return nativeReflectApply(nativeArrayIsArray, NativeArray, [value]);
+}
+
+function tableGetOwnPropertyDescriptor(
+  value: object,
+  property: PropertyKey,
+): PropertyDescriptor | undefined {
+  return nativeReflectApply(nativeGetOwnPropertyDescriptor, NativeObject, [value, property]);
 }
 
 /**
@@ -110,14 +116,13 @@ function renderTableChildren(
   if (budget.remaining < 0) {
     throw new NativeTypeError('Kovo table children exceed the maximum child count.');
   }
-  if (tableApply<boolean>(nativeArrayIsArray, NativeArray, [value])) {
-    const values = value as readonly unknown[];
-    const length = stableArrayLength(values);
+  if (tableArrayIsArray(value)) {
+    const length = stableArrayLength(value);
     let rendered: TableChildrenRendering = { kind: 'sync', value: '' };
     for (let index = 0; index < length; index += 1) {
       rendered = concatTableChildren(
         rendered,
-        renderTableChildren(arrayOwnValue(values, index), budget, depth + 1),
+        renderTableChildren(arrayOwnValue(value, index), budget, depth + 1),
       );
     }
     return rendered;
@@ -160,14 +165,14 @@ function tableRenderingValue(rendering: TableChildrenRendering): MaybePromise<st
 }
 
 function tableResolve<Value>(value: Value | PromiseLike<Value>): Promise<Value> {
-  return tableApply<Promise<Value>>(nativePromiseResolve, NativePromise, [value]);
+  return new NativePromise<Value>((resolve) => resolve(value));
 }
 
 function tableThen<Value, Result>(
   promise: Promise<Value>,
   onFulfilled: (value: Value) => Result | PromiseLike<Result>,
 ): Promise<Result> {
-  return tableApply<Promise<Result>>(nativePromiseThen, promise, [onFulfilled]);
+  return nativeReflectApply(nativePromiseThen, promise, [onFulfilled]);
 }
 
 function isPromiseLike(value: unknown): value is PromiseLike<unknown> {
@@ -175,12 +180,13 @@ function isPromiseLike(value: unknown): value is PromiseLike<unknown> {
     typeof value === 'object' &&
     value !== null &&
     'then' in value &&
-    typeof (value as { then?: unknown }).then === 'function'
+    typeof value.then === 'function'
   );
 }
 
 function tableRenderedHtml(html: string): TableRenderedHtml {
-  return trustedHtml(html, 'ui table primitive composition');
+  const rendered = trustedHtml(html, 'ui table primitive composition');
+  return rendered;
 }
 
 function escapeAttribute(value: string): string {
@@ -397,9 +403,9 @@ function tablePart(
 
 function tableAttributes(attributes: TablePartAttributes | Record<string, unknown>): string {
   let rendered = '';
-  const names = ['class', 'data-style-src', 'style', 'colspan', 'scope'] as const;
+  const names: readonly string[] = ['class', 'data-style-src', 'style', 'colspan', 'scope'];
   for (let index = 0; index < names.length; index += 1) {
-    const name = names[index] as (typeof names)[number];
+    const name = names[index] ?? '';
     const value = ownTableAttribute(attributes, name);
     const attribute = tableAttributeValue(value);
     if (attribute === undefined) continue;
@@ -423,11 +429,7 @@ function tableAttributeValue(value: unknown): string | undefined {
 }
 
 function ownTableAttribute(value: object, property: string): unknown {
-  const descriptor = tableApply<PropertyDescriptor | undefined>(
-    nativeGetOwnPropertyDescriptor,
-    NativeObject,
-    [value, property],
-  );
+  const descriptor = tableGetOwnPropertyDescriptor(value, property);
   if (descriptor === undefined) return undefined;
   if (!('value' in descriptor)) {
     throw new NativeTypeError(`Kovo table attribute ${property} must be an own data property.`);
@@ -436,16 +438,8 @@ function ownTableAttribute(value: object, property: string): unknown {
 }
 
 function arrayOwnValue(value: readonly unknown[], index: number): unknown {
-  const first = tableApply<PropertyDescriptor | undefined>(
-    nativeGetOwnPropertyDescriptor,
-    NativeObject,
-    [value, index],
-  );
-  const second = tableApply<PropertyDescriptor | undefined>(
-    nativeGetOwnPropertyDescriptor,
-    NativeObject,
-    [value, index],
-  );
+  const first = tableGetOwnPropertyDescriptor(value, index);
+  const second = tableGetOwnPropertyDescriptor(value, index);
   if (first === undefined && second === undefined) return undefined;
   if (
     first === undefined ||
@@ -460,16 +454,8 @@ function arrayOwnValue(value: readonly unknown[], index: number): unknown {
 }
 
 function stableArrayLength(value: readonly unknown[]): number {
-  const first = tableApply<PropertyDescriptor | undefined>(
-    nativeGetOwnPropertyDescriptor,
-    NativeObject,
-    [value, 'length'],
-  );
-  const second = tableApply<PropertyDescriptor | undefined>(
-    nativeGetOwnPropertyDescriptor,
-    NativeObject,
-    [value, 'length'],
-  );
+  const first = tableGetOwnPropertyDescriptor(value, 'length');
+  const second = tableGetOwnPropertyDescriptor(value, 'length');
   if (
     first === undefined ||
     second === undefined ||
