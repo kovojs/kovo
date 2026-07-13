@@ -22,6 +22,7 @@ import {
   compilerMapGet,
   compilerMapSet,
   compilerOwnDataValue,
+  compilerRegExpTest,
   compilerSetOwnDataProperty,
   compilerSetAdd,
   compilerSetDelete,
@@ -34,6 +35,7 @@ import {
   compilerStringSplit,
   compilerStringStartsWith,
   compilerStringToLowerCase,
+  compilerStringTrim,
 } from '../compiler-security-intrinsics.js';
 import { deriveMutationKey } from '../mutation-names.js';
 import { deriveRegistryIdentity } from '../registry-identities.js';
@@ -1173,9 +1175,16 @@ function stringLiteralArrayValuesFromExpression(expression: ts.Expression): stri
   if (!ts.isArrayLiteralExpression(expression)) return null;
 
   const values: string[] = [];
-  for (const element of expression.elements) {
+  const elementLength = compilerArrayLength(expression.elements, 'String literal array elements');
+  for (let index = 0; index < elementLength; index += 1) {
+    const element = compilerOwnDataValue(
+      expression.elements,
+      index,
+      'String literal array elements',
+    ) as ts.Expression | ts.SpreadElement | undefined;
+    if (!element) throw new TypeError(`String literal array elements[${index}] must be own data.`);
     if (!ts.isStringLiteralLike(element)) return null;
-    values.push(element.text);
+    compilerArrayAppend(values, element.text, 'String literal array values');
   }
 
   return values;
@@ -1187,14 +1196,29 @@ function arrowFunctionPartsFromExpression(
 ): ArrowFunctionPartsModel | null {
   if (!ts.isArrowFunction(expression)) return null;
 
-  const params = expression.parameters.map((parameter) => parameter.name);
-  if (params.length === 0 || !params.every(ts.isIdentifier)) return null;
+  const paramNames: string[] = [];
+  const parameterLength = compilerArrayLength(expression.parameters, 'Arrow parameters');
+  if (parameterLength === 0) return null;
+  for (let index = 0; index < parameterLength; index += 1) {
+    const parameter = compilerOwnDataValue(expression.parameters, index, 'Arrow parameters') as
+      | ts.ParameterDeclaration
+      | undefined;
+    if (!parameter) throw new TypeError(`Arrow parameters[${index}] must be own data.`);
+    if (!ts.isIdentifier(parameter.name)) return null;
+    compilerArrayAppend(paramNames, parameter.name.text, 'Arrow parameter names');
+  }
   if (ts.isBlock(expression.body)) return null;
 
   return {
-    expression: expression.body.getText(sourceFile).trim(),
-    param: params[0]?.text ?? '',
-    params: params.map((param) => param.text),
+    expression: compilerStringTrim(
+      compilerStringSlice(
+        sourceFile.text,
+        expression.body.getStart(sourceFile),
+        expression.body.getEnd(),
+      ),
+    ),
+    param: paramNames[0] ?? '',
+    params: paramNames,
   };
 }
 
@@ -1240,21 +1264,45 @@ function elementAccessRootPath(node: ts.Expression): string | null {
 }
 
 function objectLiteralPaths(expression: ts.ObjectLiteralExpression, prefix = ''): string[] {
-  return expression.properties.flatMap((property) => {
+  const result: string[] = [];
+  const propertyLength = compilerArrayLength(
+    expression.properties,
+    'Object-literal path properties',
+  );
+  for (let index = 0; index < propertyLength; index += 1) {
+    const property = compilerOwnDataValue(
+      expression.properties,
+      index,
+      'Object-literal path properties',
+    ) as ts.ObjectLiteralElementLike | undefined;
+    if (!property)
+      throw new TypeError(`Object-literal path properties[${index}] must be own data.`);
     if (ts.isShorthandPropertyAssignment(property)) {
-      return [pathWithPrefix(prefix, property.name.text)];
+      compilerArrayAppend(
+        result,
+        pathWithPrefix(prefix, property.name.text),
+        'Object-literal paths',
+      );
+      continue;
     }
 
-    if (!ts.isPropertyAssignment(property)) return [];
+    if (!ts.isPropertyAssignment(property)) continue;
 
     const key = propertyNameText(property.name);
-    if (!key) return [];
+    if (!key) continue;
 
     const path = pathWithPrefix(prefix, key);
-    return ts.isObjectLiteralExpression(property.initializer)
-      ? objectLiteralPaths(property.initializer, path)
-      : [path];
-  });
+    if (ts.isObjectLiteralExpression(property.initializer)) {
+      appendDenseValues(
+        result,
+        objectLiteralPaths(property.initializer, path),
+        'Nested object-literal paths',
+      );
+    } else {
+      compilerArrayAppend(result, path, 'Object-literal paths');
+    }
+  }
+  return result;
 }
 
 function pathWithPrefix(prefix: string, key: string): string {
@@ -1458,7 +1506,7 @@ function componentModelFromInitializer(
   if (!initializer || !ts.isCallExpression(initializer)) return null;
   if (!isComponentFactoryReference(initializer.expression, componentFactories)) return null;
 
-  const [optionsArg] = initializer.arguments;
+  const optionsArg = callArgument(initializer, 0);
   if (!optionsArg || !ts.isObjectLiteralExpression(optionsArg)) return null;
 
   const options =
@@ -1490,7 +1538,14 @@ function componentPropertyInitializer(
 ): ts.Expression | null {
   if (!optionsObject || !ts.isObjectLiteralExpression(optionsObject)) return null;
 
-  for (const property of optionsObject.properties) {
+  const propertyLength = compilerArrayLength(optionsObject.properties, 'Component properties');
+  for (let index = 0; index < propertyLength; index += 1) {
+    const property = compilerOwnDataValue(
+      optionsObject.properties,
+      index,
+      'Component properties',
+    ) as ts.ObjectLiteralElementLike | undefined;
+    if (!property) throw new TypeError(`Component properties[${index}] must be own data.`);
     if (!ts.isPropertyAssignment(property)) continue;
     if (propertyNameText(property.name) === propertyName) return property.initializer;
   }
@@ -1503,13 +1558,25 @@ function componentOptions(
   source: string,
   optionsObject: ts.ObjectLiteralExpression,
 ): ComponentOptionEntry[] {
-  return optionsObject.properties.flatMap((property) => {
-    if (!ts.isPropertyAssignment(property)) return [];
+  const result: ComponentOptionEntry[] = [];
+  const propertyLength = compilerArrayLength(
+    optionsObject.properties,
+    'Component option properties',
+  );
+  for (let index = 0; index < propertyLength; index += 1) {
+    const property = compilerOwnDataValue(
+      optionsObject.properties,
+      index,
+      'Component option properties',
+    ) as ts.ObjectLiteralElementLike | undefined;
+    if (!property) throw new TypeError(`Component option properties[${index}] must be own data.`);
+    if (!ts.isPropertyAssignment(property)) continue;
 
     const key = propertyNameText(property.name);
-    if (!key) return [];
+    if (!key) continue;
 
-    return [
+    compilerArrayAppend(
+      result,
       {
         end: property.name.getEnd(),
         ...leadingJustifiedDiagnostics(source, property),
@@ -1521,8 +1588,10 @@ function componentOptions(
         ...componentOptionStaticValueEntry(property.initializer),
         ...componentOptionStaticTemplateValueEntry(sourceFile, source, property.initializer),
       },
-    ];
-  });
+      'Component option facts',
+    );
+  }
+  return result;
 }
 
 function leadingJustifiedDiagnostics(
@@ -1530,15 +1599,29 @@ function leadingJustifiedDiagnostics(
   node: ts.Node,
 ): { justifiedDiagnostics: readonly string[] } | {} {
   const ranges = ts.getLeadingCommentRanges(source, node.getFullStart()) ?? [];
-  const codes = new Set<string>();
-  for (const range of ranges) {
+  const seen = compilerCreateSet<string>();
+  const codes: string[] = [];
+  const rangeLength = compilerArrayLength(ranges, 'Leading comment ranges');
+  for (let rangeIndex = 0; rangeIndex < rangeLength; rangeIndex += 1) {
+    const range = compilerOwnDataValue(ranges, rangeIndex, 'Leading comment ranges') as
+      | ts.CommentRange
+      | undefined;
+    if (!range) throw new TypeError(`Leading comment ranges[${rangeIndex}] must be own data.`);
     if (range.end > node.getStart(node.getSourceFile())) continue;
-    for (const code of parseJustifiedDiagnostics(source.slice(range.pos, range.end))) {
-      codes.add(code);
+    const parsed = parseJustifiedDiagnostics(compilerStringSlice(source, range.pos, range.end));
+    const parsedLength = compilerArrayLength(parsed, 'Parsed justified diagnostics');
+    for (let codeIndex = 0; codeIndex < parsedLength; codeIndex += 1) {
+      const code = compilerOwnDataValue(parsed, codeIndex, 'Parsed justified diagnostics');
+      if (typeof code !== 'string') {
+        throw new TypeError(`Parsed justified diagnostics[${codeIndex}] must be an own string.`);
+      }
+      if (compilerSetHas(seen, code)) continue;
+      compilerSetAdd(seen, code);
+      compilerArrayAppend(codes, code, 'Justified diagnostic codes');
     }
   }
 
-  return codes.size === 0 ? {} : { justifiedDiagnostics: [...codes] };
+  return codes.length === 0 ? {} : { justifiedDiagnostics: codes };
 }
 
 // SPEC §4.9: a query-backed component without disableServerRefresh infers a server-refreshable
@@ -3874,14 +3957,23 @@ function objectLiteralEntries(
   sourceFile: ts.SourceFile,
   source: string,
   expression: ts.ObjectLiteralExpression,
-  staticStringValues: ReadonlyMap<string, string> = new Map(),
+  staticStringValues: ReadonlyMap<string, string> = compilerCreateMap<string, string>(),
 ): ObjectLiteralEntry[] {
-  return expression.properties.flatMap((property) => {
+  const result: ObjectLiteralEntry[] = [];
+  const propertyLength = compilerArrayLength(expression.properties, 'Object literal properties');
+  for (let index = 0; index < propertyLength; index += 1) {
+    const property = compilerOwnDataValue(
+      expression.properties,
+      index,
+      'Object literal properties',
+    ) as ts.ObjectLiteralElementLike | undefined;
+    if (!property) throw new TypeError(`Object literal properties[${index}] must be own data.`);
     if (ts.isPropertyAssignment(property)) {
       const key = propertyNameText(property.name, { staticStringValues });
-      if (!key) return [];
+      if (!key) continue;
 
-      return [
+      compilerArrayAppend(
+        result,
         {
           key,
           ...(ts.isObjectLiteralExpression(property.initializer)
@@ -3896,25 +3988,32 @@ function objectLiteralEntries(
             : {}),
           ...staticConstructorTypeEntry(sourceFile, property.initializer),
           ...objectLiteralEntryPropertyAccesses(sourceFile, property.initializer),
-          value: source.slice(
+          value: compilerStringSlice(
+            source,
             property.initializer.getStart(sourceFile),
             property.initializer.getEnd(),
           ),
         },
-      ];
+        'Object literal entries',
+      );
+      continue;
     }
 
     if (ts.isShorthandPropertyAssignment(property)) {
-      return [{ key: property.name.text, value: property.name.text }];
+      compilerArrayAppend(
+        result,
+        { key: property.name.text, value: property.name.text },
+        'Object literal entries',
+      );
+      continue;
     }
 
     if (ts.isMethodDeclaration(property)) {
       const key = propertyNameText(property.name, { staticStringValues });
-      return key ? [{ key }] : [];
+      if (key) compilerArrayAppend(result, { key }, 'Object literal entries');
     }
-
-    return [];
-  });
+  }
+  return result;
 }
 
 /**
@@ -3933,9 +4032,16 @@ function completeJsxSpreadObjectLiteralEntries(
   sourceFile: ts.SourceFile,
   source: string,
   expression: ts.ObjectLiteralExpression,
-  staticStringValues: ReadonlyMap<string, string> = new Map(),
+  staticStringValues: ReadonlyMap<string, string> = compilerCreateMap<string, string>(),
 ): ObjectLiteralEntry[] | undefined {
-  for (const property of expression.properties) {
+  const propertyLength = compilerArrayLength(expression.properties, 'JSX spread object properties');
+  for (let index = 0; index < propertyLength; index += 1) {
+    const property = compilerOwnDataValue(
+      expression.properties,
+      index,
+      'JSX spread object properties',
+    ) as ts.ObjectLiteralElementLike | undefined;
+    if (!property) throw new TypeError(`JSX spread object properties[${index}] must be own data.`);
     if (ts.isShorthandPropertyAssignment(property)) continue;
     if (!ts.isPropertyAssignment(property)) return undefined;
 
@@ -3965,30 +4071,13 @@ function jsxElementModel(
     ? node.closingElement.getStart(sourceFile)
     : node.getEnd();
   const childSource = ts.isJsxElement(node)
-    ? source.slice(openingElement.getEnd(), closingStart)
+    ? compilerStringSlice(source, openingElement.getEnd(), closingStart)
     : '';
   const selfClosing = !ts.isJsxElement(node);
 
   return {
     ancestorTags: jsxAncestorTags(sourceFile, node),
-    attributes: openingElement.attributes.properties.flatMap((property) => {
-      if (!ts.isJsxAttribute(property)) return [];
-
-      const value = staticJsxAttributeValue(property);
-      const expression = jsxAttributeExpression(sourceFile, source, property);
-      const name = property.name.getText(sourceFile);
-      return [
-        {
-          ...jsxAttributeEventFacts(name),
-          end: property.getEnd(),
-          leadingStart: attributeLeadingStart(source, property.getStart(sourceFile)),
-          name,
-          start: property.getStart(sourceFile),
-          ...(expression === null ? {} : expression),
-          ...(value === undefined ? {} : { value }),
-        },
-      ];
-    }),
+    attributes: jsxAttributeModels(sourceFile, source, openingElement),
     childBody: jsxChildBody(childSource, openingElement.getEnd(), selfClosing),
     ...jsxChildFacts(node, sourceFile),
     closingStart,
@@ -4003,55 +4092,135 @@ function jsxElementModel(
       openingElement,
       node,
     ),
-    spreadAttributes: openingElement.attributes.properties.flatMap((property) => {
-      if (!ts.isJsxSpreadAttribute(property)) return [];
-
-      const expression = property.expression;
-      const unwrapped = unwrapExpression(expression);
-      const bareIdentifierName = ts.isIdentifier(unwrapped) ? unwrapped.text : undefined;
-      const callExpression = ts.isCallExpression(unwrapped) ? unwrapped : undefined;
-      const callName =
-        callExpression && ts.isIdentifier(callExpression.expression)
-          ? callExpression.expression.text
-          : undefined;
-      const callImport = namedImports.find((entry) => entry.localName === callName);
-      const [firstCallArgument] = callExpression?.arguments ?? [];
-      const callArgument = firstCallArgument ? unwrapExpression(firstCallArgument) : undefined;
-      const callArgumentBareIdentifierName =
-        callArgument && ts.isIdentifier(callArgument) ? callArgument.text : undefined;
-      const objectEntries = ts.isObjectLiteralExpression(unwrapped)
-        ? completeJsxSpreadObjectLiteralEntries(sourceFile, source, unwrapped)
-        : bareIdentifierName === undefined
-          ? undefined
-          : moduleScopeObjectEntries.get(bareIdentifierName);
-      return [
-        {
-          end: property.getEnd(),
-          expression: source.slice(expression.getStart(sourceFile), expression.getEnd()).trim(),
-          ...(callName === undefined ? {} : { expressionCallName: callName }),
-          ...(callImport === undefined
-            ? {}
-            : {
-                expressionCallImportedName: callImport.importedName,
-                expressionCallModuleSpecifier: callImport.moduleSpecifier,
-              }),
-          ...(callArgumentBareIdentifierName === undefined
-            ? {}
-            : { expressionCallArgumentBareIdentifierName: callArgumentBareIdentifierName }),
-          ...(bareIdentifierName === undefined
-            ? {}
-            : {
-                expressionBareIdentifierName: bareIdentifierName,
-                expressionIsBareIdentifier: true,
-              }),
-          ...(objectEntries === undefined ? {} : { objectEntries }),
-          start: property.getStart(sourceFile),
-        },
-      ];
-    }),
+    spreadAttributes: jsxSpreadAttributeModels(
+      sourceFile,
+      source,
+      openingElement,
+      moduleScopeObjectEntries,
+      namedImports,
+    ),
     start: node.getStart(sourceFile),
     tag: openingElement.tagName.getText(sourceFile),
   };
+}
+
+function jsxAttributeModels(
+  sourceFile: ts.SourceFile,
+  source: string,
+  openingElement: ts.JsxOpeningElement | ts.JsxSelfClosingElement,
+): JsxElementModel['attributes'][number][] {
+  const result: JsxElementModel['attributes'][number][] = [];
+  const properties = openingElement.attributes.properties;
+  const propertyLength = compilerArrayLength(properties, 'JSX attributes');
+  for (let index = 0; index < propertyLength; index += 1) {
+    const property = compilerOwnDataValue(properties, index, 'JSX attributes') as
+      | ts.JsxAttribute
+      | ts.JsxSpreadAttribute
+      | undefined;
+    if (!property) throw new TypeError(`JSX attributes[${index}] must be own data.`);
+    if (!ts.isJsxAttribute(property)) continue;
+
+    const value = staticJsxAttributeValue(property);
+    const expression = jsxAttributeExpression(sourceFile, source, property);
+    const name = property.name.getText(sourceFile);
+    compilerArrayAppend(
+      result,
+      {
+        ...jsxAttributeEventFacts(name),
+        end: property.getEnd(),
+        leadingStart: attributeLeadingStart(source, property.getStart(sourceFile)),
+        name,
+        start: property.getStart(sourceFile),
+        ...(expression === null ? {} : expression),
+        ...(value === undefined ? {} : { value }),
+      },
+      'JSX attributes',
+    );
+  }
+  return result;
+}
+
+function jsxSpreadAttributeModels(
+  sourceFile: ts.SourceFile,
+  source: string,
+  openingElement: ts.JsxOpeningElement | ts.JsxSelfClosingElement,
+  moduleScopeObjectEntries: ReadonlyMap<string, readonly ObjectLiteralEntry[]>,
+  namedImports: readonly NamedImportModel[],
+): JsxElementModel['spreadAttributes'][number][] {
+  const result: JsxElementModel['spreadAttributes'][number][] = [];
+  const properties = openingElement.attributes.properties;
+  const propertyLength = compilerArrayLength(properties, 'JSX spread attributes');
+  for (let index = 0; index < propertyLength; index += 1) {
+    const property = compilerOwnDataValue(properties, index, 'JSX spread attributes') as
+      | ts.JsxAttribute
+      | ts.JsxSpreadAttribute
+      | undefined;
+    if (!property) throw new TypeError(`JSX spread attributes[${index}] must be own data.`);
+    if (!ts.isJsxSpreadAttribute(property)) continue;
+
+    const expression = property.expression;
+    const unwrapped = unwrapExpression(expression);
+    const bareIdentifierName = ts.isIdentifier(unwrapped) ? unwrapped.text : undefined;
+    const callExpression = ts.isCallExpression(unwrapped) ? unwrapped : undefined;
+    const callName =
+      callExpression && ts.isIdentifier(callExpression.expression)
+        ? callExpression.expression.text
+        : undefined;
+    let callImport: NamedImportModel | undefined;
+    const importLength = compilerArrayLength(namedImports, 'Named imports');
+    for (let importIndex = 0; importIndex < importLength; importIndex += 1) {
+      const candidate = compilerOwnDataValue(namedImports, importIndex, 'Named imports') as
+        | NamedImportModel
+        | undefined;
+      if (!candidate) throw new TypeError(`Named imports[${importIndex}] must be own data.`);
+      if (candidate.localName === callName) {
+        callImport = candidate;
+        break;
+      }
+    }
+    const firstCallArgument = callExpression ? callArgument(callExpression, 0) : undefined;
+    const unwrappedCallArgument = firstCallArgument
+      ? unwrapExpression(firstCallArgument)
+      : undefined;
+    const callArgumentBareIdentifierName =
+      unwrappedCallArgument && ts.isIdentifier(unwrappedCallArgument)
+        ? unwrappedCallArgument.text
+        : undefined;
+    const objectEntries = ts.isObjectLiteralExpression(unwrapped)
+      ? completeJsxSpreadObjectLiteralEntries(sourceFile, source, unwrapped)
+      : bareIdentifierName === undefined
+        ? undefined
+        : compilerMapGet(moduleScopeObjectEntries, bareIdentifierName);
+    compilerArrayAppend(
+      result,
+      {
+        end: property.getEnd(),
+        expression: compilerStringTrim(
+          compilerStringSlice(source, expression.getStart(sourceFile), expression.getEnd()),
+        ),
+        ...(callName === undefined ? {} : { expressionCallName: callName }),
+        ...(callImport === undefined
+          ? {}
+          : {
+              expressionCallImportedName: callImport.importedName,
+              expressionCallModuleSpecifier: callImport.moduleSpecifier,
+            }),
+        ...(callArgumentBareIdentifierName === undefined
+          ? {}
+          : { expressionCallArgumentBareIdentifierName: callArgumentBareIdentifierName }),
+        ...(bareIdentifierName === undefined
+          ? {}
+          : {
+              expressionBareIdentifierName: bareIdentifierName,
+              expressionIsBareIdentifier: true,
+            }),
+        ...(objectEntries === undefined ? {} : { objectEntries }),
+        start: property.getStart(sourceFile),
+      },
+      'JSX spread attributes',
+    );
+  }
+  return result;
 }
 
 function jsxAttributeEventFacts(name: string): {
@@ -4065,22 +4234,24 @@ function jsxAttributeEventFacts(name: string): {
 }
 
 function jsxDomEventName(name: string): { domEventName: string } | {} {
-  if (!/^on[A-Z][A-Za-z0-9]*$/.test(name)) return {};
-  return { domEventName: name.slice(2).toLowerCase() };
+  if (!compilerRegExpTest(/^on[A-Z][A-Za-z0-9]*$/, name)) return {};
+  return { domEventName: compilerStringToLowerCase(compilerStringSlice(name, 2)) };
 }
 
 function jsxExecutionTriggerName(name: string): { executionTriggerName: string } | {} {
-  if (!name.startsWith('on:')) return {};
-  const triggerName = name.slice('on:'.length);
+  if (!compilerStringStartsWith(name, 'on:')) return {};
+  const triggerName = compilerStringSlice(name, 'on:'.length);
   if (!validExecutionTriggerName(triggerName)) return {};
   return { executionTriggerName: triggerName };
 }
 
 function validExecutionTriggerName(name: string): boolean {
   if (name === '') return false;
-  const [first, ...rest] = name;
-  if (!first || !isLowerAlpha(first)) return false;
-  return rest.every(isExecutionTriggerNameChar);
+  if (!isLowerAlpha(name[0] ?? '')) return false;
+  for (let index = 1; index < name.length; index += 1) {
+    if (!isExecutionTriggerNameChar(name[index] ?? '')) return false;
+  }
+  return true;
 }
 
 function isExecutionTriggerNameChar(char: string): boolean {
@@ -4228,30 +4399,70 @@ function callExpressionModel(
   source: string,
   node: ts.CallExpression,
 ): CallExpressionModel {
-  return {
-    arguments: node.arguments.map((argument) =>
-      source.slice(argument.getStart(sourceFile), argument.getEnd()),
-    ),
-    argumentArrowFunctionParts: node.arguments.map((argument) =>
+  const argumentSources: string[] = [];
+  const argumentArrowFunctionParts: (ArrowFunctionPartsModel | null)[] = [];
+  const argumentObjectLiteralPaths: string[][] = [];
+  const argumentPropertyAccesses: PropertyAccessPathModel[][] = [];
+  const argumentSpans: SourceSpan[] = [];
+  const argumentStringLiteralArrayValues: (string[] | null)[] = [];
+  const argumentStaticValues: (StaticLiteralValue | undefined)[] = [];
+  const argumentTemporalReads: TemporalReadModel[][] = [];
+  const argumentLength = compilerArrayLength(node.arguments, 'Call expression arguments');
+  for (let index = 0; index < argumentLength; index += 1) {
+    const argument = compilerOwnDataValue(node.arguments, index, 'Call expression arguments') as
+      | ts.Expression
+      | undefined;
+    if (!argument) throw new TypeError(`Call expression arguments[${index}] must be own data.`);
+    compilerArrayAppend(
+      argumentSources,
+      compilerStringSlice(source, argument.getStart(sourceFile), argument.getEnd()),
+      'Call argument sources',
+    );
+    compilerArrayAppend(
+      argumentArrowFunctionParts,
       arrowFunctionPartsFromExpression(sourceFile, argument),
-    ),
-    argumentObjectLiteralPaths: node.arguments.map((argument) =>
+      'Call argument arrow-function facts',
+    );
+    compilerArrayAppend(
+      argumentObjectLiteralPaths,
       ts.isObjectLiteralExpression(argument) ? objectLiteralPaths(argument) : [],
-    ),
-    argumentPropertyAccesses: node.arguments.map((argument) =>
+      'Call argument object-literal paths',
+    );
+    compilerArrayAppend(
+      argumentPropertyAccesses,
       propertyAccessPathModels(sourceFile, argument),
-    ),
-    argumentSpans: node.arguments.map((argument) => ({
-      end: argument.getEnd(),
-      start: argument.getStart(sourceFile),
-    })),
-    argumentStringLiteralArrayValues: node.arguments.map((argument) =>
+      'Call argument property accesses',
+    );
+    compilerArrayAppend(
+      argumentSpans,
+      { end: argument.getEnd(), start: argument.getStart(sourceFile) },
+      'Call argument spans',
+    );
+    compilerArrayAppend(
+      argumentStringLiteralArrayValues,
       stringLiteralArrayValuesFromExpression(argument),
-    ),
-    argumentStaticValues: node.arguments.map((argument) => staticLiteralValue(argument)),
-    argumentTemporalReads: node.arguments.map((argument) =>
+      'Call argument string arrays',
+    );
+    compilerArrayAppend(
+      argumentStaticValues,
+      staticLiteralValue(argument),
+      'Call argument static values',
+    );
+    compilerArrayAppend(
+      argumentTemporalReads,
       temporalReadModels(sourceFile, argument),
-    ),
+      'Call argument temporal reads',
+    );
+  }
+  return {
+    arguments: argumentSources,
+    argumentArrowFunctionParts,
+    argumentObjectLiteralPaths,
+    argumentPropertyAccesses,
+    argumentSpans,
+    argumentStringLiteralArrayValues,
+    argumentStaticValues,
+    argumentTemporalReads,
     end: node.getEnd(),
     ...exportedConstInitializerName(node),
     name: node.expression.getText(sourceFile),

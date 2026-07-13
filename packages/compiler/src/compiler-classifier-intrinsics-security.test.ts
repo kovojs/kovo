@@ -438,6 +438,141 @@ export const CartBadge = component({
     expect(poisonHits).toBe(0);
   });
 
+  it('does not suppress event property facts through upstream argument Array.map', () => {
+    const nativeMap = Array.prototype.map;
+    const nativeApply = Reflect.apply;
+    let poisonHits = 0;
+    let result: ReturnType<typeof compileComponentModule> | undefined;
+    try {
+      Array.prototype.map = function poisonedEmitArgumentMap<T, U>(
+        callback: (value: T, index: number, array: T[]) => U,
+        thisArg?: unknown,
+      ): U[] {
+        if (
+          (this[0] as { text?: unknown } | undefined)?.text === 'cart:added' &&
+          new Error().stack?.includes('callExpressionModel')
+        ) {
+          poisonHits += 1;
+          return [];
+        }
+        return nativeApply(nativeMap, this, [callback, thisArg]);
+      };
+      result = compileComponentModule({
+        fileName: 'cart.events.tsx',
+        queryShapes: { product: { id: 'string', unitPrice: 'number' } },
+        source: `
+export function notifyPrice(product, emit) {
+  emit('cart:added', { product: { unitPrice: product.unitPrice } });
+}
+`,
+      });
+    } finally {
+      Array.prototype.map = nativeMap;
+    }
+    expect(result?.diagnostics.filter((diagnostic) => diagnostic.code === 'KV320')).toHaveLength(1);
+    expect(poisonHits).toBe(0);
+  });
+
+  it('does not suppress local-state property facts through upstream object Array.flatMap', () => {
+    const nativeFlatMap = Array.prototype.flatMap;
+    const nativeApply = Reflect.apply;
+    let poisonHits = 0;
+    let result: ReturnType<typeof compileComponentModule> | undefined;
+    try {
+      Array.prototype.flatMap = function poisonedStatePropertyFlatMap<T, U>(
+        callback: (value: T, index: number, array: T[]) => U | readonly U[],
+        thisArg?: unknown,
+      ): U[] {
+        const first = this[0] as { name?: { text?: unknown } } | undefined;
+        if (first?.name?.text === 'saved' && new Error().stack?.includes('objectLiteralEntries')) {
+          poisonHits += 1;
+          return [];
+        }
+        return nativeApply(nativeFlatMap, this, [callback, thisArg]);
+      };
+      result = compileComponentModule({
+        fileName: 'cart-badge.tsx',
+        source: `
+export const CartBadge = component({
+  queries: { cart: cartQuery },
+  state: () => ({ saved: cart.count }),
+  render: ({ cart }, state) => <button disabled={cart.count === 0}>{state.saved}</button>,
+});
+`,
+      });
+    } finally {
+      Array.prototype.flatMap = nativeFlatMap;
+    }
+    expect(result?.diagnostics.filter((diagnostic) => diagnostic.code === 'KV301')).toHaveLength(1);
+    expect(poisonHits).toBe(0);
+  });
+
+  it('does not suppress secret query declarations through component-option Array.flatMap', () => {
+    const nativeFlatMap = Array.prototype.flatMap;
+    const nativeApply = Reflect.apply;
+    let poisonHits = 0;
+    let result: ReturnType<typeof compileComponentModule> | undefined;
+    try {
+      Array.prototype.flatMap = function poisonedQueryOptionFlatMap<T, U>(
+        callback: (value: T, index: number, array: T[]) => U | readonly U[],
+        thisArg?: unknown,
+      ): U[] {
+        const first = this[0] as { name?: { text?: unknown } } | undefined;
+        if (first?.name?.text === 'queries' && new Error().stack?.includes('componentOptions')) {
+          poisonHits += 1;
+          return [];
+        }
+        return nativeApply(nativeFlatMap, this, [callback, thisArg]);
+      };
+      result = compileComponentModule({
+        fileName: 'user-card.tsx',
+        queryShapes: { user: { passwordHash: { kind: 'secret', shape: 'string' } } },
+        source: `
+export const UserCard = component({
+  queries: { user: {} },
+  render: () => <user-card><span data-bind="user.passwordHash">x</span></user-card>,
+});
+`,
+      });
+    } finally {
+      Array.prototype.flatMap = nativeFlatMap;
+    }
+    expect(result?.diagnostics.filter((diagnostic) => diagnostic.code === 'KV435')).toHaveLength(1);
+    expect(poisonHits).toBe(0);
+  });
+
+  it('does not suppress unsafe JSX attributes through upstream attribute Array.flatMap', () => {
+    const nativeFlatMap = Array.prototype.flatMap;
+    const nativeApply = Reflect.apply;
+    let poisonHits = 0;
+    let result: ReturnType<typeof compileComponentModule> | undefined;
+    try {
+      Array.prototype.flatMap = function poisonedJsxAttributeFlatMap<T, U>(
+        callback: (value: T, index: number, array: T[]) => U | readonly U[],
+        thisArg?: unknown,
+      ): U[] {
+        const first = this[0] as { name?: { escapedText?: unknown } } | undefined;
+        if (
+          first?.name?.escapedText === 'dangerouslySetInnerHTML' &&
+          new Error().stack?.includes('jsxElementModel')
+        ) {
+          poisonHits += 1;
+          return [];
+        }
+        return nativeApply(nativeFlatMap, this, [callback, thisArg]);
+      };
+      result = compileComponentModule({
+        fileName: 'raw-html.tsx',
+        source:
+          "export const C = component({ render: () => <div dangerouslySetInnerHTML={'<img src=x onerror=alert(1)>'} /> });",
+      });
+    } finally {
+      Array.prototype.flatMap = nativeFlatMap;
+    }
+    expect(result?.diagnostics.filter((diagnostic) => diagnostic.code === 'KV236')).toHaveLength(1);
+    expect(poisonHits).toBe(0);
+  });
+
   it('does not publish a captured server secret through stateful Array.filter replacement', () => {
     const nativeFilter = Array.prototype.filter;
     const nativeApply = Reflect.apply;
