@@ -21,10 +21,13 @@ import type {
 } from '@kovojs/server/internal/data-plane-static-analysis';
 import { currentKovoBuildContext } from '@kovojs/server/internal/build-context';
 import { serializeRuntimeRegistryWireModule } from '@kovojs/server/internal/runtime-registry-wire';
-import { trustedViteSecurityProfileSentinel } from './internal/vite-security-sentinel.ts';
 import {
-  createKovoAppShellViteDevIntegration,
-  type KovoAppShellViteCompilerModuleDiagnosticReport,
+  trustedViteSecurityProfileIntegrationSentinel,
+  trustedViteSecurityProfileSentinel,
+} from './internal/vite-security-sentinel.ts';
+import type {
+  KovoAppShellViteCompilerModuleDiagnosticReport,
+  KovoAppShellViteDevIntegration,
 } from './vite-dev.js';
 
 const viteClearTimeout = globalThis.clearTimeout;
@@ -148,12 +151,17 @@ interface CssSplitChunks {
  * must default-export a KovoApp; generated route artifacts stay compiler-owned.
  */
 export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
-  const trustedSecurityProfile =
-    (
-      options as KovoVitePluginOptions & {
-        [trustedViteSecurityProfileSentinel]?: unknown;
-      }
-    )[trustedViteSecurityProfileSentinel] === trustedViteSecurityProfileSentinel;
+  const trustedOptions = options as KovoVitePluginOptions & {
+    [trustedViteSecurityProfileIntegrationSentinel]?: unknown;
+    [trustedViteSecurityProfileSentinel]?: unknown;
+  };
+  const trustedCreateDevIntegration =
+    trustedOptions[trustedViteSecurityProfileSentinel] === trustedViteSecurityProfileSentinel &&
+    typeof trustedOptions[trustedViteSecurityProfileIntegrationSentinel] === 'function'
+      ? (trustedOptions[
+          trustedViteSecurityProfileIntegrationSentinel
+        ] as typeof import('./vite-dev.js').createKovoAppShellViteDevIntegration)
+      : undefined;
   const app = authoredAppEntry(options.app);
   const runtimeRegistryPublicId = `virtual:kovo-runtime-registry:${app}`;
   const runtimeRegistryResolvedId = `\0${runtimeRegistryPublicId}`;
@@ -299,12 +307,12 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
       const compiler = await compilerPlugin();
       await compiler.configureServer?.(server);
       const appRouteTargets = await routeTargets();
-      let createDevIntegration: typeof createKovoAppShellViteDevIntegration;
-      if (trustedSecurityProfile) {
+      let createDevIntegration: typeof import('./vite-dev.js').createKovoAppShellViteDevIntegration;
+      if (trustedCreateDevIntegration !== undefined) {
         // SPEC §6.6 rule 6: the supported CLI selects this constructor from the trusted plugin
         // profile imported before authored config evaluation. Never resolve it through the live
         // Vite graph, whose alias/plugin hooks are caller-owned.
-        createDevIntegration = createKovoAppShellViteDevIntegration;
+        createDevIntegration = trustedCreateDevIntegration;
       } else {
         // Direct `kovo()` wiring is a convenience integration, not the supported security runner.
         // Preserve its graph-local constructor so existing embeddings/tests retain module identity.

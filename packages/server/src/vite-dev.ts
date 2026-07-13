@@ -86,6 +86,7 @@ import {
   witnessObjectIs,
   witnessOwnKeys,
   witnessReflectApply,
+  witnessReflectGet,
   witnessWeakMapGet,
   witnessWeakMapHas,
   witnessWeakMapSet,
@@ -509,7 +510,7 @@ export function kovoAppShellViteDevPlugin(
     server.middlewares.use((request, response, next) => {
       const loaded = securityPromiseResolve(ssrLoadModule(kovoAppShellViteDevModuleId));
       const dispatched = securityPromiseThen(loaded, (serverModule) => {
-        const dispatch = viteDevOwnDataValue(
+        const dispatch = viteDevModuleExportValue(
           serverModule,
           'dispatchKovoAppShellViteDevRequest',
           `${kovoAppShellViteDevModuleId} dispatch export`,
@@ -1473,7 +1474,7 @@ function readKovoAppShellViteDevApp(
   exportName: string,
   moduleId: string,
 ): KovoApp {
-  const app = viteDevOwnDataValue(module, exportName, `${moduleId} ${exportName} export`);
+  const app = viteDevModuleExportValue(module, exportName, `${moduleId} ${exportName} export`);
   if (isKovoApp(app)) return app;
 
   throw new Error(`${moduleId} must export ${exportName} as a Kovo app for Vite dev.`);
@@ -1487,7 +1488,7 @@ function readKovoAppShellViteDevNodeHandler(
   moduleId: string,
 ): KovoAppShellViteMiddleware {
   if (exportName !== undefined) {
-    const handler = viteDevOwnDataValue(module, exportName, `${moduleId} ${exportName} export`);
+    const handler = viteDevModuleExportValue(module, exportName, `${moduleId} ${exportName} export`);
     if (isKovoAppShellViteDevNodeHandler(handler)) {
       return (request, response, next) => {
         const result = securityPromiseResolve(
@@ -1881,6 +1882,21 @@ function viteDevOwnDataValue(source: unknown, property: PropertyKey, label: stri
     throw new TypeError(`${label} must be a stable own data property.`);
   }
   return before.value;
+}
+
+function viteDevModuleExportValue(
+  source: unknown,
+  property: PropertyKey,
+  label: string,
+): unknown {
+  if ((typeof source !== 'object' && typeof source !== 'function') || source === null) {
+    throw new TypeError(`${label} owner must be an object.`);
+  }
+  // Vite owns SSR namespace proxies and may materialize a fresh descriptor/value wrapper on each
+  // inspection. Supported CLI loads are kept outside authored resolve/load/transform hooks, so one
+  // fixed-name read from an own namespace export is the honest trust boundary (SPEC §6.6 rule 6).
+  if (witnessGetOwnPropertyDescriptor(source, property) === undefined) return undefined;
+  return witnessReflectGet(source, property);
 }
 
 function viteDevStableCallable(source: unknown, property: PropertyKey, label: string): Function {
