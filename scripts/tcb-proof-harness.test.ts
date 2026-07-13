@@ -112,6 +112,34 @@ describe('TCB proof: emitToWire finite egress model (DEC-K/A10)', () => {
     }
   });
 
+  it('keeps multi-value Secret inspection pinned after late Array.isArray poisoning', () => {
+    const originalIsArray = Array.isArray;
+    let error: unknown;
+    try {
+      Array.isArray = function poisonedArrayIsArray(_value: unknown): _value is unknown[] {
+        return false;
+      };
+      try {
+        emitToWire(
+          {
+            body: 'ok',
+            headers: { 'x-token': ['public', secret(secretNeedle) as unknown as string] },
+            status: 200,
+          },
+          'framework-response',
+          { method: 'GET', status: 200 },
+        );
+      } catch (caught) {
+        error = caught;
+      }
+    } finally {
+      Array.isArray = originalIsArray;
+    }
+
+    expect(String(error)).toContain('KV435');
+    expect(String(error)).not.toContain(secretNeedle);
+  });
+
   it('refuses channel/value mismatches before constructing a Web Response', () => {
     expect(() =>
       emitToWire({ body: 'ok', headers: {}, status: 200 }, 'raw-endpoint-response', {

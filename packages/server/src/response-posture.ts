@@ -658,6 +658,7 @@ function finalizeResponseHeaders(
     if (witnessIsArray(value)) {
       for (let valueIndex = 0; valueIndex < value.length; valueIndex += 1) {
         const entry = value[valueIndex];
+        assertNoSecretEgressValue(entry, `response header "${name}"`);
         if (typeof entry !== 'string') {
           throw new TypeError(`Response header ${name} values must be strings.`);
         }
