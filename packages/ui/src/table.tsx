@@ -440,7 +440,9 @@ function ownTableAttribute(value: object, property: string): unknown {
 function arrayOwnValue(value: readonly unknown[], index: number): unknown {
   const first = tableGetOwnPropertyDescriptor(value, index);
   const second = tableGetOwnPropertyDescriptor(value, index);
-  if (first === undefined && second === undefined) return undefined;
+  if (first === undefined && second === undefined) {
+    throw new NativeTypeError('Kovo table children must be dense own data elements.');
+  }
   if (
     first === undefined ||
     second === undefined ||

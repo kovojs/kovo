@@ -88,6 +88,10 @@ describe('@kovojs/ui Table StyleX slots', () => {
     );
     expect(accessorInvoked).toBe(false);
 
+    expect(() => Table.definition.render({ children: new Array(1) })).toThrow(
+      /dense own data elements/u,
+    );
+
     expect(() => Table.definition.render({ children: new Array(10_001) })).toThrow(
       /bounded stable dense array/u,
     );
