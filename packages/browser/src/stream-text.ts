@@ -2,7 +2,9 @@ import type { StreamTextChunk } from './wire-response-scanner.js';
 import type { ImportHandlerModule } from './handlers.js';
 import { assertAllowedKovoDynamicImportUrlForModule } from './dynamic-import-url.js';
 import {
+  applySecurityIntrinsic,
   securityArrayAppend,
+  securityGetOwnPropertyDescriptor,
   securityMap,
   securityMapForEach,
   securityMapGet,
@@ -13,6 +15,7 @@ import {
   securitySetForEach,
   securityStringSlice,
 } from './security-witness-intrinsics.js';
+import { readRuntimeElementAttribute } from './runtime-dom-security.js';
 
 export interface StreamTextTarget {
   getAttribute?(name: string): string | null;
@@ -215,7 +218,7 @@ export class StreamTextBuffer {
   }
 
   private async render(target: StreamTextTarget, source: string): Promise<void> {
-    const ref = target.getAttribute?.('data-stream-renderer');
+    const ref = readRuntimeElementAttribute(target, 'data-stream-renderer');
     if (!ref || !this.importModule) return;
 
     const parsed = parseRendererReference(ref);
@@ -227,12 +230,17 @@ export class StreamTextBuffer {
     try {
       assertAllowedKovoDynamicImportUrlForModule(parsed.url, this.importModule);
       const mod = await this.importModule(parsed.url);
-      const renderer = mod[parsed.exportName];
-      if (typeof renderer !== 'function') {
+      const descriptor = securityGetOwnPropertyDescriptor(mod, parsed.exportName);
+      const renderer = descriptor && 'value' in descriptor ? descriptor.value : undefined;
+      if (!isStreamRenderer(renderer)) {
         this.onError?.(new Error(`Stream renderer export not found: ${ref}`));
         return;
       }
-      await renderer(target, source, { signal: this.signal });
+      await applySecurityIntrinsic<unknown>(renderer, undefined, [
+        target,
+        source,
+        { signal: this.signal },
+      ]);
     } catch (error) {
       this.onError?.(error);
     }
@@ -243,6 +251,16 @@ export class StreamTextBuffer {
     clearTimeout(state.timer);
     state.timer = undefined;
   }
+}
+
+function isStreamRenderer(
+  value: unknown,
+): value is (
+  target: StreamTextTarget,
+  source: string,
+  options: { signal: AbortSignal | undefined },
+) => unknown {
+  return typeof value === 'function';
 }
 
 export function findStreamTextTarget(

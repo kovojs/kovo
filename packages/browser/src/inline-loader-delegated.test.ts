@@ -311,6 +311,30 @@ describe('inline loader delegated handlers', () => {
   );
 
   it.each(inlineSourceInstallCases)(
+    'rejects inherited inline derive outputs through %s',
+    async (_name, installSource) => {
+      const host = new FakeStatefulBindingElement({
+        'kovo-state': '{"enabled":false}',
+        'on:click': '/c/theme.js#toggle',
+      });
+      const output = new FakeStatefulBindingElement(
+        { 'data-bind': '/c/theme.js#labelDerive' },
+        { parent: host, textContent: 'old' },
+      );
+      const run = vi.fn(() => 'forged');
+      const carrier = Object.create({ labelDerive: { run } }) as Record<string, unknown>;
+      carrier.toggle = (_event: unknown, ctx: { state: { enabled: boolean } }) => {
+        ctx.state.enabled = true;
+      };
+
+      await dispatchInlineDelegatedClick(host, async () => carrier, installSource, ['/c/theme.js']);
+
+      expect(run).not.toHaveBeenCalled();
+      expect(output.textContent).toBe('');
+    },
+  );
+
+  it.each(inlineSourceInstallCases)(
     'reuses inline ctx.signal for the same island through %s',
     async (_name, installSource) => {
       const globalRecord = globalThis as unknown as Record<string, unknown>;
@@ -557,6 +581,35 @@ describe('inline loader delegated handlers', () => {
 
       await assertErrorParity('/c/cart.js');
       await assertErrorParity('/c/cart.js#missing');
+    },
+  );
+
+  it.each(inlineSourceInstallCases)(
+    'rejects inherited and accessor inline handler exports through %s',
+    async (_name, installSource) => {
+      const inherited = vi.fn();
+      const inheritedCarrier = Object.create({ toggle: inherited }) as Record<string, unknown>;
+      const inheritedElement = new FakeElement({ 'on:click': '/c/theme.js#toggle' });
+      await expect(
+        dispatchInlineDelegatedClick(
+          inheritedElement,
+          async () => inheritedCarrier,
+          installSource,
+          ['/c/theme.js'],
+        ),
+      ).rejects.toThrow('Handler export not found: /c/theme.js#toggle');
+      expect(inherited).not.toHaveBeenCalled();
+
+      const getter = vi.fn(() => inherited);
+      const accessorCarrier: Record<string, unknown> = {};
+      Object.defineProperty(accessorCarrier, 'toggle', { configurable: true, get: getter });
+      const accessorElement = new FakeElement({ 'on:click': '/c/theme.js#toggle' });
+      await expect(
+        dispatchInlineDelegatedClick(accessorElement, async () => accessorCarrier, installSource, [
+          '/c/theme.js',
+        ]),
+      ).rejects.toThrow('Handler export not found: /c/theme.js#toggle');
+      expect(getter).not.toHaveBeenCalled();
     },
   );
 

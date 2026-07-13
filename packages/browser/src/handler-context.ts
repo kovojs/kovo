@@ -28,6 +28,11 @@ import {
   securityWeakMapSet,
 } from './security-witness-intrinsics.js';
 import { readAttribute, tagClose } from './wire-html.js';
+import {
+  closestRuntimeElement,
+  readRuntimeElementAttribute,
+  setRuntimeElementAttribute,
+} from './runtime-dom-security.js';
 
 /** Runtime API used by Kovo applications and generated runtime integration. */
 export type ElementParamValue = string | number | boolean;
@@ -87,7 +92,9 @@ export function createDelegatedHandlerContext(
 
 /** @internal Read an island element's `data-p-*` params into a typed params object (SPEC §4.3). */
 export function readElementParams(element: EventElementLike): Record<string, ElementParamValue> {
-  const paramTypes = readElementParamTypes(element.getAttribute?.('kovo-param-types'));
+  const paramTypes = readElementParamTypes(
+    readRuntimeElementAttribute(element, 'kovo-param-types'),
+  );
   const params = securityNullRecord<ElementParamValue>();
 
   const attributes = domAttributes(element.attributes);
@@ -136,7 +143,7 @@ function coerceElementParam(value: string, type: string | undefined): ElementPar
 /** @internal Read an island element's serialized `kovo-state`, defaulting malformed state to `{}` (SPEC §4.3). */
 export function readElementState(element: EventElementLike): JsonValue {
   const stateHost = readElementStateHost(element);
-  const state = stateHost?.getAttribute('kovo-state');
+  const state = stateHost ? readRuntimeElementAttribute(stateHost, 'kovo-state') : null;
   if (!state) return {};
 
   try {
@@ -149,13 +156,13 @@ export function readElementState(element: EventElementLike): JsonValue {
 /** @internal Serialize island state back onto the element's `kovo-state` attribute (SPEC §4.3). */
 export function writeElementState(element: EventElementLike, state: JsonValue): void {
   const serialized = securityJsonStringify(state);
-  if (serialized !== undefined) element.setAttribute?.('kovo-state', serialized);
+  if (serialized !== undefined) setRuntimeElementAttribute(element, 'kovo-state', serialized);
 }
 
 export function readElementStateHost(element: EventElementLike): EventElementLike | null {
   return (
-    element.closest?.('[kovo-state]') ??
-    (element.getAttribute('kovo-state') === null ? null : element)
+    closestRuntimeElement<EventElementLike>(element, '[kovo-state]') ??
+    (readRuntimeElementAttribute(element, 'kovo-state') === null ? null : element)
   );
 }
 
@@ -173,11 +180,11 @@ function createHandlerSignal(element: EventElementLike, scope: IslandSignalScope
 }
 
 function islandSignalKey(element: EventElementLike): string | null {
-  const island = element.closest?.('[kovo-c]') ?? element;
+  const island = closestRuntimeElement<EventElementLike>(element, '[kovo-c]') ?? element;
   return islandSignalIdentity(
-    island.getAttribute('kovo-c'),
-    island.getAttribute('kovo-key'),
-    island.getAttribute('id'),
+    readRuntimeElementAttribute(island, 'kovo-c'),
+    readRuntimeElementAttribute(island, 'kovo-key'),
+    readRuntimeElementAttribute(island, 'id'),
   );
 }
 

@@ -160,18 +160,18 @@ function installInlineKovoLoader(im) {
   const intrinsicJsonParse = intrinsicJson.parse;
   const ci = () => mis.createMutationIdem();
   const rh = (el) =>
-    el.closest?.('[kovo-state]') ?? (el.getAttribute?.('kovo-state') === null ? null : el);
+    bns.closestElement(el, '[kovo-state]') ??
+    (bns.readAttribute(el, 'kovo-state') === null ? null : el);
   const rs = (el) => {
     try {
       return bns.call(intrinsicJsonParse, intrinsicJson, [
-        rh(el)?.getAttribute('kovo-state') ?? '{}',
+        bns.readAttribute(rh(el), 'kovo-state') ?? '{}',
       ]);
     } catch {
       return {};
     }
   };
-  const qa = (root, selector) =>
-    root.querySelectorAll ? [...root.querySelectorAll(selector)] : [];
+  const qa = (root, selector) => bns.queryAllElements(root, selector);
   const xa = (current, next) => {
     for (let i = current.attributes.length; i--; ) {
       const attr = current.attributes[i];
@@ -274,8 +274,24 @@ function installInlineKovoLoader(im) {
     if (!ki(url)) throw Error('Disallowed Kovo dynamic import URL: ' + url);
     return oi(url);
   };
+  const oe = (carrier, name) => {
+    if (carrier === null || typeof carrier !== 'object') return;
+    const descriptor = bns.getOwnSecurityPropertyDescriptor(carrier, name);
+    return descriptor && 'value' in descriptor ? descriptor.value : undefined;
+  };
+  const ras = (carrier, name) => {
+    const attribute = bns.readAttribute(carrier, name);
+    if (attribute !== null) return attribute;
+    const value = oe(carrier, name);
+    return typeof value === 'string' ? value : null;
+  };
+  const dr = (mod, name, state) => {
+    const derive = oe(mod, name);
+    const run = oe(derive, 'run');
+    return typeof run === 'function' ? bns.call(run, derive, [state]) : undefined;
+  };
   const sh = (el, host) =>
-    el === host || !el.closest || el.closest('[kovo-state]') === host;
+    el === host || bns.closestElement(el, '[kovo-state]') === host;
   const ba = (el) =>
     [...(el.attributes || [])].filter(
       (attr) => attr.name.startsWith('data-bind:') && attr.value,
@@ -352,8 +368,7 @@ function installInlineKovoLoader(im) {
     const hi = ref.lastIndexOf('#');
     if (hi <= 0 || hi === ref.length - 1) return;
     const mod = await im(ref.slice(0, hi));
-    const derive = mod[ref.slice(hi + 1)];
-    const val = derive?.run?.(state);
+    const val = dr(mod, ref.slice(hi + 1), state);
     if (bt) {
       wa(el, bt, val);
     } else {
@@ -392,18 +407,18 @@ function installInlineKovoLoader(im) {
       const hi = ref.lastIndexOf('#');
       if (hi <= 0 || hi === ref.length - 1) return;
       const mod = await im(ref.slice(0, hi));
-      wp(el, suffix, mod[ref.slice(hi + 1)]?.run?.(state));
+      wp(el, suffix, dr(mod, ref.slice(hi + 1), state));
     } else if (ref.startsWith('state.')) {
       wp(el, suffix, vp(state, ref.slice(6)));
     }
   };
   const as = async (host, state) => {
-    const hb = host.getAttribute?.('data-bind');
+    const hb = bns.readAttribute(host, 'data-bind');
     if (hb?.includes('#')) await wd(host, hb, undefined, state);
     else ws(host, hb, undefined, state);
     for (const el of qa(host, '[data-bind]')) {
       if (sh(el, host)) {
-        const binding = el.getAttribute('data-bind');
+        const binding = bns.readAttribute(el, 'data-bind');
         if (binding?.includes('#')) {
           await wd(el, binding, undefined, state);
         } else {
@@ -446,16 +461,15 @@ function installInlineKovoLoader(im) {
   const hsaf = (value) => value && !/[\x00-\x1f\x7f\s;,#=]/.test(value);
   const hsc = (value) => hsaf(value) && !value.includes(':');
   const targetIdentity = (el) =>
-    el.getAttribute('kovo-fragment-target') ??
-    el.getAttribute('id') ??
-    el.getAttribute('kovo-c') ??
-    '';
+    ras(el, 'kovo-fragment-target') ?? ras(el, 'id') ?? ras(el, 'kovo-c') ?? '';
   const liveTargetIdentity = (el) =>
-    el.getAttribute('kovo-live-component') ?? el.getAttribute('kovo-c') ?? targetIdentity(el);
+    ras(el, 'kovo-live-component') ??
+    ras(el, 'kovo-c') ??
+    targetIdentity(el);
   const liveProps = (el) => {
     try {
       const props = bns.call(intrinsicJsonParse, intrinsicJson, [
-        el.getAttribute('kovo-props') || '{}',
+        ras(el, 'kovo-props') || '{}',
       ]);
       return props && typeof props === 'object' && !Array.isArray(props) ? props : {};
     } catch {
@@ -466,7 +480,7 @@ function installInlineKovoLoader(im) {
     ...new Set(
       [...doc.querySelectorAll('[kovo-deps]')]
         .map((el) => {
-          const deps = rd(el.getAttribute('kovo-deps'));
+          const deps = rd(ras(el, 'kovo-deps'));
           const target = targetIdentity(el);
           if (!hsaf(target) || !deps.every(hsaf)) return '';
           return target && (deps.length ? target + '=' + deps.join(' ') : target);
@@ -480,7 +494,7 @@ function installInlineKovoLoader(im) {
     for (const el of doc.querySelectorAll('[kovo-deps]')) {
       const target = targetIdentity(el);
       const component = liveTargetIdentity(el);
-      const token = el.getAttribute('kovo-live-token');
+      const token = ras(el, 'kovo-live-token');
       if (!hsaf(target) || !hsc(component) || !hsaf(token)) continue;
       if (!target || seen.has(target)) continue;
       seen.add(target);
@@ -505,7 +519,8 @@ function installInlineKovoLoader(im) {
     }
   };
   const ft = (target) => ftd(doc, target);
-  const hs = (el) => ((el = el.closest('[kovo-c]') || el).a ||= new AbortController()).signal;
+  const hs = (el) =>
+    ((el = bns.closestElement(el, '[kovo-c]') || el).a ||= new AbortController()).signal;
   const kb = (root = doc) => {
     const meta = bns.queryOne(root, 'meta[name="kovo-build"]');
     return meta ? bns.readAttribute(meta, 'content') || '' : '';
@@ -747,12 +762,12 @@ function installInlineKovoLoader(im) {
     }
   };
   const sr = async (el, source) => {
-    const ref = el.getAttribute?.('data-stream-renderer');
+    const ref = bns.readAttribute(el, 'data-stream-renderer');
     const hi = ref?.lastIndexOf('#') ?? -1;
     if (hi <= 0 || hi === ref.length - 1) return;
     const mod = await im(ref.slice(0, hi));
-    const render = mod[ref.slice(hi + 1)];
-    if (typeof render === 'function') await render(el, source, {});
+    const render = oe(mod, ref.slice(hi + 1));
+    if (typeof render === 'function') await bns.call(render, undefined, [el, source, {}]);
   };
   const at = (texts) => {
     let missing = false;
@@ -768,7 +783,11 @@ function installInlineKovoLoader(im) {
       se[x.target] = el;
       el.textContent = source;
       el.setAttribute?.('data-stream-state', 'streaming');
-      void sr(el, source).catch(() => {});
+      void (async () => {
+        try {
+          await sr(el, source);
+        } catch {}
+      })();
     }
     return !missing;
   };
@@ -943,7 +962,9 @@ function installInlineKovoLoader(im) {
     const next = bns.safeSameOriginPath(bns.readFormDataValue(body, 'next'));
     if (next) return next;
     const current = bns.currentUrl();
-    const action = current ? bns.parseUrl(form.action || '', current.href) : undefined;
+    const action = current
+      ? bns.parseUrl(ras(form, 'action') || '', current.href)
+      : undefined;
     if (action?.pathname === '/_m/auth/sign-in' || action?.pathname === '/auth/sign-in') return '/';
     return bns.currentPathTarget() || '/';
   };
@@ -956,29 +977,30 @@ function installInlineKovoLoader(im) {
     }
     return false;
   };
-  const sef = (event, form) => {
-    event.preventDefault();
-    const streaming = form.getAttribute?.('data-mutation-stream') !== null;
-    const body = new FormData(form, event.submitter);
+  const sef = (event, form, submitter) => {
+    if (!bns.preventDelegatedEventDefault(event)) return;
+    const streaming = bns.readAttribute(form, 'data-mutation-stream') !== null;
+    const body = bns.createFormData(form, submitter);
     const formIdem = bns.readFormDataValue(body, 'Kovo-Idem');
     const idem = typeof formIdem === 'string' && formIdem !== '' ? formIdem : ci();
-    bns.fetchValue(form.action, {
-      body,
-      headers: {
-        Accept: streaming
-          ? 'text/vnd.kovo.fragment+html; stream=1'
-          : 'text/vnd.kovo.fragment+html',
-        'Kovo-Form-Target': targetIdentity(form),
-        'Kovo-Fragment': 'true',
-        'Kovo-Idem': String(idem),
-        'Kovo-Live-Targets': rlt().join('; '),
-        ...(streaming ? { 'Kovo-Stream': 'true' } : {}),
-        'Kovo-Targets': rt().join('; '),
-      },
-      keepalive: !streaming,
-      method: bns.upper(form.method || 'post'),
-    })
-      .then((response) => {
+    void (async () => {
+      try {
+        const response = await bns.fetchValue(ras(form, 'action') || '', {
+          body,
+          headers: {
+            Accept: streaming
+              ? 'text/vnd.kovo.fragment+html; stream=1'
+              : 'text/vnd.kovo.fragment+html',
+            'Kovo-Form-Target': targetIdentity(form),
+            'Kovo-Fragment': 'true',
+            'Kovo-Idem': String(idem),
+            'Kovo-Live-Targets': rlt().join('; '),
+            ...(streaming ? { 'Kovo-Stream': 'true' } : {}),
+            'Kovo-Targets': rt().join('; '),
+          },
+          keepalive: !streaming,
+          method: bns.upper(ras(form, 'method') || 'post'),
+        });
         const status = rsp(response);
         // SPEC §9.3: retirement wins over every redirect/body channel; a response carrying
         // conflicting metadata cannot keep the old page-load principal alive.
@@ -1011,47 +1033,55 @@ function installInlineKovoLoader(im) {
           // missing/mismatched token must cancel unread bytes and hard-reload with zero apply.
           const responseBuild = bh(response);
           if (kb() && (!responseBuild || responseBuild !== kb())) {
-            return recoverStream(responseBody);
-          }
-          return asr(responseBody);
-        }
-        return bns.readResponseText(response).then((text) => {
-          const changes = chg(response);
-          if (eaf(response, changes, text)) {
-            // C176 / SPEC §9.3: the accepted empty-auth fallback is a principal transition even
-            // without the explicit header. Retirement must precede a cancellable navigation.
-            retireBroadcast();
-            ng(ant(form, body));
+            await recoverStream(responseBody);
             return;
           }
-          ab(text, bh(response));
-          const completedStatus = rsp(response, 200);
-          if (completedStatus >= 200 && completedStatus < 300 && bns.readResponseField(response, 'ok') !== false) {
-            pb(text, changes);
-          }
-        });
-      })
-      .catch((error) => {
+          await asr(responseBody);
+          return;
+        }
+        const text = await bns.readResponseText(response);
+        const changes = chg(response);
+        if (eaf(response, changes, text)) {
+          // C176 / SPEC §9.3: the accepted empty-auth fallback is a principal transition even
+          // without the explicit header. Retirement must precede a cancellable navigation.
+          retireBroadcast();
+          ng(ant(form, body));
+          return;
+        }
+        ab(text, bh(response));
+        const completedStatus = rsp(response, 200);
+        if (completedStatus >= 200 && completedStatus < 300 && bns.readResponseField(response, 'ok') !== false) {
+          pb(text, changes);
+        }
+      } catch (error) {
         if (error !== streamRecoveryError) fsb(form);
-      });
+      }
+    })();
   };
   const rp = (el) =>
-    (el.getAttribute('kovo-param-types') || '').split(/[\s,]+/).reduce((types, entry) => {
+    (ras(el, 'kovo-param-types') || '').split(/[\s,]+/).reduce((types, entry) => {
       const [name, type] = entry.split(':');
       if (name) types[name] = type;
       return types;
     }, {},);
   const dispatch = async (event) => {
-    if (event.type === 'submit') {
-      const form = event.target?.closest?.('form[enhance],form[data-enhance],form[data-mutation]',);
+    const eventFacts = bns.snapshotDelegatedEvent(event);
+    if (!eventFacts) return;
+    const eventType = eventFacts.type;
+    const eventTarget = eventFacts.target;
+    if (eventType === 'submit') {
+      const form = bns.closestElement(
+        eventTarget,
+        'form[enhance],form[data-enhance],form[data-mutation]',
+      );
       if (form) {
-        sef(event, form);
+        sef(event, form, eventFacts.submitter);
         return;
       }
     }
-    if (event.type === 'click' && inav(event)) return;
-    const el = event.target?.closest?.('[on\\:' + event.type + ']');
-    const refs = el?.getAttribute('on:' + event.type);
+    if (eventType === 'click' && inav(event)) return;
+    const el = bns.closestElement(eventTarget, '[on\\:' + eventType + ']');
+    const refs = el ? bns.readAttribute(el, 'on:' + eventType) : null;
     if (!el || !refs) return;
     // SPEC.md §4.4: cancel the native context menu synchronously, in this
     // capture-phase prefix, before the awaited handler import below. An
@@ -1061,8 +1091,8 @@ function installInlineKovoLoader(im) {
     // The marker lets the chained primitive (SPEC.md §4.6 contextMenu open) tell
     // this framework native-suppression apart from a genuine author preventDefault
     // so it still opens the styled menu rather than treating itself as superseded.
-    if (event.type === 'contextmenu' && event.cancelable && !event.defaultPrevented) {
-      event.preventDefault();
+    if (eventType === 'contextmenu' && eventFacts.cancelable && !eventFacts.defaultPrevented) {
+      bns.preventDelegatedEventDefault(event);
       event.kovoNativeDefaultManaged = true;
     }
     const params = {};
@@ -1070,7 +1100,7 @@ function installInlineKovoLoader(im) {
     const state = rs(el);
     const st = rh(el);
     const context = { params, state, signal: hs(el) };
-    for (const attr of el.attributes || []) {
+    for (const attr of bns.snapshotElementAttributes(el)) {
       if (!attr.name.startsWith('data-p-')) continue;
       const name = attr.name
         .slice('data-p-'.length)
@@ -1084,19 +1114,19 @@ function installInlineKovoLoader(im) {
       const hi = ref.lastIndexOf('#');
       if (hi <= 0 || hi === ref.length - 1) throw Error('Invalid handler reference: ' + ref);
       const mod = await im(ref.slice(0, hi));
-      const fn = mod[ref.slice(hi + 1)];
+      const fn = oe(mod, ref.slice(hi + 1));
       if (typeof fn !== 'function') throw Error('Handler export not found: ' + ref);
       const prev = globalThis.__kovo_postCommitSchedule;
       globalThis.__kovo_postCommitSchedule = (cb) => pc.push(cb);
       let run;
       try {
-        run = fn(event, context);
+        run = bns.call(fn, undefined, [event, context]);
       } finally {
         globalThis.__kovo_postCommitSchedule = prev;
       }
       await run;
     }
-    st?.setAttribute?.('kovo-state', JSON.stringify(state));
+    if (st) bns.setElementAttribute(st, 'kovo-state', JSON.stringify(state));
     if (st) await as(st, state);
     for (const cb of pc) try { cb(); } catch {}
   };
@@ -1155,9 +1185,11 @@ function installInlineKovoLoader(im) {
     addEventListener(
       overType,
       (event) => {
-        const el = event.target?.closest?.('[on\\:' + enterType + ']');
-        if (!el || el.contains?.(event.relatedTarget)) return;
-        void dispatch({ relatedTarget: event.relatedTarget, target: el, type: enterType });
+        const eventFacts = bns.snapshotDelegatedEvent(event);
+        if (!eventFacts) return;
+        const el = bns.closestElement(eventFacts.target, '[on\\:' + enterType + ']');
+        if (!el || bns.elementContains(el, eventFacts.relatedTarget)) return;
+        void dispatch({ relatedTarget: eventFacts.relatedTarget, target: el, type: enterType });
       },
       { capture: true },
     );

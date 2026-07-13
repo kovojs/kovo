@@ -33,6 +33,21 @@ export interface BrowserMutationBroadcastEnvelopeSnapshot {
   readonly type: 'kovo:mutation-response';
 }
 
+/** @internal Immutable platform-event facts used for delegated authority selection. */
+export interface BrowserDelegatedEventSnapshot {
+  readonly altKey: boolean;
+  readonly button: number;
+  readonly cancelable: boolean;
+  readonly ctrlKey: boolean;
+  readonly defaultPrevented: boolean;
+  readonly metaKey: boolean;
+  readonly relatedTarget: object | null;
+  readonly shiftKey: boolean;
+  readonly submitter: unknown;
+  readonly target: object | null;
+  readonly type: string;
+}
+
 /** @internal Private exact response facts bound to one accepted fetch carrier. */
 interface BrowserFetchResponsePlan {
   readonly body: unknown;
@@ -85,6 +100,8 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
   const NativeReadableStreamDefaultReader = scope.ReadableStreamDefaultReader;
   const NativeEvent = scope.Event;
   const NativeEventTarget = scope.EventTarget;
+  const NativeMouseEvent = scope.MouseEvent;
+  const NativeSubmitEvent = scope.SubmitEvent;
   const NativePageTransitionEvent = scope.PageTransitionEvent;
   const NativeMessageEvent = scope.MessageEvent;
   const NativeBroadcastChannel = scope.BroadcastChannel;
@@ -150,6 +167,9 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
     : undefined;
   const elementGetAttribute = NativeElement
     ? valueMethod(NativeElement.prototype, 'getAttribute')
+    : undefined;
+  const elementClosest = NativeElement
+    ? valueMethod(NativeElement.prototype, 'closest')
     : undefined;
   const elementHasAttribute = NativeElement
     ? valueMethod(NativeElement.prototype, 'hasAttribute')
@@ -248,6 +268,38 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
     : undefined;
   const eventTargetDispatchEvent = NativeEventTarget
     ? valueMethod(NativeEventTarget.prototype, 'dispatchEvent')
+    : undefined;
+  const eventTypeGetter = NativeEvent ? getter(NativeEvent.prototype, 'type') : undefined;
+  const eventTargetGetter = NativeEvent ? getter(NativeEvent.prototype, 'target') : undefined;
+  const eventCancelableGetter = NativeEvent
+    ? getter(NativeEvent.prototype, 'cancelable')
+    : undefined;
+  const eventDefaultPreventedGetter = NativeEvent
+    ? getter(NativeEvent.prototype, 'defaultPrevented')
+    : undefined;
+  const eventPreventDefault = NativeEvent
+    ? valueMethod(NativeEvent.prototype, 'preventDefault')
+    : undefined;
+  const mouseEventRelatedTarget = NativeMouseEvent
+    ? getter(NativeMouseEvent.prototype, 'relatedTarget')
+    : undefined;
+  const mouseEventButton = NativeMouseEvent
+    ? getter(NativeMouseEvent.prototype, 'button')
+    : undefined;
+  const mouseEventAltKey = NativeMouseEvent
+    ? getter(NativeMouseEvent.prototype, 'altKey')
+    : undefined;
+  const mouseEventCtrlKey = NativeMouseEvent
+    ? getter(NativeMouseEvent.prototype, 'ctrlKey')
+    : undefined;
+  const mouseEventMetaKey = NativeMouseEvent
+    ? getter(NativeMouseEvent.prototype, 'metaKey')
+    : undefined;
+  const mouseEventShiftKey = NativeMouseEvent
+    ? getter(NativeMouseEvent.prototype, 'shiftKey')
+    : undefined;
+  const submitEventSubmitter = NativeSubmitEvent
+    ? getter(NativeSubmitEvent.prototype, 'submitter')
     : undefined;
   const pageTransitionPersisted = NativePageTransitionEvent
     ? getter(NativePageTransitionEvent.prototype, 'persisted')
@@ -495,6 +547,73 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
       name,
     ]);
     return typeof value === 'string' ? value : null;
+  }
+
+  function closestElement(element: unknown, selector: string): Element | null {
+    if (!controlsSound || element === null || typeof element !== 'object') return null;
+    const value = callPlatformOrCustom<unknown>(element, [elementClosest], 'closest', [selector]);
+    return value !== null && typeof value === 'object' ? (value as Element) : null;
+  }
+
+  function readEventField(
+    event: object,
+    fieldGetter: (() => unknown) | undefined,
+    property: PropertyKey,
+  ): unknown {
+    if (fieldGetter) {
+      try {
+        return apply(fieldGetter, event, []);
+      } catch {}
+    }
+    return readOwnData(event, property);
+  }
+
+  function snapshotDelegatedEvent(event: unknown): BrowserDelegatedEventSnapshot | undefined {
+    if (!controlsSound || event === null || typeof event !== 'object') return undefined;
+    const type = readEventField(event, eventTypeGetter, 'type');
+    const target = readEventField(event, eventTargetGetter, 'target');
+    if (
+      typeof type !== 'string' ||
+      type.length === 0 ||
+      (target !== null && typeof target !== 'object')
+    ) {
+      return undefined;
+    }
+    const relatedTarget = readEventField(event, mouseEventRelatedTarget, 'relatedTarget');
+    const button = readEventField(event, mouseEventButton, 'button');
+    return freezeBrowserSnapshot({
+      altKey: readEventField(event, mouseEventAltKey, 'altKey') === true,
+      button: typeof button === 'number' ? button : 0,
+      cancelable: readEventField(event, eventCancelableGetter, 'cancelable') === true,
+      ctrlKey: readEventField(event, mouseEventCtrlKey, 'ctrlKey') === true,
+      defaultPrevented:
+        readEventField(event, eventDefaultPreventedGetter, 'defaultPrevented') === true,
+      metaKey: readEventField(event, mouseEventMetaKey, 'metaKey') === true,
+      relatedTarget:
+        relatedTarget !== null && typeof relatedTarget === 'object' ? relatedTarget : null,
+      shiftKey: readEventField(event, mouseEventShiftKey, 'shiftKey') === true,
+      submitter: readEventField(event, submitEventSubmitter, 'submitter'),
+      target,
+      type,
+    });
+  }
+
+  function preventDelegatedEventDefault(event: unknown): boolean {
+    if (!controlsSound || event === null || typeof event !== 'object') return false;
+    if (eventPreventDefault) {
+      try {
+        apply(eventPreventDefault, event, []);
+        return true;
+      } catch {}
+    }
+    const custom = readOwnData(event, 'preventDefault');
+    if (typeof custom !== 'function') return false;
+    try {
+      apply(custom, event, []);
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   function readDomProperty(
@@ -1728,6 +1847,13 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
     return controlsSound && typeof value === 'string' && lower(trim(value)) === expectedLowercase;
   }
 
+  function createFormData(form: HTMLFormElement, submitter?: HTMLElement | null): FormData {
+    if (!controlsSound || !NativeFormData) {
+      throw new TypeError('Kovo form-data constructor control is unavailable.');
+    }
+    return new NativeFormData(form, submitter);
+  }
+
   function readFormDataValue(formData: unknown, name: string): unknown {
     if (!controlsSound || formData === null || typeof formData !== 'object') return undefined;
     if (formDataGet) {
@@ -2253,7 +2379,20 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
           !documentElement ||
           !eventTargetAddEventListener ||
           !eventTargetRemoveEventListener ||
-          !eventTargetDispatchEvent
+          !eventTargetDispatchEvent ||
+          !eventTypeGetter ||
+          !eventTargetGetter ||
+          !eventCancelableGetter ||
+          !eventDefaultPreventedGetter ||
+          !eventPreventDefault ||
+          (NativeMouseEvent &&
+            (!mouseEventRelatedTarget ||
+              !mouseEventButton ||
+              !mouseEventAltKey ||
+              !mouseEventCtrlKey ||
+              !mouseEventMetaKey ||
+              !mouseEventShiftKey)) ||
+          (NativeSubmitEvent && !submitEventSubmitter)
         ) {
           return false;
         }
@@ -2303,6 +2442,39 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
           rejectedForeignEventReceiver = true;
         }
         if (!rejectedForeignEventReceiver) return false;
+        const eventFactControl = new NativeEvent('kovo-security-control:event-facts', {
+          cancelable: true,
+        });
+        if (
+          apply<unknown>(eventTypeGetter, eventFactControl, []) !==
+            'kovo-security-control:event-facts' ||
+          apply<unknown>(eventTargetGetter, eventFactControl, []) !== null ||
+          apply<unknown>(eventCancelableGetter, eventFactControl, []) !== true ||
+          apply<unknown>(eventDefaultPreventedGetter, eventFactControl, []) !== false
+        ) {
+          return false;
+        }
+        apply(eventPreventDefault, eventFactControl, []);
+        if (apply<unknown>(eventDefaultPreventedGetter, eventFactControl, []) !== true)
+          return false;
+        if (NativeMouseEvent) {
+          const mouseFactControl = new NativeMouseEvent('click', {
+            altKey: true,
+            button: 1,
+            ctrlKey: true,
+            metaKey: true,
+            shiftKey: true,
+          });
+          if (
+            apply<unknown>(mouseEventButton!, mouseFactControl, []) !== 1 ||
+            apply<unknown>(mouseEventAltKey!, mouseFactControl, []) !== true ||
+            apply<unknown>(mouseEventCtrlKey!, mouseFactControl, []) !== true ||
+            apply<unknown>(mouseEventMetaKey!, mouseFactControl, []) !== true ||
+            apply<unknown>(mouseEventShiftKey!, mouseFactControl, []) !== true
+          ) {
+            return false;
+          }
+        }
       }
       if (NativeMessageEvent) {
         if (!messageEventData) return false;
@@ -2433,10 +2605,13 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
       if (NativeDocument && NativeElement && NativeNode && documentObject) {
         if (
           !NativeHTMLFormElement ||
+          !NativeFormData ||
+          !formDataGet ||
           !htmlFormSubmit ||
           !documentCreateElement ||
           !elementSetAttribute ||
           !elementGetAttribute ||
+          !elementClosest ||
           !elementHasAttribute ||
           !elementRemoveAttribute ||
           !elementAttributes ||
@@ -2514,6 +2689,8 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
           rejectedForeignFormReceiver = true;
         }
         if (!rejectedForeignFormReceiver) return false;
+        const formDataControl = new NativeFormData(formSubmitControl as HTMLFormElement);
+        if (apply(formDataGet, formDataControl, ['kovo-missing-control']) !== null) return false;
         apply(elementSetAttribute, snapshotControl, ['kovo-nav-segment', 'security-control']);
         apply(elementSetAttribute, nestedControl, ['kovo-nav-segment', 'nested-control']);
         apply(elementSetAttribute, nestedControl, ['kovo-fragment-target', 'security-live-target']);
@@ -2525,6 +2702,13 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
         ]);
         apply(elementSetAttribute, templateChildControl, ['data-kovo-template-control', 'yes']);
         apply(nodeAppendChild, snapshotControl, [nestedControl]);
+        if (
+          apply<unknown>(elementClosest, nestedControl, [
+            '[kovo-nav-segment="security-control"]',
+          ]) !== snapshotControl
+        ) {
+          return false;
+        }
         const templateFragment = apply<unknown>(templateContent, templateControl, []);
         if (templateFragment === null || typeof templateFragment !== 'object') return false;
         // C186 / SPEC §6.6: the realm witness must not itself violate the default Trusted Types
@@ -2664,8 +2848,10 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
     charCode,
     cloneDomNode,
     cloneElement,
+    closestElement,
     createMutationBroadcastChannel,
     createFragmentContent,
+    createFormData,
     createTextDecoder,
     currentPathTarget,
     currentUrl,
@@ -2687,6 +2873,7 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
     navigateSameOrigin,
     parseHtmlDocument,
     parseUrl,
+    preventDelegatedEventDefault,
     prependElementChildren,
     queryOne,
     queryAllElements,
@@ -2717,6 +2904,7 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
     setElementAttribute,
     slice,
     snapshotChildNodes,
+    snapshotDelegatedEvent,
     snapshotElementAttributes,
     snapshotElementChildren,
     snapshotMutationBroadcastEnvelopeData,

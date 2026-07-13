@@ -19,6 +19,11 @@ import {
   type EnhancedMutationLoaderOptions,
 } from './mutation-submit.js';
 import type { QueryScriptLike } from './query-script-hydration.js';
+import {
+  closestRuntimeElement,
+  runtimeElementContains,
+  snapshotRuntimeDelegatedEvent,
+} from './runtime-dom-security.js';
 
 /** Runtime API used by Kovo applications and generated runtime integration. */
 export interface LoaderLifecycleTarget extends ListenerTargetLike<DelegatedEvent> {}
@@ -132,14 +137,15 @@ export function installDelegatedEventLifecycle(
       options.root,
       overType,
       (event) => {
-        const crossing = event as DelegatedEvent & { relatedTarget?: PointerCrossingNode | null };
-        const element = crossing.target?.closest?.(`[on\\:${enterType}]`) as
-          | PointerCrossingNode
-          | null
-          | undefined;
-        if (!element || element.contains?.(crossing.relatedTarget ?? null) === true) return;
+        const eventFacts = snapshotRuntimeDelegatedEvent(event);
+        if (!eventFacts) return;
+        const element = closestRuntimeElement<PointerCrossingNode>(
+          eventFacts.target,
+          `[on\\:${enterType}]`,
+        );
+        if (!element || runtimeElementContains(element, eventFacts.relatedTarget)) return;
         dispatchLifecycleEvent(
-          { target: element, type: enterType },
+          { relatedTarget: eventFacts.relatedTarget, target: element, type: enterType },
           options.importModule,
           options.islandSignalScope,
           options.onError,

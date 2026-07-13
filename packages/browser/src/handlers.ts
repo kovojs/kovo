@@ -12,7 +12,14 @@ import {
 import { applyStateBindings, supportsQueryBindings } from './query-bindings.js';
 import { assertAllowedKovoDynamicImportRefForModule } from './dynamic-import-url.js';
 import {
+  closestRuntimeElement,
+  readRuntimeElementAttribute,
+  snapshotRuntimeDelegatedEvent,
+} from './runtime-dom-security.js';
+import {
+  applySecurityIntrinsic,
   securityArrayAppend,
+  securityGetOwnPropertyDescriptor,
   securityRegExpTest,
   securityStringSlice,
   securityWeakMap,
@@ -119,7 +126,12 @@ export async function dispatchDelegatedEvent(
   importModule: ImportHandlerModule,
   islandSignalScope: IslandSignalScope = defaultIslandSignalScope,
 ): Promise<void> {
-  const element = event.target?.closest?.(`[on\\:${event.type}]`);
+  const eventFacts = snapshotRuntimeDelegatedEvent(event);
+  if (!eventFacts) return;
+  const element = closestRuntimeElement<EventElementLike>(
+    eventFacts.target,
+    `[on\\:${eventFacts.type}]`,
+  );
   if (!element) return;
 
   const stateHost = readElementStateHost(element) ?? element;
@@ -136,6 +148,7 @@ export async function dispatchDelegatedEvent(
       element,
       stateHost,
       islandSignalScope,
+      eventFacts.type,
     );
   })();
   const queuedRecord: { value: Promise<void> | undefined } = { value: undefined };
@@ -163,6 +176,7 @@ async function dispatchDelegatedEventForElement(
   element: EventElementLike,
   stateHost: EventElementLike,
   islandSignalScope: IslandSignalScope,
+  eventType: string,
 ): Promise<void> {
   const handlerContext = createDelegatedHandlerContext(element, stateHost, islandSignalScope);
 
@@ -172,16 +186,18 @@ async function dispatchDelegatedEventForElement(
   const postCommitQueue: Array<() => void> = [];
 
   try {
-    const references = parseHandlerReferences(element.getAttribute(`on:${event.type}`));
+    const references = parseHandlerReferences(
+      readRuntimeElementAttribute(element, 'on:' + eventType),
+    );
     for (let index = 0; index < references.length; index += 1) {
       const reference = references[index];
       if (reference === undefined) continue;
       const { ref, source } = reference;
       assertAllowedKovoDynamicImportRefForModule(ref, importModule);
       const mod = await importModule(ref.url);
-      const fn = mod[ref.exportName];
+      const fn = ownHandlerModuleExport(mod, ref.exportName);
 
-      if (typeof fn !== 'function') {
+      if (!isClientHandler(fn)) {
         throw new Error(`Handler export not found: ${source}`);
       }
 
@@ -189,7 +205,10 @@ async function dispatchDelegatedEventForElement(
       // call frame: primitives register deferred work synchronously, and a
       // synchronous-scoped hook avoids leaking into concurrent dispatches.
       const result = withPostCommitQueue(postCommitQueue, () =>
-        (fn as ClientHandler)(event as Event, handlerContext.context),
+        applySecurityIntrinsic<ReturnType<ClientHandler>>(fn, undefined, [
+          event,
+          handlerContext.context,
+        ]),
       );
       await result;
     }
@@ -200,6 +219,15 @@ async function dispatchDelegatedEventForElement(
     }
     drainPostCommitQueue(postCommitQueue);
   }
+}
+
+function ownHandlerModuleExport(mod: object, exportName: string): unknown {
+  const descriptor = securityGetOwnPropertyDescriptor(mod, exportName);
+  return descriptor && 'value' in descriptor ? descriptor.value : undefined;
+}
+
+function isClientHandler(value: unknown): value is ClientHandler {
+  return typeof value === 'function';
 }
 
 function parseHandlerReferences(

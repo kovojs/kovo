@@ -37,6 +37,11 @@ import {
   reloadSessionTransitionDocument,
   retireSessionTransitionPrincipal,
 } from './session-transition.js';
+import {
+  createRuntimeFormData,
+  preventRuntimeDelegatedEventDefault,
+  snapshotRuntimeDelegatedEvent,
+} from './runtime-dom-security.js';
 
 export type {
   EnhancedFormLike,
@@ -82,18 +87,22 @@ export async function dispatchEnhancedFormSubmit(
   islandSignalScope: IslandSignalScope = defaultIslandSignalScope,
   hooks: EnhancedFormSubmitHooks = {},
 ): Promise<boolean> {
-  if (!options || event.type !== 'submit') return false;
+  if (!options) return false;
+  const eventFacts = snapshotRuntimeDelegatedEvent(event);
+  if (!eventFacts || eventFacts.type !== 'submit') return false;
 
-  const form = closestEnhancedMutationForm(event.target);
+  const form = closestEnhancedMutationForm(eventFacts.target);
   if (!form) return false;
   if (!isEligibleEnhancedMutationForm(form)) return false;
 
-  event.preventDefault?.();
+  if (!preventRuntimeDelegatedEventDefault(event)) return false;
   try {
     const applied = await submitEnhancedMutation({
       fetch: options.fetch,
       form,
-      formData: options.formData ? options.formData(form, event) : formDataForSubmit(form, event),
+      formData: options.formData
+        ? options.formData(form, event)
+        : formDataForSubmit(form, eventFacts.submitter),
       ...(options.onError
         ? {
             onError(error) {
@@ -134,21 +143,23 @@ export function isEnhancedSubmitEvent(
   event: DelegatedEvent,
   options: EnhancedMutationLoaderOptions | undefined,
 ): boolean {
-  if (!options || event.type !== 'submit') return false;
+  if (!options) return false;
+  const eventFacts = snapshotRuntimeDelegatedEvent(event);
+  if (!eventFacts || eventFacts.type !== 'submit') return false;
 
-  const form = closestEnhancedMutationForm(event.target);
+  const form = closestEnhancedMutationForm(eventFacts.target);
   return form !== null && isEligibleEnhancedMutationForm(form);
 }
 
-function formDataForSubmit(form: EnhancedFormElementLike, event: DelegatedEvent): FormData {
-  if (event.submitter !== undefined) {
+function formDataForSubmit(form: EnhancedFormElementLike, submitter: unknown): FormData {
+  if (submitter !== undefined) {
     try {
-      return new FormData(form as HTMLFormElement, event.submitter as HTMLElement);
+      return createRuntimeFormData(form, submitter);
     } catch {
       // Older DOM implementations and test doubles may not support the submitter overload.
     }
   }
-  return new FormData(form as HTMLFormElement);
+  return createRuntimeFormData(form);
 }
 
 /** @internal Options for submitting a single enhanced mutation request (SPEC §9.1). */

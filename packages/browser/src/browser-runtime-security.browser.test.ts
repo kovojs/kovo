@@ -6,6 +6,7 @@ import { applyBindProp } from './bind-prop.js';
 import { createDocumentLifecycleRecovery } from './document-lifecycle.js';
 import { isAllowedKovoDynamicImportUrl } from './dynamic-import-url.js';
 import { installEnhancedNavigationRuntime } from './enhanced-navigation.js';
+import { dispatchDelegatedEvent } from './handlers.js';
 import { DomMorphRoot, applyFragments } from './morph.js';
 import { createBrowserNavigationSecurityControls } from './navigation-security-intrinsics.js';
 import { applyCompiledQueryUpdatePlan, applyStateBindings } from './query-bindings.js';
@@ -51,7 +52,7 @@ afterEach(() => {
   document.body.replaceChildren();
   document.head
     .querySelectorAll(
-      'base[data-browser-runtime-security], meta[name="kovo-build"], meta[name="kovo-session"]',
+      'base[data-browser-runtime-security], meta[name="kovo-build"], meta[name="kovo-session"], [data-kovo-module-allowlist]',
     )
     .forEach((element) => element.remove());
   delete (globalThis as typeof globalThis & { __bindPropOwned?: number }).__bindPropOwned;
@@ -60,6 +61,78 @@ afterEach(() => {
 });
 
 describe('browser-runtime security regressions', () => {
+  it('pins delegated event selection and handler export authority before late DOM poisoning', async () => {
+    const safeUrl = '/c/safe-handler.client.js';
+    const privilegedUrl = '/c/privileged-handler.client.js';
+    const marker = document.createElement('meta');
+    marker.setAttribute('data-kovo-module-allowlist', `${safeUrl} ${privilegedUrl}`);
+    document.head.append(marker);
+    const safeButton = document.createElement('button');
+    safeButton.setAttribute('on:click', `${safeUrl}#runSafe`);
+    const privilegedButton = document.createElement('button');
+    privilegedButton.setAttribute('on:click', `${privilegedUrl}#runPrivileged`);
+    document.body.append(safeButton, privilegedButton);
+    const safe = vi.fn();
+    const privileged = vi.fn();
+    const imports: string[] = [];
+    const importModule = async (url: string) => {
+      imports.push(url);
+      return url === safeUrl ? { runSafe: safe } : { runPrivileged: privileged };
+    };
+    let pending: Promise<void> | undefined;
+    document.addEventListener(
+      'click',
+      (event) => {
+        pending = dispatchDelegatedEvent(event, importModule);
+      },
+      { capture: true, once: true },
+    );
+
+    const targetDescriptor = Object.getOwnPropertyDescriptor(Event.prototype, 'target');
+    const typeDescriptor = Object.getOwnPropertyDescriptor(Event.prototype, 'type');
+    const closestDescriptor = Object.getOwnPropertyDescriptor(Element.prototype, 'closest');
+    const getAttributeDescriptor = Object.getOwnPropertyDescriptor(
+      Element.prototype,
+      'getAttribute',
+    );
+    if (!targetDescriptor || !typeDescriptor || !closestDescriptor || !getAttributeDescriptor) {
+      throw new Error('missing browser event security controls');
+    }
+    try {
+      Object.defineProperty(Event.prototype, 'target', {
+        ...targetDescriptor,
+        get: () => privilegedButton,
+      });
+      Object.defineProperty(Event.prototype, 'type', {
+        ...typeDescriptor,
+        get: () => 'submit',
+      });
+      Object.defineProperty(Element.prototype, 'closest', {
+        ...closestDescriptor,
+        value: () => privilegedButton,
+      });
+      Object.defineProperty(Element.prototype, 'getAttribute', {
+        ...getAttributeDescriptor,
+        value(name: string) {
+          return name === 'on:click' ? `${privilegedUrl}#runPrivileged` : null;
+        },
+      });
+      safeButton.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+    } finally {
+      Object.defineProperty(Event.prototype, 'target', targetDescriptor);
+      Object.defineProperty(Event.prototype, 'type', typeDescriptor);
+      Object.defineProperty(Element.prototype, 'closest', closestDescriptor);
+      Object.defineProperty(Element.prototype, 'getAttribute', getAttributeDescriptor);
+    }
+    if (!pending) throw new Error('delegated event was not observed');
+    await pending;
+
+    expect(imports).toEqual([safeUrl]);
+    expect(safe).toHaveBeenCalledOnce();
+    expect(privileged).not.toHaveBeenCalled();
+    marker.remove();
+  });
+
   it('keeps witnessed fragment bytes authoritative after late trim replacement', () => {
     const safeHtml = '<section kovo-fragment-target="account">SERVER-SAFE</section>';
     const hostileHtml = '<base data-browser-runtime-security href="https://attacker.example/">';

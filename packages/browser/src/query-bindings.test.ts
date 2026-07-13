@@ -1,4 +1,4 @@
-import { afterAll, describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it, vi } from 'vitest';
 
 import {
   setRuntimeSinkSecurityEventHandler,
@@ -631,6 +631,42 @@ describe('query binding helpers', () => {
       '/c/accordion.client.js#Accordion$output_text_derive',
     ]);
     expect(output.textContent).toBe('none');
+  });
+
+  it('rejects inherited and accessor derive output authority without invocation', async () => {
+    const host = new FakeStatefulBindingElement({ 'kovo-state': '{"value":"safe"}' });
+    const output = new FakeStatefulBindingElement(
+      { 'data-bind': '/c/accordion.client.js#Accordion$output_text_derive' },
+      { parent: host, textContent: 'old' },
+    );
+    const run = vi.fn(() => 'forged');
+    const inheritedCarrier = Object.create({
+      Accordion$output_text_derive: { run },
+    }) as Record<string, unknown>;
+
+    await applyStateBindings(
+      host,
+      { value: 'safe' },
+      { importModule: async () => inheritedCarrier },
+    );
+    expect(run).not.toHaveBeenCalled();
+    expect(output.textContent).toBe('');
+
+    output.textContent = 'old';
+    const getter = vi.fn(() => ({ run }));
+    const accessorCarrier: Record<string, unknown> = {};
+    Object.defineProperty(accessorCarrier, 'Accordion$output_text_derive', {
+      configurable: true,
+      get: getter,
+    });
+    await applyStateBindings(
+      host,
+      { value: 'safe' },
+      { importModule: async () => accessorCarrier },
+    );
+    expect(getter).not.toHaveBeenCalled();
+    expect(run).not.toHaveBeenCalled();
+    expect(output.textContent).toBe('');
   });
 
   it('detects query binding roots by selector support', () => {

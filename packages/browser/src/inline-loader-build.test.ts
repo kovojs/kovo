@@ -68,7 +68,7 @@ describe('inline loader build source', () => {
     expect(inlineKovoLoaderInstallerReadableSource).not.toContain('new BroadcastChannel(');
     expect(inlineKovoLoaderInstallerReadableSource).toContain("listen('visibilitychange'");
     expect(buildInlineKovoLoaderInstallerSource()).toBe(inlineKovoLoaderInstallerSource);
-    expect(inlineKovoLoaderInstallerSource).toContain("getAttribute('kovo-live-component')");
+    expect(inlineKovoLoaderInstallerSource).toContain("'kovo-live-component'");
     expect(inlineKovoLoaderInstallerSource).not.toContain('kovo-live-cp');
   });
 

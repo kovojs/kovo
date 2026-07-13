@@ -10,10 +10,16 @@ import type {
 import { morphDomElement, sanitizeDomElementTree } from './morph.js';
 import type { QueryStore } from './query-store.js';
 import { kovoBoundAttributeValue } from './security-output.js';
-import { securityStringTrim } from './security-witness-intrinsics.js';
+import {
+  applySecurityIntrinsic,
+  securityArrayAppend,
+  securityGetOwnPropertyDescriptor,
+  securityStringTrim,
+} from './security-witness-intrinsics.js';
 import { kovoCreateHTML } from './trusted-types.js';
 import { assertAllowedKovoDynamicImportRefForModule } from './dynamic-import-url.js';
 import { reconcileKeyed } from './keyed-reconciler.js';
+import { closestRuntimeElement, readRuntimeElementAttribute } from './runtime-dom-security.js';
 
 /** Runtime API used by Kovo applications and generated runtime integration. */
 export interface QueryBindingElement
@@ -468,19 +474,43 @@ async function applyStateDeriveBindings(
   const importModule = options.importModule;
   if (!importModule) return applied;
 
+  type DeriveBinding =
+    | {
+        element: QueryBindingElement;
+        kind: 'attribute';
+        name: string;
+        ref: KovoModuleRef<'derive'>;
+        refValue: string;
+      }
+    | {
+        element: QueryBindingElement;
+        kind: 'property';
+        name: string;
+        ref: KovoModuleRef<'derive'>;
+        refValue: string;
+      }
+    | {
+        element: QueryBindingElement;
+        kind: 'text';
+        ref: KovoModuleRef<'derive'>;
+        refValue: string;
+      };
+  const bindings: DeriveBinding[] = [];
+
+  // Snapshot every DOM-selected derive reference before importing the first authored module. A
+  // derive may mutate attributes or DOM prototypes, but it cannot thereby redirect a later
+  // framework import/callee decision in the same state-commit pass (SPEC §6.6).
   for (const element of dataBindElements(root, root)) {
-    const refValue = element.getAttribute('data-bind');
+    const refValue = readRuntimeElementAttribute(element, 'data-bind');
     if (!refValue) continue;
 
     const ref = parseDeriveReference(refValue);
     if (!ref) continue;
-
-    assertAllowedKovoDynamicImportRefForModule(ref, importModule);
-    const mod = await importModule(ref.url);
-    const derive = mod[ref.exportName];
-    const value = isRunnableDerive(derive) ? derive.run(state) : undefined;
-    writeQueryPlanElement(element, formatBoundValue(value));
-    applied.push(refValue);
+    securityArrayAppend(
+      bindings,
+      { element, kind: 'text', ref, refValue },
+      'Browser state derive binding snapshot',
+    );
   }
 
   for (const element of attributeBindingElements(root, { ...options, scopeRoot: root })) {
@@ -489,41 +519,74 @@ async function applyStateDeriveBindings(
     for (const attribute of bindingAttributes(element)) {
       const ref = parseDeriveReference(attribute.value);
       if (!ref) continue;
-
-      assertAllowedKovoDynamicImportRefForModule(ref, importModule);
-      const mod = await importModule(ref.url);
-      const derive = mod[ref.exportName];
-      const value = isRunnableDerive(derive) ? derive.run(state) : undefined;
-      const boundAttribute = attribute.name.slice('data-bind:'.length);
-      if (value === undefined || value === null) {
-        removeBoundAttribute(element, boundAttribute);
-      } else {
-        setBoundAttribute(element, boundAttribute, value);
-      }
-      applied.push(attribute.value);
+      securityArrayAppend(
+        bindings,
+        {
+          element,
+          kind: 'attribute',
+          name: attribute.name.slice('data-bind:'.length),
+          ref,
+          refValue: attribute.value,
+        },
+        'Browser state derive attribute snapshot',
+      );
     }
 
     // SPEC §4.8 data-bind-prop: assign the live property for derive-bound stamps.
     for (const attribute of bindPropAttributes(element)) {
       const ref = parseDeriveReference(attribute.value);
       if (!ref) continue;
-
-      assertAllowedKovoDynamicImportRefForModule(ref, importModule);
-      const mod = await importModule(ref.url);
-      const derive = mod[ref.exportName];
-      const value = isRunnableDerive(derive) ? derive.run(state) : undefined;
-      applyBindProp(element, attribute.name.slice(BIND_PROP_PREFIX.length), value);
-      applied.push(attribute.value);
+      securityArrayAppend(
+        bindings,
+        {
+          element,
+          kind: 'property',
+          name: attribute.name.slice(BIND_PROP_PREFIX.length),
+          ref,
+          refValue: attribute.value,
+        },
+        'Browser state derive property snapshot',
+      );
     }
+  }
+
+  for (let index = 0; index < bindings.length; index += 1) {
+    const binding = bindings[index];
+    if (!binding) continue;
+    assertAllowedKovoDynamicImportRefForModule(binding.ref, importModule);
+    const mod = await importModule(binding.ref.url);
+    const value = runOwnDeriveExport(mod, binding.ref.exportName, state);
+    if (binding.kind === 'text') {
+      writeQueryPlanElement(binding.element, formatBoundValue(value));
+    } else if (binding.kind === 'attribute') {
+      if (value === undefined || value === null) {
+        removeBoundAttribute(binding.element, binding.name);
+      } else {
+        setBoundAttribute(binding.element, binding.name, value);
+      }
+    } else {
+      applyBindProp(binding.element, binding.name, value);
+    }
+    securityArrayAppend(applied, binding.refValue, 'Browser applied state derive bindings');
   }
 
   return applied;
 }
 
-function isRunnableDerive(value: unknown): value is { run(value: unknown): unknown } {
-  return (
-    typeof value === 'object' && value !== null && 'run' in value && typeof value.run === 'function'
-  );
+function runOwnDeriveExport(mod: object, exportName: string, state: unknown): unknown {
+  const deriveDescriptor = securityGetOwnPropertyDescriptor(mod, exportName);
+  if (!deriveDescriptor || !('value' in deriveDescriptor)) return undefined;
+  const derive = deriveDescriptor.value;
+  if (derive === null || typeof derive !== 'object') return undefined;
+  const runDescriptor = securityGetOwnPropertyDescriptor(derive, 'run');
+  if (!runDescriptor || !('value' in runDescriptor) || !isDeriveRunner(runDescriptor.value)) {
+    return undefined;
+  }
+  return applySecurityIntrinsic(runDescriptor.value, derive, [state]);
+}
+
+function isDeriveRunner(value: unknown): value is (state: unknown) => unknown {
+  return typeof value === 'function';
 }
 
 function parseDeriveReference(value: string): KovoModuleRef<'derive'> | null {
@@ -533,7 +596,7 @@ function parseDeriveReference(value: string): KovoModuleRef<'derive'> | null {
 function elementBelongsToScope(element: QueryBindingElement, scopeRoot: unknown): boolean {
   if (!scopeRoot || element === scopeRoot) return true;
 
-  const closestStateHost = element.closest?.('[kovo-state]');
+  const closestStateHost = closestRuntimeElement<QueryBindingElement>(element, '[kovo-state]');
   return !closestStateHost || closestStateHost === scopeRoot;
 }
 
@@ -543,10 +606,10 @@ function elementBelongsToQueryKey(
 ): boolean {
   if (!queryKey) return true;
 
-  const closestQueryHost = element.closest?.('[kovo-deps]');
+  const closestQueryHost = closestRuntimeElement<QueryBindingElement>(element, '[kovo-deps]');
   if (!closestQueryHost) return true;
 
-  return readDeps(closestQueryHost.getAttribute('kovo-deps')).includes(queryKey);
+  return readDeps(readRuntimeElementAttribute(closestQueryHost, 'kovo-deps')).includes(queryKey);
 }
 
 function readDeps(value: string | null | undefined): string[] {

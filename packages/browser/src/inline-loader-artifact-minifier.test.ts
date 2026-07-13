@@ -51,7 +51,7 @@ describe('inline loader minified artifact', () => {
     expect(inlineKovoLoaderInstallerSource).not.toContain("readAttribute(query.attrs,'name')");
     expect(inlineKovoLoaderInstallerSource).not.toContain('queryBody');
     expect(inlineKovoLoaderInstallerSource).toContain(
-      "el.getAttribute('kovo-fragment-target')??el.getAttribute('id')??el.getAttribute('kovo-c')",
+      "ras(el,'kovo-fragment-target')??ras(el,'id')??ras(el,'kovo-c')",
     );
     expect(inlineKovoLoaderInstallerSource).toContain(
       'const hsaf=(value)=>value&&!/[\\x00-\\x1f\\x7f\\s;,#=]/.test(value);',
@@ -65,7 +65,7 @@ describe('inline loader minified artifact', () => {
     expect(inlineKovoLoaderInstallerSource).toContain(
       "const ftd=(root,target)=>{try{const selectorTarget=sq(target);return(root.querySelector?.('[kovo-fragment-target=\"'+selectorTarget+'\"]')??root.getElementById?.(target)??root.querySelector?.('[id=\"'+selectorTarget+'\"]')??root.querySelector?.('[kovo-c=\"'+selectorTarget+'\"]')??root.querySelector?.('kovo-defer[target=\"'+selectorTarget+'\"]'));}catch{return;}};const ft=(target)=>ftd(doc,target);",
     );
-    expect(inlineKovoLoaderInstallerSource).toContain("getAttribute('kovo-param-types')");
+    expect(inlineKovoLoaderInstallerSource).toContain("ras(el,'kovo-param-types')");
     expect(inlineKovoLoaderInstallerSource).not.toContain('new DOMParser().parseFromString');
     expect(inlineKovoLoaderInstallerSource).toContain(
       'parseHtmlDocument:(value)=>bns.parseHtmlDocument(value)',

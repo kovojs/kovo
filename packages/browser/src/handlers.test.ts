@@ -121,6 +121,32 @@ describe('delegated handler reference dispatch', () => {
     ).rejects.toThrow('Invalid handler reference: /c/cart.client.js#');
   });
 
+  it('rejects inherited and accessor handler exports without invoking them', async () => {
+    const inherited = vi.fn();
+    const inheritedCarrier = Object.create({ pass: inherited }) as Record<string, unknown>;
+    const inheritedElement = new FakeElement({ 'on:click': '/c/pass.client.js#pass' });
+
+    await expect(
+      dispatchDelegatedEvent(
+        { target: inheritedElement, type: 'click' },
+        async () => inheritedCarrier,
+      ),
+    ).rejects.toThrow('Handler export not found: /c/pass.client.js#pass');
+    expect(inherited).not.toHaveBeenCalled();
+
+    const getter = vi.fn(() => inherited);
+    const accessorCarrier: Record<string, unknown> = {};
+    Object.defineProperty(accessorCarrier, 'pass', { configurable: true, get: getter });
+    const accessorElement = new FakeElement({ 'on:click': '/c/pass.client.js#pass' });
+    await expect(
+      dispatchDelegatedEvent(
+        { target: accessorElement, type: 'click' },
+        async () => accessorCarrier,
+      ),
+    ).rejects.toThrow('Handler export not found: /c/pass.client.js#pass');
+    expect(getter).not.toHaveBeenCalled();
+  });
+
   it('rejects non-Kovo dynamic import URLs before importing handler modules', async () => {
     const importModule = vi.fn(async () => ({ missing: vi.fn() }));
     const element = new FakeElement({

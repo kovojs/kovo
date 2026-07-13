@@ -27,6 +27,7 @@ import {
 /** Runtime API used by Kovo applications and generated runtime integration. */
 export interface DelegatedEvent {
   preventDefault?: () => void;
+  relatedTarget?: object | null;
   submitter?: unknown;
   type: string;
   target: EventTargetLike | null;

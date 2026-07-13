@@ -2,6 +2,7 @@ import type { EventElementLike, EventTargetLike } from './events.js';
 import type { UploadProgress } from './mutation-fetch.js';
 import { createBrowserNavigationSecurityControls } from './navigation-security-intrinsics.js';
 import { securityGetOwnPropertyDescriptor } from './security-witness-intrinsics.js';
+import { closestRuntimeElement } from './runtime-dom-security.js';
 
 // C210 / SPEC §6.6/§9.2: capture native form submission while the framework module graph loads,
 // before authored client code can replace HTMLFormElement.prototype.submit.
@@ -20,10 +21,7 @@ export interface EnhancedFormElementLike extends EventElementLike {
 export function closestEnhancedMutationForm(
   target: EventTargetLike | undefined | null,
 ): EnhancedFormElementLike | null {
-  const form = target?.closest?.(enhancedMutationFormSelector) as
-    | EnhancedFormElementLike
-    | null
-    | undefined;
+  const form = closestRuntimeElement<EnhancedFormElementLike>(target, enhancedMutationFormSelector);
   return form && isEnhancedForm(form) ? form : null;
 }
 

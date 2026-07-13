@@ -793,6 +793,51 @@ describe('decoded mutation response apply', () => {
     expect(privileged).not.toHaveBeenCalled();
   });
 
+  it('rejects inherited and accessor stream renderer exports without invocation', async () => {
+    const root = new FakeMorphRoot();
+    const streamTarget = new FakeQueryBindingElement(
+      {
+        'data-stream-renderer': '/c/markdown.client.js#renderSafe',
+        'data-stream-text': 'assistant:a1',
+      },
+      { textContent: '' },
+    );
+    root.querySelectorAll = (selector: string) =>
+      selector === '[data-stream-text="assistant:a1"]' ? [streamTarget] : [];
+    const renderer = vi.fn();
+    const inheritedCarrier = Object.create({ renderSafe: renderer }) as Record<string, unknown>;
+    const inheritedError = vi.fn();
+    const inheritedBuffer = new StreamTextBuffer({
+      importModule: vi.fn(async () => inheritedCarrier),
+      onError: inheritedError,
+    });
+    applyStreamTextChunks(
+      root as unknown as StreamTextRoot,
+      [{ mode: 'checkpoint', target: 'assistant:a1', text: 'safe source' }],
+      { buffer: inheritedBuffer },
+    );
+    await inheritedBuffer.flush('completion');
+    expect(renderer).not.toHaveBeenCalled();
+    expect(inheritedError).toHaveBeenCalledWith(
+      expect.objectContaining({ message: expect.stringContaining('export not found') }),
+    );
+
+    const getter = vi.fn(() => renderer);
+    const accessorCarrier: Record<string, unknown> = {};
+    Object.defineProperty(accessorCarrier, 'renderSafe', { configurable: true, get: getter });
+    const accessorBuffer = new StreamTextBuffer({
+      importModule: vi.fn(async () => accessorCarrier),
+    });
+    applyStreamTextChunks(
+      root as unknown as StreamTextRoot,
+      [{ mode: 'checkpoint', target: 'assistant:a1', text: 'safe source' }],
+      { buffer: accessorBuffer },
+    );
+    await accessorBuffer.flush('completion');
+    expect(getter).not.toHaveBeenCalled();
+    expect(renderer).not.toHaveBeenCalled();
+  });
+
   it('rejects stream renderer module URLs outside the dynamic import allowlist', async () => {
     const store = createQueryStore();
     const root = new FakeMorphRoot();

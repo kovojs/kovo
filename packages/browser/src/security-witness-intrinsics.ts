@@ -496,6 +496,11 @@ export function securityGetOwnPropertyDescriptor(
   );
 }
 
+export function securityGetPrototypeOf(value: object): object | null {
+  assertCapturedSecurityControls();
+  return invoke<object | null>(intrinsicObjectGetPrototypeOf, IntrinsicObject, [value]);
+}
+
 /** Own-data append for browser security and DOM decision collections (SPEC §6.6/§9.1). */
 export function securityArrayAppend<Value>(target: Value[], value: Value, label: string): void {
   assertCapturedSecurityControls();

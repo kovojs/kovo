@@ -362,37 +362,62 @@ export function installEnhancedNavigationRuntime(
     }
   };
   const handleClick = (event: MouseEvent) => {
+    const eventFacts = security.snapshotDelegatedEvent(event);
     if (
-      event.defaultPrevented ||
-      event.button ||
-      event.metaKey ||
-      event.ctrlKey ||
-      event.shiftKey ||
-      event.altKey
+      !eventFacts ||
+      eventFacts.type !== 'click' ||
+      eventFacts.defaultPrevented ||
+      eventFacts.button ||
+      eventFacts.metaKey ||
+      eventFacts.ctrlKey ||
+      eventFacts.shiftKey ||
+      eventFacts.altKey
     ) {
       return false;
     }
-    const target = event.target as Element | null;
-    const anchor = target?.closest?.('a[href]') as HTMLAnchorElement | null;
+    const target = eventFacts.target;
+    const anchor = security.closestElement(target, 'a[href]');
+    const anchorTarget = anchor
+      ? (security.readAttribute(anchor, 'target') ?? readOwnNavigationString(anchor, 'target'))
+      : undefined;
     if (
       !anchor ||
-      target?.closest?.('[on\\:click]') ||
-      anchor.target ||
-      anchor.hasAttribute?.('download')
+      security.closestElement(target, '[on\\:click]') ||
+      anchorTarget ||
+      hasNavigationAttribute(anchor, 'download')
     ) {
       return false;
     }
     const currentUrl = security.currentUrl();
-    const url = currentUrl ? security.parseUrl(anchor.href, currentUrl.href) : undefined;
+    const href = security.readAttribute(anchor, 'href') ?? readOwnNavigationString(anchor, 'href');
+    const url = currentUrl && href ? security.parseUrl(href, currentUrl.href) : undefined;
     if (!currentUrl || !url || url.origin !== currentUrl.origin) return false;
     if (url.pathname === currentUrl.pathname && url.search === currentUrl.search && url.hash) {
       return false;
     }
-    event.preventDefault();
+    if (!security.preventDelegatedEventDefault(event)) return false;
     sf(currentUrl.href);
     void navigate(url.href);
     return true;
   };
+
+  function readOwnNavigationString(value: object, property: PropertyKey): string | undefined {
+    const descriptor = security.getOwnSecurityPropertyDescriptor(value, property);
+    return descriptor && 'value' in descriptor && typeof descriptor.value === 'string'
+      ? descriptor.value
+      : undefined;
+  }
+
+  function hasNavigationAttribute(value: object, name: string): boolean {
+    if (security.readAttribute(value, name) !== null) return true;
+    const descriptor = security.getOwnSecurityPropertyDescriptor(value, 'hasAttribute');
+    return Boolean(
+      descriptor &&
+      'value' in descriptor &&
+      typeof descriptor.value === 'function' &&
+      security.call(descriptor.value, value, [name]) === true,
+    );
+  }
 
   if (globalThis.history?.scrollRestoration !== undefined) {
     globalThis.history.scrollRestoration = 'manual';
