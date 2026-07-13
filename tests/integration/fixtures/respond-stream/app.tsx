@@ -1,6 +1,6 @@
 // SPEC.md §6.4: stream route outcomes declare content type/disposition and remain
 // guarded routes before a body is streamed.
-import { createApp, guards, respond, route } from '@kovojs/server';
+import { createApp, guards, respond, route, unsafeInline } from '@kovojs/server';
 import { defineFixture } from '@kovojs/test/internal/integration/define';
 
 interface StreamSession {
@@ -32,8 +32,8 @@ const streamRoute = route('/reports/live.txt', {
       disposition: 'inline',
       filename: 'live.txt',
       // SPEC §6.6/KV428: this fixture owns the generated text bytes; unbufferable inline streams
-      // require an explicit verified-safe attestation.
-      verifiedSafe: true,
+      // require explicit, audited inline-risk acceptance.
+      unsafeInline: unsafeInline('fixture emits application-owned UTF-8 text chunks'),
     }),
 });
 

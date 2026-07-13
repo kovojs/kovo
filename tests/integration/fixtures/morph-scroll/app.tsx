@@ -35,6 +35,7 @@ async function renderPanel(db: KovoFixtureRequest['db']): Promise<string> {
 
 export const refreshScroll = mutation('scroll/refresh', {
   csrf: false,
+  csrfJustification: 'fixture mutation has no ambient browser authority',
   input: s.object({}),
   registry: { tables: ['scroll_state'] },
   handler: async (_input: unknown, request: KovoFixtureRequest) => {

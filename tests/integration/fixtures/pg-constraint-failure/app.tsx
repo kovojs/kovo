@@ -37,6 +37,7 @@ function statementCarrier(
 
 export const duplicateCharge = mutation('pg-constraint-failure/charge', {
   csrf: false,
+  csrfJustification: 'fixture mutation has no ambient browser authority',
   input: s.object({ id: s.string() }),
   registry: { tables: ['charges', 'ledger'] },
   transaction: async (request: KovoFixtureRequest, run) =>

@@ -63,6 +63,7 @@ function renderInitialQueryScript(name: string, key: string, value: unknown): st
 
 const bulkRestock = mutation('table-level-invalidation/restock', {
   csrf: false,
+  csrfJustification: 'fixture mutation has no ambient browser authority',
   input: s.object({ category: s.string(), threshold: s.number().int().min(0) }),
   registry: {
     queries: [productQuery],

@@ -6,6 +6,7 @@ const receiptDomain = domain('receipt');
 
 export const createReceipt = mutation('render-error-fragment/create', {
   csrf: false,
+  csrfJustification: 'fixture mutation has no ambient browser authority',
   input: s.object({ id: s.string(), secret: s.string() }),
   registry: { tables: ['receipts'] },
   handler: async (input: { id: string; secret: string }, request: KovoFixtureRequest, context) => {

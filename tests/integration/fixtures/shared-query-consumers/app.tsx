@@ -19,6 +19,7 @@ async function renderStatus(db: KovoFixtureRequest['db']): Promise<string> {
 
 export const publishProfile = mutation('shared-query-consumers/publish', {
   csrf: false,
+  csrfJustification: 'fixture mutation has no ambient browser authority',
   input: s.object({}),
   registry: {
     queries: [profileQuery],

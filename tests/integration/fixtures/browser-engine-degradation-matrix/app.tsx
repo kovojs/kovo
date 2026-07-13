@@ -37,6 +37,7 @@ function renderSubmittedReport(rawInput: FormData): string {
 
 export const submitMatrixForm = mutation('engine-matrix/submit', {
   csrf: false,
+  csrfJustification: 'fixture mutation has no ambient browser authority',
   input: s.object({
     includeGift: s.boolean(),
     quantity: s.number().int().min(1),

@@ -57,6 +57,7 @@ function renderStock(stock: number): string {
 // Writes cart_items (cart) AND products (product); declares BOTH (touchGraph below).
 const addBoth = mutation('multi-domain-write/add-both', {
   csrf: false,
+  csrfJustification: 'fixture mutation has no ambient browser authority',
   input: s.object({}),
   registry: { tables: ['cart_items', 'products'], touches: [cart, product] },
   async handler(_input: unknown, request: KovoFixtureRequest, context) {
@@ -78,6 +79,7 @@ const addBoth = mutation('multi-domain-write/add-both', {
 // silently-stale domain KV402 must catch.
 const addPartial = mutation('multi-domain-write/add-partial', {
   csrf: false,
+  csrfJustification: 'fixture mutation has no ambient browser authority',
   input: s.object({}),
   registry: { tables: ['cart_items', 'products'], touches: [cart] },
   async handler(_input: unknown, request: KovoFixtureRequest, context) {

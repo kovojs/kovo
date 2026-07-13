@@ -28,6 +28,7 @@ function renderAuthoredTsxCardHtml(payload: PayloadResult): string {
 
 export const updatePayload = mutation('xss/update', {
   csrf: false,
+  csrfJustification: 'fixture mutation has no ambient browser authority',
   input: s.object({}),
   registry: {
     queries: [payloadQuery],

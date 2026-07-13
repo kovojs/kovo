@@ -54,6 +54,7 @@ export const cartQuery = query('cart', {
 
 export const changeCart = mutation('stamp-list-insert-remove/change', {
   csrf: false,
+  csrfJustification: 'fixture mutation has no ambient browser authority',
   input: s.object({ mode: s.string() }),
   registry: {
     queries: [cartQuery],

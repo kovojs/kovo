@@ -54,6 +54,7 @@ export const boardQuery = query('board', {
 
 export const reorderBoard = mutation('stamp-list-reorder/reorder', {
   csrf: false,
+  csrfJustification: 'fixture mutation has no ambient browser authority',
   input: s.object({}),
   registry: {
     queries: [boardQuery],

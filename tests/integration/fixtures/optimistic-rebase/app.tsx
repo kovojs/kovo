@@ -42,6 +42,7 @@ async function renderCartPanel(db: KovoFixtureRequest['db']): Promise<string> {
 
 const addItem = mutation('optimistic-rebase/add', {
   csrf: false,
+  csrfJustification: 'fixture mutation has no ambient browser authority',
   input: s.object({ delay: s.number(), quantity: s.number() }),
   registry: {
     queries: [cartQuery],

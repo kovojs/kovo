@@ -19,6 +19,7 @@ async function renderCartSection(db: KovoFixtureRequest['db']): Promise<string> 
 
 export const addToCart = mutation('cart/add', {
   csrf: false,
+  csrfJustification: 'fixture mutation has no ambient browser authority',
   input: s.object({ sku: s.string() }),
   registry: { tables: ['cart_items'] },
   handler: async (input: { sku: string }, request: KovoFixtureRequest) => {

@@ -50,6 +50,7 @@ export const cartQuery = query('cart', {
 
 export const changeCart = mutation('scale-keyed-list/change', {
   csrf: false,
+  csrfJustification: 'fixture mutation has no ambient browser authority',
   input: s.object({}),
   registry: { queries: [cartQuery], tables: ['cart_item'], touches: [cartDomain] },
   handler: async (_input: unknown, request: KovoFixtureRequest, context) => {

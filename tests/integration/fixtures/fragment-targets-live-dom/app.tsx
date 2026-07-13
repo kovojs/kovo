@@ -34,6 +34,7 @@ async function renderDynamic(db: KovoFixtureRequest['db']): Promise<string> {
 
 export const advance = mutation('fragment-targets-live-dom/advance', {
   csrf: false,
+  csrfJustification: 'fixture mutation has no ambient browser authority',
   input: s.object({}),
   registry: { tables: ['live_dom_state'] },
   handler: async (_input: unknown, request: KovoFixtureRequest) => {

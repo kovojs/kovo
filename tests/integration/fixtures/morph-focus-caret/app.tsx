@@ -25,6 +25,7 @@ async function renderEditor(db: KovoFixtureRequest['db']): Promise<string> {
 
 export const saveDraft = mutation('profile/save-draft', {
   csrf: false,
+  csrfJustification: 'fixture mutation has no ambient browser authority',
   input: s.object({}),
   registry: { tables: ['profile'] },
   handler: async (_input: unknown, request: KovoFixtureRequest) => {

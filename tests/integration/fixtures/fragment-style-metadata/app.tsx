@@ -19,6 +19,7 @@ const lateCardStylesheets =
 
 export const revealLateCard = mutation('fragment-style-metadata/reveal', {
   csrf: false,
+  csrfJustification: 'fixture mutation has no ambient browser authority',
   input: s.object({}),
   handler: () => ({ ok: true }),
 });

@@ -27,6 +27,7 @@ async function renderZone(db: KovoFixtureRequest['db']): Promise<string> {
 
 export const addIsland = mutation('island/add', {
   csrf: false,
+  csrfJustification: 'fixture mutation has no ambient browser authority',
   input: s.object({}),
   registry: { tables: ['island_patch'] },
   handler: async (_input: unknown, request: KovoFixtureRequest) => {

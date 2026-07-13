@@ -40,6 +40,7 @@ function renderCartCount(count: number): string {
 
 const addOpaqueCartItem = mutation('manual-touches-raw-write/add', {
   csrf: false,
+  csrfJustification: 'fixture mutation has no ambient browser authority',
   input: s.object({ productId: s.string() }),
   registry: {
     queries: [cartQuery],

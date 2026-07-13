@@ -36,6 +36,7 @@ async function renderShell(db: KovoFixtureRequest['db']): Promise<string> {
 
 export const swapIsland = mutation('loader-lifecycle/swap', {
   csrf: false,
+  csrfJustification: 'fixture mutation has no ambient browser authority',
   input: s.object({}),
   registry: { tables: ['lifecycle_state'] },
   handler: async (_input, request: KovoFixtureRequest) => {

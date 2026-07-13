@@ -38,6 +38,7 @@ async function renderLastRow(db: KovoFixtureRequest['db']): Promise<string> {
 
 export const loadMore = mutation('feed/load-more', {
   csrf: false,
+  csrfJustification: 'fixture mutation has no ambient browser authority',
   input: s.object({}),
   registry: { tables: ['feed'] },
   handler: async (_input: unknown, request: KovoFixtureRequest) => {

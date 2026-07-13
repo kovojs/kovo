@@ -36,6 +36,7 @@ function renderStateIsland(): string {
 
 export const fillDeal = mutation('nullable-binding/fill', {
   csrf: false,
+  csrfJustification: 'fixture mutation has no ambient browser authority',
   input: s.object({}),
   registry: {
     queries: [dealQuery],
@@ -51,6 +52,7 @@ export const fillDeal = mutation('nullable-binding/fill', {
 
 export const clearDeal = mutation('nullable-binding/clear', {
   csrf: false,
+  csrfJustification: 'fixture mutation has no ambient browser authority',
   input: s.object({}),
   registry: {
     queries: [dealQuery],

@@ -4,6 +4,7 @@ import { defineFixture } from '@kovojs/test/internal/integration/define';
 
 export const subscribe = mutation('a11y-form-error/subscribe', {
   csrf: false,
+  csrfJustification: 'fixture mutation has no ambient browser authority',
   errors: { INVALID_EMAIL: s.object({ field: s.string() }) },
   input: s.object({ email: s.string() }),
   handler: (input, _request, context) => {

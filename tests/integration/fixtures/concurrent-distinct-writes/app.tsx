@@ -20,6 +20,7 @@ function renderPanel(count: number): string {
 function bump(key: string, amount: number) {
   return mutation(`concurrent-distinct-writes/${key}`, {
     csrf: false,
+    csrfJustification: 'fixture mutation has no ambient browser authority',
     input: s.object({}),
     registry: { tables: ['counter'], touches: [counterDomain] },
     handler: async (_input: unknown, request: KovoFixtureRequest, context) => {

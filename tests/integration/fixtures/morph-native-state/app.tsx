@@ -23,6 +23,7 @@ function renderPanel(value: number): string {
 
 export const bump = mutation('morph-native-state/bump', {
   csrf: false,
+  csrfJustification: 'fixture mutation has no ambient browser authority',
   input: s.object({}),
   registry: { tables: ['panel'], touches: [panelDomain] },
   handler: async (_input: unknown, request: KovoFixtureRequest, context) => {

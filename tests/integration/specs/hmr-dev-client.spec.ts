@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import {
   compileComponentModule,
   kovoVitePlugin,
+  type KovoVitePlugin,
   type KovoVitePluginOptions,
 } from '@kovojs/compiler';
 import { expect, test } from '@playwright/test';
@@ -823,7 +824,7 @@ function kovoSourceEditFixturePlugin(options: { onModuleDiagnostics: OnModuleDia
   configureServer?: ReturnType<typeof kovoVitePlugin>['configureServer'];
   handleHotUpdate?: ReturnType<typeof kovoVitePlugin>['handleHotUpdate'];
   name: string;
-  transform(source: string, id: string): null | { code: string; map: null };
+  transform: KovoVitePlugin['transform'];
 } {
   const hmrTransport = kovoVitePlugin(options);
   let root = process.cwd();
@@ -832,10 +833,12 @@ function kovoSourceEditFixturePlugin(options: { onModuleDiagnostics: OnModuleDia
     configureServer: hmrTransport.configureServer,
     handleHotUpdate: hmrTransport.handleHotUpdate,
     name: 'kovo-source-edit-fixture',
-    transform(source, id) {
+    async transform(source, id) {
       if (!/\.[cm]?tsx?$/.test(id) || !source.includes('component(')) return null;
 
-      void hmrTransport.transform(source, id);
+      // The compiler transform persists its cache asynchronously. Await it so closing the Vite
+      // fixture cannot race a late cache write and fail recursive cleanup with ENOTEMPTY.
+      await hmrTransport.transform(source, id);
       const result = compileComponentModule({
         fileName: fixtureComponentFileName(id, root),
         packagePrefixDiscoveryRoot: root,

@@ -73,6 +73,7 @@ function renderComposer(errorCode = ''): string {
 
 export const sendMessage = mutation('chat/send', {
   csrf: false,
+  csrfJustification: 'fixture mutation has no ambient browser authority',
   errors: {
     MODEL_UNAVAILABLE: s.object({}),
   },

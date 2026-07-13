@@ -34,6 +34,7 @@ function statementCarrier(
 
 export const failAfterWrite = mutation('rollback/fail-after-write', {
   csrf: false,
+  csrfJustification: 'fixture mutation has no ambient browser authority',
   input: s.object({ note: s.string() }),
   registry: { tables: ['rollback_events'] },
   transaction: async (request: KovoFixtureRequest, run) =>

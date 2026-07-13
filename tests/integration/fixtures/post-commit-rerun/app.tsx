@@ -15,6 +15,7 @@ function renderBadge(db: KovoFixtureRequest['db']): Promise<string> {
 
 export const deposit = mutation('account/deposit', {
   csrf: false,
+  csrfJustification: 'fixture mutation has no ambient browser authority',
   input: s.object({ amount: s.number().int().min(1) }),
   registry: {
     queries: [balanceQuery],

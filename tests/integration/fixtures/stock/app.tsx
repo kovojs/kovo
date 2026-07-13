@@ -17,6 +17,7 @@ function renderBadge(db: KovoFixtureRequest['db']): Promise<string> {
 
 export const buy = mutation('stock/buy', {
   csrf: false,
+  csrfJustification: 'fixture mutation has no ambient browser authority',
   errors: { OUT_OF_STOCK: s.object({ available: s.number().int().min(0) }) },
   input: s.object({}),
   registry: { tables: ['item'] },

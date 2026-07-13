@@ -12,6 +12,7 @@ import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/in
 
 export const reserve = mutation('validation/reserve', {
   csrf: false,
+  csrfJustification: 'fixture mutation has no ambient browser authority',
   input: s.object({
     quantity: s.number().int().min(1),
   }),

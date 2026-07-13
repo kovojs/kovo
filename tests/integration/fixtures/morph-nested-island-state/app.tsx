@@ -23,6 +23,7 @@ async function renderPanel(db: KovoFixtureRequest['db']): Promise<string> {
 
 const refreshParent = mutation('morph-nested-island-state/refresh', {
   csrf: false,
+  csrfJustification: 'fixture mutation has no ambient browser authority',
   input: s.object({}),
   registry: { tables: ['nested_island_parent'] },
   handler: async (_input: unknown, request: KovoFixtureRequest) => {

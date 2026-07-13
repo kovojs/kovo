@@ -19,6 +19,7 @@ function renderBadge(db: KovoFixtureRequest['db']): Promise<string> {
 export const increment = mutation('counter/increment', {
   // Fixture: skip the CSRF/session dance (plans/integration-test-suite.md).
   csrf: false,
+  csrfJustification: 'fixture mutation has no ambient browser authority',
   input: s.object({}),
   registry: { tables: ['counter'], touches: [counter] },
   handler: async (_input: unknown, request: KovoFixtureRequest, context) => {

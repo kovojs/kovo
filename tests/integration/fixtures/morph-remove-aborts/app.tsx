@@ -32,6 +32,7 @@ async function renderShell(db: KovoFixtureRequest['db']): Promise<string> {
 
 export const removeIsland = mutation('morph-remove-aborts/remove', {
   csrf: false,
+  csrfJustification: 'fixture mutation has no ambient browser authority',
   input: s.object({}),
   registry: { tables: ['morph_abort_state'] },
   handler: async (_input, request: KovoFixtureRequest) => {

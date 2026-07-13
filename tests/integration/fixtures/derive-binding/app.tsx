@@ -24,6 +24,7 @@ export const inventoryQuery = query('inventory', {
 
 export const sellOutInventory = mutation('derive-binding/sell-out', {
   csrf: false,
+  csrfJustification: 'fixture mutation has no ambient browser authority',
   input: s.object({}),
   registry: {
     queries: [inventoryQuery],

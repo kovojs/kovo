@@ -43,6 +43,7 @@ async function renderCartPanel(db: KovoFixtureRequest['db']): Promise<string> {
 
 const addItem = mutation('optimistic-rollback/add', {
   csrf: false,
+  csrfJustification: 'fixture mutation has no ambient browser authority',
   errors: { OUT_OF_STOCK: s.object({ available: s.number().int().min(0) }) },
   input: s.object({ quantity: s.number() }),
   handler: async (_input: { quantity: number }, _request: KovoFixtureRequest, context) => {

@@ -15,6 +15,7 @@ declare module '@kovojs/core' {
 
 export const placeOrder = mutation('redirect-typed-target/place-order', {
   csrf: false,
+  csrfJustification: 'fixture mutation has no ambient browser authority',
   input: s.object({ id: s.string() }),
   handler: (input: { id: string }) =>
     redirect('/orders/:id', {

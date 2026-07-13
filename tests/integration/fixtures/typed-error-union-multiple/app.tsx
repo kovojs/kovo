@@ -6,6 +6,7 @@ import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/in
 
 export const checkout = mutation('checkout/submit', {
   csrf: false,
+  csrfJustification: 'fixture mutation has no ambient browser authority',
   errors: {
     CARD_DECLINED: s.object({}),
     OUT_OF_STOCK: s.object({ available: s.number().int().min(0) }),

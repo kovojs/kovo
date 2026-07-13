@@ -5,6 +5,7 @@ import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/in
 
 export const subscribe = mutation('newsletter/subscribe', {
   csrf: false,
+  csrfJustification: 'fixture mutation has no ambient browser authority',
   errors: { ALREADY_SUBSCRIBED: s.object({ email: s.string() }) },
   input: s.object({
     email: s.string(),

@@ -48,6 +48,7 @@ async function renderCard(db: KovoFixtureRequest['db'], id: string): Promise<str
 
 export const restockProduct = mutation('multi-instance-query/restock', {
   csrf: false,
+  csrfJustification: 'fixture mutation has no ambient browser authority',
   input: s.object({ id: s.string(), restock: s.number().int().min(1) }),
   registry: {
     queries: [productQuery],

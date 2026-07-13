@@ -7,6 +7,7 @@ import { account, balanceQuery } from './shared';
 
 export const deposit = mutation('fragment-slot-hoist/deposit', {
   csrf: false,
+  csrfJustification: 'fixture mutation has no ambient browser authority',
   input: s.object({ amount: s.number().int().min(1) }),
   registry: {
     queries: [balanceQuery],

@@ -42,6 +42,7 @@ async function renderCounterPanel(db: KovoFixtureRequest['db']): Promise<string>
 
 const increment = mutation('nav-lifecycle/increment', {
   csrf: false,
+  csrfJustification: 'fixture mutation has no ambient browser authority',
   input: s.object({ quantity: s.number() }),
   registry: { tables: ['nav_lifecycle_counter'], touches: [counterDomain] },
   handler: async (input: { quantity: number }, request: KovoFixtureRequest, context) => {

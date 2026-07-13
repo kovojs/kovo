@@ -5,6 +5,7 @@ import { defineFixture } from '@kovojs/test/internal/integration/define';
 
 export const revealRecommendation = mutation('late-fragment-static-css/reveal', {
   csrf: false,
+  csrfJustification: 'fixture mutation has no ambient browser authority',
   input: s.object({}),
   handler: () => ({ ok: true }),
 });

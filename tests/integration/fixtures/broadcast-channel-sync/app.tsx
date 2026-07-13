@@ -42,6 +42,7 @@ async function renderPresence(db: KovoFixtureRequest['db']): Promise<string> {
 
 const publishPresence = mutation('broadcast-channel-sync/publish', {
   csrf: false,
+  csrfJustification: 'fixture mutation has no ambient browser authority',
   input: s.object({}),
   registry: { tables: ['broadcast_presence'], touches: [presenceDomain] },
   handler: async (_input: unknown, request: KovoFixtureRequest, context) => {

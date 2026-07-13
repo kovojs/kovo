@@ -38,6 +38,7 @@ function submittedValue(rawInput: FormData, name: string): string {
 
 export const submitOrder = mutation('enhanced-submit-controls/submit', {
   csrf: false,
+  csrfJustification: 'fixture mutation has no ambient browser authority',
   input: s.object({
     includeGift: s.boolean(),
     quantity: s.number().int().min(1),

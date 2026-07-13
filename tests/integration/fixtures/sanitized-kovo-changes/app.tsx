@@ -6,6 +6,7 @@ const auditRecord = domain('audit-record');
 
 export const saveSecret = mutation('sanitized-kovo-changes/save', {
   csrf: false,
+  csrfJustification: 'fixture mutation has no ambient browser authority',
   input: s.object({ id: s.string(), secret: s.string() }),
   registry: { tables: ['audit_records'] },
   handler: async (input: { id: string; secret: string }, request: KovoFixtureRequest, context) => {
