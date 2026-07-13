@@ -9,12 +9,19 @@ function fakeReq(cookie) {
 function fakeRes() {
   const headers = {};
   return {
+    body: undefined,
     headers,
     getHeader: (name) => headers[name],
+    end(body) {
+      this.body = body;
+      return this;
+    },
     setHeader: (name, value) => {
       headers[name] = value;
     },
-    writeHead() {
+    writeHead(status, responseHeaders = {}) {
+      this.status = status;
+      for (const [name, value] of Object.entries(responseHeaders)) headers[name] = value;
       return this;
     },
   };
@@ -195,6 +202,37 @@ describe('createPerSessionDispatcher', () => {
     expect(dispatcher.size).toBe(2);
     expect(dispatcher.sessions.has(sids[0])).toBe(false); // oldest evicted
     expect(dispatcher.sessions.has(sids[2])).toBe(true);
+  });
+
+  it('refuses excess visitors before starting untracked concurrent builds', async () => {
+    let builds = 0;
+    const releases = [];
+    const dispatcher = createPerSessionDispatcher({
+      buildHandler: () => {
+        builds += 1;
+        return new Promise((resolve) => {
+          releases.push(() => resolve((_req, res) => res.writeHead(200)));
+        });
+      },
+      maxSessions: 2,
+    });
+
+    const first = dispatcher.dispatch(fakeReq(), fakeRes());
+    const second = dispatcher.dispatch(fakeReq(), fakeRes());
+    const refused = fakeRes();
+    await dispatcher.dispatch(fakeReq(), refused);
+
+    expect(builds).toBe(2);
+    expect(dispatcher.size).toBe(2);
+    expect(refused.status).toBe(503);
+    expect(refused.headers).toMatchObject({
+      'cache-control': 'no-store',
+      'retry-after': '1',
+    });
+    expect(refused.getHeader('Set-Cookie')).toBeUndefined();
+
+    for (const release of releases) release();
+    await Promise.all([first, second]);
   });
 
   it('shares one in-flight build across concurrent first requests', async () => {

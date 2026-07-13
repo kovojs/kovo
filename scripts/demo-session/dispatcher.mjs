@@ -80,13 +80,18 @@ export function createPerSessionDispatcher({
   }
 
   // Map iteration is insertion-ordered; re-inserting on touch (see touch()) keeps
-  // the least-recently-used session at the front, so this caps the live set.
-  function enforceCap() {
-    while (sessions.size > maxSessions) {
-      const oldest = sessions.keys().next().value;
-      if (oldest === undefined) break;
-      evict(oldest);
+  // the least-recently-used session at the front. Admission happens BEFORE a
+  // fresh handler build starts. Never evict an in-flight build: its Promise cannot
+  // be cancelled, so doing so would let untracked builds exceed the resource cap.
+  function admitNewSession() {
+    if (sessions.size < maxSessions) return true;
+    for (const [sid, session] of sessions) {
+      if (session.pending === null) {
+        evict(sid);
+        return true;
+      }
     }
+    return false;
   }
 
   function touch(sid, session, at) {
@@ -191,6 +196,10 @@ export function createPerSessionDispatcher({
     // cookie create a named session: only ids already minted into this process's
     // live map can select an app instance. Expired/restarted sessions get a new id.
     if (!sid || !isPlausibleSid(sid) || !sessions.has(sid)) {
+      if (!admitNewSession()) {
+        sendCapacityResponse(req, res);
+        return;
+      }
       sid = genId();
       if (!isPlausibleSid(sid)) {
         throw new TypeError('createPerSessionDispatcher genId must return an RFC 4122 UUID.');
@@ -202,7 +211,6 @@ export function createPerSessionDispatcher({
     }
 
     const session = getSession(sid, at);
-    enforceCap();
 
     // Let shared-instance demos scope their own data by the dispatcher-selected
     // session id without trusting a client-supplied header.
@@ -225,6 +233,17 @@ export function createPerSessionDispatcher({
     sweepIdle,
     sessions,
   };
+}
+
+function sendCapacityResponse(req, res) {
+  const body = 'Demo session capacity is busy; retry shortly.\n';
+  res.writeHead(503, {
+    'cache-control': 'no-store',
+    'content-length': String(Buffer.byteLength(body)),
+    'content-type': 'text/plain; charset=utf-8',
+    'retry-after': '1',
+  });
+  res.end(req.method === 'HEAD' ? undefined : body);
 }
 
 // A session id we minted is a UUID; reject anything else so a hostile/garbage
