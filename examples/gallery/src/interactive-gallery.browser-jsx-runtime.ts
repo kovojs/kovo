@@ -51,6 +51,13 @@ export function jsx(
 export const jsxs = jsx;
 export const jsxDEV = jsx;
 
+/** Browser-harness equivalent of the compiler-owned server text-escape ABI. */
+export function escapeText(value: unknown): string {
+  if (value === null || value === undefined || typeof value === 'boolean') return '';
+  if (Array.isArray(value)) return value.map((item) => escapeText(item)).join('');
+  return escapeHtmlText(String(value));
+}
+
 async function renderKovoComponent(component: KovoJsxComponent, props: JsxProps): Promise<string> {
   const state = component.definition.state?.();
   const render = component.definition.render as (
@@ -121,10 +128,14 @@ function serializeAttributeValue(value: unknown): string {
   return JSON.stringify(value);
 }
 
-function escapeAttribute(value: string): string {
+export function escapeAttribute(value: string): string {
   return value
     .replaceAll('&', '&amp;')
     .replaceAll('"', '&quot;')
     .replaceAll('<', '&lt;')
     .replaceAll('>', '&gt;');
+}
+
+function escapeHtmlText(value: string): string {
+  return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
 }

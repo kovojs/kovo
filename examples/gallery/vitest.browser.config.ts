@@ -41,6 +41,7 @@ function galleryBrowserRuntimeBoundaryPlugin() {
     resolveId(id: string): string | undefined {
       if (id === '@kovojs/core') return browserCoreRuntime;
       if (id === '@kovojs/server') return browserServerRuntime;
+      if (id === '@kovojs/server/internal/escape') return browserJsxRuntime;
       if (id === '@kovojs/server/jsx-dev-runtime') return browserJsxRuntime;
       if (id === '@kovojs/server/jsx-runtime') return browserJsxRuntime;
       return undefined;
