@@ -549,6 +549,7 @@ describe('server app-shell public API barrels', () => {
       // capabilities through this public helper; raw system DB handles stay unexported.
       usePostgresSystemDb: postgresRuntimeApi.usePostgresSystemDb,
       postgresSchemaModule: postgresRuntimeApi.postgresSchemaModule,
+      runtimeDbMetadataForSchema: sqliteRuntimeApi.runtimeDbMetadataForSchema,
       createRequestHandler: appApi.createRequestHandler,
       exportStaticApp: staticExportOrchestratorApi.exportStaticApp,
       isKovoApp: appGuardsApi.isKovoApp,
@@ -708,6 +709,10 @@ describe('server app-shell public API barrels', () => {
     );
     expect(publicApi.createSqliteAppRuntimeDb).toBe(sqliteRuntimeApi.createSqliteAppRuntimeDb);
     expect(packageRootApi.createSqliteAppRuntimeDb).toBe(sqliteRuntimeApi.createSqliteAppRuntimeDb);
+    expect(publicApi.runtimeDbMetadataForSchema).toBe(sqliteRuntimeApi.runtimeDbMetadataForSchema);
+    expect(packageRootApi.runtimeDbMetadataForSchema).toBe(
+      sqliteRuntimeApi.runtimeDbMetadataForSchema,
+    );
     for (const key of renderingSubpathOnlyValues) {
       expect(publicValues).not.toHaveProperty(key);
       expect(packageRootValues).not.toHaveProperty(key);
@@ -941,9 +946,11 @@ describe('server app-shell public API barrels', () => {
       'createMemoryMutationReplayStore',
       'endpointMatches',
       'explainGuard',
+      'extractCompilerBoundKovoRuntimeDbMetadata',
       'frameworkEndpoint',
       'frameworkManagedDbRawTarget',
       'guardAuditName',
+      'installGeneratedTableSecurityManifestForCommand',
       'invalidate',
       'kovoDeclaredWriteDbHandle',
       'kovoReadonlyDbHandle',
@@ -953,6 +960,8 @@ describe('server app-shell public API barrels', () => {
       'registerFrameworkManagedDbHooks',
       'registerGeneratedMutationTouchRegistry',
       'registerGeneratedQueryReadRegistry',
+      'registerGeneratedTableSecurityManifest',
+      'registeredGeneratedTableSecurityManifest',
       'resolveLifecycleRequest',
       'runEndpoint',
       'runMutation',

@@ -10,6 +10,7 @@ import Database from 'better-sqlite3';
 import {
   createSqliteAppRuntimeDb,
   declareSecretReadCapability,
+  runtimeDbMetadataForSchema,
   type AccessDecision,
   type CsrfOptions,
   type KovoSqliteAppRuntimeDb,
@@ -21,7 +22,6 @@ import {
 } from '@kovojs/better-auth';
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
-import { extractKovoRuntimeDbMetadata } from '@kovojs/drizzle';
 import { getTableConfig } from 'drizzle-orm/sqlite-core';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
 
@@ -60,7 +60,7 @@ const SCHEMA_TABLES = [
   schema.account,
   schema.verification,
 ] as const;
-const RUNTIME_DB_METADATA = extractKovoRuntimeDbMetadata(SCHEMA_TABLES);
+const RUNTIME_DB_METADATA = runtimeDbMetadataForSchema(SCHEMA_TABLES);
 const SQLITE_RUNTIME_WARNING =
   'Kovo SQLite starter is experimental and single-principal only: SQLite has no engine role/RLS layer, so Kovo owner scoping is not enforced. Use the default PGlite/Postgres runtime for multi-tenant authorization.';
 let sqliteRuntimeWarningPrinted = false;

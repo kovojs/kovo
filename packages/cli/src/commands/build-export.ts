@@ -55,6 +55,7 @@ import type { KovoAppShellCompiledClientModule } from '@kovojs/server/internal/a
 import {
   buildCheckSourceFiles,
   buildCompilerQueryShapeFacts,
+  collectRuntimeRegistryFacts,
   type DataPlaneSourceFile as BuildCheckSourceFile,
   type QueryReadFactLike,
   staticDataPlaneBuildFacts,
@@ -538,6 +539,10 @@ export async function runBuildCommand(
       writeKovoNeutralBuild,
     } = loadAndCheck.value;
     const outDir = resolve(invocationRoot, options.outDir);
+    const staticRuntimeRegistry = await collectRuntimeRegistryFacts({
+      appSourceDir: dirname(resolvedAppModulePath),
+      root: invocationRoot,
+    });
     const clientBuild = await buildKovoClientManifest(
       join(outDir, '.kovo-client'),
       kovoClientBuildRoot(resolvedAppModulePath, invocationRoot),
@@ -552,7 +557,12 @@ export async function runBuildCommand(
     const serverHandlerBuild = await bundleKovoServerHandler(resolvedAppModulePath, {
       buildRoot: invocationRoot,
       queryShapeFacts,
-      runtimeRegistry: runtimeRegistryWireFactsFromGraph(checkGraph),
+      runtimeRegistry: {
+        ...runtimeRegistryWireFactsFromGraph(checkGraph),
+        ...(staticRuntimeRegistry.tableSecurity === undefined
+          ? {}
+          : { tableSecurity: staticRuntimeRegistry.tableSecurity }),
+      },
       stylesheetAssets: buildCssAssets,
     });
     const clientModules = uniqueKovoCompiledClientModules([
@@ -3174,7 +3184,12 @@ export function serializeBuildRuntimeRegistryWireModule(
 ): string {
   return buildJoinStrings(
     [
-      `import { registerGeneratedMutationTouchRegistry, registerGeneratedQueryReadRegistry } from '@kovojs/server/internal/execution';`,
+      `import { registerGeneratedMutationTouchRegistry, registerGeneratedQueryReadRegistry, registerGeneratedTableSecurityManifest } from '@kovojs/server/internal/execution';`,
+      ...(registry.tableSecurity === undefined
+        ? []
+        : [
+            `registerGeneratedTableSecurityManifest(${stringifyBuildValue(registry.tableSecurity)});`,
+          ]),
       `registerGeneratedQueryReadRegistry(${stringifyBuildValue(registry.queryReads)});`,
       `registerGeneratedMutationTouchRegistry(${stringifyBuildValue(registry.mutationTouches)});`,
       '',

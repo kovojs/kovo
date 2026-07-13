@@ -39,7 +39,7 @@ export type {
 } from './postgres-runtime.js';
 // SPEC §5.2/§10.3/§11.2: generated SQLite starter source must use public Kovo entrypoints, while
 // the adapter hooks and low-level secret/read/write wrappers remain internal.
-export { createSqliteAppRuntimeDb } from './sqlite-runtime.js';
+export { createSqliteAppRuntimeDb, runtimeDbMetadataForSchema } from './sqlite-runtime.js';
 export type {
   KovoSqliteAppRuntimeDb,
   KovoSqliteAppRuntimeMetadata,

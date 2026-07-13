@@ -14,6 +14,7 @@ import {
   runtimeMapGet,
   runtimeMapHas,
   runtimeMapSet,
+  runtimeMapSize,
   runtimeNullRecord,
   runtimeObjectKeys,
   runtimeOwnDataValue,
@@ -41,6 +42,44 @@ type KovoRuntimeDbTableConfig = {
   columns: readonly KovoRuntimeDbColumn[];
   name: string;
 };
+
+/** @internal Compiler-derived physical/selection column identity used to bind runtime schema facts. */
+export interface KovoRuntimeTableSecurityManifestColumn {
+  key: string;
+  name: string;
+}
+
+/** @internal Compiler-derived direct-owner source used to bind runtime schema facts. */
+export interface KovoRuntimeTableSecurityManifestOwner {
+  columnKey: string;
+  columnName: string;
+}
+
+/** @internal Compiler-derived transitive-owner source used to bind runtime schema facts. */
+export interface KovoRuntimeTableSecurityManifestOwnerVia {
+  fkColumnKey: string;
+  fkColumnName: string;
+  parentKeyColumnKey: string;
+  parentKeyColumnName: string;
+  parentTable: string;
+}
+
+/** @internal Compiler-derived security facts for one physical Drizzle table. */
+export interface KovoRuntimeTableSecurityManifestTable {
+  authorizationClassifications: readonly KovoRuntimeAuthorizationClassification[];
+  columns: readonly KovoRuntimeTableSecurityManifestColumn[];
+  governedColumnKeys: readonly string[];
+  name: string;
+  owner?: KovoRuntimeTableSecurityManifestOwner;
+  ownerVia?: KovoRuntimeTableSecurityManifestOwnerVia;
+  secretColumnKeys: readonly string[];
+  secretDeclared: boolean;
+}
+
+/** @internal Compiler-owned table-security authority emitted ahead of app evaluation. */
+export interface KovoRuntimeTableSecurityManifest {
+  tables: readonly KovoRuntimeTableSecurityManifestTable[];
+}
 type KovoRuntimeTableFacts = {
   annotation: KovoRuntimeDomainAnnotation | undefined;
   columnKeys: ReadonlyMap<string, string>;
@@ -172,6 +211,23 @@ export interface KovoRuntimeDbMetadata {
  * the security decision itself stays in the server package (SPEC §10.3/§11.2).
  */
 export function extractKovoRuntimeDbMetadata(tables: readonly unknown[]): KovoRuntimeDbMetadata {
+  return extractKovoRuntimeDbMetadataWithManifest(tables);
+}
+
+/** @internal Bind runtime Drizzle identity to compiler-owned table-security facts. */
+export function extractCompilerBoundKovoRuntimeDbMetadata(
+  tables: readonly unknown[],
+  manifest: KovoRuntimeTableSecurityManifest,
+): KovoRuntimeDbMetadata {
+  return extractKovoRuntimeDbMetadataWithManifest(tables, manifest);
+}
+
+function extractKovoRuntimeDbMetadataWithManifest(
+  tables: readonly unknown[],
+  manifest?: KovoRuntimeTableSecurityManifest,
+): KovoRuntimeDbMetadata {
+  const expectedTables =
+    manifest === undefined ? undefined : snapshotRuntimeTableSecurityManifest(manifest);
   const tableSnapshot = runtimeSnapshotArray(tables, 'Kovo Drizzle runtime schema tables');
   // Snapshot every table/column/annotation fact before the first app-owned selector runs. A
   // selector can close over any schema table, so per-table lazy snapshots still permit an earlier
@@ -187,6 +243,9 @@ export function extractKovoRuntimeDbMetadata(tables: readonly unknown[]): KovoRu
     const facts = snapshotRuntimeTableFacts(table);
     runtimeArrayAppend(tableFacts, facts, 'Kovo Drizzle runtime table facts');
     runtimeMapSet(factsByTable, table as object, facts);
+  }
+  if (expectedTables !== undefined) {
+    assertRuntimeSchemaMatchesManifest(tableFacts, expectedTables);
   }
   // ownerVia may name a parent not repeated in the caller's table list. Capture that parent before
   // callbacks too, while keeping it out of the extracted schema-table inventory.
@@ -289,6 +348,19 @@ export function extractKovoRuntimeDbMetadata(tables: readonly unknown[]): KovoRu
       runtimeMapSet(secretColumnNamesByTable, config.name, runtimeSealSet(tableSecretColumnNames));
     }
 
+    if (expectedTables !== undefined) {
+      const expected = runtimeMapGet(expectedTables, config.name);
+      if (expected === undefined) throwRuntimeTableSecurityMismatch(config.name);
+      assertRuntimeTableSecurityFacts(expected, {
+        classifications,
+        governedColumnKeys: tableGovernedColumnKeys,
+        owner: ownerSource,
+        ownerVia: ownerViaSource,
+        secretColumnKeys: tableSecretColumnKeys,
+        secretDeclared: secretAnnotation !== undefined,
+      });
+    }
+
     runtimeMapForEach(columnKeys, (key, dbName) => {
       const column = runtimeMapGet(facts.columnObjectsByKey, key);
       if (column === undefined) return;
@@ -322,6 +394,325 @@ export function extractKovoRuntimeDbMetadata(tables: readonly unknown[]): KovoRu
     secretColumnNamesByTable: runtimeSealMap(secretColumnNamesByTable),
     secretTableNames: runtimeSealSet(secretTableNames),
   });
+}
+
+function snapshotRuntimeTableSecurityManifest(
+  manifest: KovoRuntimeTableSecurityManifest,
+): ReadonlyMap<string, KovoRuntimeTableSecurityManifestTable> {
+  if (typeof manifest !== 'object' || manifest === null || runtimeArrayIsArray(manifest)) {
+    throw new TypeError('Kovo compiler table-security manifest must be an own-data record.');
+  }
+  const tablesValue = requiredRuntimeManifestValue(manifest, 'tables', 'manifest');
+  if (!runtimeArrayIsArray(tablesValue)) {
+    throw new TypeError('Kovo compiler table-security manifest.tables must be an array.');
+  }
+  const tables = runtimeSnapshotArray(tablesValue, 'Kovo compiler table-security tables');
+  const byName = runtimeMap<string, KovoRuntimeTableSecurityManifestTable>();
+  for (let index = 0; index < tables.length; index += 1) {
+    const table = snapshotRuntimeTableSecurityManifestTable(
+      runtimeArrayValue(tables, index, 'Kovo compiler table-security tables'),
+      index,
+    );
+    if (runtimeMapHas(byName, table.name)) throwRuntimeTableSecurityMismatch(table.name);
+    runtimeMapSet(byName, table.name, table);
+  }
+  return byName;
+}
+
+function snapshotRuntimeTableSecurityManifestTable(
+  value: unknown,
+  index: number,
+): KovoRuntimeTableSecurityManifestTable {
+  const label = `manifest.tables[${index}]`;
+  if (typeof value !== 'object' || value === null || runtimeArrayIsArray(value)) {
+    throw new TypeError(`Kovo compiler table-security ${label} must be an own-data record.`);
+  }
+  const name = requiredRuntimeManifestValue(value, 'name', label);
+  const classificationsValue = requiredRuntimeManifestValue(
+    value,
+    'authorizationClassifications',
+    label,
+  );
+  const columnsValue = requiredRuntimeManifestValue(value, 'columns', label);
+  const governedValue = requiredRuntimeManifestValue(value, 'governedColumnKeys', label);
+  const secretValue = requiredRuntimeManifestValue(value, 'secretColumnKeys', label);
+  const secretDeclared = requiredRuntimeManifestValue(value, 'secretDeclared', label);
+  if (
+    typeof name !== 'string' ||
+    !runtimeArrayIsArray(classificationsValue) ||
+    !runtimeArrayIsArray(columnsValue) ||
+    !runtimeArrayIsArray(governedValue) ||
+    !runtimeArrayIsArray(secretValue) ||
+    typeof secretDeclared !== 'boolean'
+  ) {
+    throw new TypeError(`Kovo compiler table-security ${label} contains invalid required facts.`);
+  }
+
+  const classificationsSource = runtimeSnapshotArray(
+    classificationsValue,
+    `${label}.authorizationClassifications`,
+  );
+  const authorizationClassifications: KovoRuntimeAuthorizationClassification[] = [];
+  for (
+    let classificationIndex = 0;
+    classificationIndex < classificationsSource.length;
+    classificationIndex += 1
+  ) {
+    const classification = runtimeArrayValue(
+      classificationsSource,
+      classificationIndex,
+      `${label}.authorizationClassifications`,
+    );
+    if (!isRuntimeManifestClassification(classification)) {
+      throw new TypeError(`Kovo compiler table-security ${label} has an invalid classification.`);
+    }
+    runtimeArrayAppend(
+      authorizationClassifications,
+      classification,
+      `${label}.authorizationClassifications`,
+    );
+  }
+
+  const columnsSource = runtimeSnapshotArray(columnsValue, `${label}.columns`);
+  const columns: KovoRuntimeTableSecurityManifestColumn[] = [];
+  for (let columnIndex = 0; columnIndex < columnsSource.length; columnIndex += 1) {
+    const columnValue = runtimeArrayValue(columnsSource, columnIndex, `${label}.columns`);
+    if (
+      typeof columnValue !== 'object' ||
+      columnValue === null ||
+      runtimeArrayIsArray(columnValue)
+    ) {
+      throw new TypeError(`Kovo compiler table-security ${label} has an invalid column.`);
+    }
+    const key = requiredRuntimeManifestValue(columnValue, 'key', `${label}.columns`);
+    const columnName = requiredRuntimeManifestValue(columnValue, 'name', `${label}.columns`);
+    if (typeof key !== 'string' || typeof columnName !== 'string') {
+      throw new TypeError(`Kovo compiler table-security ${label} has an invalid column.`);
+    }
+    runtimeArrayAppend(columns, runtimeFreeze({ key, name: columnName }), `${label}.columns`);
+  }
+
+  const ownerValue = optionalRuntimeManifestValue(value, 'owner');
+  const ownerViaValue = optionalRuntimeManifestValue(value, 'ownerVia');
+  return runtimeFreeze({
+    authorizationClassifications: runtimeFreeze(authorizationClassifications),
+    columns: runtimeFreeze(columns),
+    governedColumnKeys: snapshotRuntimeManifestStrings(
+      governedValue,
+      `${label}.governedColumnKeys`,
+    ),
+    name,
+    ...(ownerValue === undefined
+      ? {}
+      : { owner: snapshotRuntimeManifestOwner(ownerValue, `${label}.owner`) }),
+    ...(ownerViaValue === undefined
+      ? {}
+      : { ownerVia: snapshotRuntimeManifestOwnerVia(ownerViaValue, `${label}.ownerVia`) }),
+    secretColumnKeys: snapshotRuntimeManifestStrings(secretValue, `${label}.secretColumnKeys`),
+    secretDeclared,
+  });
+}
+
+function snapshotRuntimeManifestOwner(
+  value: unknown,
+  label: string,
+): KovoRuntimeTableSecurityManifestOwner {
+  if (typeof value !== 'object' || value === null || runtimeArrayIsArray(value)) {
+    throw new TypeError(`Kovo compiler table-security ${label} must be an own-data record.`);
+  }
+  const columnKey = requiredRuntimeManifestValue(value, 'columnKey', label);
+  const columnName = requiredRuntimeManifestValue(value, 'columnName', label);
+  if (typeof columnKey !== 'string' || typeof columnName !== 'string') {
+    throw new TypeError(`Kovo compiler table-security ${label} contains invalid facts.`);
+  }
+  return runtimeFreeze({ columnKey, columnName });
+}
+
+function snapshotRuntimeManifestOwnerVia(
+  value: unknown,
+  label: string,
+): KovoRuntimeTableSecurityManifestOwnerVia {
+  if (typeof value !== 'object' || value === null || runtimeArrayIsArray(value)) {
+    throw new TypeError(`Kovo compiler table-security ${label} must be an own-data record.`);
+  }
+  const fkColumnKey = requiredRuntimeManifestValue(value, 'fkColumnKey', label);
+  const fkColumnName = requiredRuntimeManifestValue(value, 'fkColumnName', label);
+  const parentKeyColumnKey = requiredRuntimeManifestValue(value, 'parentKeyColumnKey', label);
+  const parentKeyColumnName = requiredRuntimeManifestValue(value, 'parentKeyColumnName', label);
+  const parentTable = requiredRuntimeManifestValue(value, 'parentTable', label);
+  if (
+    typeof fkColumnKey !== 'string' ||
+    typeof fkColumnName !== 'string' ||
+    typeof parentKeyColumnKey !== 'string' ||
+    typeof parentKeyColumnName !== 'string' ||
+    typeof parentTable !== 'string'
+  ) {
+    throw new TypeError(`Kovo compiler table-security ${label} contains invalid facts.`);
+  }
+  return runtimeFreeze({
+    fkColumnKey,
+    fkColumnName,
+    parentKeyColumnKey,
+    parentKeyColumnName,
+    parentTable,
+  });
+}
+
+function snapshotRuntimeManifestStrings(
+  value: readonly unknown[],
+  label: string,
+): readonly string[] {
+  const source = runtimeSnapshotArray(value, label);
+  const strings: string[] = [];
+  for (let index = 0; index < source.length; index += 1) {
+    const entry = runtimeArrayValue(source, index, label);
+    if (typeof entry !== 'string') {
+      throw new TypeError(`Kovo compiler table-security ${label} must contain strings.`);
+    }
+    runtimeArrayAppend(strings, entry, label);
+  }
+  return runtimeFreeze(strings);
+}
+
+function requiredRuntimeManifestValue(value: object, property: string, label: string): unknown {
+  const result = runtimeOwnDataValue(value, property);
+  if (!result.found) {
+    throw new TypeError(`Kovo compiler table-security ${label}.${property} must be own data.`);
+  }
+  return result.value;
+}
+
+function optionalRuntimeManifestValue(value: object, property: string): unknown {
+  const result = runtimeOwnDataValue(value, property);
+  return result.found ? result.value : undefined;
+}
+
+function assertRuntimeSchemaMatchesManifest(
+  tableFacts: readonly KovoRuntimeTableFacts[],
+  expectedTables: ReadonlyMap<string, KovoRuntimeTableSecurityManifestTable>,
+): void {
+  if (runtimeMapSize(expectedTables) !== tableFacts.length) {
+    throwRuntimeTableSecurityMismatch('<schema>');
+  }
+  const seen = runtimeSet<string>();
+  for (let index = 0; index < tableFacts.length; index += 1) {
+    const facts = runtimeArrayValue(tableFacts, index, 'Kovo Drizzle runtime table facts');
+    if (runtimeSetHas(seen, facts.config.name)) {
+      throwRuntimeTableSecurityMismatch(facts.config.name);
+    }
+    runtimeSetAdd(seen, facts.config.name);
+    const expected = runtimeMapGet(expectedTables, facts.config.name);
+    if (expected === undefined || runtimeMapSize(facts.columnKeys) !== expected.columns.length) {
+      throwRuntimeTableSecurityMismatch(facts.config.name);
+    }
+    for (let columnIndex = 0; columnIndex < expected.columns.length; columnIndex += 1) {
+      const column = runtimeArrayValue(
+        expected.columns,
+        columnIndex,
+        'Kovo compiler table-security columns',
+      );
+      if (runtimeMapGet(facts.columnKeys, column.name) !== column.key) {
+        throwRuntimeTableSecurityMismatch(facts.config.name);
+      }
+    }
+  }
+}
+
+function assertRuntimeTableSecurityFacts(
+  expected: KovoRuntimeTableSecurityManifestTable,
+  actual: {
+    classifications: readonly KovoRuntimeAuthorizationClassification[];
+    governedColumnKeys: ReadonlySet<string>;
+    owner: KovoRuntimeOwnerSource | undefined;
+    ownerVia: KovoRuntimeOwnerViaSource | undefined;
+    secretColumnKeys: ReadonlySet<string>;
+    secretDeclared: boolean;
+  },
+): void {
+  if (
+    !runtimeManifestStringArrayEquals(
+      expected.authorizationClassifications,
+      actual.classifications,
+    ) ||
+    !runtimeManifestSetEquals(expected.governedColumnKeys, actual.governedColumnKeys) ||
+    !runtimeManifestSetEquals(expected.secretColumnKeys, actual.secretColumnKeys) ||
+    expected.secretDeclared !== actual.secretDeclared ||
+    !runtimeManifestOwnerEquals(expected.owner, actual.owner) ||
+    !runtimeManifestOwnerViaEquals(expected.ownerVia, actual.ownerVia)
+  ) {
+    throwRuntimeTableSecurityMismatch(expected.name);
+  }
+}
+
+function runtimeManifestStringArrayEquals(
+  expected: readonly string[],
+  actual: readonly string[],
+): boolean {
+  if (expected.length !== actual.length) return false;
+  for (let index = 0; index < expected.length; index += 1) {
+    if (
+      runtimeArrayValue(expected, index, 'Kovo compiler table-security strings') !==
+      runtimeArrayValue(actual, index, 'Kovo Drizzle runtime table-security strings')
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function runtimeManifestSetEquals(
+  expected: readonly string[],
+  actual: ReadonlySet<string>,
+): boolean {
+  if (expected.length !== runtimeSetSize(actual)) return false;
+  for (let index = 0; index < expected.length; index += 1) {
+    if (
+      !runtimeSetHas(actual, runtimeArrayValue(expected, index, 'Kovo compiler table-security set'))
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function runtimeManifestOwnerEquals(
+  expected: KovoRuntimeTableSecurityManifestOwner | undefined,
+  actual: KovoRuntimeOwnerSource | undefined,
+): boolean {
+  if (expected === undefined || actual === undefined) return expected === actual;
+  return expected.columnKey === actual.columnKey && expected.columnName === actual.columnName;
+}
+
+function runtimeManifestOwnerViaEquals(
+  expected: KovoRuntimeTableSecurityManifestOwnerVia | undefined,
+  actual: KovoRuntimeOwnerViaSource | undefined,
+): boolean {
+  if (expected === undefined || actual === undefined) return expected === actual;
+  return (
+    expected.fkColumnKey === actual.fkColumnKey &&
+    expected.fkColumnName === actual.fkColumnName &&
+    expected.parentKeyColumnKey === actual.parentKeyColumnKey &&
+    expected.parentKeyColumnName === actual.parentKeyColumnName &&
+    expected.parentTable === actual.parentTable
+  );
+}
+
+function isRuntimeManifestClassification(
+  value: unknown,
+): value is KovoRuntimeAuthorizationClassification {
+  return (
+    value === 'authzPolicy' ||
+    value === 'owned' ||
+    value === 'ownedVia' ||
+    value === 'public' ||
+    value === 'reference'
+  );
+}
+
+function throwRuntimeTableSecurityMismatch(table: string): never {
+  throw new TypeError(
+    `KV414: runtime Drizzle table security for ${table} does not match the compiler-derived manifest (SPEC §6.6/§10.3).`,
+  );
 }
 
 function getRuntimeTableConfig(table: unknown): KovoRuntimeDbTableConfig {

@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { sql } from 'drizzle-orm';
+import { sql, Table } from 'drizzle-orm';
 import { pgTable, text as pgText } from 'drizzle-orm/pg-core';
 import { sqliteTable, text } from 'drizzle-orm/sqlite-core';
 import { kovo } from './runtime.js';
-import { extractKovoRuntimeDbMetadata } from './runtime-metadata.js';
+import {
+  extractCompilerBoundKovoRuntimeDbMetadata,
+  extractKovoRuntimeDbMetadata,
+} from './runtime-metadata.js';
 
 describe('runtime metadata extraction', () => {
   it('extracts secret and non-secret SQLite schema metadata from Drizzle tables', () => {
@@ -92,6 +95,43 @@ describe('runtime metadata extraction', () => {
     expect([...metadata.secretTableNames]).toEqual(['users']);
     expect([...(metadata.secretColumnKeysByTable.get('users') ?? [])]).toEqual(['passwordHash']);
     expect(metadata.authorizationClassificationsByTable.get('users')).toBeUndefined();
+  });
+
+  it('rejects late replacement of the exact Drizzle callback against compiler facts', () => {
+    const users = sqliteTable(
+      'users',
+      {
+        id: text('id').primaryKey(),
+        passwordHash: text('password_hash').notNull(),
+      },
+      kovo({ domain: 'user', key: 'id', secret: ['passwordHash'] }),
+    );
+    const manifest = {
+      tables: [
+        {
+          authorizationClassifications: [],
+          columns: [
+            { key: 'id', name: 'id' },
+            { key: 'passwordHash', name: 'password_hash' },
+          ],
+          governedColumnKeys: ['id', 'passwordHash'],
+          name: 'users',
+          secretColumnKeys: ['passwordHash'],
+          secretDeclared: true,
+        },
+      ],
+    } as const;
+
+    Object.defineProperty(users, Table.Symbol.ExtraConfigBuilder, {
+      configurable: true,
+      enumerable: true,
+      value: Object.assign(() => [], { domain: 'public', public: true }),
+      writable: true,
+    });
+
+    expect(() => extractCompilerBoundKovoRuntimeDbMetadata([users], manifest)).toThrow(
+      /KV414: runtime Drizzle table security/u,
+    );
   });
 
   it('treats secret: true as a whole-table secret annotation', () => {

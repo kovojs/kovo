@@ -617,6 +617,9 @@ describe('public Kovo Vite plugin: data-plane safety gate (SPEC.md §11.4)', () 
     expect(registrySource).toContain(
       `registerGeneratedMutationTouchRegistry({"addContact":[{"domain":"contact","keys":null}]});`,
     );
+    expect(registrySource).toContain(
+      `registerGeneratedTableSecurityManifest({"tables":[{"authorizationClassifications":["authzPolicy"],"columns":[{"key":"id","name":"id"}],"governedColumnKeys":["id"],"name":"contacts","secretColumnKeys":[],"secretDeclared":false}]});`,
+    );
   });
 
   it('skips runtime registry injection while the CLI derives the build graph', async () => {

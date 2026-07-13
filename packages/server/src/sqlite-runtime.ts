@@ -6,6 +6,7 @@ import {
   type Reader,
 } from './managed-db.js';
 import { createSecretBoxingReadDb } from './secret-read-boundary.js';
+import { extractCompilerBoundKovoRuntimeDbMetadata } from './generated-table-security-registry.js';
 import {
   witnessFreeze,
   witnessGetOwnPropertyDescriptor,
@@ -75,6 +76,19 @@ export interface KovoSqliteAppRuntimeDb<Db extends object> {
   db: Db;
   /** Read-only endpoint/query handle with secret-read boxing applied. */
   readonlyDb: Reader<Db>;
+}
+
+/**
+ * Bind a generated app's Drizzle schema to compiler-derived runtime security metadata.
+ *
+ * Generated dev/production entries register the compiler manifest before app modules evaluate;
+ * this helper then uses live Drizzle values only for table/column identity and rejects any
+ * authorization or confidentiality mismatch (SPEC §6.6/§10.3).
+ */
+export function runtimeDbMetadataForSchema(
+  tables: readonly unknown[],
+): KovoSqliteAppRuntimeMetadata {
+  return extractCompilerBoundKovoRuntimeDbMetadata(tables);
 }
 
 /**

@@ -4141,6 +4141,7 @@ function ownerDomainsFromProjectExtraction(extraction: ProjectExtraction): Owner
   ownerDomains: readonly OwnerDomainFact[];
   queries: readonly QueryFact[];
   queryWriteReachability: readonly QueryWriteReachabilityFact[];
+  runtimeTableSecurityManifest: RuntimeTableSecurityManifest;
   scopeAudits: readonly ScopeAuditFact[];
   sqlSafetyDiagnostics: readonly TouchGraphDiagnostic[];
   toctouFacts: readonly ToctouFact[];
@@ -4148,6 +4149,254 @@ function ownerDomainsFromProjectExtraction(extraction: ProjectExtraction): Owner
 }
 
 type AuthzCensusClassification = 'authzPolicy' | 'owned' | 'ownedVia' | 'public' | 'reference';
+
+/** @internal Compiler-owned runtime security facts for one physical Drizzle column. */
+export interface RuntimeTableSecurityManifestColumn {
+  key: string;
+  name: string;
+}
+
+/** @internal Compiler-owned direct-owner fact for one physical Drizzle table. */
+export interface RuntimeTableSecurityManifestOwner {
+  columnKey: string;
+  columnName: string;
+}
+
+/** @internal Compiler-owned transitive-owner fact for one physical Drizzle table. */
+export interface RuntimeTableSecurityManifestOwnerVia {
+  fkColumnKey: string;
+  fkColumnName: string;
+  parentKeyColumnKey: string;
+  parentKeyColumnName: string;
+  parentTable: string;
+}
+
+/** @internal Compiler-owned runtime security facts for one physical Drizzle table. */
+export interface RuntimeTableSecurityManifestTable {
+  authorizationClassifications: readonly AuthzCensusClassification[];
+  columns: readonly RuntimeTableSecurityManifestColumn[];
+  governedColumnKeys: readonly string[];
+  name: string;
+  owner?: RuntimeTableSecurityManifestOwner;
+  ownerVia?: RuntimeTableSecurityManifestOwnerVia;
+  secretColumnKeys: readonly string[];
+  secretDeclared: boolean;
+}
+
+/**
+ * @internal Canonical table-security authority emitted into the runtime registry.
+ *
+ * App code and Drizzle table objects share the runtime realm, so the mutable
+ * `Table.Symbol.ExtraConfigBuilder` slot is an input to compare, never the authority
+ * for authorization or confidentiality (SPEC §6.6 rule 5 / §10.3).
+ */
+export interface RuntimeTableSecurityManifest {
+  tables: readonly RuntimeTableSecurityManifestTable[];
+}
+
+interface RuntimeTableSecurityManifestDraft {
+  annotation: ExtractedTableAnnotation;
+  columns: readonly RuntimeTableSecurityManifestColumn[];
+  initializer: CallExpression;
+  name: string;
+  namespaceTableNames: ReturnType<typeof projectNamespaceTableNamesByLocal>;
+  syntheticName: string;
+}
+
+function runtimeTableSecurityManifestFromProjectExtraction(
+  extraction: ProjectExtraction,
+): RuntimeTableSecurityManifest {
+  const drafts = new Map<string, RuntimeTableSecurityManifestDraft>();
+  for (const sourceFile of extraction.sourceFiles) {
+    const namespaceTableNames = projectNamespaceTableNamesByLocal(
+      sourceFile,
+      extraction.tableNamesBySymbol,
+    );
+    for (const declaration of sourceFile.getVariableDeclarations()) {
+      const statement = declaration.getVariableStatement();
+      if (
+        statement === undefined ||
+        !statement
+          .getModifiers()
+          .some((modifier) => modifier.getKind() === SyntaxKind.ExportKeyword)
+      ) {
+        continue;
+      }
+      const initializer = declaration.getInitializer();
+      if (
+        !initializer ||
+        !Node.isCallExpression(initializer) ||
+        !isProjectTableInitializerNode(initializer)
+      ) {
+        continue;
+      }
+      const rootCall = rootCallExpression(initializer);
+      if (!Node.isCallExpression(rootCall)) continue;
+      const name = tableNameArgument(rootCall);
+      const annotation = tableAnnotation(rootCall);
+      const syntheticName = extraction.tableNamesBySymbol.get(
+        resolvedSymbolKey(declaration.getNameNode().getSymbol()) ?? '',
+      );
+      if (name === undefined || annotation === null || syntheticName === undefined) continue;
+      drafts.set(name, {
+        annotation,
+        columns: runtimeManifestColumns(rootCall),
+        initializer: rootCall,
+        name,
+        namespaceTableNames,
+        syntheticName,
+      });
+    }
+  }
+
+  const tables: RuntimeTableSecurityManifestTable[] = [];
+  for (const draft of drafts.values()) {
+    const annotation = draft.annotation;
+    const classifications = authzCensusClassifications(annotation);
+    const domainAnnotation = isDomainExtractedTableAnnotation(annotation) ? annotation : undefined;
+    const ownerColumn = runtimeManifestColumnForRef(draft.columns, domainAnnotation?.owner);
+    const owner =
+      ownerColumn === undefined
+        ? undefined
+        : { columnKey: ownerColumn.key, columnName: ownerColumn.name };
+    const ownerVia = runtimeManifestOwnerVia(draft, drafts, extraction.tableNamesBySymbol);
+    const secretDeclared = domainAnnotation?.secret !== undefined;
+    const secretColumnKeys = runtimeManifestAnnotatedColumnKeys(
+      draft.columns,
+      domainAnnotation?.secret,
+    );
+    const governedColumnKeys = new Set<string>();
+    const keyColumn = runtimeManifestColumnForRef(draft.columns, domainAnnotation?.key);
+    if (keyColumn !== undefined) governedColumnKeys.add(keyColumn.key);
+    if (ownerColumn !== undefined) governedColumnKeys.add(ownerColumn.key);
+    for (const column of draft.columns) {
+      if (runtimeManifestPasswordColumn(column.key) || runtimeManifestPasswordColumn(column.name)) {
+        governedColumnKeys.add(column.key);
+      }
+    }
+    for (const key of runtimeManifestAnnotatedColumnKeys(
+      draft.columns,
+      domainAnnotation?.confidentialAtRest,
+    )) {
+      governedColumnKeys.add(key);
+    }
+    for (const key of runtimeManifestAnnotatedColumnKeys(
+      draft.columns,
+      domainAnnotation?.governed,
+    )) {
+      governedColumnKeys.add(key);
+    }
+
+    tables.push({
+      authorizationClassifications: classifications,
+      columns: draft.columns,
+      governedColumnKeys: [...governedColumnKeys].sort(compareRuntimeManifestStrings),
+      name: draft.name,
+      ...(owner === undefined ? {} : { owner }),
+      ...(ownerVia === undefined ? {} : { ownerVia }),
+      secretColumnKeys,
+      secretDeclared,
+    });
+  }
+  tables.sort((left, right) => compareRuntimeManifestStrings(left.name, right.name));
+  return { tables };
+}
+
+function runtimeManifestColumns(initializer: CallExpression): RuntimeTableSecurityManifestColumn[] {
+  const object = initializer.getArguments()[1];
+  if (!object || !Node.isObjectLiteralExpression(object)) return [];
+  const columns: RuntimeTableSecurityManifestColumn[] = [];
+  for (const property of object.getProperties()) {
+    if (!Node.isPropertyAssignment(property)) continue;
+    const key = propertyNameText(property.getNameNode());
+    const value = property.getInitializer();
+    if (key === undefined || value === undefined) continue;
+    const rootCall = columnBuilderRootCallExpression(value.compilerNode as ts.Expression);
+    const nameArgument = rootCall?.arguments[0];
+    const name =
+      nameArgument !== undefined && ts.isStringLiteralLike(nameArgument) ? nameArgument.text : key;
+    columns.push({ key, name });
+  }
+  columns.sort((left, right) => compareRuntimeManifestStrings(left.key, right.key));
+  return columns;
+}
+
+function runtimeManifestAnnotatedColumnKeys(
+  columns: readonly RuntimeTableSecurityManifestColumn[],
+  annotation: KovoDomainTableAnnotation['secret'] | KovoDomainTableAnnotation['governed'],
+): string[] {
+  if (annotation === undefined) return [];
+  if (annotation === true) return columns.map((column) => column.key);
+  if (!Array.isArray(annotation)) return [];
+  const refs = annotation;
+  const keys = new Set<string>();
+  for (const ref of refs) {
+    const column = runtimeManifestColumnForRef(columns, ref);
+    if (column !== undefined) keys.add(column.key);
+  }
+  return [...keys].sort(compareRuntimeManifestStrings);
+}
+
+function runtimeManifestColumnForRef(
+  columns: readonly RuntimeTableSecurityManifestColumn[],
+  ref: unknown,
+): RuntimeTableSecurityManifestColumn | undefined {
+  if (typeof ref !== 'string') return undefined;
+  return columns.find((column) => column.key === ref || column.name === ref);
+}
+
+function runtimeManifestOwnerVia(
+  draft: RuntimeTableSecurityManifestDraft,
+  drafts: ReadonlyMap<string, RuntimeTableSecurityManifestDraft>,
+  tableNamesBySymbol: ReadonlyMap<string, string>,
+): RuntimeTableSecurityManifestOwnerVia | undefined {
+  const annotationCall = draft.initializer.getArguments().find(isKovoAnnotationCall);
+  const annotationObject =
+    annotationCall && Node.isCallExpression(annotationCall)
+      ? annotationCall.getArguments()[0]
+      : undefined;
+  const ownerVia = objectPropertyFromObject(annotationObject, 'ownerVia');
+  if (ownerVia === undefined) return undefined;
+  const fkRef = columnNamePropertyFromObject(ownerVia, 'fk');
+  const parentKeyRef = columnNamePropertyFromObject(ownerVia, 'parentKey');
+  const parentExpression = objectPropertyInitializer(ownerVia, 'parent');
+  if (fkRef === undefined || parentKeyRef === undefined || parentExpression === undefined) {
+    return undefined;
+  }
+  const parentProjectName = projectTableNameForNode(
+    parentExpression,
+    tableNamesBySymbol,
+    draft.namespaceTableNames,
+  );
+  if (parentProjectName === undefined) return undefined;
+  const parentDraft = [...drafts.values()].find(
+    (candidate) =>
+      candidate.name === parentProjectName || candidate.syntheticName === parentProjectName,
+  );
+  const fkColumn = runtimeManifestColumnForRef(draft.columns, fkRef);
+  const parentKeyColumn =
+    parentDraft === undefined
+      ? undefined
+      : runtimeManifestColumnForRef(parentDraft.columns, parentKeyRef);
+  if (parentDraft === undefined || fkColumn === undefined || parentKeyColumn === undefined) {
+    return undefined;
+  }
+  return {
+    fkColumnKey: fkColumn.key,
+    fkColumnName: fkColumn.name,
+    parentKeyColumnKey: parentKeyColumn.key,
+    parentKeyColumnName: parentKeyColumn.name,
+    parentTable: parentDraft.name,
+  };
+}
+
+function runtimeManifestPasswordColumn(value: string): boolean {
+  return /^(?:password|passwordHash|passwordDigest)$/u.test(value);
+}
+
+function compareRuntimeManifestStrings(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0;
+}
 
 /** @internal */ export interface DrizzleAnalysisContext {
   extraction: ProjectExtraction;
@@ -4447,6 +4696,9 @@ class LazyDrizzleFactStore implements DrizzleFactStore {
       ownerDomains: ownerAudit.ownerDomains,
       queries,
       queryWriteReachability: this.queryWriteReachability(),
+      runtimeTableSecurityManifest: runtimeTableSecurityManifestFromProjectExtraction(
+        this.extraction,
+      ),
       scopeAudits: ownerAudit.scopeAudits,
       sqlSafetyDiagnostics: [
         ...this.sqlSafetyDiagnostics(),

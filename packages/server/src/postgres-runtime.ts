@@ -4,7 +4,7 @@ import { types as nodeUtilTypes } from 'node:util';
 
 import { PGlite } from '@electric-sql/pglite';
 import { createBoundedRuntimeAuditCollector } from '@kovojs/core/internal/security-markers';
-import { extractKovoRuntimeDbMetadata, type KovoRuntimeDbMetadata } from '@kovojs/drizzle';
+import type { KovoRuntimeDbMetadata } from '@kovojs/drizzle';
 import { buildRelations, type AnyRelations, type SQL } from 'drizzle-orm';
 import { PgDialect, getTableConfig } from 'drizzle-orm/pg-core';
 import { drizzle as drizzleNodePg, type NodePgDatabase } from 'drizzle-orm/node-postgres';
@@ -80,6 +80,7 @@ import {
   witnessWeakMapGet,
   witnessWeakMapSet,
 } from './security-witness-intrinsics.js';
+import { extractCompilerBoundKovoRuntimeDbMetadata } from './generated-table-security-registry.js';
 import { ensureRecurringTaskSchema } from './task-cron.js';
 import {
   createDurableTaskSqlExecutor,
@@ -1342,7 +1343,7 @@ export function createPostgresAppRuntimeDb(
   const schemaTables = sortTablesByForeignKeyDependencies(postgresTablesFromSchema(config.schema));
   assertPostgresRuntimeSchemaSupported(schemaTables);
   const metadata = snapshotExtractedKovoRuntimeDbMetadata(
-    extractKovoRuntimeDbMetadata(schemaTables),
+    extractCompilerBoundKovoRuntimeDbMetadata(schemaTables),
   );
   const ddl = schemaDdl(schemaTables);
   const client = createRuntimeClient(config);
@@ -1408,7 +1409,7 @@ export async function provisionPostgresAppDb(
   const schemaTables = sortTablesByForeignKeyDependencies(postgresTablesFromSchema(config.schema));
   assertPostgresRuntimeSchemaSupported(schemaTables);
   const metadata = snapshotExtractedKovoRuntimeDbMetadata(
-    extractKovoRuntimeDbMetadata(schemaTables),
+    extractCompilerBoundKovoRuntimeDbMetadata(schemaTables),
   );
   const client = createRuntimeClient(config);
   try {
@@ -1448,7 +1449,7 @@ export async function migratePostgresAppDb(
   const schemaTables = sortTablesByForeignKeyDependencies(postgresTablesFromSchema(config.schema));
   assertPostgresRuntimeSchemaSupported(schemaTables);
   const metadata = snapshotExtractedKovoRuntimeDbMetadata(
-    extractKovoRuntimeDbMetadata(schemaTables),
+    extractCompilerBoundKovoRuntimeDbMetadata(schemaTables),
   );
   const client = createRuntimeClient(config);
   try {
@@ -1517,7 +1518,7 @@ export async function checkPostgresAppDbPosture(
   const schemaTables = sortTablesByForeignKeyDependencies(postgresTablesFromSchema(config.schema));
   assertPostgresRuntimeSchemaSupported(schemaTables);
   const metadata = snapshotExtractedKovoRuntimeDbMetadata(
-    extractKovoRuntimeDbMetadata(schemaTables),
+    extractCompilerBoundKovoRuntimeDbMetadata(schemaTables),
   );
   const client = createRuntimeClient(config);
   try {

@@ -162,6 +162,7 @@ interface StaticBuildAnalysisFactsLike {
   ownerDomains?: readonly CoreGraph.OwnerDomainFact[];
   queries: readonly unknown[];
   queryWriteReachability?: readonly CoreGraph.QueryWriteReachabilityFact[];
+  runtimeTableSecurityManifest?: RuntimeRegistryWireFacts['tableSecurity'];
   scopeAudits?: readonly CoreGraph.ScopeAuditFact[];
   sqlSafetyDiagnostics: readonly TouchGraphDiagnosticLike[];
   toctouFacts: readonly ToctouFactLike[];
@@ -327,8 +328,11 @@ export async function collectRuntimeRegistryFacts(options: {
 }): Promise<DataPlaneRuntimeRegistryFacts> {
   const analysis = await collectDataPlaneAnalysis(options);
   if (analysis.files.length === 0) return { mutationTouches: {}, queryReads: [] };
-  const { runtimeRegistryMutationTouchesFromGraph, runtimeRegistryQueryReadsFromFacts } =
-    await importRuntimeRegistryWireModule();
+  const {
+    runtimeRegistryMutationTouchesFromGraph,
+    runtimeRegistryQueryReadsFromFacts,
+    runtimeRegistryTableSecurityFromFacts,
+  } = await importRuntimeRegistryWireModule();
 
   return {
     mutationTouches: runtimeRegistryMutationTouchesFromGraph(
@@ -339,6 +343,13 @@ export async function collectRuntimeRegistryFacts(options: {
     queryReads: runtimeRegistryQueryReadsFromFacts(
       analysis.staticFacts.queries as readonly { query?: unknown; reads?: readonly unknown[] }[],
     ),
+    ...(analysis.staticFacts.runtimeTableSecurityManifest === undefined
+      ? {}
+      : {
+          tableSecurity: runtimeRegistryTableSecurityFromFacts(
+            analysis.staticFacts.runtimeTableSecurityManifest,
+          ),
+        }),
   };
 }
 
@@ -820,13 +831,22 @@ function snapshotStaticBuildAnalysisFacts(
   );
   const toctouFacts = staticAnalysisOwnDataValue(value, 'toctouFacts', 'Static-analysis facts');
   const touchGraph = staticAnalysisOwnDataValue(value, 'touchGraph', 'Static-analysis facts');
+  const runtimeTableSecurityManifest = staticAnalysisOwnDataValue(
+    value,
+    'runtimeTableSecurityManifest',
+    'Static-analysis facts',
+  );
   if (
     !staticAnalysisArrayIsArray(queries) ||
     !staticAnalysisArrayIsArray(sqlSafetyDiagnostics) ||
     !staticAnalysisArrayIsArray(toctouFacts) ||
     !touchGraph ||
     typeof touchGraph !== 'object' ||
-    staticAnalysisArrayIsArray(touchGraph)
+    staticAnalysisArrayIsArray(touchGraph) ||
+    (runtimeTableSecurityManifest !== undefined &&
+      (runtimeTableSecurityManifest === null ||
+        typeof runtimeTableSecurityManifest !== 'object' ||
+        staticAnalysisArrayIsArray(runtimeTableSecurityManifest)))
   ) {
     return undefined;
   }
@@ -874,6 +894,13 @@ function snapshotStaticBuildAnalysisFacts(
     ...(scopeAudits === undefined
       ? {}
       : { scopeAudits: scopeAudits as readonly CoreGraph.ScopeAuditFact[] }),
+    ...(runtimeTableSecurityManifest === undefined
+      ? {}
+      : {
+          runtimeTableSecurityManifest: runtimeTableSecurityManifest as NonNullable<
+            RuntimeRegistryWireFacts['tableSecurity']
+          >,
+        }),
     sqlSafetyDiagnostics: sqlSafetySnapshot,
     toctouFacts: toctouSnapshot,
     touchGraph,

@@ -15,6 +15,8 @@ import {
   type KovoPostgresPostureReport,
   type KovoPostgresRuntimeDriver,
 } from '@kovojs/server';
+import { collectRuntimeRegistryFacts } from '@kovojs/server/internal/data-plane-static-analysis';
+import { installGeneratedTableSecurityManifestForCommand } from '@kovojs/server/internal/execution';
 import { createFrameworkOutputFileSystemBoundary } from '@kovojs/core/internal/filesystem';
 
 import {
@@ -117,11 +119,21 @@ export async function runDbCommand(
   options: KovoDbOptions,
   security: KovoCommandSecurityDisposition = kovoCommandBootSecurityDisposition,
 ): Promise<CliCommandResult> {
+  let releaseTableSecurityManifest: (() => void) | undefined;
   try {
     // SPEC §6.6 rule 6: resolve every operator-selected path and environment value before the
     // authored schema/runtime-options graph evaluates. Schema top-level code shares the process,
     // but cannot redirect privileged database administration or framework-owned migration I/O.
     const resolvedOptions = resolveDbCommandAuthority(options, security);
+    const registry = await collectRuntimeRegistryFacts({
+      appSourceDir: dirname(resolvedOptions.schemaPath),
+      root: resolvedOptions.invocationCwd,
+    });
+    if (registry.tableSecurity !== undefined) {
+      releaseTableSecurityManifest = installGeneratedTableSecurityManifestForCommand(
+        registry.tableSecurity,
+      );
+    }
     const dbConfig = await loadDbConfig(resolvedOptions.schemaPath);
     if (resolvedOptions.action === 'generate') {
       return dbGenerateCommandResult(await runDbGenerate({ ...resolvedOptions, dbConfig }));
@@ -133,6 +145,8 @@ export async function runDbCommand(
       error: error instanceof Error ? error.message : String(error),
       exitCode: 1,
     };
+  } finally {
+    releaseTableSecurityManifest?.();
   }
 }
 

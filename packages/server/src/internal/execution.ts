@@ -27,6 +27,12 @@ export {
   type GeneratedQueryReadRegistry,
 } from '../generated-query-registry.js';
 export {
+  extractCompilerBoundKovoRuntimeDbMetadata,
+  installGeneratedTableSecurityManifestForCommand,
+  registeredGeneratedTableSecurityManifest,
+  registerGeneratedTableSecurityManifest,
+} from '../generated-table-security-registry.js';
+export {
   createMemoryMutationReplayStore,
   type MutationReplayReservation,
   type MutationReplayStore,

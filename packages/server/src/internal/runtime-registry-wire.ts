@@ -31,10 +31,57 @@ export interface RuntimeRegistryQueryReadFact {
   query: string;
 }
 
+/** @internal Compiler-derived authorization classifications for a physical table. */
+export type RuntimeTableSecurityAuthorizationClassification =
+  | 'authzPolicy'
+  | 'owned'
+  | 'ownedVia'
+  | 'public'
+  | 'reference';
+
+/** @internal Compiler-derived physical/selection column identity. */
+export interface RuntimeTableSecurityWireColumn {
+  key: string;
+  name: string;
+}
+
+/** @internal Compiler-derived direct owner source. */
+export interface RuntimeTableSecurityWireOwner {
+  columnKey: string;
+  columnName: string;
+}
+
+/** @internal Compiler-derived transitive owner source. */
+export interface RuntimeTableSecurityWireOwnerVia {
+  fkColumnKey: string;
+  fkColumnName: string;
+  parentKeyColumnKey: string;
+  parentKeyColumnName: string;
+  parentTable: string;
+}
+
+/** @internal Compiler-derived security facts for one physical table. */
+export interface RuntimeTableSecurityWireTable {
+  authorizationClassifications: readonly RuntimeTableSecurityAuthorizationClassification[];
+  columns: readonly RuntimeTableSecurityWireColumn[];
+  governedColumnKeys: readonly string[];
+  name: string;
+  owner?: RuntimeTableSecurityWireOwner;
+  ownerVia?: RuntimeTableSecurityWireOwnerVia;
+  secretColumnKeys: readonly string[];
+  secretDeclared: boolean;
+}
+
+/** @internal Compiler-owned table-security manifest serialized ahead of app evaluation. */
+export interface RuntimeTableSecurityWireManifest {
+  tables: readonly RuntimeTableSecurityWireTable[];
+}
+
 /** @internal Runtime registry wire schema shared by Vite dev and CLI build/export. */
 export interface RuntimeRegistryWireFacts {
   mutationTouches: Readonly<Record<string, readonly RuntimeRegistryMutationTouchSite[]>>;
   queryReads: readonly RuntimeRegistryQueryReadFact[];
+  tableSecurity?: RuntimeTableSecurityWireManifest;
 }
 
 /** @internal Project static facts with enough shape to project runtime registry reads. */
@@ -174,6 +221,231 @@ export function runtimeRegistryMutationTouchesFromGraph(
   return freezeBuildSecurityValue(touchesByMutation);
 }
 
+/**
+ * @internal Snapshot the Drizzle analyzer's compiler-owned table-security manifest.
+ *
+ * The analyzer can run after authored modules in dev/build processes, so every carrier is read
+ * through boot-pinned own-data controls before it becomes generated runtime source (SPEC §6.6).
+ */
+export function runtimeRegistryTableSecurityFromFacts(
+  value: unknown,
+): RuntimeTableSecurityWireManifest {
+  if (value === null || typeof value !== 'object' || witnessIsArray(value)) {
+    throw new TypeError('Runtime table-security manifest must be an own-data record.');
+  }
+  const tablesValue = requiredRuntimeTableSecurityValue(value, 'tables', 'manifest');
+  if (!witnessIsArray(tablesValue)) {
+    throw new TypeError('Runtime table-security manifest.tables must be an array.');
+  }
+  const sourceTables = snapshotBuildArray(tablesValue, 'Runtime table-security tables');
+  const tables: RuntimeTableSecurityWireTable[] = [];
+  for (let index = 0; index < sourceTables.length; index += 1) {
+    commitBuildArrayValue(
+      tables,
+      snapshotRuntimeTableSecurityTable(sourceTables[index], index),
+      'Runtime table-security tables',
+    );
+  }
+  securityArraySort(tables, (left, right) => compareStrings(left.name, right.name));
+  return freezeBuildSecurityValue({ tables: freezeBuildSecurityValue(tables) });
+}
+
+function snapshotRuntimeTableSecurityTable(
+  value: unknown,
+  index: number,
+): RuntimeTableSecurityWireTable {
+  const label = `manifest.tables[${index}]`;
+  if (value === null || typeof value !== 'object' || witnessIsArray(value)) {
+    throw new TypeError(`Runtime table-security ${label} must be an own-data record.`);
+  }
+  const name = requiredRuntimeTableSecurityValue(value, 'name', label);
+  const classificationsValue = requiredRuntimeTableSecurityValue(
+    value,
+    'authorizationClassifications',
+    label,
+  );
+  const columnsValue = requiredRuntimeTableSecurityValue(value, 'columns', label);
+  const governedValue = requiredRuntimeTableSecurityValue(value, 'governedColumnKeys', label);
+  const secretValue = requiredRuntimeTableSecurityValue(value, 'secretColumnKeys', label);
+  const secretDeclared = requiredRuntimeTableSecurityValue(value, 'secretDeclared', label);
+  if (
+    typeof name !== 'string' ||
+    !witnessIsArray(classificationsValue) ||
+    !witnessIsArray(columnsValue) ||
+    !witnessIsArray(governedValue) ||
+    !witnessIsArray(secretValue) ||
+    typeof secretDeclared !== 'boolean'
+  ) {
+    throw new TypeError(`Runtime table-security ${label} contains invalid required facts.`);
+  }
+
+  const classifications = snapshotBuildArray(
+    classificationsValue,
+    `${label}.authorizationClassifications`,
+  );
+  const authorizationClassifications: RuntimeTableSecurityAuthorizationClassification[] = [];
+  for (
+    let classificationIndex = 0;
+    classificationIndex < classifications.length;
+    classificationIndex += 1
+  ) {
+    const classification = classifications[classificationIndex];
+    if (!isRuntimeTableSecurityClassification(classification)) {
+      throw new TypeError(`Runtime table-security ${label} contains an invalid classification.`);
+    }
+    commitBuildArrayValue(
+      authorizationClassifications,
+      classification,
+      `${label}.authorizationClassifications`,
+    );
+  }
+
+  const sourceColumns = snapshotBuildArray(columnsValue, `${label}.columns`);
+  const columns: RuntimeTableSecurityWireColumn[] = [];
+  for (let columnIndex = 0; columnIndex < sourceColumns.length; columnIndex += 1) {
+    const column = sourceColumns[columnIndex];
+    if (column === null || typeof column !== 'object' || witnessIsArray(column)) {
+      throw new TypeError(`Runtime table-security ${label}.columns contains an invalid column.`);
+    }
+    const key = requiredRuntimeTableSecurityValue(column, 'key', `${label}.columns`);
+    const columnName = requiredRuntimeTableSecurityValue(column, 'name', `${label}.columns`);
+    if (typeof key !== 'string' || typeof columnName !== 'string') {
+      throw new TypeError(`Runtime table-security ${label}.columns contains an invalid column.`);
+    }
+    commitBuildArrayValue(
+      columns,
+      freezeBuildSecurityValue({ key, name: columnName }),
+      `${label}.columns`,
+    );
+  }
+
+  const ownerValue = optionalRuntimeTableSecurityValue(value, 'owner', label);
+  const ownerViaValue = optionalRuntimeTableSecurityValue(value, 'ownerVia', label);
+  return freezeBuildSecurityValue({
+    authorizationClassifications: freezeBuildSecurityValue(authorizationClassifications),
+    columns: freezeBuildSecurityValue(columns),
+    governedColumnKeys: snapshotRuntimeTableSecurityStrings(
+      governedValue,
+      `${label}.governedColumnKeys`,
+    ),
+    name,
+    ...(ownerValue === undefined
+      ? {}
+      : { owner: snapshotRuntimeTableSecurityOwner(ownerValue, label) }),
+    ...(ownerViaValue === undefined
+      ? {}
+      : { ownerVia: snapshotRuntimeTableSecurityOwnerVia(ownerViaValue, label) }),
+    secretColumnKeys: snapshotRuntimeTableSecurityStrings(secretValue, `${label}.secretColumnKeys`),
+    secretDeclared,
+  });
+}
+
+function snapshotRuntimeTableSecurityOwner(
+  value: unknown,
+  label: string,
+): RuntimeTableSecurityWireOwner {
+  if (value === null || typeof value !== 'object' || witnessIsArray(value)) {
+    throw new TypeError(`Runtime table-security ${label}.owner must be an own-data record.`);
+  }
+  const columnKey = requiredRuntimeTableSecurityValue(value, 'columnKey', `${label}.owner`);
+  const columnName = requiredRuntimeTableSecurityValue(value, 'columnName', `${label}.owner`);
+  if (typeof columnKey !== 'string' || typeof columnName !== 'string') {
+    throw new TypeError(`Runtime table-security ${label}.owner contains invalid facts.`);
+  }
+  return freezeBuildSecurityValue({ columnKey, columnName });
+}
+
+function snapshotRuntimeTableSecurityOwnerVia(
+  value: unknown,
+  label: string,
+): RuntimeTableSecurityWireOwnerVia {
+  if (value === null || typeof value !== 'object' || witnessIsArray(value)) {
+    throw new TypeError(`Runtime table-security ${label}.ownerVia must be an own-data record.`);
+  }
+  const fields = [
+    'fkColumnKey',
+    'fkColumnName',
+    'parentKeyColumnKey',
+    'parentKeyColumnName',
+    'parentTable',
+  ] as const;
+  const snapshot: Record<(typeof fields)[number], string> = {
+    fkColumnKey: '',
+    fkColumnName: '',
+    parentKeyColumnKey: '',
+    parentKeyColumnName: '',
+    parentTable: '',
+  };
+  for (let index = 0; index < fields.length; index += 1) {
+    const field = fields[index]!;
+    const fieldValue = requiredRuntimeTableSecurityValue(value, field, `${label}.ownerVia`);
+    if (typeof fieldValue !== 'string') {
+      throw new TypeError(`Runtime table-security ${label}.ownerVia contains invalid facts.`);
+    }
+    snapshot[field] = fieldValue;
+  }
+  return freezeBuildSecurityValue(snapshot);
+}
+
+function snapshotRuntimeTableSecurityStrings(
+  value: readonly unknown[],
+  label: string,
+): readonly string[] {
+  const source = snapshotBuildArray(value, label);
+  const strings: string[] = [];
+  for (let index = 0; index < source.length; index += 1) {
+    if (typeof source[index] !== 'string') {
+      throw new TypeError(`Runtime table-security ${label} must contain only strings.`);
+    }
+    commitBuildArrayValue(strings, source[index], label);
+  }
+  witnessSortStrings(strings);
+  return freezeBuildSecurityValue(strings);
+}
+
+function requiredRuntimeTableSecurityValue(
+  value: object,
+  property: string,
+  label: string,
+): unknown {
+  const result = buildOwnDataProperty(
+    value,
+    property,
+    `Runtime table-security ${label}.${property}`,
+  );
+  if (!result.present) {
+    throw new TypeError(
+      `Runtime table-security ${label}.${property} must be an own data property.`,
+    );
+  }
+  return result.value;
+}
+
+function optionalRuntimeTableSecurityValue(
+  value: object,
+  property: string,
+  label: string,
+): unknown {
+  const result = buildOwnDataProperty(
+    value,
+    property,
+    `Runtime table-security ${label}.${property}`,
+  );
+  return result.present ? result.value : undefined;
+}
+
+function isRuntimeTableSecurityClassification(
+  value: unknown,
+): value is RuntimeTableSecurityAuthorizationClassification {
+  return (
+    value === 'authzPolicy' ||
+    value === 'owned' ||
+    value === 'ownedVia' ||
+    value === 'public' ||
+    value === 'reference'
+  );
+}
+
 /** @internal Project runtime registry facts from the CLI/server graph shape. */
 export function runtimeRegistryWireFactsFromGraph(
   graph: CoreGraph.KovoCheckInput,
@@ -198,7 +470,11 @@ export function runtimeRegistryWireFactsFromGraph(
 export function serializeRuntimeRegistryWireModule(registry: RuntimeRegistryWireFacts): string {
   const queryReads = buildSecuritySourceLiteral(registry.queryReads);
   const mutationTouches = buildSecuritySourceLiteral(registry.mutationTouches);
-  return `import { registerGeneratedMutationTouchRegistry, registerGeneratedQueryReadRegistry } from '@kovojs/server/internal/execution';\nregisterGeneratedQueryReadRegistry(${queryReads});\nregisterGeneratedMutationTouchRegistry(${mutationTouches});\n`;
+  const tableSecurity =
+    registry.tableSecurity === undefined
+      ? ''
+      : `registerGeneratedTableSecurityManifest(${buildSecuritySourceLiteral(registry.tableSecurity)});\n`;
+  return `import { registerGeneratedMutationTouchRegistry, registerGeneratedQueryReadRegistry, registerGeneratedTableSecurityManifest } from '@kovojs/server/internal/execution';\n${tableSecurity}registerGeneratedQueryReadRegistry(${queryReads});\nregisterGeneratedMutationTouchRegistry(${mutationTouches});\n`;
 }
 
 function snapshotRuntimeTouch(

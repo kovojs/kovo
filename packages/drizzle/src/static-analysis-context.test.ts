@@ -27,6 +27,18 @@ describe('@kovojs/drizzle static analysis context', () => {
       ownerDomains: ownerAudit.ownerDomains,
       queries,
       queryWriteReachability: extractQueryWriteReachabilityFromProject(project),
+      runtimeTableSecurityManifest: {
+        tables: [
+          {
+            authorizationClassifications: ['reference'],
+            columns: [],
+            governedColumnKeys: [],
+            name: 'carts',
+            secretColumnKeys: [],
+            secretDeclared: false,
+          },
+        ],
+      },
       scopeAudits: ownerAudit.scopeAudits,
       sqlSafetyDiagnostics: [
         ...analyzeSqlSafetyFromProject(project),
@@ -34,6 +46,74 @@ describe('@kovojs/drizzle static analysis context', () => {
       ],
       toctouFacts: extractToctouFromProject(project),
       touchGraph: extractTouchGraphFromProject(project),
+    });
+  });
+
+  it('derives canonical runtime table security from source instead of runtime callbacks', () => {
+    const facts = extractStaticBuildAnalysisFactsFromProject({
+      files: [
+        pgDatabaseTypes([]),
+        {
+          fileName: 'src/schema.ts',
+          source: [
+            'import { kovo } from "@kovojs/drizzle";',
+            'import { pgTable, text } from "drizzle-orm/pg-core";',
+            '',
+            'export const users = pgTable("user", {',
+            '  id: text("user_id").primaryKey(),',
+            '  passwordHash: text("password_hash").notNull(),',
+            '}, kovo({ domain: "user", key: (t) => t.id, owner: (t) => t.id, secret: [(t) => t.passwordHash] }));',
+            '',
+            'export const sessions = pgTable("session", {',
+            '  id: text("session_id").primaryKey(),',
+            '  userId: text("user_id").notNull(),',
+            '  token: text("session_token").notNull(),',
+            '}, kovo({',
+            '  domain: "session",',
+            '  key: (t) => t.id,',
+            '  ownerVia: { fk: (t) => t.userId, parent: users, parentKey: (t) => t.id },',
+            '  governed: [(t) => t.token],',
+            '  secret: true,',
+            '}));',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(facts.runtimeTableSecurityManifest).toEqual({
+      tables: [
+        {
+          authorizationClassifications: ['ownedVia'],
+          columns: [
+            { key: 'id', name: 'session_id' },
+            { key: 'token', name: 'session_token' },
+            { key: 'userId', name: 'user_id' },
+          ],
+          governedColumnKeys: ['id', 'token'],
+          name: 'session',
+          ownerVia: {
+            fkColumnKey: 'userId',
+            fkColumnName: 'user_id',
+            parentKeyColumnKey: 'id',
+            parentKeyColumnName: 'user_id',
+            parentTable: 'user',
+          },
+          secretColumnKeys: ['id', 'token', 'userId'],
+          secretDeclared: true,
+        },
+        {
+          authorizationClassifications: ['owned'],
+          columns: [
+            { key: 'id', name: 'user_id' },
+            { key: 'passwordHash', name: 'password_hash' },
+          ],
+          governedColumnKeys: ['id', 'passwordHash'],
+          name: 'user',
+          owner: { columnKey: 'id', columnName: 'user_id' },
+          secretColumnKeys: ['passwordHash'],
+          secretDeclared: true,
+        },
+      ],
     });
   });
 

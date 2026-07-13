@@ -937,6 +937,9 @@ describe('create-kovo starter (metadata)', () => {
       'const runtime = createSqliteAppRuntimeDb({',
     );
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain('metadata: RUNTIME_DB_METADATA');
+    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
+      'const RUNTIME_DB_METADATA = runtimeDbMetadataForSchema(SCHEMA_TABLES)',
+    );
     expect(files.get('src/_kovo/app-runtime-db.ts')).not.toContain(
       'Object.defineProperty(db, kovoReadonlyDbHandle',
     );
@@ -954,7 +957,7 @@ describe('create-kovo starter (metadata)', () => {
     );
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain('ready: Promise.resolve()');
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
-      'const RUNTIME_DB_METADATA = extractKovoRuntimeDbMetadata(SCHEMA_TABLES)',
+      'const RUNTIME_DB_METADATA = runtimeDbMetadataForSchema(SCHEMA_TABLES)',
     );
     expect(files.get('src/_kovo/app-runtime-db.ts')).not.toContain('readonlyDb(db, {');
     expect(files.get('src/_kovo/app-runtime-db.ts')).not.toContain(
