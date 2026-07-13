@@ -181,7 +181,11 @@ function validatedPackagePrefixFact(
   ) {
     compilerFailClosed(`Package component prefix facts[${index}] has invalid fields.`);
   }
-  return { effectivePrefix, packageName, prefix };
+  return {
+    ...(effectivePrefix === undefined ? {} : { effectivePrefix }),
+    packageName,
+    ...(prefix === undefined ? {} : { prefix }),
+  };
 }
 
 function ownRegistration(

@@ -75,7 +75,7 @@ function freezePrototypeChain(prototype: object): void {
   let current: object | null = prototype;
   for (let depth = 0; current !== null && depth < 64; depth += 1) {
     if (current === NativeObject.prototype || current === NativeFunction.prototype) return;
-    const next = apply<object | null>(nativeGetPrototypeOf, NativeObject, [current]);
+    const next: object | null = apply<object | null>(nativeGetPrototypeOf, NativeObject, [current]);
     freezeAuthority(current);
     current = next;
   }
