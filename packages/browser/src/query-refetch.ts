@@ -25,9 +25,24 @@ import {
 } from './security-witness-intrinsics.js';
 
 // SPEC §6.6/§9.4: typed-read refetch is a credential-bearing browser transport and a
-// server-truth sink. Capture its platform controls before authored modules can replace response
-// getters, text(), URL encoding, or collection methods.
-const queryRefetchSecurity = createBrowserNavigationSecurityControls();
+// server-truth sink. Capture its platform controls before authored browser modules can replace
+// response getters, text(), URL encoding, or collection methods. `@kovojs/server` transitively
+// exposes this framework-white-box module to its Vite SSR evaluator, though, so a non-DOM server
+// import must not run browser realm controls merely by importing the package. Node-only structural
+// adapters used by focused tests initialize the same controls at their first refetch boundary.
+type QueryRefetchSecurity = ReturnType<typeof createBrowserNavigationSecurityControls>;
+
+let queryRefetchSecurityAtBoot: QueryRefetchSecurity | undefined =
+  typeof globalThis.Element === 'function' && typeof globalThis.Document === 'function'
+    ? createBrowserNavigationSecurityControls()
+    : undefined;
+
+function queryRefetchSecurityControls(): QueryRefetchSecurity {
+  if (queryRefetchSecurityAtBoot) return queryRefetchSecurityAtBoot;
+  const security = createBrowserNavigationSecurityControls();
+  queryRefetchSecurityAtBoot = security;
+  return security;
+}
 const queryRefetchEncodeURIComponent = encodeURIComponent;
 const queryRefetchEncodingSound =
   queryRefetchEncodeURIComponent('kovo/query?key=value') === 'kovo%2Fquery%3Fkey%3Dvalue' &&
@@ -150,6 +165,7 @@ interface AppliedRefetchedQueryBody extends RefetchedQueryResponse {
 export async function refetchQueries(
   options: RefetchQueriesOptions,
 ): Promise<RefetchedQueryResponse[]> {
+  const queryRefetchSecurity = queryRefetchSecurityControls();
   const bodies: RefetchedQueryBody[] = [];
   const fetchControl = options.fetch;
   const expectedBuildToken = options.expectedBuildToken;
