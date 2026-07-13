@@ -323,6 +323,21 @@ describe('enhanced mutation fetch', () => {
     expect(formData.get('Kovo-Idem')).toBe(fetched.idem);
   });
 
+  it('rejects a read-only custom body that carries stale idempotency authority', async () => {
+    const fetch = vi.fn();
+
+    await expect(
+      fetchEnhancedMutation({
+        fetch,
+        form: { action: '/_m/comment/post', getAttribute: () => null, method: 'post' },
+        formData: { get: () => 'idem_stale_render' },
+        root: new FakeTargetRoot([]),
+      }),
+    ).rejects.toThrow(/form-data setter control is unavailable/u);
+
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
   it('keeps selector-hostile identities but skips delimiter-unsafe live target headers', async () => {
     const root = new FakeTargetRoot([
       new FakeTargetElement('target"bad\\id', {

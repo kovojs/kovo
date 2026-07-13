@@ -1408,8 +1408,11 @@ function installInlineKovoLoader(im) {
     if (!bns.preventDelegatedEventDefault(event)) return;
     const streaming = bns.readAttribute(form, 'data-mutation-stream') !== null;
     const body = bns.createFormData(form, submitter);
-    const formIdem = bns.readFormDataValue(body, 'Kovo-Idem');
-    const idem = typeof formIdem === 'string' && formIdem !== '' ? formIdem : ci();
+    // SPEC §10.3: the rendered hidden value is the no-JS retry token, not a form-instance
+    // constant. Every enhanced logical submit mints fresh authority and commits that exact value
+    // to both the body field and header through the boot-captured FormData setter.
+    const idem = ci();
+    bns.setFormDataValue(body, 'Kovo-Idem', idem);
     void (async () => {
       try {
         const response = await bns.fetchValue(ras(form, 'action') || '', {

@@ -1,5 +1,6 @@
 import { afterEach, expect, it, vi } from 'vitest';
 
+import { fetchEnhancedMutation } from './mutation-fetch.js';
 import { fallbackEnhancedMutationSubmit } from './mutation-form.js';
 
 const initialBody = document.body.innerHTML;
@@ -55,5 +56,52 @@ it('pins modular native submit before a late prototype replacement', async () =>
     expect(poisonedSubmit).not.toHaveBeenCalled();
   } finally {
     Object.defineProperty(HTMLFormElement.prototype, 'submit', descriptor);
+  }
+});
+
+it('refreshes modular idempotency truth through the boot-pinned FormData setter', async () => {
+  const formData = new FormData();
+  const setDescriptor = Object.getOwnPropertyDescriptor(FormData.prototype, 'set');
+  const getDescriptor = Object.getOwnPropertyDescriptor(FormData.prototype, 'get');
+  if (
+    !setDescriptor ||
+    !('value' in setDescriptor) ||
+    typeof setDescriptor.value !== 'function' ||
+    !getDescriptor ||
+    !('value' in getDescriptor) ||
+    typeof getDescriptor.value !== 'function'
+  ) {
+    throw new Error('native FormData controls unavailable');
+  }
+  Reflect.apply(setDescriptor.value, formData, ['Kovo-Idem', 'idem_stale_render']);
+  let poisonedSetCalls = 0;
+  Object.defineProperty(FormData.prototype, 'set', {
+    ...setDescriptor,
+    value() {
+      poisonedSetCalls += 1;
+    },
+  });
+  try {
+    const fetch = vi.fn(
+      async (_url: string, options: { body: unknown; headers: Record<string, string> }) => {
+        expect(Reflect.apply(getDescriptor.value, options.body, ['Kovo-Idem'])).toBe(
+          options.headers['Kovo-Idem'],
+        );
+        return new Response(null, { status: 204 });
+      },
+    );
+
+    const fetched = await fetchEnhancedMutation({
+      fetch,
+      form: { action: '/_m/comment/post', getAttribute: () => null, method: 'post' },
+      formData,
+      root: document.createElement('main'),
+    });
+
+    expect(fetched.idem).not.toBe('idem_stale_render');
+    expect(Reflect.apply(getDescriptor.value, formData, ['Kovo-Idem'])).toBe(fetched.idem);
+    expect(poisonedSetCalls).toBe(0);
+  } finally {
+    Object.defineProperty(FormData.prototype, 'set', setDescriptor);
   }
 });

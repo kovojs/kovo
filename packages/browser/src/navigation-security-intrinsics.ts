@@ -167,6 +167,7 @@ export function createBrowserNavigationSecurityControls(
     ? valueMethod(NativeDOMParser.prototype, 'parseFromString')
     : undefined;
   const formDataGet = NativeFormData ? valueMethod(NativeFormData.prototype, 'get') : undefined;
+  const formDataSet = NativeFormData ? valueMethod(NativeFormData.prototype, 'set') : undefined;
   const documentQuerySelector = NativeDocument
     ? valueMethod(NativeDocument.prototype, 'querySelector')
     : undefined;
@@ -2302,6 +2303,38 @@ export function createBrowserNavigationSecurityControls(
     }
   }
 
+  function setFormDataValue(formData: unknown, name: string, value: string): void {
+    if (
+      !controlsSound ||
+      formData === null ||
+      typeof formData !== 'object' ||
+      typeof name !== 'string' ||
+      typeof value !== 'string'
+    ) {
+      throw new TypeError('Kovo form-data setter control is unavailable.');
+    }
+    let nativeReceiver = false;
+    if (formDataGet) {
+      try {
+        apply(formDataGet, formData, ['kovo-form-data-receiver-control']);
+        nativeReceiver = true;
+      } catch {}
+    }
+    const setter = nativeReceiver ? formDataSet : stableMethod(formData, 'set');
+    if (!setter) {
+      // Browser-free transport fakes may carry no form fields at all. A header-only carrier has
+      // no competing replay authority; a read-only carrier that already contains an idem does,
+      // and must fail closed rather than send mismatched body/header truth.
+      const existing = readFormDataValue(formData, name);
+      if (existing === undefined || existing === null || existing === '') return;
+      throw new TypeError('Kovo form-data setter control is unavailable.');
+    }
+    apply(setter, formData, [name, value]);
+    if (readFormDataValue(formData, name) !== value) {
+      throw new TypeError('Kovo form-data setter control did not commit the exact value.');
+    }
+  }
+
   function freezeFetchHeaderSnapshot(
     headers: object | undefined,
     getHeader: Function | undefined,
@@ -3103,6 +3136,7 @@ export function createBrowserNavigationSecurityControls(
           !NativeHTMLFormElement ||
           !NativeFormData ||
           !formDataGet ||
+          !formDataSet ||
           !htmlFormSubmit ||
           !documentCreateElement ||
           !elementSetAttribute ||
@@ -3217,6 +3251,17 @@ export function createBrowserNavigationSecurityControls(
         if (!rejectedForeignFormReceiver) return false;
         const formDataControl = new NativeFormData(formSubmitControl as HTMLFormElement);
         if (apply(formDataGet, formDataControl, ['kovo-missing-control']) !== null) return false;
+        apply(formDataSet, formDataControl, ['Kovo-Idem', 'kovo-form-data-control']);
+        if (apply(formDataGet, formDataControl, ['Kovo-Idem']) !== 'kovo-form-data-control') {
+          return false;
+        }
+        let rejectedForeignFormDataReceiver = false;
+        try {
+          apply(formDataSet, {}, ['Kovo-Idem', 'kovo-form-data-control']);
+        } catch {
+          rejectedForeignFormDataReceiver = true;
+        }
+        if (!rejectedForeignFormDataReceiver) return false;
         apply(elementSetAttribute, snapshotControl, ['kovo-nav-segment', 'security-control']);
         apply(elementSetAttribute, nestedControl, ['kovo-nav-segment', 'nested-control']);
         apply(elementSetAttribute, nestedControl, ['kovo-fragment-target', 'security-live-target']);
@@ -3494,6 +3539,7 @@ export function createBrowserNavigationSecurityControls(
     safeSameOriginPath,
     setElementAttribute,
     setElementProperty,
+    setFormDataValue,
     setSecurityMapValue,
     setNodeTextContent,
     slice,

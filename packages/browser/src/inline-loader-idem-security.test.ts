@@ -24,7 +24,20 @@ it.each(inlineSourceInstallCases)(
       setTimeout: globalRecord.setTimeout,
     };
     const listeners = new Map<string, (event: unknown) => void>();
-    const requests: Array<{ headers: Record<string, string> }> = [];
+    class TestFormData {
+      value = 'idem_stale_render';
+
+      get(name: string) {
+        return name === 'Kovo-Idem' ? this.value : null;
+      }
+
+      set(name: string, value: string) {
+        if (name === 'Kovo-Idem') this.value = value;
+      }
+    }
+    const nativeFormDataSet = TestFormData.prototype.set;
+    const requests: Array<{ body: TestFormData; headers: Record<string, string> }> = [];
+    let poisonedFormDataSetCalls = 0;
     let randomCall = 0;
     const form = {
       action: '/_m/cart/add',
@@ -35,9 +48,7 @@ it.each(inlineSourceInstallCases)(
     };
 
     try {
-      globalRecord.FormData = function FormData() {
-        return { get: () => null };
-      };
+      globalRecord.FormData = TestFormData;
       globalRecord.addEventListener = (type: string, listener: (event: unknown) => void) => {
         listeners.set(type, listener);
       };
@@ -55,7 +66,7 @@ it.each(inlineSourceInstallCases)(
       });
       globalRecord.document = { querySelector: () => null, querySelectorAll: () => [] };
       globalRecord.fetch = vi.fn(
-        async (_url: string, options: { headers: Record<string, string> }) => {
+        async (_url: string, options: { body: TestFormData; headers: Record<string, string> }) => {
           requests.push(options);
           return { headers: { get: () => null }, status: 204, text: async () => '' };
         },
@@ -73,6 +84,9 @@ it.each(inlineSourceInstallCases)(
         vi.fn(async () => ({})),
         globalRecord,
       );
+      TestFormData.prototype.set = function poisonedFormDataSet() {
+        poisonedFormDataSetCalls += 1;
+      };
       Object.defineProperty(typedArrayPrototype, 'length', {
         configurable: true,
         get: () => 0,
@@ -103,7 +117,27 @@ it.each(inlineSourceInstallCases)(
 
       // Two boot probes consume calls 1/2; the logical submit receives call 3 (0x33..0x42).
       expect(requests[0]?.headers['Kovo-Idem']).toBe('idem_333435363738393a3b3c3d3e3f404142');
+      expect(requests[0]?.body.value).toBe('idem_333435363738393a3b3c3d3e3f404142');
+      listeners.get('submit')?.({
+        preventDefault: vi.fn(),
+        target: {
+          closest(selector: string) {
+            return selector === 'form[enhance],form[data-enhance],form[data-mutation]'
+              ? form
+              : null;
+          },
+        },
+        type: 'submit',
+      });
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(requests[1]?.headers['Kovo-Idem']).toBe('idem_4445464748494a4b4c4d4e4f50515253');
+      expect(requests[1]?.body.value).toBe('idem_4445464748494a4b4c4d4e4f50515253');
+      expect(requests[1]?.headers['Kovo-Idem']).not.toBe(requests[0]?.headers['Kovo-Idem']);
+      expect(poisonedFormDataSetCalls).toBe(0);
     } finally {
+      TestFormData.prototype.set = nativeFormDataSet;
       Object.defineProperty(typedArrayPrototype, 'length', typedArrayLengthDescriptor);
       Object.assign(globalRecord, {
         FormData: originals.FormData,

@@ -15,6 +15,11 @@ import {
 
 type BrowserNavigationSecurityControls = ReturnType<typeof createBrowserNavigationSecurityControls>;
 
+// SPEC §6.6/§10.3: capture the form-data and response membrane while the framework browser graph
+// loads. The browser-free test/runtime path constructs the same witnessed controls on demand.
+const bootMutationFetchSecurity =
+  typeof document === 'undefined' ? undefined : createBrowserNavigationSecurityControls();
+
 // SPEC §6.6/§9.1: failure classification is a response-security fact, not a live carrier
 // property. Consumers classify after body reads and optimistic work, so retaining the carrier and
 // rereading mutable `ok`/`status` would let same-realm code turn a witnessed failure into success.
@@ -94,12 +99,19 @@ export interface FetchedEnhancedMutation {
 
 export async function fetchEnhancedMutation(
   options: FetchEnhancedMutationOptions,
-  idem = options.idem ?? refreshFormDataIdem(options.formData) ?? createMutationIdem(),
+  requestedIdem?: string,
 ): Promise<FetchedEnhancedMutation> {
-  const security = createBrowserNavigationSecurityControls();
+  const security = bootMutationFetchSecurity ?? createBrowserNavigationSecurityControls();
   const fetchMutation = options.fetch;
   const form = options.form;
   const formData = options.formData;
+  const idem = requestedIdem ?? options.idem ?? createMutationIdem();
+  // SPEC §10.3: enhanced submits replace the rendered no-JS token for every logical submit. The
+  // exact same fresh value must cross both carriers because replay parsers may inspect either the
+  // stamped body field or the enhanced header.
+  if (formData !== null && typeof formData === 'object') {
+    security.setFormDataValue(formData, 'Kovo-Idem', idem);
+  }
   const onError = options.onError;
   const onSessionTransition = options.onSessionTransition;
   const onSessionTransitionReload = options.onSessionTransitionReload;
@@ -329,19 +341,6 @@ function readFormDataString(
       ? (formData as { get(name: string): unknown }).get(name)
       : undefined;
   return typeof value === 'string' ? value : undefined;
-}
-
-function refreshFormDataIdem(formData: unknown): string | undefined {
-  if (
-    formData === null ||
-    typeof formData !== 'object' ||
-    typeof (formData as { set?: unknown }).set !== 'function'
-  ) {
-    return undefined;
-  }
-  const value = createMutationIdem();
-  (formData as { set(name: string, value: string): void }).set('Kovo-Idem', value);
-  return value;
 }
 
 function readSubmittedFormTarget(form: EnhancedFormLike): string | undefined {
