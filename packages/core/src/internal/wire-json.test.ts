@@ -118,6 +118,85 @@ describe('wire-json core contract', () => {
     expect(() => stringifyWireValue(accessor)).toThrow('stable own data properties');
   });
 
+  it('rejects cyclic and over-deep wire values with bounded framework diagnostics', () => {
+    const cyclic: Record<string, unknown> = {};
+    cyclic.self = cyclic;
+    expect(() => stringifyWireValue(cyclic)).toThrow(
+      'Kovo wire JSON must not contain cyclic values',
+    );
+
+    let deep: Record<string, unknown> = {};
+    const root = deep;
+    for (let depth = 0; depth <= 64; depth += 1) {
+      const next: Record<string, unknown> = {};
+      deep.value = next;
+      deep = next;
+    }
+    expect(() => stringifyWireValue(root)).toThrow(
+      'Kovo wire JSON exceeds the 64-level depth bound',
+    );
+
+    expect(() => stringifyWireValue(new Array(100_000))).toThrow(
+      'Kovo wire JSON exceeds the 100000-node bound',
+    );
+  });
+
+  it('allows acyclic shared values while encoding each occurrence independently', () => {
+    const shared = { id: 42n };
+    expect(stringifyWireValue({ first: shared, second: shared })).toBe(
+      '{"first":{"id":{"$kovo":"bigint","value":"42"}},"second":{"id":{"$kovo":"bigint","value":"42"}}}',
+    );
+  });
+
+  it('does not read a proxy array length through an attacker-controlled get trap', () => {
+    let lengthReads = 0;
+    const value = new Proxy(['safe'], {
+      get(target, property, receiver) {
+        if (property === 'length') {
+          lengthReads += 1;
+          return 0;
+        }
+        return Reflect.get(target, property, receiver);
+      },
+    });
+
+    expect(stringifyWireValue(value)).toBe('["safe"]');
+    expect(lengthReads).toBe(0);
+  });
+
+  it('shadows inherited toJSON hooks before serializing normalized wire values', () => {
+    const nativeDefineProperty = Object.defineProperty;
+    const objectDescriptor = Object.getOwnPropertyDescriptor(Object.prototype, 'toJSON');
+    const arrayDescriptor = Object.getOwnPropertyDescriptor(Array.prototype, 'toJSON');
+    let json: string | undefined;
+    try {
+      nativeDefineProperty(Object.prototype, 'toJSON', {
+        configurable: true,
+        value: () => ({ principalId: 'attacker' }),
+        writable: true,
+      });
+      nativeDefineProperty(Array.prototype, 'toJSON', {
+        configurable: true,
+        value: () => ['attacker'],
+        writable: true,
+      });
+      json = stringifyWireValue({ ids: [42n], principalId: 'victim' });
+    } finally {
+      if (objectDescriptor === undefined) {
+        delete (Object.prototype as { toJSON?: unknown }).toJSON;
+      } else {
+        nativeDefineProperty(Object.prototype, 'toJSON', objectDescriptor);
+      }
+      if (arrayDescriptor === undefined) {
+        delete (Array.prototype as unknown as { toJSON?: unknown }).toJSON;
+      } else {
+        nativeDefineProperty(Array.prototype, 'toJSON', arrayDescriptor);
+      }
+    }
+
+    expect(json).toBe('{"ids":[{"$kovo":"bigint","value":"42"}],"principalId":"victim"}');
+  });
+
   it('reports malformed JSON without throwing', () => {
     const parsed = parseWireJsonValue('{not json');
     expect(parsed.ok).toBe(false);

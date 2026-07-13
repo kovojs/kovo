@@ -15,17 +15,30 @@ import {
   securityJsonStringify,
   securityNullRecord,
   securityObjectKeys,
+  securityOwnArrayEntry,
   securityString,
+  securityWeakSet,
+  securityWeakSetAdd,
+  securityWeakSetDelete,
+  securityWeakSetHas,
 } from './security-witness-intrinsics.js';
 
 const IntrinsicBigInt = globalThis.BigInt;
 const IntrinsicDate = globalThis.Date;
 const IntrinsicError = globalThis.Error;
 const IntrinsicJSON = globalThis.JSON;
+const IntrinsicTypeError = globalThis.TypeError;
 const intrinsicDateGetTime = IntrinsicDate.prototype.getTime;
 const intrinsicDateToISOString = IntrinsicDate.prototype.toISOString;
 const intrinsicJsonParse = IntrinsicJSON.parse;
 const wireJsonControlsSound = verifyWireJsonControls();
+const MAX_WIRE_JSON_DEPTH = 64;
+const MAX_WIRE_JSON_NODES = 100_000;
+
+interface WireJsonTraversalState {
+  nodes: number;
+  readonly seen: WeakSet<object>;
+}
 
 /** @internal Discriminator key for Kovo's tagged wire JSON forms. */
 export const KOVO_WIRE_TAG = '$kovo' as const;
@@ -156,67 +169,159 @@ export const wireJsonRoundTripCorpus: readonly KovoWireJsonCorpusEntry[] = [
  * shape at the single Kovo wire encode seam.
  */
 export function jsonSafeWireValue(value: unknown): unknown {
+  return jsonSafeWireValueAt(value, { nodes: 0, seen: securityWeakSet<object>() }, 0);
+}
+
+function jsonSafeWireValueAt(
+  value: unknown,
+  state: WireJsonTraversalState,
+  depth: number,
+): unknown {
+  // SPEC §6.6/§9.5: wire normalization is a fail-closed runtime boundary, so
+  // caller-owned recursive graphs must consume a finite framework budget.
+  if (depth > MAX_WIRE_JSON_DEPTH) {
+    throw new IntrinsicTypeError(
+      `Kovo wire JSON exceeds the ${MAX_WIRE_JSON_DEPTH}-level depth bound.`,
+    );
+  }
+  consumeWireJsonNode(state);
   if (isSecret(value)) {
-    throw new Error(
+    throw new IntrinsicError(
       'KV435 Secret runtime value cannot cross the Kovo client wire; reveal or redact it explicitly before returning it.',
     );
   }
   if (isUntrusted(value)) {
-    throw new Error(
+    throw new IntrinsicError(
       'KV426 Untrusted runtime value cannot cross the Kovo client wire; validate or escape it explicitly before returning it.',
     );
   }
   if (typeof value === 'function' || typeof value === 'symbol') {
-    throw new TypeError(
+    throw new IntrinsicTypeError(
       'Kovo wire JSON cannot encode function or symbol values; return schema-shaped JSON data.',
     );
   }
   if (typeof value === 'bigint') {
-    return { [KOVO_WIRE_TAG]: 'bigint', value: securityString(value) };
+    return wireTag('bigint', securityString(value));
   }
   if (securityHasInstance(IntrinsicDate, value)) {
     assertWireJsonControls();
     const time = securityApply<number>(intrinsicDateGetTime, value, []);
     const iso = time !== time ? null : securityApply<string>(intrinsicDateToISOString, value, []);
-    return { [KOVO_WIRE_TAG]: 'date', value: iso };
+    return wireTag('date', iso);
   }
   if (securityIsArray(value)) {
+    const object = value as object;
+    if (securityWeakSetHas(state.seen, object)) {
+      throw new IntrinsicTypeError('Kovo wire JSON must not contain cyclic values.');
+    }
+    const lengthDescriptor = securityGetOwnPropertyDescriptor(value, 'length');
+    if (lengthDescriptor === undefined || !securityHasOwn(lengthDescriptor, 'value')) {
+      throw new IntrinsicTypeError('Kovo wire JSON arrays must have a stable own-data length.');
+    }
+    const length = lengthDescriptor.value;
+    if (
+      typeof length !== 'number' ||
+      length < 0 ||
+      length % 1 !== 0 ||
+      length > MAX_WIRE_JSON_NODES
+    ) {
+      throw new IntrinsicTypeError(
+        `Kovo wire JSON arrays must contain at most ${MAX_WIRE_JSON_NODES} entries.`,
+      );
+    }
+    securityWeakSetAdd(state.seen, object);
     const out: unknown[] = [];
-    for (let index = 0; index < value.length; index += 1) {
+    shadowInheritedToJson(out);
+    for (let index = 0; index < length; index += 1) {
       const descriptor = securityGetOwnPropertyDescriptor(value, securityString(index));
       // JSON.stringify emits array holes as null. Reconstruct that exact value rather than
       // dispatching through caller-controlled Array iteration/map methods.
       if (descriptor === undefined) {
+        consumeWireJsonNode(state);
         securityArrayAppend(out, null);
         continue;
       }
       if (!('value' in descriptor)) {
-        throw new TypeError('Kovo wire JSON arrays must contain stable data properties.');
+        throw new IntrinsicTypeError('Kovo wire JSON arrays must contain stable data properties.');
       }
-      securityArrayAppend(out, jsonSafeWireValue(descriptor.value));
+      securityArrayAppend(out, jsonSafeWireValueAt(descriptor.value, state, depth + 1));
     }
+    securityWeakSetDelete(state.seen, object);
     return out;
   }
   if (value !== null && typeof value === 'object') {
+    if (securityWeakSetHas(state.seen, value)) {
+      throw new IntrinsicTypeError('Kovo wire JSON must not contain cyclic values.');
+    }
+    securityWeakSetAdd(state.seen, value);
     const out = securityNullRecord<unknown>();
     const keys = securityObjectKeys(value);
+    if (keys.length > MAX_WIRE_JSON_NODES) {
+      throw new IntrinsicTypeError(
+        `Kovo wire JSON objects must contain at most ${MAX_WIRE_JSON_NODES} entries.`,
+      );
+    }
     for (let index = 0; index < keys.length; index += 1) {
-      const key = keys[index];
-      if (key === undefined) continue;
+      const keyEntry = securityOwnArrayEntry(keys, index);
+      if (!keyEntry.ok) {
+        throw new IntrinsicTypeError('Kovo wire JSON objects must contain stable own keys.');
+      }
+      const key = keyEntry.value;
       const descriptor = securityGetOwnPropertyDescriptor(value, key);
       if (descriptor === undefined || !('value' in descriptor)) {
-        throw new TypeError('Kovo wire JSON objects must contain stable own data properties.');
+        throw new IntrinsicTypeError(
+          'Kovo wire JSON objects must contain stable own data properties.',
+        );
       }
       securityDefineProperty(out, key, {
         configurable: true,
         enumerable: true,
-        value: jsonSafeWireValue(descriptor.value),
+        value: jsonSafeWireValueAt(descriptor.value, state, depth + 1),
         writable: true,
       });
     }
+    securityWeakSetDelete(state.seen, value);
     return out;
   }
   return value;
+}
+
+function consumeWireJsonNode(state: WireJsonTraversalState): void {
+  state.nodes += 1;
+  if (state.nodes > MAX_WIRE_JSON_NODES) {
+    throw new IntrinsicTypeError(`Kovo wire JSON exceeds the ${MAX_WIRE_JSON_NODES}-node bound.`);
+  }
+}
+
+function wireTag(tag: 'bigint', value: string): KovoWireBigIntTag;
+function wireTag(tag: 'date', value: string | null): KovoWireDateTag;
+function wireTag(
+  tag: 'bigint' | 'date',
+  value: string | null,
+): KovoWireBigIntTag | KovoWireDateTag {
+  const out = securityNullRecord<string | null>();
+  securityDefineProperty(out, KOVO_WIRE_TAG, {
+    configurable: true,
+    enumerable: true,
+    value: tag,
+    writable: true,
+  });
+  securityDefineProperty(out, 'value', {
+    configurable: true,
+    enumerable: true,
+    value,
+    writable: true,
+  });
+  return out as unknown as KovoWireBigIntTag | KovoWireDateTag;
+}
+
+function shadowInheritedToJson(value: unknown[]): void {
+  securityDefineProperty(value, 'toJSON', {
+    configurable: true,
+    enumerable: false,
+    value: undefined,
+    writable: false,
+  });
 }
 
 /** @internal Stringify through the canonical Kovo wire JSON encoder. */
@@ -224,7 +329,7 @@ export function stringifyWireValue(value: unknown): string {
   assertWireJsonControls();
   const result = securityJsonStringify(jsonSafeWireValue(value));
   if (result === undefined) {
-    throw new TypeError('Kovo wire JSON cannot encode an undefined top-level value.');
+    throw new IntrinsicTypeError('Kovo wire JSON cannot encode an undefined top-level value.');
   }
   return result;
 }
@@ -291,7 +396,7 @@ function IntrinsicNumberNaN(): number {
 
 function assertWireJsonControls(): void {
   if (!wireJsonControlsSound) {
-    throw new TypeError(
+    throw new IntrinsicTypeError(
       'Kovo wire JSON controls are unavailable because realm intrinsics were modified before framework initialization.',
     );
   }

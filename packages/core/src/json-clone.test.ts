@@ -97,6 +97,18 @@ describe('JSON value utilities', () => {
     }
   });
 
+  it('rejects over-deep JSON before native recursion exhausts the stack', () => {
+    let deep: Record<string, unknown> = {};
+    const root = deep;
+    for (let depth = 0; depth <= 64; depth += 1) {
+      const next: Record<string, unknown> = {};
+      deep.value = next;
+      deep = next;
+    }
+
+    expect(() => assertJsonValue(root)).toThrow('exceeds the 64-level depth bound');
+  });
+
   it('validates and clones in one boundary operation', () => {
     const input = { nested: { b: 2, a: 1 } };
     const clone = assertAndCloneJsonValue(input);

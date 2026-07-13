@@ -45,6 +45,8 @@ securityDefineProperty(ownKeysControl, 'hidden', {
 });
 const jsonScalarControlsSound = verifyJsonScalarControls();
 const MAX_JSON_ARRAY_LENGTH = 1_000_000;
+const MAX_JSON_DEPTH = 64;
+const MAX_JSON_NODES = 100_000;
 
 /** @internal Options for runtime JSON value validation. */
 export interface AssertJsonValueOptions {
@@ -116,7 +118,8 @@ function snapshotJsonValue(value: unknown, root: string, canonical: boolean): Js
   // Validate the same own-data descriptors committed to the framework snapshot so a Proxy cannot
   // present safe truth to validation and different truth to cloning or canonical serialization.
   const seen = securityWeakSet<object>();
-  return snapshotJsonValueAt(value, [], root, seen, canonical);
+  const state = { nodes: 0 };
+  return snapshotJsonValueAt(value, [], root, seen, canonical, state, 0);
 }
 
 function snapshotJsonValueAt(
@@ -125,7 +128,18 @@ function snapshotJsonValueAt(
   root: string,
   seen: WeakSet<object>,
   canonical: boolean,
+  state: { nodes: number },
+  depth: number,
 ): JsonValue {
+  // SPEC §6.6/§9.5: exact-value validation must reject hostile recursive
+  // breadth/depth with deterministic framework errors rather than native OOM/stack failure.
+  if (depth > MAX_JSON_DEPTH) {
+    throw jsonValueError(root, path, `exceeds the ${MAX_JSON_DEPTH}-level depth bound`);
+  }
+  state.nodes += 1;
+  if (state.nodes > MAX_JSON_NODES) {
+    throw jsonValueError(root, path, `exceeds the ${MAX_JSON_NODES}-node bound`);
+  }
   if (value === null) return null;
 
   switch (typeof value) {
@@ -157,7 +171,7 @@ function snapshotJsonValueAt(
       throw jsonValueError(root, path, 'must be a plain JSON array');
     }
     securityWeakSetAdd(seen, object);
-    const snapshot = snapshotJsonArray(value, path, root, seen, canonical);
+    const snapshot = snapshotJsonArray(value, path, root, seen, canonical, state, depth);
     securityWeakSetDelete(seen, object);
     return snapshot;
   }
@@ -168,7 +182,7 @@ function snapshotJsonValueAt(
   }
 
   securityWeakSetAdd(seen, object);
-  const snapshot = snapshotJsonObject(value, path, root, seen, canonical);
+  const snapshot = snapshotJsonObject(value, path, root, seen, canonical, state, depth);
   securityWeakSetDelete(seen, object);
   return snapshot;
 }
@@ -179,6 +193,8 @@ function snapshotJsonArray(
   root: string,
   seen: WeakSet<object>,
   canonical: boolean,
+  state: { nodes: number },
+  depth: number,
 ): JsonValue[] {
   const lengthDescriptor = securityGetOwnPropertyDescriptor(value, 'length');
   if (lengthDescriptor === undefined || !securityHasOwn(lengthDescriptor, 'value')) {
@@ -236,7 +252,7 @@ function snapshotJsonArray(
     }
     securityArrayAppend(
       next,
-      snapshotJsonValueAt(descriptor.value, entryPath, root, seen, canonical),
+      snapshotJsonValueAt(descriptor.value, entryPath, root, seen, canonical, state, depth + 1),
     );
   }
 
@@ -252,6 +268,8 @@ function snapshotJsonObject(
   root: string,
   seen: WeakSet<object>,
   canonical: boolean,
+  state: { nodes: number },
+  depth: number,
 ): JsonValue {
   const ownKeys = snapshotOwnKeys(value, path, root);
   const keys: string[] = [];
@@ -285,7 +303,15 @@ function snapshotJsonObject(
     securityDefineProperty(next, key, {
       configurable: true,
       enumerable: true,
-      value: snapshotJsonValueAt(descriptor.value, propertyPath, root, seen, canonical),
+      value: snapshotJsonValueAt(
+        descriptor.value,
+        propertyPath,
+        root,
+        seen,
+        canonical,
+        state,
+        depth + 1,
+      ),
       writable: true,
     });
   }
