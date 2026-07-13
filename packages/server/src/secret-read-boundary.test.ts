@@ -236,6 +236,55 @@ describe('secret read boundary', () => {
     expect(row.publicLabel).toBe('public label');
   });
 
+  it('remaps exact driver column names to authored public projection aliases', async () => {
+    const db = createSecretBoxingReadDb(
+      builderDb(
+        queryObject('select label from secrets', [], {
+          publicAlias: publicColumn,
+        }),
+      ),
+      metadata(),
+      { executeSql: () => [{ label: 'public label' }] },
+    );
+
+    await expect(db.select()).resolves.toEqual([{ publicAlias: 'public label' }]);
+  });
+
+  it.each([
+    ['reordered', { classified: 'victim-secret', label: 'public label' }],
+    ['missing', { label: 'public label' }],
+    ['extra', { label: 'public label', classified: 'victim-secret', unexpected: 'x' }],
+  ])('fails closed when exact driver projection keys are %s', async (_posture, row) => {
+    const db = createSecretBoxingReadDb(
+      builderDb(
+        queryObject('select label, classified from secrets', [], {
+          publicAlias: publicColumn,
+          secretAlias: secretColumn,
+        }),
+      ),
+      metadata(),
+      { executeSql: () => [row] },
+    );
+
+    await expect(db.select()).rejects.toThrow(/Exact selected read execution result/u);
+  });
+
+  it('keeps exact positional values reads fail-closed', () => {
+    const query = {
+      selectedFields: { publicAlias: publicColumn, secretAlias: secretColumn },
+      toSQL: () => ({ sql: 'select label, classified from secrets' }),
+      values: () => [],
+    };
+    const db = createSecretBoxingReadDb(builderDb(query), metadata(), {
+      executeSql: () => [['public label', 'victim-secret']],
+    });
+
+    const values = db.select().values() as unknown[][];
+
+    expect(isSecret(values[0]?.[0])).toBe(true);
+    expect(isSecret(values[0]?.[1])).toBe(true);
+  });
+
   it('preserves proven non-secret Drizzle expressions through the SQL-safe builder proxy', async () => {
     const client = new Database(':memory:');
     client.exec(
@@ -666,6 +715,53 @@ describe('secret read boundary', () => {
         .execute({});
       expect(preparedPublic[0]!.label).toBe('public-label');
       expect(isSecret(preparedPublic[0]!.label)).toBe(false);
+    } finally {
+      await client.close();
+    }
+  });
+
+  it('keeps public Postgres builder projections unboxed while boxing selected and derived secrets', async () => {
+    const client = new PGlite();
+    try {
+      await client.exec(
+        [
+          'create table projection_secrets (id text primary key, classified text not null, label text not null)',
+          "insert into projection_secrets values ('s1', 'victim-secret', 'public-label')",
+        ].join(';'),
+      );
+      const secrets = pgTable(
+        'projection_secrets',
+        {
+          classified: pgText('classified').notNull(),
+          id: pgText('id').primaryKey(),
+          label: pgText('label').notNull(),
+        },
+        kovo({ domain: 'projection-secret', key: 'id', secret: ['classified'] }),
+      );
+      const raw = drizzlePostgres({ client });
+      const safe = wrapManagedDbForSqlSafety(
+        raw,
+        'enforce',
+        managedSqlExecutionPolicy({ capability: 'read' }),
+      );
+      const db = createSecretBoxingReadDb(safe, extractKovoRuntimeDbMetadata([secrets]), {
+        executeSql: async (statement) =>
+          (await client.query(statement.text, [...statement.params])).rows,
+      });
+
+      const publicRows = await db
+        .select({ id: secrets.id, label: drizzleSql<string>`upper(${secrets.label})` })
+        .from(secrets);
+      const secretRows = await db
+        .select({ classified: secrets.classified, id: secrets.id })
+        .from(secrets);
+      const derivedSecretRows = await db
+        .select({ derived: drizzleSql<string>`upper(${secrets.classified})`, id: secrets.id })
+        .from(secrets);
+
+      expect(publicRows).toEqual([{ id: 's1', label: 'PUBLIC-LABEL' }]);
+      expect(isSecret(secretRows[0]?.classified)).toBe(true);
+      expect(isSecret(derivedSecretRows[0]?.derived)).toBe(true);
     } finally {
       await client.close();
     }

@@ -318,6 +318,11 @@ export function frameworkCanonicalNativeSqlSource(value: unknown): object | unde
   throw new Error('KV422: canonical Drizzle SQL source chain exceeds the bounded authority limit.');
 }
 
+/** Resolve one trusted reconstruction edge without exposing mutable structural lookalikes. @internal */
+export function frameworkCanonicalNativeSqlImmediateSource(value: unknown): object | undefined {
+  return isRecord(value) ? witnessWeakMapGet(frameworkCanonicalNativeSqlSources, value) : undefined;
+}
+
 function wrapDbAdapter(
   db: object,
   mode: SqlSafetyMode,
@@ -694,6 +699,7 @@ function wrapSqlBuilderSafety(
     },
   });
   witnessWeakMapSet(proxyCache, builder, proxy);
+  witnessWeakMapSet(frameworkManagedDbRawTargets, proxy, builder);
   return proxy;
 }
 
@@ -1890,6 +1896,7 @@ function wrapReadWithBuilder(
   });
 
   witnessWeakMapSet(proxyCache, builder, proxy);
+  witnessWeakMapSet(frameworkManagedDbRawTargets, proxy, builder);
   return proxy;
 }
 

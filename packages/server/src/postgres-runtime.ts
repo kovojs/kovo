@@ -38,6 +38,10 @@ import {
 import { requestPassedRoleGuard } from './guards.js';
 import { runtimeEnvironmentValue } from './runtime-environment-authority.js';
 import {
+  forEachReadonlyMapEntry,
+  forEachReadonlySetValue,
+} from './readonly-collection-snapshot.js';
+import {
   securityArrayIsArray,
   securityArrayJoin,
   securityArraySort,
@@ -555,14 +559,50 @@ function postgresStringSet(values: readonly string[]): Set<string> {
 
 function postgresSetValues<Value>(values: ReadonlySet<Value>): Value[] {
   const output: Value[] = [];
-  witnessSetForEach(values as Set<Value>, (value) => appendPostgresValue(output, value));
+  forEachReadonlySetValue(values, 'Postgres readonly set', (value) =>
+    appendPostgresValue(output, value),
+  );
   return output;
+}
+
+function postgresReadonlySetHas<Value>(
+  values: ReadonlySet<Value>,
+  expected: Value,
+  label: string,
+): boolean {
+  let found = false;
+  forEachReadonlySetValue(values, label, (value) => {
+    if (witnessObjectIs(value, expected)) found = true;
+  });
+  return found;
+}
+
+function postgresForEachReadonlyMapEntry<Key, Value>(
+  values: ReadonlyMap<Key, Value>,
+  label: string,
+  callback: (value: Value, key: Key) => void,
+): void {
+  forEachReadonlyMapEntry<Key, Value>(values, label, callback);
 }
 
 function postgresMapValues<Key, Value>(values: ReadonlyMap<Key, Value>): Value[] {
   const output: Value[] = [];
-  witnessMapForEach(values as Map<Key, Value>, (value) => appendPostgresValue(output, value));
+  postgresForEachReadonlyMapEntry(values, 'Postgres readonly map', (value) =>
+    appendPostgresValue(output, value),
+  );
   return output;
+}
+
+function postgresReadonlyMapValue<Key, Value>(
+  values: ReadonlyMap<Key, Value>,
+  key: Key,
+  label: string,
+): Value | undefined {
+  let result: Value | undefined;
+  postgresForEachReadonlyMapEntry(values, label, (value, candidate) => {
+    if (witnessObjectIs(candidate, key)) result = value;
+  });
+  return result;
 }
 
 function postgresOwnDataValues(values: object): unknown[] {
@@ -1769,8 +1809,11 @@ async function checkRuntimeDbPostureTransaction(
     const tableName = tableConfig.name;
     const tableReference = quoteQualified(tableSchemaName(tableConfig), tableName);
     const secretColumns =
-      witnessMapGet(input.metadata.secretColumnNamesByTable, tableName) ??
-      createWitnessSet<string>();
+      postgresReadonlyMapValue(
+        input.metadata.secretColumnNamesByTable,
+        tableName,
+        'Postgres secret column names by table',
+      ) ?? createWitnessSet<string>();
     const secretColumnValues = postgresSetValues(secretColumns);
     const secretColumnCount = postgresDenseArrayLength(
       secretColumnValues,
@@ -5385,8 +5428,11 @@ async function applyPostgresReaderColumnPrivileges(
     const table = postgresDenseValue(tables, index, 'Postgres reader privilege tables');
     const tableConfig = getTableConfig(table);
     const secretColumns =
-      witnessMapGet(metadata.secretColumnNamesByTable, tableConfig.name) ??
-      createWitnessSet<string>();
+      postgresReadonlyMapValue(
+        metadata.secretColumnNamesByTable,
+        tableConfig.name,
+        'Postgres secret column names by table',
+      ) ?? createWitnessSet<string>();
     const publicColumns = postgresPublicColumnNames(tableConfig, secretColumns);
     await client.exec(`REVOKE ALL ON TABLE ${quoteTable(tableConfig)} FROM PUBLIC`);
     await client.exec(
@@ -5411,7 +5457,9 @@ function postgresPublicColumnNames(
   const publicColumns: string[] = [];
   for (let index = 0; index < table.columns.length; index += 1) {
     const column = postgresDenseValue(table.columns, index, 'Postgres table columns').name;
-    if (!witnessSetHas(secretColumns, column)) appendPostgresDenseValue(publicColumns, column);
+    if (!postgresReadonlySetHas(secretColumns, column, 'Postgres secret column names')) {
+      appendPostgresDenseValue(publicColumns, column);
+    }
   }
   return publicColumns;
 }
@@ -5438,34 +5486,42 @@ function postgresReaderReadableTableNames(
   witnessMapForEach(customAuthzPolicyPredicatesByTable(tables), (_predicate, tableName) =>
     witnessSetAdd(authzPolicyTables, tableName),
   );
-  witnessMapForEach(metadata.authorizationClassificationsByTable, (classifications, tableName) => {
-    for (let index = 0; index < classifications.length; index += 1) {
-      const classification = postgresDenseValue(
-        classifications,
-        index,
-        'Postgres authorization classifications',
-      );
-      if (
-        classification === 'public' ||
-        classification === 'reference' ||
-        (classification === 'authzPolicy' && !witnessSetHas(authzPolicyTables, tableName))
-      ) {
-        witnessSetAdd(readableTables, tableName);
-        break;
+  postgresForEachReadonlyMapEntry(
+    metadata.authorizationClassificationsByTable,
+    'Postgres authorization classifications by table',
+    (classifications, tableName) => {
+      for (let index = 0; index < classifications.length; index += 1) {
+        const classification = postgresDenseValue(
+          classifications,
+          index,
+          'Postgres authorization classifications',
+        );
+        if (
+          classification === 'public' ||
+          classification === 'reference' ||
+          (classification === 'authzPolicy' && !witnessSetHas(authzPolicyTables, tableName))
+        ) {
+          witnessSetAdd(readableTables, tableName);
+          break;
+        }
       }
-    }
-  });
+    },
+  );
   return readableTables;
 }
 
 function postgresOwnerScopedTableNames(metadata: KovoRuntimeDbMetadata): readonly string[] {
   const names: string[] = [];
   const seen = createWitnessSet<string>();
-  witnessMapForEach(metadata.ownerSourcesByTable, (_source, name) =>
-    appendUniquePostgresIdentity(names, seen, name),
+  postgresForEachReadonlyMapEntry(
+    metadata.ownerSourcesByTable,
+    'Postgres owner sources by table',
+    (_source, name) => appendUniquePostgresIdentity(names, seen, name),
   );
-  witnessMapForEach(metadata.ownerViaSourcesByTable, (_source, name) =>
-    appendUniquePostgresIdentity(names, seen, name),
+  postgresForEachReadonlyMapEntry(
+    metadata.ownerViaSourcesByTable,
+    'Postgres owner-via sources by table',
+    (_source, name) => appendUniquePostgresIdentity(names, seen, name),
   );
   return names;
 }
@@ -5483,8 +5539,11 @@ async function applyPostgresWriterTablePrivileges(
     const table = postgresDenseValue(tables, index, 'Postgres writer privilege tables');
     const tableConfig = getTableConfig(table);
     const secretColumns =
-      witnessMapGet(metadata.secretColumnNamesByTable, tableConfig.name) ??
-      createWitnessSet<string>();
+      postgresReadonlyMapValue(
+        metadata.secretColumnNamesByTable,
+        tableConfig.name,
+        'Postgres secret column names by table',
+      ) ?? createWitnessSet<string>();
     const publicColumns = postgresPublicColumnNames(tableConfig, secretColumns);
     await client.exec(
       `REVOKE ALL ON TABLE ${quoteTable(tableConfig)} FROM ${quoteIdent(config.writerRole)}`,
@@ -5559,7 +5618,11 @@ async function applyPostgresPrivilegedRolePrivileges(
     );
     if (witnessSetHas(config.crossOwnerReadTables, tableName)) {
       const secretColumns =
-        witnessMapGet(metadata.secretColumnNamesByTable, tableName) ?? createWitnessSet<string>();
+        postgresReadonlyMapValue(
+          metadata.secretColumnNamesByTable,
+          tableName,
+          'Postgres secret column names by table',
+        ) ?? createWitnessSet<string>();
       const publicColumns = postgresPublicColumnNames(tableConfig, secretColumns);
       if (publicColumns.length > 0) {
         await client.exec(
@@ -5610,18 +5673,22 @@ function postgresWriterWritableTableNames(
   witnessMapForEach(customAuthzPolicyPredicatesByTable(tables), (_predicate, tableName) =>
     witnessSetAdd(authzPolicyTables, tableName),
   );
-  witnessMapForEach(metadata.authorizationClassificationsByTable, (classifications, tableName) => {
-    for (let index = 0; index < classifications.length; index += 1) {
-      if (
-        postgresDenseValue(classifications, index, 'Postgres authorization classifications') ===
-          'authzPolicy' &&
-        !witnessSetHas(authzPolicyTables, tableName)
-      ) {
-        witnessSetAdd(writableTables, tableName);
-        break;
+  postgresForEachReadonlyMapEntry(
+    metadata.authorizationClassificationsByTable,
+    'Postgres authorization classifications by table',
+    (classifications, tableName) => {
+      for (let index = 0; index < classifications.length; index += 1) {
+        if (
+          postgresDenseValue(classifications, index, 'Postgres authorization classifications') ===
+            'authzPolicy' &&
+          !witnessSetHas(authzPolicyTables, tableName)
+        ) {
+          witnessSetAdd(writableTables, tableName);
+          break;
+        }
       }
-    }
-  });
+    },
+  );
   return writableTables;
 }
 
@@ -5670,36 +5737,44 @@ function resolveProtectedPostgresTables(
     witnessMapSet(tableConfigs, config.name, config);
   }
   const protectedTables = createWitnessMap<string, ProtectedPostgresTable>();
-  witnessMapForEach(metadata.ownerSourcesByTable, (owner, tableName) => {
-    const tableConfig = witnessMapGet(tableConfigs, tableName);
-    if (tableConfig === undefined) return;
-    witnessMapSet(protectedTables, tableName, {
-      kind: 'owner',
-      predicate: `${quoteIdent(owner.columnName)} = current_setting('kovo.principal', true)`,
-      schemaName: tableSchemaName(tableConfig),
-      tableName,
-    });
-  });
-  witnessMapForEach(metadata.ownerViaSourcesByTable, (ownerVia, tableName) => {
-    const tableConfig = witnessMapGet(tableConfigs, tableName);
-    if (tableConfig === undefined) return;
-    const predicate = ownerPredicateForTable(metadata, ownerVia.parentTable, {
-      parentKeyColumnName: ownerVia.parentKeyColumnName,
-      parentMatchExpression: `${quoteIdent(tableName)}.${quoteIdent(ownerVia.fkColumnName)}`,
-      visited: postgresStringSet([tableName]),
-    });
-    if (predicate === undefined) {
-      throw new Error(
-        `KV414: ownerVia table ${tableName} cannot resolve parent chain through ${ownerVia.parentTable} to an owner column (SPEC §10.3).`,
-      );
-    }
-    witnessMapSet(protectedTables, tableName, {
-      kind: 'ownerVia',
-      predicate,
-      schemaName: tableSchemaName(tableConfig),
-      tableName,
-    });
-  });
+  postgresForEachReadonlyMapEntry(
+    metadata.ownerSourcesByTable,
+    'Postgres owner sources by table',
+    (owner, tableName) => {
+      const tableConfig = witnessMapGet(tableConfigs, tableName);
+      if (tableConfig === undefined) return;
+      witnessMapSet(protectedTables, tableName, {
+        kind: 'owner',
+        predicate: `${quoteIdent(owner.columnName)} = current_setting('kovo.principal', true)`,
+        schemaName: tableSchemaName(tableConfig),
+        tableName,
+      });
+    },
+  );
+  postgresForEachReadonlyMapEntry(
+    metadata.ownerViaSourcesByTable,
+    'Postgres owner-via sources by table',
+    (ownerVia, tableName) => {
+      const tableConfig = witnessMapGet(tableConfigs, tableName);
+      if (tableConfig === undefined) return;
+      const predicate = ownerPredicateForTable(metadata, ownerVia.parentTable, {
+        parentKeyColumnName: ownerVia.parentKeyColumnName,
+        parentMatchExpression: `${quoteIdent(tableName)}.${quoteIdent(ownerVia.fkColumnName)}`,
+        visited: postgresStringSet([tableName]),
+      });
+      if (predicate === undefined) {
+        throw new Error(
+          `KV414: ownerVia table ${tableName} cannot resolve parent chain through ${ownerVia.parentTable} to an owner column (SPEC §10.3).`,
+        );
+      }
+      witnessMapSet(protectedTables, tableName, {
+        kind: 'ownerVia',
+        predicate,
+        schemaName: tableSchemaName(tableConfig),
+        tableName,
+      });
+    },
+  );
   witnessMapForEach(customAuthzPolicyPredicatesByTable(tables), (policy) => {
     const predicate = policy.predicate;
     const tableName = policy.tableName;
@@ -5727,7 +5802,11 @@ function ownerPredicateForTable(
   if (witnessSetHas(input.visited, tableName)) return undefined;
   witnessSetAdd(input.visited, tableName);
   const parentAlias = quoteIdent(`kovo_parent_${tableName}_${witnessSetSize(input.visited)}`);
-  const owner = witnessMapGet(metadata.ownerSourcesByTable, tableName);
+  const owner = postgresReadonlyMapValue(
+    metadata.ownerSourcesByTable,
+    tableName,
+    'Postgres owner sources by table',
+  );
   if (owner !== undefined) {
     return postgresJoin(
       [
@@ -5741,7 +5820,11 @@ function ownerPredicateForTable(
       ' ',
     );
   }
-  const ownerVia = witnessMapGet(metadata.ownerViaSourcesByTable, tableName);
+  const ownerVia = postgresReadonlyMapValue(
+    metadata.ownerViaSourcesByTable,
+    tableName,
+    'Postgres owner-via sources by table',
+  );
   if (ownerVia === undefined) return undefined;
   const nested = ownerPredicateForTable(metadata, ownerVia.parentTable, {
     parentKeyColumnName: ownerVia.parentKeyColumnName,
@@ -6011,21 +6094,25 @@ function postgresReachabilityAllowlist(
   witnessMapForEach(customAuthzPolicyPredicatesByTable(tables), (_policy, tableName) =>
     witnessSetAdd(protectedAuthzPolicyTables, tableName),
   );
-  witnessMapForEach(metadata.authorizationClassificationsByTable, (classifications, tableName) => {
-    if (
-      postgresSomeDense(
-        classifications,
-        (classification) =>
-          classification === 'public' ||
-          classification === 'reference' ||
-          (classification === 'authzPolicy' &&
-            !witnessSetHas(protectedAuthzPolicyTables, tableName)),
-        'Postgres reachability classifications',
-      )
-    ) {
-      addDeclaredTable(tableName);
-    }
-  });
+  postgresForEachReadonlyMapEntry(
+    metadata.authorizationClassificationsByTable,
+    'Postgres authorization classifications by table',
+    (classifications, tableName) => {
+      if (
+        postgresSomeDense(
+          classifications,
+          (classification) =>
+            classification === 'public' ||
+            classification === 'reference' ||
+            (classification === 'authzPolicy' &&
+              !witnessSetHas(protectedAuthzPolicyTables, tableName)),
+          'Postgres reachability classifications',
+        )
+      ) {
+        addDeclaredTable(tableName);
+      }
+    },
+  );
   witnessSetForEach(customAuthzPolicyDependencyTableNames(tables), addDeclaredTable);
   return allowlisted;
 }

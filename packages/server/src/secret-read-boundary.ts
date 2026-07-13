@@ -27,6 +27,7 @@ import {
   witnessWeakMapSet,
 } from './security-witness-intrinsics.js';
 import {
+  frameworkCanonicalNativeSqlImmediateSource,
   frameworkCanonicalNativeSqlSource,
   frameworkManagedDbRawTarget,
 } from './sql-safe-handle.js';
@@ -773,7 +774,7 @@ function wrapReadSurface(
         const exact =
           carrier === undefined
             ? undefined
-            : exactSecretReadExecution(target, carrier, 'all', options);
+            : exactSecretReadExecution(target, carrier, 'all', options, metadata);
         const boundary = mergeReadBoundaries(
           mergeReadBoundaries(
             inheritedBoundary,
@@ -834,7 +835,7 @@ function wrapReadSurface(
           const exact =
             carrier === undefined || relationalQuery !== undefined || args.length !== 0
               ? undefined
-              : exactSecretReadExecution(target, carrier, terminalMode, options);
+              : exactSecretReadExecution(target, carrier, terminalMode, options, metadata);
           const boundary = mergeReadBoundaries(
             mergeReadBoundaries(
               inheritedBoundary,
@@ -851,11 +852,11 @@ function wrapReadSurface(
           }
           const result =
             exact === undefined ? witnessReflectApply(item, target, args) : exact.execute();
-          return boxSecretReadExecutionResult(
-            result,
-            metadata,
-            exact === undefined ? failClosedExecutionBoundary(boundary) : boundary,
-          );
+          const terminalBoundary =
+            prop === 'values' || exact === undefined
+              ? failClosedExecutionBoundary(boundary)
+              : boundary;
+          return boxSecretReadExecutionResult(result, metadata, terminalBoundary);
         }
         const boundary = mergeReadBoundaries(
           inheritedBoundary,
@@ -893,7 +894,8 @@ function readBoundaryForQuery(
   }
   return options.sqliteColumnOrigins === undefined
     ? relationalQuery === undefined
-      ? fallbackReadBoundaryForSql(carrier.text, metadata)
+      ? (selectedProjectionReadBoundary(value, carrier.text, metadata) ??
+        fallbackReadBoundaryForSql(carrier.text, metadata))
       : { ...emptyReadBoundary(), secretColumnScopeKnown: true }
     : sqliteSecretReadBoundaryForStatement(
         value,
@@ -903,6 +905,59 @@ function readBoundaryForQuery(
         undefined,
         relationalQuery?.nestedResultKeys,
       );
+}
+
+function selectedProjectionReadBoundary(
+  statement: unknown,
+  sql: string,
+  metadata: SecretReadMetadata,
+): SecretReadBoundary | undefined {
+  const fields = selectedFieldsFromValue(statement);
+  if (fields === undefined) return undefined;
+  const secretResultKeys = createWitnessSet<string>();
+  const opaqueResultKeys = createWitnessSet<string>();
+  const referencesSecretTable = sqlReferencesSecretTable(sql, metadata.secretTableNames);
+  const keys = witnessObjectKeys(fields);
+  for (let index = 0; index < keys.length; index += 1) {
+    const key = keys[index]!;
+    const descriptor = witnessGetOwnPropertyDescriptor(fields, key);
+    if (descriptor === undefined || !('value' in descriptor)) {
+      witnessSetAdd(opaqueResultKeys, key);
+      continue;
+    }
+    const field = descriptor.value;
+    const sourceIdentity = isObjectLike(field)
+      ? (frameworkCanonicalNativeSqlSource(field) ?? field)
+      : undefined;
+    const source =
+      sourceIdentity === undefined
+        ? undefined
+        : witnessMapGet(
+            metadata.columnSources as Map<object, SecretReadColumnSource>,
+            sourceIdentity,
+          );
+    if (source !== undefined) {
+      if (source.secret) witnessSetAdd(secretResultKeys, key);
+      continue;
+    }
+    if (isColumnLike(field)) {
+      const canonicalSecret = canonicalColumnSecretVerdict(field, metadata);
+      if (canonicalSecret === true) witnessSetAdd(secretResultKeys, key);
+      else if (canonicalSecret === undefined && referencesSecretTable) {
+        witnessSetAdd(opaqueResultKeys, key);
+      }
+      continue;
+    }
+    if (classifySqlExpression(field, metadata) !== 'safe') {
+      witnessSetAdd(opaqueResultKeys, key);
+    }
+  }
+  return {
+    ...emptyReadBoundary(),
+    opaqueResultKeys,
+    secretResultKeys,
+    secretColumnScopeKnown: true,
+  };
 }
 
 function pinRelationalReadQuery(value: object): PinnedRelationalReadQuery | undefined {
@@ -1076,6 +1131,7 @@ function exactSecretReadExecution(
   carrier: SqlCarrier,
   mode: SecretReadExecutionMode,
   options: SecretReadBoundaryOptions,
+  metadata: SecretReadMetadata,
 ): ExactSecretReadExecution | undefined {
   if (options.sqliteColumnOrigins !== undefined) {
     try {
@@ -1108,8 +1164,112 @@ function exactSecretReadExecution(
   return witnessFreeze({
     columns: undefined,
     exactColumns: false,
-    execute: () => executeSql(carrier, mode),
+    execute: () => mapSelectedReadExecutionResult(executeSql(carrier, mode), query, metadata, mode),
   });
+}
+
+function mapSelectedReadExecutionResult(
+  result: unknown,
+  query: unknown,
+  metadata: SecretReadMetadata,
+  mode: SecretReadExecutionMode,
+): unknown {
+  if (mode === 'values') return result;
+  if (result !== null && typeof result === 'object') {
+    const then = optionalInheritedFunctionDataProperty(result, 'then');
+    if (then !== undefined) {
+      return witnessReflectApply(nativePromiseThen, settleSecretReadResult(result, then), [
+        (value: unknown) => mapSelectedReadResult(value, query, metadata),
+      ]);
+    }
+  }
+  return mapSelectedReadResult(result, query, metadata);
+}
+
+function mapSelectedReadResult(
+  result: unknown,
+  query: unknown,
+  metadata: SecretReadMetadata,
+): unknown {
+  const selectedKeys = selectedResultKeysFromValue(query);
+  if (selectedKeys.length === 0) return result;
+  const driverKeys = selectedDriverKeysFromValue(query, metadata);
+  if (witnessIsArray(result)) {
+    return mapDenseReadArray(result, (row) => mapSelectedReadRow(row, selectedKeys, driverKeys));
+  }
+  return mapSelectedReadRow(result, selectedKeys, driverKeys);
+}
+
+function mapSelectedReadRow(
+  row: unknown,
+  selectedKeys: readonly string[],
+  expectedDriverKeys: readonly (string | undefined)[],
+): unknown {
+  if (!isObjectLike(row)) {
+    throw new TypeError('Exact selected read execution must return object rows.');
+  }
+  const driverKeys = witnessObjectKeys(row);
+  if (driverKeys.length !== selectedKeys.length) {
+    throw new TypeError(
+      'Exact selected read execution result shape does not match its projection.',
+    );
+  }
+  const mapped = witnessCreateNullRecord();
+  for (let index = 0; index < selectedKeys.length; index += 1) {
+    const selectedKey = selectedKeys[index]!;
+    const driverKey = driverKeys[index]!;
+    const expectedDriverKey = expectedDriverKeys[index];
+    if (expectedDriverKey !== undefined && driverKey !== expectedDriverKey) {
+      throw new TypeError(
+        'Exact selected read execution result order does not match its projection.',
+      );
+    }
+    const descriptor = witnessGetOwnPropertyDescriptor(row, driverKey);
+    if (descriptor === undefined || !('value' in descriptor)) {
+      throw new TypeError('Exact selected read execution rows must use own data properties.');
+    }
+    witnessDefineProperty(mapped, selectedKey, {
+      configurable: true,
+      enumerable: true,
+      value: descriptor.value,
+      writable: true,
+    });
+  }
+  return mapped;
+}
+
+function selectedDriverKeysFromValue(
+  value: unknown,
+  metadata: SecretReadMetadata,
+): readonly (string | undefined)[] {
+  const fields = selectedFieldsFromValue(value);
+  if (fields === undefined) return [];
+  const keys = witnessObjectKeys(fields);
+  const result: (string | undefined)[] = [];
+  for (let index = 0; index < keys.length; index += 1) {
+    const descriptor = witnessGetOwnPropertyDescriptor(fields, keys[index]!);
+    if (descriptor === undefined || !('value' in descriptor) || !isObjectLike(descriptor.value)) {
+      witnessDefineProperty(result, index, {
+        configurable: true,
+        enumerable: true,
+        value: undefined,
+        writable: true,
+      });
+      continue;
+    }
+    const sourceIdentity = frameworkCanonicalNativeSqlSource(descriptor.value) ?? descriptor.value;
+    const source = witnessMapGet(
+      metadata.columnSources as Map<object, SecretReadColumnSource>,
+      sourceIdentity,
+    );
+    witnessDefineProperty(result, index, {
+      configurable: true,
+      enumerable: true,
+      value: source?.column,
+      writable: true,
+    });
+  }
+  return witnessFreeze(result);
 }
 
 function mapExactSqliteReadResult(
@@ -1411,6 +1571,8 @@ function sqlChunkIsSafe(chunk: unknown, metadata: SecretReadMetadata): boolean {
     sourceIdentity,
   );
   if (source !== undefined) return !source.secret;
+  const canonicalSecret = canonicalColumnSecretVerdict(chunk, metadata);
+  if (canonicalSecret !== undefined) return !canonicalSecret;
 
   const nested = optionalOwnDataValue(chunk, 'queryChunks');
   if (witnessIsArray(nested)) {
@@ -1448,6 +1610,21 @@ function sqlChunkIsSafe(chunk: unknown, metadata: SecretReadMetadata): boolean {
     return true;
   }
   return false;
+}
+
+function canonicalColumnSecretVerdict(
+  value: object,
+  metadata: SecretReadMetadata,
+): boolean | undefined {
+  const immediate = frameworkCanonicalNativeSqlImmediateSource(value);
+  if (immediate === undefined) return undefined;
+  const candidate = isColumnLike(value) ? value : immediate;
+  const name = optionalOwnDataValue(candidate, 'name');
+  if (typeof name !== 'string') return undefined;
+  return (
+    witnessSetHas(metadata.secretColumnKeys as Set<string>, name) ||
+    witnessSetHas(metadata.secretColumnNames as Set<string>, name)
+  );
 }
 
 const SAFE_SQL_WORDS = [
@@ -1593,12 +1770,13 @@ function sqlCarrierFromValue(value: unknown, params: readonly unknown[]): SqlCar
   if (typeof value === 'string') {
     return witnessFreeze({ params: snapshotSqlCarrierParams(params), text: value });
   }
-  const toSQL = isObjectLike(value)
-    ? optionalInheritedFunctionDataProperty(value, 'toSQL')
+  const target = isObjectLike(value) ? (frameworkManagedDbRawTarget(value) ?? value) : value;
+  const toSQL = isObjectLike(target)
+    ? optionalInheritedFunctionDataProperty(target, 'toSQL')
     : undefined;
-  if (toSQL !== undefined && isObjectLike(value)) {
+  if (toSQL !== undefined && isObjectLike(target)) {
     try {
-      const result = witnessReflectApply<unknown>(toSQL, value, []);
+      const result = witnessReflectApply<unknown>(toSQL, target, []);
       if (isObjectLike(result)) {
         const sql = optionalOwnDataValue(result, 'sql');
         const resultParams = optionalOwnDataValue(result, 'params');
@@ -1613,7 +1791,7 @@ function sqlCarrierFromValue(value: unknown, params: readonly unknown[]): SqlCar
       return undefined;
     }
   }
-  const text = sqlTextFromValue(value);
+  const text = sqlTextFromValue(target);
   if (text !== undefined) {
     return witnessFreeze({ params: snapshotSqlCarrierParams(params), text });
   }
