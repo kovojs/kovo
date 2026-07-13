@@ -5,6 +5,7 @@ import {
   DRIZZLE_SELECT_QUERY_METHODS,
   extractStaticBuildAnalysisFactsFromProject,
 } from '@kovojs/drizzle/internal/static';
+import { DRIZZLE_TABLE_FACTORY_NAMES } from './drizzle-surface.js';
 import { pgDatabaseTypes } from './test-helpers.js';
 
 const DB_TYPES = pgDatabaseTypes([
@@ -25,6 +26,45 @@ function censusDiagnostics(source: string) {
 }
 
 describe('@kovojs/drizzle authorization census static gate (DEC-K/C7)', () => {
+  it('keeps schema tables in the census when a plugin tries to mutate table-factory policy', () => {
+    const mutableNames = DRIZZLE_TABLE_FACTORY_NAMES as Set<string>;
+    let removed = false;
+    let diagnostics: ReturnType<typeof censusDiagnostics> | undefined;
+
+    try {
+      try {
+        removed = Set.prototype.delete.call(mutableNames, 'pgTable');
+      } catch {
+        // The hardened classifier is a frozen closure-backed ReadonlySet facade, not a Set target.
+      }
+      diagnostics = censusDiagnostics(
+        [
+          'import { query } from "@kovojs/server";',
+          'import { kovo } from "@kovojs/drizzle";',
+          'import { pgTable, text } from "drizzle-orm/pg-core";',
+          'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+          '',
+          'export const payroll = pgTable("payroll", { id: text("id").primaryKey() }, kovo({ domain: "payroll", key: "id" }));',
+          '',
+          'export const payrollQuery = query("payroll", {',
+          '  load(_input: unknown, db: PgAsyncDatabase<any, any>) {',
+          '    return db.select({ id: payroll.id }).from(payroll);',
+          '  },',
+          '});',
+        ].join('\n'),
+      );
+    } finally {
+      if (removed) Set.prototype.add.call(mutableNames, 'pgTable');
+    }
+
+    expect(diagnostics).toEqual([
+      expect.objectContaining({
+        message: expect.stringContaining('Authorization census table payroll is request-reachable'),
+      }),
+    ]);
+    expect(removed).toBe(false);
+  });
+
   it('keeps write-reachable tables in the census after late Object.values poisoning', () => {
     const originalValues = Object.values;
     let diagnostics: ReturnType<typeof censusDiagnostics> | undefined;

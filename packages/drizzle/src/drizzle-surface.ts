@@ -6,11 +6,15 @@ import {
   runtimeDefineOwnData,
   runtimeFreeze,
   runtimeOwnDataValue,
+  runtimeRegExpTest,
+  runtimeSealSet,
+  runtimeSet,
+  runtimeSetAdd,
 } from './runtime-security-intrinsics.js';
 
-export const DRIZZLE_TABLE_FACTORY_NAMES = new Set(['pgTable', 'sqliteTable']);
+export const DRIZZLE_TABLE_FACTORY_NAMES = immutablePolicySet(['pgTable', 'sqliteTable']);
 
-export const DRIZZLE_DATABASE_TYPE_NAMES = new Set([
+export const DRIZZLE_DATABASE_TYPE_NAMES = immutablePolicySet([
   'SQLiteAsyncDatabase',
   'BetterSQLite3Database',
   'BunSQLiteDatabase',
@@ -302,7 +306,7 @@ export function kovoAnalyzerSummary<T extends (...args: never[]) => unknown>(
 }
 
 export function isDrizzleDatabaseTypeName(name: string): boolean {
-  return DRIZZLE_DATABASE_TYPE_NAMES.has(name) || /^Neon.*Database$/.test(name);
+  return DRIZZLE_DATABASE_TYPE_NAMES.has(name) || runtimeRegExpTest(/^Neon.*Database$/u, name);
 }
 
 export function isDrizzleTableFactoryName(name: string): boolean {
@@ -311,6 +315,16 @@ export function isDrizzleTableFactoryName(name: string): boolean {
 
 export function isKovoExtraConfigCallName(name: string): boolean {
   return name === KOVO_EXTRA_CONFIG_CALL_NAME;
+}
+
+function immutablePolicySet(values: readonly string[]): ReadonlySet<string> {
+  // SPEC §6.6 rule 6: app/plugin code shares the process but must not rewrite the
+  // static classifier vocabulary after the trusted Drizzle module initializes.
+  const policy = runtimeSet<string>();
+  for (let index = 0; index < values.length; index += 1) {
+    runtimeSetAdd(policy, values[index]!);
+  }
+  return runtimeSealSet(policy);
 }
 
 export function isDomainTableAnnotation(
