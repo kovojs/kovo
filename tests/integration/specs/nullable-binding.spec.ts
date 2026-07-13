@@ -19,14 +19,14 @@ test('keeps optional text and attribute bindings empty or removed across SSR and
   await page.goto('/');
 
   const serverText = page.locator('deal-card [data-bind="deal.contact?.name"]');
-  const serverLink = page.locator('deal-card [data-bind\\:href="deal.contact?.name"]');
+  const serverLink = page.locator('deal-card a');
   await expect(serverText).toHaveText('');
   await expect(serverLink).not.toHaveAttribute('href');
   await expect(serverLink).not.toHaveAttribute('aria-label');
 
   await submit(page, 'Fill server contact');
   await expect(serverText).toHaveText('Server Contact');
-  await expect(serverLink).toHaveAttribute('href', 'Server Contact');
+  await expect(serverLink).toHaveAttribute('href', '/contacts/server');
   await expect(serverLink).toHaveAttribute('aria-label', 'Server Contact');
 
   await submit(page, 'Clear server contact');

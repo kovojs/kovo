@@ -1,52 +1,13 @@
+/** @jsxImportSource @kovojs/server */
 // SPEC §4.8 keyed stamps at volume (plans/bugs-and-testing.md P3 scale; testing-audit §5.6):
 // a 300-row keyed list reconciled through a fragment patch must keep identity correct at
 // scale — the right row removed, order preserved, no mis-keying or duplicate keys.
 import { staticSql } from '@kovojs/test/internal/integration/fixture-abi';
-import { createApp, domain, mutation, query, route, s } from '@kovojs/server';
-import {
-  escapeAttribute,
-  escapeHtml,
-  renderQueryScript,
-} from '@kovojs/test/internal/integration/fixture-abi';
+import { createApp, mutation, route, s, trustedHtml } from '@kovojs/server';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
-const cartDomain = domain('cart');
-
-interface CartItem {
-  [key: string]: unknown;
-  id: string;
-  name: string;
-  qty: number;
-}
-
-interface CartResult {
-  items: CartItem[];
-}
-
-async function readCart(db: KovoFixtureRequest['db']): Promise<CartResult> {
-  const items = (await db.query(
-    staticSql`select id, name, qty from cart_item order by position asc`,
-  )) as unknown as CartItem[];
-  return { items };
-}
-
-function renderRow(item: CartItem): string {
-  return `<li kovo-key="${escapeAttribute(item.id)}" data-row="${escapeAttribute(item.id)}"><span data-bind=".qty">${item.qty}</span> <span data-bind=".name">${escapeHtml(item.name)}</span></li>`;
-}
-
-function renderList(cart: CartResult): string {
-  return `<ul data-bind-list="cart.items" kovo-key="id" aria-label="Cart items">${cart.items.map(renderRow).join('')}<template kovo-stamp>${renderRow({ id: '', name: '', qty: 0 })}</template></ul>`;
-}
-
-async function renderCartList(db: KovoFixtureRequest['db']): Promise<string> {
-  return `<cart-list kovo-fragment-target="cart-list" kovo-deps="cart">${renderList(await readCart(db))}</cart-list>`;
-}
-
-export const cartQuery = query('cart', {
-  load: (_input: unknown, context?: { request: KovoFixtureRequest }) =>
-    readCart(context?.request.db as KovoFixtureRequest['db']),
-  reads: [cartDomain],
-});
+import { CartList } from './cart-list';
+import { cartDomain, cartQuery } from './shared';
 
 export const changeCart = mutation('scale-keyed-list/change', {
   csrf: false,
@@ -64,22 +25,21 @@ export const changeCart = mutation('scale-keyed-list/change', {
 });
 
 const homeRoute = route('/', {
-  page: async (_context, request: KovoFixtureRequest) => {
-    const cart = await readCart(request.db);
-    return `${renderQueryScript({ name: 'cart', value: cart })}
-    <script type="module" src="/client.ts"></script>
+  page: () => (
     <main>
-      ${await renderCartList(request.db)}
-      <form method="post" action="/_m/scale-keyed-list/change" enhance data-mutation="scale-keyed-list/change" kovo-deps="cart">
+      {trustedHtml('<script type="module" src="/client.ts"></script>')}
+      <CartList />
+      <form mutation={changeCart} enhance>
         <button type="submit">Change</button>
       </form>
-    </main>`;
-  },
+    </main>
+  ),
 });
 
 const app = createApp({
   mutations: [changeCart],
   queries: [cartQuery],
+  requestLimits: { maxQueryListItems: 400 },
   routes: [homeRoute],
 });
 

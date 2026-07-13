@@ -1,8 +1,9 @@
+/** @jsxImportSource @kovojs/server */
 import { staticSql } from '@kovojs/test/internal/integration/fixture-abi';
 import { createApp, mutation, route, s } from '@kovojs/server';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
-import { renderBalanceShell } from './balance-shell';
+import { BalanceShell } from './balance-shell';
 import { account, balanceQuery } from './shared';
 
 export const deposit = mutation('fragment-slot-hoist/deposit', {
@@ -25,17 +26,20 @@ export const deposit = mutation('fragment-slot-hoist/deposit', {
 });
 
 const homeRoute = route('/', {
-  page: async (_context, request: KovoFixtureRequest) => {
-    const shell = await renderBalanceShell(request.db);
-    return `<main>
-      <kovo-fragment target="balance-shell">${shell}</kovo-fragment>
-      <form method="post" action="/_m/fragment-slot-hoist/deposit" enhance
-        data-mutation="fragment-slot-hoist/deposit" kovo-deps="slot_account">
+  page: () => (
+    <main>
+      <BalanceShell />
+      <form
+        method="post"
+        action="/_m/fragment-slot-hoist/deposit"
+        enhance
+        data-mutation="fragment-slot-hoist/deposit"
+      >
         <input name="amount" type="number" value="7" />
         <button type="submit">Deposit</button>
       </form>
-    </main>`;
-  },
+    </main>
+  ),
 });
 
 const app = createApp({

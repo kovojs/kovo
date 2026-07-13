@@ -12,13 +12,24 @@ test('coalesces concurrent duplicate enhanced mutation submissions', async ({
   await page.goto('/');
   const origin = new URL(page.url()).origin;
   const token = await page.locator('input[name="kovo-csrf"]').inputValue();
+  const target = page.locator('[kovo-fragment-target="idem-concurrent-status"]');
+  const liveTarget = [
+    await target.getAttribute('kovo-fragment-target'),
+    '#',
+    await target.getAttribute('kovo-live-component'),
+    '@',
+    await target.getAttribute('kovo-live-token'),
+    ':',
+    (await target.getAttribute('kovo-props')) ?? '{}',
+  ].join('');
   const post = () =>
     request.post('/_m/mutation-idempotency-concurrent/record', {
       form: { note: 'race', 'kovo-csrf': token },
       headers: {
         'Kovo-Fragment': 'true',
         'Kovo-Idem': 'idem-concurrent-1',
-        'Kovo-Targets': 'idem-concurrent-status',
+        'Kovo-Live-Targets': liveTarget,
+        'Kovo-Targets': 'idem-concurrent-status=idem',
         origin,
       },
     });
@@ -31,7 +42,8 @@ test('coalesces concurrent duplicate enhanced mutation submissions', async ({
 
   const [firstBody, duplicateBody] = await Promise.all([first.text(), duplicate.text()]);
   expect(firstBody).toBe(duplicateBody);
-  expect(firstBody).toContain('data-bind="idem.count">1');
+  expect(firstBody).toContain('<output data-bind="idem.count"');
+  expect(firstBody).toContain('>1</output>');
 
   const rows = await kovoApp.db.query(
     'select count(*)::int as count, array_agg(note order by note) as notes from concurrent_entries',

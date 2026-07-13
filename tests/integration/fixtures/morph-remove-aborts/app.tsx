@@ -1,59 +1,45 @@
+/** @jsxImportSource @kovojs/server */
 // SPEC.md §4.4/§4.7: fragment morphs that remove islands abort their ctx.signal
 // and leave patched/replacement islands inert until a declared trigger or interaction.
 import { staticSql } from '@kovojs/test/internal/integration/fixture-abi';
 import { createApp, mutation, route, s } from '@kovojs/server';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
-type MorphStage = 'active' | 'removed';
-
-async function readStage(db: KovoFixtureRequest['db']): Promise<MorphStage> {
-  const rows = await db.query<{ stage: MorphStage }>(
-    staticSql`select stage from morph_abort_state where id = 1`,
-  );
-  return rows[0]?.stage ?? 'active';
-}
-
-async function renderShell(db: KovoFixtureRequest['db']): Promise<string> {
-  const stage = await readStage(db);
-  if (stage === 'removed') {
-    return `<section data-morph-stage="removed">
-      <replacement-abort-island kovo-c="replacement-abort-island">
-        <button type="button" on:click="/client.ts#touchReplacement">Touch replacement</button>
-      </replacement-abort-island>
-    </section>`;
-  }
-
-  return `<section data-morph-stage="active">
-    <abortable-island kovo-c="abortable-island">
-      <button type="button" on:click="/client.ts#startAbortable">Start abortable</button>
-    </abortable-island>
-  </section>`;
-}
+import { MorphAbortShell } from './morph-abort-shell';
+import { morphAbortDomain, morphAbortQuery } from './shared';
 
 export const removeIsland = mutation('morph-remove-aborts/remove', {
   csrf: false,
   csrfJustification: 'fixture mutation has no ambient browser authority',
   input: s.object({}),
-  registry: { tables: ['morph_abort_state'] },
-  handler: async (_input, request: KovoFixtureRequest) => {
+  registry: {
+    queries: [morphAbortQuery],
+    tables: ['morph_abort_state'],
+    touches: [morphAbortDomain],
+  },
+  handler: async (_input, request: KovoFixtureRequest, context) => {
     await request.db.exec(staticSql`update morph_abort_state set stage = 'removed' where id = 1`);
+    context.invalidate(morphAbortDomain);
     return {};
   },
 });
 
 const homeRoute = route('/', {
-  page: async (_context, request: KovoFixtureRequest) => `<main>
-    <h1>Morph remove aborts</h1>
-    <p data-morph-abort-status>idle</p>
-    <div kovo-fragment-target="morph-abort-shell">${await renderShell(request.db)}</div>
-    <form method="post" action="/_m/morph-remove-aborts/remove" enhance data-mutation="morph-remove-aborts/remove">
-      <button type="submit">Remove island</button>
-    </form>
-  </main>`,
+  page: () => (
+    <main>
+      <h1>Morph remove aborts</h1>
+      <p data-morph-abort-status>idle</p>
+      <MorphAbortShell />
+      <form mutation={removeIsland} enhance>
+        <button type="submit">Remove island</button>
+      </form>
+    </main>
+  ),
 });
 
 const app = createApp({
   mutations: [removeIsland],
+  queries: [morphAbortQuery],
   routes: [homeRoute],
 });
 

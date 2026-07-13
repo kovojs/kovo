@@ -20,9 +20,9 @@ test('re-runs every visible product query instance when a coarse table-level inv
   ]);
 
   const body = await response.text();
-  expect(body).toContain('<kovo-fragment target="product-p1">');
+  expect(body).toContain('<kovo-fragment target="product-panel:p1">');
   expect(body).toContain('<output data-bind="product.stock">3</output>');
-  expect(body).toContain('<kovo-fragment target="product-p2">');
+  expect(body).toContain('<kovo-fragment target="product-panel:p2">');
   expect(body).toContain('<output data-bind="product.stock">10</output>');
 
   await expect(page.locator('[data-product-id="p1"] [data-bind="product.stock"]')).toHaveText('3');

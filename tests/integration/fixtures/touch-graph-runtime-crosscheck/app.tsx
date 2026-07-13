@@ -1,38 +1,16 @@
-import { staticSql } from '@kovojs/test/internal/integration/fixture-abi';
-import { createApp, domain, mutation, route, s } from '@kovojs/server';
-import {
-  defineFixture,
-  type KovoFixtureReaderRequest,
-  type KovoFixtureRequest,
-} from '@kovojs/test/internal/integration/define';
+/** @jsxImportSource @kovojs/server */
+import { createApp, mutation, route, s } from '@kovojs/server';
+import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
-const cart = domain('cart');
-
-async function cartCountReader(db: KovoFixtureReaderRequest['db']): Promise<number> {
-  const rows = await db.rawRead<{ count: number }>(
-    staticSql`select count(*)::int as count from cart_items`,
-    { reads: ['cart_items'] },
-  );
-  return rows[0]?.count ?? 0;
-}
-
-async function cartCountWriter(db: KovoFixtureRequest['db']): Promise<number> {
-  const rows = await db.query<{ count: number }>(
-    staticSql`select count(*)::int as count from cart_items`,
-  );
-  return rows[0]?.count ?? 0;
-}
-
-function renderCartCount(count: number): string {
-  return `<p kovo-fragment-target="cart-count" kovo-deps="cart" data-testid="cart-count">${count}</p>`;
-}
+import { CartCount } from './cart-count';
+import { cart, cartQuery } from './shared';
 
 const addCartItem = mutation('touch-graph-runtime-crosscheck/add', {
   csrf: false,
   csrfJustification: 'fixture mutation has no ambient browser authority',
   defaultRedirectTo: '/',
   input: s.object({ productId: s.string() }),
-  registry: { tables: ['cart_items'], touches: [cart] },
+  registry: { queries: [cartQuery], tables: ['cart_items'], touches: [cart] },
   async handler(input, request: KovoFixtureRequest, context) {
     await request.db.query({
       text: 'insert into cart_items (product_id) values ($1)',
@@ -60,19 +38,25 @@ const smuggleAuditWrite = mutation('touch-graph-runtime-crosscheck/smuggle', {
 });
 
 const home = route('/', {
-  page: async (_context, request: KovoFixtureReaderRequest) => `
+  page: () => (
     <main>
-      <kovo-fragment target="cart-count">${renderCartCount(await cartCountReader(request.db))}</kovo-fragment>
-      <form method="post" action="/_m/touch-graph-runtime-crosscheck/add" enhance data-mutation="touch-graph-runtime-crosscheck/add" kovo-deps="cart">
-        <input type="hidden" name="productId" value="p1">
+      <CartCount />
+      <form
+        method="post"
+        action="/_m/touch-graph-runtime-crosscheck/add"
+        enhance
+        data-mutation="touch-graph-runtime-crosscheck/add"
+      >
+        <input type="hidden" name="productId" value="p1" />
         <button type="submit">Add item</button>
       </form>
     </main>
-  `,
+  ),
 });
 
 const app = createApp({
   mutations: [addCartItem, smuggleAuditWrite],
+  queries: [cartQuery],
   routes: [home],
 });
 

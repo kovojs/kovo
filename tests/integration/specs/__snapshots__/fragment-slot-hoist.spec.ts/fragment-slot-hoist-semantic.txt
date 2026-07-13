@@ -1,10 +1,13 @@
-<section data-derive-attr="data-account" data-derive="slotBalance.BalanceShell$section_data_account_derive" kovo-c="balance-shell" kovo-deps="slotBalance slotBalance" kovo-fragment-target="balance-shell">
+<section data-derive-attr="data-account" data-derive="slotBalance.BalanceShell$section_data_account_derive" kovo-c="balance-shell" kovo-deps="slotBalance" kovo-fragment-target="balance-shell">
   <h1>
     "Account"
     <span data-bind="slotBalance.accountId">
       "acct-1"
   <div>
     <p>
-      "Hoisted slot for acct-1:"
-      <output>
+      "Hoisted slot for"
+      <span data-bind="slotBalance.accountId">
+        "acct-1"
+      ":"
+      <output data-bind="slotBalance.balance">
         "17"

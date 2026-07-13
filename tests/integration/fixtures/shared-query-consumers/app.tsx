@@ -1,21 +1,12 @@
+/** @jsxImportSource @kovojs/server */
 import { staticSql } from '@kovojs/test/internal/integration/fixture-abi';
-import { createApp, mutation, route, s } from '@kovojs/server';
 import { renderQueryScript } from '@kovojs/test/internal/integration/fixture-abi';
+import { createApp, mutation, route, s, trustedHtml } from '@kovojs/server';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 import { ProfileStatus } from './profile-status';
 import { ProfileSummary } from './profile-summary';
 import { profileDomain, profileQuery, readProfile } from './shared';
-
-async function renderSummary(db: KovoFixtureRequest['db']): Promise<string> {
-  const profile = await readProfile(db);
-  return ProfileSummary.definition.render({ profile }) as unknown as string;
-}
-
-async function renderStatus(db: KovoFixtureRequest['db']): Promise<string> {
-  const profile = await readProfile(db);
-  return ProfileStatus.definition.render({ profile }) as unknown as string;
-}
 
 export const publishProfile = mutation('shared-query-consumers/publish', {
   csrf: false,
@@ -39,16 +30,21 @@ export const publishProfile = mutation('shared-query-consumers/publish', {
 const homeRoute = route('/', {
   page: async (_context, request: KovoFixtureRequest) => {
     const profile = await readProfile(request.db);
-    const summary = await renderSummary(request.db);
-    const status = await renderStatus(request.db);
-    return `${renderQueryScript({ name: 'profile', value: profile })}
-    <main>
-      <kovo-fragment target="profile-summary">${summary}</kovo-fragment>
-      <kovo-fragment target="profile-status">${status}</kovo-fragment>
-      <form method="post" action="/_m/shared-query-consumers/publish" enhance data-mutation="shared-query-consumers/publish" kovo-deps="profile">
-        <button type="submit">Publish profile</button>
-      </form>
-    </main>`;
+    return (
+      <main>
+        {trustedHtml(renderQueryScript({ name: 'profile', value: profile }))}
+        <ProfileSummary />
+        <ProfileStatus />
+        <form
+          method="post"
+          action="/_m/shared-query-consumers/publish"
+          enhance
+          data-mutation="shared-query-consumers/publish"
+        >
+          <button type="submit">Publish profile</button>
+        </form>
+      </main>
+    );
   },
 });
 

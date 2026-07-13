@@ -1,4 +1,4 @@
-<section kovo-deps="scroll" kovo-fragment-target="scroll-panel" kovo-key="scroll-panel">
+<section kovo-c="scroll-panel" kovo-deps="scroll" kovo-fragment-target="scroll-panel" kovo-key="scroll-panel">
   <div kovo-key="scroll-region">
     <p data-row="1" kovo-key="row-1">
       "Stable row 1"

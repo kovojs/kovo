@@ -1,3 +1,4 @@
+/** @jsxImportSource @kovojs/server */
 // Mutation wire fixture for SPEC.md §10.3: enhanced mutation responses rerun
 // invalidated queries after commit, so fragments and <kovo-query> carry truth.
 import { staticSql } from '@kovojs/test/internal/integration/fixture-abi';
@@ -5,13 +6,7 @@ import { createApp, mutation, route, s } from '@kovojs/server';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 import { BalanceBadge } from './balance-badge';
-import { account, balanceQuery, readBalance } from './shared';
-
-function renderBadge(db: KovoFixtureRequest['db']): Promise<string> {
-  return readBalance(db).then(
-    (balance) => BalanceBadge.definition.render({ balance }) as unknown as string,
-  );
-}
+import { account, balanceQuery } from './shared';
 
 export const deposit = mutation('account/deposit', {
   csrf: false,
@@ -33,17 +28,15 @@ export const deposit = mutation('account/deposit', {
 });
 
 const homeRoute = route('/', {
-  page: async (_context, request: KovoFixtureRequest) => {
-    const badge = await renderBadge(request.db);
-    return `<main>
-      <kovo-fragment target="balance-badge">${badge}</kovo-fragment>
-      <form method="post" action="/_m/account/deposit" enhance data-mutation="account/deposit"
-        kovo-deps="account">
+  page: () => (
+    <main>
+      <BalanceBadge />
+      <form method="post" action="/_m/account/deposit" enhance data-mutation="account/deposit">
         <input name="amount" type="number" value="5" />
         <button type="submit">Deposit</button>
       </form>
-    </main>`;
-  },
+    </main>
+  ),
 });
 
 const app = createApp({

@@ -3,7 +3,7 @@ import { domain, query, type QueryLoadContext } from '@kovojs/server';
 import type { KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 export interface DealResult {
-  contact: { name: string } | null;
+  contact: { href: string; name: string } | null;
 }
 
 export const dealDomain = domain('deal');
@@ -13,7 +13,7 @@ export async function readDeal(db: KovoFixtureRequest['db']): Promise<DealResult
     staticSql`select contact_name from deal where id = 1`,
   );
   const name = rows[0]?.contact_name ?? null;
-  return { contact: name === null ? null : { name } };
+  return { contact: name === null ? null : { href: '/contacts/server', name } };
 }
 
 export const dealQuery = query('deal', {

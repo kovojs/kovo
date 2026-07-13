@@ -2,37 +2,18 @@
 // SPEC.md §4.5: fragment-target children lower to server-renderable slot functions.
 import { component } from '@kovojs/core';
 
-import { balanceQuery, readBalance, type BalanceResult } from './shared';
-
-interface BalanceShellSlots {
-  children?: unknown;
-}
+import { balanceQuery, type BalanceResult } from './shared';
 
 export const BalanceShell = component({
   queries: { slotBalance: balanceQuery },
-  render: (
-    { slotBalance }: { slotBalance: BalanceResult },
-    _state,
-    { children }: BalanceShellSlots,
-  ) => (
+  render: ({ slotBalance }: { slotBalance: BalanceResult }) => (
     <section data-account={slotBalance.accountId}>
       <h1>Account {slotBalance.accountId}</h1>
-      <div data-slot="children">{children}</div>
+      <div data-slot="children">
+        <p data-hoisted-slot="balance">
+          Hoisted slot for {slotBalance.accountId}: <output>{slotBalance.balance}</output>
+        </p>
+      </div>
     </section>
   ),
 });
-
-export function BalanceShell$slot_children(props: BalanceResult): string {
-  return (
-    <p data-hoisted-slot="balance">
-      Hoisted slot for {props.accountId}: <output>{props.balance}</output>
-    </p>
-  ) as unknown as string;
-}
-
-export async function renderBalanceShell(db: Parameters<typeof readBalance>[0]): Promise<string> {
-  const slotBalance = await readBalance(db);
-  return BalanceShell.definition.render({ slotBalance }, undefined, {
-    children: BalanceShell$slot_children(slotBalance),
-  });
-}

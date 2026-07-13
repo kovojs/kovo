@@ -1,48 +1,41 @@
+/** @jsxImportSource @kovojs/server */
 // SPEC.md §5.3 + §11.4: explain output names the behavior surface humans drive.
-import { staticSql } from '@kovojs/test/internal/integration/fixture-abi';
 import { createApp, mutation, route, s } from '@kovojs/server';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
-async function renderCartBadge(db: KovoFixtureRequest['db']): Promise<string> {
-  const rows = await db.query<{ count: number }>(
-    staticSql`select count(*)::int as count from cart_items`,
-  );
-  return `<output data-bind="cart.count">${rows[0]?.count ?? 0}</output>`;
-}
-
-async function renderCartSection(db: KovoFixtureRequest['db']): Promise<string> {
-  return `<section data-component="CartBadge" kovo-fragment-target="cart-badge" kovo-deps="cart">
-    <h1>Cart</h1>
-    ${await renderCartBadge(db)}
-  </section>`;
-}
+import { CartBadge } from './cart-badge';
+import { cartDomain, cartQuery } from './shared';
 
 export const addToCart = mutation('cart/add', {
   csrf: false,
   csrfJustification: 'fixture mutation has no ambient browser authority',
   defaultRedirectTo: '/',
   input: s.object({ sku: s.string() }),
-  registry: { tables: ['cart_items'] },
-  handler: async (input: { sku: string }, request: KovoFixtureRequest) => {
+  registry: { queries: [cartQuery], tables: ['cart_items'], touches: [cartDomain] },
+  handler: async (input: { sku: string }, request: KovoFixtureRequest, context) => {
     await request.db.exec({
       text: 'insert into cart_items (sku) values ($1)',
       values: [input.sku],
     });
+    context.invalidate(cartDomain);
     return {};
   },
 });
 
 const app = createApp({
   mutations: [addToCart],
+  queries: [cartQuery],
   routes: [
     route('/', {
-      page: async (_context, request: KovoFixtureRequest) => `<main data-page="cart">
-        ${await renderCartSection(request.db)}
-        <form method="post" action="/_m/cart/add" enhance data-mutation="cart/add" kovo-deps="cart">
-          <input name="sku" value="sku-1">
-          <button type="submit">Add to cart</button>
-        </form>
-      </main>`,
+      page: () => (
+        <main data-page="cart">
+          <CartBadge />
+          <form mutation={addToCart} enhance>
+            <input name="sku" value="sku-1" />
+            <button type="submit">Add to cart</button>
+          </form>
+        </main>
+      ),
     }),
   ],
 });

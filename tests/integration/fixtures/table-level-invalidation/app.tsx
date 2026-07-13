@@ -1,65 +1,9 @@
-import { createApp, domain, mutation, query, route, s } from '@kovojs/server';
-import {
-  defineFixture,
-  type KovoFixtureReaderRequest,
-  type KovoFixtureRequest,
-} from '@kovojs/test/internal/integration/define';
+/** @jsxImportSource @kovojs/server */
+import { createApp, mutation, route, s } from '@kovojs/server';
+import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
-const product = domain('product');
-
-interface ProductPanelResult extends Record<string, unknown> {
-  id: string;
-  label: string;
-  stock: number;
-}
-
-async function readProductPanelFromReader(
-  db: KovoFixtureReaderRequest['db'],
-  id: string,
-  label: string,
-): Promise<ProductPanelResult> {
-  const rows = await db.rawRead<ProductPanelResult>(
-    {
-      text: 'select id, name as label, stock from products where id = $1',
-      values: [id],
-    },
-    { reads: ['products'] },
-  );
-  return rows[0] ?? { id, label, stock: 0 };
-}
-
-async function readProductPanelFromWriter(
-  db: KovoFixtureRequest['db'],
-  id: string,
-  label: string,
-): Promise<ProductPanelResult> {
-  const rows = await db.query<ProductPanelResult>({
-    text: 'select id, name as label, stock from products where id = $1',
-    values: [id],
-  });
-  return rows[0] ?? { id, label, stock: 0 };
-}
-
-const productQuery = query('product', {
-  args: s.object({ id: s.string(), label: s.string() }),
-  instanceKey: (input) => `product:${input.id}`,
-  async load(input: { id: string; label: string }, context) {
-    const request = context?.request as KovoFixtureReaderRequest;
-    return readProductPanelFromReader(request.db, input.id, input.label);
-  },
-  reads: [product],
-});
-
-function renderPanel(result: ProductPanelResult): string {
-  return `<section data-product-id="${result.id}" kovo-fragment-target="product-${result.id}" kovo-deps="product">
-    <h2>${result.label}</h2>
-    <output data-bind="product.stock">${result.stock}</output>
-  </section>`;
-}
-
-function renderInitialQueryScript(name: string, key: string, value: unknown): string {
-  return `<script type="application/json" kovo-query="${name}" key="${key}">${JSON.stringify(value).replaceAll('<', '\\u003c')}</script>`;
-}
+import { ProductPanel } from './product-panel';
+import { product, productQuery } from './shared';
 
 const bulkRestock = mutation('table-level-invalidation/restock', {
   csrf: false,
@@ -67,8 +11,8 @@ const bulkRestock = mutation('table-level-invalidation/restock', {
   defaultRedirectTo: '/',
   input: s.object({ category: s.string(), threshold: s.number().int().min(0) }),
   registry: {
-    queries: [productQuery],
     tables: ['products'],
+    touches: [product],
   },
   async handler(input, request: KovoFixtureRequest, context) {
     await request.db.query({
@@ -83,22 +27,17 @@ const bulkRestock = mutation('table-level-invalidation/restock', {
 });
 
 const home = route('/', {
-  page: async (_context, request: KovoFixtureReaderRequest) => {
-    const p1 = await readProductPanelFromReader(request.db, 'p1', 'Pen');
-    const p2 = await readProductPanelFromReader(request.db, 'p2', 'Notebook');
-
-    return `${renderInitialQueryScript('product', 'product:p1', p1)}
-    ${renderInitialQueryScript('product', 'product:p2', p2)}
+  page: () => (
     <main>
-      <kovo-fragment target="product-p1">${renderPanel(p1)}</kovo-fragment>
-      <kovo-fragment target="product-p2">${renderPanel(p2)}</kovo-fragment>
-      <form method="post" action="/_m/table-level-invalidation/restock" enhance data-mutation="table-level-invalidation/restock" kovo-deps="product">
-        <input type="hidden" name="category" value="office">
-        <input type="hidden" name="threshold" value="10">
+      <ProductPanel productId="p1" label="Pen" key="p1" />
+      <ProductPanel productId="p2" label="Notebook" key="p2" />
+      <form mutation={bulkRestock} enhance>
+        <input type="hidden" name="category" value="office" />
+        <input type="hidden" name="threshold" value="10" />
         <button type="submit">Restock low office stock</button>
       </form>
-    </main>`;
-  },
+    </main>
+  ),
 });
 
 const app = createApp({

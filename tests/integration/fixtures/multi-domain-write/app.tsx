@@ -1,58 +1,14 @@
+/** @jsxImportSource @kovojs/server */
 // SPEC §11.1/§11.2, KV402 (plans/bugs-and-testing.md C7; testing-audit §5.1): one
 // handler writing TWO domains. The runtime cross-check must pass when both are
 // declared and fail loudly naming the MISSING domain when one is omitted.
 import { staticSql } from '@kovojs/test/internal/integration/fixture-abi';
-import { createApp, domain, mutation, route, s } from '@kovojs/server';
-import {
-  defineFixture,
-  type KovoFixtureReaderRequest,
-  type KovoFixtureRequest,
-} from '@kovojs/test/internal/integration/define';
+import { createApp, mutation, route, s } from '@kovojs/server';
+import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
-const cart = domain('cart');
-const product = domain('product');
-
-async function cartCountReader(db: KovoFixtureReaderRequest['db']): Promise<number> {
-  const rows = await db.rawRead<{ count: number }>(
-    staticSql`select count(*)::int as count from cart_items`,
-    { reads: ['cart_items'] },
-  );
-  return rows[0]?.count ?? 0;
-}
-
-async function cartCountWriter(db: KovoFixtureRequest['db']): Promise<number> {
-  const rows = await db.query<{ count: number }>(
-    staticSql`select count(*)::int as count from cart_items`,
-  );
-  return rows[0]?.count ?? 0;
-}
-
-async function productStockReader(db: KovoFixtureReaderRequest['db']): Promise<number> {
-  const rows = await db.rawRead<{ stock: number }>(
-    {
-      text: 'select stock from products where id = $1',
-      values: ['p1'],
-    },
-    { reads: ['products'] },
-  );
-  return rows[0]?.stock ?? 0;
-}
-
-async function productStockWriter(db: KovoFixtureRequest['db']): Promise<number> {
-  const rows = await db.query<{ stock: number }>({
-    text: 'select stock from products where id = $1',
-    values: ['p1'],
-  });
-  return rows[0]?.stock ?? 0;
-}
-
-function renderCart(count: number): string {
-  return `<p kovo-fragment-target="cart-count" kovo-deps="cart" data-testid="cart-count">${count}</p>`;
-}
-
-function renderStock(stock: number): string {
-  return `<p kovo-fragment-target="product-stock" kovo-deps="product" data-testid="product-stock">${stock}</p>`;
-}
+import { CartCount } from './cart-count';
+import { ProductStock } from './product-stock';
+import { cart, cartQuery, product, productQuery } from './shared';
 
 // Writes cart_items (cart) AND products (product); declares BOTH (touchGraph below).
 const addBoth = mutation('multi-domain-write/add-both', {
@@ -60,7 +16,11 @@ const addBoth = mutation('multi-domain-write/add-both', {
   csrfJustification: 'fixture mutation has no ambient browser authority',
   defaultRedirectTo: '/',
   input: s.object({}),
-  registry: { tables: ['cart_items', 'products'], touches: [cart, product] },
+  registry: {
+    queries: [cartQuery, productQuery],
+    tables: ['cart_items', 'products'],
+    touches: [cart, product],
+  },
   async handler(_input: unknown, request: KovoFixtureRequest, context) {
     await request.db.query({
       text: 'insert into cart_items (product_id) values ($1)',
@@ -83,7 +43,7 @@ const addPartial = mutation('multi-domain-write/add-partial', {
   csrfJustification: 'fixture mutation has no ambient browser authority',
   defaultRedirectTo: '/',
   input: s.object({}),
-  registry: { tables: ['cart_items', 'products'], touches: [cart] },
+  registry: { queries: [cartQuery], tables: ['cart_items', 'products'], touches: [cart] },
   async handler(_input: unknown, request: KovoFixtureRequest, context) {
     await request.db.query({
       text: 'insert into cart_items (product_id) values ($1)',
@@ -99,17 +59,25 @@ const addPartial = mutation('multi-domain-write/add-partial', {
 });
 
 const home = route('/', {
-  page: async (_context, request: KovoFixtureReaderRequest) => `<main>
-    <kovo-fragment target="cart-count">${renderCart(await cartCountReader(request.db))}</kovo-fragment>
-    <kovo-fragment target="product-stock">${renderStock(await productStockReader(request.db))}</kovo-fragment>
-    <form method="post" action="/_m/multi-domain-write/add-both" enhance data-mutation="multi-domain-write/add-both" kovo-deps="cart product">
-      <button type="submit">Add both</button>
-    </form>
-  </main>`,
+  page: () => (
+    <main>
+      <CartCount />
+      <ProductStock />
+      <form
+        method="post"
+        action="/_m/multi-domain-write/add-both"
+        enhance
+        data-mutation="multi-domain-write/add-both"
+      >
+        <button type="submit">Add both</button>
+      </form>
+    </main>
+  ),
 });
 
 const app = createApp({
   mutations: [addBoth, addPartial],
+  queries: [cartQuery, productQuery],
   routes: [home],
 });
 

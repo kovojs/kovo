@@ -1,47 +1,46 @@
+/** @jsxImportSource @kovojs/server */
 // SPEC.md §6.6/§9.1: mutation POSTs validate CSRF before parsing or guards.
-import { staticSql } from '@kovojs/test/internal/integration/fixture-abi';
-import { createApp, csrfField, mutation, route, s } from '@kovojs/server';
+import { createApp, mutation, route, s } from '@kovojs/server';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
+
+import { CsrfTotal } from './csrf-total';
+import { csrfDomain, csrfQuery } from './shared';
 
 const csrf = {
   secret: 'csrf-required-secret-at-least-32-bytes',
   sessionId: () => 'csrf-required-session',
 };
 
-async function renderTotal(db: KovoFixtureRequest['db']): Promise<string> {
-  const rows = await db.query<{ total: number }>(
-    staticSql`select coalesce(sum(amount), 0)::int as total from payments`,
-  );
-  return `<section kovo-fragment-target="csrf-total" kovo-deps="csrf"><output data-bind="csrf.total">${rows[0]?.total ?? 0}</output></section>`;
-}
-
 export const deposit = mutation('csrf-required/deposit', {
   defaultRedirectTo: '/',
   input: s.object({ amount: s.number().int().min(1) }),
-  registry: { tables: ['payments'] },
-  handler: async (input: { amount: number }, request: KovoFixtureRequest) => {
+  registry: { queries: [csrfQuery], tables: ['payments'], touches: [csrfDomain] },
+  handler: async (input: { amount: number }, request: KovoFixtureRequest, context) => {
     await request.db.exec({
       text: 'insert into payments (amount) values ($1)',
       values: [input.amount],
     });
+    context.invalidate(csrfDomain);
     return {};
   },
 });
 
 const homeRoute = route('/', {
-  page: async (_context, request: KovoFixtureRequest) => `<main>
-    <kovo-fragment target="csrf-total">${await renderTotal(request.db)}</kovo-fragment>
-    <form method="post" action="/_m/csrf-required/deposit" enhance data-mutation="csrf-required/deposit" kovo-deps="csrf">
-      ${csrfField(request, { ...csrf, audience: deposit.key })}
-      <input type="number" name="amount" value="1">
-      <button type="submit">Deposit with csrf</button>
-    </form>
-  </main>`,
+  page: () => (
+    <main>
+      <CsrfTotal />
+      <form mutation={deposit} enhance>
+        <input type="number" name="amount" value="1" />
+        <button type="submit">Deposit with csrf</button>
+      </form>
+    </main>
+  ),
 });
 
 const app = createApp({
   csrf,
   mutations: [deposit],
+  queries: [csrfQuery],
   routes: [homeRoute],
 });
 

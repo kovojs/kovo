@@ -1,56 +1,40 @@
+/** @jsxImportSource @kovojs/server */
 // Morph application fixture: an island patched in by a fragment is discovered by
 // delegated future events, but its handler module is not imported eagerly (SPEC §4.4, §9.1).
 import { staticSql } from '@kovojs/test/internal/integration/fixture-abi';
 import { createApp, mutation, route, s } from '@kovojs/server';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
-async function readInstalled(db: KovoFixtureRequest['db']): Promise<boolean> {
-  const rows = await db.query<{ installed: number }>(
-    staticSql`select installed from island_patch where id = 1`,
-  );
-  return rows[0]?.installed === 1;
-}
-
-async function renderZone(db: KovoFixtureRequest['db']): Promise<string> {
-  const installed = await readInstalled(db);
-  return `<section kovo-fragment-target="patch-zone" kovo-deps="island" kovo-key="patch-zone">
-    ${
-      installed
-        ? `<patched-island kovo-c="patched-island" kovo-key="patched-island" kovo-state='{"count":0}'>
-            <button type="button" on:click="/client.ts#activate" data-p-label="patched">Activate patched island</button>
-            <output data-island-output data-bind="state.count">0</output>
-          </patched-island>`
-        : '<p data-empty-zone>No island yet</p>'
-    }
-  </section>`;
-}
+import { PatchZone } from './patch-zone';
+import { islandDomain, islandQuery } from './shared';
 
 export const addIsland = mutation('island/add', {
   csrf: false,
   csrfJustification: 'fixture mutation has no ambient browser authority',
   defaultRedirectTo: '/',
   input: s.object({}),
-  registry: { tables: ['island_patch'] },
-  handler: async (_input: unknown, request: KovoFixtureRequest) => {
+  registry: { queries: [islandQuery], tables: ['island_patch'], touches: [islandDomain] },
+  handler: async (_input: unknown, request: KovoFixtureRequest, context) => {
     await request.db.exec(staticSql`update island_patch set installed = 1 where id = 1`);
+    context.invalidate(islandDomain);
     return {};
   },
 });
 
 const homeRoute = route('/', {
-  page: async (_context, request: KovoFixtureRequest) => {
-    const zone = await renderZone(request.db);
-    return `<main>
-      <kovo-fragment target="patch-zone">${zone}</kovo-fragment>
-      <form method="post" action="/_m/island/add" enhance data-mutation="island/add" kovo-deps="island">
+  page: () => (
+    <main>
+      <PatchZone />
+      <form mutation={addIsland} enhance>
         <button type="submit">Patch island</button>
       </form>
-    </main>`;
-  },
+    </main>
+  ),
 });
 
 const app = createApp({
   mutations: [addIsland],
+  queries: [islandQuery],
   routes: [homeRoute],
 });
 

@@ -1,38 +1,11 @@
+/** @jsxImportSource @kovojs/server */
 import { staticSql } from '@kovojs/test/internal/integration/fixture-abi';
-import { createApp, mutation, route, s } from '@kovojs/server';
-import {
-  escapeAttribute,
-  escapeHtml,
-  renderQueryScript,
-} from '@kovojs/test/internal/integration/fixture-abi';
+import { renderQueryScript } from '@kovojs/test/internal/integration/fixture-abi';
+import { createApp, mutation, route, s, trustedHtml } from '@kovojs/server';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
-import { dealDomain, dealQuery, readDeal, type DealResult } from './shared';
-
-function renderDeal(db: KovoFixtureRequest['db']): Promise<string> {
-  return readDeal(db).then(renderDealHtml);
-}
-
-function renderDealHtml(deal: DealResult): string {
-  const name = deal.contact?.name;
-  const contactAttrs =
-    name === undefined
-      ? ''
-      : ` href="${escapeAttribute(name)}" aria-label="${escapeAttribute(name)}"`;
-  return `<deal-card kovo-deps="deal" kovo-fragment-target="deal-card">
-    <output data-bind="deal.contact?.name">${escapeHtml(name ?? '')}</output>
-    <a${contactAttrs} data-bind:href="deal.contact?.name" data-bind:aria-label="deal.contact?.name">Contact</a>
-  </deal-card>`;
-}
-
-function renderStateIsland(): string {
-  return `<nullable-state kovo-state='{"contact":null}'>
-    <output data-bind="state.contact?.name"></output>
-    <a data-bind:href="state.contact?.name" data-bind:aria-label="state.contact?.name">State contact</a>
-    <button type="button" on:click="/state-actions.ts#fillContact">Fill state contact</button>
-    <button type="button" on:click="/state-actions.ts#clearContact">Clear state contact</button>
-  </nullable-state>`;
-}
+import { DealCard } from './deal-card';
+import { dealDomain, dealQuery, readDeal } from './shared';
 
 export const fillDeal = mutation('nullable-binding/fill', {
   csrf: false,
@@ -71,18 +44,21 @@ export const clearDeal = mutation('nullable-binding/clear', {
 const homeRoute = route('/', {
   page: async (_context, request: KovoFixtureRequest) => {
     const deal = await readDeal(request.db);
-    const rendered = await renderDeal(request.db);
-    return `${renderQueryScript({ name: 'deal', value: deal })}
-    <main>
-      <kovo-fragment target="deal-card">${rendered}</kovo-fragment>
-      ${renderStateIsland()}
-      <form method="post" action="/_m/nullable-binding/fill" enhance data-mutation="nullable-binding/fill" kovo-deps="deal">
-        <button type="submit">Fill server contact</button>
-      </form>
-      <form method="post" action="/_m/nullable-binding/clear" enhance data-mutation="nullable-binding/clear" kovo-deps="deal">
-        <button type="submit">Clear server contact</button>
-      </form>
-    </main>`;
+    return (
+      <main>
+        {trustedHtml(renderQueryScript({ name: 'deal', value: deal }))}
+        <DealCard />
+        {trustedHtml(
+          '<nullable-state kovo-state=\'{"contact":null}\'><output data-bind="state.contact?.name"></output><a data-bind:href="state.contact?.name" data-bind:aria-label="state.contact?.name">State contact</a><button type="button" on:click="/state-actions.ts#fillContact">Fill state contact</button><button type="button" on:click="/state-actions.ts#clearContact">Clear state contact</button></nullable-state>',
+        )}
+        <form mutation={fillDeal} enhance>
+          <button type="submit">Fill server contact</button>
+        </form>
+        <form mutation={clearDeal} enhance>
+          <button type="submit">Clear server contact</button>
+        </form>
+      </main>
+    );
   },
 });
 

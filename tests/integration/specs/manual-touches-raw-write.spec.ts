@@ -19,7 +19,8 @@ test('runtime-verifies raw writes covered by manual touches and refreshes depend
 
   const body = await response.text();
   expect(body).toContain('<kovo-fragment target="cart-count">');
-  expect(body).toContain('data-testid="cart-count">1</output>');
+  expect(body).toContain('data-testid="cart-count"');
+  expect(body).toContain('>1</output>');
 
   await expect(page.getByTestId('cart-count')).toHaveText('1');
   expect(await kovoApp.db.query('select product_id from cart_items')).toEqual([

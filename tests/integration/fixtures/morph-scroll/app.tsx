@@ -5,56 +5,35 @@ import { staticSql } from '@kovojs/test/internal/integration/fixture-abi';
 import { createApp, Document, Head, InlineStyle, mutation, route, s } from '@kovojs/server';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
+import { ScrollPanel } from './scroll-panel';
+import { scrollDomain, scrollQuery } from './shared';
+
 const SCROLL_REGION_CSS =
   '[data-scroll-region]{height:110px;overflow:auto;border:1px solid currentColor}' +
   '[data-scroll-region] [data-row]{height:24px;margin:0}';
-
-async function readVersion(db: KovoFixtureRequest['db']): Promise<number> {
-  const rows = await db.query<{ version: number }>(
-    staticSql`select version from scroll_state where id = 1`,
-  );
-  return rows[0]?.version ?? 0;
-}
-
-async function renderPanel(db: KovoFixtureRequest['db']): Promise<string> {
-  const version = await readVersion(db);
-  const rows = Array.from({ length: 28 }, (_value, index) => {
-    const rowNumber = index + 1;
-    const label =
-      rowNumber === 14 ? `Inserted content version ${version}` : `Stable row ${rowNumber}`;
-    return `<p kovo-key="row-${rowNumber}" data-row="${rowNumber}">${label}</p>`;
-  }).join('');
-
-  return `<section kovo-fragment-target="scroll-panel" kovo-deps="scroll" kovo-key="scroll-panel">
-    <div kovo-key="scroll-region" data-scroll-region>
-      ${rows}
-    </div>
-    <p>Server version <output data-bind="scroll.version">${version}</output></p>
-  </section>`;
-}
 
 export const refreshScroll = mutation('scroll/refresh', {
   csrf: false,
   csrfJustification: 'fixture mutation has no ambient browser authority',
   defaultRedirectTo: '/',
   input: s.object({}),
-  registry: { tables: ['scroll_state'] },
-  handler: async (_input: unknown, request: KovoFixtureRequest) => {
+  registry: { queries: [scrollQuery], tables: ['scroll_state'], touches: [scrollDomain] },
+  handler: async (_input: unknown, request: KovoFixtureRequest, context) => {
     await request.db.exec(staticSql`update scroll_state set version = version + 1 where id = 1`);
+    context.invalidate(scrollDomain);
     return {};
   },
 });
 
 const homeRoute = route('/', {
-  page: async (_context, request: KovoFixtureRequest) => {
-    const panel = await renderPanel(request.db);
-    return `<main>
-      <kovo-fragment target="scroll-panel">${panel}</kovo-fragment>
-      <form method="post" action="/_m/scroll/refresh" enhance data-mutation="scroll/refresh" kovo-deps="scroll">
+  page: () => (
+    <main>
+      <ScrollPanel />
+      <form mutation={refreshScroll} enhance>
         <button type="submit">Refresh content</button>
       </form>
-    </main>`;
-  },
+    </main>
+  ),
 });
 
 const app = createApp({
@@ -71,6 +50,7 @@ const app = createApp({
     </Document>
   ),
   mutations: [refreshScroll],
+  queries: [scrollQuery],
   routes: [homeRoute],
 });
 

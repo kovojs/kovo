@@ -1,4 +1,4 @@
-<section kovo-deps="island" kovo-fragment-target="patch-zone" kovo-key="patch-zone">
+<section kovo-c="patch-zone" kovo-deps="island" kovo-fragment-target="patch-zone" kovo-key="patch-zone">
   <patched-island kovo-c="patched-island" kovo-key="patched-island" kovo-state="{\"count\":0}">
     <button data-p-label="patched" on:click="/client.ts#activate" type="button">
       "Activate patched island"

@@ -1,56 +1,10 @@
+/** @jsxImportSource @kovojs/server */
 import { staticSql } from '@kovojs/test/internal/integration/fixture-abi';
-import { createApp, domain, mutation, query, route, s } from '@kovojs/server';
-import {
-  escapeAttribute,
-  escapeHtml,
-  renderQueryScript,
-} from '@kovojs/test/internal/integration/fixture-abi';
+import { createApp, mutation, route, s, trustedHtml } from '@kovojs/server';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
-const cartDomain = domain('cart');
-
-interface CartItem {
-  [key: string]: unknown;
-  id: string;
-  name: string;
-  qty: number;
-}
-
-interface CartResult {
-  items: CartItem[];
-}
-
-async function readCart(db: KovoFixtureRequest['db']): Promise<CartResult> {
-  const items = (await db.query(
-    staticSql`select id, name, qty from cart_item order by position asc`,
-  )) as unknown as CartItem[];
-  return { items };
-}
-
-function renderRow(item: CartItem): string {
-  return `<li kovo-key="${escapeAttribute(item.id)}" data-row="${escapeAttribute(item.id)}">
-    <span data-bind=".qty">${item.qty}</span>
-    <span data-bind=".name">${escapeHtml(item.name)}</span>
-  </li>`;
-}
-
-function renderList(cart: CartResult): string {
-  return `<ul data-bind-list="cart.items" kovo-key="id" aria-label="Cart items">
-    ${cart.items.map(renderRow).join('')}
-    <template kovo-stamp>${renderRow({ id: '', name: '', qty: 0 })}</template>
-  </ul>`;
-}
-
-async function renderCartList(db: KovoFixtureRequest['db']): Promise<string> {
-  const cart = await readCart(db);
-  return `<cart-list kovo-fragment-target="cart-list" kovo-deps="cart">${renderList(cart)}</cart-list>`;
-}
-
-export const cartQuery = query('cart', {
-  load: (_input: unknown, context?: { request: KovoFixtureRequest }) =>
-    readCart(context?.request.db as KovoFixtureRequest['db']),
-  reads: [cartDomain],
-});
+import { CartList } from './cart-list';
+import { cartDomain, cartQuery } from './shared';
 
 export const changeCart = mutation('stamp-list-insert-remove/change', {
   csrf: false,
@@ -77,22 +31,20 @@ export const changeCart = mutation('stamp-list-insert-remove/change', {
 });
 
 const homeRoute = route('/', {
-  page: async (_context, request: KovoFixtureRequest) => {
-    const cart = await readCart(request.db);
-    return `${renderQueryScript({ name: 'cart', value: cart })}
-    <script type="module" src="/client.ts"></script>
+  page: () => (
     <main>
-      ${await renderCartList(request.db)}
-      <form method="post" action="/_m/stamp-list-insert-remove/change" enhance data-mutation="stamp-list-insert-remove/change" kovo-deps="cart">
+      {trustedHtml('<script type="module" src="/client.ts"></script>')}
+      <CartList />
+      <form mutation={changeCart} enhance>
         <input type="hidden" name="mode" value="insert" />
         <button type="submit">Insert item</button>
       </form>
-      <form method="post" action="/_m/stamp-list-insert-remove/change" enhance data-mutation="stamp-list-insert-remove/change" kovo-deps="cart">
+      <form mutation={changeCart} enhance>
         <input type="hidden" name="mode" value="remove" />
         <button type="submit">Remove item</button>
       </form>
-    </main>`;
-  },
+    </main>
+  ),
 });
 
 const app = createApp({
