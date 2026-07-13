@@ -700,13 +700,15 @@ export const guards = {
         }
 
         const maxKeys = rateOptions.maxKeys ?? defaultRateLimitMaxKeys;
-        while (witnessMapSize(counts) >= maxKeys) {
-          let oldest: string | undefined;
-          witnessMapForEach(counts, (_record, candidate) => {
-            if (oldest === undefined) oldest = candidate;
+        if (witnessMapSize(counts) >= maxKeys) {
+          // SPEC §9.5: an over-budget request MUST receive 429. Evicting an active key here
+          // reopened that key's window under attacker-controlled key churn. Refuse unseen keys
+          // until the earliest active window expires; never trade security truth for admission.
+          let earliestResetAt = now + windowMs;
+          witnessMapForEach(counts, (record) => {
+            if (record.resetAt < earliestResetAt) earliestResetAt = record.resetAt;
           });
-          if (oldest === undefined) break;
-          witnessMapDelete(counts, oldest);
+          return rateLimitFailure(earliestResetAt, now);
         }
 
         witnessMapSet(counts, key, {

@@ -194,7 +194,7 @@ describe('server mutation replay store', () => {
     ).toThrow(/status is not allowed/u);
   });
 
-  it('bounds memory mutation replay records by ttl and entry count', async () => {
+  it('fails closed at capacity and never forgets committed mutation replay truth', async () => {
     const replayStore = createMemoryMutationReplayStore({ maxEntries: 1, ttlMs: 5 });
     const first = {
       body: 'first',
@@ -208,16 +208,17 @@ describe('server mutation replay store', () => {
     } as const;
 
     replayStore.set('session-a', 'idem_01', first);
-    replayStore.set('session-a', 'idem_02', second);
-
-    expect(replayStore.get('session-a', 'idem_01')).toBeUndefined();
-    expect(replayStore.get('session-a', 'idem_02')).toEqual(second);
+    expect(() => replayStore.set('session-a', 'idem_02', second)).toThrow(/capacity|saturated/u);
+    expect(replayStore.reserve('session-a', 'idem_02')).toBeUndefined();
+    expect(replayStore.get('session-a', 'idem_01')).toEqual(first);
+    expect(replayStore.get('session-a', 'idem_02')).toBeUndefined();
 
     await new Promise((resolve) => setTimeout(resolve, 15));
-    expect(replayStore.get('session-a', 'idem_02')).toBeUndefined();
+    expect(replayStore.get('session-a', 'idem_01')).toEqual(first);
+    expect(replayStore.reserve('session-a', 'idem_02')).toBeUndefined();
   });
 
-  it('M7: pending reservations outlive ttl and committed ttl starts at commit', async () => {
+  it('M7: pending and committed replay truth outlive the legacy ttl hint', async () => {
     const replayStore = createMemoryMutationReplayStore({
       maxEntries: 1,
       maxPending: 1,
@@ -239,7 +240,8 @@ describe('server mutation replay store', () => {
     expect(replayStore.get('scope', 'idem', 'fingerprint')).toEqual(response);
 
     await new Promise((resolve) => setTimeout(resolve, 15));
-    expect(replayStore.get('scope', 'idem', 'fingerprint')).toBeUndefined();
+    expect(replayStore.get('scope', 'idem', 'fingerprint')).toEqual(response);
+    expect(replayStore.reserve('scope', 'other', 'fingerprint')).toBeUndefined();
   });
 
   it('M7: a superseded reservation commit is generation-fenced from newer truth', async () => {
@@ -1757,17 +1759,18 @@ describe('server mutation response replay', () => {
   });
 
   // A6 (SPEC §10.3:1063/1065): reserve() must never FIFO-evict in-flight pending
-  // reservations; a second reserve() for the same key must return undefined (already taken).
-  it('A6: does not evict in-flight pending reservations under maxEntries pressure', async () => {
+  // reservations; capacity refuses unseen work instead of reopening an occupied key.
+  it('A6: refuses unseen reservations at maxEntries without evicting pending truth', async () => {
     const replayStore = createMemoryMutationReplayStore({ maxEntries: 2 });
 
     // Reserve A (pending).
     const reservationA = replayStore.reserve('scope-a', 'idem_a');
     expect(reservationA).toBeDefined();
 
-    // Drive 2 more reserves to fill/overflow the store.
-    replayStore.reserve('scope-b', 'idem_b');
-    replayStore.reserve('scope-c', 'idem_c');
+    const reservationB = replayStore.reserve('scope-b', 'idem_b');
+    const reservationC = replayStore.reserve('scope-c', 'idem_c');
+    expect(reservationB).toBeDefined();
+    expect(reservationC).toBeUndefined();
 
     // A must still be present (not evicted) — get() returns a Promise (the pending record).
     const getA = replayStore.get('scope-a', 'idem_a');
@@ -1837,21 +1840,46 @@ describe('server mutation response replay', () => {
     expect(response.body).toContain('data-error-code="RATE_LIMITED"');
   });
 
-  // E4: maxPending defaults must NOT regress the A6 maxEntries-pressure scenario (3 pending
-  // under maxEntries:2 all coexist). The default pending cap is generous enough that the
-  // documented A6 behavior is unchanged when no maxPending is configured.
-  it('E4: default maxPending leaves the A6 maxEntries scenario unchanged', () => {
+  it('fails closed before execution when retained replay truth fills maxEntries', async () => {
+    const replayStore = createMemoryMutationReplayStore({ maxEntries: 1 });
+    const retained = { body: 'retained', headers: {}, status: 200 } as const;
+    replayStore.set('retained-scope', 'retained-idem', retained);
+    let writes = 0;
+    const addToCart = mutation('cart/capacity', {
+      input: s.object({ productId: s.string() }),
+      handler(input) {
+        writes += 1;
+        return input;
+      },
+    });
+
+    const response = await renderMutationResponse(addToCart, {
+      idem: 'new-idem',
+      rawInput: { productId: 'p1' },
+      replayStore,
+      request: { sessionId: 's1' },
+      targets: ['cart-form'],
+    });
+
+    expect(writes).toBe(0);
+    expect(response.status).toBe(429);
+    expect(response.headers['Retry-After']).toBe('1');
+    expect(response.body).toContain('data-error-code="RATE_LIMITED"');
+    expect(replayStore.get('retained-scope', 'retained-idem')).toEqual(retained);
+  });
+
+  // E4: the pending bound is additional defense-in-depth; it must never let pending records
+  // bypass the total maxEntries admission cap.
+  it('E4: default maxPending cannot bypass the total maxEntries admission cap', () => {
     const replayStore = createMemoryMutationReplayStore({ maxEntries: 2 });
     expect(replayStore.reserve('scope-a', 'idem_a')).toBeDefined();
     expect(replayStore.reserve('scope-b', 'idem_b')).toBeDefined();
-    // Third pending under maxEntries:2 must still succeed (no eviction, no premature cap).
-    expect(replayStore.reserve('scope-c', 'idem_c')).toBeDefined();
+    expect(replayStore.reserve('scope-c', 'idem_c')).toBeUndefined();
   });
 
-  // M7/K3 (SPEC §10.3): capacity applies to settled truth only. set() must never evict an
-  // in-flight reservation or force its duplicate to run again; the waiter remains joined until
-  // the original owner commits/aborts, while committed state remains maxEntries-bounded.
-  it('M7: set() capacity never evicts an in-flight record or strands its waiter', async () => {
+  // M7/K3 (SPEC §10.3): direct set() at capacity must fail before it can evict an in-flight
+  // reservation or strand a waiter. The admitted owner can still commit in place.
+  it('M7: set() fails closed at capacity without evicting or stranding pending truth', async () => {
     const replayStore = createMemoryMutationReplayStore({ maxEntries: 1 });
 
     const reservationA = replayStore.reserve('scope', 'idem_a');
@@ -1859,14 +1887,15 @@ describe('server mutation response replay', () => {
     const joined = replayStore.get('scope', 'idem_a');
     expect(joined).toBeInstanceOf(Promise);
 
-    replayStore.set('scope', 'idem_b', { body: 'b', headers: {}, status: 200 });
+    expect(() =>
+      replayStore.set('scope', 'idem_b', { body: 'b', headers: {}, status: 200 }),
+    ).toThrow(/capacity|saturated/u);
     expect(replayStore.reserve('scope', 'idem_a')).toBeUndefined();
 
     const settledA = { body: 'a', headers: {}, status: 200 } as const;
     reservationA!.commit(settledA);
     await expect(joined).resolves.toEqual(settledA);
     expect(replayStore.get('scope', 'idem_a')).toEqual(settledA);
-    // A committed after B, so FIFO committed capacity retains A and evicts B.
     expect(replayStore.get('scope', 'idem_b')).toBeUndefined();
   });
 });

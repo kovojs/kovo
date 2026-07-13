@@ -379,7 +379,7 @@ describe('capability-url: one-time tokens via a replay store', () => {
   });
 
   it('two one-time tokens for the same key are independent (distinct nonces)', async () => {
-    const store = createMemoryCapabilityReplayStore();
+    const store = createMemoryCapabilityReplayStore({ now: () => 1 });
     const t1 = await signCapability(SECRET, { key: 'a.pdf', oneTime: true }, 0);
     const t2 = await signCapability(SECRET, { key: 'a.pdf', oneTime: true }, 0);
     expect(t1.token).not.toBe(t2.token);
@@ -397,6 +397,41 @@ describe('capability-url: one-time tokens via a replay store', () => {
     );
     expect(r1.ok).toBe(true);
     expect(r2.ok).toBe(true);
+  });
+
+  it('fails closed at active replay capacity without reopening a consumed nonce', () => {
+    let now = 1;
+    const store = createMemoryCapabilityReplayStore({ maxEntries: 2, now: () => now });
+
+    expect(store.consume('nonce-a', 100)).toBe(true);
+    expect(store.consume('nonce-b', 100)).toBe(true);
+    for (let index = 0; index < 1_000; index += 1) {
+      expect(store.consume(`churn-${index}`, 100)).toBe(false);
+      expect(store.size()).toBe(2);
+    }
+    expect(store.consume('nonce-a', 100)).toBe(false);
+
+    now = 100;
+    expect(store.consume('nonce-c', 200)).toBe(true);
+    expect(store.size()).toBe(1);
+  });
+
+  it('rejects invalid replay-store capacity without invoking accessors', () => {
+    expect(() => createMemoryCapabilityReplayStore({ maxEntries: -1 })).toThrow(
+      /maxEntries.*non-negative integer/u,
+    );
+
+    let getterCalls = 0;
+    const accessor = {} as { maxEntries?: number };
+    Object.defineProperty(accessor, 'maxEntries', {
+      configurable: true,
+      get() {
+        getterCalls += 1;
+        return 1;
+      },
+    });
+    expect(() => createMemoryCapabilityReplayStore(accessor)).toThrow();
+    expect(getterCalls).toBe(0);
   });
 
   it('keeps one-time nonce entropy pinned after a late RNG method override', async () => {

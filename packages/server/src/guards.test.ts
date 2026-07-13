@@ -1026,7 +1026,7 @@ describe('server guard and session primitives', () => {
     expect(guard({ session: { user: { id: 'u2' } } })).toBe(true);
   });
 
-  it('evicts oldest rate-limit keys when the key cap is reached', async () => {
+  it('fails closed at the rate-limit key cap without reopening an active window', async () => {
     interface TenantRequest {
       session?: { id?: string };
       tenant: string;
@@ -1051,12 +1051,16 @@ describe('server guard and session primitives', () => {
       { ok: true },
     );
     await expect(runMutation(guarded, { productId: 'p1' }, { tenant: 'c' })).resolves.toMatchObject(
-      { ok: true },
+      {
+        error: { code: 'RATE_LIMITED' },
+        ok: false,
+        status: 429,
+      },
     );
     await expect(runMutation(guarded, { productId: 'p1' }, { tenant: 'a' })).resolves.toMatchObject(
-      { ok: true },
+      { error: { code: 'RATE_LIMITED' }, ok: false, status: 429 },
     );
-    await expect(runMutation(guarded, { productId: 'p1' }, { tenant: 'c' })).resolves.toMatchObject(
+    await expect(runMutation(guarded, { productId: 'p1' }, { tenant: 'b' })).resolves.toMatchObject(
       { error: { code: 'RATE_LIMITED' }, ok: false, status: 429 },
     );
   });

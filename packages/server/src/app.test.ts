@@ -2430,7 +2430,7 @@ describe('server createApp request shell', () => {
     expect((await handler(request('198.51.100.12, 203.0.113.100'))).status).toBe(303);
   });
 
-  it('bounds app request-limit key cardinality under churn while preserving active retry-after', async () => {
+  it('fails closed under app request-limit key churn without evicting active windows', async () => {
     const addToCart = mutation('cart/bounded-rate-keys', {
       csrf: false,
       input: s.object({}),
@@ -2455,19 +2455,22 @@ describe('server createApp request shell', () => {
         method: 'POST',
       });
 
-    for (let index = 0; index < 2_048; index += 1) {
+    for (let index = 0; index < 8; index += 1) {
       expect((await handler(request(index))).status).toBe(303);
-      expect(appRateLimitKeyCounts(app).perIp).toBeLessThanOrEqual(8);
+      expect(appRateLimitKeyCounts(app).perIp).toBe(index + 1);
     }
 
-    const activeLimited = await handler(request(2_047));
-    expect(activeLimited.status).toBe(429);
-    expect(activeLimited.headers.get('retry-after')).toBe('60');
-    expect(appRateLimitKeyCounts(app).perIp).toBeLessThanOrEqual(8);
+    for (let index = 8; index < 2_048; index += 1) {
+      const saturated = await handler(request(index));
+      expect(saturated.status).toBe(429);
+      expect(saturated.headers.get('retry-after')).toBe('60');
+      expect(appRateLimitKeyCounts(app).perIp).toBe(8);
+    }
 
-    const evictedOldest = await handler(request(0));
-    expect(evictedOldest.status).toBe(303);
-    expect(appRateLimitKeyCounts(app).perIp).toBeLessThanOrEqual(8);
+    const activeOldest = await handler(request(0));
+    expect(activeOldest.status).toBe(429);
+    expect(activeOldest.headers.get('retry-after')).toBe('60');
+    expect(appRateLimitKeyCounts(app).perIp).toBe(8);
   });
 
   it("does not let one rate-limit check evict another check's window", async () => {

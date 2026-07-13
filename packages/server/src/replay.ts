@@ -20,9 +20,9 @@ import {
   witnessIsArray,
   witnessJsonStringifyPrimitive,
   witnessMapDelete,
-  witnessMapForEach,
   witnessMapGet,
   witnessMapSet,
+  witnessMapSize,
   witnessObjectIs,
   witnessObjectKeys,
   witnessReflectApply,
@@ -33,8 +33,6 @@ import {
   requestStateExactCompositeKey,
   requestStateIgnorePromiseRejection,
   requestStateIsSafeInteger,
-  requestStateMax,
-  requestStateNow,
   requestStatePromiseThen,
 } from './request-state-intrinsics.js';
 
@@ -209,7 +207,7 @@ export interface ReplayReservationRequest<Response, Reservation> {
 }
 
 export interface MutationReplayStoreOptions {
-  /** Maximum number of settled responses retained independently from in-flight reservations. */
+  /** Maximum total number of retained pending or committed replay keys. */
   maxEntries?: number;
   /**
    * E4 (SPEC §9.1:1073 atomic reservation; §9.5:914 pre-dispatch shed): a separate
@@ -222,10 +220,14 @@ export interface MutationReplayStoreOptions {
    * unbounded pending records. When the number of pending reservations is at this cap,
    * `reserve()` REFUSES a new reservation (callers fail closed) rather than EVICTING an
    * existing pending slot (which would re-open A6/M4).
-   * Defaults to `maxEntries` so the documented A6 maxEntries-pressure behavior is unchanged.
+   * Defaults to `maxEntries`; the total `maxEntries` admission bound always applies first.
    */
   maxPending?: number;
-  /** Time-to-live for a committed response, measured from commit/set (pending work never expires). */
+  /**
+   * @deprecated Accepted as a validated legacy retention hint but intentionally ignored.
+   * SPEC §10.3 requires every sequential duplicate to replay and never re-execute, so an
+   * in-memory store cannot expire committed truth without weakening the idempotency contract.
+   */
   ttlMs?: number;
 }
 
@@ -234,9 +236,9 @@ type CsrfReplayScope<Request> =
   | Pick<CsrfOptions<Request>, 'anonymousCookie' | 'field' | 'sessionId'>;
 
 /**
- * Build the default in-memory {@link MutationReplayStore} (SPEC §9.1): settled responses are
- * bounded by `maxEntries` with a post-commit `ttlMs`; in-flight work is independently bounded by
- * `maxPending` and never expires or gets evicted before commit/abort.
+ * Build the default in-memory {@link MutationReplayStore} (SPEC §9.1/§10.3): admitted replay keys
+ * are bounded by `maxEntries`, committed truth is never evicted or expired, and unseen work is
+ * refused at capacity so callers fail closed before running the handler.
  */
 export function createMemoryMutationReplayStore<
   Response extends MutationReplayResponse = MutationReplayResponse,
@@ -248,57 +250,20 @@ export function createMemoryMutationReplayStore<
   const configuredMaxPending = stableMutationReplayOption(options, 'maxPending');
   const configuredTtlMs = stableMutationReplayOption(options, 'ttlMs');
   const maxEntries = configuredMaxEntries ?? 1_000;
-  // E4 (SPEC §9.1:1073/§9.5:914): bound in-flight pending reservations independently of
-  // `maxEntries` to cap peak memory under a concurrent-flood DoS. The default is a generous
-  // absolute bound (`max(maxEntries, 256)`) rather than `maxEntries` itself, so it never
-  // throttles legitimate concurrency under a deliberately tiny `maxEntries` (e.g. the A6
-  // maxEntries-pressure scenario, where several pending records must coexist under
-  // `maxEntries:2`) while still bounding the default-config peak to `maxEntries` (1000).
-  const maxPending = configuredMaxPending ?? requestStateMax(maxEntries, 256);
+  const maxPending = configuredMaxPending ?? maxEntries;
   const ttlMs = configuredTtlMs ?? 5 * 60_000;
   assertMutationReplayStoreOptions({ maxEntries, maxPending, ttlMs });
   const responses = createWitnessMap<string, MutationReplayRecord<Response>>();
 
-  // SPEC §10.3 (M7): pending and committed state have independent bounds/lifetimes. Pending
-  // reservations never expire or get capacity-evicted; maxPending keeps that state bounded.
-  // Committed responses start ttlMs at commit/set and maxEntries bounds only settled truth.
+  // SPEC §10.3: the map itself is the retained idempotency truth. Pending reservations may abort,
+  // but committed responses never disappear; maxEntries sheds unseen work before execution.
   let pendingCount = 0;
-  let committedCount = 0;
-
-  function evictExpiredCommitted(): void {
-    const now = requestStateNow();
-    witnessMapForEach(responses, (record, key) => {
-      if (record.kind === 'committed' && record.expiresAt <= now) {
-        witnessMapDelete(responses, key);
-        committedCount -= 1;
-      }
-    });
-  }
-
-  function evictCommittedOverCapacity(): void {
-    while (committedCount > maxEntries) {
-      let oldestCommitted: string | undefined;
-      witnessMapForEach(responses, (record, key) => {
-        if (oldestCommitted === undefined && record.kind === 'committed') {
-          oldestCommitted = key;
-        }
-      });
-      if (oldestCommitted === undefined) return;
-      witnessMapDelete(responses, oldestCommitted);
-      committedCount -= 1;
-    }
-  }
 
   return {
     get(scope, idem, fingerprint) {
       const key = mutationReplayKey(scope, idem);
       const record = witnessMapGet(responses, key);
       if (!record) return undefined;
-      if (record.kind === 'committed' && record.expiresAt <= requestStateNow()) {
-        witnessMapDelete(responses, key);
-        committedCount -= 1;
-        return undefined;
-      }
 
       if (!fingerprintsMatch(record.fingerprint, fingerprint)) {
         throw new MutationReplayConflictError();
@@ -311,7 +276,6 @@ export function createMemoryMutationReplayStore<
       return cloneMutationReplayResponse(record.response);
     },
     reserve(scope, idem, fingerprint) {
-      evictExpiredCommitted();
       const key = mutationReplayKey(scope, idem);
       const existing = witnessMapGet(responses, key);
       if (existing) {
@@ -321,11 +285,9 @@ export function createMemoryMutationReplayStore<
         return undefined;
       }
 
-      // E4 (SPEC §9.1:1073 atomic reservation; §9.5:914 pre-dispatch shed): when pending
-      // reservations are at `maxPending`, REFUSE a new one so callers can fail closed rather
-      // than allocating without bound. Must REFUSE, never EVICT a pending slot — evicting one
-      // re-opens the part-2 A6/M4 double-execute hazard.
-      if (pendingCount >= maxPending) return undefined;
+      // SPEC §10.3: refuse, never evict. `reserveReplayBeforeRun` translates an unavailable
+      // reservation with no existing value into the framework's fail-closed 429 response.
+      if (witnessMapSize(responses) >= maxEntries || pendingCount >= maxPending) return undefined;
 
       let resolvePending: (response: Response) => void = () => undefined;
       let rejectPending: (reason?: unknown) => void = () => undefined;
@@ -378,46 +340,34 @@ export function createMemoryMutationReplayStore<
           }
           const cloned = cloneMutationReplayResponse(response);
           pendingCount -= 1;
-          committedCount += 1;
-          // Delete/reinsert so FIFO capacity order reflects commit time, not reservation time.
-          witnessMapDelete(responses, key);
           witnessMapSet(responses, key, {
-            expiresAt: requestStateNow() + ttlMs,
             fingerprint,
             kind: 'committed',
             response: cloned,
           });
           resolvePending(cloned);
-          evictCommittedOverCapacity();
         },
       };
     },
     set(scope, idem, response, fingerprint) {
-      evictExpiredCommitted();
       const key = mutationReplayKey(scope, idem);
       const existing = witnessMapGet(responses, key);
       if (existing && !fingerprintsMatch(existing.fingerprint, fingerprint)) {
         throw new MutationReplayConflictError();
       }
+      if (existing === undefined && witnessMapSize(responses) >= maxEntries) {
+        throw new Error('Mutation replay store is saturated; cannot admit a new idempotency key.');
+      }
       const cloned = cloneMutationReplayResponse(response);
       if (existing?.kind === 'pending') {
         pendingCount -= 1;
-        committedCount += 1;
-      } else if (!existing) {
-        committedCount += 1;
       }
-      // Refresh insertion order/TTL for an existing committed record too.
-      witnessMapDelete(responses, key);
       witnessMapSet(responses, key, {
-        expiresAt: requestStateNow() + ttlMs,
         fingerprint,
         kind: 'committed',
         response: cloned,
       });
       if (existing?.kind === 'pending') existing.resolve(cloned);
-      // Capacity eviction is committed-only. Pending records stay joined until their owner
-      // explicitly commits/aborts; total state remains bounded by maxEntries + maxPending.
-      evictCommittedOverCapacity();
     },
   };
 }
@@ -691,7 +641,6 @@ export async function commitReservedMutationReplay<Response extends MutationRepl
 
 type MutationReplayRecord<Response extends MutationReplayResponse> =
   | {
-      expiresAt: number;
       fingerprint: string | undefined;
       kind: 'committed';
       response: Response;

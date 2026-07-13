@@ -226,30 +226,38 @@ describe('server webhook primitive', () => {
     expect(store.get('webhook', 'event\0tail')).toBe(second);
   });
 
-  it('bounds committed and pending webhook replay state and expires only committed truth', async () => {
-    const store = createPublicMemoryWebhookReplayStore({
+  it('fails closed at capacity and never forgets committed webhook replay truth', async () => {
+    const committedStore = createPublicMemoryWebhookReplayStore({
       maxEntries: 1,
       maxPending: 1,
       ttlMs: 5,
     });
     const first: WebhookWireResponse = { body: 'first', headers: {}, status: 200 };
     const second: WebhookWireResponse = { body: 'second', headers: {}, status: 200 };
-    store.set('scope', 'first', first);
-    store.set('scope', 'second', second);
-    expect(store.get('scope', 'first')).toBeUndefined();
-    expect(store.get('scope', 'second')).toBe(second);
+    committedStore.set('scope', 'first', first);
+    expect(() => committedStore.set('scope', 'second', second)).toThrow(/capacity|saturated/u);
+    expect(committedStore.reserve('scope', 'second')).toBeUndefined();
+    expect(committedStore.get('scope', 'first')).toBe(first);
 
-    const pending = store.reserve('scope', 'pending');
-    expect(pending).toBeDefined();
-    expect(store.reserve('scope', 'other-pending')).toBeUndefined();
     await new Promise((resolve) => setTimeout(resolve, 15));
-    expect(store.reserve('scope', 'other-pending')).toBeUndefined();
+    expect(committedStore.get('scope', 'first')).toBe(first);
+    expect(committedStore.reserve('scope', 'second')).toBeUndefined();
+
+    const pendingStore = createPublicMemoryWebhookReplayStore({
+      maxEntries: 1,
+      maxPending: 1,
+      ttlMs: 5,
+    });
+    const pending = pendingStore.reserve('scope', 'pending');
+    expect(pending).toBeDefined();
+    expect(pendingStore.reserve('scope', 'other-pending')).toBeUndefined();
+    await new Promise((resolve) => setTimeout(resolve, 15));
+    expect(pendingStore.reserve('scope', 'other-pending')).toBeUndefined();
     pending?.abort?.();
 
-    const replacement = store.reserve('scope', 'other-pending');
+    const replacement = pendingStore.reserve('scope', 'other-pending');
     expect(replacement).toBeDefined();
     replacement?.abort?.();
-    expect(store.get('scope', 'second')).toBeUndefined();
   });
 
   it('rejects unsafe webhook replay capacity and ttl values', () => {
@@ -1641,6 +1649,37 @@ describe('server webhook primitive', () => {
     expect(resultC.response.status).toBe(200);
     expect(enteredTotal).toBe(1);
     expect(sideEffects).toBe(1);
+  });
+
+  it('fails closed before webhook execution when retained replay truth fills capacity', async () => {
+    const replayStore = createPublicMemoryWebhookReplayStore({ maxEntries: 1 });
+    const retained: WebhookWireResponse = { body: 'retained', headers: {}, status: 200 };
+    replayStore.set('retained-scope', 'retained-event', retained);
+    let handlerCalls = 0;
+    const wh = webhook('/webhooks/capacity', {
+      handler() {
+        handlerCalls += 1;
+        return { ok: true };
+      },
+      idempotency: (input) => input.id,
+      input: s.object({ id: s.string() }),
+      replayStore,
+      verify: 'none',
+      verifyJustification: 'fixture-only webhook test',
+    });
+
+    const result = await runWebhook(
+      wh,
+      new Request('https://example.test/webhooks/capacity', {
+        body: JSON.stringify({ id: 'new-event' }),
+        method: 'POST',
+      }),
+    );
+
+    expect(handlerCalls).toBe(0);
+    expect(result.response.status).toBe(429);
+    expect(result.response.headers.get('retry-after')).toBe('1');
+    expect(replayStore.get('retained-scope', 'retained-event')).toBe(retained);
   });
 
   // A4 (SPEC §9.1:850): an unexpected handler exception must abort the reservation so

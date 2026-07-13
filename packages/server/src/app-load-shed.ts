@@ -476,26 +476,34 @@ function consumeRateLimit(
   evictExpiredRateBuckets(store, limit, now);
 
   const existing = witnessMapGet(store, key);
-  const bucket = existing === undefined ? { count: 0, windowStart: now } : existing;
-  bucket.count += 1;
   if (existing === undefined) {
-    while (witnessMapSize(store) >= limit.maxKeys) {
-      let oldest: string | undefined;
-      witnessMapForEach(store, (_bucket, candidate) => {
-        if (oldest === undefined) oldest = candidate;
+    if (witnessMapSize(store) >= limit.maxKeys) {
+      // SPEC §9.5 requires over-budget requests to fail closed. An attacker must not be able to
+      // rotate source keys to evict an active bucket and reopen its request budget.
+      let earliestResetAt = now + limit.windowMs;
+      witnessMapForEach(store, (bucket) => {
+        const resetAt = bucket.windowStart + limit.windowMs;
+        if (resetAt < earliestResetAt) earliestResetAt = resetAt;
       });
-      if (oldest === undefined) break;
-      witnessMapDelete(store, oldest);
+      return {
+        retryAfterSeconds: requestStateRetryAfterSeconds(earliestResetAt - now),
+      };
     }
-  } else {
-    witnessMapDelete(store, key);
+    const bucket = { count: 1, windowStart: now };
+    witnessMapSet(store, key, bucket);
+    return bucket.count <= limit.max
+      ? undefined
+      : {
+          retryAfterSeconds: requestStateRetryAfterSeconds(limit.windowMs),
+        };
   }
-  witnessMapSet(store, key, bucket);
 
-  if (bucket.count <= limit.max) return undefined;
+  existing.count += 1;
+
+  if (existing.count <= limit.max) return undefined;
 
   return {
-    retryAfterSeconds: requestStateRetryAfterSeconds(bucket.windowStart + limit.windowMs - now),
+    retryAfterSeconds: requestStateRetryAfterSeconds(existing.windowStart + limit.windowMs - now),
   };
 }
 

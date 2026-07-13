@@ -59,6 +59,7 @@ import { signingKeyRingFromSecret, type SigningSecret } from './keyring.js';
 const TOKEN_VERSION = 'v2';
 const CAPABILITY_SIGNING_PURPOSE = 'capability-url';
 const DEFAULT_CAPABILITY_AUDIENCE = 'storage-download';
+const DEFAULT_CAPABILITY_REPLAY_MAX_ENTRIES = 10_000;
 
 /** HTTP method a capability token authorizes. Downloads are reads; we model GET/HEAD. */
 export type CapabilityMethod = 'GET' | 'HEAD';
@@ -123,21 +124,27 @@ export interface CapabilityReplayStore {
 }
 
 /**
- * In-memory one-time replay store with TTL eviction. Suitable for single-process apps and tests;
- * a multi-process deployment injects a shared store (Redis &c.) with the same contract.
+ * Bounded in-memory one-time replay store with signed-expiry eviction. Suitable for single-process
+ * apps and tests; a multi-process deployment injects a shared store (Redis &c.) with the same
+ * contract. At full active capacity, consume() fails closed instead of evicting an unexpired nonce.
  */
 export function createMemoryCapabilityReplayStore(
-  options: { now?: () => number } = {},
+  options: { maxEntries?: number; now?: () => number } = {},
 ): CapabilityReplayStore & {
   size(): number;
 } {
   const consumed = createCapabilityMap<string, number>();
+  const configuredMaxEntries = capabilityOwnDataValue(options, 'maxEntries');
   const configuredNow = capabilityOwnDataValue(options, 'now');
+  const maxEntries = configuredMaxEntries ?? DEFAULT_CAPABILITY_REPLAY_MAX_ENTRIES;
+  if (typeof maxEntries !== 'number' || !capabilityIsSafeInteger(maxEntries) || maxEntries < 0) {
+    throw capabilityTypeError('Capability replay-store maxEntries must be a non-negative integer.');
+  }
   if (configuredNow !== undefined && typeof configuredNow !== 'function') {
     throw capabilityTypeError('Capability replay-store now must be a function.');
   }
   const now = configuredNow ?? capabilityNow;
-  const evict = (): void => {
+  const evict = (): number => {
     const current = capabilityReflectApply<number>(now, undefined, []);
     if (!isValidClock(current)) {
       throw capabilityTypeError(
@@ -149,11 +156,22 @@ export function createMemoryCapabilityReplayStore(
       const entry = entries[index]!;
       if (entry[1] <= current) capabilityMapDelete(consumed, entry[0]);
     }
+    return current;
   };
   return capabilityFreeze({
     consume(id: string, expiresAt: number): boolean {
-      evict();
+      const current = evict();
       if (capabilityMapHas(consumed, id)) return false;
+      if (
+        typeof id !== 'string' ||
+        id.length === 0 ||
+        typeof expiresAt !== 'number' ||
+        !capabilityIsSafeInteger(expiresAt) ||
+        expiresAt <= current ||
+        capabilityMapSize(consumed) >= maxEntries
+      ) {
+        return false;
+      }
       // Hold the replay id only until the signed token expiry. After that, the expiry check rejects
       // the token before replay lookup, so retaining the id no longer buys security.
       capabilityMapSet(consumed, id, expiresAt);

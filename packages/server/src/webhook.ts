@@ -51,8 +51,6 @@ import {
   requestStateExactCompositeKey,
   requestStateIgnorePromiseRejection,
   requestStateIsSafeInteger,
-  requestStateMax,
-  requestStateNow,
 } from './request-state-intrinsics.js';
 import {
   createWitnessMap,
@@ -64,9 +62,9 @@ import {
   witnessGetPrototypeOf,
   witnessIsArray,
   witnessMapDelete,
-  witnessMapForEach,
   witnessMapGet,
   witnessMapSet,
+  witnessMapSize,
   witnessObjectIs,
   witnessReflectApply,
   witnessReflectGet,
@@ -366,53 +364,26 @@ export function createMemoryWebhookReplayStore(
   const configuredMaxPending = webhookReplayNumberOption(options, 'maxPending');
   const configuredTtlMs = webhookReplayNumberOption(options, 'ttlMs');
   const maxEntries = configuredMaxEntries ?? 1_000;
-  const maxPending = configuredMaxPending ?? requestStateMax(maxEntries, 256);
+  const maxPending = configuredMaxPending ?? maxEntries;
   const ttlMs = configuredTtlMs ?? 5 * 60_000;
   assertWebhookReplayStoreOptions({ maxEntries, maxPending, ttlMs });
   const responses = createWitnessMap<string, WebhookReplayRecord>();
-  let committedCount = 0;
   let pendingCount = 0;
-
-  function evictExpiredCommitted(): void {
-    const now = requestStateNow();
-    witnessMapForEach(responses, (record, key) => {
-      if (record.kind === 'committed' && record.expiresAt <= now) {
-        witnessMapDelete(responses, key);
-        committedCount -= 1;
-      }
-    });
-  }
-
-  function evictCommittedOverCapacity(): void {
-    while (committedCount > maxEntries) {
-      let oldestCommitted: string | undefined;
-      witnessMapForEach(responses, (record, key) => {
-        if (oldestCommitted === undefined && record.kind === 'committed') oldestCommitted = key;
-      });
-      if (oldestCommitted === undefined) return;
-      witnessMapDelete(responses, oldestCommitted);
-      committedCount -= 1;
-    }
-  }
 
   return {
     get(scope, idem) {
       const key = webhookReplayKey(scope, idem);
       const record = witnessMapGet(responses, key);
       if (record === undefined) return undefined;
-      if (record.kind === 'committed' && record.expiresAt <= requestStateNow()) {
-        witnessMapDelete(responses, key);
-        committedCount -= 1;
-        return undefined;
-      }
       if (record.kind === 'pending') return record.pending;
       return record.response;
     },
     reserve(scope, idem) {
-      evictExpiredCommitted();
       const key = webhookReplayKey(scope, idem);
       if (witnessMapGet(responses, key) !== undefined) return undefined;
-      if (pendingCount >= maxPending) return undefined;
+      // SPEC §10.3 requires every duplicate to replay, so capacity may refuse unseen work but
+      // must never evict an existing pending or committed event id.
+      if (witnessMapSize(responses) >= maxEntries || pendingCount >= maxPending) return undefined;
 
       let resolvePending: (response: WebhookWireResponse) => void = () => undefined;
       let rejectPending: (reason?: unknown) => void = () => undefined;
@@ -456,36 +427,28 @@ export function createMemoryWebhookReplayStore(
             return;
           }
           pendingCount -= 1;
-          committedCount += 1;
-          witnessMapDelete(responses, key);
           witnessMapSet(responses, key, {
-            expiresAt: requestStateNow() + ttlMs,
             kind: 'committed',
             response,
           });
           resolvePending(response);
-          evictCommittedOverCapacity();
         },
       };
     },
     set(scope, idem, response) {
-      evictExpiredCommitted();
       const key = webhookReplayKey(scope, idem);
       const existing = witnessMapGet(responses, key);
+      if (existing === undefined && witnessMapSize(responses) >= maxEntries) {
+        throw new Error('Webhook replay store is saturated; cannot admit a new event id.');
+      }
       if (existing?.kind === 'pending') {
         pendingCount -= 1;
-        committedCount += 1;
-      } else if (existing === undefined) {
-        committedCount += 1;
       }
-      witnessMapDelete(responses, key);
       witnessMapSet(responses, key, {
-        expiresAt: requestStateNow() + ttlMs,
         kind: 'committed',
         response,
       });
       if (existing?.kind === 'pending') existing.resolve(response);
-      evictCommittedOverCapacity();
     },
   };
 }
@@ -507,7 +470,7 @@ function webhookReplayNumberOption(
 }
 
 type WebhookReplayRecord =
-  | { expiresAt: number; kind: 'committed'; response: WebhookWireResponse }
+  | { kind: 'committed'; response: WebhookWireResponse }
   | {
       generation: object;
       kind: 'pending';
