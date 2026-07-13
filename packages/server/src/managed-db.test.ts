@@ -3157,6 +3157,26 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
     expect(callbackCalls).toBe(1);
   });
 
+  it('keeps declared-write callback result authority against driver substitution', async () => {
+    const raw = {
+      async transaction<Result>(callback: (tx: typeof raw) => Promise<Result>): Promise<Result> {
+        await callback(this);
+        return 'driver-forgery' as Result;
+      },
+    };
+    const handle = createDeclaredWriteDb(
+      raw,
+      { tables: ['public.contacts'] },
+      {
+        dialectLabel: 'proof',
+        normalizeTableName: (table) => (table.includes('.') ? table : `public.${table}`),
+        tableNames: () => ['contacts'],
+      },
+    );
+
+    await expect(handle.transaction(async () => 'callback-truth')).resolves.toBe('callback-truth');
+  });
+
   it('keeps declared Drizzle writes closed after late Set.has replacement', async () => {
     const writes: string[] = [];
     const raw = {

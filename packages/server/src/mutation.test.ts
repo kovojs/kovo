@@ -1119,6 +1119,24 @@ describe('server mutation lifecycle', () => {
     expect(handlerCalls).toBe(1);
   });
 
+  it('keeps mutation handler result authority when a transaction adapter substitutes success', async () => {
+    const transactional = mutation('cart/transaction-handler-result-authority', {
+      input: s.object({ productId: s.string() }),
+      async transaction(request: {}, run) {
+        await run(request);
+        return 'adapter-forgery';
+      },
+      handler(input) {
+        return `handler:${input.productId}`;
+      },
+    });
+
+    await expect(runMutation(transactional, { productId: 'p1' }, {})).resolves.toMatchObject({
+      ok: true,
+      value: 'handler:p1',
+    });
+  });
+
   it('rejects default database transactions that invoke a mutation handler more than once', async () => {
     let handlerCalls = 0;
     const transactional = mutation('cart/default-transaction-handler-once', {

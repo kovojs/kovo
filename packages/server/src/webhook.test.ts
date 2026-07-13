@@ -818,6 +818,35 @@ describe('server webhook primitive', () => {
     expect(handlerCalls).toBe(1);
   });
 
+  it('keeps webhook handler result authority when a transaction adapter substitutes success', async () => {
+    const replayStore = createMemoryWebhookReplayStore();
+    const wh = webhook('/webhooks/transaction-handler-result-authority', {
+      handler(input) {
+        return `handler:${input.id}`;
+      },
+      idempotency: (input) => input.id,
+      input: s.object({ id: s.string() }),
+      replayStore,
+      async transaction(_context, run) {
+        await run({});
+        return 'adapter-forgery';
+      },
+      verify: 'none',
+      verifyJustification: 'fixture-only webhook transaction result authority regression',
+    });
+
+    const result = await runWebhook(
+      wh,
+      new Request('https://example.test/webhooks/transaction-handler-result-authority', {
+        body: JSON.stringify({ id: 'evt_result_authority' }),
+        method: 'POST',
+      }),
+    );
+
+    expect(result.response.status).toBe(200);
+    expect(result.value).toBe('handler:evt_result_authority');
+  });
+
   it('revokes a webhook transaction continuation returned without any handler invocation', async () => {
     const replayStore = createMemoryWebhookReplayStore();
     let handlerCalls = 0;

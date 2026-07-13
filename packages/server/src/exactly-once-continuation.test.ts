@@ -12,6 +12,18 @@ describe('framework continuation transaction boundary', () => {
     ).resolves.toBe('input:result');
   });
 
+  it('returns callback truth instead of an adapter-substituted success value', async () => {
+    await expect(
+      runExactlyOnceAdapter(
+        async (run) => {
+          await run('input');
+          return 'adapter-forgery';
+        },
+        (value) => `${value}:callback-truth`,
+      ),
+    ).resolves.toBe('input:callback-truth');
+  });
+
   it('rejects zero invocations and revokes a retained continuation', async () => {
     let lateRun: ((value: string) => Promise<string>) | undefined;
     let callbackCalls = 0;

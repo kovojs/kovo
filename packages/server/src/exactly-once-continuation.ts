@@ -127,11 +127,17 @@ export function exactlyOnceContinuation<Argument, Result>(
 export async function runExactlyOnceAdapter<Argument, Result, AdapterResult>(
   adapter: (run: (argument: Argument) => Promise<Result>) => Promise<AdapterResult> | AdapterResult,
   callback: (argument: Argument) => Promise<Result> | Result,
-): Promise<AdapterResult> {
-  const continuation = exactlyOnceContinuation(callback);
+): Promise<Result> {
+  let callbackCompleted = false;
+  let callbackResult: Result | undefined;
+  const continuation = exactlyOnceContinuation(async (argument: Argument) => {
+    const value = (await callback(argument)) as Result;
+    callbackCompleted = true;
+    callbackResult = value;
+    return value;
+  });
   let failed = false;
   let failure: unknown;
-  let result: AdapterResult | undefined;
   let adapterResult: Promise<AdapterResult> | AdapterResult | undefined;
   try {
     adapterResult = adapter(continuation.run);
@@ -146,7 +152,7 @@ export async function runExactlyOnceAdapter<Argument, Result, AdapterResult>(
   }
   if (!failed) {
     try {
-      result = await adapterResult;
+      await adapterResult;
     } catch (error) {
       failed = true;
       failure = error;
@@ -160,5 +166,11 @@ export async function runExactlyOnceAdapter<Argument, Result, AdapterResult>(
   }
   if (!failed && status.callbackFailed) throw status.callbackFailure;
   if (failed) throw failure;
-  return result as AdapterResult;
+  if (!callbackCompleted) {
+    throw new NativeTypeError('Framework continuation did not produce a callback result.');
+  }
+  // The adapter owns transaction scheduling/commit, not result authority. Once it has completed
+  // exactly one callback, return the callback's settled truth even if the adapter substitutes a
+  // different success value (SPEC §10.3/§11.4).
+  return callbackResult as Result;
 }
