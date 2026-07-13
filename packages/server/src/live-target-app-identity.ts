@@ -3,7 +3,10 @@ import { randomUUID } from 'node:crypto';
 import type { KovoApp } from './app-types.js';
 import type { CsrfOptions } from './csrf.js';
 import { resolveBootMode } from './env.js';
-import { createLiveTargetAttestation, type MutationLiveTargetDescriptor } from './mutation-wire.js';
+import {
+  createLiveTargetAttestationForResponse,
+  type MutationLiveTargetDescriptor,
+} from './mutation-wire.js';
 import {
   createWitnessWeakMap,
   witnessFreeze,
@@ -152,7 +155,7 @@ export function createLiveTargetAttestationWithAuthority<Request>(
   if (facts === undefined) {
     throw new TypeError('Live-target stamping requires a framework-issued app authority.');
   }
-  return createLiveTargetAttestation(descriptor, {
+  return createLiveTargetAttestationForResponse(descriptor, {
     buildToken: facts.audience,
     ...(facts.csrf === undefined ? {} : { csrf: facts.csrf as CsrfOptions<Request> }),
     request,

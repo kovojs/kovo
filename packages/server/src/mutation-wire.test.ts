@@ -330,6 +330,56 @@ describe('mutation wire headers', () => {
     ).toEqual([]);
   });
 
+  it('does not accept an anonymous live-target descriptor under another CSRF cookie', () => {
+    // SPEC §6.6/§9.1: anonymous browser authority is the framework-owned CSRF cookie, not
+    // one process-wide literal "anonymous" principal. A descriptor captured in browser A must not
+    // authorize the same generated renderer/query reconstruction in browser B.
+    const descriptor = {
+      component: 'components/account/summary',
+      props: { accountId: 'account-a' },
+      target: 'account-summary',
+    };
+    const requestForCookie = (cookie: string) =>
+      new Request('https://app.test/account', {
+        headers: { Cookie: `kovo_csrf=${cookie}` },
+      });
+    const requestA = requestForCookie('a'.repeat(43));
+    const requestB = requestForCookie('b'.repeat(43));
+    const csrf = {
+      secret: 'live-target-secret-0123456789abcdef',
+      sessionId: (_request: Request) => undefined,
+    };
+    const token = createLiveTargetAttestation(descriptor, {
+      buildToken: 'anonymous-cookie-bound-audience',
+      csrf,
+      request: requestA,
+    });
+    const headers = {
+      'Kovo-Live-Targets': `account-summary#components/account/summary@${token}:{"accountId":"account-a"}`,
+    };
+
+    expect(
+      mutationWireRequestFromHeaders({
+        buildToken: 'anonymous-cookie-build',
+        csrf,
+        headers,
+        liveTargetAudience: 'anonymous-cookie-bound-audience',
+        rawInput: {},
+        request: requestA,
+      }).liveTargetDescriptors,
+    ).toHaveLength(1);
+    expect(
+      mutationWireRequestFromHeaders({
+        buildToken: 'anonymous-cookie-build',
+        csrf,
+        headers,
+        liveTargetAudience: 'anonymous-cookie-bound-audience',
+        rawInput: {},
+        request: requestB,
+      }).liveTargetDescriptors,
+    ).toEqual([]);
+  });
+
   it('rejects a configured CSRF binding when the framework session principal is unresolved', () => {
     const request = {
       csrfPrincipal: 'session-a',

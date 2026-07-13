@@ -7,7 +7,11 @@ import {
   isProvenPrincipal,
   principalPostureFromRequest,
 } from './auth-principal.js';
-import type { CsrfOptions } from './csrf.js';
+import {
+  mintCsrfLiveTargetBindingForResponse,
+  resolveCsrfLiveTargetBinding,
+  type CsrfOptions,
+} from './csrf.js';
 import { signingKeyRingFromSecret } from './keyring.js';
 import type { RequestLifecycleOptions } from './guards.js';
 import type { StylesheetAsset } from './hints.js';
@@ -773,7 +777,36 @@ export function createLiveTargetAttestation<Request>(
     sourceUrl?: string;
   },
 ): string {
-  const payload = liveTargetAttestationPayload(descriptor, options);
+  return createLiveTargetAttestationInternal(descriptor, options, false);
+}
+
+/**
+ * @internal Mint through the framework response channel so a first-anonymous descriptor is bound
+ * to the exact anonymous-CSRF cookie emitted with that response (SPEC §6.6/§9.1).
+ */
+export function createLiveTargetAttestationForResponse<Request>(
+  descriptor: Omit<MutationLiveTargetDescriptor, 'attestation'>,
+  options: {
+    buildToken: string;
+    csrf?: CsrfOptions<Request> | false;
+    request: Request;
+    sourceUrl?: string;
+  },
+): string {
+  return createLiveTargetAttestationInternal(descriptor, options, true);
+}
+
+function createLiveTargetAttestationInternal<Request>(
+  descriptor: Omit<MutationLiveTargetDescriptor, 'attestation'>,
+  options: {
+    buildToken: string;
+    csrf?: CsrfOptions<Request> | false;
+    request: Request;
+    sourceUrl?: string;
+  },
+  mintAnonymousForResponse: boolean,
+): string {
+  const payload = liveTargetAttestationPayload(descriptor, options, mintAnonymousForResponse);
   if (options.csrf === undefined || options.csrf === false) {
     return signingKeyRingFromSecret(liveTargetAttestationSecret()).sign({
       audience: 'mutation-live-target',
@@ -837,11 +870,12 @@ function liveTargetAttestationPayload<Request>(
     request: Request;
     sourceUrl?: string;
   },
+  mintAnonymousForResponse = false,
 ): string {
   if (typeof options.buildToken !== 'string' || options.buildToken.length === 0) {
     throw new Error('live-target attestation requires a non-empty app build token.');
   }
-  const identity = liveTargetAttestationIdentity(options);
+  const identity = liveTargetAttestationIdentity(options, mintAnonymousForResponse);
   return canonicalJsonStringify({
     buildToken: options.buildToken,
     component: descriptor.component,
@@ -853,10 +887,16 @@ function liveTargetAttestationPayload<Request>(
   });
 }
 
-function liveTargetAttestationIdentity<Request>(options: {
-  csrf?: CsrfOptions<Request> | false;
-  request: Request;
-}): { csrfBinding: string | undefined; principal: string | undefined } {
+function liveTargetAttestationIdentity<Request>(
+  options: {
+    csrf?: CsrfOptions<Request> | false;
+    request: Request;
+  },
+  mintAnonymousForResponse: boolean,
+): {
+  csrfBinding: string | undefined;
+  principal: string | undefined;
+} {
   if (options.csrf === false) return { csrfBinding: undefined, principal: undefined };
 
   // Pin the lifecycle-owned principal before invoking the app-configured CSRF resolver. The two
@@ -871,12 +911,18 @@ function liveTargetAttestationIdentity<Request>(options: {
       'live-target attestation cannot use an unresolved framework session principal.',
     );
   }
-  const csrfPrincipal = options.csrf?.sessionId(options.request);
-  if (csrfPrincipal !== undefined && !isProvenPrincipal(csrfPrincipal)) {
+  const csrfIdentity =
+    options.csrf === undefined
+      ? undefined
+      : mintAnonymousForResponse
+        ? mintCsrfLiveTargetBindingForResponse(options.request, options.csrf)
+        : resolveCsrfLiveTargetBinding(options.request, options.csrf);
+  if (csrfIdentity?.kind === 'session' && !isProvenPrincipal(csrfIdentity.value)) {
     throw new Error(
       'live-target attestation cannot use an unresolved session principal from the CSRF binding.',
     );
   }
+  const csrfPrincipal = csrfIdentity?.value;
 
   // A deployment may use the framework-owned live-target secret without configuring a global
   // CSRF keyring (for example when mutations own their CSRF posture). The route and mutation

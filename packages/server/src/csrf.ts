@@ -480,6 +480,14 @@ function resolveCsrfBinding<Request>(
 ): CsrfBinding | undefined {
   const sessionId = options.sessionId(request);
   if (sessionId) return { value: sessionId };
+  return resolveAnonymousCsrfBinding(request, options, mintOptions);
+}
+
+function resolveAnonymousCsrfBinding<Request>(
+  request: Request,
+  options: Pick<CsrfOptions<Request>, 'anonymousCookie'>,
+  mintOptions: { anonymousCache?: Map<string, CsrfBinding>; mintAnonymous?: boolean } = {},
+): CsrfBinding | undefined {
   if (options.anonymousCookie === false) return undefined;
 
   const cookieOptions = options.anonymousCookie ?? {};
@@ -526,6 +534,81 @@ export function resolveCsrfReplayBinding<Request>(
   options: Pick<CsrfOptions<Request>, 'anonymousCookie' | 'sessionId'>,
 ): string | undefined {
   return resolveCsrfBinding(request, options)?.value;
+}
+
+interface CsrfLiveTargetBinding {
+  kind: 'anonymous' | 'session';
+  value: string;
+}
+
+/**
+ * Resolve the credential identity that a live-target attestation verifier must consume.
+ *
+ * Unlike a raw `sessionId` read, anonymous requests resolve to the same framework-owned signed
+ * cookie used by the synchronizer-token and replay scopes (SPEC §6.6/§9.1). Verification never
+ * mints: a request without the response's cookie therefore cannot recreate its descriptor token.
+ *
+ * @internal Package-internal live-target bridge; not exported from the public server entrypoint.
+ */
+export function resolveCsrfLiveTargetBinding<Request>(
+  request: Request,
+  options: Pick<CsrfOptions<Request>, 'anonymousCookie' | 'sessionId'>,
+): CsrfLiveTargetBinding | undefined {
+  return resolveCsrfLiveTargetBindingInternal(request, options, false);
+}
+
+/**
+ * Resolve or mint the live-target credential identity while rendering a framework response.
+ *
+ * First-anonymous renders reuse the JSX response's anonymous-binding cache and `Set-Cookie`
+ * callback, so every descriptor in that response is bound to the exact cookie the browser
+ * receives. Minting outside that response-owned channel fails closed rather than creating an
+ * undeliverable credential.
+ *
+ * @internal Package-internal live-target bridge; not exported from the public server entrypoint.
+ */
+export function mintCsrfLiveTargetBindingForResponse<Request>(
+  request: Request,
+  options: Pick<CsrfOptions<Request>, 'anonymousCookie' | 'sessionId'>,
+): CsrfLiveTargetBinding | undefined {
+  return resolveCsrfLiveTargetBindingInternal(request, options, true);
+}
+
+function resolveCsrfLiveTargetBindingInternal<Request>(
+  request: Request,
+  options: Pick<CsrfOptions<Request>, 'anonymousCookie' | 'sessionId'>,
+  mintAnonymousForResponse: boolean,
+): CsrfLiveTargetBinding | undefined {
+  // Live-target identity treats any defined session result as an attempted session principal.
+  // The attestation sink applies the proven-principal classifier, so blank/reserved/malformed app
+  // results cannot silently downgrade into an anonymous cookie scope.
+  const sessionId = options.sessionId(request);
+  if (sessionId !== undefined) return { kind: 'session', value: sessionId };
+
+  const existing = resolveAnonymousCsrfBinding(request, options);
+  if (existing !== undefined) return { kind: 'anonymous', value: existing.value };
+  if (!mintAnonymousForResponse || options.anonymousCookie === false) return undefined;
+
+  const context = currentJsxFrameworkContext();
+  if (context === undefined || !witnessObjectIs(context.request, request)) {
+    throw new Error(
+      'live-target attestation cannot mint an anonymous CSRF binding outside its response context.',
+    );
+  }
+  if (context.onCsrfSetCookie === undefined) {
+    throw new Error(
+      'live-target attestation cannot mint an anonymous CSRF binding without a Set-Cookie sink.',
+    );
+  }
+
+  context.anonymousCsrfBindings ??= createSecurityMap();
+  const binding = resolveAnonymousCsrfBinding(request, options, {
+    anonymousCache: context.anonymousCsrfBindings,
+    mintAnonymous: true,
+  });
+  if (binding === undefined) return undefined;
+  if (binding.setCookie !== undefined) context.onCsrfSetCookie(binding.setCookie);
+  return { kind: 'anonymous', value: binding.value };
 }
 
 function anonymousCsrfCacheKey(name: string, cookie: CookieOptions): string {

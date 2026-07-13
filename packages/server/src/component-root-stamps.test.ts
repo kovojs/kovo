@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { query } from './query.js';
 import { stampKovoComponentRoot } from './component-root-stamps.js';
 import { createLiveTargetAttestation } from './mutation-wire.js';
+import { runWithJsxRequestContext } from './jsx-context.js';
 import { createLiveTargetTestAuthority } from './test-fixtures.js';
 
 const componentRootStampTestBuildToken = 'component-root-stamp-test-build';
@@ -286,5 +287,98 @@ describe('component root stamp security', () => {
 
     expect(stamped).toContain('kovo-props="{}"');
     expect(stamped).toContain(`kovo-live-token="${expectedToken}"`);
+  });
+
+  it('mints first-anonymous live-target tokens against the response CSRF cookie', () => {
+    // SPEC §6.6/§9.1: a first anonymous document has no request cookie yet. The component
+    // stamp must mint through the same response-owned cache/Set-Cookie channel as a rendered form,
+    // then attest the descriptor against that exact browser credential.
+    const csrf = {
+      secret: 'component-root-anonymous-csrf-secret-0123456789abcdef',
+      sessionId: (_request: Request) => undefined,
+    };
+    const authority = createLiveTargetTestAuthority('component-root-anonymous-build', csrf);
+    const cardQuery = query('anonymous-card', { load: () => ({ title: 'safe' }) });
+    const Card = component({
+      queries: { card: cardQuery },
+      render: () => undefined,
+    });
+    const request = new Request('https://app.test/account');
+    const setCookies: string[] = [];
+    const stamped = runWithJsxRequestContext(
+      request,
+      {
+        csrf,
+        onCsrfSetCookie: (cookie) => setCookies.push(cookie),
+      },
+      () =>
+        stampKovoComponentRoot({
+          attestationAuthority: authority.authority,
+          component: Card,
+          componentName: 'components/card/anonymous-card',
+          html: '<anonymous-card>safe</anonymous-card>',
+          props: {},
+          request,
+        }),
+    );
+
+    expect(setCookies).toHaveLength(1);
+    const cookiePair = setCookies[0]?.split(';', 1)[0];
+    if (cookiePair === undefined) throw new Error('expected anonymous CSRF cookie pair');
+    const cookieBoundRequest = new Request('https://app.test/account', {
+      headers: { Cookie: cookiePair },
+    });
+    const otherCookieRequest = new Request('https://app.test/account', {
+      headers: { Cookie: '__Host-kovo_csrf=' + 'b'.repeat(43) },
+    });
+    const descriptor = {
+      component: 'components/card/anonymous-card',
+      props: {},
+      target: 'anonymous-card',
+    };
+    const expected = createLiveTargetAttestation(descriptor, {
+      buildToken: authority.audience,
+      csrf,
+      request: cookieBoundRequest,
+    });
+    const otherBrowser = createLiveTargetAttestation(descriptor, {
+      buildToken: authority.audience,
+      csrf,
+      request: otherCookieRequest,
+    });
+
+    expect(stamped).toContain(`kovo-live-token="${expected}"`);
+    expect(otherBrowser).not.toBe(expected);
+  });
+
+  it('preserves framework stamping for custom non-cookie CSRF carriers', () => {
+    const request = { csrfPrincipal: 'custom-session-a' };
+    const csrf = {
+      secret: 'component-root-custom-csrf-secret-0123456789abcdef',
+      sessionId: (value: typeof request) => value.csrfPrincipal,
+    };
+    const authority = createLiveTargetTestAuthority('component-root-custom-build', csrf);
+    const cardQuery = query('custom-card', { load: () => ({ title: 'safe' }) });
+    const Card = component({ queries: { card: cardQuery }, render: () => undefined });
+    const descriptor = {
+      component: 'components/card/custom-card',
+      props: {},
+      target: 'custom-card',
+    };
+    const stamped = stampKovoComponentRoot({
+      attestationAuthority: authority.authority,
+      component: Card,
+      componentName: descriptor.component,
+      html: '<custom-card>safe</custom-card>',
+      props: {},
+      request,
+    });
+    const expected = createLiveTargetAttestation(descriptor, {
+      buildToken: authority.audience,
+      csrf,
+      request,
+    });
+
+    expect(stamped).toContain(`kovo-live-token="${expected}"`);
   });
 });
