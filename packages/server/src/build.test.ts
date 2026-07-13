@@ -81,6 +81,68 @@ describe('server build-time deployment API', () => {
     ).toMatchObject({ name: 'node' });
   });
 
+  it('rejects symlinked built-in preset roots and destination parents without writing outside', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kovo-preset-output-boundary-'));
+
+    try {
+      const build = await writeKovoNeutralBuild({
+        app: createApp({
+          routes: [
+            route('/dynamic', {
+              guard: () => true,
+              page: () => renderedHtml('<main>Dynamic</main>'),
+            }),
+          ],
+        }),
+        outDir: join(root, '.kovo'),
+        serverHandlerSource:
+          'export default async function handler() { return new Response("safe"); }\n',
+      });
+      const cases = [
+        { parent: 'client', preset: node({ dockerfile: false }), name: 'node' },
+        { parent: 'functions', preset: vercel(), name: 'vercel' },
+        {
+          parent: 'server',
+          preset: cloudflare({ compatibilityDate: '2026-06-18', name: 'boundary-test' }),
+          name: 'cloudflare',
+        },
+      ] as const;
+
+      for (const entry of cases) {
+        const rootOutside = join(root, `${entry.name}-root-outside`);
+        const linkedRoot = join(root, `${entry.name}-linked-root`);
+        await mkdir(rootOutside);
+        await symlink(rootOutside, linkedRoot, 'dir');
+        await expect(
+          entry.preset.emit!(build, {
+            declaredEnv: [],
+            log() {},
+            outDir: linkedRoot,
+            readNeutral: () => build,
+          }),
+        ).rejects.toThrow(/(?:symbolic-link|not a directory|cannot use)/u);
+        await expect(readdir(rootOutside)).resolves.toEqual([]);
+
+        const parentOutside = join(root, `${entry.name}-parent-outside`);
+        const parentRoot = join(root, `${entry.name}-parent-root`);
+        await mkdir(parentOutside);
+        await mkdir(parentRoot);
+        await symlink(parentOutside, join(parentRoot, entry.parent), 'dir');
+        await expect(
+          entry.preset.emit!(build, {
+            declaredEnv: [],
+            log() {},
+            outDir: parentRoot,
+            readNeutral: () => build,
+          }),
+        ).rejects.toThrow(/(?:symbolic link|symbolic-link|output parent|cannot write)/u);
+        await expect(readdir(parentOutside)).resolves.toEqual([]);
+      }
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
   it('writes a deterministic neutral build layout from app-shell build inputs', async () => {
     const root = await mkdtemp(join(tmpdir(), 'kovo-neutral-build-'));
 

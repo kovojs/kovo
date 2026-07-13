@@ -1,24 +1,30 @@
 import './security-bootstrap.js';
 
 import { execFileSync } from 'node:child_process';
-import { copyFile, cp, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import * as path from 'node:path';
 
 import {
   kovoDeferredRuntimeModulePath,
   kovoDeferredRuntimeModuleVersion,
 } from '@kovojs/browser/internal/inline-loader';
+import {
+  createFrameworkOutputFileSystemBoundary,
+  type ConfinedFileSystemEntry,
+} from '@kovojs/core/internal/filesystem';
 
 import { resolvedFileSystemPath } from './vite-build-assets.js';
 import {
   buildOwnDataProperty,
   buildSecurityFunctionSource,
+  buildSecurityPathJoin,
   buildSecuritySha256Hex,
   buildSecuritySourceLiteral,
   commitBuildArrayValue,
   snapshotBuildArray,
 } from './build-security-intrinsics.js';
 import type { KovoNeutralBuild } from './neutral-build.js';
+import { writeArtifactOutput, type ArtifactOutputEntry } from './output-staging.js';
 import {
   createSecurityNullRecord,
   securityArrayJoin,
@@ -367,35 +373,46 @@ async function emitNodePreset(
   }
 
   const outDir = resolvedFileSystemPath(context.outDir);
-  await mkdir(outDir, { recursive: true });
-  await cp(build.clientDir, path.join(outDir, 'client'), { recursive: true });
+  await writePresetDirectory(build.clientDir, outDir, 'client', 'node client');
   if (build.publicAssetDir !== undefined) {
-    await cp(build.publicAssetDir, path.join(outDir, 'static'), { recursive: true });
+    await writePresetDirectory(build.publicAssetDir, outDir, 'static', 'node public assets');
   }
   if (build.staticOutput !== undefined) {
-    await cp(build.staticOutput.dir, path.join(outDir, 'static'), { recursive: true });
+    await writePresetDirectory(build.staticOutput.dir, outDir, 'static', 'node static output');
   }
-  await cp(build.serverDir, path.join(outDir, 'server'), { recursive: true });
+  await writePresetDirectory(build.serverDir, outDir, 'server', 'node server');
   const nodeAdapterSource = nodeAdapterRuntimeSource();
   const serverSource = nodeServerSource();
-  await writeGeneratedJavaScript(
-    path.join(outDir, 'node-adapter.mjs'),
-    nodeAdapterSource,
-    'module',
-  );
-  await writeGeneratedJavaScript(path.join(outDir, 'server.mjs'), serverSource, 'module');
-  await writeJson(path.join(outDir, 'kovo-artifact-integrity.json'), {
-    algorithm: 'sha256',
-    files: {
-      'node-adapter.mjs': generatedArtifactDigest(nodeAdapterSource),
-      'server.mjs': generatedArtifactDigest(serverSource),
-    },
-  });
-  await emitNodeRuntimePackage(outDir);
-
-  if (options.dockerfile !== false) {
-    await writeFile(path.join(outDir, 'Dockerfile'), nodeDockerfileSource(), 'utf8');
+  validateGeneratedJavaScript(path.join(outDir, 'node-adapter.mjs'), nodeAdapterSource, 'module');
+  validateGeneratedJavaScript(path.join(outDir, 'server.mjs'), serverSource, 'module');
+  const runtimeEntries = await nodeRuntimePackageEntries(outDir);
+  const generatedEntries: ArtifactOutputEntry[] = [
+    presetContentEntry(outDir, 'node-adapter.mjs', nodeAdapterSource, 'node adapter'),
+    presetContentEntry(outDir, 'server.mjs', serverSource, 'node server entry'),
+    presetJsonEntry(outDir, 'kovo-artifact-integrity.json', {
+      algorithm: 'sha256',
+      files: {
+        'node-adapter.mjs': generatedArtifactDigest(nodeAdapterSource),
+        'server.mjs': generatedArtifactDigest(serverSource),
+      },
+    }),
+  ];
+  const pinnedRuntimeEntries = snapshotBuildArray(runtimeEntries, 'node runtime package entries');
+  for (let index = 0; index < pinnedRuntimeEntries.length; index += 1) {
+    commitBuildArrayValue(
+      generatedEntries,
+      pinnedRuntimeEntries[index]!,
+      'Node generated output entries',
+    );
   }
+  if (options.dockerfile !== false) {
+    commitBuildArrayValue(
+      generatedEntries,
+      presetContentEntry(outDir, 'Dockerfile', nodeDockerfileSource(), 'node Dockerfile'),
+      'Node generated output entries',
+    );
+  }
+  await writePresetArtifacts(outDir, generatedEntries, 'node generated output');
 
   context.log(`Emitted Kovo node preset output to ${outDir}`);
 }
@@ -407,9 +424,12 @@ async function emitVercelPreset(
 ): Promise<void> {
   if (build.staticOnly && build.staticOutput !== undefined) {
     const outDir = resolvedFileSystemPath(context.outDir);
-    await mkdir(outDir, { recursive: true });
-    await cp(build.staticOutput.dir, path.join(outDir, 'static'), { recursive: true });
-    await writeJson(path.join(outDir, 'config.json'), vercelStaticBuildOutputConfig());
+    await writePresetDirectory(build.staticOutput.dir, outDir, 'static', 'vercel static output');
+    await writePresetArtifacts(
+      outDir,
+      [presetJsonEntry(outDir, 'config.json', vercelStaticBuildOutputConfig())],
+      'vercel static configuration',
+    );
     context.log(`Emitted Kovo vercel static preset output to ${outDir}`);
     return;
   }
@@ -419,36 +439,60 @@ async function emitVercelPreset(
   }
 
   const outDir = resolvedFileSystemPath(context.outDir);
-  const functionDir = path.join(outDir, 'functions/kovo.func');
-  await mkdir(outDir, { recursive: true });
-  await copyPresetStaticFiles(build, path.join(outDir, 'static'));
-  await mkdir(functionDir, { recursive: true });
-  await copyFile(build.serverHandlerPath, path.join(functionDir, 'handler.mjs'));
+  await writePresetStaticFiles(build, outDir, 'static', 'vercel');
   const nodeAdapterSource = nodeAdapterRuntimeSource();
   const functionSource = vercelFunctionSource();
-  await writeGeneratedJavaScript(
-    path.join(functionDir, 'node-adapter.mjs'),
+  validateGeneratedJavaScript(
+    path.join(outDir, 'functions/kovo.func/node-adapter.mjs'),
     nodeAdapterSource,
     'module',
   );
-  await writeGeneratedJavaScript(path.join(functionDir, 'index.cjs'), functionSource, 'commonjs');
-  await writeJson(path.join(functionDir, 'kovo-artifact-integrity.json'), {
-    algorithm: 'sha256',
-    files: {
-      'index.cjs': generatedArtifactDigest(functionSource),
-      'node-adapter.mjs': generatedArtifactDigest(nodeAdapterSource),
-    },
-  });
-  await writeJson(path.join(functionDir, '.vc-config.json'), {
-    handler: 'index.cjs',
-    launcherType: 'Nodejs',
-    ...(options.maxDuration === undefined ? {} : { maxDuration: options.maxDuration }),
-    ...(options.memory === undefined ? {} : { memory: options.memory }),
-    ...(options.regions === undefined ? {} : { regions: options.regions }),
-    runtime: 'nodejs22.x',
-    shouldAddHelpers: true,
-  });
-  await writeJson(path.join(outDir, 'config.json'), vercelBuildOutputConfig());
+  validateGeneratedJavaScript(
+    path.join(outDir, 'functions/kovo.func/index.cjs'),
+    functionSource,
+    'commonjs',
+  );
+  await writePresetArtifacts(
+    outDir,
+    [
+      presetSourceEntry(
+        outDir,
+        'functions/kovo.func/handler.mjs',
+        build.serverHandlerPath,
+        'vercel handler',
+      ),
+      presetContentEntry(
+        outDir,
+        'functions/kovo.func/node-adapter.mjs',
+        nodeAdapterSource,
+        'vercel node adapter',
+      ),
+      presetContentEntry(
+        outDir,
+        'functions/kovo.func/index.cjs',
+        functionSource,
+        'vercel function entry',
+      ),
+      presetJsonEntry(outDir, 'functions/kovo.func/kovo-artifact-integrity.json', {
+        algorithm: 'sha256',
+        files: {
+          'index.cjs': generatedArtifactDigest(functionSource),
+          'node-adapter.mjs': generatedArtifactDigest(nodeAdapterSource),
+        },
+      }),
+      presetJsonEntry(outDir, 'functions/kovo.func/.vc-config.json', {
+        handler: 'index.cjs',
+        launcherType: 'Nodejs',
+        ...(options.maxDuration === undefined ? {} : { maxDuration: options.maxDuration }),
+        ...(options.memory === undefined ? {} : { memory: options.memory }),
+        ...(options.regions === undefined ? {} : { regions: options.regions }),
+        runtime: 'nodejs22.x',
+        shouldAddHelpers: true,
+      }),
+      presetJsonEntry(outDir, 'config.json', vercelBuildOutputConfig()),
+    ],
+    'vercel generated output',
+  );
 
   context.log(`Emitted Kovo vercel preset output to ${outDir}`);
 }
@@ -460,9 +504,24 @@ async function emitCloudflarePreset(
 ): Promise<void> {
   if (build.staticOnly && build.staticOutput !== undefined) {
     const outDir = resolvedFileSystemPath(context.outDir);
-    await mkdir(outDir, { recursive: true });
-    await cp(build.staticOutput.dir, path.join(outDir, 'client'), { recursive: true });
-    await writeFile(path.join(outDir, 'wrangler.toml'), wranglerTomlSource(options), 'utf8');
+    await writePresetDirectory(
+      build.staticOutput.dir,
+      outDir,
+      'client',
+      'cloudflare static output',
+    );
+    await writePresetArtifacts(
+      outDir,
+      [
+        presetContentEntry(
+          outDir,
+          'wrangler.toml',
+          wranglerTomlSource(options),
+          'cloudflare configuration',
+        ),
+      ],
+      'cloudflare static configuration',
+    );
     context.log(`Emitted Kovo cloudflare static preset output to ${outDir}`);
     return;
   }
@@ -472,31 +531,61 @@ async function emitCloudflarePreset(
   }
 
   const outDir = resolvedFileSystemPath(context.outDir);
-  await mkdir(outDir, { recursive: true });
-  await copyPresetStaticFiles(build, path.join(outDir, 'client'));
-  await mkdir(path.join(outDir, 'server'), { recursive: true });
-  await copyFile(build.serverHandlerPath, path.join(outDir, 'server/handler.mjs'));
+  await writePresetStaticFiles(build, outDir, 'client', 'cloudflare');
   const workerSource = cloudflareWorkerSource();
-  await writeGeneratedJavaScript(path.join(outDir, 'worker.mjs'), workerSource, 'module');
-  await writeJson(path.join(outDir, 'kovo-artifact-integrity.json'), {
-    algorithm: 'sha256',
-    files: {
-      'worker.mjs': generatedArtifactDigest(workerSource),
-    },
-  });
-  await writeFile(path.join(outDir, 'wrangler.toml'), wranglerTomlSource(options), 'utf8');
+  validateGeneratedJavaScript(path.join(outDir, 'worker.mjs'), workerSource, 'module');
+  await writePresetArtifacts(
+    outDir,
+    [
+      presetSourceEntry(
+        outDir,
+        'server/handler.mjs',
+        build.serverHandlerPath,
+        'cloudflare handler',
+      ),
+      presetContentEntry(outDir, 'worker.mjs', workerSource, 'cloudflare worker'),
+      presetJsonEntry(outDir, 'kovo-artifact-integrity.json', {
+        algorithm: 'sha256',
+        files: {
+          'worker.mjs': generatedArtifactDigest(workerSource),
+        },
+      }),
+      presetContentEntry(
+        outDir,
+        'wrangler.toml',
+        wranglerTomlSource(options),
+        'cloudflare configuration',
+      ),
+    ],
+    'cloudflare generated output',
+  );
 
   context.log(`Emitted Kovo cloudflare preset output to ${outDir}`);
 }
 
-async function copyPresetStaticFiles(build: KovoNeutralBuild, outDir: string): Promise<void> {
+async function writePresetStaticFiles(
+  build: KovoNeutralBuild,
+  outDir: string,
+  targetDirectory: string,
+  preset: string,
+): Promise<void> {
   if (build.publicAssetDir !== undefined) {
-    await cp(build.publicAssetDir, outDir, { recursive: true });
+    await writePresetDirectory(
+      build.publicAssetDir,
+      outDir,
+      targetDirectory,
+      `${preset} public assets`,
+    );
   }
   if (build.staticOutput !== undefined) {
-    await cp(build.staticOutput.dir, outDir, { recursive: true });
+    await writePresetDirectory(
+      build.staticOutput.dir,
+      outDir,
+      targetDirectory,
+      `${preset} static output`,
+    );
   }
-  await cp(build.clientDir, outDir, { recursive: true });
+  await writePresetDirectory(build.clientDir, outDir, targetDirectory, `${preset} client output`);
 }
 
 function clientModuleRetentionDiagnostics(
@@ -703,18 +792,13 @@ function isFrameworkRuntimeClientModule(
   );
 }
 
-async function writeJson(filePath: string, value: unknown): Promise<void> {
-  await mkdir(path.dirname(filePath), { recursive: true });
-  await writeFile(filePath, `${buildSecuritySourceLiteral(value)}\n`, 'utf8');
-}
-
 type GeneratedJavaScriptFormat = 'commonjs' | 'module';
 
-async function writeGeneratedJavaScript(
+function validateGeneratedJavaScript(
   filePath: string,
   source: string,
   format: GeneratedJavaScriptFormat,
-): Promise<void> {
+): void {
   try {
     nativeExecFileSync(nodeExecutablePath, ['--check', `--input-type=${format}`], {
       encoding: 'utf8',
@@ -724,7 +808,120 @@ async function writeGeneratedJavaScript(
   } catch {
     throw new TypeError(`Kovo refused to emit invalid generated JavaScript for ${filePath}.`);
   }
-  await writeFile(filePath, source, 'utf8');
+}
+
+function presetContentEntry(
+  outDir: string,
+  relativePath: string,
+  content: string | Uint8Array,
+  label: string,
+): ArtifactOutputEntry {
+  return {
+    content,
+    kind: 'deploy-preset',
+    label,
+    targetPath: buildSecurityPathJoin(outDir, relativePath),
+  };
+}
+
+function presetSourceEntry(
+  outDir: string,
+  relativePath: string,
+  sourcePath: string,
+  label: string,
+): ArtifactOutputEntry {
+  return {
+    kind: 'deploy-preset',
+    label,
+    sourcePath,
+    targetPath: buildSecurityPathJoin(outDir, relativePath),
+  };
+}
+
+function presetJsonEntry(
+  outDir: string,
+  relativePath: string,
+  value: unknown,
+): ArtifactOutputEntry {
+  return presetContentEntry(
+    outDir,
+    relativePath,
+    `${buildSecuritySourceLiteral(value)}\n`,
+    relativePath,
+  );
+}
+
+async function writePresetArtifacts(
+  outDir: string,
+  entries: readonly ArtifactOutputEntry[],
+  label: string,
+): Promise<void> {
+  await writeArtifactOutput(outDir, entries, {
+    stagingPrefix: '.kovo-preset-output-',
+    diagnostics: {
+      root: (root, reason) => new Error(`Kovo ${label} cannot use '${root}': ${reason}.`),
+      target: (entry, reason) =>
+        new Error(`Kovo ${label} cannot write '${entry.label}': ${reason}.`),
+    },
+  });
+}
+
+async function writePresetDirectory(
+  sourceDir: string,
+  outDir: string,
+  targetDirectory: string,
+  label: string,
+): Promise<void> {
+  const source = createFrameworkOutputFileSystemBoundary(sourceDir);
+  await source.ensureDirectory();
+  const entries: ArtifactOutputEntry[] = [];
+  await appendPresetDirectoryEntries(
+    source,
+    await source.entries('.'),
+    outDir,
+    targetDirectory,
+    label,
+    entries,
+  );
+  await writePresetArtifacts(outDir, entries, label);
+}
+
+async function appendPresetDirectoryEntries(
+  source: ReturnType<typeof createFrameworkOutputFileSystemBoundary>,
+  children: readonly ConfinedFileSystemEntry[],
+  outDir: string,
+  targetDirectory: string,
+  label: string,
+  entries: ArtifactOutputEntry[],
+): Promise<void> {
+  const snapshot = snapshotBuildArray(children, `${label} source directory entries`);
+  for (let index = 0; index < snapshot.length; index += 1) {
+    const entry = snapshot[index]!;
+    if (entry.kind === 'directory') {
+      await appendPresetDirectoryEntries(
+        source,
+        await source.entriesOf(entry),
+        outDir,
+        targetDirectory,
+        label,
+        entries,
+      );
+      continue;
+    }
+    if (entry.kind !== 'file') {
+      throw new Error(`Kovo ${label} refuses non-regular source entry '${entry.relativePath}'.`);
+    }
+    commitBuildArrayValue(
+      entries,
+      presetContentEntry(
+        outDir,
+        buildSecurityPathJoin(targetDirectory, entry.relativePath),
+        await source.fileBytesOf(entry),
+        `${label} ${entry.relativePath}`,
+      ),
+      `${label} output entries`,
+    );
+  }
 }
 
 function generatedArtifactDigest(source: string): string {
@@ -3037,7 +3234,7 @@ CMD ["node", "server.mjs"]
 `;
 }
 
-async function emitNodeRuntimePackage(outDir: string): Promise<void> {
+async function nodeRuntimePackageEntries(outDir: string): Promise<ArtifactOutputEntry[]> {
   const source = await readPackageJsonForNodeRuntime();
   const runtimePackage = {
     dependencies: source.dependencies ?? {},
@@ -3047,11 +3244,19 @@ async function emitNodeRuntimePackage(outDir: string): Promise<void> {
     type: 'module',
     ...(source.packageManager === undefined ? {} : { packageManager: source.packageManager }),
   };
-  await writeFile(
-    path.join(outDir, 'package.json'),
-    `${buildSecuritySourceLiteral(runtimePackage)}\n`,
-  );
-  await copyRuntimeLockfile(outDir);
+  const entries: ArtifactOutputEntry[] = [
+    presetContentEntry(
+      outDir,
+      'package.json',
+      `${buildSecuritySourceLiteral(runtimePackage)}\n`,
+      'node runtime package manifest',
+    ),
+  ];
+  const lockfile = await runtimeLockfileEntry(outDir);
+  if (lockfile !== undefined) {
+    commitBuildArrayValue(entries, lockfile, 'Node runtime package output entries');
+  }
+  return entries;
 }
 
 async function readPackageJsonForNodeRuntime(): Promise<{
@@ -3061,7 +3266,7 @@ async function readPackageJsonForNodeRuntime(): Promise<{
 }> {
   let source: string;
   try {
-    source = await readFile(path.join(process.cwd(), 'package.json'), 'utf8');
+    source = await readFile(buildSecurityPathJoin(process.cwd(), 'package.json'), 'utf8');
   } catch {
     return {};
   }
@@ -3075,17 +3280,22 @@ const runtimeLockfileNames = [
   'yarn.lock',
 ] as const;
 
-async function copyRuntimeLockfile(outDir: string): Promise<void> {
+async function runtimeLockfileEntry(outDir: string): Promise<ArtifactOutputEntry | undefined> {
   const fileNames = snapshotBuildArray(runtimeLockfileNames, 'Node runtime lockfile candidates');
+  const project = createFrameworkOutputFileSystemBoundary(process.cwd());
+  await project.ensureDirectory();
   for (let index = 0; index < fileNames.length; index += 1) {
     const fileName = fileNames[index]!;
     try {
-      await copyFile(path.join(process.cwd(), fileName), path.join(outDir, fileName));
-      return;
+      const bytes = await project.fileBytes(fileName);
+      if (bytes !== undefined) {
+        return presetContentEntry(outDir, fileName, bytes, `node runtime ${fileName}`);
+      }
     } catch {
       // Lockfiles are optional for the deploy artifact; package.json still gives Docker an install path.
     }
   }
+  return undefined;
 }
 
 function snapshotNodeRuntimePackageManifest(value: unknown): {
