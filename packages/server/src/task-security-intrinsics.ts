@@ -1,3 +1,4 @@
+/* oxlint-disable typescript/unbound-method -- Boot-captured controls are invoked through pinned Reflect.apply. */
 import { randomBytes as nodeRandomBytes } from 'node:crypto';
 import {
   clearInterval as nodeClearInterval,
@@ -104,6 +105,7 @@ const realmClearInterval = globalThis.clearInterval;
 const realmClearTimeout = globalThis.clearTimeout;
 const realmSetInterval = globalThis.setInterval;
 const realmSetTimeout = globalThis.setTimeout;
+const taskVitestMode = process.env.VITEST !== undefined;
 
 const timerControl = nodeSetTimeout(() => undefined, 2_147_483_647);
 const nativeTimerUnref = taskControlFunction(timerControl, 'unref');
@@ -938,7 +940,9 @@ interface TestFakeTimerControls {
 }
 
 function testFakeTimerControls(): TestFakeTimerControls | undefined {
-  if (process.env.VITEST === undefined) return undefined;
+  // SPEC §6.6 rule 6: test posture is host/bootstrap authority. App code must not be able to set
+  // VITEST later and opt durable-task lease/cron controls into mutable fake timers.
+  if (!taskVitestMode) return undefined;
   const setTimeoutCandidate = globalThis.setTimeout;
   const setIntervalCandidate = globalThis.setInterval;
   const clearTimeoutCandidate = globalThis.clearTimeout;

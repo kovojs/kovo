@@ -1,3 +1,4 @@
+import { spawnSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { createRequire, syncBuiltinESMExports } from 'node:module';
 
@@ -19,8 +20,50 @@ import {
 
 const require = createRequire(import.meta.url);
 const mutableCrypto = require('node:crypto') as { randomBytes: typeof randomBytes };
+const taskSecurityModuleUrl = new URL('./task-security-intrinsics.ts', import.meta.url).href;
 
 describe('durable-task intrinsic membrane (SPEC §9.6/§10.3)', () => {
+  it('does not let app code enable test fake timers after bootstrap', () => {
+    const script = `
+      const { existsSync } = await import('node:fs');
+      const { registerHooks } = await import('node:module');
+      registerHooks({
+        resolve(specifier, context, nextResolve) {
+          if (specifier.startsWith('.') && specifier.endsWith('.js') && context.parentURL) {
+            const candidate = new URL(specifier.replace(/\\.js$/, '.ts'), context.parentURL);
+            if (existsSync(candidate)) return nextResolve(candidate.href, context);
+          }
+          return nextResolve(specifier, context);
+        },
+      });
+      delete process.env.VITEST;
+      const tasks = await import(${JSON.stringify(
+        `${taskSecurityModuleUrl}?boot-pinned-test-posture`,
+      )});
+      const clock = {};
+      let fakeCalls = 0;
+      const fakeSetTimeout = Object.assign(() => { fakeCalls += 1; return {}; }, { clock });
+      const fakeSetInterval = Object.assign(() => { fakeCalls += 1; return {}; }, { clock });
+      const fakeClearTimeout = () => { fakeCalls += 1; };
+      const fakeClearInterval = () => { fakeCalls += 1; };
+      process.env.VITEST = 'true';
+      globalThis.setTimeout = fakeSetTimeout;
+      globalThis.setInterval = fakeSetInterval;
+      globalThis.clearTimeout = fakeClearTimeout;
+      globalThis.clearInterval = fakeClearInterval;
+      const timer = tasks.taskSetTimeout(() => {}, 60_000);
+      tasks.taskClearTimeout(timer);
+      process.exit(fakeCalls === 0 ? 0 : 3);
+    `;
+    const result = spawnSync(
+      process.execPath,
+      ['--experimental-transform-types', '--input-type=module', '--eval', script],
+      { encoding: 'utf8' },
+    );
+    expect(result.stderr).toBe('');
+    expect(result.status).toBe(0);
+  });
+
   it('keeps exact registry dispatch and cryptographic identities after late poisoning', async () => {
     const originalDateNow = Date.now;
     const originalMapGet = Map.prototype.get;
