@@ -171,6 +171,58 @@ describe('@kovojs/drizzle runtime surface', () => {
     ).toMatchObject({ ok: true, statement: { text: rawDelete } });
   });
 
+  it('pins Drizzle constructor methods and trusted justification authority at module boot', () => {
+    const mutableDrizzleSql = drizzleSql as unknown as {
+      identifier: typeof drizzleSql.identifier;
+      join: typeof drizzleSql.join;
+      raw: typeof drizzleSql.raw;
+    };
+    const originalIdentifier = mutableDrizzleSql.identifier;
+    const originalJoin = mutableDrizzleSql.join;
+    const originalRaw = mutableDrizzleSql.raw;
+    const attacker = originalRaw('delete from accounts');
+    let raw: SQL | undefined;
+    let identifier: SQL | undefined;
+    let joined: SQL | undefined;
+    try {
+      mutableDrizzleSql.raw = () => attacker;
+      mutableDrizzleSql.identifier = () => attacker;
+      mutableDrizzleSql.join = () => attacker;
+      raw = sql.raw('select 1');
+      identifier = sql.identifier('accounts');
+      joined = sql.join([sql.identifier('accounts')]);
+    } finally {
+      mutableDrizzleSql.raw = originalRaw;
+      mutableDrizzleSql.identifier = originalIdentifier;
+      mutableDrizzleSql.join = originalJoin;
+    }
+    expect(raw).not.toBe(attacker);
+    expect(identifier).not.toBe(attacker);
+    expect(joined).not.toBe(attacker);
+    expect(
+      snapshotManagedSqlStatement(
+        trustedSql(raw!, { justification: 'constructor authority control' }),
+        'postgres',
+      ),
+    ).toMatchObject({ ok: true, statement: { text: 'select 1' } });
+    expect(snapshotManagedSqlStatement(identifier!, 'postgres')).toMatchObject({
+      ok: true,
+      statement: { text: '"accounts"' },
+    });
+
+    Object.defineProperty(Object.prototype, 'justification', {
+      configurable: true,
+      value: 'inherited trusted SQL audit bypass',
+    });
+    try {
+      expect(() => trustedSql(sql.raw('select 1'), {} as { justification: string })).toThrow(
+        /justification/u,
+      );
+    } finally {
+      delete (Object.prototype as { justification?: unknown }).justification;
+    }
+  });
+
   it('cannot erase SQL constructor arguments through inherited numeric setters', () => {
     const nativeDefineProperty = Object.defineProperty;
     const originalDescriptor = Object.getOwnPropertyDescriptor(Array.prototype, '1');

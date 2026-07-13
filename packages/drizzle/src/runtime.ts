@@ -26,6 +26,24 @@ function drizzleApply<Return>(fn: Function, receiver: unknown, args: readonly un
   return drizzleReflectApply(fn, receiver, args) as Return;
 }
 
+function captureDrizzleSqlMethod(property: 'identifier' | 'join' | 'raw'): Function | undefined {
+  const descriptor = drizzleApply<PropertyDescriptor | undefined>(
+    drizzleGetOwnPropertyDescriptor,
+    DrizzleNativeObject,
+    [drizzleSql, property],
+  );
+  return descriptor !== undefined && 'value' in descriptor && typeof descriptor.value === 'function'
+    ? descriptor.value
+    : undefined;
+}
+
+const drizzleIdentifier = captureDrizzleSqlMethod('identifier');
+const drizzleJoin = captureDrizzleSqlMethod('join');
+const drizzleRaw = captureDrizzleSqlMethod('raw');
+if (drizzleRaw === undefined) {
+  throw new TypeError('The installed Drizzle version does not expose sql.raw().');
+}
+
 function commitDrizzleArrayValue<Value>(target: Value[], value: Value): boolean {
   const length = drizzleApply<PropertyDescriptor | undefined>(
     drizzleGetOwnPropertyDescriptor,
@@ -189,7 +207,7 @@ type SqlTag = (<T = unknown>(
 export const sql = (<T = unknown>(strings: TemplateStringsArray, ...values: unknown[]) => {
   const stringSnapshot = snapshotSqlConstructorArray(strings, 'sql template strings');
   const valueSnapshot = snapshotSqlConstructorArray(values, 'sql template values');
-  const args: unknown[] = [strings];
+  const args: unknown[] = [stringSnapshot];
   for (let index = 0; index < valueSnapshot.length; index += 1) {
     drizzleArrayAppend(args, valueSnapshot[index]);
   }
@@ -202,20 +220,20 @@ export const sql = (<T = unknown>(strings: TemplateStringsArray, ...values: unkn
 }) as unknown as SqlTag;
 
 sql.raw = <T = unknown>(value: string) => {
-  const raw = drizzleSql.raw(value) as SQL<T>;
+  const raw = drizzleApply<SQL<T>>(drizzleRaw, drizzleSql, [value]);
   stampRawSqlChunk(raw, value);
   return stampStaticSql(raw, { containsRawChunk: true }, { kind: 'text', text: value });
 };
 
 sql.identifier = <T = unknown>(value: string, options: { allow?: readonly string[] } = {}) => {
-  const identifier = validateSqlIdentifier(value, options.allow);
-  const factory = (
-    drizzleSql as unknown as { identifier?: <TResult = unknown>(value: string) => SQL<TResult> }
-  ).identifier;
+  const allow = drizzleOwnDataOption(options, 'allow', 'sql.identifier allowlist') as
+    | readonly string[]
+    | undefined;
+  const identifier = validateSqlIdentifier(value, allow);
   const statement =
-    typeof factory === 'function'
-      ? factory<T>(identifier)
-      : (drizzleSql.raw(quoteSqlIdentifier(identifier)) as SQL<T>);
+    drizzleIdentifier === undefined
+      ? drizzleApply<SQL<T>>(drizzleRaw, drizzleSql, [quoteSqlIdentifier(identifier)])
+      : drizzleApply<SQL<T>>(drizzleIdentifier, drizzleSql, [identifier]);
   return stampSqlIdentifier(statement, quoteSqlIdentifier(identifier));
 };
 
@@ -226,16 +244,11 @@ sql.allow = <T = unknown>(value: string, allow: readonly string[]) => {
 
 sql.join = <T = unknown>(parts: readonly unknown[], separator?: unknown) => {
   const partSnapshot = snapshotSqlConstructorArray(parts, 'sql.join parts');
-  const drizzleSeparator = separator ?? drizzleSql.raw(', ');
-  const factory = (
-    drizzleSql as unknown as {
-      join?: <TResult = unknown>(parts: unknown[], separator?: unknown) => SQL<TResult>;
-    }
-  ).join;
-  if (typeof factory !== 'function') {
+  const drizzleSeparator = separator ?? drizzleApply<SQL>(drizzleRaw, drizzleSql, [', ']);
+  if (drizzleJoin === undefined) {
     throw new TypeError('The installed Drizzle version does not expose sql.join().');
   }
-  const statement = invokeSqlConstructor<SQL<T>>(factory, undefined, [
+  const statement = invokeSqlConstructor<SQL<T>>(drizzleJoin, drizzleSql, [
     partSnapshot,
     drizzleSeparator,
   ]);
@@ -265,7 +278,11 @@ export function staticSql<T = unknown>(
   const text = joinStaticSqlStrings(
     snapshotSqlConstructorArray(strings, 'staticSql template strings'),
   );
-  return stampStaticSql(drizzleSql.raw(text) as SQL<T>, {}, { kind: 'text', text });
+  return stampStaticSql(
+    drizzleApply<SQL<T>>(drizzleRaw, drizzleSql, [text]),
+    {},
+    { kind: 'text', text },
+  );
 }
 
 /**
@@ -276,7 +293,22 @@ export function trustedSql<TResult = unknown, T extends SQL<TResult> = SQL<TResu
   statement: T,
   options: { justification: string },
 ): T & KovoTrustedSql<TResult> {
-  return stampTrustedSql(statement, options.justification);
+  const justification = drizzleOwnDataOption(options, 'justification', 'trustedSql justification');
+  if (typeof justification !== 'string') {
+    throw new TypeError('trustedSql justification must be an own string data property.');
+  }
+  return stampTrustedSql(statement, justification);
+}
+
+function drizzleOwnDataOption(value: object, property: PropertyKey, label: string): unknown {
+  const descriptor = drizzleApply<PropertyDescriptor | undefined>(
+    drizzleGetOwnPropertyDescriptor,
+    DrizzleNativeObject,
+    [value, property],
+  );
+  if (descriptor === undefined) return undefined;
+  if (!('value' in descriptor)) throw new TypeError(`${label} must be an own data property.`);
+  return descriptor.value;
 }
 
 function quoteSqlIdentifier(identifier: string): string {
