@@ -77,6 +77,37 @@ describe('security decision markers', () => {
       name: 'test.emit',
     });
   });
+
+  it('pins collector sealing and decision identity against ambient object controls', () => {
+    const originalDefineProperties = Object.defineProperties;
+    const originalFreeze = Object.freeze;
+    const originalIsSafeInteger = Number.isSafeInteger;
+    let collector:
+      | { drain(): string[]; record(fact: string): void }
+      | undefined;
+    let classify: ((value: string) => string) | undefined;
+    try {
+      Object.defineProperties = ((value: object) => value) as typeof Object.defineProperties;
+      Object.freeze = ((value: object) => ({ attacker: value })) as typeof Object.freeze;
+      Number.isSafeInteger = () => true;
+      collector = createBoundedRuntimeAuditCollector<string>(2);
+      collector.record('first');
+      collector.record('second');
+      classify = securityClassifier('test.pinned-classifier', (value: string) => value);
+    } finally {
+      Object.defineProperties = originalDefineProperties;
+      Object.freeze = originalFreeze;
+      Number.isSafeInteger = originalIsSafeInteger;
+    }
+
+    expect(collector?.drain()).toEqual(['first', 'second']);
+    expect(Object.isFrozen(collector)).toBe(true);
+    expect(securityDecisionMetadata(classify)).toEqual({
+      kind: 'classifier',
+      name: 'test.pinned-classifier',
+    });
+    expect(securityDecisionMetadata(() => undefined)).toBeUndefined();
+  });
 });
 
 describe('DEC-D security code registry', () => {

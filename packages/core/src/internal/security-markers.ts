@@ -5,6 +5,9 @@ import {
   securityDefineProperty,
   securityGetOwnPropertyDescriptor,
   securityObjectKeys,
+  securityWeakMap,
+  securityWeakMapGet,
+  securityWeakMapSet,
 } from '#security-witness-intrinsics';
 
 type AnyFunction = (...args: any[]) => any;
@@ -34,7 +37,13 @@ interface BoundedRuntimeAuditCollector<Fact> {
 export function createBoundedRuntimeAuditCollector<Fact>(
   capacity = RUNTIME_AUDIT_FACT_CAPACITY,
 ): BoundedRuntimeAuditCollector<Fact> {
-  if (!Number.isSafeInteger(capacity) || capacity <= 0 || capacity > RUNTIME_AUDIT_FACT_CAPACITY) {
+  if (
+    typeof capacity !== 'number' ||
+    capacity !== capacity ||
+    capacity % 1 !== 0 ||
+    capacity <= 0 ||
+    capacity > RUNTIME_AUDIT_FACT_CAPACITY
+  ) {
     throw new TypeError(
       `Runtime audit collector capacity must be an integer from 1 to ${RUNTIME_AUDIT_FACT_CAPACITY}.`,
     );
@@ -47,7 +56,7 @@ export function createBoundedRuntimeAuditCollector<Fact>(
   let head = 0;
   let size = 0;
 
-  return Object.freeze({
+  return freezeSecurityValue({
     drain(): Fact[] {
       const facts: Fact[] = [];
       for (let index = 0; index < size; index += 1) {
@@ -77,8 +86,8 @@ export function createBoundedRuntimeAuditCollector<Fact>(
   });
 }
 
-const securityDecisionBrand: unique symbol = Symbol('kovo.security-decision');
-const securityDecisionName: unique symbol = Symbol('kovo.security-decision.name');
+declare const securityDecisionBrand: unique symbol;
+declare const securityDecisionName: unique symbol;
 
 /** @internal Security-code enforcement taxonomy from fundamental-fixes-followup-4 DEC-D. */
 export type SecurityCodeEnforcement =
@@ -448,6 +457,13 @@ export type SecurityDecisionFunction<
   readonly [securityDecisionName]: Name;
 };
 
+interface SecurityDecisionMetadata {
+  readonly kind: 'classifier' | 'wire-emitter';
+  readonly name: string;
+}
+
+const securityDecisionMetadataByFunction = securityWeakMap<Function, SecurityDecisionMetadata>();
+
 /** @internal Brand a classifier without changing call behavior. */
 export function securityClassifier<const Name extends string, FunctionValue extends AnyFunction>(
   name: Name,
@@ -469,13 +485,7 @@ export function securityDecisionMetadata(
   value: unknown,
 ): { kind: 'classifier' | 'wire-emitter'; name: string } | undefined {
   if (typeof value !== 'function') return undefined;
-  const record = value as Partial<
-    Record<typeof securityDecisionBrand, 'classifier' | 'wire-emitter'> &
-      Record<typeof securityDecisionName, string>
-  >;
-  return record[securityDecisionBrand] === undefined || record[securityDecisionName] === undefined
-    ? undefined
-    : { kind: record[securityDecisionBrand], name: record[securityDecisionName] };
+  return securityWeakMapGet(securityDecisionMetadataByFunction, value);
 }
 
 function markSecurityDecision<
@@ -483,19 +493,10 @@ function markSecurityDecision<
   const Name extends string,
   FunctionValue extends AnyFunction,
 >(kind: Kind, name: Name, fn: FunctionValue): SecurityDecisionFunction<Kind, Name, FunctionValue> {
-  Object.defineProperties(fn, {
-    [securityDecisionBrand]: {
-      configurable: false,
-      enumerable: false,
-      value: kind,
-      writable: false,
-    },
-    [securityDecisionName]: {
-      configurable: false,
-      enumerable: false,
-      value: name,
-      writable: false,
-    },
-  });
+  securityWeakMapSet(
+    securityDecisionMetadataByFunction,
+    fn,
+    freezeSecurityValue({ kind, name }),
+  );
   return fn as SecurityDecisionFunction<Kind, Name, FunctionValue>;
 }
