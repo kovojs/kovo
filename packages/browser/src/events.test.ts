@@ -41,6 +41,19 @@ describe('typed event bus', () => {
     );
   });
 
+  it('rejects duplicate event names before server-fact registry disagreement', () => {
+    expect(() =>
+      createEventBus([
+        event<'cart:added', { productId: string }>('cart:added', {
+          serverFactKeys: ['productId'],
+        }),
+        event<'cart:added', { quantity: number }>('cart:added', {
+          serverFactKeys: ['quantity'],
+        }),
+      ] as const),
+    ).toThrow('Kovo event registry contains duplicate name: cart:added.');
+  });
+
   it('rejects event payloads that carry query data facts', () => {
     const cartAdded = event<'cart:added', { productId: string; quantity: number }>('cart:added', {
       serverFactKeys: ['productId'],
@@ -80,6 +93,73 @@ describe('typed event bus', () => {
         name: 'cart:added',
         payload: { productId: 'p1' },
       },
+      phase: 'event-listener',
+    });
+  });
+
+  it('retains registry and query-confidentiality facts after late intrinsic poisoning', () => {
+    const cartAdded = event<'cart:added', { productId: string }>('cart:added', {
+      serverFactKeys: ['productId'],
+    });
+    const bus = createEventBus([cartAdded] as const, { queryDataKeys: ['productId'] });
+    const get = Object.getOwnPropertyDescriptor(Map.prototype, 'get');
+    const has = Object.getOwnPropertyDescriptor(Set.prototype, 'has');
+    const keys = Object.getOwnPropertyDescriptor(Object, 'keys');
+    const find = Object.getOwnPropertyDescriptor(Array.prototype, 'find');
+    if (!get || !has || !keys || !find) throw new Error('Missing event security descriptors');
+    Object.defineProperty(Map.prototype, 'get', { ...get, value: () => undefined });
+    Object.defineProperty(Set.prototype, 'has', { ...has, value: () => false });
+    Object.defineProperty(Object, 'keys', { ...keys, value: () => [] });
+    Object.defineProperty(Array.prototype, 'find', { ...find, value: () => undefined });
+    try {
+      expect(() => bus.emit('cart:added', { productId: 'p1' })).toThrow(
+        'Event payload overlaps query data; use a transform. event cart:added carries productId.',
+      );
+      expect(() => bus.emit('attacker' as never, {} as never)).toThrow(
+        'Event is not declared in the registry: attacker',
+      );
+    } finally {
+      Object.defineProperty(Map.prototype, 'get', get);
+      Object.defineProperty(Set.prototype, 'has', has);
+      Object.defineProperty(Object, 'keys', keys);
+      Object.defineProperty(Array.prototype, 'find', find);
+    }
+  });
+
+  it('retains listener dispatch and rejection reporting after late Promise/collection poisoning', async () => {
+    const error = new Error('late listener failure');
+    const onError = vi.fn();
+    const bus = createEventBus([event<'cart:added', {}>('cart:added')] as const, { onError });
+    const listener = vi.fn(async () => {
+      throw error;
+    });
+    bus.on('cart:added', listener);
+    const resolve = Object.getOwnPropertyDescriptor(Promise, 'resolve');
+    const catchMethod = Object.getOwnPropertyDescriptor(Promise.prototype, 'catch');
+    const get = Object.getOwnPropertyDescriptor(Map.prototype, 'get');
+    const forEach = Object.getOwnPropertyDescriptor(Set.prototype, 'forEach');
+    if (!resolve || !catchMethod || !get || !forEach) {
+      throw new Error('Missing event continuation security descriptors');
+    }
+    Object.defineProperty(Promise, 'resolve', { ...resolve, value: () => ({ catch() {} }) });
+    Object.defineProperty(Promise.prototype, 'catch', { ...catchMethod, value: () => undefined });
+    Object.defineProperty(Map.prototype, 'get', { ...get, value: () => undefined });
+    Object.defineProperty(Set.prototype, 'forEach', { ...forEach, value: () => undefined });
+    try {
+      bus.emit('cart:added', {});
+    } finally {
+      Object.defineProperty(Promise, 'resolve', resolve);
+      Object.defineProperty(Promise.prototype, 'catch', catchMethod);
+      Object.defineProperty(Map.prototype, 'get', get);
+      Object.defineProperty(Set.prototype, 'forEach', forEach);
+    }
+    await Promise.resolve();
+
+    // SPEC §4.3/§6.6: listener registry and continuation state are framework facts; late
+    // Promise/Map/Set replacement cannot suppress dispatch or its error channel.
+    expect(listener).toHaveBeenCalledOnce();
+    expect(onError).toHaveBeenCalledWith(error, {
+      event: { name: 'cart:added', payload: {} },
       phase: 'event-listener',
     });
   });

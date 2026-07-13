@@ -260,6 +260,61 @@ describe('delegated handler reference dispatch', () => {
     expect(element.getAttribute('kovo-state')).toBe('{"count":2}');
   });
 
+  it('retains delegated state continuation after late Promise method poisoning', async () => {
+    let handlerCalls = 0;
+    const handler = (_event: unknown, ctx: { state: { count: number } }) => {
+      handlerCalls += 1;
+      ctx.state.count += 1;
+    };
+    const importModule = async () => ({ increment: handler });
+    const element = new FakeElement({
+      'kovo-state': '{"count":0}',
+      'on:click': '/c/counter.client.js#increment',
+    });
+    const names = ['catch', 'then', 'finally'] as const;
+    const descriptors = names.map((name) => {
+      const descriptor = Object.getOwnPropertyDescriptor(Promise.prototype, name);
+      if (!descriptor) throw new Error(`Missing Promise.prototype.${name}`);
+      return { descriptor, name };
+    });
+    const resolve = Object.getOwnPropertyDescriptor(Promise, 'resolve');
+    if (!resolve) throw new Error('Missing Promise.resolve');
+    const poison = new Error('ambient Promise method invoked');
+    Object.defineProperty(Promise, 'resolve', {
+      ...resolve,
+      value: () => {
+        throw poison;
+      },
+    });
+    for (const { descriptor, name } of descriptors) {
+      Object.defineProperty(Promise.prototype, name, {
+        ...descriptor,
+        value: () => {
+          throw poison;
+        },
+      });
+    }
+    let first: Promise<void> | undefined;
+    let second: Promise<void> | undefined;
+    try {
+      first = dispatchDelegatedEvent({ target: element, type: 'click' }, importModule);
+      second = dispatchDelegatedEvent({ target: element, type: 'click' }, importModule);
+    } finally {
+      Object.defineProperty(Promise, 'resolve', resolve);
+      for (const { descriptor, name } of descriptors) {
+        Object.defineProperty(Promise.prototype, name, descriptor);
+      }
+    }
+    if (!first || !second) throw new Error('Missing delegated dispatch completions');
+    await first;
+    await second;
+
+    // SPEC §4.3/§6.6: per-island state serialization is framework-owned continuation truth;
+    // authored Promise method replacement cannot suppress a handler or reorder the next writer.
+    expect(handlerCalls).toBe(2);
+    expect(element.getAttribute('kovo-state')).toBe('{"count":2}');
+  });
+
   it('does not serialize delegated state writes across different islands', async () => {
     let releaseFirst: (() => void) | undefined;
     const firstCanFinish = new Promise<void>((resolve) => {

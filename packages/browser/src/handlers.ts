@@ -123,19 +123,34 @@ export async function dispatchDelegatedEvent(
   if (!element) return;
 
   const stateHost = readElementStateHost(element) ?? element;
-  const previous = securityWeakMapGet(delegatedStateQueues, stateHost) ?? Promise.resolve();
-  const dispatch = previous
-    .catch(() => undefined)
-    .then(() =>
-      dispatchDelegatedEventForElement(event, importModule, element, stateHost, islandSignalScope),
+  const previous = securityWeakMapGet(delegatedStateQueues, stateHost);
+  const dispatch = (async () => {
+    if (previous) {
+      try {
+        await previous;
+      } catch {}
+    }
+    await dispatchDelegatedEventForElement(
+      event,
+      importModule,
+      element,
+      stateHost,
+      islandSignalScope,
     );
-  const queued = dispatch
-    .catch(() => undefined)
-    .finally(() => {
+  })();
+  let queued: Promise<void>;
+  queued = (async () => {
+    try {
+      await dispatch;
+    } catch {
+      // The public dispatch promise carries the failure; the retained queue only sequences the
+      // next state writer and therefore settles successfully after a failed handler.
+    } finally {
       if (securityWeakMapGet(delegatedStateQueues, stateHost) === queued) {
         securityWeakMapDelete(delegatedStateQueues, stateHost);
       }
-    });
+    }
+  })();
   securityWeakMapSet(delegatedStateQueues, stateHost, queued);
 
   await dispatch;
