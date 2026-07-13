@@ -304,8 +304,8 @@ describe('create-kovo starter (build integration: runtime and dev server)', () =
         headers: { cookie: cookieHeader(jar) },
         redirect: 'manual',
       });
-      expect(authedHome.status).toBe(200);
       const authedHtml = await authedHome.text();
+      expect(authedHome.status, `${authedHtml}\n${output()}`).toBe(200);
       expect(authedHtml).toContain('Demo User');
       expect(authedHtml).toContain('Contacts');
       expect(authedHtml).toContain('Ada Lovelace');
