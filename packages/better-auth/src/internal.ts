@@ -72,6 +72,7 @@ import { betterAuthOAuthProviderSuccessorImportPaths } from './internal/plugin-m
 import {
   betterAuthArrayAppend,
   betterAuthDefineOwnData,
+  betterAuthOwnDataOption,
   betterAuthSnapshotDenseArray,
   betterAuthToLowerCase,
 } from './internal/intrinsics.js';
@@ -393,17 +394,36 @@ export function createBetterAuthCredentialMutationTouchGraph(
     | BetterAuthCredentialMutationTouchGraphOptions
     | Partial<Record<BetterAuthCredentialMutationApi, string>> = {},
 ): BetterAuthCredentialMutationTouchGraph {
-  const keyOverrides = isBetterAuthCredentialMutationTouchGraphOptions(options)
-    ? (options.keys ?? {})
+  const structuredOptions = isBetterAuthCredentialMutationTouchGraphOptions(options);
+  const keyOverrides = structuredOptions
+    ? (betterAuthOwnDataOption<Partial<Record<BetterAuthCredentialMutationApi, string>>>(
+        options,
+        'keys',
+        'Better Auth credential touch-graph option keys',
+      ) ?? {})
     : options;
-  const tableTouches = isBetterAuthCredentialMutationTouchGraphOptions(options)
-    ? options.credentialMutationTableTouches
+  const tableTouches = structuredOptions
+    ? betterAuthOwnDataOption<
+        BetterAuthCredentialMutationTouchGraphOptions['credentialMutationTableTouches']
+      >(
+        options,
+        'credentialMutationTableTouches',
+        'Better Auth credential touch-graph option credentialMutationTableTouches',
+      )
     : undefined;
-  const schemaBridge = isBetterAuthCredentialMutationTouchGraphOptions(options)
-    ? options.schemaBridge
+  const schemaBridge = structuredOptions
+    ? betterAuthOwnDataOption<BetterAuthSchemaBridgeExtensions>(
+        options,
+        'schemaBridge',
+        'Better Auth credential touch-graph option schemaBridge',
+      )
     : undefined;
-  const apis = isBetterAuthCredentialMutationTouchGraphOptions(options)
-    ? (options.apis ?? betterAuthCredentialMutationApis)
+  const apis = structuredOptions
+    ? (betterAuthOwnDataOption<readonly BetterAuthCredentialMutationApi[]>(
+        options,
+        'apis',
+        'Better Auth credential touch-graph option apis',
+      ) ?? betterAuthCredentialMutationApis)
     : betterAuthCredentialMutationApis;
   const derivationOptions = {
     ...(tableTouches === undefined ? {} : { credentialMutationTableTouches: tableTouches }),
@@ -433,7 +453,12 @@ export function createBetterAuthCredentialMutationTouchGraph(
         `Better Auth ${api} touch-graph sites`,
       );
     }
-    const key = keyOverrides[api] ?? betterAuthCredentialMutationDefaultKeys[api];
+    const key =
+      betterAuthOwnDataOption<string>(
+        keyOverrides,
+        api,
+        `Better Auth credential touch-graph key ${api}`,
+      ) ?? betterAuthCredentialMutationDefaultKeys[api];
     betterAuthDefineOwnData(
       graph,
       key,

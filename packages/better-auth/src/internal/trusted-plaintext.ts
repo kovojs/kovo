@@ -237,7 +237,8 @@ function copySetCookieValues(value: unknown): string[] {
     !('value' in lengthDescriptor) ||
     typeof lengthDescriptor.value !== 'number' ||
     !betterAuthIsSafeInteger(lengthDescriptor.value) ||
-    lengthDescriptor.value < 0
+    lengthDescriptor.value < 0 ||
+    lengthDescriptor.value >= 100_000
   ) {
     return [];
   }

@@ -34,7 +34,11 @@ import {
   pinBetterAuthSignOut,
   pinBetterAuthSignUpEmail,
 } from './internal/trusted-plaintext.js';
-import { betterAuthOwnDataOption } from './internal/intrinsics.js';
+import {
+  betterAuthOwnDataOption,
+  betterAuthResponseHeaders,
+  betterAuthResponseStatus,
+} from './internal/intrinsics.js';
 
 const NativeError = Error;
 const betterAuthCredentialBoundaryFailureMessage =
@@ -269,7 +273,21 @@ export function betterAuthSignOutMutation<
           throw betterAuthCredentialBoundaryFailure();
         }
 
-        forwardBetterAuthSetCookie(response.headers, context);
+        // SPEC §6.5/§9.1: a resolved provider promise is not revocation evidence. Bind the
+        // exact boot-pinned Response facts and require a successful status before clearing any
+        // browser state or publishing the framework-owned signed-out outcome.
+        const status = betterAuthResponseStatus(response);
+        const responseHeaders = betterAuthResponseHeaders(response);
+        if (
+          status === undefined ||
+          status < 200 ||
+          status >= 300 ||
+          responseHeaders === undefined
+        ) {
+          throw betterAuthCredentialBoundaryFailure();
+        }
+
+        forwardBetterAuthSetCookie(responseHeaders, context);
         setSessionRevocationClearSiteData(context);
 
         return {

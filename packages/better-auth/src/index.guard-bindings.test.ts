@@ -158,4 +158,45 @@ describe('guard bindings', () => {
       }),
     ).toBe(true);
   });
+
+  it('does not grant organization authority through inherited or accessor session fields', async () => {
+    // SPEC §6.5/§10.3: the active organization is authorization evidence. Only exact own
+    // session/user/organization data may grant; prototype and accessor carriers fail closed.
+    const scoped = activeOrganization<AppRequest & { session?: AppRequest['session'] | null }>();
+    let accessorReads = 0;
+    const inheritedSession = Object.create({
+      session: {
+        activeOrganizationId: 'attacker-org',
+        user: { id: 'attacker', roles: ['admin'] },
+      },
+    }) as AppRequest;
+    const inheritedOrganization = {
+      session: Object.create(
+        { activeOrganizationId: 'attacker-org' },
+        {
+          user: { configurable: true, enumerable: true, value: { id: 'user-1' } },
+        },
+      ),
+    } as AppRequest;
+    const accessorOrganization = {
+      session: Object.defineProperties(
+        {},
+        {
+          activeOrganizationId: {
+            configurable: true,
+            get() {
+              accessorReads += 1;
+              return 'attacker-org';
+            },
+          },
+          user: { configurable: true, enumerable: true, value: { id: 'user-1' } },
+        },
+      ),
+    } as AppRequest;
+
+    expect(await scoped(inheritedSession)).toMatchObject({ kind: 'unauthenticated' });
+    expect(await scoped(inheritedOrganization)).toMatchObject({ kind: 'forbidden' });
+    expect(await scoped(accessorOrganization)).toMatchObject({ kind: 'forbidden' });
+    expect(accessorReads).toBe(0);
+  });
 });

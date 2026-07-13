@@ -250,10 +250,23 @@ export function activeOrganization<Request extends BetterAuthOrganizationRequest
   ActiveOrganizationRequest<Request>
 > {
   return (request) => {
-    if (!request.session?.user) return unauthenticatedGuardFailure();
+    // SPEC §6.5/§10.3: session, user, and organization are authorization evidence. Do not
+    // invoke accessors or inherit prototype state at this last adapter-owned guard boundary.
+    const session = readOwnDataValue(request, 'session');
+    if (session === null || typeof session !== 'object') return unauthenticatedGuardFailure();
+    const user = readOwnDataValue(session, 'user');
+    if (user === null || typeof user !== 'object') return unauthenticatedGuardFailure();
+    const activeOrganizationId = readOwnDataValue(session, 'activeOrganizationId');
 
-    return request.session.activeOrganizationId ? true : unauthorizedGuardFailure();
+    return typeof activeOrganizationId === 'string' && activeOrganizationId !== ''
+      ? true
+      : unauthorizedGuardFailure();
   };
+}
+
+function readOwnDataValue(value: object, property: PropertyKey): unknown {
+  const descriptor = betterAuthGetOwnPropertyDescriptor(value, property);
+  return descriptor !== undefined && 'value' in descriptor ? descriptor.value : undefined;
 }
 
 /**
@@ -414,9 +427,9 @@ export function isBetterAuthCredentialMutationTouchGraphOptions(
     | Partial<Record<BetterAuthCredentialMutationApi, string>>,
 ): value is BetterAuthCredentialMutationTouchGraphOptions {
   return (
-    'apis' in value ||
-    'credentialMutationTableTouches' in value ||
-    'keys' in value ||
-    'schemaBridge' in value
+    betterAuthGetOwnPropertyDescriptor(value, 'apis') !== undefined ||
+    betterAuthGetOwnPropertyDescriptor(value, 'credentialMutationTableTouches') !== undefined ||
+    betterAuthGetOwnPropertyDescriptor(value, 'keys') !== undefined ||
+    betterAuthGetOwnPropertyDescriptor(value, 'schemaBridge') !== undefined
   );
 }

@@ -5,6 +5,7 @@ import {
   betterAuthSignInEmailMutation,
   betterAuthSignOutMutation,
   betterAuthSignUpEmailMutation,
+  createBetterAuthCredentialMutationTouchGraph,
   getBetterAuthSetCookie,
   isBetterAuthCredentialFailureError,
   type BetterAuthResponseLike,
@@ -368,6 +369,86 @@ describe('credential mutation helpers', () => {
     });
   });
 
+  it('does not report or clear local state for a failed sign-out response', async () => {
+    // SPEC §6.5/§9.1: logout success needs exact positive provider response evidence.
+    // A resolved 5xx is not revocation and must not emit Clear-Site-Data or a signed-out outcome.
+    const auth: BetterAuthSignOutLike = {
+      api: {
+        signOut: () =>
+          new Response('provider failed', {
+            headers: { 'set-cookie': 'kovo_session=; Max-Age=0; Path=/' },
+            status: 500,
+          }),
+      },
+    };
+    const signOut = betterAuthSignOutMutation(auth);
+
+    await expect(
+      runProtectedCredentialMutation(
+        signOut,
+        {},
+        {
+          headers: requestHeaders('kovo_session=session-1'),
+        },
+      ),
+    ).rejects.toThrow(
+      'Better Auth credential provider failed inside the trusted plaintext boundary.',
+    );
+  });
+
+  it('does not trust late native Response getters to forge sign-out success', async () => {
+    const response = new Response('provider failed', { status: 500 });
+    const auth: BetterAuthSignOutLike = { api: { signOut: () => response } };
+    const signOut = betterAuthSignOutMutation(auth);
+    const status = Object.getOwnPropertyDescriptor(Response.prototype, 'status');
+    const headers = Object.getOwnPropertyDescriptor(Response.prototype, 'headers');
+    if (!status?.get || !headers?.get) throw new Error('Response controls unavailable');
+    const forged = new Headers({ 'set-cookie': 'kovo_session=; Max-Age=0; Path=/' });
+    try {
+      Object.defineProperty(Response.prototype, 'status', { ...status, get: () => 200 });
+      Object.defineProperty(Response.prototype, 'headers', { ...headers, get: () => forged });
+      await expect(
+        runProtectedCredentialMutation(
+          signOut,
+          {},
+          {
+            headers: requestHeaders('kovo_session=session-1'),
+          },
+        ),
+      ).rejects.toThrow(
+        'Better Auth credential provider failed inside the trusted plaintext boundary.',
+      );
+    } finally {
+      Object.defineProperty(Response.prototype, 'status', status);
+      Object.defineProperty(Response.prototype, 'headers', headers);
+    }
+  });
+
+  it('does not let inherited touch-graph option fields erase credential coverage', () => {
+    // SPEC §10.3/§11.2: overload classification is part of the credential write graph.
+    // An inherited `apis` field must not reinterpret ordinary key overrides as an empty graph.
+    const keyOverrides = Object.create({ apis: [] }) as Record<string, string>;
+    keyOverrides.signInEmail = 'custom/sign-in';
+
+    const graph = createBetterAuthCredentialMutationTouchGraph(keyOverrides);
+    expect(Object.keys(graph).sort()).toEqual(['auth/sign-out', 'auth/sign-up', 'custom/sign-in']);
+  });
+
+  it('rejects touch-graph option accessors without invoking them', () => {
+    let reads = 0;
+    const options = Object.defineProperty({}, 'apis', {
+      get() {
+        reads += 1;
+        return [];
+      },
+    });
+
+    expect(() => createBetterAuthCredentialMutationTouchGraph(options as never)).toThrow(
+      /touch-graph option apis must be an own-data property/,
+    );
+    expect(reads).toBe(0);
+  });
+
   it('pins credential API methods and their receiver before plaintext becomes reachable', async () => {
     const receiverCalls: Array<{ method: string; receiver: unknown }> = [];
     const capturedByPoison: string[] = [];
@@ -724,6 +805,31 @@ describe('getBetterAuthSetCookie comma-folded fallback (part-3 L13-3)', () => {
     }
     expect(cookies).toEqual(['sid=reviewed; Path=/; HttpOnly', 'csrf=token; Path=/']);
     expect(poisonHits).toBe(0);
+  });
+
+  it('rejects unbounded structural Set-Cookie arrays before iterating them', () => {
+    let descriptorReads = 0;
+    const values = new Proxy(
+      { length: 100_001 },
+      {
+        getOwnPropertyDescriptor(target, property) {
+          descriptorReads += 1;
+          if (property === 'length') {
+            return { configurable: true, enumerable: false, value: target.length, writable: true };
+          }
+          if (typeof property === 'string' && /^\d+$/u.test(property)) {
+            return { configurable: true, enumerable: true, value: 'sid=x', writable: true };
+          }
+          return undefined;
+        },
+      },
+    );
+    const headers = Object.defineProperty({}, 'getSetCookie', {
+      value: () => values,
+    }) as Headers;
+
+    expect(getBetterAuthSetCookie(headers)).toEqual([]);
+    expect(descriptorReads).toBeLessThan(10);
   });
 
   function headersWithFoldedSetCookie(folded: string): Headers {
