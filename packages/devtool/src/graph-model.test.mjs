@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildBm25, KIND_META, LANES } from './graph-model.mjs';
+import { buildBm25, KIND_META, LANES, traceGraph } from './graph-model.mjs';
 import { createMcpServer } from './mcp.mjs';
+import { arraySort } from './output-security.mjs';
 
 function retrievalBundle() {
   return {
@@ -78,5 +79,42 @@ describe('devtool BM25 retrieval', () => {
 
     expect(KIND_META.domain.accent).toBe('#34d399');
     expect(LANES[0]).toBe('mutation');
+  });
+
+  it('keeps adversarial graph sorting subquadratic without using Array.prototype.sort', () => {
+    const size = 4_096;
+    const values = [];
+    for (let value = size - 1; value >= 0; value -= 1) values.push(value);
+    let comparisons = 0;
+
+    const sorted = arraySort(values, (left, right) => {
+      comparisons += 1;
+      return left - right;
+    });
+
+    expect(sorted[0]).toBe(0);
+    expect(sorted[size - 1]).toBe(size - 1);
+    expect(comparisons).toBeLessThan(size * 16);
+  });
+
+  it('traces a graph deeper than the JavaScript call stack with an iterative worklist', () => {
+    const size = 20_000;
+    const nodes = [];
+    const edges = [];
+    for (let index = 0; index < size; index += 1) {
+      nodes.push({ id: `node:${index}` });
+      if (index > 0) {
+        edges.push({
+          from: `node:${index - 1}`,
+          id: `edge:${index - 1}`,
+          to: `node:${index}`,
+        });
+      }
+    }
+
+    const traced = traceGraph(nodes, edges, 'node:0');
+
+    expect(traced.nodes.size).toBe(size);
+    expect(traced.edges.size).toBe(size - 1);
   });
 });

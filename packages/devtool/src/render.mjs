@@ -1,7 +1,7 @@
 // Server-side renderer for the dataflow graph. URL-driven (SPEC §8): ?app, ?sel,
 // ?q decide what renders, so the core works JS-off. Pure — takes a prebuilt bundle
 // (nodes/edges with source slices) and returns HTML.
-import { buildBm25, KIND_META, LANES } from './graph-model.mjs';
+import { buildBm25, KIND_META, LANES, traceGraph } from './graph-model.mjs';
 import { renderCode } from './highlight.mjs';
 import {
   arrayAppend,
@@ -168,36 +168,7 @@ function layout(bundle) {
 
 // ---------- trace ----------
 function trace(bundle, selId) {
-  const out = createMap(),
-    inc = createMap();
-  for (let index = 0; index < arrayLength(bundle.nodes, 'devtool graph nodes'); index += 1) {
-    const node = arrayValue(bundle.nodes, index, 'devtool graph nodes');
-    mapSet(out, node.id, []);
-    mapSet(inc, node.id, []);
-  }
-  for (let index = 0; index < arrayLength(bundle.edges, 'devtool graph edges'); index += 1) {
-    const edge = arrayValue(bundle.edges, index, 'devtool graph edges');
-    arrayAppend(mapGet(out, edge.from), edge, 'devtool outgoing edges');
-    arrayAppend(mapGet(inc, edge.to), edge, 'devtool incoming edges');
-  }
-  const nodes = createSet(),
-    edges = createSet();
-  setAdd(nodes, selId);
-  const walk = (cur, dir) => {
-    const candidates = dir === 'd' ? mapGet(out, cur) : mapGet(inc, cur);
-    for (let index = 0; index < arrayLength(candidates, 'devtool trace edges'); index += 1) {
-      const edge = arrayValue(candidates, index, 'devtool trace edges');
-      const next = dir === 'd' ? edge.to : edge.from;
-      setAdd(edges, edge.id);
-      if (!setHas(nodes, next)) {
-        setAdd(nodes, next);
-        walk(next, dir);
-      }
-    }
-  };
-  walk(selId, 'd');
-  walk(selId, 'u');
-  return { nodes, edges };
+  return traceGraph(bundle.nodes, bundle.edges, selId);
 }
 
 function edgePath(a, b) {

@@ -15,6 +15,7 @@ import {
   arraySort,
   arrayValue,
   createMap,
+  createSet,
   freeze,
   isSafeInteger,
   joinStrings,
@@ -22,6 +23,8 @@ import {
   mapHas,
   mapSet,
   numberLog,
+  setAdd,
+  setHas,
   stringCharCodeAt,
   stringSlice,
 } from './output-security.mjs';
@@ -216,26 +219,61 @@ function buildIndex(nodes, edges, byId) {
   }
 
   /** all node ids reachable along the dataflow when one node is selected (for highlight). */
-  const traceFrom = (nid) => {
-    const set = new Set([nid]);
-    const edgeSet = new Set();
-    const walk = (cur, dir) => {
-      const list = dir === 'down' ? out.get(cur) : inc.get(cur);
-      for (const e of list ?? []) {
-        const next = dir === 'down' ? e.to : e.from;
-        edgeSet.add(e.id);
-        if (!set.has(next)) {
-          set.add(next);
-          walk(next, dir);
-        }
-      }
-    };
-    walk(nid, 'down');
-    walk(nid, 'up');
-    return { nodes: set, edges: edgeSet };
-  };
+  const traceFrom = (nid) => traceAdjacency(out, inc, nid);
 
   return { out, inc, componentInflow, componentOutflow, mutationEffects, optStatus, traceFrom };
+}
+
+/** @internal Iterative graph trace shared by the renderer and model index. */
+export function traceGraph(nodes, edges, nid) {
+  const out = createMap();
+  const inc = createMap();
+  for (let index = 0; index < arrayLength(nodes, 'devtool graph nodes'); index += 1) {
+    const node = arrayValue(nodes, index, 'devtool graph nodes');
+    mapSet(out, node.id, []);
+    mapSet(inc, node.id, []);
+  }
+  for (let index = 0; index < arrayLength(edges, 'devtool graph edges'); index += 1) {
+    const edge = arrayValue(edges, index, 'devtool graph edges');
+    const outgoing = mapGet(out, edge.from);
+    const incoming = mapGet(inc, edge.to);
+    if (outgoing) arrayAppend(outgoing, edge, 'devtool outgoing edges');
+    if (incoming) arrayAppend(incoming, edge, 'devtool incoming edges');
+  }
+  return traceAdjacency(out, inc, nid);
+}
+
+function traceAdjacency(out, inc, nid) {
+  const nodes = createSet();
+  const edges = createSet();
+  setAdd(nodes, nid);
+
+  const walk = (adjacency, direction) => {
+    const visited = createSet();
+    const work = [nid];
+    setAdd(visited, nid);
+    for (let cursor = 0; cursor < arrayLength(work, 'devtool trace worklist'); cursor += 1) {
+      const current = arrayValue(work, cursor, 'devtool trace worklist');
+      const candidates = mapGet(adjacency, current) ?? [];
+      for (
+        let edgeIndex = 0;
+        edgeIndex < arrayLength(candidates, 'devtool trace edges');
+        edgeIndex += 1
+      ) {
+        const edge = arrayValue(candidates, edgeIndex, 'devtool trace edges');
+        const next = direction === 'down' ? edge.to : edge.from;
+        setAdd(edges, edge.id);
+        setAdd(nodes, next);
+        if (!setHas(visited, next)) {
+          setAdd(visited, next);
+          arrayAppend(work, next, 'devtool trace worklist');
+        }
+      }
+    }
+  };
+  walk(out, 'down');
+  walk(inc, 'up');
+  return { nodes, edges };
 }
 
 // ---------- BM25 retrieval (the MCP tool's ranking, also powers UI search) ----------

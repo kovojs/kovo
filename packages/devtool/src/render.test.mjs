@@ -489,6 +489,40 @@ describe('devtool renderPage', () => {
     expect(reads).toBe(0);
   });
 
+  it('does not mistake accessors for data after Object.prototype value pollution', () => {
+    const options = baseRenderOptions();
+    const originalValue = Object.getOwnPropertyDescriptor(Object.prototype, 'value');
+    let reads = 0;
+    let failure;
+    Object.defineProperty(options.bundle.nodes[0], 'label', {
+      enumerable: true,
+      get() {
+        reads += 1;
+        return 'getter result';
+      },
+    });
+
+    try {
+      Object.defineProperty(Object.prototype, 'value', {
+        configurable: true,
+        value: '<img src=x onerror=alert(8)>',
+        writable: true,
+      });
+      try {
+        renderPage(options);
+      } catch (error) {
+        failure = error;
+      }
+    } finally {
+      if (originalValue === undefined) delete Object.prototype.value;
+      else Object.defineProperty(Object.prototype, 'value', originalValue);
+    }
+
+    expect(failure).toBeInstanceOf(TypeError);
+    expect(failure.message).toMatch(/bundle\.nodes\[0\]\.label.*(?:changed|own data property)/u);
+    expect(reads).toBe(0);
+  });
+
   it('rejects a proxy that changes an authority field during reconstruction', () => {
     const options = baseRenderOptions();
     const target = options.manifest[0];
@@ -507,5 +541,27 @@ describe('devtool renderPage', () => {
     });
 
     expect(() => renderPage(options)).toThrow(/manifest\[0\]\.id changed while it was inspected/u);
+  });
+
+  it('rejects an array proxy that changes an entry during reconstruction', () => {
+    const options = baseRenderOptions();
+    const target = options.manifest;
+    let reads = 0;
+    options.manifest = new Proxy(target, {
+      getOwnPropertyDescriptor(record, key) {
+        const descriptor = Reflect.getOwnPropertyDescriptor(record, key);
+        if (key !== '0' || descriptor === undefined) return descriptor;
+        reads += 1;
+        return {
+          ...descriptor,
+          value:
+            reads === 1
+              ? descriptor.value
+              : { blurb: '', id: 'attacker', label: '<img src=x onerror=alert(9)>' },
+        };
+      },
+    });
+
+    expect(() => renderPage(options)).toThrow(/manifest\[0\] changed while it was inspected/u);
   });
 });

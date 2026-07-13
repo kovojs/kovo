@@ -52,11 +52,15 @@ function ownDescriptor(value, key) {
   return apply(nativeGetOwnPropertyDescriptor, NativeObject, [value, key]);
 }
 
+function hasOwnDescriptorValue(descriptor) {
+  return descriptor !== undefined && ownDescriptor(descriptor, 'value') !== undefined;
+}
+
 function sameDataDescriptor(left, right) {
   if (left === undefined || right === undefined) return left === right;
   return (
-    'value' in left &&
-    'value' in right &&
+    hasOwnDescriptorValue(left) &&
+    hasOwnDescriptorValue(right) &&
     apply(nativeObjectIs, NativeObject, [left.value, right.value]) &&
     left.configurable === right.configurable &&
     left.enumerable === right.enumerable &&
@@ -129,9 +133,13 @@ export function isArray(value) {
 export function arrayLength(values, label = 'array') {
   if (!isArray(values)) throw new NativeTypeError(`${label} must be an array.`);
   const descriptor = ownDescriptor(values, 'length');
+  const confirmed = ownDescriptor(values, 'length');
+  if (!sameDataDescriptor(descriptor, confirmed)) {
+    throw new NativeTypeError(`${label}.length changed while it was inspected.`);
+  }
   if (
     descriptor === undefined ||
-    !('value' in descriptor) ||
+    !hasOwnDescriptorValue(descriptor) ||
     typeof descriptor.value !== 'number' ||
     !apply(nativeNumberIsSafeInteger, NativeNumber, [descriptor.value]) ||
     descriptor.value < 0
@@ -143,7 +151,11 @@ export function arrayLength(values, label = 'array') {
 
 export function arrayValue(values, index, label = 'array') {
   const descriptor = ownDescriptor(values, index);
-  if (descriptor === undefined || !('value' in descriptor) || !descriptor.enumerable) {
+  const confirmed = ownDescriptor(values, index);
+  if (!sameDataDescriptor(descriptor, confirmed)) {
+    throw new NativeTypeError(`${label}[${index}] changed while it was inspected.`);
+  }
+  if (descriptor === undefined || !hasOwnDescriptorValue(descriptor) || !descriptor.enumerable) {
     throw new NativeTypeError(`${label}[${index}] must be an enumerable own data property.`);
   }
   return descriptor.value;
@@ -228,18 +240,49 @@ export function arrayReverseCopy(values, label = 'array') {
 }
 
 export function arraySort(values, compare, label = 'array') {
-  const output = arraySlice(values, 0, arrayLength(values, label), label);
-  const length = arrayLength(output, `${label} sort`);
-  for (let index = 1; index < length; index += 1) {
-    const value = arrayValue(output, index, `${label} sort`);
-    let cursor = index;
-    while (cursor > 0 && compare(value, arrayValue(output, cursor - 1, `${label} sort`)) < 0) {
-      defineOwnData(output, cursor, arrayValue(output, cursor - 1, `${label} sort`));
-      cursor -= 1;
-    }
-    defineOwnData(output, cursor, value);
+  if (typeof compare !== 'function') {
+    throw new NativeTypeError(`${label} comparator must be a function.`);
   }
-  return output;
+  let source = arraySlice(values, 0, arrayLength(values, label), label);
+  const length = arrayLength(source, `${label} sort`);
+  if (length < 2) return source;
+
+  let target = [];
+  for (let index = 0; index < length; index += 1) {
+    arrayAppend(target, undefined, `${label} sort workspace`);
+  }
+
+  // Bottom-up stable merge sort keeps graph layout and BM25 ranking O(n log n)
+  // without dispatching through a late-poisonable Array.prototype.sort.
+  for (let width = 1; width < length; width *= 2) {
+    const span = width * 2;
+    for (let start = 0; start < length; start += span) {
+      let left = start;
+      const leftCandidate = start + width;
+      const leftEnd = leftCandidate < length ? leftCandidate : length;
+      let right = leftEnd;
+      const rightCandidate = start + span;
+      const rightEnd = rightCandidate < length ? rightCandidate : length;
+
+      for (let write = start; write < rightEnd; write += 1) {
+        const takeLeft =
+          left < leftEnd &&
+          (right >= rightEnd ||
+            compare(
+              arrayValue(source, left, `${label} sort`),
+              arrayValue(source, right, `${label} sort`),
+            ) <= 0);
+        const value = takeLeft
+          ? arrayValue(source, left++, `${label} sort`)
+          : arrayValue(source, right++, `${label} sort`);
+        defineOwnData(target, write, value);
+      }
+    }
+    const previous = source;
+    source = target;
+    target = previous;
+  }
+  return source;
 }
 
 export function arrayIncludes(values, expected, label = 'array') {
@@ -297,7 +340,7 @@ export function stableOwnData(record, key, label) {
     );
   }
   if (before === undefined) return { found: false, value: undefined };
-  if (!('value' in before) || !before.enumerable) {
+  if (!hasOwnDescriptorValue(before) || !before.enumerable) {
     throw new NativeTypeError(
       `${label}.${apply(NativeString, undefined, [key])} must be an enumerable own data property.`,
     );
