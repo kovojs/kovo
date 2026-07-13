@@ -113,4 +113,41 @@ describe('CSP source-list value validation (bugz-3 L18, SPEC §6.6)', () => {
     );
     expect(headers?.['Reporting-Endpoints']).toBe('kovo-csp="/_kovo/reports/csp"');
   });
+
+  it('ignores inherited CSP overrides and refuses accessors without invoking them', () => {
+    const metadata = emptyCspInlineMetadata();
+    const inheritedOptions = Object.create({
+      baseUri: ['*'],
+      formAction: ['*'],
+      frameAncestors: ['*'],
+      objectSrc: ['*'],
+      trustedTypes: false,
+    });
+    const policy = renderContentSecurityPolicy(metadata, inheritedOptions);
+    expect(policy).toContain("base-uri 'self'");
+    expect(policy).toContain("object-src 'none'");
+    expect(policy).toContain("form-action 'self'");
+    expect(policy).toContain("frame-ancestors 'none'");
+
+    const inheritedConfig = Object.create({
+      allowlist: { scriptSrc: ['https://attacker.example'] },
+      reporting: false,
+      trustedTypes: false,
+    });
+    const defaultPolicy = renderDefaultDocumentCsp(metadata, inheritedConfig);
+    expect(defaultPolicy).not.toContain('https://attacker.example');
+    expect(defaultPolicy).toContain("require-trusted-types-for 'script'");
+
+    let getterCalls = 0;
+    const accessor = {} as Parameters<typeof renderContentSecurityPolicy>[1];
+    Object.defineProperty(accessor, 'baseUri', {
+      configurable: true,
+      get() {
+        getterCalls += 1;
+        return ['*'];
+      },
+    });
+    expect(() => renderContentSecurityPolicy(metadata, accessor)).toThrow('own data');
+    expect(getterCalls).toBe(0);
+  });
 });

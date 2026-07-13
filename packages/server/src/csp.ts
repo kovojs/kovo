@@ -1,5 +1,13 @@
 import { escapeAttribute } from './html.js';
 import {
+  witnessArrayAppend,
+  witnessCreateNullRecord,
+  witnessFreeze,
+  witnessGetOwnPropertyDescriptor,
+  witnessIsArray,
+  witnessObjectIs,
+} from './security-witness-intrinsics.js';
+import {
   createSecuritySet,
   securityArrayJoin,
   securityArrayPush,
@@ -161,6 +169,181 @@ interface CspReportingHeaderOptions {
   endpointOrigin?: string;
 }
 
+const CSP_ALLOWLIST_KEYS = [
+  'connectSrc',
+  'frameSrc',
+  'imgSrc',
+  'scriptSrc',
+  'styleSrc',
+] as const satisfies readonly (keyof CspAllowlist)[];
+
+const CSP_POLICY_ARRAY_KEYS = [
+  'baseUri',
+  'connectSrc',
+  'defaultSrc',
+  'formAction',
+  'frameAncestors',
+  'frameSrc',
+  'imgSrc',
+  'objectSrc',
+  'scriptSrc',
+  'styleSrc',
+] as const satisfies readonly (keyof ContentSecurityPolicyOptions)[];
+
+function snapshotCspInlineMetadata(source: CspInlineMetadata): CspInlineMetadata {
+  if (typeof source !== 'object' || source === null || witnessIsArray(source)) {
+    throw new TypeError('CSP inline metadata must be a stable own-data record.');
+  }
+  const scripts = snapshotCspStringArray(
+    cspRequiredOwnDataValue(source, 'scripts', 'CSP inline metadata'),
+    'CSP inline script hashes',
+  );
+  const styles = snapshotCspStringArray(
+    cspRequiredOwnDataValue(source, 'styles', 'CSP inline metadata'),
+    'CSP inline style hashes',
+  );
+  const rawStyleAttributes = cspOwnDataValue(source, 'styleAttributes', 'CSP inline metadata');
+  const styleAttributes =
+    rawStyleAttributes === undefined
+      ? undefined
+      : snapshotCspStringArray(rawStyleAttributes, 'CSP inline style-attribute hashes');
+  const snapshot = witnessCreateNullRecord<unknown>();
+  snapshot.scripts = scripts;
+  snapshot.styles = styles;
+  snapshot.styleAttributes = styleAttributes;
+  return witnessFreeze(snapshot) as unknown as CspInlineMetadata;
+}
+
+function snapshotDocumentCspConfig(source: DocumentCspConfig): DocumentCspConfig {
+  if (typeof source !== 'object' || source === null || witnessIsArray(source)) {
+    throw new TypeError('Document CSP config must be a stable own-data record.');
+  }
+  const rawAllowlist = cspOwnDataValue(source, 'allowlist', 'Document CSP config');
+  const rawReporting = cspOwnDataValue(source, 'reporting', 'Document CSP config');
+  const trustedTypes = cspOwnDataValue(source, 'trustedTypes', 'Document CSP config');
+  if (trustedTypes !== undefined && typeof trustedTypes !== 'boolean') {
+    throw new TypeError('Document CSP trustedTypes must be a boolean.');
+  }
+  const allowlist = rawAllowlist === undefined ? undefined : snapshotCspAllowlist(rawAllowlist);
+  const reporting =
+    rawReporting === undefined || rawReporting === false
+      ? rawReporting
+      : snapshotCspReportingConfig(rawReporting);
+  const snapshot = witnessCreateNullRecord<unknown>();
+  snapshot.allowlist = allowlist;
+  snapshot.reporting = reporting;
+  snapshot.trustedTypes = trustedTypes;
+  return witnessFreeze(snapshot) as unknown as DocumentCspConfig;
+}
+
+function snapshotCspAllowlist(source: unknown): CspAllowlist {
+  if (typeof source !== 'object' || source === null || witnessIsArray(source)) {
+    throw new TypeError('Document CSP allowlist must be a stable own-data record.');
+  }
+  const snapshot = witnessCreateNullRecord<unknown>();
+  for (let index = 0; index < CSP_ALLOWLIST_KEYS.length; index += 1) {
+    const key = CSP_ALLOWLIST_KEYS[index]!;
+    const value = cspOwnDataValue(source, key, 'Document CSP allowlist');
+    snapshot[key] =
+      value === undefined ? undefined : snapshotCspStringArray(value, `CSP allowlist.${key}`);
+  }
+  return witnessFreeze(snapshot) as unknown as CspAllowlist;
+}
+
+function snapshotCspReportingConfig(source: unknown): CspReportingConfig {
+  if (typeof source !== 'object' || source === null || witnessIsArray(source)) {
+    throw new TypeError('Document CSP reporting config must be a stable own-data record.');
+  }
+  const maxAgeSeconds = cspOwnDataValue(source, 'maxAgeSeconds', 'CSP reporting config');
+  if (maxAgeSeconds !== undefined && typeof maxAgeSeconds !== 'number') {
+    throw new TypeError('CSP reporting maxAgeSeconds must be a number.');
+  }
+  const snapshot = witnessCreateNullRecord<unknown>();
+  snapshot.maxAgeSeconds = maxAgeSeconds;
+  return witnessFreeze(snapshot) as unknown as CspReportingConfig;
+}
+
+function snapshotContentSecurityPolicyOptions(
+  source: ContentSecurityPolicyOptions,
+): ContentSecurityPolicyOptions {
+  if (typeof source !== 'object' || source === null || witnessIsArray(source)) {
+    throw new TypeError('CSP policy options must be a stable own-data record.');
+  }
+  const snapshot = witnessCreateNullRecord<unknown>();
+  for (let index = 0; index < CSP_POLICY_ARRAY_KEYS.length; index += 1) {
+    const key = CSP_POLICY_ARRAY_KEYS[index]!;
+    const value = cspOwnDataValue(source, key, 'CSP policy options');
+    snapshot[key] =
+      value === undefined ? undefined : snapshotCspStringArray(value, `CSP policy ${key}`);
+  }
+  const reportTo = cspOwnDataValue(source, 'reportTo', 'CSP policy options');
+  const trustedTypes = cspOwnDataValue(source, 'trustedTypes', 'CSP policy options');
+  if (reportTo !== undefined && typeof reportTo !== 'string') {
+    throw new TypeError('CSP reportTo must be a string.');
+  }
+  if (trustedTypes !== undefined && typeof trustedTypes !== 'boolean') {
+    throw new TypeError('CSP trustedTypes must be a boolean.');
+  }
+  snapshot.reportTo = reportTo;
+  snapshot.trustedTypes = trustedTypes;
+  return witnessFreeze(snapshot) as unknown as ContentSecurityPolicyOptions;
+}
+
+function snapshotCspStringArray(source: unknown, label: string): readonly string[] {
+  if (!witnessIsArray(source)) throw new TypeError(`${label} must be an array.`);
+  const length = cspRequiredOwnDataValue(source, 'length', label);
+  if (
+    typeof length !== 'number' ||
+    !securityNumberIsFinite(length) ||
+    securityMathFloor(length) !== length ||
+    length < 0 ||
+    length > 100_000
+  ) {
+    throw new TypeError(`${label} must be a bounded dense array.`);
+  }
+  const snapshot: string[] = [];
+  for (let index = 0; index < length; index += 1) {
+    const value = cspRequiredOwnDataValue(source, index, label);
+    if (typeof value !== 'string') throw new TypeError(`${label} must contain strings.`);
+    witnessArrayAppend(snapshot, value, label);
+  }
+  return witnessFreeze(snapshot);
+}
+
+function cspRequiredOwnDataValue(source: object, property: PropertyKey, label: string): unknown {
+  const before = witnessGetOwnPropertyDescriptor(source, property);
+  const after = witnessGetOwnPropertyDescriptor(source, property);
+  if (before === undefined || after === undefined) {
+    throw new TypeError(`${label}.${String(property)} must be an own data property.`);
+  }
+  return cspStableDescriptorValue(before, after, property, label);
+}
+
+function cspOwnDataValue(source: object, property: PropertyKey, label: string): unknown {
+  const before = witnessGetOwnPropertyDescriptor(source, property);
+  const after = witnessGetOwnPropertyDescriptor(source, property);
+  if (before === undefined && after === undefined) return undefined;
+  if (before === undefined || after === undefined) {
+    throw new TypeError(`${label}.${String(property)} must be stable.`);
+  }
+  return cspStableDescriptorValue(before, after, property, label);
+}
+
+function cspStableDescriptorValue(
+  before: PropertyDescriptor,
+  after: PropertyDescriptor,
+  property: PropertyKey,
+  label: string,
+): unknown {
+  if (!('value' in before) || !('value' in after)) {
+    throw new TypeError(`${label}.${String(property)} must be an own data property.`);
+  }
+  if (!witnessObjectIs(before.value, after.value)) {
+    throw new TypeError(`${label}.${String(property)} changed during validation.`);
+  }
+  return before.value;
+}
+
 /**
  * SF (secure-framework Tier 3): assemble the strict default-on `Content-Security-Policy`
  * header value for a framework-rendered document.
@@ -182,8 +365,10 @@ export function renderDefaultDocumentCsp(
   metadata: CspInlineMetadata,
   config: DocumentCspConfig = {},
 ): string {
-  const allow = config.allowlist ?? {};
-  const reporting = resolveCspReporting(config.reporting);
+  const closedMetadata = snapshotCspInlineMetadata(metadata);
+  const closedConfig = snapshotDocumentCspConfig(config);
+  const allow = closedConfig.allowlist ?? witnessCreateNullRecord<readonly string[]>();
+  const reporting = resolveCspReporting(closedConfig.reporting);
   const scriptSrc = appendSourceValues(["'self'"], allow.scriptSrc);
   const styleSrc = appendSourceValues(["'self'"], allow.styleSrc);
   const imgSrc =
@@ -202,7 +387,7 @@ export function renderDefaultDocumentCsp(
   // only touch the per-fetch directives below. `base-uri`/`object-src`/`form-action`/
   // `frame-ancestors` are assembled by `renderContentSecurityPolicy` from their secure
   // defaults and are intentionally absent from `CspAllowlist`, so they stay locked.
-  return renderContentSecurityPolicy(metadata, {
+  return renderContentSecurityPolicy(closedMetadata, {
     scriptSrc,
     styleSrc,
     ...(imgSrc === undefined ? {} : { imgSrc }),
@@ -220,7 +405,7 @@ export function renderDefaultDocumentCsp(
     // the cross-browser CSP floor above carries the real guarantee. An app can opt OUT with
     // `document: { csp: { trustedTypes: false } }` (e.g. a third-party library that needs
     // its own un-named TT policy or an unrouted raw-HTML sink).
-    ...(config.trustedTypes === false ? {} : { trustedTypes: true }),
+    ...(closedConfig.trustedTypes === false ? {} : { trustedTypes: true }),
   });
 }
 
@@ -228,9 +413,17 @@ export function renderCspReportingHeaders(
   config: DocumentCspConfig = {},
   options: CspReportingHeaderOptions = {},
 ): CspReportingHeaders | undefined {
-  const reporting = resolveCspReporting(config.reporting);
+  if (typeof options !== 'object' || options === null || witnessIsArray(options)) {
+    throw new TypeError('CSP reporting options must be a stable own-data record.');
+  }
+  const closedConfig = snapshotDocumentCspConfig(config);
+  const endpointOrigin = cspOwnDataValue(options, 'endpointOrigin', 'CSP reporting options');
+  if (endpointOrigin !== undefined && typeof endpointOrigin !== 'string') {
+    throw new TypeError('CSP reporting endpointOrigin must be a string.');
+  }
+  const reporting = resolveCspReporting(closedConfig.reporting);
   if (reporting === undefined) return undefined;
-  const endpoint = relativeReportEndpoint(reporting.endpoint, options.endpointOrigin);
+  const endpoint = relativeReportEndpoint(reporting.endpoint, endpointOrigin);
   const endpointJson = securityJsonStringify(endpoint);
   const groupJson = securityJsonStringify(reporting.group);
   if (endpointJson === undefined || groupJson === undefined) {
@@ -335,37 +528,42 @@ export function renderContentSecurityPolicy(
   metadata: CspInlineMetadata,
   options: ContentSecurityPolicyOptions = {},
 ): string {
+  const closedMetadata = snapshotCspInlineMetadata(metadata);
+  const closedOptions = snapshotContentSecurityPolicyOptions(options);
   const scriptSources = appendSourceValues(
-    appendSourceValues([], options.scriptSrc ?? ["'self'"]),
-    quoteHashes(metadata.scripts),
+    appendSourceValues([], closedOptions.scriptSrc ?? ["'self'"]),
+    quoteHashes(closedMetadata.scripts),
   );
   const styleSources = appendSourceValues(
     appendSourceValues(
-      appendSourceValues([], options.styleSrc ?? ["'self'"]),
-      quoteHashes(metadata.styles),
+      appendSourceValues([], closedOptions.styleSrc ?? ["'self'"]),
+      quoteHashes(closedMetadata.styles),
     ),
-    (metadata.styleAttributes?.length ?? 0) === 0 ? [] : ["'unsafe-hashes'"],
+    (closedMetadata.styleAttributes?.length ?? 0) === 0 ? [] : ["'unsafe-hashes'"],
   );
-  appendSourceValuesInto(styleSources, quoteHashes(metadata.styleAttributes ?? []));
+  appendSourceValuesInto(styleSources, quoteHashes(closedMetadata.styleAttributes ?? []));
   const candidates: (string | undefined)[] = [
-    directive('default-src', options.defaultSrc ?? ["'self'"]),
+    directive('default-src', closedOptions.defaultSrc ?? ["'self'"]),
     directive('script-src', scriptSources),
     directive('style-src', styleSources),
-    directive('img-src', options.imgSrc),
-    directive('connect-src', options.connectSrc),
-    directive('frame-src', options.frameSrc),
+    directive('img-src', closedOptions.imgSrc),
+    directive('connect-src', closedOptions.connectSrc),
+    directive('frame-src', closedOptions.frameSrc),
     // G2 (bugs-part3 CSP-2): `base-uri` and `object-src` are NON-overridable hardening
     // directives with no `default-src` fallback. Without `base-uri`, an injected
     // `<base href="//evil">` (markup injection, no script execution) reroutes every
     // relative module URL to an attacker origin and runs attacker JS despite the
     // hash-locked `script-src`. Emit them unconditionally with secure defaults.
-    directive('base-uri', options.baseUri ?? ["'self'"]),
-    directive('object-src', options.objectSrc ?? ["'none'"]),
+    directive('base-uri', closedOptions.baseUri ?? ["'self'"]),
+    directive('object-src', closedOptions.objectSrc ?? ["'none'"]),
     // `form-action`/`frame-ancestors` close the injected-`<form action>` exfiltration
     // and clickjacking vectors respectively; emit with secure defaults.
-    directive('form-action', options.formAction ?? ["'self'"]),
-    directive('frame-ancestors', options.frameAncestors ?? ["'none'"]),
-    directive('report-to', options.reportTo === undefined ? undefined : [options.reportTo]),
+    directive('form-action', closedOptions.formAction ?? ["'self'"]),
+    directive('frame-ancestors', closedOptions.frameAncestors ?? ["'none'"]),
+    directive(
+      'report-to',
+      closedOptions.reportTo === undefined ? undefined : [closedOptions.reportTo],
+    ),
     // SF (secure-framework Tier 3): the Chromium-only Trusted Types floor, now DEFAULT-ON
     // (`renderDefaultDocumentCsp` passes `trustedTypes: true` unless the app opts out).
     // Safe to default-on because EVERY framework DOM-write sink — module-side
@@ -377,7 +575,7 @@ export function renderContentSecurityPolicy(
     // bypassing policy. Other browsers ignore both directives, leaving the cross-browser CSP
     // floor above intact (TT is runtime DiD, not a by-construction proof — SPEC §6.6).
   ];
-  if (options.trustedTypes) {
+  if (closedOptions.trustedTypes) {
     securityArrayPush(candidates, "require-trusted-types-for 'script'");
     securityArrayPush(candidates, `trusted-types ${KOVO_TRUSTED_TYPES_POLICY}`);
   }
