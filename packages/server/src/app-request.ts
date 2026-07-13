@@ -32,6 +32,7 @@ import { mutationResponseWithoutBrowserState } from './mutation.js';
 import { denseOwnRegistryEntryByExactKey } from './registry-lookup.js';
 import {
   requestCreateUrl,
+  requestDecodeURIComponent,
   requestMethod,
   requestUrl,
   requestUrlSnapshot,
@@ -229,7 +230,7 @@ function resolveReservedDispatchKey(
   }
   if (match.kind !== 'query') return undefined;
   try {
-    return decodeURIComponent(match.key);
+    return requestDecodeURIComponent(match.key);
   } catch {
     return undefined;
   }

@@ -2203,6 +2203,37 @@ describe('server createApp request shell', () => {
     expect(onError).toHaveBeenCalledTimes(4);
   });
 
+  it('does not let poisoned URI decoding redirect a query to another registry key', async () => {
+    const nativeDecodeURIComponent = globalThis.decodeURIComponent;
+    const app = createApp({
+      queries: [
+        query('public', { load: () => ({ value: 'public' }), reads: [] }),
+        query('private', {
+          load(_input, context?: { request: Request & { session?: { secret: string } } }) {
+            return { value: context?.request.session?.secret };
+          },
+          reads: [],
+        }),
+      ],
+      sessionProvider: () => ({ secret: 'PRIVATE_QUERY_VALUE' }),
+    });
+    const handler = createRequestHandler(app);
+
+    let response: Response | undefined;
+    globalThis.decodeURIComponent = (value) =>
+      value === 'public' ? 'private' : nativeDecodeURIComponent(value);
+    try {
+      response = await handler(new Request('https://example.test/_q/public'));
+    } finally {
+      globalThis.decodeURIComponent = nativeDecodeURIComponent;
+    }
+
+    expect(response?.status).toBe(200);
+    const body = await response?.text();
+    expect(body).toContain('{"value":"public"}');
+    expect(body).not.toContain('PRIVATE_QUERY_VALUE');
+  });
+
   it('rejects percent-encoded mutation aliases before policy callbacks or dispatch', async () => {
     const clientIp = vi.fn(() => '203.0.113.7');
     const protectedHandler = vi.fn(() => ({ protected: true }));

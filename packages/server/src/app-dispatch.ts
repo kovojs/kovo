@@ -30,7 +30,11 @@ import { appTaskScheduler } from './task-runtime.js';
 import { readCsrfCarrierFromRequest } from './untrusted-request-body.js';
 import { runWebhook, type WebhookDeclaration } from './webhook.js';
 import { canonicalRequestMethod } from './request-method.js';
-import { requestMethod, requestUrlSearchParams } from './request-body-intrinsics.js';
+import {
+  requestDecodeURIComponent,
+  requestMethod,
+  requestUrlSearchParams,
+} from './request-body-intrinsics.js';
 
 export interface MatchedAppDispatchOptions {
   app: KovoApp;
@@ -87,7 +91,7 @@ export async function dispatchMatchedAppRequest({
     return routeResponseToWebResponse(
       await renderQueryRegistryEndpointResponse<Request>(
         { queries: app.queries as QueryEndpointRegistry<Request>['queries'] },
-        reservedKey ?? decodeURIComponent(match.key),
+        reservedKey ?? requestDecodeURIComponent(match.key),
         queryRequest,
       ),
       { method: exactMethod },
@@ -99,7 +103,7 @@ export async function dispatchMatchedAppRequest({
       app,
       request,
       url,
-      reservedKey ?? decodeURIComponent(match.key),
+      reservedKey ?? requestDecodeURIComponent(match.key),
       exactMethod,
     );
   }
