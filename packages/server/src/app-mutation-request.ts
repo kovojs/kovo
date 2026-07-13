@@ -168,7 +168,6 @@ export async function handleAppMutationRequest(
   );
   const resolveRenderRequest = mutationRenderRequestResolver(
     app,
-    request,
     sourceRequest,
     sourceUrl,
     mutationDb,
@@ -447,7 +446,6 @@ function defaultAppMutationFailurePageRenderer(
 
 function mutationRenderRequestResolver(
   app: KovoApp,
-  ingressRequest: Request,
   sourceRequest: Request,
   sourceUrl: URL,
   db: KovoApp['db'],
@@ -458,7 +456,6 @@ function mutationRenderRequestResolver(
     if (resolution === undefined) {
       resolution = resolveAuthorizedMutationSourceRequest(
         app,
-        ingressRequest,
         sourceRequest,
         sourceUrl,
         db,
@@ -471,7 +468,6 @@ function mutationRenderRequestResolver(
 
 async function resolveAuthorizedMutationSourceRequest(
   app: KovoApp,
-  ingressRequest: Request,
   sourceRequest: Request,
   sourceUrl: URL,
   db: KovoApp['db'],
@@ -487,7 +483,12 @@ async function resolveAuthorizedMutationSourceRequest(
     },
     sourceRequest,
     {
-      clientIp: () => resolveRequestClientIp(app, ingressRequest),
+      // The source route is authorized against a fresh GET carrier. In particular, csrf:false
+      // mutations must not re-expose the ingress Cookie/Authorization headers through an
+      // app-configured clientIp resolver while preparing response-side query/render authority.
+      // Adapter-owned peer bindings were copied onto sourceRequest above, so trusted IP metadata
+      // remains available without reopening ambient credentials (SPEC §6.6/§9.1/§9.5).
+      clientIp: () => resolveRequestClientIp(app, sourceRequest),
       ...(db === undefined ? {} : { db }),
       ...(app.onError === undefined ? {} : { onError: app.onError }),
       ...(app.sessionProvider === undefined || csrfExempt

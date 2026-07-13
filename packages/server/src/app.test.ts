@@ -3145,6 +3145,7 @@ describe('server createApp request shell', () => {
             return '203.0.113.11';
           },
         },
+        routes: [route('/', { page: () => renderedHtml('<main>Cart</main>') })],
       }),
     );
     const handler = createRequestHandler(app);
@@ -3221,6 +3222,7 @@ describe('server createApp request shell', () => {
       createApp({
         mutations: [addToCart],
         queries: [cartQuery],
+        routes: [route('/', { page: () => renderedHtml('<main>Cart</main>') })],
       }),
     );
     const handler = createRequestHandler(app);
@@ -3335,7 +3337,7 @@ describe('server createApp request shell', () => {
       new Request('https://example.test/_m/runtime-registry/add', {
         body: new FormData(),
         headers: {
-          'Kovo-Current-Url': 'https://example.test/',
+          'Kovo-Current-Url': 'https://example.test/cart',
           'Kovo-Fragment': 'true',
           'Kovo-Live-Targets': attestedLiveTargetHeader(
             'cart-panel',
@@ -3343,7 +3345,7 @@ describe('server createApp request shell', () => {
             appLiveTargetAttestationAudience(app),
             {},
             undefined,
-            'https://example.test/',
+            'https://example.test/cart',
           ),
           'Kovo-Targets': 'cart-panel=runtimeRegistryCart',
         },
