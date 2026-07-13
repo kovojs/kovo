@@ -72,8 +72,15 @@ export function derivePublishPlan(pkgJson) {
     if (target === null) {
       throw new Error(`exports["${subpath}"] does not target ./src: ${JSON.stringify(value)}`);
     }
-    const stem = sourceStem(target);
-    entries.add(target.replace(/^\.\//, ''));
+    // The workspace server Vite entry must install the TS source resolver before statically
+    // linking its compiler/style graph. Published packages already contain emitted .mjs files and
+    // keep the ordinary bundled entry; never ship the workspace-global resolver hook.
+    const publishTarget =
+      pkgJson.name === '@kovojs/server' && subpath === './vite' && target === './src/vite-source.ts'
+        ? './src/vite.ts'
+        : target;
+    const stem = sourceStem(publishTarget);
+    entries.add(publishTarget.replace(/^\.\//, ''));
     stemBySubpath.set(subpath, stem);
   }
 

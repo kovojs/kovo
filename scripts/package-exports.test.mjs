@@ -137,4 +137,31 @@ describe('package export resolver', () => {
       }),
     ).toThrow('kovo.publishExtraEntries target does not target ./src');
   });
+
+  it('keeps the workspace-only server Vite resolver out of published packages', () => {
+    expect(
+      derivePublishPlan({
+        name: '@kovojs/server',
+        exports: {
+          '.': './src/index.ts',
+          './vite': './src/vite-source.ts',
+        },
+      }),
+    ).toEqual({
+      entries: ['src/index.ts', 'src/vite.ts'],
+      publishConfig: {
+        exports: {
+          '.': {
+            types: './dist/index.d.mts',
+            default: './dist/index.mjs',
+          },
+          './vite': {
+            types: './dist/vite.d.mts',
+            default: './dist/vite.mjs',
+          },
+        },
+      },
+      targetFiles: ['dist/index.d.mts', 'dist/index.mjs', 'dist/vite.d.mts', 'dist/vite.mjs'],
+    });
+  });
 });

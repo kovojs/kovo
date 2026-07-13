@@ -13,7 +13,7 @@
     ".": "./src/index.ts",
     "./build": "./src/build.ts",
     "./testing": "./src/testing.ts",
-    "./vite": "./src/vite.ts",
+    "./vite": "./src/vite-source.ts",
     "./internal/app-shell-vite": "./src/internal/app-shell-vite.ts",
     "./internal/audit-facts": "./src/internal/audit-facts.ts",
     "./internal/build": "./src/internal/build.ts",
