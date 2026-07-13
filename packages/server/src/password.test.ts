@@ -63,6 +63,16 @@ describe('password primitive: argon2id-only sink', () => {
     });
   });
 
+  it('requires exact boolean true from the Argon2 verifier', async () => {
+    const digest = await hashPassword('correct horse battery staple');
+    argon2Mock.verify.mockResolvedValueOnce('truthy-forgery' as unknown as boolean);
+
+    await expect(verifyPassword('wrong horse battery staple', digest)).resolves.toEqual({
+      ok: false,
+      needsRehash: false,
+    });
+  });
+
   it('fails closed for malformed and non-argon2id digests', async () => {
     const badDigests = [
       '',

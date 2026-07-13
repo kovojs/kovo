@@ -358,7 +358,9 @@ async function verifyParsedPasswordDigest(
 ): Promise<PasswordVerifyResult> {
   try {
     const { verify } = await loadArgon2();
-    const ok = await verify(digest, password, params, signal);
+    // SPEC §6.6: verifier output is authentication evidence, so only exact boolean true may
+    // authorize. A buggy/hostile native adapter cannot promote a truthy carrier into success.
+    const ok = (await verify(digest, password, params, signal)) === true;
     return { ok, needsRehash: ok && digestNeedsRehash(parsed, params) };
   } catch {
     return { ok: false, needsRehash: false };
