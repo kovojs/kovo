@@ -13,8 +13,8 @@ fails closed.
 
 | Severity | Families | Items  |
 | -------- | -------: | ------ |
-| Critical |       13 | C1-C13 |
-| High     |       18 | H1-H18 |
+| Critical |       14 | C1-C14 |
+| High     |       19 | H1-H19 |
 | Medium   |        9 | M1-M9  |
 | Low      |        2 | L1-L2  |
 
@@ -99,13 +99,24 @@ fails closed.
     source value with the approved closed source graph, and changed/new-module timer attacks fail
     before server artifact emission. SPEC §5.2, §6.6.
 
-- [x] **C13 - Runtime security engines could be first-resolved after app evaluation and replaced by
-      resolver hooks.**
+- [ ] **C13 - Runtime security engines could be first-resolved after app evaluation or consume
+      app-realm collection authority.**
   - Reproductions replaced the managed SQL parser, Argon2 password work, and the Undici-floor
-    witness after framework initialization.
-  - **Evidence:** `ea30e8c0e`, `9b6b1a4e6`, `716f2fa69`; parser, crypto, and floor-witness authority is
-    captured with the trusted server graph, and late-hook subprocess regressions cannot redirect
-    it. SPEC §6.6.
+    witness after framework initialization; a later selective `Array.prototype.map` replacement
+    also made the captured SQL parser report no write targets and bypass the managed write policy.
+  - **Open proof:** keep `9b6b1a4e6`, `716f2fa69`, and `5b90d62d6`; replace the incomplete parser
+    pin in `ea30e8c0e` with an isolated, exact-dependency parser realm and prove both classifier and
+    managed-execution attacks fail. SPEC §6.6.
+
+- [ ] **C14 - Generated live-target renderer authority leaked across app aggregates in one
+      process.**
+  - Registering app A's generated renderer, creating app A, then registering app B's renderer and
+    creating app B left both renderers in `appB.liveTargetRenderers`. With a shared process
+    attestation secret, an A descriptor can therefore select A's query-backed renderer while it is
+    running with B's request and DB context.
+  - **Open proof:** bind generated renderers to the exact app aggregate/module graph, prove two
+    sequential apps cannot observe each other's renderer authority, and cover removal/HMR without
+    retaining a deleted renderer. SPEC §2, §6.6, §9.1, §9.5.
 
 ## High
 
@@ -188,6 +199,15 @@ fails closed.
     canonical snapshots are bounded to one entry per lane, and the symlink regression leaves the
     outside victim untouched. SPEC §2, §10.6.
 
+- [ ] **H19 - Concurrent filesystem storage reads could combine an object body and metadata from
+      different committed generations.**
+  - Writers were serialized only per adapter instance while `get`, `stat`, and `stream` read the
+    body and sidecar separately; two same-root adapters reproduced a new body with the prior
+    content type, ETag, and metadata.
+  - **Open proof:** commit body bytes behind one atomic generation pointer, share read/write
+    coordination across same-root instances, and prove `get`, `stat`, and `stream` each observe one
+    complete generation. SPEC §6.6, §10.6.
+
 ## Medium
 
 - [x] **M1 - PGlite declared-write verification attributed setup/seed writes to a request.**
@@ -241,7 +261,7 @@ fails closed.
 
 - [ ] Obtain explicit zero-new-finding conclusions on the final integrated head for runtime,
       browser/core, and compiler/build/supply-chain scopes.
-  - Prior zero conclusions at `be2b43bda` were superseded by C11-C13, H18, and M9; repeat the
+  - Prior zero conclusions at `be2b43bda` were superseded by C11-C14, H18-H19, and M9; repeat the
     independent sweeps after every open family is integrated.
 - [ ] Regenerate and review the final pack-security snapshot, then run exact-head static, paranoid,
       package, root-test, browser, integration, starter, kovo-check, publish, perf, and diff gates.
