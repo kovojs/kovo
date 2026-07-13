@@ -213,6 +213,9 @@ describe('create-kovo starter (metadata)', () => {
         'actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830',
       );
       expect(ciWorkflow).toContain('vp install --frozen-lockfile');
+      expect(ciWorkflow).toContain('vp exec pnpm run check');
+      expect(ciWorkflow).toContain('vp exec pnpm run test');
+      expect(ciWorkflow).not.toContain('- run: vp check');
       expect(ciWorkflow).not.toMatch(/uses: [^\n]+@v\d/u);
       expect(ciWorkflow).not.toContain('run: kovo build');
 

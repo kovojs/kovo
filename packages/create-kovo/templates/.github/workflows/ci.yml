@@ -32,6 +32,8 @@ jobs:
           restore-keys: |
             kovo-cache-${{ runner.os }}-
       - run: vp install --frozen-lockfile
-      - run: vp check
-      - run: vp test
+      # Run the package script, not bare `vp check`: the script also enforces the
+      # sound TypeScript subset, endpoint posture, and production graph proof.
+      - run: vp exec pnpm run check
+      - run: vp exec pnpm run test
       - run: vp exec pnpm run build:prod
