@@ -1,3 +1,4 @@
+import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 
 import { describe, expect, it } from 'vitest';
@@ -10,6 +11,37 @@ import {
 } from './compiler-security-intrinsics.js';
 
 describe('compiler supported-runner security bootstrap', () => {
+  it('locks native promise methods without turning them into accessor-backed thenables', () => {
+    const bootstrapUrl = new URL('./security-bootstrap.ts', import.meta.url).href;
+    const source = `
+      import { lockCompilerSecurityRealm } from ${JSON.stringify(bootstrapUrl)};
+      lockCompilerSecurityRealm();
+      const descriptor = Object.getOwnPropertyDescriptor(Promise.prototype, 'then');
+      if (!descriptor || !('value' in descriptor) || typeof descriptor.value !== 'function') {
+        throw new Error('Promise.prototype.then must remain an immutable data function.');
+      }
+      if (descriptor.writable !== false || descriptor.configurable !== false) {
+        throw new Error('Promise.prototype.then must be locked.');
+      }
+      const value = await Promise.resolve('promise-lockdown-ok');
+      process.stdout.write(value);
+    `;
+    const result = spawnSync(
+      process.execPath,
+      [
+        '--disable-warning=ExperimentalWarning',
+        '--experimental-transform-types',
+        '--input-type=module',
+        '--eval',
+        source,
+      ],
+      { encoding: 'utf8' },
+    );
+
+    expect(result.status, result.stderr).toBe(0);
+    expect(result.stdout).toBe('promise-lockdown-ok');
+  });
+
   it('keeps exact identities after a selective lookalike Hash.update replacement', () => {
     // Importing compiler-security-intrinsics above is the supported runner bootstrap. App/plugin
     // evaluation happens after that point; source-comment likeness is deliberately irrelevant.

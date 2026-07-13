@@ -90,7 +90,10 @@ export function lockCompilerSecurityRealm(): void {
   freezeTarget(NativeNumber);
   guardPrototypeFunctions(NativeObject.prototype);
   freezeTarget(NativeObject);
-  guardPrototypeFunctions(NativePromise.prototype);
+  // Promise reflection is used by server-side security membranes to distinguish native promises
+  // from app-owned accessor thenables. Keep the native methods immutable as data properties: an
+  // accessor guard would make the supported build/dev runner itself look like a hostile thenable.
+  guardPrototypeFunctions(NativePromise.prototype, false);
   freezeTarget(NativePromise);
   freezeTarget(NativeReflect);
   guardPrototypeFunctions(NativeRegExp.prototype);
