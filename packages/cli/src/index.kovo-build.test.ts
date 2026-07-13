@@ -37,6 +37,11 @@ const repoRoot = process.cwd();
 const BUILD_FIXTURE_CSRF_SECRET = 'build-fixture-csrf-secret-0123456789abcdef0123456789';
 const BUILD_FIXTURE_WEBHOOK_HMAC_SECRET = 'b0b1b2b3b4b5b6b7b8b9babbbcbdbebf';
 const BUILD_FIXTURE_CSRF_SESSION_ID = 'build-fixture-session';
+// The source-side attestation helper bootstraps with this test module, while emitted Node handlers
+// bootstrap lazily on their first request. Keep both framework instances on the same operator
+// secret so the integration fixture tests stylesheet delivery rather than a deliberate key change.
+const BUILD_FIXTURE_LIVE_TARGET_SECRET =
+  process.env.KOVO_LIVE_TARGET_SECRET || 'kovo-live-target-attestation:development';
 const BUILD_FIXTURE_CSRF = {
   secret: BUILD_FIXTURE_CSRF_SECRET,
   sessionId: () => BUILD_FIXTURE_CSRF_SESSION_ID,
@@ -604,7 +609,7 @@ export default createApp({
         join(root, 'src/contacts-query.ts'),
         'contactsQuery',
       );
-      await withEnv({ KOVO_LIVE_TARGET_SECRET: 'kovo-build-test-live-target-secret' }, async () => {
+      await withEnv({ KOVO_LIVE_TARGET_SECRET: BUILD_FIXTURE_LIVE_TARGET_SECRET }, async () => {
         const origin = await listen(server);
 
         try {
@@ -2655,7 +2660,7 @@ export async function resetFixture() {
         createKovoNodeServer(): Server;
       };
       const server = serverModule.createKovoNodeServer();
-      await withEnv({ KOVO_LIVE_TARGET_SECRET: 'kovo-build-test-live-target-secret' }, async () => {
+      await withEnv({ KOVO_LIVE_TARGET_SECRET: BUILD_FIXTURE_LIVE_TARGET_SECRET }, async () => {
         const origin = await listen(server);
 
         try {
