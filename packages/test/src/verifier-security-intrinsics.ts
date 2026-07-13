@@ -615,6 +615,29 @@ export function verifierPromiseThen<T, Result>(
   return apply(nativePromiseThen, value, [onFulfilled]);
 }
 
+/** Await the three concurrent operations used by the integration login boundary. */
+export function verifierPromiseAll3(
+  first: PromiseLike<unknown>,
+  second: PromiseLike<unknown>,
+  third: PromiseLike<unknown>,
+): Promise<void> {
+  assertVerifierSecurityIntrinsics();
+  return new NativePromise<void>((resolve, reject) => {
+    let remaining = 3;
+    const fulfilled = (): void => {
+      remaining -= 1;
+      if (remaining === 0) resolve();
+    };
+    const observe = (value: PromiseLike<unknown>): void => {
+      const promise = apply<Promise<unknown>>(nativePromiseResolve, NativePromise, [value]);
+      apply(nativePromiseThen, promise, [fulfilled, reject]);
+    };
+    observe(first);
+    observe(second);
+    observe(third);
+  });
+}
+
 export function verifierAsyncStorage<Store>(): AsyncLocalStorage<Store> {
   assertVerifierSecurityIntrinsics();
   return new NativeAsyncLocalStorage<Store>();

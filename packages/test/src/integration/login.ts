@@ -12,6 +12,8 @@ import {
   verifierFreeze,
   verifierGetOwnPropertyDescriptor,
   verifierOwnKeys,
+  verifierPromiseAll3,
+  verifierStringIncludes,
   verifierUrlSnapshot,
 } from '../verifier-security-intrinsics.js';
 
@@ -59,23 +61,24 @@ export async function login(page: Page, origin: string, options: LoginOptions): 
     ? page.getByRole('button', { name: stable.submit })
     : page.locator('button[type="submit"], input[type="submit"]').first();
 
-  await Promise.all([
-    page.waitForResponse(
-      (response) =>
-        (mutationMatch
-          ? response.url().includes(mutationMatch)
-          : response.url().includes('/_m/')) && response.status() < 400,
-      { timeout: 15_000 },
-    ),
+  const responseReady = page.waitForResponse(
+    (response) =>
+      verifierStringIncludes(response.url(), mutationMatch ?? '/_m/') && response.status() < 400,
+    { timeout: 15_000 },
+  );
+  const navigationReady = page.waitForEvent('framenavigated', {
+    predicate: (frame) => frame === page.mainFrame(),
+    timeout: 15_000,
+  });
+  const submitted = submit.click();
+  await verifierPromiseAll3(
+    responseReady,
     // SPEC §9.3: a successful session-establishing mutation retires the page-load principal and
     // performs a full navigation. Waiting only for the mutation headers lets callers race that
     // reload with their next page.goto(), so the helper's completion boundary is the new document.
-    page.waitForEvent('framenavigated', {
-      predicate: (frame) => frame === page.mainFrame(),
-      timeout: 15_000,
-    }),
-    submit.click(),
-  ]);
+    navigationReady,
+    submitted,
+  );
   await page.waitForLoadState('networkidle');
 }
 

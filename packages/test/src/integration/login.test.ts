@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { login, loginFieldSelector } from './login.js';
 
@@ -70,5 +70,50 @@ describe('integration login security', () => {
       Object.defineProperty(URL.prototype, 'href', originalHref);
       Object.defineProperty(URL.prototype, 'origin', originalOrigin);
     }
+  });
+
+  it('pins response matching and concurrent completion after authored prototype poisoning', async () => {
+    const frame = {};
+    const click = vi.fn(async () => {});
+    const page = {
+      fill: vi.fn(async () => {}),
+      getByRole: vi.fn(() => ({ click })),
+      goto: vi.fn(async () => {}),
+      mainFrame: vi.fn(() => frame),
+      waitForEvent: vi.fn(
+        async (_name: string, options: { predicate(value: unknown): boolean }) => {
+          expect(options.predicate(frame)).toBe(true);
+        },
+      ),
+      waitForLoadState: vi.fn(async () => {}),
+      waitForResponse: vi.fn(
+        async (predicate: (response: { status(): number; url(): string }) => boolean) => {
+          expect(
+            predicate({
+              status: () => 200,
+              url: () => 'http://fixture.local/_m/auth/sign-in',
+            }),
+          ).toBe(true);
+        },
+      ),
+    };
+    const nativeIncludes = String.prototype.includes;
+    const nativePromiseAll = Promise.all;
+    try {
+      String.prototype.includes = () => false;
+      Promise.all = () => {
+        throw new Error('ambient Promise.all must not run');
+      };
+      await login(page as never, 'http://fixture.local', {
+        fields: { email: 'a@example.test', password: 'secret' },
+        submit: 'Sign in',
+      });
+    } finally {
+      String.prototype.includes = nativeIncludes;
+      Promise.all = nativePromiseAll;
+    }
+
+    expect(click).toHaveBeenCalledOnce();
+    expect(page.waitForLoadState).toHaveBeenCalledWith('networkidle');
   });
 });
