@@ -1,4 +1,4 @@
-import { chmod, mkdtemp, writeFile } from 'node:fs/promises';
+import { chmod, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -104,17 +104,13 @@ describe('vite-fixtures', () => {
         '  process.exit(1);',
         '}',
         "const viteConfig = await readFile('vite.config.mjs', 'utf8');",
-        'const requiredAliases = [',
-        "  '@kovojs/core/internal/module-ref',",
-        "  '@kovojs/core/internal/route-pattern',",
-        "  '@kovojs/core/internal/security-markers',",
-        "  '@kovojs/core/internal/wire-json',",
-        '];',
-        'for (const alias of requiredAliases) {',
-        '  if (!viteConfig.includes(alias)) {',
-        '    console.error(`Missing core internal alias: ${alias}`);',
-        '    process.exit(2);',
-        '  }',
+        "if (!viteConfig.includes('^@kovojs\\\\/core\\\\/internal\\\\/(.+)$')) {",
+        "  console.error('Missing exact core internal catch-all alias');",
+        '  process.exit(2);',
+        '}',
+        "if (!viteConfig.includes('dist/core/src/internal/$1.mjs')) {",
+        "  console.error('Missing core internal dist replacement');",
+        '  process.exit(2);',
         '}',
         "await mkdir('dist/assets', { recursive: true });",
         "await writeFile('dist/index.html', '<main>green</main>');",
@@ -139,6 +135,19 @@ describe('vite-fixtures', () => {
       greenDistEntries: ['assets', 'index.html'],
       redOutput: expect.stringContaining('Kovo Vite transform failed'),
     });
+  });
+
+  it('keeps the root production pack aligned with every declared core subpath', async () => {
+    const corePackage = JSON.parse(
+      await readFile(new URL('../../core/package.json', import.meta.url), 'utf8'),
+    ) as { exports: Record<string, string> };
+    const rootConfig = await readFile(new URL('../../../vite.config.ts', import.meta.url), 'utf8');
+
+    // rules/api-surface.md: every manifest export must have a production distribution entry.
+    for (const [subpath, source] of Object.entries(corePackage.exports)) {
+      if (subpath === '.') continue;
+      expect(rootConfig).toContain(`'packages/core/${source.slice('./'.length)}'`);
+    }
   });
 
   it('projects the production emit contract and generated handler middleware into one fact', async () => {

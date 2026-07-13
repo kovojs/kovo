@@ -9,6 +9,8 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { promisify } from 'node:util';
 import { gzipSync } from 'node:zlib';
 
+const nullPrototypeRecord = (value) => Object.assign(Object.create(null), value);
+
 import { missingBuildMessage } from '../scripts/kovo-check.mjs';
 import { readTempCommerceGraph } from '../scripts/commerce-graph.mjs';
 import {
@@ -369,7 +371,7 @@ void test('P3 commerce mutation runs through the transaction lifecycle', async (
     failed: {
       db: {
         commits: 1,
-        items: [{ productId: 'p1', qty: 2 }],
+        items: [nullPrototypeRecord({ productId: 'p1', qty: 2 })],
         rollbacks: 1,
       },
       result: {
@@ -381,7 +383,7 @@ void test('P3 commerce mutation runs through the transaction lifecycle', async (
     successful: {
       db: {
         commits: 1,
-        items: [{ productId: 'p1', qty: 2 }],
+        items: [nullPrototypeRecord({ productId: 'p1', qty: 2 })],
         rollbacks: 0,
       },
       result: {
@@ -407,11 +409,11 @@ void test('D1 commerce enhanced fragments carry stylesheet hints', async () => {
     },
     failure: {
       body: '<kovo-fragment target="product-form:p2"><link rel="stylesheet" href="/assets/styles.css"><form class="cart-form-panel"><output role="alert">Only 0 left.</output></form></kovo-fragment>',
-      headers: {
+      headers: nullPrototypeRecord({
         'Cache-Control': 'private, no-store',
         'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
         Vary: 'Cookie',
-      },
+      }),
       status: 422,
     },
     pageHints: {
@@ -524,13 +526,13 @@ void test('D4 commerce adopt-dont-invent features stay represented', async () =>
   assert.equal(fact.upload.pendingAfterSubmit, null);
   assert.deepEqual(fact.fragmentFailure, {
     body: '<kovo-fragment target="product-grid-error" error-boundary="product-grid"><link rel="stylesheet" href="/assets/styles.css"><section role="alert">fragment failed</section></kovo-fragment>',
-    headers: {
+    headers: nullPrototypeRecord({
       'Cache-Control': 'private, no-store',
       'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
       'Kovo-Build': 'conformance-server-test-build',
       'Kovo-Changes': '[]',
       Vary: 'Cookie',
-    },
+    }),
     status: 200,
   });
 });
@@ -675,21 +677,24 @@ void test('P10 commerce graph assertions answer behavior mechanically', async ()
     touchGraphKeys: ['cart.addItem'],
   });
   assert.deepEqual(fact.componentGraphFacts, [
-    {
+    nullPrototypeRecord({
       domName: 'cart-badge',
       exportName: 'CartBadge',
       fragments: ['cart-badge/cart-badge'],
       name: 'cart-badge/cart-badge',
       queries: ['cart', 'cartQuery'],
-    },
+    }),
   ]);
-  assert.deepEqual(fact.registryFacts, {
-    components: ['cart-badge/cart-badge'],
-    domainKeys: ['cart'],
-    fragmentTargets: ['cart-badge/cart-badge'],
-    invalidations: {},
-    routes: [],
-  });
+  assert.deepEqual(
+    fact.registryFacts,
+    nullPrototypeRecord({
+      components: ['cart-badge/cart-badge'],
+      domainKeys: ['cart'],
+      fragmentTargets: ['cart-badge/cart-badge'],
+      invalidations: nullPrototypeRecord({}),
+      routes: [],
+    }),
+  );
   assert.deepEqual(fact.matrix.matrix, graphOptimisticStatusMatrix(commerceGraph));
   assert.deepEqual(fact.matrix.staticInvalidationMismatches, []);
   assert.deepEqual(fact.matrix.unhandledMutations, []);
@@ -854,7 +859,7 @@ void test('P9 verification layer evidence remains represented', async () => {
       nestedUpdateCovered: true,
       nestedUpdateReadsCovered: true,
       selectSubqueryCoveredWithBothDomains: true,
-      structuredStatementForwarded: true,
+      structuredStatementReconstructed: true,
       structuredStatementObserved: [
         {
           branch: undefined,
@@ -1267,13 +1272,16 @@ void test('P5 data-bind paths are checked against generated query shape facts', 
     ].join('\n'),
     KV302Message: 'data-bind path is not present in the declared query shape.',
   });
-  assert.deepEqual(dataBindFact.queryShapes, {
-    cart: {
-      count: 'number',
-      empty: 'boolean',
-      items: [{ name: 'string', productId: 'string', qty: 'number' }],
-    },
-  });
+  assert.deepEqual(
+    dataBindFact.queryShapes,
+    nullPrototypeRecord({
+      cart: {
+        count: 'number',
+        empty: 'boolean',
+        items: [{ name: 'string', productId: 'string', qty: 'number' }],
+      },
+    }),
+  );
   assert.deepEqual(dataBindFact.validCartBindingDiagnostics, []);
   assert.deepEqual(dataBindFact.validCartBindingPlans, [
     {
@@ -1321,20 +1329,23 @@ void test('P5 data-bind paths are checked against generated query shape facts', 
       message: 'data-bind path is not present in the declared query shape. cart.items',
     },
   ]);
-  assert.deepEqual(dataBindFact.nullableQueryShapes, {
-    product: {
-      name: 'string',
-      review: {
-        kind: 'nullable',
-        shape: {
-          rating: {
-            kind: 'nullable',
-            shape: 'number',
+  assert.deepEqual(
+    dataBindFact.nullableQueryShapes,
+    nullPrototypeRecord({
+      product: {
+        name: 'string',
+        review: {
+          kind: 'nullable',
+          shape: {
+            rating: {
+              kind: 'nullable',
+              shape: 'number',
+            },
           },
         },
       },
-    },
-  });
+    }),
+  );
   assert.deepEqual(dataBindFact.optionalNullablePathDiagnostics, []);
   assert.deepEqual(dataBindFact.unsafeNullablePathDiagnostics, [
     {
@@ -1360,7 +1371,7 @@ void test('S1 production build proves the compiler 1:1 emit contract', async () 
   assert.deepEqual(contract.handlerSummary, {
     handlerName: 'ProductCard$button_click',
     modulePath: '/c/routes/products/product-card.client.js',
-    versionShape: 'render-plan-hex-16-plus-hash-hex-8',
+    versionShape: 'render-plan-hex-16-plus-hash-hex-64',
   });
   assert.deepEqual(contract.middleware, {
     cartEvents: ['p1'],
@@ -1409,7 +1420,7 @@ export const DiagnosticCard = component({
     assert.deepEqual(diagnosticFact.loweredHandler, {
       handlerName: 'DiagnosticCard$button_click',
       modulePath: '/c/routes/diagnostic-card.client.js',
-      versionShape: 'render-plan-hex-16-plus-hash-hex-8',
+      versionShape: 'render-plan-hex-16-plus-hash-hex-64',
     });
     assert.deepEqual(
       diagnosticFact.help.map(({ label }) => label),
@@ -1477,7 +1488,7 @@ export const DiagnosticCard = component({
   assert.deepEqual(lintTransform.handlerSummary, {
     handlerName: 'DiagnosticCard$button_click',
     modulePath: '/c/routes/diagnostic-card.client.js',
-    versionShape: 'render-plan-hex-16-plus-hash-hex-8',
+    versionShape: 'render-plan-hex-16-plus-hash-hex-64',
   });
   assert.deepEqual(
     lintDiagnostics.map((diagnostic) => ({
@@ -1523,7 +1534,8 @@ document.querySelector('#app')!.textContent = 'D10 build green';
   };
 
   const exportBehavior = await kovoExportStaticBehaviorFact({
-    appCoreModuleUrl: pathToFileURL(join(projectRoot, 'dist/server/src/index.mjs')).href,
+    appCoreModuleUrl: '@kovojs/server',
+    cliFixtureParent: join(projectRoot, 'packages/cli'),
     createApp,
     errorDiagnostic,
     expectedStaticExportCliError,
@@ -1532,7 +1544,7 @@ document.querySelector('#app')!.textContent = 'D10 build green';
     fixturePrefix: 'kovo-d10-kovo-export-',
     lintDiagnostic,
     runCliCommand,
-    serverModuleUrl: pathToFileURL(join(projectRoot, 'dist/server/src/index.mjs')).href,
+    serverModuleUrl: '@kovojs/server',
     serverRoute,
   });
   assert.match(exportBehavior.cli.green.summary?.outDir ?? '', /^".*green-out"$/);

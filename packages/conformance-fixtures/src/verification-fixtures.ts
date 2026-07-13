@@ -45,7 +45,7 @@ export interface VerificationLayerBehaviorFact {
     nestedUpdateCovered: boolean;
     nestedUpdateReadsCovered: boolean;
     selectSubqueryCoveredWithBothDomains: boolean;
-    structuredStatementForwarded: boolean;
+    structuredStatementReconstructed: boolean;
     structuredStatementObserved: unknown;
   };
   verifier: {
@@ -506,7 +506,8 @@ export async function verificationLayerBehaviorFact(
       nestedUpdateCovered,
       nestedUpdateReadsCovered,
       selectSubqueryCoveredWithBothDomains,
-      structuredStatementForwarded: structuredStatementCalls[0] === structuredStatement,
+      // SPEC §6.6 C9: accepted statement objects are reconstructed before the driver sink.
+      structuredStatementReconstructed: structuredStatementCalls[0] !== structuredStatement,
       structuredStatementObserved: structuredSqlVerifier.observed,
     },
     verifier: {

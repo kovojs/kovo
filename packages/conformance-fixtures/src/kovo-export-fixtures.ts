@@ -79,6 +79,7 @@ export interface KovoExportStaticBehaviorFact {
 
 export interface KovoExportStaticBehaviorOptions {
   appCoreModuleUrl: string;
+  cliFixtureParent?: string;
   cliMarker?: string;
   createApp: (options: {
     egress?: unknown;
@@ -167,6 +168,7 @@ export function kovoExportCliResultFact(result: KovoExportCliResultLike): KovoEx
 
 export async function kovoExportStaticBehaviorFact({
   appCoreModuleUrl,
+  cliFixtureParent = tmpdir(),
   cliMarker = 'cli',
   createApp,
   errorDiagnostic,
@@ -223,12 +225,14 @@ export async function kovoExportStaticBehaviorFact({
     });
     const exportedHtml = await readFile(join(apiOutDir, 'index.html'), 'utf8');
 
-    const cliFixtureRoot = await mkdtemp(join(tmpdir(), `${fixturePrefix}cli-`));
+    const cliFixtureRoot = await mkdtemp(join(cliFixtureParent, `${fixturePrefix}cli-`));
     try {
       const cliRedOutDir = join(cliFixtureRoot, 'red-out');
       const cliGreenOutDir = join(cliFixtureRoot, 'green-out');
-      const cliRedModule = join(cliFixtureRoot, 'red-app.mjs');
-      const cliGreenModule = join(cliFixtureRoot, 'green-app.mjs');
+      // Exercise the ordinary app path: TypeScript entries are loaded through Kovo's Vite SSR
+      // security profile, which owns workspace package resolution and source-to-source ESM mapping.
+      const cliRedModule = join(cliFixtureRoot, 'red-app.ts');
+      const cliGreenModule = join(cliFixtureRoot, 'green-app.ts');
       const cliAppModuleSource = (diagnostics: KovoExportStaticDiagnosticLike[]) => `
 import { route as serverRoute } from ${JSON.stringify(serverModuleUrl)};
 import { createApp } from ${JSON.stringify(appCoreModuleUrl)};

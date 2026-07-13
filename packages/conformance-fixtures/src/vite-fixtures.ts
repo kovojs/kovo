@@ -350,42 +350,19 @@ export async function viteRedGreenBuildFixtureFact(
           options.jsxRuntimeAlias ??
             join(options.projectRoot, 'packages/server/src/jsx-runtime.ts'),
         )};`,
+        `const coreInternalAlias = ${JSON.stringify(
+          join(options.projectRoot, 'dist/core/src/internal/$1.mjs'),
+        )};`,
         '',
         'export default {',
         "  plugins: [Object.assign(kovoVitePlugin(), { enforce: 'pre' })],",
         '  resolve: {',
-        '    alias: {',
-        `      '@kovojs/core/internal/security-url': ${JSON.stringify(
-          join(options.projectRoot, 'dist/core/src/internal/security-url.mjs'),
-        )},`,
-        `      '@kovojs/core/internal/sql-safety': ${JSON.stringify(
-          join(options.projectRoot, 'dist/core/src/internal/sql-safety.mjs'),
-        )},`,
-        `      '@kovojs/core/internal/sink-policy': ${JSON.stringify(
-          join(options.projectRoot, 'dist/core/src/internal/sink-policy.mjs'),
-        )},`,
-        `      '@kovojs/core/internal/diagnostics': ${JSON.stringify(
-          join(options.projectRoot, 'dist/core/src/internal/diagnostics.mjs'),
-        )},`,
-        `      '@kovojs/core/internal/query-delta': ${JSON.stringify(
-          join(options.projectRoot, 'dist/core/src/internal/query-delta.mjs'),
-        )},`,
-        `      '@kovojs/core/internal/route-pattern': ${JSON.stringify(
-          join(options.projectRoot, 'dist/core/src/internal/route-pattern.mjs'),
-        )},`,
-        `      '@kovojs/core/internal/security-markers': ${JSON.stringify(
-          join(options.projectRoot, 'dist/core/src/internal/security-markers.mjs'),
-        )},`,
-        `      '@kovojs/core/internal/module-ref': ${JSON.stringify(
-          join(options.projectRoot, 'dist/core/src/internal/module-ref.mjs'),
-        )},`,
-        `      '@kovojs/core/internal/wire-json': ${JSON.stringify(
-          join(options.projectRoot, 'dist/core/src/internal/wire-json.mjs'),
-        )},`,
-        `      '@kovojs/core': ${JSON.stringify(options.coreAlias)},`,
-        "      'react/jsx-dev-runtime': jsxRuntimeAlias,",
-        "      'react/jsx-runtime': jsxRuntimeAlias,",
-        '    },',
+        '    alias: [',
+        '      { find: /^@kovojs\\/core\\/internal\\/(.+)$/, replacement: coreInternalAlias },',
+        `      { find: /^@kovojs\\/core$/, replacement: ${JSON.stringify(options.coreAlias)} },`,
+        "      { find: 'react/jsx-dev-runtime', replacement: jsxRuntimeAlias },",
+        "      { find: 'react/jsx-runtime', replacement: jsxRuntimeAlias },",
+        '    ],',
         '  },',
         '};',
         '',

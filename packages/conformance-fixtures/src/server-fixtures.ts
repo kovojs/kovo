@@ -371,14 +371,29 @@ export async function serverCommerceTransactionBehaviorFact(
   runtime: ServerMutationLifecycleRuntime,
 ): Promise<ServerCommerceTransactionBehaviorFact> {
   const createTransactionalDb = () => {
+    type CartItem = { productId: string; qty: number };
     const db = {
       commits: 0,
-      items: [] as Array<{ productId: string; qty: number }>,
+      items: [] as CartItem[],
       rollbacks: 0,
       async transaction(
-        run: (draft: { items: Array<{ productId: string; qty: number }> }) => Promise<unknown>,
+        run: (draft: {
+          insert(table: string): { values(row: CartItem): void };
+          items: CartItem[];
+        }) => Promise<unknown>,
       ) {
-        const draft = { items: this.items.map((item) => ({ ...item })) };
+        const items = this.items.map((item) => ({ ...item }));
+        const draft = {
+          insert(table: string) {
+            if (table !== 'cart_items') throw new Error(`Unexpected table ${table}`);
+            return {
+              values(row: CartItem) {
+                items[items.length] = row;
+              },
+            };
+          },
+          items,
+        };
         try {
           const result = await run(draft);
           this.items = draft.items;
@@ -409,7 +424,7 @@ export async function serverCommerceTransactionBehaviorFact(
         return context.fail('OUT_OF_STOCK', { availableQuantity: 5 });
       }
 
-      request.db.items.push({ productId: input.productId, qty: input.quantity });
+      request.db.insert('cart_items').values({ productId: input.productId, qty: input.quantity });
       return { count: request.db.items.length };
     },
     input: runtime.s.object({

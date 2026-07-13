@@ -103,7 +103,7 @@ describe('@kovojs/test verification fixtures', () => {
         nestedUpdateCovered: true,
         nestedUpdateReadsCovered: true,
         selectSubqueryCoveredWithBothDomains: true,
-        structuredStatementForwarded: true,
+        structuredStatementReconstructed: true,
         structuredStatementObserved: [
           {
             branch: undefined,
