@@ -37,6 +37,7 @@ const intrinsicWeakSetAdd = NativeWeakSet.prototype.add;
 const intrinsicWeakSetHas = NativeWeakSet.prototype.has;
 const intrinsicMapSize = intrinsicObjectGetOwnPropertyDescriptor(NativeMap.prototype, 'size')?.get;
 const intrinsicSetSize = intrinsicObjectGetOwnPropertyDescriptor(NativeSet.prototype, 'size')?.get;
+const kovoRuntimeDomainAnnotations = new NativeWeakSet<object>();
 const runtimeMetadataCollectionFacades = new NativeWeakSet<object>();
 
 function apply<Return>(fn: Function, receiver: unknown, args: readonly unknown[]): Return {
@@ -131,6 +132,26 @@ function assertControls(): void {
   if (!controlsSound) {
     throw new TypeError('Kovo Drizzle runtime security controls are unavailable.');
   }
+}
+
+/** @internal Record framework construction authority for one Kovo domain annotation. */
+export function recordKovoRuntimeDomainAnnotation<Value extends object>(value: Value): Value {
+  assertControls();
+  apply(intrinsicWeakSetAdd, kovoRuntimeDomainAnnotations, [value]);
+  if (!isKovoRuntimeDomainAnnotation(value)) {
+    throw new TypeError('Kovo Drizzle runtime annotation provenance commit failed.');
+  }
+  return value;
+}
+
+/** @internal Reject structural lookalikes at the runtime metadata boundary. */
+export function isKovoRuntimeDomainAnnotation(value: unknown): value is object {
+  assertControls();
+  return (
+    (typeof value === 'object' || typeof value === 'function') &&
+    value !== null &&
+    apply<boolean>(intrinsicWeakSetHas, kovoRuntimeDomainAnnotations, [value])
+  );
 }
 
 export function runtimeArrayIsArray(value: unknown): value is readonly unknown[] {

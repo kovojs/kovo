@@ -52,6 +52,27 @@ describe('runtime metadata extraction', () => {
     ]);
   });
 
+  it('does not accept structural table values as Kovo security annotations', () => {
+    const users = sqliteTable(
+      'users',
+      {
+        id: text('id').primaryKey(),
+        passwordHash: text('password_hash').notNull(),
+      },
+      kovo({ domain: 'user', key: 'id', secret: ['passwordHash'] }),
+    );
+    Object.defineProperty(users, 'forgedAnnotation', {
+      enumerable: true,
+      value: { domain: 'public', public: true },
+    });
+
+    const metadata = extractKovoRuntimeDbMetadata([users]);
+
+    expect([...metadata.secretTableNames]).toEqual(['users']);
+    expect([...(metadata.secretColumnKeysByTable.get('users') ?? [])]).toEqual(['passwordHash']);
+    expect(metadata.authorizationClassificationsByTable.get('users')).toBeUndefined();
+  });
+
   it('treats secret: true as a whole-table secret annotation', () => {
     const vault = sqliteTable(
       'vault',

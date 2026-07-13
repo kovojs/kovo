@@ -2,6 +2,7 @@ import { getTableConfig as getPgTableConfig } from 'drizzle-orm/pg-core';
 import { getTableConfig as getSqliteTableConfig } from 'drizzle-orm/sqlite-core';
 
 import {
+  isKovoRuntimeDomainAnnotation,
   runtimeArrayAppend,
   runtimeArrayIsArray,
   runtimeArrayLength,
@@ -585,7 +586,7 @@ function ownPropertyValue(value: object, property: PropertyKey): unknown {
 }
 
 function domainAnnotationValue(value: unknown): KovoRuntimeDomainAnnotation | undefined {
-  if ((typeof value !== 'object' && typeof value !== 'function') || value === null) {
+  if (!isKovoRuntimeDomainAnnotation(value)) {
     return undefined;
   }
   const domain = runtimeOwnDataValue(value, 'domain');
