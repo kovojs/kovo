@@ -1,3 +1,17 @@
+import {
+  applySecurityIntrinsic,
+  securityArrayAppend,
+  securityArrayIsArray,
+  securityGetOwnPropertyDescriptor,
+  securityMap,
+  securityMapGet,
+  securityMapHas,
+  securityMapSet,
+  securitySet,
+  securitySetAdd,
+  securitySetHas,
+} from './security-witness-intrinsics.js';
+
 /** @internal Key type shared by Kovo keyed reconciliation adapters. */
 export type KeyedReconcileKey = string | number;
 
@@ -27,51 +41,153 @@ export function reconcileKeyed<Current, Next, Output, Key extends KeyedReconcile
   next: readonly Next[],
   adapter: KeyedReconcileAdapter<Current, Next, Output, Key>,
 ): Output[] {
-  const currentByKey = indexEntries(current, adapter.currentKey, 'current', adapter.onDuplicateKey);
-  indexEntries(next, adapter.nextKey, 'next', adapter.onDuplicateKey);
-  const used = new Set<Current>();
+  const currentKey = ownAdapterFunction(adapter, 'currentKey');
+  const nextKey = ownAdapterFunction(adapter, 'nextKey');
+  const create = ownAdapterFunction(adapter, 'create');
+  const match = ownAdapterFunction(adapter, 'match');
+  const duplicate = ownOptionalAdapterFunction(adapter, 'onDuplicateKey');
+  const preserveUnkeyed = ownOptionalAdapterBoolean(adapter, 'preserveUnkeyed') !== false;
+  const currentEntries = snapshotEntries(current, currentKey, 'current');
+  const nextEntries = snapshotEntries(next, nextKey, 'next');
+  const currentByKey = indexEntries(currentEntries, 'current', duplicate);
+  indexEntries(nextEntries, 'next', duplicate);
+  const used = securitySet<Current>();
   let unkeyedCursor = 0;
 
-  function takeUnkeyed(): Current | undefined {
-    if (adapter.preserveUnkeyed === false) return undefined;
+  function takeUnkeyed(): KeyedReconcileEntry<Current, Key> | undefined {
+    if (!preserveUnkeyed) return undefined;
 
-    while (unkeyedCursor < current.length) {
-      const candidate = current[unkeyedCursor];
+    while (unkeyedCursor < currentEntries.length) {
+      const candidate = currentEntries[unkeyedCursor];
       unkeyedCursor += 1;
-      if (!candidate || adapter.currentKey(candidate) != null || used.has(candidate)) continue;
+      if (!candidate || candidate.key != null || securitySetHas(used, candidate.item)) continue;
       return candidate;
     }
 
     return undefined;
   }
 
-  return next.map((nextItem) => {
-    const key = adapter.nextKey(nextItem);
-    const matched = key == null ? takeUnkeyed() : currentByKey.get(key);
+  const output: Output[] = [];
+  for (let index = 0; index < nextEntries.length; index += 1) {
+    const nextEntry = nextEntries[index];
+    if (!nextEntry) continue;
+    const matched =
+      nextEntry.key == null ? takeUnkeyed() : securityMapGet(currentByKey, nextEntry.key);
 
-    if (!matched || used.has(matched)) {
-      return adapter.create(nextItem);
+    if (!matched || securitySetHas(used, matched.item)) {
+      securityArrayAppend(
+        output,
+        applySecurityIntrinsic(create, undefined, [nextEntry.item]),
+        'Browser keyed reconciliation output',
+      );
+      continue;
     }
 
-    used.add(matched);
-    return adapter.match(matched, nextItem);
-  });
+    securitySetAdd(used, matched.item);
+    securityArrayAppend(
+      output,
+      applySecurityIntrinsic(match, undefined, [matched.item, nextEntry.item]),
+      'Browser keyed reconciliation output',
+    );
+  }
+  return output;
 }
 
 function indexEntries<Item, Key extends KeyedReconcileKey>(
-  entries: readonly Item[],
-  readKey: (item: Item) => Key | null | undefined,
+  entries: readonly KeyedReconcileEntry<Item, Key>[],
   side: 'current' | 'next',
   onDuplicateKey: ((side: 'current' | 'next', key: Key) => void) | undefined,
-): Map<Key, Item> {
-  const byKey = new Map<Key, Item>();
+): Map<Key, KeyedReconcileEntry<Item, Key>> {
+  const byKey = securityMap<Key, KeyedReconcileEntry<Item, Key>>();
 
-  for (const entry of entries) {
-    const key = readKey(entry);
+  for (let index = 0; index < entries.length; index += 1) {
+    const entry = entries[index];
+    if (!entry) continue;
+    const key = entry.key;
     if (key == null) continue;
-    if (byKey.has(key)) onDuplicateKey?.(side, key);
-    else byKey.set(key, entry);
+    if (securityMapHas(byKey, key)) {
+      if (onDuplicateKey) applySecurityIntrinsic(onDuplicateKey, undefined, [side, key]);
+    } else {
+      securityMapSet(byKey, key, entry);
+    }
   }
 
   return byKey;
+}
+
+function snapshotEntries<Item, Key extends KeyedReconcileKey>(
+  items: readonly Item[],
+  readKey: (item: Item) => Key | null | undefined,
+  side: 'current' | 'next',
+): KeyedReconcileEntry<Item, Key>[] {
+  if (!securityArrayIsArray(items)) {
+    throw new TypeError(`Kovo ${side} keyed reconciliation input must be an array.`);
+  }
+  const length = securityGetOwnPropertyDescriptor(items, 'length');
+  if (
+    !length ||
+    !('value' in length) ||
+    typeof length.value !== 'number' ||
+    length.value < 0 ||
+    length.value > 100_000 ||
+    length.value % 1 !== 0
+  ) {
+    throw new TypeError(`Kovo ${side} keyed reconciliation input length is invalid.`);
+  }
+
+  const snapshot: KeyedReconcileEntry<Item, Key>[] = [];
+  for (let index = 0; index < length.value; index += 1) {
+    const descriptor = securityGetOwnPropertyDescriptor(items, index);
+    if (!descriptor || !('value' in descriptor)) {
+      throw new TypeError(`Kovo ${side} keyed reconciliation input must be dense own data.`);
+    }
+    const item = descriptor.value as Item;
+    const key = applySecurityIntrinsic<Key | null | undefined>(readKey, undefined, [item]);
+    if (key != null && typeof key !== 'string' && typeof key !== 'number') {
+      throw new TypeError(`Kovo ${side} keyed reconciliation key is invalid.`);
+    }
+    securityArrayAppend(snapshot, { item, key }, `Browser ${side} keyed reconciliation snapshot`);
+  }
+  return snapshot;
+}
+
+function ownAdapterFunction<
+  Current,
+  Next,
+  Output,
+  Key extends KeyedReconcileKey,
+  Name extends 'create' | 'currentKey' | 'match' | 'nextKey',
+>(
+  adapter: KeyedReconcileAdapter<Current, Next, Output, Key>,
+  name: Name,
+): Extract<KeyedReconcileAdapter<Current, Next, Output, Key>[Name], Function> {
+  const descriptor = securityGetOwnPropertyDescriptor(adapter, name);
+  if (!descriptor || !('value' in descriptor) || typeof descriptor.value !== 'function') {
+    throw new TypeError(`Kovo keyed reconciliation adapter ${name} must be an own-data function.`);
+  }
+  return descriptor.value;
+}
+
+function ownOptionalAdapterFunction<Current, Next, Output, Key extends KeyedReconcileKey>(
+  adapter: KeyedReconcileAdapter<Current, Next, Output, Key>,
+  name: 'onDuplicateKey',
+): ((side: 'current' | 'next', key: Key) => void) | undefined {
+  const descriptor = securityGetOwnPropertyDescriptor(adapter, name);
+  if (!descriptor) return undefined;
+  if (!('value' in descriptor) || typeof descriptor.value !== 'function') {
+    throw new TypeError(`Kovo keyed reconciliation adapter ${name} must be an own-data function.`);
+  }
+  return descriptor.value;
+}
+
+function ownOptionalAdapterBoolean<Current, Next, Output, Key extends KeyedReconcileKey>(
+  adapter: KeyedReconcileAdapter<Current, Next, Output, Key>,
+  name: 'preserveUnkeyed',
+): boolean | undefined {
+  const descriptor = securityGetOwnPropertyDescriptor(adapter, name);
+  if (!descriptor) return undefined;
+  if (!('value' in descriptor) || typeof descriptor.value !== 'boolean') {
+    throw new TypeError(`Kovo keyed reconciliation adapter ${name} must be own boolean data.`);
+  }
+  return descriptor.value;
 }

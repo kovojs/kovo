@@ -52,4 +52,121 @@ describe('keyed reconciliation kernel', () => {
       }),
     ).toThrow('Duplicate current structural morph key: dup');
   });
+
+  it('uses boot-captured array, Map, and Set controls after late prototype poisoning', () => {
+    const current = [{ key: 'a' }, { key: 'b' }];
+    const nextRows = [{ key: 'b' }, { key: 'c' }];
+    const originalMap = Array.prototype.map;
+    const originalFilter = Array.prototype.filter;
+    const originalEntries = Array.prototype.entries;
+    const originalIterator = Array.prototype[Symbol.iterator];
+    const originalIsArray = Array.isArray;
+    const originalMapGet = Map.prototype.get;
+    const originalMapHas = Map.prototype.has;
+    const originalMapSet = Map.prototype.set;
+    const originalSetAdd = Set.prototype.add;
+    const originalSetHas = Set.prototype.has;
+    let result: Array<{ key: string }> | undefined;
+
+    try {
+      Array.prototype.map = () => {
+        throw new Error('late Array.map poison');
+      };
+      Array.prototype.filter = () => {
+        throw new Error('late Array.filter poison');
+      };
+      Array.prototype.entries = () => {
+        throw new Error('late Array.entries poison');
+      };
+      Array.prototype[Symbol.iterator] = () => {
+        throw new Error('late Array iterator poison');
+      };
+      Array.isArray = () => false;
+      Map.prototype.get = () => {
+        throw new Error('late Map.get poison');
+      };
+      Map.prototype.has = () => {
+        throw new Error('late Map.has poison');
+      };
+      Map.prototype.set = () => {
+        throw new Error('late Map.set poison');
+      };
+      Set.prototype.add = () => {
+        throw new Error('late Set.add poison');
+      };
+      Set.prototype.has = () => {
+        throw new Error('late Set.has poison');
+      };
+
+      result = reconcileKeyed(current, nextRows, {
+        create: (item) => ({ ...item }),
+        currentKey: (item) => item.key,
+        match: (item) => item,
+        nextKey: (item) => item.key,
+      });
+    } finally {
+      Array.prototype.map = originalMap;
+      Array.prototype.filter = originalFilter;
+      Array.prototype.entries = originalEntries;
+      Array.prototype[Symbol.iterator] = originalIterator;
+      Array.isArray = originalIsArray;
+      Map.prototype.get = originalMapGet;
+      Map.prototype.has = originalMapHas;
+      Map.prototype.set = originalMapSet;
+      Set.prototype.add = originalSetAdd;
+      Set.prototype.has = originalSetHas;
+    }
+
+    expect(result?.map((item) => item.key)).toEqual(['b', 'c']);
+    expect(result?.[0]).toBe(current[1]);
+  });
+
+  it('rejects sparse inherited row substitutions instead of consulting Array.prototype', () => {
+    const sparse = new Array<{ key: string }>(1);
+    const originalZero = Object.getOwnPropertyDescriptor(Array.prototype, '0');
+    let error: unknown;
+    try {
+      Object.defineProperty(Array.prototype, '0', {
+        configurable: true,
+        value: { key: 'forged' },
+        writable: true,
+      });
+      try {
+        reconcileKeyed(sparse, [], {
+          create: (item) => item,
+          currentKey: (item) => item.key,
+          match: (item) => item,
+          nextKey: (item) => item.key,
+        });
+      } catch (caught) {
+        error = caught;
+      }
+    } finally {
+      if (originalZero) Object.defineProperty(Array.prototype, '0', originalZero);
+      else Reflect.deleteProperty(Array.prototype, '0');
+    }
+    expect(error).toBeInstanceOf(TypeError);
+    expect(String(error)).toContain('dense own data');
+  });
+
+  it('keeps large keyed reconciliation linear-time', () => {
+    const current: Array<{ key: string }> = [];
+    const nextRows: Array<{ key: string }> = [];
+    for (let index = 0; index < 25_000; index += 1) {
+      current.push({ key: `row-${index}` });
+      nextRows.push({ key: `row-${24_999 - index}` });
+    }
+    const start = performance.now();
+    const result = reconcileKeyed(current, nextRows, {
+      create: (item) => ({ ...item }),
+      currentKey: (item) => item.key,
+      match: (item) => item,
+      nextKey: (item) => item.key,
+    });
+    const elapsed = performance.now() - start;
+
+    expect(result).toHaveLength(25_000);
+    expect(result[0]).toBe(current[24_999]);
+    expect(elapsed).toBeLessThan(1_500);
+  });
 });

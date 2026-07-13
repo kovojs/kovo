@@ -8,18 +8,44 @@ import type {
   QuerySelectorAllRootLike,
 } from './dom-like.js';
 import { morphDomElement, sanitizeDomElementTree } from './morph.js';
+import { createBrowserNavigationSecurityControls } from './navigation-security-intrinsics.js';
 import type { QueryStore } from './query-store.js';
 import { kovoBoundAttributeValue } from './security-output.js';
 import {
   applySecurityIntrinsic,
   securityArrayAppend,
+  securityArrayIsArray,
   securityGetOwnPropertyDescriptor,
+  securityGetPrototypeOf,
+  securityJsonStringify,
+  securityNumber,
+  securityString,
+  securityStringCharCodeAt,
+  securityStringIndexOf,
+  securityStringSlice,
+  securityStringStartsWith,
+  securityStringToLowerCase,
   securityStringTrim,
 } from './security-witness-intrinsics.js';
 import { kovoCreateHTML } from './trusted-types.js';
 import { assertAllowedKovoDynamicImportRefForModule } from './dynamic-import-url.js';
 import { reconcileKeyed } from './keyed-reconciler.js';
 import { closestRuntimeElement, readRuntimeElementAttribute } from './runtime-dom-security.js';
+
+// SPEC §6.6 rule 6: query-plan DOM selection, parsing, and commits use controls captured before any
+// authored client module can replace realm prototypes. Browser-free structural fakes keep their
+// explicit seam below; genuine platform Elements never dispatch through their live prototypes.
+const browserQueryBindingSecurity =
+  typeof document === 'undefined' || typeof Element === 'undefined'
+    ? undefined
+    : createBrowserNavigationSecurityControls(globalThis, kovoCreateHTML);
+
+function requireBrowserQueryBindingSecurity(): NonNullable<typeof browserQueryBindingSecurity> {
+  if (!browserQueryBindingSecurity) {
+    throw new TypeError('Kovo query-binding DOM security controls are unavailable.');
+  }
+  return browserQueryBindingSecurity;
+}
 
 /** Runtime API used by Kovo applications and generated runtime integration. */
 export interface QueryBindingElement
@@ -160,50 +186,63 @@ function applyRootBindings(
   options: ApplyRootBindingsOptions = {},
 ): string[] {
   const applied: string[] = [];
+  const bindingPrefix = `${rootName}.`;
 
-  for (const element of dataBindElements(root, options.scopeRoot)) {
+  const textElements = dataBindElements(root, options.scopeRoot);
+  for (let elementIndex = 0; elementIndex < textElements.length; elementIndex += 1) {
+    const element = textElements[elementIndex];
+    if (!element) continue;
     if (!elementBelongsToQueryKey(element, options.queryKey)) continue;
 
-    const path = element.getAttribute('data-bind');
-    if (!path?.startsWith(`${rootName}.`)) continue;
+    const path = readBindingAttribute(element, 'data-bind');
+    if (!path || !securityStringStartsWith(path, bindingPrefix)) continue;
 
-    const boundValue = valueAtPath(value, path.slice(rootName.length + 1));
+    const boundValue = valueAtPath(value, securityStringSlice(path, bindingPrefix.length));
     const rendered = formatBoundValue(boundValue);
 
     // SPEC §4.8: data-bind is a textContent sink; form values use data-bind:value.
-    element.textContent = rendered;
-    applied.push(path);
+    writeQueryPlanElement(element, rendered);
+    securityArrayAppend(applied, path, 'Browser applied query text bindings');
   }
 
-  for (const element of attributeBindingElements(root, options)) {
+  const attributeElements = attributeBindingElements(root, options);
+  for (let elementIndex = 0; elementIndex < attributeElements.length; elementIndex += 1) {
+    const element = attributeElements[elementIndex];
+    if (!element) continue;
     if (!elementBelongsToScope(element, options.scopeRoot)) continue;
     if (!elementBelongsToQueryKey(element, options.queryKey)) continue;
 
-    for (const attribute of bindingAttributes(element)) {
-      const boundAttribute = attribute.name.slice('data-bind:'.length);
+    const attributes = bindingAttributes(element);
+    for (let attributeIndex = 0; attributeIndex < attributes.length; attributeIndex += 1) {
+      const attribute = attributes[attributeIndex];
+      if (!attribute) continue;
+      const boundAttribute = securityStringSlice(attribute.name, 'data-bind:'.length);
       const path = attribute.value;
-      if (!path.startsWith(`${rootName}.`)) continue;
+      if (!securityStringStartsWith(path, bindingPrefix)) continue;
 
-      const boundValue = valueAtPath(value, path.slice(rootName.length + 1));
+      const boundValue = valueAtPath(value, securityStringSlice(path, bindingPrefix.length));
       if (boundValue === undefined || boundValue === null) {
         removeBoundAttribute(element, boundAttribute);
       } else {
         setBoundAttribute(element, boundAttribute, boundValue);
       }
-      applied.push(path);
+      securityArrayAppend(applied, path, 'Browser applied query attribute bindings');
     }
 
     // SPEC §4.8 data-bind-prop: assign the live property for path-bound stamps.
-    for (const attribute of bindPropAttributes(element)) {
+    const propertyAttributes = bindPropAttributes(element);
+    for (let attributeIndex = 0; attributeIndex < propertyAttributes.length; attributeIndex += 1) {
+      const attribute = propertyAttributes[attributeIndex];
+      if (!attribute) continue;
       const path = attribute.value;
-      if (!path.startsWith(`${rootName}.`)) continue;
+      if (!securityStringStartsWith(path, bindingPrefix)) continue;
 
       applyBindProp(
         element,
-        attribute.name.slice(BIND_PROP_PREFIX.length),
-        valueAtPath(value, path.slice(rootName.length + 1)),
+        securityStringSlice(attribute.name, BIND_PROP_PREFIX.length),
+        valueAtPath(value, securityStringSlice(path, bindingPrefix.length)),
       );
-      applied.push(path);
+      securityArrayAppend(applied, path, 'Browser applied query property bindings');
     }
   }
 
@@ -224,7 +263,9 @@ export function applyCompiledQueryUpdatePlan(
   };
   const applied: AppliedCompiledQueryUpdatePlan = {
     bindings:
-      plan.bindings === false ? [] : applyQueryBindings(root, queryName, value, bindingOptions),
+      readOwnPlanField(plan, 'bindings') === false
+        ? []
+        : applyQueryBindings(root, queryName, value, bindingOptions),
     derives: [],
     stamps: [],
     templateStamps: [],
@@ -233,43 +274,93 @@ export function applyCompiledQueryUpdatePlan(
     ? { queryStore: options.queryStore }
     : {};
 
-  for (const derive of plan.derives ?? []) {
-    const selector = derive.selector ?? `[data-derive="${queryName}.${derive.name}"]`;
-    const rendered = formatBoundValue(derive.select(value, root, context));
+  const derives = snapshotPlanArray<CompiledQueryDerive>(plan, 'derives');
+  for (let deriveIndex = 0; deriveIndex < derives.length; deriveIndex += 1) {
+    const derive = derives[deriveIndex];
+    if (!derive) continue;
+    const name = requiredOwnString(derive, 'name', 'derive');
+    const select = requiredOwnFunction<CompiledQueryDerive['select']>(derive, 'select', 'derive');
+    const selector =
+      optionalOwnString(derive, 'selector', 'derive') ?? `[data-derive="${queryName}.${name}"]`;
+    const rendered = formatBoundValue(
+      applySecurityIntrinsic(select, derive, [value, root, context]),
+    );
 
-    for (const element of root.querySelectorAll(selector)) {
+    const elements = queryBindingElements(root, selector);
+    for (let elementIndex = 0; elementIndex < elements.length; elementIndex += 1) {
+      const element = elements[elementIndex];
+      if (!element) continue;
       writeQueryPlanElement(element, rendered);
-      applied.derives.push(derive.name);
+      securityArrayAppend(applied.derives, name, 'Browser applied compiled query derives');
     }
   }
 
-  for (const stamp of plan.stamps ?? []) {
-    const selected = stamp.select(value, root, context);
+  const stamps = snapshotPlanArray<CompiledQueryStamp>(plan, 'stamps');
+  for (let stampIndex = 0; stampIndex < stamps.length; stampIndex += 1) {
+    const stamp = stamps[stampIndex];
+    if (!stamp) continue;
+    const attr = requiredOwnString(stamp, 'attr', 'stamp');
+    const selector = requiredOwnString(stamp, 'selector', 'stamp');
+    const select = requiredOwnFunction<CompiledQueryStamp['select']>(stamp, 'select', 'stamp');
+    const selected = applySecurityIntrinsic(select, stamp, [value, root, context]);
 
-    for (const element of root.querySelectorAll(stamp.selector)) {
+    const elements = queryBindingElements(root, selector);
+    for (let elementIndex = 0; elementIndex < elements.length; elementIndex += 1) {
+      const element = elements[elementIndex];
+      if (!element) continue;
       if (selected === undefined || selected === null) {
-        removeBoundAttribute(element, stamp.attr);
+        removeBoundAttribute(element, attr);
       } else {
-        setBoundAttribute(element, stamp.attr, selected);
+        setBoundAttribute(element, attr, selected);
       }
-      applied.stamps.push(stamp.attr);
+      securityArrayAppend(applied.stamps, attr, 'Browser applied compiled query stamps');
     }
   }
 
-  for (const stamp of plan.templateStamps ?? []) {
-    const list = valueAtPath(value, stamp.list);
-    if (!Array.isArray(list)) continue;
+  const templateStamps = snapshotPlanArray<CompiledQueryTemplateStamp>(plan, 'templateStamps');
+  for (let stampIndex = 0; stampIndex < templateStamps.length; stampIndex += 1) {
+    const stamp = templateStamps[stampIndex];
+    if (!stamp) continue;
+    const listPath = requiredOwnString(stamp, 'list', 'template stamp');
+    const selector = requiredOwnString(stamp, 'selector', 'template stamp');
+    const render = requiredOwnFunction<CompiledQueryTemplateStamp['render']>(
+      stamp,
+      'render',
+      'template stamp',
+    );
+    const key = requiredOwnTemplateStampKey(stamp);
+    const list = valueAtPath(value, listPath);
+    if (!securityArrayIsArray(list)) continue;
+    const values = snapshotDenseArray(list, 'query template-stamp list');
+    const items: TemplateStampItem[] = [];
+    for (let itemIndex = 0; itemIndex < values.length; itemIndex += 1) {
+      const item = values[itemIndex];
+      const html = applySecurityIntrinsic<unknown>(render, stamp, [item, itemIndex]);
+      if (typeof html !== 'string') {
+        throw new TypeError('Kovo template-stamp render must return a string.');
+      }
+      securityArrayAppend(
+        items,
+        {
+          html,
+          index: itemIndex,
+          key: securityString(readTemplateStampKey(key, stamp, item, itemIndex)),
+          value: item,
+        },
+        'Browser query template-stamp item snapshot',
+      );
+    }
 
-    const items = list.map((item, index) => ({
-      html: stamp.render(item, index),
-      index,
-      key: String(readTemplateStampKey(stamp, item, index)),
-      value: item,
-    }));
-
-    for (const element of root.querySelectorAll(stamp.selector)) {
+    const elements = queryBindingElements(root, selector);
+    for (let elementIndex = 0; elementIndex < elements.length; elementIndex += 1) {
+      const element = elements[elementIndex];
+      if (!element) continue;
       if (!reconcileTemplateStampHost(element, items)) continue;
-      applied.templateStamps.push(stamp.selector);
+      securityArrayAppend(
+        applied.templateStamps,
+        selector,
+        'Browser applied compiled query template stamps',
+      );
     }
   }
 
@@ -281,105 +372,130 @@ export function supportsQueryBindings(root: unknown): root is QueryBindingRoot {
   return typeof (root as Partial<QueryBindingRoot>).querySelectorAll === 'function';
 }
 
-function isTemplateStampHost(element: QueryBindingElement): element is TemplateStampHost {
-  return (
-    'reconcileTemplateStamp' in element && typeof element.reconcileTemplateStamp === 'function'
-  );
-}
-
 function reconcileTemplateStampHost(
   element: QueryBindingElement,
   items: readonly TemplateStampItem[],
 ): boolean {
-  if (isTemplateStampHost(element)) {
-    element.reconcileTemplateStamp(items);
+  if (isDomTemplateStampHost(element)) {
+    reconcileDomTemplateStamp(element, items);
     return true;
   }
 
-  if (!isDomTemplateStampHost(element)) return false;
-
-  reconcileDomTemplateStamp(element, items);
+  const reconcile = structuralMethod(element, 'reconcileTemplateStamp');
+  if (!reconcile) return false;
+  applySecurityIntrinsic(reconcile, element, [items]);
   return true;
 }
 
 function isDomTemplateStampHost(element: QueryBindingElement): element is Element {
-  return (
-    typeof (element as Partial<Element>).querySelector === 'function' &&
-    typeof (element as Partial<Element>).insertBefore === 'function' &&
-    typeof (element as Partial<Element>).querySelectorAll === 'function'
-  );
+  return browserQueryBindingSecurity?.isPlatformElement(element) === true;
 }
 
 function reconcileDomTemplateStamp(host: Element, items: readonly TemplateStampItem[]): void {
-  const template = host.querySelector('template[kovo-stamp]');
-  if (!isHtmlTemplateElement(template)) return;
+  const security = requireBrowserQueryBindingSecurity();
+  const template = security.queryOne(host, 'template[kovo-stamp]');
+  if (!template || security.readElementTagName(template) !== 'TEMPLATE') return;
 
-  const elements = reconcileKeyed(
-    [...host.children].filter((child) => child !== template),
-    items,
-    {
-      create(item) {
-        return domTemplateStampElement(template, item);
-      },
-      currentKey(child) {
-        return child.getAttribute('kovo-key');
-      },
-      match(existing, item) {
-        const next = domTemplateStampElement(template, item);
-        return next ? morphDomElement(existing, next) : existing;
-      },
-      nextKey(item) {
-        return item.key;
-      },
-      preserveUnkeyed: false,
-    },
-  ).filter((element): element is Element => element !== null);
-  const desired = new Set(elements);
-
-  for (const [index, element] of elements.entries()) {
-    const item = items[index];
-    if (!item) continue;
-    applyItemRelativeBindings(element, item.value);
-    host.insertBefore(element, template);
+  const children = security.snapshotElementChildren(host);
+  const current: Element[] = [];
+  for (let index = 0; index < children.length; index += 1) {
+    const child = children[index];
+    if (child && child !== template) {
+      securityArrayAppend(current, child, 'Browser query template-stamp current rows');
+    }
   }
 
-  for (const child of Array.from(host.children)) {
-    if (child !== template && child.hasAttribute('kovo-key') && !desired.has(child)) child.remove();
+  const reconciled = reconcileKeyed(current, items, {
+    create(item) {
+      return domTemplateStampElement(item, security);
+    },
+    currentKey(child) {
+      return security.readAttribute(child, 'kovo-key');
+    },
+    match(existing, item) {
+      const next = domTemplateStampElement(item, security);
+      return next ? morphDomElement(existing, next) : existing;
+    },
+    nextKey(item) {
+      return item.key;
+    },
+    preserveUnkeyed: false,
+  });
+  const desired = security.createSecurityMap<Element, true>();
+  for (let index = 0; index < reconciled.length; index += 1) {
+    const element = reconciled[index];
+    if (!element) continue;
+    security.setSecurityMapValue(desired, element, true);
+  }
+
+  for (let index = 0; index < reconciled.length; index += 1) {
+    const element = reconciled[index];
+    const item = items[index];
+    if (!element || !item) continue;
+    applyItemRelativeBindings(element, item.value);
+    security.insertDomNode(host, element, template);
+  }
+
+  const committedChildren = security.snapshotElementChildren(host);
+  for (let index = 0; index < committedChildren.length; index += 1) {
+    const child = committedChildren[index];
+    if (
+      child &&
+      child !== template &&
+      security.hasElementAttribute(child, 'kovo-key') &&
+      !security.hasSecurityMapValue(desired, child)
+    ) {
+      security.removeElement(child);
+    }
   }
 }
 
 function domTemplateStampElement(
-  template: HTMLTemplateElement,
   item: TemplateStampItem,
+  security = requireBrowserQueryBindingSecurity(),
 ): Element | null {
-  const parser = template.ownerDocument.createElement('template');
   // SF (secure-framework Tier 3): Trusted Types policy seam (see trusted-types.ts).
-  parser.innerHTML = kovoCreateHTML(securityStringTrim(item.html));
-  const element = parser.content.firstElementChild;
+  const content = security.createFragmentContent(kovoCreateHTML(securityStringTrim(item.html)));
+  const elements = security.snapshotElementChildren(content);
+  const element = elements[0];
   if (!element) return null;
 
-  element.setAttribute('kovo-key', item.key);
-  return sanitizeDomElementTree(element);
-}
-
-function isHtmlTemplateElement(element: Element | null): element is HTMLTemplateElement {
-  return element !== null && 'content' in element && 'ownerDocument' in element;
+  security.setElementAttribute(element, 'kovo-key', item.key);
+  return sanitizeDomElementTree(element, security);
 }
 
 function applyItemRelativeBindings(root: Element, value: unknown): void {
-  for (const element of itemBindingElements(root)) {
-    const path = element.getAttribute('data-bind');
-    if (!path?.startsWith('.')) continue;
+  const textElements = itemBindingElements(root);
+  for (let elementIndex = 0; elementIndex < textElements.length; elementIndex += 1) {
+    const element = textElements[elementIndex];
+    if (!element) continue;
+    const path = readBindingAttribute(element, 'data-bind');
+    if (!path || !securityStringStartsWith(path, '.')) continue;
 
-    writeQueryPlanElement(element, formatBoundValue(valueAtPath(value, path.slice(1))));
+    writeQueryPlanElement(
+      element,
+      formatBoundValue(valueAtPath(value, securityStringSlice(path, 1))),
+    );
   }
 
-  for (const element of [root, ...root.querySelectorAll('*')]) {
-    for (const attribute of bindingAttributes(element)) {
-      if (!attribute.value.startsWith('.')) continue;
+  const elements: QueryBindingElement[] = [root];
+  const descendants = queryBindingElements(root, '*');
+  for (let index = 0; index < descendants.length; index += 1) {
+    const descendant = descendants[index];
+    if (descendant) {
+      securityArrayAppend(elements, descendant, 'Browser query item-binding descendants');
+    }
+  }
+  for (let elementIndex = 0; elementIndex < elements.length; elementIndex += 1) {
+    const element = elements[elementIndex];
+    if (!element) continue;
+    const attributes = bindingAttributes(element);
+    for (let attributeIndex = 0; attributeIndex < attributes.length; attributeIndex += 1) {
+      const attribute = attributes[attributeIndex];
+      if (!attribute || !securityStringStartsWith(attribute.value, '.')) continue;
 
-      const boundAttribute = attribute.name.slice('data-bind:'.length);
-      const selected = valueAtPath(value, attribute.value.slice(1));
+      const boundAttribute = securityStringSlice(attribute.name, 'data-bind:'.length);
+      const selected = valueAtPath(value, securityStringSlice(attribute.value, 1));
       if (selected === undefined || selected === null) {
         removeBoundAttribute(element, boundAttribute);
       } else {
@@ -388,62 +504,105 @@ function applyItemRelativeBindings(root: Element, value: unknown): void {
     }
 
     // SPEC §4.8 data-bind-prop: item-relative live-property assignment.
-    for (const attribute of bindPropAttributes(element)) {
-      if (!attribute.value.startsWith('.')) continue;
+    const propertyAttributes = bindPropAttributes(element);
+    for (let attributeIndex = 0; attributeIndex < propertyAttributes.length; attributeIndex += 1) {
+      const attribute = propertyAttributes[attributeIndex];
+      if (!attribute || !securityStringStartsWith(attribute.value, '.')) continue;
 
       applyBindProp(
         element,
-        attribute.name.slice(BIND_PROP_PREFIX.length),
-        valueAtPath(value, attribute.value.slice(1)),
+        securityStringSlice(attribute.name, BIND_PROP_PREFIX.length),
+        valueAtPath(value, securityStringSlice(attribute.value, 1)),
       );
     }
   }
 }
 
 function itemBindingElements(root: Element): Element[] {
-  return [
-    ...(root.getAttribute('data-bind') !== null ? [root] : []),
-    ...root.querySelectorAll('[data-bind]'),
-  ];
+  const elements: Element[] = [];
+  if (readBindingAttribute(root, 'data-bind') !== null) {
+    securityArrayAppend(elements, root, 'Browser query item-binding roots');
+  }
+  const descendants = queryBindingElements(root, '[data-bind]');
+  for (let index = 0; index < descendants.length; index += 1) {
+    const descendant = descendants[index];
+    if (descendant) {
+      securityArrayAppend(elements, descendant as Element, 'Browser query item-binding roots');
+    }
+  }
+  return elements;
 }
 
 function readTemplateStampKey(
-  stamp: CompiledQueryTemplateStamp,
+  keyPlan: CompiledQueryTemplateStamp['key'],
+  receiver: CompiledQueryTemplateStamp,
   item: unknown,
   index: number,
 ): string | number {
-  if (typeof stamp.key === 'function') return stamp.key(item, index);
+  if (typeof keyPlan === 'function') {
+    const selected = applySecurityIntrinsic<unknown>(keyPlan, receiver, [item, index]);
+    if (typeof selected !== 'string' && typeof selected !== 'number') {
+      throw new TypeError('Kovo template-stamp key function must return a string or number.');
+    }
+    return selected;
+  }
 
-  const key = valueAtPath(item, stamp.key);
+  const key = valueAtPath(item, keyPlan);
   return typeof key === 'string' || typeof key === 'number' || typeof key === 'bigint'
-    ? key.toString()
+    ? securityString(key)
     : index;
 }
 
 function valueAtPath(value: unknown, path: string): unknown {
-  return path.split('.').reduce<unknown>((current, segment) => {
-    const key = segment.endsWith('?') ? segment.slice(0, -1) : segment;
+  let current = value;
+  let start = 0;
+  while (start <= path.length) {
+    const separator = securityStringIndexOf(path, '.', start);
+    const end = separator < 0 ? path.length : separator;
+    let key = securityStringSlice(path, start, end);
+    if (key.length > 0 && key[key.length - 1] === '?') {
+      key = securityStringSlice(key, 0, -1);
+    }
     if (typeof current !== 'object' || current === null) return undefined;
-    return (current as Record<string, unknown>)[key];
-  }, value);
+    const descriptor = securityGetOwnPropertyDescriptor(current, key);
+    if (!descriptor || !('value' in descriptor)) return undefined;
+    current = descriptor.value;
+    if (separator < 0) return current;
+    start = separator + 1;
+  }
+  return current;
 }
 
 function queryAttributeBindingElements(root: QueryBindingRoot): QueryBindingElement[] {
   try {
-    return Array.from(root.querySelectorAll('*')).filter(
-      (element) => bindingAttributes(element).length > 0 || bindPropAttributes(element).length > 0,
-    );
+    const selected = queryBindingElements(root, '*');
+    const elements: QueryBindingElement[] = [];
+    for (let index = 0; index < selected.length; index += 1) {
+      const element = selected[index];
+      if (
+        element &&
+        (bindingAttributes(element).length > 0 || bindPropAttributes(element).length > 0)
+      ) {
+        securityArrayAppend(elements, element, 'Browser query attribute-binding index');
+      }
+    }
+    return elements;
   } catch {
     return [];
   }
 }
 
 function dataBindElements(root: QueryBindingRoot, scopeRoot: unknown): QueryBindingElement[] {
-  const elements = Array.from(root.querySelectorAll('[data-bind]')).filter((element) =>
-    elementBelongsToScope(element, scopeRoot),
-  );
-  if (isQueryBindingElement(root) && root.getAttribute('data-bind') !== null) {
-    elements.unshift(root);
+  const selected = queryBindingElements(root, '[data-bind]');
+  const elements: QueryBindingElement[] = [];
+  if (isQueryBindingElement(root) && readBindingAttribute(root, 'data-bind') !== null) {
+    securityArrayAppend(elements, root, 'Browser query text-binding roots');
+  }
+  for (let index = 0; index < selected.length; index += 1) {
+    const element = selected[index];
+    if (element && elementBelongsToScope(element, scopeRoot)) {
+      securityArrayAppend(elements, element, 'Browser query text-binding roots');
+    }
   }
 
   return elements;
@@ -459,10 +618,19 @@ function attributeBindingElements(
     isQueryBindingElement(root) &&
     (bindingAttributes(root).length > 0 || bindPropAttributes(root).length > 0)
   ) {
-    return [root, ...elements];
+    const withRoot: QueryBindingElement[] = [];
+    securityArrayAppend(withRoot, root, 'Browser query attribute-binding roots');
+    const snapshot = snapshotDenseArray(elements, 'query attribute-binding index');
+    for (let index = 0; index < snapshot.length; index += 1) {
+      const element = snapshot[index];
+      if (element) {
+        securityArrayAppend(withRoot, element, 'Browser query attribute-binding roots');
+      }
+    }
+    return withRoot;
   }
 
-  return elements;
+  return snapshotDenseArray(elements, 'query attribute-binding index');
 }
 
 async function applyStateDeriveBindings(
@@ -500,7 +668,10 @@ async function applyStateDeriveBindings(
   // Snapshot every DOM-selected derive reference before importing the first authored module. A
   // derive may mutate attributes or DOM prototypes, but it cannot thereby redirect a later
   // framework import/callee decision in the same state-commit pass (SPEC §6.6).
-  for (const element of dataBindElements(root, root)) {
+  const textElements = dataBindElements(root, root);
+  for (let elementIndex = 0; elementIndex < textElements.length; elementIndex += 1) {
+    const element = textElements[elementIndex];
+    if (!element) continue;
     const refValue = readRuntimeElementAttribute(element, 'data-bind');
     if (!refValue) continue;
 
@@ -513,10 +684,16 @@ async function applyStateDeriveBindings(
     );
   }
 
-  for (const element of attributeBindingElements(root, { ...options, scopeRoot: root })) {
+  const attributeElements = attributeBindingElements(root, { ...options, scopeRoot: root });
+  for (let elementIndex = 0; elementIndex < attributeElements.length; elementIndex += 1) {
+    const element = attributeElements[elementIndex];
+    if (!element) continue;
     if (!elementBelongsToScope(element, root)) continue;
 
-    for (const attribute of bindingAttributes(element)) {
+    const attributes = bindingAttributes(element);
+    for (let attributeIndex = 0; attributeIndex < attributes.length; attributeIndex += 1) {
+      const attribute = attributes[attributeIndex];
+      if (!attribute) continue;
       const ref = parseDeriveReference(attribute.value);
       if (!ref) continue;
       securityArrayAppend(
@@ -524,7 +701,7 @@ async function applyStateDeriveBindings(
         {
           element,
           kind: 'attribute',
-          name: attribute.name.slice('data-bind:'.length),
+          name: securityStringSlice(attribute.name, 'data-bind:'.length),
           ref,
           refValue: attribute.value,
         },
@@ -533,7 +710,10 @@ async function applyStateDeriveBindings(
     }
 
     // SPEC §4.8 data-bind-prop: assign the live property for derive-bound stamps.
-    for (const attribute of bindPropAttributes(element)) {
+    const propertyAttributes = bindPropAttributes(element);
+    for (let attributeIndex = 0; attributeIndex < propertyAttributes.length; attributeIndex += 1) {
+      const attribute = propertyAttributes[attributeIndex];
+      if (!attribute) continue;
       const ref = parseDeriveReference(attribute.value);
       if (!ref) continue;
       securityArrayAppend(
@@ -541,7 +721,7 @@ async function applyStateDeriveBindings(
         {
           element,
           kind: 'property',
-          name: attribute.name.slice(BIND_PROP_PREFIX.length),
+          name: securityStringSlice(attribute.name, BIND_PROP_PREFIX.length),
           ref,
           refValue: attribute.value,
         },
@@ -609,37 +789,61 @@ function elementBelongsToQueryKey(
   const closestQueryHost = closestRuntimeElement<QueryBindingElement>(element, '[kovo-deps]');
   if (!closestQueryHost) return true;
 
-  return readDeps(readRuntimeElementAttribute(closestQueryHost, 'kovo-deps')).includes(queryKey);
+  const deps = readDeps(readRuntimeElementAttribute(closestQueryHost, 'kovo-deps'));
+  for (let index = 0; index < deps.length; index += 1) {
+    if (deps[index] === queryKey) return true;
+  }
+  return false;
 }
 
 function readDeps(value: string | null | undefined): string[] {
-  return (value ?? '')
-    .split(/[\s,]+/)
-    .map((dep) => dep.trim())
-    .filter(Boolean);
+  const source = value ?? '';
+  const deps: string[] = [];
+  let start = 0;
+  for (let index = 0; index <= source.length; index += 1) {
+    const code = index < source.length ? securityStringCharCodeAt(source, index) : 0x20;
+    const delimiter =
+      code === 0x2c ||
+      code === 0x09 ||
+      code === 0x0a ||
+      code === 0x0c ||
+      code === 0x0d ||
+      code === 0x20;
+    if (!delimiter) continue;
+    if (start < index) {
+      securityArrayAppend(
+        deps,
+        securityStringSlice(source, start, index),
+        'Browser query dependency snapshot',
+      );
+    }
+    start = index + 1;
+  }
+  return deps;
 }
 
 function isQueryBindingElement(value: unknown): value is QueryBindingElement {
-  return typeof (value as Partial<QueryBindingElement>).getAttribute === 'function';
+  if (browserQueryBindingSecurity?.isPlatformElement(value)) return true;
+  return structuralMethod(value, 'getAttribute') !== undefined;
 }
 
 function bindingAttributes(element: QueryBindingElement): Array<{ name: string; value: string }> {
-  return domAttributes(element.attributes).filter(
-    (attribute) => attribute.name.startsWith('data-bind:') && attribute.value !== '',
-  );
+  return matchingBindingAttributes(element, 'data-bind:');
 }
 
 // SPEC §4.8 data-bind-prop: live-property binding stamps. Kept separate from
 // `data-bind:` so the property write runs in addition to (never instead of) the
 // companion attribute write.
 function bindPropAttributes(element: QueryBindingElement): Array<{ name: string; value: string }> {
-  return domAttributes(element.attributes).filter(
-    (attribute) => attribute.name.startsWith(BIND_PROP_PREFIX) && attribute.value !== '',
-  );
+  return matchingBindingAttributes(element, BIND_PROP_PREFIX);
 }
 
 function writeQueryPlanElement(element: QueryBindingElement, rendered: string): void {
   // SPEC §4.8: derive text stamps share data-bind's textContent semantics.
+  if (browserQueryBindingSecurity?.isPlatformElement(element)) {
+    browserQueryBindingSecurity.setNodeTextContent(element, rendered);
+    return;
+  }
   element.textContent = rendered;
 }
 
@@ -647,7 +851,7 @@ function removeBoundAttribute(element: QueryBindingElement, name: string): void 
   // SPEC §5.2.4: closing a <dialog> by removing `open` never exits the top layer;
   // route through dialog.close() so a show-modal dialog leaves the top layer.
   if (name === 'open' && reconcileDialogOpen(element, null)) return;
-  element.removeAttribute?.(name);
+  removeBindingAttribute(element, name);
   if (name === 'value' && element.value !== undefined && shouldClearRemovedValueProperty(element)) {
     element.value = '';
   }
@@ -666,22 +870,25 @@ function removeBoundAttribute(element: QueryBindingElement, name: string): void 
 }
 
 function shouldClearRemovedValueProperty(element: QueryBindingElement): boolean {
-  return element.tagName?.toLowerCase() !== 'progress';
+  const tagName = readBindingTagName(element);
+  return tagName === undefined || securityStringToLowerCase(tagName) !== 'progress';
 }
 
 // HTML boolean-presence attributes: falsy value → removeAttribute, truthy → setAttribute('', '').
 // Covers query-source bindings/derives/stamps that emit raw booleans (J3, SPEC §4.6/§4.8).
-const BOOLEAN_PRESENCE_ATTRIBUTES = new Set([
-  'checked',
-  'disabled',
-  'hidden',
-  'indeterminate',
-  'multiple',
-  'open',
-  'readonly',
-  'required',
-  'selected',
-]);
+function isBooleanPresenceAttribute(name: string): boolean {
+  return (
+    name === 'checked' ||
+    name === 'disabled' ||
+    name === 'hidden' ||
+    name === 'indeterminate' ||
+    name === 'multiple' ||
+    name === 'open' ||
+    name === 'readonly' ||
+    name === 'required' ||
+    name === 'selected'
+  );
+}
 
 // SPEC §5.2.4: a <dialog> opened via the native show-modal invoker lives in the
 // top layer. Reflecting the reactive open state with setAttribute/removeAttribute
@@ -696,7 +903,8 @@ interface DialogElementLike {
 }
 
 function reconcileDialogOpen(element: QueryBindingElement, value: unknown): boolean {
-  if (element.tagName?.toLowerCase() !== 'dialog') return false;
+  const tagName = readBindingTagName(element);
+  if (!tagName || securityStringToLowerCase(tagName) !== 'dialog') return false;
   const dialog = element as QueryBindingElement & DialogElementLike;
   if (typeof dialog.close !== 'function') return false;
 
@@ -705,12 +913,15 @@ function reconcileDialogOpen(element: QueryBindingElement, value: unknown): bool
   } else if (!dialog.open) {
     // Idempotent against the native show-modal invoker, which opens the dialog on
     // the same activation before this reactive write runs.
-    if (element.getAttribute?.('aria-modal') === 'true' && typeof dialog.showModal === 'function') {
+    if (
+      readBindingAttribute(element, 'aria-modal') === 'true' &&
+      typeof dialog.showModal === 'function'
+    ) {
       dialog.showModal();
     } else if (typeof dialog.show === 'function') {
       dialog.show();
     } else {
-      element.setAttribute?.('open', '');
+      setBindingAttribute(element, 'open', '');
     }
   }
   return true;
@@ -721,11 +932,11 @@ function setBoundAttribute(element: QueryBindingElement, name: string, value: un
   // and set to '' (present) on any other value including true, '', and non-null strings.
   // This covers both query-source raw booleans and state-derive '' / null patterns.
   if (name === 'open' && reconcileDialogOpen(element, value)) return;
-  if (BOOLEAN_PRESENCE_ATTRIBUTES.has(name)) {
+  if (isBooleanPresenceAttribute(name)) {
     if (value === false || value == null) {
       removeBoundAttribute(element, name);
     } else {
-      element.setAttribute?.(name, '');
+      setBindingAttribute(element, name, '');
       // Sync property mirrors for checked and indeterminate.
       if (name === 'checked' && element.checked !== undefined) element.checked = true;
       if (name === 'indeterminate' && element.indeterminate !== undefined)
@@ -742,15 +953,15 @@ function setBoundAttribute(element: QueryBindingElement, name: string, value: un
     removeBoundAttribute(element, name);
     return;
   }
-  element.setAttribute?.(name, rendered);
+  setBindingAttribute(element, name, rendered);
   if (name === 'value' && element.value !== undefined) {
     element.value = rendered;
   }
   if ((name === 'scrollLeft' || name === 'scrollleft') && element.scrollLeft !== undefined) {
-    element.scrollLeft = Number(value) || 0;
+    element.scrollLeft = securityNumber(value) || 0;
   }
   if ((name === 'scrollTop' || name === 'scrolltop') && element.scrollTop !== undefined) {
-    element.scrollTop = Number(value) || 0;
+    element.scrollTop = securityNumber(value) || 0;
   }
 }
 
@@ -758,8 +969,193 @@ function formatBoundValue(value: unknown): string {
   if (value === undefined || value === null) return '';
   if (typeof value === 'string') return value;
   if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint') {
-    return value.toString();
+    return securityString(value);
   }
-  if (typeof value === 'object') return JSON.stringify(value);
+  if (typeof value === 'object') return securityJsonStringify(value) ?? '';
   return '';
+}
+
+function queryBindingElements(root: object, selector: string): QueryBindingElement[] {
+  if (browserQueryBindingSecurity) {
+    return browserQueryBindingSecurity.queryAllElements(root, selector) as QueryBindingElement[];
+  }
+  const query = structuralMethod(root, 'querySelectorAll');
+  if (!query) return [];
+  const selected = applySecurityIntrinsic<unknown>(query, root, [selector]);
+  return snapshotDenseArray(
+    selected,
+    'structural query-binding selection',
+  ) as QueryBindingElement[];
+}
+
+function snapshotDenseArray<Value>(value: unknown, label: string): Value[] {
+  if (!securityArrayIsArray(value)) throw new TypeError(`Kovo ${label} must be an array.`);
+  const length = securityGetOwnPropertyDescriptor(value, 'length');
+  if (
+    !length ||
+    !('value' in length) ||
+    typeof length.value !== 'number' ||
+    length.value < 0 ||
+    length.value > 100_000 ||
+    length.value % 1 !== 0
+  ) {
+    throw new TypeError(`Kovo ${label} length is invalid.`);
+  }
+  const snapshot: Value[] = [];
+  for (let index = 0; index < length.value; index += 1) {
+    const item = securityGetOwnPropertyDescriptor(value, index);
+    if (!item || !('value' in item)) {
+      throw new TypeError(`Kovo ${label} must be dense own data.`);
+    }
+    securityArrayAppend(snapshot, item.value as Value, `Browser ${label} snapshot`);
+  }
+  return snapshot;
+}
+
+function readOwnPlanField(
+  plan: CompiledQueryUpdatePlan,
+  name: keyof CompiledQueryUpdatePlan,
+): unknown {
+  const descriptor = securityGetOwnPropertyDescriptor(plan, name);
+  if (!descriptor) return undefined;
+  if (!('value' in descriptor)) {
+    throw new TypeError(`Kovo compiled query plan ${name} must be own data.`);
+  }
+  return descriptor.value;
+}
+
+function snapshotPlanArray<Value>(
+  plan: CompiledQueryUpdatePlan,
+  name: 'derives' | 'stamps' | 'templateStamps',
+): Value[] {
+  const value = readOwnPlanField(plan, name);
+  return value === undefined ? [] : snapshotDenseArray<Value>(value, `compiled query plan ${name}`);
+}
+
+function requiredOwnString(value: object, name: PropertyKey, label: string): string {
+  const descriptor = securityGetOwnPropertyDescriptor(value, name);
+  if (!descriptor || !('value' in descriptor) || typeof descriptor.value !== 'string') {
+    throw new TypeError(`Kovo ${label} ${String(name)} must be own string data.`);
+  }
+  return descriptor.value;
+}
+
+function optionalOwnString(value: object, name: PropertyKey, label: string): string | undefined {
+  const descriptor = securityGetOwnPropertyDescriptor(value, name);
+  if (!descriptor) return undefined;
+  if (!('value' in descriptor) || typeof descriptor.value !== 'string') {
+    throw new TypeError(`Kovo ${label} ${String(name)} must be own string data.`);
+  }
+  return descriptor.value;
+}
+
+function requiredOwnFunction<FunctionType extends Function>(
+  value: object,
+  name: PropertyKey,
+  label: string,
+): FunctionType {
+  const descriptor = securityGetOwnPropertyDescriptor(value, name);
+  if (!descriptor || !('value' in descriptor) || typeof descriptor.value !== 'function') {
+    throw new TypeError(`Kovo ${label} ${String(name)} must be an own-data function.`);
+  }
+  return descriptor.value as FunctionType;
+}
+
+function requiredOwnTemplateStampKey(
+  stamp: CompiledQueryTemplateStamp,
+): CompiledQueryTemplateStamp['key'] {
+  const descriptor = securityGetOwnPropertyDescriptor(stamp, 'key');
+  if (
+    !descriptor ||
+    !('value' in descriptor) ||
+    (typeof descriptor.value !== 'string' && typeof descriptor.value !== 'function')
+  ) {
+    throw new TypeError('Kovo template stamp key must be own string or function data.');
+  }
+  return descriptor.value;
+}
+
+function structuralMethod(
+  value: unknown,
+  name: PropertyKey,
+): ((...args: any[]) => unknown) | undefined {
+  if (value === null || typeof value !== 'object') return undefined;
+  let owner: object | null = value;
+  for (let depth = 0; owner !== null && depth < 16; depth += 1) {
+    const descriptor = securityGetOwnPropertyDescriptor(owner, name);
+    if (descriptor) {
+      return 'value' in descriptor && typeof descriptor.value === 'function'
+        ? descriptor.value
+        : undefined;
+    }
+    owner = securityGetPrototypeOf(owner);
+  }
+  return undefined;
+}
+
+function readBindingAttribute(element: QueryBindingElement, name: string): string | null {
+  if (browserQueryBindingSecurity?.isPlatformElement(element)) {
+    return browserQueryBindingSecurity.readAttribute(element, name);
+  }
+  const read = structuralMethod(element, 'getAttribute');
+  if (!read) return null;
+  const value = applySecurityIntrinsic<unknown>(read, element, [name]);
+  return typeof value === 'string' ? value : null;
+}
+
+function readBindingTagName(element: QueryBindingElement): string | undefined {
+  if (browserQueryBindingSecurity?.isPlatformElement(element)) {
+    return browserQueryBindingSecurity.readElementTagName(element);
+  }
+  const descriptor = securityGetOwnPropertyDescriptor(element, 'tagName');
+  return descriptor && 'value' in descriptor && typeof descriptor.value === 'string'
+    ? descriptor.value
+    : undefined;
+}
+
+function setBindingAttribute(element: QueryBindingElement, name: string, value: string): void {
+  if (browserQueryBindingSecurity?.isPlatformElement(element)) {
+    browserQueryBindingSecurity.setElementAttribute(element, name, value);
+    return;
+  }
+  const write = structuralMethod(element, 'setAttribute');
+  if (write) applySecurityIntrinsic(write, element, [name, value]);
+}
+
+function removeBindingAttribute(element: QueryBindingElement, name: string): void {
+  if (browserQueryBindingSecurity?.isPlatformElement(element)) {
+    browserQueryBindingSecurity.removeElementAttribute(element, name);
+    return;
+  }
+  const remove = structuralMethod(element, 'removeAttribute');
+  if (remove) applySecurityIntrinsic(remove, element, [name]);
+}
+
+function matchingBindingAttributes(
+  element: QueryBindingElement,
+  prefix: string,
+): Array<{ name: string; value: string }> {
+  let attributes: Array<{ name: string; value: string }>;
+  if (browserQueryBindingSecurity?.isPlatformElement(element)) {
+    attributes = browserQueryBindingSecurity.snapshotElementAttributes(element);
+  } else {
+    const descriptor = securityGetOwnPropertyDescriptor(element, 'attributes');
+    attributes = domAttributes(
+      descriptor && 'value' in descriptor
+        ? (descriptor.value as QueryBindingElement['attributes'])
+        : undefined,
+    );
+  }
+  const matches: Array<{ name: string; value: string }> = [];
+  for (let index = 0; index < attributes.length; index += 1) {
+    const attribute = attributes[index];
+    if (attribute && attribute.value !== '' && securityStringStartsWith(attribute.name, prefix)) {
+      securityArrayAppend(
+        matches,
+        { name: attribute.name, value: attribute.value },
+        'Browser query binding attribute snapshot',
+      );
+    }
+  }
+  return matches;
 }

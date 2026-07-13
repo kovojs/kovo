@@ -1,9 +1,13 @@
 import { afterEach, describe, expect, it } from 'vitest';
 
+import { createBrowserNavigationSecurityControls } from './navigation-security-intrinsics.js';
 import { applyCompiledQueryUpdatePlan } from './query-bindings.js';
+import { kovoCreateHTML } from './trusted-types.js';
 
 afterEach(() => {
   document.body.replaceChildren();
+  delete (globalThis as typeof globalThis & { __kovo_query_binding_owned?: number })
+    .__kovo_query_binding_owned;
 });
 
 describe('browser query template stamps', () => {
@@ -104,5 +108,284 @@ describe('browser query template stamps', () => {
     ]);
     expect(list.textContent).toBe('1 x Beans2 x Mug');
     expect(list.querySelector('[kovo-key="p1"]')?.getAttribute('data-name')).toBe('Mug');
+  });
+
+  it('does not adopt a late Array.filter substitution during template reconciliation', () => {
+    const list = document.createElement('ul');
+    list.id = 'security-list';
+    list.innerHTML = '<template kovo-stamp><li></li></template>';
+    document.body.append(list);
+    const attacker = document.createElement('img');
+    attacker.setAttribute('data-attacker-substitution', 'true');
+    attacker.setAttribute('onerror', 'globalThis.__kovo_query_binding_owned = 1');
+    attacker.setAttribute('src', '/missing-query-binding-owned');
+    const originalFilter = Array.prototype.filter;
+
+    try {
+      Array.prototype.filter = function poisonedFilter(...args) {
+        const filtered = Reflect.apply(originalFilter, this, args) as unknown[];
+        return filtered.some((entry) => entry instanceof Element) ? [attacker] : filtered;
+      } as typeof Array.prototype.filter;
+
+      applyCompiledQueryUpdatePlan(
+        document,
+        'inventory',
+        { items: [{ id: 'safe-row' }] },
+        {
+          bindings: false,
+          templateStamps: [
+            {
+              key: 'id',
+              list: 'items',
+              render: () => '<li data-server-safe="true">SERVER SAFE</li>',
+              selector: '#security-list',
+            },
+          ],
+        },
+      );
+    } finally {
+      Array.prototype.filter = originalFilter;
+    }
+
+    expect(list.querySelector('[data-attacker-substitution]')).toBeNull();
+    expect(list.querySelector('[data-server-safe]')?.textContent).toBe('SERVER SAFE');
+  });
+
+  it('pins template parsing and keyed DOM commits before late prototype poisoning', () => {
+    const list = document.createElement('ul');
+    list.id = 'security-list';
+    list.innerHTML = [
+      '<li kovo-key="stale">STALE</li>',
+      '<template kovo-stamp><li></li></template>',
+    ].join('');
+    document.body.append(list);
+    const attacker = document.createElement('img');
+    attacker.setAttribute('data-attacker-substitution', 'dom-poison');
+    attacker.setAttribute('onerror', 'globalThis.__kovo_query_binding_owned = 1');
+    attacker.setAttribute('src', '/missing-query-binding-owned');
+    const attackerHtml = attacker.outerHTML;
+    const attackerFragment = document.createDocumentFragment();
+    attackerFragment.append(attacker.cloneNode(true));
+    const createElementDescriptor = Object.getOwnPropertyDescriptor(
+      Document.prototype,
+      'createElement',
+    );
+    const innerHtmlDescriptor = Object.getOwnPropertyDescriptor(Element.prototype, 'innerHTML');
+    const childrenDescriptor = Object.getOwnPropertyDescriptor(Element.prototype, 'children');
+    const querySelectorDescriptor = Object.getOwnPropertyDescriptor(
+      Element.prototype,
+      'querySelector',
+    );
+    const getAttributeDescriptor = Object.getOwnPropertyDescriptor(
+      Element.prototype,
+      'getAttribute',
+    );
+    const setAttributeDescriptor = Object.getOwnPropertyDescriptor(
+      Element.prototype,
+      'setAttribute',
+    );
+    const hasAttributeDescriptor = Object.getOwnPropertyDescriptor(
+      Element.prototype,
+      'hasAttribute',
+    );
+    const contentDescriptor = Object.getOwnPropertyDescriptor(
+      HTMLTemplateElement.prototype,
+      'content',
+    );
+    const firstElementChildDescriptor = Object.getOwnPropertyDescriptor(
+      DocumentFragment.prototype,
+      'firstElementChild',
+    );
+    const insertBeforeDescriptor = Object.getOwnPropertyDescriptor(Node.prototype, 'insertBefore');
+    const removeDescriptor = Object.getOwnPropertyDescriptor(Element.prototype, 'remove');
+    if (
+      !createElementDescriptor ||
+      !innerHtmlDescriptor?.set ||
+      !childrenDescriptor?.get ||
+      !querySelectorDescriptor ||
+      !getAttributeDescriptor ||
+      !setAttributeDescriptor ||
+      !hasAttributeDescriptor ||
+      !contentDescriptor?.get ||
+      !insertBeforeDescriptor ||
+      !removeDescriptor
+    ) {
+      throw new Error('missing template-stamp DOM security controls');
+    }
+    const nativeCreateElement =
+      createElementDescriptor.value as typeof Document.prototype.createElement;
+    const nativeInnerHtmlSet = innerHtmlDescriptor.set;
+    const nativeInsertBefore = insertBeforeDescriptor.value as typeof Node.prototype.insertBefore;
+
+    try {
+      Object.defineProperty(Document.prototype, 'createElement', {
+        ...createElementDescriptor,
+        value(this: Document) {
+          const parser = Reflect.apply(nativeCreateElement, this, [
+            'template',
+          ]) as HTMLTemplateElement;
+          Reflect.apply(nativeInnerHtmlSet, parser, [attackerHtml]);
+          return parser;
+        },
+      });
+      Object.defineProperty(Element.prototype, 'innerHTML', {
+        ...innerHtmlDescriptor,
+        set(this: Element) {
+          Reflect.apply(nativeInnerHtmlSet, this, [attackerHtml]);
+        },
+      });
+      Object.defineProperty(Element.prototype, 'children', {
+        ...childrenDescriptor,
+        get() {
+          return [attacker];
+        },
+      });
+      Object.defineProperty(Element.prototype, 'querySelector', {
+        ...querySelectorDescriptor,
+        value() {
+          throw new Error('late querySelector poison');
+        },
+      });
+      Object.defineProperty(Element.prototype, 'getAttribute', {
+        ...getAttributeDescriptor,
+        value() {
+          throw new Error('late getAttribute poison');
+        },
+      });
+      Object.defineProperty(Element.prototype, 'setAttribute', {
+        ...setAttributeDescriptor,
+        value() {
+          throw new Error('late setAttribute poison');
+        },
+      });
+      Object.defineProperty(Element.prototype, 'hasAttribute', {
+        ...hasAttributeDescriptor,
+        value() {
+          return false;
+        },
+      });
+      Object.defineProperty(HTMLTemplateElement.prototype, 'content', {
+        ...contentDescriptor,
+        get() {
+          return attackerFragment;
+        },
+      });
+      Object.defineProperty(DocumentFragment.prototype, 'firstElementChild', {
+        configurable: true,
+        get() {
+          return attacker;
+        },
+      });
+      Object.defineProperty(Node.prototype, 'insertBefore', {
+        ...insertBeforeDescriptor,
+        value(this: Node, _node: Node, anchor: Node | null) {
+          return Reflect.apply(nativeInsertBefore, this, [attacker, anchor]);
+        },
+      });
+      Object.defineProperty(Element.prototype, 'remove', {
+        ...removeDescriptor,
+        value() {},
+      });
+
+      applyCompiledQueryUpdatePlan(
+        document,
+        'inventory',
+        { items: [{ id: 'safe-row' }] },
+        {
+          bindings: false,
+          templateStamps: [
+            {
+              key: 'id',
+              list: 'items',
+              render: () => '<li data-server-safe="true">SERVER SAFE</li>',
+              selector: '#security-list',
+            },
+          ],
+        },
+      );
+    } finally {
+      Object.defineProperty(Document.prototype, 'createElement', createElementDescriptor);
+      Object.defineProperty(Element.prototype, 'innerHTML', innerHtmlDescriptor);
+      Object.defineProperty(Element.prototype, 'children', childrenDescriptor);
+      Object.defineProperty(Element.prototype, 'querySelector', querySelectorDescriptor);
+      Object.defineProperty(Element.prototype, 'getAttribute', getAttributeDescriptor);
+      Object.defineProperty(Element.prototype, 'setAttribute', setAttributeDescriptor);
+      Object.defineProperty(Element.prototype, 'hasAttribute', hasAttributeDescriptor);
+      Object.defineProperty(HTMLTemplateElement.prototype, 'content', contentDescriptor);
+      if (firstElementChildDescriptor) {
+        Object.defineProperty(
+          DocumentFragment.prototype,
+          'firstElementChild',
+          firstElementChildDescriptor,
+        );
+      } else {
+        Reflect.deleteProperty(DocumentFragment.prototype, 'firstElementChild');
+      }
+      Object.defineProperty(Node.prototype, 'insertBefore', insertBeforeDescriptor);
+      Object.defineProperty(Element.prototype, 'remove', removeDescriptor);
+    }
+
+    expect(list.querySelector('[data-attacker-substitution]')).toBeNull();
+    expect(list.querySelector('[kovo-key="stale"]')).toBeNull();
+    expect(list.querySelector('[kovo-key="safe-row"]')?.textContent).toBe('SERVER SAFE');
+    expect(
+      (globalThis as typeof globalThis & { __kovo_query_binding_owned?: number })
+        .__kovo_query_binding_owned,
+    ).toBeUndefined();
+  });
+
+  it('fails closed when template creation or HTML parsing was poisoned before capture', () => {
+    const createElementDescriptor = Object.getOwnPropertyDescriptor(
+      Document.prototype,
+      'createElement',
+    );
+    const innerHtmlDescriptor = Object.getOwnPropertyDescriptor(Element.prototype, 'innerHTML');
+    if (!createElementDescriptor || !innerHtmlDescriptor?.set) {
+      throw new Error('missing pre-init template security controls');
+    }
+    const nativeCreateElement =
+      createElementDescriptor.value as typeof Document.prototype.createElement;
+    const nativeInnerHtmlSet = innerHtmlDescriptor.set;
+    let createError: unknown;
+    let parseError: unknown;
+
+    try {
+      Object.defineProperty(Document.prototype, 'createElement', {
+        ...createElementDescriptor,
+        value(this: Document, name: string) {
+          return Reflect.apply(nativeCreateElement, this, [name === 'template' ? 'div' : name]);
+        },
+      });
+      try {
+        createBrowserNavigationSecurityControls(globalThis, kovoCreateHTML);
+      } catch (error) {
+        createError = error;
+      }
+    } finally {
+      Object.defineProperty(Document.prototype, 'createElement', createElementDescriptor);
+    }
+
+    try {
+      Object.defineProperty(Element.prototype, 'innerHTML', {
+        ...innerHtmlDescriptor,
+        set(this: Element) {
+          Reflect.apply(nativeInnerHtmlSet, this, [
+            '<img data-attacker-substitution="pre-init" onerror="globalThis.__kovo_query_binding_owned=1">',
+          ]);
+        },
+      });
+      try {
+        createBrowserNavigationSecurityControls(globalThis, kovoCreateHTML);
+      } catch (error) {
+        parseError = error;
+      }
+    } finally {
+      Object.defineProperty(Element.prototype, 'innerHTML', innerHtmlDescriptor);
+    }
+
+    expect(createError).toBeInstanceOf(TypeError);
+    expect(String(createError)).toContain('modified before runtime initialization');
+    expect(parseError).toBeInstanceOf(TypeError);
+    expect(String(parseError)).toContain('modified before runtime initialization');
   });
 });

@@ -71,7 +71,10 @@ interface BrowserFetchResponsePlan {
  *
  * @internal
  */
-export function createBrowserNavigationSecurityControls(scope: typeof globalThis = globalThis) {
+export function createBrowserNavigationSecurityControls(
+  scope: typeof globalThis = globalThis,
+  createHTML?: (html: string) => unknown,
+) {
   const NativeObject = Object;
   const NativeArray = Array;
   const NativeMap = Map;
@@ -886,7 +889,7 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
           break;
         } catch {}
       }
-      if (!read) entry = readOwnData(collection, String(index));
+      if (!read) entry = readOwnData(collection, apply<string>(NativeString, undefined, [index]));
       if (entry === null || entry === undefined) {
         throw new TypeError('Kovo DOM collection item is unavailable.');
       }
@@ -956,6 +959,17 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
   function readElementTagName(element: object): string | undefined {
     const value = readDomProperty(element, 'tagName', [elementTagName]);
     return typeof value === 'string' ? value : undefined;
+  }
+
+  function isPlatformElement(value: unknown): value is Element {
+    if (!controlsSound || !elementTagName || value === null || typeof value !== 'object') {
+      return false;
+    }
+    try {
+      return typeof apply<unknown>(elementTagName, value, []) === 'string';
+    } catch {
+      return false;
+    }
   }
 
   function hasElementAttribute(element: object, name: string): boolean {
@@ -3095,6 +3109,9 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
           'article',
         ]);
         const templateControl = apply<unknown>(documentCreateElement, documentObject, ['template']);
+        const parserTemplateControl = apply<unknown>(documentCreateElement, documentObject, [
+          'template',
+        ]);
         const templateChildControl = apply<unknown>(documentCreateElement, documentObject, [
           'strong',
         ]);
@@ -3117,6 +3134,8 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
           typeof replacementControl !== 'object' ||
           templateControl === null ||
           typeof templateControl !== 'object' ||
+          parserTemplateControl === null ||
+          typeof parserTemplateControl !== 'object' ||
           templateChildControl === null ||
           typeof templateChildControl !== 'object' ||
           formSubmitControl === null ||
@@ -3220,6 +3239,35 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
           apply<unknown>(nodeTextContent, textControl, []) !== 'kovo-text-content-control'
         ) {
           return false;
+        }
+        if (createHTML) {
+          // SPEC §4.8/§6.6: when the boot-owned Trusted Types mint is available, witness the exact
+          // parser setter that template stamps and fragment commits will use. This catches a
+          // selectively replaced pre-init innerHTML setter without violating a required-TT CSP.
+          const parserWitness = '<mark data-kovo-parser-control="exact">kovo-parser-control</mark>';
+          const parserHtml = apply<unknown>(createHTML, undefined, [parserWitness]);
+          apply(elementInnerHtmlSetter, parserTemplateControl, [parserHtml]);
+          const parserFragment = apply<unknown>(templateContent, parserTemplateControl, []);
+          if (parserFragment === null || typeof parserFragment !== 'object') return false;
+          const parserChildren = apply<unknown>(fragmentChildren, parserFragment, []);
+          if (
+            parserChildren === null ||
+            typeof parserChildren !== 'object' ||
+            apply<unknown>(htmlCollectionLength, parserChildren, []) !== 1
+          ) {
+            return false;
+          }
+          const parserChild = apply<unknown>(htmlCollectionItem, parserChildren, [0]);
+          if (
+            parserChild === null ||
+            typeof parserChild !== 'object' ||
+            apply<unknown>(elementTagName, parserChild, []) !== 'MARK' ||
+            apply<unknown>(elementGetAttribute, parserChild, ['data-kovo-parser-control']) !==
+              'exact' ||
+            apply<unknown>(nodeTextContent, parserChild, []) !== 'kovo-parser-control'
+          ) {
+            return false;
+          }
         }
         const templateAttributes = apply<unknown>(elementAttributes, templateChild, []);
         if (templateAttributes === null || typeof templateAttributes !== 'object') return false;
@@ -3348,6 +3396,7 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
     hasElementAttribute,
     hasSecurityMapValue,
     islandAbortSignal,
+    isPlatformElement,
     insertDomNode,
     elementContains,
     isHtmlContentType,

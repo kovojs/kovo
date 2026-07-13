@@ -11,6 +11,7 @@ const IntrinsicWeakMap = WeakMap;
 const IntrinsicWeakSet = WeakSet;
 const IntrinsicMap = Map;
 const IntrinsicSet = Set;
+const IntrinsicArray = Array;
 const IntrinsicObject = Object;
 const IntrinsicNumber = Number;
 
@@ -30,6 +31,7 @@ const intrinsicSetAdd = Set.prototype.add;
 const intrinsicSetHas = Set.prototype.has;
 const intrinsicSetDelete = Set.prototype.delete;
 const intrinsicSetForEach = Set.prototype.forEach;
+const intrinsicArrayIsArray = Array.isArray;
 const intrinsicObjectFreeze = Object.freeze;
 const intrinsicObjectIsFrozen = Object.isFrozen;
 const intrinsicObjectIsExtensible = Object.isExtensible;
@@ -213,6 +215,15 @@ function assertSetIntegrity(): void {
   }
 }
 
+function assertArrayIntegrity(): void {
+  if (
+    invoke(intrinsicArrayIsArray, IntrinsicArray, [[]]) !== true ||
+    invoke(intrinsicArrayIsArray, IntrinsicArray, [{ length: 0 }]) !== false
+  ) {
+    failIntrinsic('Array.isArray');
+  }
+}
+
 function assertFreezeIntegrity(): void {
   const marker = invoke<PropertyDescriptor | undefined>(
     intrinsicObjectGetOwnPropertyDescriptor,
@@ -318,6 +329,7 @@ const capturedSecurityControlsSound = (() => {
     assertWeakSetIntegrity();
     assertMapIntegrity();
     assertSetIntegrity();
+    assertArrayIntegrity();
     assertFreezeIntegrity();
     assertDefinePropertiesIntegrity();
     assertStringIntegrity();
@@ -463,6 +475,11 @@ export function securitySetDelete<T>(set: Set<T>, value: T): boolean {
 export function securitySetForEach<T>(set: Set<T>, callback: (value: T) => void): void {
   assertCapturedSecurityControls();
   invoke(intrinsicSetForEach, set, [callback]);
+}
+
+export function securityArrayIsArray(value: unknown): value is unknown[] {
+  assertCapturedSecurityControls();
+  return invoke(intrinsicArrayIsArray, IntrinsicArray, [value]) === true;
 }
 
 export function freezeSecurityValue<T extends object>(value: T): T {
