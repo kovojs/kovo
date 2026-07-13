@@ -2746,12 +2746,14 @@ export default async function handler(request) {
         devDependencies?: Record<string, string>;
         name?: string;
         packageManager?: string;
+        pnpm?: { overrides?: Record<string, string> };
       };
       expect(runtimePackage.name).toBe('kovo-monorepo-server');
       expect(runtimePackage.packageManager).toBe('pnpm@10.12.1');
       expect(runtimePackage.dependencies).not.toHaveProperty('attacker-runtime');
       expect(runtimePackage.devDependencies).not.toHaveProperty('attacker-dev-runtime');
       expect(runtimePackage.devDependencies).toHaveProperty('vitest', '4.1.8');
+      expect(runtimePackage.pnpm?.overrides).toEqual({ esbuild: '0.28.1' });
       expect(copiedLockfile).toBe(true);
       expect(parseHitsAfterEmit).toBe(0);
       expect(iteratorHitsAfterEmit).toBe(0);

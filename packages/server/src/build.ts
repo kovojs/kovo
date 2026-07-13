@@ -12,6 +12,7 @@ import {
   createFrameworkOutputFileSystemBoundary,
   type ConfinedFileSystemEntry,
 } from '@kovojs/core/internal/filesystem';
+import { assertAndCloneJsonValue } from '@kovojs/core/internal/json';
 
 import { resolvedFileSystemPath } from './vite-build-assets.js';
 import {
@@ -3576,6 +3577,7 @@ async function nodeRuntimePackageEntries(
     scripts: { start: 'NODE_ENV=production node server.mjs' },
     type: 'module',
     ...(source.packageManager === undefined ? {} : { packageManager: source.packageManager }),
+    ...(source.pnpm === undefined ? {} : { pnpm: source.pnpm }),
   };
   const entries: ArtifactOutputEntry[] = [
     presetContentEntry(
@@ -3598,6 +3600,7 @@ interface NodeRuntimePackageManifest {
   name?: string;
   optionalDependencies?: Record<string, string>;
   packageManager?: string;
+  pnpm?: Record<string, unknown>;
 }
 
 async function readPackageJsonForNodeRuntime(
@@ -3646,6 +3649,7 @@ function snapshotNodeRuntimePackageManifest(value: unknown): NodeRuntimePackageM
   }
   const name = optionalNodeRuntimePackageString(value, 'name');
   const packageManager = optionalNodeRuntimePackageString(value, 'packageManager');
+  const pnpm = optionalNodeRuntimePnpmConfig(value);
   const dependencies = optionalNodeRuntimeDependencies(value, 'dependencies');
   const devDependencies = optionalNodeRuntimeDependencies(value, 'devDependencies');
   const optionalDependencies = optionalNodeRuntimeDependencies(value, 'optionalDependencies');
@@ -3655,7 +3659,20 @@ function snapshotNodeRuntimePackageManifest(value: unknown): NodeRuntimePackageM
     ...(name === undefined ? {} : { name }),
     ...(optionalDependencies === undefined ? {} : { optionalDependencies }),
     ...(packageManager === undefined ? {} : { packageManager }),
+    ...(pnpm === undefined ? {} : { pnpm }),
   };
+}
+
+function optionalNodeRuntimePnpmConfig(value: object): Record<string, unknown> | undefined {
+  const field = buildOwnDataProperty(value, 'pnpm', 'Node runtime package manifest.pnpm');
+  if (!field.present || field.value === undefined) return undefined;
+  const snapshot = assertAndCloneJsonValue(field.value, {
+    root: 'Node runtime package manifest.pnpm',
+  });
+  if (typeof snapshot !== 'object' || snapshot === null || securityArrayIsArray(snapshot)) {
+    throw new TypeError('Node runtime package manifest pnpm must be a JSON object.');
+  }
+  return snapshot;
 }
 
 function optionalNodeRuntimeDependencies(
