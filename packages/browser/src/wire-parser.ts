@@ -14,10 +14,7 @@ import {
   securityStringStartsWith,
   securityStringTrim,
 } from './security-witness-intrinsics.js';
-import {
-  readRuntimeElementAttribute,
-  readRuntimeNodeTextContent,
-} from './runtime-dom-security.js';
+import { readRuntimeElementAttribute, readRuntimeNodeTextContent } from './runtime-dom-security.js';
 import {
   readElementChunks,
   readMutationResponseBodyCore,
@@ -214,9 +211,7 @@ const QueryScriptArray = Array;
 const queryScriptArrayIsArray = QueryScriptArray.isArray;
 const MAX_QUERY_SCRIPTS = 100_000;
 
-function snapshotQueryScripts(
-  scripts: Iterable<QueryScriptChunkLike>,
-): QueryScriptChunkLike[] {
+function snapshotQueryScripts(scripts: Iterable<QueryScriptChunkLike>): QueryScriptChunkLike[] {
   const snapshot: QueryScriptChunkLike[] = [];
   if (
     applySecurityIntrinsic<boolean>(queryScriptArrayIsArray, QueryScriptArray, [scripts]) === true
@@ -233,10 +228,7 @@ function snapshotQueryScripts(
       throw new TypeError('Kovo query script collection is invalid or too large.');
     }
     for (let index = 0; index < length.value; index += 1) {
-      const entry = securityOwnArrayEntry(
-        scripts as readonly QueryScriptChunkLike[],
-        index,
-      );
+      const entry = securityOwnArrayEntry(scripts as readonly QueryScriptChunkLike[], index);
       if (!entry.ok) throw new TypeError('Kovo query script collection must be dense.');
       securityArrayAppend(snapshot, entry.value, 'Browser query script snapshot');
     }

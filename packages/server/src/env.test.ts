@@ -58,10 +58,7 @@ describe('validateAppEnv — framework secret refuse-to-boot (SPEC §6.6)', () =
       });
       try {
         expect(() =>
-          validateAppEnv(
-            { csrfSecret: { current: new Uint8Array(5) } },
-            { mode: 'production' },
-          ),
+          validateAppEnv({ csrfSecret: { current: new Uint8Array(5) } }, { mode: 'production' }),
         ).toThrow(CreateAppBootError);
       } finally {
         Object.defineProperty(typedArrayPrototype, 'byteLength', descriptor!);

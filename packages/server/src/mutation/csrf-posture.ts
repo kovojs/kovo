@@ -10,15 +10,10 @@ export function validateMutationCsrfPosture(source: {
   readonly csrfJustification?: unknown;
 }): void {
   if (source.csrf === false) {
-    snapshotAuditJustification(
-      source.csrfJustification,
-      'mutation() csrf:false csrfJustification',
-    );
+    snapshotAuditJustification(source.csrfJustification, 'mutation() csrf:false csrfJustification');
     return;
   }
   if (source.csrfJustification !== undefined) {
-    throw new TypeError(
-      'mutation() csrfJustification is only valid when csrf is exactly false.',
-    );
+    throw new TypeError('mutation() csrfJustification is only valid when csrf is exactly false.');
   }
 }

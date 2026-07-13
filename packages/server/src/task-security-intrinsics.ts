@@ -6,9 +6,7 @@ import {
   setTimeout as nodeSetTimeout,
 } from 'node:timers';
 
-import {
-  securityUint8ArrayLength,
-} from './response-security-intrinsics.js';
+import { securityUint8ArrayLength } from './response-security-intrinsics.js';
 import {
   assertSecurityWitnessIntrinsics,
   createWitnessMap,

@@ -165,10 +165,7 @@ describe('SigningKeyRing', () => {
 
   it('rejects undersized signing material after typed-array length accessors are poisoned', () => {
     const typedArrayPrototype = Object.getPrototypeOf(Uint8Array.prototype) as object;
-    const byteLengthDescriptor = Object.getOwnPropertyDescriptor(
-      typedArrayPrototype,
-      'byteLength',
-    );
+    const byteLengthDescriptor = Object.getOwnPropertyDescriptor(typedArrayPrototype, 'byteLength');
     expect(byteLengthDescriptor).toBeDefined();
 
     Object.defineProperty(typedArrayPrototype, 'byteLength', {

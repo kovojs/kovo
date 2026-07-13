@@ -19,13 +19,17 @@ it('rolls rejected optimism back after late Array.filter replacement', () => {
   const store = createQueryStore();
   const rebaser = new OptimisticRebaser(store);
   store.set('account', { role: 'user' });
-  rebaser.add('rejected-role-change', {}, {
-    transforms: {
-      account() {
-        return { role: 'admin' };
+  rebaser.add(
+    'rejected-role-change',
+    {},
+    {
+      transforms: {
+        account() {
+          return { role: 'admin' };
+        },
       },
     },
-  });
+  );
   expect(store.get('account')).toEqual({ role: 'admin' });
 
   Array.prototype.filter = function poisonedFilter(callback, thisArg) {
@@ -85,13 +89,17 @@ it('restores the captured server baseline after late Map.get replacement', () =>
   const store = createQueryStore();
   const rebaser = new OptimisticRebaser(store);
   store.set('account', { role: 'user' });
-  rebaser.add('rejected-role-change', {}, {
-    transforms: {
-      account() {
-        return { role: 'admin' };
+  rebaser.add(
+    'rejected-role-change',
+    {},
+    {
+      transforms: {
+        account() {
+          return { role: 'admin' };
+        },
       },
     },
-  });
+  );
 
   let matchingReads = 0;
   Map.prototype.get = function poisonedGet(key: unknown) {

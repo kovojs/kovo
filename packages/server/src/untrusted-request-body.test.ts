@@ -69,10 +69,7 @@ describe('untrusted request body parser', () => {
       expect(parsed.ok).toBe(true);
       if (!parsed.ok) return;
       expect(
-        revealUntrusted(
-          (parsed.value as { id: unknown }).id,
-          'test validates poisoned webhook id',
-        ),
+        revealUntrusted((parsed.value as { id: unknown }).id, 'test validates poisoned webhook id'),
       ).toBe('evt_signed');
     } finally {
       Object.defineProperty(typedArrayPrototype, 'byteLength', descriptor!);

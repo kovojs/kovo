@@ -425,11 +425,7 @@ describe('browser mutation-response output membrane', () => {
       return Reflect.apply(nativeDocumentQuerySelector, this, [selector]);
     } as typeof Document.prototype.querySelector;
 
-    applyModular(
-      name,
-      '',
-      `<main kovo-fragment-target="${name}">ACCESS-REVOKED</main>`,
-    );
+    applyModular(name, '', `<main kovo-fragment-target="${name}">ACCESS-REVOKED</main>`);
 
     expect(target.textContent).toBe('ACCESS-REVOKED');
     expect(decoy.textContent).toBe('DECOY');

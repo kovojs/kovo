@@ -210,7 +210,9 @@ export class OptimisticRebaser {
       const transform = plan.transforms[queryName];
       if (transform === 'await-fragment') continue;
       if (typeof transform !== 'function') {
-        throw new TypeError('Kovo optimistic query plan entries must be transforms or await-fragment.');
+        throw new TypeError(
+          'Kovo optimistic query plan entries must be transforms or await-fragment.',
+        );
       }
 
       const key = optimisticQueryKey(plan, queryName, change);
@@ -294,7 +296,8 @@ export class OptimisticRebaser {
 
     for (let index = 0; index < nextPending.length; index += 1) {
       const pendingEntry = securityOwnArrayEntry(nextPending, index);
-      if (!pendingEntry.ok) throw new TypeError('Kovo optimistic pending transforms must be dense.');
+      if (!pendingEntry.ok)
+        throw new TypeError('Kovo optimistic pending transforms must be dense.');
       const pendingTransform = pendingEntry.value;
       try {
         next = applyOptimisticTransform(
@@ -306,11 +309,7 @@ export class OptimisticRebaser {
         reportRuntimeError(this.#onError, error);
         continue;
       }
-      securityArrayAppend(
-        survivors,
-        pendingTransform,
-        'Browser optimistic surviving transforms',
-      );
+      securityArrayAppend(survivors, pendingTransform, 'Browser optimistic surviving transforms');
     }
 
     this.#store.set(queryName, next, key);
@@ -364,7 +363,8 @@ export class OptimisticRebaser {
     const survivors: PendingTransform[] = [];
     for (let index = 0; index < pendingTransforms.length; index += 1) {
       const pendingEntry = securityOwnArrayEntry(pendingTransforms, index);
-      if (!pendingEntry.ok) throw new TypeError('Kovo optimistic pending transforms must be dense.');
+      if (!pendingEntry.ok)
+        throw new TypeError('Kovo optimistic pending transforms must be dense.');
       const pending = pendingEntry.value;
       try {
         next = applyOptimisticTransform(next, pending.change.input, pending.transform);
@@ -740,11 +740,7 @@ export function canonicalInstanceKeyValue(
       throw new TypeError('Kovo optimistic key fields must be own-data properties.');
     }
     const value = descriptor.value;
-    if (
-      typeof value !== 'string' &&
-      typeof value !== 'number' &&
-      typeof value !== 'boolean'
-    ) {
+    if (typeof value !== 'string' && typeof value !== 'number' && typeof value !== 'boolean') {
       throw new TypeError('Kovo optimistic key fields must be string, number, or boolean values.');
     }
     result += `${index === 0 ? '' : ':'}${securityString(value)}`;

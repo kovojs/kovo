@@ -1,7 +1,4 @@
-import {
-  compilerStringCharCodeAt,
-  compilerStringTrim,
-} from '../compiler-security-intrinsics.js';
+import { compilerStringCharCodeAt, compilerStringTrim } from '../compiler-security-intrinsics.js';
 
 /** Maximum author-controlled audit text retained in compiler facts (SPEC §6.6). */
 export const COMPILER_AUDIT_TEXT_MAX_LENGTH = 4_096;
@@ -14,10 +11,7 @@ export const COMPILER_AUDIT_TEXT_MAX_LENGTH = 4_096;
  * or review tooling. Invalid text never discharges a compiler security gate.
  */
 export function isCompilerAuditText(value: string): boolean {
-  if (
-    value.length > COMPILER_AUDIT_TEXT_MAX_LENGTH ||
-    compilerStringTrim(value).length === 0
-  ) {
+  if (value.length > COMPILER_AUDIT_TEXT_MAX_LENGTH || compilerStringTrim(value).length === 0) {
     return false;
   }
 

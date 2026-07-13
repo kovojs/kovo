@@ -23,19 +23,11 @@ export function findFragmentTargetElement(
   // same identity precedence as Kovo-Targets collection: explicit fragment
   // target, then DOM id, then component stamp.
   return (
-    findRootOrDescendant(
-      root,
-      `[kovo-fragment-target="${escapeCssString(target)}"]`,
-      security,
-    ) ??
+    findRootOrDescendant(root, `[kovo-fragment-target="${escapeCssString(target)}"]`, security) ??
     (security ? security.getElementById(root, target) : root.getElementById?.(target)) ??
     findRootOrDescendant(root, `[id="${escapeCssString(target)}"]`, security) ??
     findRootOrDescendant(root, `[kovo-c="${escapeCssString(target)}"]`, security) ??
-    findRootOrDescendant(
-      root,
-      `kovo-defer[target="${escapeCssString(target)}"]`,
-      security,
-    )
+    findRootOrDescendant(root, `kovo-defer[target="${escapeCssString(target)}"]`, security)
   );
 }
 

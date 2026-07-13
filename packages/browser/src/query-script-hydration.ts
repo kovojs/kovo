@@ -96,22 +96,18 @@ export function createQueryScriptHydrationLedger(
       // refetches must converge on the same query-store apply path without
       // replaying already applied server-provided scripts. Malformed transient
       // script data is intentionally left observable for a later hydration pass.
-      const hydrated = applyQueryChunksToRuntime(
-        store,
-        queryChunksFromHydrationRecords(records),
-        {
-          ...definedProps({
-            applyQuery: mergedOptions.applyQuery,
-            onError: mergedOptions.onError,
-            queryPlans: mergedOptions.queryPlans,
-            root: mergedOptions.root,
-          }),
-          afterApplyQuery(query, value) {
-            mergedOptions.afterApplyQuery?.(query, value);
-            securitySetAdd(appliedQueries, query);
-          },
+      const hydrated = applyQueryChunksToRuntime(store, queryChunksFromHydrationRecords(records), {
+        ...definedProps({
+          applyQuery: mergedOptions.applyQuery,
+          onError: mergedOptions.onError,
+          queryPlans: mergedOptions.queryPlans,
+          root: mergedOptions.root,
+        }),
+        afterApplyQuery(query, value) {
+          mergedOptions.afterApplyQuery?.(query, value);
+          securitySetAdd(appliedQueries, query);
         },
-      );
+      });
       for (let index = 0; index < records.length; index += 1) {
         const record = securityOwnArrayEntry(records, index);
         if (!record.ok) throw new TypeError('Kovo query hydration records must be dense.');
