@@ -14,6 +14,7 @@ import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
 
 import { createApp, domain, query, route, s } from '@kovojs/server';
+import { jsx } from '@kovojs/server/jsx-runtime';
 import {
   createKovoAppShellDevDiagnosticLedger,
   createKovoAppShellViteDevIntegration,
@@ -158,17 +159,23 @@ test('dev HMR client refreshes query-backed live targets from server state', asy
       product: productQuery.args((props: { productId: string }) => ({ id: props.productId })),
     },
     render({ product, productId }: { product: { id: string; stock: number }; productId: string }) {
-      return `<section
-        kovo-fragment-target="product-card"
-        kovo-c="product-card"
-        kovo-deps="product:${product.id}"
-        kovo-live-component="hmr/ProductCard"
-        kovo-live-token="${liveTargetToken('product-card', 'hmr/ProductCard', { productId })}"
-        kovo-props='{"productId":"${productId}"}'>
-        <label for="product-note">Note</label>
-        <input id="product-note" kovo-key="note" value="server ${product.stock}">
-        <output id="product-stock" kovo-key="stock">${product.stock}</output>
-      </section>`;
+      return jsx('section', {
+        'kovo-c': 'product-card',
+        'kovo-deps': `product:${product.id}`,
+        'kovo-fragment-target': 'product-card',
+        'kovo-live-component': 'hmr/ProductCard',
+        'kovo-live-token': liveTargetToken('product-card', 'hmr/ProductCard', { productId }),
+        'kovo-props': JSON.stringify({ productId }),
+        children: [
+          jsx('label', { children: 'Note', for: 'product-note' }),
+          jsx('input', {
+            id: 'product-note',
+            'kovo-key': 'note',
+            value: `server ${product.stock}`,
+          }),
+          jsx('output', { children: product.stock, id: 'product-stock', 'kovo-key': 'stock' }),
+        ],
+      });
     },
   });
   const productRenderer = componentLiveTargetRenderer({

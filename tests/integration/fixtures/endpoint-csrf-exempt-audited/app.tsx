@@ -1,10 +1,20 @@
 // SPEC.md §9.1: CSRF-exempt endpoints are declared machine ingress with a named
 // justification, not browser mutation forms.
+import { hmacSignature } from '@kovojs/core';
 import { createApp, endpoint, route } from '@kovojs/server';
 import { defineFixture } from '@kovojs/test/internal/integration/define';
 
+const demoHmac = hmacSignature({
+  encoding: 'hex',
+  header: 'x-demo-signature',
+  name: 'demo',
+  payload: (request) => request.payload,
+  scheme: 'demo-hmac',
+  secret: 'endpoint-demo-hmac-secret-at-least-32-bytes',
+});
+
 const webhookEndpoint = endpoint('/webhooks/signed-callback', {
-  auth: { kind: 'verifier', name: 'demo-hmac' },
+  auth: { kind: 'verifier', name: demoHmac.resolved.scheme, verify: demoHmac },
   csrf: false,
   csrfJustification: 'signed callback verifies raw body',
   async handler(request) {
