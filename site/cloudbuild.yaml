@@ -21,7 +21,6 @@ substitutions:
   _REGION: us-central1
   _REPO: kovo
   _SERVICE: kovo-docs
-  _TAG: latest
   _MEMORY: 512Mi
   _CPU: '1'
   _CONCURRENCY: '80'
@@ -36,23 +35,23 @@ timeout: 1800s
 
 steps:
   - id: build
-    name: gcr.io/cloud-builders/docker
+    name: gcr.io/cloud-builders/docker@sha256:6c9b879570fe1c63a78af0b575ca5ac52f6c2c7e25f76f91ae1f2d6cb2a872ee
     args:
       - build
       - -f
       - site/Dockerfile
       - -t
-      - ${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPO}/docs:${_TAG}
+      - ${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPO}/docs:${BUILD_ID}
       - .
 
   - id: smoke
-    name: gcr.io/cloud-builders/docker
+    name: gcr.io/cloud-builders/docker@sha256:6c9b879570fe1c63a78af0b575ca5ac52f6c2c7e25f76f91ae1f2d6cb2a872ee
     entrypoint: bash
     args:
       - -c
       - |
         set -euo pipefail
-        IMAGE=${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPO}/docs:${_TAG}
+        IMAGE=${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPO}/docs:${BUILD_ID}
         CID=$$(docker run -d -e PORT=8080 -e HOST=0.0.0.0 "$$IMAGE")
         trap 'docker logs "$$CID" || true; docker rm -f "$$CID" >/dev/null 2>&1 || true' EXIT
 
@@ -67,13 +66,13 @@ steps:
         exit 1
 
   - id: push
-    name: gcr.io/cloud-builders/docker
+    name: gcr.io/cloud-builders/docker@sha256:6c9b879570fe1c63a78af0b575ca5ac52f6c2c7e25f76f91ae1f2d6cb2a872ee
     args:
       - push
-      - ${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPO}/docs:${_TAG}
+      - ${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPO}/docs:${BUILD_ID}
 
   - id: deploy
-    name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk@sha256:db6c7fccfc6046e4b5a2180772d6426aa89cba5f84d879f2e89c989d9d08f4f7
     args:
       - gcloud
       - run
@@ -82,7 +81,7 @@ steps:
       - --project
       - ${_PROJECT_ID}
       - --image
-      - ${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPO}/docs:${_TAG}
+      - ${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPO}/docs:${BUILD_ID}
       - --region
       - ${_REGION}
       - --platform
