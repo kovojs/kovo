@@ -329,6 +329,7 @@ function bootstrapEgressFloor(egress: AppEgressOptions | undefined): void {
   // sidecars so development boot does not brick ordinary DB/Redis/OTel/Ollama setups.
   installEgressFloorSync(egress as EgressOptions | undefined, warn, {
     allowPrivateNetwork: devDefault,
+    preserveExistingAppPolicy: true,
   });
   if (devDefault) {
     warn(

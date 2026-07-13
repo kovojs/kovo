@@ -241,6 +241,32 @@ describe('egress bootstrap: transport-floor install + self-probe', () => {
     server.close();
   });
 
+  it('refuses a later app aggregate that would widen the process-global egress floor', async () => {
+    const server = http.createServer((_req, res) => res.end('internal-secret'));
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const port = (server.address() as AddressInfo).port;
+
+    try {
+      createApp({ egress: { allowInternal: [] } });
+      teardown = activeEgressFloor()?.uninstall;
+      await expect(fetch(`http://127.0.0.1:${port}/`)).rejects.toBeDefined();
+
+      expect(() => createApp({ egress: { allowInternal: [`127.0.0.1:${port}`] } })).toThrow(
+        EgressFloorBootError,
+      );
+      await expect(fetch(`http://127.0.0.1:${port}/`)).rejects.toBeDefined();
+    } finally {
+      server.close();
+    }
+  });
+
+  it('allows a later app aggregate to reinstall the same process egress posture', () => {
+    createApp({ egress: { allowDestinations: [], allowInternal: [] } });
+    teardown = activeEgressFloor()?.uninstall;
+
+    expect(() => createApp({ egress: { allowDestinations: [], allowInternal: [] } })).not.toThrow();
+  });
+
   it('default-denies raw node:net Unix-domain-socket connects', async () => {
     if (process.platform === 'win32') return;
     const root = mkdtempSync(join(tmpdir(), 'kovo-egress-uds-net-'));

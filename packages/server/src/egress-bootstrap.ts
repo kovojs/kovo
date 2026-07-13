@@ -27,6 +27,9 @@ import {
   witnessMapForEach,
   witnessMapGet,
   witnessMapSet,
+  witnessSetForEach,
+  witnessSetHas,
+  witnessSetSize,
 } from './security-witness-intrinsics.js';
 import { runtimeEnvironmentValue } from './runtime-environment-authority.js';
 import { securityPromiseResolve } from './response-security-intrinsics.js';
@@ -73,6 +76,11 @@ interface EgressFloorInstallOptions {
    * installed, but permit non-metadata private-network destinations.
    */
   allowPrivateNetwork?: boolean;
+  /**
+   * `createApp()` process posture: an already-installed app floor may be repaired or reinstalled,
+   * but a later app aggregate must not replace it with broader/different process-global authority.
+   */
+  preserveExistingAppPolicy?: boolean;
 }
 
 /** Boot refusal for a missing, partial, tampered, or unaudited-disabled egress floor. */
@@ -126,6 +134,18 @@ export function installEgressFloorSync(
     ...installOptions,
     databaseEndpoints: registeredDatabaseEndpoints(),
   });
+  if (
+    installOptions.preserveExistingAppPolicy === true &&
+    bootPolicy !== undefined &&
+    (!sameEgressFloorPolicy(bootPolicy, policy) ||
+      netConnectFloorTamperStatus().hardening !== (options?.hardening ?? 'off'))
+  ) {
+    throw new EgressFloorBootError(
+      'createApp() refused to replace an existing app egress posture with a different ' +
+        'process-global policy. Kovo apps that require different outbound authority must run in ' +
+        'separate processes (SPEC §6.6).',
+    );
+  }
   const uninstallNet = installNetConnectFloor(policy, options?.hardening ?? 'off', warn);
   const uninstallDgram = installDgramFloor(policy, options?.hardening ?? 'off', warn);
   const uninstallUndici = installUndiciFloor(policy);
@@ -151,6 +171,35 @@ export function installEgressFloorSync(
   // unmissably. A missing floor is a security regression, not a silent fallback.
   selfProbe(warn);
   return result;
+}
+
+function sameEgressFloorPolicy(left: EgressPolicy, right: EgressPolicy): boolean {
+  return (
+    left.allowPrivateNetwork === right.allowPrivateNetwork &&
+    sameEgressStringSet(left.allowInternal, right.allowInternal) &&
+    sameEgressStringSet(left.allowDatabaseEndpoints, right.allowDatabaseEndpoints) &&
+    sameEgressStringSet(left.allowDestinations, right.allowDestinations) &&
+    sameEgressStringArray(left.allowInternalCidrs, right.allowInternalCidrs)
+  );
+}
+
+function sameEgressStringSet(left: ReadonlySet<string>, right: ReadonlySet<string>): boolean {
+  if (witnessSetSize(left) !== witnessSetSize(right)) return false;
+  let same = true;
+  witnessSetForEach(left, (value) => {
+    if (!witnessSetHas(right, value)) same = false;
+  });
+  return same;
+}
+
+function sameEgressStringArray(left: readonly string[], right: readonly string[]): boolean {
+  if (left.length !== right.length) return false;
+  for (let index = 0; index < left.length; index += 1) {
+    const leftValue = databaseEndpointAt(left, index, 'egress CIDR posture');
+    const rightValue = databaseEndpointAt(right, index, 'egress CIDR posture');
+    if (leftValue !== rightValue) return false;
+  }
+  return true;
 }
 
 /**
