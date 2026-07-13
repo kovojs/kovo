@@ -1,50 +1,20 @@
-import {
-  createApp,
-  domain,
-  mutation,
-  query,
-  route,
-  s,
-  type QueryLoadContext,
-} from '@kovojs/server';
+/** @jsxImportSource @kovojs/server */
+import { createApp, mutation, route, s, trustedHtml } from '@kovojs/server';
 import { staticSql } from '@kovojs/test/internal/integration/fixture-abi';
-import { renderQueryScript } from '@kovojs/test/internal/integration/fixture-abi';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
-type Presence = Record<string, unknown> & {
-  status: string;
-};
-
-const presenceDomain = domain('presence');
-
-async function readPresence(db: KovoFixtureRequest['db']): Promise<Presence> {
-  const rows = await db.query<Presence>(
-    staticSql`select status from broadcast_presence where id = 1`,
-  );
-  return rows[0] ?? { status: 'offline' };
-}
-
-const presenceQuery = query('presence', {
-  reads: [presenceDomain],
-  load: (_input: unknown, context?: QueryLoadContext<KovoFixtureRequest>) => {
-    const db = context?.request?.db;
-    if (!db) throw new Error('presence query requires request.db');
-    return readPresence(db);
-  },
-});
-
-async function renderPresence(db: KovoFixtureRequest['db']): Promise<string> {
-  const presence = await readPresence(db);
-  return `<section id="presence-panel" kovo-fragment-target="presence-panel" kovo-deps="presence">
-    <output data-bind="presence.status">${presence.status}</output>
-  </section>`;
-}
+import { PresencePanel } from './presence-panel';
+import { presenceDomain, presenceQuery } from './shared';
 
 const publishPresence = mutation('broadcast-channel-sync/publish', {
   csrf: false,
   csrfJustification: 'fixture mutation has no ambient browser authority',
   input: s.object({}),
-  registry: { tables: ['broadcast_presence'], touches: [presenceDomain] },
+  registry: {
+    queries: [presenceQuery],
+    tables: ['broadcast_presence'],
+    touches: [presenceDomain],
+  },
   handler: async (_input: unknown, request: KovoFixtureRequest, context) => {
     await request.db.exec(staticSql`update broadcast_presence set status = 'online' where id = 1`);
     context.invalidate(presenceDomain);
@@ -53,17 +23,12 @@ const publishPresence = mutation('broadcast-channel-sync/publish', {
 });
 
 const homeRoute = route('/', {
-  page: async (_context, request: KovoFixtureRequest) => {
-    const presence = await readPresence(request.db);
-    return `${renderQueryScript({ name: 'presence', value: presence })}
-    <script type="module" src="/client.ts"></script>
+  page: () => (
     <main>
-      ${await renderPresence(request.db)}
-      <form id="presence-form" method="post" action="/_m/broadcast-channel-sync/publish">
-        <button type="submit">Publish presence</button>
-      </form>
-    </main>`;
-  },
+      {trustedHtml('<script type="module" src="/client.ts"></script>')}
+      <PresencePanel />
+    </main>
+  ),
 });
 
 const app = createApp({

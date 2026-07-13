@@ -1,4 +1,4 @@
-<inventory-panel kovo-deps="inventory">
+<inventory-panel kovo-c="inventory-panel" kovo-deps="inventory" kovo-fragment-target="inventory-panel">
   <p>
     <span data-bind="inventory.label">
       "Sold out"
@@ -7,3 +7,6 @@
       "0"
   <button data-bind:disabled="/derive.ts#Inventory$disableWhenUnavailable" disabled="" type="button">
     "Ship order"
+  <form action="/_m/derive-binding/sell-out" method="post">
+    <button type="submit">
+      "Sell out"

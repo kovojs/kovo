@@ -1,24 +1,10 @@
-import { staticSql } from '@kovojs/test/internal/integration/fixture-abi';
-import { createApp, mutation, route, s } from '@kovojs/server';
-import {
-  escapeAttribute,
-  escapeHtml,
-  renderQueryScript,
-} from '@kovojs/test/internal/integration/fixture-abi';
+/** @jsxImportSource @kovojs/server */
+import { renderQueryScript, staticSql } from '@kovojs/test/internal/integration/fixture-abi';
+import { createApp, mutation, route, s, trustedHtml } from '@kovojs/server';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
-import { cardDomain, cardQuery, readCard, type CardResult } from './shared';
-
-function renderCard(db: KovoFixtureRequest['db']): Promise<string> {
-  return readCard(db).then(renderCardHtml);
-}
-
-function renderCardHtml(card: CardResult): string {
-  return `<binding-card kovo-deps="card" kovo-fragment-target="binding-card">
-    <output data-bind="card.text">${escapeHtml(card.text)}</output>
-    <button type="button" aria-label="${escapeAttribute(card.label)}" data-bind:aria-label="card.label" data-state="${escapeAttribute(card.status)}" data-bind:data-state="card.status">Server binding</button>
-  </binding-card>`;
-}
+import { BindingCard } from './binding-card';
+import { cardDomain, cardQuery, readCard } from './shared';
 
 function renderStateIsland(): string {
   return `<state-binding-panel kovo-state='{"text":"Client initial","label":"Client initial card","status":"idle"}'>
@@ -49,16 +35,14 @@ export const updateCard = mutation('binding-text-attr/update', {
 const homeRoute = route('/', {
   page: async (_context, request: KovoFixtureRequest) => {
     const card = await readCard(request.db);
-    const rendered = await renderCard(request.db);
-    return `${renderQueryScript({ name: 'card', value: card })}
-    <script type="module" src="/client.ts"></script>
-    <main>
-      <kovo-fragment target="binding-card">${rendered}</kovo-fragment>
-      ${renderStateIsland()}
-      <form method="post" action="/_m/binding-text-attr/update" enhance data-mutation="binding-text-attr/update" kovo-deps="card">
-        <button type="submit">Update server card</button>
-      </form>
-    </main>`;
+    return (
+      <main>
+        {trustedHtml(renderQueryScript({ name: 'card', value: card }))}
+        {trustedHtml('<script type="module" src="/client.ts"></script>')}
+        <BindingCard />
+        {trustedHtml(renderStateIsland())}
+      </main>
+    );
   },
 });
 

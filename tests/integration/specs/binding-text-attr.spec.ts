@@ -23,7 +23,7 @@ test('updates text and attribute bindings from current server and state surfaces
   const mutationResponse = await mutationResponsePromise;
   const mutationBody = await mutationResponse.text();
   expect(mutationBody).toMatch(/<kovo-query name="card"[^>]*>/u);
-  expect(mutationBody).not.toContain('<kovo-fragment');
+  expect(mutationBody).toContain('<kovo-fragment target="binding-card">');
 
   await expect(queryOutput).toHaveText('Updated text');
   await expect(queryButton).toHaveAttribute('aria-label', 'Updated card');

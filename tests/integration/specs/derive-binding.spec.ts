@@ -22,7 +22,7 @@ test('lazily imports a named derive on query change and updates the bound attrib
   ]);
   const body = await response.text();
   expect(body).toMatch(/<kovo-query name="inventory"[^>]*>/u);
-  expect(body).not.toContain('<kovo-fragment');
+  expect(body).toContain('<kovo-fragment target="inventory-panel">');
 
   await expect(page.locator('[data-bind="inventory.count"]')).toHaveText('0');
   await expect(page.locator('[data-bind="inventory.label"]')).toHaveText('Sold out');

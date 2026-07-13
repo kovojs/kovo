@@ -24,13 +24,16 @@ test('mutation query chunks rebroadcast to another same-user tab @race-prone', a
   await expect(pageStatus).toHaveText('offline');
   await expect(otherStatus).toHaveText('offline');
 
-  await Promise.all([
+  const [response] = await Promise.all([
     page.waitForResponse(
       (response) =>
         response.url().endsWith('/_m/broadcast-channel-sync/publish') && response.status() === 200,
     ),
     page.getByRole('button', { name: 'Publish presence' }).click(),
   ]);
+  const body = await response.text();
+  expect(body).toMatch(/<kovo-query name="presence"[^>]*>/u);
+  expect(body).toContain('<kovo-fragment target="presence-panel">');
 
   await expect(pageStatus).toHaveText('online');
   await expect(otherStatus).toHaveText('online');
