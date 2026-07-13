@@ -36,6 +36,7 @@ describe('runtime output-context helpers', () => {
     const originalTrim = String.prototype.trim;
     const originalSlice = String.prototype.slice;
     const originalIndexOf = String.prototype.indexOf;
+    const originalStartsWith = String.prototype.startsWith;
     const originalCharCodeAt = String.prototype.charCodeAt;
     const originalToLowerCase = String.prototype.toLowerCase;
     const originalExec = RegExp.prototype.exec;
@@ -60,6 +61,7 @@ describe('runtime output-context helpers', () => {
         return attacker;
       };
       String.prototype.indexOf = () => -1;
+      String.prototype.startsWith = () => false;
       String.prototype.charCodeAt = () => 0;
       String.prototype.toLowerCase = function () {
         return 'forged-safe';
@@ -80,6 +82,7 @@ describe('runtime output-context helpers', () => {
       String.prototype.trim = originalTrim;
       String.prototype.slice = originalSlice;
       String.prototype.indexOf = originalIndexOf;
+      String.prototype.startsWith = originalStartsWith;
       String.prototype.charCodeAt = originalCharCodeAt;
       String.prototype.toLowerCase = originalToLowerCase;
       RegExp.prototype.exec = originalExec;

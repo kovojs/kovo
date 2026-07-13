@@ -23,6 +23,7 @@ import {
   securityStringIndexOf,
   securityStringReplaceAll,
   securityStringSlice,
+  securityStringStartsWith,
   securityStringToLowerCase,
   securityStringTrim,
   securityWeakMap,
@@ -467,6 +468,7 @@ function sanitizeRichHtmlFragment(value: string, allowedTags: Set<string>): stri
   let html = '';
   let offset = 0;
   const stack: string[] = [];
+  const openTagCounts = securityMap<string, number>();
   const droppedSubtrees: string[] = [];
 
   while (offset < value.length) {
@@ -480,7 +482,9 @@ function sanitizeRichHtmlFragment(value: string, allowedTags: Set<string>): stri
       html += escapeHtmlText(securityStringSlice(value, offset, tagStart));
     }
 
-    if (securityStringIndexOf(value, '<!--', tagStart) === tagStart) {
+    // SPEC §6.6 resource floor: an unanchored indexOf scans the entire remaining hostile fragment
+    // for every ordinary tag when no later comment exists. The exact-position witness is O(1).
+    if (securityStringStartsWith(value, '<!--', tagStart)) {
       const commentEnd = securityStringIndexOf(value, '-->', tagStart + 4);
       offset = commentEnd === -1 ? value.length : commentEnd + 3;
       continue;
@@ -521,12 +525,19 @@ function sanitizeRichHtmlFragment(value: string, allowedTags: Set<string>): stri
     if (!securitySetHas(allowedTags, token.name)) continue;
 
     if (token.closing) {
+      // SPEC §6.6 resource floor: hostile rich text can name an allowed-but-unopened closing tag
+      // repeatedly. Avoid rescanning the entire open stack for every miss; with this count guard,
+      // every successful backward scan also pops the entries it crossed, keeping the parser linear.
+      if ((securityMapGet(openTagCounts, token.name) ?? 0) === 0) continue;
       const lastIndex = lastArrayIndexOf(stack, token.name);
-      if (lastIndex === -1) continue;
       for (let index = stack.length - 1; index >= lastIndex; index -= 1) {
         const tag = stack[index];
         stack.length = index;
-        if (tag !== undefined) html += `</${tag}>`;
+        if (tag !== undefined) {
+          const count = securityMapGet(openTagCounts, tag) ?? 0;
+          securityMapSet(openTagCounts, tag, count > 1 ? count - 1 : 0);
+          html += `</${tag}>`;
+        }
       }
       continue;
     }
@@ -538,6 +549,11 @@ function sanitizeRichHtmlFragment(value: string, allowedTags: Set<string>): stri
         stack,
         token.name,
         'Browser packages/browser/src/security-output.ts collection',
+      );
+      securityMapSet(
+        openTagCounts,
+        token.name,
+        (securityMapGet(openTagCounts, token.name) ?? 0) + 1,
       );
     }
   }
