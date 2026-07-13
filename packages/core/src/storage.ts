@@ -21,6 +21,7 @@ import {
   fileSystemArraySome,
   fileSystemCopyArrayBuffer,
   fileSystemCopyArrayBufferView,
+  fileSystemCreatePromise,
   fileSystemCreateUint8Array,
   fileSystemFreeze,
   fileSystemIsArrayBuffer,
@@ -31,6 +32,7 @@ import {
   fileSystemMapGet,
   fileSystemMapSet,
   fileSystemOwnDataProperty,
+  fileSystemPromiseThen,
   fileSystemReadableStreamClose,
   fileSystemReadableStreamEnqueue,
   fileSystemReadableStreamError,
@@ -306,10 +308,8 @@ export function createFileSystemStorage(options: FileSystemStorageOptions): Stor
         // SPEC §6.6 object-exact capability binding: deletion is a sink too. A missing, malformed,
         // or differently-owned sidecar cannot authorize removing bytes from an aliased host path.
         if (record?.logicalKey !== normalizedKey) return;
-        await Promise.all([
-          fileSystem.deleteFile(physicalKey),
-          fileSystem.deleteFile(metadataStorageKey(physicalKey)),
-        ]);
+        await fileSystem.deleteFile(physicalKey);
+        await fileSystem.deleteFile(metadataStorageKey(physicalKey));
       });
     },
     async get(key) {
@@ -964,10 +964,8 @@ async function assertFileSystemStorageSlotOwnership(
   physicalKey: string,
   logicalKey: string,
 ): Promise<void> {
-  const [fileStats, sidecarBytes] = await Promise.all([
-    fileSystem.statFile(physicalKey),
-    fileSystem.fileBytes(metadataStorageKey(physicalKey)),
-  ]);
+  const fileStats = await fileSystem.statFile(physicalKey);
+  const sidecarBytes = await fileSystem.fileBytes(metadataStorageKey(physicalKey));
   if (fileStats === undefined && sidecarBytes === undefined) return;
 
   const record = await readFileSystemMetadataRecord(fileSystem, physicalKey);
@@ -995,17 +993,24 @@ async function withFileSystemWriteLock<T>(
   filePath: string,
   run: () => Promise<T>,
 ): Promise<T> {
-  const previous = fileSystemMapGet(locks, filePath) ?? Promise.resolve();
+  const previous =
+    fileSystemMapGet(locks, filePath) ??
+    fileSystemCreatePromise<void>((resolve) => resolve(undefined));
   let releaseCurrent: () => void = () => undefined;
-  const current = new Promise<void>((resolve) => {
+  const current = fileSystemCreatePromise<void>((resolve) => {
     releaseCurrent = resolve;
   });
-  const lock = previous.then(
+  const lock = fileSystemPromiseThen(
+    previous,
     () => current,
     () => current,
   );
   fileSystemMapSet(locks, filePath, lock);
-  await previous.catch(() => undefined);
+  await fileSystemPromiseThen(
+    previous,
+    () => undefined,
+    () => undefined,
+  );
   try {
     return await run();
   } finally {

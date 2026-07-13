@@ -68,6 +68,7 @@ const nativeArraySome = NativeArray.prototype.some;
 const nativeMapDelete = NativeMap.prototype.delete;
 const nativeMapGet = NativeMap.prototype.get;
 const nativeMapSet = NativeMap.prototype.set;
+const nativePromiseThen = NativePromise.prototype.then;
 const nativeFunctionHasInstance = NativeFunction.prototype[Symbol.hasInstance];
 const nativeObjectFreeze = NativeObject.freeze;
 const nativeObjectGetOwnPropertyDescriptor = NativeObject.getOwnPropertyDescriptor;
@@ -237,6 +238,11 @@ function capturedControlsAreSound(): boolean {
       stream,
       [],
     );
+    const resolvedPromise = new NativePromise<string>((resolve) => resolve('safe'));
+    const chainedPromise = apply<Promise<string>>(nativePromiseThen, resolvedPromise, [
+      (value: string) => value,
+      () => 'unsafe',
+    ]);
     return (
       parts.length === 2 &&
       parts[0] === 'safe' &&
@@ -323,6 +329,8 @@ function capturedControlsAreSound(): boolean {
       apply(nativeFunctionHasInstance, NativeUint8Array, [bytes]) === true &&
       apply(nativeFunctionHasInstance, NativeReadableStreamDefaultReader, [streamReader]) ===
         true &&
+      apply(nativeFunctionHasInstance, NativePromise, [resolvedPromise]) === true &&
+      apply(nativeFunctionHasInstance, NativePromise, [chainedPromise]) === true &&
       slicedBytes.length === 2 &&
       slicedBytes[0] === 0x56 &&
       slicedBytes[1] === 0x4f &&
@@ -551,6 +559,25 @@ export function fileSystemMapGet<Key, Value>(map: Map<Key, Value>, key: Key): Va
 export function fileSystemMapSet<Key, Value>(map: Map<Key, Value>, key: Key, value: Value): void {
   assertFileSystemIntrinsics();
   apply(nativeMapSet, map, [key, value]);
+}
+
+export function fileSystemCreatePromise<Value>(
+  executor: (
+    resolve: (value: Value | PromiseLike<Value>) => void,
+    reject: (reason?: unknown) => void,
+  ) => void,
+): Promise<Value> {
+  assertFileSystemIntrinsics();
+  return new NativePromise<Value>(executor);
+}
+
+export function fileSystemPromiseThen<Value, Result>(
+  promise: Promise<Value>,
+  onFulfilled: (value: Value) => Result | PromiseLike<Result>,
+  onRejected: (reason: unknown) => Result | PromiseLike<Result>,
+): Promise<Result> {
+  assertFileSystemIntrinsics();
+  return apply<Promise<Result>>(nativePromiseThen, promise, [onFulfilled, onRejected]);
 }
 
 export function fileSystemStableMethod(

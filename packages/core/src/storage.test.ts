@@ -930,6 +930,50 @@ describe('storage adapters', () => {
     }
   });
 
+  it('does not let Promise.all suppress exact filesystem slot ownership', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'kovo-storage-promise-authority-'));
+    const originalAll = Promise.all;
+    try {
+      const storage = createFileSystemStorage({ root });
+      const firstKey = 'promise-collision/\ud800';
+      const collidingKey = 'promise-collision/\ud801';
+      await storage.put(firstKey, 'FIRST', { etag: '"first"' });
+
+      Promise.all = (() => Promise.resolve([])) as typeof Promise.all;
+      await expect(storage.put(collidingKey, 'SECOND', { etag: '"second"' })).rejects.toThrow(
+        /collision/u,
+      );
+    } finally {
+      Promise.all = originalAll;
+    }
+
+    try {
+      const storage = createFileSystemStorage({ root });
+      expect(bytesToText((await storage.get('promise-collision/\ud800'))?.body)).toBe('FIRST');
+      await expect(storage.get('promise-collision/\ud801')).resolves.toBeUndefined();
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
+  it('pins filesystem write-lock Promise.resolve before app evaluation', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'kovo-storage-lock-authority-'));
+    const originalResolve = Promise.resolve;
+    try {
+      const storage = createFileSystemStorage({ root });
+      Promise.resolve = function resolvePoison() {
+        throw new Error('ambient Promise.resolve dispatched');
+      } as typeof Promise.resolve;
+
+      await storage.put('private/victim.txt', 'VICTIM');
+      expect(bytesToText((await storage.get('private/victim.txt'))?.body)).toBe('VICTIM');
+    } finally {
+      Promise.resolve = originalResolve;
+    }
+
+    await rm(root, { force: true, recursive: true });
+  });
+
   it('uses exact sidecar ownership to close physical digest collisions across every operation', async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), 'kovo-storage-exact-key-'));
     try {
