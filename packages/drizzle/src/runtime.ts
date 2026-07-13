@@ -37,12 +37,17 @@ function captureDrizzleSqlMethod(property: 'identifier' | 'join' | 'raw'): Funct
     : undefined;
 }
 
+function requireDrizzleSqlMethod(property: 'raw'): Function {
+  const method = captureDrizzleSqlMethod(property);
+  if (method === undefined) {
+    throw new TypeError(`The installed Drizzle version does not expose sql.${property}().`);
+  }
+  return method;
+}
+
 const drizzleIdentifier = captureDrizzleSqlMethod('identifier');
 const drizzleJoin = captureDrizzleSqlMethod('join');
-const drizzleRaw = captureDrizzleSqlMethod('raw');
-if (drizzleRaw === undefined) {
-  throw new TypeError('The installed Drizzle version does not expose sql.raw().');
-}
+const drizzleRaw = requireDrizzleSqlMethod('raw');
 
 function commitDrizzleArrayValue<Value>(target: Value[], value: Value): boolean {
   const length = drizzleApply<PropertyDescriptor | undefined>(
