@@ -2770,14 +2770,6 @@ function firstSqlWord(value: string): string {
   return word;
 }
 
-function asciiLower(value: string): string {
-  let result = '';
-  for (let index = 0; index < value.length; index += 1) {
-    result += asciiLowerCharacter(value[index]!);
-  }
-  return result;
-}
-
 function asciiLowerCharacter(value: string): string {
   const upper = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
   const lower = 'abcdefghijklmnopqrstuvwxyz';

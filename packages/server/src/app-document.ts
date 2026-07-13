@@ -42,10 +42,7 @@ import {
 } from './route.js';
 import { queryRuntimeWarningHeaderValue, queryRuntimeWarningsFromRequest } from './query.js';
 import type { KovoApp } from './app-types.js';
-import {
-  appLiveTargetAttestationAudience,
-  appLiveTargetAttestationAuthority,
-} from './live-target-app-identity.js';
+import { appLiveTargetAttestationAuthority } from './live-target-app-identity.js';
 import { isTrustedSecureRequest } from './request-scheme.js';
 import { isNativeRequest, requestForAuthorityNeutralMetadata } from './request-carrier.js';
 import {
@@ -94,7 +91,6 @@ export async function renderAppRouteDocumentResponse({
   // so descriptors cannot cross app aggregates that share signing material (SPEC §6.6/§9.3).
   const loaderRuntimeHref = ensureKovoLoaderRuntimeClientModule(app.clientModules);
   const buildToken = app.clientModules.buildToken();
-  const liveTargetAudience = appLiveTargetAttestationAudience(app, buildToken);
   const liveTargetAttestationAuthority = appLiveTargetAttestationAuthority(app, buildToken);
   // SPEC §6.6 / §9.1: thread `ctx.signUrl` onto the page context when a storage download endpoint
   // is mounted. The route context must mint with the same configured capability signer that the

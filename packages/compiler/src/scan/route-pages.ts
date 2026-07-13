@@ -872,7 +872,7 @@ function routeLayoutFacts(
       return [];
     }
     compilerSetAdd(seen, current.name);
-    const layoutModel = compilerMapGet(layouts, current.name);
+    const layoutModel: RouteLayoutModel | undefined = compilerMapGet(layouts, current.name);
     if (!layoutModel) {
       compilerArrayAppend(
         diagnostics,

@@ -998,10 +998,6 @@ function componentMutationDefaultForms(
   return forms;
 }
 
-function isObjectLike(value: unknown): value is Record<string, unknown> {
-  return (typeof value === 'object' || typeof value === 'function') && value !== null;
-}
-
 function isPromiseLike<Value>(value: MaybePromise<Value>): value is Promise<Value> {
   return formHelperIsPromise(value);
 }

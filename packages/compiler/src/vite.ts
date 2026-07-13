@@ -952,7 +952,7 @@ function snapshotViteCompileResultForSettlement(value: unknown): ViteCompileResu
       );
     }
   }
-  return compilerFreeze(snapshot) as ViteCompileResult;
+  return compilerFreeze(snapshot) as unknown as ViteCompileResult;
 }
 
 function snapshotKovoVitePluginOptions(value: KovoVitePluginOptions): KovoVitePluginOptions {

@@ -1480,7 +1480,11 @@ function staticStyleAttributeReplacement(
 } {
   const diagnostics: CompilerDiagnostic[] = [];
   const extraReplacements: SourceReplacement[] = [];
-  const remaining = compilerCreateNullRecord<string>() as ReturnType<typeof attrs>;
+  const remaining = compilerCreateNullRecord<string>() as {
+    class?: string;
+    'data-style-src'?: string;
+    style?: string;
+  };
   const className = compilerOwnDataValue(attributes, 'class', 'Style lowered attributes');
   const styleSource = compilerOwnDataValue(
     attributes,

@@ -1,4 +1,5 @@
 import type { TrustedHtml } from '@kovojs/browser';
+import type { ComponentChild } from '@kovojs/core';
 
 import { escapeAttribute, renderedHtml, renderedHtmlContent, type RenderedHtml } from './html.js';
 import {
@@ -29,15 +30,10 @@ export type RegionPriority = 'after-paint' | 'critical' | 'visible';
  * and promises are awaited by the server renderer (SPEC §8).
  */
 export type ServerRenderable =
+  | ComponentChild
   | ServerRenderable[]
-  | boolean
-  | null
-  | number
   | readonly ServerRenderable[]
-  | { readonly html: string; [Symbol.toPrimitive](): string; toString(): string }
-  | string
   | TrustedHtml
-  | undefined
   | Promise<ServerRenderable>;
 
 /** Props for {@link Defer}, the public JSX-native route-region deferral primitive. */

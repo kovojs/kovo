@@ -1,4 +1,3 @@
-import { compileComponentModule } from './compile.js';
 import {
   createFrameworkKovoVitePlugin,
   type KovoVitePlugin,
