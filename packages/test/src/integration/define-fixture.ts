@@ -156,7 +156,9 @@ function ownData(value: object, property: PropertyKey, label: string): unknown {
     !('value' in second) ||
     first.value !== second.value
   ) {
-    throw new TypeError(`${label}.${String(property)} must be a stable own data property.`);
+    throw new TypeError(
+      `${label}.${typeof property === 'string' ? property : 'symbol'} must be a stable own data property.`,
+    );
   }
   return first.value;
 }
