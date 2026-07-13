@@ -17,6 +17,7 @@ import {
   canonicalRequestFingerprint,
   createMemoryMutationReplayStore,
   mutationReplayContext,
+  readMutationReplay,
   type MutationReplayResponse,
   type MutationReplayStore,
 } from './replay.js';
@@ -145,6 +146,52 @@ describe('server mutation replay store', () => {
     expect(
       serverResponseToWebResponse(clonedLookalike, { method: 'POST' }).headers.get('location'),
     ).toBe('/');
+  });
+
+  it('rejects accessor-backed durable response authority without invoking getters', async () => {
+    let bodyReads = 0;
+    const response = {
+      headers: {},
+      status: 200,
+    } as Record<string, unknown>;
+    Object.defineProperty(response, 'body', {
+      get() {
+        bodyReads += 1;
+        return frameworkWireBody('forged');
+      },
+    });
+    const replayStore: MutationReplayStore = {
+      get: () => response as unknown as MutationReplayResponse,
+      reserve: () => undefined,
+      set: () => undefined,
+    };
+
+    await expect(
+      readMutationReplay({
+        fingerprint: 'fingerprint',
+        idem: 'idem',
+        replayStore,
+        scope: 'scope',
+      }),
+    ).rejects.toThrow(/body must be an own data property/u);
+    expect(bodyReads).toBe(0);
+  });
+
+  it('rejects inherited and invalid durable response fields', () => {
+    const replayStore = createMemoryMutationReplayStore();
+    const inherited = Object.create({
+      body: frameworkWireBody('inherited'),
+      headers: {},
+      status: 200,
+    }) as MutationReplayResponse;
+    expect(() => replayStore.set('scope', 'inherited', inherited)).toThrow(/body must be an own/u);
+    expect(() =>
+      replayStore.set('scope', 'invalid-status', {
+        body: frameworkWireBody('invalid'),
+        headers: {},
+        status: 201 as MutationReplayResponse['status'],
+      }),
+    ).toThrow(/status is not allowed/u);
   });
 
   it('bounds memory mutation replay records by ttl and entry count', async () => {

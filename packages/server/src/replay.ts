@@ -551,7 +551,8 @@ export async function readMutationReplay<Response extends MutationReplayResponse
 ): Promise<Response | undefined> {
   if (!replay.idem || !replay.scope) return undefined;
   try {
-    return await replay.replayStore?.get(replay.scope, replay.idem, replay.fingerprint);
+    const response = await replay.replayStore?.get(replay.scope, replay.idem, replay.fingerprint);
+    return response === undefined ? undefined : cloneMutationReplayResponse(response);
   } catch (error) {
     // A pending record this read joined was aborted (e.g. the in-flight request
     // hit a non-replayable validation failure). Treat it as a miss so this
@@ -579,12 +580,15 @@ export async function reserveMutationReplayBeforeRun<Response extends MutationRe
   | { kind: 'reserved'; reservation: MutationReplayReservation<Response> }
   | { kind: 'unavailable' }
 > {
-  return reserveReplayBeforeRun({
+  const result = await reserveReplayBeforeRun({
     fingerprint: replay.fingerprint,
     idem: replay.idem,
     scope: replay.scope,
     store: replay.replayStore,
   });
+  return result.kind === 'replayed'
+    ? { kind: 'replayed', response: cloneMutationReplayResponse(result.response) }
+    : result;
 }
 
 /**
@@ -969,10 +973,25 @@ function fingerprintsMatch(left: string | undefined, right: string | undefined):
 function cloneMutationReplayResponse<Response extends MutationReplayResponse>(
   response: Response,
 ): Response {
+  if (typeof response !== 'object' || response === null || witnessIsArray(response)) {
+    throw new TypeError('Mutation replay response must be a stable own-data record.');
+  }
+  const body = requiredMutationReplayResponseValue(response, 'body');
+  const headers = requiredMutationReplayResponseValue(response, 'headers');
+  const status = requiredMutationReplayResponseValue(response, 'status');
+  if (typeof body !== 'string') {
+    throw new TypeError('Mutation replay response body must be a framework wire string.');
+  }
+  if (!isMutationReplayResponseStatus(status)) {
+    throw new TypeError('Mutation replay response status is not allowed.');
+  }
+  if (typeof headers !== 'object' || headers === null || witnessIsArray(headers)) {
+    throw new TypeError('Mutation replay response headers must be a stable record.');
+  }
   const cloned = {
-    body: response.body,
-    headers: cloneResponseHeaders(response.headers),
-    status: response.status,
+    body,
+    headers: cloneResponseHeaders(headers as ResponseHeaders),
+    status,
   } as Response;
 
   // SPEC §6.6 boundary rule 5 / §9.1: replay reconstruction may preserve private
@@ -981,4 +1000,31 @@ function cloneMutationReplayResponse<Response extends MutationReplayResponse>(
   // bytes written after its original classification into a later replay sink. Arbitrary durable
   // store records never pass this identity check and therefore remain fail-closed/unblessed.
   return isBlessedRedirectResponse(response) ? blessRedirectResponse(cloned) : cloned;
+}
+
+function requiredMutationReplayResponseValue(source: object, property: PropertyKey): unknown {
+  const before = witnessGetOwnPropertyDescriptor(source, property);
+  const after = witnessGetOwnPropertyDescriptor(source, property);
+  if (before === undefined || after === undefined || !('value' in before) || !('value' in after)) {
+    throw new TypeError(
+      `Mutation replay response ${String(property)} must be an own data property.`,
+    );
+  }
+  if (!witnessObjectIs(before.value, after.value)) {
+    throw new TypeError(`Mutation replay response ${String(property)} changed during validation.`);
+  }
+  return before.value;
+}
+
+function isMutationReplayResponseStatus(value: unknown): value is MutationReplayResponse['status'] {
+  return (
+    value === 200 ||
+    value === 303 ||
+    value === 401 ||
+    value === 403 ||
+    value === 409 ||
+    value === 422 ||
+    value === 429 ||
+    value === 500
+  );
 }
