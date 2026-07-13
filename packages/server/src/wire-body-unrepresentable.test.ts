@@ -25,6 +25,24 @@ describe('framework wire response body construction', () => {
       'cached',
     );
   });
+
+  it('requires the replay audit reason to be an exact own data property', () => {
+    expect(() =>
+      replayMutationWireBody('cached', Object.create({ reason: 'prototype-provided waiver' })),
+    ).toThrow('own data property');
+
+    let getterCalls = 0;
+    const accessor = {} as { reason: string };
+    Object.defineProperty(accessor, 'reason', {
+      configurable: true,
+      get() {
+        getterCalls += 1;
+        return 'accessor-provided waiver';
+      },
+    });
+    expect(() => replayMutationWireBody('cached', accessor)).toThrow('own data property');
+    expect(getterCalls).toBe(0);
+  });
 });
 
 // SPEC §9.1/§9.4: query and mutation wire bodies are framework-owned vocabulary.

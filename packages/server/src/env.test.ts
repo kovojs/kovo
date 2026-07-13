@@ -227,6 +227,28 @@ describe('committed-secret lint (audit-grade, SPEC §6.6)', () => {
   it('a waiver requires a justification', () => {
     expect(() => committedSecretWaiver('x', { justification: '' })).toThrow(/justification/);
   });
+
+  it('requires the waiver justification to be an exact own data property', () => {
+    const inheritedSecret = 'Lm8' + 'zQ2wE6rT9yU3iO7pA1sD5fG8hJ2kL6xC9vB3nM7qW';
+    expect(() =>
+      committedSecretWaiver(
+        inheritedSecret,
+        Object.create({ justification: 'prototype-provided waiver' }),
+      ),
+    ).toThrow('own data property');
+
+    let getterCalls = 0;
+    const accessor = {} as { justification: string };
+    Object.defineProperty(accessor, 'justification', {
+      configurable: true,
+      get() {
+        getterCalls += 1;
+        return 'accessor-provided waiver';
+      },
+    });
+    expect(() => committedSecretWaiver('another-secret', accessor)).toThrow('own data property');
+    expect(getterCalls).toBe(0);
+  });
 });
 
 describe('helpers', () => {

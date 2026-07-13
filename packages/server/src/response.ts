@@ -111,7 +111,11 @@ export function replayMutationWireBody(
   body: string,
   options: ReplayMutationWireBodyOptions,
 ): FrameworkWireBody {
-  if (securityStringTrim(options.reason) === '') {
+  if (typeof options !== 'object' || options === null) {
+    throw new TypeError('replayMutationWireBody() options must be an object.');
+  }
+  const reason = stableRequiredOwnDataValue(options, 'reason');
+  if (typeof reason !== 'string' || securityStringTrim(reason) === '') {
     throw new TypeError('replayMutationWireBody() requires a non-empty audit reason.');
   }
   return frameworkWireBody(body);
@@ -1045,6 +1049,14 @@ function stableOwnDataValue(value: object, property: PropertyKey): unknown {
     throw new TypeError(`Kovo response input ${String(property)} changed during validation.`);
   }
   return before.value;
+}
+
+function stableRequiredOwnDataValue(value: object, property: PropertyKey): unknown {
+  const result = stableOwnDataValue(value, property);
+  if (witnessGetOwnPropertyDescriptor(value, property) === undefined) {
+    throw new TypeError(`Kovo response input ${String(property)} must be an own data property.`);
+  }
+  return result;
 }
 
 function snapshotDenseArray<Value>(values: readonly Value[], label: string): Value[] {

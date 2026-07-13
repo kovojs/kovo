@@ -10,6 +10,7 @@ import {
   witnessArrayAppend,
   witnessGetOwnPropertyDescriptor,
   witnessIsArray,
+  witnessObjectIs,
   witnessSetAdd,
   witnessSetHas,
 } from './security-witness-intrinsics.js';
@@ -341,7 +342,26 @@ const WAIVED_STRINGS = createWitnessSet<string>();
  * `justification` recorded for the audit trail.
  */
 export function committedSecretWaiver(value: string, options: { justification: string }): string {
-  if (!options || typeof options.justification !== 'string' || options.justification.length === 0) {
+  if (!options || typeof options !== 'object') {
+    throw new TypeError(
+      'committedSecretWaiver requires a non-empty justification (audited in the committed-secret lint, SPEC §6.6).',
+    );
+  }
+  const before = witnessGetOwnPropertyDescriptor(options, 'justification');
+  const after = witnessGetOwnPropertyDescriptor(options, 'justification');
+  if (
+    before === undefined ||
+    after === undefined ||
+    !('value' in before) ||
+    !('value' in after) ||
+    !witnessObjectIs(before.value, after.value)
+  ) {
+    throw new TypeError(
+      'committedSecretWaiver justification must be a stable own data property (SPEC §6.6).',
+    );
+  }
+  const justification = before.value;
+  if (typeof justification !== 'string' || justification.length === 0) {
     throw new TypeError(
       'committedSecretWaiver requires a non-empty justification (audited in the committed-secret lint, SPEC §6.6).',
     );
