@@ -58,6 +58,7 @@ const productGridQuery = query('productGrid', {
 
 const addToCart = mutation('cart/add', {
   csrf: false,
+  csrfJustification: 'test fixture uses a non-browser caller',
   handler(input: { productId: string; quantity: number }, request: { db: FixtureDb }) {
     request.db.write('cart_items', { productId: input.productId, qty: input.quantity });
     request.db.write('products', { id: input.productId });

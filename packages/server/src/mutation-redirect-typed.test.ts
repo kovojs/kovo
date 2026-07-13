@@ -17,6 +17,7 @@ declare module '@kovojs/core' {
 describe('mutation redirectTo typed redirect() value (capability-gaps §3; SPEC §9.1 PRG / §6.4)', () => {
   const createChat = mutation('chat/create', {
     csrf: false,
+    csrfJustification: 'test fixture uses a non-browser caller',
     input: s.object({ title: s.string() }),
     handler(input) {
       return { id: 'c-123', title: input.title };
@@ -77,6 +78,7 @@ describe('mutation redirectTo typed redirect() value (capability-gaps §3; SPEC 
     // exercised on the wire path above, where Value is already resolved.
     const withTypedRedirect = mutation('chat/create-2', {
       csrf: false,
+      csrfJustification: 'test fixture uses a non-browser caller',
       input: s.object({ title: s.string() }),
       redirectTo: redirect('/chat/:id', { params: { id: 'static-id' } }),
       handler(input) {

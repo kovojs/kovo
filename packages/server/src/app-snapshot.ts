@@ -25,6 +25,7 @@ import {
   type EndpointMount,
 } from './endpoint.js';
 import type { LiveTargetRenderer } from './mutation-wire.js';
+import { validateMutationCsrfPosture } from './mutation/csrf-posture.js';
 import type { RegisteredQueryDefinition } from './query.js';
 import { snapshotMutationReplayStore } from './replay.js';
 import { layout, route, type LayoutDeclaration } from './route.js';
@@ -138,6 +139,7 @@ export function snapshotAppMutation(
   if (record.csrf !== undefined && record.csrf !== false) {
     record.csrf = snapshotAppCsrfOptions(record.csrf as CsrfOptions<unknown>);
   }
+  validateMutationCsrfPosture(record);
   snapshotArrayProperty(record, 'fileFields', 'mutation.fileFields');
   if (record.registry !== undefined) {
     record.registry = snapshotMutationRegistry(record.registry, context);

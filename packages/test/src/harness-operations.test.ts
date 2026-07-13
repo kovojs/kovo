@@ -31,6 +31,7 @@ describe('@kovojs/test harness operations', () => {
     const state = createRecordingOperationVerifier(observed);
     const addToCart = mutation('cart/add', {
       csrf: false,
+      csrfJustification: 'test fixture uses a non-browser caller',
       input: s.object({ productId: s.string() }),
       handler(input, request: { db: FakeDb; session?: { user?: { id: string } } }) {
         request.db.write('cart_items', `${request.session?.user?.id}:${input.productId}`);
@@ -71,6 +72,7 @@ describe('@kovojs/test harness operations', () => {
     const state = createRecordingOperationVerifier(observed);
     const addToCart = mutation('cart/add', {
       csrf: false,
+      csrfJustification: 'test fixture uses a non-browser caller',
       input: s.object({ productId: s.string() }),
       handler(input, request: { db: FakeDb; session?: { user?: { id: string } } }) {
         request.db.write('cart_items', `${request.session?.user?.id}:${input.productId}`);

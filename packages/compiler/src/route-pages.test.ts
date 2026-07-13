@@ -298,6 +298,28 @@ export const signed = routing.route('/signed', {
     expect(result.routePageFacts[0]?.layouts).toEqual([{ localName: 'AppLayout', queries: [] }]);
   });
 
+  it.each([
+    ['C0 control', 'reviewed\u0000reason'],
+    ['C1 control', 'reviewed\u0085reason'],
+    ['bidi override', 'reviewed\u202ereason'],
+    ['invisible isolate', 'reviewed\u2066reason'],
+    ['unbounded text', 'x'.repeat(4_097)],
+  ])('does not emit a public access fact for %s in its audit reason', (_label, reason) => {
+    const result = compileRouteModule({
+      fileName: 'src/routes.tsx',
+      source: `
+import { publicAccess, route } from '@kovojs/server';
+export const docs = route('/docs', {
+  access: publicAccess(${JSON.stringify(reason)}),
+  page: () => <main>Docs</main>,
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual([]);
+    expect(result.routePageFacts[0]?.access).toBeUndefined();
+  });
+
   it('does not treat local route/layout/publicAccess lookalikes as framework constructs', () => {
     const result = compileRouteModule({
       fileName: 'src/routes.tsx',

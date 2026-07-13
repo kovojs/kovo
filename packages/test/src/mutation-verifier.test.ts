@@ -14,6 +14,7 @@ describe('@kovojs/test mutation verifier', () => {
   it('fails verification for writes to domains outside the static graph', async () => {
     const cartMutation = mutation('cart/add', {
       csrf: false,
+      csrfJustification: 'test fixture uses a non-browser caller',
       input: s.object({ productId: s.string() }),
       handler(input, request: { db: FakeDb }) {
         request.db.write('audit_log', input.productId);
@@ -44,6 +45,7 @@ describe('@kovojs/test mutation verifier', () => {
   it('scopes harness write verification to the executed mutation graph entry', async () => {
     const cartMutation = mutation('cart/add', {
       csrf: false,
+      csrfJustification: 'test fixture uses a non-browser caller',
       input: s.object({ productId: s.string() }),
       handler(input, request: { db: FakeDb }) {
         request.db.write('products', input.productId);
@@ -80,6 +82,7 @@ describe('@kovojs/test mutation verifier', () => {
   it('C167 rejects undeclared standalone reads performed by a mutation handler', async () => {
     const cartMutation = mutation('cart/read-product', {
       csrf: false,
+      csrfJustification: 'test fixture uses a non-browser caller',
       input: s.object({}),
       handler(_input, request: { db: FakeDb }) {
         return request.db.read('products');
@@ -105,6 +108,7 @@ describe('@kovojs/test mutation verifier', () => {
   it('C167 accepts a standalone mutation read declared in the immutable graph', async () => {
     const cartMutation = mutation('cart/read-product', {
       csrf: false,
+      csrfJustification: 'test fixture uses a non-browser caller',
       input: s.object({}),
       handler(_input, request: { db: FakeDb }) {
         return request.db.read('products');
@@ -139,6 +143,7 @@ describe('@kovojs/test mutation verifier', () => {
     const execOptions = { touchGraphKey: 'cart/add' };
     const cartMutation = mutation('cart/add', {
       csrf: false,
+      csrfJustification: 'test fixture uses a non-browser caller',
       input: s.object({ productId: s.string() }),
       handler(input, request: { db: FakeDb }) {
         execOptions.touchGraphKey = 'product/update';
@@ -171,6 +176,7 @@ describe('@kovojs/test mutation verifier', () => {
   it('uses explicit harness touch graph keys when mutation keys differ from graph entries', async () => {
     const cartMutation = mutation('cart/add', {
       csrf: false,
+      csrfJustification: 'test fixture uses a non-browser caller',
       input: s.object({ productId: s.string() }),
       handler(input, request: { db: FakeDb }) {
         request.db.write('cart_items', input.productId);
@@ -203,6 +209,7 @@ describe('@kovojs/test mutation verifier', () => {
   it('keeps scoped KV406 coverage tied to the executed mutation graph entry', async () => {
     const cartMutation = mutation('cart/add', {
       csrf: false,
+      csrfJustification: 'test fixture uses a non-browser caller',
       input: s.object({ productId: s.string() }),
       handler(input, request: { db: FakeDb }) {
         request.db.write('audit_log', input.productId);
@@ -244,6 +251,7 @@ describe('@kovojs/test mutation verifier', () => {
   it('allows scoped writes covered by same-entry KV406 annotations', async () => {
     const cartMutation = mutation('cart/add', {
       csrf: false,
+      csrfJustification: 'test fixture uses a non-browser caller',
       input: s.object({ productId: s.string() }),
       handler(input, request: { db: FakeDb }) {
         request.db.write('audit_log', input.productId);
@@ -283,6 +291,7 @@ describe('@kovojs/test mutation verifier', () => {
   it('checks only writes observed during the current mutation exec', async () => {
     const cartMutation = mutation('cart/add', {
       csrf: false,
+      csrfJustification: 'test fixture uses a non-browser caller',
       input: s.object({ productId: s.string() }),
       handler(input, request: { db: FakeDb }) {
         request.db.write('cart_items', input.productId);
@@ -318,6 +327,7 @@ describe('@kovojs/test mutation verifier', () => {
   it('fails verification for writes to unmapped tables', async () => {
     const cartMutation = mutation('cart/add', {
       csrf: false,
+      csrfJustification: 'test fixture uses a non-browser caller',
       input: s.object({ productId: s.string() }),
       handler(input, request: { db: FakeDb }) {
         request.db.write('unknown_table', input.productId);

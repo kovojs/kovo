@@ -1307,6 +1307,16 @@ export default createApp({
       expect(exitCode, errorOutput).toBe(0);
       expect(errorOutput).not.toContain('UNGUARDED');
       expect(existsSync(outDir)).toBe(true);
+      const graph = JSON.parse(readFileSync(join(outDir, '.kovo/graph.json'), 'utf8')) as {
+        mutations?: readonly Record<string, unknown>[];
+      };
+      expect(graph.mutations).toContainEqual(
+        expect.objectContaining({
+          csrf: 'exempt',
+          csrfJustification: 'non-browser regression fixture',
+          key: 'admin/update',
+        }),
+      );
     } finally {
       stdout.mockRestore();
       stderr.mockRestore();

@@ -1106,6 +1106,7 @@ describe('server guard and session primitives', () => {
   it('returns 401 plus Kovo-Reauth for unauthenticated enhanced mutation guard failures', async () => {
     const guarded = mutation('cart/add', {
       csrf: false,
+      csrfJustification: 'test fixture uses a non-browser caller',
       guard: guards.authed<{ session?: { user?: { id: string } } | null }>(),
       input: s.object({ productId: s.string() }),
       handler() {
@@ -1185,6 +1186,7 @@ describe('server guard and session primitives', () => {
   it('returns 303 login redirect for unauthenticated no-JS mutation guard failures', async () => {
     const guarded = mutation('cart/add', {
       csrf: false,
+      csrfJustification: 'test fixture uses a non-browser caller',
       guard: guards.authed<{ session?: { user?: { id: string } } | null }>(),
       input: s.object({ productId: s.string() }),
       handler() {
@@ -1342,6 +1344,7 @@ describe('server guard and session primitives', () => {
   it('keeps authenticated authorization failures on typed enhanced fragments with 403', async () => {
     const guarded = mutation('admin/refund', {
       csrf: false,
+      csrfJustification: 'test fixture uses a non-browser caller',
       guard: guards.role<{ session?: { user?: { id?: string; roles: readonly string[] } } | null }>(
         'admin',
       ),

@@ -35,6 +35,7 @@ export type {
   ChangeRecord,
   InvalidateOptions,
   MutationContext,
+  MutationCsrfDeclaration,
   MutationDefinition,
   MutationFail,
   MutationFormDefinition,

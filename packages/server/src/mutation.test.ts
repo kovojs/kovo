@@ -401,6 +401,7 @@ describe('server mutation lifecycle', () => {
     const addToCart = assignDerivedMutationKey(
       defineMutation({
         csrf: false,
+        csrfJustification: 'test fixture uses a non-browser caller',
         input: s.object({ productId: s.string() }),
         queue: true,
         handler() {
@@ -424,6 +425,7 @@ describe('server mutation lifecycle', () => {
   it('rejects conflicting compiler-derived mutation keys', () => {
     const addToCart = defineMutation({
       csrf: false,
+      csrfJustification: 'test fixture uses a non-browser caller',
       input: s.object({ productId: s.string() }),
       handler() {
         return 'ok';
@@ -440,6 +442,7 @@ describe('server mutation lifecycle', () => {
   it('fails closed when object-form mutation values are used before compiler key derivation', () => {
     const addToCart = defineMutation({
       csrf: false,
+      csrfJustification: 'test fixture uses a non-browser caller',
       input: s.object({ productId: s.string() }),
       handler() {
         return 'ok';

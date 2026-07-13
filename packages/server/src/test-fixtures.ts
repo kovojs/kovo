@@ -11,7 +11,13 @@ import { query } from './query.js';
 import { s, type Schema } from './schema.js';
 
 export const testMutation = ((key: string, definition: Parameters<typeof defineMutation>[1]) =>
-  defineMutation(key, { csrf: false, ...definition })) as typeof defineMutation;
+  Object.prototype.hasOwnProperty.call(definition, 'csrf')
+    ? defineMutation(key, definition)
+    : defineMutation(key, {
+        ...definition,
+        csrf: false,
+        csrfJustification: 'server test fixture uses a non-browser caller',
+      })) as typeof defineMutation;
 
 export const cartFixtureValue = {
   count: 1,

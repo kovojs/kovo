@@ -289,6 +289,7 @@ export type {
   InferSchema,
   InvalidateOptions,
   MutationContext,
+  MutationCsrfDeclaration,
   MutationDefinition,
   MutationFail,
   MutationFormAttributes,

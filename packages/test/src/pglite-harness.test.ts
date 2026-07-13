@@ -220,6 +220,7 @@ describe('@kovojs/test PGlite harness integration', () => {
 
       const addToCart = mutation('cart/add', {
         csrf: false,
+        csrfJustification: 'test fixture uses a non-browser caller',
         input: s.object({ productId: s.string(), quantity: s.number().int().min(1) }),
         async handler(input, request: { db: typeof db }) {
           await request.db.write('cart_items', {
@@ -387,6 +388,7 @@ describe('@kovojs/test PGlite harness integration', () => {
   it('rejects direct db.query SQL writes without registry tables before touch graph verification', async () => {
     const cartMutation = mutation('cart/add', {
       csrf: false,
+      csrfJustification: 'test fixture uses a non-browser caller',
       input: s.object({ productId: s.string() }),
       async handler(input, request: { db: Pick<PgliteTestDb, 'query'> }) {
         await request.db.query({
@@ -427,6 +429,7 @@ describe('@kovojs/test PGlite harness integration', () => {
   it('verifies separated db.query carriers against the static touch graph', async () => {
     const cartMutation = mutation('cart/add', {
       csrf: false,
+      csrfJustification: 'test fixture uses a non-browser caller',
       input: s.object({ productId: s.string() }),
       registry: { tables: ['cart_items'] },
       async handler(input, request: { db: Pick<PgliteTestDb, 'query'> }) {
@@ -468,6 +471,7 @@ describe('@kovojs/test PGlite harness integration', () => {
   it('detects a real raw SQL cross-tenant owner write with the runtime KV414 check', async () => {
     const cancelOrder = mutation('order/cancel', {
       csrf: false,
+      csrfJustification: 'test fixture uses a non-browser caller',
       input: s.object({ id: s.string() }),
       registry: { tables: ['orders'] },
       async handler(
@@ -546,6 +550,7 @@ describe('@kovojs/test PGlite harness integration', () => {
   it('rejects engine-side PGlite cascade writes with the declared-write stat fallback', async () => {
     const deleteProduct = mutation('product/delete', {
       csrf: false,
+      csrfJustification: 'test fixture uses a non-browser caller',
       input: s.object({ productId: s.string() }),
       registry: { tables: ['products'] },
       async handler(input, request: { db: Pick<PgliteTestDb, 'query'> }) {
@@ -594,6 +599,7 @@ describe('@kovojs/test PGlite harness integration', () => {
   it('rejects raw pglite handle SQL strings before touch graph verification', async () => {
     const cartMutation = mutation('cart/add', {
       csrf: false,
+      csrfJustification: 'test fixture uses a non-browser caller',
       input: s.object({ productId: s.string() }),
       async handler(input, request: { db: Pick<PgliteTestDb, 'pglite'> }) {
         await request.db.pglite.query('insert into audit_log (product_id) values ($1)', [
@@ -633,6 +639,7 @@ describe('@kovojs/test PGlite harness integration', () => {
   it('rejects raw pglite transaction SQL strings before touch graph verification', async () => {
     const cartMutation = mutation('cart/add', {
       csrf: false,
+      csrfJustification: 'test fixture uses a non-browser caller',
       input: s.object({ productId: s.string() }),
       async handler(input, request: { db: Pick<PgliteTestDb, 'pglite'> }) {
         await request.db.pglite.transaction(async (tx) => {

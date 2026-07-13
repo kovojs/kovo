@@ -845,6 +845,7 @@ describe('server app matched dispatch boundary', () => {
     let handlerCalls = 0;
     const addToCart = mutation('cart/add', {
       csrf: false,
+      csrfJustification: 'test fixture uses a non-browser caller',
       input: s.object({ productId: s.string() }),
       handler(input) {
         handlerCalls += 1;

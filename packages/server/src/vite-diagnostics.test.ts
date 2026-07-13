@@ -109,6 +109,7 @@ describe('server app shell Vite diagnostics', () => {
     // mutation must be a full declaration, not a bare { key } shell.
     const addToCart = mutation('cart/add', {
       csrf: false,
+      csrfJustification: 'test fixture uses a non-browser caller',
       input: s.object({ productId: s.string() }),
       handler() {
         return 'ok';

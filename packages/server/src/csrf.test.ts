@@ -619,6 +619,7 @@ describe('mutation CSRF enforcement', () => {
   it('preserves legacy mutation execution when csrf is explicitly false', async () => {
     const addToCart = defineMutation('cart/add', {
       csrf: false,
+      csrfJustification: 'test fixture uses a non-browser caller',
       input: s.object({ productId: s.string() }),
       handler(input) {
         return input.productId;

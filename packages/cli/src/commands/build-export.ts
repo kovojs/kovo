@@ -1421,7 +1421,12 @@ function mutationCheckFact(
   return {
     ...(access === undefined ? {} : { access }),
     csrf: mutation.csrf === false ? 'exempt' : 'checked',
-    ...(mutation.csrf === false ? { csrfJustification: 'csrf:false mutation declaration' } : {}),
+    // SPEC §6.6/§9.1: the runtime constructor/app snapshot already made this
+    // discriminant fail closed. Preserve the exact author reason in explain/check
+    // facts instead of replacing it with a generic, non-auditable placeholder.
+    ...(mutation.csrf === false
+      ? { csrfJustification: requiredMutationCsrfJustification(mutation) }
+      : {}),
     ...(guards.length === 0 ? {} : { guards }),
     ...(referencesSessionAuthority ? { session: 'guard-chain-browser-authority' } : {}),
     ...(invalidates.length === 0 ? {} : { invalidates }),
@@ -1435,6 +1440,16 @@ function mutationCheckFact(
           ),
         }),
   };
+}
+
+function requiredMutationCsrfJustification(mutation: KovoApp['mutations'][number]): string {
+  const justification = mutation.csrfJustification;
+  if (typeof justification !== 'string' || justification.length === 0) {
+    throw new TypeError(
+      `Mutation ${mutation.key} reached build graph extraction without its csrf:false justification.`,
+    );
+  }
+  return justification;
 }
 
 function mutationGuardReferencesSessionAuthority(

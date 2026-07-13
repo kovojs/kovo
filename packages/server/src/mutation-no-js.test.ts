@@ -408,6 +408,7 @@ describe('no-JS mutation responses', () => {
     let handlerCalls = 0;
     const extWrite = mutation('ext/write', {
       csrf: false,
+      csrfJustification: 'test fixture uses a non-browser caller',
       input: s.object({ value: s.string() }),
       handler(input) {
         handlerCalls += 1;

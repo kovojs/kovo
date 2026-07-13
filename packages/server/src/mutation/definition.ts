@@ -26,6 +26,7 @@ import {
 import type { TaskDefinition, TaskHandle } from '../task.js';
 import type { DurableTaskEnqueueInput } from '../task-queue.js';
 import type { MutationStreamContext, MutationStreamSource } from './streaming.js';
+import { validateMutationCsrfPosture } from './csrf-posture.js';
 
 declare const mutationRequestDbBrand: unique symbol;
 
@@ -295,6 +296,12 @@ export interface MutationDefinition<
 > {
   access?: AccessDecision;
   csrf?: CsrfOptions<Request> | false;
+  /**
+   * Required audit text when `csrf` is exactly `false` (SPEC §6.6/§9.1).
+   * Protected mutations cannot carry this field, so explain output always reflects
+   * the declaration's exact security posture rather than a generic placeholder.
+   */
+  csrfJustification?: string;
   /** Static/common POST-redirect-GET target for successful no-JS submissions (SPEC §9.1). */
   defaultRedirectTo?: string;
   /** @internal Derived from `input` when the schema contains `s.file()` fields. */
@@ -339,6 +346,23 @@ export interface MutationDefinition<
     run: (transactionRequest: GuardedRequest) => Promise<Result>,
   ) => Promise<Result>;
 }
+
+/**
+ * CSRF fields accepted by {@link mutation} declarations (SPEC §6.6/§9.1).
+ *
+ * CSRF protection is the default. The only opt-out is the explicit discriminated
+ * branch `{ csrf: false, csrfJustification: string }`, making an unexplained
+ * exemption a type error while runtime validation remains the security boundary.
+ */
+export type MutationCsrfDeclaration<Request = unknown> =
+  | {
+      csrf?: CsrfOptions<Request>;
+      csrfJustification?: never;
+    }
+  | {
+      csrf: false;
+      csrfJustification: string;
+    };
 
 /**
  * The minimal mutation reference ({@link MutationDefinition} `key` plus `csrf` posture)
@@ -413,8 +437,9 @@ export interface MutationFactory<Request = unknown> {
   >(
     definition: Omit<
       MutationDefinition<string, InputSchema, Errors, ContextRequest, Value, GuardedRequest>,
-      'key'
-    >,
+      'csrf' | 'csrfJustification' | 'key'
+    > &
+      MutationCsrfDeclaration<ContextRequest>,
   ): MutationDefinition<string, InputSchema, Errors, ContextRequest, Value, GuardedRequest> & {
     key: string;
   };
@@ -427,7 +452,8 @@ export interface MutationFactory<Request = unknown> {
  * an optional static `defaultRedirectTo`, and an optional `transaction` wrapper. The input schema
  * doubles as `FormData` coercion; `context.fail(code, payload)` returns a typed failure;
  * `context.invalidate(domain)` records what the write touched so dependent queries rerun. CSRF is
- * default-on — supply `csrf` or set it to `false` with justification.
+ * default-on — supply `csrf`, or use the explicit
+ * `{ csrf: false, csrfJustification: '...' }` machine-caller posture.
  *
  * @param definition - Input schema, handler, and optional errors/guard/transaction/csrf.
  * @returns A `MutationDefinition` that receives its stable key from compiler-emitted metadata.
@@ -440,6 +466,7 @@ export interface MutationFactory<Request = unknown> {
  *
  * export const addToCart = mutation({
  *   csrf: false,
+ *   csrfJustification: 'signed inventory client request',
  *   input: s.object({
  *     productId: s.string(),
  *     quantity: s.number().int().min(1).default(1),
@@ -463,8 +490,9 @@ export function mutation<
 >(
   definition: Omit<
     MutationDefinition<string, InputSchema, Errors, Request, Value, GuardedRequest>,
-    'key'
-  >,
+    'csrf' | 'csrfJustification' | 'key'
+  > &
+    MutationCsrfDeclaration<Request>,
 ): MutationDefinition<string, InputSchema, Errors, Request, Value, GuardedRequest> & {
   key: string;
 };
@@ -479,8 +507,9 @@ export function mutation<
   key: Key,
   definition: Omit<
     MutationDefinition<Key, InputSchema, Errors, Request, Value, GuardedRequest>,
-    'key'
-  >,
+    'csrf' | 'csrfJustification' | 'key'
+  > &
+    MutationCsrfDeclaration<Request>,
 ): MutationDefinition<Key, InputSchema, Errors, Request, Value, GuardedRequest> & { key: Key };
 export function mutation(
   keyOrDefinition: string | Omit<MutationDefinition<any, any, any, any, any, any>, 'key'>,
@@ -556,6 +585,7 @@ function snapshotMutationDefinition(
       writable: true,
     });
   }
+  validateMutationCsrfPosture(snapshot);
   return snapshot as Omit<MutationDefinition<any, any, any, any, any, any>, 'key'>;
 }
 

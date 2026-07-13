@@ -52,6 +52,7 @@ describe('@kovojs/test verifier declared-claim coverage (KV403/KV405/KV408)', ()
     it('surfaces KV403 through the harness verificationDiagnostics() integration seam', async () => {
       const cartMutation = mutation('cart/add', {
         csrf: false,
+        csrfJustification: 'test fixture uses a non-browser caller',
         input: s.object({ productId: s.string() }),
         handler(input, request: { db: FakeDb }) {
           request.db.write('cart_items', input.productId);
@@ -131,6 +132,7 @@ describe('@kovojs/test verifier declared-claim coverage (KV403/KV405/KV408)', ()
       // `stock-reserve` branch on `products` is never observed → KV405 + KV403.
       const cartMutation = mutation('cart/add', {
         csrf: false,
+        csrfJustification: 'test fixture uses a non-browser caller',
         input: s.object({ productId: s.string(), reserve: s.boolean() }),
         handler(input, request: { db: FakeDb }) {
           request.db.write('cart_items', input.productId, { branch: 'cart-line' });
@@ -188,6 +190,7 @@ describe('@kovojs/test verifier declared-claim coverage (KV403/KV405/KV408)', ()
     it('clears KV405 when the conditional arm runs under instrumentation', async () => {
       const cartMutation = mutation('cart/add', {
         csrf: false,
+        csrfJustification: 'test fixture uses a non-browser caller',
         input: s.object({ productId: s.string(), reserve: s.boolean() }),
         handler(input, request: { db: FakeDb }) {
           request.db.write('cart_items', input.productId, { branch: 'cart-line' });
@@ -259,6 +262,7 @@ describe('@kovojs/test verifier declared-claim coverage (KV403/KV405/KV408)', ()
     it('fires KV408 through the harness mutation exec seam', async () => {
       const reserveMutation = mutation('stock/reserve', {
         csrf: false,
+        csrfJustification: 'test fixture uses a non-browser caller',
         input: s.object({ productId: s.string() }),
         handler(input, request: { db: FakeDb }) {
           request.db.write('products', { sku: input.productId }, { rowKey: 'sku' });

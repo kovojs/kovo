@@ -46,6 +46,7 @@ describe('createApp provider-typed authoring context', () => {
       mutations: ({ mutation }) => [
         mutation('cart/add', {
           csrf: false,
+          csrfJustification: 'test fixture uses a non-browser caller',
           input: s.object({ productId: s.string() }),
           registry: { touches: [cart] },
           handler(input, request) {
@@ -155,6 +156,7 @@ describe('createApp provider-typed authoring context', () => {
       mutations: ({ mutation }) => [
         mutation('cart/add-tx-typed', {
           csrf: false,
+          csrfJustification: 'test fixture uses a non-browser caller',
           input: s.object({ productId: s.string() }),
           handler(input, request) {
             request.db.insert(input.productId);

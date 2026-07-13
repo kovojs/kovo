@@ -18,10 +18,10 @@ import {
   compilerRegExpTest,
   compilerSetAdd,
   compilerSetHas,
-  compilerStringTrim,
 } from '../compiler-security-intrinsics.js';
 import type { ComponentModuleModel } from '../scan/parse.js';
 import type { PublishToClientFact } from '../types.js';
+import { isCompilerAuditText } from '../security/audit-text.js';
 
 /**
  * SPEC §6.6/§6.2 + secure-framework Phase 4 / Tier 0 item 3: gate the named-import
@@ -258,7 +258,9 @@ function classifyCaptures(
         const publishReason = isPublishToClientArgument(node, parent)
           ? publishToClientReason(parent as ts.CallExpression)
           : null;
-        const published = publishReason !== null && compilerStringTrim(publishReason).length > 0;
+        // SPEC §6.6: the exact recorded reason must remain unambiguous in source,
+        // `kovo explain`, CI logs, and review tooling.
+        const published = publishReason !== null && isCompilerAuditText(publishReason);
         if (published) {
           compilerArrayAppend(
             publishFacts,

@@ -662,6 +662,7 @@ describe('server createApp request shell', () => {
         mutations: [
           mutation('account/schema-boundary', {
             csrf: false,
+            csrfJustification: 'test fixture uses a non-browser caller',
             input: mutableSchema,
             handler: mutationHandler,
           }),
@@ -942,6 +943,7 @@ describe('server createApp request shell', () => {
   it('rejects object-form mutations before compiler-derived key metadata is attached', () => {
     const addToCart = mutation({
       csrf: false,
+      csrfJustification: 'test fixture uses a non-browser caller',
       input: s.object({ productId: s.string() }),
       handler() {
         return 'ok';
@@ -987,6 +989,7 @@ describe('server createApp request shell', () => {
     const publicMutation = mutation('registry/public-write', {
       access: publicAccess('public sibling used by registry poisoning regression'),
       csrf: false,
+      csrfJustification: 'test fixture uses a non-browser caller',
       handler: publicHandler,
       input: s.object({ value: s.string() }),
     });
@@ -1025,6 +1028,7 @@ describe('server createApp request shell', () => {
         mutations: [
           mutation('%61', {
             csrf: false,
+            csrfJustification: 'test fixture uses a non-browser caller',
             handler: mutationHandler,
             input: s.object({}),
           }),
@@ -1430,6 +1434,7 @@ describe('server createApp request shell', () => {
         mutations: [
           mutation('machine/fail', {
             csrf: false,
+            csrfJustification: 'test fixture uses a non-browser caller',
             input: s.object({ value: s.string() }),
             handler: (input) => input,
           }),
@@ -1467,6 +1472,7 @@ describe('server createApp request shell', () => {
       mutations: [
         mutation('machine/startup', {
           csrf: false,
+          csrfJustification: 'test fixture uses a non-browser caller',
           handler: () => ({ ok: true }),
           input: s.object({}),
         }),
@@ -1794,6 +1800,7 @@ describe('server createApp request shell', () => {
       mutations: [
         mutation('cart/oversized', {
           csrf: false,
+          csrfJustification: 'test fixture uses a non-browser caller',
           handler: mutationHandler,
           input: s.object({}),
         }),
@@ -1834,6 +1841,7 @@ describe('server createApp request shell', () => {
     const mutationHandler = vi.fn(() => ({ ok: true }));
     const upload = mutation('upload/avatar', {
       csrf: false,
+      csrfJustification: 'test fixture uses a non-browser caller',
       handler: mutationHandler,
       input: s.object({
         avatar: s.file().maxBytes(8),
@@ -1878,6 +1886,7 @@ describe('server createApp request shell', () => {
         mutations: [
           mutation('upload/poisoned-cap', {
             csrf: false,
+            csrfJustification: 'test fixture uses a non-browser caller',
             handler: mutationHandler,
             input: s.object({ avatar: s.file().maxBytes(8) }),
           }),
@@ -2028,6 +2037,7 @@ describe('server createApp request shell', () => {
         mutations: [
           mutation('machine/stream-write', {
             csrf: false,
+            csrfJustification: 'test fixture uses a non-browser caller',
             input: s.object({ value: s.string() }),
             handler: mutationHandler,
           }),
@@ -2112,6 +2122,7 @@ describe('server createApp request shell', () => {
     const mutationHandler = vi.fn(() => ({ ok: true }));
     const addToCart = mutation('cart/add-rate-limited', {
       csrf: false,
+      csrfJustification: 'test fixture uses a non-browser caller',
       input: s.object({ quantity: s.number().default(1) }),
       handler: mutationHandler,
     });
@@ -2165,6 +2176,7 @@ describe('server createApp request shell', () => {
       mutations: [
         mutation('machine/run', {
           csrf: false,
+          csrfJustification: 'test fixture uses a non-browser caller',
           handler: () => ({ ok: true }),
           input: s.object({}),
         }),
@@ -2309,6 +2321,7 @@ describe('server createApp request shell', () => {
         mutations: [
           mutation('a', {
             csrf: false,
+            csrfJustification: 'test fixture uses a non-browser caller',
             handler: exemptHandler,
             input: s.object({}),
           }),
@@ -2342,6 +2355,7 @@ describe('server createApp request shell', () => {
           mutations: [
             mutation(`cart/proxy-${trustedProxy ? 'trusted' : 'untrusted'}`, {
               csrf: false,
+              csrfJustification: 'test fixture uses a non-browser caller',
               handler: () => ({ ok: true }),
               input: s.object({}),
             }),
@@ -2375,6 +2389,7 @@ describe('server createApp request shell', () => {
   it('disables per-ip pre-dispatch limiting when no trustworthy client key is available', async () => {
     const addToCart = mutation('cart/no-client-ip-key', {
       csrf: false,
+      csrfJustification: 'test fixture uses a non-browser caller',
       handler: () => ({ ok: true }),
       input: s.object({}),
     });
@@ -2403,6 +2418,7 @@ describe('server createApp request shell', () => {
   it('uses the rightmost forwarded IP behind a trusted proxy', async () => {
     const addToCart = mutation('cart/rightmost-forwarded-ip', {
       csrf: false,
+      csrfJustification: 'test fixture uses a non-browser caller',
       handler: () => ({ ok: true }),
       input: s.object({}),
     });
@@ -2433,6 +2449,7 @@ describe('server createApp request shell', () => {
   it('fails closed under app request-limit key churn without evicting active windows', async () => {
     const addToCart = mutation('cart/bounded-rate-keys', {
       csrf: false,
+      csrfJustification: 'test fixture uses a non-browser caller',
       input: s.object({}),
       handler: () => ({ ok: true }),
     });
@@ -2946,6 +2963,7 @@ describe('server createApp request shell', () => {
     });
     const addToCart = mutation('cart/add', {
       csrf: false,
+      csrfJustification: 'test fixture uses a non-browser caller',
       input: s.object({}),
       registry: {
         queries: [cartQuery],
@@ -3039,6 +3057,7 @@ describe('server createApp request shell', () => {
     });
     const addToCart = mutation('cart/add', {
       csrf: false,
+      csrfJustification: 'test fixture uses a non-browser caller',
       input: s.object({ productId: s.string(), quantity: s.number().int().min(1).default(1) }),
       registry: {
         touches: [cart],
@@ -3118,6 +3137,7 @@ describe('server createApp request shell', () => {
     });
     const addToCart = mutation('cart/add', {
       csrf: false,
+      csrfJustification: 'test fixture uses a non-browser caller',
       input: s.object({ productId: s.string() }),
       registry: {
         touches: [cart],
@@ -3196,6 +3216,7 @@ describe('server createApp request shell', () => {
 
     const addToCart = mutation('runtime-registry/add', {
       csrf: false,
+      csrfJustification: 'test fixture uses a non-browser caller',
       input: s.object({}),
       handler() {
         count += 1;
@@ -3204,6 +3225,7 @@ describe('server createApp request shell', () => {
     });
     const failCart = mutation('runtime-registry/fail', {
       csrf: false,
+      csrfJustification: 'test fixture uses a non-browser caller',
       errors: { NOPE: s.object({}) },
       input: s.object({}),
       handler(_input, _request, context) {

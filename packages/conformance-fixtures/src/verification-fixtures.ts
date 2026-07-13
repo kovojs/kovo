@@ -134,6 +134,7 @@ export async function verificationLayerBehaviorFact(
 
   const writeMutation = mutation('cart/add', {
     csrf: false,
+    csrfJustification: 'test fixture uses a non-browser caller',
     input: s.object({ productId: s.string() }),
     handler(input: { productId: string }, request: { db: FakeDb }) {
       request.db.write('cart_items', input.productId);
@@ -160,6 +161,7 @@ export async function verificationLayerBehaviorFact(
 
   const writeOutsideGraph = mutation('cart/add', {
     csrf: false,
+    csrfJustification: 'test fixture uses a non-browser caller',
     input: s.object({ productId: s.string() }),
     handler(input: { productId: string }, request: { db: FakeDb }) {
       request.db.write('audit_log', input.productId);
@@ -380,6 +382,7 @@ export async function verificationLayerBehaviorFact(
   });
   const rawPgliteMutation = mutation('cart/add', {
     csrf: false,
+    csrfJustification: 'test fixture uses a non-browser caller',
     input: s.object({ productId: s.string() }),
     async handler(input: { productId: string }, request: { db: { pglite: any } }) {
       await request.db.pglite.query('insert into audit_log (product_id) values ($1)', [
@@ -457,6 +460,7 @@ export async function verificationLayerBehaviorFact(
   libsqlDb.client.execute({ sql: 'select * from products where id = ?', args: ['p1'] });
   const transactionMutation = mutation('cart/add-transaction', {
     csrf: false,
+    csrfJustification: 'test fixture uses a non-browser caller',
     input: s.object({ productId: s.string() }),
     async handler(input: { productId: string }, request: { db: { pglite: any } }) {
       await request.db.pglite.transaction(

@@ -371,6 +371,31 @@ export const PayButton = component({
       );
     });
 
+    it.each([
+      ['C0 control', 'reviewed\u0000reason'],
+      ['C1 control', 'reviewed\u0085reason'],
+      ['bidi override', 'reviewed\u202ereason'],
+      ['invisible isolate', 'reviewed\u2066reason'],
+      ['unbounded text', 'x'.repeat(4_097)],
+    ])('rejects publishToClient escapes with %s in the audit reason', (_label, reason) => {
+      const source = `
+import { component, publishToClient } from '@kovojs/core';
+import { STRIPE_PUBLISHABLE_KEY } from './config';
+
+export const PayButton = component({
+  render: () => (
+    <button onClick={() => mountStripe(publishToClient(STRIPE_PUBLISHABLE_KEY, { reason: ${JSON.stringify(reason)} }))}>Pay</button>
+  ),
+});
+`;
+      const result = compile(source);
+      expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toContain('KV437');
+      expect(result.publishToClientFacts).toEqual([]);
+      expect(clientSource(source)).not.toContain(
+        'import { STRIPE_PUBLISHABLE_KEY } from "./config";',
+      );
+    });
+
     it('does not treat a handler-local shadow of an import name as a captured import', () => {
       const source = `
 import { component } from '@kovojs/core';

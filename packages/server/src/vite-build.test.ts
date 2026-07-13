@@ -420,6 +420,7 @@ export const CartButton = component({
       });
       const addToCart = mutation('cart/add-token-proof', {
         csrf: false,
+        csrfJustification: 'test fixture uses a non-browser caller',
         input: s.object({ productId: s.string() }),
         registry: {
           queries: [cartQuery],

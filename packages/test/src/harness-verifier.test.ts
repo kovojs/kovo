@@ -14,6 +14,7 @@ describe('@kovojs/test harness verifier integration', () => {
   it('verifies observed writes against the static touch graph after exec', async () => {
     const cartMutation = mutation('cart/add', {
       csrf: false,
+      csrfJustification: 'test fixture uses a non-browser caller',
       input: s.object({ productId: s.string() }),
       handler(input, request: { db: FakeDb }) {
         request.db.write('cart_items', input.productId);
@@ -52,6 +53,7 @@ describe('@kovojs/test harness verifier integration', () => {
   it('exposes verification diagnostics through the harness context', async () => {
     const cartMutation = mutation('cart/add', {
       csrf: false,
+      csrfJustification: 'test fixture uses a non-browser caller',
       input: s.object({ productId: s.string() }),
       handler(input, request: { db: FakeDb }) {
         request.db.write('cart_items', input.productId, { branch: 'cart-line' });
@@ -120,6 +122,7 @@ describe('@kovojs/test harness verifier integration', () => {
   it('verifies structured SQL writes against the static touch graph', async () => {
     const cartMutation = mutation('cart/add', {
       csrf: false,
+      csrfJustification: 'test fixture uses a non-browser caller',
       input: s.object({ productId: s.string() }),
       registry: { tables: ['cart_items'] },
       handler(input, request: { db: FakeDb }) {
@@ -154,6 +157,7 @@ describe('@kovojs/test harness verifier integration', () => {
   it('fails verification when observed writes land outside touch graph coverage', async () => {
     const cartMutation = mutation('cart/add', {
       csrf: false,
+      csrfJustification: 'test fixture uses a non-browser caller',
       input: s.object({ productId: s.string() }),
       handler(input, request: { db: FakeDb }) {
         request.db.write('audit_log', input.productId);
@@ -193,6 +197,7 @@ describe('@kovojs/test harness verifier integration', () => {
     };
     const cartMutation = mutation('cart/add', {
       csrf: false,
+      csrfJustification: 'test fixture uses a non-browser caller',
       input: s.object({ productId: s.string() }),
       async handler(input, request: { db: FakeDb }) {
         cartStarted.resolve(undefined);
@@ -204,6 +209,7 @@ describe('@kovojs/test harness verifier integration', () => {
     });
     const auditMutation = mutation('audit/add', {
       csrf: false,
+      csrfJustification: 'test fixture uses a non-browser caller',
       input: s.object({ event: s.string() }),
       async handler(input, request: { db: FakeDb }) {
         auditStarted.resolve(undefined);

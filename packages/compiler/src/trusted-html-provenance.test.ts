@@ -622,6 +622,26 @@ export const C = component({
     ).toHaveLength(1);
   });
 
+  it.each([
+    ['C0 control', 'reviewed\u0000reason'],
+    ['C1 control', 'reviewed\u0085reason'],
+    ['bidi override', 'reviewed\u202ereason'],
+    ['invisible isolate', 'reviewed\u2066reason'],
+    ['unbounded text', 'x'.repeat(4_097)],
+  ])('does not discharge trustedHtml with %s in the audit reason', (_label, reason) => {
+    expect(
+      kv426(`
+import { trustedHtml } from '@kovojs/browser';
+export const C = component({
+  queries: { post: postQuery },
+  render: ({ post }) => (
+    <article>{trustedHtml(post.body, { reason: ${JSON.stringify(reason)} })}</article>
+  ),
+});
+`),
+    ).toHaveLength(1);
+  });
+
   it('fails closed for a function-call result that carries query data', () => {
     expect(
       kv426(`
@@ -1031,6 +1051,24 @@ export const C = component({
 });
 `),
     ).toHaveLength(0);
+  });
+
+  it.each([
+    ['C0 control', 'reviewed\u0000reason'],
+    ['C1 control', 'reviewed\u0085reason'],
+    ['bidi override', 'reviewed\u202ereason'],
+    ['invisible isolate', 'reviewed\u2066reason'],
+    ['unbounded text', 'x'.repeat(4_097)],
+  ])('does not discharge trustedUrl with %s in the audit reason', (_label, reason) => {
+    expect(
+      kv426(`
+import { trustedUrl } from '@kovojs/browser';
+export const C = component({
+  queries: { post: postQuery },
+  render: ({ post }) => <a href={trustedUrl(post.href, ${JSON.stringify(reason)})}>read</a>,
+});
+`),
+    ).toHaveLength(1);
   });
 
   it('fails closed for computed trustedUrl namespace calls in JSX attributes', () => {

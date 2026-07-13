@@ -53,6 +53,7 @@ describe('built-bundle durable replay receipts (SPEC §10.3)', () => {
       )) as typeof import('./index.js');
       const mutationFromB = bundleB.mutation('receipt/cross-bundle', {
         csrf: false,
+        csrfJustification: 'test fixture uses a non-browser caller',
         handler(input) {
           return input;
         },

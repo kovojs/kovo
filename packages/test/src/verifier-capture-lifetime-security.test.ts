@@ -261,6 +261,7 @@ describe('@kovojs/test capture lifetime security', () => {
     let detached!: Promise<void>;
     const lateMutation = mutation('audit/late', {
       csrf: false,
+      csrfJustification: 'test fixture uses a non-browser caller',
       input: s.object({ id: s.string() }),
       handler(input, request: { db: FakeDb }) {
         detached = gate.promise.then(() => request.db.write('audit_log', input.id));
@@ -288,6 +289,7 @@ describe('@kovojs/test capture lifetime security', () => {
     let retainedWrite!: () => void;
     const lateMutation = mutation('audit/retain', {
       csrf: false,
+      csrfJustification: 'test fixture uses a non-browser caller',
       input: s.object({ id: s.string() }),
       handler(input, request: { db: FakeDb }) {
         retainedWrite = () => request.db.write('audit_log', input.id);

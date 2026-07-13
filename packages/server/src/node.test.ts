@@ -638,6 +638,7 @@ describe('server node adapter', () => {
     });
     const addToCart = mutation('cart/add', {
       csrf: false,
+      csrfJustification: 'test fixture uses a non-browser caller',
       input: s.object({ quantity: s.number().int().min(1).default(1) }),
       registry: {
         queries: [cartQuery],
@@ -800,6 +801,7 @@ describe('toNodeHandler incomplete request transport closure', () => {
       mutations: [
         mutation('a/b', {
           csrf: false,
+          csrfJustification: 'test fixture uses a non-browser caller',
           handler: mutationHandler,
           input: s.object({}),
         }),

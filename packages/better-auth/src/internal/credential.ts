@@ -353,8 +353,10 @@ export function credentialMutationDefinitionOptions<
   },
 ): Pick<
   MutationDefinition<Key, never, never, Request, never, GuardedRequest>,
-  'access' | 'csrf' | 'guard' | 'registry' | 'transaction'
-> {
+  'access' | 'guard' | 'registry' | 'transaction'
+> & {
+  csrf?: CsrfOptions<Request>;
+} {
   // SPEC §6.6: anonymous CSRF is mandatory for pre-authentication forms. Keep a runtime
   // fail-closed check in addition to the public type so JavaScript callers and forged/cast values
   // cannot turn a credential mutation into a login-CSRF or logout-CSRF endpoint.

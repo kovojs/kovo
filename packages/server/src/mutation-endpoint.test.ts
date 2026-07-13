@@ -65,6 +65,7 @@ describe('server mutation endpoint routing', () => {
       define: () =>
         mutation('lifecycle/invalid-body', {
           csrf: false,
+          csrfJustification: 'test fixture uses a non-browser caller',
           input: s.object({ value: s.string() }),
           handler(input) {
             return input;
@@ -80,6 +81,7 @@ describe('server mutation endpoint routing', () => {
       define: () =>
         mutation('lifecycle/rate-limit', {
           csrf: false,
+          csrfJustification: 'test fixture uses a non-browser caller',
           guard: guards.rateLimit({ max: 0, per: 'global', windowMs: 2_000 }),
           input: s.object({ value: s.string() }),
           handler(input) {
@@ -96,6 +98,7 @@ describe('server mutation endpoint routing', () => {
       define: () =>
         mutation('lifecycle/stale-version', {
           csrf: false,
+          csrfJustification: 'test fixture uses a non-browser caller',
           input: s.object({ value: s.string() }),
           handler() {
             throw new StaleVersionError();
@@ -153,6 +156,7 @@ describe('server mutation endpoint routing', () => {
     const onError = vi.fn();
     const fails = mutation(`lifecycle/handler-throw-${scenario.name}`, {
       csrf: false,
+      csrfJustification: 'test fixture uses a non-browser caller',
       input: s.object({ value: s.string() }),
       handler() {
         throw thrown;
@@ -185,6 +189,7 @@ describe('server mutation endpoint routing', () => {
   ])('blocks login-CSRF Set-Cookie output from $name csrf:false mutations', async (scenario) => {
     const signIn = mutation(`auth/unsafe-sign-in-${scenario.name}`, {
       csrf: false,
+      csrfJustification: 'test fixture uses a non-browser caller',
       input: s.object({ email: s.string() }),
       handler(input, _request, context) {
         context.setCookie('session', 'attacker-session');
@@ -217,6 +222,7 @@ describe('server mutation endpoint routing', () => {
   ])('blocks csrf:false browser-state sink $name', async ({ run }) => {
     const unsafe = mutation('auth/unsafe-browser-state', {
       csrf: false,
+      csrfJustification: 'test fixture uses a non-browser caller',
       input: s.object({}),
       handler(_input, _request, context) {
         run(context);
@@ -231,6 +237,7 @@ describe('server mutation endpoint routing', () => {
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const fails = mutation('lifecycle/handler-throw-default-log', {
       csrf: false,
+      csrfJustification: 'test fixture uses a non-browser caller',
       input: s.object({ value: s.string() }),
       handler() {
         throw thrown;

@@ -173,6 +173,7 @@ describe('structured access metadata', () => {
     const guardedMutation = mutation('admin/touch', {
       access,
       csrf: false,
+      csrfJustification: 'test fixture uses a non-browser caller',
       input: s.object({ id: s.string() }),
       handler: () => 'ok',
     });

@@ -353,6 +353,7 @@ describe('durable task runtime (SPEC §9.6)', () => {
     const runtime = createAppTaskRuntime(app);
     const scheduleUnregistered = mutation('runtime/schedule-unregistered', {
       csrf: false,
+      csrfJustification: 'test fixture uses a non-browser caller',
       input: s.object({}),
       handler(_input, request: TaskSchedulingRequest) {
         return request.schedule(unregistered, {});

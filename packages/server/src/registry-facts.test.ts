@@ -80,6 +80,7 @@ describe('runtimeRegistryFacts', () => {
     const mutations = [
       mutation('registry-facts/dense-write', {
         csrf: false,
+        csrfJustification: 'test fixture uses a non-browser caller',
         handler: (input) => input,
         input: s.object({ value: s.string() }),
       }),

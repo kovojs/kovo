@@ -19,6 +19,7 @@ describe('@kovojs/test SQL verifier integration', () => {
   it('verifies insert-select SQL as a target write plus source reads', async () => {
     const productImport = mutation('product/import', {
       csrf: false,
+      csrfJustification: 'test fixture uses a non-browser caller',
       input: s.object({ productId: s.string() }),
       registry: {
         tables: ['product_snapshots'],
@@ -102,6 +103,7 @@ describe('@kovojs/test SQL verifier integration', () => {
   it('fails mutation exec when insert-select reads are missing from the touch graph', async () => {
     const productImport = mutation('product/import', {
       csrf: false,
+      csrfJustification: 'test fixture uses a non-browser caller',
       input: s.object({ productId: s.string() }),
       registry: {
         tables: ['product_snapshots'],
@@ -157,6 +159,7 @@ describe('@kovojs/test SQL verifier integration', () => {
   it('does not let unscoped KV406 cover missing mutation read domains', async () => {
     const productImport = mutation('product/import', {
       csrf: false,
+      csrfJustification: 'test fixture uses a non-browser caller',
       input: s.object({ productId: s.string() }),
       registry: { tables: ['product_snapshots'] },
       handler(_input, request: { db: FakeDb }) {
@@ -215,6 +218,7 @@ describe('@kovojs/test SQL verifier integration', () => {
   it('scopes mutation-read verification to the executed mutation graph entry', async () => {
     const productImport = mutation('product/import', {
       csrf: false,
+      csrfJustification: 'test fixture uses a non-browser caller',
       input: s.object({ productId: s.string() }),
       registry: { tables: ['product_snapshots'] },
       handler(_input, request: { db: FakeDb }) {

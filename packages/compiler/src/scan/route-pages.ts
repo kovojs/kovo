@@ -33,6 +33,7 @@ import {
 } from '../shared.js';
 import { ensureTypescriptRuntime } from '../ts-api.js';
 import { compileArtifactFileNames } from '../types.js';
+import { isCompilerAuditText } from '../security/audit-text.js';
 
 ensureTypescriptRuntime(ts);
 
@@ -591,7 +592,9 @@ function accessDecisionFact(
     isFrameworkAccessExpression(sourceFile, access.expression, PUBLIC_ACCESS_IDENTITY)
   ) {
     const [reason] = access.arguments;
-    if (reason && ts.isStringLiteralLike(reason)) return { kind: 'public', reason: reason.text };
+    if (reason && ts.isStringLiteralLike(reason) && isCompilerAuditText(reason.text)) {
+      return { kind: 'public', reason: reason.text };
+    }
   }
 
   if (ts.isArrayLiteralExpression(access)) {
@@ -604,7 +607,7 @@ function accessDecisionFact(
   if (kind === 'verified-machine-auth') return { kind: 'verified-machine-auth' };
   if (kind === 'public') {
     const reason = staticStringProperty(access, 'reason', sourceFile);
-    if (reason !== undefined) return { kind: 'public', reason };
+    if (reason !== undefined && isCompilerAuditText(reason)) return { kind: 'public', reason };
   }
   if (kind === 'guard-chain') {
     return { guards: [], kind };

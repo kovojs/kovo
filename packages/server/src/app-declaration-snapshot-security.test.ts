@@ -266,6 +266,7 @@ describe('closed app declaration semantics', () => {
     const mutationDefinition = mutation('registry/write', {
       access: publicAccess('registry snapshot regression'),
       csrf: false,
+      csrfJustification: 'test fixture uses a non-browser caller',
       handler: () => ({ ok: true }),
       input: s.object({ id: s.string() }),
       registry: {

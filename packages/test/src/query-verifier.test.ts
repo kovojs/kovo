@@ -611,6 +611,7 @@ describe('@kovojs/test query verifier', () => {
     });
     const cartMutation = mutation('cart/add', {
       csrf: false,
+      csrfJustification: 'test fixture uses a non-browser caller',
       input: s.object({ productId: s.string() }),
       async handler(input, request: { db: FakeDb }) {
         mutationStarted.resolve(undefined);

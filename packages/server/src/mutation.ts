@@ -119,6 +119,7 @@ export {
 } from './mutation/definition.js';
 export type {
   MutationContext,
+  MutationCsrfDeclaration,
   MutationDefinition,
   MutationFactory,
   MutationFail,

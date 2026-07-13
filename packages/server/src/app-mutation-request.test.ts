@@ -49,6 +49,7 @@ describe('server app mutation request boundary', () => {
     });
     const update = mutation('private/update', {
       csrf: false,
+      csrfJustification: 'test fixture uses a non-browser caller',
       handler: () => ({}),
       input: s.object({}),
       registry: { queries: [reviewedQuery], touches: [privateData] },
@@ -97,6 +98,7 @@ describe('server app mutation request boundary', () => {
       mutations: [
         mutation('method/write', {
           csrf: false,
+          csrfJustification: 'test fixture uses a non-browser caller',
           handler,
           input: s.object({}),
         }),
@@ -136,6 +138,7 @@ describe('server app mutation request boundary', () => {
     const seen: string[] = [];
     const addToCart = mutation('cart/add', {
       csrf: false,
+      csrfJustification: 'test fixture uses a non-browser caller',
       input: s.object({ productId: s.string() }),
       handler(input) {
         seen.push(`handler:${input.productId}`);
@@ -169,6 +172,7 @@ describe('server app mutation request boundary', () => {
     const responsePolicy = { redirectTo: '/safe' };
     const save = mutation('save', {
       csrf: false,
+      csrfJustification: 'test fixture uses a non-browser caller',
       input: s.object({ value: s.string() }),
       handler: (input) => input,
     });
@@ -203,6 +207,7 @@ describe('server app mutation request boundary', () => {
   it('keeps mutation response policy closed when ambient Object.freeze is selectively replaced', async () => {
     const save = mutation('freeze-poison/save', {
       csrf: false,
+      csrfJustification: 'test fixture uses a non-browser caller',
       input: s.object({ value: s.string() }),
       handler: (input) => input,
     });
@@ -313,6 +318,7 @@ describe('server app mutation request boundary', () => {
     const seen: Array<Record<string, unknown>> = [];
     const addToCart = mutation('cart/add', {
       csrf: false,
+      csrfJustification: 'test fixture uses a non-browser caller',
       input: s.object({ productId: s.string() }),
       handler(input) {
         seen.push(input);
@@ -343,6 +349,7 @@ describe('server app mutation request boundary', () => {
     let handlerCalls = 0;
     const addToCart = mutation('cart/add', {
       csrf: false,
+      csrfJustification: 'test fixture uses a non-browser caller',
       input: s.object({ productId: s.string() }),
       handler(input) {
         handlerCalls += 1;
@@ -370,6 +377,7 @@ describe('server app mutation request boundary', () => {
   it('uses mutation-level defaultRedirectTo without an app-authored response switch', async () => {
     const addToCart = mutation('cart/add', {
       csrf: false,
+      csrfJustification: 'test fixture uses a non-browser caller',
       defaultRedirectTo: '/cart',
       input: s.object({ productId: s.string() }),
       handler(input) {
@@ -393,6 +401,7 @@ describe('server app mutation request boundary', () => {
   it('uses mutation-level dynamic redirectTo without an app-authored response switch', async () => {
     const signIn = mutation('auth/sign-in', {
       csrf: false,
+      csrfJustification: 'test fixture uses a non-browser caller',
       input: s.object({ next: s.string() }),
       redirectTo: (result) => (result.value as { redirectTo: string }).redirectTo,
       handler(input) {
@@ -427,6 +436,7 @@ describe('server app mutation request boundary', () => {
     };
     const addToCart = mutation('cart/add', {
       csrf: false,
+      csrfJustification: 'test fixture uses a non-browser caller',
       input: s.object({ productId: s.string() }),
       redirectTo: '/cart',
       handler(input, request: Request & { db: typeof db; session?: never }) {
@@ -490,6 +500,7 @@ describe('server app mutation request boundary', () => {
     const seen: string[] = [];
     const addToCart = mutation('cart/request-db', {
       csrf: false,
+      csrfJustification: 'test fixture uses a non-browser caller',
       input: s.object({ productId: s.string() }),
       handler(input, request: Request & { db: typeof db; session?: never }) {
         expect('session' in request).toBe(false);
@@ -539,6 +550,7 @@ describe('server app mutation request boundary', () => {
       mutations: [
         mutation('cart/accessor-db', {
           csrf: false,
+          csrfJustification: 'test fixture uses a non-browser caller',
           handler,
           input: s.object({}),
         }),
@@ -572,6 +584,7 @@ describe('server app mutation request boundary', () => {
     });
     const addToCart = mutation('cart/add', {
       csrf: false,
+      csrfJustification: 'test fixture uses a non-browser caller',
       input: s.object({ productId: s.string() }),
       registry: {
         queries: [cartQuery],
@@ -628,6 +641,7 @@ describe('server app mutation request boundary', () => {
     });
     const addToCart = mutation('cart/map-poison', {
       csrf: false,
+      csrfJustification: 'test fixture uses a non-browser caller',
       input: s.object({}),
       registry: { queries: [cartQuery], touches: [cart] },
       handler: () => ({}),
@@ -695,6 +709,7 @@ describe('server app mutation request boundary', () => {
     });
     const save = mutation('cart/array-census', {
       csrf: false,
+      csrfJustification: 'test fixture uses a non-browser caller',
       input: s.object({}),
       registry: { queries: [cartQuery], touches: [cart] },
       handler: () => ({}),
@@ -792,6 +807,7 @@ describe('server app mutation request boundary', () => {
     });
     const refreshCatalog = mutation('catalog/refresh', {
       csrf: false,
+      csrfJustification: 'test fixture uses a non-browser caller',
       defaultRedirectTo: '/catalog',
       input: s.object({ reason: s.string() }),
       registry: {
@@ -834,6 +850,7 @@ describe('server app mutation request boundary', () => {
   it('inherits app and source-route stylesheets into enhanced failure fragments', async () => {
     const addToCart = mutation('cart/add', {
       csrf: false,
+      csrfJustification: 'test fixture uses a non-browser caller',
       input: s.object({ quantity: s.number().int().min(1) }),
       handler(input) {
         return input;
@@ -992,6 +1009,7 @@ describe('server app mutation request boundary', () => {
     let observedOutcome: { readonly kind: string } | undefined;
     const save = mutation('freeze-outcome/save', {
       csrf: false,
+      csrfJustification: 'test fixture uses a non-browser caller',
       input: s.object({ value: s.string() }),
       handler: (input) => input,
     });
@@ -1157,6 +1175,7 @@ describe('server app mutation request boundary', () => {
     let sessionReads = 0;
     const addToCart = mutation('cart/add', {
       csrf: false,
+      csrfJustification: 'test fixture uses a non-browser caller',
       input: s.object({ productId: s.string() }),
       handler(input, request) {
         const typed = request as Request & {
@@ -1241,6 +1260,7 @@ describe('server app mutation request boundary', () => {
     const onError = vi.fn();
     const addToCart = mutation('cart/add', {
       csrf: false,
+      csrfJustification: 'test fixture uses a non-browser caller',
       input: s.object({ productId: s.string() }),
       handler(input) {
         return input;
@@ -1305,6 +1325,7 @@ describe('server app mutation request boundary', () => {
     const onError = vi.fn();
     const addToCart = mutation('cart/add', {
       csrf: false,
+      csrfJustification: 'test fixture uses a non-browser caller',
       input: s.object({ productId: s.string() }),
       handler(input) {
         return input;

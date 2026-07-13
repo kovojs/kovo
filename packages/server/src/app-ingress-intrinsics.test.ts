@@ -94,6 +94,7 @@ describe('request ingress intrinsic authority', () => {
     const calls: string[] = [];
     const definition = mutation('account/delete', {
       csrf: false,
+      csrfJustification: 'test fixture uses a non-browser caller',
       handler() {
         calls.push('deleted');
         return { ok: true };

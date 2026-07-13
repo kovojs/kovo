@@ -184,6 +184,7 @@ export async function serverMutationLifecycleBehaviorFact(
   const transactionEvents: string[] = [];
   const transactional = runtime.mutation('cart/add', {
     csrf: false,
+    csrfJustification: 'conformance fixture uses a non-browser caller',
     guard(request: { user?: string }) {
       transactionEvents.push(`guard:${request.user}`);
       return request.user === 'u1';
@@ -204,6 +205,7 @@ export async function serverMutationLifecycleBehaviorFact(
   const rollbackEvents: string[] = [];
   const failing = runtime.mutation('cart/fail', {
     csrf: false,
+    csrfJustification: 'conformance fixture uses a non-browser caller',
     errors: {
       OUT_OF_STOCK: runtime.s.object({
         availableQuantity: runtime.s.number().int().min(0),
@@ -239,6 +241,7 @@ export async function serverMutationLifecycleBehaviorFact(
   });
   const addToCart = runtime.mutation('cart/add', {
     csrf: false,
+    csrfJustification: 'conformance fixture uses a non-browser caller',
     handler(input: { productId: string }, request: { session: { cartId: string } }) {
       return `${request.session.cartId}:${input.productId}`;
     },
@@ -410,6 +413,7 @@ export async function serverCommerceTransactionBehaviorFact(
 
   const addToCart = runtime.mutation('cart/add', {
     csrf: false,
+    csrfJustification: 'conformance fixture uses a non-browser caller',
     errors: {
       OUT_OF_STOCK: runtime.s.object({
         availableQuantity: runtime.s.number().int().min(0),
@@ -503,6 +507,7 @@ export async function serverCommerceStylesheetBehaviorFact(
   const cart = runtime.domain('cart');
   const addToCart = runtime.mutation('cart/add', {
     csrf: false,
+    csrfJustification: 'conformance fixture uses a non-browser caller',
     errors: {
       OUT_OF_STOCK: runtime.s.object({ availableQuantity: runtime.s.number().int().min(0) }),
     },
@@ -619,6 +624,7 @@ export async function serverCommerceAdoptDontInventBehaviorFact(
   };
   const uploadReceipt = runtime.mutation('order/receipt', {
     csrf: false,
+    csrfJustification: 'conformance fixture uses a non-browser caller',
     handler(input: any, request: unknown) {
       const session = commerceSession.parse(request) as { user: { id: string } };
       return {
@@ -706,6 +712,7 @@ export async function serverCommerceAdoptDontInventBehaviorFact(
 
   const fragmentFailure = runtime.mutation('product-grid/reload', {
     csrf: false,
+    csrfJustification: 'conformance fixture uses a non-browser caller',
     handler(input: unknown) {
       return input;
     },

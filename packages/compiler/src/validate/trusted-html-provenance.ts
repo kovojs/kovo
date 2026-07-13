@@ -22,7 +22,6 @@ import {
   compilerSetAdd,
   compilerSetForEach,
   compilerSetHas,
-  compilerStringTrim,
 } from '../compiler-security-intrinsics.js';
 import {
   expressionResolvesToTrustedHtmlBrand,
@@ -33,6 +32,7 @@ import {
 } from '../output-context-facts.js';
 import { propertyNameText } from '../scan/ast.js';
 import type { ComponentModuleModel } from '../scan/parse.js';
+import { isCompilerAuditText } from '../security/audit-text.js';
 
 /**
  * SPEC §9.1 (sink renderer) / §5.2 #10 (output safety) / §4.8 (trustedHtml/trustedUrl escape
@@ -1746,7 +1746,7 @@ function staticStringValue(
 function hasAuditedReason(call: ts.CallExpression): boolean {
   const metadata = call.arguments[1];
   if (metadata === undefined) return false;
-  if (ts.isStringLiteralLike(metadata)) return compilerStringTrim(metadata.text).length > 0;
+  if (ts.isStringLiteralLike(metadata)) return isCompilerAuditText(metadata.text);
   if (ts.isObjectLiteralExpression(metadata)) {
     const propertyLength = compilerArrayLength(metadata.properties, 'Trust metadata properties');
     for (let index = 0; index < propertyLength; index += 1) {
@@ -1764,7 +1764,7 @@ function hasAuditedReason(call: ts.CallExpression): boolean {
         identifierName(property.name) === AUDITED_REASON_PROPERTY &&
         ts.isStringLiteralLike(property.initializer)
       ) {
-        return compilerStringTrim(property.initializer.text).length > 0;
+        return isCompilerAuditText(property.initializer.text);
       }
     }
   }

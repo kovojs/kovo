@@ -133,6 +133,7 @@ describe('@kovojs/test SQLite harness integration', () => {
 
       const addToCart = mutation('cart/add', {
         csrf: false,
+        csrfJustification: 'test fixture uses a non-browser caller',
         input: s.object({ productId: s.string(), quantity: s.number().int().min(1) }),
         handler(input, request: { db: SqliteTestDb }) {
           request.db.write('cart_items', {
@@ -258,6 +259,7 @@ describe('@kovojs/test SQLite harness integration', () => {
   it('rejects raw better-sqlite3 handle SQL strings before touch graph verification', async () => {
     const cartMutation = mutation('cart/add', {
       csrf: false,
+      csrfJustification: 'test fixture uses a non-browser caller',
       input: s.object({ productId: s.string() }),
       handler(input, request: { db: Pick<SqliteTestDb, 'sqlite'> }) {
         request.db.sqlite
@@ -298,6 +300,7 @@ describe('@kovojs/test SQLite harness integration', () => {
   it('rejects parser-rejected prepared SQLite raw strings before execution-time verification', async () => {
     const cartMutation = mutation('cart/add', {
       csrf: false,
+      csrfJustification: 'test fixture uses a non-browser caller',
       input: s.object({ productId: s.string() }),
       handler(input, request: { db: Pick<SqliteTestDb, 'sqlite'> }) {
         request.db.sqlite
@@ -338,6 +341,7 @@ describe('@kovojs/test SQLite harness integration', () => {
   it('rejects raw SQLite trigger SQL strings before touch graph verification', async () => {
     const deleteProduct = mutation('product/delete', {
       csrf: false,
+      csrfJustification: 'test fixture uses a non-browser caller',
       input: s.object({ productId: s.string() }),
       async handler(input, request: { db: Pick<SqliteTestDb, 'exec'> }) {
         await request.db.exec(`delete from products where id = '${input.productId}'`);
@@ -388,6 +392,7 @@ describe('@kovojs/test SQLite harness integration', () => {
   it('rejects raw prepared SQLite trigger SQL strings before execution-time verification', async () => {
     const repriceProduct = mutation('product/reprice', {
       csrf: false,
+      csrfJustification: 'test fixture uses a non-browser caller',
       input: s.object({ productId: s.string() }),
       handler(input, request: { db: Pick<SqliteTestDb, 'sqlite'> }) {
         request.db.sqlite
@@ -440,6 +445,7 @@ describe('@kovojs/test SQLite harness integration', () => {
   it('verifies SQLite trigger fingerprint side effects when row counts do not change', async () => {
     const repriceProduct = mutation('product/reprice', {
       csrf: false,
+      csrfJustification: 'test fixture uses a non-browser caller',
       input: s.object({ productId: s.string() }),
       async handler(input, request: { db: Pick<SqliteTestDb, 'exec'> }) {
         await request.db.exec(`update products set price = 20 where id = '${input.productId}'`);

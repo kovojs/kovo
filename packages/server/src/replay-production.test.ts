@@ -45,6 +45,7 @@ const egressDisabled = {
 function declaredMutation() {
   return mutation('receipt/write', {
     csrf: false,
+    csrfJustification: 'test fixture uses a non-browser caller',
     handler(input) {
       return input;
     },
