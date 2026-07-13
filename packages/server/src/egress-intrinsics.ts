@@ -39,7 +39,9 @@ const nativeNumberIsInteger = NativeNumber.isInteger;
 const nativeNumberToString = NativeNumber.prototype.toString;
 const nativeObjectDefineProperty = NativeObject.defineProperty;
 const nativeObjectGetOwnPropertyDescriptor = NativeObject.getOwnPropertyDescriptor;
+const nativeObjectIs = NativeObject.is;
 const nativeParseInt = globalThis.parseInt;
+const nativeReflectGet = NativeReflect.get;
 const nativeRegExpExec = globalThis.RegExp.prototype.exec;
 const nativeSetAdd = NativeSet.prototype.add;
 const nativeSetDelete = NativeSet.prototype.delete;
@@ -182,6 +184,15 @@ function capturedControlsAreSound(): boolean {
     commitEgressArrayItems(mutable, ['b'], 'egress control probe');
     apply(nativeArraySplice, mutable, [0, 1, 'c']);
     if (mutable.length !== 2 || mutable[0] !== 'c' || mutable[1] !== 'b') return false;
+
+    const socketOptions = { path: '/tmp/kovo-control.sock' };
+    if (
+      apply(nativeReflectGet, NativeReflect, [socketOptions, 'path', socketOptions]) !==
+        '/tmp/kovo-control.sock' ||
+      apply(nativeObjectIs, NativeObject, [0 / 0, 0 / 0]) !== true
+    ) {
+      return false;
+    }
 
     if (
       apply(nativeStringTrim, '  Host.Example.  ', []) !== 'Host.Example.' ||
@@ -396,6 +407,11 @@ export function egressObjectDefineProperty<T extends object>(
   return apply(nativeObjectDefineProperty, NativeObject, [value, property, descriptor]);
 }
 
+export function egressObjectIs(left: unknown, right: unknown): boolean {
+  assertEgressIntrinsics();
+  return apply(nativeObjectIs, NativeObject, [left, right]);
+}
+
 export function egressParseInt(value: string, radix: number): number {
   assertEgressIntrinsics();
   return apply(nativeParseInt, undefined, [value, radix]);
@@ -409,6 +425,15 @@ export function egressRegExpExec(expression: RegExp, value: string): RegExpExecA
 export function egressRegExpTest(expression: RegExp, value: string): boolean {
   assertEgressIntrinsics();
   return apply<RegExpExecArray | null>(nativeRegExpExec, expression, [value]) !== null;
+}
+
+export function egressReflectGet(
+  value: object,
+  property: PropertyKey,
+  receiver: unknown = value,
+): unknown {
+  assertEgressIntrinsics();
+  return apply(nativeReflectGet, NativeReflect, [value, property, receiver]);
 }
 
 export function egressRequest(input: RequestInfo | URL, init?: RequestInit): Request {

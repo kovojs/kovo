@@ -23,7 +23,9 @@ import {
   egressNumberIsInteger,
   egressNumberToString,
   egressObjectDefineProperty,
+  egressObjectIs,
   egressParseInt,
+  egressReflectGet,
   egressRegExpTest,
   egressRequest,
   egressRequestUrl,
@@ -120,7 +122,11 @@ export class EgressBlockedError extends Error {
   /** Coarse reason class for audit. */
   readonly classification: PrivateAddressClass;
   /** Which egress posture rejected the destination. */
-  readonly reason: 'private-network' | 'destination-allowlist' | 'missing-floor';
+  readonly reason:
+    | 'private-network'
+    | 'destination-allowlist'
+    | 'missing-floor'
+    | 'unix-domain-socket';
   /** Suggested HTTP status for adapters that surface this on the wire (SPEC §9.5). */
   readonly status = 502;
 
@@ -129,7 +135,12 @@ export class EgressBlockedError extends Error {
     resolvedIp?: string | undefined;
     classification: PrivateAddressClass;
     metadata?: boolean;
-    reason?: 'private-network' | 'destination-allowlist' | 'missing-floor' | undefined;
+    reason?:
+      | 'private-network'
+      | 'destination-allowlist'
+      | 'missing-floor'
+      | 'unix-domain-socket'
+      | undefined;
   }) {
     const where =
       args.resolvedIp && args.resolvedIp !== egressStringSplit(args.destination, ':')[0]
@@ -140,6 +151,10 @@ export class EgressBlockedError extends Error {
     if (reason === 'missing-floor') {
       remediation =
         'Install createApp({ egress }) / installEgressFloor() before invoking Kovo runtime egress.';
+    } else if (reason === 'unix-domain-socket') {
+      remediation =
+        'Unix-domain sockets are default-denied because they can reach local privileged services; ' +
+        'expose an explicitly governed TCP endpoint instead.';
     } else if (reason === 'destination-allowlist') {
       remediation = 'Add the exact origin to createApp({ egress: { allowDestinations: [...] } }).';
     } else if (args.metadata) {
@@ -1317,6 +1332,7 @@ interface AgentRequestOptions {
   port?: number | string;
   defaultPort?: number | string;
   protocol?: string;
+  socketPath?: string;
   [key: string]: unknown;
 }
 
@@ -1332,8 +1348,8 @@ type AgentSocket = net.Socket & { remotePort?: number };
  *   - A `Worker`/`child_process` does NOT inherit this monkeypatch; each worker bootstrap must
  *     re-install (see {@link installEgressFloor}).
  *   - Native addons / FFI that open sockets without going through `net` are not seen.
- *   - A Unix-domain-socket connect (`path`, no host) is allowed through (no IP to classify);
- *     SSRF to a metadata IP cannot ride a UDS, so this is safe for the threat model.
+ *   - Unix-domain-socket connects are denied because path-only dials can reach local privileged
+ *     HTTP services without presenting an IP address to the classifier.
  */
 export function installNetConnectFloor(
   policy: EgressPolicy,
@@ -1359,8 +1375,12 @@ export function installNetConnectFloor(
     const activePolicy = state.policy;
 
     const options = normalizeConnectOptions(args);
+    if (options !== null && stableConnectTargetValue(options, 'path') != null) {
+      throw unixDomainSocketBlocked();
+    }
     if (!options || options.host === undefined || options.host === '') {
-      // Port/path-only or unparseable form (e.g. a UDS connect) — nothing to classify.
+      // Unparseable forms retain Node's own argument validation. Recognized path-only forms were
+      // denied above before the original connect function could open a local service socket.
       return egressApply(original, this, args);
     }
     const host = options.host;
@@ -1485,6 +1505,9 @@ function evaluateHttpAgentRequest(
   options: AgentRequestOptions,
   policy: EgressPolicy,
 ): EgressBlockedError | null {
+  if (stableConnectTargetValue(options, 'socketPath') != null) {
+    return unixDomainSocketBlocked();
+  }
   const host = egressString(options.hostname ?? options.host ?? 'localhost');
   const port = egressNumber(
     options.port ?? options.defaultPort ?? (options.protocol === 'https:' ? 443 : 80),
@@ -1622,7 +1645,7 @@ function applyNetConnectHardening(
  *     This is the form raw `node:http`/`node:https` (and AWS IMDS via @smithy) actually take,
  *     so we MUST unwrap it or the floor reads `host === undefined` and fails open.
  *   - `connect(port[, host][, cb])` — synthesize an options object.
- *   - `connect(path[, cb])` — UDS; nothing to classify.
+ *   - `connect(path[, cb])` — synthesize a path object so the sink can deny UDS.
  *
  * Mutating the returned options object in place propagates our injected `lookup`.
  */
@@ -1655,8 +1678,23 @@ function normalizeConnectOptions(args: unknown[]): ConnectOptions | null {
     );
     return synthesized;
   }
-  // (path, cb) — UDS, nothing to classify.
-  return null;
+  // (path, cb) — preserve a recognized UDS target for the default-deny sink above.
+  return typeof first === 'string' ? { path: first } : null;
+}
+
+function stableConnectTargetValue(options: object, property: 'path' | 'socketPath'): unknown {
+  const before = egressReflectGet(options, property, options);
+  const after = egressReflectGet(options, property, options);
+  if (!egressObjectIs(before, after)) throw unixDomainSocketBlocked();
+  return before;
+}
+
+function unixDomainSocketBlocked(): EgressBlockedError {
+  return new EgressBlockedError({
+    classification: 'special-use',
+    destination: 'unix-domain-socket',
+    reason: 'unix-domain-socket',
+  });
 }
 
 /**

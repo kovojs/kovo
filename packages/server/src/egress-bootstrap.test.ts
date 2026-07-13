@@ -1,5 +1,8 @@
 import http from 'node:http';
 import net, { type AddressInfo } from 'node:net';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Agent, setGlobalDispatcher } from 'undici';
 
@@ -231,6 +234,87 @@ describe('egress bootstrap: dual-layer install + self-probe', () => {
     await expect(fetch(`http://127.0.0.1:${port}/`)).rejects.toBeDefined();
 
     server.close();
+  });
+
+  it('default-denies raw node:net Unix-domain-socket connects', async () => {
+    if (process.platform === 'win32') return;
+    const root = mkdtempSync(join(tmpdir(), 'kovo-egress-uds-net-'));
+    const socketPath = join(root, 'http.sock');
+    const server = http.createServer((_req, res) => res.end('uds bypass'));
+    const nativeReflectGet = Reflect.get;
+    let poisonedPathReads = 0;
+    await new Promise<void>((resolve) => server.listen(socketPath, resolve));
+
+    try {
+      createApp({ egress: { allowInternal: [] } });
+      teardown = activeEgressFloor()?.uninstall;
+      Reflect.get = function poisonedGet(target, property, receiver) {
+        if (property === 'path') poisonedPathReads += 1;
+        return arguments.length < 3
+          ? nativeReflectGet(target, property)
+          : nativeReflectGet(target, property, receiver);
+      };
+      const error = await new Promise<unknown>((resolve) => {
+        try {
+          const socket = net.connect(socketPath);
+          socket.once('connect', () => {
+            socket.destroy();
+            resolve(undefined);
+          });
+          socket.once('error', resolve);
+        } catch (caught) {
+          resolve(caught);
+        }
+      });
+
+      expect(error).toMatchObject({
+        name: EGRESS_BLOCKED_ERROR_NAME,
+        reason: 'unix-domain-socket',
+      });
+      expect(poisonedPathReads).toBe(0);
+    } finally {
+      Reflect.get = nativeReflectGet;
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it('default-denies node:http socketPath requests', async () => {
+    if (process.platform === 'win32') return;
+    const root = mkdtempSync(join(tmpdir(), 'kovo-egress-uds-http-'));
+    const socketPath = join(root, 'http.sock');
+    let requests = 0;
+    const server = http.createServer((_req, res) => {
+      requests += 1;
+      res.end('uds bypass');
+    });
+    await new Promise<void>((resolve) => server.listen(socketPath, resolve));
+
+    try {
+      createApp({ egress: { allowInternal: [] } });
+      teardown = activeEgressFloor()?.uninstall;
+      const error = await new Promise<unknown>((resolve) => {
+        try {
+          const request = http.request({ method: 'GET', path: '/', socketPath }, (response) => {
+            response.resume();
+            response.once('end', () => resolve(undefined));
+          });
+          request.once('error', resolve);
+          request.end();
+        } catch (caught) {
+          resolve(caught);
+        }
+      });
+
+      expect(error).toMatchObject({
+        name: EGRESS_BLOCKED_ERROR_NAME,
+        reason: 'unix-domain-socket',
+      });
+      expect(requests).toBe(0);
+    } finally {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+      rmSync(root, { force: true, recursive: true });
+    }
   });
 
   it('permits a framework-registered database endpoint after the floor is installed', async () => {
