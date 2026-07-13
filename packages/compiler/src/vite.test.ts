@@ -1553,7 +1553,7 @@ export const RegionB = component({
     );
   });
 
-  it('caches repeated transforms by source hash and compile context', async () => {
+  it('caches repeated transforms in memory without signing injected compiler output', async () => {
     const compileComponentModule = vi.fn(({ source }: { source: string }) => ({
       dependencyFootprint: {},
       files: [{ kind: 'server', source: `export const sourceLength = ${source.length};` }],
@@ -1581,15 +1581,15 @@ export const RegionB = component({
       const secondPlugin = createKovoVitePlugin(secondCompile);
       secondPlugin.configResolved?.({ root } as never);
       expect((await secondPlugin.transform('component(', 'src/cart-badge.tsx'))?.code).toBe(
-        'export const sourceLength = 10;',
+        'export const sourceLength = -1;',
       );
-      expect(secondCompile).not.toHaveBeenCalled();
+      expect(secondCompile).toHaveBeenCalledTimes(1);
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
   });
 
-  it('reuses persistent cache entries across restarts when only facts outside the footprint change', async () => {
+  it('does not persist injected compiler footprint outputs across plugin instances', async () => {
     const root = mkdtempSync(join(tmpdir(), 'kovo-vite-persistent-footprint-cache-'));
     const cartInput = [
       {
@@ -1655,9 +1655,9 @@ export const RegionB = component({
       secondPlugin.configResolved?.({ root } as never);
 
       expect((await secondPlugin.transform('component(', 'src/cart-badge.tsx'))?.code).toBe(
-        `export const cartInput = ${JSON.stringify(cartInput)};`,
+        'export const cacheMiss = true;',
       );
-      expect(secondCompile).not.toHaveBeenCalled();
+      expect(secondCompile).toHaveBeenCalledTimes(1);
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

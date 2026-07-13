@@ -1,12 +1,7 @@
 import type { CompileComponentOptions, CompileResult } from '@kovojs/compiler';
 import {
-  CompileCache,
-  compileCacheKey,
-  compileComponentCacheKeyInput,
-  persistentCompileCacheDir,
-  readPersistentCompileCacheEntry,
+  compileComponentModuleCached,
   snapshotCompileComponentOptions,
-  writePersistentCompileCacheEntry,
 } from '@kovojs/compiler/internal';
 import type * as CompilerInternal from '@kovojs/compiler/internal';
 import type { DiagnosticCode, DiagnosticSeverity } from '@kovojs/core';
@@ -37,8 +32,6 @@ import {
   stableValue,
   writeUsageError,
 } from '../shared.js';
-
-const cliCompileComponentCache = new CompileCache<CompileResult>();
 
 /** @internal Input shape for the internal `compile_component` MCP tool. */
 export interface CompileComponentV1Input {
@@ -178,24 +171,7 @@ export async function compileCachedComponentModule(
   // compiler module import yields, making cache authorization and emitted bytes observe a later
   // carrier than the one supplied at invocation (SPEC.md §5.2.1).
   options = snapshotCompileComponentOptions(options);
-  const { compileComponentModule } = await import('@kovojs/compiler');
-  if (!cache) return compileComponentModule(options);
-
-  const cacheInput = compileComponentCacheKeyInput(options);
-  const cacheKey = compileCacheKey(cacheInput);
-  const cacheDir = persistentCompileCacheDir(options.packagePrefixDiscoveryRoot ?? process.cwd());
-  const persistent = await readPersistentCompileCacheEntry<CompileResult>(cacheDir, cacheKey);
-  if (persistent) return persistent;
-
-  const result = await cliCompileComponentCache.getOrCreate(cacheInput, () =>
-    compileComponentModule(options),
-  );
-  await writePersistentCompileCacheEntry(cacheDir, {
-    cacheKey,
-    footprint: result.dependencyFootprint,
-    result,
-  });
-  return result;
+  return compileComponentModuleCached(options, cache);
 }
 
 function compileComponentOptions(input: CompileComponentV1Input): CompileComponentOptions {

@@ -2,10 +2,13 @@ import { join as builtinJoin } from 'node:path';
 
 import { canonicalJson } from './canonical-json.js';
 import { compilerBuildCacheIdentity } from './cache-identity.js';
+import { compileComponentModule } from './compile.js';
+import { snapshotCompileComponentOptions } from './compile-options.js';
 import {
   compilerArrayAppend,
   compilerArrayIsArray,
   compilerCreateMap,
+  compilerCreateWeakMap,
   compilerHmacSha256Hex,
   compilerJsonParse,
   compilerMapGet,
@@ -21,19 +24,85 @@ import {
   compilerStringEndsWith,
   compilerStringSlice,
   compilerUtf8Text,
+  compilerWeakMapGet,
+  compilerWeakMapSet,
 } from './compiler-security-intrinsics.js';
 import {
   compileCacheKey,
+  compileComponentCacheKeyInput,
   narrowCompileCacheKeyInput,
   type CompileCacheKeyInput,
 } from './compile-cache.js';
-import type { CompileDependencyFootprint } from './types.js';
+import type {
+  CompileComponentOptions,
+  CompileDependencyFootprint,
+  CompileResult,
+} from './types.js';
 
 const join = builtinJoin;
 
 const persistentCompileCacheFormat = 'kovo-compile-cache/v4';
 const persistentCompilerBuildIdentityRef = `builds/${compilerRandomUuid()}.json`;
 const persistentCompileCacheMacKey = compilerRandomUuid();
+
+interface CompilerProducedCacheAuthority {
+  readonly exactCacheKey: string;
+  readonly footprintCacheKey?: string;
+  readonly footprintPreimage: string;
+  readonly resultPreimage: string;
+}
+
+// This authority and the signer live in one already-evaluated module. Never delegate the decision
+// through a late dynamic import: authored config can install a Node resolution hook and substitute
+// the imported verifier after this module has captured its HMAC key (SPEC.md §2 / §5.2.1).
+const compilerProducedCacheAuthorities = compilerCreateWeakMap<
+  CompileResult,
+  CompilerProducedCacheAuthority
+>();
+
+/** @internal Compile and bind an exact result/options preimage for the cache signer. */
+export function compileComponentModuleForPersistentCache(
+  rawOptions: CompileComponentOptions,
+): CompileResult {
+  const options = snapshotCompileComponentOptions(rawOptions);
+  const result = compileComponentModule(options);
+  const exactCacheKey = compileCacheKey(compileComponentCacheKeyInput(options));
+  const footprint = result.dependencyFootprint;
+  compilerWeakMapSet(compilerProducedCacheAuthorities, result, {
+    exactCacheKey,
+    ...(footprint === undefined
+      ? {}
+      : {
+          footprintCacheKey: compileCacheKey(compileComponentCacheKeyInput(options, footprint)),
+        }),
+    footprintPreimage: canonicalJson(footprint),
+    resultPreimage: canonicalJson(result),
+  });
+  return result;
+}
+
+function compilerProducedResultAuthorizesPersistentCacheEntry(
+  result: unknown,
+  cacheKey: unknown,
+  footprint: unknown,
+): boolean {
+  if (typeof result !== 'object' || result === null || typeof cacheKey !== 'string') return false;
+  const authority = compilerWeakMapGet(compilerProducedCacheAuthorities, result as CompileResult);
+  if (
+    authority === undefined ||
+    (cacheKey !== authority.exactCacheKey && cacheKey !== authority.footprintCacheKey)
+  ) {
+    return false;
+  }
+  try {
+    return (
+      canonicalJson(footprint) === authority.footprintPreimage &&
+      canonicalJson(result) === authority.resultPreimage
+    );
+  } catch {
+    return false;
+  }
+}
 
 /** @internal On-disk manifest entry for one content-addressed compile result. */
 export interface PersistentCompileCacheEntry {
@@ -248,10 +317,27 @@ export async function writePersistentCompileCacheEntry(
     footprint: CompileDependencyFootprint;
     result: unknown;
   },
-): Promise<PersistentCompileCacheEntry> {
+): Promise<PersistentCompileCacheEntry | null> {
+  // SPEC.md §2 / §5.2.1: config/app code can reach this process and may even locate private
+  // distribution chunks. Only the exact result identity, bytes, footprint, and cache key bound by
+  // the real compiler in this module are eligible for signing. Injected/test compilers remain
+  // in-memory, and no late resolver-controlled import participates in this decision.
+  const cacheKey = compilerOwnDataValue(entry, 'cacheKey', 'Persistent compiler cache write');
+  const footprint = compilerOwnDataValue(entry, 'footprint', 'Persistent compiler cache write');
+  const result = compilerOwnDataValue(entry, 'result', 'Persistent compiler cache write');
+  if (!compilerProducedResultAuthorizesPersistentCacheEntry(result, cacheKey, footprint)) {
+    return null;
+  }
+  // Capture every signed byte before the next await. An authored caller can retain and mutate the
+  // result object while filesystem setup yields; persistence must use the exact preimages just
+  // validated against the compiler's WeakMap authority, never re-read caller-owned carriers.
+  const resultJson = canonicalJson(result);
+  const persistentFootprint = compilerJsonParse(
+    canonicalJson(footprint),
+  ) as CompileDependencyFootprint;
+  if (typeof cacheKey !== 'string') return null;
   const fileSystem = await persistentCacheFileSystem(cacheDir);
   await fileSystem.ensureDirectory();
-  const resultJson = canonicalJson(entry.result);
   const resultRef = `blobs/${sha256(resultJson)}.json`;
   await fileSystem.writeFile(resultRef, resultJson);
   const compilerBuildIdentity = compilerBuildCacheIdentity();
@@ -259,9 +345,9 @@ export async function writePersistentCompileCacheEntry(
 
   const unsignedEntry = {
     artifactRefs: { result: resultRef },
-    cacheKey: entry.cacheKey,
+    cacheKey,
     compilerBuildIdentityRef: persistentCompilerBuildIdentityRef,
-    footprint: entry.footprint,
+    footprint: persistentFootprint,
     resultPreimage: resultJson,
     updatedAtMs: compilerNowMs(),
   };
@@ -270,7 +356,7 @@ export async function writePersistentCompileCacheEntry(
     integrity: compilerHmacSha256Hex(persistentCompileCacheMacKey, canonicalJson(unsignedEntry)),
   };
   await fileSystem.writeFile(
-    `entries/${sha256(entry.cacheKey)}.json`,
+    `entries/${sha256(cacheKey)}.json`,
     `${canonicalJson(manifestEntry)}\n`,
   );
   // Entry files are authoritative. Keep the compatibility manifest compact instead of duplicating

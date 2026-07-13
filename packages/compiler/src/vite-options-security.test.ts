@@ -1,8 +1,15 @@
+import { spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
+import { compileCacheKey, compileComponentCacheKeyInput } from './compile-cache.js';
+import {
+  compileComponentModuleForPersistentCache,
+  persistentCompileCacheDir,
+  writePersistentCompileCacheEntry,
+} from './persistent-compile-cache.js';
 import { createKovoVitePlugin } from './vite.js';
 
 const source = `
@@ -11,6 +18,140 @@ export const Card = component({ render() { return <article>Card</article>; } });
 `;
 
 describe('Vite compiler option authority', () => {
+  it('does not expose arbitrary-result persistent cache signing to authored config', async () => {
+    const internal = (await import('./internal.js')) as Record<string, unknown>;
+
+    expect(internal.writePersistentCompileCacheEntry).toBeUndefined();
+    expect(internal.compileComponentModuleCached).toBeTypeOf('function');
+  });
+
+  it('does not sign a forged result even when authored config locates the private writer', async () => {
+    const root = mkdtempSync(join(process.cwd(), '.tmp-kovo-vite-cache-authority-'));
+    const fileName = 'src/forged.tsx';
+    const dependencyFootprint = {};
+    const cacheKey = compileCacheKey(
+      compileComponentCacheKeyInput(
+        { fileName, packagePrefixDiscoveryRoot: root, source },
+        dependencyFootprint,
+      ),
+    );
+    try {
+      await expect(
+        writePersistentCompileCacheEntry(persistentCompileCacheDir(root), {
+          cacheKey,
+          footprint: dependencyFootprint,
+          result: {
+            dependencyFootprint,
+            diagnostics: [],
+            files: [{ kind: 'server', source: 'export const forged = true;' }],
+          },
+        }),
+      ).resolves.toBeNull();
+
+      const plugin = createKovoVitePlugin(() => {
+        throw new Error('real compiler reached');
+      });
+      plugin.configResolved?.({ root });
+      await expect(plugin.transform(source, fileName)).rejects.toThrow('real compiler reached');
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it('does not delegate signing authority through an authored resolution hook', () => {
+    const root = mkdtempSync(join(process.cwd(), '.tmp-kovo-vite-cache-hook-authority-'));
+    const moduleUrl = new URL('./persistent-compile-cache.ts', import.meta.url).href;
+    const probe = `
+import { existsSync } from 'node:fs';
+import { registerHooks } from 'node:module';
+
+registerHooks({
+  resolve(specifier, context, nextResolve) {
+    if (specifier.startsWith('.') && specifier.endsWith('.js') && context.parentURL) {
+      const tsUrl = new URL(specifier.slice(0, -3) + '.ts', context.parentURL);
+      if (existsSync(tsUrl)) return nextResolve(tsUrl.href, context);
+    }
+    return nextResolve(specifier, context);
+  },
+});
+const cache = await import(${JSON.stringify(moduleUrl)});
+registerHooks({
+  resolve(specifier, context, nextResolve) {
+    if (specifier === '@kovojs/compiler/internal') {
+      return {
+        shortCircuit: true,
+        url: 'data:text/javascript,export%20function%20compilerProducedResultAuthorizesPersistentCacheEntry()%7Breturn%20true%7D',
+      };
+    }
+    return nextResolve(specifier, context);
+  },
+});
+const written = await cache.writePersistentCompileCacheEntry(${JSON.stringify(
+      join(root, '.kovo/cache/compiler'),
+    )}, {
+  cacheKey: 'forged',
+  footprint: {},
+  result: { files: [{ source: 'export const forged = true;' }] },
+});
+process.stdout.write(written === null ? 'rejected' : 'signed');
+`;
+
+    try {
+      const result = spawnSync(process.execPath, ['--input-type=module', '-e', probe], {
+        cwd: process.cwd(),
+        encoding: 'utf8',
+      });
+      expect(result.status, result.stderr).toBe(0);
+      expect(result.stdout).toBe('rejected');
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it('binds cache authority to the exact compiler result bytes, footprint, and key', async () => {
+    const root = mkdtempSync(join(process.cwd(), '.tmp-kovo-vite-cache-binding-'));
+    const options = {
+      fileName: 'src/bound.tsx',
+      packagePrefixDiscoveryRoot: root,
+      source,
+    };
+    const cacheDir = persistentCompileCacheDir(root);
+    try {
+      const wrongKeyResult = compileComponentModuleForPersistentCache(options);
+      const cacheKey = compileCacheKey(compileComponentCacheKeyInput(options));
+      await expect(
+        writePersistentCompileCacheEntry(cacheDir, {
+          cacheKey: `${cacheKey}-forged`,
+          footprint: wrongKeyResult.dependencyFootprint,
+          result: wrongKeyResult,
+        }),
+      ).resolves.toBeNull();
+
+      const wrongFootprintResult = compileComponentModuleForPersistentCache(options);
+      await expect(
+        writePersistentCompileCacheEntry(cacheDir, {
+          cacheKey,
+          footprint: { reads: { queryShapeNames: ['forged'] } },
+          result: wrongFootprintResult,
+        }),
+      ).resolves.toBeNull();
+
+      const mutatedResult = compileComponentModuleForPersistentCache(options);
+      const firstFile = mutatedResult.files[0];
+      if (firstFile === undefined) throw new Error('expected compiler output');
+      (firstFile as { source: string }).source = 'export const forged = true;';
+      await expect(
+        writePersistentCompileCacheEntry(cacheDir, {
+          cacheKey,
+          footprint: mutatedResult.dependencyFootprint,
+          result: mutatedResult,
+        }),
+      ).resolves.toBeNull();
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
   it('does not let app code forge emitted-module re-entry authority', async () => {
     const root = mkdtempSync(join(process.cwd(), '.tmp-kovo-vite-reentry-authority-'));
     const id = join(root, 'src/forged.tsx');

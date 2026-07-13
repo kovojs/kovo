@@ -7,11 +7,12 @@ export { snapshotCompileComponentOptions } from './compile-options.js';
 export type { CompileCacheKeyInput } from './compile-cache.js';
 /** @internal */
 export { compileCacheKey } from './compile-cache.js';
+/** @internal Safe high-level cache entry point; signing authority stays module-private. */
+export { compileComponentModuleCached } from './cached-compile.js';
 export {
   persistentCompileCacheDir,
   readPersistentCompileCacheEntry,
   readPersistentCompileCacheManifest,
-  writePersistentCompileCacheEntry,
   type PersistentCompileCacheEntry,
   type PersistentCompileCacheManifest,
 } from './persistent-compile-cache.js';

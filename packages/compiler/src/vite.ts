@@ -15,7 +15,7 @@ import {
 } from '@kovojs/core/internal/client-module-url';
 import { isDiagnosticCode } from '@kovojs/core/internal/diagnostics';
 
-import { CompileCache, compileCacheKey, compileComponentCacheKeyInput } from './compile-cache.js';
+import { CompileCache, compileComponentCacheKeyInput } from './compile-cache.js';
 import { snapshotCompileComponentOptions } from './compile-options.js';
 import { canonicalJson } from './canonical-json.js';
 import {
@@ -57,11 +57,6 @@ import {
   type CssAssetManifest,
   type CssAssetManifestOptions,
 } from './css.js';
-import {
-  persistentCompileCacheDir,
-  readPersistentCompileCacheEntryForInput,
-  writePersistentCompileCacheEntry,
-} from './persistent-compile-cache.js';
 import {
   allComponentOptionObjectEntries,
   parseComponentModule,
@@ -279,6 +274,7 @@ interface ViteCompileResult {
 }
 
 type MaybePromise<T> = Promise<T> | T;
+type ViteCompileComponentModule = (options: ViteCompileOptions) => MaybePromise<ViteCompileResult>;
 
 /**
  * Build a KovoVitePlugin bound to a given component-compile function, lowering authored
@@ -288,7 +284,16 @@ type MaybePromise<T> = Promise<T> | T;
  * substituted in tests (SPEC.md §5.2). Public plugin factory.
  */
 export function createKovoVitePlugin(
-  compileComponentModule: (options: ViteCompileOptions) => MaybePromise<ViteCompileResult>,
+  compileComponentModule: ViteCompileComponentModule,
+  options: KovoVitePluginOptions = {},
+): KovoVitePlugin {
+  return createFrameworkKovoVitePlugin(compileComponentModule, compileComponentModule, options);
+}
+
+/** @internal Bind distinct cache-authorized and cold compiler entry points for framework runners. */
+export function createFrameworkKovoVitePlugin(
+  compileComponentModule: ViteCompileComponentModule,
+  compileComponentModuleWithoutCache: ViteCompileComponentModule,
   options: KovoVitePluginOptions = {},
 ): KovoVitePlugin {
   options = snapshotKovoVitePluginOptions(options);
@@ -353,7 +358,14 @@ export function createKovoVitePlugin(
       return resolvedId;
     },
     load(id: string): MaybePromise<null | string> {
-      return loadViteClientModule(compileComponentModule, compileCache, options, root, id);
+      return loadViteClientModule(
+        compileComponentModule,
+        compileComponentModuleWithoutCache,
+        compileCache,
+        options,
+        root,
+        id,
+      );
     },
     transform(source: string, id: string) {
       const fileName = viteComponentFileName(id, root);
@@ -402,6 +414,7 @@ export function createKovoVitePlugin(
       };
       const result = compileCachedViteComponentModule(
         compileComponentModule,
+        compileComponentModuleWithoutCache,
         compileCache,
         options,
         root,
@@ -490,6 +503,7 @@ export function createKovoVitePlugin(
       try {
         result = await compileCachedViteComponentModule(
           compileComponentModule,
+          compileComponentModuleWithoutCache,
           compileCache,
           options,
           root,
@@ -762,7 +776,8 @@ function matchesViteFilter(
 }
 
 async function compileCachedViteComponentModule(
-  compileComponentModule: (options: ViteCompileOptions) => MaybePromise<ViteCompileResult>,
+  compileComponentModule: ViteCompileComponentModule,
+  compileComponentModuleWithoutCache: ViteCompileComponentModule,
   cache: CompileCache<ViteCompileResult>,
   options: KovoVitePluginOptions,
   root: string,
@@ -788,27 +803,12 @@ async function compileCachedViteComponentModule(
     source,
   });
   if (options.cache === false) {
-    return await compileComponentModule(compileOptions);
+    return await compileComponentModuleWithoutCache(compileOptions);
   }
   const cacheInput = compileComponentCacheKeyInput(compileOptions);
-  const cacheDir = persistentCompileCacheDir(root);
-  const persistent = await readPersistentCompileCacheEntryForInput<ViteCompileResult>(
-    cacheDir,
-    cacheInput,
-  );
-  if (persistent) return persistent;
-  const result = await cache.getOrCreate(cacheInput, () => compileComponentModule(compileOptions));
-  if (result.dependencyFootprint) {
-    const cacheKey = compileCacheKey(
-      compileComponentCacheKeyInput(compileOptions, result.dependencyFootprint),
-    );
-    await writePersistentCompileCacheEntry(cacheDir, {
-      cacheKey,
-      footprint: result.dependencyFootprint,
-      result,
-    });
-  }
-  return result;
+  // Framework runners inject the high-level cache-authorized compiler here. Public/test injected
+  // compilers receive only this private per-plugin memory cache and can never reach the signer.
+  return cache.getOrCreate(cacheInput, () => compileComponentModule(compileOptions));
 }
 
 function snapshotKovoVitePluginOptions(value: KovoVitePluginOptions): KovoVitePluginOptions {
@@ -1065,7 +1065,8 @@ function resolveViteClientModuleId(
 }
 
 function loadViteClientModule(
-  compileComponentModule: (options: ViteCompileOptions) => MaybePromise<ViteCompileResult>,
+  compileComponentModule: ViteCompileComponentModule,
+  compileComponentModuleWithoutCache: ViteCompileComponentModule,
   cache: CompileCache<ViteCompileResult>,
   options: KovoVitePluginOptions,
   root: string,
@@ -1084,6 +1085,7 @@ function loadViteClientModule(
 
   const result = compileCachedViteComponentModule(
     compileComponentModule,
+    compileComponentModuleWithoutCache,
     cache,
     options,
     root,

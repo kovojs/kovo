@@ -901,7 +901,7 @@ export default createApp({
     }
   }, 90_000);
 
-  it('keeps KV418 closed when app evaluation selectively replaces the mutation Array.map', async () => {
+  it('fails the verifier boundary when app evaluation selectively replaces the mutation Array.map', async () => {
     const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-mutation-map-poison-'));
     const appPath = join(root, 'app.mjs');
     const outDir = join(root, 'dist');
@@ -962,7 +962,10 @@ export default app;
       ]);
       const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
       expect(exitCode, errorOutput).toBe(1);
-      expect(errorOutput).toContain('ERROR KV418 MUTATION auth/map-poison');
+      // The realm-integrity gate now rejects the poisoned receiver before KV418 classification.
+      expect(errorOutput).toContain(
+        'ERROR SECURITY Kovo verifier security boundary rejected unstable input or changed controls.',
+      );
       expect(errorOutput).not.toContain('CHECK ok');
     } finally {
       Array.prototype.map = nativeMap;
@@ -973,7 +976,7 @@ export default app;
     }
   }, 90_000);
 
-  it('classifies Cookie authority before app code can replace String.toLowerCase', async () => {
+  it('fails the verifier boundary after app code replaces String.toLowerCase', async () => {
     const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-cookie-lowercase-poison-'));
     const appPath = join(root, 'app.mjs');
     const outDir = join(root, 'dist');
@@ -1018,7 +1021,10 @@ export default createApp({ mutations: [unsafe] });
       ]);
       const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
       expect(exitCode, errorOutput).toBe(1);
-      expect(errorOutput).toContain('ERROR KV418 MUTATION auth/lowercase-poison');
+      // The realm-integrity gate rejects the poisoned classifier control before KV418 runs.
+      expect(errorOutput).toContain(
+        'ERROR SECURITY Kovo verifier security boundary rejected unstable input or changed controls.',
+      );
       expect(errorOutput).not.toContain('CHECK ok');
     } finally {
       String.prototype.toLowerCase = nativeToLowerCase;

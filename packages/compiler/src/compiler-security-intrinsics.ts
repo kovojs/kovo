@@ -30,6 +30,7 @@ const NativeReflect = globalThis.Reflect;
 const NativeSet = globalThis.Set;
 const NativeString = globalThis.String;
 const NativeTypeError = globalThis.TypeError;
+const NativeWeakMap = globalThis.WeakMap;
 const nativeArrayIsArray = NativeArray.isArray;
 const nativeArrayJoin = NativeArray.prototype.join;
 const nativeBufferFrom = BuiltinBuffer.from;
@@ -72,6 +73,8 @@ const nativeStringStartsWith = NativeString.prototype.startsWith;
 const nativeStringToLowerCase = NativeString.prototype.toLowerCase;
 const nativeStringToUpperCase = NativeString.prototype.toUpperCase;
 const nativeStringTrim = NativeString.prototype.trim;
+const nativeWeakMapGet = NativeWeakMap.prototype.get;
+const nativeWeakMapSet = NativeWeakMap.prototype.set;
 const nativeStatsIsDirectory = BuiltinStats.prototype.isDirectory;
 const nativeStatsIsFile = BuiltinStats.prototype.isFile;
 
@@ -168,6 +171,10 @@ function compilerBootstrapSelfCheckPasses(): boolean {
     apply(nativeSetAdd, set, ['safe']);
     if (apply(nativeSetHas, set, ['safe']) !== true) return false;
     if (apply(nativeSetHas, set, ['missing']) !== false) return false;
+    const weakMap = new NativeWeakMap<object, string>();
+    const weakMapKey = {};
+    apply(nativeWeakMapSet, weakMap, [weakMapKey, 'safe']);
+    if (apply(nativeWeakMapGet, weakMap, [weakMapKey]) !== 'safe') return false;
     if (apply(nativeMathTrunc, NativeMath, [1.9]) !== 1) return false;
     const keys = apply<string[]>(nativeObjectKeys, NativeObject, [{ b: 1, a: 2 }]);
     if (!(keys.length === 2 && keys[0] === 'b' && keys[1] === 'a')) return false;
@@ -496,6 +503,11 @@ export function compilerCreateSet<Value>(): Set<Value> {
   return new NativeSet<Value>();
 }
 
+export function compilerCreateWeakMap<Key extends object, Value>(): WeakMap<Key, Value> {
+  assertCompilerSecurityIntrinsics();
+  return new NativeWeakMap<Key, Value>();
+}
+
 export function compilerMapDelete<Key, Value>(map: Map<Key, Value>, key: Key): boolean {
   assertCompilerSecurityIntrinsics();
   return apply(nativeMapDelete, map, [key]);
@@ -527,6 +539,23 @@ export function compilerSetForEach<Value>(
 ): void {
   assertCompilerSecurityIntrinsics();
   apply(nativeSetForEach, set, [callback]);
+}
+
+export function compilerWeakMapGet<Key extends object, Value>(
+  map: WeakMap<Key, Value>,
+  key: Key,
+): Value | undefined {
+  assertCompilerSecurityIntrinsics();
+  return apply(nativeWeakMapGet, map, [key]);
+}
+
+export function compilerWeakMapSet<Key extends object, Value>(
+  map: WeakMap<Key, Value>,
+  key: Key,
+  value: Value,
+): void {
+  assertCompilerSecurityIntrinsics();
+  apply(nativeWeakMapSet, map, [key, value]);
 }
 
 export function compilerObservePromise<Value>(

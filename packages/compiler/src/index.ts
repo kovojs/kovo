@@ -1,5 +1,10 @@
 import { compileComponentModule } from './compile.js';
-import { createKovoVitePlugin, type KovoVitePlugin, type KovoVitePluginOptions } from './vite.js';
+import { compileComponentModuleCached } from './cached-compile.js';
+import {
+  createFrameworkKovoVitePlugin,
+  type KovoVitePlugin,
+  type KovoVitePluginOptions,
+} from './vite.js';
 
 export type { QueryPlanBootstrapInput, QueryPlanBootstrapOptions } from './emit/bootstrap.js';
 export { emitQueryPlanBootstrapModule } from './emit/bootstrap.js';
@@ -67,5 +72,9 @@ export {
  * of `@kovojs/compiler`.
  */
 export function kovoVitePlugin(options: KovoVitePluginOptions = {}): KovoVitePlugin {
-  return createKovoVitePlugin(compileComponentModule, options);
+  return createFrameworkKovoVitePlugin(
+    (compileOptions) => compileComponentModuleCached(compileOptions),
+    compileComponentModule,
+    options,
+  );
 }

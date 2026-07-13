@@ -20,15 +20,21 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as cacheIdentity from './cache-identity.js';
 import { compileCacheKey, compileComponentCacheKeyInput } from './compile-cache.js';
 import {
+  compileComponentModuleForPersistentCache,
   persistentCompileCacheDir,
   readPersistentCompileCacheEntry,
   readPersistentCompileCacheEntryForInput,
   readPersistentCompileCacheManifest,
   writePersistentCompileCacheEntry,
 } from './persistent-compile-cache.js';
-import type { CompileDependencyFootprint } from './types.js';
+import type {
+  CompileComponentOptions,
+  CompileDependencyFootprint,
+  CompileResult,
+} from './types.js';
 
 const tempRoots: string[] = [];
+const cacheKeysByResult = new WeakMap<CompileResult, string>();
 
 afterEach(async () => {
   vi.restoreAllMocks();
@@ -43,37 +49,34 @@ describe('persistent compile cache format', () => {
 
   it('writes a versioned manifest entry and content-addressed result blob atomically', async () => {
     const cacheDir = persistentCompileCacheDir(await tempRoot());
-    const entry = await writePersistentCompileCacheEntry(cacheDir, {
-      cacheKey: 'cache-key-a',
-      footprint: {
-        queryShapes: { cart: { count: 'number' } },
-        reads: { queryShapeNames: ['cart'] },
-      },
-      result: {
-        files: [{ fileName: 'cart.server.js', source: 'export {};' }],
-      },
-    });
+    const result = cacheResult('cart');
+    const cacheKey = cacheKeyForResult(result);
+    const entry = requiredCacheEntry(
+      await writePersistentCompileCacheEntry(cacheDir, {
+        cacheKey,
+        footprint: result.dependencyFootprint,
+        result,
+      }),
+    );
 
-    expect(entry.cacheKey).toBe('cache-key-a');
+    expect(entry.cacheKey).toBe(cacheKey);
     expect(entry.artifactRefs.result).toMatch(/^blobs\/[0-9a-f]{64}\.json$/);
     expect(entry.compilerBuildIdentityRef).toMatch(
       /^builds\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.json$/,
     );
-    expect(entry.resultPreimage).toContain('cart.server.js');
+    expect(entry.resultPreimage).toContain('Cached');
     const manifest = await readPersistentCompileCacheManifest(cacheDir);
     expect(manifest).toEqual({
-      entries: { 'cache-key-a': { ...entry, updatedAtMs: expect.any(Number) } },
+      entries: { [cacheKey]: { ...entry, updatedAtMs: expect.any(Number) } },
       version: 'kovo-compile-cache/v4',
     });
     await expect(readFile(join(cacheDir, entry.artifactRefs.result), 'utf8')).resolves.toContain(
-      'cart.server.js',
+      'Cached',
     );
     await expect(readFile(join(cacheDir, entry.compilerBuildIdentityRef), 'utf8')).resolves.toBe(
       cacheIdentity.compilerBuildCacheIdentity(),
     );
-    await expect(readPersistentCompileCacheEntry(cacheDir, 'cache-key-a')).resolves.toEqual({
-      files: [{ fileName: 'cart.server.js', source: 'export {};' }],
-    });
+    await expect(readPersistentCompileCacheEntry(cacheDir, cacheKey)).resolves.toEqual(result);
   });
 
   it('does not write cache artifacts through a symlinked cache root', async () => {
@@ -82,12 +85,13 @@ describe('persistent compile cache format', () => {
     const cacheDir = persistentCompileCacheDir(root);
     await mkdir(join(root, '.kovo/cache'), { recursive: true });
     await symlink(outside, cacheDir, 'dir');
+    const result = cacheResult('outside');
 
     await expect(
       writePersistentCompileCacheEntry(cacheDir, {
-        cacheKey: 'outside-cache-key',
-        footprint: { reads: { queryShapeNames: [] } },
-        result: { value: 'must-stay-confined' },
+        cacheKey: cacheKeyForResult(result),
+        footprint: result.dependencyFootprint,
+        result,
       }),
     ).rejects.toThrow(/symbolic-link|symbolic link|cannot use/u);
     await expect(readdir(outside)).resolves.toEqual([]);
@@ -96,12 +100,13 @@ describe('persistent compile cache format', () => {
   it('atomically replaces symlinked and hardlinked cache artifact leaves', async () => {
     const cacheDir = persistentCompileCacheDir(await tempRoot());
     const outside = await tempRoot();
+    const result = cacheResult('leaf-alias');
     const input = {
-      cacheKey: 'cache-leaf-alias-key',
-      footprint: { reads: { queryShapeNames: ['alias'] } },
-      result: { value: 'safe' },
+      cacheKey: cacheKeyForResult(result),
+      footprint: result.dependencyFootprint,
+      result,
     } satisfies Parameters<typeof writePersistentCompileCacheEntry>[1];
-    const entry = await writePersistentCompileCacheEntry(cacheDir, input);
+    const entry = requiredCacheEntry(await writePersistentCompileCacheEntry(cacheDir, input));
     const [entryFile] = await readdir(join(cacheDir, 'entries'));
     if (entryFile === undefined) throw new Error('expected persistent cache entry file');
     const aliases = [
@@ -137,11 +142,15 @@ describe('persistent compile cache format', () => {
   it('treats symlinked cache entry, blob, and build-identity leaves as misses', async () => {
     const cacheDir = persistentCompileCacheDir(await tempRoot());
     const outside = await tempRoot();
-    const entry = await writePersistentCompileCacheEntry(cacheDir, {
-      cacheKey: 'cache-read-leaf-alias-key',
-      footprint: { reads: { queryShapeNames: ['alias'] } },
-      result: { value: 'safe' },
-    });
+    const result = cacheResult('read-leaf-alias');
+    const cacheKey = cacheKeyForResult(result);
+    const entry = requiredCacheEntry(
+      await writePersistentCompileCacheEntry(cacheDir, {
+        cacheKey,
+        footprint: result.dependencyFootprint,
+        result,
+      }),
+    );
     const [entryFile] = await readdir(join(cacheDir, 'entries'));
     if (entryFile === undefined) throw new Error('expected persistent cache entry file');
     const targets = [
@@ -157,9 +166,7 @@ describe('persistent compile cache format', () => {
       await writeFile(referent, original);
       await unlink(target);
       await symlink(referent, target);
-      await expect(
-        readPersistentCompileCacheEntry(cacheDir, 'cache-read-leaf-alias-key'),
-      ).resolves.toBeNull();
+      await expect(readPersistentCompileCacheEntry(cacheDir, cacheKey)).resolves.toBeNull();
       await unlink(target);
       await writeFile(target, original);
     }
@@ -175,15 +182,17 @@ describe('persistent compile cache format', () => {
     Date.now = () => -1;
 
     try {
-      const entry = await writePersistentCompileCacheEntry(cacheDir, {
-        cacheKey: 'cache-late-intrinsics-key',
-        footprint: { reads: { queryShapeNames: ['late'] } },
-        result: { value: 'safe' },
-      });
+      const result = cacheResult('late-intrinsics');
+      const cacheKey = cacheKeyForResult(result);
+      const entry = requiredCacheEntry(
+        await writePersistentCompileCacheEntry(cacheDir, {
+          cacheKey,
+          footprint: result.dependencyFootprint,
+          result,
+        }),
+      );
       expect(entry.updatedAtMs).toBeGreaterThan(0);
-      await expect(
-        readPersistentCompileCacheEntry(cacheDir, 'cache-late-intrinsics-key'),
-      ).resolves.toEqual({ value: 'safe' });
+      await expect(readPersistentCompileCacheEntry(cacheDir, cacheKey)).resolves.toEqual(result);
     } finally {
       NativeBuffer.prototype.toString = nativeBufferToString;
       Date.now = nativeDateNow;
@@ -192,22 +201,28 @@ describe('persistent compile cache format', () => {
 
   it('preserves parallel per-entry writes', async () => {
     const cacheDir = persistentCompileCacheDir(await tempRoot());
+    const resultA = cacheResult('parallel-a');
+    const resultB = cacheResult('parallel-b');
+    const cacheKeyA = cacheKeyForResult(resultA);
+    const cacheKeyB = cacheKeyForResult(resultB);
     const entries = await Promise.all([
       writePersistentCompileCacheEntry(cacheDir, {
-        cacheKey: 'cache-key-a',
-        footprint: { reads: { queryShapeNames: ['a'] } },
-        result: { value: 'a' },
+        cacheKey: cacheKeyA,
+        footprint: resultA.dependencyFootprint,
+        result: resultA,
       }),
       writePersistentCompileCacheEntry(cacheDir, {
-        cacheKey: 'cache-key-b',
-        footprint: { reads: { queryShapeNames: ['b'] } },
-        result: { value: 'b' },
+        cacheKey: cacheKeyB,
+        footprint: resultB.dependencyFootprint,
+        result: resultB,
       }),
     ]);
 
     const manifest = await readPersistentCompileCacheManifest(cacheDir);
-    expect(Object.keys(manifest.entries).sort()).toEqual(['cache-key-a', 'cache-key-b']);
-    expect(entries[0].compilerBuildIdentityRef).toBe(entries[1].compilerBuildIdentityRef);
+    expect(Object.keys(manifest.entries).sort()).toEqual([cacheKeyA, cacheKeyB].sort());
+    expect(requiredCacheEntry(entries[0]).compilerBuildIdentityRef).toBe(
+      requiredCacheEntry(entries[1]).compilerBuildIdentityRef,
+    );
     await expect(readFile(join(cacheDir, 'manifest.json'), 'utf8')).resolves.toBe(
       '{"entries":{},"version":"kovo-compile-cache/v4"}\n',
     );
@@ -219,22 +234,22 @@ describe('persistent compile cache format', () => {
     // served as a hit (SPEC.md §5.2 / §5.2.1) — that would emit stale modules
     // from a previous implementation.
     const cacheDir = persistentCompileCacheDir(await tempRoot());
+    const result = cacheResult('build-identity');
+    const cacheKey = cacheKeyForResult(result);
     await writePersistentCompileCacheEntry(cacheDir, {
-      cacheKey: 'cache-key-a',
-      footprint: { reads: { queryShapeNames: ['a'] } },
-      result: { value: 'a' },
+      cacheKey,
+      footprint: result.dependencyFootprint,
+      result,
     });
     // Same exact build identity → hit.
-    await expect(readPersistentCompileCacheEntry(cacheDir, 'cache-key-a')).resolves.toEqual({
-      value: 'a',
-    });
+    await expect(readPersistentCompileCacheEntry(cacheDir, cacheKey)).resolves.toEqual(result);
 
     // Simulate the compiler being upgraded: the exact implementation identity now reports a new
     // namespace, so the previously written entry is a clean miss.
     vi.spyOn(cacheIdentity, 'compilerBuildCacheIdentity').mockReturnValue(
       '{"version":"compiler-build-cache-identity/v2","changed":true}',
     );
-    await expect(readPersistentCompileCacheEntry(cacheDir, 'cache-key-a')).resolves.toBeNull();
+    await expect(readPersistentCompileCacheEntry(cacheDir, cacheKey)).resolves.toBeNull();
   });
 
   it('treats a missing or corrupt manifest as an empty cache miss', async () => {
@@ -254,13 +269,17 @@ describe('persistent compile cache format', () => {
 
   it('misses cache entries whose blob ref escapes or is not content-addressed', async () => {
     const cacheDir = persistentCompileCacheDir(await tempRoot());
-    const entry = await writePersistentCompileCacheEntry(cacheDir, {
-      cacheKey: 'cache-key-a',
-      footprint: { reads: { queryShapeNames: ['a'] } },
-      result: { value: 'a' },
-    });
+    const result = cacheResult('escaping-ref');
+    const cacheKey = cacheKeyForResult(result);
+    const entry = requiredCacheEntry(
+      await writePersistentCompileCacheEntry(cacheDir, {
+        cacheKey,
+        footprint: result.dependencyFootprint,
+        result,
+      }),
+    );
     const manifest = await readPersistentCompileCacheManifest(cacheDir);
-    manifest.entries['cache-key-a'] = {
+    manifest.entries[cacheKey] = {
       ...entry,
       artifactRefs: { result: '../../../../outside.json' },
     };
@@ -268,19 +287,23 @@ describe('persistent compile cache format', () => {
     const [entryFile] = await readdir(join(cacheDir, 'entries'));
     await writeFile(
       join(cacheDir, 'entries', entryFile ?? ''),
-      `${JSON.stringify(manifest.entries['cache-key-a'])}\n`,
+      `${JSON.stringify(manifest.entries[cacheKey])}\n`,
     );
 
-    await expect(readPersistentCompileCacheEntry(cacheDir, 'cache-key-a')).resolves.toBeNull();
+    await expect(readPersistentCompileCacheEntry(cacheDir, cacheKey)).resolves.toBeNull();
   });
 
   it('rejects an escaping blob ref despite a selective RegExp.exec replacement', async () => {
     const cacheDir = persistentCompileCacheDir(await tempRoot());
-    const entry = await writePersistentCompileCacheEntry(cacheDir, {
-      cacheKey: 'cache-key-a',
-      footprint: { reads: { queryShapeNames: ['account'] } },
-      result: { files: [{ kind: 'client', source: 'export const safe = true;' }] },
-    });
+    const result = cacheResult('regexp-ref');
+    const cacheKey = cacheKeyForResult(result);
+    const entry = requiredCacheEntry(
+      await writePersistentCompileCacheEntry(cacheDir, {
+        cacheKey,
+        footprint: result.dependencyFootprint,
+        result,
+      }),
+    );
     const attackerJson = '{"files":[{"kind":"client","source":"export const adminToken = leak;"}]}';
     const maliciousRef = '../attacker.json';
     const require = createRequire(import.meta.url);
@@ -289,7 +312,7 @@ describe('persistent compile cache format', () => {
     await writeFile(join(cacheDir, maliciousRef), attackerJson);
     const maliciousEntry = { ...entry, artifactRefs: { result: maliciousRef } };
     const manifest = await readPersistentCompileCacheManifest(cacheDir);
-    manifest.entries['cache-key-a'] = maliciousEntry;
+    manifest.entries[cacheKey] = maliciousEntry;
     await writeFile(join(cacheDir, 'manifest.json'), `${JSON.stringify(manifest)}\n`);
     const [entryFile] = await readdir(join(cacheDir, 'entries'));
     if (entryFile === undefined) throw new Error('expected persistent cache entry file');
@@ -306,7 +329,7 @@ describe('persistent compile cache format', () => {
     };
 
     try {
-      await expect(readPersistentCompileCacheEntry(cacheDir, 'cache-key-a')).resolves.toBeNull();
+      await expect(readPersistentCompileCacheEntry(cacheDir, cacheKey)).resolves.toBeNull();
     } finally {
       RegExp.prototype.exec = nativeExec;
     }
@@ -314,23 +337,31 @@ describe('persistent compile cache format', () => {
 
   it('misses cache entries whose blob contents do not match the content-addressed ref', async () => {
     const cacheDir = persistentCompileCacheDir(await tempRoot());
-    const entry = await writePersistentCompileCacheEntry(cacheDir, {
-      cacheKey: 'cache-key-a',
-      footprint: { reads: { queryShapeNames: ['a'] } },
-      result: { value: 'a' },
-    });
+    const result = cacheResult('blob-content');
+    const cacheKey = cacheKeyForResult(result);
+    const entry = requiredCacheEntry(
+      await writePersistentCompileCacheEntry(cacheDir, {
+        cacheKey,
+        footprint: result.dependencyFootprint,
+        result,
+      }),
+    );
     await writeFile(join(cacheDir, entry.artifactRefs.result), '{"value":"tampered"}');
 
-    await expect(readPersistentCompileCacheEntry(cacheDir, 'cache-key-a')).resolves.toBeNull();
+    await expect(readPersistentCompileCacheEntry(cacheDir, cacheKey)).resolves.toBeNull();
   });
 
   it('rejects coordinated entry and blob tampering without a process-local cache authenticator', async () => {
     const cacheDir = persistentCompileCacheDir(await tempRoot());
-    const entry = await writePersistentCompileCacheEntry(cacheDir, {
-      cacheKey: 'cache-key-a',
-      footprint: { reads: { queryShapeNames: ['account'] } },
-      result: { files: [{ kind: 'client', source: 'export const safe = true;' }] },
-    });
+    const result = cacheResult('coordinated-tamper');
+    const cacheKey = cacheKeyForResult(result);
+    const entry = requiredCacheEntry(
+      await writePersistentCompileCacheEntry(cacheDir, {
+        cacheKey,
+        footprint: result.dependencyFootprint,
+        result,
+      }),
+    );
     const attackerJson = '{"files":[{"kind":"client","source":"export const adminToken = leak;"}]}';
     await writeFile(join(cacheDir, entry.artifactRefs.result), attackerJson);
 
@@ -345,47 +376,57 @@ describe('persistent compile cache format', () => {
 
     // A cache-directory writer can coordinate every stored preimage, but it cannot mint the
     // process-local authenticator captured before app/plugin evaluation (SPEC §5.2.1).
-    await expect(readPersistentCompileCacheEntry(cacheDir, 'cache-key-a')).resolves.toBeNull();
+    await expect(readPersistentCompileCacheEntry(cacheDir, cacheKey)).resolves.toBeNull();
   });
 
   it('treats a blob-locator collision as a miss instead of cross-binding results', async () => {
     const cacheDir = persistentCompileCacheDir(await tempRoot());
-    const first = await writePersistentCompileCacheEntry(cacheDir, {
-      cacheKey: 'cache-key-a',
-      footprint: {},
-      result: { value: 'safe-a' },
-    });
-    const second = await writePersistentCompileCacheEntry(cacheDir, {
-      cacheKey: 'cache-key-b',
-      footprint: {},
-      result: { value: 'unsafe-b' },
-    });
+    const firstResult = cacheResult('collision-a');
+    const secondResult = cacheResult('collision-b');
+    const firstKey = cacheKeyForResult(firstResult);
+    const secondKey = cacheKeyForResult(secondResult);
+    const first = requiredCacheEntry(
+      await writePersistentCompileCacheEntry(cacheDir, {
+        cacheKey: firstKey,
+        footprint: firstResult.dependencyFootprint,
+        result: firstResult,
+      }),
+    );
+    const second = requiredCacheEntry(
+      await writePersistentCompileCacheEntry(cacheDir, {
+        cacheKey: secondKey,
+        footprint: secondResult.dependencyFootprint,
+        result: secondResult,
+      }),
+    );
     const manifest = await readPersistentCompileCacheManifest(cacheDir);
     const collided = { ...second, artifactRefs: first.artifactRefs };
-    manifest.entries['cache-key-b'] = collided;
+    manifest.entries[secondKey] = collided;
     await writeFile(join(cacheDir, 'manifest.json'), `${JSON.stringify(manifest)}\n`);
     const entryFiles = await readdir(join(cacheDir, 'entries'));
     for (const entryFile of entryFiles) {
       const path = join(cacheDir, 'entries', entryFile);
       const parsed = JSON.parse(await readFile(path, 'utf8')) as { cacheKey?: string };
-      if (parsed.cacheKey === 'cache-key-b') {
+      if (parsed.cacheKey === secondKey) {
         await writeFile(path, `${JSON.stringify(collided)}\n`);
       }
     }
 
-    await expect(readPersistentCompileCacheEntry(cacheDir, 'cache-key-a')).resolves.toEqual({
-      value: 'safe-a',
-    });
-    await expect(readPersistentCompileCacheEntry(cacheDir, 'cache-key-b')).resolves.toBeNull();
+    await expect(readPersistentCompileCacheEntry(cacheDir, firstKey)).resolves.toEqual(firstResult);
+    await expect(readPersistentCompileCacheEntry(cacheDir, secondKey)).resolves.toBeNull();
   });
 
   it('rejects a tampered compiler blob despite a synchronized selective createHash replacement', async () => {
     const cacheDir = persistentCompileCacheDir(await tempRoot());
-    const entry = await writePersistentCompileCacheEntry(cacheDir, {
-      cacheKey: 'cache-key-a',
-      footprint: { reads: { queryShapeNames: ['account'] } },
-      result: { files: [{ kind: 'client', source: 'export const safe = true;' }] },
-    });
+    const result = cacheResult('hash-tamper');
+    const cacheKey = cacheKeyForResult(result);
+    const entry = requiredCacheEntry(
+      await writePersistentCompileCacheEntry(cacheDir, {
+        cacheKey,
+        footprint: result.dependencyFootprint,
+        result,
+      }),
+    );
     const tampered = '{"files":[{"kind":"client","source":"export const adminToken = leak;"}]}';
     await writeFile(join(cacheDir, entry.artifactRefs.result), tampered);
     const storedDigest = /blobs\/([0-9a-f]{64})\.json$/u.exec(entry.artifactRefs.result)?.[1];
@@ -414,7 +455,7 @@ describe('persistent compile cache format', () => {
     syncBuiltinESMExports();
 
     try {
-      await expect(readPersistentCompileCacheEntry(cacheDir, 'cache-key-a')).resolves.toBeNull();
+      await expect(readPersistentCompileCacheEntry(cacheDir, cacheKey)).resolves.toBeNull();
     } finally {
       mutableCrypto.createHash = nativeCreateHash;
       syncBuiltinESMExports();
@@ -423,21 +464,24 @@ describe('persistent compile cache format', () => {
 
   it('replays learned footprints without crossing production render-plan gates', async () => {
     const cacheDir = persistentCompileCacheDir(await tempRoot());
-    const footprint: CompileDependencyFootprint = {
-      queryShapes: { cart: { count: 'number' } },
-      reads: { queryShapeNames: ['cart'] },
-    };
-    const compileInput = {
+    const compileInput: CompileComponentOptions = {
       fileName: 'cart.tsx',
       queryShapes: { cart: { count: 'number' }, ignored: { name: 'string' } },
-      source: 'component({})',
+      source: `
+export const CachedCart = component({
+  queries: { cart: {} },
+  render: () => <span>cart</span>,
+});
+`,
     };
+    const result = compileComponentModuleForPersistentCache(compileInput);
+    const footprint: CompileDependencyFootprint = result.dependencyFootprint;
     const cacheKey = compileCacheKey(compileComponentCacheKeyInput(compileInput, footprint));
 
     await writePersistentCompileCacheEntry(cacheDir, {
       cacheKey,
       footprint,
-      result: { value: 'no-gate' },
+      result,
     });
 
     await expect(
@@ -448,7 +492,7 @@ describe('persistent compile cache format', () => {
           queryShapes: { cart: { count: 'number' }, ignored: { title: 'string' } },
         }),
       ),
-    ).resolves.toEqual({ value: 'no-gate' });
+    ).resolves.toEqual(result);
 
     await expect(
       readPersistentCompileCacheEntryForInput(
@@ -466,4 +510,31 @@ async function tempRoot(): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), 'kovo-persistent-cache-'));
   tempRoots.push(root);
   return root;
+}
+
+function cacheResult(label: string): CompileResult {
+  const options: CompileComponentOptions = {
+    fileName: `src/cache-${label}.tsx`,
+    source: `
+export const Cached = component({
+  render: () => <span>{${JSON.stringify(label)}}</span>,
+});
+`,
+  };
+  const result = compileComponentModuleForPersistentCache(options);
+  cacheKeysByResult.set(result, compileCacheKey(compileComponentCacheKeyInput(options)));
+  return result;
+}
+
+function cacheKeyForResult(result: CompileResult): string {
+  const cacheKey = cacheKeysByResult.get(result);
+  if (cacheKey === undefined) throw new Error('expected test compile-result cache key');
+  return cacheKey;
+}
+
+function requiredCacheEntry(
+  entry: Awaited<ReturnType<typeof writePersistentCompileCacheEntry>>,
+): NonNullable<typeof entry> {
+  if (entry === null) throw new Error('expected an authorized persistent cache entry');
+  return entry;
 }
