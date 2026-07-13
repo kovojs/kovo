@@ -1,10 +1,18 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { describe, expect, it, vi } from 'vitest';
 
-import { kovoCheck, kovoExplain, main } from './index.js';
+import { kovoCheck, kovoExplain, main, mainAsync } from './index.js';
 import {
   frameworkSourceSinkInventory,
   scanSourceSinkDrift,
@@ -296,7 +304,7 @@ describe('source/sink inventory', () => {
     expect(result.output).toContain('FAIL-CLOSED shape=unsafe URL scheme');
   });
 
-  it('writes deterministic JSON from the check command', () => {
+  it('writes deterministic JSON from the check command', async () => {
     const root = mkdtempSync(join(tmpdir(), 'kovo-sources-sinks-'));
     const previous = process.cwd();
     const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
@@ -305,7 +313,7 @@ describe('source/sink inventory', () => {
     try {
       process.chdir(root);
 
-      expect(main(['check', 'sources-sinks'])).toBe(0);
+      await expect(mainAsync(['check', 'sources-sinks'])).resolves.toBe(0);
 
       const artifact = JSON.parse(
         readFileSync(join(root, sourcesSinksArtifactPath), 'utf8'),
@@ -348,6 +356,29 @@ describe('source/sink inventory', () => {
       stdout.mockRestore();
       stderr.mockRestore();
       rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it('rejects a symlinked sources-sinks artifact parent', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-sources-sinks-alias-'));
+    const outside = mkdtempSync(join(tmpdir(), 'kovo-sources-sinks-outside-'));
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    mkdirSync(root, { recursive: true });
+    symlinkSync(outside, join(root, '.kovo'), 'dir');
+
+    try {
+      await expect(
+        mainAsync(['check', 'sources-sinks'], {
+          invocationCwd: root,
+          invocationEnv: Object.freeze(Object.create(null) as NodeJS.ProcessEnv),
+          paranoidStaticAdvisory: false,
+        }),
+      ).rejects.toThrow(/symbolic-link|symbolic link/u);
+      expect(existsSync(join(outside, 'sources-sinks.json'))).toBe(false);
+    } finally {
+      stdout.mockRestore();
+      rmSync(root, { force: true, recursive: true });
+      rmSync(outside, { force: true, recursive: true });
     }
   });
 

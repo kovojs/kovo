@@ -1,5 +1,6 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { Buffer as NativeBuffer } from 'node:buffer';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 
 import {
   bundledKovoDocsMirrorFiles,
@@ -8,6 +9,7 @@ import {
   renderKovoRulesBlock,
   replaceKovoRulesBlock,
 } from '@kovojs/core/internal/agent-docs';
+import { createFrameworkOutputFileSystemBoundary } from '@kovojs/core/internal/filesystem';
 
 import type { KovoCheckResult } from '../shared.js';
 
@@ -22,11 +24,16 @@ interface ResolvedDocs {
   source: 'bundled' | 'fetched';
 }
 
+const nativeBufferFrom = NativeBuffer.from;
+const nativeBufferToString = NativeBuffer.prototype.toString;
+const nativeReflectApply = Reflect.apply;
+
 /** @internal Execute the CLI-only `kovo update-docs` command. */
 export async function runUpdateDocsCommand(
   options: UpdateDocsOptions = {},
 ): Promise<KovoCheckResult> {
   const cwd = resolve(options.cwd ?? process.cwd());
+  const output = createFrameworkOutputFileSystemBoundary(cwd);
   const version = options.version ?? readCliPackageVersion();
   const resolved = await resolveDocs(options.fetchImpl ?? globalThis.fetch, version);
   const kovoRulesSource =
@@ -40,12 +47,12 @@ export async function runUpdateDocsCommand(
   });
 
   try {
-    const agentsPath = join(cwd, 'AGENTS.md');
-    const currentAgents = existsSync(agentsPath) ? readFileSync(agentsPath, 'utf8') : '';
-    writeTextFile(agentsPath, replaceKovoRulesBlock(currentAgents, rulesBlock));
+    const agentsBytes = await output.fileBytes('AGENTS.md');
+    const currentAgents = agentsBytes === undefined ? '' : utf8Text(agentsBytes);
+    await output.writeFile('AGENTS.md', replaceKovoRulesBlock(currentAgents, rulesBlock));
 
     for (const [path, source] of resolved.files) {
-      writeTextFile(join(cwd, '.kovo/docs', path), source);
+      await output.writeFile(`.kovo/docs/${path}`, source);
     }
 
     return {
@@ -114,9 +121,9 @@ function metadataSource(version: string, source: 'bundled' | 'fetched'): string 
   )}\n`;
 }
 
-function writeTextFile(path: string, source: string): void {
-  mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, source, 'utf8');
+function utf8Text(bytes: Uint8Array): string {
+  const buffer = nativeReflectApply(nativeBufferFrom, NativeBuffer, [bytes]) as Buffer;
+  return nativeReflectApply(nativeBufferToString, buffer, ['utf8']) as string;
 }
 
 function readCliPackageVersion(): string {

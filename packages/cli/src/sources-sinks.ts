@@ -1,5 +1,5 @@
-import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
-import { dirname, join, relative, sep } from 'node:path';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { join, relative, sep } from 'node:path';
 
 import { diagnosticDefinitionText } from '@kovojs/core/internal/diagnostics';
 import {
@@ -12,6 +12,7 @@ import {
   type SourceSinkInventoryEntry,
   type SourceSinkRuntimeEvidence,
 } from '@kovojs/core/internal/source-sink-registry';
+import { createFrameworkOutputFileSystemBoundary } from '@kovojs/core/internal/filesystem';
 
 import { type KovoCheckResult } from './shared.js';
 
@@ -106,13 +107,16 @@ export function sourcesSinksArtifact(
   return artifact;
 }
 
-export function writeSourcesSinksArtifact(
+export async function writeSourcesSinksArtifact(
   cwd = process.cwd(),
   options: SourcesSinksArtifactOptions = {},
-): string {
+): Promise<string> {
   const artifactPath = join(cwd, sourcesSinksArtifactPath);
-  mkdirSync(dirname(artifactPath), { recursive: true });
-  writeFileSync(artifactPath, `${JSON.stringify(sourcesSinksArtifact(options), null, 2)}\n`);
+  const output = createFrameworkOutputFileSystemBoundary(cwd);
+  await output.writeFile(
+    sourcesSinksArtifactPath,
+    `${JSON.stringify(sourcesSinksArtifact(options), null, 2)}\n`,
+  );
   return artifactPath;
 }
 

@@ -129,7 +129,6 @@ const SYNC_COMMAND_HANDLERS: Record<KovoSyncCommandName, SyncCommandHandler> = {
         if (input.exitCode !== 0) return writeCommandResult(input);
       }
       const driftScan = scanSourceSinkDrift(security.invocationCwd);
-      writeSourcesSinksArtifact(security.invocationCwd, { driftScan });
       return writeCommandResult(sourcesSinksCheckResult(outputVersion, { driftScan }));
     }
     return writeCommandResult(
@@ -147,7 +146,6 @@ const SYNC_COMMAND_HANDLERS: Record<KovoSyncCommandName, SyncCommandHandler> = {
   explain(args, security) {
     const parsed = parseExplainArgs(args);
     if (!parsed.ok) return writeUsageError(parsed.message);
-    if ('sourcesSinks' in parsed.options) writeSourcesSinksArtifact(security.invocationCwd);
     return writeCommandResult(
       runGraphCommand(
         parsed.inputPath,
@@ -234,7 +232,15 @@ export async function mainAsync(
   security: KovoCommandSecurityDisposition = captureKovoCommandSecurityDisposition(),
 ): Promise<number> {
   const command = resolveCommand(args[0]);
-  if (!command || !isAsyncCommand(command)) return main(args, security);
+  if (!command || !isAsyncCommand(command)) {
+    if (command?.name === 'check' && args[1] === 'sources-sinks') {
+      const driftScan = scanSourceSinkDrift(security.invocationCwd);
+      await writeSourcesSinksArtifact(security.invocationCwd, { driftScan });
+    } else if (command?.name === 'explain' && args.includes('--sources-sinks')) {
+      await writeSourcesSinksArtifact(security.invocationCwd);
+    }
+    return main(args, security);
+  }
   return ASYNC_COMMAND_HANDLERS[command.name](args.slice(1), security);
 }
 

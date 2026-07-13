@@ -1,4 +1,13 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -124,6 +133,31 @@ describe('kovo update-docs', () => {
       expect(existsSync(join(root, '.kovo/docs/llms.txt'))).toBe(false);
     } finally {
       rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it('does not write docs through project output symlinks', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-update-docs-alias-'));
+    const outside = mkdtempSync(join(tmpdir(), 'kovo-update-docs-outside-'));
+    const outsideAgents = join(outside, 'AGENTS.md');
+    writeFileSync(outsideAgents, 'outside agents\n');
+    symlinkSync(outsideAgents, join(root, 'AGENTS.md'));
+    mkdirSync(join(root, '.kovo'));
+    symlinkSync(outside, join(root, '.kovo/docs'), 'dir');
+
+    try {
+      const result = await runUpdateDocsCommand({
+        cwd: root,
+        fetchImpl: async () => new Response('# fetched\n', { status: 200 }),
+        version: '1.0.0',
+      });
+      expect(result.exitCode).toBe(1);
+      expect(readFileSync(outsideAgents, 'utf8')).toBe('outside agents\n');
+      expect(existsSync(join(outside, 'llms.txt'))).toBe(false);
+      expect(lstatSync(join(root, 'AGENTS.md')).isSymbolicLink()).toBe(false);
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+      rmSync(outside, { force: true, recursive: true });
     }
   });
 });
