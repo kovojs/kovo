@@ -35,6 +35,7 @@ import { main, mainAsync } from './index.js';
 
 const repoRoot = process.cwd();
 const BUILD_FIXTURE_CSRF_SECRET = 'build-fixture-csrf-secret-0123456789abcdef0123456789';
+const BUILD_FIXTURE_WEBHOOK_HMAC_SECRET = 'b0b1b2b3b4b5b6b7b8b9babbbcbdbebf';
 const BUILD_FIXTURE_CSRF_SESSION_ID = 'build-fixture-session';
 const BUILD_FIXTURE_CSRF = {
   secret: BUILD_FIXTURE_CSRF_SECRET,
@@ -2187,7 +2188,7 @@ const paymentWebhook = webhook('/webhooks/payment', {
     header: 'x-signature',
     payload: (request) => request.payload,
     scheme: 'hmac-sha256:hex',
-    secret: 'whsec_test',
+    secret: '${BUILD_FIXTURE_WEBHOOK_HMAC_SECRET}',
   }),
   writes: [payment],
 });
@@ -2196,7 +2197,7 @@ const official = hmacSignature({
   encoding: 'hex',
   header: 'x-signature',
   payload: (request) => request.payload,
-  secret: 'official-secret',
+  secret: 'c0c1c2c3c4c5c6c7c8c9cacbcccdcecf',
 });
 const forgedHmac = { ...official, verify: async () => true };
 const forgedEndpoint = endpoint('/forged-hmac', {
@@ -2242,7 +2243,9 @@ export default createApp({
       const origin = await listen(server);
       try {
         const body = JSON.stringify({ id: 'evt-1' });
-        const signature = createHmac('sha256', 'whsec_test').update(body).digest('hex');
+        const signature = createHmac('sha256', BUILD_FIXTURE_WEBHOOK_HMAC_SECRET)
+          .update(body)
+          .digest('hex');
         const accepted = await fetch(`${origin}/webhooks/payment`, {
           body,
           headers: { 'Content-Type': 'application/json', 'x-signature': signature },

@@ -40,8 +40,13 @@ const textResponse = {
   cache: 'no-store',
 } as const;
 
+const ACCESS_HMAC_SECRET = '202122232425262728292a2b2c2d2e2f';
+const OLD_SNAPSHOT_HMAC_SECRET = '303132333435363738393a3b3c3d3e3f';
+const NEW_SNAPSHOT_HMAC_SECRET = '404142434445464748494a4b4c4d4e4f';
+const OFFICIAL_HMAC_SECRET = '505152535455565758595a5b5c5d5e5f';
+
 function sign(body: string): string {
-  return createHmac('sha256', 'access_secret').update(body).digest('hex');
+  return createHmac('sha256', ACCESS_HMAC_SECRET).update(body).digest('hex');
 }
 
 describe('structured access metadata', () => {
@@ -323,7 +328,7 @@ describe('structured access metadata', () => {
 
   it('keeps official HMAC webhook authentication on its construction-time option snapshot', async () => {
     let handlerCalls = 0;
-    const authoredSecret = new TextEncoder().encode('old-secret');
+    const authoredSecret = new TextEncoder().encode(OLD_SNAPSHOT_HMAC_SECRET);
     const options: HmacSignatureOptions = {
       encoding: 'hex',
       header: 'x-signature',
@@ -333,7 +338,7 @@ describe('structured access metadata', () => {
     const verifier = hmacSignature(options);
     // Public byte-shaped config is audit metadata, not the executable source of truth. Mutating
     // it before createApp() must not make canonicalization rebuild different authentication.
-    (verifier.config.secret as Uint8Array).set(new TextEncoder().encode('new-secret'));
+    (verifier.config.secret as Uint8Array).set(new TextEncoder().encode(NEW_SNAPSHOT_HMAC_SECRET));
     const declared = webhook('/hmac-verifier-snapshot', {
       handler: () => {
         handlerCalls += 1;
@@ -347,7 +352,7 @@ describe('structured access metadata', () => {
     expect((derived.endpoints[0] as typeof declared).webhookDefinition.verify).toBe(verifier);
     const handle = createRequestHandler(derived);
     const body = '{}';
-    const signature = createHmac('sha256', 'new-secret').update(body).digest('hex');
+    const signature = createHmac('sha256', NEW_SNAPSHOT_HMAC_SECRET).update(body).digest('hex');
     const request = () =>
       new Request('https://example.test/hmac-verifier-snapshot', {
         body,
@@ -356,8 +361,8 @@ describe('structured access metadata', () => {
       });
 
     expect((await handle(request())).status).toBe(401);
-    options.secret = 'new-secret';
-    authoredSecret.set(new TextEncoder().encode('new-secret'));
+    options.secret = NEW_SNAPSHOT_HMAC_SECRET;
+    authoredSecret.set(new TextEncoder().encode(NEW_SNAPSHOT_HMAC_SECRET));
 
     expect((await handle(request())).status).toBe(401);
     expect(handlerCalls).toBe(0);
@@ -370,7 +375,7 @@ describe('structured access metadata', () => {
       encoding: 'hex',
       header: 'x-signature',
       payload: ({ payload }) => payload,
-      secret: 'official-secret',
+      secret: OFFICIAL_HMAC_SECRET,
     });
     const forged = {
       ...official,
@@ -693,7 +698,7 @@ describe('structured access metadata', () => {
       name: 'access',
       payload: (request) => request.payload,
       scheme: 'access:v1:hmac-sha256',
-      secret: 'access_secret',
+      secret: ACCESS_HMAC_SECRET,
     });
     const guardedEndpoint = endpoint('/machine/access', {
       access: publicAccess('audit metadata only'),

@@ -1,3 +1,4 @@
+import { createHmac } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -17,12 +18,14 @@ const stripePayload =
   '{"id":"evt_payment_succeeded_001","object":"event","type":"payment_intent.succeeded","data":{"object":{"id":"pi_123","metadata":{"orderId":"order_123"}}},"livemode":false,"pending_webhooks":1}';
 const stripeTimestamp = 1_674_087_231;
 const stripeNow = stripeTimestamp * 1000;
-const stripeHeader =
-  't=1674087231,v1=16de56e1424fa5548a47dee454c8718c66241d4b9e62668bb2fe43355842d3cf';
+const stripeSecret = 'd0d1d2d3d4d5d6d7d8d9dadbdcdddedf';
+const currentStripeSecret = 'e0e1e2e3e4e5e6e7e8e9eaebecedeeef';
+const oldStripeSecret = 'f0f1f2f3f4f5f6f7f8f9fafbfcfdfeff';
+const stripeHeader = `t=${stripeTimestamp},v1=${stripeSignature(stripeSecret)}`;
 const rotatedStripeSignatureHeader = [
-  't=1674087231',
+  `t=${stripeTimestamp}`,
   'v1=0000000000000000000000000000000000000000000000000000000000000000',
-  'v1=905f240a41547aab27bd6e0dc3699a5cd121de3da4f90a926768d1993bf7ee00',
+  `v1=${stripeSignature(oldStripeSecret)}`,
 ].join(',');
 
 type StripeFixtureEvent = {
@@ -161,7 +164,7 @@ describe('S7 Stripe-format webhook lifecycle spike', () => {
         countingStripeRequest(stripePayload, rotatedStripeSignatureHeader).request,
         {
           replayStore: createMemoryMutationReplayStore(),
-          secret: ['whsec_current_secret', 'whsec_old_secret'],
+          secret: [currentStripeSecret, oldStripeSecret],
           state,
         },
       ),
@@ -180,7 +183,7 @@ async function runStripeWebhookSpike(
   options: StripeSpikeOptions,
 ): Promise<SpikeResponse> {
   const rawBody = new Uint8Array(await request.arrayBuffer());
-  const verifier = stripeFixtureSignature({ secret: options.secret ?? 'whsec_test_secret' });
+  const verifier = stripeFixtureSignature({ secret: options.secret ?? stripeSecret });
   const verified = await verifier.verify({
     headers: request.headers,
     now: options.now ?? stripeNow,
@@ -275,6 +278,10 @@ function stripeFixtureSignature(options: {
       timestamp: (_request, context) => stripeHeaderPart(context.signatureHeader, 't'),
     },
   });
+}
+
+function stripeSignature(secret: string): string {
+  return createHmac('sha256', secret).update(`${stripeTimestamp}.${stripePayload}`).digest('hex');
 }
 
 function stripeV1Signatures(header: string): readonly string[] {

@@ -27,6 +27,8 @@ const rawTextResponse = {
   cache: 'no-store',
 } satisfies EndpointResponsePosture;
 
+const GRAPH_HMAC_SECRET = '606162636465666768696a6b6c6d6e6f';
+
 describe('app access graph extraction', () => {
   it('extracts producer-owned access decisions and missing facts from assembled apps', () => {
     const authed = guards.authed<{ session?: { user?: { id?: string } } }>();
@@ -80,7 +82,7 @@ describe('app access graph extraction', () => {
           header: 'X-Signature',
           payload: ({ payload }) => payload,
           scheme: 'sync-hmac',
-          secret: 'test_secret',
+          secret: GRAPH_HMAC_SECRET,
         }),
       },
       handler: () => Response.json({ ok: true }),
@@ -97,7 +99,7 @@ describe('app access graph extraction', () => {
         header: 'Stripe-Signature',
         payload: ({ payload }) => payload,
         scheme: 'stripe-signature',
-        secret: 'test_secret',
+        secret: GRAPH_HMAC_SECRET,
       }),
     });
 

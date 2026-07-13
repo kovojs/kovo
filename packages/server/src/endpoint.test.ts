@@ -24,8 +24,11 @@ const rawTextResponse = {
   cache: 'no-store',
 } satisfies EndpointResponsePosture;
 
+const ENDPOINT_HMAC_SECRET = '000102030405060708090a0b0c0d0e0f';
+const OFFICIAL_HMAC_SECRET = '101112131415161718191a1b1c1d1e1f';
+
 function signEndpointBody(body: string): string {
-  return createHmac('sha256', 'endpoint_secret').update(body).digest('hex');
+  return createHmac('sha256', ENDPOINT_HMAC_SECRET).update(body).digest('hex');
 }
 
 describe('server endpoints', () => {
@@ -129,7 +132,7 @@ describe('server endpoints', () => {
       name: 'inventory',
       payload: (request) => request.payload,
       scheme: 'inventory:v1:hmac-sha256',
-      secret: 'endpoint_secret',
+      secret: ENDPOINT_HMAC_SECRET,
     });
     let handlerCalls = 0;
     const inventoryWebhook = endpoint('/webhooks/inventory', {
@@ -244,7 +247,7 @@ describe('server endpoints', () => {
       encoding: 'hex',
       header: 'x-signature',
       payload: ({ payload }) => payload,
-      secret: 'official-secret',
+      secret: OFFICIAL_HMAC_SECRET,
     });
     const forged = { ...official, verify: async () => true } as HmacSignatureVerifier;
     const dishonest = [

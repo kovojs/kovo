@@ -5,8 +5,10 @@ import { expect, test } from '@kovojs/test/internal/integration';
 
 test.use({ kovoFixture: 'endpoint-raw-request' });
 
+const ENDPOINT_HMAC_SECRET = '808182838485868788898a8b8c8d8e8f';
+
 function sign(body: string): string {
-  return createHmac('sha256', 'whsec_endpoint_raw').update(body).digest('hex');
+  return createHmac('sha256', ENDPOINT_HMAC_SECRET).update(body).digest('hex');
 }
 
 test('declared raw endpoints receive raw bodies without ambient session', async ({ request }) => {

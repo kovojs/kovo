@@ -9,6 +9,8 @@ import type {
 } from '@kovojs/test/internal/integration/fixture-abi';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
+const WEBHOOK_HMAC_SECRET = 'a0a1a2a3a4a5a6a7a8a9aaabacadaeaf';
+
 type WebhookRequest = Request & KovoFixtureRequest;
 
 function createReplayStore(): WebhookReplayStore {
@@ -67,7 +69,7 @@ export default defineFixture({
         name: 'stripe-lite',
         payload: (request) => request.payload,
         scheme: 'stripe-lite:v1:hmac-sha256',
-        secret: 'whsec_integration',
+        secret: WEBHOOK_HMAC_SECRET,
       }),
     });
 

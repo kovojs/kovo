@@ -19,6 +19,8 @@ import {
   type WebhookWireResponse,
 } from './webhook.js';
 
+const WEBHOOK_HMAC_SECRET = '707172737475767778797a7b7c7d7e7f';
+
 function signedRequest(body: string, signature: string): Request {
   return new Request('https://example.test/webhooks/stripe', {
     body,
@@ -31,7 +33,7 @@ function signedRequest(body: string, signature: string): Request {
 }
 
 function sign(body: string): string {
-  return createHmac('sha256', 'whsec_test').update(body).digest('hex');
+  return createHmac('sha256', WEBHOOK_HMAC_SECRET).update(body).digest('hex');
 }
 
 describe('server webhook primitive', () => {
@@ -225,7 +227,7 @@ describe('server webhook primitive', () => {
       name: 'test-provider',
       payload: (request) => request.payload,
       scheme: 'test-provider:v1:hmac-sha256',
-      secret: 'whsec_test',
+      secret: WEBHOOK_HMAC_SECRET,
     });
 
     const providerWebhook = webhook('/webhooks/provider', {
@@ -308,7 +310,7 @@ describe('server webhook primitive', () => {
       name: 'stripe-lite',
       payload: (request) => request.payload,
       scheme: 'stripe-lite:v1:hmac-sha256',
-      secret: 'whsec_test',
+      secret: WEBHOOK_HMAC_SECRET,
     });
     const steps: string[] = [];
     let writes = 0;
@@ -404,7 +406,7 @@ describe('server webhook primitive', () => {
       name: 'stripe-lite',
       payload: (request) => request.payload,
       scheme: 'stripe-lite:v1:hmac-sha256',
-      secret: 'whsec_test',
+      secret: WEBHOOK_HMAC_SECRET,
     });
     const stripeWebhook = webhook('/webhooks/stripe', {
       handler() {
@@ -725,7 +727,7 @@ describe('server webhook primitive', () => {
       encoding: 'hex',
       header: 'x-signature',
       payload: (request) => request.payload,
-      secret: 'whsec_test',
+      secret: WEBHOOK_HMAC_SECRET,
     });
     let handled = 0;
     const stripeWebhook = webhook('/webhooks/stripe', {
@@ -1018,7 +1020,7 @@ describe('server webhook primitive', () => {
           header: 'x-signature',
           payload: (request) => request.payload,
           scheme: 'stripe-lite:v1:hmac-sha256',
-          secret: 'whsec_test',
+          secret: WEBHOOK_HMAC_SECRET,
         }),
         writes: [invoice],
       }),
@@ -1320,7 +1322,7 @@ describe('server webhook primitive', () => {
         if (sig === 'malformed') throw new Error('cannot parse signature header');
         return request.payload;
       },
-      secret: 'whsec_test',
+      secret: WEBHOOK_HMAC_SECRET,
     });
     const okWebhook = webhook('/webhooks/throwing-payload', {
       handler(input: { id: string }) {

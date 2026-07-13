@@ -5,8 +5,10 @@ import { expect, test } from '@kovojs/test/internal/integration';
 
 test.use({ kovoFixture: 'webhook-hmac' });
 
+const WEBHOOK_HMAC_SECRET = '909192939495969798999a9b9c9d9e9f';
+
 function sign(body: string): string {
-  return createHmac('sha256', 'whsec_integration').update(body).digest('hex');
+  return createHmac('sha256', WEBHOOK_HMAC_SECRET).update(body).digest('hex');
 }
 
 test('signed webhook writes once and emits a unified change record', async ({

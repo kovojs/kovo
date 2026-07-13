@@ -5,8 +5,10 @@ import { expect, test } from '@kovojs/test/internal/integration';
 
 test.use({ kovoFixture: 'webhook-idempotency' });
 
+const WEBHOOK_HMAC_SECRET = 'a0a1a2a3a4a5a6a7a8a9aaabacadaeaf';
+
 function sign(body: string): string {
-  return createHmac('sha256', 'whsec_integration').update(body).digest('hex');
+  return createHmac('sha256', WEBHOOK_HMAC_SECRET).update(body).digest('hex');
 }
 
 test('duplicate provider event id replays without re-executing handler', async ({

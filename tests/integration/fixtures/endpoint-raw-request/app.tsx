@@ -8,6 +8,8 @@ interface RawSession {
   user: { id: string; roles: readonly string[] };
 }
 
+const ENDPOINT_HMAC_SECRET = '808182838485868788898a8b8c8d8e8f';
+
 function readSessionCookie(request: Request): RawSession | null {
   const raw = request.headers.get('cookie') ?? '';
   return raw.includes('endpoint_raw_session=1')
@@ -25,7 +27,7 @@ const exactEndpoint = endpoint('/machine/exact', {
       name: 'endpoint-raw',
       payload: (request) => request.payload,
       scheme: 'endpoint-raw:v1:hmac-sha256',
-      secret: 'whsec_endpoint_raw',
+      secret: ENDPOINT_HMAC_SECRET,
     }),
   },
   csrf: false,
