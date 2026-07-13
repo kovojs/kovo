@@ -6,6 +6,12 @@ import {
   type Reader,
 } from './managed-db.js';
 import { createSecretBoxingReadDb } from './secret-read-boundary.js';
+import {
+  witnessFreeze,
+  witnessGetOwnPropertyDescriptor,
+  witnessIsArray,
+  witnessObjectIs,
+} from './security-witness-intrinsics.js';
 
 /** Runtime source metadata for one SQLite result column. */
 export interface KovoSqliteRuntimeColumnSource {
@@ -81,34 +87,85 @@ export interface KovoSqliteAppRuntimeDb<Db extends object> {
 export function createSqliteAppRuntimeDb<Db extends object>(
   options: KovoSqliteAppRuntimeOptions<Db>,
 ): KovoSqliteAppRuntimeDb<Db> {
+  if (typeof options !== 'object' || options === null || witnessIsArray(options)) {
+    throw new TypeError('SQLite runtime options must be a stable own-data record.');
+  }
+  const rawDb = requiredSqliteRuntimeValue(options, 'db');
+  const rawMetadata = requiredSqliteRuntimeValue(options, 'metadata');
+  const rawNormalizeTableName = requiredSqliteRuntimeValue(options, 'normalizeTableName');
+  const rawSqliteAuthorizer = requiredSqliteRuntimeValue(options, 'sqliteAuthorizer');
+  const rawSqliteColumnOrigins = optionalSqliteRuntimeValue(options, 'sqliteColumnOrigins');
+  const rawTableNames = requiredSqliteRuntimeValue(options, 'tableNames');
+  if (
+    typeof rawDb !== 'object' ||
+    rawDb === null ||
+    typeof rawMetadata !== 'object' ||
+    rawMetadata === null ||
+    typeof rawNormalizeTableName !== 'function' ||
+    typeof rawSqliteAuthorizer !== 'object' ||
+    rawSqliteAuthorizer === null ||
+    (rawSqliteColumnOrigins !== undefined &&
+      (typeof rawSqliteColumnOrigins !== 'object' || rawSqliteColumnOrigins === null)) ||
+    typeof rawTableNames !== 'function'
+  ) {
+    throw new TypeError('SQLite runtime options contain an invalid authority value.');
+  }
+  const db = rawDb as Db;
+  const metadata = rawMetadata as KovoSqliteAppRuntimeMetadata;
+  const normalizeTableName = rawNormalizeTableName as (table: string) => string;
+  const sqliteAuthorizer = rawSqliteAuthorizer as DeclaredWriteSqliteAuthorizerOptions;
+  const sqliteColumnOrigins = rawSqliteColumnOrigins as KovoSqliteColumnOriginClient | undefined;
+  const tableNames = rawTableNames as (table: unknown) => readonly string[];
   const readDb = createSecretBoxingReadDb(
-    readonlyDb(options.db, {
+    readonlyDb(db, {
       rawRead: {
         dialectLabel: 'SQLite',
         executeMethod: 'all',
-        normalizeTableName: options.normalizeTableName,
-        sqliteAuthorizer: options.sqliteAuthorizer,
+        normalizeTableName,
+        sqliteAuthorizer,
       },
     }),
-    options.metadata,
-    options.sqliteColumnOrigins === undefined
-      ? {}
-      : { sqliteColumnOrigins: options.sqliteColumnOrigins },
+    metadata,
+    sqliteColumnOrigins === undefined ? {} : { sqliteColumnOrigins },
   );
   registerFrameworkManagedDbHooks(
-    options.db,
+    db,
     () => readDb,
     (policy: Parameters<typeof createDeclaredWriteDb>[1]) =>
-      createDeclaredWriteDb(options.db, policy, {
+      createDeclaredWriteDb(db, policy, {
         dialectLabel: 'SQLite',
-        governedColumns: options.metadata,
-        normalizeTableName: options.normalizeTableName,
-        sqliteAuthorizer: options.sqliteAuthorizer,
-        tableNames: options.tableNames,
+        governedColumns: metadata,
+        normalizeTableName,
+        sqliteAuthorizer,
+        tableNames,
       }),
   );
-  return {
-    db: options.db,
+  return witnessFreeze({
+    db,
     readonlyDb: readDb,
-  };
+  });
+}
+
+function optionalSqliteRuntimeValue(source: object, property: PropertyKey): unknown {
+  const before = witnessGetOwnPropertyDescriptor(source, property);
+  const after = witnessGetOwnPropertyDescriptor(source, property);
+  if ((before === undefined) !== (after === undefined)) {
+    throw new TypeError(`SQLite runtime option ${String(property)} must be stable.`);
+  }
+  if (before === undefined) return undefined;
+  if (!('value' in before) || after === undefined || !('value' in after)) {
+    throw new TypeError(`SQLite runtime option ${String(property)} must be an own data property.`);
+  }
+  if (!witnessObjectIs(before.value, after.value)) {
+    throw new TypeError(`SQLite runtime option ${String(property)} changed during validation.`);
+  }
+  return before.value;
+}
+
+function requiredSqliteRuntimeValue(source: object, property: PropertyKey): unknown {
+  const descriptor = witnessGetOwnPropertyDescriptor(source, property);
+  if (descriptor === undefined) {
+    throw new TypeError(`SQLite runtime option ${String(property)} must be an own data property.`);
+  }
+  return optionalSqliteRuntimeValue(source, property);
 }
