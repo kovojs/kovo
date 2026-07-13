@@ -31,6 +31,7 @@ import { registeredGeneratedLiveTargetRenderers } from './live-target-registry.j
 import {
   appendResponseHeader,
   blessRedirectResponse,
+  cloneResponseHeaders,
   isBlessedRedirectResponse,
   type ResponseHeaders,
   type ServerResponseBase,
@@ -1012,38 +1013,47 @@ export async function renderNoJsMutationResponse<
 export function mutationResponseWithoutBrowserState<
   Response extends ServerResponseBase<unknown, ResponseHeaders>,
 >(response: Response): Response {
-  let removed = false;
+  const bodyDescriptor = witnessGetOwnPropertyDescriptor(response, 'body');
+  const headersDescriptor = witnessGetOwnPropertyDescriptor(response, 'headers');
+  const statusDescriptor = witnessGetOwnPropertyDescriptor(response, 'status');
+  if (
+    bodyDescriptor === undefined ||
+    !('value' in bodyDescriptor) ||
+    headersDescriptor === undefined ||
+    !('value' in headersDescriptor) ||
+    statusDescriptor === undefined ||
+    !('value' in statusDescriptor)
+  ) {
+    throw new TypeError(
+      'Mutation response must contain stable own body, headers, and status data.',
+    );
+  }
+
+  const sourceHeaders = cloneResponseHeaders(headersDescriptor.value as ResponseHeaders);
   const headers = witnessCreateNullRecord<ResponseHeaders[string]>() as ResponseHeaders;
-  const names = witnessObjectKeys(response.headers);
+  const names = witnessObjectKeys(sourceHeaders);
   for (let index = 0; index < names.length; index += 1) {
     const name = names[index]!;
-    const descriptor = witnessGetOwnPropertyDescriptor(response.headers, name);
+    const descriptor = witnessGetOwnPropertyDescriptor(sourceHeaders, name);
     if (descriptor === undefined || !('value' in descriptor)) {
       throw new TypeError(`Mutation response header ${name} must be an own data property.`);
     }
     const value = descriptor.value as ResponseHeaders[string];
     const lower = witnessStringToLowerCase(name);
     if (lower === 'set-cookie' || lower === 'clear-site-data') {
-      removed = true;
       continue;
     }
-    if (witnessIsArray(value)) {
-      const snapshot: string[] = [];
-      for (let valueIndex = 0; valueIndex < value.length; valueIndex += 1) {
-        const entry = witnessGetOwnPropertyDescriptor(value, valueIndex);
-        if (entry === undefined || !('value' in entry) || typeof entry.value !== 'string') {
-          throw new TypeError(`Mutation response header ${name} must contain strings.`);
-        }
-        witnessArrayAppend(snapshot, entry.value, 'Mutation response header snapshot');
-      }
-      headers[name] = snapshot;
-    } else {
-      headers[name] = value;
-    }
+    headers[name] = value;
   }
-  if (!removed) return response;
 
-  const sanitized = { ...response, headers } as Response;
+  // SPEC §6.6/KV418: consume the exact framework-owned header snapshot classified above. Returning
+  // the original response when it appeared clean would let a stateful Proxy expose Set-Cookie or
+  // Clear-Site-Data only when the later wire sink enumerates the caller-owned carrier.
+  const sanitized = {
+    body: bodyDescriptor.value,
+    headers,
+    status: statusDescriptor.value,
+  } as Response;
   return isBlessedRedirectResponse(response) ? blessRedirectResponse(sanitized) : sanitized;
 }
 

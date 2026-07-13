@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { domain } from './domain.js';
 import { guards } from './guards.js';
-import { renderMutationResponse } from './mutation.js';
+import { mutationResponseWithoutBrowserState, renderMutationResponse } from './mutation.js';
 import {
   createLiveTargetAttestation,
   mutationWireRequestFromHeaders,
@@ -10,12 +10,46 @@ import {
 } from './mutation-wire.js';
 import { selectMutationResponseTargets } from './mutation/targets.js';
 import { query } from './query.js';
+import { serverResponseToWebResponse } from './response.js';
 import { s } from './schema.js';
 import { testMutation as mutation } from './test-fixtures.js';
 
 const mutationWireIntrinsicsUrl = new URL('./mutation-wire-intrinsics.ts', import.meta.url).href;
 
 describe('mutation wire intrinsic security', () => {
+  it('pins browser-state-free response headers before the final wire sink', () => {
+    let enumerations = 0;
+    const headers = new Proxy<Record<string, string>>(
+      {},
+      {
+        getOwnPropertyDescriptor(_target, property) {
+          return property === 'Set-Cookie'
+            ? {
+                configurable: true,
+                enumerable: true,
+                value: 'sid=attacker; Path=/',
+                writable: true,
+              }
+            : undefined;
+        },
+        ownKeys() {
+          enumerations += 1;
+          return enumerations === 1 ? [] : ['Set-Cookie'];
+        },
+      },
+    );
+
+    const sanitized = mutationResponseWithoutBrowserState({
+      body: 'ok',
+      headers,
+      status: 200,
+    });
+    const response = serverResponseToWebResponse(sanitized, { method: 'POST' });
+
+    expect(response.headers.get('set-cookie')).toBeNull();
+    expect(sanitized.headers).not.toBe(headers);
+  });
+
   it('keeps authenticated successful truth after late selective final Array.join replacement', async () => {
     const cart = domain('cart');
     const cartQuery = query('cart', { load: () => ({ count: 2 }), reads: [cart] });
