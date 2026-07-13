@@ -57,7 +57,7 @@ import {
   capabilityUrlPathname,
 } from './capability-intrinsics.js';
 import {
-  endpoint,
+  frameworkEndpoint,
   pinEndpointSelfVerifyingAuth,
   type EndpointDeclaration,
   type EndpointMethod,
@@ -506,8 +506,9 @@ export function createStorageDownloadEndpoint(
     );
   };
 
-  const declaration = pinEndpointSelfVerifyingAuth(
-    endpoint(basePath, {
+  const declaration = frameworkEndpoint(
+    basePath,
+    {
       access: verifiedAccess,
       method: 'GET',
       mount: 'prefix',
@@ -534,23 +535,28 @@ export function createStorageDownloadEndpoint(
         reservedHeaders: ['X-Content-Type-Options'],
       },
       handler,
-    }),
+    },
+    (frameworkDeclaration) => {
+      pinEndpointSelfVerifyingAuth(frameworkDeclaration);
+      capabilityDefineProperty(frameworkDeclaration, 'allowedMethods', {
+        configurable: false,
+        enumerable: false,
+        value: capabilityFreeze(['GET', 'HEAD']) satisfies readonly ['GET', 'HEAD'],
+        writable: false,
+      });
+      capabilityDefineProperty(frameworkDeclaration, STORAGE_DOWNLOAD_ENDPOINT_INFO, {
+        configurable: false,
+        enumerable: false,
+        value: capabilityFreeze({
+          basePath,
+          oneTimeReplayStore: replayStore !== undefined,
+          secret,
+          ...(scopeForRequest === undefined ? {} : { scope: scopeForRequest }),
+        } satisfies StorageDownloadEndpointInfo),
+        writable: false,
+      });
+    },
   );
-  capabilityDefineProperty(declaration, 'allowedMethods', {
-    configurable: false,
-    enumerable: false,
-    value: ['GET', 'HEAD'] satisfies readonly ['GET', 'HEAD'],
-  });
-  capabilityDefineProperty(declaration, STORAGE_DOWNLOAD_ENDPOINT_INFO, {
-    configurable: false,
-    enumerable: false,
-    value: capabilityFreeze({
-      basePath,
-      oneTimeReplayStore: replayStore !== undefined,
-      secret,
-      ...(scopeForRequest === undefined ? {} : { scope: scopeForRequest }),
-    } satisfies StorageDownloadEndpointInfo),
-  });
   return declaration;
 }
 

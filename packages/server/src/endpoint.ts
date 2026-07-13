@@ -244,6 +244,49 @@ export function endpoint<
   path: Path,
   definition: EndpointDefinition<Method, Mount, Db>,
 ): EndpointDeclaration<Path, Method, Mount, Db> {
+  return witnessFreeze(constructEndpointDeclaration(path, definition)) as EndpointDeclaration<
+    Path,
+    Method,
+    Mount,
+    Db
+  >;
+}
+
+/**
+ * Construct a framework-owned endpoint, synchronously attach private framework metadata, then
+ * close the declaration before it becomes caller-visible. This is deliberately absent from the
+ * public routing API: app-authored endpoints must use {@link endpoint}, whose authority is closed
+ * immediately (SPEC §6.6/§9.1).
+ *
+ * @internal
+ */
+export function frameworkEndpoint<
+  const Path extends string,
+  const Method extends EndpointMethod = EndpointMethod,
+  const Mount extends EndpointMount = 'exact',
+  Db = unknown,
+>(
+  path: Path,
+  definition: EndpointDefinition<Method, Mount, Db>,
+  decorate: (declaration: EndpointDeclaration<Path, Method, Mount, Db>) => void,
+): EndpointDeclaration<Path, Method, Mount, Db> {
+  const declaration = constructEndpointDeclaration(path, definition);
+  const result = decorate(declaration);
+  if (result !== undefined) {
+    throw new TypeError('Framework endpoint decoration must complete synchronously.');
+  }
+  return witnessFreeze(declaration) as EndpointDeclaration<Path, Method, Mount, Db>;
+}
+
+function constructEndpointDeclaration<
+  const Path extends string,
+  const Method extends EndpointMethod = EndpointMethod,
+  const Mount extends EndpointMount = 'exact',
+  Db = unknown,
+>(
+  path: Path,
+  definition: EndpointDefinition<Method, Mount, Db>,
+): EndpointDeclaration<Path, Method, Mount, Db> {
   if (typeof definition !== 'object' || definition === null || witnessIsArray(definition)) {
     throw new TypeError('endpoint() requires a stable own-data definition record.');
   }
@@ -311,7 +354,7 @@ export function endpoint<
     access as AccessDecision | undefined,
   );
   pinEndpointAuth(declaration, auth as EndpointAuthDeclaration | undefined);
-  return witnessFreeze(declaration) as EndpointDeclaration<Path, Method, Mount, Db>;
+  return declaration;
 }
 
 function snapshotEndpointResponsePosture(source: unknown): EndpointResponsePosture {
