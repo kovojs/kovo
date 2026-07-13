@@ -52,4 +52,61 @@ describe('package component prefix manifest discovery', () => {
       prefix: null,
     });
   });
+
+  it('ignores inherited manifest and option fields', () => {
+    const inheritedManifest = Object.create({
+      kovo: { prefix: 'forged-' },
+      name: '@forged/package',
+    }) as unknown;
+    expect(packageComponentPrefixFactFromPackageManifest(inheritedManifest)).toBeNull();
+
+    const inheritedOptions = Object.create({
+      effectivePrefix: 'forged-effective-',
+      requirePrefix: true,
+    }) as { effectivePrefix?: string; requirePrefix?: boolean };
+    expect(
+      packageComponentPrefixFactFromPackageManifest({ name: '@missing/prefix' }, inheritedOptions),
+    ).toBeNull();
+  });
+
+  it('does not invoke manifest accessors or a late Array.isArray replacement', () => {
+    let getterHits = 0;
+    const accessorManifest = Object.defineProperty({}, 'name', {
+      enumerable: true,
+      get() {
+        getterHits += 1;
+        return '@forged/accessor';
+      },
+    });
+    expect(packageComponentPrefixFactFromPackageManifest(accessorManifest)).toBeNull();
+    expect(getterHits).toBe(0);
+
+    const nativeIsArray = Array.isArray;
+    let arrayPoisonHits = 0;
+    try {
+      Array.isArray = () => {
+        arrayPoisonHits += 1;
+        return false;
+      };
+      const arrayManifest = Object.assign([], {
+        kovo: { prefix: 'forged-' },
+        name: '@forged/array',
+      });
+      expect(packageComponentPrefixFactFromPackageManifest(arrayManifest)).toBeNull();
+      expect(arrayPoisonHits).toBe(0);
+    } finally {
+      Array.isArray = nativeIsArray;
+    }
+  });
+
+  it('returns an immutable own-data prefix fact', () => {
+    const fact = packageComponentPrefixFactFromPackageManifest({
+      kovo: { prefix: 'acme-' },
+      name: '@acme/primitives',
+    });
+
+    expect(fact).toEqual({ packageName: '@acme/primitives', prefix: 'acme-' });
+    expect(Object.isFrozen(fact)).toBe(true);
+    expect(Object.hasOwn(fact ?? {}, 'packageName')).toBe(true);
+  });
 });

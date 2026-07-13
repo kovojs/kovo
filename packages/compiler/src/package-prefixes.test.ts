@@ -140,6 +140,43 @@ export const Shell = component({
     }
   });
 
+  it('does not forge discovered package prefix facts from poisoned prototypes', () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-prefix-prototype-authority-'));
+    const originalKovo = Object.getOwnPropertyDescriptor(Object.prototype, 'kovo');
+    let diagnostics: ReturnType<typeof compileComponentModule>['diagnostics'] | undefined;
+
+    try {
+      writePackageManifest(root, '@empty/package', { name: '@empty/package' });
+      writePackageManifest(root, '@real/package', {
+        kovo: { prefix: 'acme-' },
+        name: '@real/package',
+      });
+      Object.defineProperty(Object.prototype, 'kovo', {
+        configurable: true,
+        value: { prefix: 'acme-' },
+        writable: true,
+      });
+
+      diagnostics = compileComponentModule({
+        fileName,
+        packagePrefixDiscoveryRoot: root,
+        source: `
+import { component } from '@kovojs/core';
+import '@empty/package';
+import '@real/package';
+
+export const Shell = component({
+  render: () => <section></section>,
+});
+`,
+      }).diagnostics;
+    } finally {
+      restoreProperty(Object.prototype, 'kovo', originalKovo);
+      rmSync(root, { force: true, recursive: true });
+    }
+    expect(diagnostics).toEqual([]);
+  });
+
   it('carries explicit package prefix facts into the app explain graph', () => {
     const derived = deriveAppGraph({
       graph: {
@@ -236,4 +273,16 @@ function writePackageManifest(
   const dir = join(root, 'node_modules', ...packageName.split('/'));
   mkdirSync(dir, { recursive: true });
   writeFileSync(join(dir, 'package.json'), `${JSON.stringify(manifest)}\n`, 'utf8');
+}
+
+function restoreProperty(
+  target: object,
+  property: PropertyKey,
+  descriptor: PropertyDescriptor | undefined,
+): void {
+  if (descriptor === undefined) {
+    Reflect.deleteProperty(target, property);
+  } else {
+    Object.defineProperty(target, property, descriptor);
+  }
 }
