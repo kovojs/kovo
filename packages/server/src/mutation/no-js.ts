@@ -20,6 +20,10 @@ import type { InferSchema, Schema } from '../schema.js';
 import type { MutationDefinition, MutationFail, MutationSuccess } from './definition.js';
 import { renderDefaultFailurePage } from './failure-html.js';
 import { reportServerError } from '../diagnostics.js';
+import {
+  requestStateIsSingleLeadingSlashPath,
+  requestStateLocationWithQuery,
+} from '../request-state-intrinsics.js';
 
 export interface NoJsMutationLifecycleResponseOptions<
   Key extends string,
@@ -291,7 +295,6 @@ function mutationGuardFailureIsUnauthenticated<Request>(
 }
 
 function loginLocation(next: string): string {
-  const url = new URL('/login', 'https://kovo.local');
-  url.searchParams.set('next', next.startsWith('/') && !next.startsWith('//') ? next : '/');
-  return `${url.pathname}${url.search}${url.hash}`;
+  const safeNext = requestStateIsSingleLeadingSlashPath(next) ? next : '/';
+  return requestStateLocationWithQuery('/login', 'https://kovo.local', 'next', safeNext);
 }

@@ -7,6 +7,8 @@ import {
   RedosPatternError,
   testLinearPattern,
   unsafeRegex,
+  unsafeRegexPatternSnapshot,
+  type UnsafeRegexBrand,
 } from './redos.js';
 import {
   REDOS_LINEAR_ADVERSARIAL_CORPUS,
@@ -45,6 +47,52 @@ describe('blessed format matchers (KV434)', () => {
     expect(BLESSED_FORMATS.url.test('http://localhost:3000')).toBe(true);
     expect(BLESSED_FORMATS.url.test('ftp://example.com')).toBe(false);
     expect(BLESSED_FORMATS.url.test('https://')).toBe(false);
+  });
+
+  it('keeps direct blessed validators stable after application code poisons string intrinsics', () => {
+    const originals = {
+      charCodeAt: String.prototype.charCodeAt,
+      endsWith: String.prototype.endsWith,
+      includes: String.prototype.includes,
+      indexOf: String.prototype.indexOf,
+      lastIndexOf: String.prototype.lastIndexOf,
+      slice: String.prototype.slice,
+      split: String.prototype.split,
+      startsWith: String.prototype.startsWith,
+      toLowerCase: String.prototype.toLowerCase,
+    };
+    let results: readonly boolean[] = [];
+    try {
+      String.prototype.charCodeAt = () => 0x61;
+      String.prototype.endsWith = () => false;
+      String.prototype.includes = () => true;
+      String.prototype.indexOf = () => 1;
+      String.prototype.lastIndexOf = () => 1;
+      String.prototype.slice = () => 'forged';
+      String.prototype.split = () => ['forged.test'];
+      String.prototype.startsWith = () => true;
+      String.prototype.toLowerCase = () => 'https://forged.test';
+      results = [
+        BLESSED_FORMATS.email.test('not-an-email'),
+        BLESSED_FORMATS.slug.test('UPPER'),
+        BLESSED_FORMATS.url.test('javascript:alert(1)'),
+        BLESSED_FORMATS.uuid.test('not-a-uuid'),
+        BLESSED_FORMATS.email.test('user@example.com'),
+        BLESSED_FORMATS.url.test('https://example.com/path'),
+      ];
+    } finally {
+      String.prototype.charCodeAt = originals.charCodeAt;
+      String.prototype.endsWith = originals.endsWith;
+      String.prototype.includes = originals.includes;
+      String.prototype.indexOf = originals.indexOf;
+      String.prototype.lastIndexOf = originals.lastIndexOf;
+      String.prototype.slice = originals.slice;
+      String.prototype.split = originals.split;
+      String.prototype.startsWith = originals.startsWith;
+      String.prototype.toLowerCase = originals.toLowerCase;
+    }
+
+    expect(results).toEqual([false, false, false, false, true, true]);
   });
 });
 
@@ -259,6 +307,43 @@ describe('unsafeRegex escape (KV434)', () => {
     expect(drainUnsafeRegexFacts()).toEqual([]);
 
     expect(() => unsafeRegex(/x/u, '')).toThrow(/justification/u);
+  });
+
+  it('requires constructor provenance and pins the audited pattern snapshot', () => {
+    // @ts-expect-error UnsafeRegexBrand uses a module-private symbol, not public structural fields.
+    const forgedAtTypeLevel: UnsafeRegexBrand = {
+      justification: 'forged',
+      regex: /forged/u,
+      unsafe: true,
+    };
+    expect(() => unsafeRegexPatternSnapshot(forgedAtTypeLevel)).toThrow(/minted by unsafeRegex/u);
+
+    const mutable = /safe/u;
+    const brand = unsafeRegex(mutable, 'audited mutable source');
+    const before = unsafeRegexPatternSnapshot(brand);
+    mutable.compile('(a+)+$', 'u');
+
+    expect(unsafeRegexPatternSnapshot(brand)).toEqual(before);
+    expect(before).toEqual({ flags: 'u', source: 'safe' });
+    expect(Object.isFrozen(brand)).toBe(true);
+  });
+
+  it('rejects a blank audit justification under a poisoned trim intrinsic', () => {
+    const originalTrim = String.prototype.trim;
+    let observed: unknown;
+    try {
+      String.prototype.trim = () => 'forged justification';
+      try {
+        unsafeRegex(/x/u, '');
+      } catch (error) {
+        observed = error;
+      }
+    } finally {
+      String.prototype.trim = originalTrim;
+    }
+
+    expect(observed).toBeInstanceOf(Error);
+    expect(String((observed as Error).message)).toMatch(/justification/u);
   });
 });
 

@@ -17,6 +17,7 @@ import { query } from './query.js';
 import { s, type Schema } from './schema.js';
 import { cartBadgeFragmentHtml, testMutation as mutation } from './test-fixtures.js';
 import { createLiveTargetAttestation } from './mutation-wire.js';
+import { noJsMutationReauthResponse } from './mutation/no-js.js';
 
 const mutationEndpointTestBuildToken = 'mutation-endpoint-test-build';
 
@@ -391,6 +392,43 @@ describe('server mutation endpoint routing', () => {
         'Cache-Control': 'no-store',
         Location: '/login?next=%2Fcart',
       },
+      status: 303,
+    });
+  });
+
+  it('pins no-JS reauth next-path and URL controls against application realm poisoning', () => {
+    const originalStartsWith = String.prototype.startsWith;
+    const urlDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'URL');
+    let response: ReturnType<typeof noJsMutationReauthResponse>;
+    try {
+      String.prototype.startsWith = (search: string) => search === '/';
+      Object.defineProperty(globalThis, 'URL', {
+        configurable: true,
+        value: class PoisonedUrl {
+          pathname = '/forged';
+          search = '?next=https://evil.test';
+          hash = '';
+          searchParams = { set() {} };
+        },
+        writable: true,
+      });
+      response = noJsMutationReauthResponse(
+        { auth: 'unauthenticated', code: 'UNAUTHORIZED', status: 422 },
+        { session: null },
+        { currentUrl: 'https://evil.test' },
+      );
+    } finally {
+      String.prototype.startsWith = originalStartsWith;
+      if (urlDescriptor === undefined) {
+        delete (globalThis as { URL?: typeof URL }).URL;
+      } else {
+        Object.defineProperty(globalThis, 'URL', urlDescriptor);
+      }
+    }
+
+    expect(response).toEqual({
+      body: '',
+      headers: { 'Cache-Control': 'no-store', Location: '/login?next=%2F' },
       status: 303,
     });
   });

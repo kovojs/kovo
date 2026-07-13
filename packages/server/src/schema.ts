@@ -21,6 +21,7 @@ import {
   PATTERN_MAX_INPUT_LENGTH,
   compileLinearPattern,
   testLinearPattern,
+  unsafeRegexPatternSnapshot,
 } from './redos.js';
 import {
   createWitnessSet,
@@ -918,8 +919,9 @@ class StringSchemaImpl implements StringSchema {
 
   matches(brand: UnsafeRegexBrand): StringSchema {
     // The audited escape: the ReDoS risk was accepted + recorded at `unsafeRegex(...)`.
-    const source = securityRegExpSource(brand.regex);
-    const flags = stableValidationRegexFlags(securityRegExpFlags(brand.regex));
+    const snapshot = unsafeRegexPatternSnapshot(brand);
+    const source = snapshot.source;
+    const flags = stableValidationRegexFlags(snapshot.flags);
     return this.#with({ kind: 'unsafe', regex: securityCreateRegExp(source, flags) });
   }
 

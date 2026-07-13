@@ -1021,6 +1021,13 @@ function cloneMutationReplayResponse<Response extends MutationReplayResponse>(
   return isBlessedRedirectResponse(response) ? blessRedirectResponse(cloned) : cloned;
 }
 
+/** @internal Reconstruct an untrusted replay-store response as stable framework-owned data. */
+export function snapshotMutationReplayResponse<Response extends MutationReplayResponse>(
+  response: Response,
+): Response {
+  return cloneMutationReplayResponse(response);
+}
+
 function requiredMutationReplayResponseValue(source: object, property: PropertyKey): unknown {
   const before = witnessGetOwnPropertyDescriptor(source, property);
   const after = witnessGetOwnPropertyDescriptor(source, property);

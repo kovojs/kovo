@@ -7,6 +7,7 @@ import {
   readMutationReplay,
   reserveReplayBeforeRun,
   reserveMutationReplayBeforeRun,
+  snapshotMutationReplayResponse,
 } from '../replay.js';
 import { formLikeToRecord } from '../schema.js';
 import type {
@@ -20,6 +21,12 @@ import type {
 import type { ResolvedGuardFailure } from '../guards.js';
 import type { MutationFail, MutationSuccess } from './definition.js';
 import type { ValidationFailurePayload } from '../schema.js';
+import {
+  witnessGetOwnPropertyDescriptor,
+  witnessIsArray,
+  witnessObjectIs,
+} from '../security-witness-intrinsics.js';
+import { securityStringStartsWith } from '../response-security-intrinsics.js';
 
 export type MutationLifecycleReplayReservation<Response> = {
   abort?(): void;
@@ -146,8 +153,9 @@ export function noJsMutationReplayPolicy<Request, Value>(mode: {
     async read() {
       const context = await replayContext();
       const scope = context.scope === null ? `nojs:${mode.mutationKey}` : `nojs:${context.scope}`;
+      const response = await mode.request.replayStore?.get(scope, idem, context.fingerprint);
       return noJsReplayResponseOrConflict(
-        await mode.request.replayStore?.get(scope, idem, context.fingerprint),
+        response === undefined ? undefined : snapshotMutationReplayResponse(response),
       );
     },
     async reserve() {
@@ -165,7 +173,7 @@ export function noJsMutationReplayPolicy<Request, Value>(mode: {
       if (result.kind === 'replayed') {
         return {
           kind: 'replayed',
-          response: noJsReplayResultOrConflict(result.response),
+          response: noJsReplayResultOrConflict(snapshotMutationReplayResponse(result.response)),
         };
       }
       if (result.kind !== 'reserved') return result;
@@ -180,20 +188,50 @@ export function noJsMutationReplayPolicy<Request, Value>(mode: {
 export function isNoJsReplayResponse(
   response: MutationEndpointReplayResponse,
 ): response is NoJsMutationResponse {
+  const status = stableReplayOwnData(response, 'status');
+  const headers = stableReplayOwnData(response, 'headers');
+  const contentType = stableReplayHeader(headers, 'Content-Type');
   return (
-    response.status === 303 ||
-    String(response.headers['Content-Type'] ?? '').startsWith('text/html;')
+    status === 303 ||
+    (typeof contentType === 'string' && securityStringStartsWith(contentType, 'text/html;'))
   );
 }
 
 export function isEnhancedReplayResponse(
   response: MutationEndpointReplayResponse,
 ): response is BufferedMutationWireResponse {
+  const status = stableReplayOwnData(response, 'status');
+  const headers = stableReplayOwnData(response, 'headers');
+  const contentType = stableReplayHeader(headers, 'Content-Type');
+  const reauth = stableReplayHeader(headers, 'Kovo-Reauth');
   return (
-    response.status !== 303 &&
-    (String(response.headers['Content-Type'] ?? '').startsWith('text/vnd.kovo.fragment+html;') ||
-      typeof response.headers['Kovo-Reauth'] === 'string')
+    status !== undefined &&
+    status !== 303 &&
+    ((typeof contentType === 'string' &&
+      securityStringStartsWith(contentType, 'text/vnd.kovo.fragment+html;')) ||
+      typeof reauth === 'string')
   );
+}
+
+function stableReplayHeader(headers: unknown, name: string): unknown {
+  if (typeof headers !== 'object' || headers === null || witnessIsArray(headers)) return undefined;
+  return stableReplayOwnData(headers, name);
+}
+
+function stableReplayOwnData(source: unknown, property: PropertyKey): unknown {
+  if (typeof source !== 'object' || source === null || witnessIsArray(source)) return undefined;
+  const before = witnessGetOwnPropertyDescriptor(source, property);
+  const after = witnessGetOwnPropertyDescriptor(source, property);
+  if (
+    before === undefined ||
+    after === undefined ||
+    !('value' in before) ||
+    !('value' in after) ||
+    !witnessObjectIs(before.value, after.value)
+  ) {
+    return undefined;
+  }
+  return before.value;
 }
 
 function enhancedReplayResponseOrConflict(

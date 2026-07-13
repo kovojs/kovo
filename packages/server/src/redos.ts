@@ -22,6 +22,26 @@ import {
   linearRegexMatch,
   type LinearRegexProgram,
 } from './internal/linear-regex/index.js';
+import {
+  createWitnessWeakMap,
+  witnessFreeze,
+  witnessWeakMapGet,
+  witnessWeakMapSet,
+} from './security-witness-intrinsics.js';
+import {
+  securityRegExpFlags,
+  securityRegExpSource,
+  securityStringCharCodeAt,
+  securityStringEndsWith,
+  securityStringIncludes,
+  securityStringIndexOf,
+  securityStringLastIndexOf,
+  securityStringSlice,
+  securityStringSplit,
+  securityStringStartsWith,
+  securityStringToLowerCase,
+  securityStringTrim,
+} from './response-security-intrinsics.js';
 
 /** A blessed, backtracking-free format matcher and its name (for error messages / capability facts). */
 export interface BlessedFormat {
@@ -48,7 +68,7 @@ export const slugFormat: BlessedFormat = {
     if (value.length === 0 || value.length > 256) return false;
     let prevHyphen = true; // leading hyphen disallowed
     for (let i = 0; i < value.length; i += 1) {
-      const c = value.charCodeAt(i);
+      const c = securityStringCharCodeAt(value, i);
       const isLowerAlnum = isDigit(c) || (c >= 0x61 && c <= 0x7a);
       if (isLowerAlnum) {
         prevHyphen = false;
@@ -69,7 +89,7 @@ export const uuidFormat: BlessedFormat = {
   test(value) {
     if (value.length !== 36) return false;
     for (let i = 0; i < 36; i += 1) {
-      const c = value.charCodeAt(i);
+      const c = securityStringCharCodeAt(value, i);
       if (i === 8 || i === 13 || i === 18 || i === 23) {
         if (c !== 0x2d) return false;
       } else if (!isHex(c)) {
@@ -89,19 +109,23 @@ export const emailFormat: BlessedFormat = {
   name: 'email',
   test(value) {
     if (value.length === 0 || value.length > 254) return false;
-    const at = value.indexOf('@');
-    if (at <= 0 || at !== value.lastIndexOf('@')) return false; // exactly one @, non-empty local
-    const local = value.slice(0, at);
-    const domain = value.slice(at + 1);
+    const at = securityStringIndexOf(value, '@');
+    if (at <= 0 || at !== securityStringLastIndexOf(value, '@')) return false; // exactly one @, non-empty local
+    const local = securityStringSlice(value, 0, at);
+    const domain = securityStringSlice(value, at + 1);
     if (local.length > 64 || domain.length === 0) return false;
     // Local part: alnum and a conservative set of specials, no leading/trailing/doubled dot.
     let prevDot = true;
     for (let i = 0; i < local.length; i += 1) {
-      const c = local.charCodeAt(i);
+      const c = securityStringCharCodeAt(local, i);
       if (c === 0x2e /* . */) {
         if (prevDot) return false;
         prevDot = true;
-      } else if (isAsciiLetter(c) || isDigit(c) || "!#$%&'*+/=?^_`{|}~-".includes(local[i] ?? '')) {
+      } else if (
+        isAsciiLetter(c) ||
+        isDigit(c) ||
+        securityStringIncludes("!#$%&'*+/=?^_`{|}~-", local[i] ?? '')
+      ) {
         prevDot = false;
       } else {
         return false;
@@ -115,20 +139,21 @@ export const emailFormat: BlessedFormat = {
 /** A hostname: dot-separated labels of alnum/hyphen (no leading/trailing hyphen), at least 2 labels. */
 function isValidDomain(domain: string): boolean {
   if (domain.length > 253) return false;
-  const labels = domain.split('.');
+  const labels = securityStringSplit(domain, '.');
   if (labels.length < 2) return false;
-  for (const label of labels) {
+  for (let labelIndex = 0; labelIndex < labels.length; labelIndex += 1) {
+    const label = labels[labelIndex]!;
     if (label.length === 0 || label.length > 63) return false;
-    if (label.startsWith('-') || label.endsWith('-')) return false;
+    if (securityStringStartsWith(label, '-') || securityStringEndsWith(label, '-')) return false;
     for (let i = 0; i < label.length; i += 1) {
-      const c = label.charCodeAt(i);
+      const c = securityStringCharCodeAt(label, i);
       if (!isAsciiLetter(c) && !isDigit(c) && c !== 0x2d) return false;
     }
   }
   // Final label (TLD) must be all-letters.
   const tld = labels[labels.length - 1] ?? '';
   for (let i = 0; i < tld.length; i += 1) {
-    if (!isAsciiLetter(tld.charCodeAt(i))) return false;
+    if (!isAsciiLetter(securityStringCharCodeAt(tld, i))) return false;
   }
   return true;
 }
@@ -138,10 +163,14 @@ export const urlFormat: BlessedFormat = {
   name: 'url',
   test(value) {
     if (value.length === 0 || value.length > 2048) return false;
-    const lower = value.toLowerCase();
-    const scheme = lower.startsWith('https://') ? 8 : lower.startsWith('http://') ? 7 : -1;
+    const lower = securityStringToLowerCase(value);
+    const scheme = securityStringStartsWith(lower, 'https://')
+      ? 8
+      : securityStringStartsWith(lower, 'http://')
+        ? 7
+        : -1;
     if (scheme === -1) return false;
-    const rest = value.slice(scheme);
+    const rest = securityStringSlice(value, scheme);
     if (rest.length === 0) return false;
     // Authority ends at the first `/`, `?`, or `#`.
     let end = rest.length;
@@ -152,14 +181,16 @@ export const urlFormat: BlessedFormat = {
         break;
       }
     }
-    const authority = rest.slice(0, end);
+    const authority = securityStringSlice(rest, 0, end);
     // Strip an optional `:port`.
-    const colon = authority.lastIndexOf(':');
-    const host = colon === -1 ? authority : authority.slice(0, colon);
+    const colon = securityStringLastIndexOf(authority, ':');
+    const host = colon === -1 ? authority : securityStringSlice(authority, 0, colon);
     if (colon !== -1) {
-      const port = authority.slice(colon + 1);
+      const port = securityStringSlice(authority, colon + 1);
       if (port.length === 0 || port.length > 5) return false;
-      for (let i = 0; i < port.length; i += 1) if (!isDigit(port.charCodeAt(i))) return false;
+      for (let i = 0; i < port.length; i += 1) {
+        if (!isDigit(securityStringCharCodeAt(port, i))) return false;
+      }
     }
     return host === 'localhost' || isValidDomain(host);
   },
@@ -221,9 +252,31 @@ const unsafeRegexFacts = createBoundedRuntimeAuditCollector<UnsafeRegexFact>();
 
 /** A regex brand carrying the audited ReDoS-risk acceptance from {@link unsafeRegex}. */
 export interface UnsafeRegexBrand {
+  readonly [unsafeRegexBrand]: { readonly kind: 'unsafe-regex' };
   readonly justification: string;
   readonly regex: RegExp;
   readonly unsafe: true;
+}
+
+declare const unsafeRegexBrand: unique symbol;
+
+interface UnsafeRegexPatternSnapshot {
+  readonly flags: string;
+  readonly source: string;
+}
+
+const unsafeRegexPatternSnapshots = createWitnessWeakMap<object, UnsafeRegexPatternSnapshot>();
+
+/** @internal Resolve only a pattern genuinely minted by {@link unsafeRegex}. */
+export function unsafeRegexPatternSnapshot(brand: UnsafeRegexBrand): UnsafeRegexPatternSnapshot {
+  if ((typeof brand !== 'object' && typeof brand !== 'function') || brand === null) {
+    throw new TypeError('s.string().matches(...) requires a value minted by unsafeRegex(...).');
+  }
+  const snapshot = witnessWeakMapGet(unsafeRegexPatternSnapshots, brand);
+  if (snapshot === undefined) {
+    throw new TypeError('s.string().matches(...) requires a value minted by unsafeRegex(...).');
+  }
+  return snapshot;
 }
 
 /**
@@ -236,11 +289,17 @@ export interface UnsafeRegexBrand {
  * @param justification - Why the ReDoS risk is acceptable here (required, audited).
  */
 export function unsafeRegex(regex: RegExp, justification: string): UnsafeRegexBrand {
-  if (!justification || justification.trim().length === 0) {
+  if (!justification || securityStringTrim(justification).length === 0) {
     throw new Error('unsafeRegex(...) requires a justification (KV434, SPEC §6.6/§9.5).');
   }
-  unsafeRegexFacts.record({ justification, source: regex.source });
-  return { justification, regex, unsafe: true };
+  const snapshot = witnessFreeze({
+    flags: securityRegExpFlags(regex),
+    source: securityRegExpSource(regex),
+  });
+  const brand = witnessFreeze({ justification, regex, unsafe: true as const }) as UnsafeRegexBrand;
+  witnessWeakMapSet(unsafeRegexPatternSnapshots, brand, snapshot);
+  unsafeRegexFacts.record({ justification, source: snapshot.source });
+  return brand;
 }
 
 /**
