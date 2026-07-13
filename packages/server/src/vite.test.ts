@@ -221,8 +221,22 @@ export default createApp({
     }
   });
 
-  it('rejects generated app entries', () => {
-    expect(() => kovo({ app: '/src/generated/app.kovo-route.tsx' })).toThrow(
+  it('rejects generated app entries under late String.includes poisoning', () => {
+    const originalIncludes = String.prototype.includes;
+    let observed: unknown;
+    try {
+      String.prototype.includes = () => false;
+      try {
+        kovo({ app: '/src/generated/app.kovo-route.tsx' });
+      } catch (error) {
+        observed = error;
+      }
+    } finally {
+      String.prototype.includes = originalIncludes;
+    }
+
+    expect(observed).toBeInstanceOf(TypeError);
+    expect(String((observed as Error).message)).toContain(
       'kovo({ app }) must point at an authored app entry',
     );
   });

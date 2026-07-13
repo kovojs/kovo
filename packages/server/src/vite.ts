@@ -9,7 +9,6 @@ assertDataPlaneStaticAnalysisIntrinsics();
 import { existsSync, readFileSync } from 'node:fs';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { registerHooks } from 'node:module';
-import { dirname, isAbsolute, relative, resolve } from 'node:path';
 
 import type { DiagnosticDocumentDiagnostic } from './document-diagnostics.js';
 import type { StylesheetAsset } from './hints.js';
@@ -27,9 +26,36 @@ import {
   trustedViteSecurityProfileSentinel,
 } from './internal/vite-security-sentinel.ts';
 import type { KovoAppShellViteCompilerModuleDiagnosticReport } from './vite-dev.js';
+import {
+  buildOwnDataProperty,
+  buildSecurityFileUrlToPath,
+  buildSecurityPathDirname,
+  buildSecurityPathIsAbsolute,
+  buildSecurityPathRelative,
+  buildSecurityPathResolve,
+  buildSecuritySourceLiteral,
+  buildSecurityUrlSnapshot,
+  commitBuildArrayValue,
+  snapshotBuildArray,
+} from './build-security-intrinsics.js';
+import {
+  securityArrayIsArray,
+  securityArrayJoin,
+  securityRegExpExec,
+  securityStringEndsWith,
+  securityStringIncludes,
+  securityStringIndexOf,
+  securityStringReplaceAll,
+  securityStringSlice,
+  securityStringStartsWith,
+  securityStringTrim,
+} from './response-security-intrinsics.js';
 
 const viteClearTimeout = globalThis.clearTimeout;
 const viteSetTimeout = globalThis.setTimeout;
+const viteExistsSync = existsSync;
+const viteReadFileSync = readFileSync;
+const viteRegisterHooks = registerHooks;
 const viteParanoidValue = process.env.KOVO_PARANOID;
 const viteBootParanoidStaticAdvisory = viteParanoidValue === '1' || viteParanoidValue === 'true';
 
@@ -151,24 +177,42 @@ interface CssSplitChunks {
  * must default-export a KovoApp; generated route artifacts stay compiler-owned.
  */
 export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
+  if (typeof options !== 'object' || options === null || securityArrayIsArray(options)) {
+    throw new TypeError('kovo(...) requires an own-data options object.');
+  }
   const trustedOptions = options as KovoVitePluginOptions & {
     [trustedViteSecurityProfileIntegrationSentinel]?: unknown;
     [trustedViteSecurityProfileParanoidSentinel]?: unknown;
     [trustedViteSecurityProfileSentinel]?: unknown;
   };
+  const trustedProfile = buildOwnDataProperty(
+    trustedOptions,
+    trustedViteSecurityProfileSentinel,
+    'trusted Vite security profile',
+  );
+  const trustedIntegration = buildOwnDataProperty(
+    trustedOptions,
+    trustedViteSecurityProfileIntegrationSentinel,
+    'trusted Vite security profile integration',
+  );
+  const trustedParanoid = buildOwnDataProperty(
+    trustedOptions,
+    trustedViteSecurityProfileParanoidSentinel,
+    'trusted Vite paranoid disposition',
+  );
   const hasTrustedSecurityProfile =
-    trustedOptions[trustedViteSecurityProfileSentinel] === trustedViteSecurityProfileSentinel;
+    trustedProfile.present && trustedProfile.value === trustedViteSecurityProfileSentinel;
   const trustedCreateDevIntegration =
     hasTrustedSecurityProfile &&
-    typeof trustedOptions[trustedViteSecurityProfileIntegrationSentinel] === 'function'
-      ? (trustedOptions[
-          trustedViteSecurityProfileIntegrationSentinel
-        ] as typeof import('./vite-dev.js').createKovoAppShellViteDevIntegration)
+    trustedIntegration.present &&
+    typeof trustedIntegration.value === 'function'
+      ? (trustedIntegration.value as typeof import('./vite-dev.js').createKovoAppShellViteDevIntegration)
       : undefined;
   const paranoidStaticAdvisory = hasTrustedSecurityProfile
-    ? trustedOptions[trustedViteSecurityProfileParanoidSentinel] === true
+    ? trustedParanoid.present && trustedParanoid.value === true
     : viteBootParanoidStaticAdvisory;
-  const app = authoredAppEntry(options.app);
+  const appProperty = buildOwnDataProperty(options, 'app', 'kovo({ app })');
+  const app = authoredAppEntry(appProperty.present ? appProperty.value : undefined);
   const runtimeRegistryPublicId = `virtual:kovo-runtime-registry:${app}`;
   const runtimeRegistryResolvedId = `\0${runtimeRegistryPublicId}`;
   let root = process.cwd();
@@ -207,7 +251,7 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
 
     const reportedNow = new Set<string>();
     for (const [fileName, fileDiagnostics] of byFile) {
-      const absFileName = slashPath(resolve(root, fileName));
+      const absFileName = slashPath(buildSecurityPathResolve(root, fileName));
       reportedNow.add(absFileName);
       emit(dataPlaneLedgerReport(absFileName, fileDiagnostics));
     }
@@ -224,7 +268,11 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
   const scheduleDevDataPlaneGate = async (file: string): Promise<void> => {
     if (viteCommand !== 'serve') return;
     const adapter = await importKovoDataPlaneStaticAnalysisModule();
-    if (!adapter.isDataPlaneSourceFile(file, dirname(appEntryFileName(app, root)))) return;
+    if (
+      !adapter.isDataPlaneSourceFile(file, buildSecurityPathDirname(appEntryFileName(app, root)))
+    ) {
+      return;
+    }
     compilerQueryShapeFacts = undefined;
     if (devDataPlaneDebounce) viteClearTimeout(devDataPlaneDebounce);
     devDataPlaneDebounce = viteSetTimeout(() => {
@@ -270,12 +318,12 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
     const result = module.extractAppRouteCssTargets({
       fileName,
       packagePrefixDiscoveryRoot: root,
-      source: existsSync(fileName) ? readFileSync(fileName, 'utf8') : '',
+      source: viteExistsSync(fileName) ? viteReadFileSync(fileName, 'utf8') : '',
     });
 
     return rootRelativeRouteTargets(
       result.routeTargets as readonly CssRouteSplitTarget[],
-      dirname(fileName),
+      buildSecurityPathDirname(fileName),
       root,
     );
   };
@@ -283,10 +331,20 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
   const plugin: KovoViteRuntimePlugin = {
     enforce: 'pre',
     async configResolved(config) {
-      root = config.root ?? root;
+      const rootProperty = buildOwnDataProperty(config, 'root', 'Vite resolved root');
+      if (rootProperty.present) {
+        if (typeof rootProperty.value !== 'string') {
+          throw new TypeError('Vite resolved root must be a string.');
+        }
+        root = rootProperty.value;
+      }
+      const commandProperty = buildOwnDataProperty(config, 'command', 'Vite resolved command');
       viteCommand =
-        (config as { command?: 'build' | 'serve' }).command === 'serve' ? 'serve' : 'build';
-      compilerQueryShapeFacts = await collectCompilerQueryShapeFacts(root, app);
+        commandProperty.present && commandProperty.value === 'serve' ? 'serve' : 'build';
+      compilerQueryShapeFacts = snapshotBuildArray(
+        await collectCompilerQueryShapeFacts(root, app),
+        'compiler query-shape facts',
+      );
       const compiler = await compilerPlugin();
       await compiler.configResolved?.(config);
     },
@@ -296,14 +354,20 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
       // once per project at the build hook, reusing the SAME `@kovojs/drizzle` analyzers the
       // `kovo` CLI uses (one source of truth, zero drift). Until now these gates ran ONLY via the
       // CLI over app source, so unsafe raw SQL shipped green through `vp build`.
-      compilerQueryShapeFacts = await collectCompilerQueryShapeFacts(root, app);
+      compilerQueryShapeFacts = snapshotBuildArray(
+        await collectCompilerQueryShapeFacts(root, app),
+        'compiler query-shape facts',
+      );
       if (viteCommand === 'serve') {
         // Dev disposition: surface as teaching diagnostics in the ledger; never crash HMR.
         await runDevDataPlaneGate();
         return;
       }
       // Build disposition: fail-closed — any error-severity finding fails the build.
-      const diagnostics = await collectDataPlaneErrorDiagnostics(root, app);
+      const diagnostics = snapshotBuildArray(
+        await collectDataPlaneErrorDiagnostics(root, app),
+        'data-plane build diagnostics',
+      );
       if (
         diagnostics.length > 0 &&
         !paranoidDataPlaneDiagnosticsAreAdvisory(diagnostics, paranoidStaticAdvisory)
@@ -312,7 +376,15 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
       }
     },
     async configureServer(server: KovoViteDevServer) {
-      root = server.config?.root ?? root;
+      if (server.config !== undefined) {
+        const rootProperty = buildOwnDataProperty(server.config, 'root', 'Vite dev-server root');
+        if (rootProperty.present) {
+          if (typeof rootProperty.value !== 'string') {
+            throw new TypeError('Vite dev-server root must be a string.');
+          }
+          root = rootProperty.value;
+        }
+      }
       const compiler = await compilerPlugin();
       await compiler.configureServer?.(server);
       const appRouteTargets = await routeTargets();
@@ -369,7 +441,7 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
       const transformedSource = shouldInjectRuntimeRegistryImport(root, app, id)
         ? insertAfterJsxImportSourcePragma(
             source,
-            `import ${JSON.stringify(runtimeRegistryPublicId)};\n`,
+            `import ${buildSecuritySourceLiteral(runtimeRegistryPublicId)};\n`,
           )
         : source;
       const transformed = await (await compilerPlugin()).transform?.(transformedSource, id);
@@ -397,28 +469,42 @@ let dataPlaneStaticAnalysisModulePromise:
   | Promise<typeof import('@kovojs/server/internal/data-plane-static-analysis')>
   | undefined;
 
-function authoredAppEntry(app: string): string {
-  if (typeof app !== 'string' || app.trim() === '') {
+function authoredAppEntry(app: unknown): string {
+  if (typeof app !== 'string' || securityStringTrim(app) === '') {
     throw new TypeError('kovo({ app }) requires an authored app entry module.');
   }
-  const normalized = app.trim().split('?')[0]?.replaceAll('\\', '/') ?? '';
-  if (normalized.includes('/generated/')) {
+  const trimmed = securityStringTrim(app);
+  const normalized = slashPath(cleanModuleId(trimmed));
+  if (securityStringIncludes(normalized, '/generated/')) {
     throw new TypeError(
       'kovo({ app }) must point at an authored app entry, not an app-local generated artifact (SPEC.md §9.5).',
     );
   }
-  return app.trim();
+  return trimmed;
 }
 
 function appEntryFileName(app: string, root: string): string {
-  const clean = app.split(/[?#]/, 1)[0] ?? app;
-  if (isAbsolute(clean)) return resolve(root, clean.slice(1));
-  return resolve(root, clean);
+  const clean = cleanModuleId(app);
+  if (buildSecurityPathIsAbsolute(clean)) {
+    return buildSecurityPathResolve(root, securityStringSlice(clean, 1));
+  }
+  return buildSecurityPathResolve(root, clean);
 }
 
 function isAppEntryModuleId(id: string, app: string, root: string): boolean {
-  const clean = id.split(/[?#]/, 1)[0] ?? id;
-  return slashPath(resolve(root, clean)) === slashPath(appEntryFileName(app, root));
+  const clean = cleanModuleId(id);
+  return (
+    slashPath(buildSecurityPathResolve(root, clean)) === slashPath(appEntryFileName(app, root))
+  );
+}
+
+function cleanModuleId(value: string): string {
+  const query = securityStringIndexOf(value, '?');
+  const hash = securityStringIndexOf(value, '#');
+  let end = value.length;
+  if (query !== -1 && query < end) end = query;
+  if (hash !== -1 && hash < end) end = hash;
+  return securityStringSlice(value, 0, end);
 }
 
 function shouldInjectRuntimeRegistryImport(root: string, app: string, id: string): boolean {
@@ -429,10 +515,10 @@ function shouldInjectRuntimeRegistryImport(root: string, app: string, id: string
 }
 
 function insertAfterJsxImportSourcePragma(source: string, insertion: string): string {
-  if (source.includes(insertion)) return source;
-  const pragma = /^\/\*\* @jsxImportSource [\s\S]*?\*\/\s*/.exec(source);
+  if (securityStringIncludes(source, insertion)) return source;
+  const pragma = securityRegExpExec(/^\/\*\* @jsxImportSource [\s\S]*?\*\/\s*/u, source);
   if (!pragma) return `${insertion}${source}`;
-  return `${source.slice(0, pragma[0].length)}${insertion}${source.slice(pragma[0].length)}`;
+  return `${securityStringSlice(source, 0, pragma[0].length)}${insertion}${securityStringSlice(source, pragma[0].length)}`;
 }
 
 function rootRelativeRouteTargets(
@@ -440,24 +526,41 @@ function rootRelativeRouteTargets(
   appDir: string,
   root: string,
 ): readonly CssRouteSplitTarget[] {
-  const prefix = slashPath(relative(root, appDir));
-  if (!prefix || prefix.startsWith('..')) return targets;
+  const prefix = slashPath(buildSecurityPathRelative(root, appDir));
+  if (!prefix || securityStringStartsWith(prefix, '..')) return targets;
 
-  return targets.map((target) => ({
-    ...target,
-    sourceFileNames: target.sourceFileNames.map((fileName) => `${prefix}/${fileName}`),
-  }));
+  const normalized: CssRouteSplitTarget[] = [];
+  const targetSnapshot = snapshotBuildArray(targets, 'CSS route split targets');
+  for (let targetIndex = 0; targetIndex < targetSnapshot.length; targetIndex += 1) {
+    const target = targetSnapshot[targetIndex]!;
+    const sourceFileNames: string[] = [];
+    const sourceSnapshot = snapshotBuildArray(
+      target.sourceFileNames,
+      'CSS route split source files',
+    );
+    for (let fileIndex = 0; fileIndex < sourceSnapshot.length; fileIndex += 1) {
+      commitBuildArrayValue(
+        sourceFileNames,
+        `${prefix}/${sourceSnapshot[fileIndex]!}`,
+        'CSS route split source file',
+      );
+    }
+    commitBuildArrayValue(normalized, { ...target, sourceFileNames }, 'CSS route split target');
+  }
+  return normalized;
 }
 
 function isAuthoredAppSourceFile(fileName: string, app: string, root: string): boolean {
-  const appDir = dirname(appEntryFileName(app, root));
-  const relativeAppDir = slashPath(relative(root, appDir));
-  if (!relativeAppDir || relativeAppDir.startsWith('..')) {
-    return slashPath(fileName).startsWith(`${slashPath(appDir)}/`);
+  const appDir = buildSecurityPathDirname(appEntryFileName(app, root));
+  const relativeAppDir = slashPath(buildSecurityPathRelative(root, appDir));
+  if (!relativeAppDir || securityStringStartsWith(relativeAppDir, '..')) {
+    return securityStringStartsWith(slashPath(fileName), `${slashPath(appDir)}/`);
   }
 
   const normalized = slashPath(fileName);
-  return normalized === relativeAppDir || normalized.startsWith(`${relativeAppDir}/`);
+  return (
+    normalized === relativeAppDir || securityStringStartsWith(normalized, `${relativeAppDir}/`)
+  );
 }
 
 function stylesheetAssetsFromCssSplitChunks(chunks: CssSplitChunks | undefined):
@@ -495,7 +598,7 @@ function stylesheetAssetsFromCssSplitChunkList(
 }
 
 function slashPath(value: string): string {
-  return value.replaceAll('\\', '/');
+  return securityStringReplaceAll(value, '\\', '/');
 }
 
 async function importKovoCompilerViteModule(): Promise<Record<string, unknown>> {
@@ -503,8 +606,13 @@ async function importKovoCompilerViteModule(): Promise<Record<string, unknown>> 
   try {
     return await importOptionalModule('@kovojs/compiler/vite');
   } catch (error) {
-    const workspaceSource = new URL('../../compiler/src/vite-config.ts', import.meta.url);
-    if (existsSync(workspaceSource)) return await importOptionalModule(workspaceSource.href);
+    const workspaceSource = buildSecurityUrlSnapshot(
+      '../../compiler/src/vite-config.ts',
+      import.meta.url,
+    );
+    if (viteExistsSync(buildSecurityFileUrlToPath(workspaceSource.href))) {
+      return await importOptionalModule(workspaceSource.href);
+    }
     throw missingCompilerError(error);
   }
 }
@@ -514,8 +622,13 @@ async function importKovoCompilerPackageStylesModule(): Promise<Record<string, u
   try {
     return await importOptionalModule('@kovojs/compiler/package-styles');
   } catch (error) {
-    const workspaceSource = new URL('../../compiler/src/package-styles.ts', import.meta.url);
-    if (existsSync(workspaceSource)) return await importOptionalModule(workspaceSource.href);
+    const workspaceSource = buildSecurityUrlSnapshot(
+      '../../compiler/src/package-styles.ts',
+      import.meta.url,
+    );
+    if (viteExistsSync(buildSecurityFileUrlToPath(workspaceSource.href))) {
+      return await importOptionalModule(workspaceSource.href);
+    }
     throw missingCompilerError(error);
   }
 }
@@ -537,11 +650,18 @@ function registerCompilerSourceResolutionHooks(): void {
   if (compilerSourceResolutionHooksRegistered) return;
   compilerSourceResolutionHooksRegistered = true;
 
-  registerHooks({
+  viteRegisterHooks({
     resolve(specifier, context, nextResolve) {
-      if (specifier.startsWith('.') && specifier.endsWith('.js') && context.parentURL) {
-        const tsUrl = new URL(specifier.replace(/\.js$/, '.ts'), context.parentURL);
-        if (existsSync(tsUrl)) return nextResolve(tsUrl.href, context);
+      if (
+        securityStringStartsWith(specifier, '.') &&
+        securityStringEndsWith(specifier, '.js') &&
+        context.parentURL
+      ) {
+        const tsSpecifier = `${securityStringSlice(specifier, 0, -3)}.ts`;
+        const tsUrl = buildSecurityUrlSnapshot(tsSpecifier, context.parentURL);
+        if (viteExistsSync(buildSecurityFileUrlToPath(tsUrl.href))) {
+          return nextResolve(tsUrl.href, context);
+        }
       }
 
       return nextResolve(specifier, context);
@@ -572,7 +692,7 @@ async function collectDataPlaneErrorDiagnostics(
 ): Promise<DataPlaneDiagnostic[]> {
   const adapter = await importKovoDataPlaneStaticAnalysisModule();
   return adapter.collectDataPlaneErrorDiagnostics({
-    appSourceDir: dirname(appEntryFileName(app, root)),
+    appSourceDir: buildSecurityPathDirname(appEntryFileName(app, root)),
     root,
   });
 }
@@ -580,7 +700,7 @@ async function collectDataPlaneErrorDiagnostics(
 async function collectRuntimeRegistry(root: string, app: string): Promise<RuntimeRegistryFacts> {
   const adapter = await importKovoDataPlaneStaticAnalysisModule();
   return adapter.collectRuntimeRegistryFacts({
-    appSourceDir: dirname(appEntryFileName(app, root)),
+    appSourceDir: buildSecurityPathDirname(appEntryFileName(app, root)),
     root,
   });
 }
@@ -592,31 +712,42 @@ async function collectCompilerQueryShapeFacts(
   const adapter = await importKovoDataPlaneStaticAnalysisModule();
   if (currentKovoBuildContext()?.graphDerivation === true) {
     await adapter.collectDataPlaneAnalysis({
-      appSourceDir: dirname(appEntryFileName(app, root)),
+      appSourceDir: buildSecurityPathDirname(appEntryFileName(app, root)),
       root,
       skipStaticFacts: true,
     });
   }
   return adapter.collectCompilerQueryShapeFacts({
-    appSourceDir: dirname(appEntryFileName(app, root)),
+    appSourceDir: buildSecurityPathDirname(appEntryFileName(app, root)),
     root,
   });
 }
 
 /** The fail-closed build error thrown when the gate finds error-severity data-plane diagnostics. */
 function dataPlaneGateError(diagnostics: readonly DataPlaneDiagnostic[]): Error {
-  const findingLines = diagnostics.map(
-    (diagnostic) => `  ERROR ${diagnostic.code} ${diagnostic.site} ${diagnostic.message}`,
+  const findingLines: string[] = [];
+  for (let index = 0; index < diagnostics.length; index += 1) {
+    const diagnostic = diagnostics[index]!;
+    commitBuildArrayValue(
+      findingLines,
+      `  ERROR ${diagnostic.code} ${diagnostic.site} ${diagnostic.message}`,
+      'data-plane diagnostic line',
+    );
+  }
+  const lines = [
+    `Kovo data-plane safety gate failed: ${diagnostics.length} error-severity diagnostic${
+      diagnostics.length === 1 ? '' : 's'
+    } (SPEC.md §11.4).`,
+  ];
+  for (let index = 0; index < findingLines.length; index += 1) {
+    commitBuildArrayValue(lines, findingLines[index]!, 'data-plane gate error line');
+  }
+  commitBuildArrayValue(
+    lines,
+    'These by-construction findings mean request-derived data could reach SQL/IO unsafely. Fix them or use the audited escape hatch (sql`...`, staticSql`...`, trustedSql(...), compareAndSet) before building.',
+    'data-plane gate help line',
   );
-  return new Error(
-    [
-      `Kovo data-plane safety gate failed: ${diagnostics.length} error-severity diagnostic${
-        diagnostics.length === 1 ? '' : 's'
-      } (SPEC.md §11.4).`,
-      ...findingLines,
-      'These by-construction findings mean request-derived data could reach SQL/IO unsafely. Fix them or use the audited escape hatch (sql`...`, staticSql`...`, trustedSql(...), compareAndSet) before building.',
-    ].join('\n'),
-  );
+  return new Error(securityArrayJoin(lines, '\n'));
 }
 
 function paranoidDataPlaneDiagnosticsAreAdvisory(
@@ -624,10 +755,19 @@ function paranoidDataPlaneDiagnosticsAreAdvisory(
   paranoidStaticAdvisory: boolean,
 ): boolean {
   if (!paranoidStaticAdvisory) return false;
-  return (
-    diagnostics.length > 0 &&
-    diagnostics.every((diagnostic) => isParanoidSecurityAdvisoryCode(diagnostic.code))
-  );
+  if (diagnostics.length === 0) return false;
+  for (let index = 0; index < diagnostics.length; index += 1) {
+    const diagnostic = diagnostics[index]!;
+    const code = buildOwnDataProperty(diagnostic, 'code', 'data-plane diagnostic code');
+    if (
+      !code.present ||
+      typeof code.value !== 'string' ||
+      !isParanoidSecurityAdvisoryCode(code.value)
+    ) {
+      return false;
+    }
+  }
+  return true;
 }
 
 /** Build a dev-ledger module-diagnostics report (teaching disposition) for one app file. */
@@ -652,7 +792,7 @@ function dataPlaneLedgerReport(
 /** Read a file's source for diagnostic rendering; never throws (returns '' on failure). */
 function readSourceSafe(absFileName: string): string {
   try {
-    return readFileSync(absFileName, 'utf8');
+    return viteReadFileSync(absFileName, 'utf8');
   } catch {
     return '';
   }

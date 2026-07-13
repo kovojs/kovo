@@ -507,6 +507,41 @@ describe('public Kovo Vite plugin: data-plane safety gate (SPEC.md §11.4)', () 
     }
   });
 
+  it('does not let Array.every poison hide a hard finding in a paranoid mixed diagnostic set', async () => {
+    const root = await fixture({
+      'src/drizzle-types.d.ts': DRIZZLE_TYPES,
+      'src/inventory.domain.ts': KV429_DOMAIN,
+      'src/queries/search.ts': KV422_INJECTION,
+      'src/schema.ts': KV429_SCHEMA,
+    });
+    const plugin = trustedKovoVitePlugin({
+      app: APP_ENTRY,
+      paranoidStaticAdvisory: true,
+    }) as unknown as DataPlaneGatePlugin;
+    await plugin.configResolved({ command: 'build', root });
+
+    const originalEvery = Array.prototype.every;
+    let observed: unknown;
+    try {
+      Array.prototype.every = function hideMixedHardFinding(callback, thisArg) {
+        for (let index = 0; index < this.length; index += 1) {
+          if ((this[index] as { code?: unknown } | undefined)?.code === 'KV429') return true;
+        }
+        return Reflect.apply(originalEvery, this, [callback, thisArg]);
+      } as typeof Array.prototype.every;
+      try {
+        await plugin.buildStart();
+      } catch (error) {
+        observed = error;
+      }
+    } finally {
+      Array.prototype.every = originalEvery;
+    }
+
+    expect(observed).toBeInstanceOf(Error);
+    expect(String((observed as Error).message)).toMatch(/ERROR KV429/u);
+  });
+
   it('passes the build on a clean (branded sql`...`) fixture', async () => {
     const root = await fixture({ 'src/queries/search.ts': KV422_CLEAN });
     const plugin = kovo({ app: APP_ENTRY }) as unknown as DataPlaneGatePlugin;
@@ -559,7 +594,14 @@ describe('public Kovo Vite plugin: data-plane safety gate (SPEC.md §11.4)', () 
     const plugin = kovo({ app: APP_ENTRY }) as unknown as DataPlaneGatePlugin;
     await plugin.configResolved({ command: 'build', root });
 
-    const transformed = await plugin.transform(APP_SOURCE, join(root, 'src/app.tsx'));
+    const originalIncludes = String.prototype.includes;
+    let transformed: Awaited<ReturnType<DataPlaneGatePlugin['transform']>>;
+    try {
+      String.prototype.includes = () => true;
+      transformed = await plugin.transform(APP_SOURCE, join(root, 'src/app.tsx'));
+    } finally {
+      String.prototype.includes = originalIncludes;
+    }
     expect(transformed?.code).toContain('virtual:kovo-runtime-registry:/src/app.tsx');
 
     const registryId = await plugin.resolveId(
