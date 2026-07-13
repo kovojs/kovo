@@ -5,13 +5,14 @@ import { pathToFileURL } from 'node:url';
 
 import type {
   InlineConfig,
-  PartialEnvironment,
   Plugin,
   PluginOption,
   ResolvedConfig,
   UserConfig,
   ViteDevServer,
 } from 'vite-plus';
+
+type DevPluginEnvironment = Parameters<NonNullable<Plugin['applyToEnvironment']>>[0];
 
 import {
   DEV_ARGV_SPEC,
@@ -47,6 +48,7 @@ const nativeObjectCreate = NativeObject.create;
 const nativeObjectDefineProperty = NativeObject.defineProperty;
 const nativePromiseThen = NativePromise.prototype.then;
 const nativeReflectApply = NativeReflect.apply;
+const nativeReflectDeleteProperty = NativeReflect.deleteProperty;
 const isolatedAuthoredPlugin = Symbol('Kovo isolated authored Vite plugin');
 
 const AUTHORITY_BEARING_AUTHORED_PLUGIN_HOOKS = [
@@ -422,11 +424,9 @@ function trustedLiveDevConfig(
     configFile: false,
     define: {},
     environments: { ssr: trustedSsrEnvironmentConfig() },
-    esbuild: undefined,
     experimental: { bundledDev: false },
     logLevel: 'error',
     mode: options.mode,
-    oxc: undefined,
     plugins,
     resolve: trustedRootResolveConfig(),
     root,
@@ -485,7 +485,7 @@ function fixedDevPluginArray(
  * available, but app-level lifecycle hooks that receive the mutable root config or live server are
  * rejected because those capabilities cannot be narrowed to the client environment.
  */
-function isolateAuthoredPluginOption(option: PluginOption): PluginOption {
+function isolateAuthoredPluginOption(option: unknown): PluginOption {
   if (option === false || option === null || option === undefined) return option;
   if (buildArrayIsArray(option)) {
     const source = buildSnapshotDenseArray(option, 'Nested authored Vite plugin options');
@@ -519,9 +519,7 @@ function isolateAuthoredPluginOption(option: PluginOption): PluginOption {
   if (buildOwnDataValue(option, 'then', 'Authored Vite plugin') !== undefined) {
     throw new TypeError('Authored Vite plugin thenables must be native promises.');
   }
-  if (buildOwnDataValue(option, isolatedAuthoredPlugin, 'Authored Vite plugin') === true) {
-    return option as Plugin;
-  }
+  if (isIsolatedAuthoredPlugin(option)) return option;
 
   for (let index = 0; index < AUTHORITY_BEARING_AUTHORED_PLUGIN_HOOKS.length; index += 1) {
     const hookName = AUTHORITY_BEARING_AUTHORED_PLUGIN_HOOKS[index]!;
@@ -535,9 +533,7 @@ function isolateAuthoredPluginOption(option: PluginOption): PluginOption {
     }
   }
 
-  const wrapper = nativeApply<Record<PropertyKey, unknown>>(nativeObjectCreate, NativeObject, [
-    null,
-  ]);
+  const wrapper = nativeApply<Plugin>(nativeObjectCreate, NativeObject, [null]);
   const name = buildOwnDataValue(option, 'name', 'Authored Vite plugin');
   if (typeof name !== 'string' || name.length === 0) {
     throw new TypeError('Authored Vite plugins must have a non-empty own data name.');
@@ -602,7 +598,7 @@ function isolateAuthoredPluginOption(option: PluginOption): PluginOption {
   defineFixedData(
     wrapper,
     'applyToEnvironment',
-    function kovoAuthoredPluginEnvironmentGate(environment: PartialEnvironment) {
+    function kovoAuthoredPluginEnvironmentGate(environment: DevPluginEnvironment) {
       // The server/compiler/data-plane graph is a framework-owned trust root (SPEC §6.6 rule 6).
       // Authored plugins remain available to Vite's client environment only.
       return environment.name === 'client';
@@ -610,7 +606,7 @@ function isolateAuthoredPluginOption(option: PluginOption): PluginOption {
     true,
   );
   defineFixedData(wrapper, isolatedAuthoredPlugin, true, false);
-  return freezeFrameworkPlugin(wrapper) as Plugin;
+  return freezeFrameworkPlugin(wrapper);
 }
 
 function isAuthorityBearingAuthoredPluginHook(key: string): boolean {
@@ -677,11 +673,11 @@ function createDevSecurityProfilePlugins(kovoPlugin: PluginOption): {
         // trusted Kovo hook. Authored config is never spread or merged into this graph.
         config.assetsInclude = [];
         config.define = {};
-        config.esbuild = undefined;
+        deleteConfigProperty(config, 'esbuild');
         config.environments = { ssr: trustedSsrEnvironmentConfig() };
         config.experimental = { bundledDev: false };
         config.resolve = trustedRootResolveConfig();
-        config.oxc = undefined;
+        deleteConfigProperty(config, 'oxc');
         config.ssr = trustedSsrConfig();
 
         const configured = buildOwnDataValue(config, 'plugins', 'Vite config');
@@ -745,8 +741,11 @@ function lockResolvedDevSecurityProfile(config: ResolvedConfig): void {
   lockResolvedAliases(config.resolve.alias);
   freezeFrameworkPlugin(config.resolve);
   defineFixedData(config, 'resolve', config.resolve, true);
+  if (!buildArrayIsArray(config.ssr.external) || !buildArrayIsArray(config.ssr.noExternal)) {
+    throw new TypeError('Resolved Vite SSR dependency policy must use fixed arrays.');
+  }
   freezeFrameworkPlugin(config.ssr.external);
-  if (buildArrayIsArray(config.ssr.noExternal)) freezeFrameworkPlugin(config.ssr.noExternal);
+  freezeFrameworkPlugin(config.ssr.noExternal);
   freezeFrameworkPlugin(config.ssr);
   defineFixedData(config, 'ssr', config.ssr, true);
 
@@ -836,9 +835,24 @@ function defineFixedData(
   ]);
 }
 
-function isDirectKovoPlugin(value: PluginOption): boolean {
+function deleteConfigProperty(target: object, key: PropertyKey): void {
+  if (nativeApply<boolean>(nativeReflectDeleteProperty, NativeReflect, [target, key]) !== true) {
+    throw new TypeError(`Resolved Vite config.${String(key)} could not be removed.`);
+  }
+}
+
+function isDirectKovoPlugin(value: unknown): boolean {
   if (!isRecord(value) || buildArrayIsArray(value)) return false;
   return buildOwnDataValue(value, 'name', 'Authored Vite plugin') === 'kovo';
+}
+
+function isIsolatedAuthoredPlugin(
+  value: Record<string, unknown>,
+): value is Record<string, unknown> & Plugin {
+  return (
+    buildOwnDataValue(value, isolatedAuthoredPlugin, 'Authored Vite plugin') === true &&
+    typeof buildOwnDataValue(value, 'name', 'Authored Vite plugin') === 'string'
+  );
 }
 
 function freezeFrameworkPlugin<Value extends object>(value: Value): Value {

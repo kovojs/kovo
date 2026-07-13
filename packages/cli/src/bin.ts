@@ -48,8 +48,10 @@ const commandSecurityDisposition = Object.freeze({
   paranoidStaticAdvisory: paranoidValue === '1' || paranoidValue === 'true',
 });
 
-function snapshotInvocationEnvironment(source) {
-  const snapshot = Object.create(null);
+function snapshotInvocationEnvironment(
+  source: NodeJS.ProcessEnv,
+): Readonly<Record<string, string>> {
+  const snapshot: Record<string, string> = Object.create(null);
   for (const name of Object.keys(source)) {
     const before = Object.getOwnPropertyDescriptor(source, name);
     const after = Object.getOwnPropertyDescriptor(source, name);
@@ -69,7 +71,10 @@ function snapshotInvocationEnvironment(source) {
   return Object.freeze(snapshot);
 }
 
-function sameEnvironmentDescriptor(left, right) {
+function sameEnvironmentDescriptor(
+  left: PropertyDescriptor | undefined,
+  right: PropertyDescriptor | undefined,
+): boolean {
   if (left === undefined || right === undefined) return left === right;
   return (
     'value' in left &&

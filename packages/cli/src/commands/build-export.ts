@@ -109,6 +109,7 @@ import {
   buildRegExpReplace,
   buildSetAdd,
   buildSetHas,
+  buildSetNullPrototype,
   buildSnapshotDenseArray,
   buildStringIncludes,
   buildStringSplit,
@@ -2189,14 +2190,14 @@ function snapshotConfiguredKovoPreset(value: unknown, configPath: string): KovoP
   ) {
     throw new Error(`${configPath} preset must be a Kovo preset value such as node().`);
   }
-  const snapshot = buildCreateNullRecord<unknown>() as KovoPreset;
-  snapshot.name = name;
-  if (emit !== undefined) snapshot.emit = emit as KovoPreset['emit'];
-  if (inspect !== undefined) snapshot.inspect = inspect as KovoPreset['inspect'];
-  if (capabilities !== undefined) {
-    snapshot.capabilities = snapshotConfiguredKovoPresetCapabilities(capabilities, configPath);
-  }
-  return snapshot;
+  return buildSetNullPrototype({
+    ...(capabilities === undefined
+      ? {}
+      : { capabilities: snapshotConfiguredKovoPresetCapabilities(capabilities, configPath) }),
+    ...(emit === undefined ? {} : { emit: emit as NonNullable<KovoPreset['emit']> }),
+    ...(inspect === undefined ? {} : { inspect: inspect as NonNullable<KovoPreset['inspect']> }),
+    name,
+  } satisfies KovoPreset);
 }
 
 function snapshotConfiguredKovoPresetCapabilities(
@@ -3217,24 +3218,32 @@ export async function runExportCommandStructured(
   try {
     options = snapshotKovoExportOptions(options);
     const resolvedOptions = resolveKovoExportOptions(options, security.invocationCwd);
-    manifestPlan = await staticExportManifestPlan(resolvedOptions);
-    const staticExport = await withStylesheetEnvOverlay(manifestPlan.stylesheetEnv, async () => {
-      loadedExport = await loadExportAppModule(resolvedOptions, security.invocationCwd);
-      const app = appFromModule(loadedExport.appModule, resolvedOptions.appModulePath);
-      return await loadedExport.exportStaticApp(app, {
-        ...(manifestPlan.assets.length === 0 ? {} : { assets: manifestPlan.assets }),
-        ...(resolvedOptions.onNonExportable === undefined
-          ? {}
-          : { onNonExportable: resolvedOptions.onNonExportable }),
-        diagnostics: staticExportDiagnosticsFromModule(loadedExport.appModule),
-        ...(resolvedOptions.origin === undefined ? {} : { origin: resolvedOptions.origin }),
-        outDir: resolvedOptions.outDir,
-        ...(resolvedOptions.assetBase === undefined
-          ? {}
-          : { publicAssetBase: resolvedOptions.assetBase }),
-        publicAssetRoot: manifestPlan.publicAssetRoot,
-      });
-    });
+    const currentManifestPlan = await staticExportManifestPlan(resolvedOptions);
+    manifestPlan = currentManifestPlan;
+    const staticExport = await withStylesheetEnvOverlay(
+      currentManifestPlan.stylesheetEnv,
+      async () => {
+        loadedExport = await loadExportAppModule(resolvedOptions, security.invocationCwd);
+        const app = appFromModule(loadedExport.appModule, resolvedOptions.appModulePath);
+        return await loadedExport.exportStaticApp(app, {
+          ...(currentManifestPlan.assets.length === 0
+            ? {}
+            : { assets: currentManifestPlan.assets }),
+          ...(resolvedOptions.onNonExportable === undefined
+            ? {}
+            : { onNonExportable: resolvedOptions.onNonExportable }),
+          diagnostics: staticExportDiagnosticsFromModule(loadedExport.appModule),
+          ...(resolvedOptions.origin === undefined ? {} : { origin: resolvedOptions.origin }),
+          outDir: resolvedOptions.outDir,
+          ...(resolvedOptions.assetBase === undefined
+            ? {}
+            : { publicAssetBase: resolvedOptions.assetBase }),
+          ...(currentManifestPlan.publicAssetRoot === undefined
+            ? {}
+            : { publicAssetRoot: currentManifestPlan.publicAssetRoot }),
+        });
+      },
+    );
 
     return kovoExportResult(staticExport, resolvedOptions);
   } catch (error) {

@@ -433,7 +433,7 @@ export function writeKovoProject(
 function ownScaffoldOption<Key extends keyof WriteKovoProjectOptions>(
   options: WriteKovoProjectOptions,
   key: Key,
-): WriteKovoProjectOptions[Key] {
+): WriteKovoProjectOptions[Key] | undefined {
   const before = nativeReflectApply(nativeGetOwnPropertyDescriptor, NativeObject, [options, key]);
   const after = nativeReflectApply(nativeGetOwnPropertyDescriptor, NativeObject, [options, key]);
   if (before === undefined && after === undefined) return undefined;

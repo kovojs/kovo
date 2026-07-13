@@ -222,6 +222,12 @@ export function buildCreateNullRecord<Value>(): Record<PropertyKey, Value> {
   return apply(nativeObjectCreate, NativeObject, [null]);
 }
 
+export function buildSetNullPrototype<Value extends object>(value: Value): Value {
+  assertBuildSecurityIntrinsics();
+  apply(nativeObjectSetPrototypeOf, NativeObject, [value, null]);
+  return value;
+}
+
 export function buildMapGet<Key, Value>(map: ReadonlyMap<Key, Value>, key: Key): Value | undefined {
   assertBuildSecurityIntrinsics();
   return apply(nativeMapGet, map, [key]);
