@@ -20,6 +20,7 @@ import type { InferSchema, Schema } from '../schema.js';
 import type { MutationDefinition, MutationFail, MutationSuccess } from './definition.js';
 import { renderDefaultFailurePage } from './failure-html.js';
 import { reportServerError } from '../diagnostics.js';
+import { isFrameworkMutationFailurePageRenderer } from '../mutation-failure-renderer-authority.js';
 import {
   requestStateIsSingleLeadingSlashPath,
   requestStateLocationWithQuery,
@@ -57,15 +58,16 @@ export async function renderNoJsMutationLifecycleResponse<
   >,
 ): Promise<NoJsMutationResponse> {
   const { definition, lifecycle, noJsRequest } = options;
+  const preLifecycleRequest = noJsPreLifecycleFailureRequest(noJsRequest);
 
   if (lifecycle.kind === 'csrf-failure') {
     const reauthResponse = await options.csrfReauthResponse();
     if (reauthResponse) return reauthResponse;
-    return renderNoJsMutationFailureResponse(lifecycle.failure, noJsRequest);
+    return renderNoJsMutationFailureResponse(lifecycle.failure, preLifecycleRequest);
   }
 
   if (lifecycle.kind === 'validation-failure') {
-    return renderNoJsMutationFailureResponse(lifecycle.failure, noJsRequest);
+    return renderNoJsMutationFailureResponse(lifecycle.failure, preLifecycleRequest);
   }
 
   if (lifecycle.kind === 'guard-failure') {
@@ -75,16 +77,17 @@ export async function renderNoJsMutationLifecycleResponse<
       noJsRequest.currentUrl === undefined ? {} : { currentUrl: noJsRequest.currentUrl },
     );
     if (reauthResponse) return reauthResponse;
-    return renderNoJsMutationFailureResponse(lifecycle.failure, noJsRequest);
+    return renderNoJsMutationFailureResponse(lifecycle.failure, preLifecycleRequest);
   }
 
-  if (lifecycle.kind === 'replay-conflict') return renderNoJsReplayConflictPage(noJsRequest);
+  if (lifecycle.kind === 'replay-conflict')
+    return renderNoJsReplayConflictPage(preLifecycleRequest);
   if (lifecycle.kind === 'replay-unavailable') {
-    return renderNoJsReplayUnavailablePage(noJsRequest);
+    return renderNoJsReplayUnavailablePage(preLifecycleRequest);
   }
   if (lifecycle.kind === 'replayed') {
     if (isNoJsReplayResponse(lifecycle.response)) return lifecycle.response;
-    return renderNoJsReplayConflictPage(noJsRequest);
+    return renderNoJsReplayConflictPage(preLifecycleRequest);
   }
 
   if (lifecycle.kind === 'handler-error') {
@@ -148,6 +151,16 @@ export async function renderNoJsMutationLifecycleResponse<
   });
   await lifecycle.reservation?.commit(successResponse);
   return successResponse;
+}
+
+function noJsPreLifecycleFailureRequest<Request, Value>(
+  request: NoJsMutationRequest<Request, Value>,
+): NoJsMutationRequest<Request, Value> {
+  if (isFrameworkMutationFailurePageRenderer(request.renderFailurePage)) return request;
+  if (request.renderFailurePage === undefined) return request;
+  const result = { ...request };
+  delete result.renderFailurePage;
+  return result;
 }
 
 async function resolvePostLifecycleNoJsRequest<Request, Value>(

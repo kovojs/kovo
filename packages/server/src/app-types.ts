@@ -1,4 +1,4 @@
-import type { DiagnosticCode, DiagnosticSeverity, Redirect } from '@kovojs/core';
+import type { DiagnosticCode, DiagnosticSeverity } from '@kovojs/core';
 import type { VersionedClientModuleRegistry } from './client-modules.js';
 import type { EgressOptions } from './egress.js';
 import type { CsrfOptions } from './csrf.js';
@@ -9,11 +9,10 @@ import type { DocumentConfig, DocumentDeclaration } from './document-structured.
 import type { EndpointDeclaration, EndpointMethod, EndpointMount } from './endpoint.js';
 import type { DbProvider, LifecycleRequest, SessionProvider } from './guards.js';
 import type { StylesheetAsset } from './hints.js';
-import type { MutationFactory, MutationFail, MutationSuccess } from './mutation.js';
-import type { FragmentRenderer, LiveTargetRenderer } from './mutation-wire.js';
+import type { MutationFactory } from './mutation.js';
+import type { LiveTargetRenderer } from './mutation-wire.js';
 import type { QueryFactory } from './query.js';
 import type { ServerRenderable } from './deferred-region.js';
-import type { AwaitableGeneratedFragmentRenderable } from './renderable.js';
 import type { MutationReplayStore } from './replay.js';
 import type { ResponseHeaders } from './response.js';
 import type { LayoutFactory, RouteDeclaration, RouteFactory } from './route.js';
@@ -278,7 +277,6 @@ export interface CreateAppOptions<
   endpoints?: readonly EndpointDeclaration<string, EndpointMethod, EndpointMount>[];
   errorShells?: AppErrorShellOptions;
   liveTargetRenderers?: readonly LiveTargetRenderer<AppRequest>[];
-  mutationResponses?: AppMutationResponses;
   mutations?: AppAuthoringDeclarations<AppMutationDeclaration<AppRequest>, AppRequest>;
   // SPEC §9.1/§10.3: apps inject a replay store so duplicate Kovo-Idem mutation requests
   // replay the stored response without re-executing the handler. Production mutation declarations
@@ -326,7 +324,6 @@ export interface KovoApp<
   readonly endpoints: readonly EndpointDeclaration<string, EndpointMethod, EndpointMount>[];
   readonly errorShells: AppErrorShellOptions;
   readonly liveTargetRenderers: readonly LiveTargetRenderer<any>[];
-  readonly mutationResponses: AppMutationResponses;
   readonly mutations: readonly AppMutationDeclaration<any>[];
   readonly mutationReplayStore?: MutationReplayStore;
   readonly onError?: ServerErrorHandler;
@@ -354,50 +351,3 @@ export interface AppMutationDeclaration<_AppRequest = unknown> {
 
 /** Task declaration shape accepted by `createApp({ tasks })` and stored on `KovoApp` (SPEC §9.6). */
 export type AppTaskDeclaration<_AppRequest = unknown> = TaskDefinition<string, any, any>;
-
-/**
- * Runtime context passed to mutation response resolvers when the request shell
- * builds redirect, fragment, or failure responses (SPEC §9.5).
- */
-export interface AppMutationResponseContext {
-  currentUrl: string;
-  key: string;
-  mutation: AppMutationDeclaration;
-  /** Framework-produced result available only after the normative mutation lifecycle completed. */
-  outcome: { kind: 'failure'; code: string; status: number } | { kind: 'success' };
-  rawInput: unknown;
-  request: Request;
-  url: URL;
-}
-
-/**
- * Per-mutation response policy used by the request shell after a mutation handler
- * succeeds or fails (SPEC §9.5).
- */
-export interface AppMutationResponseOptions {
-  failureTarget?: string;
-  failureStylesheets?: readonly (string | StylesheetAsset)[];
-  fragmentRenderers?: readonly FragmentRenderer[];
-  /**
-   * POST-redirect-GET success target (SPEC §9.1). Accepts a plain `string`, a typed `redirect()`
-   * {@link Redirect} value (SPEC §6.4), or a function of the result returning either form.
-   */
-  redirectTo?: string | Redirect | ((result: MutationSuccess<unknown>) => string | Redirect);
-  renderFailureFragment?: (
-    failure: MutationFail,
-    rawInput: unknown,
-  ) => AwaitableGeneratedFragmentRenderable;
-  renderFailurePage?: (failure: MutationFail, rawInput: unknown) => string | Promise<string>;
-}
-
-export type AppMutationResponsePolicy = AppMutationResponseOptions | AppMutationResponseResolver;
-
-export type AppMutationResponses = Readonly<Record<string, AppMutationResponsePolicy>>;
-
-/**
- * Resolve mutation response policy after validation, authorization, replay reservation, and the
- * mutation transaction complete instead of declaring static options up front (SPEC §9.5/§10.3).
- */
-export type AppMutationResponseResolver = (
-  context: AppMutationResponseContext,
-) => AppMutationResponseOptions | Promise<AppMutationResponseOptions | undefined> | undefined;

@@ -93,15 +93,16 @@ export const renderMutationWireLifecycleResponse = wireEmitter(
     >,
   ): Promise<MutationWireResponse> {
     const { definition, lifecycle, wireRequest } = options;
+    const preLifecycleRequest = mutationWirePreLifecycleFailureRequest(wireRequest);
 
     if (lifecycle.kind === 'csrf-failure') {
       const reauthResponse = await options.csrfReauthResponse();
       if (reauthResponse) return reauthResponse;
-      return mutationWireFailureResponse(lifecycle.failure, wireRequest);
+      return mutationWireFailureResponse(lifecycle.failure, preLifecycleRequest);
     }
 
     if (lifecycle.kind === 'validation-failure') {
-      return mutationWireFailureResponse(lifecycle.failure, wireRequest);
+      return mutationWireFailureResponse(lifecycle.failure, preLifecycleRequest);
     }
 
     if (lifecycle.kind === 'guard-failure') {
@@ -112,23 +113,26 @@ export const renderMutationWireLifecycleResponse = wireEmitter(
       );
       if (reauthResponse) return reauthResponse;
       return {
-        body: frameworkWireBody(await renderFailureFragment(lifecycle.failure, wireRequest)),
+        body: frameworkWireBody(
+          await renderFailureFragment(lifecycle.failure, preLifecycleRequest),
+        ),
         // A1: a rate-limit (or other retry-able) guard failure carries Retry-After; preserve it on the
         // pre-replay guard-failure response (the old runMutation path added it via retryAfterHeaders).
         headers: mergeResponseHeaders(
-          mutationWireResponseHeaders(wireRequest),
+          mutationWireResponseHeaders(preLifecycleRequest),
           retryAfterHeaders(lifecycle.guardFailure),
         ),
         status: lifecycle.failure.status,
       };
     }
 
-    if (lifecycle.kind === 'replay-conflict') return renderReplayConflictFragment(wireRequest);
+    if (lifecycle.kind === 'replay-conflict')
+      return renderReplayConflictFragment(preLifecycleRequest);
     if (lifecycle.kind === 'replay-unavailable')
-      return renderReplayUnavailableFragment(wireRequest);
+      return renderReplayUnavailableFragment(preLifecycleRequest);
     if (lifecycle.kind === 'replayed') {
       if (isEnhancedReplayResponse(lifecycle.response)) return lifecycle.response;
-      return renderReplayConflictFragment(wireRequest);
+      return renderReplayConflictFragment(preLifecycleRequest);
     }
 
     if (lifecycle.kind === 'handler-error') {
@@ -246,6 +250,15 @@ export const renderMutationWireLifecycleResponse = wireEmitter(
     return finalResponse;
   },
 );
+
+function mutationWirePreLifecycleFailureRequest<Request>(
+  request: MutationWireRequest<Request>,
+): MutationWireRequest<Request> {
+  if (request.renderFailureFragment === undefined) return request;
+  const result = { ...request };
+  delete result.renderFailureFragment;
+  return result;
+}
 
 async function resolvePostLifecycleWireRequest<Request>(
   request: MutationWireRequest<Request>,

@@ -5,7 +5,6 @@ import { component } from '@kovojs/core';
 import { createApp, createRequestHandler } from './app.js';
 import { appLiveTargetAttestationAudience } from './live-target-app-identity.js';
 import { handleAppMutationRequest } from './app-mutation-request.js';
-import { normalizeAppMutationResponseOptions } from './app-mutation-responses.js';
 import { csrfToken } from './csrf.js';
 import { domain } from './domain.js';
 import { guards } from './guards.js';
@@ -144,226 +143,57 @@ describe('server app mutation request boundary', () => {
     }
   });
 
-  it('resolves mutation response options from exact-key policies', async () => {
-    const seen: string[] = [];
-    const addToCart = mutation('cart/add', {
-      csrf: false,
-      csrfJustification: 'test fixture uses a non-browser caller',
-      input: s.object({ productId: s.string() }),
-      handler(input) {
-        seen.push(`handler:${input.productId}`);
-        return input;
-      },
-    });
-    const app = createApp({
-      mutationResponses: {
-        'cart/add': ({ rawInput }) => {
-          seen.push(`policy:${rawInput instanceof FormData}`);
-          return { redirectTo: '/cart' };
-        },
-      },
-      mutations: [addToCart],
-    });
-    const form = new FormData();
-    form.set('productId', 'p1');
-    const request = new Request('https://shop.example.test/_m/cart/add', {
-      body: form,
-      method: 'POST',
-    });
-
-    const response = await handleAppMutationRequest(app, request, new URL(request.url), 'cart/add');
-
-    expect(response.status).toBe(303);
-    expect(response.headers.get('location')).toBe('/cart');
-    expect(seen).toEqual(['handler:p1', 'policy:true']);
-  });
-
-  it('uses static response policy to re-render the submitted form on validation failure', async () => {
-    const reserve = mutation('inventory/reserve', {
-      csrf: false,
-      csrfJustification: 'test fixture uses a non-browser caller',
-      input: s.object({ quantity: s.number().int().min(1) }),
-      handler: vi.fn((input) => input),
-    });
-    const app = createApp({
-      mutationResponses: {
-        [reserve.key]: {
-          failureTarget: 'reservation-form',
-          renderFailureFragment: (failure) =>
-            `<form kovo-fragment-target="reservation-form"><output role="alert" data-error-code="${failure.error.code}">Invalid quantity</output></form>`,
-        },
-      },
-      mutations: [reserve],
-    });
-    const form = new FormData();
-    form.set('quantity', '0');
-    const request = new Request('https://shop.example.test/_m/inventory/reserve', {
-      body: form,
-      headers: {
-        'Kovo-Form-Target': 'reservation-form',
-        'Kovo-Fragment': 'true',
-      },
-      method: 'POST',
-    });
-
-    const response = await handleAppMutationRequest(
-      app,
-      request,
-      new URL(request.url),
-      reserve.key,
-    );
-
-    expect(response.status).toBe(422);
-    expect(await response.text()).toBe(
-      '<kovo-fragment target="reservation-form"><form kovo-fragment-target="reservation-form"><output role="alert" data-error-code="VALIDATION">Invalid quantity</output></form></kovo-fragment>',
-    );
-    expect(reserve.handler).not.toHaveBeenCalled();
-  });
-
-  it('snapshots static response policy and rejects registry accessors at app closure', async () => {
-    const responsePolicy = { redirectTo: '/safe' };
-    const save = mutation('save', {
-      csrf: false,
-      csrfJustification: 'test fixture uses a non-browser caller',
-      input: s.object({ value: s.string() }),
-      handler: (input) => input,
-    });
-    const app = createApp({
-      mutationResponses: { save: responsePolicy },
-      mutations: [save],
-    });
-    responsePolicy.redirectTo = '/attacker';
-    expect(Object.isFrozen(app.mutationResponses)).toBe(true);
-    expect(Object.isFrozen(app.mutationResponses.save)).toBe(true);
-
-    const form = new FormData();
-    form.set('value', 'x');
-    const request = new Request('https://example.test/_m/save', { body: form, method: 'POST' });
-    const response = await handleAppMutationRequest(app, request, new URL(request.url), 'save');
-    expect(response.headers.get('location')).toBe('/safe');
-
+  it('rejects the removed root-public mutationResponses switch without invoking accessors', () => {
     let reads = 0;
-    const policies = Object.defineProperty({}, 'save', {
+    const options = Object.defineProperty({}, 'mutationResponses', {
       enumerable: true,
       get() {
         reads += 1;
-        return { redirectTo: '/attacker' };
+        return {
+          save: {
+            fragmentRenderers: [
+              { render: () => trustedHtml('<output>secret</output>'), target: 'secret' },
+            ],
+          },
+        };
       },
     });
-    expect(() => createApp({ mutationResponses: policies as never })).toThrow(
-      'must be a stable own data property',
+
+    expect(() => createApp(options as never)).toThrow(
+      'createApp({ mutationResponses }) is forbidden',
     );
     expect(reads).toBe(0);
   });
 
-  it('keeps mutation response policy closed when ambient Object.freeze is selectively replaced', async () => {
-    const save = mutation('freeze-poison/save', {
-      csrf: false,
-      csrfJustification: 'test fixture uses a non-browser caller',
-      input: s.object({ value: s.string() }),
-      handler: (input) => input,
-    });
-    const originalFreeze = Object.freeze;
-    const safeFailurePage = () => '<main>safe validation failure</main>';
-    let capturedPolicy: { renderFailurePage: () => string } | undefined;
-    Object.freeze = ((value: unknown) => {
-      if (
-        typeof value === 'object' &&
-        value !== null &&
-        (value as { renderFailurePage?: unknown }).renderFailurePage === safeFailurePage
-      ) {
-        capturedPolicy = value as { renderFailurePage: () => string };
-        return value;
-      }
-      return originalFreeze(value);
-    }) as typeof Object.freeze;
-
-    let app: ReturnType<typeof createApp>;
-    try {
-      app = createApp({
-        mutationResponses: {
-          'freeze-poison/save': { renderFailurePage: safeFailurePage },
+  it.each([
+    {
+      name: 'one uniquely named sensitive renderer',
+      renderers: [
+        {
+          render: vi.fn(() => trustedHtml('<output>SERVER_DATABASE_SECRET</output>')),
+          target: 'admin',
         },
-        mutations: [save],
-      });
-    } finally {
-      Object.freeze = originalFreeze;
-    }
-
-    if (capturedPolicy !== undefined) {
-      capturedPolicy.renderFailurePage = () =>
-        '<img src=x onerror="globalThis.kovoFreezePoisoned=true">';
-    }
-    expect(capturedPolicy).toBeUndefined();
-
-    const form = new FormData();
-    const request = new Request('https://example.test/_m/freeze-poison/save', {
-      body: form,
-      method: 'POST',
-    });
-    const response = await handleAppMutationRequest(
-      app,
-      request,
-      new URL(request.url),
-      'freeze-poison/save',
-    );
-    expect(response.status).toBe(422);
-    expect(await response.text()).toBe('<main>safe validation failure</main>');
-  });
-
-  it('normalizes nested response policy through pinned Object, Reflect, Array, and Set controls', () => {
-    const originalArrayIsArray = Array.isArray;
-    const originalFreeze = Object.freeze;
-    const originalGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
-    const originalObjectKeys = Object.keys;
-    const originalOwnKeys = Reflect.ownKeys;
-    const originalSetHas = Set.prototype.has;
-    Array.isArray = () => false;
-    Object.freeze = ((value: unknown) => value) as typeof Object.freeze;
-    Object.getOwnPropertyDescriptor = (() => ({
-      configurable: true,
-      enumerable: true,
-      value: 'attacker-substituted',
-      writable: true,
-    })) as typeof Object.getOwnPropertyDescriptor;
-    Object.keys = () => [];
-    Reflect.ownKeys = () => ['csrf'];
-    Set.prototype.has = () => false;
-
-    let normalized: ReturnType<typeof normalizeAppMutationResponseOptions>;
-    try {
-      normalized = normalizeAppMutationResponseOptions({
-        failureStylesheets: [{ href: '/safe.css', preload: true }],
-        failureTarget: 'safe-form',
-        fragmentRenderers: [
-          {
-            errorBoundary: { render: () => trustedHtml('<output>safe boundary</output>') },
-            render: () => trustedHtml('<output>safe fragment</output>'),
-            stylesheets: ['/fragment.css'],
-            target: 'safe-fragment',
-          },
-        ],
-        redirectTo: { location: '/safe', status: 303 },
-      });
-    } finally {
-      Set.prototype.has = originalSetHas;
-      Reflect.ownKeys = originalOwnKeys;
-      Object.keys = originalObjectKeys;
-      Object.getOwnPropertyDescriptor = originalGetOwnPropertyDescriptor;
-      Object.freeze = originalFreeze;
-      Array.isArray = originalArrayIsArray;
-    }
-
-    expect(normalized.failureTarget).toBe('safe-form');
-    expect(normalized.redirectTo).toEqual({ location: '/safe', status: 303 });
-    expect(normalized.failureStylesheets).toEqual([{ href: '/safe.css', preload: true }]);
-    expect(normalized.fragmentRenderers?.[0]?.target).toBe('safe-fragment');
-    expect(Object.isFrozen(normalized)).toBe(true);
-    expect(Object.isFrozen(normalized.failureStylesheets)).toBe(true);
-    expect(Object.isFrozen(normalized.failureStylesheets?.[0])).toBe(true);
-    expect(Object.isFrozen(normalized.fragmentRenderers)).toBe(true);
-    expect(Object.isFrozen(normalized.fragmentRenderers?.[0])).toBe(true);
-    expect(Object.isFrozen(normalized.fragmentRenderers?.[0]?.errorBoundary)).toBe(true);
+      ],
+    },
+    {
+      name: 'duplicate sensitive renderer targets',
+      renderers: [
+        { render: vi.fn(() => trustedHtml('<output>public</output>')), target: 'shared' },
+        {
+          render: vi.fn(() => trustedHtml('<output>SERVER_DATABASE_SECRET</output>')),
+          target: 'shared',
+        },
+      ],
+    },
+  ])('rejects $name before any renderer callback can become app authority', ({ renderers }) => {
+    expect(() =>
+      createApp({
+        mutationResponses: {
+          save: { fragmentRenderers: renderers },
+        },
+      } as never),
+    ).toThrow('createApp({ mutationResponses }) is forbidden');
+    for (const renderer of renderers) expect(renderer.render).not.toHaveBeenCalled();
   });
 
   it('decodes JSON mutation bodies through schemas without prototype-pollution side effects', async () => {
@@ -371,18 +201,14 @@ describe('server app mutation request boundary', () => {
     const addToCart = mutation('cart/add', {
       csrf: false,
       csrfJustification: 'test fixture uses a non-browser caller',
+      redirectTo: '/cart',
       input: s.object({ productId: s.string() }),
       handler(input) {
         seen.push(input);
         return input;
       },
     });
-    const app = createApp({
-      mutationResponses: {
-        'cart/add': { redirectTo: '/cart' },
-      },
-      mutations: [addToCart],
-    });
+    const app = createApp({ mutations: [addToCart] });
     const request = new Request('https://shop.example.test/_m/cart/add', {
       body: '{"__proto__":{"polluted":true},"constructor":{"polluted":true},"productId":"p1","prototype":{"polluted":true}}',
       headers: { 'Content-Type': 'application/json' },
@@ -542,14 +368,13 @@ describe('server app mutation request boundary', () => {
   it('preserves an own-data request db across csrf-exempt enhanced dispatch', async () => {
     // C194 / SPEC §6.6/§9.5/§11.2: adapters may bind a per-request DB capability before app
     // dispatch. Cookie/authorization neutralization must preserve that exact framework input for
-    // the handler and post-lifecycle response policy without retaining ambient browser authority.
+    // the handler without retaining ambient browser authority.
     const writes: string[] = [];
     const db = {
       insert(value: string) {
         writes.push(value);
       },
     };
-    const seen: string[] = [];
     const addToCart = mutation('cart/request-db', {
       csrf: false,
       csrfJustification: 'test fixture uses a non-browser caller',
@@ -558,20 +383,10 @@ describe('server app mutation request boundary', () => {
         expect('session' in request).toBe(false);
         expect(request.headers.get('cookie')).toBeNull();
         request.db.insert(input.productId);
-        seen.push('handler');
         return input;
       },
     });
-    const app = createApp({
-      mutationResponses: {
-        'cart/request-db': ({ request }) => {
-          (request as Request & { db: typeof db }).db.insert('response-policy');
-          seen.push('response-policy');
-          return { redirectTo: '/cart' };
-        },
-      },
-      mutations: [addToCart],
-    });
+    const app = createApp({ mutations: [addToCart] });
     const form = new FormData();
     form.set('productId', 'p1');
     const request = new Request('https://shop.example.test/_m/cart/request-db', {
@@ -591,8 +406,7 @@ describe('server app mutation request boundary', () => {
     const response = await createRequestHandler(app)(request);
 
     expect(response.status).toBe(200);
-    expect(writes).toEqual(['p1', 'response-policy']);
-    expect(seen).toEqual(['handler', 'response-policy']);
+    expect(writes).toEqual(['p1']);
     expect(request.headers.get('cookie')).toBe('sid=victim');
   });
 
@@ -909,7 +723,7 @@ describe('server app mutation request boundary', () => {
     expect(body).not.toContain('"label":"item-2"');
   });
 
-  it('inherits app and source-route stylesheets into enhanced failure fragments', async () => {
+  it('inherits app and source-route stylesheets into generated enhanced failure fragments', async () => {
     const addToCart = mutation('cart/add', {
       csrf: false,
       csrfJustification: 'test fixture uses a non-browser caller',
@@ -923,12 +737,6 @@ describe('server app mutation request boundary', () => {
       stylesheets: [stylesheet('./cart.css')],
     });
     const app = createApp({
-      mutationResponses: {
-        'cart/add': {
-          failureStylesheets: [stylesheet('./form.css')],
-          failureTarget: 'cart-form',
-        },
-      },
       mutations: [addToCart],
       routes: [cartRoute],
       stylesheets: [stylesheet('./app.css')],
@@ -939,6 +747,7 @@ describe('server app mutation request boundary', () => {
       body: form,
       headers: {
         Referer: 'https://shop.example.test/cart',
+        'Kovo-Form-Target': 'cart-form',
         'Kovo-Fragment': 'true',
       },
       method: 'POST',
@@ -949,11 +758,11 @@ describe('server app mutation request boundary', () => {
 
     expect(response.status, body).toBe(422);
     expect(body).toBe(
-      '<kovo-fragment target="cart-form"><link rel="stylesheet" href="/assets/app.css"><link rel="stylesheet" href="/assets/cart.css"><link rel="stylesheet" href="/assets/form.css"><output role="alert" data-error-path="quantity">Expected number &gt;= 1</output></kovo-fragment>',
+      '<kovo-fragment target="cart-form"><link rel="stylesheet" href="/assets/app.css"><link rel="stylesheet" href="/assets/cart.css"><output role="alert" data-error-path="quantity">Expected number &gt;= 1</output></kovo-fragment>',
     );
   });
 
-  it('resolves the app session once before mutation response options and guarded handlers', async () => {
+  it('resolves the app session once before guarded mutation handlers', async () => {
     // SPEC §6.6/§9.1: a session-authenticated mutation is CSRF-checked (KV418 forbids the
     // `csrf: false` + session combination), so this exercises the normal protected path. The
     // synchronizer token is stamped into the form and validated before the guard chain.
@@ -963,6 +772,7 @@ describe('server app mutation request boundary', () => {
     const addToCart = mutation('cart/add', {
       guard: guards.authed(),
       input: s.object({ productId: s.string() }),
+      redirectTo: '/cart',
       handler(input, request) {
         const session = (
           request as Request & { session?: { user?: { id?: string } | null } | null }
@@ -973,15 +783,6 @@ describe('server app mutation request boundary', () => {
     });
     const app = createApp({
       csrf,
-      mutationResponses: {
-        'cart/add': ({ currentUrl, rawInput, request }) => {
-          const session = (
-            request as Request & { session?: { user?: { id?: string } | null } | null }
-          ).session;
-          seen.push(`response:${session?.user?.id}:${currentUrl}:${rawInput instanceof FormData}`);
-          return { redirectTo: '/cart' };
-        },
-      },
       mutations: [addToCart],
       sessionProvider() {
         sessionReads += 1;
@@ -1002,130 +803,12 @@ describe('server app mutation request boundary', () => {
     expect(response.status).toBe(303);
     expect(response.headers.get('location')).toBe('/cart');
     expect(sessionReads).toBe(1);
-    expect(seen).toEqual(['handler:u1:p1', 'response:u1:/_m/cart/add?from=button:true']);
+    expect(seen).toEqual(['handler:u1:p1']);
     expect('session' in request).toBe(false);
   });
 
-  it('invokes dynamic response policy only after a validated, authorized handler outcome', async () => {
-    const seen: string[] = [];
-    let allowSession = true;
-    const csrf = {
-      secret: 'post-lifecycle-policy-secret-key-0123456789',
-      sessionId: () => 's1',
-    };
-    const addToCart = mutation('cart/add', {
-      errors: { OUT_OF_STOCK: s.object({}) },
-      guard: guards.authed(),
-      input: s.object({ productId: s.string() }),
-      handler(input, _request, context) {
-        seen.push(`handler:${input.productId}`);
-        if (input.productId === 'sold-out') return context.fail('OUT_OF_STOCK', {});
-        return input;
-      },
-    });
-    const app = createApp({
-      csrf,
-      mutationResponses: {
-        'cart/add': ({ outcome }) => {
-          seen.push(`policy:${outcome.kind}`);
-          return { redirectTo: '/cart' };
-        },
-      },
-      mutations: [addToCart],
-      sessionProvider() {
-        return { user: allowSession ? { id: 'u1' } : null };
-      },
-    });
-    const submit = async (fields: Record<string, string>) => {
-      const form = new FormData();
-      for (const [key, value] of Object.entries(fields)) form.set(key, value);
-      const request = new Request('https://shop.example.test/_m/cart/add', {
-        body: form,
-        headers: { origin: 'https://shop.example.test' },
-        method: 'POST',
-      });
-      return handleAppMutationRequest(app, request, new URL(request.url), 'cart/add');
-    };
-    const token = csrfToken({}, csrf, { audience: 'cart/add' });
-
-    expect((await submit({ productId: 'p1' })).status).toBe(422);
-    expect(seen).toEqual([]);
-
-    expect((await submit({ 'kovo-csrf': token })).status).toBe(422);
-    expect(seen).toEqual([]);
-
-    allowSession = false;
-    expect((await submit({ 'kovo-csrf': token, productId: 'p1' })).status).toBe(303);
-    expect(seen).toEqual([]);
-
-    allowSession = true;
-    expect((await submit({ 'kovo-csrf': token, productId: 'p1' })).status).toBe(303);
-    expect(seen).toEqual(['handler:p1', 'policy:success']);
-
-    seen.length = 0;
-    expect((await submit({ 'kovo-csrf': token, productId: 'sold-out' })).status).toBe(422);
-    expect(seen).toEqual(['handler:sold-out', 'policy:failure']);
-  });
-
-  it('pins the post-lifecycle outcome before invoking an app response policy', async () => {
-    let observedOutcome: { readonly kind: string } | undefined;
-    const save = mutation('freeze-outcome/save', {
-      csrf: false,
-      csrfJustification: 'test fixture uses a non-browser caller',
-      input: s.object({ value: s.string() }),
-      handler: (input) => input,
-    });
-    const app = createApp({
-      mutationResponses: {
-        'freeze-outcome/save': ({ outcome }) => {
-          observedOutcome = outcome;
-          return { redirectTo: '/saved' };
-        },
-      },
-      mutations: [save],
-    });
-    const form = new FormData();
-    form.set('value', 'safe');
-    const request = new Request('https://example.test/_m/freeze-outcome/save', {
-      body: form,
-      method: 'POST',
-    });
-    const originalFreeze = Object.freeze;
-    let interceptedOutcome = false;
-    Object.freeze = ((value: unknown) => {
-      if (
-        typeof value === 'object' &&
-        value !== null &&
-        (value as { kind?: unknown }).kind === 'success'
-      ) {
-        interceptedOutcome = true;
-        return originalFreeze({ code: 'ATTACKER', kind: 'failure', status: 422 });
-      }
-      return originalFreeze(value);
-    }) as typeof Object.freeze;
-
-    let response: Response;
-    try {
-      response = await handleAppMutationRequest(
-        app,
-        request,
-        new URL(request.url),
-        'freeze-outcome/save',
-      );
-    } finally {
-      Object.freeze = originalFreeze;
-    }
-
-    expect(response.status).toBe(303);
-    expect(response.headers.get('location')).toBe('/saved');
-    expect(interceptedOutcome).toBe(false);
-    expect(observedOutcome).toEqual({ kind: 'success' });
-    expect(Object.isFrozen(observedOutcome)).toBe(true);
-  });
-
-  it('pins replay-store authority and does not run policy when reservation fails closed', async () => {
+  it('pins replay-store authority and does not run the handler when reservation fails closed', async () => {
     const handler = vi.fn(() => ({ ok: true }));
-    const policy = vi.fn(() => ({ redirectTo: '/done' }));
     const replayStore = {
       get: vi.fn(() => undefined),
       reserve: vi.fn(() => undefined),
@@ -1142,7 +825,6 @@ describe('server app mutation request boundary', () => {
     const app = createApp({
       csrf,
       mutationReplayStore: replayStore,
-      mutationResponses: { save: policy },
       mutations: [save],
     });
     (replayStore as { reserve: (...args: unknown[]) => unknown }).reserve = vi.fn(() => ({
@@ -1164,64 +846,6 @@ describe('server app mutation request boundary', () => {
     const response = await handleAppMutationRequest(app, request, new URL(request.url), 'save');
     expect(response.status).toBe(429);
     expect(handler).not.toHaveBeenCalled();
-    expect(policy).not.toHaveBeenCalled();
-  });
-
-  it('forbids static and runtime response-policy CSRF overrides', async () => {
-    expect(() =>
-      createApp({
-        mutationResponses: { save: { csrf: false } as never },
-      }),
-    ).toThrow('response decoration cannot replace pre-body CSRF posture');
-
-    const onError = vi.fn();
-    const handler = vi.fn(() => ({ ok: true }));
-    const policy = vi.fn(() => ({ csrf: false, redirectTo: '/forged' }) as never);
-    const csrf = {
-      secret: 'runtime-policy-override-secret-key-0123456789',
-      sessionId: () => 's1',
-    };
-    const save = mutation('save', {
-      input: s.object({ value: s.string() }),
-      handler,
-    });
-    const app = createApp({
-      csrf,
-      mutationResponses: { save: policy },
-      mutations: [save],
-      onError,
-    });
-    const forgedForm = new FormData();
-    forgedForm.set('value', 'forged');
-    const forged = new Request('https://example.test/_m/save', {
-      body: forgedForm,
-      headers: { origin: 'https://example.test' },
-      method: 'POST',
-    });
-
-    expect((await handleAppMutationRequest(app, forged, new URL(forged.url), 'save')).status).toBe(
-      422,
-    );
-    expect(handler).not.toHaveBeenCalled();
-    expect(policy).not.toHaveBeenCalled();
-
-    const validForm = new FormData();
-    validForm.set('value', 'valid');
-    validForm.set('kovo-csrf', csrfToken({}, csrf, { audience: 'save' }));
-    const valid = new Request('https://example.test/_m/save', {
-      body: validForm,
-      headers: { origin: 'https://example.test' },
-      method: 'POST',
-    });
-    expect((await handleAppMutationRequest(app, valid, new URL(valid.url), 'save')).status).toBe(
-      500,
-    );
-    expect(handler).toHaveBeenCalledTimes(1);
-    expect(policy).toHaveBeenCalledTimes(1);
-    expect(onError).toHaveBeenCalledWith(
-      expect.any(TypeError),
-      expect.objectContaining({ mutationKey: 'save', operation: 'mutation-response-policy' }),
-    );
   });
 
   it('serves a csrf:false mutation with no ambient session (SPEC §6.6/§9.1 KV418 runtime floor)', async () => {

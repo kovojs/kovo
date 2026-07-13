@@ -37,7 +37,6 @@ import {
   witnessMapSet,
   witnessSetAdd,
   witnessSetHas,
-  witnessSetSize,
 } from '../security-witness-intrinsics.js';
 import type { QueryRerun } from './definition.js';
 
@@ -231,6 +230,7 @@ export async function renderFragmentChunks(
   targets: readonly string[],
   input: unknown,
 ): Promise<string[]> {
+  assertUniqueFragmentRendererTargets(renderers);
   const wanted = createWitnessSet<string>();
   for (let targetIndex = 0; targetIndex < targets.length; targetIndex += 1) {
     witnessSetAdd(wanted, targets[targetIndex]!);
@@ -239,7 +239,9 @@ export async function renderFragmentChunks(
 
   for (let rendererIndex = 0; rendererIndex < renderers.length; rendererIndex += 1) {
     const renderer = renderers[rendererIndex]!;
-    if (witnessSetSize(wanted) > 0 && !witnessSetHas(wanted, renderer.target)) continue;
+    // SPEC §9.1: the client names the live DOM targets to refresh. An omitted/empty target list
+    // means no app-authored fragment work, never wildcard authority over the renderer registry.
+    if (!witnessSetHas(wanted, renderer.target)) continue;
 
     try {
       witnessArrayAppend(
@@ -559,14 +561,26 @@ function addQueryTokens(target: Set<string>, tokens: readonly string[]): void {
 function fragmentRenderersByTarget(
   renderers: readonly FragmentRenderer[],
 ): ReadonlyMap<string, FragmentRenderer> {
+  assertUniqueFragmentRendererTargets(renderers);
   const byTarget = createWitnessMap<string, FragmentRenderer>();
   for (let index = 0; index < renderers.length; index += 1) {
     const renderer = renderers[index]!;
-    const existing = witnessMapGet(byTarget, renderer.target);
-    if (existing && existing.updateCoverage !== 'plan') continue;
     witnessMapSet(byTarget, renderer.target, renderer);
   }
   return byTarget;
+}
+
+function assertUniqueFragmentRendererTargets(renderers: readonly FragmentRenderer[]): void {
+  const seen = createWitnessSet<string>();
+  for (let index = 0; index < renderers.length; index += 1) {
+    const target = renderers[index]!.target;
+    if (witnessSetHas(seen, target)) {
+      throw new TypeError(
+        `Generated mutation fragment renderer target ${target} is registered more than once.`,
+      );
+    }
+    witnessSetAdd(seen, target);
+  }
 }
 
 function targetIsPlanCovered(

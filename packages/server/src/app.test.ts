@@ -3073,6 +3073,7 @@ describe('server createApp request shell', () => {
       csrf: false,
       csrfJustification: 'test fixture uses a non-browser caller',
       input: s.object({ productId: s.string(), quantity: s.number().int().min(1).default(1) }),
+      redirectTo: '/cart',
       registry: {
         touches: [cart],
       },
@@ -3089,9 +3090,6 @@ describe('server createApp request shell', () => {
           render: () => '<cart-badge>1</cart-badge>',
         },
       ],
-      mutationResponses: {
-        'cart/add': { redirectTo: '/cart' },
-      },
       mutations: [addToCart],
       requestLimits: {
         clientIp(request) {

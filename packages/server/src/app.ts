@@ -19,7 +19,6 @@ import {
   snapshotLiveTargetRenderers,
 } from './app-snapshot.js';
 import { normalizeAppRequestLimits } from './app-load-shed.js';
-import { snapshotAppMutationResponses } from './app-mutation-responses.js';
 import { createAppTaskRuntime, registerAppTaskRuntime } from './task-runtime.js';
 import { ensureKovoLoaderRuntimeClientModule } from './loader-runtime-client-module.js';
 import { takeRegisteredGeneratedLiveTargetRenderers } from './live-target-registry.js';
@@ -63,11 +62,6 @@ export type {
   AppDiagnostic,
   AppLifecycleRequest,
   AppMutationDeclaration,
-  AppMutationResponseContext,
-  AppMutationResponseOptions,
-  AppMutationResponsePolicy,
-  AppMutationResponseResolver,
-  AppMutationResponses,
   AppQueryDeclaration,
   AppRateLimitOptions,
   AppRequestLimitOptions,
@@ -131,6 +125,7 @@ export function createApp<
   options: CreateAppOptions<SessionValue, DbValue, RawRequest, AppRequest> = {},
 ): KovoApp<SessionValue, DbValue, RawRequest, AppRequest> {
   type AppOptions = CreateAppOptions<SessionValue, DbValue, RawRequest, AppRequest>;
+  rejectRemovedMutationResponsesOption(options);
   // Read every top-level option exactly once through an own-data descriptor before any authored
   // declaration callback executes. A route/query/mutation factory must not be able to replace the
   // session, DB, request-policy, or response authority that the surrounding createApp() call
@@ -161,10 +156,6 @@ export function createApp<
     options,
     'liveTargetRenderers',
   ) as AppOptions['liveTargetRenderers'];
-  const mutationResponsesSource = appOptionOwnDataValue(
-    options,
-    'mutationResponses',
-  ) as AppOptions['mutationResponses'];
   const mutationsSource = appOptionOwnDataValue(options, 'mutations') as AppOptions['mutations'];
   const onError = appOptionOwnDataValue(options, 'onError') as KovoApp['onError'];
   const queriesSource = appOptionOwnDataValue(options, 'queries') as AppOptions['queries'];
@@ -192,7 +183,6 @@ export function createApp<
   const egress = snapshotAppEgressOptions(egressSource);
   const document = normalizeAppDocumentOptions(documentSource);
   const errorShells = snapshotAppErrorShells(errorShellsSource ?? {});
-  const mutationResponses = snapshotAppMutationResponses(mutationResponsesSource ?? {});
   const requestLimits = normalizeAppRequestLimits(requestLimitsSource);
   // Refuse to boot — by-construction at the bootstrap chokepoint (SPEC §6.6,
   // §9.5; plans/secure-framework.md Tier 1). In production a missing/empty/short
@@ -289,7 +279,6 @@ export function createApp<
       stylesheets: stylesheetsSource ?? [],
       ...(csrf === undefined ? {} : { csrf }),
       ...(db === undefined ? {} : { db }),
-      mutationResponses,
       ...(mutationReplayStore === undefined ? {} : { mutationReplayStore }),
       ...(onError === undefined ? {} : { onError }),
       ...(renderRoute === undefined ? {} : { renderRoute }),
@@ -303,6 +292,13 @@ export function createApp<
   // mutation commit and fail only while rendering its response, so retries could duplicate writes.
   appLiveTargetAttestationAudience(app);
   return app;
+}
+
+function rejectRemovedMutationResponsesOption(source: object): void {
+  if (witnessGetOwnPropertyDescriptor(source, 'mutationResponses') === undefined) return;
+  throw new TypeError(
+    'createApp({ mutationResponses }) is forbidden: SPEC §9.1 makes mutation success selection generated and failure rendering framework-owned.',
+  );
 }
 
 function appOptionOwnDataValue(source: object, property: PropertyKey): unknown {

@@ -91,12 +91,18 @@ import * as wireHtmlApi from '../wire-html.js';
 type RootAppDocumentOptions = import('../index.js').AppDocumentOptions;
 // eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
 type RootAppErrorShellOptions = import('../index.js').AppErrorShellOptions;
-// eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
-type RootAppMutationResponseContext = import('../index.js').AppMutationResponseContext;
-// eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
-type RootAppMutationResponseOptions = import('../index.js').AppMutationResponseOptions;
-// eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
-type RootAppMutationResponseResolver = import('../index.js').AppMutationResponseResolver;
+// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
+type RemovedRootAppMutationResponseContext =
+  // @ts-expect-error SPEC §9.1 forbids an app-authored mutation response switch.
+  import('../index.js').AppMutationResponseContext;
+// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
+type RemovedRootAppMutationResponseOptions =
+  // @ts-expect-error SPEC §9.1 makes response selection generated and deterministic.
+  import('../index.js').AppMutationResponseOptions;
+// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
+type RemovedRootAppMutationResponseResolver =
+  // @ts-expect-error SPEC §9.1 forbids arbitrary app-authored response callbacks.
+  import('../index.js').AppMutationResponseResolver;
 // eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
 type RootAppRouteRenderContext = import('../index.js').AppRouteRenderContext;
 // eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.

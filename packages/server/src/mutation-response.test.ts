@@ -757,6 +757,69 @@ describe('server mutation primitives', () => {
     });
   });
 
+  it('treats an omitted Kovo-Targets header as no fragment render authority', async () => {
+    const cart = domain('cart');
+    const cartQuery = query('cart', { load: () => ({ count: 1 }), reads: [cart] });
+    const update = mutation('cart/no-targets', {
+      csrf: false,
+      csrfJustification: 'test fixture uses a non-browser caller',
+      input: s.object({}),
+      registry: { queries: [cartQuery], touches: [cart] },
+      handler: () => ({}),
+    });
+    const publicRenderer = vi.fn(() => '<output>PUBLIC_OMITTED</output>');
+    const sensitiveRenderer = vi.fn(() => '<output>SERVER_DATABASE_SECRET_OMITTED</output>');
+
+    const response = await renderMutationEndpointResponse(update, {
+      fragmentRenderers: [
+        { render: publicRenderer, target: 'public-panel' },
+        { render: sensitiveRenderer, target: 'admin-panel' },
+      ],
+      headers: { 'Kovo-Fragment': 'true' },
+      rawInput: {},
+      redirectTo: '/',
+      request: {},
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.body).toBe('');
+    expect(publicRenderer).not.toHaveBeenCalled();
+    expect(sensitiveRenderer).not.toHaveBeenCalled();
+  });
+
+  it('rejects duplicate generated fragment targets before either renderer executes', async () => {
+    const cart = domain('cart');
+    const cartQuery = query('cart', { load: () => ({ count: 1 }), reads: [cart] });
+    const update = mutation('cart/duplicate-targets', {
+      csrf: false,
+      csrfJustification: 'test fixture uses a non-browser caller',
+      input: s.object({}),
+      registry: { queries: [cartQuery], touches: [cart] },
+      handler: () => ({}),
+    });
+    const publicRenderer = vi.fn(() => '<output>PUBLIC_DUPLICATE</output>');
+    const sensitiveRenderer = vi.fn(() => '<output>SERVER_DATABASE_SECRET_DUPLICATE</output>');
+
+    const response = await renderMutationEndpointResponse(update, {
+      fragmentRenderers: [
+        { render: publicRenderer, target: 'shared-panel' },
+        { render: sensitiveRenderer, target: 'shared-panel' },
+      ],
+      headers: {
+        'Kovo-Fragment': 'true',
+        'Kovo-Targets': 'shared-panel=cart',
+      },
+      rawInput: {},
+      redirectTo: '/',
+      request: {},
+    });
+
+    expect(response.status).toBe(500);
+    expect(response.body).toContain('RENDER_ERROR');
+    expect(publicRenderer).not.toHaveBeenCalled();
+    expect(sensitiveRenderer).not.toHaveBeenCalled();
+  });
+
   it('bypasses success selection on failures and rerenders the submitted form target', async () => {
     const cart = domain('cart');
     const cartQuery = query('cart', {
@@ -1413,7 +1476,7 @@ describe('server mutation primitives', () => {
     });
   });
 
-  it('lets enhanced forms override validation failure fragments', async () => {
+  it('does not let structural callbacks override pre-handler validation failure fragments', async () => {
     const addToCart = mutation('cart/add', {
       input: s.object({
         productId: s.string(),
@@ -1424,16 +1487,20 @@ describe('server mutation primitives', () => {
       },
     });
 
+    const renderFailureFragment = vi.fn(
+      (failure, rawInput) =>
+        `<form kovo-c="product-form" aria-invalid="true"><output role="alert" data-error-code="${failure.error.code}">${(rawInput as { quantity: number }).quantity}</output></form>`,
+    );
+
     await expect(
       renderMutationResponse(addToCart, {
         failureTarget: 'product-form:p1',
         rawInput: { productId: 'p1', quantity: 0 },
-        renderFailureFragment: (failure, rawInput) =>
-          `<form kovo-c="product-form" aria-invalid="true"><output role="alert" data-error-code="${failure.error.code}">${(rawInput as { quantity: number }).quantity}</output></form>`,
+        renderFailureFragment,
         request: {},
       }),
     ).resolves.toEqual({
-      body: '<kovo-fragment target="product-form:p1"><form kovo-c="product-form" aria-invalid="true"><output role="alert" data-error-code="VALIDATION">0</output></form></kovo-fragment>',
+      body: '<kovo-fragment target="product-form:p1"><output role="alert" data-error-path="quantity">Expected number &gt;= 1</output></kovo-fragment>',
       headers: {
         'Cache-Control': 'private, no-store',
         'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
@@ -1442,6 +1509,7 @@ describe('server mutation primitives', () => {
       },
       status: 422,
     });
+    expect(renderFailureFragment).not.toHaveBeenCalled();
   });
 
   it('streams mutation chunks after validation and reconciles with final server truth', async () => {

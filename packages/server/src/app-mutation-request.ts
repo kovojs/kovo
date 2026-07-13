@@ -4,26 +4,16 @@ import {
   type MutationDefinition,
   type MutationFail,
 } from './mutation.js';
-import type {
-  FragmentRenderer,
-  LiveTargetRenderer,
-  MutationPostLifecycleOutcome,
-  MutationPostLifecycleResponseOptions,
-} from './mutation-wire.js';
+import type { LiveTargetRenderer } from './mutation-wire.js';
 import { mutationCsrfOptions } from './csrf.js';
+import { frameworkMutationFailurePageRenderer } from './mutation-failure-renderer-authority.js';
 import { methodNotAllowedWebResponse, serverResponseToWebResponse } from './response.js';
 import type { Schema } from './schema.js';
-import type {
-  AppMutationResponseContext,
-  AppMutationResponseOptions,
-  AppMutationDeclaration,
-  KovoApp,
-} from './app-types.js';
+import type { AppMutationDeclaration, KovoApp } from './app-types.js';
 import {
   appLiveTargetAttestationAudience,
   appLiveTargetAttestationAuthority,
 } from './live-target-app-identity.js';
-import { normalizeAppMutationResponseOptions } from './app-mutation-responses.js';
 import {
   appRequestUrl,
   renderAppErrorDocumentResponse,
@@ -56,7 +46,7 @@ import {
   securityStringStartsWith,
   securityStringTrim,
 } from './response-security-intrinsics.js';
-import { witnessFreeze, witnessGetOwnPropertyDescriptor } from './security-witness-intrinsics.js';
+import { witnessGetOwnPropertyDescriptor } from './security-witness-intrinsics.js';
 
 export async function handleAppMutationRequest(
   app: KovoApp,
@@ -112,7 +102,6 @@ export async function handleAppMutationRequest(
     idempotency: { mode: app.mutationReplayStore === undefined ? 'none' : 'replay-store' },
     surface: 'mutation',
   });
-  const currentUrl = appRequestUrl(url);
   const sourceUrl = mutationSourceUrl(request, url);
 
   const bodyResult = await readUntrustedRequestBody(mutationRequest);
@@ -149,9 +138,6 @@ export async function handleAppMutationRequest(
     rawInput,
     'validated app mutation response raw input',
   );
-  const mutationResponsePolicy = app.mutationResponses[mutation.key];
-  const mutationResponseOptions =
-    typeof mutationResponsePolicy === 'function' ? undefined : mutationResponsePolicy;
   const inheritedStylesheets = sourceRouteStylesheets(app, sourceUrl);
   const defaultFailurePageRenderer = defaultAppMutationFailurePageRenderer(
     app,
@@ -176,38 +162,7 @@ export async function handleAppMutationRequest(
     mutation.redirectTo ??
     mutation.defaultRedirectTo ??
     defaultMutationRedirectTo(mutationRequest, appRequestUrl(sourceUrl));
-  const responseOptions = appMutationEndpointResponseOptions(
-    mutationResponseOptions,
-    inheritedStylesheets,
-    defaultFailurePageRenderer,
-    fallbackRedirectTo,
-  );
-  const resolvePostLifecycleResponse =
-    typeof mutationResponsePolicy !== 'function'
-      ? undefined
-      : async (
-          outcome: MutationPostLifecycleOutcome,
-        ): Promise<MutationPostLifecycleResponseOptions | undefined> => {
-          const resolved = await mutationResponsePolicy({
-            currentUrl,
-            key: mutation.key,
-            mutation,
-            outcome: appMutationResponseOutcome(outcome),
-            rawInput: responseRawInput,
-            request: mutationRequest,
-            url: requestCreateUrl(requestUrlSnapshot(url).href),
-          });
-          if (resolved === undefined) return undefined;
-          return appMutationEndpointResponseOptions(
-            normalizeAppMutationResponseOptions(
-              resolved,
-              `mutationResponses.${mutation.key} post-lifecycle result`,
-            ),
-            inheritedStylesheets,
-            defaultFailurePageRenderer,
-            fallbackRedirectTo,
-          );
-        };
+  const failureStylesheets = mergedStylesheets(inheritedStylesheets, undefined);
 
   const endpointResponse = await renderMutationEndpointResponse(requestMutation, {
     buildToken,
@@ -219,14 +174,17 @@ export async function handleAppMutationRequest(
     ...(app.mutationReplayStore === undefined ? {} : { replayStore: app.mutationReplayStore }),
     ...(app.onError === undefined ? {} : { onError: app.onError }),
     maxListItems: app.requestLimits.maxQueryListItems,
-    ...responseOptions,
+    redirectTo: fallbackRedirectTo,
+    ...(failureStylesheets === undefined ? {} : { failureStylesheets }),
+    ...(defaultFailurePageRenderer === undefined
+      ? {}
+      : { renderFailurePage: defaultFailurePageRenderer }),
     headers: mutationRequest.headers,
     liveTargetRenderers: inheritLiveTargetRendererStylesheets(
       app.liveTargetRenderers,
       inheritedStylesheets,
     ),
     rawInput,
-    ...(resolvePostLifecycleResponse === undefined ? {} : { resolvePostLifecycleResponse }),
     request: mutationRequest,
     ...(taskScheduler === undefined ? {} : { taskScheduler }),
   });
@@ -338,27 +296,6 @@ function sourceRouteStylesheets(
   return stylesheets;
 }
 
-function inheritFragmentRendererStylesheets(
-  renderers: readonly FragmentRenderer[],
-  inheritedStylesheets: readonly KovoApp['stylesheets'][number][],
-): readonly FragmentRenderer[] {
-  if (inheritedStylesheets.length === 0) return renderers;
-
-  const inherited: FragmentRenderer[] = [];
-  denseOwnArrayForEach(
-    renderers,
-    (renderer) => {
-      const stylesheets = mergedStylesheets(inheritedStylesheets, renderer.stylesheets);
-      appendDenseOwnArrayValue(inherited, {
-        ...renderer,
-        ...(stylesheets === undefined ? {} : { stylesheets }),
-      });
-    },
-    'Mutation fragment renderer snapshot',
-  );
-  return inherited;
-}
-
 function inheritLiveTargetRendererStylesheets<Request>(
   renderers: readonly LiveTargetRenderer<Request>[],
   inheritedStylesheets: readonly KovoApp['stylesheets'][number][],
@@ -431,52 +368,6 @@ function stylesheetCriticalCssIsAlreadyLoaded(
   );
 }
 
-type ResolvedAppMutationEndpointOptions = MutationPostLifecycleResponseOptions & {
-  redirectTo: NonNullable<AppMutationResponseOptions['redirectTo']>;
-};
-
-function appMutationResponseOutcome(
-  outcome: MutationPostLifecycleOutcome,
-): AppMutationResponseContext['outcome'] {
-  return outcome.kind === 'success'
-    ? witnessFreeze({ kind: 'success' })
-    : witnessFreeze({
-        code: String(outcome.result.error.code),
-        kind: 'failure',
-        status: outcome.result.status,
-      });
-}
-
-function appMutationEndpointResponseOptions(
-  options: AppMutationResponseOptions | undefined,
-  inheritedStylesheets: readonly KovoApp['stylesheets'][number][],
-  defaultFailurePageRenderer: ((failure: MutationFail) => Promise<string>) | undefined,
-  fallbackRedirectTo: NonNullable<AppMutationResponseOptions['redirectTo']>,
-): ResolvedAppMutationEndpointOptions {
-  const failureStylesheets = mergedStylesheets(inheritedStylesheets, options?.failureStylesheets);
-  return {
-    redirectTo: options?.redirectTo ?? fallbackRedirectTo,
-    ...(options?.failureTarget === undefined ? {} : { failureTarget: options.failureTarget }),
-    ...(failureStylesheets === undefined ? {} : { failureStylesheets }),
-    ...(options?.fragmentRenderers === undefined
-      ? {}
-      : {
-          fragmentRenderers: inheritFragmentRendererStylesheets(
-            options.fragmentRenderers,
-            inheritedStylesheets,
-          ),
-        }),
-    ...(options?.renderFailureFragment === undefined
-      ? {}
-      : { renderFailureFragment: options.renderFailureFragment }),
-    ...(options?.renderFailurePage !== undefined
-      ? { renderFailurePage: options.renderFailurePage }
-      : defaultFailurePageRenderer === undefined
-        ? {}
-        : { renderFailurePage: defaultFailurePageRenderer }),
-  };
-}
-
 function defaultMutationRedirectTo(request: Request, currentUrl: string): string {
   const referer = requestHeader(request, 'referer');
   if (referer) {
@@ -521,7 +412,7 @@ function defaultAppMutationFailurePageRenderer(
     return undefined;
   }
 
-  return async (failure) => {
+  return frameworkMutationFailurePageRenderer(async (failure) => {
     const response = await renderAppRouteDocumentResponse({
       app,
       jsxContext: { mutationFailure: { failure, input: rawInput, mutationKey } },
@@ -532,5 +423,5 @@ function defaultAppMutationFailurePageRenderer(
     });
 
     return typeof response.body === 'string' ? response.body : '';
-  };
+  });
 }

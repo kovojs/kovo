@@ -180,6 +180,41 @@ describe('server mutation endpoint routing', () => {
     },
   );
 
+  it('does not invoke structurally supplied failure renderers before CSRF succeeds', async () => {
+    const handler = vi.fn(() => ({ ok: true }));
+    const renderFailureFragment = vi.fn(() => '<output>SERVER_FRAGMENT_SECRET</output>');
+    const renderFailurePage = vi.fn(() => '<main>SERVER_PAGE_SECRET</main>');
+    const protectedMutation = defineMutation('lifecycle/pre-csrf-renderer', {
+      input: s.object({ value: s.string() }),
+      handler,
+    });
+
+    const enhanced = await renderMutationEndpointResponse(protectedMutation, {
+      headers: { 'Kovo-Fragment': 'true' },
+      rawInput: { value: 'attacker' },
+      redirectTo: '/done',
+      renderFailureFragment,
+      renderFailurePage,
+      request: {},
+    });
+    const noJs = await renderMutationEndpointResponse(protectedMutation, {
+      headers: {},
+      rawInput: { value: 'attacker' },
+      redirectTo: '/done',
+      renderFailureFragment,
+      renderFailurePage,
+      request: {},
+    });
+
+    expect(enhanced.status).toBe(422);
+    expect(enhanced.body).not.toContain('SERVER_FRAGMENT_SECRET');
+    expect(noJs.status).toBe(422);
+    expect(noJs.body).not.toContain('SERVER_PAGE_SECRET');
+    expect(renderFailureFragment).not.toHaveBeenCalled();
+    expect(renderFailurePage).not.toHaveBeenCalled();
+    expect(handler).not.toHaveBeenCalled();
+  });
+
   it.each([
     {
       headers: { 'Kovo-Fragment': 'true' },
