@@ -530,12 +530,22 @@ function canonicalReplayInput<Request>(
     return found ? new ReplayFormDataFingerprintInput(entries) : wireRequest.rawInput;
   }
   const record = formLikeToRecord(wireRequest.rawInput);
-  if (!(field in record)) return wireRequest.rawInput;
-
-  return {
-    ...record,
-    [field]: `csrf-binding:${csrfBinding}`,
-  };
+  const keys = witnessObjectKeys(record);
+  const fields = snapshotReplayRecord(record, keys);
+  let found = false;
+  const normalized = {} as Record<string, unknown>;
+  for (let index = 0; index < fields.length; index += 1) {
+    const entry = fields[index]!;
+    const key = entry[0];
+    if (key === field) found = true;
+    witnessDefineProperty(normalized, key, {
+      configurable: true,
+      enumerable: true,
+      value: key === field ? `csrf-binding:${csrfBinding}` : entry[1],
+      writable: true,
+    });
+  }
+  return found ? normalized : wireRequest.rawInput;
 }
 
 function composeMutationReplayScope(

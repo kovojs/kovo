@@ -1019,6 +1019,36 @@ describe('server mutation response replay', () => {
     expect(second.fingerprint).not.toBe(await canonicalRequestFingerprint(secondBody));
   });
 
+  it('normalizes CSRF replay fingerprints from own data descriptors, not Proxy get traps', async () => {
+    const replayStore = createMemoryMutationReplayStore();
+    const csrf = {
+      secret: 'replay-csrf-secret-0123456789-abcdef',
+      sessionId: (request: { sessionId?: string }) => request.sessionId,
+    };
+    const request = { sessionId: 's1' };
+    const token = csrfToken(request, csrf, { audience: 'cart/add' });
+    const victimBody = { 'kovo-csrf': token, productId: 'victim' };
+    const proxyBody = new Proxy(victimBody, {
+      get(target, property, receiver) {
+        if (property === 'productId') return 'attacker-substitution';
+        return Reflect.get(target, property, receiver);
+      },
+    });
+    const contextFor = (rawInput: unknown) =>
+      mutationReplayContext(csrf, {
+        idem: 'idem_proxy_snapshot',
+        mutationKey: 'cart/add',
+        rawInput,
+        replayStore,
+        request,
+      });
+
+    const expected = await contextFor(victimBody);
+    const observed = await contextFor(proxyBody);
+
+    expect(observed.fingerprint).toBe(expected.fingerprint);
+  });
+
   it('scopes replay records by mutation key so a sibling mutation does not replay another', async () => {
     const cart = domain('cart');
     const replayStore = createMemoryMutationReplayStore();

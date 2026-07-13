@@ -75,6 +75,24 @@ describe('csrf helpers', () => {
     expect(validateCsrfToken({ 'csrf<input>': token }, { sessionId: '' }, csrf)).toBe(false);
   });
 
+  it('rejects inherited and accessor-backed CSRF authority without invoking getters', () => {
+    const token = csrfToken(request, csrf);
+    const inherited = Object.create({ 'csrf<input>': token }) as Record<string, unknown>;
+    let getterCalls = 0;
+    const accessor = {} as Record<string, unknown>;
+    Object.defineProperty(accessor, 'csrf<input>', {
+      enumerable: true,
+      get() {
+        getterCalls += 1;
+        return token;
+      },
+    });
+
+    expect(validateCsrfToken(inherited, request, csrf)).toBe(false);
+    expect(validateCsrfToken(accessor, request, csrf)).toBe(false);
+    expect(getterCalls).toBe(0);
+  });
+
   it('mints with the current CSRF secret while accepting one configured previous secret', () => {
     const current = 'current-secret-at-least-32-characters-long';
     const previous = 'previous-secret-at-least-32-characters-long';

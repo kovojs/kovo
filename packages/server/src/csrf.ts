@@ -17,6 +17,7 @@ import {
   witnessCreateNullRecord,
   witnessGetOwnPropertyDescriptor,
   witnessIsArray,
+  witnessObjectIs,
   witnessReflectApply,
 } from './security-witness-intrinsics.js';
 import {
@@ -369,7 +370,7 @@ export function validateCsrfToken<Request>(
   const binding = resolveCsrfBinding(request, options);
   if (!binding) return false;
 
-  const submitted = revealCsrfInput(formLikeToRecord(rawInput)[options.field ?? 'kovo-csrf']);
+  const submitted = revealCsrfInput(readOwnCsrfInputField(rawInput, options.field ?? 'kovo-csrf'));
   if (typeof submitted !== 'string') return false;
 
   const submittedMac = unmaskCsrfToken(submitted);
@@ -383,6 +384,25 @@ export function validateCsrfToken<Request>(
       signature: submittedMac,
     }).ok === true
   );
+}
+
+function readOwnCsrfInputField(rawInput: unknown, field: string): unknown {
+  const record = formLikeToRecord(rawInput);
+  const before = witnessGetOwnPropertyDescriptor(record, field);
+  const after = witnessGetOwnPropertyDescriptor(record, field);
+  if (
+    before === undefined ||
+    after === undefined ||
+    !('value' in before) ||
+    !('value' in after) ||
+    !witnessObjectIs(before.value, after.value) ||
+    before.configurable !== after.configurable ||
+    before.enumerable !== after.enumerable ||
+    before.writable !== after.writable
+  ) {
+    return undefined;
+  }
+  return before.value;
 }
 
 function revealCsrfInput(input: unknown): unknown {
