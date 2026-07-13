@@ -8,6 +8,7 @@ export type BetterAuthRequestSecretDisposition =
   | 'boxed'
   | 'confined-cookie-forwarding'
   | 'confined-third-party-adapter'
+  | 'reconstructed-non-secret-projection'
   | 'vetted-compare-or-verify';
 
 export interface BetterAuthRequestSecretPath {
@@ -36,6 +37,12 @@ const permittedCrossUserCredentialDispositions =
   betterAuthStringSet<BetterAuthRequestSecretDisposition>(
     ['boxed', 'vetted-compare-or-verify'],
     'Better Auth permitted cross-user credential dispositions',
+  );
+
+const permittedAdapterCredentialDispositions =
+  betterAuthStringSet<BetterAuthRequestSecretDisposition>(
+    ['boxed', 'reconstructed-non-secret-projection', 'vetted-compare-or-verify'],
+    'Better Auth permitted adapter credential dispositions',
   );
 
 export const betterAuthRequestSecretPaths = [
@@ -74,6 +81,16 @@ export const betterAuthRequestSecretPaths = [
     disposition: 'confined-third-party-adapter',
     readsCrossUserCredential: false,
     reason: 'Request cookie is passed only to Better Auth getSession lookup.',
+  },
+  {
+    id: 'better-auth.get-session.response-secret-projection',
+    entrypoint: 'session-provider',
+    carrier: 'adapter-system-db-secret-column',
+    source: 'packages/better-auth/src/session.ts',
+    disposition: 'reconstructed-non-secret-projection',
+    readsCrossUserCredential: false,
+    reason:
+      'Session and user rows are reconstructed without credential-shaped fields before app mapping.',
   },
   {
     id: 'better-auth.set-cookie.forwarding',
@@ -370,10 +387,32 @@ export function proveBetterAuthRequestSecretNonEgress(
       }
     }
 
+    if (
+      path.carrier === 'adapter-system-db-secret-column' &&
+      !path.readsCrossUserCredential &&
+      !betterAuthSetHas(permittedAdapterCredentialDispositions, path.disposition)
+    ) {
+      betterAuthArrayAppend(
+        issues,
+        `KV439: ${path.id} handles an adapter auth credential with unconfined disposition ${path.disposition}`,
+        'Better Auth request secret non-egress issues',
+      );
+    }
+
     if (path.disposition === 'boxed' && path.carrier !== 'adapter-system-db-secret-column') {
       betterAuthArrayAppend(
         issues,
         `KV439: ${path.id} claims boxing for non-database auth secret carrier`,
+        'Better Auth request secret non-egress issues',
+      );
+    }
+    if (
+      path.disposition === 'reconstructed-non-secret-projection' &&
+      path.carrier !== 'adapter-system-db-secret-column'
+    ) {
+      betterAuthArrayAppend(
+        issues,
+        `KV439: ${path.id} claims credential projection for non-database auth secret carrier`,
         'Better Auth request secret non-egress issues',
       );
     }

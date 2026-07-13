@@ -24,6 +24,7 @@ const nativeMapHas = NativeMap.prototype.has;
 const nativeMapSet = NativeMap.prototype.set;
 const nativeNumberIsNaN = NativeNumber.isNaN;
 const nativeNumberIsSafeInteger = NativeNumber.isSafeInteger;
+const nativeObjectCreate = NativeObject.create;
 const nativeObjectDefineProperty = NativeObject.defineProperty;
 const nativeObjectFreeze = NativeObject.freeze;
 const nativeObjectGetOwnPropertyDescriptor = NativeObject.getOwnPropertyDescriptor;
@@ -92,6 +93,17 @@ function capturedControlsAreSound(): boolean {
     const keys = apply<string[]>(nativeObjectKeys, NativeObject, [{ safe: true }]);
     const parsed = apply<Record<string, unknown>>(nativeJsonParse, NativeJSON, ['{"safe":true}']);
     const frozenProbe = { safe: true };
+    const nullRecord = apply<Record<string, unknown>>(nativeObjectCreate, NativeObject, [null]);
+    apply(nativeObjectDefineProperty, NativeObject, [
+      nullRecord,
+      'safe',
+      { configurable: true, enumerable: true, value: 42, writable: true },
+    ]);
+    const nullRecordDescriptor = apply<PropertyDescriptor | undefined>(
+      nativeObjectGetOwnPropertyDescriptor,
+      NativeObject,
+      [nullRecord, 'safe'],
+    );
     apply(nativeObjectFreeze, NativeObject, [frozenProbe]);
     return (
       apply(nativeArrayIsArray, NativeArray, [[]]) === true &&
@@ -102,6 +114,9 @@ function capturedControlsAreSound(): boolean {
       descriptor !== undefined &&
       'value' in descriptor &&
       descriptor.value === 42 &&
+      nullRecordDescriptor !== undefined &&
+      'value' in nullRecordDescriptor &&
+      nullRecordDescriptor.value === 42 &&
       keys.length === 1 &&
       keys[0] === 'safe' &&
       parsed.safe === true &&
@@ -333,6 +348,12 @@ export function betterAuthArrayAppend<Value>(target: Value[], value: Value, labe
 export function betterAuthCreateMap<Key, Value>(): Map<Key, Value> {
   assertBetterAuthIntrinsics();
   return new NativeMap<Key, Value>();
+}
+
+/** @internal Create a prototype-free carrier through the boot-pinned Object control. */
+export function betterAuthCreateNullRecord<Value>(): Record<string, Value> {
+  assertBetterAuthIntrinsics();
+  return apply<Record<string, Value>>(nativeObjectCreate, NativeObject, [null]);
 }
 
 export function betterAuthCreateSet<Value>(): Set<Value> {

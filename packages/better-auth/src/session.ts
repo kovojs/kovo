@@ -2,12 +2,21 @@ import type { SessionProvider, SessionProviderResult } from '@kovojs/server';
 
 import {
   getBetterAuthSetCookie,
+  isBetterAuthCredentialShapedColumn,
   type BetterAuthGetSessionWithHeadersResult,
   type BetterAuthLike,
   type BetterAuthRequestLike,
 } from './internal.js';
 import { callBetterAuthGetSession, pinBetterAuthGetSession } from './internal/trusted-plaintext.js';
-import { betterAuthGetOwnPropertyDescriptor } from './internal/intrinsics.js';
+import {
+  betterAuthArrayIsArray,
+  betterAuthCreateNullRecord,
+  betterAuthDefineOwnData,
+  betterAuthGetOwnPropertyDescriptor,
+  betterAuthObjectKeys,
+  betterAuthOwnDataValue,
+} from './internal/intrinsics.js';
+import { assertBetterAuthRequestSecretPath } from './internal/non-egress-proof.js';
 
 const NativeError = Error;
 const betterAuthSessionBoundaryFailureMessage =
@@ -23,13 +32,97 @@ export interface BetterAuthSessionPayload<Session, User> {
   user: User;
 }
 
+type BetterAuthCredentialField =
+  | 'apikey'
+  | 'apisecret'
+  | 'backupcode'
+  | 'backupcodes'
+  | 'certificate'
+  | 'code'
+  | 'codes'
+  | 'credential'
+  | 'credentials'
+  | 'hash'
+  | 'key'
+  | 'keys'
+  | 'otp'
+  | 'passcode'
+  | 'passphrase'
+  | 'password'
+  | 'pin'
+  | 'privatekey'
+  | 'salt'
+  | 'secret'
+  | 'secrets'
+  | 'seed'
+  | 'signature'
+  | 'token'
+  | 'tokens';
+
+type BetterAuthCredentialFieldSuffix =
+  | 'ApiKey'
+  | 'ApiSecret'
+  | 'BackupCode'
+  | 'BackupCodes'
+  | 'Certificate'
+  | 'Code'
+  | 'Codes'
+  | 'Credential'
+  | 'Credentials'
+  | 'Hash'
+  | 'Key'
+  | 'Keys'
+  | 'Otp'
+  | 'Passcode'
+  | 'Passphrase'
+  | 'Password'
+  | 'Pin'
+  | 'PrivateKey'
+  | 'Salt'
+  | 'Secret'
+  | 'Secrets'
+  | 'Seed'
+  | 'Signature'
+  | 'Token'
+  | 'Tokens';
+
+type BetterAuthSafeField<Key> = Key extends string
+  ? Lowercase<Key> extends BetterAuthCredentialField
+    ? never
+    : Key extends
+          | `${string}${BetterAuthCredentialFieldSuffix}`
+          | `${string}_${BetterAuthCredentialField}`
+          | `${string}-${BetterAuthCredentialField}`
+      ? never
+      : Key
+  : Key;
+
+/**
+ * A Better Auth row after Kovo removes credential-shaped top-level fields before app code sees it.
+ * The mapped type is author-time defense-in-depth; the runtime reconstruction owns enforcement
+ * (SPEC §10.3 C9 and AGENTS.md's type-level security ergonomics rule).
+ */
+export type BetterAuthSanitizedRecord<Value> = Value extends object
+  ? { [Key in keyof Value as BetterAuthSafeField<Key>]: Value[Key] }
+  : Value;
+
+/**
+ * The reconstructed `{ session, user }` projection delivered to an app-authored session mapper.
+ * Better Auth bearer tokens, password hashes, API keys, and similarly credential-shaped fields
+ * are absent at runtime and omitted from the common TypeScript field vocabulary.
+ */
+export interface BetterAuthSanitizedSessionPayload<Session, User> {
+  session: BetterAuthSanitizedRecord<Session>;
+  user: BetterAuthSanitizedRecord<User>;
+}
+
 /**
  * Function the app supplies to `betterAuthSession` to project Better Auth's
  * `{ session, user }` payload into the app's own session value. Called once per
  * authenticated request (SPEC.md §6.5).
  */
 export type BetterAuthSessionMapper<AuthSession, AuthUser, SessionValue> = (
-  value: BetterAuthSessionPayload<AuthSession, AuthUser>,
+  value: BetterAuthSanitizedSessionPayload<AuthSession, AuthUser>,
 ) => SessionValue;
 
 /**
@@ -95,7 +188,12 @@ export function betterAuthSession<
           | null
           | undefined)
       : (result as BetterAuthSessionPayload<AuthSession, AuthUser> | null | undefined);
-    const value = payload ? map(payload) : null;
+    let value: SessionValue | null;
+    try {
+      value = payload ? map(sanitizeBetterAuthSessionPayload(payload)) : null;
+    } catch {
+      throw new NativeError(betterAuthSessionBoundaryFailureMessage);
+    }
 
     const headers = isEnvelope ? (headersDescriptor.value as Headers) : undefined;
     const setCookies = getBetterAuthSetCookie(headers);
@@ -105,4 +203,39 @@ export function betterAuthSession<
     // backward compatible (no envelope unless there is something to forward).
     return setCookies.length > 0 ? { setCookies, value } : value;
   };
+}
+
+function sanitizeBetterAuthSessionPayload<AuthSession, AuthUser>(
+  payload: BetterAuthSessionPayload<AuthSession, AuthUser>,
+): BetterAuthSanitizedSessionPayload<AuthSession, AuthUser> {
+  // Better Auth's core session row includes the live bearer `token`. The app mapper is not one
+  // of the trusted plaintext sinks: reconstruct both rows and omit every credential-shaped field
+  // through the same positive classifier used by schema confidentiality (SPEC §10.1/§10.3 C9-C10).
+  assertBetterAuthRequestSecretPath('better-auth.get-session.response-secret-projection');
+  if (typeof payload !== 'object' || payload === null || betterAuthArrayIsArray(payload)) {
+    throw new TypeError('Better Auth session payload must be an object.');
+  }
+  const session = betterAuthOwnDataValue(payload, 'session', 'Better Auth session payload');
+  const user = betterAuthOwnDataValue(payload, 'user', 'Better Auth session payload');
+  return {
+    session: sanitizeBetterAuthRow<AuthSession>(session, 'Better Auth session row'),
+    user: sanitizeBetterAuthRow<AuthUser>(user, 'Better Auth user row'),
+  };
+}
+
+function sanitizeBetterAuthRow<Value>(
+  source: unknown,
+  label: string,
+): BetterAuthSanitizedRecord<Value> {
+  if (typeof source !== 'object' || source === null || betterAuthArrayIsArray(source)) {
+    throw new TypeError(`${label} must be an object.`);
+  }
+  const snapshot = betterAuthCreateNullRecord<unknown>();
+  const fields = betterAuthObjectKeys(source, `${label} fields`);
+  for (let index = 0; index < fields.length; index += 1) {
+    const field = fields[index]!;
+    if (isBetterAuthCredentialShapedColumn(field)) continue;
+    betterAuthDefineOwnData(snapshot, field, betterAuthOwnDataValue(source, field, label), label);
+  }
+  return snapshot as BetterAuthSanitizedRecord<Value>;
 }

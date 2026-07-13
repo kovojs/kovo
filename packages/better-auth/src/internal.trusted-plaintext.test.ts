@@ -151,6 +151,7 @@ describe('Better Auth trusted plaintext zone', () => {
       'better-auth.sign-up.submitted-password',
       'better-auth.sign-out.request-cookie',
       'better-auth.get-session.request-cookie',
+      'better-auth.get-session.response-secret-projection',
       'better-auth.set-cookie.forwarding',
       'better-auth.session-refresh.set-cookie',
       'better-auth.adapter.sign-in.account-password',
@@ -166,6 +167,7 @@ describe('Better Auth trusted plaintext zone', () => {
       ),
     ).toEqual(
       new Set([
+        'better-auth.get-session.response-secret-projection',
         'better-auth.adapter.sign-in.account-password',
         'better-auth.adapter.session-token-lookup',
       ]),
@@ -187,6 +189,22 @@ describe('Better Auth trusted plaintext zone', () => {
       proveBetterAuthRequestSecretNonEgress([...betterAuthRequestSecretPaths, unsafePath]),
     ).toEqual([
       'KV439: better-auth.adapter.future-token-leak reads a cross-user auth credential with unboxed disposition confined-third-party-adapter',
+    ]);
+  });
+
+  it('fails red when an adapter credential path is neither confined nor reconstructed', () => {
+    const unsafePath: BetterAuthRequestSecretPath = {
+      id: 'better-auth.adapter.current-session-leak',
+      entrypoint: 'session-provider',
+      carrier: 'adapter-system-db-secret-column',
+      source: 'packages/better-auth/src/session.ts',
+      disposition: 'confined-third-party-adapter',
+      readsCrossUserCredential: false,
+      reason: 'synthetic regression path',
+    };
+
+    expect(proveBetterAuthRequestSecretNonEgress([unsafePath])).toEqual([
+      'KV439: better-auth.adapter.current-session-leak handles an adapter auth credential with unconfined disposition confined-third-party-adapter',
     ]);
   });
 

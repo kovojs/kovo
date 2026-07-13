@@ -129,6 +129,56 @@ describe('betterAuthSession', () => {
     }
   });
 
+  it('reconstructs the mapper payload without Better Auth credential-shaped fields', async () => {
+    // SPEC §10.3 C9: Better Auth's real session payload contains the live bearer `token`.
+    // The app-authored mapper is not a trusted plaintext sink, so it may receive only a
+    // reconstructed projection with credential-shaped fields removed.
+    const auth = {
+      api: {
+        getSession: () => ({
+          session: {
+            activeOrganizationId: 'org-1',
+            id: 'session-1',
+            refreshTokenExpiresAt: '2099-01-01T00:00:00.000Z',
+            token: 'LIVE_BETTER_AUTH_BEARER_TOKEN',
+          },
+          user: {
+            email: 'ada@example.com',
+            id: 'user-1',
+            passwordHash: 'STORED_PASSWORD_HASH',
+            roles: ['admin'] as const,
+          },
+        }),
+      },
+    };
+    let mapperPayload: unknown;
+    const provider = betterAuthSession(auth, (value) => {
+      if (false) {
+        // @ts-expect-error Better Auth's live bearer credential is not mapper-readable.
+        value.session.token;
+        // @ts-expect-error Credential-shaped plugin fields are not mapper-readable.
+        value.user.passwordHash;
+      }
+      mapperPayload = value;
+      return value;
+    });
+
+    await provider({ headers: new Headers({ cookie: 'kovo_session=s1' }) });
+
+    expect(mapperPayload).toEqual({
+      session: {
+        activeOrganizationId: 'org-1',
+        id: 'session-1',
+        refreshTokenExpiresAt: '2099-01-01T00:00:00.000Z',
+      },
+      user: {
+        email: 'ada@example.com',
+        id: 'user-1',
+        roles: ['admin'],
+      },
+    });
+  });
+
   // part-3 I2 (SPEC.md §6.5, §9.1.1:854): with rolling sessions / cookie-cache, Better Auth
   // writes a fresh session Set-Cookie on every authenticated GET. The framework lifecycle
   // MUST set the resolved session AND forward that refresh cookie to the response sink, so a
