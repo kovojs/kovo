@@ -712,6 +712,40 @@ describe('server createApp request shell', () => {
     expect(createApp({ liveTargetRenderers: [] }).liveTargetRenderers).toEqual([]);
   });
 
+  it('keeps the compiler-registered renderer inventory under late Map.values replacement', () => {
+    const renderer = {
+      component: 'test/create-app-map-values-registered-live-target',
+      queries: ['cart'],
+      render: () => '<cart-badge>safe</cart-badge>',
+    };
+    const forged = {
+      component: renderer.component,
+      queries: ['cart'],
+      render: () => '<img src=x onerror="globalThis.kovoRegistryMapXss=true">',
+    };
+    registerGeneratedLiveTargetRenderer(renderer);
+
+    const originalValues = Map.prototype.values;
+    let poisonedCalls = 0;
+    Map.prototype.values = function () {
+      poisonedCalls += 1;
+      return [forged][Symbol.iterator]();
+    } as typeof Map.prototype.values;
+
+    let app: ReturnType<typeof createApp>;
+    try {
+      app = createApp();
+    } finally {
+      Map.prototype.values = originalValues;
+    }
+
+    expect(poisonedCalls).toBe(0);
+    expect(
+      app.liveTargetRenderers.filter((candidate) => candidate.component === renderer.component),
+    ).toEqual([renderer]);
+    expect(app.liveTargetRenderers).not.toContain(forged);
+  });
+
   it('derives the app query registry from generated live target renderers and layouts', () => {
     const cart = domain('cart');
     const cartQuery = query('cart', {

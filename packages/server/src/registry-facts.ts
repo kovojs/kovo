@@ -17,12 +17,14 @@ import {
 import {
   createWitnessMap,
   createWitnessSet,
+  witnessGetOwnPropertyDescriptor,
   witnessMapForEach,
   witnessMapGet,
   witnessMapHas,
   witnessMapSet,
   witnessSetAdd,
   witnessSetHas,
+  witnessObjectKeys,
   witnessSortStrings,
 } from './security-witness-intrinsics.js';
 
@@ -367,16 +369,35 @@ function routeLayoutQueries<Request>(
 ): readonly QueryDefinition<string, unknown, unknown, Request>[] {
   const queries: QueryDefinition<string, unknown, unknown, Request>[] = [];
 
-  for (const routeDeclaration of routes) {
-    for (const layoutDeclaration of layoutChain(routeDeclaration.layout)) {
-      queries.push(
-        ...Object.values(layoutDeclaration.queries ?? {}).map(
-          (queryDefinition) =>
-            queryDefinition as QueryDefinition<string, unknown, unknown, Request>,
-        ),
+  denseOwnArrayForEach(
+    routes,
+    (routeDeclaration) => {
+      denseOwnArrayForEach(
+        layoutChain(routeDeclaration.layout),
+        (layoutDeclaration) => {
+          const layoutQueries = layoutDeclaration.queries;
+          if (layoutQueries === undefined) return;
+          const names = witnessObjectKeys(layoutQueries);
+          denseOwnArrayForEach(
+            names,
+            (name) => {
+              const descriptor = witnessGetOwnPropertyDescriptor(layoutQueries, name);
+              if (descriptor === undefined || !('value' in descriptor)) {
+                throw new TypeError('Route layout queries must be stable own data properties.');
+              }
+              appendDenseOwnArrayValue(
+                queries,
+                descriptor.value as QueryDefinition<string, unknown, unknown, Request>,
+              );
+            },
+            'Route layout query names',
+          );
+        },
+        'Route layout chain',
       );
-    }
-  }
+    },
+    'Route registry layout facts',
+  );
 
   return queries;
 }
@@ -384,19 +405,23 @@ function routeLayoutQueries<Request>(
 function layoutChain(
   layoutDeclaration: LayoutDeclaration<any, any, any> | undefined,
 ): LayoutDeclaration<any, any, any>[] {
-  const chain: LayoutDeclaration<any, any, any>[] = [];
-  const seen = new Set<LayoutDeclaration<any, any, any>>();
+  const reversed: LayoutDeclaration<any, any, any>[] = [];
+  const seen = createWitnessSet<LayoutDeclaration<any, any, any>>();
   let current = layoutDeclaration;
 
   while (current) {
-    if (seen.has(current)) {
+    if (witnessSetHas(seen, current)) {
       throw new Error('Cyclic route layout parent chain.');
     }
-    seen.add(current);
-    chain.unshift(current);
+    witnessSetAdd(seen, current);
+    appendDenseOwnArrayValue(reversed, current);
     current = current.parent;
   }
 
+  const chain: LayoutDeclaration<any, any, any>[] = [];
+  for (let index = reversed.length - 1; index >= 0; index -= 1) {
+    appendDenseOwnArrayValue(chain, reversed[index]!);
+  }
   return chain;
 }
 

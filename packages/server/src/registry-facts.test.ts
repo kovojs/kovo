@@ -109,6 +109,76 @@ describe('runtimeRegistryFacts', () => {
     }
   });
 
+  it('keeps guarded layout query authority under late registry traversal poison', () => {
+    const protectedQuery = query('registryFactsLayoutAuthority', {
+      guard: () => false,
+      load: () => ({ private: true }),
+      reads: [],
+    });
+    const publicForgery = query('registryFactsLayoutAuthority', {
+      load: () => ({ private: false }),
+      reads: [],
+    });
+    const layoutQueries = { protected: protectedQuery };
+    const routes = [{ layout: { queries: layoutQueries } }];
+    const forgedValues = [publicForgery];
+    const originalAdd = Set.prototype.add;
+    const originalHas = Set.prototype.has;
+    const originalIterator = Array.prototype[Symbol.iterator];
+    const originalMap = Array.prototype.map;
+    const originalUnshift = Array.prototype.unshift;
+    const originalValues = Object.values;
+    const calls = { add: 0, has: 0, iterator: 0, map: 0, unshift: 0, values: 0 };
+    Object.values = function (value) {
+      if (value === layoutQueries) {
+        calls.values += 1;
+        return forgedValues;
+      }
+      return originalValues(value);
+    } as typeof Object.values;
+    Array.prototype.map = function (callback, thisArg) {
+      if (this === forgedValues) calls.map += 1;
+      return originalMap.call(this, callback, thisArg);
+    } as typeof Array.prototype.map;
+    Array.prototype[Symbol.iterator] = function () {
+      if (this === routes) calls.iterator += 1;
+      return originalIterator.call(this);
+    } as typeof Array.prototype[Symbol.iterator];
+    Array.prototype.unshift = function (...values) {
+      calls.unshift += 1;
+      return originalUnshift.apply(this, values);
+    } as typeof Array.prototype.unshift;
+    Set.prototype.has = function (value) {
+      calls.has += 1;
+      return originalHas.call(this, value);
+    };
+    Set.prototype.add = function (value) {
+      calls.add += 1;
+      return originalAdd.call(this, value);
+    };
+
+    let facts: ReturnType<typeof runtimeRegistryFacts>;
+    try {
+      facts = runtimeRegistryFacts({
+        liveTargetRenderers: [],
+        mutations: [],
+        queries: [],
+        routes,
+      });
+    } finally {
+      Set.prototype.add = originalAdd;
+      Set.prototype.has = originalHas;
+      Array.prototype.unshift = originalUnshift;
+      Array.prototype[Symbol.iterator] = originalIterator;
+      Array.prototype.map = originalMap;
+      Object.values = originalValues;
+    }
+
+    expect(calls).toEqual({ add: 0, has: 0, iterator: 0, map: 0, unshift: 0, values: 0 });
+    expect(facts.queries).toEqual([protectedQuery]);
+    expect(facts.queries).not.toContain(publicForgery);
+  });
+
   it('folds generated query reads into app and live-target queries once', () => {
     const fallback = domain('registry-facts-fallback');
     const catalogQuery = query('registryFactsCatalog', {

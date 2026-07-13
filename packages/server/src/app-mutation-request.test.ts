@@ -553,6 +553,173 @@ describe('server app mutation request boundary', () => {
     );
   });
 
+  it('keeps the closed live-target renderer inventory under a late exact Array.map replacement', async () => {
+    const cart = domain('cart');
+    const cartQuery = query('cart-map-poison', {
+      reads: [cart],
+      load: () => ({ count: 1 }),
+    });
+    const addToCart = mutation('cart/map-poison', {
+      csrf: false,
+      input: s.object({}),
+      registry: { queries: [cartQuery], touches: [cart] },
+      handler: () => ({}),
+    });
+    const app = createApp({
+      liveTargetRenderers: [
+        {
+          component: 'components/cart/map-poison',
+          queries: ['cart-map-poison'],
+          render: () => '<cart-badge>safe</cart-badge>',
+        },
+      ],
+      mutations: [addToCart],
+      stylesheets: [stylesheet('./app.css')],
+    });
+    const originalMap = Array.prototype.map;
+    let poisonedCalls = 0;
+    Array.prototype.map = function (callback, thisArg) {
+      if (this === app.liveTargetRenderers) {
+        poisonedCalls += 1;
+        return [
+          {
+            component: 'components/cart/map-poison',
+            queries: ['cart-map-poison'],
+            render: () => '<img src=x onerror="globalThis.kovoLateMapXss=true">',
+          },
+        ];
+      }
+      return originalMap.call(this, callback, thisArg);
+    } as typeof Array.prototype.map;
+
+    let response: Response;
+    try {
+      const request = new Request('https://shop.example.test/_m/cart/map-poison', {
+        body: new FormData(),
+        headers: {
+          'Kovo-Fragment': 'true',
+          'Kovo-Live-Targets': attestedLiveTargetHeader(
+            'cart-badge',
+            'components/cart/map-poison',
+          ),
+          'Kovo-Targets': 'cart-badge=cart-map-poison',
+        },
+        method: 'POST',
+      });
+      response = await handleAppMutationRequest(
+        app,
+        request,
+        new URL(request.url),
+        'cart/map-poison',
+      );
+    } finally {
+      Array.prototype.map = originalMap;
+    }
+
+    const body = await response.text();
+    expect(response.status, body).toBe(200);
+    expect(poisonedCalls).toBe(0);
+    expect(body).not.toContain('onerror');
+    expect(body).toContain('<cart-badge>safe</cart-badge>');
+  });
+
+  it('inherits renderer stylesheets without ambient array callbacks or iterators', async () => {
+    const cart = domain('cart');
+    const cartQuery = query('cart-array-census', {
+      reads: [cart],
+      load: () => ({ count: 1 }),
+    });
+    const save = mutation('cart/array-census', {
+      csrf: false,
+      input: s.object({}),
+      registry: { queries: [cartQuery], touches: [cart] },
+      handler: () => ({}),
+    });
+    const app = createApp({
+      liveTargetRenderers: [
+        {
+          component: 'components/cart/array-census',
+          queries: ['cart-array-census'],
+          render: () => '<cart-badge>safe</cart-badge>',
+          stylesheets: [
+            stylesheet({ criticalCss: '.renderer-safe{color:green}', href: './renderer.css' }),
+          ],
+        },
+      ],
+      mutations: [save],
+      routes: [
+        route('/cart-array-census', {
+          page: () => trustedHtml('<main>Cart</main>'),
+          stylesheets: [
+            stylesheet({ criticalCss: '.route-safe{color:blue}', href: './route.css' }),
+          ],
+        }),
+      ],
+      stylesheets: [
+        stylesheet({ criticalCss: '.app-safe{color:red}', href: './app.css' }),
+      ],
+    });
+
+    const originalFilter = Array.prototype.filter;
+    const originalFlatMap = Array.prototype.flatMap;
+    const originalIterator = Array.prototype[Symbol.iterator];
+    const originalSome = Array.prototype.some;
+    const calls = { filter: 0, flatMap: 0, iterator: 0, some: 0 };
+    Array.prototype.filter = function (callback, thisArg) {
+      if (this === app.liveTargetRenderers[0]?.stylesheets) calls.filter += 1;
+      return originalFilter.call(this, callback, thisArg);
+    } as typeof Array.prototype.filter;
+    Array.prototype.flatMap = function (callback, thisArg) {
+      const first = this[0] as { criticalCss?: string } | undefined;
+      if (first?.criticalCss === '.app-safe{color:red}' && this.length === 2) calls.flatMap += 1;
+      return originalFlatMap.call(this, callback, thisArg);
+    } as typeof Array.prototype.flatMap;
+    Array.prototype[Symbol.iterator] = function () {
+      if (this === app.stylesheets || this === app.routes[0]?.stylesheets) calls.iterator += 1;
+      return originalIterator.call(this);
+    } as typeof Array.prototype[Symbol.iterator];
+    Array.prototype.some = function (callback, thisArg) {
+      if (this[0] === '.app-safe{color:red}') calls.some += 1;
+      return originalSome.call(this, callback, thisArg);
+    } as typeof Array.prototype.some;
+
+    let response: Response;
+    try {
+      const request = new Request('https://shop.example.test/_m/cart/array-census', {
+        body: new FormData(),
+        headers: {
+          Referer: 'https://shop.example.test/cart-array-census',
+          'Kovo-Fragment': 'true',
+          'Kovo-Live-Targets': attestedLiveTargetHeader(
+            'cart-badge',
+            'components/cart/array-census',
+          ),
+          'Kovo-Targets': 'cart-badge=cart-array-census',
+        },
+        method: 'POST',
+      });
+      response = await handleAppMutationRequest(
+        app,
+        request,
+        new URL(request.url),
+        'cart/array-census',
+      );
+    } finally {
+      Array.prototype.some = originalSome;
+      Array.prototype[Symbol.iterator] = originalIterator;
+      Array.prototype.flatMap = originalFlatMap;
+      Array.prototype.filter = originalFilter;
+    }
+
+    const body = await response.text();
+    expect(response.status, body).toBe(200);
+    expect(calls).toEqual({ filter: 0, flatMap: 0, iterator: 0, some: 0 });
+    expect(body).toContain('<cart-badge>safe</cart-badge>');
+    expect(body).toContain('./app.css');
+    expect(body).toContain('./route.css');
+    expect(body).toContain('./renderer.css');
+  });
+
   it('threads app query list limits into enhanced mutation query refreshes', async () => {
     const catalog = domain('catalog');
     const catalogQuery = query('catalogItems', {

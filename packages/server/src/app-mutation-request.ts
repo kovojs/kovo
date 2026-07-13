@@ -34,9 +34,24 @@ import {
 } from './response-posture.js';
 import { appTaskScheduler } from './task-runtime.js';
 import { readUntrustedRequestBody, revealUntrustedRequestValue } from './untrusted-request-body.js';
-import { denseOwnRegistryEntryByExactKey } from './registry-lookup.js';
+import {
+  appendDenseOwnArrayValue,
+  denseOwnArrayFind,
+  denseOwnArrayForEach,
+  denseOwnRegistryEntryByExactKey,
+} from './registry-lookup.js';
 import { canonicalRequestMethod } from './request-method.js';
-import { requestCreateUrl, requestMethod, requestUrlSnapshot } from './request-body-intrinsics.js';
+import {
+  requestCreateUrl,
+  requestHeader,
+  requestMethod,
+  requestUrlSnapshot,
+} from './request-body-intrinsics.js';
+import {
+  securityStringIncludes,
+  securityStringStartsWith,
+  securityStringTrim,
+} from './response-security-intrinsics.js';
 import { witnessFreeze, witnessGetOwnPropertyDescriptor } from './security-witness-intrinsics.js';
 
 export async function handleAppMutationRequest(
@@ -295,7 +310,18 @@ function sourceRouteStylesheets(
   });
   const routeStylesheets =
     match.kind === 'route' && match.methodAllowed ? (match.route.stylesheets ?? []) : [];
-  return [...app.stylesheets, ...routeStylesheets];
+  const stylesheets: KovoApp['stylesheets'][number][] = [];
+  denseOwnArrayForEach(
+    app.stylesheets,
+    (stylesheet) => appendDenseOwnArrayValue(stylesheets, stylesheet),
+    'App stylesheet snapshot',
+  );
+  denseOwnArrayForEach(
+    routeStylesheets,
+    (stylesheet) => appendDenseOwnArrayValue(stylesheets, stylesheet),
+    'Route stylesheet snapshot',
+  );
+  return stylesheets;
 }
 
 function inheritFragmentRendererStylesheets(
@@ -304,13 +330,19 @@ function inheritFragmentRendererStylesheets(
 ): readonly FragmentRenderer[] {
   if (inheritedStylesheets.length === 0) return renderers;
 
-  return renderers.map((renderer) => {
-    const stylesheets = mergedStylesheets(inheritedStylesheets, renderer.stylesheets);
-    return {
-      ...renderer,
-      ...(stylesheets === undefined ? {} : { stylesheets }),
-    };
-  });
+  const inherited: FragmentRenderer[] = [];
+  denseOwnArrayForEach(
+    renderers,
+    (renderer) => {
+      const stylesheets = mergedStylesheets(inheritedStylesheets, renderer.stylesheets);
+      appendDenseOwnArrayValue(inherited, {
+        ...renderer,
+        ...(stylesheets === undefined ? {} : { stylesheets }),
+      });
+    },
+    'Mutation fragment renderer snapshot',
+  );
+  return inherited;
 }
 
 function inheritLiveTargetRendererStylesheets<Request>(
@@ -319,28 +351,52 @@ function inheritLiveTargetRendererStylesheets<Request>(
 ): readonly LiveTargetRenderer<Request>[] {
   if (inheritedStylesheets.length === 0) return renderers;
 
-  return renderers.map((renderer) => {
-    const stylesheets = mergedStylesheets(inheritedStylesheets, renderer.stylesheets);
-    return {
-      ...renderer,
-      ...(stylesheets === undefined ? {} : { stylesheets }),
-    };
-  });
+  const inherited: LiveTargetRenderer<Request>[] = [];
+  denseOwnArrayForEach(
+    renderers,
+    (renderer) => {
+      const stylesheets = mergedStylesheets(inheritedStylesheets, renderer.stylesheets);
+      appendDenseOwnArrayValue(inherited, {
+        ...renderer,
+        ...(stylesheets === undefined ? {} : { stylesheets }),
+      });
+    },
+    'Mutation live-target renderer snapshot',
+  );
+  return inherited;
 }
 
 function mergedStylesheets<Stylesheet extends KovoApp['stylesheets'][number]>(
   inheritedStylesheets: readonly Stylesheet[],
   ownStylesheets: readonly Stylesheet[] | undefined,
 ): readonly Stylesheet[] | undefined {
-  const inheritedCriticalCss = inheritedStylesheets.flatMap((stylesheet) =>
-    typeof stylesheet !== 'string' && stylesheet.criticalCss ? [stylesheet.criticalCss] : [],
+  const inheritedCriticalCss: string[] = [];
+  denseOwnArrayForEach(
+    inheritedStylesheets,
+    (stylesheet) => {
+      if (typeof stylesheet !== 'string' && stylesheet.criticalCss) {
+        appendDenseOwnArrayValue(inheritedCriticalCss, stylesheet.criticalCss);
+      }
+    },
+    'Inherited mutation stylesheet snapshot',
   );
-  const merged = [
-    ...inheritedStylesheets,
-    ...(ownStylesheets ?? []).filter(
-      (stylesheet) => !stylesheetCriticalCssIsAlreadyLoaded(stylesheet, inheritedCriticalCss),
-    ),
-  ];
+  const merged: Stylesheet[] = [];
+  denseOwnArrayForEach(
+    inheritedStylesheets,
+    (stylesheet) => appendDenseOwnArrayValue(merged, stylesheet),
+    'Inherited mutation stylesheet snapshot',
+  );
+  if (ownStylesheets !== undefined) {
+    denseOwnArrayForEach(
+      ownStylesheets,
+      (stylesheet) => {
+        if (!stylesheetCriticalCssIsAlreadyLoaded(stylesheet, inheritedCriticalCss)) {
+          appendDenseOwnArrayValue(merged, stylesheet);
+        }
+      },
+      'Mutation renderer stylesheet snapshot',
+    );
+  }
   return merged.length === 0 ? undefined : merged;
 }
 
@@ -349,9 +405,16 @@ function stylesheetCriticalCssIsAlreadyLoaded(
   inheritedCriticalCss: readonly string[],
 ): boolean {
   if (typeof stylesheet === 'string') return false;
-  const criticalCss = stylesheet.criticalCss?.trim();
+  const criticalCss =
+    stylesheet.criticalCss === undefined ? undefined : securityStringTrim(stylesheet.criticalCss);
   if (!criticalCss) return false;
-  return inheritedCriticalCss.some((candidate) => candidate.includes(criticalCss));
+  return (
+    denseOwnArrayFind(
+      inheritedCriticalCss,
+      (candidate) => securityStringIncludes(candidate, criticalCss),
+      'Inherited mutation critical CSS snapshot',
+    ) !== undefined
+  );
 }
 
 type ResolvedAppMutationEndpointOptions = MutationPostLifecycleResponseOptions & {
@@ -401,7 +464,7 @@ function appMutationEndpointResponseOptions(
 }
 
 function defaultMutationRedirectTo(request: Request, currentUrl: string): string {
-  const referer = request.headers.get('referer');
+  const referer = requestHeader(request, 'referer');
   if (referer) {
     try {
       const url = requestCreateUrl(referer);
@@ -411,11 +474,11 @@ function defaultMutationRedirectTo(request: Request, currentUrl: string): string
     }
   }
 
-  return currentUrl.startsWith('/_m/') ? '/' : currentUrl;
+  return securityStringStartsWith(currentUrl, '/_m/') ? '/' : currentUrl;
 }
 
 function mutationSourceUrl(request: Request, mutationUrl: URL): URL {
-  const referer = request.headers.get('referer');
+  const referer = requestHeader(request, 'referer');
   if (!referer) return mutationUrl;
   try {
     const mutationSnapshot = requestUrlSnapshot(mutationUrl);
