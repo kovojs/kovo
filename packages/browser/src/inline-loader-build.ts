@@ -999,6 +999,14 @@ function installInlineKovoLoader(im) {
   const frf = dl.refreshLiveTargets;
   const rememberQueryChunk = dl.rememberQueryChunk;
   const rememberQueryScripts = dl.rememberQueryScripts;
+  const islandIdentity = (element) => {
+    const component = bns.readAttribute(element, 'kovo-c');
+    if (!component) return undefined;
+    const key = bns.readAttribute(element, 'kovo-key');
+    const id = bns.readAttribute(element, 'id');
+    const instance = key ?? id;
+    return instance ? component + '\0' + instance : component;
+  };
   const aq = (queries, applyQueries) => {
     for (let index = 0; index < queries.length; index += 1) {
       const q = queries[index];
@@ -1019,25 +1027,31 @@ function installInlineKovoLoader(im) {
     for (let fragmentIndex = 0; fragmentIndex < fragments.length; fragmentIndex += 1) {
       const x = fragments[fragmentIndex];
       if (!x) continue;
-      if (x.mode === 'append') continue;
+      // SPEC §9.3: append/prepend retain every connected child, so neither operation can retire
+      // an existing island's handler lifetime.
+      if (x.mode === 'append' || x.mode === 'prepend') continue;
       const e = ft(x.target);
       if (e) {
+        // SPEC §6.6/§9.1: only parsed element identity is authority for retaining an island.
+        // Raw HTML substring searches let ordinary text containing kovo-c="..." and
+        // kovo-key="..." keep an island signal alive after its element was removed, and also
+        // matched component/key bytes from unrelated elements.
+        const html = renderedFragmentHtmlContent(x.html);
+        const incoming = bns.createFragmentContent(tts.createHTML(html));
+        const incomingIslands = qa(incoming, '[kovo-c]');
+        const retained = bns.createSecurityMap();
+        for (let islandIndex = 0; islandIndex < incomingIslands.length; islandIndex += 1) {
+          const island = incomingIslands[islandIndex];
+          if (!island) continue;
+          const identity = islandIdentity(island);
+          if (identity !== undefined) bns.setSecurityMapValue(retained, identity, true);
+        }
         const liveChildren = qa(e, '[kovo-c]');
         for (let childIndex = 0; childIndex < liveChildren.length; childIndex += 1) {
           const y = liveChildren[childIndex];
           if (!y) continue;
-          const html = renderedFragmentHtmlContent(x.html);
-          const component = bns.readAttribute(y, 'kovo-c');
-          const key = bns.readAttribute(y, 'kovo-key');
-          const id = bns.readAttribute(y, 'id');
-          if (
-            bns.indexOf(html, 'kovo-c="' + component + '"') >= 0 &&
-            ((!key && !id) ||
-              (key !== null && bns.indexOf(html, 'kovo-key="' + key + '"') >= 0) ||
-              (id !== null && bns.indexOf(html, 'id="' + id + '"') >= 0))
-          ) {
-            continue;
-          }
+          const identity = islandIdentity(y);
+          if (identity !== undefined && bns.hasSecurityMapValue(retained, identity)) continue;
           bns.retireIslandSignal(y);
         }
       }

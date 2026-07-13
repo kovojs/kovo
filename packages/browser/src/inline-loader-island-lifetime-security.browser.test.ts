@@ -76,4 +76,30 @@ it('keeps island lifetime authority private and boot-pinned', async () => {
   expect(firstSignal?.aborted).toBe(true);
   expect(secondSignal?.aborted).toBe(false);
   expect(root.querySelector('[kovo-key="row-1"]')).toBeNull();
+
+  // SPEC §6.6/§9.3: prepend retains every existing island, so loading older rows must not
+  // revoke a still-connected island's handler lifetime.
+  (globalThis as unknown as { __kovo_a?: (body: string) => void }).__kovo_a?.(
+    [
+      '<kovo-fragment target="cart-list" mode="prepend">',
+      '<li kovo-c="cart-row" kovo-key="row-0">zero</li>',
+      '</kovo-fragment>',
+    ].join(''),
+  );
+  expect(secondSignal?.aborted).toBe(false);
+  expect(root.querySelector('[kovo-key="row-2"]')).not.toBeNull();
+
+  // Raw response text is not structural island evidence. An escaped/user-authored text node that
+  // happens to spell the framework attributes cannot keep a removed island's authority alive.
+  (globalThis as unknown as { __kovo_a?: (body: string) => void }).__kovo_a?.(
+    [
+      '<kovo-fragment target="cart-list">',
+      '<ul kovo-fragment-target="cart-list">',
+      '<li>kovo-c="cart-row" kovo-key="row-2"</li>',
+      '</ul>',
+      '</kovo-fragment>',
+    ].join(''),
+  );
+  expect(secondSignal?.aborted).toBe(true);
+  expect(root.querySelector('[kovo-key="row-2"]')).toBeNull();
 });

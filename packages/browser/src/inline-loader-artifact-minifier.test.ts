@@ -208,7 +208,18 @@ describe('inline loader minified artifact', () => {
     expect(inlineKovoLoaderInstallerSource).toContain(
       'for(let fragmentIndex=0;fragmentIndex<fragments.length;fragmentIndex+=1)',
     );
-    expect(inlineKovoLoaderInstallerSource).toContain(`bns.indexOf(html,'kovo-c="'+cp+'"')>=0`);
+    expect(inlineKovoLoaderInstallerSource).toContain(
+      "if(x.mode==='append'||x.mode==='prepend')continue;",
+    );
+    expect(inlineKovoLoaderInstallerSource).toContain(
+      'const incoming=bns.createFragmentContent(tts.createHTML(html));',
+    );
+    expect(inlineKovoLoaderInstallerSource).toContain(
+      'bns.hasSecurityMapValue(retained,identity)',
+    );
+    expect(inlineKovoLoaderInstallerSource).not.toContain(
+      `bns.indexOf(html,'kovo-c="'+cp+'"')>=0`,
+    );
     expect(inlineKovoLoaderInstallerSource).not.toContain('for(const x of fragments)');
     expect(inlineKovoLoaderInstallerSource).not.toContain('html.includes(');
     expect(inlineKovoLoaderInstallerSource).not.toContain('[...doc.head.childNodes]');
@@ -230,7 +241,7 @@ describe('inline loader minified artifact', () => {
     expect(inlineKovoLoaderInstallerSource).not.toContain('body.getReader()');
     expect(inlineKovoLoaderInstallerSource).not.toContain('rr.read()');
     expect(inlineKovoLoaderInstallerSource).not.toContain('rr.releaseLock');
-    expect(inlineKovoLoaderInstallerSource).toContain("bns.ra(y,'kovo-key')");
+    expect(inlineKovoLoaderInstallerSource).toContain("const key=bns.ra(el,'kovo-key')");
     expect(inlineKovoLoaderInstallerSource).not.toContain('innerHTML=html');
     expect(inlineKovoLoaderInstallerSource).not.toContain('applyResponseChunks');
     expect(inlineKovoLoaderInstallerSource).toContain('detail:{qs:ok}');
