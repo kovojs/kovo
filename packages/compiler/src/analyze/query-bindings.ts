@@ -4,6 +4,14 @@
 // non-enumerable `outputContext` channel are unchanged.
 import { parseBindingPath } from './query-shapes.js';
 import {
+  compilerArrayAppend,
+  compilerMapGet,
+  compilerMapSet,
+  compilerSnapshotDenseArray,
+  compilerStringLocaleCompare,
+  compilerStringSlice,
+} from '../compiler-security-intrinsics.js';
+import {
   dataBindAttributeFact,
   isBindingAttribute,
   isWithinElement,
@@ -31,18 +39,31 @@ import type {
 } from '../types.js';
 
 export function dataBindAttributes(model: ComponentModuleModel): DataBindAttribute[] {
-  return jsxAttributes(model)
-    .filter(
-      (attribute) =>
-        isBindingAttribute(attribute.name) &&
-        attribute.value !== undefined &&
-        attribute.value !== '',
-    )
-    .map((attribute) => ({
-      ...dataBindAttributeFact(attribute.name, attribute.value ?? ''),
-      end: attribute.end,
-      start: attribute.start,
-    }));
+  const output: DataBindAttribute[] = [];
+  const attributes = compilerSnapshotDenseArray(
+    jsxAttributes(model),
+    'Compiler query data-bind attributes',
+  );
+  for (let index = 0; index < attributes.length; index += 1) {
+    const attribute = attributes[index]!;
+    if (
+      !isBindingAttribute(attribute.name) ||
+      attribute.value === undefined ||
+      attribute.value === ''
+    ) {
+      continue;
+    }
+    compilerArrayAppend(
+      output,
+      {
+        ...dataBindAttributeFact(attribute.name, attribute.value),
+        end: attribute.end,
+        start: attribute.start,
+      },
+      'Compiler query data-bind attributes',
+    );
+  }
+  return output;
 }
 
 export function dataBindOutputContextFact(binding: DataBindAttribute): GeneratedOutputWriteFact {
@@ -56,7 +77,7 @@ export function dataBindOutputContextFact(binding: DataBindAttribute): Generated
     };
   }
 
-  const attr = binding.name.slice('data-bind:'.length);
+  const attr = compilerStringSlice(binding.name, 'data-bind:'.length);
   return {
     context: outputContextForAttribute(attr),
     expression: binding.path,
@@ -71,47 +92,58 @@ export function pushOutputContext(
   query: string,
   fact: GeneratedOutputWriteFact,
 ): void {
-  factsByQuery.set(query, [...(factsByQuery.get(query) ?? []), fact]);
+  const facts = compilerSnapshotDenseArray(
+    compilerMapGet(factsByQuery, query) ?? [],
+    'Compiler query output contexts',
+  );
+  compilerArrayAppend(facts, fact, 'Compiler query output contexts');
+  compilerMapSet(factsByQuery, query, facts);
 }
 
 export function collectDataBindListStamps(model: ComponentModuleModel): QueryTemplateStampFact[] {
-  const elements = jsxElements(model);
+  const elements = compilerSnapshotDenseArray(
+    jsxElements(model),
+    'Compiler query list-stamp elements',
+  );
+  const stamps: QueryTemplateStampFact[] = [];
+  for (let index = 0; index < elements.length; index += 1) {
+    const element = elements[index]!;
+    const list = jsxStaticAttributeValue(element, 'data-bind-list');
+    const key = jsxStaticAttributeValue(element, 'kovo-key');
+    if (!list || !key) continue;
 
-  return elements
-    .flatMap((element) => {
-      const list = jsxStaticAttributeValue(element, 'data-bind-list');
-      const key = jsxStaticAttributeValue(element, 'kovo-key');
-      if (!list || !key) return [];
+    const template = templateStampElement(elements, element);
+    const templateBody = template ? jsxElementChildBody(template) : null;
+    const itemBindingPlaceholders =
+      template && templateBody
+        ? templateItemBindingPlaceholders(elements, template, templateBody)
+        : [];
+    if (itemBindingPlaceholders.length === 0) continue;
 
-      const template = templateStampElement(elements, element);
-      const templateBody = template ? jsxElementChildBody(template) : null;
-      const itemBindingPlaceholders =
-        template && templateBody
-          ? templateItemBindingPlaceholders(elements, template, templateBody)
-          : [];
-
-      return [
-        withOutputContext(
-          {
-            itemBindingPlaceholders,
-            key,
-            list,
-            listReadPath: queryRelativePath(list),
-            listReadSegments: queryRelativeSegments(list),
-            selector: `[data-bind-list="${list}"]`,
-            template: templateBody?.source ?? '',
-          },
-          {
-            context: 'html-fragment',
-            expression: list,
-            sink: 'template.innerHTML',
-            source: 'template-stamp',
-            writer: 'template stamp assembly',
-          },
-        ),
-      ];
-    })
-    .filter((stamp) => (stamp.itemBindingPlaceholders?.length ?? 0) > 0);
+    compilerArrayAppend(
+      stamps,
+      withOutputContext(
+        {
+          itemBindingPlaceholders,
+          key,
+          list,
+          listReadPath: queryRelativePath(list),
+          listReadSegments: queryRelativeSegments(list),
+          selector: `[data-bind-list="${list}"]`,
+          template: templateBody?.source ?? '',
+        },
+        {
+          context: 'html-fragment',
+          expression: list,
+          sink: 'template.innerHTML',
+          source: 'template-stamp',
+          writer: 'template stamp assembly',
+        },
+      ),
+      'Compiler query list stamps',
+    );
+  }
+  return stamps;
 }
 
 function queryRelativePath(path: string): string {
@@ -119,13 +151,26 @@ function queryRelativePath(path: string): string {
 }
 
 function queryRelativeSegments(path: string): BindingPathSegmentFact[] {
-  return parseBindingPath(path).slice(1);
+  const parsed = compilerSnapshotDenseArray(
+    parseBindingPath(path),
+    'Compiler query-relative path segments',
+  );
+  const output: BindingPathSegmentFact[] = [];
+  for (let index = 1; index < parsed.length; index += 1) {
+    compilerArrayAppend(output, parsed[index]!, 'Compiler query-relative path segments');
+  }
+  return output;
 }
 
 function bindingPathSegmentsToPath(segments: readonly BindingPathSegmentFact[]): string {
-  return segments
-    .map((segment) => (segment.optional ? `${segment.name}?` : segment.name))
-    .join('.');
+  const source = compilerSnapshotDenseArray(segments, 'Compiler binding path segments');
+  let output = '';
+  for (let index = 0; index < source.length; index += 1) {
+    if (index > 0) output += '.';
+    const segment = source[index]!;
+    output += segment.optional ? `${segment.name}?` : segment.name;
+  }
+  return output;
 }
 
 function templateItemBindingPlaceholders(
@@ -133,56 +178,87 @@ function templateItemBindingPlaceholders(
   template: JsxElementModel,
   templateBody: JsxElementChildBody,
 ): QueryTemplateStampBindingPlaceholder[] {
-  return elements
-    .filter((candidate) => isWithinElement(candidate, template))
-    .flatMap((candidate) =>
-      candidate.attributes
-        // SPEC §5.x: Only TEXT bindings (data-bind, no colon suffix) produce a child-body
-        // placeholder. Attribute bindings (data-bind:href, data-bind:hidden, …) are applied
-        // by the runtime applyItemRelativeBindings/setBoundAttribute path — interpolating them
-        // into the element child body would clobber the element's own label text (bugz L3).
-        .filter(
-          (attribute) =>
-            attribute.name === 'data-bind' &&
-            attribute.value !== undefined &&
-            attribute.value !== '' &&
-            dataBindAttributeFact(attribute.name, attribute.value).relativeReadPath !== null,
-        )
-        .map((attribute) => {
-          const fact = dataBindAttributeFact(attribute.name, attribute.value ?? '');
-          const childBody = jsxElementChildBody(candidate);
-          const templateStart = childBody ? childBody.offset - templateBody.offset : 0;
-          const templateEnd = templateStart + (childBody?.source.length ?? 0);
-          return withOutputContext(
-            {
-              path: fact.path,
-              readPath: fact.relativeReadPath ?? '',
-              readSegments: parseBindingPath(fact.relativeReadPath ?? ''),
-              templateEnd,
-              templateStart,
-              value: childBody?.source ?? '',
-            },
-            {
-              context: 'html-fragment',
-              expression: fact.path,
-              sink: 'template item placeholder',
-              source: 'template-stamp',
-              writer: 'template stamp interpolation',
-            },
-          );
-        }),
-    )
-    .sort((left, right) => left.path.localeCompare(right.path));
+  const placeholders: QueryTemplateStampBindingPlaceholder[] = [];
+  const sourceElements = compilerSnapshotDenseArray(elements, 'Compiler template-stamp elements');
+  for (let index = 0; index < sourceElements.length; index += 1) {
+    const candidate = sourceElements[index]!;
+    if (!isWithinElement(candidate, template)) continue;
+    const attributes = compilerSnapshotDenseArray(
+      candidate.attributes,
+      'Compiler template-stamp attributes',
+    );
+    for (let attributeIndex = 0; attributeIndex < attributes.length; attributeIndex += 1) {
+      const attribute = attributes[attributeIndex]!;
+      // SPEC §5.x: Only TEXT bindings (data-bind, no colon suffix) produce a child-body
+      // placeholders. Attribute bindings are applied by the runtime property path.
+      if (
+        attribute.name !== 'data-bind' ||
+        attribute.value === undefined ||
+        attribute.value === ''
+      ) {
+        continue;
+      }
+      const fact = dataBindAttributeFact(attribute.name, attribute.value);
+      if (fact.relativeReadPath === null) continue;
+      const childBody = jsxElementChildBody(candidate);
+      const templateStart = childBody ? childBody.offset - templateBody.offset : 0;
+      const templateEnd = templateStart + (childBody?.source.length ?? 0);
+      compilerArrayAppend(
+        placeholders,
+        withOutputContext(
+          {
+            path: fact.path,
+            readPath: fact.relativeReadPath,
+            readSegments: parseBindingPath(fact.relativeReadPath),
+            templateEnd,
+            templateStart,
+            value: childBody?.source ?? '',
+          },
+          {
+            context: 'html-fragment',
+            expression: fact.path,
+            sink: 'template item placeholder',
+            source: 'template-stamp',
+            writer: 'template stamp interpolation',
+          },
+        ),
+        'Compiler template-stamp placeholders',
+      );
+    }
+  }
+  sortPlaceholders(placeholders);
+  return placeholders;
 }
 
 function templateStampElement(
   elements: readonly JsxElementModel[],
   container: JsxElementModel,
 ): JsxElementModel | undefined {
-  return elements.find(
-    (element) =>
+  const source = compilerSnapshotDenseArray(elements, 'Compiler template-stamp lookup elements');
+  for (let index = 0; index < source.length; index += 1) {
+    const element = source[index]!;
+    if (
       element.tag === 'template' &&
       isWithinElement(element, container) &&
-      hasJsxAttribute(element, 'kovo-stamp'),
-  );
+      hasJsxAttribute(element, 'kovo-stamp')
+    ) {
+      return element;
+    }
+  }
+  return undefined;
+}
+
+function sortPlaceholders(values: QueryTemplateStampBindingPlaceholder[]): void {
+  for (let index = 1; index < values.length; index += 1) {
+    const value = values[index]!;
+    let insertion = index;
+    while (
+      insertion > 0 &&
+      compilerStringLocaleCompare(value.path, values[insertion - 1]!.path) < 0
+    ) {
+      values[insertion] = values[insertion - 1]!;
+      insertion -= 1;
+    }
+    values[insertion] = value;
+  }
 }

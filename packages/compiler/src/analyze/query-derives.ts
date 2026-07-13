@@ -4,6 +4,16 @@
 // `outputContext` channel are unchanged.
 import { parseBindingPath } from './query-shapes.js';
 import { withOutputContext } from './query-internal.js';
+import {
+  compilerArrayAppend,
+  compilerCreateMap,
+  compilerMapGet,
+  compilerMapSet,
+  compilerOwnDataValue,
+  compilerSnapshotDenseArray,
+  compilerStringSlice,
+  compilerStringStartsWith,
+} from '../compiler-security-intrinsics.js';
 import { callExpressions, jsxElements, type ComponentModuleModel } from '../scan/parse.js';
 import { outputContextForAttribute } from '../output-context-facts.js';
 import type { QueryDeriveFact, QueryStampFact } from '../types.js';
@@ -11,19 +21,31 @@ import type { QueryDeriveFact, QueryStampFact } from '../types.js';
 export function exportedDerives(
   model: ComponentModuleModel,
 ): Map<string, Omit<QueryDeriveFact, 'selector'>> {
-  const derives = new Map<string, Omit<QueryDeriveFact, 'selector'>>();
+  const derives = compilerCreateMap<string, Omit<QueryDeriveFact, 'selector'>>();
 
-  for (const call of callExpressions(model)) {
+  const calls = compilerSnapshotDenseArray(callExpressions(model), 'Compiler exported derives');
+  for (let index = 0; index < calls.length; index += 1) {
+    const call = calls[index]!;
     if (call.name !== 'derive' || !call.exportedConstName) continue;
 
-    const inputs = deriveInputNames(call.argumentStringLiteralArrayValues[0]);
-    const derive = call.argumentArrowFunctionParts[1];
+    const inputs = deriveInputNames(
+      compilerOwnDataValue(
+        call.argumentStringLiteralArrayValues,
+        0,
+        'Compiler derive input argument',
+      ) as readonly string[] | null | undefined,
+    );
+    const derive = compilerOwnDataValue(
+      call.argumentArrowFunctionParts,
+      1,
+      'Compiler derive arrow arguments',
+    );
     if (inputs.length === 0 || !derive || derive.params.length !== inputs.length) continue;
     const input = inputs[0];
     if (!input) continue;
     const exportName = call.exportedConstName;
 
-    derives.set(exportName, {
+    compilerMapSet(derives, exportName, {
       exportName,
       expression: derive.expression,
       input,
@@ -38,7 +60,14 @@ export function exportedDerives(
 }
 
 function deriveInputNames(values: readonly string[] | null | undefined): string[] {
-  return values?.filter((input) => input.length > 0) ?? [];
+  const inputs: string[] = [];
+  const source = compilerSnapshotDenseArray(values ?? [], 'Compiler derive input names');
+  for (let index = 0; index < source.length; index += 1) {
+    if (source[index]!.length > 0) {
+      compilerArrayAppend(inputs, source[index]!, 'Compiler derive input names');
+    }
+  }
+  return inputs;
 }
 
 export function derivePlanInputs(
@@ -54,21 +83,30 @@ export function dataDeriveStamps(
   const deriveFacts: QueryDeriveFact[] = [];
   const stampFacts: QueryStampFact[] = [];
 
-  for (const element of jsxElements(model)) {
-    for (const attribute of element.attributes.filter(
-      (item) => item.name.startsWith('data-bind:') && item.value,
-    )) {
+  const elements = compilerSnapshotDenseArray(jsxElements(model), 'Compiler derive-stamp elements');
+  for (let elementIndex = 0; elementIndex < elements.length; elementIndex += 1) {
+    const element = elements[elementIndex]!;
+    const attributes = compilerSnapshotDenseArray(
+      element.attributes,
+      'Compiler derive-stamp attributes',
+    );
+    for (let attributeIndex = 0; attributeIndex < attributes.length; attributeIndex += 1) {
+      const attribute = attributes[attributeIndex]!;
+      if (!compilerStringStartsWith(attribute.name, 'data-bind:') || !attribute.value) continue;
       if (!attribute.value) continue;
 
-      const [inputSegment, nameSegment, ...extraSegments] = parseBindingPath(attribute.value);
-      if (!inputSegment || !nameSegment || extraSegments.length > 0) continue;
+      const segments = parseBindingPath(attribute.value);
+      const inputSegment = segments[0];
+      const nameSegment = segments[1];
+      if (!inputSegment || !nameSegment || segments.length > 2) continue;
 
-      const derive = derives.get(nameSegment.name);
-      if (!derive || !derivePlanInputs(derive).includes(inputSegment.name)) continue;
+      const derive = compilerMapGet(derives, nameSegment.name);
+      if (!derive || !containsString(derivePlanInputs(derive), inputSegment.name)) continue;
       if (inputSegment.name === 'state') continue;
 
-      const attr = attribute.name.slice('data-bind:'.length);
-      stampFacts.push(
+      const attr = compilerStringSlice(attribute.name, 'data-bind:'.length);
+      compilerArrayAppend(
+        stampFacts,
         withOutputContext(
           {
             attr,
@@ -86,25 +124,24 @@ export function dataDeriveStamps(
             writer: 'query attribute binding',
           },
         ),
+        'Compiler query derive stamps',
       );
     }
 
-    const deriveAttribute = element.attributes.find(
-      (attribute) => attribute.name === 'data-derive' && attribute.value,
-    );
+    const deriveAttribute = findAttribute(attributes, 'data-derive');
     if (!deriveAttribute?.value) continue;
 
-    const attr = element.attributes.find(
-      (attribute) => attribute.name === 'data-derive-attr' && attribute.value,
-    )?.value;
+    const attr = findAttribute(attributes, 'data-derive-attr')?.value;
 
-    const [inputSegment, nameSegment, ...extraSegments] = parseBindingPath(deriveAttribute.value);
-    if (!inputSegment || !nameSegment || extraSegments.length > 0) continue;
+    const segments = parseBindingPath(deriveAttribute.value);
+    const inputSegment = segments[0];
+    const nameSegment = segments[1];
+    if (!inputSegment || !nameSegment || segments.length > 2) continue;
     const input = inputSegment.name;
     const name = nameSegment.name;
 
-    const derive = derives.get(name);
-    if (!derive || !derivePlanInputs(derive).includes(input)) continue;
+    const derive = compilerMapGet(derives, name);
+    if (!derive || !containsString(derivePlanInputs(derive), input)) continue;
 
     const deriveFact = {
       ...derive,
@@ -112,7 +149,8 @@ export function dataDeriveStamps(
     };
 
     if (attr) {
-      stampFacts.push(
+      compilerArrayAppend(
+        stampFacts,
         withOutputContext(
           {
             attr,
@@ -127,9 +165,10 @@ export function dataDeriveStamps(
             writer: 'query attribute stamp',
           },
         ),
+        'Compiler query derive stamps',
       );
     } else {
-      deriveFacts.push(deriveFact);
+      compilerArrayAppend(deriveFacts, deriveFact, 'Compiler query derive facts');
     }
   }
 
@@ -137,4 +176,23 @@ export function dataDeriveStamps(
     derives: deriveFacts,
     stamps: stampFacts,
   };
+}
+
+function containsString(values: readonly string[], wanted: string): boolean {
+  const source = compilerSnapshotDenseArray(values, 'Compiler derive plan inputs');
+  for (let index = 0; index < source.length; index += 1) {
+    if (source[index] === wanted) return true;
+  }
+  return false;
+}
+
+function findAttribute<Attribute extends { readonly name: string; readonly value?: string }>(
+  attributes: readonly Attribute[],
+  name: string,
+): Attribute | undefined {
+  const source = compilerSnapshotDenseArray(attributes, 'Compiler derive attribute lookup');
+  for (let index = 0; index < source.length; index += 1) {
+    if (source[index]!.name === name && source[index]!.value) return source[index]!;
+  }
+  return undefined;
 }

@@ -8,6 +8,12 @@
 // `JSON.stringify` and `factHash`; it is load-bearing for byte/fact-hash
 // stability. Do not convert it to a plain enumerable field.
 import { isRelativeBindingPath, queryNameFromPath, relativeBindingPath } from './query-shapes.js';
+import {
+  compilerArrayAppend,
+  compilerDefineOwnDataProperty,
+  compilerSnapshotDenseArray,
+  compilerStringStartsWith,
+} from '../compiler-security-intrinsics.js';
 import { jsxElements, type ComponentModuleModel, type JsxElementModel } from '../scan/parse.js';
 import type { GeneratedOutputWriteFact } from '../output-context-facts.js';
 
@@ -37,7 +43,7 @@ export function withOutputContext<Value extends object>(
   value: Value,
   outputContext: GeneratedOutputWriteFact,
 ): Value & { outputContext: GeneratedOutputWriteFact } {
-  Object.defineProperty(value, 'outputContext', { enumerable: false, value: outputContext });
+  compilerDefineOwnDataProperty(value, 'outputContext', outputContext, false);
   return value as Value & { outputContext: GeneratedOutputWriteFact };
 }
 
@@ -45,23 +51,34 @@ export function withOutputContexts<Value extends object>(
   value: Value,
   outputContexts: readonly GeneratedOutputWriteFact[],
 ): Value & { outputContexts: readonly GeneratedOutputWriteFact[] } {
-  Object.defineProperty(value, 'outputContexts', { enumerable: false, value: outputContexts });
+  compilerDefineOwnDataProperty(value, 'outputContexts', outputContexts, false);
   return value as Value & { outputContexts: readonly GeneratedOutputWriteFact[] };
 }
 
 export function jsxAttributes(model: ComponentModuleModel) {
-  return jsxElements(model).flatMap((element) => [...element.attributes]);
+  const attributes: ReturnType<typeof jsxElements>[number]['attributes'][number][] = [];
+  const elements = compilerSnapshotDenseArray(jsxElements(model), 'Compiler query JSX elements');
+  for (let index = 0; index < elements.length; index += 1) {
+    const source = compilerSnapshotDenseArray(
+      elements[index]!.attributes,
+      'Compiler query JSX element attributes',
+    );
+    for (let attributeIndex = 0; attributeIndex < source.length; attributeIndex += 1) {
+      compilerArrayAppend(attributes, source[attributeIndex]!, 'Compiler query JSX attributes');
+    }
+  }
+  return attributes;
 }
 
 export function hasJsxAttribute(element: JsxElementModel, name: string): boolean {
-  return element.attributes.some((attribute) => attribute.name === name);
+  return jsxAttribute(element, name) !== undefined;
 }
 
 export function jsxStaticAttributeValue(
   element: JsxElementModel,
   name: string,
 ): string | undefined {
-  return element.attributes.find((attribute) => attribute.name === name)?.value;
+  return jsxAttribute(element, name)?.value;
 }
 
 export function isWithinElement(candidate: JsxElementModel, container: JsxElementModel): boolean {
@@ -69,9 +86,23 @@ export function isWithinElement(candidate: JsxElementModel, container: JsxElemen
 }
 
 export function isBindingAttribute(name: string): boolean {
-  return name === 'data-bind' || name.startsWith('data-bind:');
+  return name === 'data-bind' || compilerStringStartsWith(name, 'data-bind:');
 }
 
 export function isStatePath(path: string): boolean {
-  return path.startsWith('state.');
+  return compilerStringStartsWith(path, 'state.');
+}
+
+function jsxAttribute(
+  element: JsxElementModel,
+  name: string,
+): JsxElementModel['attributes'][number] | undefined {
+  const attributes = compilerSnapshotDenseArray(
+    element.attributes,
+    'Compiler query JSX attribute lookup',
+  );
+  for (let index = 0; index < attributes.length; index += 1) {
+    if (attributes[index]!.name === name) return attributes[index]!;
+  }
+  return undefined;
 }

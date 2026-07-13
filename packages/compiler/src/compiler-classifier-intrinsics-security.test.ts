@@ -103,6 +103,39 @@ export const UserCard = component({
     expect(result?.diagnostics.filter((diagnostic) => diagnostic.code === 'KV435')).toHaveLength(1);
   });
 
+  it('does not suppress query-shape binding diagnostics through binding Array.filter', () => {
+    const nativeFilter = Array.prototype.filter;
+    const nativeApply = Reflect.apply;
+    let poisonHits = 0;
+    let result: ReturnType<typeof compileComponentModule> | undefined;
+    try {
+      Array.prototype.filter = function poisonedBindingFilter<T>(
+        callback: (value: T, index: number, array: T[]) => unknown,
+        thisArg?: unknown,
+      ): T[] {
+        const first = this[0] as { name?: unknown; path?: unknown } | undefined;
+        if (first?.name === 'data-bind' && first.path === 'cart.total') {
+          poisonHits += 1;
+          return [];
+        }
+        return nativeApply(nativeFilter, this, [callback, thisArg]);
+      };
+      result = compileComponentModule({
+        fileName: 'cart-total.tsx',
+        queryShapes: { cart: { count: 'number' } },
+        source: `
+export const CartTotal = component({
+  render: () => <span data-bind="cart.total">0</span>,
+});
+`,
+      });
+    } finally {
+      Array.prototype.filter = nativeFilter;
+    }
+    expect(result?.diagnostics.filter((diagnostic) => diagnostic.code === 'KV302')).toHaveLength(1);
+    expect(poisonHits).toBe(0);
+  });
+
   it('does not skip the complete validator pipeline through Array.flatMap replacement', () => {
     const nativeFlatMap = Array.prototype.flatMap;
     const nativeApply = Reflect.apply;

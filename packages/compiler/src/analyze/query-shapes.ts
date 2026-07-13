@@ -1,6 +1,21 @@
 import { allComponentOptionObjectKeys, type ComponentModuleModel } from '../scan/parse.js';
 import type { CompileComponentOptions, QueryShape, QueryShapeFact } from '../types.js';
 import {
+  compilerArrayAppend,
+  compilerCreateSet,
+  compilerObjectKeys,
+  compilerOwnDataValue,
+  compilerRegExpTest,
+  compilerSetAdd,
+  compilerSetHas,
+  compilerSnapshotDenseArray,
+  compilerStringEndsWith,
+  compilerStringIndexOf,
+  compilerStringSlice,
+  compilerStringSplit,
+  compilerStringStartsWith,
+} from '../compiler-security-intrinsics.js';
+import {
   isArrayQueryShape,
   isNullableQueryShapeWrapper,
   isQueryShapeObject,
@@ -32,11 +47,28 @@ export function knownQueryNames(
   model: ComponentModuleModel,
   options: QueryShapeOptions,
 ): Set<string> {
-  return new Set([
-    ...componentQueryNames(model),
-    ...Object.keys(options.registryFacts?.queries ?? {}),
-    ...Object.keys(componentQueryShapes(options) ?? {}),
-  ]);
+  const names = compilerCreateSet<string>();
+  addStringsToSet(names, componentQueryNames(model), 'Compiler component query names');
+  const registryFacts = compilerOwnDataValue(
+    options,
+    'registryFacts',
+    'Compiler query-shape options',
+  );
+  if (typeof registryFacts === 'object' && registryFacts !== null) {
+    const registryQueries = compilerOwnDataValue(
+      registryFacts,
+      'queries',
+      'Compiler query-shape registry facts',
+    );
+    if (typeof registryQueries === 'object' && registryQueries !== null) {
+      addStringsToSet(names, compilerObjectKeys(registryQueries), 'Compiler registry query names');
+    }
+  }
+  const shapes = componentQueryShapes(options);
+  if (shapes !== null) {
+    addStringsToSet(names, compilerObjectKeys(shapes), 'Compiler query-shape names');
+  }
+  return names;
 }
 
 export function componentQueryNames(model: ComponentModuleModel): string[] {
@@ -46,30 +78,41 @@ export function componentQueryNames(model: ComponentModuleModel): string[] {
 export function componentQueryShapes(
   options: QueryShapeOptions,
 ): Record<string, QueryShape> | null {
-  return (
-    options.queryShapes ??
-    (options.queryShapeFacts ? queryShapesFromFacts(options.queryShapeFacts) : null)
+  const queryShapes = compilerOwnDataValue(options, 'queryShapes', 'Compiler query-shape options');
+  if (queryShapes !== undefined) return queryShapes as Record<string, QueryShape>;
+  const queryShapeFacts = compilerOwnDataValue(
+    options,
+    'queryShapeFacts',
+    'Compiler query-shape options',
   );
+  return queryShapeFacts === undefined
+    ? null
+    : queryShapesFromFacts(queryShapeFacts as readonly QueryShapeFact[]);
 }
 
 export function queryNameFromPath(path: string): string | null {
-  return path.split('.', 1)[0] ?? null;
+  const separator = compilerStringIndexOf(path, '.');
+  return separator < 0 ? path : compilerStringSlice(path, 0, separator);
 }
 
 export function queryPathUsesKnownQuery(path: string, knownQueries: ReadonlySet<string>): boolean {
   const query = queryNameFromPath(path);
-  return query !== null && knownQueries.has(query);
+  return query !== null && compilerSetHas(knownQueries, query);
 }
 
 export function validatePathInQueryShapes(
   path: string,
   queryShapes: Record<string, QueryShape>,
 ): PathShapeValidation {
-  const [querySegment, ...segments] = parseBindingPath(path);
+  const parsed = parseBindingPath(path);
+  const querySegment = parsed[0];
+  const segments = arrayTail(parsed, 'Compiler query binding path');
   const queryName = querySegment?.name;
   if (!queryName) return { exists: false };
 
-  const shape = queryShapes[queryName];
+  const shape = compilerOwnDataValue(queryShapes, queryName, 'Compiler query shapes') as
+    | QueryShape
+    | undefined;
   if (!shape || segments.length === 0) return { exists: Boolean(shape) };
 
   return validatePathInShape(shape, segments);
@@ -83,21 +126,28 @@ export function validatePathInShape(
   if (segments.length === 0) return { exists: true };
 
   if (isArrayQueryShape(current)) {
-    const [head, ...tail] = segments;
+    const head = segments[0];
+    const tail = arrayTail(segments, 'Compiler array query-shape path');
     if (head?.name === 'length') return { exists: tail.length === 0 };
-    const itemShape = current[0];
+    const itemShape = compilerOwnDataValue(current, 0, 'Compiler array query shape') as
+      | QueryShape
+      | undefined;
     if (itemShape === undefined) return { exists: false };
-    return head && /^\d+$/u.test(head.name)
+    return head && compilerRegExpTest(/^\d+$/u, head.name)
       ? validatePathInShape(itemShape, tail)
       : validatePathInShape(itemShape, segments);
   }
 
   if (!isQueryShapeObject(current)) return { exists: false };
 
-  const [head, ...tail] = segments;
-  if (!head || !(head.name in current)) return { exists: false };
+  const head = segments[0];
+  const tail = arrayTail(segments, 'Compiler object query-shape path');
+  if (!head) return { exists: false };
 
-  const child = current[head.name] ?? 'object';
+  const child = compilerOwnDataValue(current, head.name, 'Compiler object query shape') as
+    | QueryShape
+    | undefined;
+  if (child === undefined) return { exists: false };
   const nullableTraversal = tail.length > 0 && isNullableQueryShapeWrapper(child) && !head.optional;
   if (nullableTraversal) {
     const childValidation = validatePathInShape(child, tail);
@@ -116,27 +166,40 @@ export function queryShapeAtPath(
   const current = unwrapQueryShape(shape);
   if (segments.length === 0) return current;
   if (isArrayQueryShape(current)) {
-    const [head, ...tail] = segments;
+    const head = segments[0];
+    const tail = arrayTail(segments, 'Compiler array query-shape lookup path');
     if (head?.name === 'length') return tail.length === 0 ? 'number' : 'object';
-    const itemShape = current[0] ?? 'object';
-    return head && /^\d+$/u.test(head.name)
+    const itemShape = (compilerOwnDataValue(current, 0, 'Compiler array query shape') ??
+      'object') as QueryShape;
+    return head && compilerRegExpTest(/^\d+$/u, head.name)
       ? queryShapeAtPath(itemShape, tail)
       : queryShapeAtPath(itemShape, segments);
   }
   if (!isQueryShapeObject(current)) return 'object';
 
-  const [head, ...tail] = segments;
+  const head = segments[0];
+  const tail = arrayTail(segments, 'Compiler object query-shape lookup path');
   if (!head) return current;
-  return queryShapeAtPath(current[head.name] ?? 'object', tail);
+  return queryShapeAtPath(
+    (compilerOwnDataValue(current, head.name, 'Compiler object query shape') ??
+      'object') as QueryShape,
+    tail,
+  );
 }
 
 export function queryShapeAtBindingPath(
   path: string,
   queryShapes: Record<string, QueryShape>,
 ): QueryShape | undefined {
-  const [querySegment, ...segments] = parseBindingPath(path);
+  const parsed = parseBindingPath(path);
+  const querySegment = parsed[0];
+  const segments = arrayTail(parsed, 'Compiler query-shape lookup path');
   const queryName = querySegment?.name;
-  const shape = queryName ? queryShapes[queryName] : undefined;
+  const shape = queryName
+    ? (compilerOwnDataValue(queryShapes, queryName, 'Compiler query shapes') as
+        | QueryShape
+        | undefined)
+    : undefined;
   return shape === undefined ? undefined : queryShapeAtPath(shape, segments);
 }
 
@@ -145,7 +208,9 @@ export function listItemShapeAtBindingPath(
   queryShapes: Record<string, QueryShape>,
 ): QueryShape | undefined {
   const shape = queryShapeAtBindingPath(path, queryShapes);
-  return shape !== undefined && isArrayQueryShape(shape) ? shape[0] : undefined;
+  return shape !== undefined && isArrayQueryShape(shape)
+    ? (compilerOwnDataValue(shape, 0, 'Compiler list query shape') as QueryShape | undefined)
+    : undefined;
 }
 
 export function validateListBindingInQueryShapes(
@@ -154,11 +219,15 @@ export function validateListBindingInQueryShapes(
   itemBindingPaths: readonly string[],
   queryShapes: Record<string, QueryShape>,
 ): PathShapeValidation {
-  const [querySegment, ...segments] = parseBindingPath(listPath);
+  const parsed = parseBindingPath(listPath);
+  const querySegment = parsed[0];
+  const segments = arrayTail(parsed, 'Compiler list query binding path');
   const queryName = querySegment?.name;
   if (!queryName || segments.length === 0) return { exists: false };
 
-  const listShape = queryShapes[queryName];
+  const listShape = compilerOwnDataValue(queryShapes, queryName, 'Compiler query shapes') as
+    | QueryShape
+    | undefined;
   if (!listShape) return { exists: false };
 
   const itemShape = listItemShapeAtBindingPath(listPath, queryShapes);
@@ -171,7 +240,9 @@ export function validateListBindingInQueryShapes(
   if (!listValidation.exists) return { exists: false };
   if (listValidation.nullableTraversal) return listValidation;
 
-  for (const path of itemBindingPaths) {
+  const paths = compilerSnapshotDenseArray(itemBindingPaths, 'Compiler list item binding paths');
+  for (let index = 0; index < paths.length; index += 1) {
+    const path = paths[index]!;
     if (!validatePathInShape(itemShape, parseBindingPath(relativeBindingPath(path))).exists) {
       return { exists: false };
     }
@@ -181,20 +252,47 @@ export function validateListBindingInQueryShapes(
 }
 
 export function queryShapePaths(queryShapes: Record<string, QueryShape>): string[] {
-  return Object.entries(queryShapes).flatMap(([queryName, shape]) => [
-    queryName,
-    ...queryShapeChildPaths(shape).map((path) => `${queryName}.${path}`),
-  ]);
+  const paths: string[] = [];
+  const queryNames = compilerSnapshotDenseArray(
+    compilerObjectKeys(queryShapes),
+    'Compiler query-shape path names',
+  );
+  for (let index = 0; index < queryNames.length; index += 1) {
+    const queryName = queryNames[index]!;
+    compilerArrayAppend(paths, queryName, 'Compiler query-shape paths');
+    const shape = compilerOwnDataValue(queryShapes, queryName, 'Compiler query shapes') as
+      | QueryShape
+      | undefined;
+    if (shape === undefined) continue;
+    const children = queryShapeChildPaths(shape);
+    for (let childIndex = 0; childIndex < children.length; childIndex += 1) {
+      compilerArrayAppend(
+        paths,
+        `${queryName}.${children[childIndex]!}`,
+        'Compiler query-shape paths',
+      );
+    }
+  }
+  return paths;
 }
 
 export function parseBindingPath(path: string): BindingPathSegment[] {
-  return path
-    .split('.')
-    .filter((segment) => segment !== '')
-    .map((segment) => ({
-      name: segment.endsWith('?') ? segment.slice(0, -1) : segment,
-      optional: segment.endsWith('?'),
-    }));
+  const rawSegments = compilerStringSplit(path, '.');
+  const segments: BindingPathSegment[] = [];
+  for (let index = 0; index < rawSegments.length; index += 1) {
+    const segment = rawSegments[index]!;
+    if (segment === '') continue;
+    const optional = compilerStringEndsWith(segment, '?');
+    compilerArrayAppend(
+      segments,
+      {
+        name: optional ? compilerStringSlice(segment, 0, -1) : segment,
+        optional,
+      },
+      'Compiler binding path segments',
+    );
+  }
+  return segments;
 }
 
 export function requiredPathSegment(name: string): BindingPathSegment {
@@ -202,24 +300,65 @@ export function requiredPathSegment(name: string): BindingPathSegment {
 }
 
 export function relativeBindingPath(path: string): string {
-  return isRelativeBindingPath(path) ? path.slice(1) : path;
+  return isRelativeBindingPath(path) ? compilerStringSlice(path, 1) : path;
 }
 
 export function isRelativeBindingPath(path: string): boolean {
-  return path.startsWith('.');
+  return compilerStringStartsWith(path, '.');
 }
 
 function queryShapeChildPaths(shape: QueryShape): string[] {
   const current = unwrapQueryShape(shape);
   if (isArrayQueryShape(current)) {
-    const itemShape = current[0];
-    return itemShape === undefined ? ['length'] : ['length', ...queryShapeChildPaths(itemShape)];
+    const paths = ['length'];
+    const itemShape = compilerOwnDataValue(current, 0, 'Compiler array query shape') as
+      | QueryShape
+      | undefined;
+    if (itemShape !== undefined) {
+      const children = queryShapeChildPaths(itemShape);
+      for (let index = 0; index < children.length; index += 1) {
+        compilerArrayAppend(paths, children[index]!, 'Compiler query-shape child paths');
+      }
+    }
+    return paths;
   }
 
   if (!isQueryShapeObject(current)) return [];
 
-  return Object.entries(current).flatMap(([key, child]) => [
-    key,
-    ...queryShapeChildPaths(child ?? 'object').map((path) => `${key}.${path}`),
-  ]);
+  const paths: string[] = [];
+  const keys = compilerSnapshotDenseArray(
+    compilerObjectKeys(current),
+    'Compiler object query-shape keys',
+  );
+  for (let index = 0; index < keys.length; index += 1) {
+    const key = keys[index]!;
+    compilerArrayAppend(paths, key, 'Compiler query-shape child paths');
+    const child = (compilerOwnDataValue(current, key, 'Compiler object query shape') ??
+      'object') as QueryShape;
+    const children = queryShapeChildPaths(child);
+    for (let childIndex = 0; childIndex < children.length; childIndex += 1) {
+      compilerArrayAppend(
+        paths,
+        `${key}.${children[childIndex]!}`,
+        'Compiler query-shape child paths',
+      );
+    }
+  }
+  return paths;
+}
+
+function arrayTail<Value>(values: readonly Value[], label: string): Value[] {
+  const source = compilerSnapshotDenseArray(values, label);
+  const tail: Value[] = [];
+  for (let index = 1; index < source.length; index += 1) {
+    compilerArrayAppend(tail, source[index]!, `${label} tail`);
+  }
+  return tail;
+}
+
+function addStringsToSet(target: Set<string>, values: readonly string[], label: string): void {
+  const snapshot = compilerSnapshotDenseArray(values, label);
+  for (let index = 0; index < snapshot.length; index += 1) {
+    compilerSetAdd(target, snapshot[index]!);
+  }
 }

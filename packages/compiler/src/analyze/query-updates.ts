@@ -11,6 +11,20 @@
 // Behavior-neutral: emitted `QueryUpdatePlanFact` / `QueryUpdateCoverageFact` bytes and
 // `factHash` output are identical to the pre-split module.
 import { dedupeBy } from '../shared.js';
+import {
+  compilerArrayAppend,
+  compilerCreateMap,
+  compilerCreateSet,
+  compilerMapForEach,
+  compilerMapGet,
+  compilerMapSet,
+  compilerSetAdd,
+  compilerSetForEach,
+  compilerSetHas,
+  compilerSnapshotDenseArray,
+  compilerStringLocaleCompare,
+  compilerStringStartsWith,
+} from '../compiler-security-intrinsics.js';
 import { knownQueryNames, queryNameFromPath } from './query-shapes.js';
 import { coveragePathKey, withOutputContexts } from './query-internal.js';
 import {
@@ -55,95 +69,144 @@ export function collectQueryUpdatePlans(
   model: ComponentModuleModel,
   componentName: string,
 ): QueryUpdatePlanFact[] {
-  const pathsByQuery = new Map<string, Set<string>>();
-  const outputContextsByQuery = new Map<string, GeneratedOutputWriteFact[]>();
-  const derivesByQuery = new Map<string, QueryDeriveFact[]>();
-  const stampsByQuery = new Map<string, QueryStampFact[]>();
-  const listStampsByQuery = new Map<string, QueryTemplateStampFact[]>();
+  const pathsByQuery = compilerCreateMap<string, Set<string>>();
+  const outputContextsByQuery = compilerCreateMap<string, GeneratedOutputWriteFact[]>();
+  const derivesByQuery = compilerCreateMap<string, QueryDeriveFact[]>();
+  const stampsByQuery = compilerCreateMap<string, QueryStampFact[]>();
+  const listStampsByQuery = compilerCreateMap<string, QueryTemplateStampFact[]>();
 
-  for (const binding of dataBindAttributes(model)) {
+  const bindings = compilerSnapshotDenseArray(
+    dataBindAttributes(model),
+    'Compiler query-plan bindings',
+  );
+  for (let index = 0; index < bindings.length; index += 1) {
+    const binding = bindings[index]!;
     const { path, query } = binding;
     if (!query || query === 'state') continue;
 
-    const paths = pathsByQuery.get(query) ?? new Set<string>();
-    paths.add(path);
-    pathsByQuery.set(query, paths);
+    const paths = compilerMapGet(pathsByQuery, query) ?? compilerCreateSet<string>();
+    compilerSetAdd(paths, path);
+    compilerMapSet(pathsByQuery, query, paths);
     pushOutputContext(outputContextsByQuery, query, dataBindOutputContextFact(binding));
   }
 
-  for (const stamp of collectDataBindListStamps(model)) {
+  const listStamps = compilerSnapshotDenseArray(
+    collectDataBindListStamps(model),
+    'Compiler query-plan list stamps',
+  );
+  for (let index = 0; index < listStamps.length; index += 1) {
+    const stamp = listStamps[index]!;
     const query = queryNameFromPath(stamp.list);
     if (!query || query === 'state') continue;
 
-    const paths = pathsByQuery.get(query) ?? new Set<string>();
-    paths.add(stamp.list);
-    pathsByQuery.set(query, paths);
-    listStampsByQuery.set(query, [...(listStampsByQuery.get(query) ?? []), stamp]);
+    const paths = compilerMapGet(pathsByQuery, query) ?? compilerCreateSet<string>();
+    compilerSetAdd(paths, stamp.list);
+    compilerMapSet(pathsByQuery, query, paths);
+    appendMapArray(listStampsByQuery, query, stamp, 'Compiler query-plan list stamps');
     pushOutputContext(outputContextsByQuery, query, stamp.outputContext);
-    for (const placeholder of stamp.itemBindingPlaceholders ?? []) {
-      pushOutputContext(outputContextsByQuery, query, placeholder.outputContext);
+    const placeholders = compilerSnapshotDenseArray(
+      stamp.itemBindingPlaceholders ?? [],
+      'Compiler query-plan list placeholders',
+    );
+    for (let placeholderIndex = 0; placeholderIndex < placeholders.length; placeholderIndex += 1) {
+      pushOutputContext(
+        outputContextsByQuery,
+        query,
+        placeholders[placeholderIndex]!.outputContext,
+      );
     }
   }
 
   const deriveStamps = dataDeriveStamps(model, exportedDerives(model));
 
-  for (const derive of deriveStamps.derives) {
-    for (const input of derivePlanInputs(derive)) {
-      const derives = derivesByQuery.get(input) ?? [];
-      derives.push({ ...derive, input });
-      derivesByQuery.set(input, derives);
+  const derives = compilerSnapshotDenseArray(deriveStamps.derives, 'Compiler query-plan derives');
+  for (let deriveIndex = 0; deriveIndex < derives.length; deriveIndex += 1) {
+    const derive = derives[deriveIndex]!;
+    const inputs = compilerSnapshotDenseArray(
+      derivePlanInputs(derive),
+      'Compiler query-plan derive inputs',
+    );
+    for (let inputIndex = 0; inputIndex < inputs.length; inputIndex += 1) {
+      const input = inputs[inputIndex]!;
+      appendMapArray(derivesByQuery, input, { ...derive, input }, 'Compiler query-plan derives');
     }
   }
 
-  for (const stamp of deriveStamps.stamps) {
-    for (const input of derivePlanInputs(stamp.derive)) {
-      const stamps = stampsByQuery.get(input) ?? [];
-      stamps.push({ ...stamp, derive: { ...stamp.derive, input } });
-      stampsByQuery.set(input, stamps);
+  const stamps = compilerSnapshotDenseArray(
+    deriveStamps.stamps,
+    'Compiler query-plan derive stamps',
+  );
+  for (let stampIndex = 0; stampIndex < stamps.length; stampIndex += 1) {
+    const stamp = stamps[stampIndex]!;
+    const inputs = compilerSnapshotDenseArray(
+      derivePlanInputs(stamp.derive),
+      'Compiler query-plan stamp inputs',
+    );
+    for (let inputIndex = 0; inputIndex < inputs.length; inputIndex += 1) {
+      const input = inputs[inputIndex]!;
+      appendMapArray(
+        stampsByQuery,
+        input,
+        { ...stamp, derive: { ...stamp.derive, input } },
+        'Compiler query-plan derive stamps',
+      );
       pushOutputContext(outputContextsByQuery, input, stamp.outputContext);
     }
   }
 
-  const queries = new Set([
-    ...pathsByQuery.keys(),
-    ...listStampsByQuery.keys(),
-    ...derivesByQuery.keys(),
-    ...stampsByQuery.keys(),
-  ]);
-
-  return [...queries]
-    .sort((left, right) => left.localeCompare(right))
-    .map((query) => {
-      const plan: QueryUpdatePlanFact = {
-        componentName,
-        ...(derivesByQuery.has(query)
-          ? {
-              derives: [...(derivesByQuery.get(query) ?? [])].sort((left, right) =>
-                left.name.localeCompare(right.name),
-              ),
-            }
-          : {}),
-        paths: [...(pathsByQuery.get(query) ?? [])].sort(),
-        query,
-        ...(stampsByQuery.has(query)
-          ? {
-              stamps: [...(stampsByQuery.get(query) ?? [])].sort((left, right) =>
-                left.attr.localeCompare(right.attr),
-              ),
-            }
-          : {}),
-        ...(listStampsByQuery.has(query)
-          ? {
-              templateStamps: [...(listStampsByQuery.get(query) ?? [])].sort((left, right) =>
-                left.list.localeCompare(right.list),
-              ),
-            }
-          : {}),
-      };
-      return outputContextsByQuery.has(query)
-        ? withOutputContexts(plan, outputContextsByQuery.get(query) ?? [])
-        : plan;
-    });
+  const queries = compilerCreateSet<string>();
+  addMapKeys(queries, pathsByQuery);
+  addMapKeys(queries, listStampsByQuery);
+  addMapKeys(queries, derivesByQuery);
+  addMapKeys(queries, stampsByQuery);
+  const queryNames = setValues(queries, 'Compiler query-plan names');
+  sortValues(queryNames, compilerStringLocaleCompare);
+  const output: QueryUpdatePlanFact[] = [];
+  for (let index = 0; index < queryNames.length; index += 1) {
+    const query = queryNames[index]!;
+    const queryDerives = compilerMapGet(derivesByQuery, query);
+    const queryStamps = compilerMapGet(stampsByQuery, query);
+    const queryTemplateStamps = compilerMapGet(listStampsByQuery, query);
+    const plan: QueryUpdatePlanFact = {
+      componentName,
+      ...(queryDerives === undefined
+        ? {}
+        : {
+            derives: sortedValues(
+              queryDerives,
+              (left, right) => compilerStringLocaleCompare(left.name, right.name),
+              'Compiler query-plan derives',
+            ),
+          }),
+      paths: sortedSetStrings(compilerMapGet(pathsByQuery, query)),
+      query,
+      ...(queryStamps === undefined
+        ? {}
+        : {
+            stamps: sortedValues(
+              queryStamps,
+              (left, right) => compilerStringLocaleCompare(left.attr, right.attr),
+              'Compiler query-plan stamps',
+            ),
+          }),
+      ...(queryTemplateStamps === undefined
+        ? {}
+        : {
+            templateStamps: sortedValues(
+              queryTemplateStamps,
+              (left, right) => compilerStringLocaleCompare(left.list, right.list),
+              'Compiler query-plan template stamps',
+            ),
+          }),
+    };
+    const outputContexts = compilerMapGet(outputContextsByQuery, query);
+    compilerArrayAppend(
+      output,
+      outputContexts === undefined ? plan : withOutputContexts(plan, outputContexts),
+      'Compiler query update plans',
+    );
+  }
+  return output;
 }
 
 export function collectQueryUpdateCoverage(
@@ -154,12 +217,18 @@ export function collectQueryUpdateCoverage(
   sourceOffsetMap?: SourceOffsetMap,
 ): QueryUpdateCoverageFact[] {
   const facts: QueryUpdateCoverageFact[] = [];
-  const coveredPaths = new Set<string>();
-  const planCoveredPaths = new Set<string>();
-  const statusCoveredPaths = new Set<string>();
+  const coveredPaths = compilerCreateSet<string>();
+  const planCoveredPaths = compilerCreateSet<string>();
+  const statusCoveredPaths = compilerCreateSet<string>();
   const knownQueries = knownQueryNames(model, options);
 
-  for (const binding of dataBindAttributes(model).filter((item) => item.query !== null)) {
+  const bindings = compilerSnapshotDenseArray(
+    dataBindAttributes(model),
+    'Compiler query coverage bindings',
+  );
+  for (let index = 0; index < bindings.length; index += 1) {
+    const binding = bindings[index]!;
+    if (binding.query === null) continue;
     const path = binding.path;
     const query = binding.query;
     if (!query) continue;
@@ -168,101 +237,151 @@ export function collectQueryUpdateCoverage(
       start: binding.start ?? 0,
     });
 
-    facts.push({
-      componentName: ownerName,
-      detail: binding.name,
-      position: binding.name === 'data-bind' ? 'binding' : 'attribute',
-      query: path,
-      ...(query === 'state' ? { source: 'state' as const } : {}),
-      status: 'plan',
-    });
+    compilerArrayAppend(
+      facts,
+      {
+        componentName: ownerName,
+        detail: binding.name,
+        position: binding.name === 'data-bind' ? 'binding' : 'attribute',
+        query: path,
+        ...(query === 'state' ? { source: 'state' as const } : {}),
+        status: 'plan',
+      },
+      'Compiler query coverage facts',
+    );
     const key = componentCoveragePathKey(ownerName, query === 'state' ? 'state' : 'query', path);
-    coveredPaths.add(key);
-    planCoveredPaths.add(key);
+    compilerSetAdd(coveredPaths, key);
+    compilerSetAdd(planCoveredPaths, key);
   }
 
-  for (const stamp of collectDataBindListStamps(model)) {
+  const listStamps = compilerSnapshotDenseArray(
+    collectDataBindListStamps(model),
+    'Compiler query coverage list stamps',
+  );
+  for (let index = 0; index < listStamps.length; index += 1) {
+    const stamp = listStamps[index]!;
     if (queryNameFromPath(stamp.list) === 'state') continue;
 
-    facts.push({
-      componentName,
-      detail: 'data-bind-list',
-      position: 'template',
-      query: stamp.list,
-      status: 'plan',
-    });
+    compilerArrayAppend(
+      facts,
+      {
+        componentName,
+        detail: 'data-bind-list',
+        position: 'template',
+        query: stamp.list,
+        status: 'plan',
+      },
+      'Compiler query coverage facts',
+    );
     const key = componentCoveragePathKey(componentName, 'query', stamp.list);
-    coveredPaths.add(key);
-    planCoveredPaths.add(key);
+    compilerSetAdd(coveredPaths, key);
+    compilerSetAdd(planCoveredPaths, key);
   }
 
-  for (const path of renderOnceQueryPaths(model, knownQueries)) {
-    facts.push({
-      componentName,
-      detail: 'declared renderOnce',
-      position: 'expression',
-      query: path,
-      status: 'renderOnce',
-    });
+  const renderOnceQueries = compilerSnapshotDenseArray(
+    renderOnceQueryPaths(model, knownQueries),
+    'Compiler renderOnce query paths',
+  );
+  for (let index = 0; index < renderOnceQueries.length; index += 1) {
+    const path = renderOnceQueries[index]!;
+    compilerArrayAppend(
+      facts,
+      {
+        componentName,
+        detail: 'declared renderOnce',
+        position: 'expression',
+        query: path,
+        status: 'renderOnce',
+      },
+      'Compiler query coverage facts',
+    );
     const key = componentCoveragePathKey(componentName, 'query', path);
-    coveredPaths.add(key);
-    statusCoveredPaths.add(key);
+    compilerSetAdd(coveredPaths, key);
+    compilerSetAdd(statusCoveredPaths, key);
   }
 
-  for (const path of renderOnceStatePaths(model)) {
-    facts.push({
-      componentName,
-      detail: 'declared renderOnce',
-      position: 'expression',
-      query: path,
-      source: 'state',
-      status: 'renderOnce',
-    });
+  const renderOnceStates = compilerSnapshotDenseArray(
+    renderOnceStatePaths(model),
+    'Compiler renderOnce state paths',
+  );
+  for (let index = 0; index < renderOnceStates.length; index += 1) {
+    const path = renderOnceStates[index]!;
+    compilerArrayAppend(
+      facts,
+      {
+        componentName,
+        detail: 'declared renderOnce',
+        position: 'expression',
+        query: path,
+        source: 'state',
+        status: 'renderOnce',
+      },
+      'Compiler query coverage facts',
+    );
     const key = componentCoveragePathKey(componentName, 'state', path);
-    coveredPaths.add(key);
-    statusCoveredPaths.add(key);
+    compilerSetAdd(coveredPaths, key);
+    compilerSetAdd(statusCoveredPaths, key);
   }
 
-  for (const expression of jsxQueryExpressionPaths(model, knownQueries)) {
+  const queryExpressions = compilerSnapshotDenseArray(
+    jsxQueryExpressionPaths(model, knownQueries),
+    'Compiler query coverage expressions',
+  );
+  for (let index = 0; index < queryExpressions.length; index += 1) {
+    const expression = queryExpressions[index]!;
     const owner = componentForSpan(model, expression);
     if (!owner || componentOptionStaticValueFor(owner, 'isomorphic') !== true) continue;
     const ownerName = owner?.localName ?? componentName;
     const path = expression.path;
     const key = componentCoveragePathKey(ownerName, 'query', path);
-    if (coveredPaths.has(key)) continue;
+    if (compilerSetHas(coveredPaths, key)) continue;
 
-    facts.push({
-      componentName: ownerName,
-      detail: 'declared isomorphic island',
-      position: 'expression',
-      query: path,
-      status: 'isomorphic',
-    });
-    coveredPaths.add(key);
-    statusCoveredPaths.add(key);
+    compilerArrayAppend(
+      facts,
+      {
+        componentName: ownerName,
+        detail: 'declared isomorphic island',
+        position: 'expression',
+        query: path,
+        status: 'isomorphic',
+      },
+      'Compiler query coverage facts',
+    );
+    compilerSetAdd(coveredPaths, key);
+    compilerSetAdd(statusCoveredPaths, key);
   }
 
-  for (const expression of jsxStateExpressionPaths(model)) {
+  const stateExpressions = compilerSnapshotDenseArray(
+    jsxStateExpressionPaths(model),
+    'Compiler state coverage expressions',
+  );
+  for (let index = 0; index < stateExpressions.length; index += 1) {
+    const expression = stateExpressions[index]!;
     const owner = componentForSpan(model, expression);
     if (!owner || componentOptionStaticValueFor(owner, 'isomorphic') !== true) continue;
     const ownerName = owner?.localName ?? componentName;
     const path = expression.path;
     const key = componentCoveragePathKey(ownerName, 'state', path);
-    if (coveredPaths.has(key)) continue;
+    if (compilerSetHas(coveredPaths, key)) continue;
 
-    facts.push({
-      componentName: ownerName,
-      detail: 'declared isomorphic island',
-      position: 'expression',
-      query: path,
-      source: 'state',
-      status: 'isomorphic',
-    });
-    coveredPaths.add(key);
-    statusCoveredPaths.add(key);
+    compilerArrayAppend(
+      facts,
+      {
+        componentName: ownerName,
+        detail: 'declared isomorphic island',
+        position: 'expression',
+        query: path,
+        source: 'state',
+        status: 'isomorphic',
+      },
+      'Compiler state coverage facts',
+    );
+    compilerSetAdd(coveredPaths, key);
+    compilerSetAdd(statusCoveredPaths, key);
   }
 
-  for (const expression of jsxQueryExpressionPaths(model, knownQueries)) {
+  for (let index = 0; index < queryExpressions.length; index += 1) {
+    const expression = queryExpressions[index]!;
     const owner = componentForSpan(model, expression);
     const fragmentTarget =
       owner && componentHasInferredFragmentTarget(owner)
@@ -272,47 +391,57 @@ export function collectQueryUpdateCoverage(
     const ownerName = owner?.localName ?? componentName;
     const path = expression.path;
     const key = componentCoveragePathKey(ownerName, 'query', path);
-    if (coveredPaths.has(key)) continue;
+    if (compilerSetHas(coveredPaths, key)) continue;
 
-    facts.push({
-      componentName: ownerName,
-      detail: 'inferred query-backed server refresh target',
-      position: 'expression',
-      query: path,
-      status: 'fragment',
-    });
-    coveredPaths.add(key);
-    statusCoveredPaths.add(key);
+    compilerArrayAppend(
+      facts,
+      {
+        componentName: ownerName,
+        detail: 'inferred query-backed server refresh target',
+        position: 'expression',
+        query: path,
+        status: 'fragment',
+      },
+      'Compiler query coverage facts',
+    );
+    compilerSetAdd(coveredPaths, key);
+    compilerSetAdd(statusCoveredPaths, key);
   }
 
-  for (const expression of jsxQueryExpressionPaths(model, knownQueries)) {
+  for (let index = 0; index < queryExpressions.length; index += 1) {
+    const expression = queryExpressions[index]!;
     const ownerName = componentNameForSpan(model, componentName, expression);
     const path = expression.path;
     const key = componentCoveragePathKey(ownerName, 'query', path);
     if (
-      statusCoveredPaths.has(key) ||
-      (planCoveredPaths.has(key) && queryExpressionCoveredByDataBind(expression, model))
+      compilerSetHas(statusCoveredPaths, key) ||
+      (compilerSetHas(planCoveredPaths, key) && queryExpressionCoveredByDataBind(expression, model))
     ) {
       continue;
     }
 
-    facts.push({
-      componentName: ownerName,
-      detail: 'query expression has no data-bind, renderOnce, fragment, or isomorphic status',
-      position: 'expression',
-      query: path,
-      sourceSpan: { length: expression.end - expression.start, start: expression.start },
-      status: 'UNHANDLED',
-    });
+    compilerArrayAppend(
+      facts,
+      {
+        componentName: ownerName,
+        detail: 'query expression has no data-bind, renderOnce, fragment, or isomorphic status',
+        position: 'expression',
+        query: path,
+        sourceSpan: { length: expression.end - expression.start, start: expression.start },
+        status: 'UNHANDLED',
+      },
+      'Compiler query coverage facts',
+    );
   }
 
-  for (const expression of jsxStateExpressionPaths(model)) {
+  for (let index = 0; index < stateExpressions.length; index += 1) {
+    const expression = stateExpressions[index]!;
     const ownerName = componentNameForSpan(model, componentName, expression);
     const path = expression.path;
     const key = componentCoveragePathKey(ownerName, 'state', path);
     if (
-      statusCoveredPaths.has(key) ||
-      (planCoveredPaths.has(key) && stateExpressionCoveredByDataBind(expression, model))
+      compilerSetHas(statusCoveredPaths, key) ||
+      (compilerSetHas(planCoveredPaths, key) && stateExpressionCoveredByDataBind(expression, model))
     ) {
       continue;
     }
@@ -321,15 +450,19 @@ export function collectQueryUpdateCoverage(
       continue;
     }
 
-    facts.push({
-      componentName: ownerName,
-      detail: 'state expression has no data-bind, renderOnce, or isomorphic status',
-      position: 'expression',
-      query: path,
-      source: 'state',
-      sourceSpan: { length: expression.end - expression.start, start: expression.start },
-      status: 'UNHANDLED',
-    });
+    compilerArrayAppend(
+      facts,
+      {
+        componentName: ownerName,
+        detail: 'state expression has no data-bind, renderOnce, or isomorphic status',
+        position: 'expression',
+        query: path,
+        source: 'state',
+        sourceSpan: { length: expression.end - expression.start, start: expression.start },
+        status: 'UNHANDLED',
+      },
+      'Compiler state coverage facts',
+    );
   }
 
   return dedupeBy(facts, updateCoverageKey);
@@ -342,13 +475,19 @@ function stateExpressionCoveredByGeneratedDerive(
 ): boolean {
   const span = originalSpanForGeneratedExpression(expression, sourceOffsetMap);
   if (!span) return false;
-  return stateDerives.some(
-    (derive) =>
+  const derives = compilerSnapshotDenseArray(stateDerives, 'Compiler generated state derives');
+  for (let index = 0; index < derives.length; index += 1) {
+    const derive = derives[index]!;
+    if (
       derive.sourceSpan !== undefined &&
       deriveSourcePathsCoverExpression(derive.sourcePaths, expression.path) &&
       derive.sourceSpan.start >= span.start &&
-      derive.sourceSpan.end <= span.end,
-  );
+      derive.sourceSpan.end <= span.end
+    ) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function originalSpanForGeneratedExpression(
@@ -377,12 +516,18 @@ function deriveSourcePathsCoverExpression(
   sourcePaths: readonly string[] | undefined,
   path: string,
 ): boolean {
-  return sourcePaths?.some((sourcePath) => statePathCovers(sourcePath, path)) === true;
+  const paths = compilerSnapshotDenseArray(sourcePaths ?? [], 'Compiler state derive source paths');
+  for (let index = 0; index < paths.length; index += 1) {
+    if (statePathCovers(paths[index]!, path)) return true;
+  }
+  return false;
 }
 
 function statePathCovers(sourcePath: string, path: string): boolean {
   return (
-    sourcePath === path || sourcePath.startsWith(`${path}.`) || sourcePath.startsWith(`${path}[`)
+    sourcePath === path ||
+    compilerStringStartsWith(sourcePath, `${path}.`) ||
+    compilerStringStartsWith(sourcePath, `${path}[`)
   );
 }
 
@@ -413,23 +558,96 @@ function fragmentTargetComponentReferenceForSpan(
   model: ComponentModuleModel,
   span: { end: number; start: number },
 ): ComponentModel | null {
-  const fragmentTargetsByLocalName = new Map(
-    model.components.flatMap((component) =>
-      component.localName && componentHasInferredFragmentTarget(component)
-        ? [[component.localName, component]]
-        : [],
-    ),
+  const fragmentTargetsByLocalName = compilerCreateMap<string, ComponentModel>();
+  let hasFragmentTarget = false;
+  const components = compilerSnapshotDenseArray(
+    model.components,
+    'Compiler fragment target components',
   );
-  if (fragmentTargetsByLocalName.size === 0) return null;
+  for (let index = 0; index < components.length; index += 1) {
+    const component = components[index]!;
+    if (!component.localName || !componentHasInferredFragmentTarget(component)) continue;
+    compilerMapSet(fragmentTargetsByLocalName, component.localName, component);
+    hasFragmentTarget = true;
+  }
+  if (!hasFragmentTarget) return null;
 
-  const containingTarget = jsxElements(model)
-    .filter(
-      (element) =>
-        span.start >= element.start &&
-        span.end <= element.end &&
-        fragmentTargetsByLocalName.has(element.tag),
-    )
-    .sort((left, right) => left.end - left.start - (right.end - right.start))[0];
+  const elements = compilerSnapshotDenseArray(
+    jsxElements(model),
+    'Compiler fragment target elements',
+  );
+  let containingTarget: (typeof elements)[number] | undefined;
+  for (let index = 0; index < elements.length; index += 1) {
+    const element = elements[index]!;
+    if (
+      span.start < element.start ||
+      span.end > element.end ||
+      compilerMapGet(fragmentTargetsByLocalName, element.tag) === undefined
+    ) {
+      continue;
+    }
+    if (
+      containingTarget === undefined ||
+      element.end - element.start < containingTarget.end - containingTarget.start
+    ) {
+      containingTarget = element;
+    }
+  }
 
-  return containingTarget ? (fragmentTargetsByLocalName.get(containingTarget.tag) ?? null) : null;
+  return containingTarget
+    ? (compilerMapGet(fragmentTargetsByLocalName, containingTarget.tag) ?? null)
+    : null;
+}
+
+function appendMapArray<Key, Value>(
+  map: Map<Key, Value[]>,
+  key: Key,
+  value: Value,
+  label: string,
+): void {
+  const values = compilerSnapshotDenseArray(compilerMapGet(map, key) ?? [], label);
+  compilerArrayAppend(values, value, label);
+  compilerMapSet(map, key, values);
+}
+
+function addMapKeys<Key>(target: Set<Key>, map: ReadonlyMap<Key, unknown>): void {
+  compilerMapForEach(map, (_value, key) => {
+    compilerSetAdd(target, key);
+  });
+}
+
+function setValues<Value>(values: ReadonlySet<Value>, label: string): Value[] {
+  const output: Value[] = [];
+  compilerSetForEach(values, (value) => {
+    compilerArrayAppend(output, value, label);
+  });
+  return output;
+}
+
+function sortedSetStrings(values: ReadonlySet<string> | undefined): string[] {
+  const output = values === undefined ? [] : setValues(values, 'Compiler query-plan paths');
+  sortValues(output, compilerStringLocaleCompare);
+  return output;
+}
+
+function sortedValues<Value>(
+  values: readonly Value[],
+  compare: (left: Value, right: Value) => number,
+  label: string,
+): Value[] {
+  const output = compilerSnapshotDenseArray(values, label);
+  sortValues(output, compare);
+  return output;
+}
+
+function sortValues<Value>(values: Value[], compare: (left: Value, right: Value) => number): void {
+  for (let index = 1; index < values.length; index += 1) {
+    const value = values[index]!;
+    let insertion = index;
+    while (insertion > 0 && compare(value, values[insertion - 1]!) < 0) {
+      values[insertion] = values[insertion - 1]!;
+      insertion -= 1;
+    }
+    values[insertion] = value;
+  }
 }
