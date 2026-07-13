@@ -705,22 +705,28 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
     target: unknown,
     type: string,
     listener: (event: unknown) => void,
+    options?: unknown,
   ): boolean {
-    return callEventTargetMethod(target, eventTargetAddEventListener, 'addEventListener', [
-      type,
-      listener,
-    ]);
+    return callEventTargetMethod(
+      target,
+      eventTargetAddEventListener,
+      'addEventListener',
+      options === undefined ? [type, listener] : [type, listener, options],
+    );
   }
 
   function removeLifecycleEventListener(
     target: unknown,
     type: string,
     listener: (event: unknown) => void,
+    options?: unknown,
   ): boolean {
-    return callEventTargetMethod(target, eventTargetRemoveEventListener, 'removeEventListener', [
-      type,
-      listener,
-    ]);
+    return callEventTargetMethod(
+      target,
+      eventTargetRemoveEventListener,
+      'removeEventListener',
+      options === undefined ? [type, listener] : [type, listener, options],
+    );
   }
 
   function readAttribute(element: unknown, name: string): string | null {

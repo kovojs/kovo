@@ -3,6 +3,7 @@ import { reportRuntimeError } from './error-policy.js';
 import type { RuntimeErrorReporter } from './error-policy.js';
 import { queryIdentityFromStoreKey, queryStoreKey, queryWireKey } from './query-store.js';
 import type { QuerySnapshot, QueryStore } from './query-store.js';
+import { addRuntimeEventListener, removeRuntimeEventListener } from './runtime-dom-security.js';
 import {
   securityArrayAppend,
   securityMap,
@@ -470,11 +471,16 @@ export function installPagehideOptimismCleanup(
     options.discardPendingOptimism();
   };
   const globalTarget = globalPagehideTarget(options.root);
-  options.root.addEventListener('pagehide', listener);
-  globalTarget?.addEventListener('pagehide', listener);
+  if (!addRuntimeEventListener(options.root, 'pagehide', listener)) {
+    throw new TypeError('Kovo optimistic cleanup listener enrollment failed.');
+  }
+  if (globalTarget && !addRuntimeEventListener(globalTarget, 'pagehide', listener)) {
+    removeRuntimeEventListener(options.root, 'pagehide', listener);
+    throw new TypeError('Kovo global optimistic cleanup listener enrollment failed.');
+  }
   return () => {
-    options.root.removeEventListener?.('pagehide', listener);
-    globalTarget?.removeEventListener?.('pagehide', listener);
+    removeRuntimeEventListener(options.root, 'pagehide', listener);
+    if (globalTarget) removeRuntimeEventListener(globalTarget, 'pagehide', listener);
   };
 }
 

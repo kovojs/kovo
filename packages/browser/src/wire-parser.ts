@@ -4,13 +4,20 @@ import { reportMalformedJson, reportRuntimeError } from './error-policy.js';
 import type { RuntimeErrorReporter } from './error-policy.js';
 import { parseJsonValue } from './json.js';
 import {
+  applySecurityIntrinsic,
   securityArrayAppend,
+  securityGetOwnPropertyDescriptor,
+  securityOwnArrayEntry,
   securityRegExpTest,
   securityStringIndexOf,
   securityStringSlice,
   securityStringStartsWith,
   securityStringTrim,
 } from './security-witness-intrinsics.js';
+import {
+  readRuntimeElementAttribute,
+  readRuntimeNodeTextContent,
+} from './runtime-dom-security.js';
 import {
   readElementChunks,
   readMutationResponseBodyCore,
@@ -172,10 +179,13 @@ export function readQueryScriptChunks(
   onError?: RuntimeErrorReporter,
 ): QueryChunk[] {
   const queries: QueryChunk[] = [];
-
-  for (const script of scripts) {
+  const snapshot = snapshotQueryScripts(scripts);
+  for (let index = 0; index < snapshot.length; index += 1) {
+    const entry = securityOwnArrayEntry(snapshot, index);
+    if (!entry.ok) throw new TypeError('Kovo query script snapshot must be dense.');
+    const script = entry.value;
     const query = readQueryScriptChunk(script, onError);
-    if (query) queries.push(query);
+    if (query) securityArrayAppend(queries, query, 'Browser hydrated query chunks');
   }
 
   return queries;
@@ -185,19 +195,60 @@ export function readQueryScriptChunk(
   script: QueryScriptChunkLike,
   onError?: RuntimeErrorReporter,
 ): QueryChunk | undefined {
-  const name = script.getAttribute('kovo-query');
+  const name = readRuntimeElementAttribute(script, 'kovo-query');
   if (!name) return undefined;
 
   return readQueryChunkPayload(
     {
-      content: script.textContent ?? 'null',
+      content: readRuntimeNodeTextContent(script) ?? 'null',
       decodeHtmlEntities: false,
-      key: script.getAttribute('key'),
+      key: readRuntimeElementAttribute(script, 'key'),
       name,
-      settles: script.getAttribute('settles'),
+      settles: readRuntimeElementAttribute(script, 'settles'),
     },
     onError,
   );
+}
+
+const QueryScriptArray = Array;
+const queryScriptArrayIsArray = QueryScriptArray.isArray;
+const MAX_QUERY_SCRIPTS = 100_000;
+
+function snapshotQueryScripts(
+  scripts: Iterable<QueryScriptChunkLike>,
+): QueryScriptChunkLike[] {
+  const snapshot: QueryScriptChunkLike[] = [];
+  if (
+    applySecurityIntrinsic<boolean>(queryScriptArrayIsArray, QueryScriptArray, [scripts]) === true
+  ) {
+    const length = securityGetOwnPropertyDescriptor(scripts, 'length');
+    if (
+      !length ||
+      !('value' in length) ||
+      typeof length.value !== 'number' ||
+      length.value < 0 ||
+      length.value % 1 !== 0 ||
+      length.value > MAX_QUERY_SCRIPTS
+    ) {
+      throw new TypeError('Kovo query script collection is invalid or too large.');
+    }
+    for (let index = 0; index < length.value; index += 1) {
+      const entry = securityOwnArrayEntry(
+        scripts as readonly QueryScriptChunkLike[],
+        index,
+      );
+      if (!entry.ok) throw new TypeError('Kovo query script collection must be dense.');
+      securityArrayAppend(snapshot, entry.value, 'Browser query script snapshot');
+    }
+    return snapshot;
+  }
+  for (const script of scripts) {
+    if (snapshot.length >= MAX_QUERY_SCRIPTS) {
+      throw new TypeError('Kovo query script collection is too large.');
+    }
+    securityArrayAppend(snapshot, script, 'Browser query script snapshot');
+  }
+  return snapshot;
 }
 
 interface QueryChunkPayload {

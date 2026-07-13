@@ -118,7 +118,9 @@ export function readVisibleReturnQueryScripts(
   // SPEC.md §4.4/§9.4: visible-return refetch only follows server-authored
   // query hydration scripts; DOM binding scans stay inside the shared query
   // apply path.
-  return (root.querySelectorAll?.('script[kovo-query]') ?? []) as Iterable<QueryScriptLike>;
+  return browserLifecycleSecurity
+    ? (browserLifecycleSecurity.queryAllElements(root, 'script[kovo-query]') as QueryScriptLike[])
+    : ((root.querySelectorAll?.('script[kovo-query]') ?? []) as Iterable<QueryScriptLike>);
 }
 
 export function installQueryVisibleReturnRefetch(
@@ -242,22 +244,48 @@ export function installQueryVisibleReturnRefetch(
   // recovery path as focus/visibility return. In browsers pageshow is a Window
   // lifecycle event, while the loader root is usually document for query scans.
   const pageShowTarget = globalPageShowTarget(options.root);
-  options.root.addEventListener('visibilitychange', listener);
-  options.root.addEventListener('pageshow', listener);
-  pageShowTarget?.addEventListener('pageshow', listener);
+  addVisibleReturnListener(options.root, 'visibilitychange', listener);
+  addVisibleReturnListener(options.root, 'pageshow', listener);
+  if (pageShowTarget) addVisibleReturnListener(pageShowTarget, 'pageshow', listener);
 
   return {
     dispose() {
       disposed = true;
-      options.root.removeEventListener?.('visibilitychange', listener);
-      options.root.removeEventListener?.('pageshow', listener);
-      pageShowTarget?.removeEventListener?.('pageshow', listener);
+      removeVisibleReturnListener(options.root, 'visibilitychange', listener);
+      removeVisibleReturnListener(options.root, 'pageshow', listener);
+      if (pageShowTarget) removeVisibleReturnListener(pageShowTarget, 'pageshow', listener);
     },
     rememberAppliedQueries(queries) {
       if (disposed) return;
       ledger.remember(queries);
     },
   };
+}
+
+function addVisibleReturnListener(
+  target: ListenerTargetLike<unknown>,
+  type: string,
+  listener: (event: unknown) => void,
+): void {
+  if (browserLifecycleSecurity) {
+    if (!browserLifecycleSecurity.addLifecycleEventListener(target, type, listener)) {
+      throw new TypeError('Kovo visible-return revalidation listener enrollment failed.');
+    }
+    return;
+  }
+  target.addEventListener(type, listener);
+}
+
+function removeVisibleReturnListener(
+  target: ListenerTargetLike<unknown>,
+  type: string,
+  listener: (event: unknown) => void,
+): void {
+  if (browserLifecycleSecurity) {
+    browserLifecycleSecurity.removeLifecycleEventListener(target, type, listener);
+    return;
+  }
+  target.removeEventListener?.(type, listener);
 }
 
 function appendDenseStrings(target: string[], source: readonly string[], label: string): void {

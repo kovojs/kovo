@@ -129,6 +129,52 @@ export function setRuntimeElementAttribute(element: unknown, name: string, value
   }
 }
 
+export function addRuntimeEventListener(
+  target: unknown,
+  type: string,
+  listener: (event: any) => void,
+  options?: unknown,
+): boolean {
+  if (runtimeDomSecurity) {
+    return runtimeDomSecurity.addLifecycleEventListener(target, type, listener, options);
+  }
+  const method = runtimeStructuralMethod(target, 'addEventListener');
+  if (!method) return false;
+  try {
+    applySecurityIntrinsic(
+      method,
+      target,
+      options === undefined ? [type, listener] : [type, listener, options],
+    );
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function removeRuntimeEventListener(
+  target: unknown,
+  type: string,
+  listener: (event: any) => void,
+  options?: unknown,
+): boolean {
+  if (runtimeDomSecurity) {
+    return runtimeDomSecurity.removeLifecycleEventListener(target, type, listener, options);
+  }
+  const method = runtimeStructuralMethod(target, 'removeEventListener');
+  if (!method) return false;
+  try {
+    applySecurityIntrinsic(
+      method,
+      target,
+      options === undefined ? [type, listener] : [type, listener, options],
+    );
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** Resolve the first matching live DOM element through boot-witnessed selector controls. */
 export function queryRuntimeElement(root: unknown, selector: string): object | null {
   if (root === null || typeof root !== 'object') return null;

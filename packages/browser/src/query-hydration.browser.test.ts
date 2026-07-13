@@ -3,11 +3,82 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createQueryStore } from './client.js';
 import { installKovoLoader } from './generated.js';
 
+const nativeDocumentQuerySelectorAll = Document.prototype.querySelectorAll;
+const nativeElementGetAttribute = Element.prototype.getAttribute;
+const nativeEventTargetAddEventListener = EventTarget.prototype.addEventListener;
+
 afterEach(() => {
+  Document.prototype.querySelectorAll = nativeDocumentQuerySelectorAll;
+  Element.prototype.getAttribute = nativeElementGetAttribute;
+  EventTarget.prototype.addEventListener = nativeEventTargetAddEventListener;
   document.body.replaceChildren();
 });
 
 describe('query hydration browser runtime', () => {
+  it('pins initial query discovery before authored querySelectorAll replacement', () => {
+    document.body.innerHTML =
+      '<script kovo-query="account" type="application/json">{"role":"user"}</script>';
+    const store = createQueryStore();
+    Document.prototype.querySelectorAll = function poisonedQuerySelectorAll() {
+      return document.createElement('div').querySelectorAll('*');
+    } as typeof Document.prototype.querySelectorAll;
+
+    const loader = installKovoLoader({ importModule: vi.fn(), queryStore: store, root: document });
+
+    expect(store.get('account')).toEqual({ role: 'user' });
+    loader.dispose();
+  });
+
+  it('pins query script identity before authored getAttribute replacement', () => {
+    document.body.innerHTML =
+      '<script kovo-query="account" type="application/json">{"role":"user"}</script>';
+    const script = document.querySelector('script[kovo-query="account"]');
+    if (!script) throw new Error('missing account query script');
+    Element.prototype.getAttribute = function poisonedGetAttribute(name: string) {
+      if (this === script && name === 'kovo-query') return 'attacker-account';
+      return Reflect.apply(nativeElementGetAttribute, this, [name]);
+    };
+    const store = createQueryStore();
+
+    const loader = installKovoLoader({ importModule: vi.fn(), queryStore: store, root: document });
+
+    expect(store.get('account')).toEqual({ role: 'user' });
+    expect(store.get('attacker-account')).toBeUndefined();
+    loader.dispose();
+  });
+
+  it('pins visible-return enrollment before authored addEventListener replacement', () => {
+    document.body.innerHTML =
+      '<script kovo-query="account" type="application/json">{"role":"user"}</script>';
+    const store = createQueryStore();
+    EventTarget.prototype.addEventListener = function poisonedAddEventListener() {};
+    const loader = installKovoLoader({
+      importModule: vi.fn(),
+      queryStore: store,
+      refetchOnFocus: vi.fn(),
+      root: document,
+    });
+    EventTarget.prototype.addEventListener = nativeEventTargetAddEventListener;
+
+    const next = document.createElement('script');
+    next.type = 'application/json';
+    next.setAttribute('kovo-query', 'permissions');
+    next.textContent = '{"canManage":false}';
+    document.body.append(next);
+    document.dispatchEvent(new Event('visibilitychange'));
+
+    expect(store.get('permissions')).toEqual({ canManage: false });
+    window.dispatchEvent(
+      new CustomEvent('kovo:query', {
+        detail: {
+          queries: [{ attrs: ' name="inline-authority"', content: '{"active":true}' }],
+        },
+      }),
+    );
+    expect(store.get('inline-authority')).toEqual({ active: true });
+    loader.dispose();
+  });
+
   it('hydrates newly inserted query scripts through store subscribers and DOM bindings', async () => {
     document.body.innerHTML = [
       '<script kovo-query="cart" type="application/json">{"count":1}</script>',

@@ -21,7 +21,9 @@ import {
 } from './mutation-submit.js';
 import type { QueryScriptLike } from './query-script-hydration.js';
 import {
+  addRuntimeEventListener,
   closestRuntimeElement,
+  removeRuntimeEventListener,
   runtimeElementContains,
   snapshotRuntimeDelegatedEvent,
 } from './runtime-dom-security.js';
@@ -81,9 +83,11 @@ export function addLoaderListener(
   disposers: Array<() => void>,
   options?: { capture?: boolean },
 ): void {
-  target.addEventListener(type, listener, options);
+  if (!addRuntimeEventListener(target, type, listener, options)) {
+    throw new TypeError(`Kovo loader could not enroll the ${type} lifecycle listener.`);
+  }
   appendDisposer(disposers, () => {
-    target.removeEventListener?.(type, listener, options);
+    removeRuntimeEventListener(target, type, listener, options);
   });
 }
 

@@ -7,6 +7,7 @@ import type { CompiledQueryUpdatePlans } from './query-bindings.js';
 import type { QueryStore } from './query-store.js';
 import { readQueryElementChunk } from './wire-parser.js';
 import type { QueryChunk, QueryElementChunkLike } from './wire-parser.js';
+import { addRuntimeEventListener, removeRuntimeEventListener } from './runtime-dom-security.js';
 
 /** Runtime API used by Kovo applications and generated runtime integration. */
 export interface InlineQueryEventDetail {
@@ -70,10 +71,12 @@ export function installInlineQueryEventHydration(
     }
   };
 
-  options.target.addEventListener('kovo:query', listener);
+  if (!addRuntimeEventListener(options.target, 'kovo:query', listener)) {
+    throw new TypeError('Kovo inline query hydration listener enrollment failed.');
+  }
 
   return () => {
-    options.target.removeEventListener?.('kovo:query', listener);
+    removeRuntimeEventListener(options.target, 'kovo:query', listener);
   };
 }
 
