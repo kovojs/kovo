@@ -10,7 +10,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 | Severity | Count | Items   |
 | -------- | ----: | ------- |
-| Critical |   266 | C1-C266 |
+| Critical |   269 | C1-C269 |
 | High     |    35 | H1-H35  |
 | Medium   |    12 | M1-M12  |
 
@@ -3062,6 +3062,27 @@ build:dist` passes.
     inherited option setters could redirect static output beyond the validated destination.
   - **Evidence:** poisoned unregister removes the exemption, inherited `outDir` receives zero writes,
     all 2,392 server tests and server dist/DTS pass in the isolated proving branch.
+
+- [x] **C267 - App response policy can replace the framework-owned mutation outcome.**
+      `packages/server/src/app-mutation-request.ts`
+  - A late `Object.freeze` replacement could substitute an attacker-authored failure for a genuine
+    success before the app response policy observed the lifecycle result.
+  - **Evidence:** the exact post-lifecycle poison regression retains the genuine success outcome and
+    202 related server tests plus server dist/DTS pass.
+
+- [x] **C268 - Rooted file capabilities can be returned mutable after app execution.**
+      `packages/server/src/file.ts`
+  - A late `Object.freeze` replacement suppressed capability sealing, leaving the validated root and
+    serving function writable after construction.
+  - **Evidence:** the exact poison regression never reaches ambient freeze and the returned rooted
+    capability is frozen, branded, and rejects a `serve` replacement.
+
+- [x] **C269 - Mutation queues can lose their immutable authority name.**
+      `packages/server/src/mutation/definition.ts`
+  - A late `Object.freeze` replacement left a first-class queue mutable, allowing its authority name
+    to be replaced after validation.
+  - **Evidence:** the exact poison regression keeps the queue frozen and rejects a name replacement;
+    the focused 74-test owner matrix passes.
 
 ## High
 
