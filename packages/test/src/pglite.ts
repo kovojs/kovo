@@ -19,6 +19,11 @@ import {
   verifierApply,
   verifierArrayJoin,
   verifierArrayPush,
+  verifierMap,
+  verifierMapForEach,
+  verifierMapGet,
+  verifierMapHas,
+  verifierMapSet,
   verifierPromise,
   verifierPromiseResolve,
   verifierNumber,
@@ -130,8 +135,14 @@ export async function createPgliteTestDb(options: PGliteOptions = {}): Promise<P
     callback: () => Promise<Result>,
   ): Promise<Result> =>
     runSerializedTransaction('begin', async () => {
+      // SPEC §10.3/§11.2: PGlite currently retains pg_stat_xact_user_tables counters across
+      // committed statements on the same in-process connection. Snapshot the counters inside the
+      // newly-opened declared-write transaction so setup/seed writes cannot be attributed to the
+      // mutation being checked. The post-callback comparison still fails closed on counter
+      // regression, which would indicate that app code tried to reset the enforcement witness.
+      const baseline = await snapshotPgliteWriteStats(pglite);
       const result = await callback();
-      const unexpected = await unexpectedPgliteWriteStatTables(pglite, policy);
+      const unexpected = await unexpectedPgliteWriteStatTables(pglite, policy, baseline);
       if (unexpected.length > 0) {
         throw new PgliteDeclaredWriteScopeError(policy, unexpected);
       }
@@ -326,6 +337,8 @@ interface PgliteWriteStatRow {
   n_tup_upd: number | string;
 }
 
+type PgliteWriteStatSnapshot = Map<string, number>;
+
 class PgliteDeclaredWriteScopeError extends Error {
   constructor(policy: DeclaredWritePolicy, unexpected: readonly string[]) {
     super(
@@ -346,6 +359,7 @@ class PgliteDeclaredWriteScopeError extends Error {
 async function unexpectedPgliteWriteStatTables(
   pglite: PGlite,
   policy: DeclaredWritePolicy,
+  baseline: ReadonlyMap<string, number>,
 ): Promise<string[]> {
   const declaredTables = policy.tables ?? [];
   if (declaredTables.length === 0) return [];
@@ -355,6 +369,24 @@ async function unexpectedPgliteWriteStatTables(
     const table = declaredTables[index];
     if (table !== undefined) verifierSetAdd(allowed, normalizePolicyTable(table, 'postgres'));
   }
+  const stats = await snapshotPgliteWriteStats(pglite);
+  const unexpected: string[] = [];
+  verifierMapForEach(stats, (count, table) => {
+    if (verifierSetHas(allowed, table)) return;
+    const before = verifierMapGet(baseline, table) ?? 0;
+    // Transaction-local write counters are monotonic. A decrease is not a benign delta: treat it
+    // as witness tampering/reset and roll the transaction back rather than allowing a bypass.
+    if (count !== before) verifierArrayPush(unexpected, table);
+  });
+  verifierMapForEach(baseline, (count, table) => {
+    if (count !== 0 && !verifierSetHas(allowed, table) && !verifierMapHas(stats, table)) {
+      verifierArrayPush(unexpected, table);
+    }
+  });
+  return unexpected;
+}
+
+async function snapshotPgliteWriteStats(pglite: PGlite): Promise<PgliteWriteStatSnapshot> {
   const stats = await callPgliteQuery<PgliteWriteStatRow>(
     pglite,
     verifierArrayJoin(
@@ -366,21 +398,21 @@ async function unexpectedPgliteWriteStatTables(
     ),
     [],
   );
-  const unexpected: string[] = [];
+  const snapshot = verifierMap<string, number>();
   for (let index = 0; index < stats.rows.length; index += 1) {
     const row = stats.rows[index];
-    if (
-      row !== undefined &&
-      verifierNumber(row.n_tup_ins) +
-        verifierNumber(row.n_tup_upd) +
-        verifierNumber(row.n_tup_del) >
-        0
-    ) {
+    if (row !== undefined) {
       const table = normalizePolicyTable(row.table, 'postgres');
-      if (!verifierSetHas(allowed, table)) verifierArrayPush(unexpected, table);
+      verifierMapSet(
+        snapshot,
+        table,
+        verifierNumber(row.n_tup_ins) +
+          verifierNumber(row.n_tup_upd) +
+          verifierNumber(row.n_tup_del),
+      );
     }
   }
-  return unexpected;
+  return snapshot;
 }
 
 async function insertPgliteRow(

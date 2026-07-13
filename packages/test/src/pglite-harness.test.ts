@@ -336,6 +336,54 @@ describe('@kovojs/test PGlite harness integration', () => {
     }
   });
 
+  it('does not attribute committed setup writes to a later declared-write transaction', async () => {
+    const db = await createPgliteTestDb();
+
+    try {
+      await db.exec('create table cart_items (product_id text primary key, qty integer)');
+      await db.exec('create table setup_state (id integer primary key, value text)');
+      await db.exec("insert into setup_state (id, value) values (1, 'seeded')");
+
+      const declaredWriteDb = db as unknown as {
+        [kovoDeclaredWriteDbHandle](policy: {
+          dialect: 'postgres';
+          tables: readonly string[];
+          touches: readonly string[];
+        }): unknown;
+      };
+      const writer = declaredWriteDb[kovoDeclaredWriteDbHandle]({
+        dialect: 'postgres',
+        tables: ['cart_items'],
+        touches: ['cart'],
+      }) as Pick<PgliteTestDb, 'exec' | 'query'>;
+
+      await expect(
+        writer.query({
+          text: 'insert into cart_items (product_id, qty) values ($1, $2)',
+          values: ['p1', 2],
+        }),
+      ).resolves.toEqual([]);
+      await expect(db.read('setup_state')).resolves.toEqual([{ id: 1, value: 'seeded' }]);
+
+      await expect(
+        writer.query({
+          text: 'update setup_state set value = $1 where id = $2',
+          values: ['tampered', 1],
+        }),
+      ).rejects.toThrow(/KV406.*stat-delta fallback[\s\S]*public\.setup_state/);
+      await expect(db.read('setup_state')).resolves.toEqual([{ id: 1, value: 'seeded' }]);
+
+      await expect(
+        writer.exec(
+          "select pg_stat_reset(); update setup_state set value = 'reset-smuggled' where id = 1",
+        ),
+      ).rejects.toThrow(/KV406.*stat-delta fallback[\s\S]*public\.setup_state/);
+      await expect(db.read('setup_state')).resolves.toEqual([{ id: 1, value: 'seeded' }]);
+    } finally {
+      await db.close();
+    }
+  });
+
   it('rejects direct db.query SQL writes without registry tables before touch graph verification', async () => {
     const cartMutation = mutation('cart/add', {
       csrf: false,
