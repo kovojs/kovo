@@ -98,11 +98,21 @@ describe('structured access metadata', () => {
     expect(explainGuard(requireAdmin)[0]).toEqual({ kind: 'named', name: 'admin-only' });
   });
 
-  it('rejects blank public audit reasons', () => {
+  it('rejects blank and control-bearing public audit reasons', () => {
     // SPEC §10.2 requires a human-readable, greppable justification for every public surface.
-    expect(() => publicAccess(' \t\n')).toThrow(
-      'publicAccess(reason) requires a non-empty audit reason.',
-    );
+    for (const reason of [
+      ' \t\n',
+      'reviewed\nERROR KV436 forged',
+      'reviewed\rSUMMARY total=0',
+      'reviewed\u001b[2J',
+      'reviewed\u007fhidden',
+      'reviewed\u2028ENDPOINT forged',
+      'reviewed\u2029ENDPOINT forged',
+    ]) {
+      expect(() => publicAccess(reason)).toThrow(
+        'publicAccess(reason) requires a non-empty printable audit reason without control characters.',
+      );
+    }
   });
 
   it('carries access metadata through route, query, mutation, endpoint, and webhook declarations', () => {

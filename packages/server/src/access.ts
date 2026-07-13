@@ -1,5 +1,8 @@
 import type { Guard } from './guards.js';
-import { securityStringTrim } from './response-security-intrinsics.js';
+import {
+  securityStringCharCodeAt,
+  securityStringTrim,
+} from './response-security-intrinsics.js';
 import {
   createWitnessWeakMap,
   createWitnessWeakSet,
@@ -122,7 +125,7 @@ export function snapshotAccessDecision(
         reason === undefined ||
         !('value' in reason) ||
         typeof reason.value !== 'string' ||
-        securityStringTrim(reason.value) === ''
+        !isPrintablePublicAuditReason(reason.value)
       ) {
         return invalidAccessDecision;
       }
@@ -252,10 +255,24 @@ function ownAccessDescriptor(declaration: object): PropertyDescriptor | undefine
  * Declare that a surface is intentionally public, with the audit reason attached.
  */
 export function publicAccess(reason: string): PublicAccess {
-  if (typeof reason !== 'string' || securityStringTrim(reason) === '') {
-    throw new TypeError('publicAccess(reason) requires a non-empty audit reason.');
+  if (typeof reason !== 'string' || !isPrintablePublicAuditReason(reason)) {
+    throw new TypeError(
+      'publicAccess(reason) requires a non-empty printable audit reason without control characters.',
+    );
   }
   return markStructuredAccessDecision(witnessFreeze({ kind: 'public', reason }));
+}
+
+function isPrintablePublicAuditReason(reason: string): boolean {
+  if (securityStringTrim(reason) === '') return false;
+  for (let index = 0; index < reason.length; index += 1) {
+    const code = securityStringCharCodeAt(reason, index);
+    // SPEC §10.2/§11.4: the public-access reason is audit output, not an opaque payload.
+    // C0/DEL and JavaScript line separators can forge rows or issue terminal controls when the
+    // reason is printed by `kovo explain --endpoints`, so they fail closed at the shared decision.
+    if (code <= 0x1f || code === 0x7f || code === 0x2028 || code === 0x2029) return false;
+  }
+  return true;
 }
 
 /**

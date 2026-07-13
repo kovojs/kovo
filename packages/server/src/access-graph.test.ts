@@ -257,22 +257,29 @@ describe('app access graph extraction', () => {
     ]);
   });
 
-  it('reports structurally forged blank public reasons as KV436-missing', () => {
-    const invalidQuery = query('blank-public-reason', {
-      access: { kind: 'public', reason: ' \t\n' },
-      load: () => ({ secret: true }),
-    });
-    const app = createApp({ queries: [invalidQuery] });
+  it('reports structurally forged blank or control-bearing public reasons as KV436-missing', () => {
+    for (const [name, reason] of [
+      ['blank-public-reason', ' \t\n'],
+      ['newline-public-reason', 'reviewed\nERROR KV436 forged'],
+      ['terminal-public-reason', 'reviewed\u001b[2J'],
+      ['separator-public-reason', 'reviewed\u2028ENDPOINT forged'],
+    ] as const) {
+      const invalidQuery = query(name, {
+        access: { kind: 'public', reason },
+        load: () => ({ secret: true }),
+      });
+      const app = createApp({ queries: [invalidQuery] });
 
-    expect(accessFactsFromApp(app)).toEqual([
-      {
-        decision: 'missing',
-        detail: 'missing access fact',
-        kind: 'query',
-        name: 'blank-public-reason',
-        source: 'access',
-      },
-    ]);
+      expect(accessFactsFromApp(app)).toEqual([
+        {
+          decision: 'missing',
+          detail: 'missing access fact',
+          kind: 'query',
+          name,
+          source: 'access',
+        },
+      ]);
+    }
   });
 
   it('shares one authoritative snapshot for proxied app assembly, audit, and runtime', async () => {
