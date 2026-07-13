@@ -86,4 +86,18 @@ describe('safeUrl', () => {
     expect(setResult).toBe('#');
     expect(regexpResult).toBe('#');
   });
+
+  it('rejects runtime non-string carriers without invoking their coercion hooks', () => {
+    let invoked = false;
+    const carrier = {
+      0: '/',
+      length: 1,
+      toString() {
+        invoked = true;
+        return 'javascript:alert(1)';
+      },
+    };
+    expect(safeUrl(carrier as unknown as string)).toBe('#');
+    expect(invoked).toBe(false);
+  });
 });

@@ -27,4 +27,18 @@ describe('UI safeUrl authority', () => {
     expect(safeUrl('javascript&#x3A;alert(1)')).toBe('#');
     expect(safeUrl('data:text/html,<script>alert(1)</script>')).toBe('#');
   });
+
+  it('rejects runtime non-string carriers without invoking their coercion hooks', () => {
+    let invoked = false;
+    const carrier = {
+      0: '/',
+      length: 1,
+      toString() {
+        invoked = true;
+        return 'javascript:alert(1)';
+      },
+    };
+    expect(safeUrl(carrier as unknown as string)).toBe('#');
+    expect(invoked).toBe(false);
+  });
 });

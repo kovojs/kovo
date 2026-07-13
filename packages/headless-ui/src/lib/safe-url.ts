@@ -11,7 +11,7 @@
  * `Set.prototype.has` would let that code redefine what the URL allowlist means.
  */
 export function safeUrl(value: string | null | undefined, fallback = '#'): string {
-  if (value === undefined || value === null) return fallback;
+  if (typeof value !== 'string') return fallback;
 
   const normalized = normalizedUrlForSchemeCheck(value);
   if (normalized === '') return fallback;
@@ -35,10 +35,7 @@ function normalizedUrlForSchemeCheck(value: string): string {
   let normalized = '';
   for (let index = 0; index < value.length; index += 1) {
     const character = value[index] ?? '';
-    if (
-      character <= '\u0020' ||
-      (character >= '\u007f' && character <= '\u009f')
-    ) {
+    if (character <= '\u0020' || (character >= '\u007f' && character <= '\u009f')) {
       continue;
     }
     normalized += character;
@@ -79,9 +76,7 @@ function isAllowedScheme(value: string, end: number): boolean {
   let scheme = '';
   for (let index = 0; index < end; index += 1) {
     const character = value[index] ?? '';
-    scheme += character >= 'A' && character <= 'Z'
-      ? asciiLower(character)
-      : character;
+    scheme += character >= 'A' && character <= 'Z' ? asciiLower(character) : character;
   }
   switch (scheme) {
     case 'ftp':
