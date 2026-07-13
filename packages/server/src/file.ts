@@ -6,6 +6,7 @@ import {
 import { blessSink, isBlessedSink } from '@kovojs/core/internal/sink-policy';
 
 import { respond, type RouteResponseOutcome, type RouteStreamOptions } from './response.js';
+import { witnessFreeze } from './security-witness-intrinsics.js';
 
 type RootedFileServeSink = 'rooted-file-serve';
 
@@ -45,7 +46,7 @@ export async function rootedFiles(root: string): Promise<RootedFiles> {
   };
   return blessSink<RootedFileServeSink, RootedFiles>(
     ROOTED_FILE_SERVE_SINK,
-    Object.freeze(capability),
+    witnessFreeze(capability),
   );
 }
 

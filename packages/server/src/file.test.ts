@@ -118,4 +118,35 @@ describe('server rooted file primitive', () => {
       await rm(root, { force: true, recursive: true });
     }
   });
+
+  it('pins a rooted file capability after app code replaces ambient Object.freeze', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kovo-rooted-files-'));
+    const originalFreeze = Object.freeze;
+    let interceptedCapability = false;
+    Object.freeze = ((value: unknown) => {
+      if (
+        typeof value === 'object' &&
+        value !== null &&
+        typeof (value as { root?: unknown }).root === 'string' &&
+        typeof (value as { serve?: unknown }).serve === 'function'
+      ) {
+        interceptedCapability = true;
+        return value;
+      }
+      return originalFreeze(value);
+    }) as typeof Object.freeze;
+
+    let files: Awaited<ReturnType<typeof rootedFiles>>;
+    try {
+      files = await rootedFiles(root);
+    } finally {
+      Object.freeze = originalFreeze;
+      await rm(root, { force: true, recursive: true });
+    }
+
+    expect(interceptedCapability).toBe(false);
+    expect(isRootedFileServeCapability(files)).toBe(true);
+    expect(Object.isFrozen(files)).toBe(true);
+    expect(Reflect.set(files, 'serve', async () => undefined)).toBe(false);
+  });
 });

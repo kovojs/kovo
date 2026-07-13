@@ -319,6 +319,34 @@ describe('server mutation lifecycle', () => {
     expect(() => queue('')).toThrow('queue(name) requires a non-empty queue name.');
   });
 
+  it('pins first-class queue values after app code replaces ambient Object.freeze', () => {
+    const originalFreeze = Object.freeze;
+    let interceptedQueue = false;
+    Object.freeze = ((value: unknown) => {
+      if (
+        typeof value === 'object' &&
+        value !== null &&
+        (value as { name?: unknown }).name === 'secure-queue'
+      ) {
+        interceptedQueue = true;
+        return value;
+      }
+      return originalFreeze(value);
+    }) as typeof Object.freeze;
+
+    let secureQueue: ReturnType<typeof queue>;
+    try {
+      secureQueue = queue('secure-queue');
+    } finally {
+      Object.freeze = originalFreeze;
+    }
+
+    expect(interceptedQueue).toBe(false);
+    expect(secureQueue.name).toBe('secure-queue');
+    expect(Object.isFrozen(secureQueue)).toBe(true);
+    expect(Reflect.set(secureQueue, 'name', 'attacker-queue')).toBe(false);
+  });
+
   it('derives direct-render form attributes from typed mutation values', () => {
     const addToCart = mutation('cart/add', {
       input: s.object({ productId: s.string() }),

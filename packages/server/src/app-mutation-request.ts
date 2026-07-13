@@ -37,7 +37,7 @@ import { readUntrustedRequestBody, revealUntrustedRequestValue } from './untrust
 import { denseOwnRegistryEntryByExactKey } from './registry-lookup.js';
 import { canonicalRequestMethod } from './request-method.js';
 import { requestCreateUrl, requestMethod, requestUrlSnapshot } from './request-body-intrinsics.js';
-import { witnessGetOwnPropertyDescriptor } from './security-witness-intrinsics.js';
+import { witnessFreeze, witnessGetOwnPropertyDescriptor } from './security-witness-intrinsics.js';
 
 export async function handleAppMutationRequest(
   app: KovoApp,
@@ -362,8 +362,8 @@ function appMutationResponseOutcome(
   outcome: MutationPostLifecycleOutcome,
 ): AppMutationResponseContext['outcome'] {
   return outcome.kind === 'success'
-    ? Object.freeze({ kind: 'success' })
-    : Object.freeze({
+    ? witnessFreeze({ kind: 'success' })
+    : witnessFreeze({
         code: String(outcome.result.error.code),
         kind: 'failure',
         status: outcome.result.status,

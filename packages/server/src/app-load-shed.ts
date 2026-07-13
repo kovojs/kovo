@@ -82,32 +82,32 @@ const DEFAULT_WINDOW_MS = 60_000;
 const DEFAULT_MAX_RATE_KEYS = 10_000;
 const DEFAULT_MAX_BODY_BYTES = 1_048_576;
 const DEFAULT_MAX_QUERY_LIST_ITEMS = 100;
-const DEFAULT_GLOBAL_RATE: ResolvedAppRateLimitOptions = Object.freeze({
+const DEFAULT_GLOBAL_RATE: ResolvedAppRateLimitOptions = witnessFreeze({
   max: 20_000,
   maxKeys: DEFAULT_MAX_RATE_KEYS,
   windowMs: DEFAULT_WINDOW_MS,
 });
-const DEFAULT_PER_IP_RATE: ResolvedAppRateLimitOptions = Object.freeze({
+const DEFAULT_PER_IP_RATE: ResolvedAppRateLimitOptions = witnessFreeze({
   max: 600,
   maxKeys: DEFAULT_MAX_RATE_KEYS,
   windowMs: DEFAULT_WINDOW_MS,
 });
-const DEFAULT_MUTATION_GLOBAL_RATE: ResolvedAppRateLimitOptions = Object.freeze({
+const DEFAULT_MUTATION_GLOBAL_RATE: ResolvedAppRateLimitOptions = witnessFreeze({
   max: 5_000,
   maxKeys: DEFAULT_MAX_RATE_KEYS,
   windowMs: DEFAULT_WINDOW_MS,
 });
-const DEFAULT_MUTATION_PER_IP_RATE: ResolvedAppRateLimitOptions = Object.freeze({
+const DEFAULT_MUTATION_PER_IP_RATE: ResolvedAppRateLimitOptions = witnessFreeze({
   max: 120,
   maxKeys: DEFAULT_MAX_RATE_KEYS,
   windowMs: DEFAULT_WINDOW_MS,
 });
-const DEFAULT_QUERY_GLOBAL_RATE: ResolvedAppRateLimitOptions = Object.freeze({
+const DEFAULT_QUERY_GLOBAL_RATE: ResolvedAppRateLimitOptions = witnessFreeze({
   max: 15_000,
   maxKeys: DEFAULT_MAX_RATE_KEYS,
   windowMs: DEFAULT_WINDOW_MS,
 });
-const DEFAULT_QUERY_PER_IP_RATE: ResolvedAppRateLimitOptions = Object.freeze({
+const DEFAULT_QUERY_PER_IP_RATE: ResolvedAppRateLimitOptions = witnessFreeze({
   max: 600,
   maxKeys: DEFAULT_MAX_RATE_KEYS,
   windowMs: DEFAULT_WINDOW_MS,

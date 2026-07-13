@@ -1,30 +1,32 @@
+import { witnessFreeze } from './security-witness-intrinsics.js';
+
 /**
  * @internal Static host header policy manifest for build and export emitters (SPEC §6.6/§14).
  */
-export const staticHostHeaderPolicy = Object.freeze({
-  clientModule: Object.freeze({
+export const staticHostHeaderPolicy = witnessFreeze({
+  clientModule: witnessFreeze({
     'cache-control': 'public, max-age=31536000, immutable',
     'cross-origin-resource-policy': 'same-origin',
     'x-content-type-options': 'nosniff',
   }),
-  document: Object.freeze({
+  document: witnessFreeze({
     'cross-origin-opener-policy': 'same-origin-allow-popups',
     'permissions-policy': 'camera=(), microphone=(), geolocation=(), payment=(), usb=()',
     'referrer-policy': 'strict-origin-when-cross-origin',
     'x-content-type-options': 'nosniff',
     'x-frame-options': 'DENY',
   }),
-  errorDocument: Object.freeze({
+  errorDocument: witnessFreeze({
     'cache-control': 'no-store',
     'cross-origin-resource-policy': 'same-origin',
     'x-content-type-options': 'nosniff',
   }),
-  immutableAsset: Object.freeze({
+  immutableAsset: witnessFreeze({
     'cache-control': 'public, max-age=31536000, immutable',
     'cross-origin-resource-policy': 'same-origin',
     'x-content-type-options': 'nosniff',
   }),
-  revalidatingAsset: Object.freeze({
+  revalidatingAsset: witnessFreeze({
     'cache-control': 'public, max-age=0, must-revalidate',
     'cross-origin-resource-policy': 'same-origin',
     'x-content-type-options': 'nosniff',

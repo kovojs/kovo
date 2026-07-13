@@ -759,6 +759,61 @@ describe('server app mutation request boundary', () => {
     expect(seen).toEqual(['handler:sold-out', 'policy:failure']);
   });
 
+  it('pins the post-lifecycle outcome before invoking an app response policy', async () => {
+    let observedOutcome: { readonly kind: string } | undefined;
+    const save = mutation('freeze-outcome/save', {
+      csrf: false,
+      input: s.object({ value: s.string() }),
+      handler: (input) => input,
+    });
+    const app = createApp({
+      mutationResponses: {
+        'freeze-outcome/save': ({ outcome }) => {
+          observedOutcome = outcome;
+          return { redirectTo: '/saved' };
+        },
+      },
+      mutations: [save],
+    });
+    const form = new FormData();
+    form.set('value', 'safe');
+    const request = new Request('https://example.test/_m/freeze-outcome/save', {
+      body: form,
+      method: 'POST',
+    });
+    const originalFreeze = Object.freeze;
+    let interceptedOutcome = false;
+    Object.freeze = ((value: unknown) => {
+      if (
+        typeof value === 'object' &&
+        value !== null &&
+        (value as { kind?: unknown }).kind === 'success'
+      ) {
+        interceptedOutcome = true;
+        return originalFreeze({ code: 'ATTACKER', kind: 'failure', status: 422 });
+      }
+      return originalFreeze(value);
+    }) as typeof Object.freeze;
+
+    let response: Response;
+    try {
+      response = await handleAppMutationRequest(
+        app,
+        request,
+        new URL(request.url),
+        'freeze-outcome/save',
+      );
+    } finally {
+      Object.freeze = originalFreeze;
+    }
+
+    expect(response.status).toBe(303);
+    expect(response.headers.get('location')).toBe('/saved');
+    expect(interceptedOutcome).toBe(false);
+    expect(observedOutcome).toEqual({ kind: 'success' });
+    expect(Object.isFrozen(observedOutcome)).toBe(true);
+  });
+
   it('does not run dynamic response policy when replay reservation fails closed', async () => {
     const handler = vi.fn(() => ({ ok: true }));
     const policy = vi.fn(() => ({ redirectTo: '/done' }));

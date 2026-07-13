@@ -14,6 +14,7 @@ import type { Guard, RequestLifecycleOptions } from '../guards.js';
 import { escapeAttribute } from '../html.js';
 import type { ErrorBoundaryRenderer, FragmentRenderer } from '../mutation-wire.js';
 import { mutationInputFileFields, type InferSchema, type Schema } from '../schema.js';
+import { witnessFreeze } from '../security-witness-intrinsics.js';
 import type { TaskDefinition, TaskHandle } from '../task.js';
 import type { DurableTaskEnqueueInput } from '../task-queue.js';
 import type { MutationStreamContext, MutationStreamSource } from './streaming.js';
@@ -243,7 +244,7 @@ export class MutationQueue<Name extends string = string> {
 
   /** @internal */
   static create<const Name extends string>(name: Name): MutationQueue<Name> {
-    return Object.freeze(new MutationQueue(name)) as MutationQueue<Name>;
+    return witnessFreeze(new MutationQueue(name)) as MutationQueue<Name>;
   }
 }
 
