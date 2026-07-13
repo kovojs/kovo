@@ -37,6 +37,8 @@ import {
   type Reader,
 } from './managed-db.js';
 import { requestPassedRoleGuard } from './guards.js';
+import { createPostgresMutationReplayStore, POSTGRES_REPLAY_TABLE } from './postgres-replay.js';
+import type { MutationReplayStore } from './replay.js';
 import { runtimeEnvironmentValue } from './runtime-environment-authority.js';
 import {
   forEachReadonlyMapEntry,
@@ -104,6 +106,7 @@ const postgresPinnedNodeClients = createWitnessWeakMap<object, true>();
 const postgresNodeClientReleaseValues = createWitnessWeakMap<object, Function>();
 const FRAMEWORK_INTERNAL_REACHABLE_TABLES = postgresStringSet([
   '_kovo_jobs',
+  POSTGRES_REPLAY_TABLE,
   '_kovo_task_cron_occurrences',
   SCHEMA_STATE_TABLE,
 ]);
@@ -1226,6 +1229,8 @@ export interface KovoPostgresMigrationPlan {
 /** Created app database runtime used by generated `src/_kovo/app-runtime-db.ts` modules. */
 export interface KovoPostgresAppRuntimeDb {
   db(request?: unknown): KovoPostgresRuntimeDb;
+  /** Framework-system durable mutation idempotency truth (SPEC §10.3). */
+  readonly mutationReplayStore: MutationReplayStore;
   readonlyDb: Reader<KovoPostgresRuntimeDb>;
   ready: Promise<void>;
   /** Framework-owned non-request DB capability for generated auth/seed wiring, still RLS-subject. */
@@ -1353,6 +1358,7 @@ export function createPostgresAppRuntimeDb(
     schemaDdl: ddl,
     schemaTables,
   });
+  let mutationReplayStore: MutationReplayStore | undefined;
 
   const dbForRequest = (request?: unknown): KovoPostgresRuntimeDb => {
     const scope = postgresRequestScope(request, config);
@@ -1365,9 +1371,38 @@ export function createPostgresAppRuntimeDb(
       request,
     );
   };
+  const durableMutationReplayStore = (): MutationReplayStore => {
+    mutationReplayStore ??= createPostgresMutationReplayStore(
+      createDurableTaskSqlExecutor(
+        dbForRequest({
+          principalPosture: declareSystemPrincipal(
+            'reserve and settle durable mutation idempotency truth',
+            {
+              ingress: 'endpoint',
+              operation: 'write',
+              surface: 'createPostgresAppRuntimeDb().mutationReplayStore',
+            },
+          ),
+        }),
+      ),
+    );
+    return mutationReplayStore;
+  };
+  const replayStore: MutationReplayStore = witnessFreeze({
+    get(scope, idem, fingerprint) {
+      return durableMutationReplayStore().get(scope, idem, fingerprint);
+    },
+    reserve(scope, idem, fingerprint) {
+      return durableMutationReplayStore().reserve(scope, idem, fingerprint);
+    },
+    set(scope, idem, response, fingerprint) {
+      return durableMutationReplayStore().set(scope, idem, response, fingerprint);
+    },
+  });
 
   return {
     db: dbForRequest,
+    mutationReplayStore: replayStore,
     readonlyDb: createRequestScopedReadonlyDb(client, config, metadata),
     ready,
     systemDb(options) {
@@ -1634,6 +1669,9 @@ async function provisionRuntimeDb(
     await withPostgresAppDdlSearchPath(tx, () =>
       provisionPostgresFrameworkTaskStore(tx, input.config),
     );
+    await withPostgresAppDdlSearchPath(tx, () =>
+      provisionPostgresFrameworkReplayStore(tx, input.config, input.runtimeLoginRole),
+    );
     await applyPostgresRlsPolicies(tx, input.schemaTables, input.metadata, input.config);
     await applyPostgresViewSecurityInvoker(tx, input.schemaTables);
     await applyPostgresReaderColumnPrivileges(tx, input.schemaTables, input.metadata, input.config);
@@ -1735,6 +1773,11 @@ async function checkRuntimeDbPostureTransaction(
     issues,
     await postgresRoleAttributeVersionIssues(client),
     'Postgres role attribute issues',
+  );
+  appendPostgresDenseValues(
+    issues,
+    await postgresReplayStorePostureIssues(client, input.config, runtimeLoginRole),
+    'Postgres replay store posture issues',
   );
   if (input.config.driver === 'node-postgres') {
     appendPostgresDenseValues(
@@ -2638,6 +2681,150 @@ async function provisionPostgresFrameworkTaskStore(
   await ensureDurableTaskSchema(executor);
   await ensureRecurringTaskSchema(executor);
   await grantDurableTaskWriterRole(executor, config.writerRole);
+}
+
+/**
+ * Provision the framework-owned replay truth outside ordinary app-role authority (SPEC §10.3).
+ * The system client is the only runtime surface allowed to reserve or settle these rows.
+ */
+async function provisionPostgresFrameworkReplayStore(
+  client: RuntimeTransactionClient,
+  config: ResolvedPostgresRuntimeConfig,
+  runtimeLoginRole: string | undefined,
+): Promise<void> {
+  await client.exec(
+    postgresJoin(
+      [
+        `CREATE TABLE IF NOT EXISTS ${quoteIdent(POSTGRES_REPLAY_TABLE)} (`,
+        "surface text NOT NULL CHECK (surface IN ('mutation', 'webhook')),",
+        'scope text NOT NULL CHECK (char_length(scope) BETWEEN 1 AND 4096),',
+        'idem text NOT NULL CHECK (char_length(idem) BETWEEN 1 AND 1024),',
+        'fingerprint text CHECK (fingerprint IS NULL OR char_length(fingerprint) BETWEEN 1 AND 1024),',
+        'generation text NOT NULL CHECK (char_length(generation) BETWEEN 1 AND 128),',
+        "state text NOT NULL CHECK (state IN ('pending', 'committed')),",
+        'response_body text,',
+        'response_headers text,',
+        'response_status integer,',
+        'created_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,',
+        'committed_at timestamptz,',
+        'PRIMARY KEY (surface, scope, idem),',
+        'CHECK (',
+        "(state = 'pending' AND response_body IS NULL AND response_headers IS NULL AND response_status IS NULL AND committed_at IS NULL)",
+        'OR',
+        "(state = 'committed' AND response_body IS NOT NULL AND response_headers IS NOT NULL AND response_status IS NOT NULL AND committed_at IS NOT NULL)",
+        ')',
+        ')',
+      ],
+      ' ',
+    ),
+  );
+  const table = quoteQualified('public', POSTGRES_REPLAY_TABLE);
+  await client.exec(`REVOKE ALL ON TABLE ${table} FROM PUBLIC`);
+  const deniedRoles = [config.readerRole, config.writerRole, config.adminRole, config.systemRole];
+  if (runtimeLoginRole !== undefined) appendPostgresDenseValue(deniedRoles, runtimeLoginRole);
+  const seen = createWitnessSet<string>();
+  for (let index = 0; index < deniedRoles.length; index += 1) {
+    const role = postgresDenseValue(deniedRoles, index, 'Postgres replay denied roles');
+    if (witnessSetHas(seen, role)) continue;
+    witnessSetAdd(seen, role);
+    await client.exec(`REVOKE ALL ON TABLE ${table} FROM ${quoteIdent(role)}`);
+  }
+  await client.exec(
+    `GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE ${table} TO ${quoteIdent(config.systemRole)}`,
+  );
+}
+
+interface PostgresReplayPrivilegeRow {
+  can_delete: boolean;
+  can_insert: boolean;
+  can_select: boolean;
+  can_update: boolean;
+}
+
+async function postgresReplayStorePostureIssues(
+  client: RuntimeTransactionClient,
+  config: ResolvedPostgresRuntimeConfig,
+  runtimeLoginRole: string | undefined,
+): Promise<KovoPostgresPostureIssue[]> {
+  const relation = await safeQuery<{ exists: boolean }>(
+    client,
+    "SELECT to_regclass('public._kovo_replay') IS NOT NULL AS exists",
+  );
+  const relationRow =
+    relation === undefined ||
+    postgresDenseArrayLength(relation.rows, 'Postgres replay relation') === 0
+      ? undefined
+      : postgresDenseArrayValue(relation.rows, 0, 'Postgres replay relation');
+  if (relationRow?.exists !== true) {
+    return [
+      {
+        code: 'KV433_REPLAY_STORE',
+        detail:
+          'public._kovo_replay is missing; provision the framework replay truth table before boot',
+      },
+    ];
+  }
+
+  const issues: KovoPostgresPostureIssue[] = [];
+  const roles: { allow: boolean; role: string }[] = [
+    { allow: false, role: config.readerRole },
+    { allow: false, role: config.writerRole },
+    { allow: false, role: config.adminRole },
+    { allow: true, role: config.systemRole },
+  ];
+  if (runtimeLoginRole !== undefined) {
+    appendPostgresDenseValue(roles, { allow: false, role: runtimeLoginRole });
+  }
+  const seen = createWitnessSet<string>();
+  for (let index = 0; index < roles.length; index += 1) {
+    const expected = postgresDenseValue(roles, index, 'Postgres replay privilege roles');
+    if (witnessSetHas(seen, expected.role)) continue;
+    witnessSetAdd(seen, expected.role);
+    const privileges = await safeQuery<PostgresReplayPrivilegeRow>(
+      client,
+      postgresJoin(
+        [
+          "SELECT has_table_privilege($1, 'public._kovo_replay', 'SELECT') AS can_select,",
+          "has_table_privilege($1, 'public._kovo_replay', 'INSERT') AS can_insert,",
+          "has_table_privilege($1, 'public._kovo_replay', 'UPDATE') AS can_update,",
+          "has_table_privilege($1, 'public._kovo_replay', 'DELETE') AS can_delete",
+        ],
+        ' ',
+      ),
+      [expected.role],
+    );
+    const privilegeRow =
+      privileges === undefined ||
+      postgresDenseArrayLength(privileges.rows, 'Postgres replay privilege rows') === 0
+        ? undefined
+        : postgresDenseArrayValue(privileges.rows, 0, 'Postgres replay privilege rows');
+    if (privilegeRow === undefined) {
+      appendPostgresDenseValue(issues, {
+        code: 'KV433_REPLAY_STORE_ACL',
+        detail: `could not verify replay-table privileges for ${expected.role}`,
+      });
+      continue;
+    }
+    const hasAll =
+      privilegeRow.can_select === true &&
+      privilegeRow.can_insert === true &&
+      privilegeRow.can_update === true &&
+      privilegeRow.can_delete === true;
+    const hasAny =
+      privilegeRow.can_select === true ||
+      privilegeRow.can_insert === true ||
+      privilegeRow.can_update === true ||
+      privilegeRow.can_delete === true;
+    if ((expected.allow && !hasAll) || (!expected.allow && hasAny)) {
+      appendPostgresDenseValue(issues, {
+        code: 'KV433_REPLAY_STORE_ACL',
+        detail: expected.allow
+          ? `${expected.role} must have SELECT, INSERT, UPDATE, DELETE on public._kovo_replay`
+          : `${expected.role} must not have effective access to public._kovo_replay`,
+      });
+    }
+  }
+  return issues;
 }
 
 async function auditPostgresReachableRoutines(

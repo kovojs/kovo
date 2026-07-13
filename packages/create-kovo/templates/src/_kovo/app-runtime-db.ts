@@ -8,6 +8,7 @@ import {
   type KovoPostgresAppRuntimeDb,
   type KovoPostgresAppRuntimeOptions,
   type KovoPostgresSystemDb,
+  type MutationReplayStore,
 } from '@kovojs/server';
 import {
   betterAuthSession,
@@ -98,6 +99,11 @@ function authAdapterDb(): KovoPostgresSystemDb {
     reason: 'Better Auth adapter manages session tables before an app session exists',
     surface: 'src/_kovo/app-runtime-db.ts#createAppAuthBindings',
   });
+}
+
+/** Durable SPEC §10.3 mutation replay truth, reachable only through the framework system role. */
+export function appRuntimeMutationReplayStore(): MutationReplayStore {
+  return getAppDatabase().mutationReplayStore;
 }
 
 function createAuthAdapter(): ReturnType<typeof drizzleAdapter> {

@@ -182,6 +182,11 @@ export type { BlessedFormatName, UnsafeRegexBrand } from '../redos.js';
 // and mutation handlers (real consumer: conformance/webhook-spike). The default
 // in-memory implementation and its contract types stay public at the root.
 export { createMemoryMutationReplayStore } from '../replay.js';
-export type { MutationReplayReservation, MutationReplayStore } from '../replay.js';
+export type {
+  MutationReplayReservation,
+  MutationReplayResponse,
+  MutationReplayStore,
+  MutationReplayStoreOptions,
+} from '../replay.js';
 export { replayMutationWireBody } from '../response.js';
 export type { FrameworkWireBody, ReplayMutationWireBodyOptions } from '../response.js';

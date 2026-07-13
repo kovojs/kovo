@@ -8,12 +8,14 @@ import {
 
 import Database from 'better-sqlite3';
 import {
+  createMemoryMutationReplayStore,
   createSqliteAppRuntimeDb,
   declareSecretReadCapability,
   runtimeDbMetadataForSchema,
   type AccessDecision,
   type CsrfOptions,
   type KovoSqliteAppRuntimeDb,
+  type MutationReplayStore,
 } from '@kovojs/server';
 import {
   betterAuthSession,
@@ -115,10 +117,19 @@ function normalizePolicyTable(table: string): string {
 }
 
 const appDatabase = createAppRuntimeDb();
+const mutationReplayStore = createMemoryMutationReplayStore();
 
 /** Read-only app DB value re-exported by src/db.ts for endpoint/user-authored reads. */
 export const appRuntimeReadonlyDb: AppReadonlyDb = appDatabase.readonlyDb;
 export const appRuntimeDbReady: Promise<void> = appDatabase.ready;
+
+/**
+ * SQLite is development-only until it has a durable framework-owned replay relation. Production
+ * createApp() rejects this deliberately volatile store rather than claiming restart safety.
+ */
+export function appRuntimeMutationReplayStore(): MutationReplayStore {
+  return mutationReplayStore;
+}
 
 /**
  * Framework-owned auth adapter factory. The SQLite DB value remains module-private to the

@@ -199,8 +199,8 @@ describe('create-kovo starter (build integration: runtime and dev server)', () =
       const duplicateSignIn = await submitSignIn();
       const duplicateSignInBody = await duplicateSignIn.text();
 
-      expect(firstSignIn.status).toBe(200);
-      expect(duplicateSignIn.status).toBe(200);
+      expect(firstSignIn.status, `${firstSignInBody}\n${output()}`).toBe(200);
+      expect(duplicateSignIn.status, `${duplicateSignInBody}\n${output()}`).toBe(200);
       expect(firstSignIn.headers.get('Kovo-Idem')).toBe(idem);
       expect(duplicateSignIn.headers.get('Kovo-Idem')).toBe(idem);
       expect(firstSignIn.headers.getSetCookie().length).toBeGreaterThan(0);

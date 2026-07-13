@@ -342,14 +342,12 @@ describe('create-kovo starter (metadata)', () => {
     );
     expect(files.get('src/_kovo/app-runtime-db.ts')).not.toContain('__kovoStarterAppDatabase');
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain('ON CONFLICT (id) DO NOTHING');
-    expect(files.get('src/app.tsx')).toContain('createMemoryMutationReplayStore');
+    expect(files.get('src/app.tsx')).toContain('appRuntimeMutationReplayStore');
     expect(files.get('src/app.tsx')).toContain(
-      'const mutationReplayStore = createMemoryMutationReplayStore();',
+      'const mutationReplayStore = appRuntimeMutationReplayStore();',
     );
     expect(files.get('src/app.tsx')).toContain('mutationReplayStore,');
-    expect(files.get('src/app.tsx')).toContain(
-      "import { appRuntimeDbProvider, appRuntimeDbReady } from './_kovo/app-runtime-db.js'",
-    );
+    expect(files.get('src/app.tsx')).toContain("} from './_kovo/app-runtime-db.js'");
     expect(files.get('src/app.tsx')).not.toContain("import { appDbReady } from './db.js'");
     expect(files.get('src/app.tsx')).toContain('await appRuntimeDbReady');
     expect(files.get('src/app.tsx')).toContain('db: appRuntimeDbProvider,');

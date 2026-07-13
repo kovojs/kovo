@@ -23,7 +23,10 @@ const SECURITY_SURFACE_FILES = new Set([
 const SECURITY_SURFACE_ENROLLMENT_MESSAGE =
   'SPEC.md §6.6/§10.2/§10.3 sound subset must enroll the whole starter security surface';
 const RUNTIME_DB_IMPORT_ALLOWLIST = new Map([
-  ['src/app.tsx', new Set(['appRuntimeDbProvider', 'appRuntimeDbReady'])],
+  [
+    'src/app.tsx',
+    new Set(['appRuntimeDbProvider', 'appRuntimeDbReady', 'appRuntimeMutationReplayStore']),
+  ],
   ['src/auth.ts', new Set(['createAppAuthBindings'])],
   ['src/auth.sqlite.ts', new Set(['createAppAuthBindings'])],
   ['src/db.ts', new Set(['appRuntimeReadonlyDb'])],

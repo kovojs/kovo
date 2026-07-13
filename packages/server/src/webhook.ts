@@ -5,6 +5,7 @@ import type {
 } from '@kovojs/core';
 import { isFrameworkHmacSignatureVerifier } from '@kovojs/core/internal/verifier';
 import { requestVerifierInput } from './app-load-shed.js';
+import { resolveBootMode } from './env.js';
 import {
   actAsNonRequestPrincipal,
   declareSystemPrincipal,
@@ -82,6 +83,7 @@ const WEBHOOK_RESPONSE_RESERVED_HEADERS = ['Kovo-*'] as const;
 const WEBHOOK_OBJECT_PROTOTYPE = witnessGetPrototypeOf({});
 const webhookFailureOutcomes = createWitnessWeakSet<object>();
 const webhookRollbackOutcomes = createWitnessWeakSet<object>();
+const memoryWebhookReplayStores = createWitnessWeakSet<object>();
 
 declare const webhookTxDbBrand: unique symbol;
 
@@ -130,7 +132,10 @@ export interface WebhookWireResponse extends ServerResponseBase<
 
 /** Atomic idempotency store used by writable webhooks to reserve and replay provider event ids. */
 export interface WebhookReplayStore {
-  get(scope: string, idem: string): Promise<WebhookWireResponse> | WebhookWireResponse | undefined;
+  get(
+    scope: string,
+    idem: string,
+  ): Promise<WebhookWireResponse | undefined> | WebhookWireResponse | undefined;
   reserve(
     scope: string,
     idem: string,
@@ -373,7 +378,7 @@ export function createMemoryWebhookReplayStore(
   const responses = createWitnessMap<string, WebhookReplayRecord>();
   let pendingCount = 0;
 
-  return {
+  const store: WebhookReplayStore = {
     get(scope, idem) {
       const key = webhookReplayKey(scope, idem);
       const record = witnessMapGet(responses, key);
@@ -454,6 +459,17 @@ export function createMemoryWebhookReplayStore(
       if (existing?.kind === 'pending') existing.resolve(response);
     },
   };
+  witnessWeakSetAdd(memoryWebhookReplayStores, store);
+  return store;
+}
+
+/** @internal True only for framework-created volatile webhook replay stores and their snapshots. */
+export function isMemoryWebhookReplayStore(source: unknown): boolean {
+  return (
+    (typeof source === 'object' || typeof source === 'function') &&
+    source !== null &&
+    witnessWeakSetHas(memoryWebhookReplayStores, source)
+  );
 }
 
 function webhookReplayNumberOption(
@@ -624,6 +640,11 @@ function snapshotWebhookDefinitionForDeclaration<
     replayStoreSource === undefined
       ? undefined
       : snapshotWebhookReplayStore(replayStoreSource, 'webhook().replayStore');
+  if (resolveBootMode() === 'production' && isMemoryWebhookReplayStore(replayStoreSource)) {
+    throw new Error(
+      'KV436: webhook() refused a volatile memory replayStore in production; use createPostgresWebhookReplayStore() so idempotency truth survives restart and replicas (SPEC §10.3).',
+    );
+  }
   const writes =
     writesSource === undefined
       ? undefined
@@ -883,7 +904,7 @@ function snapshotWebhookReplayStore(source: unknown, label: string): WebhookRepl
   const get = stableWebhookMethod(source, 'get', `${label}.get`);
   const reserve = stableWebhookMethod(source, 'reserve', `${label}.reserve`);
   const set = stableWebhookMethod(source, 'set', `${label}.set`);
-  return witnessFreeze({
+  const snapshot: WebhookReplayStore = witnessFreeze({
     get(scope: string, idem: string) {
       return witnessReflectApply(get, source, [scope, idem]);
     },
@@ -897,6 +918,10 @@ function snapshotWebhookReplayStore(source: unknown, label: string): WebhookRepl
       return witnessReflectApply<Promise<void> | void>(set, source, [scope, idem, response]);
     },
   });
+  if (witnessWeakSetHas(memoryWebhookReplayStores, source)) {
+    witnessWeakSetAdd(memoryWebhookReplayStores, snapshot);
+  }
+  return snapshot;
 }
 
 function snapshotWebhookReplayReservation(
@@ -1763,7 +1788,7 @@ async function storeWebhookReplay(
 
 function responseFromWire(response: WebhookWireResponse): Response {
   return serverResponseToWebResponse(
-    snapshotWebhookWireResponse(response, 'Webhook replay response'),
+    snapshotWebhookReplayResponse(response, 'Webhook replay response'),
     { method: 'GET' },
   );
 }
@@ -1777,7 +1802,8 @@ function responseFromWire(response: WebhookWireResponse): Response {
  * (for example policy sees 200 while the constructor sees 302 + an unblessed external Location).
  * Exact own-data reconstruction also keeps inherited headers and late mutation out of the wire.
  */
-function snapshotWebhookWireResponse(source: unknown, label: string): WebhookWireResponse {
+/** @internal Reconstruct an untrusted durable webhook replay response as stable wire data. */
+export function snapshotWebhookReplayResponse(source: unknown, label: string): WebhookWireResponse {
   if (typeof source !== 'object' || source === null || witnessIsArray(source)) {
     throw new TypeError(`${label} must be a stable response record.`);
   }

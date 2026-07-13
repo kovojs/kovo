@@ -688,10 +688,9 @@ function addM1HeaderRedirectCapabilityProof(root: string): void {
   const appPath = join(root, 'src/app.tsx');
   const app = readFileSync(appPath, 'utf8')
     .replace(
-      '  createApp,\n  createMemoryMutationReplayStore,\n  createMemoryVersionedClientModuleRegistry,',
+      '  createApp,\n  createMemoryVersionedClientModuleRegistry,',
       [
         '  createApp,',
-        '  createMemoryMutationReplayStore,',
         '  createMemoryStorage,',
         '  createMemoryVersionedClientModuleRegistry,',
         '  createStorageDownloadEndpoint,',
@@ -706,9 +705,9 @@ function addM1HeaderRedirectCapabilityProof(root: string): void {
       ].join('\n'),
     )
     .replace(
-      'const mutationReplayStore = createMemoryMutationReplayStore();',
+      'const mutationReplayStore = appRuntimeMutationReplayStore();',
       [
-        'const mutationReplayStore = createMemoryMutationReplayStore();',
+        'const mutationReplayStore = appRuntimeMutationReplayStore();',
         'const m1CapabilityStorage = createMemoryStorage();',
         "await m1CapabilityStorage.put('receipts/m1.txt', 'm1 capability secret\\n', {",
         "  contentType: 'text/plain',",

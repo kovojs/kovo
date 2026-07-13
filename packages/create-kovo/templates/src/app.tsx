@@ -1,7 +1,6 @@
 /** @jsxImportSource @kovojs/server */
 import {
   createApp,
-  createMemoryMutationReplayStore,
   createMemoryVersionedClientModuleRegistry,
   createRequestHandler,
   endpoint,
@@ -25,7 +24,11 @@ import {
   seedDemoUser,
   type AppRequest,
 } from './auth.js';
-import { appRuntimeDbProvider, appRuntimeDbReady } from './_kovo/app-runtime-db.js';
+import {
+  appRuntimeDbProvider,
+  appRuntimeDbReady,
+  appRuntimeMutationReplayStore,
+} from './_kovo/app-runtime-db.js';
 import { addContact } from './mutations.js';
 import { contactsQuery } from './queries.js';
 import { appTheme } from './theme.js';
@@ -40,9 +43,9 @@ await appRuntimeDbReady;
 await seedDemoUser();
 
 const stylesheets = [stylesheet('./styles.css', { theme: appTheme })] as const;
-// SPEC §9.1: duplicate same-principal enhanced POSTs with the same Kovo-Idem reserve
-// and replay through a process-local store instead of executing independently.
-const mutationReplayStore = createMemoryMutationReplayStore();
+// SPEC §10.3: duplicate same-principal enhanced POSTs reserve and replay through durable
+// system-role Postgres truth, including across process restart and multiple replicas.
+const mutationReplayStore = appRuntimeMutationReplayStore();
 
 const styles = style.create({
   shell: {

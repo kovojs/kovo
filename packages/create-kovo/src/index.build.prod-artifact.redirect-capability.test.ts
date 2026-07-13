@@ -144,14 +144,9 @@ function addRedirectAndCapabilityProof(root: string): void {
   const app = readFileSync(appPath, 'utf8');
   const withStorageImports = replaceRequired(
     app,
+    ['  createApp,', '  createMemoryVersionedClientModuleRegistry,'].join('\n'),
     [
       '  createApp,',
-      '  createMemoryMutationReplayStore,',
-      '  createMemoryVersionedClientModuleRegistry,',
-    ].join('\n'),
-    [
-      '  createApp,',
-      '  createMemoryMutationReplayStore,',
       '  createMemoryStorage,',
       '  createMemoryVersionedClientModuleRegistry,',
       '  createStorageDownloadEndpoint,',
@@ -160,9 +155,9 @@ function addRedirectAndCapabilityProof(root: string): void {
   );
   const withStorage = replaceRequired(
     withStorageImports,
-    'const mutationReplayStore = createMemoryMutationReplayStore();',
+    'const mutationReplayStore = appRuntimeMutationReplayStore();',
     [
-      'const mutationReplayStore = createMemoryMutationReplayStore();',
+      'const mutationReplayStore = appRuntimeMutationReplayStore();',
       'const capabilityProofStorage = createMemoryStorage();',
       "await capabilityProofStorage.put('receipts/ord_1.txt', 'capability secret\\n', {",
       "  contentType: 'text/plain',",

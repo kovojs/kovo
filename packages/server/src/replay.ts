@@ -13,6 +13,7 @@ import { formLikeToRecord } from './schema.js';
 import { requestFormDataEntries, requestIsFormData } from './request-body-intrinsics.js';
 import {
   createWitnessMap,
+  createWitnessWeakSet,
   witnessDefineProperty,
   witnessFreeze,
   witnessGetOwnPropertyDescriptor,
@@ -28,6 +29,8 @@ import {
   witnessReflectApply,
   witnessReflectGet,
   witnessSortStrings,
+  witnessWeakSetAdd,
+  witnessWeakSetHas,
 } from './security-witness-intrinsics.js';
 import {
   requestStateExactCompositeKey,
@@ -53,7 +56,9 @@ const subtleDigestControl = witnessReflectApply<Promise<ArrayBuffer>>(
   nativeSubtleCrypto,
   ['SHA-256', new NativeUint8Array()],
 ).then((digest) => bytesToHex(new NativeUint8Array(digest)) === EMPTY_SHA256);
+const memoryMutationReplayStores = createWitnessWeakSet<object>();
 
+/** Persistable framework mutation response accepted by a SPEC §10.3 replay store. */
 export type MutationReplayResponse = ServerResponseBase<
   FrameworkWireBody,
   ResponseHeaders,
@@ -70,7 +75,11 @@ export type MutationReplayResponse = ServerResponseBase<
 export interface MutationReplayStore<
   Response extends MutationReplayResponse = MutationReplayResponse,
 > {
-  get(scope: string, idem: string, fingerprint?: string): Promise<Response> | Response | undefined;
+  get(
+    scope: string,
+    idem: string,
+    fingerprint?: string,
+  ): Promise<Response | undefined> | Response | undefined;
   reserve(
     scope: string,
     idem: string,
@@ -92,7 +101,7 @@ export function snapshotMutationReplayStore<Response extends MutationReplayRespo
   const get = stableMutationReplayMethod(source, 'get', true)!;
   const reserve = stableMutationReplayMethod(source, 'reserve', true)!;
   const set = stableMutationReplayMethod(source, 'set', true)!;
-  return witnessFreeze({
+  const snapshot: MutationReplayStore<Response> = witnessFreeze({
     get(scope: string, idem: string, fingerprint?: string) {
       return witnessReflectApply(get, source, [scope, idem, fingerprint]);
     },
@@ -115,6 +124,19 @@ export function snapshotMutationReplayStore<Response extends MutationReplayRespo
       ]);
     },
   });
+  if (witnessWeakSetHas(memoryMutationReplayStores, source)) {
+    witnessWeakSetAdd(memoryMutationReplayStores, snapshot);
+  }
+  return snapshot;
+}
+
+/** @internal True only for framework-created volatile mutation replay stores and their snapshots. */
+export function isMemoryMutationReplayStore(source: unknown): boolean {
+  return (
+    (typeof source === 'object' || typeof source === 'function') &&
+    source !== null &&
+    witnessWeakSetHas(memoryMutationReplayStores, source)
+  );
 }
 
 function snapshotMutationReplayReservation<Response extends MutationReplayResponse>(
@@ -222,6 +244,7 @@ export interface ReplayReservationRequest<Response, Reservation> {
   store?: ReplayReservationStore<Response, Reservation> | undefined;
 }
 
+/** Capacity posture for the development/test-only in-memory mutation replay store. */
 export interface MutationReplayStoreOptions {
   /** Maximum total number of retained pending or committed replay keys. */
   maxEntries?: number;
@@ -275,7 +298,7 @@ export function createMemoryMutationReplayStore<
   // but committed responses never disappear; maxEntries sheds unseen work before execution.
   let pendingCount = 0;
 
-  return {
+  const store: MutationReplayStore<Response> = {
     get(scope, idem, fingerprint) {
       const key = mutationReplayKey(scope, idem);
       const record = witnessMapGet(responses, key);
@@ -386,6 +409,8 @@ export function createMemoryMutationReplayStore<
       if (existing?.kind === 'pending') existing.resolve(cloned);
     },
   };
+  witnessWeakSetAdd(memoryMutationReplayStores, store);
+  return store;
 }
 
 function stableMutationReplayOption(
