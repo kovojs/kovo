@@ -68,6 +68,9 @@ export const defaultAllowedToolingFiles = [
   'packages/server/src/internal/data-plane-static-analysis-intrinsics.ts',
   'packages/server/src/internal/data-plane-static-analysis.ts',
   'packages/server/src/neutral-build.ts',
+  // Workspace-only config bootstrap: probes only whether the emitted-suffix TypeScript sibling
+  // exists before the real Vite/compiler graph links. Published/runtime packages exclude it.
+  'packages/server/src/vite-source.ts',
   'packages/server/src/vite.ts',
   'packages/server/src/vite-build-assets.ts',
   'packages/server/src/vite-build-output.ts',
