@@ -16,6 +16,7 @@ import type { QueryScriptLike } from './query-script-hydration.js';
 import { splitQueryWireKey } from './query-store.js';
 import type { QueryStore } from './query-store.js';
 import { createBrowserNavigationSecurityControls } from './navigation-security-intrinsics.js';
+import { reloadSessionTransitionDocument } from './session-transition.js';
 
 // SPEC §6.6/§8: capture the bfcache revalidation getter while the framework
 // module graph initializes, before authored client modules can replace realm
@@ -349,6 +350,6 @@ function globalEventTarget(): ListenerTargetLike<unknown> | undefined {
 }
 
 function globalLocationReload(): (() => void) | undefined {
-  const location = (globalThis as { location?: { reload?: () => void } }).location;
-  return typeof location?.reload === 'function' ? () => location.reload?.() : undefined;
+  const location = (globalThis as { location?: unknown }).location;
+  return location === undefined ? undefined : () => void reloadSessionTransitionDocument();
 }

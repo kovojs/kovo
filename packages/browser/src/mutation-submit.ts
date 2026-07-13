@@ -278,8 +278,10 @@ function defaultDeltaMissRefetcher(options: EnhancedMutationSubmitOptions): OnDe
 
 /** @internal Default §14 recovery: full-navigation reload of the current route on a persistent build skew. */
 function defaultBuildSkewReload(): void {
-  const location = (globalThis as { location?: { reload?: () => void } }).location;
-  location?.reload?.();
+  // SPEC §6.6/§14: build-skew recovery is mandatory framework authority. Use the same
+  // construction-time pinned reload as session transitions so authored code cannot suppress the
+  // full-render recovery by replacing Location.reload after the loader initializes.
+  reloadSessionTransitionDocument();
 }
 
 function stampEnhancedMutationPending(

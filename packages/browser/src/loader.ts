@@ -24,6 +24,7 @@ import type { QueryApplyInterposition } from './query-apply.js';
 import type { CompiledQueryUpdatePlans } from './query-bindings.js';
 import type { QueryRefetchOptions } from './query-refetch.js';
 import type { QueryStore } from './query-store.js';
+import { securityGetOwnPropertyDescriptor } from './security-witness-intrinsics.js';
 
 /**
  * App-facing enhanced-mutation wiring for `installKovoLoader`.
@@ -155,12 +156,13 @@ export function installGeneratedKovoLoader(
   options: KovoGeneratedLoaderOptions,
 ): KovoGeneratedLoader {
   const events = options.events ?? defaultDelegatedEvents;
+  const allowedClientModuleUrls = ownAllowedClientModuleUrls(options);
   const islandSignalScope = createIslandSignalScope();
   // Every production import crosses one guarded boundary. An explicit compiler registry is used
   // by generated/programmatic loaders; otherwise the guard consumes the marked document manifest.
   const importModule = guardKovoDynamicImportModule(
     options.importModule,
-    definedProps({ allowedModuleUrls: options.allowedClientModuleUrls }),
+    definedProps({ allowedModuleUrls: allowedClientModuleUrls }),
   );
   const disposers: Array<() => void> = [];
   let queryRuntime: InstalledLoaderQueryRuntime | undefined;
@@ -187,7 +189,7 @@ export function installGeneratedKovoLoader(
           importModule: options.enhancedMutations.importModule
             ? guardKovoDynamicImportModule(
                 options.enhancedMutations.importModule,
-                definedProps({ allowedModuleUrls: options.allowedClientModuleUrls }),
+                definedProps({ allowedModuleUrls: allowedClientModuleUrls }),
               )
             : importModule,
           // K4 / SPEC §4.7: thread the loader's islandSignalScope into the broadcast
@@ -279,13 +281,26 @@ function toGeneratedLoaderOptions(options: KovoLoaderOptions): KovoGeneratedLoad
     importModule: options.importModule as ImportHandlerModule,
     root: options.root as LoaderRoot,
     ...definedProps({
-      allowedClientModuleUrls: options.allowedClientModuleUrls,
+      allowedClientModuleUrls: ownAllowedClientModuleUrls(options),
       enhancedMutations,
       events: options.events,
       onError: options.onError as KovoGeneratedLoaderOptions['onError'],
       queryStore: options.queryStore,
     }),
   };
+}
+
+function ownAllowedClientModuleUrls(
+  options: KovoLoaderOptions | KovoGeneratedLoaderOptions,
+): readonly string[] | undefined {
+  const descriptor = securityGetOwnPropertyDescriptor(options, 'allowedClientModuleUrls');
+  if (descriptor === undefined || ('value' in descriptor && descriptor.value === undefined)) {
+    return undefined;
+  }
+  if (!('value' in descriptor)) {
+    throw new TypeError('Kovo loader allowedClientModuleUrls must be an own-data property.');
+  }
+  return descriptor.value as readonly string[];
 }
 
 function initializeNativeIndeterminateCheckboxes(root: LoaderRoot): void {

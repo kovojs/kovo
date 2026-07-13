@@ -80,4 +80,46 @@ describe('session-transition reload security', () => {
     expect(reload).toHaveBeenCalledOnce();
     expect(poison).not.toHaveBeenCalled();
   });
+
+  it('uses the boot-pinned reload for persisted session-dependent bfcache recovery', async () => {
+    const reload = vi.fn();
+    const poison = vi.fn();
+    const location = {
+      assign: vi.fn(),
+      hash: '',
+      href: 'https://kovo.test/private',
+      origin: 'https://kovo.test',
+      pathname: '/private',
+      reload,
+      search: '',
+    };
+    vi.stubGlobal('location', location);
+    vi.stubGlobal('document', {});
+    const { installBfcacheSessionReload } = await import('./query-visible-return.js');
+    const listeners = new Map<string, (event: unknown) => void>();
+    const pageShowTarget = {
+      addEventListener(type: string, listener: (event: unknown) => void) {
+        listeners.set(type, listener);
+      },
+      removeEventListener(type: string) {
+        listeners.delete(type);
+      },
+    };
+    installBfcacheSessionReload({
+      document: {
+        querySelector(selector: string) {
+          return selector === 'meta[name="kovo-session"]'
+            ? { getAttribute: () => 'principal-fingerprint' }
+            : null;
+        },
+      },
+      pageShowTarget,
+    });
+    location.reload = poison;
+
+    listeners.get('pageshow')?.({ persisted: true, type: 'pageshow' });
+
+    expect(reload).toHaveBeenCalledOnce();
+    expect(poison).not.toHaveBeenCalled();
+  });
 });

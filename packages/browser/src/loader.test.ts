@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { installKovoLoader as installKovoLoaderFromBarrel } from './client.js';
-import { installKovoLoader } from './loader.js';
+import { installKovoLoader, type KovoLoaderOptions } from './loader.js';
 import { FakeElement, FakeRoot } from './runtime-test-fakes.js';
 
 describe('runtime loader module', () => {
@@ -73,6 +73,96 @@ describe('runtime loader module', () => {
 
     expect(importModule).not.toHaveBeenCalled();
     expect(handler).not.toHaveBeenCalled();
+  });
+
+  it('pins the compiler client-module allowlist against retained caller mutation', async () => {
+    const root = new FakeRoot();
+    const allowedClientModuleUrls = ['/c/allowed.client.js'];
+    const importModule = vi.fn(async () => ({ run: vi.fn() }));
+    installKovoLoader({
+      allowedClientModuleUrls,
+      events: ['click'],
+      importModule,
+      root,
+    });
+
+    allowedClientModuleUrls[0] = '/c/blocked.client.js';
+    await root.listeners.get('click')?.({
+      target: new FakeElement({ 'on:click': '/c/blocked.client.js#run' }),
+      type: 'click',
+    });
+
+    expect(importModule).not.toHaveBeenCalled();
+  });
+
+  it('pins allowlist option projection against late Object.fromEntries poisoning', async () => {
+    const root = new FakeRoot();
+    const importModule = vi.fn(async () => ({ run: vi.fn() }));
+    const originalFromEntries = Object.fromEntries;
+    let firstProjection = true;
+    Object.fromEntries = ((entries: Iterable<readonly [PropertyKey, unknown]>) => {
+      if (firstProjection) {
+        firstProjection = false;
+        return { allowedClientModuleUrls: ['/c/blocked.client.js'] };
+      }
+      return originalFromEntries(entries);
+    }) as typeof Object.fromEntries;
+    try {
+      installKovoLoader({
+        allowedClientModuleUrls: ['/c/allowed.client.js'],
+        events: ['click'],
+        importModule,
+        root,
+      });
+    } finally {
+      Object.fromEntries = originalFromEntries;
+    }
+
+    await root.listeners.get('click')?.({
+      target: new FakeElement({ 'on:click': '/c/blocked.client.js#run' }),
+      type: 'click',
+    });
+
+    expect(importModule).not.toHaveBeenCalled();
+  });
+
+  it('ignores inherited client-module allowlist authority', async () => {
+    const root = new FakeRoot();
+    const importModule = vi.fn(async () => ({ run: vi.fn() }));
+    Object.defineProperty(Object.prototype, 'allowedClientModuleUrls', {
+      configurable: true,
+      value: ['/c/blocked.client.js'],
+    });
+    try {
+      installKovoLoader({ events: ['click'], importModule, root });
+    } finally {
+      delete (Object.prototype as { allowedClientModuleUrls?: unknown }).allowedClientModuleUrls;
+    }
+
+    await root.listeners.get('click')?.({
+      target: new FakeElement({ 'on:click': '/c/blocked.client.js#run' }),
+      type: 'click',
+    });
+    expect(importModule).not.toHaveBeenCalled();
+  });
+
+  it('rejects accessor allowlist options without invoking the getter', () => {
+    const root = new FakeRoot();
+    let getterCalls = 0;
+    const options = {
+      importModule: vi.fn(async () => ({})),
+      root,
+    } as KovoLoaderOptions;
+    Object.defineProperty(options, 'allowedClientModuleUrls', {
+      configurable: true,
+      get() {
+        getterCalls += 1;
+        return ['/c/blocked.client.js'];
+      },
+    });
+
+    expect(() => installKovoLoader(options)).toThrow('must be an own-data property');
+    expect(getterCalls).toBe(0);
   });
 
   it('uses the explicit compiler client-module allowlist for startup triggers', async () => {

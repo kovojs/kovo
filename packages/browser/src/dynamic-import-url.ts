@@ -3,6 +3,7 @@ import type { KovoModuleRef } from '@kovojs/core/internal/module-ref';
 import {
   securityArrayAppend,
   applySecurityIntrinsic,
+  freezeSecurityValue,
   securityGetOwnPropertyDescriptor,
   securityOwnArrayEntry,
   securityRegExpTest,
@@ -41,6 +42,7 @@ export interface DynamicImportUrlOptions {
 export type DynamicImportModule<T = Record<string, unknown>> = (url: string) => Promise<T>;
 
 const guardedDynamicImportModules = securityWeakSet<object>();
+const invalidAllowedModuleUrls = Symbol('kovo.invalid-dynamic-import-allowlist');
 
 /** @internal Runtime allowlist for compiler-emitted client-module import refs (SPEC §5.2.1). */
 export function assertAllowedKovoDynamicImportUrl(
@@ -67,12 +69,46 @@ export function guardKovoDynamicImportModule<T = Record<string, unknown>>(
   importModule: DynamicImportModule<T>,
   options: DynamicImportUrlOptions = {},
 ): DynamicImportModule<T> {
+  // SPEC §5.2.1/§6.6: the compiler registry is construction-time authority. Close over a
+  // dense frozen snapshot (including an empty document-derived registry) so mutating the loader
+  // options/array after installation cannot authorize a different server-supplied module ref.
+  const configuredAllowlist = ownAllowedModuleUrls(options);
+  if (configuredAllowlist === invalidAllowedModuleUrls) {
+    throw new TypeError('Kovo dynamic import allowlist must be an own-data property.');
+  }
+  const guardedOptions = freezeSecurityValue({
+    allowedModuleUrls: snapshotAllowedClientModuleUrls(configuredAllowlist),
+  });
   const guarded = (url: string) => {
-    assertAllowedKovoDynamicImportUrl(url, options);
+    assertAllowedKovoDynamicImportUrl(url, guardedOptions);
     return importModule(url);
   };
   securityWeakSetAdd(guardedDynamicImportModules, guarded);
   return guarded;
+}
+
+function snapshotAllowedClientModuleUrls(explicit?: readonly string[]): readonly string[] {
+  const values = explicit ?? documentModulepreloadClientModules() ?? [];
+  const lengthDescriptor = securityGetOwnPropertyDescriptor(values, 'length');
+  if (
+    lengthDescriptor === undefined ||
+    !('value' in lengthDescriptor) ||
+    typeof lengthDescriptor.value !== 'number' ||
+    lengthDescriptor.value % 1 !== 0 ||
+    lengthDescriptor.value < 0 ||
+    lengthDescriptor.value > 100_000
+  ) {
+    throw new TypeError('Kovo dynamic import allowlist requires a bounded dense array.');
+  }
+  const snapshot: string[] = [];
+  for (let index = 0; index < lengthDescriptor.value; index += 1) {
+    const entry = securityOwnArrayEntry(values, index);
+    if (!entry.ok || typeof entry.value !== 'string') {
+      throw new TypeError('Kovo dynamic import allowlist requires dense own-data strings.');
+    }
+    securityArrayAppend(snapshot, entry.value, 'Browser dynamic import allowlist snapshot');
+  }
+  return freezeSecurityValue(snapshot);
 }
 
 /** @internal Avoid a weaker second default-manifest check after an explicit guarded importer. */
@@ -114,11 +150,22 @@ export function isAllowedKovoDynamicImportUrl(
   if (isAllowedLocalDevSourceModuleUrl(parsed)) return true;
   if (!securityStringStartsWith(urlPathname(parsed), '/c/')) return false;
 
-  const manifest = allowedClientModuleUrlManifest(options.allowedModuleUrls);
+  const configuredAllowlist = ownAllowedModuleUrls(options);
+  if (configuredAllowlist === invalidAllowedModuleUrls) return false;
+  const manifest = allowedClientModuleUrlManifest(configuredAllowlist);
   // SPEC §4.7/§4.8/§6.6: a missing/empty compiler-owned registry is deny, never a
   // wildcard for every same-origin /c/ module. Local Vite source modules retain their explicit
   // development-only branch above.
   return securitySetHas(manifest, canonicalImportUrl(parsed));
+}
+
+function ownAllowedModuleUrls(
+  options: DynamicImportUrlOptions,
+): readonly string[] | undefined | typeof invalidAllowedModuleUrls {
+  const descriptor = securityGetOwnPropertyDescriptor(options, 'allowedModuleUrls');
+  if (descriptor === undefined) return undefined;
+  if (!('value' in descriptor)) return invalidAllowedModuleUrls;
+  return descriptor.value === undefined ? undefined : (descriptor.value as readonly string[]);
 }
 
 function isAllowedLocalDevSourceModuleUrl(url: URL): boolean {
