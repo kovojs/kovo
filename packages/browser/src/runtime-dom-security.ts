@@ -4,6 +4,7 @@ import {
 } from './navigation-security-intrinsics.js';
 import {
   applySecurityIntrinsic,
+  defineSecurityProperties,
   securityGetOwnPropertyDescriptor,
   securityGetPrototypeOf,
 } from './security-witness-intrinsics.js';
@@ -128,6 +129,76 @@ export function setRuntimeElementAttribute(element: unknown, name: string, value
   }
 }
 
+/** Resolve the first matching live DOM element through boot-witnessed selector controls. */
+export function queryRuntimeElement(root: unknown, selector: string): object | null {
+  if (root === null || typeof root !== 'object') return null;
+  if (runtimeDomSecurity) {
+    const one = runtimeDomSecurity.queryOne(root, selector);
+    if (one) return one;
+    const values = runtimeDomSecurity.queryAllElements(root, selector);
+    return values[0] ?? null;
+  }
+  const queryOne = runtimeStructuralMethod(root, 'querySelector');
+  if (queryOne) {
+    try {
+      const value = applySecurityIntrinsic<unknown>(queryOne, root, [selector]);
+      if (value !== null && typeof value === 'object') return value;
+    } catch {}
+  }
+  const queryAll = runtimeStructuralMethod(root, 'querySelectorAll');
+  if (!queryAll) return null;
+  try {
+    const values = applySecurityIntrinsic<unknown>(queryAll, root, [selector]);
+    if (values === null || typeof values !== 'object') return null;
+    const first = securityGetOwnPropertyDescriptor(values, 0);
+    if (first && 'value' in first && first.value !== null && typeof first.value === 'object') {
+      return first.value;
+    }
+    for (const value of values as Iterable<unknown>) {
+      return value !== null && typeof value === 'object' ? value : null;
+    }
+  } catch {}
+  return null;
+}
+
+/** Read authoritative text through the boot-witnessed Node.textContent getter. */
+export function readRuntimeNodeTextContent(node: unknown): string | null {
+  if (node === null || typeof node !== 'object') return null;
+  if (runtimeDomSecurity) return runtimeDomSecurity.readNodeTextContent(node);
+  const descriptor = securityGetOwnPropertyDescriptor(node, 'textContent');
+  return descriptor && 'value' in descriptor && typeof descriptor.value === 'string'
+    ? descriptor.value
+    : null;
+}
+
+/** Commit authoritative text through the boot-witnessed Node.textContent setter. */
+export function setRuntimeNodeTextContent(node: unknown, value: string): boolean {
+  if (node === null || typeof node !== 'object') return false;
+  if (runtimeDomSecurity) {
+    try {
+      runtimeDomSecurity.setNodeTextContent(node, value);
+      return runtimeDomSecurity.readNodeTextContent(node) === value;
+    } catch {
+      return false;
+    }
+  }
+  const descriptor = securityGetOwnPropertyDescriptor(node, 'textContent');
+  if (descriptor && 'value' in descriptor && descriptor.writable === true) {
+    defineSecurityProperties(node, {
+      textContent: { ...descriptor, value },
+    });
+    return securityGetOwnPropertyDescriptor(node, 'textContent')?.value === value;
+  }
+  const setter = runtimeStructuralSetter(node, 'textContent');
+  if (!setter) return false;
+  try {
+    applySecurityIntrinsic(setter, node, [value]);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function createRuntimeFormData(form: object, submitter?: unknown): FormData {
   if (runtimeDomSecurity) {
     return runtimeDomSecurity.createFormData(
@@ -163,6 +234,21 @@ function runtimeStructuralMethod(
       return 'value' in descriptor && isRuntimeCallable(descriptor.value)
         ? descriptor.value
         : undefined;
+    }
+    owner = securityGetPrototypeOf(owner);
+  }
+  return undefined;
+}
+
+function runtimeStructuralSetter(
+  value: object,
+  property: PropertyKey,
+): ((next: unknown) => void) | undefined {
+  let owner: object | null = value;
+  for (let depth = 0; owner !== null && depth < 16; depth += 1) {
+    const descriptor = securityGetOwnPropertyDescriptor(owner, property);
+    if (descriptor !== undefined) {
+      return 'set' in descriptor && isRuntimeCallable(descriptor.set) ? descriptor.set : undefined;
     }
     owner = securityGetPrototypeOf(owner);
   }

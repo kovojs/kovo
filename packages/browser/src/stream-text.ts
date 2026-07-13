@@ -15,7 +15,13 @@ import {
   securitySetForEach,
   securityStringSlice,
 } from './security-witness-intrinsics.js';
-import { readRuntimeElementAttribute } from './runtime-dom-security.js';
+import {
+  queryRuntimeElement,
+  readRuntimeElementAttribute,
+  readRuntimeNodeTextContent,
+  setRuntimeElementAttribute,
+  setRuntimeNodeTextContent,
+} from './runtime-dom-security.js';
 
 export interface StreamTextTarget {
   getAttribute?(name: string): string | null;
@@ -128,7 +134,7 @@ export class StreamTextBuffer {
 
     state.accumulated += chunk.text;
     state.pending += chunk.text;
-    target.setAttribute?.('data-stream-state', 'streaming');
+    setRuntimeElementAttribute(target, 'data-stream-state', 'streaming');
 
     if (state.pending.length >= this.flushThreshold) {
       this.cancelTimer(state);
@@ -162,7 +168,7 @@ export class StreamTextBuffer {
   async fail(error: unknown): Promise<void> {
     await this.flush('error');
     securityMapForEach(this.states, (state) => {
-      state.target.setAttribute?.('data-stream-state', 'error');
+      setRuntimeElementAttribute(state.target, 'data-stream-state', 'error');
     });
     this.onError?.(error);
   }
@@ -175,7 +181,7 @@ export class StreamTextBuffer {
     }
 
     const state: StreamTextState = {
-      accumulated: target.textContent ?? '',
+      accumulated: readRuntimeNodeTextContent(target) ?? '',
       pending: '',
       target,
       timer: undefined,
@@ -196,8 +202,14 @@ export class StreamTextBuffer {
 
     this.cancelTimer(state);
     state.pending = '';
-    state.target.textContent = state.accumulated;
-    state.target.setAttribute?.('data-stream-state', reason === 'error' ? 'error' : 'streaming');
+    if (!setRuntimeNodeTextContent(state.target, state.accumulated)) {
+      throw new TypeError('Kovo stream-text target commit control is unavailable.');
+    }
+    setRuntimeElementAttribute(
+      state.target,
+      'data-stream-state',
+      reason === 'error' ? 'error' : 'streaming',
+    );
     await this.render(state.target, state.accumulated);
   }
 
@@ -330,19 +342,16 @@ export function findStreamTextTarget(
   root: StreamTextRoot,
   target: string,
 ): StreamTextTarget | null {
-  const resolved = root.findStreamTextTarget?.(target);
-  if (resolved) return resolved;
-
-  const selector = `[data-stream-text="${escapeCssString(target)}"]`;
-  const queryOne = root.querySelector?.(selector);
-  if (queryOne) return queryOne;
-
-  if (!root.querySelectorAll) return null;
-  for (const candidate of root.querySelectorAll(selector)) {
-    return candidate;
+  const custom = securityGetOwnPropertyDescriptor(root, 'findStreamTextTarget');
+  if (custom && 'value' in custom && typeof custom.value === 'function') {
+    try {
+      const resolved = applySecurityIntrinsic<unknown>(custom.value, root, [target]);
+      if (resolved !== null && typeof resolved === 'object') return resolved as StreamTextTarget;
+    } catch {}
   }
 
-  return null;
+  const selector = `[data-stream-text="${escapeCssString(target)}"]`;
+  return queryRuntimeElement(root, selector) as StreamTextTarget | null;
 }
 
 function applyStreamTextChunkImmediately(
@@ -356,9 +365,17 @@ function applyStreamTextChunkImmediately(
     return false;
   }
 
-  const current = target.textContent ?? '';
-  target.textContent = chunk.mode === 'checkpoint' ? chunk.text : `${current}${chunk.text}`;
-  target.setAttribute?.('data-stream-state', 'streaming');
+  const current = readRuntimeNodeTextContent(target) ?? '';
+  if (
+    !setRuntimeNodeTextContent(
+      target,
+      chunk.mode === 'checkpoint' ? chunk.text : `${current}${chunk.text}`,
+    )
+  ) {
+    onError?.(new TypeError('Kovo stream-text target commit control is unavailable.'));
+    return false;
+  }
+  setRuntimeElementAttribute(target, 'data-stream-state', 'streaming');
   return true;
 }
 

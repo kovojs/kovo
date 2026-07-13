@@ -100,7 +100,9 @@ export function createBrowserKovoRoot(options: CreateBrowserKovoRootOptions = {}
       return morphRoot.findFragmentTarget(target);
     },
     querySelectorAll(selector) {
-      return runtimeRoot.querySelectorAll(selector);
+      // SPEC §6.6/§9.1: live target and stream routing are security-bearing server-truth inputs.
+      // Snapshot through the same boot-witnessed selector membrane as fragment application.
+      return browserRootSecurity.queryAllElements(runtimeRoot, selector);
     },
   };
   return root;
