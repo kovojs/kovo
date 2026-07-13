@@ -345,6 +345,82 @@ describe('kovo db', () => {
     );
   });
 
+  it('does not write generated migrations through a symlinked migrations root', async () => {
+    const { dataDir, migrationsDir, root, schemaPath } = writeDbCommandFixture(
+      'generated-symlink-root',
+    );
+    const outside = mkdtempSync(join(dirname(root), '.tmp-kovo-db-generate-outside-'));
+    roots.push(outside);
+    rmSync(migrationsDir, { force: true, recursive: true });
+    symlinkSync(outside, migrationsDir, 'dir');
+
+    const generated = await captureWrites(() =>
+      mainAsync([
+        'db',
+        'generate',
+        '--schema',
+        schemaPath,
+        '--driver',
+        'pglite',
+        '--data-dir',
+        dataDir,
+        '--migrations',
+        migrationsDir,
+      ]),
+    );
+
+    expect(generated.result).toBe(1);
+    expect(generated.stdout).toBe('');
+    expect(generated.stderr).toMatch(/symbolic-link|symbolic link|cannot use/u);
+    expect(readdirSync(outside)).toEqual([]);
+  });
+
+  it('does not execute migrations read through a symlinked migrations root', async () => {
+    const { dataDir, migrationsDir, root, schemaPath } = writeDbCommandFixture(
+      'migrate-symlink-root',
+    );
+    const outside = mkdtempSync(join(dirname(root), '.tmp-kovo-db-migrate-outside-'));
+    roots.push(outside);
+    writeFileSync(
+      join(outside, '001_outside.sql'),
+      'CREATE TABLE outside_symlink_migration (id text PRIMARY KEY);\n',
+      'utf8',
+    );
+    rmSync(migrationsDir, { force: true, recursive: true });
+    symlinkSync(outside, migrationsDir, 'dir');
+
+    const migrated = await captureWrites(() =>
+      mainAsync([
+        'db',
+        'migrate',
+        '--schema',
+        schemaPath,
+        '--driver',
+        'pglite',
+        '--data-dir',
+        dataDir,
+        '--migrations',
+        migrationsDir,
+      ]),
+    );
+
+    expect(migrated.result).toBe(1);
+    expect(migrated.stdout).toBe('');
+    expect(migrated.stderr).not.toContain('MIGRATION status=applied');
+
+    const { PGlite } = (await import(
+      fileURLToPath(new URL('../../server/node_modules/@electric-sql/pglite', import.meta.url))
+    )) as typeof import('@electric-sql/pglite');
+    const db = new PGlite(dataDir);
+    try {
+      await expect(db.query('select * from outside_symlink_migration')).rejects.toThrow(
+        /does not exist/u,
+      );
+    } finally {
+      await db.close();
+    }
+  });
+
   it('prints usage for missing db actions', async () => {
     const output = await captureWrites(() => mainAsync(['db']));
 

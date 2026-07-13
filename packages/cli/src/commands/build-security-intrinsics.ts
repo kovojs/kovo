@@ -1,10 +1,12 @@
 /* oxlint-disable typescript/unbound-method -- Boot-captured controls are invoked via pinned Reflect.apply. */
+import { Buffer as NativeBuffer } from 'node:buffer';
 /**
  * Boot-pinned controls for authority-bearing `kovo build --check` joins (SPEC §2/§11.4).
  * The supported CLI runner loads this module before Vite config/plugins/apps. Function#toString is
  * captured only for operational handler-source extraction, never as native provenance.
  */
 const NativeArray = globalThis.Array;
+const NativeDate = globalThis.Date;
 const NativeFunction = globalThis.Function;
 const NativeJSON = globalThis.JSON;
 const NativeMap = globalThis.Map;
@@ -18,6 +20,9 @@ const NativeString = globalThis.String;
 const NativeTypeError = globalThis.TypeError;
 const nativeArrayIsArray = NativeArray.isArray;
 const nativeArrayJoin = NativeArray.prototype.join;
+const nativeBufferFrom = NativeBuffer.from;
+const nativeBufferToString = NativeBuffer.prototype.toString;
+const nativeDateToISOString = NativeDate.prototype.toISOString;
 const nativeFunctionToString = NativeFunction.prototype.toString;
 const nativeJsonStringify = NativeJSON.stringify;
 const nativeMapGet = NativeMap.prototype.get;
@@ -38,6 +43,7 @@ const nativeRegExpReplace = NativeRegExp.prototype[Symbol.replace];
 const nativeSetAdd = NativeSet.prototype.add;
 const nativeSetHas = NativeSet.prototype.has;
 const nativeStringIncludes = NativeString.prototype.includes;
+const nativeStringEndsWith = NativeString.prototype.endsWith;
 const nativeStringIndexOf = NativeString.prototype.indexOf;
 const nativeStringSlice = NativeString.prototype.slice;
 const nativeStringStartsWith = NativeString.prototype.startsWith;
@@ -264,6 +270,22 @@ export function buildRegExpReplace(expression: RegExp, value: string, replacemen
 export function buildStringIncludes(value: string, search: string): boolean {
   assertBuildSecurityIntrinsics();
   return apply(nativeStringIncludes, value, [search]);
+}
+
+export function buildStringEndsWith(value: string, search: string): boolean {
+  assertBuildSecurityIntrinsics();
+  return apply(nativeStringEndsWith, value, [search]);
+}
+
+export function buildCurrentIsoTimestamp(): string {
+  assertBuildSecurityIntrinsics();
+  return apply(nativeDateToISOString, new NativeDate(), []);
+}
+
+export function buildUtf8Text(value: Uint8Array): string {
+  assertBuildSecurityIntrinsics();
+  const buffer = apply<Buffer>(nativeBufferFrom, NativeBuffer, [value]);
+  return apply(nativeBufferToString, buffer, ['utf8']);
 }
 
 export function buildStringSplit(value: string, separator: string): string[] {
