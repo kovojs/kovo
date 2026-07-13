@@ -175,7 +175,16 @@ export interface WebhookPrincipalWriteScope<Tx = unknown> {
 
 /** Options used when an app dispatch path lets a webhook compose through `runMutation(...)`. */
 export interface RunWebhookOptions<Request extends EndpointRequest = EndpointRequest> {
-  mutationOptions?: Omit<RunMutationOptions<Request>, 'csrf'>;
+  /**
+   * Safe app lifecycle adapters forwarded into composed mutations. Internal mutation gate flags,
+   * session authority, CSRF posture, and caller-supplied principal posture are deliberately absent:
+   * webhook composition derives those from its verified replay reservation and explicit
+   * `actAs(...)`/`declareSystemWrite(...)` branch.
+   */
+  mutationOptions?: Pick<
+    RunMutationOptions<Request>,
+    'clientIp' | 'db' | 'onError' | 'taskScheduler'
+  >;
 }
 
 /**
@@ -688,6 +697,177 @@ function snapshotWebhookDefinitionForDeclaration<
   }) as WebhookDefinition<InputSchema, Value, Tx, Writes>;
 }
 
+type PinnedWebhookMutationOptions<Request extends EndpointRequest> = Pick<
+  RunMutationOptions<Request>,
+  'clientIp' | 'db' | 'onError' | 'taskScheduler'
+>;
+
+function snapshotRunWebhookOptions<Request extends EndpointRequest>(
+  source: RunWebhookOptions<Request>,
+): PinnedWebhookMutationOptions<Request> {
+  if (typeof source !== 'object' || source === null || witnessIsArray(source)) {
+    throw new TypeError('runWebhook() options must be a stable own-data record.');
+  }
+  assertExactWebhookOptionKeys(source, ['mutationOptions'], 'runWebhook() options');
+  const mutationOptions = stableOwnWebhookValue(
+    source,
+    'mutationOptions',
+    'runWebhook().mutationOptions',
+    false,
+  );
+  if (mutationOptions === undefined) return witnessFreeze({});
+  if (typeof mutationOptions !== 'object' || mutationOptions === null || witnessIsArray(mutationOptions)) {
+    throw new TypeError('runWebhook().mutationOptions must be a stable own-data record.');
+  }
+
+  assertExactWebhookOptionKeys(
+    mutationOptions,
+    ['clientIp', 'db', 'onError', 'taskScheduler'],
+    'runWebhook().mutationOptions',
+  );
+  const clientIp = stableOwnWebhookValue(
+    mutationOptions,
+    'clientIp',
+    'runWebhook().mutationOptions.clientIp',
+    false,
+  );
+  const db = stableOwnWebhookValue(
+    mutationOptions,
+    'db',
+    'runWebhook().mutationOptions.db',
+    false,
+  );
+  const onError = stableOwnWebhookValue(
+    mutationOptions,
+    'onError',
+    'runWebhook().mutationOptions.onError',
+    false,
+  );
+  const schedulerSource = stableOwnWebhookValue(
+    mutationOptions,
+    'taskScheduler',
+    'runWebhook().mutationOptions.taskScheduler',
+    false,
+  );
+  if (clientIp !== undefined && typeof clientIp !== 'function') {
+    throw new TypeError('runWebhook().mutationOptions.clientIp must be a function.');
+  }
+  if (db !== undefined && typeof db !== 'function') {
+    throw new TypeError('runWebhook().mutationOptions.db must be a function.');
+  }
+  if (onError !== undefined && typeof onError !== 'function') {
+    throw new TypeError('runWebhook().mutationOptions.onError must be a function.');
+  }
+  const taskScheduler =
+    schedulerSource === undefined ? undefined : snapshotWebhookTaskScheduler(schedulerSource);
+
+  return witnessFreeze({
+    ...(clientIp === undefined
+      ? {}
+      : { clientIp: clientIp as PinnedWebhookMutationOptions<Request>['clientIp'] }),
+    ...(db === undefined ? {} : { db: db as PinnedWebhookMutationOptions<Request>['db'] }),
+    ...(onError === undefined
+      ? {}
+      : { onError: onError as PinnedWebhookMutationOptions<Request>['onError'] }),
+    ...(taskScheduler === undefined ? {} : { taskScheduler }),
+  });
+}
+
+function snapshotWebhookTaskScheduler(
+  source: unknown,
+): NonNullable<RunMutationOptions<EndpointRequest>['taskScheduler']> {
+  if (typeof source !== 'object' || source === null || witnessIsArray(source)) {
+    throw new TypeError('runWebhook().mutationOptions.taskScheduler must be a stable record.');
+  }
+  assertExactWebhookOptionKeys(
+    source,
+    ['cancel', 'registeredTasks', 'schedule'],
+    'runWebhook().mutationOptions.taskScheduler',
+  );
+  const cancel = stableOwnWebhookValue(
+    source,
+    'cancel',
+    'runWebhook().mutationOptions.taskScheduler.cancel',
+  );
+  const registeredTasksSource = stableOwnWebhookValue(
+    source,
+    'registeredTasks',
+    'runWebhook().mutationOptions.taskScheduler.registeredTasks',
+  );
+  const schedule = stableOwnWebhookValue(
+    source,
+    'schedule',
+    'runWebhook().mutationOptions.taskScheduler.schedule',
+  );
+  if (typeof cancel !== 'function' || typeof schedule !== 'function') {
+    throw new TypeError('runWebhook() task scheduler methods must be functions.');
+  }
+  if (!witnessIsArray(registeredTasksSource)) {
+    throw new TypeError('runWebhook() task scheduler registry must be a dense array.');
+  }
+  const length = stableOwnWebhookValue(
+    registeredTasksSource,
+    'length',
+    'runWebhook().mutationOptions.taskScheduler.registeredTasks.length',
+  );
+  if (
+    typeof length !== 'number' ||
+    !requestStateIsSafeInteger(length) ||
+    length < 0 ||
+    length > 100_000
+  ) {
+    throw new TypeError('runWebhook() task scheduler registry must be bounded and dense.');
+  }
+  const registeredTasks: unknown[] = [];
+  for (let index = 0; index < length; index += 1) {
+    const taskDefinition = stableOwnWebhookValue(
+      registeredTasksSource,
+      index,
+      `runWebhook().mutationOptions.taskScheduler.registeredTasks[${index}]`,
+    );
+    witnessDefineProperty(registeredTasks, index, {
+      configurable: true,
+      enumerable: true,
+      value: taskDefinition,
+      writable: true,
+    });
+  }
+
+  return witnessFreeze({
+    registeredTasks: witnessFreeze(registeredTasks) as never,
+    cancel(request, handle) {
+      return witnessReflectApply(cancel, source, [request, handle]);
+    },
+    schedule(request, input) {
+      return witnessReflectApply(schedule, source, [request, input]);
+    },
+  });
+}
+
+function assertExactWebhookOptionKeys(
+  source: object,
+  allowed: readonly string[],
+  label: string,
+): void {
+  const keys = witnessOwnKeys(source);
+  if (keys.length > 100_000) throw new TypeError(`${label} must be bounded.`);
+  for (let index = 0; index < keys.length; index += 1) {
+    const descriptor = witnessGetOwnPropertyDescriptor(keys, index);
+    if (descriptor === undefined || !('value' in descriptor)) {
+      throw new TypeError(`${label} keys must remain dense.`);
+    }
+    const key = descriptor.value;
+    let accepted = false;
+    for (let allowedIndex = 0; allowedIndex < allowed.length; allowedIndex += 1) {
+      if (key === allowed[allowedIndex]) {
+        accepted = true;
+        break;
+      }
+    }
+    if (!accepted) throw new TypeError(`${label} contains an unsupported option.`);
+  }
+}
+
 function snapshotWebhookVerification(source: unknown): WebhookVerifier | 'none' {
   if (source === 'none') return source;
   if (typeof source !== 'object' || source === null || witnessIsArray(source)) {
@@ -919,6 +1099,33 @@ export async function runWebhook<
   request: Request,
   options: RunWebhookOptions = {},
 ): Promise<WebhookRunResult<WebhookInputFor<InputSchema>, Value>> {
+  let name: string;
+  let definition: WebhookDefinition<InputSchema, Value, Tx, Writes>;
+  let mutationOptions: PinnedWebhookMutationOptions<EndpointRequest>;
+  try {
+    const definitionSource = stableOwnWebhookValue(
+      declaration,
+      'webhookDefinition',
+      'runWebhook().webhookDefinition',
+    );
+    const nameSource = stableOwnWebhookValue(declaration, 'name', 'runWebhook().name');
+    if (typeof nameSource !== 'string') {
+      throw new TypeError('runWebhook().name must be an own string data property.');
+    }
+    name = nameSource;
+    definition = snapshotWebhookDefinitionForDeclaration(
+      definitionSource as WebhookDefinition<InputSchema, Value, Tx, Writes>,
+    );
+    assertWebhookWritePosture(name, definition);
+    mutationOptions = snapshotRunWebhookOptions(options);
+  } catch {
+    return {
+      changes: [],
+      replayed: false,
+      response: webhookResponse(500, 'Internal Server Error'),
+    };
+  }
+
   const endpointRequest = endpointRequestWithoutSession(request, { stripAuthorization: true });
   const verifierInput = await requestVerifierInput(endpointRequest);
   const rawBody = verifierInput.payload;
@@ -930,11 +1137,7 @@ export async function runWebhook<
   // `false` result, never surfacing which check failed.
   let verification: boolean;
   try {
-    verification = await verifyWebhook(
-      declaration.webhookDefinition,
-      verifierInput.headers,
-      rawBody,
-    );
+    verification = await verifyWebhook(definition, verifierInput.headers, rawBody);
   } catch {
     verification = false;
   }
@@ -960,10 +1163,7 @@ export async function runWebhook<
   // the same sanitized 500 the handler-exception path returns, never leaking its `.message`.
   let inputResult: Awaited<ReturnType<typeof parseLooseWebhookInput<InputSchema>>>;
   try {
-    inputResult = await parseLooseWebhookInput(
-      declaration.webhookDefinition.input,
-      bodyResult.value,
-    );
+    inputResult = await parseLooseWebhookInput(definition.input, bodyResult.value);
   } catch {
     return {
       changes: [],
@@ -987,8 +1187,8 @@ export async function runWebhook<
   // a writable transaction MUST carry idempotency()+replayStore. Fail closed BEFORE opening
   // the transaction (not at the old post-commit posture check) so a misconfigured or
   // hand-built declaration can never commit a write a provider retry would re-execute.
-  const writeCapable = webhookCanWrite(declaration.webhookDefinition);
-  if (writeCapable && !webhookReplayPostureSatisfied(declaration.webhookDefinition)) {
+  const writeCapable = webhookCanWrite(definition);
+  if (writeCapable && !webhookReplayPostureSatisfied(definition)) {
     return {
       changes: [],
       replayed: false,
@@ -999,7 +1199,7 @@ export async function runWebhook<
   const input = inputResult.value;
   let idem: string | undefined;
   try {
-    const candidate = declaration.webhookDefinition.idempotency?.(input);
+    const candidate = definition.idempotency?.(input);
     if (candidate !== undefined && typeof candidate !== 'string') {
       return {
         changes: [],
@@ -1028,10 +1228,8 @@ export async function runWebhook<
   // RESERVE/SET below — gating the lookup on a truthy `idem` skipped the fast path
   // for '' while still reserving, leaving a latent double-execute window.
   const idemActive = idem !== undefined;
-  const replayScope = webhookReplayScope(declaration.name);
-  const replayed = idemActive
-    ? await declaration.webhookDefinition.replayStore?.get(replayScope, idem)
-    : undefined;
+  const replayScope = webhookReplayScope(name);
+  const replayed = idemActive ? await definition.replayStore?.get(replayScope, idem) : undefined;
   if (replayed) {
     return {
       changes: [],
@@ -1050,7 +1248,7 @@ export async function runWebhook<
   const reserveOutcome = await reserveReplayBeforeRun({
     idem,
     scope: replayScope,
-    store: declaration.webhookDefinition.replayStore,
+    store: definition.replayStore,
   });
   if (reserveOutcome.kind === 'replayed') {
     return {
@@ -1073,32 +1271,37 @@ export async function runWebhook<
     const runHandler = async (tx: Tx): Promise<Value> => {
       const managedTx = webhookManagedTransactionDb(tx);
       const context = webhookHandlerContext(
-        declaration.name,
+        name,
         input,
         endpointRequest,
         rawBody,
         changes,
-        declaration.webhookDefinition.writes,
+        definition.writes,
         managedTx,
-        async (definition, mutationInput, principalPosture) => {
+        async (mutationDefinition, mutationInput, principalPosture) => {
           if (reserveOutcome.kind !== 'reserved' && reserveOutcome.kind !== 'disabled') {
             throw new Error('Webhook replay reservation is unavailable.');
           }
-          if (!idemActive || declaration.webhookDefinition.replayStore === undefined) {
+          if (!idemActive || definition.replayStore === undefined) {
             throw new Error(
-              `Webhook "${declaration.name}" called runMutation(${definition.key}) without an active idempotency replay reservation.`,
+              `Webhook "${name}" called runMutation(${mutationDefinition.key}) without an active idempotency replay reservation.`,
             );
           }
 
           const mutationRequest = webhookMutationRequest(endpointRequest, managedTx);
-          const result = await runMutation(definition as never, mutationInput, mutationRequest, {
-            ...options.mutationOptions,
-            csrf: false,
-            principalPosture,
-          } as never);
+          const result = await runMutation(
+            mutationDefinition as never,
+            mutationInput,
+            mutationRequest,
+            {
+              ...mutationOptions,
+              csrf: false,
+              principalPosture,
+            } as never,
+          );
           if (!result.ok) {
             throw new Error(
-              `Webhook runMutation(${definition.key}) failed with ${result.status} ${result.error.code}.`,
+              `Webhook runMutation(${mutationDefinition.key}) failed with ${result.status} ${result.error.code}.`,
             );
           }
           appendWebhookChanges(
@@ -1108,20 +1311,20 @@ export async function runWebhook<
           return result.value;
         },
       );
-      const value = await declaration.webhookDefinition.handler(input, context);
+      const value = await definition.handler(input, context);
       if (isWebhookFail(value)) throw new WebhookRollback(value);
       return value as Value;
     };
-    const value = declaration.webhookDefinition.transaction
-      ? await declaration.webhookDefinition.transaction(
+    const value = definition.transaction
+      ? await definition.transaction(
           { input, rawBody, request: endpointRequest },
           runHandler,
         )
       : await runHandler(undefined as Tx);
-    assertWebhookReplayPosture(declaration, changes);
+    assertWebhookReplayPosture(name, definition, changes);
 
     const response = storeWebhookReplay(
-      declaration.webhookDefinition.replayStore,
+      definition.replayStore,
       replayScope,
       idem,
       {
@@ -1141,7 +1344,7 @@ export async function runWebhook<
   } catch (error) {
     if (isWebhookRollback(error)) {
       const response = storeWebhookReplay(
-        declaration.webhookDefinition.replayStore,
+        definition.replayStore,
         replayScope,
         idem,
         webhookFailWireResponse(error.failure, idem),
@@ -1180,19 +1383,17 @@ export async function runWebhook<
  * covers the recordChange-without-posture developer error the runtime can still observe.
  */
 function assertWebhookReplayPosture(
-  declaration: {
-    name: string;
-    webhookDefinition: {
-      idempotency?: unknown;
-      replayStore?: unknown;
-    };
+  name: string,
+  definition: {
+    idempotency?: unknown;
+    replayStore?: unknown;
   },
   changes: readonly ChangeRecord[],
 ): void {
   if (changes.length === 0) return;
-  if (webhookReplayPostureSatisfied(declaration.webhookDefinition)) return;
+  if (webhookReplayPostureSatisfied(definition)) return;
   throw new Error(
-    `Webhook "${declaration.name}" recorded write changes without idempotency and replayStore posture.`,
+    `Webhook "${name}" recorded write changes without idempotency and replayStore posture.`,
   );
 }
 

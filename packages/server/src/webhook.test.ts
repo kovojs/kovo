@@ -635,6 +635,85 @@ describe('server webhook primitive', () => {
     expect(mutationWrites).toBe(1);
   });
 
+  it('does not let webhook options bypass a composed mutation guard', async () => {
+    const replayStore = createMemoryWebhookReplayStore();
+    let mutationWrites = 0;
+    const guardedMutation = mutation('invoice/guarded-webhook-options', {
+      guard: () => false,
+      handler(input: { id: string }) {
+        mutationWrites += 1;
+        return input.id;
+      },
+      input: s.object({ id: s.string() }),
+    });
+    const wh = webhook('/webhooks/guarded-options', {
+      handler(input, context) {
+        return context.actAs('owner_1').runMutation(guardedMutation, input);
+      },
+      idempotency: (input) => input.id,
+      input: s.object({ id: s.string() }),
+      replayStore,
+      verify: 'none',
+      verifyJustification: 'fixture-only webhook option guard regression',
+    });
+
+    const result = await runWebhook(
+      wh,
+      new Request('https://example.test/webhooks/guarded-options', {
+        body: JSON.stringify({ id: 'evt_guarded' }),
+        method: 'POST',
+      }),
+      { mutationOptions: { guardResolved: true } } as never,
+    );
+
+    expect(result.response.status).toBe(500);
+    expect(mutationWrites).toBe(0);
+  });
+
+  it('rejects a late mutation-options accessor before verifier or replay awaits', async () => {
+    const replayStore = createMemoryWebhookReplayStore();
+    let mutationWrites = 0;
+    let optionReads = 0;
+    const guardedMutation = mutation('invoice/accessor-webhook-options', {
+      guard: () => false,
+      handler(input: { id: string }) {
+        mutationWrites += 1;
+        return input.id;
+      },
+      input: s.object({ id: s.string() }),
+    });
+    const wh = webhook('/webhooks/accessor-options', {
+      handler(input, context) {
+        return context.actAs('owner_1').runMutation(guardedMutation, input);
+      },
+      idempotency: (input) => input.id,
+      input: s.object({ id: s.string() }),
+      replayStore,
+      verify: 'none',
+      verifyJustification: 'fixture-only webhook option accessor regression',
+    });
+    const options = {} as Record<string, unknown>;
+    Object.defineProperty(options, 'mutationOptions', {
+      get() {
+        optionReads += 1;
+        return { guardResolved: true };
+      },
+    });
+
+    const result = await runWebhook(
+      wh,
+      new Request('https://example.test/webhooks/accessor-options', {
+        body: JSON.stringify({ id: 'evt_accessor' }),
+        method: 'POST',
+      }),
+      options as never,
+    );
+
+    expect(result.response.status).toBe(500);
+    expect(optionReads).toBe(0);
+    expect(mutationWrites).toBe(0);
+  });
+
   it('refuses a webhook mutation that only carries a payload owner and no actAs posture', async () => {
     const replayStore = createMemoryWebhookReplayStore();
     let mutationWrites = 0;
@@ -1300,6 +1379,51 @@ describe('server webhook primitive', () => {
     expect(result.replayed).toBe(false);
     // The transaction was never opened, so the write never executed even once.
     expect(writes).toBe(0);
+  });
+
+  it('pins structural write posture before a toggling definition can run without replay', async () => {
+    const invoice = domain('invoice-toggling-runtime-posture');
+    let handlerCalls = 0;
+    let writesReads = 0;
+    const wh = webhook('/webhooks/toggling-runtime-posture', {
+      handler(input, context) {
+        handlerCalls += 1;
+        context.recordChange(invoice, { keys: [input.id] });
+        return { ok: true };
+      },
+      idempotency: (input) => input.id,
+      input: s.object({ id: s.string() }),
+      replayStore: createMemoryWebhookReplayStore(),
+      verify: 'none',
+      verifyJustification: 'fixture-only webhook test',
+      writes: [invoice],
+    });
+    const toggling = {
+      ...wh,
+      webhookDefinition: { ...wh.webhookDefinition },
+    };
+    delete (toggling.webhookDefinition as { idempotency?: unknown }).idempotency;
+    delete (toggling.webhookDefinition as { replayStore?: unknown }).replayStore;
+    Object.defineProperty(toggling.webhookDefinition, 'writes', {
+      configurable: true,
+      enumerable: true,
+      get() {
+        writesReads += 1;
+        return writesReads === 1 ? [] : [invoice];
+      },
+    });
+
+    const result = await runWebhook(
+      toggling as typeof wh,
+      new Request('https://example.test/webhooks/toggling-runtime-posture', {
+        body: JSON.stringify({ id: 'evt_toggle' }),
+        method: 'POST',
+      }),
+    );
+
+    expect(result.response.status).toBe(500);
+    expect(handlerCalls).toBe(0);
+    expect(writesReads).toBe(0);
   });
 
   // H9 (SPEC §10.3:1151): the reserve path did a single non-blocking attempt and, on
