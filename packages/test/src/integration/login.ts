@@ -3,6 +3,20 @@
 // field is part of the rendered form), so a test just supplies credentials. This
 // hides the CSRF/session dance that the commerce scratch drive script hand-rolled.
 import type { Page } from '@playwright/test';
+import { URL as NodeURL } from 'node:url';
+
+/* eslint-disable typescript/unbound-method */
+
+import {
+  verifierArrayPush,
+  verifierApply,
+  verifierFreeze,
+  verifierGetOwnPropertyDescriptor,
+  verifierOwnKeys,
+} from '../verifier-security-intrinsics.js';
+
+const nativeStringCharCodeAt = String.prototype.charCodeAt;
+const nativeNumberToString = Number.prototype.toString;
 
 /** Options for `login`. */
 export interface LoginOptions {
@@ -22,16 +36,27 @@ export interface LoginOptions {
  * Establishes the session cookie on the page's context.
  */
 export async function login(page: Page, origin: string, options: LoginOptions): Promise<void> {
-  const loginPath = options.loginPath ?? '/login';
-  await page.goto(new URL(loginPath, origin).href, { waitUntil: 'networkidle' });
+  const stable = snapshotLoginOptions(options);
+  const loginPath = stable.loginPath ?? '/login';
+  const originUrl = new NodeURL(origin);
+  const loginUrl = new NodeURL(loginPath, originUrl);
+  if (
+    loginUrl.origin !== originUrl.origin ||
+    loginUrl.username !== '' ||
+    loginUrl.password !== ''
+  ) {
+    throw new TypeError('Kovo integration login path must resolve on the fixture origin.');
+  }
+  await page.goto(loginUrl.href, { waitUntil: 'networkidle' });
 
-  for (const [name, value] of Object.entries(options.fields)) {
-    await page.fill(`[name="${name}"]`, value);
+  for (let index = 0; index < stable.fields.length; index += 1) {
+    const [name, value] = stable.fields[index] as readonly [string, string];
+    await page.fill(loginFieldSelector(name), value);
   }
 
-  const mutationMatch = options.awaitMutation;
-  const submit = options.submit
-    ? page.getByRole('button', { name: options.submit })
+  const mutationMatch = stable.awaitMutation;
+  const submit = stable.submit
+    ? page.getByRole('button', { name: stable.submit })
     : page.locator('button[type="submit"], input[type="submit"]').first();
 
   await Promise.all([
@@ -52,4 +77,85 @@ export async function login(page: Page, origin: string, options: LoginOptions): 
     submit.click(),
   ]);
   await page.waitForLoadState('networkidle');
+}
+
+interface StableLoginOptions {
+  readonly awaitMutation?: string;
+  readonly fields: readonly (readonly [string, string])[];
+  readonly loginPath?: string;
+  readonly submit?: string;
+}
+
+function snapshotLoginOptions(options: LoginOptions): StableLoginOptions {
+  if (typeof options !== 'object' || options === null) {
+    throw new TypeError('Kovo integration login options must be an object.');
+  }
+  const fields = ownData(options, 'fields', 'login options');
+  if (typeof fields !== 'object' || fields === null) {
+    throw new TypeError('Kovo integration login fields must be an own-data object.');
+  }
+  const fieldEntries: (readonly [string, string])[] = [];
+  const names = verifierOwnKeys(fields);
+  for (let index = 0; index < names.length; index += 1) {
+    const name = names[index];
+    if (typeof name !== 'string') throw new TypeError('Login fields must not use symbol names.');
+    const value = ownData(fields, name, 'login fields');
+    if (typeof value !== 'string') throw new TypeError(`Login field ${name} must be a string.`);
+    verifierArrayPush(fieldEntries, verifierFreeze([name, value] as const));
+  }
+  const loginPath = optionalString(options, 'loginPath');
+  const submit = optionalString(options, 'submit');
+  const awaitMutation = optionalString(options, 'awaitMutation');
+  return verifierFreeze({
+    ...(awaitMutation === undefined ? {} : { awaitMutation }),
+    fields: verifierFreeze(fieldEntries),
+    ...(loginPath === undefined ? {} : { loginPath }),
+    ...(submit === undefined ? {} : { submit }),
+  });
+}
+
+function optionalString(options: object, property: string): string | undefined {
+  const value = ownData(options, property, 'login options');
+  if (value !== undefined && typeof value !== 'string') {
+    throw new TypeError(`Login option ${property} must be a string own data property.`);
+  }
+  return value;
+}
+
+function ownData(value: object, property: PropertyKey, label: string): unknown {
+  const first = verifierGetOwnPropertyDescriptor(value, property);
+  const second = verifierGetOwnPropertyDescriptor(value, property);
+  if (first === undefined && second === undefined) return undefined;
+  if (
+    first === undefined ||
+    second === undefined ||
+    !('value' in first) ||
+    !('value' in second) ||
+    first.value !== second.value
+  ) {
+    throw new TypeError(`${label}.${String(property)} must be a stable own data property.`);
+  }
+  return first.value;
+}
+
+/** @internal Exact CSS string selector for one login field name. */
+export function loginFieldSelector(name: string): string {
+  let escaped = '';
+  for (let index = 0; index < name.length; index += 1) {
+    const character = name[index] ?? '';
+    const safe =
+      (character >= 'a' && character <= 'z') ||
+      (character >= 'A' && character <= 'Z') ||
+      (character >= '0' && character <= '9') ||
+      character === '-' ||
+      character === '_';
+    if (safe) {
+      escaped += character;
+      continue;
+    }
+    const charCode = verifierApply<number>(nativeStringCharCodeAt, character, [0]);
+    const code = verifierApply<string>(nativeNumberToString, charCode, [16]);
+    escaped += `\\${code} `;
+  }
+  return `[name="${escaped}"]`;
 }

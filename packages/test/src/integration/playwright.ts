@@ -4,7 +4,6 @@
 // The harness boots that app once per worker (amortizing Vite startup), resets the
 // database before each test for isolation, points `baseURL` at the live origin so
 // `page.goto('/')` just works, and hands the test `db`, `login`, and `semantic`.
-import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import {
@@ -15,6 +14,7 @@ import {
 } from '@playwright/test';
 
 import { bootFixture, type BootedFixture } from './boot-fixture.js';
+import { resolveFixtureDirectory } from './fixture-path.js';
 import { login as performLogin, type LoginOptions } from './login.js';
 import { semanticSnapshot, type SemanticSnapshotOptions } from './semantic-snapshot.js';
 import type { PgliteTestDb } from '../pglite.js';
@@ -67,7 +67,8 @@ export const test = base.extend<KovoTestFixtures, KovoTestOptions & KovoWorkerFi
           "Set the fixture to drive: `test.use({ kovoFixture: '<folder>' })` at the top of the spec.",
         );
       }
-      const booted = await bootFixture(path.join(fixturesRoot, kovoFixture));
+      const fixtureDirectory = await resolveFixtureDirectory(fixturesRoot, kovoFixture);
+      const booted = await bootFixture(fixtureDirectory);
       await use(booted);
       await booted.close();
     },
