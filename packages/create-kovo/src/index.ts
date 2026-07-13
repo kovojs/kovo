@@ -337,9 +337,12 @@ export function writeKovoProject(
   options: WriteKovoProjectOptions = {},
 ): WriteKovoProjectResult {
   const root = resolve(targetDirectory);
-  const name = options.name ?? basename(root);
+  const configuredName = ownScaffoldOption(options, 'name');
+  const configuredDialect = ownScaffoldOption(options, 'dialect');
+  const disableGit = ownScaffoldOption(options, 'disableGit');
+  const name = configuredName ?? basename(root);
   const project = createKovoProject({
-    ...(options.dialect === undefined ? {} : { dialect: options.dialect }),
+    ...(configuredDialect === undefined ? {} : { dialect: configuredDialect }),
     name,
   });
 
@@ -347,7 +350,9 @@ export function writeKovoProject(
 
   mkdirSync(root, { recursive: true });
   const rootIdentity = pinScaffoldRoot(root);
-  const stagingRoot = mkdtempSync(resolve(root, '.kovo-scaffold-'));
+  verifyScaffoldRoot(rootIdentity);
+  const stagingRoot = mkdtempSync(resolve(rootIdentity.canonicalPath, '.kovo-scaffold-'));
+  verifyScaffoldRoot(rootIdentity);
 
   try {
     for (const file of project.files) {
@@ -384,8 +389,9 @@ export function writeKovoProject(
     rmSync(stagingRoot, { force: true, recursive: true });
   }
 
-  if (!options.disableGit) {
-    tryGitInit(root);
+  if (disableGit !== true) {
+    verifyScaffoldRoot(rootIdentity);
+    tryGitInit(rootIdentity.canonicalPath);
   }
 
   return {
@@ -393,6 +399,28 @@ export function writeKovoProject(
     name: project.name,
     root,
   };
+}
+
+function ownScaffoldOption<Key extends keyof WriteKovoProjectOptions>(
+  options: WriteKovoProjectOptions,
+  key: Key,
+): WriteKovoProjectOptions[Key] {
+  const before = Object.getOwnPropertyDescriptor(options, key);
+  const after = Object.getOwnPropertyDescriptor(options, key);
+  if (before === undefined && after === undefined) return undefined;
+  if (
+    before === undefined ||
+    after === undefined ||
+    !('value' in before) ||
+    !('value' in after) ||
+    !Object.is(before.value, after.value) ||
+    before.configurable !== after.configurable ||
+    before.enumerable !== after.enumerable ||
+    before.writable !== after.writable
+  ) {
+    throw new TypeError(`create-kovo option '${String(key)}' must be a stable own data property.`);
+  }
+  return before.value as WriteKovoProjectOptions[Key];
 }
 
 function renderAgentsFile(kovoRulesBlock: string): string {

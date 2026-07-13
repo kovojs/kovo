@@ -25,6 +25,7 @@ import {
   demoPasswordEnvVar,
   main,
   renderCreateKovoHelp,
+  type WriteKovoProjectOptions,
   writeKovoProject,
 } from './index.js';
 import { linkStarterBuildDependencies, resolveDependencyRoot } from './index.test-support.js';
@@ -1387,6 +1388,24 @@ describe('create-kovo starter (CLI)', () => {
     } finally {
       rmSync(parent, { force: true, recursive: true });
       rmSync(outside, { force: true, recursive: true });
+    }
+  });
+
+  it('rejects live scaffold option accessors before writing or invoking git', () => {
+    const root = join(mkdtempSync(join(tmpdir(), 'create-kovo-options-')), 'app');
+    const options = Object.create(null) as WriteKovoProjectOptions;
+    Object.defineProperty(options, 'disableGit', {
+      enumerable: true,
+      get: () => false,
+    });
+
+    try {
+      expect(() => writeKovoProject(root, options)).toThrow(
+        "create-kovo option 'disableGit' must be a stable own data property.",
+      );
+      expect(existsSync(root)).toBe(false);
+    } finally {
+      rmSync(dirname(root), { force: true, recursive: true });
     }
   });
 });
