@@ -9,6 +9,7 @@ import { writeKovoProject } from './index.js';
 import {
   attributeValue,
   buildReusableProductionArtifact,
+  fieldValue,
   firstFormHtml,
 } from './index.build.test-support.js';
 import {
@@ -17,8 +18,10 @@ import {
 } from './index.build.prod-artifact.sink-census.js';
 import {
   collectOutput,
+  cookieHeader,
   fetchTextWhenReady,
   linkStarterBuildDependencies,
+  mergeCookies,
   reservePort,
   stopProcess,
   withRepoBinOnPath,
@@ -78,6 +81,7 @@ describe('create-kovo starter (build integration: production response header art
         env: {
           ...withRepoBinOnPath(),
           HOST: '127.0.0.1',
+          KOVO_VERIFY_ENDPOINT_POSTURE: '1',
           NODE_ENV: 'test',
           PORT: String(port),
         },
@@ -120,15 +124,22 @@ describe('create-kovo starter (build integration: production response header art
       expect(rollingOk.headers.get('cache-control')).toBe('private, no-store');
       expect(rollingOk.headers.get('vary')).toContain('Cookie');
 
+      const cookieJar = new Map<string, string>();
       const cookiePage = await fetch(`${origin}/header-cookie-proof`);
+      mergeCookies(cookieJar, cookiePage.headers.getSetCookie());
       const cookieForm = firstFormHtml(await cookiePage.text());
       const action = attributeValue(cookieForm, 'action');
       if (!action) throw new Error('Expected header cookie proof form action.');
 
       const cookie = await fetch(`${origin}${action}`, {
-        body: new URLSearchParams({ 'Kovo-Idem': `cookie-${Date.now()}`, mode: 'safe' }),
+        body: new URLSearchParams({
+          csrf: fieldValue(cookieForm, 'csrf'),
+          'Kovo-Idem': `cookie-${Date.now()}`,
+          mode: 'safe',
+        }),
         headers: {
           'content-type': 'application/x-www-form-urlencoded',
+          cookie: cookieHeader(cookieJar),
           'Kovo-Fragment': 'true',
           origin,
         },
@@ -142,9 +153,14 @@ describe('create-kovo starter (build integration: production response header art
       expect(cookie.headers.getSetCookie()[0]).toContain('SameSite=Lax');
 
       const unsafeCookie = await fetch(`${origin}${action}`, {
-        body: new URLSearchParams({ 'Kovo-Idem': `unsafe-cookie-${Date.now()}`, mode: 'unsafe' }),
+        body: new URLSearchParams({
+          csrf: fieldValue(cookieForm, 'csrf'),
+          'Kovo-Idem': `unsafe-cookie-${Date.now()}`,
+          mode: 'unsafe',
+        }),
         headers: {
           'content-type': 'application/x-www-form-urlencoded',
+          cookie: cookieHeader(cookieJar),
           'Kovo-Fragment': 'true',
           origin,
         },
@@ -155,14 +171,20 @@ describe('create-kovo starter (build integration: production response header art
       expect(unsafeCookie.headers.getSetCookie()).toEqual([]);
       expect(unsafeCookieBody).not.toContain('Set-Cookie: c2=owned');
 
-      const rawEndpoint = await fetch(`${origin}/raw-header-endpoint`, { redirect: 'manual' });
-      await expect(rawEndpoint.text()).resolves.toBe('raw endpoint header proof');
-      expect(rawEndpoint.status).toBe(200);
+      const rawEndpoint = await fetch(`${origin}/raw-header-endpoint`, {
+        headers: { 'x-kovo-header-proof': 'accepted' },
+        redirect: 'manual',
+      });
+      const rawEndpointBody = await rawEndpoint.text();
+      expect(rawEndpoint.status, `${rawEndpointBody}\n${output()}`).toBe(200);
+      expect(rawEndpointBody).toBe('raw endpoint header proof');
       const rawCookies = rawEndpoint.headers.getSetCookie();
       expect(rawCookies).toHaveLength(1);
       expect(rawCookies[0]).toContain('raw_sid=abc');
       expect(rawCookies[0]).toContain('HttpOnly');
-      expect(rawCookies[0]).toContain('Secure');
+      // The artifact is exercised over local HTTP under NODE_ENV=test; Secure is intentionally
+      // transport/runtime-derived instead of being frozen into the production build output.
+      expect(rawCookies[0]).not.toContain('Secure');
       expect(rawCookies[0]).toContain('SameSite=Lax');
 
       const rawRedirect = await fetch(`${origin}/raw-header-redirect`, { redirect: 'manual' });
@@ -210,7 +232,6 @@ function addHeaderSinkProofRoutes(root: string): void {
       '',
       'export const headerCookieProof = mutation({',
       "  access: publicAccess('public Set-Cookie response header sink proof'),",
-      '  csrf: false,',
       '  input: s.object({ mode: s.string() }),',
       '  handler(input, _request, context) {',
       "    const value = input.mode === 'unsafe' ? 'unsafe\\r\\nSet-Cookie: c2=owned' : 'hello world';",
@@ -240,7 +261,7 @@ function addHeaderSinkProofRoutes(root: string): void {
   const withRespondImport = replaceRequired(
     app,
     '  redirect,\n  route,',
-    '  notFound,\n  redirect,\n  respond,\n  route,',
+    '  customVerifier,\n  notFound,\n  redirect,\n  respond,\n  route,',
     'response-header proof response imports',
   );
   const withRawEndpoint = replaceRequired(
@@ -248,9 +269,14 @@ function addHeaderSinkProofRoutes(root: string): void {
     'const mutationReplayStore = createMemoryMutationReplayStore();',
     [
       'const mutationReplayStore = createMemoryMutationReplayStore();',
+      "const rawHeaderProofVerifier = customVerifier('raw-header-proof', ({ headers }) =>",
+      "  'get' in headers &&",
+      "  typeof headers.get === 'function' &&",
+      "  headers.get('x-kovo-header-proof') === 'accepted',",
+      ');',
       "const rawHeaderEndpoint = endpoint('/raw-header-endpoint', {",
       "  access: publicAccess('public raw endpoint Set-Cookie header sink proof'),",
-      "  auth: { kind: 'none', justification: 'public read-only header sink proof endpoint' },",
+      "  auth: { kind: 'custom', name: 'raw-header-proof', verify: rawHeaderProofVerifier },",
       "  method: 'GET',",
       "  reason: 'raw endpoint Set-Cookie header sink proof',",
       '  csrf: false,',

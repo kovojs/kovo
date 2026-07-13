@@ -8,13 +8,19 @@ import { expect } from 'vitest';
 import { writeKovoProject } from './index.js';
 import {
   collectOutput,
+  cookieHeader,
   fetchTextWhenReady,
   linkStarterBuildDependencies,
+  mergeCookies,
   reservePort,
   stopProcess,
   withRepoBinOnPath,
 } from './index.test-support.js';
-import { buildReusableProductionArtifact } from './index.build.test-support.js';
+import {
+  buildReusableProductionArtifact,
+  fieldValue,
+  formHtmlByAction,
+} from './index.build.test-support.js';
 
 interface DurableTaskArtifactServer {
   origin: string;
@@ -137,7 +143,6 @@ export function addDurableTaskProofs(root: string): void {
       '',
       'export const recordTaskEffect = mutation({',
       '  access: publicProof,',
-      '  csrf: false,',
       '  input: s.object({ proofId: s.string() }),',
       "  registry: { tables: ['task_proofs'], touches: [taskProof] },",
       '  async handler(input: { proofId: string }, request: AppRequest) {',
@@ -186,7 +191,6 @@ export function addDurableTaskProofs(root: string): void {
       '',
       'export const scheduleTaskProof = mutation({',
       '  access: publicProof,',
-      '  csrf: false,',
       '  input: s.object({',
       '    proofId: s.string(),',
       '    mode: s.string(),',
@@ -250,8 +254,32 @@ export function addDurableTaskProofs(root: string): void {
     'utf8',
   );
 
+  writeFileSync(
+    join(root, 'src/durable-task-proof-form.tsx'),
+    [
+      '/** @jsxImportSource @kovojs/server */',
+      "import { component } from '@kovojs/core';",
+      "import { mutationFormAttributes } from '@kovojs/server';",
+      "import { scheduleTaskProof } from './durable-task-proofs.js';",
+      '',
+      'export const DurableTaskProofForm = component({',
+      '  mutations: { scheduleTaskProof },',
+      '  render: () => <form data-proof="durable-task-schedule" {...mutationFormAttributes(scheduleTaskProof)} />',
+      '});',
+      '',
+    ].join('\n'),
+    'utf8',
+  );
+
   const appPath = join(root, 'src/app.tsx');
   const app = readFileSync(appPath, 'utf8')
+    .replace(
+      "import { ContactsRegion } from './components/contacts.js';",
+      [
+        "import { ContactsRegion } from './components/contacts.js';",
+        "import { DurableTaskProofForm } from './durable-task-proof-form.js';",
+      ].join('\n'),
+    )
     .replace(
       "import { addContact } from './mutations.js';",
       [
@@ -275,6 +303,19 @@ export function addDurableTaskProofs(root: string): void {
     .replace(
       'routes: [',
       'tasks: [recordDurableTask, flakyDurableTask, selfRescheduleTask],\n  routes: [',
+    )
+    .replace(
+      "  routes: [\n    route('/', {",
+      [
+        '  routes: [',
+        "    route('/durable-task-proof', {",
+        "      access: publicAccess('public durable task scheduling regression proof'),",
+        '      page() {',
+        '        return <DurableTaskProofForm />;',
+        '      },',
+        '    }),',
+        "    route('/', {",
+      ].join('\n'),
     );
   writeFileSync(appPath, app, 'utf8');
 }
@@ -284,14 +325,21 @@ export async function postScheduleMode(
   proofId: string,
   mode: string,
 ): Promise<Response> {
+  const jar = new Map<string, string>();
+  const pageResponse = await fetch(`${origin}/durable-task-proof`);
+  mergeCookies(jar, pageResponse.headers.getSetCookie());
+  const pageHtml = await pageResponse.text();
+  const form = formHtmlByAction(pageHtml, '/_m/durable-task-proofs/schedule-task-proof');
   return fetch(`${origin}/_m/durable-task-proofs/schedule-task-proof`, {
     body: new URLSearchParams({
+      csrf: fieldValue(form, 'csrf'),
       mode,
       proofId,
       'Kovo-Idem': uniqueProofId(`idem-${mode}`),
     }),
     headers: {
       'content-type': 'application/x-www-form-urlencoded',
+      cookie: cookieHeader(jar),
       origin,
     },
     method: 'POST',
