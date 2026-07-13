@@ -133,11 +133,17 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
   const documentQuerySelector = NativeDocument
     ? valueMethod(NativeDocument.prototype, 'querySelector')
     : undefined;
+  const documentQuerySelectorAll = NativeDocument
+    ? valueMethod(NativeDocument.prototype, 'querySelectorAll')
+    : undefined;
   const elementQuerySelector = NativeElement
     ? valueMethod(NativeElement.prototype, 'querySelector')
     : undefined;
   const fragmentQuerySelector = NativeDocumentFragment
     ? valueMethod(NativeDocumentFragment.prototype, 'querySelector')
+    : undefined;
+  const fragmentQuerySelectorAll = NativeDocumentFragment
+    ? valueMethod(NativeDocumentFragment.prototype, 'querySelectorAll')
     : undefined;
   const elementQuerySelectorAll = NativeElement
     ? valueMethod(NativeElement.prototype, 'querySelectorAll')
@@ -611,9 +617,17 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
 
   function queryAllElements(root: object, selector: string): Element[] {
     let collection: unknown;
-    if (elementQuerySelectorAll) {
+    const platformMethods = [
+      documentQuerySelectorAll,
+      elementQuerySelectorAll,
+      fragmentQuerySelectorAll,
+    ];
+    for (let index = 0; index < platformMethods.length; index += 1) {
+      const method = platformMethods[index];
+      if (!method) continue;
       try {
-        collection = apply(elementQuerySelectorAll, root, [selector]);
+        collection = apply(method, root, [selector]);
+        break;
       } catch {}
     }
     if (collection === undefined) {
@@ -2383,7 +2397,9 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
           !attrValue ||
           !documentActiveElement ||
           !elementQuerySelector ||
-          !elementQuerySelectorAll
+          !elementQuerySelectorAll ||
+          (NativeDocument !== undefined && !documentQuerySelectorAll) ||
+          (NativeDocumentFragment !== undefined && !fragmentQuerySelectorAll)
         ) {
           return false;
         }

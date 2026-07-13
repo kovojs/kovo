@@ -216,27 +216,49 @@ function installInlineKovoLoader(im) {
   };
   const ki = (url) => {
     try {
-      const l = globalThis.location || { href: 'http://localhost/', origin: 'http://localhost' };
-      const p = new URL(url, l.href);
+      const l = bns.currentUrl();
+      if (!l) return false;
+      const p = bns.parseUrl(url, l.href);
+      if (!p) return false;
       if (p.origin !== l.origin) return false;
       const pn = p.pathname;
       if (
-        p.protocol === 'http:' &&
-        /^(?:localhost|127\.0\.0\.1|::1)$/.test(p.hostname) &&
-        !pn.startsWith('/c/') &&
-        /\.(?:[cm]?tsx?)$/.test(pn)
+        bns.regExpTest(/^http:\/\/(?:localhost|127\.0\.0\.1|\[::1\])(?::\d+)?$/, p.origin) &&
+        bns.indexOf(pn, '/c/') !== 0 &&
+        bns.regExpTest(/\.(?:[cm]?tsx?)$/, pn)
       ) {
         return true;
       }
-      if (!pn.startsWith('/c/')) return false;
+      if (bns.indexOf(pn, '/c/') !== 0) return false;
       const k = p.origin + pn + p.search;
-      for (const a of qa(doc, '[data-kovo-module-allowlist]')) {
-        const declared = a.getAttribute?.('data-kovo-module-allowlist') || a.getAttribute?.('href') || '';
-        for (const href of declared.split(/\s+/).filter(Boolean)) {
+      const allowlistMarkers = bns.queryAllElements(doc, '[data-kovo-module-allowlist]');
+      for (let markerIndex = 0; markerIndex < allowlistMarkers.length; markerIndex += 1) {
+        const a = allowlistMarkers[markerIndex];
+        if (!a) continue;
+        const declared =
+          bns.readAttribute(a, 'data-kovo-module-allowlist') ||
+          bns.readAttribute(a, 'href') ||
+          '';
+        let href = '';
+        for (let index = 0; index <= declared.length; index += 1) {
+          const character = declared[index];
+          if (character !== undefined && !bns.regExpTest(/\s/, character)) {
+            href += character;
+            continue;
+          }
+          if (!href) continue;
           try {
-            const u = new URL(href, l.href);
-            if (u.origin === l.origin && u.pathname.startsWith('/c/') && u.origin + u.pathname + u.search === k) return true;
+            const u = bns.parseUrl(href, l.href);
+            if (
+              u &&
+              u.origin === l.origin &&
+              bns.indexOf(u.pathname, '/c/') === 0 &&
+              u.origin + u.pathname + u.search === k
+            ) {
+              return true;
+            }
           } catch {}
+          href = '';
         }
       }
       return false;
@@ -481,8 +503,10 @@ function installInlineKovoLoader(im) {
   };
   const ft = (target) => ftd(doc, target);
   const hs = (el) => ((el = el.closest('[kovo-c]') || el).a ||= new AbortController()).signal;
-  const kb = (root = doc) =>
-    root.querySelector?.('meta[name="kovo-build"]')?.getAttribute('content') || '';
+  const kb = (root = doc) => {
+    const meta = bns.queryOne(root, 'meta[name="kovo-build"]');
+    return meta ? bns.readAttribute(meta, 'content') || '' : '';
+  };
   const bh = (res) => bns.readHeader(res, 'Kovo-Build') ?? '';
   const qwk = (name, key) => {
     if (!name) return '';
@@ -863,7 +887,8 @@ function installInlineKovoLoader(im) {
       return [];
     }
   };
-  const sfp = doc.querySelector?.('meta[name="kovo-session"]')?.getAttribute('content') ?? undefined;
+  const sessionMeta = bns.queryOne(doc, 'meta[name="kovo-session"]');
+  const sfp = sessionMeta ? bns.readAttribute(sessionMeta, 'content') ?? undefined : undefined;
   let bc;
   let broadcastRetired = false;
   try {

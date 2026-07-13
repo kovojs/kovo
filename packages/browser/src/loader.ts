@@ -18,6 +18,7 @@ import { installLoaderQueryRuntime } from './loader-query.js';
 import type { InstalledLoaderQueryRuntime } from './loader-query.js';
 import type { EnhancedMutationFetch, UploadProgress } from './mutation-fetch.js';
 import type { EnhancedMutationLoaderOptions } from './mutation-submit.js';
+import { createBrowserNavigationSecurityControls } from './navigation-security-intrinsics.js';
 import { installPagehideOptimismCleanup } from './optimism.js';
 import type { QueryEventHydrationTarget } from './query-events.js';
 import type { QueryApplyInterposition } from './query-apply.js';
@@ -25,6 +26,8 @@ import type { CompiledQueryUpdatePlans } from './query-bindings.js';
 import type { QueryRefetchOptions } from './query-refetch.js';
 import type { QueryStore } from './query-store.js';
 import { securityGetOwnPropertyDescriptor } from './security-witness-intrinsics.js';
+
+const loaderBrowserSecurity = createBrowserNavigationSecurityControls();
 
 /**
  * App-facing enhanced-mutation wiring for `installKovoLoader`.
@@ -172,10 +175,14 @@ export function installGeneratedKovoLoader(
   // bugs-1 F13 / SPEC §9.3: the server stamps an opaque per-session fingerprint as
   // <meta name="kovo-session">; the broadcast uses it to discard cross-principal
   // rebroadcasts so shared-device tabs never apply another session's private data.
-  const sessionFingerprint =
+  const sessionMeta =
     typeof document === 'undefined'
+      ? null
+      : loaderBrowserSecurity.queryOne(document, 'meta[name="kovo-session"]');
+  const sessionFingerprint =
+    sessionMeta === null
       ? undefined
-      : (document.querySelector('meta[name="kovo-session"]')?.getAttribute('content') ?? undefined);
+      : (loaderBrowserSecurity.readAttribute(sessionMeta, 'content') ?? undefined);
   const enhancedMutationSetup = options.enhancedMutations
     ? withDefaultMutationBroadcast({
         ...options.enhancedMutations,

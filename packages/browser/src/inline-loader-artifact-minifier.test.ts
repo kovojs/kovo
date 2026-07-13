@@ -102,6 +102,22 @@ describe('inline loader minified artifact', () => {
     expect(inlineKovoLoaderInstallerSource).not.toContain(
       'if(doc.querySelector?.(\'meta[name="kovo-session"]\'))',
     );
+    expect(inlineKovoLoaderInstallerSource).toContain(
+      'const sessionMeta=bns.queryOne(doc,\'meta[name="kovo-session"]\')',
+    );
+    expect(inlineKovoLoaderInstallerSource).toContain(
+      'const meta=bns.queryOne(root,\'meta[name="kovo-build"]\')',
+    );
+    expect(inlineKovoLoaderInstallerSource).not.toContain(
+      'root.querySelector?.(\'meta[name="kovo-build"]\')',
+    );
+    expect(inlineKovoLoaderInstallerSource).toContain(
+      "bns.queryAllElements(doc,'[data-kovo-module-allowlist]')",
+    );
+    expect(inlineKovoLoaderInstallerSource).not.toContain(
+      "for(const a of bns.queryAllElements(doc,'[data-kovo-module-allowlist]'))",
+    );
+    expect(inlineKovoLoaderInstallerSource).not.toContain("qa(doc,'[data-kovo-module-allowlist]')");
   });
 
   it('keeps mutation broadcast envelopes on the immutable MessageEvent snapshot', () => {

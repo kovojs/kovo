@@ -11,23 +11,20 @@ export function installTestClientModuleManifest(urls: readonly string[]): () => 
       return name === 'data-kovo-module-allowlist' ? url : null;
     },
   }));
-  const documentLike = new Proxy(previous ?? {}, {
-    get(target, property, receiver) {
-      if (property === 'querySelectorAll') {
-        return (selector: string) =>
-          selector === '[data-kovo-module-allowlist]'
-            ? links
-            : (previous?.querySelectorAll?.(selector) ?? []);
-      }
-      if (property === 'querySelector') {
-        return (selector: string) =>
-          (
-            previous as { querySelector?: (selector: string) => unknown } | undefined
-          )?.querySelector?.(selector) ?? null;
-      }
-      return Reflect.get(target, property, receiver);
+  const documentLike = {
+    querySelector(selector: string) {
+      return (
+        (
+          previous as { querySelector?: (selector: string) => unknown } | undefined
+        )?.querySelector?.(selector) ?? null
+      );
     },
-  });
+    querySelectorAll(selector: string) {
+      return selector === '[data-kovo-module-allowlist]'
+        ? links
+        : (previous?.querySelectorAll?.(selector) ?? []);
+    },
+  };
   Object.defineProperty(globalThis, 'document', {
     configurable: true,
     value: documentLike,

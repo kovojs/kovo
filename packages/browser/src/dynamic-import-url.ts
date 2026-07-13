@@ -1,5 +1,7 @@
 import type { KovoModuleRef } from '@kovojs/core/internal/module-ref';
 
+import { createBrowserNavigationSecurityControls } from './navigation-security-intrinsics.js';
+
 import {
   securityArrayAppend,
   applySecurityIntrinsic,
@@ -33,6 +35,7 @@ const intrinsicUrlHostname = securityGetOwnPropertyDescriptor(
   'hostname',
 )?.get;
 const capturedUrlControlsSound = verifyCapturedUrlControls();
+const dynamicImportBrowserSecurity = createBrowserNavigationSecurityControls();
 
 export interface DynamicImportUrlOptions {
   allowedModuleUrls?: readonly string[];
@@ -194,11 +197,28 @@ function parseImportUrl(value: string): URL | null {
 }
 
 function currentHref(): string {
-  return globalThis.location?.href ?? 'http://localhost/';
+  return (
+    dynamicImportBrowserSecurity.currentUrl()?.href ??
+    lateStructuralLocationField('href') ??
+    'http://localhost/'
+  );
 }
 
 function currentOrigin(): string {
-  return globalThis.location?.origin ?? urlOrigin(new IntrinsicURL(currentHref()));
+  return (
+    dynamicImportBrowserSecurity.currentUrl()?.origin ??
+    lateStructuralLocationField('origin') ??
+    urlOrigin(new IntrinsicURL(currentHref()))
+  );
+}
+
+function lateStructuralLocationField(property: 'href' | 'origin'): string | undefined {
+  const location = (globalThis as { location?: unknown }).location;
+  if (location === null || typeof location !== 'object') return undefined;
+  const descriptor = securityGetOwnPropertyDescriptor(location, property);
+  return descriptor !== undefined && 'value' in descriptor && typeof descriptor.value === 'string'
+    ? descriptor.value
+    : undefined;
 }
 
 function allowedClientModuleUrlManifest(explicit?: readonly string[]): Set<string> {
@@ -221,16 +241,21 @@ function allowedClientModuleUrlManifest(explicit?: readonly string[]): Set<strin
 
 function documentModulepreloadClientModules(): readonly string[] | undefined {
   if (typeof document === 'undefined') return undefined;
-  const markers = document.querySelectorAll?.('[data-kovo-module-allowlist]');
-  if (!markers) return undefined;
+  const markers = dynamicImportBrowserSecurity.queryAllElements(
+    document,
+    '[data-kovo-module-allowlist]',
+  );
 
   const hrefs: string[] = [];
   for (let index = 0; index < markers.length; index += 1) {
-    const marker = markers[index] as { getAttribute?: (name: string) => string | null } | undefined;
+    const marker = markers[index];
     if (marker === undefined) continue;
-    const declared = marker.getAttribute?.('data-kovo-module-allowlist');
+    const declared = dynamicImportBrowserSecurity.readAttribute(
+      marker,
+      'data-kovo-module-allowlist',
+    );
     if (declared) appendWhitespaceTokens(hrefs, declared);
-    const href = marker.getAttribute?.('href');
+    const href = dynamicImportBrowserSecurity.readAttribute(marker, 'href');
     if (!declared && href)
       securityArrayAppend(
         hrefs,

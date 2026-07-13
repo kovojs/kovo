@@ -123,6 +123,22 @@ it('keeps generated publish on the witnessed postMessage after late principal st
   const senderDocument = senderWindow.document;
   const anonymousDocument = anonymousWindow.document;
   const samePrincipalDocument = samePrincipalWindow.document;
+  const form = senderDocument.querySelector('form');
+  if (!form) throw new Error('sender form unavailable');
+  const originalSenderQuerySelector = senderWindow.Document.prototype.querySelector;
+  let queryPoisonCalls = 0;
+  const queryPoisonTrigger = senderDocument.createElement('input');
+  queryPoisonTrigger.type = 'checkbox';
+  queryPoisonTrigger.setAttribute('aria-checked', 'mixed');
+  Object.defineProperty(queryPoisonTrigger, 'indeterminate', {
+    configurable: true,
+    get: () => false,
+    set() {
+      queryPoisonCalls += 1;
+      senderWindow.Document.prototype.querySelector = () => null;
+    },
+  });
+  senderDocument.body.prepend(queryPoisonTrigger);
   let responseValue = 'BASELINE SESSION-A PRIVATE';
   (senderWindow as unknown as Record<string, unknown>).fetch = vi.fn(
     async () => new senderWindow.Response(fragmentBody(responseValue), { status: 200 }),
@@ -132,9 +148,11 @@ it('keeps generated publish on the witnessed postMessage after late principal st
     const script = frameWindow.document.createElement('script');
     script.textContent = `(${inlineKovoLoaderInstallerSource})(globalThis.__kovoC151Import);`;
     frameWindow.document.head.append(script);
+    if (frameWindow === senderWindow) {
+      senderWindow.Document.prototype.querySelector = originalSenderQuerySelector;
+    }
   }
-  const form = senderDocument.querySelector('form');
-  if (!form) throw new Error('sender form unavailable');
+  expect(queryPoisonCalls).toBe(1);
 
   form.dispatchEvent(new senderWindow.SubmitEvent('submit', { bubbles: true, cancelable: true }));
   await vi.waitFor(() =>
