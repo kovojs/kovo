@@ -1,7 +1,9 @@
-import { existsSync, readFileSync, realpathSync, statSync } from 'node:fs';
+import { existsSync, realpathSync, statSync } from 'node:fs';
 import { createServer as createNodeServer } from 'node:http';
 import { extname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+import { openConfinedFilePath } from '../../scripts/lib/confined-static-file.mjs';
 
 const siteRoot = fileURLToPath(new URL('../', import.meta.url));
 const defaultStaticRoot = resolve(siteRoot, 'dist');
@@ -115,7 +117,12 @@ export async function serveSiteStaticFile({
 }) {
   const resolved = resolveSiteStaticRequest({ method, rawUrl, staticRoot });
   if (resolved.kind === 'file') {
-    sendFile(response, method, resolved.filePath, resolved.responsePath, resolved.status);
+    const opened = await openConfinedFilePath(staticRoot, resolved.filePath);
+    if (opened === undefined) {
+      sendText(response, 404, 'Not found.\n', { 'cache-control': 'no-store' });
+      return textResponseResult(404, 'Not found.\n', { 'cache-control': 'no-store' });
+    }
+    await sendFile(response, method, opened, resolved.responsePath, resolved.status);
     return resolved;
   }
 
@@ -190,13 +197,23 @@ function resolveFilePath(staticRoot, decodedPath) {
   return resolve(staticRoot, relativePath.replace(/^\/+/, ''));
 }
 
-function sendFile(response, method, filePath, decodedPath, status = 200) {
-  response.writeHead(status, responseHeaders(filePath, decodedPath));
-  if (method === 'HEAD') {
-    response.end();
-    return;
+async function sendFile(response, method, opened, decodedPath, status = 200) {
+  try {
+    response.writeHead(status, responseHeaders(opened.filePath, decodedPath, opened.stat));
+    if (method === 'HEAD') {
+      await opened.fileHandle.close();
+      response.end();
+      return;
+    }
+    const source = opened.fileHandle.createReadStream({ autoClose: true });
+    source.once('error', (error) => {
+      response.destroy(error instanceof Error ? error : undefined);
+    });
+    source.pipe(response);
+  } catch (error) {
+    await opened.fileHandle.close().catch(() => {});
+    throw error;
   }
-  response.end(readFileSync(filePath));
 }
 
 function sendText(response, status, body, headers = {}) {
@@ -224,9 +241,9 @@ function fileResponseResult({ filePath, requestPath, responsePath, status }) {
   };
 }
 
-function responseHeaders(filePath, decodedPath) {
+function responseHeaders(filePath, decodedPath, fileInfo = statSync(filePath)) {
   const headers = {
-    'content-length': statSync(filePath).size,
+    'content-length': fileInfo.size,
     'content-type': contentType(filePath),
   };
 

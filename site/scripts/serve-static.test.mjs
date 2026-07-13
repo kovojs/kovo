@@ -1,10 +1,17 @@
+import { renameSync, symlinkSync } from 'node:fs';
+import { once } from 'node:events';
 import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { PassThrough } from 'node:stream';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { createSiteStaticServeServer, resolveSiteStaticRequest } from './serve-static.mjs';
+import {
+  createSiteStaticServeServer,
+  resolveSiteStaticRequest,
+  serveSiteStaticFile,
+} from './serve-static.mjs';
 
 const roots = [];
 const servers = [];
@@ -132,6 +139,41 @@ describe('site static Cloud Run server', () => {
     expect(fallback.status).toBe(403);
     expect(await fallback.text()).not.toContain('OUTSIDE_DEPLOYMENT_SECRET');
   });
+
+  it.skipIf(process.platform === 'win32')(
+    'streams the checked descriptor when the exported pathname is swapped after headers',
+    async () => {
+      const root = await createStaticRoot();
+      const outside = await mkdtemp(path.join(tmpdir(), 'kovo-site-static-outside-'));
+      roots.push(outside);
+      const pagePath = path.join(root, 'getting-started', 'index.html');
+      const checkedPath = path.join(root, 'getting-started', 'index.checked.html');
+      const secretPath = path.join(outside, 'deployment-secret.txt');
+      await writeFile(secretPath, 'OUTSIDE_DEPLOYMENT_SECRET');
+
+      const chunks = [];
+      const response = new PassThrough();
+      response.on('data', (chunk) => chunks.push(chunk));
+      response.writeHead = () => {
+        renameSync(pagePath, checkedPath);
+        symlinkSync(secretPath, pagePath);
+        return response;
+      };
+      const finished = once(response, 'finish');
+
+      await expect(
+        serveSiteStaticFile({
+          method: 'GET',
+          rawUrl: '/getting-started',
+          response,
+          staticRoot: root,
+        }),
+      ).resolves.toMatchObject({ kind: 'file', status: 200 });
+      await finished;
+
+      expect(Buffer.concat(chunks).toString('utf8')).toBe('<h1>Docs</h1>');
+    },
+  );
 });
 
 async function createStaticRoot() {

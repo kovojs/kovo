@@ -1,7 +1,9 @@
-import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { once } from 'node:events';
 import { request as httpRequest, createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { PassThrough } from 'node:stream';
 import { brotliDecompressSync, gunzipSync } from 'node:zlib';
 import { afterEach, describe, expect, it } from 'vitest';
 
@@ -166,6 +168,37 @@ describe('demo-session built asset serving', () => {
       } finally {
         await server.close();
       }
+    },
+  );
+
+  it.skipIf(process.platform === 'win32')(
+    'streams the checked descriptor when the asset pathname is swapped after headers',
+    async () => {
+      const distDir = tempDist({ 'assets/app.js': 'SAFE_DEMO_ASSET' });
+      const outsideDir = tempDist({ 'secret.js': 'OUTSIDE_DEMO_SECRET' });
+      const assetPath = path.join(distDir, 'assets/app.js');
+      const checkedPath = path.join(distDir, 'assets/app.checked.js');
+      const secretPath = path.join(outsideDir, 'secret.js');
+      const chunks = [];
+      const response = new PassThrough();
+      response.on('data', (chunk) => chunks.push(chunk));
+      response.writeHead = () => {
+        renameSync(assetPath, checkedPath);
+        symlinkSync(secretPath, assetPath);
+        return response;
+      };
+      const finished = once(response, 'finish');
+
+      await expect(
+        tryServeBuiltAsset(
+          { headers: {}, method: 'GET', url: '/assets/app.js' },
+          response,
+          distDir,
+        ),
+      ).resolves.toBe(true);
+      await finished;
+
+      expect(Buffer.concat(chunks).toString('utf8')).toBe('SAFE_DEMO_ASSET');
     },
   );
 });

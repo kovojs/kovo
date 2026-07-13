@@ -1,11 +1,10 @@
-import { createReadStream } from 'node:fs';
 import { createServer as createNodeServer } from 'node:http';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { createServer as createViteServer } from 'vite';
 
-import { resolveConfinedStaticFile } from '../../../scripts/lib/confined-static-file.mjs';
+import { openConfinedStaticFile } from '../../../scripts/lib/confined-static-file.mjs';
 
 const commerceRoot = fileURLToPath(new URL('../', import.meta.url));
 const distDir = path.join(commerceRoot, 'dist');
@@ -26,16 +25,26 @@ const STATIC_MIME = {
 // checks, serving built `/assets/*` from `dist/` when `vp build` has populated it.
 async function tryServeBuiltAsset(req, res) {
   const pathname = new URL(req.url, 'http://x').pathname;
-  const filePath = await resolveConfinedStaticFile(distDir, pathname, '/assets/');
-  if (filePath === undefined) return false;
+  const opened = await openConfinedStaticFile(distDir, pathname, '/assets/');
+  if (opened === undefined) return false;
   try {
     res.writeHead(200, {
-      'content-type': STATIC_MIME[path.extname(filePath)] ?? 'application/octet-stream',
+      'content-type': STATIC_MIME[path.extname(opened.filePath)] ?? 'application/octet-stream',
       'cache-control': 'public, max-age=31536000, immutable',
     });
-    createReadStream(filePath).pipe(res);
+    if (req.method === 'HEAD') {
+      await opened.fileHandle.close();
+      res.end();
+      return true;
+    }
+    const source = opened.fileHandle.createReadStream({ autoClose: true });
+    source.once('error', (error) => {
+      res.destroy(error instanceof Error ? error : undefined);
+    });
+    source.pipe(res);
     return true;
   } catch {
+    await opened.fileHandle.close().catch(() => {});
     return false;
   }
 }

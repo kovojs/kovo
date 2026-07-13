@@ -1,11 +1,11 @@
-import { createReadStream } from 'node:fs';
-import { realpath, stat } from 'node:fs/promises';
+import { realpath } from 'node:fs/promises';
 import { createServer as createNodeServer } from 'node:http';
 import path from 'node:path';
 import { createBrotliCompress, createGzip } from 'node:zlib';
 
 import { createServer as createViteServer } from 'vite-plus';
 
+import { openConfinedFilePath } from '../lib/confined-static-file.mjs';
 import { createPerSessionDispatcher } from './dispatcher.mjs';
 
 // SPEC.md §9.5: a multi-tenant ("demo") serve path for the example app shells.
@@ -172,6 +172,7 @@ export async function tryServeBuiltAsset(req, res, distDir) {
     sendTextAssetResponse(req, res, 403, 'Refusing to serve outside the demo dist directory.\n');
     return true;
   }
+  let opened;
   try {
     const [canonicalDistDir, canonicalFilePath] = await Promise.all([
       realpath(distDir),
@@ -181,12 +182,12 @@ export async function tryServeBuiltAsset(req, res, distDir) {
       sendTextAssetResponse(req, res, 403, 'Refusing to serve outside the demo dist directory.\n');
       return true;
     }
-    const info = await stat(canonicalFilePath);
-    if (!info.isFile()) {
+    opened = await openConfinedFilePath(canonicalDistDir, canonicalFilePath);
+    if (opened === undefined) {
       sendMissingBuiltAsset(req, res, pathname);
       return true;
     }
-    const contentType = STATIC_MIME[path.extname(filePath)] ?? 'application/octet-stream';
+    const contentType = STATIC_MIME[path.extname(opened.filePath)] ?? 'application/octet-stream';
     const compression = isCompressibleContentType(contentType)
       ? preferredCompression(String(req.headers['accept-encoding'] ?? ''))
       : undefined;
@@ -200,11 +201,13 @@ export async function tryServeBuiltAsset(req, res, distDir) {
       ...headers,
     });
     if (req.method === 'HEAD') {
+      await opened.fileHandle.close();
       res.end();
       return true;
     }
-    // Open the already-canonicalized path, never the attacker-influenced symlink spelling.
-    const source = createReadStream(canonicalFilePath);
+    // Stream the descriptor authenticated above. Reopening even the canonical pathname here
+    // would let a concurrent rename/symlink swap change the object after containment checks.
+    const source = opened.fileHandle.createReadStream({ autoClose: true });
     const body =
       compression === 'br'
         ? source.pipe(createBrotliCompress())
@@ -217,6 +220,7 @@ export async function tryServeBuiltAsset(req, res, distDir) {
     body.pipe(res);
     return true;
   } catch {
+    await opened?.fileHandle.close().catch(() => {});
     sendMissingBuiltAsset(req, res, pathname);
     return true;
   }
