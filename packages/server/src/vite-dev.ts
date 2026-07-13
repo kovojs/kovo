@@ -87,6 +87,7 @@ import {
   securityStringIndexOf,
   securityStringReplaceAll,
   securityStringSlice,
+  securityStringSplit,
   securityStringStartsWith,
   securityStringToLowerCase,
   securityStringTrim,
@@ -694,15 +695,10 @@ async function renderKovoHmrLiveTargetRefreshResponse(
   request: IncomingMessage,
   endpointUrl: RequestUrlSnapshot,
 ): Promise<Response> {
-  if (!requestMethodIs(request, 'GET', 'HEAD', 'POST')) {
-    return hmrRefreshTextResponse(
-      'Kovo HMR live-target refresh only accepts GET, HEAD, or POST.',
-      405,
-      app,
-      {
-        refreshKind: 'live-targets',
-      },
-    );
+  if (!requestMethodIs(request, 'POST')) {
+    return hmrRefreshTextResponse('Kovo HMR live-target refresh only accepts POST.', 405, app, {
+      refreshKind: 'live-targets',
+    });
   }
 
   const webRequest = nodeRequestToWebRequest(request);
@@ -964,11 +960,30 @@ function hmrRefreshHeaders(
   const headers = createSecurityHeaders(initialHeaders);
   const buildToken = app?.clientModules.buildToken() ?? '';
 
+  // Refresh output can include session/guard/query-specific documents or fragments. It is dev-only,
+  // but it still crosses the HTTP cache boundary and must never be reusable across principals
+  // (SPEC.md §§9.4, 9.5.1).
+  securityHeadersSet(headers, 'Cache-Control', 'private, no-store');
+  appendHmrVaryToken(headers, 'Cookie');
   if (refreshKind) securityHeadersSet(headers, 'Kovo-HMR-Refresh', refreshKind);
   if (buildToken !== '') securityHeadersSet(headers, 'Kovo-Build', buildToken);
   if (previousBuildToken) securityHeadersSet(headers, 'Kovo-Previous-Build', previousBuildToken);
 
   return headers;
+}
+
+function appendHmrVaryToken(headers: Headers, token: string): void {
+  const existing = securityHeadersGet(headers, 'Vary');
+  if (existing === null || existing === '') {
+    securityHeadersSet(headers, 'Vary', token);
+    return;
+  }
+  const values = securityStringSplit(existing, ',');
+  const normalizedToken = securityStringToLowerCase(token);
+  for (let index = 0; index < values.length; index += 1) {
+    if (securityStringToLowerCase(securityStringTrim(values[index]!)) === normalizedToken) return;
+  }
+  securityHeadersSet(headers, 'Vary', `${existing}, ${token}`);
 }
 
 function previousHmrBuildToken(

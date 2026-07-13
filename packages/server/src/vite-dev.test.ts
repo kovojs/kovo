@@ -1057,6 +1057,8 @@ describe('server app shell Vite dev seam', () => {
       expect(response.headers.get('kovo-hmr-refresh')).toBe('route');
       expect(response.headers.get('kovo-previous-build')).toBe('old-build');
       expect(response.headers.get('kovo-build')).toBe(clientModules.buildToken());
+      expect(response.headers.get('cache-control')).toBe('private, no-store');
+      expect(response.headers.get('vary')).toContain('Cookie');
       expect(body).toContain('<meta name="kovo-build" content="');
       expect(body).toContain('<script type="module" src="/@kovo/hmr-client"></script>');
       expect(body).toContain('<main>Cart refresh</main>');
@@ -1206,6 +1208,15 @@ describe('server app shell Vite dev seam', () => {
       });
 
       const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+      for (const method of ['GET', 'HEAD']) {
+        const disallowed = await fetch(
+          `${origin}/@kovo/hmr/refresh/live-targets?url=/cart?tab=summary`,
+          { method },
+        );
+        expect(disallowed.status).toBe(405);
+        expect(disallowed.headers.get('cache-control')).toBe('private, no-store');
+        expect(disallowed.headers.get('vary')).toContain('Cookie');
+      }
       const response = await fetch(`${origin}/@kovo/hmr/refresh/live-targets?oldBuild=old-build`, {
         headers: {
           accept: 'application/json',
@@ -1233,6 +1244,8 @@ describe('server app shell Vite dev seam', () => {
       expect(response.headers.get('kovo-hmr-refresh')).toBe('live-targets');
       expect(response.headers.get('kovo-previous-build')).toBe('old-build');
       expect(response.headers.get('kovo-build')).toBe(clientModules.buildToken());
+      expect(response.headers.get('cache-control')).toBe('private, no-store');
+      expect(response.headers.get('vary')).toContain('Cookie');
       expect(body).toBe(
         '<kovo-fragment target="cart-badge"><link rel="stylesheet" href="/assets/cart.css"><cart-badge data-target="cart-badge">3</cart-badge></kovo-fragment>',
       );
