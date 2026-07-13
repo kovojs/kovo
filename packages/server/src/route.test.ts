@@ -167,6 +167,44 @@ describe('route primitives', () => {
     expect(result?.body).not.toContain('private');
   });
 
+  it('does not select an unverified descendant boundary after Array.slice poisoning', async () => {
+    const rootLayout = layout({});
+    const guardedLayout = layout({
+      guard: () => ({ kind: 'forbidden' as const }),
+      parent: rootLayout,
+    });
+    const unverifiedDescendant = layout({
+      boundaries: {
+        unauthorized: () => renderedHtml('<main>unverified descendant boundary</main>'),
+      },
+      parent: guardedLayout,
+    });
+    const child = route('/layout-boundary-slice-poison', {
+      layout: unverifiedDescendant,
+      page: () => renderedHtml('<main>private</main>'),
+    });
+    const nativeSlice = Array.prototype.slice;
+    let result: Awaited<ReturnType<typeof renderRoutePageResponse>> | undefined;
+    try {
+      Array.prototype.slice = function poisonedLayoutPrefix(start?: number, end?: number) {
+        if (this.length === 3 && this[2] === unverifiedDescendant) return this;
+        return Reflect.apply(nativeSlice, this, [start, end]);
+      };
+      result = await renderRoutePageResponse(
+        child,
+        {},
+        new Request('https://example.test/layout-boundary-slice-poison'),
+      );
+    } finally {
+      Array.prototype.slice = nativeSlice;
+    }
+
+    expect(result?.status).toBe(403);
+    expect(result?.body).toContain('<h1>Forbidden</h1>');
+    expect(result?.body).not.toContain('unverified descendant boundary');
+    expect(result?.body).not.toContain('private');
+  });
+
   it('accepts optional route search schema fields', async () => {
     const optionalSearchRoute = route('/optional-search', {
       page({ search }) {

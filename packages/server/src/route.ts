@@ -758,7 +758,7 @@ async function runRoutePageInternal<
     if (guardFailure) {
       return withRouteBoundaryFailure(
         routeGuardFailure(guardFailure),
-        routeBoundaryFor('unauthorized', undefined, layouts.slice(0, index + 1)),
+        routeBoundaryFor('unauthorized', undefined, routeLayoutChainPrefix(layouts, index + 1)),
       );
     }
   }
@@ -904,11 +904,25 @@ async function renderLayoutChain<Request>(
     } catch (error) {
       throw new RouteBoundaryRenderError(
         error,
-        routeBoundaryFor('error', undefined, layouts.slice(0, index + 1)),
+        routeBoundaryFor('error', undefined, routeLayoutChainPrefix(layouts, index + 1)),
       );
     }
   }
   return value;
+}
+
+function routeLayoutChainPrefix(
+  layouts: readonly LayoutDeclaration<any, any, any>[],
+  endExclusive: number,
+): LayoutDeclaration<any, any, any>[] {
+  // SPEC §6.6/§9.5: only layout segments whose guards have already run may supply a failure
+  // boundary. App evaluation shares this realm, so an ambient Array.slice must not widen the
+  // authorized prefix to include an unverified descendant.
+  const prefix: LayoutDeclaration<any, any, any>[] = [];
+  for (let index = 0; index < endExclusive && index < layouts.length; index += 1) {
+    witnessArrayAppend(prefix, layouts[index]!, 'Verified route layout boundary prefix');
+  }
+  return prefix;
 }
 
 async function renderRouteRegions<
