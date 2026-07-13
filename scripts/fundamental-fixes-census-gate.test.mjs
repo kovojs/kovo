@@ -75,12 +75,15 @@ describe('fundamental-fixes-census-gate', () => {
   it('fails when a source-discovered sink or handle is not enrolled in the manifest', () => {
     const manifest = cloneDefaultManifest();
     const row = manifest.rows.find((candidate) => candidate.id === 'ssr-document-html');
+    const sourceRow = extractSourceDecisionRows().find(
+      (candidate) => candidate.sourceDecision === 'server.wire.ssr-document',
+    );
     row.sourceDecisions = row.sourceDecisions.filter(
       (sourceDecision) => sourceDecision !== 'server.wire.ssr-document',
     );
 
     expect(evaluateFundamentalFixesCensus({ manifest, planText }).violations).toContain(
-      'scripts/fundamental-fixes-census.manifest.json: missing manifest enrollment for output-wire-sink source decision server.wire.ssr-document (packages/server/src/document-core.ts:226)',
+      `scripts/fundamental-fixes-census.manifest.json: missing manifest enrollment for output-wire-sink source decision server.wire.ssr-document (${sourceRow.file}:${sourceRow.line})`,
     );
   });
 

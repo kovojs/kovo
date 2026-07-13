@@ -104,32 +104,40 @@ describe('@kovojs/ui copy-in model', () => {
 
       // Typecheck the copied components with the workspace's compiler flags but
       // WITHOUT inheriting any repo tsconfig — exactly an external app's setup.
-      execFileSync(
-        resolveBin('tsc'),
-        [
-          '--ignoreConfig',
-          '--noEmit',
-          '--jsx',
-          'react-jsx',
-          '--jsxImportSource',
-          '@kovojs/server',
-          '--module',
-          'NodeNext',
-          '--moduleResolution',
-          'NodeNext',
-          '--target',
-          'ES2024',
-          '--strict',
-          '--skipLibCheck',
-          '--exactOptionalPropertyTypes',
-          '--noUncheckedIndexedAccess',
-          '--verbatimModuleSyntax',
-          '--types',
-          'node',
-          ...COMPONENTS.map(({ file }) => join('src', 'components', 'ui', file)),
-        ],
-        { cwd: root, stdio: 'pipe' },
-      );
+      try {
+        execFileSync(
+          resolveBin('tsc'),
+          [
+            '--ignoreConfig',
+            '--allowImportingTsExtensions',
+            '--noEmit',
+            '--jsx',
+            'react-jsx',
+            '--jsxImportSource',
+            '@kovojs/server',
+            '--module',
+            'NodeNext',
+            '--moduleResolution',
+            'NodeNext',
+            '--target',
+            'ES2024',
+            '--strict',
+            '--skipLibCheck',
+            '--exactOptionalPropertyTypes',
+            '--noUncheckedIndexedAccess',
+            '--verbatimModuleSyntax',
+            '--types',
+            'node',
+            ...COMPONENTS.map(({ file }) => join('src', 'components', 'ui', file)),
+          ],
+          { cwd: root, encoding: 'utf8', stdio: 'pipe' },
+        );
+      } catch (error) {
+        const failure = error as { message?: string; stderr?: string; stdout?: string };
+        throw new Error(
+          `Copied component typecheck failed:\n${failure.stdout ?? ''}${failure.stderr ?? ''}${failure.message ?? ''}`,
+        );
+      }
     } finally {
       rmSync(root, { force: true, recursive: true });
     }
