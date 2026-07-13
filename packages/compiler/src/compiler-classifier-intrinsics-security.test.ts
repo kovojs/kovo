@@ -1146,6 +1146,100 @@ export const ProductCard = component({
     expect(poisonHits).toBe(0);
   });
 
+  it('does not suppress missing IDREF validation through value Array.filter', () => {
+    const nativeFilter = Array.prototype.filter;
+    const nativeApply = Reflect.apply;
+    let poisonHits = 0;
+    let result: ReturnType<typeof compileComponentModule> | undefined;
+    try {
+      Array.prototype.filter = function poisonedIdrefFilter<T>(
+        callback: (value: T, index: number, array: T[]) => unknown,
+        thisArg?: unknown,
+      ): T[] {
+        if (
+          (this[0] as { value?: unknown } | undefined)?.value === 'cart-search' &&
+          new Error().stack?.includes('validateIdrefsInElementScope')
+        ) {
+          poisonHits += 1;
+          return [];
+        }
+        return nativeApply(nativeFilter, this, [callback, thisArg]);
+      };
+      result = compileComponentModule({
+        fileName: 'cart-shell.tsx',
+        source: `
+export const CartShell = component({
+  render: () => <section><label for="cart-search">Search</label><input id="cart-query" /></section>,
+});
+`,
+      });
+    } finally {
+      Array.prototype.filter = nativeFilter;
+    }
+    expect(result?.diagnostics.filter((diagnostic) => diagnostic.code === 'KV221')).toHaveLength(1);
+    expect(poisonHits).toBe(0);
+  });
+
+  it('does not suppress duplicate static ids through Set.has replacement', () => {
+    const nativeHas = Set.prototype.has;
+    const nativeApply = Reflect.apply;
+    let poisonHits = 0;
+    let result: ReturnType<typeof compileComponentModule> | undefined;
+    try {
+      Set.prototype.has = function poisonedStaticIdHas<T>(value: T): boolean {
+        if (value === 'cart-title' && new Error().stack?.includes('validateStaticIds')) {
+          poisonHits += 1;
+          return false;
+        }
+        return nativeApply(nativeHas, this, [value]);
+      };
+      result = compileComponentModule({
+        fileName: 'cart-shell.tsx',
+        source: `
+export const CartShell = component({
+  render: () => <section><h2 id="cart-title">Cart</h2><output id="cart-title">2</output></section>,
+});
+`,
+      });
+    } finally {
+      Set.prototype.has = nativeHas;
+    }
+    expect(result?.diagnostics.filter((diagnostic) => diagnostic.code === 'KV224')).toHaveLength(1);
+    expect(poisonHits).toBe(0);
+  });
+
+  it('does not accept unknown residual component stamps through Set.has replacement', () => {
+    const nativeHas = Set.prototype.has;
+    const nativeApply = Reflect.apply;
+    let poisonHits = 0;
+    let result: ReturnType<typeof compileComponentModule> | undefined;
+    try {
+      Set.prototype.has = function poisonedResidualComponentHas<T>(value: T): boolean {
+        if (
+          value === 'unknown-component' &&
+          new Error().stack?.includes('validateResidualStamps')
+        ) {
+          poisonHits += 1;
+          return true;
+        }
+        return nativeApply(nativeHas, this, [value]);
+      };
+      result = compileComponentModule({
+        fileName: 'recommendations.tsx',
+        source: `
+export const Recommendations = component({
+  queries: { cart: cartQuery },
+  render: () => <section kovo-c="unknown-component" kovo-deps="missingQuery:p1" />,
+});
+`,
+      });
+    } finally {
+      Set.prototype.has = nativeHas;
+    }
+    expect(result?.diagnostics.filter((diagnostic) => diagnostic.code === 'KV226')).toHaveLength(2);
+    expect(poisonHits).toBe(0);
+  });
+
   it('does not publish a captured server secret through stateful Array.filter replacement', () => {
     const nativeFilter = Array.prototype.filter;
     const nativeApply = Reflect.apply;
