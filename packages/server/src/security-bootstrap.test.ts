@@ -50,12 +50,16 @@ describe('server security bootstrap census', () => {
     const dataPlaneBootstrap = source.indexOf(
       "from './internal/data-plane-static-analysis-intrinsics.ts';",
     );
+    const buildIntrinsics = source.indexOf("from './build-security-intrinsics.ts';");
+    const responseIntrinsics = source.indexOf("from './response-security-intrinsics.ts';");
     const firstAuthoredIntegrationImport = source.indexOf(
       "from '@kovojs/server/internal/data-plane-static-analysis';",
     );
 
     expect(compilerBootstrap).toBeGreaterThanOrEqual(0);
     expect(dataPlaneBootstrap).toBeGreaterThan(compilerBootstrap);
+    expect(buildIntrinsics).toBeGreaterThan(dataPlaneBootstrap);
+    expect(responseIntrinsics).toBeGreaterThan(buildIntrinsics);
     expect(firstAuthoredIntegrationImport).toBeGreaterThan(dataPlaneBootstrap);
   });
 

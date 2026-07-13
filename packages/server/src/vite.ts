@@ -37,7 +37,7 @@ import {
   buildSecurityUrlSnapshot,
   commitBuildArrayValue,
   snapshotBuildArray,
-} from './build-security-intrinsics.js';
+} from './build-security-intrinsics.ts';
 import {
   securityArrayIsArray,
   securityArrayJoin,
@@ -49,7 +49,7 @@ import {
   securityStringSlice,
   securityStringStartsWith,
   securityStringTrim,
-} from './response-security-intrinsics.js';
+} from './response-security-intrinsics.ts';
 
 const viteClearTimeout = globalThis.clearTimeout;
 const viteSetTimeout = globalThis.setTimeout;
