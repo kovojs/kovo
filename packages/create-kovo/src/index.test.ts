@@ -1423,4 +1423,25 @@ describe('create-kovo starter (CLI)', () => {
       rmSync(dirname(root), { force: true, recursive: true });
     }
   });
+
+  it('does not dispatch staging commits through a replaced Array iterator', () => {
+    const parent = mkdtempSync(join(tmpdir(), 'create-kovo-iterator-'));
+    const root = join(parent, 'app');
+    const nativeIterator = Array.prototype[Symbol.iterator];
+    Array.prototype[Symbol.iterator] = function poisonedStagingIterator() {
+      if (typeof this[0] === 'string' && this.some((value) => value === '.env')) {
+        return Reflect.apply(nativeIterator, ['../outside'], []);
+      }
+      return Reflect.apply(nativeIterator, this, []);
+    };
+
+    try {
+      writeKovoProject(root, { disableGit: true, name: 'Iterator Safe' });
+      expect(existsSync(join(root, 'package.json'))).toBe(true);
+      expect(existsSync(join(parent, 'outside'))).toBe(false);
+    } finally {
+      Array.prototype[Symbol.iterator] = nativeIterator;
+      rmSync(parent, { force: true, recursive: true });
+    }
+  });
 });

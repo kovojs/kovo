@@ -374,7 +374,8 @@ export function writeKovoProject(
   verifyScaffoldRoot(rootIdentity);
 
   try {
-    for (const file of project.files) {
+    for (let fileIndex = 0; fileIndex < project.files.length; fileIndex += 1) {
+      const file = project.files[fileIndex]!;
       const destination = resolve(stagingRoot, file.path);
 
       const relativeDestination = relative(stagingRoot, destination);
@@ -400,7 +401,12 @@ export function writeKovoProject(
       writeFileSync(destination, file.source, 'utf8');
     }
 
-    for (const name of readdirSync(stagingRoot)) {
+    const stagedNames = readdirSync(stagingRoot);
+    for (let nameIndex = 0; nameIndex < stagedNames.length; nameIndex += 1) {
+      const name = stagedNames[nameIndex]!;
+      if (name === '.' || name === '..' || basename(name) !== name) {
+        throw new Error(`Invalid scaffold staging entry: ${name}`);
+      }
       verifyScaffoldRoot(rootIdentity);
       renameSync(resolve(stagingRoot, name), resolve(rootIdentity.canonicalPath, name));
     }
@@ -413,8 +419,12 @@ export function writeKovoProject(
     tryGitInit(rootIdentity.canonicalPath);
   }
 
+  const writtenFiles: string[] = [];
+  for (let index = 0; index < project.files.length; index += 1) {
+    writtenFiles[index] = project.files[index]!.path;
+  }
   return {
-    files: project.files.map((file) => file.path),
+    files: writtenFiles,
     name: project.name,
     root,
   };
