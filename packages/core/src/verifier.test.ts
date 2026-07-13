@@ -720,6 +720,17 @@ describe('webhook verifier kit', () => {
         payload: '{}',
       }),
     ).resolves.toBe(true);
+
+    const truthyForgery = customVerifier(
+      'provider-truthy-forgery',
+      () => ({ authorized: true }) as never,
+    );
+    await expect(
+      truthyForgery.verify({
+        headers: new Headers(),
+        payload: '{}',
+      }),
+    ).resolves.toBe(false);
   });
 });
 

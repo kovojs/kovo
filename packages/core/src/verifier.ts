@@ -467,7 +467,9 @@ export function customVerifier(
     name,
     scheme: `custom:${name}`,
     async verify(request) {
-      return verify(request);
+      // SPEC §9.1 verifier-before-parse is fail-closed. JavaScript callers and casts can violate
+      // the TypeScript callback signature, so only the exact boolean verdict authorizes.
+      return (await verify(request)) === true;
     },
   };
 }
