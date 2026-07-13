@@ -1,6 +1,7 @@
 /** @internal Operator-selected security posture pinned before any authored module evaluation. */
 export interface KovoCommandSecurityDisposition {
   readonly invocationCwd: string;
+  readonly invocationEnv: NodeJS.ProcessEnv;
   readonly paranoidStaticAdvisory: boolean;
 }
 
@@ -9,9 +10,11 @@ export const kovoCommandBootSecurityDisposition = captureKovoCommandSecurityDisp
 
 /** @internal Capture supported-runner path authority and environment posture once at command entry. */
 export function captureKovoCommandSecurityDisposition(): KovoCommandSecurityDisposition {
-  const value = process.env.KOVO_PARANOID;
+  const invocationEnv = Object.freeze({ ...process.env });
+  const value = invocationEnv.KOVO_PARANOID;
   return Object.freeze({
     invocationCwd: process.cwd(),
+    invocationEnv,
     paranoidStaticAdvisory: value === '1' || value === 'true',
   });
 }

@@ -2327,10 +2327,18 @@ describe('kovo check', () => {
 
       process.chdir(outside);
       expect(
-        main(['check', 'graph.json'], { invocationCwd: tempDir, paranoidStaticAdvisory: false }),
+        main(['check', 'graph.json'], {
+          invocationCwd: tempDir,
+          invocationEnv: {},
+          paranoidStaticAdvisory: false,
+        }),
       ).toBe(1);
       expect(
-        main(['check', 'graph.json'], { invocationCwd: tempDir, paranoidStaticAdvisory: true }),
+        main(['check', 'graph.json'], {
+          invocationCwd: tempDir,
+          invocationEnv: {},
+          paranoidStaticAdvisory: true,
+        }),
       ).toBe(0);
     } finally {
       process.chdir(previousCwd);

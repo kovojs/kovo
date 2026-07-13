@@ -478,6 +478,64 @@ export default createApp({
     }
   }, 120_000);
 
+  it('pins deploy preset environment before authored config evaluation in the real CLI', () => {
+    const root = cliFixtureRoot('preset-environment');
+    try {
+      mkdirSync(join(root, 'src'), { recursive: true });
+      writeFileSync(
+        join(root, 'index.html'),
+        '<!doctype html><script type="module" src="/src/client.ts"></script>\n',
+        'utf8',
+      );
+      writeFileSync(join(root, 'src/client.ts'), 'export {};\n', 'utf8');
+      writeFileSync(
+        join(root, 'app.ts'),
+        `import { createApp, publicAccess, route } from '@kovojs/server';
+export default createApp({
+  routes: [route('/', {
+    access: publicAccess('preset environment regression'),
+    page: () => '<main>Preset environment</main>',
+  })],
+});
+`,
+        'utf8',
+      );
+      writeFileSync(
+        join(root, 'kovo.config.ts'),
+        `if (process.env.APP_PRESET_MUTATION === 'enable') process.env.KOVO_PRESET = 'cloudflare';
+if (process.env.APP_PRESET_MUTATION === 'disable') delete process.env.KOVO_PRESET;
+export default {};
+`,
+        'utf8',
+      );
+
+      const ordinaryEnv = { ...process.env, APP_PRESET_MUTATION: 'enable' };
+      delete ordinaryEnv.KOVO_PRESET;
+      delete ordinaryEnv.VERCEL;
+      delete ordinaryEnv.CF_PAGES;
+      delete ordinaryEnv.CLOUDFLARE;
+      const configEnabled = runKovoCli(
+        root,
+        ['build', './app.ts', '--out', 'enabled', '--check'],
+        ordinaryEnv,
+      );
+      expect(configEnabled.status, configEnabled.stderr).toBe(0);
+      expect(configEnabled.stdout).toContain('CHECK ok preset=node');
+
+      rmSync(join(root, 'enabled'), { force: true, recursive: true });
+      rmSync(join(root, '.kovo'), { force: true, recursive: true });
+      const operatorVercel = runKovoCli(
+        root,
+        ['build', './app.ts', '--out', 'operator-vercel', '--check'],
+        { ...ordinaryEnv, APP_PRESET_MUTATION: 'disable', KOVO_PRESET: 'vercel' },
+      );
+      expect(operatorVercel.status, operatorVercel.stderr).toBe(0);
+      expect(operatorVercel.stdout).toContain('CHECK ok preset=vercel');
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  }, 120_000);
+
   it('keeps real build and export outside undeclared authored Vite config hooks', () => {
     const root = cliFixtureRoot('undeclared-vite-config');
     const appPath = join(root, 'app.mjs');

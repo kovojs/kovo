@@ -457,14 +457,22 @@ export async function runBuildCommand(
     const reachableSessionAuthorityFacts =
       await sessionAuthorityFactsFromEntry(resolvedAppModulePath);
     const loadedConfig = await loadKovoBuildConfig(invocationRoot, resolvedAppModulePath);
-    const selectedPreset = selectedKovoBuildPreset(options, loadedConfig.config);
+    const selectedPreset = selectedKovoBuildPreset(
+      options,
+      loadedConfig.config,
+      security.invocationEnv,
+    );
     // plans/fast-kovo-check3.md: start the independent `tsc --noEmit` preflight subprocess here and
     // let it overlap the vite app load below AND the kovo-check security preflight, instead of
     // running it sequentially first (~1.7s cold / ~0.7s warm saved, no correctness change). The
     // no-op `.catch` prevents an unhandled rejection if the load/check throws before we reach the
     // fail-closed join below; we still `await typeScriptPreflight` there, so its error is never
     // swallowed and ZERO artifacts are emitted on any preflight failure.
-    const typeScriptPreflight = runTypeScriptBuildPreflight(resolvedAppModulePath, invocationRoot);
+    const typeScriptPreflight = runTypeScriptBuildPreflight(
+      resolvedAppModulePath,
+      invocationRoot,
+      security.invocationEnv,
+    );
     buildObservePromise(
       typeScriptPreflight,
       () => {},
@@ -668,6 +676,7 @@ async function loadAndCheckBuildApp(
 async function runTypeScriptBuildPreflight(
   appModulePath: string,
   invocationRoot: string,
+  invocationEnv: NodeJS.ProcessEnv,
 ): Promise<void> {
   const tsconfigPath = findBuildTsconfig(appModulePath, invocationRoot);
   if (tsconfigPath === undefined) return;
@@ -713,7 +722,7 @@ async function runTypeScriptBuildPreflight(
       {
         cwd: projectDir,
         encoding: 'utf8',
-        env: process.env,
+        env: invocationEnv,
       },
     );
   } catch (error) {
@@ -1900,10 +1909,11 @@ function assertKovoBuildCssDelivery(
 function selectedKovoBuildPreset(
   options: KovoBuildOptions,
   config: KovoConfig | undefined,
+  invocationEnv: NodeJS.ProcessEnv,
 ): SelectedKovoBuildPreset {
   if (options.preset !== undefined) return { name: options.preset };
 
-  const envPreset = process.env.KOVO_PRESET;
+  const envPreset = invocationEnv.KOVO_PRESET;
   if (envPreset) {
     const parsedPreset = parseKovoBuildPresetName(envPreset);
     if (!parsedPreset) throw new Error(`unsupported KOVO_PRESET ${stableValue(envPreset)}`);
@@ -1912,8 +1922,8 @@ function selectedKovoBuildPreset(
 
   if (config?.preset !== undefined) return selectedConfiguredKovoBuildPreset(config.preset);
 
-  if (process.env.VERCEL) return { name: 'vercel' };
-  if (process.env.CF_PAGES || process.env.CLOUDFLARE) return { name: 'cloudflare' };
+  if (invocationEnv.VERCEL) return { name: 'vercel' };
+  if (invocationEnv.CF_PAGES || invocationEnv.CLOUDFLARE) return { name: 'cloudflare' };
   return { name: 'node' };
 }
 
