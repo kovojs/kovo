@@ -196,11 +196,14 @@ export function isFrameworkHmacSignatureVerifier(value: unknown): value is HmacS
  * @example
  * import { hmacSignature } from '@kovojs/core';
  *
+ * const secret = process.env.PROVIDER_WEBHOOK_SECRET;
+ * if (secret === undefined) throw new Error('Missing provider webhook signing material');
+ *
  * export const verifier = hmacSignature({
  *   encoding: 'hex',
  *   header: 'x-signature',
  *   payload: (request) => request.payload,
- *   secret: '0123456789abcdef0123456789abcdef',
+ *   secret,
  * });
  */
 export function hmacSignature(options: HmacSignatureOptions): HmacSignatureVerifier {
@@ -478,8 +481,11 @@ export function customVerifier(
  * @example
  * import { standardWebhooks } from '@kovojs/core';
  *
+ * const secret = process.env.STANDARD_WEBHOOK_SECRET;
+ * if (secret === undefined) throw new Error('Missing Standard Webhooks signing material');
+ *
  * export const verifier = standardWebhooks({
- *   secret: 'whsec_c3RhbmRhcmQgdGVzdCBzZWNyZXQga2V5IDMyIGJ5dGVzISE=',
+ *   secret,
  * });
  */
 export function standardWebhooks(options: StandardWebhooksOptions): HmacSignatureVerifier {
