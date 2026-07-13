@@ -1051,6 +1051,34 @@ export const Subscription = component({
     expect(poisonHits).toBe(0);
   });
 
+  it('does not suppress package-prefix collisions through Map.get replacement', () => {
+    const nativeGet = Map.prototype.get;
+    const nativeApply = Reflect.apply;
+    let poisonHits = 0;
+    let result: ReturnType<typeof compileComponentModule> | undefined;
+    try {
+      Map.prototype.get = function poisonedPackagePrefixGet<K, V>(key: K): V | undefined {
+        if (key === 'acme-' && new Error().stack?.includes('validatePackageComponentPrefixes')) {
+          poisonHits += 1;
+          return undefined;
+        }
+        return nativeApply(nativeGet, this, [key]);
+      };
+      result = compileComponentModule({
+        fileName: 'prefixes.tsx',
+        packageComponentPrefixes: [
+          { packageName: '@acme/one', prefix: 'acme-' },
+          { packageName: '@other/two', prefix: 'acme-' },
+        ],
+        source: `export const C = component({ render: () => <p>Safe</p> });`,
+      });
+    } finally {
+      Map.prototype.get = nativeGet;
+    }
+    expect(result?.diagnostics.filter((diagnostic) => diagnostic.code === 'KV234')).toHaveLength(1);
+    expect(poisonHits).toBe(0);
+  });
+
   it('does not publish a captured server secret through stateful Array.filter replacement', () => {
     const nativeFilter = Array.prototype.filter;
     const nativeApply = Reflect.apply;
