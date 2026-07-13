@@ -1,7 +1,14 @@
 import type { Schema } from './schema.js';
 import { isSigningKeyRing, SIGNING_SECRET_MIN_BYTES } from './keyring.js';
 import { isSchemaValidationError } from './schema.js';
-import { createWitnessSet, witnessSetAdd, witnessSetHas } from './security-witness-intrinsics.js';
+import {
+  createWitnessSet,
+  witnessArrayAppend,
+  witnessGetOwnPropertyDescriptor,
+  witnessIsArray,
+  witnessSetAdd,
+  witnessSetHas,
+} from './security-witness-intrinsics.js';
 
 /**
  * Env validation + refuse-to-boot on missing/weak framework secrets (SPEC §6.6, §9.5;
@@ -75,7 +82,7 @@ export function isCreateAppBootError(error: unknown): error is CreateAppBootErro
   if (error instanceof CreateAppBootError) return true;
   if (typeof error !== 'object' || error === null) return false;
   const candidate = error as Partial<CreateAppBootError>;
-  return candidate.name === 'CreateAppBootError' && Array.isArray(candidate.issues);
+  return candidate.name === 'CreateAppBootError' && witnessIsArray(candidate.issues);
 }
 
 /** The framework secrets that `createApp` consumes and this module gates. */
@@ -137,9 +144,15 @@ export function validateAppEnv(
 
   if (issues.length === 0) return;
 
-  const fatal = issues.filter((issue) => issue.fatal);
+  let hasFatal = false;
+  for (let index = 0; index < issues.length; index += 1) {
+    if (issues[index]!.fatal) {
+      hasFatal = true;
+      break;
+    }
+  }
 
-  if (mode === 'production' && fatal.length > 0) {
+  if (mode === 'production' && hasFatal) {
     // Refuse to boot — by-construction at the chokepoint (SPEC §6.6). All issues
     // (fatal + advisory) ride the error so one fix-up pass clears the deploy.
     throw new CreateAppBootError(issues);
@@ -165,14 +178,16 @@ function validateFrameworkSecret(value: unknown, path: string, issues: EnvValida
   if (isSigningKeyRing(value)) return;
 
   if (isRecord(value)) {
-    if (Array.isArray(value.keys)) {
-      value.keys.forEach((key, index) => {
+    if (witnessIsArray(value.keys)) {
+      for (let index = 0; index < value.keys.length; index += 1) {
+        const descriptor = witnessGetOwnPropertyDescriptor(value.keys, index);
+        const key = descriptor !== undefined && 'value' in descriptor ? descriptor.value : undefined;
         if (isRecord(key)) {
           validateFrameworkSecretValue(key.secret, `${path}.keys.${index}.secret`, issues);
         } else {
           validateFrameworkSecretValue(undefined, `${path}.keys.${index}`, issues);
         }
-      });
+      }
       return;
     }
     validateFrameworkSecretValue(value.current, `${path}.current`, issues);
@@ -192,7 +207,7 @@ function validateFrameworkSecretValue(
 ): void {
   if (value instanceof Uint8Array) {
     if (value.byteLength >= FRAMEWORK_SECRET_MIN_LENGTH) return;
-    issues.push({
+    appendEnvIssue(issues, {
       code: 'too-short',
       fatal: true,
       message: `${path} must be at least ${FRAMEWORK_SECRET_MIN_LENGTH} bytes`,
@@ -202,7 +217,7 @@ function validateFrameworkSecretValue(
   }
 
   if (typeof value !== 'string') {
-    issues.push({
+    appendEnvIssue(issues, {
       code: 'invalid',
       path,
       fatal: true,
@@ -212,7 +227,7 @@ function validateFrameworkSecretValue(
   }
 
   if (value.length === 0) {
-    issues.push({
+    appendEnvIssue(issues, {
       code: 'missing',
       path,
       fatal: true,
@@ -222,7 +237,7 @@ function validateFrameworkSecretValue(
   }
 
   if (value.length < FRAMEWORK_SECRET_MIN_LENGTH) {
-    issues.push({
+    appendEnvIssue(issues, {
       code: 'too-short',
       path,
       fatal: true,
@@ -234,7 +249,7 @@ function validateFrameworkSecretValue(
   // Advisory (audit-grade heuristics; FPs → warn, never block).
   const entropyBits = estimateEntropyBits(value);
   if (entropyBits < FRAMEWORK_SECRET_MIN_ENTROPY_BITS) {
-    issues.push({
+    appendEnvIssue(issues, {
       code: 'low-entropy',
       path,
       fatal: false,
@@ -244,7 +259,7 @@ function validateFrameworkSecretValue(
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
+  return typeof value === 'object' && value !== null && !witnessIsArray(value);
 }
 
 /**
@@ -262,8 +277,9 @@ function validateAppEnvSchema(
     schema.parse(source);
   } catch (error) {
     if (isSchemaValidationError(error)) {
-      for (const issue of error.issues) {
-        issues.push({
+      for (let index = 0; index < error.issues.length; index += 1) {
+        const issue = error.issues[index]!;
+        appendEnvIssue(issues, {
           code: 'invalid',
           path: issue.path.length > 0 ? `env.${issue.path.join('.')}` : 'env',
           fatal: true,
@@ -272,13 +288,17 @@ function validateAppEnvSchema(
       }
       return;
     }
-    issues.push({
+    appendEnvIssue(issues, {
       code: 'invalid',
       path: 'env',
       fatal: true,
       message: `App env validation threw: ${error instanceof Error ? error.message : String(error)} (createApp({ env }), SPEC §9.5).`,
     });
   }
+}
+
+function appendEnvIssue(issues: EnvValidationIssue[], issue: EnvValidationIssue): void {
+  witnessArrayAppend(issues, issue, 'Server environment validation issue');
 }
 
 /**

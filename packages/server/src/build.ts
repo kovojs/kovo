@@ -1956,6 +1956,19 @@ function generatedNodeDiagnosticFactory(): (
     ]);
   }
 
+  function defineArrayValue<Value>(values: Value[], index: number, value: Value): void {
+    apply(nativeObjectDefineProperty, NativeObject, [
+      values,
+      index,
+      {
+        configurable: true,
+        enumerable: true,
+        value,
+        writable: true,
+      },
+    ]);
+  }
+
   function controlsAreSound(): boolean {
     try {
       const record = { value: 'ok' };
@@ -2128,11 +2141,12 @@ function generatedNodeDiagnosticFactory(): (
     safe: string,
   ): void {
     let index = replacements.length;
+    append(replacements, [unsafe, safe]);
     while (index > 0 && replacements[index - 1]![0].length < unsafe.length) {
-      replacements[index] = replacements[index - 1]!;
+      defineArrayValue(replacements, index, replacements[index - 1]!);
       index -= 1;
     }
-    replacements[index] = [unsafe, safe];
+    defineArrayValue(replacements, index, [unsafe, safe]);
   }
 
   function charCode(value: string, index: number): number {
@@ -2420,11 +2434,12 @@ function generatedNodeDiagnosticFactory(): (
       const item = inputs.secretValues[index]!;
       if (item === '') continue;
       let insertion = values.length;
+      append(values, item);
       while (insertion > 0 && values[insertion - 1]!.length < item.length) {
-        values[insertion] = values[insertion - 1]!;
+        defineArrayValue(values, insertion, values[insertion - 1]!);
         insertion -= 1;
       }
-      values[insertion] = item;
+      defineArrayValue(values, insertion, item);
     }
     for (let index = 0; index < values.length; index += 1) {
       sanitized = replaceAllLiteral(sanitized, values[index]!, '[redacted]');

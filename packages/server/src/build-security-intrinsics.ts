@@ -195,7 +195,12 @@ export function snapshotBuildArray<Value>(
 }
 
 /** Commit one value to a framework-owned dense array without mutable method or prototype dispatch. */
-export function commitBuildArrayValue<Value>(target: Value[], value: Value, label: string): void {
+export function commitBuildArrayValue<Value>(
+  target: Value[],
+  value: Value,
+  label: string,
+  index?: number,
+): void {
   assertBuildSecurityIntrinsics();
   if (!securityArrayIsArray(target)) {
     throw new TypeError(`Kovo build security boundary expected ${label} target to be an array.`);
@@ -210,9 +215,18 @@ export function commitBuildArrayValue<Value>(target: Value[], value: Value, labe
     throw new TypeError(`Kovo build security boundary found an invalid ${label} target length.`);
   }
 
+  const commitIndex = index ?? (rawLength as number);
+  if (
+    !securityNumberIsInteger(commitIndex) ||
+    commitIndex < 0 ||
+    commitIndex > (rawLength as number)
+  ) {
+    throw new TypeError(`Kovo build security boundary found an invalid ${label} target index.`);
+  }
+
   // Object.defineProperty's array-index algorithm grows `length` while bypassing inherited numeric
   // setters. The control itself is boot-pinned, so evaluated app code cannot replace the commit.
-  witnessDefineProperty(target, rawLength as number, {
+  witnessDefineProperty(target, commitIndex, {
     configurable: true,
     enumerable: true,
     value,

@@ -67,6 +67,11 @@ import {
   requestFormDataValues,
   requestIsFormData,
 } from './request-body-intrinsics.js';
+import {
+  witnessCreateNullRecord,
+  witnessGetOwnPropertyDescriptor,
+  witnessObjectKeys,
+} from './security-witness-intrinsics.js';
 import { renderServerRenderable } from './renderable.js';
 import { stampKovoComponentRoot } from './component-root-stamps.js';
 import { isDocumentConfig, isStructuredDocumentNode } from './document-structured.js';
@@ -347,15 +352,16 @@ function renderJsxAttributes(type: string, props: JsxProps, jsxKey?: unknown): s
       continue;
     }
     if (styleAttrs && name === 'class') {
-      const className = [attributeText(name, value), styleAttrs.class].filter(Boolean).join(' ');
+      const className = joinPresentStrings([attributeText(name, value), styleAttrs.class], ' ');
       rendered += ` class="${escapeAttribute(className)}"`;
       renderedClass = true;
       continue;
     }
     if (styleAttrs && name === 'data-style-src') {
-      const source = [attributeText(name, value), styleAttrs['data-style-src']]
-        .filter(Boolean)
-        .join('; ');
+      const source = joinPresentStrings(
+        [attributeText(name, value), styleAttrs['data-style-src']],
+        '; ',
+      );
       rendered += ` data-style-src="${escapeAttribute(source)}"`;
       renderedStyleSource = true;
       continue;
@@ -396,7 +402,17 @@ function renderJsxAttributes(type: string, props: JsxProps, jsxKey?: unknown): s
 }
 
 function mergedStyle(...values: Array<string | undefined>): string {
-  return values.filter(Boolean).join('; ');
+  return joinPresentStrings(values, '; ');
+}
+
+function joinPresentStrings(values: readonly (string | undefined)[], separator: string): string {
+  let result = '';
+  for (let index = 0; index < values.length; index += 1) {
+    const value = formHelperOwnDataValue(values, index);
+    if (typeof value !== 'string' || value === '') continue;
+    result += `${result === '' ? '' : separator}${value}`;
+  }
+  return result;
 }
 
 function kovoStyleInputAttributes(value: unknown):
@@ -412,7 +428,12 @@ function kovoStyleInputAttributes(value: unknown):
 
 function isKovoStyleInput(value: unknown): boolean {
   if (!value) return false;
-  if (Array.isArray(value)) return value.some(isKovoStyleInput);
+  if (formHelperIsArray(value)) {
+    for (let index = 0; index < value.length; index += 1) {
+      if (isKovoStyleInput(formHelperOwnDataValue(value, index))) return true;
+    }
+    return false;
+  }
   return typeof value === 'object' && value !== null && '$$css' in value;
 }
 
@@ -713,14 +734,21 @@ function attributeText(name: string, value: unknown): string {
 }
 
 function isStyleProperties(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
+  return typeof value === 'object' && value !== null && !formHelperIsArray(value);
 }
 
 function renderStyleProperties(properties: Record<string, unknown>): string {
-  return Object.entries(properties)
-    .map(([propertyName, propertyValue]) => kovoStyleProperty(propertyName, propertyValue))
-    .filter(Boolean)
-    .join('; ');
+  let rendered = '';
+  const names = formHelperObjectKeys(properties);
+  for (let index = 0; index < names.length; index += 1) {
+    const propertyName = formHelperOwnDataValue(names, index);
+    if (typeof propertyName !== 'string') continue;
+    const propertyValue = formHelperOwnDataValue(properties, propertyName);
+    const declaration = kovoStyleProperty(propertyName, propertyValue);
+    if (declaration === '') continue;
+    rendered += `${rendered === '' ? '' : '; '}${declaration}`;
+  }
+  return rendered;
 }
 
 function rawHtmlContent(props: JsxProps): string | undefined {
@@ -843,8 +871,15 @@ async function loadComponentQueries(
   const queryBindings = component.definition.queries;
   if (!isRecord(queryBindings)) return {};
 
-  const values: Record<string, unknown> = {};
-  for (const [name, binding] of Object.entries(queryBindings)) {
+  const values = witnessCreateNullRecord<unknown>() as Record<string, unknown>;
+  const names = witnessObjectKeys(queryBindings);
+  for (let index = 0; index < names.length; index += 1) {
+    const name = names[index]!;
+    const descriptor = witnessGetOwnPropertyDescriptor(queryBindings, name);
+    if (descriptor === undefined || !('value' in descriptor)) {
+      throw new TypeError(`Route JSX component query ${name} must be an own data property.`);
+    }
+    const binding = descriptor.value;
     const resolved = componentQueryBinding(binding, props);
     if (!resolved) continue;
     if (request === undefined) {
@@ -882,9 +917,7 @@ function componentRenderSlots(
   request: unknown,
 ): ComponentRenderSlots {
   const forms = isRecord(component.definition.mutations)
-    ? Object.fromEntries(
-        Object.keys(component.definition.mutations).map((key) => [key, { failure: null }]),
-      )
+    ? componentMutationDefaultForms(component.definition.mutations)
     : undefined;
 
   let slots: ComponentRenderSlots = {
@@ -897,7 +930,11 @@ function componentRenderSlots(
   const failureContext = currentJsxFrameworkContext()?.mutationFailure;
   if (!failureContext || !isRecord(component.definition.mutations)) return slots;
 
-  for (const [name, mutation] of Object.entries(component.definition.mutations)) {
+  const names = formHelperObjectKeys(component.definition.mutations);
+  for (let index = 0; index < names.length; index += 1) {
+    const name = formHelperOwnDataValue(names, index);
+    if (typeof name !== 'string') continue;
+    const mutation = formHelperOwnDataValue(component.definition.mutations, name);
     if (isMutationDefinitionLike(mutation) && mutation.key === failureContext.mutationKey) {
       slots = componentMutationFailureSlots(name, failureContext.failure, slots, {
         submitted: failureContext.input,
@@ -909,7 +946,18 @@ function componentRenderSlots(
 }
 
 function jsxPropsToSlots(props: JsxProps): ComponentRenderSlots {
-  return Object.fromEntries(Object.entries(props).filter(([name]) => name !== 'children'));
+  const slots = formHelperCreateRecord() as ComponentRenderSlots;
+  const names = formHelperObjectKeys(props);
+  for (let index = 0; index < names.length; index += 1) {
+    const name = formHelperOwnDataValue(names, index);
+    if (typeof name !== 'string' || name === 'children') continue;
+    formHelperDefineDataProperty(
+      slots as Record<string, unknown>,
+      name,
+      formHelperOwnDataValue(props, name),
+    );
+  }
+  return slots;
 }
 
 function isKovoComponent(value: unknown): value is KovoJsxComponent {
@@ -920,7 +968,7 @@ function isQueryDefinition(value: unknown): value is QueryDefinition {
   return (
     isRecord(value) &&
     typeof value.key === 'string' &&
-    (value.reads === undefined || Array.isArray(value.reads))
+    (value.reads === undefined || formHelperIsArray(value.reads))
   );
 }
 
@@ -931,7 +979,21 @@ function isQueryArgsBinding(
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
+  return typeof value === 'object' && value !== null && !formHelperIsArray(value);
+}
+
+function componentMutationDefaultForms(
+  mutations: Record<string, unknown>,
+): Record<string, { failure: null }> {
+  const forms = formHelperCreateRecord() as Record<string, { failure: null }>;
+  const names = formHelperObjectKeys(mutations);
+  for (let index = 0; index < names.length; index += 1) {
+    const name = formHelperOwnDataValue(names, index);
+    if (typeof name === 'string') {
+      formHelperDefineDataProperty(forms, name, { failure: null });
+    }
+  }
+  return forms;
 }
 
 function isObjectLike(value: unknown): value is Record<string, unknown> {

@@ -184,6 +184,8 @@ export function validateRawSetCookie(value: string): string {
 export interface ForwardSetCookiePosture {
   /** Credential class whose floor should be applied to the forwarded cookie. */
   class?: CookieClass;
+  /** Trusted HTTPS request signal from the framework adapter. */
+  secure?: boolean;
   /** Audit-only source label for the internal caller that owns the upstream cookie. */
   source: 'better-auth-credential' | 'csrf' | 'legacy-normalize' | 'session-provider';
 }
@@ -469,7 +471,7 @@ export function forwardSetCookie(raw: string, posture: ForwardSetCookiePosture):
   // brought UP to the floor; we never downgrade a forwarded credential cookie, so no `unsafe` escape
   // is involved here. To preserve the upstream's intent where it set SameSite=None (a deliberate
   // cross-site embed), we keep it but pair it with Secure (browsers require Secure for SameSite=None).
-  const productionSecure = isProductionRuntime();
+  const productionSecure = isProductionRuntime() || posture.secure === true;
   const floorHttpOnly = isCredentialClass(cookieClass) ? true : upstreamHttpOnly;
   const floorSecure = isCredentialClass(cookieClass)
     ? upstreamSecure || productionSecure || sameSite === 'none'

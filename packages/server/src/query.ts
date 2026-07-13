@@ -350,12 +350,16 @@ function buildQueryDefinition<const Key extends string>(
   );
   if (!definition.args) return queryDefinition;
 
-  return Object.assign(queryDefinition, {
-    args: queryArgsSchema(
+  witnessDefineProperty(queryDefinition, 'args', {
+    configurable: true,
+    enumerable: true,
+    value: queryArgsSchema(
       definition.args,
       queryDefinition as QueryDefinition<string, unknown, unknown, unknown>,
     ),
+    writable: true,
   });
+  return queryDefinition;
 }
 
 /**
@@ -782,7 +786,7 @@ function queryArgsSchema<Input>(
     schema,
   })) as QueryArgsSchema<Input>;
 
-  Object.defineProperty(bind, 'parse', {
+  witnessDefineProperty(bind, 'parse', {
     configurable: true,
     enumerable: true,
     value: (input: unknown) => schema.parse(input),
@@ -792,7 +796,7 @@ function queryArgsSchema<Input>(
     parseAsync?: (input: unknown) => Promise<Input>;
   };
   if (typeof asyncSchema.parseAsync === 'function') {
-    Object.defineProperty(bind, 'parseAsync', {
+    witnessDefineProperty(bind, 'parseAsync', {
       configurable: true,
       enumerable: true,
       value: (input: unknown) => asyncSchema.parseAsync?.(input),

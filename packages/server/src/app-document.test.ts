@@ -1586,9 +1586,9 @@ describe('rolling-session refresh cookies on GET documents (part-3 I2)', () => {
     // Both refresh cookies are emitted as a Set-Cookie header array (webResponseHeaders
     // appends each as a separate Set-Cookie on the wire).
     expect(response.headers['Set-Cookie']).toEqual([
-      'session_token=rolled; Path=/; HttpOnly; SameSite=Lax',
+      'session_token=rolled; Path=/; HttpOnly; Secure; SameSite=Lax',
       // Forwarded refresh cookie is brought up to the session floor (SameSite=Lax added).
-      'session_data=cache; Path=/; HttpOnly; SameSite=Lax',
+      'session_data=cache; Path=/; HttpOnly; Secure; SameSite=Lax',
     ]);
   });
 
@@ -1647,7 +1647,7 @@ describe('rolling-session Set-Cookie forces no-store on unguarded GET documents 
     // The refresh cookie MUST still ride the response (the lifecycle forwarding is unchanged)…
     expect(response.headers['Set-Cookie']).toEqual([
       // Forwarded better-auth session cookie is floored (SameSite=Lax added).
-      'better-auth.session_token=tok; Path=/; HttpOnly; SameSite=Lax',
+      'better-auth.session_token=tok; Path=/; HttpOnly; Secure; SameSite=Lax',
     ]);
     // …and because a per-principal cookie was emitted, the document MUST be non-cacheable.
     expect(response.headers['Cache-Control']).toBe('private, no-store');
@@ -1761,7 +1761,7 @@ describe('rolling-session Set-Cookie forces no-store on unguarded GET documents 
     }
 
     expect(response.headers['Set-Cookie']).toEqual([
-      'sid=genuine-session; Path=/; HttpOnly; SameSite=Lax',
+      'sid=genuine-session; Path=/; HttpOnly; Secure; SameSite=Lax',
     ]);
   });
 });

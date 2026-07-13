@@ -479,7 +479,9 @@ interface StateSet {
 }
 
 function createStateSet(size: number): StateSet {
-  return { count: 0, matched: false, seen: securityCreateUint8Array(size), states: [] };
+  const states: number[] = [];
+  for (let index = 0; index < size; index += 1) securityArrayPush(states, 0);
+  return { count: 0, matched: false, seen: securityCreateUint8Array(size), states };
 }
 
 function resetStateSet(set: StateSet): void {

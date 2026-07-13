@@ -570,6 +570,47 @@ describe('server endpoints', () => {
     }
   });
 
+  it('keeps endpoint response posture fail-closed after an app handler poisons Array.push', async () => {
+    const previousVerify = process.env.KOVO_VERIFY_ENDPOINT_POSTURE;
+    const nativePush = Array.prototype.push;
+    let poisonHits = 0;
+    process.env.KOVO_VERIFY_ENDPOINT_POSTURE = '1';
+    const mismatched = endpoint('/machine/posture-push-poison', {
+      csrf: false,
+      csrfJustification: 'runtime posture poisoning regression',
+      handler: () => {
+        Array.prototype.push = function poisonedPosturePush(...values: unknown[]) {
+          if (values[0] === 'declared cache=no-store but response lacks Cache-Control: no-store') {
+            poisonHits += 1;
+            return this.length;
+          }
+          return Reflect.apply(nativePush, this, values);
+        };
+        return new Response('{"ok":true}', { headers: { 'Content-Type': 'text/plain' } });
+      },
+      method: 'POST',
+      reason: 'runtime posture poisoning regression',
+      response: { appOwnedSafety: true, body: 'json', cache: 'no-store' },
+    });
+
+    let error: unknown;
+    try {
+      await runEndpoint(
+        mismatched,
+        new Request('https://example.test/machine/posture-push-poison', { method: 'POST' }),
+      );
+    } catch (caught) {
+      error = caught;
+    } finally {
+      Array.prototype.push = nativePush;
+      if (previousVerify === undefined) delete process.env.KOVO_VERIFY_ENDPOINT_POSTURE;
+      else process.env.KOVO_VERIFY_ENDPOINT_POSTURE = previousVerify;
+    }
+
+    expect(poisonHits).toBe(0);
+    expect(String(error)).toMatch(/response posture mismatch/u);
+  });
+
   it('allows honest multi-body response posture declarations', async () => {
     const previous = process.env.KOVO_VERIFY_ENDPOINT_POSTURE;
     process.env.KOVO_VERIFY_ENDPOINT_POSTURE = '1';

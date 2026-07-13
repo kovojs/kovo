@@ -45,6 +45,29 @@ describe('validateAppEnv — framework secret refuse-to-boot (SPEC §6.6)', () =
       expect(error.message).toContain('randomBytes');
     });
 
+    it('cannot erase a fatal weak-secret issue through a late Array.push override', () => {
+      const nativePush = Array.prototype.push;
+      let poisonHits = 0;
+      let caught: unknown;
+      try {
+        Array.prototype.push = function poisonedEnvIssuePush(...values: unknown[]) {
+          if ((values[0] as { code?: unknown } | undefined)?.code === 'too-short') {
+            poisonHits += 1;
+            return this.length;
+          }
+          return Reflect.apply(nativePush, this, values);
+        };
+        validateAppEnv({ csrfSecret: 'short' }, { mode: 'production' });
+      } catch (error) {
+        caught = error;
+      } finally {
+        Array.prototype.push = nativePush;
+      }
+
+      expect(poisonHits).toBe(0);
+      expect(caught).toBeInstanceOf(CreateAppBootError);
+    });
+
     it('throws on a non-string secret', () => {
       const error = captureBootError(() =>
         validateAppEnv({ csrfSecret: 1234 as unknown }, { mode: 'production' }),

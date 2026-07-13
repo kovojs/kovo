@@ -18,6 +18,7 @@ import {
   witnessDefineProperty,
   witnessFreeze,
   witnessGetOwnPropertyDescriptor,
+  witnessIsArray,
   witnessReflectApply,
   witnessReflectGet,
   witnessWeakMapGet,
@@ -272,7 +273,7 @@ export function pinEndpointAuth<Declaration extends object>(
 ): Declaration {
   if (witnessWeakMapHas(pinnedEndpointAuth, declaration)) return declaration;
   const snapshot = snapshotEndpointAuth(auth);
-  Object.defineProperty(declaration, 'auth', {
+  witnessDefineProperty(declaration, 'auth', {
     configurable: false,
     enumerable: auth !== undefined,
     value: snapshot.auth,
@@ -343,7 +344,7 @@ export function copyEndpointAuthSnapshot<Declaration extends object>(
 ): Declaration {
   if (witnessWeakMapHas(pinnedEndpointAuth, target)) return target;
   const snapshot = endpointAuthSnapshotFor(source);
-  Object.defineProperty(target, 'auth', {
+  witnessDefineProperty(target, 'auth', {
     configurable: false,
     enumerable: snapshot.auth !== undefined,
     value: snapshot.auth,
@@ -375,7 +376,7 @@ function endpointAuthSnapshotFor(
       ? ({ auth: undefined, valid: false } satisfies PinnedEndpointAuth)
       : snapshotEndpointAuth(auth);
   try {
-    Object.defineProperty(declaration, 'auth', {
+    witnessDefineProperty(declaration, 'auth', {
       configurable: false,
       enumerable: descriptor?.enumerable ?? auth !== undefined,
       value: snapshot.auth,
@@ -460,7 +461,7 @@ function snapshotExecutableVerifier(value: unknown): PinnedExecutableVerifier | 
       verify: async (request) => Boolean(await witnessReflectApply(verify, value, [request])),
     };
   }
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) return undefined;
+  if (typeof value !== 'object' || value === null || witnessIsArray(value)) return undefined;
 
   const kind = stableVerifierValue(value, 'kind');
   const name = stableVerifierValue(value, 'name');

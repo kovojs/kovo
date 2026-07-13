@@ -58,8 +58,10 @@ import {
   witnessFreeze,
   witnessGetOwnPropertyDescriptor,
   witnessIsArray,
+  witnessObjectKeys,
   witnessReflectApply,
   witnessReflectGet,
+  witnessStringToLowerCase,
 } from './security-witness-intrinsics.js';
 
 type AnyRouteDeclaration = RouteDeclaration<any, any, any, any, any, any>;
@@ -191,7 +193,11 @@ export async function renderAppRouteDocumentResponse({
       appendResponseHeader(
         response.headers,
         'Set-Cookie',
-        forwardSetCookie(cookie.raw, { class: 'session', source: cookie.source }),
+        forwardSetCookie(cookie.raw, {
+          class: 'session',
+          secure: isTrustedSecureRequest(request),
+          source: cookie.source,
+        }),
       );
     }
     return refreshSetCookies.length > 0
@@ -576,9 +582,23 @@ function renderConfiguredErrorShellBody(value: unknown): string {
 function stripContentTypeHeader(
   headers: RoutePageResponse['headers'],
 ): RoutePageResponse['headers'] {
-  return Object.fromEntries(
-    Object.entries(headers).filter(([name]) => name.toLowerCase() !== 'content-type'),
-  );
+  const stripped = witnessCreateNullRecord<unknown>() as RoutePageResponse['headers'];
+  const names = witnessObjectKeys(headers);
+  for (let index = 0; index < names.length; index += 1) {
+    const name = names[index]!;
+    if (witnessStringToLowerCase(name) === 'content-type') continue;
+    const descriptor = witnessGetOwnPropertyDescriptor(headers, name);
+    if (descriptor === undefined || !('value' in descriptor)) {
+      throw new TypeError(`Configured error shell header ${name} must be an own data property.`);
+    }
+    witnessDefineProperty(stripped, name, {
+      configurable: true,
+      enumerable: true,
+      value: descriptor.value,
+      writable: true,
+    });
+  }
+  return stripped;
 }
 
 export function appRequestUrl(url: URL): string {

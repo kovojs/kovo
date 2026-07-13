@@ -4,6 +4,7 @@ import { setRuntimeSinkSecurityEventHandler } from '@kovojs/core/internal/sink-p
 
 import { renderRouteDocumentResponse } from './document-core.js';
 import {
+  appendResponseHeader,
   blessRedirectResponse,
   isHeaderSource,
   mergeResponseHeaders,
@@ -19,6 +20,32 @@ import {
 } from './response.js';
 
 describe('server response adapters', () => {
+  it('commits Set-Cookie without inherited credential setter dispatch', () => {
+    const headers: Record<string, string | string[]> = {};
+    const previous = Object.getOwnPropertyDescriptor(Object.prototype, 'Set-Cookie');
+    let setterCalls = 0;
+    try {
+      Object.defineProperty(Object.prototype, 'Set-Cookie', {
+        configurable: true,
+        set() {
+          setterCalls += 1;
+        },
+      });
+      appendResponseHeader(headers, 'Set-Cookie', 'sid=reviewed; Path=/; HttpOnly');
+    } finally {
+      if (previous === undefined) {
+        delete (Object.prototype as { 'Set-Cookie'?: unknown })['Set-Cookie'];
+      } else {
+        Object.defineProperty(Object.prototype, 'Set-Cookie', previous);
+      }
+    }
+
+    expect(setterCalls).toBe(0);
+    expect(Object.getOwnPropertyDescriptor(headers, 'Set-Cookie')?.value).toEqual([
+      'sid=reviewed; Path=/; HttpOnly',
+    ]);
+  });
+
   it('suppresses route response bodies for HEAD requests', async () => {
     const response = routeResponseToWebResponse(
       {

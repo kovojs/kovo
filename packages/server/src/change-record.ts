@@ -1,4 +1,20 @@
 import { isCompilerDerivedDomain, type Domain } from './domain.js';
+import {
+  createWitnessSet,
+  witnessArrayAppend,
+  witnessFreeze,
+  witnessGetOwnPropertyDescriptor,
+  witnessIsArray,
+  witnessSetAdd,
+  witnessSetHas,
+  witnessString,
+} from './security-witness-intrinsics.js';
+import {
+  securityStringIncludes,
+  securityStringSlice,
+  securityStringSplit,
+  securityStringStartsWith,
+} from './response-security-intrinsics.js';
 
 const ARGUMENT_TOUCH_KEY_PREFIX = 'arg:';
 
@@ -68,7 +84,7 @@ export function invalidate<const DomainKey extends string, Input = unknown>(
   return {
     domain: domain.key,
     ...(options.input === undefined ? {} : { input: options.input }),
-    ...(options.keys === undefined ? {} : { keys: options.keys }),
+    ...(options.keys === undefined ? {} : { keys: snapshotChangeKeys(options.keys) }),
     manual: true,
     ...(options.reason === undefined ? {} : { reason: options.reason }),
   };
@@ -80,13 +96,22 @@ export function mutationRegistryChangeRecords<Input>(
 ): ChangeRecord<string, Input>[] {
   const inferredTouches = dedupeTouchSites(registry?.inferredTouches ?? []);
   if (inferredTouches.length > 0) {
-    return inferredTouches.map((touch) => ({
-      ...(touch.crossTable ? { crossTable: true as const } : {}),
-      domain: touch.domain,
-      input,
-      ...touchKeyRecord(touch.keys, input),
-      ...(touch.via === undefined ? {} : { via: touch.via }),
-    }));
+    const records: ChangeRecord<string, Input>[] = [];
+    for (let index = 0; index < inferredTouches.length; index += 1) {
+      const touch = inferredTouches[index]!;
+      witnessArrayAppend(
+        records,
+        {
+          ...(touch.crossTable ? { crossTable: true as const } : {}),
+          domain: touch.domain,
+          input,
+          ...touchKeyRecord(touch.keys, input),
+          ...(touch.via === undefined ? {} : { via: touch.via }),
+        },
+        'Mutation inferred change record',
+      );
+    }
+    return records;
   }
 
   return changeRecordsFor(registry?.touches ?? [], input);
@@ -138,7 +163,11 @@ export function changeRecordTouchesQueryInstance(
   }
 
   // A per-row reader of this domain: narrow to the touched rows only.
-  return change.keys?.includes(rowValue) ?? false;
+  const keys = change.keys ?? [];
+  for (let index = 0; index < keys.length; index += 1) {
+    if (keys[index] === rowValue) return true;
+  }
+  return false;
 }
 
 /**
@@ -153,10 +182,10 @@ export function changeRecordTouchesQueryInstance(
  */
 function canonicalSingleRowValue(domain: string, instanceKey: string): string | undefined {
   const prefix = `${domain}:`;
-  if (!instanceKey.startsWith(prefix)) return undefined;
+  if (!securityStringStartsWith(instanceKey, prefix)) return undefined;
 
-  const value = instanceKey.slice(prefix.length);
-  if (value.length === 0 || value.includes(':')) return undefined;
+  const value = securityStringSlice(instanceKey, prefix.length);
+  if (value.length === 0 || securityStringIncludes(value, ':')) return undefined;
 
   return value;
 }
@@ -165,10 +194,15 @@ function changeRecordsFor<Input>(
   domains: readonly Domain[],
   input: Input,
 ): ChangeRecord<string, Input>[] {
-  return domains.map((item) => ({
-    domain: resolvedManualDomainKey(item),
-    input,
-  }));
+  const records: ChangeRecord<string, Input>[] = [];
+  for (let index = 0; index < domains.length; index += 1) {
+    witnessArrayAppend(
+      records,
+      { domain: resolvedManualDomainKey(domains[index]!), input },
+      'Mutation declared change record',
+    );
+  }
+  return records;
 }
 
 function resolvedManualDomainKey(domain: Domain): string {
@@ -181,14 +215,15 @@ function resolvedManualDomainKey(domain: Domain): string {
 }
 
 function dedupeTouchSites(touches: readonly MutationTouchSite[]): MutationTouchSite[] {
-  const seen = new Set<string>();
+  const seen = createWitnessSet<string>();
   const deduped: MutationTouchSite[] = [];
 
-  for (const touch of touches) {
+  for (let index = 0; index < touches.length; index += 1) {
+    const touch = touches[index]!;
     const key = `${touch.domain}\0${touch.via ?? ''}\0${touch.keys ?? ''}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    deduped.push(touch);
+    if (witnessSetHas(seen, key)) continue;
+    witnessSetAdd(seen, key);
+    witnessArrayAppend(deduped, touch, 'Mutation touch dedupe');
   }
 
   return deduped;
@@ -199,15 +234,18 @@ function touchKeyRecord<Input>(
   input: Input,
 ): Pick<ChangeRecord<string, Input>, 'keys'> {
   if (keySource === null) return {};
-  if (!keySource.startsWith(ARGUMENT_TOUCH_KEY_PREFIX)) return {};
+  if (!securityStringStartsWith(keySource, ARGUMENT_TOUCH_KEY_PREFIX)) return {};
 
-  const value = readPath(input, keySource.slice(ARGUMENT_TOUCH_KEY_PREFIX.length));
+  const value = readPath(input, securityStringSlice(keySource, ARGUMENT_TOUCH_KEY_PREFIX.length));
   if (value === undefined || value === null) return {};
-  if (Array.isArray(value)) {
-    const keys = value.flatMap((item) => {
-      const key = primitiveKey(item);
-      return key === undefined ? [] : [key];
-    });
+  if (witnessIsArray(value)) {
+    const keys: string[] = [];
+    for (let index = 0; index < value.length; index += 1) {
+      const descriptor = witnessGetOwnPropertyDescriptor(value, index);
+      if (descriptor === undefined || !('value' in descriptor)) continue;
+      const key = primitiveKey(descriptor.value);
+      if (key !== undefined) witnessArrayAppend(keys, key, 'Mutation touch argument key');
+    }
     return keys.length > 0 ? { keys } : {};
   }
 
@@ -216,17 +254,35 @@ function touchKeyRecord<Input>(
 }
 
 function readPath(input: unknown, path: string): unknown {
-  return path.split('.').reduce<unknown>((value, segment) => {
+  const segments = securityStringSplit(path, '.');
+  let value = input;
+  for (let index = 0; index < segments.length; index += 1) {
+    const segment = segments[index]!;
     if (value === null || typeof value !== 'object') return undefined;
-    if (!Object.hasOwn(value, segment)) return undefined;
-    return (value as Record<string, unknown>)[segment];
-  }, input);
+    const descriptor = witnessGetOwnPropertyDescriptor(value, segment);
+    if (descriptor === undefined || !('value' in descriptor)) return undefined;
+    value = descriptor.value;
+  }
+  return value;
 }
 
 function primitiveKey(value: unknown): string | undefined {
   if (typeof value === 'string') return value;
   if (typeof value === 'number' || typeof value === 'bigint' || typeof value === 'boolean') {
-    return String(value);
+    return witnessString(value);
   }
   return undefined;
+}
+
+function snapshotChangeKeys(keys: readonly string[]): readonly string[] {
+  if (!witnessIsArray(keys)) throw new TypeError('Mutation invalidation keys must be an array.');
+  const snapshot: string[] = [];
+  for (let index = 0; index < keys.length; index += 1) {
+    const descriptor = witnessGetOwnPropertyDescriptor(keys, index);
+    if (descriptor === undefined || !('value' in descriptor) || typeof descriptor.value !== 'string') {
+      throw new TypeError('Mutation invalidation keys must contain stable string data properties.');
+    }
+    witnessArrayAppend(snapshot, descriptor.value, 'Mutation invalidation key snapshot');
+  }
+  return witnessFreeze(snapshot);
 }

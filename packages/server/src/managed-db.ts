@@ -599,7 +599,7 @@ function snapshotManagedWritePolicy(policy: ManagedSqlWritePolicy): ManagedSqlWr
   const engineReadonly = optionalOwnDataProperty(policy, 'engineReadonly');
   const tables = optionalOwnDataProperty(policy, 'tables');
   const touches = optionalOwnDataProperty(policy, 'touches');
-  const snapshot: ManagedSqlWritePolicy = {};
+  const snapshot = witnessCreateNullRecord<unknown>() as ManagedSqlWritePolicy;
   if (capability !== undefined) {
     if (capability !== 'read' && capability !== 'write') {
       throw new TypeError('managed SQL capability must be read or write.');
@@ -639,21 +639,20 @@ function snapshotDeclaredWriteBoundary(
 }
 
 function snapshotDeclaredWriteOptions(options: DeclaredWriteDbOptions): DeclaredWriteDbOptions {
-  const normalizeTableName = ownFunctionDataProperty(options, 'normalizeTableName');
+  const normalizeTableNameControl = ownFunctionDataProperty(options, 'normalizeTableName');
   const tableNames = ownFunctionDataProperty(options, 'tableNames');
-  const runtime: DeclaredWriteDbOptions = {
-    dialectLabel: ownStringDataProperty(options, 'dialectLabel'),
-    normalizeTableName(table) {
-      const normalized = witnessReflectApply<unknown>(normalizeTableName, options, [table]);
-      if (typeof normalized !== 'string') {
-        throw new TypeError('declared-write table normalization must return a string.');
-      }
-      return normalized;
-    },
-    tableNames(table) {
-      const names = witnessReflectApply<unknown>(tableNames, options, [table]);
-      return snapshotStringArray(names, 'observed declared-write table names');
-    },
+  const runtime = witnessCreateNullRecord<unknown>() as unknown as DeclaredWriteDbOptions;
+  runtime.dialectLabel = ownStringDataProperty(options, 'dialectLabel');
+  runtime.normalizeTableName = function normalizeDeclaredWriteTable(table) {
+    const normalized = witnessReflectApply<unknown>(normalizeTableNameControl, options, [table]);
+    if (typeof normalized !== 'string') {
+      throw new TypeError('declared-write table normalization must return a string.');
+    }
+    return normalized;
+  };
+  runtime.tableNames = function tableNamesSnapshot(table) {
+    const names = witnessReflectApply<unknown>(tableNames, options, [table]);
+    return snapshotStringArray(names, 'observed declared-write table names');
   };
   const governedColumns = optionalOwnDataProperty(options, 'governedColumns');
   const sqliteAuthorizer = optionalOwnDataProperty(options, 'sqliteAuthorizer');
@@ -789,7 +788,7 @@ function snapshotAuthorizationClassifications(
 function snapshotPostgresScopedClientOptions(
   options: PostgresScopedClientOptions,
 ): PostgresScopedClientOptions {
-  const snapshot: PostgresScopedClientOptions = {};
+  const snapshot = witnessCreateNullRecord<unknown>() as PostgresScopedClientOptions;
   const principal = optionalOwnDataProperty(options, 'principal');
   const quoteIdentifier = optionalOwnDataProperty(options, 'quoteIdentifier');
   const readOnly = optionalOwnDataProperty(options, 'readOnly');
@@ -834,7 +833,8 @@ function snapshotPostgresScopedClientOptions(
 function postgresReadonlyScopedOptions(
   options: PostgresReadonlyClientOptions,
 ): PostgresScopedClientOptions {
-  const snapshot: PostgresScopedClientOptions = { readOnly: true };
+  const snapshot = witnessCreateNullRecord<unknown>() as PostgresScopedClientOptions;
+  snapshot.readOnly = true;
   const principal = optionalOwnDataProperty(options, 'principal');
   const quoteIdentifier = optionalOwnDataProperty(options, 'quoteIdentifier');
   const readerRole = optionalOwnDataProperty(options, 'readerRole');
@@ -875,7 +875,7 @@ function postgresReadonlyScopedOptions(
 
 function snapshotPostgresRlsDiagnostics(value: unknown): PostgresRlsSilentDenyDiagnosticsOptions {
   if (!isRecord(value)) throw new TypeError('Postgres RLS diagnostics must be an object.');
-  const snapshot: PostgresRlsSilentDenyDiagnosticsOptions = {};
+  const snapshot = witnessCreateNullRecord<unknown>() as PostgresRlsSilentDenyDiagnosticsOptions;
   const enabled = optionalOwnDataProperty(value, 'enabled');
   const privilegedClient = optionalOwnDataProperty(value, 'privilegedClient');
   const tableName = optionalOwnDataProperty(value, 'tableName');
@@ -2883,10 +2883,10 @@ async function maybeReportPostgresRlsSilentDeny(
 }
 
 function resultRowCount(result: unknown): number | undefined {
-  if (Array.isArray(result)) return result.length;
+  if (witnessIsArray(result)) return result.length;
   if (isRecord(result)) {
     const rows = result.rows;
-    if (Array.isArray(rows)) return rows.length;
+    if (witnessIsArray(rows)) return rows.length;
   }
   return undefined;
 }
@@ -2899,9 +2899,9 @@ async function countPostgresDiagnosticRows(
   const quote = options.quoteIdentifier ?? quoteSqlIdentifier;
   const query = `SELECT count(*) AS count FROM ${quoteQualifiedSqlIdentifier(table, quote)}`;
   const result = await client.query(query);
-  const rows = Array.isArray(result)
+  const rows = witnessIsArray(result)
     ? result
-    : isRecord(result) && Array.isArray(result.rows)
+    : isRecord(result) && witnessIsArray(result.rows)
       ? result.rows
       : [];
   const first = rows[0];
@@ -3094,10 +3094,10 @@ function snapshotReadonlyCapabilityOptions(options: {
   crossOwnerRead?: CrossOwnerReadPolicyOptions;
   rawRead?: RawReadPolicyOptions;
 } {
-  const snapshot: {
+  const snapshot = witnessCreateNullRecord<unknown>() as {
     crossOwnerRead?: CrossOwnerReadPolicyOptions;
     rawRead?: RawReadPolicyOptions;
-  } = {};
+  };
   const crossOwnerRead = optionalOwnDataProperty(options, 'crossOwnerRead');
   const rawRead = optionalOwnDataProperty(options, 'rawRead');
   if (crossOwnerRead !== undefined) {
@@ -3112,13 +3112,12 @@ function snapshotReadonlyCapabilityOptions(options: {
 
 function snapshotRawReadPolicy(policy: RawReadPolicyOptions): RawReadPolicyOptions {
   const normalizeTableName = ownFunctionDataProperty(policy, 'normalizeTableName');
-  const snapshot: RawReadPolicyOptions = {
-    dialectLabel: ownStringDataProperty(policy, 'dialectLabel'),
-    normalizeTableName(table) {
-      const value = witnessReflectApply<unknown>(normalizeTableName, policy, [table]);
-      if (typeof value !== 'string') throw new TypeError('rawRead table normalization failed.');
-      return value;
-    },
+  const snapshot = witnessCreateNullRecord<unknown>() as unknown as RawReadPolicyOptions;
+  snapshot.dialectLabel = ownStringDataProperty(policy, 'dialectLabel');
+  snapshot.normalizeTableName = function normalizeRawReadTable(table) {
+    const value = witnessReflectApply<unknown>(normalizeTableName, policy, [table]);
+    if (typeof value !== 'string') throw new TypeError('rawRead table normalization failed.');
+    return value;
   };
   const ownerTables = optionalOwnDataProperty(policy, 'ownerTables');
   const sqliteAuthorizer = optionalOwnDataProperty(policy, 'sqliteAuthorizer');
@@ -3156,20 +3155,19 @@ function snapshotCrossOwnerReadPolicy(
   policy: CrossOwnerReadPolicyOptions,
 ): CrossOwnerReadPolicyOptions {
   const normalizeTableName = ownFunctionDataProperty(policy, 'normalizeTableName');
-  const snapshot: CrossOwnerReadPolicyOptions = {
-    dialectLabel: ownStringDataProperty(policy, 'dialectLabel'),
-    normalizeTableName(table) {
-      const value = witnessReflectApply<unknown>(normalizeTableName, policy, [table]);
-      if (typeof value !== 'string') {
-        throw new TypeError('crossOwnerRead table normalization failed.');
-      }
-      return value;
-    },
-    ownerTables: snapshotStringArray(
-      optionalOwnDataProperty(policy, 'ownerTables'),
-      'crossOwnerRead owner tables',
-    ),
+  const snapshot = witnessCreateNullRecord<unknown>() as unknown as CrossOwnerReadPolicyOptions;
+  snapshot.dialectLabel = ownStringDataProperty(policy, 'dialectLabel');
+  snapshot.normalizeTableName = function normalizeCrossOwnerReadTable(table) {
+    const value = witnessReflectApply<unknown>(normalizeTableName, policy, [table]);
+    if (typeof value !== 'string') {
+      throw new TypeError('crossOwnerRead table normalization failed.');
+    }
+    return value;
   };
+  snapshot.ownerTables = snapshotStringArray(
+    optionalOwnDataProperty(policy, 'ownerTables'),
+    'crossOwnerRead owner tables',
+  );
   const adminClient = optionalOwnDataProperty(policy, 'adminClient');
   const executeMethod = optionalOwnDataProperty(policy, 'executeMethod');
   const executeSql = optionalOwnDataProperty(policy, 'executeSql');
@@ -3402,7 +3400,8 @@ function normalizedRawReadDeclaration(declaration: RawReadDeclaration): RawReadD
     actAs = trimFrameworkString(actAsValue);
     if (actAs === '') throw new Error('KV414: rawRead actAs scope requires a non-empty principal.');
   }
-  const snapshot: RawReadDeclaration = { reads };
+  const snapshot = witnessCreateNullRecord<unknown>() as unknown as RawReadDeclaration;
+  snapshot.reads = reads;
   if (actAs !== undefined) snapshot.actAs = actAs;
   if (publicReadValue !== undefined) {
     snapshot.declarePublicRead = normalizedPublicReadDeclaration(
@@ -3787,7 +3786,7 @@ export function managedDb<Db>(
 }
 
 function snapshotManagedDbOptions(options: ManagedDbOptions): ManagedDbOptions {
-  const snapshot: ManagedDbOptions = {};
+  const snapshot = witnessCreateNullRecord<unknown>() as ManagedDbOptions;
   const crossOwnerRead = optionalOwnDataProperty(options, 'crossOwnerRead');
   const rawRead = optionalOwnDataProperty(options, 'rawRead');
   const sqlWritePolicy = optionalOwnDataProperty(options, 'sqlWritePolicy');
@@ -3814,10 +3813,10 @@ function managedReadCapabilityOptions(options: ManagedDbOptions): {
   crossOwnerRead?: CrossOwnerReadPolicyOptions;
   rawRead?: RawReadPolicyOptions;
 } {
-  const readOptions: {
+  const readOptions = witnessCreateNullRecord<unknown>() as {
     crossOwnerRead?: CrossOwnerReadPolicyOptions;
     rawRead?: RawReadPolicyOptions;
-  } = {};
+  };
   if (options.crossOwnerRead !== undefined) readOptions.crossOwnerRead = options.crossOwnerRead;
   if (options.rawRead !== undefined) readOptions.rawRead = options.rawRead;
   return witnessFreeze(readOptions);

@@ -14,6 +14,7 @@ import {
 } from './untrusted-request-body.js';
 import { isNativeRequest, requestForAuthorityNeutralMetadata } from './request-carrier.js';
 import {
+  witnessCreateNullRecord,
   witnessGetOwnPropertyDescriptor,
   witnessIsArray,
   witnessReflectApply,
@@ -208,7 +209,7 @@ export function csrfField<Request>(
     mutation?: string | { readonly key: string };
   },
 ): string {
-  const context: CsrfAudienceContext = {};
+  const context = witnessCreateNullRecord<unknown>() as CsrfAudienceContext;
   if (options.audience !== undefined) context.audience = options.audience;
   if (options.mutation !== undefined) context.mutation = options.mutation;
   return `<input type="hidden" name="${escapeAttribute(options.field ?? 'kovo-csrf')}" value="${escapeAttribute(csrfToken(request, options, context))}">`;
@@ -229,7 +230,7 @@ export function mintCsrfField<Request>(
     mutation?: string | { readonly key: string };
   },
 ): MintedCsrfField {
-  const context: CsrfAudienceContext = {};
+  const context = witnessCreateNullRecord<unknown>() as CsrfAudienceContext;
   if (options.audience !== undefined) context.audience = options.audience;
   if (options.mutation !== undefined) context.mutation = options.mutation;
   const minted = mintCsrfToken(request, options, context);

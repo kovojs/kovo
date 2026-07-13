@@ -27,6 +27,7 @@ import {
 } from './request-carrier.js';
 import { assertNoSecretEgressValue } from './secret-egress.js';
 import { endpointBrowserStateAuthExecuted } from './endpoint-auth-proof.js';
+import { isTrustedSecureRequest } from './request-scheme.js';
 import type {
   EndpointDeclaration,
   EndpointMethod,
@@ -66,6 +67,7 @@ export interface WireOutputProvenance {
   blessedRedirect?: boolean;
   method: string;
   redirectAllowlist?: readonly RedirectLocationAllowlistEntry[];
+  secure?: true;
   status?: number;
 }
 
@@ -270,12 +272,13 @@ export function finalizeServerResponse(
  */
 export function finalizeRawWebResponse(
   response: Response,
-  request: Pick<Request, 'method'>,
+  request: Pick<Request, 'method'> | Request,
   options: { redirectAllowlist?: readonly RedirectLocationAllowlistEntry[] } = {},
 ): Response {
   const status = readNativeResponseStatus(response);
   return emitToWire(response, 'raw-endpoint-response', {
     method: request.method,
+    ...(isTrustedSecureRequest(request) ? { secure: true } : {}),
     ...(options.redirectAllowlist === undefined
       ? {}
       : { redirectAllowlist: options.redirectAllowlist }),
@@ -303,9 +306,12 @@ export const emitToWire = wireEmitter(
       const status = readNativeResponseStatus(value);
       const finalizedHeaders = finalizeRawResponseHeaders(
         value,
-        provenance.redirectAllowlist === undefined
-          ? {}
-          : { redirectAllowlist: provenance.redirectAllowlist },
+        {
+          ...(provenance.redirectAllowlist === undefined
+            ? {}
+            : { redirectAllowlist: provenance.redirectAllowlist }),
+          ...(provenance.secure === true ? { secure: true as const } : {}),
+        },
       );
       const suppressBody = provenance.method === 'HEAD' || status === 304;
       if (!suppressBody && finalizedHeaders === headers) return value;
@@ -544,13 +550,22 @@ export function assertEndpointResponsePosture(
     definition.response.cache === 'no-store' &&
     !witnessRegExpTest(/\bno-store\b/i, cacheControl)
   ) {
-    failures.push('declared cache=no-store but response lacks Cache-Control: no-store');
+    appendResponsePostureValue(
+      failures,
+      'declared cache=no-store but response lacks Cache-Control: no-store',
+    );
   }
   if (definition.response.cache === 'private' && !witnessRegExpTest(/\bprivate\b/i, cacheControl)) {
-    failures.push('declared cache=private but response lacks Cache-Control: private');
+    appendResponsePostureValue(
+      failures,
+      'declared cache=private but response lacks Cache-Control: private',
+    );
   }
   if (definition.response.cache === 'public' && !witnessRegExpTest(/\bpublic\b/i, cacheControl)) {
-    failures.push('declared cache=public but response lacks Cache-Control: public');
+    appendResponsePostureValue(
+      failures,
+      'declared cache=public but response lacks Cache-Control: public',
+    );
   }
   const bodyPosture = endpointResponseBodyPostures(definition.response.body);
   if (postureIncludes(bodyPosture, 'redirect') && status >= 300 && status < 400) {
@@ -562,7 +577,8 @@ export function assertEndpointResponsePosture(
         redirectLocationOptions(definition.response.redirectAllowlist),
       ) !== location
     ) {
-      failures.push(
+      appendResponsePostureValue(
+        failures,
         'redirect Location must be same-origin or match response.redirectAllowlist with a rationale',
       );
     }
@@ -575,11 +591,17 @@ export function assertEndpointResponsePosture(
     bodyPosture[0] === 'redirect' &&
     (status < 300 || status >= 400)
   ) {
-    failures.push('declared body=redirect but response status is not 3xx');
+    appendResponsePostureValue(
+      failures,
+      'declared body=redirect but response status is not 3xx',
+    );
   }
   const contentType = nativeHeaderGet(headers, 'content-type') ?? '';
   if (!endpointResponseBodyMatchesContentType(bodyPosture, contentType)) {
-    failures.push(endpointResponseBodyMismatchMessage(definition.response.body));
+    appendResponsePostureValue(
+      failures,
+      endpointResponseBodyMismatchMessage(definition.response.body),
+    );
   }
   assertEndpointReservedHeaders(definition, headers, failures);
   if (failures.length === 0) return;
@@ -604,9 +626,7 @@ function assertEndpointBrowserStateResponsePosture(
   if (endpointBrowserStateAuthExecuted(definition, request)) return;
 
   throw endpointPostureError(definition, [
-    `${browserStateHeaders.join(
-      ' and ',
-    )} requires an executable non-ambient verifier or a framework-owned self-verifying handler on a csrf:false endpoint`,
+    `${joinResponsePostureValues(browserStateHeaders, ' and ')} requires an executable non-ambient verifier or a framework-owned self-verifying handler on a csrf:false endpoint`,
   ]);
 }
 
@@ -659,7 +679,7 @@ function finalizeResponseHeaders(
 
 function finalizeRawResponseHeaders(
   response: Response,
-  options: { redirectAllowlist?: readonly RedirectLocationAllowlistEntry[] },
+  options: { redirectAllowlist?: readonly RedirectLocationAllowlistEntry[]; secure?: true },
 ): Headers {
   const headers = readNativeResponseHeaders(response);
   const hasRedirectLocation =
@@ -689,7 +709,11 @@ function finalizeRawResponseHeaders(
     nativeHeaderAppend(
       webHeaders,
       'Set-Cookie',
-      forwardSetCookie(cookie, { class: 'session', source: 'legacy-normalize' }),
+      forwardSetCookie(cookie, {
+        class: 'session',
+        ...(options.secure === true ? { secure: true } : {}),
+        source: 'legacy-normalize',
+      }),
     );
   }
 
@@ -755,6 +779,14 @@ function appendResponsePostureValue<Value>(values: Value[], value: Value): void 
     value,
     writable: true,
   });
+}
+
+function joinResponsePostureValues(values: readonly string[], separator: string): string {
+  let result = '';
+  for (let index = 0; index < values.length; index += 1) {
+    result += `${index === 0 ? '' : separator}${values[index]}`;
+  }
+  return result;
 }
 
 function lowerCase(value: string): string {
@@ -856,7 +888,7 @@ function requestMetadataUrl(value: string): string {
         appendResponsePostureValue(keys, encodeURIComponent(key));
       },
     ]);
-    return `${origin}${pathname}${keys.length === 0 ? '' : `?${keys.join('&')}`}`;
+    return `${origin}${pathname}${keys.length === 0 ? '' : `?${joinResponsePostureValues(keys, '&')}`}`;
   } catch {
     return 'http://kovo.invalid/';
   }
@@ -944,7 +976,9 @@ function assertKnownLifecyclePolicy(options: unknown): void {
   }
 
   const allowed = LIFECYCLE_POLICY_KEYS[policy.surface];
-  for (const key of witnessObjectKeys(options)) {
+  const keys = witnessObjectKeys(options);
+  for (let index = 0; index < keys.length; index += 1) {
+    const key = keys[index]!;
     if (!witnessSetHas(allowed as Set<string>, key)) {
       throw new Error(`Lifecycle surface "${policy.surface}" does not accept option "${key}".`);
     }
@@ -978,9 +1012,7 @@ function endpointPostureError(
   failures: readonly string[],
 ): Error {
   return new Error(
-    `Endpoint ${definition.method} ${definition.path} response posture mismatch: ${failures.join(
-      '; ',
-    )}.`,
+    `Endpoint ${definition.method} ${definition.path} response posture mismatch: ${joinResponsePostureValues(failures, '; ')}.`,
   );
 }
 
@@ -991,7 +1023,7 @@ function endpointResponseBodyPostures(
 }
 
 function endpointResponseBodyPostureLabel(body: EndpointResponseBodyPosture): string {
-  return typeof body === 'string' ? body : body.join('|');
+  return typeof body === 'string' ? body : joinResponsePostureValues(body, '|');
 }
 
 function endpointResponseBodyMismatchMessage(body: EndpointResponseBodyPosture): string {

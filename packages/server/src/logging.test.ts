@@ -56,6 +56,28 @@ describe('log-channel neutralization', () => {
     expect(scrubSecretLifecycleValue(plain)).toBe(plain);
   });
 
+  it('commits scrubbed arguments as own data when Array.prototype has an indexed setter', () => {
+    const input = [secret('sk_live_array_setter')];
+    const previous = Object.getOwnPropertyDescriptor(Array.prototype, '0');
+    let setterCalls = 0;
+    let result: unknown[] | undefined;
+    try {
+      Object.defineProperty(Array.prototype, '0', {
+        configurable: true,
+        set() {
+          setterCalls += 1;
+        },
+      });
+      result = scrubConsoleArgs(input);
+    } finally {
+      if (previous === undefined) delete (Array.prototype as { 0?: unknown })[0];
+      else Object.defineProperty(Array.prototype, '0', previous);
+    }
+
+    expect(setterCalls).toBe(0);
+    expect(Object.getOwnPropertyDescriptor(result, '0')?.value).toBe('[secret]');
+  });
+
   it('retains only pathname and ordered query-key names for diagnostic URLs', () => {
     const corpus = [
       [

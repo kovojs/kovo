@@ -521,6 +521,53 @@ describe('server createApp request shell', () => {
     expect(html).not.toContain('/mutated.css');
   });
 
+  it('cannot substitute a validated CSRF trusted origin through an inherited array setter', () => {
+    const nativeDefineProperty = Object.defineProperty;
+    const previous = nativeDefineProperty
+      ? Object.getOwnPropertyDescriptor(Array.prototype, '0')
+      : undefined;
+    const routes = [route('/', { page: () => renderedHtml('<main>home</main>') })];
+    let poisonHits = 0;
+    let app: ReturnType<typeof createApp> | undefined;
+    try {
+      nativeDefineProperty(Array.prototype, '0', {
+        configurable: true,
+        set(value: unknown) {
+          if (value === 'https://trusted.example') {
+            poisonHits += 1;
+            nativeDefineProperty(this, '0', {
+              configurable: true,
+              enumerable: true,
+              value: 'https://attacker.example',
+              writable: true,
+            });
+            return;
+          }
+          nativeDefineProperty(this, '0', {
+            configurable: true,
+            enumerable: true,
+            value,
+            writable: true,
+          });
+        },
+      });
+      app = createApp({
+        csrf: {
+          secret: 'trusted-origin-snapshot-secret-0123456789',
+          sessionId: () => 'session',
+          trustedOrigins: ['https://trusted.example'],
+        },
+        routes,
+      });
+    } finally {
+      if (previous === undefined) delete (Array.prototype as { 0?: unknown })[0];
+      else nativeDefineProperty(Array.prototype, '0', previous);
+    }
+
+    expect(poisonHits).toBe(0);
+    expect(app?.csrf?.trustedOrigins).toEqual(['https://trusted.example']);
+  });
+
   it('rejects a forged victim-session CSRF token after the authoring config is mutated', async () => {
     const mutationHandler = vi.fn(() => ({ ok: true }));
     const csrf = {

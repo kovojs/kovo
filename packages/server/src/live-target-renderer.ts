@@ -19,6 +19,13 @@ import { recordQueryRuntimeWarnings, runQuery, type QueryDefinition } from './qu
 import type { LiveTargetRenderContext, LiveTargetRenderer } from './mutation-wire.js';
 import type { ErrorBoundaryRenderer } from './mutation-wire.js';
 import { revealUntrustedRequestValue } from './untrusted-request-body.js';
+import {
+  witnessArrayAppend,
+  witnessCreateNullRecord,
+  witnessGetOwnPropertyDescriptor,
+  witnessIsArray,
+  witnessObjectKeys,
+} from './security-witness-intrinsics.js';
 
 /** @internal Generated component query binding used by live-target renderers (SPEC §9.1). */
 export interface ComponentLiveTargetQueryBinding<Request = unknown> {
@@ -63,15 +70,22 @@ export function componentLiveTargetRenderer<
   const queryBindings = normalizeLiveTargetQueryBindings(
     options.queries ?? componentLiveTargetQueryBindings<Request>(options.component),
   );
+  const queryKeys: string[] = [];
+  const queryDefinitions: QueryDefinition<string, unknown, unknown, Request>[] = [];
+  for (let index = 0; index < queryBindings.length; index += 1) {
+    const binding = queryBindings[index]!;
+    witnessArrayAppend(queryKeys, binding.query.key, 'Live-target query key');
+    witnessArrayAppend(queryDefinitions, binding.query, 'Live-target query definition');
+  }
 
   const renderer: LiveTargetRenderer<Request> & {
     queryBindings: readonly ComponentLiveTargetQueryBinding<Request>[];
   } = {
     component: options.componentId,
     ...componentLiveTargetErrorBoundary(options),
-    queries: queryBindings.map((binding) => binding.query.key),
+    queries: queryKeys,
     queryBindings,
-    queryDefinitions: queryBindings.map((binding) => binding.query),
+    queryDefinitions,
     async render(context) {
       const queries = await loadLiveTargetQueries(queryBindings, context);
       const renderOptions = await componentLiveTargetRenderOptions(options, context);
@@ -111,10 +125,20 @@ export function componentLiveTargetRenderer<
 function normalizeLiveTargetQueryBindings<Request>(
   bindings: readonly ComponentLiveTargetQueryBinding<Request>[],
 ): ComponentLiveTargetQueryBinding<Request>[] {
-  return bindings.map((binding) => ({
-    ...binding,
-    query: queryWithGeneratedReads(binding.query),
-  }));
+  const normalized: ComponentLiveTargetQueryBinding<Request>[] = [];
+  for (let index = 0; index < bindings.length; index += 1) {
+    const descriptor = witnessGetOwnPropertyDescriptor(bindings, index);
+    if (descriptor === undefined || !('value' in descriptor)) {
+      throw new TypeError('Live-target query bindings must be dense own data properties.');
+    }
+    const binding = descriptor.value;
+    witnessArrayAppend(
+      normalized,
+      { ...binding, query: queryWithGeneratedReads(binding.query) },
+      'Live-target query binding snapshot',
+    );
+  }
+  return normalized;
 }
 
 function componentLiveTargetErrorBoundary<
@@ -148,11 +172,21 @@ function componentLiveTargetQueryBindings<Request>(
   component: Component<any>,
 ): ComponentLiveTargetQueryBinding<Request>[] {
   if (!isRecord(component.definition.queries)) return [];
-
-  return Object.entries(component.definition.queries).flatMap(([name, binding]) => {
+  const bindings: ComponentLiveTargetQueryBinding<Request>[] = [];
+  const names = witnessObjectKeys(component.definition.queries);
+  for (let index = 0; index < names.length; index += 1) {
+    const name = names[index]!;
+    const descriptor = witnessGetOwnPropertyDescriptor(component.definition.queries, name);
+    if (descriptor === undefined || !('value' in descriptor)) {
+      throw new TypeError(`Component live-target query ${name} must be an own data property.`);
+    }
+    const binding = descriptor.value;
     const queryBinding = componentQueryBinding<Request>(name, binding);
-    return queryBinding === undefined ? [] : [queryBinding];
-  });
+    if (queryBinding !== undefined) {
+      witnessArrayAppend(bindings, queryBinding, 'Component live-target query binding');
+    }
+  }
+  return bindings;
 }
 
 function componentQueryBinding<Request>(
@@ -181,7 +215,7 @@ function isQueryDefinition<Request>(
   return (
     isRecord(value) &&
     typeof value.key === 'string' &&
-    (value.reads === undefined || Array.isArray(value.reads))
+    (value.reads === undefined || witnessIsArray(value.reads))
   );
 }
 
@@ -189,9 +223,10 @@ async function loadLiveTargetQueries<Request>(
   bindings: readonly ComponentLiveTargetQueryBinding<Request>[],
   context: LiveTargetRenderContext<Request>,
 ): Promise<Record<string, unknown>> {
-  const values: Record<string, unknown> = {};
+  const values = witnessCreateNullRecord<unknown>() as Record<string, unknown>;
 
-  for (const binding of bindings) {
+  for (let index = 0; index < bindings.length; index += 1) {
+    const binding = bindings[index]!;
     const props = revealLiveTargetValue(context.props) as Record<string, unknown>;
     const input = revealLiveTargetValue(binding.args ? binding.args(props) : undefined);
     const result = await runQuery(binding.query, input, context.request, {
@@ -238,9 +273,7 @@ function componentLiveTargetDefaultSlots<Request>(
   context: LiveTargetRenderContext<Request>,
 ): ComponentRenderSlots {
   const forms = isRecord(component.definition.mutations)
-    ? Object.fromEntries(
-        Object.keys(component.definition.mutations).map((key) => [key, { failure: null }]),
-      )
+    ? componentMutationDefaultForms(component.definition.mutations)
     : undefined;
 
   let slots: ComponentRenderSlots = {
@@ -252,7 +285,12 @@ function componentLiveTargetDefaultSlots<Request>(
     return slots;
   }
 
-  for (const [name, mutation] of Object.entries(component.definition.mutations)) {
+  const names = witnessObjectKeys(component.definition.mutations);
+  for (let index = 0; index < names.length; index += 1) {
+    const name = names[index]!;
+    const descriptor = witnessGetOwnPropertyDescriptor(component.definition.mutations, name);
+    if (descriptor === undefined || !('value' in descriptor)) continue;
+    const mutation = descriptor.value;
     if (isMutationDefinitionLike(mutation) && mutation.key === context.mutationKey) {
       slots = componentMutationFailureSlots(name, context.failure, slots, {
         submitted: context.input,
@@ -264,7 +302,19 @@ function componentLiveTargetDefaultSlots<Request>(
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
+  return typeof value === 'object' && value !== null && !witnessIsArray(value);
+}
+
+function componentMutationDefaultForms(
+  mutations: Record<string, unknown>,
+): Record<string, { failure: null }> {
+  const forms = witnessCreateNullRecord<{ failure: null }>() as Record<
+    string,
+    { failure: null }
+  >;
+  const names = witnessObjectKeys(mutations);
+  for (let index = 0; index < names.length; index += 1) forms[names[index]!] = { failure: null };
+  return forms;
 }
 
 function isMutationDefinitionLike(value: unknown): value is { key: string } {

@@ -23,6 +23,7 @@ import { query } from './query.js';
 import { layout, route } from './route.js';
 import { task } from './task.js';
 import {
+  witnessCreateNullRecord,
   witnessDefineProperty,
   witnessFreeze,
   witnessGetOwnPropertyDescriptor,
@@ -364,7 +365,10 @@ function snapshotAppDocumentCspAllowlist(
   value: unknown,
 ): NonNullable<NonNullable<KovoApp['document']['csp']>['allowlist']> {
   const record = appDocumentRecord(value, 'document.csp.allowlist');
-  const snapshot: Record<string, readonly string[]> = {};
+  const snapshot = witnessCreateNullRecord<readonly string[]>() as Record<
+    string,
+    readonly string[]
+  >;
   for (const field of ['connectSrc', 'frameSrc', 'imgSrc', 'scriptSrc', 'styleSrc'] as const) {
     const entries = appDocumentOwnDataValue(record, field);
     if (entries !== undefined) {

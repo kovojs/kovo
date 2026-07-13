@@ -57,6 +57,7 @@ import {
   type RouteResponseOutcome,
 } from './response.js';
 import { resolveKovoLifecycleRequest } from './response-posture.js';
+import { requestSerializeUrlSearchParamsEntries } from './request-body-intrinsics.js';
 import { isSchemaValidationError, type Schema, type ValidationFailurePayload } from './schema.js';
 import {
   isRenderedHtml,
@@ -81,11 +82,15 @@ import {
   createWitnessMap,
   createWitnessSet,
   createWitnessWeakMap,
+  witnessArrayAppend,
+  witnessCreateNullRecord,
   witnessDefineProperty,
   witnessGetOwnPropertyDescriptor,
+  witnessIsArray,
   witnessMapGet,
   witnessMapSet,
   witnessFreeze,
+  witnessObjectKeys,
   witnessSetAdd,
   witnessSetHas,
   witnessWeakMapGet,
@@ -335,9 +340,15 @@ export function layout<
   definition: LayoutDefinition<Request, Queries, Page, Regions>,
 ): LayoutDeclaration<Request, Queries, Page, Regions> {
   const declaration = pinAccessDecision({ ...definition }, definition.access);
-  const deps = Object.values(definition.queries ?? {}).map(
-    (queryDefinition) => queryDefinition.key,
-  );
+  const deps: string[] = [];
+  const queryDefinitions = definition.queries ?? {};
+  const queryNames = witnessObjectKeys(queryDefinitions);
+  for (let index = 0; index < queryNames.length; index += 1) {
+    const descriptor = witnessGetOwnPropertyDescriptor(queryDefinitions, queryNames[index]!);
+    if (descriptor !== undefined && 'value' in descriptor) {
+      witnessArrayAppend(deps, descriptor.value.key, 'Layout query dependency');
+    }
+  }
   if (deps.length > 0) {
     nextLayoutLiveTargetId += 1;
     witnessWeakMapSet(layoutLiveTargetMetadata, declaration, {
@@ -439,33 +450,49 @@ function fallbackRoutePageMetadata<Path extends string>(
 ): CompiledRoutePageMetadata | undefined {
   if ((!definition.page && !definition.regions) || !definition.layout) return undefined;
   const layouts = routeLayoutChain(definition.layout);
-  const regionSegments = routeRegionSegments(path, Object.keys(definition.regions ?? {}));
+  const regionSegments = routeRegionSegments(path, witnessObjectKeys(definition.regions ?? {}));
+  const navigationSegments: CompiledRouteNavigationSegment[] = [];
+  for (let index = 0; index < layouts.length; index += 1) {
+    const layoutDeclaration = layouts[index]!;
+    const id = layoutNavigationSegmentId(layoutDeclaration);
+    const queries: string[] = [];
+    const definitions = layoutDeclaration.queries ?? {};
+    const names = witnessObjectKeys(definitions);
+    for (let queryIndex = 0; queryIndex < names.length; queryIndex += 1) {
+      const descriptor = witnessGetOwnPropertyDescriptor(definitions, names[queryIndex]!);
+      if (descriptor !== undefined && 'value' in descriptor) {
+        witnessArrayAppend(
+          queries,
+          (descriptor.value as RegisteredQueryDefinition).key,
+          'Route layout query key',
+        );
+      }
+    }
+    witnessArrayAppend(
+      navigationSegments,
+      { id, kind: 'layout', localName: id, queries },
+      'Route layout navigation metadata',
+    );
+  }
+  if (regionSegments.length > 0) {
+    for (let index = 0; index < regionSegments.length; index += 1) {
+      witnessArrayAppend(
+        navigationSegments,
+        regionSegments[index]!,
+        'Route region navigation metadata',
+      );
+    }
+  } else {
+    witnessArrayAppend(
+      navigationSegments,
+      { components: [], id: `page:${path}`, kind: 'page', localName: 'page' },
+      'Route page navigation metadata',
+    );
+  }
   return {
     components: [],
     fileName: '',
-    navigationSegments: [
-      ...layouts.map((layoutDeclaration) => {
-        const id = layoutNavigationSegmentId(layoutDeclaration);
-        return {
-          id,
-          kind: 'layout' as const,
-          localName: id,
-          queries: (
-            Object.values(layoutDeclaration.queries ?? {}) as RegisteredQueryDefinition[]
-          ).map((queryDefinition) => queryDefinition.key),
-        };
-      }),
-      ...(regionSegments.length > 0
-        ? regionSegments
-        : [
-            {
-              components: [],
-              id: `page:${path}`,
-              kind: 'page' as const,
-              localName: 'page',
-            },
-          ]),
-    ],
+    navigationSegments,
     route: path,
   };
 }
@@ -474,12 +501,21 @@ function routeRegionSegments(
   path: string,
   regionNames: readonly string[],
 ): CompiledRouteNavigationSegment[] {
-  return regionNames.map((name) => ({
-    components: [],
-    id: name === 'page' ? `page:${path}` : `region:${name}`,
-    kind: name === 'page' ? 'page' : 'region',
-    localName: name,
-  }));
+  const segments: CompiledRouteNavigationSegment[] = [];
+  for (let index = 0; index < regionNames.length; index += 1) {
+    const name = regionNames[index]!;
+    witnessArrayAppend(
+      segments,
+      {
+        components: [],
+        id: name === 'page' ? `page:${path}` : `region:${name}`,
+        kind: name === 'page' ? 'page' : 'region',
+        localName: name,
+      },
+      'Route region navigation segment',
+    );
+  }
+  return segments;
 }
 
 function layoutNavigationSegmentId(layoutDeclaration: LayoutDeclaration<any, any, any>): string {
@@ -529,11 +565,31 @@ function revealRouteRequestValue(value: unknown): unknown {
       revealUntrusted(value, 'matched route request value without explicit schema'),
     );
   }
-  if (Array.isArray(value)) return value.map((entry) => revealRouteRequestValue(entry));
+  if (witnessIsArray(value)) {
+    const revealed: unknown[] = [];
+    for (let index = 0; index < value.length; index += 1) {
+      const descriptor = witnessGetOwnPropertyDescriptor(value, index);
+      if (descriptor === undefined || !('value' in descriptor)) {
+        throw new TypeError('Route request arrays must contain stable own data properties.');
+      }
+      witnessArrayAppend(
+        revealed,
+        revealRouteRequestValue(descriptor.value),
+        'Route request value snapshot',
+      );
+    }
+    return revealed;
+  }
   if (typeof value === 'object' && value !== null) {
-    const record = Object.create(null) as Record<string, unknown>;
-    for (const [key, entry] of Object.entries(value)) {
-      record[key] = revealRouteRequestValue(entry);
+    const record = witnessCreateNullRecord<unknown>() as Record<string, unknown>;
+    const keys = witnessObjectKeys(value);
+    for (let index = 0; index < keys.length; index += 1) {
+      const key = keys[index]!;
+      const descriptor = witnessGetOwnPropertyDescriptor(value, key);
+      if (descriptor === undefined || !('value' in descriptor)) {
+        throw new TypeError(`Route request value ${key} must be a stable own data property.`);
+      }
+      record[key] = revealRouteRequestValue(descriptor.value);
     }
     return record;
   }
@@ -755,7 +811,7 @@ function fallbackRouteDeclarationMetadata(
 function routeLayoutChain(
   layoutDeclaration: LayoutDeclaration<any, any, any> | undefined,
 ): LayoutDeclaration<any, any, any>[] {
-  const chain: LayoutDeclaration<any, any, any>[] = [];
+  const reversed: LayoutDeclaration<any, any, any>[] = [];
   const seen = createWitnessSet<LayoutDeclaration<any, any, any>>();
   let current = layoutDeclaration;
 
@@ -764,10 +820,14 @@ function routeLayoutChain(
       throw new Error('Cyclic route layout parent chain.');
     }
     witnessSetAdd(seen, current);
-    chain.unshift(current);
+    witnessArrayAppend(reversed, current, 'Route layout parent chain');
     current = current.parent;
   }
 
+  const chain: LayoutDeclaration<any, any, any>[] = [];
+  for (let index = reversed.length - 1; index >= 0; index -= 1) {
+    witnessArrayAppend(chain, reversed[index]!, 'Route layout chain');
+  }
   return chain;
 }
 
@@ -821,11 +881,18 @@ async function renderRouteRegions<
     context: RouteRequest<Path, ParamsSchema, SearchSchema>,
     request: GuardedRequest,
   ) => Page | Promise<Page>;
-  const entries = Object.entries(definition.regions ?? {}) as [string, RegionRenderer][];
-  if (entries.length === 0) return {};
-  const rendered: Record<string, unknown> = {};
+  const regionDefinitions = definition.regions ?? {};
+  const names = witnessObjectKeys(regionDefinitions);
+  if (names.length === 0) return witnessCreateNullRecord<unknown>();
+  const rendered = witnessCreateNullRecord<unknown>() as Record<string, unknown>;
   const segments = routeRegionNavigationSegments(metadata);
-  for (const [name, render] of entries) {
+  for (let index = 0; index < names.length; index += 1) {
+    const name = names[index]!;
+    const descriptor = witnessGetOwnPropertyDescriptor(regionDefinitions, name);
+    if (descriptor === undefined || !('value' in descriptor) || typeof descriptor.value !== 'function') {
+      throw new TypeError(`Route region ${name} must be an own renderer data property.`);
+    }
+    const render = descriptor.value as RegionRenderer;
     const value = await render(routeRequest, request);
     rendered[name] = stampRouteNavigationSegment(
       witnessMapGet(segments as Map<string, CompiledRouteNavigationSegment>, name),
@@ -840,9 +907,17 @@ async function loadLayoutQueries<Request>(
   request: Request,
   maxListItems?: number,
 ): Promise<LayoutQueryResults<LayoutQueryMap<any>>> {
-  const values: Record<string, unknown> = {};
+  const values = witnessCreateNullRecord<unknown>() as Record<string, unknown>;
 
-  for (const [name, queryDefinition] of Object.entries(layoutDeclaration.queries ?? {})) {
+  const queryDefinitions = layoutDeclaration.queries ?? {};
+  const names = witnessObjectKeys(queryDefinitions);
+  for (let index = 0; index < names.length; index += 1) {
+    const name = names[index]!;
+    const descriptor = witnessGetOwnPropertyDescriptor(queryDefinitions, name);
+    if (descriptor === undefined || !('value' in descriptor)) {
+      throw new TypeError(`Layout query ${name} must be an own data property.`);
+    }
+    const queryDefinition = descriptor.value;
     const result = await runQuery(
       queryDefinition as QueryDefinition<string, unknown, unknown, Request>,
       undefined,
@@ -863,17 +938,21 @@ function stampRoutePageSegment(
   metadata: CompiledRoutePageMetadata | undefined,
   value: unknown,
 ): unknown {
-  return stampRouteNavigationSegment(
-    metadata?.navigationSegments?.find((segment) => segment.kind === 'page'),
-    value,
-  );
+  const segments = metadata?.navigationSegments ?? [];
+  for (let index = 0; index < segments.length; index += 1) {
+    const segment = segments[index];
+    if (segment?.kind === 'page') return stampRouteNavigationSegment(segment, value);
+  }
+  return value;
 }
 
 function routeRegionNavigationSegments(
   metadata: CompiledRoutePageMetadata | undefined,
 ): ReadonlyMap<string, CompiledRouteNavigationSegment> {
   const segments = createWitnessMap<string, CompiledRouteNavigationSegment>();
-  for (const segment of metadata?.navigationSegments ?? []) {
+  const navigationSegments = metadata?.navigationSegments ?? [];
+  for (let index = 0; index < navigationSegments.length; index += 1) {
+    const segment = navigationSegments[index]!;
     if (segment.kind === 'layout') continue;
     witnessMapSet(segments, segment.localName, segment);
   }
@@ -883,7 +962,15 @@ function routeRegionNavigationSegments(
 function routeLayoutSegments(
   metadata: CompiledRoutePageMetadata | undefined,
 ): readonly (CompiledRouteNavigationSegment | undefined)[] {
-  return (metadata?.navigationSegments ?? []).filter((segment) => segment.kind === 'layout');
+  const layouts: CompiledRouteNavigationSegment[] = [];
+  const navigationSegments = metadata?.navigationSegments ?? [];
+  for (let index = 0; index < navigationSegments.length; index += 1) {
+    const segment = navigationSegments[index]!;
+    if (segment.kind === 'layout') {
+      witnessArrayAppend(layouts, segment, 'Route layout navigation segment');
+    }
+  }
+  return layouts;
 }
 
 function stampRouteNavigationSegment(
@@ -1368,12 +1455,16 @@ function routeCurrentUrl<
   input: RouteRequestInput,
 ): string {
   const routeRequest = parseRouteRequest(definition, input);
-  const routeParams = Object.fromEntries(
-    Object.entries(routeRequest.params as Record<string, unknown>).map(([key, value]) => [
-      key,
-      searchParamValue(value),
-    ]),
-  );
+  const routeParams = witnessCreateNullRecord<string>() as Record<string, string>;
+  const paramSource = routeRequest.params as Record<string, unknown>;
+  const paramNames = witnessObjectKeys(paramSource);
+  for (let index = 0; index < paramNames.length; index += 1) {
+    const key = paramNames[index]!;
+    const descriptor = witnessGetOwnPropertyDescriptor(paramSource, key);
+    if (descriptor !== undefined && 'value' in descriptor) {
+      routeParams[key] = searchParamValue(descriptor.value);
+    }
+  }
   const pathname = substituteRoutePatternParams(definition.path, routeParams);
   const search = searchParamsString(routeRequest.search as Record<string, unknown>);
 
@@ -1381,22 +1472,30 @@ function routeCurrentUrl<
 }
 
 function searchParamsString(search: Record<string, unknown>): string {
-  const params = new URLSearchParams();
-  for (const [key, value] of Object.entries(search)) {
-    appendSearchParams(params, key, value);
+  const entries: [string, string][] = [];
+  const keys = witnessObjectKeys(search);
+  for (let index = 0; index < keys.length; index += 1) {
+    const key = keys[index]!;
+    const descriptor = witnessGetOwnPropertyDescriptor(search, key);
+    if (descriptor !== undefined && 'value' in descriptor) {
+      appendSearchParams(entries, key, descriptor.value);
+    }
   }
-
-  return params.toString();
+  return requestSerializeUrlSearchParamsEntries(entries);
 }
 
-function appendSearchParams(params: URLSearchParams, key: string, value: unknown): void {
+function appendSearchParams(entries: [string, string][], key: string, value: unknown): void {
   if (value === undefined || value === null) return;
-  if (Array.isArray(value)) {
-    for (const item of value) appendSearchParams(params, key, item);
+  if (witnessIsArray(value)) {
+    for (let index = 0; index < value.length; index += 1) {
+      const descriptor = witnessGetOwnPropertyDescriptor(value, index);
+      if (descriptor !== undefined && 'value' in descriptor) {
+        appendSearchParams(entries, key, descriptor.value);
+      }
+    }
     return;
   }
-
-  params.append(key, searchParamValue(value));
+  witnessArrayAppend(entries, [key, searchParamValue(value)], 'Route URL search entry');
 }
 
 function searchParamValue(value: unknown): string {
@@ -1440,8 +1539,15 @@ function isRedirect(value: unknown): value is Redirect {
 }
 
 function isStructuralRouteRedirect(value: object): boolean {
-  const keys = Object.keys(value);
-  return keys.length === 2 && keys.includes('location') && keys.includes('status');
+  const keys = witnessObjectKeys(value);
+  if (keys.length !== 2) return false;
+  let location = false;
+  let status = false;
+  for (let index = 0; index < keys.length; index += 1) {
+    if (keys[index] === 'location') location = true;
+    if (keys[index] === 'status') status = true;
+  }
+  return location && status;
 }
 
 function isRouteResponseOutcome(value: unknown): value is RouteResponseOutcome {

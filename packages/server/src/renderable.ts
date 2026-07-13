@@ -7,7 +7,7 @@ import {
   renderedHtmlContent,
   type RenderedHtml,
 } from './html.js';
-import { witnessIsArray } from './security-witness-intrinsics.js';
+import { witnessArrayAppend, witnessIsArray } from './security-witness-intrinsics.js';
 
 type MaybePromise<Value> = Promise<Value> | Value;
 
@@ -56,7 +56,11 @@ export function renderServerRenderable(children: InternalServerRenderable): Mayb
     let async = false;
     for (let index = 0; index < children.length; index += 1) {
       const value = renderServerRenderable(children[index] as InternalServerRenderable);
-      rendered[index] = value;
+      witnessArrayAppend(
+        rendered,
+        value,
+        'Server packages/server/src/renderable.ts rendered child snapshot',
+      );
       if (isPromiseLike(value)) async = true;
     }
     if (async) return joinRenderedValues(rendered);

@@ -775,6 +775,32 @@ describe('server jsx runtime', () => {
     ).toBe('<span style="left: 25%; transform: translate(-50%, -50%)"></span>');
   });
 
+  it('keeps style-object sanitization closed after Array map/filter/join poisoning', () => {
+    const nativeMap = Array.prototype.map;
+    const nativeFilter = Array.prototype.filter;
+    const nativeJoin = Array.prototype.join;
+    let rendered: string | undefined;
+    try {
+      Array.prototype.map = () => ['position:fixed;inset:0;background:red'];
+      Array.prototype.filter = () => ['position:fixed;inset:0;background:red'];
+      Array.prototype.join = () => 'position:fixed;inset:0;background:red';
+      rendered = html(
+        jsx('span', {
+          style: { color: 'green', width: 'url(javascript:alert(1))' },
+        }),
+      );
+    } finally {
+      Array.prototype.map = nativeMap;
+      Array.prototype.filter = nativeFilter;
+      Array.prototype.join = nativeJoin;
+    }
+
+    expect(rendered).toContain('<span');
+    expect(rendered).not.toContain('position:fixed');
+    expect(rendered).not.toContain('background:red');
+    expect(rendered).not.toContain('javascript:');
+  });
+
   it('renders Kovo style records passed through style= in direct server JSX', () => {
     const styles = style.create({
       root: {

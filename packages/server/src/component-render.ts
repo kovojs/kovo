@@ -7,7 +7,14 @@ import type {
 import { isRenderedHtml, renderedHtmlContent, renderHtmlValue } from './html.js';
 import { isKovoComponentDescriptor } from './component-authority.js';
 import type { MutationFail } from './mutation.js';
-import type { ValidationFailurePayload } from './schema.js';
+import { formLikeToRecord, type ValidationFailurePayload } from './schema.js';
+import {
+  witnessArrayAppend,
+  witnessCreateNullRecord,
+  witnessGetOwnPropertyDescriptor,
+  witnessIsArray,
+  witnessObjectKeys,
+} from './security-witness-intrinsics.js';
 
 /**
  * Runtime inputs for rendering a component outside the full document pipeline.
@@ -137,11 +144,18 @@ export function componentMutationFailureSlots(
 
 function componentMutationFailureValue(failure: MutationFail): unknown {
   if (failure.error.code === 'VALIDATION' && isValidationFailurePayload(failure.error.payload)) {
+    const fieldErrors = witnessCreateNullRecord<string>() as Record<string, string>;
+    for (let index = 0; index < failure.error.payload.issues.length; index += 1) {
+      const issue = failure.error.payload.issues[index]!;
+      let path = '';
+      for (let segment = 0; segment < issue.path.length; segment += 1) {
+        path += `${segment === 0 ? '' : '.'}${issue.path[segment]}`;
+      }
+      fieldErrors[path] = issue.message;
+    }
     return {
       code: 'VALIDATION',
-      fieldErrors: Object.fromEntries(
-        failure.error.payload.issues.map((issue) => [issue.path.join('.'), issue.message]),
-      ),
+      fieldErrors,
     };
   }
 
@@ -154,30 +168,24 @@ function componentMutationFailureValue(failure: MutationFail): unknown {
 function componentMutationSubmittedValues(
   rawInput: unknown,
 ): Record<string, JsonValue> | undefined {
-  if (rawInput instanceof FormData) {
-    return submittedEntriesToRecord(Array.from(rawInput.entries()));
-  }
-  if (!isRecord(rawInput)) return undefined;
-  return submittedEntriesToRecord(Object.entries(rawInput));
-}
-
-function submittedEntriesToRecord(
-  entries: readonly (readonly [string, unknown])[],
-): Record<string, JsonValue> | undefined {
-  const submitted: Record<string, JsonValue> = {};
-  for (const [name, value] of entries) {
+  if (typeof rawInput !== 'object' || rawInput === null) return undefined;
+  const record = formLikeToRecord(rawInput);
+  const submitted = witnessCreateNullRecord<JsonValue>() as Record<string, JsonValue>;
+  const names = witnessObjectKeys(record);
+  for (let index = 0; index < names.length; index += 1) {
+    const name = names[index]!;
     if (isFrameworkFormField(name)) continue;
-    const jsonValue = submittedJsonValue(value);
+    const descriptor = witnessGetOwnPropertyDescriptor(record, name);
+    if (descriptor === undefined || !('value' in descriptor)) continue;
+    const jsonValue = submittedJsonValue(descriptor.value);
     if (jsonValue === undefined) continue;
-    const existing = submitted[name];
-    submitted[name] =
-      existing === undefined
-        ? jsonValue
-        : Array.isArray(existing)
-          ? [...existing, jsonValue]
-          : [existing, jsonValue];
+    const existing = witnessGetOwnPropertyDescriptor(submitted, name)?.value;
+    if (existing === undefined) submitted[name] = jsonValue;
+    else if (witnessIsArray(existing))
+      witnessArrayAppend(existing, jsonValue, 'Component form echo');
+    else submitted[name] = [existing as JsonValue, jsonValue];
   }
-  return Object.keys(submitted).length === 0 ? undefined : submitted;
+  return witnessObjectKeys(submitted).length === 0 ? undefined : submitted;
 }
 
 function submittedJsonValue(value: unknown): JsonValue | undefined {

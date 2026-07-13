@@ -303,14 +303,19 @@ export function appendResponseHeader(
   const existingName = findHeaderName(headers, name);
   const targetName = existingName ?? name;
   if (securityStringToLowerCase(name) !== 'set-cookie') {
-    headers[targetName] = securityArrayIsArray(value) ? snapshotStringArray(value) : value;
+    commitResponseHeader(
+      headers,
+      targetName,
+      securityArrayIsArray(value) ? snapshotStringArray(value) : value,
+    );
     return;
   }
 
   const nextValues = securityArrayIsArray(value) ? snapshotStringArray(value) : [value];
-  const existing = existingName === undefined ? undefined : headers[existingName];
+  const existing =
+    existingName === undefined ? undefined : stableOwnDataValue(headers, existingName);
   if (existing === undefined) {
-    headers[targetName] = snapshotStringArray(nextValues);
+    commitResponseHeader(headers, targetName, snapshotStringArray(nextValues));
     return;
   }
 
@@ -322,7 +327,20 @@ export function appendResponseHeader(
   for (let index = 0; index < nextValues.length; index += 1) {
     securityArrayPush(merged, nextValues[index]!);
   }
-  headers[targetName] = merged;
+  commitResponseHeader(headers, targetName, merged);
+}
+
+function commitResponseHeader(
+  headers: ResponseHeaders,
+  name: string,
+  value: ResponseHeaderValue,
+): void {
+  witnessDefineProperty(headers, name, {
+    configurable: true,
+    enumerable: true,
+    value,
+    writable: true,
+  });
 }
 
 export function cloneResponseHeaders<Headers extends ResponseHeaders>(headers: Headers): Headers {

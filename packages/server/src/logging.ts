@@ -12,6 +12,7 @@ import {
 } from './logging-intrinsics.js';
 import {
   createWitnessWeakMap,
+  witnessArrayAppend,
   witnessDefineProperty,
   witnessGetOwnPropertyDescriptor,
   witnessGetPrototypeOf,
@@ -103,10 +104,13 @@ export function scrubConsoleArgs(args: readonly unknown[]): unknown[] {
   const scrubbed: unknown[] = [];
   for (let index = 0; index < args.length; index += 1) {
     const descriptor = witnessGetOwnPropertyDescriptor(args, index);
-    scrubbed[index] =
+    witnessArrayAppend(
+      scrubbed,
       descriptor !== undefined && 'value' in descriptor
         ? scrubSecretLifecycleValue(descriptor.value)
-        : '[redacted]';
+        : '[redacted]',
+      'Server packages/server/src/logging.ts console argument snapshot',
+    );
   }
   return scrubbed;
 }
@@ -126,13 +130,21 @@ function scrubSecretLifecycleValueInner(value: unknown, seen: WeakMap<object, un
     for (let index = 0; index < value.length; index += 1) {
       const descriptor = witnessGetOwnPropertyDescriptor(value, index);
       if (descriptor === undefined || !('value' in descriptor)) {
-        next[index] = '[redacted]';
+        witnessArrayAppend(
+          next,
+          '[redacted]',
+          'Server packages/server/src/logging.ts secret lifecycle snapshot',
+        );
         changed = true;
         continue;
       }
       const item = descriptor.value;
       const scrubbed = scrubSecretLifecycleValueInner(item, seen);
-      next[index] = scrubbed;
+      witnessArrayAppend(
+        next,
+        scrubbed,
+        'Server packages/server/src/logging.ts secret lifecycle snapshot',
+      );
       if (scrubbed !== item) changed = true;
     }
     if (!changed) {
@@ -235,11 +247,26 @@ function insertDiagnosticReplacement(
   safe: string,
 ): void {
   let index = replacements.length;
+  witnessArrayAppend(
+    replacements,
+    [unsafe, safe],
+    'Server packages/server/src/logging.ts diagnostic replacement order',
+  );
   while (index > 0 && replacements[index - 1]![0].length < unsafe.length) {
-    replacements[index] = replacements[index - 1]!;
+    witnessDefineProperty(replacements, index, {
+      configurable: true,
+      enumerable: true,
+      value: replacements[index - 1]!,
+      writable: true,
+    });
     index -= 1;
   }
-  replacements[index] = [unsafe, safe];
+  witnessDefineProperty(replacements, index, {
+    configurable: true,
+    enumerable: true,
+    value: [unsafe, safe],
+    writable: true,
+  });
 }
 
 function ownStringDataProperty(value: object, property: PropertyKey): string | undefined {

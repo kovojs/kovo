@@ -51,6 +51,7 @@ import {
   securityStringTrim,
 } from './response-security-intrinsics.js';
 import { renderQueryScript, type QueryScriptRenderOptions } from './wire-html.js';
+import { witnessGetOwnPropertyDescriptor } from './security-witness-intrinsics.js';
 
 /**
  * Framework-owned assembled document parts consumed by the structured document
@@ -686,7 +687,7 @@ function documentIsolationHeaders(
   existing: ResponseHeaders,
   reportingGroup?: string,
 ): Record<string, string> {
-  const headers: Record<string, string> = {};
+  const headers = createSecurityNullRecord<string>() as Record<string, string>;
   const isolationHeaderNames = securityObjectKeys(DOCUMENT_ISOLATION_HEADERS);
   for (let index = 0; index < isolationHeaderNames.length; index += 1) {
     const name = isolationHeaderNames[index]!;
@@ -1003,7 +1004,16 @@ function headerValueArray(value: string | readonly string[]): readonly string[] 
 }
 
 export function mergeVaryHeader(headers: ResponseHeaders, token: string): ResponseHeaders {
-  const merged: ResponseHeaders = { ...headers };
+  const merged = createSecurityNullRecord<ResponseHeaders[string]>() as ResponseHeaders;
+  const headerNames = securityObjectKeys(headers);
+  for (let index = 0; index < headerNames.length; index += 1) {
+    const name = headerNames[index]!;
+    const descriptor = witnessGetOwnPropertyDescriptor(headers, name);
+    if (descriptor === undefined || !('value' in descriptor)) {
+      throw new TypeError(`Document response header ${name} must be an own data property.`);
+    }
+    merged[name] = descriptor.value as ResponseHeaders[string];
+  }
   const existingName = findHeaderRecordName(merged, 'Vary');
   if (existingName === undefined) {
     merged.Vary = token;

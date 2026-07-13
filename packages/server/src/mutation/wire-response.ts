@@ -654,7 +654,13 @@ function mutationResponseInput<Value>(result: MutationSuccess<Value>, rawInput: 
 
 function queryKeysToReruns(keys: readonly string[]): { key: string }[] {
   const reruns: { key: string }[] = [];
-  for (let index = 0; index < keys.length; index += 1) reruns[index] = { key: keys[index]! };
+  for (let index = 0; index < keys.length; index += 1) {
+    witnessArrayAppend(
+      reruns,
+      { key: keys[index]! },
+      'Server packages/server/src/mutation/wire-response.ts rerun snapshot',
+    );
+  }
   return reruns;
 }
 
@@ -701,7 +707,11 @@ function snapshotStrings(values: readonly string[]): string[] {
     ) {
       throw new TypeError('Mutation change keys must be dense string data properties.');
     }
-    snapshot[index] = descriptor.value;
+    witnessArrayAppend(
+      snapshot,
+      descriptor.value,
+      'Server packages/server/src/mutation/wire-response.ts change key snapshot',
+    );
   }
   return snapshot;
 }

@@ -459,6 +459,19 @@ describe('cookie security floor (SF Phase 5, SPEC §6.6/§9.1)', () => {
     );
   });
 
+  it('forces Secure on a forwarded credential cookie for a trusted HTTPS request', () => {
+    process.env.NODE_ENV = 'development';
+    const forwarded = forwardSetCookie('sid=tok; Path=/', {
+      class: 'session',
+      secure: true,
+      source: 'session-provider',
+    });
+
+    expect(forwarded).toContain('HttpOnly');
+    expect(forwarded).toContain('Secure');
+    expect(forwarded).toContain('SameSite=Lax');
+  });
+
   it('preserves deletion cookies while applying the credential floor', () => {
     const forwarded = forwardSetCookie(
       'better-auth.session_token=; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Path=/',

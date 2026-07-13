@@ -4,6 +4,7 @@ import { inlineKovoLoaderInstallerSource } from '@kovojs/browser/internal/inline
 
 import { cspSha256, renderContentSecurityPolicy, renderDefaultDocumentCsp } from './csp.js';
 import {
+  mergeVaryHeader,
   renderDeferredDocument,
   renderDocument,
   renderDocumentQueryScript,
@@ -40,6 +41,27 @@ const deferredCleanupScript = `<script data-kovo-csp-hash="${deferredCleanupHash
 const fullInlineLoaderSource = `(${inlineKovoLoaderInstallerSource})((url)=>import(url));`;
 
 describe('server app shell document assembly', () => {
+  it('commits the Vary cache floor without inherited setter dispatch', () => {
+    const previous = Object.getOwnPropertyDescriptor(Object.prototype, 'Vary');
+    let setterCalls = 0;
+    let headers: Record<string, unknown> | undefined;
+    try {
+      Object.defineProperty(Object.prototype, 'Vary', {
+        configurable: true,
+        set() {
+          setterCalls += 1;
+        },
+      });
+      headers = mergeVaryHeader({ 'Cache-Control': 'private, no-store' }, 'Cookie');
+    } finally {
+      if (previous === undefined) delete (Object.prototype as { Vary?: unknown }).Vary;
+      else Object.defineProperty(Object.prototype, 'Vary', previous);
+    }
+
+    expect(setterCalls).toBe(0);
+    expect(Object.getOwnPropertyDescriptor(headers, 'Vary')?.value).toBe('Cookie');
+  });
+
   it('assembles deterministic documents with hints, loader, and query hydration before body', () => {
     const loaderHash = cspSha256(fullInlineLoaderSource);
     const document = renderDocument({

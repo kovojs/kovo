@@ -763,11 +763,26 @@ function sortDiagnosticStringsByLength(values: readonly string[]): string[] {
   for (let index = 0; index < values.length; index += 1) {
     const value = values[index]!;
     let insert = sorted.length;
+    witnessArrayAppend(
+      sorted,
+      value,
+      'Server packages/server/src/diagnostics.ts redaction sort',
+    );
     while (insert > 0 && sorted[insert - 1]!.length < value.length) {
-      sorted[insert] = sorted[insert - 1]!;
+      witnessDefineProperty(sorted, insert, {
+        configurable: true,
+        enumerable: true,
+        value: sorted[insert - 1],
+        writable: true,
+      });
       insert -= 1;
     }
-    sorted[insert] = value;
+    witnessDefineProperty(sorted, insert, {
+      configurable: true,
+      enumerable: true,
+      value,
+      writable: true,
+    });
   }
   return sorted;
 }

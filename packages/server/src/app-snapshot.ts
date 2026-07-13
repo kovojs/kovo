@@ -31,6 +31,8 @@ import {
   createWitnessWeakMap,
   createWitnessWeakSet,
   createWitnessSet,
+  witnessArrayAppend,
+  witnessCreateNullRecord,
   witnessDefineProperty,
   witnessFreeze,
   witnessGetOwnPropertyDescriptor,
@@ -51,6 +53,8 @@ import { runWebhook, type WebhookDeclaration } from './webhook.js';
 
 const MAX_APP_REGISTRY_LENGTH = 100_000;
 const nativeArrayIsArray = Array.isArray;
+const nativeNumberIsFinite = Number.isFinite;
+const nativeNumberIsSafeInteger = Number.isSafeInteger;
 if (!nativeArrayIsArray([]) || nativeArrayIsArray({})) {
   throw new TypeError('Kovo app array controls were modified before framework initialization.');
 }
@@ -86,7 +90,7 @@ export function snapshotAppRegistry<Value, Result>(
   const source = denseArrayValues(values, label);
   const result: Result[] = [];
   for (let index = 0; index < source.length; index += 1) {
-    result.push(snapshot(source[index]!, index));
+    witnessArrayAppend(result, snapshot(source[index]!, index), `App ${label} snapshot`);
   }
   return witnessFreeze(result);
 }
@@ -330,11 +334,12 @@ export function snapshotAppCsrfOptions<Request>(
       'app.csrf.trustedOrigins',
     );
     const origins: string[] = [];
-    for (const origin of values) {
+    for (let index = 0; index < values.length; index += 1) {
+      const origin = values[index];
       if (typeof origin !== 'string') {
         throw new TypeError('app.csrf.trustedOrigins must contain only stable strings.');
       }
-      origins.push(origin);
+      witnessArrayAppend(origins, origin, 'App CSRF trusted origin snapshot');
     }
     trustedOrigins = witnessFreeze(origins);
   }
@@ -363,8 +368,10 @@ export function snapshotAppCsrfOptions<Request>(
 /** Snapshot the error-shell callback identities used by the framework request shell. */
 export function snapshotAppErrorShells(source: AppErrorShellOptions): AppErrorShellOptions {
   const object = requireDeclarationObject(source, 'app.errorShells');
-  const snapshot: AppErrorShellOptions = {};
-  for (const field of ['forbidden', 'notFound', 'serverError'] as const) {
+  const snapshot = witnessCreateNullRecord<unknown>() as AppErrorShellOptions;
+  const fields = ['forbidden', 'notFound', 'serverError'] as const;
+  for (let index = 0; index < fields.length; index += 1) {
+    const field = fields[index]!;
     const renderer = stableOwnDataValue(object, field, `app.errorShells.${field}`);
     if (renderer !== undefined && typeof renderer !== 'function') {
       throw new TypeError(`app.errorShells.${field} must be a stable function data property.`);
@@ -523,21 +530,25 @@ function snapshotLayoutQueries(
   context: AppDeclarationSnapshotContext,
 ): Readonly<Record<string, AppQueryDeclaration>> {
   const record = snapshotOwnDataRecord(source, 'layout.queries');
-  for (const key of witnessObjectKeys(record)) {
+  const keys = witnessObjectKeys(record);
+  for (let index = 0; index < keys.length; index += 1) {
+    const key = keys[index]!;
     record[key] = snapshotAppQuery(record[key] as AppQueryDeclaration, context);
   }
   return witnessFreeze(record) as Readonly<Record<string, AppQueryDeclaration>>;
 }
 
 function snapshotRouteHintArrays(record: Record<PropertyKey, any>, label: string): void {
-  for (const field of [
+  const fields = [
     'i18n',
     'meta',
     'modulepreloads',
     'prerenderUrls',
     'staticPaths',
     'stylesheets',
-  ] as const) {
+  ] as const;
+  for (let index = 0; index < fields.length; index += 1) {
+    const field = fields[index]!;
     if (field === 'stylesheets') {
       snapshotStylesheetArrayProperty(record, field, `${label}.${field}`);
     } else {
@@ -549,11 +560,13 @@ function snapshotRouteHintArrays(record: Record<PropertyKey, any>, label: string
 function snapshotAnonymousCookie(source: unknown): CsrfAnonymousCookieOptions | false | undefined {
   if (source === undefined || source === false) return source;
   const object = requireDeclarationObject(source, 'app.csrf.anonymousCookie');
-  const snapshot: CsrfAnonymousCookieOptions = {};
-  for (const field of ['maxAge', 'name', 'path', 'sameSite', 'secure'] as const) {
+  const snapshot = witnessCreateNullRecord<unknown>() as CsrfAnonymousCookieOptions;
+  const fields = ['maxAge', 'name', 'path', 'sameSite', 'secure'] as const;
+  for (let index = 0; index < fields.length; index += 1) {
+    const field = fields[index]!;
     const value = stableOwnDataValue(object, field, `app.csrf.anonymousCookie.${field}`);
     if (value === undefined) continue;
-    if (field === 'maxAge' && (typeof value !== 'number' || !Number.isFinite(value))) {
+    if (field === 'maxAge' && (typeof value !== 'number' || !nativeNumberIsFinite(value))) {
       throw new TypeError('app.csrf.anonymousCookie.maxAge must be a finite number.');
     }
     if ((field === 'name' || field === 'path') && typeof value !== 'string') {
@@ -588,13 +601,19 @@ function snapshotImmutableTaskData(
       const values = denseArrayValues(value, label);
       const snapshot: unknown[] = [];
       for (let index = 0; index < values.length; index += 1) {
-        snapshot.push(snapshotImmutableTaskData(values[index], `${label}[${index}]`, ancestors));
+        witnessArrayAppend(
+          snapshot,
+          snapshotImmutableTaskData(values[index], `${label}[${index}]`, ancestors),
+          `${label} immutable task data snapshot`,
+        );
       }
       return witnessFreeze(snapshot);
     }
 
-    const snapshot: Record<PropertyKey, unknown> = {};
-    for (const key of witnessOwnKeys(value)) {
+    const snapshot = witnessCreateNullRecord<unknown>();
+    const keys = witnessOwnKeys(value);
+    for (let index = 0; index < keys.length; index += 1) {
+      const key = keys[index]!;
       if (typeof key === 'symbol') {
         throw new TypeError(`${label} must not contain symbol-keyed data.`);
       }
@@ -618,8 +637,8 @@ function snapshotStylesheetArray(
   const snapshot: (string | StylesheetAsset)[] = [];
   for (let index = 0; index < values.length; index += 1) {
     const value = values[index]!;
-    if (typeof value === 'string') snapshot.push(value);
-    else snapshot.push(snapshotStylesheetAsset(value));
+    if (typeof value === 'string') witnessArrayAppend(snapshot, value, `${label} string snapshot`);
+    else witnessArrayAppend(snapshot, snapshotStylesheetAsset(value), `${label} asset snapshot`);
   }
   return witnessFreeze(snapshot);
 }
@@ -663,7 +682,9 @@ function snapshotSchemaRecordProperty(
   if (value === undefined) return;
   const source = requireDeclarationObject(value, label);
   const snapshot: Record<PropertyKey, Schema<unknown>> = {};
-  for (const key of witnessOwnKeys(source)) {
+  const keys = witnessOwnKeys(source);
+  for (let index = 0; index < keys.length; index += 1) {
+    const key = keys[index]!;
     const descriptor = witnessGetOwnPropertyDescriptor(source, key);
     if (descriptor === undefined || !('value' in descriptor)) {
       throw new TypeError(`${label}.${String(key)} must be a stable own data property.`);
@@ -695,7 +716,7 @@ function denseArrayValues<Value>(source: readonly Value[], label: string): Value
     if (
       length === undefined ||
       !('value' in length) ||
-      !Number.isSafeInteger(length.value) ||
+      !nativeNumberIsSafeInteger(length.value) ||
       length.value < 0 ||
       length.value > MAX_APP_REGISTRY_LENGTH
     ) {
@@ -708,7 +729,7 @@ function denseArrayValues<Value>(source: readonly Value[], label: string): Value
       if (descriptor === undefined || !('value' in descriptor)) {
         throw new TypeError(`${label}[${index}] must be a stable own data property.`);
       }
-      values.push(descriptor.value as Value);
+      witnessArrayAppend(values, descriptor.value as Value, `${label} dense value snapshot`);
     }
     return values;
   } catch (error) {
@@ -719,7 +740,9 @@ function denseArrayValues<Value>(source: readonly Value[], label: string): Value
 
 function omittedProperties(...properties: PropertyKey[]): ReadonlySet<PropertyKey> {
   const omitted = createWitnessSet<PropertyKey>();
-  for (const property of properties) witnessSetAdd(omitted, property);
+  for (let index = 0; index < properties.length; index += 1) {
+    witnessSetAdd(omitted, properties[index]!);
+  }
   return omitted;
 }
 
@@ -731,7 +754,9 @@ function snapshotOwnDataRecord(
   const object = requireDeclarationObject(source, label);
   const record: Record<PropertyKey, any> = {};
   try {
-    for (const key of witnessOwnKeys(object)) {
+    const keys = witnessOwnKeys(object);
+    for (let index = 0; index < keys.length; index += 1) {
+      const key = keys[index]!;
       if (witnessSetHas(omitted as Set<PropertyKey>, key)) continue;
       const descriptor = witnessGetOwnPropertyDescriptor(object, key);
       if (descriptor === undefined || !('value' in descriptor)) {

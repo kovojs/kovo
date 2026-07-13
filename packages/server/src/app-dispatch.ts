@@ -115,17 +115,17 @@ export async function dispatchMatchedAppRequest({
       surface: 'endpoint',
     });
     const authFailure = await runEndpointAuth(match.endpoint, endpointRequest);
-    if (authFailure) return finalizeRawWebResponse(authFailure, { method: exactMethod });
+    if (authFailure) return finalizeRawWebResponse(authFailure, request);
     const csrfFailure = await validateEndpointCsrf(
       match.endpoint,
       request,
       app.csrf,
       exactMethod,
     );
-    if (csrfFailure) return finalizeRawWebResponse(csrfFailure, { method: exactMethod });
+    if (csrfFailure) return finalizeRawWebResponse(csrfFailure, request);
     if (isWebhookEndpoint(match.endpoint)) {
       const accessFailure = await runEndpointAccessDecision(match.endpoint, endpointRequest);
-      if (accessFailure) return finalizeRawWebResponse(accessFailure, { method: exactMethod });
+      if (accessFailure) return finalizeRawWebResponse(accessFailure, request);
       const taskScheduler = appTaskScheduler(app);
       const mutationOptions = {
         clientIp: (req: Request) => resolveRequestClientIp(app, req),
@@ -141,7 +141,7 @@ export async function dispatchMatchedAppRequest({
         })
       ).response;
       assertEndpointResponsePosture(match.endpoint, response, { request: endpointRequest });
-      return finalizeRawWebResponse(response, { method: exactMethod }, match.endpoint.response);
+      return finalizeRawWebResponse(response, request, match.endpoint.response);
     }
     return finalizeRawWebResponse(
       await runEndpoint(
@@ -149,7 +149,7 @@ export async function dispatchMatchedAppRequest({
         endpointRequest,
         app.db === undefined ? {} : { db: app.db },
       ),
-      { method: exactMethod },
+      request,
       match.endpoint.response,
     );
   }

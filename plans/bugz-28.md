@@ -10,7 +10,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 | Severity | Count | Items   |
 | -------- | ----: | ------- |
-| Critical |   256 | C1-C256 |
+| Critical |   262 | C1-C262 |
 | High     |    35 | H1-H35  |
 | Medium   |    12 | M1-M12  |
 
@@ -2991,6 +2991,50 @@ build:dist` passes.
     only owned slots, and runtime policy decisions use boot-pinned collection/string controls.
   - **Evidence:** exact clone and wire-normalization setters receive zero commits and retain original
     values; all 306 core tests and dist/DTS builds pass.
+
+- [x] **C257 - Fresh server arrays still dispatch through inherited setters.**
+      `packages/server/src`
+  - Rendered children, log redaction, mutation changes, wire reruns, diagnostics, linear-regex
+    states, and build-generated ordering still used fresh numeric writes after the append census.
+  - **Evidence:** exact log/redaction setters receive zero commits; focused server collection tests
+    and the closure-complete generated Node diagnostic suite pass.
+
+- [x] **C258 - Runtime posture and production boot refusal depend on ambient Array methods.**
+      `packages/server/src/{env,response-posture}.ts`
+  - An endpoint handler could replace `Array.prototype.push` to erase cache/body mismatch failures,
+    while the same poison erased a fatal weak-CSRF-secret issue and let production boot continue.
+  - **Evidence:** exact handler and weak-secret push-poison regressions both retain the rejecting
+    error without invoking the poisoned method.
+
+- [x] **C259 - App snapshots can substitute registry entries and CSRF authority after validation.**
+      `packages/server/src/{app,app-snapshot}.ts`
+  - Inherited index setters and mutable iterators could replace closed routes/mutations/endpoints,
+    omit guard fields, or swap `csrf.trustedOrigins`; ordinary option objects also exposed CSP and
+    anonymous-cookie fields to prototype setters.
+  - **Evidence:** the exact trusted-origin setter receives zero commits and the frozen aggregate
+    retains only the declared origin; app snapshot/runtime tests pass.
+
+- [x] **C260 - Prototype setters can widen managed DB policy or strip query auth/schema identity.**
+      `packages/server/src/{managed-db,query,endpoint,csrf}.ts`
+  - Validated write tables, scoped roles, cross-owner/raw-read hooks, endpoint auth, CSRF audiences,
+    and query access/argument parsers were committed through ambient object operations.
+  - **Evidence:** authority snapshots now use null-prototype/pinned data commits; the 159-test
+    managed-DB matrix, query/endpoint focused tests, and server dist/DTS build pass.
+
+- [x] **C261 - Header, document, and CSS security floors remain prototype-dispatchable.**
+      `packages/server/src/{response,document-core,app-document,jsx-runtime,cookies}.ts`
+  - Set-Cookie, Vary, isolation/error-shell headers, and property-level CSS sanitization could be
+    swallowed or replaced; forwarded HTTPS credential cookies also omitted `Secure` outside prod.
+  - **Evidence:** exact Set-Cookie/Vary/style poison regressions pass, HTTPS forwarding adds Secure,
+    and document/build-generated diagnostic suites pass.
+
+- [x] **C262 - Post-handler invalidation and parent-layout guards remain ambient-method dependent.**
+      `packages/server/src/{change-record,mutation,route,live-target-renderer}.ts`
+  - A handler could poison array methods to erase declared/manual changes and query reruns; poisoned
+    `unshift` removed parent layouts and their guards, while named query/region result objects leaked
+    through inherited setters.
+  - **Evidence:** change/mutation matrices retain exact invalidations and reruns; the parent-layout
+    poison request still redirects before the private page, and route/live-target suites pass.
 
 ## High
 

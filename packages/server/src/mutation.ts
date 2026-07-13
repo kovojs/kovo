@@ -81,11 +81,21 @@ import {
 } from './sql-safe-handle.js';
 import { runWithRequestInputProvenance } from './request-input-provenance.js';
 import { pinnedRequestCarrier } from './request-carrier.js';
+import { isTrustedSecureRequest } from './request-scheme.js';
 import {
+  createWitnessSet,
+  witnessArrayAppend,
+  witnessCreateNullRecord,
+  witnessDefineProperty,
   witnessGetOwnPropertyDescriptor,
   witnessGetPrototypeOf,
+  witnessIsArray,
+  witnessObjectKeys,
   witnessReflectApply,
   witnessReflectGet,
+  witnessSetAdd,
+  witnessSetHas,
+  witnessStringToLowerCase,
 } from './security-witness-intrinsics.js';
 import type {
   MutationContext,
@@ -457,7 +467,7 @@ async function runMutationWithTrackedInput<
   options: RunMutationOptions<Request>,
 ): Promise<MutationResult<Value, InferSchema<InputSchema>>> {
   const manualInvalidations: ChangeRecord[] = [];
-  const responseHeaders: ResponseHeaders = {};
+  const responseHeaders = witnessCreateNullRecord<ResponseHeaders[string]>() as ResponseHeaders;
   const csrfExempt = mutationCsrfOptions(definition, options.csrf) === false;
   function assertBrowserStateMutationAllowed(sink: string): void {
     if (!csrfExempt) return;
@@ -475,7 +485,14 @@ async function runMutationWithTrackedInput<
 
   function forwardCookie(rawSetCookie: string, posture: ForwardSetCookiePosture): void {
     assertBrowserStateMutationAllowed('context.forwardSetCookie()');
-    appendResponseHeader(responseHeaders, 'Set-Cookie', forwardSetCookie(rawSetCookie, posture));
+    appendResponseHeader(
+      responseHeaders,
+      'Set-Cookie',
+      forwardSetCookie(rawSetCookie, {
+        ...posture,
+        secure: isTrustedSecureRequest(lifecycleRequest),
+      }),
+    );
   }
 
   const context = {
@@ -491,7 +508,7 @@ async function runMutationWithTrackedInput<
     },
     invalidate(domain, options) {
       const record = invalidate(domain, options);
-      manualInvalidations.push(record);
+      witnessArrayAppend(manualInvalidations, record, 'Mutation manual invalidation');
       return record;
     },
     setCookie,
@@ -542,20 +559,32 @@ async function runMutationWithTrackedInput<
     throw error;
   }
 
-  const changes = [
-    ...mutationRegistryChangeRecords(definition.registry, input),
-    ...manualInvalidations,
-  ];
+  const changes: ChangeRecord[] = [];
+  const registryChanges = mutationRegistryChangeRecords(definition.registry, input);
+  for (let index = 0; index < registryChanges.length; index += 1) {
+    witnessArrayAppend(changes, registryChanges[index]!, 'Mutation registry change snapshot');
+  }
+  for (let index = 0; index < manualInvalidations.length; index += 1) {
+    witnessArrayAppend(changes, manualInvalidations[index]!, 'Mutation manual invalidation snapshot');
+  }
   const rerunQueryInstances = queriesToRerun(definition.registry?.queries ?? [], changes, input);
+  const rerunQueries: string[] = [];
+  const rerunKeys = createWitnessSet<string>();
+  let hasInstanceRerun = false;
+  for (let index = 0; index < rerunQueryInstances.length; index += 1) {
+    const query = rerunQueryInstances[index]!;
+    if (query.instanceKey !== undefined) hasInstanceRerun = true;
+    if (witnessSetHas(rerunKeys, query.key)) continue;
+    witnessSetAdd(rerunKeys, query.key);
+    witnessArrayAppend(rerunQueries, query.key, 'Mutation rerun query snapshot');
+  }
   return mutationSuccess(
     {
       changes,
       ok: true,
-      ...(Object.keys(responseHeaders).length > 0 ? { responseHeaders } : {}),
-      ...(rerunQueryInstances.some((query) => query.instanceKey !== undefined)
-        ? { rerunQueryInstances }
-        : {}),
-      rerunQueries: [...new Set(rerunQueryInstances.map((query) => query.key))],
+      ...(witnessObjectKeys(responseHeaders).length > 0 ? { responseHeaders } : {}),
+      ...(hasInstanceRerun ? { rerunQueryInstances } : {}),
+      rerunQueries,
       value,
     },
     input,
@@ -711,7 +740,13 @@ function mutationLifecycleOptionsWithSqlPolicy<
     return options;
   }
 
-  const touches = definition.registry?.touches?.map((domain) => domain.key);
+  const touchDomains = definition.registry?.touches;
+  const touches: string[] | undefined = touchDomains === undefined ? undefined : [];
+  if (touchDomains !== undefined && touches !== undefined) {
+    for (let index = 0; index < touchDomains.length; index += 1) {
+      witnessArrayAppend(touches, touchDomains[index]!.key, 'Mutation SQL touch policy');
+    }
+  }
   return {
     ...options,
     sqlWritePolicy: {
@@ -725,7 +760,7 @@ function mutationSuccess<Value, Input>(
   result: Omit<MutationSuccess<Value, Input>, 'input'>,
   input: Input,
 ): MutationSuccess<Value, Input> {
-  return Object.defineProperty(result, 'input', {
+  return witnessDefineProperty(result, 'input', {
     enumerable: false,
     value: input,
   }) as MutationSuccess<Value, Input>;
@@ -963,14 +998,33 @@ export function mutationResponseWithoutBrowserState<
   Response extends ServerResponseBase<unknown, ResponseHeaders>,
 >(response: Response): Response {
   let removed = false;
-  const headers: ResponseHeaders = {};
-  for (const [name, value] of Object.entries(response.headers)) {
-    const lower = name.toLowerCase();
+  const headers = witnessCreateNullRecord<ResponseHeaders[string]>() as ResponseHeaders;
+  const names = witnessObjectKeys(response.headers);
+  for (let index = 0; index < names.length; index += 1) {
+    const name = names[index]!;
+    const descriptor = witnessGetOwnPropertyDescriptor(response.headers, name);
+    if (descriptor === undefined || !('value' in descriptor)) {
+      throw new TypeError(`Mutation response header ${name} must be an own data property.`);
+    }
+    const value = descriptor.value as ResponseHeaders[string];
+    const lower = witnessStringToLowerCase(name);
     if (lower === 'set-cookie' || lower === 'clear-site-data') {
       removed = true;
       continue;
     }
-    headers[name] = Array.isArray(value) ? [...value] : value;
+    if (witnessIsArray(value)) {
+      const snapshot: string[] = [];
+      for (let valueIndex = 0; valueIndex < value.length; valueIndex += 1) {
+        const entry = witnessGetOwnPropertyDescriptor(value, valueIndex);
+        if (entry === undefined || !('value' in entry) || typeof entry.value !== 'string') {
+          throw new TypeError(`Mutation response header ${name} must contain strings.`);
+        }
+        witnessArrayAppend(snapshot, entry.value, 'Mutation response header snapshot');
+      }
+      headers[name] = snapshot;
+    } else {
+      headers[name] = value;
+    }
   }
   if (!removed) return response;
 
@@ -1115,7 +1169,12 @@ async function staleSessionCsrfLifecycleRequest<
 }
 
 function sessionGuardedMutation<Request>(definition: { guard?: Guard<Request> }): boolean {
-  return explainGuard(definition.guard).some((fact) => 'auth' in fact && fact.auth !== undefined);
+  const facts = explainGuard(definition.guard);
+  for (let index = 0; index < facts.length; index += 1) {
+    const fact = facts[index]!;
+    if ('auth' in fact && fact.auth !== undefined) return true;
+  }
+  return false;
 }
 
 function requestHasSessionUser(request: unknown): boolean {

@@ -114,6 +114,27 @@ describe('route primitives', () => {
     expect(nextValues).toEqual(['/users/u%2F1/files/report%201?from=dashboard']);
   });
 
+  it('keeps parent layout guards active after late Array.unshift poisoning', async () => {
+    const guardedLayout = layout({
+      guard: guards.authed<{ session?: { user?: { id: string } } | null }>(),
+    });
+    const child = route('/layout-guard-poison', {
+      layout: guardedLayout,
+      page: () => renderedHtml('<main>private</main>'),
+    });
+    const nativeUnshift = Array.prototype.unshift;
+    let result: Awaited<ReturnType<typeof renderRoutePageResponse>> | undefined;
+    try {
+      Array.prototype.unshift = () => 0;
+      result = await renderRoutePageResponse(child, {}, { session: null });
+    } finally {
+      Array.prototype.unshift = nativeUnshift;
+    }
+
+    expect(result?.status).toBe(303);
+    expect(result?.body).not.toContain('private');
+  });
+
   it('accepts optional route search schema fields', async () => {
     const optionalSearchRoute = route('/optional-search', {
       page({ search }) {

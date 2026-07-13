@@ -539,7 +539,13 @@ function capEntries<T>(entries: readonly T[]): T[] {
   const capped: T[] = [];
   const length =
     entries.length > MAX_MUTATION_WIRE_TARGETS ? MAX_MUTATION_WIRE_TARGETS : entries.length;
-  for (let index = 0; index < length; index += 1) capped[index] = entries[index]!;
+  for (let index = 0; index < length; index += 1) {
+    witnessArrayAppend(
+      capped,
+      entries[index]!,
+      'Server packages/server/src/mutation-wire.ts capped target snapshot',
+    );
+  }
   return capped;
 }
 
