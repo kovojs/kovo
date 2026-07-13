@@ -20,6 +20,7 @@ import {
  */
 
 const NativeFunction = globalThis.Function;
+const NativeError = globalThis.Error;
 const NativeObject = globalThis.Object;
 const NativeReflect = globalThis.Reflect;
 const NativeTypeError = globalThis.TypeError;
@@ -74,7 +75,18 @@ function freezeAuthority(value: object): void {
 function freezePrototypeChain(prototype: object): void {
   let current: object | null = prototype;
   for (let depth = 0; current !== null && depth < 64; depth += 1) {
-    if (current === NativeObject.prototype || current === NativeFunction.prototype) return;
+    // Freeze ts-morph-owned error subclasses, but stop before the shared host prototype. Freezing
+    // Error.prototype makes its inherited `name` data property non-writable, which prevents
+    // unrelated strict-mode subclasses (including Undici and Kovo diagnostics) from installing an
+    // own error name. Object.prototype and Function.prototype are the equivalent host boundaries
+    // for ordinary exported classes/functions (SPEC §6.6 rule 6).
+    if (
+      current === NativeError.prototype ||
+      current === NativeObject.prototype ||
+      current === NativeFunction.prototype
+    ) {
+      return;
+    }
     const next: object | null = apply<object | null>(nativeGetPrototypeOf, NativeObject, [current]);
     freezeAuthority(current);
     current = next;
