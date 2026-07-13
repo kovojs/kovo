@@ -29,8 +29,10 @@ import {
 import { assertProdArtifactSinkCensus } from './index.build.prod-artifact.sink-census.js';
 import {
   collectOutput,
+  cookieHeader,
   fetchTextWhenReady,
   linkStarterBuildDependencies,
+  mergeCookies,
   reservePort,
   stopProcess,
   withRepoBinOnPath,
@@ -170,7 +172,10 @@ describe('create-kovo starter (build integration: adversarial production artifac
           addM1HeaderRedirectCapabilityProof(root);
           addM1ClientDeriveProof(root);
           configureNodeRetention(root);
-          buildProductionArtifact(root);
+          // This single synthetic graph combines every M1 output sink with both
+          // generated auth schemas. Give its no-cache proof a bounded verifier
+          // heap above Node's ~4 GiB default; production app builds remain unchanged.
+          buildProductionArtifact(root, { maxOldSpaceSizeMb: 6_144 });
           const census = assertProdArtifactSinkCensus(root, [
             {
               proof: { evidence: 'M1 adversarial no-cache Defer source flip', kind: 'proof' },
@@ -281,7 +286,10 @@ describe('create-kovo starter (build integration: adversarial production artifac
           const shellBody = await shell.text();
           expect(shell.status, shellBody).toBe(500);
           expect(shellBody).toContain('&lt;main data-shell="m1"&gt;');
-          expect(shellBody).toContain('&lt;script&gt;owned()&lt;/script&gt;');
+          // Request-derived error detail is now omitted at the shell boundary;
+          // retaining it merely HTML-escaped would still expose attacker-selected
+          // content in a privileged framework error document.
+          expect(shellBody).not.toContain('owned()');
           expect(shellBody).not.toContain('<script>owned()</script>');
           expect(shellBody).not.toContain('private m1 route detail');
 
@@ -296,11 +304,25 @@ describe('create-kovo starter (build integration: adversarial production artifac
           expect(unsafe.headers.get('x-m1-proof')).toBeNull();
           expect(unsafe.headers.getSetCookie()).toEqual([]);
 
+          const headerCookieJar = new Map<string, string>();
+          const cookieForm = await fetch(`${origin}/m1/header-cookie-form`);
+          mergeCookies(headerCookieJar, cookieForm.headers.getSetCookie());
+          const cookieFormHtml = await cookieForm.text();
+          const headerCookieCsrf = /name="csrf"\s+value="([^"]+)"/.exec(cookieFormHtml)?.[1];
+          expect(cookieForm.status, cookieFormHtml).toBe(200);
+          expect(headerCookieCsrf).toBeTruthy();
+
           const cookie = await fetch(`${origin}/_m/m1/header-cookie-proof`, {
-            body: new URLSearchParams({ 'Kovo-Idem': `m1-cookie-${Date.now()}`, mode: 'safe' }),
+            body: new URLSearchParams({
+              'Kovo-Idem': `m1-cookie-${Date.now()}`,
+              csrf: headerCookieCsrf ?? '',
+              mode: 'safe',
+            }),
             headers: {
               'Kovo-Fragment': 'true',
               'content-type': 'application/x-www-form-urlencoded',
+              cookie: cookieHeader(headerCookieJar),
+              origin,
             },
             method: 'POST',
           });
@@ -313,11 +335,14 @@ describe('create-kovo starter (build integration: adversarial production artifac
           const unsafeCookie = await fetch(`${origin}/_m/m1/header-cookie-proof`, {
             body: new URLSearchParams({
               'Kovo-Idem': `m1-unsafe-cookie-${Date.now()}`,
+              csrf: headerCookieCsrf ?? '',
               mode: 'unsafe',
             }),
             headers: {
               'Kovo-Fragment': 'true',
               'content-type': 'application/x-www-form-urlencoded',
+              cookie: cookieHeader(headerCookieJar),
+              origin,
             },
             method: 'POST',
           });
@@ -647,7 +672,6 @@ function addM1HeaderRedirectCapabilityProof(root: string): void {
       '',
       'export const m1HeaderCookieProof = mutation({',
       "  access: publicAccess('public M1 Set-Cookie proof'),",
-      '  csrf: false,',
       '  input: s.object({ mode: s.string() }),',
       '  handler(input, _request, context) {',
       "    const value = input.mode === 'unsafe' ? 'bad\\r\\nSet-Cookie: m1=owned' : 'safe';",
@@ -705,6 +729,12 @@ function addM1HeaderRedirectCapabilityProof(root: string): void {
     .replace(
       "    route('/', {",
       [
+        "    route('/m1/header-cookie-form', {",
+        "      access: publicAccess('public M1 Set-Cookie proof form'),",
+        '      page() {',
+        '        return <form mutation={m1HeaderCookieProof}><input name="mode" value="safe" /><button type="submit">Submit</button></form>;',
+        '      },',
+        '    }),',
         "    route('/m1/header-safe.txt', {",
         "      access: publicAccess('public M1 header sink proof'),",
         '      page() {',

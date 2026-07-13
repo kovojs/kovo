@@ -585,7 +585,7 @@ describe('create-kovo starter (build integration: production security artifacts)
       } catch (error) {
         const output = execFileSyncErrorOutput(error);
         expect(output).toContain('KV235');
-        expect(output).toContain('@kovojs/server/internal/html');
+        expect(output).toContain('App source imports a non-public Kovo subpath');
         expect(output).toContain('raw-helper.ts');
       }
     } finally {

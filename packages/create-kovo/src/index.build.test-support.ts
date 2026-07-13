@@ -138,10 +138,19 @@ export function addNoJsFailureProof(root: string): void {
   writeFileSync(appPath, app, 'utf8');
 }
 
-export function buildProductionArtifact(root: string): void {
+export function buildProductionArtifact(
+  root: string,
+  options: { maxOldSpaceSizeMb?: number } = {},
+): void {
   // CI restores **/.kovo/cache, so this prod-artifact gate must prove current source, not cache.
   rmSync(join(root, '.kovo/cache'), { force: true, recursive: true });
-  execKovoCli(root, ['build', './src/app.tsx', '--no-cache'], nonParanoidStarterEnv(root));
+  const env = nonParanoidStarterEnv(root);
+  if (options.maxOldSpaceSizeMb !== undefined) {
+    env.NODE_OPTIONS = [env.NODE_OPTIONS, `--max-old-space-size=${options.maxOldSpaceSizeMb}`]
+      .filter(Boolean)
+      .join(' ');
+  }
+  execKovoCli(root, ['build', './src/app.tsx', '--no-cache'], env);
 }
 
 export function buildReusableProductionArtifact(root: string): void {

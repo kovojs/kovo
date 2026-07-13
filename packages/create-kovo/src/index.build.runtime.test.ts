@@ -71,7 +71,12 @@ describe('create-kovo starter (build integration: runtime and dev server)', () =
       // SPEC §6.6/§9.1.1: a production anonymous credential response must be
       // uncacheable and the browser binding must carry every session-cookie floor.
       expect(login.headers.get('cache-control')).toBe('private, no-store');
-      expect(login.headers.get('vary')?.split(',').map((value) => value.trim())).toContain('Cookie');
+      expect(
+        login.headers
+          .get('vary')
+          ?.split(',')
+          .map((value) => value.trim()),
+      ).toContain('Cookie');
       expect(loginCookies).toContain('__Host-kovo_csrf=');
       expect(loginCookies).toContain('Path=/');
       expect(loginCookies).toContain('HttpOnly');

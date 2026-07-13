@@ -90,9 +90,13 @@ describe('create-kovo starter (build integration: production island derives)', (
       ]) {
         expect(clientSources).toContain(path);
       }
+      // The framework loader legitimately uses the English word `direct`; reject
+      // the authored alias binding specifically while keeping the other uncommon
+      // authored identifiers as whole-source sentinels.
       expect(clientSources).not.toMatch(
-        /\b(?:chained|direct|firstItem|firstGroup|computedLabel|firstCard|cardLabel)\b/u,
+        /\b(?:chained|firstItem|firstGroup|computedLabel|firstCard|cardLabel)\b/u,
       );
+      expect(clientSources).not.toMatch(/\b(?:const|let|var)\s+direct\b/u);
 
       browser = await chromium.launch({ headless: true });
       const page = await browser.newPage();

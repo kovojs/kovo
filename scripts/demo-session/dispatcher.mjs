@@ -229,8 +229,7 @@ export function createPerSessionDispatcher({
 
 // A session id we minted is a UUID; reject anything else so a hostile/garbage
 // cookie can't pin an attacker-chosen key or bloat the map with junk.
-const SID_RE =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const SID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 function isPlausibleSid(value) {
   return SID_RE.test(value);
 }
