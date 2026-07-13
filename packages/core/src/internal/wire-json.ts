@@ -343,24 +343,37 @@ export function reviveWireValue(_key: string, value: unknown): unknown {
   if (value === null || typeof value !== 'object' || securityIsArray(value)) return value;
 
   const record = value as Record<string, unknown>;
-  const tag = record[KOVO_WIRE_TAG];
-  if (tag === undefined) return value;
-
   const keys = securityObjectKeys(record);
-  if (keys.length !== 2 || !securityHasOwn(record, 'value')) return value;
+  if (keys.length !== 2) return value;
 
-  if (tag === 'bigint' && typeof record.value === 'string') {
+  // SPEC §6.6/§9.4: parsed server truth shares a realm with app code. Reading either field through
+  // ordinary property lookup would let an inherited getter fabricate `$kovo` and reinterpret an
+  // ordinary two-field record. Only JSON.parse-created own data descriptors may mint a wire tag.
+  const tagDescriptor = securityGetOwnPropertyDescriptor(record, KOVO_WIRE_TAG);
+  const valueDescriptor = securityGetOwnPropertyDescriptor(record, 'value');
+  if (
+    tagDescriptor === undefined ||
+    !('value' in tagDescriptor) ||
+    valueDescriptor === undefined ||
+    !('value' in valueDescriptor)
+  ) {
+    return value;
+  }
+  const tag = tagDescriptor.value;
+  const wireValue = valueDescriptor.value;
+
+  if (tag === 'bigint' && typeof wireValue === 'string') {
     try {
       assertWireJsonControls();
-      return securityApply<bigint>(IntrinsicBigInt, undefined, [record.value]);
+      return securityApply<bigint>(IntrinsicBigInt, undefined, [wireValue]);
     } catch {
       return value;
     }
   }
   if (tag === 'date') {
     assertWireJsonControls();
-    if (record.value === null) return new IntrinsicDate(IntrinsicNumberNaN());
-    if (typeof record.value === 'string') return new IntrinsicDate(record.value);
+    if (wireValue === null) return new IntrinsicDate(IntrinsicNumberNaN());
+    if (typeof wireValue === 'string') return new IntrinsicDate(wireValue);
   }
   return value;
 }
