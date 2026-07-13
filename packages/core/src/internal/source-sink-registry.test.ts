@@ -2,11 +2,41 @@ import { describe, expect, it } from 'vitest';
 
 import {
   boundaryCrossingSinkInventory,
+  dangerousSinkTokens,
   frameworkSourceSinkInventory,
+  sourceSinkRedCorpus,
+  sourceSinkRuntimeEvidence,
 } from './source-sink-registry.js';
 
 // @kovo-security-classifier-corpus sink-registry
 describe('boundary crossing sink inventory', () => {
+  it('does not expose mutable proof registries through the internal package subpath', () => {
+    const sourceSink = frameworkSourceSinkInventory();
+    const boundary = boundaryCrossingSinkInventory();
+    const tokens = dangerousSinkTokens();
+    const corpus = sourceSinkRedCorpus();
+    const evidence = sourceSinkRuntimeEvidence();
+
+    expect(Object.isFrozen(sourceSink)).toBe(true);
+    expect(Object.isFrozen(sourceSink[0])).toBe(true);
+    expect(Object.isFrozen(sourceSink[0]!.testEvidence)).toBe(true);
+    expect(Object.isFrozen(boundary)).toBe(true);
+    expect(Object.isFrozen(boundary[0])).toBe(true);
+    expect(Object.isFrozen(tokens)).toBe(true);
+    expect(Object.isFrozen(tokens[0])).toBe(true);
+    expect(Object.isFrozen(corpus)).toBe(true);
+    expect(Object.isFrozen(corpus[0]!.payloads)).toBe(true);
+    expect(Object.isFrozen(evidence)).toBe(true);
+    expect(Object.isFrozen(evidence.failClosedCases)).toBe(true);
+    expect(Object.isFrozen(evidence.failClosedCases[0]!.testEvidence)).toBe(true);
+
+    expect(Reflect.set(sourceSink, 0, sourceSink[1])).toBe(false);
+    expect(Reflect.set(sourceSink[0]!, 'sink', 'attacker-controlled')).toBe(false);
+    expect(Reflect.set(tokens[0]!, 'token', 'attacker-controlled')).toBe(false);
+    expect(Reflect.set(corpus[0]!.payloads, 0, 'attacker-controlled')).toBe(false);
+    expect(Reflect.deleteProperty(evidence, 'runtimeChokepoints')).toBe(false);
+  });
+
   it('covers the DEC-E required sink set with mechanism and proof metadata', () => {
     const inventory = boundaryCrossingSinkInventory();
     expect(inventory.map((entry) => entry.sink)).toEqual([

@@ -1,3 +1,10 @@
+import {
+  freezeSecurityValue,
+  securityGetOwnPropertyDescriptor,
+  securityObjectKeys,
+  securityOwnArrayEntry,
+} from '#security-witness-intrinsics';
+
 import { SAFE_URL_SCHEMES, URL_ATTRIBUTE_NAMES } from './security-url.js';
 
 /** @internal */
@@ -73,6 +80,23 @@ export interface BoundaryCrossingSinkInventoryEntry {
   sink: string;
   soleDoor: string;
   specAnchor: string;
+}
+
+function freezeRegistryAuthority<T extends object>(value: T, depth = 0): T {
+  if (depth > 8) throw new TypeError('Kovo source/sink registry nesting is invalid.');
+  const keys = securityObjectKeys(value);
+  for (let index = 0; index < keys.length; index += 1) {
+    const key = securityOwnArrayEntry(keys, index);
+    if (!key.ok) throw new TypeError('Kovo source/sink registry keys must be dense.');
+    const descriptor = securityGetOwnPropertyDescriptor(value, key.value);
+    if (descriptor === undefined || !('value' in descriptor)) {
+      throw new TypeError('Kovo source/sink registry entries must be own data properties.');
+    }
+    if (typeof descriptor.value === 'object' && descriptor.value !== null) {
+      freezeRegistryAuthority(descriptor.value, depth + 1);
+    }
+  }
+  return freezeSecurityValue(value);
 }
 
 const existingEvidence = {
@@ -915,3 +939,9 @@ const boundaryCrossingInventory: readonly BoundaryCrossingSinkInventoryEntry[] =
     specAnchor: 'spec/06-type-system.md §6.6; spec/10-data-plane.md §10.3',
   },
 ] as const;
+
+freezeRegistryAuthority(sourceSinkInventory);
+freezeRegistryAuthority(driftTokens);
+freezeRegistryAuthority(redCorpus);
+freezeRegistryAuthority(runtimeEvidence);
+freezeRegistryAuthority(boundaryCrossingInventory);
