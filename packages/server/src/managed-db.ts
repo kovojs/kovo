@@ -1811,6 +1811,17 @@ function declaredWriteBuilder(
           );
         };
       }
+      if (prop === 'select' && verb === 'insert') {
+        return (selection: unknown, ...args: unknown[]) => {
+          assertGovernedInsertSelectAllowed(tableNames, options);
+          return wrapDeclaredWriteBuilderResult(
+            witnessReflectApply(value, target, prependManagedArgument(selection, args)),
+            verb,
+            tableNames,
+            options,
+          );
+        };
+      }
       return (...args: unknown[]) =>
         wrapDeclaredWriteBuilderResult(
           witnessReflectApply(value, target, args),
@@ -1834,9 +1845,23 @@ function wrapDeclaredWriteBuilderResult(
 
 function hasDeclaredWriteBuilderMethod(result: Record<PropertyKey, unknown>): boolean {
   return (
-    typeof result.values === 'function' ||
-    typeof result.set === 'function' ||
-    typeof result.onConflictDoUpdate === 'function'
+    typeof authorizationCensusDataPropertyValue(result, 'values') === 'function' ||
+    typeof authorizationCensusDataPropertyValue(result, 'set') === 'function' ||
+    typeof authorizationCensusDataPropertyValue(result, 'onConflictDoUpdate') === 'function' ||
+    typeof authorizationCensusDataPropertyValue(result, 'select') === 'function'
+  );
+}
+
+function assertGovernedInsertSelectAllowed(
+  tableNames: readonly string[],
+  options: DeclaredWriteDbOptions,
+): void {
+  if (governedWriteColumnsForTables(tableNames, options).length === 0) return;
+  throw new Error(
+    [
+      `KV438: ${options.dialectLabel} managed write rejected insert.select for a governed table because selected-column provenance cannot be proven at runtime (SPEC §11.1).`,
+      '  Use insert.values(...) with server-derived governed values or an audited trustedAssign(...) assignment.',
+    ].join('\n'),
   );
 }
 
