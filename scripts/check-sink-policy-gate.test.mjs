@@ -355,7 +355,7 @@ describe('sink-policy gate', () => {
               root: realRoot,
               serve: (path, options) => serveRootedFile(realRoot, path, options),
             };
-            return blessSink(ROOTED_FILE_SERVE_SINK, Object.freeze(capability));
+            return blessSink(ROOTED_FILE_SERVE_SINK, witnessFreeze(capability));
           }
           export function isRootedFileServeCapability(value) {
             return isBlessedSink(ROOTED_FILE_SERVE_SINK, value);
@@ -387,7 +387,7 @@ describe('sink-policy gate', () => {
               root: fileSystem.root,
               serve: (path, options) => serveRootedFile(fileSystem, path, options),
             };
-            return blessSink(ROOTED_FILE_SERVE_SINK, Object.freeze(capability));
+            return blessSink(ROOTED_FILE_SERVE_SINK, witnessFreeze(capability));
           }
           export function isRootedFileServeCapability(value) {
             return isBlessedSink(ROOTED_FILE_SERVE_SINK, value);
@@ -401,6 +401,34 @@ describe('sink-policy gate', () => {
         `,
       ),
     ).toEqual([]);
+
+    expect(
+      rootedFileServeInvariantFindings(
+        'packages/server/src/file.ts',
+        `
+          const ROOTED_FILE_SERVE_SINK = 'rooted-file-serve';
+          export async function rootedFiles(root) {
+            const fileSystem = await createFrameworkFileSystemBoundary(root);
+            const capability = {
+              root: fileSystem.root,
+              serve: (path, options) => serveRootedFile(fileSystem, path, options),
+            };
+            return blessSink(ROOTED_FILE_SERVE_SINK, Object.freeze(capability));
+          }
+          export function isRootedFileServeCapability(value) {
+            return isBlessedSink(ROOTED_FILE_SERVE_SINK, value);
+          }
+          async function serveRootedFile(fileSystem, requestedPath, options) {
+            if (!isFrameworkFileSystemBoundary(fileSystem)) return undefined;
+            const file = await fileSystem.readFile(requestedPath);
+            if (file === undefined) return undefined;
+            return respond.stream(file.body, options);
+          }
+        `,
+      ),
+    ).toContain(
+      'packages/server/src/file.ts: rootedFiles() must mint a frozen RootedFiles capability with the registered sink witness',
+    );
 
     expect(
       rootedFileServeInvariantFindings(

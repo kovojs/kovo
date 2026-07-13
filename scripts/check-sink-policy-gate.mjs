@@ -1896,7 +1896,7 @@ export function rootedFileServeInvariantFindings(filePath, text) {
     );
   }
   if (
-    !/\bblessSink\s*(?:<[^>()]*>)?\s*\(\s*ROOTED_FILE_SERVE_SINK\s*,\s*Object\s*\.\s*freeze\s*\(/.test(
+    !/\bblessSink\s*(?:<[^>()]*>)?\s*\(\s*ROOTED_FILE_SERVE_SINK\s*,\s*witnessFreeze\s*\(/.test(
       source,
     )
   ) {
