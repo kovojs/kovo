@@ -83,7 +83,10 @@ function getOwnPropertyDescriptor(
   value: object,
   property: PropertyKey,
 ): PropertyDescriptor | undefined {
-  return apply(nativeObjectGetOwnPropertyDescriptor, NativeObject, [value, property]);
+  // Static built-ins do not require a receiver. Calling the boot-captured function directly keeps
+  // descriptor reads independent of mutable globals without allocating a Reflect.apply argument
+  // array for every model field inspected by the compiler.
+  return nativeObjectGetOwnPropertyDescriptor(value, property);
 }
 
 const nativeRegExpGlobalGetter = getOwnPropertyDescriptor(NativeRegExp.prototype, 'global')?.get;
@@ -258,8 +261,14 @@ export function compilerSnapshotDenseArray<Value>(value: readonly Value[], label
     if (entry === undefined) throw new NativeTypeError(`${label}[${index}] must be dense.`);
     // This helper is also the compiler's mutable working-copy primitive (sorting and appending are
     // common consumers), so commit an own writable data property without ever consulting an
-    // inherited numeric setter. Final JSON facts use the frozen/non-writable path below.
-    compilerSetOwnDataProperty(snapshot, compilerArrayLength(snapshot, label), entry);
+    // inherited numeric setter. The input length and every input entry are still independently
+    // checked as stable own data; the compiler-private output needs only the pinned define.
+    nativeObjectDefineProperty(snapshot, index, {
+      configurable: true,
+      enumerable: true,
+      value: entry,
+      writable: true,
+    });
   }
   return snapshot;
 }
@@ -317,16 +326,12 @@ export function compilerDefineOwnDataProperty(
   enumerable = true,
 ): void {
   assertCompilerSecurityIntrinsics();
-  apply(nativeObjectDefineProperty, NativeObject, [
-    target,
-    property,
-    {
-      configurable: false,
-      enumerable,
-      value,
-      writable: false,
-    },
-  ]);
+  nativeObjectDefineProperty(target, property, {
+    configurable: false,
+    enumerable,
+    value,
+    writable: false,
+  });
 }
 
 /**
@@ -341,16 +346,12 @@ export function compilerSetOwnDataProperty(
   enumerable = true,
 ): void {
   assertCompilerSecurityIntrinsics();
-  apply(nativeObjectDefineProperty, NativeObject, [
-    target,
-    property,
-    {
-      configurable: true,
-      enumerable,
-      value,
-      writable: true,
-    },
-  ]);
+  nativeObjectDefineProperty(target, property, {
+    configurable: true,
+    enumerable,
+    value,
+    writable: true,
+  });
 }
 
 export function compilerArrayAppend<Value>(target: Value[], value: Value, label: string): void {

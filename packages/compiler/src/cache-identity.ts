@@ -228,12 +228,12 @@ export interface CompilerBuildIdInput {
  * also be versioned so a compiler implementation change becomes a clean miss. This compact token
  * is for display/path names; cache correctness compares {@link compilerBuildCacheIdentity} exactly.
  */
-export function compilerBuildId(input: CompilerBuildIdInput = {}): string {
+function computeCompilerBuildId(sourceFingerprints: Readonly<Record<string, string>>): string {
   const payload = {
     compilerBuildCacheIdentity: resolvedCompilerBuildCacheIdentity,
     packageName: compilerPackageName,
     packageVersion: compilerPackageVersion,
-    sourceFingerprints: input.sourceFingerprints ?? {},
+    sourceFingerprints,
     version: compilerBuildIdVersion,
   };
   return `${compilerPackageName}@${compilerPackageVersion}/${sha256(canonicalJson(payload))}`;
@@ -241,4 +241,15 @@ export function compilerBuildId(input: CompilerBuildIdInput = {}): string {
 
 function sha256(value: string): string {
   return compilerSha256Hex(value);
+}
+
+// The exact implementation preimage is resolved once at module bootstrap and cannot change during
+// this process. Re-serializing and hashing that multi-megabyte preimage for every cache lookup made
+// a confirmed warm hit scale with compiler source size rather than with the changed app file.
+const defaultCompilerBuildId = computeCompilerBuildId({});
+
+export function compilerBuildId(input: CompilerBuildIdInput = {}): string {
+  return input.sourceFingerprints === undefined
+    ? defaultCompilerBuildId
+    : computeCompilerBuildId(input.sourceFingerprints);
 }

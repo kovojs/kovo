@@ -28,6 +28,53 @@ export interface QueryPathExpressionFact {
   start: number;
 }
 
+type JsxAttribute = JsxElementModel['attributes'][number];
+type JsxExpression = ReturnType<typeof jsxExpressions>[number];
+
+interface QueryCoverageElement {
+  attributes: readonly JsxAttribute[];
+  element: JsxElementModel;
+}
+
+export interface QueryCoverageContext {
+  elements: readonly QueryCoverageElement[];
+  expressions: readonly JsxExpression[];
+}
+
+/**
+ * Snapshot the scanner-owned arrays once for the complete coverage pass. SPEC §5.2 keeps the typed
+ * scanner model authoritative; amortizing these fail-closed snapshots avoids re-copying every JSX
+ * element and attribute for every expression in a large component.
+ */
+export function createQueryCoverageContext(model: ComponentModuleModel): QueryCoverageContext {
+  const sourceElements = compilerSnapshotDenseArray(
+    jsxElements(model),
+    'Compiler query coverage elements',
+  );
+  const elements: QueryCoverageElement[] = [];
+  for (let index = 0; index < sourceElements.length; index += 1) {
+    const element = sourceElements[index]!;
+    compilerArrayAppend(
+      elements,
+      {
+        attributes: compilerSnapshotDenseArray(
+          element.attributes,
+          'Compiler coverage JSX attributes',
+        ),
+        element,
+      },
+      'Compiler indexed query coverage elements',
+    );
+  }
+  return {
+    elements,
+    expressions: compilerSnapshotDenseArray(
+      jsxExpressions(model),
+      'Compiler JSX coverage expressions',
+    ),
+  };
+}
+
 export function renderOnceQueryPaths(
   model: ComponentModuleModel,
   knownQueries: ReadonlySet<string>,
@@ -64,21 +111,26 @@ export function renderOnceStatePaths(model: ComponentModuleModel): string[] {
 export function jsxQueryExpressionPaths(
   model: ComponentModuleModel,
   knownQueries: ReadonlySet<string>,
+  context: QueryCoverageContext = createQueryCoverageContext(model),
 ): QueryPathExpressionFact[] {
-  return jsxExpressionPaths(model, (path) => queryPathUsesKnownQuery(path, knownQueries));
+  return jsxExpressionPaths(model, (path) => queryPathUsesKnownQuery(path, knownQueries), context);
 }
 
-export function jsxStateExpressionPaths(model: ComponentModuleModel): QueryPathExpressionFact[] {
-  return jsxExpressionPaths(model, isStatePath);
+export function jsxStateExpressionPaths(
+  model: ComponentModuleModel,
+  context: QueryCoverageContext = createQueryCoverageContext(model),
+): QueryPathExpressionFact[] {
+  return jsxExpressionPaths(model, isStatePath, context);
 }
 
 export function queryExpressionCoveredByDataBind(
   expression: { end: number; start: number },
   model: ComponentModuleModel,
+  context: QueryCoverageContext = createQueryCoverageContext(model),
 ): boolean {
-  if (queryAttributeExpressionCoveredByDataBind(expression, model)) return true;
+  if (queryAttributeExpressionCoveredByDataBind(expression, context)) return true;
 
-  const element = innermostContainingElement(expression, model);
+  const element = innermostContainingElement(expression, context);
   return element === null
     ? false
     : hasAttribute(
@@ -89,12 +141,9 @@ export function queryExpressionCoveredByDataBind(
 
 function queryAttributeExpressionCoveredByDataBind(
   expression: { end: number; start: number },
-  model: ComponentModuleModel,
+  context: QueryCoverageContext,
 ): boolean {
-  const elements = compilerSnapshotDenseArray(
-    jsxElements(model),
-    'Compiler query coverage elements',
-  );
+  const elements = context.elements;
   for (let index = 0; index < elements.length; index += 1) {
     const element = elements[index]!;
     const sourceAttribute = findAttribute(
@@ -121,10 +170,11 @@ function queryAttributeExpressionCoveredByDataBind(
 export function stateExpressionCoveredByDataBind(
   expression: { end: number; start: number },
   model: ComponentModuleModel,
+  context: QueryCoverageContext = createQueryCoverageContext(model),
 ): boolean {
-  if (stateAttributeExpressionCoveredByDataBind(expression, model)) return true;
+  if (stateAttributeExpressionCoveredByDataBind(expression, context)) return true;
 
-  const element = innermostContainingElement(expression, model);
+  const element = innermostContainingElement(expression, context);
   return element === null
     ? false
     : hasAttribute(
@@ -138,12 +188,9 @@ export function stateExpressionCoveredByDataBind(
 
 function stateAttributeExpressionCoveredByDataBind(
   expression: { end: number; start: number },
-  model: ComponentModuleModel,
+  context: QueryCoverageContext,
 ): boolean {
-  const elements = compilerSnapshotDenseArray(
-    jsxElements(model),
-    'Compiler state coverage elements',
-  );
+  const elements = context.elements;
   for (let index = 0; index < elements.length; index += 1) {
     const element = elements[index]!;
     const sourceAttribute = findAttribute(
@@ -170,15 +217,13 @@ function stateAttributeExpressionCoveredByDataBind(
 
 function innermostContainingElement(
   expression: { end: number; start: number },
-  model: ComponentModuleModel,
-): JsxElementModel | null {
-  const elements = compilerSnapshotDenseArray(
-    jsxElements(model),
-    'Compiler containing JSX elements',
-  );
-  let selected: JsxElementModel | null = null;
+  context: QueryCoverageContext,
+): QueryCoverageElement | null {
+  const elements = context.elements;
+  let selected: QueryCoverageElement | null = null;
   for (let index = 0; index < elements.length; index += 1) {
-    const element = elements[index]!;
+    const candidate = elements[index]!;
+    const element = candidate.element;
     if (
       element.selfClosing ||
       expression.start < element.openingEnd ||
@@ -186,8 +231,11 @@ function innermostContainingElement(
     ) {
       continue;
     }
-    if (selected === null || element.end - element.start < selected.end - selected.start) {
-      selected = element;
+    if (
+      selected === null ||
+      element.end - element.start < selected.element.end - selected.element.start
+    ) {
+      selected = candidate;
     }
   }
   return selected;
@@ -195,12 +243,9 @@ function innermostContainingElement(
 
 function isJsxEventAttributeExpression(
   expression: { end: number; start: number },
-  model: ComponentModuleModel,
+  context: QueryCoverageContext,
 ): boolean {
-  const elements = compilerSnapshotDenseArray(
-    jsxElements(model),
-    'Compiler event-attribute elements',
-  );
+  const elements = context.elements;
   for (let index = 0; index < elements.length; index += 1) {
     if (
       hasAttribute(
@@ -252,15 +297,13 @@ function appendCallPropertyPaths(
 function jsxExpressionPaths(
   model: ComponentModuleModel,
   keep: (path: string) => boolean,
+  context: QueryCoverageContext,
 ): QueryPathExpressionFact[] {
   const output: QueryPathExpressionFact[] = [];
-  const expressions = compilerSnapshotDenseArray(
-    jsxExpressions(model),
-    'Compiler JSX coverage expressions',
-  );
+  const expressions = context.expressions;
   for (let index = 0; index < expressions.length; index += 1) {
     const expression = expressions[index]!;
-    if (isJsxEventAttributeExpression(expression, model)) continue;
+    if (isJsxEventAttributeExpression(expression, context)) continue;
     const seen = compilerCreateSet<string>();
     const accesses = compilerSnapshotDenseArray(
       reactivePropertyAccessesForJsxExpression(expression, model),
@@ -280,16 +323,11 @@ function jsxExpressionPaths(
   return output;
 }
 
-type JsxAttribute = JsxElementModel['attributes'][number];
-
 function findAttribute(
-  element: JsxElementModel,
+  element: QueryCoverageElement,
   predicate: (attribute: JsxAttribute) => boolean,
 ): JsxAttribute | undefined {
-  const attributes = compilerSnapshotDenseArray(
-    element.attributes,
-    'Compiler coverage JSX attributes',
-  );
+  const attributes = element.attributes;
   for (let index = 0; index < attributes.length; index += 1) {
     if (predicate(attributes[index]!)) return attributes[index]!;
   }
@@ -297,7 +335,7 @@ function findAttribute(
 }
 
 function hasAttribute(
-  element: JsxElementModel,
+  element: QueryCoverageElement,
   predicate: (attribute: JsxAttribute) => boolean,
 ): boolean {
   return findAttribute(element, predicate) !== undefined;

@@ -35,6 +35,7 @@ import {
 } from './query-bindings.js';
 import { dataDeriveStamps, derivePlanInputs, exportedDerives } from './query-derives.js';
 import {
+  createQueryCoverageContext,
   jsxQueryExpressionPaths,
   jsxStateExpressionPaths,
   queryExpressionCoveredByDataBind,
@@ -221,6 +222,7 @@ export function collectQueryUpdateCoverage(
   const planCoveredPaths = compilerCreateSet<string>();
   const statusCoveredPaths = compilerCreateSet<string>();
   const knownQueries = knownQueryNames(model, options);
+  const coverageContext = createQueryCoverageContext(model);
 
   const bindings = compilerSnapshotDenseArray(
     dataBindAttributes(model),
@@ -324,7 +326,7 @@ export function collectQueryUpdateCoverage(
   }
 
   const queryExpressions = compilerSnapshotDenseArray(
-    jsxQueryExpressionPaths(model, knownQueries),
+    jsxQueryExpressionPaths(model, knownQueries, coverageContext),
     'Compiler query coverage expressions',
   );
   for (let index = 0; index < queryExpressions.length; index += 1) {
@@ -352,7 +354,7 @@ export function collectQueryUpdateCoverage(
   }
 
   const stateExpressions = compilerSnapshotDenseArray(
-    jsxStateExpressionPaths(model),
+    jsxStateExpressionPaths(model, coverageContext),
     'Compiler state coverage expressions',
   );
   for (let index = 0; index < stateExpressions.length; index += 1) {
@@ -415,7 +417,8 @@ export function collectQueryUpdateCoverage(
     const key = componentCoveragePathKey(ownerName, 'query', path);
     if (
       compilerSetHas(statusCoveredPaths, key) ||
-      (compilerSetHas(planCoveredPaths, key) && queryExpressionCoveredByDataBind(expression, model))
+      (compilerSetHas(planCoveredPaths, key) &&
+        queryExpressionCoveredByDataBind(expression, model, coverageContext))
     ) {
       continue;
     }
@@ -441,11 +444,12 @@ export function collectQueryUpdateCoverage(
     const key = componentCoveragePathKey(ownerName, 'state', path);
     if (
       compilerSetHas(statusCoveredPaths, key) ||
-      (compilerSetHas(planCoveredPaths, key) && stateExpressionCoveredByDataBind(expression, model))
+      (compilerSetHas(planCoveredPaths, key) &&
+        stateExpressionCoveredByDataBind(expression, model, coverageContext))
     ) {
       continue;
     }
-    if (stateExpressionCoveredByDataBind(expression, model)) continue;
+    if (stateExpressionCoveredByDataBind(expression, model, coverageContext)) continue;
     if (stateExpressionCoveredByGeneratedDerive(expression, stateDerives, sourceOffsetMap)) {
       continue;
     }
