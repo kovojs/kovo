@@ -317,4 +317,59 @@ describe('runtimeRegistryFacts', () => {
       'registerGeneratedQueryReadRegistry([{"domains":["account","contact"],"query":"queries/contact-detail-query"}]);',
     );
   });
+
+  it('projects runtime registry authority despite late build-realm intrinsic poison', () => {
+    const graph = {
+      queries: [{ domains: ['inventory', 'account'], query: 'queries/private-account' }],
+      touchGraph: {
+        'mutations/update-account': {
+          touches: [{ crossTable: true as const, domain: 'account', keys: 'arg:id' }],
+        },
+      },
+    };
+    const originalArrayIsArray = Array.isArray;
+    const originalEvery = Array.prototype.every;
+    const originalFlatMap = Array.prototype.flatMap;
+    const originalMap = Array.prototype.map;
+    const originalSort = Array.prototype.sort;
+    const originalObjectEntries = Object.entries;
+    const originalSetAdd = Set.prototype.add;
+    const originalSetHas = Set.prototype.has;
+    const originalLocaleCompare = String.prototype.localeCompare;
+    let facts: ReturnType<typeof runtimeRegistryWireFactsFromGraph> | undefined;
+    try {
+      Array.isArray = () => false;
+      Array.prototype.every = () => false;
+      Array.prototype.flatMap = () => [];
+      Array.prototype.map = () => [];
+      Array.prototype.sort = function () {
+        return this;
+      };
+      Object.entries = () => [];
+      Set.prototype.add = function () {
+        return this;
+      };
+      Set.prototype.has = () => true;
+      String.prototype.localeCompare = () => 0;
+
+      facts = runtimeRegistryWireFactsFromGraph(graph);
+    } finally {
+      Array.isArray = originalArrayIsArray;
+      Array.prototype.every = originalEvery;
+      Array.prototype.flatMap = originalFlatMap;
+      Array.prototype.map = originalMap;
+      Array.prototype.sort = originalSort;
+      Object.entries = originalObjectEntries;
+      Set.prototype.add = originalSetAdd;
+      Set.prototype.has = originalSetHas;
+      String.prototype.localeCompare = originalLocaleCompare;
+    }
+
+    expect(facts).toEqual({
+      mutationTouches: {
+        'mutations/update-account': [{ crossTable: true, domain: 'account', keys: 'arg:id' }],
+      },
+      queryReads: [{ domains: ['account', 'inventory'], query: 'queries/private-account' }],
+    });
+  });
 });

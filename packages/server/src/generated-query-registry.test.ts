@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { domain } from './domain.js';
 import {
   queryWithGeneratedReads,
+  registeredGeneratedQueryReads,
   registerGeneratedQueryReadRegistry,
 } from './generated-query-registry.js';
 import { query } from './query.js';
@@ -16,6 +17,8 @@ afterEach(() => {
     'dedupeQuery',
     'noopQuery',
     'compilerDerivedQuery',
+    'intrinsicAuthorityQuery',
+    'carrierSnapshotQuery',
   ]) {
     registerGeneratedQueryReadRegistry([{ domains: [], query: key }]);
   }
@@ -111,5 +114,62 @@ describe('queryWithGeneratedReads (SPEC §10.2:1018 — declared reads folded in
     const effective = queryWithGeneratedReads(derivedQuery);
 
     expect(readKeys(effective.reads)).toEqual(['domains/cart-domain']);
+  });
+
+  it('preserves compiler read authority after evaluated app code poisons mutable intrinsics', () => {
+    const definition = query('intrinsicAuthorityQuery', {
+      load: () => ({ rows: [] as unknown[] }),
+      reads: [inventory],
+    });
+    const registry = [{ domains: ['generated-authority'], query: 'intrinsicAuthorityQuery' }];
+
+    const originalArrayIsArray = Array.isArray;
+    const originalEvery = Array.prototype.every;
+    const originalFilter = Array.prototype.filter;
+    const originalMap = Array.prototype.map;
+    const originalMapGet = Map.prototype.get;
+    const originalSetAdd = Set.prototype.add;
+    const originalSetHas = Set.prototype.has;
+    let effective: typeof definition | undefined;
+    try {
+      Array.isArray = () => false;
+      Array.prototype.every = () => false;
+      Array.prototype.filter = () => [];
+      Array.prototype.map = () => [];
+      Map.prototype.get = () => undefined;
+      Set.prototype.add = function () {
+        return this;
+      };
+      Set.prototype.has = () => false;
+
+      registerGeneratedQueryReadRegistry(registry);
+      effective = queryWithGeneratedReads(definition);
+    } finally {
+      Array.isArray = originalArrayIsArray;
+      Array.prototype.every = originalEvery;
+      Array.prototype.filter = originalFilter;
+      Array.prototype.map = originalMap;
+      Map.prototype.get = originalMapGet;
+      Set.prototype.add = originalSetAdd;
+      Set.prototype.has = originalSetHas;
+    }
+
+    expect(readKeys(effective?.reads).sort()).toEqual(['generated-authority', 'inventory']);
+  });
+
+  it('reconstructs and freezes registered reads instead of retaining compiler carriers', () => {
+    const domains = ['carrier-authority'];
+    const entry = { domains, query: 'carrierSnapshotQuery' };
+    const registry = [entry];
+    registerGeneratedQueryReadRegistry(registry);
+
+    domains[0] = 'forged-domain';
+    entry.query = 'forged-query';
+    registry.length = 0;
+
+    const reads = registeredGeneratedQueryReads('carrierSnapshotQuery');
+    expect(readKeys(reads)).toEqual(['carrier-authority']);
+    expect(Object.isFrozen(reads)).toBe(true);
+    expect(Object.isFrozen(reads[0])).toBe(true);
   });
 });
