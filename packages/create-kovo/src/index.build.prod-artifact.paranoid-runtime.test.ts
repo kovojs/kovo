@@ -11,6 +11,7 @@ import { afterAll, describe, expect, it } from 'vitest';
 import { demoPasswordEnvVar, writeKovoProject } from './index.js';
 import {
   addPostgresParanoidFollowup8Shapes,
+  addDemoUserProvisioningFlow,
   addParanoidPhase5AuthorizationProof,
   addParanoidPhase5WriteBoundaryProof,
   addPostgresParanoidPhase5DogfoodProof,
@@ -21,6 +22,7 @@ import {
   fieldValue,
   formHtmlByAction,
   pruneParanoidPhase5SqliteReadSet,
+  provisionDemoUser,
   signInDemoUser,
 } from './index.build.test-support.js';
 import {
@@ -201,6 +203,7 @@ describe('create-kovo starter (build integration: paranoid runtime chokes)', () 
       addStarterMutationDbScopeProof(root);
       addParanoidPhase5WriteBoundaryProof(root);
       addParanoidPhase5AuthorizationProof(root);
+      addDemoUserProvisioningFlow(root);
 
       buildParanoidProductionArtifact(root);
 
@@ -211,7 +214,7 @@ describe('create-kovo starter (build integration: paranoid runtime chokes)', () 
           ...withRepoBinOnPath(),
           HOST: '127.0.0.1',
           KOVO_PARANOID: '1',
-          NODE_ENV: 'test',
+          NODE_ENV: 'production',
           PORT: String(port),
         },
       });
@@ -220,6 +223,7 @@ describe('create-kovo starter (build integration: paranoid runtime chokes)', () 
       const marker = `phase5-${Date.now()}-${Math.random().toString(16).slice(2)}`;
       const contactEmail = `${marker}-contact@example.com`;
 
+      await provisionDemoUser(root, origin, output);
       await signInDemoUser(root, origin, jar, output);
       await expectAuthorizationQueryShapes(origin, jar);
       await expectBlockedReadShapes(origin, jar);

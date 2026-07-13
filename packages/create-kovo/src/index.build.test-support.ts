@@ -4264,6 +4264,152 @@ export async function signInDemoUser(
   expect(signIn.status, `${signInBody}\n${output()}`).toBe(303);
 }
 
+/**
+ * Add a real Better Auth sign-up mutation/form to a generated acceptance fixture.
+ * Production starter boot must not seed the local demo credential, so tests that
+ * need an authenticated principal provision one through the same CSRF-protected
+ * credential mutation an application would expose explicitly.
+ */
+export function addDemoUserProvisioningFlow(root: string): void {
+  const runtimeDbPath = join(root, 'src/_kovo/app-runtime-db.ts');
+  let runtimeDb = readFileSync(runtimeDbPath, 'utf8');
+  runtimeDb = replaceRequired(
+    runtimeDb,
+    '  betterAuthSignInEmailMutation,\n  betterAuthSignOutMutation,',
+    '  betterAuthSignInEmailMutation,\n  betterAuthSignOutMutation,\n  betterAuthSignUpEmailMutation,',
+    'demo-user provisioning Better Auth import',
+  );
+  runtimeDb = replaceRequired(
+    runtimeDb,
+    '  signInAccess: AccessDecision;\n  signOutAccess: AccessDecision;',
+    '  signInAccess: AccessDecision;\n  signOutAccess: AccessDecision;\n  signUpAccess: AccessDecision;',
+    'demo-user provisioning auth options',
+  );
+  runtimeDb = replaceRequired(
+    runtimeDb,
+    '  const signOut = betterAuthSignOutMutation<',
+    [
+      "  const signUp = betterAuthSignUpEmailMutation<'auth/sign-up', AppRequest>(auth, {",
+      '    access: options.signUpAccess,',
+      '    csrf: options.csrf,',
+      "    defaultRedirectTo: '/',",
+      '  });',
+      '  const signOut = betterAuthSignOutMutation<',
+    ].join('\n'),
+    'demo-user provisioning sign-up mutation',
+  );
+  runtimeDb = replaceRequired(
+    runtimeDb,
+    'return Object.freeze({ seedDemoUser, sessionProvider, signIn, signOut });',
+    'return Object.freeze({ seedDemoUser, sessionProvider, signIn, signOut, signUp });',
+    'demo-user provisioning binding export',
+  );
+  writeFileSync(runtimeDbPath, runtimeDb, 'utf8');
+
+  const authPath = join(root, 'src/auth.ts');
+  let auth = readFileSync(authPath, 'utf8');
+  auth = replaceRequired(
+    auth,
+    "  signInAccess: publicAccess('sign-in runs before authentication'),\n  signOutAccess: [appAuthed],",
+    "  signInAccess: publicAccess('sign-in runs before authentication'),\n  signOutAccess: [appAuthed],\n  signUpAccess: publicAccess('acceptance fixture provisions its principal explicitly'),",
+    'demo-user provisioning access posture',
+  );
+  auth = replaceRequired(
+    auth,
+    'export const appSignOut = authBindings.signOut;',
+    'export const appSignOut = authBindings.signOut;\nexport const appSignUp = authBindings.signUp;',
+    'demo-user provisioning authored export',
+  );
+  writeFileSync(authPath, auth, 'utf8');
+
+  const formsPath = join(root, 'src/components/auth-forms.tsx');
+  let forms = readFileSync(formsPath, 'utf8');
+  forms = replaceRequired(
+    forms,
+    "import { appSignIn, appSignOut } from '../auth.js';",
+    "import { appSignIn, appSignOut, appSignUp } from '../auth.js';",
+    'demo-user provisioning form import',
+  );
+  forms += [
+    '',
+    'export function DemoUserProvisioningForm(): string {',
+    '  return (',
+    '    <form mutation={appSignUp}>',
+    '      <input name="email" type="email" />',
+    '      <input name="name" type="text" />',
+    '      <input name="password" type="password" />',
+    '      <input name="next" type="hidden" value="/" />',
+    '      <button type="submit">Provision acceptance user</button>',
+    '    </form>',
+    '  );',
+    '}',
+    '',
+  ].join('\n');
+  writeFileSync(formsPath, forms, 'utf8');
+
+  const appPath = join(root, 'src/app.tsx');
+  let app = readFileSync(appPath, 'utf8');
+  app = replaceRequired(
+    app,
+    "import { LoginForm, SignOutForm } from './components/auth-forms.js';",
+    "import { DemoUserProvisioningForm, LoginForm, SignOutForm } from './components/auth-forms.js';",
+    'demo-user provisioning app form import',
+  );
+  app = replaceRequired(
+    app,
+    '  appSignIn,\n  appSignOut,',
+    '  appSignIn,\n  appSignOut,\n  appSignUp,',
+    'demo-user provisioning app auth import',
+  );
+  app = appendArrayEntry(app, 'mutations', 'appSignUp');
+  app = replaceRequired(
+    app,
+    '            <LoginForm />',
+    '            <LoginForm />\n            <DemoUserProvisioningForm />',
+    'demo-user provisioning login route',
+  );
+  writeFileSync(appPath, app, 'utf8');
+}
+
+export async function provisionDemoUser(
+  root: string,
+  origin: string,
+  output: () => string,
+): Promise<void> {
+  await fetchTextWhenReady(`${origin}/login`, output);
+  const jar = new Map<string, string>();
+  const loginResponse = await fetch(`${origin}/login`);
+  mergeCookies(jar, loginResponse.headers.getSetCookie());
+  const loginHtml = await loginResponse.text();
+  const signUpForm = formHtmlByAction(loginHtml, '/_m/auth/sign-up');
+  const csrf = fieldValue(signUpForm, 'csrf');
+  const demoPassword =
+    new RegExp(`^${demoPasswordEnvVar}=(.+)$`, 'm').exec(
+      readFileSync(join(root, '.env'), 'utf8'),
+    )?.[1] ?? '';
+  expect(csrf).toBeTruthy();
+  expect(demoPassword).toBeTruthy();
+
+  const signUp = await fetch(`${origin}/_m/auth/sign-up`, {
+    body: new URLSearchParams({
+      csrf,
+      email: 'demo@example.com',
+      name: 'Demo User',
+      next: '/',
+      password: demoPassword,
+    }),
+    headers: {
+      'content-type': 'application/x-www-form-urlencoded',
+      cookie: cookieHeader(jar),
+      origin,
+    },
+    method: 'POST',
+    redirect: 'manual',
+  });
+  const signUpBody = await signUp.text();
+  expect(signUp.status, `${signUpBody}\n${output()}`).toBe(303);
+}
+
 export function execFileSyncErrorOutput(error: unknown): string {
   if (typeof error !== 'object' || error === null) return String(error);
   const maybeOutput = error as { message?: unknown; stderr?: unknown; stdout?: unknown };
