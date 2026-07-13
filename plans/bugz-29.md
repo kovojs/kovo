@@ -13,7 +13,7 @@ fails closed.
 
 | Severity | Families | Items  |
 | -------- | -------: | ------ |
-| Critical |       14 | C1-C14 |
+| Critical |       15 | C1-C15 |
 | High     |       19 | H1-H19 |
 | Medium   |        9 | M1-M9  |
 | Low      |        2 | L1-L2  |
@@ -117,6 +117,15 @@ fails closed.
   - **Open proof:** bind generated renderers to the exact app aggregate/module graph, prove two
     sequential apps cannot observe each other's renderer authority, and cover removal/HMR without
     retaining a deleted renderer. SPEC §2, §6.6, §9.1, §9.5.
+
+- [x] **C15 - A later app aggregate could replace the process-wide egress floor and widen an
+      earlier app's outbound authority.**
+  - A strict app first blocked loopback, then a second `createApp()` allowlisted the local target;
+    the first app's process could immediately fetch the previously denied internal response.
+  - **Evidence:** `5c95a833e`; app bootstrap now permits repair/reinstallation only when the
+    normalized process policy and hardening posture are unchanged, while incompatible apps fail
+    before any transport policy is replaced. The exact transport repro plus 102 egress tests,
+    egress-boundary, sink-policy, and `vp check` pass. SPEC §6.6.
 
 ## High
 
@@ -261,7 +270,7 @@ fails closed.
 
 - [ ] Obtain explicit zero-new-finding conclusions on the final integrated head for runtime,
       browser/core, and compiler/build/supply-chain scopes.
-  - Prior zero conclusions at `be2b43bda` were superseded by C11-C14, H18-H19, and M9; repeat the
+  - Prior zero conclusions at `be2b43bda` were superseded by C11-C15, H18-H19, and M9; repeat the
     independent sweeps after every open family is integrated.
 - [ ] Regenerate and review the final pack-security snapshot, then run exact-head static, paranoid,
       package, root-test, browser, integration, starter, kovo-check, publish, perf, and diff gates.
