@@ -1345,6 +1345,39 @@ export const CartPanel = component({
     expect(poisonHits).toBe(0);
   });
 
+  it('does not suppress reactive-alias coverage through Map.get replacement', () => {
+    const nativeGet = Map.prototype.get;
+    const nativeApply = Reflect.apply;
+    let poisonHits = 0;
+    let result: ReturnType<typeof compileComponentModule> | undefined;
+    try {
+      Map.prototype.get = function poisonedReactiveAliasGet<K, V>(key: K): V | undefined {
+        if (key === 'label' && new Error().stack?.includes('aliasesReachableFromReferences')) {
+          poisonHits += 1;
+          return undefined;
+        }
+        return nativeApply(nativeGet, this, [key]);
+      };
+      result = compileComponentModule({
+        fileName: 'cart-badge.tsx',
+        source: `
+export const CartBadge = component({
+  queries: { cart: {} },
+  disableServerRefresh: true,
+  render: () => {
+    const label = cart.count + 1;
+    return <cart-badge><p>{label}</p></cart-badge>;
+  },
+});
+`,
+      });
+    } finally {
+      Map.prototype.get = nativeGet;
+    }
+    expect(result?.diagnostics.filter((diagnostic) => diagnostic.code === 'KV311')).toHaveLength(1);
+    expect(poisonHits).toBe(0);
+  });
+
   it('does not publish a captured server secret through stateful Array.filter replacement', () => {
     const nativeFilter = Array.prototype.filter;
     const nativeApply = Reflect.apply;

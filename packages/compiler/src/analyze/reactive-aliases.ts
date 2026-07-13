@@ -6,6 +6,28 @@ import {
 } from '../scan/parse.js';
 import { unwrapExpression } from '../scan/ast.js';
 import * as ts from 'typescript';
+import {
+  compilerArrayAppend,
+  compilerArrayJoin,
+  compilerArrayLength,
+  compilerCreateMap,
+  compilerCreateSet,
+  compilerFailClosed,
+  compilerJsonStringify,
+  compilerMapForEach,
+  compilerMapGet,
+  compilerMapSet,
+  compilerOwnDataValue,
+  compilerRegExpTest,
+  compilerSetAdd,
+  compilerSetForEach,
+  compilerSetHas,
+  compilerStringEndsWith,
+  compilerStringIndexOf,
+  compilerStringSlice,
+  compilerStringSplit,
+  compilerStringTrim,
+} from '../compiler-security-intrinsics.js';
 
 /** @internal Follow same-render-body `const x = state/query...` aliases for §4.9 coverage. */
 export function reactivePropertyAccessesForJsxExpression(
@@ -14,13 +36,34 @@ export function reactivePropertyAccessesForJsxExpression(
 ): readonly PropertyAccessPathModel[] {
   const aliases = localAliasesForExpression(expression, model);
   if (aliases.length === 0) return expression.propertyAccesses;
-  const aliasNames = new Set(aliases.map((alias) => alias.name));
-  return [
-    ...expression.propertyAccesses.filter(
-      (access) => !aliasNames.has(access.path.split('.')[0] ?? ''),
-    ),
-    ...aliases.flatMap((alias) => alias.accesses),
-  ];
+  const aliasNames = compilerCreateSet<string>();
+  const aliasLength = compilerArrayLength(aliases, 'Reactive aliases');
+  for (let index = 0; index < aliasLength; index += 1) {
+    compilerSetAdd(aliasNames, ownArrayEntry(aliases, index, 'Reactive aliases').name);
+  }
+  const accesses: PropertyAccessPathModel[] = [];
+  const directLength = compilerArrayLength(
+    expression.propertyAccesses,
+    'Reactive expression property accesses',
+  );
+  for (let index = 0; index < directLength; index += 1) {
+    const access = ownArrayEntry(
+      expression.propertyAccesses,
+      index,
+      'Reactive expression property accesses',
+    );
+    if (!compilerSetHas(aliasNames, referenceRootForAccessPath(access.path) ?? '')) {
+      compilerArrayAppend(accesses, access, 'Reactive property accesses');
+    }
+  }
+  for (let index = 0; index < aliasLength; index += 1) {
+    appendArray(
+      accesses,
+      ownArrayEntry(aliases, index, 'Reactive aliases').accesses,
+      'Reactive property accesses',
+    );
+  }
+  return accesses;
 }
 
 /** @internal Expand same-render-body const aliases for generated client derives. */
@@ -61,17 +104,35 @@ function localAliasesForExpression(
     functions,
     aliasMap(destructuredAliases),
   );
-  const identifierExpressionAliasNames = new Set(
-    identifierAliases.filter((alias) => alias.expression !== undefined).map((alias) => alias.name),
+  const identifierExpressionAliasNames = compilerCreateSet<string>();
+  const identifierAliasLength = compilerArrayLength(identifierAliases, 'Identifier aliases');
+  for (let index = 0; index < identifierAliasLength; index += 1) {
+    const alias = ownArrayEntry(identifierAliases, index, 'Identifier aliases');
+    if (alias.expression !== undefined) compilerSetAdd(identifierExpressionAliasNames, alias.name);
+  }
+  const combined: ReactiveAliasModel[] = [];
+  const localAliasLength = compilerArrayLength(
+    expression.localConstAliases,
+    'Expression local const aliases',
   );
-  const aliases = dedupeAliases([
-    ...expression.localConstAliases.filter(
-      (alias) => !identifierExpressionAliasNames.has(alias.name),
-    ),
-    ...identifierAliases,
-    ...functionDeclarationReadAliasesBefore(model.sourceFile, functions),
-    ...destructuredAliases,
-  ]);
+  for (let index = 0; index < localAliasLength; index += 1) {
+    const alias = ownArrayEntry(
+      expression.localConstAliases,
+      index,
+      'Expression local const aliases',
+    );
+    if (!compilerSetHas(identifierExpressionAliasNames, alias.name)) {
+      compilerArrayAppend(combined, alias, 'Combined reactive aliases');
+    }
+  }
+  appendArray(combined, identifierAliases, 'Combined reactive aliases');
+  appendArray(
+    combined,
+    functionDeclarationReadAliasesBefore(model.sourceFile, functions),
+    'Combined reactive aliases',
+  );
+  appendArray(combined, destructuredAliases, 'Combined reactive aliases');
+  const aliases = dedupeAliases(combined);
   return aliasesReachableFromReferences(expression.references, aliases);
 }
 
@@ -82,8 +143,8 @@ function identifierConstReadAliasesBefore(
   destructuredAliases: ReadonlyMap<string, readonly ReactiveAliasModel[]>,
 ): readonly ReactiveAliasModel[] {
   const aliases: ReactiveAliasModel[] = [];
-  for (const [name, declaration] of declarations) {
-    if (!declaration.initializer) continue;
+  compilerMapForEach(declarations, (declaration, name) => {
+    if (!declaration.initializer) return;
 
     const accesses = resolvedInitializerAccesses(
       sourceFile,
@@ -92,16 +153,20 @@ function identifierConstReadAliasesBefore(
       functions,
       destructuredAliases,
     );
-    if (accesses.length === 0) continue;
+    if (accesses.length === 0) return;
     const aliasExpression = accessExpressionFromExpression(declaration.initializer);
-    aliases.push({
-      accesses,
-      ...(aliasExpression ? { expression: aliasExpression.expression } : {}),
-      name,
-      ...(aliasExpression ? { references: identifierReferences(declaration.initializer) } : {}),
-      start: declaration.getStart(sourceFile),
-    });
-  }
+    compilerArrayAppend(
+      aliases,
+      {
+        accesses,
+        ...(aliasExpression ? { expression: aliasExpression.expression } : {}),
+        name,
+        ...(aliasExpression ? { references: identifierReferences(declaration.initializer) } : {}),
+        start: declaration.getStart(sourceFile),
+      },
+      'Identifier reactive aliases',
+    );
+  });
   return aliases;
 }
 
@@ -110,16 +175,20 @@ function functionDeclarationReadAliasesBefore(
   declarations: ReadonlyMap<string, ts.FunctionDeclaration>,
 ): readonly ReactiveAliasModel[] {
   const aliases: ReactiveAliasModel[] = [];
-  for (const [name, declaration] of declarations) {
-    if (!declaration.body) continue;
+  compilerMapForEach(declarations, (declaration, name) => {
+    if (!declaration.body) return;
     const accesses = propertyAccessPathModels(sourceFile, declaration.body);
-    if (accesses.length === 0) continue;
-    aliases.push({
-      accesses,
-      name,
-      start: declaration.name?.getStart(sourceFile) ?? declaration.getStart(sourceFile),
-    });
-  }
+    if (accesses.length === 0) return;
+    compilerArrayAppend(
+      aliases,
+      {
+        accesses,
+        name,
+        start: declaration.name?.getStart(sourceFile) ?? declaration.getStart(sourceFile),
+      },
+      'Function reactive aliases',
+    );
+  });
   return aliases;
 }
 
@@ -139,10 +208,11 @@ function destructuredAliasDeclarationsBefore(
       node.initializer &&
       isConstVariableDeclaration(node)
     ) {
-      const aliasReferences =
-        references ?? new Set(bindingIdentifiers(node.name).map((identifier) => identifier.text));
-      aliases.push(
-        ...bindingPatternAliases(sourceFile, node.name, node.initializer, aliasReferences, []),
+      const aliasReferences = references ?? identifierNameSet(bindingIdentifiers(node.name));
+      appendArray(
+        aliases,
+        bindingPatternAliases(sourceFile, node.name, node.initializer, aliasReferences, []),
+        'Destructured reactive aliases',
       );
     }
     ts.forEachChild(node, visit);
@@ -156,7 +226,7 @@ function identifierConstDeclarationsBefore(
   body: ts.Block,
   expressionStart: number,
 ): ReadonlyMap<string, ts.VariableDeclaration> {
-  const declarations = new Map<string, ts.VariableDeclaration>();
+  const declarations = compilerCreateMap<string, ts.VariableDeclaration>();
   const visit = (node: ts.Node): void => {
     if (node.getStart(sourceFile) >= expressionStart) return;
     if (node !== body && isFunctionOrClassLike(node)) return;
@@ -166,7 +236,7 @@ function identifierConstDeclarationsBefore(
       node.initializer &&
       isConstVariableDeclaration(node)
     ) {
-      declarations.set(node.name.text, node);
+      compilerMapSet(declarations, node.name.text, node);
     }
     ts.forEachChild(node, visit);
   };
@@ -179,11 +249,11 @@ function functionDeclarationsBefore(
   body: ts.Block,
   expressionStart: number,
 ): ReadonlyMap<string, ts.FunctionDeclaration> {
-  const declarations = new Map<string, ts.FunctionDeclaration>();
+  const declarations = compilerCreateMap<string, ts.FunctionDeclaration>();
   const visit = (node: ts.Node): void => {
     if (node.getStart(sourceFile) >= expressionStart) return;
     if (ts.isFunctionDeclaration(node) && node.name && node.body) {
-      declarations.set(node.name.text, node);
+      compilerMapSet(declarations, node.name.text, node);
       return;
     }
     if (node !== body && isFunctionOrClassLike(node)) return;
@@ -198,36 +268,79 @@ function resolvedInitializerAccesses(
   initializer: ts.Expression,
   declarations: ReadonlyMap<string, ts.VariableDeclaration>,
   functions: ReadonlyMap<string, ts.FunctionDeclaration>,
-  destructuredAliases: ReadonlyMap<string, readonly ReactiveAliasModel[]> = new Map(),
-  seen: ReadonlySet<string> = new Set(),
+  destructuredAliases?: ReadonlyMap<string, readonly ReactiveAliasModel[]>,
+  seen?: ReadonlySet<string>,
 ): readonly PropertyAccessPathModel[] {
-  const direct = propertyAccessPathModels(sourceFile, initializer).filter((access) => {
+  const destructured = destructuredAliases ?? compilerCreateMap();
+  const visited = seen ?? compilerCreateSet<string>();
+  const direct: PropertyAccessPathModel[] = [];
+  const sourceAccesses = propertyAccessPathModels(sourceFile, initializer);
+  const sourceAccessLength = compilerArrayLength(sourceAccesses, 'Initializer property accesses');
+  for (let index = 0; index < sourceAccessLength; index += 1) {
+    const access = ownArrayEntry(sourceAccesses, index, 'Initializer property accesses');
     const root = referenceRootForAccessPath(access.path);
-    return !root || (!declarations.has(root) && !destructuredAliases.has(root));
-  });
-  const nested = identifierReferences(initializer).flatMap((name) => {
-    if (seen.has(name)) return [];
-    const destructured = destructuredAliases.get(name);
-    if (destructured) return destructured.flatMap((alias) => alias.accesses);
-
-    const declaration = declarations.get(name);
-    if (declaration?.initializer) {
-      return resolvedInitializerAccesses(
-        sourceFile,
-        declaration.initializer,
-        declarations,
-        functions,
-        destructuredAliases,
-        new Set([...seen, name]),
+    if (
+      !root ||
+      (compilerMapGet(declarations, root) === undefined &&
+        compilerMapGet(destructured, root) === undefined)
+    ) {
+      compilerArrayAppend(direct, access, 'Direct initializer property accesses');
+    }
+  }
+  const nested: PropertyAccessPathModel[] = [];
+  const references = identifierReferences(initializer);
+  const referenceLength = compilerArrayLength(references, 'Initializer references');
+  for (let index = 0; index < referenceLength; index += 1) {
+    const name = ownArrayEntry(references, index, 'Initializer references');
+    if (compilerSetHas(visited, name)) continue;
+    const destructuredCandidates = compilerMapGet(destructured, name);
+    if (destructuredCandidates) {
+      const candidateLength = compilerArrayLength(
+        destructuredCandidates,
+        'Destructured alias candidates',
       );
+      for (let candidateIndex = 0; candidateIndex < candidateLength; candidateIndex += 1) {
+        appendArray(
+          nested,
+          ownArrayEntry(destructuredCandidates, candidateIndex, 'Destructured alias candidates')
+            .accesses,
+          'Nested initializer property accesses',
+        );
+      }
+      continue;
     }
 
-    const fn = functions.get(name);
-    if (fn?.body) return propertyAccessPathModels(sourceFile, fn.body);
-    return [];
-  });
+    const declaration = compilerMapGet(declarations, name);
+    if (declaration?.initializer) {
+      const nextSeen = cloneStringSet(visited);
+      compilerSetAdd(nextSeen, name);
+      appendArray(
+        nested,
+        resolvedInitializerAccesses(
+          sourceFile,
+          declaration.initializer,
+          declarations,
+          functions,
+          destructured,
+          nextSeen,
+        ),
+        'Nested initializer property accesses',
+      );
+      continue;
+    }
 
-  return dedupeAccesses([...direct, ...nested]);
+    const fn = compilerMapGet(functions, name);
+    if (fn?.body) {
+      appendArray(
+        nested,
+        propertyAccessPathModels(sourceFile, fn.body),
+        'Nested initializer property accesses',
+      );
+    }
+  }
+
+  appendArray(direct, nested, 'Initializer property accesses');
+  return dedupeAccesses(direct);
 }
 
 function bindingPatternAliases(
@@ -244,11 +357,15 @@ function bindingPatternAliases(
     : unresolvedInitializerAccessPaths(sourceFile, initializer);
   if (fallbackAccessPaths.length === 0) return [];
 
-  for (const [index, element] of pattern.elements.entries()) {
+  const elementLength = compilerArrayLength(pattern.elements, 'Binding pattern elements');
+  for (let index = 0; index < elementLength; index += 1) {
+    const element = ownArrayEntry(pattern.elements, index, 'Binding pattern elements');
     if (ts.isOmittedExpression(element)) continue;
     if (element.dotDotDotToken) {
-      aliases.push(
-        ...unresolvedBindingAliases(sourceFile, element.name, references, fallbackAccessPaths),
+      appendArray(
+        aliases,
+        unresolvedBindingAliases(sourceFile, element.name, references, fallbackAccessPaths),
+        'Binding pattern reactive aliases',
       );
       continue;
     }
@@ -257,8 +374,10 @@ function bindingPatternAliases(
       ? bindingPropertyName(element)
       : index.toString();
     if (propertyName === null) {
-      aliases.push(
-        ...unresolvedBindingAliases(sourceFile, element.name, references, fallbackAccessPaths),
+      appendArray(
+        aliases,
+        unresolvedBindingAliases(sourceFile, element.name, references, fallbackAccessPaths),
+        'Binding pattern reactive aliases',
       );
       continue;
     }
@@ -266,45 +385,60 @@ function bindingPatternAliases(
     const segment: BindingPathSegment = ts.isObjectBindingPattern(pattern)
       ? { kind: 'property', value: propertyName }
       : { kind: 'index', value: propertyName };
-    const path = [...prefix, segment];
+    const path: BindingPathSegment[] = [];
+    appendArray(path, prefix, 'Binding path segments');
+    compilerArrayAppend(path, segment, 'Binding path segments');
     if (element.initializer) {
       const accessPaths = initializerExpression
         ? [bindingPathAccessPath(initializerExpression.accessPath, path)]
         : fallbackAccessPaths;
-      aliases.push(...unresolvedBindingAliases(sourceFile, element.name, references, accessPaths));
+      appendArray(
+        aliases,
+        unresolvedBindingAliases(sourceFile, element.name, references, accessPaths),
+        'Binding pattern reactive aliases',
+      );
       continue;
     }
     if (ts.isIdentifier(element.name)) {
       const name = element.name.text;
-      if (!references.has(name)) continue;
+      if (!compilerSetHas(references, name)) continue;
       if (!initializerExpression) {
-        aliases.push(
-          ...unresolvedBindingAliases(sourceFile, element.name, references, fallbackAccessPaths),
+        appendArray(
+          aliases,
+          unresolvedBindingAliases(sourceFile, element.name, references, fallbackAccessPaths),
+          'Binding pattern reactive aliases',
         );
         continue;
       }
       const resolvedPath = bindingPathAccessPath(initializerExpression.accessPath, path);
       const resolvedExpression = bindingPathExpression(initializerExpression.expression, path);
-      aliases.push({
-        accesses: [
-          {
-            end: element.name.getEnd(),
-            path: resolvedPath,
-            start: element.name.getStart(sourceFile),
-            terminalName: path.at(-1)?.value ?? name,
-          },
-        ],
-        expression: resolvedExpression,
-        name,
-        references: referenceRootsForAccessPath(initializerExpression.accessPath),
-        start: element.getStart(sourceFile),
-      });
+      const terminal = ownArrayEntry(path, path.length - 1, 'Binding path segments').value;
+      compilerArrayAppend(
+        aliases,
+        {
+          accesses: [
+            {
+              end: element.name.getEnd(),
+              path: resolvedPath,
+              start: element.name.getStart(sourceFile),
+              terminalName: terminal || name,
+            },
+          ],
+          expression: resolvedExpression,
+          name,
+          references: referenceRootsForAccessPath(initializerExpression.accessPath),
+          start: element.getStart(sourceFile),
+        },
+        'Binding pattern reactive aliases',
+      );
       continue;
     }
 
     if (ts.isObjectBindingPattern(element.name) || ts.isArrayBindingPattern(element.name)) {
-      aliases.push(
-        ...bindingPatternAliases(sourceFile, element.name, initializer, references, path),
+      appendArray(
+        aliases,
+        bindingPatternAliases(sourceFile, element.name, initializer, references, path),
+        'Binding pattern reactive aliases',
       );
     }
   }
@@ -360,7 +494,7 @@ function elementAccessMember(
 ): { expression: string; path: string } | null {
   const argument = expression.argumentExpression;
   if (ts.isStringLiteralLike(argument)) {
-    return { expression: `[${JSON.stringify(argument.text)}]`, path: argument.text };
+    return { expression: `[${compilerJsonStringify(argument.text) ?? '""'}]`, path: argument.text };
   }
   if (ts.isNumericLiteral(argument)) {
     return { expression: `[${argument.text}]`, path: argument.text };
@@ -369,19 +503,31 @@ function elementAccessMember(
 }
 
 function markLastAccessPathSegmentOptional(path: string): string {
-  const parts = path.split('.');
-  const last = parts.at(-1);
-  if (last) parts[parts.length - 1] = last.endsWith('?') ? last : `${last}?`;
-  return parts.join('.');
+  const parts = compilerStringSplit(path, '.');
+  const partLength = compilerArrayLength(parts, 'Reactive access path parts');
+  if (partLength === 0) return path;
+  const last = ownArrayEntry(parts, partLength - 1, 'Reactive access path parts');
+  if (last) {
+    parts[partLength - 1] = compilerStringEndsWith(last, '?') ? last : `${last}?`;
+  }
+  return compilerArrayJoin(parts, '.');
 }
 
 function unresolvedInitializerAccessPaths(
   sourceFile: ts.SourceFile,
   initializer: ts.Expression,
 ): readonly string[] {
-  return [
-    ...new Set(propertyAccessPathModels(sourceFile, initializer).map((access) => access.path)),
-  ];
+  const paths: string[] = [];
+  const seen = compilerCreateSet<string>();
+  const accesses = propertyAccessPathModels(sourceFile, initializer);
+  const accessLength = compilerArrayLength(accesses, 'Unresolved initializer accesses');
+  for (let index = 0; index < accessLength; index += 1) {
+    const path = ownArrayEntry(accesses, index, 'Unresolved initializer accesses').path;
+    if (compilerSetHas(seen, path)) continue;
+    compilerSetAdd(seen, path);
+    compilerArrayAppend(paths, path, 'Unresolved initializer paths');
+  }
+  return paths;
 }
 
 function unresolvedBindingAliases(
@@ -390,26 +536,46 @@ function unresolvedBindingAliases(
   references: ReadonlySet<string>,
   accessPaths: readonly string[],
 ): readonly ReactiveAliasModel[] {
-  return bindingIdentifiers(name)
-    .filter((identifier) => references.has(identifier.text))
-    .map((identifier) => ({
-      accesses: accessPaths.map((accessPath) => ({
-        end: identifier.getEnd(),
-        path: accessPath,
-        start: identifier.getStart(sourceFile),
-        terminalName: accessPath.split('.').at(-1) ?? accessPath,
-      })),
-      name: identifier.text,
-      start: identifier.getStart(sourceFile),
-    }));
+  const aliases: ReactiveAliasModel[] = [];
+  const identifiers = bindingIdentifiers(name);
+  const identifierLength = compilerArrayLength(identifiers, 'Binding identifiers');
+  for (let identifierIndex = 0; identifierIndex < identifierLength; identifierIndex += 1) {
+    const identifier = ownArrayEntry(identifiers, identifierIndex, 'Binding identifiers');
+    if (!compilerSetHas(references, identifier.text)) continue;
+    const accesses: PropertyAccessPathModel[] = [];
+    const pathLength = compilerArrayLength(accessPaths, 'Unresolved binding access paths');
+    for (let pathIndex = 0; pathIndex < pathLength; pathIndex += 1) {
+      const accessPath = ownArrayEntry(accessPaths, pathIndex, 'Unresolved binding access paths');
+      compilerArrayAppend(
+        accesses,
+        {
+          end: identifier.getEnd(),
+          path: accessPath,
+          start: identifier.getStart(sourceFile),
+          terminalName: lastAccessPathPart(accessPath),
+        },
+        'Unresolved binding accesses',
+      );
+    }
+    compilerArrayAppend(
+      aliases,
+      { accesses, name: identifier.text, start: identifier.getStart(sourceFile) },
+      'Unresolved binding aliases',
+    );
+  }
+  return aliases;
 }
 
 function bindingIdentifiers(name: ts.BindingName): readonly ts.Identifier[] {
   if (ts.isIdentifier(name)) return [name];
-  return name.elements.flatMap((element) => {
-    if (ts.isOmittedExpression(element)) return [];
-    return bindingIdentifiers(element.name);
-  });
+  const identifiers: ts.Identifier[] = [];
+  const elementLength = compilerArrayLength(name.elements, 'Binding name elements');
+  for (let index = 0; index < elementLength; index += 1) {
+    const element = ownArrayEntry(name.elements, index, 'Binding name elements');
+    if (ts.isOmittedExpression(element)) continue;
+    appendArray(identifiers, bindingIdentifiers(element.name), 'Binding identifiers');
+  }
+  return identifiers;
 }
 
 function identifierReferences(root: ts.Node): readonly string[] {
@@ -417,12 +583,12 @@ function identifierReferences(root: ts.Node): readonly string[] {
   const visit = (node: ts.Node): void => {
     if (isDeclarationName(node)) return;
     if (ts.isIdentifier(node) && !isPropertyAccessName(node)) {
-      names.push(node.text);
+      compilerArrayAppend(names, node.text, 'Identifier references');
     }
     ts.forEachChild(node, visit);
   };
   visit(root);
-  return [...new Set(names)];
+  return uniqueStrings(names, 'Identifier references');
 }
 
 function isDeclarationName(node: ts.Node): boolean {
@@ -456,24 +622,51 @@ function bindingPropertyName(element: ts.BindingElement): string | null {
 }
 
 function bindingPathAccessPath(root: string, path: readonly BindingPathSegment[]): string {
-  const suffix = path.map((segment) => segment.value).join('.');
+  const values: string[] = [];
+  const pathLength = compilerArrayLength(path, 'Binding path segments');
+  for (let index = 0; index < pathLength; index += 1) {
+    compilerArrayAppend(
+      values,
+      ownArrayEntry(path, index, 'Binding path segments').value,
+      'Binding path values',
+    );
+  }
+  const suffix = compilerArrayJoin(values, '.');
   return suffix ? `${root}.${suffix}` : root;
 }
 
 function bindingPathExpression(root: string, path: readonly BindingPathSegment[]): string {
-  return path.reduce((expression, segment) => {
-    if (segment.kind === 'index') return `${expression}[${segment.value}]`;
-    if (/^[A-Za-z_$][\w$]*$/.test(segment.value)) return `${expression}.${segment.value}`;
-    return `${expression}[${JSON.stringify(segment.value)}]`;
-  }, root);
+  let expression = root;
+  const pathLength = compilerArrayLength(path, 'Binding path segments');
+  for (let index = 0; index < pathLength; index += 1) {
+    const segment = ownArrayEntry(path, index, 'Binding path segments');
+    if (segment.kind === 'index') {
+      expression = `${expression}[${segment.value}]`;
+    } else if (compilerRegExpTest(/^[A-Za-z_$][\w$]*$/u, segment.value)) {
+      expression = `${expression}.${segment.value}`;
+    } else {
+      expression = `${expression}[${compilerJsonStringify(segment.value) ?? '""'}]`;
+    }
+  }
+  return expression;
 }
 
 function referencesAreDeriveInputs(
   references: readonly string[],
   inputs: readonly string[],
 ): boolean {
-  const allowed = new Set([...inputs, ...safeGlobalIdentifiers]);
-  return references.every((name) => allowed.has(name));
+  const allowed = compilerCreateSet<string>();
+  addStringsToSet(allowed, inputs, 'Reactive derive inputs');
+  addStringsToSet(allowed, safeGlobalIdentifiers, 'Safe global identifiers');
+  const referenceLength = compilerArrayLength(references, 'Reactive expression references');
+  for (let index = 0; index < referenceLength; index += 1) {
+    if (
+      !compilerSetHas(allowed, ownArrayEntry(references, index, 'Reactive expression references'))
+    ) {
+      return false;
+    }
+  }
+  return true;
 }
 
 function referenceRootsForAccessPath(path: string): readonly string[] {
@@ -482,8 +675,15 @@ function referenceRootsForAccessPath(path: string): readonly string[] {
 }
 
 function referenceRootForAccessPath(path: string): string | null {
-  const [root] = path.split(/[.[\]]/, 1);
-  return root ?? null;
+  let boundary = path.length;
+  const dot = compilerStringIndexOf(path, '.');
+  const bracket = compilerStringIndexOf(path, '[');
+  const close = compilerStringIndexOf(path, ']');
+  if (dot >= 0 && dot < boundary) boundary = dot;
+  if (bracket >= 0 && bracket < boundary) boundary = bracket;
+  if (close >= 0 && close < boundary) boundary = close;
+  const root = compilerStringSlice(path, 0, boundary);
+  return root || null;
 }
 
 function aliasesReachableFromReferences(
@@ -492,21 +692,30 @@ function aliasesReachableFromReferences(
 ): readonly ReactiveAliasModel[] {
   const aliasesByName = aliasMap(aliases);
   const reached: ReactiveAliasModel[] = [];
-  const seen = new Set<string>();
+  const seen = compilerCreateSet<string>();
 
   const visit = (name: string): void => {
-    const candidates = aliasesByName.get(name);
+    const candidates = compilerMapGet(aliasesByName, name);
     if (!candidates) return;
-    for (const alias of candidates) {
+    const candidateLength = compilerArrayLength(candidates, 'Reactive alias candidates');
+    for (let candidateIndex = 0; candidateIndex < candidateLength; candidateIndex += 1) {
+      const alias = ownArrayEntry(candidates, candidateIndex, 'Reactive alias candidates');
       const key = `${alias.name}\0${alias.start}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      reached.push(alias);
-      for (const reference of alias.references ?? []) visit(reference);
+      if (compilerSetHas(seen, key)) continue;
+      compilerSetAdd(seen, key);
+      compilerArrayAppend(reached, alias, 'Reachable reactive aliases');
+      const nestedReferences = alias.references ?? [];
+      const nestedLength = compilerArrayLength(nestedReferences, 'Reactive alias references');
+      for (let index = 0; index < nestedLength; index += 1) {
+        visit(ownArrayEntry(nestedReferences, index, 'Reactive alias references'));
+      }
     }
   };
 
-  for (const reference of references) visit(reference);
+  const referenceLength = compilerArrayLength(references, 'Reactive expression references');
+  for (let index = 0; index < referenceLength; index += 1) {
+    visit(ownArrayEntry(references, index, 'Reactive expression references'));
+  }
   return reached;
 }
 
@@ -514,16 +723,19 @@ function lowerReactiveExpression(
   expression: string,
   references: readonly string[],
   aliasesByName: ReadonlyMap<string, readonly ReactiveAliasModel[]>,
-  seenAliases: ReadonlySet<string> = new Set(),
+  seenAliases?: ReadonlySet<string>,
 ): string | null {
   if (referencesAreDeriveInputs(references, ['state'])) return expression;
 
-  const replacements = new Map<string, string>();
-  for (const reference of references) {
+  const visitedAliases = seenAliases ?? compilerCreateSet<string>();
+  const replacements = compilerCreateMap<string, string>();
+  const referenceLength = compilerArrayLength(references, 'Reactive expression references');
+  for (let index = 0; index < referenceLength; index += 1) {
+    const reference = ownArrayEntry(references, index, 'Reactive expression references');
     if (referencesAreDeriveInputs([reference], ['state'])) continue;
-    const lowered = lowerAliasReference(reference, aliasesByName, seenAliases);
+    const lowered = lowerAliasReference(reference, aliasesByName, visitedAliases);
     if (!lowered) return null;
-    replacements.set(reference, parenthesizeForReplacement(lowered));
+    compilerMapSet(replacements, reference, parenthesizeForReplacement(lowered));
   }
   return replaceIdentifierReferences(expression, replacements);
 }
@@ -533,13 +745,26 @@ function lowerAliasReference(
   aliasesByName: ReadonlyMap<string, readonly ReactiveAliasModel[]>,
   seenAliases: ReadonlySet<string>,
 ): string | null {
-  const aliases = aliasesByName.get(name);
+  const aliases = compilerMapGet(aliasesByName, name);
   if (!aliases || aliases.length === 0) return null;
 
-  const lowered = aliases.map((alias) => lowerAlias(alias, aliasesByName, seenAliases));
-  if (lowered.some((value) => value === null)) return null;
-  const distinct = [...new Set(lowered.filter((value): value is string => value !== null))];
-  return distinct.length === 1 ? (distinct[0] ?? null) : null;
+  const distinct = compilerCreateSet<string>();
+  let result: string | null = null;
+  const aliasLength = compilerArrayLength(aliases, 'Reactive alias candidates');
+  for (let index = 0; index < aliasLength; index += 1) {
+    const lowered = lowerAlias(
+      ownArrayEntry(aliases, index, 'Reactive alias candidates'),
+      aliasesByName,
+      seenAliases,
+    );
+    if (lowered === null) return null;
+    if (!compilerSetHas(distinct, lowered)) {
+      if (result !== null) return null;
+      compilerSetAdd(distinct, lowered);
+      result = lowered;
+    }
+  }
+  return result;
 }
 
 function lowerAlias(
@@ -549,21 +774,16 @@ function lowerAlias(
 ): string | null {
   if (!alias.expression) return null;
   const key = `${alias.name}\0${alias.start}`;
-  if (seenAliases.has(key)) return null;
-  return lowerReactiveExpression(
-    alias.expression,
-    alias.references ?? [],
-    aliasesByName,
-    new Set([...seenAliases, key]),
-  );
+  if (compilerSetHas(seenAliases, key)) return null;
+  const nextSeen = cloneStringSet(seenAliases);
+  compilerSetAdd(nextSeen, key);
+  return lowerReactiveExpression(alias.expression, alias.references ?? [], aliasesByName, nextSeen);
 }
 
 function replaceIdentifierReferences(
   expression: string,
   replacements: ReadonlyMap<string, string>,
 ): string {
-  if (replacements.size === 0) return expression;
-
   const scanner = ts.createScanner(
     ts.ScriptTarget.Latest,
     false,
@@ -575,27 +795,33 @@ function replaceIdentifierReferences(
   while (token !== ts.SyntaxKind.EndOfFileToken) {
     if (token === ts.SyntaxKind.Identifier) {
       const name = scanner.getTokenText();
-      const replacement = replacements.get(name);
+      const replacement = compilerMapGet(replacements, name);
       if (replacement && isReferenceIdentifierToken(expression, scanner.getTokenPos())) {
-        edits.push({
-          end: scanner.getTextPos(),
-          replacement,
-          start: scanner.getTokenPos(),
-        });
+        compilerArrayAppend(
+          edits,
+          {
+            end: scanner.getTextPos(),
+            replacement,
+            start: scanner.getTokenPos(),
+          },
+          'Reactive expression edits',
+        );
       }
     }
     token = scanner.scan();
   }
 
   let rewritten = expression;
-  for (const edit of edits.sort((left, right) => right.start - left.start)) {
-    rewritten = `${rewritten.slice(0, edit.start)}${edit.replacement}${rewritten.slice(edit.end)}`;
+  const editLength = compilerArrayLength(edits, 'Reactive expression edits');
+  for (let index = editLength - 1; index >= 0; index -= 1) {
+    const edit = ownArrayEntry(edits, index, 'Reactive expression edits');
+    rewritten = `${compilerStringSlice(rewritten, 0, edit.start)}${edit.replacement}${compilerStringSlice(rewritten, edit.end)}`;
   }
   return rewritten;
 }
 
 function parenthesizeForReplacement(expression: string): string {
-  const trimmed = expression.trim();
+  const trimmed = compilerStringTrim(expression);
   return hasSingleOuterParentheses(trimmed) ? trimmed : `(${trimmed})`;
 }
 
@@ -639,7 +865,7 @@ function isReferenceIdentifierToken(expression: string, start: number): boolean 
 function previousNonWhitespace(expression: string, start: number): string | null {
   for (let index = start - 1; index >= 0; index -= 1) {
     const char = expression[index];
-    if (char && !/\s/.test(char)) return char;
+    if (char && !compilerRegExpTest(/\s/u, char)) return char;
   }
   return null;
 }
@@ -705,13 +931,24 @@ function isFunctionOrClassLike(node: ts.Node): boolean {
 }
 
 function dedupeAliases(aliases: readonly ReactiveAliasModel[]): readonly ReactiveAliasModel[] {
-  const seen = new Set<string>();
+  const seen = compilerCreateSet<string>();
   const deduped: ReactiveAliasModel[] = [];
-  for (const alias of aliases) {
-    const key = `${alias.name}\0${alias.accesses.map((access) => access.path).join('\0')}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    deduped.push(alias);
+  const aliasLength = compilerArrayLength(aliases, 'Reactive aliases');
+  for (let aliasIndex = 0; aliasIndex < aliasLength; aliasIndex += 1) {
+    const alias = ownArrayEntry(aliases, aliasIndex, 'Reactive aliases');
+    const paths: string[] = [];
+    const accessLength = compilerArrayLength(alias.accesses, 'Reactive alias accesses');
+    for (let accessIndex = 0; accessIndex < accessLength; accessIndex += 1) {
+      compilerArrayAppend(
+        paths,
+        ownArrayEntry(alias.accesses, accessIndex, 'Reactive alias accesses').path,
+        'Reactive alias access paths',
+      );
+    }
+    const key = `${alias.name}\0${compilerArrayJoin(paths, '\0')}`;
+    if (compilerSetHas(seen, key)) continue;
+    compilerSetAdd(seen, key);
+    compilerArrayAppend(deduped, alias, 'Deduplicated reactive aliases');
   }
   return deduped;
 }
@@ -719,13 +956,15 @@ function dedupeAliases(aliases: readonly ReactiveAliasModel[]): readonly Reactiv
 function aliasMap(
   aliases: readonly ReactiveAliasModel[],
 ): ReadonlyMap<string, readonly ReactiveAliasModel[]> {
-  const mapped = new Map<string, ReactiveAliasModel[]>();
-  for (const alias of aliases) {
-    const existing = mapped.get(alias.name);
+  const mapped = compilerCreateMap<string, ReactiveAliasModel[]>();
+  const aliasLength = compilerArrayLength(aliases, 'Reactive aliases');
+  for (let index = 0; index < aliasLength; index += 1) {
+    const alias = ownArrayEntry(aliases, index, 'Reactive aliases');
+    const existing = compilerMapGet(mapped, alias.name);
     if (existing) {
-      existing.push(alias);
+      compilerArrayAppend(existing, alias, 'Named reactive aliases');
     } else {
-      mapped.set(alias.name, [alias]);
+      compilerMapSet(mapped, alias.name, [alias]);
     }
   }
   return mapped;
@@ -734,12 +973,72 @@ function aliasMap(
 function dedupeAccesses(
   accesses: readonly PropertyAccessPathModel[],
 ): readonly PropertyAccessPathModel[] {
-  const seen = new Set<string>();
+  const seen = compilerCreateSet<string>();
   const deduped: PropertyAccessPathModel[] = [];
-  for (const access of accesses) {
-    if (seen.has(access.path)) continue;
-    seen.add(access.path);
-    deduped.push(access);
+  const accessLength = compilerArrayLength(accesses, 'Reactive property accesses');
+  for (let index = 0; index < accessLength; index += 1) {
+    const access = ownArrayEntry(accesses, index, 'Reactive property accesses');
+    if (compilerSetHas(seen, access.path)) continue;
+    compilerSetAdd(seen, access.path);
+    compilerArrayAppend(deduped, access, 'Deduplicated reactive property accesses');
   }
   return deduped;
+}
+
+function identifierNameSet(identifiers: readonly ts.Identifier[]): Set<string> {
+  const names = compilerCreateSet<string>();
+  const identifierLength = compilerArrayLength(identifiers, 'Binding identifiers');
+  for (let index = 0; index < identifierLength; index += 1) {
+    compilerSetAdd(names, ownArrayEntry(identifiers, index, 'Binding identifiers').text);
+  }
+  return names;
+}
+
+function cloneStringSet(values: ReadonlySet<string>): Set<string> {
+  const clone = compilerCreateSet<string>();
+  compilerSetForEach(values, (value) => compilerSetAdd(clone, value));
+  return clone;
+}
+
+function addStringsToSet(target: Set<string>, values: readonly string[], label: string): void {
+  const valueLength = compilerArrayLength(values, label);
+  for (let index = 0; index < valueLength; index += 1) {
+    const value = compilerOwnDataValue(values, index, label);
+    if (typeof value !== 'string') compilerFailClosed(`${label}[${index}] must be a string.`);
+    compilerSetAdd(target, value);
+  }
+}
+
+function appendArray<Value>(target: Value[], values: readonly Value[], label: string): void {
+  const valueLength = compilerArrayLength(values, label);
+  for (let index = 0; index < valueLength; index += 1) {
+    compilerArrayAppend(target, ownArrayEntry(values, index, label), label);
+  }
+}
+
+function ownArrayEntry<Value>(values: readonly Value[], index: number, label: string): Value {
+  const value = compilerOwnDataValue(values, index, label) as Value | undefined;
+  if (value === undefined) compilerFailClosed(`${label}[${index}] must be own data.`);
+  return value;
+}
+
+function uniqueStrings(values: readonly string[], label: string): string[] {
+  const seen = compilerCreateSet<string>();
+  const result: string[] = [];
+  const valueLength = compilerArrayLength(values, label);
+  for (let index = 0; index < valueLength; index += 1) {
+    const value = ownArrayEntry(values, index, label);
+    if (compilerSetHas(seen, value)) continue;
+    compilerSetAdd(seen, value);
+    compilerArrayAppend(result, value, label);
+  }
+  return result;
+}
+
+function lastAccessPathPart(path: string): string {
+  const parts = compilerStringSplit(path, '.');
+  const partLength = compilerArrayLength(parts, 'Reactive access path parts');
+  return partLength === 0
+    ? path
+    : ownArrayEntry(parts, partLength - 1, 'Reactive access path parts');
 }
