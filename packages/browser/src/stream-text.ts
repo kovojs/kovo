@@ -183,14 +183,17 @@ export class StreamTextBuffer {
   }
 
   private scheduleFlush(targetName: string, reason: 'checkpoint' | 'threshold' | 'timer'): void {
-    let flush: Promise<void>;
-    flush = (async () => {
+    const flushRecord: { value: Promise<void> | undefined } = { value: undefined };
+    const flush = (async () => {
       try {
         await this.flushTarget(targetName, reason);
       } finally {
-        securitySetDelete(this.pendingFlushes, flush);
+        if (flushRecord.value !== undefined) {
+          securitySetDelete(this.pendingFlushes, flushRecord.value);
+        }
       }
     })();
+    flushRecord.value = flush;
     securitySetAdd(this.pendingFlushes, flush);
   }
 

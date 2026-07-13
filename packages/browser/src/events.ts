@@ -223,7 +223,7 @@ function assertKnownEvent(allowed: Set<string>, name: string): void {
 function assertPayloadDoesNotCarryQueryData(
   name: string,
   payload: unknown,
-  eventServerFactKeys: ReadonlyMap<string, readonly string[]>,
+  eventServerFactKeys: Map<string, readonly string[]>,
   queryDataKeys: Set<string>,
   queryDataKeyCount: number,
 ): void {

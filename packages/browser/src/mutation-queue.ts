@@ -96,7 +96,7 @@ export class MutationQueue {
 
     this.assertCanEnqueue(queue);
     const onTimeout = mutationQueueOwnOption(options, 'onTimeout', 'Kovo mutation queue onTimeout');
-    if (onTimeout !== undefined && typeof onTimeout !== 'function') {
+    if (onTimeout !== undefined && !isMutationQueueTimeoutCallback(onTimeout)) {
       throw new TypeError('Kovo mutation queue onTimeout must be a function.');
     }
 
@@ -224,6 +224,12 @@ export class MutationQueue {
       } else entry.resolve(value.value as Value);
     }
   }
+}
+
+function isMutationQueueTimeoutCallback(
+  value: unknown,
+): value is NonNullable<MutationQueueRunOptions['onTimeout']> {
+  return typeof value === 'function';
 }
 
 function createMutationQueueAbortController(): AbortController {

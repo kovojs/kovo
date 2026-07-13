@@ -138,19 +138,20 @@ export async function dispatchDelegatedEvent(
       islandSignalScope,
     );
   })();
-  let queued: Promise<void>;
-  queued = (async () => {
+  const queuedRecord: { value: Promise<void> | undefined } = { value: undefined };
+  const queued = (async () => {
     try {
       await dispatch;
     } catch {
       // The public dispatch promise carries the failure; the retained queue only sequences the
       // next state writer and therefore settles successfully after a failed handler.
     } finally {
-      if (securityWeakMapGet(delegatedStateQueues, stateHost) === queued) {
+      if (securityWeakMapGet(delegatedStateQueues, stateHost) === queuedRecord.value) {
         securityWeakMapDelete(delegatedStateQueues, stateHost);
       }
     }
   })();
+  queuedRecord.value = queued;
   securityWeakMapSet(delegatedStateQueues, stateHost, queued);
 
   await dispatch;
