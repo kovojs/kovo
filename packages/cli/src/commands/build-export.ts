@@ -19,7 +19,10 @@ import {
   resolve as builtinResolve,
   sep as builtinPathSeparator,
 } from 'node:path';
-import { pathToFileURL as builtinPathToFileURL } from 'node:url';
+import {
+  fileURLToPath as builtinFileURLToPath,
+  pathToFileURL as builtinPathToFileURL,
+} from 'node:url';
 import { promisify as builtinPromisify } from 'node:util';
 
 import type { DiagnosticCode } from '@kovojs/core';
@@ -82,7 +85,7 @@ import {
   runtimeRegistryWireFactsFromGraph,
   type RuntimeRegistryWireFacts,
 } from '@kovojs/server/internal/runtime-registry-wire';
-import { build as viteBuild, createServer as createViteServer } from 'vite-plus';
+import { build as viteBuild, createServer as createViteServer, type Plugin } from 'vite-plus';
 
 import {
   BUILD_ARGV_SPEC,
@@ -155,6 +158,7 @@ const join = builtinJoin;
 const relative = builtinRelative;
 const resolve = builtinResolve;
 const pathSeparator = builtinPathSeparator;
+const fileURLToPath = builtinFileURLToPath;
 const pathToFileURL = builtinPathToFileURL;
 const promisify = builtinPromisify;
 
@@ -551,6 +555,7 @@ export async function runBuildCommand(
     if (!loadAndCheck.ok) throw loadAndCheck.error;
     const {
       app,
+      approvedSourceFiles,
       buildStylesheetCss,
       checkGraph,
       cloudflare,
@@ -569,7 +574,7 @@ export async function runBuildCommand(
       join(outDir, '.kovo-client'),
       kovoClientBuildRoot(resolvedAppModulePath, invocationRoot),
       resolvedAppModulePath,
-      { cache: options.cache, queryShapeFacts },
+      { approvedSourceFiles, cache: options.cache, queryShapeFacts },
     );
     const buildCssAssets = mergeKovoBuildStylesheetAssets([
       buildStylesheetCss.assets,
@@ -577,6 +582,7 @@ export async function runBuildCommand(
     ]);
     const buildApp = appWithBuildStylesheetAssets(app, buildCssAssets, deriveClosedKovoApp);
     const serverHandlerBuild = await bundleKovoServerHandler(resolvedAppModulePath, {
+      approvedSourceFiles,
       buildRoot: invocationRoot,
       queryShapeFacts,
       runtimeRegistry: {
@@ -701,6 +707,7 @@ async function loadAndCheckBuildApp(
   });
   return {
     app,
+    approvedSourceFiles: buildCheck.sourceFiles,
     buildStylesheetCss,
     checkGraph: buildCheck.graph,
     cloudflare,
@@ -822,6 +829,7 @@ interface KovoBuildCheckArtifacts {
   graph: CoreGraph.KovoCheckInput;
   queryShapeFacts: readonly QueryShapeFact[];
   routePages?: readonly SourceRoutePageFacts[];
+  sourceFiles: readonly BuildCheckSourceFile[];
 }
 
 type SourceComponentGraphFacts = Pick<
@@ -927,9 +935,14 @@ async function buildCheckGraph(
         diagnostics,
       },
       queryShapeFacts: staticArtifacts.queryShapeFacts,
+      sourceFiles: staticArtifacts.sourceFiles,
     };
   }
-  return { graph: result.graph, queryShapeFacts: staticArtifacts.queryShapeFacts };
+  return {
+    graph: result.graph,
+    queryShapeFacts: staticArtifacts.queryShapeFacts,
+    sourceFiles: staticArtifacts.sourceFiles,
+  };
 }
 
 function buildPreflightComponentDiagnostics(
@@ -1063,6 +1076,7 @@ async function staticBuildCheckGraph(
     },
     queryShapeFacts,
     routePages: sourceGraphFacts.routePages,
+    sourceFiles: files,
   };
 }
 
@@ -2296,7 +2310,11 @@ async function buildKovoClientManifest(
   outDir: string,
   root: string,
   appModulePath: string,
-  options: { cache: boolean; queryShapeFacts: readonly QueryShapeFact[] },
+  options: {
+    approvedSourceFiles: readonly BuildCheckSourceFile[];
+    cache: boolean;
+    queryShapeFacts: readonly QueryShapeFact[];
+  },
 ): Promise<KovoClientManifestBuild> {
   const viteAssetPlugin = kovoVitePlugin({
     cache: options.cache,
@@ -2320,7 +2338,10 @@ async function buildKovoClientManifest(
     },
     configFile: false,
     logLevel: 'silent',
-    plugins: [viteAssetPlugin],
+    plugins: [
+      approvedBuildSourcesVitePlugin(appModulePath, root, options.approvedSourceFiles),
+      viteAssetPlugin,
+    ],
     root,
   });
 
@@ -2375,7 +2396,11 @@ async function buildKovoClientManifest(
 async function buildKovoComponentClientModules(
   appModulePath: string,
   root: string,
-  options: { cache: boolean; queryShapeFacts: readonly QueryShapeFact[] },
+  options: {
+    approvedSourceFiles: readonly BuildCheckSourceFile[];
+    cache: boolean;
+    queryShapeFacts: readonly QueryShapeFact[];
+  },
 ): Promise<{
   getClientModules?: () => readonly KovoAppShellCompiledClientModule[];
   getCssAssetManifest?: ReturnType<
@@ -2428,7 +2453,11 @@ async function buildKovoComponentClientModules(
           runtime: 'automatic',
         },
       },
-      plugins: [kovoBuildLoweringVitePlugin(kovoPlugin), bundledUndiciRuntimeVitePlugin()],
+      plugins: [
+        approvedBuildSourcesVitePlugin(appModulePath, root, options.approvedSourceFiles),
+        kovoBuildLoweringVitePlugin(kovoPlugin),
+        bundledUndiciRuntimeVitePlugin(),
+      ],
       resolve: {
         alias: [
           { find: /^@kovojs\/core$/, replacement: requireFromCli.resolve('@kovojs/core') },
@@ -2882,9 +2911,135 @@ function kovoClientBuildRoot(appModulePath: string, invocationRoot: string): str
   return indexHtml === undefined ? invocationRoot : dirname(indexHtml);
 }
 
+/**
+ * Bind every production transform to the exact app-source bytes approved by the build preflight.
+ * Vite has already read `code` when this first/enforce-pre hook runs, so equality pins the value
+ * that the remaining transform pipeline consumes without a second disk read (SPEC §5.2/§6.6).
+ */
+function approvedBuildSourcesVitePlugin(
+  appModulePath: string,
+  buildRoot: string,
+  sourceFiles: readonly BuildCheckSourceFile[],
+): Plugin {
+  const approvedByPath = buildCreateMap<string, string>();
+  const appSourcePaths = buildCreateSet<string>();
+  const approvedFiles = buildSnapshotDenseArray(sourceFiles, 'Approved build source files');
+  const sourceRoot = dirname(appModulePath);
+  for (let index = 0; index < approvedFiles.length; index += 1) {
+    const file = approvedFiles[index];
+    if (!file || typeof file !== 'object') {
+      throw new TypeError(`Approved build source file[${index}] must be an own record.`);
+    }
+    const fileName = buildOwnDataValue(file, 'fileName', `Approved build source file[${index}]`);
+    const source = buildOwnDataValue(file, 'source', `Approved build source file[${index}]`);
+    if (typeof fileName !== 'string' || typeof source !== 'string') {
+      throw new TypeError(
+        `Approved build source file[${index}] must contain own string fileName/source values.`,
+      );
+    }
+    const absoluteFileName = resolve(sourceRoot, fileName);
+    if (
+      buildMapHas(approvedByPath, absoluteFileName) &&
+      buildMapGet(approvedByPath, absoluteFileName) !== source
+    ) {
+      throw new TypeError(`Approved build source snapshot conflicts for ${absoluteFileName}.`);
+    }
+    buildMapSet(approvedByPath, absoluteFileName, source);
+    buildSetAdd(appSourcePaths, absoluteFileName);
+  }
+
+  const appSourceRoot = resolve(dirname(appModulePath));
+  return {
+    enforce: 'pre',
+    name: 'kovo-approved-build-sources',
+    async resolveId(source, importer) {
+      if (
+        importer === undefined ||
+        (!buildStringStartsWith(source, './') && !buildStringStartsWith(source, '../'))
+      ) {
+        return null;
+      }
+      const importerFileName = viteBuildSourceFileName(importer);
+      if (importerFileName === undefined || !buildSetHas(appSourcePaths, importerFileName)) {
+        return null;
+      }
+      const resolved = await this.resolve(source, importer, { skipSelf: true });
+      if (resolved === null) return null;
+      const resolvedFileName = viteBuildSourceFileName(resolved.id);
+      if (resolvedFileName === undefined || !isBuildSourceModulePath(resolvedFileName)) {
+        return resolved;
+      }
+      buildSetAdd(appSourcePaths, resolvedFileName);
+      if (!buildMapHas(approvedByPath, resolvedFileName)) {
+        throw unapprovedBuildSourceError(buildRoot, resolvedFileName);
+      }
+      return resolved;
+    },
+    transform(code, id) {
+      const fileName = viteBuildSourceFileName(id);
+      if (fileName === undefined || !isBuildSourceModulePath(fileName)) return null;
+      const approved = buildMapHas(approvedByPath, fileName);
+      if (!approved && !isBuildAppSourcePath(appSourceRoot, fileName)) return null;
+      const displayName = relative(buildRoot, fileName) || fileName;
+      if (!approved) {
+        throw unapprovedBuildSourceError(buildRoot, fileName);
+      }
+      if (code !== buildMapGet(approvedByPath, fileName)) {
+        throw new Error(
+          `Kovo build refused changed app source ${displayName}; its bytes no longer match the security-preflight snapshot (SPEC \u00a75.2/\u00a76.6).`,
+        );
+      }
+      return null;
+    },
+  };
+}
+
+function unapprovedBuildSourceError(buildRoot: string, fileName: string): Error {
+  const displayName = relative(buildRoot, fileName) || fileName;
+  return new Error(
+    `Kovo build refused unapproved app source ${displayName}; the module was introduced after the security preflight (SPEC \u00a75.2/\u00a76.6).`,
+  );
+}
+
+function viteBuildSourceFileName(id: string): string | undefined {
+  const stripped = buildRegExpReplace(/[?#].*$/u, id, '');
+  if (buildStringStartsWith(stripped, '\0')) return undefined;
+  if (buildStringStartsWith(stripped, 'file:')) {
+    try {
+      return resolve(fileURLToPath(stripped));
+    } catch {
+      return undefined;
+    }
+  }
+  return isAbsolute(stripped) ? resolve(stripped) : undefined;
+}
+
+function isBuildSourceModulePath(fileName: string): boolean {
+  return buildRegExpExec(/\.(?:[cm]?[jt]sx?)$/iu, fileName) !== null;
+}
+
+function isBuildAppSourcePath(root: string, fileName: string): boolean {
+  const relativePath = relative(root, fileName);
+  const withinRoot =
+    relativePath === '' ||
+    (!isAbsolute(relativePath) &&
+      buildRegExpExec(/^(?:\.\.(?:[/\\]|$)|[/\\])/u, relativePath) === null);
+  if (!withinRoot) return false;
+  const normalized = slashPath(relativePath);
+  return !(
+    normalized === 'node_modules' ||
+    buildStringStartsWith(normalized, 'node_modules/') ||
+    normalized === 'dist' ||
+    buildStringStartsWith(normalized, 'dist/') ||
+    normalized === '.kovo' ||
+    buildStringStartsWith(normalized, '.kovo/')
+  );
+}
+
 async function bundleKovoServerHandler(
   appModulePath: string,
   options: {
+    approvedSourceFiles: readonly BuildCheckSourceFile[];
     buildRoot: string;
     queryShapeFacts: readonly QueryShapeFact[];
     runtimeRegistry: RuntimeRegistryWireFacts;
@@ -2951,7 +3106,15 @@ async function bundleKovoServerHandler(
           runtime: 'automatic',
         },
       },
-      plugins: [kovoBuildLoweringVitePlugin(kovoPlugin), bundledUndiciRuntimeVitePlugin()],
+      plugins: [
+        approvedBuildSourcesVitePlugin(
+          appModulePath,
+          options.buildRoot,
+          options.approvedSourceFiles,
+        ),
+        kovoBuildLoweringVitePlugin(kovoPlugin),
+        bundledUndiciRuntimeVitePlugin(),
+      ],
       resolve: {
         alias: [
           { find: /^@kovojs\/core$/, replacement: requireFromCli.resolve('@kovojs/core') },

@@ -428,6 +428,139 @@ export default createApp({
     }
   }, 60_000);
 
+  it('refuses server source changed by an authored config timer after security preflight', () => {
+    const root = cliFixtureRoot('build-source-snapshot');
+    const appPath = join(root, 'src/app.ts');
+    const helperPath = join(root, 'dangerous.ts');
+    const outDir = join(root, 'dist');
+    const safeSource = `export async function dangerous(_request: unknown) {
+  return new Response('safe');
+}
+`;
+    const unsafeSource = `import { sql } from '@kovojs/drizzle';
+export async function dangerous(request: any) {
+  const rows = await request.db.execute(sql.raw(request.search.get('q')));
+  return new Response(String(rows));
+}
+`;
+    try {
+      symlinkSync(
+        join(process.cwd(), 'packages/drizzle'),
+        join(root, 'node_modules/@kovojs/drizzle'),
+      );
+      mkdirSync(join(root, 'src'), { recursive: true });
+      writeFileSync(
+        join(root, 'index.html'),
+        '<!doctype html><script type="module" src="/src/client.ts"></script>\n',
+        'utf8',
+      );
+      writeFileSync(join(root, 'src/client.ts'), 'export {};\n', 'utf8');
+      writeFileSync(helperPath, safeSource, 'utf8');
+      writeFileSync(
+        join(root, 'kovo.config.mjs'),
+        `import { existsSync, writeFileSync } from 'node:fs';
+const helperPath = ${JSON.stringify(helperPath)};
+const triggerPath = ${JSON.stringify(join(outDir, '.kovo-client'))};
+const unsafeSource = ${JSON.stringify(unsafeSource)};
+const timer = setInterval(() => {
+  if (!existsSync(triggerPath)) return;
+  writeFileSync(helperPath, unsafeSource);
+  clearInterval(timer);
+}, 1);
+timer.unref();
+export default {};
+`,
+        'utf8',
+      );
+      writeFileSync(
+        appPath,
+        `import { createApp, publicAccess, route } from '@kovojs/server';
+import { dangerous } from '../dangerous.ts';
+
+export default createApp({
+  routes: [route('/', { access: publicAccess('source snapshot regression'), page: dangerous })],
+});
+`,
+        'utf8',
+      );
+
+      const result = runKovoCli(root, ['build', appPath, '--out', outDir]);
+      expect(readFileSync(helperPath, 'utf8')).toBe(unsafeSource);
+      expect(result.status).toBe(1);
+      expect(result.stderr).toContain('Kovo build refused changed app source dangerous.ts');
+      expect(result.stderr).toContain('security-preflight snapshot');
+      expect(readFileIfPresent(join(outDir, '.kovo/server/handler.mjs'))).toBeUndefined();
+      expect(readFileIfPresent(join(outDir, 'server/server/handler.mjs'))).toBeUndefined();
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  }, 60_000);
+
+  it('refuses a new relative app module introduced after security preflight', () => {
+    const root = cliFixtureRoot('build-new-source-snapshot');
+    const appPath = join(root, 'src/app.ts');
+    const lateDir = join(root, 'late');
+    const latePath = join(lateDir, 'unsafe.ts');
+    const outDir = join(root, 'dist');
+    const lateSource = `import { sql } from '@kovojs/drizzle';
+export async function unsafe(request: any) {
+  return request.db.execute(sql.raw(request.search.get('q')));
+}
+`;
+    try {
+      symlinkSync(
+        join(process.cwd(), 'packages/drizzle'),
+        join(root, 'node_modules/@kovojs/drizzle'),
+      );
+      mkdirSync(join(root, 'src'), { recursive: true });
+      mkdirSync(lateDir, { recursive: true });
+      writeFileSync(
+        join(root, 'index.html'),
+        '<!doctype html><script type="module" src="/src/client.ts"></script>\n',
+        'utf8',
+      );
+      writeFileSync(join(root, 'src/client.ts'), 'export {};\n', 'utf8');
+      writeFileSync(
+        join(root, 'kovo.config.mjs'),
+        `import { existsSync, writeFileSync } from 'node:fs';
+const latePath = ${JSON.stringify(latePath)};
+const triggerPath = ${JSON.stringify(join(outDir, '.kovo-client'))};
+const lateSource = ${JSON.stringify(lateSource)};
+const timer = setInterval(() => {
+  if (!existsSync(triggerPath)) return;
+  writeFileSync(latePath, lateSource);
+  clearInterval(timer);
+}, 1);
+timer.unref();
+export default {};
+`,
+        'utf8',
+      );
+      writeFileSync(
+        appPath,
+        `import { createApp, publicAccess, route } from '@kovojs/server';
+const lateModules = import.meta.glob('../late/*.ts', { eager: true });
+if (Object.keys(lateModules).length > 1) throw new Error('unexpected late module count');
+
+export default createApp({
+  routes: [route('/', { access: publicAccess('new source snapshot regression'), page: () => 'safe' })],
+});
+`,
+        'utf8',
+      );
+
+      const result = runKovoCli(root, ['build', appPath, '--out', outDir]);
+      expect(readFileSync(latePath, 'utf8')).toBe(lateSource);
+      expect(result.status).toBe(1);
+      expect(result.stderr).toContain('Kovo build refused unapproved app source late/unsafe.ts');
+      expect(result.stderr).toContain('introduced after the security preflight');
+      expect(readFileIfPresent(join(outDir, '.kovo/server/handler.mjs'))).toBeUndefined();
+      expect(readFileIfPresent(join(outDir, 'server/server/handler.mjs'))).toBeUndefined();
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  }, 60_000);
+
   it('never follows an app-planted static-analysis cache symlink outside the project', () => {
     const root = cliFixtureRoot('static-cache-symlink');
     const outside = mkdtempSync(join(tmpdir(), 'kovo-static-cache-victim-'));
