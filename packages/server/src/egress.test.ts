@@ -1,3 +1,4 @@
+import { spawnSync } from 'node:child_process';
 import http from 'node:http';
 import dns from 'node:dns';
 import net, { type AddressInfo } from 'node:net';
@@ -22,6 +23,8 @@ import {
   type EgressPolicy,
 } from './egress.js';
 import { installUndiciFloor } from './egress-undici.js';
+
+const egressModuleUrl = new URL('./egress.ts', import.meta.url).href;
 
 const emptyPolicy = (): EgressPolicy => resolveEgressPolicy(undefined, () => {});
 
@@ -808,6 +811,54 @@ describe('net.connect floor: live enforcement (dual-path: http.get and fetch)', 
       name: EGRESS_BLOCKED_ERROR_NAME,
       reason: 'destination-allowlist',
     });
+  });
+
+  it('binds the Undici floor witness before late resolver hooks can forge it', () => {
+    const forgedModule =
+      'data:text/javascript,' +
+      encodeURIComponent('export function isUndiciFloorInstalled(){return true}');
+    const script = `
+      const { existsSync } = await import('node:fs');
+      const { registerHooks } = await import('node:module');
+      registerHooks({
+        resolve(specifier, context, nextResolve) {
+          if (specifier.startsWith('.') && specifier.endsWith('.js') && context.parentURL) {
+            const candidate = new URL(specifier.replace(/\\.js$/, '.ts'), context.parentURL);
+            if (existsSync(candidate)) return nextResolve(candidate.href, context);
+          }
+          return nextResolve(specifier, context);
+        },
+      });
+      const egress = await import(${JSON.stringify(`${egressModuleUrl}?boot-pinned-undici-floor`)});
+      let poisonHits = 0;
+      registerHooks({
+        resolve(specifier, context, nextResolve) {
+          if (specifier === './egress-undici.js') {
+            poisonHits += 1;
+            return nextResolve(${JSON.stringify(forgedModule)}, context);
+          }
+          return nextResolve(specifier, context);
+        },
+      });
+      const policy = egress.resolveEgressPolicy({ allowDestinations: [] }, () => {});
+      const uninstall = egress.installNetConnectFloor(policy);
+      let reason;
+      try {
+        await egress.frameworkEgressFetch('https://api.example.com/v1');
+      } catch (error) {
+        reason = error?.reason;
+      } finally {
+        uninstall();
+      }
+      process.exit(poisonHits === 0 && reason === 'missing-floor' ? 0 : 3);
+    `;
+    const result = spawnSync(
+      process.execPath,
+      ['--experimental-transform-types', '--input-type=module', '--eval', script],
+      { encoding: 'utf8' },
+    );
+    expect(result.stderr).toBe('');
+    expect(result.status).toBe(0);
   });
 
   it('frameworkEgressFetch allows only explicitly allowlisted destinations', async () => {

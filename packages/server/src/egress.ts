@@ -4,6 +4,7 @@ import http from 'node:http';
 import net from 'node:net';
 import type { LookupAddress } from 'node:dns';
 import { runtimeEnvironmentValue } from './runtime-environment-authority.js';
+import { isUndiciFloorInstalled } from './egress-undici.js';
 
 import {
   egressApply,
@@ -1172,7 +1173,6 @@ export const frameworkEgressFetch: typeof globalThis.fetch = (async (
   // the framework surface when either half of the dual floor is missing or has been replaced.
   // This import is deliberately after the synchronous Request snapshot above: native fetch pins
   // caller-owned URL/init carriers before yielding, and the security wrapper must do the same.
-  const { isUndiciFloorInstalled } = await import('./egress-undici.js');
   if (!isUndiciFloorInstalled()) {
     throw new EgressBlockedError({
       destination: requestUrl,
