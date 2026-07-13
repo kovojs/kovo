@@ -10,7 +10,7 @@ import { createApp, createRequestHandler } from './app.js';
 import { appLiveTargetAttestationAudience } from './live-target-app-identity.js';
 import { createMemoryVersionedClientModuleRegistry } from './client-modules.js';
 import { endpoint } from './endpoint.js';
-import { guard } from './guards.js';
+import { guard, resolveLifecycleRequest } from './guards.js';
 import { componentLiveTargetRenderer } from './live-target-renderer.js';
 import {
   registerGeneratedLiveTargetRenderer,
@@ -1356,6 +1356,96 @@ describe('server app shell Vite dev seam', () => {
       expect(layoutGuardRuns).toBe(layoutRunsBeforeAttack + 1);
       expect(routeGuardRuns).toBe(routeRunsBeforeAttack + 1);
       expect(secretQueryLoads).toBe(queryLoadsBeforeAttack);
+    } finally {
+      await new Promise<void>((resolve, reject) => {
+        server.close((error) => (error ? reject(error) : resolve()));
+      });
+    }
+  });
+
+  it('rejects a live-target descriptor minted for a different resolved principal without app CSRF config', async () => {
+    type SessionRequest = Request & {
+      session: { user: { id: string } } | null;
+    };
+    const victimSecret = 'VICTIM_HMR_DESCRIPTOR_SECRET';
+    const sessions = (request: Request) => {
+      const id = request.headers.get('cookie')?.match(/(?:^|;\s*)session=([^;]+)/u)?.[1];
+      return id === undefined ? null : { user: { id } };
+    };
+    const render = vi.fn((context: { props: Record<string, unknown> }) =>
+      context.props.accountId === 'victim'
+        ? `<account-secret>${victimSecret}</account-secret>`
+        : '<account-secret>own</account-secret>',
+    );
+    const renderer: LiveTargetRenderer<SessionRequest> = {
+      component: 'src/components/AccountSecret',
+      mutationKeys: [],
+      render,
+    };
+    const accountRoute = route<SessionRequest>('/account', {
+      access: [
+        guard<SessionRequest>('hmr-authenticated-account', (request) =>
+          request.session === null ? { kind: 'unauthenticated' as const } : true,
+        ),
+      ],
+      page: () => renderedHtml('<main>Account</main>'),
+    });
+    const app = withCompilerLiveTargetRenderers([renderer], () =>
+      createApp({ routes: [accountRoute], sessionProvider: sessions }),
+    );
+    let middleware: KovoAppShellViteMiddleware | undefined;
+    kovoAppShellViteDevPlugin({ moduleId: '/src/app-shell.ts' }).configureServer({
+      middlewares: {
+        use(handler) {
+          middleware = handler;
+        },
+      },
+      ssrLoadModule: viteDevSsrLoadModule(async () => ({ default: app })),
+    });
+    const server = createHttpServer((request, response) => {
+      middleware?.(request, response, (error) => {
+        response.writeHead(error ? 500 : 418, { 'Content-Type': 'text/plain; charset=utf-8' });
+        response.end(error instanceof Error ? error.message : 'vite fallback');
+      });
+    });
+
+    try {
+      await new Promise<void>((resolve, reject) => {
+        server.once('error', reject);
+        server.listen(0, '127.0.0.1', () => {
+          server.off('error', reject);
+          resolve();
+        });
+      });
+      const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+      const sourceUrl = `${origin}/account`;
+      const victimRequest = await resolveLifecycleRequest(
+        new Request(sourceUrl, { headers: { cookie: 'session=victim' } }),
+        { sessionProvider: sessions },
+      );
+      const descriptor = {
+        component: renderer.component,
+        props: { accountId: 'victim' },
+        target: 'account-secret',
+      };
+      const victimToken = createLiveTargetAttestation(descriptor, {
+        buildToken: appLiveTargetAttestationAudience(app),
+        request: victimRequest,
+        sourceUrl,
+      });
+
+      const response = await fetch(`${origin}/@kovo/hmr/refresh/live-targets?url=/account`, {
+        headers: {
+          cookie: 'session=attacker',
+          'Kovo-Live-Targets': `account-secret#${renderer.component}@${victimToken}:{"accountId":"victim"}`,
+        },
+        method: 'POST',
+      });
+      const body = await response.text();
+
+      expect(response.status, body).toBe(400);
+      expect(body).not.toContain(victimSecret);
+      expect(render).not.toHaveBeenCalled();
     } finally {
       await new Promise<void>((resolve, reject) => {
         server.close((error) => (error ? reject(error) : resolve()));
