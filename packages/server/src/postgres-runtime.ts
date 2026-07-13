@@ -5158,9 +5158,7 @@ function assertProductionRuntimeDriver(config: ResolvedPostgresRuntimeConfig): v
 }
 
 function currentNodeEnv(): string | undefined {
-  const env = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process
-    ?.env;
-  return env?.['NODE_ENV'];
+  return runtimeEnvironmentValue('NODE_ENV');
 }
 
 async function applyPostgresMigrations(

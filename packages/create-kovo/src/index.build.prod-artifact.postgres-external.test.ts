@@ -37,6 +37,46 @@ const { Pool } = require(resolveDependencyRoot('pg')) as {
   Pool: new (options: { connectionString: string; max: number }) => PgPool;
 };
 
+describe('create-kovo starter (build integration: production Postgres driver floor)', () => {
+  it('refuses a production artifact that resolves to in-process PGlite', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'create-kovo-prod-pglite-refusal-'));
+    let server: ChildProcessWithoutNullStreams | undefined;
+
+    try {
+      writeKovoProject(root, { dialect: 'postgres', name: 'Production PGlite Refusal Proof' });
+      linkStarterBuildDependencies(root);
+      buildReusableProductionArtifact(root);
+
+      const env = {
+        ...withRepoBinOnPath(),
+        HOST: '127.0.0.1',
+        NODE_ENV: 'production',
+        PORT: String(await reservePort()),
+      };
+      delete env.KOVO_DATABASE_URL;
+      delete env.KOVO_DB_ADMIN_URL;
+      delete env.KOVO_DB_SYSTEM_URL;
+      server = spawn(process.execPath, ['dist/server/server.mjs'], {
+        cwd: root,
+        detached: process.platform !== 'win32',
+        env,
+      });
+      const output = collectOutput(server);
+
+      await onceExit(server, 15_000);
+
+      expect(server.exitCode).not.toBe(0);
+      expect(output()).toContain(
+        'KV433: production requires a least-privilege external Postgres via KOVO_DATABASE_URL; ' +
+          'PGlite is dev/test-only and runs in-process as superuser (SPEC §10.3).',
+      );
+    } finally {
+      await stopProcess(server);
+      rmSync(root, { force: true, recursive: true });
+    }
+  }, 180_000);
+});
+
 describeIfPostgres(
   'create-kovo starter (build integration: external Postgres production artifact)',
   () => {
@@ -566,9 +606,22 @@ function quoteIdent(value: string): string {
   return `"${value.replaceAll('"', '""')}"`;
 }
 
-async function onceExit(child: ChildProcessWithoutNullStreams): Promise<void> {
+async function onceExit(child: ChildProcessWithoutNullStreams, timeoutMs?: number): Promise<void> {
   if (child.exitCode !== null || child.signalCode !== null) return;
-  await new Promise<void>((resolve) => child.once('exit', () => resolve()));
+  await new Promise<void>((resolve, reject) => {
+    let timeout: NodeJS.Timeout | undefined;
+    const onExit = (): void => {
+      if (timeout !== undefined) clearTimeout(timeout);
+      resolve();
+    };
+    child.once('exit', onExit);
+    if (timeoutMs !== undefined) {
+      timeout = setTimeout(() => {
+        child.off('exit', onExit);
+        reject(new Error(`Timed out waiting ${timeoutMs}ms for child process to exit.`));
+      }, timeoutMs);
+    }
+  });
 }
 
 void postgresToolchain;

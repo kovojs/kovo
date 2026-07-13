@@ -2069,9 +2069,7 @@ function snapshotNodeJobRunnerOptions(value: unknown): NodeJobRunnerOptions | fa
     modeProperty.value !== 'serve-and-run' &&
     modeProperty.value !== 'runner-only'
   ) {
-    throw new TypeError(
-      'Node preset option jobRunner.mode must be serve-and-run or runner-only.',
-    );
+    throw new TypeError('Node preset option jobRunner.mode must be serve-and-run or runner-only.');
   }
   const snapshot = createSecurityNullRecord() as NodeJobRunnerOptions;
   if (modeProperty.present && modeProperty.value !== undefined) {
@@ -2086,11 +2084,7 @@ function snapshotVercelPresetOptions(options: VercelPresetOptions): VercelPreset
   }
   const maxDuration = optionalVercelPresetNumber(options, 'maxDuration');
   const memory = optionalVercelPresetNumber(options, 'memory');
-  const regionsProperty = buildOwnDataProperty(
-    options,
-    'regions',
-    'Vercel preset options.regions',
-  );
+  const regionsProperty = buildOwnDataProperty(options, 'regions', 'Vercel preset options.regions');
   const retentionProperty = buildOwnDataProperty(
     options,
     'retention',
@@ -3373,6 +3367,9 @@ function isImmutableStaticAssetPath(pathname) {
 if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) {
   const port = Number.parseInt(process.env.PORT ?? '3000', 10);
   const host = process.env.HOST ?? '0.0.0.0';
+  // Import the app before opening the listener so framework boot invariants (including the
+  // production database-authority floor from SPEC §10.3) fail closed at process startup.
+  await loadHandler();
   createKovoNodeServer().listen(port, host, () => {
     console.log('Kovo node server listening on http://' + host + ':' + port);
   });
