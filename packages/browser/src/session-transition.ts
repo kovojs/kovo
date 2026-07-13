@@ -1,4 +1,12 @@
 import type { MutationBroadcast } from './broadcast.js';
+import { createBrowserNavigationSecurityControls } from './navigation-security-intrinsics.js';
+
+const bootSessionTransitionSecurity = createBrowserNavigationSecurityControls();
+const bootSessionTransitionReloadPinned = bootSessionTransitionSecurity.hasReloadControl();
+let fallbackSessionTransitionLocation: unknown;
+let fallbackSessionTransitionSecurity:
+  | ReturnType<typeof createBrowserNavigationSecurityControls>
+  | undefined;
 
 export interface SessionTransitionRuntime {
   broadcast?: MutationBroadcast;
@@ -15,10 +23,26 @@ export function retireSessionTransitionPrincipal(runtime: SessionTransitionRunti
   runtime.broadcast?.close();
 }
 
+function sessionTransitionSecurity(): ReturnType<typeof createBrowserNavigationSecurityControls> {
+  if (bootSessionTransitionReloadPinned) return bootSessionTransitionSecurity;
+
+  // Node/SSR imports have no Location at module initialization. Admit a late browser/test realm
+  // only when the whole Location object appears or changes, then pin that receiver and exact
+  // method. A later write to `.reload` on the same object cannot replace the selected sink.
+  const location = (globalThis as { location?: unknown }).location;
+  if (
+    fallbackSessionTransitionSecurity === undefined ||
+    fallbackSessionTransitionLocation !== location
+  ) {
+    fallbackSessionTransitionLocation = location;
+    fallbackSessionTransitionSecurity = createBrowserNavigationSecurityControls();
+  }
+  return fallbackSessionTransitionSecurity;
+}
+
 /** @internal Start the full-render half of a session transition after principal retirement. */
-export function reloadSessionTransitionDocument(): void {
-  const location = (globalThis as { location?: { reload?: () => void } }).location;
-  location?.reload?.();
+export function reloadSessionTransitionDocument(): unknown {
+  return sessionTransitionSecurity().reload();
 }
 
 /**

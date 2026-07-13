@@ -25,6 +25,7 @@ import type { ImportHandlerModule } from './handlers.js';
 import { reportRuntimeError } from './error-policy.js';
 import { readAttribute } from './wire-html.js';
 import { createBrowserNavigationSecurityControls } from './navigation-security-intrinsics.js';
+import { reloadSessionTransitionDocument } from './session-transition.js';
 
 // SPEC §6.6/§9.1: streaming response bytes remain server truth only when stream
 // acquisition, reader read/cancel/release, byte copying, and decoder construction/
@@ -331,12 +332,7 @@ export async function applyStreamingMutationResponseBodyToRuntime(
  * browser Location API remains synchronous; awaiting it keeps the failure boundary ordered.
  */
 async function recoverUnconfirmedStreamingMutation(): Promise<void> {
-  const location = (
-    globalThis as {
-      location?: { reload?: () => Promise<void> | void };
-    }
-  ).location;
-  await location?.reload?.call(location);
+  await reloadSessionTransitionDocument();
 }
 
 /**

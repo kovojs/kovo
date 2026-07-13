@@ -1997,13 +1997,16 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
     return location ? location.pathname + location.search + location.hash : undefined;
   }
 
-  function reload(): boolean {
-    if (!controlsSound || !locationObject || !locationReload) return false;
+  function hasReloadControl(): boolean {
+    return controlsSound && locationObject !== undefined && locationReload !== undefined;
+  }
+
+  function reload(): unknown {
+    if (!hasReloadControl()) return undefined;
     try {
-      apply(locationReload, locationObject, []);
-      return true;
+      return apply(locationReload as Function, locationObject, []);
     } catch {
-      return false;
+      return undefined;
     }
   }
 
@@ -2587,6 +2590,7 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
     fetchWith,
     fetchValue,
     hardNavigate,
+    hasReloadControl,
     hasElementAttribute,
     elementContains,
     isHtmlContentType,
