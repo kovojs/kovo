@@ -311,7 +311,7 @@ const removedManagedRawDriverEscapeBranch = [
 const responseFragmentTrustedHtmlRouteBranch = [
   '  if (trustedHtmlSinkRoutes.length !== 2) {',
   '    findings.push(',
-  '      `${filePath}: response-fragment HTML sink must route exactly two template.innerHTML writes through trustedHtml(); found ${trustedHtmlSinkRoutes.length}`,',
+  '      `${filePath}: response-fragment HTML sink must route exactly two membrane parse inputs through the injected createHTML control; found ${trustedHtmlSinkRoutes.length}`,',
   '    );',
   '  }',
 ].join('\n');
@@ -319,7 +319,7 @@ const responseFragmentTrustedHtmlRouteBranch = [
 const removedResponseFragmentTrustedHtmlRouteBranch = [
   '  if (false && trustedHtmlSinkRoutes.length !== 2) {',
   '    findings.push(',
-  '      `${filePath}: response-fragment HTML sink must route exactly two template.innerHTML writes through trustedHtml(); found ${trustedHtmlSinkRoutes.length}`,',
+  '      `${filePath}: response-fragment HTML sink must route exactly two membrane parse inputs through the injected createHTML control; found ${trustedHtmlSinkRoutes.length}`,',
   '    );',
   '  }',
 ].join('\n');
@@ -752,9 +752,9 @@ export const SECURITY_GATE_MUTANTS = [
   },
   {
     baseModule: sinkPolicyGate,
-    description: 'Deletes the response-fragment trustedHtml routing count invariant.',
+    description: 'Deletes the response-fragment injected createHTML routing count invariant.',
     expectedKiller:
-      'C2 trusted fragment sinks must route every innerHTML write through trustedHtml',
+      'C2 trusted fragment sinks must route both membrane parse inputs through createHTML',
     name: 'check-sink-policy-gate/drop-response-fragment-trustedhtml-route-count',
     replacement: removedResponseFragmentTrustedHtmlRouteBranch,
     search: responseFragmentTrustedHtmlRouteBranch,
@@ -1587,17 +1587,14 @@ async function assertResponseFragmentTrustedHtmlRouteCountIsCaught(moduleUnderTe
   const findings = moduleUnderTest.responseFragmentApplyInvariantFindings(
     'response-fragment-apply.ts',
     `
-      function trustedHtml(h: string): string {
-        const t = (globalThis as any).trustedTypes;
-        return t ? t.createPolicy('kovo', { createHTML: (s: string) => s }).createHTML(h) : h;
-      }
-      export function p(fs, f) {
+      export function p(fs, f, security, createHTML: (html: string) => string) {
         for (const x of fs) {
           const e = f(x.target);
-          const t = document.createElement('template');
-          t.innerHTML = trustedHtml(x.html);
-          for (const n of t.content.children) g(n);
-          e.append(...t.content.childNodes);
+          const content = security.createFragmentContent(
+            createHTML(renderedFragmentHtmlContent(x.html)),
+          );
+          for (const n of content.children) g(n);
+          e.append(...content.childNodes);
         }
       }
       function d(e, h) {
@@ -1613,7 +1610,7 @@ async function assertResponseFragmentTrustedHtmlRouteCountIsCaught(moduleUnderTe
   );
   assertIncludes(
     findings,
-    'response-fragment-apply.ts: response-fragment HTML sink must route exactly two template.innerHTML writes through trustedHtml(); found 1',
+    'response-fragment-apply.ts: response-fragment HTML sink must route exactly two membrane parse inputs through the injected createHTML control; found 1',
   );
 }
 
