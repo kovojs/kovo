@@ -59,7 +59,7 @@ export function kovoFixtureCompilerPlugin(
   compile: (
     options: Parameters<typeof compileComponentModule>[0],
   ) => CompileResult = compileComponentModule,
-): Plugin {
+): Plugin & { readonly fixtureCssRuntimeId: string } {
   const privateCssRegistrationId = `${virtualCssManifestId}:register:${randomUUID()}`;
   const resolvedPrivateCssRegistrationId = `\0${privateCssRegistrationId}`;
   let root = pathResolve(verifierApply<string>(nativeProcessCwd, process, []));
@@ -69,6 +69,9 @@ export function kovoFixtureCompilerPlugin(
   return {
     name: 'kovo-fixture-compiler',
     enforce: 'pre',
+    // bootFixture preloads this unguessable module before authored SSR dependencies. Its captured
+    // controls therefore remain authoritative even when a fixture later poisons shared prototypes.
+    fixtureCssRuntimeId: privateCssRegistrationId,
     configResolved(config) {
       const configuredRoot = ownData(config, 'root', 'fixture Vite config');
       if (typeof configuredRoot !== 'string') {
@@ -106,72 +109,153 @@ export function kovoFixtureCompilerPlugin(
       if (id !== resolvedPrivateCssRegistrationId) return null;
 
       return `
-let registered = [];
-function copyStrings(values) {
+const NativeArray = globalThis.Array;
+const NativeObject = globalThis.Object;
+const NativeReflect = globalThis.Reflect;
+const NativeTypeError = globalThis.TypeError;
+const nativeArrayIsArray = NativeArray.isArray;
+const nativeDefineProperty = NativeObject.defineProperty;
+const nativeGetOwnPropertyDescriptor = NativeObject.getOwnPropertyDescriptor;
+const nativeReflectApply = NativeReflect.apply;
+
+function apply(method, receiver, args) {
+  return nativeReflectApply(method, receiver, args);
+}
+function ownData(value, property, label) {
+  if (typeof value !== 'object' || value === null) {
+    throw new NativeTypeError(label + ' must be an object.');
+  }
+  const first = apply(nativeGetOwnPropertyDescriptor, NativeObject, [value, property]);
+  const second = apply(nativeGetOwnPropertyDescriptor, NativeObject, [value, property]);
+  if (
+    first === undefined ||
+    second === undefined ||
+    !('value' in first) ||
+    !('value' in second) ||
+    first.value !== second.value
+  ) {
+    throw new NativeTypeError(label + '.' + property + ' must be stable own data.');
+  }
+  return first.value;
+}
+function optionalOwnData(value, property, label) {
+  if (typeof value !== 'object' || value === null) {
+    throw new NativeTypeError(label + ' must be an object.');
+  }
+  const first = apply(nativeGetOwnPropertyDescriptor, NativeObject, [value, property]);
+  const second = apply(nativeGetOwnPropertyDescriptor, NativeObject, [value, property]);
+  if (first === undefined && second === undefined) return undefined;
+  if (
+    first === undefined ||
+    second === undefined ||
+    !('value' in first) ||
+    !('value' in second) ||
+    first.value !== second.value
+  ) {
+    throw new NativeTypeError(label + '.' + property + ' must be stable own data.');
+  }
+  return first.value;
+}
+function append(values, value) {
+  apply(nativeDefineProperty, NativeObject, [values, values.length, {
+    configurable: true,
+    enumerable: true,
+    value,
+    writable: true,
+  }]);
+}
+function denseStrings(values, label) {
+  if (!apply(nativeArrayIsArray, NativeArray, [values])) {
+    throw new NativeTypeError(label + ' must be an array.');
+  }
   const out = [];
-  for (let index = 0; index < (values ?? []).length; index += 1) out[out.length] = values[index];
+  for (let index = 0; index < values.length; index += 1) {
+    const value = ownData(values, index, label);
+    if (typeof value !== 'string') throw new NativeTypeError(label + ' must contain strings.');
+    append(out, value);
+  }
   return out;
 }
+let registered = [];
 function copyUsages(values) {
+  if (values === undefined) return [];
+  if (!apply(nativeArrayIsArray, NativeArray, [values])) {
+    throw new NativeTypeError('Fixture stylesheet usages must be an array.');
+  }
   const out = [];
   for (let index = 0; index < (values ?? []).length; index += 1) {
-    const value = values[index];
-    out[out.length] = {
-      className: value.className,
-      moduleFileName: value.moduleFileName,
-      source: value.source,
-      styleRef: value.styleRef,
-    };
+    const value = ownData(values, index, 'Fixture stylesheet usages');
+    append(out, {
+      className: ownData(value, 'className', 'Fixture stylesheet usage'),
+      moduleFileName: ownData(value, 'moduleFileName', 'Fixture stylesheet usage'),
+      source: ownData(value, 'source', 'Fixture stylesheet usage'),
+      styleRef: ownData(value, 'styleRef', 'Fixture stylesheet usage'),
+    });
   }
   return out;
 }
 function copyAsset(value) {
+  const usages = optionalOwnData(value, 'styleRuleUsages', 'Fixture stylesheet asset');
   return {
-    componentName: value.componentName,
-    cspHash: value.cspHash,
-    fragmentTargets: copyStrings(value.fragmentTargets),
-    href: value.href,
-    preload: value.preload,
-    sourceFileName: value.sourceFileName,
-    styleRuleUsages: copyUsages(value.styleRuleUsages),
+    componentName: ownData(value, 'componentName', 'Fixture stylesheet asset'),
+    cspHash: optionalOwnData(value, 'cspHash', 'Fixture stylesheet asset'),
+    fragmentTargets: denseStrings(
+      ownData(value, 'fragmentTargets', 'Fixture stylesheet asset'),
+      'Fixture stylesheet fragment targets',
+    ),
+    href: ownData(value, 'href', 'Fixture stylesheet asset'),
+    preload: optionalOwnData(value, 'preload', 'Fixture stylesheet asset'),
+    sourceFileName: ownData(value, 'sourceFileName', 'Fixture stylesheet asset'),
+    styleRuleUsages: copyUsages(usages),
   };
 }
 
 function dedupe(values) {
   const out = [];
   for (let index = 0; index < values.length; index += 1) {
-    const value = values[index];
+    const value = ownData(values, index, 'Fixture stylesheet candidates');
     if (!value || typeof value.href !== 'string') continue;
     let duplicate = false;
     for (let seenIndex = 0; seenIndex < out.length; seenIndex += 1) {
-      if (out[seenIndex].href === value.href) duplicate = true;
+      if (ownData(out, seenIndex, 'Fixture stylesheet output').href === value.href) duplicate = true;
     }
     if (duplicate) continue;
-    out[out.length] = value;
+    append(out, value);
   }
   return out;
 }
 export function kovoFixtureRegisterStylesheets(values) {
+  if (!apply(nativeArrayIsArray, NativeArray, [values])) {
+    throw new NativeTypeError('Fixture stylesheet registration must be an array.');
+  }
   const combined = [];
-  for (let index = 0; index < registered.length; index += 1) combined[combined.length] = registered[index];
-  for (let index = 0; index < values.length; index += 1) combined[combined.length] = copyAsset(values[index]);
+  for (let index = 0; index < registered.length; index += 1) {
+    append(combined, ownData(registered, index, 'Registered fixture stylesheets'));
+  }
+  for (let index = 0; index < values.length; index += 1) {
+    append(combined, copyAsset(ownData(values, index, 'Fixture stylesheet registration')));
+  }
   registered = dedupe(combined);
 }
 export function kovoFixtureStylesheetManifest() {
   const output = [];
-  for (let index = 0; index < registered.length; index += 1) output[output.length] = copyAsset(registered[index]);
+  for (let index = 0; index < registered.length; index += 1) {
+    append(output, copyAsset(ownData(registered, index, 'Registered fixture stylesheets')));
+  }
   return dedupe(output);
 }
 export function kovoFixtureStylesheetsForTargets(targets) {
   if (!targets) return kovoFixtureStylesheetManifest();
+  const wanted = denseStrings(targets, 'Fixture stylesheet targets');
   const selected = [];
   for (let assetIndex = 0; assetIndex < registered.length; assetIndex += 1) {
-    const asset = registered[assetIndex];
-    const fragmentTargets = asset.fragmentTargets ?? [];
+    const asset = ownData(registered, assetIndex, 'Registered fixture stylesheets');
+    const fragmentTargets = ownData(asset, 'fragmentTargets', 'Registered fixture stylesheet');
     for (let targetIndex = 0; targetIndex < fragmentTargets.length; targetIndex += 1) {
-      for (let wantedIndex = 0; wantedIndex < targets.length; wantedIndex += 1) {
-        if (fragmentTargets[targetIndex] === targets[wantedIndex]) {
-          selected[selected.length] = copyAsset(asset);
+      const target = ownData(fragmentTargets, targetIndex, 'Fixture stylesheet fragment targets');
+      for (let wantedIndex = 0; wantedIndex < wanted.length; wantedIndex += 1) {
+        if (target === ownData(wanted, wantedIndex, 'Fixture stylesheet targets')) {
+          append(selected, copyAsset(asset));
           targetIndex = fragmentTargets.length;
           break;
         }
@@ -386,7 +470,9 @@ function ownData(value: object, property: PropertyKey, label: string): unknown {
     !('value' in second) ||
     first.value !== second.value
   )
-    throw new TypeError(`${label}.${String(property)} must be a stable own data property.`);
+    throw new TypeError(
+      `${label}.${typeof property === 'string' ? property : 'symbol'} must be a stable own data property.`,
+    );
   return first.value;
 }
 

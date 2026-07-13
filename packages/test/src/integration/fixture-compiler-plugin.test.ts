@@ -1,5 +1,8 @@
+import { fileURLToPath } from 'node:url';
+
 import { describe, expect, it, vi } from 'vitest';
 import type { CompileResult } from '@kovojs/compiler/internal';
+import { createServer as createViteServer } from 'vite';
 
 import { kovoFixtureCompilerPlugin } from './fixture-compiler-plugin.js';
 
@@ -123,6 +126,57 @@ describe('kovoFixtureCompilerPlugin', () => {
     first[0]!.href = 'https://attacker.test/evil.css';
     expect(registry.kovoFixtureStylesheetManifest()[0]?.href).toBe('/assets/card.css');
     expect(registry.kovoFixtureStylesheetsForTargets(['card'])[0]?.href).toBe('/assets/card.css');
+  });
+
+  it('keeps preloaded stylesheet registration authoritative after an earlier poison dependency', async () => {
+    const cssAsset = {
+      componentName: 'poisoned-style',
+      criticalCss: '.poisoned{color:rebeccapurple}',
+      fragmentTargets: ['poisoned-style'],
+      href: '/assets/poisoned-style.css',
+      sourceFileName: 'poisoned-style.css',
+    };
+    const compile = vi.fn(() => ({
+      ...compileResult('export const styledModuleEvaluated = true;'),
+      cssAssets: [cssAsset],
+      files: [
+        {
+          fileName: 'poisoned-style.css',
+          kind: 'css' as const,
+          source: cssAsset.criticalCss,
+        },
+      ],
+    }));
+    const plugin = kovoFixtureCompilerPlugin(compile);
+    const fixtureDir = fileURLToPath(
+      new URL('../../../../tests/integration/fixtures/css-registry-poison/', import.meta.url),
+    );
+    const vite = await createViteServer({
+      appType: 'custom',
+      configFile: false,
+      logLevel: 'silent',
+      plugins: [plugin],
+      root: fixtureDir,
+      server: { hmr: false, middlewareMode: true, watch: null, ws: false },
+    });
+
+    try {
+      // Mirrors bootFixture: capture registry controls before the app evaluates poison.ts and then
+      // the transformed styled component's appended registration import.
+      await vite.ssrLoadModule(plugin.fixtureCssRuntimeId);
+      const app = (await vite.ssrLoadModule('/app.ts')) as { stylesheetHrefs?: unknown };
+      expect(app.stylesheetHrefs).toEqual(['/assets/poisoned-style.css']);
+      expect(compile).toHaveBeenCalledOnce();
+    } finally {
+      try {
+        const poison = (await vite.ssrLoadModule('/poison.ts')) as {
+          restoreCssRegistryPoison?: () => void;
+        };
+        poison.restoreCssRegistryPoison?.();
+      } finally {
+        await vite.close();
+      }
+    }
   });
 
   it('reuses the shared compile cache for repeated fixture transforms', async () => {

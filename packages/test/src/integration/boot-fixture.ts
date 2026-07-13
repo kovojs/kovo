@@ -98,11 +98,12 @@ export async function bootFixture(
   const host = options.host ?? '127.0.0.1';
   const distAssetsDir = pathJoin(fixtureDir, 'dist');
 
+  const fixtureCompiler = kovoFixtureCompilerPlugin();
   const vite = await createViteServer({
     appType: 'custom',
     configFile: false,
     logLevel: 'warn',
-    plugins: [kovoFixtureCompilerPlugin()],
+    plugins: [fixtureCompiler],
     root: fixtureDir,
     // No HMR/file-watching/ws server: fixtures are immutable per run, and parallel
     // workers must not contend for the default HMR WebSocket port.
@@ -116,6 +117,9 @@ export async function bootFixture(
   let instance: FixtureInstance;
   let unregisterSqlSnapshotter = (): void => {};
   try {
+    // The private stylesheet registry shares the authored SSR realm. Evaluate it before any
+    // fixture dependency so its dense-array controls cannot inherit later prototype setters.
+    await vite.ssrLoadModule(fixtureCompiler.fixtureCssRuntimeId);
     // SPEC §6.6 rule 6: establish both security roots in this exact `ssr.noExternal`
     // module graph before Vite evaluates any authored fixture dependency. A native test-runner
     // import does not protect the separately instantiated SSR copies.
