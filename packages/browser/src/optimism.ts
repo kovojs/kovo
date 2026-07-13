@@ -5,7 +5,9 @@ import { queryIdentityFromStoreKey, queryStoreKey, queryWireKey } from './query-
 import type { QuerySnapshot, QueryStore } from './query-store.js';
 import { addRuntimeEventListener, removeRuntimeEventListener } from './runtime-dom-security.js';
 import {
+  defineSecurityProperties,
   securityArrayAppend,
+  securityGetOwnPropertyDescriptor,
   securityMap,
   securityMapDelete,
   securityMapForEach,
@@ -17,6 +19,7 @@ import {
   securitySet,
   securitySetAdd,
   securitySetHas,
+  securityString,
 } from './security-witness-intrinsics.js';
 
 /** A pure optimistic predictor: mutate the cloned query draft for the mutation input. */
@@ -496,14 +499,19 @@ export function applyOptimisticTransforms<Input>(
   plan: OptimisticPlan<Input>,
   change: OptimisticChange<Input> = optimisticChangeFromInput(input),
 ): PendingOptimism {
-  const queryNames = Object.keys(plan.transforms);
+  const queryNames = securityObjectKeys(plan.transforms);
   const keys = resolveOptimisticKeys(plan, change);
   const snapshot = store.snapshot(queryNames, keys);
 
-  for (const queryName of queryNames) {
-    const transform = plan.transforms[queryName];
+  for (let index = 0; index < queryNames.length; index += 1) {
+    const queryNameEntry = securityOwnArrayEntry(queryNames, index);
+    if (!queryNameEntry.ok) throw new TypeError('Kovo optimistic query names must be dense.');
+    const queryName = queryNameEntry.value;
+    const transformDescriptor = securityGetOwnPropertyDescriptor(plan.transforms, queryName);
+    const transform =
+      transformDescriptor && 'value' in transformDescriptor ? transformDescriptor.value : undefined;
     if (!transform || transform === 'await-fragment') continue;
-    const key = keys[queryName];
+    const key = optimisticKeyRecordValue(keys, queryName);
 
     store.set(
       queryName,
@@ -514,13 +522,15 @@ export function applyOptimisticTransforms<Input>(
 
   return {
     commit() {
-      snapshot.clear();
+      securityMapForEach(snapshot, (_value, storeKey) => {
+        securityMapDelete(snapshot, storeKey);
+      });
     },
     restore() {
-      for (const [storeKey, value] of snapshot) {
+      securityMapForEach(snapshot, (value, storeKey) => {
         const identity = queryIdentityFromStoreKey(storeKey);
         store.set(identity.name, value, identity.key);
-      }
+      });
     },
     snapshot,
   };
@@ -667,12 +677,21 @@ export function resolveOptimisticKeys<Input>(
   plan: OptimisticPlan<Input>,
   change: OptimisticChange<Input>,
 ): Record<string, string | undefined> {
-  return Object.fromEntries(
-    Object.keys(plan.transforms).map((queryName) => [
-      queryName,
-      optimisticQueryKey(plan, queryName, change),
-    ]),
-  );
+  const resolved: Record<string, string | undefined> = {};
+  const queryNames = securityObjectKeys(plan.transforms);
+  for (let index = 0; index < queryNames.length; index += 1) {
+    const queryName = securityOwnArrayEntry(queryNames, index);
+    if (!queryName.ok) throw new TypeError('Kovo optimistic query names must be dense.');
+    defineSecurityProperties(resolved, {
+      [queryName.value]: {
+        configurable: true,
+        enumerable: true,
+        value: optimisticQueryKey(plan, queryName.value, change),
+        writable: true,
+      },
+    });
+  }
+  return resolved;
 }
 
 function optimisticQueryKey<Input>(
@@ -680,8 +699,20 @@ function optimisticQueryKey<Input>(
   queryName: string,
   change: OptimisticChange<Input>,
 ): string | undefined {
-  const key = plan.keys?.[queryName];
+  const keys = plan.keys;
+  const descriptor = keys ? securityGetOwnPropertyDescriptor(keys, queryName) : undefined;
+  const key = descriptor && 'value' in descriptor ? descriptor.value : undefined;
   return typeof key === 'function' ? key(change) : key;
+}
+
+function optimisticKeyRecordValue(
+  keys: Readonly<Record<string, string | undefined>>,
+  queryName: string,
+): string | undefined {
+  const descriptor = securityGetOwnPropertyDescriptor(keys, queryName);
+  return descriptor && 'value' in descriptor && typeof descriptor.value === 'string'
+    ? descriptor.value
+    : undefined;
 }
 
 /**
@@ -699,9 +730,26 @@ export function canonicalInstanceKeyValue(
   derived: string | Record<string, string | number | boolean>,
 ): string {
   if (typeof derived === 'string') return derived;
-  return Object.values(derived)
-    .map((value) => String(value))
-    .join(':');
+  const names = securityObjectKeys(derived);
+  let result = '';
+  for (let index = 0; index < names.length; index += 1) {
+    const name = securityOwnArrayEntry(names, index);
+    if (!name.ok) throw new TypeError('Kovo optimistic key fields must be dense.');
+    const descriptor = securityGetOwnPropertyDescriptor(derived, name.value);
+    if (!descriptor || !('value' in descriptor)) {
+      throw new TypeError('Kovo optimistic key fields must be own-data properties.');
+    }
+    const value = descriptor.value;
+    if (
+      typeof value !== 'string' &&
+      typeof value !== 'number' &&
+      typeof value !== 'boolean'
+    ) {
+      throw new TypeError('Kovo optimistic key fields must be string, number, or boolean values.');
+    }
+    result += `${index === 0 ? '' : ':'}${securityString(value)}`;
+  }
+  return result;
 }
 
 /**
@@ -720,11 +768,26 @@ export function optimisticPlanFromAuthoredMap<Input>(
 ): OptimisticPlan<Input> {
   const transforms: Record<string, OptimisticEntry<Input>> = {};
   const keys: Record<string, OptimisticQueryKey<Input>> = {};
+  const queryNames = securityObjectKeys(map);
+  let keyedCount = 0;
 
-  for (const [queryName, entry] of Object.entries(map)) {
+  for (let index = 0; index < queryNames.length; index += 1) {
+    const queryNameEntry = securityOwnArrayEntry(queryNames, index);
+    if (!queryNameEntry.ok) throw new TypeError('Kovo authored optimistic map must be dense.');
+    const queryName = queryNameEntry.value;
+    const entryDescriptor = securityGetOwnPropertyDescriptor(map, queryName);
+    if (!entryDescriptor || !('value' in entryDescriptor)) {
+      throw new TypeError('Kovo authored optimistic entries must be own-data properties.');
+    }
+    const entry = entryDescriptor.value as AuthoredOptimisticEntry<Input>;
     if (entry === 'await-fragment' || typeof entry === 'function') {
-      transforms[queryName] = entry;
+      defineSecurityProperties(transforms, {
+        [queryName]: { configurable: true, enumerable: true, value: entry, writable: true },
+      });
       continue;
+    }
+    if (entry === null || typeof entry !== 'object') {
+      throw new TypeError('Kovo authored optimistic entries are invalid.');
     }
     // SPEC §10.2:1040: a keyed entry contributes its transform plus an instance-key derivation,
     // resolved to the FULL canonical `name:keyValue` — the single instance-key currency the store,
@@ -734,19 +797,44 @@ export function optimisticPlanFromAuthoredMap<Input>(
     // query's own `instanceKey: (input) => string`, e.g. `product:p1`) and passes through; an args
     // object yields only the `keyValue`, which we prefix with the query name via `queryWireKey`
     // (idempotent — never double-prefixed) to form the canonical instance key.
-    transforms[queryName] = entry.transform;
-    const derive = entry.keys;
-    keys[queryName] = (change) => {
+    const transform = securityGetOwnPropertyDescriptor(entry, 'transform');
+    const keyDerivation = securityGetOwnPropertyDescriptor(entry, 'keys');
+    if (
+      !transform ||
+      !('value' in transform) ||
+      typeof transform.value !== 'function' ||
+      !keyDerivation ||
+      !('value' in keyDerivation) ||
+      typeof keyDerivation.value !== 'function'
+    ) {
+      throw new TypeError(
+        'Kovo keyed optimistic entries require own-data transform and keys functions.',
+      );
+    }
+    defineSecurityProperties(transforms, {
+      [queryName]: {
+        configurable: true,
+        enumerable: true,
+        value: transform.value as OptimisticTransform<Input>,
+        writable: true,
+      },
+    });
+    const derive = keyDerivation.value as AuthoredOptimisticKeyDerivation<Input>;
+    const key = (change: OptimisticChange<Input>) => {
       const derived = derive(change.input);
       return typeof derived === 'string'
         ? derived
         : queryWireKey(queryName, canonicalInstanceKeyValue(derived));
     };
+    defineSecurityProperties(keys, {
+      [queryName]: { configurable: true, enumerable: true, value: key, writable: true },
+    });
+    keyedCount += 1;
   }
 
   return {
     transforms,
-    ...(Object.keys(keys).length === 0 ? {} : { keys }),
+    ...(keyedCount === 0 ? {} : { keys }),
     ...(queue === undefined ? {} : { queue }),
   };
 }

@@ -27,6 +27,15 @@ import {
   retireSessionTransitionPrincipal,
 } from './session-transition.js';
 import type { QueryChunk } from './wire-parser.js';
+import {
+  securityArrayAppend,
+  securityGetOwnPropertyDescriptor,
+  securityObjectKeys,
+  securityOwnArrayEntry,
+  securitySet,
+  securitySetAdd,
+  securitySetHas,
+} from './security-witness-intrinsics.js';
 
 /** @internal Options for submitting an enhanced mutation with optimistic prediction (SPEC §10.4). */
 export interface OptimisticEnhancedMutationSubmitOptions<
@@ -51,7 +60,7 @@ export async function submitOptimisticEnhancedMutation<Input>(
   }
 > {
   const idem = options.idem ?? createMutationIdem();
-  const queryNames = Object.keys(options.optimistic.transforms);
+  const queryNames = securityObjectKeys(options.optimistic.transforms);
   const optimisticChange = optimisticChangeFromInput(options.input, options.change);
   const optimisticKeys = resolveOptimisticKeys(options.optimistic, optimisticChange);
   const queueName = options.optimistic.queue;
@@ -145,9 +154,23 @@ async function submitOptimisticEnhancedMutationDirect<Input>(
       fetched,
       optimisticMutationRuntimeApplyHooks(options, idem, queryNames, optimisticKeys),
     );
-    const settledQueries = queryNames.filter(
-      (queryName) => options.rebaser.pendingCount(queryName, optimisticKeys[queryName]) === 0,
-    );
+    const settledQueries: string[] = [];
+    for (let index = 0; index < queryNames.length; index += 1) {
+      const queryName = securityOwnArrayEntry(queryNames, index);
+      if (!queryName.ok) throw new TypeError('Kovo optimistic query names must be dense.');
+      if (
+        options.rebaser.pendingCount(
+          queryName.value,
+          optimisticKeyValue(optimisticKeys, queryName.value),
+        ) === 0
+      ) {
+        securityArrayAppend(
+          settledQueries,
+          queryName.value,
+          'Browser settled optimistic queries',
+        );
+      }
+    }
     if (options.pendingRoot && settledQueries.length > 0) {
       stampPendingQueries(options.pendingRoot, settledQueries, false);
     }
@@ -187,8 +210,16 @@ function discardFailedOptimism(
   queryNames: readonly string[],
   optimisticKeys: Readonly<Record<string, string | undefined>>,
 ): void {
-  for (const queryName of queryNames) {
-    rebaser.settleWithoutServerTruth(idem, queryName, optimisticKeys[queryName]);
+  for (let index = 0; index < queryNames.length; index += 1) {
+    const queryName = securityOwnArrayEntry(queryNames, index);
+    if (!queryName.ok || typeof queryName.value !== 'string') {
+      throw new TypeError('Kovo optimistic rollback query names must be dense strings.');
+    }
+    rebaser.settleWithoutServerTruth(
+      idem,
+      queryName.value,
+      optimisticKeyValue(optimisticKeys, queryName.value),
+    );
   }
 }
 
@@ -212,11 +243,24 @@ function optimisticMutationRuntimeApplyHooks<Input>(
         options.optimistic.transforms,
         optimisticKeys,
       );
-      for (const { queryName, status } of uncoveredQueries) {
-        options.rebaser.settleWithoutServerTruth(idem, queryName, optimisticKeys[queryName]);
+      for (let index = 0; index < uncoveredQueries.length; index += 1) {
+        const uncovered = securityOwnArrayEntry(uncoveredQueries, index);
+        if (!uncovered.ok) {
+          throw new TypeError('Kovo uncovered optimistic queries must be dense.');
+        }
+        const { queryName, status } = uncovered.value;
+        options.rebaser.settleWithoutServerTruth(
+          idem,
+          queryName,
+          optimisticKeyValue(optimisticKeys, queryName),
+        );
         reportRuntimeError(
           options.onError,
-          uncoveredOptimisticQueryError(queryName, optimisticKeys[queryName], status),
+          uncoveredOptimisticQueryError(
+            queryName,
+            optimisticKeyValue(optimisticKeys, queryName),
+            status,
+          ),
         );
       }
       options.rebaser.settle(idem);
@@ -234,19 +278,53 @@ function uncoveredOptimisticQueries<Input>(
   transforms: Readonly<Record<string, OptimisticEntry<Input>>>,
   optimisticKeys: Readonly<Record<string, string | undefined>>,
 ): UncoveredOptimisticQuery[] {
-  const covered = new Set(queryChunks.map((query) => queryStoreKey(query.name, query.key)));
+  const covered = securitySet<string>();
+  for (let index = 0; index < queryChunks.length; index += 1) {
+    const query = securityOwnArrayEntry(queryChunks, index);
+    if (!query.ok) throw new TypeError('Kovo optimistic server query chunks must be dense.');
+    securitySetAdd(covered, queryStoreKey(query.value.name, query.value.key));
+  }
   const uncovered: UncoveredOptimisticQuery[] = [];
 
-  for (const [queryName, transform] of Object.entries(transforms)) {
-    if (covered.has(queryStoreKey(queryName, optimisticKeys[queryName]))) continue;
+  const queryNames = securityObjectKeys(transforms);
+  for (let index = 0; index < queryNames.length; index += 1) {
+    const queryNameEntry = securityOwnArrayEntry(queryNames, index);
+    if (!queryNameEntry.ok) throw new TypeError('Kovo optimistic transform names must be dense.');
+    const queryName = queryNameEntry.value;
+    const transform = securityGetOwnPropertyDescriptor(transforms, queryName);
+    if (!transform || !('value' in transform)) {
+      throw new TypeError('Kovo optimistic transforms must be own-data properties.');
+    }
+    if (
+      securitySetHas(
+        covered,
+        queryStoreKey(queryName, optimisticKeyValue(optimisticKeys, queryName)),
+      )
+    ) {
+      continue;
+    }
 
-    uncovered.push({
-      queryName,
-      status: transform === 'await-fragment' ? 'await-fragment' : 'transform',
-    });
+    securityArrayAppend(
+      uncovered,
+      {
+        queryName,
+        status: transform.value === 'await-fragment' ? 'await-fragment' : 'transform',
+      },
+      'Browser uncovered optimistic queries',
+    );
   }
 
   return uncovered;
+}
+
+function optimisticKeyValue(
+  optimisticKeys: Readonly<Record<string, string | undefined>>,
+  queryName: string,
+): string | undefined {
+  const descriptor = securityGetOwnPropertyDescriptor(optimisticKeys, queryName);
+  return descriptor && 'value' in descriptor && typeof descriptor.value === 'string'
+    ? descriptor.value
+    : undefined;
 }
 
 function uncoveredOptimisticQueryError(
