@@ -9,6 +9,7 @@ import {
   dynamicCodeExecutionSinkFindings,
   exportedNames,
   extractRegisteredBlessedSinkKinds,
+  generatedNodeStaticServeInvariantFindings,
   logChannelNeutralizerInvariantFindings,
   logChannelSinkFindings,
   publicSinkPolicyEscapeFindings,
@@ -22,6 +23,8 @@ import {
   sqlGuardDowngradeFindings,
   sqlSafetyInvariantFindings,
 } from './check-sink-policy-gate.mjs';
+
+// @kovo-security-classifier-corpus sink-registry
 
 const validPolicy = `
 const frameworkBlessedSinkKindRegistry = [
@@ -624,6 +627,97 @@ describe('sink-policy gate', () => {
         { allowedFileServeSink: true },
       ),
     ).toEqual([]);
+  });
+
+  it('keeps the generated Node static-file allowance tied to fd identity revalidation', () => {
+    const generatedPrimitive = `
+      import {
+        close as importedCloseFileDescriptor,
+        open as importedOpenFileDescriptor,
+        readFile as importedReadFileDescriptor,
+        fstat as importedStatFileDescriptor,
+        stat as importedStatFilePath,
+      } from 'node:fs';
+      const closeFileDescriptor = importedCloseFileDescriptor;
+      const createNodeHttpServer = importedCreateServer;
+      const openFileDescriptor = importedOpenFileDescriptor;
+      const pathIsAbsolute = importedPathIsAbsolute;
+      const pathResolve = importedPathResolve;
+      const pathSeparator = importedPathSeparator;
+      const readFileDescriptor = importedReadFileDescriptor;
+      const realpath = importedRealpath;
+      const statFileDescriptor = importedStatFileDescriptor;
+      const statFilePath = importedStatFilePath;
+      const flags = fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW;
+      async function importHandler() {}
+      openFileDescriptor(path, fsReadOnlyNoFollowFlags, callback);
+      statFileDescriptor(fileDescriptor, callback);
+      sameStaticFileIdentity(expectedStat, openedStat);
+      staticPathRetainsIdentity(realRoot, resolved, expectedStat);
+      readFileDescriptor(fileDescriptor, callback);
+      sameStaticFileIdentity(expectedStat, completedStat);
+      staticPathRetainsIdentity(realRoot, resolved, expectedStat);
+      try { serve(); } finally { await closeStaticFileDescriptor(fileDescriptor); }
+    `;
+
+    expect(
+      generatedNodeStaticServeInvariantFindings('packages/server/src/build.ts', generatedPrimitive),
+    ).toEqual([]);
+    expect(
+      rootedFileServeRawSinkFindings('packages/server/src/build.ts', generatedPrimitive, {
+        allowedImportLocals: ['importedOpenFileDescriptor'],
+      }),
+    ).toEqual([]);
+    expect(
+      rootedFileServeRawSinkFindings(
+        'packages/server/src/build.ts',
+        `${generatedPrimitive}\nimport { createWriteStream } from 'node:fs';`,
+        { allowedImportLocals: ['importedOpenFileDescriptor'] },
+      ),
+    ).toEqual([
+      'packages/server/src/build.ts: KV424 raw filesystem createWriteStream import is outside the rooted file-serve primitive; use rootedFiles().serve() so file/path sinks stay rooted and witnessed',
+    ]);
+    expect(
+      generatedNodeStaticServeInvariantFindings(
+        'packages/server/src/build.ts',
+        generatedPrimitive.replace(
+          'readFileDescriptor(fileDescriptor, callback);',
+          'body: await readFile(resolved);',
+        ),
+      ),
+    ).toContain(
+      'packages/server/src/build.ts: generated Node static serving must read only through the validated descriptor',
+    );
+    expect(
+      generatedNodeStaticServeInvariantFindings(
+        'packages/server/src/build.ts',
+        generatedPrimitive.replace(
+          'sameStaticFileIdentity(expectedStat, completedStat);',
+          'sameStaticFileIdentity(expectedStat, openedStat);',
+        ),
+      ),
+    ).toContain(
+      'packages/server/src/build.ts: generated Node static serving must bind pre-read and post-read fstat identity',
+    );
+    expect(
+      generatedNodeStaticServeInvariantFindings(
+        'packages/server/src/build.ts',
+        generatedPrimitive.replace('const openFileDescriptor =', 'const lateOpenFileDescriptor ='),
+      ),
+    ).toContain(
+      'packages/server/src/build.ts: generated Node static serving must pin fs/path/http controls before authored handler evaluation',
+    );
+    expect(
+      generatedNodeStaticServeInvariantFindings(
+        'packages/server/src/build.ts',
+        generatedPrimitive.replace(
+          'async function importHandler() {}',
+          'importedOpenFileDescriptor(path, 0, callback);\nasync function importHandler() {}',
+        ),
+      ),
+    ).toContain(
+      'packages/server/src/build.ts: generated Node static serving must keep its one raw open import private to the boot pin',
+    );
   });
 
   it('runs the raw filesystem file-serve sink gate over configured server source files', () => {

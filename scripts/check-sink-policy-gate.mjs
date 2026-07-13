@@ -47,6 +47,7 @@ export const defaultCommandExecutionToolingRationales = {
 };
 
 export const defaultRootedFileServeSinkFiles = ['packages/server/src/file.ts'];
+export const defaultGeneratedNodeStaticServeSinkFiles = ['packages/server/src/build.ts'];
 export const defaultRootedFileServeRawSinkFiles = [
   ...defaultRootedFileServeSinkFiles,
   // Private boot-pinned membrane used only by the audited core filesystem boundary.
@@ -219,6 +220,8 @@ export function checkSinkPolicyGate(options = {}) {
     options.commandExecutionFiles ?? collectSourceFiles(root, commandExecutionRoots);
   const rootedFileServeSinkFiles =
     options.rootedFileServeSinkFiles ?? defaultRootedFileServeSinkFiles;
+  const generatedNodeStaticServeSinkFiles =
+    options.generatedNodeStaticServeSinkFiles ?? defaultGeneratedNodeStaticServeSinkFiles;
   const rootedFileServeRawSinkFiles =
     options.rootedFileServeRawSinkFiles ?? defaultRootedFileServeRawSinkFiles;
   const logChannelFiles = options.logChannelFiles ?? collectSourceFiles(root, logChannelRoots);
@@ -320,6 +323,7 @@ export function checkSinkPolicyGate(options = {}) {
   }
   const dynamicCodeExecutionSinkFileSet = new Set(dynamicCodeExecutionSinkFiles);
   const rootedFileServeSinkFileSet = new Set(rootedFileServeSinkFiles);
+  const generatedNodeStaticServeSinkFileSet = new Set(generatedNodeStaticServeSinkFiles);
   const rootedFileServeRawSinkFileSet = new Set(rootedFileServeRawSinkFiles);
   const logChannelNeutralizerFileSet = new Set(logChannelNeutralizerFiles);
   for (const filePath of commandExecutionFiles) {
@@ -342,8 +346,16 @@ export function checkSinkPolicyGate(options = {}) {
     findings.push(
       ...rootedFileServeRawSinkFindings(filePath, text, {
         allowedFileServeSink: rootedFileServeRawSinkFileSet.has(filePath),
+        // build.ts owns one generated, descriptor-bound open import. Keep every other raw
+        // filesystem import/call in that large source file default-deny.
+        allowedImportLocals: generatedNodeStaticServeSinkFileSet.has(filePath)
+          ? ['importedOpenFileDescriptor']
+          : [],
       }),
     );
+    if (generatedNodeStaticServeSinkFileSet.has(filePath)) {
+      findings.push(...generatedNodeStaticServeInvariantFindings(filePath, text));
+    }
     if (deserializationFiles.includes(filePath)) {
       findings.push(...deserializationSinkFindings(filePath, text));
     }
@@ -1399,9 +1411,11 @@ export function rootedFileServeRawSinkFindings(filePath, text, options = {}) {
   const findings = [];
   const source = stripCommentsAndStringContents(text);
   const fsImports = fsImportLocals(text);
+  const allowedImportLocals = new Set(options.allowedImportLocals ?? []);
 
   for (const imported of fsImports.named) {
     if (!rootedFileServeRawSinkNames.has(imported.imported)) continue;
+    if (allowedImportLocals.has(imported.local)) continue;
     findings.push(
       `${filePath}: KV424 raw filesystem ${imported.imported} import is outside the rooted file-serve primitive; use rootedFiles().serve() so file/path sinks stay rooted and witnessed`,
     );
@@ -1439,6 +1453,89 @@ export function rootedFileServeRawSinkFindings(filePath, text, options = {}) {
   }
 
   return dedupe(findings);
+}
+
+export function generatedNodeStaticServeInvariantFindings(filePath, text) {
+  const source = stripComments(text);
+  const findings = [];
+  const ownerIndex = Math.max(0, source.indexOf('function nodeServerSource()'));
+  const importHandlerIndex = source.indexOf('async function importHandler()', ownerIndex);
+  const pinnedControls = [
+    'closeFileDescriptor = importedCloseFileDescriptor',
+    'createNodeHttpServer = importedCreateServer',
+    'openFileDescriptor = importedOpenFileDescriptor',
+    'pathIsAbsolute = importedPathIsAbsolute',
+    'pathResolve = importedPathResolve',
+    'pathSeparator = importedPathSeparator',
+    'readFileDescriptor = importedReadFileDescriptor',
+    'realpath = importedRealpath',
+    'statFileDescriptor = importedStatFileDescriptor',
+    'statFilePath = importedStatFilePath',
+  ];
+  if ((source.match(/\bimportedOpenFileDescriptor\b/g)?.length ?? 0) !== 2) {
+    findings.push(
+      `${filePath}: generated Node static serving must keep its one raw open import private to the boot pin`,
+    );
+  }
+  if (
+    importHandlerIndex < 0 ||
+    pinnedControls.some((control) => {
+      const controlIndex = source.indexOf(`const ${control};`);
+      return controlIndex < ownerIndex || controlIndex > importHandlerIndex;
+    })
+  ) {
+    findings.push(
+      `${filePath}: generated Node static serving must pin fs/path/http controls before authored handler evaluation`,
+    );
+  }
+  if (
+    !/\bopen\s+as\s+importedOpenFileDescriptor\b[\s\S]{0,500}?\bfrom\s+['"]node:fs['"]/.test(
+      source,
+    ) ||
+    !/\bfsConstants\s*\.\s*O_RDONLY\b[\s\S]{0,160}?\bfsConstants\s*\.\s*O_NOFOLLOW\b/.test(
+      source,
+    ) ||
+    !/\bopenFileDescriptor\s*\(\s*path\s*,\s*fsReadOnlyNoFollowFlags\s*,/.test(source)
+  ) {
+    findings.push(
+      `${filePath}: generated Node static serving must open the canonical candidate read-only with O_NOFOLLOW`,
+    );
+  }
+  if (
+    !/\bstatFileDescriptor\s*\(\s*fileDescriptor\s*,/.test(source) ||
+    !/\bsameStaticFileIdentity\s*\(\s*expectedStat\s*,\s*openedStat\s*\)/.test(source) ||
+    !/\bsameStaticFileIdentity\s*\(\s*expectedStat\s*,\s*completedStat\s*\)/.test(source)
+  ) {
+    findings.push(
+      `${filePath}: generated Node static serving must bind pre-read and post-read fstat identity`,
+    );
+  }
+  const pathIdentityChecks = source.match(
+    /staticPathRetainsIdentity\s*\(\s*realRoot\s*,\s*resolved\s*,\s*expectedStat\s*\)/g,
+  );
+  if ((pathIdentityChecks?.length ?? 0) < 2) {
+    findings.push(
+      `${filePath}: generated Node static serving must revalidate contained path identity before and after reading`,
+    );
+  }
+  if (
+    !/\breadFileDescriptor\s*\(\s*fileDescriptor\s*,/.test(source) ||
+    /\breadFile\s*\(\s*resolved\s*\)/.test(source)
+  ) {
+    findings.push(
+      `${filePath}: generated Node static serving must read only through the validated descriptor`,
+    );
+  }
+  if (
+    !/\bfinally\s*\{\s*await\s+closeStaticFileDescriptor\s*\(\s*fileDescriptor\s*\)\s*;?\s*\}/.test(
+      source,
+    )
+  ) {
+    findings.push(
+      `${filePath}: generated Node static serving must close the validated descriptor in finally`,
+    );
+  }
+  return findings;
 }
 
 export function deserializationSinkFindings(filePath, text) {

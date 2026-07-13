@@ -117,7 +117,10 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
   {
     id: 'sink-registry',
     marker: '@kovo-security-classifier-corpus sink-registry',
-    testFiles: ['packages/core/src/internal/source-sink-registry.test.ts'],
+    testFiles: [
+      'packages/core/src/internal/source-sink-registry.test.ts',
+      'scripts/check-sink-policy-gate.test.mjs',
+    ],
     verdictAnchors: [
       {
         id: 'redirect-url-mechanism',
@@ -128,6 +131,24 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
         id: 'outbound-egress-mechanism',
         file: 'packages/core/src/internal/source-sink-registry.test.ts',
         snippets: ["['outbound egress request', 'own']"],
+      },
+      {
+        id: 'raw-filesystem-reject-corpus',
+        file: 'scripts/check-sink-policy-gate.test.mjs',
+        snippets: [
+          'rejects raw filesystem file-serve sinks outside the rooted file primitive',
+          'createWriteStream(requestedPath)',
+          'rawOpen(requestedPath',
+        ],
+      },
+      {
+        id: 'generated-static-fd-identity-corpus',
+        file: 'scripts/check-sink-policy-gate.test.mjs',
+        snippets: [
+          'keeps the generated Node static-file allowance tied to fd identity revalidation',
+          'readFileDescriptor(fileDescriptor, callback)',
+          'body: await readFile(resolved)',
+        ],
       },
     ],
   },
