@@ -160,6 +160,22 @@ describe('mutation wire headers', () => {
       }).liveTargetDescriptors,
     ).toHaveLength(1);
 
+    // SPEC §5.2.1/§14: the attestation audience includes the exact render-plan build. A stale
+    // document descriptor must not authorize a different deployment's generated renderer/query
+    // registry before the client can observe Kovo-Build skew and reload.
+    expect(
+      mutationWireRequestFromHeaders({
+        buildToken: 'build-b',
+        liveTargetAudience: 'build-b',
+        csrf,
+        headers: {
+          'Kovo-Live-Targets': `product-form:p1#components/product-form/product-form@${token}:{"productId":"p1"}`,
+        },
+        rawInput: {},
+        request,
+      }).liveTargetDescriptors,
+    ).toEqual([]);
+
     expect(
       mutationWireRequestFromHeaders({
         buildToken: 'build-a',
