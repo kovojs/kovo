@@ -83,11 +83,7 @@ export function queriesToRerun(
         writable: false,
       });
     }
-    witnessArrayAppend(
-      reruns,
-      rerun,
-      'Server packages/server/src/mutation/targets.ts collection',
-    );
+    witnessArrayAppend(reruns, rerun, 'Server packages/server/src/mutation/targets.ts collection');
   }
   return reruns;
 }

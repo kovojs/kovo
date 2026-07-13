@@ -724,12 +724,8 @@ describe('server mutation primitives', () => {
     });
 
     expect(response.status, response.body).toBe(200);
-    expect(response.body).toContain(
-      '<kovo-query name="coarseProduct" key="coarseProduct:p1">',
-    );
-    expect(response.body).toContain(
-      '<kovo-query name="coarseProduct" key="coarseProduct:p2">',
-    );
+    expect(response.body).toContain('<kovo-query name="coarseProduct" key="coarseProduct:p1">');
+    expect(response.body).toContain('<kovo-query name="coarseProduct" key="coarseProduct:p2">');
     expect(response.body).toContain('<product-panel>p1:Pen</product-panel>');
     expect(response.body).toContain('<product-panel>p2:Notebook</product-panel>');
     expect(response.body).not.toContain('undefined');
