@@ -1166,9 +1166,11 @@ describe('inline loader enhanced submit source', () => {
       };
       const listeners = new Map<string, (event: unknown) => void>();
       const nativeTextDecoderDecode = TextDecoder.prototype.decode;
+      const nativeStringSlice = String.prototype.slice;
       const formData = { kind: 'stream-form-data' };
+      const rendererReference = '/c/client.ts#renderMarkdownStream';
       const streamTargetAttrs = new Map<string, string>([
-        ['data-stream-renderer', '/c/client.ts#renderMarkdownStream'],
+        ['data-stream-renderer', rendererReference],
       ]);
       const streamTarget = {
         textContent: '',
@@ -1188,11 +1190,25 @@ describe('inline loader enhanced submit source', () => {
         },
         method: 'post',
       };
-      const importModule = vi.fn(async () => ({
-        renderMarkdownStream(target: typeof streamTarget, source: string) {
-          target.setAttribute('data-rendered-markdown', source.includes('|') ? 'table' : 'plain');
-        },
-      }));
+      const renderMarkdownStream = vi.fn((target: typeof streamTarget, source: string) => {
+        target.setAttribute('data-rendered-markdown', source.includes('|') ? 'table' : 'plain');
+      });
+      const privileged = vi.fn((target: typeof streamTarget) => {
+        target.setAttribute('data-rendered-markdown', 'privileged');
+      });
+      const importModule = vi.fn(async () => {
+        // Module evaluation happens before export selection. It must not be able to redirect the
+        // already-declared renderer by poisoning the shared String prototype during import.
+        String.prototype.slice = function poisonedRendererSlice(start, end) {
+          const source = Reflect.apply(nativeStringSlice, this, [0]);
+          if (source === rendererReference && start > 0) return 'privileged';
+          return Reflect.apply(nativeStringSlice, this, [start, end]);
+        };
+        return {
+          privileged,
+          renderMarkdownStream,
+        };
+      });
       const encoder = new TextEncoder();
       const body = new ReadableStream<Uint8Array>({
         start(controller) {
@@ -1276,8 +1292,11 @@ describe('inline loader enhanced submit source', () => {
         expect(streamTargetAttrs.get('data-stream-state')).toBe('error');
         expect(streamTargetAttrs.get('data-rendered-markdown')).toBe('table');
         expect(importModule).toHaveBeenCalledWith('/c/client.ts');
+        expect(renderMarkdownStream).toHaveBeenCalled();
+        expect(privileged).not.toHaveBeenCalled();
       } finally {
         TextDecoder.prototype.decode = nativeTextDecoderDecode;
+        String.prototype.slice = nativeStringSlice;
         Object.assign(globalRecord, {
           FormData: originals.FormData,
           TextDecoder: originals.TextDecoder,

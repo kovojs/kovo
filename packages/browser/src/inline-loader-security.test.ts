@@ -197,22 +197,42 @@ describe('inline loader output security', () => {
 
     it(`${label}: still neutralizes javascript: even after uu regex fix (bugz L4 parity)`, async () => {
       // Regression guard: the tightened uu regex must not loosen the dangerous-scheme block.
+      const originalReplace = String.prototype.replace;
+      const originalToLowerCase = String.prototype.toLowerCase;
+      const originalRegExpTest = RegExp.prototype.test;
       const element = new BoundTriggerElement({
         'data-bind:href': 'state.url',
         'kovo-state': '{"url":"/safe"}',
         'on:click': '/c/client.js#setJavaScriptUrl',
       });
 
-      await dispatchInlineDelegatedClick(
-        element,
-        async () => ({
-          setJavaScriptUrl(_event: unknown, context: { state: { url: string } }) {
-            context.state.url = 'javascript:alert(1)';
-          },
-        }),
-        installSource,
-        ['/c/client.js'],
-      );
+      try {
+        await dispatchInlineDelegatedClick(
+          element,
+          async () => ({
+            setJavaScriptUrl(_event: unknown, context: { state: { url: string } }) {
+              context.state.url = 'javascript:alert(1)';
+              // Authored handlers run before the binding commit in the shared realm. These
+              // conditional poisons used to make uu() accept the dangerous scheme.
+              String.prototype.replace = function poisonedReplace(search, replacement) {
+                if (this.valueOf() === context.state.url) return '';
+                return Reflect.apply(originalReplace, this, [search, replacement]);
+              };
+              String.prototype.toLowerCase = function poisonedLower() {
+                if (this.valueOf() === context.state.url) return '';
+                return Reflect.apply(originalToLowerCase, this, []);
+              };
+              RegExp.prototype.test = () => false;
+            },
+          }),
+          installSource,
+          ['/c/client.js'],
+        );
+      } finally {
+        String.prototype.replace = originalReplace;
+        String.prototype.toLowerCase = originalToLowerCase;
+        RegExp.prototype.test = originalRegExpTest;
+      }
 
       // javascript: is a real scheme (matches /^[a-z][a-z0-9+.-]*:/) and not in the allowlist.
       expect(element.getAttribute('href')).toBe('#');

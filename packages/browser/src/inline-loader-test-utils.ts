@@ -66,6 +66,7 @@ export async function dispatchInlineDelegatedClick(
   importModule: (url: string) => Promise<Record<string, unknown>>,
   installSource: InlineSourceInstall,
   allowedModuleUrls: readonly string[] = [],
+  afterInstall?: () => void,
 ): Promise<void> {
   const globalRecord = globalThis as unknown as Record<string, unknown>;
   const originals = {
@@ -86,6 +87,7 @@ export async function dispatchInlineDelegatedClick(
     };
 
     installSource(importModule, globalRecord);
+    afterInstall?.();
 
     await listeners.get('click')?.({
       target: element,

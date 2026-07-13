@@ -44,8 +44,10 @@ describe('inline loader minified artifact', () => {
     expect(() =>
       assertMinifiedInlineKovoLoaderInstallerWireParserParity(inlineKovoLoaderInstallerSource),
     ).not.toThrow();
-    expect(inlineKovoLoaderInstallerSource).toContain("join('; ')");
-    expect(inlineKovoLoaderInstallerSource).toContain('[...new Set(');
+    expect(inlineKovoLoaderInstallerSource).toContain("sj(rlt(),'; ')");
+    expect(inlineKovoLoaderInstallerSource).toContain("sj(rt(),'; ')");
+    expect(inlineKovoLoaderInstallerSource).not.toContain(".join('; ')");
+    expect(inlineKovoLoaderInstallerSource).not.toContain('[...new Set(');
     expect(inlineKovoLoaderInstallerSource).toContain('function ri(');
     expect(inlineKovoLoaderInstallerSource).not.toContain('readChunks(');
     expect(inlineKovoLoaderInstallerSource).not.toContain("readAttribute(query.attrs,'name')");
@@ -54,17 +56,19 @@ describe('inline loader minified artifact', () => {
       "ras(el,'kovo-fragment-target')??ras(el,'id')??ras(el,'kovo-c')",
     );
     expect(inlineKovoLoaderInstallerSource).toContain(
-      'const hsaf=(value)=>value&&!/[\\x00-\\x1f\\x7f\\s;,#=]/.test(value);',
+      'const hsaf=(value)=>value&&!bns.regExpTest(/[\\x00-\\x1f\\x7f\\s;,#=]/,value);',
     );
     expect(inlineKovoLoaderInstallerSource).toContain(
-      "const hsc=(value)=>hsaf(value)&&!value.includes(':');",
+      "const hsc=(value)=>hsaf(value)&&bns.indexOf(value,':')<0;",
     );
     // SPEC.md §9.1 + security finding M10: the fragment-target lookup uses the
     // same escaped precedence as the modular runtime and still guards
     // querySelector so malformed selectors cannot abort the apply pass.
+    expect(inlineKovoLoaderInstallerSource).toContain('bns.getElementById(root,target)');
     expect(inlineKovoLoaderInstallerSource).toContain(
-      "const ftd=(root,target)=>{try{const selectorTarget=sq(target);return(root.querySelector?.('[kovo-fragment-target=\"'+selectorTarget+'\"]')??root.getElementById?.(target)??root.querySelector?.('[id=\"'+selectorTarget+'\"]')??root.querySelector?.('[kovo-c=\"'+selectorTarget+'\"]')??root.querySelector?.('kovo-defer[target=\"'+selectorTarget+'\"]'));}catch{return;}};const ft=(target)=>ftd(doc,target);",
+      "bns.queryOne(root,'[kovo-fragment-target=\"'+selectorTarget+'\"]')",
     );
+    expect(inlineKovoLoaderInstallerSource).not.toContain('root.querySelector?.');
     expect(inlineKovoLoaderInstallerSource).toContain("ras(el,'kovo-param-types')");
     expect(inlineKovoLoaderInstallerSource).not.toContain('new DOMParser().parseFromString');
     expect(inlineKovoLoaderInstallerSource).toContain(

@@ -377,6 +377,146 @@ describe('inline loader delegated handlers', () => {
   );
 
   it.each(inlineSourceInstallCases)(
+    'snapshots every inline handler reference before the first authored handler runs through %s',
+    async (_name, installSource) => {
+      // SPEC §6.6: module evaluation and an earlier authored handler run in the shared realm, but
+      // cannot rewrite the later url#export split that the framework already selected from DOM.
+      const secondReference = '/c/theme.js#second';
+      const element = new FakeElement({
+        'on:click': '/c/theme.js#first ' + secondReference,
+      });
+      const second = vi.fn();
+      const privileged = vi.fn();
+      const originalSlice = String.prototype.slice;
+      const first = vi.fn(() => {
+        String.prototype.slice = function poisonedHandlerSlice(start, end) {
+          const source = Reflect.apply(originalSlice, this, [0]);
+          if (source === secondReference && start > 0) return 'privileged';
+          return Reflect.apply(originalSlice, this, [start, end]);
+        };
+      });
+
+      try {
+        await dispatchInlineDelegatedClick(
+          element,
+          async () => ({ first, privileged, second }),
+          installSource,
+          ['/c/theme.js'],
+        );
+      } finally {
+        String.prototype.slice = originalSlice;
+      }
+
+      expect(first).toHaveBeenCalledTimes(1);
+      expect(second).toHaveBeenCalledTimes(1);
+      expect(privileged).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(inlineSourceInstallCases)(
+    'restores the inline post-commit scheduler without invoking authored accessors through %s',
+    async (_name, installSource) => {
+      const scheduleKey = '__kovo_postCommitSchedule';
+      const globalRecord = globalThis as unknown as Record<string, unknown>;
+      const originalDescriptor = Object.getOwnPropertyDescriptor(globalThis, scheduleKey);
+      const getter = vi.fn();
+      const setter = vi.fn();
+      const second = vi.fn();
+      const element = new FakeElement({
+        'on:click': '/c/theme.js#first /c/theme.js#second',
+      });
+
+      try {
+        await dispatchInlineDelegatedClick(
+          element,
+          async () => ({
+            first() {
+              Object.defineProperty(globalThis, scheduleKey, {
+                configurable: true,
+                get: getter,
+                set: setter,
+              });
+            },
+            second,
+          }),
+          installSource,
+          ['/c/theme.js'],
+        );
+
+        expect(getter).not.toHaveBeenCalled();
+        expect(setter).not.toHaveBeenCalled();
+        expect(second).toHaveBeenCalledTimes(1);
+      } finally {
+        if (originalDescriptor) {
+          Object.defineProperty(globalThis, scheduleKey, originalDescriptor);
+        } else {
+          delete globalRecord[scheduleKey];
+        }
+      }
+    },
+  );
+
+  it.each(inlineSourceInstallCases)(
+    'keeps inline handler and parameter selection pinned after late prototype poisoning through %s',
+    async (_name, installSource) => {
+      const refs = '/c/theme.js#safe';
+      const paramTypes = 'quantity:number';
+      const element = new FakeElement({
+        'data-p-quantity': '2',
+        'kovo-param-types': paramTypes,
+        'on:click': refs,
+      });
+      const safe = vi.fn((_event, context: { params: { quantity: number } }) => {
+        expect(context.params.quantity).toBe(2);
+      });
+      const privileged = vi.fn();
+      const originalNumber = Number;
+      const originalReplace = String.prototype.replace;
+      const originalSlice = String.prototype.slice;
+      const originalSplit = String.prototype.split;
+      const originalStartsWith = String.prototype.startsWith;
+
+      try {
+        await dispatchInlineDelegatedClick(
+          element,
+          async () => ({ privileged, safe }),
+          installSource,
+          ['/c/theme.js'],
+          () => {
+            String.prototype.split = function poisonedSplit(separator, limit) {
+              const source = Reflect.apply(originalSlice, this, [0]);
+              if (source === refs) return ['/c/theme.js#privileged'];
+              if (source === paramTypes) return ['quantity:boolean'];
+              return Reflect.apply(originalSplit, this, [separator, limit]);
+            };
+            String.prototype.startsWith = function poisonedStartsWith(search, position) {
+              const source = Reflect.apply(originalSlice, this, [0]);
+              if (source === 'data-p-quantity') return false;
+              return Reflect.apply(originalStartsWith, this, [search, position]);
+            };
+            String.prototype.replace = function poisonedReplace(search, replacement) {
+              const source = Reflect.apply(originalSlice, this, [0]);
+              if (source === 'quantity') return '__proto__';
+              return Reflect.apply(originalReplace, this, [search, replacement]);
+            };
+            (globalThis as unknown as Record<string, unknown>).Number = (value: unknown) =>
+              value === '2' ? 999 : originalNumber(value);
+          },
+        );
+      } finally {
+        String.prototype.replace = originalReplace;
+        String.prototype.slice = originalSlice;
+        String.prototype.split = originalSplit;
+        String.prototype.startsWith = originalStartsWith;
+        (globalThis as unknown as Record<string, unknown>).Number = originalNumber;
+      }
+
+      expect(safe).toHaveBeenCalledTimes(1);
+      expect(privileged).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(inlineSourceInstallCases)(
     'reuses inline ctx.signal for the same island through %s',
     async (_name, installSource) => {
       const globalRecord = globalThis as unknown as Record<string, unknown>;

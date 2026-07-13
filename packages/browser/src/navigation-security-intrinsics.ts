@@ -163,6 +163,9 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
   const documentQuerySelectorAll = NativeDocument
     ? valueMethod(NativeDocument.prototype, 'querySelectorAll')
     : undefined;
+  const documentGetElementById = NativeDocument
+    ? valueMethod(NativeDocument.prototype, 'getElementById')
+    : undefined;
   const elementQuerySelector = NativeElement
     ? valueMethod(NativeElement.prototype, 'querySelector')
     : undefined;
@@ -593,6 +596,22 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
       [selector],
     );
     return value !== null && typeof value === 'object' ? (value as Element) : null;
+  }
+
+  function getElementById(root: unknown, id: string): Element | undefined {
+    if (!controlsSound || root === null || typeof root !== 'object') return undefined;
+    const custom = stableMethod(root, 'getElementById');
+    const methods = [documentGetElementById, custom];
+    for (let index = 0; index < methods.length; index += 1) {
+      const method = methods[index];
+      if (!method || (index > 0 && method === methods[0])) continue;
+      try {
+        const value = call<unknown>(method, root, [id]);
+        if (value !== null && typeof value === 'object') return value as Element;
+        if (value === null) return undefined;
+      } catch {}
+    }
+    return undefined;
   }
 
   function callEventTargetMethod(
@@ -3094,6 +3113,7 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
     fetchWithOptionalSyncResult,
     fetchValue,
     getOwnSecurityPropertyDescriptor,
+    getElementById,
     hardNavigate,
     hasReloadControl,
     hasElementAttribute,

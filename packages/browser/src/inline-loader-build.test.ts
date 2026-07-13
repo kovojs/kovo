@@ -61,7 +61,7 @@ describe('inline loader build source', () => {
       buildInlineKovoLoaderInstallerReadableSource(),
     );
     expect(inlineKovoLoaderInstallerReadableSource).toContain('\nfunction installInlineKovoLoader');
-    expect(inlineKovoLoaderInstallerReadableSource).toContain("join('; ')");
+    expect(inlineKovoLoaderInstallerReadableSource).toContain("'Kovo-Targets': sj(rt(), '; ')");
     expect(inlineKovoLoaderInstallerReadableSource).toContain(
       "bns.createMutationBroadcastChannel('kovo:mutation-response')",
     );

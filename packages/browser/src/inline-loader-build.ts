@@ -158,6 +158,43 @@ function installInlineKovoLoader(im) {
   const mis = createMutationIdemSecurityControls();
   const intrinsicJson = JSON;
   const intrinsicJsonParse = intrinsicJson.parse;
+  const intrinsicJsonStringify = intrinsicJson.stringify;
+  const intrinsicNumber = Number;
+  const intrinsicArray = Array;
+  const intrinsicArrayIsArray = intrinsicArray.isArray;
+  const intrinsicEncodeURIComponent = encodeURIComponent;
+  const intrinsicObject = Object;
+  const intrinsicObjectDefineProperty = intrinsicObject.defineProperty;
+  const intrinsicReflect = Reflect;
+  const intrinsicReflectDeleteProperty = intrinsicReflect.deleteProperty;
+  const intrinsicString = String;
+  const js = (value) => bns.call(intrinsicJsonStringify, intrinsicJson, [value]);
+  const ns = (value) => bns.call(intrinsicNumber, undefined, [value]);
+  const ss = (value) => bns.call(intrinsicString, undefined, [value]);
+  const ec = (value) => bns.call(intrinsicEncodeURIComponent, undefined, [value]);
+  const tk = (source, separator) => {
+    const values = [];
+    let start = 0;
+    for (let index = 0; index <= source.length; index += 1) {
+      if (index < source.length && !bns.regExpTest(separator, source[index] ?? '')) continue;
+      if (index > start) {
+        bns.appendDenseSecurityValue(
+          values,
+          bns.slice(source, start, index),
+          'Inline security token snapshot',
+        );
+      }
+      start = index + 1;
+    }
+    return values;
+  };
+  const sj = (values, separator) => {
+    let joined = '';
+    for (let index = 0; index < values.length; index += 1) {
+      joined += (index ? separator : '') + values[index];
+    }
+    return joined;
+  };
   const ci = () => mis.createMutationIdem();
   const rh = (el) =>
     bns.closestElement(el, '[kovo-state]') ??
@@ -191,31 +228,55 @@ function installInlineKovoLoader(im) {
     current.classList?.toggle('light', light && !dark);
     if (theme === 'dark' || theme === 'light') current.setAttribute('data-theme', theme);
   };
-  const vp = (val, path) =>
-    path.split('.').reduce((cur, seg) => {
-      const key = seg.endsWith('?') ? seg.slice(0, -1) : seg;
-      return typeof cur === 'object' && cur !== null ? cur[key] : undefined;
-    }, val);
+  const vp = (val, path) => {
+    let current = val;
+    let start = 0;
+    for (let index = 0; index <= path.length; index += 1) {
+      if (index < path.length && path[index] !== '.') continue;
+      const optional = index > start && path[index - 1] === '?';
+      const key = bns.slice(path, start, optional ? index - 1 : index);
+      current = typeof current === 'object' && current !== null ? current[key] : undefined;
+      start = index + 1;
+    }
+    return current;
+  };
   const fb = (val) =>
-    val == null ? '' : typeof val === 'object' ? JSON.stringify(val) : String(val);
+    val == null ? '' : typeof val === 'object' ? js(val) : ss(val);
   const uu = (v) => {
     // SPEC.md §4.5/§4.8 KV236: scheme check must match the canonical regex in
     // core/internal/security-url.ts (/^([a-z][a-z0-9+.-]*):/) and the sibling
     // copy w in the deferred runtime (inline-loader.ts). The old /^[a-z][^:]*:/
     // wrongly treated relative URLs containing a colon after a slash (e.g.
     // "archive/2024:summary", "a/b:c") as scheme-bearing and rewrote them to '#'.
-    const s = v.replace(/[\x00-\x20]/g, '').toLowerCase();
-    return /^[a-z][a-z0-9+.-]*:/.test(s) && !/^(https?|ftp|mailto|tel):/.test(s);
+    let stripped = '';
+    for (let index = 0; index < v.length; index += 1) {
+      const character = v[index];
+      if (character !== undefined && bns.charCode(character, 0) > 32) stripped += character;
+    }
+    const s = bns.lower(stripped);
+    return (
+      bns.regExpTest(/^[a-z][a-z0-9+.-]*:/, s) &&
+      !bns.regExpTest(/^(https?|ftp|mailto|tel):/, s)
+    );
   };
   const ia = (name) =>
-    /^(href|src|action|formaction|poster|background|cite|data|ping|xlink:href)$/i.test(name);
+    bns.regExpTest(
+      /^(href|src|action|formaction|poster|background|cite|data|ping|xlink:href)$/i,
+      name,
+    );
   const s = (v) => {
     const r = [];
-    for (const c of String(v).split(',')) {
-      const x = c.trim();
-      if (x && !uu(x.split(/\s/)[0])) r.push(x);
+    const candidates = tk(ss(v), /,/);
+    for (let index = 0; index < candidates.length; index += 1) {
+      const c = candidates[index];
+      if (c === undefined) continue;
+      const x = bns.trim(c);
+      const first = tk(x, /\s/u)[0] ?? '';
+      if (x && !uu(first)) {
+        bns.appendDenseSecurityValue(r, x, 'Inline srcset security snapshot');
+      }
     }
-    return r.length ? r.join(', ') : null;
+    return sj(r, ', ') || null;
   };
   const ki = (url) => {
     try {
@@ -279,6 +340,67 @@ function installInlineKovoLoader(im) {
     const descriptor = bns.getOwnSecurityPropertyDescriptor(carrier, name);
     return descriptor && 'value' in descriptor ? descriptor.value : undefined;
   };
+  const mr = (source) => {
+    let hashIndex = -1;
+    for (let index = 0; index < source.length; index += 1) {
+      if (source[index] === '#') hashIndex = index;
+    }
+    if (hashIndex <= 0 || hashIndex === source.length - 1) return;
+    return {
+      exportName: bns.slice(source, hashIndex + 1),
+      source,
+      url: bns.slice(source, 0, hashIndex),
+    };
+  };
+  const mrs = (refs) => {
+    const references = [];
+    const sources = tk(refs, /\s/u);
+    for (let index = 0; index < sources.length; index += 1) {
+      const source = sources[index];
+      if (source === undefined) continue;
+      const reference = mr(source);
+      if (!reference) throw Error('Invalid handler reference: ' + source);
+      bns.appendDenseSecurityValue(
+        references,
+        reference,
+        'Inline handler reference snapshot',
+      );
+    }
+    return references;
+  };
+  const sod = (carrier, name, descriptor, label) => {
+    bns.call(intrinsicObjectDefineProperty, intrinsicObject, [
+      carrier,
+      name,
+      descriptor,
+    ]);
+    const committed = bns.getOwnSecurityPropertyDescriptor(carrier, name);
+    if (!committed) throw new TypeError(label + ' own-property commit failed.');
+    return committed;
+  };
+  const sov = (carrier, name, value, label = 'Inline security value') => {
+    const committed = sod(
+      carrier,
+      name,
+      { configurable: true, enumerable: true, value, writable: true },
+      label,
+    );
+    if (!('value' in committed) || committed.value !== value) {
+      throw new TypeError(label + ' own-data commit failed.');
+    }
+  };
+  const rod = (carrier, name, descriptor, label) => {
+    if (descriptor) {
+      sod(carrier, name, descriptor, label);
+      return;
+    }
+    if (bns.call(intrinsicReflectDeleteProperty, intrinsicReflect, [carrier, name]) !== true) {
+      throw new TypeError(label + ' own-property deletion failed.');
+    }
+    if (bns.getOwnSecurityPropertyDescriptor(carrier, name) !== undefined) {
+      throw new TypeError(label + ' own-property deletion did not commit.');
+    }
+  };
   const ras = (carrier, name) => {
     const attribute = bns.readAttribute(carrier, name);
     if (attribute !== null) return attribute;
@@ -304,7 +426,7 @@ function installInlineKovoLoader(im) {
   };
   const ba = (el) => bindingAttributes(el, 'data-bind:');
   const wa = (el, name, val) => {
-    const n = name.toLowerCase();
+    const n = bns.lower(name);
     // SPEC.md section 5.2.4: a dialog opened via the native show-modal invoker
     // lives in the top layer. Toggling its open attribute alone never exits the
     // top layer (it stays :modal with an inert backdrop intercepting every
@@ -325,7 +447,7 @@ function installInlineKovoLoader(im) {
     // SPEC.md §4.6/§4.8: HTML boolean-presence attributes use presence, not
     // stringified booleans. Keep inline data-bind:* in parity with the module
     // query/state runtime for the full boolean-presence set.
-    if (/^(?:${inlineBooleanPresenceAttributes.join('|')})$/.test(n)) {
+    if (bns.regExpTest(/^(?:${inlineBooleanPresenceAttributes.join('|')})$/, n)) {
       const on = val != null && val !== false;
       if (on) bns.setElementAttribute(el, name, '');
       else bns.removeElementAttribute(el, name);
@@ -364,18 +486,18 @@ function installInlineKovoLoader(im) {
       (name === 'scrollLeft' || name === 'scrollleft') &&
       bns.readElementProperty(el, 'scrollLeft') !== undefined
     ) {
-      bns.setElementProperty(el, 'scrollLeft', Number(val) || 0);
+      bns.setElementProperty(el, 'scrollLeft', ns(val) || 0);
     }
     if (
       (name === 'scrollTop' || name === 'scrolltop') &&
       bns.readElementProperty(el, 'scrollTop') !== undefined
     ) {
-      bns.setElementProperty(el, 'scrollTop', Number(val) || 0);
+      bns.setElementProperty(el, 'scrollTop', ns(val) || 0);
     }
   };
   const ws = (el, path, bt, state, root = 'state') => {
-    if (!path?.startsWith(root + '.')) return;
-    const val = vp(state, path.slice(root.length + 1));
+    if (!path || bns.indexOf(path, root + '.') !== 0) return;
+    const val = vp(state, bns.slice(path, root.length + 1));
     if (bt) {
       wa(el, bt, val);
     } else {
@@ -407,7 +529,7 @@ function installInlineKovoLoader(im) {
     bns.setElementProperty(
       el,
       prop,
-      spec[1] === 0 ? val != null && val !== false : spec[1] === 1 ? Number(val) || 0 : fb(val),
+      spec[1] === 0 ? val != null && val !== false : spec[1] === 1 ? ns(val) || 0 : fb(val),
     );
   };
   const as = async (host, state) => {
@@ -494,15 +616,11 @@ function installInlineKovoLoader(im) {
       }
     }
   };
-  const rd = (val) =>
-    (val ?? '')
-      .split(/[\s,]+/)
-      .map((dep) => dep.trim())
-      .filter(Boolean);
+  const rd = (val) => tk(val ?? '', /[\s,]/u);
   ${fragmentTargetEscapeReadableSource}
   const sq = escapeCssString;
-  const hsaf = (value) => value && !/[\x00-\x1f\x7f\s;,#=]/.test(value);
-  const hsc = (value) => hsaf(value) && !value.includes(':');
+  const hsaf = (value) => value && !bns.regExpTest(/[\x00-\x1f\x7f\s;,#=]/, value);
+  const hsc = (value) => hsaf(value) && bns.indexOf(value, ':') < 0;
   const targetIdentity = (el) =>
     ras(el, 'kovo-fragment-target') ?? ras(el, 'id') ?? ras(el, 'kovo-c') ?? '';
   const liveTargetIdentity = (el) =>
@@ -514,34 +632,59 @@ function installInlineKovoLoader(im) {
       const props = bns.call(intrinsicJsonParse, intrinsicJson, [
         ras(el, 'kovo-props') || '{}',
       ]);
-      return props && typeof props === 'object' && !Array.isArray(props) ? props : {};
+      return props &&
+        typeof props === 'object' &&
+        bns.call(intrinsicArrayIsArray, intrinsicArray, [props]) !== true
+        ? props
+        : {};
     } catch {
       return {};
     }
   };
-  const rt = () => [
-    ...new Set(
-      [...doc.querySelectorAll('[kovo-deps]')]
-        .map((el) => {
-          const deps = rd(ras(el, 'kovo-deps'));
-          const target = targetIdentity(el);
-          if (!hsaf(target) || !deps.every(hsaf)) return '';
-          return target && (deps.length ? target + '=' + deps.join(' ') : target);
-        })
-        .filter(Boolean)
-    )
-  ];
-  const rlt = () => {
-    const seen = new Set();
+  const hasSnapshotValue = (values, value) => {
+    for (let index = 0; index < values.length; index += 1) {
+      if (values[index] === value) return true;
+    }
+    return false;
+  };
+  const rt = () => {
     const targets = [];
-    for (const el of doc.querySelectorAll('[kovo-deps]')) {
+    const elements = qa(doc, '[kovo-deps]');
+    for (let elementIndex = 0; elementIndex < elements.length; elementIndex += 1) {
+      const el = elements[elementIndex];
+      if (!el) continue;
+      const deps = rd(ras(el, 'kovo-deps'));
+      const target = targetIdentity(el);
+      let safe = !!hsaf(target);
+      for (let depIndex = 0; safe && depIndex < deps.length; depIndex += 1) {
+        safe = !!hsaf(deps[depIndex]);
+      }
+      if (!safe || !target) continue;
+      const value = deps.length ? target + '=' + sj(deps, ' ') : target;
+      if (!hasSnapshotValue(targets, value)) {
+        bns.appendDenseSecurityValue(targets, value, 'Inline target header snapshot');
+      }
+    }
+    return targets;
+  };
+  const rlt = () => {
+    const seen = [];
+    const targets = [];
+    const elements = qa(doc, '[kovo-deps]');
+    for (let index = 0; index < elements.length; index += 1) {
+      const el = elements[index];
+      if (!el) continue;
       const target = targetIdentity(el);
       const component = liveTargetIdentity(el);
       const token = ras(el, 'kovo-live-token');
       if (!hsaf(target) || !hsc(component) || !hsaf(token)) continue;
-      if (!target || seen.has(target)) continue;
-      seen.add(target);
-      targets.push(target + '#' + component + '@' + token + ':' + JSON.stringify(liveProps(el)));
+      if (!target || hasSnapshotValue(seen, target)) continue;
+      bns.appendDenseSecurityValue(seen, target, 'Inline live target identity snapshot');
+      bns.appendDenseSecurityValue(
+        targets,
+        target + '#' + component + '@' + token + ':' + js(liveProps(el)),
+        'Inline live target header snapshot',
+      );
     }
     return targets;
   };
@@ -551,11 +694,11 @@ function installInlineKovoLoader(im) {
     try {
       const selectorTarget = sq(target);
       return (
-        root.querySelector?.('[kovo-fragment-target="' + selectorTarget + '"]') ??
-        root.getElementById?.(target) ??
-        root.querySelector?.('[id="' + selectorTarget + '"]') ??
-        root.querySelector?.('[kovo-c="' + selectorTarget + '"]') ??
-        root.querySelector?.('kovo-defer[target="' + selectorTarget + '"]')
+        bns.queryOne(root, '[kovo-fragment-target="' + selectorTarget + '"]') ??
+        bns.getElementById(root, target) ??
+        bns.queryOne(root, '[id="' + selectorTarget + '"]') ??
+        bns.queryOne(root, '[kovo-c="' + selectorTarget + '"]') ??
+        bns.queryOne(root, 'kovo-defer[target="' + selectorTarget + '"]')
       );
     } catch {
       return;
@@ -571,20 +714,22 @@ function installInlineKovoLoader(im) {
   const bh = (res) => bns.readHeader(res, 'Kovo-Build') ?? '';
   const qwk = (name, key) => {
     if (!name) return '';
-    return key == null || key === '' ? name : key.startsWith(name + ':') ? key : name + ':' + key;
+    return key == null || key === ''
+      ? name
+      : bns.indexOf(key, name + ':') === 0
+        ? key
+        : name + ':' + key;
   };
   const qurl = (wireKey) => {
-    const i = wireKey.indexOf(':');
-    const n = i > 0 ? wireKey.slice(0, i) : wireKey;
-    const k = i > 0 ? wireKey.slice(i + 1) : undefined;
-    return n ? '/_q/' + encodeURIComponent(n) + (k == null ? '' : '?key=' + encodeURIComponent(k)) : '';
+    const i = bns.indexOf(wireKey, ':');
+    const n = i > 0 ? bns.slice(wireKey, 0, i) : wireKey;
+    const k = i > 0 ? bns.slice(wireKey, i + 1) : undefined;
+    return n ? '/_q/' + ec(n) + (k == null ? '' : '?key=' + ec(k)) : '';
   };
   const rbd = (nextBody) => {
-    if (doc.documentElement?.replaceChild && doc.body) {
-      doc.documentElement.replaceChild(nextBody, doc.body);
-    } else {
-      doc.body.replaceWith(nextBody);
-    }
+    const currentBody = bns.readDocumentField(doc, 'body');
+    if (!currentBody) throw new TypeError('Kovo document body is unavailable.');
+    bns.replaceElement(currentBody, nextBody);
     return nextBody;
   };
   const ks = 'script[data-kovo-csp-hash]';
@@ -710,12 +855,24 @@ function installInlineKovoLoader(im) {
   const dq = (type, init) => {
     dispatchEvent(new CustomEvent(type, init));
   };
-  const ea = (value) =>
-    String(value)
-      .replaceAll('&', '&amp;')
-      .replaceAll('"', '&quot;')
-      .replaceAll('<', '&lt;')
-      .replaceAll('>', '&gt;');
+  const ea = (value) => {
+    const source = ss(value);
+    let encoded = '';
+    for (let index = 0; index < source.length; index += 1) {
+      const character = source[index];
+      encoded +=
+        character === '&'
+          ? '&amp;'
+          : character === '"'
+            ? '&quot;'
+            : character === '<'
+              ? '&lt;'
+              : character === '>'
+                ? '&gt;'
+                : character ?? '';
+    }
+    return encoded;
+  };
   const fab = (body, build) => {
     const activeId = doc.activeElement?.id;
     ab(body, build);
@@ -761,10 +918,18 @@ function installInlineKovoLoader(im) {
   const rememberQueryChunk = dl.rememberQueryChunk;
   const rememberQueryScripts = dl.rememberQueryScripts;
   const aq = (queries, applyQueries) => {
-    for (const q of queries) rememberQueryChunk(q);
+    for (let index = 0; index < queries.length; index += 1) {
+      const q = queries[index];
+      if (q) rememberQueryChunk(q);
+    }
     if (applyQueries) {
       const ok = [];
-      for (const q of queries) qd(q) ? qr(q) : ok.push(q);
+      for (let index = 0; index < queries.length; index += 1) {
+        const q = queries[index];
+        if (!q) continue;
+        if (qd(q)) qr(q);
+        else bns.appendDenseSecurityValue(ok, q, 'Inline query event snapshot');
+      }
       dq('kovo:query', { detail: { queries: ok } });
     }
   };
@@ -795,26 +960,43 @@ function installInlineKovoLoader(im) {
     at(chunks.texts);
   };
   globalThis.__kovo_a = ab;
-  const st = {};
-  const se = {};
+  const st = [];
+  const se = [];
   const sft = (target) => {
     try {
-      return doc.querySelector('[data-stream-text="' + sq(target) + '"]');
+      return bns.queryOne(doc, '[data-stream-text="' + sq(target) + '"]');
     } catch {
       return;
     }
   };
+  const readStreamSource = (target) => {
+    for (let index = 0; index < st.length; index += 1) {
+      if (st[index]?.target === target) return st[index].source;
+    }
+  };
+  const writeStreamSource = (target, source) => {
+    for (let index = 0; index < st.length; index += 1) {
+      if (st[index]?.target === target) {
+        st[index].source = source;
+        return;
+      }
+    }
+    bns.appendDenseSecurityValue(st, { source, target }, 'Inline stream source snapshot');
+  };
   const sr = async (el, source) => {
-    const ref = bns.readAttribute(el, 'data-stream-renderer');
-    const hi = ref?.lastIndexOf('#') ?? -1;
-    if (hi <= 0 || hi === ref.length - 1) return;
-    const mod = await im(ref.slice(0, hi));
-    const render = oe(mod, ref.slice(hi + 1));
+    const sourceRef = bns.readAttribute(el, 'data-stream-renderer');
+    const reference = sourceRef ? mr(sourceRef) : undefined;
+    if (!reference) return;
+    const mod = await im(reference.url);
+    const render = oe(mod, reference.exportName);
     if (typeof render === 'function') await bns.call(render, undefined, [el, source, {}]);
   };
   const at = (texts) => {
     let missing = false;
-    for (const x of texts || []) {
+    const values = texts || [];
+    for (let index = 0; index < values.length; index += 1) {
+      const x = values[index];
+      if (!x) continue;
       const el = sft(x.target);
       if (!el) {
         missing = true;
@@ -822,11 +1004,13 @@ function installInlineKovoLoader(im) {
       }
       const text = unescapeHtml(x.text);
       const source =
-        x.mode === 'checkpoint' ? text : (st[x.target] ?? bns.readNodeTextContent(el) ?? '') + text;
-      st[x.target] = source;
-      se[x.target] = el;
+        x.mode === 'checkpoint'
+          ? text
+          : (readStreamSource(x.target) ?? bns.readNodeTextContent(el) ?? '') + text;
+      writeStreamSource(x.target, source);
+      bns.appendDenseSecurityValue(se, el, 'Inline stream target snapshot');
       bns.setNodeTextContent(el, source);
-      el.setAttribute?.('data-stream-state', 'streaming');
+      bns.setElementAttribute(el, 'data-stream-state', 'streaming');
       void (async () => {
         try {
           await sr(el, source);
@@ -836,7 +1020,10 @@ function installInlineKovoLoader(im) {
     return !missing;
   };
   const sfail = () => {
-    for (const key in se) se[key].setAttribute?.('data-stream-state', 'error');
+    for (let index = 0; index < se.length; index += 1) {
+      const element = se[index];
+      if (element) bns.setElementAttribute(element, 'data-stream-state', 'error');
+    }
   };
   const ax = (chunks) => {
     const textStart = chunks.texts[0]?.start ?? 1 / 0;
@@ -867,30 +1054,62 @@ function installInlineKovoLoader(im) {
   };
   const cp = (body, state) => {
     if (state.done) {
-      if (body.trim()) throw Error('Streaming mutation emitted bytes after <kovo-done>');
+      if (bns.trim(body)) throw Error('Streaming mutation emitted bytes after <kovo-done>');
       return '';
     }
     const chunks = readMutationResponseElementChunks(body);
     const dones = readElementChunks(body, 'kovo-done');
     let end = 0;
-    for (const group of [chunks.queries, chunks.fragments, chunks.texts, dones]) {
-      for (const x of group) if (x.end > end) end = x.end;
+    const groups = [chunks.queries, chunks.fragments, chunks.texts, dones];
+    for (let groupIndex = 0; groupIndex < groups.length; groupIndex += 1) {
+      const group = groups[groupIndex];
+      if (!group) continue;
+      for (let index = 0; index < group.length; index += 1) {
+        const chunk = group[index];
+        if (chunk && chunk.end > end) end = chunk.end;
+      }
     }
     if (!end) return body;
-    state.queries.push(...chunks.queries);
+    for (let index = 0; index < chunks.queries.length; index += 1) {
+      const query = chunks.queries[index];
+      if (query) {
+        bns.appendDenseSecurityValue(state.queries, query, 'Inline streaming query snapshot');
+      }
+    }
     if (!dones.length) {
       if (!ax(chunks)) {
         sfail();
         throw Error('Missing kovo-text target');
       }
-      return body.slice(end);
+      return bns.slice(body, end);
     }
-    const firstDone = dones.reduce((first, current) => current.start < first.start ? current : first);
-    const hasPostDoneChunk = [chunks.queries, chunks.fragments, chunks.texts]
-      .some((group) => group.some((chunk) => chunk.start > firstDone.start));
-    const reason = dones
-      .map((x) => readAttribute(x.attrs, 'reason') ?? 'complete')
-      .find((value) => value !== 'complete') ?? (hasPostDoneChunk ? 'invalid' : 'complete');
+    let firstDone = dones[0];
+    for (let index = 1; index < dones.length; index += 1) {
+      const current = dones[index];
+      if (current && firstDone && current.start < firstDone.start) firstDone = current;
+    }
+    if (!firstDone) throw Error('Streaming mutation completion marker is unavailable');
+    let hasPostDoneChunk = false;
+    for (let groupIndex = 0; groupIndex < 3 && !hasPostDoneChunk; groupIndex += 1) {
+      const group = groups[groupIndex];
+      if (!group) continue;
+      for (let index = 0; index < group.length; index += 1) {
+        if (group[index]?.start > firstDone.start) {
+          hasPostDoneChunk = true;
+          break;
+        }
+      }
+    }
+    let reason = hasPostDoneChunk ? 'invalid' : 'complete';
+    for (let index = 0; index < dones.length; index += 1) {
+      const done = dones[index];
+      if (!done) continue;
+      const value = readAttribute(done.attrs, 'reason') ?? 'complete';
+      if (value !== 'complete') {
+        reason = value;
+        break;
+      }
+    }
     if (!ax(chunks)) {
       sfail();
       throw Error('Missing kovo-text target');
@@ -899,7 +1118,7 @@ function installInlineKovoLoader(im) {
     if (reason === 'complete') {
       aq(state.queries, true);
       state.queries.length = 0;
-      return body.slice(end);
+      return bns.slice(body, end);
     }
     aq(state.queries, false);
     state.queries.length = 0;
@@ -918,7 +1137,7 @@ function installInlineKovoLoader(im) {
         pending = cp(pending + bns.decodeText(decoder, read.value, { stream: true }), state);
       }
       pending += bns.decodeText(decoder);
-      if (pending.trim()) {
+      if (bns.trim(pending)) {
         sfail();
         throw Error('Streaming mutation ended with an incomplete wire element');
       }
@@ -936,8 +1155,10 @@ function installInlineKovoLoader(im) {
   };
   const fsb = (form) => {
     if (bns.submitForm(form)) return;
-    form.setAttribute?.('data-error-code', 'NETWORK_ERROR');
-    form.setAttribute?.('kovo-error', '');
+    try {
+      bns.setElementAttribute(form, 'data-error-code', 'NETWORK_ERROR');
+      bns.setElementAttribute(form, 'kovo-error', '');
+    } catch {}
   };
   const chg = (response) => {
     const value = bns.readHeader(response, 'Kovo-Changes');
@@ -1037,10 +1258,10 @@ function installInlineKovoLoader(im) {
               : 'text/vnd.kovo.fragment+html',
             'Kovo-Form-Target': targetIdentity(form),
             'Kovo-Fragment': 'true',
-            'Kovo-Idem': String(idem),
-            'Kovo-Live-Targets': rlt().join('; '),
+            'Kovo-Idem': ss(idem),
+            'Kovo-Live-Targets': sj(rlt(), '; '),
             ...(streaming ? { 'Kovo-Stream': 'true' } : {}),
-            'Kovo-Targets': rt().join('; '),
+            'Kovo-Targets': sj(rt(), '; '),
           },
           keepalive: !streaming,
           method: bns.upper(ras(form, 'method') || 'post'),
@@ -1102,12 +1323,40 @@ function installInlineKovoLoader(im) {
       }
     })();
   };
-  const rp = (el) =>
-    (ras(el, 'kovo-param-types') || '').split(/[\s,]+/).reduce((types, entry) => {
-      const [name, type] = entry.split(':');
-      if (name) types[name] = type;
-      return types;
-    }, {},);
+  const rp = (el) => {
+    const types = [];
+    const entries = tk(ras(el, 'kovo-param-types') || '', /[\s,]/u);
+    for (let index = 0; index < entries.length; index += 1) {
+      const entry = entries[index];
+      if (!entry) continue;
+      const separator = bns.indexOf(entry, ':');
+      const name = separator < 0 ? entry : bns.slice(entry, 0, separator);
+      const type = separator < 0 ? undefined : bns.slice(entry, separator + 1);
+      if (name) {
+        bns.appendDenseSecurityValue(types, { name, type }, 'Inline parameter type snapshot');
+      }
+    }
+    return types;
+  };
+  const rpt = (types, name) => {
+    for (let index = 0; index < types.length; index += 1) {
+      if (types[index]?.name === name) return types[index].type;
+    }
+  };
+  const pn = (source) => {
+    let name = '';
+    for (let index = 0; index < source.length; index += 1) {
+      const character = source[index];
+      const next = source[index + 1];
+      if (character === '-' && next !== undefined && bns.regExpTest(/[a-z0-9]/, next)) {
+        name += bns.upper(next);
+        index += 1;
+      } else if (character !== undefined) {
+        name += character;
+      }
+    }
+    return name;
+  };
   const dispatch = async (event) => {
     const eventFacts = bns.snapshotDelegatedEvent(event);
     if (!eventFacts) return;
@@ -1144,35 +1393,46 @@ function installInlineKovoLoader(im) {
     const state = rs(el);
     const st = rh(el);
     const context = { params, state, signal: hs(el) };
-    for (const attr of bns.snapshotElementAttributes(el)) {
-      if (!attr.name.startsWith('data-p-')) continue;
-      const name = attr.name
-        .slice('data-p-'.length)
-        .replace(/-([a-z0-9])/g, (_match, char) => char.toUpperCase());
-      const type = pt[name];
+    const attributes = bns.snapshotElementAttributes(el);
+    for (let index = 0; index < attributes.length; index += 1) {
+      const attr = attributes[index];
+      if (!attr || bns.indexOf(attr.name, 'data-p-') !== 0) continue;
+      const name = pn(bns.slice(attr.name, 'data-p-'.length));
+      const type = rpt(pt, name);
       const val = attr.value;
-      params[name] = type === 'number' ? Number(val) : type === 'boolean' ? val === 'true' : val;
+      sov(params, name, type === 'number' ? ns(val) : type === 'boolean' ? val === 'true' : val);
     }
     const pc = [];
-    for (const ref of refs.split(/\s+/).filter(Boolean)) {
-      const hi = ref.lastIndexOf('#');
-      if (hi <= 0 || hi === ref.length - 1) throw Error('Invalid handler reference: ' + ref);
-      const mod = await im(ref.slice(0, hi));
-      const fn = oe(mod, ref.slice(hi + 1));
-      if (typeof fn !== 'function') throw Error('Handler export not found: ' + ref);
-      const prev = globalThis.__kovo_postCommitSchedule;
-      globalThis.__kovo_postCommitSchedule = (cb) => pc.push(cb);
+    const references = mrs(refs);
+    for (let index = 0; index < references.length; index += 1) {
+      const reference = references[index];
+      if (!reference) continue;
+      const mod = await im(reference.url);
+      const fn = oe(mod, reference.exportName);
+      if (typeof fn !== 'function') throw Error('Handler export not found: ' + reference.source);
+      const scheduleKey = '__kovo_postCommitSchedule';
+      const previousSchedule = bns.getOwnSecurityPropertyDescriptor(globalThis, scheduleKey);
+      const scheduler = (callback) => {
+        if (typeof callback === 'function') {
+          bns.appendDenseSecurityValue(pc, callback, 'Inline post-commit callback snapshot');
+        }
+      };
+      sov(globalThis, scheduleKey, scheduler, 'Inline post-commit scheduler');
       let run;
       try {
         run = bns.call(fn, undefined, [event, context]);
       } finally {
-        globalThis.__kovo_postCommitSchedule = prev;
+        rod(globalThis, scheduleKey, previousSchedule, 'Inline post-commit scheduler');
       }
       await run;
     }
-    if (st) bns.setElementAttribute(st, 'kovo-state', JSON.stringify(state));
+    if (st) bns.setElementAttribute(st, 'kovo-state', js(state));
     if (st) await as(st, state);
-    for (const cb of pc) try { cb(); } catch {}
+    for (let index = 0; index < pc.length; index += 1) {
+      const callback = pc[index];
+      if (typeof callback !== 'function') continue;
+      try { bns.call(callback, undefined, []); } catch {}
+    }
   };
   const trigger = (type, target) => {
     void dispatch({ target, type });
