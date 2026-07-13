@@ -351,6 +351,39 @@ describe('server app matched dispatch boundary', () => {
     );
   });
 
+  it('pins raw endpoint headers after browser-state posture classification', async () => {
+    let retainedResponse: Response | undefined;
+    const machine = endpoint('/machine/retained-response', {
+      csrf: false,
+      csrfJustification: 'non-browser machine status request',
+      handler() {
+        retainedResponse = new Response('ok', {
+          headers: {
+            'Cache-Control': 'no-store',
+            'Content-Type': 'text/plain; charset=utf-8',
+          },
+        });
+        return retainedResponse;
+      },
+      method: 'POST',
+      reason: 'retained raw response security regression',
+      response: rawTextResponse,
+    });
+    const app = createApp({ endpoints: [machine] });
+    const request = new Request('https://shop.example.test/machine/retained-response', {
+      method: 'POST',
+    });
+
+    const response = await dispatchMatchedAppRequest(matchedAppRequest(app, request));
+    retainedResponse?.headers.set('Clear-Site-Data', '"cookies"');
+    retainedResponse?.headers.set('Set-Cookie', 'sid=attacker; Path=/');
+
+    expect(response).not.toBe(retainedResponse);
+    expect(response.headers.get('clear-site-data')).toBeNull();
+    expect(response.headers.get('set-cookie')).toBeNull();
+    await expect(response.text()).resolves.toBe('ok');
+  });
+
   it.each(['POST', 'PUT', 'PATCH', 'DELETE'])(
     'enforces default endpoint CSRF before %s handler dispatch',
     async (method) => {

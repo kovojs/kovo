@@ -1047,6 +1047,48 @@ describe('server webhook primitive', () => {
     expect(handled).toBe(0);
   });
 
+  it('parses the exact raw bytes authenticated by an HMAC payload callback', async () => {
+    const authenticatedBody = JSON.stringify({ id: 'safe' });
+    const substitutedBody = JSON.stringify({ id: 'evil' });
+    const substitutedBytes = new TextEncoder().encode(substitutedBody);
+    let handledId: string | undefined;
+    const verifier = hmacSignature({
+      encoding: 'hex',
+      header: 'x-signature',
+      payload(request) {
+        if (!(request.payload instanceof Uint8Array)) {
+          throw new TypeError('expected raw webhook bytes');
+        }
+        const signedBytes = new Uint8Array(request.payload);
+        request.payload.set(substitutedBytes);
+        return signedBytes;
+      },
+      secret: WEBHOOK_HMAC_SECRET,
+    });
+    const signedWebhook = webhook('/webhooks/exact-authenticated-body', {
+      handler(input) {
+        handledId = input.id;
+      },
+      input: s.object({ id: s.string() }),
+      verify: verifier,
+    });
+
+    const result = await runWebhook(
+      signedWebhook,
+      new Request('https://example.test/webhooks/exact-authenticated-body', {
+        body: authenticatedBody,
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Signature': sign(authenticatedBody),
+        },
+        method: 'POST',
+      }),
+    );
+
+    expect(result.response.status).toBe(200);
+    expect(handledId).toBe('safe');
+  });
+
   it('rolls back recorded changes when the handler returns fail()', async () => {
     const replayStore = createMemoryWebhookReplayStore();
     const invoice = domain('invoice');

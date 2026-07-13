@@ -320,7 +320,6 @@ export const emitToWire = wireEmitter(
       if (!isNativeResponse(value)) {
         throw new TypeError('emitToWire raw-endpoint-response requires a Web Response.');
       }
-      const headers = readNativeResponseHeaders(value);
       const status = readNativeResponseStatus(value);
       const finalizedHeaders = finalizeRawResponseHeaders(value, {
         ...(provenance.redirectAllowlist === undefined
@@ -329,7 +328,6 @@ export const emitToWire = wireEmitter(
         ...(provenance.secure === true ? { secure: true as const } : {}),
       });
       const suppressBody = provenance.method === 'HEAD' || status === 304;
-      if (!suppressBody && finalizedHeaders === headers) return value;
 
       return new NativeResponse(suppressBody ? null : readNativeResponseBody(value), {
         headers: finalizedHeaders,
@@ -729,8 +727,10 @@ function finalizeRawResponseHeaders(
   const hasRedirectLocation =
     isRedirectStatus(readNativeResponseStatus(response)) && nativeHeaderHas(headers, 'location');
   const setCookies = rawSetCookieHeaders(headers);
-  if (!hasRedirectLocation && setCookies.length === 0) return headers;
 
+  // SPEC §6.2 rule 5: response posture is decided over caller-owned headers before this
+  // wire sink runs. Always reconstruct them so a retained raw Response cannot mutate the
+  // already-classified authority-bearing carrier after the boundary decision.
   const webHeaders = createNativeHeaders();
   witnessReflectApply(nativeHeadersForEach as Function, headers, [
     (value: string, name: string): void => {

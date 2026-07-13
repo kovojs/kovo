@@ -44,7 +44,11 @@ import {
   type ResponseHeaders,
   type ServerResponseBase,
 } from './response.js';
-import { securityArrayJoin, securityJsonStringify } from './response-security-intrinsics.js';
+import {
+  securityArrayJoin,
+  securityJsonStringify,
+  securityUint8ArraySlice,
+} from './response-security-intrinsics.js';
 import { isSchemaValidationError, snapshotSchemaForRuntime } from './schema.js';
 import type { InferSchema, Schema, ValidationIssue } from './schema.js';
 import { managedSqlExecutionPolicy, wrapManagedDbForSqlSafety } from './sql-safe-handle.js';
@@ -1143,7 +1147,14 @@ export async function runWebhook<
   // `false` result, never surfacing which check failed.
   let verification: boolean;
   try {
-    verification = await verifyWebhook(definition, verifierInput.headers, rawBody);
+    // SPEC §6.2 rule 5 / §9.1: verifier callbacks are authored code. Give them a detached
+    // byte view so payload/timestamp normalization cannot rewrite the exact raw bytes parsed and
+    // dispatched after authentication (valid signature over A must never authorize body B).
+    verification = await verifyWebhook(
+      definition,
+      verifierInput.headers,
+      securityUint8ArraySlice(rawBody),
+    );
   } catch {
     verification = false;
   }

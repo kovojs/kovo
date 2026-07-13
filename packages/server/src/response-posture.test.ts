@@ -99,13 +99,27 @@ describe('central response posture finalization', () => {
     await expect(notModified.text()).resolves.toBe('');
   });
 
-  it('suppresses raw endpoint HEAD bodies without copying streaming success bodies', async () => {
+  it('pins raw endpoint response headers before they cross the wire boundary', async () => {
     const raw = new Response('payload', {
       headers: { 'Cache-Control': 'no-store', 'Content-Type': 'text/plain; charset=utf-8' },
       status: 200,
     });
 
-    expect(finalizeRawWebResponse(raw, { method: 'GET' })).toBe(raw);
+    const finalized = finalizeRawWebResponse(raw, { method: 'GET' });
+
+    expect(finalized).not.toBe(raw);
+    raw.headers.set('Clear-Site-Data', '"cookies"');
+    raw.headers.set('Set-Cookie', 'sid=attacker; Path=/');
+    expect(finalized.headers.get('clear-site-data')).toBeNull();
+    expect(finalized.headers.get('set-cookie')).toBeNull();
+    await expect(finalized.text()).resolves.toBe('payload');
+  });
+
+  it('suppresses raw endpoint HEAD bodies while preserving finalized headers', async () => {
+    const raw = new Response('payload', {
+      headers: { 'Cache-Control': 'no-store', 'Content-Type': 'text/plain; charset=utf-8' },
+      status: 200,
+    });
 
     const head = finalizeRawWebResponse(raw, { method: 'HEAD' });
 
