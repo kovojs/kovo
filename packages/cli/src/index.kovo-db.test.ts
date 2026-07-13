@@ -9,6 +9,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { spawnSync } from 'node:child_process';
+import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -419,6 +420,134 @@ describe('kovo db', () => {
     }
   });
 
+  it('does not let an authored schema redirect migration reads through synced Node path exports', async () => {
+    const { dataDir, migrationsDir, root, schemaPath } = writeDbCommandFixture(
+      'migrate-node-path-poison',
+    );
+    const outside = mkdtempSync(join(dirname(root), '.tmp-kovo-db-path-poison-outside-'));
+    roots.push(outside);
+    const createNotes = [
+      'CREATE TABLE kovo_cli_db_notes (',
+      '  id text PRIMARY KEY,',
+      '  "ownerId" text NOT NULL,',
+      '  title text NOT NULL',
+      ');',
+      '',
+    ].join('\n');
+    writeFileSync(join(migrationsDir, '001_reviewed.sql'), createNotes, 'utf8');
+    writeFileSync(
+      join(outside, '001_attacker.sql'),
+      `${createNotes}CREATE TABLE outside_path_poison_migration (id text PRIMARY KEY);\n`,
+      'utf8',
+    );
+    writeFileSync(
+      schemaPath,
+      [
+        "import { createRequire, syncBuiltinESMExports } from 'node:module';",
+        'const nodeRequire = createRequire(import.meta.url);',
+        "const mutablePath = nodeRequire('node:path');",
+        'const nativeResolve = mutablePath.resolve;',
+        'try {',
+        'mutablePath.resolve = (...segments: string[]) =>',
+        `  segments.length === 1 && segments[0] === ${JSON.stringify(migrationsDir)}`,
+        `    ? ${JSON.stringify(outside)}`,
+        '    : nativeResolve(...segments);',
+        'syncBuiltinESMExports();',
+        '} catch {}',
+        readFileSync(schemaPath, 'utf8'),
+      ].join('\n'),
+      'utf8',
+    );
+
+    const env = { ...process.env };
+    delete env.KOVO_ADMIN_DATABASE_URL;
+    delete env.KOVO_DATABASE_URL;
+    delete env.KOVO_RUNTIME_DATABASE_URL;
+    const migrated = runKovoDbCli(
+      root,
+      [
+        'db',
+        'migrate',
+        '--schema',
+        schemaPath,
+        '--driver',
+        'pglite',
+        '--data-dir',
+        dataDir,
+        '--migrations',
+        migrationsDir,
+      ],
+      env,
+    );
+    expect(migrated.status, migrated.stderr).toBe(0);
+    expect(migrated.stdout).toContain('MIGRATION status=applied id="001_reviewed.sql"');
+    expect(migrated.stdout).not.toContain('001_attacker.sql');
+
+    const { PGlite } = (await import(
+      fileURLToPath(new URL('../../server/node_modules/@electric-sql/pglite', import.meta.url))
+    )) as typeof import('@electric-sql/pglite');
+    const db = new PGlite(dataDir);
+    try {
+      await expect(db.query('select * from outside_path_poison_migration')).rejects.toThrow(
+        /does not exist/u,
+      );
+    } finally {
+      await db.close();
+    }
+  }, 120_000);
+
+  it('binds runtime tables imported from the app root into the compiler-owned DB manifest', () => {
+    const {
+      dataDir,
+      root,
+      schemaPath: flatSchemaPath,
+    } = writeDbCommandFixture('root-schema-import');
+    const sharedSchemaPath = join(root, 'shared-schema.ts');
+    writeFileSync(sharedSchemaPath, readFileSync(flatSchemaPath, 'utf8'), 'utf8');
+    rmSync(flatSchemaPath);
+    const schemaPath = join(root, 'src', 'schema.ts');
+    mkdirSync(dirname(schemaPath), { recursive: true });
+    writeFileSync(
+      schemaPath,
+      [
+        "import { kovo } from '@kovojs/drizzle';",
+        "import { pgTable, text } from 'drizzle-orm/pg-core';",
+        "export { notes } from '../shared-schema.js';",
+        '',
+        'export const manifestAnchor = pgTable(',
+        "  'kovo_cli_manifest_anchor',",
+        "  { id: text('id').primaryKey() },",
+        "  kovo({ domain: 'cli-anchor', key: 'id', public: true }),",
+        ');',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+
+    const env = { ...process.env };
+    delete env.KOVO_ADMIN_DATABASE_URL;
+    delete env.KOVO_DATABASE_URL;
+    delete env.KOVO_RUNTIME_DATABASE_URL;
+    const provisioned = runKovoDbCli(
+      root,
+      [
+        'db',
+        'provision',
+        '--schema',
+        './src/schema.ts',
+        '--driver',
+        'pglite',
+        '--data-dir',
+        dataDir,
+      ],
+      env,
+    );
+
+    expect(provisioned.status, provisioned.stderr).toBe(0);
+    expect(provisioned.stdout).toContain('STATUS ok');
+    expect(provisioned.stderr).not.toContain('compiler-derived manifest');
+  }, 120_000);
+
   it('prints usage for missing db actions', async () => {
     const output = await captureWrites(() => mainAsync(['db']));
 
@@ -436,9 +565,11 @@ describe('kovo db', () => {
       schemaPath,
       [
         `process.chdir(${JSON.stringify(outside)});`,
-        "Object.defineProperty(Object.prototype, 'KOVO_ADMIN_DATABASE_URL', {",
-        "  configurable: true, value: 'postgres://attacker@127.0.0.1:2/attacker',",
-        '});',
+        'try {',
+        "  Object.defineProperty(Object.prototype, 'KOVO_ADMIN_DATABASE_URL', {",
+        "    configurable: true, value: 'postgres://attacker@127.0.0.1:2/attacker',",
+        '  });',
+        '} catch {}',
         readFileSync(schemaPath, 'utf8'),
       ].join('\n'),
       'utf8',
@@ -488,9 +619,7 @@ describe('kovo db', () => {
     root: string;
     schemaPath: string;
   } {
-    const root = mkdtempSync(
-      join(dirname(fileURLToPath(import.meta.url)), `.tmp-kovo-db-${name}-`),
-    );
+    const root = mkdtempSync(join(tmpdir(), `.tmp-kovo-db-${name}-`));
     roots.push(root);
     const dataDir = join(root, 'pglite');
     const migrationsDir = join(root, 'migrations');

@@ -18,8 +18,10 @@ const NativeRegExp = globalThis.RegExp;
 const NativeSet = globalThis.Set;
 const NativeString = globalThis.String;
 const NativeTypeError = globalThis.TypeError;
+const NativeUint8Array = globalThis.Uint8Array;
 const nativeArrayIsArray = NativeArray.isArray;
 const nativeArrayJoin = NativeArray.prototype.join;
+const nativeBufferByteLength = NativeBuffer.byteLength;
 const nativeBufferFrom = NativeBuffer.from;
 const nativeBufferToString = NativeBuffer.prototype.toString;
 const nativeDateToISOString = NativeDate.prototype.toISOString;
@@ -32,6 +34,7 @@ const nativeNumberIsSafeInteger = NativeNumber.isSafeInteger;
 const nativeObjectCreate = NativeObject.create;
 const nativeObjectDefineProperty = NativeObject.defineProperty;
 const nativeObjectGetOwnPropertyDescriptor = NativeObject.getOwnPropertyDescriptor;
+const nativeObjectGetPrototypeOf = NativeObject.getPrototypeOf;
 const nativeObjectIs = NativeObject.is;
 const nativeObjectKeys = NativeObject.keys;
 const nativeObjectSetPrototypeOf = NativeObject.setPrototypeOf;
@@ -49,6 +52,11 @@ const nativeStringSlice = NativeString.prototype.slice;
 const nativeStringStartsWith = NativeString.prototype.startsWith;
 const nativeStringTrim = NativeString.prototype.trim;
 const nativeStringTrimEnd = NativeString.prototype.trimEnd;
+const nativeTypedArrayPrototype = nativeObjectGetPrototypeOf(NativeUint8Array.prototype);
+const nativeTypedArrayByteLengthGetter = nativeObjectGetOwnPropertyDescriptor(
+  nativeTypedArrayPrototype,
+  'byteLength',
+)?.get;
 
 function apply<Return>(fn: Function, receiver: unknown, args: readonly unknown[]): Return {
   return nativeReflectApply(fn, receiver, args) as Return;
@@ -84,8 +92,11 @@ function ownDataValueUnchecked(source: object, key: PropertyKey): unknown {
 
 function bootstrapSelfCheckPasses(): boolean {
   try {
+    if (typeof nativeTypedArrayByteLengthGetter !== 'function') return false;
     if (apply(nativeArrayIsArray, NativeArray, [[]]) !== true) return false;
     if (apply(nativeArrayIsArray, NativeArray, [{}]) !== false) return false;
+    if (apply(nativeBufferByteLength, NativeBuffer, ['kovo', 'utf8']) !== 4) return false;
+    if (apply(nativeTypedArrayByteLengthGetter, new NativeUint8Array(3), []) !== 3) return false;
     const record = { safe: true };
     if (ownDataValueUnchecked(record, 'safe') !== true) return false;
     if (apply<string | undefined>(nativeJsonStringify, NativeJSON, ['a"b']) !== '"a\\"b"') {
@@ -286,6 +297,19 @@ export function buildStringEndsWith(value: string, search: string): boolean {
 export function buildCurrentIsoTimestamp(): string {
   assertBuildSecurityIntrinsics();
   return apply(nativeDateToISOString, new NativeDate(), []);
+}
+
+export function buildByteLength(value: string | Uint8Array): number {
+  assertBuildSecurityIntrinsics();
+  const length = apply<number>(
+    typeof value === 'string' ? nativeBufferByteLength : nativeTypedArrayByteLengthGetter!,
+    typeof value === 'string' ? NativeBuffer : value,
+    typeof value === 'string' ? [value, 'utf8'] : [],
+  );
+  if (!apply(nativeNumberIsSafeInteger, NativeNumber, [length]) || length < 0) {
+    throw new NativeTypeError('Kovo build byte length must be a non-negative safe integer.');
+  }
+  return length;
 }
 
 export function buildUtf8Text(value: Uint8Array): string {

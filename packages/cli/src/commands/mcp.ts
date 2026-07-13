@@ -1,3 +1,6 @@
+import { Buffer as NativeBuffer } from 'node:buffer';
+import { Transform, type TransformCallback } from 'node:stream';
+
 import type { CompileComponentOptions, CompileResult } from '@kovojs/compiler';
 import {
   compileComponentModuleCached,
@@ -32,6 +35,10 @@ import {
   stableValue,
   writeUsageError,
 } from '../shared.js';
+import { buildByteLength } from './build-security-intrinsics.js';
+
+const MCP_MAX_REQUEST_BYTES = 4 * 1024 * 1024;
+const MCP_MAX_COMPILE_SOURCE_BYTES = 2 * 1024 * 1024;
 
 /** @internal Input shape for the internal `compile_component` MCP tool. */
 export interface CompileComponentV1Input {
@@ -250,18 +257,50 @@ export async function runMcpFallbackStdio(
   output: { write(chunk: string): unknown },
 ): Promise<void> {
   let pending = '';
+  let discardingOversizedLine = false;
 
   for await (const chunk of input) {
-    pending += typeof chunk === 'string' ? chunk : chunk.toString('utf8');
-    const lines = pending.split(/\r?\n/);
-    pending = lines.pop() ?? '';
+    const text = typeof chunk === 'string' ? chunk : chunk.toString('utf8');
+    const lines = text.split(/\r?\n/);
+    const tail = lines.pop() ?? '';
 
-    for (const line of lines) {
-      await writeMcpLine(line, output);
+    for (let index = 0; index < lines.length; index += 1) {
+      const line = lines[index] ?? '';
+      if (discardingOversizedLine) {
+        discardingOversizedLine = false;
+        pending = '';
+        continue;
+      }
+      const completeBytes = buildByteLength(pending) + buildByteLength(line);
+      if (completeBytes > MCP_MAX_REQUEST_BYTES) {
+        pending = '';
+        writeMcpInputLimitError(output);
+        continue;
+      }
+      const complete = pending + line;
+      pending = '';
+      await writeMcpLine(complete, output);
+    }
+
+    if (!discardingOversizedLine) {
+      const pendingBytes = buildByteLength(pending) + buildByteLength(tail);
+      if (pendingBytes > MCP_MAX_REQUEST_BYTES) {
+        pending = '';
+        discardingOversizedLine = true;
+        writeMcpInputLimitError(output);
+      } else {
+        pending += tail;
+      }
     }
   }
 
-  if (pending.trim()) await writeMcpLine(pending, output);
+  if (!discardingOversizedLine && pending.trim()) await writeMcpLine(pending, output);
+}
+
+function writeMcpInputLimitError(output: { write(chunk: string): unknown }): void {
+  output.write(
+    `${JSON.stringify(mcpError(null, -32001, `request exceeds ${MCP_MAX_REQUEST_BYTES} bytes`))}\n`,
+  );
 }
 
 async function writeMcpLine(
@@ -287,7 +326,86 @@ export async function runMcpSdkServer(transport?: Transport): Promise<void> {
     import('@modelcontextprotocol/sdk/server/stdio.js'),
     createMcpSdkServer(),
   ]);
-  await server.connect(transport ?? new StdioServerTransport());
+  await server.connect(
+    transport ?? new StdioServerTransport(new BoundedMcpStdin(process.stdin), process.stdout),
+  );
+}
+
+/** @internal Bounds the third-party SDK's otherwise unbounded newline buffer. */
+export class BoundedMcpStdin extends Transform {
+  private buffered: Buffer[] = [];
+  private bufferedBytes = 0;
+  private discarding = false;
+
+  constructor(input: NodeJS.ReadableStream) {
+    super();
+    input.pipe(this);
+  }
+
+  override _transform(
+    chunk: Buffer | string,
+    encoding: BufferEncoding,
+    callback: TransformCallback,
+  ): void {
+    try {
+      const bytes = typeof chunk === 'string' ? NativeBuffer.from(chunk, encoding) : chunk;
+      let start = 0;
+      const length = buildByteLength(bytes);
+      for (let index = 0; index < length; index += 1) {
+        if (bytes[index] !== 0x0a) continue;
+        this.appendLineSegment(bytes.subarray(start, index), true);
+        start = index + 1;
+      }
+      this.appendLineSegment(bytes.subarray(start), false);
+      callback();
+    } catch (error) {
+      callback(error as Error);
+    }
+  }
+
+  override _flush(callback: TransformCallback): void {
+    try {
+      if (this.discarding || this.bufferedBytes > 0) this.emitBufferedLine();
+      callback();
+    } catch (error) {
+      callback(error as Error);
+    }
+  }
+
+  private appendLineSegment(segment: Buffer, complete: boolean): void {
+    if (!this.discarding) {
+      const segmentBytes = buildByteLength(segment);
+      if (this.bufferedBytes + segmentBytes > MCP_MAX_REQUEST_BYTES) {
+        this.buffered = [];
+        this.bufferedBytes = 0;
+        this.discarding = true;
+      } else if (segmentBytes > 0) {
+        this.buffered.push(segment);
+        this.bufferedBytes += segmentBytes;
+      }
+    }
+    if (complete) this.emitBufferedLine();
+  }
+
+  private emitBufferedLine(): void {
+    if (this.discarding) {
+      this.push(
+        `${JSON.stringify({
+          id: 'kovo-input-limit',
+          jsonrpc: '2.0',
+          method: '__kovo_input_limit__',
+        })}\n`,
+      );
+    } else {
+      if (this.bufferedBytes > 0) {
+        this.push(NativeBuffer.concat(this.buffered, this.bufferedBytes));
+      }
+      this.push('\n');
+    }
+    this.buffered = [];
+    this.bufferedBytes = 0;
+    this.discarding = false;
+  }
 }
 
 async function createMcpSdkServer(): Promise<
@@ -381,13 +499,13 @@ function listMcpTools(): {
         inputSchema: {
           additionalProperties: true,
           properties: {
-            fileName: { type: 'string' },
+            fileName: { maxLength: 4096, type: 'string' },
             packageComponentPrefixes: { type: 'array' },
             packagePrefixDiscoveryRoot: { type: 'string' },
             queryShapeFacts: { type: 'array' },
             queryShapes: { type: 'object' },
             registryFacts: { type: 'object' },
-            source: { type: 'string' },
+            source: { maxLength: MCP_MAX_COMPILE_SOURCE_BYTES, type: 'string' },
             sourceProvenance: { enum: ['app'] },
           },
           required: ['fileName', 'source'],
@@ -483,6 +601,12 @@ function assertCompileComponentV1Input(args: unknown): CompileComponentV1Input {
     throw new Error('compile_component fileName must be a string');
   }
   if (typeof args.source !== 'string') throw new Error('compile_component source must be a string');
+  if (buildByteLength(args.source) > MCP_MAX_COMPILE_SOURCE_BYTES) {
+    throw new Error(`compile_component source exceeds ${MCP_MAX_COMPILE_SOURCE_BYTES} bytes`);
+  }
+  if (args.fileName.length > 4096) {
+    throw new Error('compile_component fileName exceeds 4096 characters');
+  }
 
   const input: CompileComponentV1Input = {
     fileName: args.fileName,

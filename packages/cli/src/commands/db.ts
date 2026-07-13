@@ -1,6 +1,11 @@
-import { access } from 'node:fs/promises';
-import { dirname, extname, relative, resolve } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { access as builtinAccess } from 'node:fs/promises';
+import {
+  dirname as builtinDirname,
+  extname as builtinExtname,
+  relative as builtinRelative,
+  resolve as builtinResolve,
+} from 'node:path';
+import { pathToFileURL as builtinPathToFileURL } from 'node:url';
 
 import {
   checkPostgresAppDbPosture,
@@ -40,6 +45,16 @@ import {
   buildStringTrimEnd,
   buildUtf8Text,
 } from './build-security-intrinsics.js';
+
+// SPEC §6.6 rule 6: Node builtin ESM exports can be resynchronized from their mutable CommonJS
+// facades. Pin every DB-command path/file control before authored schema modules evaluate so a
+// later syncBuiltinESMExports() cannot redirect migration or runtime-database authority.
+const access = builtinAccess;
+const dirname = builtinDirname;
+const extname = builtinExtname;
+const relative = builtinRelative;
+const resolve = builtinResolve;
+const pathToFileURL = builtinPathToFileURL;
 
 type KovoDbAction = 'check' | 'generate' | 'migrate' | 'provision';
 type KovoDbTargetSource = 'admin' | 'explicit-driver' | 'pglite' | 'runtime';
@@ -125,9 +140,10 @@ export async function runDbCommand(
     // authored schema/runtime-options graph evaluates. Schema top-level code shares the process,
     // but cannot redirect privileged database administration or framework-owned migration I/O.
     const resolvedOptions = resolveDbCommandAuthority(options, security);
+    const sourceRoot = dbStaticAnalysisSourceRoot(resolvedOptions);
     const registry = await collectRuntimeRegistryFacts({
       appSourceDir: dirname(resolvedOptions.schemaPath),
-      root: resolvedOptions.invocationCwd,
+      root: sourceRoot,
     });
     if (registry.tableSecurity !== undefined) {
       releaseTableSecurityManifest = installGeneratedTableSecurityManifestForCommand(
@@ -148,6 +164,16 @@ export async function runDbCommand(
   } finally {
     releaseTableSecurityManifest?.();
   }
+}
+
+function dbStaticAnalysisSourceRoot(options: ResolvedKovoDbOptions): string {
+  const schemaRelative = relative(options.invocationCwd, options.schemaPath);
+  const schemaIsInsideInvocationRoot =
+    schemaRelative === '' ||
+    (!schemaRelative.startsWith('..') &&
+      !schemaRelative.startsWith('/') &&
+      !/^[A-Za-z]:/u.test(schemaRelative));
+  return schemaIsInsideInvocationRoot ? options.invocationCwd : dirname(options.schemaPath);
 }
 
 function resolveDbCommandAuthority(

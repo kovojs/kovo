@@ -17,7 +17,12 @@ import {
   sep as pathSeparator,
 } from 'node:path';
 
+import typescript from 'typescript';
+
 import {
+  compilerArrayAppend,
+  compilerArrayIsArray,
+  compilerArrayLength,
   compilerFailClosed,
   compilerFreeze,
   compilerNumberIsFinite,
@@ -25,9 +30,10 @@ import {
   compilerSnapshotDenseArray,
   compilerStatsIsDirectory,
   compilerStatsIsFile,
+  compilerStatsIsSymbolicLink,
   compilerStringIncludes,
   compilerStringStartsWith,
-} from './compiler-security-intrinsics.js';
+} from './compiler-security-intrinsics.ts';
 
 const nativeCloseSync = builtinCloseSync;
 const nativeFstatSync = builtinFstatSync;
@@ -40,6 +46,7 @@ const nativeReadFileSync = builtinReadFileSync;
 const nativeReaddirSync = builtinReaddirSync;
 const nativeRealpathSync = builtinRealpathSync;
 const nativeStatSync = builtinStatSync;
+const nativePreProcessFile = typescript.preProcessFile;
 
 type CompilerSourceEntryKind = 'directory' | 'file' | 'other';
 
@@ -61,12 +68,46 @@ interface CompilerSourceEntryFacts {
   readonly lexicalPath: string;
 }
 
-/** Internal synchronous source-tree capability used by compiler build discovery. */
+/** @internal Synchronous source-tree capability used by compiler build discovery. */
 export interface CompilerSourceFileSystem {
   readonly root: string;
   entries(directory: string): readonly string[];
   kind(fileName: string): CompilerSourceEntryKind;
+  readDirectory(directory: string): readonly string[] | null;
   readFile(fileName: string): string | null;
+}
+
+/** @internal Extract the module specifiers TypeScript recognizes without evaluating source. */
+export function compilerSourceModuleSpecifiers(source: string): readonly string[] {
+  const preprocessed = nativePreProcessFile(source, true, true);
+  const importedFiles = preprocessed.importedFiles;
+  if (!compilerArrayIsArray(importedFiles)) {
+    return compilerFailClosed('Compiler source module specifiers must be an array.');
+  }
+  const length = compilerArrayLength(importedFiles, 'Compiler source module specifiers');
+  const specifiers: string[] = [];
+  for (let index = 0; index < length; index += 1) {
+    const imported = compilerOwnDataValue(
+      importedFiles,
+      index,
+      'Compiler source module specifiers',
+    );
+    if (!imported || typeof imported !== 'object') {
+      return compilerFailClosed(`Compiler source module specifiers[${index}] must be a record.`);
+    }
+    const fileName = compilerOwnDataValue(
+      imported,
+      'fileName',
+      `Compiler source module specifiers[${index}]`,
+    );
+    if (typeof fileName !== 'string') {
+      return compilerFailClosed(
+        `Compiler source module specifiers[${index}].fileName must be a string.`,
+      );
+    }
+    compilerArrayAppend(specifiers, fileName, 'Compiler source module specifier snapshot');
+  }
+  return compilerFreeze(specifiers);
 }
 
 /**
@@ -74,8 +115,12 @@ export interface CompilerSourceFileSystem {
  *
  * App modules execute in the build process, so every Node/path control is captured when this module
  * is enrolled by the supported compiler bootstrap. A package root itself may be a workspace
- * symlink, but descendants cannot escape its captured canonical target and final-component symlinks
- * are never treated as authored source. This preserves SPEC.md §5.2's source-derived IR boundary.
+ * symlink, but descendants cannot escape its captured canonical target. Final-component symlinks
+ * are accepted only when they resolve to a regular file inside that target; directory links and
+ * every outside-root link remain unavailable. This preserves SPEC.md §5.2's source-derived IR
+ * boundary while allowing in-root documentation aliases.
+ *
+ * @internal
  */
 export function createCompilerSourceFileSystem(rootDir: string): CompilerSourceFileSystem | null {
   let state: CompilerSourceRootState;
@@ -96,8 +141,9 @@ export function createCompilerSourceFileSystem(rootDir: string): CompilerSourceF
 
   return compilerFreeze({
     root: state.lexicalRoot,
-    entries: (directory: string) => compilerSourceDirectoryEntries(state, directory),
+    entries: (directory: string) => compilerSourceDirectoryEntries(state, directory) ?? [],
     kind: (fileName: string) => compilerSourceEntryKind(state, fileName),
+    readDirectory: (directory: string) => compilerSourceDirectoryEntries(state, directory),
     readFile: (fileName: string) => readCompilerSourceFile(state, fileName),
   });
 }
@@ -105,16 +151,16 @@ export function createCompilerSourceFileSystem(rootDir: string): CompilerSourceF
 function compilerSourceDirectoryEntries(
   state: CompilerSourceRootState,
   directory: string,
-): readonly string[] {
+): readonly string[] | null {
   try {
     const before = compilerSourceEntryFacts(state, directory);
-    if (before === null || before.kind !== 'directory') return [];
+    if (before === null || before.kind !== 'directory') return null;
     const names = compilerSnapshotDenseArray(
       nativeReaddirSync(before.canonicalPath),
       'Compiler source directory entries',
     );
     const after = compilerSourceEntryFacts(state, directory);
-    if (after === null || !sameEntryFacts(before, after)) return [];
+    if (after === null || !sameEntryFacts(before, after)) return null;
 
     for (let index = 0; index < names.length; index += 1) {
       const name = names[index];
@@ -126,12 +172,12 @@ function compilerSourceDirectoryEntries(
         nativePathIsAbsolute(name) ||
         compilerStringIncludes(name, '\0')
       ) {
-        return [];
+        return null;
       }
     }
     return names;
   } catch {
-    return [];
+    return null;
   }
 }
 
@@ -207,31 +253,40 @@ function compilerSourceEntryFacts(
   }
 
   const lexicalStat = nativeLstatSync(lexicalPath);
-  const kind = compilerStatsIsDirectory(lexicalStat)
+  const lexicalKind = compilerStatsIsDirectory(lexicalStat)
     ? 'directory'
     : compilerStatsIsFile(lexicalStat)
       ? 'file'
-      : null;
-  if (kind === null) return null;
+      : compilerStatsIsSymbolicLink(lexicalStat)
+        ? 'symbolic-link'
+        : null;
+  if (lexicalKind === null) return null;
 
   const canonicalPath = nativeRealpathSync(lexicalPath);
   if (!containsResolvedPath(state.canonicalRoot, canonicalPath)) return null;
   const canonicalStat = nativeStatSync(canonicalPath);
-  const lexicalIdentity = fileSystemIdentity(lexicalStat, 'Compiler source entry');
-  if (
-    (kind === 'directory'
-      ? !compilerStatsIsDirectory(canonicalStat)
-      : !compilerStatsIsFile(canonicalStat)) ||
-    !sameFileSystemIdentity(
-      lexicalIdentity,
-      fileSystemIdentity(canonicalStat, 'Compiler source entry'),
-    ) ||
-    !compilerSourceRootIsStable(state)
-  ) {
-    return null;
+  const canonicalIdentity = fileSystemIdentity(canonicalStat, 'Compiler source entry');
+  let identity: FileSystemIdentity;
+  let kind: Exclude<CompilerSourceEntryKind, 'other'>;
+  if (lexicalKind === 'symbolic-link') {
+    if (!compilerStatsIsFile(canonicalStat)) return null;
+    identity = canonicalIdentity;
+    kind = 'file';
+  } else {
+    kind = lexicalKind;
+    identity = fileSystemIdentity(lexicalStat, 'Compiler source entry');
+    if (
+      (kind === 'directory'
+        ? !compilerStatsIsDirectory(canonicalStat)
+        : !compilerStatsIsFile(canonicalStat)) ||
+      !sameFileSystemIdentity(identity, canonicalIdentity)
+    ) {
+      return null;
+    }
   }
+  if (!compilerSourceRootIsStable(state)) return null;
 
-  return { canonicalPath, identity: lexicalIdentity, kind, lexicalPath };
+  return { canonicalPath, identity, kind, lexicalPath };
 }
 
 function compilerSourceRootIsStable(state: CompilerSourceRootState): boolean {

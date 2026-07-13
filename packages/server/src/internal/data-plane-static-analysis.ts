@@ -26,6 +26,11 @@ import {
 import { fileURLToPath as builtinFileURLToPath } from 'node:url';
 
 import type { DiagnosticCode } from '@kovojs/core';
+import {
+  compilerSourceModuleSpecifiers,
+  createCompilerSourceFileSystem,
+  type CompilerSourceFileSystem,
+} from '@kovojs/compiler/internal/source-filesystem';
 import { diagnosticDefinitions, isDiagnosticCode } from '@kovojs/core/internal/diagnostics';
 import {
   outputSchemaQueryShapeFactsFromProject,
@@ -59,7 +64,6 @@ import {
   staticAnalysisSecureStringEqual,
   staticAnalysisSha256,
   staticAnalysisStringEndsWith,
-  staticAnalysisStringIncludes,
   staticAnalysisStringIndexOf,
   staticAnalysisStringLastIndexOf,
   staticAnalysisStringSlice,
@@ -233,21 +237,7 @@ if (!isMainThread && isOutputSchemaQueryShapeWorkerData(workerData)) {
 /** @internal Build the analyzer SourceFileInput[] for a Vite app source tree. */
 export function dataPlaneSourceFiles(sourceDir: string, root: string): DataPlaneSourceFile[] {
   if (!existsSync(sourceDir)) return [];
-  const paths = dataPlaneSourceFilePaths(sourceDir);
-  sortStrings(paths);
-  const files: DataPlaneSourceFile[] = [];
-  for (let index = 0; index < paths.length; index += 1) {
-    const filePath = paths[index]!;
-    staticAnalysisArrayAppend(
-      files,
-      {
-        fileName: slashPath(relative(root, filePath)),
-        source: readFileSync(filePath, 'utf8'),
-      },
-      'Static-analysis discovered files',
-    );
-  }
-  return files;
+  return sourceFilesWithinBoundary(sourceDir, root, root, true);
 }
 
 /** @internal Whether a changed file is an app data-plane source file the Vite gate should re-run. */
@@ -264,9 +254,13 @@ export function isDataPlaneSourceFile(file: string, sourceDir: string): boolean 
 }
 
 /** @internal Build the analyzer SourceFileInput[] for CLI build/check. */
-export function buildCheckSourceFiles(appModulePath: string): DataPlaneSourceFile[] {
+export function buildCheckSourceFiles(
+  appModulePath: string,
+  sourceBoundaryRoot: string = dirname(appModulePath),
+): DataPlaneSourceFile[] {
   const sourceDir = dirname(appModulePath);
-  return sourceFilesUnder(sourceDir, sourceDir);
+  if (!existsSync(sourceBoundaryRoot)) return [];
+  return sourceFilesWithinBoundary(sourceDir, sourceDir, sourceBoundaryRoot, false);
 }
 
 /** @internal Run Vite/server app source static analysis and cache by source snapshot. */
@@ -359,8 +353,7 @@ export async function staticDataPlaneBuildFacts(
   options: StaticDataPlaneBuildFactsOptions,
 ): Promise<StaticDataPlaneBuildFacts> {
   const sourceFiles = snapshotDataPlaneSourceFiles(files, 'Build static-analysis sources');
-  const analysisFiles = buildStaticAnalysisSourceFiles(sourceFiles);
-  if (analysisFiles.length === 0) return { ...emptyStaticDataPlaneBuildFacts(), touchGraph: {} };
+  if (sourceFiles.length === 0) return { ...emptyStaticDataPlaneBuildFacts(), touchGraph: {} };
 
   const rawFacts = await cachedStaticBuildAnalysisFacts(sourceFiles, options);
 
@@ -550,11 +543,7 @@ async function createDataPlaneAnalysis(
       staticFacts: cached,
     };
   }
-  const analysisFiles = buildStaticAnalysisSourceFiles(sourceFiles);
-  const staticFacts =
-    analysisFiles.length === 0
-      ? emptyStaticBuildAnalysisFactsLike()
-      : await runStaticBuildAnalysisFacts(sourceFiles);
+  const staticFacts = await runStaticBuildAnalysisFacts(sourceFiles);
   writeCachedDataPlaneStaticFacts(root, viteCacheIdentity, staticFacts);
   return {
     files: sourceFiles,
@@ -1271,28 +1260,6 @@ function isCompilerQueryShapeFact(value: unknown): value is QueryShapeFact {
   );
 }
 
-function isBuildStaticAnalysisSourceFile(file: DataPlaneSourceFile): boolean {
-  const prefix = '// @kovojs-ui-copy\n';
-  if (file.source.length < prefix.length) return true;
-  for (let index = 0; index < prefix.length; index += 1) {
-    if (file.source[index] !== prefix[index]) return true;
-  }
-  return false;
-}
-
-function buildStaticAnalysisSourceFiles(
-  files: readonly DataPlaneSourceFile[],
-): DataPlaneSourceFile[] {
-  const result: DataPlaneSourceFile[] = [];
-  for (let index = 0; index < files.length; index += 1) {
-    const file = files[index]!;
-    if (isBuildStaticAnalysisSourceFile(file)) {
-      staticAnalysisArrayAppend(result, file, 'Static-analysis build source files');
-    }
-  }
-  return result;
-}
-
 function snapshotDataPlaneSourceFiles(
   files: readonly DataPlaneSourceFile[],
   label: string,
@@ -1327,59 +1294,246 @@ function snapshotDenseArray<Value>(values: readonly Value[], label: string): Val
   return snapshot;
 }
 
-function sourceFilesUnder(dir: string, root: string): DataPlaneSourceFile[] {
-  if (!existsSync(dir)) return [];
+function sourceFilesWithinBoundary(
+  dir: string,
+  fileNameRoot: string,
+  boundaryRoot: string,
+  includeDeclarations: boolean,
+): DataPlaneSourceFile[] {
+  // SPEC.md §5.2's source-derived security facts must come only from the selected app tree.
+  // Use the compiler's descriptor-bound source capability so symlinks, special entries, and
+  // realpath/descriptor races cannot redirect static analysis to host files.
+  const fileSystem = createCompilerSourceFileSystem(boundaryRoot);
+  if (fileSystem === null) {
+    throw new TypeError(`Kovo data-plane source root is unavailable or unstable: ${boundaryRoot}`);
+  }
   const files: DataPlaneSourceFile[] = [];
-  const entries = readdirSafe(dir);
+  collectSourceFilesWithinBoundary(dir, fileNameRoot, fileSystem, includeDeclarations, files);
+  collectImportedSourceFilesWithinBoundary(
+    fileNameRoot,
+    boundaryRoot,
+    fileSystem,
+    includeDeclarations,
+    files,
+  );
+  return files;
+}
+
+function collectImportedSourceFilesWithinBoundary(
+  fileNameRoot: string,
+  boundaryRoot: string,
+  fileSystem: CompilerSourceFileSystem,
+  includeDeclarations: boolean,
+  files: DataPlaneSourceFile[],
+): void {
+  const knownPaths = new Map<string, true>();
+  const initialLength = staticAnalysisArrayLength(files, 'Static-analysis initial source files');
+  for (let index = 0; index < initialLength; index += 1) {
+    const file = dataPlaneSourceFileAt(files, index, 'Static-analysis initial source files');
+    staticAnalysisMapSet(knownPaths, resolve(fileNameRoot, file.fileName), true);
+  }
+
+  for (
+    let fileIndex = 0;
+    fileIndex < staticAnalysisArrayLength(files, 'Static-analysis source closure');
+    fileIndex += 1
+  ) {
+    const file = dataPlaneSourceFileAt(files, fileIndex, 'Static-analysis source closure');
+    const importerPath = resolve(fileNameRoot, file.fileName);
+    const specifiers = snapshotDenseArray(
+      compilerSourceModuleSpecifiers(file.source),
+      `Static-analysis imports for ${file.fileName}`,
+    );
+    for (let specifierIndex = 0; specifierIndex < specifiers.length; specifierIndex += 1) {
+      const specifier = specifiers[specifierIndex]!;
+      if (
+        !staticAnalysisStringStartsWith(specifier, './') &&
+        !staticAnalysisStringStartsWith(specifier, '../')
+      ) {
+        continue;
+      }
+      const candidates = relativeSourceModuleCandidates(importerPath, specifier, boundaryRoot);
+      for (let candidateIndex = 0; candidateIndex < candidates.length; candidateIndex += 1) {
+        const candidate = candidates[candidateIndex]!;
+        const kind = fileSystem.kind(candidate);
+        if (kind === 'directory') continue;
+        if (kind === 'other') {
+          if (existsSync(candidate)) {
+            throw new TypeError(
+              `Kovo data-plane import resolves through a symbolic link or special entry: ${candidate}`,
+            );
+          }
+          continue;
+        }
+        if (staticAnalysisMapGet(knownPaths, candidate) === true) break;
+        if (!isDataPlaneAppSourcePath(candidate, { includeDeclarations })) break;
+        const source = fileSystem.readFile(candidate);
+        if (source === null) {
+          throw new TypeError(`Kovo data-plane imported source is unavailable: ${candidate}`);
+        }
+        staticAnalysisMapSet(knownPaths, candidate, true);
+        staticAnalysisArrayAppend(
+          files,
+          { fileName: slashPath(relative(fileNameRoot, candidate)), source },
+          'Static-analysis imported source closure',
+        );
+        break;
+      }
+    }
+  }
+}
+
+function dataPlaneSourceFileAt(
+  files: readonly DataPlaneSourceFile[],
+  index: number,
+  label: string,
+): DataPlaneSourceFile {
+  const value = staticAnalysisOwnDataValue(files, index, label);
+  if (!value || typeof value !== 'object') {
+    throw new TypeError(`${label}[${index}] must be a source-file record.`);
+  }
+  const fileName = staticAnalysisOwnDataValue(value, 'fileName', `${label}[${index}]`);
+  const source = staticAnalysisOwnDataValue(value, 'source', `${label}[${index}]`);
+  if (typeof fileName !== 'string' || typeof source !== 'string') {
+    throw new TypeError(`${label}[${index}] must contain fileName/source strings.`);
+  }
+  return { fileName, source };
+}
+
+const DATA_PLANE_SOURCE_MODULE_EXTENSIONS = [
+  '.ts',
+  '.tsx',
+  '.mts',
+  '.cts',
+  '.js',
+  '.jsx',
+  '.mjs',
+  '.cjs',
+] as const;
+
+function relativeSourceModuleCandidates(
+  importerPath: string,
+  specifier: string,
+  boundaryRoot: string,
+): string[] {
+  const queryIndex = staticAnalysisStringIndexOf(specifier, '?');
+  const fragmentIndex = staticAnalysisStringIndexOf(specifier, '#');
+  let end = specifier.length;
+  if (queryIndex >= 0) end = staticAnalysisMathMin(end, queryIndex);
+  if (fragmentIndex >= 0) end = staticAnalysisMathMin(end, fragmentIndex);
+  const pathSpecifier = staticAnalysisStringSlice(specifier, 0, end);
+  if (staticAnalysisStringIndexOf(pathSpecifier, '%') >= 0) {
+    throw new TypeError(`Kovo data-plane relative imports cannot use URL escapes: ${specifier}`);
+  }
+  const base = resolve(dirname(importerPath), pathSpecifier);
+  if (!pathIsWithinDataPlaneBoundary(boundaryRoot, base)) {
+    throw new TypeError(`Kovo data-plane relative import escapes the app root: ${specifier}`);
+  }
+
+  const candidates: string[] = [];
+  const mappedTypeScriptPath = mappedTypeScriptSourcePath(base);
+  if (mappedTypeScriptPath !== undefined) {
+    staticAnalysisArrayAppend(
+      candidates,
+      mappedTypeScriptPath,
+      'Static-analysis import candidates',
+    );
+    staticAnalysisArrayAppend(candidates, base, 'Static-analysis import candidates');
+    return candidates;
+  }
+  for (let index = 0; index < DATA_PLANE_SOURCE_MODULE_EXTENSIONS.length; index += 1) {
+    if (staticAnalysisStringEndsWith(base, DATA_PLANE_SOURCE_MODULE_EXTENSIONS[index]!)) {
+      staticAnalysisArrayAppend(candidates, base, 'Static-analysis import candidates');
+      return candidates;
+    }
+  }
+  if (staticAnalysisRegExpTest(/\.[^/\\]+$/u, pathSpecifier)) return candidates;
+
+  staticAnalysisArrayAppend(candidates, base, 'Static-analysis import candidates');
+  for (let index = 0; index < DATA_PLANE_SOURCE_MODULE_EXTENSIONS.length; index += 1) {
+    const extension = DATA_PLANE_SOURCE_MODULE_EXTENSIONS[index]!;
+    staticAnalysisArrayAppend(
+      candidates,
+      `${base}${extension}`,
+      'Static-analysis import candidates',
+    );
+  }
+  for (let index = 0; index < DATA_PLANE_SOURCE_MODULE_EXTENSIONS.length; index += 1) {
+    const extension = DATA_PLANE_SOURCE_MODULE_EXTENSIONS[index]!;
+    staticAnalysisArrayAppend(
+      candidates,
+      resolve(base, `index${extension}`),
+      'Static-analysis import candidates',
+    );
+  }
+  return candidates;
+}
+
+function mappedTypeScriptSourcePath(fileName: string): string | undefined {
+  if (staticAnalysisStringEndsWith(fileName, '.mjs')) {
+    return `${staticAnalysisStringSlice(fileName, 0, -4)}.mts`;
+  }
+  if (staticAnalysisStringEndsWith(fileName, '.cjs')) {
+    return `${staticAnalysisStringSlice(fileName, 0, -4)}.cts`;
+  }
+  if (staticAnalysisStringEndsWith(fileName, '.jsx')) {
+    return `${staticAnalysisStringSlice(fileName, 0, -4)}.tsx`;
+  }
+  if (staticAnalysisStringEndsWith(fileName, '.js')) {
+    return `${staticAnalysisStringSlice(fileName, 0, -3)}.ts`;
+  }
+  return undefined;
+}
+
+function pathIsWithinDataPlaneBoundary(root: string, target: string): boolean {
+  const relativePath = relative(root, target);
+  return (
+    relativePath === '' ||
+    !staticAnalysisRegExpTest(/^(?:\.\.(?:[/\\]|$)|[/\\]|[A-Za-z]:)/u, relativePath)
+  );
+}
+
+function collectSourceFilesWithinBoundary(
+  dir: string,
+  fileNameRoot: string,
+  fileSystem: CompilerSourceFileSystem,
+  includeDeclarations: boolean,
+  files: DataPlaneSourceFile[],
+): void {
+  const directoryEntries = fileSystem.readDirectory(dir);
+  if (directoryEntries === null) {
+    throw new TypeError(`Kovo data-plane source directory is unavailable or unstable: ${dir}`);
+  }
+  const entries = snapshotDenseArray(directoryEntries, 'Static-analysis source directory entries');
   sortStrings(entries);
   for (let index = 0; index < entries.length; index += 1) {
     const entry = entries[index]!;
-    const path = join(dir, entry);
+    const path = resolve(dir, entry);
     if (isIgnoredDataPlaneDirectory(entry)) continue;
-    const stat = statSafe(path);
-    if (!stat) continue;
-    if (staticAnalysisStatsIsDirectory(stat)) {
-      const nested = sourceFilesUnder(path, root);
-      for (let nestedIndex = 0; nestedIndex < nested.length; nestedIndex += 1) {
-        staticAnalysisArrayAppend(files, nested[nestedIndex]!, 'Static-analysis directory files');
-      }
+    const kind = fileSystem.kind(path);
+    if (kind === 'directory') {
+      collectSourceFilesWithinBoundary(path, fileNameRoot, fileSystem, includeDeclarations, files);
       continue;
     }
-    if (!isDataPlaneAppSourcePath(entry, { includeDeclarations: false })) continue;
+    if (kind === 'other') {
+      throw new TypeError(
+        `Kovo data-plane source tree contains a symbolic link or special entry: ${path}`,
+      );
+    }
+    if (!isInitialDataPlaneAppSourcePath(entry, { includeDeclarations })) continue;
+    const source = fileSystem.readFile(path);
+    if (source === null) {
+      throw new TypeError(`Kovo data-plane source file is unavailable or unstable: ${path}`);
+    }
     staticAnalysisArrayAppend(
       files,
       {
-        fileName: slashPath(relative(root, path)),
-        source: readFileSync(path, 'utf8'),
+        fileName: slashPath(relative(fileNameRoot, path)),
+        source,
       },
       'Static-analysis directory files',
     );
   }
-  return files;
-}
-
-function dataPlaneSourceFilePaths(directory: string): string[] {
-  const paths: string[] = [];
-  const entries = readdirSafe(directory);
-  sortStrings(entries);
-  for (let index = 0; index < entries.length; index += 1) {
-    const entry = entries[index]!;
-    const path = resolve(directory, entry);
-    const stat = statSafe(path);
-    if (!stat) continue;
-    if (staticAnalysisStatsIsDirectory(stat)) {
-      if (isIgnoredDataPlaneDirectory(entry)) continue;
-      const nested = dataPlaneSourceFilePaths(path);
-      for (let nestedIndex = 0; nestedIndex < nested.length; nestedIndex += 1) {
-        staticAnalysisArrayAppend(paths, nested[nestedIndex]!, 'Static-analysis source paths');
-      }
-      continue;
-    }
-    if (isDataPlaneAppSourcePath(entry, { includeDeclarations: true })) {
-      staticAnalysisArrayAppend(paths, path, 'Static-analysis source paths');
-    }
-  }
-  return paths;
 }
 
 function isDataPlaneAppSourcePath(
@@ -1391,10 +1545,21 @@ function isDataPlaneAppSourcePath(
     normalized,
     staticAnalysisStringLastIndexOf(normalized, '/') + 1,
   );
-  if (staticAnalysisStringIncludes(normalized, '/generated/')) return false;
-  if (baseName === 'generated') return false;
   if (staticAnalysisStringEndsWith(baseName, '.d.ts') && !options.includeDeclarations) return false;
   if (!staticAnalysisRegExpTest(/\.(?:[cm]?[jt]sx?)$/u, baseName)) return false;
+  return true;
+}
+
+function isInitialDataPlaneAppSourcePath(
+  filePath: string,
+  options: { includeDeclarations: boolean },
+): boolean {
+  if (!isDataPlaneAppSourcePath(filePath, options)) return false;
+  const normalized = staticAnalysisStringToLowerCase(slashPath(stripPathSuffix(filePath)));
+  const baseName = staticAnalysisStringSlice(
+    normalized,
+    staticAnalysisStringLastIndexOf(normalized, '/') + 1,
+  );
   if (staticAnalysisRegExpTest(/\.(?:test|spec)\.[cm]?[jt]sx?$/u, baseName)) return false;
   if (staticAnalysisRegExpTest(/(?:^|[.-])test-helpers\.[cm]?[jt]sx?$/u, baseName)) return false;
   if (staticAnalysisRegExpTest(/\.test-support\.[cm]?[jt]sx?$/u, baseName)) return false;
@@ -1403,7 +1568,7 @@ function isDataPlaneAppSourcePath(
 }
 
 function isIgnoredDataPlaneDirectory(entry: string): boolean {
-  return entry === 'node_modules' || entry === 'dist' || entry === '.kovo' || entry === 'generated';
+  return entry === 'node_modules' || entry === 'dist' || entry === '.kovo';
 }
 
 function sqlSafetyDiagnosticFact(value: unknown): CoreGraph.SqlSafetyDiagnosticFact[] {

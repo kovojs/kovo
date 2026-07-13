@@ -268,9 +268,7 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
   const scheduleDevDataPlaneGate = async (file: string): Promise<void> => {
     if (viteCommand !== 'serve') return;
     const adapter = await importKovoDataPlaneStaticAnalysisModule();
-    if (
-      !adapter.isDataPlaneSourceFile(file, buildSecurityPathDirname(appEntryFileName(app, root)))
-    ) {
+    if (!adapter.isDataPlaneSourceFile(file, root)) {
       return;
     }
     compilerQueryShapeFacts = undefined;

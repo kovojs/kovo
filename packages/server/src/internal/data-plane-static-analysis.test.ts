@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, readdir, rm, symlink, writeFile } from 'node:fs/promises';
 import { Stats } from 'node:fs';
 import { createRequire, syncBuiltinESMExports } from 'node:module';
 import { tmpdir } from 'node:os';
@@ -251,7 +251,7 @@ export const status = query({
     });
   });
 
-  it('runs aggregate analysis for app source even when aliases and wrappers avoid text relevance regexes', async () => {
+  it('does not let an author-forgeable UI-copy marker suppress aggregate security analysis', async () => {
     const extractStaticBuildAnalysisFactsFromProject = vi.fn(() => ({
       queries: [],
       sqlSafetyDiagnostics: [
@@ -276,6 +276,7 @@ export const status = query({
         {
           fileName: 'src/search.js',
           source: [
+            '// @kovojs-ui-copy',
             'export function search(input, database) {',
             '  const runner = database;',
             '  const method = "execute";',
@@ -634,22 +635,33 @@ export const status = query({
     }
   });
 
-  it('uses one app source discovery policy for JS/JSX extensions and generated/test/setup exclusions', async () => {
+  it('does not let author-controlled filenames suppress app security analysis', async () => {
     const root = await mkdtemp(join(tmpdir(), 'kovo-data-plane-source-'));
     const srcDir = join(root, 'src');
     try {
       await mkdir(join(srcDir, 'generated'), { recursive: true });
       await mkdir(join(srcDir, 'components'), { recursive: true });
       await Promise.all([
-        writeFile(join(srcDir, 'query.js'), 'export const querySource = true;\n', 'utf8'),
+        writeFile(
+          join(srcDir, 'query.js'),
+          [
+            "export { shared as querySource } from '../shared.js';",
+            "export * from './hidden.test.js';",
+            "export * from './app.setup.js';",
+            "export * from './generated/query.js';",
+            '',
+          ].join('\n'),
+          'utf8',
+        ),
         writeFile(
           join(srcDir, 'components/card.jsx'),
           'export const Card = () => <p />;\n',
           'utf8',
         ),
-        writeFile(join(srcDir, 'ignored.test.ts'), 'export const ignored = true;\n', 'utf8'),
+        writeFile(join(srcDir, 'hidden.test.ts'), 'export const hidden = true;\n', 'utf8'),
         writeFile(join(srcDir, 'app.setup.js'), 'export const setup = true;\n', 'utf8'),
         writeFile(join(srcDir, 'generated/query.ts'), 'export const generated = true;\n', 'utf8'),
+        writeFile(join(root, 'shared.ts'), 'export const shared = true;\n', 'utf8'),
       ]);
       const { buildCheckSourceFiles, dataPlaneSourceFiles, isDataPlaneSourceFile } =
         await loadSubject();
@@ -658,16 +670,69 @@ export const status = query({
         dataPlaneSourceFiles(srcDir, root)
           .map((file) => file.fileName)
           .sort(),
-      ).toEqual(['src/components/card.jsx', 'src/query.js']);
+      ).toEqual([
+        'shared.ts',
+        'src/app.setup.js',
+        'src/components/card.jsx',
+        'src/generated/query.ts',
+        'src/hidden.test.ts',
+        'src/query.js',
+      ]);
       expect(
-        buildCheckSourceFiles(join(srcDir, 'app.tsx'))
+        buildCheckSourceFiles(join(srcDir, 'app.tsx'), root)
           .map((file) => file.fileName)
           .sort(),
-      ).toEqual(['components/card.jsx', 'query.js']);
+      ).toEqual([
+        '../shared.ts',
+        'app.setup.js',
+        'components/card.jsx',
+        'generated/query.ts',
+        'hidden.test.ts',
+        'query.js',
+      ]);
       expect(isDataPlaneSourceFile(join(srcDir, 'query.js'), srcDir)).toBe(true);
       expect(isDataPlaneSourceFile(join(srcDir, 'components/card.jsx'), srcDir)).toBe(true);
-      expect(isDataPlaneSourceFile(join(srcDir, 'app.setup.js'), srcDir)).toBe(false);
-      expect(isDataPlaneSourceFile(join(srcDir, 'generated/query.ts'), srcDir)).toBe(false);
+      expect(isDataPlaneSourceFile(join(srcDir, 'app.setup.js'), srcDir)).toBe(true);
+      expect(isDataPlaneSourceFile(join(srcDir, 'generated/query.ts'), srcDir)).toBe(true);
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
+  it('derives compiler-owned table security from a test-named runtime schema module', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kovo-data-plane-test-name-'));
+    const srcDir = join(root, 'src');
+    try {
+      await mkdir(srcDir, { recursive: true });
+      await writeFile(
+        join(srcDir, 'schema.test.ts'),
+        [
+          'import { kovo } from "@kovojs/drizzle";',
+          'import { sqliteTable, text } from "drizzle-orm/sqlite-core";',
+          'export const vault = sqliteTable("vault", {',
+          '  id: text("id").primaryKey(),',
+          '  secretValue: text("secret_value").notNull(),',
+          '}, kovo({ domain: "vault", key: "id", owner: "id", secret: ["secretValue"] }));',
+        ].join('\n'),
+        'utf8',
+      );
+      await writeFile(join(srcDir, 'app.ts'), "export * from './schema.test.js';\n", 'utf8');
+      const { collectRuntimeRegistryFacts } = await loadSubject();
+
+      await expect(
+        collectRuntimeRegistryFacts({ appSourceDir: srcDir, root }),
+      ).resolves.toMatchObject({
+        tableSecurity: {
+          tables: [
+            {
+              name: 'vault',
+              owner: { columnKey: 'id', columnName: 'id' },
+              secretColumnKeys: ['secretValue'],
+              secretDeclared: true,
+            },
+          ],
+        },
+      });
     } finally {
       await rm(root, { force: true, recursive: true });
     }
@@ -691,6 +756,48 @@ export const status = query({
       ]);
     } finally {
       Stats.prototype.isDirectory = nativeIsDirectory;
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
+  it('fails closed instead of following data-plane source symlinks outside the app root', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kovo-data-plane-source-boundary-'));
+    const outside = await mkdtemp(join(tmpdir(), 'kovo-data-plane-source-outside-'));
+    const srcDir = join(root, 'src');
+    try {
+      await mkdir(srcDir, { recursive: true });
+      await writeFile(join(srcDir, 'app.tsx'), 'export const app = true;\n', 'utf8');
+      await writeFile(join(outside, 'host-secret.ts'), RELEVANT_DRIZZLE_SOURCE.source, 'utf8');
+      await symlink(join(outside, 'host-secret.ts'), join(srcDir, 'linked-secret.ts'));
+      const { buildCheckSourceFiles, dataPlaneSourceFiles } = await loadSubject();
+
+      expect(() => dataPlaneSourceFiles(srcDir, root)).toThrow(/source.*symlink|source.*special/u);
+      expect(() => buildCheckSourceFiles(join(srcDir, 'app.tsx'))).toThrow(
+        /source.*symlink|source.*special/u,
+      );
+    } finally {
+      await rm(root, { force: true, recursive: true });
+      await rm(outside, { force: true, recursive: true });
+    }
+  });
+
+  it('permits contained regular-file aliases but rejects directory symlinks', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kovo-data-plane-contained-alias-'));
+    const srcDir = join(root, 'src');
+    try {
+      await mkdir(srcDir, { recursive: true });
+      await writeFile(join(srcDir, 'app.tsx'), 'export const app = true;\n', 'utf8');
+      await writeFile(join(root, 'AGENTS.md'), 'framework instructions\n', 'utf8');
+      await symlink('AGENTS.md', join(root, 'CLAUDE.md'));
+      const { dataPlaneSourceFiles } = await loadSubject();
+
+      expect(dataPlaneSourceFiles(root, root)).toEqual([
+        { fileName: 'src/app.tsx', source: 'export const app = true;\n' },
+      ]);
+
+      await symlink('src', join(root, 'linked-source'));
+      expect(() => dataPlaneSourceFiles(root, root)).toThrow(/source.*symlink|source.*special/u);
+    } finally {
       await rm(root, { force: true, recursive: true });
     }
   });

@@ -91,6 +91,7 @@ import {
   type KovoCommandSecurityDisposition,
 } from './security-disposition.js';
 import {
+  buildByteLength,
   buildSecurityArrayAppend,
   buildArrayIsArray,
   buildArrayJoin,
@@ -945,7 +946,7 @@ async function staticBuildCheckGraph(
 ): Promise<KovoBuildCheckArtifacts> {
   const { collectCapabilityEscapesFromProject, collectCookieDowngradesFromProject } =
     await import('@kovojs/drizzle/internal/static');
-  const files = buildCheckSourceFiles(appModulePath);
+  const files = buildCheckSourceFiles(appModulePath, options.root);
   const [drizzleFacts, sourceGraphFacts] =
     files.length === 0
       ? [
@@ -3602,7 +3603,7 @@ async function snapshotExportPublicAssetEntries(
       );
     }
     const bytes = await source.fileBytesOf(entry);
-    budget.bytes += bytes.byteLength;
+    budget.bytes += buildByteLength(bytes);
     if (budget.bytes > exportPublicSnapshotMaxBytes) {
       throw new Error(
         `kovo export --dist exceeds the public asset byte limit (${exportPublicSnapshotMaxBytes}).`,
@@ -3801,19 +3802,19 @@ function kovoExportResult(
 
   for (const artifact of result.artifacts) {
     lines.push(
-      `HTML ${artifact.path} status=${artifact.status} bytes=${byteLength(artifact.body)}`,
+      `HTML ${artifact.path} status=${artifact.status} bytes=${buildByteLength(artifact.body)}`,
     );
   }
 
   for (const artifact of result.clientModules) {
     lines.push(
-      `CLIENT-MODULE ${artifact.path} href=${stringifyBuildValue(artifact.href)} status=${artifact.status} bytes=${byteLength(artifact.body)}`,
+      `CLIENT-MODULE ${artifact.path} href=${stringifyBuildValue(artifact.href)} status=${artifact.status} bytes=${buildByteLength(artifact.body)}`,
     );
   }
 
   for (const artifact of result.assets) {
     lines.push(
-      `ASSET ${artifact.path} status=${artifact.status} bytes=${readFileSync(artifact.source).byteLength}`,
+      `ASSET ${artifact.path} status=${artifact.status} bytes=${buildByteLength(readFileSync(artifact.source))}`,
     );
   }
 
@@ -3972,10 +3973,6 @@ function stringifyBuildValue(value: unknown, space?: number): string {
   const serialized = buildJsonStringify(value, space);
   if (serialized === undefined) throw new TypeError('Kovo build value is not JSON serializable.');
   return serialized;
-}
-
-function byteLength(value: string): number {
-  return Buffer.byteLength(value, 'utf8');
 }
 
 function buildErrorResult(error: unknown): CliCommandResult {

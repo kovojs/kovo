@@ -86,7 +86,12 @@ const { mainAsync } = await import('./index.js');
 // SPEC §5.2 / §6.6 rule 6: supported commands that evaluate authored modules lock the shared
 // compiler realm at the last trusted boundary, before invoking the dispatcher. Direct imports of
 // `@kovojs/cli/internal` are tooling APIs, not the supported security runner.
-if (process.argv[2] === 'build' || process.argv[2] === 'dev' || process.argv[2] === 'export') {
+if (
+  process.argv[2] === 'build' ||
+  process.argv[2] === 'db' ||
+  process.argv[2] === 'dev' ||
+  process.argv[2] === 'export'
+) {
   const { lockCompilerSecurityRealm } =
     await import('@kovojs/compiler/internal/security-bootstrap');
   lockCompilerSecurityRealm();

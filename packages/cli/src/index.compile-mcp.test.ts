@@ -1,12 +1,14 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { Readable } from 'node:stream';
 
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
 import type { JSONRPCMessage } from '@modelcontextprotocol/sdk/types.js';
 import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
 import { describe, expect, it } from 'vitest';
 
+import { BoundedMcpStdin } from './commands/mcp.js';
 import {
   compileComponentV1,
   handleKovoMcpRequest,
@@ -221,6 +223,7 @@ export const Shell = component({
                   "additionalProperties": true,
                   "properties": {
                     "fileName": {
+                      "maxLength": 4096,
                       "type": "string",
                     },
                     "packageComponentPrefixes": {
@@ -239,6 +242,7 @@ export const Shell = component({
                       "type": "object",
                     },
                     "source": {
+                      "maxLength": 2097152,
                       "type": "string",
                     },
                     "sourceProvenance": {
@@ -485,6 +489,77 @@ export const Shell = component({
         },
         version: 'kovo-mcp/v1',
       },
+    });
+  });
+
+  it('bounds fallback request lines and resumes at the next message', async () => {
+    const chunks: string[] = [];
+    await runMcpFallbackStdio(
+      mcpInputChunks(
+        'x'.repeat(4 * 1024 * 1024 + 1),
+        `\n${JSON.stringify({ id: 'after-limit', jsonrpc: '2.0', method: 'tools/list' })}\n`,
+      ),
+      { write: (chunk) => chunks.push(chunk) },
+    );
+
+    const responses = chunks
+      .join('')
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line));
+    expect(responses).toHaveLength(2);
+    expect(responses[0]).toMatchObject({
+      error: { code: -32001, message: 'request exceeds 4194304 bytes' },
+      id: null,
+      jsonrpc: '2.0',
+    });
+    expect(responses[1]).toMatchObject({
+      id: 'after-limit',
+      result: { structuredContent: { version: 'kovo-mcp/v1' } },
+    });
+  });
+
+  it('bounds the SDK transport before its unbounded newline buffer', async () => {
+    const next = JSON.stringify({ id: 'after-limit', jsonrpc: '2.0', method: 'tools/list' });
+    const bounded = new BoundedMcpStdin(
+      Readable.from([Buffer.alloc(4 * 1024 * 1024 + 1, 0x78), Buffer.from(`\n${next}\n`, 'utf8')]),
+    );
+    let output = '';
+    for await (const chunk of bounded) output += Buffer.from(chunk).toString('utf8');
+
+    const messages = output
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line));
+    expect(messages).toEqual([
+      {
+        id: 'kovo-input-limit',
+        jsonrpc: '2.0',
+        method: '__kovo_input_limit__',
+      },
+      { id: 'after-limit', jsonrpc: '2.0', method: 'tools/list' },
+    ]);
+    expect(Buffer.byteLength(output)).toBeLessThan(1024);
+  });
+
+  it('rejects oversized compile sources before invoking the compiler', async () => {
+    await expect(
+      handleKovoMcpRequest({
+        id: 'compile-limit',
+        jsonrpc: '2.0',
+        method: 'tools/call',
+        params: {
+          arguments: {
+            fileName: 'oversized.tsx',
+            source: 'x'.repeat(2 * 1024 * 1024 + 1),
+          },
+          name: 'compile_component',
+        },
+      }),
+    ).resolves.toMatchObject({
+      error: { code: -32000, message: 'compile_component source exceeds 2097152 bytes' },
+      id: 'compile-limit',
+      jsonrpc: '2.0',
     });
   });
 

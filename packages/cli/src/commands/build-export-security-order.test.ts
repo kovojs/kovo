@@ -235,6 +235,7 @@ if (!poisonRejected) throw new Error('Array.filter poison unexpectedly installed
 const unsafe = mutation('auth/lowerer-poison', {
   access: publicAccess('bootstrap poison regression'),
   csrf: false,
+  csrfJustification: 'exercise the missing-CSRF compiler diagnostic',
   input: s.object({}),
   handler(_input, request) {
     return { cookie: request.headers.get('Cookie') };
@@ -340,6 +341,7 @@ export default {};
 const unsafe = mutation('auth/restart-selective', {
   access: publicAccess('C69 restart regression'),
   csrf: false,
+  csrfJustification: 'exercise the missing-CSRF compiler diagnostic across restarts',
   input: s.object({}),
   handler(_input, request) {
     return { cookie: request.headers.get('Cookie') };

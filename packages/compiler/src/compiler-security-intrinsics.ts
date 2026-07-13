@@ -77,6 +77,7 @@ const nativeWeakMapGet = NativeWeakMap.prototype.get;
 const nativeWeakMapSet = NativeWeakMap.prototype.set;
 const nativeStatsIsDirectory = BuiltinStats.prototype.isDirectory;
 const nativeStatsIsFile = BuiltinStats.prototype.isFile;
+const nativeStatsIsSymbolicLink = BuiltinStats.prototype.isSymbolicLink;
 
 function apply<Return>(fn: Function, receiver: unknown, args: readonly unknown[]): Return {
   return nativeReflectApply(fn, receiver, args) as Return;
@@ -813,6 +814,11 @@ export function compilerStatsIsDirectory(value: object): boolean {
 export function compilerStatsIsFile(value: object): boolean {
   assertCompilerSecurityIntrinsics();
   return apply(nativeStatsIsFile, value, []);
+}
+
+export function compilerStatsIsSymbolicLink(value: object): boolean {
+  assertCompilerSecurityIntrinsics();
+  return apply(nativeStatsIsSymbolicLink, value, []);
 }
 
 export function compilerRandomUuid(): string {

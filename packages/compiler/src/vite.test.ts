@@ -12,7 +12,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { KovoViteMiddleware } from './internal.js';
 import { kovoVitePlugin } from './index.js';
 import { lowerStandaloneSourceDerivedRegistryDeclarations } from './source-derived-lowering.js';
-import { createKovoVitePlugin } from './vite.js';
+import { createKovoVitePlugin, viteFrameworkIdentityFiles } from './vite.js';
 import type { HmrImpactMetadata } from './types.js';
 
 const cartBadgeSource = `
@@ -100,6 +100,29 @@ export const C = component({
       );
     } finally {
       rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it('does not read framework identity sources through symlinks outside the Vite root', () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-vite-identity-boundary-'));
+    const outside = mkdtempSync(join(tmpdir(), 'kovo-vite-identity-outside-'));
+    const src = join(root, 'src');
+    try {
+      mkdirSync(src, { recursive: true });
+      const outsideSource = join(outside, 'browser-root.ts');
+      writeFileSync(outsideSource, "export { trustedHtml as th } from '@kovojs/browser';\n");
+      symlinkSync(outsideSource, join(src, 'browser-root.ts'));
+
+      expect(
+        viteFrameworkIdentityFiles(
+          root,
+          join(src, 'probe.tsx'),
+          "import { th } from './browser-root.js';\nexport const C = component({});\n",
+        ),
+      ).toEqual([]);
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+      rmSync(outside, { force: true, recursive: true });
     }
   });
 

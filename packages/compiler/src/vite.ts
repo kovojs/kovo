@@ -438,6 +438,7 @@ export function createFrameworkKovoVitePlugin(
         compileCache,
         options,
         root,
+        clientSourceFileSystems,
         fileName,
         source,
       );
@@ -527,6 +528,7 @@ export function createFrameworkKovoVitePlugin(
           compileCache,
           options,
           root,
+          clientSourceFileSystems,
           fileName,
           source,
         );
@@ -801,6 +803,7 @@ async function compileCachedViteComponentModule(
   cache: CompileCache<ViteCompileResult>,
   options: KovoVitePluginOptions,
   root: string,
+  sourceFileSystems: readonly CompilerSourceFileSystem[],
   fileName: string,
   source: string,
 ): Promise<ViteCompileResult> {
@@ -810,7 +813,12 @@ async function compileCachedViteComponentModule(
     resolveViteQueryShapeFacts(options, fileName),
   );
   const registryFacts = resolveViteRegistryFacts(options, fileName);
-  const extraFiles = viteFrameworkIdentityFiles(root, fileName, source);
+  const extraFiles = viteFrameworkIdentityFilesWithinRoots(
+    root,
+    fileName,
+    source,
+    sourceFileSystems,
+  );
   const compileOptions = snapshotCompileComponentOptions({
     ...(extraFiles.length === 0 ? {} : { extraFiles }),
     fileName,
@@ -938,9 +946,23 @@ export function viteFrameworkIdentityFiles(
   fileName: string,
   source: string,
 ): readonly { readonly fileName: string; readonly source: string }[] {
+  return viteFrameworkIdentityFilesWithinRoots(
+    root,
+    fileName,
+    source,
+    viteClientSourceFileSystems(root),
+  );
+}
+
+function viteFrameworkIdentityFilesWithinRoots(
+  root: string,
+  fileName: string,
+  source: string,
+  sourceFileSystems: readonly CompilerSourceFileSystem[],
+): readonly { readonly fileName: string; readonly source: string }[] {
   const collected = compilerCreateMap<string, { fileName: string; source: string }>();
   const visited = compilerCreateSet<string>();
-  collectViteFrameworkIdentityFiles(root, fileName, source, collected, visited);
+  collectViteFrameworkIdentityFiles(root, fileName, source, sourceFileSystems, collected, visited);
   const files: Array<{ fileName: string; source: string }> = [];
   compilerMapForEach(collected, (file) => {
     compilerArrayAppend(files, file, 'Compiler packages/compiler/src/vite.ts collection');
@@ -952,6 +974,7 @@ function collectViteFrameworkIdentityFiles(
   root: string,
   fileName: string,
   source: string,
+  sourceFileSystems: readonly CompilerSourceFileSystem[],
   collected: Map<string, { fileName: string; source: string }>,
   visited: Set<string>,
 ): void {
@@ -974,12 +997,24 @@ function collectViteFrameworkIdentityFiles(
       throw new TypeError(`Vite framework identity module specifiers[${index}] must be dense.`);
     }
     if (!isRelativeModuleSpecifier(specifier.specifier)) continue;
-    const resolved = readViteRelativeSourceFile(root, fileName, specifier.specifier);
+    const resolved = readViteRelativeSourceFile(
+      root,
+      fileName,
+      specifier.specifier,
+      sourceFileSystems,
+    );
     if (!resolved) continue;
     if (!compilerMapGet(collected, resolved.fileName)) {
       compilerMapSet(collected, resolved.fileName, resolved);
     }
-    collectViteFrameworkIdentityFiles(root, resolved.fileName, resolved.source, collected, visited);
+    collectViteFrameworkIdentityFiles(
+      root,
+      resolved.fileName,
+      resolved.source,
+      sourceFileSystems,
+      collected,
+      visited,
+    );
   }
 }
 
@@ -987,6 +1022,7 @@ function readViteRelativeSourceFile(
   root: string,
   importerFileName: string,
   moduleSpecifier: string,
+  sourceFileSystems: readonly CompilerSourceFileSystem[],
 ): { fileName: string; source: string } | null {
   const importerPath = isAbsolute(importerFileName)
     ? importerFileName
@@ -999,9 +1035,8 @@ function readViteRelativeSourceFile(
     if (typeof candidate !== 'string') {
       throw new TypeError(`Vite source-file candidates[${index}] must be a string.`);
     }
-    if (!existsSync(candidate)) continue;
-    const source = readFileSync(candidate, 'utf8');
-    return { fileName: viteComponentFileName(candidate, root), source };
+    const source = readViteClientSourceFile(sourceFileSystems, candidate);
+    if (source !== null) return { fileName: viteComponentFileName(candidate, root), source };
   }
   return null;
 }
@@ -1115,6 +1150,7 @@ function loadViteClientModule(
     cache,
     options,
     root,
+    sourceFileSystems,
     fileName,
     source,
   );
