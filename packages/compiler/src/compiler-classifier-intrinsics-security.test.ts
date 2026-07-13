@@ -573,6 +573,204 @@ export const UserCard = component({
     expect(poisonHits).toBe(0);
   });
 
+  it('does not suppress malformed-source rejection through parse-diagnostic Array.map', () => {
+    const nativeMap = Array.prototype.map;
+    const nativeApply = Reflect.apply;
+    let poisonHits = 0;
+    let result: ReturnType<typeof compileComponentModule> | undefined;
+    try {
+      Array.prototype.map = function poisonedParseDiagnosticMap<T, U>(
+        callback: (value: T, index: number, array: T[]) => U,
+        thisArg?: unknown,
+      ): U[] {
+        if (this.length > 0 && new Error().stack?.includes('parseDiagnosticsForSourceFile')) {
+          poisonHits += 1;
+          return [];
+        }
+        return nativeApply(nativeMap, this, [callback, thisArg]);
+      };
+      result = compileComponentModule({
+        fileName: 'broken.tsx',
+        source: `export const Broken = component({ render: () => <div><span></div> });`,
+      });
+    } finally {
+      Array.prototype.map = nativeMap;
+    }
+    expect(result?.diagnostics.filter((diagnostic) => diagnostic.code === 'KV245')).toHaveLength(1);
+    expect(result?.files).toEqual([]);
+    expect(poisonHits).toBe(0);
+  });
+
+  it('does not suppress fragment-target classification through component-option Array.find', () => {
+    const nativeFind = Array.prototype.find;
+    const nativeApply = Reflect.apply;
+    let poisonHits = 0;
+    let result: ReturnType<typeof compileComponentModule> | undefined;
+    try {
+      Array.prototype.find = function poisonedFragmentOptionFind<T>(
+        callback: (value: T, index: number, array: T[]) => unknown,
+        thisArg?: unknown,
+      ): T | undefined {
+        if (new Error().stack?.includes('componentHasInferredFragmentTarget')) {
+          for (let index = 0; index < this.length; index += 1) {
+            if ((this[index] as { key?: unknown } | undefined)?.key === 'queries') {
+              poisonHits += 1;
+              return undefined;
+            }
+          }
+        }
+        return nativeApply(nativeFind, this, [callback, thisArg]);
+      };
+      result = compileComponentModule({
+        fileName: 'cart-page.tsx',
+        source: `
+export const Stepper = component({
+  state: () => ({ count: 0 }),
+  render: (_, state) => <span>{state.count}</span>,
+});
+export const CartPanel = component({
+  queries: { cart: {} },
+  render: ({ cart }) => <section><p>{cart.total}</p><Stepper /></section>,
+});
+`,
+      });
+    } finally {
+      Array.prototype.find = nativeFind;
+    }
+    expect(result?.diagnostics.filter((diagnostic) => diagnostic.code === 'KV420')).toHaveLength(1);
+    expect(poisonHits).toBe(0);
+  });
+
+  it('does not suppress mutable-state classification through state-entry Array.some', () => {
+    const nativeSome = Array.prototype.some;
+    const nativeApply = Reflect.apply;
+    let poisonHits = 0;
+    let result: ReturnType<typeof compileComponentModule> | undefined;
+    try {
+      Array.prototype.some = function poisonedStateEntrySome<T>(
+        callback: (value: T, index: number, array: T[]) => unknown,
+        thisArg?: unknown,
+      ): boolean {
+        if (
+          (this[0] as { key?: unknown } | undefined)?.key === 'count' &&
+          new Error().stack?.includes('componentDeclaresMutableLocalState')
+        ) {
+          poisonHits += 1;
+          return false;
+        }
+        return nativeApply(nativeSome, this, [callback, thisArg]);
+      };
+      result = compileComponentModule({
+        fileName: 'cart-page.tsx',
+        source: `
+export const Stepper = component({
+  state: () => ({ count: 0 }),
+  render: (_, state) => <span>{state.count}</span>,
+});
+export const CartPanel = component({
+  queries: { cart: {} },
+  render: ({ cart }) => <section><p>{cart.total}</p><Stepper /></section>,
+});
+`,
+      });
+    } finally {
+      Array.prototype.some = nativeSome;
+    }
+    expect(result?.diagnostics.filter((diagnostic) => diagnostic.code === 'KV420')).toHaveLength(1);
+    expect(poisonHits).toBe(0);
+  });
+
+  it('does not suppress fragment-target validation through component Array.flatMap', () => {
+    const nativeFlatMap = Array.prototype.flatMap;
+    const nativeApply = Reflect.apply;
+    let poisonHits = 0;
+    let result: ReturnType<typeof compileComponentModule> | undefined;
+    try {
+      Array.prototype.flatMap = function poisonedComponentTargetFlatMap<T, U>(
+        callback: (value: T, index: number, array: T[]) => U | readonly U[],
+        thisArg?: unknown,
+      ): U[] {
+        if (
+          typeof (this[0] as { localName?: unknown } | undefined)?.localName === 'string' &&
+          new Error().stack?.includes('componentFragmentTargetNames')
+        ) {
+          poisonHits += 1;
+          return [];
+        }
+        return nativeApply(nativeFlatMap, this, [callback, thisArg]);
+      };
+      result = compileComponentModule({
+        fileName: 'cart-badge.tsx',
+        source: `
+export const CartBadge = component({
+  queries: { cart: {} },
+  render: ({ priceList }) => <span>{priceList.total}</span>,
+});
+`,
+      });
+    } finally {
+      Array.prototype.flatMap = nativeFlatMap;
+    }
+    expect(result?.diagnostics.filter((diagnostic) => diagnostic.code === 'KV303')).toHaveLength(1);
+    expect(poisonHits).toBe(0);
+  });
+
+  it('does not suppress mutation-form provenance through named-import Array.map', () => {
+    const nativeMap = Array.prototype.map;
+    const nativeApply = Reflect.apply;
+    let poisonHits = 0;
+    let result: ReturnType<typeof compileComponentModule> | undefined;
+    try {
+      Array.prototype.map = function poisonedNamedImportMap<T, U>(
+        callback: (value: T, index: number, array: T[]) => U,
+        thisArg?: unknown,
+      ): U[] {
+        if (
+          (this[0] as { name?: { text?: unknown } } | undefined)?.name?.text ===
+            'mutationFormAttributes' &&
+          new Error().stack?.includes('namedImportModels')
+        ) {
+          poisonHits += 1;
+          return [];
+        }
+        return nativeApply(nativeMap, this, [callback, thisArg]);
+      };
+      result = compileComponentModule({
+        fileName: 'product-grid.tsx',
+        registryFacts: {
+          mutationInputs: {
+            'cart/add': [
+              {
+                coercion: 'string',
+                defaulted: false,
+                name: 'productId',
+                optional: false,
+                provenance: 'registry',
+                required: true,
+              },
+            ],
+          },
+          mutations: { 'cart/add': 'typeof addToCart' },
+        },
+        source: `
+import { mutationFormAttributes } from '@kovojs/server';
+import { addToCart } from '../app.js';
+export const ProductGrid = component({
+  render: () => (
+    <form enhance {...mutationFormAttributes(addToCart)}>
+      <input type="hidden" name="product" value="p1" />
+    </form>
+  ),
+});
+`,
+      });
+    } finally {
+      Array.prototype.map = nativeMap;
+    }
+    expect(result?.diagnostics.filter((diagnostic) => diagnostic.code === 'KV242')).toHaveLength(2);
+    expect(poisonHits).toBe(0);
+  });
+
   it('does not publish a captured server secret through stateful Array.filter replacement', () => {
     const nativeFilter = Array.prototype.filter;
     const nativeApply = Reflect.apply;

@@ -30,6 +30,7 @@ import {
   compilerSha256Hex,
   compilerSnapshotDenseArray,
   compilerStringIncludes,
+  compilerStringIndexOf,
   compilerStringEndsWith,
   compilerStringSlice,
   compilerStringSplit,
@@ -189,25 +190,40 @@ export function parseDiagnosticsForSourceFile(
     (sourceFile as ts.SourceFile & { parseDiagnostics?: readonly ts.Diagnostic[] })
       .parseDiagnostics ?? [];
 
-  return parseDiagnostics.map((diagnostic: ts.Diagnostic) => {
+  const result: CompilerDiagnostic[] = [];
+  const diagnosticLength = compilerArrayLength(parseDiagnostics, 'Parse diagnostics');
+  for (let index = 0; index < diagnosticLength; index += 1) {
+    const diagnostic = compilerOwnDataValue(parseDiagnostics, index, 'Parse diagnostics') as
+      | ts.Diagnostic
+      | undefined;
+    if (!diagnostic) throw new TypeError(`Parse diagnostics[${index}] must be own data.`);
     const message = ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n');
     const start = diagnostic.start ?? 0;
-    const length = diagnostic.length ?? Math.max(1, source.length - start);
-    return {
-      code: 'KV245',
-      fileName: sourceFile.fileName,
-      help: [
-        'Would lower to: typed JSX facts before generated server, client, CSS, and registry artifacts.',
-        'Blocked reason: TypeScript could not parse the authored TSX, so later compiler phases would operate on a recovery tree.',
-        'Fixes: correct the TSX syntax at this location and re-run the compiler.',
-        'SPEC §5.2 requires app source to be TSX and generated artifacts to come only from parsed compiler facts.',
-      ].join('\n'),
-      length,
-      message: `TypeScript/TSX parse failed. ${message}`,
-      severity: 'error',
-      start: offsetToPosition(source, start),
-    };
-  });
+    const remainingLength = source.length - start;
+    const length = diagnostic.length ?? (remainingLength > 1 ? remainingLength : 1);
+    compilerArrayAppend(
+      result,
+      {
+        code: 'KV245',
+        fileName: sourceFile.fileName,
+        help: compilerArrayJoin(
+          [
+            'Would lower to: typed JSX facts before generated server, client, CSS, and registry artifacts.',
+            'Blocked reason: TypeScript could not parse the authored TSX, so later compiler phases would operate on a recovery tree.',
+            'Fixes: correct the TSX syntax at this location and re-run the compiler.',
+            'SPEC §5.2 requires app source to be TSX and generated artifacts to come only from parsed compiler facts.',
+          ],
+          '\n',
+        ),
+        length,
+        message: `TypeScript/TSX parse failed. ${message}`,
+        severity: 'error',
+        start: offsetToPosition(source, start),
+      },
+      'Parse diagnostic facts',
+    );
+  }
+  return result;
 }
 
 /**
@@ -392,7 +408,7 @@ function moduleSpecifierModel(node: ts.Node): ModuleSpecifierModel | null {
   }
 
   if (ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword) {
-    const [argument] = node.arguments;
+    const argument = callArgument(node, 0);
     if (argument && ts.isStringLiteralLike(argument)) {
       return {
         end: argument.getEnd(),
@@ -417,12 +433,24 @@ function namedImportModels(node: ts.Node): NamedImportModel[] {
   const bindings = node.importClause?.namedBindings;
   if (!bindings || !ts.isNamedImports(bindings)) return [];
   const moduleSpecifier = node.moduleSpecifier.text;
-
-  return bindings.elements.map((element) => ({
-    importedName: element.propertyName?.text ?? element.name.text,
-    localName: element.name.text,
-    moduleSpecifier,
-  }));
+  const result: NamedImportModel[] = [];
+  const elementLength = compilerArrayLength(bindings.elements, 'Named import elements');
+  for (let index = 0; index < elementLength; index += 1) {
+    const element = compilerOwnDataValue(bindings.elements, index, 'Named import elements') as
+      | ts.ImportSpecifier
+      | undefined;
+    if (!element) throw new TypeError(`Named import elements[${index}] must be own data.`);
+    compilerArrayAppend(
+      result,
+      {
+        importedName: element.propertyName?.text ?? element.name.text,
+        localName: element.name.text,
+        moduleSpecifier,
+      },
+      'Named import models',
+    );
+  }
+  return result;
 }
 
 function moduleScopeBindingModels(
@@ -431,24 +459,36 @@ function moduleScopeBindingModels(
   node: ts.Node,
 ): ModuleScopeBindingModel[] {
   if (!ts.isVariableStatement(node) || node.parent !== sourceFile) return [];
-
-  return node.declarationList.declarations.flatMap((declaration) => {
-    if (!ts.isIdentifier(declaration.name) || declaration.initializer === undefined) return [];
-
+  const result: ModuleScopeBindingModel[] = [];
+  const declarationLength = compilerArrayLength(
+    node.declarationList.declarations,
+    'Module-scope declarations',
+  );
+  for (let index = 0; index < declarationLength; index += 1) {
+    const declaration = compilerOwnDataValue(
+      node.declarationList.declarations,
+      index,
+      'Module-scope declarations',
+    ) as ts.VariableDeclaration | undefined;
+    if (!declaration) throw new TypeError(`Module-scope declarations[${index}] must be own data.`);
+    if (!ts.isIdentifier(declaration.name) || declaration.initializer === undefined) continue;
     const value = staticLiteralValue(declaration.initializer);
-    if (value === undefined) return [];
-
-    return [
+    if (value === undefined) continue;
+    compilerArrayAppend(
+      result,
       {
         name: declaration.name.text,
-        source: source.slice(
+        source: compilerStringSlice(
+          source,
           declaration.initializer.getStart(sourceFile),
           declaration.initializer.getEnd(),
         ),
         staticValue: value,
       },
-    ];
-  });
+      'Module-scope binding models',
+    );
+  }
+  return result;
 }
 
 function moduleScopeObjectEntryModels(
@@ -456,12 +496,32 @@ function moduleScopeObjectEntryModels(
   source: string,
 ): ReadonlyMap<string, readonly ObjectLiteralEntry[]> {
   const stringBindings = moduleScopeStaticStringValues(sourceFile);
-  const objectEntries = new Map<string, readonly ObjectLiteralEntry[]>();
-
-  for (const statement of sourceFile.statements) {
+  const objectEntries = compilerCreateMap<string, readonly ObjectLiteralEntry[]>();
+  const statementLength = compilerArrayLength(sourceFile.statements, 'Source file statements');
+  for (let statementIndex = 0; statementIndex < statementLength; statementIndex += 1) {
+    const statement = compilerOwnDataValue(
+      sourceFile.statements,
+      statementIndex,
+      'Source file statements',
+    ) as ts.Statement | undefined;
+    if (!statement)
+      throw new TypeError(`Source file statements[${statementIndex}] must be own data.`);
     if (!ts.isVariableStatement(statement)) continue;
-
-    for (const declaration of statement.declarationList.declarations) {
+    const declarationLength = compilerArrayLength(
+      statement.declarationList.declarations,
+      'Module-scope object declarations',
+    );
+    for (let declarationIndex = 0; declarationIndex < declarationLength; declarationIndex += 1) {
+      const declaration = compilerOwnDataValue(
+        statement.declarationList.declarations,
+        declarationIndex,
+        'Module-scope object declarations',
+      ) as ts.VariableDeclaration | undefined;
+      if (!declaration) {
+        throw new TypeError(
+          `Module-scope object declarations[${declarationIndex}] must be own data.`,
+        );
+      }
       if (!ts.isIdentifier(declaration.name) || declaration.initializer === undefined) continue;
       const initializer = unwrapExpression(declaration.initializer);
       if (!ts.isObjectLiteralExpression(initializer)) continue;
@@ -472,7 +532,7 @@ function moduleScopeObjectEntryModels(
         initializer,
         stringBindings,
       );
-      if (entries !== undefined) objectEntries.set(declaration.name.text, entries);
+      if (entries !== undefined) compilerMapSet(objectEntries, declaration.name.text, entries);
     }
   }
 
@@ -480,15 +540,35 @@ function moduleScopeObjectEntryModels(
 }
 
 function moduleScopeStaticStringValues(sourceFile: ts.SourceFile): ReadonlyMap<string, string> {
-  const strings = new Map<string, string>();
-
-  for (const statement of sourceFile.statements) {
+  const strings = compilerCreateMap<string, string>();
+  const statementLength = compilerArrayLength(sourceFile.statements, 'Source file statements');
+  for (let statementIndex = 0; statementIndex < statementLength; statementIndex += 1) {
+    const statement = compilerOwnDataValue(
+      sourceFile.statements,
+      statementIndex,
+      'Source file statements',
+    ) as ts.Statement | undefined;
+    if (!statement)
+      throw new TypeError(`Source file statements[${statementIndex}] must be own data.`);
     if (!ts.isVariableStatement(statement)) continue;
-
-    for (const declaration of statement.declarationList.declarations) {
+    const declarationLength = compilerArrayLength(
+      statement.declarationList.declarations,
+      'Module-scope string declarations',
+    );
+    for (let declarationIndex = 0; declarationIndex < declarationLength; declarationIndex += 1) {
+      const declaration = compilerOwnDataValue(
+        statement.declarationList.declarations,
+        declarationIndex,
+        'Module-scope string declarations',
+      ) as ts.VariableDeclaration | undefined;
+      if (!declaration) {
+        throw new TypeError(
+          `Module-scope string declarations[${declarationIndex}] must be own data.`,
+        );
+      }
       if (!ts.isIdentifier(declaration.name) || declaration.initializer === undefined) continue;
       const value = staticLiteralValue(declaration.initializer);
-      if (typeof value === 'string') strings.set(declaration.name.text, value);
+      if (typeof value === 'string') compilerMapSet(strings, declaration.name.text, value);
     }
   }
 
@@ -496,16 +576,34 @@ function moduleScopeStaticStringValues(sourceFile: ts.SourceFile): ReadonlyMap<s
 }
 
 function domainBindingKeys(sourceFile: ts.SourceFile): ReadonlyMap<string, string> {
-  const domains = new Map<string, string>();
-
-  for (const statement of sourceFile.statements) {
+  const domains = compilerCreateMap<string, string>();
+  const statementLength = compilerArrayLength(sourceFile.statements, 'Source file statements');
+  for (let statementIndex = 0; statementIndex < statementLength; statementIndex += 1) {
+    const statement = compilerOwnDataValue(
+      sourceFile.statements,
+      statementIndex,
+      'Source file statements',
+    ) as ts.Statement | undefined;
+    if (!statement)
+      throw new TypeError(`Source file statements[${statementIndex}] must be own data.`);
     if (!ts.isVariableStatement(statement)) continue;
-
-    for (const declaration of statement.declarationList.declarations) {
+    const declarationLength = compilerArrayLength(
+      statement.declarationList.declarations,
+      'Domain binding declarations',
+    );
+    for (let declarationIndex = 0; declarationIndex < declarationLength; declarationIndex += 1) {
+      const declaration = compilerOwnDataValue(
+        statement.declarationList.declarations,
+        declarationIndex,
+        'Domain binding declarations',
+      ) as ts.VariableDeclaration | undefined;
+      if (!declaration) {
+        throw new TypeError(`Domain binding declarations[${declarationIndex}] must be own data.`);
+      }
       if (!ts.isIdentifier(declaration.name) || declaration.initializer === undefined) continue;
       const domainKey = domainKeyFromExpression(sourceFile, declaration.initializer, domains);
       if (domainKey !== undefined && domainKey !== 'UNRESOLVED') {
-        domains.set(declaration.name.text, domainKey);
+        compilerMapSet(domains, declaration.name.text, domainKey);
       }
     }
   }
@@ -720,11 +818,12 @@ export function componentRenderHostElementFor(
   const host = component.renderHost ?? null;
   if (!host) return null;
 
-  return (
-    model.jsxElements.find(
-      (element) => element.start === host.start && element.openingEnd === host.end,
-    ) ?? null
-  );
+  const elements = snapshotCompilerModelArray(model.jsxElements, 'JSX elements');
+  for (let index = 0; index < elements.length; index += 1) {
+    const element = elements[index]!;
+    if (element.start === host.start && element.openingEnd === host.end) return element;
+  }
+  return null;
 }
 
 export function componentStateReturnObjectModel(
@@ -751,33 +850,41 @@ export function componentModelForSourceSpan(
   model: ComponentModuleModel,
   span: SourceSpan,
 ): ComponentModel | null {
-  const containing = model.components.filter((component) => {
+  const components = snapshotCompilerModelArray(model.components, 'Components');
+  let containing: ComponentModel | null = null;
+  let containingWidth: number | undefined;
+  for (let index = 0; index < components.length; index += 1) {
+    const component = components[index]!;
     const start = component.localNameSpan?.start ?? 0;
-    return span.start >= start && span.end <= component.declarationEnd;
-  });
-
-  return (
-    containing.sort(
-      (left, right) =>
-        left.declarationEnd -
-        (left.localNameSpan?.start ?? 0) -
-        (right.declarationEnd - (right.localNameSpan?.start ?? 0)),
-    )[0] ?? null
-  );
+    if (span.start < start || span.end > component.declarationEnd) continue;
+    const width = component.declarationEnd - start;
+    if (containingWidth === undefined || width < containingWidth) {
+      containing = component;
+      containingWidth = width;
+    }
+  }
+  return containing;
 }
 
 export function componentFragmentTargetNames(model: ComponentModuleModel): string[] {
-  return model.components.flatMap((component) => {
-    if (!componentHasInferredFragmentTarget(component)) {
-      return [];
+  const result: string[] = [];
+  const components = snapshotCompilerModelArray(model.components, 'Components');
+  for (let index = 0; index < components.length; index += 1) {
+    const component = components[index]!;
+    if (!componentHasInferredFragmentTarget(component) || component.localName === undefined) {
+      continue;
     }
-
-    return component.localName === undefined ? [] : [component.localName];
-  });
+    compilerArrayAppend(result, component.localName, 'Component fragment target names');
+  }
+  return result;
 }
 
 export function componentHasInferredServerRefreshTarget(model: ComponentModuleModel): boolean {
-  return model.components.some(componentHasInferredFragmentTarget);
+  const components = snapshotCompilerModelArray(model.components, 'Components');
+  for (let index = 0; index < components.length; index += 1) {
+    if (componentHasInferredFragmentTarget(components[index]!)) return true;
+  }
+  return false;
 }
 
 export function jsxElements(model: ComponentModuleModel): JsxElementModel[] {
@@ -794,7 +901,11 @@ export function soleJsxExpressionChild(
 ): JsxExpressionModel | null {
   if (element.childNonWhitespaceCount !== 1) return null;
 
-  const [container] = element.childExpressionContainers;
+  const container = compilerOwnDataValue(
+    element.childExpressionContainers,
+    0,
+    'JSX child expression containers',
+  ) as SourceSpan | undefined;
   if (!container) return null;
 
   const expressions = snapshotCompilerModelArray(model.jsxExpressions, 'JSX expressions');
@@ -1628,13 +1739,11 @@ function leadingJustifiedDiagnostics(
 // fragment target. Exposed per-`ComponentModel` (not just the module's first component) so KV420 can
 // classify every parent in a multi-component module, not only `firstComponentModel`.
 export function componentHasInferredFragmentTarget(component: ComponentModel): boolean {
-  if (
-    component.options.find((option) => option.key === 'disableServerRefresh')?.staticValue === true
-  ) {
+  if (componentOptionStaticValueFor(component, 'disableServerRefresh') === true) {
     return false;
   }
 
-  const queries = component.options.find((option) => option.key === 'queries')?.objectEntries ?? [];
+  const queries = componentOptionObjectEntriesFor(component, 'queries');
   return queries.length > 0;
 }
 
@@ -1648,11 +1757,14 @@ export function componentDeclaresMutableLocalState(
   component: ComponentModel,
   model: ComponentModuleModel,
 ): boolean {
-  if (component.options.find((option) => option.key === 'isomorphic')?.staticValue === true) {
+  if (componentOptionStaticValueFor(component, 'isomorphic') === true) {
     return false;
   }
 
-  const entries = component.stateReturnObject?.entries ?? [];
+  const entries = snapshotCompilerModelArray(
+    component.stateReturnObject?.entries ?? [],
+    'Component state return entries',
+  );
   if (entries.length === 0) return false;
 
   const renderOnceStateKeys = renderOnceStateKeysInSpan(
@@ -1660,7 +1772,10 @@ export function componentDeclaresMutableLocalState(
     component.localNameSpan?.start ?? component.declarationEnd,
     component.declarationEnd,
   );
-  return entries.some((entry) => !renderOnceStateKeys.has(entry.key));
+  for (let index = 0; index < entries.length; index += 1) {
+    if (!compilerSetHas(renderOnceStateKeys, entries[index]!.key)) return true;
+  }
+  return false;
 }
 
 function renderOnceStateKeysInSpan(
@@ -1668,14 +1783,30 @@ function renderOnceStateKeysInSpan(
   spanStart: number,
   spanEnd: number,
 ): Set<string> {
-  const keys = new Set<string>();
-  for (const call of model.calls) {
+  const keys = compilerCreateSet<string>();
+  const calls = snapshotCompilerModelArray(model.calls, 'Call expressions');
+  for (let callIndex = 0; callIndex < calls.length; callIndex += 1) {
+    const call = calls[callIndex]!;
     if (call.name !== 'renderOnce') continue;
     if (call.start < spanStart || call.end > spanEnd) continue;
-    for (const access of call.argumentPropertyAccesses.flat()) {
-      if (!access.path.startsWith('state.')) continue;
-      const key = access.path.slice('state.'.length).split('.')[0];
-      if (key) keys.add(key);
+    const argumentAccesses = snapshotCompilerModelArray(
+      call.argumentPropertyAccesses,
+      'Render-once argument property accesses',
+    );
+    for (let argumentIndex = 0; argumentIndex < argumentAccesses.length; argumentIndex += 1) {
+      const accesses = snapshotCompilerModelArray(
+        argumentAccesses[argumentIndex]!,
+        `Render-once argument ${argumentIndex} property accesses`,
+      );
+      for (let accessIndex = 0; accessIndex < accesses.length; accessIndex += 1) {
+        const access = accesses[accessIndex]!;
+        if (!compilerStringStartsWith(access.path, 'state.')) continue;
+        const remainder = compilerStringSlice(access.path, 'state.'.length);
+        const separatorIndex = compilerStringIndexOf(remainder, '.');
+        const key =
+          separatorIndex < 0 ? remainder : compilerStringSlice(remainder, 0, separatorIndex);
+        if (key) compilerSetAdd(keys, key);
+      }
     }
   }
   return keys;
@@ -1697,7 +1828,11 @@ function componentOptionStaticTemplateValueEntry(
   if (!ts.isNoSubstitutionTemplateLiteral(unwrapped)) return {};
 
   return {
-    staticTemplateValue: source.slice(unwrapped.getStart(sourceFile) + 1, unwrapped.getEnd() - 1),
+    staticTemplateValue: compilerStringSlice(
+      source,
+      unwrapped.getStart(sourceFile) + 1,
+      unwrapped.getEnd() - 1,
+    ),
   };
 }
 
