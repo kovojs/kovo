@@ -18,6 +18,7 @@ import { formatKovoModuleRef, kovoModuleRef } from '@kovojs/core/internal/module
 import { collectQueryUpdateCoverage, collectQueryUpdatePlans } from './analyze/query-updates.js';
 import { canonicalJson } from './canonical-json.js';
 import { mergeQueryUpdatePlans, mergeStyleUpdateCoverage } from './compile-result.js';
+import { snapshotCompileComponentOptions } from './compile-options.js';
 import { createCompileFactLedger, type CompileFactSnapshot } from './compile-fact-ledger.js';
 import {
   compilerArrayIsArray,
@@ -263,7 +264,7 @@ interface CompileComponentProjectOptions extends CompileComponentOptions {
  * so the pipeline reaches a fixpoint (SPEC.md §5.2; hand-authored lowered IR is KV235).
  */
 export function compileComponentModule(rawOptions: CompileComponentOptions): CompileResult {
-  const parsed = parseComponentPhase(rawOptions);
+  const parsed = parseComponentPhase(snapshotCompileComponentOptions(rawOptions));
   if (parsed.kind === 'compiler-ir') return compilerIrPassThroughResult(parsed);
   if (parsed.kind === 'parse-error') return parseErrorResult(parsed);
 
@@ -1606,15 +1607,19 @@ export function collectStateDeriveReferenceFacts(
       const derive = compilerMapGet(derivesByPlaceholder, attribute.value);
       if (!derive) continue;
 
-      appendCompileValue(references, {
-        attr: attribute.name,
-        clientHref,
-        exportName: derive.exportName,
-        placeholder: derive.placeholder,
-        target: { end: attribute.end, start: attribute.start },
-        value: formatKovoModuleRef(kovoModuleRef(clientHref, derive.exportName, 'derive')),
-        writer: 'state derive URL versioning',
-      }, 'State derive references');
+      appendCompileValue(
+        references,
+        {
+          attr: attribute.name,
+          clientHref,
+          exportName: derive.exportName,
+          placeholder: derive.placeholder,
+          target: { end: attribute.end, start: attribute.start },
+          value: formatKovoModuleRef(kovoModuleRef(clientHref, derive.exportName, 'derive')),
+          writer: 'state derive URL versioning',
+        },
+        'State derive references',
+      );
     }
   }
 
@@ -1890,14 +1895,18 @@ function stableQueryShapeSignature(shape: QueryShape): string {
   for (let index = 0; index < keys.length; index += 1) {
     const key = keys[index]!;
     const propertyShape = compilerOwnDataValue(objectShape, key, 'Object query shape');
-    appendCompileValue(frames, encodeRenderPlanFrame(
-      'property',
-      encodeRenderPlanFrame('name', key) +
-        encodeRenderPlanFrame(
-          'shape',
-          stableQueryShapeSignature((propertyShape ?? 'object') as QueryShape),
-        ),
-    ), 'Object query-shape frames');
+    appendCompileValue(
+      frames,
+      encodeRenderPlanFrame(
+        'property',
+        encodeRenderPlanFrame('name', key) +
+          encodeRenderPlanFrame(
+            'shape',
+            stableQueryShapeSignature((propertyShape ?? 'object') as QueryShape),
+          ),
+      ),
+      'Object query-shape frames',
+    );
   }
   return encodeRenderPlanFrame('object', compilerArrayJoin(frames, ''));
 }

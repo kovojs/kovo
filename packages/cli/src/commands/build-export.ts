@@ -1,7 +1,6 @@
 import { execFile as builtinExecFile } from 'node:child_process';
 import {
   existsSync as builtinExistsSync,
-  mkdirSync as builtinMkdirSync,
   mkdtempSync as builtinMkdtempSync,
   readFileSync as builtinReadFileSync,
   rmSync as builtinRmSync,
@@ -18,12 +17,14 @@ import {
   join as builtinJoin,
   relative as builtinRelative,
   resolve as builtinResolve,
+  sep as builtinPathSeparator,
 } from 'node:path';
 import { pathToFileURL as builtinPathToFileURL } from 'node:url';
 import { promisify as builtinPromisify } from 'node:util';
 
 import type { DiagnosticCode } from '@kovojs/core';
 import { isDiagnosticCode } from '@kovojs/core/internal/diagnostics';
+import { createFrameworkOutputFileSystemBoundary } from '@kovojs/core/internal/filesystem';
 import { isParanoidSecurityAdvisoryCode } from '@kovojs/core/internal/security-markers';
 import type * as CoreGraph from '@kovojs/core/internal/graph';
 import type { CompileResult, CompileRouteModuleResult } from '@kovojs/compiler';
@@ -118,7 +119,6 @@ import {
 
 const execFile = builtinExecFile;
 const existsSync = builtinExistsSync;
-const mkdirSync = builtinMkdirSync;
 const mkdtempSync = builtinMkdtempSync;
 const readFile = builtinReadFile;
 const readFileSync = builtinReadFileSync;
@@ -133,6 +133,7 @@ const isAbsolute = builtinIsAbsolute;
 const join = builtinJoin;
 const relative = builtinRelative;
 const resolve = builtinResolve;
+const pathSeparator = builtinPathSeparator;
 const pathToFileURL = builtinPathToFileURL;
 const promisify = builtinPromisify;
 
@@ -457,6 +458,7 @@ export async function runBuildCommand(
   security: KovoCommandSecurityDisposition = kovoCommandBootSecurityDisposition,
 ): Promise<CliCommandResult> {
   try {
+    options = snapshotKovoBuildOptions(options);
     const invocationRoot = security.invocationCwd;
     const resolvedAppModulePath = resolve(invocationRoot, options.appModulePath);
     // SPEC §6.6 rule 6: classify app-authored authority before config, plugins, or app evaluation
@@ -705,11 +707,18 @@ async function runTypeScriptBuildPreflight(
   // warm rebuild only re-checks changed files (plans/fast-kovo-check2.md #2). `--noEmit` is
   // kept, so only the build-info is written, never JS; tsc still invalidates by file content,
   // so type errors continue to surface on the affected files.
-  const buildInfoDir = join(projectDir, '.kovo', 'cache');
-  const buildInfoFile = join(buildInfoDir, 'tsc-preflight.tsbuildinfo');
-  mkdirSync(buildInfoDir, { recursive: true });
+  // The TypeScript subprocess must never receive the project-controlled cache path directly:
+  // `tsc` follows parent symlinks and final hardlinks. Run against a framework-minted temporary
+  // file, then import the resulting bytes through the project-root filesystem capability. This
+  // keeps the incremental cache while enforcing SPEC §10.6 confinement and atomic replacement.
+  const projectOutput = createFrameworkOutputFileSystemBoundary(projectDir);
+  const projectBuildInfoFile = '.kovo/cache/tsc-preflight.tsbuildinfo';
+  const tempDir = mkdtempSync(join(tmpdir(), 'kovo-tsc-preflight-'));
+  const buildInfoFile = join(tempDir, 'tsc-preflight.tsbuildinfo');
 
   try {
+    const previousBuildInfo = await projectOutput.fileBytes(projectBuildInfoFile);
+    if (previousBuildInfo !== undefined) writeFileSync(buildInfoFile, previousBuildInfo);
     // Async subprocess so the caller can overlap this independent `tsc --noEmit` preflight with
     // the vite app load and the kovo-check security preflight (plans/fast-kovo-check3.md). `execFile`
     // pipes and captures stdout/stderr by default, so a non-zero exit rejects with an error carrying
@@ -733,8 +742,11 @@ async function runTypeScriptBuildPreflight(
         env: invocationEnv,
       },
     );
+    await projectOutput.writeFile(projectBuildInfoFile, readFileSync(buildInfoFile));
   } catch (error) {
     throw new Error(`kovo build TypeScript preflight failed:\n${execFileErrorOutput(error)}`);
+  } finally {
+    rmSync(tempDir, { force: true, recursive: true });
   }
 }
 
@@ -3201,9 +3213,11 @@ export async function runExportCommandStructured(
   security: KovoCommandSecurityDisposition = kovoCommandBootSecurityDisposition,
 ): Promise<CliCommandResult | KovoExportCommandResult> {
   let loadedExport: LoadedExportAppModule | undefined;
+  let manifestPlan: ExportManifestPlan | undefined;
   try {
+    options = snapshotKovoExportOptions(options);
     const resolvedOptions = resolveKovoExportOptions(options, security.invocationCwd);
-    const manifestPlan = await staticExportManifestPlan(resolvedOptions);
+    manifestPlan = await staticExportManifestPlan(resolvedOptions);
     const staticExport = await withStylesheetEnvOverlay(manifestPlan.stylesheetEnv, async () => {
       loadedExport = await loadExportAppModule(resolvedOptions, security.invocationCwd);
       const app = appFromModule(loadedExport.appModule, resolvedOptions.appModulePath);
@@ -3218,8 +3232,7 @@ export async function runExportCommandStructured(
         ...(resolvedOptions.assetBase === undefined
           ? {}
           : { publicAssetBase: resolvedOptions.assetBase }),
-        publicAssetRoot:
-          manifestPlan.publicAssetRoot ?? staticExportDefaultPublicAssetRoot(resolvedOptions),
+        publicAssetRoot: manifestPlan.publicAssetRoot,
       });
     });
 
@@ -3227,8 +3240,89 @@ export async function runExportCommandStructured(
   } catch (error) {
     return exportErrorResult(error);
   } finally {
-    await loadedExport?.close?.();
+    try {
+      await loadedExport?.close?.();
+    } finally {
+      manifestPlan?.cleanup?.();
+    }
   }
+}
+
+function snapshotKovoBuildOptions(value: KovoBuildOptions): KovoBuildOptions {
+  if (typeof value !== 'object' || value === null) {
+    throw new TypeError('Kovo build options must be an object.');
+  }
+  const appModulePath = requiredBuildOptionString(value, 'appModulePath', 'build');
+  const outDir = requiredBuildOptionString(value, 'outDir', 'build');
+  const cache = buildOwnDataValue(value, 'cache', 'Kovo build options');
+  const check = buildOwnDataValue(value, 'check', 'Kovo build options');
+  const preset = buildOwnDataValue(value, 'preset', 'Kovo build options');
+  if (typeof cache !== 'boolean' || typeof check !== 'boolean') {
+    throw new TypeError('Kovo build options cache/check must be own booleans.');
+  }
+  if (
+    preset !== undefined &&
+    parseKovoBuildPresetName(requiredString(preset, 'build preset')) === undefined
+  ) {
+    throw new TypeError('Kovo build options.preset must be node, vercel, or cloudflare.');
+  }
+  const snapshot = buildCreateNullRecord<unknown>();
+  snapshot.appModulePath = appModulePath;
+  snapshot.cache = cache;
+  snapshot.check = check;
+  snapshot.outDir = outDir;
+  if (preset !== undefined) snapshot.preset = preset;
+  return snapshot as unknown as KovoBuildOptions;
+}
+
+function snapshotKovoExportOptions(value: KovoExportOptions): KovoExportOptions {
+  if (typeof value !== 'object' || value === null) {
+    throw new TypeError('Kovo export options must be an object.');
+  }
+  const snapshot = buildCreateNullRecord<unknown>();
+  snapshot.appModulePath = requiredBuildOptionString(value, 'appModulePath', 'export');
+  snapshot.outDir = requiredBuildOptionString(value, 'outDir', 'export');
+  const stringNames = [
+    'assetBase',
+    'distDir',
+    'manifestFile',
+    'origin',
+    'root',
+    'stylesheetEnv',
+  ] as const;
+  for (let index = 0; index < stringNames.length; index += 1) {
+    const name = stringNames[index]!;
+    const option = buildOwnDataValue(value, name, 'Kovo export options');
+    if (option !== undefined) snapshot[name] = requiredString(option, `export ${name}`);
+  }
+  const onNonExportable = buildOwnDataValue(value, 'onNonExportable', 'Kovo export options');
+  if (onNonExportable !== undefined) {
+    if (onNonExportable !== 'error' && onNonExportable !== 'skip') {
+      throw new TypeError('Kovo export options.onNonExportable must be error or skip.');
+    }
+    snapshot.onNonExportable = onNonExportable;
+  }
+  const vite = buildOwnDataValue(value, 'vite', 'Kovo export options');
+  if (vite !== undefined) {
+    if (typeof vite !== 'boolean')
+      throw new TypeError('Kovo export options.vite must be a boolean.');
+    snapshot.vite = vite;
+  }
+  return snapshot as unknown as KovoExportOptions;
+}
+
+function requiredBuildOptionString(
+  value: object,
+  name: 'appModulePath' | 'outDir',
+  command: 'build' | 'export',
+): string {
+  const option = buildOwnDataValue(value, name, `Kovo ${command} options`);
+  return requiredString(option, `${command} ${name}`);
+}
+
+function requiredString(value: unknown, label: string): string {
+  if (typeof value !== 'string') throw new TypeError(`Kovo ${label} must be an own string.`);
+  return value;
 }
 
 function resolveKovoExportOptions(
@@ -3320,6 +3414,7 @@ interface ExportManifestPlan {
     path: string;
     source: string;
   }[];
+  cleanup?: () => void;
   publicAssetRoot?: string;
   stylesheetHref?: string;
   stylesheetEnv?: {
@@ -3328,57 +3423,203 @@ interface ExportManifestPlan {
   };
 }
 
+const exportPublicSnapshotMaxFiles = 10_000;
+const exportPublicSnapshotMaxBytes = 512 * 1024 * 1024;
+const exportPublicSnapshotMaxDepth = 64;
+
 function buildTimeViteServerOptions(): { hmr: false } {
   return { hmr: false };
 }
 
 async function staticExportManifestPlan(options: KovoExportOptions): Promise<ExportManifestPlan> {
-  if (options.manifestFile === undefined) return { assets: [] };
-
-  const manifestFile = resolve(options.manifestFile);
-  const distDir = resolve(options.distDir ?? dirname(manifestFile));
-  const manifestRead = readJsonRecord(manifestFile);
-  if (!manifestRead.ok) {
-    throw new Error(
-      `Unable to read export manifest JSON ${manifestFile}: ${manifestRead.error.kind}`,
-    );
-  }
-  const manifest = exportManifestFromUnknown(manifestRead.value);
-  const assets = new Map<string, { path: string; source: string }>();
-  let stylesheetHref: string | undefined;
-  let stylesheetCount = 0;
-
-  for (const chunk of Object.values(manifest)) {
-    const fileAsset = addExportManifestAsset(assets, chunk.file, distDir, options.assetBase);
-    if (fileAsset && chunk.file?.replace(/[?#].*$/, '').endsWith('.css')) {
-      stylesheetHref = fileAsset.path;
-      stylesheetCount += 1;
-    }
-    for (const stylesheet of chunk.css ?? []) {
-      const asset = addExportManifestAsset(assets, stylesheet, distDir, options.assetBase);
-      if (asset) {
-        stylesheetHref = asset.path;
-        stylesheetCount += 1;
-      }
-    }
-  }
-
-  if (options.stylesheetEnv !== undefined) {
-    if (stylesheetCount !== 1 || stylesheetHref === undefined) {
+  const manifestFile =
+    options.manifestFile === undefined ? undefined : resolve(options.manifestFile);
+  const sourceDir =
+    manifestFile === undefined
+      ? staticExportDefaultPublicAssetRoot(options)
+      : resolve(options.distDir ?? dirname(manifestFile));
+  let manifest: Record<string, ExportManifestChunk> | undefined;
+  if (manifestFile !== undefined) {
+    const manifestRead = readJsonRecord(manifestFile);
+    if (!manifestRead.ok) {
       throw new Error(
-        `kovo export --stylesheet-env requires exactly one stylesheet asset in --manifest; found ${stylesheetCount}.`,
+        `Unable to read export manifest JSON ${manifestFile}: ${manifestRead.error.kind}`,
       );
     }
+    manifest = exportManifestFromUnknown(manifestRead.value);
   }
+  const assets = new Map<string, { path: string; source: string }>();
+  const sourceRoot = createFrameworkOutputFileSystemBoundary(sourceDir);
+  const snapshotRoot = mkdtempSync(join(tmpdir(), 'kovo-export-assets-'));
+  const publicAssetRoot = join(snapshotRoot, 'public');
+  const snapshotOutput = createFrameworkOutputFileSystemBoundary(publicAssetRoot);
+  const excludedRelativeRoots =
+    manifestFile === undefined ? defaultExportSnapshotExcludedRoots(sourceDir, options.outDir) : [];
+  let stylesheetHref: string | undefined;
+  let stylesheetCount = 0;
+  try {
+    if (manifestFile !== undefined) await sourceRoot.ensureDirectory();
+    await snapshotExportPublicAssetRoot(
+      sourceRoot,
+      snapshotOutput,
+      manifestFile === undefined ? 'skip' : 'reject',
+      excludedRelativeRoots,
+    );
+    for (const chunk of manifest === undefined ? [] : Object.values(manifest)) {
+      const fileAsset = await addExportManifestAsset(
+        assets,
+        chunk.file,
+        snapshotOutput,
+        options.assetBase,
+      );
+      if (fileAsset && chunk.file?.replace(/[?#].*$/, '').endsWith('.css')) {
+        stylesheetHref = fileAsset.path;
+        stylesheetCount += 1;
+      }
+      for (const stylesheet of chunk.css ?? []) {
+        const asset = await addExportManifestAsset(
+          assets,
+          stylesheet,
+          snapshotOutput,
+          options.assetBase,
+        );
+        if (asset) {
+          stylesheetHref = asset.path;
+          stylesheetCount += 1;
+        }
+      }
+    }
 
-  return {
-    assets: [...assets.values()],
-    publicAssetRoot: distDir,
-    ...(options.stylesheetEnv === undefined || stylesheetHref === undefined
-      ? {}
-      : { stylesheetEnv: { name: options.stylesheetEnv, value: stylesheetHref } }),
-    ...(stylesheetHref === undefined ? {} : { stylesheetHref }),
-  };
+    if (options.stylesheetEnv !== undefined) {
+      if (stylesheetCount !== 1 || stylesheetHref === undefined) {
+        throw new Error(
+          `kovo export --stylesheet-env requires exactly one stylesheet asset in --manifest; found ${stylesheetCount}.`,
+        );
+      }
+    }
+
+    return {
+      assets: [...assets.values()],
+      cleanup: () => rmSync(snapshotRoot, { force: true, recursive: true }),
+      publicAssetRoot,
+      ...(options.stylesheetEnv === undefined || stylesheetHref === undefined
+        ? {}
+        : { stylesheetEnv: { name: options.stylesheetEnv, value: stylesheetHref } }),
+      ...(stylesheetHref === undefined ? {} : { stylesheetHref }),
+    };
+  } catch (error) {
+    rmSync(snapshotRoot, { force: true, recursive: true });
+    throw error;
+  }
+}
+
+async function snapshotExportPublicAssetRoot(
+  source: ReturnType<typeof createFrameworkOutputFileSystemBoundary>,
+  output: ReturnType<typeof createFrameworkOutputFileSystemBoundary>,
+  nonRegular: 'reject' | 'skip',
+  excludedRelativeRoots: readonly string[],
+): Promise<void> {
+  await output.ensureDirectory();
+  const budget = { bytes: 0, files: 0 };
+  await snapshotExportPublicAssetEntries(
+    source,
+    output,
+    await source.entries('.'),
+    budget,
+    0,
+    nonRegular,
+    excludedRelativeRoots,
+  );
+}
+
+async function snapshotExportPublicAssetEntries(
+  source: ReturnType<typeof createFrameworkOutputFileSystemBoundary>,
+  output: ReturnType<typeof createFrameworkOutputFileSystemBoundary>,
+  rawEntries: Awaited<ReturnType<typeof source.entries>>,
+  budget: { bytes: number; files: number },
+  depth: number,
+  nonRegular: 'reject' | 'skip',
+  excludedRelativeRoots: readonly string[],
+): Promise<void> {
+  if (depth > exportPublicSnapshotMaxDepth) {
+    throw new Error(
+      `kovo export --dist exceeds the public asset depth limit (${exportPublicSnapshotMaxDepth}).`,
+    );
+  }
+  const entries = buildSnapshotDenseArray(rawEntries, 'Export public asset entries');
+  for (let index = 0; index < entries.length; index += 1) {
+    const entry = entries[index]!;
+    if (exportSnapshotPathIsExcluded(entry.relativePath, excludedRelativeRoots)) continue;
+    if (entry.kind === 'directory') {
+      await snapshotExportPublicAssetEntries(
+        source,
+        output,
+        await source.entriesOf(entry),
+        budget,
+        depth + 1,
+        nonRegular,
+        excludedRelativeRoots,
+      );
+      continue;
+    }
+    if (entry.kind !== 'file') {
+      if (nonRegular === 'skip') continue;
+      throw new Error(
+        `kovo export --dist contains a non-regular public asset: ${entry.relativePath}`,
+      );
+    }
+    budget.files += 1;
+    if (budget.files > exportPublicSnapshotMaxFiles) {
+      throw new Error(
+        `kovo export --dist exceeds the public asset file limit (${exportPublicSnapshotMaxFiles}).`,
+      );
+    }
+    const bytes = await source.fileBytesOf(entry);
+    budget.bytes += bytes.byteLength;
+    if (budget.bytes > exportPublicSnapshotMaxBytes) {
+      throw new Error(
+        `kovo export --dist exceeds the public asset byte limit (${exportPublicSnapshotMaxBytes}).`,
+      );
+    }
+    await output.writeFile(entry.relativePath, bytes);
+  }
+}
+
+function defaultExportSnapshotExcludedRoots(sourceDir: string, outDir: string): readonly string[] {
+  const excluded = ['node_modules', '.git', '.kovo', '.vite', '.env'];
+  const relativeOutDir = relative(sourceDir, resolve(outDir));
+  if (relativeOutDir === '') {
+    throw new Error('kovo export --out must not equal the default public asset root.');
+  }
+  if (
+    !isAbsolute(relativeOutDir) &&
+    relativeOutDir !== '..' &&
+    !buildStringStartsWith(relativeOutDir, `..${pathSeparator}`)
+  ) {
+    buildSecurityArrayAppend(excluded, relativeOutDir, 'Default export public snapshot exclusions');
+  }
+  return excluded;
+}
+
+function exportSnapshotPathIsExcluded(
+  relativePath: string,
+  excludedRelativeRoots: readonly string[],
+): boolean {
+  const excluded = buildSnapshotDenseArray(
+    excludedRelativeRoots,
+    'Export public snapshot exclusions',
+  );
+  for (let index = 0; index < excluded.length; index += 1) {
+    const root = excluded[index]!;
+    if (
+      relativePath === root ||
+      buildStringStartsWith(relativePath, `${root}${pathSeparator}`) ||
+      (root === '.env' && buildStringStartsWith(relativePath, '.env.'))
+    ) {
+      return true;
+    }
+  }
+  return false;
 }
 
 async function withStylesheetEnvOverlay<T>(
@@ -3407,32 +3648,48 @@ interface ExportManifestChunk {
 
 function exportManifestFromUnknown(value: unknown): Record<string, ExportManifestChunk> {
   if (!isRecord(value)) throw new Error('kovo export --manifest must be a JSON object.');
-  const manifest: Record<string, ExportManifestChunk> = {};
-  for (const [key, rawChunk] of Object.entries(value)) {
+  const manifest = buildCreateNullRecord<ExportManifestChunk>();
+  const keys = buildObjectKeys(value);
+  for (let keyIndex = 0; keyIndex < keys.length; keyIndex += 1) {
+    const key = keys[keyIndex]!;
+    const rawChunk = buildOwnDataValue(value, key, 'kovo export --manifest');
     if (!isRecord(rawChunk)) continue;
-    const chunk: ExportManifestChunk = {};
-    if (typeof rawChunk.file === 'string') chunk.file = rawChunk.file;
-    if (Array.isArray(rawChunk.css)) {
-      chunk.css = rawChunk.css.filter((entry): entry is string => typeof entry === 'string');
+    const chunk = buildCreateNullRecord<unknown>() as ExportManifestChunk;
+    const file = buildOwnDataValue(rawChunk, 'file', `kovo export manifest chunk ${key}`);
+    if (typeof file === 'string') chunk.file = file;
+    const rawCss = buildOwnDataValue(rawChunk, 'css', `kovo export manifest chunk ${key}`);
+    if (buildArrayIsArray(rawCss)) {
+      const cssSource = buildSnapshotDenseArray(rawCss, `kovo export manifest chunk ${key}.css`);
+      const css: string[] = [];
+      for (let cssIndex = 0; cssIndex < cssSource.length; cssIndex += 1) {
+        const entry = cssSource[cssIndex];
+        if (typeof entry === 'string') {
+          buildSecurityArrayAppend(css, entry, 'kovo export manifest stylesheet list');
+        }
+      }
+      chunk.css = css;
     }
     manifest[key] = chunk;
   }
   return manifest;
 }
 
-function addExportManifestAsset(
+async function addExportManifestAsset(
   assets: Map<string, { path: string; source: string }>,
   file: string | undefined,
-  distDir: string,
+  sourceRoot: ReturnType<typeof createFrameworkOutputFileSystemBoundary>,
   base: string | undefined,
-): { path: string; source: string } | undefined {
+): Promise<{ path: string; source: string } | undefined> {
   if (!file || /^[a-z][a-z0-9+.-]*:/i.test(file) || file.startsWith('//')) return undefined;
   const normalizedFile = normalizedExportManifestFile(file);
   if (assets.has(normalizedFile)) return assets.get(normalizedFile);
   const href = exportManifestAssetHref(normalizedFile, base);
-  const source = resolve(distDir, normalizedFile);
-  const relativeSource = relative(distDir, source);
-  if (relativeSource === '' || relativeSource.startsWith('..') || isAbsolute(relativeSource)) {
+  const bytes = await sourceRoot.fileBytes(normalizedFile);
+  if (bytes === undefined) {
+    throw new Error(`kovo export --manifest asset must be a regular file within --dist: ${file}`);
+  }
+  const source = sourceRoot.confinedPath(normalizedFile);
+  if (source === undefined) {
     throw new Error(`kovo export --manifest asset must stay within --dist: ${file}`);
   }
   const asset = {

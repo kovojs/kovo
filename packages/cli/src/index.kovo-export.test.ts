@@ -1,4 +1,13 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  truncateSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -442,6 +451,45 @@ describe('kovo export', () => {
     }
   });
 
+  it('does not stage or export private default-root trees', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-export-cli-'));
+    const appPath = join(root, 'app.mjs');
+    const outDir = join(root, 'dist');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    try {
+      symlinkServerPackage(root);
+      mkdirSync(join(root, '.git'), { recursive: true });
+      writeFileSync(join(root, '.git', 'config'), 'private repository metadata', 'utf8');
+      const secretPath = join(root, 'node_modules', 'huge-secret.bin');
+      writeFileSync(secretPath, '', 'utf8');
+      truncateSync(secretPath, 513 * 1024 * 1024);
+      writeFileSync(
+        appPath,
+        appModuleSource({
+          route:
+            '{ path: \'/\', page: () => trustedHtml(\'<main><a href="/node_modules/huge-secret.bin">secret</a><a href="/.git/config">git</a></main>\') }',
+        }),
+        'utf8',
+      );
+
+      await expect(mainAsync(['export', appPath, '--out', outDir])).resolves.toBe(1);
+
+      expect(stdout).not.toHaveBeenCalled();
+      const output = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
+      expect(output).toContain('KV229');
+      expect(output).toContain("source '");
+      expect(output).not.toContain('public asset byte limit');
+      expect(existsSync(join(outDir, 'node_modules', 'huge-secret.bin'))).toBe(false);
+      expect(existsSync(join(outDir, '.git', 'config'))).toBe(false);
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
   it('fails loudly when bare export cannot resolve a referenced public asset', async () => {
     const root = mkdtempSync(join(tmpdir(), 'kovo-export-cli-'));
     const appPath = join(root, 'app.mjs');
@@ -528,6 +576,178 @@ describe('kovo export', () => {
       stdout.mockRestore();
       stderr.mockRestore();
       rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it('rejects a symlinked Vite dist root without publishing outside files', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-export-cli-'));
+    const outside = mkdtempSync(join(tmpdir(), 'kovo-export-dist-outside-'));
+    const appPath = join(root, 'app.mjs');
+    const distDir = join(root, 'vite-dist');
+    const outDir = join(root, 'dist');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    try {
+      symlinkServerPackage(root);
+      mkdirSync(join(outside, '.vite'), { recursive: true });
+      mkdirSync(join(outside, 'assets'), { recursive: true });
+      writeFileSync(join(outside, 'assets', 'leak.txt'), 'outside secret', 'utf8');
+      writeFileSync(
+        join(outside, '.vite', 'manifest.json'),
+        JSON.stringify({ 'src/main.ts': { file: 'assets/leak.txt' } }),
+        'utf8',
+      );
+      symlinkSync(outside, distDir, 'dir');
+      writeFileSync(
+        appPath,
+        appModuleSource({
+          route:
+            "{ path: '/', page: () => trustedHtml('<main data-export-cli>CLI export</main>') }",
+        }),
+        'utf8',
+      );
+
+      await expect(
+        mainAsync([
+          'export',
+          appPath,
+          '--out',
+          outDir,
+          '--manifest',
+          join(distDir, '.vite', 'manifest.json'),
+          '--dist',
+          distDir,
+        ]),
+      ).resolves.toBe(1);
+
+      expect(stdout).not.toHaveBeenCalled();
+      expect(stderr.mock.calls.map(([chunk]) => String(chunk)).join('')).toMatch(/symbolic-link/u);
+      expect(existsSync(join(outDir, 'assets/leak.txt'))).toBe(false);
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { force: true, recursive: true });
+      rmSync(outside, { force: true, recursive: true });
+    }
+  });
+
+  it('pins the Vite public asset root before app evaluation can replace it', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-export-cli-'));
+    const outside = mkdtempSync(join(tmpdir(), 'kovo-export-dist-substitute-'));
+    const appPath = join(root, 'app.mjs');
+    const distDir = join(root, 'vite-dist');
+    const parkedDistDir = join(root, 'vite-dist-reviewed');
+    const outDir = join(root, 'dist');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    const previousRoot = process.env.KOVO_TEST_EXPORT_DIST_ROOT;
+    const previousParked = process.env.KOVO_TEST_EXPORT_DIST_PARKED;
+    const previousOutside = process.env.KOVO_TEST_EXPORT_DIST_OUTSIDE;
+
+    try {
+      symlinkServerPackage(root);
+      mkdirSync(join(distDir, '.vite'), { recursive: true });
+      writeFileSync(join(distDir, '.vite', 'manifest.json'), '{}', 'utf8');
+      writeFileSync(join(distDir, 'victim.txt'), 'reviewed public asset', 'utf8');
+      writeFileSync(join(outside, 'victim.txt'), 'outside secret', 'utf8');
+      process.env.KOVO_TEST_EXPORT_DIST_ROOT = distDir;
+      process.env.KOVO_TEST_EXPORT_DIST_PARKED = parkedDistDir;
+      process.env.KOVO_TEST_EXPORT_DIST_OUTSIDE = outside;
+      writeFileSync(
+        appPath,
+        appModuleSource({
+          prelude: [
+            "import { renameSync } from 'node:fs';",
+            'renameSync(process.env.KOVO_TEST_EXPORT_DIST_ROOT, process.env.KOVO_TEST_EXPORT_DIST_PARKED);',
+            'renameSync(process.env.KOVO_TEST_EXPORT_DIST_OUTSIDE, process.env.KOVO_TEST_EXPORT_DIST_ROOT);',
+          ],
+          route: "{ path: '/', page: () => trustedHtml('<main><img src=\"/victim.txt\"></main>') }",
+        }),
+        'utf8',
+      );
+
+      await expect(
+        mainAsync([
+          'export',
+          appPath,
+          '--out',
+          outDir,
+          '--manifest',
+          join(distDir, '.vite', 'manifest.json'),
+          '--dist',
+          distDir,
+        ]),
+      ).resolves.toBe(0);
+
+      expect(stderr).not.toHaveBeenCalled();
+      expect(readFileSync(join(outDir, 'victim.txt'), 'utf8')).toBe('reviewed public asset');
+      expect(readFileSync(join(outDir, 'victim.txt'), 'utf8')).not.toContain('outside secret');
+    } finally {
+      if (previousRoot === undefined) delete process.env.KOVO_TEST_EXPORT_DIST_ROOT;
+      else process.env.KOVO_TEST_EXPORT_DIST_ROOT = previousRoot;
+      if (previousParked === undefined) delete process.env.KOVO_TEST_EXPORT_DIST_PARKED;
+      else process.env.KOVO_TEST_EXPORT_DIST_PARKED = previousParked;
+      if (previousOutside === undefined) delete process.env.KOVO_TEST_EXPORT_DIST_OUTSIDE;
+      else process.env.KOVO_TEST_EXPORT_DIST_OUTSIDE = previousOutside;
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { force: true, recursive: true });
+      rmSync(outside, { force: true, recursive: true });
+    }
+  });
+
+  it('pins the default public asset root before app evaluation can replace it', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-export-cli-root-'));
+    const outside = mkdtempSync(join(tmpdir(), 'kovo-export-root-substitute-'));
+    const exportRoot = mkdtempSync(join(tmpdir(), 'kovo-export-root-output-'));
+    const parkedRoot = `${root}-reviewed`;
+    const appPath = join(root, 'app.mjs');
+    const outDir = join(exportRoot, 'dist');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    const previousRoot = process.env.KOVO_TEST_EXPORT_PUBLIC_ROOT;
+    const previousParked = process.env.KOVO_TEST_EXPORT_PUBLIC_PARKED;
+    const previousOutside = process.env.KOVO_TEST_EXPORT_PUBLIC_OUTSIDE;
+
+    try {
+      symlinkServerPackage(root);
+      writeFileSync(join(root, 'victim.txt'), 'reviewed public asset', 'utf8');
+      writeFileSync(join(outside, 'victim.txt'), 'outside secret', 'utf8');
+      process.env.KOVO_TEST_EXPORT_PUBLIC_ROOT = root;
+      process.env.KOVO_TEST_EXPORT_PUBLIC_PARKED = parkedRoot;
+      process.env.KOVO_TEST_EXPORT_PUBLIC_OUTSIDE = outside;
+      writeFileSync(
+        appPath,
+        appModuleSource({
+          prelude: [
+            "import { renameSync } from 'node:fs';",
+            'renameSync(process.env.KOVO_TEST_EXPORT_PUBLIC_ROOT, process.env.KOVO_TEST_EXPORT_PUBLIC_PARKED);',
+            'renameSync(process.env.KOVO_TEST_EXPORT_PUBLIC_OUTSIDE, process.env.KOVO_TEST_EXPORT_PUBLIC_ROOT);',
+          ],
+          route: "{ path: '/', page: () => trustedHtml('<main><img src=\"/victim.txt\"></main>') }",
+        }),
+        'utf8',
+      );
+
+      await expect(mainAsync(['export', appPath, '--out', outDir])).resolves.toBe(0);
+
+      expect(stderr).not.toHaveBeenCalled();
+      expect(readFileSync(join(outDir, 'victim.txt'), 'utf8')).toBe('reviewed public asset');
+      expect(readFileSync(join(outDir, 'victim.txt'), 'utf8')).not.toContain('outside secret');
+    } finally {
+      if (previousRoot === undefined) delete process.env.KOVO_TEST_EXPORT_PUBLIC_ROOT;
+      else process.env.KOVO_TEST_EXPORT_PUBLIC_ROOT = previousRoot;
+      if (previousParked === undefined) delete process.env.KOVO_TEST_EXPORT_PUBLIC_PARKED;
+      else process.env.KOVO_TEST_EXPORT_PUBLIC_PARKED = previousParked;
+      if (previousOutside === undefined) delete process.env.KOVO_TEST_EXPORT_PUBLIC_OUTSIDE;
+      else process.env.KOVO_TEST_EXPORT_PUBLIC_OUTSIDE = previousOutside;
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { force: true, recursive: true });
+      rmSync(parkedRoot, { force: true, recursive: true });
+      rmSync(outside, { force: true, recursive: true });
+      rmSync(exportRoot, { force: true, recursive: true });
     }
   });
 

@@ -3,6 +3,7 @@ export type { CompilerDiagnostic, SourcePosition } from './diagnostics.js';
 export { assertCompilerSecurityIntrinsics } from './compiler-security-intrinsics.js';
 export { compilerBuildId, type CompilerBuildIdInput } from './cache-identity.js';
 export { CompileCache, compileComponentCacheKeyInput } from './compile-cache.js';
+export { snapshotCompileComponentOptions } from './compile-options.js';
 export type { CompileCacheKeyInput } from './compile-cache.js';
 /** @internal */
 export { compileCacheKey } from './compile-cache.js';

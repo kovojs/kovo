@@ -16,13 +16,17 @@ import {
 import { isDiagnosticCode } from '@kovojs/core/internal/diagnostics';
 
 import { CompileCache, compileCacheKey, compileComponentCacheKeyInput } from './compile-cache.js';
+import { snapshotCompileComponentOptions } from './compile-options.js';
 import { canonicalJson } from './canonical-json.js';
 import {
   compilerArrayAppend,
   compilerArrayIsArray,
   compilerArrayLength,
   compilerCreateMap,
+  compilerCreateNullRecord,
   compilerCreateSet,
+  compilerDefineOwnDataProperty,
+  compilerFreeze,
   compilerJsonParse,
   compilerMapDelete,
   compilerMapForEach,
@@ -37,6 +41,8 @@ import {
   compilerSetAdd,
   compilerSetDelete,
   compilerSetHas,
+  compilerSnapshotDenseArray,
+  compilerSnapshotJsonValue,
   compilerStringEndsWith,
   compilerStringIncludes,
   compilerStringIndexOf,
@@ -285,6 +291,7 @@ export function createKovoVitePlugin(
   compileComponentModule: (options: ViteCompileOptions) => MaybePromise<ViteCompileResult>,
   options: KovoVitePluginOptions = {},
 ): KovoVitePlugin {
+  options = snapshotKovoVitePluginOptions(options);
   const compileCache = new CompileCache<ViteCompileResult>();
   const clientModules = compilerCreateMap<string, string>();
   const compiledClientModules = compilerCreateMap<string, KovoViteCompiledClientModule>();
@@ -769,7 +776,7 @@ async function compileCachedViteComponentModule(
   );
   const registryFacts = resolveViteRegistryFacts(options, fileName);
   const extraFiles = viteFrameworkIdentityFiles(root, fileName, source);
-  const compileOptions = {
+  const compileOptions = snapshotCompileComponentOptions({
     ...(extraFiles.length === 0 ? {} : { extraFiles }),
     fileName,
     ...(options.packageComponentPrefixes === undefined
@@ -779,17 +786,9 @@ async function compileCachedViteComponentModule(
     ...(queryShapeFacts === undefined ? {} : { queryShapeFacts }),
     ...(registryFacts === undefined ? {} : { registryFacts }),
     source,
-  };
+  });
   if (options.cache === false) {
-    return await compileViteComponentModule(
-      compileComponentModule,
-      options,
-      root,
-      fileName,
-      source,
-      queryShapeFacts,
-      registryFacts,
-    );
+    return await compileComponentModule(compileOptions);
   }
   const cacheInput = compileComponentCacheKeyInput(compileOptions);
   const cacheDir = persistentCompileCacheDir(root);
@@ -798,17 +797,7 @@ async function compileCachedViteComponentModule(
     cacheInput,
   );
   if (persistent) return persistent;
-  const result = await cache.getOrCreate(cacheInput, () =>
-    compileViteComponentModule(
-      compileComponentModule,
-      options,
-      root,
-      fileName,
-      source,
-      queryShapeFacts,
-      registryFacts,
-    ),
-  );
+  const result = await cache.getOrCreate(cacheInput, () => compileComponentModule(compileOptions));
   if (result.dependencyFootprint) {
     const cacheKey = compileCacheKey(
       compileComponentCacheKeyInput(compileOptions, result.dependencyFootprint),
@@ -822,31 +811,105 @@ async function compileCachedViteComponentModule(
   return result;
 }
 
-function compileViteComponentModule(
-  compileComponentModule: (options: ViteCompileOptions) => MaybePromise<ViteCompileResult>,
-  options: KovoVitePluginOptions,
-  root: string,
-  fileName: string,
-  source: string,
-  queryShapeFacts = componentLocalQueryShapeFacts(
-    source,
-    fileName,
-    resolveViteQueryShapeFacts(options, fileName),
-  ),
-  registryFacts = resolveViteRegistryFacts(options, fileName),
-): MaybePromise<ViteCompileResult> {
-  const extraFiles = viteFrameworkIdentityFiles(root, fileName, source);
-  return compileComponentModule({
-    ...(extraFiles.length === 0 ? {} : { extraFiles }),
-    fileName,
-    ...(options.packageComponentPrefixes === undefined
-      ? {}
-      : { packageComponentPrefixes: options.packageComponentPrefixes }),
-    packagePrefixDiscoveryRoot: root,
-    ...(queryShapeFacts === undefined ? {} : { queryShapeFacts }),
-    ...(registryFacts === undefined ? {} : { registryFacts }),
-    source,
-  });
+function snapshotKovoVitePluginOptions(value: KovoVitePluginOptions): KovoVitePluginOptions {
+  if (typeof value !== 'object' || value === null) {
+    throw new TypeError('Kovo Vite plugin options must be an object.');
+  }
+  const snapshot = compilerCreateNullRecord<unknown>();
+  const cache = compilerOwnDataValue(value, 'cache', 'Kovo Vite plugin options');
+  if (cache !== undefined) {
+    if (typeof cache !== 'boolean') {
+      throw new TypeError('Kovo Vite plugin options.cache must be a boolean.');
+    }
+    compilerDefineOwnDataProperty(snapshot, 'cache', cache);
+  }
+  const exclude = compilerOwnDataValue(value, 'exclude', 'Kovo Vite plugin options');
+  if (exclude !== undefined) {
+    compilerDefineOwnDataProperty(
+      snapshot,
+      'exclude',
+      compilerFreeze(
+        compilerSnapshotDenseArray(
+          exclude as readonly KovoViteModuleFilter[],
+          'Kovo Vite exclude filters',
+        ),
+      ),
+    );
+  }
+  const include = compilerOwnDataValue(value, 'include', 'Kovo Vite plugin options');
+  if (include !== undefined) {
+    compilerDefineOwnDataProperty(
+      snapshot,
+      'include',
+      compilerFreeze(
+        compilerSnapshotDenseArray(
+          include as readonly KovoViteModuleFilter[],
+          'Kovo Vite include filters',
+        ),
+      ),
+    );
+  }
+  const onDiagnostic = compilerOwnDataValue(value, 'onDiagnostic', 'Kovo Vite plugin options');
+  if (onDiagnostic !== undefined) {
+    if (typeof onDiagnostic !== 'function') {
+      throw new TypeError('Kovo Vite plugin options.onDiagnostic must be a function.');
+    }
+    compilerDefineOwnDataProperty(snapshot, 'onDiagnostic', onDiagnostic);
+  }
+  const onModuleDiagnostics = compilerOwnDataValue(
+    value,
+    'onModuleDiagnostics',
+    'Kovo Vite plugin options',
+  );
+  if (onModuleDiagnostics !== undefined) {
+    if (typeof onModuleDiagnostics !== 'function') {
+      throw new TypeError('Kovo Vite plugin options.onModuleDiagnostics must be a function.');
+    }
+    compilerDefineOwnDataProperty(snapshot, 'onModuleDiagnostics', onModuleDiagnostics);
+  }
+  const packageComponentPrefixes = compilerOwnDataValue(
+    value,
+    'packageComponentPrefixes',
+    'Kovo Vite plugin options',
+  );
+  if (packageComponentPrefixes !== undefined) {
+    compilerDefineOwnDataProperty(
+      snapshot,
+      'packageComponentPrefixes',
+      compilerSnapshotJsonValue(
+        packageComponentPrefixes as readonly PackageComponentPrefixFact[],
+        'Kovo Vite package component prefixes',
+      ),
+    );
+  }
+  const queryShapeFacts = compilerOwnDataValue(
+    value,
+    'queryShapeFacts',
+    'Kovo Vite plugin options',
+  );
+  if (queryShapeFacts !== undefined) {
+    compilerDefineOwnDataProperty(
+      snapshot,
+      'queryShapeFacts',
+      typeof queryShapeFacts === 'function'
+        ? queryShapeFacts
+        : compilerSnapshotJsonValue(
+            queryShapeFacts as readonly QueryShapeFact[],
+            'Kovo Vite query-shape facts',
+          ),
+    );
+  }
+  const registryFacts = compilerOwnDataValue(value, 'registryFacts', 'Kovo Vite plugin options');
+  if (registryFacts !== undefined) {
+    compilerDefineOwnDataProperty(
+      snapshot,
+      'registryFacts',
+      typeof registryFacts === 'function'
+        ? registryFacts
+        : compilerSnapshotJsonValue(registryFacts as RegistryFacts, 'Kovo Vite registry facts'),
+    );
+  }
+  return compilerFreeze(snapshot) as KovoVitePluginOptions;
 }
 
 /** @internal Collect project sibling files needed by framework-identity resolution. */

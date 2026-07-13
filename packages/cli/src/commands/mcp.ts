@@ -5,6 +5,7 @@ import {
   compileComponentCacheKeyInput,
   persistentCompileCacheDir,
   readPersistentCompileCacheEntry,
+  snapshotCompileComponentOptions,
   writePersistentCompileCacheEntry,
 } from '@kovojs/compiler/internal';
 import type * as CompilerInternal from '@kovojs/compiler/internal';
@@ -173,6 +174,10 @@ export async function compileCachedComponentModule(
   options: CompileComponentOptions,
   cache = true,
 ): Promise<CompileResult> {
+  // Pin before the first await: callers can otherwise mutate source/path authority while the
+  // compiler module import yields, making cache authorization and emitted bytes observe a later
+  // carrier than the one supplied at invocation (SPEC.md §5.2.1).
+  options = snapshotCompileComponentOptions(options);
   const { compileComponentModule } = await import('@kovojs/compiler');
   if (!cache) return compileComponentModule(options);
 

@@ -2,6 +2,7 @@ import { relative as builtinRelative } from 'node:path';
 
 import { canonicalJson } from './canonical-json.js';
 import { compilerBuildId } from './cache-identity.js';
+import { snapshotCompileComponentOptions } from './compile-options.js';
 import {
   compilerArrayAppend,
   compilerArrayLength,
@@ -199,6 +200,7 @@ export function compileComponentCacheKeyInput(
   options: CompileComponentCacheKeyOptions,
   dependencyFootprint?: CompileDependencyFootprint,
 ): CompileCacheKeyInput {
+  options = snapshotCompileComponentOptions(options);
   const input = compileCacheProjection({
     ...(options.extraFiles === undefined
       ? {}
