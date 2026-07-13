@@ -544,6 +544,42 @@ describe('enhanced mutation fetch', () => {
     expect(isFailedMutationResponse({ text: async () => '' })).toBe(false);
   });
 
+  it('retains the witnessed failure classification after response-carrier mutation', async () => {
+    const response = {
+      ok: false,
+      status: 500,
+      text: async () => '',
+    };
+    const fetched = await fetchEnhancedMutation({
+      fetch: async () => response,
+      form: { action: '/_m/cart/add', method: 'post' },
+      formData: new FormData(),
+      idem: 'idem_failure_snapshot',
+      root: new FakeTargetRoot([]),
+    });
+
+    response.ok = true;
+    response.status = 200;
+
+    // SPEC §6.6/§9.1: response success is a membrane-bound fact. Optimistic publication and
+    // rollback run after transport/body awaits and must not reclassify a retained mutable carrier.
+    expect(isFailedMutationResponse(fetched.response)).toBe(true);
+  });
+
+  it('does not invoke inherited or accessor response facts in direct classification', () => {
+    const inherited = Object.create({ ok: false, status: 500 }) as {
+      text(): Promise<string>;
+    };
+    inherited.text = async () => '';
+    const status = vi.fn(() => 500);
+    const accessor = { text: async () => '' };
+    Object.defineProperty(accessor, 'status', { get: status });
+
+    expect(isFailedMutationResponse(inherited)).toBe(false);
+    expect(isFailedMutationResponse(accessor)).toBe(false);
+    expect(status).not.toHaveBeenCalled();
+  });
+
   it('reads the Kovo-Build response header into buildToken (SPEC §9.1.1)', async () => {
     // SPEC §9.1.1: every mutation response carries Kovo-Build so the runtime
     // can validate deltas against the expected page build token.

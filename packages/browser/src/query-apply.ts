@@ -18,6 +18,11 @@ import type {
 import type { QueryStore } from './query-store.js';
 import { queryWireKey } from './query-store.js';
 import type { QueryChunk } from './wire-parser.js';
+import {
+  securityArrayAppend,
+  securityGetOwnPropertyDescriptor,
+  securityOwnArrayEntry,
+} from './security-witness-intrinsics.js';
 
 /**
  * An app hook that interposes on each incoming query chunk before the runtime
@@ -137,17 +142,30 @@ function applyQueryChunks(
 ): readonly string[] {
   const applied: string[] = [];
 
-  for (const query of queries) {
+  for (let index = 0; index < queries.length; index += 1) {
+    const queryEntry = securityOwnArrayEntry(queries, index);
+    if (!queryEntry.ok) {
+      throw new TypeError('Kovo decoded query chunks must be a dense array.');
+    }
+    const query = queryEntry.value;
     try {
       const value = applyQueryChunk(store, query, options.applyQuery, options.onDeltaMiss);
       options.afterApplyQuery?.(query, value);
-      applied.push(queryWireKey(query.name, query.key));
+      securityArrayAppend(
+        applied,
+        queryWireKey(query.name, query.key),
+        'Browser applied query wire keys',
+      );
     } catch (error) {
       // Delta-miss errors are handled by onDeltaMiss; swallow them silently here
       // (they do not constitute a runtime error — the miss handler refetches).
       if (error instanceof QueryDeltaApplyError) continue;
-      if (!('onError' in options)) throw error;
-      reportRuntimeError(options.onError, error);
+      const onError = securityGetOwnPropertyDescriptor(options, 'onError');
+      if (!onError || !('value' in onError)) throw error;
+      reportRuntimeError(
+        typeof onError.value === 'function' ? (onError.value as RuntimeErrorReporter) : undefined,
+        error,
+      );
     }
   }
 

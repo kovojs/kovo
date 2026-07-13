@@ -1,6 +1,18 @@
 import type { StreamTextChunk } from './wire-response-scanner.js';
 import type { ImportHandlerModule } from './handlers.js';
 import { assertAllowedKovoDynamicImportUrlForModule } from './dynamic-import-url.js';
+import {
+  securityArrayAppend,
+  securityMap,
+  securityMapForEach,
+  securityMapGet,
+  securityMapSet,
+  securitySet,
+  securitySetAdd,
+  securitySetDelete,
+  securitySetForEach,
+  securityStringSlice,
+} from './security-witness-intrinsics.js';
 
 export interface StreamTextTarget {
   getAttribute?(name: string): string | null;
@@ -51,7 +63,7 @@ export function applyStreamTextChunks(
     } else if (!applyStreamTextChunkImmediately(root, chunk, options.onError)) {
       continue;
     }
-    applied.push(chunk.target);
+    securityArrayAppend(applied, chunk.target, 'Kovo stream-text applied targets');
   }
 
   return applied;
@@ -62,9 +74,9 @@ export class StreamTextBuffer {
   private readonly flushThreshold: number;
   private readonly importModule: ImportHandlerModule | undefined;
   private readonly onError: ((error: unknown) => void) | undefined;
-  private readonly pendingFlushes = new Set<Promise<void>>();
+  private readonly pendingFlushes = securitySet<Promise<void>>();
   private readonly signal: AbortSignal | undefined;
-  private readonly states = new Map<string, StreamTextState>();
+  private readonly states = securityMap<string, StreamTextState>();
 
   constructor(options: StreamTextBufferOptions = {}) {
     this.flushDelayMs = options.flushDelayMs ?? DEFAULT_FLUSH_DELAY_MS;
@@ -116,22 +128,28 @@ export class StreamTextBuffer {
   }
 
   async flush(reason: 'completion' | 'error' = 'completion'): Promise<void> {
-    await Promise.all(this.pendingFlushes);
-    const targets = [...this.states.keys()];
-    await Promise.all(targets.map((target) => this.flushTarget(target, reason)));
-    await Promise.all(this.pendingFlushes);
+    await this.drainPendingFlushes();
+    const targets: string[] = [];
+    securityMapForEach(this.states, (_state, target) => {
+      securityArrayAppend(targets, target, 'Kovo stream-text flush targets');
+    });
+    for (let index = 0; index < targets.length; index += 1) {
+      const target = targets[index];
+      if (target !== undefined) await this.flushTarget(target, reason);
+    }
+    await this.drainPendingFlushes();
   }
 
   async fail(error: unknown): Promise<void> {
     await this.flush('error');
-    for (const state of this.states.values()) {
+    securityMapForEach(this.states, (state) => {
       state.target.setAttribute?.('data-stream-state', 'error');
-    }
+    });
     this.onError?.(error);
   }
 
   private stateFor(targetName: string, target: StreamTextTarget): StreamTextState {
-    const existing = this.states.get(targetName);
+    const existing = securityMapGet(this.states, targetName);
     if (existing) {
       existing.target = target;
       return existing;
@@ -143,7 +161,7 @@ export class StreamTextBuffer {
       target,
       timer: undefined,
     };
-    this.states.set(targetName, state);
+    securityMapSet(this.states, targetName, state);
     return state;
   }
 
@@ -151,7 +169,7 @@ export class StreamTextBuffer {
     targetName: string,
     reason: 'checkpoint' | 'completion' | 'error' | 'threshold' | 'timer',
   ): Promise<void> {
-    const state = this.states.get(targetName);
+    const state = securityMapGet(this.states, targetName);
     // K6 / SPEC §9.1: a checkpoint with empty text must still flush and clear
     // textContent even if pending.length === 0, because "checkpoint replaces
     // accumulated source". Skip only non-checkpoint empty flushes.
@@ -165,10 +183,32 @@ export class StreamTextBuffer {
   }
 
   private scheduleFlush(targetName: string, reason: 'checkpoint' | 'threshold' | 'timer'): void {
-    const flush = this.flushTarget(targetName, reason).finally(() => {
-      this.pendingFlushes.delete(flush);
-    });
-    this.pendingFlushes.add(flush);
+    let flush: Promise<void>;
+    flush = (async () => {
+      try {
+        await this.flushTarget(targetName, reason);
+      } finally {
+        securitySetDelete(this.pendingFlushes, flush);
+      }
+    })();
+    securitySetAdd(this.pendingFlushes, flush);
+  }
+
+  private async drainPendingFlushes(): Promise<void> {
+    // A renderer may schedule another flush while an earlier one settles. Drain to quiescence so
+    // no renderer continuation escapes after a confirmed/failing mutation response returns.
+    for (let round = 0; round < 100_000; round += 1) {
+      const pending: Promise<void>[] = [];
+      securitySetForEach(this.pendingFlushes, (flush) => {
+        securityArrayAppend(pending, flush, 'Kovo stream-text pending flushes');
+      });
+      if (pending.length === 0) return;
+      for (let index = 0; index < pending.length; index += 1) {
+        const flush = pending[index];
+        if (flush !== undefined) await flush;
+      }
+    }
+    throw new TypeError('Kovo stream-text flush queue did not quiesce.');
   }
 
   private async render(target: StreamTextTarget, source: string): Promise<void> {
@@ -239,22 +279,32 @@ function applyStreamTextChunkImmediately(
 }
 
 function parseRendererReference(value: string): { exportName: string; url: string } | null {
-  const hashIndex = value.lastIndexOf('#');
+  let hashIndex = -1;
+  for (let index = value.length - 1; index >= 0; index -= 1) {
+    if (value[index] === '#') {
+      hashIndex = index;
+      break;
+    }
+  }
   if (hashIndex <= 0 || hashIndex === value.length - 1) return null;
 
   return {
-    exportName: value.slice(hashIndex + 1),
-    url: value.slice(0, hashIndex),
+    exportName: securityStringSlice(value, hashIndex + 1),
+    url: securityStringSlice(value, 0, hashIndex),
   };
 }
 
 function escapeCssString(value: string): string {
-  return value.replace(/[\n\r\f"\\]/g, (char) => {
-    if (char === '\n') return '\\a ';
-    if (char === '\r') return '\\d ';
-    if (char === '\f') return '\\c ';
-    return `\\${char}`;
-  });
+  let escaped = '';
+  for (let index = 0; index < value.length; index += 1) {
+    const character = value[index] ?? '';
+    if (character === '\n') escaped += '\\a ';
+    else if (character === '\r') escaped += '\\d ';
+    else if (character === '\f') escaped += '\\c ';
+    else if (character === '"' || character === '\\') escaped += `\\${character}`;
+    else escaped += character;
+  }
+  return escaped;
 }
 
 function abortError(): Error {

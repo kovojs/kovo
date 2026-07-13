@@ -3,9 +3,13 @@ import { DomMorphRoot, type MorphRoot } from './morph.js';
 import type { FragmentTargetRoot } from './fragment-targets.js';
 import type { EnhancedMutationFetch } from './mutation-fetch.js';
 import { definedProps } from './defined-props.js';
+import { createBrowserNavigationSecurityControls } from './navigation-security-intrinsics.js';
 
 const browserKovoRootBrand: unique symbol = Symbol('kovo.browser-root');
 type BrowserKovoRuntimeRoot = BrowserKovoRoot & MorphRoot & TargetCollectorRoot;
+// SPEC §6.6/§9.1: the framework default transport carries credentials and replay
+// authority. Pin the platform fetch before any authored client module can replace it.
+const browserRootSecurity = createBrowserNavigationSecurityControls();
 
 /**
  * The browser root that `installKovoLoader` (and `applyKovoDeferredStreamResponse`)
@@ -40,7 +44,7 @@ export interface CreateBrowserKovoRootOptions {
  * @param options - The method, headers, keepalive flag, and serialized body.
  * @returns The fetch `Response`.
  */
-export const defaultEnhancedFetch: EnhancedMutationFetch = (url, options) => {
+export const defaultEnhancedFetch: EnhancedMutationFetch = async (url, options) => {
   const init: RequestInit = {
     headers: options.headers,
     keepalive: options.keepalive,
@@ -52,7 +56,9 @@ export const defaultEnhancedFetch: EnhancedMutationFetch = (url, options) => {
     init.body = options.body as BodyInit | null;
   }
 
-  return fetch(url, init);
+  return (await browserRootSecurity.fetchValue(url, init)) as Awaited<
+    ReturnType<EnhancedMutationFetch>
+  >;
 };
 
 /**

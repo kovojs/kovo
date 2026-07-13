@@ -6,8 +6,19 @@ import type { MutationChangeRecord } from './optimism.js';
 import { definedProps } from './defined-props.js';
 import { createBrowserNavigationSecurityControls } from './navigation-security-intrinsics.js';
 import { sanitizeAuthNavigationTarget, sanitizeReauthDirective } from './reauth-directive.js';
+import {
+  securityGetOwnPropertyDescriptor,
+  securityWeakMap,
+  securityWeakMapGet,
+  securityWeakMapSet,
+} from './security-witness-intrinsics.js';
 
 type BrowserNavigationSecurityControls = ReturnType<typeof createBrowserNavigationSecurityControls>;
+
+// SPEC §6.6/§9.1: failure classification is a response-security fact, not a live carrier
+// property. Consumers classify after body reads and optimistic work, so retaining the carrier and
+// rereading mutable `ok`/`status` would let same-realm code turn a witnessed failure into success.
+const mutationResponseFailures = securityWeakMap<object, boolean>();
 
 /** Runtime API used by Kovo applications and generated runtime integration. */
 export interface EnhancedFormLike {
@@ -126,6 +137,11 @@ export async function fetchEnhancedMutation(
     method: security.upper(formMethod ?? 'post'),
     ...definedProps({ onUploadProgress, signal }),
   })) as EnhancedMutationResponseLike;
+  securityWeakMapSet(
+    mutationResponseFailures,
+    response,
+    isFailedBoundMutationResponse(response, security),
+  );
   const sessionTransition = readSessionTransition(response, security);
   // SPEC §9.3 (bugz-25 M6): response headers are observable before the body settles. A slow
   // custom auth response must not leave the old-principal BroadcastChannel alive while text or a
@@ -342,5 +358,32 @@ function readSubmittedFormTarget(form: EnhancedFormLike): string | undefined {
 }
 
 export function isFailedMutationResponse(response: EnhancedMutationResponseLike): boolean {
-  return response.ok === false || (response.status !== undefined && response.status >= 400);
+  if (response !== null && typeof response === 'object') {
+    const witnessed = securityWeakMapGet(mutationResponseFailures, response);
+    if (witnessed !== undefined) return witnessed;
+  }
+
+  // Direct helper calls accept only explicit own-data facts. Inherited fields and accessors are
+  // attacker-controlled structural claims and are never invoked as a classification authority.
+  const ok = ownResponseData(response, 'ok');
+  const status = ownResponseData(response, 'status');
+  return ok === false || (typeof status === 'number' && status >= 400);
+}
+
+function isFailedBoundMutationResponse(
+  response: EnhancedMutationResponseLike,
+  security: BrowserNavigationSecurityControls,
+): boolean {
+  const ok = security.readResponseField(response, 'ok');
+  const status = security.readResponseField(response, 'status');
+  return ok === false || (typeof status === 'number' && status >= 400);
+}
+
+function ownResponseData(
+  response: EnhancedMutationResponseLike,
+  property: 'ok' | 'status',
+): unknown {
+  if (response === null || typeof response !== 'object') return undefined;
+  const descriptor = securityGetOwnPropertyDescriptor(response, property);
+  return descriptor && 'value' in descriptor ? descriptor.value : undefined;
 }

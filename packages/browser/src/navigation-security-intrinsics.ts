@@ -1935,6 +1935,30 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
     return value;
   }
 
+  async function readResponseTextOptionalSync(response: unknown): Promise<string> {
+    if (!controlsSound || response === null || typeof response !== 'object') {
+      throw new TypeError('Kovo navigation response is invalid.');
+    }
+    const plan = fetchResponsePlan(response);
+    let method = plan?.textMethod;
+    let receiver = plan?.textReceiver;
+    if (!method && responseText && responseHeaders) {
+      try {
+        apply(responseHeaders, response, []);
+        method = responseText;
+        receiver = response;
+      } catch {}
+    }
+    if (!method || !receiver) {
+      throw new TypeError('Kovo navigation response text is unavailable.');
+    }
+    const pending = apply<unknown>(method, receiver, []);
+    const value =
+      typeof pending === 'string' ? pending : await awaitNativePromise<unknown>(pending);
+    if (typeof value !== 'string') throw new TypeError('Kovo response text is invalid.');
+    return value;
+  }
+
   function parseHtmlDocument(value: string): Document | undefined {
     if (!controlsSound || !NativeDOMParser || !domParserParse) return undefined;
     try {
@@ -1960,6 +1984,43 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
     const pending = apply<unknown>(fetchControl, receiver, [input, init]);
     await requireResponseControls();
     const response = await awaitNativePromise<unknown>(pending);
+    return bindFetchResponseCarrier(response);
+  }
+
+  async function fetchWithOptionalSyncResult(
+    fetchControl: Function | undefined,
+    receiver: unknown,
+    input: string,
+    init: object,
+  ): Promise<unknown> {
+    // Modular typed-read transports historically allow a direct structural Response in tests and
+    // adapters. Preserve that contract without Promise.resolve/`await` thenable assimilation: a
+    // native Promise is recognized through the captured brand method; every other value is bound
+    // directly as a response carrier and its `then` field, if any, is never invoked.
+    if (!controlsSound || !fetchControl) {
+      throw new TypeError('Kovo navigation fetch is unavailable.');
+    }
+    const pending = apply<unknown>(fetchControl, receiver, [input, init]);
+    await requireResponseControls();
+    let response = pending;
+    if (pending !== null && typeof pending === 'object') {
+      try {
+        observePromiseRejection(pending as Promise<unknown>);
+        response = await awaitNativePromise(pending);
+      } catch (error) {
+        // A real native Promise rejection must retain its transport error. Only a failed brand
+        // probe falls back to the synchronous response-carrier path.
+        try {
+          apply(nativePromiseThen, pending, [undefined, () => undefined]);
+        } catch {
+          if (stableMethod(pending, 'then')) {
+            throw new TypeError('Kovo synchronous response carriers cannot be thenable.');
+          }
+          return bindFetchResponseCarrier(pending);
+        }
+        throw error;
+      }
+    }
     return bindFetchResponseCarrier(response);
   }
 
@@ -2604,6 +2665,7 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
     decodeText,
     fetchDocument,
     fetchWith,
+    fetchWithOptionalSyncResult,
     fetchValue,
     hardNavigate,
     hasReloadControl,
@@ -2629,6 +2691,7 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
     readDocumentField,
     readResponseField,
     readResponseText,
+    readResponseTextOptionalSync,
     regExpExec,
     regExpTest,
     readStreamChunk,

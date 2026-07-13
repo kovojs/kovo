@@ -37,6 +37,64 @@ describe('refetch-on-focus opt-out derivation', () => {
 });
 
 describe('query refetch', () => {
+  it('preserves direct injected response carriers and synchronous text', async () => {
+    const store = createQueryStore();
+    const response = {
+      status: 200,
+      text: () => '<kovo-query name="cart">{"count":3}</kovo-query>',
+    };
+
+    await expect(
+      refetchQueries({ fetch: () => response, queries: ['cart'], queryStore: store }),
+    ).resolves.toEqual([{ fragments: [], queries: ['cart'] }]);
+    expect(store.get('cart')).toEqual({ count: 3 });
+  });
+
+  it('rejects direct thenable response carriers without invoking their then method', async () => {
+    const store = createQueryStore();
+    const then = vi.fn();
+
+    await expect(
+      refetchQueries({
+        fetch: () => ({ status: 200, text: () => '', then }),
+        onError(error) {
+          throw error;
+        },
+        queries: ['cart'],
+        queryStore: store,
+      }),
+    ).rejects.toThrow(/cannot be thenable/);
+    expect(then).not.toHaveBeenCalled();
+  });
+
+  it('applies only dense decoded query facts after late Array iterator poisoning', async () => {
+    const store = createQueryStore();
+    const iterator = Object.getOwnPropertyDescriptor(Array.prototype, Symbol.iterator);
+    if (!iterator) throw new Error('Missing Array iterator security descriptor');
+    const fetch = vi.fn(async () => ({
+      status: 200,
+      text: async () => '<kovo-query name="cart">{"count":2}</kovo-query>',
+    }));
+    Object.defineProperty(Array.prototype, Symbol.iterator, {
+      ...iterator,
+      value: function* () {
+        yield { name: 'attacker', value: { admin: true } };
+      },
+    });
+    let applied;
+    try {
+      applied = await refetchQueries({ fetch, queries: ['cart'], queryStore: store });
+    } finally {
+      Object.defineProperty(Array.prototype, Symbol.iterator, iterator);
+    }
+
+    // SPEC §6.6/§9.4: the query apply loop consumes the scanner's dense carrier, not an
+    // ambient iterator that authored code can redirect to attacker-chosen server truth.
+    expect(applied).toEqual([{ fragments: [], queries: ['cart'] }]);
+    expect(store.get('cart')).toEqual({ count: 2 });
+    expect(store.get('attacker')).toBeUndefined();
+  });
+
   it('applies successful typed read chunks and reports names for the loader ledger', async () => {
     const store = createQueryStore();
     const cartPlan = vi.fn();
@@ -189,6 +247,41 @@ describe('query refetch', () => {
     expect(fetch).toHaveBeenCalledTimes(1);
     expect(store.get('cart')).toBeUndefined();
     expect(store.get('inventory')).toBeUndefined();
+  });
+
+  it('keeps failed native responses rejected after late Response prototype poisoning', async () => {
+    const store = createQueryStore();
+    const response = new Response('<kovo-query name="cart">{"count":99}</kovo-query>', {
+      status: 500,
+    });
+    let releaseFetch: (() => void) | undefined;
+    const gate = new Promise<void>((resolve) => {
+      releaseFetch = resolve;
+    });
+    const pending = refetchQueries({
+      fetch: async () => {
+        await gate;
+        return response;
+      },
+      queries: ['cart'],
+      queryStore: store,
+    });
+    const ok = Object.getOwnPropertyDescriptor(Response.prototype, 'ok');
+    const status = Object.getOwnPropertyDescriptor(Response.prototype, 'status');
+    if (!ok || !status) throw new Error('Missing Response security descriptors');
+    Object.defineProperty(Response.prototype, 'ok', { ...ok, get: () => true });
+    Object.defineProperty(Response.prototype, 'status', { ...status, get: () => 200 });
+    try {
+      releaseFetch?.();
+      await expect(pending).resolves.toEqual([]);
+    } finally {
+      Object.defineProperty(Response.prototype, 'ok', ok);
+      Object.defineProperty(Response.prototype, 'status', status);
+    }
+
+    // SPEC §6.6/§9.4: visible-return typed reads share the boot-pinned response membrane;
+    // a failed response cannot become fresh server truth through late Web API getter replacement.
+    expect(store.get('cart')).toBeUndefined();
   });
 
   it('reports malformed typed read query chunks through the shared decoded apply path', async () => {
@@ -376,14 +469,15 @@ describe('query refetch', () => {
     const onDeltaMiss = createDeltaMissRefetcher({ fetch, queryStore: store });
     onDeltaMiss('recommendations', 'user-1');
     await done;
-    await Promise.resolve();
+    await vi.waitFor(() => {
+      expect(store.get('recommendations', 'user-1')).toEqual({ items: ['p9'] });
+    });
 
     expect(fetch).toHaveBeenCalledWith('/_q/recommendations?key=user-1', {
       cache: 'no-store',
       headers: { Accept: 'text/html', 'Kovo-Fragment': 'true' },
       method: 'GET',
     });
-    expect(store.get('recommendations', 'user-1')).toEqual({ items: ['p9'] });
   });
 
   it('L8-2: a refetch routed through the rebaser rebases pending instead of clobbering', async () => {

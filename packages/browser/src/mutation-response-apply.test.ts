@@ -466,6 +466,36 @@ describe('decoded mutation response apply', () => {
     expect(onError).toHaveBeenCalled();
   });
 
+  it('reverts unconfirmed query truth under late Map prototype poisoning', async () => {
+    // SPEC §9.1: the revert ledger is the authority boundary between progressive bytes and
+    // confirmed query truth. App code shares this realm, so late Map replacement cannot erase it.
+    const store = createQueryStore();
+    store.set('chat', { count: 0 });
+    const originalHas = Map.prototype.has;
+    const root = new FakeMorphRoot();
+    root.querySelectorAll = () => [];
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(
+          new TextEncoder().encode('<kovo-query name="chat">{"count":99}</kovo-query>'),
+        );
+        controller.enqueue(new TextEncoder().encode('<kovo-done reason="error"></kovo-done>'));
+        controller.close();
+      },
+    });
+
+    try {
+      Map.prototype.has = () => true;
+      await expect(
+        applyStreamingMutationResponseBodyToRuntime({ body, root, store }),
+      ).rejects.toThrow(/not confirmed/);
+    } finally {
+      Map.prototype.has = originalHas;
+    }
+
+    expect(store.get('chat')).toEqual({ count: 0 });
+  });
+
   it('awaits framework-owned hard recovery before rejecting even when an onError hook is present', async () => {
     let finishRecovery: (() => void) | undefined;
     const recovery = new Promise<void>((resolve) => {
@@ -715,6 +745,52 @@ describe('decoded mutation response apply', () => {
     expect(onError).toHaveBeenCalledWith(renderError);
     expect(streamTarget.textContent).toBe('Hi');
     expect(streamTarget.getAttribute('data-rendered-source')).toBe('Hi');
+  });
+
+  it('keeps stream renderer export authority under late String prototype poisoning', async () => {
+    // SPEC §4.4/§9.1: the compiler-authored module#export reference is one authority.
+    // A late parser replacement must not redirect an allowed module to a privileged sibling export.
+    const root = new FakeMorphRoot();
+    const streamTarget = new FakeQueryBindingElement(
+      {
+        'data-stream-renderer': '/c/markdown.client.js#renderSafe',
+        'data-stream-text': 'assistant:a1',
+      },
+      { textContent: '' },
+    );
+    root.querySelectorAll = (selector: string) =>
+      selector === '[data-stream-text="assistant:a1"]' ? [streamTarget] : [];
+    const safe = vi.fn();
+    const privileged = vi.fn();
+    const originalLastIndexOf = String.prototype.lastIndexOf;
+    const originalSlice = String.prototype.slice;
+    const buffer = new StreamTextBuffer({
+      importModule: vi.fn(async () => ({ privileged, renderSafe: safe })),
+    });
+
+    try {
+      String.prototype.lastIndexOf = function (search: string): number {
+        return this === '/c/markdown.client.js#renderSafe' && search === '#'
+          ? '/c/markdown.client.js'.length
+          : Reflect.apply(originalLastIndexOf, this, [search]);
+      };
+      String.prototype.slice = function (start?: number, end?: number): string {
+        if (this === '/c/markdown.client.js#renderSafe' && start === 22) return 'privileged';
+        return Reflect.apply(originalSlice, this, [start, end]);
+      };
+      applyStreamTextChunks(
+        root as unknown as StreamTextRoot,
+        [{ mode: 'checkpoint', target: 'assistant:a1', text: 'safe source' }],
+        { buffer },
+      );
+      await buffer.flush('completion');
+    } finally {
+      String.prototype.lastIndexOf = originalLastIndexOf;
+      String.prototype.slice = originalSlice;
+    }
+
+    expect(safe).toHaveBeenCalledTimes(1);
+    expect(privileged).not.toHaveBeenCalled();
   });
 
   it('rejects stream renderer module URLs outside the dynamic import allowlist', async () => {

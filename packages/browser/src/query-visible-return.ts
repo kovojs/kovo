@@ -17,6 +17,14 @@ import { splitQueryWireKey } from './query-store.js';
 import type { QueryStore } from './query-store.js';
 import { createBrowserNavigationSecurityControls } from './navigation-security-intrinsics.js';
 import { reloadSessionTransitionDocument } from './session-transition.js';
+import {
+  securityArrayAppend,
+  securityOwnArrayEntry,
+  securitySet,
+  securitySetAdd,
+  securitySetForEach,
+  securitySetHas,
+} from './security-witness-intrinsics.js';
 
 // SPEC §6.6/§8: capture the bfcache revalidation getter while the framework
 // module graph initializes, before authored client modules can replace realm
@@ -62,11 +70,15 @@ export interface InstalledQueryVisibleReturnRefetch {
 export function createRefetchQueryLedger(
   initialQueries: readonly string[] = [],
 ): RefetchQueryLedger {
-  const queries = new Set<string>();
+  const queries = securitySet<string>();
 
   const remember = (nextQueries: readonly string[]): void => {
-    for (const query of nextQueries) {
-      queries.add(query);
+    for (let index = 0; index < nextQueries.length; index += 1) {
+      const entry = securityOwnArrayEntry(nextQueries, index);
+      if (!entry.ok || typeof entry.value !== 'string') {
+        throw new TypeError('Kovo visible-return query ledger requires dense string facts.');
+      }
+      securitySetAdd(queries, entry.value);
     }
   };
 
@@ -74,18 +86,25 @@ export function createRefetchQueryLedger(
 
   return {
     eligible(optOut: readonly string[] = []): readonly string[] {
-      const excluded = new Set(optOut);
+      const excluded = securitySet<string>();
+      for (let index = 0; index < optOut.length; index += 1) {
+        const entry = securityOwnArrayEntry(optOut, index);
+        if (!entry.ok || typeof entry.value !== 'string') {
+          throw new TypeError('Kovo visible-return opt-out list requires dense string facts.');
+        }
+        securitySetAdd(excluded, entry.value);
+      }
       const eligible: string[] = [];
 
-      for (const query of queries) {
+      securitySetForEach(queries, (query) => {
         // SPEC §9.3/§9.4: the declared `refetchOnFocus: false` opt-out is per query NAME
         // (typed reads dispatch `/_q/` by name), so a keyed query's every instance key is
         // excluded when its name is opted out. Exact wire-key entries still match too.
         const { name } = splitQueryWireKey(query);
-        if (!excluded.has(query) && !excluded.has(name)) {
-          eligible.push(query);
+        if (!securitySetHas(excluded, query) && !securitySetHas(excluded, name)) {
+          securityArrayAppend(eligible, query, 'Browser visible-return eligible query facts');
         }
-      }
+      });
 
       return eligible;
     },
@@ -133,10 +152,17 @@ export function installQueryVisibleReturnRefetch(
   // SPEC §9.3/§9.4: the runtime opt-out is the union of any explicit `refetchOnFocusOptOut` and
   // the set derived from declared `refetchOnFocus: false` queries, so the declarative opt-out at
   // the `queryRef(key, { refetchOnFocus: false })` site actually drives focus-refetch behavior.
-  const refetchOnFocusOptOut: readonly string[] = [
-    ...(options.refetchOnFocusOptOut ?? []),
-    ...deriveRefetchOnFocusOptOut(options.declaredQueries ?? []),
-  ];
+  const refetchOnFocusOptOut: string[] = [];
+  appendDenseStrings(
+    refetchOnFocusOptOut,
+    options.refetchOnFocusOptOut ?? [],
+    'Browser visible-return explicit opt-out facts',
+  );
+  appendDenseStrings(
+    refetchOnFocusOptOut,
+    deriveRefetchOnFocusOptOut(options.declaredQueries ?? []),
+    'Browser visible-return declared opt-out facts',
+  );
 
   if (!options.refetchOnFocus && (!options.queryRefetch || !options.queryStore)) {
     let disposed = false;
@@ -183,13 +209,27 @@ export function installQueryVisibleReturnRefetch(
         queries,
         queryStore: options.queryStore,
       });
-      ledger.remember(applied.flatMap((result) => result.queries));
+      const appliedQueries: string[] = [];
+      for (let index = 0; index < applied.length; index += 1) {
+        const result = securityOwnArrayEntry(applied, index);
+        if (!result.ok) throw new TypeError('Kovo typed-read results must be dense.');
+        appendDenseStrings(
+          appliedQueries,
+          result.value.queries,
+          'Browser visible-return applied query facts',
+        );
+      }
+      ledger.remember(appliedQueries);
     }
   };
   const refetchOnce = () => {
-    refetchInFlight ??= refetchOnVisibleReturn().finally(() => {
-      refetchInFlight = undefined;
-    });
+    refetchInFlight ??= (async () => {
+      try {
+        await refetchOnVisibleReturn();
+      } finally {
+        refetchInFlight = undefined;
+      }
+    })();
     return refetchInFlight;
   };
   const listener = async () => {
@@ -218,6 +258,16 @@ export function installQueryVisibleReturnRefetch(
       ledger.remember(queries);
     },
   };
+}
+
+function appendDenseStrings(target: string[], source: readonly string[], label: string): void {
+  for (let index = 0; index < source.length; index += 1) {
+    const entry = securityOwnArrayEntry(source, index);
+    if (!entry.ok || typeof entry.value !== 'string') {
+      throw new TypeError(`${label} must be a dense string array.`);
+    }
+    securityArrayAppend(target, entry.value, label);
+  }
 }
 
 function globalPageShowTarget(

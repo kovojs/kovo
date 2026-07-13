@@ -1,6 +1,7 @@
 import type { EventElementLike, EventTargetLike } from './events.js';
 import type { UploadProgress } from './mutation-fetch.js';
 import { createBrowserNavigationSecurityControls } from './navigation-security-intrinsics.js';
+import { securityGetOwnPropertyDescriptor } from './security-witness-intrinsics.js';
 
 // C210 / SPEC §6.6/§9.2: capture native form submission while the framework module graph loads,
 // before authored client code can replace HTMLFormElement.prototype.submit.
@@ -35,24 +36,38 @@ export function fallbackEnhancedMutationSubmit(form: EnhancedFormElementLike): v
 
 export function isEnhancedForm(form: EventElementLike): boolean {
   return (
-    form.getAttribute('enhance') !== null ||
-    form.getAttribute('data-enhance') !== null ||
-    form.getAttribute('data-mutation') !== null
+    browserFormSecurity.readAttribute(form, 'enhance') !== null ||
+    browserFormSecurity.readAttribute(form, 'data-enhance') !== null ||
+    browserFormSecurity.readAttribute(form, 'data-mutation') !== null
   );
 }
 
 export function isEligibleEnhancedMutationForm(form: EnhancedFormElementLike): boolean {
   if (!isEnhancedForm(form)) return false;
-  if ((form.method ?? 'get').toUpperCase() !== 'POST') return false;
+  const method =
+    browserFormSecurity.readAttribute(form, 'method') ?? ownStringData(form, 'method') ?? 'get';
+  if (browserFormSecurity.upper(method) !== 'POST') return false;
 
-  try {
-    const base = globalThis.location?.href ?? 'http://localhost/';
-    const action = new URL(form.action, base);
-    const current = new URL(base);
-    return action.origin === current.origin && action.pathname.startsWith('/_m/');
-  } catch {
-    return false;
-  }
+  // Real forms carry the author-written action as an attribute; the exact-own fallback keeps
+  // browser-free conformance fakes without consulting a caller-controlled prototype/accessor.
+  const rawAction =
+    browserFormSecurity.readAttribute(form, 'action') ?? ownStringData(form, 'action') ?? '';
+  const current =
+    browserFormSecurity.currentUrl() ?? browserFormSecurity.parseUrl('http://localhost/');
+  if (!current) return false;
+  const action = browserFormSecurity.parseUrl(rawAction || current.href, current.href);
+  return (
+    action !== undefined &&
+    action.origin === current.origin &&
+    browserFormSecurity.slice(action.pathname, 0, 4) === '/_m/'
+  );
+}
+
+function ownStringData(value: object, property: PropertyKey): string | undefined {
+  const descriptor = securityGetOwnPropertyDescriptor(value, property);
+  return descriptor !== undefined && 'value' in descriptor && typeof descriptor.value === 'string'
+    ? descriptor.value
+    : undefined;
 }
 
 export function updateUploadProgressElements(

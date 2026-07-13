@@ -26,6 +26,12 @@ import { reportRuntimeError } from './error-policy.js';
 import { readAttribute } from './wire-html.js';
 import { createBrowserNavigationSecurityControls } from './navigation-security-intrinsics.js';
 import { reloadSessionTransitionDocument } from './session-transition.js';
+import {
+  securityMap,
+  securityMapForEach,
+  securityMapHas,
+  securityMapSet,
+} from './security-witness-intrinsics.js';
 
 // SPEC §6.6/§9.1: streaming response bytes remain server truth only when stream
 // acquisition, reader read/cancel/release, byte copying, and decoder construction/
@@ -208,15 +214,18 @@ export async function applyStreamingMutationResponseBodyToRuntime(
   // is NOT confirmed: the runtime must not present the partial as success. We snapshot the
   // pre-apply value of every touched query the first time it arrives so we can REVERT the query
   // truth, hard-reload server authority, and then reject instead of returning a success result.
-  const queryRevertLog = new Map<string, { key?: string; name: string; previousValue: unknown }>();
+  const queryRevertLog = securityMap<
+    string,
+    { key?: string; name: string; previousValue: unknown }
+  >();
   const callerBeforeApplyQueries = applyOptions.beforeApplyQueries;
   const trackingApplyOptions: ApplyMutationResponseChunksToRuntimeOptions = {
     ...applyOptions,
     beforeApplyQueries(queries) {
       for (const query of queries) {
         const storeKey = query.key === undefined ? query.name : `${query.name} ${query.key}`;
-        if (!queryRevertLog.has(storeKey)) {
-          queryRevertLog.set(storeKey, {
+        if (!securityMapHas(queryRevertLog, storeKey)) {
+          securityMapSet(queryRevertLog, storeKey, {
             ...definedProps({ key: query.key }),
             name: query.name,
             previousValue: options.store.get(query.name, query.key),
@@ -362,13 +371,13 @@ function revertAppliedQueries(
   store: QueryStore,
   revertLog: ReadonlyMap<string, { key?: string; name: string; previousValue: unknown }>,
 ): void {
-  for (const entry of revertLog.values()) {
+  securityMapForEach(revertLog, (entry) => {
     if (entry.previousValue === undefined) {
       store.delete(entry.name, entry.key);
     } else {
       store.set(entry.name, entry.previousValue, entry.key);
     }
-  }
+  });
 }
 
 /**

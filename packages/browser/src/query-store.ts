@@ -1,3 +1,21 @@
+import {
+  securityGetOwnPropertyDescriptor,
+  securityMap,
+  securityMapDelete,
+  securityMapForEach,
+  securityMapGet,
+  securityMapHas,
+  securityMapSet,
+  securityOwnArrayEntry,
+  securitySet,
+  securitySetAdd,
+  securitySetDelete,
+  securitySetForEach,
+  securityStringIndexOf,
+  securityStringSlice,
+  securityStringStartsWith,
+} from './security-witness-intrinsics.js';
+
 /**
  * A subscriber callback invoked with a query's new value when it changes.
  */
@@ -47,8 +65,11 @@ export type QuerySnapshot = Map<string, unknown>;
  * store.set('cart', { count: 1 });
  */
 export function createQueryStore(): QueryStore {
-  const values = new Map<string, unknown>();
-  const plans = new Map<string, Set<QueryUpdatePlan>>();
+  // SPEC §6.6/§9.4: decoded server truth, subscriptions, and optimistic baselines remain
+  // authoritative after authored modules run. Never dispatch those facts through mutable ambient
+  // Map/Set/String prototype methods.
+  const values = securityMap<string, unknown>();
+  const plans = securityMap<string, Set<QueryUpdatePlan>>();
 
   return {
     // L7-2 / SPEC §9.4: the `values` map is otherwise never evicted and its keys
@@ -56,37 +77,51 @@ export function createQueryStore(): QueryStore {
     // pagination, per-row) grow the session heap without bound. `clear`/`delete`
     // give the loader/morph path a way to release that retained memory.
     clear(): void {
-      values.clear();
+      securityMapForEach(values, (_value, key) => {
+        securityMapDelete(values, key);
+      });
     },
     delete(name: string, key?: string): void {
-      values.delete(queryStoreKey(name, key));
+      securityMapDelete(values, queryStoreKey(name, key));
     },
     get<Value = unknown>(name: string, key?: string): Value | undefined {
-      return values.get(queryStoreKey(name, key)) as Value | undefined;
+      return securityMapGet(values, queryStoreKey(name, key)) as Value | undefined;
     },
     snapshot(
       names: readonly string[],
       keys: Readonly<Record<string, string | undefined>> = {},
     ): QuerySnapshot {
-      const snapshot = new Map<string, unknown>();
+      const snapshot = securityMap<string, unknown>();
 
-      for (const name of names) {
-        const storeKey = queryStoreKey(name, keys[name]);
+      for (let index = 0; index < names.length; index += 1) {
+        const nameEntry = securityOwnArrayEntry(names, index);
+        if (!nameEntry.ok || typeof nameEntry.value !== 'string') {
+          throw new TypeError('Kovo query snapshot names must be a dense string array.');
+        }
+        const name = nameEntry.value;
+        const keyDescriptor = securityGetOwnPropertyDescriptor(keys, name);
+        const key =
+          keyDescriptor && 'value' in keyDescriptor && typeof keyDescriptor.value === 'string'
+            ? keyDescriptor.value
+            : undefined;
+        const storeKey = queryStoreKey(name, key);
         // SPEC.md §10.4 bounded snapshots: optimistic transforms use copy-on-write
         // drafts, so rollback retains the pre-transform value by reference instead
         // of deep-cloning untouched query data.
-        snapshot.set(storeKey, values.get(storeKey));
+        securityMapSet(snapshot, storeKey, securityMapGet(values, storeKey));
       }
 
       return snapshot;
     },
     set<Value = unknown>(name: string, value: Value, key?: string): void {
       const storeKey = queryStoreKey(name, key);
-      values.set(storeKey, value);
+      securityMapSet(values, storeKey, value);
 
-      for (const plan of plans.get(storeKey) ?? []) {
+      const updatePlans = securityMapGet(plans, storeKey);
+      if (!updatePlans) return;
+      securitySetForEach(updatePlans, (plan) => {
         plan(value);
-      }
+      });
     },
     subscribe<Value = unknown>(
       name: string,
@@ -94,23 +129,27 @@ export function createQueryStore(): QueryStore {
       key?: string,
     ): () => void {
       const storeKey = queryStoreKey(name, key);
-      const existing = plans.get(storeKey) ?? new Set<QueryUpdatePlan>();
-      existing.add(plan as QueryUpdatePlan);
-      plans.set(storeKey, existing);
+      const existing = securityMapGet(plans, storeKey) ?? securitySet<QueryUpdatePlan>();
+      securitySetAdd(existing, plan as QueryUpdatePlan);
+      securityMapSet(plans, storeKey, existing);
 
-      if (values.has(storeKey)) {
-        plan(values.get(storeKey) as Value);
+      if (securityMapHas(values, storeKey)) {
+        plan(securityMapGet(values, storeKey) as Value);
       }
 
       return () => {
-        existing.delete(plan as QueryUpdatePlan);
+        securitySetDelete(existing, plan as QueryUpdatePlan);
         // L7-1 / SPEC §9.4: prune the now-empty subscriber Set so the `plans` map
         // does not leak one empty Set per distinct `(name, key)` over the session.
         // Re-resolve the current Set first: a later subscribe() may have replaced
         // the captured `existing` with a fresh Set for the same key, which must not
         // be deleted.
-        if (existing.size === 0 && plans.get(storeKey) === existing) {
-          plans.delete(storeKey);
+        let hasLivePlan = false;
+        securitySetForEach(existing, () => {
+          hasLivePlan = true;
+        });
+        if (!hasLivePlan && securityMapGet(plans, storeKey) === existing) {
+          securityMapDelete(plans, storeKey);
         }
       };
     },
@@ -126,7 +165,7 @@ export function queryStoreKey(name: string, key: string | undefined): string {
 export function queryWireKey(name: string, key: string | undefined): string {
   if (key === undefined) return name;
 
-  return key.startsWith(`${name}:`) ? key : `${name}:${key}`;
+  return securityStringStartsWith(key, `${name}:`) ? key : `${name}:${key}`;
 }
 
 /**
@@ -140,22 +179,22 @@ export function queryWireKey(name: string, key: string | undefined): string {
  * Runtime API used by Kovo applications and generated runtime integration.
  */
 export function splitQueryWireKey(wireKey: string): { keyValue?: string; name: string } {
-  const separator = wireKey.indexOf(':');
+  const separator = securityStringIndexOf(wireKey, ':');
   if (separator === -1) return { name: wireKey };
 
   return {
-    keyValue: wireKey.slice(separator + 1),
-    name: wireKey.slice(0, separator),
+    keyValue: securityStringSlice(wireKey, separator + 1),
+    name: securityStringSlice(wireKey, 0, separator),
   };
 }
 
 /** Runtime API used by Kovo applications and generated runtime integration. */
 export function queryIdentityFromStoreKey(storeKey: string): { key?: string; name: string } {
-  const separator = storeKey.indexOf('\0');
+  const separator = securityStringIndexOf(storeKey, '\0');
   if (separator === -1) return { name: storeKey };
 
   return {
-    key: storeKey.slice(separator + 1),
-    name: storeKey.slice(0, separator),
+    key: securityStringSlice(storeKey, separator + 1),
+    name: securityStringSlice(storeKey, 0, separator),
   };
 }

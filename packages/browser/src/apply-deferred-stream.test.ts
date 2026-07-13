@@ -54,6 +54,46 @@ function deferredSnapshot<
 }
 
 describe('deferred stream response apply', () => {
+  it('does not dispatch decoded stream truth through late map/flatMap replacements', () => {
+    const store = createQueryStore();
+    const root = new FakeMorphRoot();
+    root.targets.set('cart-badge', new FakeMorphTarget());
+    const map = Object.getOwnPropertyDescriptor(Array.prototype, 'map');
+    const flatMap = Object.getOwnPropertyDescriptor(Array.prototype, 'flatMap');
+    if (!map || !flatMap) throw new Error('Missing Array security descriptors');
+    Object.defineProperty(Array.prototype, 'map', {
+      ...map,
+      value: () => [],
+    });
+    Object.defineProperty(Array.prototype, 'flatMap', {
+      ...flatMap,
+      value: () => ['attacker'],
+    });
+    let applied;
+    try {
+      applied = applyDeferredStreamResponseToRuntime({
+        body: [
+          '--kovo-boundary',
+          '<kovo-query name="cart">{"count":2}</kovo-query>',
+          '<kovo-fragment target="cart-badge"><span>2</span></kovo-fragment>',
+          '--kovo-boundary--',
+        ].join('\n'),
+        root,
+        store,
+      });
+    } finally {
+      Object.defineProperty(Array.prototype, 'map', map);
+      Object.defineProperty(Array.prototype, 'flatMap', flatMap);
+    }
+
+    // SPEC §6.6/§9.1: decoded server wire facts are dense, framework-owned carriers. Late
+    // collection prototype mutation cannot erase their application or forge aggregation output.
+    expect(applied?.queries).toEqual(['cart']);
+    expect(applied?.appliedFragments).toEqual(['cart-badge']);
+    expect(store.get('cart')).toEqual({ count: 2 });
+    expect(root.targets.get('cart-badge')?.html).toBe('<span>2</span>');
+  });
+
   it('applies deferred stream response query truth before fragment morphs', () => {
     const store = createQueryStore();
     const root = new FakeMorphRoot();

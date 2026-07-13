@@ -67,6 +67,48 @@ describe('enhanced mutation form helpers', () => {
     }
   });
 
+  it('keeps cross-origin and non-mutation actions ineligible under late URL and string poisoning', () => {
+    // SPEC §6.6/§9.1: eligibility is the credential-bearing form-data egress choke.
+    // Authored browser code must not be able to turn an external action (or an ordinary
+    // same-origin POST) into an enhanced mutation by replacing URL/String controls after boot.
+    const origin = Object.getOwnPropertyDescriptor(URL.prototype, 'origin');
+    const originalStartsWith = String.prototype.startsWith;
+    const originalToUpperCase = String.prototype.toUpperCase;
+    if (!origin?.get) throw new Error('URL.origin getter unavailable');
+
+    try {
+      Object.defineProperty(URL.prototype, 'origin', {
+        ...origin,
+        get() {
+          return 'https://shop.example.test';
+        },
+      });
+      String.prototype.startsWith = () => true;
+      String.prototype.toUpperCase = () => 'POST';
+
+      expect(
+        isEligibleEnhancedMutationForm(
+          new FakeFormElement(
+            { 'data-mutation': 'cart/add' },
+            { action: 'https://evil.example/_m/steal', method: 'get' },
+          ),
+        ),
+      ).toBe(false);
+      expect(
+        isEligibleEnhancedMutationForm(
+          new FakeFormElement(
+            { 'data-mutation': 'cart/add' },
+            { action: '/checkout', method: 'post' },
+          ),
+        ),
+      ).toBe(false);
+    } finally {
+      Object.defineProperty(URL.prototype, 'origin', origin);
+      String.prototype.startsWith = originalStartsWith;
+      String.prototype.toUpperCase = originalToUpperCase;
+    }
+  });
+
   it('falls back to native submit or visible form error attributes', () => {
     const submit = vi.fn();
     const nativeForm = new FakeFormElement(
