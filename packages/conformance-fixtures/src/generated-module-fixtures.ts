@@ -1533,6 +1533,9 @@ export async function executeInlineEnhancedFormLoaderFixture(
     }
 
     getAttribute(): string | null {
+      if (!(this instanceof InlineFixtureElement)) {
+        throw new TypeError('Inline Element.getAttribute requires an Element receiver.');
+      }
       return null;
     }
 
@@ -1545,6 +1548,9 @@ export async function executeInlineEnhancedFormLoaderFixture(
     }
 
     querySelectorAll(): InlineFixtureElement[] {
+      if (!(this instanceof InlineFixtureElement)) {
+        throw new TypeError('Inline Element.querySelectorAll requires an Element receiver.');
+      }
       return [];
     }
 
@@ -1654,6 +1660,10 @@ export async function executeInlineEnhancedFormLoaderFixture(
       }
     },
     Headers,
+    ReadableStream,
+    ReadableStreamDefaultReader,
+    TextDecoder,
+    Uint8Array,
     URL,
     addEventListener(
       type: string,
@@ -1669,11 +1679,7 @@ export async function executeInlineEnhancedFormLoaderFixture(
     attachShadow() {
       throw new Error('inline loader must not attach shadow roots');
     },
-    crypto: {
-      randomUUID() {
-        return 'idem-inline';
-      },
-    },
+    crypto: globalThis.crypto,
     customElements: {
       define() {
         throw new Error('inline loader must not define custom elements');

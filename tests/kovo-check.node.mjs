@@ -9,6 +9,8 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { promisify } from 'node:util';
 import { gzipSync } from 'node:zlib';
 
+const nullPrototypeRecord = (value) => Object.assign(Object.create(null), value);
+
 import { missingBuildMessage } from '../scripts/kovo-check.mjs';
 import { readTempCommerceGraph } from '../scripts/commerce-graph.mjs';
 import {
@@ -770,6 +772,11 @@ void test('S2 loader budget and inline enhanced form behavior are acceptance evi
   const fact = await executeInlineEnhancedFormLoaderFixture(
     `(${inlineKovoLoaderInstallerSource})((url)=>import(url));`,
   );
+  const generatedIdem = fact.fetchCalls[0]?.headers['Kovo-Idem'];
+  assert.match(
+    generatedIdem ?? '',
+    /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu,
+  );
   assert.deepEqual(fact.listenerEvents, [
     ...delegatedLifecycleEvents,
     'popstate',
@@ -784,7 +791,7 @@ void test('S2 loader budget and inline enhanced form behavior are acceptance evi
       Accept: 'text/vnd.kovo.fragment+html',
       'Kovo-Form-Target': '',
       'Kovo-Fragment': 'true',
-      'Kovo-Idem': 'idem-inline',
+      'Kovo-Idem': generatedIdem,
       'Kovo-Live-Targets':
         'cart-badge#cart-badge@tok_cart:{}; inventory#inventory@tok_inventory:{}',
       'Kovo-Targets': 'cart-badge=cart; inventory=inventory stock',
@@ -815,7 +822,7 @@ void test('P2 loader smoke evidence is asserted through runtime behavior', async
         ['idle', true],
       ],
       disposedListenerEvents: [],
-      initialImportCount: 0,
+      initialImportCount: 1,
       listenerEvents: defaultDelegatedEvents,
       listenerOptions: Object.fromEntries(
         delegatedLifecycleEvents.map((event) => [event, { capture: true }]),
@@ -856,27 +863,29 @@ void test('P3 server renders initial query scripts for document-load hydration',
   });
 
   assert.deepEqual(fact, {
-    bodyElements: [{ attrs: {}, html: '<main></main>', innerHtml: '', tag: 'main' }],
+    bodyElements: [
+      { attrs: nullPrototypeRecord({}), html: '<main></main>', innerHtml: '', tag: 'main' },
+    ],
     bodyQueryScripts: [],
     documentQueryScripts: [
       {
-        attrs: {
+        attrs: nullPrototypeRecord({
           'data-kovo-csp-hash': 'sha256-RI5k6RX1M0ro0XMCjumAJoDVyEhUT0DexGgN17O9SSY=',
           'kovo-query': 'cart',
           key: 'cart:c1',
           type: 'application/json',
-        },
+        }),
         rawJson: '{"html":"\\u003c/script>"}',
       },
     ],
     headQueryScripts: [
       {
-        attrs: {
+        attrs: nullPrototypeRecord({
           'data-kovo-csp-hash': 'sha256-RI5k6RX1M0ro0XMCjumAJoDVyEhUT0DexGgN17O9SSY=',
           'kovo-query': 'cart',
           key: 'cart:c1',
           type: 'application/json',
-        },
+        }),
         rawJson: '{"html":"\\u003c/script>"}',
       },
     ],
@@ -893,10 +902,10 @@ void test('P2 page hints keep speculation rules opt-in and non-empty', async () 
     emptyOptInHtml: '',
     renderedHtml:
       '<script type="speculationrules" data-kovo-csp-hash="sha256-VDbRXdVrG1h/HSZeEzeFOKzfY6aegZfd8rNURnGGk4A=">{"prerender":[{"eagerness":"moderate","urls":["/products","/cart"]}]}</script>',
-    scriptAttrs: {
+    scriptAttrs: nullPrototypeRecord({
       'data-kovo-csp-hash': 'sha256-VDbRXdVrG1h/HSZeEzeFOKzfY6aegZfd8rNURnGGk4A=',
       type: 'speculationrules',
-    },
+    }),
   });
 });
 
@@ -911,7 +920,7 @@ export const ProductCard = component({
 });
 `,
   });
-  assert.deepEqual(result.viewTransitions, [{ name: 'product-p1-image' }]);
+  assert.deepEqual(result.viewTransitions, [nullPrototypeRecord({ name: 'product-p1-image' })]);
   assert.deepEqual(
     await generatedViewTransitionStampBehaviorFact({
       files: result.files,
@@ -1448,13 +1457,13 @@ void test('P3 mutation lifecycle includes an explicit transaction boundary', asy
     },
     fragmentResponse: {
       body: '<kovo-query name="cart" key="cart:c1">{"cartId":"c1"}</kovo-query>',
-      headers: {
+      headers: nullPrototypeRecord({
         'Cache-Control': 'private, no-store',
         'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
         'Kovo-Build': 'conformance-server-test-build',
         'Kovo-Changes': '[{"domain":"cart"}]',
         Vary: 'Cookie',
-      },
+      }),
       status: 200,
     },
     successfulTransaction: {
@@ -1477,11 +1486,11 @@ void test('P3 server data-plane APIs stay exported and covered', async () => {
       body:
         '<kovo-query name="productDetail" key="product:p1" version="3">' +
         '{"id":"p1","max":3,"userId":"u1"}</kovo-query>',
-      headers: {
+      headers: nullPrototypeRecord({
         'Cache-Control': 'private, no-store',
         'Content-Type': 'text/html; charset=utf-8',
         Vary: 'Cookie',
-      },
+      }),
       status: 200,
     },
     invalidInput: {
@@ -1494,17 +1503,17 @@ void test('P3 server data-plane APIs stay exported and covered', async () => {
     },
     missingRegistryQuery: {
       body: 'Not Found',
-      headers: {
+      headers: nullPrototypeRecord({
         'Cache-Control': 'private, no-store',
         'Content-Type': 'text/plain; charset=utf-8',
         Vary: 'Cookie',
-      },
+      }),
       status: 404,
     },
     success: {
       input: { id: 'p1', max: 10 },
       ok: true,
-      value: { id: 'p1', max: 10, userId: 'u1' },
+      value: nullPrototypeRecord({ id: 'p1', max: 10, userId: 'u1' }),
     },
     unauthorized: {
       error: { code: 'UNAUTHORIZED', payload: {} },
@@ -1681,13 +1690,13 @@ void test('D2 commerce validates keyed append and optimistic reorder', async () 
     },
     mutationEndpoint: {
       body: '',
-      headers: {
+      headers: nullPrototypeRecord({
         'Cache-Control': 'private, no-store',
         'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
         'Kovo-Build': 'conformance-runtime-test-build',
         'Kovo-Changes': '[{"domain":"product","keys":["p1"]}]',
         Vary: 'Cookie',
-      },
+      }),
       result: {
         changes: [{ domain: 'product', input: { productId: 'p1' }, keys: ['p1'] }],
         ok: true,

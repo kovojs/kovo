@@ -1145,7 +1145,9 @@ addEventListener('change', () => {}, {});
           headers: {
             Accept: 'text/vnd.kovo.fragment+html',
             'Kovo-Fragment': 'true',
-            'Kovo-Idem': 'idem-inline',
+            'Kovo-Idem': expect.stringMatching(
+              /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu,
+            ),
             'Kovo-Targets': 'cart-badge=cart; inventory=inventory stock',
           },
           keepalive: true,
