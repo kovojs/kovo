@@ -6,6 +6,7 @@ const NativeObject = Object;
 const NativeReflect = Reflect;
 const NativeRegExp = RegExp;
 const NativeSet = Set;
+const NativeWeakSet = WeakSet;
 
 const intrinsicArrayIsArray = NativeArray.isArray;
 const intrinsicMapForEach = NativeMap.prototype.forEach;
@@ -29,8 +30,11 @@ const intrinsicSetForEach = NativeSet.prototype.forEach;
 const intrinsicSetHas = NativeSet.prototype.has;
 const intrinsicSetKeys = NativeSet.prototype.keys;
 const intrinsicSetValues = NativeSet.prototype.values;
+const intrinsicWeakSetAdd = NativeWeakSet.prototype.add;
+const intrinsicWeakSetHas = NativeWeakSet.prototype.has;
 const intrinsicMapSize = intrinsicObjectGetOwnPropertyDescriptor(NativeMap.prototype, 'size')?.get;
 const intrinsicSetSize = intrinsicObjectGetOwnPropertyDescriptor(NativeSet.prototype, 'size')?.get;
+const runtimeMetadataCollectionFacades = new NativeWeakSet<object>();
 
 function apply<Return>(fn: Function, receiver: unknown, args: readonly unknown[]): Return {
   return intrinsicReflectApply(fn, receiver, args) as Return;
@@ -74,6 +78,9 @@ const controlsSound = (() => {
       },
     ]);
     const frozen = apply<object>(intrinsicObjectFreeze, NativeObject, [{ frozen: true }]);
+    const weakSet = new NativeWeakSet<object>();
+    const weakSetValue = {};
+    apply(intrinsicWeakSetAdd, weakSet, [weakSetValue]);
     return (
       apply<boolean>(intrinsicArrayIsArray, NativeArray, [array]) === true &&
       entry !== undefined &&
@@ -94,7 +101,9 @@ const controlsSound = (() => {
       apply<number>(intrinsicSetSize, set, []) === 1 &&
       setForEachControl === 'set-control' &&
       apply<boolean>(intrinsicRegExpTest, /control/u, ['control']) === true &&
-      apply<boolean>(intrinsicObjectIsFrozen, NativeObject, [frozen]) === true
+      apply<boolean>(intrinsicObjectIsFrozen, NativeObject, [frozen]) === true &&
+      apply<boolean>(intrinsicWeakSetHas, weakSet, [weakSetValue]) === true &&
+      apply<boolean>(intrinsicWeakSetHas, weakSet, [{}]) === false
     );
   } catch {
     return false;
@@ -298,6 +307,25 @@ export function runtimeSetSize<Value>(set: ReadonlySet<Value>): number {
   return apply<number>(intrinsicSetSize, set, []);
 }
 
+/** @internal Unforgeable provenance check for immutable runtime-metadata collection facades. */
+export function isKovoRuntimeMetadataCollectionFacade(value: unknown): value is object {
+  assertControls();
+  return (
+    (typeof value === 'object' || typeof value === 'function') &&
+    value !== null &&
+    apply<boolean>(intrinsicWeakSetHas, runtimeMetadataCollectionFacades, [value])
+  );
+}
+
+function recordRuntimeMetadataCollectionFacade<Value extends object>(value: Value): Value {
+  assertControls();
+  apply(intrinsicWeakSetAdd, runtimeMetadataCollectionFacades, [value]);
+  if (!isKovoRuntimeMetadataCollectionFacade(value)) {
+    throw new TypeError('Kovo Drizzle runtime metadata collection provenance commit failed.');
+  }
+  return value;
+}
+
 export function runtimeSealMap<Key, Value>(map: Map<Key, Value>): ReadonlyMap<Key, Value> {
   const backing = runtimeMap<Key, Value>();
   runtimeMapForEach(map, (value, key) => runtimeMapSet(backing, key, value));
@@ -347,7 +375,10 @@ export function runtimeSealMap<Key, Value>(map: Map<Key, Value>): ReadonlyMap<Ke
     () => apply<MapIterator<[Key, Value]>>(intrinsicMapEntries, backing, []),
     'Kovo Drizzle metadata map',
   );
-  facade = runtimeFreeze(target) as unknown as ReadonlyMap<Key, Value>;
+  facade = recordRuntimeMetadataCollectionFacade(runtimeFreeze(target)) as unknown as ReadonlyMap<
+    Key,
+    Value
+  >;
   return facade;
 }
 
@@ -394,6 +425,8 @@ export function runtimeSealSet<Value>(set: Set<Value>): ReadonlySet<Value> {
     () => apply<SetIterator<Value>>(intrinsicSetValues, backing, []),
     'Kovo Drizzle metadata set',
   );
-  facade = runtimeFreeze(target) as unknown as ReadonlySet<Value>;
+  facade = recordRuntimeMetadataCollectionFacade(
+    runtimeFreeze(target),
+  ) as unknown as ReadonlySet<Value>;
   return facade;
 }

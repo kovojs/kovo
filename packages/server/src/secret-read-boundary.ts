@@ -11,7 +11,6 @@ import {
   witnessGetOwnPropertyDescriptor,
   witnessGetPrototypeOf,
   witnessIsArray,
-  witnessMapForEach,
   witnessMapGet,
   witnessMapSet,
   witnessObjectKeys,
@@ -28,6 +27,10 @@ import {
   witnessWeakMapSet,
 } from './security-witness-intrinsics.js';
 import { frameworkManagedDbRawTarget } from './sql-safe-handle.js';
+import {
+  forEachReadonlyMapEntry,
+  forEachReadonlySetValue,
+} from './readonly-collection-snapshot.js';
 
 const NativePromise = globalThis.Promise;
 const nativePromiseThen = witnessReflectGet(NativePromise.prototype, 'then') as Function;
@@ -421,8 +424,9 @@ function snapshotSecretReadMetadata(metadata: SecretReadMetadata): SecretReadMet
       'secretTableNames',
     );
     const columnSources = createWitnessMap<object, SecretReadColumnSource>();
-    witnessMapForEach(
-      ownDataValue(metadata, 'columnSources') as Map<unknown, unknown>,
+    forEachReadonlyMapEntry(
+      ownDataValue(metadata, 'columnSources'),
+      'columnSources',
       (source, column) => {
         if ((typeof column !== 'object' && typeof column !== 'function') || column === null) {
           throw new TypeError('columnSources keys must be object identities.');
@@ -493,7 +497,7 @@ function snapshotSecretReadBoundary(boundary: SecretReadBoundary): SecretReadBou
 
 function snapshotStringSet(value: unknown, label: string): ReadonlySet<string> {
   const snapshot = createWitnessSet<string>();
-  witnessSetForEach(value as Set<unknown>, (entry) => {
+  forEachReadonlySetValue(value, label, (entry) => {
     if (typeof entry !== 'string') throw new TypeError(`${label} must contain only strings.`);
     witnessSetAdd(snapshot, entry);
   });
@@ -505,7 +509,7 @@ function snapshotStringSetMap(
   label: string,
 ): ReadonlyMap<string, ReadonlySet<string>> {
   const snapshot = createWitnessMap<string, ReadonlySet<string>>();
-  witnessMapForEach(value as Map<unknown, unknown>, (entry, key) => {
+  forEachReadonlyMapEntry(value, label, (entry, key) => {
     if (typeof key !== 'string') throw new TypeError(`${label} keys must be strings.`);
     witnessMapSet(snapshot, key, snapshotStringSet(entry, `${label}.${key}`));
   });

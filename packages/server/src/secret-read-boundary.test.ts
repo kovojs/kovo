@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { isSecret, revealSecret } from '@kovojs/core';
+import { extractKovoRuntimeDbMetadata, kovo } from '@kovojs/drizzle';
 import { PGlite } from '@electric-sql/pglite';
 import Database from 'better-sqlite3';
 import { defineRelations, sql as drizzleSql } from 'drizzle-orm';
@@ -76,6 +77,69 @@ function queryObject(
 }
 
 describe('secret read boundary', () => {
+  it('snapshots immutable Drizzle metadata facades before native collection operations', () => {
+    const secrets = sqliteTable(
+      'facade_secrets',
+      {
+        id: text('id').primaryKey(),
+        classified: text('classified').notNull(),
+      },
+      kovo({ domain: 'facade-secret', key: 'id', secret: ['classified'] }),
+    );
+    const declared = extractKovoRuntimeDbMetadata([secrets]);
+    const db = createSecretBoxingReadDb(
+      {
+        select() {
+          return [{ classified: 'victim-secret' }];
+        },
+      },
+      declared,
+    );
+
+    const [row] = db.select();
+    expect(isSecret(row?.classified)).toBe(true);
+    expect(() => Set.prototype.add.call(declared.secretColumnKeys, 'attacker')).toThrow();
+    expect(declared.secretColumnKeys.has('attacker')).toBe(false);
+  });
+
+  it.each(['mutable', 'frozen'] as const)(
+    'rejects a %s structural imitation of a Drizzle metadata collection',
+    (posture) => {
+      let invoked = false;
+      const structuralImitation = {
+        size: 1,
+        forEach(callback: (entry: string) => void) {
+          invoked = true;
+          callback('classified');
+        },
+      };
+      if (posture === 'frozen') Object.freeze(structuralImitation);
+
+      expect(() =>
+        createSecretBoxingReadDb(
+          { select: () => [{ classified: 'victim-secret' }] },
+          {
+            ...metadata(),
+            secretColumnKeys: structuralImitation as unknown as ReadonlySet<string>,
+          },
+        ),
+      ).toThrow('secretColumnKeys non-native collection must be framework-minted');
+      expect(invoked).toBe(false);
+    },
+  );
+
+  it('preserves validation errors thrown while snapshotting a native collection', () => {
+    expect(() =>
+      createSecretBoxingReadDb(
+        { select: () => [{ classified: 'victim-secret' }] },
+        {
+          ...metadata(),
+          secretColumnKeys: new Set([123]) as unknown as ReadonlySet<string>,
+        },
+      ),
+    ).toThrow('secretColumnKeys must contain only strings');
+  });
+
   it('pins the secret-boxing membrane against late global Proxy replacement', () => {
     const NativeProxy = globalThis.Proxy;
     let proxyHits = 0;

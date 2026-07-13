@@ -13,6 +13,7 @@
     ".": "./src/runtime.ts",
     "./internal/derive": "./src/derive.ts",
     "./internal/derive-codegen": "./src/derive-codegen.ts",
+    "./internal/runtime-metadata": "./src/runtime-metadata-internal.ts",
     "./internal/static": "./src/static.ts"
   },
   "publishConfig": {
@@ -29,6 +30,10 @@
         "types": "./dist/derive-codegen.d.mts",
         "default": "./dist/derive-codegen.mjs"
       },
+      "./internal/runtime-metadata": {
+        "types": "./dist/runtime-metadata-internal.d.mts",
+        "default": "./dist/runtime-metadata-internal.mjs"
+      },
       "./internal/static": {
         "types": "./dist/static.d.mts",
         "default": "./dist/static.mjs"
@@ -36,7 +41,7 @@
     }
   },
   "scripts": {
-    "build:dist": "vp pack src/derive-codegen.ts src/derive.ts src/runtime.ts src/static.ts --dts",
+    "build:dist": "vp pack src/derive-codegen.ts src/derive.ts src/runtime-metadata-internal.ts src/runtime.ts src/static.ts --dts",
     "prepack": "pnpm run build:dist"
   },
   "dependencies": {

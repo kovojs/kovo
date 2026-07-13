@@ -60,6 +60,10 @@ import {
   witnessWeakSetAdd,
   witnessWeakSetHas,
 } from './security-witness-intrinsics.js';
+import {
+  forEachReadonlyMapEntry,
+  forEachReadonlySetValue,
+} from './readonly-collection-snapshot.js';
 import { runtimeEnvironmentValue } from './runtime-environment-authority.js';
 
 declare const readerDbBrand: unique symbol;
@@ -688,12 +692,12 @@ function snapshotStringSetMap(
 ): ReadonlyMap<string, ReadonlySet<string>> {
   if (!isRecord(value)) throw new TypeError(`${label} must be a Map.`);
   const snapshot = createWitnessMap<string, ReadonlySet<string>>();
-  witnessMapForEach(value as unknown as Map<unknown, unknown>, (columns, table) => {
+  forEachReadonlyMapEntry(value, label, (columns, table) => {
     if (typeof table !== 'string' || !isRecord(columns)) {
       throw new TypeError(`${label} must map string tables to string sets.`);
     }
     const columnSnapshot = createWitnessSet<string>();
-    witnessSetForEach(columns as unknown as Set<unknown>, (column) => {
+    forEachReadonlySetValue(columns, `${label}.${table}`, (column) => {
       if (typeof column !== 'string') throw new TypeError(`${label} must contain string columns.`);
       witnessSetAdd(columnSnapshot, column);
     });
@@ -719,7 +723,7 @@ function snapshotAuthorizationCensusOptions(
     if (!isRecord(schemaSource)) {
       throw new TypeError('authorization census schemaTableNames must be a Set.');
     }
-    witnessSetForEach(schemaSource as unknown as Set<unknown>, (table) => {
+    forEachReadonlySetValue(schemaSource, 'authorization census schemaTableNames', (table) => {
       if (typeof table !== 'string') {
         throw new TypeError('authorization census schema table names must be strings.');
       }
@@ -734,8 +738,9 @@ function snapshotAuthorizationCensusOptions(
     if (!isRecord(classificationsSource)) {
       throw new TypeError('authorization census classifications must be a Map.');
     }
-    witnessMapForEach(
-      classificationsSource as unknown as Map<unknown, unknown>,
+    forEachReadonlyMapEntry(
+      classificationsSource,
+      'authorization census classifications',
       (values, table) => {
         if (typeof table !== 'string') {
           throw new TypeError('authorization census classification table names must be strings.');

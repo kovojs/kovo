@@ -1982,7 +1982,12 @@
       "apiBoundary": {
         "public": ["."],
         "generated": [],
-        "internal": ["./internal/derive-codegen", "./internal/static", "./internal/derive"]
+        "internal": [
+          "./internal/derive-codegen",
+          "./internal/static",
+          "./internal/derive",
+          "./internal/runtime-metadata"
+        ]
       },
       "apiRef": {
         "order": 5,
