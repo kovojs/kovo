@@ -1240,6 +1240,111 @@ export const Recommendations = component({
     expect(poisonHits).toBe(0);
   });
 
+  it('cannot forge an isomorphic justification through diagnostic Array.includes', () => {
+    const nativeIncludes = Array.prototype.includes;
+    const nativeApply = Reflect.apply;
+    let poisonHits = 0;
+    let result: ReturnType<typeof compileComponentModule> | undefined;
+    try {
+      Array.prototype.includes = function poisonedIsomorphicJustificationIncludes(
+        searchElement: unknown,
+        fromIndex?: number,
+      ): boolean {
+        if (
+          this[0] === 'KV317' &&
+          searchElement === 'KV318' &&
+          new Error().stack?.includes('validateIsomorphicJustifications')
+        ) {
+          poisonHits += 1;
+          return true;
+        }
+        return nativeApply(nativeIncludes, this, [searchElement, fromIndex]);
+      };
+      result = compileComponentModule({
+        fileName: 'isomorphic.tsx',
+        source: `
+export const Counter = component({
+  /* KV317: unrelated */
+  isomorphic: true,
+  render: () => <button>Count</button>,
+});
+`,
+      });
+    } finally {
+      Array.prototype.includes = nativeIncludes;
+    }
+    expect(result?.diagnostics.filter((diagnostic) => diagnostic.code === 'KV318')).toHaveLength(1);
+    expect(poisonHits).toBe(0);
+  });
+
+  it('does not suppress fragment input validation through render-input Array.filter', () => {
+    const nativeFilter = Array.prototype.filter;
+    const nativeApply = Reflect.apply;
+    let poisonHits = 0;
+    let result: ReturnType<typeof compileComponentModule> | undefined;
+    try {
+      Array.prototype.filter = function poisonedFragmentInputFilter<T>(
+        callback: (value: T, index: number, array: T[]) => unknown,
+        thisArg?: unknown,
+      ): T[] {
+        if (
+          (this[0] as { name?: unknown } | undefined)?.name === 'priceList' &&
+          new Error().stack?.includes('validateFragmentTargetInputs')
+        ) {
+          poisonHits += 1;
+          return [];
+        }
+        return nativeApply(nativeFilter, this, [callback, thisArg]);
+      };
+      result = compileComponentModule({
+        fileName: 'cart-badge.tsx',
+        source: `
+export const CartBadge = component({
+  queries: { cart: {} },
+  render: ({ priceList }) => <span>{priceList.total}</span>,
+});
+`,
+      });
+    } finally {
+      Array.prototype.filter = nativeFilter;
+    }
+    expect(result?.diagnostics.filter((diagnostic) => diagnostic.code === 'KV303')).toHaveLength(1);
+    expect(poisonHits).toBe(0);
+  });
+
+  it('does not suppress nested stateful islands through Map.get replacement', () => {
+    const nativeGet = Map.prototype.get;
+    const nativeApply = Reflect.apply;
+    let poisonHits = 0;
+    let result: ReturnType<typeof compileComponentModule> | undefined;
+    try {
+      Map.prototype.get = function poisonedStatefulIslandGet<K, V>(key: K): V | undefined {
+        if (key === 'Stepper' && new Error().stack?.includes('validateNestedStatefulIsland')) {
+          poisonHits += 1;
+          return undefined;
+        }
+        return nativeApply(nativeGet, this, [key]);
+      };
+      result = compileComponentModule({
+        fileName: 'cart-page.tsx',
+        source: `
+export const Stepper = component({
+  state: () => ({ count: 0 }),
+  render: (_, state) => <span>{state.count}</span>,
+});
+export const CartPanel = component({
+  queries: { cart: {} },
+  render: ({ cart }) => <section><p>{cart.total}</p><Stepper /></section>,
+});
+`,
+      });
+    } finally {
+      Map.prototype.get = nativeGet;
+    }
+    expect(result?.diagnostics.filter((diagnostic) => diagnostic.code === 'KV420')).toHaveLength(1);
+    expect(poisonHits).toBe(0);
+  });
+
   it('does not publish a captured server secret through stateful Array.filter replacement', () => {
     const nativeFilter = Array.prototype.filter;
     const nativeApply = Reflect.apply;

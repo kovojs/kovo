@@ -2,13 +2,23 @@ import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
 
 import {
   compilerArrayAppend,
+  compilerArrayIsArray,
+  compilerArrayJoin,
   compilerArrayLength,
+  compilerCreateMap,
   compilerCreateSet,
+  compilerFailClosed,
+  compilerMapGet,
+  compilerMapSet,
   compilerOwnDataValue,
+  compilerRegExpTest,
   compilerSetAdd,
   compilerSetHas,
   compilerStringIndexOf,
+  compilerStringReplaceAll,
   compilerStringSlice,
+  compilerStringSplit,
+  compilerStringStartsWith,
 } from '../compiler-security-intrinsics.js';
 import { type CompilerDiagnostic, type DiagnosticFactory } from '../diagnostics.js';
 import { componentQueryShapes, queryShapePaths } from '../analyze/query-shapes.js';
@@ -78,14 +88,14 @@ export function validateServerFactsInLocalState(
   for (let index = 0; index < queryNameLength; index += 1) {
     const query = compilerOwnDataValue(queryNames, index, 'Local-state query names');
     if (typeof query !== 'string') {
-      throw new TypeError(`Local-state query names[${index}] must be an own string.`);
+      compilerFailClosed(`Local-state query names[${index}] must be an own string.`);
     }
     compilerSetAdd(queryRoots, query);
   }
   for (let entryIndex = 0; entryIndex < entryLength; entryIndex += 1) {
     const entry = compilerOwnDataValue(stateObject.entries, entryIndex, 'Local-state entries');
     if (!entry || typeof entry !== 'object') {
-      throw new TypeError(`Local-state entries[${entryIndex}] must be own data.`);
+      compilerFailClosed(`Local-state entries[${entryIndex}] must be own data.`);
     }
     const accesses = (entry as { valuePropertyAccesses?: readonly PropertyAccessPathModel[] })
       .valuePropertyAccesses;
@@ -98,7 +108,7 @@ export function validateServerFactsInLocalState(
         `Local-state entry ${entryIndex} accesses`,
       ) as PropertyAccessPathModel | undefined;
       if (!access) {
-        throw new TypeError(
+        compilerFailClosed(
           `Local-state entry ${entryIndex} accesses[${accessIndex}] must be own data.`,
         );
       }
@@ -126,118 +136,208 @@ export function validateIsomorphicJustifications(
   diagnostics: DiagnosticFactory,
   model: ComponentModuleModel,
 ): CompilerDiagnostic[] {
-  return model.components.flatMap((component) => {
-    const option = component.options.find((candidate) => candidate.key === 'isomorphic');
-    if (option?.staticValue !== true || (option.justifiedDiagnostics?.includes('KV318') ?? false)) {
-      return [];
+  const found: CompilerDiagnostic[] = [];
+  const componentLength = compilerArrayLength(model.components, 'Isomorphic components');
+  for (let componentIndex = 0; componentIndex < componentLength; componentIndex += 1) {
+    const component = ownArrayEntry(model.components, componentIndex, 'Isomorphic components');
+    const option = componentOption(component, 'isomorphic');
+    if (option?.staticValue !== true) continue;
+    if (
+      option.justifiedDiagnostics &&
+      denseStringArrayIncludes(
+        option.justifiedDiagnostics,
+        'KV318',
+        'Isomorphic justified diagnostics',
+      )
+    ) {
+      continue;
     }
-    return [diagnostics.at('KV318', { start: option.start, length: option.end - option.start })];
-  });
+    compilerArrayAppend(
+      found,
+      diagnostics.at('KV318', { start: option.start, length: option.end - option.start }),
+      'Isomorphic justification diagnostics',
+    );
+  }
+  return found;
 }
 
 export function validateRemovedFragmentTargetOption(
   diagnostics: DiagnosticFactory,
   model: ComponentModuleModel,
 ): CompilerDiagnostic[] {
-  return model.components.flatMap((component) =>
-    component.options
-      .filter((option) => option.key === 'fragmentTarget')
-      .map((option) => ({
-        ...diagnostics.at('KV223', { start: option.start, length: option.end - option.start }),
-        help: [
-          'Would lower to: an inferred server-refresh target for a query-backed component.',
-          'Blocked reason: fragmentTarget is no longer an author-facing component option; query dependencies now derive refresh targets.',
-          'Fixes: remove fragmentTarget, declare queries for refreshable server data, or set disableServerRefresh: true to force the component off the enhanced server-refresh path.',
-          'SPEC §4.8 keeps runtime stamps compiler-derived and SPEC §4.9 classifies inferred query-backed refresh coverage.',
-          'Escape: emitted compiler artifacts may carry kovo-fragment-target hooks; app TSX should not force targets by option.',
-        ].join('\n'),
-        message:
-          'Redundant removed component option; query-backed components infer server refresh targets. fragmentTarget',
-      })),
-  );
+  const found: CompilerDiagnostic[] = [];
+  const componentLength = compilerArrayLength(model.components, 'Fragment-target components');
+  for (let componentIndex = 0; componentIndex < componentLength; componentIndex += 1) {
+    const component = ownArrayEntry(model.components, componentIndex, 'Fragment-target components');
+    const optionLength = compilerArrayLength(component.options, 'Fragment-target options');
+    for (let optionIndex = 0; optionIndex < optionLength; optionIndex += 1) {
+      const option = ownArrayEntry(component.options, optionIndex, 'Fragment-target options');
+      if (option.key !== 'fragmentTarget') continue;
+      compilerArrayAppend(
+        found,
+        {
+          ...diagnostics.at('KV223', { start: option.start, length: option.end - option.start }),
+          help: compilerArrayJoin(
+            [
+              'Would lower to: an inferred server-refresh target for a query-backed component.',
+              'Blocked reason: fragmentTarget is no longer an author-facing component option; query dependencies now derive refresh targets.',
+              'Fixes: remove fragmentTarget, declare queries for refreshable server data, or set disableServerRefresh: true to force the component off the enhanced server-refresh path.',
+              'SPEC §4.8 keeps runtime stamps compiler-derived and SPEC §4.9 classifies inferred query-backed refresh coverage.',
+              'Escape: emitted compiler artifacts may carry kovo-fragment-target hooks; app TSX should not force targets by option.',
+            ],
+            '\n',
+          ),
+          message:
+            'Redundant removed component option; query-backed components infer server refresh targets. fragmentTarget',
+        },
+        'Removed fragment-target diagnostics',
+      );
+    }
+  }
+  return found;
 }
 
 export function validateHandAuthoredFragmentTargetStamp(
   diagnostics: DiagnosticFactory,
   model: ComponentModuleModel,
 ): CompilerDiagnostic[] {
-  return model.components.flatMap((component) => {
-    if (!componentHasInferredFragmentTarget(component)) return [];
+  const found: CompilerDiagnostic[] = [];
+  const componentLength = compilerArrayLength(model.components, 'Fragment-stamp components');
+  for (let componentIndex = 0; componentIndex < componentLength; componentIndex += 1) {
+    const component = ownArrayEntry(model.components, componentIndex, 'Fragment-stamp components');
+    if (!componentHasInferredFragmentTarget(component)) continue;
 
     const host = componentRenderHostElementFor(model, component);
-    const attribute = host?.attributes.find((item) => item.name === 'kovo-fragment-target');
-    if (!attribute) return [];
+    const attribute = host ? jsxAttributeNamed(host, 'kovo-fragment-target') : undefined;
+    if (!attribute) continue;
 
-    return [
+    compilerArrayAppend(
+      found,
       {
         ...diagnostics.at('KV223', {
           start: attribute.start,
           length: attribute.end - attribute.start,
         }),
-        help: [
-          'Would lower to: the same kovo-fragment-target hook the compiler derives for a query-backed component root.',
-          'Blocked reason: the stamp is redundant in app-authored TSX because the compiler can derive the live server-refresh target from queries and component identity.',
-          'Fixes: remove the hand-written kovo-fragment-target attribute, keep declared queries as the source of truth, or set disableServerRefresh: true if the component should not be live-refreshable.',
-          'SPEC §4.8 permits residual stamps for emitted IR fixpoint validation, but app TSX should not hand-author derivable runtime hooks.',
-          'Escape: emitted compiler artifacts may retain kovo-fragment-target for the runtime Kovo-Targets wire.',
-        ].join('\n'),
+        help: compilerArrayJoin(
+          [
+            'Would lower to: the same kovo-fragment-target hook the compiler derives for a query-backed component root.',
+            'Blocked reason: the stamp is redundant in app-authored TSX because the compiler can derive the live server-refresh target from queries and component identity.',
+            'Fixes: remove the hand-written kovo-fragment-target attribute, keep declared queries as the source of truth, or set disableServerRefresh: true if the component should not be live-refreshable.',
+            'SPEC §4.8 permits residual stamps for emitted IR fixpoint validation, but app TSX should not hand-author derivable runtime hooks.',
+            'Escape: emitted compiler artifacts may retain kovo-fragment-target for the runtime Kovo-Targets wire.',
+          ],
+          '\n',
+        ),
         message:
           'Redundant hand-written fragment target stamp in sugar; the compiler derives it. kovo-fragment-target',
       },
-    ];
-  });
+      'Hand-authored fragment-stamp diagnostics',
+    );
+  }
+  return found;
 }
 
 export function validateFragmentTargetInputs(
   diagnostics: DiagnosticFactory,
   model: ComponentModuleModel,
 ): CompilerDiagnostic[] {
-  const validatesFragmentTarget = componentFragmentTargetNames(model).length > 0;
+  const validatesFragmentTarget =
+    compilerArrayLength(componentFragmentTargetNames(model), 'Fragment target names') > 0;
   const validatesIsomorphicIsland = componentOptionStaticValue(model, 'isomorphic') === true;
   if (!validatesFragmentTarget && !validatesIsomorphicIsland) return [];
 
   const allowedInputs = declaredRenderInputRoots(model, validatesIsomorphicIsland);
   const renderInputs = componentRenderInputModels(model);
-  const missingInputs = renderInputs.filter((input) => !allowedInputs.has(input.name));
-  const missingIsomorphicReads = validatesIsomorphicIsland
-    ? isomorphicRenderReads(model).filter((input) => !allowedInputs.has(input.name))
-    : [];
+  const missing: RenderInputModel[] = [];
+  appendMissingRenderInputs(missing, renderInputs, allowedInputs, 'Fragment render inputs');
+  if (validatesIsomorphicIsland) {
+    appendMissingRenderInputs(
+      missing,
+      isomorphicRenderReads(model),
+      allowedInputs,
+      'Isomorphic render reads',
+    );
+  }
 
-  return dedupeBy([...missingInputs, ...missingIsomorphicReads], (input) => input.name).map(
-    (input) => kv303RenderInputDiagnostic(diagnostics, allowedInputs, input),
-  );
+  const unique = dedupeBy(missing, (input) => input.name);
+  const found: CompilerDiagnostic[] = [];
+  const uniqueLength = compilerArrayLength(unique, 'Missing fragment render inputs');
+  for (let index = 0; index < uniqueLength; index += 1) {
+    compilerArrayAppend(
+      found,
+      kv303RenderInputDiagnostic(
+        diagnostics,
+        allowedInputs,
+        ownArrayEntry(unique, index, 'Missing fragment render inputs'),
+      ),
+      'Fragment input diagnostics',
+    );
+  }
+  return found;
 }
 
 function declaredRenderInputRoots(model: ComponentModuleModel, includeState: boolean): Set<string> {
-  return new Set([
-    ...componentOptionObjectKeys(model, 'queries'),
-    ...componentOptionObjectKeys(model, 'props'),
-    ...model.moduleScopeBindings.map((binding) => binding.name),
-    // SPEC §4.8/§4.9: `now` is the compiler-owned clock input; KV312 validates names.
-    'now',
-    ...(includeState ? ['state'] : []),
-  ]);
+  const roots = compilerCreateSet<string>();
+  addStringsToSet(roots, componentOptionObjectKeys(model, 'queries'), 'Component query names');
+  addStringsToSet(roots, componentOptionObjectKeys(model, 'props'), 'Component prop names');
+  const bindingLength = compilerArrayLength(model.moduleScopeBindings, 'Module-scope bindings');
+  for (let index = 0; index < bindingLength; index += 1) {
+    compilerSetAdd(
+      roots,
+      ownArrayEntry(model.moduleScopeBindings, index, 'Module-scope bindings').name,
+    );
+  }
+  // SPEC §4.8/§4.9: `now` is the compiler-owned clock input; KV312 validates names.
+  compilerSetAdd(roots, 'now');
+  if (includeState) compilerSetAdd(roots, 'state');
+  return roots;
 }
 
 function isomorphicRenderReads(model: ComponentModuleModel): RenderInputModel[] {
-  const renderLocalNames = new Set(
-    model.components.flatMap((component) => component.renderLocalNames),
-  );
+  const renderLocalNames = compilerCreateSet<string>();
+  const componentLength = compilerArrayLength(model.components, 'Isomorphic components');
+  for (let componentIndex = 0; componentIndex < componentLength; componentIndex += 1) {
+    addStringsToSet(
+      renderLocalNames,
+      ownArrayEntry(model.components, componentIndex, 'Isomorphic components').renderLocalNames,
+      'Isomorphic render local names',
+    );
+  }
 
-  return jsxExpressions(model)
-    .filter((expression) => !isJsxEventAttributeExpression(expression, model))
-    .flatMap((expression) => {
-      const expressionLocalNames = new Set(expression.localNames);
-      return expression.propertyAccesses
-        .map(renderInputFromPropertyAccessRoot)
-        .filter(
-          (input) => !expressionLocalNames.has(input.name) && !renderLocalNames.has(input.name),
-        );
-    });
+  const found: RenderInputModel[] = [];
+  const expressions = jsxExpressions(model);
+  const expressionLength = compilerArrayLength(expressions, 'Isomorphic JSX expressions');
+  for (let expressionIndex = 0; expressionIndex < expressionLength; expressionIndex += 1) {
+    const expression = ownArrayEntry(expressions, expressionIndex, 'Isomorphic JSX expressions');
+    if (isJsxEventAttributeExpression(expression, model)) continue;
+    const expressionLocalNames = compilerCreateSet<string>();
+    addStringsToSet(
+      expressionLocalNames,
+      expression.localNames,
+      'Isomorphic expression local names',
+    );
+    const accessLength = compilerArrayLength(
+      expression.propertyAccesses,
+      'Isomorphic property accesses',
+    );
+    for (let accessIndex = 0; accessIndex < accessLength; accessIndex += 1) {
+      const input = renderInputFromPropertyAccessRoot(
+        ownArrayEntry(expression.propertyAccesses, accessIndex, 'Isomorphic property accesses'),
+      );
+      if (
+        !compilerSetHas(expressionLocalNames, input.name) &&
+        !compilerSetHas(renderLocalNames, input.name)
+      ) {
+        compilerArrayAppend(found, input, 'Isomorphic render reads');
+      }
+    }
+  }
+  return found;
 }
 
 function renderInputFromPropertyAccessRoot(access: PropertyAccessPathModel): RenderInputModel {
-  const [root = access.path] = access.path.split('.');
+  const dot = compilerStringIndexOf(access.path, '.');
+  const root = dot < 0 ? access.path : compilerStringSlice(access.path, 0, dot);
   return {
     end: access.start + root.length,
     name: root,
@@ -254,16 +354,19 @@ function kv303RenderInputDiagnostic(
   if (
     input.sourceKey !== undefined &&
     input.sourceKey !== input.name &&
-    allowedInputs.has(input.sourceKey)
+    compilerSetHas(allowedInputs, input.sourceKey)
   ) {
     return {
       ...diagnostics.at('KV303', span, input.name),
-      help: [
-        'Would lower to: a fragment target that can be re-rendered from declared query data plus stamped props.',
-        'Blocked reason: render destructuring renamed a declared query/prop key, but fragment refresh and binding coverage use the declared key as the reconstructible channel.',
-        `Fixes: destructure the declared key as "${input.sourceKey}" in render, stamp "${input.name}" as a serializable prop, or move the aliasing into a render-local const after destructuring the declared key.`,
-        'SPEC §4.5 requires fragment targets to be reconstructible from declared server inputs.',
-      ].join('\n'),
+      help: compilerArrayJoin(
+        [
+          'Would lower to: a fragment target that can be re-rendered from declared query data plus stamped props.',
+          'Blocked reason: render destructuring renamed a declared query/prop key, but fragment refresh and binding coverage use the declared key as the reconstructible channel.',
+          `Fixes: destructure the declared key as "${input.sourceKey}" in render, stamp "${input.name}" as a serializable prop, or move the aliasing into a render-local const after destructuring the declared key.`,
+          'SPEC §4.5 requires fragment targets to be reconstructible from declared server inputs.',
+        ],
+        '\n',
+      ),
       message: `${diagnostics.at('KV303').message} ${input.name} (render destructuring aliases declared key ${input.sourceKey}; use the declared key name in the render parameter)`,
     };
   }
@@ -275,16 +378,32 @@ function isJsxEventAttributeExpression(
   expression: { end: number; start: number },
   model: ComponentModuleModel,
 ): boolean {
-  return jsxElements(model).some((element) =>
-    element.attributes.some(
-      (attribute) =>
+  const elements = jsxElements(model);
+  const elementLength = compilerArrayLength(elements, 'Component-contract JSX elements');
+  for (let elementIndex = 0; elementIndex < elementLength; elementIndex += 1) {
+    const element = ownArrayEntry(elements, elementIndex, 'Component-contract JSX elements');
+    const attributeLength = compilerArrayLength(
+      element.attributes,
+      'Component-contract JSX attributes',
+    );
+    for (let attributeIndex = 0; attributeIndex < attributeLength; attributeIndex += 1) {
+      const attribute = ownArrayEntry(
+        element.attributes,
+        attributeIndex,
+        'Component-contract JSX attributes',
+      );
+      if (
         (attribute.domEventName !== undefined || attribute.executionTriggerName !== undefined) &&
         attribute.expressionStart !== undefined &&
         attribute.expressionEnd !== undefined &&
         expression.start >= attribute.expressionStart &&
-        expression.end <= attribute.expressionEnd,
-    ),
-  );
+        expression.end <= attribute.expressionEnd
+      ) {
+        return true;
+      }
+    }
+  }
+  return false;
 }
 
 // SPEC §4.5/§4.8 (KV316): a client self-render binds no slot/children arguments — projected
@@ -306,7 +425,7 @@ export function validateIsomorphicSlotComposition(
     diagnostics.at(
       'KV316',
       { start: slots.start, length: slots.end - slots.start },
-      slots.names.length > 0 ? slots.names.join(', ') : undefined,
+      slots.names.length > 0 ? compilerArrayJoin(slots.names, ', ') : undefined,
     ),
   ];
 }
@@ -318,11 +437,23 @@ export function validateFragmentTargetChildren(
   const targetNames = fragmentTargetUsageNames(model);
   if (targetNames.length === 0) return [];
 
-  return targetNames.flatMap((name) =>
-    fragmentTargetChildBodies(model, name)
-      .filter((body) => fragmentTargetChildCapturesUnserializableValue(model, body))
-      .map((body) => kv230Diagnostic(diagnostics, name, body)),
-  );
+  const found: CompilerDiagnostic[] = [];
+  const targetLength = compilerArrayLength(targetNames, 'Fragment target usage names');
+  for (let targetIndex = 0; targetIndex < targetLength; targetIndex += 1) {
+    const name = ownArrayEntry(targetNames, targetIndex, 'Fragment target usage names');
+    const bodies = fragmentTargetChildBodies(model, name);
+    const bodyLength = compilerArrayLength(bodies, 'Fragment target child bodies');
+    for (let bodyIndex = 0; bodyIndex < bodyLength; bodyIndex += 1) {
+      const body = ownArrayEntry(bodies, bodyIndex, 'Fragment target child bodies');
+      if (!fragmentTargetChildCapturesUnserializableValue(model, body)) continue;
+      compilerArrayAppend(
+        found,
+        kv230Diagnostic(diagnostics, name, body),
+        'Fragment target child diagnostics',
+      );
+    }
+  }
+  return found;
 }
 
 // SPEC §4.5/§4.9/§9.1 (KV420): a fragment morph carries no serialization of island-local
@@ -343,30 +474,36 @@ export function validateNestedStatefulIslandInRefreshTarget(
   model: ComponentModuleModel,
   options: Pick<CompileComponentOptions, 'fileName' | 'registryFacts'>,
 ): CompilerDiagnostic[] {
-  const statefulSiblingsByName = new Map<string, ComponentModel>();
-  for (const component of model.components) {
+  const statefulSiblingsByName = compilerCreateMap<string, ComponentModel>();
+  const componentLength = compilerArrayLength(model.components, 'Nested island components');
+  for (let componentIndex = 0; componentIndex < componentLength; componentIndex += 1) {
+    const component = ownArrayEntry(model.components, componentIndex, 'Nested island components');
     if (component.localName === undefined) continue;
     if (componentDeclaresMutableLocalState(component, model)) {
-      statefulSiblingsByName.set(component.localName, component);
+      compilerMapSet(statefulSiblingsByName, component.localName, component);
     }
   }
   const statefulImportsByName = importedStatefulComponentsByLocalName(model, options);
-  if (statefulSiblingsByName.size === 0 && statefulImportsByName.size === 0) return [];
 
   const found: CompilerDiagnostic[] = [];
-  for (const parent of model.components) {
+  for (let parentIndex = 0; parentIndex < componentLength; parentIndex += 1) {
+    const parent = ownArrayEntry(model.components, parentIndex, 'Nested island components');
     if (!componentHasInferredFragmentTarget(parent)) continue;
 
-    for (const childTag of componentRefreshTargetChildComponentTags(model, parent)) {
-      const childComponent = statefulSiblingsByName.get(childTag.tag);
+    const childTags = componentRefreshTargetChildComponentTags(model, parent);
+    const childLength = compilerArrayLength(childTags, 'Refresh-target child component tags');
+    for (let childIndex = 0; childIndex < childLength; childIndex += 1) {
+      const childTag = ownArrayEntry(childTags, childIndex, 'Refresh-target child component tags');
+      const childComponent = compilerMapGet(statefulSiblingsByName, childTag.tag);
       // A component never trips KV420 against its own recursive render-time reference.
       if (childComponent?.localName === parent.localName) continue;
       const childName = childComponent
         ? childTag.tag
-        : (statefulImportsByName.get(childTag.tag) ?? null);
+        : (compilerMapGet(statefulImportsByName, childTag.tag) ?? null);
       if (!childName) continue;
 
-      found.push(
+      compilerArrayAppend(
+        found,
         diagnostics.at(
           'KV420',
           {
@@ -375,6 +512,7 @@ export function validateNestedStatefulIslandInRefreshTarget(
           },
           `${childName} inside ${parent.localName ?? 'the enclosing'}.`,
         ),
+        'Nested stateful-island diagnostics',
       );
     }
   }
@@ -398,31 +536,45 @@ function componentRefreshTargetChildComponentTags(
   const spanEnd = parent.declarationEnd;
   const hostStart = parent.renderHost?.start;
 
-  return jsxElements(model).filter(
-    (element) =>
+  const found: JsxElementModel[] = [];
+  const elements = jsxElements(model);
+  const elementLength = compilerArrayLength(elements, 'Refresh-target JSX elements');
+  for (let index = 0; index < elementLength; index += 1) {
+    const element = ownArrayEntry(elements, index, 'Refresh-target JSX elements');
+    if (
       element.start >= spanStart &&
       element.end <= spanEnd &&
       element.start !== hostStart &&
-      isComponentReferenceTag(element.tag),
-  );
+      isComponentReferenceTag(element.tag)
+    ) {
+      compilerArrayAppend(found, element, 'Refresh-target child component tags');
+    }
+  }
+  return found;
 }
 
 function isComponentReferenceTag(tag: string): boolean {
-  return /^[A-Z]/.test(tag);
+  return compilerRegExpTest(/^[A-Z]/u, tag);
 }
 
 function importedStatefulComponentsByLocalName(
   model: ComponentModuleModel,
   options: Pick<CompileComponentOptions, 'fileName' | 'registryFacts'>,
 ): Map<string, string> {
-  const statefulComponents = new Set(options.registryFacts?.statefulComponents ?? []);
-  if (statefulComponents.size === 0) return new Map();
+  const statefulComponents = compilerCreateSet<string>();
+  addStringsToSet(
+    statefulComponents,
+    registryStatefulComponents(options),
+    'Registry stateful component names',
+  );
 
-  const found = new Map<string, string>();
-  for (const namedImport of model.namedImports) {
+  const found = compilerCreateMap<string, string>();
+  const importLength = compilerArrayLength(model.namedImports, 'Named component imports');
+  for (let importIndex = 0; importIndex < importLength; importIndex += 1) {
+    const namedImport = ownArrayEntry(model.namedImports, importIndex, 'Named component imports');
     const registryName = importedComponentRegistryName(options.fileName, namedImport);
-    if (!registryName || !statefulComponents.has(registryName)) continue;
-    found.set(namedImport.localName, namedImport.localName);
+    if (!registryName || !compilerSetHas(statefulComponents, registryName)) continue;
+    compilerMapSet(found, namedImport.localName, namedImport.localName);
   }
   return found;
 }
@@ -431,7 +583,7 @@ function importedComponentRegistryName(
   fileName: string,
   namedImport: NamedImportModel,
 ): string | null {
-  if (!namedImport.moduleSpecifier.startsWith('.')) return null;
+  if (!compilerStringStartsWith(namedImport.moduleSpecifier, '.')) return null;
   const modulePath = resolveRelativeModulePath(fileName, namedImport.moduleSpecifier);
   if (!modulePath) return null;
 
@@ -441,19 +593,31 @@ function importedComponentRegistryName(
 }
 
 function resolveRelativeModulePath(fileName: string, specifier: string): string | null {
-  const base = fileName.replaceAll('\\', '/').split('/').slice(0, -1);
-  const parts = [...base, ...specifier.replaceAll('\\', '/').split('/')];
+  const baseParts = compilerStringSplit(compilerStringReplaceAll(fileName, '\\', '/'), '/');
+  const specifierParts = compilerStringSplit(compilerStringReplaceAll(specifier, '\\', '/'), '/');
+  const parts: string[] = [];
+  const baseLength = compilerArrayLength(baseParts, 'Importing module path parts');
+  for (let index = 0; index < baseLength - 1; index += 1) {
+    compilerArrayAppend(
+      parts,
+      ownArrayEntry(baseParts, index, 'Importing module path parts'),
+      'Relative import path parts',
+    );
+  }
+  appendArray(parts, specifierParts, 'Relative import path parts');
   const out: string[] = [];
-  for (const part of parts) {
+  const partLength = compilerArrayLength(parts, 'Relative import path parts');
+  for (let index = 0; index < partLength; index += 1) {
+    const part = ownArrayEntry(parts, index, 'Relative import path parts');
     if (!part || part === '.') continue;
     if (part === '..') {
       if (out.length === 0) return null;
-      out.pop();
+      out.length -= 1;
       continue;
     }
-    out.push(part);
+    compilerArrayAppend(out, part, 'Resolved relative import path parts');
   }
-  return out.join('/');
+  return compilerArrayJoin(out, '/');
 }
 
 export function validateEventPayloads(
@@ -469,7 +633,7 @@ export function validateEventPayloads(
   const queryPathLength = compilerArrayLength(queryShapePathValues, 'Query shape paths');
   for (let index = 0; index < queryPathLength; index += 1) {
     const path = compilerOwnDataValue(queryShapePathValues, index, 'Query shape paths');
-    if (typeof path !== 'string') throw new TypeError(`Query shape paths[${index}] must be own.`);
+    if (typeof path !== 'string') compilerFailClosed(`Query shape paths[${index}] must be own.`);
     compilerSetAdd(queryPaths, path);
   }
 
@@ -481,7 +645,7 @@ export function validateEventPayloads(
     const payload = compilerOwnDataValue(payloads, index, 'Event payload paths') as
       | EventPayloadPath
       | undefined;
-    if (!payload) throw new TypeError(`Event payload paths[${index}] must be own data.`);
+    if (!payload) compilerFailClosed(`Event payload paths[${index}] must be own data.`);
     if (!compilerSetHas(queryPaths, payload.path) || compilerSetHas(seen, payload.path)) continue;
     compilerSetAdd(seen, payload.path);
     compilerArrayAppend(
@@ -504,7 +668,7 @@ export function validateDirectDbAccess(
     const sink = compilerOwnDataValue(sinks, index, 'Handler write sinks') as
       | HandlerWriteSinkFact
       | undefined;
-    if (!sink) throw new TypeError(`Handler write sinks[${index}] must be own data.`);
+    if (!sink) compilerFailClosed(`Handler write sinks[${index}] must be own data.`);
     compilerArrayAppend(
       result,
       handlerWriteSinkDiagnostic(diagnostics, sink),
@@ -524,7 +688,7 @@ export function validateWebhookRecordChanges(
   for (let handlerIndex = 0; handlerIndex < handlerLength; handlerIndex += 1) {
     const handler = compilerOwnDataValue(handlers, handlerIndex, 'Webhook handlers');
     if (!handler || typeof handler !== 'object') {
-      throw new TypeError(`Webhook handlers[${handlerIndex}] must be own data.`);
+      compilerFailClosed(`Webhook handlers[${handlerIndex}] must be own data.`);
     }
     const facts = (handler as { webhookRecordChanges?: readonly WebhookRecordChangeFact[] })
       .webhookRecordChanges;
@@ -537,7 +701,7 @@ export function validateWebhookRecordChanges(
         `Webhook handler ${handlerIndex} record changes`,
       ) as WebhookRecordChangeFact | undefined;
       if (!fact) {
-        throw new TypeError(
+        compilerFailClosed(
           `Webhook handler ${handlerIndex} record changes[${factIndex}] must be own data.`,
         );
       }
@@ -555,14 +719,15 @@ function webhookRecordChangeDiagnostic(
   diagnostics: DiagnosticFactory,
   fact: WebhookRecordChangeFact,
 ): CompilerDiagnostic[] {
-  const length = Math.max(1, fact.span.end - fact.span.start);
+  const rawLength = fact.span.end - fact.span.start;
+  const length = rawLength > 1 ? rawLength : 1;
   const declared: string[] = [];
   let hasUnresolved = false;
   const declaredLength = compilerArrayLength(fact.declaredWriteKeys, 'Webhook declared writes');
   for (let index = 0; index < declaredLength; index += 1) {
     const key = compilerOwnDataValue(fact.declaredWriteKeys, index, 'Webhook declared writes');
     if (typeof key !== 'string') {
-      throw new TypeError(`Webhook declared writes[${index}] must be an own string.`);
+      compilerFailClosed(`Webhook declared writes[${index}] must be an own string.`);
     }
     if (key === 'UNRESOLVED') {
       hasUnresolved = true;
@@ -574,12 +739,15 @@ function webhookRecordChangeDiagnostic(
     return [
       {
         ...diagnostics.at('KV406', { start: fact.span.start, length }),
-        help: [
-          'Would lower to: a webhook endpoint whose emitted change records are covered by declared writes.',
-          'Blocked reason: the compiler could not statically resolve the recordChange domain or every writes[] entry, so the webhook write surface could be under-reported.',
-          'Fixes: pass a module-level domain("...") binding to context.recordChange(...) and include that same binding in webhook writes[].',
-          'SPEC §9.1 requires webhook changes to be declared so machine-ingress writes stay explainable and verifiable.',
-        ].join('\n'),
+        help: compilerArrayJoin(
+          [
+            'Would lower to: a webhook endpoint whose emitted change records are covered by declared writes.',
+            'Blocked reason: the compiler could not statically resolve the recordChange domain or every writes[] entry, so the webhook write surface could be under-reported.',
+            'Fixes: pass a module-level domain("...") binding to context.recordChange(...) and include that same binding in webhook writes[].',
+            'SPEC §9.1 requires webhook changes to be declared so machine-ingress writes stay explainable and verifiable.',
+          ],
+          '\n',
+        ),
         message:
           'Unresolved webhook recordChange domain; declare a statically named domain in writes[].',
       },
@@ -598,12 +766,15 @@ function webhookRecordChangeDiagnostic(
         { start: fact.span.start, length },
         `webhook ${fact.owner.value} recordChange("${fact.domainKey}") is outside declared writes (${declaredLabel}).`,
       ),
-      help: [
-        'Would lower to: a webhook endpoint whose emitted change records are covered by declared writes.',
-        'Blocked reason: context.recordChange(...) targets a domain absent from webhook writes[], so kovo explain/check could under-report machine-ingress writes.',
-        'Fixes: add the domain binding to writes[] or remove the recordChange call.',
-        'SPEC §9.1 requires webhook changes to be declared so machine-ingress writes stay explainable and verifiable.',
-      ].join('\n'),
+      help: compilerArrayJoin(
+        [
+          'Would lower to: a webhook endpoint whose emitted change records are covered by declared writes.',
+          'Blocked reason: context.recordChange(...) targets a domain absent from webhook writes[], so kovo explain/check could under-report machine-ingress writes.',
+          'Fixes: add the domain binding to writes[] or remove the recordChange call.',
+          'SPEC §9.1 requires webhook changes to be declared so machine-ingress writes stay explainable and verifiable.',
+        ],
+        '\n',
+      ),
     },
   ];
 }
@@ -612,16 +783,20 @@ function handlerWriteSinkDiagnostic(
   diagnostics: DiagnosticFactory,
   sink: HandlerWriteSinkFact,
 ): CompilerDiagnostic {
-  const length = Math.max(1, sink.span.end - sink.span.start);
+  const rawLength = sink.span.end - sink.span.start;
+  const length = rawLength > 1 ? rawLength : 1;
   if (handlerWriteSinkIsUnresolved(sink)) {
     return {
       ...diagnostics.at('KV406', { start: sink.span.start, length }),
-      help: [
-        'Would lower to: a typed handler write-sink fact that records the audited mutation/domain write surface.',
-        'Blocked reason: the handler contains a write-shaped call whose target or owner could not be statically resolved, so treating the handler as write-safe would be a fail-open verifier result.',
-        'Fixes: route the write through a statically named mutation/domain write, or rewrite the handler so the compiler can see the write target and audited touch surface.',
-        'SPEC §11 requires statically un-analyzable write sites to fail closed; SPEC §10.3 makes mutation/domain writes the audited write surface.',
-      ].join('\n'),
+      help: compilerArrayJoin(
+        [
+          'Would lower to: a typed handler write-sink fact that records the audited mutation/domain write surface.',
+          'Blocked reason: the handler contains a write-shaped call whose target or owner could not be statically resolved, so treating the handler as write-safe would be a fail-open verifier result.',
+          'Fixes: route the write through a statically named mutation/domain write, or rewrite the handler so the compiler can see the write target and audited touch surface.',
+          'SPEC §11 requires statically un-analyzable write sites to fail closed; SPEC §10.3 makes mutation/domain writes the audited write surface.',
+        ],
+        '\n',
+      ),
       message:
         sink.surface === 'task'
           ? 'Unresolved write sink in a task run body; route through ctx.runMutation.'
@@ -640,12 +815,15 @@ function handlerWriteSinkDiagnostic(
   if (sink.surface === 'task') {
     return {
       ...diagnostics.at('KV330', { start: sink.span.start, length }),
-      help: [
-        'Would lower to: a durable task graph node whose database effects compose through audited mutations.',
-        'Blocked reason: direct DB writes in task.run bypass ctx.runMutation, so KV414/KV438/KV407 write audits cannot see the effect.',
-        'Fixes: move the write into a mutation/domain write and call ctx.runMutation(...) from the task, or expose a statically audited mutation that owns the touch set.',
-        'SPEC §9.6 requires task DB writes to go through ctx.runMutation; SPEC §10.3 makes mutation/domain writes the audited write surface.',
-      ].join('\n'),
+      help: compilerArrayJoin(
+        [
+          'Would lower to: a durable task graph node whose database effects compose through audited mutations.',
+          'Blocked reason: direct DB writes in task.run bypass ctx.runMutation, so KV414/KV438/KV407 write audits cannot see the effect.',
+          'Fixes: move the write into a mutation/domain write and call ctx.runMutation(...) from the task, or expose a statically audited mutation that owns the touch set.',
+          'SPEC §9.6 requires task DB writes to go through ctx.runMutation; SPEC §10.3 makes mutation/domain writes the audited write surface.',
+        ],
+        '\n',
+      ),
       message: 'Direct db access in a task run body; route through ctx.runMutation.',
     };
   }
@@ -653,12 +831,15 @@ function handlerWriteSinkDiagnostic(
   if (sink.surface === 'endpoint') {
     return {
       ...diagnostics.at('KV330', { start: sink.span.start, length }),
-      help: [
-        'Would lower to: an endpoint whose database reads use a read-only app handle.',
-        'Blocked reason: direct DB writes in endpoint handlers bypass the mutation/domain write-surface audit and can turn an ordinary endpoint into an untracked state change.',
-        'Fixes: use readonlyAppDb for endpoint reads, or move writes into a mutation/domain write with declared touch metadata.',
-        'SPEC §10.3 makes mutation/domain writes the audited write surface; SPEC §6.6 requires fail-closed sinks rather than importable write handles.',
-      ].join('\n'),
+      help: compilerArrayJoin(
+        [
+          'Would lower to: an endpoint whose database reads use a read-only app handle.',
+          'Blocked reason: direct DB writes in endpoint handlers bypass the mutation/domain write-surface audit and can turn an ordinary endpoint into an untracked state change.',
+          'Fixes: use readonlyAppDb for endpoint reads, or move writes into a mutation/domain write with declared touch metadata.',
+          'SPEC §10.3 makes mutation/domain writes the audited write surface; SPEC §6.6 requires fail-closed sinks rather than importable write handles.',
+        ],
+        '\n',
+      ),
       message:
         'Direct db access in an endpoint handler; use readonlyAppDb for reads and route writes through an audited mutation/domain write.',
     };
@@ -666,12 +847,15 @@ function handlerWriteSinkDiagnostic(
 
   return {
     ...diagnostics.at('KV330', { start: sink.span.start, length }),
-    help: [
-      'Would lower to: a machine-authenticated webhook whose database effects compose through an audited mutation/domain write.',
-      'Blocked reason: direct DB writes in a webhook handler bypass the mutation/domain write-surface audit.',
-      'Fixes: move the write into a mutation/domain write with declared touch metadata, or keep the webhook handler to verification plus mutation dispatch.',
-      'SPEC §10.3 makes mutation/domain writes the audited write surface; SPEC §6.6 requires fail-closed sinks rather than importable write handles.',
-    ].join('\n'),
+    help: compilerArrayJoin(
+      [
+        'Would lower to: a machine-authenticated webhook whose database effects compose through an audited mutation/domain write.',
+        'Blocked reason: direct DB writes in a webhook handler bypass the mutation/domain write-surface audit.',
+        'Fixes: move the write into a mutation/domain write with declared touch metadata, or keep the webhook handler to verification plus mutation dispatch.',
+        'SPEC §10.3 makes mutation/domain writes the audited write surface; SPEC §6.6 requires fail-closed sinks rather than importable write handles.',
+      ],
+      '\n',
+    ),
     message:
       'Direct db access in a webhook handler; route writes through an audited mutation/domain write.',
   };
@@ -696,7 +880,7 @@ export function unhandledUpdateCoverageDiagnostics(
     const fact = compilerOwnDataValue(updateCoverage, index, 'Query update coverage facts') as
       | QueryUpdateCoverageFact
       | undefined;
-    if (!fact) throw new TypeError(`Query update coverage facts[${index}] must be own data.`);
+    if (!fact) compilerFailClosed(`Query update coverage facts[${index}] must be own data.`);
     if (fact.status !== 'UNHANDLED') continue;
     compilerArrayAppend(
       result,
@@ -715,7 +899,7 @@ function appendCompilerDiagnostics(
   const length = compilerArrayLength(values, label);
   for (let index = 0; index < length; index += 1) {
     const value = compilerOwnDataValue(values, index, label) as CompilerDiagnostic | undefined;
-    if (!value) throw new TypeError(`${label}[${index}] must be own data.`);
+    if (!value) compilerFailClosed(`${label}[${index}] must be own data.`);
     compilerArrayAppend(target, value, label);
   }
 }
@@ -728,7 +912,7 @@ function denseStringArrayIncludes(
   const length = compilerArrayLength(values, label);
   for (let index = 0; index < length; index += 1) {
     const value = compilerOwnDataValue(values, index, label);
-    if (typeof value !== 'string') throw new TypeError(`${label}[${index}] must be an own string.`);
+    if (typeof value !== 'string') compilerFailClosed(`${label}[${index}] must be an own string.`);
     if (value === search) return true;
   }
   return false;
@@ -740,7 +924,7 @@ function joinDenseStrings(values: readonly string[], separator: string): string 
   for (let index = 0; index < length; index += 1) {
     const value = compilerOwnDataValue(values, index, 'Dense string values');
     if (typeof value !== 'string') {
-      throw new TypeError(`Dense string values[${index}] must be an own string.`);
+      compilerFailClosed(`Dense string values[${index}] must be an own string.`);
     }
     if (index > 0) result += separator;
     result += value;
@@ -749,17 +933,33 @@ function joinDenseStrings(values: readonly string[], separator: string): string 
 }
 
 function fragmentTargetUsageNames(model: ComponentModuleModel): string[] {
-  return [...new Set(componentFragmentTargetNames(model))];
+  const unique = compilerCreateSet<string>();
+  const result: string[] = [];
+  const names = componentFragmentTargetNames(model);
+  const nameLength = compilerArrayLength(names, 'Fragment target names');
+  for (let index = 0; index < nameLength; index += 1) {
+    const name = ownArrayEntry(names, index, 'Fragment target names');
+    if (compilerSetHas(unique, name)) continue;
+    compilerSetAdd(unique, name);
+    compilerArrayAppend(result, name, 'Fragment target usage names');
+  }
+  return result;
 }
 
 function fragmentTargetChildBodies(
   model: ComponentModuleModel,
   name: string,
 ): JsxElementChildBody[] {
-  return jsxElements(model)
-    .filter((item) => item.tag === name)
-    .map((element) => jsxElementChildBody(element))
-    .filter((body): body is JsxElementChildBody => body !== null);
+  const bodies: JsxElementChildBody[] = [];
+  const elements = jsxElements(model);
+  const elementLength = compilerArrayLength(elements, 'Fragment target JSX elements');
+  for (let index = 0; index < elementLength; index += 1) {
+    const element = ownArrayEntry(elements, index, 'Fragment target JSX elements');
+    if (element.tag !== name) continue;
+    const body = jsxElementChildBody(element);
+    if (body) compilerArrayAppend(bodies, body, 'Fragment target child bodies');
+  }
+  return bodies;
 }
 
 function fragmentTargetChildCapturesUnserializableValue(
@@ -767,9 +967,14 @@ function fragmentTargetChildCapturesUnserializableValue(
   body: JsxElementChildBody,
 ): boolean {
   const bodyEnd = body.offset + body.source.length;
-  const references = jsxExpressions(model)
-    .filter((expression) => expression.start >= body.offset && expression.end <= bodyEnd)
-    .flatMap((expression) => expression.references);
+  const references: string[] = [];
+  const expressions = jsxExpressions(model);
+  const expressionLength = compilerArrayLength(expressions, 'Fragment child JSX expressions');
+  for (let index = 0; index < expressionLength; index += 1) {
+    const expression = ownArrayEntry(expressions, index, 'Fragment child JSX expressions');
+    if (expression.start < body.offset || expression.end > bodyEnd) continue;
+    appendArray(references, expression.references, 'Fragment child references');
+  }
 
   return capturesUnserializableReferences(references, {
     additionalAllowedReferences: moduleRenderInputNames(model),
@@ -778,11 +983,20 @@ function fragmentTargetChildCapturesUnserializableValue(
 }
 
 function moduleRenderInputNames(model: ComponentModuleModel): string[] {
-  return [
-    ...new Set(
-      model.components.flatMap((component) => component.renderInputs.map((input) => input.name)),
-    ),
-  ];
+  const seen = compilerCreateSet<string>();
+  const names: string[] = [];
+  const componentLength = compilerArrayLength(model.components, 'Module render components');
+  for (let componentIndex = 0; componentIndex < componentLength; componentIndex += 1) {
+    const component = ownArrayEntry(model.components, componentIndex, 'Module render components');
+    const inputLength = compilerArrayLength(component.renderInputs, 'Module render inputs');
+    for (let inputIndex = 0; inputIndex < inputLength; inputIndex += 1) {
+      const name = ownArrayEntry(component.renderInputs, inputIndex, 'Module render inputs').name;
+      if (compilerSetHas(seen, name)) continue;
+      compilerSetAdd(seen, name);
+      compilerArrayAppend(names, name, 'Module render input names');
+    }
+  }
+  return names;
 }
 
 function kv230Diagnostic(
@@ -794,11 +1008,14 @@ function kv230Diagnostic(
   const labels = definition.detailLabels;
   return {
     ...diagnostics.at('KV230', { start: body.offset, length: body.source.length }, target),
-    help: [
-      `${labels.slotHoist} ${target}$slot_children`,
-      `${labels.blockedChildren} ${body.source}`,
-      definition.help ?? '',
-    ].join('\n'),
+    help: compilerArrayJoin(
+      [
+        `${labels.slotHoist} ${target}$slot_children`,
+        `${labels.blockedChildren} ${body.source}`,
+        definition.help ?? '',
+      ],
+      '\n',
+    ),
   };
 }
 
@@ -813,16 +1030,22 @@ function kv311Diagnostic(
       { start: span?.start, length: span?.length },
       `${fact.componentName} ${fact.query} ${fact.position}`,
     ),
-    help: [
-      `Coverage classification: ${fact.componentName} ${fact.position} ${fact.status}`,
-      `Blocked update: ${fact.detail}`,
+    help: compilerArrayJoin(
       [
-        'Would lower to: a data-bind/update plan, inferred query-backed fragment target, isomorphic component, or renderOnce marker for the rendered position.',
-        'Blocked reason: the query/state expression is outside the current §4.8 update-plan grammar and is not inside an inferred server-refresh target.',
-        'Fixes: add a data-bind/query update plan, extract a derive/stamp, keep the component query-backed for inferred fragment refresh, mark it isomorphic, declare renderOnce, or set disableServerRefresh: true only when no enhanced refresh is intended.',
-        'SPEC §4.9 requires every query/state-dependent rendered position to have plan, fragment, isomorphic, or renderOnce coverage.',
-      ].join('\n'),
-    ].join('\n'),
+        `Coverage classification: ${fact.componentName} ${fact.position} ${fact.status}`,
+        `Blocked update: ${fact.detail}`,
+        compilerArrayJoin(
+          [
+            'Would lower to: a data-bind/update plan, inferred query-backed fragment target, isomorphic component, or renderOnce marker for the rendered position.',
+            'Blocked reason: the query/state expression is outside the current §4.8 update-plan grammar and is not inside an inferred server-refresh target.',
+            'Fixes: add a data-bind/query update plan, extract a derive/stamp, keep the component query-backed for inferred fragment refresh, mark it isomorphic, declare renderOnce, or set disableServerRefresh: true only when no enhanced refresh is intended.',
+            'SPEC §4.9 requires every query/state-dependent rendered position to have plan, fragment, isomorphic, or renderOnce coverage.',
+          ],
+          '\n',
+        ),
+      ],
+      '\n',
+    ),
   };
 }
 
@@ -833,7 +1056,7 @@ function eventPayloads(model: ComponentModuleModel): EventPayloadPath[] {
   for (let callIndex = 0; callIndex < callLength; callIndex += 1) {
     const call = compilerOwnDataValue(calls, callIndex, 'Event call expressions');
     if (!call || typeof call !== 'object') {
-      throw new TypeError(`Event call expressions[${callIndex}] must be own data.`);
+      compilerFailClosed(`Event call expressions[${callIndex}] must be own data.`);
     }
     const typedCall = call as (typeof calls)[number];
     if (typedCall.name !== 'emit') continue;
@@ -860,9 +1083,7 @@ function eventPayloads(model: ComponentModuleModel): EventPayloadPath[] {
         `Event call ${callIndex} payload paths`,
       ) as PropertyAccessPathModel | undefined;
       if (!access) {
-        throw new TypeError(
-          `Event call ${callIndex} payload paths[${pathIndex}] must be own data.`,
-        );
+        compilerFailClosed(`Event call ${callIndex} payload paths[${pathIndex}] must be own data.`);
       }
       compilerArrayAppend(
         payloads,
@@ -873,6 +1094,103 @@ function eventPayloads(model: ComponentModuleModel): EventPayloadPath[] {
   }
 
   return payloads;
+}
+
+function componentOption(
+  component: ComponentModel,
+  key: string,
+): ComponentModel['options'][number] | undefined {
+  const optionLength = compilerArrayLength(component.options, 'Component contract options');
+  for (let index = 0; index < optionLength; index += 1) {
+    const option = ownArrayEntry(component.options, index, 'Component contract options');
+    if (option.key === key) return option;
+  }
+  return undefined;
+}
+
+function jsxAttributeNamed(
+  element: JsxElementModel,
+  name: string,
+): JsxElementModel['attributes'][number] | undefined {
+  const attributeLength = compilerArrayLength(
+    element.attributes,
+    'Component contract JSX attributes',
+  );
+  for (let index = 0; index < attributeLength; index += 1) {
+    const attribute = ownArrayEntry(element.attributes, index, 'Component contract JSX attributes');
+    if (attribute.name === name) return attribute;
+  }
+  return undefined;
+}
+
+function appendMissingRenderInputs(
+  target: RenderInputModel[],
+  values: readonly RenderInputModel[],
+  allowedInputs: ReadonlySet<string>,
+  label: string,
+): void {
+  const valueLength = compilerArrayLength(values, label);
+  for (let index = 0; index < valueLength; index += 1) {
+    const value = ownArrayEntry(values, index, label);
+    if (!compilerSetHas(allowedInputs, value.name)) {
+      compilerArrayAppend(target, value, 'Missing fragment render inputs');
+    }
+  }
+}
+
+function addStringsToSet(target: Set<string>, values: readonly string[], label: string): void {
+  const valueLength = compilerArrayLength(values, label);
+  for (let index = 0; index < valueLength; index += 1) {
+    const value = compilerOwnDataValue(values, index, label);
+    if (typeof value !== 'string') compilerFailClosed(`${label}[${index}] must be a string.`);
+    compilerSetAdd(target, value);
+  }
+}
+
+function appendArray<Value>(target: Value[], values: readonly Value[], label: string): void {
+  const valueLength = compilerArrayLength(values, label);
+  for (let index = 0; index < valueLength; index += 1) {
+    compilerArrayAppend(target, ownArrayEntry(values, index, label), label);
+  }
+}
+
+function ownArrayEntry<Value>(values: readonly Value[], index: number, label: string): Value {
+  const value = compilerOwnDataValue(values, index, label) as Value | undefined;
+  if (value === undefined) compilerFailClosed(`${label}[${index}] must be own data.`);
+  return value;
+}
+
+function registryStatefulComponents(
+  options: Pick<CompileComponentOptions, 'registryFacts'>,
+): string[] {
+  const registryFacts = compilerOwnDataValue(
+    options,
+    'registryFacts',
+    'Nested-island compile options',
+  );
+  if (registryFacts === undefined) return [];
+  if (!registryFacts || typeof registryFacts !== 'object' || compilerArrayIsArray(registryFacts)) {
+    compilerFailClosed(`Nested-island registry facts must be an object.`);
+  }
+  const values = compilerOwnDataValue(
+    registryFacts,
+    'statefulComponents',
+    'Nested-island registry facts',
+  );
+  if (values === undefined) return [];
+  if (!compilerArrayIsArray(values)) {
+    compilerFailClosed(`Nested-island statefulComponents must be an array.`);
+  }
+  const result: string[] = [];
+  const valueLength = compilerArrayLength(values, 'Nested-island stateful component names');
+  for (let index = 0; index < valueLength; index += 1) {
+    const value = compilerOwnDataValue(values, index, 'Nested-island stateful component names');
+    if (typeof value !== 'string') {
+      compilerFailClosed(`Nested-island stateful component names[${index}] must be a string.`);
+    }
+    compilerArrayAppend(result, value, 'Nested-island stateful component names');
+  }
+  return result;
 }
 
 function queryRootFromPath(path: string): string {
