@@ -28,7 +28,6 @@ export interface ExactlyOnceContinuationStatus {
  */
 export interface ExactlyOnceContinuation<Argument, Result> {
   close(): void;
-  isUnstartedResult(value: unknown): boolean;
   quiesce(): Promise<void>;
   run(argument: Argument): Promise<Result>;
   status(): ExactlyOnceContinuationStatus;
@@ -50,9 +49,6 @@ export function exactlyOnceContinuation<Argument, Result>(
     close() {
       closed = true;
       if (calls !== 1 || !started || !settled) violated = true;
-    },
-    isUnstartedResult(value) {
-      return value === lazyResult && !started;
     },
     async quiesce() {
       if (pending === undefined) return;
@@ -112,18 +108,16 @@ export function exactlyOnceContinuation<Argument, Result>(
         },
         [nativePromiseToStringTag]: 'Promise',
       };
-      lazyResult = lazy;
       return lazy;
     },
     status() {
       return { callbackFailed, callbackFailure, violated };
     },
   };
-  let lazyResult: unknown;
   return continuation;
 }
 
-/** Run an adapter and reject unless it awaited the supplied continuation exactly once. */
+/** Run an adapter, observe its return, and reject unless one continuation settles in its frame. */
 export async function runExactlyOnceAdapter<Argument, Result, AdapterResult>(
   adapter: (run: (argument: Argument) => Promise<Result>) => Promise<AdapterResult> | AdapterResult,
   callback: (argument: Argument) => Promise<Result> | Result,
@@ -144,11 +138,6 @@ export async function runExactlyOnceAdapter<Argument, Result, AdapterResult>(
   } catch (error) {
     failed = true;
     failure = error;
-  }
-  if (!failed && continuation.isUnstartedResult(adapterResult)) {
-    continuation.close();
-    await continuation.quiesce();
-    throw new NativeTypeError('Framework continuation adapter must await exactly one invocation.');
   }
   if (!failed) {
     try {

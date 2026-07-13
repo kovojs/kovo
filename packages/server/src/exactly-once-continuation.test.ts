@@ -61,7 +61,7 @@ describe('framework continuation transaction boundary', () => {
     expect(callbackCalls).toBe(0);
   });
 
-  it('does not let a synchronous adapter return the unobserved lazy result', async () => {
+  it('observes a synchronous adapter return so callback work cannot escape unsettled', async () => {
     let callbackCalls = 0;
     await expect(
       runExactlyOnceAdapter(
@@ -71,8 +71,8 @@ describe('framework continuation transaction boundary', () => {
           return value;
         },
       ),
-    ).rejects.toThrow(/exactly one invocation/u);
-    expect(callbackCalls).toBe(0);
+    ).resolves.toBe('returned');
+    expect(callbackCalls).toBe(1);
   });
 
   it('remembers a caught concurrent second invocation', async () => {
