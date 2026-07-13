@@ -7,6 +7,12 @@ it.each(inlineSourceInstallCases)(
   async (_name, installSource) => {
     const globalRecord = globalThis as unknown as Record<string, unknown>;
     const cryptoDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'crypto');
+    const typedArrayPrototype = Object.getPrototypeOf(Uint8Array.prototype) as object;
+    const typedArrayLengthDescriptor = Object.getOwnPropertyDescriptor(
+      typedArrayPrototype,
+      'length',
+    );
+    if (!typedArrayLengthDescriptor) throw new Error('TypedArray length descriptor unavailable');
     const originals = {
       FormData: globalRecord.FormData,
       addEventListener: globalRecord.addEventListener,
@@ -40,7 +46,7 @@ it.each(inlineSourceInstallCases)(
         value: {
           getRandomValues(array: Uint8Array) {
             randomCall += 1;
-            for (let index = 0; index < array.length; index += 1) {
+            for (let index = 0; index < 16; index += 1) {
               array[index] = randomCall * 17 + index;
             }
             return array;
@@ -67,6 +73,10 @@ it.each(inlineSourceInstallCases)(
         vi.fn(async () => ({})),
         globalRecord,
       );
+      Object.defineProperty(typedArrayPrototype, 'length', {
+        configurable: true,
+        get: () => 0,
+      });
       Object.defineProperty(globalThis, 'crypto', {
         configurable: true,
         value: {
@@ -94,6 +104,7 @@ it.each(inlineSourceInstallCases)(
       // Two boot probes consume calls 1/2; the logical submit receives call 3 (0x33..0x42).
       expect(requests[0]?.headers['Kovo-Idem']).toBe('idem_333435363738393a3b3c3d3e3f404142');
     } finally {
+      Object.defineProperty(typedArrayPrototype, 'length', typedArrayLengthDescriptor);
       Object.assign(globalRecord, {
         FormData: originals.FormData,
         addEventListener: originals.addEventListener,

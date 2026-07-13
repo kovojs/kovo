@@ -39,8 +39,21 @@ export function createMutationIdemSecurityControls(scope: typeof globalThis = gl
     return undefined;
   }
 
+  function stableGetter(value: object, property: PropertyKey): Function | undefined {
+    let owner: object | null = value;
+    for (let depth = 0; owner !== null && depth < 16; depth += 1) {
+      const found = descriptor(owner, property);
+      if (found !== undefined) {
+        return typeof found.get === 'function' ? found.get : undefined;
+      }
+      owner = apply(nativeObjectGetPrototypeOf, NativeObject, [owner]);
+    }
+    return undefined;
+  }
+
   const randomUuid = cryptoObject ? stableMethod(cryptoObject, 'randomUUID') : undefined;
   const getRandomValues = cryptoObject ? stableMethod(cryptoObject, 'getRandomValues') : undefined;
+  const uint8ArrayByteLength = stableGetter(NativeUint8Array.prototype, 'byteLength');
 
   function baseControlsAreSound(): boolean {
     try {
@@ -137,7 +150,9 @@ export function createMutationIdemSecurityControls(scope: typeof globalThis = gl
   }
 
   function randomValuesControlIsSound(): boolean {
-    if (!baseControlsSound || !getRandomValues || !cryptoObject) return false;
+    if (!baseControlsSound || !getRandomValues || !cryptoObject || !uint8ArrayByteLength) {
+      return false;
+    }
     try {
       const first = new NativeUint8Array(16);
       const second = new NativeUint8Array(16);
@@ -147,6 +162,19 @@ export function createMutationIdemSecurityControls(scope: typeof globalThis = gl
       ) {
         return false;
       }
+      if (
+        apply<unknown>(uint8ArrayByteLength, first, []) !== 16 ||
+        apply<unknown>(uint8ArrayByteLength, second, []) !== 16
+      ) {
+        return false;
+      }
+      let rejectedForeignByteLengthReceiver = false;
+      try {
+        apply(uint8ArrayByteLength, {}, []);
+      } catch {
+        rejectedForeignByteLengthReceiver = true;
+      }
+      if (!rejectedForeignByteLengthReceiver) return false;
       let differs = false;
       let nonzero = false;
       for (let index = 0; index < 16; index += 1) {
@@ -171,13 +199,19 @@ export function createMutationIdemSecurityControls(scope: typeof globalThis = gl
       if (validUuid(value)) return value;
       throw new TypeError('Kovo mutation randomUUID control returned an invalid token.');
     }
-    if (randomValuesSound && getRandomValues && cryptoObject) {
+    if (randomValuesSound && getRandomValues && cryptoObject && uint8ArrayByteLength) {
       const bytes = new NativeUint8Array(16);
       if (apply<unknown>(getRandomValues, cryptoObject, [bytes]) !== bytes) {
         throw new TypeError('Kovo mutation getRandomValues control returned an invalid result.');
       }
+      const byteLength = apply<unknown>(uint8ArrayByteLength, bytes, []);
+      if (byteLength !== 16) {
+        throw new TypeError(
+          'Kovo mutation getRandomValues control returned an invalid byte length.',
+        );
+      }
       let hex = '';
-      for (let index = 0; index < bytes.length; index += 1) {
+      for (let index = 0; index < byteLength; index += 1) {
         const byte = bytes[index];
         if (typeof byte !== 'number') {
           throw new TypeError('Kovo mutation getRandomValues control returned invalid bytes.');

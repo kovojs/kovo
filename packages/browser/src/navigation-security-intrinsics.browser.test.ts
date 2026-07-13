@@ -292,7 +292,18 @@ describe('browser navigation security controls', () => {
     const nativeCancel = ReadableStreamDefaultReader.prototype.cancel;
     const nativeReleaseLock = ReadableStreamDefaultReader.prototype.releaseLock;
     const nativeStreamCancel = ReadableStream.prototype.cancel;
+    const nativeUint8ArraySet = Uint8Array.prototype.set;
     const serverBytes = new TextEncoder().encode('SERVER-SAFE');
+    let speciesCalls = 0;
+    Object.defineProperty(serverBytes.buffer, 'constructor', {
+      configurable: true,
+      value: {
+        get [Symbol.species]() {
+          speciesCalls += 1;
+          return Uint8Array;
+        },
+      },
+    });
     const stream = new ReadableStream<Uint8Array>({
       start(controller) {
         controller.enqueue(serverBytes);
@@ -303,6 +314,7 @@ describe('browser navigation security controls', () => {
     let readPoisonCalls = 0;
     let cancelPoisonCalls = 0;
     let releasePoisonCalls = 0;
+    let byteCopyPoisonCalls = 0;
 
     ReadableStreamDefaultReader.prototype.read = async function poisonedRead() {
       readPoisonCalls += 1;
@@ -312,6 +324,9 @@ describe('browser navigation security controls', () => {
       configurable: true,
       get: () => false,
     });
+    Uint8Array.prototype.set = function poisonedByteCopy() {
+      byteCopyPoisonCalls += 1;
+    };
     try {
       const read = await controls.readStreamChunk(plan);
       expect(read.done).toBe(false);
@@ -319,9 +334,12 @@ describe('browser navigation security controls', () => {
       serverBytes.fill(0x41);
       expect(new TextDecoder().decode(read.value)).toBe('SERVER-SAFE');
       expect(readPoisonCalls).toBe(0);
+      expect(byteCopyPoisonCalls).toBe(0);
+      expect(speciesCalls).toBe(0);
     } finally {
       ReadableStreamDefaultReader.prototype.read = nativeRead;
       Object.defineProperty(ReadableStream.prototype, 'locked', lockedDescriptor);
+      Uint8Array.prototype.set = nativeUint8ArraySet;
       controls.releaseStreamReader(plan);
     }
 

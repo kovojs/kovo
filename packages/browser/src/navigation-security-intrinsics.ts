@@ -374,6 +374,9 @@ export function createBrowserNavigationSecurityControls(
   const uint8ArrayByteLength = NativeUint8Array
     ? stableGetter(NativeUint8Array.prototype, 'byteLength')
     : undefined;
+  const uint8ArraySet = NativeUint8Array
+    ? stableMethod(NativeUint8Array.prototype, 'set')
+    : undefined;
   const readableStreamCancel = NativeReadableStream
     ? valueMethod(NativeReadableStream.prototype, 'cancel')
     : undefined;
@@ -1519,7 +1522,14 @@ export function createBrowserNavigationSecurityControls(
     if (!nativeUint8Array) {
       throw new TypeError('Kovo mutation stream returned a foreign typed-array chunk.');
     }
-    const snapshot = new NativeUint8Array(value as Uint8Array);
+    if (!uint8ArraySet) {
+      throw new TypeError('Kovo mutation stream byte-copy control is unavailable.');
+    }
+    // SPEC §6.6/§9.1: allocate the private snapshot explicitly and copy through the captured
+    // intrinsic. TypedArray slice/species and caller buffer constructors must never select the
+    // carrier for unclassified server bytes.
+    const snapshot = new NativeUint8Array(byteLength);
+    call(uint8ArraySet, snapshot, [value, 0]);
     if (call<unknown>(uint8ArrayByteLength, snapshot, []) !== byteLength) {
       throw new TypeError('Kovo mutation stream byte snapshot changed length.');
     }
@@ -2679,6 +2689,7 @@ export function createBrowserNavigationSecurityControls(
         !NativeReadableStreamDefaultReader ||
         !textDecoderDecode ||
         !uint8ArrayByteLength ||
+        !uint8ArraySet ||
         !readableStreamCancel ||
         !readableStreamGetReader ||
         !readableStreamLocked ||
@@ -2804,11 +2815,12 @@ export function createBrowserNavigationSecurityControls(
       ) {
         return false;
       }
-      const decoderCopy = new NativeUint8Array(decoderBytes);
       const decoderByteLength = apply<unknown>(uint8ArrayByteLength, decoderBytes, []);
+      if (typeof decoderByteLength !== 'number') return false;
+      const decoderCopy = new NativeUint8Array(decoderByteLength);
+      apply(uint8ArraySet, decoderCopy, [decoderBytes, 0]);
       const decoderCopyByteLength = apply<unknown>(uint8ArrayByteLength, decoderCopy, []);
       if (
-        typeof decoderByteLength !== 'number' ||
         decoderCopyByteLength !== decoderByteLength ||
         decoderCopy[0] !== 60 ||
         decoderCopy[decoderByteLength - 1] !== 62

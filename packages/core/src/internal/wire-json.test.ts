@@ -218,6 +218,12 @@ describe('wire-json core contract', () => {
     expect(() => stringifyWireValue('x'.repeat(4_000_001))).toThrow(
       /4000000-character aggregate bound/u,
     );
+    expect(() => stringifyWireValue('\0'.repeat(700_000))).toThrow(
+      /serialized output exceeds the 4000000-character bound/u,
+    );
+    expect(() => stringifyWireValue('<'.repeat(700_000))).toThrow(
+      /HTML-safe serialized output exceeds the 4000000-character bound/u,
+    );
   });
 
   it('allows acyclic shared values while encoding each occurrence independently', () => {

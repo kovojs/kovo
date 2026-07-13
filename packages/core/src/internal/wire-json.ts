@@ -21,6 +21,7 @@ import {
   securityObjectKeys,
   securityOwnArrayEntry,
   securityString,
+  securityStringCharCodeAt,
   securityWeakSet,
   securityWeakSetAdd,
   securityWeakSetDelete,
@@ -465,7 +466,32 @@ export function stringifyWireValue(value: unknown): string {
   if (result === undefined) {
     throw new IntrinsicTypeError('Kovo wire JSON cannot encode an undefined top-level value.');
   }
+  // SPEC §9.1.1/§9.4: every encoder-approved record must fit the same finite raw-input envelope
+  // enforced by browser/server decoders. JSON escaping and structural punctuation can make the
+  // serialized representation larger than the pre-serialization character budget.
+  if (result.length > MAX_WIRE_JSON_CHARACTERS) {
+    throw new IntrinsicTypeError(
+      `Kovo wire JSON serialized output exceeds the ${MAX_WIRE_JSON_CHARACTERS}-character bound.`,
+    );
+  }
+  if (wireHtmlSafeSerializedLength(result) > MAX_WIRE_JSON_CHARACTERS) {
+    throw new IntrinsicTypeError(
+      `Kovo wire JSON HTML-safe serialized output exceeds the ${MAX_WIRE_JSON_CHARACTERS}-character bound.`,
+    );
+  }
   return result;
+}
+
+function wireHtmlSafeSerializedLength(value: string): number {
+  let length = value.length;
+  for (let index = 0; index < value.length; index += 1) {
+    // Server query scripts and mutation/deferred wire fragments escape each '<' as `\u003c` so
+    // HTML parsing cannot terminate the carrier. Account for that 1-to-6 expansion before the
+    // browser's raw JSON input bound is reached.
+    if (securityStringCharCodeAt(value, index) === 0x3c) length += 5;
+    if (length > MAX_WIRE_JSON_CHARACTERS) return length;
+  }
+  return length;
 }
 
 /**
