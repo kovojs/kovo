@@ -3,13 +3,17 @@ import { createServer as createHttpServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { describe, expect, it, vi } from 'vitest';
 import { trustedHtml } from '@kovojs/browser';
+import { component } from '@kovojs/core';
 
+import { publicAccess } from './access.js';
 import { createApp, createRequestHandler } from './app.js';
 import { appLiveTargetAttestationAudience } from './live-target-app-identity.js';
 import { createMemoryVersionedClientModuleRegistry } from './client-modules.js';
 import { endpoint } from './endpoint.js';
+import { guard } from './guards.js';
+import { componentLiveTargetRenderer } from './live-target-renderer.js';
 import type { LiveTargetRenderer } from './mutation-wire.js';
-import { query } from './query.js';
+import { query, type QueryLoadContext } from './query.js';
 import { layout, route } from './route.js';
 import {
   createKovoAppShellDevDiagnosticLedger,
@@ -1141,6 +1145,12 @@ describe('server app shell Vite dev seam', () => {
     const app = createApp({
       clientModules,
       liveTargetRenderers: [cartRenderer],
+      routes: [
+        route('/cart', {
+          access: publicAccess('HMR live-target refresh regression'),
+          page: () => renderedHtml('<main>Cart</main>'),
+        }),
+      ],
     });
     let middleware: KovoAppShellViteMiddleware | undefined;
     const plugin = kovoAppShellViteDevPlugin({ moduleId: '/src/app-shell.ts' });
@@ -1199,6 +1209,145 @@ describe('server app shell Vite dev seam', () => {
     }
   });
 
+  it('runs the exact target route and layout guards before HMR live-target queries', async () => {
+    const secret = 'ADMIN_HMR_SECRET_MUST_NOT_LEAK';
+    let layoutGuardRuns = 0;
+    let routeGuardRuns = 0;
+    let secretQueryLoads = 0;
+    const adminLayout = layout<Request>({
+      access: [
+        guard('hmr-admin-layout', () => {
+          layoutGuardRuns += 1;
+          return true;
+        }),
+      ],
+    });
+    const adminRoute = route('/admin', {
+      access: [
+        guard<Request>('hmr-admin-route', (request) => {
+          routeGuardRuns += 1;
+          return request.headers.get('x-kovo-admin') === 'true'
+            ? true
+            : { kind: 'forbidden' as const };
+        }),
+      ],
+      layout: adminLayout,
+      page: () => renderedHtml('<main>Admin</main>'),
+    });
+    const publicRoute = route('/public', {
+      access: publicAccess('HMR public-route regression'),
+      page: () => renderedHtml('<main>Public</main>'),
+    });
+    const secretQuery = query('hmr-route-secret', {
+      access: publicAccess('enclosing route owns this HMR regression authorization'),
+      load(_input: unknown, context?: QueryLoadContext<Request>) {
+        secretQueryLoads += 1;
+        const pathname = new URL((context?.request as Request).url).pathname;
+        return { value: pathname === '/admin' ? secret : 'PUBLIC_VALUE' };
+      },
+    });
+    const SecretPanel = component({
+      render: ({ record }) =>
+        renderedHtml(`<secret-panel>${(record as { value: string }).value}</secret-panel>`),
+    });
+    const renderer = componentLiveTargetRenderer({
+      component: SecretPanel,
+      componentId: 'src/components/SecretPanel',
+      queries: [{ name: 'record', query: secretQuery }],
+    });
+    const app = createApp({
+      liveTargetRenderers: [renderer],
+      routes: [publicRoute, adminRoute],
+    });
+    let middleware: KovoAppShellViteMiddleware | undefined;
+    kovoAppShellViteDevPlugin({ moduleId: '/src/app-shell.ts' }).configureServer({
+      middlewares: {
+        use(handler) {
+          middleware = handler;
+        },
+      },
+      ssrLoadModule: viteDevSsrLoadModule(async () => ({ default: app })),
+    });
+    const server = createHttpServer((request, response) => {
+      middleware?.(request, response, (error) => {
+        response.writeHead(error ? 500 : 418, { 'Content-Type': 'text/plain; charset=utf-8' });
+        response.end(error instanceof Error ? error.message : 'vite fallback');
+      });
+    });
+
+    try {
+      await new Promise<void>((resolve, reject) => {
+        server.once('error', reject);
+        server.listen(0, '127.0.0.1', () => {
+          server.off('error', reject);
+          resolve();
+        });
+      });
+
+      const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+      const directAdmin = await fetch(`${origin}/admin`);
+      expect(directAdmin.status).toBe(403);
+      expect(await directAdmin.text()).not.toContain(secret);
+
+      const liveTarget = attestedLiveTargetHeader(
+        'secret-panel',
+        'src/components/SecretPanel',
+        appLiveTargetAttestationAudience(app),
+        {},
+        `${origin}/public`,
+      );
+      const publicRefresh = await fetch(`${origin}/@kovo/hmr/refresh/live-targets?url=/public`, {
+        headers: {
+          'Kovo-Current-Url': '/public',
+          'Kovo-Live-Targets': liveTarget,
+        },
+        method: 'POST',
+      });
+      const publicBody = await publicRefresh.text();
+      expect(publicRefresh.status, publicBody).toBe(200);
+      expect(publicBody).toContain('<secret-panel>PUBLIC_VALUE</secret-panel>');
+      expect(secretQueryLoads).toBe(1);
+
+      const missingRouteRefresh = await fetch(
+        `${origin}/@kovo/hmr/refresh/live-targets?url=/missing`,
+        {
+          headers: {
+            'Kovo-Current-Url': '/public',
+            'Kovo-Live-Targets': liveTarget,
+          },
+          method: 'POST',
+        },
+      );
+      expect(missingRouteRefresh.status).toBe(409);
+      expect(missingRouteRefresh.headers.get('kovo-hmr-fallback')).toBe('full-reload');
+      expect(await missingRouteRefresh.text()).not.toContain(secret);
+      expect(secretQueryLoads).toBe(1);
+
+      const layoutRunsBeforeAttack = layoutGuardRuns;
+      const routeRunsBeforeAttack = routeGuardRuns;
+      const queryLoadsBeforeAttack = secretQueryLoads;
+      const crossRouteAttack = await fetch(`${origin}/@kovo/hmr/refresh/live-targets?url=/admin`, {
+        headers: {
+          'Kovo-Current-Url': '/public',
+          'Kovo-Live-Targets': liveTarget,
+        },
+        method: 'POST',
+      });
+      const attackBody = await crossRouteAttack.text();
+
+      expect(crossRouteAttack.status, attackBody).toBe(403);
+      expect(crossRouteAttack.headers.get('kovo-hmr-fallback')).toBe('full-reload');
+      expect(attackBody).not.toContain(secret);
+      expect(layoutGuardRuns).toBe(layoutRunsBeforeAttack + 1);
+      expect(routeGuardRuns).toBe(routeRunsBeforeAttack + 1);
+      expect(secretQueryLoads).toBe(queryLoadsBeforeAttack);
+    } finally {
+      await new Promise<void>((resolve, reject) => {
+        server.close((error) => (error ? reject(error) : resolve()));
+      });
+    }
+  });
+
   it('keeps HMR live-target wire assembly pinned after an authored renderer mutates arrays', async () => {
     const originalJoin = Array.prototype.join;
     const payload =
@@ -1224,7 +1373,15 @@ describe('server app shell Vite dev seam', () => {
         return `<cart-badge data-target="${context.target}">safe</cart-badge>`;
       },
     };
-    const app = createApp({ liveTargetRenderers: [cartRenderer] });
+    const app = createApp({
+      liveTargetRenderers: [cartRenderer],
+      routes: [
+        route('/cart', {
+          access: publicAccess('HMR intrinsic-pinning regression'),
+          page: () => renderedHtml('<main>Cart</main>'),
+        }),
+      ],
+    });
     let middleware: KovoAppShellViteMiddleware | undefined;
     kovoAppShellViteDevPlugin({ moduleId: '/src/app-shell.ts' }).configureServer({
       middlewares: {

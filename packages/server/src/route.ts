@@ -673,6 +673,128 @@ export interface RouteJsxContextOptions<Request> {
 }
 
 /**
+ * Authorize one already-matched route without running its page, layout queries, or renderers.
+ * Dev HMR consumes the returned lifecycle request before any live-target query can run, so a
+ * fragment refresh cannot become a cross-route authorization side channel (SPEC §§6.6, 8, 9.3,
+ * 9.5.1).
+ *
+ * @internal
+ */
+export async function authorizeRouteRequest<
+  const Path extends string,
+  ParamsSchema extends MaybeSchema<Record<string, string>>,
+  SearchSchema extends MaybeSchema<Record<string, RouteSearchValue>>,
+  Request,
+  Page extends RoutePageResult,
+  GuardedRequest extends Request = Request,
+>(
+  definition: RouteDeclaration<Path, ParamsSchema, SearchSchema, Request, Page, GuardedRequest>,
+  input: RouteRequestInput,
+  request: Request,
+  options: RequestLifecycleOptions<Request> = {},
+): Promise<RouteAuthorizationResult<Request>> {
+  const authorization = await resolveRouteAuthorization(definition, input, request, options);
+  return authorization.ok
+    ? witnessFreeze({ ok: true as const, request: authorization.request })
+    : witnessFreeze({
+        failure: stripRouteBoundaryFailure(authorization.failure),
+        ok: false as const,
+      });
+}
+
+async function resolveRouteAuthorization<
+  const Path extends string,
+  ParamsSchema extends MaybeSchema<Record<string, string>>,
+  SearchSchema extends MaybeSchema<Record<string, RouteSearchValue>>,
+  Request,
+  Page extends RoutePageResult,
+  GuardedRequest extends Request = Request,
+>(
+  definition: RouteDeclaration<Path, ParamsSchema, SearchSchema, Request, Page, GuardedRequest>,
+  input: RouteRequestInput,
+  request: Request,
+  options: RequestLifecycleOptions<Request> = {},
+): Promise<RouteAuthorizationInternalResult<Path, ParamsSchema, SearchSchema, Request>> {
+  let routeRequest: RouteRequest<Path, ParamsSchema, SearchSchema>;
+  try {
+    routeRequest = parseRouteRequest(definition, input);
+  } catch (error) {
+    if (isSchemaValidationError(error)) {
+      return {
+        failure: {
+          error: {
+            code: 'VALIDATION',
+            payload: { issues: error.issues } satisfies ValidationFailurePayload,
+          },
+          ok: false,
+          status: 422,
+        },
+        ok: false,
+      };
+    }
+    throw error;
+  }
+
+  // Resolve the same lifecycle inputs a direct document request uses. The returned request is the
+  // exact pinned carrier the guards consumed; HMR must never fall back to its raw endpoint request
+  // after this decision (SPEC §6.6 classify-and-pin).
+  const resolvedRequest = await resolveKovoLifecycleRequest(request, {
+    ...(options.clientIp === undefined ? {} : { clientIp: options.clientIp }),
+    ...(options.db === undefined ? {} : { db: options.db }),
+    ...(options.onError === undefined ? {} : { onError: options.onError }),
+    ...(options.onSessionSetCookie === undefined
+      ? {}
+      : { onSessionSetCookie: options.onSessionSetCookie }),
+    ...(options.sessionProvider === undefined ? {} : { sessionProvider: options.sessionProvider }),
+    surface: 'document',
+  });
+  // SPEC §10.3 guard arguments and §6.4 route identity: attach only schema-validated params before
+  // either layout or route access runs. The successful result preserves this exact request carrier
+  // for downstream live-target queries, so authorization and data selection cannot disagree.
+  const lifecycleRequest =
+    definition.params === undefined
+      ? resolvedRequest
+      : (withGuardParams(resolvedRequest, routeRequest.params) as typeof resolvedRequest);
+  const layouts = routeLayoutChain(definition.layout);
+
+  for (let index = 0; index < layouts.length; index += 1) {
+    const layoutDeclaration = layouts[index];
+    if (!layoutDeclaration) continue;
+    const guardFailure = await runAccessDecisionGuards(
+      accessDecisionFor(layoutDeclaration),
+      layoutDeclaration.guard,
+      lifecycleRequest,
+    );
+    if (guardFailure) {
+      return {
+        failure: withRouteBoundaryFailure(
+          routeGuardFailure(guardFailure),
+          routeBoundaryFor('unauthorized', undefined, routeLayoutChainPrefix(layouts, index + 1)),
+        ),
+        ok: false,
+      };
+    }
+  }
+
+  const guardFailure = await runAccessDecisionGuards(
+    accessDecisionFor(definition),
+    definition.guard,
+    lifecycleRequest,
+  );
+  if (guardFailure) {
+    return {
+      failure: withRouteBoundaryFailure(
+        routeGuardFailure(guardFailure),
+        routeBoundaryFor('unauthorized', definition, layouts),
+      ),
+      ok: false,
+    };
+  }
+
+  return { layouts, ok: true, request: lifecycleRequest, routeRequest };
+}
+
+/**
  * Run a route page directly for framework dispatch and conformance fixtures.
  *
  * @internal
@@ -708,74 +830,11 @@ async function runRoutePageInternal<
   request: Request,
   options: RequestLifecycleOptions<Request> & RouteJsxContextOptions<Request> = {},
 ): Promise<RoutePageInternalResult<Page>> {
-  let routeRequest: RouteRequest<Path, ParamsSchema, SearchSchema>;
-  try {
-    routeRequest = parseRouteRequest(definition, input);
-  } catch (error) {
-    if (isSchemaValidationError(error)) {
-      return {
-        error: {
-          code: 'VALIDATION',
-          payload: { issues: error.issues } satisfies ValidationFailurePayload,
-        },
-        ok: false,
-        status: 422,
-      };
-    }
-    throw error;
-  }
-
-  // SPEC §10.3:1155-1157 ("Guards (arg-aware, normative)") + §6.4: thread the route's *validated*
-  // params (parsed/coerced by `parseRouteRequest` above against the route's `params` schema) onto
-  // the request BEFORE the layout/route guard chain, so an ownership guard (`guards.owns` reading
-  // `req.params`) can authorize a route-instance key and discharge KV414. Without it
-  // `keyOf(request)` reads `undefined` and a key-ignoring predicate authorizes everyone (IDOR).
-  // Gated on a declared `params` schema (the validated path, mirroring `runQuery`'s `args` gate) so
-  // a paramless route never fabricates a `req.params` key. The page/regions/layouts then see the
-  // same coerced `req.params` the guards saw.
-  const resolvedRequest = await resolveKovoLifecycleRequest(request, {
-    ...(options.clientIp === undefined ? {} : { clientIp: options.clientIp }),
-    ...(options.db === undefined ? {} : { db: options.db }),
-    ...(options.onError === undefined ? {} : { onError: options.onError }),
-    ...(options.onSessionSetCookie === undefined
-      ? {}
-      : { onSessionSetCookie: options.onSessionSetCookie }),
-    ...(options.sessionProvider === undefined ? {} : { sessionProvider: options.sessionProvider }),
-    surface: 'document',
-  });
-  const lifecycleRequest =
-    definition.params === undefined
-      ? resolvedRequest
-      : (withGuardParams(resolvedRequest, routeRequest.params) as typeof resolvedRequest);
-  const layouts = routeLayoutChain(definition.layout);
-
-  for (let index = 0; index < layouts.length; index += 1) {
-    const layoutDeclaration = layouts[index];
-    if (!layoutDeclaration) continue;
-    const guardFailure = await runAccessDecisionGuards(
-      accessDecisionFor(layoutDeclaration),
-      layoutDeclaration.guard,
-      lifecycleRequest,
-    );
-    if (guardFailure) {
-      return withRouteBoundaryFailure(
-        routeGuardFailure(guardFailure),
-        routeBoundaryFor('unauthorized', undefined, routeLayoutChainPrefix(layouts, index + 1)),
-      );
-    }
-  }
-
-  const guardFailure = await runAccessDecisionGuards(
-    accessDecisionFor(definition),
-    definition.guard,
-    lifecycleRequest,
-  );
-  if (guardFailure) {
-    return withRouteBoundaryFailure(
-      routeGuardFailure(guardFailure),
-      routeBoundaryFor('unauthorized', definition, layouts),
-    );
-  }
+  const authorization = await resolveRouteAuthorization(definition, input, request, options);
+  if (!authorization.ok) return authorization.failure;
+  const lifecycleRequest = authorization.request;
+  const routeRequest = authorization.routeRequest;
+  const layouts = authorization.layouts;
 
   let value: unknown;
   try {
@@ -1229,6 +1288,17 @@ export interface RoutePageFailure {
   status: 404 | 422 | 429 | 500;
 }
 
+/** @internal Exact route-authorization result consumed by dev refresh dispatch. */
+export type RouteAuthorizationResult<Request> =
+  | {
+      failure: RoutePageFailure;
+      ok: false;
+    }
+  | {
+      ok: true;
+      request: Request;
+    };
+
 type RouteBoundaryKind = keyof RouteBoundaries<any, any>;
 
 interface ResolvedRouteBoundary {
@@ -1244,6 +1314,23 @@ interface RoutePageInternalFailure extends RoutePageFailure {
   boundary?: ResolvedRouteBoundary;
   thrown?: unknown;
 }
+
+type RouteAuthorizationInternalResult<
+  Path extends string,
+  ParamsSchema extends MaybeSchema<Record<string, string>>,
+  SearchSchema extends MaybeSchema<Record<string, RouteSearchValue>>,
+  Request,
+> =
+  | {
+      failure: RoutePageInternalFailure;
+      ok: false;
+    }
+  | {
+      layouts: LayoutDeclaration<any, any, any>[];
+      ok: true;
+      request: Request;
+      routeRequest: RouteRequest<Path, ParamsSchema, SearchSchema>;
+    };
 
 class RouteBoundaryRenderError extends Error {
   constructor(

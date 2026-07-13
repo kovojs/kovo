@@ -623,7 +623,10 @@ function mergeAppRouteHints(app: KovoApp, route: AnyRouteDeclaration): PageHintO
   };
 }
 
-function searchParamsToRecord(searchParams: URLSearchParams): Record<string, string | string[]> {
+/** @internal Exact URL-search reconstruction shared by document and dev route lifecycles. */
+export function searchParamsToRecord(
+  searchParams: URLSearchParams,
+): Record<string, string | string[]> {
   const record = witnessCreateNullRecord<string | string[]>() as Record<string, string | string[]>;
   const entries = requestUrlSearchParamsEntries(searchParams);
   for (let index = 0; index < entries.length; index += 1) {

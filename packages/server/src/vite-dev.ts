@@ -9,6 +9,8 @@ import { deriveClosedKovoApp } from './app-snapshot.js';
 import { runWithGeneratedLiveTargetRegistry } from './live-target-registry.js';
 import { createRequestHandler } from './app.js';
 import type { KovoApp } from './app-types.js';
+import { resolveRequestClientIp } from './app-load-shed.js';
+import { searchParamsToRecord } from './app-document.js';
 import {
   appLiveTargetAttestationAudience,
   appLiveTargetAttestationAuthority,
@@ -27,6 +29,7 @@ import {
 import { renderLiveTargetChunks } from './mutation.js';
 import { mutationWireRequestFromHeaders } from './mutation-wire.js';
 import { readHeader, routeResponseToWebResponse, type RoutePageResponse } from './response.js';
+import { authorizeRouteRequest } from './route.js';
 import { matchShellDispatch } from './shell.js';
 import { generatedFragmentHtml } from './html.js';
 import { renderFragmentWireHtml } from './wire-html.js';
@@ -699,13 +702,63 @@ async function renderKovoHmrLiveTargetRefreshResponse(
   const webRequest = nodeRequestToWebRequest(request);
   const targetUrl = hmrRefreshTargetUrl(endpointUrl, webRequest, request);
   if (securityIsResponse(targetUrl)) return targetUrl;
+  const routeMatch = matchShellDispatch({
+    endpoints: app.endpoints,
+    method: 'GET',
+    pathname: targetUrl.pathname,
+    routes: app.routes,
+  });
+  if (
+    routeMatch.kind !== 'route' ||
+    !routeMatch.methodAllowed ||
+    routeMatch.normalization.redirect !== undefined
+  ) {
+    return hmrRefreshTextResponse(
+      'Kovo HMR live-target refresh requires a canonical app route.',
+      409,
+      app,
+      {
+        fallback: 'full-reload',
+        refreshKind: 'live-targets',
+      },
+    );
+  }
+
   const targetRequest = nodeRequestToWebRequest(hmrTargetNodeRequest(request, targetUrl));
+  const authorization = await authorizeRouteRequest(
+    routeMatch.route,
+    {
+      params: routeMatch.params,
+      search: searchParamsToRecord(targetUrl.searchParams),
+    },
+    targetRequest,
+    {
+      clientIp: (candidate) => resolveRequestClientIp(app, candidate),
+      ...(app.db === undefined ? {} : { db: app.db }),
+      ...(app.onError === undefined ? {} : { onError: app.onError }),
+      ...(app.sessionProvider === undefined ? {} : { sessionProvider: app.sessionProvider }),
+    },
+  );
+  if (!authorization.ok) {
+    return hmrRefreshTextResponse(
+      authorization.failure.error?.code === 'UNAUTHORIZED'
+        ? 'Kovo HMR live-target refresh was forbidden by the target route.'
+        : 'Kovo HMR live-target refresh could not authorize the target route.',
+      authorization.failure.error?.code === 'UNAUTHORIZED' ? 403 : 409,
+      app,
+      {
+        fallback: 'full-reload',
+        refreshKind: 'live-targets',
+      },
+    );
+  }
+
   const buildToken = app.clientModules.buildToken();
   const liveTargetAudience = appLiveTargetAttestationAudience(app, buildToken);
   const liveTargetAttestationAuthority = appLiveTargetAttestationAuthority(app, buildToken);
   // Dev HMR is still an HTTP authority boundary. Verify the browser descriptor against the exact
-  // app/build and principal before a generated renderer can run queries with this request context
-  // (SPEC §6.6/§9.3); never render the raw parsed header directly.
+  // app/build, source route, and authorized principal before any generated renderer can run a
+  // query (SPEC §§6.6, 8, 9.3, 9.5.1).
   const wireRequest = mutationWireRequestFromHeaders({
     buildToken,
     liveTargetAttestationAuthority,
@@ -715,7 +768,7 @@ async function renderKovoHmrLiveTargetRefreshResponse(
     headers: request.headers,
     liveTargetRenderers: app.liveTargetRenderers,
     rawInput: {},
-    request: targetRequest,
+    request: authorization.request,
   });
   const liveTargetDescriptors = wireRequest.liveTargetDescriptors ?? [];
   if (liveTargetDescriptors.length === 0) {
@@ -736,8 +789,9 @@ async function renderKovoHmrLiveTargetRefreshResponse(
     liveTargetAudience,
     liveTargetAttestationAuthority,
     {},
-    targetRequest,
+    authorization.request,
     app.csrf,
+    app.requestLimits.maxQueryListItems,
   );
 
   if (chunks.length === 0) {
@@ -866,7 +920,7 @@ function withKovoHmrRefreshHeaders(
 
 function hmrRefreshTextResponse(
   message: string,
-  status: 400 | 405 | 409,
+  status: 400 | 403 | 405 | 409,
   app: KovoApp | undefined,
   options: {
     fallback?: 'full-reload';
