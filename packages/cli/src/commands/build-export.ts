@@ -27,12 +27,29 @@ import { isDiagnosticCode } from '@kovojs/core/internal/diagnostics';
 import { createFrameworkOutputFileSystemBoundary } from '@kovojs/core/internal/filesystem';
 import { isParanoidSecurityAdvisoryCode } from '@kovojs/core/internal/security-markers';
 import type * as CoreGraph from '@kovojs/core/internal/graph';
-import type { CompileResult, CompileRouteModuleResult } from '@kovojs/compiler';
-import type {
+import {
+  compileComponentModule,
+  compileRouteModule,
+  kovoVitePlugin,
+  type CompileResult,
+  type CompileRouteModuleResult,
+} from '@kovojs/compiler';
+import { deriveAppGraph } from '@kovojs/compiler/graph';
+import {
+  cssRouteDeliveryGate,
+  dedupeCss,
   lowerStandaloneSourceDerivedRegistryDeclarations,
-  QueryShapeFact,
+  mutationHandlerFingerprintFromRuntimeSource,
+  mutationSessionAuthorityFacts,
+  parseComponentModule,
+  type QueryShapeFact,
+  viteFrameworkIdentityFiles,
 } from '@kovojs/compiler/internal';
-import { mutationHandlerFingerprintFromRuntimeSource } from '@kovojs/compiler/internal';
+import { extractAppRouteCssTargets } from '@kovojs/compiler/package-styles';
+import {
+  collectCapabilityEscapesFromProject,
+  collectCookieDowngradesFromProject,
+} from '@kovojs/drizzle/internal/static';
 import type {
   AccessDecision,
   Guard,
@@ -65,6 +82,7 @@ import {
   runtimeRegistryWireFactsFromGraph,
   type RuntimeRegistryWireFacts,
 } from '@kovojs/server/internal/runtime-registry-wire';
+import { build as viteBuild, createServer as createViteServer } from 'vite-plus';
 
 import {
   BUILD_ARGV_SPEC,
@@ -852,7 +870,6 @@ async function buildCheckGraph(
     root: string;
   },
 ): Promise<KovoBuildCheckArtifacts> {
-  const { deriveAppGraph } = await import('@kovojs/compiler/graph');
   const staticArtifacts = await staticBuildCheckGraph(app, appModulePath, options);
   const graph = staticArtifacts.graph;
   const result = deriveAppGraph({
@@ -944,8 +961,6 @@ async function staticBuildCheckGraph(
     root: string;
   },
 ): Promise<KovoBuildCheckArtifacts> {
-  const { collectCapabilityEscapesFromProject, collectCookieDowngradesFromProject } =
-    await import('@kovojs/drizzle/internal/static');
   const files = buildCheckSourceFiles(appModulePath, options.root);
   const [drizzleFacts, sourceGraphFacts] =
     files.length === 0
@@ -958,7 +973,7 @@ async function staticBuildCheckGraph(
           },
         ]
       : await buildPromiseAll([
-          staticDataPlaneBuildFacts(files, { cache: options.cache, cacheRoot: options.root }),
+          staticDataPlaneBuildFacts(files, { cache: options.cache }),
           sourceGraphFactsFromFiles(files, dirname(appModulePath)),
         ]);
   // SPEC §6.6/§9.1 (audit-only, threat-matrix M3): surface every app-authored escape-hatch call site
@@ -1062,8 +1077,6 @@ async function sessionAuthorityFactsFromEntry(
     fileName: basename(appModulePath),
     source: readFileSync(appModulePath, 'utf8'),
   };
-  const { mutationSessionAuthorityFacts, parseComponentModule, viteFrameworkIdentityFiles } =
-    await import('@kovojs/compiler/internal');
   const reachable: BuildCheckSourceFile[] = [entry];
   const identityFiles = buildSnapshotDenseArray(
     viteFrameworkIdentityFiles(root, entry.fileName, entry.source),
@@ -1273,8 +1286,6 @@ async function sourceGraphFactsFromFiles(
   files: readonly BuildCheckSourceFile[],
   root: string,
 ): Promise<SourceGraphFacts> {
-  const [{ compileComponentModule, compileRouteModule }, { viteFrameworkIdentityFiles }] =
-    await buildPromiseAll([import('@kovojs/compiler'), import('@kovojs/compiler/internal')]);
   const components: SourceComponentGraphFacts[] = [];
   const routeOutcomes = buildCreateMap<string, 'file' | 'stream'>();
   const routePages: SourceRoutePageFacts[] = [];
@@ -1975,8 +1986,7 @@ async function loadKovoBuildConfig(
   const configPath = findKovoBuildConfig(root);
   if (configPath === undefined) return {};
 
-  const { createServer } = await import('vite-plus');
-  const server = await createServer({
+  const server = await createViteServer({
     appType: 'custom',
     configFile: false,
     logLevel: 'error',
@@ -2002,10 +2012,8 @@ async function loadBuildAppModule(
   appModulePath: string,
   root: string,
 ): Promise<LoadedBuildAppModule> {
-  const [{ lowerStandaloneSourceDerivedRegistryDeclarations }, { createServer }] =
-    await buildPromiseAll([import('@kovojs/compiler/internal'), import('vite-plus')]);
   const requireFromApp = createRequire(pathToFileURL(appModulePath));
-  const server = await createServer({
+  const server = await createViteServer({
     appType: 'custom',
     configFile: false,
     logLevel: 'error',
@@ -2287,17 +2295,6 @@ async function buildKovoClientManifest(
   appModulePath: string,
   options: { cache: boolean; queryShapeFacts: readonly QueryShapeFact[] },
 ): Promise<KovoClientManifestBuild> {
-  const [
-    { kovoVitePlugin },
-    { cssRouteDeliveryGate, dedupeCss },
-    { extractAppRouteCssTargets },
-    { build },
-  ] = await buildPromiseAll([
-    import('@kovojs/compiler'),
-    import('@kovojs/compiler/internal'),
-    import('@kovojs/compiler/package-styles'),
-    import('vite-plus'),
-  ]);
   const viteAssetPlugin = kovoVitePlugin({
     cache: options.cache,
     queryShapeFacts: options.queryShapeFacts,
@@ -2311,7 +2308,7 @@ async function buildKovoClientManifest(
     'Client manifest CSS route targets',
   );
 
-  await build({
+  await viteBuild({
     appType: 'custom',
     build: {
       emptyOutDir: true,
@@ -2382,10 +2379,6 @@ async function buildKovoComponentClientModules(
     typeof import('@kovojs/compiler').kovoVitePlugin
   >['getCssAssetManifest'];
 }> {
-  const [{ kovoVitePlugin }, { build }] = await buildPromiseAll([
-    import('@kovojs/compiler'),
-    import('vite-plus'),
-  ]);
   const kovoPlugin = kovoVitePlugin({
     cache: options.cache,
     include: [kovoBuildAppSourceFilter(appModulePath, root)],
@@ -2405,7 +2398,7 @@ async function buildKovoComponentClientModules(
       ].join('\n'),
       'utf8',
     );
-    await build({
+    await viteBuild({
       appType: 'custom',
       build: {
         emptyOutDir: true,
@@ -2898,10 +2891,6 @@ async function bundleKovoServerHandler(
   clientModules: readonly KovoAppShellCompiledClientModule[];
   source: string;
 }> {
-  const [{ kovoVitePlugin }, { build }] = await buildPromiseAll([
-    import('@kovojs/compiler'),
-    import('vite-plus'),
-  ]);
   const kovoPlugin = kovoVitePlugin({
     include: [kovoBuildAppSourceFilter(appModulePath, options.buildRoot)],
     queryShapeFacts: options.queryShapeFacts,
@@ -2919,7 +2908,7 @@ async function bundleKovoServerHandler(
       'utf8',
     );
     writeFileSync(entryPath, kovoServerHandlerEntrySource(appModulePath, stylesheetAssets), 'utf8');
-    await build({
+    await viteBuild({
       appType: 'custom',
       build: {
         emptyOutDir: true,
@@ -3402,8 +3391,7 @@ async function loadExportAppModule(
     };
   }
 
-  const { createServer } = await import('vite-plus');
-  const server = await createServer({
+  const server = await createViteServer({
     appType: 'custom',
     configFile: false,
     logLevel: 'error',

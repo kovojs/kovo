@@ -908,20 +908,6 @@ export default createApp({
     const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
     const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     const nativeMap = Array.prototype.map;
-    vi.doMock('@kovojs/drizzle/internal/static', () => ({
-      collectCapabilityEscapesFromProject: () => [],
-      collectCookieDowngradesFromProject: () => [],
-      extractStaticBuildAnalysisFactsFromProject: () => ({
-        massAssignmentFacts: [],
-        ownerDomains: [],
-        queries: [],
-        queryWriteReachability: [],
-        scopeAudits: [],
-        sqlSafetyDiagnostics: [],
-        toctouFacts: [],
-        touchGraph: {},
-      }),
-    }));
 
     try {
       mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
@@ -969,7 +955,6 @@ export default app;
       expect(errorOutput).not.toContain('CHECK ok');
     } finally {
       Array.prototype.map = nativeMap;
-      vi.doUnmock('@kovojs/drizzle/internal/static');
       stdout.mockRestore();
       stderr.mockRestore();
       rmSync(root, { force: true, recursive: true });
@@ -1460,30 +1445,11 @@ export async function unsafe(db, input) {
     }
   });
 
-  it('reuses cached Drizzle static analysis facts for unchanged build inputs', async () => {
+  it('does not persist Drizzle security facts to app-writable disk cache state', async () => {
     const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-static-cache-'));
     const appPath = join(root, 'app.mjs');
     const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
     const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
-    const extractStaticBuildAnalysisFactsFromProject = vi.fn(() => ({
-      massAssignmentFacts: [],
-      ownerDomains: [],
-      queries: [],
-      queryWriteReachability: [],
-      scopeAudits: [],
-      sqlSafetyDiagnostics: [],
-      toctouFacts: [],
-      touchGraph: {},
-    }));
-
-    // build-export also runs the M3 capability/cookie-downgrade static producers over the same
-    // files (SPEC §6.6/§9.1); the mock must expose them so the build does not throw on undefined.
-    vi.doMock('@kovojs/drizzle/internal/static', () => ({
-      collectCapabilityEscapesFromProject: () => [],
-      collectCookieDowngradesFromProject: () => [],
-      extractStaticBuildAnalysisFactsFromProject,
-    }));
-
     try {
       mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
       symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
@@ -1517,19 +1483,15 @@ export const marker = sql.raw('select 1');
       );
 
       await expect(withCwd(root, () => mainAsync(['build', './app.mjs']))).resolves.toBe(0);
-      expect(extractStaticBuildAnalysisFactsFromProject).toHaveBeenCalledTimes(1);
 
       await expect(withCwd(root, () => mainAsync(['build', './app.mjs']))).resolves.toBe(0);
-      expect(extractStaticBuildAnalysisFactsFromProject).toHaveBeenCalledTimes(1);
 
       await expect(
         withCwd(root, () => mainAsync(['build', './app.mjs', '--no-cache'])),
       ).resolves.toBe(0);
-      expect(extractStaticBuildAnalysisFactsFromProject).toHaveBeenCalledTimes(2);
-      expect(existsSync(join(root, '.kovo/cache/static-build-analysis'))).toBe(true);
+      expect(existsSync(join(root, '.kovo/cache/static-build-analysis'))).toBe(false);
       expect(stderr).not.toHaveBeenCalled();
     } finally {
-      vi.doUnmock('@kovojs/drizzle/internal/static');
       stdout.mockRestore();
       stderr.mockRestore();
       rmSync(root, { force: true, recursive: true });

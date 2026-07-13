@@ -3,6 +3,7 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   rmSync,
   symlinkSync,
@@ -369,6 +370,105 @@ export default createApp({
     }
   }, 120_000);
 
+  it('eagerly binds compiler graph and Drizzle analyzer truth before authored resolver hooks', () => {
+    const root = cliFixtureRoot('resolver-hook-static-gates');
+    const appPath = join(root, 'app.ts');
+    try {
+      symlinkSync(
+        join(process.cwd(), 'packages/drizzle'),
+        join(root, 'node_modules/@kovojs/drizzle'),
+      );
+      writeFileSync(
+        join(root, 'kovo.config.mjs'),
+        `import { registerHooks } from 'node:module';
+
+const emptyGraph = 'data:text/javascript,' + encodeURIComponent(
+  'export function deriveAppGraph(){return {graph:{},diagnostics:[]}}',
+);
+const emptyStatic = 'data:text/javascript,' + encodeURIComponent(
+  'export function collectCapabilityEscapesFromProject(){return []};' +
+  'export function collectCookieDowngradesFromProject(){return []};' +
+  'export function extractStaticBuildAnalysisFactsFromProject(){return {queries:[],sqlSafetyDiagnostics:[],toctouFacts:[],touchGraph:{}}}',
+);
+registerHooks({
+  resolve(specifier, context, nextResolve) {
+    if (specifier === '@kovojs/compiler/graph') return { shortCircuit: true, url: emptyGraph };
+    if (specifier === '@kovojs/drizzle/internal/static') return { shortCircuit: true, url: emptyStatic };
+    return nextResolve(specifier, context);
+  },
+});
+export default {};
+`,
+        'utf8',
+      );
+      writeFileSync(
+        appPath,
+        `import { sql } from '@kovojs/drizzle';
+import { createApp, publicAccess, route } from '@kovojs/server';
+
+export async function unsafe(db, input) {
+  return db.execute(sql.raw(input.id));
+}
+
+export default createApp({
+  routes: [route('/', { access: publicAccess('resolver hook regression'), page: () => '<main>Unsafe</main>' })],
+});
+`,
+        'utf8',
+      );
+
+      const outDir = join(root, 'dist');
+      const result = runKovoCli(root, ['build', appPath, '--out', outDir]);
+      expect(result.status, result.stderr).toBe(1);
+      expect(result.stderr).toContain('ERROR KV422');
+      expect(result.stderr).toContain('sql.raw');
+      expect(readFileIfPresent(join(outDir, '.kovo/graph.json'))).toBeUndefined();
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  }, 60_000);
+
+  it('never follows an app-planted static-analysis cache symlink outside the project', () => {
+    const root = cliFixtureRoot('static-cache-symlink');
+    const outside = mkdtempSync(join(tmpdir(), 'kovo-static-cache-victim-'));
+    const appPath = join(root, 'app.ts');
+    try {
+      symlinkSync(
+        join(process.cwd(), 'packages/drizzle'),
+        join(root, 'node_modules/@kovojs/drizzle'),
+      );
+      mkdirSync(join(root, '.kovo/cache'), { recursive: true });
+      mkdirSync(join(root, 'src'), { recursive: true });
+      writeFileSync(join(outside, 'victim.txt'), 'ORIGINAL\n', 'utf8');
+      symlinkSync(outside, join(root, '.kovo/cache/static-build-analysis'));
+      writeFileSync(
+        join(root, 'index.html'),
+        '<!doctype html><script type="module" src="/src/client.ts"></script>\n',
+        'utf8',
+      );
+      writeFileSync(join(root, 'src/client.ts'), 'export {};\n', 'utf8');
+      writeFileSync(
+        appPath,
+        `import { sql } from '@kovojs/drizzle';
+import { createApp, publicAccess, route } from '@kovojs/server';
+export const reviewed = sql.raw('select 1');
+export default createApp({
+  routes: [route('/', { access: publicAccess('cache symlink regression'), page: () => '<main>Safe</main>' })],
+});
+`,
+        'utf8',
+      );
+
+      const result = runKovoCli(root, ['build', appPath, '--out', join(root, 'dist')]);
+      expect(result.status, result.stderr).toBe(0);
+      expect(readdirSync(outside)).toEqual(['victim.txt']);
+      expect(readFileSync(join(outside, 'victim.txt'), 'utf8')).toBe('ORIGINAL\n');
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+      rmSync(outside, { force: true, recursive: true });
+    }
+  }, 60_000);
+
   it('pins operator paranoid disposition before app evaluation in the real CLI', () => {
     const root = cliFixtureRoot('paranoid-disposition');
     const appPath = join(root, 'app.ts');
@@ -487,7 +587,7 @@ export default createApp({
       expect(build.status, build.stderr).toBe(0);
       expect(build.stdout).toContain(`NEUTRAL outDir=${JSON.stringify(join(root, 'dist/.kovo'))}`);
       expect(existsSync(join(root, 'dist/.kovo/graph.json'))).toBe(true);
-      expect(existsSync(join(root, '.kovo/cache/static-build-analysis'))).toBe(true);
+      expect(existsSync(join(root, '.kovo/cache/static-build-analysis'))).toBe(false);
       expect(existsSync(join(outside, 'dist'))).toBe(false);
       expect(existsSync(join(outside, '.kovo'))).toBe(false);
 

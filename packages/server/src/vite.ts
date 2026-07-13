@@ -8,16 +8,28 @@ assertDataPlaneStaticAnalysisIntrinsics();
 
 import { existsSync, readFileSync } from 'node:fs';
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { registerHooks } from 'node:module';
+
+import { extractAppRouteCssTargets } from '@kovojs/compiler/package-styles';
+import type { QueryShapeFact as CompilerViteQueryShapeFact } from '@kovojs/compiler/internal';
+import { kovoVitePlugin as createCompilerVitePlugin } from '@kovojs/compiler/vite';
 
 import type { DiagnosticDocumentDiagnostic } from './document-diagnostics.js';
 import type { StylesheetAsset } from './hints.js';
 import { isParanoidSecurityAdvisoryCode } from '@kovojs/core/internal/security-markers';
-import type {
-  DataPlaneDiagnostic,
-  DataPlaneRuntimeRegistryFacts as RuntimeRegistryFacts,
-  QueryShapeFact as CompilerQueryShapeFact,
-} from '@kovojs/server/internal/data-plane-static-analysis';
+/*
+ * This value import is intentionally eager: authored Vite config can install node:module resolver
+ * hooks, so a later dynamic import cannot own compiler/data-plane security truth (SPEC §2/§11.4).
+ */
+import {
+  collectCompilerQueryShapeFacts as collectCompilerQueryShapeFactsAdapter,
+  collectDataPlaneAnalysis as collectDataPlaneAnalysisAdapter,
+  collectDataPlaneErrorDiagnostics as collectDataPlaneErrorDiagnosticsAdapter,
+  collectRuntimeRegistryFacts as collectRuntimeRegistryFactsAdapter,
+  isDataPlaneSourceFile,
+  type DataPlaneDiagnostic,
+  type DataPlaneRuntimeRegistryFacts as RuntimeRegistryFacts,
+  type QueryShapeFact as DataPlaneQueryShapeFact,
+} from './internal/data-plane-static-analysis.ts';
 import { currentKovoBuildContext } from '@kovojs/server/internal/build-context';
 import { serializeRuntimeRegistryWireModule } from '@kovojs/server/internal/runtime-registry-wire';
 import {
@@ -28,13 +40,11 @@ import {
 import type { KovoAppShellViteCompilerModuleDiagnosticReport } from './vite-dev.js';
 import {
   buildOwnDataProperty,
-  buildSecurityFileUrlToPath,
   buildSecurityPathDirname,
   buildSecurityPathIsAbsolute,
   buildSecurityPathRelative,
   buildSecurityPathResolve,
   buildSecuritySourceLiteral,
-  buildSecurityUrlSnapshot,
   commitBuildArrayValue,
   snapshotBuildArray,
 } from './build-security-intrinsics.ts';
@@ -42,7 +52,6 @@ import {
   securityArrayIsArray,
   securityArrayJoin,
   securityRegExpExec,
-  securityStringEndsWith,
   securityStringIncludes,
   securityStringIndexOf,
   securityStringReplaceAll,
@@ -55,7 +64,6 @@ const viteClearTimeout = globalThis.clearTimeout;
 const viteSetTimeout = globalThis.setTimeout;
 const viteExistsSync = existsSync;
 const viteReadFileSync = readFileSync;
-const viteRegisterHooks = registerHooks;
 const viteParanoidValue = process.env.KOVO_PARANOID;
 const viteBootParanoidStaticAdvisory = viteParanoidValue === '1' || viteParanoidValue === 'true';
 
@@ -216,8 +224,8 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
   const runtimeRegistryPublicId = `virtual:kovo-runtime-registry:${app}`;
   const runtimeRegistryResolvedId = `\0${runtimeRegistryPublicId}`;
   let root = process.cwd();
-  let compilerPluginPromise: Promise<KovoCompilerVitePlugin> | undefined;
-  let compilerQueryShapeFacts: readonly CompilerQueryShapeFact[] | undefined;
+  let compilerPluginValue: KovoCompilerVitePlugin | undefined;
+  let compilerQueryShapeFacts: readonly CompilerViteQueryShapeFact[] | undefined;
   let appShellPlugin: KovoAppShellDevPlugin | undefined;
   let onModuleDiagnostics: ((report: unknown) => void) | undefined;
   // SPEC.md §9.5: `serve` is the dev disposition (teaching, never fail-closed); any other
@@ -267,8 +275,7 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
   // data-plane source file changes — never on every per-file transform/HMR keystroke.
   const scheduleDevDataPlaneGate = async (file: string): Promise<void> => {
     if (viteCommand !== 'serve') return;
-    const adapter = await importKovoDataPlaneStaticAnalysisModule();
-    if (!adapter.isDataPlaneSourceFile(file, root)) {
+    if (!isDataPlaneSourceFile(file, root)) {
       return;
     }
     compilerQueryShapeFacts = undefined;
@@ -286,34 +293,22 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
     devDataPlaneDebounce.unref?.();
   };
 
-  const compilerPlugin = () => {
-    compilerPluginPromise ??= importKovoCompilerViteModule().then((module) => {
-      if (typeof module.kovoVitePlugin !== 'function') {
-        throw new Error('@kovojs/compiler/vite must export kovoVitePlugin.');
-      }
-
-      return module.kovoVitePlugin({
-        include: [(fileName: string) => isAuthoredAppSourceFile(fileName, app, root)],
-        onModuleDiagnostics(report: unknown) {
-          onModuleDiagnostics?.(report);
-        },
-        queryShapeFacts() {
-          return compilerQueryShapeFacts;
-        },
-      }) as KovoCompilerVitePlugin;
-    });
-
-    return compilerPluginPromise;
+  const compilerPlugin = async (): Promise<KovoCompilerVitePlugin> => {
+    compilerPluginValue ??= createCompilerVitePlugin({
+      include: [(fileName: string) => isAuthoredAppSourceFile(fileName, app, root)],
+      onModuleDiagnostics(report: unknown) {
+        onModuleDiagnostics?.(report);
+      },
+      queryShapeFacts() {
+        return compilerQueryShapeFacts;
+      },
+    }) as KovoCompilerVitePlugin;
+    return compilerPluginValue;
   };
 
   const routeTargets = async () => {
-    const module = await importKovoCompilerPackageStylesModule();
-    if (typeof module.extractAppRouteCssTargets !== 'function') {
-      throw new Error('@kovojs/compiler/package-styles must export extractAppRouteCssTargets.');
-    }
-
     const fileName = appEntryFileName(app, root);
-    const result = module.extractAppRouteCssTargets({
+    const result = extractAppRouteCssTargets({
       fileName,
       packagePrefixDiscoveryRoot: root,
       source: viteExistsSync(fileName) ? viteReadFileSync(fileName, 'utf8') : '',
@@ -462,11 +457,6 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
   return plugin;
 }
 
-let compilerSourceResolutionHooksRegistered = false;
-let dataPlaneStaticAnalysisModulePromise:
-  | Promise<typeof import('@kovojs/server/internal/data-plane-static-analysis')>
-  | undefined;
-
 function authoredAppEntry(app: unknown): string {
   if (typeof app !== 'string' || securityStringTrim(app) === '') {
     throw new TypeError('kovo({ app }) requires an authored app entry module.');
@@ -599,81 +589,6 @@ function slashPath(value: string): string {
   return securityStringReplaceAll(value, '\\', '/');
 }
 
-async function importKovoCompilerViteModule(): Promise<Record<string, unknown>> {
-  registerCompilerSourceResolutionHooks();
-  try {
-    return await importOptionalModule('@kovojs/compiler/vite');
-  } catch (error) {
-    const workspaceSource = buildSecurityUrlSnapshot(
-      '../../compiler/src/vite-config.ts',
-      import.meta.url,
-    );
-    if (viteExistsSync(buildSecurityFileUrlToPath(workspaceSource.href))) {
-      return await importOptionalModule(workspaceSource.href);
-    }
-    throw missingCompilerError(error);
-  }
-}
-
-async function importKovoCompilerPackageStylesModule(): Promise<Record<string, unknown>> {
-  registerCompilerSourceResolutionHooks();
-  try {
-    return await importOptionalModule('@kovojs/compiler/package-styles');
-  } catch (error) {
-    const workspaceSource = buildSecurityUrlSnapshot(
-      '../../compiler/src/package-styles.ts',
-      import.meta.url,
-    );
-    if (viteExistsSync(buildSecurityFileUrlToPath(workspaceSource.href))) {
-      return await importOptionalModule(workspaceSource.href);
-    }
-    throw missingCompilerError(error);
-  }
-}
-
-async function importKovoDataPlaneStaticAnalysisModule(): Promise<
-  typeof import('@kovojs/server/internal/data-plane-static-analysis')
-> {
-  registerCompilerSourceResolutionHooks();
-  dataPlaneStaticAnalysisModulePromise ??=
-    import('@kovojs/server/internal/data-plane-static-analysis');
-  return dataPlaneStaticAnalysisModulePromise;
-}
-
-async function importOptionalModule(specifier: string): Promise<Record<string, unknown>> {
-  return (await import(specifier)) as Record<string, unknown>;
-}
-
-function registerCompilerSourceResolutionHooks(): void {
-  if (compilerSourceResolutionHooksRegistered) return;
-  compilerSourceResolutionHooksRegistered = true;
-
-  viteRegisterHooks({
-    resolve(specifier, context, nextResolve) {
-      if (
-        securityStringStartsWith(specifier, '.') &&
-        securityStringEndsWith(specifier, '.js') &&
-        context.parentURL
-      ) {
-        const tsSpecifier = `${securityStringSlice(specifier, 0, -3)}.ts`;
-        const tsUrl = buildSecurityUrlSnapshot(tsSpecifier, context.parentURL);
-        if (viteExistsSync(buildSecurityFileUrlToPath(tsUrl.href))) {
-          return nextResolve(tsUrl.href, context);
-        }
-      }
-
-      return nextResolve(specifier, context);
-    },
-  });
-}
-
-function missingCompilerError(cause: unknown): Error {
-  return new Error(
-    'kovo({ app }) requires @kovojs/compiler to be installed so Vite can lower components and collect route CSS.',
-    { cause },
-  );
-}
-
 // ---------------------------------------------------------------------------
 // Project-level data-plane safety gate (SPEC.md §11.4 / §10.2 / §10.3 / §9.5.1)
 //
@@ -688,16 +603,14 @@ async function collectDataPlaneErrorDiagnostics(
   root: string,
   app: string,
 ): Promise<DataPlaneDiagnostic[]> {
-  const adapter = await importKovoDataPlaneStaticAnalysisModule();
-  return adapter.collectDataPlaneErrorDiagnostics({
+  return collectDataPlaneErrorDiagnosticsAdapter({
     appSourceDir: buildSecurityPathDirname(appEntryFileName(app, root)),
     root,
   });
 }
 
 async function collectRuntimeRegistry(root: string, app: string): Promise<RuntimeRegistryFacts> {
-  const adapter = await importKovoDataPlaneStaticAnalysisModule();
-  return adapter.collectRuntimeRegistryFacts({
+  return collectRuntimeRegistryFactsAdapter({
     appSourceDir: buildSecurityPathDirname(appEntryFileName(app, root)),
     root,
   });
@@ -706,19 +619,32 @@ async function collectRuntimeRegistry(root: string, app: string): Promise<Runtim
 async function collectCompilerQueryShapeFacts(
   root: string,
   app: string,
-): Promise<readonly CompilerQueryShapeFact[]> {
-  const adapter = await importKovoDataPlaneStaticAnalysisModule();
+): Promise<readonly CompilerViteQueryShapeFact[]> {
   if (currentKovoBuildContext()?.graphDerivation === true) {
-    await adapter.collectDataPlaneAnalysis({
+    await collectDataPlaneAnalysisAdapter({
       appSourceDir: buildSecurityPathDirname(appEntryFileName(app, root)),
       root,
       skipStaticFacts: true,
     });
   }
-  return adapter.collectCompilerQueryShapeFacts({
-    appSourceDir: buildSecurityPathDirname(appEntryFileName(app, root)),
-    root,
-  });
+  return compilerViteQueryShapeFacts(
+    await collectCompilerQueryShapeFactsAdapter({
+      appSourceDir: buildSecurityPathDirname(appEntryFileName(app, root)),
+      root,
+    }),
+  );
+}
+
+function compilerViteQueryShapeFacts(
+  facts: readonly DataPlaneQueryShapeFact[],
+): readonly CompilerViteQueryShapeFact[] {
+  // The data-plane adapter has already recursively validated every JSON query shape before this
+  // package boundary. Snapshot the carrier once; the cast only reconciles the duplicated compiler/
+  // core recursive TypeScript aliases and does not substitute for runtime validation.
+  return snapshotBuildArray(
+    facts,
+    'compiler Vite query-shape facts',
+  ) as readonly CompilerViteQueryShapeFact[];
 }
 
 /** The fail-closed build error thrown when the gate finds error-severity data-plane diagnostics. */

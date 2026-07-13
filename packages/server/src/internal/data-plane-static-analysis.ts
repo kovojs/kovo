@@ -1,11 +1,4 @@
-import {
-  existsSync as builtinExistsSync,
-  mkdirSync as builtinMkdirSync,
-  readFileSync as builtinReadFileSync,
-  readdirSync as builtinReaddirSync,
-  statSync as builtinStatSync,
-  writeFileSync as builtinWriteFileSync,
-} from 'node:fs';
+import { existsSync as builtinExistsSync } from 'node:fs';
 import {
   createRequire as builtinCreateRequire,
   registerHooks as builtinRegisterHooks,
@@ -13,7 +6,6 @@ import {
 import { availableParallelism as builtinAvailableParallelism } from 'node:os';
 import {
   dirname as builtinDirname,
-  join as builtinJoin,
   relative as builtinRelative,
   resolve as builtinResolve,
 } from 'node:path';
@@ -38,6 +30,12 @@ import {
   type QueryShapeFact,
 } from '@kovojs/core/internal/query-shape-source';
 import type * as CoreGraph from '@kovojs/core/internal/graph';
+import { currentKovoBuildContext } from './build-context.ts';
+import {
+  runtimeRegistryMutationTouchesFromGraph,
+  runtimeRegistryQueryReadsFromFacts,
+  runtimeRegistryTableSecurityFromFacts,
+} from './runtime-registry-wire.ts';
 import {
   staticAnalysisArrayAppend,
   staticAnalysisArrayIsArray,
@@ -47,7 +45,6 @@ import {
   staticAnalysisCreateUrl,
   staticAnalysisCreatePromise,
   staticAnalysisDefineDataProperty,
-  staticAnalysisHmacSha256,
   staticAnalysisJsonParse,
   staticAnalysisMapGet,
   staticAnalysisMapSet,
@@ -60,16 +57,12 @@ import {
   staticAnalysisOwnDataValue,
   staticAnalysisPromiseAll,
   staticAnalysisRegExpTest,
-  staticAnalysisRandomUuid,
-  staticAnalysisSecureStringEqual,
-  staticAnalysisSha256,
   staticAnalysisStringEndsWith,
   staticAnalysisStringIndexOf,
   staticAnalysisStringLastIndexOf,
   staticAnalysisStringSlice,
   staticAnalysisStringStartsWith,
   staticAnalysisStringToLowerCase,
-  staticAnalysisStatsIsDirectory,
   staticAnalysisUrlHref,
 } from './data-plane-static-analysis-intrinsics.ts';
 import type { RuntimeRegistryWireFacts } from './runtime-registry-wire.js';
@@ -110,7 +103,6 @@ export type DataPlaneRuntimeRegistryFacts = RuntimeRegistryWireFacts;
 /** @internal Options for CLI build/check static data-plane fact extraction. */
 export interface StaticDataPlaneBuildFactsOptions {
   cache: boolean;
-  cacheRoot?: string;
 }
 
 /** @internal Complete Vite/server-side app source analysis. */
@@ -151,16 +143,6 @@ interface ToctouFactLike {
   table: string;
 }
 
-interface KovoDrizzleStaticModule {
-  deriveMutationTouchRegistry(options: {
-    mutations: readonly { mutation: string; touchGraphKey: string }[];
-    touchGraph: unknown;
-  }): Readonly<Record<string, readonly RuntimeMutationTouchSiteLike[]>>;
-  extractStaticBuildAnalysisFactsFromProject(options: {
-    files: readonly DataPlaneSourceFile[];
-  }): StaticBuildAnalysisFactsLike;
-}
-
 interface StaticBuildAnalysisFactsLike {
   massAssignmentFacts?: readonly CoreGraph.MassAssignmentFact[];
   ownerDomains?: readonly CoreGraph.OwnerDomainFact[];
@@ -175,21 +157,14 @@ interface StaticBuildAnalysisFactsLike {
 
 const DRIZZLE_STATIC_ANALYZER_MODULE = '@kovojs/drizzle/internal/static';
 const STATIC_DATA_PLANE_FACTS_CACHE_VERSION = '2026-07-02.authz-census.v1';
-const STATIC_DATA_PLANE_CACHE_ENVELOPE_VERSION = 'kovo-static-data-plane-cache/v3';
 const OUTPUT_SCHEMA_QUERY_SHAPE_WORKER_KIND = 'kovo.output-schema-query-shape';
 const OUTPUT_SCHEMA_WORKER_MIN_FILES = 8;
 const OUTPUT_SCHEMA_WORKER_MAX_COUNT = 4;
 const existsSync = builtinExistsSync;
-const mkdirSync = builtinMkdirSync;
-const readFileSync = builtinReadFileSync;
-const readdirSync = builtinReaddirSync;
-const statSync = builtinStatSync;
-const writeFileSync = builtinWriteFileSync;
 const createRequire = builtinCreateRequire;
 const registerHooks = builtinRegisterHooks;
 const availableParallelism = builtinAvailableParallelism;
 const dirname = builtinDirname;
-const join = builtinJoin;
 const relative = builtinRelative;
 const resolve = builtinResolve;
 const isMainThread = builtinIsMainThread;
@@ -197,11 +172,19 @@ const parentPort = builtinParentPort;
 const Worker = BuiltinWorker;
 const workerData = builtinWorkerData;
 const fileURLToPath = builtinFileURLToPath;
-const processOnlyAnalyzerIdentity = staticAnalysisRandomUuid();
-// Cache storage is app-writable and therefore cannot authorize security facts. A key that exists
-// only in this bootstrapped process turns coordinated envelope edits into misses. Consequently,
-// cross-process entries are deliberately performance hints only and are re-analyzed (SPEC §11.4).
-const staticDataPlaneCacheMacKey = staticAnalysisRandomUuid();
+
+// This import is dynamic only to support the monorepo's native TypeScript source graph. It is
+// deliberately eager top-level authority: supported CLI/Vite runners evaluate this dependency
+// before authored config can install resolver hooks (SPEC §2 / §6.6 / §11.4).
+registerCompilerSourceResolutionHooks();
+const drizzleStaticModule = (await import(DRIZZLE_STATIC_ANALYZER_MODULE)) as Record<
+  string,
+  unknown
+>;
+const extractStaticBuildAnalysisFactsFromProject =
+  'extractStaticBuildAnalysisFactsFromProject' in drizzleStaticModule
+    ? drizzleStaticModule.extractStaticBuildAnalysisFactsFromProject
+    : undefined;
 
 interface OutputSchemaQueryShapeWorkerData {
   files: readonly DataPlaneSourceFile[];
@@ -211,9 +194,21 @@ interface OutputSchemaQueryShapeWorkerData {
 
 type TypeScriptModule = typeof import('typescript');
 
-let compilerSourceResolutionHooksRegistered = false;
-let loadedTypeScript: TypeScriptModule | undefined;
-const dataPlaneAnalysisCache = new Map<string, Promise<DataPlaneAnalysis>>();
+// Load TypeScript while the trusted server Vite/CLI graph is being established. Authored config
+// can install resolver hooks later, so lazy require() cannot own output-schema security facts.
+const loadedTypeScript = createRequire(import.meta.url)('typescript') as TypeScriptModule;
+let dataPlaneAnalysisCacheEntry:
+  | {
+      identity: string;
+      resultPreimage: Promise<string>;
+    }
+  | undefined;
+let staticBuildAnalysisCacheEntry:
+  | {
+      identity: string;
+      resultPreimage: Promise<string>;
+    }
+  | undefined;
 
 class DataPlaneStaticAnalysisError extends Error {
   readonly cause: unknown;
@@ -278,11 +273,20 @@ export async function collectDataPlaneAnalysis(options: {
     };
   }
   const identity = dataPlaneAnalysisCacheIdentity(files);
-  const cached = staticAnalysisMapGet(dataPlaneAnalysisCache, identity);
-  if (cached) return cached;
-  const promise = createDataPlaneAnalysis(options.root, identity, files);
-  staticAnalysisMapSet(dataPlaneAnalysisCache, identity, promise);
-  return promise;
+  let entry = dataPlaneAnalysisCacheEntry;
+  if (entry?.identity !== identity) {
+    entry = {
+      identity,
+      resultPreimage: createDataPlaneAnalysisPreimage(files),
+    };
+    dataPlaneAnalysisCacheEntry = entry;
+  }
+  try {
+    return snapshotDataPlaneAnalysisPreimage(await entry.resultPreimage);
+  } catch (error) {
+    if (dataPlaneAnalysisCacheEntry === entry) dataPlaneAnalysisCacheEntry = undefined;
+    throw error;
+  }
 }
 
 /** @internal Return Vite build/dev error diagnostics from shared data-plane facts. */
@@ -302,8 +306,6 @@ export async function collectCompilerQueryShapeFacts(options: {
   // SPEC.md §2 / §11.4: authored config shares this process and therefore cannot provide
   // verification facts through ambient globals. Derive them here; trusted CLI builds pass their
   // already-derived snapshot directly to the compiler plugin instead.
-  const { currentKovoBuildContext } = await import('./build-context.js');
-
   const analysis = await collectDataPlaneAnalysis({
     ...options,
     skipStaticFacts: currentKovoBuildContext()?.graphDerivation === true,
@@ -322,11 +324,6 @@ export async function collectRuntimeRegistryFacts(options: {
 }): Promise<DataPlaneRuntimeRegistryFacts> {
   const analysis = await collectDataPlaneAnalysis(options);
   if (analysis.files.length === 0) return { mutationTouches: {}, queryReads: [] };
-  const {
-    runtimeRegistryMutationTouchesFromGraph,
-    runtimeRegistryQueryReadsFromFacts,
-    runtimeRegistryTableSecurityFromFacts,
-  } = await importRuntimeRegistryWireModule();
 
   return {
     mutationTouches: runtimeRegistryMutationTouchesFromGraph(
@@ -522,8 +519,6 @@ function emptyStaticDataPlaneBuildFacts(): StaticDataPlaneBuildFacts {
 }
 
 async function createDataPlaneAnalysis(
-  root: string,
-  cacheIdentity: string,
   files: readonly DataPlaneSourceFile[],
 ): Promise<DataPlaneAnalysis> {
   const sourceFiles = snapshotDataPlaneSourceFiles(files, 'Vite static-analysis sources');
@@ -534,17 +529,7 @@ async function createDataPlaneAnalysis(
       staticFacts: emptyStaticBuildAnalysisFactsLike(),
     };
   }
-  const viteCacheIdentity = namespacedDataPlaneCacheIdentity('vite', cacheIdentity);
-  const cached = readCachedDataPlaneStaticFacts(root, viteCacheIdentity);
-  if (cached) {
-    return {
-      files: sourceFiles,
-      outputQueryShapeFacts: await outputSchemaQueryShapeFactsAsync(sourceFiles),
-      staticFacts: cached,
-    };
-  }
   const staticFacts = await runStaticBuildAnalysisFacts(sourceFiles);
-  writeCachedDataPlaneStaticFacts(root, viteCacheIdentity, staticFacts);
   return {
     files: sourceFiles,
     outputQueryShapeFacts: await outputSchemaQueryShapeFactsAsync(sourceFiles),
@@ -552,37 +537,62 @@ async function createDataPlaneAnalysis(
   };
 }
 
+async function createDataPlaneAnalysisPreimage(
+  files: readonly DataPlaneSourceFile[],
+): Promise<string> {
+  return staticAnalysisCanonicalJson(await createDataPlaneAnalysis(files));
+}
+
 async function cachedStaticBuildAnalysisFacts(
   files: readonly DataPlaneSourceFile[],
   options: StaticDataPlaneBuildFactsOptions,
 ): Promise<StaticBuildAnalysisFactsLike> {
   const sourceFiles = snapshotDataPlaneSourceFiles(files, 'Cached static-analysis sources');
-  const cacheRoot = options.cacheRoot ?? process.cwd();
   const cacheIdentity = namespacedDataPlaneCacheIdentity(
     'build',
     dataPlaneAnalysisCacheIdentity(sourceFiles),
   );
-  if (options.cache) {
-    const cached = readCachedDataPlaneStaticFacts(cacheRoot, cacheIdentity);
-    if (cached) return cached;
+  if (!options.cache) return runStaticBuildAnalysisFacts(sourceFiles);
+
+  let entry = staticBuildAnalysisCacheEntry;
+  if (entry?.identity !== cacheIdentity) {
+    entry = {
+      identity: cacheIdentity,
+      resultPreimage: createStaticBuildAnalysisPreimage(sourceFiles),
+    };
+    staticBuildAnalysisCacheEntry = entry;
   }
-  const facts = await runStaticBuildAnalysisFacts(sourceFiles);
-  if (options.cache) writeCachedDataPlaneStaticFacts(cacheRoot, cacheIdentity, facts);
-  return facts;
+  try {
+    const facts = snapshotStaticBuildAnalysisFacts(
+      staticAnalysisJsonParse(await entry.resultPreimage),
+    );
+    if (facts === undefined) {
+      throw new TypeError('Kovo process-local static-analysis cache returned invalid facts.');
+    }
+    return facts;
+  } catch (error) {
+    if (staticBuildAnalysisCacheEntry === entry) staticBuildAnalysisCacheEntry = undefined;
+    throw error;
+  }
+}
+
+async function createStaticBuildAnalysisPreimage(
+  files: readonly DataPlaneSourceFile[],
+): Promise<string> {
+  return staticAnalysisCanonicalJson(await runStaticBuildAnalysisFacts(files));
 }
 
 async function runStaticBuildAnalysisFacts(
   files: readonly DataPlaneSourceFile[],
 ): Promise<StaticBuildAnalysisFactsLike> {
   try {
-    const drizzle = await importKovoDrizzleStaticModule();
-    if (typeof drizzle.extractStaticBuildAnalysisFactsFromProject !== 'function') {
+    if (typeof extractStaticBuildAnalysisFactsFromProject !== 'function') {
       throw new TypeError(
         '@kovojs/drizzle/internal/static must export extractStaticBuildAnalysisFactsFromProject.',
       );
     }
     const facts = snapshotStaticBuildAnalysisFacts(
-      drizzle.extractStaticBuildAnalysisFactsFromProject({ files }),
+      extractStaticBuildAnalysisFactsFromProject({ files }),
     );
     if (facts === undefined) {
       throw new TypeError(
@@ -593,30 +603,6 @@ async function runStaticBuildAnalysisFacts(
   } catch (error) {
     throw dataPlaneStaticAnalysisError(error, files);
   }
-}
-
-async function importKovoDrizzleStaticModule(): Promise<KovoDrizzleStaticModule> {
-  registerCompilerSourceResolutionHooks();
-  try {
-    return (await import(DRIZZLE_STATIC_ANALYZER_MODULE)) as unknown as KovoDrizzleStaticModule;
-  } catch (error) {
-    const workspaceSource = staticAnalysisCreateUrl(
-      '../../../drizzle/src/static.ts',
-      import.meta.url,
-    );
-    const workspaceSourceHref = staticAnalysisUrlHref(workspaceSource);
-    if (existsSync(fileURLToPath(workspaceSourceHref))) {
-      return (await import(workspaceSourceHref)) as unknown as KovoDrizzleStaticModule;
-    }
-    throw missingDrizzleError(error);
-  }
-}
-
-function missingDrizzleError(cause: unknown): Error {
-  return new Error(
-    'Kovo requires @kovojs/drizzle to be installed so the data-plane static-analysis gates can run (KV422/KV410/KV411/KV429).',
-    { cause },
-  );
 }
 
 function dataPlaneStaticAnalysisError(
@@ -671,141 +657,55 @@ function dataPlaneAnalysisCacheIdentity(files: readonly DataPlaneSourceFile[]): 
     staticAnalysisArraySet(entries, insertAt, entry, 'Static-analysis cache entries');
   }
   return staticAnalysisCanonicalJson({
-    analyzerIdentity: staticDataPlaneAnalyzerIdentity(),
     files: entries,
     version: STATIC_DATA_PLANE_FACTS_CACHE_VERSION,
   });
-}
-
-function staticDataPlaneAnalyzerIdentity(): string {
-  const resolved = resolveDataPlaneStaticAnalyzerPath();
-  const packageRoot = resolved ? nearestPackageRoot(dirname(resolved)) : undefined;
-  const sources: Array<{ path: string; source: string }> = [];
-  let packageManifestSource: string | undefined;
-  if (packageRoot) {
-    packageManifestSource = readFileIfExists(join(packageRoot, 'package.json'));
-    const srcDir = join(packageRoot, 'src');
-    if (existsSync(srcDir)) {
-      const analyzerSources = sourceFilePathsUnder(srcDir);
-      for (let index = 0; index < analyzerSources.length; index += 1) {
-        const file = analyzerSources[index]!;
-        staticAnalysisArrayAppend(
-          sources,
-          {
-            path: slashPath(relative(packageRoot, file)),
-            source: readFileIfExists(file),
-          },
-          'Static-analysis analyzer sources',
-        );
-      }
-    }
-  }
-  return staticAnalysisCanonicalJson(
-    resolved && packageRoot && packageManifestSource !== undefined && sources.length > 0
-      ? {
-          packageManifestSource,
-          resolvedPath: slashPath(relative(packageRoot, resolved)),
-          sources,
-          version: 'kovo-static-data-plane-analyzer-identity/v2',
-        }
-      : {
-          processIdentity: processOnlyAnalyzerIdentity,
-          version: 'kovo-static-data-plane-analyzer-identity/v2/process-only',
-        },
-  );
 }
 
 function namespacedDataPlaneCacheIdentity(kind: 'build' | 'vite', identity: string): string {
   return staticAnalysisCanonicalJson({ identity, kind });
 }
 
-function resolveDataPlaneStaticAnalyzerPath(): string | undefined {
-  try {
-    return createRequire(import.meta.url).resolve(DRIZZLE_STATIC_ANALYZER_MODULE);
-  } catch {
-    return undefined;
+function snapshotDataPlaneAnalysisPreimage(preimage: string): DataPlaneAnalysis {
+  const parsed = staticAnalysisJsonParse(preimage);
+  if (!parsed || typeof parsed !== 'object' || staticAnalysisArrayIsArray(parsed)) {
+    throw new TypeError('Kovo process-local data-plane cache returned an invalid record.');
   }
-}
-
-function readCachedDataPlaneStaticFacts(
-  root: string,
-  cacheIdentity: string,
-): StaticBuildAnalysisFactsLike | undefined {
-  try {
-    const parsed = staticAnalysisJsonParse(
-      readFileSync(dataPlaneStaticFactsCachePath(root, cacheIdentity), 'utf8'),
-    );
-    if (!parsed || typeof parsed !== 'object' || staticAnalysisArrayIsArray(parsed)) {
-      return undefined;
-    }
-    const version = staticAnalysisOwnDataValue(parsed, 'version', 'Static-analysis cache envelope');
-    const storedIdentity = staticAnalysisOwnDataValue(
-      parsed,
-      'cacheIdentity',
-      'Static-analysis cache envelope',
-    );
-    if (version !== STATIC_DATA_PLANE_CACHE_ENVELOPE_VERSION || storedIdentity !== cacheIdentity) {
-      return undefined;
-    }
-    const resultPreimage = staticAnalysisOwnDataValue(
-      parsed,
-      'resultPreimage',
-      'Static-analysis cache envelope',
-    );
-    const integrity = staticAnalysisOwnDataValue(
-      parsed,
-      'integrity',
-      'Static-analysis cache envelope',
-    );
-    if (typeof resultPreimage !== 'string' || typeof integrity !== 'string') return undefined;
-    const expectedIntegrity = staticAnalysisHmacSha256(
-      staticDataPlaneCacheMacKey,
-      staticAnalysisCanonicalJson({
-        cacheIdentity: storedIdentity,
-        resultPreimage,
-        version,
-      }),
-    );
-    if (!staticAnalysisSecureStringEqual(integrity, expectedIntegrity)) return undefined;
-    return snapshotStaticBuildAnalysisFacts(staticAnalysisJsonParse(resultPreimage));
-  } catch {
-    return undefined;
-  }
-}
-
-function writeCachedDataPlaneStaticFacts(
-  root: string,
-  cacheIdentity: string,
-  facts: StaticBuildAnalysisFactsLike,
-): void {
-  try {
-    const cachePath = dataPlaneStaticFactsCachePath(root, cacheIdentity);
-    mkdirSync(dirname(cachePath), { recursive: true });
-    const resultPreimage = staticAnalysisCanonicalJson(facts);
-    const unsignedEnvelope = {
-      cacheIdentity,
-      resultPreimage,
-      version: STATIC_DATA_PLANE_CACHE_ENVELOPE_VERSION,
-    };
-    const envelope = staticAnalysisCanonicalJson({
-      ...unsignedEnvelope,
-      integrity: staticAnalysisHmacSha256(
-        staticDataPlaneCacheMacKey,
-        staticAnalysisCanonicalJson(unsignedEnvelope),
-      ),
-    });
-    writeFileSync(cachePath, `${envelope}\n`, 'utf8');
-  } catch {
-    // Cache writes are performance-only; the analyzer already ran for this source snapshot.
-  }
-}
-
-function dataPlaneStaticFactsCachePath(root: string, cacheIdentity: string): string {
-  return join(
-    root,
-    '.kovo/cache/static-build-analysis',
-    `${staticAnalysisSha256(cacheIdentity)}.json`,
+  const files = staticAnalysisOwnDataValue(parsed, 'files', 'Cached data-plane analysis');
+  const outputQueryShapeFacts = staticAnalysisOwnDataValue(
+    parsed,
+    'outputQueryShapeFacts',
+    'Cached data-plane analysis',
   );
+  const staticFactsValue = staticAnalysisOwnDataValue(
+    parsed,
+    'staticFacts',
+    'Cached data-plane analysis',
+  );
+  if (!staticAnalysisArrayIsArray(files) || !staticAnalysisArrayIsArray(outputQueryShapeFacts)) {
+    throw new TypeError('Kovo process-local data-plane cache returned invalid arrays.');
+  }
+  const queryShapeFacts = snapshotDenseArray(
+    outputQueryShapeFacts,
+    'Cached data-plane query-shape facts',
+  );
+  for (let index = 0; index < queryShapeFacts.length; index += 1) {
+    if (!isCompilerQueryShapeFact(queryShapeFacts[index])) {
+      throw new TypeError('Kovo process-local data-plane cache returned an invalid query shape.');
+    }
+  }
+  const staticFacts = snapshotStaticBuildAnalysisFacts(staticFactsValue);
+  if (staticFacts === undefined) {
+    throw new TypeError('Kovo process-local data-plane cache returned invalid static facts.');
+  }
+  return {
+    files: snapshotDataPlaneSourceFiles(
+      files as readonly DataPlaneSourceFile[],
+      'Cached data-plane sources',
+    ),
+    outputQueryShapeFacts: queryShapeFacts as readonly QueryShapeFact[],
+    staticFacts,
+  };
 }
 
 function snapshotStaticBuildAnalysisFacts(
@@ -1647,35 +1547,6 @@ function portableCacheFilePath(fileName: string): string {
   return relativePath === '' ? fileName : relativePath;
 }
 
-function nearestPackageRoot(startDir: string): string | undefined {
-  for (let current = startDir; ; current = dirname(current)) {
-    if (existsSync(join(current, 'package.json'))) return current;
-    const parent = dirname(current);
-    if (parent === current) return undefined;
-  }
-}
-
-function sourceFilePathsUnder(directory: string): string[] {
-  const paths: string[] = [];
-  const entries = readdirSafe(directory);
-  sortStrings(entries);
-  for (let index = 0; index < entries.length; index += 1) {
-    const entry = entries[index]!;
-    const path = resolve(directory, entry);
-    const stat = statSafe(path);
-    if (!stat) continue;
-    if (staticAnalysisStatsIsDirectory(stat)) {
-      const nested = sourceFilePathsUnder(path);
-      for (let nestedIndex = 0; nestedIndex < nested.length; nestedIndex += 1) {
-        staticAnalysisArrayAppend(paths, nested[nestedIndex]!, 'Static-analysis project paths');
-      }
-    } else if (staticAnalysisRegExpTest(/\.[cm]?[jt]sx?$/u, entry)) {
-      staticAnalysisArrayAppend(paths, path, 'Static-analysis project paths');
-    }
-  }
-  return paths;
-}
-
 function sortStrings(values: string[]): void {
   for (let index = 1; index < values.length; index += 1) {
     const value = values[index]!;
@@ -1693,46 +1564,7 @@ function sortStrings(values: string[]): void {
   }
 }
 
-function readFileIfExists(path: string): string {
-  try {
-    return readFileSync(path, 'utf8');
-  } catch {
-    return '';
-  }
-}
-
-function readdirSafe(dir: string): string[] {
-  try {
-    return readdirSync(dir);
-  } catch {
-    return [];
-  }
-}
-
-function statSafe(path: string): ReturnType<typeof statSync> | undefined {
-  try {
-    return statSync(path);
-  } catch {
-    return undefined;
-  }
-}
-
-async function importRuntimeRegistryWireModule(): Promise<
-  typeof import('./runtime-registry-wire.js')
-> {
-  try {
-    return await import('./runtime-registry-wire.js');
-  } catch (error) {
-    const sourceUrl = staticAnalysisCreateUrl('./runtime-registry-wire.ts', import.meta.url);
-    const sourceHref = staticAnalysisUrlHref(sourceUrl);
-    if (existsSync(fileURLToPath(sourceHref))) return await import(sourceHref);
-    throw error;
-  }
-}
-
 function registerCompilerSourceResolutionHooks(): void {
-  if (compilerSourceResolutionHooksRegistered) return;
-  compilerSourceResolutionHooksRegistered = true;
   registerHooks({
     resolve(specifier, context, nextResolve) {
       if (
@@ -1753,7 +1585,6 @@ function registerCompilerSourceResolutionHooks(): void {
 }
 
 function typeScript(): TypeScriptModule {
-  loadedTypeScript ??= createRequire(import.meta.url)('typescript') as TypeScriptModule;
   return loadedTypeScript;
 }
 

@@ -1,6 +1,5 @@
-import { mkdtemp, mkdir, readFile, readdir, rm, symlink, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readdir, rm, symlink, writeFile } from 'node:fs/promises';
 import { Stats } from 'node:fs';
-import { createRequire, syncBuiltinESMExports } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -383,8 +382,8 @@ export const status = query({
     }
   });
 
-  it('does not replay safe cached facts when the live node:crypto hash export is replaced', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'kovo-data-plane-cache-security-'));
+  it('keys the process-local cache by exact source and never creates disk cache state', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kovo-data-plane-process-cache-'));
     const extractStaticBuildAnalysisFactsFromProject = vi.fn(
       ({ files }: { files: readonly { source: string }[] }) => ({
         queries: [],
@@ -412,67 +411,23 @@ export const status = query({
       source: 'export async function safe(db: any, id: string) { return db.execute(id); }',
     };
     const unsafe = RELEVANT_DRIZZLE_SOURCE;
-    const require = createRequire(import.meta.url);
-    const mutableCrypto = require('node:crypto') as {
-      createHash: (typeof import('node:crypto'))['createHash'];
-    };
-    const nativeCreateHash = mutableCrypto.createHash;
-    const hashPrototype = Object.getPrototypeOf(nativeCreateHash('sha256')) as {
-      update: Function;
-    };
-    const nativeHashUpdate = hashPrototype.update;
-    const nativeApply = Reflect.apply;
 
     try {
-      await expect(
-        staticDataPlaneBuildFacts([safe], { cache: true, cacheRoot: root }),
-      ).resolves.toMatchObject({ sqlSafetyDiagnostics: [] });
-      const [safeCacheFile] = await readdir(join(root, '.kovo/cache/static-build-analysis'));
-      const safeCacheKey = safeCacheFile?.replace(/\.json$/u, '');
-      expect(safeCacheKey).toMatch(/^[0-9a-f]{64}$/u);
-      const safeEnvelope = JSON.parse(
-        await readFile(
-          join(root, '.kovo/cache/static-build-analysis', safeCacheFile ?? ''),
-          'utf8',
-        ),
-      ) as { cacheIdentity?: unknown; resultPreimage?: unknown; version?: unknown };
-      expect(safeEnvelope).toMatchObject({
-        cacheIdentity: expect.any(String),
-        resultPreimage: expect.any(String),
-        version: 'kovo-static-data-plane-cache/v3',
+      await expect(staticDataPlaneBuildFacts([safe], { cache: true })).resolves.toMatchObject({
+        sqlSafetyDiagnostics: [],
       });
-
-      hashPrototype.update = function update(data: unknown, encoding?: unknown) {
-        // Deliberately mimics the former source allowlist: this[kHandle].update
-        const rewritten = typeof data === 'string' && data.includes('sql.raw') ? safe.source : data;
-        return nativeApply(nativeHashUpdate, this, [rewritten, encoding]);
-      };
-      mutableCrypto.createHash = function createHash() {
-        // Deliberately mimics the former source allowlist: return new Hash(algorithm, options)
-        return {
-          digest: () => safeCacheKey,
-          update() {
-            return this;
-          },
-        };
-      } as unknown as typeof mutableCrypto.createHash;
-      syncBuiltinESMExports();
-
-      const facts = await staticDataPlaneBuildFacts([unsafe], { cache: true, cacheRoot: root });
+      const facts = await staticDataPlaneBuildFacts([unsafe], { cache: true });
       expect(extractStaticBuildAnalysisFactsFromProject).toHaveBeenCalledTimes(2);
       expect(facts.sqlSafetyDiagnostics).toEqual([
         expect.objectContaining({ code: 'KV422', site: 'src/schema.ts:4' }),
       ]);
+      expect(await readdir(root)).toEqual([]);
     } finally {
-      mutableCrypto.createHash = nativeCreateHash;
-      hashPrototype.update = nativeHashUpdate;
-      syncBuiltinESMExports();
       await rm(root, { force: true, recursive: true });
     }
   });
 
-  it('does not persist empty facts through an inherited toJSON callback', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'kovo-data-plane-cache-to-json-'));
+  it('returns a fresh canonical snapshot for every process-cache hit', async () => {
     const extractStaticBuildAnalysisFactsFromProject = vi.fn(() => ({
       queries: [],
       sqlSafetyDiagnostics: [
@@ -491,148 +446,78 @@ export const status = query({
       extractStaticBuildAnalysisFactsFromProject,
     }));
     const { staticDataPlaneBuildFacts } = await loadSubject();
-    const previous = Object.getOwnPropertyDescriptor(Object.prototype, 'toJSON');
-    Object.defineProperty(Object.prototype, 'toJSON', {
-      configurable: true,
-      value(this: Record<string, unknown>) {
-        if ('sqlSafetyDiagnostics' in this && 'touchGraph' in this) {
-          return {
-            queries: [],
-            sqlSafetyDiagnostics: [],
-            toctouFacts: [],
-            touchGraph: {},
-          };
-        }
-        return this;
-      },
-    });
+    const first = await staticDataPlaneBuildFacts([RELEVANT_DRIZZLE_SOURCE], { cache: true });
+    (first.sqlSafetyDiagnostics as unknown[]).length = 0;
+    const second = await staticDataPlaneBuildFacts([RELEVANT_DRIZZLE_SOURCE], { cache: true });
+
+    expect(second.sqlSafetyDiagnostics).toEqual([
+      expect.objectContaining({ code: 'KV422', site: 'src/schema.ts:4' }),
+    ]);
+    expect(extractStaticBuildAnalysisFactsFromProject).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not let a caller poison the shared Vite data-plane analysis snapshot', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kovo-data-plane-vite-cache-snapshot-'));
+    const srcDir = join(root, 'src');
+    await mkdir(srcDir, { recursive: true });
+    await writeFile(join(srcDir, 'schema.ts'), RELEVANT_DRIZZLE_SOURCE.source, 'utf8');
+    const extractStaticBuildAnalysisFactsFromProject = vi.fn(() => ({
+      queries: [],
+      sqlSafetyDiagnostics: [
+        {
+          code: 'KV422',
+          message: 'raw SQL input reaches the managed sink',
+          severity: 'error',
+          site: 'src/schema.ts:4',
+        },
+      ],
+      toctouFacts: [],
+      touchGraph: {},
+    }));
+    vi.doMock('@kovojs/drizzle/internal/static', () => ({
+      deriveMutationTouchRegistry: () => ({}),
+      extractStaticBuildAnalysisFactsFromProject,
+    }));
+    const { collectDataPlaneAnalysis, collectDataPlaneErrorDiagnostics } = await loadSubject();
 
     try {
-      const first = await staticDataPlaneBuildFacts([RELEVANT_DRIZZLE_SOURCE], {
-        cache: true,
-        cacheRoot: root,
-      });
-      const second = await staticDataPlaneBuildFacts([RELEVANT_DRIZZLE_SOURCE], {
-        cache: true,
-        cacheRoot: root,
-      });
-      expect(first.sqlSafetyDiagnostics).toEqual([
-        expect.objectContaining({ code: 'KV422', site: 'src/schema.ts:4' }),
-      ]);
-      expect(second.sqlSafetyDiagnostics).toEqual([
-        expect.objectContaining({ code: 'KV422', site: 'src/schema.ts:4' }),
-      ]);
+      const first = await collectDataPlaneAnalysis({ appSourceDir: srcDir, root });
+      (first.staticFacts.sqlSafetyDiagnostics as unknown[]).length = 0;
+
+      await expect(
+        collectDataPlaneErrorDiagnostics({ appSourceDir: srcDir, root }),
+      ).resolves.toEqual([expect.objectContaining({ code: 'KV422', site: 'src/schema.ts:4' })]);
       expect(extractStaticBuildAnalysisFactsFromProject).toHaveBeenCalledTimes(1);
     } finally {
-      if (previous === undefined) delete (Object.prototype as { toJSON?: unknown }).toJSON;
-      else Object.defineProperty(Object.prototype, 'toJSON', previous);
       await rm(root, { force: true, recursive: true });
     }
   });
 
-  it('treats malformed cached SQL diagnostics as a miss and reruns the analyzer', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'kovo-data-plane-cache-malformed-'));
-    const extractStaticBuildAnalysisFactsFromProject = vi.fn(() => ({
-      queries: [],
-      sqlSafetyDiagnostics: [
-        {
-          code: 'KV422',
-          message: 'raw SQL input reaches the managed sink',
-          severity: 'error',
-          site: 'src/schema.ts:4',
-        },
-      ],
-      toctouFacts: [],
-      touchGraph: {},
-    }));
-    vi.doMock('@kovojs/drizzle/internal/static', () => ({
-      deriveMutationTouchRegistry: () => ({}),
-      extractStaticBuildAnalysisFactsFromProject,
-    }));
-    const { staticDataPlaneBuildFacts } = await loadSubject();
-
-    try {
-      await staticDataPlaneBuildFacts([RELEVANT_DRIZZLE_SOURCE], {
-        cache: true,
-        cacheRoot: root,
-      });
-      const cacheDir = join(root, '.kovo/cache/static-build-analysis');
-      const [cacheFile] = await readdir(cacheDir);
-      if (cacheFile === undefined) throw new Error('expected static-analysis cache file');
-      const cachePath = join(cacheDir, cacheFile);
-      const cached = JSON.parse(await readFile(cachePath, 'utf8')) as Record<string, unknown>;
-      const resultPreimage = JSON.parse(cached.resultPreimage as string) as Record<string, unknown>;
-      resultPreimage.sqlSafetyDiagnostics = [{ code: 'KV422' }];
-      cached.resultPreimage = JSON.stringify(resultPreimage);
-      await writeFile(cachePath, JSON.stringify(cached), 'utf8');
-
-      const facts = await staticDataPlaneBuildFacts([RELEVANT_DRIZZLE_SOURCE], {
-        cache: true,
-        cacheRoot: root,
-      });
-      expect(extractStaticBuildAnalysisFactsFromProject).toHaveBeenCalledTimes(2);
-      expect(facts.sqlSafetyDiagnostics).toEqual([
-        expect.objectContaining({ code: 'KV422', site: 'src/schema.ts:4' }),
-      ]);
-    } finally {
-      await rm(root, { force: true, recursive: true });
-    }
-  });
-
-  it('rejects coordinated cache-envelope edits that forge valid empty security facts', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'kovo-data-plane-cache-forged-empty-'));
-    const extractStaticBuildAnalysisFactsFromProject = vi.fn(() => ({
-      queries: [],
-      sqlSafetyDiagnostics: [
-        {
-          code: 'KV422',
-          message: 'raw SQL input reaches the managed sink',
-          severity: 'error',
-          site: 'src/schema.ts:4',
-        },
-      ],
-      toctouFacts: [],
-      touchGraph: {},
-    }));
-    vi.doMock('@kovojs/drizzle/internal/static', () => ({
-      deriveMutationTouchRegistry: () => ({}),
-      extractStaticBuildAnalysisFactsFromProject,
-    }));
-    const { staticDataPlaneBuildFacts } = await loadSubject();
-
-    try {
-      const first = await staticDataPlaneBuildFacts([RELEVANT_DRIZZLE_SOURCE], {
-        cache: true,
-        cacheRoot: root,
-      });
-      expect(first.sqlSafetyDiagnostics).toEqual([
-        expect.objectContaining({ code: 'KV422', site: 'src/schema.ts:4' }),
-      ]);
-
-      const cacheDir = join(root, '.kovo/cache/static-build-analysis');
-      const [cacheFile] = await readdir(cacheDir);
-      if (cacheFile === undefined) throw new Error('expected static-analysis cache file');
-      const cachePath = join(cacheDir, cacheFile);
-      const envelope = JSON.parse(await readFile(cachePath, 'utf8')) as Record<string, unknown>;
-      envelope.resultPreimage = JSON.stringify({
+  it('evicts a rejected process-cache entry before retrying the same source', async () => {
+    const extractStaticBuildAnalysisFactsFromProject = vi
+      .fn()
+      .mockImplementationOnce(() => {
+        throw new Error('transient analyzer failure');
+      })
+      .mockImplementationOnce(() => ({
         queries: [],
         sqlSafetyDiagnostics: [],
         toctouFacts: [],
         touchGraph: {},
-      });
-      await writeFile(cachePath, JSON.stringify(envelope), 'utf8');
+      }));
+    vi.doMock('@kovojs/drizzle/internal/static', () => ({
+      deriveMutationTouchRegistry: () => ({}),
+      extractStaticBuildAnalysisFactsFromProject,
+    }));
+    const { staticDataPlaneBuildFacts } = await loadSubject();
 
-      const second = await staticDataPlaneBuildFacts([RELEVANT_DRIZZLE_SOURCE], {
-        cache: true,
-        cacheRoot: root,
-      });
-      expect(extractStaticBuildAnalysisFactsFromProject).toHaveBeenCalledTimes(2);
-      expect(second.sqlSafetyDiagnostics).toEqual([
-        expect.objectContaining({ code: 'KV422', site: 'src/schema.ts:4' }),
-      ]);
-    } finally {
-      await rm(root, { force: true, recursive: true });
-    }
+    await expect(
+      staticDataPlaneBuildFacts([RELEVANT_DRIZZLE_SOURCE], { cache: true }),
+    ).rejects.toThrow(/transient analyzer failure/);
+    await expect(
+      staticDataPlaneBuildFacts([RELEVANT_DRIZZLE_SOURCE], { cache: true }),
+    ).resolves.toMatchObject({ sqlSafetyDiagnostics: [] });
+    expect(extractStaticBuildAnalysisFactsFromProject).toHaveBeenCalledTimes(2);
   });
 
   it('does not let author-controlled filenames suppress app security analysis', async () => {
