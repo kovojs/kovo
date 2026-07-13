@@ -1,12 +1,7 @@
 import { createHmac } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 
-import {
-  hmacSignature,
-  type HmacSecret,
-  type HmacSignatureVerifier,
-  type WebhookPayload,
-} from '@kovojs/core';
+import { hmacSignature, type HmacSecret, type HmacSignatureVerifier } from '@kovojs/core';
 import {
   createMemoryMutationReplayStore,
   replayMutationWireBody,
@@ -265,14 +260,9 @@ function stripeFixtureSignature(options: {
     header: 'stripe-signature',
     multiSig: stripeV1Signatures,
     name: 'stripe-fixture',
-    payload: (request, context) => {
-      const timestamp = stripeHeaderPart(context.signatureHeader, 't');
-      if (timestamp === undefined) return '';
-      return `${timestamp}.${webhookPayloadToString(request.payload)}`;
-    },
+    payload: (request) => request.payload,
     scheme: 'stripe:v1:hmac-sha256',
     secret: options.secret,
-    timestampBound: false,
     tolerance: {
       seconds: 5 * 60,
       timestamp: (_request, context) => stripeHeaderPart(context.signatureHeader, 't'),
@@ -301,14 +291,6 @@ function stripeHeaderPart(header: string, partName: string): string | undefined 
     if (name?.trim() === partName && value !== undefined && value.length > 0) return value;
   }
   return undefined;
-}
-
-function webhookPayloadToString(payload: WebhookPayload): string {
-  if (typeof payload === 'string') return payload;
-  if (payload instanceof ArrayBuffer) return new TextDecoder().decode(payload);
-  return new TextDecoder().decode(
-    payload.buffer.slice(payload.byteOffset, payload.byteOffset + payload.byteLength),
-  );
 }
 
 function createOrderTx(state: SpikeState) {

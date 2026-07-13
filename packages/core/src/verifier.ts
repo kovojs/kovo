@@ -126,18 +126,6 @@ export interface HmacSignatureOptions {
   payload: HmacSignaturePayload;
   scheme?: string;
   secret: HmacSecret | readonly HmacSecret[];
-  /**
-   * When `tolerance` is configured, the verifier automatically prepends
-   * `${timestamp}.` to the signed bytes so a captured `(signature, body)` pair
-   * cannot be replayed with a forged-fresh timestamp (SPEC §9.1.1:846 / B5).
-   *
-   * Set `timestampBound: false` only when your `payload` function already folds
-   * the timestamp into the signed bytes — the preset recipes (`standardWebhooks`,
-   * `timestampedProvider`) both do this and therefore set `false`.
-   *
-   * Defaults to `true` whenever `tolerance` is present.
-   */
-  timestampBound?: boolean;
   tolerance?: HmacSignatureTolerance;
 }
 
@@ -149,6 +137,7 @@ export interface ResolvedHmacSignatureConfig {
   multiSig: boolean;
   name: string;
   scheme: string;
+  timestampBinding: 'automatic' | 'none' | 'payload';
   toleranceSeconds?: number;
 }
 
@@ -174,6 +163,11 @@ const minimumHmacSecretBytes = 32;
 // captured signature valid indefinitely (SPEC §9.1 verifier replay protection).
 const maximumWebhookToleranceSeconds = 24 * 60 * 60;
 const frameworkHmacSignatureVerifiers = securityWeakSet<object>();
+// Module-private authority used only by framework presets whose provider protocol fixes the
+// timestamp at a non-prefix position in the signed payload. App code cannot mint or import this
+// sentinel, so public hmacSignature() always owns timestamp binding when tolerance is configured.
+const payloadBindsTimestamp = Symbol('kovo.hmac.payload-binds-timestamp');
+type HmacTimestampBinding = typeof payloadBindsTimestamp | undefined;
 
 /** @internal Unforgeable provenance check for framework-constructed HMAC verifiers. */
 export function isFrameworkHmacSignatureVerifier(value: unknown): value is HmacSignatureVerifier {
@@ -203,6 +197,13 @@ export function isFrameworkHmacSignatureVerifier(value: unknown): value is HmacS
  * });
  */
 export function hmacSignature(options: HmacSignatureOptions): HmacSignatureVerifier {
+  return createHmacSignature(options);
+}
+
+function createHmacSignature(
+  options: HmacSignatureOptions,
+  timestampBinding?: HmacTimestampBinding,
+): HmacSignatureVerifier {
   // SPEC §9.1 verifier-before-parse is a security boundary. Keep the executable
   // verifier on a private semantic snapshot so later writes through either the
   // caller-owned options object or the public audit config cannot change which
@@ -218,6 +219,12 @@ export function hmacSignature(options: HmacSignatureOptions): HmacSignatureVerif
     multiSig: runtimeOptions.multiSig !== undefined && runtimeOptions.multiSig !== false,
     name,
     scheme,
+    timestampBinding:
+      runtimeOptions.tolerance === undefined
+        ? 'none'
+        : timestampBinding === payloadBindsTimestamp
+          ? 'payload'
+          : 'automatic',
     ...(runtimeOptions.tolerance === undefined
       ? {}
       : { toleranceSeconds: runtimeOptions.tolerance.seconds }),
@@ -230,7 +237,7 @@ export function hmacSignature(options: HmacSignatureOptions): HmacSignatureVerif
     resolved,
     scheme,
     async verify(request: WebhookVerificationRequest) {
-      return verifyHmacSignature(runtimeOptions, request);
+      return verifyHmacSignature(runtimeOptions, request, timestampBinding);
     },
   };
   securityWeakSetAdd(frameworkHmacSignatureVerifiers, verifier);
@@ -249,7 +256,6 @@ function snapshotHmacSignatureOptions(options: HmacSignatureOptions): HmacSignat
     payload: snapshotWebhookPayload(options.payload),
     ...(options.scheme === undefined ? {} : { scheme: options.scheme }),
     secret: snapshotHmacSecrets(options.secret),
-    ...(options.timestampBound === undefined ? {} : { timestampBound: options.timestampBound }),
     ...(tolerance === undefined ? {} : { tolerance }),
   });
 }
@@ -398,32 +404,33 @@ export function customVerifier(
  * });
  */
 export function standardWebhooks(options: StandardWebhooksOptions): HmacSignatureVerifier {
-  return hmacSignature({
-    encoding: 'base64',
-    header: 'webhook-signature',
-    multiSig: standardV1Signatures,
-    name: 'standard-webhooks',
-    payload: (request, context) => {
-      const messageId = context.header('webhook-id');
-      const timestamp = context.header('webhook-timestamp');
-      if (messageId === undefined || timestamp === undefined) return '';
-      return `${messageId}.${timestamp}.${payloadToString(request.payload)}`;
+  return createHmacSignature(
+    {
+      encoding: 'base64',
+      header: 'webhook-signature',
+      multiSig: standardV1Signatures,
+      name: 'standard-webhooks',
+      payload: (request, context) => {
+        const messageId = context.header('webhook-id');
+        const timestamp = context.header('webhook-timestamp');
+        if (messageId === undefined || timestamp === undefined) return '';
+        return `${messageId}.${timestamp}.${payloadToString(request.payload)}`;
+      },
+      scheme: 'standard-webhooks:v1:hmac-sha256',
+      secret: normalizeStandardWebhooksSecrets(options.secret),
+      tolerance: {
+        header: 'webhook-timestamp',
+        seconds: defaultWebhookToleranceSeconds,
+      },
     },
-    scheme: 'standard-webhooks:v1:hmac-sha256',
-    secret: normalizeStandardWebhooksSecrets(options.secret),
-    // timestamp is already embedded in the payload above; skip the automatic
-    // timestamp-prefix folding that hmacSignature applies when tolerance is set.
-    timestampBound: false,
-    tolerance: {
-      header: 'webhook-timestamp',
-      seconds: defaultWebhookToleranceSeconds,
-    },
-  });
+    payloadBindsTimestamp,
+  );
 }
 
 async function verifyHmacSignature(
   options: HmacSignatureOptions,
   request: WebhookVerificationRequest,
+  timestampBinding?: HmacTimestampBinding,
 ): Promise<boolean> {
   const signatureHeader = getHeader(request.headers, options.header);
   if (signatureHeader === undefined || signatureHeader.length === 0) return false;
@@ -440,13 +447,13 @@ async function verifyHmacSignature(
       ? await options.payload(request, context)
       : options.payload;
 
-  // SPEC §9.1.1:846 (B5): when `tolerance` is configured and the caller has not
-  // explicitly opted out via `timestampBound: false`, fold the timestamp into the
-  // signed bytes so a captured (signature, body) cannot be replayed with a forged-
-  // fresh timestamp header. Preset recipes that already embed the timestamp in their
-  // payload function set `timestampBound: false` to avoid double-binding.
+  // SPEC §9.1.1:846 (B5): when `tolerance` is configured, fold the timestamp into
+  // the signed bytes so a captured (signature, body) cannot
+  // be replayed with a forged-fresh timestamp header. Only framework presets can
+  // carry the private payload-binding sentinel when the provider protocol already
+  // fixes the timestamp at another position in the signed payload.
   let signedPayloadBytes: Uint8Array;
-  if (options.tolerance !== undefined && options.timestampBound !== false) {
+  if (options.tolerance !== undefined && timestampBinding !== payloadBindsTimestamp) {
     const timestampValue =
       options.tolerance.timestamp?.(request, context) ??
       (options.tolerance.header === undefined

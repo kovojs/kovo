@@ -6,8 +6,8 @@ import {
   hmacSignature,
   standardWebhooks,
   type HmacSecret,
+  type HmacSignatureOptions,
   type HmacSignatureVerifier,
-  type WebhookPayload,
   type WebhookVerificationRequest,
 } from './index.js';
 import { isFrameworkHmacSignatureVerifier } from './internal/verifier.js';
@@ -37,8 +37,7 @@ const standardHeaders = {
 
 describe('webhook verifier kit', () => {
   it('verifies a generic HMAC signature with constant-time comparison inputs', async () => {
-    // B5 fix: tolerance is set and timestampBound is not false, so the timestamp is
-    // prepended to the signed bytes before HMAC verification.
+    // B5 fix: public HMAC tolerance always prepends the timestamp to the signed bytes.
     const verifier = hmacSignature({
       encoding: 'hex',
       header: 'x-signature',
@@ -375,6 +374,7 @@ describe('webhook verifier kit', () => {
       multiSig: true,
       name: 'timestamped-provider',
       scheme: 'timestamped-provider:v1:hmac-sha256',
+      timestampBinding: 'automatic',
       toleranceSeconds: 300,
     });
     await expect(
@@ -437,6 +437,7 @@ describe('webhook verifier kit', () => {
       multiSig: true,
       name: 'standard-webhooks',
       scheme: 'standard-webhooks:v1:hmac-sha256',
+      timestampBinding: 'payload',
       toleranceSeconds: 300,
     });
     await expect(
@@ -515,6 +516,41 @@ describe('webhook verifier kit', () => {
     await expect(verifier.verify(replayedWithFreshTimestamp)).resolves.toBe(false);
   });
 
+  it('ignores the removed timestampBound opt-out and retains automatic replay binding', async () => {
+    const payload = 'body';
+    const originalTimestamp = '1000';
+    const signature = createHmac('sha256', replaySecret)
+      .update(`${originalTimestamp}.${payload}`)
+      .digest('hex');
+    // JavaScript callers and stale compiled code can still pass unknown object keys. The removed
+    // boolean must not re-create an unsigned timestamp escape at runtime (SPEC §9.1).
+    const legacyOptions = {
+      encoding: 'hex',
+      header: 'x-signature',
+      payload: (request) => request.payload,
+      secret: replaySecret,
+      timestampBound: false,
+      tolerance: { header: 'x-time', seconds: 5 },
+    } as HmacSignatureOptions & { timestampBound: false };
+    const verifier = hmacSignature(legacyOptions);
+
+    await expect(
+      verifier.verify({
+        headers: { 'x-signature': signature, 'x-time': originalTimestamp },
+        now: 1_000_000,
+        payload,
+      }),
+    ).resolves.toBe(true);
+    await expect(
+      verifier.verify({
+        headers: { 'x-signature': signature, 'x-time': '1100' },
+        now: 1_100_000,
+        payload,
+      }),
+    ).resolves.toBe(false);
+    expect(verifier.resolved.timestampBinding).toBe('automatic');
+  });
+
   it('supports custom verifier escapes for non-HMAC schemes', async () => {
     const verifier = customVerifier('provider-ed25519', (request) =>
       request.headers instanceof Headers
@@ -539,15 +575,9 @@ function timestampedProviderSignature(options: {
     header: 'x-provider-signature',
     multiSig: providerV1Signatures,
     name: 'timestamped-provider',
-    payload: (request, context) => {
-      const timestamp = parseProviderSignature(context.signatureHeader).timestamp;
-      return `${timestamp}.${payloadToString(request.payload)}`;
-    },
+    payload: (request) => request.payload,
     scheme: 'timestamped-provider:v1:hmac-sha256',
     secret: options.secret,
-    // timestamp is already embedded in the payload above; opt out of automatic
-    // timestamp-prefix folding introduced by B5 fix to avoid double-binding.
-    timestampBound: false,
     tolerance: {
       seconds: 300,
       timestamp: (_request, context) => parseProviderSignature(context.signatureHeader).timestamp,
@@ -573,8 +603,4 @@ function parseProviderSignature(header: string): { signatures: string[]; timesta
   }
 
   return { signatures, timestamp };
-}
-
-function payloadToString(payload: WebhookPayload): string {
-  return typeof payload === 'string' ? payload : new TextDecoder().decode(payload as BufferSource);
 }
