@@ -14,6 +14,7 @@ import {
   type SecretReadMetadata,
   type SecretReadSqliteColumnOrigin,
 } from './secret-read-boundary.js';
+import { managedSqlExecutionPolicy, wrapManagedDbForSqlSafety } from './sql-safe-handle.js';
 
 const secretColumn = { name: 'classified' };
 const publicColumn = { name: 'label' };
@@ -233,6 +234,41 @@ describe('secret read boundary', () => {
     const [row] = await db.select();
 
     expect(row.publicLabel).toBe('public label');
+  });
+
+  it('preserves proven non-secret Drizzle expressions through the SQL-safe builder proxy', async () => {
+    const client = new Database(':memory:');
+    client.exec(
+      'create table expression_contacts (id text primary key, name text not null, company text not null)',
+    );
+    client
+      .prepare('insert into expression_contacts (id, name, company) values (?, ?, ?)')
+      .run('c1', 'Ada Lovelace', 'runtime-secret-value');
+    const contacts = sqliteTable(
+      'expression_contacts',
+      {
+        company: text('company').notNull(),
+        id: text('id').primaryKey(),
+        name: text('name').notNull(),
+      },
+      kovo({ domain: 'expression-contact', key: 'id', secret: ['company'] }),
+    );
+    const raw = drizzle({ client });
+    const safe = wrapManagedDbForSqlSafety(
+      raw,
+      'enforce',
+      managedSqlExecutionPolicy({ capability: 'read' }),
+    );
+    const db = createSecretBoxingReadDb(safe, extractKovoRuntimeDbMetadata([contacts]), {
+      sqliteColumnOrigins: client,
+    });
+
+    const rows = await db
+      .select({ id: contacts.id, label: drizzleSql<string>`upper(${contacts.name})` })
+      .from(contacts);
+
+    expect(rows).toEqual([{ id: 'c1', label: 'ADA LOVELACE' }]);
+    expect(JSON.stringify({ rows })).not.toContain('runtime-secret-value');
   });
 
   it('rejects raw expression chunks that hide a subquery read source', async () => {

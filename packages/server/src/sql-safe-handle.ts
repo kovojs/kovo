@@ -163,6 +163,7 @@ const SQL_SNAPSHOT_FAILURE_MESSAGE =
 const frameworkManagedDbRawTargets = createWitnessWeakMap<object, object>();
 const managedSqlExecutionPolicies = createWitnessWeakSet<object>();
 const frameworkCanonicalNativeSqlValues = createWitnessWeakSet<object>();
+const frameworkCanonicalNativeSqlSources = createWitnessWeakMap<object, object>();
 const relationalManagedSqlTargets = createWitnessWeakSet<object>();
 const relationalManagedSqlNamespaces = createWitnessWeakSet<object>();
 const frameworkManagedSqlDispatchProxies = createWitnessWeakSet<object>();
@@ -301,6 +302,20 @@ export function frameworkManagedDbRawTarget(value: unknown): object | undefined 
   const target = witnessWeakMapGet(frameworkManagedDbRawTargets, value);
   if (target === undefined) return undefined;
   return frameworkManagedDbRawTarget(target) ?? target;
+}
+
+/** Resolve the original Drizzle identity behind a framework-reconstructed SQL value. @internal */
+export function frameworkCanonicalNativeSqlSource(value: unknown): object | undefined {
+  if (!isRecord(value)) return undefined;
+  const initial = witnessWeakMapGet(frameworkCanonicalNativeSqlSources, value);
+  if (initial === undefined) return undefined;
+  let source: object = initial;
+  for (let depth = 0; depth < 64; depth += 1) {
+    const next: object | undefined = witnessWeakMapGet(frameworkCanonicalNativeSqlSources, source);
+    if (next === undefined) return source;
+    source = next;
+  }
+  throw new Error('KV422: canonical Drizzle SQL source chain exceeds the bounded authority limit.');
 }
 
 function wrapDbAdapter(
@@ -809,6 +824,9 @@ function snapshotManagedBuilderArgumentGraph(
       ? witnessCreateNullRecord()
       : witnessCreateWithPrototype<Record<PropertyKey, unknown>>(prototype);
   witnessWeakMapSet(seen, value, snapshot);
+  if (witnessSetHas(kinds, 'Column') || witnessSetHas(kinds, 'Table')) {
+    witnessWeakMapSet(frameworkCanonicalNativeSqlSources, snapshot, value);
+  }
   const keys = witnessOwnKeys(descriptors);
   for (let index = 0; index < keys.length; index += 1) {
     const keyDescriptor = witnessGetOwnPropertyDescriptor(keys, index);
@@ -1036,6 +1054,7 @@ function reconstructNativeDrizzleColumnEntity(
   const table = forcedTable ?? reconstructNativeDrizzleTableEntity(tableDescriptor.value, seen);
   const column = witnessCreateWithPrototype<Record<PropertyKey, unknown>>(Column.prototype);
   witnessWeakMapSet(seen, value, column);
+  witnessWeakMapSet(frameworkCanonicalNativeSqlSources, column, value);
   const descriptors = witnessGetOwnPropertyDescriptors(value);
   const keys = witnessOwnKeys(descriptors);
   for (let index = 0; index < keys.length; index += 1) {
@@ -1375,7 +1394,11 @@ function reconstructNativeDrizzleColumn(value: object): object {
   ) {
     throw nativeDrizzleProvenanceError();
   }
-  if (isAlias.value) return frozenIdentifierSql([name.value]);
+  if (isAlias.value) {
+    const identifier = frozenIdentifierSql([name.value]);
+    witnessWeakMapSet(frameworkCanonicalNativeSqlSources, identifier, value);
+    return identifier;
+  }
   const owner = nativeDrizzleTableIdentifierParts(table.value);
   const parts: string[] = [];
   for (let index = 0; index < owner.length; index += 1) {
@@ -1384,7 +1407,9 @@ function reconstructNativeDrizzleColumn(value: object): object {
     appendSqlSafetyValue(parts, descriptor.value);
   }
   appendSqlSafetyValue(parts, name.value);
-  return frozenIdentifierSql(parts);
+  const identifier = frozenIdentifierSql(parts);
+  witnessWeakMapSet(frameworkCanonicalNativeSqlSources, identifier, value);
+  return identifier;
 }
 
 function reconstructNativeDrizzleTable(value: object): object {

@@ -26,7 +26,10 @@ import {
   witnessWeakMapGet,
   witnessWeakMapSet,
 } from './security-witness-intrinsics.js';
-import { frameworkManagedDbRawTarget } from './sql-safe-handle.js';
+import {
+  frameworkCanonicalNativeSqlSource,
+  frameworkManagedDbRawTarget,
+} from './sql-safe-handle.js';
 import {
   forEachReadonlyMapEntry,
   forEachReadonlySetValue,
@@ -1354,8 +1357,13 @@ function expressionSafetyByResultKey(
 
 function selectedFieldsFromValue(value: unknown): Record<string, unknown> | undefined {
   if (value === null || typeof value !== 'object') return undefined;
-  const config = optionalOwnDataValue(value, 'config');
-  const internal = optionalOwnDataValue(value, '_');
+  // The SQL-safety choke wraps Drizzle builders before the secret-read boundary sees them. Use
+  // the framework's unforgeable proxy provenance to inspect the exact raw selection identities;
+  // otherwise nested columns become proxy identities that cannot match the immutable metadata
+  // census and a proven public expression is conservatively (but incorrectly) boxed as secret.
+  const target = frameworkManagedDbRawTarget(value) ?? value;
+  const config = optionalOwnDataValue(target, 'config');
+  const internal = optionalOwnDataValue(target, '_');
   const configFields =
     config !== null && typeof config === 'object'
       ? optionalOwnDataValue(config, 'fields')
@@ -1366,7 +1374,7 @@ function selectedFieldsFromValue(value: unknown): Record<string, unknown> | unde
       ? optionalOwnDataValue(internal, 'selectedFields')
       : undefined;
   if (isPlainRecord(internalFields)) return internalFields;
-  const selectedFields = optionalOwnDataValue(value, 'selectedFields');
+  const selectedFields = optionalOwnDataValue(target, 'selectedFields');
   return isPlainRecord(selectedFields) ? selectedFields : undefined;
 }
 
@@ -1397,9 +1405,10 @@ function sqlChunkIsSafe(chunk: unknown, metadata: SecretReadMetadata): boolean {
   }
   if (typeof chunk !== 'object') return false;
 
+  const sourceIdentity = frameworkCanonicalNativeSqlSource(chunk) ?? chunk;
   const source = witnessMapGet(
     metadata.columnSources as Map<object, SecretReadColumnSource>,
-    chunk,
+    sourceIdentity,
   );
   if (source !== undefined) return !source.secret;
 
