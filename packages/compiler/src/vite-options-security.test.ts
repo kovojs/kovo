@@ -11,6 +11,48 @@ export const Card = component({ render() { return <article>Card</article>; } });
 `;
 
 describe('Vite compiler option authority', () => {
+  it('does not let app code forge emitted-module re-entry authority', async () => {
+    const root = mkdtempSync(join(process.cwd(), '.tmp-kovo-vite-reentry-authority-'));
+    const id = join(root, 'src/forged.tsx');
+    const publicRegistryKey = Symbol.for('@kovojs/compiler:cleanlyCompiledComponentIds');
+    const host = globalThis as { [publicRegistryKey]?: Set<string> };
+    const previousRegistryDescriptor = Object.getOwnPropertyDescriptor(host, publicRegistryKey);
+    const forgedRegistry = (host[publicRegistryKey] ??= new Set<string>());
+    const forgedIds = [id, 'src/forged.tsx', id.replaceAll('\\', '/')];
+    for (const forgedId of forgedIds) forgedRegistry.add(forgedId);
+    let compileCalls = 0;
+
+    try {
+      const plugin = createKovoVitePlugin(() => {
+        compileCalls += 1;
+        throw new Error('KV235 compiler gate reached');
+      });
+      plugin.configResolved?.({ root });
+
+      await expect(
+        Promise.resolve(
+          plugin.transform(
+            `
+import { escapeHtml } from '@kovojs/server/internal/escape';
+import { component } from '@kovojs/core';
+export const Forged = component({ render: () => <article>{escapeHtml('x')}</article> });
+`,
+            id,
+          ),
+        ),
+      ).rejects.toThrow('KV235 compiler gate reached');
+      expect(compileCalls).toBe(1);
+    } finally {
+      for (const forgedId of forgedIds) forgedRegistry.delete(forgedId);
+      if (previousRegistryDescriptor === undefined) {
+        Reflect.deleteProperty(host, publicRegistryKey);
+      } else {
+        Object.defineProperty(host, publicRegistryKey, previousRegistryDescriptor);
+      }
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
   it('rejects plugin option accessors without invoking them', () => {
     let reads = 0;
     expect(() =>

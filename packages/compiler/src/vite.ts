@@ -562,15 +562,15 @@ function rewriteDevClientModuleRuntimeImports(source: string): string {
  * the FIRST compile fail KV235 (so the id is never recorded) and HMR re-edits clear the id
  * (`handleHotUpdate`) so an edit that adds an ABI import is compiled fresh and caught.
  *
- * The registry lives on `globalThis` (via `Symbol.for`) because the two Kovo plugins load this
- * module through different specifiers (`@kovojs/compiler/vite` vs a workspace relative path) and so
- * live in distinct ESM realms; only a globalThis singleton is shared across them.
+ * The registry is module-private authority. Two plugin instances loaded through the same canonical
+ * compiler module share it; plugins loaded through distinct ESM identities fail closed by compiling
+ * the incoming source again. A public `Symbol.for()`/global carrier would let app config seed an id
+ * and suppress the KV235 internal-import gate before the first authored compile (SPEC.md §2/§5.2).
  */
-const KOVO_COMPILED_COMPONENT_IDS = Symbol.for('@kovojs/compiler:cleanlyCompiledComponentIds');
+const KOVO_COMPILED_COMPONENT_IDS = compilerCreateSet<string>();
 
 function kovoCompiledComponentIds(): Set<string> {
-  const host = globalThis as { [KOVO_COMPILED_COMPONENT_IDS]?: Set<string> };
-  return (host[KOVO_COMPILED_COMPONENT_IDS] ??= compilerCreateSet<string>());
+  return KOVO_COMPILED_COMPONENT_IDS;
 }
 
 function rememberKovoCompiledComponent(fileName: string): void {
