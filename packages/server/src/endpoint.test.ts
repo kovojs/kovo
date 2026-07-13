@@ -5,12 +5,17 @@ import { describe, expect, it } from 'vitest';
 import {
   endpoint,
   endpointMatches,
+  frameworkEndpoint,
+  pinEndpointBrowserCredentialDelegation,
   runEndpoint,
   runEndpointAuth,
   type EndpointResponsePosture,
   type EndpointRequest,
 } from './endpoint.js';
-import { assertEndpointResponsePosture } from './response-posture.js';
+import {
+  assertEndpointResponsePosture,
+  endpointRequestWithoutSession,
+} from './response-posture.js';
 
 const rawJsonResponse = {
   appOwnedSafety: true,
@@ -574,6 +579,83 @@ describe('server endpoints', () => {
     expect(seenAuthorization).toBeNull();
     expect(seenProxyAuthorization).toBeNull();
     expect(seenSignature).toBe('sig_abc');
+  });
+
+  it('preserves browser credentials only for a pinned self-verifying protocol adapter', async () => {
+    let seenAuthorization: string | null = null;
+    let seenCookie: string | null = null;
+    let sawSession = true;
+    const protocol = frameworkEndpoint(
+      '/auth',
+      {
+        auth: { kind: 'custom', name: 'framework-auth-adapter' },
+        csrf: false,
+        csrfJustification: 'adapter verifies OAuth state and session credentials internally',
+        handler(request) {
+          seenAuthorization = request.headers.get('authorization');
+          seenCookie = request.headers.get('cookie');
+          sawSession = 'session' in request;
+          return new Response('ok', {
+            headers: {
+              'Cache-Control': 'no-store',
+              'Set-Cookie': 'sid=rotated; Path=/; Secure; HttpOnly; SameSite=Lax',
+            },
+          });
+        },
+        method: 'GET',
+        mount: 'prefix',
+        mountJustification: 'adapter owns its callback protocol subtree',
+        reason: 'framework self-verifying protocol adapter',
+        response: {
+          ...rawTextResponse,
+          reservedHeaders: ['Set-Cookie'],
+        },
+      },
+      (declaration) => {
+        pinEndpointBrowserCredentialDelegation(declaration);
+      },
+    );
+    const request = new Request('https://example.test/auth/callback', {
+      headers: {
+        Authorization: 'Bearer delegated-token',
+        Cookie: 'oauth_state=secret; sid=old',
+      },
+    });
+    Object.defineProperty(request, 'session', {
+      configurable: true,
+      value: { id: 'ambient-kovo-session' },
+    });
+
+    await expect(runEndpointAuth(protocol, request)).resolves.toBeUndefined();
+    const response = await runEndpoint(protocol, request);
+
+    expect(seenAuthorization).toBe('Bearer delegated-token');
+    expect(seenCookie).toBe('oauth_state=secret; sid=old');
+    expect(sawSession).toBe(false);
+    expect(response.headers.get('set-cookie')).toContain('sid=rotated');
+
+    const forgedDeclaration = { ...protocol } as typeof protocol;
+    const forgedView = endpointRequestWithoutSession(
+      new Request('https://example.test/auth/callback', {
+        headers: {
+          Authorization: 'Bearer forged-token',
+          Cookie: 'sid=forged',
+        },
+      }),
+      { declaration: forgedDeclaration, stripAuthorization: true },
+    );
+    expect(forgedView.headers.get('authorization')).toBeNull();
+    expect(forgedView.headers.get('cookie')).toBeNull();
+
+    const preservedView = endpointRequestWithoutSession(request, {
+      declaration: protocol,
+      stripAuthorization: true,
+    });
+    const reNeutralizedView = endpointRequestWithoutSession(preservedView, {
+      stripAuthorization: true,
+    });
+    expect(reNeutralizedView.headers.get('authorization')).toBeNull();
+    expect(reNeutralizedView.headers.get('cookie')).toBeNull();
   });
 
   it('requires an executed verifier receipt before a csrf-exempt endpoint emits browser state', async () => {

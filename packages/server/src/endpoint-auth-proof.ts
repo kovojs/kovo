@@ -18,6 +18,7 @@ import {
 
 const executedVerifierRequests = createWitnessWeakMap<object, WeakSet<Request>>();
 const selfVerifyingDeclarations = createWitnessWeakSet<object>();
+const browserCredentialDelegatingDeclarations = createWitnessWeakSet<object>();
 
 /** Mint an exact request/declaration receipt after an executable verifier returns true. */
 export function markEndpointVerifierExecuted(declaration: object, request: Request): void {
@@ -32,6 +33,26 @@ export function markEndpointVerifierExecuted(declaration: object, request: Reque
 /** Pin a framework-owned declaration whose handler verifies before producing any response. */
 export function markEndpointSelfVerifying(declaration: object): void {
   witnessWeakSetAdd(selfVerifyingDeclarations, declaration);
+}
+
+/**
+ * Pin a framework-owned self-verifying adapter that must consume the browser credential carrier it
+ * validates itself. This is deliberately separate from the general self-verifying witness: signed
+ * webhooks remain credential-neutral, while an OAuth/session protocol adapter can receive the
+ * Cookie and Authorization headers its own state/session verifier consumes (SPEC §6.6/§9.1).
+ *
+ * @internal
+ */
+export function markEndpointBrowserCredentialDelegation(declaration: object): void {
+  witnessWeakSetAdd(browserCredentialDelegatingDeclarations, declaration);
+}
+
+/** Whether the exact canonical declaration owns the private credential-delegation witness. */
+export function endpointBrowserCredentialDelegationPinned(declaration: object): boolean {
+  return (
+    witnessWeakSetHas(selfVerifyingDeclarations, declaration) &&
+    witnessWeakSetHas(browserCredentialDelegatingDeclarations, declaration)
+  );
 }
 
 /** Whether browser-state output has a private, runtime-backed authentication proof. */

@@ -4,7 +4,11 @@ import { accessDecisionFor, pinAccessDecision, type AccessDecision } from './acc
 import { actAsNonRequestPrincipal, type NonRequestPrincipalPosture } from './auth-principal.js';
 import { runAccessDecisionGuards, type DbProvider, type ResolvedGuardFailure } from './guards.js';
 import { managedDb, type Reader, type Writer } from './managed-db.js';
-import { markEndpointSelfVerifying, markEndpointVerifierExecuted } from './endpoint-auth-proof.js';
+import {
+  markEndpointBrowserCredentialDelegation,
+  markEndpointSelfVerifying,
+  markEndpointVerifierExecuted,
+} from './endpoint-auth-proof.js';
 import { pinRequestIngressSurface, requestVerifierInput } from './app-load-shed.js';
 import { requestClone } from './request-body-intrinsics.js';
 import { securityNumberIsInteger, securityStringTrim } from './response-security-intrinsics.js';
@@ -90,6 +94,7 @@ type EndpointVerifierRequest = Parameters<WebhookVerifier['verify']>[0];
 
 interface PinnedEndpointAuth {
   auth: EndpointAuthDeclaration | undefined;
+  browserCredentialDelegation?: true;
   selfVerifying?: true;
   valid: boolean;
   verify?: (request: EndpointVerifierRequest) => Promise<boolean>;
@@ -573,6 +578,27 @@ export function pinEndpointSelfVerifyingAuth<
   return declaration;
 }
 
+/**
+ * Mark a framework-owned self-verifying protocol adapter that authenticates through the inbound
+ * browser Cookie/Authorization carrier it delegates to a closed handler. The private witness is
+ * consumed by the request-neutralization boundary; app-authored endpoint metadata and structural
+ * clones cannot request this exception (SPEC §6.6/§9.1).
+ *
+ * @internal
+ */
+export function pinEndpointBrowserCredentialDelegation<
+  Declaration extends object & { auth?: EndpointAuthDeclaration },
+>(declaration: Declaration): Declaration {
+  pinEndpointSelfVerifyingAuth(declaration);
+  const snapshot = endpointAuthSnapshotFor(declaration);
+  witnessWeakMapSet(pinnedEndpointAuth, declaration, {
+    ...snapshot,
+    browserCredentialDelegation: true,
+  });
+  markEndpointBrowserCredentialDelegation(declaration);
+  return declaration;
+}
+
 /** @internal Whether a canonical endpoint carries the private self-verifying handler witness. */
 export function endpointHasSelfVerifyingAuth(
   declaration: object & { auth?: EndpointAuthDeclaration },
@@ -601,6 +627,9 @@ export function copyEndpointAuthSnapshot<Declaration extends object>(
   });
   witnessWeakMapSet(pinnedEndpointAuth, target, snapshot);
   if (snapshot.selfVerifying === true) markEndpointSelfVerifying(target);
+  if (snapshot.browserCredentialDelegation === true) {
+    markEndpointBrowserCredentialDelegation(target);
+  }
   return target;
 }
 
@@ -779,6 +808,7 @@ export async function runEndpoint(
   options: EndpointRunOptions = {},
 ): Promise<Response> {
   const endpointRequest = endpointRequestWithoutSession(request, {
+    declaration: definition,
     stripAuthorization: definition.csrf?.exempt === true,
   });
   const accessFailure = await runEndpointAccessDecision(definition, endpointRequest);
@@ -807,6 +837,7 @@ export async function runEndpointAccessDecision(
   request: Request,
 ): Promise<Response | undefined> {
   const endpointRequest = endpointRequestWithoutSession(request, {
+    declaration: definition,
     stripAuthorization: definition.csrf?.exempt === true,
   });
   const guardFailure = await runAccessDecisionGuards(
@@ -892,6 +923,7 @@ export async function runEndpointAuth(
   let verified = false;
   try {
     const authRequest = endpointRequestWithoutSession(request, {
+      declaration: definition,
       stripAuthorization: definition.csrf?.exempt === true,
     });
     verified = await auth.verify(await requestVerifierInput(authRequest));

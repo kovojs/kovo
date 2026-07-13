@@ -29,7 +29,10 @@ import {
   requestForAuthorityNeutralMetadata,
 } from './request-carrier.js';
 import { assertNoSecretEgressValue } from './secret-egress.js';
-import { endpointBrowserStateAuthExecuted } from './endpoint-auth-proof.js';
+import {
+  endpointBrowserCredentialDelegationPinned,
+  endpointBrowserStateAuthExecuted,
+} from './endpoint-auth-proof.js';
 import { isTrustedSecureRequest } from './request-scheme.js';
 import { runtimeEnvironmentValue } from './runtime-environment-authority.js';
 import type {
@@ -147,6 +150,7 @@ export interface EndpointLifecyclePolicy extends Pick<
   RequestLifecycleOptions<Request, never, never>,
   'clientIp' | 'onError'
 > {
+  declaration?: EndpointDeclaration<string, EndpointMethod, EndpointMount>;
   stripAuthorization?: boolean;
   surface: 'endpoint';
 }
@@ -230,6 +234,7 @@ export async function resolveKovoLifecycleRequest<
       assertWebRequest(request, options.surface);
       const clientIpRequest = requestMetadataWithoutAmbientAuthority(request);
       const endpointRequest = endpointRequestWithoutSession(request, {
+        ...(options.declaration === undefined ? {} : { declaration: options.declaration }),
         stripAuthorization: options.stripAuthorization === true,
       });
       if (options.clientIp !== undefined) {
@@ -431,16 +436,31 @@ if (
 }
 const authorityNeutralRequests = createWitnessWeakSet<Request>();
 const browserCredentialNeutralRequests = createWitnessWeakSet<Request>();
+const browserCredentialDelegatingRequests = createWitnessWeakSet<Request>();
 const frameworkPeerAddressProperty = '__kovoPeerAddress';
 
 /** A framework-owned request copy carrying no app session or disallowed browser authority. */
 export function endpointRequestWithoutSession(
   request: Request,
-  options: { stripAuthorization?: boolean } = {},
+  options: {
+    declaration?: EndpointDeclaration<string, EndpointMethod, EndpointMount>;
+    stripAuthorization?: boolean;
+  } = {},
 ): EndpointRequest {
+  const preserveBrowserCredentials =
+    options.declaration !== undefined &&
+    endpointBrowserCredentialDelegationPinned(options.declaration);
+  const alreadyPreservesBrowserCredentials = witnessWeakSetHas(
+    browserCredentialDelegatingRequests,
+    request,
+  );
   if (
     witnessWeakSetHas(authorityNeutralRequests, request) &&
-    (!options.stripAuthorization || witnessWeakSetHas(browserCredentialNeutralRequests, request))
+    ((preserveBrowserCredentials && alreadyPreservesBrowserCredentials) ||
+      (!preserveBrowserCredentials &&
+        !alreadyPreservesBrowserCredentials &&
+        (!options.stripAuthorization ||
+          witnessWeakSetHas(browserCredentialNeutralRequests, request))))
   ) {
     return request as EndpointRequest;
   }
@@ -455,6 +475,7 @@ export function endpointRequestWithoutSession(
   const source = cloneRequestForAuthorityNeutralization(request);
   const sourceHeaders = readNativeRequestHeaders(source);
   const sanitizedHeaders = endpointHeadersWithoutAmbientAuthority(sourceHeaders, {
+    preserveBrowserCredentials,
     stripAuthorization: options.stripAuthorization === true,
   });
   const neutral = createNativeRequest(source, {
@@ -468,7 +489,11 @@ export function endpointRequestWithoutSession(
     });
   }
   witnessWeakSetAdd(authorityNeutralRequests, neutral);
-  if (options.stripAuthorization) witnessWeakSetAdd(browserCredentialNeutralRequests, neutral);
+  if (preserveBrowserCredentials) {
+    witnessWeakSetAdd(browserCredentialDelegatingRequests, neutral);
+  } else if (options.stripAuthorization) {
+    witnessWeakSetAdd(browserCredentialNeutralRequests, neutral);
+  }
   return neutral as EndpointRequest;
 }
 
@@ -845,8 +870,13 @@ function stringWitnessSet(values: readonly string[]): Set<string> {
 const AMBIENT_BROWSER_AUTHORITY_HEADERS: readonly string[] = ['cookie'];
 function endpointHeadersWithoutAmbientAuthority(
   headers: Headers,
-  options: { metadataOnly?: boolean; stripAuthorization?: boolean } = {},
+  options: {
+    metadataOnly?: boolean;
+    preserveBrowserCredentials?: boolean;
+    stripAuthorization?: boolean;
+  } = {},
 ): Headers {
+  if (options.preserveBrowserCredentials === true) return createNativeHeaders(headers);
   if (options.stripAuthorization !== false) {
     const sanitized = createNativeHeaders();
     if (typeof nativeHeadersAppend !== 'function') {
@@ -956,7 +986,13 @@ const LIFECYCLE_POLICY_KEYS: Record<RequestLifecycleSurface, ReadonlySet<string>
     'sessionProvider',
     'surface',
   ]),
-  endpoint: stringWitnessSet(['clientIp', 'onError', 'stripAuthorization', 'surface']),
+  endpoint: stringWitnessSet([
+    'clientIp',
+    'declaration',
+    'onError',
+    'stripAuthorization',
+    'surface',
+  ]),
   mutation: stringWitnessSet([
     'clientIp',
     'csrf',

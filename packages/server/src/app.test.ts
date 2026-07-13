@@ -13,7 +13,12 @@ import { KOVO_CSP_REPORT_ENDPOINT } from './csp.js';
 import { csrfToken } from './csrf.js';
 import { kovoSecurityReportSnapshot, resetKovoSecurityReportsForTest } from './reporting.js';
 import { domain } from './domain.js';
-import { endpoint, type EndpointResponsePosture } from './endpoint.js';
+import {
+  endpoint,
+  frameworkEndpoint,
+  pinEndpointBrowserCredentialDelegation,
+  type EndpointResponsePosture,
+} from './endpoint.js';
 import { registerGeneratedMutationTouchRegistry } from './generated-mutation-registry.js';
 import { registerGeneratedQueryReadRegistry } from './generated-query-registry.js';
 import { guards } from './guards.js';
@@ -2232,6 +2237,67 @@ describe('server createApp request shell', () => {
     const body = await response?.text();
     expect(body).toContain('{"value":"public"}');
     expect(body).not.toContain('PRIVATE_QUERY_VALUE');
+  });
+
+  it('preserves credentials across the app shell only for a pinned protocol adapter', async () => {
+    let received:
+      | { authorization: string | null; cookie: string | null; session: boolean }
+      | undefined;
+    const authAdapter = frameworkEndpoint(
+      '/auth',
+      {
+        auth: { kind: 'custom', name: 'framework-auth-adapter' },
+        csrf: false,
+        csrfJustification: 'adapter verifies OAuth state and session credentials internally',
+        handler(request) {
+          received = {
+            authorization: request.headers.get('authorization'),
+            cookie: request.headers.get('cookie'),
+            session: 'session' in request,
+          };
+          return new Response('delegated', {
+            headers: {
+              'Cache-Control': 'no-store',
+              'Set-Cookie': 'sid=rotated; Path=/; Secure; HttpOnly; SameSite=Lax',
+            },
+          });
+        },
+        method: 'GET',
+        mount: 'prefix',
+        mountJustification: 'adapter owns callback routes',
+        reason: 'framework self-verifying auth adapter',
+        response: {
+          appOwnedSafety: true,
+          body: 'text',
+          cache: 'no-store',
+          reservedHeaders: ['Set-Cookie'],
+        },
+      },
+      (declaration) => {
+        pinEndpointBrowserCredentialDelegation(declaration);
+      },
+    );
+    const handler = createRequestHandler(createApp({ endpoints: [authAdapter] }));
+    const request = new Request('https://example.test/auth/callback/provider', {
+      headers: {
+        Authorization: 'Bearer callback-token',
+        Cookie: 'oauth_state=secret; sid=old',
+      },
+    });
+    Object.defineProperty(request, 'session', {
+      configurable: true,
+      value: { id: 'ambient-kovo-session' },
+    });
+
+    const response = await handler(request);
+
+    expect(response.status).toBe(200);
+    expect(received).toEqual({
+      authorization: 'Bearer callback-token',
+      cookie: 'oauth_state=secret; sid=old',
+      session: false,
+    });
+    expect(response.headers.get('set-cookie')).toContain('sid=rotated');
   });
 
   it('rejects percent-encoded mutation aliases before policy callbacks or dispatch', async () => {

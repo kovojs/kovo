@@ -115,6 +115,7 @@ export async function dispatchMatchedAppRequest({
 
     const endpointRequest = await resolveKovoLifecycleRequest(request, {
       clientIp: (req) => resolveRequestClientIp(app, req),
+      declaration: match.endpoint,
       stripAuthorization: match.endpoint.csrf?.exempt === true,
       surface: 'endpoint',
     });
