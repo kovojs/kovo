@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -61,7 +61,7 @@ describe('site static Cloud Run server', () => {
     expect(
       resolveSiteStaticRequest({ method: 'GET', rawUrl: '/getting-started', staticRoot: root }),
     ).toMatchObject({
-      filePath: path.join(root, 'getting-started', 'index.html'),
+      filePath: await realpath(path.join(root, 'getting-started', 'index.html')),
       kind: 'file',
       requestPath: '/getting-started',
       responsePath: '/getting-started',
@@ -70,7 +70,7 @@ describe('site static Cloud Run server', () => {
     expect(
       resolveSiteStaticRequest({ method: 'GET', rawUrl: '/missing', staticRoot: root }),
     ).toMatchObject({
-      filePath: path.join(root, '404.html'),
+      filePath: await realpath(path.join(root, '404.html')),
       kind: 'file',
       requestPath: '/missing',
       responsePath: '/404.html',
@@ -104,6 +104,33 @@ describe('site static Cloud Run server', () => {
     const origin = `http://127.0.0.1:${served.port}`;
     expect(await fetch(`${origin}/fixture`).then((result) => result.text())).toBe('fixture');
     expect((await fetch(`${origin}/getting-started`)).status).toBe(200);
+  });
+
+  it('refuses to follow exported-file symlinks outside the static root', async () => {
+    const root = await createStaticRoot();
+    const outside = await mkdtemp(path.join(tmpdir(), 'kovo-site-static-outside-'));
+    roots.push(outside);
+    const secretPath = path.join(outside, 'deployment-secret.txt');
+    await writeFile(secretPath, 'OUTSIDE_DEPLOYMENT_SECRET');
+    await symlink(secretPath, path.join(root, 'leak.txt'));
+
+    const served = await createSiteStaticServeServer({
+      host: '127.0.0.1',
+      port: 0,
+      staticRoot: root,
+      strictPort: true,
+    });
+    servers.push(served);
+
+    const response = await fetch(`http://127.0.0.1:${served.port}/leak.txt`);
+    expect(response.status).toBe(403);
+    expect(await response.text()).not.toContain('OUTSIDE_DEPLOYMENT_SECRET');
+
+    await rm(path.join(root, '404.html'));
+    await symlink(secretPath, path.join(root, '404.html'));
+    const fallback = await fetch(`http://127.0.0.1:${served.port}/missing`);
+    expect(fallback.status).toBe(403);
+    expect(await fallback.text()).not.toContain('OUTSIDE_DEPLOYMENT_SECRET');
   });
 });
 

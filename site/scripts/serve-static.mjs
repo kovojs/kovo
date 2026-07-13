@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, realpathSync, statSync } from 'node:fs';
 import { createServer as createNodeServer } from 'node:http';
 import { extname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -50,6 +50,8 @@ export function resolveSiteStaticRequest({ rawUrl, method, staticRoot = defaultS
     );
   }
 
+  const canonicalStaticRoot = realpathSync(staticRoot);
+
   if (method !== 'GET' && method !== 'HEAD') {
     return textResponseResult(405, 'Method not allowed for static docs.\n', {
       allow: 'GET, HEAD',
@@ -76,8 +78,12 @@ export function resolveSiteStaticRequest({ rawUrl, method, staticRoot = defaultS
   }
 
   if (existsSync(primaryPath) && statSync(primaryPath).isFile()) {
+    const canonicalPrimaryPath = realpathSync(primaryPath);
+    if (!insideRoot(canonicalStaticRoot, canonicalPrimaryPath)) {
+      return textResponseResult(403, 'Refusing to serve outside the static export directory.\n');
+    }
     return fileResponseResult({
-      filePath: primaryPath,
+      filePath: canonicalPrimaryPath,
       requestPath: decodedPath,
       responsePath: decodedPath,
       status: 200,
@@ -86,8 +92,12 @@ export function resolveSiteStaticRequest({ rawUrl, method, staticRoot = defaultS
 
   const notFoundPath = resolve(staticRoot, '404.html');
   if (existsSync(notFoundPath) && statSync(notFoundPath).isFile()) {
+    const canonicalNotFoundPath = realpathSync(notFoundPath);
+    if (!insideRoot(canonicalStaticRoot, canonicalNotFoundPath)) {
+      return textResponseResult(403, 'Refusing to serve outside the static export directory.\n');
+    }
     return fileResponseResult({
-      filePath: notFoundPath,
+      filePath: canonicalNotFoundPath,
       requestPath: decodedPath,
       responsePath: '/404.html',
       status: 404,
