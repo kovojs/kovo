@@ -1,6 +1,6 @@
 import { runMutation } from '@kovojs/server/internal/execution';
 import { renderRoutePageResponse } from '@kovojs/server/internal/route';
-import { route, session, s } from '@kovojs/server';
+import { csrfToken, route, session, s } from '@kovojs/server';
 import { trustedHtml } from '@kovojs/browser';
 import { createKovoTestHarness } from '@kovojs/test/harness';
 import { describe, expect, it } from 'vitest';
@@ -38,6 +38,23 @@ import {
   type ReferenceSession,
 } from './real-auth-fixtures.js';
 
+const credentialMutationCsrf = {
+  secret: 'better-auth-conformance-csrf-secret-0123456789',
+  sessionId: () => 'better-auth-conformance-principal',
+};
+
+function protectedCredentialInput(
+  mutation: { readonly key: string },
+  input: Record<string, unknown>,
+): Record<string, unknown> {
+  // SPEC.md §6.6/§9.1: credential mutations stay on the default synchronizer-token path even
+  // when the fixture invokes runMutation or the verifier harness without an HTTP form renderer.
+  return {
+    ...input,
+    'kovo-csrf': csrfToken({}, credentialMutationCsrf, { mutation }),
+  };
+}
+
 describe('Better Auth pinned conformance', () => {
   it('maps a real Better Auth session through the Kovo session provider seam', async () => {
     const { auth } = createRealAuth();
@@ -69,15 +86,12 @@ describe('Better Auth pinned conformance', () => {
   it('wraps real sign-up, sign-in, and sign-out auth.api responses as Kovo mutations', async () => {
     const { auth } = createRealAuth();
     const signUp = betterAuthSignUpEmailMutation(auth, {
-      csrf: false,
       defaultRedirectTo: '/welcome',
     });
     const signIn = betterAuthSignInEmailMutation(auth, {
-      csrf: false,
       defaultRedirectTo: '/account',
     });
     const signOut = betterAuthSignOutMutation(auth, {
-      csrf: false,
       defaultRedirectTo: '/login',
     });
 
@@ -87,12 +101,13 @@ describe('Better Auth pinned conformance', () => {
 
     const signUpResult = await runMutation(
       signUp,
-      {
+      protectedCredentialInput(signUp, {
         email: 'grace@example.com',
         name: 'Grace Hopper',
         password,
-      },
+      }),
       { headers: requestHeaders() },
+      { csrf: credentialMutationCsrf },
     );
 
     expect(signUpResult).toMatchObject({
@@ -108,11 +123,12 @@ describe('Better Auth pinned conformance', () => {
 
     const invalidSignIn = await runMutation(
       signIn,
-      {
+      protectedCredentialInput(signIn, {
         email: 'grace@example.com',
         password: 'wrong-conformance-secret',
-      },
+      }),
       { headers: requestHeaders() },
+      { csrf: credentialMutationCsrf },
     );
 
     expect(invalidSignIn).toEqual({
@@ -127,11 +143,12 @@ describe('Better Auth pinned conformance', () => {
 
     const signInResult = await runMutation(
       signIn,
-      {
+      protectedCredentialInput(signIn, {
         email: 'grace@example.com',
         password,
-      },
+      }),
       { headers: requestHeaders() },
+      { csrf: credentialMutationCsrf },
     );
 
     expect(signInResult).toMatchObject({
@@ -149,8 +166,9 @@ describe('Better Auth pinned conformance', () => {
 
     const signOutResult = await runMutation(
       signOut,
-      {},
+      protectedCredentialInput(signOut, {}),
       { headers: requestHeaders(responseCookies(signInResult.responseHeaders?.['Set-Cookie'])) },
+      { csrf: credentialMutationCsrf },
     );
 
     expect(signOutResult).toMatchObject({
@@ -198,7 +216,6 @@ describe('Better Auth pinned conformance', () => {
       ),
     );
     const signIn = betterAuthSignInEmailMutation<'auth/sign-in', ReferenceRequest>(auth, {
-      csrf: false,
       defaultRedirectTo: '/account',
     });
 
@@ -255,11 +272,12 @@ describe('Better Auth pinned conformance', () => {
 
     const memberSignIn = await runMutation(
       signIn,
-      {
+      protectedCredentialInput(signIn, {
         email: 'member@example.com',
         password,
-      },
+      }),
       { headers: requestHeaders() },
+      { csrf: credentialMutationCsrf },
     );
 
     expect(memberSignIn).toMatchObject({
@@ -298,11 +316,12 @@ describe('Better Auth pinned conformance', () => {
 
     const adminSignIn = await runMutation(
       signIn,
-      {
+      protectedCredentialInput(signIn, {
         email: 'admin@example.com',
         password,
-      },
+      }),
       { headers: requestHeaders() },
+      { csrf: credentialMutationCsrf },
     );
 
     expect(adminSignIn).toMatchObject({
@@ -381,25 +400,19 @@ describe('Better Auth pinned conformance', () => {
       verification: betterAuthDbVerificationConfig,
     });
     const auth = new ObservedCredentialAuth(harness.db);
-    const signUp = betterAuthSignUpEmailMutation<'auth/sign-up', AuthVerifierRequest>(auth, {
-      csrf: false,
-    });
-    const signIn = betterAuthSignInEmailMutation<'auth/sign-in', AuthVerifierRequest>(auth, {
-      csrf: false,
-    });
-    const signOut = betterAuthSignOutMutation<'auth/sign-out', AuthVerifierRequest>(auth, {
-      csrf: false,
-    });
+    const signUp = betterAuthSignUpEmailMutation<'auth/sign-up', AuthVerifierRequest>(auth);
+    const signIn = betterAuthSignInEmailMutation<'auth/sign-in', AuthVerifierRequest>(auth);
+    const signOut = betterAuthSignOutMutation<'auth/sign-out', AuthVerifierRequest>(auth);
 
     await expect(
       harness.exec(
         signUp,
-        {
+        protectedCredentialInput(signUp, {
           email: 'verified@example.com',
           name: 'Verified User',
           password,
-        },
-        { touchGraphKey: 'auth/sign-up' },
+        }),
+        { csrf: credentialMutationCsrf, touchGraphKey: 'auth/sign-up' },
       ),
     ).resolves.toMatchObject({
       ok: true,
@@ -415,11 +428,11 @@ describe('Better Auth pinned conformance', () => {
     await expect(
       harness.exec(
         signIn,
-        {
+        protectedCredentialInput(signIn, {
           email: 'verified@example.com',
           password,
-        },
-        { touchGraphKey: 'auth/sign-in' },
+        }),
+        { csrf: credentialMutationCsrf, touchGraphKey: 'auth/sign-in' },
       ),
     ).resolves.toMatchObject({
       ok: true,
@@ -433,7 +446,10 @@ describe('Better Auth pinned conformance', () => {
       },
     });
     await expect(
-      harness.exec(signOut, {}, { touchGraphKey: 'auth/sign-out' }),
+      harness.exec(signOut, protectedCredentialInput(signOut, {}), {
+        csrf: credentialMutationCsrf,
+        touchGraphKey: 'auth/sign-out',
+      }),
     ).resolves.toMatchObject({
       ok: true,
       responseHeaders: {
@@ -503,7 +519,6 @@ describe('Better Auth pinned conformance', () => {
     const signIn = betterAuthSignInEmailMutation<'auth/passkey-sign-in', PluginVerifierRequest>(
       new ObservedPluginCredentialAuth(harness.db, 'auth_webauthn_credentials'),
       {
-        csrf: false,
         key: 'auth/passkey-sign-in',
       },
     );
@@ -511,11 +526,11 @@ describe('Better Auth pinned conformance', () => {
     await expect(
       harness.exec(
         signIn,
-        {
+        protectedCredentialInput(signIn, {
           email: 'verified-passkey@example.com',
           password,
-        },
-        { touchGraphKey: 'auth/passkey-sign-in' },
+        }),
+        { csrf: credentialMutationCsrf, touchGraphKey: 'auth/passkey-sign-in' },
       ),
     ).resolves.toMatchObject({
       ok: true,
