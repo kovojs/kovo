@@ -45,6 +45,29 @@ describe('validateAppEnv — framework secret refuse-to-boot (SPEC §6.6)', () =
       expect(error.message).toContain('randomBytes');
     });
 
+    it('refuses a short byte secret after the typed-array byteLength getter is poisoned', () => {
+      const typedArrayPrototype = Object.getPrototypeOf(Uint8Array.prototype) as object;
+      const descriptor = Object.getOwnPropertyDescriptor(typedArrayPrototype, 'byteLength');
+      expect(descriptor?.get).toBeTypeOf('function');
+      Object.defineProperty(typedArrayPrototype, 'byteLength', {
+        configurable: true,
+        get(this: Uint8Array) {
+          const actual = Reflect.apply(descriptor!.get!, this, []) as number;
+          return actual === 5 ? 64 : actual;
+        },
+      });
+      try {
+        expect(() =>
+          validateAppEnv(
+            { csrfSecret: { current: new Uint8Array(5) } },
+            { mode: 'production' },
+          ),
+        ).toThrow(CreateAppBootError);
+      } finally {
+        Object.defineProperty(typedArrayPrototype, 'byteLength', descriptor!);
+      }
+    });
+
     it('cannot erase a fatal weak-secret issue through a late Array.push override', () => {
       const nativePush = Array.prototype.push;
       let poisonHits = 0;
@@ -78,6 +101,9 @@ describe('validateAppEnv — framework secret refuse-to-boot (SPEC §6.6)', () =
     it('does not throw on a strong secret', () => {
       expect(() =>
         validateAppEnv({ csrfSecret: STRONG_SECRET }, { mode: 'production' }),
+      ).not.toThrow();
+      expect(() =>
+        validateAppEnv({ csrfSecret: new Uint8Array(32) }, { mode: 'production' }),
       ).not.toThrow();
     });
 

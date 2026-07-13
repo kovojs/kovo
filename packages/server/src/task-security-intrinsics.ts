@@ -7,6 +7,9 @@ import {
 } from 'node:timers';
 
 import {
+  securityUint8ArrayLength,
+} from './response-security-intrinsics.js';
+import {
   assertSecurityWitnessIntrinsics,
   createWitnessMap,
   createWitnessSet,
@@ -280,7 +283,11 @@ function capturedTaskControlsAreSound(): boolean {
 
     const firstEntropy = nativeNodeRandomBytes(16);
     const secondEntropy = nativeNodeRandomBytes(16);
-    if (firstEntropy.byteLength !== 16 || secondEntropy.byteLength !== 16) return false;
+    if (
+      securityUint8ArrayLength(firstEntropy) !== 16 ||
+      securityUint8ArrayLength(secondEntropy) !== 16
+    )
+      return false;
     let differs = false;
     for (let index = 0; index < 16; index += 1) {
       if (firstEntropy[index] !== secondEntropy[index]) differs = true;
@@ -882,12 +889,13 @@ export function taskTimerUnref(timer: ReturnType<typeof setTimeout>): void {
 export function taskCreateEntropyId(prefix: 'job' | 'lease'): string {
   assertTaskSecurityIntrinsics();
   const bytes = nativeNodeRandomBytes(16);
-  if (bytes.byteLength !== 16) {
+  const length = securityUint8ArrayLength(bytes);
+  if (length !== 16) {
     throw new TypeError('Kovo durable-task cryptographic entropy returned the wrong byte length.');
   }
   const alphabet = '0123456789abcdef';
   let encoded = '';
-  for (let index = 0; index < bytes.byteLength; index += 1) {
+  for (let index = 0; index < length; index += 1) {
     const byte = bytes[index]!;
     encoded += alphabet[(byte >>> 4) & 0x0f]! + alphabet[byte & 0x0f]!;
   }

@@ -20,6 +20,7 @@ import {
   securityIsUint8Array,
   securityRegExpTest,
   securityTextEncode,
+  securityUint8ArrayLength,
 } from './response-security-intrinsics.js';
 
 /** Minimum HMAC root secret bytes accepted by framework signing helpers (SPEC §6.6). */
@@ -380,9 +381,10 @@ function normalizeSigningKey(key: SigningKey, index: number): NormalizedSigningK
     throw new Error(`SigningKeyRing key "${id}" has invalid signing material at index ${index}`);
   }
   const secret = normalizeSecret(sourceSecret);
-  if (secret.byteLength < SIGNING_SECRET_MIN_BYTES) {
+  const secretByteLength = securityUint8ArrayLength(secret);
+  if (secretByteLength < SIGNING_SECRET_MIN_BYTES) {
     throw new Error(
-      `SigningKeyRing key "${id}" signing material is ${secret.byteLength} bytes; ` +
+      `SigningKeyRing key "${id}" signing material is ${secretByteLength} bytes; ` +
         `minimum is ${SIGNING_SECRET_MIN_BYTES} bytes (SPEC §6.6).`,
     );
   }
@@ -433,7 +435,7 @@ function digestComparableSignature(value: string): Buffer {
   const hash = nativeCreateHash('sha256');
   witnessReflectApply(nativeHashUpdate, hash, ['kovo-signature-v1']);
   witnessReflectApply(nativeHashUpdate, hash, ['\0']);
-  witnessReflectApply(nativeHashUpdate, hash, [witnessString(bytes.byteLength)]);
+  witnessReflectApply(nativeHashUpdate, hash, [witnessString(securityUint8ArrayLength(bytes))]);
   witnessReflectApply(nativeHashUpdate, hash, ['\0']);
   witnessReflectApply(nativeHashUpdate, hash, [bytes]);
   return witnessReflectApply(nativeHashDigest, hash, []);

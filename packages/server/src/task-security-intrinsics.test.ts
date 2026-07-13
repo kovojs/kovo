@@ -157,4 +157,19 @@ describe('durable-task intrinsic membrane (SPEC §9.6/§10.3)', () => {
     expect(second).not.toBe(first);
     expect(first).not.toBe(`job_${'43'.repeat(16)}`);
   });
+
+  it('pins task entropy length after a late typed-array byteLength poison', () => {
+    const typedArrayPrototype = Object.getPrototypeOf(Uint8Array.prototype) as object;
+    const descriptor = Object.getOwnPropertyDescriptor(typedArrayPrototype, 'byteLength');
+    expect(descriptor?.get).toBeTypeOf('function');
+    Object.defineProperty(typedArrayPrototype, 'byteLength', {
+      configurable: true,
+      get: () => 0,
+    });
+    try {
+      expect(taskCreateEntropyId('lease')).toMatch(/^lease_[0-9a-f]{32}$/u);
+    } finally {
+      Object.defineProperty(typedArrayPrototype, 'byteLength', descriptor!);
+    }
+  });
 });

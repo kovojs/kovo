@@ -32,6 +32,7 @@ import {
   securityStringSplit,
   securityStringToLowerCase,
   securityStringTrim,
+  securityUint8ArrayLength,
 } from './response-security-intrinsics.js';
 import { witnessGetOwnPropertyDescriptor, witnessProxy } from './security-witness-intrinsics.js';
 
@@ -125,7 +126,7 @@ export async function readUntrustedRequestBody(
  * endpoint CSRF bodies.
  */
 export function parseUntrustedJsonBodyBytes(rawBody: Uint8Array): UntrustedJsonBodyResult {
-  if (rawBody.byteLength === 0) return { ok: true, value: {} };
+  if (securityUint8ArrayLength(rawBody) === 0) return { ok: true, value: {} };
 
   try {
     return {

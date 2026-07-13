@@ -6,7 +6,12 @@ import {
   runtimeEnvironmentValue,
 } from './runtime-environment-authority.js';
 import { isSchemaValidationError } from './schema.js';
-import { securityMathLog2, securityStringCharCodeAt } from './response-security-intrinsics.js';
+import {
+  securityIsUint8Array,
+  securityMathLog2,
+  securityStringCharCodeAt,
+  securityUint8ArrayLength,
+} from './response-security-intrinsics.js';
 import {
   createWitnessMap,
   createWitnessSet,
@@ -190,6 +195,10 @@ function validateFrameworkSecret(value: unknown, path: string, issues: EnvValida
   // keyring.ts enforces the floor for framework-created rings; external rings own their
   // material policy and are accepted as the first-class rotation interface.
   if (isSigningKeyRing(value)) return;
+  if (securityIsUint8Array(value)) {
+    validateFrameworkSecretValue(value, path, issues);
+    return;
+  }
 
   if (isRecord(value)) {
     if (witnessIsArray(value.keys)) {
@@ -220,8 +229,8 @@ function validateFrameworkSecretValue(
   path: string,
   issues: EnvValidationIssue[],
 ): void {
-  if (value instanceof Uint8Array) {
-    if (value.byteLength >= FRAMEWORK_SECRET_MIN_LENGTH) return;
+  if (securityIsUint8Array(value)) {
+    if (securityUint8ArrayLength(value) >= FRAMEWORK_SECRET_MIN_LENGTH) return;
     appendEnvIssue(issues, {
       code: 'too-short',
       fatal: true,

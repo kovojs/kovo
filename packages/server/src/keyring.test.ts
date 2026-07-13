@@ -163,6 +163,32 @@ describe('SigningKeyRing', () => {
     ).toThrow(/exactly one active key/);
   });
 
+  it('rejects undersized signing material after typed-array length accessors are poisoned', () => {
+    const typedArrayPrototype = Object.getPrototypeOf(Uint8Array.prototype) as object;
+    const byteLengthDescriptor = Object.getOwnPropertyDescriptor(
+      typedArrayPrototype,
+      'byteLength',
+    );
+    expect(byteLengthDescriptor).toBeDefined();
+
+    Object.defineProperty(typedArrayPrototype, 'byteLength', {
+      configurable: true,
+      get(this: Uint8Array) {
+        const actual = Reflect.apply(byteLengthDescriptor!.get!, this, []) as number;
+        return actual === 5 ? 64 : actual;
+      },
+    });
+    try {
+      expect(() =>
+        createSigningKeyRing({
+          keys: [{ id: 'current', secret: 'short', state: 'active' }],
+        }),
+      ).toThrow(/minimum is 32 bytes/);
+    } finally {
+      Object.defineProperty(typedArrayPrototype, 'byteLength', byteLengthDescriptor!);
+    }
+  });
+
   it('pins opaque key-ring method identities and current key metadata', () => {
     const source = {
       currentKeyId: 'original',

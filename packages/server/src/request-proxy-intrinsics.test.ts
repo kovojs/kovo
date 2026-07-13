@@ -32,4 +32,27 @@ describe('request proxy intrinsics', () => {
     expect(carrier.role).toBe('pinned-value');
     await expect(limited.text()).rejects.toBeInstanceOf(RequestBodyLimitExceededError);
   });
+
+  it('keeps request byte limits after the typed-array byteLength getter is poisoned', async () => {
+    const request = new Request('https://kovo.test/limited-bytes', {
+      body: 'larger-than-one-byte',
+      method: 'POST',
+    });
+    const typedArrayPrototype = Object.getPrototypeOf(Uint8Array.prototype) as object;
+    const descriptor = Object.getOwnPropertyDescriptor(typedArrayPrototype, 'byteLength');
+    expect(descriptor?.get).toBeTypeOf('function');
+    Object.defineProperty(typedArrayPrototype, 'byteLength', {
+      configurable: true,
+      get(this: Uint8Array) {
+        const actual = Reflect.apply(descriptor!.get!, this, []) as number;
+        return actual > 1 && actual < 1_024 ? 0 : actual;
+      },
+    });
+    try {
+      const limited = requestWithBodyLimit(request, 1);
+      await expect(limited.text()).rejects.toBeInstanceOf(RequestBodyLimitExceededError);
+    } finally {
+      Object.defineProperty(typedArrayPrototype, 'byteLength', descriptor!);
+    }
+  });
 });

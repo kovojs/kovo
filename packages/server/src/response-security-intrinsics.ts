@@ -74,6 +74,7 @@ const nativeObjectDefineProperty = NativeObject.defineProperty;
 const nativeObjectGetOwnPropertyDescriptor = NativeObject.getOwnPropertyDescriptor;
 const nativeObjectGetPrototypeOf = NativeObject.getPrototypeOf;
 const nativeObjectKeys = NativeObject.keys;
+const nativeArrayBufferByteLength = stableOwnAccessor(NativeArrayBuffer.prototype, 'byteLength');
 const nativeRegExpExec = NativeRegExp.prototype.exec;
 const nativeRegExpFlags = stableOwnAccessor(NativeRegExp.prototype, 'flags');
 const nativeRegExpSource = stableOwnAccessor(NativeRegExp.prototype, 'source');
@@ -416,7 +417,7 @@ function capturedControlsAreSound(): boolean {
     if (apply(nativeFunctionHasInstance, NativeArrayBuffer, [arrayBuffer]) !== true) return false;
     if (apply(nativeFunctionHasInstance, NativeArrayBuffer, [{}]) !== false) return false;
     const slicedArrayBuffer = apply<ArrayBuffer>(nativeArrayBufferSlice, arrayBuffer, [1, 3]);
-    if (slicedArrayBuffer.byteLength !== 2) return false;
+    if (apply(nativeArrayBufferByteLength, slicedArrayBuffer, []) !== 2) return false;
 
     const date = new NativeDate('2026-01-02T03:04:05Z');
     if (apply(nativeFunctionHasInstance, NativeDate, [date]) !== true) return false;
@@ -432,9 +433,14 @@ function capturedControlsAreSound(): boolean {
     ]);
     if (apply(nativeBufferToString, joinedBytes, ['utf8']) !== 'safe-joined') return false;
     const allocated = apply<Buffer>(nativeBufferAllocUnsafe, NativeBuffer, [4]);
-    if (allocated.byteLength !== 4) return false;
+    if (apply(nativeUint8ArrayLength, allocated, []) !== 4) return false;
     const encoded = apply<Uint8Array>(nativeTextEncoderEncode, textEncoder, ['safe']);
-    if (encoded.byteLength !== 4 || encoded[0] !== 0x73 || encoded[3] !== 0x65) return false;
+    if (
+      apply(nativeUint8ArrayLength, encoded, []) !== 4 ||
+      encoded[0] !== 0x73 ||
+      encoded[3] !== 0x65
+    )
+      return false;
     if (apply(nativeFunctionHasInstance, NativeUint8Array, [encoded]) !== true) return false;
     if (apply(nativeFunctionHasInstance, NativeUint8Array, [{}]) !== false) return false;
     if (apply(nativeUint8ArrayLength, encoded, []) !== 4) return false;
@@ -974,6 +980,11 @@ export function securityIsUint8Array(value: unknown): value is Uint8Array {
 export function securityIsArrayBuffer(value: unknown): value is ArrayBuffer {
   assertResponseSecurityIntrinsics();
   return apply(nativeFunctionHasInstance, NativeArrayBuffer, [value]);
+}
+
+export function securityArrayBufferByteLength(value: ArrayBuffer): number {
+  assertResponseSecurityIntrinsics();
+  return apply(nativeArrayBufferByteLength, value, []);
 }
 
 export function securityArrayBufferSlice(

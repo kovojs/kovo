@@ -21,6 +21,7 @@ import {
   securityRandomUuid,
   securitySha256Base64,
   securityString,
+  securityUint8ArrayLength,
 } from './response-security-intrinsics.js';
 import { requestStateIsSafeInteger, requestStateNow } from './request-state-intrinsics.js';
 import {
@@ -525,7 +526,10 @@ function serializeReplayBody(body: string): string {
 
 function parseReplayBody(body: string): string {
   const bytes = securityBufferFrom(body, 'base64');
-  if (bytes.byteLength % 2 !== 0 || securityBufferToString(bytes, 'base64') !== body) {
+  if (
+    securityUint8ArrayLength(bytes) % 2 !== 0 ||
+    securityBufferToString(bytes, 'base64') !== body
+  ) {
     throw new Error('Committed Postgres replay truth has an invalid response body encoding.');
   }
   return securityBufferToString(bytes, 'utf16le');

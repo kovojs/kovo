@@ -12,6 +12,7 @@ import {
   createNativeRequest,
   registerAuthorityNeutralRequestClone,
 } from './request-carrier.js';
+import { securityUint8ArrayLength } from './response-security-intrinsics.js';
 import { requestDecodeUtf8, requestParseJson } from './request-body-intrinsics.js';
 import {
   requestStateHeaderGet,
@@ -1001,7 +1002,7 @@ function countedBody(
   return body.pipeThrough(
     new TransformStream<Uint8Array, Uint8Array>({
       transform(chunk, controller) {
-        total += chunk.byteLength;
+        total += securityUint8ArrayLength(chunk);
         if (total > maxBodyBytes) {
           controller.error(new RequestBodyLimitExceededError(maxBodyBytes));
           return;

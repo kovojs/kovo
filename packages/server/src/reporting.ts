@@ -1,5 +1,6 @@
 import type { KovoApp } from './app-types.js';
 import { appSystemResponse } from './app-system-response.js';
+import { securityUint8ArrayLength } from './response-security-intrinsics.js';
 import {
   requestStateAbsoluteUrlOrigin,
   requestStateBoundedControlToken,
@@ -282,10 +283,11 @@ async function readBoundedReportBody(
         [],
       );
       if (done) break;
-      size += value.byteLength;
+      const chunkLength = securityUint8ArrayLength(value);
+      size += chunkLength;
       if (size > maxBytes) {
         truncated = true;
-        const allowed = requestStateMax(0, value.byteLength - (size - maxBytes));
+        const allowed = requestStateMax(0, chunkLength - (size - maxBytes));
         if (allowed > 0) {
           const accepted = apply<Uint8Array>(nativeUint8ArraySlice, value, [0, allowed]);
           apply(nativeArrayPush, chunks, [

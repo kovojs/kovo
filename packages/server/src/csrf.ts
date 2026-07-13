@@ -34,6 +34,7 @@ import {
   securityRegExpTest,
   securityStringSplit,
   securityStringStartsWith,
+  securityUint8ArrayLength,
 } from './response-security-intrinsics.js';
 
 const NativeURL = globalThis.URL;
@@ -619,7 +620,10 @@ function unmaskCsrfToken(token: string): string | undefined {
     return undefined;
   }
 
-  if (mask.byteLength !== CSRF_MAC_BYTES || maskedMac.byteLength !== CSRF_MAC_BYTES) {
+  if (
+    securityUint8ArrayLength(mask) !== CSRF_MAC_BYTES ||
+    securityUint8ArrayLength(maskedMac) !== CSRF_MAC_BYTES
+  ) {
     return undefined;
   }
 
@@ -631,8 +635,12 @@ function isBase64UrlSegment(value: string | undefined): value is string {
 }
 
 function xorBuffers(left: Buffer, right: Buffer): Buffer {
-  const output = securityBufferAllocUnsafe(left.byteLength);
-  for (let index = 0; index < left.byteLength; index += 1) {
+  const length = securityUint8ArrayLength(left);
+  if (securityUint8ArrayLength(right) !== length) {
+    throw new TypeError('Kovo CSRF masks must have equal byte lengths.');
+  }
+  const output = securityBufferAllocUnsafe(length);
+  for (let index = 0; index < length; index += 1) {
     output[index] = left[index]! ^ right[index]!;
   }
   return output;

@@ -53,6 +53,32 @@ describe('untrusted request body parser', () => {
     expect(revealUntrusted(value.nested.ok, 'test validates nested flag')).toBe(true);
   });
 
+  it('does not erase signed raw JSON after a late typed-array length poison', () => {
+    const body = new TextEncoder().encode('{"id":"evt_signed"}');
+    const typedArrayPrototype = Object.getPrototypeOf(Uint8Array.prototype) as object;
+    const descriptor = Object.getOwnPropertyDescriptor(typedArrayPrototype, 'byteLength');
+    expect(descriptor?.get).toBeTypeOf('function');
+    Object.defineProperty(typedArrayPrototype, 'byteLength', {
+      configurable: true,
+      get(this: Uint8Array) {
+        return this === body ? 0 : Reflect.apply(descriptor!.get!, this, []);
+      },
+    });
+    try {
+      const parsed = parseUntrustedJsonBodyBytes(body);
+      expect(parsed.ok).toBe(true);
+      if (!parsed.ok) return;
+      expect(
+        revealUntrusted(
+          (parsed.value as { id: unknown }).id,
+          'test validates poisoned webhook id',
+        ),
+      ).toBe('evt_signed');
+    } finally {
+      Object.defineProperty(typedArrayPrototype, 'byteLength', descriptor!);
+    }
+  });
+
   it('treats empty raw JSON bodies as an empty schema input object', () => {
     expect(parseUntrustedJsonBodyBytes(new Uint8Array())).toEqual({
       ok: true,

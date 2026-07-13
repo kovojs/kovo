@@ -16,6 +16,10 @@ import { resolveCsrfReplayBinding, type CsrfOptions } from './csrf.js';
 import { formLikeToRecord } from './schema.js';
 import { requestFormDataEntries, requestIsFormData } from './request-body-intrinsics.js';
 import {
+  securityArrayBufferByteLength,
+  securityIsArrayBuffer,
+} from './response-security-intrinsics.js';
+import {
   createWitnessMap,
   createWitnessWeakSet,
   witnessDefineProperty,
@@ -43,7 +47,6 @@ import {
   requestStatePromiseThen,
 } from './request-state-intrinsics.js';
 
-const NativeArrayBuffer = ArrayBuffer;
 const NativeUint8Array = Uint8Array;
 const nativeSubtleCrypto = globalThis.crypto.subtle;
 const subtleCryptoPrototype = witnessGetPrototypeOf(nativeSubtleCrypto);
@@ -932,7 +935,7 @@ async function uploadFingerprint(value: ReplayUploadLike): Promise<{
       },
     );
   }
-  if (!(bytes instanceof NativeArrayBuffer) || bytes.byteLength !== value.size) {
+  if (!securityIsArrayBuffer(bytes) || securityArrayBufferByteLength(bytes) !== value.size) {
     throw new MutationReplayFingerprintError(
       'Upload bytes did not match declared metadata while computing replay fingerprint.',
     );
