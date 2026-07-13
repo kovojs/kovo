@@ -17,4 +17,4 @@ export function acceptsEnhancedNavigationDocument(accept: string | null | undefi
 import {
   securityStringSplit,
   securityStringTrim,
-} from './security-witness-intrinsics.js';
+} from './security-witness-intrinsics.ts';

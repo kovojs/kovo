@@ -21,7 +21,7 @@ import type {
 } from '@kovojs/server/internal/data-plane-static-analysis';
 import { currentKovoBuildContext } from '@kovojs/server/internal/build-context';
 import { serializeRuntimeRegistryWireModule } from '@kovojs/server/internal/runtime-registry-wire';
-import { trustedViteSecurityProfileSentinel } from './internal/vite-security-sentinel.js';
+import { trustedViteSecurityProfileSentinel } from './internal/vite-security-sentinel.ts';
 import {
   createKovoAppShellViteDevIntegration,
   type KovoAppShellViteCompilerModuleDiagnosticReport,

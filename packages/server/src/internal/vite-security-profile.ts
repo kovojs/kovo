@@ -1,6 +1,6 @@
 import type { KovoVitePlugin, KovoVitePluginOptions } from '../vite.js';
 import { kovo } from '../vite.js';
-import { trustedViteSecurityProfileSentinel } from './vite-security-sentinel.js';
+import { trustedViteSecurityProfileSentinel } from './vite-security-sentinel.ts';
 
 /**
  * Construct the Vite plugin posture used only by the supported `kovo dev` runner.
