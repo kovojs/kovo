@@ -32,10 +32,10 @@ export interface BetterAuthRequestSecretPath {
   reason: string;
 }
 
-const permittedCrossUserCredentialDispositions = new Set<BetterAuthRequestSecretDisposition>([
-  'boxed',
-  'vetted-compare-or-verify',
-]);
+const permittedCrossUserCredentialDispositions = betterAuthStringSet<BetterAuthRequestSecretDisposition>(
+  ['boxed', 'vetted-compare-or-verify'],
+  'Better Auth permitted cross-user credential dispositions',
+);
 
 export const betterAuthRequestSecretPaths = [
   {
@@ -127,13 +127,18 @@ export const betterAuthRequestSecretPaths = [
 
 export type BetterAuthRequestSecretPathId = (typeof betterAuthRequestSecretPaths)[number]['id'];
 
-const betterAuthRequestSecretPathIds = new Set<string>(
-  betterAuthRequestSecretPaths.map((path) => path.id),
+const pinnedBetterAuthRequestSecretPaths = snapshotBetterAuthRequestSecretPaths(
+  betterAuthRequestSecretPaths,
+  'Better Auth request secret path manifest',
 );
+const betterAuthRequestSecretPathIds = betterAuthCreateSet<string>();
+for (let index = 0; index < pinnedBetterAuthRequestSecretPaths.length; index += 1) {
+  betterAuthSetAdd(betterAuthRequestSecretPathIds, pinnedBetterAuthRequestSecretPaths[index]!.id);
+}
 
 export function assertBetterAuthRequestSecretPath(id: BetterAuthRequestSecretPathId): void {
-  if (!betterAuthRequestSecretPathIds.has(id)) {
-    throw new Error(`KV439: unenumerated Better Auth request secret path ${id}`);
+  if (!betterAuthSetHas(betterAuthRequestSecretPathIds, id)) {
+    throw new NativeError(`KV439: unenumerated Better Auth request secret path ${id}`);
   }
 }
 
@@ -200,12 +205,16 @@ export interface BetterAuthRequestReachableExport {
   name: string;
 }
 
-const permittedBetterAuthRequestExportCapabilities = new Set<BetterAuthRequestExportCapability>([
-  'app-owned-declaration',
-  'credential-mutation',
-  'fixed-seed-operation',
-  'sanitized-session-provider',
-]);
+const permittedBetterAuthRequestExportCapabilities =
+  betterAuthStringSet<BetterAuthRequestExportCapability>(
+    [
+      'app-owned-declaration',
+      'credential-mutation',
+      'fixed-seed-operation',
+      'sanitized-session-provider',
+    ],
+    'Better Auth permitted request export capabilities',
+  );
 
 /**
  * SPEC §6.6/§10.3: prove confinement over the complete request-reachable export set, not a proxy
@@ -216,16 +225,37 @@ export function proveBetterAuthRequestExportConfinement(
   exports: readonly BetterAuthRequestReachableExport[],
 ): string[] {
   const issues: string[] = [];
-  const names = new Set<string>();
+  const names = betterAuthCreateSet<string>();
+  const exportFacts = betterAuthSnapshotDenseArray(
+    exports,
+    'Better Auth request-reachable exports',
+  );
 
-  for (const exported of exports) {
-    if (names.has(exported.name)) {
-      issues.push(`KV439: duplicate request-reachable Better Auth export ${exported.name}`);
+  for (let index = 0; index < exportFacts.length; index += 1) {
+    const exported = exportFacts[index]!;
+    const name = betterAuthStringField(
+      exported,
+      'name',
+      `Better Auth request-reachable export ${index}`,
+    );
+    const capability = betterAuthStringField(
+      exported,
+      'capability',
+      `Better Auth request-reachable export ${index}`,
+    ) as BetterAuthRequestExportCapability;
+    if (betterAuthSetHas(names, name)) {
+      betterAuthArrayAppend(
+        issues,
+        `KV439: duplicate request-reachable Better Auth export ${name}`,
+        'Better Auth request export confinement issues',
+      );
     }
-    names.add(exported.name);
-    if (!permittedBetterAuthRequestExportCapabilities.has(exported.capability)) {
-      issues.push(
-        `KV439: request-reachable Better Auth export ${exported.name} exposes ${exported.capability}`,
+    betterAuthSetAdd(names, name);
+    if (!betterAuthSetHas(permittedBetterAuthRequestExportCapabilities, capability)) {
+      betterAuthArrayAppend(
+        issues,
+        `KV439: request-reachable Better Auth export ${name} exposes ${capability}`,
+        'Better Auth request export confinement issues',
       );
     }
   }
@@ -233,8 +263,14 @@ export function proveBetterAuthRequestExportConfinement(
   return issues;
 }
 
-const betterAuthPlaintextReadingApiMethodSet = new Set(betterAuthPlaintextReadingApiMethods);
-const betterAuthNonPlaintextApiMethodSet = new Set(betterAuthNonPlaintextApiMethods);
+const betterAuthPlaintextReadingApiMethodSet = betterAuthStringSet(
+  betterAuthPlaintextReadingApiMethods,
+  'Better Auth plaintext-reading API methods',
+);
+const betterAuthNonPlaintextApiMethodSet = betterAuthStringSet(
+  betterAuthNonPlaintextApiMethods,
+  'Better Auth non-plaintext API methods',
+);
 
 /**
  * SPEC §10.1 C10 / §6.6 (papercuts-36 P1): prove the Better Auth plaintext-API surface is confined
@@ -250,30 +286,48 @@ export function proveBetterAuthPlaintextApiConfinement(
   usages: readonly BetterAuthApiUsage[],
 ): string[] {
   const issues: string[] = [];
+  const usageFacts = betterAuthSnapshotDenseArray(usages, 'Better Auth plaintext API usages');
 
-  for (const usage of usages) {
-    const isPlaintext = betterAuthPlaintextReadingApiMethodSet.has(usage.method);
-    const isNonPlaintext = betterAuthNonPlaintextApiMethodSet.has(usage.method);
+  for (let index = 0; index < usageFacts.length; index += 1) {
+    const usage = usageFacts[index]!;
+    const method = betterAuthStringField(
+      usage,
+      'method',
+      `Better Auth plaintext API usage ${index}`,
+    );
+    const file = betterAuthStringField(
+      usage,
+      'file',
+      `Better Auth plaintext API usage ${index}`,
+    );
+    const isPlaintext = betterAuthSetHas(betterAuthPlaintextReadingApiMethodSet, method);
+    const isNonPlaintext = betterAuthSetHas(betterAuthNonPlaintextApiMethodSet, method);
 
     if (isPlaintext && isNonPlaintext) {
-      issues.push(
-        `KV439: auth.api.${usage.method} is classified both plaintext-reading and non-plaintext`,
+      betterAuthArrayAppend(
+        issues,
+        `KV439: auth.api.${method} is classified both plaintext-reading and non-plaintext`,
+        'Better Auth plaintext API confinement issues',
       );
     }
 
     if (!isPlaintext && !isNonPlaintext) {
-      issues.push(
-        `KV439: unclassified Better Auth plaintext API auth.api.${usage.method} in ${usage.file}; ` +
+      betterAuthArrayAppend(
+        issues,
+        `KV439: unclassified Better Auth plaintext API auth.api.${method} in ${file}; ` +
           `classify it as plaintext-reading (confined to ${betterAuthTrustedPlaintextModule}) or ` +
           `allowlist it as non-plaintext with justification`,
+        'Better Auth plaintext API confinement issues',
       );
       continue;
     }
 
-    if (isPlaintext && usage.file !== betterAuthTrustedPlaintextModule) {
-      issues.push(
-        `KV439: plaintext-reading Better Auth API auth.api.${usage.method} used outside ` +
-          `${betterAuthTrustedPlaintextModule} in ${usage.file}`,
+    if (isPlaintext && file !== betterAuthTrustedPlaintextModule) {
+      betterAuthArrayAppend(
+        issues,
+        `KV439: plaintext-reading Better Auth API auth.api.${method} used outside ` +
+          `${betterAuthTrustedPlaintextModule} in ${file}`,
+        'Better Auth plaintext API confinement issues',
       );
     }
   }
@@ -282,32 +336,139 @@ export function proveBetterAuthPlaintextApiConfinement(
 }
 
 export function proveBetterAuthRequestSecretNonEgress(
-  paths: readonly BetterAuthRequestSecretPath[] = betterAuthRequestSecretPaths,
+  paths: readonly BetterAuthRequestSecretPath[] = pinnedBetterAuthRequestSecretPaths,
 ): string[] {
   const issues: string[] = [];
-  const seen = new Set<string>();
+  const seen = betterAuthCreateSet<string>();
+  const pathFacts = snapshotBetterAuthRequestSecretPaths(
+    paths,
+    'Better Auth request secret paths',
+  );
 
-  for (const path of paths) {
-    if (seen.has(path.id)) {
-      issues.push(`KV439: duplicate Better Auth request secret path ${path.id}`);
+  for (let index = 0; index < pathFacts.length; index += 1) {
+    const path = pathFacts[index]!;
+    if (betterAuthSetHas(seen, path.id)) {
+      betterAuthArrayAppend(
+        issues,
+        `KV439: duplicate Better Auth request secret path ${path.id}`,
+        'Better Auth request secret non-egress issues',
+      );
     }
-    seen.add(path.id);
+    betterAuthSetAdd(seen, path.id);
 
     if (path.readsCrossUserCredential) {
-      if (!permittedCrossUserCredentialDispositions.has(path.disposition)) {
-        issues.push(
+      if (!betterAuthSetHas(permittedCrossUserCredentialDispositions, path.disposition)) {
+        betterAuthArrayAppend(
+          issues,
           `KV439: ${path.id} reads a cross-user auth credential with unboxed disposition ${path.disposition}`,
+          'Better Auth request secret non-egress issues',
         );
       }
-      if (path.disposition === 'vetted-compare-or-verify' && path.reason.trim().length === 0) {
-        issues.push(`KV439: ${path.id} requires a compare/verify justification`);
+      if (
+        path.disposition === 'vetted-compare-or-verify' &&
+        betterAuthTrim(path.reason).length === 0
+      ) {
+        betterAuthArrayAppend(
+          issues,
+          `KV439: ${path.id} requires a compare/verify justification`,
+          'Better Auth request secret non-egress issues',
+        );
       }
     }
 
     if (path.disposition === 'boxed' && path.carrier !== 'adapter-system-db-secret-column') {
-      issues.push(`KV439: ${path.id} claims boxing for non-database auth secret carrier`);
+      betterAuthArrayAppend(
+        issues,
+        `KV439: ${path.id} claims boxing for non-database auth secret carrier`,
+        'Better Auth request secret non-egress issues',
+      );
     }
   }
 
   return issues;
 }
+
+function betterAuthStringSet<Value extends string>(
+  values: readonly Value[],
+  label: string,
+): Set<Value> {
+  const snapshot = betterAuthSnapshotDenseArray(values, label);
+  const set = betterAuthCreateSet<Value>();
+  for (let index = 0; index < snapshot.length; index += 1) {
+    betterAuthSetAdd(set, snapshot[index]!);
+  }
+  return set;
+}
+
+function betterAuthObjectFact(value: unknown, label: string): object {
+  if ((typeof value !== 'object' || value === null) && typeof value !== 'function') {
+    throw new NativeTypeError(`${label} must be an object with own-data facts.`);
+  }
+  return value;
+}
+
+function betterAuthStringField(value: unknown, field: PropertyKey, label: string): string {
+  const fact = betterAuthOwnDataValue(betterAuthObjectFact(value, label), field, label);
+  if (typeof fact !== 'string') {
+    throw new NativeTypeError(`${label}.${String(field)} must be text.`);
+  }
+  return fact;
+}
+
+function betterAuthBooleanField(value: unknown, field: PropertyKey, label: string): boolean {
+  const fact = betterAuthOwnDataValue(betterAuthObjectFact(value, label), field, label);
+  if (typeof fact !== 'boolean') {
+    throw new NativeTypeError(`${label}.${String(field)} must be boolean.`);
+  }
+  return fact;
+}
+
+function snapshotBetterAuthRequestSecretPaths(
+  paths: readonly BetterAuthRequestSecretPath[],
+  label: string,
+): BetterAuthRequestSecretPath[] {
+  const input = betterAuthSnapshotDenseArray(paths, label);
+  const snapshot: BetterAuthRequestSecretPath[] = [];
+  for (let index = 0; index < input.length; index += 1) {
+    const path = input[index]!;
+    const itemLabel = `${label}[${index}]`;
+    betterAuthArrayAppend(
+      snapshot,
+      {
+        carrier: betterAuthStringField(path, 'carrier', itemLabel) as BetterAuthRequestSecretCarrier,
+        disposition: betterAuthStringField(
+          path,
+          'disposition',
+          itemLabel,
+        ) as BetterAuthRequestSecretDisposition,
+        entrypoint: betterAuthStringField(
+          path,
+          'entrypoint',
+          itemLabel,
+        ) as BetterAuthRequestSecretPath['entrypoint'],
+        id: betterAuthStringField(path, 'id', itemLabel),
+        readsCrossUserCredential: betterAuthBooleanField(
+          path,
+          'readsCrossUserCredential',
+          itemLabel,
+        ),
+        reason: betterAuthStringField(path, 'reason', itemLabel),
+        source: betterAuthStringField(path, 'source', itemLabel),
+      },
+      label,
+    );
+  }
+  return snapshot;
+}
+import {
+  betterAuthArrayAppend,
+  betterAuthCreateSet,
+  betterAuthOwnDataValue,
+  betterAuthSetAdd,
+  betterAuthSetHas,
+  betterAuthSnapshotDenseArray,
+  betterAuthTrim,
+} from './intrinsics.js';
+
+const NativeError = Error;
+const NativeTypeError = TypeError;

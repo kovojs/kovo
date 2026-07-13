@@ -4,6 +4,7 @@ import { basename, join, relative } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import ts from 'typescript';
 import {
+  assertBetterAuthRequestSecretPath,
   betterAuthPlaintextReadingApiMethods,
   betterAuthRequestSecretPaths,
   betterAuthTrustedPlaintextModule,
@@ -185,6 +186,74 @@ describe('Better Auth trusted plaintext zone', () => {
     expect(
       proveBetterAuthRequestSecretNonEgress([...betterAuthRequestSecretPaths, unsafePath]),
     ).toEqual([
+      'KV439: better-auth.adapter.future-token-leak reads a cross-user auth credential with unboxed disposition confined-third-party-adapter',
+    ]);
+  });
+
+  it('keeps the runtime secret-path gate closed after late Set poisoning', () => {
+    // SPEC §6.6/§10.3 C9-C10: the plaintext boundary cannot delegate its allowlist
+    // decision to mutable ambient Set methods. A request-reachable app can poison those methods
+    // after boot; an unenumerated path must still be rejected.
+    const originalHas = Set.prototype.has;
+    let rejected = false;
+    try {
+      Set.prototype.has = () => true;
+      try {
+        assertBetterAuthRequestSecretPath('better-auth.unreviewed.secret-path' as never);
+      } catch {
+        rejected = true;
+      }
+    } finally {
+      Set.prototype.has = originalHas;
+    }
+
+    expect(rejected).toBe(true);
+  });
+
+  it('keeps every proof oracle red after late Array iterator poisoning', () => {
+    // rules/security-classifier-refactors.md C13: proof classifiers must preserve their closed
+    // verdicts under a hostile realm. `for ... of` over caller arrays is ambient iterator
+    // authority and previously let every hostile fact disappear from the proof.
+    const originalIterator = Array.prototype[Symbol.iterator];
+    let exportIssues: string[];
+    let plaintextIssues: string[];
+    let secretIssues: string[];
+    try {
+      Array.prototype[Symbol.iterator] = function () {
+        return {
+          next: () => ({ done: true, value: undefined }),
+        } as ArrayIterator<unknown>;
+      };
+      exportIssues = proveBetterAuthRequestExportConfinement([
+        { capability: 'raw-auth-instance', name: 'auth' },
+      ]);
+      plaintextIssues = proveBetterAuthPlaintextApiConfinement([
+        { file: 'session.ts', method: 'futureSecretApi' },
+      ]);
+      secretIssues = proveBetterAuthRequestSecretNonEgress([
+        {
+          carrier: 'adapter-system-db-secret-column',
+          disposition: 'confined-third-party-adapter',
+          entrypoint: 'session-provider',
+          id: 'better-auth.adapter.future-token-leak',
+          readsCrossUserCredential: true,
+          reason: 'synthetic regression path',
+          source: 'better-auth Drizzle adapter systemDb handle',
+        },
+      ]);
+    } finally {
+      Array.prototype[Symbol.iterator] = originalIterator;
+    }
+
+    expect(exportIssues!).toEqual([
+      'KV439: request-reachable Better Auth export auth exposes raw-auth-instance',
+    ]);
+    expect(plaintextIssues!).toEqual([
+      `KV439: unclassified Better Auth plaintext API auth.api.futureSecretApi in session.ts; ` +
+        `classify it as plaintext-reading (confined to ${betterAuthTrustedPlaintextModule}) or ` +
+        `allowlist it as non-plaintext with justification`,
+    ]);
+    expect(secretIssues!).toEqual([
       'KV439: better-auth.adapter.future-token-leak reads a cross-user auth credential with unboxed disposition confined-third-party-adapter',
     ]);
   });
