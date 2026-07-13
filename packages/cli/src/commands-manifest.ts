@@ -579,6 +579,7 @@ export const COMMANDS_MANIFEST = [
     summary: 'Copy a vendored @kovojs/ui component into your project (shadcn-style copy-in).',
     unknownOrder: 1,
     usage: ADD_USAGE,
+    async: true,
     flags: [
       {
         flag: '--out <dir>',

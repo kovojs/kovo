@@ -104,11 +104,6 @@ type AsyncCommandHandler = (
 ) => Promise<number>;
 
 const SYNC_COMMAND_HANDLERS: Record<KovoSyncCommandName, SyncCommandHandler> = {
-  add(args) {
-    const parsed = parseAddArgs(args);
-    if (!parsed.ok) return writeUsageError(parsed.message);
-    return writeCommandResult(runAddCommand(parsed.options));
-  },
   audit(args, security) {
     const parsed = parseAuditArgs(args);
     if (!parsed.ok) return writeUsageError(parsed.message);
@@ -164,6 +159,11 @@ const SYNC_COMMAND_HANDLERS: Record<KovoSyncCommandName, SyncCommandHandler> = {
 };
 
 const ASYNC_COMMAND_HANDLERS: Record<KovoAsyncCommandName, AsyncCommandHandler> = {
+  async add(args) {
+    const parsed = parseAddArgs(args);
+    if (!parsed.ok) return writeUsageError(parsed.message);
+    return writeCommandResult(await runAddCommand(parsed.options));
+  },
   async build(args, security) {
     const parsed = parseBuildArgs(args);
     if (!parsed.ok) return writeUsageError(parsed.message);

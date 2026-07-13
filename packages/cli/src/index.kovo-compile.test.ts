@@ -1,4 +1,14 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  linkSync,
+  lstatSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -12,6 +22,151 @@ import {
 import { mainAsync } from './index.js';
 
 describe('kovo compile', () => {
+  it('does not follow an artifact-output symlink outside --out', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-compile-output-symlink-'));
+    const sourcePath = join(root, 'cart-badge.tsx');
+    const outDir = join(root, 'generated');
+    const outPath = join(outDir, 'cart-badge.tsx');
+    const outside = join(root, 'outside.tsx');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    const previousCwd = process.cwd();
+
+    try {
+      process.chdir(root);
+      mkdirSync(outDir, { recursive: true });
+      writeFileSync(outside, 'export const outside = "reviewed";\n', 'utf8');
+      symlinkSync(outside, outPath);
+      writeFileSync(
+        sourcePath,
+        `import { component } from '@kovojs/core';
+export const CartBadge = component({ render: () => <span>Cart</span> });
+`,
+        'utf8',
+      );
+
+      await expect(
+        mainAsync([
+          'compile',
+          'component',
+          sourcePath,
+          '--out',
+          outPath,
+          '--file-name',
+          'src/components/cart-badge.tsx',
+        ]),
+      ).resolves.toBe(0);
+      expect(readFileSync(outside, 'utf8')).toBe('export const outside = "reviewed";\n');
+      expect(readFileSync(outPath, 'utf8')).toContain('export const CartBadge = component({');
+      expect(stderr).not.toHaveBeenCalled();
+    } finally {
+      process.chdir(previousCwd);
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('atomically replaces dangling symlink and hardlink compile targets', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-compile-output-aliases-'));
+    const sourcePath = join(root, 'cart-badge.tsx');
+    const outDir = join(root, 'generated');
+    const danglingTarget = join(outDir, 'dangling.tsx');
+    const danglingOutside = join(root, 'dangling-outside.tsx');
+    const hardlinkTarget = join(outDir, 'hardlink.tsx');
+    const hardlinkOutside = join(root, 'hardlink-outside.tsx');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    const previousCwd = process.cwd();
+
+    try {
+      process.chdir(root);
+      mkdirSync(outDir, { recursive: true });
+      symlinkSync(danglingOutside, danglingTarget);
+      writeFileSync(hardlinkOutside, 'export const outside = "reviewed";\n', 'utf8');
+      linkSync(hardlinkOutside, hardlinkTarget);
+      writeFileSync(
+        sourcePath,
+        `import { component } from '@kovojs/core';
+export const CartBadge = component({ render: () => <span>Cart</span> });
+`,
+        'utf8',
+      );
+
+      for (const outPath of [danglingTarget, hardlinkTarget]) {
+        await expect(
+          mainAsync([
+            'compile',
+            'component',
+            sourcePath,
+            '--out',
+            outPath,
+            '--file-name',
+            'src/components/cart-badge.tsx',
+          ]),
+        ).resolves.toBe(0);
+        expect(readFileSync(outPath, 'utf8')).toContain('export const CartBadge = component({');
+      }
+
+      expect(existsSync(danglingOutside)).toBe(false);
+      expect(lstatSync(danglingTarget).isSymbolicLink()).toBe(false);
+      expect(readFileSync(hardlinkOutside, 'utf8')).toBe(
+        'export const outside = "reviewed";\n',
+      );
+      expect(lstatSync(hardlinkTarget).ino).not.toBe(lstatSync(hardlinkOutside).ino);
+      expect(stderr).not.toHaveBeenCalled();
+    } finally {
+      process.chdir(previousCwd);
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects a symlinked compile output root without writing through it', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-compile-output-root-symlink-'));
+    const sourcePath = join(root, 'cart-badge.tsx');
+    const outsideDir = join(root, 'outside');
+    const outDir = join(root, 'generated');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    const previousCwd = process.cwd();
+
+    try {
+      process.chdir(root);
+      mkdirSync(outsideDir, { recursive: true });
+      symlinkSync(outsideDir, outDir, 'dir');
+      writeFileSync(
+        sourcePath,
+        `import { component } from '@kovojs/core';
+export const CartBadge = component({ render: () => <span>Cart</span> });
+`,
+        'utf8',
+      );
+
+      await expect(
+        mainAsync([
+          'compile',
+          'component',
+          sourcePath,
+          '--out',
+          join(outDir, 'cart-badge.tsx'),
+          '--file-name',
+          'src/components/cart-badge.tsx',
+        ]),
+      ).resolves.toBe(1);
+      expect(existsSync(join(outsideDir, 'cart-badge.tsx'))).toBe(false);
+      expect(stderr.mock.calls.map(([chunk]) => String(chunk)).join('')).toMatch(
+        /symbolic-link|symbolic link|cannot use/u,
+      );
+    } finally {
+      process.chdir(previousCwd);
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it('writes and checks component artifacts without app-authored compiler imports', async () => {
     const root = mkdtempSync(join(tmpdir(), 'kovo-compile-component-'));
     const sourcePath = join(root, 'cart-badge.tsx');
@@ -470,7 +625,7 @@ route('/', {
         inputPath,
         JSON.stringify({
           graph: {
-            components: [{ component: 'CartBadge', queries: [], target: 'CartBadge' }],
+            components: [{ name: 'CartBadge', queries: [], target: 'CartBadge' }],
           },
         }),
         'utf8',
@@ -480,7 +635,7 @@ route('/', {
 
       expect(stderr).not.toHaveBeenCalled();
       expect(JSON.parse(readFileSync(outPath, 'utf8'))).toEqual({
-        components: [{ component: 'CartBadge', queries: [], target: 'CartBadge' }],
+        components: [{ name: 'CartBadge', queries: [], target: 'CartBadge' }],
       });
       expect(stdout.mock.calls.map(([chunk]) => String(chunk)).join('')).toContain(
         `WRITE graph path=${JSON.stringify(outPath)}`,

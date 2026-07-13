@@ -103,10 +103,10 @@ describe('commands manifest', () => {
     expect(unknown.stderr).toBe(formatUnknownCommandMessage('nope'));
   });
 
-  it('marks the async-dispatched commands (build, dev, db, compile, export, mcp, update-docs) as async', () => {
+  it('marks the async-dispatched commands (add, build, dev, db, compile, export, mcp, update-docs) as async', () => {
     const asyncNames = COMMANDS_MANIFEST.filter(isAsyncManifestEntry).map((entry) => entry.name);
     expect(asyncNames.sort()).toEqual(
-      ['build', 'compile', 'db', 'dev', 'export', 'mcp', 'update-docs'].sort(),
+      ['add', 'build', 'compile', 'db', 'dev', 'export', 'mcp', 'update-docs'].sort(),
     );
   });
 

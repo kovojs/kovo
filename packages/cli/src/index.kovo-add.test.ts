@@ -1,11 +1,21 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  linkSync,
+  lstatSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { compileComponentModule } from '@kovojs/compiler';
 import { describe, expect, it, vi } from 'vitest';
 
-import { main } from './index.js';
+import { mainAsync } from './index.js';
 import {
   availableAddComponents,
   normalizedVendoredUiComponentSource,
@@ -115,7 +125,7 @@ describe('kovo add', () => {
     }
   });
 
-  it('installs missing package dependencies for copied toast source', () => {
+  it('installs missing package dependencies for copied toast source', async () => {
     const root = mkdtempSync(join(tmpdir(), 'kovo-add-cli-'));
     const outDir = join(root, 'src/components/ui');
     writeFileSync(
@@ -149,7 +159,7 @@ describe('kovo add', () => {
         '@kovojs/style',
       ]);
 
-      expect(main(['add', 'toast', '--out', outDir])).toBe(0);
+      await expect(mainAsync(['add', 'toast', '--out', outDir])).resolves.toBe(0);
 
       expect(stderr).not.toHaveBeenCalled();
       expect(install).toHaveBeenCalledWith('pnpm', ['install'], {
@@ -186,7 +196,7 @@ describe('kovo add', () => {
     }
   });
 
-  it('preserves local link specs when installing copied UI dependencies', () => {
+  it('preserves local link specs when installing copied UI dependencies', async () => {
     const root = mkdtempSync(join(tmpdir(), 'kovo-add-cli-link-'));
     const outDir = join(root, 'src/components/ui');
     writeFileSync(
@@ -211,7 +221,7 @@ describe('kovo add', () => {
       .mockImplementation(() => Buffer.alloc(0));
 
     try {
-      expect(main(['add', 'toast', '--out', outDir])).toBe(0);
+      await expect(mainAsync(['add', 'toast', '--out', outDir])).resolves.toBe(0);
 
       const packageJson = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')) as {
         dependencies: Record<string, string>;
@@ -230,7 +240,7 @@ describe('kovo add', () => {
     }
   });
 
-  it('does not print dependency instructions when copied component imports are already declared', () => {
+  it('does not print dependency instructions when copied component imports are already declared', async () => {
     const root = mkdtempSync(join(tmpdir(), 'kovo-add-cli-'));
     const outDir = join(root, 'src/components/ui');
     writeFileSync(
@@ -255,7 +265,7 @@ describe('kovo add', () => {
     const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
 
     try {
-      expect(main(['add', 'dialog', '--out', outDir])).toBe(0);
+      await expect(mainAsync(['add', 'dialog', '--out', outDir])).resolves.toBe(0);
 
       expect(stderr).not.toHaveBeenCalled();
       const output = stdout.mock.calls.map(([chunk]) => String(chunk)).join('');
@@ -329,15 +339,15 @@ describe('kovo add', () => {
     }
   });
 
-  it('vendors package-synchronized components as TSX app source', () => {
+  it('vendors package-synchronized components as TSX app source', async () => {
     const root = mkdtempSync(join(tmpdir(), 'kovo-add-cli-'));
     const outDir = join(root, 'src/components/ui');
     const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
     const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
 
     try {
-      expect(
-        main([
+      await expect(
+        mainAsync([
           'add',
           'accordion',
           'alert',
@@ -375,7 +385,7 @@ describe('kovo add', () => {
           '--out',
           outDir,
         ]),
-      ).toBe(0);
+      ).resolves.toBe(0);
 
       expect(stderr).not.toHaveBeenCalled();
       const output = stdout.mock.calls.map(([chunk]) => String(chunk)).join('');
@@ -700,17 +710,17 @@ describe('kovo add', () => {
     }
   });
 
-  it('is idempotent when the vendored component is already current', () => {
+  it('is idempotent when the vendored component is already current', async () => {
     const root = mkdtempSync(join(tmpdir(), 'kovo-add-cli-'));
     const outDir = join(root, 'ui');
     const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
     const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
 
     try {
-      expect(main(['add', 'button', '--out', outDir])).toBe(0);
+      await expect(mainAsync(['add', 'button', '--out', outDir])).resolves.toBe(0);
       stdout.mockClear();
 
-      expect(main(['add', 'button', '--out', outDir])).toBe(0);
+      await expect(mainAsync(['add', 'button', '--out', outDir])).resolves.toBe(0);
 
       expect(stderr).not.toHaveBeenCalled();
       expect(stdout.mock.calls.map(([chunk]) => String(chunk)).join('')).toContain(
@@ -723,14 +733,14 @@ describe('kovo add', () => {
     }
   });
 
-  it('is idempotent after formatter-only whitespace changes', () => {
+  it('is idempotent after formatter-only whitespace changes', async () => {
     const root = mkdtempSync(join(tmpdir(), 'kovo-add-cli-'));
     const outDir = join(root, 'ui');
     const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
     const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
 
     try {
-      expect(main(['add', 'button', '--out', outDir])).toBe(0);
+      await expect(mainAsync(['add', 'button', '--out', outDir])).resolves.toBe(0);
       const buttonPath = join(outDir, 'button.tsx');
       const formattedOnly = readFileSync(buttonPath, 'utf8')
         .replace(/\n{2,}/g, '\n\n\n')
@@ -741,7 +751,7 @@ describe('kovo add', () => {
       writeFileSync(buttonPath, formattedOnly, 'utf8');
       stdout.mockClear();
 
-      expect(main(['add', 'button', '--out', outDir])).toBe(0);
+      await expect(mainAsync(['add', 'button', '--out', outDir])).resolves.toBe(0);
 
       expect(stderr).not.toHaveBeenCalled();
       expect(stdout.mock.calls.map(([chunk]) => String(chunk)).join('')).toContain(
@@ -754,14 +764,14 @@ describe('kovo add', () => {
     }
   });
 
-  it('copies required sibling files for tabs and lands formatter-stable source', () => {
+  it('copies required sibling files for tabs and lands formatter-stable source', async () => {
     const root = mkdtempSync(join(tmpdir(), 'kovo-add-cli-'));
     const outDir = join(root, 'ui');
     const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
     const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
 
     try {
-      expect(main(['add', 'tabs', '--out', outDir])).toBe(0);
+      await expect(mainAsync(['add', 'tabs', '--out', outDir])).resolves.toBe(0);
 
       expect(stderr).not.toHaveBeenCalled();
       expect(readFileSync(join(outDir, 'tabs.tsx'), 'utf8')).toContain(
@@ -776,7 +786,7 @@ describe('kovo add', () => {
       );
 
       stdout.mockClear();
-      expect(main(['add', 'tabs', '--out', outDir])).toBe(0);
+      await expect(mainAsync(['add', 'tabs', '--out', outDir])).resolves.toBe(0);
       expect(stdout.mock.calls.map(([chunk]) => String(chunk)).join('')).toContain(
         `SKIP tabs path=${JSON.stringify(join(outDir, 'tabs.tsx'))} reason=already-current`,
       );
@@ -787,12 +797,12 @@ describe('kovo add', () => {
     }
   });
 
-  it('refuses unknown components with stable output', () => {
+  it('refuses unknown components with stable output', async () => {
     const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
     const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
 
     try {
-      expect(main(['add', 'calendar'])).toBe(1);
+      await expect(mainAsync(['add', 'calendar'])).resolves.toBe(1);
 
       expect(stdout).not.toHaveBeenCalled();
       expect(stderr.mock.calls.map(([chunk]) => String(chunk)).join('')).toBe(
@@ -804,7 +814,7 @@ describe('kovo add', () => {
     }
   });
 
-  it('refuses to overwrite app-owned component files', () => {
+  it('refuses to overwrite app-owned component files', async () => {
     const root = mkdtempSync(join(tmpdir(), 'kovo-add-cli-'));
     const outDir = join(root, 'ui');
     mkdirSync(outDir, { recursive: true });
@@ -813,7 +823,7 @@ describe('kovo add', () => {
     const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
 
     try {
-      expect(main(['add', 'button', '--out', outDir])).toBe(1);
+      await expect(mainAsync(['add', 'button', '--out', outDir])).resolves.toBe(1);
 
       expect(stdout).not.toHaveBeenCalled();
       expect(stderr.mock.calls.map(([chunk]) => String(chunk)).join('')).toBe(
@@ -825,6 +835,161 @@ describe('kovo add', () => {
     } finally {
       stdout.mockRestore();
       stderr.mockRestore();
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it('does not follow a dangling component-output symlink outside --out', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-add-output-symlink-'));
+    const outDir = join(root, 'ui');
+    const outside = join(root, 'outside-button.tsx');
+    mkdirSync(outDir, { recursive: true });
+    symlinkSync(outside, join(outDir, 'button.tsx'));
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    try {
+      await expect(mainAsync(['add', 'button', '--out', outDir])).resolves.toBe(0);
+      expect(existsSync(outside)).toBe(false);
+      expect(readFileSync(join(outDir, 'button.tsx'), 'utf8')).toContain('export const Button');
+      expect(stderr).not.toHaveBeenCalled();
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it('atomically replaces an existing outside leaf symlink without changing its referent', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-add-existing-output-symlink-'));
+    const outDir = join(root, 'ui');
+    const outside = join(root, 'outside-button.tsx');
+    mkdirSync(outDir, { recursive: true });
+    writeFileSync(outside, 'export const outside = "reviewed";\n', 'utf8');
+    symlinkSync(outside, join(outDir, 'button.tsx'));
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    try {
+      await expect(mainAsync(['add', 'button', '--out', outDir])).resolves.toBe(0);
+      expect(readFileSync(outside, 'utf8')).toBe('export const outside = "reviewed";\n');
+      expect(lstatSync(join(outDir, 'button.tsx')).isSymbolicLink()).toBe(false);
+      expect(readFileSync(join(outDir, 'button.tsx'), 'utf8')).toContain('export const Button');
+      expect(stderr).not.toHaveBeenCalled();
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it('rejects a symlinked add output root without writing through it', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-add-output-root-symlink-'));
+    const outsideDir = join(root, 'outside');
+    const outDir = join(root, 'ui');
+    mkdirSync(outsideDir, { recursive: true });
+    symlinkSync(outsideDir, outDir, 'dir');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    try {
+      await expect(mainAsync(['add', 'button', '--out', outDir])).resolves.toBe(1);
+      expect(existsSync(join(outsideDir, 'button.tsx'))).toBe(false);
+      expect(stderr.mock.calls.map(([chunk]) => String(chunk)).join('')).toMatch(
+        /symbolic-link|symbolic link|cannot use/u,
+      );
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it('does not truncate an outside hardlink when refusing an app-owned add target', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-add-output-hardlink-'));
+    const outDir = join(root, 'ui');
+    const outside = join(root, 'outside-button.tsx');
+    mkdirSync(outDir, { recursive: true });
+    writeFileSync(outside, 'export const outside = "reviewed";\n', 'utf8');
+    linkSync(outside, join(outDir, 'button.tsx'));
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    try {
+      await expect(mainAsync(['add', 'button', '--out', outDir])).resolves.toBe(1);
+      expect(readFileSync(outside, 'utf8')).toBe('export const outside = "reviewed";\n');
+      expect(stderr.mock.calls.map(([chunk]) => String(chunk)).join('')).toContain(
+        'reason=would-overwrite',
+      );
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it('does not read or replace an outside package.json through a manifest symlink', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-add-manifest-symlink-'));
+    const outsideRoot = mkdtempSync(join(tmpdir(), 'kovo-add-manifest-symlink-outside-'));
+    const outDir = join(root, 'ui');
+    const outside = join(outsideRoot, 'outside-package.json');
+    const reviewed = '{"private":true,"outside":"reviewed"}\n';
+    writeFileSync(outside, reviewed, 'utf8');
+    symlinkSync(outside, join(root, 'package.json'));
+    const install = vi.spyOn(addCommandShell, 'execFileSync').mockImplementation(() => Buffer.alloc(0));
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    try {
+      await expect(mainAsync(['add', 'toast', '--out', outDir])).resolves.toBe(1);
+      expect(readFileSync(outside, 'utf8')).toBe(reviewed);
+      expect(install).not.toHaveBeenCalled();
+      expect(stderr.mock.calls.map(([chunk]) => String(chunk)).join('')).toContain(
+        'reason=invalid-package-json',
+      );
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+      install.mockRestore();
+      rmSync(root, { force: true, recursive: true });
+      rmSync(outsideRoot, { force: true, recursive: true });
+    }
+  });
+
+  it('atomically replaces a package.json hardlink without changing its outside inode', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-add-manifest-hardlink-'));
+    const outDir = join(root, 'ui');
+    const outside = join(root, 'outside-package.json');
+    const reviewed = `${JSON.stringify(
+      {
+        dependencies: {
+          '@kovojs/core': 'workspace:*',
+          '@kovojs/style': 'workspace:*',
+          '@kovojs/ui': 'workspace:*',
+        },
+        packageManager: 'pnpm@10.12.1',
+        private: true,
+      },
+      null,
+      2,
+    )}\n`;
+    writeFileSync(outside, reviewed, 'utf8');
+    linkSync(outside, join(root, 'package.json'));
+    const install = vi.spyOn(addCommandShell, 'execFileSync').mockImplementation(() => Buffer.alloc(0));
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    try {
+      await expect(mainAsync(['add', 'toast', '--out', outDir])).resolves.toBe(0);
+      expect(readFileSync(outside, 'utf8')).toBe(reviewed);
+      expect(readFileSync(join(root, 'package.json'), 'utf8')).toContain('@kovojs/headless-ui');
+      expect(lstatSync(join(root, 'package.json')).ino).not.toBe(lstatSync(outside).ino);
+      expect(install).toHaveBeenCalledOnce();
+      expect(stderr).not.toHaveBeenCalled();
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+      install.mockRestore();
       rmSync(root, { force: true, recursive: true });
     }
   });

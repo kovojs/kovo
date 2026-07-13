@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
@@ -23,6 +23,7 @@ import type {
 } from '@kovojs/compiler';
 import type { DiagnosticCode } from '@kovojs/core';
 import { isDiagnosticCode } from '@kovojs/core/internal/diagnostics';
+import { createFrameworkOutputFileSystemBoundary } from '@kovojs/core/internal/filesystem';
 
 import {
   availableAddComponents,
@@ -227,13 +228,31 @@ export function addUsage(): string {
   return [ADD_USAGE, `available: ${availableAddComponents()}`, ''].join('\n');
 }
 
-export function runAddCommand(options: AddComponentOptions): CliCommandResult {
+export async function runAddCommand(options: AddComponentOptions): Promise<CliCommandResult> {
+  try {
+    return await runAddCommandWithOutputBoundary(options);
+  } catch (error) {
+    return {
+      error: `${addOutputVersion}\nERROR OUTPUT reason=${stableText(
+        error instanceof Error ? error.message : String(error),
+      )}`,
+      exitCode: 1,
+    };
+  }
+}
+
+async function runAddCommandWithOutputBoundary(
+  options: AddComponentOptions,
+): Promise<CliCommandResult> {
   const lines = [addOutputVersion];
-  mkdirSync(options.outDir, { recursive: true });
+  const resolvedOutDir = resolve(options.outDir);
+  const output = createFrameworkOutputFileSystemBoundary(resolvedOutDir);
+  await output.ensureDirectory();
   const requiredPackageDependencies = new Set<string>();
   const plannedWrites: {
     component: AddComponentName;
     file: (typeof vendoredUiComponents)[AddComponentName]['files'][number];
+    relativePath: string;
     target: string;
   }[] = [];
 
@@ -249,13 +268,19 @@ export function runAddCommand(options: AddComponentOptions): CliCommandResult {
       requiredPackageDependencies.add(packageName);
     }
     for (const file of entry.files) {
-      plannedWrites.push({ component, file, target: resolve(options.outDir, file.fileName) });
+      plannedWrites.push({
+        component,
+        file,
+        relativePath: file.fileName,
+        target: resolve(resolvedOutDir, file.fileName),
+      });
     }
   }
 
   for (const planned of plannedWrites) {
-    if (!existsSync(planned.target)) continue;
-    const current = readFileSync(planned.target, 'utf8');
+    const currentBytes = await output.fileBytes(planned.relativePath);
+    if (currentBytes === undefined) continue;
+    const current = Buffer.from(currentBytes).toString('utf8');
     if (
       normalizedVendoredUiComponentSource(current) ===
       normalizedVendoredUiComponentSource(planned.file.source)
@@ -271,15 +296,19 @@ export function runAddCommand(options: AddComponentOptions): CliCommandResult {
   for (const component of options.components) {
     const entry = vendoredUiComponents[component];
     if (!entry) continue;
-    const componentTarget = resolve(options.outDir, entry.fileName);
-    const allFilesAlreadyCurrent = entry.files.every((file) => {
-      const target = resolve(options.outDir, file.fileName);
-      return (
-        existsSync(target) &&
-        normalizedVendoredUiComponentSource(readFileSync(target, 'utf8')) ===
+    const componentTarget = resolve(resolvedOutDir, entry.fileName);
+    let allFilesAlreadyCurrent = true;
+    for (const file of entry.files) {
+      const current = await output.fileBytes(file.fileName);
+      if (
+        current === undefined ||
+        normalizedVendoredUiComponentSource(Buffer.from(current).toString('utf8')) !==
           normalizedVendoredUiComponentSource(file.source)
-      );
-    });
+      ) {
+        allFilesAlreadyCurrent = false;
+        break;
+      }
+    }
     if (allFilesAlreadyCurrent) {
       lines.push(
         `SKIP ${component} path=${JSON.stringify(componentTarget)} reason=already-current package=@kovojs/ui@${entry.packageVersion} sourceHash=${entry.sourceHash}`,
@@ -288,21 +317,23 @@ export function runAddCommand(options: AddComponentOptions): CliCommandResult {
     }
 
     for (const file of entry.files) {
-      const target = resolve(options.outDir, file.fileName);
-      if (existsSync(target)) continue;
-      writeFileSync(target, file.source, 'utf8');
+      if (await output.fileExists(file.fileName)) continue;
+      await output.writeFile(file.fileName, file.source);
     }
     lines.push(
       `ADD ${component} path=${JSON.stringify(componentTarget)} source=tsx package=@kovojs/ui@${entry.packageVersion} sourceHash=${entry.sourceHash}`,
     );
   }
 
-  const missingDependencies = missingAddPackageDependencies(
+  const missingDependencies = await missingAddPackageDependencies(
     [...requiredPackageDependencies].sort(),
-    options.outDir,
+    resolvedOutDir,
   );
   if (missingDependencies.length > 0) {
-    const ensuredDependencies = ensureAddPackageDependencies(missingDependencies, options.outDir);
+    const ensuredDependencies = await ensureAddPackageDependencies(
+      missingDependencies,
+      resolvedOutDir,
+    );
     if (!ensuredDependencies.ok) {
       return {
         error:
@@ -325,22 +356,22 @@ export function runAddCommand(options: AddComponentOptions): CliCommandResult {
   }
 
   lines.push(
-    `SUMMARY total=${options.components.length} outDir=${JSON.stringify(resolve(options.outDir))}`,
+    `SUMMARY total=${options.components.length} outDir=${JSON.stringify(resolvedOutDir)}`,
   );
   return { exitCode: 0, output: `${lines.join('\n')}\n` };
 }
 
-function missingAddPackageDependencies(
+async function missingAddPackageDependencies(
   packageNames: readonly string[],
   outDir: string,
-): readonly string[] {
+): Promise<readonly string[]> {
   if (packageNames.length === 0) return [];
   const packageJsonPath = findNearestPackageJson(resolve(outDir));
   if (!packageJsonPath) return packageNames;
-  const parsed = readJsonRecord(packageJsonPath);
-  if (!parsed.ok) return packageNames;
+  const parsed = await readAddPackageJson(packageJsonPath);
+  if (parsed === undefined) return packageNames;
   return packageNames.filter(
-    (packageName) => !packageJsonDeclaresPackage(parsed.value, packageName),
+    (packageName) => !packageJsonDeclaresPackage(parsed, packageName),
   );
 }
 
@@ -358,28 +389,28 @@ type EnsureAddPackageDependenciesResult =
       reason: 'install-failed' | 'invalid-package-json';
     };
 
-function ensureAddPackageDependencies(
+async function ensureAddPackageDependencies(
   packageNames: readonly string[],
   outDir: string,
-): EnsureAddPackageDependenciesResult {
+): Promise<EnsureAddPackageDependenciesResult> {
   const packageJsonPath = findNearestPackageJson(resolve(outDir));
-  const installCommand = addDependencyInstallCommand(packageNames, outDir);
   if (!packageJsonPath) {
-    return { installCommand, ok: true, status: 'follow-up' };
+    return { installCommand: `pnpm add ${packageNames.join(' ')}`, ok: true, status: 'follow-up' };
   }
 
-  const parsed = readJsonRecord(packageJsonPath);
-  if (!parsed.ok) {
+  const parsed = await readAddPackageJson(packageJsonPath);
+  if (parsed === undefined) {
     return {
-      installCommand,
+      installCommand: 'pnpm install',
       ok: false,
       packageJsonPath,
       reason: 'invalid-package-json',
     };
   }
+  const installCommand = `${packageManagerName(parsed)} install`;
 
   const missingByManifest = packageNames.filter(
-    (packageName) => !packageJsonDeclaresPackage(parsed.value, packageName),
+    (packageName) => !packageJsonDeclaresPackage(parsed, packageName),
   );
   if (missingByManifest.length === 0) {
     return { installCommand, ok: true, packageJsonPath, status: 'installed' };
@@ -388,13 +419,18 @@ function ensureAddPackageDependencies(
   const dependencySpecs = Object.fromEntries(
     missingByManifest.map((packageName) => [
       packageName,
-      inferAddDependencySpec(parsed.value, packageName),
+      inferAddDependencySpec(parsed, packageName),
     ]),
   );
-  const nextManifest = addDependenciesToPackageJson(parsed.value, dependencySpecs);
-  writeFileSync(packageJsonPath, `${JSON.stringify(nextManifest, null, 2)}\n`, 'utf8');
+  const nextManifest = addDependenciesToPackageJson(parsed, dependencySpecs);
+  const manifestOutput = createFrameworkOutputFileSystemBoundary(dirname(packageJsonPath));
+  await manifestOutput.ensureDirectory();
+  await manifestOutput.writeFile(
+    basename(packageJsonPath),
+    `${JSON.stringify(nextManifest, null, 2)}\n`,
+  );
 
-  const { args, command } = packageManagerInstallInvocation(packageJsonPath);
+  const { args, command } = packageManagerInstallInvocation(parsed);
   try {
     addCommandShell.execFileSync(command, args, {
       cwd: dirname(packageJsonPath),
@@ -410,6 +446,18 @@ function ensureAddPackageDependencies(
   }
 
   return { installCommand, ok: true, packageJsonPath, status: 'installed' };
+}
+
+async function readAddPackageJson(path: string): Promise<Record<string, unknown> | undefined> {
+  const fileSystem = createFrameworkOutputFileSystemBoundary(dirname(path));
+  const bytes = await fileSystem.fileBytes(basename(path));
+  if (bytes === undefined) return undefined;
+  try {
+    const parsed = JSON.parse(Buffer.from(bytes).toString('utf8')) as unknown;
+    return isRecord(parsed) ? parsed : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 function findNearestPackageJson(startDir: string): string | undefined {
@@ -430,13 +478,6 @@ function packageJsonDeclaresPackage(
 
 function packageBagDeclaresPackage(value: unknown, packageName: string): boolean {
   return isRecord(value) && typeof value[packageName] === 'string';
-}
-
-function addDependencyInstallCommand(packageNames: readonly string[], outDir: string): string {
-  const packageJsonPath = findNearestPackageJson(resolve(outDir));
-  const packageManager = packageJsonPath ? packageManagerName(packageJsonPath) : 'pnpm';
-  if (!packageJsonPath) return `${packageManager} add ${packageNames.join(' ')}`;
-  return `${packageManager} install`;
 }
 
 function addDependenciesToPackageJson(
@@ -525,17 +566,16 @@ function findDeclaredPackageSpec(
   return undefined;
 }
 
-function packageManagerInstallInvocation(packageJsonPath: string): {
+function packageManagerInstallInvocation(manifest: Record<string, unknown>): {
   args: string[];
   command: 'bun' | 'npm' | 'pnpm' | 'yarn';
 } {
-  const command = packageManagerName(packageJsonPath);
+  const command = packageManagerName(manifest);
   return { args: ['install'], command };
 }
 
-function packageManagerName(packageJsonPath: string): 'bun' | 'npm' | 'pnpm' | 'yarn' {
-  const parsed = readJsonRecord(packageJsonPath);
-  const packageManager = parsed.ok ? parsed.value.packageManager : undefined;
+function packageManagerName(manifest: Record<string, unknown>): 'bun' | 'npm' | 'pnpm' | 'yarn' {
+  const packageManager = manifest.packageManager;
   if (typeof packageManager === 'string') {
     const [name] = packageManager.split('@');
     if (name === 'bun' || name === 'npm' || name === 'pnpm' || name === 'yarn') return name;
@@ -914,7 +954,7 @@ async function runCompileComponentCommand(
     }
   }
 
-  return compileArtifactsResult(options.check, artifacts, warningLines(warnings));
+  return await compileArtifactsResult(options.check, artifacts, warningLines(warnings));
 }
 
 async function runCompileRouteCommand(
@@ -944,7 +984,7 @@ async function runCompileRouteCommand(
       source: `${JSON.stringify({ routePageFacts: result.routePageFacts }, null, 2)}\n`,
     });
   }
-  return compileArtifactsResult(options.check, artifacts);
+  return await compileArtifactsResult(options.check, artifacts);
 }
 
 async function runCompileGraphCommand(
@@ -955,7 +995,11 @@ async function runCompileGraphCommand(
     readJsonFile(options.inputPath) as Parameters<typeof deriveAppGraph>[0],
   );
   if (result.diagnostics.length > 0) return compileDiagnosticResult(result.diagnostics);
-  return compileArtifactResult(options, `${JSON.stringify(result.graph, null, 2)}\n`, 'graph');
+  return await compileArtifactResult(
+    options,
+    `${JSON.stringify(result.graph, null, 2)}\n`,
+    'graph',
+  );
 }
 
 async function runCompileMutationInputsCommand(
@@ -976,7 +1020,11 @@ async function runCompileMutationInputsCommand(
       })),
     ]),
   );
-  return compileArtifactResult(options, `${JSON.stringify(facts, null, 2)}\n`, 'mutation-inputs');
+  return await compileArtifactResult(
+    options,
+    `${JSON.stringify(facts, null, 2)}\n`,
+    'mutation-inputs',
+  );
 }
 
 type DrizzleOptimisticEntryStatus = 'await-fragment' | 'derived' | 'hand-written';
@@ -1183,7 +1231,7 @@ async function runCompileDrizzleStaticCommand(
           );
   }
 
-  const artifact = compileArtifactResult(
+  const artifact = await compileArtifactResult(
     options,
     `${JSON.stringify(output, null, 2)}\n`,
     'drizzle-static',
@@ -1372,7 +1420,7 @@ async function runCompileDrizzleOptimisticCommand(
       source: `${JSON.stringify(facts, null, 2)}\n`,
     });
   }
-  return compileArtifactsResult(options.check, artifacts);
+  return await compileArtifactsResult(options.check, artifacts);
 }
 
 async function authoredOptimisticStatusesFromInput(
@@ -1564,7 +1612,7 @@ async function runCompilePackageCssCommand(
   });
   if (!result.css) throw new Error(`no CSS extracted for ${options.packageName}`);
 
-  const lines = compileArtifactLines(options, result.css, 'package-css');
+  const lines = await compileArtifactLines(options, result.css, 'package-css');
   for (const diagnostic of result.diagnostics) {
     lines.splice(
       -1,
@@ -1575,12 +1623,15 @@ async function runCompilePackageCssCommand(
   return { exitCode: 0, output: `${lines.join('\n')}\n` };
 }
 
-function compileArtifactResult(
+async function compileArtifactResult(
   options: CompileBaseOptions,
   source: string,
   kind: CompileTarget,
-): CliCommandResult {
-  return { exitCode: 0, output: `${compileArtifactLines(options, source, kind).join('\n')}\n` };
+): Promise<CliCommandResult> {
+  return {
+    exitCode: 0,
+    output: `${(await compileArtifactLines(options, source, kind)).join('\n')}\n`,
+  };
 }
 
 interface CompileArtifact {
@@ -1589,35 +1640,48 @@ interface CompileArtifact {
   source: string;
 }
 
-function compileArtifactsResult(
+async function compileArtifactsResult(
   check: boolean,
   artifacts: readonly CompileArtifact[],
   warnings: readonly string[] = [],
-): CliCommandResult {
+): Promise<CliCommandResult> {
   const lines = [compileCommandOutputVersion];
   for (const artifact of artifacts) {
-    lines.push(...compileArtifactActionLines(check, artifact));
+    lines.push(...(await compileArtifactActionLines(check, artifact)));
   }
   lines.push(...warnings, `SUMMARY artifacts=${artifacts.length} diagnostics=${warnings.length}`);
   return { exitCode: 0, output: `${lines.join('\n')}\n` };
 }
 
-function compileArtifactLines(
+async function compileArtifactLines(
   options: CompileBaseOptions,
   source: string,
   kind: CompileTarget,
-): string[] {
+): Promise<string[]> {
   return [
     compileCommandOutputVersion,
-    ...compileArtifactActionLines(options.check, { kind, path: options.outPath, source }),
+    ...(await compileArtifactActionLines(options.check, {
+      kind,
+      path: options.outPath,
+      source,
+    })),
     `SUMMARY artifacts=1 diagnostics=0`,
   ];
 }
 
-function compileArtifactActionLines(check: boolean, artifact: CompileArtifact): string[] {
+async function compileArtifactActionLines(
+  check: boolean,
+  artifact: CompileArtifact,
+): Promise<string[]> {
   const target = resolve(artifact.path);
+  const output = createFrameworkOutputFileSystemBoundary(dirname(target));
+  const relativeTarget = basename(target);
   if (check) {
-    const current = readFileSync(target, 'utf8');
+    const currentBytes = await output.fileBytes(relativeTarget);
+    if (currentBytes === undefined) {
+      throw new Error(`${artifact.kind} artifact ${target} is missing or outside its output root`);
+    }
+    const current = Buffer.from(currentBytes).toString('utf8');
     if (current !== artifact.source) {
       throw new Error(`${artifact.kind} artifact ${target} is stale; rerun without --check`);
     }
@@ -1625,8 +1689,8 @@ function compileArtifactActionLines(check: boolean, artifact: CompileArtifact): 
       `CHECK ${artifact.kind} path=${JSON.stringify(target)} status=current bytes=${byteLength(artifact.source)}`,
     ];
   }
-  mkdirSync(dirname(target), { recursive: true });
-  writeFileSync(target, artifact.source, 'utf8');
+  await output.ensureDirectory();
+  await output.writeFile(relativeTarget, artifact.source);
   return [
     `WRITE ${artifact.kind} path=${JSON.stringify(target)} bytes=${byteLength(artifact.source)}`,
   ];
