@@ -143,8 +143,9 @@ describe('create-kovo starter (build integration: production Defer artifacts)', 
         const shellBody = await shellResponse.text();
         expect(shellResponse.status, shellBody).toBe(500);
         expect(shellBody).toContain(
-          '&lt;main data-shell="500"&gt;&lt;img src=x onerror=alert(1)&gt; Set-Cookie: session=evil&lt;/main&gt;',
+          '&lt;main data-shell="500"&gt; Set-Cookie: session=evil&lt;/main&gt;',
         );
+        expect(shellBody).not.toContain('&lt;img src=x onerror=alert(1)&gt;');
         expect(shellBody).not.toContain('<main data-shell="500">');
         expect(shellBody).not.toContain('<img src=x onerror=alert(1)>');
         expect(shellBody).not.toContain('private route detail');
