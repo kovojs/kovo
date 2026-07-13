@@ -32,7 +32,7 @@ declare const unverifiedAcceptanceBrand: unique symbol;
 /**
  * KV428 upload inline-XSS gate (SPEC §6.6/§9.1; plans/secure-framework.md Phase 6 Tier 1).
  *
- * The live hole this module closes: `respond.stream({ disposition: 'inline' })` serves
+ * The live hole this module closes: the inline stream response sink serves
  * attacker-controlled bytes (SVG-with-script, HTML, polyglots) inline same-origin, and the
  * upload schema stored the *verbatim client `file.type`* as the served `Content-Type`.
  * `X-Content-Type-Options: nosniff` does NOT neuter honestly-typed active content: a response
@@ -388,7 +388,7 @@ export function drainUnverifiedMimeFacts(): readonly UnverifiedMimeFact[] {
 /**
  * Thrown at the `respond.*` inline sink when an upload is served inline (`disposition: 'inline'`)
  * but the content type is NOT verified-safe (KV428, SPEC §6.6/§9.1). This is the runtime
- * fail-closed floor: when the static brand degrades (e.g. `respond.storedFile(key)` takes a bare
+ * fail-closed floor: when the static brand degrades (e.g. the stored-file response sink takes a bare
  * string key with no compile-visible verification), the runtime refuses to serve unverified bytes
  * inline rather than rendering attacker-controlled active content same-origin.
  */
