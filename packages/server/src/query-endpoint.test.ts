@@ -6,6 +6,8 @@ import { domain } from './domain.js';
 import {
   assignDerivedQueryKey,
   query,
+  queryRuntimeWarningsFromRequest,
+  recordQueryRuntimeWarnings,
   renderQueryEndpointResponse,
   renderQueryRegistryEndpointResponse,
   runQuery,
@@ -440,6 +442,24 @@ describe('query endpoints', () => {
       },
       status: 200,
     });
+  });
+
+  it('keeps query warning authority private from public symbol carriers', () => {
+    const request = {};
+    let forgedGetterCalls = 0;
+    Object.defineProperty(request, Symbol.for('kovo.queryRuntimeWarnings'), {
+      get() {
+        forgedGetterCalls += 1;
+        return [{ code: 'QUERY_LIST_LIMIT', limit: 0, path: '$.forged' }];
+      },
+    });
+
+    expect(queryRuntimeWarningsFromRequest(request)).toEqual([]);
+    recordQueryRuntimeWarnings(request, [{ code: 'QUERY_LIST_LIMIT', limit: 2, path: '$.rows' }]);
+    expect(queryRuntimeWarningsFromRequest(request)).toEqual([
+      { code: 'QUERY_LIST_LIMIT', limit: 2, path: '$.rows' },
+    ]);
+    expect(forgedGetterCalls).toBe(0);
   });
 
   it('keeps the API4 list ceiling after selective Array.isArray replacement', async () => {

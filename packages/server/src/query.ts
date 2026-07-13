@@ -69,7 +69,7 @@ const MAX_QUERY_RESULT_DEPTH = 64;
 const MAX_QUERY_RESULT_NODES = 100_000;
 const MAX_QUERY_RESULT_ESTIMATED_BYTES = 4 * 1_024 * 1_024;
 const MAX_QUERY_BIGINT_MAGNITUDE = 10n ** 4_096n;
-const queryRuntimeWarningsKey = Symbol.for('kovo.queryRuntimeWarnings');
+const queryRuntimeWarningsByRequest = createWitnessWeakMap<object, QueryRuntimeWarning[]>();
 const queryIteratorSymbol: typeof Symbol.iterator = Symbol.iterator;
 const intrinsicArrayPrototype = witnessGetPrototypeOf([]);
 const intrinsicObjectPrototype = witnessGetPrototypeOf({});
@@ -572,31 +572,21 @@ export function recordQueryRuntimeWarnings(
 ): void {
   if (warnings === undefined || warnings.length === 0) return;
   if (typeof request !== 'object' || request === null) return;
-  const target = request as { [queryRuntimeWarningsKey]?: QueryRuntimeWarning[] };
-  const existingDescriptor = witnessGetOwnPropertyDescriptor(target, queryRuntimeWarningsKey);
-  if (existingDescriptor === undefined) {
+  const target = request as object;
+  const existing = witnessWeakMapGet(queryRuntimeWarningsByRequest, target);
+  if (existing === undefined) {
     const snapshot: QueryRuntimeWarning[] = [];
     appendQueryWarnings(snapshot, warnings);
-    witnessDefineProperty(target, queryRuntimeWarningsKey, {
-      configurable: true,
-      enumerable: false,
-      value: snapshot,
-      writable: true,
-    });
+    witnessWeakMapSet(queryRuntimeWarningsByRequest, target, snapshot);
     return;
   }
-  if (!('value' in existingDescriptor) || !isQueryResultArray(existingDescriptor.value)) {
-    throw new TypeError('Kovo query warning carrier is not an own array data property.');
-  }
-  appendQueryWarnings(existingDescriptor.value as QueryRuntimeWarning[], warnings);
+  appendQueryWarnings(existing, warnings);
 }
 
 /** @internal Read query-runtime warnings recorded on a lifecycle request. */
 export function queryRuntimeWarningsFromRequest(request: unknown): readonly QueryRuntimeWarning[] {
   if (typeof request !== 'object' || request === null) return [];
-  const descriptor = witnessGetOwnPropertyDescriptor(request, queryRuntimeWarningsKey);
-  if (descriptor === undefined || !('value' in descriptor)) return [];
-  return isQueryResultArray(descriptor.value) ? (descriptor.value as QueryRuntimeWarning[]) : [];
+  return witnessWeakMapGet(queryRuntimeWarningsByRequest, request) ?? [];
 }
 
 /** @internal */
