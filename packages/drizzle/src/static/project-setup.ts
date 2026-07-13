@@ -95,7 +95,9 @@ interface ProjectExtractionMemo {
 ): ProjectExtraction {
   const project = new Project({
     compilerOptions: {
-      allowJs: false,
+      // SPEC §11.1/§11.4: JavaScript schema modules are authored source too; the exact
+      // table-security manifest must not become empty merely because a CLI schema uses .mjs.
+      allowJs: true,
       lib: ['lib.es2022.d.ts'],
       moduleResolution: ts.ModuleResolutionKind.Bundler,
       noEmit: true,

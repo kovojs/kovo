@@ -4195,7 +4195,7 @@ export interface RuntimeTableSecurityManifest {
 }
 
 interface RuntimeTableSecurityManifestDraft {
-  annotation: ExtractedTableAnnotation;
+  annotation: ExtractedTableAnnotation | null;
   columns: readonly RuntimeTableSecurityManifestColumn[];
   initializer: CallExpression;
   name: string;
@@ -4237,7 +4237,7 @@ function runtimeTableSecurityManifestFromProjectExtraction(
       const syntheticName = extraction.tableNamesBySymbol.get(
         resolvedSymbolKey(declaration.getNameNode().getSymbol()) ?? '',
       );
-      if (name === undefined || annotation === null || syntheticName === undefined) continue;
+      if (name === undefined || syntheticName === undefined) continue;
       drafts.set(name, {
         annotation,
         columns: runtimeManifestColumns(rootCall),
@@ -4252,8 +4252,9 @@ function runtimeTableSecurityManifestFromProjectExtraction(
   const tables: RuntimeTableSecurityManifestTable[] = [];
   for (const draft of drafts.values()) {
     const annotation = draft.annotation;
-    const classifications = authzCensusClassifications(annotation);
-    const domainAnnotation = isDomainExtractedTableAnnotation(annotation) ? annotation : undefined;
+    const classifications = annotation === null ? [] : authzCensusClassifications(annotation);
+    const domainAnnotation =
+      annotation !== null && isDomainExtractedTableAnnotation(annotation) ? annotation : undefined;
     const ownerColumn = runtimeManifestColumnForRef(draft.columns, domainAnnotation?.owner);
     const owner =
       ownerColumn === undefined

@@ -217,6 +217,34 @@ describe('@kovojs/drizzle authorization census static gate (DEC-K/C7)', () => {
     ]);
   });
 
+  it('still rejects a request-reachable table with no Kovo annotation', () => {
+    const diagnostics = censusDiagnostics(
+      [
+        'import { query } from "@kovojs/server";',
+        'import { pgTable, text } from "drizzle-orm/pg-core";',
+        'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+        '',
+        'export const verification = pgTable("verification", { id: text("id").primaryKey() });',
+        '',
+        'export const verificationQuery = query("verification", {',
+        '  load(_input: unknown, db: PgAsyncDatabase<any, any>) {',
+        '    return db.select({ id: verification.id }).from(verification);',
+        '  },',
+        '});',
+      ].join('\n'),
+    );
+
+    expect(diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'KV414',
+        message: expect.stringContaining(
+          'Authorization census table verification is request-reachable but has no authorization classification',
+        ),
+        site: 'src/authz-census.ts:7',
+      }),
+    ]);
+  });
+
   it('requires exactly one DEC-K classification for each request-reachable table', () => {
     const diagnostics = censusDiagnostics(
       [

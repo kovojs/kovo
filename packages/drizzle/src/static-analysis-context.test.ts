@@ -54,7 +54,7 @@ describe('@kovojs/drizzle static analysis context', () => {
       files: [
         pgDatabaseTypes([]),
         {
-          fileName: 'src/schema.ts',
+          fileName: 'external-postgres-schema.mjs',
           source: [
             'import { kovo } from "@kovojs/drizzle";',
             'import { pgTable, text } from "drizzle-orm/pg-core";',
@@ -112,6 +112,41 @@ describe('@kovojs/drizzle static analysis context', () => {
           owner: { columnKey: 'id', columnName: 'user_id' },
           secretColumnKeys: ['passwordHash'],
           secretDeclared: true,
+        },
+      ],
+    });
+  });
+
+  it('keeps unannotated tables in the exact runtime table-security manifest', () => {
+    const facts = extractStaticBuildAnalysisFactsFromProject({
+      files: [
+        pgDatabaseTypes([]),
+        {
+          fileName: 'src/schema.ts',
+          source: [
+            'import { pgTable, text } from "drizzle-orm/pg-core";',
+            '',
+            'export const verification = pgTable("verification", {',
+            '  id: text("id").primaryKey(),',
+            '  value: text("value").notNull(),',
+            '});',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(facts.runtimeTableSecurityManifest).toEqual({
+      tables: [
+        {
+          authorizationClassifications: [],
+          columns: [
+            { key: 'id', name: 'id' },
+            { key: 'value', name: 'value' },
+          ],
+          governedColumnKeys: [],
+          name: 'verification',
+          secretColumnKeys: [],
+          secretDeclared: false,
         },
       ],
     });
