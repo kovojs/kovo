@@ -312,6 +312,7 @@ export interface BetterAuthMountOperationContract {
     appOwnedSafety: true;
     body: 'redirect';
     cache: 'no-store';
+    reservedHeaders: readonly ['Location', 'Set-Cookie'];
   };
 }
 
@@ -327,7 +328,12 @@ export const betterAuthMountOperationContract = betterAuthDeepFreeze(
     },
     mountJustification: 'better-auth owns provider callback subpaths under this mount',
     reason: 'better-auth provider redirect and callback mount',
-    response: { appOwnedSafety: true, body: 'redirect', cache: 'no-store' },
+    response: {
+      appOwnedSafety: true,
+      body: 'redirect',
+      cache: 'no-store',
+      reservedHeaders: ['Location', 'Set-Cookie'],
+    },
   } as const satisfies BetterAuthMountOperationContract,
   'Better Auth mount operation contract',
 );

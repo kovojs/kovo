@@ -373,6 +373,7 @@ describe('browser redirect protocol mount', () => {
       appOwnedSafety: true,
       body: 'redirect',
       cache: 'no-store',
+      reservedHeaders: ['Location', 'Set-Cookie'],
     });
     expect(authEndpoint.auth).toEqual({ kind: 'custom', name: 'better-auth' });
     expect(authEndpoint.access).toEqual({

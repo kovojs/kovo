@@ -29,6 +29,7 @@ export {
   betterAuthSignUpEmailMutation,
 } from './mutations.js';
 export type {
+  BetterAuthSafeField,
   BetterAuthSanitizedRecord,
   BetterAuthSanitizedSessionPayload,
   BetterAuthSanitizedValue,

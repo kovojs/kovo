@@ -1289,6 +1289,36 @@ describe('schema bridge', () => {
     expect(verifierConfig.domainByTable).not.toHaveProperty('auth_identity');
     expect(verifierConfig.keyByTable).not.toHaveProperty('auth_identity');
   });
+
+  it('excludes aliases that collide with an implicit logical verifier table', () => {
+    const verifierConfig = createBetterAuthDbVerificationConfig(
+      {},
+      {
+        session: authTable(['userId'], 'user'),
+      },
+    );
+
+    // SPEC §10.1/§11.2: verifier config emits logical fallback names even when a table's metadata
+    // is unavailable. An observed `user` write cannot be assigned whichever domain happens to be
+    // emitted last when the present session table aliases that same physical name.
+    expect(verifierConfig.domainByTable).not.toHaveProperty('user');
+    expect(verifierConfig.keyByTable).not.toHaveProperty('user');
+  });
+
+  it('does not classify an unsupported plugin table through a blessed table alias', () => {
+    const verifierConfig = createBetterAuthDbVerificationConfig(
+      {},
+      {
+        auditLog: authTable(['actorId'], 'auth_events'),
+        session: authTable(['userId'], 'auth_events'),
+      },
+    );
+
+    // SPEC §11.2: an unbridged plugin table remains KV406. Sharing its physical name with a
+    // blessed table must not let the blessed table's domain/key mapping classify those writes.
+    expect(verifierConfig.domainByTable).not.toHaveProperty('auth_events');
+    expect(verifierConfig.keyByTable).not.toHaveProperty('auth_events');
+  });
 });
 
 // SPEC.md §10.1 C10 (papercuts-36 P2): the plugin credential-secret classifier is a POSITIVE

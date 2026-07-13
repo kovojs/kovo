@@ -384,6 +384,14 @@ function appendBetterAuthSecretPathIssues(
   issues: string[],
   path: BetterAuthRequestSecretPath,
 ): void {
+  appendBetterAuthCrossUserPathIssues(issues, path);
+  appendBetterAuthAdapterPathIssues(issues, path);
+}
+
+function appendBetterAuthCrossUserPathIssues(
+  issues: string[],
+  path: BetterAuthRequestSecretPath,
+): void {
   if (
     path.readsCrossUserCredential &&
     !betterAuthSetHas(permittedCrossUserCredentialDispositions, path.disposition)
@@ -403,18 +411,26 @@ function appendBetterAuthSecretPathIssues(
       `KV439: ${path.id} requires a compare/verify justification`,
     );
   }
+}
 
+function appendBetterAuthAdapterPathIssues(
+  issues: string[],
+  path: BetterAuthRequestSecretPath,
+): void {
+  const confinedAdapterCredential = betterAuthSetHas(
+    permittedAdapterCredentialDispositions,
+    path.disposition,
+  );
   if (
     path.carrier === 'adapter-system-db-secret-column' &&
     !path.readsCrossUserCredential &&
-    !betterAuthSetHas(permittedAdapterCredentialDispositions, path.disposition)
+    !confinedAdapterCredential
   ) {
     appendBetterAuthNonEgressIssue(
       issues,
       `KV439: ${path.id} handles an adapter auth credential with unconfined disposition ${path.disposition}`,
     );
   }
-
   if (path.disposition === 'boxed' && path.carrier !== 'adapter-system-db-secret-column') {
     appendBetterAuthNonEgressIssue(
       issues,

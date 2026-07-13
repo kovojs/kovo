@@ -122,6 +122,7 @@ export {
   betterAuthSignUpEmailMutation,
 } from './mutations.js';
 export type {
+  BetterAuthSafeField,
   BetterAuthSanitizedRecord,
   BetterAuthSanitizedSessionPayload,
   BetterAuthSanitizedValue,
@@ -597,7 +598,7 @@ export function createBetterAuthDbVerificationConfig(
 ): BetterAuthDbVerificationConfig {
   const bridge = createBetterAuthSchemaBridge(schemaBridge);
   const metadata = snapshotBetterAuthMetadataTables(tables, 'Better Auth verifier metadata tables');
-  const collidingPhysicalTables = betterAuthCollidingPhysicalTableNames(metadata, bridge);
+  const collidingPhysicalTables = betterAuthCollidingVerifierTableNames(metadata, bridge);
   const domainByTable: Record<string, BetterAuthTouchDomain> = {};
   const exemptTables: string[] = [];
   const keyByTable: Record<string, string> = {};
@@ -1718,6 +1719,47 @@ function betterAuthCollidingPhysicalTableNames(
   for (let index = 0; index < groups.length; index += 1) {
     const [physicalTable, logicalTables] = groups[index]!;
     if (logicalTables.length > 1) betterAuthSetAdd(collisions, physicalTable);
+  }
+  return collisions;
+}
+
+function betterAuthCollidingVerifierTableNames(
+  tables: Record<string, unknown>,
+  schemaBridge: BetterAuthSchemaBridgeExtensions,
+): Set<string> {
+  const ownersByTable = betterAuthCreateMap<string, Set<string>>();
+  const addOwner = (physicalTable: string, logicalTable: string): void => {
+    const owners = betterAuthMapGet(ownersByTable, physicalTable) ?? betterAuthCreateSet<string>();
+    betterAuthSetAdd(owners, logicalTable);
+    betterAuthMapSet(ownersByTable, physicalTable, owners);
+  };
+
+  // Verifier config deliberately accepts both the logical fallback and Better Auth's modelName
+  // alias. Detect collisions over that complete emitted key set, not only metadata-present tables.
+  const bridgeTables = betterAuthObjectKeys(schemaBridge, 'Better Auth verifier bridge tables');
+  for (let index = 0; index < bridgeTables.length; index += 1) {
+    const table = bridgeTables[index]!;
+    const candidates = betterAuthPhysicalTableNames(table, tables);
+    for (let candidateIndex = 0; candidateIndex < candidates.length; candidateIndex += 1) {
+      addOwner(candidates[candidateIndex]!, table);
+    }
+  }
+
+  // Unbridged plugin tables remain KV406. Their actual physical names reserve verifier keys so a
+  // blessed table alias cannot silently classify the plugin's observed writes.
+  const metadataTables = betterAuthObjectKeys(tables, 'Better Auth verifier metadata tables');
+  for (let index = 0; index < metadataTables.length; index += 1) {
+    const table = metadataTables[index]!;
+    addOwner(betterAuthPhysicalTableName(table, betterAuthTableMetadata(tables, table)), table);
+  }
+
+  const collisions = betterAuthCreateSet<string>();
+  const groups = betterAuthMapEntries(ownersByTable, 'Better Auth verifier table-name owners');
+  for (let index = 0; index < groups.length; index += 1) {
+    const [physicalTable, owners] = groups[index]!;
+    if (betterAuthSetValues(owners, 'Better Auth verifier table-name owners').length > 1) {
+      betterAuthSetAdd(collisions, physicalTable);
+    }
   }
   return collisions;
 }

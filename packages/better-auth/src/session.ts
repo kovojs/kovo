@@ -40,67 +40,92 @@ export interface BetterAuthSessionPayload<Session, User> {
   user: User;
 }
 
-type BetterAuthCredentialField =
-  | 'apikey'
-  | 'apisecret'
-  | 'backupcode'
-  | 'backupcodes'
-  | 'certificate'
-  | 'code'
-  | 'codes'
-  | 'credential'
-  | 'credentials'
-  | 'hash'
-  | 'key'
-  | 'keys'
-  | 'otp'
-  | 'passcode'
-  | 'passphrase'
-  | 'password'
-  | 'pin'
-  | 'privatekey'
-  | 'salt'
-  | 'secret'
-  | 'secrets'
-  | 'seed'
-  | 'signature'
-  | 'token'
-  | 'tokens';
-
-type BetterAuthCredentialFieldSuffix =
-  | 'ApiKey'
-  | 'ApiSecret'
-  | 'BackupCode'
-  | 'BackupCodes'
-  | 'Certificate'
-  | 'Code'
-  | 'Codes'
-  | 'Credential'
-  | 'Credentials'
-  | 'Hash'
-  | 'Key'
-  | 'Keys'
-  | 'Otp'
-  | 'Passcode'
-  | 'Passphrase'
-  | 'Password'
-  | 'Pin'
-  | 'PrivateKey'
-  | 'Salt'
-  | 'Secret'
-  | 'Secrets'
-  | 'Seed'
-  | 'Signature'
-  | 'Token'
-  | 'Tokens';
-
-type BetterAuthSafeField<Key> = Key extends string
-  ? Lowercase<Key> extends BetterAuthCredentialField
+/**
+ * Author-time field-key filter used by Better Auth's sanitized session projection. Credential
+ * nouns are omitted when they are the whole key, a snake/kebab suffix, or a camel-case suffix.
+ * Runtime recursive reconstruction remains the confidentiality proof (SPEC §10.3 C9-C10).
+ */
+export type BetterAuthSafeField<Key> = Key extends string
+  ? Lowercase<Key> extends
+      | 'apikey'
+      | 'apisecret'
+      | 'backupcode'
+      | 'backupcodes'
+      | 'certificate'
+      | 'code'
+      | 'codes'
+      | 'credential'
+      | 'credentials'
+      | 'hash'
+      | 'key'
+      | 'keys'
+      | 'otp'
+      | 'passcode'
+      | 'passphrase'
+      | 'password'
+      | 'pin'
+      | 'privatekey'
+      | 'salt'
+      | 'secret'
+      | 'secrets'
+      | 'seed'
+      | 'signature'
+      | 'token'
+      | 'tokens'
     ? never
     : Key extends
-          | `${string}${BetterAuthCredentialFieldSuffix}`
-          | `${string}_${BetterAuthCredentialField}`
-          | `${string}-${BetterAuthCredentialField}`
+          | `${string}${
+              | 'ApiKey'
+              | 'ApiSecret'
+              | 'BackupCode'
+              | 'BackupCodes'
+              | 'Certificate'
+              | 'Code'
+              | 'Codes'
+              | 'Credential'
+              | 'Credentials'
+              | 'Hash'
+              | 'Key'
+              | 'Keys'
+              | 'Otp'
+              | 'Passcode'
+              | 'Passphrase'
+              | 'Password'
+              | 'Pin'
+              | 'PrivateKey'
+              | 'Salt'
+              | 'Secret'
+              | 'Secrets'
+              | 'Seed'
+              | 'Signature'
+              | 'Token'
+              | 'Tokens'}`
+          | `${string}${'_' | '-'}${
+              | 'apikey'
+              | 'apisecret'
+              | 'backupcode'
+              | 'backupcodes'
+              | 'certificate'
+              | 'code'
+              | 'codes'
+              | 'credential'
+              | 'credentials'
+              | 'hash'
+              | 'key'
+              | 'keys'
+              | 'otp'
+              | 'passcode'
+              | 'passphrase'
+              | 'password'
+              | 'pin'
+              | 'privatekey'
+              | 'salt'
+              | 'secret'
+              | 'secrets'
+              | 'seed'
+              | 'signature'
+              | 'token'
+              | 'tokens'}`
       ? never
       : Key
   : Key;
