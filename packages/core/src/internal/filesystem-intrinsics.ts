@@ -321,7 +321,8 @@ function capturedControlsAreSound(): boolean {
       apply(nativeFunctionHasInstance, NativeArrayBuffer, [buffer]) === true &&
       apply(nativeFunctionHasInstance, NativeDataView, [dataView]) === true &&
       apply(nativeFunctionHasInstance, NativeUint8Array, [bytes]) === true &&
-      apply(nativeFunctionHasInstance, NativeReadableStreamDefaultReader, [streamReader]) === true &&
+      apply(nativeFunctionHasInstance, NativeReadableStreamDefaultReader, [streamReader]) ===
+        true &&
       slicedBytes.length === 2 &&
       slicedBytes[0] === 0x56 &&
       slicedBytes[1] === 0x4f &&
@@ -563,6 +564,25 @@ export function fileSystemStableMethod(
     throw new NativeTypeError(`Kovo storage control ${label} must be a stable method.`);
   }
   return method;
+}
+
+/** Boot-pinned exact own-data read for filesystem/storage authority configuration. */
+export function fileSystemOwnDataProperty(
+  value: object,
+  property: PropertyKey,
+  label: string,
+): { found: false } | { found: true; value: unknown } {
+  assertFileSystemIntrinsics();
+  const descriptor = apply<PropertyDescriptor | undefined>(
+    nativeObjectGetOwnPropertyDescriptor,
+    NativeObject,
+    [value, property],
+  );
+  if (descriptor === undefined) return { found: false };
+  if (!('value' in descriptor)) {
+    throw new TypeError(`${label} must be an own data property.`);
+  }
+  return { found: true, value: descriptor.value };
 }
 
 export function fileSystemReflectApply<Return>(

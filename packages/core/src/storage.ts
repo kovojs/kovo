@@ -20,6 +20,7 @@ import {
   fileSystemMapGet,
   fileSystemMapSet,
   fileSystemObjectValues,
+  fileSystemOwnDataProperty,
   fileSystemReadableStreamClose,
   fileSystemReadableStreamEnqueue,
   fileSystemReadableStreamError,
@@ -349,22 +350,64 @@ export function createFileSystemStorage(options: FileSystemStorageOptions): Stor
  * @returns A `StorageCapability` backed by the given client and bucket.
  */
 export function createS3CompatibleStorage(options: S3CompatibleStorageOptions): StorageCapability {
-  const prefix = options.prefix === undefined ? undefined : normalizeStoragePrefix(options.prefix);
+  // SPEC §6.6 object-exact capability binding: close the adapter over one stable client, bucket,
+  // prefix, and method set. A later write through the caller-owned options/client objects must not
+  // redirect an already-constructed storage capability to another tenant or backend.
+  const bucketProperty = fileSystemOwnDataProperty(options, 'bucket', 'S3 storage bucket');
+  const clientProperty = fileSystemOwnDataProperty(options, 'client', 'S3 storage client');
+  const prefixProperty = fileSystemOwnDataProperty(options, 'prefix', 'S3 storage prefix');
+  if (!bucketProperty.found || typeof bucketProperty.value !== 'string') {
+    throw new TypeError('S3 storage bucket must be an own string data property.');
+  }
+  if (
+    !clientProperty.found ||
+    (typeof clientProperty.value !== 'object' && typeof clientProperty.value !== 'function') ||
+    clientProperty.value === null
+  ) {
+    throw new TypeError('S3 storage client must be an own object data property.');
+  }
+  const prefixValue = prefixProperty.found ? prefixProperty.value : undefined;
+  if (prefixValue !== undefined && typeof prefixValue !== 'string') {
+    throw new TypeError('S3 storage prefix must be an own string data property when provided.');
+  }
+  const bucket = bucketProperty.value;
+  const client = clientProperty.value as S3CompatibleObjectClient;
+  const prefix = prefixValue === undefined ? undefined : normalizeStoragePrefix(prefixValue);
+  const deleteObject = fileSystemStableMethod(
+    client,
+    'deleteObject',
+    'S3 storage client.deleteObject',
+  ) as S3CompatibleObjectClient['deleteObject'];
+  const getObject = fileSystemStableMethod(
+    client,
+    'getObject',
+    'S3 storage client.getObject',
+  ) as S3CompatibleObjectClient['getObject'];
+  const headObject = fileSystemStableMethod(
+    client,
+    'headObject',
+    'S3 storage client.headObject',
+  ) as S3CompatibleObjectClient['headObject'];
+  const putObject = fileSystemStableMethod(
+    client,
+    'putObject',
+    'S3 storage client.putObject',
+  ) as S3CompatibleObjectClient['putObject'];
 
-  return {
+  return fileSystemFreeze({
     async delete(key) {
       const normalizedKey = normalizeStorageKey(key);
-      await options.client.deleteObject({
-        bucket: options.bucket,
-        key: s3ObjectKey(prefix, normalizedKey),
-      });
+      await fileSystemReflectApply<ReturnType<S3CompatibleObjectClient['deleteObject']>>(
+        deleteObject,
+        client,
+        [{ bucket, key: s3ObjectKey(prefix, normalizedKey) }],
+      );
     },
     async get(key) {
       const normalizedKey = normalizeStorageKey(key);
-      const output = await options.client.getObject({
-        bucket: options.bucket,
-        key: s3ObjectKey(prefix, normalizedKey),
-      });
+      const output = await fileSystemReflectApply<
+        ReturnType<S3CompatibleObjectClient['getObject']>
+      >(getObject, client, [{ bucket, key: s3ObjectKey(prefix, normalizedKey) }]);
       if (output === undefined) return undefined;
 
       const body = await storageBodyToBytes(output.body);
@@ -380,15 +423,19 @@ export function createS3CompatibleStorage(options: S3CompatibleStorageOptions): 
       // classified merely because app code replaced ArrayBuffer/stream prototype operations.
       const bytes = await storageBodyToBytes(body);
       const size = fileSystemArrayBufferViewByteLength(bytes);
-      const output = await options.client.putObject({
-        bucket: options.bucket,
-        key: s3ObjectKey(prefix, normalizedKey),
-        body: bytes,
-        ...(putOptions.contentType === undefined ? {} : { contentType: putOptions.contentType }),
-        // Forward the caller etag so a conforming client can persist + echo it (Part 3 bug L2 parity).
-        ...(putOptions.etag === undefined ? {} : { etag: putOptions.etag }),
-        ...(putOptions.metadata === undefined ? {} : { metadata: putOptions.metadata }),
-      });
+      const output = await fileSystemReflectApply<
+        ReturnType<S3CompatibleObjectClient['putObject']>
+      >(putObject, client, [
+        {
+          bucket,
+          key: s3ObjectKey(prefix, normalizedKey),
+          body: bytes,
+          ...(putOptions.contentType === undefined ? {} : { contentType: putOptions.contentType }),
+          // Forward caller etag so a conforming client can persist + echo it (Part 3 bug L2 parity).
+          ...(putOptions.etag === undefined ? {} : { etag: putOptions.etag }),
+          ...(putOptions.metadata === undefined ? {} : { metadata: putOptions.metadata }),
+        },
+      ]);
 
       // `size` (the materialized body length) is the out-of-band fallback; `s3ObjectInfo` prefers the
       // client's `contentLength`. Caller etag is honored uniformly (Part 3 bug L2).
@@ -396,20 +443,18 @@ export function createS3CompatibleStorage(options: S3CompatibleStorageOptions): 
     },
     async stat(key) {
       const normalizedKey = normalizeStorageKey(key);
-      const output = await options.client.headObject({
-        bucket: options.bucket,
-        key: s3ObjectKey(prefix, normalizedKey),
-      });
+      const output = await fileSystemReflectApply<
+        ReturnType<S3CompatibleObjectClient['headObject']>
+      >(headObject, client, [{ bucket, key: s3ObjectKey(prefix, normalizedKey) }]);
       // No body is materialized on a head, so size is whatever the client reports; never fabricate 0
       // for a content-length-blind client (Part 3 bug L2-storage-3).
       return output === undefined ? undefined : s3ObjectInfo(normalizedKey, output, undefined);
     },
     async stream(key) {
       const normalizedKey = normalizeStorageKey(key);
-      const output = await options.client.getObject({
-        bucket: options.bucket,
-        key: s3ObjectKey(prefix, normalizedKey),
-      });
+      const output = await fileSystemReflectApply<
+        ReturnType<S3CompatibleObjectClient['getObject']>
+      >(getObject, client, [{ bucket, key: s3ObjectKey(prefix, normalizedKey) }]);
       if (output === undefined) return undefined;
 
       return {
@@ -419,7 +464,7 @@ export function createS3CompatibleStorage(options: S3CompatibleStorageOptions): 
         body: storageBodyToReadableStream(output.body),
       };
     },
-  };
+  });
 }
 
 /**
