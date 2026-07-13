@@ -119,4 +119,54 @@ describe('server static export', () => {
       await rm(outDir, { force: true, recursive: true });
     }
   });
+
+  it('pins the output directory against an inherited outDir setter', async () => {
+    const outDir = await mkdtemp(path.join(os.tmpdir(), 'kovo-static-export-own-outdir-'));
+    const substitutedOutDir = await mkdtemp(
+      path.join(os.tmpdir(), 'kovo-static-export-setter-outdir-'),
+    );
+    const previousOutDir = Object.getOwnPropertyDescriptor(Object.prototype, 'outDir');
+    let setterCalls = 0;
+
+    try {
+      const app = createApp({
+        routes: [
+          route('/', {
+            page: () => trustedHtml('<main>Own output root</main>'),
+          }),
+        ],
+      });
+
+      Object.defineProperty(Object.prototype, 'outDir', {
+        configurable: true,
+        set(_value) {
+          setterCalls += 1;
+          Object.defineProperty(this, 'outDir', {
+            configurable: true,
+            enumerable: true,
+            value: substitutedOutDir,
+            writable: true,
+          });
+        },
+      });
+
+      try {
+        await exportStaticApp(app, { outDir });
+      } finally {
+        if (previousOutDir === undefined) delete (Object.prototype as { outDir?: unknown }).outDir;
+        else Object.defineProperty(Object.prototype, 'outDir', previousOutDir);
+      }
+
+      expect(setterCalls).toBe(0);
+      await expect(readFile(path.join(outDir, 'index.html'), 'utf8')).resolves.toContain(
+        '<main>Own output root</main>',
+      );
+      await expect(readFile(path.join(substitutedOutDir, 'index.html'), 'utf8')).rejects.toThrow();
+    } finally {
+      if (previousOutDir === undefined) delete (Object.prototype as { outDir?: unknown }).outDir;
+      else Object.defineProperty(Object.prototype, 'outDir', previousOutDir);
+      await rm(outDir, { force: true, recursive: true });
+      await rm(substitutedOutDir, { force: true, recursive: true });
+    }
+  });
 });

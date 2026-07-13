@@ -14,6 +14,15 @@ import {
   isUndiciFloorInstalled,
   undiciFloorTamperStatus,
 } from './egress-undici.js';
+import {
+  createWitnessMap,
+  witnessArrayAppend,
+  witnessGetOwnPropertyDescriptor,
+  witnessMapDelete,
+  witnessMapForEach,
+  witnessMapGet,
+  witnessMapSet,
+} from './security-witness-intrinsics.js';
 
 /**
  * Bootstrap for the outbound-egress private-network deny floor (SPEC §6.6;
@@ -49,7 +58,7 @@ import {
 
 let bootResult: EgressFloorInstall | undefined;
 let bootPolicy: EgressPolicy | undefined;
-const registeredDatabaseEndpointRefs = new Map<string, number>();
+const registeredDatabaseEndpointRefs = createWitnessMap<string, number>();
 
 interface EgressFloorInstallOptions {
   /**
@@ -107,7 +116,7 @@ export function installEgressFloorSync(
   // the undici import resolves.
   const policy = resolveEgressPolicy(options, warn, {
     ...installOptions,
-    databaseEndpoints: [...registeredDatabaseEndpointRefs.keys()],
+    databaseEndpoints: registeredDatabaseEndpoints(),
   });
   const uninstallNet = installNetConnectFloor(policy, options?.hardening ?? 'off', warn);
   const uninstallUndici = installUndiciFloor(policy);
@@ -209,9 +218,10 @@ export function registerEgressDatabaseUrl(databaseUrl: string | undefined): () =
   const endpoints = databaseEgressEndpointsFromUrls([databaseUrl]);
   if (endpoints.length === 0) return () => {};
 
-  for (const endpoint of endpoints) {
-    const next = (registeredDatabaseEndpointRefs.get(endpoint) ?? 0) + 1;
-    registeredDatabaseEndpointRefs.set(endpoint, next);
+  for (let index = 0; index < endpoints.length; index += 1) {
+    const endpoint = databaseEndpointAt(endpoints, index, 'registered database endpoints');
+    const next = (witnessMapGet(registeredDatabaseEndpointRefs, endpoint) ?? 0) + 1;
+    witnessMapSet(registeredDatabaseEndpointRefs, endpoint, next);
   }
   if (bootPolicy !== undefined) addDatabaseEgressEndpoints(bootPolicy, endpoints);
 
@@ -220,18 +230,48 @@ export function registerEgressDatabaseUrl(databaseUrl: string | undefined): () =
     if (!active) return;
     active = false;
     const removable: string[] = [];
-    for (const endpoint of endpoints) {
-      const next = (registeredDatabaseEndpointRefs.get(endpoint) ?? 0) - 1;
+    for (let index = 0; index < endpoints.length; index += 1) {
+      const endpoint = databaseEndpointAt(endpoints, index, 'registered database endpoints');
+      const next = (witnessMapGet(registeredDatabaseEndpointRefs, endpoint) ?? 0) - 1;
       if (next > 0) {
-        registeredDatabaseEndpointRefs.set(endpoint, next);
+        witnessMapSet(registeredDatabaseEndpointRefs, endpoint, next);
         continue;
       }
-      registeredDatabaseEndpointRefs.delete(endpoint);
+      witnessMapDelete(registeredDatabaseEndpointRefs, endpoint);
       const envDatabaseEndpoints = databaseEgressEndpointsFromUrls([process.env.KOVO_DATABASE_URL]);
-      if (!envDatabaseEndpoints.includes(endpoint)) {
-        removable.push(endpoint);
+      if (!databaseEndpointListHas(envDatabaseEndpoints, endpoint)) {
+        witnessArrayAppend(removable, endpoint, 'Removable database egress endpoints');
       }
     }
     if (bootPolicy !== undefined) removeDatabaseEgressEndpoints(bootPolicy, removable);
   };
+}
+
+function registeredDatabaseEndpoints(): string[] {
+  const endpoints: string[] = [];
+  witnessMapForEach(registeredDatabaseEndpointRefs, (_references, endpoint) => {
+    witnessArrayAppend(endpoints, endpoint, 'Registered database egress endpoint snapshot');
+  });
+  return endpoints;
+}
+
+function databaseEndpointListHas(endpoints: readonly string[], expected: string): boolean {
+  for (let index = 0; index < endpoints.length; index += 1) {
+    if (databaseEndpointAt(endpoints, index, 'database egress endpoint list') === expected) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function databaseEndpointAt(endpoints: readonly string[], index: number, label: string): string {
+  const descriptor = witnessGetOwnPropertyDescriptor(endpoints, index);
+  if (
+    descriptor === undefined ||
+    !('value' in descriptor) ||
+    typeof descriptor.value !== 'string'
+  ) {
+    throw new TypeError(`Kovo ${label} must contain dense own string entries.`);
+  }
+  return descriptor.value;
 }

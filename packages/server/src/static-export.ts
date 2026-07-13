@@ -53,7 +53,13 @@ import {
   securityUrlObjectSnapshot,
   securityUrlSnapshot,
 } from './response-security-intrinsics.js';
-import { witnessArrayAppend, witnessSetForEach } from './security-witness-intrinsics.js';
+import {
+  witnessArrayAppend,
+  witnessCreateNullRecord,
+  witnessDefineProperty,
+  witnessFreeze,
+  witnessSetForEach,
+} from './security-witness-intrinsics.js';
 
 /**
  * Pre-render an app's static routes to files on disk for static hosting,
@@ -135,7 +141,7 @@ function snapshotStaticExportOptions(options: StaticExportOptions): StaticExport
     throw new TypeError('Kovo static-export options must be an own-data object.');
   }
 
-  const snapshot: StaticExportOptions = {};
+  const snapshot = witnessCreateNullRecord<unknown>() as StaticExportOptions;
   const assets = optionalStaticExportOption(options, 'assets');
   const diagnostics = optionalStaticExportOption(options, 'diagnostics');
   const onNonExportable = optionalStaticExportOption(options, 'onNonExportable');
@@ -144,20 +150,47 @@ function snapshotStaticExportOptions(options: StaticExportOptions): StaticExport
   const publicAssetBase = optionalStaticExportOption(options, 'publicAssetBase');
   const publicAssetRoot = optionalStaticExportOption(options, 'publicAssetRoot');
 
-  if (assets !== undefined) snapshot.assets = assets as NonNullable<StaticExportOptions['assets']>;
+  if (assets !== undefined) {
+    commitStaticExportOption(
+      snapshot,
+      'assets',
+      assets as NonNullable<StaticExportOptions['assets']>,
+    );
+  }
   if (diagnostics !== undefined) {
-    snapshot.diagnostics = diagnostics as NonNullable<StaticExportOptions['diagnostics']>;
+    commitStaticExportOption(
+      snapshot,
+      'diagnostics',
+      diagnostics as NonNullable<StaticExportOptions['diagnostics']>,
+    );
   }
   if (onNonExportable !== undefined) {
-    snapshot.onNonExportable = onNonExportable as NonNullable<
-      StaticExportOptions['onNonExportable']
-    >;
+    commitStaticExportOption(
+      snapshot,
+      'onNonExportable',
+      onNonExportable as NonNullable<StaticExportOptions['onNonExportable']>,
+    );
   }
-  if (origin !== undefined) snapshot.origin = origin as string;
-  if (outDir !== undefined) snapshot.outDir = outDir as string | URL;
-  if (publicAssetBase !== undefined) snapshot.publicAssetBase = publicAssetBase as string;
-  if (publicAssetRoot !== undefined) snapshot.publicAssetRoot = publicAssetRoot as string | URL;
-  return snapshot;
+  if (origin !== undefined) commitStaticExportOption(snapshot, 'origin', origin as string);
+  if (outDir !== undefined) commitStaticExportOption(snapshot, 'outDir', outDir as string | URL);
+  if (publicAssetBase !== undefined)
+    commitStaticExportOption(snapshot, 'publicAssetBase', publicAssetBase as string);
+  if (publicAssetRoot !== undefined)
+    commitStaticExportOption(snapshot, 'publicAssetRoot', publicAssetRoot as string | URL);
+  return witnessFreeze(snapshot);
+}
+
+function commitStaticExportOption<Key extends keyof StaticExportOptions>(
+  snapshot: StaticExportOptions,
+  property: Key,
+  value: NonNullable<StaticExportOptions[Key]>,
+): void {
+  witnessDefineProperty(snapshot, property, {
+    configurable: false,
+    enumerable: true,
+    value,
+    writable: false,
+  });
 }
 
 function optionalStaticExportOption(options: object, property: PropertyKey): unknown {

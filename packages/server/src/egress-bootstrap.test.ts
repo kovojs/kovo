@@ -151,6 +151,75 @@ describe('egress bootstrap: dual-layer install + self-probe', () => {
     server.close();
   });
 
+  it('removes a database endpoint exemption after app code poisons collection methods', async () => {
+    const server = http.createServer((_req, res) => res.end('ok'));
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', () => resolve()));
+    const port = (server.address() as AddressInfo).port;
+    const endpoint = `127.0.0.1:${port}`;
+    const previousDatabaseUrl = process.env.KOVO_DATABASE_URL;
+    delete process.env.KOVO_DATABASE_URL;
+
+    const install = await installEgressFloor({ allowInternal: [] }, () => {});
+    teardown = install.uninstall;
+    const unregister = registerEgressDatabaseUrl(`postgres://app@${endpoint}/kovo`);
+    const nativeMapGet = Map.prototype.get;
+    const nativeMapSet = Map.prototype.set;
+    const nativeMapDelete = Map.prototype.delete;
+    const nativeArrayIncludes = Array.prototype.includes;
+    const nativeArrayPush = Array.prototype.push;
+    const poisonHits = { delete: 0, get: 0, includes: 0, push: 0, set: 0 };
+
+    try {
+      const allowed = await fetch(`http://${endpoint}/`);
+      expect(await allowed.text()).toBe('ok');
+
+      Map.prototype.get = function poisonedDatabaseEndpointGet(key: unknown) {
+        if (key === endpoint) poisonHits.get += 1;
+        return Reflect.apply(nativeMapGet, this, [key]);
+      } as typeof Map.prototype.get;
+      Map.prototype.set = function poisonedDatabaseEndpointSet(key: unknown, value: unknown) {
+        if (key === endpoint) poisonHits.set += 1;
+        return Reflect.apply(nativeMapSet, this, [key, value]);
+      } as typeof Map.prototype.set;
+      Map.prototype.delete = function poisonedDatabaseEndpointDelete(key: unknown) {
+        if (key === endpoint) poisonHits.delete += 1;
+        return Reflect.apply(nativeMapDelete, this, [key]);
+      } as typeof Map.prototype.delete;
+      Array.prototype.includes = function poisonedDatabaseEndpointIncludes(
+        searchElement: unknown,
+        fromIndex?: number,
+      ) {
+        if (searchElement === endpoint) poisonHits.includes += 1;
+        return Reflect.apply(nativeArrayIncludes, this, [searchElement, fromIndex]);
+      } as typeof Array.prototype.includes;
+      Array.prototype.push = function poisonedDatabaseEndpointPush(...values: unknown[]) {
+        if (values[0] === endpoint) {
+          poisonHits.push += 1;
+          return this.length;
+        }
+        return Reflect.apply(nativeArrayPush, this, values);
+      } as typeof Array.prototype.push;
+
+      unregister();
+    } finally {
+      Map.prototype.get = nativeMapGet;
+      Map.prototype.set = nativeMapSet;
+      Map.prototype.delete = nativeMapDelete;
+      Array.prototype.includes = nativeArrayIncludes;
+      Array.prototype.push = nativeArrayPush;
+    }
+
+    try {
+      expect(poisonHits).toEqual({ delete: 0, get: 0, includes: 0, push: 0, set: 0 });
+      await expect(fetch(`http://${endpoint}/`)).rejects.toBeDefined();
+    } finally {
+      unregister();
+      server.close();
+      if (previousDatabaseUrl === undefined) delete process.env.KOVO_DATABASE_URL;
+      else process.env.KOVO_DATABASE_URL = previousDatabaseUrl;
+    }
+  });
+
   it('carries a pre-registered database endpoint into a later floor install', async () => {
     const server = http.createServer((_req, res) => res.end('ok'));
     await new Promise<void>((r) => server.listen(0, '127.0.0.1', () => r()));
