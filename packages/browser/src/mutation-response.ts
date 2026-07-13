@@ -1,11 +1,19 @@
-import { definedProps } from './defined-props.js';
 import { reportMalformedJson } from './error-policy.js';
 import type { RuntimeErrorReporter } from './error-policy.js';
 import { parseJsonValue } from './json.js';
 import { createMutationIdemSecurityControls } from './mutation-idem-intrinsics.js';
 import type { MutationChangeRecord } from './optimism.js';
+import {
+  applySecurityIntrinsic,
+  securityArrayAppend,
+  securityGetOwnPropertyDescriptor,
+  securityOwnArrayEntry,
+} from './security-witness-intrinsics.js';
 
 const mutationIdemSecurity = createMutationIdemSecurityControls();
+const IntrinsicArray = Array;
+const intrinsicArrayIsArray = IntrinsicArray.isArray;
+const maxMutationChangeRecords = 100_000;
 
 /** @internal Minimal response shape exposing the headers read for mutation changes (SPEC §9.1). */
 export interface MutationResponseHeaderLike {
@@ -27,12 +35,19 @@ export function readMutationChangeHeader(
     reportMalformedJson(onError, 'Kovo-Changes header', parsed.error);
     return [];
   }
-  if (!Array.isArray(parsed.value)) return [];
+  const records = readDenseArray(parsed.value);
+  if (!records) return [];
 
-  return parsed.value.flatMap((record) => {
-    const sanitized = sanitizeMutationChangeRecord(record);
-    return sanitized ? [sanitized] : [];
-  });
+  const changes: MutationChangeRecord[] = [];
+  for (let index = 0; index < records.length; index += 1) {
+    const record = securityOwnArrayEntry(records.value, index);
+    if (!record.ok) return [];
+    const sanitized = sanitizeMutationChangeRecord(record.value);
+    if (sanitized) {
+      securityArrayAppend(changes, sanitized, 'Kovo mutation change response');
+    }
+  }
+  return changes;
 }
 
 /** @internal Type guard for a same-user mutation-response broadcast message (SPEC §9.2). */
@@ -47,42 +62,79 @@ export function isMutationBroadcastMessage(value: unknown): value is {
   principal?: string;
   type: 'kovo:mutation-response';
 } {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    'type' in value &&
-    value.type === 'kovo:mutation-response' &&
-    'body' in value &&
-    typeof value.body === 'string' &&
-    // D3: an envelope buildToken, when present, must be a string; reject a poisoned
-    // non-string token rather than letting a NaN-shaped value defeat the skew check.
-    (!('buildToken' in value) || typeof value.buildToken === 'string') &&
-    'changes' in value &&
-    Array.isArray(value.changes) &&
-    value.changes.every(isMutationChangeRecord)
-  );
-}
-
-function isMutationChangeRecord(value: unknown): value is MutationChangeRecord {
-  return sanitizeMutationChangeRecord(value) !== null;
+  if (typeof value !== 'object' || value === null) return false;
+  const type = securityGetOwnPropertyDescriptor(value, 'type');
+  const body = securityGetOwnPropertyDescriptor(value, 'body');
+  const buildToken = securityGetOwnPropertyDescriptor(value, 'buildToken');
+  const principal = securityGetOwnPropertyDescriptor(value, 'principal');
+  const changes = securityGetOwnPropertyDescriptor(value, 'changes');
+  // D3: optional envelope metadata must be own string data. Reject accessors and
+  // inherited carriers rather than letting app-controlled prototype code participate
+  // in a same-principal broadcast decision (SPEC §6.6/§9.2).
+  if (
+    !type ||
+    !('value' in type) ||
+    type.value !== 'kovo:mutation-response' ||
+    !body ||
+    !('value' in body) ||
+    typeof body.value !== 'string' ||
+    (buildToken && (!('value' in buildToken) || typeof buildToken.value !== 'string')) ||
+    (principal && (!('value' in principal) || typeof principal.value !== 'string')) ||
+    !changes ||
+    !('value' in changes)
+  ) {
+    return false;
+  }
+  const changeRecords = readDenseArray(changes.value);
+  if (!changeRecords) return false;
+  for (let index = 0; index < changeRecords.length; index += 1) {
+    const entry = securityOwnArrayEntry(changeRecords.value, index);
+    if (!entry.ok || sanitizeMutationChangeRecord(entry.value) === null) return false;
+  }
+  return true;
 }
 
 /** @internal Validate and normalize an untrusted value into a MutationChangeRecord (SPEC §9.1). */
 export function sanitizeMutationChangeRecord(value: unknown): MutationChangeRecord | null {
   if (typeof value !== 'object' || value === null) return null;
-  if (!('domain' in value) || typeof value.domain !== 'string') return null;
-  const keys = 'keys' in value ? value.keys : undefined;
-  if (
-    keys !== undefined &&
-    !(Array.isArray(keys) && keys.every((key) => typeof key === 'string'))
-  ) {
-    return null;
-  }
+  const domain = securityGetOwnPropertyDescriptor(value, 'domain');
+  const keys = securityGetOwnPropertyDescriptor(value, 'keys');
+  if (!domain || !('value' in domain) || typeof domain.value !== 'string') return null;
+  if (keys && !('value' in keys)) return null;
+  if (!keys || keys.value === undefined) return { domain: domain.value };
 
-  return {
-    domain: value.domain,
-    ...definedProps({ keys }),
-  };
+  const keyRecords = readDenseArray(keys.value);
+  if (!keyRecords) return null;
+  const keySnapshot: string[] = [];
+  for (let index = 0; index < keyRecords.length; index += 1) {
+    const entry = securityOwnArrayEntry(keyRecords.value, index);
+    if (!entry.ok || typeof entry.value !== 'string') return null;
+    securityArrayAppend(keySnapshot, entry.value, 'Kovo mutation change keys');
+  }
+  return { domain: domain.value, keys: keySnapshot };
+}
+
+function isIntrinsicArray(value: unknown): value is readonly unknown[] {
+  return (
+    value !== null &&
+    typeof value === 'object' &&
+    applySecurityIntrinsic<boolean>(intrinsicArrayIsArray, IntrinsicArray, [value]) === true
+  );
+}
+
+function readDenseArray(
+  value: unknown,
+): { length: number; value: readonly unknown[] } | undefined {
+  if (!isIntrinsicArray(value)) return undefined;
+  const length = securityGetOwnPropertyDescriptor(value, 'length');
+  return length &&
+    'value' in length &&
+    typeof length.value === 'number' &&
+    length.value >= 0 &&
+    length.value % 1 === 0 &&
+    length.value <= maxMutationChangeRecords
+    ? { length: length.value, value }
+    : undefined;
 }
 
 /** @internal Mint a fresh high-entropy `Kovo-Idem` value for each logical submit (SPEC §10.3 line 1065). */

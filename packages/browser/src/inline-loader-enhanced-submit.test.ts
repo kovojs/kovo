@@ -23,6 +23,26 @@ class InertBroadcastChannel {
   }
 }
 
+function poisonMutationArrayMethods(): () => void {
+  const methods = ['every', 'filter', 'flatMap'] as const;
+  const descriptors = methods.map((name) => {
+    const descriptor = Object.getOwnPropertyDescriptor(Array.prototype, name);
+    if (!descriptor) throw new Error(`Missing Array.prototype.${name}`);
+    return { descriptor, name };
+  });
+  for (const { descriptor, name } of descriptors) {
+    Object.defineProperty(Array.prototype, name, {
+      ...descriptor,
+      value: name === 'every' ? () => false : () => [],
+    });
+  }
+  return () => {
+    for (const { descriptor, name } of descriptors) {
+      Object.defineProperty(Array.prototype, name, descriptor);
+    }
+  };
+}
+
 describe('inline loader enhanced submit source', () => {
   const globalRecord = globalThis as unknown as Record<string, unknown>;
   let originalBroadcastChannel: unknown;
@@ -275,9 +295,9 @@ describe('inline loader enhanced submit source', () => {
   it.each(inlineSourceInstallCases)(
     'navigates after successful inline enhanced auth empty-fragment responses through %s',
     async (_name, installSource) => {
-      // SPEC §6.3/§9.1: when auth commits through the enhanced mutation path
-      // but produces no refreshable fragments, the browser must document-navigate
-      // so the next request observes the new session.
+      // SPEC §6.3/§9.1/§9.3: when auth commits through the enhanced mutation
+      // path but produces no refreshable fragments, the browser must retire the old
+      // principal and document-navigate even after app code mutates array prototypes.
       const cases = [
         { expected: '/dashboard?tab=home', next: '/dashboard?tab=home' },
         { expected: '/', next: 'https://evil.example/account' },
@@ -363,9 +383,14 @@ describe('inline loader enhanced submit source', () => {
             },
             type: 'submit',
           });
-          await Promise.resolve();
-          await Promise.resolve();
-          await new Promise((resolve) => setTimeout(resolve, 0));
+          const restoreArrays = poisonMutationArrayMethods();
+          try {
+            await Promise.resolve();
+            await Promise.resolve();
+            await new Promise((resolve) => setTimeout(resolve, 0));
+          } finally {
+            restoreArrays();
+          }
 
           expect(preventDefault).toHaveBeenCalledTimes(1);
           expect(assign).toHaveBeenCalledWith(expected);

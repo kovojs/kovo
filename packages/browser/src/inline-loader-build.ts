@@ -153,12 +153,16 @@ function installInlineKovoLoader(im) {
   const tts = createKovoTrustedTypesSecurityControls();
   const bns = createBrowserNavigationSecurityControls();
   const mis = createMutationIdemSecurityControls();
+  const intrinsicJson = JSON;
+  const intrinsicJsonParse = intrinsicJson.parse;
   const ci = () => mis.createMutationIdem();
   const rh = (el) =>
     el.closest?.('[kovo-state]') ?? (el.getAttribute?.('kovo-state') === null ? null : el);
   const rs = (el) => {
     try {
-      return JSON.parse(rh(el)?.getAttribute('kovo-state') ?? '{}');
+      return bns.call(intrinsicJsonParse, intrinsicJson, [
+        rh(el)?.getAttribute('kovo-state') ?? '{}',
+      ]);
     } catch {
       return {};
     }
@@ -425,7 +429,9 @@ function installInlineKovoLoader(im) {
     el.getAttribute('kovo-live-component') ?? el.getAttribute('kovo-c') ?? targetIdentity(el);
   const liveProps = (el) => {
     try {
-      const props = JSON.parse(el.getAttribute('kovo-props') || '{}');
+      const props = bns.call(intrinsicJsonParse, intrinsicJson, [
+        el.getAttribute('kovo-props') || '{}',
+      ]);
       return props && typeof props === 'object' && !Array.isArray(props) ? props : {};
     } catch {
       return {};
@@ -846,17 +852,17 @@ function installInlineKovoLoader(im) {
     const value = bns.readHeader(response, 'Kovo-Changes');
     if (!value) return [];
     try {
-      const parsed = JSON.parse(value);
-      return Array.isArray(parsed) ? parsed.filter(schg) : [];
+      const parsed = bns.call(intrinsicJsonParse, intrinsicJson, [value]);
+      const envelope = bns.snapshotMutationBroadcastEnvelopeData({
+        body: '',
+        changes: parsed,
+        type: 'kovo:mutation-response',
+      });
+      return envelope?.changes ?? [];
     } catch {
       return [];
     }
   };
-  const schg = (value) =>
-    value &&
-    typeof value === 'object' &&
-    typeof value.domain === 'string' &&
-    (value.keys === undefined || Array.isArray(value.keys) && value.keys.every((key) => typeof key === 'string'));
   const sfp = doc.querySelector?.('meta[name="kovo-session"]')?.getAttribute('content') ?? undefined;
   let bc;
   let broadcastRetired = false;

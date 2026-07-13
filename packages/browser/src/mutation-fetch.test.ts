@@ -45,7 +45,79 @@ class FakeTargetRoot {
   }
 }
 
+function poisonMutationArrayMethods(): () => void {
+  const methods = ['every', 'filter', 'flatMap'] as const;
+  const descriptors = methods.map((name) => {
+    const descriptor = Object.getOwnPropertyDescriptor(Array.prototype, name);
+    if (!descriptor) throw new Error(`Missing Array.prototype.${name}`);
+    return { descriptor, name };
+  });
+  for (const { descriptor, name } of descriptors) {
+    Object.defineProperty(Array.prototype, name, {
+      ...descriptor,
+      value: name === 'every' ? () => false : () => [],
+    });
+  }
+  return () => {
+    for (const { descriptor, name } of descriptors) {
+      Object.defineProperty(Array.prototype, name, descriptor);
+    }
+  };
+}
+
 describe('enhanced mutation fetch', () => {
+  it('retires the old auth session after late mutation-array prototype poisoning', async () => {
+    const originalLocation = globalThis.location;
+    const assign = vi.fn();
+    const onSessionTransition = vi.fn();
+    Object.defineProperty(globalThis, 'location', {
+      configurable: true,
+      value: {
+        assign,
+        hash: '',
+        href: 'https://kovo.test/login',
+        origin: 'https://kovo.test',
+        pathname: '/login',
+        search: '',
+      },
+    });
+
+    const pending = fetchEnhancedMutation({
+      fetch: async () => ({
+        headers: {
+          get(name: string) {
+            return name === 'Kovo-Changes' ? '[{"domain":"auth"}]' : null;
+          },
+        },
+        ok: true,
+        status: 200,
+        text: async () => '',
+      }),
+      form: { action: '/_m/auth/sign-in' },
+      formData: new FormData(),
+      idem: 'idem_late_array_poison',
+      onSessionTransition,
+      root: new FakeTargetRoot([]),
+    });
+    const restoreArrays = poisonMutationArrayMethods();
+    let fetched;
+    try {
+      fetched = await pending;
+    } finally {
+      restoreArrays();
+      Object.defineProperty(globalThis, 'location', {
+        configurable: true,
+        value: originalLocation,
+      });
+    }
+
+    // SPEC §9.3: a successful empty auth fragment retires old-principal
+    // broadcast authority before navigation, even after app code mutates prototypes.
+    expect(onSessionTransition).toHaveBeenCalledOnce();
+    expect(assign).toHaveBeenCalledWith('/');
+    expect(fetched.changes).toEqual([]);
+  });
+
   it('keeps auth-success navigation same-origin after late decode poisoning', async () => {
     const lifecycleOrder: string[] = [];
     const assign = vi.fn(() => lifecycleOrder.push('navigate'));
