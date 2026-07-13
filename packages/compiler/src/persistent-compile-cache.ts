@@ -1,11 +1,5 @@
-import {
-  mkdir as builtinMkdir,
-  readFile as builtinReadFile,
-  readdir as builtinReaddir,
-  rename as builtinRename,
-  writeFile as builtinWriteFile,
-} from 'node:fs/promises';
-import { dirname as builtinDirname, join as builtinJoin } from 'node:path';
+import { Buffer as NativeBuffer } from 'node:buffer';
+import { join as builtinJoin } from 'node:path';
 
 import { canonicalJson } from './canonical-json.js';
 import { compilerBuildCacheIdentity } from './cache-identity.js';
@@ -22,6 +16,7 @@ import {
   compilerRandomUuid,
   compilerSecureStringEqual,
   compilerSha256Hex,
+  compilerSnapshotDenseArray,
   compilerStringCharCodeAt,
   compilerStringEndsWith,
   compilerStringSlice,
@@ -33,12 +28,6 @@ import {
 } from './compile-cache.js';
 import type { CompileDependencyFootprint } from './types.js';
 
-const mkdir = builtinMkdir;
-const readFile = builtinReadFile;
-const readdir = builtinReaddir;
-const rename = builtinRename;
-const writeFile = builtinWriteFile;
-const dirname = builtinDirname;
 const join = builtinJoin;
 
 const persistentCompileCacheFormat = 'kovo-compile-cache/v4';
@@ -84,7 +73,9 @@ export async function readPersistentCompileCacheManifest(
 
 async function readManifestFile(cacheDir: string): Promise<PersistentCompileCacheManifest> {
   try {
-    const parsed = compilerJsonParse(await readFile(manifestPath(cacheDir), 'utf8'));
+    const source = await readPersistentCacheText(cacheDir, 'manifest.json');
+    if (source === undefined) return emptyPersistentCompileCacheManifest();
+    const parsed = compilerJsonParse(source);
     return isPersistentCompileCacheManifest(parsed)
       ? parsed
       : emptyPersistentCompileCacheManifest();
@@ -94,19 +85,24 @@ async function readManifestFile(cacheDir: string): Promise<PersistentCompileCach
 }
 
 async function readEntryFiles(cacheDir: string): Promise<PersistentCompileCacheEntry[]> {
-  let fileNames: string[];
+  const fileSystem = await persistentCacheFileSystem(cacheDir);
+  let fileEntries;
   try {
-    fileNames = await readdir(join(cacheDir, 'entries'));
+    fileEntries = compilerSnapshotDenseArray(
+      await fileSystem.entries('entries'),
+      'Persistent compiler cache entry files',
+    );
   } catch {
     return [];
   }
 
   const entries: PersistentCompileCacheEntry[] = [];
-  for (let index = 0; index < fileNames.length; index += 1) {
-    const fileName = fileNames[index]!;
-    if (!compilerStringEndsWith(fileName, '.json')) continue;
+  for (let index = 0; index < fileEntries.length; index += 1) {
+    const fileEntry = fileEntries[index]!;
+    if (fileEntry.kind !== 'file' || !compilerStringEndsWith(fileEntry.name, '.json')) continue;
     try {
-      const parsed = compilerJsonParse(await readFile(join(cacheDir, 'entries', fileName), 'utf8'));
+      const source = NativeBuffer.from(await fileSystem.fileBytesOf(fileEntry)).toString('utf8');
+      const parsed = compilerJsonParse(source);
       if (isPersistentCompileCacheEntry(parsed))
         compilerArrayAppend(
           entries,
@@ -182,7 +178,8 @@ async function readPersistentCompileCacheEntryResult<Result>(
   try {
     const resultRef = entry.artifactRefs.result;
     if (persistentCompileCacheBlobDigest(resultRef) === null) return null;
-    const resultJson = await readFile(join(cacheDir, resultRef), 'utf8');
+    const resultJson = await readPersistentCacheText(cacheDir, resultRef);
+    if (resultJson === undefined) return null;
     // The digest only locates a blob. Exact bytes authorize reuse, so a digest collision can evict
     // or overwrite an entry (cache miss) but cannot cross-bind another compile result.
     if (resultJson !== entry.resultPreimage) return null;
@@ -201,7 +198,8 @@ async function entryMatchesCurrentCompilerBuild(
     if (!persistentCompilerBuildIdentityRefIsSafe(entry.compilerBuildIdentityRef)) return false;
     const previous = cached ? compilerMapGet(cached, entry.compilerBuildIdentityRef) : undefined;
     if (previous !== undefined) return previous;
-    const storedIdentity = await readFile(join(cacheDir, entry.compilerBuildIdentityRef), 'utf8');
+    const storedIdentity = await readPersistentCacheText(cacheDir, entry.compilerBuildIdentityRef);
+    if (storedIdentity === undefined) return false;
     // The UUID is only a bounded path locator. Exact implementation bytes authorize reuse, so no
     // digest collision or selectively wrapped hash primitive can cross-bind compiler versions.
     const matches = storedIdentity === compilerBuildCacheIdentity();
@@ -250,12 +248,13 @@ export async function writePersistentCompileCacheEntry(
     result: unknown;
   },
 ): Promise<PersistentCompileCacheEntry> {
-  await mkdir(join(cacheDir, 'blobs'), { recursive: true });
+  const fileSystem = await persistentCacheFileSystem(cacheDir);
+  await fileSystem.ensureDirectory();
   const resultJson = canonicalJson(entry.result);
   const resultRef = `blobs/${sha256(resultJson)}.json`;
-  await atomicWriteFile(join(cacheDir, resultRef), resultJson);
+  await fileSystem.writeFile(resultRef, resultJson);
   const compilerBuildIdentity = compilerBuildCacheIdentity();
-  await atomicWriteFile(join(cacheDir, persistentCompilerBuildIdentityRef), compilerBuildIdentity);
+  await fileSystem.writeFile(persistentCompilerBuildIdentityRef, compilerBuildIdentity);
 
   const unsignedEntry = {
     artifactRefs: { result: resultRef },
@@ -269,14 +268,14 @@ export async function writePersistentCompileCacheEntry(
     ...unsignedEntry,
     integrity: compilerHmacSha256Hex(persistentCompileCacheMacKey, canonicalJson(unsignedEntry)),
   };
-  await atomicWriteFile(entryPath(cacheDir, entry.cacheKey), `${canonicalJson(manifestEntry)}\n`);
+  await fileSystem.writeFile(
+    `entries/${sha256(entry.cacheKey)}.json`,
+    `${canonicalJson(manifestEntry)}\n`,
+  );
   // Entry files are authoritative. Keep the compatibility manifest compact instead of duplicating
   // every exact compiler/source/result preimage into one ever-growing JSON object. Readers merge
   // the per-entry records, preserving parallel writes without quadratic manifest growth.
-  await atomicWriteFile(
-    manifestPath(cacheDir),
-    `${canonicalJson(emptyPersistentCompileCacheManifest())}\n`,
-  );
+  await fileSystem.writeFile('manifest.json', `${canonicalJson(emptyPersistentCompileCacheManifest())}\n`);
   return manifestEntry;
 }
 
@@ -364,19 +363,19 @@ function persistentCompileCacheBlobDigest(ref: string): string | null {
   return digest;
 }
 
-async function atomicWriteFile(fileName: string, source: string): Promise<void> {
-  await mkdir(dirname(fileName), { recursive: true });
-  const tempFileName = `${fileName}.${process.pid}.${compilerRandomUuid()}.tmp`;
-  await writeFile(tempFileName, source);
-  await rename(tempFileName, fileName);
+async function readPersistentCacheText(
+  cacheDir: string,
+  relativePath: string,
+): Promise<string | undefined> {
+  const bytes = await (await persistentCacheFileSystem(cacheDir)).fileBytes(relativePath);
+  return bytes === undefined ? undefined : NativeBuffer.from(bytes).toString('utf8');
 }
 
-function manifestPath(cacheDir: string): string {
-  return join(cacheDir, 'manifest.json');
-}
-
-function entryPath(cacheDir: string, cacheKey: string): string {
-  return join(cacheDir, 'entries', `${sha256(cacheKey)}.json`);
+async function persistentCacheFileSystem(cacheDir: string) {
+  const { createFrameworkOutputFileSystemBoundary } = await import(
+    '@kovojs/core/internal/filesystem'
+  );
+  return createFrameworkOutputFileSystemBoundary(cacheDir);
 }
 
 function sha256(source: string): string {

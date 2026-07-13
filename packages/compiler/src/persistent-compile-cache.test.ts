@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from 'node:fs/promises';
 import { createRequire, syncBuiltinESMExports } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -62,6 +62,23 @@ describe('persistent compile cache format', () => {
     await expect(readPersistentCompileCacheEntry(cacheDir, 'cache-key-a')).resolves.toEqual({
       files: [{ fileName: 'cart.server.js', source: 'export {};' }],
     });
+  });
+
+  it('does not write cache artifacts through a symlinked cache root', async () => {
+    const root = await tempRoot();
+    const outside = await tempRoot();
+    const cacheDir = persistentCompileCacheDir(root);
+    await mkdir(join(root, '.kovo/cache'), { recursive: true });
+    await symlink(outside, cacheDir, 'dir');
+
+    await expect(
+      writePersistentCompileCacheEntry(cacheDir, {
+        cacheKey: 'outside-cache-key',
+        footprint: { reads: { queryShapeNames: [] } },
+        result: { value: 'must-stay-confined' },
+      }),
+    ).rejects.toThrow(/symbolic-link|symbolic link|cannot use/u);
+    await expect(readdir(outside)).resolves.toEqual([]);
   });
 
   it('preserves parallel per-entry writes', async () => {
