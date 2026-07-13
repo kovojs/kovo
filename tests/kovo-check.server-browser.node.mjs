@@ -115,7 +115,6 @@ import {
   graphOptimisticStatusMatrix,
 } from '../packages/conformance-fixtures/src/graph-fixtures.ts';
 import { touchGraphProvenanceFact } from '../packages/conformance-fixtures/src/touch-graph-fixtures.ts';
-import { documentQueryScriptBehaviorFact } from '../packages/test/src/internal/html-wire.ts';
 import {
   legibilityStudyGateFact,
   normativeDocsGateFact,
@@ -319,6 +318,10 @@ void test('P3 Drizzle query facts include select shapes and instance keys', asyn
     const importFailureFact = moduleImportFailureFact(error, [
       '__filename is not defined in ES module scope',
       'packages/drizzle/src/graph.js',
+      // Node's native type stripping does not remap the reviewed `.js` source
+      // edge to static-security-authority.ts. Keep this exact: an unexpected
+      // deeper runtime-security-intrinsics.js failure must still fail the gate.
+      'packages/drizzle/src/static-security-authority.js',
       'packages/core/src/diagnostics.js',
     ]);
     assert.equal(importFailureFact.allowed, true, 'unexpected Drizzle static import failure');
