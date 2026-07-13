@@ -168,6 +168,48 @@ describe('server app mutation request boundary', () => {
     expect(seen).toEqual(['handler:p1', 'policy:true']);
   });
 
+  it('uses static response policy to re-render the submitted form on validation failure', async () => {
+    const reserve = mutation('inventory/reserve', {
+      csrf: false,
+      csrfJustification: 'test fixture uses a non-browser caller',
+      input: s.object({ quantity: s.number().int().min(1) }),
+      handler: vi.fn((input) => input),
+    });
+    const app = createApp({
+      mutationResponses: {
+        [reserve.key]: {
+          failureTarget: 'reservation-form',
+          renderFailureFragment: (failure) =>
+            `<form kovo-fragment-target="reservation-form"><output role="alert" data-error-code="${failure.error.code}">Invalid quantity</output></form>`,
+        },
+      },
+      mutations: [reserve],
+    });
+    const form = new FormData();
+    form.set('quantity', '0');
+    const request = new Request('https://shop.example.test/_m/inventory/reserve', {
+      body: form,
+      headers: {
+        'Kovo-Form-Target': 'reservation-form',
+        'Kovo-Fragment': 'true',
+      },
+      method: 'POST',
+    });
+
+    const response = await handleAppMutationRequest(
+      app,
+      request,
+      new URL(request.url),
+      reserve.key,
+    );
+
+    expect(response.status).toBe(422);
+    expect(await response.text()).toBe(
+      '<kovo-fragment target="reservation-form"><form kovo-fragment-target="reservation-form"><output role="alert" data-error-code="VALIDATION">Invalid quantity</output></form></kovo-fragment>',
+    );
+    expect(reserve.handler).not.toHaveBeenCalled();
+  });
+
   it('snapshots static response policy and rejects registry accessors at app closure', async () => {
     const responsePolicy = { redirectTo: '/safe' };
     const save = mutation('save', {

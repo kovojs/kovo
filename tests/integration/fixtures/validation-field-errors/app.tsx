@@ -55,12 +55,12 @@ const app = createApp({
   mutations: [reserve],
   routes: [homeRoute],
   mutationResponses: {
-    [reserve.key]: () => {
-      return {
-        failureTarget: 'reservation-form',
-        redirectTo: '/',
-        renderFailureFragment: renderReservationForm,
-      };
+    // SPEC.md §9.2: validation fails before the post-lifecycle response-resolver
+    // seam, so the submitted-form renderer must be declared as static policy.
+    [reserve.key]: {
+      failureTarget: 'reservation-form',
+      redirectTo: '/',
+      renderFailureFragment: renderReservationForm,
     },
   },
 });
