@@ -71,8 +71,6 @@ const SQLITE_TEMPLATE_FILES = [
   'src/auth.sqlite.ts',
 ];
 const createKovoPackageRoot = dirname(fileURLToPath(new URL('../package.json', import.meta.url)));
-const repoRoot = dirname(dirname(createKovoPackageRoot));
-const linkLocalKovoScriptPath = join(repoRoot, 'scripts/link-local-kovo.mjs');
 const createKovoPackage = JSON.parse(
   readFileSync(join(createKovoPackageRoot, 'package.json'), 'utf8'),
 ) as { version: string };
@@ -987,7 +985,7 @@ describe('create-kovo starter (metadata)', () => {
     expect(files.get('README.md')).toContain('is expected');
   });
 
-  it('writes local link specs that survive symlinked app roots', () => {
+  it('rejects scaffolding through a symlinked app-root parent', () => {
     const root = mkdtempSync(join(tmpdir(), 'create-kovo-link-local-'));
     const realAppsRoot = join(root, 'real-apps');
     const aliasAppsRoot = join(root, 'alias-apps');
@@ -996,28 +994,10 @@ describe('create-kovo starter (metadata)', () => {
     const appRoot = join(aliasAppsRoot, 'linked-app');
 
     try {
-      writeKovoProject(appRoot, { dialect: 'sqlite', name: 'Linked App', disableGit: true });
-
-      execFileSync(process.execPath, [linkLocalKovoScriptPath, appRoot, repoRoot], {
-        cwd: repoRoot,
-        stdio: 'pipe',
-      });
-
-      const realAppRoot = realpathSync(appRoot);
-      const packageJson = JSON.parse(readFileSync(join(appRoot, 'package.json'), 'utf8')) as {
-        dependencies?: Record<string, string>;
-      };
-      const serverSpec = packageJson.dependencies?.['@kovojs/server'] ?? '';
-      expect(serverSpec.startsWith('link:')).toBe(true);
-      expect(realpathSync(resolve(realAppRoot, serverSpec.slice('link:'.length)))).toBe(
-        realpathSync(join(repoRoot, 'packages/server')),
-      );
-
-      const workspace = readFileSync(join(appRoot, 'pnpm-workspace.yaml'), 'utf8');
-      const workspacePattern = workspace.split('\n')[2]?.trim().slice(2) ?? '';
-      expect(realpathSync(resolve(realAppRoot, workspacePattern.replace(/\/\*$/, '')))).toBe(
-        realpathSync(join(repoRoot, 'packages')),
-      );
+      expect(() =>
+        writeKovoProject(appRoot, { dialect: 'sqlite', name: 'Linked App', disableGit: true }),
+      ).toThrow(`Target ancestor must be a non-symbolic-link directory: ${aliasAppsRoot}`);
+      expect(readdirSync(realAppsRoot)).toEqual([]);
     } finally {
       rmSync(root, { force: true, recursive: true });
     }
@@ -1390,6 +1370,23 @@ describe('create-kovo starter (CLI)', () => {
       expect(existsSync(join(root, 'package.json'))).toBe(false);
     } finally {
       rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it('refuses a symlinked scaffold target without writing outside', () => {
+    const parent = mkdtempSync(join(tmpdir(), 'create-kovo-target-alias-'));
+    const outside = mkdtempSync(join(tmpdir(), 'create-kovo-target-outside-'));
+    const root = join(parent, 'app');
+    symlinkSync(outside, root, 'dir');
+
+    try {
+      expect(() => writeKovoProject(root, { disableGit: true, name: 'Alias' })).toThrow(
+        `Target exists and is not a directory: ${root}`,
+      );
+      expect(readdirSync(outside)).toEqual([]);
+    } finally {
+      rmSync(parent, { force: true, recursive: true });
+      rmSync(outside, { force: true, recursive: true });
     }
   });
 });

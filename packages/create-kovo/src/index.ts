@@ -3,10 +3,14 @@ import { execFileSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import {
   existsSync,
+  lstatSync,
   mkdirSync,
+  mkdtempSync,
   readdirSync,
+  renameSync,
   realpathSync,
   readFileSync,
+  rmSync,
   statSync,
   symlinkSync,
   writeFileSync,
@@ -341,30 +345,43 @@ export function writeKovoProject(
 
   assertWritableTarget(root);
 
-  for (const file of project.files) {
-    const destination = resolve(root, file.path);
+  mkdirSync(root, { recursive: true });
+  const rootIdentity = pinScaffoldRoot(root);
+  const stagingRoot = mkdtempSync(resolve(root, '.kovo-scaffold-'));
 
-    const relativeDestination = relative(root, destination);
+  try {
+    for (const file of project.files) {
+      const destination = resolve(stagingRoot, file.path);
 
-    if (
-      relativeDestination === '' ||
-      relativeDestination.startsWith('..') ||
-      isAbsolute(relativeDestination)
-    ) {
-      throw new Error(`Refusing to write outside target directory: ${file.path}`);
-    }
+      const relativeDestination = relative(stagingRoot, destination);
 
-    mkdirSync(dirname(destination), { recursive: true });
-    if (file.symlinkTarget) {
-      try {
-        symlinkSync(file.symlinkTarget, destination);
-        continue;
-      } catch {
-        writeFileSync(destination, file.source, 'utf8');
-        continue;
+      if (
+        relativeDestination === '' ||
+        relativeDestination.startsWith('..') ||
+        isAbsolute(relativeDestination)
+      ) {
+        throw new Error(`Refusing to write outside target directory: ${file.path}`);
       }
+
+      mkdirSync(dirname(destination), { recursive: true });
+      if (file.symlinkTarget) {
+        try {
+          symlinkSync(file.symlinkTarget, destination);
+          continue;
+        } catch {
+          writeFileSync(destination, file.source, 'utf8');
+          continue;
+        }
+      }
+      writeFileSync(destination, file.source, 'utf8');
     }
-    writeFileSync(destination, file.source, 'utf8');
+
+    for (const name of readdirSync(stagingRoot)) {
+      verifyScaffoldRoot(rootIdentity);
+      renameSync(resolve(stagingRoot, name), resolve(rootIdentity.canonicalPath, name));
+    }
+  } finally {
+    rmSync(stagingRoot, { force: true, recursive: true });
   }
 
   if (!options.disableGit) {
@@ -483,12 +500,13 @@ function normalizePackageName(name: string): string {
 
 function assertWritableTarget(root: string): void {
   if (!existsSync(root)) {
+    assertNearestScaffoldAncestor(root);
     return;
   }
 
-  const stats = statSync(root);
+  const stats = lstatSync(root);
 
-  if (!stats.isDirectory()) {
+  if (stats.isSymbolicLink() || !stats.isDirectory()) {
     throw new Error(`Target exists and is not a directory: ${root}`);
   }
 
@@ -496,6 +514,62 @@ function assertWritableTarget(root: string): void {
 
   if (existingEntries.length > 0) {
     throw new Error(`Target directory is not empty: ${root}`);
+  }
+}
+
+interface ScaffoldRootIdentity {
+  canonicalDev: number;
+  canonicalIno: number;
+  canonicalPath: string;
+  lexicalDev: number;
+  lexicalIno: number;
+  lexicalPath: string;
+}
+
+function assertNearestScaffoldAncestor(root: string): void {
+  let candidate = dirname(root);
+  while (!existsSync(candidate)) {
+    const parent = dirname(candidate);
+    if (parent === candidate) throw new Error(`Target has no existing directory ancestor: ${root}`);
+    candidate = parent;
+  }
+  const status = lstatSync(candidate);
+  if (status.isSymbolicLink() || !status.isDirectory()) {
+    throw new Error(`Target ancestor must be a non-symbolic-link directory: ${candidate}`);
+  }
+}
+
+function pinScaffoldRoot(root: string): ScaffoldRootIdentity {
+  const lexicalStatus = lstatSync(root);
+  if (lexicalStatus.isSymbolicLink() || !lexicalStatus.isDirectory()) {
+    throw new Error(`Target exists and is not a directory: ${root}`);
+  }
+  const canonicalPath = realpathSync(root);
+  const canonicalStatus = statSync(canonicalPath);
+  return {
+    canonicalDev: canonicalStatus.dev,
+    canonicalIno: canonicalStatus.ino,
+    canonicalPath,
+    lexicalDev: lexicalStatus.dev,
+    lexicalIno: lexicalStatus.ino,
+    lexicalPath: root,
+  };
+}
+
+function verifyScaffoldRoot(identity: ScaffoldRootIdentity): void {
+  const lexicalStatus = lstatSync(identity.lexicalPath);
+  const canonicalPath = realpathSync(identity.lexicalPath);
+  const canonicalStatus = statSync(canonicalPath);
+  if (
+    lexicalStatus.isSymbolicLink() ||
+    !lexicalStatus.isDirectory() ||
+    lexicalStatus.dev !== identity.lexicalDev ||
+    lexicalStatus.ino !== identity.lexicalIno ||
+    canonicalPath !== identity.canonicalPath ||
+    canonicalStatus.dev !== identity.canonicalDev ||
+    canonicalStatus.ino !== identity.canonicalIno
+  ) {
+    throw new Error(`Target directory identity changed while scaffolding: ${identity.lexicalPath}`);
   }
 }
 
