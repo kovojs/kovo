@@ -76,6 +76,7 @@ import {
   betterAuthCreateMap,
   betterAuthCreateSet,
   betterAuthDefineOwnData,
+  betterAuthDeepFreeze,
   betterAuthEndsWith,
   betterAuthIncludes,
   betterAuthIndexOf,
@@ -184,42 +185,52 @@ export function betterAuthTableDomain(
  * operation once here and derives registry domains, touch-graph rows, verifier table
  * coverage, and default access facts from the schema bridge.
  */
-export const betterAuthCredentialOperationContracts = {
-  signInEmail: {
-    access: publicAccess('better-auth email sign-in credential form'),
-    api: 'signInEmail',
-    csrf: 'checked',
-    defaultKey: 'auth/sign-in',
-    tableTouches: [{ table: 'session' }],
+export const betterAuthCredentialOperationContracts = betterAuthDeepFreeze(
+  {
+    signInEmail: {
+      access: publicAccess('better-auth email sign-in credential form'),
+      api: 'signInEmail',
+      csrf: 'checked',
+      defaultKey: 'auth/sign-in',
+      tableTouches: [{ table: 'session' }],
+    },
+    signOut: {
+      access: publicAccess('better-auth current-browser credential revocation form'),
+      api: 'signOut',
+      csrf: 'checked',
+      defaultKey: 'auth/sign-out',
+      tableTouches: [{ table: 'session' }],
+    },
+    signUpEmail: {
+      access: publicAccess('better-auth email sign-up credential form'),
+      api: 'signUpEmail',
+      csrf: 'checked',
+      defaultKey: 'auth/sign-up',
+      tableTouches: [{ table: 'user' }, { table: 'account' }, { table: 'session' }],
+    },
+  } as const satisfies {
+    [Api in BetterAuthCredentialMutationApi]: BetterAuthOperationContract<Api>;
   },
-  signOut: {
-    access: publicAccess('better-auth current-browser credential revocation form'),
-    api: 'signOut',
-    csrf: 'checked',
-    defaultKey: 'auth/sign-out',
-    tableTouches: [{ table: 'session' }],
-  },
-  signUpEmail: {
-    access: publicAccess('better-auth email sign-up credential form'),
-    api: 'signUpEmail',
-    csrf: 'checked',
-    defaultKey: 'auth/sign-up',
-    tableTouches: [{ table: 'user' }, { table: 'account' }, { table: 'session' }],
-  },
-} as const satisfies {
-  [Api in BetterAuthCredentialMutationApi]: BetterAuthOperationContract<Api>;
-};
+  'Better Auth credential operation contracts',
+);
 
 /** @internal Derived `{ domain, table }` touches per Better Auth credential API. */
-export const betterAuthCredentialMutationDeclaredTableTouches =
-  deriveBetterAuthCredentialDeclaredTableTouches();
+export const betterAuthCredentialMutationDeclaredTableTouches = betterAuthDeepFreeze(
+  deriveBetterAuthCredentialDeclaredTableTouches(),
+  'Better Auth credential mutation declared table touches',
+);
 
 /** @internal Default Kovo domain touches per Better Auth credential API, derived from contracts. */
-export const betterAuthCredentialMutationTouches = deriveBetterAuthCredentialMutationTouches();
+export const betterAuthCredentialMutationTouches = betterAuthDeepFreeze(
+  deriveBetterAuthCredentialMutationTouches(),
+  'Better Auth credential mutation touches',
+);
 
 /** @internal Default mutation keys per Better Auth credential API, derived from contracts. */
-export const betterAuthCredentialMutationDefaultKeys =
-  deriveBetterAuthCredentialMutationDefaultKeys();
+export const betterAuthCredentialMutationDefaultKeys = betterAuthDeepFreeze(
+  deriveBetterAuthCredentialMutationDefaultKeys(),
+  'Better Auth credential mutation default keys',
+);
 
 function deriveBetterAuthCredentialMutationDefaultKeys(): Record<
   BetterAuthCredentialMutationApi,
@@ -358,11 +369,16 @@ export function credentialMutationDefinitionOptions<
 // Archived D5 auth plan B1 / SPEC.md §11.2: declared Better Auth table touches are
 // materialized as verifier facts so library-internal writes can be checked by
 // P9 observed-write instrumentation.
-export const betterAuthCredentialMutationTouchGraph =
-  createBetterAuthCredentialMutationTouchGraph();
+export const betterAuthCredentialMutationTouchGraph = betterAuthDeepFreeze(
+  createBetterAuthCredentialMutationTouchGraph(),
+  'Better Auth credential mutation touch graph',
+);
 
 /** @internal Pre-built db-verification config derived from the blessed schema bridge. */
-export const betterAuthDbVerificationConfig = createBetterAuthDbVerificationConfig();
+export const betterAuthDbVerificationConfig = betterAuthDeepFreeze(
+  createBetterAuthDbVerificationConfig(),
+  'Better Auth db verification config',
+);
 
 /** @internal Build a KV406 degradation fact for the unavailable OAuth-provider successor metadata. */
 // Better Auth 1.6.17 deprecates `oidcProvider()` in favor of the successor

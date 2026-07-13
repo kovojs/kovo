@@ -183,7 +183,7 @@ async function isBetterAuthTwoFactorPendingResponse(
   if (readJson === undefined) return false;
 
   try {
-    const body = await readJson;
+    const body = await (readJson as PromiseLike<unknown>);
     if (typeof body !== 'object' || body === null) return false;
     const descriptor = betterAuthGetOwnPropertyDescriptor(body, 'twoFactorRedirect');
     return descriptor !== undefined && 'value' in descriptor && descriptor.value === true;

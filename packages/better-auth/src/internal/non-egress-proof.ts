@@ -32,10 +32,11 @@ export interface BetterAuthRequestSecretPath {
   reason: string;
 }
 
-const permittedCrossUserCredentialDispositions = betterAuthStringSet<BetterAuthRequestSecretDisposition>(
-  ['boxed', 'vetted-compare-or-verify'],
-  'Better Auth permitted cross-user credential dispositions',
-);
+const permittedCrossUserCredentialDispositions =
+  betterAuthStringSet<BetterAuthRequestSecretDisposition>(
+    ['boxed', 'vetted-compare-or-verify'],
+    'Better Auth permitted cross-user credential dispositions',
+  );
 
 export const betterAuthRequestSecretPaths = [
   {
@@ -295,11 +296,7 @@ export function proveBetterAuthPlaintextApiConfinement(
       'method',
       `Better Auth plaintext API usage ${index}`,
     );
-    const file = betterAuthStringField(
-      usage,
-      'file',
-      `Better Auth plaintext API usage ${index}`,
-    );
+    const file = betterAuthStringField(usage, 'file', `Better Auth plaintext API usage ${index}`);
     const isPlaintext = betterAuthSetHas(betterAuthPlaintextReadingApiMethodSet, method);
     const isNonPlaintext = betterAuthSetHas(betterAuthNonPlaintextApiMethodSet, method);
 
@@ -340,10 +337,7 @@ export function proveBetterAuthRequestSecretNonEgress(
 ): string[] {
   const issues: string[] = [];
   const seen = betterAuthCreateSet<string>();
-  const pathFacts = snapshotBetterAuthRequestSecretPaths(
-    paths,
-    'Better Auth request secret paths',
-  );
+  const pathFacts = snapshotBetterAuthRequestSecretPaths(paths, 'Better Auth request secret paths');
 
   for (let index = 0; index < pathFacts.length; index += 1) {
     const path = pathFacts[index]!;
@@ -435,7 +429,11 @@ function snapshotBetterAuthRequestSecretPaths(
     betterAuthArrayAppend(
       snapshot,
       {
-        carrier: betterAuthStringField(path, 'carrier', itemLabel) as BetterAuthRequestSecretCarrier,
+        carrier: betterAuthStringField(
+          path,
+          'carrier',
+          itemLabel,
+        ) as BetterAuthRequestSecretCarrier,
         disposition: betterAuthStringField(
           path,
           'disposition',

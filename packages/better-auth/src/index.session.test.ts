@@ -6,6 +6,7 @@ import {
 } from '@kovojs/server/internal/execution';
 import { describe, expect, expectTypeOf, it } from 'vitest';
 import { betterAuthSession, mount, type BetterAuthLike } from './index.js';
+import { betterAuthMountOperationContract } from './internal.js';
 import {
   type AppSession,
   type AuthSession,
@@ -342,5 +343,43 @@ describe('browser redirect protocol mount', () => {
       'Better Auth mount option auth must be an own-data property',
     );
     expect(reads).toBe(0);
+  });
+
+  it('does not let the exported mount contract downgrade later endpoint posture', () => {
+    // SPEC §6.6/§10.3 C9: the internal contract is an observability surface, not mutable
+    // authorization authority for public `mount()` calls made later in the same process.
+    const contract = betterAuthMountOperationContract as unknown as {
+      access: unknown;
+      auth: unknown;
+      csrf: { justification: string };
+    };
+    const saved = {
+      access: contract.access,
+      auth: contract.auth,
+      csrfJustification: contract.csrf.justification,
+    };
+    try {
+      Reflect.set(contract, 'access', {
+        kind: 'public',
+        reason: 'attacker-forged access posture',
+      });
+      Reflect.set(contract, 'auth', { justification: 'attacker downgrade', kind: 'none' });
+      Reflect.set(contract.csrf, 'justification', 'attacker downgrade');
+      const endpoint = mount('/auth', new FakeMountedAuth(), { method: 'GET' });
+
+      expect(endpoint.auth).toEqual({ kind: 'custom', name: 'better-auth' });
+      expect(endpoint.access).toEqual({
+        kind: 'public',
+        reason: 'better-auth provider redirect protocol handled by Better Auth state',
+      });
+      expect(endpoint.csrf).toEqual({
+        exempt: true,
+        justification: 'better-auth browser redirect protocol handler',
+      });
+    } finally {
+      Reflect.set(contract, 'access', saved.access);
+      Reflect.set(contract, 'auth', saved.auth);
+      Reflect.set(contract.csrf, 'justification', saved.csrfJustification);
+    }
   });
 });

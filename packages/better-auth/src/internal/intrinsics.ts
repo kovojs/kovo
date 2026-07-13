@@ -25,7 +25,9 @@ const nativeMapSet = NativeMap.prototype.set;
 const nativeNumberIsNaN = NativeNumber.isNaN;
 const nativeNumberIsSafeInteger = NativeNumber.isSafeInteger;
 const nativeObjectDefineProperty = NativeObject.defineProperty;
+const nativeObjectFreeze = NativeObject.freeze;
 const nativeObjectGetOwnPropertyDescriptor = NativeObject.getOwnPropertyDescriptor;
+const nativeObjectIsFrozen = NativeObject.isFrozen;
 const nativeObjectKeys = NativeObject.keys;
 const nativeReflectApply = NativeReflect.apply;
 const nativeRegExpExec = NativeRegExp.prototype.exec;
@@ -89,6 +91,8 @@ function capturedControlsAreSound(): boolean {
     apply(nativeSetAdd, set, ['safe']);
     const keys = apply<string[]>(nativeObjectKeys, NativeObject, [{ safe: true }]);
     const parsed = apply<Record<string, unknown>>(nativeJsonParse, NativeJSON, ['{"safe":true}']);
+    const frozenProbe = { safe: true };
+    apply(nativeObjectFreeze, NativeObject, [frozenProbe]);
     return (
       apply(nativeArrayIsArray, NativeArray, [[]]) === true &&
       apply(nativeArrayIsArray, NativeArray, [{}]) === false &&
@@ -101,6 +105,7 @@ function capturedControlsAreSound(): boolean {
       keys.length === 1 &&
       keys[0] === 'safe' &&
       parsed.safe === true &&
+      apply(nativeObjectIsFrozen, NativeObject, [frozenProbe]) === true &&
       apply(nativeMapGet, map, ['safe']) === 'value' &&
       apply(nativeMapHas, map, ['safe']) === true &&
       apply(nativeMapHas, map, ['missing']) === false &&
@@ -275,6 +280,38 @@ export function betterAuthDefineOwnData<Value>(
   if (committed === undefined || !('value' in committed) || committed.value !== value) {
     throw new TypeError(`${label} own-data commit failed.`);
   }
+}
+
+/** @internal Deep-freeze a framework-owned plain authority graph through boot-pinned controls. */
+export function betterAuthDeepFreeze<Value>(value: Value, label: string): Value {
+  assertBetterAuthIntrinsics();
+  const seen = new NativeSet<object>();
+
+  function freezeOwnDataGraph(candidate: unknown): void {
+    if (!isObject(candidate) || apply(nativeSetHas, seen, [candidate])) return;
+    apply(nativeSetAdd, seen, [candidate]);
+
+    const keys = betterAuthSnapshotDenseArray(
+      apply<string[]>(nativeObjectKeys, NativeObject, [candidate]),
+      `${label} own keys`,
+    );
+    for (let index = 0; index < keys.length; index += 1) {
+      const property = keys[index]!;
+      const descriptor = betterAuthGetOwnPropertyDescriptor(candidate, property);
+      if (descriptor === undefined || !('value' in descriptor)) {
+        throw new NativeTypeError(`${label}.${property} must be an own-data property.`);
+      }
+      freezeOwnDataGraph(descriptor.value);
+    }
+
+    apply(nativeObjectFreeze, NativeObject, [candidate]);
+    if (!apply<boolean>(nativeObjectIsFrozen, NativeObject, [candidate])) {
+      throw new NativeTypeError(`${label} could not be frozen.`);
+    }
+  }
+
+  freezeOwnDataGraph(value);
+  return value;
 }
 
 export function betterAuthArrayAppend<Value>(target: Value[], value: Value, label: string): void {
@@ -469,9 +506,12 @@ export function betterAuthResponseHeaders(value: object): Headers | undefined {
 export function betterAuthResponseStatus(value: object): number | undefined {
   assertBetterAuthIntrinsics();
   const native = readNativeResponseStatus(value);
-  if (native !== undefined) return native;
+  if (native !== undefined) return validBetterAuthHttpStatus(native) ? native : undefined;
   const descriptor = betterAuthGetOwnPropertyDescriptor(value, 'status');
-  return descriptor !== undefined && 'value' in descriptor && typeof descriptor.value === 'number'
+  return descriptor !== undefined &&
+    'value' in descriptor &&
+    typeof descriptor.value === 'number' &&
+    validBetterAuthHttpStatus(descriptor.value)
     ? descriptor.value
     : undefined;
 }
@@ -583,6 +623,12 @@ function readNativeResponseStatus(value: object): number | undefined {
   } catch {
     return undefined;
   }
+}
+
+function validBetterAuthHttpStatus(value: number): boolean {
+  return (
+    apply<boolean>(nativeNumberIsSafeInteger, NativeNumber, [value]) && value >= 100 && value <= 599
+  );
 }
 
 function isObject(value: unknown): value is object {

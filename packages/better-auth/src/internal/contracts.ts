@@ -2,6 +2,7 @@ import { domain, publicAccess, s } from '@kovojs/server';
 import type { AccessDecision, EndpointAuthDeclaration } from '@kovojs/server';
 
 import type { BetterAuthSessionPayload } from '../session.js';
+import { betterAuthDeepFreeze } from './intrinsics.js';
 
 /**
  * Options passed to a Better Auth `getSession` call. Carries the incoming request
@@ -219,11 +220,14 @@ export const betterAuthCredentialMutationErrors = {
 export type BetterAuthCredentialMutationApi = 'signInEmail' | 'signOut' | 'signUpEmail';
 
 /** @internal Better Auth credential API names keyed by the adapter's touch/registry plumbing. */
-export const betterAuthCredentialMutationApis = [
-  'signInEmail',
-  'signOut',
-  'signUpEmail',
-] as const satisfies readonly BetterAuthCredentialMutationApi[];
+export const betterAuthCredentialMutationApis = betterAuthDeepFreeze(
+  [
+    'signInEmail',
+    'signOut',
+    'signUpEmail',
+  ] as const satisfies readonly BetterAuthCredentialMutationApi[],
+  'Better Auth credential mutation APIs',
+);
 
 /** @internal Better Auth core table names recognized by the schema bridge. */
 export type BetterAuthCoreTable = 'account' | 'session' | 'user' | 'verification';
@@ -309,18 +313,21 @@ export interface BetterAuthMountOperationContract {
 }
 
 /** @internal Single Better Auth operation contract for the raw provider/callback mount. */
-export const betterAuthMountOperationContract = {
-  access: publicAccess('better-auth provider redirect protocol handled by Better Auth state'),
-  api: 'mount',
-  auth: { kind: 'custom', name: 'better-auth' },
-  csrf: {
-    exempt: true,
-    justification: 'better-auth browser redirect protocol handler',
-  },
-  mountJustification: 'better-auth owns provider callback subpaths under this mount',
-  reason: 'better-auth provider redirect and callback mount',
-  response: { appOwnedSafety: true, body: 'redirect', cache: 'no-store' },
-} as const satisfies BetterAuthMountOperationContract;
+export const betterAuthMountOperationContract = betterAuthDeepFreeze(
+  {
+    access: publicAccess('better-auth provider redirect protocol handled by Better Auth state'),
+    api: 'mount',
+    auth: { kind: 'custom', name: 'better-auth' },
+    csrf: {
+      exempt: true,
+      justification: 'better-auth browser redirect protocol handler',
+    },
+    mountJustification: 'better-auth owns provider callback subpaths under this mount',
+    reason: 'better-auth provider redirect and callback mount',
+    response: { appOwnedSafety: true, body: 'redirect', cache: 'no-store' },
+  } as const satisfies BetterAuthMountOperationContract,
+  'Better Auth mount operation contract',
+);
 
 /** @internal Schema-bridge annotation mapping a Better Auth table to a Kovo domain/key. */
 export interface BetterAuthSchemaBridgeDomainAnnotation {
@@ -546,11 +553,14 @@ export interface BetterAuthSchemaSourceGenerationResult {
 }
 
 /** @internal Kovo `auth` domain handle used by the credential-mutation touch declarations. */
-export const betterAuthAuthDomain = domain('auth');
+export const betterAuthAuthDomain = betterAuthDeepFreeze(domain('auth'), 'Better Auth auth domain');
 /** @internal Kovo `organization` domain handle for organization-plugin touch declarations. */
-export const betterAuthOrganizationDomain = domain('organization');
+export const betterAuthOrganizationDomain = betterAuthDeepFreeze(
+  domain('organization'),
+  'Better Auth organization domain',
+);
 /** @internal Kovo `user` domain handle used by the credential-mutation touch declarations. */
-export const betterAuthUserDomain = domain('user');
+export const betterAuthUserDomain = betterAuthDeepFreeze(domain('user'), 'Better Auth user domain');
 
 /**
  * @internal Blessed Better Auth schema bridge: maps each known table to a Kovo
@@ -558,68 +568,69 @@ export const betterAuthUserDomain = domain('user');
  */
 // Archived D5 auth plan B1: app-owned schema.ts tables stay visible to the touch graph.
 // User rows are intentionally not exempt; app queries commonly render names/avatars.
-export const betterAuthSchemaBridge = {
-  // bugz-3 M6 (SPEC.md §10.1): `account` stores the password hash and OAuth access/refresh/id
-  // tokens. They stay owner-scoped (`auth`/`userId`) so apps can still render non-secret
-  // columns (provider, scope), but the credential columns are classified `secret:` so a
-  // projection that reaches them fires KV435 instead of serializing a long-lived credential.
-  account: {
-    domain: 'auth',
-    key: 'userId',
-    secret: ['password', 'accessToken', 'refreshToken', 'idToken'],
-  },
-  // papercuts-36 P2 (SPEC.md §10.1 C10): the official apiKey plugin stores the raw API-key
-  // credential in `key`. It is owner-scoped (`auth`/`userId`) so non-secret columns (name, prefix,
-  // start) stay readable, but `key` is classified `secret:` so a projection that reaches it fires
-  // KV435 instead of serializing a long-lived credential to the wire.
-  apiKey: { domain: 'auth', key: 'userId', secret: ['key'] },
-  deviceCode: {
-    exempt: true,
-    rationale:
-      'Better Auth device-authorization codes are redirect/device-flow protocol state, not an app read surface under SPEC.md §10.1.',
-  },
-  invitation: { domain: 'organization', key: 'organizationId' },
-  jwks: {
-    exempt: true,
-    rationale:
-      'Better Auth JWT signing-key material is adapter bookkeeping; SPEC.md §10.1 forbids app queries from reading exempt tables.',
-  },
-  member: { domain: 'organization', key: 'organizationId' },
-  oauthAccessToken: {
-    domain: 'auth',
-    key: 'userId',
-    secret: ['accessToken', 'refreshToken'],
-  },
-  oauthApplication: { domain: 'auth', key: 'userId', secret: ['clientSecret'] },
-  oauthConsent: { domain: 'auth', key: 'userId' },
-  organization: { domain: 'organization', key: 'id' },
-  organizationRole: { domain: 'organization', key: 'organizationId' },
-  rateLimit: {
-    exempt: true,
-    rationale:
-      'Better Auth database-backed rate-limit counters are adapter enforcement state; SPEC.md §10.1 forbids app queries from reading exempt tables.',
-  },
-  // bugz-3 M6 (SPEC.md §10.1): `session.token` is the raw bearer credential. Owner-scoped
-  // reads of non-secret session columns (expiry, ip, userAgent) stay green; the token column
-  // is `secret:` so it can never be projected onto the client wire.
-  session: { domain: 'auth', key: 'userId', secret: ['token'] },
-  team: { domain: 'organization', key: 'organizationId' },
-  teamMember: { domain: 'organization', key: 'teamId' },
-  twoFactor: { domain: 'auth', key: 'userId', secret: ['secret', 'backupCodes'] },
-  user: { domain: 'user', key: 'id' },
-  verification: {
-    exempt: true,
-    rationale: 'Better Auth email/token verification bookkeeping is not an app read surface.',
-  },
-  walletAddress: { domain: 'auth', key: 'userId' },
-} as const satisfies BetterAuthSchemaBridge;
+export const betterAuthSchemaBridge = betterAuthDeepFreeze(
+  {
+    // bugz-3 M6 (SPEC.md §10.1): `account` stores the password hash and OAuth access/refresh/id
+    // tokens. They stay owner-scoped (`auth`/`userId`) so apps can still render non-secret
+    // columns (provider, scope), but the credential columns are classified `secret:` so a
+    // projection that reaches them fires KV435 instead of serializing a long-lived credential.
+    account: {
+      domain: 'auth',
+      key: 'userId',
+      secret: ['password', 'accessToken', 'refreshToken', 'idToken'],
+    },
+    // papercuts-36 P2 (SPEC.md §10.1 C10): the official apiKey plugin stores the raw API-key
+    // credential in `key`. It is owner-scoped (`auth`/`userId`) so non-secret columns (name, prefix,
+    // start) stay readable, but `key` is classified `secret:` so a projection that reaches it fires
+    // KV435 instead of serializing a long-lived credential to the wire.
+    apiKey: { domain: 'auth', key: 'userId', secret: ['key'] },
+    deviceCode: {
+      exempt: true,
+      rationale:
+        'Better Auth device-authorization codes are redirect/device-flow protocol state, not an app read surface under SPEC.md §10.1.',
+    },
+    invitation: { domain: 'organization', key: 'organizationId' },
+    jwks: {
+      exempt: true,
+      rationale:
+        'Better Auth JWT signing-key material is adapter bookkeeping; SPEC.md §10.1 forbids app queries from reading exempt tables.',
+    },
+    member: { domain: 'organization', key: 'organizationId' },
+    oauthAccessToken: {
+      domain: 'auth',
+      key: 'userId',
+      secret: ['accessToken', 'refreshToken'],
+    },
+    oauthApplication: { domain: 'auth', key: 'userId', secret: ['clientSecret'] },
+    oauthConsent: { domain: 'auth', key: 'userId' },
+    organization: { domain: 'organization', key: 'id' },
+    organizationRole: { domain: 'organization', key: 'organizationId' },
+    rateLimit: {
+      exempt: true,
+      rationale:
+        'Better Auth database-backed rate-limit counters are adapter enforcement state; SPEC.md §10.1 forbids app queries from reading exempt tables.',
+    },
+    // bugz-3 M6 (SPEC.md §10.1): `session.token` is the raw bearer credential. Owner-scoped
+    // reads of non-secret session columns (expiry, ip, userAgent) stay green; the token column
+    // is `secret:` so it can never be projected onto the client wire.
+    session: { domain: 'auth', key: 'userId', secret: ['token'] },
+    team: { domain: 'organization', key: 'organizationId' },
+    teamMember: { domain: 'organization', key: 'teamId' },
+    twoFactor: { domain: 'auth', key: 'userId', secret: ['secret', 'backupCodes'] },
+    user: { domain: 'user', key: 'id' },
+    verification: {
+      exempt: true,
+      rationale: 'Better Auth email/token verification bookkeeping is not an app read surface.',
+    },
+    walletAddress: { domain: 'auth', key: 'userId' },
+  } as const satisfies BetterAuthSchemaBridge,
+  'Better Auth built-in schema bridge',
+);
 
 /** @internal Better Auth core tables that must be present in the app schema bridge. */
-export const betterAuthRequiredCoreTables = [
-  'account',
-  'session',
-  'user',
-  'verification',
-] as const satisfies readonly BetterAuthCoreTable[];
+export const betterAuthRequiredCoreTables = betterAuthDeepFreeze(
+  ['account', 'session', 'user', 'verification'] as const satisfies readonly BetterAuthCoreTable[],
+  'Better Auth required core tables',
+);
 
 /** @internal Resolve the Kovo domain a Better Auth table is bridged into, or null when unbridged/exempt. */

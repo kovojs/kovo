@@ -5,6 +5,7 @@ import {
   betterAuthSignInEmailMutation,
   betterAuthSignOutMutation,
   betterAuthSignUpEmailMutation,
+  betterAuthCredentialMutationTouches,
   createBetterAuthCredentialMutationTouchGraph,
   getBetterAuthSetCookie,
   isBetterAuthCredentialFailureError,
@@ -423,6 +424,63 @@ describe('credential mutation helpers', () => {
     ).rejects.toThrow(
       'Better Auth credential provider failed inside the trusted plaintext boundary.',
     );
+  });
+
+  it.each([Number.NaN, 200.5])(
+    'rejects a structurally forged sign-out status %s instead of publishing revocation',
+    async (status) => {
+      // SPEC §6.5/§9.1 C9: only an exact HTTP success status is positive provider evidence.
+      // NaN bypassed both range comparisons and fractional values can never be native HTTP status.
+      const auth: BetterAuthSignOutLike = {
+        api: {
+          signOut: () => ({
+            headers: responseWithCookies([
+              'kovo_session=; Max-Age=0; Path=/; HttpOnly; SameSite=Lax',
+            ]).headers,
+            status,
+          }),
+        },
+      };
+      const signOut = betterAuthSignOutMutation(auth);
+
+      await expect(
+        runProtectedCredentialMutation(
+          signOut,
+          {},
+          { headers: requestHeaders('kovo_session=session-1') },
+        ),
+      ).rejects.toThrow(
+        'Better Auth credential provider failed inside the trusted plaintext boundary.',
+      );
+    },
+  );
+
+  it('does not let the exported touch inventory erase later credential coverage', () => {
+    // SPEC §10.3/§11.2 C9: internal observability exports are not mutable authority. A late
+    // write to the exported derived array must not remove sign-up's user/auth touch closure.
+    const exported = betterAuthCredentialMutationTouches.signUpEmail as Array<
+      (typeof betterAuthCredentialMutationTouches.signUpEmail)[number]
+    >;
+    const saved = Array.from(exported);
+    let mutated = false;
+    try {
+      mutated = Reflect.set(exported, 'length', 0);
+      const signUp = betterAuthSignUpEmailMutation(new FakeCredentialAuth());
+      expect(signUp.registry?.touches?.map((touch) => touch.key)).toEqual(['user', 'auth']);
+    } finally {
+      if (mutated) {
+        Reflect.set(exported, 'length', 0);
+        for (let index = 0; index < saved.length; index += 1) {
+          Object.defineProperty(exported, index, {
+            configurable: true,
+            enumerable: true,
+            value: saved[index],
+            writable: true,
+          });
+        }
+        Reflect.set(exported, 'length', saved.length);
+      }
+    }
   });
 
   it('does not trust late native Response getters to forge sign-out success', async () => {
