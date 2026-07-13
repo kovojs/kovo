@@ -1,10 +1,11 @@
 import { createReadStream } from 'node:fs';
-import { stat } from 'node:fs/promises';
 import { createServer as createNodeServer } from 'node:http';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { createServer as createViteServer } from 'vite';
+
+import { resolveConfinedStaticFile } from '../../../scripts/lib/confined-static-file.mjs';
 
 const soRoot = fileURLToPath(new URL('../', import.meta.url));
 const distDir = path.join(soRoot, 'dist');
@@ -22,13 +23,10 @@ const STATIC_MIME = {
 // The app references built client assets at `/assets/*`. Serve them from
 // `dist/` when present, then fall through to Vite middleware for app routes.
 async function tryServeBuiltAsset(req, res) {
-  const pathname = decodeURIComponent(new URL(req.url, 'http://x').pathname);
-  if (!pathname.startsWith('/assets/')) return false;
-  const filePath = path.join(distDir, pathname);
-  if (!filePath.startsWith(distDir)) return false;
+  const pathname = new URL(req.url, 'http://x').pathname;
+  const filePath = await resolveConfinedStaticFile(distDir, pathname, '/assets/');
+  if (filePath === undefined) return false;
   try {
-    const info = await stat(filePath);
-    if (!info.isFile()) return false;
     res.writeHead(200, {
       'content-type': STATIC_MIME[path.extname(filePath)] ?? 'application/octet-stream',
       'cache-control': cacheControlForAsset(pathname),
