@@ -31,7 +31,12 @@ const registeredTouchesByMutation = createWitnessMap<string, readonly MutationTo
 export function registerGeneratedMutationTouchRegistry(
   registry: GeneratedMutationTouchRegistry,
 ): GeneratedMutationTouchRegistry {
-  const entries = snapshotGeneratedMutationTouchRegistry(registry);
+  let entries: readonly MutationTouchRegistryEntry[];
+  try {
+    entries = snapshotGeneratedMutationTouchRegistry(registry);
+  } catch {
+    throw new TypeError('Generated mutation touch registry received an invalid registry.');
+  }
   denseOwnArrayForEach(
     entries,
     (entry) => witnessMapSet(registeredTouchesByMutation, entry.mutationKey, entry.touches),

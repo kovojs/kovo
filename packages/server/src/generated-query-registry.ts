@@ -37,7 +37,12 @@ const EMPTY_READS = witnessFreeze([] as Domain[]);
 export function registerGeneratedQueryReadRegistry(
   registry: GeneratedQueryReadRegistry,
 ): GeneratedQueryReadRegistry {
-  const entries = snapshotGeneratedQueryReadRegistry(registry);
+  let entries: readonly RegisteredQueryReadEntry[];
+  try {
+    entries = snapshotGeneratedQueryReadRegistry(registry);
+  } catch {
+    throw new TypeError('Generated query read registry received an invalid registry.');
+  }
   denseOwnArrayForEach(
     entries,
     (entry) => witnessMapSet(registeredReadsByQuery, entry.query, entry.domains),
