@@ -1,4 +1,5 @@
 import { definedProps } from './defined-props.js';
+import { appendDisposer, drainDisposers } from './dispose-stack.js';
 import { reportRuntimeContextError } from './error-policy.js';
 import type { RuntimeErrorContext } from './events.js';
 import type { LoaderRoot } from './loader-lifecycle.js';
@@ -53,7 +54,7 @@ export function installLoaderQueryRuntime(
   // defense; this covers UAs (Safari/WebKit) that keep a `no-store` page in the in-memory
   // bfcache. Registered before query refetch so the full reload wins over a stale refetch.
   const bfcacheReload = installBfcacheSessionReload();
-  disposers.push(() => {
+  appendDisposer(disposers, () => {
     bfcacheReload.dispose();
   });
 
@@ -70,7 +71,7 @@ export function installLoaderQueryRuntime(
     root: options.root,
   });
 
-  disposers.push(() => {
+  appendDisposer(disposers, () => {
     queryVisibleReturn.dispose();
   });
 
@@ -82,21 +83,23 @@ export function installLoaderQueryRuntime(
     const clockScheduler = createClockScheduler({
       ownerDocument: clockSchedulerOwnerDocument(options.root),
     });
-    disposers.push(
+    appendDisposer(
+      disposers,
       installClockUpdatePlans(
         options.root as QueryBindingRoot,
         options.clockUpdatePlans,
         options.queryStore ? { queryStore: options.queryStore } : {},
         { scheduler: clockScheduler },
       ),
-      () => {
-        clockScheduler.dispose();
-      },
     );
+    appendDisposer(disposers, () => {
+      clockScheduler.dispose();
+    });
   }
 
   if (options.queryStore) {
-    disposers.push(
+    appendDisposer(
+      disposers,
       installInlineQueryEventHydration({
         onAppliedQueries(queries) {
           queryVisibleReturn.rememberAppliedQueries(queries);
@@ -118,7 +121,7 @@ export function installLoaderQueryRuntime(
 
   return {
     dispose() {
-      for (const dispose of disposers.splice(0).reverse()) dispose();
+      drainDisposers(disposers);
     },
     rememberAppliedQueries(queries) {
       queryVisibleReturn.rememberAppliedQueries(queries);

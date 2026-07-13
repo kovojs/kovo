@@ -61,6 +61,29 @@ describe('loader lifecycle', () => {
     expect(root.listeners.has('click')).toBe(false);
   });
 
+  it('retires delegated authority after late Array.splice replacement', () => {
+    const root = new FakeRoot();
+    const dispose = installDelegatedEventLifecycle({
+      events: ['click'],
+      importModule: async () => ({}),
+      islandSignalScope: createIslandSignalScope(),
+      root,
+    });
+    const nativeSplice = Array.prototype.splice;
+    Array.prototype.splice = function poisonedSplice() {
+      return [];
+    } as typeof Array.prototype.splice;
+    try {
+      dispose();
+    } finally {
+      Array.prototype.splice = nativeSplice;
+    }
+
+    expect(root.listeners.has('click')).toBe(false);
+    expect(root.listeners.has('pointerover')).toBe(false);
+    expect(root.listeners.has('pointerout')).toBe(false);
+  });
+
   it('reports synthesized pointer failures without live Promise catch dispatch', async () => {
     const root = new FakeRoot();
     const element = new FakeElement({ 'on:pointerenter': '/c/cart.js#missing' });

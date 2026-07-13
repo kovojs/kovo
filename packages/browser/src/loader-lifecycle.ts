@@ -4,6 +4,7 @@ import type {
   VisibilityStateLike,
 } from './dom-like.js';
 import { reportRuntimeContextError } from './error-policy.js';
+import { appendDisposer, drainDisposers } from './dispose-stack.js';
 import type {
   DelegatedEvent,
   EventElementLike,
@@ -81,7 +82,7 @@ export function addLoaderListener(
   options?: { capture?: boolean },
 ): void {
   target.addEventListener(type, listener, options);
-  disposers.push(() => {
+  appendDisposer(disposers, () => {
     target.removeEventListener?.(type, listener, options);
   });
 }
@@ -159,7 +160,7 @@ export function installDelegatedEventLifecycle(
   }
 
   return () => {
-    for (const dispose of disposers.splice(0).reverse()) dispose();
+    drainDisposers(disposers);
   };
 }
 

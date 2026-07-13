@@ -2,6 +2,7 @@ import type { BrowserKovoRoot } from './browser-root.js';
 import { withDefaultMutationBroadcast } from './broadcast.js';
 import type { ClockUpdatePlan } from './clock-tick-bus.js';
 import { definedProps } from './defined-props.js';
+import { appendDisposer, drainDisposers } from './dispose-stack.js';
 import { guardKovoDynamicImportModule } from './dynamic-import-url.js';
 import { reportRuntimeContextError } from './error-policy.js';
 import type { RuntimeErrorContext } from './events.js';
@@ -212,7 +213,8 @@ export function installGeneratedKovoLoader(
 
   initializeNativeIndeterminateCheckboxes(options.root);
 
-  disposers.push(
+  appendDisposer(
+    disposers,
     installDelegatedEventLifecycle({
       ...definedProps({
         enhancedMutations,
@@ -241,12 +243,13 @@ export function installGeneratedKovoLoader(
     }),
   });
 
-  disposers.push(() => {
+  appendDisposer(disposers, () => {
     queryRuntime?.dispose();
   });
 
   if (options.discardPendingOptimism) {
-    disposers.push(
+    appendDisposer(
+      disposers,
       installPagehideOptimismCleanup({
         discardPendingOptimism: options.discardPendingOptimism,
         root: options.root,
@@ -257,17 +260,20 @@ export function installGeneratedKovoLoader(
   // SPEC §4.7/§4.8: startup triggers cross the same exact compiler-manifest gate as
   // delegated handlers. Passing the original importer here would make the trigger-level fallback
   // perform a second empty-manifest check and reject legitimate generated on:load/idle/visible refs.
-  disposers.push(installExecutionTriggers({ ...options, importModule }, islandSignalScope));
+  appendDisposer(
+    disposers,
+    installExecutionTriggers({ ...options, importModule }, islandSignalScope),
+  );
   if (enhancedMutationSetup?.dispose) {
-    disposers.push(enhancedMutationSetup.dispose);
+    appendDisposer(disposers, enhancedMutationSetup.dispose);
   }
-  disposers.push(() => {
+  appendDisposer(disposers, () => {
     abortIslandSignalScope(islandSignalScope);
   });
 
   return {
     dispose() {
-      for (const dispose of disposers.splice(0).reverse()) dispose();
+      drainDisposers(disposers);
     },
     events,
     // K4 / SPEC §4.7: expose so deferred-stream apply calls can pass the scope
