@@ -212,9 +212,12 @@ export const betterAuthSignOutInput = s.object({});
  * (with an empty payload) the sign-in/sign-up mutations return when a session was not
  * positively established. Surfaced so apps can render the matching error UI (SPEC.md §6.5).
  */
-export const betterAuthCredentialMutationErrors = {
-  INVALID_CREDENTIALS: s.object({}),
-};
+export const betterAuthCredentialMutationErrors = betterAuthDeepFreeze(
+  {
+    INVALID_CREDENTIALS: s.object({}),
+  },
+  'Better Auth credential mutation errors',
+);
 
 /** @internal Better Auth credential API names keyed by the adapter's touch/registry plumbing. */
 export type BetterAuthCredentialMutationApi = 'signInEmail' | 'signOut' | 'signUpEmail';

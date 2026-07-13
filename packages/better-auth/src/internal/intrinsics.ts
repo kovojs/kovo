@@ -233,12 +233,16 @@ export function betterAuthOwnDataOption<Value>(
   property: PropertyKey,
   label: string,
 ): Value | undefined {
-  const descriptor = betterAuthGetOwnPropertyDescriptor(options, property);
-  if (descriptor === undefined) return undefined;
-  if (!('value' in descriptor)) {
+  const before = betterAuthGetOwnPropertyDescriptor(options, property);
+  const after = betterAuthGetOwnPropertyDescriptor(options, property);
+  if (!sameDataDescriptor(before, after)) {
+    throw new TypeError(`${label} changed while it was inspected.`);
+  }
+  if (before === undefined) return undefined;
+  if (!('value' in before)) {
     throw new TypeError(`${label} must be an own-data property.`);
   }
-  return descriptor.value as Value | undefined;
+  return before.value as Value | undefined;
 }
 
 export function betterAuthCaptureOwnApiMethod(
@@ -326,6 +330,16 @@ export function betterAuthDeepFreeze<Value>(value: Value, label: string): Value 
   }
 
   freezeOwnDataGraph(value);
+  return value;
+}
+
+/** @internal Shallow-freeze a framework-owned carrier through the boot-pinned Object control. */
+export function betterAuthFreezeOwn<Value extends object>(value: Value, label: string): Value {
+  assertBetterAuthIntrinsics();
+  apply(nativeObjectFreeze, NativeObject, [value]);
+  if (!apply<boolean>(nativeObjectIsFrozen, NativeObject, [value])) {
+    throw new NativeTypeError(`${label} could not be frozen.`);
+  }
   return value;
 }
 

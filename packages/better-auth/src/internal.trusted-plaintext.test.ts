@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import ts from 'typescript';
 import {
   assertBetterAuthRequestSecretPath,
+  betterAuthNonPlaintextApiMethods,
   betterAuthPlaintextReadingApiMethods,
   betterAuthRequestSecretPaths,
   betterAuthTrustedPlaintextModule,
@@ -172,6 +173,29 @@ describe('Better Auth trusted plaintext zone', () => {
         'better-auth.adapter.session-token-lookup',
       ]),
     );
+  });
+
+  it('seals the exported proof inventories against late posture erasure', () => {
+    // SPEC §10.3 C9-C10: the public audit view must stay identical to the private proof snapshot.
+    // A consumer of the internal subpath must not be able to publish an empty manifest after boot.
+    const secretLength = betterAuthRequestSecretPaths.length;
+    const plaintextLength = betterAuthPlaintextReadingApiMethods.length;
+    const nonPlaintextLength = betterAuthNonPlaintextApiMethods.length;
+    let secretMutated = false;
+    let plaintextMutated = false;
+    let nonPlaintextMutated = false;
+    try {
+      secretMutated = Reflect.set(betterAuthRequestSecretPaths, 'length', 0);
+      plaintextMutated = Reflect.set(betterAuthPlaintextReadingApiMethods, 'length', 0);
+      nonPlaintextMutated = Reflect.set(betterAuthNonPlaintextApiMethods, 'length', 1);
+      expect([secretMutated, plaintextMutated, nonPlaintextMutated]).toEqual([false, false, false]);
+    } finally {
+      if (secretMutated) Reflect.set(betterAuthRequestSecretPaths, 'length', secretLength);
+      if (plaintextMutated)
+        Reflect.set(betterAuthPlaintextReadingApiMethods, 'length', plaintextLength);
+      if (nonPlaintextMutated)
+        Reflect.set(betterAuthNonPlaintextApiMethods, 'length', nonPlaintextLength);
+    }
   });
 
   it('fails red when a new request-reachable adapter path reads an unboxed cross-user credential', () => {

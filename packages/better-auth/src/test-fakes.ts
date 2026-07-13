@@ -173,10 +173,9 @@ export function responseWithCookies(
   status = 204,
 ): BetterAuthResponseLike {
   const headers = new Headers();
-
-  Object.defineProperty(headers, 'getSetCookie', {
-    value: () => [...cookies],
-  });
+  for (let index = 0; index < cookies.length; index += 1) {
+    headers.append('set-cookie', cookies[index]!);
+  }
 
   return { headers, status };
 }

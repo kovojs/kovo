@@ -5,6 +5,7 @@ import {
   betterAuthSignInEmailMutation,
   betterAuthSignOutMutation,
   betterAuthSignUpEmailMutation,
+  betterAuthCredentialMutationErrors,
   betterAuthCredentialMutationTouches,
   createBetterAuthCredentialMutationTouchGraph,
   getBetterAuthSetCookie,
@@ -150,6 +151,42 @@ describe('credential mutation helpers', () => {
       'credential option csrf must be an own-data property',
     );
     expect(reads).toBe(0);
+  });
+
+  it('rejects nested credential registry accessors without invoking them', () => {
+    let reads = 0;
+    const registry = Object.defineProperty({}, 'touches', {
+      enumerable: true,
+      get() {
+        reads += 1;
+        return [];
+      },
+    });
+
+    expect(() =>
+      betterAuthSignInEmailMutation(new FakeCredentialAuth(), { registry } as never),
+    ).toThrow('credential registry touches must be an own-data property');
+    expect(reads).toBe(0);
+  });
+
+  it('snapshots custom registry domains before late key mutation', () => {
+    const customAuth = { key: 'auth' };
+    const signIn = betterAuthSignInEmailMutation(new FakeCredentialAuth(), {
+      registry: { touches: [customAuth] },
+    } as never);
+    customAuth.key = 'attacker-erased-auth';
+
+    expect(signIn.registry?.touches?.map((touch) => touch.key)).toEqual(['auth']);
+  });
+
+  it('keeps mandatory credential touches immutable until app snapshotting', () => {
+    const signIn = betterAuthSignInEmailMutation(new FakeCredentialAuth());
+    const touches = signIn.registry?.touches;
+    if (touches === undefined) throw new Error('Missing credential touches');
+
+    expect(Reflect.set(touches, 'length', 0)).toBe(false);
+    expect(Reflect.set(signIn.registry!, 'touches', [])).toBe(false);
+    expect(touches.map((touch) => touch.key)).toEqual(['auth']);
   });
 
   it('rejects forged csrf:false options for every credential mutation', () => {
@@ -480,6 +517,21 @@ describe('credential mutation helpers', () => {
         }
         Reflect.set(exported, 'length', saved.length);
       }
+    }
+  });
+
+  it('does not let the exported error registry erase later credential failures', () => {
+    // SPEC §6.5/§10.3 C9: exported declaration metadata is not mutable authority. Otherwise a
+    // late delete can make the handler emit a failure absent from the mutation's declared schema.
+    const exported = betterAuthCredentialMutationErrors as Record<string, unknown>;
+    const original = Object.getOwnPropertyDescriptor(exported, 'INVALID_CREDENTIALS');
+    if (original === undefined) throw new Error('Missing credential error schema');
+    const deleted = Reflect.deleteProperty(exported, 'INVALID_CREDENTIALS');
+    try {
+      const signIn = betterAuthSignInEmailMutation(new FakeCredentialAuth());
+      expect(signIn.errors).toHaveProperty('INVALID_CREDENTIALS');
+    } finally {
+      if (deleted) Object.defineProperty(exported, 'INVALID_CREDENTIALS', original);
     }
   });
 
@@ -1124,6 +1176,24 @@ describe('credential success is positively classified', () => {
       Array.prototype.some = originalSome;
       Headers.prototype.getSetCookie = originalGetSetCookie;
     }
+
+    expect(result).toMatchObject({ ok: false, status: 422 });
+  });
+
+  it('does not let an own shadow on native Headers forge session-cookie evidence', async () => {
+    // SPEC §6.5/§9.1 C9: native Headers brand evidence outranks structural extension methods.
+    // An own method on a genuinely native header bag must not replace its boot-pinned contents.
+    const response = jsonResponse(200, { ok: true });
+    Object.defineProperty(response.headers, 'getSetCookie', {
+      configurable: true,
+      value: () => ['attacker_session=forged; Path=/; HttpOnly'],
+    });
+    const auth = signInAuthReturning(response);
+    const result = await runProtectedCredentialMutation(
+      betterAuthSignInEmailMutation(auth),
+      { email: 'ada@example.com', password: 'correct' },
+      { headers: requestHeaders() },
+    );
 
     expect(result).toMatchObject({ ok: false, status: 422 });
   });

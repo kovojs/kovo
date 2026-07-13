@@ -7,6 +7,7 @@ import type {
   MutationDefinition,
   MutationFail,
 } from '@kovojs/server';
+import type { MutationRegistry } from '@kovojs/server/internal/execution';
 
 import type { BetterAuthRoleSession } from '../guards.js';
 import type { BetterAuthCredentialMutationInternalOptions } from '../credential-options.js';
@@ -18,10 +19,13 @@ import type {
 } from './contracts.js';
 import {
   betterAuthArrayAppend,
+  betterAuthArrayIsArray,
   betterAuthApply,
   betterAuthCharacterCodeAt,
   betterAuthDateNow,
   betterAuthDateParse,
+  betterAuthDeepFreeze,
+  betterAuthFreezeOwn,
   betterAuthGetOwnPropertyDescriptor,
   betterAuthIndexOf,
   betterAuthIsNaN,
@@ -32,6 +36,7 @@ import {
   betterAuthResponseStatus,
   betterAuthSlice,
   betterAuthSplit,
+  betterAuthSnapshotDenseArray,
   betterAuthToLowerCase,
   betterAuthTrim,
 } from './intrinsics.js';
@@ -396,14 +401,71 @@ export function credentialMutationDefinitionOptions<
     ...(access === undefined ? {} : { access }),
     ...(csrf === undefined ? {} : { csrf }),
     ...(guard === undefined ? {} : { guard }),
-    registry: {
-      ...registry,
-      touches: mergeDomainTouches(contract.touches, registry?.touches),
-    },
+    registry: credentialMutationRegistry(registry, contract.touches),
     // Better Auth credential APIs use the Better Auth Drizzle adapter internally; wrapping that
     // call in Kovo's default app-db transaction nests the same in-process PGlite connection.
     transaction,
   };
+}
+
+function credentialMutationRegistry(
+  registry: MutationRegistry | undefined,
+  defaultTouches: readonly Domain[],
+): MutationRegistry {
+  if (
+    registry !== undefined &&
+    (typeof registry !== 'object' || registry === null || betterAuthArrayIsArray(registry))
+  ) {
+    throw new TypeError('Better Auth credential registry must be an object.');
+  }
+
+  const inferredTouches = snapshotCredentialRegistryArray<
+    NonNullable<MutationRegistry['inferredTouches']>[number]
+  >(registry, 'inferredTouches', 'Better Auth credential registry inferredTouches');
+  const queries = snapshotCredentialRegistryArray<NonNullable<MutationRegistry['queries']>[number]>(
+    registry,
+    'queries',
+    'Better Auth credential registry queries',
+  );
+  const tables = snapshotCredentialRegistryArray<string>(
+    registry,
+    'tables',
+    'Better Auth credential registry tables',
+  );
+  if (tables !== undefined) {
+    for (let index = 0; index < tables.length; index += 1) {
+      if (typeof tables[index] !== 'string') {
+        throw new TypeError('Better Auth credential registry tables must contain strings.');
+      }
+    }
+  }
+  const overrideTouches = snapshotCredentialRegistryArray<Domain>(
+    registry,
+    'touches',
+    'Better Auth credential registry touches',
+  );
+
+  return betterAuthFreezeOwn(
+    {
+      ...(inferredTouches === undefined ? {} : { inferredTouches }),
+      ...(queries === undefined ? {} : { queries }),
+      ...(tables === undefined ? {} : { tables }),
+      touches: mergeDomainTouches(defaultTouches, overrideTouches),
+    },
+    'Better Auth credential registry',
+  );
+}
+
+function snapshotCredentialRegistryArray<Value>(
+  registry: object | undefined,
+  property: PropertyKey,
+  label: string,
+): readonly Value[] | undefined {
+  if (registry === undefined) return undefined;
+  const value = betterAuthOwnDataOption<readonly Value[]>(registry, property, label);
+  return value === undefined
+    ? undefined
+    : betterAuthFreezeOwn(betterAuthSnapshotDenseArray(value, label), label);
 }
 
 function mergeDomainTouches(
@@ -411,12 +473,23 @@ function mergeDomainTouches(
   overrides: readonly Domain[] | undefined,
 ): Domain[] {
   const merged: Domain[] = [];
-  for (let index = 0; index < defaults.length; index += 1) {
-    betterAuthArrayAppend(merged, defaults[index]!, 'Better Auth credential domain touches');
+  const defaultSnapshot = betterAuthSnapshotDenseArray(
+    defaults,
+    'Better Auth credential default domain touches',
+  );
+  for (let index = 0; index < defaultSnapshot.length; index += 1) {
+    betterAuthArrayAppend(
+      merged,
+      snapshotCredentialDomain(defaultSnapshot[index], index),
+      'Better Auth credential domain touches',
+    );
   }
-  const additions = overrides ?? [];
+  const additions =
+    overrides === undefined
+      ? []
+      : betterAuthSnapshotDenseArray(overrides, 'Better Auth credential override domain touches');
   for (let index = 0; index < additions.length; index += 1) {
-    const item = additions[index]!;
+    const item = snapshotCredentialDomain(additions[index], defaultSnapshot.length + index);
     let existing = -1;
     for (let candidate = 0; candidate < merged.length; candidate += 1) {
       if (merged[candidate]!.key === item.key) {
@@ -426,9 +499,24 @@ function mergeDomainTouches(
     }
     if (existing < 0) {
       betterAuthArrayAppend(merged, item, 'Better Auth credential domain touches');
-    } else merged[existing] = item;
+    }
   }
-  return merged;
+  return betterAuthFreezeOwn(merged, 'Better Auth credential domain touches');
+}
+
+function snapshotCredentialDomain(value: unknown, index: number): Domain {
+  if (typeof value !== 'object' || value === null || betterAuthArrayIsArray(value)) {
+    throw new TypeError(`Better Auth credential domain touch ${index} must be an object.`);
+  }
+  const key = betterAuthOwnDataOption<string>(
+    value,
+    'key',
+    `Better Auth credential domain touch ${index}.key`,
+  );
+  if (typeof key !== 'string' || key === '') {
+    throw new TypeError(`Better Auth credential domain touch ${index}.key must be non-empty text.`);
+  }
+  return betterAuthDeepFreeze({ key }, `Better Auth credential domain touch ${index}`);
 }
 
 export function isBetterAuthCredentialMutationTouchGraphOptions(

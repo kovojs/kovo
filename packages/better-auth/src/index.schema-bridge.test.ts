@@ -503,6 +503,24 @@ describe('schema bridge', () => {
     });
   });
 
+  it('does not let exported metadata probes erase a later KV406 degradation', () => {
+    // SPEC §11.2 C9: attempted dependency probes are fail-closed audit authority. Exposing the
+    // backing array as mutable previously let a late consumer turn the default fact into “tried
+    // nothing,” undermining the diagnostic while leaving the successor metadata unavailable.
+    const expected = Array.from(betterAuthOAuthProviderSuccessorImportPaths);
+    const originalLength = betterAuthOAuthProviderSuccessorImportPaths.length;
+    const mutated = Reflect.set(betterAuthOAuthProviderSuccessorImportPaths, 'length', 0);
+    try {
+      expect(betterAuthOAuthProviderSuccessorMetadataDegradation().attemptedImports).toEqual(
+        expected,
+      );
+      expect(mutated).toBe(false);
+    } finally {
+      if (mutated)
+        Reflect.set(betterAuthOAuthProviderSuccessorImportPaths, 'length', originalLength);
+    }
+  });
+
   it('reports unavailable plugin metadata without fabricating schema mappings', () => {
     expect(
       betterAuthUnavailablePluginMetadataDegradation({
@@ -720,6 +738,64 @@ describe('schema bridge', () => {
     });
     expect(betterAuthTableDomain('webauthnCredential')).toBe(null);
     expect(betterAuthTableDomain('webauthnCredential', schemaBridge)).toBe('auth');
+  });
+
+  it('rejects inherited and accessor-backed nested schema annotations', () => {
+    // SPEC §10.1/§11.2 C9: a bridge annotation is security-classifier input. Its discriminant,
+    // owner key, and confidentiality list must be stable own data rather than prototype or getter
+    // authority that can diverge between schema emission and verifier construction.
+    const tables = {
+      account: authTable(['userId']),
+      futureCredential: authTable(['credentialId', 'userId']),
+      session: authTable(['userId']),
+      user: authTable(),
+      verification: authTable(),
+    };
+    const inherited = {
+      futureCredential: Object.create({ domain: 'auth', key: 'userId' }),
+    };
+    let reads = 0;
+    const accessor = {
+      futureCredential: Object.defineProperty({}, 'domain', {
+        enumerable: true,
+        get() {
+          reads += 1;
+          return 'auth';
+        },
+      }),
+    };
+
+    expect(() => validateBetterAuthSchemaBridge(tables, { schemaBridge: inherited })).toThrow(
+      'futureCredential must declare an own-data domain or exempt:true posture',
+    );
+    expect(() => validateBetterAuthSchemaBridge(tables, { schemaBridge: accessor })).toThrow(
+      'futureCredential.domain must be an own-data property',
+    );
+    expect(reads).toBe(0);
+  });
+
+  it('rejects accessor-backed declared table touches without invoking them', () => {
+    let reads = 0;
+    const touch = Object.defineProperty({}, 'table', {
+      enumerable: true,
+      get() {
+        reads += 1;
+        return 'session';
+      },
+    });
+
+    expect(() =>
+      validateBetterAuthSchemaBridge(
+        {
+          account: authTable(['userId']),
+          session: authTable(['userId']),
+          user: authTable(),
+          verification: authTable(),
+        },
+        { credentialMutationTableTouches: { signInEmail: [touch as never] } },
+      ),
+    ).toThrow('declared table touch 0.table must be an own-data property');
+    expect(reads).toBe(0);
   });
 
   it('keeps recognized future plugin tables unbridged with KV406 degradation facts', () => {

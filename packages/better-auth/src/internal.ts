@@ -78,6 +78,7 @@ import {
   betterAuthDefineOwnData,
   betterAuthDeepFreeze,
   betterAuthEndsWith,
+  betterAuthFreezeOwn,
   betterAuthIncludes,
   betterAuthIndexOf,
   betterAuthIsSafeInteger,
@@ -270,7 +271,29 @@ function betterAuthOperationTableTouches(
     Record<BetterAuthCredentialMutationApi, readonly BetterAuthOperationTableTouch[]>
   >,
 ): readonly BetterAuthOperationTableTouch[] {
-  return overrides?.[api] ?? betterAuthCredentialOperationContracts[api].tableTouches;
+  const override =
+    overrides === undefined
+      ? undefined
+      : betterAuthOwnDataOption<readonly BetterAuthOperationTableTouch[]>(
+          overrides,
+          api,
+          `Better Auth ${api} declared table touch override`,
+        );
+  return override ?? betterAuthCredentialOperationContracts[api].tableTouches;
+}
+
+function betterAuthOperationTouchTable(
+  touch: BetterAuthOperationTableTouch,
+  label: string,
+): string {
+  if (touch === null || typeof touch !== 'object' || betterAuthArrayIsArray(touch)) {
+    throw new TypeError(`${label} must be an object.`);
+  }
+  const table = betterAuthOwnDataOption<string>(touch, 'table', `${label}.table`);
+  if (typeof table !== 'string' || table === '') {
+    throw new TypeError(`${label}.table must be non-empty text.`);
+  }
+  return table;
 }
 
 function deriveBetterAuthDeclaredTableTouches(
@@ -290,11 +313,15 @@ function deriveBetterAuthDeclaredTableTouches(
   const declared: BetterAuthDeclaredTableTouch[] = [];
   for (let index = 0; index < touches.length; index += 1) {
     const touch = touches[index]!;
-    const bridge = betterAuthSchemaBridgeAnnotation(touch.table, schemaBridge);
+    const table = betterAuthOperationTouchTable(
+      touch,
+      `Better Auth ${api} declared table touch ${index}`,
+    );
+    const bridge = betterAuthSchemaBridgeAnnotation(table, schemaBridge);
     if (bridge === undefined || !('domain' in bridge)) continue;
     betterAuthArrayAppend(
       declared,
-      { domain: bridge.domain, table: touch.table },
+      { domain: bridge.domain, table },
       `Better Auth ${api} declared table touches`,
     );
   }
@@ -1349,29 +1376,32 @@ function declaredTableTouchMismatches(
   for (let apiIndex = 0; apiIndex < apis.length; apiIndex += 1) {
     const api = apis[apiIndex]!;
     const touches = betterAuthSnapshotDenseArray(
-      options.credentialMutationTableTouches?.[api] ??
-        betterAuthCredentialOperationContracts[api].tableTouches,
+      betterAuthOperationTableTouches(api, options.credentialMutationTableTouches),
       `Better Auth ${api} declared-touch validation`,
     );
     const declaredTouchDomains: BetterAuthTouchDomain[] = [];
 
     for (let touchIndex = 0; touchIndex < touches.length; touchIndex += 1) {
       const touch = touches[touchIndex]!;
-      if (!betterAuthSetHas(tableNames, touch.table)) {
+      const table = betterAuthOperationTouchTable(
+        touch,
+        `Better Auth ${api} declared table touch ${touchIndex}`,
+      );
+      if (!betterAuthSetHas(tableNames, table)) {
         betterAuthArrayAppend(
           mismatches,
-          `${api}.${touch.table} is declared touched but Better Auth table metadata is missing that table`,
+          `${api}.${table} is declared touched but Better Auth table metadata is missing that table`,
           'Better Auth declared-touch mismatches',
         );
         continue;
       }
 
-      const bridge = betterAuthSchemaBridgeAnnotation(touch.table, schemaBridge);
+      const bridge = betterAuthSchemaBridgeAnnotation(table, schemaBridge);
 
       if (bridge === undefined) {
         betterAuthArrayAppend(
           mismatches,
-          `${api}.${touch.table} is declared touched but outside the Better Auth schema bridge`,
+          `${api}.${table} is declared touched but outside the Better Auth schema bridge`,
           'Better Auth declared-touch mismatches',
         );
         continue;
@@ -1380,7 +1410,7 @@ function declaredTableTouchMismatches(
       if (!('domain' in bridge)) {
         betterAuthArrayAppend(
           mismatches,
-          `${api}.${touch.table} is declared touched but schema-bridge exempt`,
+          `${api}.${table} is declared touched but schema-bridge exempt`,
           'Better Auth declared-touch mismatches',
         );
         continue;
@@ -1391,11 +1421,15 @@ function declaredTableTouchMismatches(
         bridge.domain,
         `Better Auth ${api} declared-touch domains`,
       );
-      const legacyDomain = (touch as Partial<BetterAuthDeclaredTableTouch>).domain;
+      const legacyDomain = betterAuthOwnDataOption<BetterAuthTouchDomain>(
+        touch,
+        'domain',
+        `Better Auth ${api} declared table touch ${touchIndex}.domain`,
+      );
       if (legacyDomain !== undefined && bridge.domain !== legacyDomain) {
         betterAuthArrayAppend(
           mismatches,
-          `${api}.${touch.table} declares ${legacyDomain} but schema bridge maps ${bridge.domain}`,
+          `${api}.${table} declares ${legacyDomain} but schema bridge maps ${bridge.domain}`,
           'Better Auth declared-touch mismatches',
         );
       }
@@ -1903,38 +1937,44 @@ export function betterAuthCredentialSecretFields(fields: ReadonlySet<string>): r
  * SPEC.md §10.1 C10: the completeness test in `index.schema-bridge.test.ts` binds the classifier to
  * this set so a regression that stops classifying a real credential column fails closed (RED).
  */
-export const betterAuthKnownPluginCredentialColumns = [
-  'accessToken', // account / oauthAccessToken OAuth bearer credential
-  'backupCodes', // twoFactor recovery codes
-  'clientSecret', // oauthApplication registered client secret
-  'idToken', // account OIDC id token
-  'key', // apiKey plugin stored API-key credential
-  'password', // account password hash
-  'privateKey', // jwks signing-key material
-  'refreshToken', // account / oauthAccessToken OAuth refresh credential
-  'secret', // twoFactor TOTP shared secret
-  'token', // session bearer credential
-] as const;
+export const betterAuthKnownPluginCredentialColumns = betterAuthDeepFreeze(
+  [
+    'accessToken', // account / oauthAccessToken OAuth bearer credential
+    'backupCodes', // twoFactor recovery codes
+    'clientSecret', // oauthApplication registered client secret
+    'idToken', // account OIDC id token
+    'key', // apiKey plugin stored API-key credential
+    'password', // account password hash
+    'privateKey', // jwks signing-key material
+    'refreshToken', // account / oauthAccessToken OAuth refresh credential
+    'secret', // twoFactor TOTP shared secret
+    'token', // session bearer credential
+  ] as const,
+  'Better Auth known plugin credential columns',
+);
 
 /**
  * @internal Better Auth columns that MUST stay readable (never classified secret) — used by the
  * completeness test to prove the positive rule does not over-block ordinary owner-scoped columns.
  */
-export const betterAuthKnownReadablePluginColumns = [
-  'accessTokenExpiresAt',
-  'createdAt',
-  'expiresAt',
-  'id',
-  'ipAddress',
-  'name',
-  'prefix',
-  'provider',
-  'refreshTokenExpiresAt',
-  'scope',
-  'start',
-  'updatedAt',
-  'userId',
-] as const;
+export const betterAuthKnownReadablePluginColumns = betterAuthDeepFreeze(
+  [
+    'accessTokenExpiresAt',
+    'createdAt',
+    'expiresAt',
+    'id',
+    'ipAddress',
+    'name',
+    'prefix',
+    'provider',
+    'refreshTokenExpiresAt',
+    'scope',
+    'start',
+    'updatedAt',
+    'userId',
+  ] as const,
+  'Better Auth known readable plugin columns',
+);
 
 const betterAuthSchemaTableNames = betterAuthSetFromStrings(
   betterAuthObjectKeys(betterAuthSchemaBridge, 'Better Auth built-in schema table names'),
@@ -1953,14 +1993,14 @@ function betterAuthSchemaBridgeAnnotation(
 function createBetterAuthSchemaBridge(
   extensions: BetterAuthSchemaBridgeExtensions = {},
 ): BetterAuthSchemaBridgeExtensions {
+  assertBetterAuthOptionsObject(extensions, 'Better Auth schema bridge extensions');
   const bridge: BetterAuthSchemaBridgeExtensions = {};
   const extensionTables = betterAuthObjectKeys(extensions, 'Better Auth schema bridge extensions');
   for (let index = 0; index < extensionTables.length; index += 1) {
     const table = extensionTables[index]!;
-    const annotation = betterAuthOwnDataValue(
-      extensions,
-      table,
-      'Better Auth schema bridge extensions',
+    const annotation = snapshotBetterAuthSchemaBridgeAnnotation(
+      betterAuthOwnDataValue(extensions, table, 'Better Auth schema bridge extensions'),
+      `Better Auth schema bridge extension ${table}`,
     );
     betterAuthDefineOwnData(bridge, table, annotation, 'Better Auth schema bridge extensions');
   }
@@ -1970,14 +2010,69 @@ function createBetterAuthSchemaBridge(
   );
   for (let index = 0; index < builtInTables.length; index += 1) {
     const table = builtInTables[index]!;
-    const annotation = betterAuthOwnDataValue(
-      betterAuthSchemaBridge,
-      table,
-      'Better Auth built-in schema bridge',
+    const annotation = snapshotBetterAuthSchemaBridgeAnnotation(
+      betterAuthOwnDataValue(betterAuthSchemaBridge, table, 'Better Auth built-in schema bridge'),
+      `Better Auth built-in schema bridge ${table}`,
     );
     betterAuthDefineOwnData(bridge, table, annotation, 'Better Auth built-in schema bridge');
   }
   return bridge;
+}
+
+function snapshotBetterAuthSchemaBridgeAnnotation(
+  value: unknown,
+  label: string,
+): BetterAuthSchemaBridgeAnnotation {
+  if (value === null || typeof value !== 'object' || betterAuthArrayIsArray(value)) {
+    throw new TypeError(`${label} must be an object.`);
+  }
+
+  const domain = betterAuthOwnDataOption<BetterAuthTouchDomain>(value, 'domain', `${label}.domain`);
+  const exempt = betterAuthOwnDataOption<boolean>(value, 'exempt', `${label}.exempt`);
+  const key = betterAuthOwnDataOption<string>(value, 'key', `${label}.key`);
+  const rationale = betterAuthOwnDataOption<string>(value, 'rationale', `${label}.rationale`);
+  const secret = betterAuthOwnDataOption<readonly string[]>(value, 'secret', `${label}.secret`);
+
+  if (domain !== undefined) {
+    if (domain !== 'auth' && domain !== 'organization' && domain !== 'user') {
+      throw new TypeError(`${label}.domain must be auth, organization, or user.`);
+    }
+    if (exempt !== undefined || rationale !== undefined) {
+      throw new TypeError(`${label} cannot declare both domain and exempt posture.`);
+    }
+    if (key !== undefined && (typeof key !== 'string' || key === '')) {
+      throw new TypeError(`${label}.key must be non-empty text when provided.`);
+    }
+    let secretSnapshot: readonly string[] | undefined;
+    if (secret !== undefined) {
+      const fields = betterAuthSnapshotDenseArray(secret, `${label}.secret`);
+      for (let index = 0; index < fields.length; index += 1) {
+        if (typeof fields[index] !== 'string' || fields[index] === '') {
+          throw new TypeError(`${label}.secret must contain non-empty field names.`);
+        }
+      }
+      secretSnapshot = betterAuthFreezeOwn(fields, `${label}.secret`);
+    }
+    return betterAuthDeepFreeze(
+      {
+        domain,
+        ...(key === undefined ? {} : { key }),
+        ...(secretSnapshot === undefined ? {} : { secret: secretSnapshot }),
+      },
+      label,
+    );
+  }
+
+  if (exempt !== true) {
+    throw new TypeError(`${label} must declare an own-data domain or exempt:true posture.`);
+  }
+  if (key !== undefined || secret !== undefined) {
+    throw new TypeError(`${label} cannot attach domain fields to exempt posture.`);
+  }
+  if (typeof rationale !== 'string' || rationale === '') {
+    throw new TypeError(`${label}.rationale must be non-empty text.`);
+  }
+  return betterAuthDeepFreeze({ exempt: true, rationale }, label);
 }
 
 function schemaBridgeExtensionCollisionMismatches(

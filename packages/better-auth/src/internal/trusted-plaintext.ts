@@ -179,6 +179,26 @@ export function getBetterAuthSetCookie(headers: Headers | null | undefined): str
   assertBetterAuthRequestSecretPath('better-auth.set-cookie.forwarding');
   assertBetterAuthRequestSecretPath('better-auth.session-refresh.set-cookie');
   if (headers === null || headers === undefined) return [];
+
+  // A native Headers instance is positive platform evidence. Read it through the boot-pinned
+  // brand-checked methods before considering structural extension methods: an app can otherwise
+  // add an own `getSetCookie` shadow that forges session establishment without changing the real
+  // header bag (SPEC §6.5/§9.1 C9).
+  if (typeof nativeHeadersGet === 'function') {
+    try {
+      if (typeof nativeHeadersGetSetCookie === 'function') {
+        return copySetCookieValues(betterAuthApply(nativeHeadersGetSetCookie, headers, []));
+      }
+      const nativeCookie = betterAuthApply<unknown>(nativeHeadersGet, headers, ['set-cookie']);
+      return typeof nativeCookie === 'string' && nativeCookie !== ''
+        ? splitFoldedSetCookie(nativeCookie)
+        : [];
+    } catch {
+      // A brand failure identifies a structural compatibility header bag. Inspect only own-data
+      // methods below; never inherit ambient prototype authority.
+    }
+  }
+
   const ownGetSetCookie = betterAuthGetOwnPropertyDescriptor(headers, 'getSetCookie');
   if (
     ownGetSetCookie !== undefined &&
@@ -188,19 +208,7 @@ export function getBetterAuthSetCookie(headers: Headers | null | undefined): str
     return copySetCookieValues(betterAuthApply(ownGetSetCookie.value, headers, []));
   }
 
-  let cookie: string | null;
-  if (typeof nativeHeadersGet === 'function') {
-    try {
-      if (typeof nativeHeadersGetSetCookie === 'function') {
-        return copySetCookieValues(betterAuthApply(nativeHeadersGetSetCookie, headers, []));
-      }
-      cookie = betterAuthApply(nativeHeadersGet, headers, ['set-cookie']);
-    } catch {
-      cookie = readStructuralSetCookie(headers);
-    }
-  } else {
-    cookie = readStructuralSetCookie(headers);
-  }
+  const cookie = readStructuralSetCookie(headers);
   if (!cookie) return [];
 
   return splitFoldedSetCookie(cookie);
