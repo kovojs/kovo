@@ -278,8 +278,7 @@ export async function writeKovoNeutralBuild(
   const serverHandlerPath =
     serverHandlerSource === undefined ? undefined : neutralPathJoin(serverDir, 'handler.mjs');
   if (serverHandlerSource !== undefined && serverHandlerPath !== undefined) {
-    const serverOutput = createFrameworkOutputFileSystemBoundary(serverDir);
-    await serverOutput.writeFile('handler.mjs', serverHandlerSource);
+    await neutralOutput.writeFile('server/handler.mjs', serverHandlerSource);
   }
   await copyNeutralStaticAssets(appShellBuild.assets, clientDir, manifestDistDir);
   await materializeNeutralStylesheetAssets({
@@ -336,18 +335,18 @@ export async function writeKovoNeutralBuild(
     version: neutralBuildVersion,
   };
 
-  await writeJson(manifestPath, {
+  await writeJsonTo(neutralOutput, 'manifest.json', {
     assets: buildWithRegisteredClientModules.assets,
     clientModules: neutralBuildClientModuleMetadata(buildWithRegisteredClientModules.clientModules),
     routeHints: buildWithRegisteredClientModules.routeHints,
     tasks: neutral.tasks,
     version: neutralBuildVersion,
   });
-  await writeJson(routesPath, {
+  await writeJsonTo(neutralOutput, 'routes.json', {
     routes: neutralBuildRouteEntries(buildWithRegisteredClientModules.app, staticOutput),
     version: neutralBuildVersion,
   });
-  await writeJson(metaPath, {
+  await writeJsonTo(neutralOutput, 'meta.json', {
     hasServerHandler: serverHandlerPath !== undefined,
     staticOnly: neutral.staticOnly,
     tasks: neutral.tasks,
@@ -675,8 +674,10 @@ async function copyNeutralStaticAssets(
 ): Promise<void> {
   if (manifestDistDir === undefined) return;
   const output = createFrameworkOutputFileSystemBoundary(clientDir);
+  const pinnedAssets = snapshotBuildArray(assets, 'neutral static asset copy entries');
 
-  for (const asset of assets) {
+  for (let index = 0; index < pinnedAssets.length; index += 1) {
+    const asset = pinnedAssets[index]!;
     const outputPath = neutralClientOutputPath(clientDir, asset.path);
     const relativePath = neutralPathRelative(clientDir, outputPath);
     await output.copyFile(viteDistSourcePath(manifestDistDir, asset.file), relativePath);
@@ -1057,6 +1058,14 @@ async function writeJson(filePath: string, value: unknown): Promise<void> {
     neutralPathRelative(parent, filePath),
     `${buildSecuritySourceLiteral(value)}\n`,
   );
+}
+
+async function writeJsonTo(
+  output: FrameworkOutputFileSystemBoundary,
+  relativePath: string,
+  value: unknown,
+): Promise<void> {
+  await output.writeFile(relativePath, `${buildSecuritySourceLiteral(value)}\n`);
 }
 
 function neutralPathDirname(value: string): string {
