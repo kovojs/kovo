@@ -1,3 +1,5 @@
+/* oxlint-disable typescript/unbound-method -- Boot-captured Web/string controls are invoked through pinned Reflect.apply. */
+
 import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
 import { wireEmitter } from '@kovojs/core/internal/security-markers';
 import {
@@ -52,6 +54,7 @@ import {
   witnessWeakSetAdd,
   witnessWeakSetHas,
 } from './security-witness-intrinsics.js';
+import { securityStringTrim } from './response-security-intrinsics.js';
 
 const nativeStringIncludes = String.prototype.includes;
 const nativeStringStartsWith = String.prototype.startsWith;
@@ -526,7 +529,7 @@ function frameworkPeerAddress(request: Request): string | undefined {
   ) {
     return undefined;
   }
-  const value = descriptor.value.trim();
+  const value = securityStringTrim(descriptor.value);
   return value === '' ? undefined : value;
 }
 

@@ -6,6 +6,7 @@ import {
   requestUrl,
   requestUrlSnapshot,
 } from './request-body-intrinsics.js';
+import { witnessGetOwnPropertyDescriptor, witnessIsArray } from './security-witness-intrinsics.js';
 
 /**
  * Trusted transport scheme provenance for framework security decisions.
@@ -48,5 +49,11 @@ export function trustedNodeRequestScheme(
 }
 
 function firstHeaderValue(value: string | string[] | undefined): string | undefined {
-  return Array.isArray(value) ? value[0] : value;
+  if (!witnessIsArray(value)) return value;
+  const first = witnessGetOwnPropertyDescriptor(value, 0);
+  if (first === undefined) return undefined;
+  if (!('value' in first) || typeof first.value !== 'string') {
+    throw new TypeError('Trusted request scheme headers must contain stable own strings.');
+  }
+  return first.value;
 }

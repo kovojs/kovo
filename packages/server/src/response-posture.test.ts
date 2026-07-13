@@ -310,6 +310,29 @@ describe('central response posture finalization', () => {
     expect(JSON.stringify([...metadata.headers])).not.toContain('SECRET');
   });
 
+  it('preserves framework peer identity under late String.trim poison', () => {
+    const request = new Request('https://example.test/_m/run');
+    Object.defineProperty(request, '__kovoPeerAddress', {
+      configurable: true,
+      enumerable: false,
+      value: ' 203.0.113.42 ',
+      writable: false,
+    });
+    const originalTrim = String.prototype.trim;
+    let metadata: Request | undefined;
+    try {
+      String.prototype.trim = () => '';
+      metadata = requestMetadataWithoutAmbientAuthority(request);
+    } finally {
+      String.prototype.trim = originalTrim;
+    }
+
+    expect(Object.getOwnPropertyDescriptor(metadata, '__kovoPeerAddress')).toMatchObject({
+      enumerable: false,
+      value: '203.0.113.42',
+    });
+  });
+
   it('mirrors abort timing without exposing caller-controlled abort reasons', () => {
     const immediate = new AbortController();
     const immediateSecret = { headers: new Headers({ Cookie: 'sid=victim' }) };
