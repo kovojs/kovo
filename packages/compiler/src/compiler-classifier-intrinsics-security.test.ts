@@ -296,6 +296,77 @@ export const addToCart = mutation({
     expect(poisonHits).toBe(0);
   });
 
+  it('does not suppress non-literal regex diagnostics through late Array.push replacement', () => {
+    const nativePush = Array.prototype.push;
+    const nativeApply = Reflect.apply;
+    let poisonHits = 0;
+    let result: ReturnType<typeof compileComponentModule> | undefined;
+    try {
+      Array.prototype.push = function poisonedRegexDiagnosticPush<T>(...values: T[]): number {
+        if ((values[0] as { code?: unknown } | undefined)?.code === 'KV434') {
+          poisonHits += 1;
+          return this.length;
+        }
+        return nativeApply(nativePush, this, values);
+      };
+      result = compileComponentModule({
+        fileName: 'schema.ts',
+        source: `
+const buildPattern = () => /safe/;
+export const input = s.string().pattern(buildPattern());
+`,
+      });
+    } finally {
+      Array.prototype.push = nativePush;
+    }
+    expect(result?.diagnostics.filter((diagnostic) => diagnostic.code === 'KV434')).toHaveLength(1);
+    expect(poisonHits).toBe(0);
+  });
+
+  it('does not accept non-ASCII case-folding through late String.includes replacement', () => {
+    const nativeIncludes = String.prototype.includes;
+    const nativeApply = Reflect.apply;
+    let poisonHits = 0;
+    let result: ReturnType<typeof compileComponentModule> | undefined;
+    try {
+      String.prototype.includes = function poisonedRegexFlagIncludes(
+        search: string,
+        position?: number,
+      ): boolean {
+        if (this.valueOf() === 'i' && search === 'i') {
+          poisonHits += 1;
+          return false;
+        }
+        return nativeApply(nativeIncludes, this, [search, position]);
+      };
+      result = compileComponentModule({
+        fileName: 'schema.ts',
+        source: 'export const input = s.string().pattern(/é/i);',
+      });
+    } finally {
+      String.prototype.includes = nativeIncludes;
+    }
+    expect(result?.diagnostics.filter((diagnostic) => diagnostic.code === 'KV434')).toHaveLength(1);
+    expect(poisonHits).toBe(0);
+  });
+
+  it('does not accept invalid regex syntax through late global RegExp replacement', () => {
+    const nativeRegExp = globalThis.RegExp;
+    let result: ReturnType<typeof compileComponentModule> | undefined;
+    try {
+      globalThis.RegExp = function permissiveRegExp(): RegExp {
+        return /safe/;
+      } as unknown as RegExpConstructor;
+      result = compileComponentModule({
+        fileName: 'schema.ts',
+        source: 'export const input = s.string().pattern("(");',
+      });
+    } finally {
+      globalThis.RegExp = nativeRegExp;
+    }
+    expect(result?.diagnostics.filter((diagnostic) => diagnostic.code === 'KV434')).toHaveLength(1);
+  });
+
   it('does not publish a captured server secret through stateful Array.filter replacement', () => {
     const nativeFilter = Array.prototype.filter;
     const nativeApply = Reflect.apply;

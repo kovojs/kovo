@@ -612,6 +612,16 @@ export function compilerRegExpExec(value: RegExp, input: string): RegExpExecArra
   return apply(nativeRegExpExec, value, [input]);
 }
 
+export function compilerRegExpIsValid(source: string, flags: string): boolean {
+  assertCompilerSecurityIntrinsics();
+  try {
+    new NativeRegExp(source, flags);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function compilerRegExpReplace(
   expression: RegExp,
   input: string,

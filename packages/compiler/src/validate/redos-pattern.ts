@@ -1,5 +1,17 @@
 import * as ts from 'typescript';
 
+import {
+  compilerArrayAppend,
+  compilerArrayLength,
+  compilerCreateSet,
+  compilerOwnDataValue,
+  compilerRegExpIsValid,
+  compilerSetAdd,
+  compilerSetHas,
+  compilerStringCharCodeAt,
+  compilerStringIncludes,
+  compilerStringSlice,
+} from '../compiler-security-intrinsics.js';
 import { type CompilerDiagnostic, type DiagnosticFactory } from '../diagnostics.js';
 import { unwrapExpression } from '../scan/ast.js';
 import type { ComponentModuleModel } from '../scan/parse.js';
@@ -21,12 +33,14 @@ export function validateNonLiteralPattern(
   const visit = (node: ts.Node): void => {
     const flagged = unsupportedPatternCall(node);
     if (flagged) {
-      found.push(
+      compilerArrayAppend(
+        found,
         diagnostics.at(
           'KV434',
           { length: flagged.end - flagged.start, start: flagged.start },
           flagged.reason,
         ),
+        'ReDoS pattern diagnostics',
       );
     }
     ts.forEachChild(node, visit);
@@ -46,7 +60,13 @@ function unsupportedPatternCall(
   }
   if (!receiverRootsAtStringSchema(callee.expression)) return null;
 
-  const [arg] = node.arguments;
+  const argumentLength = compilerArrayLength(node.arguments, 'Pattern call arguments');
+  const arg =
+    argumentLength === 0
+      ? undefined
+      : (compilerOwnDataValue(node.arguments, 0, 'Pattern call arguments') as
+          | ts.Expression
+          | undefined);
   if (!arg) return null;
   const literal = compileVisiblePatternLiteral(arg);
   if (literal === null) {
@@ -90,10 +110,20 @@ function compileVisiblePatternLiteral(
 
 function regexLiteral(node: ts.RegularExpressionLiteral): { flags: string; source: string } {
   const text = node.text;
-  const lastSlash = text.lastIndexOf('/');
+  const lastSlash = lastSlashIndex(text);
   return lastSlash > 0
-    ? { flags: text.slice(lastSlash + 1), source: text.slice(1, lastSlash) }
+    ? {
+        flags: compilerStringSlice(text, lastSlash + 1),
+        source: compilerStringSlice(text, 1, lastSlash),
+      }
     : { flags: '', source: text };
+}
+
+function lastSlashIndex(value: string): number {
+  for (let index = value.length - 1; index >= 0; index -= 1) {
+    if (compilerStringCharCodeAt(value, index) === 0x2f) return index;
+  }
+  return -1;
 }
 
 function receiverRootsAtStringSchema(receiver: ts.Expression): boolean {
@@ -127,17 +157,17 @@ function receiverRootsAtStringSchema(receiver: ts.Expression): boolean {
 
 function isSupportedLinearRegexLiteral(source: string, flags: string): boolean {
   if (!supportedFlags(flags)) return false;
-  if (flags.includes('i') && containsNonAscii(source)) return false;
+  if (compilerStringIncludes(flags, 'i') && containsNonAscii(source)) return false;
 
   for (let i = 0; i < source.length; i += 1) {
-    const ch = source[i];
+    const ch = stringCharacterAt(source, i);
     if (ch === '\\') {
-      const escaped = source[i + 1];
-      if (escaped === undefined) return false;
+      if (i + 1 >= source.length) return false;
+      const escaped = stringCharacterAt(source, i + 1);
       if (escaped === 'x' || escaped === 'u' || escaped === 'c') return false;
       if ((escaped >= '1' && escaped <= '9') || escaped === 'k') return false;
       if (escaped === 'p' || escaped === 'P') return false;
-      if (escaped === '0' && isDigitCode(source.charCodeAt(i + 2))) return false;
+      if (escaped === '0' && isDigitCode(compilerStringCharCodeAt(source, i + 2))) return false;
       i += 1;
       continue;
     }
@@ -148,41 +178,46 @@ function isSupportedLinearRegexLiteral(source: string, flags: string): boolean {
       continue;
     }
     if (ch === '(') {
-      const next = source[i + 1];
-      const after = source[i + 2];
+      const next = stringCharacterAt(source, i + 1);
+      const after = stringCharacterAt(source, i + 2);
       if (next === '?' && after !== ':') return false;
       continue;
     }
   }
 
-  try {
-    new RegExp(source, flags.replace(/[gy]/g, ''));
-    return true;
-  } catch {
-    return false;
-  }
+  return compilerRegExpIsValid(source, runtimeRegexFlags(flags));
 }
 
 function supportedFlags(flags: string): boolean {
-  const seen = new Set<string>();
-  for (const flag of flags) {
-    if (seen.has(flag)) return false;
-    seen.add(flag);
+  const seen = compilerCreateSet<string>();
+  for (let index = 0; index < flags.length; index += 1) {
+    const flag = stringCharacterAt(flags, index);
+    if (compilerSetHas(seen, flag)) return false;
+    compilerSetAdd(seen, flag);
     if (flag !== 'i' && flag !== 'm' && flag !== 's' && flag !== 'g' && flag !== 'y') return false;
   }
   return true;
 }
 
+function runtimeRegexFlags(flags: string): string {
+  let result = '';
+  for (let index = 0; index < flags.length; index += 1) {
+    const flag = stringCharacterAt(flags, index);
+    if (flag !== 'g' && flag !== 'y') result += flag;
+  }
+  return result;
+}
+
 function classClose(source: string, open: number): number {
   for (let i = open + 1; i < source.length; i += 1) {
-    const ch = source[i];
+    const ch = stringCharacterAt(source, i);
     if (ch === '\\') {
-      const escaped = source[i + 1];
-      if (escaped === undefined) return -1;
+      if (i + 1 >= source.length) return -1;
+      const escaped = stringCharacterAt(source, i + 1);
       if (escaped === 'x' || escaped === 'u' || escaped === 'c') return -1;
       if (escaped >= '1' && escaped <= '9') return -1;
       if (escaped === 'p' || escaped === 'P' || escaped === 'k') return -1;
-      if (escaped === '0' && isDigitCode(source.charCodeAt(i + 2))) return -1;
+      if (escaped === '0' && isDigitCode(compilerStringCharCodeAt(source, i + 2))) return -1;
       i += 1;
       continue;
     }
@@ -197,11 +232,17 @@ function isDigitCode(code: number): boolean {
 
 function containsNonAscii(value: string): boolean {
   for (let i = 0; i < value.length; i += 1) {
-    if (value.charCodeAt(i) > 0x7f) return true;
+    if (compilerStringCharCodeAt(value, i) > 0x7f) return true;
   }
   return false;
 }
 
 function identifierName(name: ts.MemberName): string | null {
-  return ts.isIdentifier(name) ? String(name.escapedText) : null;
+  if (!ts.isIdentifier(name)) return null;
+  return typeof name.escapedText === 'string' ? name.escapedText : null;
+}
+
+function stringCharacterAt(value: string, index: number): string {
+  if (index < 0 || index >= value.length) return '';
+  return compilerStringSlice(value, index, index + 1);
 }
