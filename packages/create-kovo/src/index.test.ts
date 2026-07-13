@@ -330,6 +330,9 @@ describe('create-kovo starter (metadata)', () => {
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
       'export function createAppAuthBindings(options: AppAuthBindingOptions)',
     );
+    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
+      "if (process.env.NODE_ENV === 'production') return;",
+    );
     expect(files.get('src/_kovo/app-runtime-db.ts')).not.toContain('export const appRuntimeAuthDb');
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
       'export function appRuntimeDbProvider(request?: unknown): AppDb',
@@ -883,6 +886,12 @@ describe('create-kovo starter (metadata)', () => {
     // rules/dependency-policy.md: the experimental native SQLite runtime is still an
     // exact-pinned dependency so a fresh scaffold cannot silently install a new binary.
     expect(packageJson.dependencies?.['better-sqlite3']).toBe('12.11.1');
+    expect(files.get('package.json')).toContain(
+      '"start": "NODE_ENV=production node dist/server/server.mjs"',
+    );
+    expect(files.get('package.json')).toContain(
+      '"serve": "pnpm run build:prod && NODE_ENV=production node dist/server/server.mjs"',
+    );
     expect(files.get('package.json')).not.toContain('"@electric-sql/pglite"');
     expect(packageJson.pnpm?.onlyBuiltDependencies).toEqual(['better-sqlite3']);
     expect(files.get('src/db.ts')).toContain(
@@ -959,6 +968,9 @@ describe('create-kovo starter (metadata)', () => {
     );
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
       'export function appRuntimeDbProvider(request?: unknown): AppDb',
+    );
+    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
+      "if (process.env.NODE_ENV === 'production') return;",
     );
     expect(files.get('src/_kovo/app-runtime-db.ts')).not.toContain('__kovoStarterAppDatabase');
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(

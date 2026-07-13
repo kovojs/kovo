@@ -150,6 +150,10 @@ export function createAppAuthBindings(options: AppAuthBindingOptions) {
   });
 
   async function seedDemoUser(): Promise<void> {
+    // SPEC §2/§6.6: the generated credential is a local-development convenience,
+    // never a production authentication path. A copied gitignored .env must not
+    // silently provision a known demo principal when the deploy artifact boots.
+    if (process.env.NODE_ENV === 'production') return;
     const password = process.env.KOVO_DEMO_PASSWORD;
     if (!password || password === 'replace-with-a-local-demo-password') return;
 

@@ -20,6 +20,83 @@ import {
 import { buildReusableProductionArtifact, waitForTcpPort } from './index.build.test-support.js';
 
 describe('create-kovo starter (build integration: runtime and dev server)', () => {
+  it('does not seed the generated local demo credential when a production artifact boots', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'create-kovo-prod-demo-seed-'));
+    const port = await reservePort();
+    let prodServer: ChildProcessWithoutNullStreams | undefined;
+
+    try {
+      writeKovoProject(root, {
+        dialect: 'sqlite',
+        disableGit: true,
+        name: 'Production Demo Seed Proof',
+      });
+      linkStarterBuildDependencies(root);
+      buildReusableProductionArtifact(root);
+
+      prodServer = spawn(process.execPath, ['dist/server/server.mjs'], {
+        cwd: root,
+        detached: process.platform !== 'win32',
+        env: {
+          ...withRepoBinOnPath(),
+          HOST: '127.0.0.1',
+          NODE_ENV: 'production',
+          PORT: String(port),
+        },
+      });
+      const output = collectOutput(prodServer);
+      await waitForTcpPort('127.0.0.1', port, output);
+
+      const origin = `http://127.0.0.1:${port}`;
+      const jar = new Map<string, string>();
+      const login = await fetch(`${origin}/login`);
+      mergeCookies(jar, login.headers.getSetCookie());
+      const loginHtml = await login.text();
+      const csrf = /name="csrf"\s+value="([^"]+)"/.exec(loginHtml)?.[1] ?? '';
+      const generatedDemoPassword =
+        new RegExp(`^${demoPasswordEnvVar}=(.+)$`, 'm').exec(
+          readFileSync(join(root, '.env'), 'utf8'),
+        )?.[1] ?? '';
+
+      expect(login.status, `${loginHtml}\n${output()}`).toBe(200);
+      expect(csrf).toBeTruthy();
+      expect(generatedDemoPassword).toBeTruthy();
+
+      const signIn = await fetch(`${origin}/_m/auth/sign-in`, {
+        body: new URLSearchParams({
+          csrf,
+          email: 'demo@example.com',
+          next: '/',
+          password: generatedDemoPassword,
+        }),
+        headers: {
+          'content-type': 'application/x-www-form-urlencoded',
+          cookie: cookieHeader(jar),
+          origin,
+        },
+        method: 'POST',
+        redirect: 'manual',
+      });
+      mergeCookies(jar, signIn.headers.getSetCookie());
+      const signInBody = await signIn.text();
+
+      // SPEC §2/§6.6: a generated development credential must not become a production
+      // authentication path merely because the deployment copied the gitignored .env file.
+      expect(signIn.status, `${signInBody}\n${output()}`).toBe(422);
+      expect(signIn.headers.getSetCookie().join('\n')).not.toContain('better-auth.session_token');
+
+      const home = await fetch(`${origin}/`, {
+        headers: { cookie: cookieHeader(jar) },
+        redirect: 'manual',
+      });
+      expect(home.status).toBe(303);
+      expect(home.headers.get('location')).toBe('/login?next=%2F');
+    } finally {
+      await stopProcess(prodServer);
+      rmSync(root, { force: true, recursive: true });
+    }
+  }, 180_000);
+
   it('serves production assets and replays anonymous enhanced sign-in by CSRF cookie', async () => {
     const tempParent = tmpdir();
     mkdirSync(tempParent, { recursive: true });
