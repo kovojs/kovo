@@ -27,6 +27,23 @@ describe('shared URL sink security facts', () => {
     expect(hasUnsafeUrlScheme('data:text/html,<svg onload=alert(1)>')).toBe(true);
   });
 
+  it('does not expose mutable URL sink policy to app imports', () => {
+    const scheme = SAFE_URL_SCHEMES[0]!;
+    const attribute = URL_ATTRIBUTE_NAMES[0]!;
+    const changedScheme = Reflect.set(SAFE_URL_SCHEMES, 0, 'javascript');
+    const changedAttribute = Reflect.set(URL_ATTRIBUTE_NAMES, 0, 'data-attacker');
+
+    try {
+      expect(changedScheme).toBe(false);
+      expect(changedAttribute).toBe(false);
+      expect(SAFE_URL_SCHEMES[0]).toBe(scheme);
+      expect(URL_ATTRIBUTE_NAMES[0]).toBe(attribute);
+    } finally {
+      Reflect.set(SAFE_URL_SCHEMES, 0, scheme);
+      Reflect.set(URL_ATTRIBUTE_NAMES, 0, attribute);
+    }
+  });
+
   it('sanitizes render URLs through the shared core sink policy', () => {
     expect(safeUrl('ftp://example.test/file.txt')).toBe('ftp://example.test/file.txt');
     expect(safeUrl('javascript&#x3a;alert(1)')).toBe('#');

@@ -5,12 +5,14 @@ import {
   createFragmentHtml,
   createRenderedFragmentHtml,
   decideRuntimeAttributeWrite,
+  FRAMEWORK_BLESSED_SINK_KINDS,
   fragmentHtmlContent,
   hasUnsafeCssText,
   hasUnsafeCssUrl,
   isBlessedSink,
   isFragmentHtml,
   isRenderedFragmentHtml,
+  RAW_HTML_SINK_NAMES,
   renderedFragmentHtmlContent,
   sanitizeRuntimeSrcset,
   SRCSET_ATTRIBUTE_NAMES,
@@ -75,6 +77,24 @@ describe('shared Blessed<Sink> witness substrate (SPEC §6.6)', () => {
 });
 
 describe('shared runtime sink policy', () => {
+  it('freezes every exported sink-classification policy', () => {
+    const policies = [
+      FRAMEWORK_BLESSED_SINK_KINDS,
+      RAW_HTML_SINK_NAMES,
+      SRCSET_ATTRIBUTE_NAMES,
+    ] as const;
+
+    for (const policy of policies) {
+      expect(Object.isFrozen(policy)).toBe(true);
+      expect(Reflect.set(policy, 0, 'attacker-controlled-sink')).toBe(false);
+      expect(Reflect.deleteProperty(policy, '0')).toBe(false);
+    }
+
+    expect(FRAMEWORK_BLESSED_SINK_KINDS[0]).toBe('browser:response-fragment-html');
+    expect(RAW_HTML_SINK_NAMES[0]).toBe('dangerouslysetinnerhtml');
+    expect(SRCSET_ATTRIBUTE_NAMES[0]).toBe('srcset');
+  });
+
   it('classifies unsafe runtime sink families', () => {
     expect(runtimeSinkFamilyForAttribute('href')).toBe('url');
     expect(runtimeSinkFamilyForAttribute('srcset')).toBe('srcset');

@@ -26,7 +26,7 @@ import {
  * @internal URL sink facts for server render, browser runtime writes, and compiler
  * output-context classification (SPEC.md §4.8, §5.2 rule 10).
  */
-export const URL_ATTRIBUTE_NAMES = [
+export const URL_ATTRIBUTE_NAMES = freezeSecurityValue([
   'href',
   'src',
   'action',
@@ -37,10 +37,16 @@ export const URL_ATTRIBUTE_NAMES = [
   'data',
   'ping',
   'xlink:href',
-] as const;
+] as const);
 
 /** @internal URL schemes accepted by Kovo server/client URL sinks (SPEC.md §4.8). */
-export const SAFE_URL_SCHEMES = ['http', 'https', 'mailto', 'tel', 'ftp'] as const;
+export const SAFE_URL_SCHEMES = freezeSecurityValue([
+  'http',
+  'https',
+  'mailto',
+  'tel',
+  'ftp',
+] as const);
 
 const urlAttributeNames = securitySetOf<string>(URL_ATTRIBUTE_NAMES);
 const safeUrlSchemes = securitySetOf<string>(SAFE_URL_SCHEMES);
@@ -73,7 +79,7 @@ export function hasUnsafeUrlScheme(value: string): boolean {
  * centrally auditable constructor monopoly. Additions here must be reviewed with their owning
  * validator/escaper; scripts/check-sink-policy-gate.mjs rejects unregistered drift.
  */
-export const FRAMEWORK_BLESSED_SINK_KINDS = [
+export const FRAMEWORK_BLESSED_SINK_KINDS = freezeSecurityValue([
   'browser:response-fragment-html',
   'core:route-redirect',
   'parameterized-sql',
@@ -85,7 +91,7 @@ export const FRAMEWORK_BLESSED_SINK_KINDS = [
   'sql-keyword',
   'static-sql',
   'trusted-sql',
-] as const;
+] as const);
 
 /** @internal */
 export type FrameworkBlessedSinkKind = (typeof FRAMEWORK_BLESSED_SINK_KINDS)[number];
@@ -156,16 +162,16 @@ export interface RuntimeSinkDecision {
 }
 
 /** @internal Attribute names whose value is a srcset candidate list, not one plain URL. */
-export const SRCSET_ATTRIBUTE_NAMES = ['srcset', 'imagesrcset'] as const;
+export const SRCSET_ATTRIBUTE_NAMES = freezeSecurityValue(['srcset', 'imagesrcset'] as const);
 
 /** @internal Raw HTML attribute/property spellings that must not accept untrusted strings. */
-export const RAW_HTML_SINK_NAMES = [
+export const RAW_HTML_SINK_NAMES = freezeSecurityValue([
   'dangerouslysetinnerhtml',
   'innerhtml',
   'outerhtml',
   'inserthtml',
   'insertadjacenthtml',
-] as const;
+] as const);
 
 const srcsetAttributeNames = securitySetOf<string>(SRCSET_ATTRIBUTE_NAMES);
 const rawHtmlSinkNames = securitySetOf<string>(RAW_HTML_SINK_NAMES);
