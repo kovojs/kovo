@@ -156,6 +156,34 @@ describe('schema.ts materialization', () => {
     );
   });
 
+  it('rejects accessor-backed schema bridge options before validation and annotation diverge', () => {
+    const source = [
+      "import { pgTable, text } from 'drizzle-orm/pg-core';",
+      "export const auditCredential = pgTable('audit_credential', { id: text('id').primaryKey(), userId: text('user_id').notNull(), apiKey: text('api_key').notNull() });",
+    ].join('\n');
+    const tables = {
+      account: authTable(['userId']),
+      auditCredential: authTable(['apiKey', 'userId'], 'audit_credential'),
+      session: authTable(['userId']),
+      user: authTable(),
+      verification: authTable(),
+    };
+    const extension = {
+      auditCredential: { domain: 'auth', key: 'userId' },
+    } as const;
+    let reads = 0;
+    const options = {
+      get schemaBridge() {
+        reads += 1;
+        return reads === 1 ? {} : extension;
+      },
+    };
+
+    expect(() => annotateBetterAuthSchemaSource(source, tables, options)).toThrow(
+      'schemaBridge must be an own-data property',
+    );
+  });
+
   it('materializes explicit plugin-table extension aliases into schema and verifier facts', () => {
     const tables = {
       account: authTable(['userId']),
