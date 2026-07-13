@@ -4,6 +4,8 @@ export { drainPostgresPostureCheckOptOutFacts } from '../postgres-runtime.js';
 export type { PostgresPostureCheckOptOutFact } from '../postgres-runtime.js';
 export { drainUnsafeRegexFacts } from '../redos.js';
 export type { UnsafeRegexFact } from '../redos.js';
+export { drainUnsafeInlineFacts } from '../response.js';
+export type { UnsafeInlineFact } from '../response.js';
 export { drainUnverifiedMimeFacts } from '../upload-sniff.js';
 export type { UnverifiedMimeFact } from '../upload-sniff.js';
 export { drainTrustedAssignFacts } from '../write-governance.js';

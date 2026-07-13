@@ -570,6 +570,7 @@ const FRAMEWORK_CAPABILITY_CALLS: Readonly<Record<string, CapabilityExplain['kin
   serverValue: 'serverValue',
   trustedAssign: 'serverValue',
   unsafeCookie: 'unsafeCookie',
+  unsafeInline: 'unsafeInline',
   unsafeRegex: 'unsafeRegex',
   usePostgresSystemDb: 'systemDb',
 };
@@ -728,6 +729,12 @@ function capabilityJustificationForCall(
         ? objectStringProperty(options, 'justification')
         : undefined) ?? leadingJustification(call)
     );
+  }
+  if (exportName === 'unsafeInline') {
+    const justification = args[0];
+    return justification && isStringLiteralLike(justification)
+      ? justification.getLiteralText()
+      : leadingJustification(call);
   }
   if (exportName === 'usePostgresSystemDb') return leadingJustification(call);
   // serverValue(v, reason) / trustedAssign(v, reason|{reason}) / unsafeRegex(re, justification):

@@ -1,11 +1,15 @@
 import type { StorageReadCapability } from '@kovojs/core';
-import { wireEmitter } from '@kovojs/core/internal/security-markers';
+import {
+  createBoundedRuntimeAuditCollector,
+  wireEmitter,
+} from '@kovojs/core/internal/security-markers';
 import {
   blessSink,
   drainRuntimeSinkSecurityEvent,
   isBlessedSink,
 } from '@kovojs/core/internal/sink-policy';
 
+import { snapshotAuditJustification } from './audit-justification.js';
 import { InlineUnverifiedUploadError, sniffUploadBytes } from './upload-sniff.js';
 import { finalizeServerResponse } from './response-posture.js';
 import { assertNoSecretEgressValue } from './secret-egress.js';
@@ -39,11 +43,14 @@ import {
   securityUrlSnapshot,
 } from './response-security-intrinsics.js';
 import {
+  createWitnessWeakMap,
   witnessDefineProperty,
   witnessFreeze,
   witnessGetOwnPropertyDescriptor,
   witnessObjectIs,
   witnessReflectApply,
+  witnessWeakMapGet,
+  witnessWeakMapSet,
 } from './security-witness-intrinsics.js';
 import { runtimeEnvironmentValue } from './runtime-environment-authority.js';
 
@@ -168,6 +175,58 @@ export interface RouteStoredFileOptions {
   filename?: string;
 }
 
+declare const unsafeInlineAcceptanceBrand: unique symbol;
+
+/**
+ * Opaque audited receipt for rendering bytes inline without Kovo deep-sniffing them (SPEC
+ * §6.6/§9.1). Construct only with {@link unsafeInline}; structural lookalikes fail closed.
+ */
+export interface UnsafeInlineAcceptance {
+  readonly [unsafeInlineAcceptanceBrand]: { readonly kind: 'unsafe-inline-response' };
+  readonly justification: string;
+}
+
+/** A runtime observation of an {@link unsafeInline} escape. */
+export interface UnsafeInlineFact {
+  readonly justification: string;
+}
+
+const unsafeInlineAcceptanceSnapshots = createWitnessWeakMap<object, UnsafeInlineAcceptance>();
+const unsafeInlineFacts = createBoundedRuntimeAuditCollector<UnsafeInlineFact>();
+
+/**
+ * Accept the risk of bypassing Kovo's inline-body byte sniffer for bytes independently re-encoded
+ * or rasterized by the application (SPEC §6.6/§9.1). The required printable justification is
+ * surfaced by `kovo explain --capabilities`; the returned receipt is opaque and runtime-authenticated.
+ */
+export function unsafeInline(justification: string): UnsafeInlineAcceptance {
+  const closedJustification = snapshotAuditJustification(justification, 'unsafeInline()');
+  const receipt = witnessFreeze({ justification: closedJustification }) as UnsafeInlineAcceptance;
+  witnessWeakMapSet(unsafeInlineAcceptanceSnapshots, receipt, receipt);
+  unsafeInlineFacts.record(witnessFreeze({ justification: closedJustification }));
+  return receipt;
+}
+
+/** @internal Drain recent runtime observations; static call sites remain authoritative. */
+export function drainUnsafeInlineFacts(): readonly UnsafeInlineFact[] {
+  return unsafeInlineFacts.drain();
+}
+
+function unsafeInlineAcceptanceSnapshot(value: unknown): UnsafeInlineAcceptance {
+  if ((typeof value !== 'object' && typeof value !== 'function') || value === null) {
+    throw new TypeError(
+      'respond.stream() unsafeInline must be a receipt minted by unsafeInline().',
+    );
+  }
+  const snapshot = witnessWeakMapGet(unsafeInlineAcceptanceSnapshots, value);
+  if (snapshot === undefined) {
+    throw new TypeError(
+      'respond.stream() unsafeInline must be a receipt minted by unsafeInline().',
+    );
+  }
+  return snapshot;
+}
+
 /** Options for `respond.stream`: `RouteFileOptions` plus inline/attachment disposition. */
 export interface RouteStreamOptions extends RouteFileOptions {
   disposition?: 'attachment' | 'inline';
@@ -179,7 +238,7 @@ export interface RouteStreamOptions extends RouteFileOptions {
    * explicit override of that check. Setting it on attacker-controlled active content (HTML/SVG) is
    * the audited risk the brand records.
    */
-  verifiedSafe?: boolean;
+  unsafeInline?: UnsafeInlineAcceptance;
 }
 
 /**
@@ -579,7 +638,7 @@ export const respond = {
   stream(body: RouteResponseBody, options: RouteStreamOptions) {
     const rawDisposition = stableOwnDataValue(options, 'disposition');
     const declaredContentType = stableOwnDataValue(options, 'contentType');
-    const verifiedSafe = stableOwnDataValue(options, 'verifiedSafe');
+    const unsafeInlineReceipt = stableOwnDataValue(options, 'unsafeInline');
     if (
       rawDisposition !== undefined &&
       rawDisposition !== 'attachment' &&
@@ -590,19 +649,20 @@ export const respond = {
     if (typeof declaredContentType !== 'string') {
       throw new TypeError('respond.stream() contentType must be a string.');
     }
-    if (verifiedSafe !== undefined && typeof verifiedSafe !== 'boolean') {
-      throw new TypeError('respond.stream() verifiedSafe must be a boolean.');
-    }
+    const unsafeInlineAccepted =
+      unsafeInlineReceipt === undefined
+        ? false
+        : unsafeInlineAcceptanceSnapshot(unsafeInlineReceipt) === unsafeInlineReceipt;
     const disposition = rawDisposition ?? 'attachment';
     // KV428 (SPEC §6.6/§9.1): inline rendering is a branded opt-in over verified-safe bytes. For an
     // in-memory body we deep-sniff and refuse unless the bytes are a known-passive type; an
-    // un-bufferable stream cannot be sniffed, so it requires the explicit `verifiedSafe` brand
+    // un-bufferable stream cannot be sniffed, so it requires the explicit `unsafeInline` receipt
     // (the framework re-encode/rasterize attestation). This is the fail-closed runtime floor — the
     // honest ceiling is "attacker bytes never render inline as active content", not an unspoofable
-    // type. Authors override the sniffed contentType via `verifiedSafe: true` (audited risk).
+    // type. Authors override the sniffed contentType via `unsafeInline(...)` (audited risk).
     const contentType =
       disposition === 'inline'
-        ? assertInlineBody(body, declaredContentType, verifiedSafe ?? false)
+        ? assertInlineBody(body, declaredContentType, unsafeInlineAccepted)
         : declaredContentType;
     return routeResponseOutcome(
       body,
@@ -773,22 +833,23 @@ export const routeResponseToDocumentResponse = wireEmitter(
  * KV428 (SPEC §6.6/§9.1): assert an in-memory body is safe to render inline, returning the
  * server-minted (sniffed) content type. Throws {@link InlineUnverifiedUploadError} for
  * HTML/SVG/XML/ambiguous bytes. An un-bufferable `ReadableStream` cannot be sniffed, so inline
- * serving requires the explicit `verifiedSafe` brand — without it, the runtime refuses (fail-closed
- * floor). When `verifiedSafe` is set, the author's declared content type is trusted (audited risk).
+ * serving requires the explicit `unsafeInline(...)` receipt — without it, the runtime refuses
+ * (fail-closed floor). When that receipt is present, the author's declared content type is trusted
+ * (audited risk).
  */
 function assertInlineBody(
   body: RouteResponseBody,
   declaredContentType: string,
-  verifiedSafe: boolean,
+  unsafeInlineAccepted: boolean,
 ): string {
-  if (verifiedSafe) return declaredContentType;
+  if (unsafeInlineAccepted) return declaredContentType;
 
   const bytes = inlineBodyBytes(body);
   if (bytes === undefined) {
     throw new InlineUnverifiedUploadError(
-      'Refusing to serve a streamed (un-bufferable) body inline without `verifiedSafe: true`. ' +
+      'Refusing to serve a streamed (un-bufferable) body inline without `unsafeInline(...)`. ' +
         'Buffer the bytes so the runtime can deep-sniff them, serve as an attachment, or pass ' +
-        '`verifiedSafe: true` only for bytes the framework re-encoded/rasterized.',
+        '`unsafeInline(justification)` only for bytes the application re-encoded/rasterized.',
     );
   }
 
@@ -797,7 +858,7 @@ function assertInlineBody(
     throw new InlineUnverifiedUploadError(
       'Refusing to serve unverified bytes inline: the sniffed content type is not a known-passive ' +
         'type (HTML/SVG/XML/ambiguous bytes are attachment-only — SVG is XML+script). Serve as an ' +
-        'attachment, or rasterize/re-encode and pass `verifiedSafe: true`.',
+        'attachment, or rasterize/re-encode and pass `unsafeInline(justification)`.',
     );
   }
   // Server truth: the served Content-Type comes from the sniffed bytes, not the client/author lie.

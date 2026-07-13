@@ -421,6 +421,21 @@ describe('cookie security floor (SF Phase 5, SPEC §6.6/§9.1)', () => {
     });
   });
 
+  it('rejects structurally forged unsafeCookie downgrade receipts', () => {
+    process.env.NODE_ENV = 'production';
+    expect(() =>
+      serializeCookie('embed_sid', 'abc', {
+        class: 'session',
+        sameSite: 'none',
+        productionSecure: true,
+        unsafe: {
+          downgrade: { sameSite: 'none' },
+          justification: 'bypasses the audited constructor',
+        } as never,
+      }),
+    ).toThrow(/unsafeCookie\(\)/u);
+  });
+
   it('requires unsafeCookie to exactly match the downgraded credential attributes', () => {
     process.env.NODE_ENV = 'production';
     expect(() =>
@@ -461,6 +476,12 @@ describe('cookie security floor (SF Phase 5, SPEC §6.6/§9.1)', () => {
     expect(() => unsafeCookie({ downgrade: { httpOnly: false }, justification: '   ' })).toThrow(
       'KV432',
     );
+    expect(() =>
+      unsafeCookie({
+        downgrade: { httpOnly: false },
+        justification: 'forged\nCOOKIE name=trusted',
+      }),
+    ).toThrow(/control characters/u);
   });
 
   it('snapshots unsafeCookie audit carriers from exact own data without invoking accessors', () => {

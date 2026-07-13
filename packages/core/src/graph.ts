@@ -617,7 +617,8 @@ export interface UnregisteredSinkFact {
  * (KV437), an egress `allowInternal` private-network entry, a confidentiality `trustedReveal`, an
  * audited `crossOwnerRead`/`rawRead`, a `serverValue`/`trustedAssign` privileged-write escape
  * (KV438), an `unsafeRegex` ReDoS-risk acceptance (KV434), an `accept.unverified` upload escape, an
- * `unsafeCookie` credential-cookie downgrade, an `actAs`/`declareSystemRead`/`declareSystemWrite`
+ * `unsafeCookie` credential-cookie downgrade, an `unsafeInline` response-sniff bypass, an
+ * `actAs`/`declareSystemRead`/`declareSystemWrite`
  * non-request principal elevation (SPEC §10.3 DEC-G), a vetted `declarePublicRelation`, a
  * framework-owned auth/system DB facade (`usePostgresSystemDb`), managed SQL statement identity, or
  * Postgres role topology. The app-authored escapes are detected at their CALL SITE by the static
@@ -647,6 +648,7 @@ export interface CapabilityExplain {
     | 'systemDb'
     | 'trustedReveal'
     | 'unsafeCookie'
+    | 'unsafeInline'
     | 'unsafeRegex';
   /** A human justification recorded at the escape site (the audit's load-bearing field). */
   justification?: string;

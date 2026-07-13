@@ -19,12 +19,8 @@ import {
 type RootedFileServeSink = 'rooted-file-serve';
 
 /** Options for serving a file from a rooted filesystem capability. */
-export interface RootedFileServeOptions extends Omit<
-  RouteStreamOptions,
-  'disposition' | 'verifiedSafe'
-> {
+export interface RootedFileServeOptions extends Omit<RouteStreamOptions, 'disposition'> {
   disposition?: 'attachment' | 'inline';
-  verifiedSafe?: boolean;
 }
 
 /**
@@ -86,7 +82,7 @@ const ROOTED_FILE_SERVE_OPTION_KEYS = [
   'etag',
   'filename',
   'headers',
-  'verifiedSafe',
+  'unsafeInline',
 ] as const satisfies readonly (keyof RootedFileServeOptions)[];
 
 function snapshotRootedFileServeOptions(options: RootedFileServeOptions): RootedFileServeOptions {
@@ -116,9 +112,6 @@ function snapshotRootedFileServeOptions(options: RootedFileServeOptions): Rooted
   }
   if (snapshot.filename !== undefined && typeof snapshot.filename !== 'string') {
     throw new TypeError('Rooted file serve filename must be a string.');
-  }
-  if (snapshot.verifiedSafe !== undefined && typeof snapshot.verifiedSafe !== 'boolean') {
-    throw new TypeError('Rooted file serve verifiedSafe must be a boolean.');
   }
   if (snapshot.headers !== undefined) {
     snapshot.headers = snapshotRootedFileHeaders(snapshot.headers);

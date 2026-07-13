@@ -113,6 +113,22 @@ describe('@kovojs/drizzle capability-escape collector (SPEC §6.6, audit-only, M
     ]);
   });
 
+  it('surfaces unsafeInline response escapes', () => {
+    const capabilities = capabilitiesFor(`
+      import { unsafeInline } from '@kovojs/server';
+      export const receipt = unsafeInline('framework-rasterized image stream');
+    `);
+
+    expect(capabilities).toEqual([
+      expect.objectContaining({
+        justification: 'framework-rasterized image stream',
+        kind: 'unsafeInline',
+        site: 'app.tsx:3',
+        target: 'unsafeInline',
+      }),
+    ]);
+  });
+
   it('surfaces an unsafeCookie downgrade capability with its weakened floor', () => {
     const capabilities = capabilitiesFor(`
       import { serializeCookie, unsafeCookie } from '@kovojs/server';

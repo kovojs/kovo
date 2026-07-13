@@ -74,8 +74,9 @@ export type {
   RouteStoredFileOptions,
   RouteStreamOptions,
   ServerResponseBase,
+  UnsafeInlineAcceptance,
 } from '../response.js';
-export { respond } from '../response.js';
+export { respond, unsafeInline } from '../response.js';
 export { layout, notFound, route } from '../route.js';
 export type {
   LayoutDeclaration,
@@ -96,7 +97,13 @@ export type {
   RouteRequest,
   RouteRequestInput,
 } from '../route.js';
-export type { CookieClass, CookieOptions, UnsafeCookieDowngrade } from '../cookies.js';
+export { unsafeCookie } from '../cookies.js';
+export type {
+  CookieClass,
+  CookieOptions,
+  UnsafeCookieDowngrade,
+  UnsafeCookieDowngradeInput,
+} from '../cookies.js';
 export { createMemoryWebhookReplayStore, webhook } from '../webhook.js';
 export type {
   WebhookChangeOptions,

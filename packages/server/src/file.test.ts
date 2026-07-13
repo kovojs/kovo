@@ -5,7 +5,7 @@ import { basename, join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { isRootedFileServeCapability, rootedFiles } from './file.js';
-import { routeOutcomeResponse } from './response.js';
+import { routeOutcomeResponse, unsafeInline } from './response.js';
 
 describe('server rooted file primitive', () => {
   it('serves a normal file through the response sink', async () => {
@@ -37,14 +37,17 @@ describe('server rooted file primitive', () => {
     try {
       await writeFile(join(root, 'active.svg'), '<svg onload="alert(1)"></svg>', 'utf8');
       const files = await rootedFiles(root);
-      const options = {
+      const options: {
+        contentType: string;
+        disposition: 'attachment' | 'inline';
+        unsafeInline?: ReturnType<typeof unsafeInline>;
+      } = {
         contentType: 'image/svg+xml',
         disposition: 'attachment' as 'attachment' | 'inline',
-        verifiedSafe: false,
       };
       const pending = files.serve('active.svg', options);
       options.disposition = 'inline';
-      options.verifiedSafe = true;
+      options.unsafeInline = unsafeInline('mutation after the rooted read began');
 
       const outcome = await pending;
       expect(outcome?.contentDisposition).toBe('attachment; filename="active.svg"');

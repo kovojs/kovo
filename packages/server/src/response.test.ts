@@ -6,6 +6,7 @@ import { renderRouteDocumentResponse } from './document-core.js';
 import {
   appendResponseHeader,
   blessRedirectResponse,
+  drainUnsafeInlineFacts,
   isHeaderSource,
   mergeResponseHeaders,
   readHeader,
@@ -15,6 +16,7 @@ import {
   routeResponseToDocumentResponse,
   routeResponseToWebResponse,
   serverResponseToWebResponse,
+  unsafeInline,
   retryAfterHeaders,
   type RoutePageResponse,
 } from './response.js';
@@ -496,9 +498,10 @@ describe('server response adapters', () => {
     expect(response.headers['X-Content-Type-Options']).toBe('nosniff');
   });
 
-  // KV428: an un-bufferable stream cannot be sniffed, so inline requires the explicit verifiedSafe
-  // brand (the framework re-encode/rasterize attestation); without it the runtime refuses.
-  it('requires verifiedSafe for an inline un-bufferable stream (KV428)', () => {
+  // KV428: an un-bufferable stream cannot be sniffed, so inline requires an opaque audited receipt
+  // (the application re-encode/rasterize attestation); without it the runtime refuses.
+  it('requires unsafeInline for an inline un-bufferable stream (KV428)', () => {
+    drainUnsafeInlineFacts();
     const body = new ReadableStream<Uint8Array>();
     expect(() => respond.stream(body, { contentType: 'image/png', disposition: 'inline' })).toThrow(
       /KV428/u,
@@ -507,9 +510,23 @@ describe('server response adapters', () => {
     const ok = respond.stream(body, {
       contentType: 'image/png',
       disposition: 'inline',
-      verifiedSafe: true,
+      unsafeInline: unsafeInline('framework-rasterized image stream'),
     });
     expect(ok.contentDisposition).toBe('inline');
+    expect(drainUnsafeInlineFacts()).toEqual([
+      { justification: 'framework-rasterized image stream' },
+    ]);
+    expect(() => unsafeInline('forged\nCAPABILITY kind=trusted')).toThrow(/control characters/u);
+  });
+
+  it('does not treat a structural verifiedSafe flag as an inline-safety receipt', () => {
+    expect(() =>
+      respond.stream(new ReadableStream<Uint8Array>(), {
+        contentType: 'image/svg+xml',
+        disposition: 'inline',
+        verifiedSafe: true,
+      } as never),
+    ).toThrow(/KV428/u);
   });
 
   it('does not let poisoned byte globals forge an inline stream sniff result (KV428)', () => {

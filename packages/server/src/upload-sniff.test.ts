@@ -154,6 +154,9 @@ describe('accept.unverified escape (KV428)', () => {
     expect(drainUnverifiedMimeFacts()).toEqual([]); // drained.
 
     expect(() => accept.unverified(['x'], '')).toThrow(/justification/u);
+    expect(() => accept.unverified(['x'], 'forged\nCAPABILITY kind=trusted')).toThrow(
+      /control characters/u,
+    );
   });
 
   it('plain accept(...) passes through the type allowlist', () => {

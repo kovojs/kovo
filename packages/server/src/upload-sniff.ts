@@ -1,11 +1,15 @@
 import { createBoundedRuntimeAuditCollector } from '@kovojs/core/internal/security-markers';
 
+import { snapshotAuditJustification } from './audit-justification.js';
 import {
+  createWitnessWeakMap,
   witnessArrayAppend,
   witnessFreeze,
   witnessGetOwnPropertyDescriptor,
   witnessIsArray,
   witnessObjectIs,
+  witnessWeakMapGet,
+  witnessWeakMapSet,
 } from './security-witness-intrinsics.js';
 import {
   securityNumberIsInteger,
@@ -22,6 +26,8 @@ import {
   securityStringTrim,
   securityUint8ArrayLength,
 } from './response-security-intrinsics.js';
+
+declare const unverifiedAcceptanceBrand: unique symbol;
 
 /**
  * KV428 upload inline-XSS gate (SPEC §6.6/§9.1; plans/secure-framework.md Phase 6 Tier 1).
@@ -249,6 +255,7 @@ export function mintStorageKey(prefix?: string): string {
  * escape only changes the *download* type, never re-enables inline rendering of unverified bytes.
  */
 export interface UnverifiedAcceptance {
+  readonly [unverifiedAcceptanceBrand]: { readonly kind: 'unverified-upload-acceptance' };
   readonly justification: string;
   readonly types: readonly string[];
   readonly unverified: true;
@@ -261,6 +268,7 @@ export interface UnverifiedMimeFact {
 }
 
 const unverifiedMimeFacts = createBoundedRuntimeAuditCollector<UnverifiedMimeFact>();
+const unverifiedAcceptanceSnapshots = createWitnessWeakMap<object, UnverifiedAcceptance>();
 
 /**
  * The verified-MIME / unverified-escape acceptance namespace passed to `s.file().accept(...)`.
@@ -279,14 +287,34 @@ export namespace accept {
     types: readonly string[],
     justification: string,
   ): UnverifiedAcceptance {
-    if (!justification || securityStringTrim(justification).length === 0) {
-      throw new Error('accept.unverified(...) requires a justification (KV428, SPEC §6.6/§9.1).');
-    }
+    const closedJustification = snapshotAuditJustification(justification, 'accept.unverified(...)');
     const closedTypes = snapshotMimeTypes(types);
-    const fact = witnessFreeze({ justification, types: closedTypes });
+    const fact = witnessFreeze({ justification: closedJustification, types: closedTypes });
     unverifiedMimeFacts.record(fact);
-    return witnessFreeze({ justification, types: closedTypes, unverified: true });
+    const acceptance = witnessFreeze({
+      justification: closedJustification,
+      types: closedTypes,
+      unverified: true as const,
+    }) as UnverifiedAcceptance;
+    witnessWeakMapSet(unverifiedAcceptanceSnapshots, acceptance, acceptance);
+    return acceptance;
   }
+}
+
+/** @internal Authenticate an upload acceptance minted by {@link accept.unverified}. */
+export function unverifiedAcceptanceSnapshot(value: unknown): UnverifiedAcceptance {
+  if ((typeof value !== 'object' && typeof value !== 'function') || value === null) {
+    throw new TypeError(
+      's.file().accept(...) requires an acceptance minted by accept.unverified(...).',
+    );
+  }
+  const snapshot = witnessWeakMapGet(unverifiedAcceptanceSnapshots, value);
+  if (snapshot === undefined) {
+    throw new TypeError(
+      's.file().accept(...) requires an acceptance minted by accept.unverified(...).',
+    );
+  }
+  return snapshot;
 }
 
 function snapshotMimeTypes(source: readonly string[]): readonly string[] {

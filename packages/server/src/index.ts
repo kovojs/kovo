@@ -428,6 +428,8 @@ export {
   respond,
   route,
   session,
+  unsafeCookie,
+  unsafeInline,
   createMemoryWebhookReplayStore,
   webhook,
 } from './api/routing.js';
@@ -509,6 +511,8 @@ export type {
   UnauthenticatedDenial,
   UnauthenticatedHandler,
   UnsafeCookieDowngrade,
+  UnsafeCookieDowngradeInput,
+  UnsafeInlineAcceptance,
   WebhookChangeOptions,
   WebhookDeclaration,
   WebhookDeclaredWriteDomain,

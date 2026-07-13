@@ -1,5 +1,6 @@
 import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
 import { createBoundedRuntimeAuditCollector } from '@kovojs/core/internal/security-markers';
+import { snapshotAuditJustification } from './audit-justification.js';
 import { runtimeEnvironmentValue } from './runtime-environment-authority.js';
 
 import {
@@ -28,9 +29,12 @@ import {
   securityStringTrim,
 } from './response-security-intrinsics.js';
 import {
+  createWitnessWeakMap,
   witnessFreeze,
   witnessGetOwnPropertyDescriptor,
   witnessObjectIs,
+  witnessWeakMapGet,
+  witnessWeakMapSet,
 } from './security-witness-intrinsics.js';
 
 /**
@@ -53,7 +57,7 @@ export type CookieClass = 'app-data' | 'auth' | 'session';
  * (SPEC §6.6/§9.1). Produced by {@link unsafeCookie}; recorded as a downgrade fact for
  * `kovo explain --cookies` instead of being rejected with KV432.
  */
-export interface UnsafeCookieDowngrade {
+export interface UnsafeCookieDowngradeInput {
   /** Which floor attribute(s) the author is intentionally weakening. */
   downgrade: {
     httpOnly?: boolean;
@@ -63,6 +67,15 @@ export interface UnsafeCookieDowngrade {
   /** A required human justification, surfaced in `kovo explain --cookies`. */
   justification: string;
 }
+
+declare const unsafeCookieDowngradeBrand: unique symbol;
+
+/** An opaque audited cookie-floor downgrade receipt minted only by {@link unsafeCookie}. */
+export interface UnsafeCookieDowngrade extends UnsafeCookieDowngradeInput {
+  readonly [unsafeCookieDowngradeBrand]: { readonly kind: 'unsafe-cookie-downgrade' };
+}
+
+const unsafeCookieDowngradeSnapshots = createWitnessWeakMap<object, UnsafeCookieDowngrade>();
 
 /**
  * Attribute options for a typed `Set-Cookie` header, accepted by the third argument
@@ -165,12 +178,12 @@ function snapshotCookieOptions(options: CookieOptions): CookieOptions {
   assertOptionalSameSite(snapshot.sameSite, 'Cookie options.sameSite');
   assertOptionalCookieBoolean(snapshot.secure, 'Cookie options.secure');
   if (snapshot.unsafe !== undefined) {
-    snapshot.unsafe = snapshotUnsafeCookieDowngrade(snapshot.unsafe);
+    snapshot.unsafe = unsafeCookieDowngradeSnapshot(snapshot.unsafe);
   }
   return witnessFreeze(snapshot) as CookieOptions;
 }
 
-function snapshotUnsafeCookieDowngrade(value: unknown): UnsafeCookieDowngrade {
+function snapshotUnsafeCookieDowngradeInput(value: unknown): UnsafeCookieDowngradeInput {
   if (typeof value !== 'object' || value === null) {
     throw new TypeError('unsafeCookie input must be an object with exact own data properties.');
   }
@@ -198,12 +211,23 @@ function snapshotUnsafeCookieDowngrade(value: unknown): UnsafeCookieDowngrade {
   closedDowngrade.sameSite = sameSite;
   closedDowngrade.secure = secure;
   const closed = createSecurityNullRecord<unknown>() as Record<
-    keyof UnsafeCookieDowngrade,
+    keyof UnsafeCookieDowngradeInput,
     unknown
   >;
   closed.downgrade = witnessFreeze(closedDowngrade);
-  closed.justification = justification;
-  return witnessFreeze(closed) as unknown as UnsafeCookieDowngrade;
+  closed.justification = snapshotAuditJustification(justification, 'unsafeCookie() (KV432)');
+  return witnessFreeze(closed) as unknown as UnsafeCookieDowngradeInput;
+}
+
+function unsafeCookieDowngradeSnapshot(value: unknown): UnsafeCookieDowngrade {
+  if ((typeof value !== 'object' && typeof value !== 'function') || value === null) {
+    throw new TypeError('Cookie options.unsafe must be a receipt minted by unsafeCookie().');
+  }
+  const snapshot = witnessWeakMapGet(unsafeCookieDowngradeSnapshots, value);
+  if (snapshot === undefined) {
+    throw new TypeError('Cookie options.unsafe must be a receipt minted by unsafeCookie().');
+  }
+  return snapshot;
 }
 
 function assertOptionalCookieClass(value: unknown, label: string): asserts value is CookieClass {
@@ -246,15 +270,11 @@ function assertOptionalCookieString(value: unknown, label: string): asserts valu
  *   unsafe: unsafeCookie({ downgrade: { sameSite: 'none' }, justification: 'third-party embed' }),
  * });
  */
-export function unsafeCookie(downgrade: UnsafeCookieDowngrade): UnsafeCookieDowngrade {
-  const snapshot = snapshotUnsafeCookieDowngrade(downgrade);
-  if (
-    typeof snapshot.justification !== 'string' ||
-    securityStringTrim(snapshot.justification) === ''
-  ) {
-    throw new Error('unsafeCookie requires a non-empty justification (KV432).');
-  }
-  return snapshot;
+export function unsafeCookie(downgrade: UnsafeCookieDowngradeInput): UnsafeCookieDowngrade {
+  const closed = snapshotUnsafeCookieDowngradeInput(downgrade);
+  const receipt = closed as UnsafeCookieDowngrade;
+  witnessWeakMapSet(unsafeCookieDowngradeSnapshots, receipt, receipt);
+  return receipt;
 }
 
 /**
@@ -272,7 +292,7 @@ export interface CookieDowngradeFact {
 const cookieDowngradeFacts = createBoundedRuntimeAuditCollector<CookieDowngradeFact>();
 
 function recordCookieDowngradeFact(fact: CookieDowngradeFact): void {
-  const unsafe = snapshotUnsafeCookieDowngrade({
+  const unsafe = snapshotUnsafeCookieDowngradeInput({
     downgrade: fact.downgrade,
     justification: fact.justification,
   });

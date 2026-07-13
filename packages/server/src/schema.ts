@@ -13,6 +13,7 @@ import {
   mintStorageKey,
   sanitizeDownloadFilename,
   sniffUploadBytes,
+  unverifiedAcceptanceSnapshot,
 } from './upload-sniff.js';
 import {
   type BlessedFormatName,
@@ -1261,8 +1262,11 @@ function isUnverifiedAcceptance(
   accept: UnverifiedAcceptance | readonly string[] | undefined,
 ): accept is UnverifiedAcceptance {
   if (typeof accept !== 'object' || accept === null || securityArrayIsArray(accept)) return false;
-  const unverified = witnessGetOwnPropertyDescriptor(accept, 'unverified');
-  return unverified !== undefined && 'value' in unverified && unverified.value === true;
+  try {
+    return unverifiedAcceptanceSnapshot(accept) === accept;
+  } catch {
+    return false;
+  }
 }
 
 function snapshotFileAcceptance(
@@ -1296,22 +1300,7 @@ function snapshotFileAcceptance(
   if (typeof accept !== 'object' || accept === null) {
     throw new TypeError('s.file().accept(...) requires a MIME array or audited acceptance.');
   }
-  const unverified = witnessGetOwnPropertyDescriptor(accept, 'unverified');
-  const justification = witnessGetOwnPropertyDescriptor(accept, 'justification');
-  const types = witnessGetOwnPropertyDescriptor(accept, 'types');
-  if (
-    unverified?.value !== true ||
-    typeof justification?.value !== 'string' ||
-    types === undefined ||
-    !('value' in types)
-  ) {
-    throw new TypeError('s.file().accept.unverified(...) must expose stable audit data.');
-  }
-  return witnessFreeze({
-    justification: justification.value,
-    types: snapshotFileAcceptance(types.value as readonly string[]) as readonly string[],
-    unverified: true as const,
-  });
+  return unverifiedAcceptanceSnapshot(accept);
 }
 
 function stringArrayIncludes(values: readonly string[], expected: string): boolean {

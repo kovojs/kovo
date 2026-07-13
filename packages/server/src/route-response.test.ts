@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { respond } from './response.js';
+import { respond, unsafeInline } from './response.js';
 import { renderRoutePageResponse, route } from './route.js';
 
 describe('route responses', () => {
@@ -17,12 +17,12 @@ describe('route responses', () => {
     const streamRoute = route('/attachments/:id', {
       page(context) {
         // KV428: an un-bufferable stream served inline is the branded opt-in — the route attests
-        // the bytes are verified-safe (re-encoded/rasterized) via `verifiedSafe: true`.
+        // the bytes are verified-safe (re-encoded/rasterized) via an opaque audited receipt.
         return respond.stream(new ReadableStream<Uint8Array>(), {
           contentType: 'application/octet-stream',
           disposition: 'inline',
           filename: `${context.params.id}.bin`,
-          verifiedSafe: true,
+          unsafeInline: unsafeInline('route rasterizes the attachment stream'),
         });
       },
     });

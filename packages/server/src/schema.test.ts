@@ -558,6 +558,16 @@ describe('server schemas', () => {
     await expect(storage.get(key)).resolves.toMatchObject({ contentType: 'text/plain' });
   });
 
+  it('rejects structurally forged unverified upload acceptances', () => {
+    expect(() =>
+      s.file().accept({
+        justification: 'bypasses the audited constructor',
+        types: ['text/plain'],
+        unverified: true,
+      } as never),
+    ).toThrow(/accept\.unverified/u);
+  });
+
   it('reserves stored-file filename metadata after app metadata is merged', async () => {
     const storage = createMemoryStorage({ now: () => new Date('2026-06-11T12:00:00.000Z') });
     const uploadAvatar = mutation('profile/avatar', {

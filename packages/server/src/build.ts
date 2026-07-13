@@ -3236,7 +3236,6 @@ async function serveRootedStaticFile(root, relativePath, headers) {
     contentType: contentType(relativePath),
     disposition: 'inline',
     headers,
-    verifiedSafe: true,
   });
 }
 
