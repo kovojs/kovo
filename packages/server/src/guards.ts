@@ -57,6 +57,7 @@ import {
   witnessMapGet,
   witnessMapSet,
   witnessMapSize,
+  witnessObjectIs,
   witnessSetAdd,
   witnessSetHas,
   witnessWeakMapGet,
@@ -653,15 +654,9 @@ export const guards = {
   rateLimit<Request extends SessionRequestLike>(
     options: RateLimitOptions<Request>,
   ): Guard<Request> {
-    assertRateLimitOptions(options);
+    const rateOptions = snapshotRateLimitOptions(options);
+    assertRateLimitOptions(rateOptions);
     const counts = createWitnessMap<string, { count: number; resetAt: number }>();
-    const rateOptions: RateLimitOptions<Request> = witnessFreeze({
-      ...(options.key === undefined ? {} : { key: options.key }),
-      max: options.max,
-      ...(options.maxKeys === undefined ? {} : { maxKeys: options.maxKeys }),
-      ...(options.per === undefined ? {} : { per: options.per }),
-      ...(options.windowMs === undefined ? {} : { windowMs: options.windowMs }),
-    });
 
     return stampGuardAudit(
       (request) => {
@@ -1184,6 +1179,51 @@ function assertRateLimitOptions<Request>(options: RateLimitOptions<Request>): vo
   ) {
     throw new TypeError("guards.rateLimit({ per }) must be 'global', 'session', or 'ip'.");
   }
+}
+
+function snapshotRateLimitOptions<Request>(
+  source: RateLimitOptions<Request>,
+): RateLimitOptions<Request> {
+  if (typeof source !== 'object' || source === null || witnessIsArray(source)) {
+    throw new TypeError('guards.rateLimit options must be a stable own-data record.');
+  }
+  const max = stableRateLimitOption(source, 'max', true);
+  const key = stableRateLimitOption(source, 'key', false);
+  const maxKeys = stableRateLimitOption(source, 'maxKeys', false);
+  const per = stableRateLimitOption(source, 'per', false);
+  const windowMs = stableRateLimitOption(source, 'windowMs', false);
+  return witnessFreeze({
+    ...(key === undefined ? {} : { key: key as RateLimitOptions<Request>['key'] }),
+    max: max as number,
+    ...(maxKeys === undefined ? {} : { maxKeys: maxKeys as number }),
+    ...(per === undefined ? {} : { per: per as RateLimitOptions<Request>['per'] }),
+    ...(windowMs === undefined ? {} : { windowMs: windowMs as number }),
+  });
+}
+
+function stableRateLimitOption(source: object, property: PropertyKey, required: boolean): unknown {
+  const before = witnessGetOwnPropertyDescriptor(source, property);
+  const after = witnessGetOwnPropertyDescriptor(source, property);
+  if (before === undefined && after === undefined) {
+    if (!required) return undefined;
+    throw new TypeError(
+      `guards.rateLimit option ${String(property)} must be an own data property.`,
+    );
+  }
+  if (before === undefined || after === undefined || !('value' in before) || !('value' in after)) {
+    throw new TypeError(
+      `guards.rateLimit option ${String(property)} must be an own data property.`,
+    );
+  }
+  if (
+    !witnessObjectIs(before.value, after.value) ||
+    before.configurable !== after.configurable ||
+    before.enumerable !== after.enumerable ||
+    before.writable !== after.writable
+  ) {
+    throw new TypeError(`guards.rateLimit option ${String(property)} changed during validation.`);
+  }
+  return before.value;
 }
 
 function unauthenticatedGuardFailure(): UnauthenticatedDenial {

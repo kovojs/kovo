@@ -328,6 +328,39 @@ describe('server mutation replay store', () => {
     expect(replayStore.get('scope', 'idem\0tail')).toEqual(second);
   });
 
+  it('rejects replay-scope accessors before principal checks can observe different ids', async () => {
+    let reads = 0;
+    const request = {
+      get sessionId() {
+        reads += 1;
+        return reads < 3 ? 'victim-session' : 'attacker-session';
+      },
+    };
+
+    await expect(
+      mutationReplayContext(false, {
+        idem: 'idem_scope_accessor',
+        mutationKey: 'orders/update',
+        request,
+      }),
+    ).rejects.toThrow(/Mutation replay request sessionId must be an own data property/);
+    expect(reads).toBe(0);
+  });
+
+  it('does not treat inherited session ids as replay-scope authority', async () => {
+    const request = Object.create({ sessionId: 'shared-prototype-session' }) as {
+      sessionId: string;
+    };
+
+    await expect(
+      mutationReplayContext(false, {
+        idem: 'idem_inherited_scope',
+        mutationKey: 'orders/update',
+        request,
+      }),
+    ).resolves.toMatchObject({ scope: null });
+  });
+
   it('rejects unsafe replay capacities and ttl values', () => {
     expect(() => createMemoryMutationReplayStore({ maxEntries: Number.NaN })).toThrow(
       /maxEntries.*non-negative integer/u,

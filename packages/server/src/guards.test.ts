@@ -860,6 +860,20 @@ describe('server guard and session primitives', () => {
     expect(guard({})).toMatchObject({ kind: 'rateLimited' });
   });
 
+  it('rejects rate-limit accessors before validation and enforcement can observe different maxima', () => {
+    let maxReads = 0;
+    const options = {
+      get max() {
+        maxReads += 1;
+        return maxReads < 3 ? 1 : 10_000;
+      },
+      per: 'global' as const,
+    };
+
+    expect(() => guards.rateLimit(options)).toThrow(/rateLimit option max must be an own data/);
+    expect(maxReads).toBe(0);
+  });
+
   it('keeps audit facts frozen and bound to the exact framework guard identity', () => {
     const guard = guards.rateLimit<{ clientIp?: string }>({ max: 1, per: 'ip' });
     const facts = explainGuard(guard);

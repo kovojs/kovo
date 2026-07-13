@@ -703,30 +703,39 @@ function mutationReplayScope<Request>(
   const csrfBinding = csrf === false ? undefined : resolveCsrfReplayBinding(request, csrf);
   if (csrfBinding) return csrfBinding;
 
-  if (
-    typeof request === 'object' &&
-    request !== null &&
-    'sessionId' in request &&
-    typeof request.sessionId === 'string' &&
-    request.sessionId !== ''
-  ) {
-    return request.sessionId;
-  }
+  if (typeof request !== 'object' || request === null) return null;
+  const sessionId = stableMutationReplayRequestValue(request, 'sessionId');
+  if (typeof sessionId === 'string' && sessionId !== '') return sessionId;
 
-  if (
-    typeof request === 'object' &&
-    request !== null &&
-    'session' in request &&
-    typeof request.session === 'object' &&
-    request.session !== null &&
-    'id' in request.session &&
-    typeof request.session.id === 'string' &&
-    request.session.id !== ''
-  ) {
-    return request.session.id;
+  const session = stableMutationReplayRequestValue(request, 'session');
+  if (typeof session === 'object' && session !== null) {
+    const nestedSessionId = stableMutationReplayRequestValue(session, 'id', 'session.id');
+    if (typeof nestedSessionId === 'string' && nestedSessionId !== '') return nestedSessionId;
   }
 
   return null;
+}
+
+function stableMutationReplayRequestValue(
+  source: object,
+  property: PropertyKey,
+  label = String(property),
+): unknown {
+  const before = witnessGetOwnPropertyDescriptor(source, property);
+  const after = witnessGetOwnPropertyDescriptor(source, property);
+  if (before === undefined && after === undefined) return undefined;
+  if (before === undefined || after === undefined || !('value' in before) || !('value' in after)) {
+    throw new TypeError(`Mutation replay request ${label} must be an own data property.`);
+  }
+  if (
+    !witnessObjectIs(before.value, after.value) ||
+    before.configurable !== after.configurable ||
+    before.enumerable !== after.enumerable ||
+    before.writable !== after.writable
+  ) {
+    throw new TypeError(`Mutation replay request ${label} changed during validation.`);
+  }
+  return before.value;
 }
 
 function mutationReplayKey(scope: string, idem: string): string {
