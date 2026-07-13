@@ -3,6 +3,7 @@ import { createBoundedRuntimeAuditCollector } from '@kovojs/core/internal/securi
 import { runtimeEnvironmentValue } from './runtime-environment-authority.js';
 
 import {
+  createSecurityNullRecord,
   createSecurityMap,
   createSecuritySet,
   securityArrayJoin,
@@ -26,6 +27,11 @@ import {
   securityStringToLowerCase,
   securityStringTrim,
 } from './response-security-intrinsics.js';
+import {
+  witnessFreeze,
+  witnessGetOwnPropertyDescriptor,
+  witnessObjectIs,
+} from './security-witness-intrinsics.js';
 
 /**
  * The security class of a cookie, which selects the by-construction attribute floor applied at the
@@ -107,6 +113,126 @@ export interface CookieOptions {
   unsafe?: UnsafeCookieDowngrade;
 }
 
+const COOKIE_OPTION_KEYS = [
+  'class',
+  'domain',
+  'expires',
+  'httpOnly',
+  'maxAge',
+  'partitioned',
+  'path',
+  'priority',
+  'productionSecure',
+  'sameSite',
+  'secure',
+  'unsafe',
+] as const satisfies readonly (keyof CookieOptions)[];
+
+function snapshotCookieOptions(options: CookieOptions): CookieOptions {
+  if (typeof options !== 'object' || options === null) {
+    throw new TypeError('Cookie options must be an object.');
+  }
+  const snapshot = createSecurityNullRecord<unknown>() as Record<keyof CookieOptions, unknown>;
+  for (let index = 0; index < COOKIE_OPTION_KEYS.length; index += 1) {
+    const key = COOKIE_OPTION_KEYS[index]!;
+    snapshot[key] = stableOwnCookieValue(options, key, 'Cookie options');
+  }
+
+  assertOptionalCookieClass(snapshot.class, 'Cookie options.class');
+  assertOptionalCookieString(snapshot.domain, 'Cookie options.domain');
+  if (
+    snapshot.expires !== undefined &&
+    typeof snapshot.expires !== 'string' &&
+    !securityIsDate(snapshot.expires)
+  ) {
+    throw new TypeError('Cookie options.expires must be a Date or string.');
+  }
+  assertOptionalCookieBoolean(snapshot.httpOnly, 'Cookie options.httpOnly');
+  if (snapshot.maxAge !== undefined && typeof snapshot.maxAge !== 'number') {
+    throw new TypeError('Cookie options.maxAge must be a number.');
+  }
+  assertOptionalCookieBoolean(snapshot.partitioned, 'Cookie options.partitioned');
+  assertOptionalCookieString(snapshot.path, 'Cookie options.path');
+  if (
+    snapshot.priority !== undefined &&
+    snapshot.priority !== 'high' &&
+    snapshot.priority !== 'low' &&
+    snapshot.priority !== 'medium'
+  ) {
+    throw new TypeError('Cookie options.priority must be high, low, or medium.');
+  }
+  assertOptionalCookieBoolean(snapshot.productionSecure, 'Cookie options.productionSecure');
+  assertOptionalSameSite(snapshot.sameSite, 'Cookie options.sameSite');
+  assertOptionalCookieBoolean(snapshot.secure, 'Cookie options.secure');
+  if (snapshot.unsafe !== undefined) {
+    snapshot.unsafe = snapshotUnsafeCookieDowngrade(snapshot.unsafe);
+  }
+  return witnessFreeze(snapshot) as CookieOptions;
+}
+
+function snapshotUnsafeCookieDowngrade(value: unknown): UnsafeCookieDowngrade {
+  if (typeof value !== 'object' || value === null) {
+    throw new TypeError('unsafeCookie input must be an object with exact own data properties.');
+  }
+  const justification = stableRequiredOwnCookieValue(value, 'justification', 'unsafeCookie input');
+  const downgrade = stableRequiredOwnCookieValue(value, 'downgrade', 'unsafeCookie input');
+  if (typeof justification !== 'string') {
+    throw new TypeError('unsafeCookie justification must be a string.');
+  }
+  if (typeof downgrade !== 'object' || downgrade === null) {
+    throw new TypeError('unsafeCookie downgrade must be an object.');
+  }
+
+  const httpOnly = stableOwnCookieValue(downgrade, 'httpOnly', 'unsafeCookie downgrade');
+  const sameSite = stableOwnCookieValue(downgrade, 'sameSite', 'unsafeCookie downgrade');
+  const secure = stableOwnCookieValue(downgrade, 'secure', 'unsafeCookie downgrade');
+  assertOptionalCookieBoolean(httpOnly, 'unsafeCookie downgrade.httpOnly');
+  assertOptionalSameSite(sameSite, 'unsafeCookie downgrade.sameSite');
+  assertOptionalCookieBoolean(secure, 'unsafeCookie downgrade.secure');
+
+  const closedDowngrade = createSecurityNullRecord<unknown>() as Record<
+    keyof UnsafeCookieDowngrade['downgrade'],
+    unknown
+  >;
+  closedDowngrade.httpOnly = httpOnly;
+  closedDowngrade.sameSite = sameSite;
+  closedDowngrade.secure = secure;
+  const closed = createSecurityNullRecord<unknown>() as Record<
+    keyof UnsafeCookieDowngrade,
+    unknown
+  >;
+  closed.downgrade = witnessFreeze(closedDowngrade);
+  closed.justification = justification;
+  return witnessFreeze(closed) as unknown as UnsafeCookieDowngrade;
+}
+
+function assertOptionalCookieClass(value: unknown, label: string): asserts value is CookieClass {
+  if (value !== undefined && value !== 'app-data' && value !== 'auth' && value !== 'session') {
+    throw new TypeError(`${label} must be a valid cookie class.`);
+  }
+}
+
+function assertOptionalSameSite(
+  value: unknown,
+  label: string,
+): asserts value is CookieOptions['sameSite'] {
+  if (value !== undefined && value !== 'lax' && value !== 'none' && value !== 'strict') {
+    throw new TypeError(`${label} must be lax, none, or strict.`);
+  }
+}
+
+function assertOptionalCookieBoolean(value: unknown, label: string): asserts value is boolean {
+  if (value !== undefined && typeof value !== 'boolean') {
+    throw new TypeError(`${label} must be a boolean.`);
+  }
+}
+
+function assertOptionalCookieString(value: unknown, label: string): asserts value is string {
+  if (value !== undefined && typeof value !== 'string') {
+    throw new TypeError(`${label} must be a string.`);
+  }
+}
+
 /**
  * Construct the audited `unsafe` escape for an intentional insecure cookie downgrade
  * (SPEC §6.6/§9.1). Without this escape, downgrading a `session`/`auth`-class cookie's floor
@@ -121,13 +247,14 @@ export interface CookieOptions {
  * });
  */
 export function unsafeCookie(downgrade: UnsafeCookieDowngrade): UnsafeCookieDowngrade {
+  const snapshot = snapshotUnsafeCookieDowngrade(downgrade);
   if (
-    typeof downgrade.justification !== 'string' ||
-    securityStringTrim(downgrade.justification) === ''
+    typeof snapshot.justification !== 'string' ||
+    securityStringTrim(snapshot.justification) === ''
   ) {
     throw new Error('unsafeCookie requires a non-empty justification (KV432).');
   }
-  return downgrade;
+  return snapshot;
 }
 
 /**
@@ -145,7 +272,19 @@ export interface CookieDowngradeFact {
 const cookieDowngradeFacts = createBoundedRuntimeAuditCollector<CookieDowngradeFact>();
 
 function recordCookieDowngradeFact(fact: CookieDowngradeFact): void {
-  cookieDowngradeFacts.record(fact);
+  const unsafe = snapshotUnsafeCookieDowngrade({
+    downgrade: fact.downgrade,
+    justification: fact.justification,
+  });
+  const snapshot = createSecurityNullRecord<unknown>() as Record<
+    keyof CookieDowngradeFact,
+    unknown
+  >;
+  snapshot.class = fact.class;
+  snapshot.downgrade = unsafe.downgrade;
+  snapshot.justification = unsafe.justification;
+  snapshot.name = fact.name;
+  cookieDowngradeFacts.record(witnessFreeze(snapshot) as unknown as CookieDowngradeFact);
 }
 
 /**
@@ -190,6 +329,63 @@ export interface ForwardSetCookiePosture {
   secure?: boolean;
   /** Audit-only source label for the internal caller that owns the upstream cookie. */
   source: 'better-auth-credential' | 'csrf' | 'legacy-normalize' | 'session-provider';
+}
+
+function snapshotForwardSetCookiePosture(
+  posture: ForwardSetCookiePosture,
+): ForwardSetCookiePosture {
+  if (typeof posture !== 'object' || posture === null) {
+    throw new TypeError('Forwarded Set-Cookie posture must be an object.');
+  }
+  const cookieClass = stableOwnCookieValue(posture, 'class', 'Forwarded Set-Cookie posture');
+  const secure = stableOwnCookieValue(posture, 'secure', 'Forwarded Set-Cookie posture');
+  const source = stableRequiredOwnCookieValue(posture, 'source', 'Forwarded Set-Cookie posture');
+  assertOptionalCookieClass(cookieClass, 'Forwarded Set-Cookie posture.class');
+  assertOptionalCookieBoolean(secure, 'Forwarded Set-Cookie posture.secure');
+  if (
+    source !== 'better-auth-credential' &&
+    source !== 'csrf' &&
+    source !== 'legacy-normalize' &&
+    source !== 'session-provider'
+  ) {
+    throw new TypeError('Forwarded Set-Cookie posture.source must identify a framework adapter.');
+  }
+  const snapshot = createSecurityNullRecord<unknown>() as Record<
+    keyof ForwardSetCookiePosture,
+    unknown
+  >;
+  snapshot.class = cookieClass;
+  snapshot.secure = secure;
+  snapshot.source = source;
+  return witnessFreeze(snapshot) as ForwardSetCookiePosture;
+}
+
+function stableRequiredOwnCookieValue(
+  value: object,
+  property: PropertyKey,
+  label: string,
+): unknown {
+  const result = stableOwnCookieValue(value, property, label);
+  if (witnessGetOwnPropertyDescriptor(value, property) === undefined) {
+    throw new TypeError(`${label}.${String(property)} must be an own data property.`);
+  }
+  return result;
+}
+
+function stableOwnCookieValue(value: object, property: PropertyKey, label: string): unknown {
+  const before = witnessGetOwnPropertyDescriptor(value, property);
+  const after = witnessGetOwnPropertyDescriptor(value, property);
+  if ((before === undefined) !== (after === undefined)) {
+    throw new TypeError(`${label}.${String(property)} must be stable.`);
+  }
+  if (before === undefined) return undefined;
+  if (!('value' in before) || after === undefined || !('value' in after)) {
+    throw new TypeError(`${label}.${String(property)} must be an own data property.`);
+  }
+  if (!witnessObjectIs(before.value, after.value)) {
+    throw new TypeError(`${label}.${String(property)} changed during validation.`);
+  }
+  return before.value;
 }
 
 /**
@@ -328,6 +524,7 @@ function applyCookieNamePrefix(
 }
 
 export function serializeCookie(name: string, value: string, options: CookieOptions = {}): string {
+  const closedOptions = snapshotCookieOptions(options);
   assertCookieName(name);
   // SPEC §9.1.1:846: reject any control character (B4) before encoding; then
   // percent-encode the value so spaces, commas, equals, etc. cannot inject a
@@ -342,35 +539,35 @@ export function serializeCookie(name: string, value: string, options: CookieOpti
   // shipped without a declared class fails closed. Emitting a client-readable cookie must be an
   // explicit, auditable `class: 'app-data'`; there is no name-guessing heuristic (which would fail
   // open on any unrecognized credential name like `access_token`/`jwt`/`bearer`).
-  const cookieClass = options.class ?? 'session';
+  const cookieClass = closedOptions.class ?? 'session';
   const isCredential = isCredentialClass(cookieClass);
-  const floored = applyCookieFloor(name, cookieClass, options);
-  const effectiveName = applyCookieNamePrefix(name, cookieClass, floored, options);
+  const floored = applyCookieFloor(name, cookieClass, closedOptions);
+  const effectiveName = applyCookieNamePrefix(name, cookieClass, floored, closedOptions);
 
   const encodedValue = securityEncodeURIComponent(value);
   const parts = [`${effectiveName}=${encodedValue}`];
 
-  if (options.maxAge !== undefined) {
-    if (!securityNumberIsInteger(options.maxAge)) {
+  if (closedOptions.maxAge !== undefined) {
+    if (!securityNumberIsInteger(closedOptions.maxAge)) {
       throw new Error('Cookie maxAge must be an integer');
     }
-    securityArrayPush(parts, `Max-Age=${options.maxAge}`);
+    securityArrayPush(parts, `Max-Age=${closedOptions.maxAge}`);
   }
-  if (options.domain !== undefined) {
-    assertCookieOctets(options.domain, 'cookie domain');
-    securityArrayPush(parts, `Domain=${options.domain}`);
+  if (closedOptions.domain !== undefined) {
+    assertCookieOctets(closedOptions.domain, 'cookie domain');
+    securityArrayPush(parts, `Domain=${closedOptions.domain}`);
   }
   // `__Host-`-prefixed cookies require `Path=/`; the floor defaults Path for credential cookies so
   // the prefix contract holds even when the caller omitted it.
-  const effectivePath = options.path ?? (isCredential ? '/' : undefined);
+  const effectivePath = closedOptions.path ?? (isCredential ? '/' : undefined);
   if (effectivePath !== undefined) {
     assertCookieOctets(effectivePath, 'cookie path');
     securityArrayPush(parts, `Path=${effectivePath}`);
   }
-  if (options.expires !== undefined) {
-    const expires = securityIsDate(options.expires)
-      ? securityDateToUtcString(options.expires)
-      : options.expires;
+  if (closedOptions.expires !== undefined) {
+    const expires = securityIsDate(closedOptions.expires)
+      ? securityDateToUtcString(closedOptions.expires)
+      : closedOptions.expires;
     assertCookieOctets(expires, 'cookie expires');
     securityArrayPush(parts, `Expires=${expires}`);
   }
@@ -384,17 +581,17 @@ export function serializeCookie(name: string, value: string, options: CookieOpti
     }[floored.sameSite];
     securityArrayPush(parts, `SameSite=${sameSite}`);
   }
-  if (options.priority !== undefined) {
+  if (closedOptions.priority !== undefined) {
     const priority = {
       high: 'High',
       low: 'Low',
       medium: 'Medium',
-    }[options.priority];
+    }[closedOptions.priority];
     securityArrayPush(parts, `Priority=${priority}`);
   }
   // `Partitioned` is a valueless attribute; emit it last so it survives the round-trip
   // through `parseSetCookieHeader` (part-3 I1, SPEC §9.1.1).
-  if (options.partitioned) securityArrayPush(parts, 'Partitioned');
+  if (closedOptions.partitioned) securityArrayPush(parts, 'Partitioned');
 
   return securityArrayJoin(parts, '; ');
 }
@@ -457,12 +654,13 @@ function parseSetCookieHeader(raw: string): ParsedSetCookie | undefined {
  * adapters should use; app-authored cookies still go through `serializeCookie`.
  */
 export function forwardSetCookie(raw: string, posture: ForwardSetCookiePosture): string {
+  const closedPosture = snapshotForwardSetCookiePosture(posture);
   assertNoHeaderControlCharacters(raw, 'Set-Cookie');
   const parsed = parseSetCookieHeader(raw);
   if (parsed === undefined) throw new Error('forwardSetCookie requires a name=value Set-Cookie');
   assertCookieName(parsed.name);
 
-  const cookieClass = posture.class ?? 'session';
+  const cookieClass = closedPosture.class ?? 'session';
   const { byName } = parsed;
   const sameSiteRaw = securityMapGet(byName, 'samesite')?.value;
   const sameSite = forwardedSameSite(sameSiteRaw);
@@ -474,7 +672,7 @@ export function forwardSetCookie(raw: string, posture: ForwardSetCookiePosture):
   // brought UP to the floor; we never downgrade a forwarded credential cookie, so no `unsafe` escape
   // is involved here. To preserve the upstream's intent where it set SameSite=None (a deliberate
   // cross-site embed), we keep it but pair it with Secure (browsers require Secure for SameSite=None).
-  const productionSecure = isProductionRuntime() || posture.secure === true;
+  const productionSecure = isProductionRuntime() || closedPosture.secure === true;
   const floorHttpOnly = isCredentialClass(cookieClass) ? true : upstreamHttpOnly;
   const floorSecure = isCredentialClass(cookieClass)
     ? upstreamSecure || productionSecure || sameSite === 'none'

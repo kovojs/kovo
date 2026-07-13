@@ -172,6 +172,46 @@ describe('cookie header helpers', () => {
     );
   });
 
+  it('ignores inherited cookie options and refuses accessor-backed security posture', () => {
+    process.env.NODE_ENV = 'development';
+    const inherited = Object.create({
+      class: 'app-data',
+      httpOnly: false,
+      path: '/attacker',
+      sameSite: 'none',
+      secure: false,
+    }) as Parameters<typeof serializeCookie>[2];
+
+    expect(serializeCookie('sid', 'credential', inherited)).toBe(
+      'sid=credential; Path=/; HttpOnly; SameSite=Lax',
+    );
+
+    let getterCalls = 0;
+    const accessor = {} as Parameters<typeof serializeCookie>[2];
+    Object.defineProperty(accessor, 'class', {
+      configurable: true,
+      get() {
+        getterCalls += 1;
+        return 'app-data';
+      },
+    });
+    expect(() => serializeCookie('sid', 'credential', accessor)).toThrow('own data property');
+    expect(getterCalls).toBe(0);
+  });
+
+  it('rejects invalid class and SameSite values instead of emitting a browser-ignored floor', () => {
+    expect(() =>
+      serializeCookie('sid', 'credential', {
+        class: 'credential' as never,
+      }),
+    ).toThrow('cookie class');
+    expect(() =>
+      serializeCookie('sid', 'credential', {
+        sameSite: 'same-origin' as never,
+      }),
+    ).toThrow('sameSite');
+  });
+
   // L2 (SPEC §9.1.1): an app-data cookie with SameSite=None is auto-paired with Secure so browsers
   // do not silently drop it — mirroring the credential and forwarded paths. Previously the app-data
   // branch returned `secure: options.secure` verbatim, emitting `SameSite=None` without `Secure`.
@@ -423,6 +463,42 @@ describe('cookie security floor (SF Phase 5, SPEC §6.6/§9.1)', () => {
     );
   });
 
+  it('snapshots unsafeCookie audit carriers from exact own data without invoking accessors', () => {
+    const inherited = Object.create({
+      downgrade: { httpOnly: false },
+      justification: 'prototype pollution',
+    });
+    expect(() => unsafeCookie(inherited)).toThrow('own data property');
+
+    let getterCalls = 0;
+    const accessor = {
+      downgrade: { httpOnly: false },
+    } as { downgrade: { httpOnly: boolean }; justification?: string };
+    Object.defineProperty(accessor, 'justification', {
+      configurable: true,
+      get() {
+        getterCalls += 1;
+        return 'accessor-provided audit reason';
+      },
+    });
+    expect(() => unsafeCookie(accessor as never)).toThrow('own data property');
+    expect(getterCalls).toBe(0);
+
+    const source = {
+      downgrade: { httpOnly: false },
+      justification: 'legacy credential bridge',
+    };
+    const snapshot = unsafeCookie(source);
+    source.downgrade.httpOnly = true;
+    source.justification = 'changed after validation';
+    expect(snapshot).toEqual({
+      downgrade: { httpOnly: false },
+      justification: 'legacy credential bridge',
+    });
+    expect(Object.isFrozen(snapshot)).toBe(true);
+    expect(Object.isFrozen(snapshot.downgrade)).toBe(true);
+  });
+
   // Forwarded better-auth Set-Cookie normalization through the floor (preserve Partitioned/Priority).
   it('normalizes a forwarded Set-Cookie up to the session floor, preserving Partitioned/Priority', () => {
     process.env.NODE_ENV = 'production';
@@ -470,6 +546,36 @@ describe('cookie security floor (SF Phase 5, SPEC §6.6/§9.1)', () => {
     expect(forwarded).toContain('HttpOnly');
     expect(forwarded).toContain('Secure');
     expect(forwarded).toContain('SameSite=Lax');
+  });
+
+  it('pins forwarded-cookie posture to exact own data and validates its cookie class', () => {
+    process.env.NODE_ENV = 'development';
+    const inherited = Object.create({ class: 'app-data', secure: false }) as Parameters<
+      typeof forwardSetCookie
+    >[1];
+    Object.defineProperty(inherited, 'source', {
+      configurable: true,
+      enumerable: true,
+      value: 'session-provider',
+    });
+    expect(forwardSetCookie('sid=credential', inherited)).toBe(
+      'sid=credential; Path=/; HttpOnly; SameSite=Lax',
+    );
+
+    let getterCalls = 0;
+    const accessor = { source: 'session-provider' } as Parameters<typeof forwardSetCookie>[1];
+    Object.defineProperty(accessor, 'class', {
+      configurable: true,
+      get() {
+        getterCalls += 1;
+        return 'app-data';
+      },
+    });
+    expect(() => forwardSetCookie('sid=credential', accessor)).toThrow('own data property');
+    expect(getterCalls).toBe(0);
+    expect(() => normalizeForwardedSetCookie('sid=credential', 'credential' as never)).toThrow(
+      'cookie class',
+    );
   });
 
   it('preserves deletion cookies while applying the credential floor', () => {
