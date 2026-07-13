@@ -21,6 +21,7 @@ import {
   buildSecuritySha256Hex,
   buildSecuritySourceLiteral,
   commitBuildArrayValue,
+  freezeBuildSecurityValue,
   snapshotBuildArray,
 } from './build-security-intrinsics.js';
 import type { KovoNeutralBuild } from './neutral-build.js';
@@ -28,9 +29,11 @@ import { writeArtifactOutput, type ArtifactOutputEntry } from './output-staging.
 import {
   createSecurityNullRecord,
   securityArrayJoin,
+  securityArrayIsArray,
   securityIsPromise,
   securityJsonParse,
   securityNumberIsFinite,
+  securityNumberIsInteger,
   securityObjectKeys,
   securityPromiseResolve,
   securityPromiseThen,
@@ -255,37 +258,41 @@ export function defineConfig(config: KovoConfig): KovoConfig {
  * @experimental
  */
 export function node(options: NodePresetOptions = {}): KovoPreset {
-  const jobRunner = nodeJobRunnerCapability(options);
+  const pinnedOptions = snapshotNodePresetOptions(options);
+  const jobRunner = nodeJobRunnerCapability(pinnedOptions);
   const constructionProjectRoot = resolvedFileSystemPath(process.cwd());
-  return {
-    ...(jobRunner === undefined ? {} : { capabilities: { jobRunner } }),
-    emit(build, context) {
-      return emitNodePreset(build, context, options, constructionProjectRoot);
-    },
-    inspect(build, context) {
-      const retentionDiagnostics = clientModuleRetentionDiagnostics(build, 'node', options);
-      const runnerDiagnostics = nodeJobRunnerDiagnostics(build, options, jobRunner, context);
-      const appendNodeDiagnostics = (
-        jobRunnerDiagnostics: readonly PresetDiagnostic[],
-      ): readonly PresetDiagnostic[] =>
-        nodePresetDiagnostics(
-          build,
-          concatenatePresetDiagnostics(
-            retentionDiagnostics,
-            jobRunnerDiagnostics,
-            'node preset diagnostics',
-          ),
-        );
-      if (securityIsPromise(runnerDiagnostics)) {
-        return securityPromiseThen(
-          runnerDiagnostics as Promise<readonly PresetDiagnostic[]>,
-          appendNodeDiagnostics,
-        );
-      }
-      return appendNodeDiagnostics(runnerDiagnostics);
-    },
-    name: 'node',
+  const preset = createSecurityNullRecord() as KovoPreset;
+  if (jobRunner !== undefined) {
+    const capabilities = createSecurityNullRecord() as KovoPresetCapabilities;
+    capabilities.jobRunner = jobRunner;
+    preset.capabilities = freezeBuildSecurityValue(capabilities);
+  }
+  preset.emit = (build, context) =>
+    emitNodePreset(build, context, pinnedOptions, constructionProjectRoot);
+  preset.inspect = (build, context) => {
+    const retentionDiagnostics = clientModuleRetentionDiagnostics(build, 'node', pinnedOptions);
+    const runnerDiagnostics = nodeJobRunnerDiagnostics(build, pinnedOptions, jobRunner, context);
+    const appendNodeDiagnostics = (
+      jobRunnerDiagnostics: readonly PresetDiagnostic[],
+    ): readonly PresetDiagnostic[] =>
+      nodePresetDiagnostics(
+        build,
+        concatenatePresetDiagnostics(
+          retentionDiagnostics,
+          jobRunnerDiagnostics,
+          'node preset diagnostics',
+        ),
+      );
+    if (securityIsPromise(runnerDiagnostics)) {
+      return securityPromiseThen(
+        runnerDiagnostics as Promise<readonly PresetDiagnostic[]>,
+        appendNodeDiagnostics,
+      );
+    }
+    return appendNodeDiagnostics(runnerDiagnostics);
   };
+  preset.name = 'node';
+  return freezeBuildSecurityValue(preset) as KovoPreset;
 }
 
 /**
@@ -298,31 +305,30 @@ export function node(options: NodePresetOptions = {}): KovoPreset {
  * @experimental
  */
 export function vercel(options: VercelPresetOptions = {}): KovoPreset {
-  return {
-    emit(build, context) {
-      return emitVercelPreset(build, context, options);
-    },
-    inspect(build, _context) {
-      const diagnostics = concatenatePresetDiagnostics(
-        clientModuleRetentionDiagnostics(build, 'vercel', options),
-        missingJobRunnerDiagnostics(build, 'vercel'),
-        'vercel preset diagnostics',
+  const pinnedOptions = snapshotVercelPresetOptions(options);
+  const preset = createSecurityNullRecord() as KovoPreset;
+  preset.emit = (build, context) => emitVercelPreset(build, context, pinnedOptions);
+  preset.inspect = (build, _context) => {
+    const diagnostics = concatenatePresetDiagnostics(
+      clientModuleRetentionDiagnostics(build, 'vercel', pinnedOptions),
+      missingJobRunnerDiagnostics(build, 'vercel'),
+      'vercel preset diagnostics',
+    );
+    if (build.serverHandlerPath === undefined && build.staticOutput === undefined) {
+      appendPresetDiagnostic(
+        diagnostics,
+        {
+          code: 'vercel-missing-handler',
+          message: 'The vercel preset requires a neutral build with server/handler.mjs.',
+          severity: 'error',
+        },
+        'vercel missing-handler diagnostic',
       );
-      if (build.serverHandlerPath === undefined && build.staticOutput === undefined) {
-        appendPresetDiagnostic(
-          diagnostics,
-          {
-            code: 'vercel-missing-handler',
-            message: 'The vercel preset requires a neutral build with server/handler.mjs.',
-            severity: 'error',
-          },
-          'vercel missing-handler diagnostic',
-        );
-      }
-      return diagnostics;
-    },
-    name: 'vercel',
+    }
+    return diagnostics;
   };
+  preset.name = 'vercel';
+  return freezeBuildSecurityValue(preset) as KovoPreset;
 }
 
 /**
@@ -335,38 +341,36 @@ export function vercel(options: VercelPresetOptions = {}): KovoPreset {
  */
 export function cloudflare(options: CloudflarePresetOptions = {}): KovoPreset {
   const pinnedOptions = snapshotCloudflarePresetOptions(options);
-  return {
-    emit(build, context) {
-      return emitCloudflarePreset(build, context, pinnedOptions);
-    },
-    async inspect(build, context) {
-      const diagnostics = concatenatePresetDiagnostics(
-        clientModuleRetentionDiagnostics(build, 'cloudflare', pinnedOptions),
-        missingJobRunnerDiagnostics(build, 'cloudflare'),
-        'cloudflare preset diagnostics',
-      );
-      if (build.serverHandlerPath === undefined && build.staticOutput === undefined) {
-        appendPresetDiagnostic(
-          diagnostics,
-          {
-            code: 'cloudflare-missing-handler',
-            message: 'The cloudflare preset requires a neutral build with server/handler.mjs.',
-            severity: 'error',
-          },
-          'cloudflare missing-handler diagnostic',
-        );
-      }
-      if (build.serverHandlerPath === undefined) return diagnostics;
-
-      appendPresetDiagnostics(
+  const preset = createSecurityNullRecord() as KovoPreset;
+  preset.emit = (build, context) => emitCloudflarePreset(build, context, pinnedOptions);
+  preset.inspect = async (build, context) => {
+    const diagnostics = concatenatePresetDiagnostics(
+      clientModuleRetentionDiagnostics(build, 'cloudflare', pinnedOptions),
+      missingJobRunnerDiagnostics(build, 'cloudflare'),
+      'cloudflare preset diagnostics',
+    );
+    if (build.serverHandlerPath === undefined && build.staticOutput === undefined) {
+      appendPresetDiagnostic(
         diagnostics,
-        await cloudflareRuntimeDiagnostics(build, context),
-        'cloudflare runtime diagnostics',
+        {
+          code: 'cloudflare-missing-handler',
+          message: 'The cloudflare preset requires a neutral build with server/handler.mjs.',
+          severity: 'error',
+        },
+        'cloudflare missing-handler diagnostic',
       );
-      return diagnostics;
-    },
-    name: 'cloudflare',
+    }
+    if (build.serverHandlerPath === undefined) return diagnostics;
+
+    appendPresetDiagnostics(
+      diagnostics,
+      await cloudflareRuntimeDiagnostics(build, context),
+      'cloudflare runtime diagnostics',
+    );
+    return diagnostics;
   };
+  preset.name = 'cloudflare';
+  return freezeBuildSecurityValue(preset) as KovoPreset;
 }
 
 async function emitNodePreset(
@@ -640,7 +644,10 @@ function deploySkewRetentionProofSatisfiesFloor(
 function nodeJobRunnerCapability(options: NodePresetOptions): JobRunnerCapability | undefined {
   if (options.jobRunner === false) return undefined;
   if (options.jobRunner?.mode === 'runner-only') return undefined;
-  return { adapter: 'node-in-process', mode: 'serve-and-run' };
+  const capability = createSecurityNullRecord() as unknown as JobRunnerCapability;
+  capability.adapter = 'node-in-process';
+  capability.mode = 'serve-and-run';
+  return freezeBuildSecurityValue(capability) as JobRunnerCapability;
 }
 
 function nodeJobRunnerDiagnostics(
@@ -2007,6 +2014,135 @@ function tomlString(value: string): string {
   return buildSecuritySourceLiteral(value);
 }
 
+function snapshotNodePresetOptions(options: NodePresetOptions): NodePresetOptions {
+  if (typeof options !== 'object' || options === null) {
+    throw new TypeError('Node preset options must be an own-data object.');
+  }
+  const dockerfileProperty = buildOwnDataProperty(
+    options,
+    'dockerfile',
+    'Node preset options.dockerfile',
+  );
+  if (
+    dockerfileProperty.present &&
+    dockerfileProperty.value !== undefined &&
+    typeof dockerfileProperty.value !== 'boolean'
+  ) {
+    throw new TypeError('Node preset option dockerfile must be a boolean.');
+  }
+  const jobRunnerProperty = buildOwnDataProperty(
+    options,
+    'jobRunner',
+    'Node preset options.jobRunner',
+  );
+  const retentionProperty = buildOwnDataProperty(
+    options,
+    'retention',
+    'Node preset options.retention',
+  );
+  const jobRunner =
+    !jobRunnerProperty.present || jobRunnerProperty.value === undefined
+      ? undefined
+      : snapshotNodeJobRunnerOptions(jobRunnerProperty.value);
+  const retention =
+    !retentionProperty.present || retentionProperty.value === undefined
+      ? undefined
+      : snapshotDeploySkewRetentionProof(retentionProperty.value, 'Node');
+  const snapshot = createSecurityNullRecord() as NodePresetOptions;
+  if (dockerfileProperty.present && dockerfileProperty.value !== undefined) {
+    snapshot.dockerfile = dockerfileProperty.value as boolean;
+  }
+  if (jobRunner !== undefined) snapshot.jobRunner = jobRunner;
+  if (retention !== undefined) snapshot.retention = retention;
+  return snapshot;
+}
+
+function snapshotNodeJobRunnerOptions(value: unknown): NodeJobRunnerOptions | false {
+  if (value === false) return false;
+  if (typeof value !== 'object' || value === null) {
+    throw new TypeError('Node preset option jobRunner must be false or an own-data object.');
+  }
+  const modeProperty = buildOwnDataProperty(value, 'mode', 'Node preset options.jobRunner.mode');
+  if (
+    modeProperty.present &&
+    modeProperty.value !== undefined &&
+    modeProperty.value !== 'serve-and-run' &&
+    modeProperty.value !== 'runner-only'
+  ) {
+    throw new TypeError(
+      'Node preset option jobRunner.mode must be serve-and-run or runner-only.',
+    );
+  }
+  const snapshot = createSecurityNullRecord() as NodeJobRunnerOptions;
+  if (modeProperty.present && modeProperty.value !== undefined) {
+    snapshot.mode = modeProperty.value as NodeJobRunnerOptions['mode'];
+  }
+  return snapshot;
+}
+
+function snapshotVercelPresetOptions(options: VercelPresetOptions): VercelPresetOptions {
+  if (typeof options !== 'object' || options === null) {
+    throw new TypeError('Vercel preset options must be an own-data object.');
+  }
+  const maxDuration = optionalVercelPresetNumber(options, 'maxDuration');
+  const memory = optionalVercelPresetNumber(options, 'memory');
+  const regionsProperty = buildOwnDataProperty(
+    options,
+    'regions',
+    'Vercel preset options.regions',
+  );
+  const retentionProperty = buildOwnDataProperty(
+    options,
+    'retention',
+    'Vercel preset options.retention',
+  );
+  const regions =
+    !regionsProperty.present || regionsProperty.value === undefined
+      ? undefined
+      : snapshotVercelRegions(regionsProperty.value);
+  const retention =
+    !retentionProperty.present || retentionProperty.value === undefined
+      ? undefined
+      : snapshotDeploySkewRetentionProof(retentionProperty.value, 'Vercel');
+  const snapshot = createSecurityNullRecord() as VercelPresetOptions;
+  if (maxDuration !== undefined) snapshot.maxDuration = maxDuration;
+  if (memory !== undefined) snapshot.memory = memory;
+  if (regions !== undefined) snapshot.regions = regions;
+  if (retention !== undefined) snapshot.retention = retention;
+  return snapshot;
+}
+
+function optionalVercelPresetNumber(
+  options: object,
+  property: 'maxDuration' | 'memory',
+): number | undefined {
+  const field = buildOwnDataProperty(options, property, `Vercel preset options.${property}`);
+  if (!field.present || field.value === undefined) return undefined;
+  if (
+    typeof field.value !== 'number' ||
+    !securityNumberIsFinite(field.value) ||
+    !securityNumberIsInteger(field.value) ||
+    field.value <= 0 ||
+    field.value > 9_007_199_254_740_991
+  ) {
+    throw new TypeError(`Vercel preset option ${property} must be a positive safe integer.`);
+  }
+  return field.value;
+}
+
+function snapshotVercelRegions(value: unknown): readonly string[] {
+  if (!securityArrayIsArray(value)) {
+    throw new TypeError('Vercel preset option regions must be an array.');
+  }
+  const regions = snapshotBuildArray(value, 'Vercel preset regions');
+  for (let index = 0; index < regions.length; index += 1) {
+    if (typeof regions[index] !== 'string') {
+      throw new TypeError(`Vercel preset option regions[${index}] must be a string.`);
+    }
+  }
+  return regions as readonly string[];
+}
+
 function snapshotCloudflarePresetOptions(
   options: CloudflarePresetOptions,
 ): CloudflarePresetOptions {
@@ -2024,12 +2160,12 @@ function snapshotCloudflarePresetOptions(
   const retention =
     !retentionProperty.present || retentionProperty.value === undefined
       ? undefined
-      : snapshotDeploySkewRetentionProof(retentionProperty.value);
-  return {
-    ...(compatibilityDate === undefined ? {} : { compatibilityDate }),
-    ...(name === undefined ? {} : { name }),
-    ...(retention === undefined ? {} : { retention }),
-  };
+      : snapshotDeploySkewRetentionProof(retentionProperty.value, 'Cloudflare');
+  const snapshot = createSecurityNullRecord() as CloudflarePresetOptions;
+  if (compatibilityDate !== undefined) snapshot.compatibilityDate = compatibilityDate;
+  if (name !== undefined) snapshot.name = name;
+  if (retention !== undefined) snapshot.retention = retention;
+  return snapshot;
 }
 
 function optionalCloudflarePresetString(
@@ -2044,37 +2180,51 @@ function optionalCloudflarePresetString(
   return field.value;
 }
 
-function snapshotDeploySkewRetentionProof(value: unknown): DeploySkewRetentionProof {
+function snapshotDeploySkewRetentionProof(
+  value: unknown,
+  presetName: string,
+): DeploySkewRetentionProof {
   if (typeof value !== 'object' || value === null) {
-    throw new TypeError('Cloudflare preset retention proof must be an own-data object.');
+    throw new TypeError(`${presetName} preset retention proof must be an own-data object.`);
   }
-  const hours = buildOwnDataProperty(value, 'hours', 'Cloudflare retention proof.hours');
+  const hours = buildOwnDataProperty(value, 'hours', `${presetName} retention proof.hours`);
   const immutableClientModules = buildOwnDataProperty(
     value,
     'immutableClientModules',
-    'Cloudflare retention proof.immutableClientModules',
+    `${presetName} retention proof.immutableClientModules`,
   );
   const priorTokenQueryReads = buildOwnDataProperty(
     value,
     'priorTokenQueryReads',
-    'Cloudflare retention proof.priorTokenQueryReads',
+    `${presetName} retention proof.priorTokenQueryReads`,
   );
-  if (!hours.present || typeof hours.value !== 'number') {
-    throw new TypeError('Cloudflare preset retention proof hours must be a number.');
+  if (
+    !hours.present ||
+    typeof hours.value !== 'number' ||
+    !securityNumberIsFinite(hours.value) ||
+    !securityNumberIsInteger(hours.value) ||
+    hours.value < 0 ||
+    hours.value > 9_007_199_254_740_991
+  ) {
+    throw new TypeError(
+      `${presetName} preset retention proof hours must be a finite non-negative safe integer.`,
+    );
   }
   if (!immutableClientModules.present || immutableClientModules.value !== 'retained') {
     throw new TypeError(
-      'Cloudflare preset retention proof immutableClientModules must be retained.',
+      `${presetName} preset retention proof immutableClientModules must be retained.`,
     );
   }
   if (!priorTokenQueryReads.present || priorTokenQueryReads.value !== 'retained') {
-    throw new TypeError('Cloudflare preset retention proof priorTokenQueryReads must be retained.');
+    throw new TypeError(
+      `${presetName} preset retention proof priorTokenQueryReads must be retained.`,
+    );
   }
-  return {
-    hours: hours.value,
-    immutableClientModules: immutableClientModules.value,
-    priorTokenQueryReads: priorTokenQueryReads.value,
-  };
+  const snapshot = createSecurityNullRecord() as unknown as DeploySkewRetentionProof;
+  snapshot.hours = hours.value;
+  snapshot.immutableClientModules = immutableClientModules.value;
+  snapshot.priorTokenQueryReads = priorTokenQueryReads.value;
+  return snapshot;
 }
 
 /**

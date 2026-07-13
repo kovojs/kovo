@@ -22,7 +22,13 @@ import { createApp } from './app.js';
 import { computeRenderPlanFingerprint } from './client-modules.js';
 import { renderedHtml } from './html.js';
 import { route } from './route.js';
-import { cloudflare, node, vercel } from './build.js';
+import {
+  cloudflare,
+  node,
+  vercel,
+  type NodePresetOptions,
+  type VercelPresetOptions,
+} from './build.js';
 import { stylesheet, type StylesheetAsset } from './hints.js';
 import { writeKovoNeutralBuild } from './neutral-build.js';
 import {
@@ -3711,6 +3717,196 @@ export default async function handler() {
       delete poisonGlobal.__kovoRestoreCloudflareStaticPoison;
       await rm(root, { force: true, recursive: true });
     }
+  });
+
+  it('pins Node preset authority before later app/config option mutation', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kovo-node-preset-option-authority-'));
+    const options = {
+      dockerfile: false,
+      jobRunner: { mode: 'serve-and-run' as const },
+      retention: {
+        hours: 24,
+        immutableClientModules: 'retained' as const,
+        priorTokenQueryReads: 'retained' as const,
+      },
+    } satisfies NodePresetOptions;
+    const preset = node(options);
+    const reviewedEmit = preset.emit;
+    const reviewedCapability = preset.capabilities?.jobRunner;
+
+    try {
+      const build = await writeKovoNeutralBuild({
+        app: createApp({}),
+        clientModules: [
+          {
+            path: '/c/app.client.js',
+            renderPlanFingerprint: testRenderPlanFingerprint,
+            source: 'export const app = true;',
+            version: 'app-v1',
+          },
+        ],
+        outDir: join(root, '.kovo'),
+        serverHandlerSource: 'export default async () => new Response("ok");\n',
+      });
+      options.dockerfile = true;
+      options.jobRunner.mode = 'runner-only';
+      options.retention.hours = 0;
+      expect(Reflect.set(preset, 'emit', async () => {})).toBe(false);
+      expect(Reflect.set(reviewedCapability!, 'mode', 'attacker-runner')).toBe(false);
+      expect(preset.emit).toBe(reviewedEmit);
+
+      expect(preset.capabilities).toEqual({
+        jobRunner: { adapter: 'node-in-process', mode: 'serve-and-run' },
+      });
+      expect(preset.inspect!(build, { declaredEnv: [] })).toEqual([]);
+
+      const outDir = join(root, 'node-output');
+      await preset.emit!(build, {
+        declaredEnv: [],
+        log() {},
+        outDir,
+        projectRoot: root,
+        readNeutral: () => build,
+      });
+      await expect(stat(join(outDir, 'Dockerfile'))).rejects.toThrow();
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
+  it('pins Vercel preset authority before later app/config option mutation', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kovo-vercel-preset-option-authority-'));
+    const options = {
+      maxDuration: 8,
+      memory: 1024,
+      regions: ['iad1'],
+      retention: {
+        hours: 24,
+        immutableClientModules: 'retained' as const,
+        priorTokenQueryReads: 'retained' as const,
+      },
+    } satisfies VercelPresetOptions;
+    const preset = vercel(options);
+
+    try {
+      const build = await writeKovoNeutralBuild({
+        app: createApp({}),
+        clientModules: [
+          {
+            path: '/c/app.client.js',
+            renderPlanFingerprint: testRenderPlanFingerprint,
+            source: 'export const app = true;',
+            version: 'app-v1',
+          },
+        ],
+        outDir: join(root, '.kovo'),
+        serverHandlerSource: 'export default async () => new Response("ok");\n',
+      });
+      options.maxDuration = 1;
+      options.memory = 128;
+      options.regions[0] = 'attacker1';
+      options.retention.hours = 0;
+
+      expect(preset.inspect!(build, { declaredEnv: [] })).toEqual([]);
+
+      const outDir = join(root, 'vercel-output');
+      await preset.emit!(build, {
+        declaredEnv: [],
+        log() {},
+        outDir,
+        readNeutral: () => build,
+      });
+      await expect(
+        readJson(join(outDir, 'functions/kovo.func/.vc-config.json')),
+      ).resolves.toMatchObject({ maxDuration: 8, memory: 1024, regions: ['iad1'] });
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
+  it('does not inherit missing built-in preset options after construction', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kovo-preset-option-prototype-authority-'));
+    const nodePreset = node({ dockerfile: false });
+    const vercelPreset = vercel();
+    const cloudflarePreset = cloudflare();
+    const objectPrototype = Object.prototype as Record<string, unknown>;
+
+    try {
+      const build = await writeKovoNeutralBuild({
+        app: createApp({}),
+        outDir: join(root, '.kovo'),
+        serverHandlerSource: 'export default async () => new Response("ok");\n',
+      });
+      objectPrototype.maxDuration = 1;
+      objectPrototype.memory = 128;
+      objectPrototype.regions = ['attacker1'];
+      objectPrototype.name = 'attacker-worker';
+      objectPrototype.compatibilityDate = '1999-01-01';
+
+      const nodeOutDir = join(root, 'node-output');
+      await nodePreset.emit!(build, {
+        declaredEnv: [],
+        log() {},
+        outDir: nodeOutDir,
+        projectRoot: root,
+        readNeutral: () => build,
+      });
+      await expect(stat(join(nodeOutDir, 'Dockerfile'))).rejects.toThrow();
+
+      const vercelOutDir = join(root, 'vercel-output');
+      await vercelPreset.emit!(build, {
+        declaredEnv: [],
+        log() {},
+        outDir: vercelOutDir,
+        readNeutral: () => build,
+      });
+      await expect(
+        readJson(join(vercelOutDir, 'functions/kovo.func/.vc-config.json')),
+      ).resolves.not.toMatchObject({ maxDuration: 1, memory: 128, regions: ['attacker1'] });
+
+      const cloudflareOutDir = join(root, 'cloudflare-output');
+      await cloudflarePreset.emit!(build, {
+        declaredEnv: [],
+        log() {},
+        outDir: cloudflareOutDir,
+        readNeutral: () => build,
+      });
+      const wrangler = await readFile(join(cloudflareOutDir, 'wrangler.toml'), 'utf8');
+      expect(wrangler).toContain('name = "kovo-app"');
+      expect(wrangler).toContain('compatibility_date = "2024-09-23"');
+      expect(wrangler).not.toContain('attacker-worker');
+    } finally {
+      delete objectPrototype.maxDuration;
+      delete objectPrototype.memory;
+      delete objectPrototype.regions;
+      delete objectPrototype.name;
+      delete objectPrototype.compatibilityDate;
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
+  it('rejects accessor-backed and invalid numeric built-in preset options at construction', () => {
+    let getterHits = 0;
+    const accessorOptions = Object.defineProperty({}, 'maxDuration', {
+      enumerable: true,
+      get() {
+        getterHits += 1;
+        return 8;
+      },
+    });
+    expect(() => vercel(accessorOptions)).toThrow(/accessor-backed/u);
+    expect(getterHits).toBe(0);
+    expect(() => vercel({ maxDuration: Number.NaN })).toThrow(/positive safe integer/u);
+    expect(() => vercel({ memory: Number.POSITIVE_INFINITY })).toThrow(/positive safe integer/u);
+    expect(() =>
+      node({
+        retention: {
+          hours: -1,
+          immutableClientModules: 'retained',
+          priorTokenQueryReads: 'retained',
+        },
+      }),
+    ).toThrow(/finite non-negative safe integer/u);
   });
 });
 

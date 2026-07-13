@@ -194,6 +194,12 @@ export function snapshotBuildArray<Value>(
   return witnessFreeze(snapshot);
 }
 
+/** Freeze one framework-owned build descriptor through the boot-pinned Object.freeze control. */
+export function freezeBuildSecurityValue<Value extends object>(value: Value): Readonly<Value> {
+  assertBuildSecurityIntrinsics();
+  return witnessFreeze(value);
+}
+
 /** Commit one value to a framework-owned dense array without mutable method or prototype dispatch. */
 export function commitBuildArrayValue<Value>(
   target: Value[],

@@ -571,6 +571,56 @@ export default {};
     }
   }, 120_000);
 
+  it('pins configured preset methods before authored app evaluation in the real CLI', () => {
+    const root = cliFixtureRoot('preset-method-authority');
+    try {
+      mkdirSync(join(root, 'src'), { recursive: true });
+      writeFileSync(
+        join(root, 'index.html'),
+        '<!doctype html><script type="module" src="/src/client.ts"></script>\n',
+        'utf8',
+      );
+      writeFileSync(join(root, 'src/client.ts'), 'export {};\n', 'utf8');
+      writeFileSync(
+        join(root, 'kovo.config.ts'),
+        `import { defineConfig, node } from '@kovojs/server/build';
+const builtIn = node({ dockerfile: false });
+const sharedPreset = {
+  name: 'node',
+  inspect: builtIn.inspect,
+  emit: builtIn.emit,
+};
+(globalThis as any).__kovoSharedBuildPreset = sharedPreset;
+export default defineConfig({ preset: sharedPreset });
+`,
+        'utf8',
+      );
+      writeFileSync(
+        join(root, 'app.ts'),
+        `import { createApp, publicAccess, route } from '@kovojs/server';
+const sharedPreset = (globalThis as any).__kovoSharedBuildPreset;
+sharedPreset.emit = async () => {};
+sharedPreset.inspect = () => [];
+export default createApp({
+  routes: [route('/', {
+    access: publicAccess('preset method authority regression'),
+    page: () => '<main>Preset authority</main>',
+  })],
+});
+`,
+        'utf8',
+      );
+
+      const outDir = join(root, 'dist');
+      const built = runKovoCli(root, ['build', './app.ts', '--out', outDir]);
+      expect(built.status, built.stderr).toBe(0);
+      expect(existsSync(join(outDir, 'server/server.mjs'))).toBe(true);
+      expect(existsSync(join(outDir, 'server/Dockerfile'))).toBe(false);
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  }, 120_000);
+
   it('keeps real build and export outside undeclared authored Vite config hooks', () => {
     const root = cliFixtureRoot('undeclared-vite-config');
     const appPath = join(root, 'app.mjs');

@@ -40,7 +40,14 @@ import type {
   StaticExportResult,
   StylesheetAsset,
 } from '@kovojs/server';
-import type { KovoConfig, KovoPreset, PresetContext, PresetDiagnostic } from '@kovojs/server/build';
+import type {
+  JobRunnerCapability,
+  KovoConfig,
+  KovoPreset,
+  KovoPresetCapabilities,
+  PresetContext,
+  PresetDiagnostic,
+} from '@kovojs/server/build';
 import type { KovoNeutralBuild } from '@kovojs/server/internal/build';
 import { withKovoBuildContext } from '@kovojs/server/internal/build-context';
 import type { KovoAppShellCompiledClientModule } from '@kovojs/server/internal/app-shell-vite';
@@ -2124,31 +2131,93 @@ function findKovoBuildConfig(root: string): string | undefined {
 }
 
 function kovoBuildConfigFromModule(module: unknown, configPath: string): KovoConfig {
-  const value =
+  const moduleDefault =
     typeof module === 'object' && module !== null
-      ? ((module as { default?: unknown }).default ?? module)
-      : module;
+      ? kovoBuildModuleDefaultExport(module, configPath)
+      : undefined;
+  const value = moduleDefault ?? module;
   if (value === undefined || value === null) return {};
   if (!isRecord(value)) throw new Error(`${configPath} must export a config object.`);
 
-  const config: KovoConfig = {};
-  if ('preset' in value) {
-    const preset = value.preset;
-    if (!isKovoPreset(preset)) {
-      throw new Error(`${configPath} preset must be a Kovo preset value such as node().`);
-    }
-    config.preset = preset;
-  }
+  const config = buildCreateNullRecord<unknown>() as KovoConfig;
+  const preset = buildOwnDataValue(value, 'preset', `${configPath} config`);
+  if (preset !== undefined) config.preset = snapshotConfiguredKovoPreset(preset, configPath);
   return config;
 }
 
-function isKovoPreset(value: unknown): value is KovoPreset {
-  return (
-    isRecord(value) &&
-    typeof value.name === 'string' &&
-    (value.emit === undefined || typeof value.emit === 'function') &&
-    (value.inspect === undefined || typeof value.inspect === 'function')
+function kovoBuildModuleDefaultExport(module: object, configPath: string): unknown {
+  // Vite exposes SSR module namespaces through a standards-like live-binding proxy whose
+  // descriptors are not stable data descriptors. The export-name inventory is nevertheless an
+  // own-key snapshot controlled by Vite; gate the single live-binding read through that inventory
+  // so an inherited Object.prototype.default can never become config authority.
+  const exportNames = buildSnapshotDenseArray(
+    buildObjectKeys(module),
+    `${configPath} module export names`,
   );
+  for (let index = 0; index < exportNames.length; index += 1) {
+    if (exportNames[index] === 'default') {
+      return (module as { default?: unknown }).default;
+    }
+  }
+  return undefined;
+}
+
+function snapshotConfiguredKovoPreset(value: unknown, configPath: string): KovoPreset {
+  if (!isRecord(value)) {
+    throw new Error(`${configPath} preset must be a Kovo preset value such as node().`);
+  }
+  const name = buildOwnDataValue(value, 'name', `${configPath} preset`);
+  const emit = buildOwnDataValue(value, 'emit', `${configPath} preset`);
+  const inspect = buildOwnDataValue(value, 'inspect', `${configPath} preset`);
+  const capabilities = buildOwnDataValue(value, 'capabilities', `${configPath} preset`);
+  if (
+    typeof name !== 'string' ||
+    (emit !== undefined && typeof emit !== 'function') ||
+    (inspect !== undefined && typeof inspect !== 'function')
+  ) {
+    throw new Error(`${configPath} preset must be a Kovo preset value such as node().`);
+  }
+  const snapshot = buildCreateNullRecord<unknown>() as KovoPreset;
+  snapshot.name = name;
+  if (emit !== undefined) snapshot.emit = emit as KovoPreset['emit'];
+  if (inspect !== undefined) snapshot.inspect = inspect as KovoPreset['inspect'];
+  if (capabilities !== undefined) {
+    snapshot.capabilities = snapshotConfiguredKovoPresetCapabilities(capabilities, configPath);
+  }
+  return snapshot;
+}
+
+function snapshotConfiguredKovoPresetCapabilities(
+  value: unknown,
+  configPath: string,
+): KovoPresetCapabilities {
+  if (!isRecord(value)) {
+    throw new Error(`${configPath} preset capabilities must be an own-data object.`);
+  }
+  const jobRunner = buildOwnDataValue(value, 'jobRunner', `${configPath} preset capabilities`);
+  const snapshot = buildCreateNullRecord<unknown>() as KovoPresetCapabilities;
+  if (jobRunner !== undefined) {
+    snapshot.jobRunner = snapshotConfiguredJobRunnerCapability(jobRunner, configPath);
+  }
+  return snapshot;
+}
+
+function snapshotConfiguredJobRunnerCapability(
+  value: unknown,
+  configPath: string,
+): JobRunnerCapability {
+  if (!isRecord(value)) {
+    throw new Error(`${configPath} preset JobRunner capability must be an own-data object.`);
+  }
+  const adapter = buildOwnDataValue(value, 'adapter', `${configPath} preset JobRunner`);
+  const mode = buildOwnDataValue(value, 'mode', `${configPath} preset JobRunner`);
+  if (adapter !== 'node-in-process' || mode !== 'serve-and-run') {
+    throw new Error(`${configPath} preset JobRunner capability is unsupported.`);
+  }
+  const snapshot = buildCreateNullRecord<unknown>() as unknown as JobRunnerCapability;
+  snapshot.adapter = adapter;
+  snapshot.mode = mode;
+  return snapshot;
 }
 
 interface KovoClientManifestBuild {
