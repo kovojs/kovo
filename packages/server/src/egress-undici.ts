@@ -20,6 +20,7 @@ import {
 import {
   egressDateNow,
   egressDecodeURIComponent,
+  egressCreateMap,
   egressMapClear,
   egressMapGet,
   egressMapSet,
@@ -68,7 +69,7 @@ export class EgressGatingDispatcher extends Agent {
   #policy: EgressPolicy;
   // Short-lived resolved-IP pin per origin so the dispatch-time check and the connect-time
   // dial classify the SAME IP within a request window (DNS-rebind resistance at this layer too).
-  #resolutionCache = new Map<string, PinnedResolution>();
+  #resolutionCache = egressCreateMap<string, PinnedResolution>();
 
   constructor(policy: EgressPolicy, options?: UndiciAgentOptions) {
     super(options);

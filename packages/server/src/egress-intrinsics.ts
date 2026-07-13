@@ -352,6 +352,11 @@ export function egressMapClear<Key, Value>(map: Map<Key, Value>): void {
   apply(nativeMapClear, map, []);
 }
 
+export function egressCreateMap<Key, Value>(): Map<Key, Value> {
+  assertEgressIntrinsics();
+  return new NativeMap<Key, Value>();
+}
+
 export function egressMapGet<Key, Value>(map: Map<Key, Value>, key: Key): Value | undefined {
   assertEgressIntrinsics();
   return apply(nativeMapGet, map, [key]);
@@ -419,6 +424,11 @@ export function egressRequestUrl(value: Request): string {
 export function egressSetAdd<T>(set: Set<T>, value: T): void {
   assertEgressIntrinsics();
   apply(nativeSetAdd, set, [value]);
+}
+
+export function egressCreateSet<T>(): Set<T> {
+  assertEgressIntrinsics();
+  return new NativeSet<T>();
 }
 
 export function egressSetDelete<T>(set: Set<T>, value: T): boolean {

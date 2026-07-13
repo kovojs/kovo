@@ -350,6 +350,43 @@ function referenceIpv6Words(side: string): number[] | null {
 }
 
 describe('evaluateEgress policy decision', () => {
+  it('does not let a replaced Set constructor forge egress allowlist entries', () => {
+    const NativeSet = globalThis.Set;
+    let constructorCalls = 0;
+    const PoisonSet = function () {
+      constructorCalls += 1;
+      return new NativeSet<string>(['127.0.0.1:6379', 'https://api.example.test']);
+    } as unknown as SetConstructor;
+
+    let policy: EgressPolicy | undefined;
+    globalThis.Set = PoisonSet;
+    try {
+      policy = resolveEgressPolicy({ allowDestinations: [], allowInternal: [] }, () => {});
+    } finally {
+      globalThis.Set = NativeSet;
+    }
+
+    expect(constructorCalls).toBe(0);
+    expect(
+      evaluateEgress({
+        host: '127.0.0.1',
+        port: 6379,
+        resolvedIp: '127.0.0.1',
+        policy: policy!,
+      }),
+    ).toMatchObject({ classification: 'loopback' });
+    expect(
+      evaluateEgress({
+        host: 'api.example.test',
+        port: 443,
+        protocol: 'https:',
+        requireDestinationAllowlist: true,
+        resolvedIp: '93.184.216.34',
+        policy: policy!,
+      }),
+    ).toMatchObject({ reason: 'destination-allowlist' });
+  });
+
   it('keeps AWS IMDSv6 classified as metadata under inherited numeric setters', () => {
     const policy = emptyPolicy();
     const originalDescriptor = Object.getOwnPropertyDescriptor(Array.prototype, '0');

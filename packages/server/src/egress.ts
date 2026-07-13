@@ -16,6 +16,7 @@ import {
   egressArraySlice,
   egressArraySome,
   egressArraySplice,
+  egressCreateSet,
   egressDecodeURIComponent,
   egressNetIsIp,
   egressNumber,
@@ -23,7 +24,6 @@ import {
   egressNumberToString,
   egressObjectDefineProperty,
   egressParseInt,
-  egressRegExpExec,
   egressRegExpTest,
   egressRequest,
   egressRequestUrl,
@@ -309,9 +309,9 @@ export function resolveEgressPolicy(
   const azureIdentityEndpoint = resolveAzureIdentityEndpoint(
     policyOptions.identityEndpoint ?? runtimeEnvironmentValue('IDENTITY_ENDPOINT'),
   );
-  const allowInternal = new Set<string>();
-  const allowDatabaseEndpoints = new Set<string>();
-  const allowDestinations = new Set<string>();
+  const allowInternal = egressCreateSet<string>();
+  const allowDatabaseEndpoints = egressCreateSet<string>();
+  const allowDestinations = egressCreateSet<string>();
   const allowInternalCidrs: string[] = [];
   const destinationInputs = options?.allowDestinations ?? [];
   for (let index = 0; index < destinationInputs.length; index += 1) {
@@ -416,7 +416,7 @@ function resolveDatabaseEgressEndpoints(
   databaseUrls: readonly (string | undefined)[] | undefined,
 ): readonly string[] {
   const urls = databaseUrls ?? [runtimeEnvironmentValue('KOVO_DATABASE_URL')];
-  const endpoints = new Set<string>();
+  const endpoints = egressCreateSet<string>();
   const result: string[] = [];
   for (let index = 0; index < urls.length; index += 1) {
     const raw = urls[index];
@@ -561,7 +561,7 @@ function resolveAzureIdentityEndpoint(raw: string | undefined): AzureIdentityEnd
     host,
     literalIp,
     port,
-    resolvedIps: new Set<string>(),
+    resolvedIps: egressCreateSet<string>(),
   };
 }
 
