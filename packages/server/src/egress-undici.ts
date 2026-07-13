@@ -21,7 +21,6 @@ import {
   egressDateNow,
   egressDecodeURIComponent,
   egressCreateMap,
-  egressMapClear,
   egressMapGet,
   egressMapSet,
   egressNumber,
@@ -74,11 +73,6 @@ export class EgressGatingDispatcher extends Agent {
   constructor(policy: EgressPolicy, options?: UndiciAgentOptions) {
     super(options);
     this.#policy = policy;
-  }
-
-  setPolicy(policy: EgressPolicy): void {
-    this.#policy = policy;
-    egressMapClear(this.#resolutionCache);
   }
 
   override dispatch(
@@ -252,6 +246,7 @@ function rejectHandler(handler: Dispatcher.DispatchHandler, error: Error): void 
 }
 
 let installedDispatcher: EgressGatingDispatcher | undefined;
+let dispatcherBeforeInstall: ReturnType<typeof getGlobalDispatcher> | undefined;
 
 /**
  * Install (or update) the global undici dispatcher with the egress floor for `policy`. Uses the
@@ -265,21 +260,27 @@ let installedDispatcher: EgressGatingDispatcher | undefined;
  * `net.connect` layer remains the backstop for those cases (it still catches the FIRST dial).
  */
 export function installUndiciFloor(policy: EgressPolicy): () => void {
-  if (installedDispatcher) {
-    installedDispatcher.setPolicy(policy);
-    if (getGlobalDispatcher() !== installedDispatcher) {
-      setGlobalDispatcher(installedDispatcher);
-    }
-    return () => {};
-  }
-  const previous = getGlobalDispatcher();
+  // SPEC §6.6: an Agent's pooled sockets are part of the authority admitted by the policy that
+  // created them. Updating only the classifier while retaining that pool lets a hostname rebind
+  // public after policy tightening and then reuse its previously allowlisted private socket,
+  // skipping the net.connect layer. A policy generation therefore owns a fresh Agent generation.
+  if (dispatcherBeforeInstall === undefined) dispatcherBeforeInstall = getGlobalDispatcher();
+  const previousInstalled = installedDispatcher;
   const dispatcher = new EgressGatingDispatcher(policy);
   installedDispatcher = dispatcher;
   setGlobalDispatcher(dispatcher);
+  if (previousInstalled !== undefined) {
+    void previousInstalled.destroy().catch(() => {});
+  }
+  let active = true;
   return () => {
+    if (!active) return;
+    active = false;
     if (installedDispatcher === dispatcher) {
-      setGlobalDispatcher(previous);
+      const previous = dispatcherBeforeInstall;
+      if (previous !== undefined) setGlobalDispatcher(previous);
       installedDispatcher = undefined;
+      dispatcherBeforeInstall = undefined;
       void dispatcher.close().catch(() => {});
     }
   };

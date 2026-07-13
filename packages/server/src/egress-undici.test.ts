@@ -2,7 +2,11 @@ import http from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
-import { EGRESS_BLOCKED_ERROR_NAME, resolveEgressPolicy } from './egress.js';
+import {
+  EGRESS_BLOCKED_ERROR_NAME,
+  installNetConnectFloor,
+  resolveEgressPolicy,
+} from './egress.js';
 import { installUndiciFloor, isUndiciFloorInstalled } from './egress-undici.js';
 
 // Mock the resolver the undici layer uses so a hostname can return a fixed multi-A answer.
@@ -61,6 +65,29 @@ describe('undici egress floor (layer a): gates every fetch incl. pooled reuse', 
     await expect(fetch(`http://127.0.0.1:${port}/b`)).rejects.toSatisfy(
       (e) => reason(e) === EGRESS_BLOCKED_ERROR_NAME || reason(e) === 'loopback',
     );
+  });
+
+  it('does not reuse an allowlisted private hostname socket after policy tightens and DNS changes', async () => {
+    dnsLookupMock.mockReset();
+    dnsLookupMock.mockResolvedValueOnce([{ address: '127.0.0.1', family: 4 }]);
+    const allowPolicy = resolveEgressPolicy({ allowInternal: [`localhost:${port}`] }, () => {});
+    const uninstallNet = installNetConnectFloor(allowPolicy);
+    try {
+      uninstall = await installUndiciFloor(allowPolicy);
+      const allowed = await fetch(`http://localhost:${port}/hostname-a`);
+      expect(await allowed.text()).toBe('ok');
+
+      dnsLookupMock.mockResolvedValueOnce([{ address: '8.8.8.8', family: 4 }]);
+      const denyPolicy = resolveEgressPolicy(undefined, () => {});
+      installNetConnectFloor(denyPolicy);
+      uninstall = await installUndiciFloor(denyPolicy);
+
+      await expect(fetch(`http://localhost:${port}/hostname-b`)).rejects.toSatisfy(
+        (error) => reason(error) === EGRESS_BLOCKED_ERROR_NAME || reason(error) === 'loopback',
+      );
+    } finally {
+      uninstallNet();
+    }
   });
 
   it('DENIES a fetch to a metadata literal IP', async () => {
