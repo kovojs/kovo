@@ -1,5 +1,4 @@
 import {
-  recordKovoRuntimeDomainAnnotation,
   runtimeArrayAppend,
   runtimeArrayIsArray,
   runtimeArrayLength,
@@ -205,9 +204,7 @@ export function kovo(annotation: KovoAnnotation): KovoTableExtraConfig | KovoVie
       runtimeDefineOwnData(extraConfig, key, value.value, 'Kovo Drizzle annotation');
     }
   }
-  return recordKovoRuntimeDomainAnnotation(runtimeFreeze(extraConfig)) as
-    | KovoTableExtraConfig
-    | KovoViewExtraConfig;
+  return runtimeFreeze(extraConfig) as KovoTableExtraConfig | KovoViewExtraConfig;
 }
 
 const kovoAnnotationKeys = [

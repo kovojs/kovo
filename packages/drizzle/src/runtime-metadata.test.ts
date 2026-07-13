@@ -73,6 +73,27 @@ describe('runtime metadata extraction', () => {
     expect(metadata.authorizationClassificationsByTable.get('users')).toBeUndefined();
   });
 
+  it('does not let an unrelated witnessed kovo value shadow the Drizzle-owned callback', () => {
+    const users = sqliteTable(
+      'users',
+      {
+        id: text('id').primaryKey(),
+        passwordHash: text('password_hash').notNull(),
+      },
+      kovo({ domain: 'user', key: 'id', secret: ['passwordHash'] }),
+    );
+    Object.defineProperty(users, 'unrelatedKovoAnnotation', {
+      enumerable: true,
+      value: kovo({ domain: 'public', public: true }),
+    });
+
+    const metadata = extractKovoRuntimeDbMetadata([users]);
+
+    expect([...metadata.secretTableNames]).toEqual(['users']);
+    expect([...(metadata.secretColumnKeysByTable.get('users') ?? [])]).toEqual(['passwordHash']);
+    expect(metadata.authorizationClassificationsByTable.get('users')).toBeUndefined();
+  });
+
   it('treats secret: true as a whole-table secret annotation', () => {
     const vault = sqliteTable(
       'vault',

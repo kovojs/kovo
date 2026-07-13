@@ -1,8 +1,8 @@
+import { Table } from 'drizzle-orm';
 import { getTableConfig as getPgTableConfig } from 'drizzle-orm/pg-core';
 import { getTableConfig as getSqliteTableConfig } from 'drizzle-orm/sqlite-core';
 
 import {
-  isKovoRuntimeDomainAnnotation,
   runtimeArrayAppend,
   runtimeArrayIsArray,
   runtimeArrayLength,
@@ -16,7 +16,6 @@ import {
   runtimeMapSet,
   runtimeNullRecord,
   runtimeObjectKeys,
-  runtimeObjectSymbols,
   runtimeOwnDataValue,
   runtimeRegExpTest,
   runtimeSealMap,
@@ -28,6 +27,8 @@ import {
   runtimeSetSize,
   runtimeSnapshotArray,
 } from './runtime-security-intrinsics.js';
+
+const drizzleExtraConfigBuilder = requireDrizzleExtraConfigBuilder();
 
 /** Drizzle table object accepted by `extractKovoRuntimeDbMetadata`. */
 export type KovoRuntimeDbTable =
@@ -51,7 +52,7 @@ type KovoRuntimeTableFacts = {
 };
 type KovoRuntimeColumnRef = string | ((table: Record<string, unknown>) => unknown);
 type KovoRuntimeColumnAnnotation = true | KovoRuntimeColumnRef | readonly unknown[];
-type KovoRuntimeDomainAnnotation = {
+type KovoRuntimeDomainAnnotation = ((self: unknown) => unknown) & {
   authzPolicy?: unknown;
   confidentialAtRest?: KovoRuntimeColumnAnnotation;
   domain: unknown;
@@ -66,6 +67,24 @@ type KovoRuntimeDomainAnnotation = {
   public?: true;
   reference?: true;
 };
+
+function requireDrizzleExtraConfigBuilder(): symbol {
+  const symbolBag = runtimeOwnDataValue(Table, 'Symbol');
+  if (
+    !symbolBag.found ||
+    (typeof symbolBag.value !== 'object' && typeof symbolBag.value !== 'function') ||
+    symbolBag.value === null
+  ) {
+    throw new TypeError('The installed Drizzle version does not expose its table symbol bag.');
+  }
+  const extraConfigBuilder = runtimeOwnDataValue(symbolBag.value, 'ExtraConfigBuilder');
+  if (!extraConfigBuilder.found || typeof extraConfigBuilder.value !== 'symbol') {
+    throw new TypeError(
+      'The installed Drizzle version does not expose its table extra-config key.',
+    );
+  }
+  return extraConfigBuilder.value;
+}
 
 /** Drizzle-derived runtime source metadata for one physical database column. */
 export interface KovoRuntimeDbColumnSource {
@@ -209,7 +228,7 @@ export function extractKovoRuntimeDbMetadata(tables: readonly unknown[]): KovoRu
 
   for (let tableIndex = 0; tableIndex < tableFacts.length; tableIndex += 1) {
     const facts = runtimeArrayValue(tableFacts, tableIndex, 'Kovo Drizzle runtime table facts');
-    const { annotation: domainAnnotation, columnKeys, config, table } = facts;
+    const { annotation: domainAnnotation, columnKeys, config } = facts;
     runtimeSetAdd(schemaTableNames, config.name);
     runtimeMapForEach(columnKeys, (key) => runtimeSetAdd(allColumnKeys, key));
     const classifications = authorizationClassificationsForAnnotation(domainAnnotation);
@@ -373,19 +392,14 @@ function kovoSecretAnnotation(
 }
 
 function kovoDomainAnnotation(table: KovoRuntimeDbTable): KovoRuntimeDomainAnnotation | undefined {
-  const stringKeys = runtimeObjectKeys(table as unknown as object);
-  for (let index = 0; index < stringKeys.length; index += 1) {
-    const key = runtimeArrayValue(stringKeys, index, 'Kovo Drizzle table keys');
-    const annotation = domainAnnotationValue(ownPropertyValue(table as unknown as object, key));
-    if (annotation !== undefined) return annotation;
-  }
-  const symbolKeys = runtimeObjectSymbols(table as unknown as object);
-  for (let index = 0; index < symbolKeys.length; index += 1) {
-    const key = runtimeArrayValue(symbolKeys, index, 'Kovo Drizzle table symbols');
-    const annotation = domainAnnotationValue(ownPropertyValue(table as unknown as object, key));
-    if (annotation !== undefined) return annotation;
-  }
-  return undefined;
+  // SPEC §10.1: the Drizzle table factory's exact extra-config callback is the runtime
+  // annotation authority. Scanning arbitrary table values lets a witnessed-but-unrelated
+  // kovo() value shadow the real callback, while module-local brands disappear when the app and
+  // extractor are bundled as distinct copies. Drizzle's own cross-copy table key identifies the
+  // callback without exposing a Kovo signing oracle or accepting unrelated table properties.
+  return domainAnnotationValue(
+    ownPropertyValue(table as unknown as object, drizzleExtraConfigBuilder),
+  );
 }
 
 function kovoSecretColumnKeys(
@@ -570,10 +584,6 @@ function isPasswordColumnName(column: string): boolean {
   return runtimeRegExpTest(/^(?:password|passwordHash|passwordDigest)$/u, column);
 }
 
-function isColumnLike(value: unknown): value is { name: string } {
-  return columnName(value) !== undefined;
-}
-
 function columnName(value: unknown): string | undefined {
   if (typeof value !== 'object' || value === null) return undefined;
   const name = runtimeOwnDataValue(value, 'name');
@@ -586,11 +596,14 @@ function ownPropertyValue(value: object, property: PropertyKey): unknown {
 }
 
 function domainAnnotationValue(value: unknown): KovoRuntimeDomainAnnotation | undefined {
-  if (!isKovoRuntimeDomainAnnotation(value)) {
+  if (typeof value !== 'function' || !hasOwnDomain(value)) {
     return undefined;
   }
-  const domain = runtimeOwnDataValue(value, 'domain');
-  return domain.found ? (value as KovoRuntimeDomainAnnotation) : undefined;
+  return value;
+}
+
+function hasOwnDomain(value: Function): value is KovoRuntimeDomainAnnotation {
+  return runtimeOwnDataValue(value, 'domain').found;
 }
 
 function columnKeysForRefs(
