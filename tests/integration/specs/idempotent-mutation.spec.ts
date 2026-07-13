@@ -27,6 +27,7 @@ test('replays duplicate idempotency keys without executing the write twice', asy
     headers: {
       'Kovo-Fragment': 'true',
       'Kovo-Idem': 'idem-integration-1',
+      'Kovo-Current-Url': page.url(),
       'Kovo-Live-Targets': liveTarget,
       'Kovo-Targets': 'idem-status=idem',
       origin,
@@ -42,6 +43,7 @@ test('replays duplicate idempotency keys without executing the write twice', asy
     headers: {
       'Kovo-Fragment': 'true',
       'Kovo-Idem': 'idem-integration-1',
+      'Kovo-Current-Url': page.url(),
       'Kovo-Live-Targets': liveTarget,
       'Kovo-Targets': 'idem-status=idem',
       origin,

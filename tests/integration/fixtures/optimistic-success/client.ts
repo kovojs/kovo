@@ -26,6 +26,9 @@ const optimisticClient = installOptimisticFixtureClient({
 });
 
 installKovoLoader({
+  // The document's inline loader owns delegated events. This fixture-only instance injects the
+  // optimistic query store without registering a second copy of each authored handler.
+  events: [],
   importModule: (url) => import(/* @vite-ignore */ url),
   queryStore: optimisticClient.store,
   root: document,
@@ -49,19 +52,6 @@ document.getElementById('optimistic-form')?.addEventListener('submit', (event) =
       },
     },
   });
-});
-
-document.querySelector<HTMLButtonElement>('state-toggle button')?.addEventListener('click', () => {
-  const host = document.querySelector<HTMLElement>('state-toggle');
-  const output = document.querySelector<HTMLElement>('[data-testid="toggle-state"]');
-  if (!host || !output) return;
-
-  const current = JSON.parse(host.getAttribute('kovo-state') ?? '{"on":false}') as {
-    on?: boolean;
-  };
-  const next = { on: !current.on };
-  host.setAttribute('kovo-state', JSON.stringify(next));
-  output.textContent = String(next.on);
 });
 
 window.__optimisticSuccessReady = true;

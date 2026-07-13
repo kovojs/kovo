@@ -111,6 +111,9 @@ export async function bootFixture(
     logLevel: 'warn',
     plugins: [fixtureCompiler],
     root: fixtureDir,
+    // Parallel Playwright workers boot different fixture roots. Give each Vite optimizer its own
+    // cache commit directory so independent servers cannot race one shared deps_temp -> deps rename.
+    cacheDir: pathJoin(fixtureDir, 'node_modules/.vite'),
     // No HMR/file-watching/ws server: fixtures are immutable per run, and parallel
     // workers must not contend for the default HMR WebSocket port.
     server: { hmr: false, middlewareMode: true, watch: null, ws: false },
@@ -151,7 +154,23 @@ export async function bootFixture(
     const serverModule = await vite.ssrLoadModule('@kovojs/server');
     const managedDbModule = await vite.ssrLoadModule('@kovojs/server/internal/managed-db');
     const appShellModule = await vite.ssrLoadModule('@kovojs/server/internal/app-shell-vite');
-    const module = await vite.ssrLoadModule(entry);
+    const runWithGeneratedLiveTargetRegistry = (
+      appShellModule as { runWithGeneratedLiveTargetRegistry?: unknown }
+    ).runWithGeneratedLiveTargetRegistry;
+    if (typeof runWithGeneratedLiveTargetRegistry !== 'function') {
+      throw new TypeError(
+        'Fixture server could not establish compiler-owned live-target registry scope in the fixture SSR graph.',
+      );
+    }
+    // SPEC §2/§9.5: fixture apps exercise the same owner-scoped generated-registry handoff as
+    // dev and production loaders. Evaluating authored component modules before this scope exists
+    // would leave createApp() with no closed renderer inventory, making valid signed targets fall
+    // through to empty mutation responses and masking the actual framework path under test.
+    const module = await verifierApply<Promise<Record<string, unknown>>>(
+      runWithGeneratedLiveTargetRegistry,
+      undefined,
+      [() => vite.ssrLoadModule(entry)],
+    );
     const descriptor = (module as { default?: unknown }).default;
     if (!isFixtureDescriptor(descriptor)) {
       const exportedKeys = JSON.stringify(Object.keys(module));

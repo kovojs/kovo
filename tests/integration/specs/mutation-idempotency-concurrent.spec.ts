@@ -28,6 +28,7 @@ test('coalesces concurrent duplicate enhanced mutation submissions', async ({
       headers: {
         'Kovo-Fragment': 'true',
         'Kovo-Idem': 'idem-concurrent-1',
+        'Kovo-Current-Url': page.url(),
         'Kovo-Live-Targets': liveTarget,
         'Kovo-Targets': 'idem-concurrent-status=idem',
         origin,
