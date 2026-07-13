@@ -106,6 +106,146 @@ describe('JSON value utilities', () => {
     expect((clone as { nested: unknown }).nested).not.toBe(input.nested);
   });
 
+  it('snapshots proxy-owned JSON descriptors exactly once without invoking get traps', () => {
+    const makeCarrier = () => {
+      let descriptorReads = 0;
+      let propertyGets = 0;
+      const value = new Proxy(
+        {},
+        {
+          get() {
+            propertyGets += 1;
+            return 'attacker';
+          },
+          getOwnPropertyDescriptor(_target, property) {
+            if (property !== 'principalId') return undefined;
+            descriptorReads += 1;
+            return {
+              configurable: true,
+              enumerable: true,
+              value: descriptorReads === 1 ? 'victim' : 'attacker',
+              writable: true,
+            };
+          },
+          ownKeys() {
+            return ['principalId'];
+          },
+        },
+      );
+      return {
+        counts: () => ({ descriptorReads, propertyGets }),
+        value,
+      };
+    };
+
+    const cloneCarrier = makeCarrier();
+    expect(assertAndCloneJsonValue(cloneCarrier.value)).toEqual({ principalId: 'victim' });
+    expect(cloneCarrier.counts()).toEqual({ descriptorReads: 1, propertyGets: 0 });
+
+    const canonicalCarrier = makeCarrier();
+    expect(canonicalJsonStringify(canonicalCarrier.value)).toBe('{"principalId":"victim"}');
+    expect(canonicalCarrier.counts()).toEqual({ descriptorReads: 1, propertyGets: 0 });
+  });
+
+  it('does not let a proxy substitute attacker truth after validation', () => {
+    const makeCarrier = () => {
+      let propertyGets = 0;
+      const value = new Proxy(
+        { principalId: 'victim' },
+        {
+          get(_target, property) {
+            if (property !== 'principalId') return undefined;
+            propertyGets += 1;
+            return propertyGets === 1 ? 'victim' : 'attacker';
+          },
+        },
+      );
+      return { getCount: () => propertyGets, value };
+    };
+
+    const cloneCarrier = makeCarrier();
+    expect(assertAndCloneJsonValue(cloneCarrier.value)).toEqual({ principalId: 'victim' });
+    expect(cloneCarrier.getCount()).toBe(0);
+
+    const canonicalCarrier = makeCarrier();
+    expect(canonicalJsonStringify(canonicalCarrier.value)).toBe('{"principalId":"victim"}');
+    expect(canonicalCarrier.getCount()).toBe(0);
+  });
+
+  it('never invokes accessor-backed JSON properties while rejecting them', () => {
+    for (const operation of [
+      (value: unknown) => assertJsonValue(value),
+      (value: unknown) => assertAndCloneJsonValue(value),
+      (value: unknown) => canonicalJsonStringify(value),
+      (value: unknown) => cloneJsonValue(value as JsonValue),
+    ]) {
+      let accessorReads = 0;
+      const value = {};
+      Object.defineProperty(value, 'principalId', {
+        enumerable: true,
+        get() {
+          accessorReads += 1;
+          return 'attacker';
+        },
+      });
+
+      expect(() => operation(value)).toThrow('must be a data property');
+      expect(accessorReads).toBe(0);
+    }
+  });
+
+  it('rejects hidden custom and symbol JSON carriers instead of serializing around them', () => {
+    const array = ['visible'];
+    Object.defineProperty(array, 'hidden', {
+      enumerable: false,
+      value: 'dropped',
+    });
+    expect(() => assertAndCloneJsonValue(array)).toThrow(
+      'JSON value at $.hidden must not be a custom array property',
+    );
+
+    const symbol = Symbol('hidden-json-authority');
+    const object = { visible: true } as Record<PropertyKey, unknown>;
+    Object.defineProperty(object, symbol, {
+      enumerable: false,
+      value: 'dropped',
+    });
+    expect(() => canonicalJsonStringify(object)).toThrow('must not contain symbol key');
+  });
+
+  it('shadows inherited toJSON hooks before canonical serialization', () => {
+    const nativeDefineProperty = Object.defineProperty;
+    const objectDescriptor = Object.getOwnPropertyDescriptor(Object.prototype, 'toJSON');
+    const arrayDescriptor = Object.getOwnPropertyDescriptor(Array.prototype, 'toJSON');
+    let json: string | undefined;
+    try {
+      nativeDefineProperty(Object.prototype, 'toJSON', {
+        configurable: true,
+        value: () => ({ principalId: 'attacker' }),
+        writable: true,
+      });
+      nativeDefineProperty(Array.prototype, 'toJSON', {
+        configurable: true,
+        value: () => ['attacker'],
+        writable: true,
+      });
+      json = canonicalJsonStringify({ items: ['victim'], principalId: 'victim' });
+    } finally {
+      if (objectDescriptor === undefined) {
+        delete (Object.prototype as { toJSON?: unknown }).toJSON;
+      } else {
+        nativeDefineProperty(Object.prototype, 'toJSON', objectDescriptor);
+      }
+      if (arrayDescriptor === undefined) {
+        delete (Array.prototype as unknown as { toJSON?: unknown }).toJSON;
+      } else {
+        nativeDefineProperty(Array.prototype, 'toJSON', arrayDescriptor);
+      }
+    }
+
+    expect(json).toBe('{"items":["victim"],"principalId":"victim"}');
+  });
+
   it('canonicalizes object keys and measures UTF-8 encoded bytes', () => {
     const value: JsonValue = { z: 1, a: { emoji: '😀', b: true } };
     const json = canonicalJsonStringify(value);
