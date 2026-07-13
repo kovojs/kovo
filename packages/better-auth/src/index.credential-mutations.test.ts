@@ -9,6 +9,7 @@ import {
   isBetterAuthCredentialFailureError,
   type BetterAuthResponseLike,
   type BetterAuthSignInEmailLike,
+  type BetterAuthSignOutLike,
   type BetterAuthSignUpEmailLike,
 } from './internal.js';
 import {
@@ -321,6 +322,157 @@ describe('credential mutation helpers', () => {
         status: 'signed-out',
       },
     });
+  });
+
+  it('pins credential API methods and their receiver before plaintext becomes reachable', async () => {
+    const receiverCalls: Array<{ method: string; receiver: unknown }> = [];
+    const capturedByPoison: string[] = [];
+    let poisonCalls = 0;
+    const api = {
+      signInEmail(
+        this: unknown,
+        options: {
+          asResponse: true;
+          body: { email: string; password: string };
+          headers: Headers;
+        },
+      ) {
+        receiverCalls.push({ method: 'signInEmail', receiver: this });
+        return responseWithCookies(['kovo_session=sign-in; Path=/; HttpOnly; SameSite=Lax']);
+      },
+      signOut(this: unknown, _options: { asResponse: true; headers: Headers }) {
+        receiverCalls.push({ method: 'signOut', receiver: this });
+        return responseWithCookies(['kovo_session=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax']);
+      },
+      signUpEmail(
+        this: unknown,
+        _options: {
+          asResponse: true;
+          body: { email: string; name: string; password: string };
+          headers: Headers;
+        },
+      ) {
+        receiverCalls.push({ method: 'signUpEmail', receiver: this });
+        return responseWithCookies(['kovo_session=sign-up; Path=/; HttpOnly; SameSite=Lax']);
+      },
+    };
+    const auth = { api } satisfies BetterAuthSignInEmailLike &
+      BetterAuthSignOutLike &
+      BetterAuthSignUpEmailLike;
+    const signIn = betterAuthSignInEmailMutation(auth);
+    const signUp = betterAuthSignUpEmailMutation(auth);
+    const signOut = betterAuthSignOutMutation(auth);
+
+    api.signInEmail = (_options) => {
+      poisonCalls += 1;
+      capturedByPoison.push(_options.body.password);
+      return responseWithCookies(['attacker=sign-in']);
+    };
+    api.signUpEmail = (_options) => {
+      poisonCalls += 1;
+      capturedByPoison.push(_options.body.password);
+      return responseWithCookies(['attacker=sign-up']);
+    };
+    api.signOut = () => {
+      poisonCalls += 1;
+      return responseWithCookies(['attacker=sign-out']);
+    };
+    auth.api = {
+      signInEmail: api.signInEmail,
+      signOut: api.signOut,
+      signUpEmail: api.signUpEmail,
+    };
+
+    await expect(
+      runProtectedCredentialMutation(
+        signIn,
+        { email: 'ada@example.com', password: 'SIGN_IN_SECRET' },
+        { headers: requestHeaders() },
+      ),
+    ).resolves.toMatchObject({ ok: true, value: { status: 'signed-in' } });
+    await expect(
+      runProtectedCredentialMutation(
+        signUp,
+        { email: 'grace@example.com', name: 'Grace', password: 'SIGN_UP_SECRET' },
+        { headers: requestHeaders() },
+      ),
+    ).resolves.toMatchObject({ ok: true, value: { status: 'signed-up' } });
+    await expect(
+      runProtectedCredentialMutation(signOut, {}, { headers: requestHeaders('kovo_session=s1') }),
+    ).resolves.toMatchObject({ ok: true, value: { status: 'signed-out' } });
+
+    expect(poisonCalls).toBe(0);
+    expect(capturedByPoison).toEqual([]);
+    expect(receiverCalls.map(({ method }) => method)).toEqual([
+      'signInEmail',
+      'signUpEmail',
+      'signOut',
+    ]);
+    expect(receiverCalls.every(({ receiver }) => receiver === api)).toBe(true);
+  });
+
+  it('rejects accessor and inherited credential authority at declaration time', () => {
+    const apiAccessor = Object.defineProperty({}, 'api', {
+      get: () => ({ signInEmail: () => responseWithCookies([]) }),
+    }) as BetterAuthSignInEmailLike;
+    const inheritedAuth = Object.create({
+      api: { signOut: () => responseWithCookies([]) },
+    }) as BetterAuthSignOutLike;
+    const inheritedApi = {
+      api: Object.create({ signUpEmail: () => responseWithCookies([]) }),
+    } as BetterAuthSignUpEmailLike;
+
+    expect(() => betterAuthSignInEmailMutation(apiAccessor)).toThrow(
+      'Better Auth sign-in.api must be a stable own-data object',
+    );
+    expect(() => betterAuthSignOutMutation(inheritedAuth)).toThrow(
+      'Better Auth sign-out.api must be a stable own-data object',
+    );
+    expect(() => betterAuthSignUpEmailMutation(inheritedApi)).toThrow(
+      'Better Auth sign-up.api.signUpEmail must be a stable own-data method',
+    );
+  });
+
+  it('snapshots and validates credential redirect defaults before request dispatch', async () => {
+    const auth = new FakeCredentialAuth();
+    const signInOptions = { defaultRedirectTo: '/safe-sign-in' };
+    const signUpOptions = { defaultRedirectTo: '/safe-sign-up' };
+    const signOutOptions = { defaultRedirectTo: '/safe-sign-out' };
+    const signIn = betterAuthSignInEmailMutation(auth, signInOptions);
+    const signUp = betterAuthSignUpEmailMutation(auth, signUpOptions);
+    const signOut = betterAuthSignOutMutation(auth, signOutOptions);
+    signInOptions.defaultRedirectTo = '//evil.example/sign-in';
+    signUpOptions.defaultRedirectTo = '/\\evil.example/sign-up';
+    signOutOptions.defaultRedirectTo = 'https://evil.example/sign-out';
+
+    await expect(
+      runProtectedCredentialMutation(
+        signIn,
+        { email: 'ada@example.com', password: 'correct' },
+        { headers: requestHeaders() },
+      ),
+    ).resolves.toMatchObject({ value: { redirectTo: '/safe-sign-in' } });
+    await expect(
+      runProtectedCredentialMutation(
+        signUp,
+        { email: 'grace@example.com', name: 'Grace', password: 'correct' },
+        { headers: requestHeaders() },
+      ),
+    ).resolves.toMatchObject({ value: { redirectTo: '/safe-sign-up' } });
+    await expect(
+      runProtectedCredentialMutation(signOut, {}, { headers: requestHeaders('kovo_session=s1') }),
+    ).resolves.toMatchObject({ value: { redirectTo: '/safe-sign-out' } });
+
+    const invalidConfiguredDefault = betterAuthSignInEmailMutation(auth, {
+      defaultRedirectTo: 'https://evil.example/after-login',
+    });
+    await expect(
+      runProtectedCredentialMutation(
+        invalidConfiguredDefault,
+        { email: 'ada@example.com', password: 'correct' },
+        { headers: requestHeaders() },
+      ),
+    ).resolves.toMatchObject({ value: { redirectTo: '/' } });
   });
 
   it('keeps redirect targets on same-origin paths', async () => {

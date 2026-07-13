@@ -131,6 +131,39 @@ export function betterAuthGetOwnPropertyDescriptor(
   return apply(nativeObjectGetOwnPropertyDescriptor, NativeObject, [value, property]);
 }
 
+export function betterAuthCaptureOwnApiMethod(
+  auth: object,
+  methodName: PropertyKey,
+  label: string,
+): { method: Function; receiver: object } {
+  const apiDescriptor = betterAuthGetOwnPropertyDescriptor(auth, 'api');
+  if (
+    apiDescriptor === undefined ||
+    !('value' in apiDescriptor) ||
+    !isObject(apiDescriptor.value)
+  ) {
+    throw new TypeError(`${label}.api must be a stable own-data object.`);
+  }
+  const receiver = apiDescriptor.value;
+  return betterAuthCaptureOwnMethod(receiver, methodName, `${label}.api`);
+}
+
+export function betterAuthCaptureOwnMethod(
+  receiver: object,
+  methodName: PropertyKey,
+  label: string,
+): { method: Function; receiver: object } {
+  const methodDescriptor = betterAuthGetOwnPropertyDescriptor(receiver, methodName);
+  if (
+    methodDescriptor === undefined ||
+    !('value' in methodDescriptor) ||
+    typeof methodDescriptor.value !== 'function'
+  ) {
+    throw new TypeError(`${label}.${String(methodName)} must be a stable own-data method.`);
+  }
+  return { method: methodDescriptor.value, receiver };
+}
+
 export function betterAuthDefineOwnData<Value>(
   target: object,
   property: PropertyKey,

@@ -11,6 +11,7 @@ import type {
 import {
   betterAuthArrayAppend,
   betterAuthApply,
+  betterAuthCaptureOwnApiMethod,
   betterAuthCharacterCodeAt,
   betterAuthGetOwnPropertyDescriptor,
   betterAuthIsSafeInteger,
@@ -30,6 +31,76 @@ type BetterAuthBareSessionPayload<Session, User> = {
   session: Session;
   user: User;
 };
+
+/** @internal Pin the exact Better Auth sign-in sink and its API receiver at declaration time. */
+export function pinBetterAuthSignInEmail(
+  auth: BetterAuthSignInEmailLike,
+): BetterAuthSignInEmailLike {
+  const { method, receiver } = betterAuthCaptureOwnApiMethod(
+    auth,
+    'signInEmail',
+    'Better Auth sign-in',
+  );
+  return {
+    api: {
+      signInEmail(options) {
+        return betterAuthApply(method, receiver, [options]);
+      },
+    },
+  };
+}
+
+/** @internal Pin the exact Better Auth sign-up sink and its API receiver at declaration time. */
+export function pinBetterAuthSignUpEmail(
+  auth: BetterAuthSignUpEmailLike,
+): BetterAuthSignUpEmailLike {
+  const { method, receiver } = betterAuthCaptureOwnApiMethod(
+    auth,
+    'signUpEmail',
+    'Better Auth sign-up',
+  );
+  return {
+    api: {
+      signUpEmail(options) {
+        return betterAuthApply(method, receiver, [options]);
+      },
+    },
+  };
+}
+
+/** @internal Pin the exact Better Auth sign-out sink and its API receiver at declaration time. */
+export function pinBetterAuthSignOut(auth: BetterAuthSignOutLike): BetterAuthSignOutLike {
+  const { method, receiver } = betterAuthCaptureOwnApiMethod(
+    auth,
+    'signOut',
+    'Better Auth sign-out',
+  );
+  return {
+    api: {
+      signOut(options) {
+        return betterAuthApply(method, receiver, [options]);
+      },
+    },
+  };
+}
+
+/** @internal Pin the exact Better Auth session sink and its API receiver at declaration time. */
+export function pinBetterAuthGetSession<AuthSession, AuthUser>(
+  auth: BetterAuthLike<AuthSession, AuthUser>,
+): BetterAuthLike<AuthSession, AuthUser> {
+  const { method, receiver } = betterAuthCaptureOwnApiMethod(
+    auth,
+    'getSession',
+    'Better Auth session',
+  );
+  return {
+    api: {
+      getSession(options) {
+        return betterAuthApply(method, receiver, [options]);
+      },
+    },
+  };
+}
 
 /**
  * Minimal Better Auth trusted-plaintext zone.

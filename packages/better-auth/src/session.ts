@@ -6,7 +6,7 @@ import {
   type BetterAuthLike,
   type BetterAuthRequestLike,
 } from './internal.js';
-import { callBetterAuthGetSession } from './internal/trusted-plaintext.js';
+import { callBetterAuthGetSession, pinBetterAuthGetSession } from './internal/trusted-plaintext.js';
 import { betterAuthGetOwnPropertyDescriptor } from './internal/intrinsics.js';
 
 const NativeError = Error;
@@ -59,6 +59,7 @@ export function betterAuthSession<
   auth: BetterAuthLike<AuthSession, AuthUser>,
   map: BetterAuthSessionMapper<AuthSession, AuthUser, SessionValue>,
 ): SessionProvider<Request, SessionValue> {
+  const pinnedAuth = pinBetterAuthGetSession(auth);
   return async (request): Promise<SessionProviderResult<SessionValue> | SessionValue | null> => {
     let result:
       | BetterAuthGetSessionWithHeadersResult<AuthSession, AuthUser>
@@ -66,7 +67,7 @@ export function betterAuthSession<
       | null
       | undefined;
     try {
-      result = await callBetterAuthGetSession(auth, request.headers);
+      result = await callBetterAuthGetSession(pinnedAuth, request.headers);
     } catch {
       throw new NativeError(betterAuthSessionBoundaryFailureMessage);
     }

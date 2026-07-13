@@ -30,6 +30,9 @@ import {
   callBetterAuthSignInEmail,
   callBetterAuthSignOut,
   callBetterAuthSignUpEmail,
+  pinBetterAuthSignInEmail,
+  pinBetterAuthSignOut,
+  pinBetterAuthSignUpEmail,
 } from './internal/trusted-plaintext.js';
 
 const NativeError = Error;
@@ -84,6 +87,8 @@ export function betterAuthSignInEmailMutation<
   BetterAuthCredentialMutationValue<'signed-in'>,
   GuardedRequest
 > & { key: Key } {
+  const pinnedAuth = pinBetterAuthSignInEmail(auth);
+  const defaultRedirectTo = redirectPath(options.defaultRedirectTo, '/');
   return assignBetterAuthMutationKey(
     mutation({
       ...credentialMutationDefinitionOptions(
@@ -97,7 +102,7 @@ export function betterAuthSignInEmailMutation<
       async handler(input, request, context) {
         try {
           const response = await callBetterAuthSignInEmail(
-            auth,
+            pinnedAuth,
             {
               email: input.email,
               password: input.password,
@@ -106,7 +111,7 @@ export function betterAuthSignInEmailMutation<
           );
 
           const success = await resolveBetterAuthCredentialSuccess(response, context, {
-            redirectTo: redirectPath(input.next, options.defaultRedirectTo ?? '/'),
+            redirectTo: redirectPath(input.next, defaultRedirectTo),
             status: 'signed-in',
           });
 
@@ -150,6 +155,8 @@ export function betterAuthSignUpEmailMutation<
   BetterAuthCredentialMutationValue<'signed-up'>,
   GuardedRequest
 > & { key: Key } {
+  const pinnedAuth = pinBetterAuthSignUpEmail(auth);
+  const defaultRedirectTo = redirectPath(options.defaultRedirectTo, '/');
   return assignBetterAuthMutationKey(
     mutation({
       ...credentialMutationDefinitionOptions(
@@ -163,7 +170,7 @@ export function betterAuthSignUpEmailMutation<
       async handler(input, request, context) {
         try {
           const response = await callBetterAuthSignUpEmail(
-            auth,
+            pinnedAuth,
             {
               email: input.email,
               name: input.name,
@@ -173,7 +180,7 @@ export function betterAuthSignUpEmailMutation<
           );
 
           const success = await resolveBetterAuthCredentialSuccess(response, context, {
-            redirectTo: redirectPath(input.next, options.defaultRedirectTo ?? '/'),
+            redirectTo: redirectPath(input.next, defaultRedirectTo),
             status: 'signed-up',
           });
 
@@ -217,6 +224,8 @@ export function betterAuthSignOutMutation<
   BetterAuthCredentialMutationValue<'signed-out'>,
   GuardedRequest
 > & { key: Key } {
+  const pinnedAuth = pinBetterAuthSignOut(auth);
+  const defaultRedirectTo = redirectPath(options.defaultRedirectTo, '/login');
   return assignBetterAuthMutationKey(
     mutation({
       ...credentialMutationDefinitionOptions(
@@ -230,7 +239,7 @@ export function betterAuthSignOutMutation<
       async handler(_input, request, context) {
         let response: BetterAuthResponseLike;
         try {
-          response = await callBetterAuthSignOut(auth, request.headers);
+          response = await callBetterAuthSignOut(pinnedAuth, request.headers);
         } catch {
           throw betterAuthCredentialBoundaryFailure();
         }
@@ -239,7 +248,7 @@ export function betterAuthSignOutMutation<
         setSessionRevocationClearSiteData(context);
 
         return {
-          redirectTo: options.defaultRedirectTo ?? '/login',
+          redirectTo: defaultRedirectTo,
           status: 'signed-out' as const,
         };
       },

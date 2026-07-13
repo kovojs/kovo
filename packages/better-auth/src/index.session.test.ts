@@ -5,7 +5,7 @@ import {
   runEndpoint,
 } from '@kovojs/server/internal/execution';
 import { describe, expect, expectTypeOf, it } from 'vitest';
-import { betterAuthSession, mount } from './index.js';
+import { betterAuthSession, mount, type BetterAuthLike } from './index.js';
 import {
   type AppSession,
   type AuthSession,
@@ -45,6 +45,52 @@ describe('betterAuthSession', () => {
     const provider = betterAuthSession(auth, mapSession);
 
     await expect(provider({ headers: new Headers() })).resolves.toBeNull();
+  });
+
+  it('pins getSession before a late API swap can forge an admin session', async () => {
+    const auth = new FakeBetterAuth();
+    const originalApi = auth.api;
+    const provider = betterAuthSession(auth, mapSession);
+    let poisonCalls = 0;
+    const forgedGetSession = () => {
+      poisonCalls += 1;
+      return {
+        headers: new Headers({ 'set-cookie': 'attacker_session=forged' }),
+        response: {
+          session: { activeOrganizationId: 'attacker-org', id: 'attacker-session' },
+          user: {
+            email: 'evil@example.com',
+            id: 'attacker',
+            roles: ['admin', 'member'] as const,
+          },
+        },
+      };
+    };
+    (originalApi as { getSession: typeof forgedGetSession }).getSession = forgedGetSession;
+    (auth as unknown as { api: { getSession: typeof forgedGetSession } }).api = {
+      getSession: forgedGetSession,
+    };
+
+    await expect(
+      provider({ headers: new Headers({ cookie: 'kovo_session=s1' }) }),
+    ).resolves.toEqual(mappedAppSession);
+    expect(poisonCalls).toBe(0);
+  });
+
+  it('rejects accessor and inherited session authority at declaration time', () => {
+    const apiAccessor = Object.defineProperty({}, 'api', {
+      get: () => ({ getSession: () => null }),
+    }) as BetterAuthLike<AuthSession, AuthUser>;
+    const inheritedMethod = {
+      api: Object.create({ getSession: () => null }),
+    } as BetterAuthLike<AuthSession, AuthUser>;
+
+    expect(() => betterAuthSession(apiAccessor, mapSession)).toThrow(
+      'Better Auth session.api must be a stable own-data object',
+    );
+    expect(() => betterAuthSession(inheritedMethod, mapSession)).toThrow(
+      'Better Auth session.api.getSession must be a stable own-data method',
+    );
   });
 
   it('does not reinterpret a bare session through inherited envelope properties', async () => {
@@ -228,5 +274,40 @@ describe('browser redirect protocol mount', () => {
         await runEndpoint(typedEndpoint, new Request('https://example.test/auth/magic-link'))
       ).text(),
     ).resolves.toBe('GET');
+  });
+
+  it('pins an own mount handler with its receiver and rejects substitutions', async () => {
+    let poisonCalls = 0;
+    const auth = {
+      handled: false,
+      handler(this: { handled: boolean }, request: Request) {
+        this.handled = true;
+        return new Response(new URL(request.url).pathname);
+      },
+    };
+    const endpoint = mount('/auth', auth, { method: 'GET' });
+    auth.handler = () => {
+      poisonCalls += 1;
+      return new Response('attacker');
+    };
+
+    const response = await runEndpoint(
+      endpoint,
+      new Request('https://example.test/auth/callback/provider'),
+    );
+    await expect(response.text()).resolves.toBe('/auth/callback/provider');
+    expect(auth.handled).toBe(true);
+    expect(poisonCalls).toBe(0);
+
+    const accessor = Object.defineProperty({}, 'handler', {
+      get: () => () => new Response('attacker'),
+    }) as FakeMountedAuth;
+    const inherited = Object.create({ handler: () => new Response('attacker') }) as FakeMountedAuth;
+    expect(() => mount('/auth/accessor', accessor, { method: 'GET' })).toThrow(
+      'Better Auth mount.handler must be a stable own-data method',
+    );
+    expect(() => mount('/auth/inherited', inherited, { method: 'GET' })).toThrow(
+      'Better Auth mount.handler must be a stable own-data method',
+    );
   });
 });

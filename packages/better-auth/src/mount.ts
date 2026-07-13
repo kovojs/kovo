@@ -7,6 +7,7 @@ import type {
 } from '@kovojs/server';
 
 import { betterAuthMountOperationContract } from './internal/contracts.js';
+import { betterAuthApply, betterAuthCaptureOwnMethod } from './internal/intrinsics.js';
 import { assertBetterAuthRequestSecretPath } from './internal/non-egress-proof.js';
 import type { BetterAuthMountHandler, BetterAuthMountLike } from './internal.js';
 
@@ -48,7 +49,10 @@ export function mount<
   auth: BetterAuthMountLike | BetterAuthMountHandler,
   options: BetterAuthMountOptions<Method>,
 ): EndpointDeclaration<Path, Method, 'prefix'> {
-  const handler = typeof auth === 'function' ? auth : auth.handler;
+  const { method: handler, receiver: handlerReceiver } =
+    typeof auth === 'function'
+      ? { method: auth, receiver: undefined }
+      : betterAuthCaptureOwnMethod(auth, 'handler', 'Better Auth mount');
   const endpointAuth = options.auth ?? betterAuthMountOperationContract.auth;
 
   return endpoint(path, {
@@ -61,7 +65,7 @@ export function mount<
       options.csrfJustification ?? betterAuthMountOperationContract.csrf.justification,
     handler(request) {
       assertBetterAuthRequestSecretPath('better-auth.mount.handler-delegation');
-      return handler(request);
+      return betterAuthApply(handler, handlerReceiver, [request]);
     },
     method: options.method,
     mount: 'prefix',
