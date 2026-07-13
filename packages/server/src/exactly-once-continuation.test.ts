@@ -44,6 +44,18 @@ describe('framework continuation transaction boundary', () => {
     expect(callbackCalls).toBe(0);
   });
 
+  it('preserves an adapter setup failure before the continuation receives authority', async () => {
+    const setupFailure = new Error('transaction setup failed');
+    await expect(
+      runExactlyOnceAdapter(
+        () => {
+          throw setupFailure;
+        },
+        (value: string) => value,
+      ),
+    ).rejects.toBe(setupFailure);
+  });
+
   it('does not start work when an adapter discards the lazy result', async () => {
     let callbackCalls = 0;
     await expect(

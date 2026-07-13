@@ -3492,29 +3492,29 @@ function createNodePostgresRuntimeClient(
       return drizzleNodePg({ client: pool, relations });
     },
     drizzleReadonlyDb: (principal, role, roleSetting) =>
-      drizzleNodePg({
-        client: createPostgresReadonlyClient(
+      createScopedNodePostgresDrizzleDb(
+        createPostgresReadonlyClient(
           nodePostgresScopedRuntimeClient(config, transactionalClient, {
             adminClient: adminTransactionalClient,
             roleSetting,
             systemClient: systemTransactionalClient,
           }),
           postgresReadonlyClientOptions(config, principal, role, roleSetting),
-        ) as unknown as Pool,
+        ),
         relations,
-      }),
+      ),
     drizzleRequestDb: (principal, roleSetting) =>
-      drizzleNodePg({
-        client: createPostgresScopedClient(
+      createScopedNodePostgresDrizzleDb(
+        createPostgresScopedClient(
           nodePostgresScopedRuntimeClient(config, transactionalClient, {
             adminClient: adminTransactionalClient,
             roleSetting,
             systemClient: systemTransactionalClient,
           }),
           postgresScopedClientOptions(config, principal, roleSetting),
-        ) as unknown as Pool,
+        ),
         relations,
-      }),
+      ),
     label: 'Postgres',
     readonlySql: (principal, role, roleSetting) =>
       createPostgresReadonlyClient(
@@ -3555,6 +3555,50 @@ async function closeNodePostgresRuntimeClients(
       )?.();
     }
   }
+}
+
+/**
+ * Bind Drizzle's callback transaction surface to Kovo's already-scoped client transaction.
+ *
+ * NodePgSession otherwise emits its own `BEGIN` through `client.query()`. That is correctly denied
+ * by the scoped client as app-controlled transaction text, and it would also place the Drizzle
+ * callback outside Kovo's role/principal frame. This own method keeps the whole callback inside the
+ * framework transaction and reconstructs the Drizzle handle over the transaction-scoped client
+ * (SPEC §10.3/§11.2).
+ */
+function createScopedNodePostgresDrizzleDb(
+  client: object,
+  relations: AnyRelations,
+): NodePgDatabase {
+  const transaction = capturePostgresCallable(
+    client,
+    'transaction',
+    'Postgres managed Drizzle transaction',
+  );
+  const db = drizzleNodePg({ client: client as Pool, relations });
+  witnessDefineProperty(db, 'transaction', {
+    // The authorization-census proxy must be able to reflect this own authority method without
+    // inheriting a non-configurable target invariant. Its own traps still deny app mutation.
+    configurable: true,
+    enumerable: false,
+    value<Result>(
+      callback: (tx: NodePgDatabase) => Promise<Result> | Result,
+      ...args: unknown[]
+    ): Promise<Result> {
+      if (typeof callback !== 'function') {
+        throw new TypeError('Postgres managed Drizzle transactions require a callback.');
+      }
+      const wrappedCallback = (transactionClient: object): Promise<Result> | Result =>
+        witnessReflectApply(callback, undefined, [
+          createScopedNodePostgresDrizzleDb(transactionClient, relations),
+        ]);
+      const invocationArgs: unknown[] = [wrappedCallback];
+      appendPostgresDenseValues(invocationArgs, args, 'Postgres managed transaction arguments');
+      return witnessReflectApply<Promise<Result>>(transaction, client, invocationArgs);
+    },
+    writable: false,
+  });
+  return db;
 }
 
 function createOptionalNodePostgresRuntimeClient(

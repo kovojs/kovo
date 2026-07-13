@@ -14,6 +14,9 @@ function apply<Return>(fn: Function, receiver: unknown, args: readonly unknown[]
 export interface ExactlyOnceContinuationStatus {
   readonly callbackFailed: boolean;
   readonly callbackFailure: unknown;
+  readonly invocations: number;
+  readonly settled: boolean;
+  readonly started: boolean;
   readonly violated: boolean;
 }
 
@@ -111,7 +114,7 @@ export function exactlyOnceContinuation<Argument, Result>(
       return lazy;
     },
     status() {
-      return { callbackFailed, callbackFailure, violated };
+      return { callbackFailed, callbackFailure, invocations: calls, settled, started, violated };
     },
   };
   return continuation;
@@ -150,6 +153,10 @@ export async function runExactlyOnceAdapter<Argument, Result, AdapterResult>(
   continuation.close();
   await continuation.quiesce();
   const status = continuation.status();
+  // An adapter can fail during transaction setup before it is able to invoke the continuation.
+  // No callback authority ran in that case, so preserve the original setup failure. Once an
+  // invocation exists, cardinality/observation violations remain authoritative and fail closed.
+  if (failed && status.invocations === 0) throw failure;
   if (status.violated) {
     throw new NativeTypeError('Framework continuation adapter must await exactly one invocation.');
   }

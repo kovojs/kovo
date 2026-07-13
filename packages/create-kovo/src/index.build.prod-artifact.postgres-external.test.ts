@@ -139,10 +139,7 @@ describeIfPostgres(
           runtimeUrl,
         ]);
         expect(runtimeCheckOutput).toContain('STATUS ok');
-        await installAuthRuntimePoliciesAndSeedDemoUser(
-          cluster.url(database, 'postgres'),
-          demoPassword(root),
-        );
+        await seedDemoUser(cluster.url(database, 'postgres'), demoPassword(root));
         await expectPermissionDenied(runtimeUrl, `CREATE ROLE ${quoteIdent(`${runId}_blocked`)}`);
         await expectPermissionDenied(runtimeUrl, 'ALTER TABLE contacts FORCE ROW LEVEL SECURITY');
 
@@ -191,8 +188,12 @@ describeIfPostgres(
           redirect: 'manual',
         });
         mergeCookies(jar, addContact.headers.getSetCookie());
-        await addContact.text();
-        expect(addContact.status).toBe(303);
+        const addContactBody = await addContact.text();
+        if (addContact.status !== 303) {
+          throw new Error(
+            `Expected add-contact redirect, got ${addContact.status}:\n${addContactBody}\n${output()}`,
+          );
+        }
 
         const updatedHome = await fetch(`${origin}/`, {
           headers: { cookie: cookieHeader(jar) },
@@ -426,24 +427,11 @@ function writeStarterPostgresMigration(root: string): void {
   );
 }
 
-async function installAuthRuntimePoliciesAndSeedDemoUser(
-  databaseUrl: string,
-  password: string,
-): Promise<void> {
+async function seedDemoUser(databaseUrl: string, password: string): Promise<void> {
   const userId = 'demo-user';
   const accountId = 'demo-account';
   const passwordHash = await betterAuthPasswordHash(password);
   await withPool(databaseUrl, async (pool) => {
-    for (const table of ['user', 'session', 'account']) {
-      await pool.query(
-        [
-          `CREATE POLICY ${quoteIdent(`kovo_auth_runtime_${table}`)} ON ${quoteIdent(table)}`,
-          'FOR ALL TO kovo_writer',
-          'USING (true)',
-          'WITH CHECK (true)',
-        ].join(' '),
-      );
-    }
     await pool.query(
       [
         'INSERT INTO "user" (id, name, email, "emailVerified", "createdAt", "updatedAt")',
