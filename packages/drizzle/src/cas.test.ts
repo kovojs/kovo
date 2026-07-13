@@ -42,6 +42,35 @@ describe('compareAndSet (KV429)', () => {
   });
 
   describe('CasConflict: 0 rows updated — stale-version / lost-update race', () => {
+    it('does not inherit a fabricated success count from Object.prototype', async () => {
+      Object.defineProperty(Object.prototype, 'rowCount', { configurable: true, value: 1 });
+      try {
+        await expect(compareAndSet({})).resolves.toEqual({ conflict: true, ok: false });
+      } finally {
+        delete (Object.prototype as { rowCount?: unknown }).rowCount;
+      }
+    });
+
+    it('rejects accessor and invalid result counts without invoking attacker code', async () => {
+      let reads = 0;
+      const accessor = Object.defineProperty({}, 'rowCount', {
+        get() {
+          reads += 1;
+          return 1;
+        },
+      });
+      await expect(compareAndSet(accessor)).rejects.toThrow(/own-data/u);
+      expect(reads).toBe(0);
+
+      const originalIsSafeInteger = Number.isSafeInteger;
+      try {
+        Number.isSafeInteger = () => true;
+        await expect(compareAndSet({ rowCount: Number.NaN })).rejects.toThrow(/count/u);
+      } finally {
+        Number.isSafeInteger = originalIsSafeInteger;
+      }
+    });
+
     it('returns ok:false + conflict:true when rowCount is 0 (pg-style)', async () => {
       const result = await compareAndSet(Promise.resolve({ rowCount: 0 }));
       expect(result).toEqual({ ok: false, conflict: true });

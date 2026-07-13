@@ -26,6 +26,8 @@
  * ```
  */
 
+import { runtimeOwnDataValue } from './runtime-security-intrinsics.js';
+
 /** A CAS operation succeeded — ≥1 row matched the version predicate and was updated. */
 export interface CasSuccess {
   readonly ok: true;
@@ -84,10 +86,32 @@ export async function compareAndSet(
   update: DrizzleUpdateResult | Promise<DrizzleUpdateResult>,
 ): Promise<CasResult> {
   const result = await update;
-  const affected =
-    result.rowCount ?? result.rowsAffected ?? result.affectedRows ?? result.changes ?? 0;
+  const affected = affectedRowCount(result);
   if (affected > 0) {
     return { ok: true };
   }
   return { conflict: true, ok: false };
+}
+
+function affectedRowCount(result: DrizzleUpdateResult): number {
+  const properties = ['rowCount', 'rowsAffected', 'affectedRows', 'changes'] as const;
+  for (let index = 0; index < properties.length; index += 1) {
+    const property = properties[index];
+    if (property === undefined) continue;
+    const count = runtimeOwnDataValue(result, property);
+    if (!count.found || count.value === undefined || count.value === null) continue;
+    if (
+      typeof count.value !== 'number' ||
+      count.value !== count.value ||
+      count.value === Infinity ||
+      count.value === -Infinity ||
+      count.value % 1 !== 0 ||
+      count.value < 0 ||
+      count.value > 9_007_199_254_740_991
+    ) {
+      throw new TypeError(`Kovo compareAndSet ${property} count is invalid.`);
+    }
+    return count.value;
+  }
+  return 0;
 }
