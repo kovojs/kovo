@@ -143,7 +143,16 @@ export async function runDemoServeCli(makeServer) {
 }
 
 export async function tryServeBuiltAsset(req, res, distDir) {
-  const pathname = decodeURIComponent(new URL(req.url, 'http://x').pathname);
+  let pathname;
+  try {
+    pathname = decodeURIComponent(new URL(req.url, 'http://x').pathname);
+  } catch {
+    // The asset front door runs before app/Vite dispatch. A malformed percent escape
+    // must become a bounded client error here instead of an unhandled promise rejection
+    // capable of terminating the hosted demo process (SPEC §2 fail closed).
+    sendTextAssetResponse(req, res, 400, 'Malformed request path.\n');
+    return true;
+  }
   if (pathname === '/favicon.ico') {
     res.writeHead(200, {
       'cache-control': 'public, max-age=86400',

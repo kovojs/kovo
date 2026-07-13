@@ -129,6 +129,25 @@ describe('demo-session built asset serving', () => {
       await server.close();
     }
   });
+
+  it('rejects malformed percent escapes without terminating asset dispatch', async () => {
+    const server = await serveAssets(tempDist({}));
+
+    try {
+      const malformed = await requestAsset(server.origin, '/%', {});
+      expect(malformed.status).toBe(400);
+      expect(malformed.headers).toMatchObject({
+        'cache-control': 'no-store',
+        'content-type': 'text/plain; charset=utf-8',
+      });
+      expect(malformed.body.toString('utf8')).toBe('Malformed request path.\n');
+
+      const stillServing = await requestAsset(server.origin, '/favicon.ico', {});
+      expect(stillServing.status).toBe(200);
+    } finally {
+      await server.close();
+    }
+  });
 });
 
 function tempDist(files) {
