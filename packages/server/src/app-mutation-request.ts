@@ -54,7 +54,6 @@ import {
   securityHeadersSet,
   securityStringIncludes,
   securityStringStartsWith,
-  securityStringToLowerCase,
   securityStringTrim,
 } from './response-security-intrinsics.js';
 import { witnessGetOwnPropertyDescriptor } from './security-witness-intrinsics.js';
@@ -64,6 +63,7 @@ import {
   frameworkMutationRenderRequestResolver,
   type MutationRenderRequestResolver,
 } from './mutation-render-request-authority.js';
+import { sourceDocumentHeaderIsRetained } from './source-document-headers.js';
 
 export async function handleAppMutationRequest(
   app: KovoApp,
@@ -518,7 +518,7 @@ function mutationSourceDocumentRequest(
 ): Request {
   const headers = createSecurityHeaders();
   securityHeadersForEach(requestHeaders(template), (value, name) => {
-    if (mutationSourceHeaderIsRetained(name)) securityHeadersSet(headers, name, value);
+    if (sourceDocumentHeaderIsRetained(name)) securityHeadersSet(headers, name, value);
   });
   securityHeadersSet(headers, 'Accept', 'text/html');
   const sourceRequest = createNativeRequest(requestUrlSnapshot(sourceUrl).href, {
@@ -528,32 +528,4 @@ function mutationSourceDocumentRequest(
   copyRequestServerBindings(ingressRequest, sourceRequest);
   pinRequestIngressSurface(sourceRequest);
   return sourceRequest;
-}
-
-function mutationSourceHeaderIsRetained(name: string): boolean {
-  const normalized = securityStringToLowerCase(name);
-  if (
-    securityStringStartsWith(normalized, 'content-') ||
-    securityStringStartsWith(normalized, 'kovo-') ||
-    securityStringStartsWith(normalized, 'sec-fetch-')
-  ) {
-    return false;
-  }
-  return !(
-    normalized === 'accept' ||
-    normalized === 'connection' ||
-    normalized === 'csrf-token' ||
-    normalized === 'host' ||
-    normalized === 'idempotency-key' ||
-    normalized === 'origin' ||
-    normalized === 'referer' ||
-    normalized === 'te' ||
-    normalized === 'trailer' ||
-    normalized === 'transfer-encoding' ||
-    normalized === 'upgrade' ||
-    normalized === 'x-csrf-token' ||
-    normalized === 'x-http-method-override' ||
-    normalized === 'x-method-override' ||
-    normalized === 'x-requested-with'
-  );
 }

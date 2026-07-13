@@ -9,7 +9,11 @@ import { deriveClosedKovoApp } from './app-snapshot.js';
 import { runWithGeneratedLiveTargetRegistry } from './live-target-registry.js';
 import { createRequestHandler } from './app.js';
 import type { KovoApp } from './app-types.js';
-import { resolveRequestClientIp } from './app-load-shed.js';
+import {
+  copyRequestServerBindings,
+  pinRequestIngressSurface,
+  resolveRequestClientIp,
+} from './app-load-shed.js';
 import { searchParamsToRecord } from './app-document.js';
 import {
   appLiveTargetAttestationAudience,
@@ -37,6 +41,7 @@ import type { ServerErrorDiagnosticContext } from './diagnostics.js';
 import { scrubConsoleArgs } from './logging.js';
 import {
   requestCreateUrl,
+  requestHeaders,
   requestIsRequest,
   requestUrl,
   requestUrlSearchParamsEntries,
@@ -57,6 +62,7 @@ import {
   securityBufferFrom,
   securityBufferToString,
   securityHeadersDelete,
+  securityHeadersForEach,
   securityHeadersGet,
   securityHeadersSet,
   securityIsResponse,
@@ -99,6 +105,8 @@ import {
   witnessWeakMapHas,
   witnessWeakMapSet,
 } from './security-witness-intrinsics.js';
+import { createNativeRequest } from './request-carrier.js';
+import { sourceDocumentHeaderIsRetained } from './source-document-headers.js';
 
 const kovoHmrClientPath = '/@kovo/hmr-client';
 const kovoHmrRouteRefreshPath = '/@kovo/hmr/refresh/route';
@@ -671,9 +679,7 @@ async function renderKovoHmrRouteRefreshResponse(
     );
   }
 
-  const routeResponse = await createRequestHandler(app)(
-    nodeRequestToWebRequest(hmrTargetNodeRequest(request, targetUrl)),
-  );
+  const routeResponse = await createRequestHandler(app)(hmrTargetWebRequest(webRequest, targetUrl));
 
   return withKovoHmrRefreshHeaders(
     await injectKovoHmrScriptIntoWebResponse(routeResponse),
@@ -724,7 +730,7 @@ async function renderKovoHmrLiveTargetRefreshResponse(
     );
   }
 
-  const targetRequest = nodeRequestToWebRequest(hmrTargetNodeRequest(request, targetUrl));
+  const targetRequest = hmrTargetWebRequest(webRequest, targetUrl);
   const authorization = await authorizeRouteRequest(
     routeMatch.route,
     {
@@ -889,6 +895,20 @@ function hmrTargetNodeRequest(
     value: `${targetUrl.pathname}${targetUrl.search}`,
     writable: true,
   });
+  return targetRequest;
+}
+
+function hmrTargetWebRequest(request: Request, targetUrl: RequestUrlSnapshot): Request {
+  const headers = createSecurityHeaders();
+  securityHeadersForEach(requestHeaders(request), (value, name) => {
+    if (sourceDocumentHeaderIsRetained(name)) securityHeadersSet(headers, name, value);
+  });
+  securityHeadersSet(headers, 'Accept', 'text/html');
+  const targetRequest = createNativeRequest(targetUrl.href, { headers, method: 'GET' });
+  // Preserve only adapter-installed peer/DB bindings. The source document owns its URL, method,
+  // and header authority; HMR control headers must never reach guards, queries, or renderers.
+  copyRequestServerBindings(request, targetRequest);
+  pinRequestIngressSurface(targetRequest);
   return targetRequest;
 }
 

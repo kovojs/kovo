@@ -1148,10 +1148,12 @@ describe('server app shell Vite dev seam', () => {
       source: 'export const cart = true;',
       version: 'cart-v1',
     });
+    const observedSourceRequests: Request[] = [];
     const cartRenderer: LiveTargetRenderer<Request> = {
       component: 'src/components/CartBadge',
       mutationKeys: [],
       async render(context) {
+        observedSourceRequests.push(context.request);
         expect(new URL(context.request.url).pathname).toBe('/cart');
         return `<cart-badge data-target="${context.target}">${String(context.props.count)}</cart-badge>`;
       },
@@ -1162,7 +1164,12 @@ describe('server app shell Vite dev seam', () => {
         clientModules,
         routes: [
           route('/cart', {
-            access: publicAccess('HMR live-target refresh regression'),
+            access: [
+              guard('canonical HMR source request', (request) => {
+                observedSourceRequests.push(request);
+                return true;
+              }),
+            ],
             page: () => renderedHtml('<main>Cart</main>'),
           }),
         ],
@@ -1201,8 +1208,19 @@ describe('server app shell Vite dev seam', () => {
       const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
       const response = await fetch(`${origin}/@kovo/hmr/refresh/live-targets?oldBuild=old-build`, {
         headers: {
+          accept: 'application/json',
+          authorization: 'Bearer retained',
+          cookie: 'session=retained',
+          'Content-Type': 'application/json',
           'Kovo-Current-Url': '/cart?tab=summary',
+          'Kovo-Fragment': 'true',
           'Kovo-Live-Targets': `${attestedLiveTargetHeader('cart-badge', 'src/components/CartBadge', appLiveTargetAttestationAudience(app), { count: 3 }, `${origin}/cart?tab=summary`)}`,
+          origin: 'https://attacker.invalid',
+          referer: `${origin}/forged-source`,
+          'Sec-Fetch-Site': 'cross-site',
+          'X-App-Context': 'retained',
+          'X-HTTP-Method-Override': 'DELETE',
+          'X-Requested-With': 'XMLHttpRequest',
         },
         method: 'POST',
       });
@@ -1218,6 +1236,24 @@ describe('server app shell Vite dev seam', () => {
       expect(body).toBe(
         '<kovo-fragment target="cart-badge"><link rel="stylesheet" href="/assets/cart.css"><cart-badge data-target="cart-badge">3</cart-badge></kovo-fragment>',
       );
+      expect(observedSourceRequests).toHaveLength(2);
+      for (const sourceRequest of observedSourceRequests) {
+        expect(sourceRequest.method).toBe('GET');
+        expect(sourceRequest.url).toBe(`${origin}/cart?tab=summary`);
+        expect(sourceRequest.headers.get('accept')).toBe('text/html');
+        expect(sourceRequest.headers.get('authorization')).toBe('Bearer retained');
+        expect(sourceRequest.headers.get('cookie')).toBe('session=retained');
+        expect(sourceRequest.headers.get('x-app-context')).toBe('retained');
+        expect(sourceRequest.headers.get('content-type')).toBeNull();
+        expect(sourceRequest.headers.get('kovo-current-url')).toBeNull();
+        expect(sourceRequest.headers.get('kovo-fragment')).toBeNull();
+        expect(sourceRequest.headers.get('kovo-live-targets')).toBeNull();
+        expect(sourceRequest.headers.get('origin')).toBeNull();
+        expect(sourceRequest.headers.get('referer')).toBeNull();
+        expect(sourceRequest.headers.get('sec-fetch-site')).toBeNull();
+        expect(sourceRequest.headers.get('x-http-method-override')).toBeNull();
+        expect(sourceRequest.headers.get('x-requested-with')).toBeNull();
+      }
     } finally {
       await new Promise<void>((resolve, reject) => {
         server.close((error) => (error ? reject(error) : resolve()));
