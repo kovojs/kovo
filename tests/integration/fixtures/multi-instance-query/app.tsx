@@ -23,9 +23,10 @@ interface ProductResult {
 }
 
 async function readProduct(db: KovoFixtureRequest['db'], id: string): Promise<ProductResult> {
-  const rows = (await db.query(
-    `select id, name, stock from product where id = '${id.replaceAll("'", "''")}'`,
-  )) as unknown as ProductResult[];
+  const rows = await db.query<ProductResult>({
+    text: 'select id, name, stock from product where id = $1',
+    values: [id],
+  });
   return rows[0] ?? { id, name: 'Missing', stock: 0 };
 }
 

@@ -221,8 +221,8 @@ describe('@kovojs/test commerce fixture facts', () => {
         'cart.addItem': {
           reads: [],
           touches: [
-            { domain: 'cart', site: 'fixture.ts:1', via: 'cart_items' },
-            { domain: 'product', site: 'fixture.ts:2', via: 'products' },
+            { domain: 'cart', keys: null, site: 'fixture.ts:1', via: 'cart_items' },
+            { domain: 'product', keys: null, site: 'fixture.ts:2', via: 'products' },
           ],
           unresolved: [],
         },

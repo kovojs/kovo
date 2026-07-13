@@ -29,7 +29,7 @@ const REQUIRED_RULES: readonly InventoryRule[] = [
   {
     axis: 'security',
     match:
-      /^(auth|csrf|required|endpoint|forbidden|guarded|query-read-guard|session|storage|webhook|xss|sanitized|unscoped|mutation-targets-malicious)/,
+      /^(auth|bootstrap|csrf|required|endpoint|forbidden|guarded|query-read-guard|session|storage|webhook|xss|sanitized|unscoped|mutation-targets-malicious)/,
     reason: 'auth, CSRF, ownership, header, webhook, or XSS security posture',
     tier: 'required',
   },

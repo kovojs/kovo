@@ -7,12 +7,19 @@ test.use({ kovoFixture: 'mutation-targets-malicious' });
 test('ignores malformed, duplicate, unknown, and unauthorized mutation targets safely', async ({
   request,
 }) => {
+  const anonymousPage = await request.get('/');
+  const anonymousHtml = await anonymousPage.text();
+  const anonymousCsrf = /name="kovo-csrf" value="([^"]+)"/.exec(anonymousHtml)?.[1] ?? '';
+  const origin = new URL(anonymousPage.url()).origin;
+  expect(anonymousCsrf).toBeTruthy();
+
   const anonymous = await request.post('/_m/targets/refresh', {
-    form: { value: 'anonymous' },
+    form: { 'kovo-csrf': anonymousCsrf, value: 'anonymous' },
     headers: {
       'Kovo-Fragment': 'true',
       'Kovo-Targets':
         'public-status; public-status=public; unknown-target; private-panel=private; bad-target"]',
+      origin,
     },
   });
   expect(anonymous.status()).toBe(200);
@@ -24,12 +31,20 @@ test('ignores malformed, duplicate, unknown, and unauthorized mutation targets s
   expect(anonymousBody).not.toContain('unknown-target');
   expect(anonymousBody).not.toContain('bad-target');
 
+  const authedPage = await request.get('/', {
+    headers: { Cookie: 'kovo_target_session=ada' },
+  });
+  const authedHtml = await authedPage.text();
+  const authedCsrf = /name="kovo-csrf" value="([^"]+)"/.exec(authedHtml)?.[1] ?? '';
+  expect(authedCsrf).toBeTruthy();
+
   const authed = await request.post('/_m/targets/refresh', {
-    form: { value: 'authed' },
+    form: { 'kovo-csrf': authedCsrf, value: 'authed' },
     headers: {
       Cookie: 'kovo_target_session=ada',
       'Kovo-Fragment': 'true',
       'Kovo-Targets': 'private-panel=private',
+      origin,
     },
   });
   expect(authed.status()).toBe(200);

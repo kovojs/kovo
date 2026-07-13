@@ -8,9 +8,15 @@ test('merges handler transport headers on enhanced and no-JS mutation responses'
   request,
   kovoApp,
 }) => {
+  const pageResponse = await request.get('/');
+  const pageHtml = await pageResponse.text();
+  const csrf = /name="kovo-csrf" value="([^"]+)"/.exec(pageHtml)?.[1] ?? '';
+  const origin = new URL(pageResponse.url()).origin;
+  expect(csrf).toBeTruthy();
+
   const enhanced = await request.post('/_m/mutation-response-headers/touch', {
-    form: {},
-    headers: enhancedMutationHeaders({ targets: 'header-status' }),
+    form: { 'kovo-csrf': csrf },
+    headers: { ...enhancedMutationHeaders({ targets: 'header-status' }), origin },
   });
   expect(enhanced.status()).toBe(200);
   const enhancedHeaders = enhanced.headers();
@@ -32,7 +38,8 @@ test('merges handler transport headers on enhanced and no-JS mutation responses'
   expect(await enhanced.text()).toContain('<kovo-fragment target="header-status">');
 
   const noJs = await request.post('/_m/mutation-response-headers/touch', {
-    form: {},
+    form: { 'kovo-csrf': csrf },
+    headers: { origin },
     maxRedirects: 0,
   });
   expect(noJs.status()).toBe(303);

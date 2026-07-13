@@ -1,7 +1,12 @@
 // SPEC.md §9.1: mutation handlers may attach narrow transport headers.
 import { staticSql } from '@kovojs/test/internal/integration/fixture-abi';
-import { createApp, mutation, route, s } from '@kovojs/server';
+import { createApp, csrfField, mutation, route, s } from '@kovojs/server';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
+
+const csrf = {
+  secret: 'mutation-response-headers-csrf-secret-32-bytes',
+  sessionId: () => 'mutation-response-headers-browser-session',
+};
 
 async function renderStatus(db: KovoFixtureRequest['db']): Promise<string> {
   const rows = await db.query<{ count: number }>(
@@ -11,7 +16,6 @@ async function renderStatus(db: KovoFixtureRequest['db']): Promise<string> {
 }
 
 export const touchHeaders = mutation('mutation-response-headers/touch', {
-  csrf: false,
   input: s.object({}),
   registry: { tables: ['header_events'] },
   handler: async (_input: unknown, request: KovoFixtureRequest, context) => {
@@ -30,12 +34,14 @@ const homeRoute = route('/', {
   page: async (_context, request: KovoFixtureRequest) => `<main>
     <kovo-fragment target="header-status" kovo-deps="headers">${await renderStatus(request.db)}</kovo-fragment>
     <form method="post" action="/_m/mutation-response-headers/touch" enhance data-mutation="mutation-response-headers/touch" kovo-deps="headers">
+      ${csrfField(request, { ...csrf, audience: touchHeaders.key })}
       <button type="submit">Touch headers</button>
     </form>
   </main>`,
 });
 
 const app = createApp({
+  csrf,
   mutations: [touchHeaders],
   routes: [homeRoute],
   mutationResponses: {

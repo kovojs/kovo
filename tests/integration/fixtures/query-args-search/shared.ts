@@ -19,9 +19,10 @@ export async function readProduct(
   db: KovoFixtureRequest['db'],
   input: ProductArgs,
 ): Promise<ProductResult> {
-  const rows = (await db.query(
-    `select id, name, price from product where id = '${input.id.replaceAll("'", "''")}'`,
-  )) as Array<{ id: string; name: string; price: number }>;
+  const rows = await db.query<{ id: string; name: string; price: number }>({
+    text: 'select id, name, price from product where id = $1',
+    values: [input.id],
+  });
   const product = rows[0] ?? { id: input.id, name: 'Missing', price: 0 };
   return { ...product, withinBudget: product.price <= input.max };
 }
