@@ -1,4 +1,5 @@
 import { hasUnsafeUrlScheme } from '@kovojs/core/internal/sink-policy';
+import { securityStringCharCodeAt } from '#security-witness-intrinsics';
 
 export {
   hasUnsafeUrlScheme,
@@ -6,9 +7,6 @@ export {
   SAFE_URL_SCHEMES,
   URL_ATTRIBUTE_NAMES,
 } from '@kovojs/core/internal/sink-policy';
-
-// eslint-disable-next-line no-control-regex
-const urlBlankPattern = /[\u0000-\u0020\u007f-\u009f]+/g;
 
 /**
  * @internal Render-safe URL sink adapter shared by framework UI packages.
@@ -18,7 +16,15 @@ const urlBlankPattern = /[\u0000-\u0020\u007f-\u009f]+/g;
  * generic trust/bless-style render escape hatch.
  */
 export function safeUrl(value: string | null | undefined, fallback = '#'): string {
-  if (value === undefined || value === null) return fallback;
-  if (value.replace(urlBlankPattern, '') === '') return fallback;
+  if (typeof value !== 'string') return fallback;
+  if (!hasVisibleUrlCharacter(value)) return fallback;
   return hasUnsafeUrlScheme(value) ? fallback : value;
+}
+
+function hasVisibleUrlCharacter(value: string): boolean {
+  for (let index = 0; index < value.length; index += 1) {
+    const code = securityStringCharCodeAt(value, index);
+    if (code > 0x20 && (code < 0x7f || code > 0x9f)) return true;
+  }
+  return false;
 }

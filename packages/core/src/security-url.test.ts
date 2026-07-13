@@ -34,4 +34,30 @@ describe('shared URL sink security facts', () => {
     expect(safeUrl('   ')).toBe('#');
     expect(safeUrl(undefined, '/fallback')).toBe('/fallback');
   });
+
+  it('rejects late-coercing carriers and ignores poisoned String.prototype.replace', () => {
+    const originalReplace = String.prototype.replace;
+    let invoked = false;
+    let poisonedResult = '';
+    try {
+      String.prototype.replace = function replacePoison() {
+        return this as unknown as string;
+      };
+      poisonedResult = safeUrl('javascript:alert(1)');
+      const carrier = {
+        length: 8,
+        replace: () => 'https://safe.example',
+        toString() {
+          invoked = true;
+          return invoked ? 'javascript:alert(2)' : 'https://safe.example';
+        },
+      };
+      expect(safeUrl(carrier as unknown as string)).toBe('#');
+    } finally {
+      String.prototype.replace = originalReplace;
+    }
+
+    expect(poisonedResult).toBe('#');
+    expect(invoked).toBe(false);
+  });
 });
