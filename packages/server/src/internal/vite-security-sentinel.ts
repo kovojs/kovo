@@ -7,3 +7,8 @@ export const trustedViteSecurityProfileSentinel: unique symbol = Symbol(
 export const trustedViteSecurityProfileIntegrationSentinel: unique symbol = Symbol(
   'Kovo trusted Vite security profile integration',
 );
+
+/** @internal Module-private slot carrying the pre-authored operator paranoid disposition. */
+export const trustedViteSecurityProfileParanoidSentinel: unique symbol = Symbol(
+  'Kovo trusted Vite security profile paranoid disposition',
+);

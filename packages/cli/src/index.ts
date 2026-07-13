@@ -28,6 +28,10 @@ import {
 } from './commands-manifest.js';
 import { runUpdateDocsCommand } from './commands/update-docs.js';
 import {
+  kovoCommandBootSecurityDisposition,
+  type KovoCommandSecurityDisposition,
+} from './commands/security-disposition.js';
+import {
   compileComponentV1,
   handleKovoMcpRequest,
   runMcpCommand,
@@ -90,8 +94,14 @@ export type {
 } from './graph-output.js';
 export type { KovoCheckResult } from './shared.js';
 
-type SyncCommandHandler = (args: readonly string[]) => number;
-type AsyncCommandHandler = (args: readonly string[]) => Promise<number>;
+type SyncCommandHandler = (
+  args: readonly string[],
+  security: KovoCommandSecurityDisposition,
+) => number;
+type AsyncCommandHandler = (
+  args: readonly string[],
+  security: KovoCommandSecurityDisposition,
+) => Promise<number>;
 
 const SYNC_COMMAND_HANDLERS: Record<KovoSyncCommandName, SyncCommandHandler> = {
   add(args) {
@@ -108,7 +118,7 @@ const SYNC_COMMAND_HANDLERS: Record<KovoSyncCommandName, SyncCommandHandler> = {
       ),
     );
   },
-  check(args) {
+  check(args, security) {
     const parsed = parseCheckArgs(args);
     if (!parsed.ok) return writeCheckUsageError(parsed);
     const { family, inputPath } = parsed;
@@ -121,7 +131,14 @@ const SYNC_COMMAND_HANDLERS: Record<KovoSyncCommandName, SyncCommandHandler> = {
       writeSourcesSinksArtifact(process.cwd(), { driftScan });
       return writeCommandResult(sourcesSinksCheckResult(outputVersion, { driftScan }));
     }
-    return writeCommandResult(runGraphCommand(inputPath, (input) => kovoCheck(input, { family })));
+    return writeCommandResult(
+      runGraphCommand(inputPath, (input) =>
+        kovoCheck(input, {
+          family,
+          paranoidStaticAdvisory: security.paranoidStaticAdvisory,
+        }),
+      ),
+    );
   },
   explain(args) {
     const parsed = parseExplainArgs(args);
@@ -134,20 +151,20 @@ const SYNC_COMMAND_HANDLERS: Record<KovoSyncCommandName, SyncCommandHandler> = {
 };
 
 const ASYNC_COMMAND_HANDLERS: Record<KovoAsyncCommandName, AsyncCommandHandler> = {
-  async build(args) {
+  async build(args, security) {
     const parsed = parseBuildArgs(args);
     if (!parsed.ok) return writeUsageError(parsed.message);
-    return writeCommandResult(await runBuildCommand(parsed.options));
+    return writeCommandResult(await runBuildCommand(parsed.options, security));
   },
   async db(args) {
     const parsed = parseDbArgs(args);
     if (!parsed.ok) return writeUsageError(parsed.message);
     return writeCommandResult(await runDbCommand(parsed.options));
   },
-  async dev(args) {
+  async dev(args, security) {
     const parsed = parseDevArgs(args);
     if (!parsed.ok) return writeUsageError(parsed.message);
-    return writeCommandResult(await runDevCommand(parsed.options));
+    return writeCommandResult(await runDevCommand(parsed.options, security));
   },
   async compile(args) {
     const parsed = parseCompileArgs(args);
@@ -175,7 +192,10 @@ export const CLI_COMMAND_DISPATCHER_NAMES = {
 } as const;
 
 /** @internal Synchronous argv dispatcher for the `kovo` bin; not a public API. */
-export function main(args: readonly string[] = process.argv.slice(2)): number {
+export function main(
+  args: readonly string[] = process.argv.slice(2),
+  security: KovoCommandSecurityDisposition = kovoCommandBootSecurityDisposition,
+): number {
   if (args.length === 0) {
     process.stdout.write(formatNoArgsMessage());
     return 0;
@@ -192,14 +212,17 @@ export function main(args: readonly string[] = process.argv.slice(2)): number {
     throw new Error(`kovo ${command.name} is asynchronous; call mainAsync() instead.`);
   }
 
-  return SYNC_COMMAND_HANDLERS[command.name](args.slice(1));
+  return SYNC_COMMAND_HANDLERS[command.name](args.slice(1), security);
 }
 
 /** @internal Async argv dispatcher (export/mcp) for the `kovo` bin; not a public API. */
-export async function mainAsync(args: readonly string[] = process.argv.slice(2)): Promise<number> {
+export async function mainAsync(
+  args: readonly string[] = process.argv.slice(2),
+  security: KovoCommandSecurityDisposition = kovoCommandBootSecurityDisposition,
+): Promise<number> {
   const command = resolveCommand(args[0]);
-  if (!command || !isAsyncCommand(command)) return main(args);
-  return ASYNC_COMMAND_HANDLERS[command.name](args.slice(1));
+  if (!command || !isAsyncCommand(command)) return main(args, security);
+  return ASYNC_COMMAND_HANDLERS[command.name](args.slice(1), security);
 }
 
 /**

@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { kovo } from './vite.js';
 import { withKovoBuildContext } from './internal/build-context.js';
+import { trustedKovoVitePlugin } from './internal/vite-security-profile.js';
 
 // SPEC.md §11.4 (shared verification surface) / §10.2 / §10.3 / §9.5.1: the data-plane safety
 // gates (KV422 SQL injection, KV410/KV411 opaque projection/read set, KV429 lost update) must run
@@ -471,11 +472,31 @@ describe('public Kovo Vite plugin: data-plane safety gate (SPEC.md §11.4)', () 
     );
   });
 
-  it('keeps KV422 data-plane findings advisory during paranoid production builds', async () => {
+  it('does not let post-bootstrap environment mutation enable paranoid production builds', async () => {
     const previous = process.env.KOVO_PARANOID;
     process.env.KOVO_PARANOID = '1';
     const root = await fixture({ 'src/queries/search.ts': KV422_INJECTION });
     const plugin = kovo({ app: APP_ENTRY }) as unknown as DataPlaneGatePlugin;
+    await plugin.configResolved({ command: 'build', root });
+
+    try {
+      await expect(plugin.buildStart()).rejects.toThrow(
+        /data-plane safety gate failed[\s\S]*ERROR KV422[\s\S]*search\.ts/,
+      );
+    } finally {
+      if (previous === undefined) delete process.env.KOVO_PARANOID;
+      else process.env.KOVO_PARANOID = previous;
+    }
+  });
+
+  it('keeps the trusted runner paranoid disposition after environment mutation disables it', async () => {
+    const previous = process.env.KOVO_PARANOID;
+    delete process.env.KOVO_PARANOID;
+    const root = await fixture({ 'src/queries/search.ts': KV422_INJECTION });
+    const plugin = trustedKovoVitePlugin({
+      app: APP_ENTRY,
+      paranoidStaticAdvisory: true,
+    }) as unknown as DataPlaneGatePlugin;
     await plugin.configResolved({ command: 'build', root });
 
     try {

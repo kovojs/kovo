@@ -78,6 +78,10 @@ import {
 } from '../shared.js';
 import { findNearestFile, readJsonRecord } from '../tooling.js';
 import {
+  kovoCommandBootSecurityDisposition,
+  type KovoCommandSecurityDisposition,
+} from './security-disposition.js';
+import {
   buildSecurityArrayAppend,
   buildArrayIsArray,
   buildArrayJoin,
@@ -441,7 +445,10 @@ function exportUsage(): string {
   return buildJoinStrings([EXPORT_USAGE, ''], '\n', 'Export usage lines');
 }
 
-export async function runBuildCommand(options: KovoBuildOptions): Promise<CliCommandResult> {
+export async function runBuildCommand(
+  options: KovoBuildOptions,
+  security: KovoCommandSecurityDisposition = kovoCommandBootSecurityDisposition,
+): Promise<CliCommandResult> {
   try {
     const resolvedAppModulePath = resolve(options.appModulePath);
     // SPEC §6.6 rule 6: classify app-authored authority before config, plugins, or app evaluation
@@ -487,6 +494,7 @@ export async function runBuildCommand(options: KovoBuildOptions): Promise<CliCom
           resolvedAppModulePath,
           options,
           reachableSessionAuthorityFacts,
+          security,
         ),
       };
     } catch (error) {
@@ -617,6 +625,7 @@ async function loadAndCheckBuildApp(
   resolvedAppModulePath: string,
   options: KovoBuildOptions,
   reachableSessionAuthorityFacts: readonly CoreGraph.SessionAuthorityFact[],
+  security: KovoCommandSecurityDisposition,
 ) {
   // SPEC §6.6 rule 6: the exact app-resolved SSR graph must finish its trust-root transition
   // before any other build lane is allowed to evaluate authored modules. In particular, do not
@@ -635,6 +644,7 @@ async function loadAndCheckBuildApp(
   const buildCheck = await runKovoBuildCheckPreflight(app, resolvedAppModulePath, {
     cache: options.cache,
     execution,
+    paranoidStaticAdvisory: security.paranoidStaticAdvisory,
     reachableSessionAuthorityFacts,
   });
   return {
@@ -709,20 +719,20 @@ async function runKovoBuildCheckPreflight(
   options: {
     cache: boolean;
     execution: BuildExecutionModule;
+    paranoidStaticAdvisory: boolean;
     reachableSessionAuthorityFacts: readonly CoreGraph.SessionAuthorityFact[];
   },
 ): Promise<KovoBuildCheckArtifacts> {
   const artifacts = await buildCheckGraph(app, appModulePath, options);
-  const result = kovoCheck(artifacts.graph, { paranoidStaticAdvisory: isParanoidMode() });
+  const result = kovoCheck(artifacts.graph, {
+    paranoidStaticAdvisory: options.paranoidStaticAdvisory,
+  });
   if (result.exitCode === 0) return artifacts;
-  if (isParanoidMode() && paranoidBuildCheckMayProceed(result.output)) return artifacts;
+  if (options.paranoidStaticAdvisory && paranoidBuildCheckMayProceed(result.output)) {
+    return artifacts;
+  }
 
   throw new Error(`kovo build check preflight failed:\n${buildCheckFailureOutput(result.output)}`);
-}
-
-function isParanoidMode(): boolean {
-  const value = process.env.KOVO_PARANOID;
-  return value === '1' || value === 'true';
 }
 
 function paranoidBuildCheckMayProceed(output: string): boolean {

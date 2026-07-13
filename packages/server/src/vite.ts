@@ -23,12 +23,15 @@ import { currentKovoBuildContext } from '@kovojs/server/internal/build-context';
 import { serializeRuntimeRegistryWireModule } from '@kovojs/server/internal/runtime-registry-wire';
 import {
   trustedViteSecurityProfileIntegrationSentinel,
+  trustedViteSecurityProfileParanoidSentinel,
   trustedViteSecurityProfileSentinel,
 } from './internal/vite-security-sentinel.ts';
 import type { KovoAppShellViteCompilerModuleDiagnosticReport } from './vite-dev.js';
 
 const viteClearTimeout = globalThis.clearTimeout;
 const viteSetTimeout = globalThis.setTimeout;
+const viteParanoidValue = process.env.KOVO_PARANOID;
+const viteBootParanoidStaticAdvisory = viteParanoidValue === '1' || viteParanoidValue === 'true';
 
 /** Options for the public Kovo Vite plugin (SPEC.md §9.5). */
 export interface KovoVitePluginOptions {
@@ -150,15 +153,21 @@ interface CssSplitChunks {
 export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
   const trustedOptions = options as KovoVitePluginOptions & {
     [trustedViteSecurityProfileIntegrationSentinel]?: unknown;
+    [trustedViteSecurityProfileParanoidSentinel]?: unknown;
     [trustedViteSecurityProfileSentinel]?: unknown;
   };
+  const hasTrustedSecurityProfile =
+    trustedOptions[trustedViteSecurityProfileSentinel] === trustedViteSecurityProfileSentinel;
   const trustedCreateDevIntegration =
-    trustedOptions[trustedViteSecurityProfileSentinel] === trustedViteSecurityProfileSentinel &&
+    hasTrustedSecurityProfile &&
     typeof trustedOptions[trustedViteSecurityProfileIntegrationSentinel] === 'function'
       ? (trustedOptions[
           trustedViteSecurityProfileIntegrationSentinel
         ] as typeof import('./vite-dev.js').createKovoAppShellViteDevIntegration)
       : undefined;
+  const paranoidStaticAdvisory = hasTrustedSecurityProfile
+    ? trustedOptions[trustedViteSecurityProfileParanoidSentinel] === true
+    : viteBootParanoidStaticAdvisory;
   const app = authoredAppEntry(options.app);
   const runtimeRegistryPublicId = `virtual:kovo-runtime-registry:${app}`;
   const runtimeRegistryResolvedId = `\0${runtimeRegistryPublicId}`;
@@ -295,7 +304,10 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
       }
       // Build disposition: fail-closed — any error-severity finding fails the build.
       const diagnostics = await collectDataPlaneErrorDiagnostics(root, app);
-      if (diagnostics.length > 0 && !paranoidDataPlaneDiagnosticsAreAdvisory(diagnostics)) {
+      if (
+        diagnostics.length > 0 &&
+        !paranoidDataPlaneDiagnosticsAreAdvisory(diagnostics, paranoidStaticAdvisory)
+      ) {
         throw dataPlaneGateError(diagnostics);
       }
     },
@@ -609,17 +621,13 @@ function dataPlaneGateError(diagnostics: readonly DataPlaneDiagnostic[]): Error 
 
 function paranoidDataPlaneDiagnosticsAreAdvisory(
   diagnostics: readonly DataPlaneDiagnostic[],
+  paranoidStaticAdvisory: boolean,
 ): boolean {
-  if (!isParanoidMode()) return false;
+  if (!paranoidStaticAdvisory) return false;
   return (
     diagnostics.length > 0 &&
     diagnostics.every((diagnostic) => isParanoidSecurityAdvisoryCode(diagnostic.code))
   );
-}
-
-function isParanoidMode(): boolean {
-  const value = process.env.KOVO_PARANOID;
-  return value === '1' || value === 'true';
 }
 
 /** Build a dev-ledger module-diagnostics report (teaching disposition) for one app file. */

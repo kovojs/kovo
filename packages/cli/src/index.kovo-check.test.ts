@@ -2298,6 +2298,40 @@ describe('kovo check', () => {
     });
   });
 
+  it('threads the boot-pinned paranoid disposition through the check dispatcher', () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'kovo-cli-paranoid-disposition-'));
+    const graphPath = join(tempDir, 'graph.json');
+    const stdoutWrite = vi
+      .spyOn(process.stdout, 'write')
+      .mockImplementation((() => true) as typeof process.stdout.write);
+    const stderrWrite = vi
+      .spyOn(process.stderr, 'write')
+      .mockImplementation((() => true) as typeof process.stderr.write);
+
+    try {
+      writeFileSync(
+        graphPath,
+        JSON.stringify({
+          diagnostics: [
+            {
+              code: 'KV406',
+              message: 'Statically un-analyzable write site; manual touches required.',
+              severity: 'error',
+              site: 'products.ts:7',
+            },
+          ],
+        }),
+      );
+
+      expect(main(['check', graphPath], { paranoidStaticAdvisory: false })).toBe(1);
+      expect(main(['check', graphPath], { paranoidStaticAdvisory: true })).toBe(0);
+    } finally {
+      stdoutWrite.mockRestore();
+      stderrWrite.mockRestore();
+      rmSync(tempDir, { force: true, recursive: true });
+    }
+  });
+
   it('fails kovo check optimistic as a CLI command when coverage is unhandled', () => {
     const tempDir = mkdtempSync(join(tmpdir(), 'kovo-cli-optimistic-'));
     const graphPath = join(tempDir, 'graph.json');

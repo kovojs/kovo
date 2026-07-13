@@ -358,6 +358,71 @@ export default createApp({
     }
   }, 120_000);
 
+  it('pins operator paranoid disposition before app evaluation in the real CLI', () => {
+    const root = cliFixtureRoot('paranoid-disposition');
+    const appPath = join(root, 'app.ts');
+    try {
+      mkdirSync(join(root, 'src'), { recursive: true });
+      writeFileSync(
+        join(root, 'index.html'),
+        '<!doctype html><script type="module" src="/src/client.ts"></script>\n',
+        'utf8',
+      );
+      writeFileSync(join(root, 'src/client.ts'), 'export {};\n', 'utf8');
+      writeFileSync(
+        appPath,
+        `import { createApp, publicAccess, query, route, s } from '@kovojs/server';
+
+if (process.env.APP_PARANOID_MUTATION === 'enable') process.env.KOVO_PARANOID = '1';
+if (process.env.APP_PARANOID_MUTATION === 'disable') delete process.env.KOVO_PARANOID;
+
+const accounts = {};
+const badRead = query('badRead', {
+  access: publicAccess('paranoid disposition regression'),
+  async load(_input, db) {
+    await db.update(accounts).set({ role: 'admin' });
+    return { id: 'a1' };
+  },
+  output: s.object({ id: s.string() }),
+});
+
+export default createApp({
+  queries: [badRead],
+  routes: [route('/', {
+    access: publicAccess('paranoid disposition regression'),
+    page: () => '<main>Paranoid disposition</main>',
+  })],
+});
+`,
+        'utf8',
+      );
+
+      const ordinaryEnv = { ...process.env, APP_PARANOID_MUTATION: 'enable' };
+      delete ordinaryEnv.KOVO_PARANOID;
+      const appEnabled = runKovoCli(
+        root,
+        ['build', appPath, '--out', join(root, 'app-enabled'), '--check'],
+        ordinaryEnv,
+      );
+      expect(appEnabled.status, appEnabled.stderr).toBe(1);
+      expect(appEnabled.stderr).toContain('ERROR KV406 QUERY badRead');
+      expect(readFileIfPresent(join(root, 'app-enabled/.kovo/graph.json'))).toBeUndefined();
+
+      const operatorParanoid = runKovoCli(
+        root,
+        ['build', appPath, '--out', join(root, 'operator-paranoid'), '--check'],
+        { ...process.env, APP_PARANOID_MUTATION: 'disable', KOVO_PARANOID: '1' },
+      );
+      expect(operatorParanoid.status, operatorParanoid.stderr).toBe(0);
+      expect(operatorParanoid.stdout).toContain('CHECK ok preset=node');
+      expect(readFileSync(join(root, 'operator-paranoid/.kovo/graph.json'), 'utf8')).toContain(
+        'KV406',
+      );
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  }, 120_000);
+
   it('keeps real build and export outside undeclared authored Vite config hooks', () => {
     const root = cliFixtureRoot('undeclared-vite-config');
     const appPath = join(root, 'app.mjs');
@@ -417,11 +482,11 @@ function cliFixtureRoot(name: string): string {
   return root;
 }
 
-function runKovoCli(root: string, args: readonly string[]) {
+function runKovoCli(root: string, args: readonly string[], env: NodeJS.ProcessEnv = process.env) {
   return spawnSync(join(process.cwd(), 'packages/cli/src/bin.ts'), args, {
     cwd: root,
     encoding: 'utf8',
-    env: process.env,
+    env,
     timeout: 55_000,
   });
 }

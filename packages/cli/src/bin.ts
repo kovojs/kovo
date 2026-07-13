@@ -37,6 +37,14 @@ registerHooks({
   },
 });
 
+// SPEC §6.6 rule 6: operator posture is command authority. Capture it before the dispatcher can
+// evaluate authored config/app/plugin modules; later process.env writes cannot opt a build into or
+// out of the paranoid static-advisory test disposition.
+const paranoidValue = process.env.KOVO_PARANOID;
+const commandSecurityDisposition = Object.freeze({
+  paranoidStaticAdvisory: paranoidValue === '1' || paranoidValue === 'true',
+});
+
 // Import the complete trusted dispatcher graph before lockdown so framework modules that capture
 // Web/Node controls from data descriptors see the host-native descriptors. No authored module is
 // evaluated by this import; command dispatch below is the first authored-evaluation boundary.
@@ -63,7 +71,7 @@ if (process.argv[2] === 'build' || process.argv[2] === 'dev' || process.argv[2] 
 // TypeScript-only syntax (no type annotations / type arguments). Lean on contextual typing.
 const isLongLivedCommand = process.argv[2] === 'mcp' || process.argv[2] === 'dev';
 
-void mainAsync().then(async (exitCode) => {
+void mainAsync(undefined, commandSecurityDisposition).then(async (exitCode) => {
   process.exitCode = exitCode;
   if (isLongLivedCommand) return;
   // Flush stdout/stderr (an empty write's callback fires after the buffer drains to the fd)

@@ -24,6 +24,10 @@ import {
 } from '../commands-manifest.js';
 import type { CliCommandResult } from '../shared.js';
 import {
+  kovoCommandBootSecurityDisposition,
+  type KovoCommandSecurityDisposition,
+} from './security-disposition.js';
+import {
   buildSecurityArrayAppend,
   buildArrayIsArray,
   buildObjectKeys,
@@ -122,7 +126,10 @@ export function parseDevArgs(args: readonly string[]): DevArgParseResult {
 }
 
 /** @internal Start the official bootstrap-first development runner (SPEC §5.2/§6.6/§9.5). */
-export async function startKovoDevServer(options: KovoDevOptions): Promise<KovoDevServerHandle> {
+export async function startKovoDevServer(
+  options: KovoDevOptions,
+  security: KovoCommandSecurityDisposition = kovoCommandBootSecurityDisposition,
+): Promise<KovoDevServerHandle> {
   const { createServer } = await import('vite-plus');
   const root = resolve(options.root);
   const configFile = resolveDevConfigFile(root, options.configFile);
@@ -142,6 +149,7 @@ export async function startKovoDevServer(options: KovoDevOptions): Promise<KovoD
     // hooks may mutate their own config, but cannot replace the proof plugin or its hook table.
     const createdPlugin = profile.trustedKovoVitePlugin({
       app: viteAppModuleId(options.appModulePath, root),
+      paranoidStaticAdvisory: security.paranoidStaticAdvisory,
     });
     if (!isRecord(createdPlugin)) {
       throw new TypeError('@kovojs/server/vite kovo() must return a plugin object.');
@@ -198,9 +206,12 @@ export async function startKovoDevServer(options: KovoDevOptions): Promise<KovoD
 }
 
 /** @internal CLI result adapter; the live HTTP/watcher handles intentionally keep the bin alive. */
-export async function runDevCommand(options: KovoDevOptions): Promise<CliCommandResult> {
+export async function runDevCommand(
+  options: KovoDevOptions,
+  security: KovoCommandSecurityDisposition = kovoCommandBootSecurityDisposition,
+): Promise<CliCommandResult> {
   try {
-    await startKovoDevServer(options);
+    await startKovoDevServer(options, security);
     return { exitCode: 0, output: '' };
   } catch (error) {
     return {
@@ -211,7 +222,10 @@ export async function runDevCommand(options: KovoDevOptions): Promise<CliCommand
 }
 
 interface DevSecurityProfileModule {
-  trustedKovoVitePlugin(options: { app: string }): Exclude<PluginOption, false | null | undefined>;
+  trustedKovoVitePlugin(options: {
+    app: string;
+    paranoidStaticAdvisory: boolean;
+  }): Exclude<PluginOption, false | null | undefined>;
 }
 
 interface CompilerSecurityBootstrapModule {
