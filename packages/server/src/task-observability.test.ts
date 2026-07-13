@@ -8,6 +8,43 @@ import {
 import { MemoryDurableTaskQueue } from './task-queue.js';
 
 describe('durable task observability (SPEC §9.6)', () => {
+  it('normalizes status filters without inherited numeric setter dispatch', async () => {
+    const now = new Date('2026-06-30T10:00:00.000Z');
+    const jobs = [
+      {
+        args: {},
+        attempts: 1,
+        createdAt: now,
+        id: 'setter-proof',
+        runAt: now,
+        status: 'ready' as const,
+        task: 'setter.proof',
+        updatedAt: now,
+      },
+    ];
+    const filters = { status: ['ready'] as const };
+    const previous = Object.getOwnPropertyDescriptor(Array.prototype, '0');
+    let inheritedSetterCalls = 0;
+    let result: Promise<unknown>;
+    try {
+      Object.defineProperty(Array.prototype, '0', {
+        configurable: true,
+        set() {
+          inheritedSetterCalls += 1;
+        },
+      });
+      result = createDurableTaskStatus({ snapshot: () => jobs }).list(filters);
+    } finally {
+      if (previous === undefined) delete (Array.prototype as { 0?: unknown })[0];
+      else Object.defineProperty(Array.prototype, '0', previous);
+    }
+
+    await expect(result!).resolves.toEqual([
+      expect.objectContaining({ id: 'setter-proof', status: 'ready' }),
+    ]);
+    expect(inheritedSetterCalls).toBe(0);
+  });
+
   it('pins the status source, exact filters, dates, and ordering after late poisoning', async () => {
     const now = new Date('2026-06-30T10:00:00.000Z');
     const source = {
