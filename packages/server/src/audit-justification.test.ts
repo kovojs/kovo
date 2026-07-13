@@ -81,6 +81,9 @@ describe('server audited text floor (SPEC §6.6)', () => {
       /control characters/u,
     );
     expect(() => accept.unverified(['text/plain'], forged)).toThrow(/control characters/u);
+    expect(() => accept.unverified([`text/plain${forged}`], 'legacy importer')).toThrow(
+      /string array/u,
+    );
     expect(() => declarePublicRead({ reason: forged })).toThrow(/control characters/u);
     expect(() => declarePublicRelation({ relation: 'public_report', reason: forged })).toThrow(
       /control characters/u,

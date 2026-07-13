@@ -198,6 +198,8 @@ describe('accept.unverified escape (KV428)', () => {
     expect(() => accept.unverified(accessor, 'legacy importer')).toThrow('own data');
     expect(getterCalls).toBe(0);
     expect(() => accept(new Array(2))).toThrow('dense');
-    expect(() => accept(new Array(1_001).fill('application/zip'))).toThrow('bounded');
+    expect(() => accept(new Array(257).fill('application/zip'))).toThrow('bounded');
+    expect(() => accept(['text/plain\nFORGED'])).toThrow('string array');
+    expect(() => accept([`text/${'a'.repeat(252)}`])).toThrow('string array');
   });
 });

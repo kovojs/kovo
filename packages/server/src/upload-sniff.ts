@@ -279,7 +279,7 @@ const unverifiedAcceptanceSnapshots = createWitnessWeakMap<object, UnverifiedAcc
  *   recorded for `kovo explain --capabilities`. Still attachment-forced.
  */
 export function accept(types: readonly string[]): readonly string[] {
-  return snapshotMimeTypes(types);
+  return snapshotUploadMimeTypes(types);
 }
 
 export namespace accept {
@@ -288,7 +288,7 @@ export namespace accept {
     justification: string,
   ): UnverifiedAcceptance {
     const closedJustification = snapshotAuditJustification(justification, 'accept.unverified(...)');
-    const closedTypes = snapshotMimeTypes(types);
+    const closedTypes = snapshotUploadMimeTypes(types);
     const fact = witnessFreeze({ justification: closedJustification, types: closedTypes });
     unverifiedMimeFacts.record(fact);
     const acceptance = witnessFreeze({
@@ -317,7 +317,11 @@ export function unverifiedAcceptanceSnapshot(value: unknown): UnverifiedAcceptan
   return snapshot;
 }
 
-function snapshotMimeTypes(source: readonly string[]): readonly string[] {
+const MAX_UPLOAD_MIME_TYPES = 256;
+const MAX_UPLOAD_MIME_TYPE_LENGTH = 256;
+
+/** @internal Close MIME allowlists before enforcement or audit retention (SPEC §6.6/KV428). */
+export function snapshotUploadMimeTypes(source: unknown): readonly string[] {
   if (!witnessIsArray(source)) {
     throw new TypeError('Upload MIME allowlist must be an array.');
   }
@@ -327,14 +331,24 @@ function snapshotMimeTypes(source: readonly string[]): readonly string[] {
     typeof length.value !== 'number' ||
     !securityNumberIsInteger(length.value) ||
     length.value < 0 ||
-    length.value > 1_000
+    length.value > MAX_UPLOAD_MIME_TYPES
   ) {
-    throw new TypeError('Upload MIME allowlist must be a bounded array of at most 1,000 entries.');
+    throw new TypeError(
+      `Upload MIME allowlist must be a bounded array of at most ${MAX_UPLOAD_MIME_TYPES} entries.`,
+    );
   }
   const snapshot: string[] = [];
   for (let index = 0; index < length.value; index += 1) {
     const entry = stableMimeDescriptor(source, index);
-    if (entry === undefined || typeof entry.value !== 'string') {
+    if (
+      entry === undefined ||
+      typeof entry.value !== 'string' ||
+      entry.value.length > MAX_UPLOAD_MIME_TYPE_LENGTH ||
+      !securityRegExpTest(
+        /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+\/[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/u,
+        entry.value,
+      )
+    ) {
       throw new TypeError('Upload MIME allowlist must be a dense own-data string array.');
     }
     witnessArrayAppend(snapshot, entry.value, 'Upload MIME allowlist');

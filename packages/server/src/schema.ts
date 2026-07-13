@@ -12,6 +12,7 @@ import {
   type UnverifiedAcceptance,
   mintStorageKey,
   sanitizeDownloadFilename,
+  snapshotUploadMimeTypes,
   sniffUploadBytes,
   unverifiedAcceptanceSnapshot,
 } from './upload-sniff.js';
@@ -1274,28 +1275,7 @@ function snapshotFileAcceptance(
 ): UnverifiedAcceptance | readonly string[] | undefined {
   if (accept === undefined) return undefined;
   if (securityArrayIsArray(accept)) {
-    const snapshot: string[] = [];
-    const length = witnessGetOwnPropertyDescriptor(accept, 'length');
-    if (length === undefined || !('value' in length) || length.value > 1_000) {
-      throw new TypeError('s.file().accept(...) requires a bounded dense MIME array.');
-    }
-    for (let index = 0; index < length.value; index += 1) {
-      const descriptor = witnessGetOwnPropertyDescriptor(accept, index);
-      if (
-        descriptor === undefined ||
-        !('value' in descriptor) ||
-        typeof descriptor.value !== 'string'
-      ) {
-        throw new TypeError('s.file().accept(...) requires stable MIME string data.');
-      }
-      witnessDefineProperty(snapshot, index, {
-        configurable: true,
-        enumerable: true,
-        value: descriptor.value,
-        writable: true,
-      });
-    }
-    return witnessFreeze(snapshot);
+    return snapshotUploadMimeTypes(accept);
   }
   if (typeof accept !== 'object' || accept === null) {
     throw new TypeError('s.file().accept(...) requires a MIME array or audited acceptance.');
