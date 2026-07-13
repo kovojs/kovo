@@ -470,6 +470,34 @@ describe('browser redirect protocol mount', () => {
     );
   });
 
+  it('does not let mounted handler failures carry request cookies out', async () => {
+    const secret = 'MOUNT_COOKIE_SECRET_MUST_NOT_ESCAPE';
+    const endpoint = mount(
+      '/auth',
+      (request) => {
+        throw new Error(`provider callback failed for ${secret}: ${request.headers.get('cookie')}`);
+      },
+      { method: 'GET' },
+    );
+    let thrown: unknown;
+    try {
+      await runEndpoint(
+        endpoint,
+        new Request('https://example.test/auth/callback/provider', {
+          headers: { cookie: `better-auth.session_token=${secret}` },
+        }),
+      );
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect(thrown).toBeInstanceOf(Error);
+    expect((thrown as Error).message).toBe(
+      'Better Auth mounted handler failed inside the trusted plaintext boundary.',
+    );
+    expect(`${String((thrown as Error).stack)} ${JSON.stringify(thrown)}`).not.toContain(secret);
+  });
+
   it('does not inherit mount auth authority and rejects option accessors', () => {
     const auth = new FakeMountedAuth();
     Object.defineProperty(Object.prototype, 'auth', {

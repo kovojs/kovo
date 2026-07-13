@@ -416,7 +416,7 @@ export interface BetterAuthOAuthProviderSuccessorMetadataDegradation {
   attemptedImports: readonly string[];
   diagnosticCode: 'KV406';
   legacyPlugin: 'oidcProvider';
-  manualBridgeSteps: string[];
+  manualBridgeSteps: readonly string[];
   message: string;
   packageName: '@better-auth/oauth-provider';
   reason: 'oauth-provider-successor-metadata-unavailable';
@@ -428,7 +428,7 @@ export interface BetterAuthOAuthProviderSuccessorMetadataDegradation {
 export interface BetterAuthUnavailablePluginMetadataDegradation {
   attemptedImports: readonly string[];
   diagnosticCode: 'KV406';
-  manualBridgeSteps: string[];
+  manualBridgeSteps: readonly string[];
   message: string;
   packageName: string;
   pluginName: string;

@@ -314,6 +314,40 @@ export function betterAuthDefineOwnData<Value>(
   }
 }
 
+/** @internal Commit immutable own-data authority onto a caller carrier after validation. */
+export function betterAuthPinOwnData<Value>(
+  target: object,
+  property: PropertyKey,
+  value: Value,
+  label: string,
+): void {
+  assertBetterAuthIntrinsics();
+  const before = betterAuthGetOwnPropertyDescriptor(target, property);
+  if (before === undefined || !('value' in before) || before.value !== value) {
+    throw new NativeTypeError(`${label} must be stable own data before it is pinned.`);
+  }
+  apply(nativeObjectDefineProperty, NativeObject, [
+    target,
+    property,
+    {
+      configurable: false,
+      enumerable: before.enumerable === true,
+      value,
+      writable: false,
+    },
+  ]);
+  const committed = betterAuthGetOwnPropertyDescriptor(target, property);
+  if (
+    committed === undefined ||
+    !('value' in committed) ||
+    committed.value !== value ||
+    committed.configurable !== false ||
+    committed.writable !== false
+  ) {
+    throw new NativeTypeError(`${label} immutable own-data commit failed.`);
+  }
+}
+
 /** @internal Deep-freeze a framework-owned plain authority graph through boot-pinned controls. */
 export function betterAuthDeepFreeze<Value>(value: Value, label: string): Value {
   assertBetterAuthIntrinsics();

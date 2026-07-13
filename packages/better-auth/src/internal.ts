@@ -74,6 +74,7 @@ import {
   betterAuthArrayIsArray,
   betterAuthCharacterCodeAt,
   betterAuthCreateMap,
+  betterAuthCreateNullRecord,
   betterAuthCreateSet,
   betterAuthDefineOwnData,
   betterAuthDeepFreeze,
@@ -420,22 +421,28 @@ export const betterAuthDbVerificationConfig = betterAuthDeepFreeze(
 export function betterAuthOAuthProviderSuccessorMetadataDegradation(
   attemptedImports: readonly string[] = betterAuthOAuthProviderSuccessorImportPaths,
 ): BetterAuthOAuthProviderSuccessorMetadataDegradation {
-  return {
-    attemptedImports,
-    diagnosticCode: 'KV406',
-    legacyPlugin: 'oidcProvider',
-    manualBridgeSteps: [
-      'Install the Better Auth OAuth-provider successor package and inspect getAuthTables(auth.options) with that plugin enabled.',
-      'If the successor reuses oauthApplication/oauthAccessToken/oauthConsent with userId ownership, keep the existing auth-domain bridge and pin the package metadata in conformance.',
-      'If the successor adds or renames tables, add schema.ts kovo({ domain, key }) or kovo({ exempt: true }) annotations and declared Better Auth API touches before relying on runtime coverage.',
-    ],
-    message:
-      '@better-auth/oauth-provider metadata is not available from the pinned Better Auth dependency set; successor OAuth-provider writes remain KV406 until a real metadata path is pinned.',
-    packageName: '@better-auth/oauth-provider',
-    reason: 'oauth-provider-successor-metadata-unavailable',
-    schemaBridge: null,
-    tableMetadata: null,
-  };
+  return betterAuthDeepFreeze(
+    {
+      attemptedImports: snapshotBetterAuthTextArray(
+        attemptedImports,
+        'Better Auth OAuth successor attempted imports',
+      ),
+      diagnosticCode: 'KV406',
+      legacyPlugin: 'oidcProvider',
+      manualBridgeSteps: [
+        'Install the Better Auth OAuth-provider successor package and inspect getAuthTables(auth.options) with that plugin enabled.',
+        'If the successor reuses oauthApplication/oauthAccessToken/oauthConsent with userId ownership, keep the existing auth-domain bridge and pin the package metadata in conformance.',
+        'If the successor adds or renames tables, add schema.ts kovo({ domain, key }) or kovo({ exempt: true }) annotations and declared Better Auth API touches before relying on runtime coverage.',
+      ],
+      message:
+        '@better-auth/oauth-provider metadata is not available from the pinned Better Auth dependency set; successor OAuth-provider writes remain KV406 until a real metadata path is pinned.',
+      packageName: '@better-auth/oauth-provider',
+      reason: 'oauth-provider-successor-metadata-unavailable',
+      schemaBridge: null,
+      tableMetadata: null,
+    },
+    'Better Auth OAuth successor metadata degradation',
+  );
 }
 
 /** @internal Build a KV406 degradation fact for a Better Auth plugin whose table metadata is unavailable. */
@@ -447,21 +454,53 @@ export function betterAuthUnavailablePluginMetadataDegradation(options: {
   packageName: string;
   pluginName: string;
 }): BetterAuthUnavailablePluginMetadataDegradation {
-  return {
-    attemptedImports: options.attemptedImports,
-    diagnosticCode: 'KV406',
-    manualBridgeSteps: [
-      `Install a Better Auth ${options.pluginName} plugin package/export and inspect getAuthTables(auth.options) with that plugin enabled.`,
-      'If the plugin exposes app-visible tables, add schema.ts kovo({ domain, key }) annotations and declared Better Auth API touches before relying on runtime coverage.',
-      'If the plugin exposes only protocol/bookkeeping tables, add kovo({ exempt: true }) annotations with a SPEC.md §10.1 rationale and pin the metadata in conformance.',
-    ],
-    message: `${options.packageName} metadata is not available from the pinned Better Auth dependency set; ${options.pluginName} writes remain KV406 until real table metadata is pinned.`,
-    packageName: options.packageName,
-    pluginName: options.pluginName,
-    reason: 'plugin-metadata-unavailable',
-    schemaBridge: null,
-    tableMetadata: null,
-  };
+  assertBetterAuthOptionsObject(options, 'Better Auth unavailable plugin metadata options');
+  const attemptedImports = betterAuthOwnDataOption<readonly string[]>(
+    options,
+    'attemptedImports',
+    'Better Auth unavailable plugin metadata option attemptedImports',
+  );
+  const packageName = betterAuthOwnDataOption<string>(
+    options,
+    'packageName',
+    'Better Auth unavailable plugin metadata option packageName',
+  );
+  const pluginName = betterAuthOwnDataOption<string>(
+    options,
+    'pluginName',
+    'Better Auth unavailable plugin metadata option pluginName',
+  );
+  if (attemptedImports === undefined) {
+    throw new TypeError('Better Auth unavailable plugin attemptedImports are required.');
+  }
+  if (typeof packageName !== 'string' || packageName.length === 0) {
+    throw new TypeError('Better Auth unavailable plugin packageName must be non-empty text.');
+  }
+  if (typeof pluginName !== 'string' || pluginName.length === 0) {
+    throw new TypeError('Better Auth unavailable plugin pluginName must be non-empty text.');
+  }
+
+  return betterAuthDeepFreeze(
+    {
+      attemptedImports: snapshotBetterAuthTextArray(
+        attemptedImports,
+        'Better Auth unavailable plugin attempted imports',
+      ),
+      diagnosticCode: 'KV406',
+      manualBridgeSteps: [
+        `Install a Better Auth ${pluginName} plugin package/export and inspect getAuthTables(auth.options) with that plugin enabled.`,
+        'If the plugin exposes app-visible tables, add schema.ts kovo({ domain, key }) annotations and declared Better Auth API touches before relying on runtime coverage.',
+        'If the plugin exposes only protocol/bookkeeping tables, add kovo({ exempt: true }) annotations with a SPEC.md §10.1 rationale and pin the metadata in conformance.',
+      ],
+      message: `${packageName} metadata is not available from the pinned Better Auth dependency set; ${pluginName} writes remain KV406 until real table metadata is pinned.`,
+      packageName,
+      pluginName,
+      reason: 'plugin-metadata-unavailable',
+      schemaBridge: null,
+      tableMetadata: null,
+    },
+    `Better Auth ${pluginName} unavailable metadata degradation`,
+  );
 }
 
 /** @internal Build the credential-mutation touch graph (overload: key overrides per API). */
@@ -557,7 +596,8 @@ export function createBetterAuthDbVerificationConfig(
   tables: Record<string, unknown> = {},
 ): BetterAuthDbVerificationConfig {
   const bridge = createBetterAuthSchemaBridge(schemaBridge);
-  const collidingPhysicalTables = betterAuthCollidingPhysicalTableNames(tables, bridge);
+  const metadata = snapshotBetterAuthMetadataTables(tables, 'Better Auth verifier metadata tables');
+  const collidingPhysicalTables = betterAuthCollidingPhysicalTableNames(metadata, bridge);
   const domainByTable: Record<string, BetterAuthTouchDomain> = {};
   const exemptTables: string[] = [];
   const keyByTable: Record<string, string> = {};
@@ -571,7 +611,7 @@ export function createBetterAuthDbVerificationConfig(
       'Better Auth verifier schema bridge',
     ) as BetterAuthSchemaBridgeAnnotation;
     const candidates = betterAuthSnapshotDenseArray(
-      betterAuthPhysicalTableNames(table, tables),
+      betterAuthPhysicalTableNames(table, metadata),
       `Better Auth ${table} physical table names`,
     );
     const physicalTables: string[] = [];
@@ -677,6 +717,17 @@ function betterAuthSetStrings(values: ReadonlySet<string>, label: string): strin
   return betterAuthSetValues(values, label);
 }
 
+function snapshotBetterAuthTextArray(values: readonly string[], label: string): string[] {
+  const snapshot = betterAuthSnapshotDenseArray<unknown>(values, label);
+  const strings: string[] = [];
+  for (let index = 0; index < snapshot.length; index += 1) {
+    const value = snapshot[index];
+    if (typeof value !== 'string') throw new TypeError(`${label} must contain only text.`);
+    betterAuthArrayAppend(strings, value, label);
+  }
+  return strings;
+}
+
 function quoteBetterAuthStrings(values: readonly string[], label: string): string[] {
   const snapshot = betterAuthSnapshotDenseArray(values, label);
   const quoted: string[] = [];
@@ -722,12 +773,108 @@ function snapshotBetterAuthMetadataTables(
   if (tables === null || typeof tables !== 'object' || betterAuthArrayIsArray(tables)) {
     throw new TypeError(`${label} must be an object.`);
   }
-  const snapshot: Record<string, unknown> = {};
+  const snapshot = betterAuthCreateNullRecord<unknown>();
   const tableNames = betterAuthObjectKeys(tables, `${label} names`);
   for (let index = 0; index < tableNames.length; index += 1) {
     const table = tableNames[index]!;
-    betterAuthDefineOwnData(snapshot, table, betterAuthOwnDataValue(tables, table, label), label);
+    betterAuthDefineOwnData(
+      snapshot,
+      table,
+      snapshotBetterAuthTableMetadata(
+        betterAuthOwnDataValue(tables, table, label),
+        `${label}.${table}`,
+      ),
+      label,
+    );
   }
+  return snapshot;
+}
+
+function snapshotBetterAuthTableMetadata(metadata: unknown, label: string): unknown {
+  if (metadata === null || typeof metadata !== 'object' || betterAuthArrayIsArray(metadata)) {
+    return metadata;
+  }
+
+  const snapshot = betterAuthCreateNullRecord<unknown>();
+  betterAuthDefineOwnData(
+    snapshot,
+    'modelName',
+    betterAuthOwnDataValue(metadata, 'modelName', label),
+    label,
+  );
+  betterAuthDefineOwnData(
+    snapshot,
+    'order',
+    betterAuthOwnDataValue(metadata, 'order', label),
+    label,
+  );
+  const fields = betterAuthOwnDataValue(metadata, 'fields', label);
+  betterAuthDefineOwnData(
+    snapshot,
+    'fields',
+    snapshotBetterAuthFieldMetadataMap(fields, `${label}.fields`),
+    label,
+  );
+  return snapshot;
+}
+
+function snapshotBetterAuthFieldMetadataMap(fields: unknown, label: string): unknown {
+  if (fields === null || typeof fields !== 'object' || betterAuthArrayIsArray(fields)) {
+    return fields;
+  }
+
+  const snapshot = betterAuthCreateNullRecord<unknown>();
+  const fieldNames = betterAuthObjectKeys(fields, `${label} names`);
+  for (let index = 0; index < fieldNames.length; index += 1) {
+    const field = fieldNames[index]!;
+    betterAuthDefineOwnData(
+      snapshot,
+      field,
+      snapshotBetterAuthFieldMetadata(
+        betterAuthOwnDataValue(fields, field, label),
+        `${label}.${field}`,
+      ),
+      label,
+    );
+  }
+  return snapshot;
+}
+
+function snapshotBetterAuthFieldMetadata(metadata: unknown, label: string): unknown {
+  if (metadata === null || typeof metadata !== 'object' || betterAuthArrayIsArray(metadata)) {
+    return metadata;
+  }
+
+  const snapshot = betterAuthCreateNullRecord<unknown>();
+  betterAuthDefineOwnData(snapshot, 'type', betterAuthOwnDataValue(metadata, 'type', label), label);
+  betterAuthDefineOwnData(
+    snapshot,
+    'required',
+    betterAuthOwnDataValue(metadata, 'required', label),
+    label,
+  );
+  const fieldName = betterAuthOwnDataValue(metadata, 'fieldName', label);
+  betterAuthDefineOwnData(
+    snapshot,
+    'fieldName',
+    snapshotBetterAuthNestedFieldName(fieldName, `${label}.fieldName`),
+    label,
+  );
+  return snapshot;
+}
+
+function snapshotBetterAuthNestedFieldName(fieldName: unknown, label: string): unknown {
+  if (fieldName === null || typeof fieldName !== 'object' || betterAuthArrayIsArray(fieldName)) {
+    return fieldName;
+  }
+
+  const snapshot = betterAuthCreateNullRecord<unknown>();
+  betterAuthDefineOwnData(
+    snapshot,
+    'fieldName',
+    betterAuthOwnDataValue(fieldName, 'fieldName', label),
+    label,
+  );
   return snapshot;
 }
 

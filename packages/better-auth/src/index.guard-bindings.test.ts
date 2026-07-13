@@ -199,4 +199,56 @@ describe('guard bindings', () => {
     expect(await scoped(accessorOrganization)).toMatchObject({ kind: 'forbidden' });
     expect(accessorReads).toBe(0);
   });
+
+  it('pins the exact session carrier that grants active-organization authority', async () => {
+    const scoped = activeOrganization<AppRequest>();
+    const trustedSession: NonNullable<AppRequest['session']> = {
+      activeOrganizationId: 'org-1',
+      id: 'session-1',
+      user: { email: 'ada@example.com', id: 'user-1', roles: ['member'] },
+    };
+    const attackerSession: NonNullable<AppRequest['session']> = {
+      activeOrganizationId: 'attacker-org',
+      id: 'attacker-session',
+      user: { email: 'mallory@example.com', id: 'attacker', roles: ['admin'] },
+    };
+    const target = { session: trustedSession };
+    const request = new Proxy(target, {
+      get(current, property, receiver) {
+        if (property !== 'session') return Reflect.get(current, property, receiver);
+        const descriptor = Reflect.getOwnPropertyDescriptor(current, property);
+        return descriptor?.configurable === false && descriptor.writable === false
+          ? descriptor.value
+          : attackerSession;
+      },
+    }) as AppRequest;
+
+    expect(await scoped(request)).toBe(true);
+    expect(request.session?.activeOrganizationId).toBe('org-1');
+    expect(request.session?.user.id).toBe('user-1');
+  });
+
+  it('deeply pins organization evidence before narrowing the request', async () => {
+    const scoped = activeOrganization<AppRequest>();
+    const sessionTarget: NonNullable<AppRequest['session']> = {
+      activeOrganizationId: 'org-1',
+      id: 'session-1',
+      user: { email: 'ada@example.com', id: 'user-1', roles: ['member'] },
+    };
+    const session = new Proxy(sessionTarget, {
+      get(current, property, receiver) {
+        if (property !== 'activeOrganizationId') return Reflect.get(current, property, receiver);
+        const descriptor = Reflect.getOwnPropertyDescriptor(current, property);
+        return descriptor?.configurable === false && descriptor.writable === false
+          ? descriptor.value
+          : 'attacker-org';
+      },
+    });
+    const request = { session };
+
+    expect(await scoped(request)).toBe(true);
+    expect(request.session.activeOrganizationId).toBe('org-1');
+    expect(Object.isFrozen(request.session)).toBe(true);
+    expect(Object.isFrozen(request.session.user)).toBe(true);
+  });
 });

@@ -15,6 +15,10 @@ import {
 import { assertBetterAuthRequestSecretPath } from './internal/non-egress-proof.js';
 import type { BetterAuthMountHandler, BetterAuthMountLike } from './internal.js';
 
+const NativeError = Error;
+const betterAuthMountBoundaryFailureMessage =
+  'Better Auth mounted handler failed inside the trusted plaintext boundary.';
+
 /**
  * Options for `mount`. `auth` overrides the default `custom` endpoint auth
  * declaration; `method` narrows the HTTP method; `csrfJustification` records why this
@@ -89,9 +93,15 @@ export function mount<
     auth: endpointAuth,
     csrf: false,
     csrfJustification: csrfJustification ?? betterAuthMountOperationContract.csrf.justification,
-    handler(request) {
+    async handler(request) {
       assertBetterAuthRequestSecretPath('better-auth.mount.handler-delegation');
-      return betterAuthApply(handler, handlerReceiver, [request]);
+      try {
+        return await betterAuthApply<Promise<Response> | Response>(handler, handlerReceiver, [
+          request,
+        ]);
+      } catch {
+        throw new NativeError(betterAuthMountBoundaryFailureMessage);
+      }
     },
     method,
     mount: 'prefix',

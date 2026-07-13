@@ -553,6 +553,44 @@ describe('schema bridge', () => {
     ).toBe(null);
   });
 
+  it('snapshots and seals unavailable-plugin degradation authority', () => {
+    const attemptedImports = ['better-auth/plugins/example'];
+    const degradation = betterAuthUnavailablePluginMetadataDegradation({
+      attemptedImports,
+      packageName: 'better-auth/plugins/example',
+      pluginName: 'example',
+    });
+    attemptedImports[0] = 'attacker-controlled-rewrite';
+
+    expect(degradation.attemptedImports).toEqual(['better-auth/plugins/example']);
+    expect(Object.isFrozen(degradation)).toBe(true);
+    expect(Object.isFrozen(degradation.attemptedImports)).toBe(true);
+    expect(Object.isFrozen(degradation.manualBridgeSteps)).toBe(true);
+
+    let getterReads = 0;
+    const accessorOptions = Object.defineProperty({}, 'attemptedImports', {
+      get() {
+        getterReads += 1;
+        return attemptedImports;
+      },
+    }) as Parameters<typeof betterAuthUnavailablePluginMetadataDegradation>[0];
+    expect(() => betterAuthUnavailablePluginMetadataDegradation(accessorOptions)).toThrow(
+      'Better Auth unavailable plugin metadata option attemptedImports must be an own-data property.',
+    );
+    expect(getterReads).toBe(0);
+  });
+
+  it('snapshots and seals custom OAuth successor import probes', () => {
+    const attemptedImports = ['@better-auth/oauth-provider'];
+    const degradation = betterAuthOAuthProviderSuccessorMetadataDegradation(attemptedImports);
+    attemptedImports[0] = 'attacker-controlled-rewrite';
+
+    expect(degradation.attemptedImports).toEqual(['@better-auth/oauth-provider']);
+    expect(Object.isFrozen(degradation)).toBe(true);
+    expect(Object.isFrozen(degradation.attemptedImports)).toBe(true);
+    expect(Object.isFrozen(degradation.manualBridgeSteps)).toBe(true);
+  });
+
   it('reports bridged domain keys that drift from Better Auth table metadata', () => {
     expect(
       validateBetterAuthSchemaBridge({
@@ -1215,6 +1253,41 @@ describe('schema bridge', () => {
     expect(result.source).toContain("pgTable('auth_session_state', {})");
     expect(verifierConfig.domainByTable).not.toHaveProperty('auth_session_state');
     expect(verifierConfig.keyByTable).not.toHaveProperty('auth_session_state');
+  });
+
+  it('does not let pairwise-stable modelName metadata drift after collision classification', () => {
+    function driftingModelName(initial: string): object {
+      let descriptorReads = 0;
+      return new Proxy(
+        { modelName: initial },
+        {
+          getOwnPropertyDescriptor(_target, property) {
+            if (property !== 'modelName') return undefined;
+            descriptorReads += 1;
+            return {
+              configurable: true,
+              enumerable: true,
+              value: descriptorReads <= 2 ? initial : 'auth_identity',
+              writable: true,
+            };
+          },
+        },
+      );
+    }
+
+    const verifierConfig = createBetterAuthDbVerificationConfig(
+      {},
+      {
+        session: driftingModelName('auth_sessions'),
+        user: driftingModelName('auth_users'),
+      },
+    );
+
+    // SPEC §10.1/§11.2: a physical table name may not change between the collision gate and P9
+    // domain/key emission. `auth_identity` would otherwise inherit only the last logical table's
+    // authority even though both session and user metadata resolve to it during emission.
+    expect(verifierConfig.domainByTable).not.toHaveProperty('auth_identity');
+    expect(verifierConfig.keyByTable).not.toHaveProperty('auth_identity');
   });
 });
 

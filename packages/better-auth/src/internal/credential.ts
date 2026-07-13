@@ -30,6 +30,7 @@ import {
   betterAuthIndexOf,
   betterAuthIsNaN,
   betterAuthOwnDataOption,
+  betterAuthPinOwnData,
   betterAuthRegExpExec,
   betterAuthResponseHeaders,
   betterAuthResponseJson,
@@ -257,8 +258,21 @@ export function activeOrganization<Request extends BetterAuthOrganizationRequest
   return (request) => {
     // SPEC §6.5/§10.3: session, user, and organization are authorization evidence. Do not
     // invoke accessors or inherit prototype state at this last adapter-owned guard boundary.
+    // Pin the exact validated carrier before the type refinement lets downstream code use it:
+    // a caller Proxy must not show the guard one organization and the handler another (C9).
     const session = readOwnDataValue(request, 'session');
     if (session === null || typeof session !== 'object') return unauthenticatedGuardFailure();
+    try {
+      betterAuthDeepFreeze(session, 'Better Auth active-organization session authority');
+      betterAuthPinOwnData(
+        request,
+        'session',
+        session,
+        'Better Auth active-organization request session',
+      );
+    } catch {
+      return unauthorizedGuardFailure();
+    }
     const user = readOwnDataValue(session, 'user');
     if (user === null || typeof user !== 'object') return unauthenticatedGuardFailure();
     const activeOrganizationId = readOwnDataValue(session, 'activeOrganizationId');
