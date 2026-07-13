@@ -250,6 +250,121 @@ describe('mutation broadcast publish', () => {
     expect(store.get('cart')).toEqual({ count: 2 });
   });
 
+  it('pins channel and principal authority when the broadcast is installed', () => {
+    const channel = new FakeBroadcastChannel();
+    const redirectedChannel = new FakeBroadcastChannel();
+    const store = createQueryStore();
+    const redirectedStore = createQueryStore();
+    const onChanges = vi.fn();
+    const redirectedOnChanges = vi.fn();
+    const options = { channel, onChanges, principal: 'session-A', store };
+    const broadcast = installMutationBroadcast(options);
+
+    // SPEC §§6.6/9.3: a caller-controlled options object must not remain a
+    // live capability after installation. Otherwise authored client code can swap
+    // the principal gate and channel after Kovo binds the receive handler.
+    options.principal = 'session-B';
+    options.channel = redirectedChannel;
+    options.store = redirectedStore;
+    options.onChanges = redirectedOnChanges;
+    channel.onmessage?.({
+      data: {
+        body: '<kovo-query name="cart">{"count":99}</kovo-query>',
+        changes: [],
+        principal: 'session-B',
+        type: 'kovo:mutation-response',
+      },
+    });
+    expect(store.get('cart')).toBeUndefined();
+
+    channel.onmessage?.({
+      data: {
+        body: '<kovo-query name="cart">{"count":2}</kovo-query>',
+        changes: [{ domain: 'cart' }],
+        principal: 'session-A',
+        type: 'kovo:mutation-response',
+      },
+    });
+    expect(store.get('cart')).toEqual({ count: 2 });
+    expect(redirectedStore.get('cart')).toBeUndefined();
+    expect(onChanges).toHaveBeenCalledWith([{ domain: 'cart' }]);
+    expect(redirectedOnChanges).not.toHaveBeenCalled();
+
+    broadcast.publish('<kovo-query name="cart">{"count":1}</kovo-query>');
+    expect(channel.messages).toEqual([
+      {
+        body: '<kovo-query name="cart">{"count":1}</kovo-query>',
+        changes: [],
+        principal: 'session-A',
+        type: 'kovo:mutation-response',
+      },
+    ]);
+    expect(redirectedChannel.messages).toEqual([]);
+
+    broadcast.close();
+    expect(channel.closed).toBe(true);
+    expect(redirectedChannel.closed).toBe(false);
+  });
+
+  it.each(['channel', 'onChanges', 'principal', 'store'] as const)(
+    'rejects an accessor-backed %s option without invoking it',
+    (property) => {
+      const channel = new FakeBroadcastChannel();
+      const store = createQueryStore();
+      let reads = 0;
+      const options: Record<string, unknown> = { channel, store };
+      Object.defineProperty(options, property, {
+        configurable: true,
+        enumerable: true,
+        get() {
+          reads += 1;
+          return property === 'channel' ? channel : property === 'store' ? store : undefined;
+        },
+      });
+
+      expect(() => installMutationBroadcast(options as never)).toThrow(/own-data/u);
+      expect(reads).toBe(0);
+    },
+  );
+
+  it('ignores inherited principal and callback options', () => {
+    const channel = new FakeBroadcastChannel();
+    const store = createQueryStore();
+    const inheritedOnChanges = vi.fn();
+    const options = Object.assign(
+      Object.create({ onChanges: inheritedOnChanges, principal: 'session-B' }),
+      { channel, store },
+    );
+    const broadcast = installMutationBroadcast(options);
+
+    broadcast.publish('<kovo-query name="cart">{"count":1}</kovo-query>');
+    expect(channel.messages[0]).toEqual({
+      body: '<kovo-query name="cart">{"count":1}</kovo-query>',
+      changes: [],
+      type: 'kovo:mutation-response',
+    });
+    channel.onmessage?.({
+      data: {
+        body: '<kovo-query name="cart">{"count":99}</kovo-query>',
+        changes: [{ domain: 'cart' }],
+        principal: 'session-B',
+        type: 'kovo:mutation-response',
+      },
+    });
+    expect(store.get('cart')).toBeUndefined();
+    expect(inheritedOnChanges).not.toHaveBeenCalled();
+  });
+
+  it('rejects inherited required channel and store capabilities', () => {
+    const channel = new FakeBroadcastChannel();
+    const store = createQueryStore();
+    const inheritedChannel = Object.assign(Object.create({ channel }), { store });
+    const inheritedStore = Object.assign(Object.create({ store }), { channel });
+
+    expect(() => installMutationBroadcast(inheritedChannel)).toThrow(/channel.*own-data/u);
+    expect(() => installMutationBroadcast(inheritedStore)).toThrow(/store.*own-data/u);
+  });
+
   it('discards a principal-stamped message when the receiver has no principal (K1 asymmetric discard)', () => {
     // K1: an undefined-principal (anonymous/cold page) receiver must NOT accept a
     // stamped message — cross-principal disclosure via the asymmetric path (SPEC §9.3).

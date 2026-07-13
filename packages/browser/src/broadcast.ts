@@ -138,13 +138,25 @@ export function withDefaultMutationBroadcast<Options extends DefaultMutationBroa
 export function installMutationBroadcast(
   options: InstallMutationBroadcastOptions,
 ): MutationBroadcast {
+  // SPEC §§6.6/9.3: installation is the authority boundary. Retaining the
+  // caller's mutable options object would let authored client code swap the
+  // principal gate or channel after the receive handler has been installed.
+  // Project exact own-data values once so receive, publish, and close all use
+  // the same boot-time capabilities.
+  const runtimeOptions = definedProps(options) as InstallMutationBroadcastOptions;
+  if (runtimeOptions.channel === undefined) {
+    throw new TypeError('Kovo mutation broadcast channel must be an own-data property.');
+  }
+  if (runtimeOptions.store === undefined) {
+    throw new TypeError('Kovo mutation broadcast store must be an own-data property.');
+  }
   // D3 / SPEC §9.1.1, §847, §14: resolve this page's render-plan version token
   // once. The same token is stamped onto outgoing envelopes (so peers can detect
   // skew against their own page) and used as the `expectedBuildToken` for incoming
   // envelopes. BroadcastChannel replay is a distinct apply path from direct submit,
   // so without this the receive path would merge a cross-build delta onto a stale
   // base — exactly the long-open-tab redeploy skew base-version validation catches.
-  const pageBuildToken = options.buildToken ?? readPageBuildToken();
+  const pageBuildToken = runtimeOptions.buildToken ?? readPageBuildToken();
   let retired = false;
   const onMessage = (event: { data: unknown }) => {
     if (retired) return;
@@ -154,7 +166,7 @@ export function installMutationBroadcast(
     // session's private query data is never morphed into another session's UI.
     // An anonymous receiver (principal: undefined) must also discard a stamped
     // message — a present stamp against an absent receiver fingerprint is a mismatch.
-    if (retired || data.principal !== options.principal) return;
+    if (retired || data.principal !== runtimeOptions.principal) return;
     const changes = data.changes;
 
     // SPEC.md §9.2: same-user tab sync consumes the same mutation wire body
@@ -164,32 +176,32 @@ export function installMutationBroadcast(
     if (retired) return;
     const applied = applyMutationResponseBodyToRuntime({
       ...definedProps({
-        applyQuery: options.applyQuery,
+        applyQuery: runtimeOptions.applyQuery,
         // D3 / SPEC §9.1.1: pass the receiver's own page token as the expected
         // token and the sender-stamped envelope token as the response token. When
         // they differ (sender on a different build), every delta chunk in the body
         // is converted to a miss (→ onDeltaMiss refetch) instead of being merged
         // onto a base from a different build. Full chunks still apply.
         expectedBuildToken: pageBuildToken,
-        islandSignalScope: options.islandSignalScope,
-        morph: options.morph,
-        onDeltaMiss: options.onDeltaMiss,
-        onError: options.onError,
-        queryPlans: options.queryPlans,
+        islandSignalScope: runtimeOptions.islandSignalScope,
+        morph: runtimeOptions.morph,
+        onDeltaMiss: runtimeOptions.onDeltaMiss,
+        onError: runtimeOptions.onError,
+        queryPlans: runtimeOptions.queryPlans,
         responseBuildToken: data.buildToken,
-        root: options.root,
+        root: runtimeOptions.root,
       }),
       body: data.body,
-      store: options.store,
+      store: runtimeOptions.store,
     });
-    options.onAppliedQueries?.(applied.queries);
+    runtimeOptions.onAppliedQueries?.(applied.queries);
     if (changes.length > 0) {
-      options.onChanges?.(changes);
+      runtimeOptions.onChanges?.(changes);
     }
   };
   browserBroadcastSecurity.observePromiseRejection(
     browserBroadcastSecurity.setMutationBroadcastMessageHandler(
-      options.channel,
+      runtimeOptions.channel,
       onMessage,
       () => retired,
     ),
@@ -199,7 +211,7 @@ export function installMutationBroadcast(
     close() {
       if (retired) return;
       retired = true;
-      browserBroadcastSecurity.retireMutationBroadcastChannel(options.channel);
+      browserBroadcastSecurity.retireMutationBroadcastChannel(runtimeOptions.channel);
     },
     publish(body: string, changes: readonly MutationChangeRecord[] = []) {
       if (retired) return;
@@ -215,13 +227,15 @@ export function installMutationBroadcast(
         }),
         // bugs-1 F13: stamp the sender's principal fingerprint so receivers can discard
         // cross-principal rebroadcasts (SPEC §9.3).
-        ...(options.principal === undefined ? {} : { principal: options.principal }),
+        ...(runtimeOptions.principal === undefined
+          ? {}
+          : { principal: runtimeOptions.principal }),
         type: 'kovo:mutation-response',
       });
       if (!envelope) return;
       browserBroadcastSecurity.observePromiseRejection(
         browserBroadcastSecurity.postMutationBroadcastEnvelope(
-          options.channel,
+          runtimeOptions.channel,
           envelope,
           () => retired,
         ),
