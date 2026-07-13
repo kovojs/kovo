@@ -9,6 +9,13 @@ import {
 import type { StylesheetAsset } from './hints.js';
 import { currentJsxFrameworkContext, type DeferredRegionCollector } from './jsx-context.js';
 import { renderServerRenderable, type InternalServerRenderable } from './renderable.js';
+import {
+  createSecurityPromise,
+  securityArrayPush,
+  securityIsPromise,
+  securityPromiseResolve,
+  securityPromiseThen,
+} from './response-security-intrinsics.js';
 
 type MaybePromise<Value> = Promise<Value> | Value;
 
@@ -117,10 +124,14 @@ export function createDeferredRegionChunkCollector(): DeferredRegionChunkCollect
   const chunks: Promise<DeferredStreamChunk>[] = [];
   return {
     add(chunk) {
-      chunks.push(Promise.resolve(chunk));
+      securityArrayPush(chunks, securityPromiseResolve(chunk));
     },
     async chunks() {
-      return Promise.all(chunks);
+      const settled: DeferredStreamChunk[] = [];
+      for (let index = 0; index < chunks.length; index += 1) {
+        securityArrayPush(settled, await chunks[index]!);
+      }
+      return settled;
     },
     pendingChunks() {
       // SPEC §8: a deferred region render can itself discover more deferred regions. The document
@@ -163,8 +174,10 @@ function lowerDeferredRegion<Input>(
   const priority = options.priority ?? 'critical';
   const renderRegion = () => {
     const value = options.render();
-    return isPromiseLike(value)
-      ? value.then((resolved) => options.renderRegion(resolved))
+    return securityIsPromise(value)
+      ? securityPromiseThen(securityPromiseResolve(value), (resolved) =>
+          options.renderRegion(resolved),
+        )
       : options.renderRegion(value);
   };
   const renderNow = () => rendered(renderRegion());
@@ -174,22 +187,21 @@ function lowerDeferredRegion<Input>(
   if (!collector) return renderNow();
 
   const streamPriority = deferredStreamPriority(priority);
-  const regionChunk = Promise.resolve()
-    .then(renderRegion)
-    .then(
-      (html) => ({
-        fragments: [
-          {
-            html,
-            priority: streamPriority,
-            ...(options.stylesheets === undefined ? {} : { stylesheets: options.stylesheets }),
-            target: options.target,
-          },
-        ],
-        priority: streamPriority,
-      }),
-      () => renderDeferredErrorChunk(options, priority, streamPriority),
-    );
+  const regionChunk = securityPromiseThen(
+    securityPromiseThen(securityPromiseResolve(undefined), renderRegion),
+    (html) => ({
+      fragments: [
+        {
+          html,
+          priority: streamPriority,
+          ...(options.stylesheets === undefined ? {} : { stylesheets: options.stylesheets }),
+          target: options.target,
+        },
+      ],
+      priority: streamPriority,
+    }),
+    () => renderDeferredErrorChunk(options, priority, streamPriority),
+  );
   collector.add(
     withDeferredRegionTimeout(regionChunk, normalizeDeferredTimeoutMs(options.timeoutMs), () =>
       renderDeferredErrorChunk(options, priority, streamPriority),
@@ -197,8 +209,9 @@ function lowerDeferredRegion<Input>(
   );
 
   return rendered(
-    Promise.resolve(options.renderFallback(options.fallback)).then((fallback) =>
-      placeholder(options.target, priority, fallback),
+    securityPromiseThen(
+      securityPromiseResolve(options.renderFallback(options.fallback)),
+      (fallback) => placeholder(options.target, priority, fallback),
     ),
   );
 }
@@ -231,11 +244,12 @@ function withDeferredRegionTimeout(
   timeoutMs: number,
   onTimeout: () => Promise<DeferredStreamChunk>,
 ): Promise<DeferredStreamChunk> {
-  return new Promise((resolve, reject) => {
+  return createSecurityPromise((resolve, reject) => {
     const timer = setTimeout(() => {
-      void onTimeout().then(resolve, reject);
+      void securityPromiseThen(securityPromiseResolve(onTimeout()), resolve, reject);
     }, timeoutMs);
-    chunk.then(
+    void securityPromiseThen(
+      chunk,
       (value) => {
         clearTimeout(timer);
         resolve(value);
@@ -274,20 +288,13 @@ function placeholder(
 }
 
 function rendered(value: MaybePromise<string>): MaybePromise<RenderedHtml> {
-  return isPromiseLike(value) ? value.then((html) => renderedHtml(html)) : renderedHtml(value);
+  return securityIsPromise(value)
+    ? securityPromiseThen(securityPromiseResolve(value), (html) => renderedHtml(html))
+    : renderedHtml(value);
 }
 
 function unrendered(value: MaybePromise<RenderedHtml>): MaybePromise<string> {
-  return isPromiseLike(value)
-    ? value.then((html) => renderedHtmlContent(html))
+  return securityIsPromise(value)
+    ? securityPromiseThen(securityPromiseResolve(value), (html) => renderedHtmlContent(html))
     : renderedHtmlContent(value);
-}
-
-function isPromiseLike<Value>(value: unknown): value is PromiseLike<Value> {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    'then' in value &&
-    typeof (value as { then?: unknown }).then === 'function'
-  );
 }

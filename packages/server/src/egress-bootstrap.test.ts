@@ -60,6 +60,27 @@ describe('egress bootstrap: dual-layer install + self-probe', () => {
     expect(warnings.join('\n')).not.toContain('PARTIALLY');
   });
 
+  it('does not dispatch a late Promise.resolve replacement for install authority', async () => {
+    const nativeResolve = Promise.resolve;
+    let resolveHits = 0;
+    Promise.resolve = function poisonedResolve(value?: unknown) {
+      resolveHits += 1;
+      return Reflect.apply(nativeResolve, Promise, [value]);
+    } as typeof Promise.resolve;
+    let installing: ReturnType<typeof installEgressFloor>;
+    try {
+      installing = installEgressFloor({ allowInternal: [] }, () => {});
+    } finally {
+      Promise.resolve = nativeResolve;
+    }
+
+    const install = await installing;
+    teardown = install.uninstall;
+    expect(install.netConnectInstalled).toBe(true);
+    expect(install.undiciInstalled).toBe(true);
+    expect(resolveHits).toBe(0);
+  });
+
   it('warns when net.Socket.prototype.connect is re-patched after install', async () => {
     const warnings: string[] = [];
     const install = await installEgressFloor({ allowInternal: [], hardening: 'warn' }, (m) =>

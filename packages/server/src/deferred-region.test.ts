@@ -8,9 +8,15 @@ import { runWithJsxRequestContext } from './jsx-context.js';
 import { jsx } from './jsx-runtime.js';
 
 const html = async (value: unknown): Promise<string> => renderHtmlValue(await value);
+const nativePromiseAll = Promise.all;
+const nativePromiseResolve = Promise.resolve;
+const nativePromiseThen = Promise.prototype.then;
 
 afterEach(() => {
   vi.useRealTimers();
+  Promise.all = nativePromiseAll;
+  Promise.resolve = nativePromiseResolve;
+  Promise.prototype.then = nativePromiseThen;
 });
 
 describe('Defer JSX primitive', () => {
@@ -268,5 +274,52 @@ describe('Defer JSX primitive', () => {
         }),
       ),
     ).resolves.toBe('<main>No collector</main>');
+  });
+
+  it('does not dispatch late Promise combinator replacements for deferred output authority', async () => {
+    const collector = createDeferredRegionChunkCollector();
+    const poisonHits = { all: 0, resolve: 0, then: 0 };
+    Promise.resolve = function poisonedResolve(value?: unknown) {
+      poisonHits.resolve += 1;
+      return Reflect.apply(nativePromiseResolve, Promise, [value]);
+    } as typeof Promise.resolve;
+    Promise.prototype.then = function poisonedThen(onFulfilled, onRejected) {
+      poisonHits.then += 1;
+      return Reflect.apply(nativePromiseThen, this, [onFulfilled, onRejected]);
+    } as typeof Promise.prototype.then;
+
+    const deferred = runWithJsxRequestContext({}, { deferredRegions: collector }, () =>
+      Defer({
+        fallback: 'Loading',
+        priority: 'after-paint',
+        render: async () => jsx('strong', { children: 'Committed region' }),
+        target: 'promise-authority',
+      }),
+    );
+    Promise.resolve = nativePromiseResolve;
+    Promise.prototype.then = nativePromiseThen;
+    const placeholder = await html(deferred);
+
+    Promise.all = function poisonedAll(values: Iterable<unknown>) {
+      poisonHits.all += 1;
+      return Reflect.apply(nativePromiseAll, Promise, [values]);
+    } as typeof Promise.all;
+    const chunks = collector.chunks();
+    Promise.all = nativePromiseAll;
+
+    expect(placeholder).toContain('Loading');
+    await expect(chunks).resolves.toEqual([
+      {
+        fragments: [
+          {
+            html: '<strong>Committed region</strong>',
+            priority: 'normal',
+            target: 'promise-authority',
+          },
+        ],
+        priority: 'normal',
+      },
+    ]);
+    expect(poisonHits).toEqual({ all: 0, resolve: 0, then: 0 });
   });
 });

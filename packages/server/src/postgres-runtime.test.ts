@@ -3760,6 +3760,46 @@ describe('createPostgresAppRuntimeDb', () => {
     ]);
   });
 
+  it('does not dispatch a late Promise.catch replacement while rolling back a failed transaction', async () => {
+    const log: string[] = [];
+    const client = {
+      async query(statement: string) {
+        log.push(statement);
+        return { rows: [] };
+      },
+      release() {
+        log.push('release');
+      },
+    };
+    const pool = {
+      async connect() {
+        return client;
+      },
+      async end() {},
+    };
+    const runtimeClient = __testPostgresRuntimeInternals.createNodePostgresRuntimeClient(
+      pool as never,
+    );
+    const nativeCatch = Promise.prototype.catch;
+    let catchHits = 0;
+    try {
+      await expect(
+        runtimeClient.transaction(async () => {
+          Promise.prototype.catch = function poisonedCatch(onRejected) {
+            catchHits += 1;
+            return Reflect.apply(nativeCatch, this, [onRejected]);
+          } as typeof Promise.prototype.catch;
+          throw new Error('primary transaction failure');
+        }),
+      ).rejects.toThrow('primary transaction failure');
+    } finally {
+      Promise.prototype.catch = nativeCatch;
+    }
+
+    expect(catchHits).toBe(0);
+    expect(log).toEqual(['BEGIN', 'ROLLBACK', 'DISCARD ALL', 'release']);
+  });
+
   it('does not dispatch a late Pool.query method that forges PostgreSQL posture rows', async () => {
     const pool = new Pool({
       connectionString: 'postgres://127.0.0.1:1/kovo_primordial_probe',
@@ -4020,6 +4060,37 @@ describe('createPostgresAppRuntimeDb', () => {
     } finally {
       await privilegedClient.close();
     }
+  });
+
+  it('does not dispatch a late Promise.all replacement while closing external role pools', async () => {
+    const config = __testPostgresRuntimeInternals.resolvePostgresRuntimeConfig({
+      adminDatabaseUrl: 'postgres://framework-admin@127.0.0.1/kovo',
+      databaseUrl: 'postgres://app-runtime@127.0.0.1/kovo',
+      driver: 'node-postgres',
+      postureCheck: {
+        justification: 'unit test constructs handles without connecting',
+        onBoot: false,
+      },
+      provisionOnBoot: false,
+      schema,
+      systemDatabaseUrl: 'postgres://framework-system@127.0.0.1/kovo',
+    });
+    const runtimeClient = __testPostgresRuntimeInternals.createRuntimeClient(config);
+    const nativeAll = Promise.all;
+    let allHits = 0;
+    Promise.all = function poisonedAll(values: Iterable<unknown>) {
+      allHits += 1;
+      return Reflect.apply(nativeAll, Promise, [values]);
+    } as typeof Promise.all;
+    let closing: Promise<void>;
+    try {
+      closing = runtimeClient.close();
+    } finally {
+      Promise.all = nativeAll;
+    }
+
+    await closing;
+    expect(allHits).toBe(0);
   });
 
   it('provisions custom authzPolicy predicates as FORCE RLS policies', async () => {

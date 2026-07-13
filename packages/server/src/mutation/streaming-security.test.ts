@@ -6,10 +6,12 @@ import type { MutationReplayReservation } from '../replay.js';
 import { renderStreamingMutationWireResponse, stream } from './streaming.js';
 
 const nativeArrayJoin = Array.prototype.join;
+const nativePromiseRace = Promise.race;
 const nativeTextEncoderEncode = TextEncoder.prototype.encode;
 
 afterEach(() => {
   Array.prototype.join = nativeArrayJoin;
+  Promise.race = nativePromiseRace;
   TextEncoder.prototype.encode = nativeTextEncoderEncode;
 });
 
@@ -76,6 +78,25 @@ describe('streaming mutation output security', () => {
     expect(committed!.body).toContain('same replay truth');
     expect(committed!.body).not.toContain('<img');
     expect(committed!.body).not.toContain('onerror');
+  });
+
+  it('does not dispatch a late Promise.race replacement for stream chunk authority', async () => {
+    let raceHits = 0;
+    async function* chunks() {
+      Promise.race = function poisonedRace(values: Iterable<unknown>) {
+        raceHits += 1;
+        return Reflect.apply(nativePromiseRace, Promise, [values]);
+      } as typeof Promise.race;
+      yield stream.text('account', 'committed stream text');
+      yield stream.done();
+    }
+
+    const response = renderStreamingMutationWireResponse(chunks(), finalResponse());
+    const body = await readBody(response.body as ReadableStream<Uint8Array>);
+
+    expect(body).toContain('committed stream text');
+    expect(body).toContain('<kovo-done');
+    expect(raceHits).toBe(0);
   });
 });
 

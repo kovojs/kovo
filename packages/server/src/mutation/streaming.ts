@@ -4,6 +4,7 @@ import type { ServerErrorDiagnosticContext, ServerErrorHandler } from '../diagno
 import { generatedFragmentHtmlValue, type FragmentHtml } from '../html.js';
 import { frameworkWireBody } from '../response.js';
 import {
+  createSecurityPromise,
   createSecurityReadableStream,
   securityArrayJoin,
   securityArrayPush,
@@ -11,6 +12,8 @@ import {
   securityStreamEnqueue,
   securityStreamError,
   securityTextEncode,
+  securityPromiseRace,
+  securityPromiseResolve,
 } from '../response-security-intrinsics.js';
 import type { BufferedMutationWireResponse, MutationWireResponse } from '../mutation-wire.js';
 import type { ServerFragmentRenderable } from '../renderable.js';
@@ -286,12 +289,20 @@ export async function* coalesceMutationStreamChunks(
     }
     timer ??=
       bufferedText && maxDelayMs > 0
-        ? new Promise<'flush'>((resolve) => setTimeout(() => resolve('flush'), maxDelayMs))
+        ? createSecurityPromise<'flush'>((resolve) =>
+            setTimeout(() => resolve('flush'), maxDelayMs),
+          )
         : undefined;
 
     let next: IteratorResult<MutationStreamChunk> | 'flush';
     try {
-      next = timer === undefined ? await pendingRead : await Promise.race([pendingRead, timer]);
+      next =
+        timer === undefined
+          ? await pendingRead
+          : await securityPromiseRace<IteratorResult<MutationStreamChunk> | 'flush'>([
+              securityPromiseResolve<IteratorResult<MutationStreamChunk> | 'flush'>(pendingRead),
+              timer,
+            ]);
     } catch (error) {
       // L10-1 (SPEC §9): the source generator threw mid-stream. Flush any buffered text
       // so already-yielded partial output is not lost, then propagate the error so the

@@ -997,6 +997,16 @@ export function securityPromiseResolve<Value>(value: Value | PromiseLike<Value>)
   return apply(nativePromiseResolve, NativePromise, [value]);
 }
 
+export function createSecurityPromise<Value>(
+  executor: (
+    resolve: (value: Value | PromiseLike<Value>) => void,
+    reject: (reason?: unknown) => void,
+  ) => void,
+): Promise<Value> {
+  assertResponseSecurityIntrinsics();
+  return new NativePromise<Value>(executor);
+}
+
 export function securityPromiseThen<Value, Result>(
   promise: Promise<Value>,
   fulfilled: (value: Value) => Result | PromiseLike<Result>,

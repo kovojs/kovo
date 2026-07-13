@@ -3480,11 +3480,30 @@ function createNodePostgresRuntimeClient(
   return {
     close: async () => {
       try {
-        await Promise.all([
-          transactionalClient.close(),
-          adminTransactionalClient?.close(),
-          systemTransactionalClient?.close(),
-        ]);
+        const runtimeClose = transactionalClient.close();
+        const adminClose = adminTransactionalClient?.close();
+        const systemClose = systemTransactionalClient?.close();
+        let closeFailed = false;
+        let closeError: unknown;
+        try {
+          await runtimeClose;
+        } catch (error) {
+          closeFailed = true;
+          closeError = error;
+        }
+        try {
+          await adminClose;
+        } catch (error) {
+          if (!closeFailed) closeError = error;
+          closeFailed = true;
+        }
+        try {
+          await systemClose;
+        } catch (error) {
+          if (!closeFailed) closeError = error;
+          closeFailed = true;
+        }
+        if (closeFailed) throw closeError;
       } finally {
         unregisterDatabaseEgressUrl();
         unregisterAdminDatabaseEgressUrl?.();
@@ -3713,7 +3732,11 @@ class NodePostgresRuntimeClient implements RuntimeSqlClient {
       await client.query('COMMIT');
     } catch (error) {
       primaryError = error;
-      await client.query('ROLLBACK').catch(() => undefined);
+      try {
+        await client.query('ROLLBACK');
+      } catch {
+        // Preserve the primary transaction failure while still attempting session cleanup below.
+      }
     }
     const cleanupError = await discardNodePostgresSession(client);
     releasePinnedNodePostgresPoolClient(client, cleanupError);
@@ -3790,7 +3813,11 @@ class NodePostgresTransactionClient implements RuntimeSqlClient {
       await this.client.query(`RELEASE SAVEPOINT ${savepoint}`);
       return result;
     } catch (error) {
-      await this.client.query(`ROLLBACK TO SAVEPOINT ${savepoint}`).catch(() => undefined);
+      try {
+        await this.client.query(`ROLLBACK TO SAVEPOINT ${savepoint}`);
+      } catch {
+        // Preserve the primary nested-transaction failure; outer cleanup still runs.
+      }
       throw error;
     }
   }

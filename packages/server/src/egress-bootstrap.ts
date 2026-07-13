@@ -24,6 +24,7 @@ import {
   witnessMapSet,
 } from './security-witness-intrinsics.js';
 import { runtimeEnvironmentValue } from './runtime-environment-authority.js';
+import { securityPromiseResolve } from './response-security-intrinsics.js';
 
 /**
  * Bootstrap for the outbound-egress private-network deny floor (SPEC §6.6;
@@ -97,7 +98,7 @@ export function installEgressFloor(
   options: EgressOptions | undefined,
   warn: (message: string) => void = (m) => console.warn(`[kovo egress] ${m}`),
 ): Promise<EgressFloorInstall> {
-  return Promise.resolve(installEgressFloorSync(options, warn));
+  return securityPromiseResolve(installEgressFloorSync(options, warn));
 }
 
 /**
