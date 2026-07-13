@@ -40,7 +40,6 @@ const nativeReflectApply = NativeReflect.apply;
 const nativeArrayIsArray = NativeArray.isArray;
 const nativeArrayJoin = NativeArray.prototype.join;
 const nativeArraySort = NativeArray.prototype.sort;
-const nativeArrayBufferSlice = NativeArrayBuffer.prototype.slice;
 const nativeBufferAllocUnsafe = NativeBuffer.allocUnsafe;
 const nativeBufferConcat = NativeBuffer.concat;
 const nativeBufferFrom = NativeBuffer.from;
@@ -114,7 +113,6 @@ const nativeUrlProtocolGet = stableOwnGetter(NativeURL.prototype, 'protocol');
 const nativeUrlSearchGet = stableOwnGetter(NativeURL.prototype, 'search');
 const nativeUint8ArrayLength = stableOwnAccessor(NativeUint8Array.prototype, 'length');
 const nativeUint8ArrayFill = NativeUint8Array.prototype.fill;
-const nativeUint8ArraySlice = NativeUint8Array.prototype.slice;
 
 const hashControl = nativeCreateHash('sha256');
 const nativeHashUpdate = stableOwnFunction(hashControl, 'update');
@@ -124,6 +122,58 @@ const fatalTextDecoder = new NativeTextDecoder('utf-8', { fatal: true });
 
 function apply<Return>(fn: Function, receiver: unknown, args: readonly unknown[]): Return {
   return nativeReflectApply(fn, receiver, args) as Return;
+}
+
+function normalizedByteSliceIndex(
+  value: number | undefined,
+  length: number,
+  fallback: number,
+): number {
+  if (value === undefined) return fallback;
+  if (typeof value !== 'number') {
+    throw new NativeTypeError('Kovo byte slice bounds must be numbers.');
+  }
+  if (value !== value || value === 0) return 0;
+  if (value === 1 / 0) return length;
+  if (value === -1 / 0) return 0;
+  const integer =
+    value < 0
+      ? -apply<number>(nativeMathFloor, NativeMath, [-value])
+      : apply<number>(nativeMathFloor, NativeMath, [value]);
+  if (integer < 0) return length + integer < 0 ? 0 : length + integer;
+  return integer > length ? length : integer;
+}
+
+function rawUint8ArraySlice(
+  value: Uint8Array,
+  start?: number,
+  end?: number,
+): Uint8Array<ArrayBuffer> {
+  const sourceLength = apply<number>(nativeUint8ArrayLength, value, []);
+  const first = normalizedByteSliceIndex(start, sourceLength, 0);
+  const last = normalizedByteSliceIndex(end, sourceLength, sourceLength);
+  const copyLength = last > first ? last - first : 0;
+  const copy = new NativeUint8Array(copyLength);
+  for (let index = 0; index < copyLength; index += 1) copy[index] = value[first + index]!;
+  if (apply(nativeUint8ArrayLength, value, []) !== sourceLength) {
+    throw new NativeTypeError('Kovo byte source changed length while it was snapshotted.');
+  }
+  return copy;
+}
+
+function rawArrayBufferSlice(value: ArrayBuffer, start?: number, end?: number): ArrayBuffer {
+  const sourceLength = apply<number>(nativeArrayBufferByteLength, value, []);
+  const first = normalizedByteSliceIndex(start, sourceLength, 0);
+  const last = normalizedByteSliceIndex(end, sourceLength, sourceLength);
+  const copyLength = last > first ? last - first : 0;
+  const source = new NativeUint8Array(value);
+  const copy = new NativeArrayBuffer(copyLength);
+  const copyBytes = new NativeUint8Array(copy);
+  for (let index = 0; index < copyLength; index += 1) copyBytes[index] = source[first + index]!;
+  if (apply(nativeArrayBufferByteLength, value, []) !== sourceLength) {
+    throw new NativeTypeError('Kovo ArrayBuffer source changed length while it was snapshotted.');
+  }
+  return copy;
 }
 
 // SPEC §6.6/§9.1: even a captured Array.push performs prototype-visible [[Set]]. Response and
@@ -416,7 +466,7 @@ function capturedControlsAreSound(): boolean {
     const arrayBuffer = new NativeArrayBuffer(4);
     if (apply(nativeFunctionHasInstance, NativeArrayBuffer, [arrayBuffer]) !== true) return false;
     if (apply(nativeFunctionHasInstance, NativeArrayBuffer, [{}]) !== false) return false;
-    const slicedArrayBuffer = apply<ArrayBuffer>(nativeArrayBufferSlice, arrayBuffer, [1, 3]);
+    const slicedArrayBuffer = rawArrayBufferSlice(arrayBuffer, 1, 3);
     if (apply(nativeArrayBufferByteLength, slicedArrayBuffer, []) !== 2) return false;
 
     const date = new NativeDate('2026-01-02T03:04:05Z');
@@ -447,7 +497,7 @@ function capturedControlsAreSound(): boolean {
     const filled = new NativeUint8Array(3);
     apply(nativeUint8ArrayFill, filled, [0x2a]);
     if (filled[0] !== 0x2a || filled[2] !== 0x2a) return false;
-    const sliced = apply<Uint8Array>(nativeUint8ArraySlice, encoded, [1, 3]);
+    const sliced = rawUint8ArraySlice(encoded, 1, 3);
     if (
       sliced[0] !== 0x61 ||
       sliced[1] !== 0x66 ||
@@ -993,11 +1043,7 @@ export function securityArrayBufferSlice(
   end?: number,
 ): ArrayBuffer {
   assertResponseSecurityIntrinsics();
-  return apply(
-    nativeArrayBufferSlice,
-    value,
-    start === undefined ? [] : end === undefined ? [start] : [start, end],
-  );
+  return rawArrayBufferSlice(value, start, end);
 }
 
 export function securityDateToUtcString(value: Date): string {
@@ -1145,11 +1191,7 @@ export function securityUint8ArraySlice(
   end?: number,
 ): Uint8Array<ArrayBuffer> {
   assertResponseSecurityIntrinsics();
-  return apply(
-    nativeUint8ArraySlice,
-    value,
-    start === undefined ? [] : end === undefined ? [start] : [start, end],
-  );
+  return rawUint8ArraySlice(value, start, end);
 }
 
 export function securityJsonParse(value: string): unknown {

@@ -53,6 +53,7 @@ const nativeStringToUpperCase = NativeString.prototype.toUpperCase;
 const nativeStringTrim = NativeString.prototype.trim;
 const nativeTextDecoderDecode = NativeTextDecoder.prototype.decode;
 const nativeTextEncoderEncode = NativeTextEncoder.prototype.encode;
+const nativeUint8ArrayLengthGetter = inheritedGetter(NativeUint8Array.prototype, 'length');
 const nativeUint8ArraySet = NativeUint8Array.prototype.set;
 const nativeUrlPathnameGetter = getter(NativeURL.prototype, 'pathname');
 const nativeUrlSearchParamsGetter = getter(NativeURL.prototype, 'searchParams');
@@ -70,6 +71,28 @@ function getter(prototype: object, property: PropertyKey): Function | undefined 
     prototype,
     property,
   ])?.get;
+}
+
+function inheritedGetter(source: object, property: PropertyKey): Function | undefined {
+  let owner: object | null = source;
+  for (let depth = 0; owner !== null && depth < 16; depth += 1) {
+    const descriptor = apply<PropertyDescriptor | undefined>(
+      nativeObjectGetOwnPropertyDescriptor,
+      NativeObject,
+      [owner, property],
+    );
+    if (descriptor !== undefined)
+      return typeof descriptor.get === 'function' ? descriptor.get : undefined;
+    owner = apply<object | null>(nativeObjectGetPrototypeOf, NativeObject, [owner]);
+  }
+  return undefined;
+}
+
+function rawUint8ArrayLength(value: Uint8Array): number {
+  if (nativeUint8ArrayLengthGetter === undefined) {
+    throw new NativeTypeError('Native Uint8Array length is unavailable.');
+  }
+  return apply(nativeUint8ArrayLengthGetter, value, []);
 }
 
 function mapEntriesIteratorNext(): Function | undefined {
@@ -102,10 +125,10 @@ function capturedControlsAreSound(): boolean {
       rejectsInvalidUtf8 = true;
     }
     return (
-      publicBytes.length === 10 &&
+      rawUint8ArrayLength(publicBytes) === 10 &&
       publicBytes[0] === 0x70 &&
       publicBytes[9] === 0x66 &&
-      privateBytes.length === 11 &&
+      rawUint8ArrayLength(privateBytes) === 11 &&
       privateBytes[0] === 0x70 &&
       rawDecode(publicBytes) === 'public.pdf' &&
       rejectsInvalidUtf8 &&
@@ -116,10 +139,11 @@ function capturedControlsAreSound(): boolean {
       entries.length === 1 &&
       entries[0]?.[0] === 'used' &&
       entries[0]?.[1] === 10 &&
-      random.length === 12 &&
+      rawUint8ArrayLength(random) === 12 &&
       hasNonZeroByte(random) &&
       rawBase64Url(publicBytes) === 'cHVibGljLnBkZg' &&
-      rawFromBase64Url('cHVibGljLnBkZg')?.length === publicBytes.length &&
+      rawUint8ArrayLength(rawFromBase64Url('cHVibGljLnBkZg')!) ===
+        rawUint8ArrayLength(publicBytes) &&
       apply<{ v?: unknown }>(nativeJsonParse, NativeJSON, ['{"v":"v1"}']).v === 'v1' &&
       apply(nativeJsonStringify, NativeJSON, ['private.pdf']) === '"private.pdf"' &&
       apply(nativeNumberIsFinite, NativeNumber, [1]) === true &&
@@ -170,6 +194,11 @@ export function capabilityDecode(value: Uint8Array): string {
 export function capabilityUint8Array(length: number): Uint8Array {
   assertCapabilityIntrinsics();
   return new NativeUint8Array(length);
+}
+
+export function capabilityUint8ArrayLength(value: Uint8Array): number {
+  assertCapabilityIntrinsics();
+  return rawUint8ArrayLength(value);
 }
 
 export function capabilityUint8ArraySet(
@@ -506,7 +535,8 @@ function rawMapEntries(map: Map<unknown, unknown>): Array<[unknown, unknown]> {
 
 function rawBase64Url(bytes: Uint8Array): string {
   let binary = '';
-  for (let index = 0; index < bytes.length; index += 1) {
+  const length = rawUint8ArrayLength(bytes);
+  for (let index = 0; index < length; index += 1) {
     binary += apply(nativeStringFromCharCode, NativeString, [bytes[index]!]);
   }
   const encoded = apply<string>(nativeBtoa, globalThis, [binary]);
@@ -569,7 +599,8 @@ function isBase64UrlCode(code: number): boolean {
 }
 
 function hasNonZeroByte(bytes: Uint8Array): boolean {
-  for (let index = 0; index < bytes.length; index += 1) {
+  const length = rawUint8ArrayLength(bytes);
+  for (let index = 0; index < length; index += 1) {
     if (bytes[index] !== 0) return true;
   }
   return false;

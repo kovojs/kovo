@@ -17,6 +17,7 @@ import {
   createSecurityNullRecord,
   createSecuritySet,
   securityArrayIsArray,
+  securityArrayBufferSlice,
   securityArrayJoin,
   securityArrayPush,
   securityHeadersGet,
@@ -40,6 +41,7 @@ import {
   securityStringTrim,
   securityTextEncode,
   securityUint8ArrayFromArrayBuffer,
+  securityUint8ArraySlice,
   securityUrlSnapshot,
 } from './response-security-intrinsics.js';
 import {
@@ -616,7 +618,8 @@ export const respond = {
       throw new TypeError('respond.storedFile() storage filename metadata must be a string.');
     }
     const disposition = storedDisposition ?? 'attachment';
-    const sniffed = sniffUploadBytes(body);
+    const bodySnapshot = securityUint8ArraySlice(body);
+    const sniffed = sniffUploadBytes(bodySnapshot);
     if (disposition === 'inline' && !sniffed.inlineSafe) {
       throw new InlineUnverifiedUploadError(
         `Refusing to serve stored object "${key}" inline: its sniffed content type is not a ` +
@@ -624,7 +627,7 @@ export const respond = {
       );
     }
     const filename = storedFilename ?? metadataFilename;
-    return routeResponseOutcome(body, {
+    return routeResponseOutcome(bodySnapshot, {
       // Server truth: the served type is the SNIFFED type, never the stored (possibly-client) type.
       contentType: sniffed.contentType,
       disposition,
@@ -657,12 +660,13 @@ export const respond = {
     // (the framework re-encode/rasterize attestation). This is the fail-closed runtime floor — the
     // honest ceiling is "attacker bytes never render inline as active content", not an unspoofable
     // type. Authors override the sniffed contentType via `unsafeInline(...)` (audited risk).
+    const bodySnapshot = snapshotRouteResponseBody(body);
     const contentType =
       disposition === 'inline'
-        ? assertInlineBody(body, declaredContentType, unsafeInlineAccepted)
+        ? assertInlineBody(bodySnapshot, declaredContentType, unsafeInlineAccepted)
         : declaredContentType;
     return routeResponseOutcome(
-      body,
+      bodySnapshot,
       {
         contentType,
         etag: stableOwnDataValue(options, 'etag'),
@@ -870,11 +874,18 @@ function inlineBodyBytes(body: RouteResponseBody): Uint8Array | undefined {
   return undefined; // ReadableStream — not bufferable without consuming it.
 }
 
+function snapshotRouteResponseBody(body: RouteResponseBody): RouteResponseBody {
+  if (securityIsArrayBuffer(body)) return securityArrayBufferSlice(body);
+  if (securityIsUint8Array(body)) return securityUint8ArraySlice(body);
+  return body;
+}
+
 function routeResponseOutcome(
   body: RouteResponseBody,
   options: object,
   forcedDisposition?: 'attachment' | 'inline',
 ): RouteResponseOutcome {
+  const bodySnapshot = snapshotRouteResponseBody(body);
   const contentType = stableOwnDataValue(options, 'contentType');
   const disposition = forcedDisposition ?? stableOwnDataValue(options, 'disposition');
   const filename = stableOwnDataValue(options, 'filename');
@@ -900,7 +911,7 @@ function routeResponseOutcome(
     ? `${disposition}; filename="${contentDispositionFilename(filename)}"`
     : disposition;
   return markRouteResponseOutcome({
-    body,
+    body: bodySnapshot,
     contentDisposition,
     contentType,
     ...(etag === undefined ? {} : { etag }),
@@ -1252,7 +1263,7 @@ function snapshotRouteResponseOutcome(outcome: RouteResponseOutcome): RouteRespo
       ? undefined
       : snapshotStringHeaderRecord(rawHeaders, 'Kovo route response outcome headers');
   return {
-    body: body as RouteResponseBody,
+    body: snapshotRouteResponseBody(body as RouteResponseBody),
     contentDisposition,
     contentType,
     ...(etag === undefined ? {} : { etag }),

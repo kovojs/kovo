@@ -498,6 +498,23 @@ describe('server response adapters', () => {
     expect(response.headers['X-Content-Type-Options']).toBe('nosniff');
   });
 
+  it('serves the exact bytes classified by the inline response sink', async () => {
+    const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 1, 2]);
+    const outcome = respond.stream(png, {
+      contentType: 'text/html',
+      disposition: 'inline',
+    });
+    png.fill(0x3c);
+
+    const response = routeResponseToWebResponse(routeOutcomeResponse(outcome, { method: 'GET' }), {
+      method: 'GET',
+    });
+    expect([...new Uint8Array(await response.arrayBuffer())]).toEqual([
+      0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 1, 2,
+    ]);
+    expect(response.headers.get('Content-Type')).toBe('image/png');
+  });
+
   // KV428: an un-bufferable stream cannot be sniffed, so inline requires an opaque audited receipt
   // (the application re-encode/rasterize attestation); without it the runtime refuses.
   it('requires unsafeInline for an inline un-bufferable stream (KV428)', () => {

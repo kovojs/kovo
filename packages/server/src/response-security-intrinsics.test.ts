@@ -8,7 +8,12 @@ import { cspSha256, renderContentSecurityPolicy } from './csp.js';
 import { csrfToken, validateCsrfToken } from './csrf.js';
 import { renderDocument } from './document-core.js';
 import { createSigningKeyRing } from './keyring.js';
-import { securityRandomBytes, securityRandomUuid } from './response-security-intrinsics.js';
+import {
+  securityArrayBufferSlice,
+  securityRandomBytes,
+  securityRandomUuid,
+  securityUint8ArraySlice,
+} from './response-security-intrinsics.js';
 
 const intrinsicModuleUrl = new URL('./response-security-intrinsics.ts', import.meta.url).href;
 const mutableCrypto = createRequire(import.meta.url)('node:crypto') as {
@@ -19,6 +24,36 @@ const mutableCrypto = createRequire(import.meta.url)('node:crypto') as {
 };
 
 describe('document, cookie, CSP, and CSRF intrinsic closure', () => {
+  it('copies byte carriers without dispatching through caller-controlled species', () => {
+    const bytes = new Uint8Array([1, 2, 3]);
+    const buffer = bytes.buffer;
+    Object.defineProperty(bytes, 'constructor', {
+      configurable: true,
+      value: {
+        [Symbol.species]: function () {
+          return bytes;
+        },
+      },
+    });
+    Object.defineProperty(buffer, 'constructor', {
+      configurable: true,
+      value: {
+        [Symbol.species]: function () {
+          throw new Error('caller-controlled ArrayBuffer species reached');
+        },
+      },
+    });
+
+    const byteCopy = securityUint8ArraySlice(bytes);
+    const bufferCopy = securityArrayBufferSlice(buffer);
+    bytes[0] = 9;
+
+    expect(byteCopy).not.toBe(bytes);
+    expect([...byteCopy]).toEqual([1, 2, 3]);
+    expect(bufferCopy).not.toBe(buffer);
+    expect([...new Uint8Array(bufferCopy)]).toEqual([1, 2, 3]);
+  });
+
   it('keeps the complete document shell pinned after selective Array.join poisoning', () => {
     const nativeJoin = Array.prototype.join;
     const attacker = '<!doctype html><img src=x onerror=alert(1)>';

@@ -108,6 +108,31 @@ describe('security reporting intrinsic boundary', () => {
     expect(JSON.stringify(snapshot)).not.toContain(secret);
   });
 
+  it('keeps the report body limit when typed-array species aliases a stream chunk', async () => {
+    const app = createApp();
+    const oversized = reportRequest(report(`https://cdn.example.test/${'a'.repeat(70 * 1024)}`));
+    const descriptor = Object.getOwnPropertyDescriptor(Uint8Array.prototype, 'constructor');
+    expect(descriptor).toBeDefined();
+    Object.defineProperty(Uint8Array.prototype, 'constructor', {
+      configurable: true,
+      get(this: Uint8Array) {
+        const source = this;
+        return {
+          [Symbol.species]: function () {
+            return source;
+          },
+        };
+      },
+    });
+    try {
+      expect((await kovoSecurityReportResponse(app, oversized)).status).toBe(204);
+    } finally {
+      Object.defineProperty(Uint8Array.prototype, 'constructor', descriptor!);
+    }
+
+    expect(kovoSecurityReportSnapshot(app)).toEqual({ aggregates: [], dropped: 2 });
+  });
+
   it('preserves aggregate identity after selective WeakMap/Map and clock poisoning', async () => {
     const app = createApp();
     const body = report('https://cdn.example.test/one.js?secret=one');

@@ -1,6 +1,9 @@
 import type { KovoApp } from './app-types.js';
 import { appSystemResponse } from './app-system-response.js';
-import { securityUint8ArrayLength } from './response-security-intrinsics.js';
+import {
+  securityUint8ArrayLength,
+  securityUint8ArraySlice,
+} from './response-security-intrinsics.js';
 import {
   requestStateAbsoluteUrlOrigin,
   requestStateBoundedControlToken,
@@ -85,14 +88,12 @@ const REPORT_RATE_WINDOW_MS = 60_000;
 const NativeRequest = globalThis.Request;
 const NativeTextDecoder = globalThis.TextDecoder;
 const nativeArrayJoin = Array.prototype.join;
-const nativeArrayPush = Array.prototype.push;
 const nativeReaderCancel = globalThis.ReadableStreamDefaultReader.prototype.cancel;
 const nativeReaderRead = globalThis.ReadableStreamDefaultReader.prototype.read;
 const nativeRequestBody = witnessGetOwnPropertyDescriptor(NativeRequest.prototype, 'body')?.get;
 const nativeRequestMethod = witnessGetOwnPropertyDescriptor(NativeRequest.prototype, 'method')?.get;
 const nativeStreamGetReader = globalThis.ReadableStream.prototype.getReader;
 const nativeTextDecoderDecode = NativeTextDecoder.prototype.decode;
-const nativeUint8ArraySlice = Uint8Array.prototype.slice;
 
 function apply<Return>(fn: Function, receiver: unknown, args: readonly unknown[]): Return {
   return witnessReflectApply<Return>(fn, receiver, args);
@@ -106,8 +107,7 @@ function reportingControlsAreSound(): boolean {
       typeof nativeStreamGetReader !== 'function' ||
       typeof nativeReaderRead !== 'function' ||
       typeof nativeReaderCancel !== 'function' ||
-      typeof nativeTextDecoderDecode !== 'function' ||
-      typeof nativeUint8ArraySlice !== 'function'
+      typeof nativeTextDecoderDecode !== 'function'
     ) {
       return false;
     }
@@ -128,11 +128,11 @@ function reportingControlsAreSound(): boolean {
     if (apply(nativeTextDecoderDecode, new NativeTextDecoder(), [new Uint8Array([65])]) !== 'A') {
       return false;
     }
-    const bytes = apply<Uint8Array>(nativeUint8ArraySlice, new Uint8Array([1, 2, 3]), [0, 2]);
-    if (bytes.length !== 2 || bytes[0] !== 1 || bytes[1] !== 2) return false;
+    const bytes = securityUint8ArraySlice(new Uint8Array([1, 2, 3]), 0, 2);
+    if (securityUint8ArrayLength(bytes) !== 2 || bytes[0] !== 1 || bytes[1] !== 2) return false;
     const values: string[] = [];
-    apply(nativeArrayPush, values, ['a']);
-    apply(nativeArrayPush, values, ['b']);
+    witnessArrayAppend(values, 'a', 'Security report control values');
+    witnessArrayAppend(values, 'b', 'Security report control values');
     if (apply(nativeArrayJoin, values, ['']) !== 'ab') return false;
     return true;
   } catch {
@@ -289,20 +289,28 @@ async function readBoundedReportBody(
         truncated = true;
         const allowed = requestStateMax(0, chunkLength - (size - maxBytes));
         if (allowed > 0) {
-          const accepted = apply<Uint8Array>(nativeUint8ArraySlice, value, [0, allowed]);
-          apply(nativeArrayPush, chunks, [
+          const accepted = securityUint8ArraySlice(value, 0, allowed);
+          witnessArrayAppend(
+            chunks,
             apply(nativeTextDecoderDecode, decoder, [accepted, { stream: true }]),
-          ]);
+            'Security report body chunks',
+          );
         }
         requestStateIgnorePromiseRejection(apply(nativeReaderCancel, reader, []));
         break;
       }
-      apply(nativeArrayPush, chunks, [
+      witnessArrayAppend(
+        chunks,
         apply(nativeTextDecoderDecode, decoder, [value, { stream: true }]),
-      ]);
+        'Security report body chunks',
+      );
     }
   } finally {
-    apply(nativeArrayPush, chunks, [apply(nativeTextDecoderDecode, decoder, [])]);
+    witnessArrayAppend(
+      chunks,
+      apply(nativeTextDecoderDecode, decoder, []),
+      'Security report body chunks',
+    );
   }
 
   return { text: apply(nativeArrayJoin, chunks, ['']), truncated };

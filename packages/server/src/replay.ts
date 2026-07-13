@@ -14,10 +14,19 @@ import {
 } from './response.js';
 import { resolveCsrfReplayBinding, type CsrfOptions } from './csrf.js';
 import { formLikeToRecord } from './schema.js';
-import { requestFormDataEntries, requestIsFormData } from './request-body-intrinsics.js';
+import {
+  requestBlobArrayBuffer,
+  requestBlobSize,
+  requestBlobType,
+  requestFileName,
+  requestFormDataEntries,
+  requestIsFile,
+  requestIsFormData,
+} from './request-body-intrinsics.js';
 import {
   securityArrayBufferByteLength,
   securityIsArrayBuffer,
+  securityUint8ArrayLength,
 } from './response-security-intrinsics.js';
 import {
   createWitnessMap,
@@ -785,7 +794,8 @@ async function canonicalJson(value: unknown): Promise<string> {
     return canonicalFormDataEntries(value.entries);
   }
   if (isNativeFormData(value)) return canonicalFormDataEntries(snapshotFormDataEntries(value));
-  if (isUploadLike(value)) return `upload:${await canonicalJson(await uploadFingerprint(value))}`;
+  const upload = snapshotReplayUpload(value);
+  if (upload !== undefined) return `upload:${await canonicalJson(await uploadFingerprint(upload))}`;
   if (value === undefined) return 'undefined';
   if (value === null || typeof value !== 'object') {
     const encoded = witnessJsonStringifyPrimitive(
@@ -901,23 +911,64 @@ async function canonicalFormDataEntries(
   return `${result}]`;
 }
 
-interface ReplayUploadLike {
-  arrayBuffer(): Promise<ArrayBuffer>;
-  name?: unknown;
+interface ReplayUploadSnapshot {
+  readBytes(): Promise<ArrayBuffer>;
+  name: string | null;
   size: number;
-  type?: unknown;
+  type: string | null;
 }
 
-function isUploadLike(value: unknown): value is ReplayUploadLike {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    typeof (value as { arrayBuffer?: unknown }).arrayBuffer === 'function' &&
-    typeof (value as { size?: unknown }).size === 'number'
-  );
+function snapshotReplayUpload(value: unknown): ReplayUploadSnapshot | undefined {
+  if (requestIsFile(value)) {
+    return {
+      name: requestFileName(value),
+      readBytes: () => requestBlobArrayBuffer(value),
+      size: requestBlobSize(value),
+      type: requestBlobType(value),
+    };
+  }
+  if (typeof value !== 'object' || value === null) return undefined;
+
+  const arrayBuffer = stableReplayUploadOwnValue(value, 'arrayBuffer');
+  const size = stableReplayUploadOwnValue(value, 'size');
+  if (!arrayBuffer.found || typeof arrayBuffer.value !== 'function') return undefined;
+  if (!size.found || typeof size.value !== 'number') return undefined;
+  const name = stableReplayUploadOwnValue(value, 'name');
+  const type = stableReplayUploadOwnValue(value, 'type');
+  const readBytes = arrayBuffer.value;
+  return {
+    name: name.found && typeof name.value === 'string' ? name.value : null,
+    readBytes: () => witnessReflectApply<Promise<ArrayBuffer>>(readBytes, value, []),
+    size: size.value,
+    type: type.found && typeof type.value === 'string' ? type.value : null,
+  };
 }
 
-async function uploadFingerprint(value: ReplayUploadLike): Promise<{
+function stableReplayUploadOwnValue(
+  source: object,
+  property: 'arrayBuffer' | 'name' | 'size' | 'type',
+): { found: boolean; value?: unknown } {
+  const before = witnessGetOwnPropertyDescriptor(source, property);
+  const after = witnessGetOwnPropertyDescriptor(source, property);
+  if (before === undefined && after === undefined) return { found: false };
+  if (
+    before === undefined ||
+    after === undefined ||
+    !('value' in before) ||
+    !('value' in after) ||
+    !witnessObjectIs(before.value, after.value) ||
+    before.configurable !== after.configurable ||
+    before.enumerable !== after.enumerable ||
+    before.writable !== after.writable
+  ) {
+    throw new MutationReplayFingerprintError(
+      `Replay upload ${property} must be a stable own data property.`,
+    );
+  }
+  return { found: true, value: before.value };
+}
+
+async function uploadFingerprint(value: ReplayUploadSnapshot): Promise<{
   __kovoUpload: true;
   digest: string;
   name: string | null;
@@ -926,7 +977,7 @@ async function uploadFingerprint(value: ReplayUploadLike): Promise<{
 }> {
   let bytes: ArrayBuffer;
   try {
-    bytes = await value.arrayBuffer();
+    bytes = await value.readBytes();
   } catch (error) {
     throw new MutationReplayFingerprintError(
       'Unable to read upload bytes for replay fingerprint.',
@@ -963,16 +1014,17 @@ async function uploadFingerprint(value: ReplayUploadLike): Promise<{
   return {
     __kovoUpload: true,
     digest: bytesToHex(new NativeUint8Array(digest)),
-    name: typeof value.name === 'string' ? value.name : null,
+    name: value.name,
     size: value.size,
-    type: typeof value.type === 'string' ? value.type : null,
+    type: value.type,
   };
 }
 
 function bytesToHex(bytes: Uint8Array): string {
   const alphabet = '0123456789abcdef';
   let output = '';
-  for (let index = 0; index < bytes.length; index += 1) {
+  const length = securityUint8ArrayLength(bytes);
+  for (let index = 0; index < length; index += 1) {
     const byte = bytes[index]!;
     output += alphabet[byte >>> 4]! + alphabet[byte & 0x0f]!;
   }

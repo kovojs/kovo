@@ -55,6 +55,7 @@ import {
   capabilityStringSlice,
   capabilityStringToLowerCase,
   capabilityStringTrim,
+  capabilityUint8ArrayLength,
   capabilityStableProperty,
   capabilityTypeError,
   createCapabilityMap,
@@ -228,7 +229,7 @@ function canonicalizeWithNonce(
     const field = fields[index]!;
     const bytes = capabilityEncode(field);
     if (index !== 0) canonical += '|';
-    canonical += `${capabilityString(bytes.length)}:${field}`;
+    canonical += `${capabilityString(capabilityUint8ArrayLength(bytes))}:${field}`;
   }
   return capabilityEncode(canonical);
 }
@@ -313,7 +314,7 @@ export const signCapability = wireEmitter(
     const payloadBytes = capabilityEncode(
       serializeCapabilityPayload(signedKeyId, claims, oneTime, nonce),
     );
-    if (payloadBytes.length > MAX_CAPABILITY_PAYLOAD_BYTES) {
+    if (capabilityUint8ArrayLength(payloadBytes) > MAX_CAPABILITY_PAYLOAD_BYTES) {
       throw capabilityTypeError('Capability signing options exceed the bounded token payload.');
     }
     const payloadB64 = capabilityBase64Url(payloadBytes);
@@ -390,8 +391,8 @@ export const verifyCapability = securityClassifier(
       const signature = capabilityStringSlice(token, dot + 1);
       if (
         payloadBytes === undefined ||
-        payloadBytes.length === 0 ||
-        payloadBytes.length > MAX_CAPABILITY_PAYLOAD_BYTES ||
+        capabilityUint8ArrayLength(payloadBytes) === 0 ||
+        capabilityUint8ArrayLength(payloadBytes) > MAX_CAPABILITY_PAYLOAD_BYTES ||
         !isCanonicalSignature(signature)
       ) {
         return { ok: false, reason: 'malformed' };
@@ -578,12 +579,20 @@ function isCapabilityPayloadKey(value: string): boolean {
 
 function isCanonicalSignature(value: string): boolean {
   const bytes = capabilityFromBase64Url(value);
-  return bytes !== undefined && bytes.length === 32 && capabilityBase64Url(bytes) === value;
+  return (
+    bytes !== undefined &&
+    capabilityUint8ArrayLength(bytes) === 32 &&
+    capabilityBase64Url(bytes) === value
+  );
 }
 
 function isCapabilityNonce(value: string): boolean {
   const bytes = capabilityFromBase64Url(value);
-  return bytes !== undefined && bytes.length === 12 && capabilityBase64Url(bytes) === value;
+  return (
+    bytes !== undefined &&
+    capabilityUint8ArrayLength(bytes) === 12 &&
+    capabilityBase64Url(bytes) === value
+  );
 }
 
 function isSafeKeyIdText(value: string): boolean {

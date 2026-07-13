@@ -792,6 +792,64 @@ describe('server mutation response replay', () => {
     expect(observedBytes).toEqual(['AAAA']);
   });
 
+  it('keeps upload replay fingerprints byte-sensitive after typed-array length poisoning', async () => {
+    const first = new File(['AAAA'], 'same.txt', { type: 'text/plain' });
+    const second = new File(['BBBB'], 'same.txt', { type: 'text/plain' });
+    const typedArrayPrototype = Object.getPrototypeOf(Uint8Array.prototype) as object;
+    const descriptor = Object.getOwnPropertyDescriptor(typedArrayPrototype, 'length');
+    expect(descriptor?.get).toBeTypeOf('function');
+    Object.defineProperty(typedArrayPrototype, 'length', {
+      configurable: true,
+      get(this: Uint8Array) {
+        const actual = Reflect.apply(descriptor!.get!, this, []) as number;
+        return actual === 32 ? 0 : actual;
+      },
+    });
+    try {
+      await expect(canonicalRequestFingerprint(first)).resolves.not.toBe(
+        await canonicalRequestFingerprint(second),
+      );
+    } finally {
+      Object.defineProperty(typedArrayPrototype, 'length', descriptor!);
+    }
+  });
+
+  it('uses captured File bytes and metadata after app code poisons File.prototype', async () => {
+    const first = new File(['AAAA'], 'first.txt', { type: 'text/plain' });
+    const second = new File(['BBBB'], 'second.txt', { type: 'application/octet-stream' });
+    const arrayBufferDescriptor = Object.getOwnPropertyDescriptor(Blob.prototype, 'arrayBuffer');
+    const nameDescriptor = Object.getOwnPropertyDescriptor(File.prototype, 'name');
+    const sizeDescriptor = Object.getOwnPropertyDescriptor(Blob.prototype, 'size');
+    const typeDescriptor = Object.getOwnPropertyDescriptor(Blob.prototype, 'type');
+    expect(arrayBufferDescriptor?.value).toBeTypeOf('function');
+    expect(nameDescriptor?.get).toBeTypeOf('function');
+    expect(sizeDescriptor?.get).toBeTypeOf('function');
+    expect(typeDescriptor?.get).toBeTypeOf('function');
+    Object.defineProperties(Blob.prototype, {
+      arrayBuffer: {
+        configurable: true,
+        value: async () => new TextEncoder().encode('SAME').buffer,
+        writable: true,
+      },
+      size: { configurable: true, get: () => 4 },
+      type: { configurable: true, get: () => 'text/plain' },
+    });
+    Object.defineProperty(File.prototype, 'name', {
+      configurable: true,
+      get: () => 'same.txt',
+    });
+    try {
+      await expect(canonicalRequestFingerprint(first)).resolves.not.toBe(
+        await canonicalRequestFingerprint(second),
+      );
+    } finally {
+      Object.defineProperty(Blob.prototype, 'arrayBuffer', arrayBufferDescriptor!);
+      Object.defineProperty(Blob.prototype, 'size', sizeDescriptor!);
+      Object.defineProperty(Blob.prototype, 'type', typeDescriptor!);
+      Object.defineProperty(File.prototype, 'name', nameDescriptor!);
+    }
+  });
+
   it('includes FormData field multiplicity, order, and upload metadata in the fingerprint (M8)', async () => {
     const file = (name: string, type = 'text/plain') => new File(['SAME'], name, { type });
     const form = (entries: readonly (readonly [string, string | File])[]) => {

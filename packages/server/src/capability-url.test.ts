@@ -52,6 +52,36 @@ describe('capability-url: sign + constant-time verify before any storage read', 
     expect(claims.expiry).toBe(DEFAULT_CAPABILITY_TTL_MS);
   });
 
+  it('keeps capability byte encoding exact after typed-array length poisoning', async () => {
+    const typedArrayPrototype = Object.getPrototypeOf(Uint8Array.prototype) as object;
+    const descriptor = Object.getOwnPropertyDescriptor(typedArrayPrototype, 'length');
+    expect(descriptor?.get).toBeTypeOf('function');
+    Object.defineProperty(typedArrayPrototype, 'length', {
+      configurable: true,
+      get: () => 0,
+    });
+    try {
+      const signed = await signCapability(
+        SECRET,
+        { key: 'receipts/poison-resistant.pdf', oneTime: true },
+        1_000,
+      );
+      await expect(
+        verifyCapability(
+          SECRET,
+          signed.token,
+          { key: signed.claims.key, method: signed.claims.method },
+          {
+            now: 1_001,
+            replayStore: createMemoryCapabilityReplayStore({ now: () => 1_001 }),
+          },
+        ),
+      ).resolves.toMatchObject({ ok: true });
+    } finally {
+      Object.defineProperty(typedArrayPrototype, 'length', descriptor!);
+    }
+  });
+
   it('bounds signed claims, TTL, payload allocation, and untrusted wire tokens', async () => {
     const key = 'k'.repeat(MAX_CAPABILITY_KEY_LENGTH);
     const scope = 's'.repeat(MAX_CAPABILITY_SCOPE_LENGTH);
