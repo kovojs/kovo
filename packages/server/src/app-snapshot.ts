@@ -107,8 +107,9 @@ export function snapshotAppQuery(
   const access = accessDecisionFor(object as AppQueryDeclaration & { access?: AccessDecision });
   const record = snapshotOwnDataRecord(object, 'query declaration', omittedProperties('access'));
   snapshotSchemaProperty(record, 'args', 'query.args');
-  snapshotArrayProperty(record, 'reads', 'query.reads');
-  snapshotArrayProperty(record, 'delta', 'query.delta');
+  snapshotSchemaProperty(record, 'output', 'query.output');
+  snapshotDomainArrayProperty(record, 'reads', 'query.reads');
+  snapshotQueryDeltaArrayProperty(record, 'delta', 'query.delta');
 
   const declaration = pinAccessDecision(record, access) as AppQueryDeclaration;
   witnessFreeze(declaration);
@@ -129,6 +130,9 @@ export function snapshotAppMutation(
   const record = snapshotOwnDataRecord(object, 'mutation declaration', omittedProperties('access'));
   snapshotSchemaProperty(record, 'input', 'mutation.input');
   snapshotSchemaRecordProperty(record, 'errors', 'mutation.errors');
+  if (record.csrf !== undefined && record.csrf !== false) {
+    record.csrf = snapshotAppCsrfOptions(record.csrf as CsrfOptions<unknown>);
+  }
   snapshotArrayProperty(record, 'fileFields', 'mutation.fileFields');
   if (record.registry !== undefined) {
     record.registry = snapshotMutationRegistry(record.registry, context);
@@ -168,7 +172,11 @@ export function snapshotAppEndpoint(
   if (record.response !== undefined) {
     const response = snapshotOwnDataRecord(record.response, 'endpoint.response');
     snapshotArrayProperty(response, 'body', 'endpoint.response.body');
-    snapshotArrayProperty(response, 'redirectAllowlist', 'endpoint.response.redirectAllowlist');
+    snapshotRedirectAllowlistProperty(
+      response,
+      'redirectAllowlist',
+      'endpoint.response.redirectAllowlist',
+    );
     snapshotArrayProperty(response, 'reservedHeaders', 'endpoint.response.reservedHeaders');
     record.response = witnessFreeze(response);
   }
@@ -217,6 +225,14 @@ export function snapshotAppRoute(
     `route(${path}) declaration`,
     omittedProperties('access', 'layout', 'path'),
   );
+  snapshotSchemaProperty(record, 'params', `route(${path}).params`);
+  snapshotSchemaProperty(record, 'search', `route(${path}).search`);
+  snapshotFunctionRecordProperty(record, 'boundaries', `route(${path}).boundaries`, [
+    'error',
+    'notFound',
+    'unauthorized',
+  ]);
+  snapshotFunctionRecordProperty(record, 'regions', `route(${path}).regions`);
   snapshotRouteHintArrays(record, `route(${path})`);
 
   const declaration = route(path, {
@@ -256,6 +272,11 @@ export function snapshotAppLayout(
       'layout declaration',
       omittedProperties('access', 'parent', 'queries'),
     );
+    snapshotFunctionRecordProperty(record, 'boundaries', 'layout.boundaries', [
+      'error',
+      'notFound',
+      'unauthorized',
+    ]);
     snapshotRouteHintArrays(record, 'layout');
 
     const declaration = layout({
@@ -576,9 +597,13 @@ function snapshotMutationRegistry(
       (queryDefinition) => snapshotAppQuery(queryDefinition, context),
     );
   }
-  snapshotArrayProperty(record, 'inferredTouches', 'mutation.registry.inferredTouches');
-  snapshotArrayProperty(record, 'tables', 'mutation.registry.tables');
-  snapshotArrayProperty(record, 'touches', 'mutation.registry.touches');
+  snapshotMutationTouchArrayProperty(
+    record,
+    'inferredTouches',
+    'mutation.registry.inferredTouches',
+  );
+  snapshotStringArrayProperty(record, 'tables', 'mutation.registry.tables');
+  snapshotDomainArrayProperty(record, 'touches', 'mutation.registry.touches');
   return witnessFreeze(record);
 }
 
@@ -769,6 +794,127 @@ function snapshotArrayProperty(
   record[property] = witnessFreeze(denseArrayValues(value, label));
 }
 
+function snapshotStringArrayProperty(
+  record: Record<PropertyKey, any>,
+  property: PropertyKey,
+  label: string,
+): void {
+  const value = record[property];
+  if (value === undefined) return;
+  const values = denseArrayValues(value, label);
+  for (let index = 0; index < values.length; index += 1) {
+    if (typeof values[index] !== 'string') {
+      throw new TypeError(`${label}[${index}] must be a stable string.`);
+    }
+  }
+  record[property] = witnessFreeze(values);
+}
+
+function snapshotDomainArrayProperty(
+  record: Record<PropertyKey, any>,
+  property: PropertyKey,
+  label: string,
+): void {
+  const value = record[property];
+  if (value === undefined) return;
+  const values = denseArrayValues(value, label);
+  const snapshot: { key: string }[] = [];
+  for (let index = 0; index < values.length; index += 1) {
+    const source = requireDeclarationObject(values[index], `${label}[${index}]`);
+    const key = stableOwnDataValue(source, 'key', `${label}[${index}].key`);
+    if (typeof key !== 'string' || key.length === 0) {
+      throw new TypeError(`${label}[${index}].key must be a non-empty stable string.`);
+    }
+    witnessArrayAppend(snapshot, witnessFreeze({ key }), `${label} domain snapshot`);
+  }
+  record[property] = witnessFreeze(snapshot);
+}
+
+function snapshotQueryDeltaArrayProperty(
+  record: Record<PropertyKey, any>,
+  property: PropertyKey,
+  label: string,
+): void {
+  const value = record[property];
+  if (value === undefined) return;
+  const values = denseArrayValues(value, label);
+  const snapshot: { domain: string; key: string; path: string }[] = [];
+  for (let index = 0; index < values.length; index += 1) {
+    const entryLabel = `${label}[${index}]`;
+    const source = requireDeclarationObject(values[index], entryLabel);
+    const domain = stableOwnDataValue(source, 'domain', `${entryLabel}.domain`);
+    const key = stableOwnDataValue(source, 'key', `${entryLabel}.key`);
+    const path = stableOwnDataValue(source, 'path', `${entryLabel}.path`);
+    if (typeof domain !== 'string' || typeof key !== 'string' || typeof path !== 'string') {
+      throw new TypeError(`${entryLabel} must contain stable string domain, key, and path data.`);
+    }
+    witnessArrayAppend(snapshot, witnessFreeze({ domain, key, path }), `${label} entry snapshot`);
+  }
+  record[property] = witnessFreeze(snapshot);
+}
+
+function snapshotMutationTouchArrayProperty(
+  record: Record<PropertyKey, any>,
+  property: PropertyKey,
+  label: string,
+): void {
+  const value = record[property];
+  if (value === undefined) return;
+  const values = denseArrayValues(value, label);
+  const snapshot: { crossTable?: true; domain: string; keys: null | string; via?: string }[] = [];
+  for (let index = 0; index < values.length; index += 1) {
+    const entryLabel = `${label}[${index}]`;
+    const source = requireDeclarationObject(values[index], entryLabel);
+    const crossTable = stableOwnDataValue(source, 'crossTable', `${entryLabel}.crossTable`);
+    const domain = stableOwnDataValue(source, 'domain', `${entryLabel}.domain`);
+    const keys = stableOwnDataValue(source, 'keys', `${entryLabel}.keys`);
+    const via = stableOwnDataValue(source, 'via', `${entryLabel}.via`);
+    if (
+      (crossTable !== undefined && crossTable !== true) ||
+      typeof domain !== 'string' ||
+      (keys !== null && typeof keys !== 'string') ||
+      (via !== undefined && typeof via !== 'string')
+    ) {
+      throw new TypeError(
+        `${entryLabel} must contain stable domain/keys and optional crossTable/via data.`,
+      );
+    }
+    witnessArrayAppend(
+      snapshot,
+      witnessFreeze({
+        ...(crossTable === true ? { crossTable: true as const } : {}),
+        domain,
+        keys,
+        ...(via === undefined ? {} : { via }),
+      }),
+      `${label} entry snapshot`,
+    );
+  }
+  record[property] = witnessFreeze(snapshot);
+}
+
+function snapshotRedirectAllowlistProperty(
+  record: Record<PropertyKey, any>,
+  property: PropertyKey,
+  label: string,
+): void {
+  const value = record[property];
+  if (value === undefined) return;
+  const values = denseArrayValues(value, label);
+  const snapshot: { origin: string; reason: string }[] = [];
+  for (let index = 0; index < values.length; index += 1) {
+    const entryLabel = `${label}[${index}]`;
+    const source = requireDeclarationObject(values[index], entryLabel);
+    const origin = stableOwnDataValue(source, 'origin', `${entryLabel}.origin`);
+    const reason = stableOwnDataValue(source, 'reason', `${entryLabel}.reason`);
+    if (typeof origin !== 'string' || typeof reason !== 'string' || reason.length === 0) {
+      throw new TypeError(`${entryLabel} requires stable origin and non-empty reason strings.`);
+    }
+    witnessArrayAppend(snapshot, witnessFreeze({ origin, reason }), `${label} entry snapshot`);
+  }
+  record[property] = witnessFreeze(snapshot);
+}
+
 function snapshotSchemaProperty(
   record: Record<PropertyKey, any>,
   property: PropertyKey,
@@ -806,6 +952,56 @@ function snapshotSchemaRecordProperty(
     });
   }
   record[property] = witnessFreeze(snapshot);
+}
+
+/**
+ * Rebuild nested executable declaration maps before request dispatch (SPEC §6.6/§9.5 C9).
+ * Freezing only the route/layout shell would otherwise retain a mutable `regions`/`boundaries`
+ * object whose function slots can be replaced after createApp() has closed the aggregate.
+ */
+function snapshotFunctionRecordProperty(
+  record: Record<PropertyKey, any>,
+  property: PropertyKey,
+  label: string,
+  allowedKeys?: readonly string[],
+): void {
+  const value = record[property];
+  if (value === undefined) return;
+  const source = requireDeclarationObject(value, label);
+  const snapshot = witnessCreateNullRecord<Function>();
+  const keys = witnessOwnKeys(source);
+  for (let index = 0; index < keys.length; index += 1) {
+    const key = keys[index]!;
+    if (typeof key !== 'string' || !functionRecordKeyAllowed(key, allowedKeys)) {
+      throw new TypeError(`${label}.${String(key)} is not a supported renderer property.`);
+    }
+    const descriptor = witnessGetOwnPropertyDescriptor(source, key);
+    if (
+      descriptor === undefined ||
+      !('value' in descriptor) ||
+      typeof descriptor.value !== 'function'
+    ) {
+      throw new TypeError(`${label}.${key} must be a stable own function data property.`);
+    }
+    witnessDefineProperty(snapshot, key, {
+      configurable: false,
+      enumerable: descriptor.enumerable === true,
+      value: descriptor.value,
+      writable: false,
+    });
+  }
+  record[property] = witnessFreeze(snapshot);
+}
+
+function functionRecordKeyAllowed(
+  key: string,
+  allowedKeys: readonly string[] | undefined,
+): boolean {
+  if (allowedKeys === undefined) return true;
+  for (let index = 0; index < allowedKeys.length; index += 1) {
+    if (allowedKeys[index] === key) return true;
+  }
+  return false;
 }
 
 function denseArrayValues<Value>(source: readonly Value[], label: string): Value[] {

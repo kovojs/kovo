@@ -1,4 +1,7 @@
-import { createMemoryVersionedClientModuleRegistry } from './client-modules.js';
+import {
+  createMemoryVersionedClientModuleRegistry,
+  snapshotVersionedClientModuleRegistry,
+} from './client-modules.js';
 import { handleAppRequest, reportAppStartupError } from './app-request.js';
 import { routePrefetchGuardDiagnostics, routeTableDiagnostics } from './app-diagnostics.js';
 import { isKovoApp } from './app-guards.js';
@@ -6,6 +9,7 @@ import {
   closeKovoAppAggregate,
   createAppDeclarationSnapshotContext,
   snapshotAppEndpoint,
+  snapshotAppErrorShells,
   snapshotAppCsrfOptions,
   snapshotAppMutation,
   snapshotAppQuery,
@@ -113,11 +117,64 @@ export function createApp<
 >(
   options: CreateAppOptions<SessionValue, DbValue, RawRequest, AppRequest> = {},
 ): KovoApp<SessionValue, DbValue, RawRequest, AppRequest> {
+  type AppOptions = CreateAppOptions<SessionValue, DbValue, RawRequest, AppRequest>;
+  // Read every top-level option exactly once through an own-data descriptor before any authored
+  // declaration callback executes. A route/query/mutation factory must not be able to replace the
+  // session, DB, request-policy, or response authority that the surrounding createApp() call
+  // declared (SPEC §6.6/§9.5 C9).
   const mutationReplayStore = appOptionOwnDataValue(
     options,
     'mutationReplayStore',
   ) as KovoApp['mutationReplayStore'];
-  const csrf = options.csrf === undefined ? undefined : snapshotAppCsrfOptions(options.csrf);
+  const configuredClientModules = appOptionOwnDataValue(options, 'clientModules') as
+    | KovoApp['clientModules']
+    | undefined;
+  const clientModules = snapshotVersionedClientModuleRegistry(
+    configuredClientModules ?? createMemoryVersionedClientModuleRegistry(),
+  );
+  const csrfSource = appOptionOwnDataValue(options, 'csrf') as AppOptions['csrf'];
+  const db = appOptionOwnDataValue(options, 'db') as KovoApp['db'];
+  const documentSource = appOptionOwnDataValue(options, 'document') as AppOptions['document'];
+  const env = appOptionOwnDataValue(options, 'env') as AppOptions['env'];
+  const envSource = appOptionOwnDataValue(options, 'envSource') as AppOptions['envSource'];
+  const egress = appOptionOwnDataValue(options, 'egress') as AppOptions['egress'];
+  const endpointsSource = appOptionOwnDataValue(options, 'endpoints') as AppOptions['endpoints'];
+  const errorShellsSource = appOptionOwnDataValue(
+    options,
+    'errorShells',
+  ) as AppOptions['errorShells'];
+  const liveTargetRenderersSource = appOptionOwnDataValue(
+    options,
+    'liveTargetRenderers',
+  ) as AppOptions['liveTargetRenderers'];
+  const mutationResponsesSource = appOptionOwnDataValue(
+    options,
+    'mutationResponses',
+  ) as AppOptions['mutationResponses'];
+  const mutationsSource = appOptionOwnDataValue(options, 'mutations') as AppOptions['mutations'];
+  const onError = appOptionOwnDataValue(options, 'onError') as KovoApp['onError'];
+  const queriesSource = appOptionOwnDataValue(options, 'queries') as AppOptions['queries'];
+  const renderRoute = appOptionOwnDataValue(options, 'renderRoute') as KovoApp['renderRoute'];
+  const requestLimitsSource = appOptionOwnDataValue(
+    options,
+    'requestLimits',
+  ) as AppOptions['requestLimits'];
+  const routesSource = appOptionOwnDataValue(options, 'routes') as AppOptions['routes'];
+  const sessionProvider = appOptionOwnDataValue(
+    options,
+    'sessionProvider',
+  ) as KovoApp['sessionProvider'];
+  const stylesheetsSource = appOptionOwnDataValue(
+    options,
+    'stylesheets',
+  ) as AppOptions['stylesheets'];
+  const tasksSource = appOptionOwnDataValue(options, 'tasks') as AppOptions['tasks'];
+
+  const csrf = csrfSource === undefined ? undefined : snapshotAppCsrfOptions(csrfSource);
+  const document = normalizeAppDocumentOptions(documentSource);
+  const errorShells = snapshotAppErrorShells(errorShellsSource ?? {});
+  const mutationResponses = snapshotAppMutationResponses(mutationResponsesSource ?? {});
+  const requestLimits = normalizeAppRequestLimits(requestLimitsSource);
   // Refuse to boot — by-construction at the bootstrap chokepoint (SPEC §6.6,
   // §9.5; plans/secure-framework.md Tier 1). In production a missing/empty/short
   // framework signing secret (today the CSRF/anonymous-CSRF HMAC secret) or an
@@ -126,31 +183,32 @@ export function createApp<
   validateAppEnv(
     { csrfSecret: csrf?.secret },
     {
-      ...(options.env === undefined ? {} : { env: options.env }),
-      ...(options.envSource === undefined ? {} : { envSource: options.envSource }),
+      ...(env === undefined ? {} : { env }),
+      ...(envSource === undefined ? {} : { envSource }),
     },
   );
 
-  bootstrapEgressFloor(options.egress);
+  bootstrapEgressFloor(egress);
+  ensureKovoLoaderRuntimeClientModule(clientModules);
 
   const authoringContext = appAuthoringContext<AppRequest>();
   const snapshotContext = createAppDeclarationSnapshotContext();
   const routes = snapshotAppRegistry(
     resolveAppAuthoringDeclarations<AppRouteDeclaration<AppRequest>, AppRequest>(
-      options.routes,
+      routesSource,
       authoringContext,
     ) as readonly AppRouteDeclaration<AppRequest>[],
     'createApp.routes',
     (declaration) => snapshotAppRoute(declaration, snapshotContext),
   );
   const liveTargetRenderers = snapshotLiveTargetRenderers(
-    options.liveTargetRenderers ?? registeredGeneratedLiveTargetRenderers(),
+    liveTargetRenderersSource ?? registeredGeneratedLiveTargetRenderers(),
     snapshotContext,
   );
   const authoredMutations = assertUniqueMutationKeys(
     snapshotAppRegistry(
       resolveAppAuthoringDeclarations<AppMutationDeclaration<AppRequest>, AppRequest>(
-        options.mutations,
+        mutationsSource,
         authoringContext,
       ),
       'createApp.mutations',
@@ -159,14 +217,14 @@ export function createApp<
   );
   const authoredQueries = snapshotAppRegistry(
     resolveAppAuthoringDeclarations<AppQueryDeclaration<AppRequest>, AppRequest>(
-      options.queries,
+      queriesSource,
       authoringContext,
     ),
     'createApp.queries',
     (declaration) => snapshotAppQuery(declaration, snapshotContext),
   );
   const endpoints = snapshotAppRegistry(
-    options.endpoints ?? [],
+    endpointsSource ?? [],
     'createApp.endpoints',
     (declaration) => snapshotAppEndpoint(declaration, snapshotContext),
   );
@@ -184,45 +242,37 @@ export function createApp<
   );
   const tasks = assertUniqueTaskKeys(
     resolveAppAuthoringDeclarations<AppTaskDeclaration<AppRequest>, AppRequest>(
-      options.tasks,
+      tasksSource,
       authoringContext,
     ),
   );
-  const clientModules = options.clientModules ?? createMemoryVersionedClientModuleRegistry();
-  ensureKovoLoaderRuntimeClientModule(clientModules);
-
   return closeKovoAppAggregate(
     {
       clientModules,
       diagnostics: [...routeTableDiagnostics(routes), ...routePrefetchGuardDiagnostics(routes)],
-      document: normalizeAppDocumentOptions(options.document),
+      document,
       endpoints,
-      errorShells: options.errorShells ?? {},
+      errorShells,
       liveTargetRenderers,
       mutations,
       queries,
-      requestLimits: normalizeAppRequestLimits(options.requestLimits),
+      requestLimits,
       routes,
-      stylesheets: options.stylesheets ?? [],
+      stylesheets: stylesheetsSource ?? [],
       ...(csrf === undefined ? {} : { csrf }),
-      ...(options.db === undefined ? {} : { db: options.db }),
-      mutationResponses: snapshotAppMutationResponses(options.mutationResponses ?? {}),
+      ...(db === undefined ? {} : { db }),
+      mutationResponses,
       ...(mutationReplayStore === undefined ? {} : { mutationReplayStore }),
-      ...(options.onError === undefined ? {} : { onError: options.onError }),
-      ...(options.renderRoute === undefined ? {} : { renderRoute: options.renderRoute }),
-      ...(options.sessionProvider === undefined
-        ? {}
-        : { sessionProvider: options.sessionProvider }),
+      ...(onError === undefined ? {} : { onError }),
+      ...(renderRoute === undefined ? {} : { renderRoute }),
+      ...(sessionProvider === undefined ? {} : { sessionProvider }),
       tasks,
     } as KovoApp<SessionValue, DbValue, RawRequest, AppRequest>,
     snapshotContext,
   );
 }
 
-function appOptionOwnDataValue(
-  source: object,
-  property: PropertyKey,
-): unknown {
+function appOptionOwnDataValue(source: object, property: PropertyKey): unknown {
   const descriptor = witnessGetOwnPropertyDescriptor(source, property);
   if (descriptor === undefined) return undefined;
   if (!('value' in descriptor)) {

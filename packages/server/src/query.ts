@@ -27,6 +27,7 @@ import {
 import {
   entriesToRecord,
   isSchemaValidationError,
+  snapshotSchemaForRuntime,
   type Schema,
   type SchemaValidationErrorLike,
   type ValidationFailurePayload,
@@ -627,8 +628,7 @@ export const renderQueryEndpointResponse = wireEmitter(
       const authResponse = await renderHttpGuardFailureResponse(result, lifecycleRequest, {
         ...endpointRequest,
         currentUrl:
-          endpointRequest.currentUrl ??
-          queryEndpointCurrentUrl(definition.key, searchEntries),
+          endpointRequest.currentUrl ?? queryEndpointCurrentUrl(definition.key, searchEntries),
       });
       // SPEC §9.4:895: guard-failure responses (303 redirect, 403) also carry the private
       // cache posture — an anon 403 must not be cached and replayed to an authed user.
@@ -778,21 +778,22 @@ function queryArgsSchema<Input>(
   schema: Schema<Input>,
   queryDefinition: QueryDefinition<string, unknown, Input, unknown>,
 ): QueryArgsSchema<Input> {
+  const closedSchema = snapshotSchemaForRuntime(schema, 'query.args');
   const bind = (<Props extends object = any>(
     mapper: (props: Props) => Input,
   ): QueryArgsBinding<Input, Props> => ({
     args: mapper,
     query: queryDefinition,
-    schema,
+    schema: closedSchema,
   })) as QueryArgsSchema<Input>;
 
   witnessDefineProperty(bind, 'parse', {
     configurable: true,
     enumerable: true,
-    value: (input: unknown) => schema.parse(input),
+    value: (input: unknown) => closedSchema.parse(input),
   });
 
-  const asyncSchema = schema as Schema<Input> & {
+  const asyncSchema = closedSchema as Schema<Input> & {
     parseAsync?: (input: unknown) => Promise<Input>;
   };
   if (typeof asyncSchema.parseAsync === 'function') {

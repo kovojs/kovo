@@ -15,9 +15,14 @@ import {
   witnessArrayAppend,
   createWitnessMap,
   witnessFreeze,
+  witnessGetOwnPropertyDescriptor,
+  witnessGetPrototypeOf,
   witnessMapForEach,
   witnessMapGet,
   witnessMapSet,
+  witnessObjectIs,
+  witnessReflectApply,
+  witnessReflectGet,
   witnessSortStrings,
 } from './security-witness-intrinsics.js';
 
@@ -82,6 +87,101 @@ export interface VersionedClientModuleRegistry {
    * already fold shape facts into their own token do not need to call this.
    */
   setRenderPlanFingerprint?(fingerprint: string): void;
+}
+
+/** Pin an injected registry's executable authority while preserving its mutable backing store. */
+export function snapshotVersionedClientModuleRegistry(
+  source: VersionedClientModuleRegistry,
+): VersionedClientModuleRegistry {
+  if ((typeof source !== 'object' && typeof source !== 'function') || source === null) {
+    throw new TypeError('createApp clientModules must be a stable registry object.');
+  }
+  const buildToken = stableClientModuleRegistryMethod(source, 'buildToken')!;
+  const entries = stableClientModuleRegistryMethod(source, 'entries')!;
+  const put = stableClientModuleRegistryMethod(source, 'put')!;
+  const resolve = stableClientModuleRegistryMethod(source, 'resolve')!;
+  const setRenderPlanFingerprint = stableClientModuleRegistryMethod(
+    source,
+    'setRenderPlanFingerprint',
+    true,
+  );
+
+  return witnessFreeze({
+    buildToken() {
+      return witnessReflectApply<string>(buildToken, source, []);
+    },
+    entries() {
+      return witnessReflectApply<readonly VersionedClientModuleInput[]>(entries, source, []);
+    },
+    put(module: VersionedClientModuleInput) {
+      return witnessReflectApply<string>(put, source, [module]);
+    },
+    resolve(href: string) {
+      return witnessReflectApply<ReturnType<VersionedClientModuleRegistry['resolve']>>(
+        resolve,
+        source,
+        [href],
+      );
+    },
+    ...(setRenderPlanFingerprint === undefined
+      ? {}
+      : {
+          setRenderPlanFingerprint(fingerprint: string) {
+            witnessReflectApply(setRenderPlanFingerprint, source, [fingerprint]);
+          },
+        }),
+  });
+}
+
+function stableClientModuleRegistryMethod(
+  source: object,
+  property: keyof VersionedClientModuleRegistry,
+  optional = false,
+): Function | undefined {
+  let owner: object | null = source;
+  for (let depth = 0; owner !== null && depth < 16; depth += 1) {
+    const before = witnessGetOwnPropertyDescriptor(owner, property);
+    const prototype = witnessGetPrototypeOf(owner);
+    const after = witnessGetOwnPropertyDescriptor(owner, property);
+    if (!sameClientModuleMethodDescriptor(before, after)) {
+      throw new TypeError(`createApp clientModules.${property} changed while it was closed.`);
+    }
+    if (before !== undefined) {
+      if (!('value' in before) || typeof before.value !== 'function') {
+        throw new TypeError(`createApp clientModules.${property} must be a stable data method.`);
+      }
+      const observed = witnessReflectGet(source, property, source);
+      if (!witnessObjectIs(observed, before.value)) {
+        throw new TypeError(
+          `createApp clientModules.${property} must resolve to its stable method.`,
+        );
+      }
+      return before.value;
+    }
+    if (witnessGetPrototypeOf(owner) !== prototype) {
+      throw new TypeError(
+        `createApp clientModules.${property} prototype changed while it was closed.`,
+      );
+    }
+    owner = prototype;
+  }
+  if (optional) return undefined;
+  throw new TypeError(`createApp clientModules requires a stable ${property} method.`);
+}
+
+function sameClientModuleMethodDescriptor(
+  left: PropertyDescriptor | undefined,
+  right: PropertyDescriptor | undefined,
+): boolean {
+  if (left === undefined || right === undefined) return left === right;
+  return (
+    'value' in left &&
+    'value' in right &&
+    witnessObjectIs(left.value, right.value) &&
+    left.configurable === right.configurable &&
+    left.enumerable === right.enumerable &&
+    left.writable === right.writable
+  );
 }
 
 /** @internal Request context accepted by the server-owned client-module request path. */
