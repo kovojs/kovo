@@ -1,10 +1,10 @@
 import { StaticExportError, staticExportDiagnostic } from './static-export-diagnostics.js';
 import {
+  buildSecurityResponseHeaders,
   buildSecurityResponseStatus,
   buildSecurityResponseText,
 } from './build-security-intrinsics.js';
 import {
-  securityHeadersGet,
   securityStringIncludes,
   securityStringSplit,
   securityStringToLowerCase,
@@ -40,7 +40,10 @@ export async function readStaticExportReplayedResponse(
   // SPEC §6.6: classification and body capture use boot-pinned web controls. A route cannot hide
   // Content-Disposition or alter status/content type by replacing Headers/Response prototypes.
   const status = buildSecurityResponseStatus(response);
-  const contentType = securityHeadersGet(response.headers, 'content-type');
+  const headers = staticExportHeaders(buildSecurityResponseHeaders(response), {
+    path: staticExportResponsePath(options),
+  });
+  const contentType = headers['content-type'] ?? null;
   const body = await buildSecurityResponseText(response);
   const routeDocumentProtocol =
     options.kind === 'route-document'
@@ -50,6 +53,8 @@ export async function readStaticExportReplayedResponse(
   if (options.kind === 'route-document') {
     const routeOutcomeDiagnostics = routeDocumentNonExportableOutcomeDiagnostics(
       options,
+      status,
+      headers,
       contentType,
       routeDocumentProtocol,
     );
@@ -58,13 +63,19 @@ export async function readStaticExportReplayedResponse(
 
   if (status !== 200 || !isExpectedStaticExportContentType(options, contentType)) {
     throw new StaticExportError(
-      staticExportReplayResponseDiagnostics(options, contentType, routeDocumentProtocol),
+      staticExportReplayResponseDiagnostics(
+        options,
+        status,
+        headers,
+        contentType,
+        routeDocumentProtocol,
+      ),
     );
   }
 
   return {
     body,
-    headers: staticExportHeaders(response.headers, { path: staticExportResponsePath(options) }),
+    headers,
     status,
   };
 }
@@ -75,13 +86,16 @@ function staticExportResponsePath(options: StaticExportReplayedResponseReadOptio
 
 function staticExportReplayResponseDiagnostics(
   options: StaticExportReplayedResponseReadOptions,
+  status: number,
+  headers: Record<string, string>,
   contentType: string | null,
   routeDocumentProtocol: StaticExportDocumentProtocol | undefined,
 ) {
-  const status = buildSecurityResponseStatus(options.response);
   if (options.kind === 'route-document') {
     const routeOutcomeDiagnostics = routeDocumentNonExportableOutcomeDiagnostics(
       options,
+      status,
+      headers,
       contentType,
       routeDocumentProtocol,
     );
@@ -115,22 +129,23 @@ function staticExportReplayResponseDiagnostics(
 
 function routeDocumentNonExportableOutcomeDiagnostics(
   options: StaticExportRouteDocumentResponseOptions,
+  status: number,
+  headers: Record<string, string>,
   contentType: string | null,
   routeDocumentProtocol: StaticExportDocumentProtocol | undefined,
 ) {
-  const { response, routePath } = options;
-  const status = buildSecurityResponseStatus(response);
+  const { routePath } = options;
   if (status >= 300 && status < 400) {
     return [
       staticExportDiagnostic(
         routePath,
-        `KV229 static export cannot export route '${routePath}' because replay returned redirect status ${status} with Location '${securityHeadersGet(response.headers, 'location') ?? 'none'}'. Static export is L0/L1 only; serve this route dynamically or export the redirect target as a route document.`,
+        `KV229 static export cannot export route '${routePath}' because replay returned redirect status ${status} with Location '${headers.location ?? 'none'}'. Static export is L0/L1 only; serve this route dynamically or export the redirect target as a route document.`,
         routePath,
       ),
     ];
   }
 
-  const contentDisposition = securityHeadersGet(response.headers, 'content-disposition');
+  const contentDisposition = headers['content-disposition'] ?? null;
   if (contentDisposition !== null) {
     return [
       staticExportDiagnostic(

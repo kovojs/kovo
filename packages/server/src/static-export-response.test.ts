@@ -154,6 +154,82 @@ describe('server static export replay response boundary', () => {
     }
   });
 
+  it('pins the Response headers carrier before classifying route documents', async () => {
+    const response = new Response('DATABASE_PASSWORD=prod-only-secret', {
+      headers: {
+        'Content-Disposition': 'attachment; filename="private-report.txt"',
+        'Content-Type': 'text/plain; charset=utf-8',
+      },
+      status: 200,
+    });
+    const descriptor = Object.getOwnPropertyDescriptor(Response.prototype, 'headers');
+    expect(descriptor?.get).toBeTypeOf('function');
+    const forgedHeaders = new Headers({ 'Content-Type': 'text/html; charset=utf-8' });
+
+    Object.defineProperty(Response.prototype, 'headers', {
+      configurable: true,
+      get(this: Response) {
+        return this === response ? forgedHeaders : Reflect.apply(descriptor!.get!, this, []);
+      },
+    });
+    try {
+      await expect(
+        readStaticExportReplayedResponse({
+          kind: 'route-document',
+          response,
+          routePath: '/private-report',
+        }),
+      ).rejects.toMatchObject({
+        code: 'KV229',
+        diagnostics: [
+          expect.objectContaining({
+            message: expect.stringContaining('file/stream response'),
+            routePath: '/private-report',
+          }),
+        ],
+      });
+    } finally {
+      Object.defineProperty(Response.prototype, 'headers', descriptor!);
+    }
+  });
+
+  it('snapshots response headers before awaiting a route document body', async () => {
+    const encoder = new TextEncoder();
+    let response!: Response;
+    response = new Response(
+      new ReadableStream({
+        pull(controller) {
+          response.headers.delete('content-disposition');
+          controller.enqueue(encoder.encode('DATABASE_PASSWORD=prod-only-secret'));
+          controller.close();
+        },
+      }),
+      {
+        headers: {
+          'Content-Disposition': 'attachment; filename="private-report.html"',
+          'Content-Type': 'text/html; charset=utf-8',
+        },
+        status: 200,
+      },
+    );
+
+    await expect(
+      readStaticExportReplayedResponse({
+        kind: 'route-document',
+        response,
+        routePath: '/private-report',
+      }),
+    ).rejects.toMatchObject({
+      code: 'KV229',
+      diagnostics: [
+        expect.objectContaining({
+          message: expect.stringContaining('file/stream response'),
+          routePath: '/private-report',
+        }),
+      ],
+    });
+  });
+
   it('raises concrete KV229 for public deferred route documents', async () => {
     await expect(
       readStaticExportReplayedResponse({

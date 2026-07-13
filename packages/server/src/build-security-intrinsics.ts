@@ -4,7 +4,11 @@ import { createHash } from 'node:crypto';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { securityArrayIsArray, securityNumberIsInteger } from './response-security-intrinsics.ts';
+import {
+  securityArrayIsArray,
+  securityHeadersGet,
+  securityNumberIsInteger,
+} from './response-security-intrinsics.ts';
 import {
   createWitnessWeakSet,
   witnessDefineProperty,
@@ -50,6 +54,7 @@ const nativePosixDirname = path.posix.dirname;
 const nativeResponseText = stableOwnFunction(NativeResponse.prototype, 'text');
 const nativeRequestMethod = stableOwnGetter(NativeRequest.prototype, 'method');
 const nativeRequestUrl = stableOwnGetter(NativeRequest.prototype, 'url');
+const nativeResponseHeaders = stableOwnGetter(NativeResponse.prototype, 'headers');
 const nativeResponseStatus = stableOwnGetter(NativeResponse.prototype, 'status');
 const nativeUrlHash = stableOwnGetter(NativeURL.prototype, 'hash');
 const nativeUrlHref = stableOwnGetter(NativeURL.prototype, 'href');
@@ -110,7 +115,10 @@ function rawDigest(
 
 function capturedControlsAreSound(): boolean {
   try {
-    const response = new NativeResponse('control', { status: 201 });
+    const response = new NativeResponse('control', {
+      headers: { 'X-Kovo-Control': 'accepted' },
+      status: 201,
+    });
     const request = new NativeRequest('https://kovo-build-control.test/safe', { method: 'GET' });
     const url = new NativeURL('/safe?proof=1', 'https://kovo-build-control.test');
     const pathControl = nativePathResolve('kovo-build-control', 'child.txt');
@@ -118,6 +126,10 @@ function capturedControlsAreSound(): boolean {
     const fileUrlControl = nativeFileURLToPath('file:///tmp/kovo-build-control.txt');
     return (
       witnessReflectApply<number>(nativeResponseStatus, response, []) === 201 &&
+      securityHeadersGet(
+        witnessReflectApply(nativeResponseHeaders, response, []),
+        'x-kovo-control',
+      ) === 'accepted' &&
       witnessReflectApply<string>(nativeRequestMethod, request, []) === 'GET' &&
       witnessReflectApply<string>(nativeRequestUrl, request, []) ===
         'https://kovo-build-control.test/safe' &&
@@ -460,6 +472,11 @@ export function buildSecurityPosixExtname(value: string): string {
 export function buildSecurityResponseStatus(response: Response): number {
   assertBuildSecurityIntrinsics();
   return witnessReflectApply(nativeResponseStatus, response, []);
+}
+
+export function buildSecurityResponseHeaders(response: Response): Headers {
+  assertBuildSecurityIntrinsics();
+  return witnessReflectApply(nativeResponseHeaders, response, []);
 }
 
 export function buildSecurityResponseText(response: Response): Promise<string> {
