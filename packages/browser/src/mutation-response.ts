@@ -122,9 +122,7 @@ function isIntrinsicArray(value: unknown): value is readonly unknown[] {
   );
 }
 
-function readDenseArray(
-  value: unknown,
-): { length: number; value: readonly unknown[] } | undefined {
+function readDenseArray(value: unknown): { length: number; value: readonly unknown[] } | undefined {
   if (!isIntrinsicArray(value)) return undefined;
   const length = securityGetOwnPropertyDescriptor(value, 'length');
   return length &&

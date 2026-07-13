@@ -99,13 +99,11 @@ export function lowerEventHandlers(
 
     const diagnostics: CompilerDiagnostic[] = [];
     if (!namedHandler) {
-      appendHandlerFact(diagnostics, diagnosticFor(
-        options.fileName,
-        'KV210',
-        options.source,
-        attributeStart,
-        eventName.length,
-      ), 'Handler diagnostics');
+      appendHandlerFact(
+        diagnostics,
+        diagnosticFor(options.fileName, 'KV210', options.source, attributeStart, eventName.length),
+        'Handler diagnostics',
+      );
     }
 
     if (
@@ -114,54 +112,57 @@ export function lowerEventHandlers(
         model,
       })
     ) {
-      appendHandlerFact(diagnostics, kv201Diagnostic(
-        options.fileName,
-        options.source,
-        attributeStart,
-        {
+      appendHandlerFact(
+        diagnostics,
+        kv201Diagnostic(options.fileName, options.source, attributeStart, {
           attributeName: `on:${eventName}`,
           exportName,
           expression,
           params,
-        },
-      ), 'Handler diagnostics');
+        }),
+        'Handler diagnostics',
+      );
     }
 
     const primaryDiagnostic = diagnostics[diagnostics.length - 1];
-    appendHandlerFact(handlers, {
-      attributeName: `on:${eventName}`,
-      attributeEnd,
-      attributeStart,
-      attributeValue: formatKovoModuleRef(
-        kovoModuleRef(clientModuleUrl(options.fileName), exportName, 'handler'),
-      ),
-      ...(eventAttribute.zeroArgArrow
-        ? {
-            arrowBody: {
-              kind: eventAttribute.zeroArgArrow.bodyKind,
-              propertyAccesses: loweredArrowPropertyAccesses(eventAttribute.zeroArgArrow),
-              references: loweredArrowReferences(eventAttribute.zeroArgArrow),
-              source: eventAttribute.zeroArgArrow.body,
-              sourceStart: eventAttribute.zeroArgArrow.bodySourceStart,
-            },
-          }
-        : {}),
-      ...clientConstantDependencies(
-        model.moduleScopeBindings,
-        handlerReferenceNames(eventAttribute),
-        emitAllowedModuleConstants,
-      ),
-      ...clientImportDependencies(
-        model.namedImports,
-        handlerReferenceNames(eventAttribute),
-        emitAllowedImports,
-      ),
-      ...(primaryDiagnostic ? { diagnostic: primaryDiagnostic, diagnostics } : {}),
-      expression,
-      exportName,
-      isBareNamedHandler: namedHandler,
-      params,
-    }, 'Lowered event handlers');
+    appendHandlerFact(
+      handlers,
+      {
+        attributeName: `on:${eventName}`,
+        attributeEnd,
+        attributeStart,
+        attributeValue: formatKovoModuleRef(
+          kovoModuleRef(clientModuleUrl(options.fileName), exportName, 'handler'),
+        ),
+        ...(eventAttribute.zeroArgArrow
+          ? {
+              arrowBody: {
+                kind: eventAttribute.zeroArgArrow.bodyKind,
+                propertyAccesses: loweredArrowPropertyAccesses(eventAttribute.zeroArgArrow),
+                references: loweredArrowReferences(eventAttribute.zeroArgArrow),
+                source: eventAttribute.zeroArgArrow.body,
+                sourceStart: eventAttribute.zeroArgArrow.bodySourceStart,
+              },
+            }
+          : {}),
+        ...clientConstantDependencies(
+          model.moduleScopeBindings,
+          handlerReferenceNames(eventAttribute),
+          emitAllowedModuleConstants,
+        ),
+        ...clientImportDependencies(
+          model.namedImports,
+          handlerReferenceNames(eventAttribute),
+          emitAllowedImports,
+        ),
+        ...(primaryDiagnostic ? { diagnostic: primaryDiagnostic, diagnostics } : {}),
+        expression,
+        exportName,
+        isBareNamedHandler: namedHandler,
+        params,
+      },
+      'Lowered event handlers',
+    );
   }
 
   return handlers;
@@ -179,11 +180,15 @@ function loweredArrowPropertyAccesses(
       'Handler arrow property accesses',
     ) as PropertyAccessPathModel | undefined;
     if (!access) compilerFailClosed(`Handler arrow property accesses[${index}] must be dense.`);
-    appendHandlerFact(result, {
-      end: access.end - arrow.bodySourceStart,
-      path: access.path,
-      start: access.start - arrow.bodySourceStart,
-    }, 'Handler arrow property accesses');
+    appendHandlerFact(
+      result,
+      {
+        end: access.end - arrow.bodySourceStart,
+        path: access.path,
+        start: access.start - arrow.bodySourceStart,
+      },
+      'Handler arrow property accesses',
+    );
   }
   return result;
 }
@@ -200,11 +205,15 @@ function loweredArrowReferences(
       'Handler arrow references',
     ) as IdentifierReferenceModel | undefined;
     if (!reference) compilerFailClosed(`Handler arrow references[${index}] must be dense.`);
-    appendHandlerFact(result, {
-      end: reference.end - arrow.bodySourceStart,
-      name: reference.name,
-      start: reference.start - arrow.bodySourceStart,
-    }, 'Handler arrow references');
+    appendHandlerFact(
+      result,
+      {
+        end: reference.end - arrow.bodySourceStart,
+        name: reference.name,
+        start: reference.start - arrow.bodySourceStart,
+      },
+      'Handler arrow references',
+    );
   }
   return result;
 }
@@ -261,16 +270,20 @@ function versionHandlerDiagnostics(
   const result: CompilerDiagnostic[] = [];
   for (let index = 0; index < source.length; index += 1) {
     const diagnostic = source[index]!;
-    appendHandlerFact(result, diagnostic.help
-      ? {
-          ...diagnostic,
-          help: compilerStringReplaceAll(
-            diagnostic.help,
-            unversionedAttributeValue,
-            versionedAttributeValue,
-          ),
-        }
-      : diagnostic, 'Handler lowering diagnostics');
+    appendHandlerFact(
+      result,
+      diagnostic.help
+        ? {
+            ...diagnostic,
+            help: compilerStringReplaceAll(
+              diagnostic.help,
+              unversionedAttributeValue,
+              versionedAttributeValue,
+            ),
+          }
+        : diagnostic,
+      'Handler lowering diagnostics',
+    );
   }
   return result;
 }
@@ -376,10 +389,14 @@ function clientConstantDependencies(
     ) {
       continue;
     }
-    appendHandlerFact(clientConstants, {
-      name: item.name,
-      source: item.source,
-    }, 'Client handler constants');
+    appendHandlerFact(
+      clientConstants,
+      {
+        name: item.name,
+        source: item.source,
+      },
+      'Client handler constants',
+    );
   }
 
   return clientConstants.length > 0 ? { clientConstants } : {};
@@ -429,26 +446,30 @@ function eventAttributes(model: ComponentModuleModel): Array<{
       }
       const eventName = attribute.domEventName;
       if (!eventName || attribute.expression === undefined) continue;
-      appendHandlerFact(attributes, {
-        attributeEnd: attribute.end,
-        attributeStart: attribute.start,
-        eventName,
-        expression: attribute.expression,
-        ...(attribute.expressionIsBareIdentifier === undefined
-          ? {}
-          : { expressionIsBareIdentifier: attribute.expressionIsBareIdentifier }),
-        ...(attribute.expressionBareIdentifierName === undefined
-          ? {}
-          : { expressionBareIdentifierName: attribute.expressionBareIdentifierName }),
-        ...(attribute.expressionPropertyAccesses
-          ? { expressionPropertyAccesses: attribute.expressionPropertyAccesses }
-          : {}),
-        ...(attribute.expressionReferences
-          ? { expressionReferences: attribute.expressionReferences }
-          : {}),
-        tag: element.tag,
-        ...(attribute.zeroArgArrow ? { zeroArgArrow: attribute.zeroArgArrow } : {}),
-      }, 'Handler event attributes');
+      appendHandlerFact(
+        attributes,
+        {
+          attributeEnd: attribute.end,
+          attributeStart: attribute.start,
+          eventName,
+          expression: attribute.expression,
+          ...(attribute.expressionIsBareIdentifier === undefined
+            ? {}
+            : { expressionIsBareIdentifier: attribute.expressionIsBareIdentifier }),
+          ...(attribute.expressionBareIdentifierName === undefined
+            ? {}
+            : { expressionBareIdentifierName: attribute.expressionBareIdentifierName }),
+          ...(attribute.expressionPropertyAccesses
+            ? { expressionPropertyAccesses: attribute.expressionPropertyAccesses }
+            : {}),
+          ...(attribute.expressionReferences
+            ? { expressionReferences: attribute.expressionReferences }
+            : {}),
+          tag: element.tag,
+          ...(attribute.zeroArgArrow ? { zeroArgArrow: attribute.zeroArgArrow } : {}),
+        },
+        'Handler event attributes',
+      );
     }
   }
 
@@ -713,14 +734,18 @@ function extractElementParams(
   const params: ElementParam[] = [];
   for (let index = 0; index < assigned.length; index += 1) {
     const { attributeName, candidate } = assigned[index]!;
-    appendHandlerFact(params, {
-      attributeName,
-      expression: candidate.expression,
-      type:
-        candidate.type ??
-        inferElementParamType(candidate.expression, zeroArgArrow, parsedPropertyAccesses),
-      value: `{${candidate.expression}}`,
-    }, 'Handler element parameters');
+    appendHandlerFact(
+      params,
+      {
+        attributeName,
+        expression: candidate.expression,
+        type:
+          candidate.type ??
+          inferElementParamType(candidate.expression, zeroArgArrow, parsedPropertyAccesses),
+        value: `{${candidate.expression}}`,
+      },
+      'Handler element parameters',
+    );
   }
   return params;
 }
@@ -865,10 +890,14 @@ function serializableBareReferences(
       compilerSetHas(eligibleBareReferenceNames, reference.name) &&
       !compilerSetHas(localNames, reference.name)
     ) {
-      appendHandlerFact(result, {
-        expression: reference.name,
-        terminalName: reference.name,
-      }, 'Serializable handler bare references');
+      appendHandlerFact(
+        result,
+        {
+          expression: reference.name,
+          terminalName: reference.name,
+        },
+        'Serializable handler bare references',
+      );
     }
   }
   return result;

@@ -4,10 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { publicAccess } from './access.js';
 import { createApp, createRequestHandler } from './app.js';
-import {
-  createAppDeclarationSnapshotContext,
-  snapshotAppEndpoint,
-} from './app-snapshot.js';
+import { createAppDeclarationSnapshotContext, snapshotAppEndpoint } from './app-snapshot.js';
 import { createMemoryVersionedClientModuleRegistry } from './client-modules.js';
 import { csrfToken, type CsrfOptions } from './csrf.js';
 import { domain } from './domain.js';
@@ -34,10 +31,7 @@ describe('closed app declaration semantics', () => {
       webhookDefinition: {
         handler: () => undefined,
         input: s.object({ id: s.string() }),
-        verify: customVerifier(
-          'app-snapshot-truthy-webhook',
-          async () => ({ ok: false }) as never,
-        ),
+        verify: customVerifier('app-snapshot-truthy-webhook', async () => ({ ok: false }) as never),
       },
     };
     const snapshot = snapshotAppEndpoint(

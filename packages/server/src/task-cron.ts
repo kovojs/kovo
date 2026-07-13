@@ -84,7 +84,8 @@ export function createRecurringTaskMaterializer(options: {
 
   return {
     async materializeDue(materializeOptions = {}) {
-      const now = materializeOptions.now ?? (await occurrenceStore.currentTime?.()) ?? taskNewDate();
+      const now =
+        materializeOptions.now ?? (await occurrenceStore.currentTime?.()) ?? taskNewDate();
       const backfillLimit = boundedBackfillLimit(materializeOptions.backfillLimit);
       let enqueued = 0;
       const occurrences: Date[] = [];

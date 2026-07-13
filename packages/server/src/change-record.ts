@@ -279,7 +279,11 @@ function snapshotChangeKeys(keys: readonly string[]): readonly string[] {
   const snapshot: string[] = [];
   for (let index = 0; index < keys.length; index += 1) {
     const descriptor = witnessGetOwnPropertyDescriptor(keys, index);
-    if (descriptor === undefined || !('value' in descriptor) || typeof descriptor.value !== 'string') {
+    if (
+      descriptor === undefined ||
+      !('value' in descriptor) ||
+      typeof descriptor.value !== 'string'
+    ) {
       throw new TypeError('Mutation invalidation keys must contain stable string data properties.');
     }
     witnessArrayAppend(snapshot, descriptor.value, 'Mutation invalidation key snapshot');

@@ -26,11 +26,7 @@ export function lowerNavigationLinks(
 ): void {
   const length = compilerArrayLength(elements, 'Link navigation elements');
   for (let index = 0; index < length; index += 1) {
-    const link = compilerOwnDataValue(
-      elements,
-      index,
-      'Link navigation elements',
-    ) as JsxIrElement;
+    const link = compilerOwnDataValue(elements, index, 'Link navigation elements') as JsxIrElement;
     if (link.tag !== 'Link') continue;
     const toAttribute = attributeByName(link, 'to');
     if (!toAttribute?.source || !('name' in toAttribute.source)) continue;

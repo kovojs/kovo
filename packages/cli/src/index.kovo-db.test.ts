@@ -346,9 +346,8 @@ describe('kovo db', () => {
   });
 
   it('does not write generated migrations through a symlinked migrations root', async () => {
-    const { dataDir, migrationsDir, root, schemaPath } = writeDbCommandFixture(
-      'generated-symlink-root',
-    );
+    const { dataDir, migrationsDir, root, schemaPath } =
+      writeDbCommandFixture('generated-symlink-root');
     const outside = mkdtempSync(join(dirname(root), '.tmp-kovo-db-generate-outside-'));
     roots.push(outside);
     rmSync(migrationsDir, { force: true, recursive: true });
@@ -376,9 +375,8 @@ describe('kovo db', () => {
   });
 
   it('does not execute migrations read through a symlinked migrations root', async () => {
-    const { dataDir, migrationsDir, root, schemaPath } = writeDbCommandFixture(
-      'migrate-symlink-root',
-    );
+    const { dataDir, migrationsDir, root, schemaPath } =
+      writeDbCommandFixture('migrate-symlink-root');
     const outside = mkdtempSync(join(dirname(root), '.tmp-kovo-db-migrate-outside-'));
     roots.push(outside);
     writeFileSync(

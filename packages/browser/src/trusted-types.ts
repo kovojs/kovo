@@ -12,9 +12,7 @@
  *
  * @internal
  */
-export function createKovoTrustedTypesSecurityControls(
-  scope: typeof globalThis = globalThis,
-) {
+export function createKovoTrustedTypesSecurityControls(scope: typeof globalThis = globalThis) {
   const NativeObject = Object;
   const NativeReflect = Reflect;
   const nativeReflectApply = NativeReflect.apply;
@@ -22,9 +20,8 @@ export function createKovoTrustedTypesSecurityControls(
   const nativeGetPrototypeOf = NativeObject.getPrototypeOf;
   const factory = (scope as { trustedTypes?: object }).trustedTypes;
   const NativeTrustedHTML = (scope as { TrustedHTML?: { prototype: object } }).TrustedHTML;
-  const NativeTrustedScriptURL = (
-    scope as { TrustedScriptURL?: { prototype: object } }
-  ).TrustedScriptURL;
+  const NativeTrustedScriptURL = (scope as { TrustedScriptURL?: { prototype: object } })
+    .TrustedScriptURL;
 
   function apply<Return>(method: Function, receiver: unknown, args: readonly unknown[]): Return {
     return nativeReflectApply(method, receiver, args) as Return;
@@ -183,12 +180,7 @@ export function createKovoTrustedTypesSecurityControls(
   }
 
   function createScriptURL(input: string): string {
-    if (
-      !controlsSound ||
-      !scriptUrlControlsVerified ||
-      !policy ||
-      !policyCreateScriptURL
-    ) {
+    if (!controlsSound || !scriptUrlControlsVerified || !policy || !policyCreateScriptURL) {
       return input;
     }
     const value = apply<unknown>(policyCreateScriptURL, policy, [input]);

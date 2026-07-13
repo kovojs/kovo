@@ -41,10 +41,7 @@ export function snapshotAppMutationResponses(value: unknown): AppMutationRespons
     const normalized =
       typeof policy === 'function'
         ? (policy as AppMutationResponsePolicy)
-        : normalizeAppMutationResponseOptions(
-            policy,
-            `createApp mutationResponses.${key}`,
-          );
+        : normalizeAppMutationResponseOptions(policy, `createApp mutationResponses.${key}`);
     witnessDefineProperty(snapshot, key, {
       configurable: true,
       enumerable: true,
@@ -72,15 +69,11 @@ function supportedResponseOptionKeys(source: object, label: string): void {
   }
 }
 
-function frozenResponseOptions(
-  options: AppMutationResponseOptions,
-): AppMutationResponseOptions {
+function frozenResponseOptions(options: AppMutationResponseOptions): AppMutationResponseOptions {
   return witnessFreeze(options) as AppMutationResponseOptions;
 }
 
-function frozenFragmentRenderers(
-  renderers: FragmentRenderer[],
-): readonly FragmentRenderer[] {
+function frozenFragmentRenderers(renderers: FragmentRenderer[]): readonly FragmentRenderer[] {
   return witnessFreeze(renderers);
 }
 
@@ -98,9 +91,10 @@ function frozenStylesheet(stylesheet: StylesheetAsset): StylesheetAsset {
   return witnessFreeze(stylesheet) as StylesheetAsset;
 }
 
-function frozenRedirect(
-  redirect: { location: string; status: 303 },
-): NonNullable<AppMutationResponseOptions['redirectTo']> {
+function frozenRedirect(redirect: {
+  location: string;
+  status: 303;
+}): NonNullable<AppMutationResponseOptions['redirectTo']> {
   return witnessFreeze(redirect) as NonNullable<AppMutationResponseOptions['redirectTo']>;
 }
 

@@ -552,9 +552,7 @@ export function normalizeNumericLengths(css: string): string {
     /([a-z-]+):(-?\d+(?:\.\d+)?)([;}])/g,
     css,
     (match, property: string, value: string, terminator: string) =>
-      compilerStringStartsWith(property, '--') ||
-      isUnitlessCssProperty(property) ||
-      value === '0'
+      compilerStringStartsWith(property, '--') || isUnitlessCssProperty(property) || value === '0'
         ? match
         : `${property}:${value}px${terminator}`,
   );

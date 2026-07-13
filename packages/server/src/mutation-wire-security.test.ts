@@ -286,9 +286,7 @@ describe('mutation wire intrinsic security', () => {
 
     expect(failureResponse.body).toContain('safe failure');
     expect(failureResponse.body).not.toContain('admin failure');
-    expect(reauthResponse.headers['Kovo-Reauth']).toBe(
-      '/login?next=%2Faccount%3Ftab%3Dsecurity',
-    );
+    expect(reauthResponse.headers['Kovo-Reauth']).toBe('/login?next=%2Faccount%3Ftab%3Dsecurity');
     expect(unsafeNextResponse.headers['Kovo-Reauth']).toBe('/login?next=%2F');
   });
 

@@ -7,10 +7,7 @@ import { pgTable, text } from 'drizzle-orm/pg-core';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { role } from '../../better-auth/src/guards.js';
-import {
-  drainCrossOwnerReadAuditFacts,
-  managedDb,
-} from './managed-db.js';
+import { drainCrossOwnerReadAuditFacts, managedDb } from './managed-db.js';
 import { explainGuard } from './guards.js';
 import { createPostgresAppRuntimeDb } from './postgres-runtime.js';
 

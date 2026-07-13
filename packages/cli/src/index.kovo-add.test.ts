@@ -936,7 +936,9 @@ describe('kovo add', () => {
     const reviewed = '{"private":true,"outside":"reviewed"}\n';
     writeFileSync(outside, reviewed, 'utf8');
     symlinkSync(outside, join(root, 'package.json'));
-    const install = vi.spyOn(addCommandShell, 'execFileSync').mockImplementation(() => Buffer.alloc(0));
+    const install = vi
+      .spyOn(addCommandShell, 'execFileSync')
+      .mockImplementation(() => Buffer.alloc(0));
     const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
     const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
 
@@ -975,7 +977,9 @@ describe('kovo add', () => {
     )}\n`;
     writeFileSync(outside, reviewed, 'utf8');
     linkSync(outside, join(root, 'package.json'));
-    const install = vi.spyOn(addCommandShell, 'execFileSync').mockImplementation(() => Buffer.alloc(0));
+    const install = vi
+      .spyOn(addCommandShell, 'execFileSync')
+      .mockImplementation(() => Buffer.alloc(0));
     const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
     const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
 

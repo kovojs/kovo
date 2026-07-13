@@ -116,12 +116,7 @@ export async function dispatchMatchedAppRequest({
     });
     const authFailure = await runEndpointAuth(match.endpoint, endpointRequest);
     if (authFailure) return finalizeRawWebResponse(authFailure, request);
-    const csrfFailure = await validateEndpointCsrf(
-      match.endpoint,
-      request,
-      app.csrf,
-      exactMethod,
-    );
+    const csrfFailure = await validateEndpointCsrf(match.endpoint, request, app.csrf, exactMethod);
     if (csrfFailure) return finalizeRawWebResponse(csrfFailure, request);
     if (isWebhookEndpoint(match.endpoint)) {
       const accessFailure = await runEndpointAccessDecision(match.endpoint, endpointRequest);
@@ -171,10 +166,9 @@ export async function dispatchMatchedAppRequest({
     );
   }
 
-  return routeResponseToWebResponse(
-    await renderAppErrorDocumentResponse(app, request, 404),
-    { method: exactMethod },
-  );
+  return routeResponseToWebResponse(await renderAppErrorDocumentResponse(app, request, 404), {
+    method: exactMethod,
+  });
 }
 
 function isWebhookEndpoint(

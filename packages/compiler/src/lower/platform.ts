@@ -6,10 +6,7 @@ import {
   type JsxElementModel,
 } from '../scan/parse.js';
 import { escapeAttribute } from '../shared.js';
-import {
-  compilerArrayLength,
-  compilerOwnDataValue,
-} from '../compiler-security-intrinsics.js';
+import { compilerArrayLength, compilerOwnDataValue } from '../compiler-security-intrinsics.js';
 
 /**
  * @internal A lowered platform-behavior substitution: a provable event handler the compiler
@@ -159,11 +156,7 @@ function elementAttributeMatching(
 ): JsxAttributeModel | undefined {
   const length = compilerArrayLength(element.attributes, label);
   for (let index = 0; index < length; index += 1) {
-    const attribute = compilerOwnDataValue(
-      element.attributes,
-      index,
-      label,
-    ) as JsxAttributeModel;
+    const attribute = compilerOwnDataValue(element.attributes, index, label) as JsxAttributeModel;
     if (predicate(attribute)) return attribute;
   }
   return undefined;

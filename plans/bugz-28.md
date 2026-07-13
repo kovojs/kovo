@@ -1742,7 +1742,7 @@ build:dist` passes.
       `packages/server/src/{vite-build-assets,vite-build-output}.ts`
   - A selective late `Array.prototype.map` replacement targeted the genuine manifest asset array
     before `viteDistSourcePath()` ran and returned `{ path: '/assets/credentials.txt', source:
-    '/tmp/.../credentials.txt' }`. The static build completed and copied the host-only credential
+'/tmp/.../credentials.txt' }`. The static build completed and copied the host-only credential
     bytes into the public export, bypassing the Vite dist-root confinement check entirely.
   - **Acceptance:** manifest/build asset carriers are exact own-data snapshots, and every generated
     source path is derived inside the reviewed dist root after snapshotting. Late traversal,
@@ -3282,9 +3282,9 @@ build:dist` passes.
     chosen collisions nor late/import-order poison can cross-bind module bytes, forge an unchanged
     build token, or alias unversioned/out-of-registry paths.
   - **Evidence:** `pnpm exec vitest run --config vitest.bugz.config.ts
-    packages/core/src/internal/client-module-url.content-identity.test.ts
-    packages/core/src/internal/render-plan-token.test.ts packages/compiler/src/handler-lowering.test.ts
-    packages/server/src/client-modules.test.ts packages/server/src/vite-build.test.ts` passes; fixed
+packages/core/src/internal/client-module-url.content-identity.test.ts
+packages/core/src/internal/render-plan-token.test.ts packages/compiler/src/handler-lowering.test.ts
+packages/server/src/client-modules.test.ts packages/server/src/vite-build.test.ts` passes; fixed
     32-bit FNV collisions produce distinct 256-bit versions and poisoned collection/hash controls
     cannot cross-bind module bytes or render-plan fingerprints.
 
@@ -3375,7 +3375,7 @@ build:dist` passes.
     delivery accounting consume the same exact byte snapshot; fixed collision regressions produce
     distinct paths without weakening ordinary deterministic builds.
   - **Evidence:** `pnpm exec vitest run --config vitest.bugz.config.ts
-    packages/compiler/src/css.test.ts` passes; its fixed 32-bit-prefix collision emits distinct
+packages/compiler/src/css.test.ts` passes; its fixed 32-bit-prefix collision emits distinct
     256-bit paths while manifest, CSP, and byte-accounting assertions remain green.
 
 - [x] **H28 - Mutable static-header storage injects deployable Set-Cookie.**

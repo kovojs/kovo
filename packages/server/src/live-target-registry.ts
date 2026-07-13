@@ -1,9 +1,6 @@
 import type { LiveTargetRenderer } from './mutation-wire.js';
 import { appendDenseOwnArrayValue, denseOwnArrayForEach } from './registry-lookup.js';
-import {
-  securityJsonStringify,
-  securityStringEndsWith,
-} from './response-security-intrinsics.js';
+import { securityJsonStringify, securityStringEndsWith } from './response-security-intrinsics.js';
 import {
   createWitnessMap,
   witnessGetOwnPropertyDescriptor,
@@ -17,10 +14,7 @@ import {
 /** @internal Compiler-emitted module namespace that may contain live-target renderer exports. */
 export type GeneratedLiveTargetModule<_Request = unknown> = Record<string, unknown>;
 
-const registeredRenderersByComponent = createWitnessMap<
-  string,
-  LiveTargetRenderer<unknown>
->();
+const registeredRenderersByComponent = createWitnessMap<string, LiveTargetRenderer<unknown>>();
 
 /**
  * @internal Register one compiler-emitted live-target renderer as the generated module loads.
@@ -147,10 +141,7 @@ function ownDataValue(value: unknown, key: PropertyKey): unknown {
   return descriptor !== undefined && 'value' in descriptor ? descriptor.value : undefined;
 }
 
-function denseOwnArrayEvery(
-  value: unknown,
-  predicate: (entry: unknown) => boolean,
-): boolean {
+function denseOwnArrayEvery(value: unknown, predicate: (entry: unknown) => boolean): boolean {
   if (!witnessIsArray(value)) return false;
   let valid = true;
   try {

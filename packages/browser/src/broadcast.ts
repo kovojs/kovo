@@ -227,9 +227,7 @@ export function installMutationBroadcast(
         }),
         // bugs-1 F13: stamp the sender's principal fingerprint so receivers can discard
         // cross-principal rebroadcasts (SPEC §9.3).
-        ...(runtimeOptions.principal === undefined
-          ? {}
-          : { principal: runtimeOptions.principal }),
+        ...(runtimeOptions.principal === undefined ? {} : { principal: runtimeOptions.principal }),
         type: 'kovo:mutation-response',
       });
       if (!envelope) return;

@@ -707,8 +707,7 @@ function snapshotExecutableVerifier(value: unknown): PinnedExecutableVerifier | 
       auditName: value.resolved.scheme,
       kind: 'hmac',
       verifier: value,
-      verify: async (request) =>
-        (await witnessReflectApply(verify, value, [request])) === true,
+      verify: async (request) => (await witnessReflectApply(verify, value, [request])) === true,
     };
   }
   if (typeof value !== 'object' || value === null || witnessIsArray(value)) return undefined;

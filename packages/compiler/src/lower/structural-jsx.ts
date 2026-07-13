@@ -248,11 +248,7 @@ export function lowerStructuralJsx(
     appendCompilerFact(compilerEscapeImports, 'escapeText', 'Compiler escape imports');
   }
   if (needsSafeJsxSpreadHelper && !hasCompilerEscapeImport(model, 'kovoSafeJsxSpread')) {
-    appendCompilerFact(
-      compilerEscapeImports,
-      'kovoSafeJsxSpread',
-      'Compiler escape imports',
-    );
+    appendCompilerFact(compilerEscapeImports, 'kovoSafeJsxSpread', 'Compiler escape imports');
   }
   const compilerEscapeImportLength = compilerArrayLength(
     compilerEscapeImports,
@@ -489,11 +485,7 @@ function lowerViewTransitionNames(
     const attribute = attributeByName(element, 'viewTransitionName');
     if (!attribute?.source || !('name' in attribute.source)) continue;
     if (attribute.source.value !== undefined) {
-      appendCompilerFact(
-        stamps,
-        { name: attribute.source.value },
-        'View-transition stamps',
-      );
+      appendCompilerFact(stamps, { name: attribute.source.value }, 'View-transition stamps');
       mergeStyle(
         element,
         `view-transition-name: ${attribute.source.value}`,
@@ -553,12 +545,7 @@ function lowerInlineAttributeDerivesInIr(
       if (!attribute.source || !('name' in attribute.source)) continue;
       if (attribute.source.name === 'viewTransitionName') continue;
       if (inlineAttributeDeriveSkippedBySpan(attribute.source, options)) continue;
-      const derive = inlineAttributeDerive(
-        attribute.source,
-        element,
-        componentName,
-        knownQueries,
-      );
+      const derive = inlineAttributeDerive(attribute.source, element, componentName, knownQueries);
       if (derive === null) continue;
       appendCompilerFact(derives, derive, 'Inline attribute derives');
       if (derive.source === 'query') queryDeriveCount += 1;
@@ -1042,8 +1029,10 @@ function numericAttributeExpression(
 
   const roots = rootsForPropertyAccesses(attribute.expressionPropertyAccesses ?? []);
   if (
-    compilerArrayLength(compilerSetValues(roots, 'Numeric reactive roots'), 'Numeric reactive roots') ===
-      1 &&
+    compilerArrayLength(
+      compilerSetValues(roots, 'Numeric reactive roots'),
+      'Numeric reactive roots',
+    ) === 1 &&
     compilerSetHas(roots, root)
   ) {
     return compilerStringTrim(attribute.expression);
@@ -1512,9 +1501,7 @@ function lowerInlineTextBindings(
           context: 'text',
           expression: binding,
           sink: 'textContent',
-          source: compilerStringStartsWith(binding, 'state.')
-            ? 'client-state'
-            : 'client-query',
+          source: compilerStringStartsWith(binding, 'state.') ? 'client-state' : 'client-query',
           writer: 'inline text binding',
         }),
         'Inline text output contexts',
@@ -1584,9 +1571,7 @@ function lowerInlineTextBindings(
           context: 'text',
           expression: binding,
           sink: 'textContent',
-          source: compilerStringStartsWith(binding, 'state.')
-            ? 'client-state'
-            : 'client-query',
+          source: compilerStringStartsWith(binding, 'state.') ? 'client-state' : 'client-query',
           writer: 'inline mixed text binding',
         }),
         'Inline mixed text output contexts',
@@ -1637,10 +1622,7 @@ function escapeStaticTextInterpolations(
     if (compilerSetHas(boundElementStarts, element.element.start)) continue;
 
     let generatedBinding = false;
-    const attributeLength = compilerArrayLength(
-      element.attributes,
-      'Static text JSX attributes',
-    );
+    const attributeLength = compilerArrayLength(element.attributes, 'Static text JSX attributes');
     for (let attributeIndex = 0; attributeIndex < attributeLength; attributeIndex += 1) {
       const attribute = compilerOwnDataValue(
         element.attributes,
@@ -1711,10 +1693,7 @@ function shouldEscapeStaticTextExpression(
         componentIndex,
         'Static text components',
       ) as ComponentModuleModel['components'][number];
-      const inputLength = compilerArrayLength(
-        component.renderInputs,
-        'Static text render inputs',
-      );
+      const inputLength = compilerArrayLength(component.renderInputs, 'Static text render inputs');
       for (let inputIndex = 0; inputIndex < inputLength; inputIndex += 1) {
         const input = compilerOwnDataValue(
           component.renderInputs,
@@ -1792,11 +1771,7 @@ function appendCompilerFacts<Value>(
 ): void {
   const length = compilerArrayLength(values, label);
   for (let index = 0; index < length; index += 1) {
-    appendCompilerFact(
-      target,
-      compilerOwnDataValue(values, index, label) as Value,
-      label,
-    );
+    appendCompilerFact(target, compilerOwnDataValue(values, index, label) as Value, label);
   }
 }
 
@@ -1900,13 +1875,9 @@ function inlineAttributeDerive(
     if (compilerSetHas(knownQueries, root)) compilerSetAdd(queryRoots, root);
   }
   const queryRootValues = compilerSetValues(queryRoots, 'Inline attribute query roots');
-  const queryRootLength = compilerArrayLength(
-    queryRootValues,
-    'Inline attribute query roots',
-  );
+  const queryRootLength = compilerArrayLength(queryRootValues, 'Inline attribute query roots');
   const stateOnly =
-    rootLength > 0 &&
-    compilerSetEvery(roots, 'Inline attribute roots', (root) => root === 'state');
+    rootLength > 0 && compilerSetEvery(roots, 'Inline attribute roots', (root) => root === 'state');
   const clockInputs = clockQueryInputsFromRoots(roots, knownQueries);
   if (queryRootLength !== 1 && !stateOnly && !clockInputs) return null;
   if (queryRootLength > 0 && compilerSetHas(roots, 'state')) return null;
@@ -1915,11 +1886,9 @@ function inlineAttributeDerive(
     ? 'state'
     : clockInputs
       ? 'now'
-      : (compilerOwnDataValue(
-          queryRootValues,
-          0,
-          'Inline attribute query roots',
-        ) as string | undefined);
+      : (compilerOwnDataValue(queryRootValues, 0, 'Inline attribute query roots') as
+          | string
+          | undefined);
   if (!query) return null;
 
   return {
@@ -1963,19 +1932,12 @@ function inlineViewTransitionNameDerive(
     if (compilerSetHas(knownQueries, root)) compilerSetAdd(queryRoots, root);
   }
   const queryRootValues = compilerSetValues(queryRoots, 'View-transition query roots');
-  const queryRootLength = compilerArrayLength(
-    queryRootValues,
-    'View-transition query roots',
-  );
+  const queryRootLength = compilerArrayLength(queryRootValues, 'View-transition query roots');
   const stateOnly =
     rootLength > 0 && compilerSetEvery(roots, 'View-transition roots', (root) => root === 'state');
   const soleQuery =
     queryRootLength === 1
-      ? (compilerOwnDataValue(
-          queryRootValues,
-          0,
-          'View-transition query roots',
-        ) as string)
+      ? (compilerOwnDataValue(queryRootValues, 0, 'View-transition query roots') as string)
       : undefined;
   const queryOnly =
     soleQuery !== undefined &&
@@ -2270,11 +2232,7 @@ function emitDerive(options: EmitDeriveOptions): { exportName: string; stampName
     if (fact) appendCompilerFact(options.stateDerives, fact, 'Structural state derives');
   }
   if (options.outputContext && options.outputContexts) {
-    appendCompilerFact(
-      options.outputContexts,
-      options.outputContext,
-      'Structural output contexts',
-    );
+    appendCompilerFact(options.outputContexts, options.outputContext, 'Structural output contexts');
   }
   return { exportName, stampName };
 }
@@ -2518,10 +2476,7 @@ function inlineAttributeDeriveSkippedBySpan(
   const length = compilerArrayLength(spans, 'Skipped inline derive spans');
   for (let index = 0; index < length; index += 1) {
     const span = compilerOwnDataValue(spans, index, 'Skipped inline derive spans') as SourceSpan;
-    if (
-      attribute.expressionStart >= span.start &&
-      attribute.expressionEnd <= span.end
-    ) {
+    if (attribute.expressionStart >= span.start && attribute.expressionEnd <= span.end) {
       return true;
     }
   }
@@ -2641,7 +2596,11 @@ function styleObjectDeriveExpression(entries: readonly ObjectLiteralEntry[]): st
   const parts: string[] = [];
   const length = compilerArrayLength(entries, 'Style object entries');
   for (let index = 0; index < length; index += 1) {
-    const entry = compilerOwnDataValue(entries, index, 'Style object entries') as ObjectLiteralEntry;
+    const entry = compilerOwnDataValue(
+      entries,
+      index,
+      'Style object entries',
+    ) as ObjectLiteralEntry;
     if (entry.value === undefined) continue;
     appendCompilerFact(
       parts,
@@ -2692,10 +2651,7 @@ function derivePrefixInsertionOffset(source: string): number {
       /^\/\*\*?[\s\S]*?\*\/[ \t]*(?:\r?\n)?/,
       compilerStringSlice(source, offset),
     );
-    if (
-      !comment ||
-      !compilerRegExpTest(/@jsx(?:ImportSource|Runtime|Frag)?(?:\s|$)/, comment[0])
-    ) {
+    if (!comment || !compilerRegExpTest(/@jsx(?:ImportSource|Runtime|Frag)?(?:\s|$)/, comment[0])) {
       break;
     }
 
@@ -2707,9 +2663,7 @@ function derivePrefixInsertionOffset(source: string): number {
 }
 
 function trimTrailingSemicolon(value: string): string {
-  return compilerStringTrim(
-    compilerRegExpReplace(/;$/, compilerStringTrim(value), ''),
-  );
+  return compilerStringTrim(compilerRegExpReplace(/;$/, compilerStringTrim(value), ''));
 }
 
 function isStatePath(path: string): boolean {

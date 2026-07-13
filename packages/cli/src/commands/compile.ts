@@ -355,9 +355,7 @@ async function runAddCommandWithOutputBoundary(
     );
   }
 
-  lines.push(
-    `SUMMARY total=${options.components.length} outDir=${JSON.stringify(resolvedOutDir)}`,
-  );
+  lines.push(`SUMMARY total=${options.components.length} outDir=${JSON.stringify(resolvedOutDir)}`);
   return { exitCode: 0, output: `${lines.join('\n')}\n` };
 }
 
@@ -370,9 +368,7 @@ async function missingAddPackageDependencies(
   if (!packageJsonPath) return packageNames;
   const parsed = await readAddPackageJson(packageJsonPath);
   if (parsed === undefined) return packageNames;
-  return packageNames.filter(
-    (packageName) => !packageJsonDeclaresPackage(parsed, packageName),
-  );
+  return packageNames.filter((packageName) => !packageJsonDeclaresPackage(parsed, packageName));
 }
 
 type EnsureAddPackageDependenciesResult =

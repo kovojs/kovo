@@ -218,11 +218,7 @@ export function normalizeAppRequestLimits(
     'maxQueryListItems',
     'requestLimits.maxQueryListItems',
   );
-  const mutations = requestLimitOwnDataValue(
-    source,
-    'mutations',
-    'requestLimits.mutations',
-  );
+  const mutations = requestLimitOwnDataValue(source, 'mutations', 'requestLimits.mutations');
   const perIp = requestLimitOwnDataValue(source, 'perIp', 'requestLimits.perIp') as
     | AppRateLimitOptions
     | false

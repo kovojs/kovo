@@ -619,16 +619,18 @@ export function responseFragmentApplyInvariantFindings(filePath, text) {
     );
   }
 
-  if (!/\bfunction\s+p\s*\([\s\S]{0,400}\bcreateHTML\s*:\s*\(\s*html\s*:\s*string\s*\)\s*=>\s*string/.test(source)) {
+  if (
+    !/\bfunction\s+p\s*\([\s\S]{0,400}\bcreateHTML\s*:\s*\(\s*html\s*:\s*string\s*\)\s*=>\s*string/.test(
+      source,
+    )
+  ) {
     findings.push(
       `${filePath}: response-fragment HTML sink must receive its Trusted Types mint as an explicit apply-closure control`,
     );
   }
 
   if (
-    !/\bimport\s*\{\s*kovoCreateHTML\s*\}\s*from\s*['"]\.\/trusted-types\.js['"]/.test(
-      source,
-    ) ||
+    !/\bimport\s*\{\s*kovoCreateHTML\s*\}\s*from\s*['"]\.\/trusted-types\.js['"]/.test(source) ||
     !/\bp\s*\(\s*fragments\s*,\s*findFragmentTarget\s*,\s*security\s*,\s*kovoCreateHTML\s*\)/.test(
       source,
     )

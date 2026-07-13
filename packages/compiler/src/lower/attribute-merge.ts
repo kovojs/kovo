@@ -264,11 +264,7 @@ export function renderMergedAttributes(attributes: readonly MergeableAttribute[]
     appendMergeFact(
       rendered,
       renderMergedAttribute(
-        compilerOwnDataValue(
-          attributes,
-          index,
-          'Rendered merged attributes',
-        ) as MergeableAttribute,
+        compilerOwnDataValue(attributes, index, 'Rendered merged attributes') as MergeableAttribute,
       ),
       'Rendered merged attributes',
     );
@@ -323,9 +319,10 @@ function staticLiteralAttributeValue(
   if (value === null) return undefined;
   return {
     kind: 'expression',
-    source: source === undefined
-      ? (compilerJsonStringify(value) ?? 'undefined')
-      : compilerStringTrim(source),
+    source:
+      source === undefined
+        ? (compilerJsonStringify(value) ?? 'undefined')
+        : compilerStringTrim(source),
   };
 }
 
@@ -610,9 +607,7 @@ function staticString(value: MergeableAttributeValue | undefined): string | unde
 }
 
 function trimTrailingSemicolon(value: string): string {
-  return compilerStringTrim(
-    compilerRegExpReplace(/;$/, compilerStringTrim(value), ''),
-  );
+  return compilerStringTrim(compilerRegExpReplace(/;$/, compilerStringTrim(value), ''));
 }
 
 function appendMergeFact<Value>(target: Value[], value: Value, label: string): void {

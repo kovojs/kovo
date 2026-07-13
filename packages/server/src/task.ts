@@ -320,7 +320,10 @@ function snapshotTaskDefinition(
   const retryValue = taskOptionalOwnDataValue(definition, 'retry');
   let retry: TaskDefinition['retry'];
   if (retryValue !== undefined) {
-    if ((typeof retryValue !== 'object' && typeof retryValue !== 'function') || retryValue === null) {
+    if (
+      (typeof retryValue !== 'object' && typeof retryValue !== 'function') ||
+      retryValue === null
+    ) {
       throw new TypeError('task({ retry }) must be an object.');
     }
     const backoff = taskOptionalOwnDataValue(retryValue, 'backoff');

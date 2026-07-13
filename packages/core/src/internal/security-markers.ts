@@ -493,10 +493,6 @@ function markSecurityDecision<
   const Name extends string,
   FunctionValue extends AnyFunction,
 >(kind: Kind, name: Name, fn: FunctionValue): SecurityDecisionFunction<Kind, Name, FunctionValue> {
-  securityWeakMapSet(
-    securityDecisionMetadataByFunction,
-    fn,
-    freezeSecurityValue({ kind, name }),
-  );
+  securityWeakMapSet(securityDecisionMetadataByFunction, fn, freezeSecurityValue({ kind, name }));
   return fn as SecurityDecisionFunction<Kind, Name, FunctionValue>;
 }

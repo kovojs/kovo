@@ -49,7 +49,11 @@ export function lowerPrimitiveSpreads(elements: readonly JsxIrElement[]): void {
       for (let attrIndex = 0; attrIndex < attrLength; attrIndex += 1) {
         appendSpreadFact(
           next,
-          compilerOwnDataValue(attrs, attrIndex, 'Static spread lowered attributes') as JsxIrAttribute,
+          compilerOwnDataValue(
+            attrs,
+            attrIndex,
+            'Static spread lowered attributes',
+          ) as JsxIrAttribute,
           'Static spread IR attributes',
         );
       }
@@ -73,16 +77,20 @@ function spreadObjectAttributes(
     const value = spreadObjectAttributeValue(entry.value);
     if (value === null) return null;
     if (!value) continue;
-    appendSpreadFact(attributes, {
-      name: entry.key,
-      ownership: 'generated',
-      provenance: {
-        description: 'static spread attribute',
+    appendSpreadFact(
+      attributes,
+      {
+        name: entry.key,
         ownership: 'generated',
-        writer: 'static spread lowering',
+        provenance: {
+          description: 'static spread attribute',
+          ownership: 'generated',
+          writer: 'static spread lowering',
+        },
+        value,
       },
-      value,
-    }, 'Static spread lowered attributes');
+      'Static spread lowered attributes',
+    );
   }
   return attributes;
 }

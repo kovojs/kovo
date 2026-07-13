@@ -851,9 +851,7 @@ function storageSha256Hex(value: Uint8Array): string {
 function verifyStorageHashControls(): boolean {
   try {
     const hash = createHash('sha256');
-    if (
-      securityApply(intrinsicStorageHashUpdate, hash, [fileSystemUtf8Encode('Kovo')]) !== hash
-    ) {
+    if (securityApply(intrinsicStorageHashUpdate, hash, [fileSystemUtf8Encode('Kovo')]) !== hash) {
       return false;
     }
     return (

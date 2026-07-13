@@ -216,10 +216,7 @@ function snapshotStatusFilters(
   let status: DurableTaskObservedStatus | readonly DurableTaskObservedStatus[] | undefined;
   if (statusSource !== undefined) {
     if (taskIsArray(statusSource)) {
-      const values = taskSnapshotCollection<unknown>(
-        statusSource,
-        'Durable task status filters',
-      );
+      const values = taskSnapshotCollection<unknown>(statusSource, 'Durable task status filters');
       for (let index = 0; index < values.length; index += 1) {
         taskArraySet(values, index, observedStatusValue(values[index]));
       }
@@ -293,10 +290,7 @@ function listSnapshotJobs(
   );
   const snapshotJobs: DurableTaskStatusJob[] = [];
   for (let index = 0; index < rawJobs.length; index += 1) {
-    taskArrayPush(
-      snapshotJobs,
-      snapshotStatusJob(rawJobs[index]!, filters.includeArgs === true),
-    );
+    taskArrayPush(snapshotJobs, snapshotStatusJob(rawJobs[index]!, filters.includeArgs === true));
   }
   const ids = taskCreateSet<string>();
   const filterIds = filters.ids ?? [];
@@ -360,10 +354,7 @@ limit ${limitPlaceholder} offset ${offsetPlaceholder}`,
   };
 }
 
-function statusRecord(
-  job: DurableTaskStatusJob,
-  includeArgs: boolean,
-): DurableTaskStatusRecord {
+function statusRecord(job: DurableTaskStatusJob, includeArgs: boolean): DurableTaskStatusRecord {
   return {
     id: job.id,
     task: job.task,
@@ -416,20 +407,23 @@ function jobFromRow(row: DurableTaskJobRow, includeArgs: boolean): DurableTaskSt
   const leaseOwner = statusJobRowValue(row, 'lease_owner');
   const args = includeArgs ? statusJobRowValue(row, 'args') : undefined;
   const lastError = includeArgs ? statusJobRowValue(row, 'last_error') : null;
-  return snapshotStatusJob({
-    id,
-    task,
-    args,
-    runAt: dateFrom(runAt),
-    status: observedStatus(status),
-    attempts,
-    createdAt: dateFrom(createdAt),
-    updatedAt: dateFrom(updatedAt),
-    ...(logicalKey === null ? {} : { key: logicalKey }),
-    ...(leasedUntil === null ? {} : { leasedUntil: dateFrom(leasedUntil) }),
-    ...(leaseOwner === null ? {} : { leaseOwner }),
-    ...(lastError === null ? {} : { lastError }),
-  } as DurableTaskStatusJob, includeArgs);
+  return snapshotStatusJob(
+    {
+      id,
+      task,
+      args,
+      runAt: dateFrom(runAt),
+      status: observedStatus(status),
+      attempts,
+      createdAt: dateFrom(createdAt),
+      updatedAt: dateFrom(updatedAt),
+      ...(logicalKey === null ? {} : { key: logicalKey }),
+      ...(leasedUntil === null ? {} : { leasedUntil: dateFrom(leasedUntil) }),
+      ...(leaseOwner === null ? {} : { leaseOwner }),
+      ...(lastError === null ? {} : { lastError }),
+    } as DurableTaskStatusJob,
+    includeArgs,
+  );
 }
 
 function statusJobRowValue<Key extends keyof DurableTaskJobRow>(
@@ -460,7 +454,9 @@ function snapshotStatusJob(job: DurableTaskStatusJob, includeArgs: boolean): Dur
     throw new TypeError('Durable task status snapshot job id and task must be strings.');
   }
   if (!taskNumberIsSafeInteger(attempts) || attempts < 0) {
-    throw new TypeError('Durable task status snapshot job attempts must be a non-negative integer.');
+    throw new TypeError(
+      'Durable task status snapshot job attempts must be a non-negative integer.',
+    );
   }
   if (!taskDateIsDate(runAt) || !taskDateIsDate(createdAt) || !taskDateIsDate(updatedAt)) {
     throw new TypeError('Durable task status snapshot job timestamps must be Date values.');
@@ -478,10 +474,9 @@ function snapshotStatusJob(job: DurableTaskStatusJob, includeArgs: boolean): Dur
   return taskFreeze({
     id,
     task,
-    args:
-      includeArgs
-        ? assertAndCloneJsonValue(scrubSecretLifecycleValue(args), { root: 'args' })
-        : undefined,
+    args: includeArgs
+      ? assertAndCloneJsonValue(scrubSecretLifecycleValue(args), { root: 'args' })
+      : undefined,
     runAt: copyDate(runAt),
     status: observedStatusValue(status),
     attempts,

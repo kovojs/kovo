@@ -1285,7 +1285,7 @@ function escapeHtml(value: string, attribute: boolean): string {
             ? '&gt;'
             : attribute && code === 0x22
               ? '&quot;'
-              : value[index] ?? '';
+              : (value[index] ?? '');
   }
   return escaped;
 }

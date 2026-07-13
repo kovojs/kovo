@@ -143,7 +143,7 @@ describe('runtimeRegistryFacts', () => {
     Array.prototype[Symbol.iterator] = function () {
       if (this === routes) calls.iterator += 1;
       return originalIterator.call(this);
-    } as typeof Array.prototype[Symbol.iterator];
+    } as (typeof Array.prototype)[Symbol.iterator];
     Array.prototype.unshift = function (...values) {
       calls.unshift += 1;
       return originalUnshift.apply(this, values);

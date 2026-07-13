@@ -403,5 +403,5 @@ function viteDevSsrLoadModule(
       ? { dispatchKovoAppShellViteDevRequest }
       : id === '@kovojs/server'
         ? {}
-      : await loadAppModule(id);
+        : await loadAppModule(id);
 }

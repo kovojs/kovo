@@ -1488,7 +1488,11 @@ function readKovoAppShellViteDevNodeHandler(
   moduleId: string,
 ): KovoAppShellViteMiddleware {
   if (exportName !== undefined) {
-    const handler = viteDevModuleExportValue(module, exportName, `${moduleId} ${exportName} export`);
+    const handler = viteDevModuleExportValue(
+      module,
+      exportName,
+      `${moduleId} ${exportName} export`,
+    );
     if (isKovoAppShellViteDevNodeHandler(handler)) {
       return (request, response, next) => {
         const result = securityPromiseResolve(
@@ -1884,11 +1888,7 @@ function viteDevOwnDataValue(source: unknown, property: PropertyKey, label: stri
   return before.value;
 }
 
-function viteDevModuleExportValue(
-  source: unknown,
-  property: PropertyKey,
-  label: string,
-): unknown {
+function viteDevModuleExportValue(source: unknown, property: PropertyKey, label: string): unknown {
   if ((typeof source !== 'object' && typeof source !== 'function') || source === null) {
     throw new TypeError(`${label} owner must be an object.`);
   }

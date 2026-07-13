@@ -110,9 +110,7 @@ export const CartBadge = component({ render: () => <span>Cart</span> });
 
       expect(existsSync(danglingOutside)).toBe(false);
       expect(lstatSync(danglingTarget).isSymbolicLink()).toBe(false);
-      expect(readFileSync(hardlinkOutside, 'utf8')).toBe(
-        'export const outside = "reviewed";\n',
-      );
+      expect(readFileSync(hardlinkOutside, 'utf8')).toBe('export const outside = "reviewed";\n');
       expect(lstatSync(hardlinkTarget).ino).not.toBe(lstatSync(hardlinkOutside).ino);
       expect(stderr).not.toHaveBeenCalled();
     } finally {

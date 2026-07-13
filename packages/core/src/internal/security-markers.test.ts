@@ -82,9 +82,7 @@ describe('security decision markers', () => {
     const originalDefineProperties = Object.defineProperties;
     const originalFreeze = Object.freeze;
     const originalIsSafeInteger = Number.isSafeInteger;
-    let collector:
-      | { drain(): string[]; record(fact: string): void }
-      | undefined;
+    let collector: { drain(): string[]; record(fact: string): void } | undefined;
     let classify: ((value: string) => string) | undefined;
     try {
       Object.defineProperties = ((value: object) => value) as typeof Object.defineProperties;

@@ -63,10 +63,7 @@ export function emitClientModule(
   clockUpdatePlans: readonly ClockUpdatePlanFact[] = [],
 ): string {
   const handlerSnapshot = compilerSnapshotDenseArray(handlers, 'Client handlers');
-  const stateDeriveSnapshot = compilerSnapshotDenseArray(
-    stateDerives,
-    'Client state derives',
-  );
+  const stateDeriveSnapshot = compilerSnapshotDenseArray(stateDerives, 'Client state derives');
   const imports = runtimeGeneratedImportNames(
     handlerSnapshot,
     queryUpdatePlans,
@@ -77,9 +74,7 @@ export function emitClientModule(
     compilerArrayLength(imports, 'Client runtime imports') > 0
       ? `import { ${compilerArrayJoin(imports, ', ')} } from '${RUNTIME_GENERATED_IMPORT}';\n\n`
       : '';
-  const dependencyImportLines = emitClientImportDependencies(
-    clientHandlerImports(handlerSnapshot),
-  );
+  const dependencyImportLines = emitClientImportDependencies(clientHandlerImports(handlerSnapshot));
   const dependencyConstantLines = emitClientConstantDependencies(
     clientHandlerConstants(handlerSnapshot),
   );
@@ -119,9 +114,7 @@ ${importLine}${dependencyImportLines}${dependencyConstantLines}${exports || '// 
 `;
 }
 
-function clientHandlerImports(
-  handlers: readonly HandlerLowering[],
-): ClientImportDependency[] {
+function clientHandlerImports(handlers: readonly HandlerLowering[]): ClientImportDependency[] {
   const imports: ClientImportDependency[] = [];
   for (let handlerIndex = 0; handlerIndex < handlers.length; handlerIndex += 1) {
     const values = handlers[handlerIndex]!.clientImports;
@@ -134,9 +127,7 @@ function clientHandlerImports(
   return imports;
 }
 
-function clientHandlerConstants(
-  handlers: readonly HandlerLowering[],
-): ClientConstantDependency[] {
+function clientHandlerConstants(handlers: readonly HandlerLowering[]): ClientConstantDependency[] {
   const constants: ClientConstantDependency[] = [];
   for (let handlerIndex = 0; handlerIndex < handlers.length; handlerIndex += 1) {
     const values = handlers[handlerIndex]!.clientConstants;
@@ -175,7 +166,11 @@ export function emitClientModuleImportManifest(
         index,
         'Client runtime manifest imports',
       ) as string;
-      appendClientValue(imports, { importedName: name, localName: name }, 'Client runtime manifest imports');
+      appendClientValue(
+        imports,
+        { importedName: name, localName: name },
+        'Client runtime manifest imports',
+      );
     }
     appendClientValue(
       entries,
@@ -538,8 +533,7 @@ function emitClientImportDependencies(imports: readonly ClientImportDependency[]
   }
   const normalized = dedupeBy(
     normalizedFacts,
-    (entry) =>
-      `${entry.moduleSpecifier}\0${entry.item.importedName}\0${entry.item.localName}`,
+    (entry) => `${entry.moduleSpecifier}\0${entry.item.importedName}\0${entry.item.localName}`,
   );
   const entries = stableSortedClientValues(
     normalized,
@@ -914,10 +908,7 @@ function handlerArrowBodyReplacements(
     }
   }
 
-  const references = compilerSnapshotDenseArray(
-    body.references ?? [],
-    'Client handler references',
-  );
+  const references = compilerSnapshotDenseArray(body.references ?? [], 'Client handler references');
   for (let index = 0; index < references.length; index += 1) {
     const reference = references[index]!;
     const param = handlerElementParamForPath(paramReplacements, reference.name);
@@ -1123,21 +1114,14 @@ function templateStampRenderSegments(stamp: QueryTemplateStampFact): string[] {
       'Template stamp read segments',
     );
     const readSegmentNames: string[] = [];
-    const readSegmentLength = compilerArrayLength(
-      readSegmentFacts,
-      'Template stamp read segments',
-    );
+    const readSegmentLength = compilerArrayLength(readSegmentFacts, 'Template stamp read segments');
     for (let readIndex = 0; readIndex < readSegmentLength; readIndex += 1) {
       const readSegment = compilerOwnDataValue(
         readSegmentFacts,
         readIndex,
         'Template stamp read segments',
       ) as (typeof readSegmentFacts)[number];
-      appendClientValue(
-        readSegmentNames,
-        readSegment.name,
-        'Template stamp read-segment names',
-      );
+      appendClientValue(readSegmentNames, readSegment.name, 'Template stamp read-segment names');
     }
     appendClientValue(
       segments,
@@ -1152,10 +1136,7 @@ function templateStampRenderSegments(stamp: QueryTemplateStampFact): string[] {
   if (cursor < stamp.template.length) {
     appendClientValue(
       segments,
-      compilerJsonSource(
-        compilerStringSlice(stamp.template, cursor),
-        'Template stamp literal',
-      ),
+      compilerJsonSource(compilerStringSlice(stamp.template, cursor), 'Template stamp literal'),
       'Template stamp render segments',
     );
   }

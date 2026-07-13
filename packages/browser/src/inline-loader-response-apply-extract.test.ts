@@ -47,9 +47,7 @@ describe('inline loader response apply source', () => {
       'function dispatchInlineMutationQueries(',
     );
     expect(inlineResponseApplyReadableSource).not.toContain('element.innerHTML = html');
-    expect(inlineResponseApplyReadableSource).toContain(
-      '(html) => options.createHTML(html)',
-    );
+    expect(inlineResponseApplyReadableSource).toContain('(html) => options.createHTML(html)');
     expect(inlineResponseApplyReadableSource).not.toContain('export function');
     expect(alternateReadable).toContain(alternateReadableApply);
     expect(alternateReadable).not.toContain(inlineResponseApplyReadableSource);

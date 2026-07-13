@@ -30,7 +30,11 @@ export function navigationStandaloneHrefLowering(model: ComponentModuleModel): S
     'Navigation attribute replacements',
   );
   for (let callIndex = 0; callIndex < callLength; callIndex += 1) {
-    const entry = compilerOwnDataValue(calls, callIndex, 'Static href calls') as (typeof calls)[number];
+    const entry = compilerOwnDataValue(
+      calls,
+      callIndex,
+      'Static href calls',
+    ) as (typeof calls)[number];
     let withinAttribute = false;
     for (let attributeIndex = 0; attributeIndex < attributeLength; attributeIndex += 1) {
       const replacement = compilerOwnDataValue(
@@ -147,12 +151,14 @@ function isWithinReplacement(call: { end: number; start: number }, replacement: 
 
 function lowerStaticHrefCall(args: readonly (StaticLiteralValue | undefined)[]): string | null {
   const length = compilerArrayLength(args, 'Static href arguments');
-  const pathArg = length > 0
-    ? (compilerOwnDataValue(args, 0, 'Static href arguments') as StaticLiteralValue | undefined)
-    : undefined;
-  const optionsArg = length > 1
-    ? (compilerOwnDataValue(args, 1, 'Static href arguments') as StaticLiteralValue | undefined)
-    : undefined;
+  const pathArg =
+    length > 0
+      ? (compilerOwnDataValue(args, 0, 'Static href arguments') as StaticLiteralValue | undefined)
+      : undefined;
+  const optionsArg =
+    length > 1
+      ? (compilerOwnDataValue(args, 1, 'Static href arguments') as StaticLiteralValue | undefined)
+      : undefined;
   const path = staticStringValue(pathArg);
   if (!path) return null;
   if (length > 1 && optionsArg === undefined) return null;

@@ -84,17 +84,22 @@ function primitiveCompositionCandidates(
     const primitiveAttributes = primitiveObjectEntryAttributes(attrs);
     if (primitiveAttributes === null) continue;
 
-    const child = sourceAttributeByName(wrapper, 'asChild') !== undefined
-      ? singleImmediateElementChild(wrapper)
-      : singleAttrsFunctionElementChild(wrapper);
+    const child =
+      sourceAttributeByName(wrapper, 'asChild') !== undefined
+        ? singleImmediateElementChild(wrapper)
+        : singleAttrsFunctionElementChild(wrapper);
     if (!child || childHasUnsupportedSpreads(child)) continue;
 
-    appendCompositionFact(candidates, {
-      authorAttributes: authorJsxAttributes(child.element.attributes),
-      child,
-      primitiveAttributes,
-      wrapper,
-    }, 'Primitive composition candidates');
+    appendCompositionFact(
+      candidates,
+      {
+        authorAttributes: authorJsxAttributes(child.element.attributes),
+        child,
+        primitiveAttributes,
+        wrapper,
+      },
+      'Primitive composition candidates',
+    );
   }
 
   return candidates;
@@ -301,11 +306,7 @@ function appendCompositionFacts<Value>(
 ): void {
   const length = compilerArrayLength(values, label);
   for (let index = 0; index < length; index += 1) {
-    appendCompositionFact(
-      target,
-      compilerOwnDataValue(values, index, label) as Value,
-      label,
-    );
+    appendCompositionFact(target, compilerOwnDataValue(values, index, label) as Value, label);
   }
 }
 

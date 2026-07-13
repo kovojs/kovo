@@ -181,10 +181,7 @@ export function createJsxIrTree(
   const { childrenByParent, roots } = assignElementParents(elements);
 
   const expressionsByContainer = compilerCreateMap<string, JsxExpressionModel>();
-  const expressionLength = compilerArrayLength(
-    model.jsxExpressions,
-    'JSX IR source expressions',
-  );
+  const expressionLength = compilerArrayLength(model.jsxExpressions, 'JSX IR source expressions');
   for (let expressionIndex = 0; expressionIndex < expressionLength; expressionIndex += 1) {
     const expression = compilerOwnDataValue(
       model.jsxExpressions,
@@ -200,11 +197,7 @@ export function createJsxIrTree(
 
   const elementLength = compilerArrayLength(elements, 'JSX IR elements');
   for (let elementIndex = 0; elementIndex < elementLength; elementIndex += 1) {
-    const element = compilerOwnDataValue(
-      elements,
-      elementIndex,
-      'JSX IR elements',
-    ) as JsxIrElement;
+    const element = compilerOwnDataValue(elements, elementIndex, 'JSX IR elements') as JsxIrElement;
     element.children = childrenForElement(
       element,
       compilerMapGet(childrenByParent, element) ?? [],
@@ -230,11 +223,7 @@ function assignElementParents(elements: readonly JsxIrElement[]): {
   let top: JsxIrParentFrame | null = null;
   const length = compilerArrayLength(elements, 'JSX IR parent elements');
   for (let index = 0; index < length; index += 1) {
-    const element = compilerOwnDataValue(
-      elements,
-      index,
-      'JSX IR parent elements',
-    ) as JsxIrElement;
+    const element = compilerOwnDataValue(elements, index, 'JSX IR parent elements') as JsxIrElement;
     while (top !== null && top.element.element.end <= element.element.start) {
       top = top.previous;
     }
@@ -384,11 +373,15 @@ export function jsxIrReplacements(tree: JsxIrTree): SourceReplacement[] {
       rootIndex,
       'Changed JSX IR roots',
     ) as JsxIrElement;
-    appendMutableFact(replacements, {
-      end: root.element.end,
-      replacement: root.removed ? '' : printJsxIrElement(root),
-      start: root.element.start,
-    }, 'JSX IR replacements');
+    appendMutableFact(
+      replacements,
+      {
+        end: root.element.end,
+        replacement: root.removed ? '' : printJsxIrElement(root),
+        start: root.element.start,
+      },
+      'JSX IR replacements',
+    );
   }
 
   const expressions = expressionReplacements(tree.roots);
@@ -412,16 +405,20 @@ export function jsxIrReplacements(tree: JsxIrTree): SourceReplacement[] {
       }
     }
     if (contained) continue;
-    appendMutableFact(replacements, {
-      end: expression.expression.containerEnd,
-      replacement:
-        typeof expression.replacement === 'string'
-          ? expression.replacement
-          : expression.replacement
-            ? printJsxIrChild(expression.replacement)
-            : '',
-      start: expression.expression.containerStart,
-    }, 'JSX IR replacements');
+    appendMutableFact(
+      replacements,
+      {
+        end: expression.expression.containerEnd,
+        replacement:
+          typeof expression.replacement === 'string'
+            ? expression.replacement
+            : expression.replacement
+              ? printJsxIrChild(expression.replacement)
+              : '',
+        start: expression.expression.containerStart,
+      },
+      'JSX IR replacements',
+    );
   }
 
   return replacements;
@@ -514,10 +511,7 @@ function childrenForElement(
       containerIndex,
       'JSX IR expression containers',
     ) as SourceSpan;
-    const expression = compilerMapGet(
-      expressionsByContainer,
-      `${span.start}:${span.end}`,
-    );
+    const expression = compilerMapGet(expressionsByContainer, `${span.start}:${span.end}`);
     if (expression === undefined) continue;
     let nestedInDirectElement = false;
     for (let childIndex = 0; childIndex < directElementLength; childIndex += 1) {
@@ -559,23 +553,31 @@ function childrenForElement(
       'Positioned JSX IR children',
     ) as PositionedChild;
     if (child.start > cursor) {
-      appendMutableFact(result, {
-        end: child.start,
-        kind: 'text',
-        source: compilerStringSlice(options.source, cursor, child.start),
-        start: cursor,
-      }, 'JSX IR children');
+      appendMutableFact(
+        result,
+        {
+          end: child.start,
+          kind: 'text',
+          source: compilerStringSlice(options.source, cursor, child.start),
+          start: cursor,
+        },
+        'JSX IR children',
+      );
     }
     appendMutableFact(result, child.node, 'JSX IR children');
     cursor = child.end;
   }
   if (cursor < element.childBody.end) {
-    appendMutableFact(result, {
-      end: element.childBody.end,
-      kind: 'text',
-      source: compilerStringSlice(options.source, cursor, element.childBody.end),
-      start: cursor,
-    }, 'JSX IR children');
+    appendMutableFact(
+      result,
+      {
+        end: element.childBody.end,
+        kind: 'text',
+        source: compilerStringSlice(options.source, cursor, element.childBody.end),
+        start: cursor,
+      },
+      'JSX IR children',
+    );
   }
   return result;
 }
@@ -681,11 +683,7 @@ function expressionReplacements(elements: readonly JsxIrElement[]): JsxIrExpress
       const childLength = compilerArrayLength(child.children, 'JSX IR nested children');
       for (let childIndex = 0; childIndex < childLength; childIndex += 1) {
         visit(
-          compilerOwnDataValue(
-            child.children,
-            childIndex,
-            'JSX IR nested children',
-          ) as JsxIrChild,
+          compilerOwnDataValue(child.children, childIndex, 'JSX IR nested children') as JsxIrChild,
         );
       }
     }
@@ -700,11 +698,7 @@ function expressionReplacements(elements: readonly JsxIrElement[]): JsxIrExpress
     const childLength = compilerArrayLength(element.children, 'JSX IR root children');
     for (let childIndex = 0; childIndex < childLength; childIndex += 1) {
       visit(
-        compilerOwnDataValue(
-          element.children,
-          childIndex,
-          'JSX IR root children',
-        ) as JsxIrChild,
+        compilerOwnDataValue(element.children, childIndex, 'JSX IR root children') as JsxIrChild,
       );
     }
   }

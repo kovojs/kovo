@@ -27,9 +27,7 @@ describe('request ingress intrinsic authority', () => {
         ),
       search: s.object({ token: s.string() }),
     });
-    const handler = createRequestHandler(
-      createApp({ routes: [publicRoute, capabilityRoute] }),
-    );
+    const handler = createRequestHandler(createApp({ routes: [publicRoute, capabilityRoute] }));
     const request = new Request('https://kovo.local/public?token=attacker-submitted');
     const NativeURL = globalThis.URL;
     class PoisonedURL extends NativeURL {

@@ -153,11 +153,7 @@ export function blockingAppDiagnostics(
   return witnessFreeze(blocking);
 }
 
-function ownDiagnosticDataValue(
-  source: object,
-  property: PropertyKey,
-  label: string,
-): unknown {
+function ownDiagnosticDataValue(source: object, property: PropertyKey, label: string): unknown {
   const descriptor = witnessGetOwnPropertyDescriptor(source, property);
   if (descriptor === undefined) return undefined;
   if (!('value' in descriptor)) {
