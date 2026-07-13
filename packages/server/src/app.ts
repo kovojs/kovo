@@ -2,6 +2,7 @@ import {
   createMemoryVersionedClientModuleRegistry,
   snapshotVersionedClientModuleRegistry,
 } from './client-modules.js';
+import { snapshotAuditJustification } from './audit-justification.js';
 import { handleAppRequest, reportAppStartupError } from './app-request.js';
 import { routePrefetchGuardDiagnostics, routeTableDiagnostics } from './app-diagnostics.js';
 import { isKovoApp } from './app-guards.js';
@@ -377,12 +378,10 @@ function snapshotAppEgressOptions(
     if (enabled !== false) {
       throw new TypeError('createApp({ egress.enabled }) may only be false.');
     }
-    const justification = appEgressOwnDataValue(value, 'justification');
-    if (typeof justification !== 'string') {
-      throw new TypeError(
-        'createApp({ egress: { enabled: false } }) requires an own string justification.',
-      );
-    }
+    const justification = snapshotAuditJustification(
+      appEgressOwnDataValue(value, 'justification'),
+      'createApp({ egress: { enabled: false } }) (SPEC §6.6)',
+    );
     return witnessFreeze({ enabled: false as const, justification });
   }
 

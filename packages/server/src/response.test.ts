@@ -314,7 +314,7 @@ describe('server response adapters', () => {
       redirectLocationHeader('https://accounts.example.test/oauth/callback', {
         allowlist: [{ origin: 'https://accounts.example.test', reason: ' ' }],
       }),
-    ).toThrow(/rationale/);
+    ).toThrow(/non-empty audit reason/);
   });
 
   it('revalidates mutable blessed redirect Location headers at the final sink', () => {

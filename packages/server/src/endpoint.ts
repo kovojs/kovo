@@ -1,6 +1,11 @@
 import type { WebhookVerifier } from '@kovojs/core';
 import { isFrameworkHmacSignatureVerifier } from '@kovojs/core/internal/verifier';
 import { accessDecisionFor, pinAccessDecision, type AccessDecision } from './access.js';
+import {
+  snapshotAuditJustification,
+  snapshotAuditReason,
+  snapshotAuditText,
+} from './audit-justification.js';
 import { actAsNonRequestPrincipal, type NonRequestPrincipalPosture } from './auth-principal.js';
 import { runAccessDecisionGuards, type DbProvider, type ResolvedGuardFailure } from './guards.js';
 import { managedDb, type Reader, type Writer } from './managed-db.js';
@@ -11,7 +16,7 @@ import {
 } from './endpoint-auth-proof.js';
 import { pinRequestIngressSurface, requestVerifierInput } from './app-load-shed.js';
 import { requestClone } from './request-body-intrinsics.js';
-import { securityNumberIsInteger, securityStringTrim } from './response-security-intrinsics.js';
+import { securityNumberIsInteger } from './response-security-intrinsics.js';
 import type { RedirectLocationAllowlistEntry } from './response.js';
 import {
   assertEndpointResponsePosture,
@@ -314,27 +319,24 @@ function constructEndpointDeclaration<
   if (typeof handler !== 'function') {
     throw new TypeError('endpoint() requires an own data handler function');
   }
-  if (typeof reason !== 'string' || securityStringTrim(reason) === '') {
-    throw new TypeError('endpoint() requires a non-empty reason');
-  }
+  const closedReason = snapshotAuditReason(reason, 'endpoint() (SPEC §6.6/§9.1)');
   if (mount !== 'exact' && mount !== 'prefix') {
     throw new TypeError('endpoint() mount must be exact or prefix');
   }
-  if (
-    mount === 'prefix' &&
-    (typeof mountJustification !== 'string' || securityStringTrim(mountJustification) === '')
-  ) {
+  const closedMountJustification =
+    mountJustification === undefined
+      ? undefined
+      : snapshotAuditJustification(mountJustification, 'endpoint() mountJustification (SPEC §9.1)');
+  if (mount === 'prefix' && closedMountJustification === undefined) {
     throw new TypeError('endpoint() prefix mounts require a non-empty mountJustification');
   }
   if (csrf !== undefined && csrf !== true && csrf !== false) {
     throw new TypeError('endpoint() csrf must be true or false');
   }
-  if (
-    csrf === false &&
-    (typeof csrfJustification !== 'string' || securityStringTrim(csrfJustification) === '')
-  ) {
-    throw new TypeError('endpoint() csrf:false requires a non-empty csrfJustification');
-  }
+  const closedCsrfJustification =
+    csrf === false
+      ? snapshotAuditJustification(csrfJustification, 'endpoint() csrf:false (SPEC §6.6/§9.1)')
+      : undefined;
   if (db !== undefined && db !== true && db !== false) {
     throw new TypeError('endpoint() db must be true or false');
   }
@@ -343,16 +345,18 @@ function constructEndpointDeclaration<
   if (csrf === false) {
     declarationRecord.csrf = witnessFreeze({
       exempt: true as const,
-      justification: csrfJustification as string,
+      justification: closedCsrfJustification as string,
     });
   }
   if (db === true) declarationRecord.db = true;
   declarationRecord.handler = handler;
   declarationRecord.method = method;
   declarationRecord.mount = mount;
-  if (mountJustification !== undefined) declarationRecord.mountJustification = mountJustification;
+  if (closedMountJustification !== undefined) {
+    declarationRecord.mountJustification = closedMountJustification;
+  }
   declarationRecord.path = path;
-  declarationRecord.reason = reason;
+  declarationRecord.reason = closedReason;
   declarationRecord.response = response;
   const declaration = pinAccessDecision(
     declarationRecord as unknown as EndpointDeclaration<Path, Method, Mount, Db>,
@@ -429,10 +433,17 @@ function snapshotEndpointRedirectAllowlist(
     }
     const origin = stableRequiredEndpointValue(value, 'origin');
     const reason = stableRequiredEndpointValue(value, 'reason');
-    if (typeof origin !== 'string' || typeof reason !== 'string') {
+    if (typeof origin !== 'string') {
       throw new TypeError('endpoint redirect allowlist entries require string origin and reason.');
     }
-    witnessArrayAppend(snapshot, witnessFreeze({ origin, reason }), 'Endpoint redirect allowlist');
+    witnessArrayAppend(
+      snapshot,
+      witnessFreeze({
+        origin,
+        reason: snapshotAuditReason(reason, 'endpoint redirect allowlist entry (SPEC §9.1)'),
+      }),
+      'Endpoint redirect allowlist',
+    );
   }
   return witnessFreeze(snapshot);
 }
@@ -683,7 +694,13 @@ function snapshotEndpointAuth(auth: EndpointAuthDeclaration | undefined): Pinned
         return { auth: undefined, valid: false };
       }
       return {
-        auth: witnessFreeze({ kind: 'none', justification: justification.value }),
+        auth: witnessFreeze({
+          kind: 'none',
+          justification: snapshotAuditJustification(
+            justification.value,
+            'endpoint() auth:none (SPEC §9.1)',
+          ),
+        }),
         valid: true,
       };
     }
@@ -700,20 +717,22 @@ function snapshotEndpointAuth(auth: EndpointAuthDeclaration | undefined): Pinned
         ? verifierDescriptor.value
         : undefined;
     const executable = verifier === undefined ? undefined : snapshotExecutableVerifier(verifier);
+    const authKind = kind.value === 'custom' ? 'custom' : 'verifier';
+    const closedName = snapshotAuditText(name.value, `endpoint() auth:${authKind} name`);
     if (
       verifier !== undefined &&
       (executable === undefined ||
         (kind.value === 'custom' &&
-          (executable.kind !== 'custom' || executable.auditName !== name.value)) ||
+          (executable.kind !== 'custom' || executable.auditName !== closedName)) ||
         (kind.value === 'verifier' &&
-          (executable.kind !== 'hmac' || executable.auditName !== name.value)))
+          (executable.kind !== 'hmac' || executable.auditName !== closedName)))
     ) {
       return { auth: undefined, valid: false };
     }
     return {
       auth: witnessFreeze({
-        kind: kind.value,
-        name: name.value,
+        kind: authKind,
+        name: closedName,
         ...(executable === undefined ? {} : { verify: executable.verifier }),
       }),
       valid: true,

@@ -1,4 +1,5 @@
 import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
+import { snapshotAuditJustification } from './audit-justification.js';
 import type { AppDiagnostic, KovoApp } from './app-types.js';
 import { findRouteAmbiguities, type RouteLike } from './match.js';
 import {
@@ -119,7 +120,14 @@ export function routePrefetchGuardDiagnostics(
       'prefetchJustification',
       'Route prefetch justification',
     );
-    if (typeof justification === 'string' && justification.length > 0) continue;
+    if (justification !== undefined) {
+      try {
+        snapshotAuditJustification(justification, 'route prefetchJustification (SPEC §8/KV419)');
+        continue;
+      } catch {
+        // Invalid audit text cannot suppress the guarded-prefetch diagnostic.
+      }
+    }
     const path = ownDiagnosticDataValue(route, 'path', 'Route diagnostic path');
     witnessArrayAppend(
       diagnostics,

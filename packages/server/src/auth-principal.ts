@@ -1,6 +1,7 @@
 import { types as nodeUtilTypes } from 'node:util';
 
 import { securityClassifier } from '@kovojs/core/internal/security-markers';
+import { snapshotAuditReason } from './audit-justification.js';
 import {
   createWitnessWeakSet,
   witnessFreeze,
@@ -415,9 +416,12 @@ export function declareSystemPrincipal(
   reason: unknown,
   audit: NonRequestPrincipalAudit,
 ): NonRequestPrincipalPosture {
-  const trimmedReason =
-    typeof reason === 'string' ? authApply<string>(nativeStringTrim, reason, []) : '';
-  if (typeof reason !== 'string' || trimmedReason === '' || reason !== trimmedReason) {
+  const closedReason = snapshotAuditReason(
+    reason,
+    'declareSystemRead/Write(reason) (SPEC §10.3 DEC-G)',
+  );
+  const trimmedReason = authApply<string>(nativeStringTrim, closedReason, []);
+  if (closedReason !== trimmedReason) {
     throw new TypeError(
       'declareSystemRead/Write(reason) requires a non-empty audited reason (SPEC §10.3 DEC-G).',
     );
@@ -425,7 +429,7 @@ export function declareSystemPrincipal(
   return mintNonRequestPrincipalPosture({
     audit,
     kind: 'system',
-    reason,
+    reason: closedReason,
   });
 }
 

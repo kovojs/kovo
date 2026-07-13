@@ -16,6 +16,7 @@
  */
 import { createBoundedRuntimeAuditCollector } from '@kovojs/core/internal/security-markers';
 
+import { snapshotAuditJustification, snapshotAuditText } from './audit-justification.js';
 import {
   compileLinearRegex as compileLinearRegexProgram,
   LinearRegexError,
@@ -40,7 +41,6 @@ import {
   securityStringSplit,
   securityStringStartsWith,
   securityStringToLowerCase,
-  securityStringTrim,
 } from './response-security-intrinsics.js';
 
 /** A blessed, backtracking-free format matcher and its name (for error messages / capability facts). */
@@ -289,16 +289,24 @@ export function unsafeRegexPatternSnapshot(brand: UnsafeRegexBrand): UnsafeRegex
  * @param justification - Why the ReDoS risk is acceptable here (required, audited).
  */
 export function unsafeRegex(regex: RegExp, justification: string): UnsafeRegexBrand {
-  if (!justification || securityStringTrim(justification).length === 0) {
-    throw new Error('unsafeRegex(...) requires a justification (KV434, SPEC §6.6/§9.5).');
-  }
+  const closedJustification = snapshotAuditJustification(
+    justification,
+    'unsafeRegex(...) (KV434, SPEC §6.6/§9.5)',
+  );
   const snapshot = witnessFreeze({
     flags: securityRegExpFlags(regex),
-    source: securityRegExpSource(regex),
+    source: snapshotAuditText(
+      securityRegExpSource(regex),
+      'unsafeRegex(...) source (KV434, SPEC §6.6/§9.5)',
+    ),
   });
-  const brand = witnessFreeze({ justification, regex, unsafe: true as const }) as UnsafeRegexBrand;
+  const brand = witnessFreeze({
+    justification: closedJustification,
+    regex,
+    unsafe: true as const,
+  }) as UnsafeRegexBrand;
   witnessWeakMapSet(unsafeRegexPatternSnapshots, brand, snapshot);
-  unsafeRegexFacts.record({ justification, source: snapshot.source });
+  unsafeRegexFacts.record({ justification: closedJustification, source: snapshot.source });
   return brand;
 }
 

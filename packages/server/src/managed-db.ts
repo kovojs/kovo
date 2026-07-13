@@ -33,6 +33,7 @@ import {
   createBoundedRuntimeAuditCollector,
   securityClassifier,
 } from '@kovojs/core/internal/security-markers';
+import { snapshotAuditReason, snapshotAuditText } from './audit-justification.js';
 import { requestInputProvenanceForValue } from './request-input-provenance.js';
 import { runExactlyOnceAdapter } from './exactly-once-continuation.js';
 import {
@@ -3562,13 +3563,9 @@ function normalizedPublicReadDeclaration(options: PublicReadDeclaration): Public
     );
   }
   const reasonValue = optionalOwnDataProperty(options, 'reason');
-  if (typeof reasonValue !== 'string') {
-    throw new Error('KV414: rawRead declarePublicRead scope requires a non-empty reason.');
-  }
-  const reason = trimFrameworkString(reasonValue);
-  if (reason === '') {
-    throw new Error('KV414: rawRead declarePublicRead scope requires a non-empty reason.');
-  }
+  const reason = trimFrameworkString(
+    snapshotAuditReason(reasonValue, 'KV414 rawRead declarePublicRead scope (SPEC §10.3)'),
+  );
   const rows = optionalOwnDataProperty(options, 'rows');
   const columns = optionalOwnDataProperty(options, 'columns');
   const normalized: PublicReadDeclaration = { reason };
@@ -3680,11 +3677,9 @@ function normalizedCrossOwnerReadDeclaration(
     throw new Error('KV414: crossOwnerRead requires role: "admin" (SPEC §10.3).');
   }
   const reasonValue = optionalOwnDataProperty(declaration, 'reason');
-  if (typeof reasonValue !== 'string') {
-    throw new Error('KV414: crossOwnerRead requires a non-empty reason.');
-  }
-  const reason = trimFrameworkString(reasonValue);
-  if (reason === '') throw new Error('KV414: crossOwnerRead requires a non-empty reason.');
+  const reason = trimFrameworkString(
+    snapshotAuditReason(reasonValue, 'KV414 crossOwnerRead() (SPEC §10.3)'),
+  );
   let reads: readonly string[];
   try {
     reads = snapshotTrimmedStringArray(
@@ -3698,10 +3693,10 @@ function normalizedCrossOwnerReadDeclaration(
     throw new Error('KV414: crossOwnerRead requires a non-empty declared reads table set.');
   }
   const siteValue = optionalOwnDataProperty(declaration, 'site');
-  if (siteValue !== undefined && typeof siteValue !== 'string') {
-    throw new Error('KV414: crossOwnerRead site must be a string.');
-  }
-  const site = typeof siteValue === 'string' ? trimFrameworkString(siteValue) : undefined;
+  const site =
+    siteValue === undefined
+      ? undefined
+      : trimFrameworkString(snapshotAuditText(siteValue, 'KV414 crossOwnerRead() site'));
   return witnessFreeze({
     reason,
     reads,

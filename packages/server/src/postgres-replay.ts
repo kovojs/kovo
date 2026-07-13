@@ -2,6 +2,7 @@ import { setTimeout as nodeSetTimeout } from 'node:timers';
 
 import { mintFrameworkDurableReplayStoreReceipt } from '@kovojs/core/internal/security-markers';
 
+import { snapshotAuditJustification } from './audit-justification.js';
 import {
   MutationReplayConflictError,
   snapshotMutationReplayResponse,
@@ -18,7 +19,6 @@ import {
   securityJsonStringify,
   securityRandomUuid,
   securitySha256Base64,
-  securityStringTrim,
 } from './response-security-intrinsics.js';
 import { requestStateIsSafeInteger, requestStateNow } from './request-state-intrinsics.js';
 import {
@@ -174,14 +174,10 @@ export async function releasePostgresPendingReplay(
   const idem = stableRequiredString(target, 'idem', 'Postgres replay release target');
   const persisted = persistedReplayKey(scope, idem);
   const generation = stableRequiredString(target, 'generation', 'Postgres replay release target');
-  const justification = stableRequiredString(
-    options,
-    'justification',
-    'Postgres replay release options',
+  snapshotAuditJustification(
+    stableRequiredString(options, 'justification', 'Postgres replay release options'),
+    'releasePostgresPendingReplay() (SPEC §10.3)',
   );
-  if (securityStringTrim(justification) === '') {
-    throw new TypeError('releasePostgresPendingReplay() requires a non-empty justification.');
-  }
   const result = await sql.execute<{ generation: string }>({
     text:
       'DELETE FROM public._kovo_replay ' +

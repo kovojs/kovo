@@ -1,4 +1,5 @@
 import type { Schema } from './schema.js';
+import { snapshotAuditJustification } from './audit-justification.js';
 import { isSigningKeyRing, SIGNING_SECRET_MIN_BYTES } from './keyring.js';
 import {
   runtimeEnvironmentSnapshot,
@@ -366,12 +367,10 @@ export function committedSecretWaiver(value: string, options: { justification: s
       'committedSecretWaiver justification must be a stable own data property (SPEC §6.6).',
     );
   }
-  const justification = before.value;
-  if (typeof justification !== 'string' || justification.length === 0) {
-    throw new TypeError(
-      'committedSecretWaiver requires a non-empty justification (audited in the committed-secret lint, SPEC §6.6).',
-    );
-  }
+  snapshotAuditJustification(
+    before.value,
+    'committedSecretWaiver() (audited in the committed-secret lint, SPEC §6.6)',
+  );
   witnessSetAdd(WAIVED_STRINGS, value);
   return value;
 }

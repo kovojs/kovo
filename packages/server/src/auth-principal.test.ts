@@ -183,6 +183,6 @@ describe('non-request principal posture (SPEC §10.3 DEC-G)', () => {
     expect(() => assertNonRequestPrincipalPosture(forged)).toThrow(/framework-minted actAs/);
     expect(() => principalFromNonRequestPrincipalPosture(forged)).toThrow(/framework-minted actAs/);
     expect(() => actAsNonRequestPrincipal(' anonymous ', audit)).toThrow(/proven/);
-    expect(() => declareSystemPrincipal('', audit)).toThrow(/non-empty audited reason/);
+    expect(() => declareSystemPrincipal('', audit)).toThrow(/non-empty audit reason/);
   });
 });

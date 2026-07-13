@@ -1,5 +1,6 @@
 import { fileURLToPath } from 'node:url';
 
+import { snapshotAuditJustification } from './audit-justification.js';
 import {
   cspHashAttribute,
   cspSha256,
@@ -1282,9 +1283,13 @@ function snapshotPageHintOptions(options: PageHintOptions): PageHintOptions {
   ) {
     throw new TypeError('page hint prefetch is invalid.');
   }
-  if (prefetchJustification !== undefined && typeof prefetchJustification !== 'string') {
-    throw new TypeError('page hint prefetchJustification must be a string.');
-  }
+  const closedPrefetchJustification =
+    prefetchJustification === undefined
+      ? undefined
+      : snapshotAuditJustification(
+          prefetchJustification,
+          'page hint prefetchJustification (SPEC §8)',
+        );
   if (prerenderUrls !== undefined && !securityArrayIsArray(prerenderUrls)) {
     throw new TypeError('page hint prerenderUrls must be an array.');
   }
@@ -1352,7 +1357,9 @@ function snapshotPageHintOptions(options: PageHintOptions): PageHintOptions {
       ? {}
       : { modulepreloads: snapshotStringHintArray(modulepreloads, 'page hint modulepreloads') }),
     ...(prefetch === undefined ? {} : { prefetch }),
-    ...(prefetchJustification === undefined ? {} : { prefetchJustification }),
+    ...(closedPrefetchJustification === undefined
+      ? {}
+      : { prefetchJustification: closedPrefetchJustification }),
     ...(prerenderUrls === undefined
       ? {}
       : { prerenderUrls: snapshotStringHintArray(prerenderUrls, 'page hint prerenderUrls') }),

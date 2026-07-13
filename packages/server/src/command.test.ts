@@ -258,7 +258,7 @@ describe('server command primitive', () => {
       /at least one program/,
     );
     expect(() => commandAllowlist([process.execPath], { justification: '' })).toThrow(
-      /justification must be non-empty/,
+      /non-empty justification/,
     );
     expect(() =>
       commandAllowlist([process.execPath, process.execPath], {

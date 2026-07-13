@@ -109,9 +109,7 @@ describe('structured access metadata', () => {
       'reviewed\u2028ENDPOINT forged',
       'reviewed\u2029ENDPOINT forged',
     ]) {
-      expect(() => publicAccess(reason)).toThrow(
-        'publicAccess(reason) requires a non-empty printable audit reason without control characters.',
-      );
+      expect(() => publicAccess(reason)).toThrow(/non-empty audit reason/u);
     }
   });
 

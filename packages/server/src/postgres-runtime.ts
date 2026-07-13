@@ -26,6 +26,11 @@ import {
   principalFromNonRequestPrincipalPosture,
   type NonRequestPrincipalPosture,
 } from './auth-principal.js';
+import {
+  snapshotAuditJustification,
+  snapshotAuditReason,
+  snapshotAuditText,
+} from './audit-justification.js';
 import { registerEgressDatabaseUrl } from './egress-bootstrap.js';
 import { runExactlyOnceAdapter } from './exactly-once-continuation.js';
 import { egressDecodeURIComponent, egressUrl, egressUrlUsername } from './egress-intrinsics.js';
@@ -4203,20 +4208,22 @@ function resolvePostgresPostureCheck(
     );
   }
 
-  const justification = postureCheck.justification;
-  if (typeof justification !== 'string' || securityStringTrim(justification) === '') {
-    throw new Error(
-      'KV433: postureCheck: { onBoot: false } requires a non-empty justification for kovo explain --capabilities (SPEC §10.3).',
-    );
-  }
+  const justification = snapshotAuditJustification(
+    postureCheck.justification,
+    'KV433 postureCheck: { onBoot: false } for kovo explain --capabilities (SPEC §10.3)',
+  );
   const site = postureCheck.site;
   return {
     onBoot: false,
     optOut: {
       justification: securityStringTrim(justification),
-      ...(typeof site === 'string' && securityStringTrim(site) !== ''
-        ? { site: securityStringTrim(site) }
-        : {}),
+      ...(site === undefined
+        ? {}
+        : {
+            site: securityStringTrim(
+              snapshotAuditText(site, 'KV433 postureCheck opt-out site (SPEC §10.3)'),
+            ),
+          }),
     },
   };
 }
@@ -4249,18 +4256,19 @@ function normalizedPublicRelationDeclaration(
   }
   const declaration = postgresOwnDataSnapshot(value, 'Postgres public-relation declaration');
   const relation = normalizePostgresRelationName(declaration.relation);
-  const reason = declaration.reason;
-  if (typeof reason !== 'string' || securityStringTrim(reason) === '') {
-    throw new Error('KV433: declarePublicRelation requires a non-empty reason (SPEC §10.3).');
-  }
+  const reason = snapshotAuditReason(
+    declaration.reason,
+    'KV433 declarePublicRelation() (SPEC §10.3)',
+  );
   const site = declaration.site;
-  if (site !== undefined && (typeof site !== 'string' || securityStringTrim(site) === '')) {
-    throw new Error('KV433: declarePublicRelation site must be a non-empty string.');
-  }
+  const closedSite =
+    site === undefined
+      ? undefined
+      : snapshotAuditText(site, 'KV433 declarePublicRelation() site (SPEC §10.3)');
   return {
     relation,
     reason: securityStringTrim(reason),
-    ...(site === undefined ? {} : { site: securityStringTrim(site) }),
+    ...(closedSite === undefined ? {} : { site: securityStringTrim(closedSite) }),
   };
 }
 

@@ -9,6 +9,7 @@ import {
 } from '@kovojs/core/internal/security-markers';
 import { isFrameworkHmacSignatureVerifier } from '@kovojs/core/internal/verifier';
 import { requestVerifierInput } from './app-load-shed.js';
+import { snapshotAuditJustification } from './audit-justification.js';
 import { resolveBootMode } from './env.js';
 import {
   actAsNonRequestPrincipal,
@@ -43,11 +44,7 @@ import {
   type ResponseHeaders,
   type ServerResponseBase,
 } from './response.js';
-import {
-  securityArrayJoin,
-  securityJsonStringify,
-  securityStringTrim,
-} from './response-security-intrinsics.js';
+import { securityArrayJoin, securityJsonStringify } from './response-security-intrinsics.js';
 import { isSchemaValidationError, snapshotSchemaForRuntime } from './schema.js';
 import type { InferSchema, Schema, ValidationIssue } from './schema.js';
 import { managedSqlExecutionPolicy, wrapManagedDbForSqlSafety } from './sql-safe-handle.js';
@@ -667,14 +664,10 @@ function snapshotWebhookDefinitionForDeclaration<
   const access = snapshotAccessDecision(accessSource as AccessDecision | undefined);
 
   if (verify === 'none') {
-    const justification = stableOwnWebhookValue(
-      source,
-      'verifyJustification',
-      'webhook().verifyJustification',
+    const justification = snapshotAuditJustification(
+      stableOwnWebhookValue(source, 'verifyJustification', 'webhook().verifyJustification'),
+      'webhook() verify:none (SPEC §9.1)',
     );
-    if (typeof justification !== 'string' || securityStringTrim(justification) === '') {
-      throw new TypeError('webhook() verify: "none" requires a non-empty verifyJustification.');
-    }
     return witnessFreeze({
       ...(access === undefined ? {} : { access }),
       handler,

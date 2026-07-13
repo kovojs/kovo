@@ -1,5 +1,6 @@
 import { secret } from '@kovojs/core';
 import { securityClassifier } from '@kovojs/core/internal/security-markers';
+import { snapshotAuditJustification, snapshotAuditText } from './audit-justification.js';
 import {
   createWitnessMap,
   createWitnessSet,
@@ -170,36 +171,35 @@ export function declareSecretReadCapability<T extends object>(
   statement: T,
   declaration: DeclaredSecretReadCapability,
 ): T {
-  const justification = optionalOwnDataValue(declaration, 'justification');
-  const source = optionalOwnDataValue(declaration, 'source');
-  const table = optionalOwnDataValue(declaration, 'table');
+  const justification = snapshotAuditJustification(
+    optionalOwnDataValue(declaration, 'justification'),
+    'declareSecretReadCapability() (KV435, SPEC §10.3/§11.2)',
+  );
+  const source = snapshotAuditText(
+    optionalOwnDataValue(declaration, 'source'),
+    'declareSecretReadCapability() source (KV435)',
+  );
+  const table = snapshotAuditText(
+    optionalOwnDataValue(declaration, 'table'),
+    'declareSecretReadCapability() table (KV435)',
+  );
   const columnsValue = optionalOwnDataValue(declaration, 'columns');
-  if (typeof justification !== 'string' || trimSecurityString(justification) === '') {
-    throw new Error('KV435: declared secret-read capability requires a justification.');
-  }
-  if (
-    typeof source !== 'string' ||
-    typeof table !== 'string' ||
-    trimSecurityString(source) === '' ||
-    trimSecurityString(table) === ''
-  ) {
-    throw new Error('KV435: declared secret-read capability requires a source table.');
-  }
-  if (!witnessIsArray(columnsValue) || columnsValue.length === 0) {
+  if (!witnessIsArray(columnsValue) || columnsValue.length === 0 || columnsValue.length > 256) {
     throw new Error('KV435: declared secret-read capability requires at least one secret column.');
   }
   const columns: string[] = [];
   for (let index = 0; index < columnsValue.length; index += 1) {
     const descriptor = witnessGetOwnPropertyDescriptor(columnsValue, index);
-    if (
-      descriptor === undefined ||
-      !('value' in descriptor) ||
-      typeof descriptor.value !== 'string' ||
-      trimSecurityString(descriptor.value) === ''
-    ) {
+    if (descriptor === undefined || !('value' in descriptor)) {
       throw new Error('KV435: declared secret-read capability requires secret column names.');
     }
-    witnessDefineProperty(columns, columns.length, { value: descriptor.value, writable: true });
+    witnessDefineProperty(columns, columns.length, {
+      value: snapshotAuditText(
+        descriptor.value,
+        `declareSecretReadCapability() columns[${index}] (KV435)`,
+      ),
+      writable: true,
+    });
   }
   witnessWeakMapSet(
     declaredSecretReadCapabilities,
@@ -1711,36 +1711,6 @@ function asciiLowerCharacter(value: string): string {
     if (upper[index] === value) return lower[index]!;
   }
   return value;
-}
-
-function trimSecurityString(value: string): string {
-  let start = 0;
-  let end = value.length;
-  while (start < end && isSecurityWhitespace(value[start]!)) start += 1;
-  while (end > start && isSecurityWhitespace(value[end - 1]!)) end -= 1;
-  let trimmed = '';
-  for (let index = start; index < end; index += 1) trimmed += value[index];
-  return trimmed;
-}
-
-function isSecurityWhitespace(value: string): boolean {
-  return (
-    value === ' ' ||
-    value === '\t' ||
-    value === '\n' ||
-    value === '\r' ||
-    value === '\f' ||
-    value === '\v' ||
-    value === '\u00a0' ||
-    value === '\u1680' ||
-    (value >= '\u2000' && value <= '\u200a') ||
-    value === '\u2028' ||
-    value === '\u2029' ||
-    value === '\u202f' ||
-    value === '\u205f' ||
-    value === '\u3000' ||
-    value === '\ufeff'
-  );
 }
 
 function isSqlIdentifierStart(value: string): boolean {

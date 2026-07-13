@@ -804,7 +804,7 @@ wrapManagedDbForSqlSafety(raw, undefined, { capability: 'write' });
 
   it('validates and audits scoped public rawRead declarations', async () => {
     drainPublicReadAuditFacts();
-    expect(() => declarePublicRead({ reason: '' })).toThrow(/non-empty reason/);
+    expect(() => declarePublicRead({ reason: '' })).toThrow(/non-empty audit reason/);
     expect(() =>
       declarePublicRead({ reason: 'published orders', rows: { predicate: ' ' } }),
     ).toThrow(/rows scope/);

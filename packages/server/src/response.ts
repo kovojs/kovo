@@ -9,7 +9,7 @@ import {
   isBlessedSink,
 } from '@kovojs/core/internal/sink-policy';
 
-import { snapshotAuditJustification } from './audit-justification.js';
+import { snapshotAuditJustification, snapshotAuditReason } from './audit-justification.js';
 import { InlineUnverifiedUploadError, sniffUploadBytes } from './upload-sniff.js';
 import { finalizeServerResponse } from './response-posture.js';
 import { assertNoSecretEgressValue } from './secret-egress.js';
@@ -124,10 +124,7 @@ export function replayMutationWireBody(
   if (typeof options !== 'object' || options === null) {
     throw new TypeError('replayMutationWireBody() options must be an object.');
   }
-  const reason = stableRequiredOwnDataValue(options, 'reason');
-  if (typeof reason !== 'string' || securityStringTrim(reason) === '') {
-    throw new TypeError('replayMutationWireBody() requires a non-empty audit reason.');
-  }
+  snapshotAuditReason(stableRequiredOwnDataValue(options, 'reason'), 'replayMutationWireBody()');
   return frameworkWireBody(body);
 }
 
@@ -1039,12 +1036,10 @@ function redirectOriginAllowed(
 function normalizedRedirectAllowlistOrigin(entry: RedirectLocationAllowlistEntry): string {
   const reason = stableOwnDataValue(entry, 'reason');
   const origin = stableOwnDataValue(entry, 'origin');
-  if (typeof reason !== 'string' || typeof origin !== 'string') {
+  if (typeof origin !== 'string') {
     throw new TypeError('Redirect Location allowlist entries require string origin and reason.');
   }
-  if (hasHeaderControlCharacter(reason) || securityStringTrim(reason).length === 0) {
-    throw new TypeError('Redirect Location allowlist entries require a non-empty rationale.');
-  }
+  snapshotAuditReason(reason, 'Redirect Location allowlist entry (SPEC §9.1)');
   if (hasHeaderControlCharacter(origin)) {
     throw new TypeError('Redirect Location allowlist origins must not contain control characters.');
   }
@@ -1209,10 +1204,13 @@ function snapshotRedirectAllowlist(values: readonly unknown[]): RedirectLocation
     }
     const reason = stableOwnDataValue(value, 'reason');
     const origin = stableOwnDataValue(value, 'origin');
-    if (typeof reason !== 'string' || typeof origin !== 'string') {
+    if (typeof origin !== 'string') {
       throw new TypeError('Redirect Location allowlist entries require string origin and reason.');
     }
-    securityArrayPush(entries, { origin, reason });
+    securityArrayPush(entries, {
+      origin,
+      reason: snapshotAuditReason(reason, 'Redirect Location allowlist entry (SPEC §9.1)'),
+    });
   }
   return entries;
 }

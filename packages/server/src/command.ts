@@ -1,4 +1,5 @@
 import { blessSink, isBlessedSink } from '@kovojs/core/internal/sink-policy';
+import { snapshotAuditJustification } from './audit-justification.js';
 import {
   commandArrayIsArray,
   commandCloneDenseStringArray,
@@ -95,9 +96,10 @@ export function commandAllowlist(
     );
   }
   const justification = commandOwnDataValue(options, 'justification', 'Command allowlist options');
-  assertSafeCommandText(justification as string, 'allowlist justification', {
-    allowWhitespace: true,
-  });
+  const closedJustification = snapshotAuditJustification(
+    justification,
+    'commandAllowlist() (SPEC.md §6.6, KV424)',
+  );
 
   const sourcePrograms = commandCloneDenseStringArray(programs, 'Command allowlist programs');
   if (sourcePrograms.length === 0) {
@@ -127,7 +129,7 @@ export function commandAllowlist(
   }
 
   const allowlist = witnessFreeze({
-    justification: justification as string,
+    justification: closedJustification,
   }) as CommandAllowlist;
   witnessWeakMapSet(commandAllowlists, allowlist, uniquePrograms);
   return allowlist;

@@ -5,6 +5,11 @@ import {
 } from '@kovojs/core';
 import { isFrameworkHmacSignatureVerifier } from '@kovojs/core/internal/verifier';
 import { accessDecisionFor, pinAccessDecision, type AccessDecision } from './access.js';
+import {
+  snapshotAuditJustification,
+  snapshotAuditReason,
+  snapshotAuditText,
+} from './audit-justification.js';
 import { isKovoApp, markClosedKovoApp } from './app-guards.js';
 import type {
   AppMutationDeclaration,
@@ -166,8 +171,20 @@ export function snapshotAppEndpoint(
     'endpoint declaration',
     omittedProperties('access', 'auth'),
   );
+  record.reason = snapshotAuditReason(record.reason, 'app endpoint snapshot (SPEC §9.1)');
+  if (record.mountJustification !== undefined) {
+    record.mountJustification = snapshotAuditJustification(
+      record.mountJustification,
+      'app endpoint mountJustification snapshot (SPEC §9.1)',
+    );
+  }
   if (record.csrf !== undefined) {
-    record.csrf = witnessFreeze(snapshotOwnDataRecord(record.csrf, 'endpoint.csrf'));
+    const csrf = snapshotOwnDataRecord(record.csrf, 'endpoint.csrf');
+    csrf.justification = snapshotAuditJustification(
+      csrf.justification,
+      'app endpoint CSRF exemption snapshot (SPEC §6.6/§9.1)',
+    );
+    record.csrf = witnessFreeze(csrf);
   }
   if (record.response !== undefined) {
     const response = snapshotOwnDataRecord(record.response, 'endpoint.response');
@@ -614,6 +631,12 @@ function snapshotWebhookDefinition(source: unknown): Readonly<Record<string, unk
   const verify = stableOwnDataValue(object, 'verify', 'webhookDefinition.verify');
   const record = snapshotOwnDataRecord(object, 'webhookDefinition', omittedProperties('verify'));
   record.verify = verify === 'none' ? verify : snapshotWebhookVerifier(verify);
+  if (verify === 'none') {
+    record.verifyJustification = snapshotAuditJustification(
+      record.verifyJustification,
+      'app webhook verify:none snapshot (SPEC §9.1)',
+    );
+  }
   snapshotArrayProperty(record, 'writes', 'webhookDefinition.writes');
   return witnessFreeze(record);
 }
@@ -640,15 +663,17 @@ function snapshotWebhookVerifier(source: unknown): WebhookVerifier {
   const name = stableOwnDataValue(object, 'name', 'webhookDefinition.verify.name');
   const scheme = stableOwnDataValue(object, 'scheme', 'webhookDefinition.verify.scheme');
   const verify = stableOwnDataValue(object, 'verify', 'webhookDefinition.verify.verify');
-  if (typeof name !== 'string' || typeof scheme !== 'string' || typeof verify !== 'function') {
+  if (typeof verify !== 'function') {
     throw new TypeError('webhookDefinition.verify must expose stable custom verifier metadata.');
   }
+  const closedName = snapshotAuditText(name, 'app webhook custom verifier name (SPEC §9.1)');
+  const closedScheme = snapshotAuditText(scheme, 'app webhook custom verifier scheme (SPEC §9.1)');
 
   let canonical: CustomWebhookVerifier;
   canonical = witnessFreeze({
     kind: 'custom',
-    name,
-    scheme,
+    name: closedName,
+    scheme: closedScheme,
     async verify(request: WebhookVerificationRequest): Promise<boolean> {
       return (await witnessReflectApply(verify, canonical, [request])) === true;
     },
@@ -907,10 +932,14 @@ function snapshotRedirectAllowlistProperty(
     const source = requireDeclarationObject(values[index], entryLabel);
     const origin = stableOwnDataValue(source, 'origin', `${entryLabel}.origin`);
     const reason = stableOwnDataValue(source, 'reason', `${entryLabel}.reason`);
-    if (typeof origin !== 'string' || typeof reason !== 'string' || reason.length === 0) {
+    if (typeof origin !== 'string') {
       throw new TypeError(`${entryLabel} requires stable origin and non-empty reason strings.`);
     }
-    witnessArrayAppend(snapshot, witnessFreeze({ origin, reason }), `${label} entry snapshot`);
+    witnessArrayAppend(
+      snapshot,
+      witnessFreeze({ origin, reason: snapshotAuditReason(reason, entryLabel) }),
+      `${label} entry snapshot`,
+    );
   }
   record[property] = witnessFreeze(snapshot);
 }

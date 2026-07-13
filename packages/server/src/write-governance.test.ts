@@ -122,7 +122,7 @@ describe('trustedAssign', () => {
   });
 
   it('bounds structured audit columns before traversal', () => {
-    const oversized = new Array(100_001).fill('role');
+    const oversized = new Array(257).fill('role');
     expect(() =>
       trustedAssign('admin', {
         columns: oversized,

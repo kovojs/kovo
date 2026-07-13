@@ -16,8 +16,9 @@
 
 import { createBoundedRuntimeAuditCollector } from '@kovojs/core/internal/security-markers';
 
+import { snapshotAuditReason, snapshotAuditText } from './audit-justification.js';
 import { markPrivilegedRequestInputAssignment } from './request-input-provenance.js';
-import { securityNumberIsInteger, securityStringTrim } from './response-security-intrinsics.js';
+import { securityNumberIsInteger } from './response-security-intrinsics.js';
 import {
   witnessArrayAppend,
   witnessCreateNullRecord,
@@ -66,9 +67,7 @@ const trustedAssignFacts = createBoundedRuntimeAuditCollector<TrustedAssignFact>
  * await db.insert(orders).values({ id: serverValue(generatedId, 'server-generated key'), ... });
  */
 export function serverValue<T>(value: T, reason: string): T {
-  if (typeof reason !== 'string' || securityStringTrim(reason) === '') {
-    throw new Error('serverValue requires a non-empty reason (KV438).');
-  }
+  snapshotAuditReason(reason, 'serverValue() (KV438)');
   return value;
 }
 
@@ -103,11 +102,8 @@ const TRUSTED_ASSIGN_STRING_KEYS = [
 
 function snapshotTrustedAssignFact(source: string | TrustedAssignOptions): TrustedAssignFact {
   if (typeof source === 'string') {
-    if (securityStringTrim(source) === '') {
-      throw new Error('trustedAssign requires a non-empty reason (KV438).');
-    }
     const fact = witnessCreateNullRecord<unknown>();
-    fact.reason = source;
+    fact.reason = snapshotAuditReason(source, 'trustedAssign() (KV438)');
     return witnessFreeze(fact) as unknown as TrustedAssignFact;
   }
   if (typeof source !== 'object' || source === null || witnessIsArray(source)) {
@@ -127,10 +123,10 @@ function snapshotTrustedAssignFact(source: string | TrustedAssignOptions): Trust
     if (typeof descriptor.value !== 'string') {
       throw new TypeError(`trustedAssign ${key} must be a string (KV438).`);
     }
-    if (key === 'reason' && securityStringTrim(descriptor.value) === '') {
-      throw new Error('trustedAssign requires a non-empty reason (KV438).');
-    }
-    fact[key] = descriptor.value;
+    fact[key] =
+      key === 'reason'
+        ? snapshotAuditReason(descriptor.value, 'trustedAssign() (KV438)')
+        : snapshotAuditText(descriptor.value, `trustedAssign() ${key} (KV438)`);
   }
 
   const columns = stableTrustedAssignDescriptor(source, 'columns');
@@ -150,7 +146,7 @@ function snapshotTrustedAssignColumns(source: unknown): readonly string[] {
     typeof length.value !== 'number' ||
     !securityNumberIsInteger(length.value) ||
     length.value < 0 ||
-    length.value > 100_000
+    length.value > 256
   ) {
     throw new TypeError('trustedAssign columns must be a dense array of strings (KV438).');
   }
@@ -160,7 +156,11 @@ function snapshotTrustedAssignColumns(source: unknown): readonly string[] {
     if (entry === undefined || typeof entry.value !== 'string') {
       throw new TypeError('trustedAssign columns must be a dense array of strings (KV438).');
     }
-    witnessArrayAppend(columns, entry.value, 'trustedAssign audit columns');
+    witnessArrayAppend(
+      columns,
+      snapshotAuditText(entry.value, `trustedAssign() columns[${index}] (KV438)`),
+      'trustedAssign audit columns',
+    );
   }
   return witnessFreeze(columns);
 }
