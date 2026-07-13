@@ -1,4 +1,3 @@
-import { Buffer as NativeBuffer } from 'node:buffer';
 import { join as builtinJoin } from 'node:path';
 
 import { canonicalJson } from './canonical-json.js';
@@ -11,6 +10,7 @@ import {
   compilerJsonParse,
   compilerMapGet,
   compilerMapSet,
+  compilerNowMs,
   compilerObjectKeys,
   compilerOwnDataValue,
   compilerRandomUuid,
@@ -20,6 +20,7 @@ import {
   compilerStringCharCodeAt,
   compilerStringEndsWith,
   compilerStringSlice,
+  compilerUtf8Text,
 } from './compiler-security-intrinsics.js';
 import {
   compileCacheKey,
@@ -101,7 +102,7 @@ async function readEntryFiles(cacheDir: string): Promise<PersistentCompileCacheE
     const fileEntry = fileEntries[index]!;
     if (fileEntry.kind !== 'file' || !compilerStringEndsWith(fileEntry.name, '.json')) continue;
     try {
-      const source = NativeBuffer.from(await fileSystem.fileBytesOf(fileEntry)).toString('utf8');
+      const source = compilerUtf8Text(await fileSystem.fileBytesOf(fileEntry));
       const parsed = compilerJsonParse(source);
       if (isPersistentCompileCacheEntry(parsed))
         compilerArrayAppend(
@@ -262,7 +263,7 @@ export async function writePersistentCompileCacheEntry(
     compilerBuildIdentityRef: persistentCompilerBuildIdentityRef,
     footprint: entry.footprint,
     resultPreimage: resultJson,
-    updatedAtMs: Date.now(),
+    updatedAtMs: compilerNowMs(),
   };
   const manifestEntry: PersistentCompileCacheEntry = {
     ...unsignedEntry,
@@ -275,7 +276,10 @@ export async function writePersistentCompileCacheEntry(
   // Entry files are authoritative. Keep the compatibility manifest compact instead of duplicating
   // every exact compiler/source/result preimage into one ever-growing JSON object. Readers merge
   // the per-entry records, preserving parallel writes without quadratic manifest growth.
-  await fileSystem.writeFile('manifest.json', `${canonicalJson(emptyPersistentCompileCacheManifest())}\n`);
+  await fileSystem.writeFile(
+    'manifest.json',
+    `${canonicalJson(emptyPersistentCompileCacheManifest())}\n`,
+  );
   return manifestEntry;
 }
 
@@ -368,13 +372,12 @@ async function readPersistentCacheText(
   relativePath: string,
 ): Promise<string | undefined> {
   const bytes = await (await persistentCacheFileSystem(cacheDir)).fileBytes(relativePath);
-  return bytes === undefined ? undefined : NativeBuffer.from(bytes).toString('utf8');
+  return bytes === undefined ? undefined : compilerUtf8Text(bytes);
 }
 
 async function persistentCacheFileSystem(cacheDir: string) {
-  const { createFrameworkOutputFileSystemBoundary } = await import(
-    '@kovojs/core/internal/filesystem'
-  );
+  const { createFrameworkOutputFileSystemBoundary } =
+    await import('@kovojs/core/internal/filesystem');
   return createFrameworkOutputFileSystemBoundary(cacheDir);
 }
 

@@ -1,4 +1,16 @@
-import { mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from 'node:fs/promises';
+import { Buffer as NativeBuffer } from 'node:buffer';
+import {
+  link,
+  lstat,
+  mkdir,
+  mkdtemp,
+  readFile,
+  readdir,
+  rm,
+  symlink,
+  unlink,
+  writeFile,
+} from 'node:fs/promises';
 import { createRequire, syncBuiltinESMExports } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -79,6 +91,103 @@ describe('persistent compile cache format', () => {
       }),
     ).rejects.toThrow(/symbolic-link|symbolic link|cannot use/u);
     await expect(readdir(outside)).resolves.toEqual([]);
+  });
+
+  it('atomically replaces symlinked and hardlinked cache artifact leaves', async () => {
+    const cacheDir = persistentCompileCacheDir(await tempRoot());
+    const outside = await tempRoot();
+    const input = {
+      cacheKey: 'cache-leaf-alias-key',
+      footprint: { reads: { queryShapeNames: ['alias'] } },
+      result: { value: 'safe' },
+    } satisfies Parameters<typeof writePersistentCompileCacheEntry>[1];
+    const entry = await writePersistentCompileCacheEntry(cacheDir, input);
+    const [entryFile] = await readdir(join(cacheDir, 'entries'));
+    if (entryFile === undefined) throw new Error('expected persistent cache entry file');
+    const aliases = [
+      { kind: 'symlink', relativePath: entry.artifactRefs.result },
+      { kind: 'hardlink', relativePath: entry.compilerBuildIdentityRef },
+      { kind: 'hardlink', relativePath: `entries/${entryFile}` },
+      { kind: 'symlink', relativePath: 'manifest.json' },
+    ] as const;
+
+    for (let index = 0; index < aliases.length; index += 1) {
+      const alias = aliases[index]!;
+      const target = join(cacheDir, alias.relativePath);
+      const referent = join(outside, `outside-${index}.json`);
+      await writeFile(referent, `outside-${index}\n`);
+      await unlink(target);
+      if (alias.kind === 'symlink') await symlink(referent, target);
+      else await link(referent, target);
+    }
+
+    await writePersistentCompileCacheEntry(cacheDir, input);
+    for (let index = 0; index < aliases.length; index += 1) {
+      const alias = aliases[index]!;
+      const target = join(cacheDir, alias.relativePath);
+      const referent = join(outside, `outside-${index}.json`);
+      await expect(readFile(referent, 'utf8')).resolves.toBe(`outside-${index}\n`);
+      const targetStatus = await lstat(target);
+      const referentStatus = await lstat(referent);
+      expect(targetStatus.isSymbolicLink()).toBe(false);
+      expect(targetStatus.ino).not.toBe(referentStatus.ino);
+    }
+  });
+
+  it('treats symlinked cache entry, blob, and build-identity leaves as misses', async () => {
+    const cacheDir = persistentCompileCacheDir(await tempRoot());
+    const outside = await tempRoot();
+    const entry = await writePersistentCompileCacheEntry(cacheDir, {
+      cacheKey: 'cache-read-leaf-alias-key',
+      footprint: { reads: { queryShapeNames: ['alias'] } },
+      result: { value: 'safe' },
+    });
+    const [entryFile] = await readdir(join(cacheDir, 'entries'));
+    if (entryFile === undefined) throw new Error('expected persistent cache entry file');
+    const targets = [
+      entry.artifactRefs.result,
+      entry.compilerBuildIdentityRef,
+      `entries/${entryFile}`,
+    ];
+
+    for (let index = 0; index < targets.length; index += 1) {
+      const target = join(cacheDir, targets[index]!);
+      const original = await readFile(target);
+      const referent = join(outside, `outside-read-${index}.json`);
+      await writeFile(referent, original);
+      await unlink(target);
+      await symlink(referent, target);
+      await expect(
+        readPersistentCompileCacheEntry(cacheDir, 'cache-read-leaf-alias-key'),
+      ).resolves.toBeNull();
+      await unlink(target);
+      await writeFile(target, original);
+    }
+  });
+
+  it('uses boot-pinned UTF-8 and clock controls after late mutation', async () => {
+    const cacheDir = persistentCompileCacheDir(await tempRoot());
+    const nativeBufferToString = NativeBuffer.prototype.toString;
+    const nativeDateNow = Date.now;
+    NativeBuffer.prototype.toString = (() => {
+      throw new Error('late Buffer.prototype.toString replacement must not run');
+    }) as typeof NativeBuffer.prototype.toString;
+    Date.now = () => -1;
+
+    try {
+      const entry = await writePersistentCompileCacheEntry(cacheDir, {
+        cacheKey: 'cache-late-intrinsics-key',
+        footprint: { reads: { queryShapeNames: ['late'] } },
+        result: { value: 'safe' },
+      });
+      expect(entry.updatedAtMs).toBeGreaterThan(0);
+      await expect(
+        readPersistentCompileCacheEntry(cacheDir, 'cache-late-intrinsics-key'),
+      ).resolves.toEqual({ value: 'safe' });
+    } finally {
+      NativeBuffer.prototype.toString = nativeBufferToString;
+      Date.now = nativeDateNow;
+    }
   });
 
   it('preserves parallel per-entry writes', async () => {

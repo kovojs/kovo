@@ -1,4 +1,5 @@
 /* oxlint-disable typescript/unbound-method -- Boot-captured controls are invoked via pinned Reflect.apply. */
+import { Buffer as BuiltinBuffer } from 'node:buffer';
 import {
   createHash as builtinCreateHash,
   createHmac as builtinCreateHmac,
@@ -17,6 +18,7 @@ import { Stats as BuiltinStats } from 'node:fs';
  * bootstrap; NODE_OPTIONS/loaders and equivalent pre-run code are part of the host TCB.
  */
 const NativeArray = globalThis.Array;
+const NativeDate = globalThis.Date;
 const NativeJSON = globalThis.JSON;
 const NativeMap = globalThis.Map;
 const NativeMath = globalThis.Math;
@@ -30,8 +32,11 @@ const NativeString = globalThis.String;
 const NativeTypeError = globalThis.TypeError;
 const nativeArrayIsArray = NativeArray.isArray;
 const nativeArrayJoin = NativeArray.prototype.join;
+const nativeBufferFrom = BuiltinBuffer.from;
+const nativeBufferToString = BuiltinBuffer.prototype.toString;
 const nativeCreateHash = builtinCreateHash;
 const nativeCreateHmac = builtinCreateHmac;
+const nativeDateNow = NativeDate.now;
 const nativeRandomUUID = builtinRandomUUID;
 const nativeJsonParse = NativeJSON.parse;
 const nativeJsonStringify = NativeJSON.stringify;
@@ -193,6 +198,27 @@ export function assertCompilerSecurityIntrinsics(): void {
 export function compilerFailClosed(message: string): never {
   assertCompilerSecurityIntrinsics();
   throw new NativeTypeError(message);
+}
+
+export function compilerNowMs(): number {
+  assertCompilerSecurityIntrinsics();
+  const value = apply<number>(nativeDateNow, NativeDate, []);
+  if (
+    !apply(nativeNumberIsFinite, NativeNumber, [value]) ||
+    !apply(nativeNumberIsSafeInteger, NativeNumber, [value]) ||
+    value < 0
+  ) {
+    throw new NativeTypeError('Compiler clock returned an invalid timestamp.');
+  }
+  return value;
+}
+
+export function compilerUtf8Text(bytes: Uint8Array): string {
+  assertCompilerSecurityIntrinsics();
+  const buffer = apply<InstanceType<typeof BuiltinBuffer>>(nativeBufferFrom, BuiltinBuffer, [
+    bytes,
+  ]);
+  return apply(nativeBufferToString, buffer, ['utf8']);
 }
 
 export function compilerArrayIsArray(value: unknown): value is unknown[] {
