@@ -71,6 +71,7 @@ import { createApp, mutation, query, s, webhook } from '@kovojs/server';
 
 export const addToCart = mutation({
   csrf: false,
+  csrfJustification: 'fixture-only non-browser mutation identity test',
   input: s.object({ productId: s.string() }),
   handler() {
     return 'ok';

@@ -22,13 +22,15 @@ function snapshotAuditedString(
   label: string,
   field: 'audit reason' | 'audit text' | 'justification',
 ): string {
+  const trimmed = typeof value === 'string' ? securityStringTrim(value) : undefined;
   if (
     typeof value !== 'string' ||
     value.length > MAX_AUDIT_TEXT_LENGTH ||
-    securityStringTrim(value) === ''
+    trimmed === '' ||
+    trimmed !== value
   ) {
     throw new TypeError(
-      `${label} requires a non-empty ${field}; it must be printable and at most ${MAX_AUDIT_TEXT_LENGTH} characters.`,
+      `${label} requires a non-empty ${field}; it must have no leading/trailing whitespace, be printable, and be at most ${MAX_AUDIT_TEXT_LENGTH} characters.`,
     );
   }
   for (let index = 0; index < value.length; index += 1) {

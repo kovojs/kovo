@@ -168,9 +168,9 @@ describe('@kovojs/server/testing Postgres helpers', () => {
     const runtime = await createPostgresTestRuntime({ schema });
 
     try {
-      await expect(runtime.asSystem('', () => [])).rejects.toThrow(/non-empty audited reason/);
+      await expect(runtime.asSystem('', () => [])).rejects.toThrow(/non-empty audit reason/);
       await expect(runtime.asSystem(' padded ', () => [])).rejects.toThrow(
-        /non-empty audited reason/,
+        /non-empty audit reason/,
       );
     } finally {
       await runtime.close();

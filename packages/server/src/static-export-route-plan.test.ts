@@ -207,7 +207,13 @@ describe('server static export route plan', () => {
             secret: 'static-export-route-plan-csrf-secret-0123456789',
             sessionId: () => undefined,
           },
-          mutations: [{ csrf: false, key: 'status/ping' }],
+          mutations: [
+            {
+              csrf: false,
+              csrfJustification: 'machine-only status probe without browser authority',
+              key: 'status/ping',
+            },
+          ],
           routes: [
             route('/status', {
               access: publicAccess('static status shell'),

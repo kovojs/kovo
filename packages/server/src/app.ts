@@ -378,10 +378,20 @@ function snapshotAppEgressOptions(
     if (enabled !== false) {
       throw new TypeError('createApp({ egress.enabled }) may only be false.');
     }
-    const justification = snapshotAuditJustification(
-      appEgressOwnDataValue(value, 'justification'),
-      'createApp({ egress: { enabled: false } }) (SPEC §6.6)',
-    );
+    let justification: string;
+    try {
+      justification = snapshotAuditJustification(
+        appEgressOwnDataValue(value, 'justification'),
+        'createApp({ egress: { enabled: false } }) (SPEC §6.6)',
+      );
+    } catch (error) {
+      if (resolveBootMode() === 'production') {
+        throw new EgressFloorBootError(
+          `createApp() refused to boot: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
+      throw error;
+    }
     return witnessFreeze({ enabled: false as const, justification });
   }
 
