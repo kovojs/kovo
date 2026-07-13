@@ -9,9 +9,12 @@ const NativeSet = Set;
 
 const intrinsicArrayIsArray = NativeArray.isArray;
 const intrinsicMapForEach = NativeMap.prototype.forEach;
+const intrinsicMapEntries = NativeMap.prototype.entries;
 const intrinsicMapGet = NativeMap.prototype.get;
 const intrinsicMapHas = NativeMap.prototype.has;
+const intrinsicMapKeys = NativeMap.prototype.keys;
 const intrinsicMapSet = NativeMap.prototype.set;
+const intrinsicMapValues = NativeMap.prototype.values;
 const intrinsicObjectDefineProperty = NativeObject.defineProperty;
 const intrinsicObjectFreeze = NativeObject.freeze;
 const intrinsicObjectGetOwnPropertyDescriptor = NativeObject.getOwnPropertyDescriptor;
@@ -21,8 +24,12 @@ const intrinsicObjectKeys = NativeObject.keys;
 const intrinsicReflectApply = NativeReflect.apply;
 const intrinsicRegExpTest = NativeRegExp.prototype.test;
 const intrinsicSetAdd = NativeSet.prototype.add;
+const intrinsicSetEntries = NativeSet.prototype.entries;
 const intrinsicSetForEach = NativeSet.prototype.forEach;
 const intrinsicSetHas = NativeSet.prototype.has;
+const intrinsicSetKeys = NativeSet.prototype.keys;
+const intrinsicSetValues = NativeSet.prototype.values;
+const intrinsicMapSize = intrinsicObjectGetOwnPropertyDescriptor(NativeMap.prototype, 'size')?.get;
 const intrinsicSetSize = intrinsicObjectGetOwnPropertyDescriptor(NativeSet.prototype, 'size')?.get;
 
 function apply<Return>(fn: Function, receiver: unknown, args: readonly unknown[]): Return {
@@ -80,6 +87,8 @@ const controlsSound = (() => {
       apply<string | undefined>(intrinsicMapGet, map, ['key']) === 'map-control' &&
       apply<boolean>(intrinsicMapHas, map, ['key']) === true &&
       mapForEachControl === 'key:map-control' &&
+      intrinsicMapSize !== undefined &&
+      apply<number>(intrinsicMapSize, map, []) === 1 &&
       apply<boolean>(intrinsicSetHas, set, ['set-control']) === true &&
       intrinsicSetSize !== undefined &&
       apply<number>(intrinsicSetSize, set, []) === 1 &&
@@ -247,6 +256,14 @@ export function runtimeMapForEach<Key, Value>(
   apply(intrinsicMapForEach, map, [callback]);
 }
 
+export function runtimeMapSize(map: ReadonlyMap<unknown, unknown>): number {
+  assertControls();
+  if (intrinsicMapSize === undefined) {
+    throw new TypeError('Kovo Drizzle runtime Map size control is unavailable.');
+  }
+  return apply<number>(intrinsicMapSize, map, []);
+}
+
 export function runtimeSet<Value>(): Set<Value> {
   assertControls();
   return new NativeSet<Value>();
@@ -281,20 +298,102 @@ export function runtimeSetSize<Value>(set: ReadonlySet<Value>): number {
   return apply<number>(intrinsicSetSize, set, []);
 }
 
-const immutableCollectionMutation = () => {
-  throw new TypeError('Kovo Drizzle runtime metadata collections are immutable.');
-};
-
 export function runtimeSealMap<Key, Value>(map: Map<Key, Value>): ReadonlyMap<Key, Value> {
-  runtimeDefineOwnData(map, 'clear', immutableCollectionMutation, 'Kovo Drizzle metadata map');
-  runtimeDefineOwnData(map, 'delete', immutableCollectionMutation, 'Kovo Drizzle metadata map');
-  runtimeDefineOwnData(map, 'set', immutableCollectionMutation, 'Kovo Drizzle metadata map');
-  return runtimeFreeze(map);
+  const backing = runtimeMap<Key, Value>();
+  runtimeMapForEach(map, (value, key) => runtimeMapSet(backing, key, value));
+  let facade: ReadonlyMap<Key, Value>;
+  const target: Record<PropertyKey, unknown> = {};
+  runtimeDefineOwnData(
+    target,
+    'entries',
+    () => apply<MapIterator<[Key, Value]>>(intrinsicMapEntries, backing, []),
+    'Kovo Drizzle metadata map',
+  );
+  runtimeDefineOwnData(
+    target,
+    'forEach',
+    (callback: (value: Value, key: Key, map: ReadonlyMap<Key, Value>) => void, thisArg?: unknown) =>
+      runtimeMapForEach(backing, (value, key) => apply(callback, thisArg, [value, key, facade])),
+    'Kovo Drizzle metadata map',
+  );
+  runtimeDefineOwnData(
+    target,
+    'get',
+    (key: Key) => runtimeMapGet(backing, key),
+    'Kovo Drizzle metadata map',
+  );
+  runtimeDefineOwnData(
+    target,
+    'has',
+    (key: Key) => runtimeMapHas(backing, key),
+    'Kovo Drizzle metadata map',
+  );
+  runtimeDefineOwnData(
+    target,
+    'keys',
+    () => apply<MapIterator<Key>>(intrinsicMapKeys, backing, []),
+    'Kovo Drizzle metadata map',
+  );
+  runtimeDefineOwnData(target, 'size', runtimeMapSize(backing), 'Kovo Drizzle metadata map');
+  runtimeDefineOwnData(
+    target,
+    'values',
+    () => apply<MapIterator<Value>>(intrinsicMapValues, backing, []),
+    'Kovo Drizzle metadata map',
+  );
+  runtimeDefineOwnData(
+    target,
+    Symbol.iterator,
+    () => apply<MapIterator<[Key, Value]>>(intrinsicMapEntries, backing, []),
+    'Kovo Drizzle metadata map',
+  );
+  facade = runtimeFreeze(target) as unknown as ReadonlyMap<Key, Value>;
+  return facade;
 }
 
 export function runtimeSealSet<Value>(set: Set<Value>): ReadonlySet<Value> {
-  runtimeDefineOwnData(set, 'add', immutableCollectionMutation, 'Kovo Drizzle metadata set');
-  runtimeDefineOwnData(set, 'clear', immutableCollectionMutation, 'Kovo Drizzle metadata set');
-  runtimeDefineOwnData(set, 'delete', immutableCollectionMutation, 'Kovo Drizzle metadata set');
-  return runtimeFreeze(set);
+  const backing = runtimeSet<Value>();
+  runtimeSetForEach(set, (value) => runtimeSetAdd(backing, value));
+  let facade: ReadonlySet<Value>;
+  const target: Record<PropertyKey, unknown> = {};
+  runtimeDefineOwnData(
+    target,
+    'entries',
+    () => apply<SetIterator<[Value, Value]>>(intrinsicSetEntries, backing, []),
+    'Kovo Drizzle metadata set',
+  );
+  runtimeDefineOwnData(
+    target,
+    'forEach',
+    (callback: (value: Value, key: Value, set: ReadonlySet<Value>) => void, thisArg?: unknown) =>
+      runtimeSetForEach(backing, (value) => apply(callback, thisArg, [value, value, facade])),
+    'Kovo Drizzle metadata set',
+  );
+  runtimeDefineOwnData(
+    target,
+    'has',
+    (value: Value) => runtimeSetHas(backing, value),
+    'Kovo Drizzle metadata set',
+  );
+  runtimeDefineOwnData(
+    target,
+    'keys',
+    () => apply<SetIterator<Value>>(intrinsicSetKeys, backing, []),
+    'Kovo Drizzle metadata set',
+  );
+  runtimeDefineOwnData(target, 'size', runtimeSetSize(backing), 'Kovo Drizzle metadata set');
+  runtimeDefineOwnData(
+    target,
+    'values',
+    () => apply<SetIterator<Value>>(intrinsicSetValues, backing, []),
+    'Kovo Drizzle metadata set',
+  );
+  runtimeDefineOwnData(
+    target,
+    Symbol.iterator,
+    () => apply<SetIterator<Value>>(intrinsicSetValues, backing, []),
+    'Kovo Drizzle metadata set',
+  );
+  facade = runtimeFreeze(target) as unknown as ReadonlySet<Value>;
+  return facade;
 }

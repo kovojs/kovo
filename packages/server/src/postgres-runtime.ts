@@ -395,6 +395,124 @@ function appendPostgresDenseValues<Value>(
   }
 }
 
+function postgresExtractedCollectionForEach(source: object, label: string): Function {
+  if (postgresIsProxy(source)) throw new TypeError(`${label} must not be a Proxy.`);
+  const descriptor = witnessGetOwnPropertyDescriptor(source, 'forEach');
+  if (
+    descriptor === undefined ||
+    !('value' in descriptor) ||
+    typeof descriptor.value !== 'function'
+  ) {
+    throw new TypeError(`${label} must expose a frozen own-data forEach method.`);
+  }
+  return descriptor.value;
+}
+
+function snapshotExtractedReadonlySet<Value>(
+  source: ReadonlySet<Value>,
+  label: string,
+): Set<Value> {
+  const output = createWitnessSet<Value>();
+  const forEach = postgresExtractedCollectionForEach(source, label);
+  witnessReflectApply(forEach, source, [
+    (value: Value) => {
+      witnessSetAdd(output, value);
+    },
+  ]);
+  return output;
+}
+
+function snapshotExtractedReadonlyMap<Key, Value, OutputValue = Value>(
+  source: ReadonlyMap<Key, Value>,
+  label: string,
+  snapshotValue: (value: Value, key: Key) => OutputValue = (value) =>
+    value as unknown as OutputValue,
+): Map<Key, OutputValue> {
+  const output = createWitnessMap<Key, OutputValue>();
+  const forEach = postgresExtractedCollectionForEach(source, label);
+  witnessReflectApply(forEach, source, [
+    (value: Value, key: Key) => {
+      witnessMapSet(output, key, snapshotValue(value, key));
+    },
+  ]);
+  return output;
+}
+
+function snapshotExtractedKovoRuntimeDbMetadata(
+  metadata: KovoRuntimeDbMetadata,
+): KovoRuntimeDbMetadata {
+  return witnessFreeze({
+    allColumnKeys: snapshotExtractedReadonlySet(
+      metadata.allColumnKeys,
+      'Kovo runtime all-column keys',
+    ),
+    authorizationClassificationsByTable: snapshotExtractedReadonlyMap(
+      metadata.authorizationClassificationsByTable,
+      'Kovo runtime authorization classifications',
+      (classifications, tableName) =>
+        witnessFreeze(
+          postgresMapDense(
+            classifications,
+            (classification) => classification,
+            `Kovo runtime authorization classifications for ${tableName}`,
+          ),
+        ),
+    ),
+    columnSources: snapshotExtractedReadonlyMap(
+      metadata.columnSources,
+      'Kovo runtime column sources',
+    ),
+    governedColumnKeysByTable: snapshotExtractedReadonlyMap(
+      metadata.governedColumnKeysByTable,
+      'Kovo runtime governed column keys',
+      (keys, tableName) =>
+        snapshotExtractedReadonlySet(keys, `Kovo runtime governed column keys for ${tableName}`),
+    ),
+    governedColumnNamesByTable: snapshotExtractedReadonlyMap(
+      metadata.governedColumnNamesByTable,
+      'Kovo runtime governed column names',
+      (names, tableName) =>
+        snapshotExtractedReadonlySet(names, `Kovo runtime governed column names for ${tableName}`),
+    ),
+    ownerSourcesByTable: snapshotExtractedReadonlyMap(
+      metadata.ownerSourcesByTable,
+      'Kovo runtime owner sources',
+    ),
+    ownerViaSourcesByTable: snapshotExtractedReadonlyMap(
+      metadata.ownerViaSourcesByTable,
+      'Kovo runtime owner-via sources',
+    ),
+    schemaTableNames: snapshotExtractedReadonlySet(
+      metadata.schemaTableNames,
+      'Kovo runtime schema table names',
+    ),
+    secretColumnKeys: snapshotExtractedReadonlySet(
+      metadata.secretColumnKeys,
+      'Kovo runtime secret column keys',
+    ),
+    secretColumnNames: snapshotExtractedReadonlySet(
+      metadata.secretColumnNames,
+      'Kovo runtime secret column names',
+    ),
+    secretColumnKeysByTable: snapshotExtractedReadonlyMap(
+      metadata.secretColumnKeysByTable,
+      'Kovo runtime secret column keys by table',
+      (keys, tableName) =>
+        snapshotExtractedReadonlySet(keys, `Kovo runtime secret column keys for ${tableName}`),
+    ),
+    secretColumnNamesByTable: snapshotExtractedReadonlyMap(
+      metadata.secretColumnNamesByTable,
+      'Kovo runtime secret column names by table',
+      (names, tableName) =>
+        snapshotExtractedReadonlySet(names, `Kovo runtime secret column names for ${tableName}`),
+    ),
+    secretTableNames: snapshotExtractedReadonlySet(
+      metadata.secretTableNames,
+      'Kovo runtime secret table names',
+    ),
+  });
+}
+
 function postgresFilterDense<Value>(
   values: readonly Value[],
   include: (value: Value, index: number) => boolean,
@@ -1181,7 +1299,9 @@ export function createPostgresAppRuntimeDb(
   assertProductionRuntimeDriver(config);
   const schemaTables = sortTablesByForeignKeyDependencies(postgresTablesFromSchema(config.schema));
   assertPostgresRuntimeSchemaSupported(schemaTables);
-  const metadata = extractKovoRuntimeDbMetadata(schemaTables);
+  const metadata = snapshotExtractedKovoRuntimeDbMetadata(
+    extractKovoRuntimeDbMetadata(schemaTables),
+  );
   const ddl = schemaDdl(schemaTables);
   const client = createRuntimeClient(config);
   const ready = initializeRuntimeDb(client.sql, {
@@ -1245,7 +1365,9 @@ export async function provisionPostgresAppDb(
   const config = resolvePostgresRuntimeConfigSnapshot(safeOptions);
   const schemaTables = sortTablesByForeignKeyDependencies(postgresTablesFromSchema(config.schema));
   assertPostgresRuntimeSchemaSupported(schemaTables);
-  const metadata = extractKovoRuntimeDbMetadata(schemaTables);
+  const metadata = snapshotExtractedKovoRuntimeDbMetadata(
+    extractKovoRuntimeDbMetadata(schemaTables),
+  );
   const client = createRuntimeClient(config);
   try {
     await provisionRuntimeDb(client.sql, {
@@ -1283,7 +1405,9 @@ export async function migratePostgresAppDb(
   const config = resolvePostgresRuntimeConfigSnapshot(safeOptions);
   const schemaTables = sortTablesByForeignKeyDependencies(postgresTablesFromSchema(config.schema));
   assertPostgresRuntimeSchemaSupported(schemaTables);
-  const metadata = extractKovoRuntimeDbMetadata(schemaTables);
+  const metadata = snapshotExtractedKovoRuntimeDbMetadata(
+    extractKovoRuntimeDbMetadata(schemaTables),
+  );
   const client = createRuntimeClient(config);
   try {
     const migrations = await provisionRuntimeDb(client.sql, {
@@ -1350,7 +1474,9 @@ export async function checkPostgresAppDbPosture(
   const config = resolvePostgresRuntimeConfigSnapshot(safeOptions);
   const schemaTables = sortTablesByForeignKeyDependencies(postgresTablesFromSchema(config.schema));
   assertPostgresRuntimeSchemaSupported(schemaTables);
-  const metadata = extractKovoRuntimeDbMetadata(schemaTables);
+  const metadata = snapshotExtractedKovoRuntimeDbMetadata(
+    extractKovoRuntimeDbMetadata(schemaTables),
+  );
   const client = createRuntimeClient(config);
   try {
     const runtimeLoginRole = runtimeLoginRoleFromDatabaseUrl(config.databaseUrl);

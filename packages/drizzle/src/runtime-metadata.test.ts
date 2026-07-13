@@ -20,16 +20,16 @@ describe('runtime metadata extraction', () => {
 
     const metadata = extractKovoRuntimeDbMetadata([users]);
 
-    expect(metadata.allColumnKeys).toEqual(
-      new Set(['id', 'passwordHash', 'apiToken', 'displayName']),
-    );
-    expect(metadata.secretTableNames).toEqual(new Set(['users']));
-    expect(metadata.secretColumnKeysByTable.get('users')).toEqual(
-      new Set(['passwordHash', 'apiToken']),
-    );
-    expect(metadata.secretColumnNamesByTable.get('users')).toEqual(
-      new Set(['password_hash', 'api_token']),
-    );
+    expect([...metadata.allColumnKeys]).toEqual(['id', 'passwordHash', 'apiToken', 'displayName']);
+    expect([...metadata.secretTableNames]).toEqual(['users']);
+    expect([...(metadata.secretColumnKeysByTable.get('users') ?? [])]).toEqual([
+      'passwordHash',
+      'apiToken',
+    ]);
+    expect([...(metadata.secretColumnNamesByTable.get('users') ?? [])]).toEqual([
+      'password_hash',
+      'api_token',
+    ]);
     expect(metadata.columnSources.get(users.passwordHash)).toEqual({
       column: 'password_hash',
       key: 'passwordHash',
@@ -42,12 +42,14 @@ describe('runtime metadata extraction', () => {
       secret: false,
       table: 'users',
     });
-    expect(metadata.governedColumnKeysByTable.get('users')).toEqual(
-      new Set(['id', 'passwordHash']),
-    );
-    expect(metadata.governedColumnNamesByTable.get('users')).toEqual(
-      new Set(['id', 'password_hash']),
-    );
+    expect([...(metadata.governedColumnKeysByTable.get('users') ?? [])]).toEqual([
+      'id',
+      'passwordHash',
+    ]);
+    expect([...(metadata.governedColumnNamesByTable.get('users') ?? [])]).toEqual([
+      'id',
+      'password_hash',
+    ]);
   });
 
   it('treats secret: true as a whole-table secret annotation', () => {
@@ -62,8 +64,8 @@ describe('runtime metadata extraction', () => {
 
     const metadata = extractKovoRuntimeDbMetadata([vault]);
 
-    expect(metadata.secretColumnKeysByTable.get('vault')).toEqual(new Set(['id', 'contents']));
-    expect(metadata.secretColumnNamesByTable.get('vault')).toEqual(new Set(['id', 'contents']));
+    expect([...(metadata.secretColumnKeysByTable.get('vault') ?? [])]).toEqual(['id', 'contents']);
+    expect([...(metadata.secretColumnNamesByTable.get('vault') ?? [])]).toEqual(['id', 'contents']);
   });
 
   it('extracts Postgres table metadata for PGlite runtime wiring', () => {
@@ -83,9 +85,9 @@ describe('runtime metadata extraction', () => {
 
     const metadata = extractKovoRuntimeDbMetadata([account]);
 
-    expect(metadata.secretTableNames).toEqual(new Set(['account']));
-    expect(metadata.secretColumnKeysByTable.get('account')).toEqual(new Set(['accessToken']));
-    expect(metadata.secretColumnNamesByTable.get('account')).toEqual(new Set(['accessToken']));
+    expect([...metadata.secretTableNames]).toEqual(['account']);
+    expect([...(metadata.secretColumnKeysByTable.get('account') ?? [])]).toEqual(['accessToken']);
+    expect([...(metadata.secretColumnNamesByTable.get('account') ?? [])]).toEqual(['accessToken']);
     expect(metadata.columnSources.get(account.accessToken)).toEqual({
       column: 'accessToken',
       key: 'accessToken',
@@ -122,12 +124,20 @@ describe('runtime metadata extraction', () => {
 
     const metadata = extractKovoRuntimeDbMetadata([account]);
 
-    expect(metadata.governedColumnKeysByTable.get('account')).toEqual(
-      new Set(['id', 'ownerId', 'passwordDigest', 'recoveryCode', 'role']),
-    );
-    expect(metadata.governedColumnNamesByTable.get('account')).toEqual(
-      new Set(['id', 'owner_id', 'password_digest', 'recovery_code', 'role']),
-    );
+    expect([...(metadata.governedColumnKeysByTable.get('account') ?? [])]).toEqual([
+      'id',
+      'ownerId',
+      'passwordDigest',
+      'recoveryCode',
+      'role',
+    ]);
+    expect([...(metadata.governedColumnNamesByTable.get('account') ?? [])]).toEqual([
+      'id',
+      'owner_id',
+      'password_digest',
+      'recovery_code',
+      'role',
+    ]);
     expect(metadata.authorizationClassificationsByTable.get('account')).toEqual(['owned']);
     expect(metadata.ownerSourcesByTable.get('account')).toEqual({
       columnKey: 'ownerId',
@@ -149,12 +159,16 @@ describe('runtime metadata extraction', () => {
 
     const metadata = extractKovoRuntimeDbMetadata([auditLog]);
 
-    expect(metadata.governedColumnKeysByTable.get('audit_log')).toEqual(
-      new Set(['id', 'actorId', 'event']),
-    );
-    expect(metadata.governedColumnNamesByTable.get('audit_log')).toEqual(
-      new Set(['id', 'actor_id', 'event']),
-    );
+    expect([...(metadata.governedColumnKeysByTable.get('audit_log') ?? [])]).toEqual([
+      'id',
+      'actorId',
+      'event',
+    ]);
+    expect([...(metadata.governedColumnNamesByTable.get('audit_log') ?? [])]).toEqual([
+      'id',
+      'actor_id',
+      'event',
+    ]);
   });
 
   it('extracts ownerVia and non-owner DEC-K classifications for runtime authorization', () => {
@@ -206,18 +220,20 @@ describe('runtime metadata extraction', () => {
 
     const metadata = extractKovoRuntimeDbMetadata([users, orders, orderItems, posts, shares]);
 
-    expect(metadata.authorizationClassificationsByTable).toEqual(
-      new Map([
-        ['users', ['reference']],
-        ['orders', ['owned']],
-        ['order_items', ['ownedVia']],
-        ['posts', ['public']],
-        ['shares', ['authzPolicy']],
-      ]),
-    );
-    expect(metadata.schemaTableNames).toEqual(
-      new Set(['users', 'orders', 'order_items', 'posts', 'shares']),
-    );
+    expect([...metadata.authorizationClassificationsByTable]).toEqual([
+      ['users', ['reference']],
+      ['orders', ['owned']],
+      ['order_items', ['ownedVia']],
+      ['posts', ['public']],
+      ['shares', ['authzPolicy']],
+    ]);
+    expect([...metadata.schemaTableNames]).toEqual([
+      'users',
+      'orders',
+      'order_items',
+      'posts',
+      'shares',
+    ]);
     expect(metadata.ownerViaSourcesByTable.get('order_items')).toEqual({
       fkColumnKey: 'orderId',
       fkColumnName: 'order_id',

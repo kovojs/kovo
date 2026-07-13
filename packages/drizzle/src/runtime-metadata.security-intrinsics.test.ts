@@ -36,7 +36,7 @@ describe('runtime metadata security intrinsics', () => {
       columnName: 'owner_id',
       table: 'accounts',
     });
-    expect(metadata.secretColumnNamesByTable.get('accounts')).toEqual(new Set(['secret']));
+    expect([...(metadata.secretColumnNamesByTable.get('accounts') ?? [])]).toEqual(['secret']);
   });
 
   it('retains authorization classifications under late filter poison', () => {
@@ -135,15 +135,17 @@ describe('runtime metadata security intrinsics', () => {
       'owned',
     ]);
     expect(metadata.ownerSourcesByTable.get('accounts_intrinsics')?.columnName).toBe('owner_id');
-    expect(metadata.governedColumnNamesByTable.get('accounts_intrinsics')).toEqual(
-      new Set(['id', 'owner_id', 'password_hash']),
-    );
-    expect(metadata.secretColumnNamesByTable.get('accounts_intrinsics')).toEqual(
-      new Set(['secret']),
-    );
+    expect([...(metadata.governedColumnNamesByTable.get('accounts_intrinsics') ?? [])]).toEqual([
+      'id',
+      'owner_id',
+      'password_hash',
+    ]);
+    expect([...(metadata.secretColumnNamesByTable.get('accounts_intrinsics') ?? [])]).toEqual([
+      'secret',
+    ]);
   });
 
-  it('returns frozen snapshots whose ordinary mutation methods fail closed', () => {
+  it('returns frozen non-native snapshots with no captured-prototype mutation receiver', () => {
     const accounts = pgTable(
       'accounts_frozen',
       { id: text('id').primaryKey(), ownerId: text('owner_id').notNull() },
@@ -156,14 +158,18 @@ describe('runtime metadata security intrinsics', () => {
     expect(
       Object.isFrozen(metadata.authorizationClassificationsByTable.get('accounts_frozen')!),
     ).toBe(true);
+    expect(
+      (metadata.authorizationClassificationsByTable as unknown as { set?: unknown }).set,
+    ).toBeUndefined();
     expect(() =>
-      (metadata.authorizationClassificationsByTable as Map<string, readonly string[]>).set(
-        'accounts_frozen',
-        ['public'],
-      ),
-    ).toThrow('immutable');
-    expect(() => (metadata.schemaTableNames as Set<string>).add('attacker_public_table')).toThrow(
-      'immutable',
-    );
+      Map.prototype.set.call(metadata.authorizationClassificationsByTable, 'accounts_frozen', [
+        'public',
+      ]),
+    ).toThrow();
+    expect(() =>
+      Set.prototype.add.call(metadata.schemaTableNames, 'attacker_public_table'),
+    ).toThrow();
+    expect(metadata.authorizationClassificationsByTable.get('accounts_frozen')).toEqual(['owned']);
+    expect(metadata.schemaTableNames.has('attacker_public_table')).toBe(false);
   });
 });
