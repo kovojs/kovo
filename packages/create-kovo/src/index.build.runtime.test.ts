@@ -1,5 +1,5 @@
 import { execFileSync, spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -34,6 +34,17 @@ describe('create-kovo starter (build integration: runtime and dev server)', () =
       linkStarterBuildDependencies(root);
       buildReusableProductionArtifact(root);
 
+      const generatedEnv = readFileSync(join(root, '.env'), 'utf8');
+      const generatedCsrfSecret = /^KOVO_CSRF_SECRET=(.+)$/m.exec(generatedEnv)?.[1] ?? '';
+      const generatedDemoPassword =
+        new RegExp(`^${demoPasswordEnvVar}=(.+)$`, 'm').exec(generatedEnv)?.[1] ?? '';
+      const productionArtifactText = readUtf8Tree(join(root, 'dist'));
+
+      expect(generatedCsrfSecret).toBeTruthy();
+      expect(generatedDemoPassword).toBeTruthy();
+      expect(productionArtifactText).not.toContain(generatedCsrfSecret);
+      expect(productionArtifactText).not.toContain(generatedDemoPassword);
+
       prodServer = spawn(process.execPath, ['dist/server/server.mjs'], {
         cwd: root,
         detached: process.platform !== 'win32',
@@ -53,14 +64,19 @@ describe('create-kovo starter (build integration: runtime and dev server)', () =
       mergeCookies(jar, login.headers.getSetCookie());
       const loginHtml = await login.text();
       const csrf = /name="csrf"\s+value="([^"]+)"/.exec(loginHtml)?.[1] ?? '';
-      const generatedDemoPassword =
-        new RegExp(`^${demoPasswordEnvVar}=(.+)$`, 'm').exec(
-          readFileSync(join(root, '.env'), 'utf8'),
-        )?.[1] ?? '';
+      const loginCookies = login.headers.getSetCookie().join('\n');
 
       expect(login.status, `${loginHtml}\n${output()}`).toBe(200);
       expect(csrf).toBeTruthy();
-      expect(generatedDemoPassword).toBeTruthy();
+      // SPEC §6.6/§9.1.1: a production anonymous credential response must be
+      // uncacheable and the browser binding must carry every session-cookie floor.
+      expect(login.headers.get('cache-control')).toBe('private, no-store');
+      expect(login.headers.get('vary')?.split(',').map((value) => value.trim())).toContain('Cookie');
+      expect(loginCookies).toContain('__Host-kovo_csrf=');
+      expect(loginCookies).toContain('Path=/');
+      expect(loginCookies).toContain('HttpOnly');
+      expect(loginCookies).toContain('Secure');
+      expect(loginCookies).toContain('SameSite=Lax');
 
       const signIn = await fetch(`${origin}/_m/auth/sign-in`, {
         body: new URLSearchParams({
@@ -421,3 +437,13 @@ describe('create-kovo starter (build integration: runtime and dev server)', () =
     }
   }, 120_000);
 });
+
+function readUtf8Tree(root: string): string {
+  const chunks: string[] = [];
+  for (const entry of readdirSync(root, { withFileTypes: true })) {
+    const path = join(root, entry.name);
+    if (entry.isDirectory()) chunks.push(readUtf8Tree(path));
+    else if (entry.isFile()) chunks.push(readFileSync(path, 'utf8'));
+  }
+  return chunks.join('\n');
+}
