@@ -1,12 +1,35 @@
-import { existsSync, realpathSync, statSync } from 'node:fs';
+/* oxlint-disable typescript/unbound-method -- Boot-captured controls are invoked through pinned Reflect.apply. */
+
+import { constants as fsConstants, existsSync, realpathSync, statSync } from 'node:fs';
 import { createServer as createNodeServer } from 'node:http';
-import { extname, join, relative, resolve } from 'node:path';
+import { extname, isAbsolute, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { openConfinedFilePath } from '../../scripts/lib/confined-static-file.mjs';
+import { readConfinedFilePath } from '../../scripts/lib/confined-static-file.mjs';
 
-const siteRoot = fileURLToPath(new URL('../', import.meta.url));
-const defaultStaticRoot = resolve(siteRoot, 'dist');
+const NativeString = globalThis.String;
+const NativeURL = globalThis.URL;
+const nativeFunctionBind = globalThis.Function.prototype.bind;
+const nativeReflectApply = globalThis.Reflect.apply;
+const fileUrlToPath = bindControl(fileURLToPath);
+const fsExistsSync = bindControl(existsSync);
+const fsRealpathSync = bindControl(realpathSync);
+const fsStatSync = bindControl(statSync);
+const fsFileTypeMask = fsConstants.S_IFMT;
+const fsRegularFileType = fsConstants.S_IFREG;
+const nativeDecodeURIComponent = globalThis.decodeURIComponent;
+const nativeStringEndsWith = NativeString.prototype.endsWith;
+const nativeStringReplace = NativeString.prototype.replace;
+const nativeStringStartsWith = NativeString.prototype.startsWith;
+const nativeStringToLowerCase = NativeString.prototype.toLowerCase;
+const pathExtname = bindControl(extname);
+const pathIsAbsolute = bindControl(isAbsolute);
+const pathJoin = bindControl(join);
+const pathRelative = bindControl(relative);
+const pathResolve = bindControl(resolve);
+
+const siteRoot = fileUrlToPath(new NativeURL('../', import.meta.url));
+const defaultStaticRoot = pathResolve(siteRoot, 'dist');
 
 export async function createSiteStaticServeServer({
   host = process.env.HOST ?? '127.0.0.1',
@@ -45,14 +68,14 @@ export async function createSiteStaticServeServer({
 }
 
 export function resolveSiteStaticRequest({ rawUrl, method, staticRoot = defaultStaticRoot }) {
-  if (!existsSync(staticRoot)) {
+  if (!fsExistsSync(staticRoot)) {
     return textResponseResult(
       404,
       'Static export directory not found. Run pnpm --filter @kovojs/site run build first.\n',
     );
   }
 
-  const canonicalStaticRoot = realpathSync(staticRoot);
+  const canonicalStaticRoot = fsRealpathSync(staticRoot);
 
   if (method !== 'GET' && method !== 'HEAD') {
     return textResponseResult(405, 'Method not allowed for static docs.\n', {
@@ -62,14 +85,14 @@ export function resolveSiteStaticRequest({ rawUrl, method, staticRoot = defaultS
 
   let url;
   try {
-    url = new URL(rawUrl, 'http://kovo-site.local');
+    url = new NativeURL(rawUrl, 'http://kovo-site.local');
   } catch {
     return textResponseResult(400, 'Invalid request URL.\n');
   }
 
   let decodedPath;
   try {
-    decodedPath = decodeURIComponent(url.pathname);
+    decodedPath = nativeDecodeURIComponent(url.pathname);
   } catch {
     return textResponseResult(400, 'Invalid request path.\n');
   }
@@ -79,8 +102,8 @@ export function resolveSiteStaticRequest({ rawUrl, method, staticRoot = defaultS
     return textResponseResult(403, 'Refusing to serve outside the static export directory.\n');
   }
 
-  if (existsSync(primaryPath) && statSync(primaryPath).isFile()) {
-    const canonicalPrimaryPath = realpathSync(primaryPath);
+  if (fsExistsSync(primaryPath) && regularFileStat(fsStatSync(primaryPath))) {
+    const canonicalPrimaryPath = fsRealpathSync(primaryPath);
     if (!insideRoot(canonicalStaticRoot, canonicalPrimaryPath)) {
       return textResponseResult(403, 'Refusing to serve outside the static export directory.\n');
     }
@@ -92,9 +115,9 @@ export function resolveSiteStaticRequest({ rawUrl, method, staticRoot = defaultS
     });
   }
 
-  const notFoundPath = resolve(staticRoot, '404.html');
-  if (existsSync(notFoundPath) && statSync(notFoundPath).isFile()) {
-    const canonicalNotFoundPath = realpathSync(notFoundPath);
+  const notFoundPath = pathResolve(staticRoot, '404.html');
+  if (fsExistsSync(notFoundPath) && regularFileStat(fsStatSync(notFoundPath))) {
+    const canonicalNotFoundPath = fsRealpathSync(notFoundPath);
     if (!insideRoot(canonicalStaticRoot, canonicalNotFoundPath)) {
       return textResponseResult(403, 'Refusing to serve outside the static export directory.\n');
     }
@@ -117,12 +140,12 @@ export async function serveSiteStaticFile({
 }) {
   const resolved = resolveSiteStaticRequest({ method, rawUrl, staticRoot });
   if (resolved.kind === 'file') {
-    const opened = await openConfinedFilePath(staticRoot, resolved.filePath);
-    if (opened === undefined) {
+    const loaded = await readConfinedFilePath(staticRoot, resolved.filePath, method !== 'HEAD');
+    if (loaded === undefined) {
       sendText(response, 404, 'Not found.\n', { 'cache-control': 'no-store' });
       return textResponseResult(404, 'Not found.\n', { 'cache-control': 'no-store' });
     }
-    await sendFile(response, method, opened, resolved.responsePath, resolved.status);
+    sendFile(response, method, loaded, resolved.responsePath, resolved.status);
     return resolved;
   }
 
@@ -191,29 +214,22 @@ function parseCliOptions(args) {
 
 function resolveFilePath(staticRoot, decodedPath) {
   const relativePath =
-    decodedPath === '/' || decodedPath.endsWith('/') || !extname(decodedPath)
-      ? join(decodedPath, 'index.html')
+    decodedPath === '/' || stringEndsWith(decodedPath, '/') || !pathExtname(decodedPath)
+      ? pathJoin(decodedPath, 'index.html')
       : decodedPath;
-  return resolve(staticRoot, relativePath.replace(/^\/+/, ''));
+  return pathResolve(
+    staticRoot,
+    nativeReflectApply(nativeStringReplace, relativePath, [/^\/+/, '']),
+  );
 }
 
-async function sendFile(response, method, opened, decodedPath, status = 200) {
-  try {
-    response.writeHead(status, responseHeaders(opened.filePath, decodedPath, opened.stat));
-    if (method === 'HEAD') {
-      await opened.fileHandle.close();
-      response.end();
-      return;
-    }
-    const source = opened.fileHandle.createReadStream({ autoClose: true });
-    source.once('error', (error) => {
-      response.destroy(error instanceof Error ? error : undefined);
-    });
-    source.pipe(response);
-  } catch (error) {
-    await opened.fileHandle.close().catch(() => {});
-    throw error;
+function sendFile(response, method, loaded, decodedPath, status = 200) {
+  response.writeHead(status, responseHeaders(loaded.filePath, decodedPath, loaded.size));
+  if (method === 'HEAD') {
+    response.end();
+    return;
   }
+  response.end(loaded.body);
 }
 
 function sendText(response, status, body, headers = {}) {
@@ -241,15 +257,15 @@ function fileResponseResult({ filePath, requestPath, responsePath, status }) {
   };
 }
 
-function responseHeaders(filePath, decodedPath, fileInfo = statSync(filePath)) {
+function responseHeaders(filePath, decodedPath, size = fsStatSync(filePath).size) {
   const headers = {
-    'content-length': fileInfo.size,
+    'content-length': size,
     'content-type': contentType(filePath),
   };
 
   // SPEC.md section 6.6 and section 9.5: exported /c/ modules are immutable
   // app-shell artifacts, and old versions must keep resolving across deploys.
-  if (decodedPath.startsWith('/c/')) {
+  if (stringStartsWith(decodedPath, '/c/')) {
     headers['cache-control'] = 'public, max-age=31536000, immutable';
   }
 
@@ -257,7 +273,7 @@ function responseHeaders(filePath, decodedPath, fileInfo = statSync(filePath)) {
 }
 
 function contentType(filePath) {
-  switch (extname(filePath).toLowerCase()) {
+  switch (nativeReflectApply(nativeStringToLowerCase, pathExtname(filePath), [])) {
     case '.css':
       return 'text/css; charset=utf-8';
     case '.html':
@@ -319,10 +335,30 @@ function closeServer(server) {
 }
 
 function insideRoot(staticRoot, filePath) {
-  const relativeFilePath = relative(staticRoot, filePath);
-  return relativeFilePath !== '' && !relativeFilePath.startsWith('..');
+  const relativeFilePath = pathRelative(staticRoot, filePath);
+  return (
+    relativeFilePath !== '' &&
+    !stringStartsWith(relativeFilePath, '..') &&
+    !pathIsAbsolute(relativeFilePath)
+  );
+}
+
+function regularFileStat(fileStat) {
+  return (fileStat.mode & fsFileTypeMask) === fsRegularFileType;
+}
+
+function stringEndsWith(value, suffix) {
+  return nativeReflectApply(nativeStringEndsWith, value, [suffix]);
+}
+
+function stringStartsWith(value, prefix) {
+  return nativeReflectApply(nativeStringStartsWith, value, [prefix]);
+}
+
+function bindControl(control) {
+  return nativeReflectApply(nativeFunctionBind, control, [undefined]);
 }
 
 function isMainModule() {
-  return process.argv[1] === fileURLToPath(import.meta.url);
+  return process.argv[1] === fileUrlToPath(import.meta.url);
 }

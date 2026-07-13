@@ -1,10 +1,11 @@
 import { mkdtemp, mkdir, realpath, rename, rm, symlink, writeFile } from 'node:fs/promises';
+import { syncBuiltinESMExports } from 'node:module';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { openConfinedStaticFile } from './confined-static-file.mjs';
+import { readConfinedStaticFile } from './confined-static-file.mjs';
 
 describe('confined static file resolution', () => {
   let parent;
@@ -27,17 +28,17 @@ describe('confined static file resolution', () => {
     await writeFile(secret, 'secret');
     await symlink(secret, path.join(assets, 'escape.js'));
 
-    const opened = await openConfinedStaticFile(root, '/assets/safe.js', '/assets/');
-    expect(opened?.filePath).toBe(await realpath(safe));
-    await opened?.fileHandle.close();
+    const loaded = await readConfinedStaticFile(root, '/assets/safe.js', '/assets/');
+    expect(loaded?.filePath).toBe(await realpath(safe));
+    expect(loaded?.body?.toString('utf8')).toBe('safe');
     await expect(
-      openConfinedStaticFile(root, '/assets/%2e%2e%2f%2e%2e%2fdist-evil%2fsecret.js', '/assets/'),
+      readConfinedStaticFile(root, '/assets/%2e%2e%2f%2e%2e%2fdist-evil%2fsecret.js', '/assets/'),
     ).resolves.toBeUndefined();
     await expect(
-      openConfinedStaticFile(root, '/assets/escape.js', '/assets/'),
+      readConfinedStaticFile(root, '/assets/escape.js', '/assets/'),
     ).resolves.toBeUndefined();
     await expect(
-      openConfinedStaticFile(root, '/assets/%not-an-escape', '/assets/'),
+      readConfinedStaticFile(root, '/assets/%not-an-escape', '/assets/'),
     ).resolves.toBeUndefined();
   });
 
@@ -56,15 +57,37 @@ describe('confined static file resolution', () => {
       await writeFile(safe, 'SAFE_ASSET');
       await writeFile(secret, 'OUTSIDE_SECRET');
 
-      const opened = await openConfinedStaticFile(root, '/assets/safe.js', '/assets/');
-      expect(opened).toBeDefined();
-      if (opened === undefined) throw new Error('Expected the safe static asset to open.');
+      const loaded = await readConfinedStaticFile(root, '/assets/safe.js', '/assets/');
+      expect(loaded).toBeDefined();
+      if (loaded === undefined) throw new Error('Expected the safe static asset to load.');
 
       await rename(safe, checked);
       await symlink(secret, safe);
 
-      await expect(opened.fileHandle.readFile('utf8')).resolves.toBe('SAFE_ASSET');
-      await opened.fileHandle.close();
+      expect(loaded.body?.toString('utf8')).toBe('SAFE_ASSET');
+    },
+  );
+
+  it.skipIf(process.platform === 'win32')(
+    'keeps the boot-captured separator for traversal checks after builtin export poisoning',
+    async () => {
+      parent = await mkdtemp(path.join(tmpdir(), 'kovo-static-root-'));
+      const root = path.join(parent, 'dist');
+      const outside = path.join(parent, 'outside');
+      await mkdir(path.join(root, 'assets'), { recursive: true });
+      await mkdir(outside, { recursive: true });
+      await writeFile(path.join(outside, 'secret.js'), 'OUTSIDE_SECRET');
+      const originalSeparator = path.sep;
+      path.sep = 'poisoned-separator';
+      syncBuiltinESMExports();
+      try {
+        await expect(
+          readConfinedStaticFile(root, '/assets/%2e%2e/%2e%2e/outside/secret.js', '/assets/'),
+        ).resolves.toBeUndefined();
+      } finally {
+        path.sep = originalSeparator;
+        syncBuiltinESMExports();
+      }
     },
   );
 });

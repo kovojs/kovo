@@ -1,6 +1,14 @@
-import { mkdirSync, mkdtempSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import fs, {
+  mkdirSync,
+  mkdtempSync,
+  renameSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { once } from 'node:events';
 import { request as httpRequest, createServer } from 'node:http';
+import { syncBuiltinESMExports } from 'node:module';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { PassThrough } from 'node:stream';
@@ -201,6 +209,63 @@ describe('demo-session built asset serving', () => {
       expect(Buffer.concat(chunks).toString('utf8')).toBe('SAFE_DEMO_ASSET');
     },
   );
+
+  it('uses boot-pinned filesystem and path controls after builtin export poisoning', async () => {
+    const distDir = tempDist({ 'assets/app.js': 'PINNED_DEMO_ASSET' });
+    const originals = {
+      close: fs.close,
+      fstat: fs.fstat,
+      open: fs.open,
+      pathIsAbsolute: path.isAbsolute,
+      pathRelative: path.relative,
+      pathResolve: path.resolve,
+      pathSeparator: path.sep,
+      readFile: fs.readFile,
+      stat: fs.stat,
+    };
+    let poisonHits = 0;
+    const poison = () => {
+      poisonHits += 1;
+      throw new Error('poisoned builtin static-file control');
+    };
+    const chunks = [];
+    const response = new PassThrough();
+    response.on('data', (chunk) => chunks.push(chunk));
+    response.writeHead = () => response;
+    const finished = once(response, 'finish');
+
+    fs.close = poison;
+    fs.fstat = poison;
+    fs.open = poison;
+    fs.readFile = poison;
+    fs.stat = poison;
+    path.sep = 'poisoned-separator';
+    syncBuiltinESMExports();
+    try {
+      await expect(
+        tryServeBuiltAsset(
+          { headers: {}, method: 'GET', url: '/assets/app.js' },
+          response,
+          distDir,
+        ),
+      ).resolves.toBe(true);
+    } finally {
+      fs.close = originals.close;
+      fs.fstat = originals.fstat;
+      fs.open = originals.open;
+      fs.readFile = originals.readFile;
+      fs.stat = originals.stat;
+      path.isAbsolute = originals.pathIsAbsolute;
+      path.relative = originals.pathRelative;
+      path.resolve = originals.pathResolve;
+      path.sep = originals.pathSeparator;
+      syncBuiltinESMExports();
+    }
+    await finished;
+
+    expect(poisonHits).toBe(0);
+    expect(Buffer.concat(chunks).toString('utf8')).toBe('PINNED_DEMO_ASSET');
+  });
 });
 
 function tempDist(files) {

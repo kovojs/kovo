@@ -1,13 +1,21 @@
+/* oxlint-disable typescript/unbound-method -- Boot-captured controls are invoked through pinned Reflect.apply. */
+
 import { createServer as createNodeServer } from 'node:http';
-import path from 'node:path';
+import { extname as importedPathExtname, join as importedPathJoin } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { createServer as createViteServer } from 'vite';
 
-import { openConfinedStaticFile } from '../../../scripts/lib/confined-static-file.mjs';
+import { readConfinedStaticFile } from '../../../scripts/lib/confined-static-file.mjs';
 
-const commerceRoot = fileURLToPath(new URL('../', import.meta.url));
-const distDir = path.join(commerceRoot, 'dist');
+const NativeURL = globalThis.URL;
+const nativeFunctionBind = globalThis.Function.prototype.bind;
+const nativeReflectApply = globalThis.Reflect.apply;
+const pathExtname = bindControl(importedPathExtname);
+const pathJoin = bindControl(importedPathJoin);
+
+const commerceRoot = fileURLToPath(new NativeURL('../', import.meta.url));
+const distDir = pathJoin(commerceRoot, 'dist');
 
 const STATIC_MIME = {
   '.css': 'text/css; charset=utf-8',
@@ -24,27 +32,21 @@ const STATIC_MIME = {
 // This helper keeps the Vite middleware path available for local source-serving
 // checks, serving built `/assets/*` from `dist/` when `vp build` has populated it.
 async function tryServeBuiltAsset(req, res) {
-  const pathname = new URL(req.url, 'http://x').pathname;
-  const opened = await openConfinedStaticFile(distDir, pathname, '/assets/');
-  if (opened === undefined) return false;
+  const pathname = new NativeURL(req.url, 'http://x').pathname;
+  const loaded = await readConfinedStaticFile(distDir, pathname, '/assets/', req.method !== 'HEAD');
+  if (loaded === undefined) return false;
   try {
     res.writeHead(200, {
-      'content-type': STATIC_MIME[path.extname(opened.filePath)] ?? 'application/octet-stream',
+      'content-type': STATIC_MIME[pathExtname(loaded.filePath)] ?? 'application/octet-stream',
       'cache-control': 'public, max-age=31536000, immutable',
     });
     if (req.method === 'HEAD') {
-      await opened.fileHandle.close();
       res.end();
       return true;
     }
-    const source = opened.fileHandle.createReadStream({ autoClose: true });
-    source.once('error', (error) => {
-      res.destroy(error instanceof Error ? error : undefined);
-    });
-    source.pipe(res);
+    res.end(loaded.body);
     return true;
   } catch {
-    await opened.fileHandle.close().catch(() => {});
     return false;
   }
 }
@@ -187,4 +189,8 @@ function closeServer(server, vite) {
 
 function isMainModule() {
   return process.argv[1] === fileURLToPath(import.meta.url);
+}
+
+function bindControl(control) {
+  return nativeReflectApply(nativeFunctionBind, control, [undefined]);
 }

@@ -1,12 +1,40 @@
+/* oxlint-disable typescript/unbound-method -- Boot-captured controls are invoked through pinned Reflect.apply. */
+
 import { realpath } from 'node:fs/promises';
 import { createServer as createNodeServer } from 'node:http';
-import path from 'node:path';
-import { createBrotliCompress, createGzip } from 'node:zlib';
+import {
+  basename as importedPathBasename,
+  extname as importedPathExtname,
+  isAbsolute as importedPathIsAbsolute,
+  join as importedPathJoin,
+  relative as importedPathRelative,
+  resolve as importedPathResolve,
+} from 'node:path';
+import { brotliCompress, gzip } from 'node:zlib';
 
 import { createServer as createViteServer } from 'vite-plus';
 
-import { openConfinedFilePath } from '../lib/confined-static-file.mjs';
+import { readConfinedFilePath } from '../lib/confined-static-file.mjs';
 import { createPerSessionDispatcher } from './dispatcher.mjs';
+
+const NativePromise = globalThis.Promise;
+const NativeString = globalThis.String;
+const NativeURL = globalThis.URL;
+const nativeFunctionBind = globalThis.Function.prototype.bind;
+const nativeReflectApply = globalThis.Reflect.apply;
+const compressBrotli = bindControl(brotliCompress);
+const compressGzip = bindControl(gzip);
+const nativeDecodeURIComponent = globalThis.decodeURIComponent;
+const nativePromiseAll = bindControl(NativePromise.all, NativePromise);
+const nativeStringReplace = NativeString.prototype.replace;
+const nativeStringStartsWith = NativeString.prototype.startsWith;
+const pathBasename = bindControl(importedPathBasename);
+const pathExtname = bindControl(importedPathExtname);
+const pathIsAbsolute = bindControl(importedPathIsAbsolute);
+const pathJoin = bindControl(importedPathJoin);
+const pathRelative = bindControl(importedPathRelative);
+const pathResolve = bindControl(importedPathResolve);
+const realpathFile = bindControl(realpath);
 
 // SPEC.md §9.5: a multi-tenant ("demo") serve path for the example app shells.
 // The regular scripts/serve.mjs wires ONE process-wide app-shell node handler via
@@ -68,7 +96,7 @@ export async function createDemoServeServer({
   // singleton app-shell dev plugin (which would otherwise also claim app routes).
   process.env.KOVO_DEMO_MULTITENANT = '1';
 
-  const distDir = path.join(root, 'dist');
+  const distDir = pathJoin(root, 'dist');
   const vite = await createViteServer({
     appType: 'custom',
     configFile,
@@ -145,7 +173,7 @@ export async function runDemoServeCli(makeServer) {
 export async function tryServeBuiltAsset(req, res, distDir) {
   let pathname;
   try {
-    pathname = decodeURIComponent(new URL(req.url, 'http://x').pathname);
+    pathname = nativeDecodeURIComponent(new NativeURL(req.url, 'http://x').pathname);
   } catch {
     // The asset front door runs before app/Vite dispatch. A malformed percent escape
     // must become a bounded client error here instead of an unhandled promise rejection
@@ -166,28 +194,35 @@ export async function tryServeBuiltAsset(req, res, distDir) {
     res.end(DEMO_FAVICON_ICO);
     return true;
   }
-  if (!pathname.startsWith('/assets/')) return false;
-  const filePath = path.resolve(distDir, pathname.replace(/^\/+/, ''));
+  if (!stringStartsWith(pathname, '/assets/')) return false;
+  const filePath = pathResolve(
+    distDir,
+    nativeReflectApply(nativeStringReplace, pathname, [/^\/+/, '']),
+  );
   if (!insideDirectory(distDir, filePath)) {
     sendTextAssetResponse(req, res, 403, 'Refusing to serve outside the demo dist directory.\n');
     return true;
   }
-  let opened;
   try {
-    const [canonicalDistDir, canonicalFilePath] = await Promise.all([
-      realpath(distDir),
-      realpath(filePath),
-    ]);
+    const [canonicalDistDir, canonicalFilePath] = await nativeReflectApply(
+      nativePromiseAll,
+      NativePromise,
+      [[realpathFile(distDir), realpathFile(filePath)]],
+    );
     if (!insideDirectory(canonicalDistDir, canonicalFilePath)) {
       sendTextAssetResponse(req, res, 403, 'Refusing to serve outside the demo dist directory.\n');
       return true;
     }
-    opened = await openConfinedFilePath(canonicalDistDir, canonicalFilePath);
-    if (opened === undefined) {
+    const loaded = await readConfinedFilePath(
+      canonicalDistDir,
+      canonicalFilePath,
+      req.method !== 'HEAD',
+    );
+    if (loaded === undefined) {
       sendMissingBuiltAsset(req, res, pathname);
       return true;
     }
-    const contentType = STATIC_MIME[path.extname(opened.filePath)] ?? 'application/octet-stream';
+    const contentType = STATIC_MIME[pathExtname(loaded.filePath)] ?? 'application/octet-stream';
     const compression = isCompressibleContentType(contentType)
       ? preferredCompression(String(req.headers['accept-encoding'] ?? ''))
       : undefined;
@@ -197,38 +232,46 @@ export async function tryServeBuiltAsset(req, res, distDir) {
       ...(isCompressibleContentType(contentType) ? { vary: 'Accept-Encoding' } : {}),
       ...(compression ? { 'content-encoding': compression } : {}),
     };
+    const body = await compressBuiltAsset(loaded.body, compression);
     res.writeHead(200, {
       ...headers,
     });
     if (req.method === 'HEAD') {
-      await opened.fileHandle.close();
       res.end();
       return true;
     }
-    // Stream the descriptor authenticated above. Reopening even the canonical pathname here
-    // would let a concurrent rename/symlink swap change the object after containment checks.
-    const source = opened.fileHandle.createReadStream({ autoClose: true });
-    const body =
-      compression === 'br'
-        ? source.pipe(createBrotliCompress())
-        : compression === 'gzip'
-          ? source.pipe(createGzip())
-          : source;
-    body.once('error', (error) => {
-      res.destroy(error instanceof Error ? error : undefined);
-    });
-    body.pipe(res);
+    res.end(body);
     return true;
   } catch {
-    await opened?.fileHandle.close().catch(() => {});
     sendMissingBuiltAsset(req, res, pathname);
     return true;
   }
 }
 
 function insideDirectory(root, filePath) {
-  const relativePath = path.relative(root, filePath);
-  return relativePath === '' || (!relativePath.startsWith('..') && !path.isAbsolute(relativePath));
+  const relativePath = pathRelative(root, filePath);
+  return (
+    relativePath === '' || (!stringStartsWith(relativePath, '..') && !pathIsAbsolute(relativePath))
+  );
+}
+
+function compressBuiltAsset(body, compression) {
+  if (body === undefined || compression === undefined) return body;
+  const compress = compression === 'br' ? compressBrotli : compressGzip;
+  return new NativePromise((resolve, reject) => {
+    compress(body, (error, compressed) => {
+      if (error) reject(error);
+      else resolve(compressed);
+    });
+  });
+}
+
+function stringStartsWith(value, prefix) {
+  return nativeReflectApply(nativeStringStartsWith, value, [prefix]);
+}
+
+function bindControl(control, receiver) {
+  return nativeReflectApply(nativeFunctionBind, control, [receiver]);
 }
 
 function sendMissingBuiltAsset(req, res, pathname) {
@@ -285,7 +328,7 @@ function parseAcceptEncoding(value) {
 function isCompressibleContentType(contentType) {
   const type = contentType.split(';', 1)[0]?.trim().toLowerCase() ?? '';
   return (
-    type.startsWith('text/') ||
+    stringStartsWith(type, 'text/') ||
     type === 'application/javascript' ||
     type === 'application/json' ||
     type === 'application/ld+json' ||
@@ -300,7 +343,7 @@ function isCompressibleContentType(contentType) {
 }
 
 function cacheControlForAsset(pathname) {
-  const fileName = path.basename(pathname);
+  const fileName = pathBasename(pathname);
   return hasContentHash(fileName)
     ? 'public, max-age=31536000, immutable'
     : 'public, max-age=0, must-revalidate';
