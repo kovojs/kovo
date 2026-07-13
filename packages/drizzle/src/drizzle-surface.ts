@@ -1,3 +1,13 @@
+import {
+  runtimeArrayAppend,
+  runtimeArrayIsArray,
+  runtimeArrayLength,
+  runtimeArrayValue,
+  runtimeDefineOwnData,
+  runtimeFreeze,
+  runtimeOwnDataValue,
+} from './runtime-security-intrinsics.js';
+
 export const DRIZZLE_TABLE_FACTORY_NAMES = new Set(['pgTable', 'sqliteTable']);
 
 export const DRIZZLE_DATABASE_TYPE_NAMES = new Set([
@@ -180,9 +190,94 @@ export type KovoViewExtraConfig = KovoViewExtraConfigAnnotation & ((self: unknow
 export function kovo(annotation: KovoViewExtraConfigAnnotation): KovoViewExtraConfig;
 export function kovo(annotation: KovoTableAnnotation): KovoTableExtraConfig;
 export function kovo(annotation: KovoAnnotation): KovoTableExtraConfig | KovoViewExtraConfig {
-  return Object.assign((() => []) as (self: unknown) => [], annotation) as
-    | KovoTableExtraConfig
-    | KovoViewExtraConfig;
+  const extraConfig = (() => []) as (self: unknown) => [];
+  const snapshot = snapshotKovoAnnotation(annotation);
+  for (let index = 0; index < kovoAnnotationKeys.length; index += 1) {
+    const key = kovoAnnotationKeys[index]!;
+    const value = runtimeOwnDataValue(snapshot, key);
+    if (value.found) {
+      runtimeDefineOwnData(extraConfig, key, value.value, 'Kovo Drizzle annotation');
+    }
+  }
+  return runtimeFreeze(extraConfig) as KovoTableExtraConfig | KovoViewExtraConfig;
+}
+
+const kovoAnnotationKeys = [
+  'atomic',
+  'authzPolicy',
+  'confidentialAtRest',
+  'domain',
+  'exempt',
+  'fans',
+  'governed',
+  'key',
+  'owner',
+  'ownerVia',
+  'public',
+  'readOnly',
+  'reference',
+  'secret',
+  'version',
+  'view',
+] as const;
+
+function snapshotKovoAnnotation(annotation: KovoAnnotation): Readonly<Record<string, unknown>> {
+  if (typeof annotation !== 'object' || annotation === null) {
+    throw new TypeError('kovo() requires an annotation object.');
+  }
+  const snapshot: Record<string, unknown> = {};
+  for (let index = 0; index < kovoAnnotationKeys.length; index += 1) {
+    const key = kovoAnnotationKeys[index]!;
+    const value = runtimeOwnDataValue(annotation, key);
+    if (!value.found) continue;
+    runtimeDefineOwnData(
+      snapshot,
+      key,
+      snapshotKovoAnnotationValue(key, value.value),
+      'Kovo Drizzle annotation snapshot',
+    );
+  }
+  return runtimeFreeze(snapshot);
+}
+
+function snapshotKovoAnnotationValue(
+  key: (typeof kovoAnnotationKeys)[number],
+  value: unknown,
+): unknown {
+  if (runtimeArrayIsArray(value)) {
+    const length = runtimeArrayLength(value, `Kovo Drizzle ${key} annotation`);
+    const snapshot: unknown[] = [];
+    for (let index = 0; index < length; index += 1) {
+      const entry = runtimeArrayValue(value, index, `Kovo Drizzle ${key} annotation`);
+      runtimeArrayAppend(
+        snapshot,
+        key === 'fans' ? snapshotKovoRecord(entry, ['domain', 'via', 'when']) : entry,
+        `Kovo Drizzle ${key} annotation`,
+      );
+    }
+    return runtimeFreeze(snapshot);
+  }
+  if (key === 'domain' && typeof value === 'object' && value !== null) {
+    return snapshotKovoRecord(value, ['key']);
+  }
+  if (key === 'ownerVia') return snapshotKovoRecord(value, ['fk', 'parent', 'parentKey']);
+  if (key === 'view') return snapshotKovoRecord(value, ['of', 'refresh']);
+  return value;
+}
+
+function snapshotKovoRecord(value: unknown, keys: readonly string[]): Readonly<object> {
+  if (typeof value !== 'object' || value === null) {
+    throw new TypeError('Kovo Drizzle nested annotation must be an object.');
+  }
+  const snapshot: Record<string, unknown> = {};
+  for (let index = 0; index < keys.length; index += 1) {
+    const key = keys[index]!;
+    const entry = runtimeOwnDataValue(value, key);
+    if (entry.found) {
+      runtimeDefineOwnData(snapshot, key, entry.value, 'Kovo Drizzle nested annotation');
+    }
+  }
+  return runtimeFreeze(snapshot);
 }
 
 /**
