@@ -96,6 +96,22 @@ describe('runtime Secret non-coercible wrapper (SPEC §10.2/§11.2)', () => {
     expect(String(objectError)).toMatch(/KV435/);
   });
 
+  it('refuses structuredClone accessors without executing them', () => {
+    // SPEC §6.6: recursive egress checks consume stable own-data snapshots rather
+    // than invoking application accessors during a confidentiality decision.
+    let reads = 0;
+    const carrier = Object.defineProperty({}, 'password', {
+      enumerable: true,
+      get() {
+        reads += 1;
+        return secret('accessor-secret');
+      },
+    });
+
+    expect(() => structuredClone(carrier)).toThrow(/accessor|own data/u);
+    expect(reads).toBe(0);
+  });
+
   it('reveals the value only on explicit reveal()/revealSecret()', () => {
     drainSecretRevealAuditFacts();
     const s = secret('hunter2');

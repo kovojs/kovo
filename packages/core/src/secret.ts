@@ -2,7 +2,6 @@ import { createBoundedRuntimeAuditCollector } from './internal/security-markers.
 import {
   freezeSecurityValue,
   securityApply,
-  securityDefineProperty,
   securityIsArray,
   securityIsError,
   securityIsMap,
@@ -167,8 +166,6 @@ const maybeMarkAsUncloneable = (() => {
   return loader?.('node:worker_threads')?.markAsUncloneable;
 })();
 
-const structuredCloneSecretGuard = Symbol.for('kovo.secret.structuredCloneGuard');
-
 type PoisonKind = 'secret' | 'redacted' | 'untrusted';
 const poisonBoxKinds = securityWeakMap<object, PoisonKind>();
 
@@ -294,21 +291,17 @@ installStructuredCloneSecretGuard();
 
 function installStructuredCloneSecretGuard(): void {
   const globalClone = globalThis as typeof globalThis & {
-    [structuredCloneSecretGuard]?: true;
     structuredClone?: (value: unknown, options?: unknown) => unknown;
   };
-  if (globalClone[structuredCloneSecretGuard] === true) return;
   const nativeStructuredClone = globalClone.structuredClone;
   if (typeof nativeStructuredClone !== 'function') return;
+  // SPEC §6.6: a Symbol.for/global marker is app-forgeable and therefore cannot
+  // prove that this confidentiality choke was installed. Every loaded Kovo copy
+  // contributes its own guard; composed wrappers safely recognize their own boxes.
   globalClone.structuredClone = (value: unknown, options?: unknown): unknown => {
     assertNoSecretStructuredCloneValue(value);
     return nativeStructuredClone(value, options);
   };
-  securityDefineProperty(globalClone, structuredCloneSecretGuard, {
-    configurable: false,
-    enumerable: false,
-    value: true,
-  });
 }
 
 function assertNoSecretStructuredCloneValue(
@@ -320,7 +313,15 @@ function assertNoSecretStructuredCloneValue(
   if (securityWeakSetHas(seen, value)) return;
   securityWeakSetAdd(seen, value);
   if (securityIsArray(value)) {
-    for (let index = 0; index < value.length; index += 1) {
+    const lengthDescriptor = securityGetOwnPropertyDescriptor(value, 'length');
+    if (
+      lengthDescriptor === undefined ||
+      !('value' in lengthDescriptor) ||
+      typeof lengthDescriptor.value !== 'number'
+    ) {
+      throw new TypeError('structuredClone input requires a stable array length.');
+    }
+    for (let index = 0; index < lengthDescriptor.value; index += 1) {
       const descriptor = securityGetOwnPropertyDescriptor(value, index);
       if (descriptor === undefined) continue;
       if (!('value' in descriptor)) {
@@ -345,10 +346,20 @@ function assertNoSecretStructuredCloneValue(
   for (let index = 0; index < keys.length; index += 1) {
     const key = keys[index];
     if (key === undefined) continue;
-    assertNoSecretStructuredCloneValue((value as Record<string, unknown>)[key], seen);
+    const descriptor = securityGetOwnPropertyDescriptor(value, key);
+    if (descriptor === undefined || !('value' in descriptor)) {
+      throw new TypeError('structuredClone input must not hide secrets behind object accessors.');
+    }
+    assertNoSecretStructuredCloneValue(descriptor.value, seen);
   }
-  if (securityIsError(value) && 'cause' in value) {
-    assertNoSecretStructuredCloneValue((value as { cause?: unknown }).cause, seen);
+  if (securityIsError(value)) {
+    const cause = securityGetOwnPropertyDescriptor(value, 'cause');
+    if (cause !== undefined) {
+      if (!('value' in cause)) {
+        throw new TypeError('structuredClone input must not hide secrets behind Error accessors.');
+      }
+      assertNoSecretStructuredCloneValue(cause.value, seen);
+    }
   }
 }
 
