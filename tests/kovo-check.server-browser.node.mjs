@@ -9,6 +9,8 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { promisify } from 'node:util';
 import { gzipSync } from 'node:zlib';
 
+const nullPrototypeRecord = (value) => Object.assign(Object.create(null), value);
+
 import { missingBuildMessage } from '../scripts/kovo-check.mjs';
 import { readTempCommerceGraph } from '../scripts/commerce-graph.mjs';
 import {
@@ -502,13 +504,13 @@ export const CartRow = component({
 `,
   });
   assert.deepEqual(result.componentGraphFacts, [
-    {
+    nullPrototypeRecord({
       domName: 'cart-row',
       exportName: 'CartRow',
       fragments: ['cart-row/cart-row'],
       name: 'cart-row/cart-row',
       queries: ['cart'],
-    },
+    }),
   ]);
   await assertGeneratedRegistryConsumerTypes(
     result.files,
@@ -1071,14 +1073,14 @@ export const CartActions = component({
         select: 'select:p1',
       },
       parsedParams: {
-        add: { quantity: 2 },
-        deselect: { id: 'p2', selected: false },
-        select: { id: 'p1', selected: true },
-        standalone: {
+        add: nullPrototypeRecord({ quantity: 2 }),
+        deselect: nullPrototypeRecord({ id: 'p2', selected: false }),
+        select: nullPrototypeRecord({ id: 'p1', selected: true }),
+        standalone: nullPrototypeRecord({
           featured: false,
           productId: 'p1',
           quantity: 2,
-        },
+        }),
       },
       stateCountAfterAdd: 3,
     },
