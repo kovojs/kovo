@@ -1,3 +1,9 @@
+import { spawnSync } from 'node:child_process';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -6,7 +12,62 @@ import {
   UNTABLED_SQL_WRITE,
 } from './sql-write-allowlist.js';
 
+const sqlWriteAllowlistModuleUrl = pathToFileURL(
+  join(import.meta.dirname, 'sql-write-allowlist.ts'),
+).href;
+
 describe('parseSqlWriteTables', () => {
+  it('binds the SQL parser before late resolver hooks can replace classifier truth', () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-sql-parser-authority-'));
+    const forgedParser = join(root, 'forged-parser.cjs');
+    writeFileSync(forgedParser, 'module.exports = { parse() { return []; } };\n', 'utf8');
+    const script = `
+      const { existsSync } = await import('node:fs');
+      const { registerHooks } = await import('node:module');
+      const { pathToFileURL } = await import('node:url');
+      registerHooks({
+        resolve(specifier, context, nextResolve) {
+          if (specifier.startsWith('.') && specifier.endsWith('.js') && context.parentURL) {
+            const candidate = new URL(specifier.replace(/\\.js$/, '.ts'), context.parentURL);
+            if (existsSync(candidate)) return nextResolve(candidate.href, context);
+          }
+          return nextResolve(specifier, context);
+        },
+      });
+      const classifier = await import(${JSON.stringify(
+        `${sqlWriteAllowlistModuleUrl}?boot-pinned-parser`,
+      )});
+      let poisonHits = 0;
+      registerHooks({
+        resolve(specifier, context, nextResolve) {
+          if (specifier === 'pgsql-ast-parser') {
+            poisonHits += 1;
+            return nextResolve(pathToFileURL(${JSON.stringify(forgedParser)}).href, context);
+          }
+          return nextResolve(specifier, context);
+        },
+      });
+      const targets = classifier.parseSqlWriteTables(
+        "UPDATE victim_accounts SET role = 'admin'",
+        { dialect: 'postgres' },
+      );
+      process.exit(
+        poisonHits === 0 && targets.length === 1 && targets[0] === 'victim_accounts' ? 0 : 3,
+      );
+    `;
+    try {
+      const result = spawnSync(
+        process.execPath,
+        ['--experimental-transform-types', '--input-type=module', '--eval', script],
+        { encoding: 'utf8' },
+      );
+      expect(result.stderr).toBe('');
+      expect(result.status).toBe(0);
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
   it('keeps DML write table extraction precise', () => {
     expect(parseSqlWriteTables('DELETE FROM contacts', { dialect: 'sqlite' })).toEqual([
       'contacts',

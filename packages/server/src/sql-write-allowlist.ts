@@ -1,5 +1,5 @@
-import { createRequire } from 'node:module';
 import { securityClassifier } from '@kovojs/core/internal/security-markers';
+import * as pgsqlAstParser from 'pgsql-ast-parser';
 import type {
   DeleteStatement,
   InsertStatement,
@@ -29,13 +29,9 @@ import {
 } from './security-witness-intrinsics.js';
 
 const nativeArraySort = Array.prototype.sort;
-
-const require = createRequire(import.meta.url);
-let pgsqlAstParser: typeof import('pgsql-ast-parser') | undefined;
-
-function sqlParser(): typeof import('pgsql-ast-parser') {
-  pgsqlAstParser ??= require('pgsql-ast-parser') as typeof import('pgsql-ast-parser');
-  return pgsqlAstParser;
+const pgsqlAstParse = pgsqlAstParser.parse;
+if (typeof pgsqlAstParse !== 'function') {
+  throw new TypeError('Kovo managed SQL parser authority is unavailable.');
 }
 
 /** Runtime SQL parser configuration for production write-table enforcement. */
@@ -88,7 +84,10 @@ export const classifyStatement = securityClassifier(
     const sql = options.dialect === 'sqlite' ? normalizeSqlitePlaceholders(statement) : statement;
     let parsedStatements: Statement[];
     try {
-      parsedStatements = sqlParser().parse(sql);
+      // SPEC §6.6 rule 6: the parser decides whether raw SQL is a proven read or which exact
+      // tables it can write. Capture that authority with the trusted server graph; a first-use
+      // require after app evaluation would let a resolver hook substitute attacker-selected facts.
+      parsedStatements = witnessReflectApply(pgsqlAstParse, undefined, [sql]) as Statement[];
     } catch (error) {
       return {
         kind: 'unproven',
