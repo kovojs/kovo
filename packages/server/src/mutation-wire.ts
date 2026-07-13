@@ -368,13 +368,13 @@ export interface NoJsMutationReplayStore {
     scope: string,
     idem: string,
     fingerprint?: string,
-  ): NoJsMutationReplayReservation | undefined;
+  ): NoJsMutationReplayReservation | Promise<NoJsMutationReplayReservation | undefined> | undefined;
 }
 
 /** @internal Reservation handle for a no-JS replay record. */
 export interface NoJsMutationReplayReservation {
-  abort?(): void;
-  commit(response: MutationEndpointReplayResponse): void;
+  abort?(): Promise<void> | void;
+  commit(response: MutationEndpointReplayResponse): Promise<void> | void;
 }
 
 /**

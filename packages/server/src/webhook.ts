@@ -131,15 +131,18 @@ export interface WebhookWireResponse extends ServerResponseBase<
 /** Atomic idempotency store used by writable webhooks to reserve and replay provider event ids. */
 export interface WebhookReplayStore {
   get(scope: string, idem: string): Promise<WebhookWireResponse> | WebhookWireResponse | undefined;
-  reserve(scope: string, idem: string): WebhookReplayReservation | undefined;
-  set(scope: string, idem: string, response: WebhookWireResponse): void;
+  reserve(
+    scope: string,
+    idem: string,
+  ): Promise<WebhookReplayReservation | undefined> | WebhookReplayReservation | undefined;
+  set(scope: string, idem: string, response: WebhookWireResponse): Promise<void> | void;
 }
 
 /** A held webhook replay reservation, committed with the final response or aborted on failure. */
 export interface WebhookReplayReservation {
   /** Release a pending reservation without committing, so a retry can re-run the handler (A4). */
-  abort?(): void;
-  commit(response: WebhookWireResponse): void;
+  abort?(): Promise<void> | void;
+  commit(response: WebhookWireResponse): Promise<void> | void;
 }
 
 /**
@@ -884,14 +887,14 @@ function snapshotWebhookReplayStore(source: unknown, label: string): WebhookRepl
     get(scope: string, idem: string) {
       return witnessReflectApply(get, source, [scope, idem]);
     },
-    reserve(scope: string, idem: string) {
-      const reservation = witnessReflectApply<unknown>(reserve, source, [scope, idem]);
+    async reserve(scope: string, idem: string) {
+      const reservation = await witnessReflectApply<unknown>(reserve, source, [scope, idem]);
       return reservation === undefined
         ? undefined
         : snapshotWebhookReplayReservation(reservation, `${label}.reserve()`);
     },
     set(scope: string, idem: string, response: WebhookWireResponse) {
-      witnessReflectApply(set, source, [scope, idem, response]);
+      return witnessReflectApply<Promise<void> | void>(set, source, [scope, idem, response]);
     },
   });
 }
@@ -910,11 +913,11 @@ function snapshotWebhookReplayReservation(
       ? {}
       : {
           abort() {
-            witnessReflectApply(abort, source, []);
+            return witnessReflectApply<Promise<void> | void>(abort, source, []);
           },
         }),
     commit(response: WebhookWireResponse) {
-      witnessReflectApply(commit, source, [response]);
+      return witnessReflectApply<Promise<void> | void>(commit, source, [response]);
     },
   });
 }
@@ -1237,6 +1240,7 @@ export async function runWebhook<
   const reservation = reserveOutcome.kind === 'reserved' ? reserveOutcome.reservation : undefined;
 
   const changes: ChangeRecord<string, WebhookInputFor<InputSchema>>[] = [];
+  let handlerCommitted = false;
   try {
     const runHandler = async (tx: Tx): Promise<Value> => {
       const managedTx = webhookManagedTransactionDb(tx);
@@ -1291,9 +1295,13 @@ export async function runWebhook<
           runHandler,
         )
       : await runHandler(undefined as Tx);
+    // From this point the transaction adapter (when present) has committed. Any replay
+    // settlement or post-handler posture failure must leave the reservation pending rather than
+    // reopening execution across the commit/response crash window (SPEC §10.3).
+    handlerCommitted = true;
     assertWebhookReplayPosture(name, definition, changes);
 
-    const response = storeWebhookReplay(
+    const response = await storeWebhookReplay(
       definition.replayStore,
       replayScope,
       idem,
@@ -1313,7 +1321,7 @@ export async function runWebhook<
     };
   } catch (error) {
     if (isWebhookRollback(error)) {
-      const response = storeWebhookReplay(
+      const response = await storeWebhookReplay(
         definition.replayStore,
         replayScope,
         idem,
@@ -1331,7 +1339,7 @@ export async function runWebhook<
     // A4 (SPEC §9.1:850): on an unexpected exception, abort the reservation so
     // a provider retry can re-run the handler fresh. Only explicit fail()/
     // WebhookRollback results and successes get committed to the replay store.
-    reservation?.abort?.();
+    if (!handlerCommitted) await reservation?.abort?.();
 
     return {
       changes: [],
@@ -1737,19 +1745,19 @@ function webhookFailWireResponse(
   };
 }
 
-function storeWebhookReplay(
+async function storeWebhookReplay(
   replayStore: WebhookReplayStore | undefined,
   scope: string,
   idem: string | undefined,
   response: WebhookWireResponse,
   reservation: WebhookReplayReservation | undefined,
-): WebhookWireResponse {
+): Promise<WebhookWireResponse> {
   if (reservation) {
-    reservation.commit(response);
+    await reservation.commit(response);
     return response;
   }
 
-  if (idem !== undefined) replayStore?.set(scope, idem, response);
+  if (idem !== undefined) await replayStore?.set(scope, idem, response);
   return response;
 }
 

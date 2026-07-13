@@ -97,7 +97,7 @@ export async function renderNoJsMutationLifecycleResponse<
   }
 
   if (lifecycle.kind === 'mutation-failure') {
-    lifecycle.reservation?.abort?.();
+    await lifecycle.reservation?.abort?.();
     try {
       return renderNoJsMutationFailureResponse(
         lifecycle.result,
@@ -123,7 +123,9 @@ export async function renderNoJsMutationLifecycleResponse<
       result: lifecycle.result,
     });
   } catch (error) {
-    lifecycle.reservation?.abort?.();
+    // The successful mutation has crossed its transaction boundary. Preserve the pending replay
+    // claim when response policy fails so a retry cannot execute committed work again
+    // (SPEC §10.3).
     reportServerError(noJsRequest.onError, error, {
       mutationKey: definition.key,
       operation: 'mutation-response-policy',
@@ -144,7 +146,7 @@ export async function renderNoJsMutationLifecycleResponse<
     ),
     status: 303 as const,
   });
-  lifecycle.reservation?.commit(successResponse);
+  await lifecycle.reservation?.commit(successResponse);
   return successResponse;
 }
 

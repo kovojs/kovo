@@ -29,8 +29,8 @@ import {
 import { securityStringStartsWith } from '../response-security-intrinsics.js';
 
 export type MutationLifecycleReplayReservation<Response> = {
-  abort?(): void;
-  commit(response: Response): void;
+  abort?(): Promise<void> | void;
+  commit(response: Response): Promise<void> | void;
 };
 
 export type MutationLifecycleReplayPolicy<Response> = {
@@ -118,7 +118,7 @@ export function enhancedMutationReplayPolicy<Request>(mode: {
             ? {}
             : { abort: () => result.reservation.abort?.() }),
           commit(response: BufferedMutationWireResponse) {
-            result.reservation.commit(response);
+            return result.reservation.commit(response);
           },
         },
       };
@@ -268,7 +268,7 @@ function noJsReplayReservation(
   return {
     ...(reservation.abort === undefined ? {} : { abort: () => reservation.abort?.() }),
     commit(response) {
-      reservation.commit(response);
+      return reservation.commit(response);
     },
   };
 }

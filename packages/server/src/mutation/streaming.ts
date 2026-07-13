@@ -201,7 +201,7 @@ export const renderStreamingMutationWireResponse = wireEmitter(
               if (chunk.kind === 'done') {
                 securityStreamClose(controller);
                 // Commit the full settled body so replays re-serve the complete stream.
-                reservation?.commit({
+                await reservation?.commit({
                   body: frameworkWireBody(securityArrayJoin(buffered, '')),
                   headers: finalResponse.headers,
                   status: finalResponse.status,
@@ -215,7 +215,7 @@ export const renderStreamingMutationWireResponse = wireEmitter(
             enqueue(renderDoneWireHtml());
             securityStreamClose(controller);
             // Commit after the generator exhausted (no explicit done chunk).
-            reservation?.commit({
+            await reservation?.commit({
               body: frameworkWireBody(securityArrayJoin(buffered, '')),
               headers: finalResponse.headers,
               status: finalResponse.status,
@@ -225,7 +225,7 @@ export const renderStreamingMutationWireResponse = wireEmitter(
             // server error hook and emit a `<kovo-done reason="error">` terminator so the
             // client observes a clean, in-band end-of-stream (mirroring the explicit
             // `stream.done({ reason: 'error' })` path) instead of a silent hang. The
-            // reservation is aborted, never committed, so the failed stream is not replayed.
+            // mutation has already crossed its transaction boundary before streaming starts.
             if (errorContext) {
               reportServerError(
                 errorContext.onError,
@@ -241,8 +241,10 @@ export const renderStreamingMutationWireResponse = wireEmitter(
               // concurrently); fall back to surfacing the original error on the stream.
               securityStreamError(controller, error);
             }
-            // Do not commit on error; let the reservation remain pending/aborted.
-            reservation?.abort?.();
+            // Do not abort on either a generator or replay-settlement error: the mutation
+            // transaction has already committed. Leaving the durable claim pending fails closed
+            // across the response-settlement crash window instead of re-running the handler on a
+            // retry (SPEC §10.3).
           }
         },
         cancel() {

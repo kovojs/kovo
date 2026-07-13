@@ -149,7 +149,7 @@ export const renderMutationWireLifecycleResponse = wireEmitter(
           result,
         });
       } catch (error) {
-        lifecycle.reservation?.abort?.();
+        await lifecycle.reservation?.abort?.();
         reportServerError(wireRequest.onError, error, {
           mutationKey: definition.key,
           operation: 'mutation-response-policy',
@@ -186,7 +186,9 @@ export const renderMutationWireLifecycleResponse = wireEmitter(
         result,
       });
     } catch (error) {
-      reservation?.abort?.();
+      // The successful mutation has crossed its transaction boundary. Keep its replay claim
+      // pending when response policy fails so a retry cannot execute the committed handler again
+      // (SPEC §10.3).
       reportServerError(wireRequest.onError, error, {
         mutationKey: definition.key,
         operation: 'mutation-response-policy',
@@ -239,7 +241,7 @@ export const renderMutationWireLifecycleResponse = wireEmitter(
       );
     }
 
-    reservation?.commit(finalResponse);
+    await reservation?.commit(finalResponse);
     return finalResponse;
   },
 );

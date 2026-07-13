@@ -75,8 +75,11 @@ export interface MutationReplayStore<
     scope: string,
     idem: string,
     fingerprint?: string,
-  ): MutationReplayReservation<Response> | undefined;
-  set(scope: string, idem: string, response: Response, fingerprint?: string): void;
+  ):
+    | MutationReplayReservation<Response>
+    | Promise<MutationReplayReservation<Response> | undefined>
+    | undefined;
+  set(scope: string, idem: string, response: Response, fingerprint?: string): Promise<void> | void;
 }
 
 /** Pin a custom mutation replay store's method/receiver authority at app assembly. */
@@ -93,14 +96,23 @@ export function snapshotMutationReplayStore<Response extends MutationReplayRespo
     get(scope: string, idem: string, fingerprint?: string) {
       return witnessReflectApply(get, source, [scope, idem, fingerprint]);
     },
-    reserve(scope: string, idem: string, fingerprint?: string) {
-      const reservation = witnessReflectApply<unknown>(reserve, source, [scope, idem, fingerprint]);
+    async reserve(scope: string, idem: string, fingerprint?: string) {
+      const reservation = await witnessReflectApply<unknown>(reserve, source, [
+        scope,
+        idem,
+        fingerprint,
+      ]);
       return reservation === undefined
         ? undefined
         : snapshotMutationReplayReservation<Response>(reservation);
     },
     set(scope: string, idem: string, response: Response, fingerprint?: string) {
-      witnessReflectApply(set, source, [scope, idem, response, fingerprint]);
+      return witnessReflectApply<Promise<void> | void>(set, source, [
+        scope,
+        idem,
+        response,
+        fingerprint,
+      ]);
     },
   });
 }
@@ -118,11 +130,11 @@ function snapshotMutationReplayReservation<Response extends MutationReplayRespon
       ? {}
       : {
           abort() {
-            witnessReflectApply(abort, source, []);
+            return witnessReflectApply<Promise<void> | void>(abort, source, []);
           },
         }),
     commit(response: Response) {
-      witnessReflectApply(commit, source, [response]);
+      return witnessReflectApply<Promise<void> | void>(commit, source, [response]);
     },
   });
 }
@@ -170,8 +182,8 @@ export interface MutationReplayReservation<
    * failure). Optional for backward compatibility with stores predating
    * security finding M4; callers must tolerate its absence.
    */
-  abort?(): void;
-  commit(response: Response): void;
+  abort?(): Promise<void> | void;
+  commit(response: Response): Promise<void> | void;
 }
 
 export interface MutationReplayContext<
@@ -189,7 +201,11 @@ export interface ReplayReservationStore<Response, Reservation> {
     idem: string,
     fingerprint?: string,
   ): Promise<Response | undefined> | Response | undefined;
-  reserve(scope: string, idem: string, fingerprint?: string): Reservation | undefined;
+  reserve(
+    scope: string,
+    idem: string,
+    fingerprint?: string,
+  ): Promise<Reservation | undefined> | Reservation | undefined;
 }
 
 export type ReplayReservationResult<Response, Reservation> =
@@ -565,7 +581,7 @@ export async function reserveReplayBeforeRun<Response, Reservation>(
 
   let reservation: Reservation | undefined;
   try {
-    reservation = replay.store.reserve(replay.scope, replay.idem, replay.fingerprint);
+    reservation = await replay.store.reserve(replay.scope, replay.idem, replay.fingerprint);
   } catch (error) {
     if (error instanceof MutationReplayConflictError) return { kind: 'conflict' };
     throw error;
@@ -590,7 +606,7 @@ export async function reserveReplayBeforeRun<Response, Reservation>(
   // through unprotected (which would re-open the M4 double-execute hazard).
   let retryReservation: Reservation | undefined;
   try {
-    retryReservation = replay.store.reserve(replay.scope, replay.idem, replay.fingerprint);
+    retryReservation = await replay.store.reserve(replay.scope, replay.idem, replay.fingerprint);
   } catch (error) {
     if (error instanceof MutationReplayConflictError) return { kind: 'conflict' };
     throw error;
@@ -635,7 +651,7 @@ export async function commitReservedMutationReplay<Response extends MutationRepl
   render: () => Promise<Response>,
 ): Promise<Response> {
   const response = await render();
-  reservation?.commit(response);
+  await reservation?.commit(response);
   return response;
 }
 

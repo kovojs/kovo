@@ -354,7 +354,7 @@ async function runMutationLifecycleHandler<
   try {
     result = await runMutation(definition, rawInput, request, options);
   } catch (error) {
-    state.reservation?.abort?.();
+    await state.reservation?.abort?.();
     if (!state.catchHandlerErrors) throw error;
     return { error, kind: 'handler-error', reservation: state.reservation };
   }
@@ -363,7 +363,7 @@ async function runMutationLifecycleHandler<
     if (result.error.code === 'VALIDATION' || result.status === 429 || result.status === 409) {
       // Validation, transient rate-limit, and KV429 stale-version outcomes are retryable with
       // corrected/fresh state; never store them as idempotent replay responses (SPEC §9.1/§10.3).
-      state.reservation?.abort?.();
+      await state.reservation?.abort?.();
     }
     return { kind: 'mutation-failure', reservation: state.reservation, result };
   }
