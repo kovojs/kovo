@@ -199,19 +199,25 @@ export function getBetterAuthSetCookie(headers: Headers | null | undefined): str
     }
   }
 
-  const ownGetSetCookie = betterAuthGetOwnPropertyDescriptor(headers, 'getSetCookie');
-  if (
-    ownGetSetCookie !== undefined &&
-    'value' in ownGetSetCookie &&
-    typeof ownGetSetCookie.value === 'function'
-  ) {
-    return copySetCookieValues(betterAuthApply(ownGetSetCookie.value, headers, []));
+  try {
+    const ownGetSetCookie = betterAuthGetOwnPropertyDescriptor(headers, 'getSetCookie');
+    if (
+      ownGetSetCookie !== undefined &&
+      'value' in ownGetSetCookie &&
+      typeof ownGetSetCookie.value === 'function'
+    ) {
+      return copySetCookieValues(betterAuthApply(ownGetSetCookie.value, headers, []));
+    }
+
+    const cookie = readStructuralSetCookie(headers);
+    if (!cookie) return [];
+
+    return splitFoldedSetCookie(cookie);
+  } catch {
+    // Structural compatibility header bags are untrusted. Inspection failure contributes no
+    // session-cookie evidence, so provider-controlled error text cannot leave this trusted zone.
+    return [];
   }
-
-  const cookie = readStructuralSetCookie(headers);
-  if (!cookie) return [];
-
-  return splitFoldedSetCookie(cookie);
 }
 
 function splitFoldedSetCookie(folded: string): string[] {

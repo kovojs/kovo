@@ -379,6 +379,7 @@ review remains manual and is the point of the `reviewTrigger`. See `rules/depend
         "better-auth.sign-up.submitted-password",
         "better-auth.sign-out.request-cookie",
         "better-auth.get-session.request-cookie",
+        "better-auth.get-session.response-secret-projection",
         "better-auth.set-cookie.forwarding",
         "better-auth.session-refresh.set-cookie",
         "better-auth.adapter.sign-in.account-password",

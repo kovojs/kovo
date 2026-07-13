@@ -15,6 +15,7 @@ const NativeSet = globalThis.Set;
 const NativeString = globalThis.String;
 const NativeTypeError = globalThis.TypeError;
 const nativeArrayIsArray = NativeArray.isArray;
+const nativeDateGetTime = NativeDate.prototype.getTime;
 const nativeDateNow = NativeDate.now;
 const nativeDateParse = NativeDate.parse;
 const nativeJsonParse = NativeJSON.parse;
@@ -136,6 +137,7 @@ function capturedControlsAreSound(): boolean {
       apply(nativeStringToLowerCase, 'EXPIRES', []) === 'expires' &&
       apply(nativeStringToUpperCase, 'kovo', []) === 'KOVO' &&
       apply(nativeStringTrim, ' safe ', []) === 'safe' &&
+      apply(nativeDateGetTime, new NativeDate(0), []) === 0 &&
       apply(nativeDateParse, NativeDate, ['Thu, 01 Jan 1970 00:00:00 GMT']) === 0 &&
       apply(nativeDateParse, NativeDate, ['Tue, 19 Jan 2038 03:14:07 GMT']) === 2_147_483_647_000 &&
       apply<number>(nativeDateNow, NativeDate, []) > 1_000_000_000_000 &&
@@ -185,6 +187,17 @@ export function betterAuthCharacterCodeAt(value: string, index: number): number 
 export function betterAuthDateNow(): number {
   assertBetterAuthIntrinsics();
   return apply(nativeDateNow, NativeDate, []);
+}
+
+/** @internal Clone a genuine Date without consulting its mutable prototype. */
+export function betterAuthCloneDate(value: object): Date | undefined {
+  assertBetterAuthIntrinsics();
+  try {
+    const timestamp = apply<number>(nativeDateGetTime, value, []);
+    return new NativeDate(timestamp);
+  } catch {
+    return undefined;
+  }
 }
 
 export function betterAuthDateParse(value: string): number {

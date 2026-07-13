@@ -9,18 +9,26 @@ import {
 } from './internal.js';
 import { callBetterAuthGetSession, pinBetterAuthGetSession } from './internal/trusted-plaintext.js';
 import {
+  betterAuthArrayAppend,
   betterAuthArrayIsArray,
+  betterAuthCloneDate,
+  betterAuthCreateMap,
   betterAuthCreateNullRecord,
   betterAuthDefineOwnData,
   betterAuthGetOwnPropertyDescriptor,
+  betterAuthMapGet,
+  betterAuthMapHas,
+  betterAuthMapSet,
   betterAuthObjectKeys,
   betterAuthOwnDataValue,
+  betterAuthSnapshotDenseArray,
 } from './internal/intrinsics.js';
 import { assertBetterAuthRequestSecretPath } from './internal/non-egress-proof.js';
 
 const NativeError = Error;
 const betterAuthSessionBoundaryFailureMessage =
   'Better Auth session provider failed inside the trusted plaintext boundary.';
+const betterAuthSanitizationInProgress = {};
 
 /**
  * The `{ session, user }` pair Better Auth returns for an authenticated request. The
@@ -98,12 +106,26 @@ type BetterAuthSafeField<Key> = Key extends string
   : Key;
 
 /**
- * A Better Auth row after Kovo removes credential-shaped top-level fields before app code sees it.
- * The mapped type is author-time defense-in-depth; the runtime reconstruction owns enforcement
+ * A recursively reconstructed Better Auth value. JSON objects lose credential-shaped fields,
+ * arrays and dates are copied, and scalar values are preserved.
+ */
+export type BetterAuthSanitizedValue<Value> = Value extends Date
+  ? Date
+  : Value extends readonly unknown[]
+    ? { [Index in keyof Value]: BetterAuthSanitizedValue<Value[Index]> }
+    : Value extends object
+      ? BetterAuthSanitizedRecord<Value>
+      : Value;
+
+/**
+ * A Better Auth row after Kovo removes credential-shaped fields before app code sees it. The
+ * mapped type is author-time defense-in-depth; recursive runtime reconstruction owns enforcement
  * (SPEC §10.3 C9 and AGENTS.md's type-level security ergonomics rule).
  */
 export type BetterAuthSanitizedRecord<Value> = Value extends object
-  ? { [Key in keyof Value as BetterAuthSafeField<Key>]: Value[Key] }
+  ? {
+      [Key in keyof Value as BetterAuthSafeField<Key>]: BetterAuthSanitizedValue<Value[Key]>;
+    }
   : Value;
 
 /**
@@ -165,43 +187,41 @@ export function betterAuthSession<
       throw new NativeError(betterAuthSessionBoundaryFailureMessage);
     }
 
-    // BACKWARD-COMPAT shape detection: an instance that honors `returnHeaders` returns the
-    // `{ response, headers }` envelope; one that ignores it (the example apps, a
-    // non-overloaded instance) returns the bare session payload. A session payload never
-    // carries both `response` and `headers`, so their joint presence identifies the envelope.
-    const responseDescriptor =
-      result !== null && typeof result === 'object'
-        ? betterAuthGetOwnPropertyDescriptor(result, 'response')
-        : undefined;
-    const headersDescriptor =
-      result !== null && typeof result === 'object'
-        ? betterAuthGetOwnPropertyDescriptor(result, 'headers')
-        : undefined;
-    const isEnvelope =
-      responseDescriptor !== undefined &&
-      'value' in responseDescriptor &&
-      headersDescriptor !== undefined &&
-      'value' in headersDescriptor;
-    const payload = isEnvelope
-      ? (responseDescriptor.value as
-          | BetterAuthSessionPayload<AuthSession, AuthUser>
-          | null
-          | undefined)
-      : (result as BetterAuthSessionPayload<AuthSession, AuthUser> | null | undefined);
-    let value: SessionValue | null;
     try {
-      value = payload ? map(sanitizeBetterAuthSessionPayload(payload)) : null;
+      // BACKWARD-COMPAT shape detection: an instance that honors `returnHeaders` returns the
+      // `{ response, headers }` envelope; one that ignores it returns the bare session payload.
+      // Bind every deferred descriptor/header operation inside the same opaque-error boundary as
+      // the provider call: structural shims can otherwise throw cookie-bearing errors later.
+      const responseDescriptor =
+        result !== null && typeof result === 'object'
+          ? betterAuthGetOwnPropertyDescriptor(result, 'response')
+          : undefined;
+      const headersDescriptor =
+        result !== null && typeof result === 'object'
+          ? betterAuthGetOwnPropertyDescriptor(result, 'headers')
+          : undefined;
+      const isEnvelope =
+        responseDescriptor !== undefined &&
+        'value' in responseDescriptor &&
+        headersDescriptor !== undefined &&
+        'value' in headersDescriptor;
+      const payload = isEnvelope
+        ? (responseDescriptor.value as
+            | BetterAuthSessionPayload<AuthSession, AuthUser>
+            | null
+            | undefined)
+        : (result as BetterAuthSessionPayload<AuthSession, AuthUser> | null | undefined);
+      const value = payload ? map(sanitizeBetterAuthSessionPayload(payload)) : null;
+      const headers = isEnvelope ? (headersDescriptor.value as Headers) : undefined;
+      const setCookies = getBetterAuthSetCookie(headers);
+
+      // Forward refresh/cookie-cache Set-Cookie headers only when the instance actually
+      // produced them; otherwise resolve to the plain mapped value so the contract is fully
+      // backward compatible (no envelope unless there is something to forward).
+      return setCookies.length > 0 ? { setCookies, value } : value;
     } catch {
       throw new NativeError(betterAuthSessionBoundaryFailureMessage);
     }
-
-    const headers = isEnvelope ? (headersDescriptor.value as Headers) : undefined;
-    const setCookies = getBetterAuthSetCookie(headers);
-
-    // Forward refresh/cookie-cache Set-Cookie headers only when the instance actually
-    // produced them; otherwise resolve to the plain mapped value so the contract is fully
-    // backward compatible (no envelope unless there is something to forward).
-    return setCookies.length > 0 ? { setCookies, value } : value;
   };
 }
 
@@ -217,25 +237,89 @@ function sanitizeBetterAuthSessionPayload<AuthSession, AuthUser>(
   }
   const session = betterAuthOwnDataValue(payload, 'session', 'Better Auth session payload');
   const user = betterAuthOwnDataValue(payload, 'user', 'Better Auth session payload');
+  const copies = betterAuthCreateMap<object, unknown>();
   return {
-    session: sanitizeBetterAuthRow<AuthSession>(session, 'Better Auth session row'),
-    user: sanitizeBetterAuthRow<AuthUser>(user, 'Better Auth user row'),
+    session: sanitizeBetterAuthRow<AuthSession>(session, 'Better Auth session row', copies),
+    user: sanitizeBetterAuthRow<AuthUser>(user, 'Better Auth user row', copies),
   };
 }
 
 function sanitizeBetterAuthRow<Value>(
   source: unknown,
   label: string,
+  copies: Map<object, unknown>,
 ): BetterAuthSanitizedRecord<Value> {
   if (typeof source !== 'object' || source === null || betterAuthArrayIsArray(source)) {
     throw new TypeError(`${label} must be an object.`);
   }
+  return sanitizeBetterAuthValue(source, label, copies) as BetterAuthSanitizedRecord<Value>;
+}
+
+function sanitizeBetterAuthValue<Value>(
+  source: Value,
+  label: string,
+  copies: Map<object, unknown>,
+): BetterAuthSanitizedValue<Value> {
+  if (source === null) return source as BetterAuthSanitizedValue<Value>;
+  const sourceType = typeof source;
+  if (
+    sourceType === 'string' ||
+    sourceType === 'number' ||
+    sourceType === 'boolean' ||
+    sourceType === 'bigint' ||
+    sourceType === 'undefined'
+  ) {
+    return source as BetterAuthSanitizedValue<Value>;
+  }
+  if (sourceType !== 'object') {
+    throw new TypeError(`${label} contains an unsupported value.`);
+  }
+
+  const objectSource = source as object;
+  if (betterAuthMapHas(copies, objectSource)) {
+    const existing = betterAuthMapGet(copies, objectSource);
+    if (existing === betterAuthSanitizationInProgress) {
+      throw new TypeError(`${label} contains a cyclic value.`);
+    }
+    return existing as BetterAuthSanitizedValue<Value>;
+  }
+  const date = betterAuthCloneDate(objectSource);
+  if (date !== undefined) {
+    betterAuthMapSet(copies, objectSource, date);
+    return date as BetterAuthSanitizedValue<Value>;
+  }
+  if (betterAuthArrayIsArray(objectSource)) {
+    const values = betterAuthSnapshotDenseArray(objectSource, label);
+    const snapshot: unknown[] = [];
+    betterAuthMapSet(copies, objectSource, betterAuthSanitizationInProgress);
+    for (let index = 0; index < values.length; index += 1) {
+      betterAuthArrayAppend(
+        snapshot,
+        sanitizeBetterAuthValue(values[index], `${label}[${index}]`, copies),
+        label,
+      );
+    }
+    betterAuthMapSet(copies, objectSource, snapshot);
+    return snapshot as BetterAuthSanitizedValue<Value>;
+  }
+
   const snapshot = betterAuthCreateNullRecord<unknown>();
-  const fields = betterAuthObjectKeys(source, `${label} fields`);
+  betterAuthMapSet(copies, objectSource, betterAuthSanitizationInProgress);
+  const fields = betterAuthObjectKeys(objectSource, `${label} fields`);
   for (let index = 0; index < fields.length; index += 1) {
     const field = fields[index]!;
     if (isBetterAuthCredentialShapedColumn(field)) continue;
-    betterAuthDefineOwnData(snapshot, field, betterAuthOwnDataValue(source, field, label), label);
+    betterAuthDefineOwnData(
+      snapshot,
+      field,
+      sanitizeBetterAuthValue(
+        betterAuthOwnDataValue(objectSource, field, label),
+        `${label}.${field}`,
+        copies,
+      ),
+      label,
+    );
   }
-  return snapshot as BetterAuthSanitizedRecord<Value>;
+  betterAuthMapSet(copies, objectSource, snapshot);
+  return snapshot as BetterAuthSanitizedValue<Value>;
 }

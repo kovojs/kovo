@@ -31,6 +31,7 @@ export {
 export type {
   BetterAuthSanitizedRecord,
   BetterAuthSanitizedSessionPayload,
+  BetterAuthSanitizedValue,
   BetterAuthSessionMapper,
   BetterAuthSessionPayload,
 } from './session.js';

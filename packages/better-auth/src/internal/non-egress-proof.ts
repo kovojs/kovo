@@ -368,66 +368,72 @@ export function proveBetterAuthRequestSecretNonEgress(
   for (let index = 0; index < pathFacts.length; index += 1) {
     const path = pathFacts[index]!;
     if (betterAuthSetHas(seen, path.id)) {
-      betterAuthArrayAppend(
+      appendBetterAuthNonEgressIssue(
         issues,
         `KV439: duplicate Better Auth request secret path ${path.id}`,
-        'Better Auth request secret non-egress issues',
       );
     }
     betterAuthSetAdd(seen, path.id);
-
-    if (path.readsCrossUserCredential) {
-      if (!betterAuthSetHas(permittedCrossUserCredentialDispositions, path.disposition)) {
-        betterAuthArrayAppend(
-          issues,
-          `KV439: ${path.id} reads a cross-user auth credential with unboxed disposition ${path.disposition}`,
-          'Better Auth request secret non-egress issues',
-        );
-      }
-      if (
-        path.disposition === 'vetted-compare-or-verify' &&
-        betterAuthTrim(path.reason).length === 0
-      ) {
-        betterAuthArrayAppend(
-          issues,
-          `KV439: ${path.id} requires a compare/verify justification`,
-          'Better Auth request secret non-egress issues',
-        );
-      }
-    }
-
-    if (
-      path.carrier === 'adapter-system-db-secret-column' &&
-      !path.readsCrossUserCredential &&
-      !betterAuthSetHas(permittedAdapterCredentialDispositions, path.disposition)
-    ) {
-      betterAuthArrayAppend(
-        issues,
-        `KV439: ${path.id} handles an adapter auth credential with unconfined disposition ${path.disposition}`,
-        'Better Auth request secret non-egress issues',
-      );
-    }
-
-    if (path.disposition === 'boxed' && path.carrier !== 'adapter-system-db-secret-column') {
-      betterAuthArrayAppend(
-        issues,
-        `KV439: ${path.id} claims boxing for non-database auth secret carrier`,
-        'Better Auth request secret non-egress issues',
-      );
-    }
-    if (
-      path.disposition === 'reconstructed-non-secret-projection' &&
-      path.carrier !== 'adapter-system-db-secret-column'
-    ) {
-      betterAuthArrayAppend(
-        issues,
-        `KV439: ${path.id} claims credential projection for non-database auth secret carrier`,
-        'Better Auth request secret non-egress issues',
-      );
-    }
+    appendBetterAuthSecretPathIssues(issues, path);
   }
 
   return issues;
+}
+
+function appendBetterAuthSecretPathIssues(
+  issues: string[],
+  path: BetterAuthRequestSecretPath,
+): void {
+  if (
+    path.readsCrossUserCredential &&
+    !betterAuthSetHas(permittedCrossUserCredentialDispositions, path.disposition)
+  ) {
+    appendBetterAuthNonEgressIssue(
+      issues,
+      `KV439: ${path.id} reads a cross-user auth credential with unboxed disposition ${path.disposition}`,
+    );
+  }
+  if (
+    path.readsCrossUserCredential &&
+    path.disposition === 'vetted-compare-or-verify' &&
+    betterAuthTrim(path.reason).length === 0
+  ) {
+    appendBetterAuthNonEgressIssue(
+      issues,
+      `KV439: ${path.id} requires a compare/verify justification`,
+    );
+  }
+
+  if (
+    path.carrier === 'adapter-system-db-secret-column' &&
+    !path.readsCrossUserCredential &&
+    !betterAuthSetHas(permittedAdapterCredentialDispositions, path.disposition)
+  ) {
+    appendBetterAuthNonEgressIssue(
+      issues,
+      `KV439: ${path.id} handles an adapter auth credential with unconfined disposition ${path.disposition}`,
+    );
+  }
+
+  if (path.disposition === 'boxed' && path.carrier !== 'adapter-system-db-secret-column') {
+    appendBetterAuthNonEgressIssue(
+      issues,
+      `KV439: ${path.id} claims boxing for non-database auth secret carrier`,
+    );
+  }
+  if (
+    path.disposition === 'reconstructed-non-secret-projection' &&
+    path.carrier !== 'adapter-system-db-secret-column'
+  ) {
+    appendBetterAuthNonEgressIssue(
+      issues,
+      `KV439: ${path.id} claims credential projection for non-database auth secret carrier`,
+    );
+  }
+}
+
+function appendBetterAuthNonEgressIssue(issues: string[], issue: string): void {
+  betterAuthArrayAppend(issues, issue, 'Better Auth request secret non-egress issues');
 }
 
 function betterAuthStringSet<Value extends string>(

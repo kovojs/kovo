@@ -179,6 +179,114 @@ describe('betterAuthSession', () => {
     });
   });
 
+  it('recursively strips JSON credentials and isolates provider objects across requests', async () => {
+    // Better Auth additional fields may be JSON/array/date values. The app mapper must not receive
+    // nested credential fields or a live reference into provider/cache state that another request
+    // can mutate (SPEC §6.5/§10.3 C9).
+    const providerPayload = {
+      session: {
+        expiresAt: new Date('2099-01-01T00:00:00.000Z'),
+        id: 'session-1',
+      },
+      user: {
+        id: 'user-1',
+        profile: {
+          apiToken: 'NESTED_PLUGIN_BEARER',
+          preferences: { theme: 'light' },
+          roles: ['member'],
+        },
+      },
+    };
+    const auth = { api: { getSession: () => providerPayload } };
+    const observations: unknown[] = [];
+    const provider = betterAuthSession(auth, (value) => {
+      if (false) {
+        // @ts-expect-error Nested credential-shaped JSON fields are not mapper-readable.
+        value.user.profile.apiToken;
+      }
+      observations.push({
+        expiresAt: value.session.expiresAt,
+        hasApiToken: 'apiToken' in value.user.profile,
+        preferencesTheme: value.user.profile.preferences.theme,
+        roles: Array.from(value.user.profile.roles),
+      });
+      value.user.profile.preferences.theme = 'mapper-mutated';
+      value.user.profile.roles.push('mapper-mutated');
+      return value;
+    });
+
+    await provider({ headers: new Headers({ cookie: 'kovo_session=s1' }) });
+    await provider({ headers: new Headers({ cookie: 'kovo_session=s1' }) });
+
+    expect(providerPayload.user.profile).toEqual({
+      apiToken: 'NESTED_PLUGIN_BEARER',
+      preferences: { theme: 'light' },
+      roles: ['member'],
+    });
+    expect(observations).toEqual([
+      {
+        expiresAt: new Date('2099-01-01T00:00:00.000Z'),
+        hasApiToken: false,
+        preferencesTheme: 'light',
+        roles: ['member'],
+      },
+      {
+        expiresAt: new Date('2099-01-01T00:00:00.000Z'),
+        hasApiToken: false,
+        preferencesTheme: 'light',
+        roles: ['member'],
+      },
+    ]);
+    expect((observations[0] as { expiresAt: Date }).expiresAt).not.toBe(
+      providerPayload.session.expiresAt,
+    );
+  });
+
+  it('rejects cyclic provider values before they can reach session serialization', async () => {
+    const profile: Record<string, unknown> = { displayName: 'Ada' };
+    profile.self = profile;
+    const auth = {
+      api: {
+        getSession: () => ({
+          session: { id: 'session-1' },
+          user: { id: 'user-1', profile },
+        }),
+      },
+    };
+    const provider = betterAuthSession(auth, (value) => value);
+
+    await expect(provider({ headers: new Headers({ cookie: 'kovo_session=s1' }) })).rejects.toThrow(
+      'Better Auth session provider failed inside the trusted plaintext boundary.',
+    );
+  });
+
+  it('does not let deferred session-header failures carry secrets out of the boundary', async () => {
+    const secret = 'LIVE_REFRESH_COOKIE_MUST_NOT_ESCAPE';
+    const auth = {
+      api: {
+        getSession: () => ({
+          headers: {
+            getSetCookie() {
+              throw new Error(`refresh parsing failed for ${secret}`);
+            },
+          } as unknown as Headers,
+          response: {
+            session: { id: 'session-1' },
+            user: { id: 'user-1' },
+          },
+        }),
+      },
+    };
+    const provider = betterAuthSession(auth, (value) => value);
+    const result = await provider({ headers: new Headers({ cookie: 'kovo_session=s1' }) });
+
+    expect(result).toEqual({
+      session: { id: 'session-1' },
+      user: { id: 'user-1' },
+    });
+    expect(JSON.stringify(result)).not.toContain(secret);
+  });
+
   // part-3 I2 (SPEC.md §6.5, §9.1.1:854): with rolling sessions / cookie-cache, Better Auth
   // writes a fresh session Set-Cookie on every authenticated GET. The framework lifecycle
   // MUST set the resolved session AND forward that refresh cookie to the response sink, so a

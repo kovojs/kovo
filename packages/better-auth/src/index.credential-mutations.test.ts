@@ -463,6 +463,37 @@ describe('credential mutation helpers', () => {
     );
   });
 
+  it('does not let deferred sign-out header failures carry cookie secrets out', async () => {
+    const secret = 'SIGN_OUT_COOKIE_MUST_NOT_ESCAPE';
+    const auth: BetterAuthSignOutLike = {
+      api: {
+        signOut: () => ({
+          headers: {
+            getSetCookie() {
+              throw new Error(`sign-out parsing failed for ${secret}`);
+            },
+          } as unknown as Headers,
+          status: 200,
+        }),
+      },
+    };
+    const result = await runProtectedCredentialMutation(
+      betterAuthSignOutMutation(auth),
+      {},
+      { headers: requestHeaders('kovo_session=session-1') },
+    );
+
+    expect(result).toMatchObject({
+      ok: true,
+      responseHeaders: {
+        'Clear-Site-Data': '"cookies", "storage", "executionContexts"',
+      },
+      value: { status: 'signed-out' },
+    });
+    expect(result.responseHeaders).not.toHaveProperty('Set-Cookie');
+    expect(JSON.stringify(result)).not.toContain(secret);
+  });
+
   it.each([Number.NaN, 200.5])(
     'rejects a structurally forged sign-out status %s instead of publishing revocation',
     async (status) => {
@@ -969,6 +1000,16 @@ describe('getBetterAuthSetCookie comma-folded fallback (part-3 L13-3)', () => {
 
     expect(getBetterAuthSetCookie(headers)).toEqual([]);
     expect(descriptorReads).toBeLessThan(10);
+  });
+
+  it('fails closed without leaking direct structural header inspection failures', () => {
+    const secret = 'DIRECT_COOKIE_SECRET_MUST_NOT_ESCAPE';
+    const headers = {
+      getSetCookie() {
+        throw new Error(`structural cookie failure for ${secret}`);
+      },
+    } as unknown as Headers;
+    expect(getBetterAuthSetCookie(headers)).toEqual([]);
   });
 
   function headersWithFoldedSetCookie(folded: string): Headers {

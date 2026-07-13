@@ -266,34 +266,37 @@ export function betterAuthSignOutMutation<
       redirectTo: (result: { value: BetterAuthCredentialMutationValue<'signed-out'> }) =>
         result.value.redirectTo,
       async handler(_input, request, context) {
-        let response: BetterAuthResponseLike;
         try {
-          response = await callBetterAuthSignOut(pinnedAuth, request.headers);
+          const response: BetterAuthResponseLike = await callBetterAuthSignOut(
+            pinnedAuth,
+            request.headers,
+          );
+
+          // SPEC §6.5/§9.1: a resolved provider promise is not revocation evidence. Bind the
+          // exact boot-pinned Response facts and require a successful status before clearing any
+          // browser state or publishing the framework-owned signed-out outcome. Deferred response
+          // inspection and cookie forwarding remain inside the opaque plaintext boundary too.
+          const status = betterAuthResponseStatus(response);
+          const responseHeaders = betterAuthResponseHeaders(response);
+          if (
+            status === undefined ||
+            status < 200 ||
+            status >= 300 ||
+            responseHeaders === undefined
+          ) {
+            throw betterAuthCredentialBoundaryFailure();
+          }
+
+          forwardBetterAuthSetCookie(responseHeaders, context);
+          setSessionRevocationClearSiteData(context);
+
+          return {
+            redirectTo: defaultRedirectTo,
+            status: 'signed-out' as const,
+          };
         } catch {
           throw betterAuthCredentialBoundaryFailure();
         }
-
-        // SPEC §6.5/§9.1: a resolved provider promise is not revocation evidence. Bind the
-        // exact boot-pinned Response facts and require a successful status before clearing any
-        // browser state or publishing the framework-owned signed-out outcome.
-        const status = betterAuthResponseStatus(response);
-        const responseHeaders = betterAuthResponseHeaders(response);
-        if (
-          status === undefined ||
-          status < 200 ||
-          status >= 300 ||
-          responseHeaders === undefined
-        ) {
-          throw betterAuthCredentialBoundaryFailure();
-        }
-
-        forwardBetterAuthSetCookie(responseHeaders, context);
-        setSessionRevocationClearSiteData(context);
-
-        return {
-          redirectTo: defaultRedirectTo,
-          status: 'signed-out' as const,
-        };
       },
     }),
     key ?? ('auth/sign-out' as Key),

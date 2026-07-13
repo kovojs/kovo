@@ -198,6 +198,20 @@ describe('Better Auth trusted plaintext zone', () => {
     }
   });
 
+  it('keeps the TCB enrollment path list equal to the executable manifest', () => {
+    const tcbSource = readFileSync(join(srcDir, '../../../security/TCB.md'), 'utf8');
+    const manifestBlock = /```json tcb-manifest\s+([\s\S]*?)```/u.exec(tcbSource)?.[1];
+    if (manifestBlock === undefined) throw new Error('Missing TCB manifest block');
+    const manifest = JSON.parse(manifestBlock) as {
+      entries: Array<{ id: string; paths?: string[] }>;
+    };
+    const enrolled = manifest.entries.find(
+      (entry) => entry.id === 'better-auth.request-secret-surface.manifest',
+    );
+
+    expect(enrolled?.paths).toEqual(betterAuthRequestSecretPaths.map((path) => path.id));
+  });
+
   it('fails red when a new request-reachable adapter path reads an unboxed cross-user credential', () => {
     const unsafePath: BetterAuthRequestSecretPath = {
       id: 'better-auth.adapter.future-token-leak',
