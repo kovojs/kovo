@@ -1,3 +1,4 @@
+/* oxlint-disable typescript/unbound-method -- Boot-captured controls pin KV330 diagnostic policy. */
 import type { DiagnosticCode, DiagnosticSeverity } from '@kovojs/core';
 import { diagnosticDefinitionText, diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
 import { puntReasonLabel } from '@kovojs/core/internal/derivation';
@@ -11,6 +12,11 @@ import { frameworkSourceSinkInventory } from '@kovojs/core/internal/source-sink-
 
 import type { KovoTargetExplainOptions } from './graph-args.js';
 import type { KovoCheckResult } from './shared.js';
+
+const NativeReflect = globalThis.Reflect;
+const NativeSet = globalThis.Set;
+const nativeReflectApply = NativeReflect.apply;
+const nativeSetHas = NativeSet.prototype.has;
 
 const explainOutputVersion = 'kovo-explain/v1';
 
@@ -311,7 +317,7 @@ export function hasStaticHandlerWriteSinkDiagnostic(
 ): boolean {
   return diagnostics.some((diagnostic) => {
     if (diagnostic.code === 'KV330') {
-      return handlerWriteSinkKv330Messages.has(
+      return handlerWriteSinkKv330MessageHas(
         diagnostic.message ?? diagnosticDefinitions.KV330.message,
       );
     }
@@ -323,12 +329,16 @@ export function hasStaticHandlerWriteSinkDiagnostic(
   });
 }
 
-export const handlerWriteSinkKv330Messages = new Set([
+const handlerWriteSinkKv330Messages = new NativeSet([
   diagnosticDefinitions.KV330.message,
   'Direct db access in a task run body; route through ctx.runMutation.',
   'Direct db access in an endpoint handler; use readonlyAppDb for reads and route writes through an audited mutation/domain write.',
   'Direct db access in a webhook handler; route writes through an audited mutation/domain write.',
 ]);
+
+function handlerWriteSinkKv330MessageHas(message: string): boolean {
+  return nativeReflectApply(nativeSetHas, handlerWriteSinkKv330Messages, [message]) === true;
+}
 
 export function resolvedHandlerWriteSinkMessage(
   surface: CoreGraph.HandlerWriteSinkSurface,

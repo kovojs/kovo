@@ -48,14 +48,21 @@ const commandSecurityDisposition = Object.freeze({
   paranoidStaticAdvisory: paranoidValue === '1' || paranoidValue === 'true',
 });
 
-function snapshotInvocationEnvironment(
-  source: NodeJS.ProcessEnv,
-): Readonly<Record<string, string>> {
-  const snapshot: Record<string, string> = Object.create(null);
+function snapshotInvocationEnvironment(source = process.env) {
+  const snapshot = Object.create(null);
   for (const name of Object.keys(source)) {
     const before = Object.getOwnPropertyDescriptor(source, name);
     const after = Object.getOwnPropertyDescriptor(source, name);
-    if (!sameEnvironmentDescriptor(before, after)) {
+    const unchanged =
+      before === undefined || after === undefined
+        ? before === after
+        : 'value' in before &&
+          'value' in after &&
+          Object.is(before.value, after.value) &&
+          before.configurable === after.configurable &&
+          before.enumerable === after.enumerable &&
+          before.writable === after.writable;
+    if (!unchanged) {
       throw new TypeError('Kovo invocation environment changed while it was inspected.');
     }
     if (before === undefined || !('value' in before) || typeof before.value !== 'string') {
@@ -69,21 +76,6 @@ function snapshotInvocationEnvironment(
     });
   }
   return Object.freeze(snapshot);
-}
-
-function sameEnvironmentDescriptor(
-  left: PropertyDescriptor | undefined,
-  right: PropertyDescriptor | undefined,
-): boolean {
-  if (left === undefined || right === undefined) return left === right;
-  return (
-    'value' in left &&
-    'value' in right &&
-    Object.is(left.value, right.value) &&
-    left.configurable === right.configurable &&
-    left.enumerable === right.enumerable &&
-    left.writable === right.writable
-  );
 }
 
 // Import the complete trusted dispatcher graph before lockdown so framework modules that capture
