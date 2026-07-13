@@ -14,6 +14,20 @@ import {
   type CompileResult,
 } from '@kovojs/compiler/internal';
 import type { Plugin } from 'vite';
+import path from 'node:path';
+
+import {
+  verifierApply,
+  verifierStringIndexOf,
+  verifierStringReplaceAll,
+  verifierStringSlice,
+  verifierStringStartsWith,
+} from '../verifier-security-intrinsics.js';
+
+const nativePathIsAbsolute = path.isAbsolute;
+const nativePathRelative = path.relative;
+const nativePathResolve = path.resolve;
+const nativePathSeparator = path.sep;
 
 const virtualCssManifestId = 'virtual:kovo-fixture-css-manifest';
 const resolvedVirtualCssManifestId = `\0${virtualCssManifestId}`;
@@ -140,15 +154,44 @@ export function kovoFixtureStylesheetsForTargets(targets) {
 }
 
 function fixtureAuthoredModule(id: string, root: string): boolean {
-  const path = id.split('?')[0]!.replaceAll('\\', '/');
-  const normalizedRoot = root.replaceAll('\\', '/').replace(/\/$/, '');
-  return path.startsWith(`${normalizedRoot}/`);
+  const modulePath = cleanModulePath(id);
+  if (!pathIsAbsolute(modulePath)) return false;
+  return pathContains(pathResolve(root), pathResolve(modulePath));
 }
 
 function fixtureComponentFileName(id: string, root: string): string {
-  const path = id.split('?')[0]!.replaceAll('\\', '/');
-  const normalizedRoot = root.replaceAll('\\', '/').replace(/\/$/, '');
-  return path.startsWith(`${normalizedRoot}/`) ? path.slice(normalizedRoot.length + 1) : path;
+  const modulePath = pathResolve(cleanModulePath(id));
+  const normalizedRoot = pathResolve(root);
+  return pathContains(normalizedRoot, modulePath)
+    ? verifierStringReplaceAll(pathRelative(normalizedRoot, modulePath), '\\', '/')
+    : verifierStringReplaceAll(modulePath, '\\', '/');
+}
+
+function cleanModulePath(id: string): string {
+  const query = verifierStringIndexOf(id, '?');
+  return query < 0 ? id : verifierStringSlice(id, 0, query);
+}
+
+function pathContains(root: string, candidate: string): boolean {
+  const relative = pathRelative(root, candidate);
+  return (
+    relative !== '' &&
+    !pathIsAbsolute(relative) &&
+    relative !== '..' &&
+    !verifierStringStartsWith(relative, `..${nativePathSeparator}`)
+  );
+}
+
+function pathIsAbsolute(value: string): boolean {
+  return verifierApply<boolean>(nativePathIsAbsolute, path, [value]);
+}
+
+function pathRelative(from: string, to: string): string {
+  return verifierApply<string>(nativePathRelative, path, [from, to]);
+}
+
+function pathResolve(...values: string[]): string {
+  return verifierApply<string>(nativePathResolve, path, values);
 }
 
 function cssRuntimeRegistration(assets: readonly ComponentCssAsset[]): string {
