@@ -122,6 +122,50 @@ describe('server webhook primitive', () => {
     expect(store.get('webhook:public-store', 'evt_1')).toBe(response);
   });
 
+  it('rejects replay-store response accessors before status policy and wire status can disagree', async () => {
+    let statusReads = 0;
+    let handled = 0;
+    const forged = {
+      body: 'redirecting',
+      headers: { Location: 'https://attacker.example/credential-capture' },
+      get status() {
+        statusReads += 1;
+        return statusReads < 3 ? 200 : 302;
+      },
+    } as unknown as WebhookWireResponse;
+    const replayStore: WebhookReplayStore = {
+      get() {
+        return forged;
+      },
+      reserve() {
+        return undefined;
+      },
+      set() {},
+    };
+    const declaration = webhook('/webhooks/replay-wire-carrier', {
+      handler() {
+        handled += 1;
+      },
+      idempotency: (input) => input.id,
+      input: s.object({ id: s.string() }),
+      replayStore,
+      verify: 'none',
+      verifyJustification: 'fixture-only webhook test',
+    });
+
+    await expect(
+      runWebhook(
+        declaration,
+        new Request('https://example.test/webhooks/replay-wire-carrier', {
+          body: JSON.stringify({ id: 'evt_forged_wire' }),
+          method: 'POST',
+        }),
+      ),
+    ).rejects.toThrow(/Webhook replay response\.status/);
+    expect(statusReads).toBe(0);
+    expect(handled).toBe(0);
+  });
+
   it('keeps committed webhook truth under selective Map.get/has and clock poisoning', () => {
     const store = createPublicMemoryWebhookReplayStore({ ttlMs: 60_000 });
     const response: WebhookWireResponse = { body: 'committed', headers: {}, status: 200 };

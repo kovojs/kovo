@@ -553,6 +553,52 @@ describe('durable task runner (SPEC §9.6)', () => {
     }
   });
 
+  it('rejects self-reschedule option accessors before they can bypass the delay floor', async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date('2026-06-30T10:00:00.000Z'));
+      const store = new MemoryDurableTaskQueue();
+      let reads = 0;
+      let loop!: ReturnType<typeof task>;
+      loop = task('loop.accessor-options', {
+        input: s.object({}),
+        async run(_, context) {
+          await context.schedule(
+            loop,
+            {},
+            {
+              get afterMs() {
+                reads += 1;
+                return reads < 4 ? 1 : undefined;
+              },
+            },
+          );
+        },
+      });
+      await store.enqueue({ task: loop.key, args: {} });
+      const runner = createDurableTaskRunner({
+        selfRescheduleDelayFloorMs: 1000,
+        store,
+        tasks: [loop],
+      });
+
+      await runner.runOnce(new Date('2026-06-30T10:00:00.000Z'));
+
+      expect(reads).toBe(0);
+      expect(store.snapshot()).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            lastError: expect.stringContaining('Durable task property afterMs'),
+            status: 'dead',
+          }),
+        ]),
+      );
+      expect(store.snapshot().filter((job) => job.status === 'ready')).toEqual([]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('rejects ctx.schedule for tasks outside the runner registry', async () => {
     const store = new MemoryDurableTaskQueue();
     const registered = task('registered.parent', {
@@ -623,5 +669,141 @@ describe('durable task runner (SPEC §9.6)', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('pins the queue and egress hook identities when the runner is constructed', async () => {
+    const originalStore = new MemoryDurableTaskQueue();
+    const attackerStore = new MemoryDurableTaskQueue();
+    const observed: string[] = [];
+    const originalFetch = vi.fn(async () => new Response('original-egress-hook'));
+    const attackerFetch = vi.fn(async () => new Response('attacker-egress-hook'));
+    const hooks = { fetch: originalFetch as typeof fetch };
+    const authorityProbe = task('authority.probe', {
+      input: s.object({ source: s.string() }),
+      async run(args, context) {
+        observed.push(
+          `${args.source}:${await (await context.fetch('https://example.test')).text()}`,
+        );
+      },
+    });
+    await originalStore.enqueue({ task: authorityProbe.key, args: { source: 'original-store' } });
+    await attackerStore.enqueue({ task: authorityProbe.key, args: { source: 'attacker-store' } });
+    const options = { hooks, store: originalStore, tasks: [authorityProbe] };
+    const runner = createDurableTaskRunner(options);
+
+    (options as { store: MemoryDurableTaskQueue }).store = attackerStore;
+    hooks.fetch = attackerFetch as typeof fetch;
+
+    await runner.runOnce(new Date());
+
+    expect(observed).toEqual(['original-store:original-egress-hook']);
+    expect(originalFetch).toHaveBeenCalledOnce();
+    expect(attackerFetch).not.toHaveBeenCalled();
+    expect(originalStore.snapshot()[0]).toMatchObject({ status: 'succeeded' });
+    expect(attackerStore.snapshot()[0]).toMatchObject({ status: 'ready' });
+  });
+
+  it('rejects claimed-job accessors without invoking them as registry authority', async () => {
+    let taskReads = 0;
+    let handled = 0;
+    const registered = task('authority.claimed-job', {
+      input: s.object({}),
+      run() {
+        handled += 1;
+      },
+    });
+    const forgedJob = {
+      args: {},
+      attempts: 1,
+      createdAt: new Date(0),
+      generation: 0,
+      id: 'forged-job',
+      lineage: 'forged-job',
+      priority: 0,
+      runAt: new Date(0),
+      status: 'running',
+      get task() {
+        taskReads += 1;
+        return registered.key;
+      },
+      updatedAt: new Date(0),
+    };
+    const store = {
+      async cancel() {
+        return false;
+      },
+      async claimDue() {
+        return [forgedJob];
+      },
+      async enqueue() {
+        return { id: 'unused', task: registered.key };
+      },
+      async heartbeat() {
+        return true;
+      },
+      async markFailed() {
+        return true;
+      },
+      async markSucceeded() {
+        return true;
+      },
+      async reapExpiredLeases() {
+        return 0;
+      },
+    };
+    const runner = createDurableTaskRunner({ store, tasks: [registered] });
+
+    await expect(runner.runOnce(new Date())).rejects.toThrow(
+      /Durable task property task must be an own data value/,
+    );
+    expect(taskReads).toBe(0);
+    expect(handled).toBe(0);
+  });
+
+  it('rejects a queue adapter batch larger than the requested claim limit', async () => {
+    const registered = task('authority.claim-limit', {
+      input: s.object({}),
+      run() {},
+    });
+    const job = {
+      args: {},
+      attempts: 1,
+      createdAt: new Date(0),
+      generation: 0,
+      id: 'oversized-job',
+      lineage: 'oversized-job',
+      priority: 0,
+      runAt: new Date(0),
+      status: 'running' as const,
+      task: registered.key,
+      updatedAt: new Date(0),
+    };
+    const store = {
+      async cancel() {
+        return false;
+      },
+      async claimDue() {
+        return [job, job];
+      },
+      async enqueue() {
+        return { id: 'unused', task: registered.key };
+      },
+      async heartbeat() {
+        return true;
+      },
+      async markFailed() {
+        return true;
+      },
+      async markSucceeded() {
+        return true;
+      },
+      async reapExpiredLeases() {
+        return 0;
+      },
+    };
+
+    await expect(
+      createDurableTaskRunner({ store, tasks: [registered] }).runOnce(new Date()),
+    ).rejects.toThrow(/claimDue result must not exceed the requested bounded limit/);
   });
 });

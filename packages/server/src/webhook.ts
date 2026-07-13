@@ -1554,7 +1554,77 @@ function storeWebhookReplay(
 }
 
 function responseFromWire(response: WebhookWireResponse): Response {
-  return serverResponseToWebResponse(response, { method: 'GET' });
+  return serverResponseToWebResponse(
+    snapshotWebhookWireResponse(response, 'Webhook replay response'),
+    { method: 'GET' },
+  );
+}
+
+/**
+ * Reconstruct persisted webhook wire output before response policy observes it.
+ *
+ * Replay stores are adapter boundaries: their result may have been deserialized from a durable
+ * database or reconstructed by application code. Reading `status` once for redirect policy and
+ * again for the Web `Response` constructor would let an accessor make those two sinks disagree
+ * (for example policy sees 200 while the constructor sees 302 + an unblessed external Location).
+ * Exact own-data reconstruction also keeps inherited headers and late mutation out of the wire.
+ */
+function snapshotWebhookWireResponse(source: unknown, label: string): WebhookWireResponse {
+  if (typeof source !== 'object' || source === null || witnessIsArray(source)) {
+    throw new TypeError(`${label} must be a stable response record.`);
+  }
+  const body = stableOwnWebhookValue(source, 'body', `${label}.body`);
+  const headers = stableOwnWebhookValue(source, 'headers', `${label}.headers`);
+  const status = stableOwnWebhookValue(source, 'status', `${label}.status`);
+  if (typeof body !== 'string') {
+    throw new TypeError(`${label}.body must be a string own data property.`);
+  }
+  if (!isWebhookResponseStatus(status)) {
+    throw new TypeError(`${label}.status must be a supported webhook response status.`);
+  }
+  return witnessFreeze({
+    body,
+    headers: snapshotWebhookWireHeaders(headers, `${label}.headers`),
+    status,
+  });
+}
+
+function snapshotWebhookWireHeaders(source: unknown, label: string): ResponseHeaders {
+  if (typeof source !== 'object' || source === null || witnessIsArray(source)) {
+    throw new TypeError(`${label} must be a stable header record.`);
+  }
+  const keys = witnessOwnKeys(source);
+  if (keys.length > 1_000) throw new TypeError(`${label} must be bounded.`);
+  const snapshot = witnessCreateNullRecord<string | readonly string[]>() as ResponseHeaders;
+  for (let index = 0; index < keys.length; index += 1) {
+    const name = stableOwnWebhookValue(keys, index, `${label} key[${index}]`);
+    if (typeof name !== 'string') {
+      throw new TypeError(`${label} names must be strings.`);
+    }
+    const value = stableOwnWebhookValue(source, name, `${label}.${name}`);
+    if (typeof value !== 'string' && !witnessIsArray(value)) {
+      throw new TypeError(`${label}.${name} must be a string or dense string array.`);
+    }
+    witnessDefineProperty(snapshot, name, {
+      configurable: false,
+      enumerable: true,
+      value:
+        typeof value === 'string' ? value : snapshotWebhookStringArray(value, `${label}.${name}`),
+      writable: false,
+    });
+  }
+  return witnessFreeze(snapshot) as ResponseHeaders;
+}
+
+function isWebhookResponseStatus(value: unknown): value is WebhookResponseStatus {
+  return (
+    value === 200 ||
+    value === 400 ||
+    value === 401 ||
+    value === 422 ||
+    value === 429 ||
+    value === 500
+  );
 }
 
 type WebhookResponseContentType = 'application/json; charset=utf-8' | 'text/plain; charset=utf-8';
