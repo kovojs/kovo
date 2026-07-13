@@ -82,6 +82,8 @@ import * as uploadSniffApi from '../upload-sniff.js';
 import * as viteApi from '../vite.js';
 import * as viteDevApi from '../vite-dev.js';
 import * as internalWireApi from '../internal/wire.js';
+import * as liveTargetAppAttestationApi from '../live-target-app-attestation.js';
+import * as mutationWireApi from '../mutation-wire.js';
 import * as wireHtmlApi from '../wire-html.js';
 
 // eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
@@ -852,6 +854,12 @@ describe('server app-shell public API barrels', () => {
     expect(packageInternalRouteApi.renderRoutePageResponse).toBe(routeApi.renderRoutePageResponse);
     expect(packageInternalWireApi.renderMutationEndpointResponse).toBe(
       mutationApi.renderMutationEndpointResponse,
+    );
+    expect(packageInternalWireApi.createLiveTargetAttestation).toBe(
+      liveTargetAppAttestationApi.createAppLiveTargetAttestation,
+    );
+    expect(packageInternalWireApi.createLiveTargetAttestation).not.toBe(
+      mutationWireApi.createLiveTargetAttestation,
     );
     expect(packageInternalWireApi.renderMutationResponse).toBe(mutationApi.renderMutationResponse);
     expect(packageInternalWireApi.renderNoJsMutationResponse).toBe(

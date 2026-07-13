@@ -6,8 +6,13 @@ import {
 import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
 import { isKovoApp } from './app-guards.js';
 import { deriveClosedKovoApp } from './app-snapshot.js';
+import { runWithGeneratedLiveTargetRegistry } from './live-target-registry.js';
 import { createRequestHandler } from './app.js';
 import type { KovoApp } from './app-types.js';
+import {
+  appLiveTargetAttestationAudience,
+  appLiveTargetAttestationAuthority,
+} from './live-target-app-identity.js';
 import {
   renderDiagnosticDocument,
   type DiagnosticDocumentDiagnostic,
@@ -20,7 +25,7 @@ import {
   type NodeRequestHandler,
 } from './node.js';
 import { renderLiveTargetChunks } from './mutation.js';
-import { readMutationWireHeaders } from './mutation-wire.js';
+import { mutationWireRequestFromHeaders } from './mutation-wire.js';
 import { readHeader, routeResponseToWebResponse, type RoutePageResponse } from './response.js';
 import { matchShellDispatch } from './shell.js';
 import { generatedFragmentHtml } from './html.js';
@@ -420,7 +425,7 @@ export async function dispatchKovoAppShellViteDevRequest(
   // graph. Runtime-specific controls such as command execution remain tree-shakeable in production
   // bundles, but an authored dependency cannot run first and influence their dev-time capture.
   await server.ssrLoadModule(kovoServerRootModuleId);
-  const module = await server.ssrLoadModule(moduleId);
+  const module = await runWithGeneratedLiveTargetRegistry(() => server.ssrLoadModule(moduleId));
   const stylesheetAssets = readKovoAppShellViteDevStylesheetAssets(options.stylesheetAssets);
   const stylesheetResponse = renderKovoAppShellViteDevStylesheetAsset(request, stylesheetAssets);
   if (stylesheetResponse) {
@@ -691,10 +696,30 @@ async function renderKovoHmrLiveTargetRefreshResponse(
     );
   }
 
-  const wireHeaders = readMutationWireHeaders(request.headers);
-  if (wireHeaders.liveTargetDescriptors.length === 0) {
+  const webRequest = nodeRequestToWebRequest(request);
+  const targetUrl = hmrRefreshTargetUrl(endpointUrl, webRequest, request);
+  if (securityIsResponse(targetUrl)) return targetUrl;
+  const targetRequest = nodeRequestToWebRequest(hmrTargetNodeRequest(request, targetUrl));
+  const buildToken = app.clientModules.buildToken();
+  const liveTargetAudience = appLiveTargetAttestationAudience(app, buildToken);
+  const liveTargetAttestationAuthority = appLiveTargetAttestationAuthority(app, buildToken);
+  // Dev HMR is still an HTTP authority boundary. Verify the browser descriptor against the exact
+  // app/build and principal before a generated renderer can run queries with this request context
+  // (SPEC §6.6/§9.3); never render the raw parsed header directly.
+  const wireRequest = mutationWireRequestFromHeaders({
+    buildToken,
+    liveTargetAttestationAuthority,
+    liveTargetAudience,
+    ...(app.csrf === undefined ? {} : { csrf: app.csrf }),
+    headers: request.headers,
+    liveTargetRenderers: app.liveTargetRenderers,
+    rawInput: {},
+    request: targetRequest,
+  });
+  const liveTargetDescriptors = wireRequest.liveTargetDescriptors ?? [];
+  if (liveTargetDescriptors.length === 0) {
     return hmrRefreshTextResponse(
-      'Kovo HMR live-target refresh requires Kovo-Live-Targets.',
+      'Kovo HMR live-target refresh requires an attested Kovo-Live-Targets descriptor.',
       400,
       app,
       {
@@ -704,16 +729,14 @@ async function renderKovoHmrLiveTargetRefreshResponse(
     );
   }
 
-  const webRequest = nodeRequestToWebRequest(request);
-  const targetUrl = hmrRefreshTargetUrl(endpointUrl, webRequest, request);
-  if (securityIsResponse(targetUrl)) return targetUrl;
-
   const chunks = await renderLiveTargetChunks(
     app.liveTargetRenderers,
-    wireHeaders.liveTargetDescriptors,
+    liveTargetDescriptors,
+    liveTargetAudience,
+    liveTargetAttestationAuthority,
     {},
-    nodeRequestToWebRequest(hmrTargetNodeRequest(request, targetUrl)),
-    undefined,
+    targetRequest,
+    app.csrf,
   );
 
   if (chunks.length === 0) {
@@ -1149,7 +1172,7 @@ async function refreshLiveTargets(event) {
     headers: {
       "Kovo-Current-Url": location.href,
       "Kovo-Fragment": "true",
-      "Kovo-Live-Targets": live.join(","),
+      "Kovo-Live-Targets": live.join("; "),
       "Kovo-Targets": dependencyTargets().join(";"),
     },
     method: "POST",

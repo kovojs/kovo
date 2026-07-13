@@ -29,8 +29,6 @@ import { renderedHtml } from '@kovojs/server/internal/html';
 import { kovo } from '@kovojs/server/vite';
 
 import { installEgressFloorSync } from '../../server/src/egress-bootstrap.js';
-import { createLiveTargetAttestation } from '../../server/src/mutation-wire.js';
-
 import { main, mainAsync } from './index.js';
 
 const repoRoot = process.cwd();
@@ -615,12 +613,11 @@ export default createApp({
         const origin = await listen(server);
 
         try {
-          const liveTarget = liveTargetHeader(
-            {
-              component: 'components/contacts-region/contacts-region',
-              target: 'contacts-region',
-            },
-            { csrf: true },
+          const documentHtml = await (await fetch(`${origin}/`)).text();
+          const liveTarget = liveTargetHeaderFromDocument(
+            documentHtml,
+            'contacts-region',
+            'components/contacts-region/contacts-region',
           );
           const mutationResponse = await fetch(`${origin}/_m/${addContactKey}`, {
             body: buildFixtureMutationBody(addContactKey),
@@ -2644,10 +2641,12 @@ export async function resetFixture() {
         const origin = await listen(server);
 
         try {
-          const homePanelLiveTarget = liveTargetHeader({
-            component: 'home-panel/home-panel',
-            target: 'home-panel',
-          });
+          const documentHtml = await (await fetch(`${origin}/`)).text();
+          const homePanelLiveTarget = liveTargetHeaderFromDocument(
+            documentHtml,
+            'home-panel',
+            'home-panel/home-panel',
+          );
           const loginMutationResponse = await fetch(`${origin}/_m/home/touch`, {
             body: new URLSearchParams(),
             headers: {
@@ -3423,19 +3422,14 @@ export const ContactsRegion = component({
 `;
 }
 
-function liveTargetHeader(
-  input: { component: string; target: string },
-  options: { csrf?: boolean } = {},
+function liveTargetHeaderFromDocument(
+  documentHtml: string,
+  target: string,
+  component: string,
 ): string {
-  const props = {};
-  const token = createLiveTargetAttestation(
-    { component: input.component, props, target: input.target },
-    {
-      ...(options.csrf ? { csrf: BUILD_FIXTURE_CSRF } : {}),
-      request: {},
-    },
-  );
-  return `${input.target}#${input.component}@${token}:${JSON.stringify(props)}`;
+  const token = /\bkovo-live-token="([^"]+)"/u.exec(documentHtml)?.[1];
+  if (!token) throw new Error('Built fixture document is missing a live-target attestation.');
+  return `${target}#${component}@${token}:{}`;
 }
 
 function fixtureDerivedRegistryKey(fileName: string, exportedBinding: string): string {

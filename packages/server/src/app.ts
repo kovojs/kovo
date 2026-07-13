@@ -22,7 +22,12 @@ import { normalizeAppRequestLimits } from './app-load-shed.js';
 import { snapshotAppMutationResponses } from './app-mutation-responses.js';
 import { createAppTaskRuntime, registerAppTaskRuntime } from './task-runtime.js';
 import { ensureKovoLoaderRuntimeClientModule } from './loader-runtime-client-module.js';
-import { registeredGeneratedLiveTargetRenderers } from './live-target-registry.js';
+import { takeRegisteredGeneratedLiveTargetRenderers } from './live-target-registry.js';
+import {
+  appLiveTargetAttestationAudience,
+  appLiveTargetDeclaredId,
+  registerAppLiveTargetIdentity,
+} from './live-target-app-identity.js';
 import { mutation } from './mutation.js';
 import { query } from './query.js';
 import { layout, route } from './route.js';
@@ -130,6 +135,7 @@ export function createApp<
   // declaration callback executes. A route/query/mutation factory must not be able to replace the
   // session, DB, request-policy, or response authority that the surrounding createApp() call
   // declared (SPEC §6.6/§9.5 C9).
+  const appId = appLiveTargetDeclaredId(appOptionOwnDataValue(options, 'appId'));
   const mutationReplayStore = appOptionOwnDataValue(
     options,
     'mutationReplayStore',
@@ -177,6 +183,10 @@ export function createApp<
     'stylesheets',
   ) as AppOptions['stylesheets'];
   const tasksSource = appOptionOwnDataValue(options, 'tasks') as AppOptions['tasks'];
+  // Generated component modules register immediately before their app module evaluates. Transfer
+  // that pending inventory once even when explicit wiring wins, so it cannot leak into the next
+  // app aggregate in this process (SPEC §6.6/§9.1/§9.5).
+  const generatedLiveTargetRenderers = takeRegisteredGeneratedLiveTargetRenderers<AppRequest>();
 
   const csrf = csrfSource === undefined ? undefined : snapshotAppCsrfOptions(csrfSource);
   const egress = snapshotAppEgressOptions(egressSource);
@@ -211,7 +221,7 @@ export function createApp<
     (declaration) => snapshotAppRoute(declaration, snapshotContext),
   );
   const liveTargetRenderers = snapshotLiveTargetRenderers(
-    liveTargetRenderersSource ?? registeredGeneratedLiveTargetRenderers(),
+    liveTargetRenderersSource ?? generatedLiveTargetRenderers,
     snapshotContext,
   );
   const authoredMutations = assertUniqueMutationKeys(
@@ -264,7 +274,7 @@ export function createApp<
       authoringContext,
     ),
   );
-  return closeKovoAppAggregate(
+  const app = closeKovoAppAggregate(
     {
       clientModules,
       diagnostics: collectAppDiagnostics(routes),
@@ -288,6 +298,11 @@ export function createApp<
     } as KovoApp<SessionValue, DbValue, RawRequest, AppRequest>,
     snapshotContext,
   );
+  registerAppLiveTargetIdentity(app, appId);
+  // Validate the registry token before the app can escape. A late empty token would otherwise let a
+  // mutation commit and fail only while rendering its response, so retries could duplicate writes.
+  appLiveTargetAttestationAudience(app);
+  return app;
 }
 
 function appOptionOwnDataValue(source: object, property: PropertyKey): unknown {
@@ -705,6 +720,8 @@ export function createRequestHandler(app: KovoApp): RequestHandler {
       'createRequestHandler() requires a Kovo app aggregate. SPEC §9.5 request dispatch must start from createApp(), not a raw request handler or compatibility shell.',
     );
   }
+
+  appLiveTargetAttestationAudience(app);
 
   const taskRuntime = createAppTaskRuntime(app);
   registerAppTaskRuntime(app, taskRuntime);

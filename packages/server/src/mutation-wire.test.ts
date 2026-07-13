@@ -84,10 +84,16 @@ describe('mutation wire headers', () => {
       props: { productId: 'p1' },
       target: 'product-form:p1',
     };
-    const token = createLiveTargetAttestation(descriptor, { csrf, request });
+    const token = createLiveTargetAttestation(descriptor, {
+      buildToken: 'mutation-wire-test-build',
+      csrf,
+      request,
+    });
 
     expect(
       mutationWireRequestFromHeaders({
+        buildToken: 'mutation-wire-test-build',
+        liveTargetAudience: 'mutation-wire-test-build',
         csrf,
         headers: new Map([
           ['Kovo-Fragment', 'true'],
@@ -105,6 +111,8 @@ describe('mutation wire headers', () => {
         request,
       }),
     ).toEqual({
+      buildToken: 'mutation-wire-test-build',
+      liveTargetAudience: 'mutation-wire-test-build',
       csrf,
       fragment: true,
       idem: 'idem_01HY',
@@ -142,6 +150,7 @@ describe('mutation wire headers', () => {
     expect(
       mutationWireRequestFromHeaders({
         buildToken: 'build-a',
+        liveTargetAudience: 'build-a',
         csrf,
         headers: {
           'Kovo-Live-Targets': `product-form:p1#components/product-form/product-form@${token}:{"productId":"p1"}`,
@@ -154,6 +163,7 @@ describe('mutation wire headers', () => {
     expect(
       mutationWireRequestFromHeaders({
         buildToken: 'build-a',
+        liveTargetAudience: 'build-a',
         csrf: { ...csrf, secret: 'different-live-target-secret-0123456789abcdef' },
         headers: {
           'Kovo-Live-Targets': `product-form:p1#components/product-form/product-form@${token}:{"productId":"p1"}`,
@@ -166,6 +176,7 @@ describe('mutation wire headers', () => {
     expect(
       mutationWireRequestFromHeaders({
         buildToken: 'build-a',
+        liveTargetAudience: 'build-a',
         csrf,
         headers: {
           'Kovo-Live-Targets': `product-form:p1#components/product-form/product-form@${token.slice(0, -1)}:{"productId":"p1"}`,
@@ -178,6 +189,7 @@ describe('mutation wire headers', () => {
     expect(
       mutationWireRequestFromHeaders({
         buildToken: 'build-a',
+        liveTargetAudience: 'build-a',
         csrf,
         headers: {
           'Kovo-Live-Targets': `product-form:p1#components/product-form/product-form@${token}a:{"productId":"p1"}`,
@@ -190,6 +202,7 @@ describe('mutation wire headers', () => {
     expect(
       mutationWireRequestFromHeaders({
         buildToken: 'build-a',
+        liveTargetAudience: 'build-a',
         csrf,
         headers: {
           'Kovo-Live-Targets':
@@ -220,6 +233,7 @@ describe('mutation wire headers', () => {
     expect(
       mutationWireRequestFromHeaders({
         buildToken: 'build-a',
+        liveTargetAudience: 'build-a',
         csrf,
         headers: {
           'Kovo-Live-Targets':
@@ -241,10 +255,15 @@ describe('mutation wire headers', () => {
     };
     try {
       process.env.KOVO_LIVE_TARGET_SECRET = 'live-target-deployment-secret-a-012345';
-      const token = createLiveTargetAttestation(descriptor, { request });
+      const token = createLiveTargetAttestation(descriptor, {
+        buildToken: 'mutation-wire-test-build',
+        request,
+      });
 
       expect(
         mutationWireRequestFromHeaders({
+          buildToken: 'mutation-wire-test-build',
+          liveTargetAudience: 'mutation-wire-test-build',
           headers: {
             'Kovo-Live-Targets': `product-form:p1#components/product-form/product-form@${token}:{"productId":"p1"}`,
           },
@@ -256,6 +275,8 @@ describe('mutation wire headers', () => {
       process.env.KOVO_LIVE_TARGET_SECRET = 'live-target-deployment-secret-b-012345';
       expect(
         mutationWireRequestFromHeaders({
+          buildToken: 'mutation-wire-test-build',
+          liveTargetAudience: 'mutation-wire-test-build',
           headers: {
             'Kovo-Live-Targets': `product-form:p1#components/product-form/product-form@${token}:{"productId":"p1"}`,
           },
@@ -289,9 +310,14 @@ describe('mutation wire headers', () => {
       };
       process.env.KOVO_LIVE_TARGET_SECRET = 'captured-live-target-secret-0123456789';
       const descriptor = { component: 'components/a', props: { id: '1' }, target: 'a' };
-      const token = createLiveTargetAttestation(descriptor, { request: {} });
+      const token = createLiveTargetAttestation(descriptor, {
+        buildToken: 'mutation-wire-test-build',
+        request: {},
+      });
       expect(
         mutationWireRequestFromHeaders({
+          buildToken: 'mutation-wire-test-build',
+          liveTargetAudience: 'mutation-wire-test-build',
           headers: { 'Kovo-Live-Targets': `a#components/a@${token}:{"id":"1"}` },
           rawInput: {},
           request: {},
@@ -319,7 +345,7 @@ describe('mutation wire headers', () => {
             props: { productId: 'p1' },
             target: 'product-form:p1',
           },
-          { request: {} },
+          { buildToken: 'mutation-wire-test-build', request: {} },
         ),
       ).toThrow(/KOVO_LIVE_TARGET_SECRET is required/);
     } finally {

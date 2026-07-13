@@ -147,6 +147,7 @@ export function componentLiveTargetRenderer<
       const html = await runWithJsxRequestContext(
         context.request,
         {
+          attestationAuthority: context.attestationAuthority,
           ...(csrf === undefined ? {} : { csrf }),
           ...(context.failure === undefined || context.mutationKey === undefined
             ? {}
@@ -162,9 +163,9 @@ export function componentLiveTargetRenderer<
         () => renderComponent(component, { ...context.props, ...queries }, resolvedRenderOptions),
       );
       return stampKovoComponentRoot({
+        attestationAuthority: context.attestationAuthority,
         component,
         componentName: componentId,
-        ...(csrf === undefined ? {} : { csrf }),
         html,
         props: context.props,
         request: context.request,

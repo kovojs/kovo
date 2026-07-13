@@ -89,6 +89,7 @@ export const galleryInteractiveRoute = route('/gallery/interactive', {
 
 export function createGalleryInteractiveAppShell() {
   const app = createApp({
+    appId: 'a6a65802-25f9-40ce-a2ad-5ab960ff3277',
     clientModules: galleryInteractiveClientModules,
     document: { lang: 'en-US' },
     renderRoute(value) {

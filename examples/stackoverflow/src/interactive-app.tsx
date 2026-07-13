@@ -250,6 +250,7 @@ export async function buildSoInteractiveApp(
   });
 
   const app = createApp({
+    appId: '1eeb2490-f12b-4af7-b1ca-2023f2c621e8',
     clientModules: createMemoryVersionedClientModuleRegistry(),
     db: async (request) => {
       const sessionId = request.session?.id ?? FALLBACK_SO_DEMO_SESSION_ID;

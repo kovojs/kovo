@@ -1,6 +1,7 @@
-import { createHash, timingSafeEqual } from 'node:crypto';
+import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 
-import type { Redirect } from '@kovojs/core';
+import type { JsonValue, Redirect } from '@kovojs/core';
+import { assertAndCloneJsonValue, canonicalJsonStringify } from '@kovojs/core/internal/json';
 import { isProvenPrincipal } from './auth-principal.js';
 import type { CsrfOptions } from './csrf.js';
 import { signingKeyRingFromSecret } from './keyring.js';
@@ -8,6 +9,7 @@ import type { RequestLifecycleOptions } from './guards.js';
 import type { StylesheetAsset } from './hints.js';
 import type { MutationFail, MutationSuccess } from './mutation.js';
 import type { TaskScheduler } from './mutation/definition.js';
+import type { LiveTargetAttestationAuthority } from './live-target-app-identity.js';
 import type { RegisteredQueryDefinition } from './query.js';
 import type { AwaitableGeneratedFragmentRenderable } from './renderable.js';
 import type { MutationReplayStore } from './replay.js';
@@ -24,16 +26,14 @@ import {
   createWitnessSet,
   witnessGetPrototypeOf,
   witnessIsArray,
-  witnessJsonStringifyPrimitive,
   witnessGetOwnPropertyDescriptor,
-  witnessObjectKeys,
   witnessReflectApply,
   witnessSetAdd,
   witnessSetHas,
-  witnessSortStrings,
   witnessString,
 } from './security-witness-intrinsics.js';
 import {
+  securityNumberIsInteger,
   securityStringCharCodeAt,
   securityStringIndexOf,
   securityStringSlice,
@@ -43,6 +43,7 @@ import {
 import { mutationWireJsonParse } from './mutation-wire-intrinsics.js';
 
 const NativeBuffer = Buffer;
+const developmentLiveTargetAttestationSecret = randomBytes(32).toString('base64url');
 const nativeBufferFrom = NativeBuffer.from;
 const nativeBufferByteLength = NativeBuffer.byteLength;
 const hashControl = createHash('sha256');
@@ -148,6 +149,10 @@ export interface MutationWireRequest<
    * to full rather than applying a delta against a stale base.
    */
   buildToken?: string;
+  /** Opaque app-owned authority required by live-target render/stamp sinks. */
+  liveTargetAttestationAuthority?: LiveTargetAttestationAuthority;
+  /** App-bound live-target signing audience; distinct from the public render-plan token. */
+  liveTargetAudience?: string;
   csrf?: CsrfOptions<Request> | false;
   currentUrl?: string;
   failureTarget?: string;
@@ -212,6 +217,10 @@ export interface LiveTargetRenderer<Request = unknown> {
 
 /** @internal Context passed to a generated live-target renderer (SPEC §9.1). */
 export interface LiveTargetRenderContext<Request = unknown> {
+  /** Framework-issued authority for the closed app that owns this render. */
+  attestationAuthority: LiveTargetAttestationAuthority;
+  /** Replica-stable app/build identity bound into every live-target attestation (SPEC §9.3). */
+  buildToken: string;
   csrf?: CsrfOptions<Request> | false;
   failure?: MutationFail;
   input: unknown;
@@ -266,6 +275,10 @@ export interface MutationWireRequestOptions<
 > extends RequestLifecycleOptions<Request, SessionValue> {
   /** Build-global render-plan version token (SPEC §5.1, §9.1.1). */
   buildToken?: string;
+  /** Opaque app-owned authority required by live-target render/stamp sinks. */
+  liveTargetAttestationAuthority?: LiveTargetAttestationAuthority;
+  /** App-bound live-target signing audience; defaults to buildToken for direct internal callers. */
+  liveTargetAudience?: string;
   csrf?: CsrfOptions<Request> | false;
   currentUrl?: string;
   failureTarget?: string;
@@ -473,6 +486,12 @@ export function mutationWireRequestFromHeaders<Request>(
     // Replay fingerprinting is intentionally deferred into the post-CSRF/schema/guard lifecycle
     // policy. Upload-byte hashing here would let invalid requests spend digest work before gates.
     ...(options.buildToken === undefined ? {} : { buildToken: options.buildToken }),
+    ...(options.liveTargetAttestationAuthority === undefined
+      ? {}
+      : { liveTargetAttestationAuthority: options.liveTargetAttestationAuthority }),
+    ...(options.liveTargetAudience === undefined
+      ? {}
+      : { liveTargetAudience: options.liveTargetAudience }),
     ...(options.db === undefined ? {} : { db: options.db }),
     ...(options.onError === undefined ? {} : { onError: options.onError }),
     ...(options.sessionProvider === undefined ? {} : { sessionProvider: options.sessionProvider }),
@@ -506,6 +525,58 @@ export function mutationWireRequestFromHeaders<Request>(
     targets: headers.targets,
     ...(options.taskScheduler === undefined ? {} : { taskScheduler: options.taskScheduler }),
   };
+}
+
+/**
+ * @internal Revalidate and detach descriptors supplied to the direct mutation-wire API.
+ *
+ * The header parser is not the only in-repo constructor of `MutationWireRequest`. The execution
+ * sink therefore rechecks every descriptor against the exact app audience/principal and clones
+ * its JSON props before a mutation can commit. This prevents a structural caller or a concurrent
+ * mutation of the caller-owned carrier from bypassing the HTTP attestation gate (SPEC §6.6/§9.3).
+ */
+export function snapshotVerifiedLiveTargetDescriptors<Request>(
+  descriptors: unknown,
+  options: Pick<
+    MutationWireRequestOptions<Request>,
+    'buildToken' | 'csrf' | 'liveTargetAudience' | 'request'
+  >,
+): readonly MutationLiveTargetDescriptor[] {
+  if (descriptors === undefined) return [];
+  if (!witnessIsArray(descriptors)) {
+    throw new TypeError('Mutation live-target descriptors must be a dense own-data array.');
+  }
+  const lengthDescriptor = witnessGetOwnPropertyDescriptor(descriptors, 'length');
+  if (
+    lengthDescriptor === undefined ||
+    !('value' in lengthDescriptor) ||
+    typeof lengthDescriptor.value !== 'number' ||
+    !securityNumberIsInteger(lengthDescriptor.value) ||
+    lengthDescriptor.value < 0 ||
+    lengthDescriptor.value > MAX_MUTATION_WIRE_TARGETS
+  ) {
+    throw new TypeError('Mutation live-target descriptors have an invalid length.');
+  }
+
+  const snapshots: MutationLiveTargetDescriptor[] = [];
+  for (let index = 0; index < lengthDescriptor.value; index += 1) {
+    const entryDescriptor = witnessGetOwnPropertyDescriptor(descriptors, index);
+    if (entryDescriptor === undefined || !('value' in entryDescriptor)) {
+      throw new TypeError('Mutation live-target descriptors must not contain holes or accessors.');
+    }
+    const snapshot = snapshotLiveTargetDescriptor(entryDescriptor.value);
+    if (!verifyLiveTargetDescriptor(snapshot, options)) {
+      throw new TypeError(
+        'Mutation live-target descriptor attestation does not match this app, build, and principal.',
+      );
+    }
+    witnessArrayAppend(
+      snapshots,
+      snapshot,
+      'Server packages/server/src/mutation-wire.ts verified descriptor snapshot',
+    );
+  }
+  return snapshots;
 }
 
 /**
@@ -668,6 +739,7 @@ function parseLiveTargetDescriptorEntry(entry: string): MutationLiveTargetDescri
 export function createLiveTargetAttestation<Request>(
   descriptor: Omit<MutationLiveTargetDescriptor, 'attestation'>,
   options: {
+    buildToken: string;
     csrf?: CsrfOptions<Request> | false;
     request: Request;
   },
@@ -689,14 +761,21 @@ export function createLiveTargetAttestation<Request>(
 
 function verifyLiveTargetDescriptor<Request>(
   descriptor: MutationLiveTargetDescriptor,
-  options: MutationWireRequestOptions<Request>,
+  options: Pick<
+    MutationWireRequestOptions<Request>,
+    'buildToken' | 'csrf' | 'liveTargetAudience' | 'request'
+  >,
 ): boolean {
   if (descriptor.attestation === undefined) {
     return false;
   }
   let expected: string;
   try {
+    if (typeof options.liveTargetAudience !== 'string' || options.liveTargetAudience.length === 0) {
+      return false;
+    }
     expected = createLiveTargetAttestation(descriptor, {
+      buildToken: options.liveTargetAudience,
       ...(options.csrf === undefined ? {} : { csrf: options.csrf }),
       request: options.request,
     });
@@ -715,21 +794,26 @@ function liveTargetAttestationSecret(): string {
     );
   }
 
-  return 'kovo-live-target-attestation:development';
+  return developmentLiveTargetAttestationSecret;
 }
 
 function liveTargetAttestationPayload<Request>(
   descriptor: Omit<MutationLiveTargetDescriptor, 'attestation'>,
   options: {
+    buildToken: string;
     csrf?: CsrfOptions<Request> | false;
     request: Request;
   },
 ): string {
+  if (typeof options.buildToken !== 'string' || options.buildToken.length === 0) {
+    throw new Error('live-target attestation requires a non-empty app build token.');
+  }
   const principal = options.csrf === false ? undefined : options.csrf?.sessionId(options.request);
   if (principal !== undefined && !isProvenPrincipal(principal)) {
     throw new Error('live-target attestation cannot use an unresolved session principal.');
   }
-  return canonicalJson({
+  return canonicalJsonStringify({
+    buildToken: options.buildToken,
     component: descriptor.component,
     principal: principal ?? 'anonymous',
     props: descriptor.props,
@@ -737,30 +821,39 @@ function liveTargetAttestationPayload<Request>(
   });
 }
 
-function canonicalJson(value: unknown): string {
+function snapshotLiveTargetDescriptor(value: unknown): MutationLiveTargetDescriptor {
   if (value === null || typeof value !== 'object') {
-    return (
-      witnessJsonStringifyPrimitive(value as string | number | boolean | null | undefined) ??
-      'undefined'
+    throw new TypeError('Mutation live-target descriptor must be an object.');
+  }
+  const attestation = requiredLiveTargetDescriptorString(value, 'attestation');
+  const component = requiredLiveTargetDescriptorString(value, 'component');
+  const target = requiredLiveTargetDescriptorString(value, 'target');
+  const propsDescriptor = witnessGetOwnPropertyDescriptor(value, 'props');
+  if (propsDescriptor === undefined || !('value' in propsDescriptor)) {
+    throw new TypeError('Mutation live-target descriptor props must be stable own JSON data.');
+  }
+  const props = assertAndCloneJsonValue(propsDescriptor.value, {
+    root: 'liveTargetDescriptor.props',
+  });
+  if (props === null || typeof props !== 'object' || witnessIsArray(props)) {
+    throw new TypeError('Mutation live-target descriptor props must be a JSON object.');
+  }
+  return { attestation, component, props: props as Record<string, JsonValue>, target };
+}
+
+function requiredLiveTargetDescriptorString(source: object, property: string): string {
+  const descriptor = witnessGetOwnPropertyDescriptor(source, property);
+  if (
+    descriptor === undefined ||
+    !('value' in descriptor) ||
+    typeof descriptor.value !== 'string' ||
+    descriptor.value.length === 0
+  ) {
+    throw new TypeError(
+      `Mutation live-target descriptor ${property} must be a non-empty own string.`,
     );
   }
-  if (witnessIsArray(value)) {
-    let result = '[';
-    for (let index = 0; index < value.length; index += 1) {
-      if (index > 0) result += ',';
-      result += canonicalJson(value[index]);
-    }
-    return `${result}]`;
-  }
-  const keys = witnessObjectKeys(value);
-  witnessSortStrings(keys);
-  let result = '{';
-  for (let index = 0; index < keys.length; index += 1) {
-    const key = keys[index]!;
-    if (index > 0) result += ',';
-    result += `${witnessJsonStringifyPrimitive(key)!}:${canonicalJson((value as Record<string, unknown>)[key])}`;
-  }
-  return `${result}}`;
+  return descriptor.value;
 }
 
 function secureEqual(left: string, right: string): boolean {

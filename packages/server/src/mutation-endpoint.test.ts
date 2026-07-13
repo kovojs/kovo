@@ -15,16 +15,32 @@ import {
 } from './mutation.js';
 import { query } from './query.js';
 import { s, type Schema } from './schema.js';
-import { cartBadgeFragmentHtml, testMutation as mutation } from './test-fixtures.js';
+import {
+  cartBadgeFragmentHtml,
+  createLiveTargetTestAuthority,
+  testMutation as mutation,
+} from './test-fixtures.js';
 import { createLiveTargetAttestation } from './mutation-wire.js';
 import { noJsMutationReauthResponse } from './mutation/no-js.js';
 
 const mutationEndpointTestBuildToken = 'mutation-endpoint-test-build';
+const mutationEndpointTestAuthority = createLiveTargetTestAuthority(mutationEndpointTestBuildToken);
 
-function withMutationEndpointTestBuildToken<T extends { buildToken?: string }>(
+function withMutationEndpointTestBuildToken<
+  T extends { buildToken?: string; liveTargetAudience?: string },
+>(
   request: T,
-): T & { buildToken: string } {
-  return { buildToken: mutationEndpointTestBuildToken, ...request };
+): T & {
+  buildToken: string;
+  liveTargetAttestationAuthority: typeof mutationEndpointTestAuthority.authority;
+  liveTargetAudience: string;
+} {
+  return {
+    buildToken: mutationEndpointTestBuildToken,
+    liveTargetAttestationAuthority: mutationEndpointTestAuthority.authority,
+    liveTargetAudience: mutationEndpointTestAuthority.audience,
+    ...request,
+  };
 }
 
 function renderMutationEndpointResponse(
@@ -41,11 +57,37 @@ function attestedLiveTargetHeader(
   component: string,
   props: Record<string, unknown> = {},
 ): string {
-  const token = createLiveTargetAttestation({ component, props, target }, { request: {} });
+  const token = createLiveTargetAttestation(
+    { component, props, target },
+    { buildToken: mutationEndpointTestAuthority.audience, request: {} },
+  );
   return `${target}#${component}@${token}:${JSON.stringify(props)}`;
 }
 
 describe('server mutation endpoint routing', () => {
+  it('rejects an empty enhanced build token before committing the mutation handler', async () => {
+    let writes = 0;
+    const update = defineMutation('lifecycle/empty-build-token', {
+      csrf: false,
+      csrfJustification: 'test fixture uses a non-browser caller',
+      handler() {
+        writes += 1;
+        return {};
+      },
+      input: s.object({}),
+    });
+
+    await expect(
+      renderMutationEndpointResponseBase(update, {
+        buildToken: '',
+        headers: { 'Kovo-Fragment': 'true' },
+        rawInput: {},
+        request: {},
+      }),
+    ).rejects.toThrow(/non-empty buildToken before the enhanced mutation lifecycle/u);
+    expect(writes).toBe(0);
+  });
+
   it.each([
     {
       define: () =>

@@ -19,6 +19,10 @@ import type {
   AppMutationDeclaration,
   KovoApp,
 } from './app-types.js';
+import {
+  appLiveTargetAttestationAudience,
+  appLiveTargetAttestationAuthority,
+} from './live-target-app-identity.js';
 import { normalizeAppMutationResponseOptions } from './app-mutation-responses.js';
 import {
   appRequestUrl,
@@ -165,6 +169,8 @@ export async function handleAppMutationRequest(
   // Derive the build token from the app's client-module registry so it is
   // identical for the page render and this mutation response (SPEC §5.1, §9.1.1).
   const buildToken = app.clientModules.buildToken();
+  const liveTargetAudience = appLiveTargetAttestationAudience(app, buildToken);
+  const liveTargetAttestationAuthority = appLiveTargetAttestationAuthority(app, buildToken);
   const taskScheduler = appTaskScheduler(app);
   const fallbackRedirectTo =
     mutation.redirectTo ??
@@ -205,6 +211,8 @@ export async function handleAppMutationRequest(
 
   const endpointResponse = await renderMutationEndpointResponse(requestMutation, {
     buildToken,
+    liveTargetAttestationAuthority,
+    liveTargetAudience,
     ...(app.csrf === undefined ? {} : { csrf: app.csrf }),
     currentUrl: appRequestUrl(sourceUrl),
     ...(app.mutationReplayStore === undefined ? {} : { replayStore: app.mutationReplayStore }),
@@ -267,10 +275,14 @@ async function renderPreBodyCsrfFailure(
     Request
   >;
   const buildToken = app.clientModules.buildToken();
+  const liveTargetAudience = appLiveTargetAttestationAudience(app, buildToken);
+  const liveTargetAttestationAuthority = appLiveTargetAttestationAuthority(app, buildToken);
   const taskScheduler = appTaskScheduler(app);
 
   const endpointResponse = await renderMutationEndpointResponse(requestMutation, {
     buildToken,
+    liveTargetAttestationAuthority,
+    liveTargetAudience,
     ...(app.csrf === undefined ? {} : { csrf: app.csrf }),
     currentUrl: appRequestUrl(sourceUrl),
     headers: request.headers,

@@ -1,20 +1,48 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
+
 import type { LiveTargetRenderer } from './mutation-wire.js';
 import { appendDenseOwnArrayValue, denseOwnArrayForEach } from './registry-lookup.js';
 import { securityJsonStringify, securityStringEndsWith } from './response-security-intrinsics.js';
 import {
   createWitnessMap,
+  createWitnessWeakSet,
   witnessGetOwnPropertyDescriptor,
   witnessIsArray,
   witnessMapForEach,
   witnessMapGet,
   witnessMapSet,
   witnessObjectKeys,
+  witnessReflectApply,
+  witnessWeakSetAdd,
+  witnessWeakSetHas,
 } from './security-witness-intrinsics.js';
 
 /** @internal Compiler-emitted module namespace that may contain live-target renderer exports. */
 export type GeneratedLiveTargetModule<_Request = unknown> = Record<string, unknown>;
 
-const registeredRenderersByComponent = createWitnessMap<string, LiveTargetRenderer<unknown>>();
+type GeneratedLiveTargetRegistryScope = Map<string, LiveTargetRenderer<unknown>>;
+
+const generatedLiveTargetRegistryContext =
+  new AsyncLocalStorage<GeneratedLiveTargetRegistryScope>();
+const consumedGeneratedLiveTargetRegistryScopes =
+  createWitnessWeakSet<GeneratedLiveTargetRegistryScope>();
+const nativeAsyncLocalGetStore = AsyncLocalStorage.prototype.getStore;
+const nativeAsyncLocalRun = AsyncLocalStorage.prototype.run;
+
+/**
+ * @internal Evaluate one app module graph inside an owner-local generated-renderer registry.
+ *
+ * The loader must establish this scope before dynamically importing authored app code. Async-local
+ * ownership keeps concurrent/TLA module graphs disjoint; registrations outside an established
+ * framework loader scope are intentionally ignored instead of becoming process-global authority
+ * (SPEC §6.6/§9.1/§9.5).
+ */
+export function runWithGeneratedLiveTargetRegistry<Value>(load: () => Value): Value {
+  return witnessReflectApply<Value>(nativeAsyncLocalRun, generatedLiveTargetRegistryContext, [
+    createWitnessMap<string, LiveTargetRenderer<unknown>>(),
+    load,
+  ]);
+}
 
 /**
  * @internal Register one compiler-emitted live-target renderer as the generated module loads.
@@ -38,11 +66,22 @@ export function registerGeneratedLiveTargetRenderer<Request = unknown>(
     );
   }
 
-  witnessMapSet(
-    registeredRenderersByComponent,
-    liveTargetRendererComponent(renderer),
-    renderer as LiveTargetRenderer<unknown>,
-  );
+  const scope = currentGeneratedLiveTargetRegistryScope();
+  if (scope !== undefined) {
+    if (witnessWeakSetHas(consumedGeneratedLiveTargetRegistryScopes, scope)) {
+      throw new Error(
+        'Generated live target renderer registration occurred after the app aggregate consumed its module graph.',
+      );
+    }
+    const component = liveTargetRendererComponent(renderer);
+    const existing = witnessMapGet(scope, component);
+    if (existing !== undefined && existing !== renderer) {
+      throw new Error(
+        `Duplicate generated live target renderer for component ${securityJsonStringify(component)} in one app module graph.`,
+      );
+    }
+    witnessMapSet(scope, component, renderer as LiveTargetRenderer<unknown>);
+  }
   return renderer;
 }
 
@@ -50,11 +89,50 @@ export function registerGeneratedLiveTargetRenderer<Request = unknown>(
 export function registeredGeneratedLiveTargetRenderers<
   Request = unknown,
 >(): LiveTargetRenderer<Request>[] {
+  const scope = currentGeneratedLiveTargetRegistryScope();
+  return scope === undefined || witnessWeakSetHas(consumedGeneratedLiveTargetRegistryScopes, scope)
+    ? []
+    : snapshotRegisteredGeneratedLiveTargetRenderers<Request>(scope);
+}
+
+/**
+ * @internal Transfer the pending compiler-emitted renderer inventory to exactly one app aggregate.
+ *
+ * Component modules execute before their app module calls `createApp()`. Treat that registration
+ * window as a single-use handoff instead of a process-global registry: otherwise a later app in the
+ * same process inherits renderer/query authority from every app evaluated before it (SPEC §6.6,
+ * §9.1, §9.5). Replacing the map before traversal also means registrations triggered by later
+ * module evaluation belong to the next aggregate rather than racing into the current snapshot.
+ */
+export function takeRegisteredGeneratedLiveTargetRenderers<
+  Request = unknown,
+>(): LiveTargetRenderer<Request>[] {
+  const scope = currentGeneratedLiveTargetRegistryScope();
+  if (scope === undefined || witnessWeakSetHas(consumedGeneratedLiveTargetRegistryScopes, scope)) {
+    return [];
+  }
+  // Seal before traversal. A renderer getter/callback cannot race a late registration into the
+  // handed-off inventory, and a second createApp() in this graph receives no authority.
+  witnessWeakSetAdd(consumedGeneratedLiveTargetRegistryScopes, scope);
+  return snapshotRegisteredGeneratedLiveTargetRenderers<Request>(scope);
+}
+
+function snapshotRegisteredGeneratedLiveTargetRenderers<Request>(
+  source: ReadonlyMap<string, LiveTargetRenderer<unknown>>,
+): LiveTargetRenderer<Request>[] {
   const renderers: LiveTargetRenderer<Request>[] = [];
-  witnessMapForEach(registeredRenderersByComponent, (renderer) => {
+  witnessMapForEach(source, (renderer) => {
     appendDenseOwnArrayValue(renderers, renderer as LiveTargetRenderer<Request>);
   });
   return renderers;
+}
+
+function currentGeneratedLiveTargetRegistryScope(): GeneratedLiveTargetRegistryScope | undefined {
+  return witnessReflectApply<GeneratedLiveTargetRegistryScope | undefined>(
+    nativeAsyncLocalGetStore,
+    generatedLiveTargetRegistryContext,
+    [],
+  );
 }
 
 /**

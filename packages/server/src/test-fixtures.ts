@@ -1,6 +1,13 @@
 import type { JsonValue } from '@kovojs/core';
 
+import { createApp } from './app.js';
+import { createMemoryVersionedClientModuleRegistry } from './client-modules.js';
+import type { CsrfOptions } from './csrf.js';
 import { domain } from './domain.js';
+import {
+  appLiveTargetAttestationAudience,
+  appLiveTargetAttestationAuthority,
+} from './live-target-app-identity.js';
 import {
   mutation as defineMutation,
   type MutationDefinition,
@@ -9,6 +16,23 @@ import {
 import type { FragmentRenderer } from './mutation-wire.js';
 import { query } from './query.js';
 import { s, type Schema } from './schema.js';
+
+/** Test-only closed-app authority for direct internal wire/renderer fixtures. */
+export function createLiveTargetTestAuthority<Request>(
+  buildToken: string,
+  csrf?: CsrfOptions<Request>,
+) {
+  const backing = createMemoryVersionedClientModuleRegistry();
+  const app = createApp({
+    clientModules: { ...backing, buildToken: () => buildToken },
+    ...(csrf === undefined ? {} : { csrf }),
+  });
+  return {
+    app,
+    audience: appLiveTargetAttestationAudience(app, buildToken),
+    authority: appLiveTargetAttestationAuthority(app, buildToken),
+  };
+}
 
 export const testMutation = ((key: string, definition: Parameters<typeof defineMutation>[1]) =>
   Object.prototype.hasOwnProperty.call(definition, 'csrf')

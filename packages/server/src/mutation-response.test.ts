@@ -21,6 +21,7 @@ import {
   cartMutationFragmentRenderers,
   cartMutationTargets,
   createCartMutationFixture,
+  createLiveTargetTestAuthority,
   testMutation as mutation,
 } from './test-fixtures.js';
 import { componentLiveTargetRenderer } from './live-target-renderer.js';
@@ -28,11 +29,23 @@ import { createLiveTargetAttestation } from './mutation-wire.js';
 import { registerGeneratedQueryReadRegistry } from './generated-query-registry.js';
 
 const mutationResponseTestBuildToken = 'mutation-response-test-build';
+const mutationResponseTestAuthority = createLiveTargetTestAuthority(mutationResponseTestBuildToken);
 
-function withMutationResponseTestBuildToken<T extends { buildToken?: string }>(
+function withMutationResponseTestBuildToken<
+  T extends { buildToken?: string; liveTargetAudience?: string },
+>(
   request: T,
-): T & { buildToken: string } {
-  return { buildToken: mutationResponseTestBuildToken, ...request };
+): T & {
+  buildToken: string;
+  liveTargetAttestationAuthority: typeof mutationResponseTestAuthority.authority;
+  liveTargetAudience: string;
+} {
+  return {
+    buildToken: mutationResponseTestBuildToken,
+    liveTargetAttestationAuthority: mutationResponseTestAuthority.authority,
+    liveTargetAudience: mutationResponseTestAuthority.audience,
+    ...request,
+  };
 }
 
 function renderMutationResponse(
@@ -58,7 +71,10 @@ function attestedLiveTargetHeader(
   component: string,
   props: Record<string, unknown> = {},
 ): string {
-  const token = createLiveTargetAttestation({ component, props, target }, { request: {} });
+  const token = createLiveTargetAttestation(
+    { component, props, target },
+    { buildToken: mutationResponseTestAuthority.audience, request: {} },
+  );
   return `${target}#${component}@${token}:${JSON.stringify(props)}`;
 }
 

@@ -169,6 +169,7 @@ function HomePage({ request }: { request: AppRequest }): string {
 }
 
 const app = createApp({
+  appId: '{{app_id}}',
   clientModules: createMemoryVersionedClientModuleRegistry(),
   csrf: appCsrf,
   db: appRuntimeDbProvider,

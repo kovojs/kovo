@@ -40,6 +40,7 @@ import { createDeferredRegionChunkCollector } from './deferred-region.js';
 import { stampGuardFailureDocumentSecurityFloor } from './document-core.js';
 import type { DeferredRegionCollector } from './jsx-context.js';
 import type { MutationFail } from './mutation.js';
+import type { LiveTargetAttestationAuthority } from './live-target-app-identity.js';
 import {
   recordQueryRuntimeWarnings,
   runQuery,
@@ -658,6 +659,7 @@ export function notFound(): NotFound {
 }
 
 export interface RouteJsxContextOptions<Request> {
+  attestationAuthority?: LiveTargetAttestationAuthority;
   csrf?: CsrfOptions<Request>;
   deferredRegions?: DeferredRegionCollector;
   maxListItems?: number;
@@ -1470,6 +1472,9 @@ function routeJsxContextOptions<Request>(
   deferredRegions?: DeferredRegionCollector,
 ): RouteJsxContextOptions<Request> {
   return {
+    ...(options.attestationAuthority === undefined
+      ? {}
+      : { attestationAuthority: options.attestationAuthority }),
     ...(options.csrf === undefined ? {} : { csrf: options.csrf }),
     ...(deferredRegions === undefined && options.deferredRegions === undefined
       ? {}

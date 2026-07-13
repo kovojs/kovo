@@ -3,10 +3,11 @@ import { describe, expect, it } from 'vitest';
 import { csrfToken } from '@kovojs/server';
 import {
   componentLiveTargetRenderer,
-  createLiveTargetAttestation,
   renderMutationEndpointResponse,
   type MutationWireHeaderSource,
 } from '../../../../../packages/server/src/internal/wire.js';
+import { createLiveTargetAttestation } from '../../../../../packages/server/src/mutation-wire.js';
+import { createLiveTargetTestAuthority } from '../../../../../packages/server/src/test-fixtures.js';
 import { createKovoTestHarness, type KovoTestHarnessOptions } from '@kovojs/test/harness';
 import { kovoCheck, kovoExplain } from '@kovojs/cli';
 import { readTempCommerceGraph } from '../../../../../scripts/commerce-graph.mjs';
@@ -29,6 +30,8 @@ import { OrderHistory } from './components/order-history.js';
 import { createShopDb, type ShopDb } from './db.js';
 import { cart, order, product } from './domains.js';
 import { cartQuery, orderHistoryQuery, productsQuery } from './queries.js';
+
+const tutorialLiveTargetAuthority = createLiveTargetTestAuthority('tutorial-step-07-test-build');
 
 // Tutorial step 07: the whole behavior surface is checkable without a
 // browser — kovo check over the app graph, kovo explain as the queryable
@@ -56,6 +59,8 @@ function submitAddToCart(
     buildToken: 'tutorial-step-07-test-build',
     headers: withAttestedLiveTargets(headers, request),
     liveTargetRenderers: successLiveTargetRenderers(),
+    liveTargetAttestationAuthority: tutorialLiveTargetAuthority.authority,
+    liveTargetAudience: tutorialLiveTargetAuthority.audience,
     rawInput,
     redirectTo: '/',
     renderFailureFragment: (failure) => renderAddToCartFailureFragment(request, rawInput, failure),
@@ -103,7 +108,10 @@ function attestLiveTargetEntries(value: string, request: ShopRequest): string {
       const component = trimmed.slice(componentSeparator + 1, propsSeparator);
       const propsJson = trimmed.slice(propsSeparator + 1);
       const props = JSON.parse(propsJson) as Record<string, unknown>;
-      const token = createLiveTargetAttestation({ component, props, target }, { request });
+      const token = createLiveTargetAttestation(
+        { component, props, target },
+        { buildToken: tutorialLiveTargetAuthority.audience, request },
+      );
       return `${target}#${component}@${token}:${propsJson}`;
     })
     .join('; ');

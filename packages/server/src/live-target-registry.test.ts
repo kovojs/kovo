@@ -4,8 +4,12 @@ import {
   collectGeneratedLiveTargetRenderers,
   registeredGeneratedLiveTargetRenderers,
   registerGeneratedLiveTargetRenderer,
+  runWithGeneratedLiveTargetRegistry,
 } from './live-target-registry.js';
 import type { LiveTargetRenderer } from './mutation-wire.js';
+import { createLiveTargetTestAuthority } from './test-fixtures.js';
+
+const registryTestAuthority = createLiveTargetTestAuthority('live-target-registry-test-build');
 
 describe('generated live target registry collection', () => {
   it('collects only compiler-emitted live target renderer exports', () => {
@@ -118,45 +122,36 @@ describe('generated live target registry collection', () => {
   });
 
   it('stores generated renderers idempotently by component id', () => {
-    const initial = registeredGeneratedLiveTargetRenderers().filter(
-      (renderer) => renderer.component === 'test/auto-registered',
-    );
-    expect(initial).toEqual([]);
-
-    const first: LiveTargetRenderer = {
-      component: 'test/auto-registered',
-      queries: ['cart'],
-      render: () => '<cart-badge>1</cart-badge>',
-    };
-    expect(registerGeneratedLiveTargetRenderer(first)).toBe(first);
-    expect(
-      registeredGeneratedLiveTargetRenderers().filter(
+    runWithGeneratedLiveTargetRegistry(() => {
+      const initial = registeredGeneratedLiveTargetRenderers().filter(
         (renderer) => renderer.component === 'test/auto-registered',
-      ),
-    ).toEqual([first]);
+      );
+      expect(initial).toEqual([]);
 
-    // Re-registering the SAME object identity is idempotent (no throw, no duplicate).
-    expect(registerGeneratedLiveTargetRenderer(first)).toBe(first);
-    expect(
-      registeredGeneratedLiveTargetRenderers().filter(
-        (renderer) => renderer.component === 'test/auto-registered',
-      ),
-    ).toEqual([first]);
+      const first: LiveTargetRenderer = {
+        component: 'test/auto-registered',
+        queries: ['cart'],
+        render: () => '<cart-badge>1</cart-badge>',
+      };
+      expect(registerGeneratedLiveTargetRenderer(first)).toBe(first);
+      expect(
+        registeredGeneratedLiveTargetRenderers().filter(
+          (renderer) => renderer.component === 'test/auto-registered',
+        ),
+      ).toEqual([first]);
 
-    expect(
-      registeredGeneratedLiveTargetRenderers().filter(
-        (renderer) => renderer.component === 'test/auto-registered',
-      ),
-    ).toEqual([first]);
+      // Re-registering the SAME object identity is idempotent (no throw, no duplicate).
+      expect(registerGeneratedLiveTargetRenderer(first)).toBe(first);
+      expect(
+        registeredGeneratedLiveTargetRenderers().filter(
+          (renderer) => renderer.component === 'test/auto-registered',
+        ),
+      ).toEqual([first]);
+    });
   });
 
-  it('replaces stale generated renderers by component id during dev HMR', async () => {
+  it('isolates fresh generated renderer scopes during dev reloads', async () => {
     const component = 'test/hmr-auto-registered';
-    const initial = registeredGeneratedLiveTargetRenderers().filter(
-      (renderer) => renderer.component === component,
-    );
-    expect(initial).toEqual([]);
-
     const first: LiveTargetRenderer = {
       component,
       queries: ['cart'],
@@ -168,18 +163,78 @@ describe('generated live target registry collection', () => {
       render: () => '<cart-badge>latest</cart-badge>',
     };
 
-    expect(registerGeneratedLiveTargetRenderer(first)).toBe(first);
-    expect(registerGeneratedLiveTargetRenderer(latest)).toBe(latest);
-
-    const active = registeredGeneratedLiveTargetRenderers().filter(
-      (renderer) => renderer.component === component,
-    );
+    expect(
+      runWithGeneratedLiveTargetRegistry(() => {
+        registerGeneratedLiveTargetRenderer(first);
+        return registeredGeneratedLiveTargetRenderers();
+      }),
+    ).toEqual([first]);
+    const active = runWithGeneratedLiveTargetRegistry(() => {
+      registerGeneratedLiveTargetRenderer(latest);
+      return registeredGeneratedLiveTargetRenderers();
+    }).filter((renderer) => renderer.component === component);
     expect(active).toEqual([latest]);
     expect(
       await active[0]!.render({
+        attestationAuthority: registryTestAuthority.authority,
+        buildToken: 'live-target-registry-test-build',
         liveTarget: { component, props: {}, target: 'cart-badge' },
         request: new Request('http://kovo.test/cart'),
       }),
     ).toBe('<cart-badge>latest</cart-badge>');
+  });
+
+  it('ignores unscoped registrations and isolates concurrent top-level-await graphs', async () => {
+    const outside: LiveTargetRenderer = {
+      component: 'test/outside',
+      render: () => '<outside />',
+    };
+    registerGeneratedLiveTargetRenderer(outside);
+    expect(registeredGeneratedLiveTargetRenderers()).toEqual([]);
+
+    let releaseFirst!: () => void;
+    const firstGate = new Promise<void>((resolve) => {
+      releaseFirst = resolve;
+    });
+    const first = runWithGeneratedLiveTargetRegistry(async () => {
+      const renderer: LiveTargetRenderer = {
+        component: 'test/concurrent',
+        render: () => '<first />',
+      };
+      registerGeneratedLiveTargetRenderer(renderer);
+      await firstGate;
+      return registeredGeneratedLiveTargetRenderers();
+    });
+    const second = runWithGeneratedLiveTargetRegistry(async () => {
+      const renderer: LiveTargetRenderer = {
+        component: 'test/concurrent',
+        render: () => '<second />',
+      };
+      registerGeneratedLiveTargetRenderer(renderer);
+      releaseFirst();
+      return registeredGeneratedLiveTargetRenderers();
+    });
+
+    const [firstRenderers, secondRenderers] = await Promise.all([first, second]);
+    expect(
+      await firstRenderers[0]!.render({
+        attestationAuthority: registryTestAuthority.authority,
+        buildToken: 'a',
+        input: {},
+        props: {},
+        request: {},
+        target: 'a',
+      }),
+    ).toBe('<first />');
+    expect(
+      await secondRenderers[0]!.render({
+        attestationAuthority: registryTestAuthority.authority,
+        buildToken: 'b',
+        input: {},
+        props: {},
+        request: {},
+        target: 'b',
+      }),
+    ).toBe('<second />');
   });
 });

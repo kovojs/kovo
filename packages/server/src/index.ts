@@ -227,6 +227,10 @@ export type {
   VersionedClientModuleInput,
   VersionedClientModuleRegistry,
 } from './client-modules.js';
+// Opaque recursive public type carried by generated live-target render contexts. The framework
+// issues values from a module-private WeakMap; exporting the type does not expose a constructor or
+// weaken the runtime capability proof (rules/api-surface.md; SPEC §6.6/§9.3).
+export type { LiveTargetAttestationAuthority } from './live-target-app-identity.js';
 export type { NodeHandlerOptions, NodeRequestHandler } from './node.js';
 export type {
   StaticExportCompileDiagnostic,

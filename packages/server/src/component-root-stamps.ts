@@ -1,9 +1,11 @@
 import type { Component } from '@kovojs/core';
 
 import { isKovoComponentDescriptor } from './component-authority.js';
-import type { CsrfOptions } from './csrf.js';
 import { escapeAttribute } from './html.js';
-import { createLiveTargetAttestation } from './mutation-wire.js';
+import {
+  createLiveTargetAttestationWithAuthority,
+  type LiveTargetAttestationAuthority,
+} from './live-target-app-identity.js';
 import type { QueryDefinition } from './query.js';
 import {
   securityArrayIsArray,
@@ -82,9 +84,9 @@ export function assignDerivedComponentName<ComponentType extends StampComponent>
 }
 
 export interface ComponentRootStampOptions<Request = unknown> {
+  attestationAuthority?: LiveTargetAttestationAuthority;
   component: StampComponent;
   componentName?: string;
-  csrf?: CsrfOptions<Request>;
   html: string;
   jsxKey?: unknown;
   props: Record<string, unknown>;
@@ -93,9 +95,9 @@ export interface ComponentRootStampOptions<Request = unknown> {
 }
 
 interface SnapshottedComponentRootStampOptions<Request> {
+  readonly attestationAuthority: LiveTargetAttestationAuthority | undefined;
   readonly component: StampComponent;
   readonly componentName: string | undefined;
-  readonly csrf: CsrfOptions<Request> | undefined;
   readonly html: string;
   readonly jsxKey: unknown;
   readonly props: Readonly<Record<string, unknown>>;
@@ -150,16 +152,14 @@ export function stampKovoComponentRoot<Request = unknown>(
   attrs = setOrAppendHtmlAttribute(
     attrs,
     'kovo-live-token',
-    createLiveTargetAttestation(
+    createLiveTargetAttestationWithAuthority(
+      requiredStampAuthority(snapshot.attestationAuthority),
       {
         component: metadata.componentName,
         props: metadata.props ?? emptyStampProps,
         target: metadata.target,
       },
-      {
-        ...(snapshot.csrf === undefined ? {} : { csrf: snapshot.csrf }),
-        request: snapshot.request,
-      },
+      snapshot.request,
     ),
   );
   if (metadata.props !== undefined) {
@@ -203,19 +203,29 @@ function snapshotComponentRootStampOptions<Request>(
   if (target !== undefined && typeof target !== 'string') {
     throw new TypeError('Component root stamp target must be a string.');
   }
-
   return witnessFreeze({
+    attestationAuthority: optionalOwnDataValue(
+      options,
+      'attestationAuthority',
+      'Component root stamp options',
+    ) as LiveTargetAttestationAuthority | undefined,
     component,
     componentName,
-    csrf: optionalOwnDataValue(options, 'csrf', 'Component root stamp options') as
-      | CsrfOptions<Request>
-      | undefined,
     html,
     jsxKey: optionalOwnDataValue(options, 'jsxKey', 'Component root stamp options'),
     props: snapshotOwnRecord(props, 'Component root stamp props'),
     request: ownDataValue(options, 'request', 'Component root stamp options') as Request,
     target,
   });
+}
+
+function requiredStampAuthority(
+  authority: LiveTargetAttestationAuthority | undefined,
+): LiveTargetAttestationAuthority {
+  if (authority === undefined) {
+    throw new TypeError('Live-target component stamping requires a closed-app authority.');
+  }
+  return authority;
 }
 
 function componentRootStampMetadata<Request>(

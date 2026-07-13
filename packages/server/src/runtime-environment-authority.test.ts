@@ -61,6 +61,23 @@ describe('server runtime operator-environment authority (SPEC §6.6 rule 6)', ()
         egress: { enabled: false, justification: 'isolated authority regression' },
       }),
     ).toThrow(/refused to boot/u);
+    const liveTargetRenderer = {
+      component: 'components/operator-env',
+      render: () => '<operator-env />',
+    };
+    expect(() =>
+      appApi.createApp({
+        egress: { enabled: false, justification: 'isolated authority regression' },
+        liveTargetRenderers: [liveTargetRenderer],
+      }),
+    ).toThrow(/Production apps with live-target renderers require createApp\(\{ appId \}\)/u);
+    expect(() =>
+      appApi.createApp({
+        appId: 'c1f7a1bc-3ded-4205-b0e0-a6120b56d18e',
+        egress: { enabled: false, justification: 'isolated authority regression' },
+        liveTargetRenderers: [liveTargetRenderer],
+      }),
+    ).not.toThrow();
     expect(() =>
       env.validateAppEnv(
         {},
@@ -105,13 +122,20 @@ describe('server runtime operator-environment authority (SPEC §6.6 rule 6)', ()
       props: { id: '1' },
       target: 'operator-env',
     };
-    const firstAttestation = mutationWire.createLiveTargetAttestation(descriptor, { request: {} });
+    const firstAttestation = mutationWire.createLiveTargetAttestation(descriptor, {
+      buildToken: 'runtime-environment-test-build',
+      request: {},
+    });
     setEnvironment('KOVO_LIVE_TARGET_SECRET', 'attacker-live-target-secret-c-0123456789');
-    expect(mutationWire.createLiveTargetAttestation(descriptor, { request: {} })).toBe(
-      firstAttestation,
-    );
     expect(
       mutationWire.createLiveTargetAttestation(descriptor, {
+        buildToken: 'runtime-environment-test-build',
+        request: {},
+      }),
+    ).toBe(firstAttestation);
+    expect(
+      mutationWire.createLiveTargetAttestation(descriptor, {
+        buildToken: 'runtime-environment-test-build',
         csrf: {
           secret: 'explicit-rotation-secret-a-0123456789abcdef',
           sessionId: () => undefined,
@@ -120,6 +144,7 @@ describe('server runtime operator-environment authority (SPEC §6.6 rule 6)', ()
       }),
     ).not.toBe(
       mutationWire.createLiveTargetAttestation(descriptor, {
+        buildToken: 'runtime-environment-test-build',
         csrf: {
           secret: 'explicit-rotation-secret-b-0123456789abcdef',
           sessionId: () => undefined,
@@ -198,7 +223,7 @@ describe('server runtime operator-environment authority (SPEC §6.6 rule 6)', ()
     expect(() =>
       mutationWire.createLiveTargetAttestation(
         { component: 'components/missing-secret', props: {}, target: 'missing-secret' },
-        { request: {} },
+        { buildToken: 'runtime-environment-test-build', request: {} },
       ),
     ).toThrow(/KOVO_LIVE_TARGET_SECRET is required/u);
   });

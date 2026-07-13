@@ -37,11 +37,12 @@ function withSessionCsrf(
 }
 
 function liveHeader(
+  app: Parameters<typeof createLiveTargetAttestation>[0],
   target: string,
   component: string,
   props: Record<string, unknown> = {},
 ): string {
-  const token = createLiveTargetAttestation({ component, props, target }, { request: {} });
+  const token = createLiveTargetAttestation(app, { component, props, target }, {});
   return `${target}#${component}@${token}:${JSON.stringify(props)}`;
 }
 
@@ -215,7 +216,7 @@ describe('stackoverflow interactive app', () => {
   });
 
   it('voteUp response reconciles derived optimism to committed PGlite query truth', async () => {
-    const { db, handler } = await buildSoInteractiveApp();
+    const { app, db, handler } = await buildSoInteractiveApp();
 
     const [first] = await db.select().from(questions).orderBy(asc(questions.id)).limit(1);
     if (!first) throw new Error('seed produced no questions');
@@ -233,7 +234,7 @@ describe('stackoverflow interactive app', () => {
           Origin: 'http://example.test',
           'Kovo-Fragment': 'true',
           'Kovo-Idem': 'test-vote-1',
-          'Kovo-Live-Targets': liveHeader(questionListTarget, questionListComponent),
+          'Kovo-Live-Targets': liveHeader(app, questionListTarget, questionListComponent),
           'Kovo-Targets': `${questionListTarget}=queries/question-list queries/question-score`,
         },
         body: new URLSearchParams(
@@ -281,7 +282,7 @@ describe('stackoverflow interactive app', () => {
   });
 
   it('postAnswer inserts the answer, bumps the count, and re-renders the detail region', async () => {
-    const { db, handler } = await buildSoInteractiveApp();
+    const { app, db, handler } = await buildSoInteractiveApp();
     const [question] = await db.select().from(questions).orderBy(asc(questions.id)).limit(1);
     if (!question) throw new Error('seed produced no questions');
     const beforeCount = question.answerCount;
@@ -296,7 +297,7 @@ describe('stackoverflow interactive app', () => {
         authorId: 'demo-viewer',
       }),
       `${questionDetailTarget}:${question.id}=queries/question-answers queries/question-detail`,
-      liveHeader(`${questionDetailTarget}:${question.id}`, questionDetailComponent, {
+      liveHeader(app, `${questionDetailTarget}:${question.id}`, questionDetailComponent, {
         questionId: question.id,
       }),
     );
@@ -313,7 +314,7 @@ describe('stackoverflow interactive app', () => {
   });
 
   it('postAnswer refreshes when submitted with the live headers collected from the full document', async () => {
-    const { db, handler } = await buildSoInteractiveApp();
+    const { app, db, handler } = await buildSoInteractiveApp();
     const [question] = await db.select().from(questions).orderBy(asc(questions.id)).limit(1);
     if (!question) throw new Error('seed produced no questions');
 
@@ -328,7 +329,7 @@ describe('stackoverflow interactive app', () => {
       `${detailTarget}=queries/question-answers queries/question-detail`,
     );
     expect(headers.liveTargets).toContain(
-      liveHeader(detailTarget, questionDetailComponent, { questionId: question.id }),
+      liveHeader(app, detailTarget, questionDetailComponent, { questionId: question.id }),
     );
 
     const { status, html } = await postForm(
@@ -350,7 +351,7 @@ describe('stackoverflow interactive app', () => {
   });
 
   it('postQuestion inserts the question and re-renders the list region', async () => {
-    const { db, handler } = await buildSoInteractiveApp();
+    const { app, db, handler } = await buildSoInteractiveApp();
     const before = (await db.select().from(questions)).length;
 
     const { status, html } = await postForm(
@@ -363,7 +364,7 @@ describe('stackoverflow interactive app', () => {
         authorId: 'demo-viewer',
       }),
       `${questionListTarget}=queries/question-list queries/question-score`,
-      liveHeader(questionListTarget, questionListComponent),
+      liveHeader(app, questionListTarget, questionListComponent),
     );
 
     expect(status).toBe(200);
@@ -376,7 +377,7 @@ describe('stackoverflow interactive app', () => {
   });
 
   it('postQuestion typed failure re-renders the list form with duplicate-title state', async () => {
-    const { db, handler } = await buildSoInteractiveApp();
+    const { app, db, handler } = await buildSoInteractiveApp();
     const [question] = await db.select().from(questions).orderBy(asc(questions.id)).limit(1);
     if (!question) throw new Error('seed produced no questions');
 
@@ -390,7 +391,7 @@ describe('stackoverflow interactive app', () => {
         authorId: 'demo-viewer',
       }),
       `${questionListTarget}=queries/question-list queries/question-score`,
-      liveHeader(questionListTarget, questionListComponent),
+      liveHeader(app, questionListTarget, questionListComponent),
     );
 
     expect(status).toBe(422);
@@ -400,7 +401,7 @@ describe('stackoverflow interactive app', () => {
   });
 
   it('shares one handler while keeping browser sessions isolated by session id', async () => {
-    const { db, handler } = await buildSoInteractiveApp();
+    const { app, db, handler } = await buildSoInteractiveApp();
     const sessionA = 'session-a';
     const sessionB = 'session-b';
     const title = 'Session A only question';
@@ -426,7 +427,7 @@ describe('stackoverflow interactive app', () => {
         authorId: 'demo-viewer',
       }),
       `${questionListTarget}=queries/question-list queries/question-score`,
-      liveHeader(questionListTarget, questionListComponent),
+      liveHeader(app, questionListTarget, questionListComponent),
       { [demoSessionHeader]: sessionA },
     );
 

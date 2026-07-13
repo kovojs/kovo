@@ -2058,13 +2058,16 @@ async function loadBuildAppModule(
     const serverInternalBuildModule = await server.ssrLoadModule(
       viteSsrModuleId(requireFromApp.resolve('@kovojs/server/internal/build'), root),
     );
-    const appModule = await server.ssrLoadModule(viteSsrModuleId(appModulePath, root));
+    const trustedInternalBuild =
+      serverInternalBuildModule as LoadedBuildAppModule['serverInternalBuildModule'];
+    const appModule = await trustedInternalBuild.runWithGeneratedLiveTargetRegistry(() =>
+      server.ssrLoadModule(viteSsrModuleId(appModulePath, root)),
+    );
     return {
       appModule,
       serverBuildModule: serverBuildModule as LoadedBuildAppModule['serverBuildModule'],
       serverExecutionModule: serverExecutionModule as LoadedBuildAppModule['serverExecutionModule'],
-      serverInternalBuildModule:
-        serverInternalBuildModule as LoadedBuildAppModule['serverInternalBuildModule'],
+      serverInternalBuildModule: trustedInternalBuild,
     };
   } finally {
     await server.close();
@@ -3274,9 +3277,9 @@ export function kovoServerHandlerEntrySource(
     [
       "import { createRequestHandler } from '@kovojs/server';",
       "import './runtime-registry.mjs';",
-      "import { deriveClosedKovoApp } from '@kovojs/server/internal/app-shell-vite';",
+      "import { deriveClosedKovoApp, runWithGeneratedLiveTargetRegistry } from '@kovojs/server/internal/app-shell-vite';",
       "import { appendFrameworkRuntimeArrayValue } from '@kovojs/server/internal/execution';",
-      `import * as appModule from ${stringifyBuildValue(pathToFileURL(appModulePath).href)};`,
+      `const appModule = await runWithGeneratedLiveTargetRegistry(() => import(${stringifyBuildValue(pathToFileURL(appModulePath).href)}));`,
       'const app = appModule.default ?? appModule.app;',
       `const stylesheetAssets = ${stringifyBuildValue(stylesheetAssets)};`,
       'export default createRequestHandler(appWithBuildStylesheetAssets(app, stylesheetAssets));',
@@ -3551,8 +3554,13 @@ async function loadExportAppModule(
         .href
     );
     const serverModule = await import(pathToFileURL(appResolvedServerPath).href);
+    const serverInternalBuildModule = await import(
+      pathToFileURL(requireFromApp.resolve('@kovojs/server/internal/build')).href
+    );
     return {
-      appModule: await import(pathToFileURL(resolvedAppModulePath).href),
+      appModule: await serverInternalBuildModule.runWithGeneratedLiveTargetRegistry(
+        () => import(pathToFileURL(resolvedAppModulePath).href),
+      ),
       exportStaticApp: exportStaticAppFromModule(serverModule),
     };
   }
@@ -3568,7 +3576,12 @@ async function loadExportAppModule(
   try {
     await preloadKovoSsrSecurityProfile(server, resolvedAppModulePath, root);
     const serverModule = await server.ssrLoadModule(viteSsrModuleId(appResolvedServerPath, root));
-    const appModule = await server.ssrLoadModule(resolvedAppModulePath);
+    const serverInternalBuildModule = (await server.ssrLoadModule(
+      viteSsrModuleId(requireFromApp.resolve('@kovojs/server/internal/build'), root),
+    )) as typeof import('@kovojs/server/internal/build');
+    const appModule = await serverInternalBuildModule.runWithGeneratedLiveTargetRegistry(() =>
+      server.ssrLoadModule(resolvedAppModulePath),
+    );
     return {
       appModule,
       close: () => server.close(),

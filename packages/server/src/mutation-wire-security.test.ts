@@ -12,7 +12,7 @@ import { selectMutationResponseTargets } from './mutation/targets.js';
 import { query } from './query.js';
 import { serverResponseToWebResponse } from './response.js';
 import { s } from './schema.js';
-import { testMutation as mutation } from './test-fixtures.js';
+import { createLiveTargetTestAuthority, testMutation as mutation } from './test-fixtures.js';
 
 const mutationWireIntrinsicsUrl = new URL('./mutation-wire-intrinsics.ts', import.meta.url).href;
 
@@ -71,6 +71,7 @@ describe('mutation wire intrinsic security', () => {
       response = await renderMutationResponse(add, {
         buildToken: 'mutation-security-build',
         fragment: true,
+        liveTargetAudience: 'mutation-security-build',
         rawInput: { productId: 'p1' },
         request: { session: { user: 'victim' } },
       });
@@ -157,7 +158,11 @@ describe('mutation wire intrinsic security', () => {
       props: { id: 'safe' },
       target: 'public-panel',
     };
-    const token = createLiveTargetAttestation(descriptor, { csrf, request });
+    const token = createLiveTargetAttestation(descriptor, {
+      buildToken: 'mutation-wire-security-build',
+      csrf,
+      request,
+    });
     const headers = {
       'Kovo-Fragment': 'TRUE',
       'Kovo-Form-Target': ' public-panel ',
@@ -191,7 +196,14 @@ describe('mutation wire intrinsic security', () => {
     let wireRequest;
     try {
       parsedHeaders = readMutationWireHeaders(headers);
-      wireRequest = mutationWireRequestFromHeaders({ csrf, headers, rawInput: {}, request });
+      wireRequest = mutationWireRequestFromHeaders({
+        buildToken: 'mutation-wire-security-build',
+        liveTargetAudience: 'mutation-wire-security-build',
+        csrf,
+        headers,
+        rawInput: {},
+        request,
+      });
     } finally {
       Set.prototype.has = originalSetHas;
       Set.prototype.add = originalSetAdd;
@@ -236,6 +248,7 @@ describe('mutation wire intrinsic security', () => {
     try {
       response = await renderMutationResponse(save, {
         buildToken: 'unicode-build',
+        liveTargetAudience: 'unicode-build',
         fragment: true,
         rawInput: { id: 'safe' },
         request: {},
@@ -262,6 +275,12 @@ describe('mutation wire intrinsic security', () => {
     const invalid = mutation('account/invalid', {
       input: s.object({ id: s.string() }),
       handler: () => 'ok',
+    });
+    const wireAuthority = createLiveTargetTestAuthority('mutation-wire-security-build');
+    const publicDescriptor = { component: 'public', props: {}, target: 'public' };
+    const publicAttestation = createLiveTargetAttestation(publicDescriptor, {
+      buildToken: wireAuthority.audience,
+      request: {},
     });
     const originalFind = Array.prototype.find;
     const originalStartsWith = String.prototype.startsWith;
@@ -292,8 +311,11 @@ describe('mutation wire intrinsic security', () => {
     let unsafeNextResponse;
     try {
       failureResponse = await renderMutationResponse(invalid, {
+        buildToken: 'mutation-wire-security-build',
         failureTarget: 'public',
-        liveTargetDescriptors: [{ component: 'public', props: {}, target: 'public' }],
+        liveTargetAttestationAuthority: wireAuthority.authority,
+        liveTargetAudience: wireAuthority.audience,
+        liveTargetDescriptors: [{ ...publicDescriptor, attestation: publicAttestation }],
         liveTargetRenderers: [
           { component: 'public', render: () => '<output>safe failure</output>' },
           { component: 'admin', render: () => '<output>admin failure</output>' },
@@ -302,12 +324,16 @@ describe('mutation wire intrinsic security', () => {
         request: {},
       });
       reauthResponse = await renderMutationResponse(guarded, {
+        buildToken: 'mutation-wire-security-build',
         currentUrl: '/account?tab=security',
+        liveTargetAudience: 'mutation-wire-security-build',
         rawInput: { id: 'safe' },
         request: { session: null },
       });
       unsafeNextResponse = await renderMutationResponse(guarded, {
+        buildToken: 'mutation-wire-security-build',
         currentUrl: '/\\attacker.invalid/admin',
+        liveTargetAudience: 'mutation-wire-security-build',
         rawInput: { id: 'safe' },
         request: { session: null },
       });
@@ -339,7 +365,9 @@ describe('mutation wire intrinsic security', () => {
     };
 
     const response = await renderMutationResponse(guarded, {
+      buildToken: 'mutation-wire-security-build',
       currentUrl: '/account',
+      liveTargetAudience: 'mutation-wire-security-build',
       rawInput: {
         id: 'safe',
         'kovo-csrf': `v1.${'A'.repeat(43)}.${'B'.repeat(43)}`,
@@ -371,7 +399,9 @@ describe('mutation wire intrinsic security', () => {
     });
 
     const response = await renderMutationResponse(guarded, {
+      buildToken: 'mutation-wire-security-build',
       currentUrl: '/account',
+      liveTargetAudience: 'mutation-wire-security-build',
       rawInput: {
         id: 'safe',
         'kovo-csrf': `v1.${'A'.repeat(43)}.${'B'.repeat(43)}`,

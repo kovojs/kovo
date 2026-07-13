@@ -3,10 +3,11 @@ import { describe, expect, it } from 'vitest';
 import { csrfToken } from '@kovojs/server';
 import {
   componentLiveTargetRenderer,
-  createLiveTargetAttestation,
   renderMutationEndpointResponse,
   type MutationWireHeaderSource,
 } from '../../../../../packages/server/src/internal/wire.js';
+import { createLiveTargetAttestation } from '../../../../../packages/server/src/mutation-wire.js';
+import { createLiveTargetTestAuthority } from '../../../../../packages/server/src/test-fixtures.js';
 import { propertyTest } from '@kovojs/test/assertions';
 
 import {
@@ -25,6 +26,8 @@ import { CartBadge } from './components/cart-badge.js';
 import { createShopDb } from './db.js';
 import { cart, product } from './domains.js';
 import { cartQuery, productsQuery } from './queries.js';
+
+const tutorialLiveTargetAuthority = createLiveTargetTestAuthority('tutorial-step-05-test-build');
 
 // Tutorial step 05: invalidation is derived from declared touches, server
 // truth rides the same wire as fragments, and every optimistic prediction is
@@ -49,6 +52,8 @@ function submitAddToCart(
     buildToken: 'tutorial-step-05-test-build',
     headers: withAttestedLiveTargets(headers, request),
     liveTargetRenderers: successLiveTargetRenderers(),
+    liveTargetAttestationAuthority: tutorialLiveTargetAuthority.authority,
+    liveTargetAudience: tutorialLiveTargetAuthority.audience,
     rawInput,
     redirectTo: '/',
     renderFailureFragment: (failure) => renderAddToCartFailureFragment(request, rawInput, failure),
@@ -92,7 +97,10 @@ function attestLiveTargetEntries(value: string, request: ShopRequest): string {
       const component = trimmed.slice(componentSeparator + 1, propsSeparator);
       const propsJson = trimmed.slice(propsSeparator + 1);
       const props = JSON.parse(propsJson) as Record<string, unknown>;
-      const token = createLiveTargetAttestation({ component, props, target }, { request });
+      const token = createLiveTargetAttestation(
+        { component, props, target },
+        { buildToken: tutorialLiveTargetAuthority.audience, request },
+      );
       return `${target}#${component}@${token}:${propsJson}`;
     })
     .join('; ');

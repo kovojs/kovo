@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { execFileSync } from 'node:child_process';
-import { randomBytes } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import {
   existsSync,
   lstatSync,
@@ -251,6 +251,11 @@ export function generateDemoPassword(): string {
   return randomBytes(18).toString('base64url');
 }
 
+/** Globally unique, committed live-target security identity for one scaffolded application. */
+export function generateAppId(): string {
+  return randomUUID();
+}
+
 function renderEnvFile(secret: string, demoPassword: string): string {
   return [
     '# Local development environment for this Kovo app.',
@@ -303,7 +308,7 @@ const gitignoreEntries = [
 export function createKovoProject(options: CreateKovoOptions): CreateKovoProject {
   const packageName = normalizePackageName(options.name);
   const dialect = options.dialect ?? 'postgres';
-  const values = templateValues(packageName);
+  const values = templateValues(packageName, generateAppId());
   const docsVersion = packageVersion('@kovojs/core');
   const csrfSecret = generateCsrfSecret();
   const demoPassword = generateDemoPassword();
@@ -509,8 +514,9 @@ function renderTemplate(source: string, values: Record<string, string>): string 
   });
 }
 
-function templateValues(name: string): Record<string, string> {
+function templateValues(name: string, appId: string): Record<string, string> {
   return {
+    app_id: appId,
     kovo_better_auth_version: packageVersion('@kovojs/better-auth'),
     kovo_browser_version: packageVersion('@kovojs/browser'),
     kovo_cli_version: packageVersion('@kovojs/cli'),

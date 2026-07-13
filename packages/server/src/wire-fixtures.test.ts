@@ -16,9 +16,13 @@ import { createLiveTargetAttestation } from './mutation-wire.js';
 import {
   cartBadgeFragmentHtml,
   createCartMutationFixture,
+  createLiveTargetTestAuthority,
   createCartQueryFixture,
   testMutation as mutation,
 } from './test-fixtures.js';
+
+const wireFixtureBuildToken = 'wire-fixture-test-build';
+const wireFixtureLiveTargetAuthority = createLiveTargetTestAuthority(wireFixtureBuildToken);
 
 describe('server wire fixture contracts', () => {
   it('matches the typed read wire fixture response byte-for-byte', async () => {
@@ -85,15 +89,21 @@ describe('server wire fixture contracts', () => {
 
     const response = expectBufferedWireResponse(
       await renderMutationResponse(addToCart, {
-        buildToken: 'wire-fixture-test-build',
+        buildToken: wireFixtureBuildToken,
         idem: 'idem_01HX',
         liveTargetDescriptors: [
           {
+            attestation: createLiveTargetAttestation(
+              { component: 'components/cart/badge', props: {}, target: 'cart-badge' },
+              { buildToken: wireFixtureLiveTargetAuthority.audience, request: {} },
+            ),
             component: 'components/cart/badge',
             props: {},
             target: 'cart-badge',
           },
         ],
+        liveTargetAttestationAuthority: wireFixtureLiveTargetAuthority.authority,
+        liveTargetAudience: wireFixtureLiveTargetAuthority.audience,
         liveTargetRenderers: [
           {
             component: 'components/cart/badge',
@@ -149,7 +159,7 @@ describe('server wire fixture contracts', () => {
           enhancedAddToCart: async (headers, rawInput) =>
             expectBufferedWireResponse(
               await renderMutationEndpointResponse(addToCart, {
-                buildToken: 'wire-fixture-test-build',
+                buildToken: wireFixtureBuildToken,
                 failureTarget: 'product-form:p1',
                 headers: {
                   ...withoutHeader(headers, 'Kovo-Live-Targets'),
@@ -158,6 +168,8 @@ describe('server wire fixture contracts', () => {
                     'components/cart/badge',
                   ),
                 },
+                liveTargetAttestationAuthority: wireFixtureLiveTargetAuthority.authority,
+                liveTargetAudience: wireFixtureLiveTargetAuthority.audience,
                 liveTargetRenderers: [
                   {
                     component: 'components/cart/badge',
@@ -275,9 +287,11 @@ describe('server wire fixture contracts', () => {
 
     const response = expectBufferedWireResponse(
       await renderMutationResponse(addToCart, {
-        buildToken: 'wire-fixture-test-build',
+        buildToken: wireFixtureBuildToken,
         failureTarget: 'product-form:p1',
         idem: 'idem_01HY',
+        liveTargetAttestationAuthority: wireFixtureLiveTargetAuthority.authority,
+        liveTargetAudience: wireFixtureLiveTargetAuthority.audience,
         rawInput: { productId: 'p1', quantity: 99 },
         renderFailureFragment: (failure, rawInput) => {
           const input = rawInput as { productId: string; quantity: number };
@@ -343,7 +357,10 @@ function attestedLiveTargetHeader(
   component: string,
   props: Record<string, unknown> = {},
 ): string {
-  const token = createLiveTargetAttestation({ component, props, target }, { request: {} });
+  const token = createLiveTargetAttestation(
+    { component, props, target },
+    { buildToken: wireFixtureLiveTargetAuthority.audience, request: {} },
+  );
   return `${target}#${component}@${token}:${JSON.stringify(props)}`;
 }
 

@@ -107,6 +107,7 @@ export async function buildCrmInteractiveApp(
   });
 
   const app = createApp({
+    appId: '0e3f07cd-cc4b-4f10-85bb-9eaaf6f73338',
     clientModules: createMemoryVersionedClientModuleRegistry(),
     db: () => database,
     document: { lang: 'en-US' },

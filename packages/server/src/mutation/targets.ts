@@ -18,8 +18,10 @@ import type {
   MutationLiveTargetDescriptor,
   MutationWireRequest,
 } from '../mutation-wire.js';
+import type { LiveTargetAttestationAuthority } from '../live-target-app-identity.js';
 import { revealUntrustedRequestValue } from '../untrusted-request-body.js';
 import {
+  securityJsonStringify,
   securityStringIncludes,
   securityStringSlice,
   securityStringStartsWith,
@@ -274,6 +276,8 @@ export async function renderFragmentChunks(
 export async function renderLiveTargetChunks<Request>(
   renderers: readonly LiveTargetRenderer<Request>[],
   targets: readonly MutationLiveTargetDescriptor[],
+  buildToken: string,
+  attestationAuthority: LiveTargetAttestationAuthority,
   input: unknown,
   request: Request,
   csrf: MutationWireRequest<Request>['csrf'] | undefined,
@@ -289,6 +293,8 @@ export async function renderLiveTargetChunks<Request>(
 
     try {
       const html = await renderer.render({
+        attestationAuthority,
+        buildToken,
         ...(csrf === undefined ? {} : { csrf }),
         input,
         ...(maxListItems === undefined ? {} : { maxListItems }),
@@ -331,9 +337,12 @@ function liveTargetRenderersByComponent<Request>(
   const byComponent = createWitnessMap<string, LiveTargetRenderer<Request>>();
   for (let index = 0; index < renderers.length; index += 1) {
     const renderer = renderers[index]!;
-    if (!witnessMapHas(byComponent, renderer.component)) {
-      witnessMapSet(byComponent, renderer.component, renderer);
+    if (witnessMapHas(byComponent, renderer.component)) {
+      throw new TypeError(
+        `Duplicate live-target renderer component ${securityJsonStringify(renderer.component)} reached the render sink.`,
+      );
     }
+    witnessMapSet(byComponent, renderer.component, renderer);
   }
   return byComponent;
 }

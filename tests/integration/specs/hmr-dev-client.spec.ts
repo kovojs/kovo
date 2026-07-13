@@ -1,5 +1,6 @@
 // SPEC.md §9.5.1: dev HMR asks the app shell for server-owned fragment output.
 import { component } from '@kovojs/core';
+import { randomBytes, randomUUID } from 'node:crypto';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
@@ -25,10 +26,9 @@ import {
 } from '@kovojs/server/internal/app-shell-vite';
 import {
   componentLiveTargetRenderer,
-  createLiveTargetAttestation,
+  createLiveTargetAttestation as createAppLiveTargetAttestation,
   type LiveTargetRenderer,
 } from '@kovojs/server/internal/wire';
-
 // These specs spin up ad hoc Vite/HTTP HMR servers and mutate module graphs; running
 // them concurrently inside one file causes CI-only startup/teardown contention.
 test.describe.configure({ mode: 'serial' });
@@ -41,23 +41,25 @@ type ViteMiddleware = (
 type OnModuleDiagnostics = Exclude<KovoVitePluginOptions['onModuleDiagnostics'], undefined>;
 
 function liveTargetToken(
+  app: Parameters<typeof createAppLiveTargetAttestation>[0],
   target: string,
   component: string,
   props: Record<string, unknown> = {},
 ): string {
-  return createLiveTargetAttestation({ component, props, target }, { request: {} });
+  return createAppLiveTargetAttestation(app, { component, props, target }, {});
 }
 
 test('dev HMR client applies server-rendered live-target fragments without reloading', async ({
   page,
 }) => {
   let renderVersion = 1;
+  let app!: ReturnType<typeof createApp>;
   const renderCard = () => `<section
       kovo-fragment-target="hmr-card"
       kovo-c="hmr-card"
       kovo-deps="hmr"
       kovo-live-component="hmr/Card"
-      kovo-live-token="${liveTargetToken('hmr-card', 'hmr/Card', { id: 'one' })}"
+      kovo-live-token="${liveTargetToken(app, 'hmr-card', 'hmr/Card', { id: 'one' })}"
       kovo-props='{"id":"one"}'>
       <label for="hmr-input">Draft</label>
       <input id="hmr-input" kovo-key="input" value="server ${renderVersion}">
@@ -71,7 +73,7 @@ test('dev HMR client applies server-rendered live-target fragments without reloa
       return renderCard();
     },
   };
-  const app = createApp({
+  app = createApp({
     liveTargetRenderers: [renderer],
     routes: [
       route('/', {
@@ -142,6 +144,7 @@ test('dev HMR client refreshes query-backed live targets from server state', asy
   const product = domain('product');
   let stock = 7;
   const queryLoads: string[] = [];
+  let app!: ReturnType<typeof createApp>;
   const productQuery = query('product', {
     args: s.object({ id: s.string() }),
     load(input: { id: string }, context: unknown) {
@@ -165,7 +168,7 @@ test('dev HMR client refreshes query-backed live targets from server state', asy
         'kovo-deps': `product:${product.id}`,
         'kovo-fragment-target': 'product-card',
         'kovo-live-component': 'hmr/ProductCard',
-        'kovo-live-token': liveTargetToken('product-card', 'hmr/ProductCard', { productId }),
+        'kovo-live-token': liveTargetToken(app, 'product-card', 'hmr/ProductCard', { productId }),
         'kovo-props': JSON.stringify({ productId }),
         children: [
           jsx('label', { children: 'Note', for: 'product-note' }),
@@ -183,18 +186,14 @@ test('dev HMR client refreshes query-backed live targets from server state', asy
     component: ProductCard,
     componentId: 'hmr/ProductCard',
   });
-  const app = createApp({
+  app = createApp({
     liveTargetRenderers: [productRenderer],
     routes: [
       route('/', {
-        async page(_context, request) {
-          const card = await productRenderer.render({
-            input: {},
-            props: { productId: 'p1' },
-            request,
-            target: 'product-card',
+        page() {
+          return jsx('main', {
+            children: jsx(ProductCard, { productId: 'p1' }),
           });
-          return `<main>${card}</main>`;
         },
       }),
     ],
@@ -448,13 +447,13 @@ test('Vite route-shell source edits use full reload fallback with fresh server o
   page,
 }) => {
   const fixture = await serveViteSourceEditFixture({
-    appShell: hmrSourceAppShell({ routeVersion: 'before' }),
     card: hmrSourceCard({
       handlerText: 'handler route-shell',
       inputValue: 'server route-shell',
       outputText: 'Version route-shell',
       refreshable: true,
     }),
+    routeVersion: 'before',
   });
 
   try {
@@ -467,7 +466,7 @@ test('Vite route-shell source edits use full reload fallback with fresh server o
         response.request().resourceType() === 'document' &&
         response.status() === 200,
     );
-    const events = await fixture.writeAppShell(hmrSourceAppShell({ routeVersion: 'after' }));
+    const events = await fixture.writeAppShell({ routeVersion: 'after' });
     const event = expectKovoSourceEditEvent(events, 'kovo:route-shell');
     expect(event).toMatchObject({
       impact: 'routeRefresh',
@@ -623,23 +622,33 @@ async function serveHmrFixture(
 interface ViteSourceEditFixture {
   close(): Promise<void>;
   origin: string;
-  writeAppShell(
-    source: string,
-  ): Promise<readonly { data: Record<string, unknown>; event: string }[]>;
+  writeAppShell(options: {
+    routeVersion?: string;
+  }): Promise<readonly { data: Record<string, unknown>; event: string }[]>;
   writeCard(source: string): Promise<readonly { data: Record<string, unknown>; event: string }[]>;
 }
 
 async function serveViteSourceEditFixture(options: {
-  appShell?: string;
   card: string;
+  routeVersion?: string;
 }): Promise<ViteSourceEditFixture> {
   const root = await mkdtemp(fileURLToPath(new URL('../.hmr-source-edit-', import.meta.url)));
   const srcDir = join(root, 'src');
   const appShellPath = join(srcDir, 'app-shell.ts');
   const cardPath = join(srcDir, 'hmr-card.tsx');
+  const appId = randomUUID();
+  const signingSecret = randomBytes(32).toString('base64url');
   await mkdir(srcDir, { recursive: true });
   await writeFile(cardPath, options.card, 'utf8');
-  await writeFile(appShellPath, options.appShell ?? hmrSourceAppShell(), 'utf8');
+  await writeFile(
+    appShellPath,
+    hmrSourceAppShell({
+      appId,
+      signingSecret,
+      ...(options.routeVersion === undefined ? {} : { routeVersion: options.routeVersion }),
+    }),
+    'utf8',
+  );
   await writeFile(
     join(srcDir, 'hmr-handler.ts'),
     'export function track(value: string) { return value; }\n',
@@ -720,7 +729,8 @@ async function serveViteSourceEditFixture(options: {
         await rm(root, { force: true, recursive: true });
       },
       origin: `http://127.0.0.1:${(server.address() as AddressInfo).port}`,
-      async writeAppShell(source) {
+      async writeAppShell(nextOptions) {
+        const source = hmrSourceAppShell({ appId, signingSecret, ...nextOptions });
         await writeFile(appShellPath, source, 'utf8');
         vite?.moduleGraph?.invalidateAll();
         const startIndex = hmrEvents.length;
@@ -785,33 +795,35 @@ function isKovoCustomHmrPayload(
   );
 }
 
-function hmrSourceAppShell(options: { routeVersion?: string } = {}): string {
+function hmrSourceAppShell(options: {
+  appId: string;
+  routeVersion?: string;
+  signingSecret: string;
+}): string {
   const routeVersion = options.routeVersion ?? '';
   return `
 import { createApp, route } from '@kovojs/server';
-import { renderComponent } from '@kovojs/server/internal/html';
+import { jsx } from '@kovojs/server/jsx-runtime';
 
 import { HmrSourceCard } from './hmr-card';
 
-function renderCard() {
-  return renderComponent(HmrSourceCard, {});
-}
-
-const renderer = {
-  component: 'hmr/SourceCard',
-  render() {
-    return renderCard();
-  },
-};
-
 export default createApp({
-  liveTargetRenderers: [renderer],
+  appId: ${JSON.stringify(options.appId)},
+  csrf: {
+    secret: ${JSON.stringify(options.signingSecret)},
+    sessionId() {
+      return undefined;
+    },
+  },
   routes: [
     route('/', {
       page() {
-        return \`<main>${
-          routeVersion ? `<h1 id="hmr-route-version">${routeVersion}</h1>` : ''
-        }\${renderCard()}</main>\`;
+        return jsx('main', {
+          children: [
+            ${routeVersion ? `jsx('h1', { children: '${routeVersion}', id: 'hmr-route-version' }),` : ''}
+            jsx(HmrSourceCard, {}),
+          ],
+        });
       },
     }),
   ],
@@ -875,25 +887,22 @@ function hmrSourceCard(options: {
   outputText: string;
   refreshable: boolean;
 }): string {
-  const refreshAttributes = options.refreshable
-    ? `
-      kovo-deps="hmr"
-      kovo-live-component="hmr/SourceCard"
-      kovo-live-token="${liveTargetToken('hmr-source-card', 'hmr/SourceCard')}"
-      kovo-props="{}"`
-    : '';
-
   return `/** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
+import { query } from '@kovojs/server';
 import { track } from './hmr-handler';
 
+const hmrQuery = query('hmr', {
+  load() {
+    return {};
+  },
+});
+
 export const HmrSourceCard = component({
-  queries: { hmr: {} },
+  ${options.refreshable ? 'queries: { hmr: hmrQuery },' : ''}
   ${options.css ? `css: ${JSON.stringify(options.css)},` : ''}
   render: () => (
-    <section
-      kovo-fragment-target="hmr-source-card"
-      kovo-c="hmr-source-card"${refreshAttributes}>
+    <section>
       <label for="hmr-source-input">Draft</label>
       <input id="hmr-source-input" kovo-key="input" value=${JSON.stringify(options.inputValue)} />
       <output id="hmr-source-output" kovo-key="output">${options.outputText}</output>

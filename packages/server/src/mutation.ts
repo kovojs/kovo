@@ -27,7 +27,6 @@ import {
   type RequestLifecycleOptions,
   type ResolvedGuardFailure,
 } from './guards.js';
-import { registeredGeneratedLiveTargetRenderers } from './live-target-registry.js';
 import {
   appendResponseHeader,
   blessRedirectResponse,
@@ -38,6 +37,7 @@ import {
 } from './response.js';
 import {
   mutationWireRequestFromHeaders,
+  snapshotVerifiedLiveTargetDescriptors,
   type BufferedMutationWireResponse,
   type LiveTargetRenderer,
   type MutationEndpointRequest,
@@ -47,6 +47,11 @@ import {
   type NoJsMutationRequest,
   type NoJsMutationResponse,
 } from './mutation-wire.js';
+import {
+  createAppDeclarationSnapshotContext,
+  snapshotLiveTargetRenderers,
+} from './app-snapshot.js';
+import { assertLiveTargetAttestationAuthority } from './live-target-app-identity.js';
 import type { TaskHandle, TaskInput, TaskSchedulingRequest } from './task.js';
 import { durableTaskScheduleInput } from './task-runner.js';
 import { MutationReplayConflictError } from './replay.js';
@@ -90,9 +95,9 @@ import {
   witnessArrayAppend,
   witnessCreateNullRecord,
   witnessDefineProperty,
+  witnessFreeze,
   witnessGetOwnPropertyDescriptor,
   witnessGetPrototypeOf,
-  witnessIsArray,
   witnessObjectKeys,
   witnessReflectApply,
   witnessReflectGet,
@@ -813,12 +818,13 @@ export async function renderMutationResponse<
   definition: MutationDefinition<Key, InputSchema, Errors, Request, Value, GuardedRequest>,
   wireRequest: MutationWireRequest<Request>,
 ): Promise<MutationWireResponse> {
-  const csrf = mutationCsrfOptions(definition, wireRequest.csrf);
+  const executionWireRequest = snapshotEnhancedMutationWireRequest(wireRequest);
+  const csrf = mutationCsrfOptions(definition, executionWireRequest.csrf);
   const deliveryMode = {
     csrf,
     kind: 'enhanced-fragment',
     mutationKey: definition.key,
-    request: wireRequest,
+    request: executionWireRequest,
   } satisfies MutationResponseDeliveryMode<Request, Value>;
   const lifecycle = await executeMutationLifecycle<
     Key,
@@ -828,20 +834,144 @@ export async function renderMutationResponse<
     Value,
     GuardedRequest,
     BufferedMutationWireResponse
-  >(definition, wireRequest.rawInput, wireRequest.request, {
-    ...runMutationOptions(wireRequest.csrf, wireRequest),
+  >(definition, executionWireRequest.rawInput, executionWireRequest.request, {
+    ...runMutationOptions(executionWireRequest.csrf, executionWireRequest),
     catchHandlerErrors: true,
     ...optionalReplayPolicy(enhancedMutationReplayPolicy(deliveryMode)),
   });
 
   const response = await renderMutationWireLifecycleResponse({
-    csrfReauthResponse: () => staleSessionEnhancedCsrfReauthResponse(definition, csrf, wireRequest),
+    csrfReauthResponse: () =>
+      staleSessionEnhancedCsrfReauthResponse(definition, csrf, executionWireRequest),
     definition,
     lifecycle,
-    registryFacts: mutationRuntimeRegistryFacts(definition, wireRequest.liveTargetRenderers ?? []),
-    wireRequest,
+    registryFacts: mutationRuntimeRegistryFacts(
+      definition,
+      executionWireRequest.liveTargetRenderers ?? [],
+    ),
+    wireRequest: executionWireRequest,
   });
   return csrf === false ? mutationResponseWithoutBrowserState(response) : response;
+}
+
+/** Fail before the mutation lifecycle can commit when its enhanced response cannot be versioned. */
+function snapshotEnhancedMutationWireRequest<Request>(
+  wireRequest: MutationWireRequest<Request>,
+): MutationWireRequest<Request> {
+  if (wireRequest === null || typeof wireRequest !== 'object') {
+    throw new TypeError('renderMutationResponse() requires a stable mutation wire request.');
+  }
+  const snapshot = witnessCreateNullRecord<unknown>();
+  const keys = witnessObjectKeys(wireRequest);
+  for (let index = 0; index < keys.length; index += 1) {
+    const keyDescriptor = witnessGetOwnPropertyDescriptor(keys, index);
+    if (
+      keyDescriptor === undefined ||
+      !('value' in keyDescriptor) ||
+      typeof keyDescriptor.value !== 'string'
+    ) {
+      throw new TypeError('Mutation wire request keys must be dense own strings.');
+    }
+    const key = keyDescriptor.value;
+    if (key === 'liveTargetDescriptors' || key === 'liveTargetRenderers') continue;
+    const descriptor = witnessGetOwnPropertyDescriptor(wireRequest, key);
+    if (descriptor === undefined || !('value' in descriptor)) {
+      throw new TypeError(`Mutation wire request ${key} must be a stable own data property.`);
+    }
+    witnessDefineProperty(snapshot, key, {
+      configurable: false,
+      enumerable: true,
+      value: descriptor.value,
+      writable: false,
+    });
+  }
+
+  const descriptor = witnessGetOwnPropertyDescriptor(snapshot, 'buildToken');
+  if (
+    descriptor !== undefined &&
+    'value' in descriptor &&
+    typeof descriptor.value === 'string' &&
+    descriptor.value.length > 0
+  ) {
+    const requestDescriptor = witnessGetOwnPropertyDescriptor(snapshot, 'request');
+    if (requestDescriptor === undefined || !('value' in requestDescriptor)) {
+      throw new TypeError('renderMutationResponse() requires a stable own request property.');
+    }
+    const audienceDescriptor = witnessGetOwnPropertyDescriptor(snapshot, 'liveTargetAudience');
+    const csrfDescriptor = witnessGetOwnPropertyDescriptor(snapshot, 'csrf');
+    const liveTargetAudience =
+      audienceDescriptor === undefined || !('value' in audienceDescriptor)
+        ? undefined
+        : audienceDescriptor.value;
+    if (typeof liveTargetAudience !== 'string' || liveTargetAudience.length === 0) {
+      throw new TypeError(
+        'renderMutationResponse() requires a non-empty app-bound liveTargetAudience before the enhanced mutation lifecycle can run (SPEC §6.6/§9.3).',
+      );
+    }
+    const csrf =
+      csrfDescriptor === undefined || !('value' in csrfDescriptor)
+        ? undefined
+        : (csrfDescriptor.value as CsrfOptions<Request> | false | undefined);
+    const sourceDescriptors = witnessGetOwnPropertyDescriptor(wireRequest, 'liveTargetDescriptors');
+    if (sourceDescriptors !== undefined && !('value' in sourceDescriptors)) {
+      throw new TypeError(
+        'Mutation wire request liveTargetDescriptors must be a stable own data property.',
+      );
+    }
+    const liveTargetDescriptors = snapshotVerifiedLiveTargetDescriptors(
+      sourceDescriptors === undefined ? undefined : sourceDescriptors.value,
+      {
+        buildToken: descriptor.value,
+        liveTargetAudience,
+        ...(csrf === undefined ? {} : { csrf }),
+        request: requestDescriptor.value as Request,
+      },
+    );
+    if (liveTargetDescriptors.length > 0) {
+      const authorityDescriptor = witnessGetOwnPropertyDescriptor(
+        snapshot,
+        'liveTargetAttestationAuthority',
+      );
+      if (authorityDescriptor === undefined || !('value' in authorityDescriptor)) {
+        throw new TypeError(
+          'Enhanced live-target rendering requires a framework-issued app authority before the mutation lifecycle can run.',
+        );
+      }
+      assertLiveTargetAttestationAuthority(
+        authorityDescriptor.value,
+        liveTargetAudience,
+        csrf as CsrfOptions<unknown> | false | undefined,
+      );
+    }
+    witnessDefineProperty(snapshot, 'liveTargetDescriptors', {
+      configurable: false,
+      enumerable: true,
+      value: witnessFreeze(liveTargetDescriptors),
+      writable: false,
+    });
+
+    const sourceRenderers = witnessGetOwnPropertyDescriptor(wireRequest, 'liveTargetRenderers');
+    if (sourceRenderers !== undefined) {
+      if (!('value' in sourceRenderers)) {
+        throw new TypeError(
+          'Mutation wire request liveTargetRenderers must be a stable own data property.',
+        );
+      }
+      witnessDefineProperty(snapshot, 'liveTargetRenderers', {
+        configurable: false,
+        enumerable: true,
+        value: snapshotLiveTargetRenderers(
+          sourceRenderers.value as readonly LiveTargetRenderer<Request>[],
+          createAppDeclarationSnapshotContext(),
+        ),
+        writable: false,
+      });
+    }
+    return witnessFreeze(snapshot) as unknown as MutationWireRequest<Request>;
+  }
+  throw new TypeError(
+    'renderMutationResponse() requires a non-empty buildToken before the enhanced mutation lifecycle can run (SPEC §5.2.1/§9.1).',
+  );
 }
 
 /**
@@ -890,8 +1020,10 @@ export async function renderMutationEndpointResponse<
   definition: MutationDefinition<Key, InputSchema, Errors, Request, Value, GuardedRequest>,
   endpointRequest: MutationEndpointRequest<Request, Value>,
 ): Promise<MutationEndpointResponse> {
-  const liveTargetRenderers =
-    endpointRequest.liveTargetRenderers ?? registeredGeneratedLiveTargetRenderers<Request>();
+  // The closed app/request owner must provide the exact renderer inventory. Falling back to a
+  // process registry lets an unrelated app/HMR module inject query/render authority into this
+  // endpoint after its aggregate was closed (SPEC §6.6/§9.1/§9.5).
+  const liveTargetRenderers = endpointRequest.liveTargetRenderers ?? [];
   const endpointDefinition = mutationWithRuntimeRegistryFacts(definition, {
     liveTargetRenderers,
     queries: [],

@@ -4,6 +4,12 @@ import { describe, expect, it } from 'vitest';
 import { query } from './query.js';
 import { stampKovoComponentRoot } from './component-root-stamps.js';
 import { createLiveTargetAttestation } from './mutation-wire.js';
+import { createLiveTargetTestAuthority } from './test-fixtures.js';
+
+const componentRootStampTestBuildToken = 'component-root-stamp-test-build';
+const componentRootStampTestAuthority = createLiveTargetTestAuthority(
+  componentRootStampTestBuildToken,
+);
 
 describe('component root stamp security', () => {
   it('does not let a late selective String.replace escape the stamped opening tag', () => {
@@ -28,6 +34,7 @@ describe('component root stamp security', () => {
         return nativeReplace.call(this, search, replacement as never);
       };
       stamped = stampKovoComponentRoot({
+        attestationAuthority: componentRootStampTestAuthority.authority,
         component: Card,
         componentName: 'components/card/card-root',
         html,
@@ -117,6 +124,7 @@ describe('component root stamp security', () => {
       String.prototype.trim = () => 'admin';
 
       stamped = stampKovoComponentRoot({
+        attestationAuthority: componentRootStampTestAuthority.authority,
         component: Card,
         componentName: 'components/card/card-root',
         html,
@@ -158,7 +166,7 @@ describe('component root stamp security', () => {
         props: { productId: 'p1', filters: { a: 1, z: 2 } },
         target,
       },
-      { request },
+      { buildToken: componentRootStampTestAuthority.audience, request },
     );
 
     expect(stamped).not.toContain('<img');
@@ -260,6 +268,7 @@ describe('component root stamp security', () => {
     });
     const request = {};
     const stamped = stampKovoComponentRoot({
+      attestationAuthority: componentRootStampTestAuthority.authority,
       component: Card,
       componentName: 'components/card/card-root',
       html: '<card-root>safe</card-root>',
@@ -272,7 +281,7 @@ describe('component root stamp security', () => {
         props: {},
         target: 'card-root',
       },
-      { request },
+      { buildToken: componentRootStampTestAuthority.audience, request },
     );
 
     expect(stamped).toContain('kovo-props="{}"');

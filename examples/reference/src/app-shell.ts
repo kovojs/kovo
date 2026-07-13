@@ -84,6 +84,7 @@ export const referenceLoginRoute = route('/login', {
 export function createReferenceAppShell(options: ReferenceAppShellOptions = {}) {
   const auth = options.auth ?? createReferenceAuth(createReferenceBetterAuth());
   const app = createApp({
+    appId: '1f067065-c40a-4579-b35a-7fbcf928e32c',
     document: { lang: 'en-US' },
     mutationResponses: {
       [referenceSignIn.key]: ({ rawInput }) => {
@@ -122,6 +123,7 @@ export function createReferenceAppShell(options: ReferenceAppShellOptions = {}) 
 
 export function createReferencePublicAppShell() {
   const app = createApp({
+    appId: '1f067065-c40a-4579-b35a-7fbcf928e32c',
     clientModules: publicClientModules,
     document: { lang: 'en-US' },
     renderRoute(value) {

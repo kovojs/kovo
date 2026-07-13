@@ -233,6 +233,12 @@ export interface CreateAppOptions<
   AppRequest = AppLifecycleRequest<RawRequest, SessionValue, DbValue>,
 > {
   /**
+   * Replica-stable canonical UUIDv4 for live-target descriptor authority. Production apps with
+   * live-target renderers must declare one, and distinct apps must use distinct generated ids even
+   * when they ship identical client/render plans (SPEC §6.6/§9.3).
+   */
+  appId?: string;
+  /**
    * Versioned client-module registry to inject (SPEC §9.5). Apps that emit
    * interactive client modules pass their own registry here (e.g. via
    * `createMemoryVersionedClientModuleRegistry`); when omitted, `createApp`

@@ -17,6 +17,7 @@ import type {
   AppRouteDeclaration,
   KovoApp,
 } from './app-types.js';
+import { inheritAppLiveTargetIdentity } from './live-target-app-identity.js';
 import {
   copyEndpointAuthSnapshot,
   type EndpointAuthDeclaration,
@@ -34,6 +35,7 @@ import type { AppDiagnostic, AppErrorShellOptions, AppTaskDeclaration } from './
 import type { CsrfAnonymousCookieOptions, CsrfOptions } from './csrf.js';
 import { snapshotStylesheetAsset, type StylesheetAsset } from './hints.js';
 import { signingKeyRingFromSecret } from './keyring.js';
+import { securityJsonStringify } from './response-security-intrinsics.js';
 import {
   createWitnessWeakMap,
   createWitnessWeakSet,
@@ -325,6 +327,7 @@ export function snapshotLiveTargetRenderers(
   renderers: readonly LiveTargetRenderer<any>[],
   context: AppDeclarationSnapshotContext,
 ): readonly LiveTargetRenderer<any>[] {
+  const componentIds = createWitnessSet<string>();
   return snapshotAppRegistry(renderers, 'app.liveTargetRenderers', (source, index) => {
     const label = `liveTargetRenderer[${index}]`;
     const object = requireDeclarationObject(source, label);
@@ -335,6 +338,15 @@ export function snapshotLiveTargetRenderers(
       label,
       omittedProperties('errorBoundary', 'queryBindings'),
     );
+    if (typeof record.component !== 'string' || record.component.length === 0) {
+      throw new TypeError(`${label}.component must be a stable non-empty string.`);
+    }
+    if (witnessSetHas(componentIds, record.component)) {
+      throw new TypeError(
+        `Duplicate live-target renderer component ${securityJsonStringify(record.component)} is not allowed in one app.`,
+      );
+    }
+    witnessSetAdd(componentIds, record.component);
     if (record.queries !== undefined) {
       const values = denseArrayValues(record.queries, 'liveTargetRenderer.queries');
       for (let queryIndex = 0; queryIndex < values.length; queryIndex += 1) {
@@ -596,7 +608,9 @@ export function deriveClosedKovoApp<App extends KovoApp>(
   if (!isKovoApp(source)) {
     throw new TypeError('Kovo app derivation requires a closed createApp() aggregate.');
   }
-  return closeKovoAppAggregate({ ...source, ...overrides } as App);
+  const derived = closeKovoAppAggregate({ ...source, ...overrides } as App);
+  inheritAppLiveTargetIdentity(source, derived);
+  return derived;
 }
 
 function snapshotMutationRegistry(

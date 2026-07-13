@@ -1078,7 +1078,8 @@ describe('create-kovo starter (metadata)', () => {
       });
 
       for (const file of project.files) {
-        if (file.path === '.env') continue;
+        // Both contain fresh per-project security material for each independent scaffold call.
+        if (file.path === '.env' || file.path === 'src/app.tsx') continue;
         if (file.symlinkTarget) {
           expect(readlinkSync(join(root, file.path))).toBe(file.symlinkTarget);
           continue;
@@ -1090,6 +1091,10 @@ describe('create-kovo starter (metadata)', () => {
       const secret = /^KOVO_CSRF_SECRET=(.+)$/m.exec(envSource)?.[1] ?? '';
       expect(secret).toMatch(/^[A-Za-z0-9_-]{43}$/);
       expect(secret).not.toBe('replace-with-a-deployed-secret');
+      const appSource = readFileSync(join(root, 'src/app.tsx'), 'utf8');
+      expect(appSource).toMatch(
+        /appId: '[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}'/u,
+      );
       const demoPassword =
         new RegExp(`^${demoPasswordEnvVar}=(.+)$`, 'm').exec(envSource)?.[1] ?? '';
       expect(demoPassword).toMatch(/^[A-Za-z0-9_-]{24}$/);

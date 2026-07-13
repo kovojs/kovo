@@ -42,6 +42,10 @@ import {
 } from './route.js';
 import { queryRuntimeWarningHeaderValue, queryRuntimeWarningsFromRequest } from './query.js';
 import type { KovoApp } from './app-types.js';
+import {
+  appLiveTargetAttestationAudience,
+  appLiveTargetAttestationAuthority,
+} from './live-target-app-identity.js';
 import { isTrustedSecureRequest } from './request-scheme.js';
 import { isNativeRequest, requestForAuthorityNeutralMetadata } from './request-carrier.js';
 import {
@@ -85,6 +89,13 @@ export async function renderAppRouteDocumentResponse({
   url,
 }: AppRouteDocumentOptions): Promise<RoutePageResponse> {
   const search = searchParamsToRecord(requestUrlSearchParams(url));
+  // Compute the replica-stable app/build identity before component rendering. Live-target stamps
+  // bind it into their attestations, and mutation/HMR verification uses the same closed app token
+  // so descriptors cannot cross app aggregates that share signing material (SPEC §6.6/§9.3).
+  const loaderRuntimeHref = ensureKovoLoaderRuntimeClientModule(app.clientModules);
+  const buildToken = app.clientModules.buildToken();
+  const liveTargetAudience = appLiveTargetAttestationAudience(app, buildToken);
+  const liveTargetAttestationAuthority = appLiveTargetAttestationAuthority(app, buildToken);
   // SPEC §6.6 / §9.1: thread `ctx.signUrl` onto the page context when a storage download endpoint
   // is mounted. The route context must mint with the same configured capability signer that the
   // endpoint verify sink uses; otherwise the documented pairing fails closed as an opaque 404.
@@ -149,6 +160,7 @@ export async function renderAppRouteDocumentResponse({
           })
         : renderDefaultRouteValue(value),
     {
+      attestationAuthority: liveTargetAttestationAuthority,
       currentUrl: appRequestUrl(url),
       ...(app.csrf === undefined ? {} : { csrf: app.csrf }),
       ...(jsxContext?.mutationFailure === undefined
@@ -212,12 +224,6 @@ export async function renderAppRouteDocumentResponse({
   if (routeResponse.status === 500 && !routeHasBoundary(route, 'error')) {
     return withRefreshCookies(await renderAppErrorDocumentResponse(app, request, 500));
   }
-
-  // Stamp the build-global render-plan version token so the client can detect
-  // deploy skew and refetch full rather than applying a delta against a stale
-  // base (SPEC §5.1, §9.1.1).
-  const loaderRuntimeHref = ensureKovoLoaderRuntimeClientModule(app.clientModules);
-  const buildToken = app.clientModules.buildToken();
 
   // K3 / SPEC §9.3: derive the broadcast fingerprint from the session identity already resolved on
   // the request (not the whole cookie header), so non-session cookie churn (CSRF rotation, theme)

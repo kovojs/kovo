@@ -1,5 +1,6 @@
 import type { CsrfOptions } from './csrf.js';
 import type { DeferredStreamChunk } from './deferred-stream.js';
+import type { LiveTargetAttestationAuthority } from './live-target-app-identity.js';
 import {
   formHelperAsyncLocalGetStore,
   formHelperAsyncLocalRun,
@@ -22,6 +23,7 @@ export interface JsxMutationFailureContext {
 
 export interface JsxFrameworkContext {
   anonymousCsrfBindings?: Map<string, JsxAnonymousCsrfBinding>;
+  attestationAuthority?: LiveTargetAttestationAuthority;
   csrf?: CsrfOptions<any>;
   deferredRegions?: DeferredRegionCollector;
   maxListItems?: number;
@@ -99,6 +101,9 @@ function createJsxFrameworkContext(
   const anonymousCsrfBindings = formHelperOwnDataValue(options, 'anonymousCsrfBindings') as
     | Map<string, JsxAnonymousCsrfBinding>
     | undefined;
+  const attestationAuthority = formHelperOwnDataValue(options, 'attestationAuthority') as
+    | LiveTargetAttestationAuthority
+    | undefined;
   const csrf = formHelperOwnDataValue(options, 'csrf') as CsrfOptions<any> | undefined;
   const deferredRegions = formHelperOwnDataValue(options, 'deferredRegions') as
     | DeferredRegionCollector
@@ -117,6 +122,7 @@ function createJsxFrameworkContext(
       : undefined;
   const context: JsxFrameworkContext = {
     ...(anonymousCsrfBindings === undefined ? {} : { anonymousCsrfBindings }),
+    ...(attestationAuthority === undefined ? {} : { attestationAuthority }),
     ...(csrf === undefined ? {} : { csrf }),
     ...(deferredRegions === undefined ? {} : { deferredRegions }),
     ...(maxListItems === undefined ? {} : { maxListItems }),

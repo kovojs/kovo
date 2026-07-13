@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { trustedHtml } from '@kovojs/browser';
 
 import { createApp, createRequestHandler } from './app.js';
+import { appLiveTargetAttestationAudience } from './live-target-app-identity.js';
 import { createMemoryVersionedClientModuleRegistry } from './client-modules.js';
 import { endpoint } from './endpoint.js';
 import type { LiveTargetRenderer } from './mutation-wire.js';
@@ -25,9 +26,13 @@ import { createLiveTargetAttestation } from './mutation-wire.js';
 function attestedLiveTargetHeader(
   target: string,
   component: string,
+  buildToken: string,
   props: Record<string, unknown> = {},
 ): string {
-  const token = createLiveTargetAttestation({ component, props, target }, { request: {} });
+  const token = createLiveTargetAttestation(
+    { component, props, target },
+    { buildToken, request: {} },
+  );
   return `${target}#${component}@${token}:${JSON.stringify(props)}`;
 }
 
@@ -71,7 +76,7 @@ describe('server app shell Vite dev seam', () => {
       shouldHandleKovoAppShellViteRequest(
         request('/@kovo/hmr/refresh/live-targets', {
           headers: {
-            'Kovo-Live-Targets': `${attestedLiveTargetHeader('product-card', 'src/components/ProductCard', { id: 'p1' })}`,
+            'Kovo-Live-Targets': `${attestedLiveTargetHeader('product-card', 'src/components/ProductCard', appLiveTargetAttestationAudience(app), { id: 'p1' })}`,
           },
           method: 'POST',
         }),
@@ -1171,7 +1176,7 @@ describe('server app shell Vite dev seam', () => {
         {
           headers: {
             'Kovo-Current-Url': '/cart?tab=summary',
-            'Kovo-Live-Targets': `${attestedLiveTargetHeader('cart-badge', 'src/components/CartBadge', { count: 3 })}`,
+            'Kovo-Live-Targets': `${attestedLiveTargetHeader('cart-badge', 'src/components/CartBadge', appLiveTargetAttestationAudience(app), { count: 3 })}`,
           },
           method: 'POST',
         },
@@ -1250,7 +1255,11 @@ describe('server app shell Vite dev seam', () => {
         {
           headers: {
             'Kovo-Current-Url': '/cart',
-            'Kovo-Live-Targets': attestedLiveTargetHeader('cart-badge', 'src/components/CartBadge'),
+            'Kovo-Live-Targets': attestedLiveTargetHeader(
+              'cart-badge',
+              'src/components/CartBadge',
+              appLiveTargetAttestationAudience(app),
+            ),
           },
           method: 'POST',
         },
@@ -1288,7 +1297,7 @@ describe('server app shell Vite dev seam', () => {
     const liveTargetResponse = await handler(
       new Request('http://kovo.test/@kovo/hmr/refresh/live-targets', {
         headers: {
-          'Kovo-Live-Targets': `${attestedLiveTargetHeader('cart-badge', 'src/components/CartBadge', { count: 3 })}`,
+          'Kovo-Live-Targets': `${attestedLiveTargetHeader('cart-badge', 'src/components/CartBadge', 'unused-production-build', { count: 3 })}`,
         },
         method: 'POST',
       }),

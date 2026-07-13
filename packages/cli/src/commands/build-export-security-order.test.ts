@@ -34,11 +34,12 @@ describe('build/export security bootstrap ordering', () => {
     });
     const serverImport = source.indexOf("import { createRequestHandler } from '@kovojs/server';");
     const registryImport = source.indexOf("import './runtime-registry.mjs';");
-    const appImport = source.indexOf('import * as appModule from');
+    const appImport = source.indexOf('const appModule = await runWithGeneratedLiveTargetRegistry');
 
     expect(serverImport).toBeGreaterThanOrEqual(0);
     expect(serverImport).toBeLessThan(registryImport);
     expect(registryImport).toBeLessThan(appImport);
+    expect(source).not.toContain('import * as appModule from');
     expect(source).toContain('appendFrameworkRuntimeArrayValue');
     expect(source).not.toContain('[result.length]');
     expect(source).not.toContain('[hrefOrder.length]');

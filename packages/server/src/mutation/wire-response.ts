@@ -24,6 +24,7 @@ import {
   type MutationWireRequest,
   type MutationWireResponse,
 } from '../mutation-wire.js';
+import type { LiveTargetAttestationAuthority } from '../live-target-app-identity.js';
 import type { GeneratedFragmentRenderable } from '../renderable.js';
 import { queryRuntimeWarningHeaderValue, queryRuntimeWarningsFromRequest } from '../query.js';
 import type { RuntimeRegistryFacts } from '../registry-facts.js';
@@ -311,17 +312,21 @@ const renderSuccessfulMutationWireResponse = wireEmitter(
       wireRequest.idem === undefined ? undefined : [wireRequest.idem],
     );
     const fragmentChunks: string[] = [];
-    appendChunks(
-      fragmentChunks,
-      await renderLiveTargetChunks(
-        wireRequest.liveTargetRenderers ?? [],
-        selection.liveTargetDescriptors,
-        renderInput,
-        wireRequest.request,
-        wireRequest.csrf,
-        wireRequest.maxListItems,
-      ),
-    );
+    if (selection.liveTargetDescriptors.length > 0) {
+      appendChunks(
+        fragmentChunks,
+        await renderLiveTargetChunks(
+          wireRequest.liveTargetRenderers ?? [],
+          selection.liveTargetDescriptors,
+          requiredLiveTargetAudience(wireRequest),
+          requiredLiveTargetAttestationAuthority(wireRequest),
+          renderInput,
+          wireRequest.request,
+          wireRequest.csrf,
+          wireRequest.maxListItems,
+        ),
+      );
+    }
     appendChunks(
       fragmentChunks,
       await renderFragmentChunks(
@@ -427,6 +432,25 @@ function requiredMutationBuildToken<Request>(wireRequest: MutationWireRequest<Re
   );
 }
 
+function requiredLiveTargetAudience<Request>(wireRequest: MutationWireRequest<Request>): string {
+  const audience = wireRequest.liveTargetAudience ?? wireRequest.buildToken;
+  if (typeof audience === 'string' && audience.length > 0) return audience;
+  throw new TypeError(
+    'Live-target rendering requires a non-empty app-bound attestation audience (SPEC §6.6/§9.3).',
+  );
+}
+
+function requiredLiveTargetAttestationAuthority<Request>(
+  wireRequest: MutationWireRequest<Request>,
+): LiveTargetAttestationAuthority {
+  if (wireRequest.liveTargetAttestationAuthority !== undefined) {
+    return wireRequest.liveTargetAttestationAuthority;
+  }
+  throw new TypeError(
+    'Live-target rendering requires a framework-issued closed-app authority (SPEC §6.6/§9.3).',
+  );
+}
+
 function mutationRenderErrorResponse<Request>(
   changes: readonly ChangeRecord[],
   wireRequest: MutationWireRequest<Request>,
@@ -516,6 +540,8 @@ async function renderDefaultFailureFragment<Request>(
       : findLiveTargetRenderer(wireRequest.liveTargetRenderers ?? [], descriptor.component);
   if (descriptor && renderer) {
     return renderer.render({
+      attestationAuthority: requiredLiveTargetAttestationAuthority(wireRequest),
+      buildToken: requiredLiveTargetAudience(wireRequest),
       failure,
       input: wireRequest.rawInput,
       ...(wireRequest.csrf === undefined ? {} : { csrf: wireRequest.csrf }),

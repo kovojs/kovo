@@ -12,7 +12,6 @@ export {
   type GeneratedLiveTargetModule,
 } from '../live-target-registry.js';
 export {
-  createLiveTargetAttestation,
   mutationWireRequestFromHeaders,
   readMutationWireHeaders,
   type BufferedMutationWireResponse,
@@ -31,6 +30,7 @@ export {
   type NoJsMutationRequest,
   type NoJsMutationResponse,
 } from '../mutation-wire.js';
+export { createAppLiveTargetAttestation as createLiveTargetAttestation } from '../live-target-app-attestation.js';
 export { assignDerivedMutationKey } from '../mutation/definition.js';
 export {
   renderMutationEndpointResponse,

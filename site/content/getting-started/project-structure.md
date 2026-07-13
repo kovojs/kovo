@@ -51,6 +51,7 @@ queries, route components, theme, and stylesheet, then creates the app:
 
 ```tsx
 createApp({
+  appId: '61cc6f90-8870-4dcf-977f-2df98af8cd93',
   clientModules: createMemoryVersionedClientModuleRegistry(),
   db: () => appDb,
   mutations: [addContact, appSignIn, appSignOut],
@@ -59,6 +60,13 @@ createApp({
   routes: [homeRoute, loginRoute],
 });
 ```
+
+`create-kovo` generates this UUIDv4 once. Keep it stable across replicas and deployments of the same
+app; generate a different UUIDv4 for every distinct app. Production apps with live-target renderers
+must declare it. Kovo binds live-target reconstruction tokens to this identity so one app cannot
+replay a descriptor into another app with the same render plan, including when the apps run in
+separate processes or isolates. Keep the CSRF or `KOVO_LIVE_TARGET_SECRET` signing secret unique to
+the app as well.
 
 The home route redirects unauthenticated requests to `/login`; the login route renders the auth
 form. The full scaffold passes `appSessionProvider` to `createApp()`, registers the health endpoint,

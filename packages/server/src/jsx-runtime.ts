@@ -853,8 +853,10 @@ async function renderKovoComponent(
   const context = currentJsxFrameworkContext();
   return renderedHtml(
     stampKovoComponentRoot({
+      ...(context?.attestationAuthority === undefined
+        ? {}
+        : { attestationAuthority: context.attestationAuthority }),
       component,
-      ...(context?.csrf === undefined ? {} : { csrf: context.csrf }),
       html,
       jsxKey,
       props,
