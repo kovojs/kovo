@@ -139,15 +139,24 @@ test('escapes model-streamed HTML/JS in the <kovo-text> wire (no LLM-output XSS)
   expect(dialogFired).toBe(false);
 });
 
-test('marks a streamed assistant source failed when the response aborts @race-prone', async ({
+test('reloads authoritative truth when a streamed response is not confirmed @race-prone', async ({
   page,
 }) => {
   await page.goto('/');
   await page.getByRole('textbox', { name: 'Message' }).fill('abort');
-  await page.getByRole('button', { name: 'Send' }).click();
+  await Promise.all([
+    // SPEC §9.1 permits failed-source marking or a navigation to server truth. Kovo takes the
+    // stronger recovery after progressively applying fragments because the partial DOM cannot be
+    // rolled back honestly once <kovo-done reason="error"> rejects confirmation.
+    page.waitForEvent('framenavigated', {
+      predicate: (frame) => frame === page.mainFrame(),
+    }),
+    page.getByRole('button', { name: 'Send' }).click(),
+  ]);
+  await page.waitForLoadState('networkidle');
 
-  await expect(page.locator('[data-stream-text="assistant:2"]')).toHaveAttribute(
-    'data-stream-state',
-    'error',
+  await expect(page.locator('[data-stream-text="assistant:2"]')).toHaveCount(0);
+  await expect(page.locator('[data-role="assistant"]')).toContainText(
+    'Final answer for abort: table code image',
   );
 });

@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { findFragmentTargetElement, type FragmentTargetRoot } from './fragment-targets.js';
+import {
+  escapeCssString,
+  findFragmentTargetElement,
+  type FragmentTargetRoot,
+} from './fragment-targets.js';
 
 describe('fragment target lookup', () => {
   it('falls back to kovo-defer target hosts for initial deferred streams', () => {
@@ -25,5 +29,17 @@ describe('fragment target lookup', () => {
       '[kovo-c="reviews:p1"]',
       'kovo-defer[target="reviews:p1"]',
     ]);
+  });
+
+  it('escapes selector identities after late String.replace poisoning', () => {
+    // SPEC §6.6/§9.1: app code cannot redirect a fragment commit by replacing a
+    // mutable String prototype method after the target helper is imported.
+    const originalReplace = String.prototype.replace;
+    try {
+      String.prototype.replace = (() => 'attacker-target') as typeof String.prototype.replace;
+      expect(escapeCssString('target"bad\\id')).toBe('target\\"bad\\\\id');
+    } finally {
+      String.prototype.replace = originalReplace;
+    }
   });
 });

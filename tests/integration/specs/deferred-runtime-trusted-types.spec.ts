@@ -23,6 +23,7 @@ test('default Trusted Types CSP permits the versioned deferred runtime to instal
   const csp = (await documentResponse?.allHeaders())?.['content-security-policy'];
   expect(csp).toContain("require-trusted-types-for 'script'");
   expect(csp).toContain('trusted-types kovo');
+  expect(csp).toContain('kovo-browser');
   expect(runtimeResponse.status()).toBe(200);
 
   // The tiny bootstrap's apply function closes over `streamQueue`; the deferred runtime replaces

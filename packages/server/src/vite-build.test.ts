@@ -68,7 +68,7 @@ const staticExportRuntimeHref = versionedClientModuleHref(
 const staticExportBootstrapCspHash = cspSha256(
   createInlineKovoLoaderSource(JSON.stringify(staticExportRuntimeHref), '(url)=>import(url)'),
 );
-const staticExportDocumentCsp = `default-src 'self'; script-src 'self' '${staticExportBootstrapCspHash}'; style-src 'self'; base-uri 'self'; object-src 'none'; form-action 'self'; frame-ancestors 'none'; report-to kovo-csp; require-trusted-types-for 'script'; trusted-types kovo`;
+const staticExportDocumentCsp = `default-src 'self'; script-src 'self' '${staticExportBootstrapCspHash}'; style-src 'self'; base-uri 'self'; object-src 'none'; form-action 'self'; frame-ancestors 'none'; report-to kovo-csp; require-trusted-types-for 'script'; trusted-types kovo kovo-browser`;
 const staticExportReportingHeaders = {
   'report-to': '{"endpoints":[{"url":"/_kovo/reports/csp"}],"group":"kovo-csp","max_age":10886400}',
   'reporting-endpoints': 'kovo-csp="/_kovo/reports/csp"',

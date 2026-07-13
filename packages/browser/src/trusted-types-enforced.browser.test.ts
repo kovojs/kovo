@@ -26,8 +26,8 @@ import {
 //
 // Enforcement cannot be retro-applied to an already-parsed document, so we mint a same-origin
 // child document via a `srcdoc` iframe whose `<meta http-equiv="Content-Security-Policy">`
-// carries the strict `require-trusted-types-for 'script'; trusted-types kovo` directive the
-// server now emits by default. Inside that enforcing realm we prove:
+// carries the strict `require-trusted-types-for 'script'; trusted-types kovo kovo-browser`
+// directive the server now emits by default. Inside that enforcing realm we prove:
 //   (1) a raw (non-framework) string `innerHTML` write THROWS — the DOM-XSS sink is killed;
 //   (2) a value minted by the boot-owned `kovo` policy controller is ACCEPTED — Kovo's own
 //       hydration survives without consulting a public policy cache.
@@ -41,12 +41,12 @@ const initialPolicyCacheDescriptor = Object.getOwnPropertyDescriptor(globalThis,
 function enforcingFrame(): Promise<HTMLIFrameElement> {
   return new Promise((resolve) => {
     const frame = document.createElement('iframe');
-    // The enforcing document admits ONLY the framework `kovo` policy (no 'allow-duplicates'),
-    // exactly mirroring the header `renderDefaultDocumentCsp` now ships by default.
+    // The enforcing document admits only the generated and modular framework policies (without
+    // 'allow-duplicates'), exactly mirroring `renderDefaultDocumentCsp`.
     frame.srcdoc =
       '<!doctype html><html><head>' +
       '<meta http-equiv="Content-Security-Policy" ' +
-      'content="require-trusted-types-for \'script\'; trusted-types kovo">' +
+      'content="require-trusted-types-for \'script\'; trusted-types kovo kovo-browser">' +
       '</head><body><div id="t"></div></body></html>';
     frame.addEventListener('load', () => resolve(frame), { once: true });
     document.body.append(frame);
@@ -137,6 +137,38 @@ describe('Trusted Types default-on enforcement (SF Tier 3, Chromium-only)', () =
       'framework-safe',
     );
   });
+
+  it.runIf(hasTrustedTypes)(
+    'keeps generated and modular policy controllers usable without allowing duplicates',
+    async () => {
+      const frame = await enforcingFrame();
+      const win = frame.contentWindow as Window &
+        typeof globalThis & {
+          trustedTypes: {
+            createPolicy(
+              name: string,
+              rules: { createHTML(input: string): string },
+            ): { createHTML(input: string): unknown };
+          };
+        };
+      const generated = createKovoTrustedTypesSecurityControls(win, 'kovo');
+      const modular = createKovoTrustedTypesSecurityControls(win, 'kovo-browser');
+      const generatedTarget = frame.contentDocument!.createElement('div');
+      const modularTarget = frame.contentDocument!.createElement('div');
+
+      generatedTarget.innerHTML = generated.createHTML('<strong>generated</strong>');
+      modularTarget.innerHTML = modular.createHTML('<em>modular</em>');
+
+      expect(generatedTarget.textContent).toBe('generated');
+      expect(modularTarget.textContent).toBe('modular');
+      expect(() =>
+        win.trustedTypes.createPolicy('kovo', { createHTML: (value) => value }),
+      ).toThrow();
+      expect(() =>
+        win.trustedTypes.createPolicy('kovo-browser', { createHTML: (value) => value }),
+      ).toThrow();
+    },
+  );
 
   it.runIf(hasTrustedTypes)(
     'boots navigation controls before policy creation and accepts policy-minted template HTML',

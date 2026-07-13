@@ -137,11 +137,8 @@ export async function fetchEnhancedMutation(
     method: security.upper(formMethod ?? 'post'),
     ...definedProps({ onUploadProgress, signal }),
   })) as EnhancedMutationResponseLike;
-  securityWeakMapSet(
-    mutationResponseFailures,
-    response,
-    isFailedBoundMutationResponse(response, security),
-  );
+  const failed = isFailedBoundMutationResponse(response, security);
+  securityWeakMapSet(mutationResponseFailures, response, failed);
   const sessionTransition = readSessionTransition(response, security);
   // SPEC §9.3 (bugz-25 M6): response headers are observable before the body settles. A slow
   // custom auth response must not leave the old-principal BroadcastChannel alive while text or a
@@ -197,11 +194,12 @@ export async function fetchEnhancedMutation(
     | ReadableStream<Uint8Array>
     | null
     | undefined;
-  const body = streaming && responseBody ? '' : await security.readResponseText(response);
-  if (
-    !(streaming && responseBody) &&
-    isSuccessfulEmptyAuthFragmentResponse(response, changes, body, security)
-  ) {
+  // A streaming request can still produce an ordinary typed failure fragment (for example a
+  // schema/handler 422). Only successful responses may hand their body to the progressive stream
+  // parser; failure bodies retain the ordinary fragment vocabulary and must be buffered/applied.
+  const usesStreamBody = streaming && responseBody && !failed;
+  const body = usesStreamBody ? '' : await security.readResponseText(response);
+  if (!usesStreamBody && isSuccessfulEmptyAuthFragmentResponse(response, changes, body, security)) {
     const navigationTarget = resolveAuthMutationNavigationTarget(form, formData, security);
     // C176 / SPEC §9.3: this accepted fallback is itself an auth/session transition even when a
     // custom endpoint omitted the explicit transition header. Cut the old principal's broadcast
@@ -224,7 +222,7 @@ export async function fetchEnhancedMutation(
     changes,
     idem,
     response,
-    ...(streaming && responseBody ? { streamBody: responseBody } : {}),
+    ...(usesStreamBody ? { streamBody: responseBody } : {}),
     targets: targetSnapshot.targets,
   };
 }

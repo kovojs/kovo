@@ -8,8 +8,10 @@ import {
   applyHtmlResponseFragments,
   applyResponseFragment,
   applyResponseFragments,
+  p,
   type HtmlResponseFragmentApplyTarget,
 } from './response-fragment-apply.js';
+import { createBrowserNavigationSecurityControls } from './navigation-security-intrinsics.js';
 
 interface TestFragmentTarget {
   html: string;
@@ -238,6 +240,42 @@ describe('response fragment apply primitive', () => {
       // Two rows inserted (10px each) → scrollTop shifts by 20 to keep the anchor.
       expect(target.scrollTop).toBe(20);
     } finally {
+      restore();
+    }
+  });
+
+  it('keeps prepend output decisions stable after late Set prototype poisoning', () => {
+    // SPEC §6.6/§9.3: a mutable Set prototype cannot forge every incoming key
+    // as already present and silently discard a server-authorized output page.
+    const restore = installFakeDocument();
+    const originalHas = Set.prototype.has;
+    try {
+      const security = createBrowserNavigationSecurityControls();
+      const target = fakePrependTarget(['m3', 'm4'], 10);
+      Set.prototype.has = (() => true) as typeof Set.prototype.has;
+      p(
+        [
+          {
+            html: fragmentHtml(
+              '<article kovo-key="m1"></article><article kovo-key="m2"></article>',
+            ),
+            mode: 'prepend',
+            target: 'chat-log',
+          },
+        ],
+        () => target as unknown as HtmlResponseFragmentApplyTarget,
+        security,
+        (html) => html,
+      );
+
+      expect(target.children.map((row) => row.getAttribute('kovo-key'))).toEqual([
+        'm1',
+        'm2',
+        'm3',
+        'm4',
+      ]);
+    } finally {
+      Set.prototype.has = originalHas;
       restore();
     }
   });

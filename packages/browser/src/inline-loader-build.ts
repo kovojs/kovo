@@ -210,11 +210,18 @@ function installInlineKovoLoader(im) {
   };
   const qa = (root, selector) => bns.queryAllElements(root, selector);
   const xa = (current, next) => {
-    for (let i = current.attributes.length; i--; ) {
-      const attr = current.attributes[i];
-      if (attr && !next.hasAttribute(attr.name)) current.removeAttribute(attr.name);
+    const currentAttributes = bns.snapshotElementAttributes(current);
+    for (let index = 0; index < currentAttributes.length; index += 1) {
+      const attribute = currentAttributes[index];
+      if (attribute && !bns.hasElementAttribute(next, attribute.name)) {
+        bns.removeElementAttribute(current, attribute.name);
+      }
     }
-    for (const attr of next.attributes) current.setAttribute(attr.name, attr.value);
+    const nextAttributes = bns.snapshotElementAttributes(next);
+    for (let index = 0; index < nextAttributes.length; index += 1) {
+      const attribute = nextAttributes[index];
+      if (attribute) bns.setElementAttribute(current, attribute.name, attribute.value);
+    }
   };
   const xd = (current, next) => {
     let theme;
@@ -734,89 +741,158 @@ function installInlineKovoLoader(im) {
   };
   const ks = 'script[data-kovo-csp-hash]';
   const rscr = (root) => {
-    for (const old of qa(root, ks)) {
-      if (!old.isConnected) continue;
+    const scripts = qa(root, ks);
+    for (let scriptIndex = 0; scriptIndex < scripts.length; scriptIndex += 1) {
+      const old = scripts[scriptIndex];
+      if (!old || !bns.readNodeIsConnected(old)) continue;
       const fresh = doc.createElement('script');
-      for (const attr of old.attributes) fresh.setAttribute(attr.name, attr.value);
+      const attributes = bns.snapshotElementAttributes(old);
+      for (let attributeIndex = 0; attributeIndex < attributes.length; attributeIndex += 1) {
+        const attribute = attributes[attributeIndex];
+        if (attribute) bns.setElementAttribute(fresh, attribute.name, attribute.value);
+      }
       bns.setNodeTextContent(fresh, bns.readNodeTextContent(old) ?? '');
-      old.replaceWith(fresh);
+      bns.replaceElement(old, fresh);
     }
   };
-  const hk = (el) => {
-    if (el.nodeType !== 1) return '';
-    if (el.tagName === 'STYLE') {
-      const criticalHref = el.getAttribute('data-kovo-critical-href');
-      return criticalHref ? ['style', criticalHref, bns.readNodeTextContent(el) || ''].join('|') : '';
+  const canonicalRel = (value) => {
+    const rawTokens = tk(value, /\s/u);
+    const tokens = [];
+    for (let index = 0; index < rawTokens.length; index += 1) {
+      const token = rawTokens[index];
+      if (token) {
+        bns.appendDenseSecurityValue(tokens, bns.lower(token), 'Inline head rel snapshot');
+      }
     }
-    if (el.tagName === 'SCRIPT') return el.outerHTML ? 'script|' + el.outerHTML : '';
-    if (el.tagName !== 'LINK') return '';
-    let rel = (el.getAttribute('rel') || '')
-      .split(/\s+/)
-      .filter(Boolean)
-      .map((token) => token.toLowerCase())
-      .sort()
-      .join(' ');
+    for (let end = tokens.length - 1; end > 0; end -= 1) {
+      for (let index = 0; index < end; index += 1) {
+        const left = tokens[index];
+        const right = tokens[index + 1];
+        if (left !== undefined && right !== undefined && left > right) {
+          tokens[index] = right;
+          tokens[index + 1] = left;
+        }
+      }
+    }
+    return sj(tokens, ' ');
+  };
+  const hk = (el) => {
+    const tagName = bns.readElementTagName(el);
+    if (!tagName) return '';
+    if (tagName === 'STYLE') {
+      const criticalHref = bns.readAttribute(el, 'data-kovo-critical-href');
+      return criticalHref
+        ? 'style|' + criticalHref + '|' + (bns.readNodeTextContent(el) || '')
+        : '';
+    }
+    if (tagName === 'SCRIPT') {
+      const outerHtml = bns.readElementOuterHtml(el);
+      return outerHtml ? 'script|' + outerHtml : '';
+    }
+    if (tagName !== 'LINK') return '';
+    let rel = canonicalRel(bns.readAttribute(el, 'rel') || '');
     if (
       rel === 'preload' &&
-      el.getAttribute('as') === 'style' &&
-      el.hasAttribute('data-kovo-deferred-style')
+      bns.readAttribute(el, 'as') === 'style' &&
+      bns.hasElementAttribute(el, 'data-kovo-deferred-style')
     ) {
       rel = 'stylesheet';
     }
     if (rel !== 'stylesheet' && rel !== 'modulepreload') return '';
-    const href = el.getAttribute('href');
+    const href = bns.readAttribute(el, 'href');
     if (!href) return '';
     try {
-      return [
+      const location = bns.currentUrl();
+      const url = location && bns.parseUrl(href, location.href);
+      if (!url) return '';
+      return sj([
         'link',
         rel,
-        new URL(href, location.href).href,
-        rel === 'modulepreload' ? el.getAttribute('as') || '' : '',
-        el.getAttribute('media') || '',
-        el.getAttribute('crossorigin') || '',
-        el.getAttribute('integrity') || '',
-        el.getAttribute('referrerpolicy') || '',
-        el.getAttribute('type') || '',
-      ].join('|');
+        url.href,
+        rel === 'modulepreload' ? bns.readAttribute(el, 'as') || '' : '',
+        bns.readAttribute(el, 'media') || '',
+        bns.readAttribute(el, 'crossorigin') || '',
+        bns.readAttribute(el, 'integrity') || '',
+        bns.readAttribute(el, 'referrerpolicy') || '',
+        bns.readAttribute(el, 'type') || '',
+      ], '|');
     } catch {
       return '';
     }
   };
   const ch = (nextHead) => {
-    const pool = new Map();
-    for (const el of [...doc.head.childNodes]) {
+    const poolKeys = [];
+    const poolValues = [];
+    const poolList = (key, create) => {
+      for (let index = 0; index < poolKeys.length; index += 1) {
+        if (poolKeys[index] === key) return poolValues[index];
+      }
+      if (!create) return;
+      const list = [];
+      bns.appendDenseSecurityValue(poolKeys, key, 'Inline head pool key snapshot');
+      bns.appendDenseSecurityValue(poolValues, list, 'Inline head pool value snapshot');
+      return list;
+    };
+    const currentHead = bns.snapshotChildNodes(doc.head);
+    for (let index = 0; index < currentHead.length; index += 1) {
+      const el = currentHead[index];
+      if (!el) continue;
       const key = hk(el);
       if (!key) continue;
-      const list = pool.get(key) || [];
-      list.push(el);
-      pool.set(key, list);
+      bns.appendDenseSecurityValue(poolList(key, true), el, 'Inline head pool node snapshot');
     }
 
-    const kept = new Set();
+    const kept = [];
+    const isKept = (node) => {
+      for (let index = 0; index < kept.length; index += 1) {
+        if (kept[index] === node) return true;
+      }
+      return false;
+    };
+    const takeFirst = (values) => {
+      if (!values || !values.length) return;
+      const first = values[0];
+      for (let index = 1; index < values.length; index += 1) {
+        values[index - 1] = values[index];
+      }
+      values.length -= 1;
+      return first;
+    };
     const pending = [];
     const flush = (anchor) => {
-      for (const next of pending.splice(0)) doc.head.insertBefore(next.cloneNode(true), anchor);
+      for (let index = 0; index < pending.length; index += 1) {
+        const next = pending[index];
+        if (next) doc.head.insertBefore(bns.cloneDomNode(next, true), anchor);
+      }
+      pending.length = 0;
     };
-    for (const el of [...doc.head.childNodes]) {
-      if (!hk(el)) el.remove();
+    const removableHead = bns.snapshotChildNodes(doc.head);
+    for (let index = 0; index < removableHead.length; index += 1) {
+      const el = removableHead[index];
+      if (el && !hk(el)) bns.removeElement(el);
     }
-    for (const next of [...nextHead.childNodes]) {
+    const nextNodes = bns.snapshotChildNodes(nextHead);
+    for (let index = 0; index < nextNodes.length; index += 1) {
+      const next = nextNodes[index];
+      if (!next) continue;
       const key = hk(next);
       if (!key) {
-        pending.push(next);
+        bns.appendDenseSecurityValue(pending, next, 'Inline pending head node snapshot');
         continue;
       }
-      const match = pool.get(key)?.shift();
-      const node = match || next.cloneNode(true);
-      kept.add(node);
+      const match = takeFirst(poolList(key, false));
+      const node = match || bns.cloneDomNode(next, true);
+      bns.appendDenseSecurityValue(kept, node, 'Inline kept head node snapshot');
       // SPEC.md §4.4: enhanced navigation must not create a transient unstyled
       // document. Moving a connected stylesheet can briefly detach its rules in
       // Chromium, so matched head assets keep their physical DOM position.
-      if (!match) doc.head.appendChild(node);
+      if (!match) bns.appendElementChildren(doc.head, [node]);
       flush(node);
     }
-    for (const el of [...doc.head.childNodes]) {
-      if (hk(el) && !kept.has(el)) el.remove();
+    const staleHead = bns.snapshotChildNodes(doc.head);
+    for (let index = 0; index < staleHead.length; index += 1) {
+      const el = staleHead[index];
+      if (el && hk(el) && !isKept(el)) bns.removeElement(el);
     }
     flush(null);
   };
@@ -844,11 +920,15 @@ function installInlineKovoLoader(im) {
     }
     bns.navigateSameOrigin(href);
   };
-  for (const el of qa(
+  const indeterminateInputs = qa(
     doc,
     'input[type="checkbox"][aria-checked="mixed"],input[type="checkbox"][data-state="indeterminate"]',
-  )) {
-    if (el.indeterminate !== undefined) el.indeterminate = true;
+  );
+  for (let index = 0; index < indeterminateInputs.length; index += 1) {
+    const el = indeterminateInputs[index];
+    if (el && bns.readElementProperty(el, 'indeterminate') !== undefined) {
+      bns.setElementProperty(el, 'indeterminate', true);
+    }
   }
   ${wireParserReadableSource}
   ${responseApplyReadableSource}
@@ -934,13 +1014,30 @@ function installInlineKovoLoader(im) {
     }
   };
   const af = (fragments) => {
-    for (const x of fragments) {
+    for (let fragmentIndex = 0; fragmentIndex < fragments.length; fragmentIndex += 1) {
+      const x = fragments[fragmentIndex];
+      if (!x) continue;
       if (x.mode === 'append') continue;
       const e = ft(x.target);
-      if (e) for (const y of qa(e, '[kovo-c]')) {
-        const html = renderedFragmentHtmlContent(x.html);
-        if (html.includes('kovo-c="' + y.getAttribute('kovo-c') + '"') && (!y.getAttribute('kovo-key') && !y.getAttribute('id') || html.includes('kovo-key="' + y.getAttribute('kovo-key') + '"') || html.includes('id="' + y.getAttribute('id') + '"'))) continue;
-        y.a?.abort();
+      if (e) {
+        const liveChildren = qa(e, '[kovo-c]');
+        for (let childIndex = 0; childIndex < liveChildren.length; childIndex += 1) {
+          const y = liveChildren[childIndex];
+          if (!y) continue;
+          const html = renderedFragmentHtmlContent(x.html);
+          const component = bns.readAttribute(y, 'kovo-c');
+          const key = bns.readAttribute(y, 'kovo-key');
+          const id = bns.readAttribute(y, 'id');
+          if (
+            bns.indexOf(html, 'kovo-c="' + component + '"') >= 0 &&
+            ((!key && !id) ||
+              (key !== null && bns.indexOf(html, 'kovo-key="' + key + '"') >= 0) ||
+              (id !== null && bns.indexOf(html, 'id="' + id + '"') >= 0))
+          ) {
+            continue;
+          }
+          y.a?.abort();
+        }
       }
     }
     applyInlineMutationResponseChunks(
@@ -952,7 +1049,10 @@ function installInlineKovoLoader(im) {
     const chunks = readInlineMutationResponseBodyChunks(body);
     const skew = kb() && (!build || build !== kb());
     if (skew) {
-      for (const q of chunks.queries) qr(q);
+      for (let index = 0; index < chunks.queries.length; index += 1) {
+        const q = chunks.queries[index];
+        if (q) qr(q);
+      }
       return;
     }
     aq(chunks.queries, 1);
@@ -1293,7 +1393,11 @@ function installInlineKovoLoader(im) {
           return;
         }
         const responseBody = bns.readResponseField(response, 'body');
-        if (streaming && responseBody) {
+        const failed = status >= 400 || bns.readResponseField(response, 'ok') === false;
+        // A streaming request may receive an ordinary typed failure fragment. Do not feed a 4xx
+        // body into the progressive parser: it has no <kovo-done> terminator and is safe to apply
+        // only through the normal decoded-fragment path.
+        if (streaming && responseBody && !failed) {
           // bugz-26 H6 / SPEC §14: validate the response build before acquiring a reader. A
           // missing/mismatched token must cancel unread bytes and hard-reload with zero apply.
           const responseBuild = bh(response);
@@ -1444,44 +1548,84 @@ function installInlineKovoLoader(im) {
     return true;
   };
   const tr = (root = doc) => {
-    const matches = (selector) =>
-      root.matches?.(selector) ? [root].concat(qa(root, selector)) : qa(root, selector);
-    matches('[on\\:load]').forEach((el) => to(el, 'load') && trigger('load', el));
-    matches('[on\\:idle]').forEach((el) =>
-      to(el, 'idle') && (globalThis.requestIdleCallback || setTimeout)(() => trigger('idle', el)),
-    );
+    const matches = (selector) => {
+      const values = qa(root, selector);
+      if (root.matches?.(selector)) {
+        const snapshot = [root];
+        for (let index = 0; index < values.length; index += 1) {
+          const value = values[index];
+          if (value) bns.appendDenseSecurityValue(snapshot, value, 'Inline trigger snapshot');
+        }
+        return snapshot;
+      }
+      return values;
+    };
+    const loadElements = matches('[on\\:load]');
+    for (let index = 0; index < loadElements.length; index += 1) {
+      const el = loadElements[index];
+      if (el && to(el, 'load')) trigger('load', el);
+    }
+    const idleElements = matches('[on\\:idle]');
+    for (let index = 0; index < idleElements.length; index += 1) {
+      const el = idleElements[index];
+      if (el && to(el, 'idle')) {
+        (globalThis.requestIdleCallback || setTimeout)(() => trigger('idle', el));
+      }
+    }
     if (globalThis.IntersectionObserver) {
-      const observer = new IntersectionObserver((entries) =>
-        entries.forEach((entry) => {
-          if (!entry.isIntersecting) return;
+      const observer = new IntersectionObserver((entries) => {
+        for (let index = 0; index < entries.length; index += 1) {
+          const entry = entries[index];
+          if (!entry) continue;
+          if (!entry.isIntersecting) continue;
           observer.unobserve(entry.target);
           trigger('visible', entry.target);
-        }),
-      );
-      matches('[on\\:visible]').forEach((el) => to(el, 'visible') && observer.observe(el));
+        }
+      });
+      const visibleElements = matches('[on\\:visible]');
+      for (let index = 0; index < visibleElements.length; index += 1) {
+        const el = visibleElements[index];
+        if (el && to(el, 'visible')) observer.observe(el);
+      }
     }
   };
   const ps = () => {
     const promote = () => {
-      for (const el of qa(doc, 'link[data-kovo-deferred-style]')) {
-        const href = el.getAttribute?.('href');
+      const deferredStyles = qa(doc, 'link[data-kovo-deferred-style]');
+      for (let index = 0; index < deferredStyles.length; index += 1) {
+        const el = deferredStyles[index];
+        if (!el) continue;
+        const href = bns.readAttribute(el, 'href');
         if (!href) continue;
-        const existing = qa(doc, 'link[rel="stylesheet"][href]').some(
-          (link) => link !== el && !link.closest?.('noscript') && link.getAttribute?.('href') === href,
-        );
+        const stylesheets = qa(doc, 'link[rel="stylesheet"][href]');
+        let existing = false;
+        for (let styleIndex = 0; styleIndex < stylesheets.length; styleIndex += 1) {
+          const link = stylesheets[styleIndex];
+          if (
+            link &&
+            link !== el &&
+            !bns.closestElement(link, 'noscript') &&
+            bns.readAttribute(link, 'href') === href
+          ) {
+            existing = true;
+            break;
+          }
+        }
         if (existing) {
-          el.remove?.();
+          bns.removeElement(el);
           continue;
         }
-        el.rel = 'stylesheet';
-        el.removeAttribute?.('data-kovo-deferred-style');
+        bns.setElementAttribute(el, 'rel', 'stylesheet');
+        bns.removeElementAttribute(el, 'data-kovo-deferred-style');
       }
     };
     const raf = globalThis.requestAnimationFrame;
     if (typeof raf === 'function') raf(() => raf(promote));
     else setTimeout(promote);
   };
-  for (const event of events) addEventListener(event, dispatch, { capture: true });
+  for (let index = 0; index < events.length; index += 1) {
+    addEventListener(events[index], dispatch, { capture: true });
+  }
   // SPEC.md §4.4: synthesize delegated pointerenter/pointerleave from the bubbling
   // pointerover/pointerout pair, firing only when the pointer crosses the on:* element's
   // boundary (relatedTarget outside it) so child movement does not re-fire enter/leave.
@@ -1598,6 +1742,15 @@ function installInlineKovoBootstrap(runtimeUrl, runtimeImport) {
   const nativeClosest = capturedMethod(globalThis.Element?.prototype, 'closest');
   const nativeGetAttribute = capturedMethod(globalThis.Element?.prototype, 'getAttribute');
   const nativeHasAttribute = capturedMethod(globalThis.Element?.prototype, 'hasAttribute');
+  const nativeSetAttribute = capturedMethod(globalThis.Element?.prototype, 'setAttribute');
+  const nativeRemoveAttribute = capturedMethod(globalThis.Element?.prototype, 'removeAttribute');
+  const nativeRemove = capturedMethod(globalThis.Element?.prototype, 'remove');
+  const nativeDocumentQuerySelectorAll = capturedMethod(
+    globalThis.Document?.prototype,
+    'querySelectorAll',
+  );
+  const nativeNodeListLength = capturedGetter(globalThis.NodeList?.prototype, 'length');
+  const nativeNodeListItem = capturedMethod(globalThis.NodeList?.prototype, 'item');
   const nativeIsConnected = capturedGetter(globalThis.Node?.prototype, 'isConnected');
   const nativeUrlHref = capturedGetter(globalThis.URL?.prototype, 'href');
   const nativeUrlOrigin = capturedGetter(globalThis.URL?.prototype, 'origin');
@@ -1672,6 +1825,12 @@ function installInlineKovoBootstrap(runtimeUrl, runtimeImport) {
       typeof nativeClosest !== 'function' ||
       typeof nativeGetAttribute !== 'function' ||
       typeof nativeHasAttribute !== 'function' ||
+      typeof nativeSetAttribute !== 'function' ||
+      typeof nativeRemoveAttribute !== 'function' ||
+      typeof nativeRemove !== 'function' ||
+      typeof nativeDocumentQuerySelectorAll !== 'function' ||
+      typeof nativeNodeListLength !== 'function' ||
+      typeof nativeNodeListItem !== 'function' ||
       typeof nativeIsConnected !== 'function' ||
       typeof nativeUrlHref !== 'function' ||
       typeof nativeUrlOrigin !== 'function' ||
@@ -1804,6 +1963,18 @@ function installInlineKovoBootstrap(runtimeUrl, runtimeImport) {
     const result = callCaptured(element, nativeHasAttribute, 'hasAttribute', [name]);
     return result.called && result.value === true;
   };
+  const setAttribute = (element, name, value) => {
+    if (!callCaptured(element, nativeSetAttribute, 'setAttribute', [name, value]).called) {
+      throw new TypeError('Kovo bootstrap set-attribute control is unavailable.');
+    }
+  };
+  const removeAttribute = (element, name) => {
+    if (!callCaptured(element, nativeRemoveAttribute, 'removeAttribute', [name]).called) {
+      throw new TypeError('Kovo bootstrap remove-attribute control is unavailable.');
+    }
+  };
+  const removeElement = (element) =>
+    callCaptured(element, nativeRemove, 'remove', []).called;
   const isConnected = (target) => readCaptured(target, nativeIsConnected, 'isConnected') === true;
   const snapshotEvent = (event) => ({
     altKey: readCaptured(event, nativeMouseAltKey, 'altKey') === true,
@@ -1872,22 +2043,61 @@ function installInlineKovoBootstrap(runtimeUrl, runtimeImport) {
   if (ownValue(globalThis, '__kovo_a') !== queueStream) {
     throw new TypeError('Kovo bootstrap stream queue controls are unavailable.');
   }
-  const qa = (root, selector) =>
-    root.querySelectorAll ? [...root.querySelectorAll(selector)] : [];
+  const qa = (root, selector) => {
+    const query = callCaptured(
+      root,
+      nativeDocumentQuerySelectorAll,
+      'querySelectorAll',
+      [selector],
+    );
+    if (!query.called || query.value === null || typeof query.value !== 'object') return [];
+    const length = readCaptured(query.value, nativeNodeListLength, 'length');
+    if (typeof length !== 'number' || length < 0 || length > 100_000 || length % 1 !== 0) {
+      throw new TypeError('Kovo bootstrap DOM collection length is invalid.');
+    }
+    const values = [];
+    for (let index = 0; index < length; index += 1) {
+      const item = callCaptured(query.value, nativeNodeListItem, 'item', [index]);
+      if (!item.called || item.value === null || typeof item.value !== 'object') {
+        throw new TypeError('Kovo bootstrap DOM collection item is unavailable.');
+      }
+      odp(values, values.length, {
+        configurable: true,
+        enumerable: true,
+        value: item.value,
+        writable: true,
+      });
+    }
+    return values;
+  };
   const ps = () => {
     const promote = () => {
-      for (const el of qa(doc, 'link[data-kovo-deferred-style]')) {
-        const href = el.getAttribute?.('href');
+      const deferredStyles = qa(doc, 'link[data-kovo-deferred-style]');
+      for (let index = 0; index < deferredStyles.length; index += 1) {
+        const el = deferredStyles[index];
+        if (!el) continue;
+        const href = readAttribute(el, 'href');
         if (!href) continue;
-        const existing = qa(doc, 'link[rel="stylesheet"][href]').some(
-          (link) => link !== el && !link.closest?.('noscript') && link.getAttribute?.('href') === href,
-        );
+        const stylesheets = qa(doc, 'link[rel="stylesheet"][href]');
+        let existing = false;
+        for (let styleIndex = 0; styleIndex < stylesheets.length; styleIndex += 1) {
+          const link = stylesheets[styleIndex];
+          if (
+            link &&
+            link !== el &&
+            !closestElement(link, 'noscript') &&
+            readAttribute(link, 'href') === href
+          ) {
+            existing = true;
+            break;
+          }
+        }
         if (existing) {
-          el.remove?.();
+          removeElement(el);
           continue;
         }
-        el.rel = 'stylesheet';
-        el.removeAttribute?.('data-kovo-deferred-style');
+        setAttribute(el, 'rel', 'stylesheet');
+        removeAttribute(el, 'data-kovo-deferred-style');
       }
     };
     const raf = globalThis.requestAnimationFrame;

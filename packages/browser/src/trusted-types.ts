@@ -1,7 +1,9 @@
 // SPEC §6.6: Trusted Types is browser runtime defense-in-depth, not the output proof. The
-// controller below owns the sole policy reference in a module/installer-private closure, captures
-// the host methods at boot, and checks that every minted value retains the exact reviewed bytes.
-// A public realm property is never accepted as policy identity or cached authority (C221).
+// controller below owns its policy reference in a module/installer-private closure, captures the
+// host methods at boot, and checks that every minted value retains the exact reviewed bytes. The
+// generated runtime and modular browser runtime use distinct CSP-admitted names so their private
+// controllers can coexist without enabling duplicate-policy creation. A public realm property is
+// never accepted as policy identity or cached authority (C221).
 
 /**
  * Build boot-owned Trusted Types controls for one Kovo runtime installation.
@@ -12,7 +14,10 @@
  *
  * @internal
  */
-export function createKovoTrustedTypesSecurityControls(scope: typeof globalThis = globalThis) {
+export function createKovoTrustedTypesSecurityControls(
+  scope: typeof globalThis = globalThis,
+  policyName: 'kovo' | 'kovo-browser' = 'kovo',
+) {
   const NativeObject = Object;
   const NativeReflect = Reflect;
   const nativeReflectApply = NativeReflect.apply;
@@ -120,7 +125,7 @@ export function createKovoTrustedTypesSecurityControls(scope: typeof globalThis 
     }
     try {
       policy = apply<object>(createPolicy, factory, [
-        'kovo',
+        policyName,
         {
           createHTML: (input: string) => input,
           createScriptURL: (input: string) => input,
@@ -198,7 +203,7 @@ export function createKovoTrustedTypesSecurityControls(scope: typeof globalThis 
   return { createHTML, createScriptURL, readHTML };
 }
 
-let trustedTypesControls = createKovoTrustedTypesSecurityControls();
+let trustedTypesControls = createKovoTrustedTypesSecurityControls(globalThis, 'kovo-browser');
 
 /** Route framework-reviewed HTML through Kovo's boot-owned Trusted Types policy. @internal */
 export function kovoCreateHTML(html: string): string {
@@ -217,5 +222,5 @@ export function kovoReadTrustedHTML(value: unknown): string | undefined {
 
 /** Reset the private controller against the current realm. Test-only. @internal */
 export function __resetKovoTrustedTypePolicyForTest(): void {
-  trustedTypesControls = createKovoTrustedTypesSecurityControls();
+  trustedTypesControls = createKovoTrustedTypesSecurityControls(globalThis, 'kovo-browser');
 }

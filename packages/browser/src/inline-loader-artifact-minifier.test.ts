@@ -28,6 +28,12 @@ describe('inline loader minified artifact', () => {
     );
     expect(kovoLoaderSource).toBe(kovoLoaderSource.trim());
     expect(kovoLoaderSource).not.toMatch(/\n|\s{2,}/);
+    // SPEC §6.6: the shipped bootstrap must not re-enter mutable collection
+    // prototypes after it captures its replay/style controls.
+    expect(inlineKovoLoaderBootstrapInstallerSource).not.toContain('.some(');
+    expect(inlineKovoLoaderBootstrapInstallerSource).not.toContain('.forEach(');
+    expect(inlineKovoLoaderBootstrapInstallerSource).not.toContain('for(const ');
+    expect(inlineKovoLoaderBootstrapInstallerSource).not.toContain('[...');
     expect(kovoLoaderSource).toMatch(
       /^\(function installInlineKovoBootstrap\(\w+,\w+\)\{.*\}\)\("\/c\/kovo-runtime\.client\.js",\(url\)=>import\(url\)\);$/,
     );
@@ -200,8 +206,14 @@ describe('inline loader minified artifact', () => {
     );
     expect(inlineKovoLoaderInstallerSource).toContain("dq('kovo:query',{detail:{qs:ok}});");
     expect(inlineKovoLoaderInstallerSource).toContain(
-      `for(const x of fragments){if(x.mode==='append')continue;const e=ft(x.target);if(e)for(const y of qa(e,'[kovo-c]')){const html=renderedFragmentHtmlContent(x.html);if(html.includes('kovo-c="'+y.getAttribute('kovo-c')+'"')&&(!y.getAttribute('kovo-key')&&!y.getAttribute('id')||html.includes('kovo-key="'+y.getAttribute('kovo-key')+'"')||html.includes('id="'+y.getAttribute('id')+'"')))continue;y.a?.abort();}}ai({fragments},{createHTML:(html)=>tts.createHTML(html),ff:ft,security:bns});`,
+      'for(let fragmentIndex=0;fragmentIndex<fragments.length;fragmentIndex+=1)',
     );
+    expect(inlineKovoLoaderInstallerSource).toContain(`bns.indexOf(html,'kovo-c="'+cp+'"')>=0`);
+    expect(inlineKovoLoaderInstallerSource).not.toContain('for(const x of fragments)');
+    expect(inlineKovoLoaderInstallerSource).not.toContain('html.includes(');
+    expect(inlineKovoLoaderInstallerSource).not.toContain('[...doc.head.childNodes]');
+    expect(inlineKovoLoaderInstallerSource).not.toContain('.some(');
+    expect(inlineKovoLoaderInstallerSource).not.toContain('.forEach(');
     expect(inlineKovoLoaderInstallerSource).toContain('function m(c,n,security)');
     expect(inlineKovoLoaderInstallerSource).toContain(
       'return p(chunks.fragments,(target)=>options.ff(target),options.security,(html)=>options.createHTML(html))',
@@ -218,7 +230,7 @@ describe('inline loader minified artifact', () => {
     expect(inlineKovoLoaderInstallerSource).not.toContain('body.getReader()');
     expect(inlineKovoLoaderInstallerSource).not.toContain('rr.read()');
     expect(inlineKovoLoaderInstallerSource).not.toContain('rr.releaseLock');
-    expect(inlineKovoLoaderInstallerSource).toContain("getAttribute('kovo-key')");
+    expect(inlineKovoLoaderInstallerSource).toContain("bns.ra(y,'kovo-key')");
     expect(inlineKovoLoaderInstallerSource).not.toContain('innerHTML=html');
     expect(inlineKovoLoaderInstallerSource).not.toContain('applyResponseChunks');
     expect(inlineKovoLoaderInstallerSource).toContain('detail:{qs:ok}');

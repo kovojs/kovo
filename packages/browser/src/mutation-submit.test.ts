@@ -735,6 +735,41 @@ describe('enhanced mutation submit', () => {
     expect(channel.messages).toEqual([]);
   });
 
+  it('applies a typed failure fragment normally when a streaming form receives 422', async () => {
+    const store = createQueryStore();
+    const root = new FakeMorphRoot();
+    root.targets.set('composer', new FakeMorphTarget());
+    const text = vi.fn(
+      async () =>
+        '<kovo-fragment target="composer"><form><output role="alert">failed</output></form></kovo-fragment>',
+    );
+    const fetch = vi.fn(async () => ({
+      body: new ReadableStream<Uint8Array>(),
+      headers: { get: () => null },
+      ok: false,
+      status: 422,
+      text,
+    }));
+
+    const result = await submitEnhancedMutation({
+      fetch,
+      form: {
+        action: '/_m/chat/send',
+        getAttribute(name: string) {
+          return name === 'data-mutation-stream' ? 'true' : null;
+        },
+        method: 'post',
+      },
+      formData: new FormData(),
+      root,
+      store,
+    });
+
+    expect(text).toHaveBeenCalledTimes(1);
+    expect(result.appliedFragments).toEqual(['composer']);
+    expect(root.targets.get('composer')?.html).toContain('role="alert"');
+  });
+
   it('streams opted-in enhanced submits from a readable response body', async () => {
     const store = createQueryStore();
     const root = new FakeMorphRoot();

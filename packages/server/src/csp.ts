@@ -78,26 +78,27 @@ export interface ContentSecurityPolicyOptions {
   styleSrc?: readonly string[];
   /**
    * SF (secure-framework Tier 3): when `true`, append `require-trusted-types-for 'script'`
-   * and a `trusted-types <policy>` directive that admits ONLY Kovo's sole framework
-   * policy ({@link KOVO_TRUSTED_TYPES_POLICY}). On Chromium this turns every
+   * and a `trusted-types <policies>` directive that admits only Kovo's generated
+   * ({@link KOVO_TRUSTED_TYPES_POLICY}) and modular framework policies. On Chromium this turns every
    * non-framework `innerHTML`/`script.src`/`eval` DOM-write sink into a throw —
    * runtime defense-in-depth against a slipped-through DOM-XSS (SPEC §6.6), NOT a
    * by-construction proof. {@link renderDefaultDocumentCsp} now defaults this ON because
    * every Kovo internal sink (module-side AND the always-on inline loader) routes through
-   * the policy's `createHTML`; this low-level builder still treats `true` as the explicit
+   * its private policy's `createHTML`; this low-level builder still treats `true` as the explicit
    * opt-in for callers assembling a CSP by hand.
    */
   trustedTypes?: boolean;
 }
 
 /**
- * SF (secure-framework Tier 3): the name of Kovo's single framework-owned Trusted
- * Types policy. The strict CSP admits ONLY this policy via `trusted-types kovo`
- * (no `'allow-duplicates'`), so any app or third-party attempt to create another
- * named (or the default) policy throws on Chromium. Kept in lockstep with the
- * browser-side `createPolicy('kovo', …)` call so the header and the runtime agree.
+ * SF (secure-framework Tier 3): the name of the framework-owned Trusted Types policy
+ * used by Kovo's generated runtime. The strict CSP also admits the
+ * distinct module-private `kovo-browser` policy used by the modular browser runtime;
+ * it deliberately omits `'allow-duplicates'`, so app or third-party attempts to
+ * recreate either framework policy still throw on Chromium.
  */
 export const KOVO_TRUSTED_TYPES_POLICY = 'kovo';
+const KOVO_BROWSER_TRUSTED_TYPES_POLICY = 'kovo-browser';
 
 /**
  * SF (secure-framework Tier 3): an app-facing third-party allowlist that EXTENDS
@@ -138,7 +139,8 @@ export interface DocumentCspConfig {
   reporting?: CspReportingConfig | false;
   /**
    * SF (secure-framework Tier 3): the Chromium-only Trusted Types floor, now DEFAULT-ON.
-   * Omitted/`true` emits `require-trusted-types-for 'script'` + `trusted-types kovo`; set
+   * Omitted/`true` emits `require-trusted-types-for 'script'` plus the two private Kovo
+   * policy names; set
    * `false` to opt OUT (e.g. an app embedding a third-party widget that needs its own
    * un-named TT policy, or that writes raw HTML through a sink Kovo does not route).
    */
@@ -569,15 +571,19 @@ export function renderContentSecurityPolicy(
     // Safe to default-on because EVERY framework DOM-write sink — module-side
     // `morph.ts`/`query-bindings.ts` AND the always-on inline loader's
     // `insertAdjacentHTML`/`innerHTML` fragment-apply sinks — routes through the framework
-    // `kovo` policy, so Kovo's own hydration survives enforcement on Chromium.
-    // `require-trusted-types-for 'script'` makes injection sinks throw; `trusted-types kovo`
-    // admits ONLY Kovo's sole policy (no `'allow-duplicates'`) so an attacker cannot mint a
-    // bypassing policy. Other browsers ignore both directives, leaving the cross-browser CSP
-    // floor above intact (TT is runtime DiD, not a by-construction proof — SPEC §6.6).
+    // private `kovo` / `kovo-browser` policies, so Kovo's own hydration survives enforcement on
+    // Chromium even when generated and modular runtimes coexist. `require-trusted-types-for
+    // 'script'` makes injection sinks throw; omitting `'allow-duplicates'` prevents another
+    // controller from recreating either framework policy. Other browsers ignore both directives,
+    // leaving the cross-browser CSP floor above intact (TT is runtime DiD, not a by-construction
+    // proof — SPEC §6.6).
   ];
   if (closedOptions.trustedTypes) {
     securityArrayPush(candidates, "require-trusted-types-for 'script'");
-    securityArrayPush(candidates, `trusted-types ${KOVO_TRUSTED_TYPES_POLICY}`);
+    securityArrayPush(
+      candidates,
+      `trusted-types ${KOVO_TRUSTED_TYPES_POLICY} ${KOVO_BROWSER_TRUSTED_TYPES_POLICY}`,
+    );
   }
   const directives: string[] = [];
   for (let index = 0; index < candidates.length; index += 1) {

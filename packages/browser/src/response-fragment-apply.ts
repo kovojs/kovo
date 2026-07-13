@@ -137,13 +137,24 @@ export function p(
         // the scroll anchor — the target is the scroll container, so its scrollTop is
         // shifted by the inserted height to keep existing ("load older") content
         // visually fixed (no jump). Inert-until-touched holds as for append.
-        const ex = new Set<string>();
+        const ex: string[] = [];
+        const rememberKey = (key: string): boolean => {
+          for (let keyIndex = 0; keyIndex < ex.length; keyIndex += 1) {
+            if (ex[keyIndex] === key) return false;
+          }
+          securityArrayAppend(
+            ex,
+            key,
+            'Browser packages/browser/src/response-fragment-apply.ts keyed prepend snapshot',
+          );
+          return true;
+        };
         const currentRows = security.snapshotElementChildren(e);
         for (let index = 0; index < currentRows.length; index += 1) {
           const current = currentRows[index];
           if (!current) continue;
           const ck = k(current, security);
-          if (ck !== null) ex.add(ck);
+          if (ck !== null) rememberKey(ck);
         }
         const ins: Element[] = [];
         const incoming = security.snapshotElementChildren(content);
@@ -151,7 +162,7 @@ export function p(
           const n = incoming[index];
           if (!n) continue;
           const nk = k(n, security);
-          if (nk !== null && ex.has(nk)) continue;
+          if (nk !== null && !rememberKey(nk)) continue;
           securityArrayAppend(
             ins,
             n,
