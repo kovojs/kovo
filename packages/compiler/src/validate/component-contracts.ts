@@ -3,7 +3,12 @@ import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
 import {
   compilerArrayAppend,
   compilerArrayLength,
+  compilerCreateSet,
   compilerOwnDataValue,
+  compilerSetAdd,
+  compilerSetHas,
+  compilerStringIndexOf,
+  compilerStringSlice,
 } from '../compiler-security-intrinsics.js';
 import { type CompilerDiagnostic, type DiagnosticFactory } from '../diagnostics.js';
 import { componentQueryShapes, queryShapePaths } from '../analyze/query-shapes.js';
@@ -32,6 +37,7 @@ import {
   type NamedImportModel,
   type PropertyAccessPathModel,
   type RenderInputModel,
+  type SourceSpan,
   type WebhookRecordChangeFact,
   webhookHandlers,
 } from '../scan/parse.js';
@@ -63,25 +69,55 @@ export function validateServerFactsInLocalState(
 ): CompilerDiagnostic[] {
   const stateObject = componentStateReturnObjectModel(model);
   const queryNames = componentOptionObjectKeys(model, 'queries');
-  if (queryNames.length === 0 || !stateObject || stateObject.entries.length === 0) return [];
+  const queryNameLength = compilerArrayLength(queryNames, 'Local-state query names');
+  if (queryNameLength === 0 || !stateObject) return [];
+  const entryLength = compilerArrayLength(stateObject.entries, 'Local-state entries');
+  if (entryLength === 0) return [];
 
-  const queryRoots = new Set(queryNames);
-  const serverFactEntry = stateObject.entries.find((entry) =>
-    entry.valuePropertyAccesses?.some((access) => queryRoots.has(queryRootFromPath(access.path))),
-  );
-  const access = serverFactEntry?.valuePropertyAccesses?.find((candidate) =>
-    queryRoots.has(queryRootFromPath(candidate.path)),
-  );
-  if (!access) return [];
-
-  return [diagnostics.at('KV301', { start: access.start, length: access.path.length })];
+  const queryRoots = compilerCreateSet<string>();
+  for (let index = 0; index < queryNameLength; index += 1) {
+    const query = compilerOwnDataValue(queryNames, index, 'Local-state query names');
+    if (typeof query !== 'string') {
+      throw new TypeError(`Local-state query names[${index}] must be an own string.`);
+    }
+    compilerSetAdd(queryRoots, query);
+  }
+  for (let entryIndex = 0; entryIndex < entryLength; entryIndex += 1) {
+    const entry = compilerOwnDataValue(stateObject.entries, entryIndex, 'Local-state entries');
+    if (!entry || typeof entry !== 'object') {
+      throw new TypeError(`Local-state entries[${entryIndex}] must be own data.`);
+    }
+    const accesses = (entry as { valuePropertyAccesses?: readonly PropertyAccessPathModel[] })
+      .valuePropertyAccesses;
+    if (!accesses) continue;
+    const accessLength = compilerArrayLength(accesses, `Local-state entry ${entryIndex} accesses`);
+    for (let accessIndex = 0; accessIndex < accessLength; accessIndex += 1) {
+      const access = compilerOwnDataValue(
+        accesses,
+        accessIndex,
+        `Local-state entry ${entryIndex} accesses`,
+      ) as PropertyAccessPathModel | undefined;
+      if (!access) {
+        throw new TypeError(
+          `Local-state entry ${entryIndex} accesses[${accessIndex}] must be own data.`,
+        );
+      }
+      if (!compilerSetHas(queryRoots, queryRootFromPath(access.path))) continue;
+      return [diagnostics.at('KV301', { start: access.start, length: access.path.length })];
+    }
+  }
+  return [];
 }
 
 export function validateReservedQueryNames(
   diagnostics: DiagnosticFactory,
   model: ComponentModuleModel,
 ): CompilerDiagnostic[] {
-  return componentOptionObjectKeys(model, 'queries').includes('state')
+  return denseStringArrayIncludes(
+    componentOptionObjectKeys(model, 'queries'),
+    'state',
+    'Reserved query names',
+  )
     ? [diagnostics.at('KV304', undefined, 'state')]
     : [];
 }
@@ -428,13 +464,33 @@ export function validateEventPayloads(
   const queryShapes = componentQueryShapes(options);
   if (!queryShapes) return [];
 
-  const queryPaths = new Set(queryShapePaths(queryShapes));
-  const overlapping = eventPayloads(model).filter((payload) => queryPaths.has(payload.path));
-  if (overlapping.length === 0) return [];
+  const queryPaths = compilerCreateSet<string>();
+  const queryShapePathValues = queryShapePaths(queryShapes);
+  const queryPathLength = compilerArrayLength(queryShapePathValues, 'Query shape paths');
+  for (let index = 0; index < queryPathLength; index += 1) {
+    const path = compilerOwnDataValue(queryShapePathValues, index, 'Query shape paths');
+    if (typeof path !== 'string') throw new TypeError(`Query shape paths[${index}] must be own.`);
+    compilerSetAdd(queryPaths, path);
+  }
 
-  return dedupeBy(overlapping, (payload) => payload.path).map((payload) =>
-    diagnostics.at('KV320', { start: payload.index, length: payload.length }, payload.path),
-  );
+  const seen = compilerCreateSet<string>();
+  const result: CompilerDiagnostic[] = [];
+  const payloads = eventPayloads(model);
+  const payloadLength = compilerArrayLength(payloads, 'Event payload paths');
+  for (let index = 0; index < payloadLength; index += 1) {
+    const payload = compilerOwnDataValue(payloads, index, 'Event payload paths') as
+      | EventPayloadPath
+      | undefined;
+    if (!payload) throw new TypeError(`Event payload paths[${index}] must be own data.`);
+    if (!compilerSetHas(queryPaths, payload.path) || compilerSetHas(seen, payload.path)) continue;
+    compilerSetAdd(seen, payload.path);
+    compilerArrayAppend(
+      result,
+      diagnostics.at('KV320', { start: payload.index, length: payload.length }, payload.path),
+      'Event payload diagnostics',
+    );
+  }
+  return result;
 }
 
 export function validateDirectDbAccess(
@@ -772,25 +828,54 @@ function kv311Diagnostic(
 
 function eventPayloads(model: ComponentModuleModel): EventPayloadPath[] {
   const payloads: EventPayloadPath[] = [];
-
-  for (const call of callExpressions(model).filter((item) => item.name === 'emit')) {
-    const span = call.argumentSpans[1];
-    const paths = call.argumentPropertyAccesses[1]?.map((access) => access.path) ?? [];
-    if (paths.length === 0) continue;
+  const calls = callExpressions(model);
+  const callLength = compilerArrayLength(calls, 'Event call expressions');
+  for (let callIndex = 0; callIndex < callLength; callIndex += 1) {
+    const call = compilerOwnDataValue(calls, callIndex, 'Event call expressions');
+    if (!call || typeof call !== 'object') {
+      throw new TypeError(`Event call expressions[${callIndex}] must be own data.`);
+    }
+    const typedCall = call as (typeof calls)[number];
+    if (typedCall.name !== 'emit') continue;
+    const span = compilerOwnDataValue(
+      typedCall.argumentSpans,
+      1,
+      `Event call ${callIndex} argument spans`,
+    ) as SourceSpan | undefined;
+    const paths = compilerOwnDataValue(
+      typedCall.argumentPropertyAccesses,
+      1,
+      `Event call ${callIndex} argument property accesses`,
+    ) as readonly PropertyAccessPathModel[] | undefined;
+    if (!paths || compilerArrayLength(paths, `Event call ${callIndex} payload paths`) === 0) {
+      continue;
+    }
     if (!span) continue;
 
-    payloads.push(
-      ...paths.map((path) => ({
-        index: span.start,
-        length: span.end - span.start,
-        path,
-      })),
-    );
+    const pathLength = compilerArrayLength(paths, `Event call ${callIndex} payload paths`);
+    for (let pathIndex = 0; pathIndex < pathLength; pathIndex += 1) {
+      const access = compilerOwnDataValue(
+        paths,
+        pathIndex,
+        `Event call ${callIndex} payload paths`,
+      ) as PropertyAccessPathModel | undefined;
+      if (!access) {
+        throw new TypeError(
+          `Event call ${callIndex} payload paths[${pathIndex}] must be own data.`,
+        );
+      }
+      compilerArrayAppend(
+        payloads,
+        { index: span.start, length: span.end - span.start, path: access.path },
+        'Event payload paths',
+      );
+    }
   }
 
   return payloads;
 }
 
 function queryRootFromPath(path: string): string {
-  return path.split('.', 1)[0] ?? path;
+  const dot = compilerStringIndexOf(path, '.');
+  return dot === -1 ? path : compilerStringSlice(path, 0, dot);
 }

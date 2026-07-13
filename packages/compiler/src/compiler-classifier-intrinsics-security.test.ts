@@ -367,6 +367,77 @@ export const input = s.string().pattern(buildPattern());
     expect(result?.diagnostics.filter((diagnostic) => diagnostic.code === 'KV434')).toHaveLength(1);
   });
 
+  it('does not suppress query-derived event payload diagnostics through late Array.filter', () => {
+    const nativeFilter = Array.prototype.filter;
+    const nativeApply = Reflect.apply;
+    let poisonHits = 0;
+    let result: ReturnType<typeof compileComponentModule> | undefined;
+    try {
+      Array.prototype.filter = function poisonedEmitCallFilter<T>(
+        callback: (value: T, index: number, array: T[]) => unknown,
+        thisArg?: unknown,
+      ): T[] {
+        const first = this[0] as { argumentPropertyAccesses?: unknown; name?: unknown } | undefined;
+        if (
+          first?.name === 'emit' &&
+          Array.isArray(first.argumentPropertyAccesses) &&
+          new Error().stack?.includes('eventPayloads')
+        ) {
+          poisonHits += 1;
+          return [];
+        }
+        return nativeApply(nativeFilter, this, [callback, thisArg]);
+      };
+      result = compileComponentModule({
+        fileName: 'cart.events.tsx',
+        queryShapes: { product: { id: 'string', unitPrice: 'number' } },
+        source: `
+export function notifyPrice(product, emit) {
+  emit('cart:added', { product: { unitPrice: product.unitPrice } });
+}
+`,
+      });
+    } finally {
+      Array.prototype.filter = nativeFilter;
+    }
+    expect(result?.diagnostics.filter((diagnostic) => diagnostic.code === 'KV320')).toHaveLength(1);
+    expect(poisonHits).toBe(0);
+  });
+
+  it('does not suppress server-fact local-state diagnostics through late Array.find', () => {
+    const nativeFind = Array.prototype.find;
+    const nativeApply = Reflect.apply;
+    let poisonHits = 0;
+    let result: ReturnType<typeof compileComponentModule> | undefined;
+    try {
+      Array.prototype.find = function poisonedStateEntryFind<T>(
+        callback: (value: T, index: number, array: T[]) => unknown,
+        thisArg?: unknown,
+      ): T | undefined {
+        const first = this[0] as { valuePropertyAccesses?: unknown } | undefined;
+        if (Array.isArray(first?.valuePropertyAccesses)) {
+          poisonHits += 1;
+          return undefined;
+        }
+        return nativeApply(nativeFind, this, [callback, thisArg]);
+      };
+      result = compileComponentModule({
+        fileName: 'cart-badge.tsx',
+        source: `
+export const CartBadge = component({
+  queries: { cart: cartQuery },
+  state: () => ({ saved: cart.count }),
+  render: ({ cart }, state) => <button disabled={cart.count === 0}>{state.saved}</button>,
+});
+`,
+      });
+    } finally {
+      Array.prototype.find = nativeFind;
+    }
+    expect(result?.diagnostics.filter((diagnostic) => diagnostic.code === 'KV301')).toHaveLength(1);
+    expect(poisonHits).toBe(0);
+  });
+
   it('does not publish a captured server secret through stateful Array.filter replacement', () => {
     const nativeFilter = Array.prototype.filter;
     const nativeApply = Reflect.apply;

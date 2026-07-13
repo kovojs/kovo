@@ -670,14 +670,18 @@ function componentOptionFor(
 function objectEntryKeys(entries: readonly ObjectLiteralEntry[]): string[] {
   const source = snapshotCompilerModelArray(entries, 'Component option object entries');
   const keys: string[] = [];
-  for (let index = 0; index < source.length; index += 1) keys[index] = source[index]!.key;
+  for (let index = 0; index < source.length; index += 1) {
+    compilerArrayAppend(keys, source[index]!.key, 'Component option object keys');
+  }
   return keys;
 }
 
 export function componentRenderInputs(model: ComponentModuleModel): string[] {
   const inputs = componentRenderInputModels(model);
   const names: string[] = [];
-  for (let index = 0; index < inputs.length; index += 1) names[index] = inputs[index]!.name;
+  for (let index = 0; index < inputs.length; index += 1) {
+    compilerArrayAppend(names, inputs[index]!.name, 'Component render input names');
+  }
   return names;
 }
 
@@ -728,7 +732,17 @@ export function componentStateReturnObjectModel(
 }
 
 export function componentStateReturnObjectKeys(model: ComponentModuleModel): string[] {
-  return [...(componentStateReturnObjectModel(model)?.entries.map((entry) => entry.key) ?? [])];
+  const entries = componentStateReturnObjectModel(model)?.entries ?? [];
+  const result: string[] = [];
+  const length = compilerArrayLength(entries, 'Component state return entries');
+  for (let index = 0; index < length; index += 1) {
+    const entry = compilerOwnDataValue(entries, index, 'Component state return entries') as
+      | ObjectLiteralEntry
+      | undefined;
+    if (!entry) throw new TypeError(`Component state return entries[${index}] must be own data.`);
+    compilerArrayAppend(result, entry.key, 'Component state return keys');
+  }
+  return result;
 }
 
 export function componentModelForSourceSpan(
@@ -810,7 +824,7 @@ function snapshotCompilerModelArray<Value>(values: readonly Value[], label: stri
     if (value === undefined) {
       throw new TypeError(`${label}[${index}] must be an own compiler model fact.`);
     }
-    snapshot[index] = value;
+    compilerArrayAppend(snapshot, value, label);
   }
   return snapshot;
 }
