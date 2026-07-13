@@ -1,6 +1,7 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { createServer as createNetServer } from 'node:net';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { afterEach, describe, expect, it } from 'vitest';
@@ -56,7 +57,7 @@ describe('kovo dev', () => {
   });
 
   it('resolves dev paths against the boot-pinned invocation cwd', () => {
-    const outside = mkdtempSync(join('/private/tmp', 'kovo-dev-cwd-mutation-'));
+    const outside = mkdtempSync(join(tmpdir(), 'kovo-dev-cwd-mutation-'));
     temporaryRoots.push(outside);
     const previousCwd = process.cwd();
     try {

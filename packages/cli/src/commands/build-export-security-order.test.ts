@@ -8,6 +8,7 @@ import {
   symlinkSync,
   writeFileSync,
 } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
@@ -433,7 +434,7 @@ export default createApp({
 
   it('pins build and export paths before authored process.chdir() in the real CLI', () => {
     const root = cliFixtureRoot('invocation-cwd');
-    const outside = mkdtempSync(join('/private/tmp', 'kovo-cli-cwd-outside-'));
+    const outside = mkdtempSync(join(tmpdir(), 'kovo-cli-cwd-outside-'));
     const appPath = join(root, 'app.ts');
     try {
       writeFileSync(
