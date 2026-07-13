@@ -11,6 +11,15 @@ import type { TouchGraph } from '@kovojs/core/internal/graph';
 
 import type { PgliteTestDb } from '../pglite.js';
 import type { DbVerificationConfig } from '../verifier.js';
+import {
+  verifierDenseArraySnapshot,
+  verifierDefineProperty,
+  verifierFreeze,
+  verifierGetOwnPropertyDescriptor,
+  verifierNullRecord,
+  verifierOwnKeys,
+} from '../verifier-security-intrinsics.js';
+import { snapshotDbVerificationConfig, snapshotTouchGraph } from '../verifier-snapshots.js';
 
 /**
  * The per-request context a fixture's route/query/mutation handlers receive. The
@@ -76,14 +85,119 @@ export interface KovoFixtureDescriptor {
  * });
  */
 export function defineFixture(definition: FixtureDefinition): KovoFixtureDescriptor {
-  return { [FIXTURE_BRAND]: true, definition };
+  return snapshotFixtureDescriptor({ [FIXTURE_BRAND]: true, definition });
 }
 
 /** Narrow an SSR-loaded module's default export to a fixture descriptor. */
 export function isFixtureDescriptor(value: unknown): value is KovoFixtureDescriptor {
+  if (typeof value !== 'object' || value === null) return false;
+  const brand = verifierGetOwnPropertyDescriptor(value, FIXTURE_BRAND);
+  const definition = verifierGetOwnPropertyDescriptor(value, 'definition');
   return (
-    typeof value === 'object' &&
-    value !== null &&
-    (value as Record<string, unknown>)[FIXTURE_BRAND] === true
+    brand !== undefined &&
+    'value' in brand &&
+    brand.value === true &&
+    definition !== undefined &&
+    'value' in definition &&
+    typeof definition.value === 'object' &&
+    definition.value !== null
   );
+}
+
+/** @internal Snapshot a foreign-realm fixture declaration before authored setup can run. */
+export function snapshotFixtureDescriptor(value: unknown): KovoFixtureDescriptor {
+  if (!isFixtureDescriptor(value)) {
+    throw new TypeError('Fixture descriptor must carry stable own brand and definition data.');
+  }
+  if (ownData(value, FIXTURE_BRAND, 'fixture descriptor') !== true) {
+    throw new TypeError('Fixture descriptor brand must be stable own data.');
+  }
+  const definition = ownData(value, 'definition', 'fixture descriptor') as object;
+  const app = ownData(definition, 'app', 'fixture definition');
+  if (typeof app !== 'function' && (typeof app !== 'object' || app === null)) {
+    throw new TypeError('fixture definition.app must be a stable own app object or factory.');
+  }
+  const schema = snapshotFixtureSchema(ownData(definition, 'schema', 'fixture definition'));
+  const seed = ownData(definition, 'seed', 'fixture definition');
+  if (seed !== undefined && typeof seed !== 'function') {
+    throw new TypeError('fixture definition.seed must be a stable own function.');
+  }
+  const touchGraph = ownData(definition, 'touchGraph', 'fixture definition');
+  const verification = ownData(definition, 'verification', 'fixture definition');
+  if ((touchGraph === undefined) !== (verification === undefined)) {
+    throw new TypeError(
+      'fixture definition touchGraph and verification must be supplied together.',
+    );
+  }
+  const routeReads = ownData(definition, 'routeReads', 'fixture definition');
+  const stableDefinition: FixtureDefinition = verifierFreeze({
+    app: app as FixtureAppFactory,
+    ...(routeReads === undefined ? {} : { routeReads: snapshotRouteReads(routeReads) }),
+    ...(schema === undefined ? {} : { schema }),
+    ...(seed === undefined ? {} : { seed: seed as NonNullable<FixtureDefinition['seed']> }),
+    ...(touchGraph === undefined
+      ? {}
+      : {
+          touchGraph: snapshotTouchGraph(touchGraph as TouchGraph),
+          verification: snapshotDbVerificationConfig(verification as DbVerificationConfig),
+        }),
+  });
+  return verifierFreeze({ [FIXTURE_BRAND]: true, definition: stableDefinition });
+}
+
+function ownData(value: object, property: PropertyKey, label: string): unknown {
+  const first = verifierGetOwnPropertyDescriptor(value, property);
+  const second = verifierGetOwnPropertyDescriptor(value, property);
+  if (first === undefined && second === undefined) return undefined;
+  if (
+    first === undefined ||
+    second === undefined ||
+    !('value' in first) ||
+    !('value' in second) ||
+    first.value !== second.value
+  ) {
+    throw new TypeError(`${label}.${String(property)} must be a stable own data property.`);
+  }
+  return first.value;
+}
+
+function snapshotFixtureSchema(value: unknown): string | readonly string[] | undefined {
+  if (value === undefined || typeof value === 'string') return value;
+  return verifierDenseArraySnapshot(value, 'fixture definition.schema', (statement) => {
+    if (typeof statement !== 'string') {
+      throw new TypeError('fixture definition.schema entries must be strings.');
+    }
+    return statement;
+  });
+}
+
+function snapshotRouteReads(value: unknown): Readonly<Record<string, readonly string[]>> {
+  if (typeof value !== 'object' || value === null) {
+    throw new TypeError('fixture definition.routeReads must be an own-data object.');
+  }
+  const snapshot = verifierNullRecord<readonly string[]>();
+  const paths = verifierOwnKeys(value);
+  for (let index = 0; index < paths.length; index += 1) {
+    const path = paths[index];
+    if (typeof path !== 'string') {
+      throw new TypeError('fixture definition.routeReads must not contain symbol properties.');
+    }
+    const reads = ownData(value, path, 'fixture definition.routeReads');
+    verifierDefineProperty(snapshot, path, {
+      configurable: false,
+      enumerable: true,
+      value: verifierDenseArraySnapshot(
+        reads,
+        `fixture definition.routeReads.${path}`,
+        (domain) => {
+          if (typeof domain !== 'string') {
+            throw new TypeError(`fixture definition.routeReads.${path} entries must be strings.`);
+          }
+          return domain;
+        },
+      ),
+      writable: false,
+    });
+  }
+  return verifierFreeze(snapshot);
 }

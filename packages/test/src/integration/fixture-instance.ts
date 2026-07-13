@@ -33,7 +33,11 @@ import {
   verifierUrlPathname,
 } from '../verifier-security-intrinsics.js';
 import { snapshotDomains, snapshotQueryReadDomains } from '../verifier-snapshots.js';
-import type { KovoFixtureDescriptor, KovoFixtureRequest } from './define-fixture.js';
+import {
+  snapshotFixtureDescriptor,
+  type KovoFixtureDescriptor,
+  type KovoFixtureRequest,
+} from './define-fixture.js';
 
 const nativeDecodeURIComponent = globalThis.decodeURIComponent;
 const emptyDeclaredReads = snapshotDomains([]);
@@ -99,7 +103,8 @@ export async function createFixtureInstance(
   createRequestHandler: FixtureRequestHandlerFactory,
   prepareApp: FixtureAppPreparer = (app) => ({ app, managesDb: false }),
 ): Promise<FixtureInstance> {
-  const { definition } = descriptor;
+  const { definition } = snapshotFixtureDescriptor(descriptor);
+  const stableRouteReadPolicy = snapshotRouteReadPolicy(definition);
   let rawDb: PgliteTestDb;
   let db: PgliteTestDb;
   let inspectionDb: PgliteTestDb;
@@ -141,7 +146,7 @@ export async function createFixtureInstance(
     app = prepared.app;
     appManagesDb = prepared.managesDb;
     queryReadPolicy = verifier ? snapshotQueryReadPolicy(app) : verifierMap();
-    routeReadPolicy = verifier ? snapshotRouteReadPolicy(definition) : verifierMap();
+    routeReadPolicy = verifier ? stableRouteReadPolicy : verifierMap();
     dispatch = createRequestHandler(app);
   };
 

@@ -8,7 +8,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import type { PgliteTestDb } from '../pglite.js';
 import { deferred } from '../test-fixtures.js';
-import type { KovoFixtureDescriptor } from './define-fixture.js';
+import { isFixtureDescriptor, type KovoFixtureDescriptor } from './define-fixture.js';
 import { createFixtureInstance, type FixtureInstance } from './fixture-instance.js';
 
 let instance: FixtureInstance | undefined;
@@ -19,6 +19,73 @@ afterEach(async () => {
 });
 
 describe('integration fixture verifier security', () => {
+  it('requires an exact own fixture brand without invoking accessors', () => {
+    expect(
+      isFixtureDescriptor({
+        definition: { app: { queries: [] } },
+        __proto__: { __kovoIntegrationFixture: true },
+      }),
+    ).toBe(false);
+
+    let invoked = false;
+    const accessor = {
+      definition: { app: { queries: [] } },
+      get __kovoIntegrationFixture() {
+        invoked = true;
+        return true;
+      },
+    };
+    expect(isFixtureDescriptor(accessor)).toBe(false);
+    expect(invoked).toBe(false);
+  });
+
+  it('snapshots route-read policy before an authored app factory can widen it', async () => {
+    let db!: PgliteTestDb;
+    const routeReads = { '/': [] as string[] };
+    const app = { queries: [] } as unknown as KovoApp;
+    const descriptor: KovoFixtureDescriptor = {
+      __kovoIntegrationFixture: true,
+      definition: {
+        app: ({ db: fixtureDb }) => {
+          db = fixtureDb;
+          routeReads['/'] = ['product'];
+          return app;
+        },
+        routeReads,
+        schema: 'create table products (id text primary key)',
+        touchGraph: {},
+        verification: { domainByTable: { products: 'product' } },
+      },
+    };
+
+    instance = await createFixtureInstance(descriptor, () => async () => {
+      await db.read('products');
+      return new Response('ok');
+    });
+
+    const response = await instance.handle(new Request('http://fixture.local/'));
+    expect(response.status).toBe(500);
+    await expect(response.text()).resolves.toContain('KV407');
+  });
+
+  it('rejects fixture definition accessors without invoking authored code', async () => {
+    let invoked = false;
+    const descriptor = {
+      __kovoIntegrationFixture: true,
+      definition: {
+        get app() {
+          invoked = true;
+          return { queries: [] };
+        },
+      },
+    } as unknown as KovoFixtureDescriptor;
+
+    await expect(
+      createFixtureInstance(descriptor, () => async () => new Response('ok')),
+    ).rejects.toThrow(/stable own data property/u);
+    expect(invoked).toBe(false);
+  });
+
   it('C150 snapshots query policy before late definition mutation and find/map hooks', async () => {
     const reads = [{ key: 'cart' }];
     let db!: PgliteTestDb;
