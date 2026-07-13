@@ -4171,8 +4171,20 @@ export interface RuntimeTableSecurityManifestOwnerVia {
   parentTable: string;
 }
 
+/** @internal Exact author-supplied authorization posture bound into generated runtime policy. */
+export type RuntimeTableSecurityManifestAuthzPolicy =
+  | {
+      justification: string;
+      kind: 'guard-assertion';
+    }
+  | {
+      kind: 'sql';
+      sql: string;
+    };
+
 /** @internal Compiler-owned runtime security facts for one physical Drizzle table. */
 export interface RuntimeTableSecurityManifestTable {
+  authzPolicy?: RuntimeTableSecurityManifestAuthzPolicy;
   authorizationClassifications: readonly AuthzCensusClassification[];
   columns: readonly RuntimeTableSecurityManifestColumn[];
   governedColumnKeys: readonly string[];
@@ -4261,6 +4273,7 @@ function runtimeTableSecurityManifestFromProjectExtraction(
         ? undefined
         : { columnKey: ownerColumn.key, columnName: ownerColumn.name };
     const ownerVia = runtimeManifestOwnerVia(draft, drafts, extraction.tableNamesBySymbol);
+    const authzPolicy = runtimeManifestAuthzPolicy(draft);
     const secretDeclared = domainAnnotation?.secret !== undefined;
     const secretColumnKeys = runtimeManifestAnnotatedColumnKeys(
       draft.columns,
@@ -4289,6 +4302,7 @@ function runtimeTableSecurityManifestFromProjectExtraction(
     }
 
     tables.push({
+      ...(authzPolicy === undefined ? {} : { authzPolicy }),
       authorizationClassifications: classifications,
       columns: draft.columns,
       governedColumnKeys: [...governedColumnKeys].sort(compareRuntimeManifestStrings),
@@ -4301,6 +4315,117 @@ function runtimeTableSecurityManifestFromProjectExtraction(
   }
   tables.sort((left, right) => compareRuntimeManifestStrings(left.name, right.name));
   return { tables };
+}
+
+function runtimeManifestAuthzPolicy(
+  draft: RuntimeTableSecurityManifestDraft,
+): RuntimeTableSecurityManifestAuthzPolicy | undefined {
+  const annotationCall = draft.initializer.getArguments().find(isKovoAnnotationCall);
+  const annotationObject =
+    annotationCall && Node.isCallExpression(annotationCall)
+      ? annotationCall.getArguments()[0]
+      : undefined;
+  const policy =
+    annotationObject === undefined
+      ? undefined
+      : objectPropertyInitializer(annotationObject, 'authzPolicy');
+  if (policy === undefined) return undefined;
+
+  const canonical = runtimeManifestCanonicalAuthzPolicy(policy, new Set(), 0);
+  if (canonical !== undefined) return canonical;
+
+  throw new TypeError(
+    `KV414: compiler-bound authzPolicy for table ${draft.name} must be an exact string literal, a no-substitution sql template, or sql.raw(<literal>); dynamic/interpolated policy authority fails closed (SPEC \u00a76.6/\u00a710.3).`,
+  );
+}
+
+function runtimeManifestCanonicalAuthzPolicy(
+  node: Node,
+  seen: ReadonlySet<string>,
+  depth: number,
+): RuntimeTableSecurityManifestAuthzPolicy | undefined {
+  if (depth > 16) return undefined;
+  const expression = unwrappedStaticExpressionNode(node);
+  if (Node.isStringLiteral(expression) || Node.isNoSubstitutionTemplateLiteral(expression)) {
+    return { justification: expression.getLiteralText(), kind: 'guard-assertion' };
+  }
+
+  if (Node.isTaggedTemplateExpression(expression)) {
+    const template = expression.getTemplate();
+    if (
+      Node.isNoSubstitutionTemplateLiteral(template) &&
+      runtimeManifestIsSqlTag(expression.getTag())
+    ) {
+      return { kind: 'sql', sql: template.getLiteralText() };
+    }
+    return undefined;
+  }
+
+  if (Node.isCallExpression(expression)) {
+    const callee = unwrappedStaticExpressionNode(expression.getExpression());
+    if (
+      Node.isPropertyAccessExpression(callee) &&
+      callee.getName() === 'raw' &&
+      runtimeManifestIsSqlTag(callee.getExpression())
+    ) {
+      const [value] = expression.getArguments();
+      const literal = value && unwrappedStaticExpressionNode(value);
+      return literal &&
+        (Node.isStringLiteral(literal) || Node.isNoSubstitutionTemplateLiteral(literal))
+        ? { kind: 'sql', sql: literal.getLiteralText() }
+        : undefined;
+    }
+  }
+
+  if (!Node.isIdentifier(expression)) return undefined;
+  const symbol = expression.getSymbol();
+  const target = symbol?.getAliasedSymbol() ?? symbol;
+  for (const declaration of target?.getDeclarations() ?? []) {
+    if (!Node.isVariableDeclaration(declaration)) continue;
+    const list = declaration.getVariableStatement()?.getDeclarationList();
+    if (list?.getDeclarationKind() !== 'const') continue;
+    const initializer = declaration.getInitializer();
+    if (initializer === undefined) continue;
+    const key = `${declaration.getSourceFile().getFilePath()}:${declaration.getStart()}`;
+    if (seen.has(key)) return undefined;
+    const nextSeen = new Set(seen);
+    nextSeen.add(key);
+    return runtimeManifestCanonicalAuthzPolicy(initializer, nextSeen, depth + 1);
+  }
+  return undefined;
+}
+
+function runtimeManifestIsSqlTag(node: Node): boolean {
+  const expression = unwrappedStaticExpressionNode(node);
+  const sourceFile = expression.getSourceFile();
+  if (Node.isIdentifier(expression)) {
+    return sourceFile.getImportDeclarations().some((declaration) => {
+      if (!runtimeManifestSqlModule(declaration.getModuleSpecifierValue())) return false;
+      return declaration
+        .getNamedImports()
+        .some(
+          (specifier) =>
+            specifier.getName() === 'sql' &&
+            (specifier.getAliasNode()?.getText() ?? specifier.getName()) === expression.getText(),
+        );
+    });
+  }
+  if (!Node.isPropertyAccessExpression(expression) || expression.getName() !== 'sql') {
+    return false;
+  }
+  const receiver = unwrappedStaticExpressionNode(expression.getExpression());
+  if (!Node.isIdentifier(receiver)) return false;
+  return sourceFile
+    .getImportDeclarations()
+    .some(
+      (declaration) =>
+        runtimeManifestSqlModule(declaration.getModuleSpecifierValue()) &&
+        declaration.getNamespaceImport()?.getText() === receiver.getText(),
+    );
+}
+
+function runtimeManifestSqlModule(specifier: string): boolean {
+  return specifier === 'drizzle-orm' || specifier === '@kovojs/drizzle';
 }
 
 function runtimeManifestColumns(initializer: CallExpression): RuntimeTableSecurityManifestColumn[] {

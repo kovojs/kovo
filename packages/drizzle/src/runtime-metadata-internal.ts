@@ -2,6 +2,7 @@ import { isKovoRuntimeMetadataCollectionFacade } from './runtime-security-intrin
 
 export { extractCompilerBoundKovoRuntimeDbMetadata } from './runtime-metadata.js';
 export type {
+  KovoRuntimeTableSecurityManifestAuthzPolicy,
   KovoRuntimeTableSecurityManifest,
   KovoRuntimeTableSecurityManifestColumn,
   KovoRuntimeTableSecurityManifestOwner,

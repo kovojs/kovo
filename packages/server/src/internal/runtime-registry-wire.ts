@@ -60,8 +60,20 @@ export interface RuntimeTableSecurityWireOwnerVia {
   parentTable: string;
 }
 
+/** @internal Exact compiler-derived authorization posture for one physical Drizzle table. */
+export type RuntimeTableSecurityWireAuthzPolicy =
+  | {
+      justification: string;
+      kind: 'guard-assertion';
+    }
+  | {
+      kind: 'sql';
+      sql: string;
+    };
+
 /** @internal Compiler-derived security facts for one physical table. */
 export interface RuntimeTableSecurityWireTable {
+  authzPolicy?: RuntimeTableSecurityWireAuthzPolicy;
   authorizationClassifications: readonly RuntimeTableSecurityAuthorizationClassification[];
   columns: readonly RuntimeTableSecurityWireColumn[];
   governedColumnKeys: readonly string[];
@@ -319,9 +331,23 @@ function snapshotRuntimeTableSecurityTable(
     );
   }
 
+  const authzPolicyValue = optionalRuntimeTableSecurityValue(value, 'authzPolicy', label);
+  const authzPolicy =
+    authzPolicyValue === undefined
+      ? undefined
+      : snapshotRuntimeTableSecurityAuthzPolicy(authzPolicyValue, label);
+  if (
+    runtimeTableSecurityClassificationsInclude(authorizationClassifications, 'authzPolicy') !==
+    (authzPolicy !== undefined)
+  ) {
+    throw new TypeError(
+      `Runtime table-security ${label}.authzPolicy must exactly match its classification.`,
+    );
+  }
   const ownerValue = optionalRuntimeTableSecurityValue(value, 'owner', label);
   const ownerViaValue = optionalRuntimeTableSecurityValue(value, 'ownerVia', label);
   return freezeBuildSecurityValue({
+    ...(authzPolicy === undefined ? {} : { authzPolicy }),
     authorizationClassifications: freezeBuildSecurityValue(authorizationClassifications),
     columns: freezeBuildSecurityValue(columns),
     governedColumnKeys: snapshotRuntimeTableSecurityStrings(
@@ -338,6 +364,45 @@ function snapshotRuntimeTableSecurityTable(
     secretColumnKeys: snapshotRuntimeTableSecurityStrings(secretValue, `${label}.secretColumnKeys`),
     secretDeclared,
   });
+}
+
+function snapshotRuntimeTableSecurityAuthzPolicy(
+  value: unknown,
+  label: string,
+): RuntimeTableSecurityWireAuthzPolicy {
+  if (value === null || typeof value !== 'object' || witnessIsArray(value)) {
+    throw new TypeError(`Runtime table-security ${label}.authzPolicy must be an own-data record.`);
+  }
+  const kind = requiredRuntimeTableSecurityValue(value, 'kind', `${label}.authzPolicy`);
+  if (kind === 'guard-assertion') {
+    const justification = requiredRuntimeTableSecurityValue(
+      value,
+      'justification',
+      `${label}.authzPolicy`,
+    );
+    if (typeof justification !== 'string') {
+      throw new TypeError(`Runtime table-security ${label}.authzPolicy contains invalid facts.`);
+    }
+    return freezeBuildSecurityValue({ justification, kind });
+  }
+  if (kind === 'sql') {
+    const sql = requiredRuntimeTableSecurityValue(value, 'sql', `${label}.authzPolicy`);
+    if (typeof sql !== 'string') {
+      throw new TypeError(`Runtime table-security ${label}.authzPolicy contains invalid facts.`);
+    }
+    return freezeBuildSecurityValue({ kind, sql });
+  }
+  throw new TypeError(`Runtime table-security ${label}.authzPolicy contains invalid facts.`);
+}
+
+function runtimeTableSecurityClassificationsInclude(
+  values: readonly RuntimeTableSecurityAuthorizationClassification[],
+  expected: RuntimeTableSecurityAuthorizationClassification,
+): boolean {
+  for (let index = 0; index < values.length; index += 1) {
+    if (values[index] === expected) return true;
+  }
+  return false;
 }
 
 function snapshotRuntimeTableSecurityOwner(

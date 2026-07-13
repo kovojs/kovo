@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { sql, Table } from 'drizzle-orm';
-import { pgTable, text as pgText } from 'drizzle-orm/pg-core';
+import { PgDialect, pgTable, text as pgText } from 'drizzle-orm/pg-core';
 import { sqliteTable, text } from 'drizzle-orm/sqlite-core';
 import { kovo } from './runtime.js';
 import {
@@ -132,6 +132,154 @@ describe('runtime metadata extraction', () => {
     expect(() => extractCompilerBoundKovoRuntimeDbMetadata([users], manifest)).toThrow(
       /KV414: runtime Drizzle table security/u,
     );
+  });
+
+  it('rejects a permissive runtime SQL policy against the compiler-bound restrictive policy', () => {
+    const shares = pgTable(
+      'shares',
+      {
+        id: pgText('id').primaryKey(),
+        ownerId: pgText('owner_id').notNull(),
+      },
+      kovo({ authzPolicy: sql.raw('TRUE'), domain: 'share', key: 'id' }),
+    );
+    const manifest = {
+      tables: [
+        {
+          authzPolicy: {
+            kind: 'sql',
+            sql: "owner_id = current_setting('kovo.principal', true)",
+          },
+          authorizationClassifications: ['authzPolicy'],
+          columns: [
+            { key: 'id', name: 'id' },
+            { key: 'ownerId', name: 'owner_id' },
+          ],
+          governedColumnKeys: ['id'],
+          name: 'shares',
+          secretColumnKeys: [],
+          secretDeclared: false,
+        },
+      ],
+    } as const;
+
+    expect(() => extractCompilerBoundKovoRuntimeDbMetadata([shares], manifest)).toThrow(
+      /KV414: runtime Drizzle table security/u,
+    );
+  });
+
+  it('compares compiler-bound guard assertions as exact literal justifications', () => {
+    const labels = sqliteTable(
+      'labels',
+      { id: text('id').primaryKey() },
+      kovo({ authzPolicy: 'writes require the labels mutation guard', domain: 'label', key: 'id' }),
+    );
+    const manifest = {
+      tables: [
+        {
+          authzPolicy: {
+            justification: 'writes require an unrelated guard',
+            kind: 'guard-assertion',
+          },
+          authorizationClassifications: ['authzPolicy'],
+          columns: [{ key: 'id', name: 'id' }],
+          governedColumnKeys: ['id'],
+          name: 'labels',
+          secretColumnKeys: [],
+          secretDeclared: false,
+        },
+      ],
+    } as const;
+
+    expect(() => extractCompilerBoundKovoRuntimeDbMetadata([labels], manifest)).toThrow(
+      /KV414: runtime Drizzle table security/u,
+    );
+  });
+
+  it('snapshots matching compiler-bound SQL policy authority before callback replacement', () => {
+    const predicate = "owner_id = current_setting('kovo.principal', true)";
+    const shares = pgTable(
+      'shares',
+      {
+        id: pgText('id').primaryKey(),
+        ownerId: pgText('owner_id').notNull(),
+      },
+      kovo({ authzPolicy: sql.raw(predicate), domain: 'share', key: 'id' }),
+    );
+    const manifest = {
+      tables: [
+        {
+          authzPolicy: { kind: 'sql', sql: predicate },
+          authorizationClassifications: ['authzPolicy'],
+          columns: [
+            { key: 'id', name: 'id' },
+            { key: 'ownerId', name: 'owner_id' },
+          ],
+          governedColumnKeys: ['id'],
+          name: 'shares',
+          secretColumnKeys: [],
+          secretDeclared: false,
+        },
+      ],
+    } as const;
+
+    const metadata = extractCompilerBoundKovoRuntimeDbMetadata([shares], manifest);
+    Object.defineProperty(shares, Table.Symbol.ExtraConfigBuilder, {
+      configurable: true,
+      enumerable: true,
+      value: kovo({ authzPolicy: sql.raw('TRUE'), domain: 'share', key: 'id' }),
+      writable: true,
+    });
+
+    expect(metadata.compilerBoundAuthzPoliciesByTable?.get('shares')).toEqual({
+      kind: 'sql',
+      sql: predicate,
+    });
+  });
+
+  it('uses the boot-pinned Postgres renderer when comparing compiler-bound policy SQL', () => {
+    const predicate = "owner_id = current_setting('kovo.principal', true)";
+    const shares = pgTable(
+      'shares',
+      {
+        id: pgText('id').primaryKey(),
+        ownerId: pgText('owner_id').notNull(),
+      },
+      kovo({ authzPolicy: sql.raw(predicate), domain: 'share', key: 'id' }),
+    );
+    const manifest = {
+      tables: [
+        {
+          authzPolicy: { kind: 'sql', sql: predicate },
+          authorizationClassifications: ['authzPolicy'],
+          columns: [
+            { key: 'id', name: 'id' },
+            { key: 'ownerId', name: 'owner_id' },
+          ],
+          governedColumnKeys: ['id'],
+          name: 'shares',
+          secretColumnKeys: [],
+          secretDeclared: false,
+        },
+      ],
+    } as const;
+    const original = Object.getOwnPropertyDescriptor(PgDialect.prototype, 'sqlToQuery');
+    Object.defineProperty(PgDialect.prototype, 'sqlToQuery', {
+      configurable: true,
+      value: () => ({ params: [], sql: 'TRUE' }),
+      writable: true,
+    });
+    try {
+      expect(
+        extractCompilerBoundKovoRuntimeDbMetadata(
+          [shares],
+          manifest,
+        ).compilerBoundAuthzPoliciesByTable?.get('shares'),
+      ).toEqual({ kind: 'sql', sql: predicate });
+    } finally {
+      if (original !== undefined)
+        Object.defineProperty(PgDialect.prototype, 'sqlToQuery', original);
+    }
   });
 
   it('treats secret: true as a whole-table secret annotation', () => {

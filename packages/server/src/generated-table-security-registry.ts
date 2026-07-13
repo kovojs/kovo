@@ -1,8 +1,5 @@
 import { extractKovoRuntimeDbMetadata, type KovoRuntimeDbMetadata } from '@kovojs/drizzle';
-import {
-  extractCompilerBoundKovoRuntimeDbMetadata as extractDrizzleCompilerBoundRuntimeDbMetadata,
-  type KovoRuntimeTableSecurityManifest,
-} from '@kovojs/drizzle/internal/runtime-metadata';
+import { extractCompilerBoundKovoRuntimeDbMetadata as extractDrizzleCompilerBoundRuntimeDbMetadata } from '@kovojs/drizzle/internal/runtime-metadata';
 
 import {
   runtimeRegistryTableSecurityFromFacts,
@@ -10,7 +7,7 @@ import {
 } from './internal/runtime-registry-wire.js';
 import { buildSecuritySourceLiteral } from './build-security-intrinsics.js';
 
-let registeredManifest: KovoRuntimeTableSecurityManifest | undefined;
+let registeredManifest: RuntimeTableSecurityWireManifest | undefined;
 let registeredManifestLiteral: string | undefined;
 let registeredManifestPermanent = false;
 
@@ -80,7 +77,7 @@ export function installGeneratedTableSecurityManifestForCommand(
 
 /** @internal Return the compiler-owned manifest registered for this app boot, if present. */
 export function registeredGeneratedTableSecurityManifest():
-  | KovoRuntimeTableSecurityManifest
+  | RuntimeTableSecurityWireManifest
   | undefined {
   return registeredManifest;
 }

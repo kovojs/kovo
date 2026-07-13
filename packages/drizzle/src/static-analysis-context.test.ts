@@ -117,6 +117,101 @@ describe('@kovojs/drizzle static analysis context', () => {
     });
   });
 
+  it('binds exact no-substitution SQL authorization policy into the runtime manifest', () => {
+    const facts = extractStaticBuildAnalysisFactsFromProject({
+      files: [
+        pgDatabaseTypes([]),
+        {
+          fileName: 'src/shares.mjs',
+          source: [
+            'import { kovo } from "@kovojs/drizzle";',
+            'import { sql } from "drizzle-orm";',
+            'import { pgTable, text } from "drizzle-orm/pg-core";',
+            '',
+            'export const shares = pgTable("shares", {',
+            '  id: text("id").primaryKey(),',
+            '  ownerId: text("owner_id").notNull(),',
+            '}, kovo({',
+            "  authzPolicy: sql`owner_id = current_setting('kovo.principal', true)`,",
+            '  domain: "share",',
+            '  key: "id",',
+            '}));',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(facts.runtimeTableSecurityManifest.tables).toEqual([
+      {
+        authzPolicy: {
+          kind: 'sql',
+          sql: "owner_id = current_setting('kovo.principal', true)",
+        },
+        authorizationClassifications: ['authzPolicy'],
+        columns: [
+          { key: 'id', name: 'id' },
+          { key: 'ownerId', name: 'owner_id' },
+        ],
+        governedColumnKeys: ['id'],
+        name: 'shares',
+        secretColumnKeys: [],
+        secretDeclared: false,
+      },
+    ]);
+  });
+
+  it('resolves JS const aliases and imported SQL aliases for exact authorization policy', () => {
+    const facts = extractStaticBuildAnalysisFactsFromProject({
+      files: [
+        pgDatabaseTypes([]),
+        {
+          fileName: 'src/shares.js',
+          source: [
+            'import { kovo } from "@kovojs/drizzle";',
+            'import { sql as drizzleSql } from "drizzle-orm";',
+            'import { pgTable, text } from "drizzle-orm/pg-core";',
+            '',
+            'const restrictivePolicy = drizzleSql.raw("owner_id = current_setting(\'kovo.principal\', true)");',
+            'export const shares = pgTable("shares", {',
+            '  id: text("id").primaryKey(),',
+            '  ownerId: text("owner_id").notNull(),',
+            '}, kovo({ authzPolicy: restrictivePolicy, domain: "share", key: "id" }));',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(facts.runtimeTableSecurityManifest.tables[0]?.authzPolicy).toEqual({
+      kind: 'sql',
+      sql: "owner_id = current_setting('kovo.principal', true)",
+    });
+  });
+
+  it('fails closed when compiler-bound authorization policy contains interpolation', () => {
+    expect(() =>
+      extractStaticBuildAnalysisFactsFromProject({
+        files: [
+          pgDatabaseTypes([]),
+          {
+            fileName: 'src/shares.ts',
+            source: [
+              'import { kovo } from "@kovojs/drizzle";',
+              'import { sql } from "drizzle-orm";',
+              'import { pgTable, text } from "drizzle-orm/pg-core";',
+              '',
+              'const principal = "u1";',
+              'export const shares = pgTable("shares", { id: text("id").primaryKey() }, kovo({',
+              '  authzPolicy: sql`owner_id = ${principal}`,',
+              '  domain: "share",',
+              '  key: "id",',
+              '}));',
+            ].join('\n'),
+          },
+        ],
+      }),
+    ).toThrow(/KV414: compiler-bound authzPolicy/u);
+  });
+
   it('keeps unannotated tables in the exact runtime table-security manifest', () => {
     const facts = extractStaticBuildAnalysisFactsFromProject({
       files: [

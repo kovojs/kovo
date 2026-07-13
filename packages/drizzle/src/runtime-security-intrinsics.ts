@@ -133,6 +133,16 @@ function assertControls(): void {
   }
 }
 
+/** @internal Invoke a boot-captured callable without consulting mutable `Reflect.apply`. */
+export function runtimeReflectApply<Return>(
+  fn: Function,
+  receiver: unknown,
+  args: readonly unknown[],
+): Return {
+  assertControls();
+  return apply<Return>(fn, receiver, args);
+}
+
 export function runtimeArrayIsArray(value: unknown): value is readonly unknown[] {
   assertControls();
   return apply<boolean>(intrinsicArrayIsArray, NativeArray, [value]);

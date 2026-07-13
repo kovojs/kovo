@@ -1,5 +1,5 @@
 import { Table } from 'drizzle-orm';
-import { getTableConfig as getPgTableConfig } from 'drizzle-orm/pg-core';
+import { PgDialect, getTableConfig as getPgTableConfig } from 'drizzle-orm/pg-core';
 import { getTableConfig as getSqliteTableConfig } from 'drizzle-orm/sqlite-core';
 
 import {
@@ -9,6 +9,7 @@ import {
   runtimeArrayValue,
   runtimeDefineOwnData,
   runtimeFreeze,
+  runtimeGetOwnPropertyDescriptor,
   runtimeMap,
   runtimeMapForEach,
   runtimeMapGet,
@@ -19,6 +20,7 @@ import {
   runtimeObjectKeys,
   runtimeOwnDataValue,
   runtimeRegExpTest,
+  runtimeReflectApply,
   runtimeSealMap,
   runtimeSealSet,
   runtimeSet,
@@ -30,6 +32,8 @@ import {
 } from './runtime-security-intrinsics.js';
 
 const drizzleExtraConfigBuilder = requireDrizzleExtraConfigBuilder();
+const runtimeAuthzPolicyDialect = new PgDialect();
+const runtimeAuthzPolicySqlToQuery = requireRuntimeAuthzPolicySqlToQuery();
 
 /** Drizzle table object accepted by `extractKovoRuntimeDbMetadata`. */
 export type KovoRuntimeDbTable =
@@ -64,8 +68,20 @@ export interface KovoRuntimeTableSecurityManifestOwnerVia {
   parentTable: string;
 }
 
+/** @internal Exact compiler-derived authorization posture for one physical Drizzle table. */
+export type KovoRuntimeTableSecurityManifestAuthzPolicy =
+  | {
+      justification: string;
+      kind: 'guard-assertion';
+    }
+  | {
+      kind: 'sql';
+      sql: string;
+    };
+
 /** @internal Compiler-derived security facts for one physical Drizzle table. */
 export interface KovoRuntimeTableSecurityManifestTable {
+  authzPolicy?: KovoRuntimeTableSecurityManifestAuthzPolicy;
   authorizationClassifications: readonly KovoRuntimeAuthorizationClassification[];
   columns: readonly KovoRuntimeTableSecurityManifestColumn[];
   governedColumnKeys: readonly string[];
@@ -125,6 +141,18 @@ function requireDrizzleExtraConfigBuilder(): symbol {
   return extraConfigBuilder.value;
 }
 
+function requireRuntimeAuthzPolicySqlToQuery(): PgDialect['sqlToQuery'] {
+  const descriptor = runtimeGetOwnPropertyDescriptor(PgDialect.prototype, 'sqlToQuery');
+  if (
+    descriptor === undefined ||
+    !('value' in descriptor) ||
+    typeof descriptor.value !== 'function'
+  ) {
+    throw new TypeError('The installed Drizzle version does not expose its Postgres SQL renderer.');
+  }
+  return descriptor.value as PgDialect['sqlToQuery'];
+}
+
 /** Drizzle-derived runtime source metadata for one physical database column. */
 export interface KovoRuntimeDbColumnSource {
   /** Physical database column name. */
@@ -179,6 +207,18 @@ export interface KovoRuntimeDbMetadata {
   authorizationClassificationsByTable: ReadonlyMap<
     string,
     readonly KovoRuntimeAuthorizationClassification[]
+  >;
+  /** @internal Immutable compiler authority for exact custom authorization policy sinks. */
+  compilerBoundAuthzPoliciesByTable?: ReadonlyMap<
+    string,
+    | {
+        justification: string;
+        kind: 'guard-assertion';
+      }
+    | {
+        kind: 'sql';
+        sql: string;
+      }
   >;
   /** Runtime object identity map for Drizzle column objects used in SQL expressions. */
   columnSources: ReadonlyMap<object, KovoRuntimeDbColumnSource>;
@@ -273,6 +313,10 @@ function extractKovoRuntimeDbMetadataWithManifest(
     string,
     readonly KovoRuntimeAuthorizationClassification[]
   >();
+  const compilerBoundAuthzPoliciesByTable =
+    expectedTables === undefined
+      ? undefined
+      : runtimeMap<string, KovoRuntimeTableSecurityManifestAuthzPolicy>();
   const columnSources = runtimeMap<object, KovoRuntimeDbColumnSource>();
   const governedColumnKeysByTable = runtimeMap<string, ReadonlySet<string>>();
   const governedColumnNamesByTable = runtimeMap<string, ReadonlySet<string>>();
@@ -351,7 +395,9 @@ function extractKovoRuntimeDbMetadataWithManifest(
     if (expectedTables !== undefined) {
       const expected = runtimeMapGet(expectedTables, config.name);
       if (expected === undefined) throwRuntimeTableSecurityMismatch(config.name);
+      const authzPolicy = runtimeAuthzPolicyForAnnotation(domainAnnotation, config.name);
       assertRuntimeTableSecurityFacts(expected, {
+        authzPolicy,
         classifications,
         governedColumnKeys: tableGovernedColumnKeys,
         owner: ownerSource,
@@ -359,6 +405,9 @@ function extractKovoRuntimeDbMetadataWithManifest(
         secretColumnKeys: tableSecretColumnKeys,
         secretDeclared: secretAnnotation !== undefined,
       });
+      if (expected.authzPolicy !== undefined && compilerBoundAuthzPoliciesByTable !== undefined) {
+        runtimeMapSet(compilerBoundAuthzPoliciesByTable, config.name, expected.authzPolicy);
+      }
     }
 
     runtimeMapForEach(columnKeys, (key, dbName) => {
@@ -382,6 +431,11 @@ function extractKovoRuntimeDbMetadataWithManifest(
   return runtimeFreeze({
     allColumnKeys: runtimeSealSet(allColumnKeys),
     authorizationClassificationsByTable: runtimeSealMap(authorizationClassificationsByTable),
+    ...(compilerBoundAuthzPoliciesByTable === undefined
+      ? {}
+      : {
+          compilerBoundAuthzPoliciesByTable: runtimeSealMap(compilerBoundAuthzPoliciesByTable),
+        }),
     columnSources: runtimeSealMap(columnSources),
     governedColumnKeysByTable: runtimeSealMap(governedColumnKeysByTable),
     governedColumnNamesByTable: runtimeSealMap(governedColumnNamesByTable),
@@ -492,9 +546,22 @@ function snapshotRuntimeTableSecurityManifestTable(
     runtimeArrayAppend(columns, runtimeFreeze({ key, name: columnName }), `${label}.columns`);
   }
 
+  const authzPolicyValue = optionalRuntimeManifestValue(value, 'authzPolicy');
+  const authzPolicy =
+    authzPolicyValue === undefined
+      ? undefined
+      : snapshotRuntimeManifestAuthzPolicy(authzPolicyValue, `${label}.authzPolicy`);
+  const hasAuthzPolicyClassification = runtimeManifestStringArrayIncludes(
+    authorizationClassifications,
+    'authzPolicy',
+  );
+  if (hasAuthzPolicyClassification !== (authzPolicy !== undefined)) {
+    throwRuntimeTableSecurityMismatch(name);
+  }
   const ownerValue = optionalRuntimeManifestValue(value, 'owner');
   const ownerViaValue = optionalRuntimeManifestValue(value, 'ownerVia');
   return runtimeFreeze({
+    ...(authzPolicy === undefined ? {} : { authzPolicy }),
     authorizationClassifications: runtimeFreeze(authorizationClassifications),
     columns: runtimeFreeze(columns),
     governedColumnKeys: snapshotRuntimeManifestStrings(
@@ -511,6 +578,31 @@ function snapshotRuntimeTableSecurityManifestTable(
     secretColumnKeys: snapshotRuntimeManifestStrings(secretValue, `${label}.secretColumnKeys`),
     secretDeclared,
   });
+}
+
+function snapshotRuntimeManifestAuthzPolicy(
+  value: unknown,
+  label: string,
+): KovoRuntimeTableSecurityManifestAuthzPolicy {
+  if (typeof value !== 'object' || value === null || runtimeArrayIsArray(value)) {
+    throw new TypeError(`Kovo compiler table-security ${label} must be an own-data record.`);
+  }
+  const kind = requiredRuntimeManifestValue(value, 'kind', label);
+  if (kind === 'guard-assertion') {
+    const justification = requiredRuntimeManifestValue(value, 'justification', label);
+    if (typeof justification !== 'string') {
+      throw new TypeError(`Kovo compiler table-security ${label} contains invalid facts.`);
+    }
+    return runtimeFreeze({ justification, kind });
+  }
+  if (kind === 'sql') {
+    const sql = requiredRuntimeManifestValue(value, 'sql', label);
+    if (typeof sql !== 'string') {
+      throw new TypeError(`Kovo compiler table-security ${label} contains invalid facts.`);
+    }
+    return runtimeFreeze({ kind, sql });
+  }
+  throw new TypeError(`Kovo compiler table-security ${label} contains invalid facts.`);
 }
 
 function snapshotRuntimeManifestOwner(
@@ -621,6 +713,7 @@ function assertRuntimeSchemaMatchesManifest(
 function assertRuntimeTableSecurityFacts(
   expected: KovoRuntimeTableSecurityManifestTable,
   actual: {
+    authzPolicy: KovoRuntimeTableSecurityManifestAuthzPolicy | undefined;
     classifications: readonly KovoRuntimeAuthorizationClassification[];
     governedColumnKeys: ReadonlySet<string>;
     owner: KovoRuntimeOwnerSource | undefined;
@@ -630,6 +723,7 @@ function assertRuntimeTableSecurityFacts(
   },
 ): void {
   if (
+    !runtimeManifestAuthzPolicyEquals(expected.authzPolicy, actual.authzPolicy) ||
     !runtimeManifestStringArrayEquals(
       expected.authorizationClassifications,
       actual.classifications,
@@ -642,6 +736,26 @@ function assertRuntimeTableSecurityFacts(
   ) {
     throwRuntimeTableSecurityMismatch(expected.name);
   }
+}
+
+function runtimeManifestAuthzPolicyEquals(
+  expected: KovoRuntimeTableSecurityManifestAuthzPolicy | undefined,
+  actual: KovoRuntimeTableSecurityManifestAuthzPolicy | undefined,
+): boolean {
+  if (expected === undefined || actual === undefined) return expected === actual;
+  if (expected.kind !== actual.kind) return false;
+  return expected.kind === 'guard-assertion'
+    ? actual.kind === 'guard-assertion' && expected.justification === actual.justification
+    : actual.kind === 'sql' && expected.sql === actual.sql;
+}
+
+function runtimeManifestStringArrayIncludes(values: readonly string[], expected: string): boolean {
+  for (let index = 0; index < values.length; index += 1) {
+    if (runtimeArrayValue(values, index, 'Kovo compiler table-security strings') === expected) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function runtimeManifestStringArrayEquals(
@@ -780,6 +894,49 @@ function kovoSecretAnnotation(
   const secret = annotationValue(annotation, 'secret');
   if (secret === true || typeof secret === 'string' || runtimeArrayIsArray(secret)) return secret;
   return undefined;
+}
+
+function runtimeAuthzPolicyForAnnotation(
+  annotation: KovoRuntimeDomainAnnotation | undefined,
+  tableName: string,
+): KovoRuntimeTableSecurityManifestAuthzPolicy | undefined {
+  const authzPolicy = annotationValue(annotation, 'authzPolicy');
+  if (authzPolicy === undefined) return undefined;
+  if (typeof authzPolicy === 'string') {
+    const snapshot: KovoRuntimeTableSecurityManifestAuthzPolicy = {
+      justification: authzPolicy,
+      kind: 'guard-assertion',
+    };
+    return runtimeFreeze(snapshot);
+  }
+  try {
+    const query = runtimeReflectApply<unknown>(
+      runtimeAuthzPolicySqlToQuery,
+      runtimeAuthzPolicyDialect,
+      [authzPolicy],
+    );
+    if (typeof query !== 'object' || query === null || runtimeArrayIsArray(query)) {
+      throwRuntimeTableSecurityMismatch(tableName);
+    }
+    const sql = runtimeOwnDataValue(query, 'sql');
+    const params = runtimeOwnDataValue(query, 'params');
+    if (
+      !sql.found ||
+      typeof sql.value !== 'string' ||
+      !params.found ||
+      !runtimeArrayIsArray(params.value) ||
+      runtimeArrayLength(params.value, 'Kovo Drizzle runtime authzPolicy parameters') !== 0
+    ) {
+      throwRuntimeTableSecurityMismatch(tableName);
+    }
+    const snapshot: KovoRuntimeTableSecurityManifestAuthzPolicy = {
+      kind: 'sql',
+      sql: sql.value,
+    };
+    return runtimeFreeze(snapshot);
+  } catch {
+    throwRuntimeTableSecurityMismatch(tableName);
+  }
 }
 
 function kovoDomainAnnotation(table: KovoRuntimeDbTable): KovoRuntimeDomainAnnotation | undefined {

@@ -36,7 +36,7 @@ for membership graphs; `reference` is for immutable global lookup rows with no t
 
 ## Add the document policy
 
-Annotate the document table with ``kovo({ authzPolicy: sql`...` })``. The predicate should answer:
+Annotate the document table with `kovo({ authzPolicy: sql.raw(...) })`. The predicate should answer:
 "does the current database principal have a membership row for this document's team?"
 
 ```ts
@@ -64,18 +64,19 @@ export const teamDocuments = pgTable(
   kovo({
     domain: 'team-document',
     key: 'id',
-    authzPolicy: sql`EXISTS (
-      SELECT 1 FROM ${teamMemberships}
-      WHERE ${teamMemberships.teamId} = "team_documents"."team_id"
-        AND ${teamMemberships.userId} = current_setting('kovo.principal', true)
-    )`,
+    authzPolicy: sql.raw(`EXISTS (
+      SELECT 1 FROM "team_memberships"
+      WHERE "team_memberships"."team_id" = "team_documents"."team_id"
+        AND "team_memberships"."user_id" = current_setting('kovo.principal', true)
+    )`),
   }),
 );
 ```
 
-Keep referenced tables in the predicate as Drizzle interpolations like `${teamMemberships}`. That
-lets Kovo provision the grants the policy needs. Raw string table names are harder for the framework
-to see and may fail closed at the database engine instead.
+Keep the predicate literal. Kovo binds these exact SQL bytes into the generated table-security
+manifest and installs that snapshot as the RLS policy. An interpolation such as
+`${teamMemberships}` fails during the build. A table referenced by the predicate needs its own
+readable, protected posture; `owner: 'userId'` supplies that posture for the membership table above.
 
 ## Provision and check it
 
@@ -184,8 +185,8 @@ reviewed database object the policy can reference directly.
 
 - `SPEC §10.3` covers the managed Postgres write boundary and the engine backstop for owner,
   owner-via, and authz-policy tables.
-- `KV414` is the authorization census family that requires request-reachable tables to declare an
-  ownership, custom authz, public, or reference posture.
+- `KV414` requires request-reachable tables to declare an ownership, custom authz, public, or
+  reference posture. It also rejects dynamic or interpolated compiler-bound `authzPolicy` values.
 - Postgres posture checks report missing forced RLS, missing `kovo_authz_policy`, or unsafe
   reachable objects through the database check output.
 

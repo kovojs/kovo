@@ -206,6 +206,13 @@ type PgTableConfig = ReturnType<typeof getTableConfig>;
 type PgTable = Parameters<typeof getTableConfig>[0];
 type PgColumn = PgTableConfig['columns'][number];
 type PgForeignKey = PgTableConfig['foreignKeys'][number];
+type CompilerBoundAuthzPolicy =
+  NonNullable<KovoRuntimeDbMetadata['compilerBoundAuthzPoliciesByTable']> extends ReadonlyMap<
+    string,
+    infer Policy
+  >
+    ? Policy
+    : never;
 
 const POSTGRES_POLICY_DIALECT = new PgDialect();
 const postgresPolicySqlToQuery = capturePostgresPolicySqlToQuery();
@@ -469,6 +476,10 @@ function snapshotExtractedReadonlyMap<Key, Value, OutputValue = Value>(
 function snapshotExtractedKovoRuntimeDbMetadata(
   metadata: KovoRuntimeDbMetadata,
 ): KovoRuntimeDbMetadata {
+  const compilerBoundAuthzPoliciesByTable = postgresOwnDataValue(
+    metadata as unknown as Record<PropertyKey, unknown>,
+    'compilerBoundAuthzPoliciesByTable',
+  ) as ReadonlyMap<string, CompilerBoundAuthzPolicy> | undefined;
   return witnessFreeze({
     allColumnKeys: snapshotExtractedReadonlySet(
       metadata.allColumnKeys,
@@ -486,6 +497,15 @@ function snapshotExtractedKovoRuntimeDbMetadata(
           ),
         ),
     ),
+    ...(compilerBoundAuthzPoliciesByTable === undefined
+      ? {}
+      : {
+          compilerBoundAuthzPoliciesByTable: snapshotExtractedReadonlyMap(
+            compilerBoundAuthzPoliciesByTable,
+            'Kovo compiler-bound authorization policies',
+            snapshotExtractedAuthzPolicy,
+          ),
+        }),
     columnSources: snapshotExtractedReadonlyMap(
       metadata.columnSources,
       'Kovo runtime column sources',
@@ -539,6 +559,39 @@ function snapshotExtractedKovoRuntimeDbMetadata(
       'Kovo runtime secret table names',
     ),
   });
+}
+
+function snapshotExtractedAuthzPolicy(
+  value: CompilerBoundAuthzPolicy,
+  tableName: string,
+): CompilerBoundAuthzPolicy {
+  if (
+    typeof value !== 'object' ||
+    value === null ||
+    securityArrayIsArray(value) ||
+    postgresIsProxy(value)
+  ) {
+    throw new TypeError(
+      `Kovo compiler-bound authorization policy for ${tableName} must be an own-data record.`,
+    );
+  }
+  const record = value as unknown as Record<PropertyKey, unknown>;
+  const kind = postgresOwnDataValue(record, 'kind');
+  if (kind === 'guard-assertion') {
+    const justification = postgresOwnDataValue(record, 'justification');
+    if (typeof justification !== 'string') {
+      throw new TypeError(`Kovo compiler-bound authorization policy for ${tableName} is invalid.`);
+    }
+    return witnessFreeze({ justification, kind });
+  }
+  if (kind === 'sql') {
+    const sql = postgresOwnDataValue(record, 'sql');
+    if (typeof sql !== 'string') {
+      throw new TypeError(`Kovo compiler-bound authorization policy for ${tableName} is invalid.`);
+    }
+    return witnessFreeze({ kind, sql });
+  }
+  throw new TypeError(`Kovo compiler-bound authorization policy for ${tableName} is invalid.`);
 }
 
 function postgresFilterDense<Value>(
@@ -1373,10 +1426,10 @@ export function createPostgresAppRuntimeDb(
   const config = resolvePostgresRuntimeConfig(options);
   assertProductionRuntimeDriver(config);
   const schemaTables = sortTablesByForeignKeyDependencies(postgresTablesFromSchema(config.schema));
-  assertPostgresRuntimeSchemaSupported(schemaTables);
   const metadata = snapshotExtractedKovoRuntimeDbMetadata(
     extractCompilerBoundKovoRuntimeDbMetadata(schemaTables),
   );
+  assertPostgresRuntimeSchemaSupported(schemaTables, metadata);
   const ddl = schemaDdl(schemaTables);
   const client = createRuntimeClient(config);
   const ready = initializeRuntimeDb(client.sql, {
@@ -1514,10 +1567,10 @@ export async function provisionPostgresAppDb(
   });
   const config = resolvePostgresRuntimeConfigSnapshot(safeOptions);
   const schemaTables = sortTablesByForeignKeyDependencies(postgresTablesFromSchema(config.schema));
-  assertPostgresRuntimeSchemaSupported(schemaTables);
   const metadata = snapshotExtractedKovoRuntimeDbMetadata(
     extractCompilerBoundKovoRuntimeDbMetadata(schemaTables),
   );
+  assertPostgresRuntimeSchemaSupported(schemaTables, metadata);
   const client = createRuntimeClient(config);
   try {
     await provisionRuntimeDb(client.sql, {
@@ -1554,10 +1607,10 @@ export async function migratePostgresAppDb(
   });
   const config = resolvePostgresRuntimeConfigSnapshot(safeOptions);
   const schemaTables = sortTablesByForeignKeyDependencies(postgresTablesFromSchema(config.schema));
-  assertPostgresRuntimeSchemaSupported(schemaTables);
   const metadata = snapshotExtractedKovoRuntimeDbMetadata(
     extractCompilerBoundKovoRuntimeDbMetadata(schemaTables),
   );
+  assertPostgresRuntimeSchemaSupported(schemaTables, metadata);
   const client = createRuntimeClient(config);
   try {
     const migrations = await provisionRuntimeDb(client.sql, {
@@ -1596,7 +1649,10 @@ export async function planPostgresAppDbMigration(
   });
   const config = resolvePostgresRuntimeConfigSnapshot(safeOptions);
   const schemaTables = sortTablesByForeignKeyDependencies(postgresTablesFromSchema(config.schema));
-  assertPostgresRuntimeSchemaSupported(schemaTables);
+  const metadata = snapshotExtractedKovoRuntimeDbMetadata(
+    extractCompilerBoundKovoRuntimeDbMetadata(schemaTables),
+  );
+  assertPostgresRuntimeSchemaSupported(schemaTables, metadata);
   const client = createRuntimeClient(config);
   try {
     return await planRuntimeDbMigration(client.sql, schemaTables, config.driver);
@@ -1623,10 +1679,10 @@ export async function checkPostgresAppDbPosture(
   });
   const config = resolvePostgresRuntimeConfigSnapshot(safeOptions);
   const schemaTables = sortTablesByForeignKeyDependencies(postgresTablesFromSchema(config.schema));
-  assertPostgresRuntimeSchemaSupported(schemaTables);
   const metadata = snapshotExtractedKovoRuntimeDbMetadata(
     extractCompilerBoundKovoRuntimeDbMetadata(schemaTables),
   );
+  assertPostgresRuntimeSchemaSupported(schemaTables, metadata);
   const client = createRuntimeClient(config);
   try {
     const runtimeLoginRole = runtimeLoginRoleFromDatabaseUrl(config.databaseUrl);
@@ -5938,7 +5994,7 @@ async function applyPostgresReaderColumnPrivileges(
 ): Promise<void> {
   const protectedTables = resolveProtectedPostgresTables(tables, metadata);
   const readableTables = postgresReaderReadableTableNames(tables, metadata, protectedTables);
-  const authzPolicyDependencyTables = customAuthzPolicyDependencyTableNames(tables);
+  const authzPolicyDependencyTables = customAuthzPolicyDependencyTableNames(tables, metadata);
   for (let index = 0; index < tables.length; index += 1) {
     const table = postgresDenseValue(tables, index, 'Postgres reader privilege tables');
     const tableConfig = getTableConfig(table);
@@ -5998,7 +6054,7 @@ function postgresReaderReadableTableNames(
     witnessSetAdd(readableTables, tableName),
   );
   const authzPolicyTables = createWitnessSet<string>();
-  witnessMapForEach(customAuthzPolicyPredicatesByTable(tables), (_predicate, tableName) =>
+  witnessMapForEach(customAuthzPolicyPredicatesByTable(tables, metadata), (_predicate, tableName) =>
     witnessSetAdd(authzPolicyTables, tableName),
   );
   postgresForEachReadonlyMapEntry(
@@ -6049,7 +6105,7 @@ async function applyPostgresWriterTablePrivileges(
 ): Promise<void> {
   const protectedTables = resolveProtectedPostgresTables(tables, metadata);
   const writableTables = postgresWriterWritableTableNames(tables, metadata, protectedTables);
-  const authzPolicyDependencyTables = customAuthzPolicyDependencyTableNames(tables);
+  const authzPolicyDependencyTables = customAuthzPolicyDependencyTableNames(tables, metadata);
   for (let index = 0; index < tables.length; index += 1) {
     const table = postgresDenseValue(tables, index, 'Postgres writer privilege tables');
     const tableConfig = getTableConfig(table);
@@ -6185,7 +6241,7 @@ function postgresWriterWritableTableNames(
     witnessSetAdd(writableTables, tableName),
   );
   const authzPolicyTables = createWitnessSet<string>();
-  witnessMapForEach(customAuthzPolicyPredicatesByTable(tables), (_predicate, tableName) =>
+  witnessMapForEach(customAuthzPolicyPredicatesByTable(tables, metadata), (_predicate, tableName) =>
     witnessSetAdd(authzPolicyTables, tableName),
   );
   postgresForEachReadonlyMapEntry(
@@ -6290,7 +6346,7 @@ function resolveProtectedPostgresTables(
       });
     },
   );
-  witnessMapForEach(customAuthzPolicyPredicatesByTable(tables), (policy) => {
+  witnessMapForEach(customAuthzPolicyPredicatesByTable(tables, metadata), (policy) => {
     const predicate = policy.predicate;
     const tableName = policy.tableName;
     const tableConfig = witnessMapGet(tableConfigs, tableName);
@@ -6493,8 +6549,31 @@ async function applyPostgresViewSecurityInvoker(
 
 function customAuthzPolicyPredicatesByTable(
   tables: readonly PgTable[],
+  metadata: KovoRuntimeDbMetadata,
 ): ReadonlyMap<string, AuthzPolicyPredicate> {
   const predicates = createWitnessMap<string, AuthzPolicyPredicate>();
+  const compilerBoundPolicies = metadata.compilerBoundAuthzPoliciesByTable;
+  if (compilerBoundPolicies !== undefined) {
+    postgresForEachReadonlyMapEntry(
+      compilerBoundPolicies,
+      'Postgres compiler-bound authorization policies',
+      (policy, tableName) => {
+        if (policy.kind === 'guard-assertion') return;
+        if (securityStringTrim(policy.sql) === '') {
+          throw unsupportedAuthzPolicyError(
+            tableName,
+            'predicate SQL rendered to an empty statement',
+          );
+        }
+        witnessMapSet(predicates, tableName, {
+          dependencyTableNames: [],
+          predicate: policy.sql,
+          tableName,
+        });
+      },
+    );
+    return predicates;
+  }
   const tableCount = postgresDenseArrayLength(tables, 'Postgres authz-policy tables');
   for (let index = 0; index < tableCount; index += 1) {
     const table = postgresDenseArrayValue(tables, index, 'Postgres authz-policy tables');
@@ -6524,8 +6603,11 @@ function customAuthzPolicyPredicatesByTable(
   return predicates;
 }
 
-function assertPostgresRuntimeSchemaSupported(tables: readonly PgTable[]): void {
-  customAuthzPolicyPredicatesByTable(tables);
+function assertPostgresRuntimeSchemaSupported(
+  tables: readonly PgTable[],
+  metadata: KovoRuntimeDbMetadata,
+): void {
+  customAuthzPolicyPredicatesByTable(tables, metadata);
 }
 
 function renderCustomAuthzPolicyPredicate(tableName: string, authzPolicy: unknown): string {
@@ -6558,9 +6640,12 @@ function renderCustomAuthzPolicyPredicate(tableName: string, authzPolicy: unknow
   return securityStringTrim(query.sql);
 }
 
-function customAuthzPolicyDependencyTableNames(tables: readonly PgTable[]): ReadonlySet<string> {
+function customAuthzPolicyDependencyTableNames(
+  tables: readonly PgTable[],
+  metadata: KovoRuntimeDbMetadata,
+): ReadonlySet<string> {
   const dependencyTableNames = createWitnessSet<string>();
-  const policies = postgresMapValues(customAuthzPolicyPredicatesByTable(tables));
+  const policies = postgresMapValues(customAuthzPolicyPredicatesByTable(tables, metadata));
   const policyCount = postgresDenseArrayLength(policies, 'Postgres authz policies');
   for (let policyIndex = 0; policyIndex < policyCount; policyIndex += 1) {
     const dependencies = postgresDenseArrayValue(
@@ -6606,7 +6691,7 @@ function postgresReachabilityAllowlist(
     }
   };
   const protectedAuthzPolicyTables = createWitnessSet<string>();
-  witnessMapForEach(customAuthzPolicyPredicatesByTable(tables), (_policy, tableName) =>
+  witnessMapForEach(customAuthzPolicyPredicatesByTable(tables, metadata), (_policy, tableName) =>
     witnessSetAdd(protectedAuthzPolicyTables, tableName),
   );
   postgresForEachReadonlyMapEntry(
@@ -6628,7 +6713,7 @@ function postgresReachabilityAllowlist(
       }
     },
   );
-  witnessSetForEach(customAuthzPolicyDependencyTableNames(tables), addDeclaredTable);
+  witnessSetForEach(customAuthzPolicyDependencyTableNames(tables, metadata), addDeclaredTable);
   return allowlisted;
 }
 
