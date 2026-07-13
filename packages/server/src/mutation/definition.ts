@@ -14,7 +14,15 @@ import type { Guard, RequestLifecycleOptions } from '../guards.js';
 import { escapeAttribute } from '../html.js';
 import type { ErrorBoundaryRenderer, FragmentRenderer } from '../mutation-wire.js';
 import { mutationInputFileFields, type InferSchema, type Schema } from '../schema.js';
-import { witnessFreeze } from '../security-witness-intrinsics.js';
+import {
+  witnessCreateNullRecord,
+  witnessDefineProperty,
+  witnessFreeze,
+  witnessGetOwnPropertyDescriptor,
+  witnessIsArray,
+  witnessObjectIs,
+  witnessOwnKeys,
+} from '../security-witness-intrinsics.js';
 import type { TaskDefinition, TaskHandle } from '../task.js';
 import type { DurableTaskEnqueueInput } from '../task-queue.js';
 import type { MutationStreamContext, MutationStreamSource } from './streaming.js';
@@ -482,17 +490,20 @@ export function mutation(
     if (definition === undefined) {
       throw new TypeError('mutation(key, definition) requires a definition object.');
     }
-    const fileFields = mutationInputFileFields(definition.input);
+    const closedDefinition = snapshotMutationDefinition(definition);
+    const fileFields = mutationInputFileFields(closedDefinition.input);
     const queue =
-      definition.queue === true ? keyOrDefinition : normalizeMutationQueue(definition.queue);
+      closedDefinition.queue === true
+        ? keyOrDefinition
+        : normalizeMutationQueue(closedDefinition.queue);
     return pinAccessDecision(
       {
-        ...definition,
+        ...closedDefinition,
         ...(fileFields.length === 0 ? {} : { enctype: 'multipart/form-data' as const, fileFields }),
         key: keyOrDefinition,
         ...(queue === undefined ? {} : { queue }),
       } as MutationDefinition<string> & { key: string },
-      definition.access,
+      closedDefinition.access,
     );
   }
 
@@ -500,16 +511,52 @@ export function mutation(
   // source-derived by the compiler because runtime JavaScript cannot prove export binding names.
   // Compiler-emitted IR assigns `.key` immediately after the declaration. Until then, helpers that
   // need a wire endpoint fail closed through `assertMutationKey`.
-  const fileFields = mutationInputFileFields(keyOrDefinition.input);
-  const queue = normalizeMutationQueue(keyOrDefinition.queue);
+  const closedDefinition = snapshotMutationDefinition(keyOrDefinition);
+  const fileFields = mutationInputFileFields(closedDefinition.input);
+  const queue = normalizeMutationQueue(closedDefinition.queue);
   return pinAccessDecision(
     {
-      ...keyOrDefinition,
+      ...closedDefinition,
       ...(fileFields.length === 0 ? {} : { enctype: 'multipart/form-data' as const, fileFields }),
       ...(queue === undefined ? {} : { queue }),
     } as MutationDefinition<string> & { key: string },
-    keyOrDefinition.access,
+    closedDefinition.access,
   );
+}
+
+function snapshotMutationDefinition(
+  source: Omit<MutationDefinition<any, any, any, any, any, any>, 'key'>,
+): Omit<MutationDefinition<any, any, any, any, any, any>, 'key'> {
+  if (typeof source !== 'object' || source === null || witnessIsArray(source)) {
+    throw new TypeError('mutation() requires a stable own-data definition object.');
+  }
+  const keys = witnessOwnKeys(source);
+  if (keys.length > 100_000) throw new TypeError('mutation() definition must be bounded.');
+  const snapshot = witnessCreateNullRecord<unknown>();
+  for (let index = 0; index < keys.length; index += 1) {
+    const key = keys[index]!;
+    if (typeof key !== 'string') continue;
+    const before = witnessGetOwnPropertyDescriptor(source, key);
+    const after = witnessGetOwnPropertyDescriptor(source, key);
+    if (
+      before === undefined ||
+      after === undefined ||
+      !('value' in before) ||
+      !('value' in after)
+    ) {
+      throw new TypeError(`mutation() definition.${key} must be an own data property.`);
+    }
+    if (!witnessObjectIs(before.value, after.value)) {
+      throw new TypeError(`mutation() definition.${key} changed during validation.`);
+    }
+    witnessDefineProperty(snapshot, key, {
+      configurable: true,
+      enumerable: before.enumerable === true,
+      value: before.value,
+      writable: true,
+    });
+  }
+  return snapshot as Omit<MutationDefinition<any, any, any, any, any, any>, 'key'>;
 }
 
 /**

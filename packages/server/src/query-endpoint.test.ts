@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { secret, trustedReveal, type Secret } from '@kovojs/core';
 
-import { publicAccess } from './access.js';
+import { accessDecisionFor, publicAccess } from './access.js';
 import { domain } from './domain.js';
 import {
   assignDerivedQueryKey,
@@ -14,6 +14,33 @@ import {
 import { s, type Schema } from './schema.js';
 
 describe('query endpoints', () => {
+  it('ignores inherited query access/reads and refuses definition accessors', () => {
+    const inherited = Object.create({
+      access: publicAccess('prototype-provided public query'),
+      reads: [domain('prototype-read')],
+    });
+    Object.defineProperty(inherited, 'load', {
+      enumerable: true,
+      value: () => ({ ok: true }),
+    });
+    const declaration = query('exact-query', inherited);
+    expect(accessDecisionFor(declaration)).toBeUndefined();
+    expect(declaration.reads).toEqual([]);
+
+    let getterCalls = 0;
+    const accessor = { reads: [] } as unknown as Parameters<typeof query>[1];
+    Object.defineProperty(accessor, 'load', {
+      configurable: true,
+      enumerable: true,
+      get() {
+        getterCalls += 1;
+        return () => ({ ok: true });
+      },
+    });
+    expect(() => query('accessor-query', accessor)).toThrow('own data');
+    expect(getterCalls).toBe(0);
+  });
+
   it('cannot cross-bind a guarded query to a public sibling through poisoned Array.find', async () => {
     const publicLoad = vi.fn(() => ({ source: 'public' }));
     const protectedLoad = vi.fn(() => ({ source: 'protected' }));
@@ -299,8 +326,7 @@ describe('query endpoints', () => {
     const victimCapability = 'victim-query-capability';
     const capabilityQuery = query('capabilityLookup', {
       args: s.object({ token: s.string() }),
-      guard: (request: { args?: { token?: string } }) =>
-        request.args?.token === victimCapability,
+      guard: (request: { args?: { token?: string } }) => request.args?.token === victimCapability,
       load: (input: { token: string }) => ({ account: 'victim-account', token: input.token }),
       reads: [],
     });
@@ -344,8 +370,7 @@ describe('query endpoints', () => {
     };
     const capabilityQuery = query('iterableCapabilityLookup', {
       args: s.object({ token: s.string() }),
-      guard: (request: { args?: { token?: string } }) =>
-        request.args?.token === victimCapability,
+      guard: (request: { args?: { token?: string } }) => request.args?.token === victimCapability,
       load: () => ({ account: 'victim-account' }),
       reads: [],
     });
@@ -364,16 +389,13 @@ describe('query endpoints', () => {
     const search = [['token', 'attacker-submitted'] as const];
     const capabilityQuery = query('arrayCapabilityLookup', {
       args: s.object({ token: s.string() }),
-      guard: (request: { args?: { token?: string } }) =>
-        request.args?.token === victimCapability,
+      guard: (request: { args?: { token?: string } }) => request.args?.token === victimCapability,
       load: () => ({ account: 'victim-account' }),
       reads: [],
     });
     const originalIterator = Array.prototype[Symbol.iterator];
     Array.prototype[Symbol.iterator] = function iterator() {
-      return originalIterator.call(
-        this === search ? [['token', victimCapability] as const] : this,
-      );
+      return originalIterator.call(this === search ? [['token', victimCapability] as const] : this);
     };
     let response: Awaited<ReturnType<typeof renderQueryEndpointResponse>>;
     try {

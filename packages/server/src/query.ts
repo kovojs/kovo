@@ -49,8 +49,11 @@ import {
   witnessGetOwnPropertyDescriptor,
   witnessGetPrototypeOf,
   witnessIsArray,
+  witnessObjectIs,
   witnessObjectKeys,
+  witnessOwnKeys,
   witnessReflectApply,
+  witnessSetHas,
   witnessWeakMapGet,
   witnessWeakMapSet,
 } from './security-witness-intrinsics.js';
@@ -340,27 +343,63 @@ function buildQueryDefinition<const Key extends string>(
   key: Key,
   definition: Omit<RegisteredQueryDefinition, 'key'>,
 ): unknown {
-  assertKnownQueryDefinitionKeys(definition);
+  const closedDefinition = snapshotQueryDefinition(definition);
+  assertKnownQueryDefinitionKeys(closedDefinition);
   const queryDefinition = pinAccessDecision(
     {
-      ...definition,
+      ...closedDefinition,
       key,
-      reads: definition.reads ?? [],
+      reads: closedDefinition.reads ?? [],
     },
-    definition.access,
+    closedDefinition.access,
   );
-  if (!definition.args) return queryDefinition;
+  if (!closedDefinition.args) return queryDefinition;
 
   witnessDefineProperty(queryDefinition, 'args', {
     configurable: true,
     enumerable: true,
     value: queryArgsSchema(
-      definition.args,
+      closedDefinition.args,
       queryDefinition as QueryDefinition<string, unknown, unknown, unknown>,
     ),
     writable: true,
   });
   return queryDefinition;
+}
+
+function snapshotQueryDefinition(
+  source: Omit<RegisteredQueryDefinition, 'key'>,
+): Omit<RegisteredQueryDefinition, 'key'> {
+  if (typeof source !== 'object' || source === null || witnessIsArray(source)) {
+    throw new TypeError('query() requires a stable own-data definition object.');
+  }
+  const keys = witnessOwnKeys(source);
+  if (keys.length > 100_000) throw new TypeError('query() definition must be bounded.');
+  const snapshot = witnessCreateNullRecord<unknown>();
+  for (let index = 0; index < keys.length; index += 1) {
+    const key = keys[index]!;
+    if (typeof key !== 'string') continue;
+    const before = witnessGetOwnPropertyDescriptor(source, key);
+    const after = witnessGetOwnPropertyDescriptor(source, key);
+    if (
+      before === undefined ||
+      after === undefined ||
+      !('value' in before) ||
+      !('value' in after)
+    ) {
+      throw new TypeError(`query() definition.${key} must be an own data property.`);
+    }
+    if (!witnessObjectIs(before.value, after.value)) {
+      throw new TypeError(`query() definition.${key} changed during validation.`);
+    }
+    witnessDefineProperty(snapshot, key, {
+      configurable: true,
+      enumerable: before.enumerable === true,
+      value: before.value,
+      writable: true,
+    });
+  }
+  return snapshot as Omit<RegisteredQueryDefinition, 'key'>;
 }
 
 /**
@@ -405,8 +444,10 @@ const queryDefinitionKeys = new Set<PropertyKey>([
 ]);
 
 function assertKnownQueryDefinitionKeys(definition: object): void {
-  for (const key of Reflect.ownKeys(definition)) {
-    if (queryDefinitionKeys.has(key)) continue;
+  const keys = witnessOwnKeys(definition);
+  for (let index = 0; index < keys.length; index += 1) {
+    const key = keys[index]!;
+    if (witnessSetHas(queryDefinitionKeys, key)) continue;
     throw new TypeError(
       `Unknown query() definition field "${String(key)}". Supported fields are ${[
         ...queryDefinitionKeys,

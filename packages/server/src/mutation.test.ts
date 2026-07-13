@@ -4,6 +4,7 @@ import { stampTrustedSql } from '@kovojs/core/internal/sql-safety';
 import { createMemoryStorage } from '@kovojs/core/internal/storage';
 
 import { invalidate } from './change-record.js';
+import { accessDecisionFor, publicAccess } from './access.js';
 import { csrfToken } from './csrf.js';
 import { domain, tag } from './domain.js';
 import { guards } from './guards.js';
@@ -67,6 +68,35 @@ function protectedMutationFixture<Input extends Record<string, unknown>>(
 }
 
 describe('server mutation lifecycle', () => {
+  it('ignores inherited mutation access/queue and refuses definition accessors', () => {
+    const inherited = Object.create({
+      access: publicAccess('prototype-provided public mutation'),
+      queue: true,
+    });
+    Object.defineProperties(inherited, {
+      handler: { enumerable: true, value: () => ({ ok: true }) },
+      input: { enumerable: true, value: s.object({ value: s.string() }) },
+    });
+    const declaration = defineMutation('exact-mutation', inherited);
+    expect(accessDecisionFor(declaration)).toBeUndefined();
+    expect(declaration.queue).toBeUndefined();
+
+    let getterCalls = 0;
+    const accessor = {
+      input: s.object({ value: s.string() }),
+    } as unknown as Parameters<typeof defineMutation>[1];
+    Object.defineProperty(accessor, 'handler', {
+      configurable: true,
+      enumerable: true,
+      get() {
+        getterCalls += 1;
+        return () => ({ ok: true });
+      },
+    });
+    expect(() => defineMutation('accessor-mutation', accessor)).toThrow('own data');
+    expect(getterCalls).toBe(0);
+  });
+
   function createTransactionalListDb() {
     const state = {
       commits: 0,
@@ -705,8 +735,7 @@ describe('server mutation lifecycle', () => {
     const nativeBind = Function.prototype.bind;
     const nativeText = Request.prototype.text;
     const guarded = mutation('security/body-carrier-binding', {
-      guard: async (guardRequest: Request) =>
-        (await guardRequest.clone().text()) === acceptedBody,
+      guard: async (guardRequest: Request) => (await guardRequest.clone().text()) === acceptedBody,
       input: s.object({}),
       handler: async (_input, handlerRequest: Request) => handlerRequest.text(),
     });
@@ -732,10 +761,7 @@ describe('server mutation lifecycle', () => {
     const victimSession = { user: { id: 'victim', roles: ['member'] } };
     const attackerSession = { user: { id: 'attacker', roles: ['admin'] } };
     const nativeArrayIterator = Array.prototype[Symbol.iterator];
-    const nativeArrayConstructor = Object.getOwnPropertyDescriptor(
-      Array.prototype,
-      'constructor',
-    )!;
+    const nativeArrayConstructor = Object.getOwnPropertyDescriptor(Array.prototype, 'constructor')!;
     let pinnedRoles: readonly string[] | undefined;
     const poisonedSpecies = new Proxy(function PoisonedArraySpecies() {}, {
       construct(_target, args) {
@@ -744,10 +770,7 @@ describe('server mutation lifecycle', () => {
           defineProperty(target, property, descriptor) {
             return Reflect.defineProperty(target, property, {
               ...descriptor,
-              value:
-                property === '0' && descriptor.value === 'member'
-                  ? 'admin'
-                  : descriptor.value,
+              value: property === '0' && descriptor.value === 'member' ? 'admin' : descriptor.value,
             });
           },
         });
@@ -799,36 +822,40 @@ describe('server mutation lifecycle', () => {
 
     try {
       await expect(
-        runMutation(guarded, {}, {}, {
-          db(request) {
-            sessionCarrier = request as object;
-            pinnedRoles = (
-              request as { session: { user: { roles: readonly string[] } } }
-            ).session.user.roles;
-            Reflect.get = function (
-              target: object,
-              propertyKey: PropertyKey,
-              receiver?: unknown,
-            ): unknown {
-              if (target === sessionCarrier && propertyKey === 'session') return attackerSession;
-              return nativeReflectGet(target, propertyKey, receiver);
-            };
-            return db;
-          },
-          sessionProvider: () => victimSession,
-          taskScheduler: {
-            cancel() {
-              return false;
+        runMutation(
+          guarded,
+          {},
+          {},
+          {
+            db(request) {
+              sessionCarrier = request as object;
+              pinnedRoles = (request as { session: { user: { roles: readonly string[] } } }).session
+                .user.roles;
+              Reflect.get = function (
+                target: object,
+                propertyKey: PropertyKey,
+                receiver?: unknown,
+              ): unknown {
+                if (target === sessionCarrier && propertyKey === 'session') return attackerSession;
+                return nativeReflectGet(target, propertyKey, receiver);
+              };
+              return db;
             },
-            registeredTasks: [followup],
-            schedule(request, input) {
-              schedulerSessions.push(
-                (request as { session: typeof victimSession }).session.user.id,
-              );
-              return { id: 'job-1', task: input.task };
+            sessionProvider: () => victimSession,
+            taskScheduler: {
+              cancel() {
+                return false;
+              },
+              registeredTasks: [followup],
+              schedule(request, input) {
+                schedulerSessions.push(
+                  (request as { session: typeof victimSession }).session.user.id,
+                );
+                return { id: 'job-1', task: input.task };
+              },
             },
           },
-        }),
+        ),
       ).resolves.toMatchObject({
         ok: true,
         value: 'victim:member:member:transaction:security/carrier-followup',
