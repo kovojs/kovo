@@ -434,6 +434,103 @@ describe('storage constructor and metadata authority', () => {
       delete (Object.prototype as { contentType?: unknown }).contentType;
     }
   });
+
+  it('pins Date and etag scalar controls against late global and prototype replacement', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'kovo-storage-date-intrinsics-'));
+    const NativeDate = globalThis.Date;
+    const originalGetTime = NativeDate.prototype.getTime;
+    const originalToISOString = NativeDate.prototype.toISOString;
+    const originalEncodeURIComponent = globalThis.encodeURIComponent;
+    const fixed = new NativeDate('2026-06-11T12:00:00.000Z');
+    try {
+      const storage = createFileSystemStorage({ root });
+      globalThis.Date = function PoisonedDate() {
+        return new NativeDate(0);
+      } as unknown as DateConstructor;
+      NativeDate.prototype.getTime = () => 0;
+      NativeDate.prototype.toISOString = () => 'forged-date';
+      globalThis.encodeURIComponent = () => 'forged-key';
+
+      const memory = createMemoryStorage({ now: () => fixed });
+      const put = await memory.put('safe key.txt', 'plain text');
+      await storage.put('safe.txt', 'plain text', { etag: '"fixed"' });
+
+      expect(put.etag).toBe(`"kovo-safe%20key.txt-10-${fixed.valueOf()}"`);
+    } finally {
+      globalThis.Date = NativeDate;
+      NativeDate.prototype.getTime = originalGetTime;
+      NativeDate.prototype.toISOString = originalToISOString;
+      globalThis.encodeURIComponent = originalEncodeURIComponent;
+    }
+    try {
+      const sidecar = JSON.parse(
+        await readFile(
+          path.join(root, `${fileSystemPhysicalStorageKey('safe.txt')}${fileSystemSidecarSuffix}`),
+          'utf8',
+        ),
+      ) as { lastModified?: unknown };
+      expect(sidecar.lastModified).not.toBe('forged-date');
+      expect(new NativeDate(sidecar.lastModified as string).valueOf()).not.toBe(0);
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
+  it('rejects invalid filesystem dates despite late Date and Number predicate poisoning', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'kovo-storage-date-validation-'));
+    const originalDateParse = Date.parse;
+    const originalNumberIsFinite = Number.isFinite;
+    try {
+      const storage = createFileSystemStorage({ root });
+      const key = 'safe.txt';
+      await storage.put(key, 'plain text');
+      await writeFile(
+        path.join(root, `${fileSystemPhysicalStorageKey(key)}${fileSystemSidecarSuffix}`),
+        JSON.stringify({ lastModified: 'not-a-date', logicalKey: key }),
+        'utf8',
+      );
+      Date.parse = () => 0;
+      Number.isFinite = () => true;
+
+      await expect(storage.stat(key)).resolves.toBeUndefined();
+    } finally {
+      Date.parse = originalDateParse;
+      Number.isFinite = originalNumberIsFinite;
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
+  it('rejects S3 metadata coercion objects and invalid sizes without invoking attacker code', async () => {
+    let coercions = 0;
+    const hostileDate = {
+      valueOf() {
+        coercions += 1;
+        return Date.now();
+      },
+    };
+    const client: S3CompatibleObjectClient = {
+      async deleteObject() {},
+      async getObject() {
+        return { body: 'plain text', lastModified: hostileDate as Date };
+      },
+      async headObject() {
+        return { contentLength: Number.NaN, lastModified: hostileDate as Date };
+      },
+      async putObject() {
+        return {};
+      },
+    };
+    const storage = createS3CompatibleStorage({ bucket: 'safe', client });
+    const originalNumberIsSafeInteger = Number.isSafeInteger;
+    try {
+      Number.isSafeInteger = () => true;
+      await expect(storage.stat('safe.txt')).rejects.toThrow(/contentLength/u);
+      await expect(storage.get('safe.txt')).rejects.toThrow(/lastModified/u);
+    } finally {
+      Number.isSafeInteger = originalNumberIsSafeInteger;
+    }
+    expect(coercions).toBe(0);
+  });
 });
 
 describe('storage read/write authority split', () => {

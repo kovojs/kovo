@@ -3,8 +3,11 @@ import { createHash } from 'node:crypto';
 import { createFrameworkOutputFileSystemBoundary } from './internal/filesystem.js';
 import {
   securityArrayAppend,
+  securityApply,
   securityDefineProperty,
+  securityEncodeURIComponent,
   securityGetOwnPropertyDescriptor,
+  securityHasInstance,
   securityIsArray,
   securityNullRecord,
   securityObjectKeys,
@@ -204,6 +207,9 @@ interface FileSystemMetadataRecord {
 
 const sidecarSuffix = '.kovo-storage.json';
 const fileSystemObjectPrefix = 'kovo-storage-v1';
+const IntrinsicDate = globalThis.Date;
+const intrinsicDateGetTime = IntrinsicDate.prototype.getTime;
+const intrinsicDateToISOString = IntrinsicDate.prototype.toISOString;
 
 /**
  * Create an in-memory object store implementing `StorageCapability`.
@@ -224,7 +230,7 @@ export function createMemoryStorage(options: MemoryStorageOptions = {}): Storage
     throw new TypeError('Memory storage now must be an own function data property when provided.');
   }
   const now = (nowProperty.found ? nowProperty.value : undefined) as (() => Date) | undefined;
-  const readNow = now ?? (() => new Date());
+  const readNow = now ?? (() => new IntrinsicDate());
 
   return {
     async delete(key) {
@@ -315,7 +321,7 @@ export function createFileSystemStorage(options: FileSystemStorageOptions): Stor
       const filePath = storageFilePath(fileSystem, physicalKey);
       const optionsSnapshot = snapshotStoragePutOptions(putOptions);
       const bytes = await storageBodyToBytes(body);
-      const lastModified = new Date();
+      const lastModified = new IntrinsicDate();
       const info = objectInfo(
         normalizedKey,
         fileSystemArrayBufferViewByteLength(bytes),
@@ -686,12 +692,56 @@ function defineStorageData(target: object, key: PropertyKey, value: unknown): vo
   }
 }
 
+function snapshotStorageDate(value: unknown, label: string): Date {
+  const snapshot = trySnapshotStorageDate(value);
+  if (snapshot === undefined) throw new TypeError(`${label} must be a valid Date or date string.`);
+  return snapshot;
+}
+
+function trySnapshotStorageDate(value: unknown): Date | undefined {
+  let time: number;
+  if (typeof value === 'string') {
+    const parsed = new IntrinsicDate(value);
+    time = storageDateGetTime(parsed);
+  } else {
+    if (!securityHasInstance(IntrinsicDate, value)) return undefined;
+    try {
+      time = storageDateGetTime(value as Date);
+    } catch {
+      return undefined;
+    }
+  }
+  return storageIsFiniteNumber(time) ? new IntrinsicDate(time) : undefined;
+}
+
+function storageDateGetTime(value: Date): number {
+  return securityApply<number>(intrinsicDateGetTime, value, []);
+}
+
+function storageDateToISOString(value: Date): string {
+  return securityApply<string>(intrinsicDateToISOString, value, []);
+}
+
+function storageIsFiniteNumber(value: number): boolean {
+  return value === value && value !== Infinity && value !== -Infinity;
+}
+
+function storageIsSafeInteger(value: number): boolean {
+  return (
+    storageIsFiniteNumber(value) &&
+    value % 1 === 0 &&
+    value >= -9_007_199_254_740_991 &&
+    value <= 9_007_199_254_740_991
+  );
+}
+
 function objectInfo(
   key: string,
   size: number,
   options: StoragePutOptions,
   lastModified: Date,
 ): StorageObjectInfo {
+  const lastModifiedSnapshot = snapshotStorageDate(lastModified, 'Storage lastModified');
   const contentType = storageOptionalOwnData(options, 'contentType', 'Storage put contentType');
   const callerEtag = storageOptionalOwnData(options, 'etag', 'Storage put etag');
   const metadata = storageOptionalOwnData(options, 'metadata', 'Storage put metadata');
@@ -699,8 +749,10 @@ function objectInfo(
     key,
     size,
     contentType as string | undefined,
-    callerEtag === undefined ? storageEtag(key, size, lastModified) : (callerEtag as string),
-    lastModified,
+    callerEtag === undefined
+      ? storageEtag(key, size, lastModifiedSnapshot)
+      : (callerEtag as string),
+    lastModifiedSnapshot,
     metadata as Readonly<Record<string, string>> | undefined,
   );
 }
@@ -712,7 +764,11 @@ function metadataRecord(info: StorageObjectInfo): FileSystemMetadataRecord {
   defineStorageData(
     record,
     'lastModified',
-    lastModified === undefined ? new Date().toISOString() : (lastModified as Date).toISOString(),
+    storageDateToISOString(
+      lastModified === undefined
+        ? new IntrinsicDate()
+        : snapshotStorageDate(lastModified, 'Storage lastModified'),
+    ),
   );
   defineStorageData(record, 'logicalKey', key);
   copyOptionalStorageInfoProperty(record, info, 'size');
@@ -743,7 +799,10 @@ async function fileSystemStat(
       | string
       | undefined,
     storageOptionalOwnData(record, 'etag', 'Filesystem metadata etag') as string | undefined,
-    new Date(record.lastModified),
+    snapshotStorageDate(
+      storageRequiredOwnData(record, 'lastModified', 'Filesystem metadata lastModified'),
+      'Filesystem metadata lastModified',
+    ),
     storageOptionalOwnData(record, 'metadata', 'Filesystem metadata custom metadata') as
       | Readonly<Record<string, string>>
       | undefined,
@@ -803,13 +862,10 @@ function parseFileSystemMetadataRecord(value: unknown): FileSystemMetadataRecord
     'Filesystem metadata custom metadata',
   );
   if (!logicalKey.found || typeof logicalKey.value !== 'string') return undefined;
-  if (
-    !lastModified.found ||
-    typeof lastModified.value !== 'string' ||
-    !Number.isFinite(Date.parse(lastModified.value))
-  ) {
+  if (!lastModified.found || typeof lastModified.value !== 'string') {
     return undefined;
   }
+  if (trySnapshotStorageDate(lastModified.value) === undefined) return undefined;
   if (
     contentType.found &&
     contentType.value !== undefined &&
@@ -821,7 +877,7 @@ function parseFileSystemMetadataRecord(value: unknown): FileSystemMetadataRecord
   if (
     size.found &&
     size.value !== undefined &&
-    (typeof size.value !== 'number' || !Number.isSafeInteger(size.value) || size.value < 0)
+    (typeof size.value !== 'number' || !storageIsSafeInteger(size.value) || size.value < 0)
   ) {
     return undefined;
   }
@@ -902,7 +958,7 @@ async function withFileSystemWriteLock<T>(
 }
 
 function storageEtag(key: string, size: number, lastModified: Date): string {
-  return `"kovo-${encodeURIComponent(key)}-${size}-${lastModified.getTime()}"`;
+  return `"kovo-${securityEncodeURIComponent(key)}-${size}-${storageDateGetTime(lastModified)}"`;
 }
 
 function copyInfo(info: StorageObjectInfo): StorageObjectInfo {
@@ -937,7 +993,11 @@ function storageInfoRecord(
   if (contentType !== undefined) defineStorageData(record, 'contentType', contentType);
   if (etag !== undefined) defineStorageData(record, 'etag', etag);
   if (lastModified !== undefined) {
-    defineStorageData(record, 'lastModified', new Date(lastModified));
+    defineStorageData(
+      record,
+      'lastModified',
+      snapshotStorageDate(lastModified, 'Storage lastModified'),
+    );
   }
   if (metadata !== undefined) {
     defineStorageData(record, 'metadata', snapshotStorageMetadata(metadata));
@@ -1050,7 +1110,7 @@ function s3ObjectInfo(
   const customMetadata = storageOptionalOwnData(metadata, 'metadata', 'S3 object metadata');
   if (
     contentLength !== undefined &&
-    (typeof contentLength !== 'number' || !Number.isSafeInteger(contentLength) || contentLength < 0)
+    (typeof contentLength !== 'number' || !storageIsSafeInteger(contentLength) || contentLength < 0)
   ) {
     throw new TypeError('S3 object contentLength must be a non-negative safe integer.');
   }
@@ -1063,7 +1123,7 @@ function s3ObjectInfo(
   if (
     lastModified !== undefined &&
     typeof lastModified !== 'string' &&
-    (typeof lastModified !== 'object' || lastModified === null)
+    !securityHasInstance(IntrinsicDate, lastModified)
   ) {
     throw new TypeError('S3 object lastModified must be a Date or date string.');
   }
@@ -1084,7 +1144,7 @@ function s3OutputBody(output: S3CompatibleGetObjectOutput): StorageBody {
 function s3PutFallbackSize(output: S3CompatiblePutObjectOutput, bodySize: number): number {
   const size = storageOptionalOwnData(output, 'size', 'S3 put object size');
   if (size === undefined) return bodySize;
-  if (typeof size !== 'number' || !Number.isSafeInteger(size) || size < 0) {
+  if (typeof size !== 'number' || !storageIsSafeInteger(size) || size < 0) {
     throw new TypeError('S3 put object size must be a non-negative safe integer.');
   }
   return size;
