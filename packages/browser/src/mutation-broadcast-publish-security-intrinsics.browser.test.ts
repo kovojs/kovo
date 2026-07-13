@@ -152,32 +152,42 @@ it('keeps generated publish on the witnessed postMessage after late principal st
       senderWindow.Document.prototype.querySelector = originalSenderQuerySelector;
     }
   }
-  expect(queryPoisonCalls).toBe(1);
+  // The hardened property writer dispatches through the captured native input setter, so an own
+  // accessor cannot smuggle a query-selector mutation into loader installation. Poison the
+  // selector explicitly after install to retain this test's late-intrinsic coverage.
+  expect(queryPoisonCalls).toBe(0);
+  senderWindow.Document.prototype.querySelector = () => null;
 
-  form.dispatchEvent(new senderWindow.SubmitEvent('submit', { bubbles: true, cancelable: true }));
-  await vi.waitFor(() =>
-    expect(
-      samePrincipalDocument.querySelector('[kovo-fragment-target="private"]')?.textContent,
-    ).toBe('BASELINE SESSION-A PRIVATE'),
-  );
-  expect(anonymousDocument.querySelector('[kovo-fragment-target="private"]')?.textContent).toBe(
-    'ANONYMOUS INITIAL',
-  );
-
-  responseValue = 'PINNED SESSION-A PRIVATE';
-  const poison = stripPrincipalPostMessage(senderWindow.BroadcastChannel.prototype);
   try {
     form.dispatchEvent(new senderWindow.SubmitEvent('submit', { bubbles: true, cancelable: true }));
     await vi.waitFor(() =>
       expect(
         samePrincipalDocument.querySelector('[kovo-fragment-target="private"]')?.textContent,
-      ).toBe('PINNED SESSION-A PRIVATE'),
+      ).toBe('BASELINE SESSION-A PRIVATE'),
     );
+    expect(anonymousDocument.querySelector('[kovo-fragment-target="private"]')?.textContent).toBe(
+      'ANONYMOUS INITIAL',
+    );
+
+    responseValue = 'PINNED SESSION-A PRIVATE';
+    const poison = stripPrincipalPostMessage(senderWindow.BroadcastChannel.prototype);
+    try {
+      form.dispatchEvent(
+        new senderWindow.SubmitEvent('submit', { bubbles: true, cancelable: true }),
+      );
+      await vi.waitFor(() =>
+        expect(
+          samePrincipalDocument.querySelector('[kovo-fragment-target="private"]')?.textContent,
+        ).toBe('PINNED SESSION-A PRIVATE'),
+      );
+    } finally {
+      poison.restore();
+    }
+    expect(anonymousDocument.querySelector('[kovo-fragment-target="private"]')?.textContent).toBe(
+      'ANONYMOUS INITIAL',
+    );
+    expect(poison.calls()).toBe(0);
   } finally {
-    poison.restore();
+    senderWindow.Document.prototype.querySelector = originalSenderQuerySelector;
   }
-  expect(anonymousDocument.querySelector('[kovo-fragment-target="private"]')?.textContent).toBe(
-    'ANONYMOUS INITIAL',
-  );
-  expect(poison.calls()).toBe(0);
 });
