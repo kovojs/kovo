@@ -15,8 +15,6 @@ import {
   adminRoute,
   createReferenceAuth,
   createReferenceBetterAuth,
-  referenceSignIn,
-  referenceSignOut,
   type ReferenceAuthBindings,
   type ReferenceRequest,
 } from './app.js';
@@ -86,23 +84,6 @@ export function createReferenceAppShell(options: ReferenceAppShellOptions = {}) 
   const app = createApp({
     appId: '1f067065-c40a-4579-b35a-7fbcf928e32c',
     document: { lang: 'en-US' },
-    mutationResponses: {
-      [referenceSignIn.key]: ({ rawInput }) => {
-        return {
-          redirectTo: (result) => authRedirectTo(result.value),
-          renderFailurePage: (failure) =>
-            `<!doctype html><html><body><main>${ReferenceShellLoginForm({
-              ...(failure.error.code === 'INVALID_CREDENTIALS'
-                ? { failure: 'INVALID_CREDENTIALS' as const }
-                : {}),
-              next: nextFromRawInput(rawInput) ?? '/account',
-            })}</main></body></html>`,
-        };
-      },
-      [referenceSignOut.key]: {
-        redirectTo: (result) => authRedirectTo(result.value),
-      },
-    },
     mutations: [auth.signIn, auth.signOut],
     ...(options.onError === undefined ? {} : { onError: options.onError }),
     renderRoute(value) {
@@ -142,29 +123,6 @@ export function createReferencePublicAppShell() {
 
 export function routeValueToHtml(value: unknown): string {
   return renderRouteHtml(value);
-}
-
-function nextFromRawInput(rawInput: unknown): string | undefined {
-  if (rawInput instanceof FormData) {
-    const value = rawInput.get('next');
-    return typeof value === 'string' ? value : undefined;
-  }
-
-  if (typeof rawInput !== 'object' || rawInput === null || !('next' in rawInput)) {
-    return undefined;
-  }
-
-  const value = rawInput.next;
-  return typeof value === 'string' ? value : undefined;
-}
-
-function authRedirectTo(value: unknown): string {
-  if (typeof value === 'object' && value !== null && 'redirectTo' in value) {
-    const redirectTo = value.redirectTo;
-    if (typeof redirectTo === 'string') return redirectTo;
-  }
-
-  return '/account';
 }
 
 export const referenceAppShell = createReferenceAppShell();

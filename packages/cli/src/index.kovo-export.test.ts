@@ -64,7 +64,6 @@ function appModuleSource(options: {
     '  errorShells: {},',
     '  liveTargetRenderers: [],',
     '  mutations: [],',
-    '  mutationResponses: {},',
     '  queries: [],',
     `  routes: [${options.route}],`,
     '  stylesheets: [],',

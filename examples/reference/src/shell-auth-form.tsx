@@ -1,11 +1,11 @@
 /** @jsxImportSource @kovojs/server */
+import { FormError } from '@kovojs/core';
+
 import { referenceSignIn } from './app.js';
 
 export function ReferenceShellLoginForm({
-  failure,
   next = '/account',
 }: {
-  failure?: 'INVALID_CREDENTIALS';
   next?: string;
 } = {}): string {
   return (
@@ -13,11 +13,10 @@ export function ReferenceShellLoginForm({
       <input type="hidden" name="next" value={next} />
       <input name="email" type="email" autocomplete="email" required />
       <input name="password" type="password" autocomplete="current-password" required />
-      {failure === 'INVALID_CREDENTIALS' ? (
-        <output role="alert" data-error-code="INVALID_CREDENTIALS">
-          Invalid email or password.
-        </output>
-      ) : null}
+      {/* SPEC §9.1: the framework re-renders the submitted source-route form with typed failure
+          state; the app does not register an app-level mutation-response body override. */}
+      <FormError code="INVALID_CREDENTIALS" message="Invalid email or password." />
+      <FormError code="CSRF" message="Request verification failed. Please retry." />
       <button type="submit">Sign in</button>
     </form>
   );

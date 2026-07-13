@@ -286,10 +286,7 @@ function referenceAuthResponse(
   status = 204,
 ): ReferenceBetterAuthResponse {
   const headers = new Headers();
-
-  Object.defineProperty(headers, 'getSetCookie', {
-    value: () => [...cookies],
-  });
+  for (const cookie of cookies) headers.append('Set-Cookie', cookie);
 
   return { headers, status };
 }
