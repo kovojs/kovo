@@ -1616,6 +1616,8 @@ export async function executeInlineEnhancedFormLoaderFixture(
     },
   ];
   const context = {
+    AbortController,
+    AbortSignal,
     CustomEvent: class CustomEvent {
       detail: unknown;
       type: string;
