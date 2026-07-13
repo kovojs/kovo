@@ -1,4 +1,9 @@
-import { securityArrayAppend } from './security-witness-intrinsics.js'; /** Parsed attribute metadata for raw Kovo wire elements (SPEC §9.4). */
+import { securityArrayAppend } from './security-witness-intrinsics.js';
+
+/**
+ * Parsed attribute metadata used by compiler-emitted Kovo wire readers (SPEC §9.4).
+ * @generated
+ */
 export interface WireAttribute {
   end: number;
   hasValue: boolean;

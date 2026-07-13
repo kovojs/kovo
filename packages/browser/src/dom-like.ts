@@ -1,4 +1,9 @@
-import { securityArrayAppend } from './security-witness-intrinsics.js'; /** Minimal `{ name, value }` shape of a DOM attribute the runtime reads (SPEC §9.1). */
+import { securityArrayAppend } from './security-witness-intrinsics.js';
+
+/**
+ * Minimal `{ name, value }` shape used by compiler-emitted loader ABI (SPEC §9.1).
+ * @generated
+ */
 export interface DomAttributeLike {
   name: string;
   value: string;
