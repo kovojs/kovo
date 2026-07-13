@@ -74,6 +74,7 @@ interface BrowserFetchResponsePlan {
 export function createBrowserNavigationSecurityControls(scope: typeof globalThis = globalThis) {
   const NativeObject = Object;
   const NativeArray = Array;
+  const NativeMap = Map;
   const NativePromise = Promise;
   const NativeWeakMap = WeakMap;
   const NativeReflect = Reflect;
@@ -126,6 +127,9 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
   const nativeObjectFreeze = NativeObject.freeze;
   const nativeObjectIsFrozen = NativeObject.isFrozen;
   const nativeArrayIsArray = NativeArray.isArray;
+  const nativeMapGet = valueMethod(NativeMap.prototype, 'get');
+  const nativeMapHas = valueMethod(NativeMap.prototype, 'has');
+  const nativeMapSet = valueMethod(NativeMap.prototype, 'set');
   const nativePromiseThen = NativePromise.prototype.then;
   const nativeWeakMapGet = valueMethod(NativeWeakMap.prototype, 'get');
   const nativeWeakMapHas = valueMethod(NativeWeakMap.prototype, 'has');
@@ -562,6 +566,43 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
   ): PropertyDescriptor | undefined {
     if (!controlsSound) throw new TypeError('Kovo browser navigation controls are unavailable.');
     return descriptor(value, property);
+  }
+
+  function createSecurityMap<Key, Value>(): Map<Key, Value> {
+    if (!controlsSound || !nativeMapGet || !nativeMapHas || !nativeMapSet) {
+      throw new TypeError('Kovo browser Map controls are unavailable.');
+    }
+    return new NativeMap<Key, Value>();
+  }
+
+  function getSecurityMapValue<Key, Value>(
+    map: ReadonlyMap<Key, Value>,
+    key: Key,
+  ): Value | undefined {
+    if (!controlsSound || !nativeMapGet) {
+      throw new TypeError('Kovo browser Map controls are unavailable.');
+    }
+    return apply<Value | undefined>(nativeMapGet, map, [key]);
+  }
+
+  function hasSecurityMapValue<Key>(map: ReadonlyMap<Key, unknown>, key: Key): boolean {
+    if (!controlsSound || !nativeMapHas) {
+      throw new TypeError('Kovo browser Map controls are unavailable.');
+    }
+    return apply<boolean>(nativeMapHas, map, [key]) === true;
+  }
+
+  function setSecurityMapValue<Key, Value>(map: Map<Key, Value>, key: Key, value: Value): void {
+    if (!controlsSound || !nativeMapGet || !nativeMapHas || !nativeMapSet) {
+      throw new TypeError('Kovo browser Map controls are unavailable.');
+    }
+    if (
+      apply<unknown>(nativeMapSet, map, [key, value]) !== map ||
+      apply<boolean>(nativeMapHas, map, [key]) !== true ||
+      apply<Value | undefined>(nativeMapGet, map, [key]) !== value
+    ) {
+      throw new TypeError('Kovo browser Map write control rejected its commit.');
+    }
   }
 
   function fetchResponsePlan(response: object): BrowserFetchResponsePlan | undefined {
@@ -2547,6 +2588,9 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
         typeof nativeObjectFreeze !== 'function' ||
         typeof nativeObjectIsFrozen !== 'function' ||
         typeof nativeArrayIsArray !== 'function' ||
+        typeof nativeMapGet !== 'function' ||
+        typeof nativeMapHas !== 'function' ||
+        typeof nativeMapSet !== 'function' ||
         typeof nativePromiseThen !== 'function' ||
         typeof nativeWeakMapGet !== 'function' ||
         typeof nativeWeakMapHas !== 'function' ||
@@ -2648,6 +2692,24 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
         rejectedForeignWeakMapReceiver = true;
       }
       if (!rejectedForeignWeakMapReceiver) return false;
+      const mapControl = new NativeMap<unknown, object>();
+      const mapKey = 'kovo-browser-map-control';
+      const mapValue = { marker: 'kovo-browser-map-value' };
+      if (
+        apply<unknown>(nativeMapSet, mapControl, [mapKey, mapValue]) !== mapControl ||
+        apply<unknown>(nativeMapGet, mapControl, [mapKey]) !== mapValue ||
+        apply<boolean>(nativeMapHas, mapControl, [mapKey]) !== true ||
+        apply<boolean>(nativeMapHas, mapControl, ['kovo-browser-map-negative']) !== false
+      ) {
+        return false;
+      }
+      let rejectedForeignMapReceiver = false;
+      try {
+        apply(nativeMapGet, {}, [mapKey]);
+      } catch {
+        rejectedForeignMapReceiver = true;
+      }
+      if (!rejectedForeignMapReceiver) return false;
       const abortControllerControl = new NativeAbortController();
       const abortSignalControl = apply<unknown>(abortControllerSignal, abortControllerControl, []);
       if (
@@ -3238,6 +3300,7 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
     cloneDomNode,
     cloneElement,
     closestElement,
+    createSecurityMap,
     createMutationBroadcastChannel,
     createFragmentContent,
     createFormData,
@@ -3251,10 +3314,12 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
     fetchWithOptionalSyncResult,
     fetchValue,
     getOwnSecurityPropertyDescriptor,
+    getSecurityMapValue,
     getElementById,
     hardNavigate,
     hasReloadControl,
     hasElementAttribute,
+    hasSecurityMapValue,
     islandAbortSignal,
     insertDomNode,
     elementContains,
@@ -3299,6 +3364,7 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
     safeSameOriginPath,
     setElementAttribute,
     setElementProperty,
+    setSecurityMapValue,
     setNodeTextContent,
     slice,
     snapshotChildNodes,

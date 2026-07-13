@@ -4,6 +4,33 @@ import { createBrowserNavigationSecurityControls } from './navigation-security-i
 import { sanitizeReauthDirective } from './reauth-directive.js';
 
 describe('browser navigation security intrinsics', () => {
+  it('keeps keyed reconciliation maps pinned after late Map prototype replacement', () => {
+    const controls = createBrowserNavigationSecurityControls();
+    const originalGet = Map.prototype.get;
+    const originalHas = Map.prototype.has;
+    const originalSet = Map.prototype.set;
+    let present = false;
+    let value: object | undefined;
+    try {
+      Map.prototype.get = () => ({ forged: true });
+      Map.prototype.has = () => false;
+      Map.prototype.set = function () {
+        return this;
+      };
+      const map = controls.createSecurityMap<string, object>();
+      const expected = { server: true };
+      controls.setSecurityMapValue(map, 'row-1', expected);
+      present = controls.hasSecurityMapValue(map, 'row-1');
+      value = controls.getSecurityMapValue(map, 'row-1');
+    } finally {
+      Map.prototype.get = originalGet;
+      Map.prototype.has = originalHas;
+      Map.prototype.set = originalSet;
+    }
+    expect(present).toBe(true);
+    expect(value).toEqual({ server: true });
+  });
+
   it('keeps URL and path decisions pinned after late prototype/global replacement', () => {
     const controls = createBrowserNavigationSecurityControls();
     const originDescriptor = Object.getOwnPropertyDescriptor(URL.prototype, 'origin')!;

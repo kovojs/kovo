@@ -85,22 +85,22 @@ export class DomMorphTarget implements MorphTarget {
     const current = security.snapshotElementChildren(this.element);
     const incoming = security.snapshotElementChildren(content);
     const insert: Element[] = [];
+    const presentKeys = security.createSecurityMap<string, true>();
+    for (let currentIndex = 0; currentIndex < current.length; currentIndex += 1) {
+      const currentNode = current[currentIndex];
+      if (!currentNode) continue;
+      const key = domMorphKey(currentNode, security);
+      if (key !== null) security.setSecurityMapValue(presentKeys, key, true);
+    }
     for (let incomingIndex = 0; incomingIndex < incoming.length; incomingIndex += 1) {
       const node = incoming[incomingIndex];
       if (!node) continue;
       const key = domMorphKey(node, security);
-      let present = false;
       if (key !== null) {
-        for (let currentIndex = 0; currentIndex < current.length; currentIndex += 1) {
-          const currentNode = current[currentIndex];
-          if (currentNode && domMorphKey(currentNode, security) === key) {
-            present = true;
-            break;
-          }
-        }
+        if (security.hasSecurityMapValue(presentKeys, key)) continue;
+        security.setSecurityMapValue(presentKeys, key, true);
       }
-      if (!present)
-        securityArrayAppend(insert, node, 'Browser packages/browser/src/morph.ts collection');
+      securityArrayAppend(insert, node, 'Browser packages/browser/src/morph.ts collection');
     }
     const scrollTop = this.element.scrollTop;
     const scrollHeight = this.element.scrollHeight;
@@ -539,8 +539,18 @@ function morphDomChildren(
   const currentChildren = security.snapshotChildNodes(current);
   const nextChildren = security.snapshotChildNodes(next);
   const desiredNodes: ChildNode[] = [];
-  const usedCurrent: ChildNode[] = [];
+  const currentByKey = security.createSecurityMap<string, ChildNode>();
+  const usedCurrent = security.createSecurityMap<ChildNode, true>();
   let unkeyedCursor = 0;
+
+  for (let currentIndex = 0; currentIndex < currentChildren.length; currentIndex += 1) {
+    const candidate = currentChildren[currentIndex];
+    if (!candidate || security.readElementTagName(candidate) === undefined) continue;
+    const key = domMorphKey(candidate as Element, security);
+    if (key !== null && !security.hasSecurityMapValue(currentByKey, key)) {
+      security.setSecurityMapValue(currentByKey, key, candidate);
+    }
+  }
 
   for (let nextIndex = 0; nextIndex < nextChildren.length; nextIndex += 1) {
     const nextChild = nextChildren[nextIndex];
@@ -560,25 +570,15 @@ function morphDomChildren(
           security.readElementTagName(candidate) !== undefined
             ? domMorphKey(candidate as Element, security)
             : null;
-        if (candidateKey !== null || includesDomNode(usedCurrent, candidate)) continue;
+        if (candidateKey !== null || security.hasSecurityMapValue(usedCurrent, candidate)) continue;
         matched = candidate;
         break;
       }
     } else {
-      for (let currentIndex = 0; currentIndex < currentChildren.length; currentIndex += 1) {
-        const candidate = currentChildren[currentIndex];
-        if (
-          candidate &&
-          security.readElementTagName(candidate) !== undefined &&
-          domMorphKey(candidate as Element, security) === nextKey
-        ) {
-          matched = candidate;
-          break;
-        }
-      }
+      matched = security.getSecurityMapValue(currentByKey, nextKey);
     }
 
-    if (!matched || includesDomNode(usedCurrent, matched)) {
+    if (!matched || security.hasSecurityMapValue(usedCurrent, matched)) {
       securityArrayAppend(
         desiredNodes,
         cloneDomChildNode(nextChild, security),
@@ -587,7 +587,7 @@ function morphDomChildren(
       continue;
     }
 
-    securityArrayAppend(usedCurrent, matched, 'Browser packages/browser/src/morph.ts collection');
+    security.setSecurityMapValue(usedCurrent, matched, true);
     if (
       security.readElementTagName(matched) !== undefined &&
       security.readElementTagName(nextChild) !== undefined
@@ -612,13 +612,6 @@ function morphDomChildren(
   // `replaceChildren` adopts the already-reconciled node plan in one boot-pinned native
   // commit. Reused keyed nodes retain identity; removed nodes are discarded atomically.
   security.replaceElementChildren(current, desiredNodes);
-}
-
-function includesDomNode(nodes: readonly ChildNode[], candidate: ChildNode): boolean {
-  for (let index = 0; index < nodes.length; index += 1) {
-    if (nodes[index] === candidate) return true;
-  }
-  return false;
 }
 
 function cloneDomChildNode(child: ChildNode, security = requireBrowserDomSecurity()): ChildNode {

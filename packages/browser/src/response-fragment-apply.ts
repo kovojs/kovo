@@ -13,9 +13,12 @@ export type HtmlResponseFragmentSecurityControls = Pick<
   | 'charCode'
   | 'cloneDomNode'
   | 'createFragmentContent'
+  | 'createSecurityMap'
   | 'elementContains'
   | 'hasElementAttribute'
   | 'indexOf'
+  | 'getSecurityMapValue'
+  | 'hasSecurityMapValue'
   | 'lower'
   | 'prependElementChildren'
   | 'queryAllElements'
@@ -29,6 +32,7 @@ export type HtmlResponseFragmentSecurityControls = Pick<
   | 'replaceElement'
   | 'replaceElementChildren'
   | 'setElementAttribute'
+  | 'setSecurityMapValue'
   | 'slice'
   | 'snapshotChildNodes'
   | 'snapshotElementAttributes'
@@ -137,16 +141,10 @@ export function p(
         // the scroll anchor — the target is the scroll container, so its scrollTop is
         // shifted by the inserted height to keep existing ("load older") content
         // visually fixed (no jump). Inert-until-touched holds as for append.
-        const ex: string[] = [];
+        const ex = security.createSecurityMap<string, true>();
         const rememberKey = (key: string): boolean => {
-          for (let keyIndex = 0; keyIndex < ex.length; keyIndex += 1) {
-            if (ex[keyIndex] === key) return false;
-          }
-          securityArrayAppend(
-            ex,
-            key,
-            'Browser packages/browser/src/response-fragment-apply.ts keyed prepend snapshot',
-          );
+          if (security.hasSecurityMapValue(ex, key)) return false;
+          security.setSecurityMapValue(ex, key, true);
           return true;
         };
         const currentRows = security.snapshotElementChildren(e);
@@ -511,22 +509,28 @@ function u(c: Element, n: Element, security: HtmlResponseFragmentSecurityControl
   const current = security.snapshotElementChildren(c);
   const next = security.snapshotChildNodes(n);
   const desired: ChildNode[] = [];
+  const currentByKey = security.createSecurityMap<string, Element>();
+  const used = security.createSecurityMap<Element, true>();
+  for (let currentIndex = 0; currentIndex < current.length; currentIndex += 1) {
+    const candidate = current[currentIndex];
+    if (!candidate) continue;
+    const key = k(candidate, security);
+    if (key !== null && !security.hasSecurityMapValue(currentByKey, key)) {
+      security.setSecurityMapValue(currentByKey, key, candidate);
+    }
+  }
   for (let nextIndex = 0; nextIndex < next.length; nextIndex += 1) {
     const nextNode = next[nextIndex];
     if (!nextNode) continue;
     if (security.readElementTagName(nextNode) !== undefined) {
       const nextElement = nextNode as Element;
       const key = k(nextElement, security);
-      let match: Element | undefined;
-      if (key !== null) {
-        for (let currentIndex = 0; currentIndex < current.length; currentIndex += 1) {
-          const candidate = current[currentIndex];
-          if (candidate && k(candidate, security) === key) {
-            match = candidate;
-            break;
-          }
-        }
-      }
+      const candidate = key === null ? undefined : security.getSecurityMapValue(currentByKey, key);
+      const match =
+        candidate !== undefined && !security.hasSecurityMapValue(used, candidate)
+          ? candidate
+          : undefined;
+      if (match !== undefined) security.setSecurityMapValue(used, match, true);
       const resolved = match
         ? m(match, nextElement, security)
         : g(security.cloneDomNode(nextElement, true) as Element, security);
