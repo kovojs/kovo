@@ -10,7 +10,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 | Severity | Count | Items   |
 | -------- | ----: | ------- |
-| Critical |   262 | C1-C262 |
+| Critical |   266 | C1-C266 |
 | High     |    35 | H1-H35  |
 | Medium   |    12 | M1-M12  |
 
@@ -3035,6 +3035,33 @@ build:dist` passes.
     through inherited setters.
   - **Evidence:** change/mutation matrices retain exact invalidations and reruns; the parent-layout
     poison request still redirects before the private page, and route/live-target suites pass.
+
+- [x] **C263 - Webhook HMAC accepts brute-force secrets and unbounded replay tolerance.**
+      `packages/core/src/verifier.ts`
+  - One-byte secrets were accepted and `seconds: Infinity` made arbitrarily old signed requests pass.
+  - **Evidence:** every rotation key now decodes to at least 32 bytes and tolerance is an integer in
+    `0..86400`; all 308 core tests and dist/DTS builds pass.
+
+- [x] **C264 - Better Auth schema/touch classifiers fail open under Array method replacement.**
+      `packages/better-auth/src`
+  - Replaced filter/map/sort/push controls erased missing tables, key/touch mismatches, plugin secret
+    evidence, and generated credential mutation touches.
+  - **Evidence:** the exact four-method poison corpus retains every rejection and graph fact; all 110
+    Better Auth tests and dist/DTS builds pass.
+
+- [x] **C265 - Browser auth changes can leave old-principal broadcast authority active.**
+      `packages/browser/src/{mutation-response,mutation-fetch,inline-loader-build,inline-loader}.ts`
+  - Replaced flatMap/filter/every controls erased an `auth` Kovo-Changes fallback, so an old-principal
+    channel was not retired before navigation.
+  - **Evidence:** modular and generated-loader poison regressions close the channel before navigation;
+    all 763 node and 525 three-engine browser tests, parity, Trusted Types, and dist/DTS pass.
+
+- [x] **C266 - Disposed DB egress authority and static-export destinations remain mutable.**
+      `packages/server/src/{egress-bootstrap,static-export}.ts`
+  - Ambient Map/array methods could preserve a private DB endpoint exemption after disposal, while
+    inherited option setters could redirect static output beyond the validated destination.
+  - **Evidence:** poisoned unregister removes the exemption, inherited `outDir` receives zero writes,
+    all 2,392 server tests and server dist/DTS pass in the isolated proving branch.
 
 ## High
 
