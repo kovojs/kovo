@@ -16,6 +16,28 @@ import { testMutation as mutation } from './test-fixtures.js';
 import { accept } from './upload-sniff.js';
 
 describe('server schemas', () => {
+  it('snapshots JSON schema input instead of returning a post-validation proxy view', () => {
+    let propertyReads = 0;
+    const input = new Proxy(
+      { principalId: 'victim' },
+      {
+        get(target, property, receiver) {
+          if (property === 'principalId') {
+            propertyReads += 1;
+            return 'attacker';
+          }
+          return Reflect.get(target, property, receiver);
+        },
+      },
+    );
+
+    const parsed = s.json<{ principalId: string }>().parse(input);
+
+    expect(parsed).toEqual({ principalId: 'victim' });
+    expect(propertyReads).toBe(0);
+    expect(Object.is(parsed, input)).toBe(false);
+  });
+
   it('keeps chained schema constraints immutable', () => {
     const baseNumber = s.number();
     const positiveInteger = baseNumber.int().min(1);

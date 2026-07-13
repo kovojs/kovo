@@ -6,6 +6,7 @@ import {
   type StorageObjectInfo,
   type StoragePutCapability,
 } from '@kovojs/core';
+import { assertAndCloneJsonValue } from '@kovojs/core/internal/json';
 
 import {
   type UnverifiedAcceptance,
@@ -229,20 +230,6 @@ function ownRecordValues(record: Record<string, unknown>): unknown[] {
   return values;
 }
 
-function recordValuesEvery(
-  record: Record<string, unknown>,
-  predicate: (value: unknown) => boolean,
-): boolean {
-  const keys = witnessObjectKeys(record);
-  for (let index = 0; index < keys.length; index += 1) {
-    const descriptor = witnessGetOwnPropertyDescriptor(record, keys[index]!);
-    if (descriptor === undefined || !('value' in descriptor) || !predicate(descriptor.value)) {
-      return false;
-    }
-  }
-  return true;
-}
-
 /** @internal Return the declared upload bytes needed by file schemas nested in this schema. */
 export function schemaMaxUploadBytes(schema: Schema<unknown>): number | undefined {
   const metadata = witnessWeakMapGet(schemaMetadata, schema);
@@ -436,8 +423,13 @@ export const s = {
       parse(input: unknown): Value {
         input = revealSchemaInput(input);
         const value = typeof input === 'string' ? parseJsonInput(input) : input;
-        if (!isJsonValue(value)) throw validationError('Expected JSON value');
-        return value as Value;
+        try {
+          // SPEC §9.1.1: validate and commit the same exact JSON descriptors so an app-owned
+          // Proxy cannot substitute different authority after schema validation.
+          return assertAndCloneJsonValue(value, { root: 'JSON input' }) as Value;
+        } catch {
+          throw validationError('Expected JSON value');
+        }
       },
     };
   },
@@ -1165,26 +1157,6 @@ function parseJsonInput(input: string): unknown {
   } catch {
     throw validationError('Expected JSON value');
   }
-}
-
-function isJsonValue(value: unknown): value is JsonValue {
-  if (value === null) return true;
-  switch (typeof value) {
-    case 'boolean':
-    case 'number':
-    case 'string':
-      return securityNumberIsFinite(value) || typeof value !== 'number';
-    case 'object':
-      if (securityArrayIsArray(value)) return arrayEvery(value, isJsonValue);
-      if (!isPlainJsonObject(value)) return false;
-      return recordValuesEvery(value as Record<string, unknown>, isJsonValue);
-    default:
-      return false;
-  }
-}
-
-function isPlainJsonObject(value: object): boolean {
-  return requestIsPlainRecord(value);
 }
 
 class FileSchemaImpl implements FileSchema {
