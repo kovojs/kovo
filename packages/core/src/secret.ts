@@ -1,4 +1,5 @@
 import { createBoundedRuntimeAuditCollector } from './internal/security-markers.js';
+import { snapshotAuditText } from './internal/audit-text.js';
 import {
   freezeSecurityValue,
   securityApply,
@@ -467,7 +468,9 @@ export function redacted<T>(value: T, options: RedactedOptions = {}): RedactedVa
   if (mask !== undefined && typeof mask !== 'string') {
     throw new TypeError('Redacted mask must be an own string data property when provided.');
   }
-  const box = new KovoPoisonBox(value, (mask as string | undefined) ?? REDACTED_MASK, 'redacted');
+  const closedMask =
+    mask === undefined ? REDACTED_MASK : snapshotAuditText(mask, 'Redacted mask', true);
+  const box = new KovoPoisonBox(value, closedMask, 'redacted');
   return freezeSecurityValue(box) as unknown as RedactedValue<T>;
 }
 
@@ -486,7 +489,7 @@ function validateRevealReason(reason: SecretRevealReason | undefined): string {
   if (typeof text !== 'string' || securityStringTrim(text) === '') {
     throw new Error('Secret/Untrusted reveal requires a non-empty justification.');
   }
-  return securityStringTrim(text);
+  return securityStringTrim(snapshotAuditText(text, 'Secret/Untrusted reveal justification'));
 }
 
 function recordSecretReveal(reason: string): void {
@@ -551,6 +554,7 @@ export function publishToClient<T>(value: T, options: PublishToClientOptions): T
   if (typeof reason !== 'string' || !securityStringTrim(reason)) {
     throw new Error('publishToClient requires a non-empty reason.');
   }
+  snapshotAuditText(reason, 'publishToClient reason');
   return value;
 }
 
@@ -568,6 +572,7 @@ export function declareOffWire(run: () => void, options: DeclareOffWireOptions):
   if (typeof justification !== 'string' || !securityStringTrim(justification)) {
     throw new Error('declareOffWire requires a non-empty justification.');
   }
+  snapshotAuditText(justification, 'declareOffWire justification');
   run();
 }
 
@@ -700,6 +705,7 @@ export function trustedReveal<T>(value: T, options: TrustedRevealOptions): Trust
   if (typeof justification !== 'string' || !securityStringTrim(justification)) {
     throw new Error('trustedReveal requires a non-empty justification.');
   }
+  snapshotAuditText(justification, 'trustedReveal justification');
   // Unwrap a runtime secret box so the reveal yields the value, not the poisoned
   // wrapper; a non-box value (e.g. a Drizzle column typed Secret) passes through.
   return (

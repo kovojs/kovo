@@ -1,4 +1,5 @@
 import { diagnosticDefinitions } from './diagnostics.js';
+import { snapshotAuditText } from './audit-text.js';
 import {
   freezeSecurityValue,
   securityArrayAppend,
@@ -195,7 +196,7 @@ export function validateTrustedSqlJustification(justification: string): string {
   if (!securityStringTrim(justification)) {
     throw new Error('trustedSql requires a non-empty justification.');
   }
-  return justification;
+  return snapshotAuditText(justification, 'trustedSql justification');
 }
 
 /** @internal */
