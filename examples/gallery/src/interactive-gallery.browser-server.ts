@@ -1,12 +1,16 @@
+import { isKovoTrustedHtml, kovoTrustedHtmlContent } from '@kovojs/browser/generated';
+
+import { escapeText } from './interactive-gallery.browser-jsx-runtime.js';
+
 export { trustedHtml, trustedUrl } from '@kovojs/browser';
 
 export function renderRouteHtml(value: unknown): string {
   if (value === null || value === undefined || typeof value === 'boolean') return '';
   if (typeof value === 'string') return value;
   if (typeof value === 'number' || typeof value === 'bigint') return `${value}`;
-  if (typeof value === 'object' && typeof (value as { html?: unknown }).html === 'string') {
-    return (value as { html: string }).html;
+  if (isKovoTrustedHtml(value)) {
+    return kovoTrustedHtmlContent(value);
   }
 
-  return JSON.stringify(value) ?? '';
+  return escapeText(JSON.stringify(value) ?? '');
 }
