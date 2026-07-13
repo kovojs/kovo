@@ -93,6 +93,136 @@ describe('server endpoints', () => {
     expect(assertNoAmbientSession).toBeTypeOf('function');
   });
 
+  it('ignores inherited endpoint posture and refuses accessors without invoking them', () => {
+    const inherited = Object.create({
+      csrf: false,
+      csrfJustification: 'prototype-provided exemption',
+      db: true,
+      mount: 'prefix',
+      mountJustification: 'prototype-provided prefix mount',
+    });
+    Object.defineProperties(inherited, {
+      handler: { enumerable: true, value: () => new Response('ok') },
+      method: { enumerable: true, value: 'POST' },
+      reason: { enumerable: true, value: 'exact endpoint declaration' },
+      response: { enumerable: true, value: rawTextResponse },
+    });
+    const declaration = endpoint('/exact-own-posture', inherited);
+    expect(declaration.csrf).toBeUndefined();
+    expect(declaration.db).toBeUndefined();
+    expect(declaration.mount).toBe('exact');
+
+    let getterCalls = 0;
+    const accessor = {
+      handler: () => new Response('ok'),
+      method: 'POST',
+      reason: 'accessor endpoint declaration',
+      response: rawTextResponse,
+    } as Parameters<typeof endpoint>[1];
+    Object.defineProperty(accessor, 'csrf', {
+      configurable: true,
+      get() {
+        getterCalls += 1;
+        return false;
+      },
+    });
+    expect(() => endpoint('/accessor-posture', accessor)).toThrow('own data');
+    expect(getterCalls).toBe(0);
+  });
+
+  it('pins reserved-header posture before an asynchronous endpoint handler runs', async () => {
+    const previous = process.env.KOVO_VERIFY_ENDPOINT_POSTURE;
+    process.env.KOVO_VERIFY_ENDPOINT_POSTURE = '1';
+    const reservedHeaders: string[] = [];
+    const responsePosture: EndpointResponsePosture = {
+      appOwnedSafety: true,
+      body: 'text',
+      cache: 'no-store',
+      reservedHeaders,
+    };
+    const declaration = endpoint('/late-reserved-header', {
+      async handler() {
+        await Promise.resolve();
+        reservedHeaders.push('Set-Cookie');
+        return new Response('ok', {
+          headers: { 'Cache-Control': 'no-store', 'Set-Cookie': 'sid=attacker; Path=/' },
+        });
+      },
+      method: 'POST',
+      reason: 'late reserved header posture regression',
+      response: responsePosture,
+    });
+    try {
+      await expect(
+        runEndpoint(
+          declaration,
+          new Request('https://example.test/late-reserved-header', { method: 'POST' }),
+        ),
+      ).rejects.toThrow(/Set-Cookie/u);
+    } finally {
+      if (previous === undefined) delete process.env.KOVO_VERIFY_ENDPOINT_POSTURE;
+      else process.env.KOVO_VERIFY_ENDPOINT_POSTURE = previous;
+    }
+  });
+
+  it('retains one immutable nested endpoint declaration snapshot', () => {
+    const body: ['json', 'text'] = ['json', 'text'];
+    const reservedHeaders = ['Location'];
+    const allowEntry = {
+      origin: 'https://accounts.example.test',
+      reason: 'delegated identity provider',
+    };
+    const redirectAllowlist = [allowEntry];
+    const response: EndpointResponsePosture = {
+      appOwnedSafety: true,
+      body,
+      cache: 'no-store',
+      redirectAllowlist,
+      reservedHeaders,
+    };
+    const auth = { justification: 'public machine callback', kind: 'none' as const };
+    const definition = {
+      auth,
+      csrf: false as const,
+      csrfJustification: 'public machine callback',
+      handler: () => new Response('ok'),
+      method: 'POST' as const,
+      reason: 'immutable endpoint declaration regression',
+      response,
+    };
+    const declaration = endpoint('/immutable-endpoint', definition);
+
+    body[0] = 'bytes';
+    reservedHeaders[0] = 'Set-Cookie';
+    allowEntry.origin = 'https://attacker.example';
+    response.appOwnedSafety = false;
+    response.cache = 'public';
+    auth.justification = 'changed after declaration';
+    definition.handler = () => new Response('attacker');
+
+    expect(declaration.response).toEqual({
+      appOwnedSafety: true,
+      body: ['json', 'text'],
+      cache: 'no-store',
+      redirectAllowlist: [
+        {
+          origin: 'https://accounts.example.test',
+          reason: 'delegated identity provider',
+        },
+      ],
+      reservedHeaders: ['Location'],
+    });
+    expect(declaration.auth).toEqual({
+      justification: 'public machine callback',
+      kind: 'none',
+    });
+    expect(Object.isFrozen(declaration)).toBe(true);
+    expect(Object.isFrozen(declaration.response)).toBe(true);
+    expect(Object.isFrozen(declaration.response.redirectAllowlist?.[0])).toBe(true);
+    expect(Object.isFrozen(declaration.response.reservedHeaders)).toBe(true);
+    expect(Reflect.set(declaration, 'response', rawTextResponse)).toBe(false);
+  });
+
   it('runs endpoint handlers as raw Request to Response without consuming the body first', async () => {
     const seen: string[] = [];
     const inventoryWebhook = endpoint('/webhooks/inventory', {

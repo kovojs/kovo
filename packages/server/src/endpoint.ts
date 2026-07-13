@@ -7,6 +7,7 @@ import { managedDb, type Reader, type Writer } from './managed-db.js';
 import { markEndpointSelfVerifying, markEndpointVerifierExecuted } from './endpoint-auth-proof.js';
 import { pinRequestIngressSurface, requestVerifierInput } from './app-load-shed.js';
 import { requestClone } from './request-body-intrinsics.js';
+import { securityNumberIsInteger, securityStringTrim } from './response-security-intrinsics.js';
 import type { RedirectLocationAllowlistEntry } from './response.js';
 import {
   assertEndpointResponsePosture,
@@ -15,10 +16,13 @@ import {
 } from './response-posture.js';
 import {
   createWitnessWeakMap,
+  witnessArrayAppend,
+  witnessCreateNullRecord,
   witnessDefineProperty,
   witnessFreeze,
   witnessGetOwnPropertyDescriptor,
   witnessIsArray,
+  witnessObjectIs,
   witnessReflectApply,
   witnessReflectGet,
   witnessWeakMapGet,
@@ -240,30 +244,232 @@ export function endpoint<
   path: Path,
   definition: EndpointDefinition<Method, Mount, Db>,
 ): EndpointDeclaration<Path, Method, Mount, Db> {
-  const mount = (definition.mount ?? 'exact') as Mount;
-  if (definition.reason.trim() === '') {
+  if (typeof definition !== 'object' || definition === null || witnessIsArray(definition)) {
+    throw new TypeError('endpoint() requires a stable own-data definition record.');
+  }
+  const access = stableEndpointValue(definition, 'access');
+  const auth = stableEndpointValue(definition, 'auth');
+  const csrf = stableEndpointValue(definition, 'csrf');
+  const csrfJustification = stableEndpointValue(definition, 'csrfJustification');
+  const db = stableEndpointValue(definition, 'db');
+  const handler = stableRequiredEndpointValue(definition, 'handler');
+  const method = stableRequiredEndpointValue(definition, 'method');
+  const mountValue = stableEndpointValue(definition, 'mount');
+  const mountJustification = stableEndpointValue(definition, 'mountJustification');
+  const reason = stableRequiredEndpointValue(definition, 'reason');
+  const responseValue = stableRequiredEndpointValue(definition, 'response');
+  const mount = (mountValue ?? 'exact') as Mount;
+
+  if (typeof method !== 'string' || method === '') {
+    throw new TypeError('endpoint() requires a non-empty method');
+  }
+  if (typeof handler !== 'function') {
+    throw new TypeError('endpoint() requires an own data handler function');
+  }
+  if (typeof reason !== 'string' || securityStringTrim(reason) === '') {
     throw new TypeError('endpoint() requires a non-empty reason');
   }
+  if (mount !== 'exact' && mount !== 'prefix') {
+    throw new TypeError('endpoint() mount must be exact or prefix');
+  }
+  if (
+    mount === 'prefix' &&
+    (typeof mountJustification !== 'string' || securityStringTrim(mountJustification) === '')
+  ) {
+    throw new TypeError('endpoint() prefix mounts require a non-empty mountJustification');
+  }
+  if (csrf !== undefined && csrf !== true && csrf !== false) {
+    throw new TypeError('endpoint() csrf must be true or false');
+  }
+  if (
+    csrf === false &&
+    (typeof csrfJustification !== 'string' || securityStringTrim(csrfJustification) === '')
+  ) {
+    throw new TypeError('endpoint() csrf:false requires a non-empty csrfJustification');
+  }
+  if (db !== undefined && db !== true && db !== false) {
+    throw new TypeError('endpoint() db must be true or false');
+  }
+  const response = snapshotEndpointResponsePosture(responseValue);
+  const declarationRecord = witnessCreateNullRecord<unknown>();
+  if (csrf === false) {
+    declarationRecord.csrf = witnessFreeze({
+      exempt: true as const,
+      justification: csrfJustification as string,
+    });
+  }
+  if (db === true) declarationRecord.db = true;
+  declarationRecord.handler = handler;
+  declarationRecord.method = method;
+  declarationRecord.mount = mount;
+  if (mountJustification !== undefined) declarationRecord.mountJustification = mountJustification;
+  declarationRecord.path = path;
+  declarationRecord.reason = reason;
+  declarationRecord.response = response;
   const declaration = pinAccessDecision(
-    {
-      ...(definition.csrf === false
-        ? { csrf: { exempt: true, justification: definition.csrfJustification } }
-        : {}),
-      ...(definition.db === true ? { db: true as const } : {}),
-      handler: definition.handler,
-      method: definition.method,
-      mount,
-      ...(definition.mountJustification === undefined
-        ? {}
-        : { mountJustification: definition.mountJustification }),
-      path,
-      reason: definition.reason,
-      response: definition.response,
-    } as EndpointDeclaration<Path, Method, Mount, Db>,
-    definition.access,
+    declarationRecord as unknown as EndpointDeclaration<Path, Method, Mount, Db>,
+    access as AccessDecision | undefined,
   );
-  pinEndpointAuth(declaration, definition.auth);
-  return declaration;
+  pinEndpointAuth(declaration, auth as EndpointAuthDeclaration | undefined);
+  return witnessFreeze(declaration) as EndpointDeclaration<Path, Method, Mount, Db>;
+}
+
+function snapshotEndpointResponsePosture(source: unknown): EndpointResponsePosture {
+  if (typeof source !== 'object' || source === null || witnessIsArray(source)) {
+    throw new TypeError('endpoint().response must be a stable own-data record.');
+  }
+  const appOwnedSafety = stableRequiredEndpointValue(source, 'appOwnedSafety');
+  const bodySource = stableRequiredEndpointValue(source, 'body');
+  const cache = stableRequiredEndpointValue(source, 'cache');
+  const redirectAllowlistSource = stableEndpointValue(source, 'redirectAllowlist');
+  const reservedHeadersSource = stableEndpointValue(source, 'reservedHeaders');
+  if (typeof appOwnedSafety !== 'boolean') {
+    throw new TypeError('endpoint().response.appOwnedSafety must be a boolean.');
+  }
+  if (!isEndpointCachePosture(cache)) {
+    throw new TypeError('endpoint().response.cache has an invalid posture.');
+  }
+  const body = snapshotEndpointResponseBody(bodySource);
+  const redirectAllowlist =
+    redirectAllowlistSource === undefined
+      ? undefined
+      : snapshotEndpointRedirectAllowlist(redirectAllowlistSource);
+  const reservedHeaders =
+    reservedHeadersSource === undefined
+      ? undefined
+      : snapshotEndpointStringArray(reservedHeadersSource, 'endpoint().response.reservedHeaders');
+  const snapshot = witnessCreateNullRecord<unknown>();
+  snapshot.appOwnedSafety = appOwnedSafety;
+  snapshot.body = body;
+  snapshot.cache = cache;
+  snapshot.redirectAllowlist = redirectAllowlist;
+  snapshot.reservedHeaders = reservedHeaders;
+  return witnessFreeze(snapshot) as unknown as EndpointResponsePosture;
+}
+
+function snapshotEndpointResponseBody(source: unknown): EndpointResponseBodyPosture {
+  if (typeof source === 'string') {
+    if (!isEndpointResponseBody(source)) {
+      throw new TypeError('endpoint().response.body has an invalid posture.');
+    }
+    return source;
+  }
+  const values = snapshotEndpointArray(source, 'endpoint().response.body');
+  if (values.length === 0) {
+    throw new TypeError('endpoint().response.body must not be empty.');
+  }
+  const bodies: EndpointResponseBody[] = [];
+  for (let index = 0; index < values.length; index += 1) {
+    const value = values[index];
+    if (!isEndpointResponseBody(value)) {
+      throw new TypeError('endpoint().response.body has an invalid posture.');
+    }
+    witnessArrayAppend(bodies, value, 'Endpoint response body posture');
+  }
+  return witnessFreeze(bodies) as unknown as EndpointResponseBodyPosture;
+}
+
+function snapshotEndpointRedirectAllowlist(
+  source: unknown,
+): readonly RedirectLocationAllowlistEntry[] {
+  const values = snapshotEndpointArray(source, 'endpoint().response.redirectAllowlist');
+  const snapshot: RedirectLocationAllowlistEntry[] = [];
+  for (let index = 0; index < values.length; index += 1) {
+    const value = values[index];
+    if (typeof value !== 'object' || value === null || witnessIsArray(value)) {
+      throw new TypeError('endpoint redirect allowlist entries must be stable records.');
+    }
+    const origin = stableRequiredEndpointValue(value, 'origin');
+    const reason = stableRequiredEndpointValue(value, 'reason');
+    if (typeof origin !== 'string' || typeof reason !== 'string') {
+      throw new TypeError('endpoint redirect allowlist entries require string origin and reason.');
+    }
+    witnessArrayAppend(snapshot, witnessFreeze({ origin, reason }), 'Endpoint redirect allowlist');
+  }
+  return witnessFreeze(snapshot);
+}
+
+function snapshotEndpointStringArray(source: unknown, label: string): readonly string[] {
+  const values = snapshotEndpointArray(source, label);
+  const snapshot: string[] = [];
+  for (let index = 0; index < values.length; index += 1) {
+    const value = values[index];
+    if (typeof value !== 'string') throw new TypeError(`${label} must contain strings.`);
+    witnessArrayAppend(snapshot, value, label);
+  }
+  return witnessFreeze(snapshot);
+}
+
+function snapshotEndpointArray(source: unknown, label: string): unknown[] {
+  if (!witnessIsArray(source)) throw new TypeError(`${label} must be an array.`);
+  const length = stableRequiredEndpointValue(source, 'length');
+  if (
+    typeof length !== 'number' ||
+    !securityNumberIsInteger(length) ||
+    length < 0 ||
+    length > 100_000
+  ) {
+    throw new TypeError(`${label} must be a bounded dense array.`);
+  }
+  const snapshot: unknown[] = [];
+  for (let index = 0; index < length; index += 1) {
+    const descriptor = stableEndpointDescriptor(source, index);
+    if (descriptor === undefined) throw new TypeError(`${label} must be a bounded dense array.`);
+    witnessArrayAppend(snapshot, descriptor.value, label);
+  }
+  return snapshot;
+}
+
+function stableRequiredEndpointValue(source: object, property: PropertyKey): unknown {
+  const descriptor = stableEndpointDescriptor(source, property);
+  if (descriptor === undefined) {
+    throw new TypeError(`endpoint() ${String(property)} must be an own data property.`);
+  }
+  return descriptor.value;
+}
+
+function stableEndpointValue(source: object, property: PropertyKey): unknown {
+  return stableEndpointDescriptor(source, property)?.value;
+}
+
+function stableEndpointDescriptor(
+  source: object,
+  property: PropertyKey,
+): { value: unknown } | undefined {
+  const before = witnessGetOwnPropertyDescriptor(source, property);
+  const after = witnessGetOwnPropertyDescriptor(source, property);
+  if ((before === undefined) !== (after === undefined)) {
+    throw new TypeError(`endpoint() ${String(property)} must be stable.`);
+  }
+  if (before === undefined) return undefined;
+  if (!('value' in before) || after === undefined || !('value' in after)) {
+    throw new TypeError(`endpoint() ${String(property)} must be an own data property.`);
+  }
+  if (!witnessObjectIs(before.value, after.value)) {
+    throw new TypeError(`endpoint() ${String(property)} changed during validation.`);
+  }
+  return { value: before.value };
+}
+
+function isEndpointResponseBody(value: unknown): value is EndpointResponseBody {
+  return (
+    value === 'bytes' ||
+    value === 'html' ||
+    value === 'json' ||
+    value === 'redirect' ||
+    value === 'stream' ||
+    value === 'text'
+  );
+}
+
+function isEndpointCachePosture(value: unknown): value is EndpointCachePosture {
+  return (
+    value === 'custom' ||
+    value === 'no-store' ||
+    value === 'private' ||
+    value === 'public' ||
+    value === 'revalidated'
+  );
 }
 
 /** @internal Pin endpoint machine-auth metadata and its executable verifier with the access fact. */
