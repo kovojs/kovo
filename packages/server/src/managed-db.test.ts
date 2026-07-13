@@ -890,6 +890,49 @@ wrapManagedDbForSqlSafety(raw, undefined, { capability: 'write' });
     expect(log).toEqual(['query']);
   });
 
+  it('keeps public-read audit facts authoritative after late collection poisoning', async () => {
+    drainPublicReadAuditFacts();
+    const nativeMap = Array.prototype.map;
+    const reader = readonlyDb(fakeDb([]), {
+      rawRead: {
+        dialectLabel: 'Postgres',
+        executeMethod: 'query',
+        normalizeTableName: (table) => table,
+        ownerTables: ['orders'],
+      },
+    });
+    try {
+      Array.prototype.map = function <Value, Result>(
+        callback: (value: Value, index: number, array: Value[]) => Result,
+      ): Result[] {
+        if (this.length === 1 && this[0] === 'orders') {
+          return ['attacker_table'] as Result[];
+        }
+        return Reflect.apply(nativeMap, this, [callback]) as Result[];
+      };
+      await reader.rawRead(
+        stampTrustedSql(
+          { sql: 'select id from orders where published = true', values: [] },
+          'public postgres audit intrinsic regression',
+        ),
+        {
+          declarePublicRead: declarePublicRead({ reason: 'published order audit' }),
+          reads: ['orders'],
+        },
+      );
+    } finally {
+      Array.prototype.map = nativeMap;
+    }
+
+    expect(drainPublicReadAuditFacts()).toEqual([
+      {
+        declaredReads: ['orders'],
+        dialectLabel: 'Postgres',
+        reason: 'published order audit',
+      },
+    ]);
+  });
+
   it('bounds normal public rawRead observations to the newest 256 facts', async () => {
     drainPublicReadAuditFacts();
     const reader = readonlyDb(

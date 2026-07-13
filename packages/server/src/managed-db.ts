@@ -3618,17 +3618,35 @@ function recordPublicReadAuditFact(
   observed: { observedReads?: readonly string[]; ownerReads?: readonly string[] } = {},
 ): void {
   publicReadAuditFacts.record({
-    declaredReads: [...new Set(declaration.reads.map(policy.normalizeTableName))].sort(),
+    declaredReads: sortedNormalizedStringArray(
+      declaration.reads,
+      policy.normalizeTableName,
+      'public read audit declared reads',
+    ),
     dialectLabel: policy.dialectLabel,
     reason: publicRead.reason,
     ...(publicRead.rows === undefined ? {} : { rows: publicRead.rows }),
-    ...(publicRead.columns === undefined ? {} : { columns: [...publicRead.columns] }),
+    ...(publicRead.columns === undefined
+      ? {}
+      : { columns: snapshotStringArray(publicRead.columns, 'public read audit columns') }),
     ...(observed.observedReads === undefined
       ? {}
-      : { observedReads: [...new Set(observed.observedReads)].sort() }),
+      : {
+          observedReads: sortedNormalizedStringArray(
+            observed.observedReads,
+            identityManagedString,
+            'public read audit observed reads',
+          ),
+        }),
     ...(observed.ownerReads === undefined || observed.ownerReads.length === 0
       ? {}
-      : { ownerReads: [...new Set(observed.ownerReads)].sort() }),
+      : {
+          ownerReads: sortedNormalizedStringArray(
+            observed.ownerReads,
+            identityManagedString,
+            'public read audit owner reads',
+          ),
+        }),
   });
 }
 
@@ -3710,13 +3728,45 @@ function recordCrossOwnerReadAuditFact(
   policy: CrossOwnerReadPolicyOptions,
 ): void {
   crossOwnerReadAuditFacts.record({
-    declaredReads: [...new Set(declaration.reads.map(policy.normalizeTableName))].sort(),
+    declaredReads: sortedNormalizedStringArray(
+      declaration.reads,
+      policy.normalizeTableName,
+      'cross-owner read audit declared reads',
+    ),
     dialectLabel: policy.dialectLabel,
     observedRead: policy.normalizeTableName(observedTable),
     reason: declaration.reason,
     ...(policy.principal === undefined ? {} : { principal: policy.principal }),
     ...(declaration.site === undefined ? {} : { site: declaration.site }),
   });
+}
+
+function sortedNormalizedStringArray(
+  values: readonly string[],
+  normalize: (value: string) => string,
+  label: string,
+): readonly string[] {
+  const normalized = normalizedStringArray(values, normalize, label);
+  const sorted: string[] = [];
+  for (let index = 0; index < normalized.length; index += 1) {
+    const descriptor = witnessGetOwnPropertyDescriptor(normalized, index);
+    if (descriptor === undefined || !('value' in descriptor)) {
+      throw new TypeError(`${label} must remain a dense string snapshot.`);
+    }
+    const value = descriptor.value;
+    let insertAt = sorted.length;
+    while (insertAt > 0 && value < sorted[insertAt - 1]!) insertAt -= 1;
+    appendManagedValue(sorted, '');
+    for (let move = sorted.length - 1; move > insertAt; move -= 1) {
+      sorted[move] = sorted[move - 1]!;
+    }
+    sorted[insertAt] = value;
+  }
+  return witnessFreeze(sorted);
+}
+
+function identityManagedString(value: string): string {
+  return value;
 }
 
 function rawReadExecutionMethod(
