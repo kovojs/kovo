@@ -1197,6 +1197,37 @@ describe('server createApp request shell', () => {
     expect(body).not.toContain('<main>New</main>');
   });
 
+  it('pins blocking diagnostics against entry mutation and late collection replacement', async () => {
+    const app = createApp({
+      routes: [
+        route('/admin/:section', { page: () => trustedHtml('<main>Public parameter</main>') }),
+        route('/admin/settings', {
+          guard: guards.authed,
+          page: () => trustedHtml('<main>Private settings</main>'),
+        }),
+      ],
+    });
+    expect(app.diagnostics[0]?.code).toBe('KV228');
+    expect(() => {
+      (app.diagnostics[0] as { code: string }).code = 'KV210';
+    }).toThrow(TypeError);
+
+    const nativeFilter = Array.prototype.filter;
+    Array.prototype.filter = function (callback, thisArg) {
+      if (this === app.diagnostics) return [];
+      return nativeFilter.call(this, callback, thisArg);
+    };
+    try {
+      const response = await createRequestHandler(app)(
+        new Request('https://example.test/admin/settings'),
+      );
+      expect(response.status).toBe(500);
+      await expect(response.text()).resolves.toContain('KV228');
+    } finally {
+      Array.prototype.filter = nativeFilter;
+    }
+  });
+
   it('renders configured error shells through the app request boundary', async () => {
     const handler = createRequestHandler(
       createApp({
@@ -1521,6 +1552,107 @@ describe('server createApp request shell', () => {
     expect(response.headers.get('kovo-build')).toBeNull();
     await expect(response.text()).resolves.toBe('Payload Too Large');
     expect(endpointHandler).not.toHaveBeenCalled();
+  });
+
+  it('pins normalized request-limit authority after app assembly', async () => {
+    const endpointHandler = vi.fn(() => new Response('ok'));
+    const app = createApp({
+      endpoints: [
+        endpoint('/pinned-limits', {
+          csrf: false,
+          csrfJustification: 'test machine endpoint',
+          handler: endpointHandler,
+          method: 'POST',
+          reason: 'request-limit snapshot regression',
+          response: rawTextResponse,
+        }),
+      ],
+      requestLimits: {
+        global: { max: 1, windowMs: 60_000 },
+        maxBodyBytes: 4,
+        mutations: {
+          global: { max: 2, windowMs: 60_000 },
+          perIp: { max: 2, windowMs: 60_000 },
+        },
+        perIp: { max: 2, windowMs: 60_000 },
+        queries: {
+          global: { max: 2, windowMs: 60_000 },
+          perIp: { max: 2, windowMs: 60_000 },
+        },
+      },
+    });
+
+    expect(() => {
+      (app.requestLimits as { maxBodyBytes: number | false }).maxBodyBytes = false;
+    }).toThrow(TypeError);
+    expect(() => {
+      (app.requestLimits as { global: unknown }).global = false;
+    }).toThrow(TypeError);
+    expect(() => {
+      (app.requestLimits.global as { max: number }).max = 100;
+    }).toThrow(TypeError);
+    expect(() => {
+      (app.requestLimits.perIp as { max: number }).max = 100;
+    }).toThrow(TypeError);
+    expect(() => {
+      (app.requestLimits.mutations as { global: unknown }).global = false;
+    }).toThrow(TypeError);
+    expect(() => {
+      (app.requestLimits.mutations.global as { max: number }).max = 100;
+    }).toThrow(TypeError);
+    expect(() => {
+      (app.requestLimits.mutations.perIp as { max: number }).max = 100;
+    }).toThrow(TypeError);
+    expect(() => {
+      (app.requestLimits.queries as { perIp: unknown }).perIp = false;
+    }).toThrow(TypeError);
+    expect(() => {
+      (app.requestLimits.queries.global as { max: number }).max = 100;
+    }).toThrow(TypeError);
+    expect(() => {
+      (app.requestLimits.queries.perIp as { max: number }).max = 100;
+    }).toThrow(TypeError);
+
+    const oversized = await createRequestHandler(app)(
+      new Request('https://example.test/pinned-limits', {
+        body: '12345',
+        headers: { 'Content-Length': '5' },
+        method: 'POST',
+      }),
+    );
+    expect(oversized.status).toBe(413);
+    expect(endpointHandler).not.toHaveBeenCalled();
+
+    const first = await createRequestHandler(app)(new Request('https://example.test/missing'));
+    const second = await createRequestHandler(app)(new Request('https://example.test/missing'));
+    expect(first.status).toBe(404);
+    expect(second.status).toBe(429);
+  });
+
+  it('rejects accessor-backed request-limit authority instead of cross-binding reads', () => {
+    let maxBodyReads = 0;
+    const requestLimits = {
+      get maxBodyBytes() {
+        maxBodyReads += 1;
+        return maxBodyReads === 1 ? 4 : (false as const);
+      },
+    };
+
+    expect(() => createApp({ requestLimits })).toThrow(
+      'createApp({ requestLimits.maxBodyBytes }) must be a stable own data property.',
+    );
+    expect(maxBodyReads).toBe(0);
+
+    const nested = {
+      mutations: {
+        get global() {
+          return false as const;
+        },
+      },
+    };
+    expect(() => createApp({ requestLimits: nested })).toThrow(
+      'createApp({ requestLimits.mutations.global }) must be a stable own data property.',
+    );
   });
 
   it('enforces the default request body cap before endpoint dispatch', async () => {

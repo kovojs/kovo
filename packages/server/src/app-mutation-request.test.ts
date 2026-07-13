@@ -1043,7 +1043,7 @@ describe('server app mutation request boundary', () => {
     expect(Object.isFrozen(observedOutcome)).toBe(true);
   });
 
-  it('does not run dynamic response policy when replay reservation fails closed', async () => {
+  it('pins replay-store authority and does not run policy when reservation fails closed', async () => {
     const handler = vi.fn(() => ({ ok: true }));
     const policy = vi.fn(() => ({ redirectTo: '/done' }));
     const replayStore = {
@@ -1065,6 +1065,9 @@ describe('server app mutation request boundary', () => {
       mutationResponses: { save: policy },
       mutations: [save],
     });
+    (replayStore as { reserve: (...args: unknown[]) => unknown }).reserve = vi.fn(() => ({
+      commit: vi.fn(),
+    }));
     const form = new FormData();
     form.set('value', 'x');
     form.set('kovo-csrf', csrfToken({}, csrf, { audience: 'save' }));

@@ -14,6 +14,7 @@ import { requestFormDataEntries, requestIsFormData } from './request-body-intrin
 import {
   createWitnessMap,
   witnessDefineProperty,
+  witnessFreeze,
   witnessGetOwnPropertyDescriptor,
   witnessGetPrototypeOf,
   witnessIsArray,
@@ -22,8 +23,10 @@ import {
   witnessMapForEach,
   witnessMapGet,
   witnessMapSet,
+  witnessObjectIs,
   witnessObjectKeys,
   witnessReflectApply,
+  witnessReflectGet,
   witnessSortStrings,
 } from './security-witness-intrinsics.js';
 import {
@@ -76,6 +79,87 @@ export interface MutationReplayStore<
     fingerprint?: string,
   ): MutationReplayReservation<Response> | undefined;
   set(scope: string, idem: string, response: Response, fingerprint?: string): void;
+}
+
+/** Pin a custom mutation replay store's method/receiver authority at app assembly. */
+export function snapshotMutationReplayStore<Response extends MutationReplayResponse>(
+  source: MutationReplayStore<Response>,
+): MutationReplayStore<Response> {
+  if ((typeof source !== 'object' && typeof source !== 'function') || source === null) {
+    throw new TypeError('createApp mutationReplayStore must be a stable replay-store object.');
+  }
+  const get = stableMutationReplayMethod(source, 'get', true)!;
+  const reserve = stableMutationReplayMethod(source, 'reserve', true)!;
+  const set = stableMutationReplayMethod(source, 'set', true)!;
+  return witnessFreeze({
+    get(scope: string, idem: string, fingerprint?: string) {
+      return witnessReflectApply(get, source, [scope, idem, fingerprint]);
+    },
+    reserve(scope: string, idem: string, fingerprint?: string) {
+      const reservation = witnessReflectApply<unknown>(reserve, source, [
+        scope,
+        idem,
+        fingerprint,
+      ]);
+      return reservation === undefined
+        ? undefined
+        : snapshotMutationReplayReservation<Response>(reservation);
+    },
+    set(scope: string, idem: string, response: Response, fingerprint?: string) {
+      witnessReflectApply(set, source, [scope, idem, response, fingerprint]);
+    },
+  });
+}
+
+function snapshotMutationReplayReservation<Response extends MutationReplayResponse>(
+  source: unknown,
+): MutationReplayReservation<Response> {
+  if ((typeof source !== 'object' && typeof source !== 'function') || source === null) {
+    throw new TypeError('Mutation replay reserve() must return a stable reservation object.');
+  }
+  const commit = stableMutationReplayMethod(source, 'commit', true)!;
+  const abort = stableMutationReplayMethod(source, 'abort', false);
+  return witnessFreeze({
+    ...(abort === undefined
+      ? {}
+      : {
+          abort() {
+            witnessReflectApply(abort, source, []);
+          },
+        }),
+    commit(response: Response) {
+      witnessReflectApply(commit, source, [response]);
+    },
+  });
+}
+
+function stableMutationReplayMethod(
+  source: object,
+  property: PropertyKey,
+  required: boolean,
+): Function | undefined {
+  const before = witnessGetOwnPropertyDescriptor(source, property);
+  if (before === undefined) {
+    if (!required) return undefined;
+    throw new TypeError(`Mutation replay store requires an own ${String(property)} method.`);
+  }
+  if (!('value' in before) || typeof before.value !== 'function') {
+    throw new TypeError(`Mutation replay store ${String(property)} must be an own data method.`);
+  }
+  const observed = witnessReflectGet(source, property, source);
+  const after = witnessGetOwnPropertyDescriptor(source, property);
+  if (
+    after === undefined ||
+    !('value' in after) ||
+    !witnessObjectIs(before.value, after.value) ||
+    !witnessObjectIs(observed, before.value) ||
+    before.configurable !== after.configurable ||
+    before.enumerable !== after.enumerable ||
+    before.writable !== after.writable
+  ) {
+    throw new TypeError(`Mutation replay store ${String(property)} must be stable.`);
+  }
+  return before.value;
 }
 
 /**

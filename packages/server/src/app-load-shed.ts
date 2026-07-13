@@ -190,40 +190,111 @@ export function normalizeAppRequestLimits(
   options: AppRequestLimitOptions | false | undefined,
 ): ResolvedAppRequestLimitOptions {
   if (options === false) {
-    return {
+    return witnessFreeze({
       global: false,
       maxBodyBytes: false,
       maxQueryListItems: DEFAULT_MAX_QUERY_LIST_ITEMS,
-      mutations: { global: false, perIp: false },
+      mutations: frozenRequestRateLimits(false, false),
       perIp: false,
-      queries: { global: false, perIp: false },
+      queries: frozenRequestRateLimits(false, false),
       trustedProxy: false,
-    };
+    });
   }
 
-  const baseGlobal = normalizeRate(options?.global, DEFAULT_GLOBAL_RATE);
-  const basePerIp = normalizeRate(options?.perIp, DEFAULT_PER_IP_RATE);
+  const source =
+    options === undefined ? undefined : requestLimitRecord(options, 'createApp requestLimits');
+  const clientIp = requestLimitOwnDataValue(source, 'clientIp', 'requestLimits.clientIp');
+  const global = requestLimitOwnDataValue(source, 'global', 'requestLimits.global') as
+    | AppRateLimitOptions
+    | false
+    | undefined;
+  const maxBodyBytes = requestLimitOwnDataValue(
+    source,
+    'maxBodyBytes',
+    'requestLimits.maxBodyBytes',
+  );
+  const maxQueryListItems = requestLimitOwnDataValue(
+    source,
+    'maxQueryListItems',
+    'requestLimits.maxQueryListItems',
+  );
+  const mutations = requestLimitOwnDataValue(
+    source,
+    'mutations',
+    'requestLimits.mutations',
+  );
+  const perIp = requestLimitOwnDataValue(source, 'perIp', 'requestLimits.perIp') as
+    | AppRateLimitOptions
+    | false
+    | undefined;
+  const queries = requestLimitOwnDataValue(source, 'queries', 'requestLimits.queries');
+  const trustedProxy = requestLimitOwnDataValue(
+    source,
+    'trustedProxy',
+    'requestLimits.trustedProxy',
+  );
+  if (clientIp !== undefined && typeof clientIp !== 'function') {
+    throw new TypeError('createApp({ requestLimits.clientIp }) must be a function.');
+  }
+  if (trustedProxy !== undefined && typeof trustedProxy !== 'boolean') {
+    throw new TypeError('createApp({ requestLimits.trustedProxy }) must be boolean.');
+  }
 
-  return {
-    ...(options?.clientIp === undefined ? {} : { clientIp: options.clientIp }),
+  const baseGlobal = normalizeRate(global, DEFAULT_GLOBAL_RATE, 'requestLimits.global');
+  const basePerIp = normalizeRate(perIp, DEFAULT_PER_IP_RATE, 'requestLimits.perIp');
+
+  return witnessFreeze({
+    ...(clientIp === undefined ? {} : { clientIp: clientIp as (request: Request) => string }),
     global: baseGlobal,
     maxBodyBytes:
-      options?.maxBodyBytes === undefined ? DEFAULT_MAX_BODY_BYTES : normalizeBodyLimit(options),
+      maxBodyBytes === undefined ? DEFAULT_MAX_BODY_BYTES : normalizeBodyLimit(maxBodyBytes),
     maxQueryListItems:
-      options?.maxQueryListItems === undefined
+      maxQueryListItems === undefined
         ? DEFAULT_MAX_QUERY_LIST_ITEMS
-        : normalizeQueryListLimit(options.maxQueryListItems),
-    mutations: {
-      global: normalizeRate(options?.mutations?.global, DEFAULT_MUTATION_GLOBAL_RATE),
-      perIp: normalizeRate(options?.mutations?.perIp, DEFAULT_MUTATION_PER_IP_RATE),
-    },
+        : normalizeQueryListLimit(maxQueryListItems),
+    mutations: normalizeRequestRateLimits(
+      mutations,
+      DEFAULT_MUTATION_GLOBAL_RATE,
+      DEFAULT_MUTATION_PER_IP_RATE,
+      'requestLimits.mutations',
+    ),
     perIp: basePerIp,
-    queries: {
-      global: normalizeRate(options?.queries?.global, DEFAULT_QUERY_GLOBAL_RATE),
-      perIp: normalizeRate(options?.queries?.perIp, DEFAULT_QUERY_PER_IP_RATE),
-    },
-    trustedProxy: options?.trustedProxy === true,
-  };
+    queries: normalizeRequestRateLimits(
+      queries,
+      DEFAULT_QUERY_GLOBAL_RATE,
+      DEFAULT_QUERY_PER_IP_RATE,
+      'requestLimits.queries',
+    ),
+    trustedProxy: trustedProxy === true,
+  });
+}
+
+function normalizeRequestRateLimits(
+  value: unknown,
+  defaultGlobal: ResolvedAppRateLimitOptions,
+  defaultPerIp: ResolvedAppRateLimitOptions,
+  label: string,
+): ResolvedAppRequestRateLimitOptions {
+  const source = value === undefined ? undefined : requestLimitRecord(value, label);
+  const global = requestLimitOwnDataValue(source, 'global', `${label}.global`) as
+    | AppRateLimitOptions
+    | false
+    | undefined;
+  const perIp = requestLimitOwnDataValue(source, 'perIp', `${label}.perIp`) as
+    | AppRateLimitOptions
+    | false
+    | undefined;
+  return frozenRequestRateLimits(
+    normalizeRate(global, defaultGlobal, `${label}.global`),
+    normalizeRate(perIp, defaultPerIp, `${label}.perIp`),
+  );
+}
+
+function frozenRequestRateLimits(
+  global: ResolvedAppRateLimitOptions | false,
+  perIp: ResolvedAppRateLimitOptions | false,
+): ResolvedAppRequestRateLimitOptions {
+  return witnessFreeze({ global, perIp });
 }
 
 export function preDispatchLoadShedResponse(
@@ -251,9 +322,8 @@ export function preDispatchLoadShedResponse(
   });
 }
 
-function normalizeBodyLimit(options: AppRequestLimitOptions): number | false {
-  if (options.maxBodyBytes === false) return false;
-  const maxBodyBytes = options.maxBodyBytes ?? DEFAULT_MAX_BODY_BYTES;
+function normalizeBodyLimit(maxBodyBytes: unknown): number | false {
+  if (maxBodyBytes === false) return false;
   if (!requestStateIsSafeInteger(maxBodyBytes) || maxBodyBytes < 0) {
     throw new TypeError(
       'createApp({ requestLimits.maxBodyBytes }) must be a non-negative integer.',
@@ -262,7 +332,7 @@ function normalizeBodyLimit(options: AppRequestLimitOptions): number | false {
   return maxBodyBytes;
 }
 
-function normalizeQueryListLimit(maxQueryListItems: number): number {
+function normalizeQueryListLimit(maxQueryListItems: unknown): number {
   if (!requestStateIsSafeInteger(maxQueryListItems) || maxQueryListItems < 1) {
     throw new TypeError(
       'createApp({ requestLimits.maxQueryListItems }) must be a positive integer.',
@@ -274,11 +344,17 @@ function normalizeQueryListLimit(maxQueryListItems: number): number {
 function normalizeRate(
   options: AppRateLimitOptions | false | undefined,
   defaults: ResolvedAppRateLimitOptions,
+  label: string,
 ): ResolvedAppRateLimitOptions | false {
   if (options === false) return false;
-  const max = options?.max ?? defaults.max;
-  const maxKeys = options?.maxKeys ?? defaults.maxKeys;
-  const windowMs = options?.windowMs ?? defaults.windowMs;
+  if (options === undefined) return defaults;
+  const source = requestLimitRecord(options, label);
+  const authoredMax = requestLimitOwnDataValue(source, 'max', `${label}.max`);
+  const authoredMaxKeys = requestLimitOwnDataValue(source, 'maxKeys', `${label}.maxKeys`);
+  const authoredWindowMs = requestLimitOwnDataValue(source, 'windowMs', `${label}.windowMs`);
+  const max = authoredMax ?? defaults.max;
+  const maxKeys = authoredMaxKeys ?? defaults.maxKeys;
+  const windowMs = authoredWindowMs ?? defaults.windowMs;
   if (!requestStateIsSafeInteger(max) || max < 1) {
     throw new TypeError('createApp({ requestLimits.*.max }) must be a positive integer.');
   }
@@ -288,7 +364,28 @@ function normalizeRate(
   if (!requestStateIsSafeInteger(windowMs) || windowMs < 1) {
     throw new TypeError('createApp({ requestLimits.*.windowMs }) must be a positive integer.');
   }
-  return { max, maxKeys, windowMs };
+  return witnessFreeze({ max, maxKeys, windowMs });
+}
+
+function requestLimitRecord(value: unknown, label: string): Record<PropertyKey, unknown> {
+  if (typeof value !== 'object' || value === null || witnessIsArray(value)) {
+    throw new TypeError(`createApp({ ${label} }) must be a stable own-data object.`);
+  }
+  return value as Record<PropertyKey, unknown>;
+}
+
+function requestLimitOwnDataValue(
+  source: Record<PropertyKey, unknown> | undefined,
+  property: PropertyKey,
+  label: string,
+): unknown {
+  if (source === undefined) return undefined;
+  const descriptor = witnessGetOwnPropertyDescriptor(source, property);
+  if (descriptor === undefined) return undefined;
+  if (!('value' in descriptor)) {
+    throw new TypeError(`createApp({ ${label} }) must be a stable own data property.`);
+  }
+  return descriptor.value;
 }
 
 function requestBodySizeFailure(

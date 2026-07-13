@@ -21,9 +21,10 @@ import {
 } from './endpoint.js';
 import type { LiveTargetRenderer } from './mutation-wire.js';
 import type { RegisteredQueryDefinition } from './query.js';
+import { snapshotMutationReplayStore } from './replay.js';
 import { layout, route, type LayoutDeclaration } from './route.js';
 import { snapshotSchemaForRuntime, type Schema } from './schema.js';
-import type { AppErrorShellOptions, AppTaskDeclaration } from './app-types.js';
+import type { AppDiagnostic, AppErrorShellOptions, AppTaskDeclaration } from './app-types.js';
 import type { CsrfAnonymousCookieOptions, CsrfOptions } from './csrf.js';
 import { snapshotStylesheetAsset, type StylesheetAsset } from './hints.js';
 import { signingKeyRingFromSecret } from './keyring.js';
@@ -460,6 +461,40 @@ export function snapshotAppTask(source: AppTaskDeclaration, index = 0): AppTaskD
   return witnessFreeze(record) as AppTaskDeclaration;
 }
 
+/** Reconstruct one runtime-blocking diagnostic so app code cannot rewrite dispatch policy. */
+function snapshotAppDiagnostic(source: AppDiagnostic, index: number): AppDiagnostic {
+  const label = `app.diagnostics[${index}]`;
+  const record = snapshotOwnDataRecord(source, label);
+  if (
+    typeof record.code !== 'string' ||
+    typeof record.fileName !== 'string' ||
+    typeof record.message !== 'string' ||
+    (record.help !== undefined && typeof record.help !== 'string') ||
+    (record.length !== undefined &&
+      (!nativeNumberIsSafeInteger(record.length) || record.length < 0)) ||
+    (record.severity !== undefined &&
+      record.severity !== 'error' &&
+      record.severity !== 'warn' &&
+      record.severity !== 'lint' &&
+      record.severity !== 'notice')
+  ) {
+    throw new TypeError(`${label} must contain stable diagnostic scalar fields.`);
+  }
+  if (record.start !== undefined) {
+    const start = snapshotOwnDataRecord(record.start, `${label}.start`);
+    if (
+      !nativeNumberIsSafeInteger(start.column) ||
+      start.column < 0 ||
+      !nativeNumberIsSafeInteger(start.line) ||
+      start.line < 0
+    ) {
+      throw new TypeError(`${label}.start must contain non-negative integer column and line.`);
+    }
+    record.start = witnessFreeze(start);
+  }
+  return witnessFreeze(record) as AppDiagnostic;
+}
+
 /**
  * Close and identity-mark a Kovo aggregate after all load-bearing declaration registries have been
  * rebuilt as dense frozen arrays of canonical declarations (SPEC §9.5/§10.2).
@@ -482,11 +517,19 @@ export function closeKovoAppAggregate<App extends KovoApp>(
     snapshotAppEndpoint(value, context),
   );
   const liveTargetRenderers = snapshotLiveTargetRenderers(source.liveTargetRenderers, context);
-  const diagnostics = witnessFreeze(denseArrayValues(source.diagnostics, 'app.diagnostics'));
+  const diagnostics = snapshotAppRegistry(
+    source.diagnostics,
+    'app.diagnostics',
+    snapshotAppDiagnostic,
+  );
   const stylesheets = snapshotStylesheetArray(source.stylesheets, 'app.stylesheets');
   const tasks = snapshotAppRegistry(source.tasks, 'app.tasks', snapshotAppTask);
   const errorShells = snapshotAppErrorShells(source.errorShells);
   const csrf = source.csrf === undefined ? undefined : snapshotAppCsrfOptions(source.csrf);
+  const mutationReplayStore =
+    source.mutationReplayStore === undefined
+      ? undefined
+      : snapshotMutationReplayStore(source.mutationReplayStore);
 
   const aggregate = witnessFreeze({
     ...source,
@@ -496,6 +539,7 @@ export function closeKovoAppAggregate<App extends KovoApp>(
     errorShells,
     liveTargetRenderers,
     mutations,
+    ...(mutationReplayStore === undefined ? {} : { mutationReplayStore }),
     queries,
     routes,
     stylesheets,

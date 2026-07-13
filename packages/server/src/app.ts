@@ -113,6 +113,10 @@ export function createApp<
 >(
   options: CreateAppOptions<SessionValue, DbValue, RawRequest, AppRequest> = {},
 ): KovoApp<SessionValue, DbValue, RawRequest, AppRequest> {
+  const mutationReplayStore = appOptionOwnDataValue(
+    options,
+    'mutationReplayStore',
+  ) as KovoApp['mutationReplayStore'];
   const csrf = options.csrf === undefined ? undefined : snapshotAppCsrfOptions(options.csrf);
   // Refuse to boot — by-construction at the bootstrap chokepoint (SPEC §6.6,
   // §9.5; plans/secure-framework.md Tier 1). In production a missing/empty/short
@@ -203,9 +207,7 @@ export function createApp<
       ...(csrf === undefined ? {} : { csrf }),
       ...(options.db === undefined ? {} : { db: options.db }),
       mutationResponses: snapshotAppMutationResponses(options.mutationResponses ?? {}),
-      ...(options.mutationReplayStore === undefined
-        ? {}
-        : { mutationReplayStore: options.mutationReplayStore }),
+      ...(mutationReplayStore === undefined ? {} : { mutationReplayStore }),
       ...(options.onError === undefined ? {} : { onError: options.onError }),
       ...(options.renderRoute === undefined ? {} : { renderRoute: options.renderRoute }),
       ...(options.sessionProvider === undefined
@@ -215,6 +217,18 @@ export function createApp<
     } as KovoApp<SessionValue, DbValue, RawRequest, AppRequest>,
     snapshotContext,
   );
+}
+
+function appOptionOwnDataValue(
+  source: object,
+  property: PropertyKey,
+): unknown {
+  const descriptor = witnessGetOwnPropertyDescriptor(source, property);
+  if (descriptor === undefined) return undefined;
+  if (!('value' in descriptor)) {
+    throw new TypeError(`createApp option ${String(property)} must be a stable own data property.`);
+  }
+  return descriptor.value;
 }
 
 function bootstrapEgressFloor(egress: AppEgressOptions | undefined): void {

@@ -57,6 +57,21 @@ describe('app diagnostics — prefetch guard gate (bugs-1 F36 / KV419)', () => {
     expect(app.diagnostics.filter((diagnostic) => diagnostic.code === 'KV419')).toHaveLength(0);
   });
 
+  it('does not let a truthy non-string justification suppress KV419', () => {
+    const app = createApp({
+      routes: [
+        route('/malformed-justification', {
+          guard: guards.authed<SessionShape>(),
+          prefetch: 'moderate',
+          prefetchJustification: { reviewed: true } as never,
+          page: () => trustedHtml('<main>private</main>'),
+        }),
+      ],
+    });
+
+    expect(app.diagnostics[0]?.code).toBe('KV419');
+  });
+
   // I3b: guarded + moderate + no justification → still one KV419.
   it('flags KV419 for guarded + moderate when prefetchJustification is absent (I3b)', () => {
     const app = createApp({
@@ -71,6 +86,40 @@ describe('app diagnostics — prefetch guard gate (bugs-1 F36 / KV419)', () => {
     const kv419 = app.diagnostics.filter((diagnostic) => diagnostic.code === 'KV419');
     expect(kv419).toHaveLength(1);
     expect(kv419[0]?.fileName).toBe('/dashboard');
+  });
+
+  it('retains blocking route diagnostics under late Array filter/map replacement', () => {
+    const moderate = route('/private', {
+      guard: guards.authed<SessionShape>(),
+      prefetch: 'moderate',
+      page: () => trustedHtml('<main>private</main>'),
+    });
+    const parameter = route('/products/:id', {
+      page: () => trustedHtml('<main>parameter</main>'),
+    });
+    const fixed = route('/products/new', {
+      page: () => trustedHtml('<main>fixed</main>'),
+    });
+    const nativeFilter = Array.prototype.filter;
+    const nativeMap = Array.prototype.map;
+    Array.prototype.filter = function () {
+      return [];
+    };
+    Array.prototype.map = function () {
+      return [];
+    };
+    let guardedApp: ReturnType<typeof createApp> | undefined;
+    let ambiguousApp: ReturnType<typeof createApp> | undefined;
+    try {
+      guardedApp = createApp({ routes: [moderate] });
+      ambiguousApp = createApp({ routes: [parameter, fixed] });
+    } finally {
+      Array.prototype.filter = nativeFilter;
+      Array.prototype.map = nativeMap;
+    }
+
+    expect(guardedApp?.diagnostics[0]?.code).toBe('KV419');
+    expect(ambiguousApp?.diagnostics[0]?.code).toBe('KV228');
   });
 
   // I3c: limitation note — session-dependence without a guard is not detectable from
