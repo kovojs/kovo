@@ -824,6 +824,10 @@ function installInlineKovoLoader(im) {
     }
   };
   const ch = (nextHead) => {
+    // SPEC §6.6/§8: head metadata and executable assets must commit to the boot-witnessed
+    // document head, not a late authored Document.prototype.head getter result.
+    const head = bns.readDocumentField(doc, 'head');
+    if (!head) throw new TypeError('Kovo document head is unavailable.');
     const poolKeys = [];
     const poolValues = [];
     const poolList = (key, create) => {
@@ -836,7 +840,7 @@ function installInlineKovoLoader(im) {
       bns.appendDenseSecurityValue(poolValues, list, 'Inline head pool value snapshot');
       return list;
     };
-    const currentHead = bns.snapshotChildNodes(doc.head);
+    const currentHead = bns.snapshotChildNodes(head);
     for (let index = 0; index < currentHead.length; index += 1) {
       const el = currentHead[index];
       if (!el) continue;
@@ -865,11 +869,11 @@ function installInlineKovoLoader(im) {
     const flush = (anchor) => {
       for (let index = 0; index < pending.length; index += 1) {
         const next = pending[index];
-        if (next) bns.insertDomNode(doc.head, bns.cloneDomNode(next, true), anchor);
+        if (next) bns.insertDomNode(head, bns.cloneDomNode(next, true), anchor);
       }
       pending.length = 0;
     };
-    const removableHead = bns.snapshotChildNodes(doc.head);
+    const removableHead = bns.snapshotChildNodes(head);
     for (let index = 0; index < removableHead.length; index += 1) {
       const el = removableHead[index];
       if (el && !hk(el)) bns.removeElement(el);
@@ -889,10 +893,10 @@ function installInlineKovoLoader(im) {
       // SPEC.md §4.4: enhanced navigation must not create a transient unstyled
       // document. Moving a connected stylesheet can briefly detach its rules in
       // Chromium, so matched head assets keep their physical DOM position.
-      if (!match) bns.appendElementChildren(doc.head, [node]);
+      if (!match) bns.appendElementChildren(head, [node]);
       flush(node);
     }
-    const staleHead = bns.snapshotChildNodes(doc.head);
+    const staleHead = bns.snapshotChildNodes(head);
     for (let index = 0; index < staleHead.length; index += 1) {
       const el = staleHead[index];
       if (el && hk(el) && !isKept(el)) bns.removeElement(el);

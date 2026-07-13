@@ -152,14 +152,25 @@ describe('browser inline loader enhanced navigation', () => {
     installNavigationLoader();
 
     const nativeInsertBefore = Node.prototype.insertBefore;
+    const nativeHead = Object.getOwnPropertyDescriptor(Document.prototype, 'head');
+    if (!nativeHead?.get) throw new Error('Document.head getter unavailable');
+    let lateHeadReads = 0;
     try {
       Node.prototype.insertBefore = function forgedInsert<NodeType extends Node>(node: NodeType) {
         return node;
       };
+      Object.defineProperty(Document.prototype, 'head', {
+        ...nativeHead,
+        get() {
+          lateHeadReads += 1;
+          return Reflect.apply(nativeHead.get!, this, []);
+        },
+      });
       dispatchAnchorLikeClick('/cart');
       await vi.waitFor(() => expect(document.title).toBe('Cart'));
     } finally {
       Node.prototype.insertBefore = nativeInsertBefore;
+      Object.defineProperty(Document.prototype, 'head', nativeHead);
     }
 
     expect(document.querySelector('meta[name="description"]')?.getAttribute('content')).toBe(
@@ -168,6 +179,7 @@ describe('browser inline loader enhanced navigation', () => {
     expect(document.querySelector('meta[name="kovo-build"]')?.getAttribute('content')).toBe(
       'build-a',
     );
+    expect(lateHeadReads).toBe(0);
   });
 
   it('does not preserve a revoked sibling segment through late Element.contains poisoning', async () => {

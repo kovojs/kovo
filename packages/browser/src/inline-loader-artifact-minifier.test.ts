@@ -223,6 +223,10 @@ describe('inline loader minified artifact', () => {
     expect(inlineKovoLoaderInstallerSource).not.toContain('for(const x of fragments)');
     expect(inlineKovoLoaderInstallerSource).not.toContain('html.includes(');
     expect(inlineKovoLoaderInstallerSource).not.toContain('[...doc.head.childNodes]');
+    expect(inlineKovoLoaderInstallerSource).toContain(
+      "const head=bns.readDocumentField(doc,'head');",
+    );
+    expect(inlineKovoLoaderInstallerSource).not.toContain('doc.head');
     expect(inlineKovoLoaderInstallerSource).not.toContain('.some(');
     expect(inlineKovoLoaderInstallerSource).not.toContain('.forEach(');
     expect(inlineKovoLoaderInstallerSource).toContain('function m(c,n,security)');
