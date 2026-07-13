@@ -18,6 +18,7 @@ import {
   securityHeadersGet,
   securityIsHeaders,
   securityIsMap,
+  securityIsUint8Array,
   securityMapForEach,
   securityNumberIsInteger,
   securityObjectKeys,
@@ -524,23 +525,53 @@ export const respond = {
     if (storedFilename !== undefined && typeof storedFilename !== 'string') {
       throw new TypeError('respond.storedFile() filename must be a string.');
     }
-    const object = await storage.get(key);
+    if ((typeof storage !== 'object' && typeof storage !== 'function') || storage === null) {
+      throw new TypeError('respond.storedFile() storage must be a stable read capability.');
+    }
+    const get = stableRequiredOwnDataValue(storage, 'get');
+    if (typeof get !== 'function') {
+      throw new TypeError('respond.storedFile() storage.get must be an own data function.');
+    }
+    const object = await witnessReflectApply<unknown>(get, storage, [key]);
     if (object === undefined) return undefined;
+    if (typeof object !== 'object' || object === null || securityArrayIsArray(object)) {
+      throw new TypeError('respond.storedFile() storage.get returned an invalid object.');
+    }
+    const body = stableRequiredOwnDataValue(object, 'body');
+    const etag = stableOwnDataValue(object, 'etag');
+    const metadata = stableOwnDataValue(object, 'metadata');
+    if (!securityIsUint8Array(body)) {
+      throw new TypeError('respond.storedFile() storage.get body must be Uint8Array bytes.');
+    }
+    if (etag !== undefined && typeof etag !== 'string') {
+      throw new TypeError('respond.storedFile() storage.get etag must be a string.');
+    }
+    if (
+      metadata !== undefined &&
+      (typeof metadata !== 'object' || metadata === null || securityArrayIsArray(metadata))
+    ) {
+      throw new TypeError('respond.storedFile() storage.get metadata must be a stable record.');
+    }
+    const metadataFilename =
+      metadata === undefined ? undefined : stableOwnDataValue(metadata, 'filename');
+    if (metadataFilename !== undefined && typeof metadataFilename !== 'string') {
+      throw new TypeError('respond.storedFile() storage filename metadata must be a string.');
+    }
     const disposition = storedDisposition ?? 'attachment';
-    const sniffed = sniffUploadBytes(object.body);
+    const sniffed = sniffUploadBytes(body);
     if (disposition === 'inline' && !sniffed.inlineSafe) {
       throw new InlineUnverifiedUploadError(
         `Refusing to serve stored object "${key}" inline: its sniffed content type is not a ` +
           'known-passive type. Serve as an attachment, or rasterize/re-encode the bytes.',
       );
     }
-    const filename = storedFilename ?? object.metadata?.filename;
-    return routeResponseOutcome(object.body, {
+    const filename = storedFilename ?? metadataFilename;
+    return routeResponseOutcome(body, {
       // Server truth: the served type is the SNIFFED type, never the stored (possibly-client) type.
       contentType: sniffed.contentType,
       disposition,
       ...(filename === undefined ? {} : { filename }),
-      ...(object.etag === undefined ? {} : { etag: object.etag }),
+      ...(etag === undefined ? {} : { etag }),
     });
   },
   stream(body: RouteResponseBody, options: RouteStreamOptions) {

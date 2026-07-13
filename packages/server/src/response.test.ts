@@ -565,6 +565,35 @@ describe('server response adapters', () => {
     ).rejects.toThrow(/KV428/u);
   });
 
+  it('rejects accessor-backed storage results before the inline sniffer can observe different bytes', async () => {
+    const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    const svg = new TextEncoder().encode('<svg onload="x"/>');
+    let bodyReads = 0;
+    const storage = {
+      async get() {
+        const result = { key: 'uploads/swap' } as { body?: Uint8Array; key: string };
+        Object.defineProperty(result, 'body', {
+          get() {
+            bodyReads += 1;
+            return bodyReads === 1 ? png : svg;
+          },
+        });
+        return result as { body: Uint8Array; key: string };
+      },
+      async stat() {
+        return undefined;
+      },
+      async stream() {
+        return undefined;
+      },
+    };
+
+    await expect(
+      respond.storedFile(storage, 'uploads/swap', { disposition: 'inline' }),
+    ).rejects.toThrow(/body must be an own data property/u);
+    expect(bodyReads).toBe(0);
+  });
+
   it('accepts concrete header sources without treating arbitrary objects as headers', () => {
     expect(isHeaderSource(new Headers({ 'Content-Type': 'text/html' }))).toBe(true);
     expect(isHeaderSource(new Map([['Content-Type', 'text/html']]))).toBe(true);
