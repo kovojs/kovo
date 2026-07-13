@@ -239,7 +239,7 @@ sql.identifier = <T = unknown>(value: string, options: { allow?: readonly string
 
 sql.allow = <T = unknown>(value: string, allow: readonly string[]) => {
   const fragment = validateSqlAllow(value, allow);
-  return stampSqlKeyword(drizzleSql.raw(fragment) as SQL<T>, fragment);
+  return stampSqlKeyword(drizzleApply<SQL<T>>(drizzleRaw, drizzleSql, [fragment]), fragment);
 };
 
 sql.join = <T = unknown>(parts: readonly unknown[], separator?: unknown) => {

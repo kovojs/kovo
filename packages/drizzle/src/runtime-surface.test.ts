@@ -184,6 +184,7 @@ describe('@kovojs/drizzle runtime surface', () => {
     let raw: SQL | undefined;
     let identifier: SQL | undefined;
     let joined: SQL | undefined;
+    let allowed: SQL | undefined;
     try {
       mutableDrizzleSql.raw = () => attacker;
       mutableDrizzleSql.identifier = () => attacker;
@@ -191,6 +192,7 @@ describe('@kovojs/drizzle runtime surface', () => {
       raw = sql.raw('select 1');
       identifier = sql.identifier('accounts');
       joined = sql.join([sql.identifier('accounts')]);
+      allowed = sql.allow('asc', ['asc', 'desc']);
     } finally {
       mutableDrizzleSql.raw = originalRaw;
       mutableDrizzleSql.identifier = originalIdentifier;
@@ -199,6 +201,7 @@ describe('@kovojs/drizzle runtime surface', () => {
     expect(raw).not.toBe(attacker);
     expect(identifier).not.toBe(attacker);
     expect(joined).not.toBe(attacker);
+    expect(allowed).not.toBe(attacker);
     expect(
       snapshotManagedSqlStatement(
         trustedSql(raw!, { justification: 'constructor authority control' }),
@@ -208,6 +211,10 @@ describe('@kovojs/drizzle runtime surface', () => {
     expect(snapshotManagedSqlStatement(identifier!, 'postgres')).toMatchObject({
       ok: true,
       statement: { text: '"accounts"' },
+    });
+    expect(snapshotManagedSqlStatement(allowed!, 'postgres')).toMatchObject({
+      ok: true,
+      statement: { text: 'asc' },
     });
 
     Object.defineProperty(Object.prototype, 'justification', {
