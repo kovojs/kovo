@@ -228,4 +228,23 @@ describe('durable task observability (SPEC §9.6)', () => {
     expect(statements[0]!.text).toContain('limit $3 offset $4');
     expect(statements[0]!.values).toEqual(['email.send', ['failed', 'dead'], 5, 0]);
   });
+
+  it('rejects accessor-backed SQL rows without invoking the getter', async () => {
+    let rowReads = 0;
+    const status = createDurableTaskStatus({
+      async execute() {
+        const result = {} as { rows?: unknown[] };
+        Object.defineProperty(result, 'rows', {
+          get() {
+            rowReads += 1;
+            return [];
+          },
+        });
+        return result as { rows: never[] };
+      },
+    });
+
+    await expect(status.list()).rejects.toThrow(/rows.*own data/u);
+    expect(rowReads).toBe(0);
+  });
 });

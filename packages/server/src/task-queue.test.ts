@@ -289,7 +289,7 @@ describe('durable task queue store (SPEC §9.6)', () => {
     const executor: DurableTaskSqlExecutor = {
       async execute(statement) {
         statements.push(statement);
-        if (statement.text.includes('returning id')) return { rows: [{ id: statement.values[0] }] };
+        if (statement.text.startsWith('insert')) return { rows: [{ id: statement.values[0] }] };
         return { rows: [] };
       },
     };
@@ -349,8 +349,7 @@ describe('durable task queue store (SPEC §9.6)', () => {
     });
     const originalStringify = JSON.stringify;
     try {
-      JSON.stringify = () =>
-        '{"operation":"delete-account","principalId":"attacker-principal"}';
+      JSON.stringify = () => '{"operation":"delete-account","principalId":"attacker-principal"}';
       await store.enqueue({
         args: { operation: 'read-profile', principalId: 'victim-principal' },
         task: 'account.maintenance',
@@ -439,6 +438,52 @@ describe('durable task queue store (SPEC §9.6)', () => {
 
     expect(result).toEqual({ rowCount: 1, rows: [{ id: 'job_1' }] });
     expect(calls).toEqual([['select $1::text as id', ['job_1']]]);
+  });
+
+  it('ignores inherited SQL result counts and rejects result accessors without invoking them', async () => {
+    const inherited = createDurableTaskSqlExecutor({
+      query: async () => Object.assign(Object.create({ rowCount: 1 }), { rows: [] }),
+    });
+    await expect(inherited.execute({ text: 'update jobs', values: [] })).resolves.toEqual({
+      rows: [],
+    });
+
+    let rowCountReads = 0;
+    const accessor = createDurableTaskSqlExecutor({
+      query: async () => {
+        const result = { rows: [] } as Record<string, unknown>;
+        Object.defineProperty(result, 'rowCount', {
+          get() {
+            rowCountReads += 1;
+            return 1;
+          },
+        });
+        return result;
+      },
+    });
+    await expect(accessor.execute({ text: 'update jobs', values: [] })).rejects.toThrow(
+      /rowCount.*own data/u,
+    );
+    expect(rowCountReads).toBe(0);
+
+    let rowCountDescriptors = 0;
+    const unstable = createDurableTaskSqlExecutor({
+      query: async () =>
+        new Proxy(
+          { rowCount: 1, rows: [] },
+          {
+            getOwnPropertyDescriptor(target, property) {
+              const descriptor = Reflect.getOwnPropertyDescriptor(target, property);
+              if (property !== 'rowCount' || descriptor === undefined) return descriptor;
+              rowCountDescriptors += 1;
+              return { ...descriptor, value: rowCountDescriptors === 1 ? 1 : 0 };
+            },
+          },
+        ),
+    });
+    await expect(unstable.execute({ text: 'update jobs', values: [] })).rejects.toThrow(
+      /rowCount.*stable/u,
+    );
   });
 
   it('adapts a Drizzle PGlite transaction session client before proxied top-level handles', async () => {

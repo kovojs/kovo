@@ -11,12 +11,15 @@ import {
   taskDateIsDate,
   taskFloor,
   taskIsArray,
+  taskIsRecord,
   taskMax,
   taskNewDate,
+  taskOwnDataValue,
   taskSetAdd,
   taskSetForEach,
   taskSetHas,
   taskSetSize,
+  taskSnapshotCollection,
   taskStableOwnFunction,
   taskString,
 } from './task-security-intrinsics.js';
@@ -151,9 +154,20 @@ function createStatusReader(
         source,
         [sqlListJobsStatement(filters)],
       );
+      if (!taskIsRecord(result)) {
+        throw new TypeError('Durable task status SQL result must be a stable record.');
+      }
+      const rawRows = taskOwnDataValue(result, 'rows');
+      if (!taskIsArray(rawRows)) {
+        throw new TypeError('Durable task status SQL rows must be a dense own-data array.');
+      }
+      const rows = taskSnapshotCollection<DurableTaskJobRow>(
+        rawRows as DurableTaskJobRow[],
+        'Durable task status SQL rows',
+      );
       const jobs: DurableTaskStatusJob[] = [];
-      for (let index = 0; index < result.rows.length; index += 1) {
-        taskArrayPush(jobs, jobFromRow(result.rows[index]!));
+      for (let index = 0; index < rows.length; index += 1) {
+        taskArrayPush(jobs, jobFromRow(rows[index]!));
       }
       return jobs;
     };
@@ -283,20 +297,39 @@ interface DurableTaskJobRow {
 }
 
 function jobFromRow(row: DurableTaskJobRow): DurableTaskStatusJob {
+  const id = statusJobRowValue(row, 'id');
+  const task = statusJobRowValue(row, 'task_key');
+  const args = statusJobRowValue(row, 'args');
+  const runAt = statusJobRowValue(row, 'run_at');
+  const status = statusJobRowValue(row, 'status');
+  const attempts = statusJobRowValue(row, 'attempts');
+  const createdAt = statusJobRowValue(row, 'created_at');
+  const updatedAt = statusJobRowValue(row, 'updated_at');
+  const logicalKey = statusJobRowValue(row, 'logical_key');
+  const leasedUntil = statusJobRowValue(row, 'leased_until');
+  const leaseOwner = statusJobRowValue(row, 'lease_owner');
+  const lastError = statusJobRowValue(row, 'last_error');
   return {
-    id: row.id,
-    task: row.task_key,
-    args: row.args,
-    runAt: dateFrom(row.run_at),
-    status: observedStatus(row.status),
-    attempts: row.attempts,
-    createdAt: dateFrom(row.created_at),
-    updatedAt: dateFrom(row.updated_at),
-    ...(row.logical_key === null ? {} : { key: row.logical_key }),
-    ...(row.leased_until === null ? {} : { leasedUntil: dateFrom(row.leased_until) }),
-    ...(row.lease_owner === null ? {} : { leaseOwner: row.lease_owner }),
-    ...(row.last_error === null ? {} : { lastError: row.last_error }),
+    id,
+    task,
+    args,
+    runAt: dateFrom(runAt),
+    status: observedStatus(status),
+    attempts,
+    createdAt: dateFrom(createdAt),
+    updatedAt: dateFrom(updatedAt),
+    ...(logicalKey === null ? {} : { key: logicalKey }),
+    ...(leasedUntil === null ? {} : { leasedUntil: dateFrom(leasedUntil) }),
+    ...(leaseOwner === null ? {} : { leaseOwner }),
+    ...(lastError === null ? {} : { lastError }),
   };
+}
+
+function statusJobRowValue<Key extends keyof DurableTaskJobRow>(
+  row: DurableTaskJobRow,
+  property: Key,
+): DurableTaskJobRow[Key] {
+  return taskOwnDataValue(row, property) as DurableTaskJobRow[Key];
 }
 
 function copyJob(job: DurableTaskStatusJob): DurableTaskStatusJob {

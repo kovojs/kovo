@@ -23,6 +23,7 @@ import {
   witnessMapSet,
   witnessMapSize,
   witnessObjectKeys,
+  witnessObjectIs,
   witnessReflectApply,
   witnessReflectGet,
   witnessSetAdd,
@@ -79,6 +80,7 @@ const nativeMathMax = NativeMath.max;
 const nativeMathMin = NativeMath.min;
 const nativeMathTrunc = NativeMath.trunc;
 const nativeNumberIsFinite = NativeNumber.isFinite;
+const nativeNumberIsSafeInteger = NativeNumber.isSafeInteger;
 const nativeObjectEntries = NativeObject.entries;
 const nativeObjectValues = NativeObject.values;
 const nativePromiseAll = NativePromise.all;
@@ -444,25 +446,43 @@ export function taskObjectValues<Value>(value: Record<string, Value>): Value[] {
 
 export function taskOwnDataValue(value: object, property: PropertyKey): unknown {
   assertTaskSecurityIntrinsics();
-  const descriptor = witnessGetOwnPropertyDescriptor(value, property);
-  if (descriptor === undefined || !('value' in descriptor)) {
+  const before = witnessGetOwnPropertyDescriptor(value, property);
+  const after = witnessGetOwnPropertyDescriptor(value, property);
+  if (before === undefined || after === undefined || !('value' in before) || !('value' in after)) {
     throw new TypeError(
       `Durable task property ${witnessString(property)} must be an own data value.`,
     );
   }
-  return descriptor.value;
+  if (
+    !witnessObjectIs(before.value, after.value) ||
+    before.configurable !== after.configurable ||
+    before.enumerable !== after.enumerable ||
+    before.writable !== after.writable
+  ) {
+    throw new TypeError(`Durable task property ${witnessString(property)} must be stable.`);
+  }
+  return before.value;
 }
 
 export function taskOptionalOwnDataValue(value: object, property: PropertyKey): unknown {
   assertTaskSecurityIntrinsics();
-  const descriptor = witnessGetOwnPropertyDescriptor(value, property);
-  if (descriptor === undefined) return undefined;
-  if (!('value' in descriptor)) {
+  const before = witnessGetOwnPropertyDescriptor(value, property);
+  const after = witnessGetOwnPropertyDescriptor(value, property);
+  if (before === undefined && after === undefined) return undefined;
+  if (before === undefined || after === undefined || !('value' in before) || !('value' in after)) {
     throw new TypeError(
       `Durable task property ${witnessString(property)} must be an own data value.`,
     );
   }
-  return descriptor.value;
+  if (
+    !witnessObjectIs(before.value, after.value) ||
+    before.configurable !== after.configurable ||
+    before.enumerable !== after.enumerable ||
+    before.writable !== after.writable
+  ) {
+    throw new TypeError(`Durable task property ${witnessString(property)} must be stable.`);
+  }
+  return before.value;
 }
 
 export function taskFreeze<Value>(value: Value): Readonly<Value> {
@@ -640,6 +660,11 @@ export function taskDateParts(value: Date): {
 export function taskNumberIsFinite(value: unknown): value is number {
   assertTaskSecurityIntrinsics();
   return apply(nativeNumberIsFinite, NativeNumber, [value]);
+}
+
+export function taskNumberIsSafeInteger(value: unknown): value is number {
+  assertTaskSecurityIntrinsics();
+  return apply(nativeNumberIsSafeInteger, NativeNumber, [value]);
 }
 
 export function taskNumber(value: string): number {
@@ -844,9 +869,7 @@ export function taskClearInterval(timer: ReturnType<typeof setInterval>): void {
   apply(controls?.clearInterval ?? realmClearInterval, undefined, [timer]);
 }
 
-export function taskTimerUnref(
-  timer: ReturnType<typeof setTimeout> | ReturnType<typeof setInterval>,
-): void {
+export function taskTimerUnref(timer: ReturnType<typeof setTimeout>): void {
   assertTaskSecurityIntrinsics();
   if (testFakeTimerControls() !== undefined) return;
   if (nativeTimerUnref !== undefined) apply(nativeTimerUnref, timer, []);

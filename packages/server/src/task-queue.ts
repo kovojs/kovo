@@ -28,11 +28,16 @@ import {
   taskMax,
   taskNewDate,
   taskNumberIsFinite,
+  taskNumberIsSafeInteger,
+  taskOptionalOwnDataValue,
+  taskOwnDataValue,
   taskSetAdd,
   taskSetHas,
   taskString,
   taskStringReplaceAll,
   taskStringTrim,
+  taskSnapshotCollection,
+  taskStableOwnFunction,
   taskTrunc,
 } from './task-security-intrinsics.js';
 
@@ -295,7 +300,19 @@ function quoteIdent(value: string): string {
 }
 
 export class PostgresDurableTaskQueue implements DurableTaskQueueStore {
-  constructor(private readonly executor: DurableTaskSqlExecutor) {}
+  private readonly executor: DurableTaskSqlExecutor;
+
+  constructor(executor: DurableTaskSqlExecutor) {
+    const execute = taskStableOwnFunction(executor, 'execute', 'Durable task SQL executor');
+    this.executor = {
+      async execute<Row = Record<string, unknown>>(
+        statement: DurableTaskSqlStatement,
+      ): Promise<DurableTaskSqlResult<Row>> {
+        const result = await taskApply<Promise<unknown>>(execute, executor, [statement]);
+        return normalizeSqlResult<Row>(result);
+      },
+    };
+  }
 
   async enqueue(input: DurableTaskEnqueueInput): Promise<TaskHandle> {
     const now = taskNewDate();
@@ -328,7 +345,7 @@ export class PostgresDurableTaskQueue implements DurableTaskQueueStore {
         ]),
       );
       const row = result.rows[0];
-      return { id: row?.id ?? id, task: input.task };
+      return { id: row === undefined ? id : taskRowId(row), task: input.task };
     }
 
     const statementText =
@@ -348,7 +365,8 @@ export class PostgresDurableTaskQueue implements DurableTaskQueueStore {
         lastError,
       ]),
     );
-    return { id: result.rows[0]?.id ?? id, task: input.task };
+    const row = result.rows[0];
+    return { id: row === undefined ? id : taskRowId(row), task: input.task };
   }
 
   async cancel(handle: TaskHandle): Promise<boolean> {
@@ -722,24 +740,95 @@ where status = 'running' and leased_until <= $1`,
 } as const;
 
 function jobFromRow(row: DurableTaskJobRow): DurableTaskJob {
+  const id = taskJobRowValue(row, 'id');
+  const task = taskJobRowValue(row, 'task_key');
+  const args = taskJobRowValue(row, 'args');
+  const runAt = taskJobRowValue(row, 'run_at');
+  const logicalKey = taskJobRowValue(row, 'logical_key');
+  const lineage = taskJobRowValue(row, 'lineage');
+  const generation = taskJobRowValue(row, 'generation');
+  const priority = taskJobRowValue(row, 'priority');
+  const status = taskJobRowValue(row, 'status');
+  const attempts = taskJobRowValue(row, 'attempts');
+  const createdAt = taskJobRowValue(row, 'created_at');
+  const updatedAt = taskJobRowValue(row, 'updated_at');
+  const leasedUntil = taskJobRowValue(row, 'leased_until');
+  const leaseOwner = taskJobRowValue(row, 'lease_owner');
+  const leaseToken = taskJobRowValue(row, 'lease_token');
+  const lastError = taskJobRowValue(row, 'last_error');
+  if (
+    typeof id !== 'string' ||
+    taskStringTrim(id) === '' ||
+    typeof task !== 'string' ||
+    taskStringTrim(task) === '' ||
+    (lineage !== null && typeof lineage !== 'string') ||
+    (logicalKey !== null && typeof logicalKey !== 'string') ||
+    (leaseOwner !== null && typeof leaseOwner !== 'string') ||
+    (leaseToken !== null && typeof leaseToken !== 'string') ||
+    (lastError !== null && typeof lastError !== 'string') ||
+    !isDurableTaskJobStatus(status) ||
+    !taskNumberIsSafeInteger(attempts) ||
+    attempts < 0 ||
+    (generation !== null && (!taskNumberIsSafeInteger(generation) || generation < 0)) ||
+    (priority !== null && !taskNumberIsSafeInteger(priority))
+  ) {
+    throw new TypeError('Durable task SQL job row contains invalid authority fields.');
+  }
   return {
-    id: row.id,
-    task: row.task_key,
-    args: row.args,
-    runAt: dateFrom(row.run_at),
-    lineage: row.lineage ?? row.id,
-    generation: row.generation ?? 0,
-    priority: row.priority ?? 0,
-    status: row.status,
-    attempts: row.attempts,
-    createdAt: dateFrom(row.created_at),
-    updatedAt: dateFrom(row.updated_at),
-    ...(row.logical_key === null ? {} : { key: row.logical_key }),
-    ...(row.leased_until === null ? {} : { leasedUntil: dateFrom(row.leased_until) }),
-    ...(row.lease_owner === null ? {} : { leaseOwner: row.lease_owner }),
-    ...(row.lease_token === null ? {} : { leaseToken: row.lease_token }),
-    ...(row.last_error === null ? {} : { lastError: row.last_error }),
+    id,
+    task,
+    args: assertAndCloneJsonValue(args, { root: 'args' }),
+    runAt: validTaskRowDate(runAt),
+    lineage: lineage ?? id,
+    generation: generation ?? 0,
+    priority: priority ?? 0,
+    status,
+    attempts,
+    createdAt: validTaskRowDate(createdAt),
+    updatedAt: validTaskRowDate(updatedAt),
+    ...(logicalKey === null ? {} : { key: logicalKey }),
+    ...(leasedUntil === null ? {} : { leasedUntil: validTaskRowDate(leasedUntil) }),
+    ...(leaseOwner === null ? {} : { leaseOwner }),
+    ...(leaseToken === null ? {} : { leaseToken }),
+    ...(lastError === null ? {} : { lastError }),
   };
+}
+
+function isDurableTaskJobStatus(value: unknown): value is DurableTaskJobStatus {
+  return (
+    value === 'ready' ||
+    value === 'running' ||
+    value === 'succeeded' ||
+    value === 'failed' ||
+    value === 'dead' ||
+    value === 'cancelled'
+  );
+}
+
+function validTaskRowDate(value: Date | string): Date {
+  if (!taskDateIsDate(value) && typeof value !== 'string') {
+    throw new TypeError('Durable task SQL job date must be a Date or string.');
+  }
+  const date = dateFrom(value);
+  if (!taskNumberIsFinite(taskDateGetTime(date))) {
+    throw new TypeError('Durable task SQL job date must be valid.');
+  }
+  return date;
+}
+
+function taskJobRowValue<Key extends keyof DurableTaskJobRow>(
+  row: DurableTaskJobRow,
+  property: Key,
+): DurableTaskJobRow[Key] {
+  return taskOwnDataValue(row, property) as DurableTaskJobRow[Key];
+}
+
+function taskRowId(row: { id: string }): string {
+  const id = taskOwnDataValue(row, 'id');
+  if (typeof id !== 'string' || taskStringTrim(id) === '') {
+    throw new TypeError('Durable task SQL id must be a non-empty own data string.');
+  }
+  return id;
 }
 
 function sqlStatement(text: string, values: readonly unknown[]): DurableTaskSqlStatement {
@@ -772,17 +861,31 @@ function isSqlClientLike(value: unknown): value is SqlClientLike {
 }
 
 function normalizeSqlResult<Row>(result: unknown): DurableTaskSqlResult<Row> {
-  if (taskIsArray(result)) return { rows: result as readonly Row[] };
+  if (taskIsArray(result)) {
+    return { rows: taskSnapshotCollection<Row>(result as Row[], 'Durable task SQL rows') };
+  }
   if (!isRecord(result)) return { rows: [] };
 
-  const rows = taskIsArray(result.rows) ? (result.rows as readonly Row[]) : [];
+  const rawRows = taskOptionalOwnDataValue(result, 'rows');
+  if (rawRows !== undefined && !taskIsArray(rawRows)) {
+    throw new TypeError('Durable task SQL rows must be a dense own-data array.');
+  }
+  const rows =
+    rawRows === undefined
+      ? []
+      : taskSnapshotCollection<Row>(rawRows as Row[], 'Durable task SQL rows');
+  const rowCount = taskOptionalOwnDataValue(result, 'rowCount');
+  const affectedRows = taskOptionalOwnDataValue(result, 'affectedRows');
+  const count = rowCount ?? affectedRows;
+  if (
+    count !== undefined &&
+    (typeof count !== 'number' || !taskNumberIsSafeInteger(count) || count < 0)
+  ) {
+    throw new TypeError('Durable task SQL row count must be a non-negative integer.');
+  }
   return {
     rows,
-    ...(typeof result.rowCount === 'number'
-      ? { rowCount: result.rowCount }
-      : typeof result.affectedRows === 'number'
-        ? { rowCount: result.affectedRows }
-        : {}),
+    ...(count === undefined ? {} : { rowCount: count }),
   };
 }
 
