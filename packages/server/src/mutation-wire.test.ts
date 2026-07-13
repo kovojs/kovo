@@ -214,6 +214,42 @@ describe('mutation wire headers', () => {
     ).toEqual([]);
   });
 
+  it('does not accept a no-CSRF live-target descriptor after the resolved principal changes', () => {
+    const descriptor = {
+      component: 'components/account/summary',
+      props: { accountId: 'account-a' },
+      target: 'account-summary',
+    };
+    const originalRequest = { session: { user: { id: 'user-a' } } };
+    const otherPrincipalRequest = { session: { user: { id: 'user-b' } } };
+    const token = createLiveTargetAttestation(descriptor, {
+      buildToken: 'principal-bound-audience',
+      request: originalRequest,
+    });
+    const headers = {
+      'Kovo-Live-Targets': `account-summary#components/account/summary@${token}:{"accountId":"account-a"}`,
+    };
+
+    expect(
+      mutationWireRequestFromHeaders({
+        buildToken: 'principal-build',
+        headers,
+        liveTargetAudience: 'principal-bound-audience',
+        rawInput: {},
+        request: originalRequest,
+      }).liveTargetDescriptors,
+    ).toHaveLength(1);
+    expect(
+      mutationWireRequestFromHeaders({
+        buildToken: 'principal-build',
+        headers,
+        liveTargetAudience: 'principal-bound-audience',
+        rawInput: {},
+        request: otherPrincipalRequest,
+      }).liveTargetDescriptors,
+    ).toEqual([]);
+  });
+
   it('binds live-target descriptors to the exact document URL context that minted them', () => {
     const descriptor = {
       component: 'components/contextual/contextual',

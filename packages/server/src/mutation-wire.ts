@@ -2,7 +2,7 @@ import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 
 import type { JsonValue, Redirect } from '@kovojs/core';
 import { assertAndCloneJsonValue, canonicalJsonStringify } from '@kovojs/core/internal/json';
-import { isProvenPrincipal } from './auth-principal.js';
+import { isProvenPrincipal, principalPostureFromRequest } from './auth-principal.js';
 import type { CsrfOptions } from './csrf.js';
 import { signingKeyRingFromSecret } from './keyring.js';
 import type { RequestLifecycleOptions } from './guards.js';
@@ -837,10 +837,7 @@ function liveTargetAttestationPayload<Request>(
   if (typeof options.buildToken !== 'string' || options.buildToken.length === 0) {
     throw new Error('live-target attestation requires a non-empty app build token.');
   }
-  const principal = options.csrf === false ? undefined : options.csrf?.sessionId(options.request);
-  if (principal !== undefined && !isProvenPrincipal(principal)) {
-    throw new Error('live-target attestation cannot use an unresolved session principal.');
-  }
+  const principal = liveTargetAttestationPrincipal(options);
   return canonicalJsonStringify({
     buildToken: options.buildToken,
     component: descriptor.component,
@@ -849,6 +846,32 @@ function liveTargetAttestationPayload<Request>(
     sourceUrl: liveTargetSourceContext(options.request, options.sourceUrl),
     target: descriptor.target,
   });
+}
+
+function liveTargetAttestationPrincipal<Request>(options: {
+  csrf?: CsrfOptions<Request> | false;
+  request: Request;
+}): string | undefined {
+  if (options.csrf === false) return undefined;
+
+  const csrfPrincipal = options.csrf?.sessionId(options.request);
+  if (csrfPrincipal !== undefined) {
+    if (!isProvenPrincipal(csrfPrincipal)) {
+      throw new Error('live-target attestation cannot use an unresolved session principal.');
+    }
+    return csrfPrincipal;
+  }
+
+  // A deployment may use the framework-owned live-target secret without configuring a global
+  // CSRF keyring (for example when mutations own their CSRF posture). The route and mutation
+  // lifecycle still carry a classify-and-pin principal snapshot. Bind the descriptor to that
+  // identity so a document retained across logout/login cannot reconstruct the prior principal's
+  // component/query target under the new session (SPEC §6.5/§6.6/§9.3).
+  const posture = principalPostureFromRequest(options.request);
+  if (posture.kind === 'unresolved') {
+    throw new Error('live-target attestation cannot use an unresolved session principal.');
+  }
+  return posture.kind === 'proven' ? posture.principal : undefined;
 }
 
 function liveTargetSourceContext(request: unknown, supplied?: string): string {
