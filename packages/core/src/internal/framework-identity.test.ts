@@ -4,7 +4,9 @@ import { describe, expect, it } from 'vitest';
 import {
   canonicalFrameworkExportForExpression,
   expressionAtSpan,
+  frameworkCatalogExportForModuleSpecifier,
   frameworkCatalogExportForSourcePath,
+  frameworkCatalogExportsForModule,
   frameworkExport,
   frameworkIdentityExpressionKindRows,
   registerFrameworkIdentityProject,
@@ -100,6 +102,30 @@ function expectedExpressionSyntaxKinds(): readonly ts.SyntaxKind[] {
 }
 
 describe('framework identity resolver', () => {
+  it('does not expose mutable catalog authority through lookup results', () => {
+    const identity = frameworkCatalogExportForModuleSpecifier('@kovojs/browser', 'trustedHtml')!;
+    const exports = frameworkCatalogExportsForModule('@kovojs/browser') as Set<string>;
+    const originalExportName = identity.exportName;
+    const changedIdentity = Reflect.set(identity, 'exportName', 'component');
+    const alreadyHadAttacker = exports.has('attacker-controlled');
+    exports.add('attacker-controlled');
+
+    try {
+      expect(Object.isFrozen(identity)).toBe(true);
+      expect(changedIdentity).toBe(false);
+      expect(frameworkCatalogExportForModuleSpecifier('@kovojs/browser', 'trustedHtml')).toEqual({
+        exportName: 'trustedHtml',
+        module: '@kovojs/browser',
+      });
+      expect(frameworkCatalogExportsForModule('@kovojs/browser').has('attacker-controlled')).toBe(
+        false,
+      );
+    } finally {
+      if (changedIdentity) Reflect.set(identity, 'exportName', originalExportName);
+      if (!alreadyHadAttacker) exports.delete('attacker-controlled');
+    }
+  });
+
   it('does not let late scalar traversal erase a framework source-path identity', () => {
     const originalReplaceAll = String.prototype.replaceAll;
     const originalIncludes = String.prototype.includes;

@@ -7,6 +7,7 @@ import {
   securityOwnArrayEntry,
   securitySet,
   securitySetAdd,
+  securitySetForEach,
   securityStringCharCodeAt,
   securityStringSlice,
 } from '#security-witness-intrinsics';
@@ -281,10 +282,14 @@ for (let index = 0; index < frameworkIdentityCatalog.length; index += 1) {
       specifierExports = securityMap();
       securityMapSet(moduleSpecifierIndex, specifier, specifierExports);
     }
-    securityMapSet(specifierExports, entry.exportName, {
-      exportName: entry.exportName,
-      module: entry.module,
-    });
+    securityMapSet(
+      specifierExports,
+      entry.exportName,
+      freezeSecurityValue({
+        exportName: entry.exportName,
+        module: entry.module,
+      }),
+    );
   }
 }
 
@@ -302,7 +307,14 @@ export function frameworkCatalogExportForModuleSpecifier(
 export function frameworkCatalogExportsForModule(
   module: FrameworkIdentityModule,
 ): ReadonlySet<string> {
-  return securityMapGet(moduleExportIndex, module) ?? securitySet();
+  const snapshot = securitySet<string>();
+  const exports = securityMapGet(moduleExportIndex, module);
+  if (exports) {
+    securitySetForEach(exports, (exportName) => {
+      securitySetAdd(snapshot, exportName);
+    });
+  }
+  return snapshot;
 }
 
 /** @internal */
@@ -387,5 +399,5 @@ function catalogArrayIncludes(values: readonly string[], expected: string): bool
 }
 
 function catalogIdentity(entry: FrameworkExportIdentity): FrameworkExportIdentity {
-  return { exportName: entry.exportName, module: entry.module };
+  return freezeSecurityValue({ exportName: entry.exportName, module: entry.module });
 }
