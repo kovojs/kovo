@@ -221,13 +221,6 @@ export interface CompilerBuildIdInput {
   readonly sourceFingerprints?: Readonly<Record<string, string>>;
 }
 
-/**
- * @internal Stable compiler/dependency identity for incremental cache keys.
- *
- * SPEC.md §5.2 keeps emitted artifacts deterministic; the incremental cache must
- * also be versioned so a compiler implementation change becomes a clean miss. This compact token
- * is for display/path names; cache correctness compares {@link compilerBuildCacheIdentity} exactly.
- */
 function computeCompilerBuildId(sourceFingerprints: Readonly<Record<string, string>>): string {
   const payload = {
     compilerBuildCacheIdentity: resolvedCompilerBuildCacheIdentity,
@@ -248,6 +241,13 @@ function sha256(value: string): string {
 // a confirmed warm hit scale with compiler source size rather than with the changed app file.
 const defaultCompilerBuildId = computeCompilerBuildId({});
 
+/**
+ * @internal Stable compiler/dependency identity for incremental cache keys.
+ *
+ * SPEC.md §5.2 keeps emitted artifacts deterministic; the incremental cache must
+ * also be versioned so a compiler implementation change becomes a clean miss. This compact token
+ * is for display/path names; cache correctness compares {@link compilerBuildCacheIdentity} exactly.
+ */
 export function compilerBuildId(input: CompilerBuildIdInput = {}): string {
   return input.sourceFingerprints === undefined
     ? defaultCompilerBuildId

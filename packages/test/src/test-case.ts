@@ -70,11 +70,6 @@ function configureKovoTest<Db>(
   return (name, fn, runner) => buildCase(name, fn, options, runner);
 }
 
-/**
- * Define a Kovo test case. Call with inline `options`, or use
- * `kovoTest.configure(options)` to bind the harness once and call the result as
- * `test(name, fn)` (SPEC §12).
- */
 const kovoTestWithConfigure = kovoTestImpl as typeof kovoTestImpl & {
   configure: typeof configureKovoTest;
 };
@@ -85,6 +80,11 @@ verifierDefineProperty(kovoTestWithConfigure, 'configure', {
   writable: false,
 });
 
+/**
+ * Define a Kovo test case. Call with inline `options`, or use
+ * `kovoTest.configure(options)` to bind the harness once and call the result as
+ * `test(name, fn)` (SPEC §12).
+ */
 export const kovoTest: typeof kovoTestWithConfigure = verifierFreeze(
   kovoTestWithConfigure,
 ) as typeof kovoTestWithConfigure;
