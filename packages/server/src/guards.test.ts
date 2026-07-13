@@ -265,6 +265,28 @@ describe('guard principal resolution (Q.6 auth-decision fail-closed)', () => {
 });
 
 describe('server guard and session primitives', () => {
+  it('does not promote inherited or accessor-backed request db values into managed authority', async () => {
+    const inherited = await resolveLifecycleRequest(
+      Object.create({ db: { execute: () => 'prototype-db' } }),
+      { sqlWritePolicy: { tables: [] } },
+    );
+    let dbReads = 0;
+    const accessor = {} as { db?: unknown };
+    Object.defineProperty(accessor, 'db', {
+      get() {
+        dbReads += 1;
+        return { execute: () => 'accessor-db' };
+      },
+    });
+    const accessorResult = await resolveLifecycleRequest(accessor, {
+      sqlWritePolicy: { tables: [] },
+    });
+
+    expect('db' in inherited).toBe(false);
+    expect('db' in accessorResult).toBe(false);
+    expect(dbReads).toBe(0);
+  });
+
   it('guards managed DB handles from unbranded raw SQL strings before driver execution', async () => {
     const calls: unknown[] = [];
     const request = await resolveLifecycleRequest(

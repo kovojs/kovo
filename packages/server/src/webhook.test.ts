@@ -1109,6 +1109,72 @@ describe('server webhook primitive', () => {
     expect(wh.webhookDefinition.writes).toEqual([invoice]);
   });
 
+  it('fails closed before a write-capable handler when idempotency resolves without an event id', async () => {
+    const invoice = domain('invoice-missing-runtime-id');
+    let handlerCalls = 0;
+    const wh = webhook('/webhooks/missing-runtime-id', {
+      handler(input, context) {
+        handlerCalls += 1;
+        context.recordChange(invoice, { keys: [input.id] });
+        return { ok: true };
+      },
+      idempotency: () => undefined,
+      input: s.object({ id: s.string() }),
+      replayStore: createMemoryWebhookReplayStore(),
+      verify: 'none',
+      verifyJustification: 'fixture-only webhook test',
+      writes: [invoice],
+    });
+
+    const result = await runWebhook(
+      wh,
+      new Request('https://example.test/webhooks/missing-runtime-id', {
+        body: JSON.stringify({ id: 'evt_missing' }),
+        method: 'POST',
+      }),
+    );
+
+    expect(result.response.status).toBe(500);
+    expect(result.replayed).toBe(false);
+    expect(handlerCalls).toBe(0);
+  });
+
+  it('rejects non-string idempotency outcomes without coercing them into replay keys', async () => {
+    const invoice = domain('invoice-invalid-runtime-id');
+    let handlerCalls = 0;
+    let coercions = 0;
+    const wh = webhook('/webhooks/invalid-runtime-id', {
+      handler() {
+        handlerCalls += 1;
+        return { ok: true };
+      },
+      idempotency: () =>
+        ({
+          toString() {
+            coercions += 1;
+            return 'evt_forged';
+          },
+        }) as never,
+      input: s.object({ id: s.string() }),
+      replayStore: createMemoryWebhookReplayStore(),
+      verify: 'none',
+      verifyJustification: 'fixture-only webhook test',
+      writes: [invoice],
+    });
+
+    const result = await runWebhook(
+      wh,
+      new Request('https://example.test/webhooks/invalid-runtime-id', {
+        body: JSON.stringify({ id: 'evt_invalid' }),
+        method: 'POST',
+      }),
+    );
+
+    expect(result.response.status).toBe(500);
+    expect(handlerCalls).toBe(0);
+    expect(coercions).toBe(0);
+  });
+
   it('B4: fails closed when recordChange targets a domain outside declared writes', async () => {
     const replayStore = createMemoryWebhookReplayStore();
     const contact = domain('model/contact');

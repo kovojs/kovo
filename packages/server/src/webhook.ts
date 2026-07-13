@@ -938,7 +938,7 @@ export async function runWebhook<
   } catch {
     verification = false;
   }
-  if (!verification) {
+  if (verification !== true) {
     return {
       changes: [],
       replayed: false,
@@ -987,10 +987,8 @@ export async function runWebhook<
   // a writable transaction MUST carry idempotency()+replayStore. Fail closed BEFORE opening
   // the transaction (not at the old post-commit posture check) so a misconfigured or
   // hand-built declaration can never commit a write a provider retry would re-execute.
-  if (
-    declaration.webhookDefinition.transaction !== undefined &&
-    !webhookReplayPostureSatisfied(declaration.webhookDefinition)
-  ) {
+  const writeCapable = webhookCanWrite(declaration.webhookDefinition);
+  if (writeCapable && !webhookReplayPostureSatisfied(declaration.webhookDefinition)) {
     return {
       changes: [],
       replayed: false,
@@ -999,7 +997,31 @@ export async function runWebhook<
   }
 
   const input = inputResult.value;
-  const idem = declaration.webhookDefinition.idempotency?.(input);
+  let idem: string | undefined;
+  try {
+    const candidate = declaration.webhookDefinition.idempotency?.(input);
+    if (candidate !== undefined && typeof candidate !== 'string') {
+      return {
+        changes: [],
+        replayed: false,
+        response: webhookResponse(500, 'Internal Server Error'),
+      };
+    }
+    idem = candidate;
+  } catch {
+    return {
+      changes: [],
+      replayed: false,
+      response: webhookResponse(500, 'Internal Server Error'),
+    };
+  }
+  if (writeCapable && idem === undefined) {
+    return {
+      changes: [],
+      replayed: false,
+      response: webhookResponse(500, 'Internal Server Error'),
+    };
+  }
   // L10-3 (SPEC §9.1:860): use ONE truthiness predicate for the whole replay
   // lifecycle. An empty-string idem is a VALID provider event id, so the fast-path
   // LOOKUP must be gated on `idem !== undefined` (treated active) exactly like the
@@ -1213,6 +1235,13 @@ function webhookReplayPostureSatisfied(definition: {
   replayStore?: unknown;
 }): boolean {
   return definition.idempotency !== undefined && definition.replayStore !== undefined;
+}
+
+function webhookCanWrite(definition: {
+  transaction?: unknown;
+  writes?: readonly unknown[] | undefined;
+}): boolean {
+  return definition.transaction !== undefined || (definition.writes?.length ?? 0) > 0;
 }
 
 type WebhookVerificationFields = WebhookVerifiedDefinition | WebhookNoneDefinition;

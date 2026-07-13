@@ -1032,14 +1032,18 @@ export async function resolveLifecycleRequest<Request, SessionValue = unknown, D
         options.sqlWritePolicy === undefined ? {} : { sqlWritePolicy: options.sqlWritePolicy },
       ),
     );
-  } else if (options.sqlWritePolicy !== undefined && requestHasDb(lifecycleRequest)) {
-    lifecycleRequest = requestWithProperty(
-      lifecycleRequest,
-      'db',
-      managedDb(lifecycleRequest.db, options.dbMode ?? 'write', {
-        sqlWritePolicy: options.sqlWritePolicy,
-      }),
-    );
+  } else if (options.sqlWritePolicy !== undefined) {
+    const requestDb = requestOwnDb(lifecycleRequest);
+    lifecycleRequest =
+      requestDb.present && requestDb.value !== undefined
+        ? requestWithProperty(
+            lifecycleRequest,
+            'db',
+            managedDb(requestDb.value, options.dbMode ?? 'write', {
+              sqlWritePolicy: options.sqlWritePolicy,
+            }),
+          )
+        : withoutRequestProperty(lifecycleRequest, 'db');
   }
 
   // SPEC §9.5: attach the framework-resolved trustworthy client IP after providers but before the
@@ -1055,8 +1059,16 @@ export async function resolveLifecycleRequest<Request, SessionValue = unknown, D
   return lifecycleRequest as LifecycleRequest<Request, SessionValue, DbValue>;
 }
 
-function requestHasDb(value: unknown): value is { db: unknown } {
-  return typeof value === 'object' && value !== null && 'db' in value;
+function requestOwnDb(value: unknown):
+  | { present: false }
+  | { present: true; value: unknown } {
+  if ((typeof value !== 'object' && typeof value !== 'function') || value === null) {
+    return { present: false };
+  }
+  const descriptor = witnessGetOwnPropertyDescriptor(value, 'db');
+  return descriptor !== undefined && 'value' in descriptor
+    ? { present: true, value: descriptor.value }
+    : { present: false };
 }
 
 export async function renderHttpGuardFailureResponse<Request>(
