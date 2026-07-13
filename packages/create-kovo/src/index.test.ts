@@ -206,12 +206,8 @@ describe('create-kovo starter (metadata)', () => {
       expect(ciWorkflow).toContain('vp exec pnpm run build:prod');
       expect(ciWorkflow).toContain('node-version: 24.10.0');
       expect(ciWorkflow).toContain('permissions:\n  contents: read\n  actions: read');
-      expect(ciWorkflow).toContain(
-        'actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5',
-      );
-      expect(ciWorkflow).toContain(
-        'actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830',
-      );
+      expect(ciWorkflow).toContain('actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5');
+      expect(ciWorkflow).toContain('actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830');
       expect(ciWorkflow).toContain('vp install --frozen-lockfile');
       expect(ciWorkflow).toContain('vp exec pnpm run check');
       expect(ciWorkflow).toContain('vp exec pnpm run test');
