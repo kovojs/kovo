@@ -1,3 +1,8 @@
+import {
+  drizzleStaticObjectValues,
+  drizzleStaticReadonlySet,
+} from './static-security-authority.js';
+
 import { dirname, isAbsolute, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { JsonValue } from '@kovojs/core';
@@ -126,7 +131,7 @@ import {
 } from './static/framework-identity.js';
 import { drizzleDiagnostic } from './static/diagnostics.js';
 
-/** @internal */ export const IGNORED_LOCAL_CALL_NAMES = new Set([
+/** @internal */ export const IGNORED_LOCAL_CALL_NAMES = drizzleStaticReadonlySet([
   'eq',
   'for',
   'function',
@@ -140,9 +145,9 @@ import { drizzleDiagnostic } from './static/diagnostics.js';
 ]);
 /** @internal */ export const KV411_MESSAGE = 'Query read set includes an exempt table';
 /** @internal */ export const UNRESOLVED_READ_SOURCE_EXPRESSION = '__kovoUnresolvedReadSource';
-/** @internal */ export const BOOLEAN_COLUMN_BUILDERS = new Set(['boolean']);
-/** @internal */ export const JSON_COLUMN_BUILDERS = new Set(['json', 'jsonb']);
-/** @internal */ export const NUMBER_COLUMN_BUILDERS = new Set([
+/** @internal */ export const BOOLEAN_COLUMN_BUILDERS = drizzleStaticReadonlySet(['boolean']);
+/** @internal */ export const JSON_COLUMN_BUILDERS = drizzleStaticReadonlySet(['json', 'jsonb']);
+/** @internal */ export const NUMBER_COLUMN_BUILDERS = drizzleStaticReadonlySet([
   'bigint',
   'doublePrecision',
   'integer',
@@ -153,11 +158,9 @@ import { drizzleDiagnostic } from './static/diagnostics.js';
   'bigserial',
   'smallserial',
 ]);
-/** @internal */ export const UNCLASSIFIED_DRIZZLE_RECEIVER_MUTATION_METHODS = new Set([
-  '$count',
-  'execute',
-]);
-/** @internal */ export const RAW_SQL_RECEIVER_SINK_METHODS = new Set([
+/** @internal */ export const UNCLASSIFIED_DRIZZLE_RECEIVER_MUTATION_METHODS =
+  drizzleStaticReadonlySet(['$count', 'execute']);
+/** @internal */ export const RAW_SQL_RECEIVER_SINK_METHODS = drizzleStaticReadonlySet([
   'all',
   'exec',
   'execute',
@@ -167,7 +170,7 @@ import { drizzleDiagnostic } from './static/diagnostics.js';
   'run',
   'values',
 ]);
-/** @internal */ export const RAW_SQL_WRITE_RECEIVER_SINK_METHODS = new Set([
+/** @internal */ export const RAW_SQL_WRITE_RECEIVER_SINK_METHODS = drizzleStaticReadonlySet([
   'all',
   'exec',
   'execute',
@@ -176,22 +179,27 @@ import { drizzleDiagnostic } from './static/diagnostics.js';
   'run',
   'values',
 ]);
-const AMBIGUOUS_RAW_SQL_RECEIVER_SINK_METHODS = new Set(['all', 'get', 'run', 'values']);
-/** @internal */ export const DRIZZLE_SELECT_QUERY_METHODS = new Set([
+const AMBIGUOUS_RAW_SQL_RECEIVER_SINK_METHODS = drizzleStaticReadonlySet([
+  'all',
+  'get',
+  'run',
+  'values',
+]);
+/** @internal */ export const DRIZZLE_SELECT_QUERY_METHODS = drizzleStaticReadonlySet([
   'select',
   'selectDistinct',
   'selectDistinctOn',
 ]);
-/** @internal */ export const DRIZZLE_CORE_MODULE_SPECIFIERS = new Set([
+/** @internal */ export const DRIZZLE_CORE_MODULE_SPECIFIERS = drizzleStaticReadonlySet([
   'drizzle-orm/pg-core',
   'drizzle-orm/sqlite-core',
 ]);
-/** @internal */ export const DRIZZLE_UNMODELED_RELATION_FACTORY_NAMES = new Set([
+/** @internal */ export const DRIZZLE_UNMODELED_RELATION_FACTORY_NAMES = drizzleStaticReadonlySet([
   'pgMaterializedView',
   'pgView',
   'sqliteView',
 ]);
-/** @internal */ export const CLASSIFIED_DRIZZLE_RECEIVER_METHODS = new Set([
+/** @internal */ export const CLASSIFIED_DRIZZLE_RECEIVER_METHODS = drizzleStaticReadonlySet([
   ...DRIZZLE_SELECT_QUERY_METHODS,
   'delete',
   'insert',
@@ -205,7 +213,7 @@ const AMBIGUOUS_RAW_SQL_RECEIVER_SINK_METHODS = new Set(['all', 'get', 'run', 'v
 /** @internal */ export const UNRESOLVED_DOMAIN_WRITE_SPREAD_MEMBER = '<spread>';
 /** @internal */ export const UNMODELED_RELATION_EXPRESSION_PREFIX = '__kovoUnmodeledRelation';
 /** @internal */ export const DRIZZLE_STATIC_PROJECT_ROOT = dirname(fileURLToPath(import.meta.url));
-/** @internal */ export const TOUCH_BODY_ITERATION_CALLBACK_METHODS = new Set([
+/** @internal */ export const TOUCH_BODY_ITERATION_CALLBACK_METHODS = drizzleStaticReadonlySet([
   'filter',
   'flatMap',
   'forEach',
@@ -3876,7 +3884,7 @@ function requestReachableTableNames(input: {
   for (const fact of input.queryWriteReachability) {
     add(fact.table, fact.site);
   }
-  for (const entry of Object.values(input.touchGraph)) {
+  for (const entry of drizzleStaticObjectValues(input.touchGraph)) {
     for (const read of entry.reads ?? []) add(read.via, read.site);
     for (const touch of entry.touches ?? []) add(touch.via, touch.site);
     for (const table of entry.tables ?? []) add(table, tableAuthzCensusSite(table));

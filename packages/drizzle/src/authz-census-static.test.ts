@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
+import { Node } from 'ts-morph';
 
-import { extractStaticBuildAnalysisFactsFromProject } from '@kovojs/drizzle/internal/static';
+import {
+  DRIZZLE_SELECT_QUERY_METHODS,
+  extractStaticBuildAnalysisFactsFromProject,
+} from '@kovojs/drizzle/internal/static';
 import { pgDatabaseTypes } from './test-helpers.js';
 
 const DB_TYPES = pgDatabaseTypes([
@@ -21,6 +25,129 @@ function censusDiagnostics(source: string) {
 }
 
 describe('@kovojs/drizzle authorization census static gate (DEC-K/C7)', () => {
+  it('keeps write-reachable tables in the census after late Object.values poisoning', () => {
+    const originalValues = Object.values;
+    let diagnostics: ReturnType<typeof censusDiagnostics> | undefined;
+
+    try {
+      Object.values = (() => []) as typeof Object.values;
+      const facts = extractStaticBuildAnalysisFactsFromProject({
+        files: [
+          DB_TYPES,
+          {
+            fileName: 'src/authz-census.ts',
+            source: [
+              'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+              'import { kovo } from "@kovojs/drizzle";',
+              'import { pgTable, text } from "drizzle-orm/pg-core";',
+              '',
+              'export const auditLogs = pgTable("audit_logs", { id: text("id").primaryKey() }, kovo({ domain: "auditLog", key: "id" }));',
+              '',
+              'export async function appendAudit(db: PgAsyncDatabase<any, any>) {',
+              '  await db.insert(auditLogs).values({ id: "a1" });',
+              '}',
+            ].join('\n'),
+          },
+        ],
+      });
+      diagnostics = facts.sqlSafetyDiagnostics as ReturnType<typeof censusDiagnostics>;
+    } finally {
+      Object.values = originalValues;
+    }
+
+    expect(diagnostics?.filter((diagnostic) => diagnostic.code === 'KV414')).toEqual([
+      expect.objectContaining({
+        message: expect.stringContaining(
+          'Authorization census table audit_logs is request-reachable',
+        ),
+      }),
+    ]);
+  });
+
+  it('keeps write-reachable tables in the census after late ts-morph classifier poisoning', () => {
+    const originalIsCallExpression = Node.isCallExpression;
+    let diagnostics: ReturnType<typeof censusDiagnostics> | undefined;
+    let replaced = false;
+
+    try {
+      replaced = Reflect.set(
+        Node,
+        'isCallExpression',
+        (() => false) as typeof Node.isCallExpression,
+      );
+      const facts = extractStaticBuildAnalysisFactsFromProject({
+        files: [
+          DB_TYPES,
+          {
+            fileName: 'src/authz-census.ts',
+            source: [
+              'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+              'import { kovo } from "@kovojs/drizzle";',
+              'import { pgTable, text } from "drizzle-orm/pg-core";',
+              '',
+              'export const auditLogs = pgTable("audit_logs", { id: text("id").primaryKey() }, kovo({ domain: "auditLog", key: "id" }));',
+              '',
+              'export async function appendAudit(db: PgAsyncDatabase<any, any>) {',
+              '  await db.insert(auditLogs).values({ id: "a1" });',
+              '}',
+            ].join('\n'),
+          },
+        ],
+      });
+      diagnostics = facts.sqlSafetyDiagnostics as ReturnType<typeof censusDiagnostics>;
+    } finally {
+      if (replaced) Reflect.set(Node, 'isCallExpression', originalIsCallExpression);
+    }
+
+    expect(replaced).toBe(false);
+    expect(diagnostics?.filter((diagnostic) => diagnostic.code === 'KV414')).toEqual([
+      expect.objectContaining({
+        message: expect.stringContaining(
+          'Authorization census table audit_logs is request-reachable',
+        ),
+      }),
+    ]);
+  });
+
+  it('keeps query-reachable tables in the census when a plugin tries to mutate classifier sets', () => {
+    const mutableMethods = DRIZZLE_SELECT_QUERY_METHODS as Set<string>;
+    let removed = false;
+    let diagnostics: ReturnType<typeof censusDiagnostics> | undefined;
+
+    try {
+      try {
+        removed = Set.prototype.delete.call(mutableMethods, 'select');
+      } catch {
+        // The hardened classifier is a frozen closure-backed ReadonlySet facade, not a Set target.
+      }
+      diagnostics = censusDiagnostics(
+        [
+          'import { query } from "@kovojs/server";',
+          'import { kovo } from "@kovojs/drizzle";',
+          'import { pgTable, text } from "drizzle-orm/pg-core";',
+          'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+          '',
+          'export const drafts = pgTable("drafts", { id: text("id").primaryKey() }, kovo({ domain: "draft", key: "id" }));',
+          '',
+          'export const draftQuery = query("draft", {',
+          '  load(_input: unknown, db: PgAsyncDatabase<any, any>) {',
+          '    return db.select({ id: drafts.id }).from(drafts);',
+          '  },',
+          '});',
+        ].join('\n'),
+      );
+    } finally {
+      if (removed) Set.prototype.add.call(mutableMethods, 'select');
+    }
+
+    expect(removed).toBe(false);
+    expect(diagnostics).toEqual([
+      expect.objectContaining({
+        message: expect.stringContaining('Authorization census table drafts is request-reachable'),
+      }),
+    ]);
+  });
+
   it('fails the build aggregate for a request-reachable unclassified schema table', () => {
     const diagnostics = censusDiagnostics(
       [
