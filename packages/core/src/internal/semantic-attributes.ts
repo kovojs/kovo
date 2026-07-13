@@ -85,6 +85,14 @@ export const SEMANTIC_ATTRIBUTE_MANIFEST = {
   behavioral: ['action', 'formaction', 'href', 'method', 'src'],
 } as const;
 
+freezeSecurityValue(SEMANTIC_ATTRIBUTE_MANIFEST.generatedOnly.attributes);
+freezeSecurityValue(SEMANTIC_ATTRIBUTE_MANIFEST.generatedOnly.prefixes);
+freezeSecurityValue(SEMANTIC_ATTRIBUTE_MANIFEST.generatedOnly);
+freezeSecurityValue(SEMANTIC_ATTRIBUTE_MANIFEST.semanticSnapshot);
+freezeSecurityValue(SEMANTIC_ATTRIBUTE_MANIFEST.accessible);
+freezeSecurityValue(SEMANTIC_ATTRIBUTE_MANIFEST.behavioral);
+freezeSecurityValue(SEMANTIC_ATTRIBUTE_MANIFEST);
+
 /** @internal */
 export const GENERATED_ONLY_SEMANTIC_ATTRIBUTES =
   SEMANTIC_ATTRIBUTE_MANIFEST.generatedOnly.attributes;
@@ -118,6 +126,7 @@ export function isGeneratedOnlySemanticAttribute(name: string): boolean {
   return false;
 }
 import {
+  freezeSecurityValue,
   securitySet,
   securitySetAdd,
   securitySetHas,

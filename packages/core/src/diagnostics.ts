@@ -1,3 +1,11 @@
+import {
+  freezeSecurityValue,
+  securityGetOwnPropertyDescriptor,
+  securityHasOwn,
+  securityObjectKeys,
+  securityOwnArrayEntry,
+} from '#security-witness-intrinsics';
+
 /** Severity tier of a diagnostic, from blocking `error` down to advisory `notice`. */
 export type DiagnosticSeverity = 'error' | 'warn' | 'lint' | 'notice';
 
@@ -117,6 +125,23 @@ export interface DiagnosticTextOptions {
   preferHelp?: boolean;
 }
 
+function freezeDiagnosticRegistryValue<T extends object>(value: T, depth = 0): T {
+  if (depth > 4) throw new TypeError('Kovo diagnostic registry nesting is invalid.');
+  const keys = securityObjectKeys(value);
+  for (let index = 0; index < keys.length; index += 1) {
+    const key = securityOwnArrayEntry(keys, index);
+    if (!key.ok) throw new TypeError('Kovo diagnostic registry keys must be dense.');
+    const descriptor = securityGetOwnPropertyDescriptor(value, key.value);
+    if (descriptor === undefined || !('value' in descriptor)) {
+      throw new TypeError('Kovo diagnostic registry entries must be own data properties.');
+    }
+    if (typeof descriptor.value === 'object' && descriptor.value !== null) {
+      freezeDiagnosticRegistryValue(descriptor.value, depth + 1);
+    }
+  }
+  return freezeSecurityValue(value);
+}
+
 /**
  * Render the human-readable text for a diagnostic code, optionally including or
  * preferring its help line.
@@ -155,7 +180,7 @@ export function diagnosticDefinitionText(
  * }
  */
 export function isDiagnosticCode(value: unknown): value is DiagnosticCode {
-  return typeof value === 'string' && Object.hasOwn(diagnosticDefinitions, value);
+  return typeof value === 'string' && securityHasOwn(diagnosticDefinitions, value);
 }
 
 /** Compiler-owned diagnostics whose help must satisfy SPEC §5.2 teaching-error shape. */
@@ -1121,3 +1146,6 @@ export const diagnosticDefinitions = {
     message: 'SQLite owner annotations are advisory only in the experimental SQLite runtime.',
   },
 } as const satisfies Record<DiagnosticCode, DiagnosticDefinition>;
+
+freezeDiagnosticRegistryValue(compilerDiagnosticTeachingSchemas);
+freezeDiagnosticRegistryValue(diagnosticDefinitions);

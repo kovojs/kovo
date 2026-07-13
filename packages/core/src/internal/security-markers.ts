@@ -5,6 +5,7 @@ import {
   securityDefineProperty,
   securityGetOwnPropertyDescriptor,
   securityObjectKeys,
+  securityOwnArrayEntry,
   securityWeakMap,
   securityWeakMapGet,
   securityWeakMapSet,
@@ -400,6 +401,24 @@ export const SECURITY_CODE_REGISTRY = {
   },
 } as const satisfies Readonly<Record<string, SecurityCodeRegistryEntry>>;
 
+const securityCodeRegistryKeys = securityObjectKeys(SECURITY_CODE_REGISTRY);
+for (let index = 0; index < securityCodeRegistryKeys.length; index += 1) {
+  const codeEntry = securityOwnArrayEntry(securityCodeRegistryKeys, index);
+  if (!codeEntry.ok) throw new TypeError('Kovo security code registry keys must be dense.');
+  const code = codeEntry.value;
+  const descriptor = securityGetOwnPropertyDescriptor(SECURITY_CODE_REGISTRY, code);
+  if (
+    descriptor === undefined ||
+    !('value' in descriptor) ||
+    typeof descriptor.value !== 'object' ||
+    descriptor.value === null
+  ) {
+    throw new TypeError(`Kovo security code ${code} must be an own data record.`);
+  }
+  freezeSecurityValue(descriptor.value);
+}
+freezeSecurityValue(SECURITY_CODE_REGISTRY);
+
 /** @internal Security codes that paranoid mode must downgrade to advisory findings. */
 export const PARANOID_SECURITY_ADVISORY_CODES: readonly string[] =
   collectParanoidSecurityAdvisoryCodes();
@@ -440,7 +459,10 @@ function collectParanoidSecurityAdvisoryCodes(): readonly string[] {
 }
 
 /** @internal DEC-D1/C5: auth/confidentiality guarantees cannot rest only on build enumeration. */
-export const AUTHORIZATION_CONFIDENTIALITY_RUNTIME_CODES = ['KV414', 'KV435'] as const;
+export const AUTHORIZATION_CONFIDENTIALITY_RUNTIME_CODES = freezeSecurityValue([
+  'KV414',
+  'KV435',
+] as const);
 
 /** @internal Return whether a code is advisory under KOVO_PARANOID=1. */
 export function isParanoidSecurityAdvisoryCode(code: string): boolean {

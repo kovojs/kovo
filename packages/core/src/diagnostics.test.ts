@@ -8,6 +8,34 @@ import {
 } from './diagnostics.js';
 
 describe('diagnostic registry', () => {
+  it('does not expose mutable diagnostic severity or teaching authority', () => {
+    const severity = diagnosticDefinitions.KV414.severity;
+    const loweredForm = compilerDiagnosticTeachingSchemas.KV201.loweredForm;
+    const changedSeverity = Reflect.set(diagnosticDefinitions.KV414, 'severity', 'lint');
+    const changedTeaching = Reflect.set(
+      compilerDiagnosticTeachingSchemas.KV201,
+      'loweredForm',
+      'not-applicable',
+    );
+
+    try {
+      expect(Object.isFrozen(diagnosticDefinitions)).toBe(true);
+      expect(Object.isFrozen(diagnosticDefinitions.KV414)).toBe(true);
+      expect(Object.isFrozen(diagnosticDefinitions.KV201.detailLabels)).toBe(true);
+      expect(Object.isFrozen(compilerDiagnosticTeachingSchemas)).toBe(true);
+      expect(Object.isFrozen(compilerDiagnosticTeachingSchemas.KV201)).toBe(true);
+      expect(changedSeverity).toBe(false);
+      expect(changedTeaching).toBe(false);
+      expect(diagnosticDefinitions.KV414.severity).toBe(severity);
+      expect(compilerDiagnosticTeachingSchemas.KV201.loweredForm).toBe(loweredForm);
+    } finally {
+      if (changedSeverity) Reflect.set(diagnosticDefinitions.KV414, 'severity', severity);
+      if (changedTeaching) {
+        Reflect.set(compilerDiagnosticTeachingSchemas.KV201, 'loweredForm', loweredForm);
+      }
+    }
+  });
+
   it('contains the Phase 0 diagnostic registry from SPEC §11.3', () => {
     expect(Object.keys(diagnosticDefinitions)).toEqual([
       'KV201',

@@ -109,6 +109,34 @@ describe('security decision markers', () => {
 });
 
 describe('DEC-D security code registry', () => {
+  it('does not expose mutable security classification authority', () => {
+    const enforcement = SECURITY_CODE_REGISTRY.KV414.enforcement;
+    const firstRuntimeCode = AUTHORIZATION_CONFIDENTIALITY_RUNTIME_CODES[0];
+    const changedEnforcement = Reflect.set(
+      SECURITY_CODE_REGISTRY.KV414,
+      'enforcement',
+      'build-only',
+    );
+    const changedRuntimeCode = Reflect.set(AUTHORIZATION_CONFIDENTIALITY_RUNTIME_CODES, 0, 'KV407');
+
+    try {
+      expect(Object.isFrozen(SECURITY_CODE_REGISTRY)).toBe(true);
+      expect(Object.isFrozen(SECURITY_CODE_REGISTRY.KV414)).toBe(true);
+      expect(Object.isFrozen(AUTHORIZATION_CONFIDENTIALITY_RUNTIME_CODES)).toBe(true);
+      expect(changedEnforcement).toBe(false);
+      expect(changedRuntimeCode).toBe(false);
+      expect(SECURITY_CODE_REGISTRY.KV414.enforcement).toBe(enforcement);
+      expect(AUTHORIZATION_CONFIDENTIALITY_RUNTIME_CODES[0]).toBe(firstRuntimeCode);
+    } finally {
+      if (changedEnforcement) {
+        Reflect.set(SECURITY_CODE_REGISTRY.KV414, 'enforcement', enforcement);
+      }
+      if (changedRuntimeCode) {
+        Reflect.set(AUTHORIZATION_CONFIDENTIALITY_RUNTIME_CODES, 0, firstRuntimeCode);
+      }
+    }
+  });
+
   it('derives the paranoid advisory set from runtime chokes plus proven by-construction entries', () => {
     const derived = Object.values(SECURITY_CODE_REGISTRY)
       .filter(
