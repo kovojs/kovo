@@ -399,12 +399,12 @@ void test('P3 commerce mutation runs through the transaction lifecycle', async (
 void test('D1 commerce enhanced fragments carry stylesheet hints', async () => {
   assert.deepEqual(await serverCommerceStylesheetBehaviorFact(serverCommerceStylesheetRuntime), {
     deferred: {
-      fragmentAttrs: { target: 'recommendations' },
-      linkAttrs: {
+      fragmentAttrs: nullPrototypeRecord({ target: 'recommendations' }),
+      linkAttrs: nullPrototypeRecord({
         href: '/assets/recommendations.css',
         rel: 'stylesheet',
-      },
-      sectionAttrs: { class: 'recommendation-panel' },
+      }),
+      sectionAttrs: nullPrototypeRecord({ class: 'recommendation-panel' }),
       tags: ['main', 'kovo-defer', 'kovo-fragment', 'link', 'section', 'script', 'script'],
     },
     failure: {
@@ -1461,7 +1461,7 @@ export const DiagnosticCard = component({
   });
   const greenButtons = greenTransform.elements.map((element) => element.attrs);
   assert.equal(greenTransform.mapIsNull, true);
-  assert.deepEqual(greenButtons, [{ 'kovo-c': 'diagnostic-card' }]);
+  assert.deepEqual(greenButtons, [nullPrototypeRecord({ 'kovo-c': 'diagnostic-card' })]);
 
   await assert.rejects(
     async () => plugin.transform(redSource, componentId),

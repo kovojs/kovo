@@ -943,7 +943,13 @@ export const CartBadge = component({
       appliedFragments: ['reviews:p1', 'recommendations:p1'],
       chunkFragmentTargets: [['reviews:p1', 'recommendations:p1']],
       fragmentHtmlFactsByTarget: {
-        'reviews:p1': [{ attrs: { 'kovo-key': 'r1' }, innerHtml: '5', tag: 'article' }],
+        'reviews:p1': [
+          {
+            attrs: nullPrototypeRecord({ 'kovo-key': 'r1' }),
+            innerHtml: '5',
+            tag: 'article',
+          },
+        ],
       },
       fragmentTargets: ['reviews:p1', 'recommendations:p1'],
       queryNames: ['reviews', 'recommendations'],
@@ -1106,8 +1112,8 @@ export const CartTotal = component({
     {
       actualMatchesExpected: true,
       artifact: 'components/cart/cart-total.server.js',
-      boundSpanAttrs: { 'data-bind': 'cart.total' },
-      cartTotalAttrs: {},
+      boundSpanAttrs: nullPrototypeRecord({ 'data-bind': 'cart.total' }),
+      cartTotalAttrs: nullPrototypeRecord({}),
       checkCount: 1,
       mismatchRejected: true,
       ok: true,
