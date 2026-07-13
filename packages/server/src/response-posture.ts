@@ -9,6 +9,7 @@ import {
 } from './guards.js';
 import {
   isBlessedRedirectResponse,
+  cloneResponseHeaders,
   readHeader,
   redirectLocationHeader,
   redirectLocationHeaderValue,
@@ -54,7 +55,15 @@ import {
   witnessWeakSetAdd,
   witnessWeakSetHas,
 } from './security-witness-intrinsics.js';
-import { securityStringTrim } from './response-security-intrinsics.js';
+import {
+  securityArrayBufferSlice,
+  securityIsArrayBuffer,
+  securityIsReadableStream,
+  securityIsUint8Array,
+  securityStringCharCodeAt,
+  securityStringTrim,
+  securityUint8ArraySlice,
+} from './response-security-intrinsics.js';
 
 const nativeStringIncludes = String.prototype.includes;
 const nativeStringStartsWith = String.prototype.startsWith;
@@ -639,10 +648,20 @@ function finalizeResponseHeaders(
   options: { blessedRedirect: boolean; status: number },
 ): Headers {
   const webHeaders = createNativeHeaders();
-  const names = witnessObjectKeys(headers);
+  const sourceNames = witnessObjectKeys(headers);
+  for (let index = 0; index < sourceNames.length; index += 1) {
+    const name = sourceNames[index]!;
+    const descriptor = witnessGetOwnPropertyDescriptor(headers, name);
+    if (descriptor === undefined || !('value' in descriptor)) {
+      throw new TypeError(`Response header ${name} must be a stable own data property.`);
+    }
+    assertNoSecretEgressValue(descriptor.value, `response header "${name}"`);
+  }
+  const stableHeaders = cloneResponseHeaders(headers);
+  const names = witnessObjectKeys(stableHeaders);
   for (let index = 0; index < names.length; index += 1) {
     const name = names[index]!;
-    const descriptor = witnessGetOwnPropertyDescriptor(headers, name);
+    const descriptor = witnessGetOwnPropertyDescriptor(stableHeaders, name);
     if (descriptor === undefined || !('value' in descriptor)) {
       throw new TypeError(`Response header ${name} must be a stable own data property.`);
     }
@@ -745,7 +764,7 @@ function assertSafeResponseHeaderName(name: string): void {
 function assertSafeResponseHeaderValue(name: string, value: string): void {
   assertNoSecretEgressValue(value, `response header "${name}"`);
   for (let index = 0; index < value.length; index += 1) {
-    const code = value.charCodeAt(index);
+    const code = securityStringCharCodeAt(value, index);
     if (code > 0x1f && code !== 0x7f) continue;
     throw new ResponseHeaderChannelError(
       `${diagnosticDefinitions.KV415.message} Header ${name} contains a control character.`,
@@ -756,16 +775,10 @@ function assertSafeResponseHeaderValue(name: string, value: string): void {
 function webResponseBodyToBodyInit(body: WebResponseBody): BodyInit | null {
   if (body === null) return null;
   if (typeof body === 'string') return body;
-  if (body instanceof ReadableStream) return body;
-  if (body instanceof ArrayBuffer) return body;
-
-  if (body.buffer instanceof ArrayBuffer) {
-    return body.buffer.slice(body.byteOffset, body.byteOffset + body.byteLength);
-  }
-
-  const copy = new Uint8Array(body.byteLength);
-  copy.set(body);
-  return copy.buffer;
+  if (securityIsReadableStream(body)) return body;
+  if (securityIsArrayBuffer(body)) return securityArrayBufferSlice(body);
+  if (securityIsUint8Array(body)) return securityUint8ArraySlice(body);
+  throw new TypeError('Framework response body must use a supported stable byte carrier.');
 }
 
 function isRedirectStatus(status: number): boolean {

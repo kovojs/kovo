@@ -10,6 +10,7 @@ import { createHash, randomBytes } from 'node:crypto';
  */
 
 const NativeArray = globalThis.Array;
+const NativeArrayBuffer = globalThis.ArrayBuffer;
 const NativeBuffer = Buffer;
 const NativeDate = globalThis.Date;
 const NativeFunction = globalThis.Function;
@@ -39,6 +40,7 @@ const nativeReflectApply = NativeReflect.apply;
 const nativeArrayIsArray = NativeArray.isArray;
 const nativeArrayJoin = NativeArray.prototype.join;
 const nativeArraySort = NativeArray.prototype.sort;
+const nativeArrayBufferSlice = NativeArrayBuffer.prototype.slice;
 const nativeBufferAllocUnsafe = NativeBuffer.allocUnsafe;
 const nativeBufferConcat = NativeBuffer.concat;
 const nativeBufferFrom = NativeBuffer.from;
@@ -406,6 +408,13 @@ function capturedControlsAreSound(): boolean {
     if (apply(nativeFunctionHasInstance, NativePromise, [chained]) !== true) return false;
     const stream = new NativeReadableStream<Uint8Array>();
     if (apply(nativeFunctionHasInstance, NativeReadableStream, [stream]) !== true) return false;
+    if (apply(nativeFunctionHasInstance, NativeReadableStream, [{}]) !== false) return false;
+
+    const arrayBuffer = new NativeArrayBuffer(4);
+    if (apply(nativeFunctionHasInstance, NativeArrayBuffer, [arrayBuffer]) !== true) return false;
+    if (apply(nativeFunctionHasInstance, NativeArrayBuffer, [{}]) !== false) return false;
+    const slicedArrayBuffer = apply<ArrayBuffer>(nativeArrayBufferSlice, arrayBuffer, [1, 3]);
+    if (slicedArrayBuffer.byteLength !== 2) return false;
 
     const date = new NativeDate('2026-01-02T03:04:05Z');
     if (apply(nativeFunctionHasInstance, NativeDate, [date]) !== true) return false;
@@ -955,6 +964,24 @@ export function securityIsUint8Array(value: unknown): value is Uint8Array {
   return apply(nativeFunctionHasInstance, NativeUint8Array, [value]);
 }
 
+export function securityIsArrayBuffer(value: unknown): value is ArrayBuffer {
+  assertResponseSecurityIntrinsics();
+  return apply(nativeFunctionHasInstance, NativeArrayBuffer, [value]);
+}
+
+export function securityArrayBufferSlice(
+  value: ArrayBuffer,
+  start?: number,
+  end?: number,
+): ArrayBuffer {
+  assertResponseSecurityIntrinsics();
+  return apply(
+    nativeArrayBufferSlice,
+    value,
+    start === undefined ? [] : end === undefined ? [start] : [start, end],
+  );
+}
+
 export function securityDateToUtcString(value: Date): string {
   assertResponseSecurityIntrinsics();
   return apply(nativeDateToUtcString, value, []);
@@ -1039,6 +1066,11 @@ export function createSecurityReadableStream<Value>(
 ): ReadableStream<Value> {
   assertResponseSecurityIntrinsics();
   return new NativeReadableStream<Value>(source);
+}
+
+export function securityIsReadableStream(value: unknown): value is ReadableStream<unknown> {
+  assertResponseSecurityIntrinsics();
+  return apply(nativeFunctionHasInstance, NativeReadableStream, [value]);
 }
 
 export function securityStreamEnqueue<Value>(

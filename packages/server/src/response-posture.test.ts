@@ -11,11 +11,61 @@ import {
   endpointRequestWithoutSession,
   finalizeRawWebResponse,
   finalizeServerResponse,
+  ResponseHeaderChannelError,
   requestMetadataWithoutAmbientAuthority,
   resolveKovoLifecycleRequest,
 } from './response-posture.js';
 
 describe('central response posture finalization', () => {
+  it('rejects response-header controls through the pinned KV415 classifier', () => {
+    const originalCharCodeAt = String.prototype.charCodeAt;
+    let observed: unknown;
+    try {
+      String.prototype.charCodeAt = () => 0x41;
+      try {
+        finalizeServerResponse(
+          {
+            body: 'blocked',
+            headers: { 'X-Unsafe': 'safe\r\nX-Injected: yes' },
+            status: 200,
+          },
+          { method: 'GET' },
+        );
+      } catch (error) {
+        observed = error;
+      }
+    } finally {
+      String.prototype.charCodeAt = originalCharCodeAt;
+    }
+
+    expect(observed).toBeInstanceOf(ResponseHeaderChannelError);
+    expect(String((observed as Error).message)).toMatch(/KV415.*control character/u);
+  });
+
+  it('copies byte response bodies through pinned carrier controls', async () => {
+    const bytes = new Uint8Array([0x73, 0x61, 0x66, 0x65]);
+    const originalSlice = Uint8Array.prototype.slice;
+    const originalHasInstance = Object.getOwnPropertyDescriptor(Uint8Array, Symbol.hasInstance);
+    let response: Response | undefined;
+    try {
+      Uint8Array.prototype.slice = () => new Uint8Array([0x65, 0x76, 0x69, 0x6c]);
+      Object.defineProperty(Uint8Array, Symbol.hasInstance, {
+        configurable: true,
+        value: () => false,
+      });
+      response = finalizeServerResponse(
+        { body: bytes, headers: { 'Content-Type': 'text/plain' }, status: 200 },
+        { method: 'GET' },
+      );
+      bytes.fill(0x78);
+    } finally {
+      Uint8Array.prototype.slice = originalSlice;
+      if (originalHasInstance === undefined) delete Uint8Array[Symbol.hasInstance];
+      else Object.defineProperty(Uint8Array, Symbol.hasInstance, originalHasInstance);
+    }
+
+    await expect(response?.text()).resolves.toBe('safe');
+  });
   it('suppresses framework response bodies for HEAD and 304 without dropping headers', async () => {
     const head = finalizeServerResponse(
       {
