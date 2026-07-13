@@ -132,6 +132,12 @@ export async function fetchEnhancedMutation(
     'Kovo-Live-Targets': targetSnapshot.liveHeader,
     'Kovo-Targets': targetSnapshot.header,
   };
+  const currentUrl = security.currentUrl();
+  if (currentUrl !== undefined) {
+    // SPEC §6.6/§9.1: bind server-side live-target verification and query rendering to the exact
+    // document context that minted the descriptor instead of the mutation endpoint URL.
+    headers['Kovo-Current-Url'] = currentUrl.href;
+  }
   if (submittedFormTarget !== undefined) {
     headers['Kovo-Form-Target'] = submittedFormTarget;
   }

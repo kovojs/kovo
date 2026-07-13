@@ -1413,6 +1413,7 @@ function installInlineKovoLoader(im) {
     // to both the body field and header through the boot-captured FormData setter.
     const idem = ci();
     bns.setFormDataValue(body, 'Kovo-Idem', idem);
+    const sourceUrl = bns.currentUrl()?.href;
     void (async () => {
       try {
         const response = await bns.fetchValue(ras(form, 'action') || '', {
@@ -1422,6 +1423,7 @@ function installInlineKovoLoader(im) {
               ? 'text/vnd.kovo.fragment+html; stream=1'
               : 'text/vnd.kovo.fragment+html',
             'Kovo-Form-Target': targetIdentity(form),
+            ...(sourceUrl ? { 'Kovo-Current-Url': sourceUrl } : {}),
             'Kovo-Fragment': 'true',
             'Kovo-Idem': ss(idem),
             'Kovo-Live-Targets': sj(rlt(), '; '),
