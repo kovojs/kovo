@@ -391,30 +391,38 @@ function appendJsonPath(
 }
 
 function sortStrings(values: string[]): string[] {
-  for (let index = 1; index < values.length; index += 1) {
-    const valueEntry = securityOwnArrayEntry(values, index);
-    if (!valueEntry.ok) throw new IntrinsicTypeError('Canonical JSON key list is unstable.');
-    const value = valueEntry.value;
-    let insertion = index;
-    while (insertion > 0) {
-      const previousEntry = securityOwnArrayEntry(values, insertion - 1);
-      if (!previousEntry.ok) {
-        throw new IntrinsicTypeError('Canonical JSON key list is unstable.');
+  // SPEC §6.6/§9.5 resource floor: canonicalization is reachable from query-delta sizing and
+  // durable-task arguments. Insertion sort made reverse attacker-shaped key sets quadratic. This
+  // bottom-up merge sort retains deterministic UTF-16 lexical order with O(n log n) comparisons.
+  const length = values.length;
+  if (length < 2) return values;
+  let source: string[] = [];
+  for (let index = 0; index < length; index += 1) {
+    const entry = securityOwnArrayEntry(values, index);
+    if (!entry.ok) throw new IntrinsicTypeError('Canonical JSON key list is unstable.');
+    securityArrayAppend(source, entry.value);
+  }
+
+  for (let width = 1; width < length; width *= 2) {
+    const target: string[] = [];
+    for (let start = 0; start < length; start += width * 2) {
+      const middle = start + width < length ? start + width : length;
+      const end = start + width * 2 < length ? start + width * 2 : length;
+      let left = start;
+      let right = middle;
+      while (left < middle || right < end) {
+        const useLeft = right >= end || (left < middle && source[left]! <= source[right]!);
+        securityArrayAppend(target, source[useLeft ? left++ : right++]!);
       }
-      const previous = previousEntry.value;
-      if (previous <= value) break;
-      securityDefineProperty(values, insertion, {
-        configurable: true,
-        enumerable: true,
-        value: previous,
-        writable: true,
-      });
-      insertion -= 1;
     }
-    securityDefineProperty(values, insertion, {
+    source = target;
+  }
+
+  for (let index = 0; index < length; index += 1) {
+    securityDefineProperty(values, index, {
       configurable: true,
       enumerable: true,
-      value,
+      value: source[index],
       writable: true,
     });
   }
