@@ -6,6 +6,7 @@ import { commandAllowlist } from './command.js';
 import { unsafeCookie } from './cookies.js';
 import { endpoint } from './endpoint.js';
 import { committedSecretWaiver } from './env.js';
+import { guard, guards } from './guards.js';
 import { declarePublicRead } from './managed-db.js';
 import { declarePublicRelation } from './postgres-runtime.js';
 import { unsafeRegex } from './redos.js';
@@ -111,5 +112,46 @@ describe('server audited text floor (SPEC §6.6)', () => {
         verifyJustification: forged,
       }),
     ).toThrow(/control characters/u);
+  });
+
+  it('rejects spoofable and unbounded guard audit metadata', () => {
+    const forged = 'reviewed\u202eFORGED AUDIT ROW';
+
+    expect(() => guard(forged, () => true)).toThrow(/control characters/u);
+    expect(() => guards.role(forged)).toThrow(/control characters/u);
+    expect(() =>
+      guards.owns(
+        (request: { id: string; session?: { user?: { id?: string } | null } | null }) => request.id,
+        () => true,
+        { name: forged },
+      ),
+    ).toThrow(/control characters/u);
+    expect(() =>
+      guards.owns(
+        (request: { id: string; session?: { user?: { id?: string } | null } | null }) => request.id,
+        () => true,
+        { principal: forged },
+      ),
+    ).toThrow(/control characters/u);
+    expect(() =>
+      guards.owns(
+        (request: { id: string; session?: { user?: { id?: string } | null } | null }) => request.id,
+        () => true,
+        { resourceKey: forged },
+      ),
+    ).toThrow(/control characters/u);
+    expect(() =>
+      guards.owns(
+        (request: { id: string; session?: { user?: { id?: string } | null } | null }) => request.id,
+        () => true,
+        {
+          principal: { expression: 'session.user.id', path: forged, source: 'session' },
+        },
+      ),
+    ).toThrow(/control characters/u);
+    const unnamed = () => true;
+    Object.defineProperty(unnamed, 'name', { configurable: true, value: forged });
+    expect(() => guards.all(unnamed)).toThrow(/control characters/u);
+    expect(() => guard('g'.repeat(4_097), () => true)).toThrow(/4096/u);
   });
 });

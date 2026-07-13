@@ -4,6 +4,7 @@ import {
   snapshotAccessDecision,
   type AccessDecision,
 } from './access.js';
+import { snapshotAuditText } from './audit-justification.js';
 import {
   mergeVaryHeader,
   renderErrorDocument,
@@ -572,8 +573,7 @@ export function guard<Request, RefinedRequest extends Request = Request>(
   name: string,
   fn: Guard<Request, RefinedRequest>,
 ): Guard<Request, RefinedRequest> {
-  const trimmed = securityStringTrim(name);
-  if (trimmed === '') throw new TypeError('guard(name, fn) requires a non-empty name.');
+  const trimmed = securityStringTrim(snapshotAuditText(name, 'guard(name, fn) audit name'));
 
   const namedGuard: Guard<Request, RefinedRequest> = (request) => fn(request);
   const refinesDescriptor = witnessGetOwnPropertyDescriptor(fn, 'refines');
@@ -654,7 +654,7 @@ export const guards = {
       if (facts.length === 0) {
         appendGuardAuditFact(auditFacts, {
           kind: 'opaque',
-          name: item.name || 'anonymous',
+          name: stableGuardFunctionAuditName(item),
         });
         continue;
       }
@@ -727,23 +727,25 @@ export const guards = {
     );
   },
   role<Request extends RoleSessionRequestLike>(role: string): Guard<Request> {
+    const closedRole = snapshotAuditText(role, 'guards.role() role');
+    const auditName = snapshotAuditText(`role:${closedRole}`, 'guards.role() audit name');
     return stampGuardAudit(
       (request) => {
         const principal = requestPrincipalSnapshot(request);
         if (principal.kind !== 'proven') {
           return unauthenticatedGuardFailure();
         }
-        if (!roleListIncludes(principal.roles, role)) return unauthorizedGuardFailure();
-        markPassedRoleGuard(request, role);
+        if (!roleListIncludes(principal.roles, closedRole)) return unauthorizedGuardFailure();
+        markPassedRoleGuard(request, closedRole);
         return true;
       },
       [
         {
           auth: 'session-role',
           kind: 'role',
-          name: `role:${role}`,
+          name: auditName as `role:${string}`,
           principal: normalizePrincipalKeyAudit('session.user.roles'),
-          role,
+          role: closedRole,
         },
       ],
     );
@@ -770,6 +772,7 @@ export const guards = {
     ownsRow: (request: KeyedRequest, key: Key) => boolean | Promise<boolean>,
     audit?: OwnershipGuardAuditOptions,
   ): Guard<Request> {
+    const closedAudit = snapshotOwnershipGuardAuditOptions(audit);
     return stampGuardAudit(
       async (request) => {
         if (requestPrincipalSnapshot(request).kind !== 'proven') {
@@ -787,11 +790,11 @@ export const guards = {
         {
           auth: 'session-user',
           kind: 'owns',
-          name: audit?.name ?? 'owns',
-          principal: normalizePrincipalKeyAudit(audit?.principal ?? 'session.user.id'),
-          ...(audit?.resourceKey === undefined
+          name: closedAudit.name,
+          principal: closedAudit.principal,
+          ...(closedAudit.resourceKey === undefined
             ? {}
-            : { resourceKey: normalizeResourceKeyAudit(audit.resourceKey) }),
+            : { resourceKey: closedAudit.resourceKey }),
           staticProof: 'not-claimed',
         },
       ],
@@ -824,12 +827,7 @@ export function guardAuditName<Request>(guard: Guard<Request>): string {
     if (firstName === undefined) firstName = fact.name;
   }
   if (firstName !== undefined) return firstName;
-  const functionName = witnessGetOwnPropertyDescriptor(guard, 'name');
-  return functionName !== undefined &&
-    'value' in functionName &&
-    typeof functionName.value === 'string'
-    ? functionName.value
-    : 'anonymous';
+  return stableGuardFunctionAuditName(guard);
 }
 
 /** @internal SPEC §10.3 DEC-G: runtime evidence that a named role guard passed on this request. */
@@ -901,25 +899,145 @@ function freezeGuardAuditFact(fact: GuardAuditFact): GuardAuditFact {
 function normalizePrincipalKeyAudit(
   value: GuardPrincipalKeyAudit | string,
 ): GuardPrincipalKeyAudit {
-  if (typeof value !== 'string') return value;
+  if (typeof value !== 'string') {
+    const expression = snapshotAuditText(
+      stableGuardAuditDataValue(value, 'expression', 'ownership principal audit'),
+      'ownership principal audit expression',
+    );
+    const path = snapshotAuditText(
+      stableGuardAuditDataValue(value, 'path', 'ownership principal audit'),
+      'ownership principal audit path',
+    );
+    const source = stableGuardAuditDataValue(value, 'source', 'ownership principal audit');
+    if (source !== 'request' && source !== 'session') {
+      throw new TypeError('ownership principal audit source must be request or session.');
+    }
+    return { expression, path, source };
+  }
 
-  const { path, source } = normalizeAuditExpression(value, ['session']);
+  const expression = snapshotAuditText(value, 'ownership principal audit expression');
+  const { path, source } = normalizeAuditExpression(expression, ['session']);
   return {
-    expression: value,
-    path,
+    expression,
+    path: snapshotAuditText(path, 'ownership principal audit path'),
     source: source === 'session' ? 'session' : 'request',
   };
 }
 
 function normalizeResourceKeyAudit(value: GuardResourceKeyAudit | string): GuardResourceKeyAudit {
-  if (typeof value !== 'string') return value;
+  if (typeof value !== 'string') {
+    const expression = snapshotAuditText(
+      stableGuardAuditDataValue(value, 'expression', 'ownership resource audit'),
+      'ownership resource audit expression',
+    );
+    const path = snapshotAuditText(
+      stableGuardAuditDataValue(value, 'path', 'ownership resource audit'),
+      'ownership resource audit path',
+    );
+    const source = stableGuardAuditDataValue(value, 'source', 'ownership resource audit');
+    if (source !== 'args' && source !== 'params' && source !== 'request') {
+      throw new TypeError('ownership resource audit source must be args, params, or request.');
+    }
+    return { expression, path, source };
+  }
 
-  const { path, source } = normalizeAuditExpression(value, ['args', 'params']);
+  const expression = snapshotAuditText(value, 'ownership resource audit expression');
+  const { path, source } = normalizeAuditExpression(expression, ['args', 'params']);
   return {
-    expression: value,
-    path,
+    expression,
+    path: snapshotAuditText(path, 'ownership resource audit path'),
     source: source === 'args' || source === 'params' ? source : 'request',
   };
+}
+
+function snapshotOwnershipGuardAuditOptions(value: OwnershipGuardAuditOptions | undefined): {
+  name: string;
+  principal: GuardPrincipalKeyAudit;
+  resourceKey?: GuardResourceKeyAudit;
+} {
+  if (value === undefined) {
+    return {
+      name: 'owns',
+      principal: normalizePrincipalKeyAudit('session.user.id'),
+    };
+  }
+  if (typeof value !== 'object' || value === null || witnessIsArray(value)) {
+    throw new TypeError('guards.owns() audit metadata must be a stable own-data record.');
+  }
+  const name = stableOptionalGuardAuditDataValue(value, 'name', 'guards.owns() audit metadata');
+  const principal = stableOptionalGuardAuditDataValue(
+    value,
+    'principal',
+    'guards.owns() audit metadata',
+  );
+  const resourceKey = stableOptionalGuardAuditDataValue(
+    value,
+    'resourceKey',
+    'guards.owns() audit metadata',
+  );
+  return {
+    name:
+      name === undefined ? 'owns' : snapshotAuditText(name, 'guards.owns() audit metadata name'),
+    principal: normalizePrincipalKeyAudit(
+      principal === undefined ? 'session.user.id' : (principal as GuardPrincipalKeyAudit | string),
+    ),
+    ...(resourceKey === undefined
+      ? {}
+      : { resourceKey: normalizeResourceKeyAudit(resourceKey as GuardResourceKeyAudit | string) }),
+  };
+}
+
+function stableGuardFunctionAuditName(guard: Function): string {
+  const before = witnessGetOwnPropertyDescriptor(guard, 'name');
+  const after = witnessGetOwnPropertyDescriptor(guard, 'name');
+  if (before === undefined && after === undefined) return 'anonymous';
+  if (
+    before === undefined ||
+    after === undefined ||
+    !('value' in before) ||
+    !('value' in after) ||
+    typeof before.value !== 'string' ||
+    !witnessObjectIs(before.value, after.value) ||
+    before.configurable !== after.configurable ||
+    before.enumerable !== after.enumerable ||
+    before.writable !== after.writable
+  ) {
+    throw new TypeError('Guard function audit name must be a stable own-data string.');
+  }
+  if (securityStringTrim(before.value) === '') return 'anonymous';
+  return snapshotAuditText(before.value, 'Guard function audit name');
+}
+
+function stableGuardAuditDataValue(source: unknown, property: PropertyKey, label: string): unknown {
+  if (typeof source !== 'object' || source === null || witnessIsArray(source)) {
+    throw new TypeError(`${label} must be a stable own-data record.`);
+  }
+  const value = stableOptionalGuardAuditDataValue(source, property, label);
+  if (value === undefined) throw new TypeError(`${label} requires ${String(property)}.`);
+  return value;
+}
+
+function stableOptionalGuardAuditDataValue(
+  source: object,
+  property: PropertyKey,
+  label: string,
+): unknown {
+  const before = witnessGetOwnPropertyDescriptor(source, property);
+  const after = witnessGetOwnPropertyDescriptor(source, property);
+  if (before === undefined && after === undefined) return undefined;
+  if (
+    before === undefined ||
+    after === undefined ||
+    !('value' in before) ||
+    !('value' in after) ||
+    !witnessObjectIs(before.value, after.value) ||
+    before.configurable !== after.configurable ||
+    before.enumerable !== after.enumerable ||
+    before.writable !== after.writable
+  ) {
+    throw new TypeError(`${label} ${String(property)} must be a stable own-data property.`);
+  }
+  return before.value;
 }
 
 function normalizeAuditExpression(

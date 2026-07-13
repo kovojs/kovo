@@ -281,7 +281,7 @@ describe('server guard and session primitives', () => {
     }
 
     expect(failure).toBeInstanceOf(TypeError);
-    expect((failure as Error).message).toMatch(/non-empty name/);
+    expect((failure as Error).message).toMatch(/non-empty audit text/);
   });
 
   it('pins named guard facts and ownership audit paths against late intrinsic poison', () => {
