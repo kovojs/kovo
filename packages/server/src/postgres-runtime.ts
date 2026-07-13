@@ -3478,38 +3478,15 @@ function createNodePostgresRuntimeClient(
     config.systemDatabaseUrl,
   );
   return {
-    close: async () => {
-      try {
-        const runtimeClose = transactionalClient.close();
-        const adminClose = adminTransactionalClient?.close();
-        const systemClose = systemTransactionalClient?.close();
-        let closeFailed = false;
-        let closeError: unknown;
-        try {
-          await runtimeClose;
-        } catch (error) {
-          closeFailed = true;
-          closeError = error;
-        }
-        try {
-          await adminClose;
-        } catch (error) {
-          if (!closeFailed) closeError = error;
-          closeFailed = true;
-        }
-        try {
-          await systemClose;
-        } catch (error) {
-          if (!closeFailed) closeError = error;
-          closeFailed = true;
-        }
-        if (closeFailed) throw closeError;
-      } finally {
-        unregisterDatabaseEgressUrl();
-        unregisterAdminDatabaseEgressUrl?.();
-        unregisterSystemDatabaseEgressUrl?.();
-      }
-    },
+    close: () =>
+      closeNodePostgresRuntimeClients(
+        [transactionalClient, adminTransactionalClient, systemTransactionalClient],
+        [
+          unregisterDatabaseEgressUrl,
+          unregisterAdminDatabaseEgressUrl,
+          unregisterSystemDatabaseEgressUrl,
+        ],
+      ),
     drizzleInternalDb: (capability) => {
       assertInternalPostgresRuntimeDbCapability(capability);
       return drizzleNodePg({ client: pool, relations });
@@ -3550,6 +3527,34 @@ function createNodePostgresRuntimeClient(
       ),
     sql: transactionalClient,
   };
+}
+
+async function closeNodePostgresRuntimeClients(
+  clients: readonly (NodePostgresRuntimeClient | undefined)[],
+  unregisterEgressUrls: readonly ((() => void) | undefined)[],
+): Promise<void> {
+  let closeFailed = false;
+  let closeError: unknown;
+  try {
+    for (let index = 0; index < clients.length; index += 1) {
+      const client = postgresDenseArrayValue(clients, index, 'Postgres runtime close clients');
+      try {
+        await client?.close();
+      } catch (error) {
+        if (!closeFailed) closeError = error;
+        closeFailed = true;
+      }
+    }
+    if (closeFailed) throw closeError;
+  } finally {
+    for (let index = 0; index < unregisterEgressUrls.length; index += 1) {
+      postgresDenseArrayValue(
+        unregisterEgressUrls,
+        index,
+        'Postgres runtime egress unregister callbacks',
+      )?.();
+    }
+  }
 }
 
 function createOptionalNodePostgresRuntimeClient(

@@ -204,6 +204,14 @@ review remains manual and is the point of the `reviewTrigger`. See `rules/depend
       "lineBudget": 80
     },
     {
+      "id": "server.postgres-runtime.node-client-close",
+      "file": "packages/server/src/postgres-runtime.ts",
+      "name": "closeNodePostgresRuntimeClients",
+      "kind": "node-postgres-close-and-egress-unregister",
+      "classification": "tcb",
+      "lineBudget": 35
+    },
+    {
       "id": "server.postgres-runtime.internal-framework-capability",
       "file": "packages/server/src/postgres-runtime.ts",
       "name": "assertInternalPostgresRuntimeDbCapability",
