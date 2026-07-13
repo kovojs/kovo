@@ -261,7 +261,7 @@ export function node(options: NodePresetOptions = {}): KovoPreset {
   const pinnedOptions = snapshotNodePresetOptions(options);
   const jobRunner = nodeJobRunnerCapability(pinnedOptions);
   const constructionProjectRoot = resolvedFileSystemPath(process.cwd());
-  const preset = createSecurityNullRecord() as KovoPreset;
+  const preset = createSecurityNullRecord() as unknown as KovoPreset;
   if (jobRunner !== undefined) {
     const capabilities = createSecurityNullRecord() as KovoPresetCapabilities;
     capabilities.jobRunner = jobRunner;
@@ -306,7 +306,7 @@ export function node(options: NodePresetOptions = {}): KovoPreset {
  */
 export function vercel(options: VercelPresetOptions = {}): KovoPreset {
   const pinnedOptions = snapshotVercelPresetOptions(options);
-  const preset = createSecurityNullRecord() as KovoPreset;
+  const preset = createSecurityNullRecord() as unknown as KovoPreset;
   preset.emit = (build, context) => emitVercelPreset(build, context, pinnedOptions);
   preset.inspect = (build, _context) => {
     const diagnostics = concatenatePresetDiagnostics(
@@ -341,7 +341,7 @@ export function vercel(options: VercelPresetOptions = {}): KovoPreset {
  */
 export function cloudflare(options: CloudflarePresetOptions = {}): KovoPreset {
   const pinnedOptions = snapshotCloudflarePresetOptions(options);
-  const preset = createSecurityNullRecord() as KovoPreset;
+  const preset = createSecurityNullRecord() as unknown as KovoPreset;
   preset.emit = (build, context) => emitCloudflarePreset(build, context, pinnedOptions);
   preset.inspect = async (build, context) => {
     const diagnostics = concatenatePresetDiagnostics(
@@ -2075,7 +2075,7 @@ function snapshotNodeJobRunnerOptions(value: unknown): NodeJobRunnerOptions | fa
   }
   const snapshot = createSecurityNullRecord() as NodeJobRunnerOptions;
   if (modeProperty.present && modeProperty.value !== undefined) {
-    snapshot.mode = modeProperty.value as NodeJobRunnerOptions['mode'];
+    snapshot.mode = modeProperty.value as NonNullable<NodeJobRunnerOptions['mode']>;
   }
   return snapshot;
 }
