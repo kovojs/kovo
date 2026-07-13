@@ -3,6 +3,7 @@ import {
   compilerArrayAppend,
   compilerArrayLength,
   compilerCreateSet,
+  compilerFailClosed,
   compilerOwnDataValue,
   compilerSetAdd,
   compilerSetHas,
@@ -15,7 +16,7 @@ compilerSetAdd(declaredExecutionTriggers, 'load');
 compilerSetAdd(declaredExecutionTriggers, 'visible');
 
 const delegatedDomEvents = compilerCreateSet<string>();
-for (const name of [
+const delegatedDomEventNames = [
   'beforeinput',
   'blur',
   'change',
@@ -40,7 +41,16 @@ for (const name of [
   'reset',
   'submit',
   'toggle',
-] as const) {
+] as const;
+const delegatedDomEventNameLength = compilerArrayLength(
+  delegatedDomEventNames,
+  'Delegated DOM event names',
+);
+for (let index = 0; index < delegatedDomEventNameLength; index += 1) {
+  const name = compilerOwnDataValue(delegatedDomEventNames, index, 'Delegated DOM event names');
+  if (typeof name !== 'string') {
+    compilerFailClosed(`Delegated DOM event names[${index}] must be a string.`);
+  }
   compilerSetAdd(delegatedDomEvents, name);
 }
 
@@ -50,8 +60,12 @@ export function validateEventTriggerNames(
 ): CompilerDiagnostic[] {
   const result: CompilerDiagnostic[] = [];
   const attributes = eventTriggerAttributes(model);
-  for (let index = 0; index < attributes.length; index += 1) {
-    const attribute = attributes[index]!;
+  const attributeLength = compilerArrayLength(attributes, 'Event-trigger facts');
+  for (let index = 0; index < attributeLength; index += 1) {
+    const attribute = compilerOwnDataValue(attributes, index, 'Event-trigger facts') as
+      | (typeof attributes)[number]
+      | undefined;
+    if (!attribute) compilerFailClosed(`Event-trigger facts[${index}] must be own data.`);
     if (!isKnownEventOrTrigger(attribute.name)) {
       compilerArrayAppend(
         result,
@@ -77,8 +91,14 @@ function eventTriggerAttributes(
 ): Array<{ index: number; name: string }> {
   const result: Array<{ index: number; name: string }> = [];
   const elements = jsxElements(model);
-  for (let elementIndex = 0; elementIndex < elements.length; elementIndex += 1) {
-    const element = elements[elementIndex]!;
+  const elementLength = compilerArrayLength(elements, 'Event-trigger elements');
+  for (let elementIndex = 0; elementIndex < elementLength; elementIndex += 1) {
+    const element = compilerOwnDataValue(elements, elementIndex, 'Event-trigger elements') as
+      | (typeof elements)[number]
+      | undefined;
+    if (!element) {
+      compilerFailClosed(`Event-trigger elements[${elementIndex}] must be own data.`);
+    }
     const attributeLength = compilerArrayLength(element.attributes, 'Event-trigger attributes');
     for (let attributeIndex = 0; attributeIndex < attributeLength; attributeIndex += 1) {
       const attribute = compilerOwnDataValue(
@@ -86,8 +106,9 @@ function eventTriggerAttributes(
         attributeIndex,
         'Event-trigger attributes',
       ) as (typeof element.attributes)[number] | undefined;
-      if (!attribute)
-        throw new TypeError(`Event-trigger attributes[${attributeIndex}] must be own data.`);
+      if (!attribute) {
+        compilerFailClosed(`Event-trigger attributes[${attributeIndex}] must be own data.`);
+      }
       const name = attribute.executionTriggerName;
       if (name !== undefined) {
         compilerArrayAppend(
@@ -111,8 +132,12 @@ function hasKv211Justification(model: ComponentModuleModel, index: number): bool
   // SPEC §5.2: consume the typed `justifiedDiagnostics` parser fact rather than re-scanning the raw
   // comment text for the KV211 code at validation time.
   const comments = jsxComments(model);
-  for (let commentIndex = 0; commentIndex < comments.length; commentIndex += 1) {
-    const comment = comments[commentIndex]!;
+  const commentLength = compilerArrayLength(comments, 'JSX comments');
+  for (let commentIndex = 0; commentIndex < commentLength; commentIndex += 1) {
+    const comment = compilerOwnDataValue(comments, commentIndex, 'JSX comments') as
+      | (typeof comments)[number]
+      | undefined;
+    if (!comment) compilerFailClosed(`JSX comments[${commentIndex}] must be own data.`);
     if (comment.attachedAttributeStart !== index || !comment.justifiedDiagnostics) continue;
     const codeLength = compilerArrayLength(
       comment.justifiedDiagnostics,

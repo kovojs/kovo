@@ -919,6 +919,138 @@ export const C = component({
     expect(poisonHits).toBe(0);
   });
 
+  it('does not suppress literal-navigation validation through element Array.flatMap', () => {
+    const nativeFlatMap = Array.prototype.flatMap;
+    const nativeApply = Reflect.apply;
+    let poisonHits = 0;
+    let result: ReturnType<typeof compileComponentModule> | undefined;
+    try {
+      Array.prototype.flatMap = function poisonedNavigationElementFlatMap<T, U>(
+        callback: (value: T, index: number, array: T[]) => U | readonly U[],
+        thisArg?: unknown,
+      ): U[] {
+        if (
+          Array.isArray((this[0] as { attributes?: unknown } | undefined)?.attributes) &&
+          new Error().stack?.includes('literalNavigationTargets')
+        ) {
+          poisonHits += 1;
+          return [];
+        }
+        return nativeApply(nativeFlatMap, this, [callback, thisArg]);
+      };
+      result = compileComponentModule({
+        fileName: 'navigation.tsx',
+        registryFacts: { routes: ['/cart'] },
+        source: `export const C = component({ render: () => <a href="/admin">Admin</a> });`,
+      });
+    } finally {
+      Array.prototype.flatMap = nativeFlatMap;
+    }
+    expect(result?.diagnostics.filter((diagnostic) => diagnostic.code === 'KV220')).toHaveLength(1);
+    expect(poisonHits).toBe(0);
+  });
+
+  it('does not forge literal-navigation route matches through route Array.some', () => {
+    const nativeSome = Array.prototype.some;
+    const nativeApply = Reflect.apply;
+    let poisonHits = 0;
+    let result: ReturnType<typeof compileComponentModule> | undefined;
+    try {
+      Array.prototype.some = function poisonedNavigationRouteSome<T>(
+        callback: (value: T, index: number, array: T[]) => unknown,
+        thisArg?: unknown,
+      ): boolean {
+        if (this[0] === '/cart' && new Error().stack?.includes('validateLiteralHrefs')) {
+          poisonHits += 1;
+          return true;
+        }
+        return nativeApply(nativeSome, this, [callback, thisArg]);
+      };
+      result = compileComponentModule({
+        fileName: 'navigation.tsx',
+        registryFacts: { routes: ['/cart'] },
+        source: `export const C = component({ render: () => <a href="/admin">Admin</a> });`,
+      });
+    } finally {
+      Array.prototype.some = nativeSome;
+    }
+    expect(result?.diagnostics.filter((diagnostic) => diagnostic.code === 'KV220')).toHaveLength(1);
+    expect(poisonHits).toBe(0);
+  });
+
+  it('does not suppress rendered clock validation through JSX-expression Array.filter', () => {
+    const nativeFilter = Array.prototype.filter;
+    const nativeApply = Reflect.apply;
+    let poisonHits = 0;
+    let result: ReturnType<typeof compileComponentModule> | undefined;
+    try {
+      Array.prototype.filter = function poisonedTemporalExpressionFilter<T>(
+        callback: (value: T, index: number, array: T[]) => unknown,
+        thisArg?: unknown,
+      ): T[] {
+        if (
+          Array.isArray(
+            (this[0] as { propertyAccesses?: unknown } | undefined)?.propertyAccesses,
+          ) &&
+          new Error().stack?.includes('renderedClockReads')
+        ) {
+          poisonHits += 1;
+          return [];
+        }
+        return nativeApply(nativeFilter, this, [callback, thisArg]);
+      };
+      result = compileComponentModule({
+        fileName: 'clock.tsx',
+        source: `
+export const Clock = component({
+  render: ({ now }) => <time>{formatRelative(now.ago)}</time>,
+});
+`,
+      });
+    } finally {
+      Array.prototype.filter = nativeFilter;
+    }
+    expect(result?.diagnostics.filter((diagnostic) => diagnostic.code === 'KV312')).toHaveLength(1);
+    expect(poisonHits).toBe(0);
+  });
+
+  it('does not forge volatile-query refresh bindings through String.includes', () => {
+    const nativeIncludes = String.prototype.includes;
+    const nativeApply = Reflect.apply;
+    let poisonHits = 0;
+    let result: ReturnType<typeof compileComponentModule> | undefined;
+    try {
+      String.prototype.includes = function poisonedTemporalRefreshIncludes(
+        search: string,
+        position?: number,
+      ): boolean {
+        if (
+          this.valueOf() === 'subscriptionQuery' &&
+          search === '.refresh(' &&
+          new Error().stack?.includes('refreshedComponentQueryNames')
+        ) {
+          poisonHits += 1;
+          return true;
+        }
+        return nativeApply(nativeIncludes, this, [search, position]);
+      };
+      result = compileComponentModule({
+        fileName: 'subscription.tsx',
+        queryShapes: { sub: { serverNow: { kind: 'volatile-time', shape: 'string' } } },
+        source: `
+export const Subscription = component({
+  queries: { sub: subscriptionQuery },
+  render: ({ sub }) => <time>{formatTime(sub.serverNow)}</time>,
+});
+`,
+      });
+    } finally {
+      String.prototype.includes = nativeIncludes;
+    }
+    expect(result?.diagnostics.filter((diagnostic) => diagnostic.code === 'KV312')).toHaveLength(1);
+    expect(poisonHits).toBe(0);
+  });
+
   it('does not publish a captured server secret through stateful Array.filter replacement', () => {
     const nativeFilter = Array.prototype.filter;
     const nativeApply = Reflect.apply;

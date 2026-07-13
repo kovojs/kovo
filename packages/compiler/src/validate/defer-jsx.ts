@@ -10,6 +10,7 @@ import {
   compilerArrayAppend,
   compilerArrayLength,
   compilerCreateSet,
+  compilerFailClosed,
   compilerOwnDataValue,
   compilerSetAdd,
   compilerSetHas,
@@ -21,8 +22,13 @@ export function validateDeferJsxChildren(
 ): CompilerDiagnostic[] {
   const childContainers = compilerCreateSet<string>();
   const elements = jsxElements(model);
-  for (let elementIndex = 0; elementIndex < elements.length; elementIndex += 1) {
-    const containers = elements[elementIndex]!.childExpressionContainers;
+  const elementLength = compilerArrayLength(elements, 'Defer JSX elements');
+  for (let elementIndex = 0; elementIndex < elementLength; elementIndex += 1) {
+    const element = compilerOwnDataValue(elements, elementIndex, 'Defer JSX elements') as
+      | (typeof elements)[number]
+      | undefined;
+    if (!element) compilerFailClosed(`Defer JSX elements[${elementIndex}] must be own data.`);
+    const containers = element.childExpressionContainers;
     const containerLength = compilerArrayLength(containers, 'Defer JSX child containers');
     for (let containerIndex = 0; containerIndex < containerLength; containerIndex += 1) {
       const container = compilerOwnDataValue(
@@ -30,16 +36,21 @@ export function validateDeferJsxChildren(
         containerIndex,
         'Defer JSX child containers',
       ) as SourceSpan | undefined;
-      if (!container)
-        throw new TypeError(`Defer JSX child containers[${containerIndex}] must be own data.`);
+      if (!container) {
+        compilerFailClosed(`Defer JSX child containers[${containerIndex}] must be own data.`);
+      }
       compilerSetAdd(childContainers, spanKey(container));
     }
   }
 
   const result: CompilerDiagnostic[] = [];
   const expressions = jsxExpressions(model);
-  for (let index = 0; index < expressions.length; index += 1) {
-    const expression = expressions[index]!;
+  const expressionLength = compilerArrayLength(expressions, 'Defer JSX expressions');
+  for (let index = 0; index < expressionLength; index += 1) {
+    const expression = compilerOwnDataValue(expressions, index, 'Defer JSX expressions') as
+      | (typeof expressions)[number]
+      | undefined;
+    if (!expression) compilerFailClosed(`Defer JSX expressions[${index}] must be own data.`);
     if (
       expression.callName === 'defer' &&
       compilerSetHas(
