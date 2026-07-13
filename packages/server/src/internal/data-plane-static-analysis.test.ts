@@ -298,6 +298,39 @@ export const status = query({
     ]);
   });
 
+  it('preserves core diagnostic severities from the aggregate analyzer', async () => {
+    vi.doMock('@kovojs/drizzle/internal/static', () => ({
+      deriveMutationTouchRegistry: () => ({}),
+      extractStaticBuildAnalysisFactsFromProject: () => ({
+        queries: [],
+        sqlSafetyDiagnostics: [
+          {
+            code: 'KV447',
+            message: 'SQLite owner annotations are advisory only.',
+            severity: 'warn',
+            site: 'src/schema.ts:5',
+          },
+        ],
+        toctouFacts: [],
+        touchGraph: {},
+      }),
+    }));
+    const { staticDataPlaneBuildFacts } = await loadSubject();
+
+    await expect(
+      staticDataPlaneBuildFacts([RELEVANT_DRIZZLE_SOURCE], { cache: false }),
+    ).resolves.toMatchObject({
+      sqlSafetyDiagnostics: [
+        {
+          code: 'KV447',
+          message: 'SQLite owner annotations are advisory only.',
+          severity: 'warn',
+          site: 'src/schema.ts:5',
+        },
+      ],
+    });
+  });
+
   it('cannot drop discovered unsafe sources through a selective late Array.filter replacement', async () => {
     // SPEC §2/§11.4: evaluated app code shares the build realm. The complete source census
     // must be snapshotted before relevance classification, not handed to a mutable Array filter.

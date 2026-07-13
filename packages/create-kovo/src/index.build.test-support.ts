@@ -2976,7 +2976,7 @@ export function addParanoidPhase5WriteBoundaryProof(root: string): void {
       "import { sqliteTable, text } from 'drizzle-orm/sqlite-core';",
       "import { domain, endpoint, mutation, publicAccess, s, serverValue } from '@kovojs/server';",
       '',
-      "import type { AppRequest } from './auth.js';",
+      "import { appCsrf, type AppRequest } from './auth.js';",
       "import { readonlyAppDb } from './db.js';",
       "import { contacts } from './schema.js';",
       '',
@@ -3007,7 +3007,7 @@ export function addParanoidPhase5WriteBoundaryProof(root: string): void {
       '',
       'export const phase5DdlWriteProof = mutation({',
       '  access: publicProof,',
-      '  csrf: false,',
+      '  csrf: appCsrf,',
       '  input: proofInput,',
       "  registry: { tables: ['contacts'], touches: phase5DdlWriteRun.touches },",
       '  async handler(_input: { marker: string }, request: AppRequest) {',
@@ -3033,7 +3033,7 @@ export function addParanoidPhase5WriteBoundaryProof(root: string): void {
       '',
       'export const phase5BoxedSecretBuilderWriteProof = mutation({',
       '  access: publicProof,',
-      '  csrf: false,',
+      '  csrf: appCsrf,',
       '  input: proofInput,',
       "  registry: { tables: ['contacts'], touches: phase5BoxedSecretBuilderWriteRun.touches },",
       '  async handler(input: { marker: string }, request: AppRequest) {',
@@ -3059,7 +3059,7 @@ export function addParanoidPhase5WriteBoundaryProof(root: string): void {
       '',
       'export const phase5BoxedSecretRawWriteProof = mutation({',
       '  access: publicProof,',
-      '  csrf: false,',
+      '  csrf: appCsrf,',
       '  input: proofInput,',
       "  registry: { tables: ['contacts'], touches: phase5BoxedSecretRawWriteRun.touches },",
       '  async handler(input: { marker: string }, request: AppRequest) {',
@@ -3085,7 +3085,7 @@ export function addParanoidPhase5WriteBoundaryProof(root: string): void {
       '',
       'export const phase5GovernedMassAssignmentProof = mutation({',
       '  access: publicProof,',
-      '  csrf: false,',
+      '  csrf: appCsrf,',
       '  input: proofInput,',
       "  registry: { tables: ['contacts'], touches: phase5GovernedMassAssignmentRun.touches },",
       '  async handler(input: { marker: string }, request: AppRequest) {',
@@ -3101,6 +3101,10 @@ export function addParanoidPhase5WriteBoundaryProof(root: string): void {
       "  csrfJustification: 'read-only phase 5.1 write boundary status proof',",
       '  async handler(request: Request) {',
       '    const marker = new URL(request.url).searchParams.get("marker") ?? "";',
+      '    const contactEmail = new URL(request.url).searchParams.get("contactEmail") ?? "";',
+      '    const contactRows = contactEmail',
+      '      ? await readonlyAppDb.select({ id: contacts.id }).from(contacts).where(eq(contacts.email, contactEmail))',
+      '      : [];',
       '    const builderRows = await readonlyAppDb',
       '      .select({ id: contacts.id })',
       '      .from(contacts)',
@@ -3123,6 +3127,7 @@ export function addParanoidPhase5WriteBoundaryProof(root: string): void {
       '        blockedDdlTables: ddlRows.length,',
       '        blockedGovernedMassAssignmentRows: governedRows.length,',
       '        blockedRawSecretRows: rawRows.length,',
+      '        contactRows: contactRows.length,',
       '      },',
       "      { headers: { 'Cache-Control': 'no-store' } },",
       '    );',
@@ -3130,6 +3135,65 @@ export function addParanoidPhase5WriteBoundaryProof(root: string): void {
       "  method: 'GET',",
       "  reason: 'read-only phase 5.1 write boundary status proof',",
       "  response: { appOwnedSafety: true, body: 'json', cache: 'no-store' },",
+      '});',
+      '',
+    ].join('\n'),
+    'utf8',
+  );
+
+  const starterProofPath = join(root, 'src/starter-mutation-db-scope-proof.ts');
+  let starterProof = readFileSync(starterProofPath, 'utf8');
+  starterProof = replaceRequired(
+    starterProof,
+    "import type { AppRequest } from './auth.js';",
+    "import { appCsrf, type AppRequest } from './auth.js';",
+    'phase 5.1 protected starter DB-scope CSRF import',
+  );
+  for (const mutationName of [
+    'starterAuthSessionTableWriteProof',
+    'starterAuthUserTableWriteProof',
+    'starterRawAuthTableWriteProof',
+  ]) {
+    starterProof = replaceRequired(
+      starterProof,
+      `export const ${mutationName} = mutation({\n  access: publicProof,\n  csrf: false,`,
+      `export const ${mutationName} = mutation({\n  access: publicProof,\n  csrf: appCsrf,`,
+      `phase 5.1 protected ${mutationName} CSRF posture`,
+    );
+  }
+  writeFileSync(starterProofPath, starterProof, 'utf8');
+
+  writeFileSync(
+    join(root, 'src/paranoid-phase5-write-proof-forms.tsx'),
+    [
+      '/** @jsxImportSource @kovojs/server */',
+      "import { component } from '@kovojs/core';",
+      "import { mutationFormAttributes } from '@kovojs/server';",
+      '',
+      "import { phase5BoxedSecretBuilderWriteProof, phase5BoxedSecretRawWriteProof, phase5DdlWriteProof, phase5GovernedMassAssignmentProof } from './paranoid-phase5-write-boundary-proof.js';",
+      "import { starterAuthSessionTableWriteProof, starterAuthUserTableWriteProof, starterRawAuthTableWriteProof } from './starter-mutation-db-scope-proof.js';",
+      '',
+      'export const Phase5WriteProofForms = component({',
+      '  mutations: {',
+      '    phase5BoxedSecretBuilderWriteProof,',
+      '    phase5BoxedSecretRawWriteProof,',
+      '    phase5DdlWriteProof,',
+      '    phase5GovernedMassAssignmentProof,',
+      '    starterAuthSessionTableWriteProof,',
+      '    starterAuthUserTableWriteProof,',
+      '    starterRawAuthTableWriteProof,',
+      '  },',
+      '  render: () => (',
+      '    <div hidden>',
+      '      <form {...mutationFormAttributes(phase5BoxedSecretBuilderWriteProof)} />',
+      '      <form {...mutationFormAttributes(phase5BoxedSecretRawWriteProof)} />',
+      '      <form {...mutationFormAttributes(phase5DdlWriteProof)} />',
+      '      <form {...mutationFormAttributes(phase5GovernedMassAssignmentProof)} />',
+      '      <form {...mutationFormAttributes(starterAuthSessionTableWriteProof)} />',
+      '      <form {...mutationFormAttributes(starterAuthUserTableWriteProof)} />',
+      '      <form {...mutationFormAttributes(starterRawAuthTableWriteProof)} />',
+      '    </div>',
+      '  ),',
       '});',
       '',
     ].join('\n'),
@@ -3146,15 +3210,25 @@ export function addParanoidPhase5WriteBoundaryProof(root: string): void {
     ? replaceRequired(
         app,
         existingImport,
-        `${existingImport}\n${phase5Import}`,
+        `${existingImport}\n${phase5Import}\nimport { Phase5WriteProofForms } from './paranoid-phase5-write-proof-forms.js';`,
         'phase 5.1 write boundary imports',
       )
     : replaceRequired(
         app,
         "import { addContact } from './mutations.js';",
-        ["import { addContact } from './mutations.js';", phase5Import].join('\n'),
+        [
+          "import { addContact } from './mutations.js';",
+          phase5Import,
+          "import { Phase5WriteProofForms } from './paranoid-phase5-write-proof-forms.js';",
+        ].join('\n'),
         'phase 5.1 write boundary imports',
       );
+  app = replaceRequired(
+    app,
+    '      <ContactsRegion />',
+    '      <ContactsRegion />\n      <Phase5WriteProofForms />',
+    'phase 5.1 protected write proof forms',
+  );
   app = appendArrayEntry(app, 'endpoints', 'phase5WriteBoundaryStatusEndpoint');
   app = app.includes(
     '  mutations: [addContact, starterAbsentTablesContactWriteProof, starterAuthSessionTableWriteProof, starterAuthUserTableWriteProof, starterRawAuthTableWriteProof, appSignIn, appSignOut],',
@@ -3162,7 +3236,7 @@ export function addParanoidPhase5WriteBoundaryProof(root: string): void {
     ? replaceRequired(
         app,
         '  mutations: [addContact, starterAbsentTablesContactWriteProof, starterAuthSessionTableWriteProof, starterAuthUserTableWriteProof, starterRawAuthTableWriteProof, appSignIn, appSignOut],',
-        '  mutations: [addContact, starterAbsentTablesContactWriteProof, starterAuthSessionTableWriteProof, starterAuthUserTableWriteProof, starterRawAuthTableWriteProof, phase5BoxedSecretBuilderWriteProof, phase5BoxedSecretRawWriteProof, phase5DdlWriteProof, phase5GovernedMassAssignmentProof, appSignIn, appSignOut],',
+        '  mutations: [addContact, starterAuthSessionTableWriteProof, starterAuthUserTableWriteProof, starterRawAuthTableWriteProof, phase5BoxedSecretBuilderWriteProof, phase5BoxedSecretRawWriteProof, phase5DdlWriteProof, phase5GovernedMassAssignmentProof, appSignIn, appSignOut],',
         'phase 5.1 write boundary mutation registration',
       )
     : replaceRequired(
@@ -3274,7 +3348,7 @@ export function addParanoidPhase5AuthorizationProof(root: string): void {
       "import { alias } from 'drizzle-orm/sqlite-core';",
       "import { domain, endpoint, mutation, publicAccess, query, s, type JsonValue, type QueryLoadContext } from '@kovojs/server';",
       '',
-      "import { appAuthed, type AppRequest } from './auth.js';",
+      "import { appAuthed, appCsrf, type AppRequest } from './auth.js';",
       "import type { AppDb } from './db.js';",
       "import { readonlyAppDb } from './db.js';",
       "import { phase5AuthzItems, phase5AuthzOrders, phase5AuthzOrderView } from './schema.js';",
@@ -3380,19 +3454,17 @@ export function addParanoidPhase5AuthorizationProof(root: string): void {
       '});',
       "(phase5AuthzChildQuery as { key: string }).key = 'phase5-authz-owner-via';",
       '',
-      'const authzOptimistic = {',
-      '  ["phase5-authz-alias"](_draft: { items: AuthzRow[] }, _input: { marker: string }) {},',
-      '  ["phase5-authz-builder"](_draft: { items: AuthzRow[] }, _input: { marker: string }) {},',
-      '  ["phase5-authz-compound"](_draft: { items: AuthzRow[] }, _input: { marker: string }) {},',
-      '  ["phase5-authz-owner-via"](_draft: { items: AuthzRow[] }, _input: { marker: string }) {},',
-      '  ["phase5-authz-view"](_draft: { items: AuthzRow[] }, _input: { marker: string }) {},',
-      '};',
-      '',
       'export const phase5AuthzGraphProof = mutation({',
       '  access: publicProof,',
-      '  csrf: false,',
+      '  csrf: appCsrf,',
       '  input: proofInput,',
-      '  optimistic: authzOptimistic,',
+      '  optimistic: {',
+      "    [phase5AuthzAliasQuery.key]: 'await-fragment',",
+      "    [phase5AuthzBuilderQuery.key]: 'await-fragment',",
+      "    [phase5AuthzCompoundQuery.key]: 'await-fragment',",
+      "    [phase5AuthzChildQuery.key]: 'await-fragment',",
+      "    [phase5AuthzViewQuery.key]: 'await-fragment',",
+      '  },',
       '  registry: { touches: [phase5AuthzOrderDomain, phase5AuthzItemDomain] },',
       '  handler() {',
       '    return { ok: true };',
@@ -3611,7 +3683,7 @@ export function addPostgresParanoidPhase5DogfoodProof(root: string): void {
       "import { alias, pgTable, text } from 'drizzle-orm/pg-core';",
       "import { createMemoryWebhookReplayStore, domain, endpoint, mutation, publicAccess, query, s, serverValue, task, webhook, type JsonValue, type QueryLoadContext, type TaskSchedulingRequest } from '@kovojs/server';",
       '',
-      "import { appAuthed, type AppRequest } from './auth.js';",
+      "import { appAuthed, appCsrf, type AppRequest } from './auth.js';",
       "import type { AppDb } from './db.js';",
       "import { readonlyAppDb } from './db.js';",
       "import { phase5PgEvents, phase5PgItems, phase5PgOrders, verification } from './schema.js';",
@@ -3758,7 +3830,7 @@ export function addPostgresParanoidPhase5DogfoodProof(root: string): void {
       '});',
       '',
       'export const phase5PgScheduleTask = mutation({',
-      '  access: publicProof, csrf: false, input: proofInput,',
+      '  access: publicProof, csrf: appCsrf, input: proofInput,',
       "  registry: { tables: ['_kovo_jobs'], touches: [eventDomain] },",
       '  async handler(input: { marker: string }, request: AppRequest & TaskSchedulingRequest) {',
       '    await request.schedule(phase5PgReadTask, { id: `${input.marker}-task` });',
@@ -3816,7 +3888,7 @@ export function addPostgresParanoidPhase5DogfoodProof(root: string): void {
       '',
       'export const phase5PgOwnOrderWriteProof = mutation({',
       '  access: [appAuthed],',
-      '  csrf: false,',
+      '  csrf: appCsrf,',
       '  input: proofInput,',
       "  registry: { tables: ['phase5_pg_orders'], touches: phase5PgOwnOrderWrite.touches },",
       '  async handler(_input: { marker: string }, request: AppRequest) {',
@@ -3828,7 +3900,7 @@ export function addPostgresParanoidPhase5DogfoodProof(root: string): void {
       '',
       'export const phase5PgCrossOwnerOrderWriteProof = mutation({',
       '  access: publicProof,',
-      '  csrf: false,',
+      '  csrf: appCsrf,',
       '  input: proofInput,',
       "  registry: { tables: ['phase5_pg_orders'], touches: phase5PgCrossOwnerOrderWrite.touches },",
       '  async handler(_input: { marker: string }, request: AppRequest) {',
@@ -3917,6 +3989,34 @@ export function addPostgresParanoidPhase5DogfoodProof(root: string): void {
     'utf8',
   );
 
+  writeFileSync(
+    join(root, 'src/paranoid-phase5-postgres-proof-forms.tsx'),
+    [
+      '/** @jsxImportSource @kovojs/server */',
+      "import { component } from '@kovojs/core';",
+      "import { mutationFormAttributes } from '@kovojs/server';",
+      '',
+      "import { phase5PgCrossOwnerOrderWriteProof, phase5PgOwnOrderWriteProof, phase5PgScheduleTask } from './paranoid-phase5-postgres-proof.js';",
+      '',
+      'export const Phase5PostgresProofForms = component({',
+      '  mutations: {',
+      '    phase5PgCrossOwnerOrderWriteProof,',
+      '    phase5PgOwnOrderWriteProof,',
+      '    phase5PgScheduleTask,',
+      '  },',
+      '  render: () => (',
+      '    <div hidden>',
+      '      <form {...mutationFormAttributes(phase5PgCrossOwnerOrderWriteProof)} />',
+      '      <form {...mutationFormAttributes(phase5PgOwnOrderWriteProof)} />',
+      '      <form {...mutationFormAttributes(phase5PgScheduleTask)} />',
+      '    </div>',
+      '  ),',
+      '});',
+      '',
+    ].join('\n'),
+    'utf8',
+  );
+
   const appPath = join(root, 'src/app.tsx');
   let app = readFileSync(appPath, 'utf8');
   const importLine =
@@ -3924,8 +4024,18 @@ export function addPostgresParanoidPhase5DogfoodProof(root: string): void {
   app = replaceRequired(
     app,
     "import { appTheme } from './theme.js';",
-    [importLine, "import { appTheme } from './theme.js';"].join('\n'),
+    [
+      importLine,
+      "import { Phase5PostgresProofForms } from './paranoid-phase5-postgres-proof-forms.js';",
+      "import { appTheme } from './theme.js';",
+    ].join('\n'),
     'phase 5 postgres app import',
+  );
+  app = replaceRequired(
+    app,
+    '      <ContactsRegion />',
+    '      <ContactsRegion />\n      <Phase5PostgresProofForms />',
+    'phase 5 postgres protected proof forms',
   );
   for (const endpointEntry of [
     'phase5PgEndpoint',

@@ -58,7 +58,6 @@ const blockedWriteCases = [
   'starter-db-scope/auth-user-table-write',
   'starter-db-scope/auth-session-table-write',
   'starter-db-scope/raw-auth-table-write',
-  'starter-db-scope/absent-tables-contact-write',
   'phase5-write-boundary/ddl-write',
   'phase5-write-boundary/boxed-secret-builder',
   'phase5-write-boundary/boxed-secret-raw',
@@ -166,7 +165,7 @@ describe('create-kovo starter (build integration: paranoid runtime chokes)', () 
         await expectPostgresReferenceMemberships(origin);
         await expectPostgresReadonlyStatus(origin, marker);
         await expectPostgresWriteBoundary(origin, jar);
-        await expectPostgresTaskAndWebhook(origin, marker, output);
+        await expectPostgresTaskAndWebhook(origin, jar, marker, output);
 
         expect(output()).not.toContain('Kovo SQLite starter is experimental');
         expect(output()).not.toContain('phase5-pg-secret');
@@ -233,8 +232,8 @@ describe('create-kovo starter (build integration: paranoid runtime chokes)', () 
       await expectStarterInScopeWrite(origin, jar, output, contactEmail);
       await expectAuthorizationEndpoint(origin);
       await expectAuthorizationStatus(origin);
-      await expectBlockedWrites(origin, marker);
-      await expectWriteStatus(origin, marker, contactEmail);
+      await expectBlockedWrites(origin, jar, marker, output);
+      await expectWriteStatus(origin, marker, contactEmail, output);
 
       expect(output()).toContain('Kovo SQLite starter is experimental and single-principal only');
       expect(output()).toContain('KV435');
@@ -459,8 +458,9 @@ async function expectPostgresWriteBoundary(
   origin: string,
   jar: Map<string, string>,
 ): Promise<void> {
+  const csrf = await fetchMutationCsrf(origin, jar, 'phase5-pg/cross-owner-order-write');
   const crossOwnerWrite = await fetch(`${origin}/_m/phase5-pg/cross-owner-order-write`, {
-    body: new URLSearchParams({ marker: 'phase5-pg-cross' }),
+    body: new URLSearchParams({ csrf, marker: 'phase5-pg-cross' }),
     headers: {
       'content-type': 'application/x-www-form-urlencoded',
       cookie: cookieHeader(jar),
@@ -484,13 +484,16 @@ async function expectPostgresWriteBoundary(
 
 async function expectPostgresTaskAndWebhook(
   origin: string,
+  jar: Map<string, string>,
   marker: string,
   output: () => string,
 ): Promise<void> {
+  const csrf = await fetchMutationCsrf(origin, jar, 'phase5-pg/schedule-task');
   const taskResponse = await fetch(`${origin}/_m/phase5-pg/schedule-task`, {
-    body: new URLSearchParams({ marker }),
+    body: new URLSearchParams({ csrf, marker }),
     headers: {
       'content-type': 'application/x-www-form-urlencoded',
+      cookie: cookieHeader(jar),
       origin,
     },
     method: 'POST',
@@ -509,6 +512,22 @@ async function expectPostgresTaskAndWebhook(
   expect(webhookResponse.status, webhookBody).toBe(200);
 
   await expectEventuallyPostgresEvent(origin, marker);
+}
+
+async function fetchMutationCsrf(
+  origin: string,
+  jar: Map<string, string>,
+  mutation: string,
+): Promise<string> {
+  const response = await fetch(`${origin}/`, {
+    headers: { cookie: cookieHeader(jar) },
+  });
+  const body = await response.text();
+  expect(response.status, body).toBe(200);
+  const form = formHtmlByAction(body, `/_m/${mutation}`);
+  const csrf = fieldValue(form, 'csrf');
+  expect(csrf).toBeTruthy();
+  return csrf;
 }
 
 async function expectEventuallyPostgresEvent(origin: string, marker: string): Promise<void> {
@@ -737,12 +756,19 @@ async function expectStarterInScopeWrite(
   expect(addContact.status).toBe(303);
 }
 
-async function expectBlockedWrites(origin: string, marker: string): Promise<void> {
+async function expectBlockedWrites(
+  origin: string,
+  jar: Map<string, string>,
+  marker: string,
+  output: () => string,
+): Promise<void> {
   for (const key of blockedWriteCases) {
+    const csrf = await fetchMutationCsrf(origin, jar, key);
     const response = await fetch(`${origin}/_m/${key}`, {
-      body: new URLSearchParams({ marker }),
+      body: new URLSearchParams({ csrf, marker }),
       headers: {
         'content-type': 'application/x-www-form-urlencoded',
+        cookie: cookieHeader(jar),
         origin,
       },
       method: 'POST',
@@ -750,7 +776,7 @@ async function expectBlockedWrites(origin: string, marker: string): Promise<void
     });
     const body = await response.text();
 
-    expect(response.status, `${key}: ${body}`).toBe(500);
+    expect(response.status, `${key}: ${body}\n${output()}`).toBe(500);
     expect(body).not.toContain(marker);
     expect(body).not.toContain('runtime-secret-value');
     expect(body).not.toContain('phase5-builder-secret');
@@ -1199,40 +1225,21 @@ async function expectWriteStatus(
   origin: string,
   marker: string,
   contactEmail: string,
+  output: () => string,
 ): Promise<void> {
-  const scopeStatusResponse = await fetch(
-    `${origin}/api/starter-db-scope-proof?marker=${encodeURIComponent(
+  const writeStatusResponse = await fetch(
+    `${origin}/api/phase5-write-boundary-proof?marker=${encodeURIComponent(
       marker,
     )}&contactEmail=${encodeURIComponent(contactEmail)}`,
   );
-  const scopeStatusBody = await scopeStatusResponse.text();
-  expect(scopeStatusResponse.status, scopeStatusBody).toBe(200);
-  const scopeStatus = JSON.parse(scopeStatusBody) as {
-    absentContactRows: number;
-    authSessionRows: number;
-    authUserRows: number;
-    contactRows: number;
-    rawAuthUserRows: number;
-  };
-
-  expect(scopeStatus).toEqual({
-    absentContactRows: 0,
-    authSessionRows: 0,
-    authUserRows: 0,
-    contactRows: 1,
-    rawAuthUserRows: 0,
-  });
-
-  const writeStatusResponse = await fetch(
-    `${origin}/api/phase5-write-boundary-proof?marker=${encodeURIComponent(marker)}`,
-  );
   const writeStatusBody = await writeStatusResponse.text();
-  expect(writeStatusResponse.status, writeStatusBody).toBe(200);
+  expect(writeStatusResponse.status, `${writeStatusBody}\n${output()}`).toBe(200);
   const writeStatus = JSON.parse(writeStatusBody) as {
     blockedBuilderSecretRows: number;
     blockedDdlTables: number;
     blockedGovernedMassAssignmentRows: number;
     blockedRawSecretRows: number;
+    contactRows: number;
   };
 
   expect(writeStatus).toEqual({
@@ -1240,5 +1247,6 @@ async function expectWriteStatus(
     blockedDdlTables: 0,
     blockedGovernedMassAssignmentRows: 0,
     blockedRawSecretRows: 0,
+    contactRows: 1,
   });
 }

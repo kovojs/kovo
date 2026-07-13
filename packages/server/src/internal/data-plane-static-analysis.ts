@@ -1400,20 +1400,21 @@ function sqlSafetyDiagnosticFact(value: unknown): CoreGraph.SqlSafetyDiagnosticF
   const message = staticAnalysisOwnDataValue(value, 'message', 'SQL-safety diagnostic');
   const severity = staticAnalysisOwnDataValue(value, 'severity', 'SQL-safety diagnostic');
   const site = staticAnalysisOwnDataValue(value, 'site', 'SQL-safety diagnostic');
+  const normalizedSeverity = severity ?? 'error';
   if (
     isDiagnosticCode(code) &&
     typeof message === 'string' &&
     typeof site === 'string' &&
-    (severity === undefined ||
-      severity === 'error' ||
-      severity === 'warning' ||
-      severity === 'notice')
+    (normalizedSeverity === 'error' ||
+      normalizedSeverity === 'warn' ||
+      normalizedSeverity === 'lint' ||
+      normalizedSeverity === 'notice')
   ) {
     return [
       {
         code,
         message,
-        severity: (severity ?? 'error') as CoreGraph.SqlSafetyDiagnosticFact['severity'],
+        severity: normalizedSeverity,
         site,
       },
     ];
