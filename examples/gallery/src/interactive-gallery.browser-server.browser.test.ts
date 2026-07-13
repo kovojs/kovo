@@ -1,6 +1,9 @@
 import { expect, it } from 'vitest';
 
-import { renderRouteHtml, trustedHtml } from './interactive-gallery.browser-server.js';
+import {
+  renderRouteHtml,
+  trustedHtml,
+} from '../../../tests/gallery/interactive-gallery.browser-server.js';
 
 it('unwraps only genuine trusted HTML at the gallery server boundary', () => {
   // SPEC.md §4.5 and §9.5: the browser harness must preserve the production route-renderer trust

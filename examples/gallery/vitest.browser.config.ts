@@ -5,11 +5,17 @@ import { defineConfig } from 'vitest/config';
 import { exampleKovoCompilerPlugin } from '../vite-kovo-compiler.js';
 
 const headed = process.env.KOVO_GALLERY_BROWSER_HEADED === '1';
+const browserRuntime = fileURLToPath(
+  new URL('../../packages/browser/src/index.ts', import.meta.url),
+);
+const browserGeneratedRuntime = fileURLToPath(
+  new URL('../../packages/browser/src/generated.ts', import.meta.url),
+);
 const browserCoreRuntime = fileURLToPath(
   new URL('./src/interactive-gallery.browser-core.ts', import.meta.url),
 );
 const browserServerRuntime = fileURLToPath(
-  new URL('./src/interactive-gallery.browser-server.ts', import.meta.url),
+  new URL('../../tests/gallery/interactive-gallery.browser-server.ts', import.meta.url),
 );
 const browserJsxRuntime = fileURLToPath(
   new URL('./src/interactive-gallery.browser-jsx-runtime.ts', import.meta.url),
@@ -39,6 +45,8 @@ function galleryBrowserRuntimeBoundaryPlugin() {
     name: 'kovo-gallery-browser-runtime-boundary',
     enforce: 'pre' as const,
     resolveId(id: string): string | undefined {
+      if (id === '@kovojs/browser') return browserRuntime;
+      if (id === '@kovojs/browser/generated') return browserGeneratedRuntime;
       if (id === '@kovojs/core') return browserCoreRuntime;
       if (id === '@kovojs/server') return browserServerRuntime;
       if (id === '@kovojs/server/internal/escape') return browserJsxRuntime;

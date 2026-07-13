@@ -1,6 +1,6 @@
 import { isKovoTrustedHtml, kovoTrustedHtmlContent } from '@kovojs/browser/generated';
 
-import { escapeText } from './interactive-gallery.browser-jsx-runtime.js';
+import { escapeText } from '../../examples/gallery/src/interactive-gallery.browser-jsx-runtime.js';
 
 export { trustedHtml, trustedUrl } from '@kovojs/browser';
 
