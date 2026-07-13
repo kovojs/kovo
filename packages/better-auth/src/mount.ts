@@ -1,10 +1,13 @@
-import { endpoint } from '@kovojs/server';
 import type {
   AccessDecision,
   EndpointAuthDeclaration,
   EndpointDeclaration,
   EndpointMethod,
 } from '@kovojs/server';
+import {
+  frameworkEndpoint,
+  pinEndpointBrowserCredentialDelegation,
+} from '@kovojs/server/internal/execution';
 
 import { betterAuthMountOperationContract } from './internal/contracts.js';
 import {
@@ -86,27 +89,40 @@ export function mount<
   }
   const endpointAuth = configuredAuth ?? betterAuthMountOperationContract.auth;
 
-  return endpoint(path, {
-    ...(access === undefined && configuredAuth !== undefined
-      ? {}
-      : { access: access ?? betterAuthMountOperationContract.access }),
-    auth: endpointAuth,
-    csrf: false,
-    csrfJustification: csrfJustification ?? betterAuthMountOperationContract.csrf.justification,
-    async handler(request) {
-      assertBetterAuthRequestSecretPath('better-auth.mount.handler-delegation');
-      try {
-        return await betterAuthApply<Promise<Response> | Response>(handler, handlerReceiver, [
-          request,
-        ]);
-      } catch {
-        throw new NativeError(betterAuthMountBoundaryFailureMessage);
+  return frameworkEndpoint(
+    path,
+    {
+      ...(access === undefined && configuredAuth !== undefined
+        ? {}
+        : { access: access ?? betterAuthMountOperationContract.access }),
+      auth: endpointAuth,
+      csrf: false,
+      csrfJustification: csrfJustification ?? betterAuthMountOperationContract.csrf.justification,
+      async handler(request) {
+        assertBetterAuthRequestSecretPath('better-auth.mount.handler-delegation');
+        try {
+          return await betterAuthApply<Promise<Response> | Response>(handler, handlerReceiver, [
+            request,
+          ]);
+        } catch {
+          throw new NativeError(betterAuthMountBoundaryFailureMessage);
+        }
+      },
+      method,
+      mount: 'prefix',
+      mountJustification: betterAuthMountOperationContract.mountJustification,
+      reason: betterAuthMountOperationContract.reason,
+      response: betterAuthMountOperationContract.response,
+    },
+    (declaration) => {
+      const pinnedAuth = declaration.auth;
+      if (
+        pinnedAuth !== undefined &&
+        pinnedAuth.kind !== 'none' &&
+        pinnedAuth.verify === undefined
+      ) {
+        pinEndpointBrowserCredentialDelegation(declaration);
       }
     },
-    method,
-    mount: 'prefix',
-    mountJustification: betterAuthMountOperationContract.mountJustification,
-    reason: betterAuthMountOperationContract.reason,
-    response: betterAuthMountOperationContract.response,
-  });
+  );
 }

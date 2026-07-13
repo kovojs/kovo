@@ -436,6 +436,81 @@ describe('browser redirect protocol mount', () => {
     ).resolves.toBe('GET');
   });
 
+  it('delegates browser credentials only through the pinned Better Auth mount', async () => {
+    let received:
+      | { authorization: string | null; cookie: string | null; session: boolean }
+      | undefined;
+    const authEndpoint = mount(
+      '/auth',
+      (request) => {
+        received = {
+          authorization: request.headers.get('authorization'),
+          cookie: request.headers.get('cookie'),
+          session: 'session' in request,
+        };
+        return new Response(null, {
+          headers: {
+            'Cache-Control': 'no-store',
+            Location: '/signed-in',
+            'Set-Cookie':
+              'better-auth.session_token=rotated; Path=/; Secure; HttpOnly; SameSite=Lax',
+          },
+          status: 302,
+        });
+      },
+      { method: 'GET' },
+    );
+    const request = new Request('https://example.test/auth/callback/provider', {
+      headers: {
+        Authorization: 'Bearer callback-token',
+        Cookie: 'better-auth.state=oauth-secret; better-auth.session_token=old',
+      },
+    });
+    Object.defineProperty(request, 'session', {
+      configurable: true,
+      value: { id: 'ambient-kovo-session' },
+    });
+
+    const response = await runEndpoint(authEndpoint, request);
+
+    expect(received).toEqual({
+      authorization: 'Bearer callback-token',
+      cookie: 'better-auth.state=oauth-secret; better-auth.session_token=old',
+      session: false,
+    });
+    expect(response.status).toBe(302);
+    expect(response.headers.get('location')).toBe('/signed-in');
+    expect(response.headers.get('set-cookie')).toContain('better-auth.session_token=rotated');
+  });
+
+  it('keeps explicitly unauthenticated mounts browser-credential neutral', async () => {
+    let received: { authorization: string | null; cookie: string | null } | undefined;
+    const magicLink = mount(
+      '/auth/magic-link',
+      (request) => {
+        received = {
+          authorization: request.headers.get('authorization'),
+          cookie: request.headers.get('cookie'),
+        };
+        return new Response('verified');
+      },
+      {
+        auth: { justification: 'magic-link token is carried in the URL', kind: 'none' },
+        csrfJustification: 'magic-link token is carried in the URL',
+        method: 'GET',
+      },
+    );
+
+    await runEndpoint(
+      magicLink,
+      new Request('https://example.test/auth/magic-link/verify?token=opaque', {
+        headers: { Authorization: 'Bearer ambient', Cookie: 'sid=ambient' },
+      }),
+    );
+
+    expect(received).toEqual({ authorization: null, cookie: null });
+  });
+
   it('pins an own mount handler with its receiver and rejects substitutions', async () => {
     let poisonCalls = 0;
     const auth = {
