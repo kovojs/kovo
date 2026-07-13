@@ -659,6 +659,16 @@ function copyRequestScopedDb(source: Request, target: Request): void {
   });
 }
 
+/**
+ * @internal Preserve only adapter-installed server bindings when Kovo reconstructs a bodyless
+ * request for the same ingress. Browser credentials and lifecycle session state are deliberately
+ * not copied here; the caller owns their explicit posture and lifecycle resolution.
+ */
+export function copyRequestServerBindings(source: Request, target: Request): void {
+  copyRequestPeerAddress(source, target);
+  copyRequestScopedDb(source, target);
+}
+
 /** Framework-owned verifier input reconstructed from one exact Request snapshot (SPEC §6.6). */
 export interface RequestVerifierInput {
   headers: Headers;

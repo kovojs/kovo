@@ -27,6 +27,7 @@ import {
 import type { LiveTargetAttestationAuthority } from '../live-target-app-identity.js';
 import type { GeneratedFragmentRenderable } from '../renderable.js';
 import { queryRuntimeWarningHeaderValue, queryRuntimeWarningsFromRequest } from '../query.js';
+import { resolveFrameworkMutationRenderRequest } from '../mutation-render-request-authority.js';
 import type { RuntimeRegistryFacts } from '../registry-facts.js';
 import type { InferSchema, Schema } from '../schema.js';
 import { renderStreamingMutationWireResponse } from './streaming.js';
@@ -93,12 +94,16 @@ export const renderMutationWireLifecycleResponse = wireEmitter(
     >,
   ): Promise<MutationWireResponse> {
     const { definition, lifecycle, wireRequest } = options;
-    const preLifecycleRequest = mutationWirePreLifecycleFailureRequest(wireRequest);
+    const preLifecycleRequest = mutationWirePreLifecycleFailureRequest(wireRequest, true);
+    const nonRenderingPreLifecycleRequest = mutationWirePreLifecycleFailureRequest(
+      wireRequest,
+      false,
+    );
 
     if (lifecycle.kind === 'csrf-failure') {
       const reauthResponse = await options.csrfReauthResponse();
       if (reauthResponse) return reauthResponse;
-      return mutationWireFailureResponse(lifecycle.failure, preLifecycleRequest);
+      return mutationWireFailureResponse(lifecycle.failure, nonRenderingPreLifecycleRequest);
     }
 
     if (lifecycle.kind === 'validation-failure') {
@@ -127,9 +132,9 @@ export const renderMutationWireLifecycleResponse = wireEmitter(
     }
 
     if (lifecycle.kind === 'replay-conflict')
-      return renderReplayConflictFragment(preLifecycleRequest);
+      return renderReplayConflictFragment(nonRenderingPreLifecycleRequest);
     if (lifecycle.kind === 'replay-unavailable')
-      return renderReplayUnavailableFragment(preLifecycleRequest);
+      return renderReplayUnavailableFragment(nonRenderingPreLifecycleRequest);
     if (lifecycle.kind === 'replayed') {
       if (isEnhancedReplayResponse(lifecycle.response)) return lifecycle.response;
       return renderReplayConflictFragment(preLifecycleRequest);
@@ -253,10 +258,15 @@ export const renderMutationWireLifecycleResponse = wireEmitter(
 
 function mutationWirePreLifecycleFailureRequest<Request>(
   request: MutationWireRequest<Request>,
+  allowGeneratedRenderer: boolean,
 ): MutationWireRequest<Request> {
-  if (request.renderFailureFragment === undefined) return request;
+  if (request.renderFailureFragment === undefined && allowGeneratedRenderer) return request;
   const result = { ...request };
   delete result.renderFailureFragment;
+  if (!allowGeneratedRenderer) {
+    result.liveTargetDescriptors = [];
+    result.liveTargetRenderers = [];
+  }
   return result;
 }
 
@@ -315,17 +325,24 @@ const renderSuccessfulMutationWireResponse = wireEmitter(
       rerunQueries,
       targets: wireRequest.targets ?? [],
     });
-    const queryChunks = await renderQueryChunks(
-      definition.registry?.queries ?? [],
-      selection.rerunQueries,
-      renderInput,
+    const renderRequest = await resolveFrameworkMutationRenderRequest(
+      wireRequest.resolveRenderRequest,
       wireRequest.request,
-      result.changes,
-      wireRequest.maxListItems,
-      wireRequest.idem === undefined ? undefined : [wireRequest.idem],
     );
+    const queryChunks =
+      renderRequest === undefined
+        ? []
+        : await renderQueryChunks(
+            definition.registry?.queries ?? [],
+            selection.rerunQueries,
+            renderInput,
+            renderRequest,
+            result.changes,
+            wireRequest.maxListItems,
+            wireRequest.idem === undefined ? undefined : [wireRequest.idem],
+          );
     const fragmentChunks: string[] = [];
-    if (selection.liveTargetDescriptors.length > 0) {
+    if (renderRequest !== undefined && selection.liveTargetDescriptors.length > 0) {
       appendChunks(
         fragmentChunks,
         await renderLiveTargetChunks(
@@ -334,7 +351,7 @@ const renderSuccessfulMutationWireResponse = wireEmitter(
           requiredLiveTargetAudience(wireRequest),
           requiredLiveTargetAttestationAuthority(wireRequest),
           renderInput,
-          wireRequest.request,
+          renderRequest,
           wireRequest.csrf,
           wireRequest.maxListItems,
         ),
@@ -358,7 +375,7 @@ const renderSuccessfulMutationWireResponse = wireEmitter(
       'Kovo-Build': requiredMutationBuildToken(wireRequest),
     };
     const queryWarningHeader = queryRuntimeWarningHeaderValue(
-      queryRuntimeWarningsFromRequest(wireRequest.request),
+      queryRuntimeWarningsFromRequest(renderRequest ?? wireRequest.request),
     );
     const queryWarningHeaders =
       queryWarningHeader === undefined ? undefined : { 'Kovo-Warn': queryWarningHeader };
@@ -551,7 +568,14 @@ async function renderDefaultFailureFragment<Request>(
     descriptor === undefined
       ? undefined
       : findLiveTargetRenderer(wireRequest.liveTargetRenderers ?? [], descriptor.component);
-  if (descriptor && renderer) {
+  const renderRequest =
+    descriptor && renderer
+      ? await resolveFrameworkMutationRenderRequest(
+          wireRequest.resolveRenderRequest,
+          wireRequest.request,
+        )
+      : undefined;
+  if (descriptor && renderer && renderRequest !== undefined) {
     return renderer.render({
       attestationAuthority: requiredLiveTargetAttestationAuthority(wireRequest),
       buildToken: requiredLiveTargetAudience(wireRequest),
@@ -560,7 +584,7 @@ async function renderDefaultFailureFragment<Request>(
       ...(wireRequest.csrf === undefined ? {} : { csrf: wireRequest.csrf }),
       ...(wireRequest.mutationKey === undefined ? {} : { mutationKey: wireRequest.mutationKey }),
       props: descriptor.props,
-      request: wireRequest.request,
+      request: renderRequest,
       target,
     });
   }
