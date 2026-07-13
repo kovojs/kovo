@@ -16,6 +16,7 @@ import {
 } from '@kovojs/server';
 
 import { renderPage } from './render.mjs';
+import { renderStyleElement } from './output-security.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
@@ -43,6 +44,7 @@ const str = (v) => {
 export function createDevtoolApp({ bundles, base = process.env.KOVO_DEVTOOL_BASE ?? '' }) {
   if (!bundles?.length) throw new Error('createDevtoolApp: at least one bundle is required.');
   const css = fontFaceCss() + readFileSync(join(HERE, 'styles.css'), 'utf8');
+  const styleElement = renderStyleElement(css);
 
   const clientModules = createMemoryVersionedClientModuleRegistry();
   const pzHref = clientModules.put({
@@ -63,15 +65,17 @@ export function createDevtoolApp({ bundles, base = process.env.KOVO_DEVTOOL_BASE
     page(context) {
       const wanted = str(context.search.app);
       const app = wanted && byApp.has(wanted) ? wanted : manifest[0].id;
-      return renderPage({
-        manifest,
-        bundle: byApp.get(app),
-        app,
-        sel: str(context.search.sel),
-        q: str(context.search.q),
-        pzHref: base + pzHref,
-        css,
-      });
+      return (
+        styleElement +
+        renderPage({
+          manifest,
+          bundle: byApp.get(app),
+          app,
+          sel: str(context.search.sel),
+          q: str(context.search.q),
+          pzHref: base + pzHref,
+        })
+      );
     },
   });
 

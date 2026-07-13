@@ -5,6 +5,26 @@
 // the framework already proves (SPEC §11.1 touch-sets ⋈ §10.2 read-sets) into a
 // navigable shape. Imported by both the node bundle script and the browser UI so
 // the two surfaces can never diverge (SPEC §5.3 — one artifact, two renderers).
+import {
+  arrayAppend,
+  arrayFilter,
+  arrayLength,
+  arrayMap,
+  arrayReduce,
+  arraySlice,
+  arraySort,
+  arrayValue,
+  createMap,
+  freeze,
+  isSafeInteger,
+  joinStrings,
+  mapGet,
+  mapHas,
+  mapSet,
+  numberLog,
+  stringCharCodeAt,
+  stringSlice,
+} from './output-security.mjs';
 
 /**
  * @typedef {'mutation'|'domain'|'query'|'component'|'page'} NodeKind
@@ -12,15 +32,30 @@
  */
 
 /** Left→right dataflow lanes. A write propagates rightward to the UI. */
-export const LANES = ['mutation', 'domain', 'query', 'component', 'page'];
+export const LANES = freeze(['mutation', 'domain', 'query', 'component', 'page']);
 
-export const KIND_META = {
-  mutation: { label: 'Mutations', accent: '#f5a623', glyph: '⚡', blurb: 'typed writes' },
-  domain: { label: 'Domains', accent: '#34d399', glyph: '◆', blurb: 'invalidation units' },
-  query: { label: 'Queries', accent: '#38bdf8', glyph: '◎', blurb: 'typed reads' },
-  component: { label: 'Components', accent: '#a78bfa', glyph: '▢', blurb: 'render + handlers' },
-  page: { label: 'Pages', accent: '#94a3b8', glyph: '◧', blurb: 'routes' },
-};
+export const KIND_META = freeze({
+  mutation: freeze({
+    accent: '#f5a623',
+    blurb: 'typed writes',
+    glyph: '⚡',
+    label: 'Mutations',
+  }),
+  domain: freeze({
+    accent: '#34d399',
+    blurb: 'invalidation units',
+    glyph: '◆',
+    label: 'Domains',
+  }),
+  query: freeze({ accent: '#38bdf8', blurb: 'typed reads', glyph: '◎', label: 'Queries' }),
+  component: freeze({
+    accent: '#a78bfa',
+    blurb: 'render + handlers',
+    glyph: '▢',
+    label: 'Components',
+  }),
+  page: freeze({ accent: '#94a3b8', blurb: 'routes', glyph: '◧', label: 'Pages' }),
+});
 
 const id = (kind, name) => `${kind}:${name}`;
 
@@ -209,34 +244,86 @@ function buildIndex(nodes, edges, byId) {
 // fits where an embedding model would not.
 
 export function buildBm25(nodes) {
-  const docs = nodes.map((n) => ({ id: n.id, terms: tokenize(cardText(n)) }));
-  const N = docs.length;
-  const df = new Map();
-  for (const d of docs) for (const t of new Set(d.terms)) df.set(t, (df.get(t) ?? 0) + 1);
-  const avgdl = docs.reduce((s, d) => s + d.terms.length, 0) / Math.max(1, N);
+  const docs = arrayMap(
+    nodes,
+    (node) => ({ id: node.id, terms: tokenize(cardText(node)) }),
+    'devtool BM25 nodes',
+  );
+  const N = arrayLength(docs, 'devtool BM25 documents');
+  const df = createMap();
+  for (let docIndex = 0; docIndex < N; docIndex += 1) {
+    const terms = uniqueStrings(
+      arrayValue(docs, docIndex, 'devtool BM25 documents').terms,
+      'devtool BM25 document terms',
+    );
+    for (let termIndex = 0; termIndex < arrayLength(terms, 'devtool BM25 terms'); termIndex += 1) {
+      const term = arrayValue(terms, termIndex, 'devtool BM25 terms');
+      mapSet(df, term, (mapGet(df, term) ?? 0) + 1);
+    }
+  }
+  const avgdl =
+    arrayReduce(
+      docs,
+      (sum, document) => sum + arrayLength(document.terms, 'devtool BM25 document terms'),
+      0,
+      'devtool BM25 documents',
+    ) / (N > 1 ? N : 1);
   const k1 = 1.5,
     b = 0.75;
-  const idf = (t) => Math.log(1 + (N - (df.get(t) ?? 0) + 0.5) / ((df.get(t) ?? 0) + 0.5));
+  const idf = (term) => {
+    const frequency = mapGet(df, term) ?? 0;
+    return numberLog(1 + (N - frequency + 0.5) / (frequency + 0.5));
+  };
 
   return function search(queryStr, limit = 8) {
+    if (!isSafeInteger(limit) || limit < 0) {
+      throw new TypeError('Kovo devtool BM25 limit must be a non-negative safe integer.');
+    }
     const qterms = tokenize(queryStr);
-    const scored = docs.map((d) => {
-      const tf = new Map();
-      for (const t of d.terms) tf.set(t, (tf.get(t) ?? 0) + 1);
-      let score = 0;
-      const matched = [];
-      for (const qt of new Set(qterms)) {
-        const f = tf.get(qt) ?? 0;
-        if (!f) continue;
-        matched.push(qt);
-        score += (idf(qt) * (f * (k1 + 1))) / (f + k1 * (1 - b + b * (d.terms.length / avgdl)));
-      }
-      return { id: d.id, score, matched };
-    });
-    return scored
-      .filter((s) => s.score > 0)
-      .sort((a, b) => b.score - a.score)
-      .slice(0, limit);
+    const uniqueQueryTerms = uniqueStrings(qterms, 'devtool BM25 query terms');
+    const scored = arrayMap(
+      docs,
+      (document) => {
+        const tf = createMap();
+        for (
+          let termIndex = 0;
+          termIndex < arrayLength(document.terms, 'devtool BM25 document terms');
+          termIndex += 1
+        ) {
+          const term = arrayValue(document.terms, termIndex, 'devtool BM25 document terms');
+          mapSet(tf, term, (mapGet(tf, term) ?? 0) + 1);
+        }
+        let score = 0;
+        const matched = [];
+        for (
+          let queryIndex = 0;
+          queryIndex < arrayLength(uniqueQueryTerms, 'devtool BM25 query terms');
+          queryIndex += 1
+        ) {
+          const queryTerm = arrayValue(uniqueQueryTerms, queryIndex, 'devtool BM25 query terms');
+          const frequency = mapGet(tf, queryTerm) ?? 0;
+          if (!frequency) continue;
+          arrayAppend(matched, queryTerm, 'devtool BM25 matched terms');
+          score +=
+            (idf(queryTerm) * (frequency * (k1 + 1))) /
+            (frequency +
+              k1 *
+                (1 - b + b * (arrayLength(document.terms, 'devtool BM25 document terms') / avgdl)));
+        }
+        return { id: document.id, matched, score };
+      },
+      'devtool BM25 documents',
+    );
+    return arraySlice(
+      arraySort(
+        arrayFilter(scored, (result) => result.score > 0, 'devtool BM25 scores'),
+        (left, right) => right.score - left.score,
+        'devtool BM25 matches',
+      ),
+      0,
+      limit,
+      'devtool BM25 sorted matches',
+    );
   };
 }
 
@@ -245,35 +332,83 @@ function cardText(n) {
   const parts = [n.kind, n.name, n.label];
   const d = n.data;
   if (n.kind === 'component') {
-    parts.push('component', d.domName, ...(d.queries ?? []));
-    for (const mf of d.mutationForms ?? [])
-      parts.push('mutation', 'form', mf.mutation, ...(mf.fields ?? []));
+    appendCardParts(parts, ['component', d.domName]);
+    appendCardParts(parts, d.queries ?? []);
+    const forms = d.mutationForms ?? [];
+    for (let index = 0; index < arrayLength(forms, 'devtool mutation forms'); index += 1) {
+      const form = arrayValue(forms, index, 'devtool mutation forms');
+      appendCardParts(parts, ['mutation', 'form', form.mutation]);
+      appendCardParts(parts, form.fields ?? []);
+    }
   } else if (n.kind === 'query') {
-    parts.push('query', 'read', ...(d.domains ?? []), ...(d.guards ?? []));
+    appendCardParts(parts, ['query', 'read']);
+    appendCardParts(parts, d.domains ?? []);
+    appendCardParts(parts, d.guards ?? []);
   } else if (n.kind === 'mutation') {
-    parts.push(
-      'mutation',
-      'write',
-      ...(d.writes ?? []),
-      ...(d.inputFields ?? []),
-      ...(d.guards ?? []),
-    );
-    for (const o of d.optimistic ?? [])
-      parts.push(o.query, o.status, o.derivation?.reason?.code ?? '');
+    appendCardParts(parts, ['mutation', 'write']);
+    appendCardParts(parts, d.writes ?? []);
+    appendCardParts(parts, d.inputFields ?? []);
+    appendCardParts(parts, d.guards ?? []);
+    const optimistic = d.optimistic ?? [];
+    for (let index = 0; index < arrayLength(optimistic, 'devtool optimistic facts'); index += 1) {
+      const fact = arrayValue(optimistic, index, 'devtool optimistic facts');
+      appendCardParts(parts, [fact.query, fact.status, fact.derivation?.reason?.code ?? '']);
+    }
   } else if (n.kind === 'domain') {
-    parts.push('domain');
+    arrayAppend(parts, 'domain', 'devtool card parts');
   } else if (n.kind === 'page') {
-    parts.push('page', 'route', d.meta?.title ?? '');
+    appendCardParts(parts, ['page', 'route', d.meta?.title ?? '']);
   }
-  return parts.filter(Boolean).join(' ');
+  return joinStrings(
+    arrayFilter(parts, (part) => typeof part === 'string' && part.length > 0, 'devtool card parts'),
+    ' ',
+    'devtool card text',
+  );
 }
 
 function tokenize(s) {
-  return String(s)
-    .replace(/([a-z0-9])([A-Z])/g, '$1 $2') // camelCase split
-    .toLowerCase()
-    .split(/[^a-z0-9]+/)
-    .filter((t) => t.length > 1);
+  if (typeof s !== 'string') throw new TypeError('Kovo devtool BM25 text must be a string.');
+  const terms = [];
+  let current = '';
+  let previousWasLowerOrDigit = false;
+  const flush = () => {
+    if (current.length > 1) arrayAppend(terms, current, 'devtool BM25 tokens');
+    current = '';
+  };
+  for (let index = 0; index < s.length; index += 1) {
+    const code = stringCharCodeAt(s, index);
+    const uppercase = code >= 65 && code <= 90;
+    const lowercase = code >= 97 && code <= 122;
+    const digit = code >= 48 && code <= 57;
+    if (uppercase && previousWasLowerOrDigit) flush();
+    if (uppercase) current += stringSlice('abcdefghijklmnopqrstuvwxyz', code - 65, code - 64);
+    else if (lowercase || digit) current += stringSlice(s, index, index + 1);
+    else flush();
+    previousWasLowerOrDigit = lowercase || digit;
+  }
+  flush();
+  return terms;
+}
+
+function appendCardParts(target, values) {
+  for (let index = 0; index < arrayLength(values, 'devtool card part values'); index += 1) {
+    const value = arrayValue(values, index, 'devtool card part values');
+    if (typeof value !== 'string') throw new TypeError('Kovo devtool card parts must be strings.');
+    arrayAppend(target, value, 'devtool card parts');
+  }
+}
+
+function uniqueStrings(values, label) {
+  const seen = createMap();
+  const unique = [];
+  for (let index = 0; index < arrayLength(values, label); index += 1) {
+    const value = arrayValue(values, index, label);
+    if (typeof value !== 'string') throw new TypeError(`${label}[${index}] must be a string.`);
+    if (mapHas(seen, value)) continue;
+    mapSet(seen, value, true);
+    arrayAppend(unique, value, `${label} unique values`);
+  }
+  return unique;
 }
 
 // ---------- helpers ----------

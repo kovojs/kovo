@@ -64,8 +64,8 @@ export interface KindMeta {
 
 export function buildDataflowGraph(graph: GraphJson): DataflowGraph;
 export function buildBm25(nodes: DataflowNode[]): (query: string, limit?: number) => Bm25Hit[];
-export const KIND_META: Record<string, KindMeta>;
-export const LANES: string[];
+export const KIND_META: Readonly<Record<string, Readonly<KindMeta>>>;
+export const LANES: readonly string[];
 
 export function buildBundle(opts: {
   app: string;
@@ -90,7 +90,6 @@ export function renderPage(opts: {
   sel?: string;
   q?: string;
   pzHref: string;
-  css?: string;
 }): string;
 
 // createDevtoolApp is declared in './app' (it imports @kovojs/server);

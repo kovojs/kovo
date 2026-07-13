@@ -3,6 +3,35 @@
 // (nodes/edges with source slices) and returns HTML.
 import { buildBm25, KIND_META, LANES } from './graph-model.mjs';
 import { renderCode } from './highlight.mjs';
+import {
+  arrayAppend,
+  arrayFilter,
+  arrayFind,
+  arrayIncludes,
+  arrayLength,
+  arrayMap,
+  arrayReduce,
+  arrayReverseCopy,
+  arraySlice,
+  arraySome,
+  arraySort,
+  arrayValue,
+  createMap,
+  createSet,
+  defineOwnData,
+  encodeQueryValue,
+  escapeHtmlAttribute,
+  escapeHtmlText,
+  joinStrings,
+  mapGet,
+  mapSet,
+  numberToFixed,
+  setAdd,
+  setHas,
+  stringSplit,
+  stringTrim,
+} from './output-security.mjs';
+import { snapshotRenderOptions } from './render-input.mjs';
 
 const W = 176;
 const H = 56;
@@ -12,20 +41,22 @@ const ROW_STEP = 86;
 const X0 = 40;
 const TOP_PAD = 80;
 
-const escText = (s) =>
-  String(s ?? '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
-const escAttr = (s) => escText(s).replace(/"/g, '&quot;');
-const esc = escText;
+const escAttr = escapeHtmlAttribute;
+const esc = escapeHtmlText;
 
 function queryHref(params) {
-  const search = new URLSearchParams();
-  for (const [key, value] of Object.entries(params)) {
-    if (value !== undefined && value !== null && value !== '') search.set(key, String(value));
+  const pairs = [];
+  const keys = ['app', 'sel', 'q'];
+  for (let index = 0; index < arrayLength(keys, 'devtool query keys'); index += 1) {
+    const key = arrayValue(keys, index, 'devtool query keys');
+    const value = params[key];
+    if (value !== undefined && value !== null && value !== '') {
+      if (typeof value !== 'string')
+        throw new TypeError(`Devtool query parameter ${key} must be text.`);
+      arrayAppend(pairs, `${key}=${encodeQueryValue(value)}`, 'devtool query parameters');
+    }
   }
-  return `?${search.toString()}`;
+  return `?${joinStrings(pairs, '&', 'devtool query parameters')}`;
 }
 
 const accent = (kind) => KIND_META[kind]?.accent ?? '#888';
@@ -33,69 +64,133 @@ const glyph = (kind) => KIND_META[kind]?.glyph ?? '•';
 
 // ---------- layout ----------
 function layout(bundle) {
-  const activeLanes = LANES.filter((k) => bundle.nodes.some((n) => n.kind === k));
-  const lanes = activeLanes.map((k) => bundle.nodes.filter((n) => n.kind === k));
+  const activeLanes = arrayFilter(
+    LANES,
+    (k) => arraySome(bundle.nodes, (n) => n.kind === k, 'devtool graph nodes'),
+    'devtool lane vocabulary',
+  );
+  const lanes = arrayMap(
+    activeLanes,
+    (k) => arrayFilter(bundle.nodes, (n) => n.kind === k, 'devtool graph nodes'),
+    'devtool active lanes',
+  );
 
-  const adj = new Map();
-  for (const n of bundle.nodes) adj.set(n.id, new Set());
-  for (const e of bundle.edges) {
-    adj.get(e.from)?.add(e.to);
-    adj.get(e.to)?.add(e.from);
+  const adj = createMap();
+  for (let index = 0; index < arrayLength(bundle.nodes, 'devtool graph nodes'); index += 1) {
+    const node = arrayValue(bundle.nodes, index, 'devtool graph nodes');
+    mapSet(adj, node.id, []);
+  }
+  for (let index = 0; index < arrayLength(bundle.edges, 'devtool graph edges'); index += 1) {
+    const edge = arrayValue(bundle.edges, index, 'devtool graph edges');
+    arrayAppend(mapGet(adj, edge.from), edge.to, 'devtool adjacency');
+    arrayAppend(mapGet(adj, edge.to), edge.from, 'devtool adjacency');
   }
 
-  const rankOf = new Map();
-  const reindex = () => lanes.forEach((arr) => arr.forEach((n, i) => rankOf.set(n.id, i)));
+  const rankOf = createMap();
+  const reindex = () => {
+    for (let laneIndex = 0; laneIndex < arrayLength(lanes, 'devtool lanes'); laneIndex += 1) {
+      const lane = arrayValue(lanes, laneIndex, 'devtool lanes');
+      for (let nodeIndex = 0; nodeIndex < arrayLength(lane, 'devtool lane'); nodeIndex += 1) {
+        mapSet(rankOf, arrayValue(lane, nodeIndex, 'devtool lane').id, nodeIndex);
+      }
+    }
+  };
   reindex();
   for (let sweep = 0; sweep < 6; sweep++) {
-    const order = sweep % 2 ? [...lanes.keys()].reverse() : [...lanes.keys()];
-    for (const li of order) {
-      const arr = lanes[li];
-      const bary = new Map();
-      arr.forEach((n, i) => {
-        const ns = [...(adj.get(n.id) ?? [])].map((x) => rankOf.get(x)).filter((x) => x != null);
-        bary.set(n.id, ns.length ? ns.reduce((a, b) => a + b, 0) / ns.length : i);
-      });
-      arr.sort((a, b) => bary.get(a.id) - bary.get(b.id) || 0);
+    const forwardOrder = [];
+    for (let index = 0; index < arrayLength(lanes, 'devtool lanes'); index += 1) {
+      arrayAppend(forwardOrder, index, 'devtool lane order');
+    }
+    const order = sweep % 2 ? arrayReverseCopy(forwardOrder, 'devtool lane order') : forwardOrder;
+    for (
+      let orderIndex = 0;
+      orderIndex < arrayLength(order, 'devtool lane order');
+      orderIndex += 1
+    ) {
+      const laneIndex = arrayValue(order, orderIndex, 'devtool lane order');
+      const lane = arrayValue(lanes, laneIndex, 'devtool lanes');
+      const bary = createMap();
+      for (let nodeIndex = 0; nodeIndex < arrayLength(lane, 'devtool lane'); nodeIndex += 1) {
+        const node = arrayValue(lane, nodeIndex, 'devtool lane');
+        const neighbors = mapGet(adj, node.id);
+        const ranks = [];
+        for (
+          let neighborIndex = 0;
+          neighborIndex < arrayLength(neighbors, 'devtool adjacency');
+          neighborIndex += 1
+        ) {
+          const rank = mapGet(rankOf, arrayValue(neighbors, neighborIndex, 'devtool adjacency'));
+          if (rank !== undefined) arrayAppend(ranks, rank, 'devtool neighbor ranks');
+        }
+        mapSet(
+          bary,
+          node.id,
+          arrayLength(ranks, 'devtool neighbor ranks') > 0
+            ? arrayReduce(ranks, (sum, rank) => sum + rank, 0, 'devtool neighbor ranks') /
+                arrayLength(ranks, 'devtool neighbor ranks')
+            : nodeIndex,
+        );
+      }
+      defineOwnData(
+        lanes,
+        laneIndex,
+        arraySort(
+          lane,
+          (left, right) => mapGet(bary, left.id) - mapGet(bary, right.id) || 0,
+          'devtool lane',
+        ),
+      );
       reindex();
     }
   }
 
-  const maxRows = Math.max(1, ...lanes.map((l) => l.length));
-  for (let li = 0; li < lanes.length; li++) {
-    const arr = lanes[li];
-    const startY = TOP_PAD + ((maxRows - arr.length) * ROW_STEP) / 2;
-    arr.forEach((n, i) => {
-      n.lane = li;
-      n.x = X0 + li * COL_STEP;
-      n.y = startY + i * ROW_STEP;
-    });
+  let maxRows = 1;
+  for (let laneIndex = 0; laneIndex < arrayLength(lanes, 'devtool lanes'); laneIndex += 1) {
+    const size = arrayLength(arrayValue(lanes, laneIndex, 'devtool lanes'), 'devtool lane');
+    if (size > maxRows) maxRows = size;
+  }
+  for (let laneIndex = 0; laneIndex < arrayLength(lanes, 'devtool lanes'); laneIndex += 1) {
+    const lane = arrayValue(lanes, laneIndex, 'devtool lanes');
+    const startY = TOP_PAD + ((maxRows - arrayLength(lane, 'devtool lane')) * ROW_STEP) / 2;
+    for (let nodeIndex = 0; nodeIndex < arrayLength(lane, 'devtool lane'); nodeIndex += 1) {
+      const node = arrayValue(lane, nodeIndex, 'devtool lane');
+      node.lane = laneIndex;
+      node.x = X0 + laneIndex * COL_STEP;
+      node.y = startY + nodeIndex * ROW_STEP;
+    }
   }
 
-  const width = X0 + (activeLanes.length - 1) * COL_STEP + W + 44;
-  const height = Math.max(480, TOP_PAD + maxRows * ROW_STEP + 24);
+  const width = X0 + (arrayLength(activeLanes, 'devtool active lanes') - 1) * COL_STEP + W + 44;
+  const calculatedHeight = TOP_PAD + maxRows * ROW_STEP + 24;
+  const height = calculatedHeight > 480 ? calculatedHeight : 480;
   return { activeLanes, width, height };
 }
 
 // ---------- trace ----------
 function trace(bundle, selId) {
-  const out = new Map(),
-    inc = new Map();
-  for (const n of bundle.nodes) {
-    out.set(n.id, []);
-    inc.set(n.id, []);
+  const out = createMap(),
+    inc = createMap();
+  for (let index = 0; index < arrayLength(bundle.nodes, 'devtool graph nodes'); index += 1) {
+    const node = arrayValue(bundle.nodes, index, 'devtool graph nodes');
+    mapSet(out, node.id, []);
+    mapSet(inc, node.id, []);
   }
-  for (const e of bundle.edges) {
-    out.get(e.from)?.push(e);
-    inc.get(e.to)?.push(e);
+  for (let index = 0; index < arrayLength(bundle.edges, 'devtool graph edges'); index += 1) {
+    const edge = arrayValue(bundle.edges, index, 'devtool graph edges');
+    arrayAppend(mapGet(out, edge.from), edge, 'devtool outgoing edges');
+    arrayAppend(mapGet(inc, edge.to), edge, 'devtool incoming edges');
   }
-  const nodes = new Set([selId]),
-    edges = new Set();
+  const nodes = createSet(),
+    edges = createSet();
+  setAdd(nodes, selId);
   const walk = (cur, dir) => {
-    for (const e of (dir === 'd' ? out.get(cur) : inc.get(cur)) ?? []) {
-      const next = dir === 'd' ? e.to : e.from;
-      edges.add(e.id);
-      if (!nodes.has(next)) {
-        nodes.add(next);
+    const candidates = dir === 'd' ? mapGet(out, cur) : mapGet(inc, cur);
+    for (let index = 0; index < arrayLength(candidates, 'devtool trace edges'); index += 1) {
+      const edge = arrayValue(candidates, index, 'devtool trace edges');
+      const next = dir === 'd' ? edge.to : edge.from;
+      setAdd(edges, edge.id);
+      if (!setHas(nodes, next)) {
+        setAdd(nodes, next);
         walk(next, dir);
       }
     }
@@ -119,106 +214,152 @@ function edgePath(a, b) {
     sy = a.y + H,
     ex = b.x + W / 2,
     ey = b.y + H,
-    cy = Math.max(sy, ey) + 64;
+    cy = (sy > ey ? sy : ey) + 64;
   return `M ${sx} ${sy} C ${sx} ${cy} ${ex} ${cy} ${ex} ${ey}`;
 }
 
 // ---------- main ----------
 export function renderPage(opts) {
-  const { manifest, bundle, app, sel, q, pzHref } = opts;
-  const byId = new Map(bundle.nodes.map((n) => [n.id, n]));
+  const { manifest, bundle, app, sel, q, pzHref } = snapshotRenderOptions(opts);
+  const byId = createMap();
+  for (let index = 0; index < arrayLength(bundle.nodes, 'devtool graph nodes'); index += 1) {
+    const node = arrayValue(bundle.nodes, index, 'devtool graph nodes');
+    mapSet(byId, node.id, node);
+  }
   const { activeLanes, width, height } = layout(bundle);
 
-  const selNode = sel ? byId.get(sel) : undefined;
+  const selNode = sel ? mapGet(byId, sel) : undefined;
   const tr = selNode ? trace(bundle, selNode.id) : null;
 
   let results = '';
-  let hits = new Set();
-  if (q && q.trim()) {
+  let hits = createSet();
+  if (q && stringTrim(q)) {
     const search = buildBm25(bundle.nodes);
     const ranked = search(q, 6);
-    hits = new Set(ranked.map((r) => r.id));
+    hits = createSet();
+    for (let index = 0; index < arrayLength(ranked, 'devtool search results'); index += 1) {
+      setAdd(hits, arrayValue(ranked, index, 'devtool search results').id);
+    }
     results =
       `<div class="results"><div class="results-head"><span>BM25 · ${ranked.length} matches</span><span>over ${bundle.nodes.length} graph cards</span></div>` +
       (ranked.length
-        ? ranked
-            .map((r) => {
-              const n = byId.get(r.id);
-              return (
-                `<a class="result" href="${escAttr(queryHref({ app, sel: n.id, q }))}">` +
-                `<span class="dot" style="background:${escAttr(accent(n.kind))}"></span>` +
-                `<span><b>${esc(n.label)}</b> <span class="chip">${n.kind}</span></span>` +
-                `<span class="matched">${r.matched.join(' ')}</span><span class="score">${r.score.toFixed(2)}</span></a>`
-              );
-            })
-            .join('')
+        ? joinStrings(
+            arrayMap(
+              ranked,
+              (r) => {
+                const n = mapGet(byId, r.id);
+                return (
+                  `<a class="result" href="${escAttr(queryHref({ app, sel: n.id, q }))}">` +
+                  `<span class="dot" style="background:${escAttr(accent(n.kind))}"></span>` +
+                  `<span><b>${esc(n.label)}</b> <span class="chip">${esc(n.kind)}</span></span>` +
+                  `<span class="matched">${esc(joinStrings(r.matched, ' ', 'devtool matched terms'))}</span><span class="score">${esc(numberToFixed(r.score, 2))}</span></a>`
+                );
+              },
+              'devtool search results',
+            ),
+            '',
+            'devtool rendered search results',
+          )
         : `<div class="result"><span style="color:var(--faint)">No graph cards matched “${esc(q)}”.</span></div>`) +
       `</div>`;
   }
 
-  const markers = activeLanes
-    .map(
+  const markers = joinStrings(
+    arrayMap(
+      activeLanes,
       (k) =>
         `<marker id="ar-${escAttr(k)}" markerWidth="7" markerHeight="7" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="${escAttr(accent(k))}"/></marker>`,
-    )
-    .join('');
-  const paths = bundle.edges
-    .map((e) => {
-      const a = byId.get(e.from),
-        b = byId.get(e.to);
-      if (!a || !b) return '';
-      const col = accent(a.kind);
-      const active = tr?.edges.has(e.id);
-      const cls = ['edge', tr ? (active ? 'active animated' : 'dim') : '']
-        .filter(Boolean)
-        .join(' ');
-      return `<path class="${escAttr(cls)}" data-from="${escAttr(e.from)}" data-to="${escAttr(e.to)}" d="${escAttr(edgePath(a, b))}" stroke="${escAttr(col)}" stroke-opacity="0.32" style="color:${escAttr(col)}" marker-end="url(#ar-${escAttr(a.kind)})"/>`;
-    })
-    .join('');
+      'devtool active lanes',
+    ),
+    '',
+    'devtool SVG markers',
+  );
+  const paths = joinStrings(
+    arrayMap(
+      bundle.edges,
+      (e) => {
+        const a = mapGet(byId, e.from),
+          b = mapGet(byId, e.to);
+        if (!a || !b) return '';
+        const col = accent(a.kind);
+        const active = tr ? setHas(tr.edges, e.id) : false;
+        const cls = joinStrings(
+          arrayFilter(
+            ['edge', tr ? (active ? 'active animated' : 'dim') : ''],
+            (value) => value !== '',
+          ),
+          ' ',
+        );
+        return `<path class="${escAttr(cls)}" data-from="${escAttr(e.from)}" data-to="${escAttr(e.to)}" d="${escAttr(edgePath(a, b))}" stroke="${escAttr(col)}" stroke-opacity="0.32" style="color:${escAttr(col)}" marker-end="url(#ar-${escAttr(a.kind)})"/>`;
+      },
+      'devtool graph edges',
+    ),
+    '',
+    'devtool SVG paths',
+  );
 
-  const cards = bundle.nodes
-    .map((n) => {
-      const cls = ['node', `node--${n.kind}`];
-      if (selNode) {
-        if (n.id === selNode.id) cls.push('sel');
-        else if (tr?.nodes.has(n.id)) cls.push('trace');
-        else cls.push('dim');
-      }
-      if (hits.has(n.id)) cls.push('hit');
-      const sub = nodeSub(n);
-      const href = queryHref({ app, sel: n.id, q });
-      return (
-        `<a class="${escAttr(cls.join(' '))}" data-node-id="${escAttr(n.id)}" href="${escAttr(href)}" style="left:${escAttr(n.x)}px;top:${escAttr(n.y)}px;width:${W}px;min-height:${H}px">` +
-        `<span class="label"><span class="glyph">${glyph(n.kind)}</span>${esc(n.label)}</span>` +
-        (sub ? `<span class="sub">${esc(sub)}</span>` : '') +
-        `</a>`
-      );
-    })
-    .join('');
+  const cards = joinStrings(
+    arrayMap(
+      bundle.nodes,
+      (n) => {
+        const cls = ['node', `node--${n.kind}`];
+        if (selNode) {
+          if (n.id === selNode.id) arrayAppend(cls, 'sel', 'devtool node classes');
+          else if (tr && setHas(tr.nodes, n.id)) arrayAppend(cls, 'trace', 'devtool node classes');
+          else arrayAppend(cls, 'dim', 'devtool node classes');
+        }
+        if (setHas(hits, n.id)) arrayAppend(cls, 'hit', 'devtool node classes');
+        const sub = nodeSub(n);
+        const href = queryHref({ app, sel: n.id, q });
+        return (
+          `<a class="${escAttr(joinStrings(cls, ' ', 'devtool node classes'))}" data-node-id="${escAttr(n.id)}" href="${escAttr(href)}" style="left:${escAttr(n.x)}px;top:${escAttr(n.y)}px;width:${W}px;min-height:${H}px">` +
+          `<span class="label"><span class="glyph">${esc(glyph(n.kind))}</span>${esc(n.label)}</span>` +
+          (sub ? `<span class="sub">${esc(sub)}</span>` : '') +
+          `</a>`
+        );
+      },
+      'devtool graph nodes',
+    ),
+    '',
+    'devtool node cards',
+  );
 
-  const laneHeads = activeLanes
-    .map((k, i) => {
-      const x = X0 + i * COL_STEP + W / 2;
-      const m = KIND_META[k];
-      return `<div class="lane-head" style="left:${escAttr(x)}px;color:${escAttr(m.accent)}"><span class="glyph">${esc(m.glyph)}</span><span class="name">${esc(m.label)}</span><span class="blurb">${esc(m.blurb)}</span></div>`;
-    })
-    .join('');
+  const laneHeads = joinStrings(
+    arrayMap(
+      activeLanes,
+      (k, i) => {
+        const x = X0 + i * COL_STEP + W / 2;
+        const m = KIND_META[k];
+        return `<div class="lane-head" style="left:${escAttr(x)}px;color:${escAttr(m.accent)}"><span class="glyph">${esc(m.glyph)}</span><span class="name">${esc(m.label)}</span><span class="blurb">${esc(m.blurb)}</span></div>`;
+      },
+      'devtool active lanes',
+    ),
+    '',
+    'devtool lane headings',
+  );
 
-  const legend = activeLanes
-    .map(
+  const legend = joinStrings(
+    arrayMap(
+      activeLanes,
       (k) =>
         `<span class="k"><span class="sw" style="background:${escAttr(accent(k))}"></span>${esc(KIND_META[k].label)}</span>`,
-    )
-    .join('');
-  const appTabs = manifest
-    .map(
+      'devtool active lanes',
+    ),
+    '',
+    'devtool legend',
+  );
+  const appTabs = joinStrings(
+    arrayMap(
+      manifest,
       (a) =>
         `<a class="app-tab" href="${escAttr(queryHref({ app: a.id }))}" aria-current="${escAttr(a.id === app ? 'true' : 'false')}"><b>${esc(a.label)}</b><small>${esc(a.blurb)}</small></a>`,
-    )
-    .join('');
+      'devtool manifest',
+    ),
+    '',
+    'devtool app tabs',
+  );
 
   return (
-    (opts.css ? `<style>${opts.css}</style>` : '') +
     `<div class="app">` +
     `<header class="topbar">` +
     `<div class="brand"><span class="brand-mark"></span><span class="brand-name">Kovo</span><span class="brand-sub">Dataflow</span></div>` +
@@ -242,11 +383,18 @@ export function renderPage(opts) {
 }
 
 function nodeSub(n) {
-  if (n.kind === 'mutation') return (n.data.writes ?? []).join(' · ');
-  if (n.kind === 'query') return 'reads ' + (n.data.domains ?? []).join(', ');
+  if (n.kind === 'mutation') return joinStrings(n.data.writes, ' · ', 'devtool writes');
+  if (n.kind === 'query')
+    return 'reads ' + joinStrings(n.data.domains, ', ', 'devtool query domains');
   if (n.kind === 'component') return n.data.domName ?? '';
   if (n.kind === 'page') return 'route';
   return '';
+}
+
+function fileLeaf(path) {
+  const parts = stringSplit(path, '/');
+  const length = arrayLength(parts, 'devtool source path');
+  return length === 0 ? '' : arrayValue(parts, length - 1, 'devtool source path');
 }
 
 // ---------- inspector ----------
@@ -256,11 +404,30 @@ const statusBadge = (s) => {
   if (st === 'derived') return `<span class="badge badge--derived">derived</span>`;
   if (st === 'hand-written') return `<span class="badge badge--hand-written">hand-written</span>`;
   if (s.derivation?.status === 'PUNTED')
-    return `<span class="badge badge--punted" title="${escAttr(JSON.stringify(s.derivation.reason))}">punted · ${esc(s.derivation.reason?.code ?? '')}</span>`;
+    return `<span class="badge badge--punted" title="${escAttr(puntReasonTitle(s.derivation.reason))}">punted · ${esc(s.derivation.reason?.code ?? '')}</span>`;
   if (st === 'await-fragment')
     return `<span class="badge badge--await-fragment">await-fragment</span>`;
   return `<span class="badge badge--none">${esc(st)}</span>`;
 };
+
+function puntReasonTitle(reason) {
+  if (!reason) return 'PUNTED';
+  const parts = [`PUNTED code=${reason.code}`];
+  const fields = ['site', 'field', 'expr', 'column', 'shape', 'table', 'detail'];
+  for (let index = 0; index < arrayLength(fields, 'devtool punt-reason fields'); index += 1) {
+    const field = arrayValue(fields, index, 'devtool punt-reason fields');
+    if (reason[field]) arrayAppend(parts, `${field}=${reason[field]}`, 'devtool punt reason');
+  }
+  const columns = reason.columns ?? [];
+  if (arrayLength(columns, 'devtool punt-reason columns')) {
+    arrayAppend(
+      parts,
+      `columns=${joinStrings(columns, ',', 'devtool punt-reason columns')}`,
+      'devtool punt reason',
+    );
+  }
+  return joinStrings(parts, '; ', 'devtool punt reason');
+}
 
 function flowrow(app, n, right, q) {
   const href = queryHref({ app, sel: n.id, q });
@@ -275,140 +442,268 @@ function renderInspector(bundle, byId, sel) {
   const app = bundle.app;
   if (!sel) return overviewInspector(bundle);
 
-  const out = bundle.edges.filter((e) => e.from === sel.id);
-  const inc = bundle.edges.filter((e) => e.to === sel.id);
+  const out = arrayFilter(bundle.edges, (e) => e.from === sel.id, 'devtool graph edges');
+  const inc = arrayFilter(bundle.edges, (e) => e.to === sel.id, 'devtool graph edges');
   const mutsWriting = (domains) =>
-    bundle.nodes.filter(
-      (n) => n.kind === 'mutation' && (n.data.writes ?? []).some((d) => domains.includes(d)),
+    arrayFilter(
+      bundle.nodes,
+      (n) =>
+        n.kind === 'mutation' &&
+        arraySome(
+          n.data.writes,
+          (domain) => arrayIncludes(domains, domain, 'devtool target domains'),
+          'devtool mutation writes',
+        ),
+      'devtool graph nodes',
     );
   const optStatus = (m, queryName) =>
-    (m.data.optimistic ?? []).find((o) => o.query === queryName) ?? null;
+    arrayFind(m.data.optimistic, (o) => o.query === queryName, 'devtool optimistic facts') ?? null;
 
   let body = '';
   if (sel.kind === 'component') {
-    const queries = inc.filter((e) => e.kind === 'feeds').map((e) => byId.get(e.from));
-    const mutations = out.filter((e) => e.kind === 'emits').map((e) => byId.get(e.to));
+    const queries = arrayMap(
+      arrayFilter(inc, (e) => e.kind === 'feeds', 'devtool incoming edges'),
+      (e) => mapGet(byId, e.from),
+      'devtool query edges',
+    );
+    const mutations = arrayMap(
+      arrayFilter(out, (e) => e.kind === 'emits', 'devtool outgoing edges'),
+      (e) => mapGet(byId, e.to),
+      'devtool mutation edges',
+    );
     body += section(
       'Queries in',
-      queries.length,
-      queries
-        .map((qn) =>
-          flowrow(
-            app,
-            qn,
-            (qn.data.domains ?? [])
-              .map((d) => `<span class="chip chip--domain">${esc(d)}</span>`)
-              .join(''),
-          ),
-        )
-        .join('') || muted('No query dependencies.'),
+      arrayLength(queries, 'devtool component queries'),
+      joinStrings(
+        arrayMap(
+          queries,
+          (qn) =>
+            flowrow(
+              app,
+              qn,
+              joinStrings(
+                arrayMap(
+                  qn.data.domains,
+                  (d) => `<span class="chip chip--domain">${esc(d)}</span>`,
+                  'devtool query domains',
+                ),
+                '',
+                'devtool domain chips',
+              ),
+            ),
+          'devtool component queries',
+        ),
+        '',
+        'devtool component query rows',
+      ) || muted('No query dependencies.'),
     );
     body += section(
       'Mutations out',
-      mutations.length,
-      mutations.length
-        ? mutations
-            .map((m) =>
-              flowrow(
-                app,
-                m,
-                (m.data.inputFields ?? [])
-                  .slice(0, 4)
-                  .map((f) => `<span class="chip">${esc(f)}</span>`)
-                  .join(''),
-              ),
-            )
-            .join('')
+      arrayLength(mutations, 'devtool component mutations'),
+      arrayLength(mutations, 'devtool component mutations')
+        ? joinStrings(
+            arrayMap(
+              mutations,
+              (m) =>
+                flowrow(
+                  app,
+                  m,
+                  joinStrings(
+                    arrayMap(
+                      arraySlice(m.data.inputFields, 0, 4, 'devtool mutation input fields'),
+                      (f) => `<span class="chip">${esc(f)}</span>`,
+                      'devtool visible input fields',
+                    ),
+                    '',
+                    'devtool input chips',
+                  ),
+                ),
+              'devtool component mutations',
+            ),
+            '',
+            'devtool component mutation rows',
+          )
         : muted('No mutations emitted (read-only component).'),
     );
     const cov = [];
-    for (const qn of queries)
-      for (const m of mutsWriting(qn.data.domains ?? [])) {
-        cov.push(
-          `<a class="flowrow node--mutation" href="${escAttr(queryHref({ app, sel: m.id }))}"><span class="dot"></span><span class="name">${esc(m.label)} <small>→ ${esc(qn.label)}</small></span><span class="right">${statusBadge(optStatus(m, qn.name))}</span></a>`,
+    for (
+      let queryIndex = 0;
+      queryIndex < arrayLength(queries, 'devtool component queries');
+      queryIndex += 1
+    ) {
+      const qn = arrayValue(queries, queryIndex, 'devtool component queries');
+      const writers = mutsWriting(qn.data.domains);
+      for (
+        let writerIndex = 0;
+        writerIndex < arrayLength(writers, 'devtool query writers');
+        writerIndex += 1
+      ) {
+        const mutation = arrayValue(writers, writerIndex, 'devtool query writers');
+        arrayAppend(
+          cov,
+          `<a class="flowrow node--mutation" href="${escAttr(queryHref({ app, sel: mutation.id }))}"><span class="dot"></span><span class="name">${esc(mutation.label)} <small>→ ${esc(qn.label)}</small></span><span class="right">${statusBadge(optStatus(mutation, qn.name))}</span></a>`,
+          'devtool refresh coverage',
         );
       }
+    }
     body += section(
       'Refresh coverage',
-      cov.length,
-      cov.join('') || muted('Nothing invalidates this component’s data.'),
+      arrayLength(cov, 'devtool refresh coverage'),
+      joinStrings(cov, '', 'devtool refresh coverage') ||
+        muted('Nothing invalidates this component’s data.'),
     );
   } else if (sel.kind === 'mutation') {
-    const domains = sel.data.writes ?? [];
-    const queries = bundle.nodes.filter(
-      (n) => n.kind === 'query' && (n.data.domains ?? []).some((d) => domains.includes(d)),
+    const domains = sel.data.writes;
+    const queries = arrayFilter(
+      bundle.nodes,
+      (n) =>
+        n.kind === 'query' &&
+        arraySome(
+          n.data.domains,
+          (domain) => arrayIncludes(domains, domain, 'devtool mutation domains'),
+          'devtool query domains',
+        ),
+      'devtool graph nodes',
     );
     body += section(
       'Writes domains',
-      domains.length,
-      `<div class="kv">${domains.map((d) => chipLink(app, byId.get(`domain:${d}`))).join('')}</div>`,
+      arrayLength(domains, 'devtool mutation domains'),
+      `<div class="kv">${joinStrings(
+        arrayMap(
+          domains,
+          (d) => chipLink(app, mapGet(byId, `domain:${d}`)),
+          'devtool mutation domains',
+        ),
+        '',
+        'devtool domain links',
+      )}</div>`,
     );
     body += section(
       'Invalidates queries',
-      queries.length,
-      queries.map((qn) => flowrow(app, qn, statusBadge(optStatus(sel, qn.name)))).join('') ||
-        muted('No queries read these domains.'),
+      arrayLength(queries, 'devtool invalidated queries'),
+      joinStrings(
+        arrayMap(
+          queries,
+          (qn) => flowrow(app, qn, statusBadge(optStatus(sel, qn.name))),
+          'devtool invalidated queries',
+        ),
+        '',
+        'devtool invalidated query rows',
+      ) || muted('No queries read these domains.'),
     );
-    if ((sel.data.inputFields ?? []).length)
+    if (arrayLength(sel.data.inputFields, 'devtool mutation input fields'))
       body += section(
         'Input fields',
-        sel.data.inputFields.length,
-        `<div class="kv">${sel.data.inputFields.map((f) => `<span class="chip">${esc(f)}</span>`).join('')}</div>`,
+        arrayLength(sel.data.inputFields, 'devtool mutation input fields'),
+        `<div class="kv">${joinStrings(
+          arrayMap(
+            sel.data.inputFields,
+            (f) => `<span class="chip">${esc(f)}</span>`,
+            'devtool mutation input fields',
+          ),
+          '',
+          'devtool input field chips',
+        )}</div>`,
       );
     const touches = sel.source?.touches ?? [];
-    if (touches.length)
+    if (arrayLength(touches, 'devtool touch sites'))
       body += section(
         'Write sites (touch graph)',
-        touches.length,
-        touches
-          .map(
+        arrayLength(touches, 'devtool touch sites'),
+        joinStrings(
+          arrayMap(
+            touches,
             (t) =>
-              `<div class="touch"><span class="via">${esc(t.via)}</span><span class="chip chip--domain">${esc(t.domain)}</span>${t.keys ? `<span class="chip">${esc(t.keys)}</span>` : ''}<span class="site">${esc(t.site?.split('/').pop())}</span></div>`,
-          )
-          .join(''),
+              `<div class="touch"><span class="via">${esc(t.via)}</span><span class="chip chip--domain">${esc(t.domain)}</span>${t.keys ? `<span class="chip">${esc(t.keys)}</span>` : ''}<span class="site">${esc(fileLeaf(t.site))}</span></div>`,
+            'devtool touch sites',
+          ),
+          '',
+          'devtool touch rows',
+        ),
       );
   } else if (sel.kind === 'query') {
-    const domains = sel.data.domains ?? [];
-    const consumers = bundle.edges
-      .filter((e) => e.kind === 'feeds' && e.from === sel.id)
-      .map((e) => byId.get(e.to));
+    const domains = sel.data.domains;
+    const consumers = arrayMap(
+      arrayFilter(
+        bundle.edges,
+        (e) => e.kind === 'feeds' && e.from === sel.id,
+        'devtool graph edges',
+      ),
+      (e) => mapGet(byId, e.to),
+      'devtool consumer edges',
+    );
     const invalidators = mutsWriting(domains);
     body += section(
       'Reads domains',
-      domains.length,
-      `<div class="kv">${domains.map((d) => chipLink(app, byId.get(`domain:${d}`))).join('')}</div>`,
+      arrayLength(domains, 'devtool query domains'),
+      `<div class="kv">${joinStrings(
+        arrayMap(
+          domains,
+          (d) => chipLink(app, mapGet(byId, `domain:${d}`)),
+          'devtool query domains',
+        ),
+        '',
+        'devtool domain links',
+      )}</div>`,
     );
     body += section(
       'Feeds components',
-      consumers.length,
-      consumers.map((c) => flowrow(app, c, '')).join('') ||
-        muted('No component consumes this query yet.'),
+      arrayLength(consumers, 'devtool query consumers'),
+      joinStrings(
+        arrayMap(consumers, (c) => flowrow(app, c, ''), 'devtool query consumers'),
+        '',
+        'devtool consumer rows',
+      ) || muted('No component consumes this query yet.'),
     );
     body += section(
       'Invalidated by',
-      invalidators.length,
-      invalidators.map((m) => flowrow(app, m, statusBadge(optStatus(m, sel.name)))).join('') ||
-        muted('No mutation invalidates this query.'),
+      arrayLength(invalidators, 'devtool query invalidators'),
+      joinStrings(
+        arrayMap(
+          invalidators,
+          (m) => flowrow(app, m, statusBadge(optStatus(m, sel.name))),
+          'devtool query invalidators',
+        ),
+        '',
+        'devtool invalidator rows',
+      ) || muted('No mutation invalidates this query.'),
     );
   } else if (sel.kind === 'domain') {
-    const queries = bundle.nodes.filter(
-      (n) => n.kind === 'query' && (n.data.domains ?? []).includes(sel.name),
+    const queries = arrayFilter(
+      bundle.nodes,
+      (n) => n.kind === 'query' && arrayIncludes(n.data.domains, sel.name, 'devtool query domains'),
+      'devtool graph nodes',
     );
-    const writers = bundle.nodes.filter(
-      (n) => n.kind === 'mutation' && (n.data.writes ?? []).includes(sel.name),
+    const writers = arrayFilter(
+      bundle.nodes,
+      (n) =>
+        n.kind === 'mutation' && arrayIncludes(n.data.writes, sel.name, 'devtool mutation writes'),
+      'devtool graph nodes',
     );
     body += section(
       'Backs queries',
-      queries.length,
-      queries.map((qn) => flowrow(app, qn, '')).join('') || muted('No query reads this domain.'),
+      arrayLength(queries, 'devtool domain queries'),
+      joinStrings(
+        arrayMap(queries, (qn) => flowrow(app, qn, ''), 'devtool domain queries'),
+        '',
+        'devtool domain query rows',
+      ) || muted('No query reads this domain.'),
     );
     body += section(
       'Written by',
-      writers.length,
-      writers.map((m) => flowrow(app, m, '')).join('') || muted('No mutation writes this domain.'),
+      arrayLength(writers, 'devtool domain writers'),
+      joinStrings(
+        arrayMap(writers, (m) => flowrow(app, m, ''), 'devtool domain writers'),
+        '',
+        'devtool domain writer rows',
+      ) || muted('No mutation writes this domain.'),
     );
   } else if (sel.kind === 'page') {
-    const comps = out.filter((e) => e.kind === 'renders').map((e) => byId.get(e.to));
+    const comps = arrayMap(
+      arrayFilter(out, (e) => e.kind === 'renders', 'devtool outgoing edges'),
+      (e) => mapGet(byId, e.to),
+      'devtool page component edges',
+    );
     if (sel.data.meta?.description)
       body += section(
         'Meta',
@@ -417,9 +712,12 @@ function renderInspector(bundle, byId, sel) {
       );
     body += section(
       'Renders',
-      comps.length,
-      comps.map((c) => flowrow(app, c, '')).join('') ||
-        muted('No tracked component leaves on this route.'),
+      arrayLength(comps, 'devtool page components'),
+      joinStrings(
+        arrayMap(comps, (c) => flowrow(app, c, ''), 'devtool page components'),
+        '',
+        'devtool page component rows',
+      ) || muted('No tracked component leaves on this route.'),
     );
   }
 
@@ -427,18 +725,26 @@ function renderInspector(bundle, byId, sel) {
 
   const meta =
     sel.kind === 'component'
-      ? `${esc(sel.data.domName)} · fragment ${esc((sel.data.fragments ?? [])[0] ?? '—')}`
+      ? `${sel.data.domName} · fragment ${arrayLength(sel.data.fragments, 'devtool fragments') ? arrayValue(sel.data.fragments, 0, 'devtool fragments') : '—'}`
       : sel.kind === 'mutation'
-        ? `POST /_m/${esc(sel.name)}`
+        ? `POST /_m/${sel.name}`
         : sel.kind === 'query'
-          ? `GET /_q/${esc(sel.name)}`
+          ? `GET /_q/${sel.name}`
           : sel.kind;
-  const guards = sel.data.guards ?? [];
+  const guards = sel.data.guards;
   return (
     `<div class="insp-head node--${escAttr(sel.kind)}"><span class="insp-kind" style="color:${escAttr(accent(sel.kind))}">${esc(glyph(sel.kind))} ${esc(sel.kind)}</span>` +
-    `<div class="insp-title">${esc(sel.label)}</div><div class="insp-meta">${meta}</div>` +
-    (guards.length
-      ? `<div class="kv" style="margin-top:8px">${guards.map((g) => `<span class="chip">🛡 ${esc(g)}</span>`).join('')}</div>`
+    `<div class="insp-title">${esc(sel.label)}</div><div class="insp-meta">${esc(meta)}</div>` +
+    (arrayLength(guards, 'devtool guards')
+      ? `<div class="kv" style="margin-top:8px">${joinStrings(
+          arrayMap(
+            guards,
+            (guard) => `<span class="chip">🛡 ${esc(guard)}</span>`,
+            'devtool guards',
+          ),
+          '',
+          'devtool guard chips',
+        )}</div>`
       : '') +
     `</div><div class="insp-body">${body}</div>`
   );
@@ -446,25 +752,48 @@ function renderInspector(bundle, byId, sel) {
 
 function overviewInspector(bundle) {
   const order = ['mutation', 'domain', 'query', 'component', 'page'];
-  const counts = order
-    .filter((k) => bundle.counts[k])
-    .map(
+  const counts = joinStrings(
+    arrayMap(
+      arrayFilter(order, (k) => bundle.counts[k] > 0, 'devtool overview order'),
       (k) =>
         `<a class="flowrow node--${escAttr(k)}" href="#"><span class="dot"></span><span class="name">${esc(KIND_META[k].label)}</span><span class="right"><span class="chip">${bundle.counts[k]}</span></span></a>`,
-    )
-    .join('');
-  const opt = {};
-  for (const n of bundle.nodes)
-    for (const o of n.data.optimistic ?? []) {
-      const key = o.derivation?.status === 'PUNTED' ? 'punted' : o.status;
-      opt[key] = (opt[key] ?? 0) + 1;
+      'devtool visible overview kinds',
+    ),
+    '',
+    'devtool overview rows',
+  );
+  const opt = createMap();
+  for (
+    let nodeIndex = 0;
+    nodeIndex < arrayLength(bundle.nodes, 'devtool graph nodes');
+    nodeIndex += 1
+  ) {
+    const node = arrayValue(bundle.nodes, nodeIndex, 'devtool graph nodes');
+    for (
+      let optimisticIndex = 0;
+      optimisticIndex < arrayLength(node.data.optimistic, 'devtool optimistic facts');
+      optimisticIndex += 1
+    ) {
+      const optimistic = arrayValue(
+        node.data.optimistic,
+        optimisticIndex,
+        'devtool optimistic facts',
+      );
+      const key = optimistic.derivation?.status === 'PUNTED' ? 'punted' : optimistic.status;
+      mapSet(opt, key, (mapGet(opt, key) ?? 0) + 1);
     }
-  const cov = Object.entries(opt)
-    .map(
-      ([k, v]) =>
-        `${statusBadge(k === 'punted' ? { derivation: { status: 'PUNTED', reason: {} } } : { status: k })} <span class="chip">${v}</span>`,
-    )
-    .join(' ');
+  }
+  const coverageKinds = ['derived', 'hand-written', 'await-fragment', 'UNHANDLED', 'punted'];
+  const cov = joinStrings(
+    arrayMap(
+      arrayFilter(coverageKinds, (kind) => mapGet(opt, kind) !== undefined),
+      (kind) =>
+        `${statusBadge(kind === 'punted' ? { derivation: { status: 'PUNTED', reason: { code: '' } } } : { status: kind })} <span class="chip">${mapGet(opt, kind)}</span>`,
+      'devtool optimistic coverage kinds',
+    ),
+    ' ',
+    'devtool optimistic coverage badges',
+  );
   return (
     `<div class="insp-head"><span class="insp-kind" style="color:var(--dim)">◫ overview</span>` +
     `<div class="insp-title">${esc(bundle.label)}</div><div class="insp-meta">${bundle.nodes.length} nodes · ${bundle.edges.length} edges · derived from generated/graph.json</div></div>` +
