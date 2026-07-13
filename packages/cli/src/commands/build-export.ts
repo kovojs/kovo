@@ -538,27 +538,23 @@ export async function runBuildCommand(
       writeKovoNeutralBuild,
     } = loadAndCheck.value;
     const outDir = resolve(invocationRoot, options.outDir);
-    const clientBuild = await withKovoBuildQueryShapeFacts(queryShapeFacts, () =>
-      buildKovoClientManifest(
-        join(outDir, '.kovo-client'),
-        kovoClientBuildRoot(resolvedAppModulePath, invocationRoot),
-        resolvedAppModulePath,
-        { cache: options.cache, queryShapeFacts },
-      ),
+    const clientBuild = await buildKovoClientManifest(
+      join(outDir, '.kovo-client'),
+      kovoClientBuildRoot(resolvedAppModulePath, invocationRoot),
+      resolvedAppModulePath,
+      { cache: options.cache, queryShapeFacts },
     );
     const buildCssAssets = mergeKovoBuildStylesheetAssets([
       buildStylesheetCss.assets,
       clientBuild.assets,
     ]);
     const buildApp = appWithBuildStylesheetAssets(app, buildCssAssets, deriveClosedKovoApp);
-    const serverHandlerBuild = await withKovoBuildQueryShapeFacts(queryShapeFacts, () =>
-      bundleKovoServerHandler(resolvedAppModulePath, {
-        buildRoot: invocationRoot,
-        queryShapeFacts,
-        runtimeRegistry: runtimeRegistryWireFactsFromGraph(checkGraph),
-        stylesheetAssets: buildCssAssets,
-      }),
-    );
+    const serverHandlerBuild = await bundleKovoServerHandler(resolvedAppModulePath, {
+      buildRoot: invocationRoot,
+      queryShapeFacts,
+      runtimeRegistry: runtimeRegistryWireFactsFromGraph(checkGraph),
+      stylesheetAssets: buildCssAssets,
+    });
     const clientModules = uniqueKovoCompiledClientModules([
       ...clientBuild.clientModules,
       ...serverHandlerBuild.clientModules,
@@ -1335,14 +1331,6 @@ function emptyStaticDataPlaneBuildFacts(): StaticDataPlaneBuildFacts {
     sqlSafetyDiagnostics: [],
     toctouFacts: [],
   };
-}
-
-async function withKovoBuildQueryShapeFacts<T>(
-  facts: readonly QueryShapeFact[],
-  fn: () => Promise<T>,
-): Promise<T> {
-  const adapter = await import('@kovojs/server/internal/data-plane-static-analysis');
-  return adapter.withKovoBuildQueryShapeFacts(facts, fn);
 }
 
 function queryCheckFact(

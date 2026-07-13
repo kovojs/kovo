@@ -820,6 +820,55 @@ export const status = query({
       await rm(root, { force: true, recursive: true });
     }
   });
+
+  it('does not accept compiler query-shape authority from an app-writable global symbol', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kovo-data-plane-global-seed-'));
+    const srcDir = join(root, 'src');
+    const buildFactsKey = Symbol.for('kovo.build.queryShapeFacts');
+    const globalRecord = globalThis as unknown as Record<symbol, unknown>;
+    const previousDescriptor = Object.getOwnPropertyDescriptor(globalThis, buildFactsKey);
+    vi.doMock('@kovojs/drizzle/internal/static', () => ({
+      deriveMutationTouchRegistry: () => ({}),
+      extractStaticBuildAnalysisFactsFromProject: () => ({
+        queries: [
+          {
+            query: 'account',
+            shape: { secret: { kind: 'secret', shape: 'string' } },
+            site: 'src/schema.ts:2',
+          },
+        ],
+        sqlSafetyDiagnostics: [],
+        toctouFacts: [],
+        touchGraph: {},
+      }),
+    }));
+
+    try {
+      await mkdir(srcDir, { recursive: true });
+      await writeFile(
+        join(srcDir, 'schema.ts'),
+        'import { sql } from "@kovojs/drizzle";\nexport const marker = sql`select 1`;\n',
+        'utf8',
+      );
+      // App-authored Vite/config code runs in this realm before Kovo build hooks.
+      globalRecord[buildFactsKey] = [];
+      const { collectCompilerQueryShapeFacts } = await loadSubject();
+
+      await expect(collectCompilerQueryShapeFacts({ appSourceDir: srcDir, root })).resolves.toEqual(
+        [
+          {
+            query: 'account',
+            shape: { secret: { kind: 'secret', shape: 'string' } },
+            source: 'src/schema.ts:2',
+          },
+        ],
+      );
+    } finally {
+      if (previousDescriptor === undefined) delete globalRecord[buildFactsKey];
+      else Object.defineProperty(globalThis, buildFactsKey, previousDescriptor);
+      await rm(root, { force: true, recursive: true });
+    }
+  });
 });
 
 async function loadSubject(): Promise<DataPlaneStaticAnalysisModule> {

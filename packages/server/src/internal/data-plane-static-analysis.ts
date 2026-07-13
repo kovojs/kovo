@@ -168,7 +168,6 @@ interface StaticBuildAnalysisFactsLike {
   touchGraph: unknown;
 }
 
-const KOVO_BUILD_QUERY_SHAPE_FACTS_GLOBAL = Symbol.for('kovo.build.queryShapeFacts');
 const DRIZZLE_STATIC_ANALYZER_MODULE = '@kovojs/drizzle/internal/static';
 const STATIC_DATA_PLANE_FACTS_CACHE_VERSION = '2026-07-02.authz-census.v1';
 const STATIC_DATA_PLANE_CACHE_ENVELOPE_VERSION = 'kovo-static-data-plane-cache/v3';
@@ -305,8 +304,9 @@ export async function collectCompilerQueryShapeFacts(options: {
   appSourceDir: string;
   root: string;
 }): Promise<readonly QueryShapeFact[]> {
-  const buildSeed = seededBuildCompilerQueryShapeFacts();
-  if (buildSeed !== undefined) return buildSeed;
+  // SPEC.md §2 / §11.4: authored config shares this process and therefore cannot provide
+  // verification facts through ambient globals. Derive them here; trusted CLI builds pass their
+  // already-derived snapshot directly to the compiler plugin instead.
   const { currentKovoBuildContext } = await import('./build-context.js');
 
   const analysis = await collectDataPlaneAnalysis({
@@ -401,28 +401,6 @@ export function buildCompilerQueryShapeFacts(
     facts.queryShapeFacts,
     outputSchemaQueryShapeFacts(files, { worker: false }),
   );
-}
-
-/** @internal Explicit bridge for app-authored Vite configs loaded during CLI build/export. */
-export async function withKovoBuildQueryShapeFacts<T>(
-  facts: readonly QueryShapeFact[],
-  fn: () => Promise<T>,
-): Promise<T> {
-  const globalFacts = globalThis as Record<symbol, unknown>;
-  const previous = globalFacts[KOVO_BUILD_QUERY_SHAPE_FACTS_GLOBAL];
-  globalFacts[KOVO_BUILD_QUERY_SHAPE_FACTS_GLOBAL] = facts;
-  try {
-    return await fn();
-  } finally {
-    if (previous === undefined) delete globalFacts[KOVO_BUILD_QUERY_SHAPE_FACTS_GLOBAL];
-    else globalFacts[KOVO_BUILD_QUERY_SHAPE_FACTS_GLOBAL] = previous;
-  }
-}
-
-function seededBuildCompilerQueryShapeFacts(): readonly QueryShapeFact[] | undefined {
-  const value = (globalThis as Record<symbol, unknown>)[KOVO_BUILD_QUERY_SHAPE_FACTS_GLOBAL];
-  if (value === undefined) return undefined;
-  return staticAnalysisArrayIsArray(value) ? compilerQueryShapeFacts(value) : [];
 }
 
 function mergeStaticAndOutputQueryShapeFacts(
