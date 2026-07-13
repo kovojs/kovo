@@ -45,10 +45,10 @@ review remains manual and is the point of the `reviewTrigger`. See `rules/depend
 ```json tcb-manifest
 {
   "schema": "kovo.security.tcb/v1",
-  "source": "plans/fundamental-fixes-followup-3.md A10/DEC-K; plans/fundamental-fixes-followup-7.md DEC-A/DEC-C/DEC-D1; plans/fundamental-fixes-followup-12.md DEC-D1",
+  "source": "plans/fundamental-fixes-followup-3.md A10/DEC-K; plans/fundamental-fixes-followup-7.md DEC-A/DEC-C/DEC-D1; plans/fundamental-fixes-followup-7b.md DEC-A; plans/fundamental-fixes-followup-12.md DEC-D1",
   "budgets": {
     "entryMaxLines": 150,
-    "totalTcbMaxLines": 1125
+    "totalTcbMaxLines": 1145
   },
   "trustedDependencySurfaces": [
     {
@@ -164,6 +164,14 @@ review remains manual and is the point of the `reviewTrigger`. See `rules/depend
   ],
   "entries": [
     {
+      "id": "server.postgres-runtime.production-driver-floor",
+      "file": "packages/server/src/postgres-runtime.ts",
+      "name": "assertProductionRuntimeDriver",
+      "kind": "pglite-production-refusal",
+      "classification": "tcb",
+      "lineBudget": 10
+    },
+    {
       "id": "server.postgres-runtime.capability-closure-audit",
       "file": "packages/server/src/postgres-runtime.ts",
       "name": "auditPostgresReachableClosure",
@@ -201,7 +209,7 @@ review remains manual and is the point of the `reviewTrigger`. See `rules/depend
       "name": "createNodePostgresRuntimeClient",
       "kind": "node-postgres-least-privilege-runtime-path",
       "classification": "tcb",
-      "lineBudget": 80
+      "lineBudget": 95
     },
     {
       "id": "server.postgres-runtime.node-client-close",

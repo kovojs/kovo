@@ -186,6 +186,18 @@ For managed Postgres/PGlite, declared write scope has an engine backstop for the
 
 **Engine-door completeness (normative).** Kovo may claim the storage engine is the sole authorization/confidentiality door only when the runtime itself holds no superuser/`BYPASSRLS` authority and cannot assume a privileged provision/admin role, and when a closure audit over the engine's actual grant graph proves that **every** object reachable by the app roles is one of: (i) a base table under `FORCE ROW LEVEL SECURITY` with a live `kovo` policy; (ii) a proven `security_invoker` view/function whose reachable base relations are themselves in that safe set; or (iii) a relation declared through the reviewed public escape, `declarePublicRelation(...)`, and surfaced as a `publicRelation` row in `kovo explain --capabilities`. The audit MUST ask the engine's finest-granularity effective-privilege oracle instead of lossy grant views or direct-grant rows: table and column reachability both count for relations, `PUBLIC` and role membership count for every privilege decision, sequence reachability is audited separately from relation reachability, and `SECURITY DEFINER` routines are scanned across all non-system schemas. Reachable objects that cannot enforce RLS, including materialized views, foreign tables, unsupported relation kinds, non-allowlisted sequences, and reachable `SECURITY DEFINER` routines, MUST fail closed. App roles MUST also hold no unexpected privilege on other ACL-bearing catalog objects or default privileges that would create future reachable objects outside the audited relation/routine/sequence set; such grants are refused rather than ignored. Build-time lints and source enumerations remain defense-in-depth only — never the thing the authorization/confidentiality guarantee rests on.
 
+**Production database driver floor (normative).** In-process PGlite is a dev/test-only,
+single-tenant database. Its bootstrap identity is necessarily superuser because PGlite has no
+connection-authentication boundary; an app-authored raw `new PGlite(dataDir)` handle therefore sits
+outside Kovo's owner-scoping and confidentiality guarantee and is only warned by the
+defense-in-depth raw-driver lint. A runtime whose bootstrap-pinned operator environment reports
+`NODE_ENV=production` MUST refuse the PGlite driver before opening a listener or serving static or
+dynamic traffic. Production requires `KOVO_DATABASE_URL` to select external Postgres, and the
+external runtime login MUST pass the non-superuser/`NOBYPASSRLS`/non-admin-membership boot invariant
+and the reachable-object closure audit above before the app serves. This relocation preserves
+zero-dependency local development without claiming that an in-process superuser can be made into a
+production least-privilege identity.
+
 The real authorization boundary is split. **Privilege** belongs to unassumeable Postgres roles such
 as `kovo_admin`/`kovo_system`, and those roles may be assumed only inside framework-owned scoped
 clients for provisioning, migration, audit, or other system work. App/runtime roles cannot assume
