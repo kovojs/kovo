@@ -154,9 +154,11 @@ export async function bootFixture(
     const serverModule = await vite.ssrLoadModule('@kovojs/server');
     const managedDbModule = await vite.ssrLoadModule('@kovojs/server/internal/managed-db');
     const appShellModule = await vite.ssrLoadModule('@kovojs/server/internal/app-shell-vite');
-    const runWithGeneratedLiveTargetRegistry = (
-      appShellModule as { runWithGeneratedLiveTargetRegistry?: unknown }
-    ).runWithGeneratedLiveTargetRegistry;
+    const runWithGeneratedLiveTargetRegistry = verifierReflectGet(
+      appShellModule,
+      'runWithGeneratedLiveTargetRegistry',
+      appShellModule,
+    );
     if (typeof runWithGeneratedLiveTargetRegistry !== 'function') {
       throw new TypeError(
         'Fixture server could not establish compiler-owned live-target registry scope in the fixture SSR graph.',
