@@ -125,6 +125,7 @@ export function createApp<
   options: CreateAppOptions<SessionValue, DbValue, RawRequest, AppRequest> = {},
 ): KovoApp<SessionValue, DbValue, RawRequest, AppRequest> {
   type AppOptions = CreateAppOptions<SessionValue, DbValue, RawRequest, AppRequest>;
+  rejectRemovedLiveTargetRenderersOption(options);
   rejectRemovedMutationResponsesOption(options);
   // Read every top-level option exactly once through an own-data descriptor before any authored
   // declaration callback executes. A route/query/mutation factory must not be able to replace the
@@ -152,10 +153,6 @@ export function createApp<
     options,
     'errorShells',
   ) as AppOptions['errorShells'];
-  const liveTargetRenderersSource = appOptionOwnDataValue(
-    options,
-    'liveTargetRenderers',
-  ) as AppOptions['liveTargetRenderers'];
   const mutationsSource = appOptionOwnDataValue(options, 'mutations') as AppOptions['mutations'];
   const onError = appOptionOwnDataValue(options, 'onError') as KovoApp['onError'];
   const queriesSource = appOptionOwnDataValue(options, 'queries') as AppOptions['queries'];
@@ -211,7 +208,7 @@ export function createApp<
     (declaration) => snapshotAppRoute(declaration, snapshotContext),
   );
   const liveTargetRenderers = snapshotLiveTargetRenderers(
-    liveTargetRenderersSource ?? generatedLiveTargetRenderers,
+    generatedLiveTargetRenderers,
     snapshotContext,
   );
   const authoredMutations = assertUniqueMutationKeys(
@@ -292,6 +289,13 @@ export function createApp<
   // mutation commit and fail only while rendering its response, so retries could duplicate writes.
   appLiveTargetAttestationAudience(app);
   return app;
+}
+
+function rejectRemovedLiveTargetRenderersOption(source: object): void {
+  if (witnessGetOwnPropertyDescriptor(source, 'liveTargetRenderers') === undefined) return;
+  throw new TypeError(
+    'createApp({ liveTargetRenderers }) is forbidden: SPEC §9.1/§9.5 makes the live-target registry compiler-owned.',
+  );
 }
 
 function rejectRemovedMutationResponsesOption(source: object): void {

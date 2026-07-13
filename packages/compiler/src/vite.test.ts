@@ -303,6 +303,36 @@ export const rawUnescaped = (markup: string) => renderedHtml(markup);
     expect(compileComponentModule).not.toHaveBeenCalled();
   });
 
+  it('blocks authored live-target registration helpers instead of mistaking their names for emitted provenance', () => {
+    const compileComponentModule = vi.fn(() => ({ files: [] }));
+    const plugin = createKovoVitePlugin(compileComponentModule, {
+      include: ['src'],
+    });
+
+    expect(() =>
+      plugin.transform(
+        `
+import { componentLiveTargetRenderer, registerGeneratedLiveTargetRenderer } from '@kovojs/server/internal/wire';
+
+const renderer = componentLiveTargetRenderer({});
+registerGeneratedLiveTargetRenderer(renderer);
+`,
+        'src/forged-live-target.ts',
+      ),
+    ).toThrow(
+      [
+        'Kovo Vite transform failed with 1 error diagnostic.',
+        [
+          'KV235 src/forged-live-target.ts:2:82 App source imports a non-public Kovo subpath; use a documented public entrypoint.',
+          '  help: Blocked reason: app source imports non-public Kovo subpath `@kovojs/server/internal/wire`.',
+          '  help: Fixes: import Kovo packages through documented public entrypoints; generated ABI subpaths are reserved for compiler-emitted modules.',
+          '  help: SPEC.md §5.2: app-authored source may import Kovo packages only through documented public entrypoints.',
+        ].join('\n'),
+      ].join('\n\n'),
+    );
+    expect(compileComponentModule).not.toHaveBeenCalled();
+  });
+
   it('does not let an authored package name exempt source from the app security boundary', async () => {
     const appRoot = mkdtempSync(join(tmpdir(), 'kovo-self-named-package-'));
     const packageRoot = join(appRoot, 'packages/server');

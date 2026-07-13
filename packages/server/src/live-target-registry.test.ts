@@ -15,11 +15,13 @@ describe('generated live target registry collection', () => {
   it('collects only compiler-emitted live target renderer exports', () => {
     const cart: LiveTargetRenderer = {
       component: 'components/cart/cart-badge/cart-badge',
+      mutationKeys: [],
       queries: ['cart'],
       render: () => '<cart-badge>1</cart-badge>',
     };
     const product: LiveTargetRenderer = {
       component: 'components/products/product-grid/product-grid',
+      mutationKeys: [],
       queries: ['products'],
       render: () => '<product-grid></product-grid>',
     };
@@ -42,10 +44,12 @@ describe('generated live target registry collection', () => {
   it('dedupes the same renderer object but rejects conflicting duplicate component ids', () => {
     const renderer: LiveTargetRenderer = {
       component: 'components/cart/cart-badge/cart-badge',
+      mutationKeys: [],
       render: () => '<cart-badge>1</cart-badge>',
     };
     const duplicate: LiveTargetRenderer = {
       component: 'components/cart/cart-badge/cart-badge',
+      mutationKeys: [],
       render: () => '<cart-badge>2</cart-badge>',
     };
 
@@ -69,6 +73,7 @@ describe('generated live target registry collection', () => {
   it('collects generated renderer exports without ambient object, string, array, or Map dispatch', () => {
     const renderer: LiveTargetRenderer = {
       component: 'components/security/registry-census',
+      mutationKeys: [],
       queries: ['security-census'],
       render: () => '<registry-census>safe</registry-census>',
     };
@@ -130,6 +135,7 @@ describe('generated live target registry collection', () => {
 
       const first: LiveTargetRenderer = {
         component: 'test/auto-registered',
+        mutationKeys: [],
         queries: ['cart'],
         render: () => '<cart-badge>1</cart-badge>',
       };
@@ -154,11 +160,13 @@ describe('generated live target registry collection', () => {
     const component = 'test/hmr-auto-registered';
     const first: LiveTargetRenderer = {
       component,
+      mutationKeys: [],
       queries: ['cart'],
       render: () => '<cart-badge>stale</cart-badge>',
     };
     const latest: LiveTargetRenderer = {
       component,
+      mutationKeys: [],
       queries: ['cart'],
       render: () => '<cart-badge>latest</cart-badge>',
     };
@@ -187,6 +195,7 @@ describe('generated live target registry collection', () => {
   it('ignores unscoped registrations and isolates concurrent top-level-await graphs', async () => {
     const outside: LiveTargetRenderer = {
       component: 'test/outside',
+      mutationKeys: [],
       render: () => '<outside />',
     };
     registerGeneratedLiveTargetRenderer(outside);
@@ -199,6 +208,7 @@ describe('generated live target registry collection', () => {
     const first = runWithGeneratedLiveTargetRegistry(async () => {
       const renderer: LiveTargetRenderer = {
         component: 'test/concurrent',
+        mutationKeys: [],
         render: () => '<first />',
       };
       registerGeneratedLiveTargetRenderer(renderer);
@@ -208,6 +218,7 @@ describe('generated live target registry collection', () => {
     const second = runWithGeneratedLiveTargetRegistry(async () => {
       const renderer: LiveTargetRenderer = {
         component: 'test/concurrent',
+        mutationKeys: [],
         render: () => '<second />',
       };
       registerGeneratedLiveTargetRenderer(renderer);

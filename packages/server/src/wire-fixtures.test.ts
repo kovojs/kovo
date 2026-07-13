@@ -107,6 +107,7 @@ describe('server wire fixture contracts', () => {
         liveTargetRenderers: [
           {
             component: 'components/cart/badge',
+            mutationKeys: [],
             queries: ['cart'],
             render: () => cartBadgeFragmentHtml,
           },
@@ -173,6 +174,7 @@ describe('server wire fixture contracts', () => {
                 liveTargetRenderers: [
                   {
                     component: 'components/cart/badge',
+                    mutationKeys: [],
                     queries: ['cart'],
                     render: () => cartBadgeFragmentHtml,
                   },

@@ -216,6 +216,8 @@ export interface MutationLiveTargetDescriptor {
 export interface LiveTargetRenderer<Request = unknown> {
   component: string;
   errorBoundary?: ErrorBoundaryRenderer;
+  /** Compiler-snapshotted mutation keys whose submitted forms this component may re-render. */
+  mutationKeys: readonly string[];
   queries?: readonly string[];
   queryDefinitions?: readonly RegisteredQueryDefinition[];
   render(context: LiveTargetRenderContext<Request>): AwaitableGeneratedFragmentRenderable;

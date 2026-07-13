@@ -129,6 +129,8 @@ function isLiveTargetRenderers(value: unknown): value is KovoApp['liveTargetRend
       (renderer) =>
         isRecord(renderer) &&
         typeof renderer.component === 'string' &&
+        Array.isArray(renderer.mutationKeys) &&
+        renderer.mutationKeys.every((key) => typeof key === 'string') &&
         typeof renderer.render === 'function',
     )
   );

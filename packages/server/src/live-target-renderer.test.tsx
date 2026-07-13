@@ -7,6 +7,11 @@ import { registerGeneratedQueryReadRegistry } from './generated-query-registry.j
 import { componentLiveTargetRenderer } from './live-target-renderer.js';
 import { query, queryRuntimeWarningsFromRequest } from './query.js';
 import { s } from './schema.js';
+import { createLiveTargetTestAuthority } from './test-fixtures.js';
+
+const liveTargetRendererTestAuthority = createLiveTargetTestAuthority(
+  'live-target-renderer-test-build',
+);
 
 describe('generated component live target renderers', () => {
   it('closes over immutable query and error-boundary construction facts', async () => {
@@ -30,6 +35,8 @@ describe('generated component live target renderers', () => {
     };
 
     expect(Object.isFrozen(renderer)).toBe(true);
+    expect(Object.isFrozen(renderer.mutationKeys)).toBe(true);
+    expect(renderer.mutationKeys).toEqual([]);
     expect(Object.isFrozen(renderer.queries)).toBe(true);
     expect(Object.isFrozen(renderer.queryDefinitions)).toBe(true);
     expect(Object.isFrozen(renderer.queryBindings)).toBe(true);
@@ -44,7 +51,13 @@ describe('generated component live target renderers', () => {
     reviewedQuery.load = () => ({ label: 'LEAKED' });
     boundary.fallback = () => <output>LEAKED BOUNDARY</output>;
 
-    const html = await renderer.render({ input: {}, props: {}, request: {}, target: 'record' });
+    const html = await renderer.render({
+      attestationAuthority: liveTargetRendererTestAuthority.authority,
+      input: {},
+      props: {},
+      request: {},
+      target: 'record',
+    });
     expect(html).toContain('>SAFE</section>');
     expect(html).not.toContain('LEAKED');
     expect(String(renderer.errorBoundary?.render(new Error('boom'), {}))).toContain(
@@ -118,6 +131,7 @@ describe('generated component live target renderers', () => {
       productQuery.key,
     ]);
     const html = await renderer.render({
+      attestationAuthority: liveTargetRendererTestAuthority.authority,
       input: {},
       props: { productId: 'p1' },
       request: { locale: 'en-US' },
@@ -211,6 +225,7 @@ describe('generated component live target renderers', () => {
 
     await expect(
       renderer.render({
+        attestationAuthority: liveTargetRendererTestAuthority.authority,
         input: {},
         props: {},
         request: {},
@@ -239,8 +254,11 @@ describe('generated component live target renderers', () => {
       component: CartForm,
       componentId: 'components/cart-form/cart-form',
     });
+    expect(renderer.mutationKeys).toEqual(['cart/add']);
+    expect(Object.isFrozen(renderer.mutationKeys)).toBe(true);
 
     const html = await renderer.render({
+      attestationAuthority: liveTargetRendererTestAuthority.authority,
       input: {},
       props: {},
       request: { csrf: 'token' },
@@ -275,6 +293,7 @@ describe('generated component live target renderers', () => {
     const request = {};
 
     const html = await renderer.render({
+      attestationAuthority: liveTargetRendererTestAuthority.authority,
       input: {},
       maxListItems: 2,
       props: {},

@@ -317,8 +317,12 @@ describe('mutation wire intrinsic security', () => {
         liveTargetAudience: wireAuthority.audience,
         liveTargetDescriptors: [{ ...publicDescriptor, attestation: publicAttestation }],
         liveTargetRenderers: [
-          { component: 'public', render: () => '<output>safe failure</output>' },
-          { component: 'admin', render: () => '<output>admin failure</output>' },
+          {
+            component: 'public',
+            mutationKeys: ['account/invalid'],
+            render: () => '<output>safe failure</output>',
+          },
+          { component: 'admin', mutationKeys: [], render: () => '<output>admin failure</output>' },
         ],
         rawInput: {},
         request: {},

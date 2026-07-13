@@ -30,11 +30,13 @@ describe('runtimeRegistryFacts', () => {
     const facts = { liveTargetRenderers: [], queries: [publicQuery, protectedQuery] };
     const renderer = {
       component: 'components/registry-facts/protected',
+      mutationKeys: [],
       queries: ['registryFactsProtected'],
       render: () => '<protected-panel></protected-panel>',
     };
     const definitionRenderer = {
       component: 'components/registry-facts/protected-definition',
+      mutationKeys: [],
       queryDefinitions: [protectedQuery],
       render: () => '<protected-definition></protected-definition>',
     };
@@ -73,6 +75,7 @@ describe('runtimeRegistryFacts', () => {
     const renderers = [
       {
         component: 'components/registry-facts/dense-catalog',
+        mutationKeys: [],
         queryDefinitions: [catalogQuery],
         render: () => '<dense-catalog></dense-catalog>',
       },
@@ -194,6 +197,7 @@ describe('runtimeRegistryFacts', () => {
       liveTargetRenderers: [
         {
           component: 'components/registry-facts/catalog',
+          mutationKeys: [],
           queryDefinitions: [catalogQuery],
           queries: ['registryFactsCatalog'],
           render: () => '<catalog-panel></catalog-panel>',
@@ -222,6 +226,7 @@ describe('runtimeRegistryFacts', () => {
       liveTargetRenderers: [
         {
           component: 'components/registry-facts/score-card',
+          mutationKeys: [],
           queryDefinitions: [{ ...scoreQuery, reads: [declared, generated] }],
           queries: ['registryFactsScore'],
           render: () => '<score-card></score-card>',

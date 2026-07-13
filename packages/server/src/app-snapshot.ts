@@ -356,6 +356,13 @@ export function snapshotLiveTargetRenderers(
       }
       record.queries = witnessFreeze(values);
     }
+    const mutationKeys = denseArrayValues(record.mutationKeys, 'liveTargetRenderer.mutationKeys');
+    for (let mutationIndex = 0; mutationIndex < mutationKeys.length; mutationIndex += 1) {
+      if (typeof mutationKeys[mutationIndex] !== 'string') {
+        throw new TypeError('liveTargetRenderer.mutationKeys must contain stable strings.');
+      }
+    }
+    record.mutationKeys = witnessFreeze(mutationKeys);
     if (record.queryDefinitions !== undefined) {
       record.queryDefinitions = snapshotAppRegistry(
         record.queryDefinitions,

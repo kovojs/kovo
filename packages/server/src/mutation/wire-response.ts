@@ -53,6 +53,7 @@ import {
 import {
   witnessArrayAppend,
   witnessGetOwnPropertyDescriptor,
+  witnessIsArray,
 } from '../security-witness-intrinsics.js';
 
 export interface MutationWireLifecycleResponseOptions<
@@ -568,13 +569,17 @@ async function renderDefaultFailureFragment<Request>(
     descriptor === undefined
       ? undefined
       : findLiveTargetRenderer(wireRequest.liveTargetRenderers ?? [], descriptor.component);
-  const renderRequest =
-    descriptor && renderer
-      ? await resolveFrameworkMutationRenderRequest(
-          wireRequest.resolveRenderRequest,
-          wireRequest.request,
-        )
-      : undefined;
+  const ownsFailureMutation =
+    descriptor &&
+    renderer &&
+    wireRequest.mutationKey !== undefined &&
+    liveTargetRendererOwnsMutation(renderer, wireRequest.mutationKey);
+  const renderRequest = ownsFailureMutation
+    ? await resolveFrameworkMutationRenderRequest(
+        wireRequest.resolveRenderRequest,
+        wireRequest.request,
+      )
+    : undefined;
   if (descriptor && renderer && renderRequest !== undefined) {
     return renderer.render({
       attestationAuthority: requiredLiveTargetAttestationAuthority(wireRequest),
@@ -590,6 +595,30 @@ async function renderDefaultFailureFragment<Request>(
   }
 
   return renderDefaultFailureFragmentContent(failure);
+}
+
+function liveTargetRendererOwnsMutation<Request>(
+  renderer: LiveTargetRenderer<Request>,
+  mutationKey: string,
+): boolean {
+  const descriptor = witnessGetOwnPropertyDescriptor(renderer, 'mutationKeys');
+  if (descriptor === undefined || !('value' in descriptor) || !witnessIsArray(descriptor.value)) {
+    return false;
+  }
+  const keys = descriptor.value;
+  let ownsMutation = false;
+  for (let index = 0; index < keys.length; index += 1) {
+    const keyDescriptor = witnessGetOwnPropertyDescriptor(keys, index);
+    if (
+      keyDescriptor === undefined ||
+      !('value' in keyDescriptor) ||
+      typeof keyDescriptor.value !== 'string'
+    ) {
+      return false;
+    }
+    if (keyDescriptor.value === mutationKey) ownsMutation = true;
+  }
+  return ownsMutation;
 }
 
 function renderMutationRenderErrorFragment<Request>(

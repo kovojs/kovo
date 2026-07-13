@@ -2039,7 +2039,11 @@ async function loadBuildAppModule(
     configFile: false,
     logLevel: 'error',
     plugins: [
-      sourceDerivedRegistryVitePlugin(root, lowerStandaloneSourceDerivedRegistryDeclarations),
+      sourceDerivedRegistryVitePlugin(
+        appModulePath,
+        root,
+        lowerStandaloneSourceDerivedRegistryDeclarations,
+      ),
     ],
     root,
     server: buildTimeViteServerOptions(),
@@ -2126,34 +2130,151 @@ function viteSsrModuleId(filePath: string, root: string): string {
 }
 
 function sourceDerivedRegistryVitePlugin(
+  appModulePath: string,
   root: string,
   lowerRegistryDeclarations: typeof lowerStandaloneSourceDerivedRegistryDeclarations,
-): {
-  enforce: 'pre';
-  name: string;
-  transform(source: string, id: string): null | { code: string; map: null };
-} {
+): Plugin {
+  const authoredSourcePaths = buildCreateSet<string>();
+  buildSetAdd(authoredSourcePaths, resolve(appModulePath));
   return {
     enforce: 'pre',
     name: 'kovo-source-derived-registry',
+    async resolveId(source, importer) {
+      if (
+        importer === undefined ||
+        (!buildStringStartsWith(source, './') && !buildStringStartsWith(source, '../'))
+      ) {
+        return null;
+      }
+      const importerFileName = viteBuildSourceFileName(importer);
+      if (importerFileName === undefined || !buildSetHas(authoredSourcePaths, importerFileName)) {
+        return null;
+      }
+      const resolved = await this.resolve(source, importer, { skipSelf: true });
+      if (resolved === null) return null;
+      const resolvedFileName = viteBuildSourceFileName(resolved.id);
+      if (resolvedFileName !== undefined && isBuildSourceModulePath(resolvedFileName)) {
+        // SPEC §5.2: source ownership follows the exact relative app-module graph. Package imports
+        // remain framework/dependency code even when a monorepo resolver points them inside root.
+        buildSetAdd(authoredSourcePaths, resolvedFileName);
+      }
+      return resolved;
+    },
     transform(source, id) {
+      const sourcePath = viteBuildSourceFileName(id);
+      if (sourcePath === undefined || !buildSetHas(authoredSourcePaths, sourcePath)) return null;
+      if (!kovoBuildViteIdWithinRoot(id, root)) return null;
       const fileName = viteSourceFileName(id, root);
       if (!/\.[cm]?[jt]sx?$/.test(fileName)) return null;
       if (source.startsWith('// @kovojs-ui-copy\n')) return null;
-      if (isKovoBuildEmittedCompilerSource(source)) return null;
+      // SPEC §5.2: helper names and generated-ABI imports are not provenance. Authored source
+      // that claims compiler authority must be rejected before Vite evaluates any top-level code;
+      // a harmless mention still proceeds through ordinary source-derived lowering.
+      if (sourceClaimsKovoBuildCompilerAuthority(fileName, source)) {
+        assertKovoBuildAuthoredCompilerAuthority(fileName, source);
+      }
       const code = lowerRegistryDeclarations({ fileName, source });
       return code === null ? null : { code, map: null };
     },
   };
 }
 
-const KOVO_BUILD_EMITTED_ABI_IMPORT_PATTERN = /@kovojs\/[^"'\s/]+\/(?:internal|generated)\//;
+function kovoBuildViteIdWithinRoot(id: string, root: string): boolean {
+  const withoutQuery = buildStringSplit(id, '?')[0] ?? id;
+  let fileName = buildStringSplit(withoutQuery, '#')[0] ?? withoutQuery;
+  if (buildStringStartsWith(fileName, 'file://')) {
+    try {
+      fileName = fileURLToPath(fileName);
+    } catch {
+      return false;
+    }
+  } else if (buildStringStartsWith(fileName, '/@fs/')) {
+    fileName = fileName.slice('/@fs'.length);
+  }
+  if (!isAbsolute(fileName)) return true;
 
-function isKovoBuildEmittedCompilerSource(source: string): boolean {
+  const relativeFileName = relative(root, fileName);
   return (
-    KOVO_BUILD_EMITTED_ABI_IMPORT_PATTERN.test(source) ||
-    source.includes('componentLiveTargetRenderer') ||
-    source.includes('registerGeneratedLiveTargetRenderer')
+    relativeFileName === '' ||
+    (!buildStringStartsWith(relativeFileName, '..') && !isAbsolute(relativeFileName))
+  );
+}
+
+const KOVO_BUILD_EMITTED_ABI_IMPORT_PATTERN =
+  /^(?:kovo\/(?:internal|generated)(?:\/|$)|@kovojs\/[^/]+\/(?:internal|generated)(?:\/|$))/;
+
+function sourceClaimsKovoBuildCompilerAuthority(fileName: string, source: string): boolean {
+  if (
+    buildStringIncludes(source, 'componentLiveTargetRenderer') ||
+    buildStringIncludes(source, 'registerGeneratedLiveTargetRenderer')
+  ) {
+    return true;
+  }
+
+  const moduleSpecifiers = buildSnapshotDenseArray(
+    parseComponentModule(fileName, source).moduleSpecifiers,
+    'Build authored module specifiers',
+  );
+  for (let index = 0; index < moduleSpecifiers.length; index += 1) {
+    if (KOVO_BUILD_EMITTED_ABI_IMPORT_PATTERN.test(moduleSpecifiers[index]!.specifier)) return true;
+  }
+  return false;
+}
+
+function assertKovoBuildAuthoredCompilerAuthority(fileName: string, source: string): void {
+  const diagnostics = buildSnapshotDenseArray(
+    compileComponentModule({ fileName, source }).diagnostics,
+    'Build authored compiler-authority diagnostics',
+  );
+  const blocked: Array<CompileResult['diagnostics'][number]> = [];
+  for (let index = 0; index < diagnostics.length; index += 1) {
+    const diagnostic = diagnostics[index]!;
+    if (diagnostic.code === 'KV235') {
+      buildSecurityArrayAppend(
+        blocked,
+        diagnostic,
+        'CLI packages/cli/src/commands/build-export.ts collection',
+      );
+    }
+  }
+  if (blocked.length === 0) return;
+
+  throw new Error(
+    buildJoinStrings(
+      [
+        `Kovo build rejected app-authored compiler authority before module evaluation (${blocked.length} KV235 diagnostic${blocked.length === 1 ? '' : 's'}).`,
+        buildJoinStrings(
+          buildMapDense(
+            blocked,
+            'Blocked authored compiler-authority diagnostics',
+            (diagnostic) => {
+              const line = diagnostic.start?.line;
+              const column = diagnostic.start?.column;
+              const site =
+                line === undefined || column === undefined
+                  ? diagnostic.fileName
+                  : `${diagnostic.fileName}:${line}:${column}`;
+              const help = buildStringTrim(diagnostic.help ?? '');
+              return help.length === 0
+                ? `${diagnostic.code} ${site} ${diagnostic.message}`
+                : `${diagnostic.code} ${site} ${diagnostic.message}\n${buildJoinStrings(
+                    buildMapDense(
+                      buildStringSplit(help, '\n'),
+                      'Blocked authored compiler-authority help',
+                      (entry) => `  help: ${entry}`,
+                    ),
+                    '\n',
+                    'Blocked authored compiler-authority help lines',
+                  )}`;
+            },
+          ),
+          '\n\n',
+          'Blocked authored compiler-authority diagnostic output',
+        ),
+      ],
+      '\n\n',
+      'Build authored compiler-authority rejection',
+    ),
   );
 }
 
@@ -2324,6 +2445,7 @@ async function buildKovoClientManifest(
   },
 ): Promise<KovoClientManifestBuild> {
   const viteAssetPlugin = kovoVitePlugin({
+    include: [kovoBuildApprovedSourceFilter(appModulePath, root, options.approvedSourceFiles)],
     queryShapeFacts: options.queryShapeFacts,
   });
   const routeTargets = buildSnapshotDenseArray(
@@ -2414,7 +2536,7 @@ async function buildKovoComponentClientModules(
   >['getCssAssetManifest'];
 }> {
   const kovoPlugin = kovoVitePlugin({
-    include: [kovoBuildAppSourceFilter(appModulePath, root)],
+    include: [kovoBuildApprovedSourceFilter(appModulePath, root, options.approvedSourceFiles)],
     queryShapeFacts: options.queryShapeFacts,
   });
   const tempDir = mkdtempSync(join(tmpdir(), 'kovo-client-modules-'));
@@ -3055,7 +3177,9 @@ async function bundleKovoServerHandler(
   source: string;
 }> {
   const kovoPlugin = kovoVitePlugin({
-    include: [kovoBuildAppSourceFilter(appModulePath, options.buildRoot)],
+    include: [
+      kovoBuildApprovedSourceFilter(appModulePath, options.buildRoot, options.approvedSourceFiles),
+    ],
     queryShapeFacts: options.queryShapeFacts,
   });
   const stylesheetAssets = options.stylesheetAssets ?? emptyKovoBuildStylesheetAssets();
@@ -3200,23 +3324,33 @@ function uniqueKovoCompiledClientModules(
   return [...byPath.values()];
 }
 
-function kovoBuildAppSourceFilter(
+function kovoBuildApprovedSourceFilter(
   appModulePath: string,
   root: string,
+  sourceFiles: readonly BuildCheckSourceFile[],
 ): (fileName: string) => boolean {
-  const appDir = slashPath(relative(root, dirname(appModulePath))).replace(/\/+$/, '');
+  const approved = buildCreateSet<string>();
+  const sourceRoot = dirname(appModulePath);
+  buildSetAdd(approved, kovoBuildFilterFileName(appModulePath, root));
+  const files = buildSnapshotDenseArray(sourceFiles, 'Approved compiler source files');
+  for (let index = 0; index < files.length; index += 1) {
+    const file = files[index];
+    if (!file || typeof file !== 'object') {
+      throw new TypeError(`Approved compiler source file[${index}] must be an own record.`);
+    }
+    const fileName = buildOwnDataValue(file, 'fileName', `Approved compiler source file[${index}]`);
+    if (typeof fileName !== 'string') {
+      throw new TypeError(`Approved compiler source file[${index}].fileName must be a string.`);
+    }
+    buildSetAdd(approved, kovoBuildFilterFileName(resolve(sourceRoot, fileName), root));
+  }
+  return (fileName) => buildSetHas(approved, kovoBuildFilterFileName(fileName, root));
+}
+
+function kovoBuildFilterFileName(fileName: string, root: string): string {
   const rootPrefix = `${slashPath(root).replace(/^\/+/, '').replace(/\/+$/, '')}/`;
-  return (fileName) => {
-    const normalized = slashPath(fileName).replace(/^\/+/, '');
-    const projectRelative = normalized.startsWith(rootPrefix)
-      ? normalized.slice(rootPrefix.length)
-      : normalized;
-    if (projectRelative.startsWith('..')) return false;
-    if (projectRelative === 'node_modules' || projectRelative.startsWith('node_modules/'))
-      return false;
-    if (appDir === '' || appDir === '.') return true;
-    return projectRelative === appDir || projectRelative.startsWith(`${appDir}/`);
-  };
+  const normalized = slashPath(fileName).replace(/^\/+/, '');
+  return normalized.startsWith(rootPrefix) ? normalized.slice(rootPrefix.length) : normalized;
 }
 
 const bundledUndiciRuntimeModuleId = '\0kovo-bundled-undici-runtime';

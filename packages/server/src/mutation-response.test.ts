@@ -410,6 +410,7 @@ describe('server mutation primitives', () => {
         liveTargetRenderers: [
           {
             component: 'components/cart/panel',
+            mutationKeys: [],
             queries: ['cart'],
             render: renderCartPanel,
           },
@@ -460,6 +461,7 @@ describe('server mutation primitives', () => {
         liveTargetRenderers: [
           {
             component: 'components/admin/panel',
+            mutationKeys: [],
             queries: ['cart'],
             render: renderAdminPanel,
           },
@@ -678,6 +680,7 @@ describe('server mutation primitives', () => {
                 return `<section role="alert">${(error as Error).message}</section>`;
               },
             },
+            mutationKeys: [],
             queries: ['cart'],
             render: renderCartPanel,
           },

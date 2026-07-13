@@ -739,6 +739,51 @@ export default createApp({
     }
   });
 
+  it('rejects app-authored live-target registration ABI before module evaluation', async () => {
+    const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-live-target-authority-'));
+    const appPath = join(root, 'app.mjs');
+    const evaluationMarker = join(root, 'app-evaluated');
+    const outDir = join(root, 'dist');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    try {
+      mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
+      symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
+      writeFileSync(
+        appPath,
+        `
+import { writeFileSync } from 'node:fs';
+import { componentLiveTargetRenderer, registerGeneratedLiveTargetRenderer } from '@kovojs/server/internal/wire';
+
+writeFileSync(${JSON.stringify(evaluationMarker)}, 'authored source executed');
+const renderer = componentLiveTargetRenderer({});
+registerGeneratedLiveTargetRenderer(renderer);
+export default {};
+`,
+        'utf8',
+      );
+
+      const exitCode = await mainAsync(['build', appPath, '--out', outDir]);
+      const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
+      expect(exitCode).toBe(1);
+      expect(stdout).not.toHaveBeenCalled();
+      expect(errorOutput).toContain(
+        'Kovo build rejected app-authored compiler authority before module evaluation',
+      );
+      expect(errorOutput).toContain('KV235 .tmp-kovo-build-live-target-authority-');
+      expect(errorOutput).toContain(
+        'App source imports a non-public Kovo subpath; use a documented public entrypoint.',
+      );
+      expect(existsSync(evaluationMarker)).toBe(false);
+      expect(existsSync(outDir)).toBe(false);
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
   it('raises KV418 when a csrf:false mutation reads the raw Cookie header', async () => {
     const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-cookie-authority-'));
     const appPath = join(root, 'app.ts');
@@ -1780,13 +1825,6 @@ const signIn = mutation('mutations/sign-in', {
 });
 
 export default createApp({
-  liveTargetRenderers: [
-    {
-      component: 'contacts/detail',
-      queryDefinitions: [contactDetailQuery],
-      render: () => trustedHtml('<section>Contact</section>', 'derived invalidates fixture'),
-    },
-  ],
   mutations: [updateContact, signIn],
   queries: [contactsQuery, contactDetailQuery, authQuery],
   routes: [
@@ -2614,10 +2652,22 @@ export async function resetFixture() {
       writeFileSync(appPath, mutationFragmentStylesheetAppModuleSource(), 'utf8');
       writeSplitStyledComponentClientEntry(root);
       writeFileSync(
+        join(root, 'src/shared.ts'),
+        `
+export const home = { key: 'home' };
+export const homeQuery = {
+  key: 'home',
+  reads: [home],
+  load: () => ({ ok: true }),
+};
+`,
+        'utf8',
+      );
+      writeFileSync(
         join(root, 'src/home-panel.tsx'),
         styledHostComponentSource('HomePanel', 'home-panel', 'crimson', {
           queryName: 'home',
-          queryShape: 'runnable',
+          queryModule: './shared.js',
         }),
         'utf8',
       );
@@ -3647,27 +3697,18 @@ export default createApp({
 function mutationFragmentStylesheetAppModuleSource(): string {
   return `
 /** @jsxImportSource @kovojs/server */
-import { createApp, domain, mutation, query, route, s, stylesheet } from '@kovojs/server';
+import { createApp, mutation, route, s, stylesheet } from '@kovojs/server';
 import { HomePanel } from './src/home-panel.js';
 import { LoginPanel } from './src/login-panel.js';
 import { SharedCard } from './src/shared-card.js';
+import { home } from './src/shared.js';
 
-import { trustedHtml } from '@kovojs/browser';
-
-const home = domain('home');
-const homeQuery = query('home', {
-  access: { kind: 'public', reason: 'build fixture query' },
-  load: () => ({ ok: true }),
-  reads: [home],
-});
 const touchHome = mutation('home/touch', {
   access: { kind: 'public', reason: 'build fixture mutation' },
   csrf: false,
   csrfJustification: 'fixture mutation has no ambient browser authority',
   input: s.object({}),
-  optimistic: { home: 'await-fragment' },
   registry: {
-    queries: [homeQuery],
     touches: [home],
   },
   handler() {
@@ -3680,15 +3721,7 @@ export default createApp({
     enabled: false,
     justification: 'test harness serves the emitted app on an ephemeral loopback port',
   },
-  liveTargetRenderers: [
-    {
-      component: 'home-panel/home-panel',
-      queries: ['home'],
-      render: () => trustedHtml('<home-panel>HomePanel</home-panel>'),
-    },
-  ],
   mutations: [touchHome],
-  queries: [homeQuery],
   routes: [
     route('/', {
       access: { kind: 'public', reason: 'build fixture route' },
@@ -4183,13 +4216,22 @@ function styledHostComponentSource(
   name: string,
   host: string,
   color: string,
-  options: { queryName?: string; queryShape?: 'empty' | 'runnable' } = {},
+  options: {
+    queryModule?: string;
+    queryName?: string;
+    queryShape?: 'empty' | 'runnable';
+  } = {},
 ): string {
   return `
 import { component } from '@kovojs/core';
+${
+  options.queryName && options.queryModule
+    ? `import { ${options.queryName}Query } from '${options.queryModule}';\n`
+    : ''
+}
 
 ${
-  options.queryName && options.queryShape === 'runnable'
+  options.queryName && !options.queryModule && options.queryShape === 'runnable'
     ? `const ${options.queryName}Query = {
   key: '${options.queryName}',
   load: () => ({ ok: true }),
@@ -4198,7 +4240,7 @@ ${
     : ''
 }
 ${
-  options.queryName && options.queryShape !== 'runnable'
+  options.queryName && !options.queryModule && options.queryShape !== 'runnable'
     ? `const ${options.queryName}Query = {
 };\n`
     : ''

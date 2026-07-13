@@ -22,11 +22,13 @@ import {
   createKovoAppShellViteDevIntegration,
   dispatchKovoAppShellViteDevRequest,
   kovoAppShellViteDevPlugin,
+  runWithGeneratedLiveTargetRegistry,
   type KovoAppShellViteMiddleware,
 } from '@kovojs/server/internal/app-shell-vite';
 import {
   componentLiveTargetRenderer,
   createLiveTargetAttestation as createAppLiveTargetAttestation,
+  registerGeneratedLiveTargetRenderer,
   type LiveTargetRenderer,
 } from '@kovojs/server/internal/wire';
 // These specs spin up ad hoc Vite/HTTP HMR servers and mutate module graphs; running
@@ -68,21 +70,24 @@ test('dev HMR client applies server-rendered live-target fragments without reloa
     </section>`;
   const renderer: LiveTargetRenderer<Request> = {
     component: 'hmr/Card',
+    mutationKeys: [],
     render(context) {
       expect(context.props).toEqual({ id: 'one' });
       expect(context.target).toBe('hmr-card');
       return renderCard(context.request);
     },
   };
-  app = createApp({
-    liveTargetRenderers: [renderer],
-    routes: [
-      route('/', {
-        page(_context, request) {
-          return `<main>${renderCard(request)}</main>`;
-        },
-      }),
-    ],
+  app = runWithGeneratedLiveTargetRegistry(() => {
+    registerGeneratedLiveTargetRenderer(renderer);
+    return createApp({
+      routes: [
+        route('/', {
+          page(_context, request) {
+            return `<main>${renderCard(request)}</main>`;
+          },
+        }),
+      ],
+    });
   });
   const server = await serveHmrFixture(app);
 
@@ -193,17 +198,19 @@ test('dev HMR client refreshes query-backed live targets from server state', asy
     component: ProductCard,
     componentId: 'hmr/ProductCard',
   });
-  app = createApp({
-    liveTargetRenderers: [productRenderer],
-    routes: [
-      route('/', {
-        page() {
-          return jsx('main', {
-            children: jsx(ProductCard, { productId: 'p1' }),
-          });
-        },
-      }),
-    ],
+  app = runWithGeneratedLiveTargetRegistry(() => {
+    registerGeneratedLiveTargetRenderer(productRenderer);
+    return createApp({
+      routes: [
+        route('/', {
+          page() {
+            return jsx('main', {
+              children: jsx(ProductCard, { productId: 'p1' }),
+            });
+          },
+        }),
+      ],
+    });
   });
   const server = await serveHmrFixture(app);
 

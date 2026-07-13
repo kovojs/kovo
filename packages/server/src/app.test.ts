@@ -36,6 +36,17 @@ import { assignDerivedTaskKey, task } from './task.js';
 import { renderedHtml } from './html.js';
 import { jsx } from './jsx-runtime.js';
 import { createLiveTargetAttestation } from './mutation-wire.js';
+import type { LiveTargetRenderer } from './mutation-wire.js';
+
+function withCompilerLiveTargetRenderers<Result>(
+  renderers: readonly LiveTargetRenderer<any>[],
+  action: () => Result,
+): Result {
+  return runWithGeneratedLiveTargetRegistry(() => {
+    for (const renderer of renderers) registerGeneratedLiveTargetRenderer(renderer);
+    return action();
+  });
+}
 
 function attestedLiveTargetHeader(
   target: string,
@@ -715,30 +726,46 @@ describe('server createApp request shell', () => {
     expect(Object.isFrozen(app!)).toBe(true);
   });
 
-  it('uses compiler-registered live target renderers when createApp does not receive explicit wiring', () => {
+  it('uses only compiler-registered live target renderers', () => {
     const renderer = {
       component: 'test/create-app-registered-live-target',
+      mutationKeys: [],
       queries: ['cart'],
       render: () => '<cart-badge>1</cart-badge>',
     };
-    const app = runWithGeneratedLiveTargetRegistry(() => {
-      registerGeneratedLiveTargetRenderer(renderer);
-      return createApp();
-    });
+    const app = withCompilerLiveTargetRenderers([renderer], () => createApp());
     expect(
       app.liveTargetRenderers.filter((candidate) => candidate.component === renderer.component),
     ).toEqual([renderer]);
-    expect(createApp({ liveTargetRenderers: [] }).liveTargetRenderers).toEqual([]);
+    expect(() => createApp({ liveTargetRenderers: [] } as never)).toThrow(
+      'createApp({ liveTargetRenderers }) is forbidden',
+    );
+  });
+
+  it('rejects an accessor-backed liveTargetRenderers option without invoking it', () => {
+    let reads = 0;
+    const options = Object.defineProperty({}, 'liveTargetRenderers', {
+      enumerable: true,
+      get() {
+        reads += 1;
+        return [];
+      },
+    });
+
+    expect(() => createApp(options)).toThrow('createApp({ liveTargetRenderers }) is forbidden');
+    expect(reads).toBe(0);
   });
 
   it('keeps the compiler-registered renderer inventory under late Map.values replacement', () => {
     const renderer = {
       component: 'test/create-app-map-values-registered-live-target',
+      mutationKeys: [],
       queries: ['cart'],
       render: () => '<cart-badge>safe</cart-badge>',
     };
     const forged = {
       component: renderer.component,
+      mutationKeys: [],
       queries: ['cart'],
       render: () => '<img src=x onerror="globalThis.kovoRegistryMapXss=true">',
     };
@@ -751,10 +778,7 @@ describe('server createApp request shell', () => {
 
     let app: ReturnType<typeof createApp>;
     try {
-      app = runWithGeneratedLiveTargetRegistry(() => {
-        registerGeneratedLiveTargetRenderer(renderer);
-        return createApp();
-      });
+      app = withCompilerLiveTargetRenderers([renderer], () => createApp());
     } finally {
       Map.prototype.values = originalValues;
     }
@@ -786,23 +810,24 @@ describe('server createApp request shell', () => {
         trustedHtml(`<main data-profile="${profile.name}">${String(children)}</main>`),
     });
 
-    const app = createApp({
-      liveTargetRenderers: [
-        {
-          component: 'components/cart/badge',
-          queries: ['cart', 'product'],
-          queryDefinitions: [cartQuery, productQuery],
-          render: () => '<cart-badge>1</cart-badge>',
-        },
-      ],
-      queries: [cartQuery],
-      routes: [
-        route('/account', {
-          layout: accountLayout,
-          page: () => trustedHtml('<section>Account</section>'),
-        }),
-      ],
-    });
+    const renderer = {
+      component: 'components/cart/badge',
+      mutationKeys: [],
+      queries: ['cart', 'product'],
+      queryDefinitions: [cartQuery, productQuery],
+      render: () => '<cart-badge>1</cart-badge>',
+    };
+    const app = withCompilerLiveTargetRenderers([renderer], () =>
+      createApp({
+        queries: [cartQuery],
+        routes: [
+          route('/account', {
+            layout: accountLayout,
+            page: () => trustedHtml('<section>Account</section>'),
+          }),
+        ],
+      }),
+    );
 
     expect(app.queries).toEqual([cartQuery, productQuery, profileQuery]);
   });
@@ -2883,44 +2908,45 @@ describe('server createApp request shell', () => {
         return { count };
       },
     });
-    const app = createApp({
-      csrf,
-      db: () => db,
-      endpoints: [
-        endpoint('/webhook', {
-          csrf: false,
-          csrfJustification: 'signed provider test endpoint',
-          handler(request) {
-            expect('session' in request).toBe(false);
-            return new Response(`endpoint-db:${'db' in request}`);
-          },
-          method: 'POST',
-          reason: 'provider webhook db wiring test',
-          response: rawTextResponse,
-        }),
-      ],
-      liveTargetRenderers: [
-        {
-          component: 'components/cart/badge',
-          queries: ['cart'],
-          render({ request }: { request: AppRequest }) {
-            return `<cart-badge>${request.db.select().count}:${request.session?.user.id}</cart-badge>`;
-          },
-        },
-      ],
-      mutations: [addToCart],
-      queries: [cartQuery],
-      routes: [
-        route('/cart', {
-          page(_context, request: AppRequest) {
-            return renderedHtml(
-              `<main>${request.db.select().count}:${request.session?.user.id}</main>`,
-            );
-          },
-        }),
-      ],
-      sessionProvider: () => ({ user: { id: 'u1' } }),
-    });
+    const cartRenderer = {
+      component: 'components/cart/badge',
+      mutationKeys: [],
+      queries: ['cart'],
+      render({ request }: { request: AppRequest }) {
+        return `<cart-badge>${request.db.select().count}:${request.session?.user.id}</cart-badge>`;
+      },
+    };
+    const app = withCompilerLiveTargetRenderers([cartRenderer], () =>
+      createApp({
+        csrf,
+        db: () => db,
+        endpoints: [
+          endpoint('/webhook', {
+            csrf: false,
+            csrfJustification: 'signed provider test endpoint',
+            handler(request) {
+              expect('session' in request).toBe(false);
+              return new Response(`endpoint-db:${'db' in request}`);
+            },
+            method: 'POST',
+            reason: 'provider webhook db wiring test',
+            response: rawTextResponse,
+          }),
+        ],
+        mutations: [addToCart],
+        queries: [cartQuery],
+        routes: [
+          route('/cart', {
+            page(_context, request: AppRequest) {
+              return renderedHtml(
+                `<main>${request.db.select().count}:${request.session?.user.id}</main>`,
+              );
+            },
+          }),
+        ],
+        sessionProvider: () => ({ user: { id: 'u1' } }),
+      }),
+    );
     const handler = createRequestHandler(app);
 
     const routeResponse = await handler(new Request('https://example.test/cart'));
@@ -3081,23 +3107,24 @@ describe('server createApp request shell', () => {
         return input;
       },
     });
-    const app = createApp({
-      liveTargetRenderers: [
-        {
-          component: 'components/cart/badge',
-          queries: ['cart'],
-          queryDefinitions: [cartQuery],
-          render: () => '<cart-badge>1</cart-badge>',
+    const cartRenderer = {
+      component: 'components/cart/badge',
+      mutationKeys: [],
+      queries: ['cart'],
+      queryDefinitions: [cartQuery],
+      render: () => '<cart-badge>1</cart-badge>',
+    };
+    const app = withCompilerLiveTargetRenderers([cartRenderer], () =>
+      createApp({
+        mutations: [addToCart],
+        requestLimits: {
+          clientIp(request) {
+            clientIpCookies.push(request.headers.get('cookie'));
+            return '203.0.113.11';
+          },
         },
-      ],
-      mutations: [addToCart],
-      requestLimits: {
-        clientIp(request) {
-          clientIpCookies.push(request.headers.get('cookie'));
-          return '203.0.113.11';
-        },
-      },
-    });
+      }),
+    );
     const handler = createRequestHandler(app);
     const enhancedForm = new FormData();
     enhancedForm.set('productId', 'p1');
@@ -3161,18 +3188,19 @@ describe('server createApp request shell', () => {
     const renderCartPanel = vi.fn(({ props }: { props: Record<string, unknown> }) => {
       return `<cart-panel>${String(props.cartId)}</cart-panel>`;
     });
-    const app = createApp({
-      liveTargetRenderers: [
-        {
-          component: 'components/cart/panel',
-          queries: ['cart'],
-          queryDefinitions: [cartQuery],
-          render: renderCartPanel,
-        },
-      ],
-      mutations: [addToCart],
-      queries: [cartQuery],
-    });
+    const cartRenderer = {
+      component: 'components/cart/panel',
+      mutationKeys: [],
+      queries: ['cart'],
+      queryDefinitions: [cartQuery],
+      render: renderCartPanel,
+    };
+    const app = withCompilerLiveTargetRenderers([cartRenderer], () =>
+      createApp({
+        mutations: [addToCart],
+        queries: [cartQuery],
+      }),
+    );
     const handler = createRequestHandler(app);
     const form = new FormData();
     form.set('productId', 'p1');
@@ -3212,18 +3240,17 @@ describe('server createApp request shell', () => {
       reads: [cart],
     });
 
+    const conflictingRenderer = {
+      component: 'components/runtime-registry/cart-panel-conflict',
+      mutationKeys: [],
+      queryDefinitions: [conflictingCartQuery],
+      queries: ['runtimeRegistryCart'],
+      render: () => '<cart-panel>conflict</cart-panel>',
+    };
     expect(() =>
-      createApp({
-        liveTargetRenderers: [
-          {
-            component: 'components/runtime-registry/cart-panel-conflict',
-            queryDefinitions: [conflictingCartQuery],
-            queries: ['runtimeRegistryCart'],
-            render: () => '<cart-panel>conflict</cart-panel>',
-          },
-        ],
-        queries: [cartQuery],
-      }),
+      withCompilerLiveTargetRenderers([conflictingRenderer], () =>
+        createApp({ queries: [cartQuery] }),
+      ),
     ).toThrow(/two queries with the same key "runtimeRegistryCart"/);
 
     const addToCart = mutation('runtime-registry/add', {
@@ -3256,23 +3283,24 @@ describe('server createApp request shell', () => {
       'runtime-registry/add': [{ domain: 'runtime-registry-cart', keys: null }],
     });
 
-    const app = createApp({
-      liveTargetRenderers: [
-        {
-          component: 'components/runtime-registry/cart-panel',
-          queryDefinitions: [cartQuery],
-          queries: ['runtimeRegistryCart'],
-          render: () => `<cart-panel>${count}</cart-panel>`,
-        },
-      ],
-      mutations: [addToCart, failCart],
-      routes: [
-        route('/cart', {
-          layout: CartLayout,
-          page: () => trustedHtml('<section>Cart</section>'),
-        }),
-      ],
-    });
+    const cartPanelRenderer = {
+      component: 'components/runtime-registry/cart-panel',
+      mutationKeys: [],
+      queryDefinitions: [cartQuery],
+      queries: ['runtimeRegistryCart'],
+      render: () => `<cart-panel>${count}</cart-panel>`,
+    };
+    const app = withCompilerLiveTargetRenderers([cartPanelRenderer], () =>
+      createApp({
+        mutations: [addToCart, failCart],
+        routes: [
+          route('/cart', {
+            layout: CartLayout,
+            page: () => trustedHtml('<section>Cart</section>'),
+          }),
+        ],
+      }),
+    );
     const handler = createRequestHandler(app);
 
     const queryResponse = await handler(new Request('https://example.test/_q/runtimeRegistryCart'));

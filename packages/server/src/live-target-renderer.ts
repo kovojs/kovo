@@ -113,6 +113,14 @@ export function componentLiveTargetRenderer<
       )) as readonly ComponentLiveTargetQueryBinding<Request>[],
   );
   const mutationBindings = componentLiveTargetMutationBindings(component);
+  const mutationKeys: string[] = [];
+  for (let index = 0; index < mutationBindings.length; index += 1) {
+    witnessArrayAppend(
+      mutationKeys,
+      mutationBindings[index]!.key,
+      'Live-target mutation ownership key',
+    );
+  }
   const queryKeys: string[] = [];
   const queryDefinitions: QueryDefinition<string, unknown, unknown, Request>[] = [];
   for (let index = 0; index < queryBindings.length; index += 1) {
@@ -128,6 +136,7 @@ export function componentLiveTargetRenderer<
     ...componentLiveTargetErrorBoundary(
       explicitErrorBoundary ?? componentDefinitionValue(component, 'errorBoundary'),
     ),
+    mutationKeys: witnessFreeze(mutationKeys),
     queries: witnessFreeze(queryKeys),
     queryBindings,
     queryDefinitions: witnessFreeze(queryDefinitions),

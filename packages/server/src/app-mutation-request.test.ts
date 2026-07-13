@@ -11,11 +11,25 @@ import { guards } from './guards.js';
 import { stylesheet } from './hints.js';
 import { renderedHtml } from './html.js';
 import { componentLiveTargetRenderer } from './live-target-renderer.js';
+import {
+  registerGeneratedLiveTargetRenderer,
+  runWithGeneratedLiveTargetRegistry,
+} from './live-target-registry.js';
 import { mutation } from './mutation.js';
 import { query } from './query.js';
 import { route } from './route.js';
 import { s } from './schema.js';
-import { createLiveTargetAttestation } from './mutation-wire.js';
+import { createLiveTargetAttestation, type LiveTargetRenderer } from './mutation-wire.js';
+
+function withCompilerLiveTargetRenderers<Result>(
+  renderers: readonly LiveTargetRenderer<any>[],
+  action: () => Result,
+): Result {
+  return runWithGeneratedLiveTargetRegistry(() => {
+    for (const renderer of renderers) registerGeneratedLiveTargetRenderer(renderer);
+    return action();
+  });
+}
 
 function attestedLiveTargetHeader(
   target: string,
@@ -59,7 +73,9 @@ describe('server app mutation request boundary', () => {
       input: s.object({}),
       registry: { queries: [reviewedQuery], touches: [privateData] },
     });
-    const app = createApp({ liveTargetRenderers: [renderer], mutations: [update] });
+    const app = withCompilerLiveTargetRenderers([renderer], () =>
+      createApp({ mutations: [update] }),
+    );
 
     const appBinding = (
       app.liveTargetRenderers[0] as typeof renderer & {
@@ -464,19 +480,20 @@ describe('server app mutation request boundary', () => {
       page: () => trustedHtml('<main>Cart</main>'),
       stylesheets: [stylesheet('./cart.css')],
     });
-    const app = createApp({
-      liveTargetRenderers: [
-        {
-          component: 'components/cart/badge',
-          queries: ['cart'],
-          render: () => '<cart-badge>1</cart-badge>',
-          stylesheets: [stylesheet('./badge.css')],
-        },
-      ],
-      mutations: [addToCart],
-      routes: [cartRoute],
-      stylesheets: [stylesheet('./app.css')],
-    });
+    const renderer = {
+      component: 'components/cart/badge',
+      mutationKeys: [],
+      queries: ['cart'],
+      render: () => '<cart-badge>1</cart-badge>',
+      stylesheets: [stylesheet('./badge.css')],
+    };
+    const app = withCompilerLiveTargetRenderers([renderer], () =>
+      createApp({
+        mutations: [addToCart],
+        routes: [cartRoute],
+        stylesheets: [stylesheet('./app.css')],
+      }),
+    );
     const form = new FormData();
     form.set('productId', 'p1');
     const request = new Request('https://shop.example.test/_m/cart/add', {
@@ -512,17 +529,18 @@ describe('server app mutation request boundary', () => {
       registry: { queries: [cartQuery], touches: [cart] },
       handler: () => ({}),
     });
-    const app = createApp({
-      liveTargetRenderers: [
-        {
-          component: 'components/cart/map-poison',
-          queries: ['cart-map-poison'],
-          render: () => '<cart-badge>safe</cart-badge>',
-        },
-      ],
-      mutations: [addToCart],
-      stylesheets: [stylesheet('./app.css')],
-    });
+    const renderer = {
+      component: 'components/cart/map-poison',
+      mutationKeys: [],
+      queries: ['cart-map-poison'],
+      render: () => '<cart-badge>safe</cart-badge>',
+    };
+    const app = withCompilerLiveTargetRenderers([renderer], () =>
+      createApp({
+        mutations: [addToCart],
+        stylesheets: [stylesheet('./app.css')],
+      }),
+    );
     const originalMap = Array.prototype.map;
     let poisonedCalls = 0;
     Array.prototype.map = function (callback, thisArg) {
@@ -587,28 +605,29 @@ describe('server app mutation request boundary', () => {
       registry: { queries: [cartQuery], touches: [cart] },
       handler: () => ({}),
     });
-    const app = createApp({
-      liveTargetRenderers: [
-        {
-          component: 'components/cart/array-census',
-          queries: ['cart-array-census'],
-          render: () => '<cart-badge>safe</cart-badge>',
-          stylesheets: [
-            stylesheet({ criticalCss: '.renderer-safe{color:green}', href: './renderer.css' }),
-          ],
-        },
+    const renderer = {
+      component: 'components/cart/array-census',
+      mutationKeys: [],
+      queries: ['cart-array-census'],
+      render: () => '<cart-badge>safe</cart-badge>',
+      stylesheets: [
+        stylesheet({ criticalCss: '.renderer-safe{color:green}', href: './renderer.css' }),
       ],
-      mutations: [save],
-      routes: [
-        route('/cart-array-census', {
-          page: () => trustedHtml('<main>Cart</main>'),
-          stylesheets: [
-            stylesheet({ criticalCss: '.route-safe{color:blue}', href: './route.css' }),
-          ],
-        }),
-      ],
-      stylesheets: [stylesheet({ criticalCss: '.app-safe{color:red}', href: './app.css' })],
-    });
+    };
+    const app = withCompilerLiveTargetRenderers([renderer], () =>
+      createApp({
+        mutations: [save],
+        routes: [
+          route('/cart-array-census', {
+            page: () => trustedHtml('<main>Cart</main>'),
+            stylesheets: [
+              stylesheet({ criticalCss: '.route-safe{color:blue}', href: './route.css' }),
+            ],
+          }),
+        ],
+        stylesheets: [stylesheet({ criticalCss: '.app-safe{color:red}', href: './app.css' })],
+      }),
+    );
 
     const originalFilter = Array.prototype.filter;
     const originalFlatMap = Array.prototype.flatMap;

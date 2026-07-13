@@ -819,12 +819,18 @@ export async function renderMutationResponse<
   wireRequest: MutationWireRequest<Request>,
 ): Promise<MutationWireResponse> {
   const executionWireRequest = snapshotEnhancedMutationWireRequest(wireRequest);
-  const csrf = mutationCsrfOptions(definition, executionWireRequest.csrf);
+  // SPEC §9.1/§9.2: failure-form ownership is derived from the dispatched mutation definition;
+  // an internal structural caller cannot substitute another mutation identity.
+  const mutationRequest: MutationWireRequest<Request> = {
+    ...executionWireRequest,
+    mutationKey: definition.key,
+  };
+  const csrf = mutationCsrfOptions(definition, mutationRequest.csrf);
   const deliveryMode = {
     csrf,
     kind: 'enhanced-fragment',
     mutationKey: definition.key,
-    request: executionWireRequest,
+    request: mutationRequest,
   } satisfies MutationResponseDeliveryMode<Request, Value>;
   const lifecycle = await executeMutationLifecycle<
     Key,
@@ -834,22 +840,22 @@ export async function renderMutationResponse<
     Value,
     GuardedRequest,
     BufferedMutationWireResponse
-  >(definition, executionWireRequest.rawInput, executionWireRequest.request, {
-    ...runMutationOptions(executionWireRequest.csrf, executionWireRequest),
+  >(definition, mutationRequest.rawInput, mutationRequest.request, {
+    ...runMutationOptions(mutationRequest.csrf, mutationRequest),
     catchHandlerErrors: true,
     ...optionalReplayPolicy(enhancedMutationReplayPolicy(deliveryMode)),
   });
 
   const response = await renderMutationWireLifecycleResponse({
     csrfReauthResponse: () =>
-      staleSessionEnhancedCsrfReauthResponse(definition, csrf, executionWireRequest),
+      staleSessionEnhancedCsrfReauthResponse(definition, csrf, mutationRequest),
     definition,
     lifecycle,
     registryFacts: mutationRuntimeRegistryFacts(
       definition,
-      executionWireRequest.liveTargetRenderers ?? [],
+      mutationRequest.liveTargetRenderers ?? [],
     ),
-    wireRequest: executionWireRequest,
+    wireRequest: mutationRequest,
   });
   return csrf === false ? mutationResponseWithoutBrowserState(response) : response;
 }

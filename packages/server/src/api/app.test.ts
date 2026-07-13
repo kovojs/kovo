@@ -91,6 +91,11 @@ import * as wireHtmlApi from '../wire-html.js';
 type RootAppDocumentOptions = import('../index.js').AppDocumentOptions;
 // eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
 type RootAppErrorShellOptions = import('../index.js').AppErrorShellOptions;
+const removedRootLiveTargetRendererOption: import('../index.js').CreateAppOptions = {
+  // @ts-expect-error SPEC §9.1/§9.5 makes live-target registry assembly compiler-owned.
+  liveTargetRenderers: [],
+};
+void removedRootLiveTargetRendererOption;
 // eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
 type RemovedRootAppMutationResponseContext =
   // @ts-expect-error SPEC §9.1 forbids an app-authored mutation response switch.

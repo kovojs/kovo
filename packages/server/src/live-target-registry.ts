@@ -188,12 +188,14 @@ function isLiveTargetRenderer<Request>(value: unknown): value is LiveTargetRende
   if (!value || typeof value !== 'object') return false;
 
   const component = ownDataValue(value, 'component');
+  const mutationKeys = ownDataValue(value, 'mutationKeys');
   const render = ownDataValue(value, 'render');
   const queries = ownDataValue(value, 'queries');
   const queryDefinitions = ownDataValue(value, 'queryDefinitions');
   return (
     typeof component === 'string' &&
     typeof render === 'function' &&
+    denseOwnArrayEvery(mutationKeys, (key) => typeof key === 'string') &&
     (queries === undefined || denseOwnArrayEvery(queries, (query) => typeof query === 'string')) &&
     (queryDefinitions === undefined ||
       denseOwnArrayEvery(

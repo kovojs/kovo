@@ -544,6 +544,7 @@ describe('server mutation endpoint routing', () => {
         liveTargetRenderers: [
           {
             component: 'components/cart/badge',
+            mutationKeys: [],
             queries: ['cart'],
             render: () => cartBadgeFragmentHtml,
           },
@@ -771,6 +772,7 @@ describe('server mutation endpoint routing', () => {
         liveTargetRenderers: [
           {
             component: 'components/add-to-cart-form',
+            mutationKeys: ['cart/add'],
             render: ({ failure, mutationKey, props }) => {
               if (!failure) throw new Error('expected mutation failure context');
               const payload = failure.error.payload as { availableQuantity: number };
@@ -792,6 +794,42 @@ describe('server mutation endpoint routing', () => {
       },
       status: 422,
     });
+  });
+
+  it('does not render a submitted form through an unrelated component mutation owner', async () => {
+    const renderUnrelatedForm = vi.fn(() => '<form>PRIVATE_PROFILE_SECRET</form>');
+    const addToCart = mutation('cart/add', {
+      errors: { OUT_OF_STOCK: s.object({}) },
+      input: s.object({ productId: s.string() }),
+      handler(_input, _request, context) {
+        return context.fail('OUT_OF_STOCK', {});
+      },
+    });
+
+    const response = await renderMutationEndpointResponse(addToCart, {
+      headers: {
+        'Kovo-Form-Target': 'profile-form',
+        'Kovo-Fragment': 'true',
+        'Kovo-Live-Targets': attestedLiveTargetHeader('profile-form', 'components/profile-form'),
+      },
+      liveTargetRenderers: [
+        {
+          component: 'components/profile-form',
+          mutationKeys: ['profile/update'],
+          render: renderUnrelatedForm,
+        },
+      ],
+      rawInput: { productId: 'p1' },
+      redirectTo: '/cart',
+      request: {},
+    });
+
+    expect(response.status).toBe(422);
+    expect(response.body).toBe(
+      '<kovo-fragment target="profile-form"><output role="alert" data-error-code="OUT_OF_STOCK">{}</output></kovo-fragment>',
+    );
+    expect(response.body).not.toContain('PRIVATE_PROFILE_SECRET');
+    expect(renderUnrelatedForm).not.toHaveBeenCalled();
   });
 
   it('renders structurally recognized input schema failures as field-scoped 422 fragments', async () => {

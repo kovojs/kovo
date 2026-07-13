@@ -12,6 +12,10 @@ import { createMemoryVersionedClientModuleRegistry } from './client-modules.js';
 import { endpoint } from './endpoint.js';
 import { guard } from './guards.js';
 import { componentLiveTargetRenderer } from './live-target-renderer.js';
+import {
+  registerGeneratedLiveTargetRenderer,
+  runWithGeneratedLiveTargetRegistry,
+} from './live-target-registry.js';
 import type { LiveTargetRenderer } from './mutation-wire.js';
 import { query, type QueryLoadContext } from './query.js';
 import { layout, route } from './route.js';
@@ -26,6 +30,16 @@ import {
 } from './vite-dev.js';
 import { renderedHtml } from './html.js';
 import { createLiveTargetAttestation } from './mutation-wire.js';
+
+function withCompilerLiveTargetRenderers<Result>(
+  renderers: readonly LiveTargetRenderer<any>[],
+  action: () => Result,
+): Result {
+  return runWithGeneratedLiveTargetRegistry(() => {
+    for (const renderer of renderers) registerGeneratedLiveTargetRenderer(renderer);
+    return action();
+  });
+}
 
 function attestedLiveTargetHeader(
   target: string,
@@ -1136,22 +1150,24 @@ describe('server app shell Vite dev seam', () => {
     });
     const cartRenderer: LiveTargetRenderer<Request> = {
       component: 'src/components/CartBadge',
+      mutationKeys: [],
       async render(context) {
         expect(new URL(context.request.url).pathname).toBe('/cart');
         return `<cart-badge data-target="${context.target}">${String(context.props.count)}</cart-badge>`;
       },
       stylesheets: ['/assets/cart.css'],
     };
-    const app = createApp({
-      clientModules,
-      liveTargetRenderers: [cartRenderer],
-      routes: [
-        route('/cart', {
-          access: publicAccess('HMR live-target refresh regression'),
-          page: () => renderedHtml('<main>Cart</main>'),
-        }),
-      ],
-    });
+    const app = withCompilerLiveTargetRenderers([cartRenderer], () =>
+      createApp({
+        clientModules,
+        routes: [
+          route('/cart', {
+            access: publicAccess('HMR live-target refresh regression'),
+            page: () => renderedHtml('<main>Cart</main>'),
+          }),
+        ],
+      }),
+    );
     let middleware: KovoAppShellViteMiddleware | undefined;
     const plugin = kovoAppShellViteDevPlugin({ moduleId: '/src/app-shell.ts' });
 
@@ -1255,10 +1271,9 @@ describe('server app shell Vite dev seam', () => {
       componentId: 'src/components/SecretPanel',
       queries: [{ name: 'record', query: secretQuery }],
     });
-    const app = createApp({
-      liveTargetRenderers: [renderer],
-      routes: [publicRoute, adminRoute],
-    });
+    const app = withCompilerLiveTargetRenderers([renderer], () =>
+      createApp({ routes: [publicRoute, adminRoute] }),
+    );
     let middleware: KovoAppShellViteMiddleware | undefined;
     kovoAppShellViteDevPlugin({ moduleId: '/src/app-shell.ts' }).configureServer({
       middlewares: {
@@ -1355,6 +1370,7 @@ describe('server app shell Vite dev seam', () => {
     let poisonHits = 0;
     const cartRenderer: LiveTargetRenderer<Request> = {
       component: 'src/components/CartBadge',
+      mutationKeys: [],
       async render(context) {
         Array.prototype.join = function substituteHmrFragment(separator) {
           if (
@@ -1373,15 +1389,16 @@ describe('server app shell Vite dev seam', () => {
         return `<cart-badge data-target="${context.target}">safe</cart-badge>`;
       },
     };
-    const app = createApp({
-      liveTargetRenderers: [cartRenderer],
-      routes: [
-        route('/cart', {
-          access: publicAccess('HMR intrinsic-pinning regression'),
-          page: () => renderedHtml('<main>Cart</main>'),
-        }),
-      ],
-    });
+    const app = withCompilerLiveTargetRenderers([cartRenderer], () =>
+      createApp({
+        routes: [
+          route('/cart', {
+            access: publicAccess('HMR intrinsic-pinning regression'),
+            page: () => renderedHtml('<main>Cart</main>'),
+          }),
+        ],
+      }),
+    );
     let middleware: KovoAppShellViteMiddleware | undefined;
     kovoAppShellViteDevPlugin({ moduleId: '/src/app-shell.ts' }).configureServer({
       middlewares: {
