@@ -18,9 +18,14 @@ import {
   appRequestUrl,
   renderAppErrorDocumentResponse,
   renderAppRouteDocumentResponse,
+  searchParamsToRecord,
 } from './app-document.js';
 import { matchShellDispatch } from './shell.js';
-import { pinRequestIngressSurface, resolveRequestClientIp } from './app-load-shed.js';
+import {
+  copyRequestServerBindings,
+  pinRequestIngressSurface,
+  resolveRequestClientIp,
+} from './app-load-shed.js';
 import {
   endpointRequestWithoutSession,
   requestMetadataWithoutAmbientAuthority,
@@ -36,17 +41,29 @@ import {
 } from './registry-lookup.js';
 import { canonicalRequestMethod } from './request-method.js';
 import {
+  requestHeaders,
   requestCreateUrl,
   requestHeader,
   requestMethod,
   requestUrlSnapshot,
+  requestUrlSearchParams,
 } from './request-body-intrinsics.js';
 import {
+  createSecurityHeaders,
+  securityHeadersForEach,
+  securityHeadersSet,
   securityStringIncludes,
   securityStringStartsWith,
+  securityStringToLowerCase,
   securityStringTrim,
 } from './response-security-intrinsics.js';
 import { witnessGetOwnPropertyDescriptor } from './security-witness-intrinsics.js';
+import { createNativeRequest } from './request-carrier.js';
+import { authorizeRouteRequest } from './route.js';
+import {
+  frameworkMutationRenderRequestResolver,
+  type MutationRenderRequestResolver,
+} from './mutation-render-request-authority.js';
 
 export async function handleAppMutationRequest(
   app: KovoApp,
@@ -103,6 +120,7 @@ export async function handleAppMutationRequest(
     surface: 'mutation',
   });
   const sourceUrl = mutationSourceUrl(request, url);
+  const sourceRequest = mutationSourceDocumentRequest(authorityNeutralRequest, request, sourceUrl);
 
   const bodyResult = await readUntrustedRequestBody(mutationRequest);
   if (!bodyResult.ok) {
@@ -114,6 +132,7 @@ export async function handleAppMutationRequest(
         app,
         mutation,
         mutationRequest,
+        sourceRequest,
         url,
         sourceUrl,
         ingressMethod,
@@ -141,10 +160,19 @@ export async function handleAppMutationRequest(
   const inheritedStylesheets = sourceRouteStylesheets(app, sourceUrl);
   const defaultFailurePageRenderer = defaultAppMutationFailurePageRenderer(
     app,
-    mutationRequest,
+    sourceRequest,
     sourceUrl,
     mutation.key,
     responseRawInput,
+    csrfExempt,
+  );
+  const resolveRenderRequest = mutationRenderRequestResolver(
+    app,
+    request,
+    sourceRequest,
+    sourceUrl,
+    mutationDb,
+    csrfExempt,
   );
   const requestMutation = mutation as unknown as MutationDefinition<
     string,
@@ -185,6 +213,7 @@ export async function handleAppMutationRequest(
       inheritedStylesheets,
     ),
     rawInput,
+    resolveRenderRequest,
     request: mutationRequest,
     ...(taskScheduler === undefined ? {} : { taskScheduler }),
   });
@@ -215,6 +244,7 @@ async function renderPreBodyCsrfFailure(
   app: KovoApp,
   mutation: AppMutationDeclaration,
   request: Request,
+  sourceRequest: Request,
   url: URL,
   sourceUrl: URL,
   ingressMethod: string,
@@ -222,10 +252,11 @@ async function renderPreBodyCsrfFailure(
   const inheritedStylesheets = sourceRouteStylesheets(app, sourceUrl);
   const defaultFailurePageRenderer = defaultAppMutationFailurePageRenderer(
     app,
-    request,
+    sourceRequest,
     sourceUrl,
     mutation.key,
     {},
+    false,
   );
   const requestMutation = mutation as unknown as MutationDefinition<
     string,
@@ -274,14 +305,8 @@ function sourceRouteStylesheets(
   app: KovoApp,
   sourceUrl: URL,
 ): readonly KovoApp['stylesheets'][number][] {
-  const match = matchShellDispatch({
-    endpoints: app.endpoints,
-    method: 'GET',
-    pathname: requestUrlSnapshot(sourceUrl).pathname,
-    routes: app.routes,
-  });
-  const routeStylesheets =
-    match.kind === 'route' && match.methodAllowed ? (match.route.stylesheets ?? []) : [];
+  const match = canonicalMutationSourceRoute(app, sourceUrl);
+  const routeStylesheets = match === undefined ? [] : (match.route.stylesheets ?? []);
   const stylesheets: KovoApp['stylesheets'][number][] = [];
   denseOwnArrayForEach(
     app.stylesheets,
@@ -396,32 +421,138 @@ function mutationSourceUrl(request: Request, mutationUrl: URL): URL {
 
 function defaultAppMutationFailurePageRenderer(
   app: KovoApp,
-  request: Request,
+  sourceRequest: Request,
   sourceUrl: URL,
   mutationKey: string,
   rawInput: unknown,
+  csrfExempt: boolean,
 ): ((failure: MutationFail) => Promise<string>) | undefined {
-  const match = matchShellDispatch({
-    endpoints: app.endpoints,
-    method: 'GET',
-    pathname: requestUrlSnapshot(sourceUrl).pathname,
-    routes: app.routes,
-  });
-
-  if (match.kind !== 'route' || !match.methodAllowed) {
-    return undefined;
-  }
+  const match = canonicalMutationSourceRoute(app, sourceUrl);
+  if (match === undefined) return undefined;
 
   return frameworkMutationFailurePageRenderer(async (failure) => {
     const response = await renderAppRouteDocumentResponse({
       app,
       jsxContext: { mutationFailure: { failure, input: rawInput, mutationKey } },
       params: match.params,
-      request,
+      request: sourceRequest,
       route: match.route,
+      ...(csrfExempt ? { sessionProvider: false as const } : {}),
       url: sourceUrl,
     });
 
     return typeof response.body === 'string' ? response.body : '';
   });
+}
+
+function mutationRenderRequestResolver(
+  app: KovoApp,
+  ingressRequest: Request,
+  sourceRequest: Request,
+  sourceUrl: URL,
+  db: KovoApp['db'],
+  csrfExempt: boolean,
+): MutationRenderRequestResolver<Request> {
+  let resolution: Promise<Request | undefined> | undefined;
+  return frameworkMutationRenderRequestResolver(() => {
+    if (resolution === undefined) {
+      resolution = resolveAuthorizedMutationSourceRequest(
+        app,
+        ingressRequest,
+        sourceRequest,
+        sourceUrl,
+        db,
+        csrfExempt,
+      );
+    }
+    return resolution;
+  });
+}
+
+async function resolveAuthorizedMutationSourceRequest(
+  app: KovoApp,
+  ingressRequest: Request,
+  sourceRequest: Request,
+  sourceUrl: URL,
+  db: KovoApp['db'],
+  csrfExempt: boolean,
+): Promise<Request | undefined> {
+  const match = canonicalMutationSourceRoute(app, sourceUrl);
+  if (match === undefined) return undefined;
+  const authorization = await authorizeRouteRequest(
+    match.route,
+    {
+      params: match.params,
+      search: searchParamsToRecord(requestUrlSearchParams(sourceUrl)),
+    },
+    sourceRequest,
+    {
+      clientIp: () => resolveRequestClientIp(app, ingressRequest),
+      ...(db === undefined ? {} : { db }),
+      ...(app.onError === undefined ? {} : { onError: app.onError }),
+      ...(app.sessionProvider === undefined || csrfExempt
+        ? {}
+        : { sessionProvider: app.sessionProvider }),
+    },
+  );
+  return authorization.ok ? authorization.request : undefined;
+}
+
+function canonicalMutationSourceRoute(app: KovoApp, sourceUrl: URL) {
+  const match = matchShellDispatch({
+    endpoints: app.endpoints,
+    method: 'GET',
+    pathname: requestUrlSnapshot(sourceUrl).pathname,
+    routes: app.routes,
+  });
+  return match.kind === 'route' && match.methodAllowed && match.normalization.redirect === undefined
+    ? match
+    : undefined;
+}
+
+function mutationSourceDocumentRequest(
+  template: Request,
+  ingressRequest: Request,
+  sourceUrl: URL,
+): Request {
+  const headers = createSecurityHeaders();
+  securityHeadersForEach(requestHeaders(template), (value, name) => {
+    if (mutationSourceHeaderIsRetained(name)) securityHeadersSet(headers, name, value);
+  });
+  securityHeadersSet(headers, 'Accept', 'text/html');
+  const sourceRequest = createNativeRequest(requestUrlSnapshot(sourceUrl).href, {
+    headers,
+    method: 'GET',
+  });
+  copyRequestServerBindings(ingressRequest, sourceRequest);
+  pinRequestIngressSurface(sourceRequest);
+  return sourceRequest;
+}
+
+function mutationSourceHeaderIsRetained(name: string): boolean {
+  const normalized = securityStringToLowerCase(name);
+  if (
+    securityStringStartsWith(normalized, 'content-') ||
+    securityStringStartsWith(normalized, 'kovo-') ||
+    securityStringStartsWith(normalized, 'sec-fetch-')
+  ) {
+    return false;
+  }
+  return !(
+    normalized === 'accept' ||
+    normalized === 'connection' ||
+    normalized === 'csrf-token' ||
+    normalized === 'host' ||
+    normalized === 'idempotency-key' ||
+    normalized === 'origin' ||
+    normalized === 'referer' ||
+    normalized === 'te' ||
+    normalized === 'trailer' ||
+    normalized === 'transfer-encoding' ||
+    normalized === 'upgrade' ||
+    normalized === 'x-csrf-token' ||
+    normalized === 'x-http-method-override' ||
+    normalized === 'x-method-override' ||
+    normalized === 'x-requested-with'
+  );
 }

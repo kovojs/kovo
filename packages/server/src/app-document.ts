@@ -74,6 +74,8 @@ export interface AppRouteDocumentOptions {
   params: Record<string, string>;
   request: Request;
   route: AnyRouteDeclaration;
+  /** @internal Omit ambient session resolution for credential-neutral source rerenders. */
+  sessionProvider?: KovoApp['sessionProvider'] | false;
   url: URL;
 }
 
@@ -83,6 +85,7 @@ export async function renderAppRouteDocumentResponse({
   params,
   request,
   route,
+  sessionProvider,
   url,
 }: AppRouteDocumentOptions): Promise<RoutePageResponse> {
   const search = searchParamsToRecord(requestUrlSearchParams(url));
@@ -142,6 +145,8 @@ export async function renderAppRouteDocumentResponse({
   // re-emit them on the document response so a continuously-active user's session actually extends
   // instead of being hard-logged-out at the original boundary.
   const refreshSetCookies: RefreshSetCookie[] = [];
+  const routeSessionProvider =
+    sessionProvider === false ? undefined : (sessionProvider ?? app.sessionProvider);
   const routeResponse = await renderRoutePageResponse(
     route,
     routeInput,
@@ -178,7 +183,7 @@ export async function renderAppRouteDocumentResponse({
           status: 403 as const,
         };
       }) as unknown as ForbiddenRenderer<Request>,
-      ...(app.sessionProvider === undefined ? {} : { sessionProvider: app.sessionProvider }),
+      ...(routeSessionProvider === undefined ? {} : { sessionProvider: routeSessionProvider }),
     },
   );
   let metaContext: ReturnType<typeof parseRouteRequest> | undefined;

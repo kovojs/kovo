@@ -1,15 +1,17 @@
 import { describe, expect, it, vi } from 'vitest';
 import { trustedHtml } from '@kovojs/browser';
-import { component } from '@kovojs/core';
+import { component, form } from '@kovojs/core';
 
 import { createApp, createRequestHandler } from './app.js';
 import { appLiveTargetAttestationAudience } from './live-target-app-identity.js';
 import { handleAppMutationRequest } from './app-mutation-request.js';
 import { csrfToken } from './csrf.js';
 import { domain } from './domain.js';
-import { guards } from './guards.js';
+import { guard, guards } from './guards.js';
 import { stylesheet } from './hints.js';
 import { renderedHtml } from './html.js';
+import { assignDerivedComponentName } from './internal/wire.js';
+import { jsx } from './jsx-runtime.js';
 import { componentLiveTargetRenderer } from './live-target-renderer.js';
 import {
   registerGeneratedLiveTargetRenderer,
@@ -74,7 +76,10 @@ describe('server app mutation request boundary', () => {
       registry: { queries: [reviewedQuery], touches: [privateData] },
     });
     const app = withCompilerLiveTargetRenderers([renderer], () =>
-      createApp({ mutations: [update] }),
+      createApp({
+        mutations: [update],
+        routes: [route('/', { page: () => renderedHtml('<main>Private update</main>') })],
+      }),
     );
 
     const appBinding = (
@@ -538,6 +543,7 @@ describe('server app mutation request boundary', () => {
     const app = withCompilerLiveTargetRenderers([renderer], () =>
       createApp({
         mutations: [addToCart],
+        routes: [route('/', { page: () => renderedHtml('<main>Cart</main>') })],
         stylesheets: [stylesheet('./app.css')],
       }),
     );
@@ -847,6 +853,214 @@ describe('server app mutation request boundary', () => {
     expect('session' in request).toBe(false);
   });
 
+  it('authorizes and reruns mutation failure UI against the canonical source GET request', async () => {
+    const events: string[] = [];
+    const sourceRequests: Request[] = [];
+    const contextualLoad = vi.fn((_input: unknown, { request }: { request: Request }) => {
+      events.push('source-query');
+      sourceRequests.push(request);
+      return {
+        value: new URL(request.url).pathname.startsWith('/_m/')
+          ? 'ADMIN_MUTATION_SECRET'
+          : 'PUBLIC_PAGE',
+      };
+    });
+    const contextualQuery = query('public/mutation-source-context', {
+      access: { kind: 'public', reason: 'source-context regression fixture' },
+      load: contextualLoad,
+    });
+    const SourcePanel = assignDerivedComponentName(
+      component({
+        mutations: { deleteAdmin: form('admin/delete') },
+        queries: { contextual: contextualQuery },
+        render: ({ contextual }) =>
+          trustedHtml(
+            `<mutation-source-panel>${(contextual as { value: string }).value}</mutation-source-panel>`,
+            'source-context regression fixture',
+          ),
+      }),
+      'components/mutation/source-panel',
+    );
+    const renderer = componentLiveTargetRenderer({
+      component: SourcePanel,
+      componentId: 'components/mutation/source-panel',
+    });
+    expect(renderer.mutationKeys).toEqual(['admin/delete']);
+
+    const mutationGuard = vi.fn(() => {
+      events.push('mutation-guard');
+      return { kind: 'forbidden' as const };
+    });
+    const adminHandler = vi.fn(() => ({ ok: true }));
+    const adminMutation = mutation('admin/delete', {
+      guard: mutationGuard,
+      input: s.object({ confirmation: s.string() }),
+      handler: adminHandler,
+    });
+    const sourceGuard = guard<Request>('mutation-source-route', (request) => {
+      events.push('source-guard');
+      expect(request.method).toBe('GET');
+      expect(new URL(request.url).pathname).toBe('/public');
+      expect(request.headers.get('accept')).toBe('text/html');
+      expect(request.headers.get('cookie')).toBe('sid=public-user');
+      expect(request.headers.get('origin')).toBeNull();
+      expect(request.headers.get('kovo-fragment')).toBeNull();
+      return request.headers.get('x-source-allowed') === 'yes'
+        ? true
+        : { kind: 'forbidden' as const };
+    });
+    const csrf = {
+      secret: 'mutation-source-context-secret-key-0123456789',
+      sessionId: () => 'public-user',
+    };
+    const app = withCompilerLiveTargetRenderers([renderer], () =>
+      createApp({
+        csrf,
+        mutations: [adminMutation],
+        routes: [
+          route('/public', {
+            access: [sourceGuard],
+            page: () => jsx(SourcePanel, {}),
+          }),
+        ],
+      }),
+    );
+    const handler = createRequestHandler(app);
+    const sourceHeaders = {
+      Accept: 'text/html',
+      Cookie: 'sid=public-user',
+      'X-Source-Allowed': 'yes',
+    };
+    const publicPage = await handler(
+      new Request('https://app.test/public', { headers: sourceHeaders }),
+    );
+    const publicHtml = await publicPage.text();
+    const target = /kovo-fragment-target="([^"]+)"/u.exec(publicHtml)?.[1];
+    const token = /kovo-live-token="([^"]+)"/u.exec(publicHtml)?.[1];
+    expect(target).toBe('source-panel');
+    expect(token).toBeTruthy();
+    expect(publicHtml).toContain('PUBLIC_PAGE');
+    events.length = 0;
+
+    const mutationCsrf = csrfToken({}, csrf, { audience: adminMutation.key });
+    const enhancedForm = new FormData();
+    enhancedForm.set('confirmation', 'yes');
+    enhancedForm.set('kovo-csrf', mutationCsrf);
+    const enhancedResponse = await handler(
+      new Request('https://app.test/_m/admin/delete', {
+        body: enhancedForm,
+        headers: {
+          ...sourceHeaders,
+          Origin: 'https://app.test',
+          'Kovo-Current-Url': 'https://app.test/public',
+          'Kovo-Form-Target': target!,
+          'Kovo-Fragment': 'true',
+          'Kovo-Live-Targets': `${target}#components/mutation/source-panel@${token}:{}`,
+        },
+        method: 'POST',
+      }),
+    );
+    const enhancedBody = await enhancedResponse.text();
+    expect(enhancedResponse.status).toBe(403);
+    expect(enhancedBody).toContain('PUBLIC_PAGE');
+    expect(enhancedBody).not.toContain('ADMIN_MUTATION_SECRET');
+    expect(events).toEqual(['mutation-guard', 'source-guard', 'source-query']);
+    expect(adminHandler).not.toHaveBeenCalled();
+    expect(new URL(sourceRequests.at(-1)!.url).pathname).toBe('/public');
+
+    events.length = 0;
+    const invalidForm = new FormData();
+    invalidForm.set('kovo-csrf', mutationCsrf);
+    const validationResponse = await handler(
+      new Request('https://app.test/_m/admin/delete', {
+        body: invalidForm,
+        headers: {
+          ...sourceHeaders,
+          Origin: 'https://app.test',
+          'Kovo-Current-Url': 'https://app.test/public',
+          'Kovo-Form-Target': target!,
+          'Kovo-Fragment': 'true',
+          'Kovo-Live-Targets': `${target}#components/mutation/source-panel@${token}:{}`,
+        },
+        method: 'POST',
+      }),
+    );
+    expect(validationResponse.status).toBe(422);
+    expect(await validationResponse.text()).toContain('PUBLIC_PAGE');
+    expect(events).toEqual(['source-guard', 'source-query']);
+    expect(mutationGuard).toHaveBeenCalledTimes(1);
+
+    events.length = 0;
+    const noJsForm = new FormData();
+    noJsForm.set('kovo-csrf', mutationCsrf);
+    const noJsResponse = await handler(
+      new Request('https://app.test/_m/admin/delete', {
+        body: noJsForm,
+        headers: {
+          ...sourceHeaders,
+          Origin: 'https://app.test',
+          'Kovo-Current-Url': 'https://app.test/public',
+        },
+        method: 'POST',
+      }),
+    );
+    const noJsBody = await noJsResponse.text();
+    expect(noJsResponse.status).toBe(422);
+    expect(noJsBody).toContain('PUBLIC_PAGE');
+    expect(noJsBody).not.toContain('ADMIN_MUTATION_SECRET');
+    expect(events).toEqual(['source-guard', 'source-query']);
+
+    events.length = 0;
+    const deniedForm = new FormData();
+    deniedForm.set('confirmation', 'yes');
+    deniedForm.set('kovo-csrf', mutationCsrf);
+    const deniedResponse = await handler(
+      new Request('https://app.test/_m/admin/delete', {
+        body: deniedForm,
+        headers: {
+          Cookie: 'sid=public-user',
+          Origin: 'https://app.test',
+          'Kovo-Current-Url': 'https://app.test/public',
+          'Kovo-Form-Target': target!,
+          'Kovo-Fragment': 'true',
+          'Kovo-Live-Targets': `${target}#components/mutation/source-panel@${token}:{}`,
+        },
+        method: 'POST',
+      }),
+    );
+    const deniedBody = await deniedResponse.text();
+    expect(deniedResponse.status).toBe(403);
+    expect(deniedBody).not.toContain('PUBLIC_PAGE');
+    expect(deniedBody).not.toContain('ADMIN_MUTATION_SECRET');
+    expect(events).toEqual(['mutation-guard', 'source-guard']);
+    expect(contextualLoad).toHaveBeenCalledTimes(4);
+
+    events.length = 0;
+    const csrfFailureForm = new FormData();
+    csrfFailureForm.set('confirmation', 'yes');
+    csrfFailureForm.set('kovo-csrf', 'forged');
+    const csrfFailureResponse = await handler(
+      new Request('https://app.test/_m/admin/delete', {
+        body: csrfFailureForm,
+        headers: {
+          ...sourceHeaders,
+          Origin: 'https://app.test',
+          'Kovo-Current-Url': 'https://app.test/public',
+          'Kovo-Form-Target': target!,
+          'Kovo-Fragment': 'true',
+          'Kovo-Live-Targets': `${target}#components/mutation/source-panel@${token}:{}`,
+        },
+        method: 'POST',
+      }),
+    );
+    const csrfFailureBody = await csrfFailureResponse.text();
+    expect(csrfFailureResponse.status).toBe(422);
+    expect(csrfFailureBody).not.toContain('PUBLIC_PAGE');
+    expect(csrfFailureBody).not.toContain('ADMIN_MUTATION_SECRET');
+    expect(events).toEqual([]);
+    expect(contextualLoad).toHaveBeenCalledTimes(4);
+  });
+
   it('pins replay-store authority and does not run the handler when reservation fails closed', async () => {
     const handler = vi.fn(() => ({ ok: true }));
     const replayStore = {
@@ -977,6 +1191,54 @@ describe('server app mutation request boundary', () => {
     // a handler cannot install a late getter that reopens the original Request authority.
     expect(seen).toEqual(['handler:false:undefined:null:undefined:kept:p1']);
     expect(request.headers.get('cookie')).toBe('sid=victim-session');
+  });
+
+  it('keeps csrf:false no-JS source failure rerenders credential and session neutral', async () => {
+    let sessionReads = 0;
+    const sourceRequests: Request[] = [];
+    const update = mutation('machine/update', {
+      csrf: false,
+      csrfJustification: 'signed non-browser fixture has no ambient browser authority',
+      input: s.object({ value: s.string() }),
+      handler: () => ({ ok: true }),
+    });
+    const app = createApp({
+      mutations: [update],
+      routes: [
+        route('/public', {
+          page(_context, request) {
+            sourceRequests.push(request);
+            const lifecycle = request as Request & { session?: unknown };
+            return renderedHtml(
+              `<main>session:${String('session' in lifecycle)} cookie:${String(request.headers.get('cookie'))} auth:${String(request.headers.get('authorization'))}</main>`,
+            );
+          },
+        }),
+      ],
+      sessionProvider() {
+        sessionReads += 1;
+        return { user: { id: 'victim' } };
+      },
+    });
+    const response = await createRequestHandler(app)(
+      new Request('https://app.test/_m/machine/update', {
+        body: new FormData(),
+        headers: {
+          Authorization: 'Bearer victim',
+          Cookie: 'sid=victim',
+          'Kovo-Current-Url': 'https://app.test/public',
+        },
+        method: 'POST',
+      }),
+    );
+    const body = await response.text();
+
+    expect(response.status).toBe(422);
+    expect(body).toContain('session:false cookie:null auth:null');
+    expect(sessionReads).toBe(0);
+    expect(sourceRequests).toHaveLength(1);
+    expect(sourceRequests[0]!.method).toBe('GET');
+    expect(new URL(sourceRequests[0]!.url).pathname).toBe('/public');
   });
 
   // H1 (high) — SPEC §9.2: malformed/wrong-Content-Type mutation body → 422, before CSRF.
