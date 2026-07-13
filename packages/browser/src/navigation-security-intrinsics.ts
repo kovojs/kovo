@@ -113,6 +113,7 @@ export function createBrowserNavigationSecurityControls(
   const NativeReadableStream = scope.ReadableStream;
   const NativeReadableStreamDefaultReader = scope.ReadableStreamDefaultReader;
   const NativeEvent = scope.Event;
+  const NativeCustomEvent = scope.CustomEvent;
   const NativeEventTarget = scope.EventTarget;
   const NativeMouseEvent = scope.MouseEvent;
   const NativeSubmitEvent = scope.SubmitEvent;
@@ -411,6 +412,9 @@ export function createBrowserNavigationSecurityControls(
   const eventPreventDefault = NativeEvent
     ? valueMethod(NativeEvent.prototype, 'preventDefault')
     : undefined;
+  const customEventDetail = NativeCustomEvent
+    ? getter(NativeCustomEvent.prototype, 'detail')
+    : undefined;
   const mouseEventRelatedTarget = NativeMouseEvent
     ? getter(NativeMouseEvent.prototype, 'relatedTarget')
     : undefined;
@@ -679,7 +683,7 @@ export function createBrowserNavigationSecurityControls(
   function callEventTargetMethod(
     target: unknown,
     platformMethod: Function | undefined,
-    property: 'addEventListener' | 'removeEventListener',
+    property: 'addEventListener' | 'dispatchEvent' | 'removeEventListener',
     args: readonly unknown[],
   ): boolean {
     if (!controlsSound || (typeof target !== 'object' && typeof target !== 'function') || !target) {
@@ -730,6 +734,20 @@ export function createBrowserNavigationSecurityControls(
       'removeEventListener',
       options === undefined ? [type, listener] : [type, listener, options],
     );
+  }
+
+  function dispatchCustomEvent(target: unknown, type: string, detail: unknown): boolean {
+    if (!controlsSound || !NativeCustomEvent || typeof type !== 'string' || type.length === 0) {
+      return false;
+    }
+    let event: CustomEvent;
+    try {
+      event = new NativeCustomEvent(type, { detail });
+      if (readEventField(event, customEventDetail, 'detail') !== detail) return false;
+    } catch {
+      return false;
+    }
+    return callEventTargetMethod(target, eventTargetDispatchEvent, 'dispatchEvent', [event]);
   }
 
   function readAttribute(element: unknown, name: string): string | null {
@@ -787,6 +805,11 @@ export function createBrowserNavigationSecurityControls(
       target,
       type,
     });
+  }
+
+  function readCustomEventDetail(event: unknown): unknown {
+    if (!controlsSound || event === null || typeof event !== 'object') return undefined;
+    return readEventField(event, customEventDetail, 'detail');
   }
 
   function preventDelegatedEventDefault(event: unknown): boolean {
@@ -2919,6 +2942,23 @@ export function createBrowserNavigationSecurityControls(
             return false;
           }
         }
+        if (NativeCustomEvent) {
+          if (!customEventDetail) return false;
+          const detailControl = { marker: 'kovo-security-control:custom-event-detail' };
+          const customEventControl = new NativeCustomEvent('kovo-security-control:custom-event', {
+            detail: detailControl,
+          });
+          if (apply<unknown>(customEventDetail, customEventControl, []) !== detailControl) {
+            return false;
+          }
+          let rejectedForeignCustomEventReceiver = false;
+          try {
+            apply(customEventDetail, {}, []);
+          } catch {
+            rejectedForeignCustomEventReceiver = true;
+          }
+          if (!rejectedForeignCustomEventReceiver) return false;
+        }
       }
       if (NativeMessageEvent) {
         if (!messageEventData) return false;
@@ -3384,6 +3424,7 @@ export function createBrowserNavigationSecurityControls(
     currentUrl,
     decodeComponent,
     decodeText,
+    dispatchCustomEvent,
     fetchDocument,
     fetchWith,
     fetchWithOptionalSyncResult,
@@ -3412,6 +3453,7 @@ export function createBrowserNavigationSecurityControls(
     queryOne,
     queryAllElements,
     readAttribute,
+    readCustomEventDetail,
     readDocumentActiveElement,
     readElementOuterHtml,
     readElementProperty,

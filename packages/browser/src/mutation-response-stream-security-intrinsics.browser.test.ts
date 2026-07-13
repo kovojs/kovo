@@ -6,10 +6,12 @@ import { DomMorphRoot } from './morph.js';
 import { createQueryStore } from './query-store.js';
 
 const nativeGetReader = ReadableStream.prototype.getReader;
+const nativeStringSlice = String.prototype.slice;
 const frames: HTMLIFrameElement[] = [];
 
 afterEach(() => {
   ReadableStream.prototype.getReader = nativeGetReader;
+  String.prototype.slice = nativeStringSlice;
   document.body.replaceChildren();
   for (const frame of frames.splice(0)) frame.remove();
 });
@@ -86,6 +88,38 @@ it('pins the modular streaming mutation reader before a late getReader substitut
   expect(document.querySelector('[kovo-fragment-target="messages"]')?.textContent).toBe(
     'SAFE SERVER STREAM',
   );
+});
+
+it('keeps modular streamed query bytes authoritative after late String.slice poisoning', async () => {
+  const store = createQueryStore();
+  const attackerChunk = '<kovo-query name="account">{"role":"attacker"}</kovo-query>';
+  const body = new ReadableStream<Uint8Array>({
+    start(controller) {
+      const encoder = new TextEncoder();
+      controller.enqueue(
+        encoder.encode('<kovo-query name="account">{"role":"server"}</kovo-query>'),
+      );
+      controller.enqueue(encoder.encode('<kovo-done reason="complete"></kovo-done>'));
+      controller.close();
+    },
+  });
+  let substituted = false;
+  String.prototype.slice = function poisonedSlice(start?: number, end?: number): string {
+    if (!substituted && typeof start === 'number' && start > 0 && end === undefined) {
+      substituted = true;
+      return attackerChunk;
+    }
+    return Reflect.apply(nativeStringSlice, this, [start, end]);
+  };
+
+  try {
+    await applyStreamingMutationResponseBodyToRuntime({ body, store });
+  } finally {
+    String.prototype.slice = nativeStringSlice;
+  }
+
+  expect(substituted).toBe(false);
+  expect(store.get('account')).toEqual({ role: 'server' });
 });
 
 it('pins the generated inline streaming mutation reader before a late getReader substitution', async () => {

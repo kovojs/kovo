@@ -34,8 +34,8 @@ import { readDeps, stampPendingQueries } from './pending.js';
 import type { PendingRoot } from './pending.js';
 import type { ImportHandlerModule } from './handlers.js';
 import {
+  captureSessionTransitionPrincipalRetirement,
   reloadSessionTransitionDocument,
-  retireSessionTransitionPrincipal,
 } from './session-transition.js';
 import {
   createRuntimeFormData,
@@ -208,12 +208,14 @@ export interface EnhancedMutationSubmitOptions {
 export async function submitEnhancedMutation(
   options: EnhancedMutationSubmitOptions,
 ): Promise<EnhancedMutationAppliedResult> {
+  options = definedProps(options) as EnhancedMutationSubmitOptions;
+  const retirePrincipal = captureSessionTransitionPrincipalRetirement(options);
   stampEnhancedMutationPending(options, true);
 
   try {
     const fetched = await fetchEnhancedMutation({
       ...options,
-      onSessionTransition: () => retireSessionTransitionPrincipal(options),
+      onSessionTransition: retirePrincipal,
       onSessionTransitionReload: reloadSessionTransitionDocument,
       streaming: isStreamingEnhancedMutationForm(options.form),
     });

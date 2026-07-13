@@ -202,7 +202,7 @@ describe('inline loader minified artifact', () => {
       'function applyInlineMutationResponseBody(',
     );
     expect(inlineKovoLoaderInstallerSource).toContain(
-      'const dq=(type,init)=>{dispatchEvent(new CustomEvent(type,init));};',
+      "const dq=(type,init)=>{if(!bns.dispatchCustomEvent(globalThis,type,init.detail)){throw new TypeError('Kovo inline query event dispatch failed.');}};",
     );
     expect(inlineKovoLoaderInstallerSource).toContain("dq('kovo:query',{detail:{qs:ok}});");
     expect(inlineKovoLoaderInstallerSource).toContain(
@@ -214,12 +214,8 @@ describe('inline loader minified artifact', () => {
     expect(inlineKovoLoaderInstallerSource).toContain(
       'const incoming=bns.createFragmentContent(tts.createHTML(html));',
     );
-    expect(inlineKovoLoaderInstallerSource).toContain(
-      'bns.hasSecurityMapValue(retained,identity)',
-    );
-    expect(inlineKovoLoaderInstallerSource).not.toContain(
-      `bns.indexOf(html,'kovo-c="'+cp+'"')>=0`,
-    );
+    expect(inlineKovoLoaderInstallerSource).toContain('bns.hasSecurityMapValue(retained,identity)');
+    expect(inlineKovoLoaderInstallerSource).not.toContain(`bns.indexOf(html,'kovo-c="'+cp+'"')>=0`);
     expect(inlineKovoLoaderInstallerSource).not.toContain('for(const x of fragments)');
     expect(inlineKovoLoaderInstallerSource).not.toContain('html.includes(');
     expect(inlineKovoLoaderInstallerSource).not.toContain('[...doc.head.childNodes]');

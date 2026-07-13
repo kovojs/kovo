@@ -200,6 +200,43 @@ describe('browser inline loader response apply', () => {
     expect(feedLink?.getAttribute('style')).toBeNull();
   });
 
+  it('pins CustomEvent construction for the inline server-query handoff', () => {
+    const NativeCustomEvent = CustomEvent;
+    let received: CustomEvent | undefined;
+    const listener = (event: Event) => {
+      received = event as CustomEvent;
+    };
+    window.addEventListener('kovo:query', listener);
+    installInlineKovoLoader(async () => ({}));
+    vi.stubGlobal(
+      'CustomEvent',
+      class PoisonedCustomEvent extends NativeCustomEvent {
+        constructor(type: string, init?: CustomEventInit) {
+          super(type, {
+            ...init,
+            detail: {
+              queries: [{ attrs: ' name="account"', content: '{"role":"attacker"}' }],
+            },
+          });
+        }
+      },
+    );
+
+    try {
+      (globalThis as unknown as { __kovo_a?: (body: string) => void }).__kovo_a?.(
+        '<kovo-query name="account">{"role":"server"}</kovo-query>',
+      );
+    } finally {
+      window.removeEventListener('kovo:query', listener);
+    }
+
+    const detail = received?.detail as
+      | { qs?: Array<{ attrs?: unknown; content?: unknown }> }
+      | undefined;
+    expect(detail?.qs?.[0]?.attrs).toBe(' name="account"');
+    expect(detail?.qs?.[0]?.content).toBe('{"role":"server"}');
+  });
+
   it('removes same-component keyed islands by exact identity', () => {
     const root = document.createElement('main');
     root.innerHTML = [

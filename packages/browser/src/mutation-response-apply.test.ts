@@ -22,9 +22,15 @@ import { readMutationResponseBodyChunks } from './wire-parser.js';
 
 const restoreClientModuleManifest = installTestClientModuleManifest(['/c/markdown.client.js']);
 const originalTextDecoderDecode = TextDecoder.prototype.decode;
+const originalStringSlice = String.prototype.slice;
+const originalRegExpExec = RegExp.prototype.exec;
+const originalArrayIterator = Array.prototype[Symbol.iterator];
 afterAll(restoreClientModuleManifest);
 afterEach(() => {
   TextDecoder.prototype.decode = originalTextDecoderDecode;
+  String.prototype.slice = originalStringSlice;
+  RegExp.prototype.exec = originalRegExpExec;
+  Array.prototype[Symbol.iterator] = originalArrayIterator;
   vi.unstubAllGlobals();
 });
 
@@ -392,6 +398,158 @@ describe('decoded mutation response apply', () => {
 
     expect(target.html).toBe('<p>SERVER-SAFE</p>');
     expect(target.html).not.toContain('ATTACKER-SUBSTITUTED');
+  });
+
+  it('does not admit query bytes substituted by a late String.slice replacement', async () => {
+    const store = createQueryStore();
+    const serverChunk = '<kovo-query name="account">{"role":"server"}</kovo-query>';
+    const attackerChunk = '<kovo-query name="account">{"role":"attacker"}</kovo-query>';
+    let substituted = false;
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        const encoder = new TextEncoder();
+        controller.enqueue(encoder.encode(serverChunk));
+        controller.enqueue(encoder.encode('<kovo-done reason="complete"></kovo-done>'));
+        controller.close();
+      },
+    });
+
+    String.prototype.slice = function poisonedSlice(start?: number, end?: number): string {
+      if (!substituted && typeof start === 'number' && start > 0 && end === undefined) {
+        substituted = true;
+        return attackerChunk;
+      }
+      return Reflect.apply(originalStringSlice, this, [start, end]);
+    };
+
+    try {
+      await applyStreamingMutationResponseBodyToRuntime({ body, store });
+    } finally {
+      String.prototype.slice = originalStringSlice;
+    }
+
+    expect(substituted).toBe(false);
+    expect(store.get('account')).toEqual({ role: 'server' });
+  });
+
+  it('does not let late RegExp.exec laundering confirm a failed stream', async () => {
+    const store = createQueryStore();
+    store.set('account', { role: 'server' });
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        const encoder = new TextEncoder();
+        controller.enqueue(
+          encoder.encode('<kovo-query name="account">{"role":"unconfirmed"}</kovo-query>'),
+        );
+        controller.enqueue(encoder.encode('<kovo-done reason="error"></kovo-done>'));
+        controller.close();
+      },
+    });
+    let execCalls = 0;
+    let caught: unknown;
+
+    RegExp.prototype.exec = function poisonedExec(value: string): RegExpExecArray | null {
+      execCalls += 1;
+      if (execCalls > 1) return null;
+      const match = [
+        '<kovo-done reason="complete">',
+        ' reason="complete"',
+      ] as unknown as RegExpExecArray;
+      match.index = 0;
+      match.input = value;
+      return match;
+    };
+    try {
+      try {
+        await applyStreamingMutationResponseBodyToRuntime({ body, store });
+      } catch (error) {
+        caught = error;
+      }
+    } finally {
+      RegExp.prototype.exec = originalRegExpExec;
+    }
+
+    expect(caught).toBeInstanceOf(Error);
+    expect(store.get('account')).toEqual({ role: 'server' });
+  });
+
+  it('reverts failed query truth after late Array iterator poisoning', async () => {
+    const store = createQueryStore();
+    store.set('account', { role: 'server' });
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        const encoder = new TextEncoder();
+        controller.enqueue(
+          encoder.encode('<kovo-query name="account">{"role":"unconfirmed"}</kovo-query>'),
+        );
+        controller.enqueue(encoder.encode('<kovo-done reason="error"></kovo-done>'));
+        controller.close();
+      },
+    });
+    let caught: unknown;
+
+    Array.prototype[Symbol.iterator] = function* poisonedIterator() {};
+    try {
+      try {
+        await applyStreamingMutationResponseBodyToRuntime({ body, store });
+      } catch (error) {
+        caught = error;
+      }
+    } finally {
+      Array.prototype[Symbol.iterator] = originalArrayIterator;
+    }
+
+    expect(caught).toBeInstanceOf(Error);
+    expect(store.get('account')).toEqual({ role: 'server' });
+  });
+
+  it('rejects and reverts response elements emitted after the terminal done marker', async () => {
+    const store = createQueryStore();
+    store.set('account', { role: 'server' });
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(
+          new TextEncoder().encode(
+            [
+              '<kovo-query name="account">{"role":"confirmed"}</kovo-query>',
+              '<kovo-done reason="complete"></kovo-done>',
+              '<kovo-query name="account">{"role":"post-terminator"}</kovo-query>',
+            ].join(''),
+          ),
+        );
+        controller.close();
+      },
+    });
+
+    await expect(applyStreamingMutationResponseBodyToRuntime({ body, store })).rejects.toThrow(
+      /not confirmed/,
+    );
+    expect(store.get('account')).toEqual({ role: 'server' });
+  });
+
+  it('rejects raw bytes hidden between multiple completion markers', async () => {
+    const store = createQueryStore();
+    store.set('account', { role: 'server' });
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(
+          new TextEncoder().encode(
+            [
+              '<kovo-query name="account">{"role":"unconfirmed"}</kovo-query>',
+              '<kovo-done reason="complete"></kovo-done>',
+              'ATTACKER-POST-TERMINATOR-BYTES',
+              '<kovo-done reason="complete"></kovo-done>',
+            ].join(''),
+          ),
+        );
+        controller.close();
+      },
+    });
+
+    await expect(applyStreamingMutationResponseBodyToRuntime({ body, store })).rejects.toThrow(
+      /not confirmed/,
+    );
+    expect(store.get('account')).toEqual({ role: 'server' });
   });
 
   it('reverts query truth and hard-recovers fragments on a non-complete <kovo-done> (I1)', async () => {

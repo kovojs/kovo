@@ -97,6 +97,13 @@ export function snapshotRuntimeDelegatedEvent(
   };
 }
 
+/** Read a CustomEvent handoff payload through the boot-witnessed platform getter. */
+export function readRuntimeCustomEventDetail(event: unknown): unknown {
+  if (runtimeDomSecurity) return runtimeDomSecurity.readCustomEventDetail(event);
+  if (event === null || typeof event !== 'object') return undefined;
+  return runtimeOwnData(event, 'detail');
+}
+
 export function preventRuntimeDelegatedEventDefault(event: unknown): boolean {
   if (runtimeDomSecurity) return runtimeDomSecurity.preventDelegatedEventDefault(event);
   const method = runtimeStructuralMethod(event, 'preventDefault');

@@ -273,6 +273,61 @@ describe('inline loader build source', () => {
     expect(() => buildInlineKovoLoaderModuleSource(source)).not.toThrow();
   });
 
+  it('pins gzip budget accounting before a late TypedArray byteLength replacement', () => {
+    const source = createOversizedInlineLoaderSource();
+    const minifiedSource = buildInlineKovoLoaderInstallerSource(source);
+    const bootstrapSource = `(${minifiedSource})(${JSON.stringify(
+      kovoDeferredRuntimeModulePath,
+    )},(url)=>import(url));`;
+    const typedArrayPrototype = Object.getPrototypeOf(Uint8Array.prototype) as object;
+    const byteLength = Object.getOwnPropertyDescriptor(typedArrayPrototype, 'byteLength');
+    const nativeByteLength = byteLength?.get;
+    if (!byteLength || !nativeByteLength) {
+      throw new Error('TypedArray byteLength descriptor unavailable');
+    }
+    const reflectApply = Reflect.apply;
+    let calibrationCalls = 0;
+
+    Object.defineProperty(typedArrayPrototype, 'byteLength', {
+      configurable: true,
+      get() {
+        calibrationCalls += 1;
+        return reflectApply(nativeByteLength, this, []);
+      },
+    });
+    try {
+      const compressed = gzipSync(bootstrapSource);
+      const callsAfterGzip = calibrationCalls;
+      void compressed.byteLength;
+      expect(calibrationCalls).toBe(callsAfterGzip + 1);
+    } finally {
+      Object.defineProperty(typedArrayPrototype, 'byteLength', byteLength);
+    }
+
+    const vulnerableReadOrdinal = calibrationCalls;
+    let poisonCalls = 0;
+    let caught: unknown;
+
+    Object.defineProperty(typedArrayPrototype, 'byteLength', {
+      configurable: true,
+      get() {
+        poisonCalls += 1;
+        if (poisonCalls === vulnerableReadOrdinal) return 1;
+        return reflectApply(nativeByteLength, this, []);
+      },
+    });
+    try {
+      assertInlineKovoLoaderBootstrapGzipBudget(minifiedSource);
+    } catch (error) {
+      caught = error;
+    } finally {
+      Object.defineProperty(typedArrayPrototype, 'byteLength', byteLength);
+    }
+
+    expect(caught).toBeInstanceOf(Error);
+    expect(String((caught as Error).message)).toContain('exceeds SPEC.md §4.4 gzip budget');
+  });
+
   it('trims custom import expressions in generated public bootstrap source', () => {
     expect(createInlineKovoLoaderSource(' globalThis.__kovoInlineImport ')).toContain(
       `)(${JSON.stringify(kovoDeferredRuntimeModulePath)},globalThis.__kovoInlineImport);`,

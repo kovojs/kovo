@@ -257,4 +257,79 @@ describe('inline query events', () => {
     expect(store.get('cart')).toEqual({ count: 1 });
     expect(onAppliedQueries).toHaveBeenCalledTimes(1);
   });
+
+  it('does not substitute inline server query truth through a late Array iterator', () => {
+    const store = createQueryStore();
+    const queries = [{ attrs: ' name="account"', content: '{"role":"server"}' }];
+    const attackerQueries = [{ attrs: ' name="account"', content: '{"role":"attacker"}' }];
+    const nativeIterator = Array.prototype[Symbol.iterator];
+    let substituted = false;
+    let applied: readonly string[] = [];
+
+    Array.prototype[Symbol.iterator] = function poisonedInlineQueryIterator() {
+      if (this === queries) {
+        substituted = true;
+        return Reflect.apply(nativeIterator, attackerQueries, []);
+      }
+      return Reflect.apply(nativeIterator, this, []);
+    };
+    try {
+      applied = applyInlineQueryEventToRuntime({ detail: { queries } }, { store });
+    } finally {
+      Array.prototype[Symbol.iterator] = nativeIterator;
+    }
+
+    expect(substituted).toBe(false);
+    expect(applied).toEqual(['account']);
+    expect(store.get('account')).toEqual({ role: 'server' });
+  });
+
+  it('rejects accessor-backed inline query chunk fields without invoking them', () => {
+    const store = createQueryStore();
+    const readAttrs = vi.fn(() => ' name="account"');
+    const chunk = { content: '{"role":"attacker"}' } as { attrs?: string; content: string };
+    Object.defineProperty(chunk, 'attrs', { get: readAttrs });
+
+    expect(() =>
+      applyInlineQueryEventToRuntime(
+        { detail: { queries: [chunk as { attrs: string; content: string }] } },
+        { store },
+      ),
+    ).toThrow(/own string data/);
+    expect(readAttrs).not.toHaveBeenCalled();
+    expect(store.get('account')).toBeUndefined();
+  });
+
+  it('pins installed query hydration options for the listener lifetime', () => {
+    const originalStore = createQueryStore();
+    const replacementStore = createQueryStore();
+    const listeners = new Map<string, (event: InlineQueryEvent) => void>();
+    const target: QueryEventHydrationTarget = {
+      addEventListener(type: string, listener: (event: InlineQueryEvent) => void) {
+        listeners.set(type, listener);
+      },
+      removeEventListener() {},
+    };
+    const originalApplied = vi.fn();
+    const replacementApplied = vi.fn();
+    const options = {
+      onAppliedQueries: originalApplied,
+      store: originalStore,
+      target,
+    };
+
+    installInlineQueryEventHydration(options);
+    options.store = replacementStore;
+    options.onAppliedQueries = replacementApplied;
+    listeners.get('kovo:query')?.({
+      detail: {
+        queries: [{ attrs: ' name="account"', content: '{"role":"server"}' }],
+      },
+    });
+
+    expect(originalStore.get('account')).toEqual({ role: 'server' });
+    expect(replacementStore.get('account')).toBeUndefined();
+    expect(originalApplied).toHaveBeenCalledWith(['account']);
+    expect(replacementApplied).not.toHaveBeenCalled();
+  });
 });

@@ -1,3 +1,4 @@
+/* oxlint-disable typescript/unbound-method -- Boot-captured byte-length control is invoked through pinned Reflect.apply. */
 import { Buffer as NativeBuffer } from 'node:buffer';
 import { createHash, randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
@@ -11,6 +12,42 @@ import ts from 'typescript';
 import { enhancedNavigationDocumentAcceptHeader } from '@kovojs/core/internal/document-protocol';
 
 import { minifyInlineJavaScriptSource } from './inline-js-minifier.ts';
+
+// SPEC §4.4/§6.6: the gzip measurement is a release gate, not advisory telemetry. Capture and
+// witness the TypedArray byte-length getter before any authored build hook can replace it and
+// make an oversized document bootstrap appear to fit under the enforced budget.
+const inlineBuildReflectApply = Reflect.apply;
+const inlineBuildGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
+const inlineBuildGetPrototypeOf = Object.getPrototypeOf;
+const inlineBuildUint8Array = Uint8Array;
+const inlineBuildTypedArrayPrototype = inlineBuildReflectApply(inlineBuildGetPrototypeOf, Object, [
+  inlineBuildUint8Array.prototype,
+]) as object;
+const inlineBuildByteLengthDescriptor = inlineBuildReflectApply(
+  inlineBuildGetOwnPropertyDescriptor,
+  Object,
+  [inlineBuildTypedArrayPrototype, 'byteLength'],
+) as PropertyDescriptor | undefined;
+const inlineBuildByteLengthGetter = inlineBuildByteLengthDescriptor?.get;
+
+if (typeof inlineBuildByteLengthGetter !== 'function') {
+  throw new TypeError('Kovo inline-loader byte-length control is unavailable.');
+}
+if (
+  inlineBuildReflectApply(inlineBuildByteLengthGetter, new inlineBuildUint8Array(), []) !== 0 ||
+  inlineBuildReflectApply(inlineBuildByteLengthGetter, new inlineBuildUint8Array(3), []) !== 3
+) {
+  throw new TypeError('Kovo inline-loader byte-length control failed its positive witnesses.');
+}
+let inlineBuildByteLengthRejectedForeignReceiver = false;
+try {
+  inlineBuildReflectApply(inlineBuildByteLengthGetter, {}, []);
+} catch {
+  inlineBuildByteLengthRejectedForeignReceiver = true;
+}
+if (!inlineBuildByteLengthRejectedForeignReceiver) {
+  throw new TypeError('Kovo inline-loader byte-length control accepted a foreign receiver.');
+}
 
 const inlineKovoLoaderModulePath = fileURLToPath(new URL('./inline-loader.ts', import.meta.url));
 const modularLoaderSourcePath = fileURLToPath(new URL('./loader.ts', import.meta.url));
@@ -941,7 +978,9 @@ function installInlineKovoLoader(im) {
   ${wireParserReadableSource}
   ${responseApplyReadableSource}
   const dq = (type, init) => {
-    dispatchEvent(new CustomEvent(type, init));
+    if (!bns.dispatchCustomEvent(globalThis, type, init.detail)) {
+      throw new TypeError('Kovo inline query event dispatch failed.');
+    }
   };
   const ea = (value) => {
     const source = ss(value);
@@ -1222,7 +1261,8 @@ function installInlineKovoLoader(im) {
         }
       }
     }
-    let reason = hasPostDoneChunk ? 'invalid' : 'complete';
+    const hasPostDoneBytes = bns.trim(bns.slice(body, firstDone.end)) !== '';
+    let reason = hasPostDoneChunk || hasPostDoneBytes ? 'invalid' : 'complete';
     for (let index = 0; index < dones.length; index += 1) {
       const done = dones[index];
       if (!done) continue;
@@ -2474,7 +2514,15 @@ export function assertInlineKovoLoaderBootstrapGzipBudget(
   installerSource: string,
   label = 'Inline Kovo loader bootstrap',
 ): void {
-  const bytes = gzipSync(createInlineKovoLoaderBootstrapSource(installerSource)).byteLength;
+  const compressed = gzipSync(createInlineKovoLoaderBootstrapSource(installerSource));
+  const bytes = inlineBuildReflectApply(
+    inlineBuildByteLengthGetter as (this: unknown) => unknown,
+    compressed,
+    [],
+  ) as unknown;
+  if (typeof bytes !== 'number' || bytes < 0 || bytes % 1 !== 0 || bytes > 9_007_199_254_740_991) {
+    throw new TypeError('Kovo inline-loader gzip byte length is invalid.');
+  }
   if (bytes <= inlineKovoLoaderGzipByteBudget) return;
 
   throw new Error(

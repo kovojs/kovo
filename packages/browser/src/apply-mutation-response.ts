@@ -13,6 +13,7 @@ import {
   readMutationResponseBodyChunks,
   readMutationResponseBodyPrefixChunks,
 } from './wire-parser.js';
+import { readElementChunks } from './wire-response-scanner.js';
 import type { FragmentChunk, StreamTextChunk } from './wire-response-scanner.js';
 import type { IslandSignalScope } from './handler-context.js';
 import {
@@ -27,10 +28,14 @@ import { readAttribute } from './wire-html.js';
 import { createBrowserNavigationSecurityControls } from './navigation-security-intrinsics.js';
 import { reloadSessionTransitionDocument } from './session-transition.js';
 import {
+  securityArrayAppend,
+  securityArrayIsArray,
+  securityGetOwnPropertyDescriptor,
   securityMap,
   securityMapForEach,
   securityMapHas,
   securityMapSet,
+  securityOwnArrayEntry,
 } from './security-witness-intrinsics.js';
 
 // SPEC §6.6/§9.1: streaming response bytes remain server truth only when stream
@@ -104,30 +109,36 @@ export function applyMutationResponseChunksToRuntime(
   chunks: MutationResponseBodyChunks,
   options: ApplyMutationResponseChunksToRuntimeOptions,
 ): AppliedMutationResponse | AppliedMutationResponseWithRoot {
+  options = definedProps(options) as ApplyMutationResponseChunksToRuntimeOptions;
   // SPEC.md §9.1: mutation, deferred, broadcast, and typed-read responses all
   // converge here after their transport-specific parser has decoded wire chunks.
 
   if (isWholeResponseBuildTokenMiss(options)) {
-    for (const query of chunks.queries) options.onDeltaMiss?.(query.name, query.key);
+    for (let index = 0; index < chunks.queries.length; index += 1) {
+      const query = securityOwnArrayEntry(chunks.queries, index);
+      if (!query.ok) throw new TypeError('Kovo mutation response queries must be dense.');
+      options.onDeltaMiss?.(query.value.name, query.value.key);
+    }
     return emptyAppliedMutationResponse(options.root);
   }
 
   const effectiveChunks = chunks;
 
   options.beforeApplyQueries?.(effectiveChunks.queries);
+  const appliedQueries = applyQueryChunksToRuntime(options.store, effectiveChunks.queries, {
+    ...definedProps({
+      applyQuery: options.applyQuery,
+      onDeltaMiss: options.onDeltaMiss,
+      onError: options.onError,
+      queryPlans: options.queryPlans,
+      root: options.queryRoot ?? options.root,
+    }),
+  });
+  const queryFacts: string[] = [];
+  appendDenseSecurityValues(queryFacts, appliedQueries, 'Browser applied mutation query facts');
   const applied: AppliedMutationResponse = {
     fragments: effectiveChunks.fragments,
-    queries: [
-      ...applyQueryChunksToRuntime(options.store, effectiveChunks.queries, {
-        ...definedProps({
-          applyQuery: options.applyQuery,
-          onDeltaMiss: options.onDeltaMiss,
-          onError: options.onError,
-          queryPlans: options.queryPlans,
-          root: options.queryRoot ?? options.root,
-        }),
-      }),
-    ],
+    queries: queryFacts,
     ...(effectiveChunks.texts === undefined ? {} : { texts: effectiveChunks.texts }),
   };
 
@@ -163,6 +174,7 @@ export function applyMutationResponseBodyToRuntime(
 export function applyMutationResponseBodyToRuntime(
   options: ApplyMutationResponseBodyToRuntimeOptions,
 ): AppliedMutationResponse | AppliedMutationResponseWithRoot {
+  options = definedProps(options) as ApplyMutationResponseBodyToRuntimeOptions;
   const { body, ...applyOptions } = options;
 
   // SPEC.md §9.1: mutation-body transport callers share the parser/apply seam
@@ -185,6 +197,7 @@ export async function applyStreamingMutationResponseBodyToRuntime(
 export async function applyStreamingMutationResponseBodyToRuntime(
   options: ApplyStreamingMutationResponseBodyToRuntimeOptions,
 ): Promise<AppliedMutationResponse | AppliedMutationResponseWithRoot> {
+  options = definedProps(options) as ApplyStreamingMutationResponseBodyToRuntimeOptions;
   const { body, ...applyOptions } = options;
   if (isWholeResponseBuildTokenMiss(applyOptions)) {
     await mutationResponseSecurity.cancelReadableStream(body);
@@ -222,7 +235,12 @@ export async function applyStreamingMutationResponseBodyToRuntime(
   const trackingApplyOptions: ApplyMutationResponseChunksToRuntimeOptions = {
     ...applyOptions,
     beforeApplyQueries(queries) {
-      for (const query of queries) {
+      for (let index = 0; index < queries.length; index += 1) {
+        const queryEntry = securityOwnArrayEntry(queries, index);
+        if (!queryEntry.ok) {
+          throw new TypeError('Kovo streamed query rollback facts must be dense.');
+        }
+        const query = snapshotQueryIdentity(queryEntry.value);
         const storeKey = query.key === undefined ? query.name : `${query.name} ${query.key}`;
         if (!securityMapHas(queryRevertLog, storeKey)) {
           securityMapSet(queryRevertLog, storeKey, {
@@ -387,15 +405,30 @@ function revertAppliedQueries(
  * interrupted stream). A missing `reason` attribute is treated as `'complete'`.
  */
 function readStreamDoneReason(body: string): string | undefined {
-  const pattern = /<kovo-done\b([^>]*)>/gi;
-  let match: RegExpExecArray | null;
-  let sawComplete = false;
-  while ((match = pattern.exec(body)) !== null) {
-    const reason = readAttribute(match[1] ?? '', 'reason') ?? 'complete';
-    if (reason !== 'complete') return reason;
-    sawComplete = true;
+  // SPEC §6.6/§9.1: the completion marker is server truth. Parse it with the shared primitive
+  // wire scanner rather than late RegExp.prototype dispatch, and enforce the same terminal-order
+  // invariant as the generated inline runtime: no query/fragment/text or non-whitespace bytes may
+  // follow the first done marker.
+  const dones = readElementChunks(body, 'kovo-done');
+  if (dones.length === 0) return undefined;
+  let firstDoneStart = Number.POSITIVE_INFINITY;
+  let firstDoneEnd = 0;
+  let failureReason: string | undefined;
+  for (let index = 0; index < dones.length; index += 1) {
+    const done = securityOwnArrayEntry(dones, index);
+    if (!done.ok) throw new TypeError('Kovo streamed completion facts must be dense.');
+    if (done.value.start < firstDoneStart) {
+      firstDoneStart = done.value.start;
+      firstDoneEnd = done.value.end;
+    }
+    const reason = readAttribute(done.value.attrs, 'reason') ?? 'complete';
+    if (reason !== 'complete' && failureReason === undefined) failureReason = reason;
   }
-  return sawComplete ? 'complete' : undefined;
+
+  if (mutationResponseSecurity.trim(mutationResponseSecurity.slice(body, firstDoneEnd)) !== '') {
+    return failureReason ?? 'invalid';
+  }
+  return failureReason ?? 'complete';
 }
 
 function applyOptionsWithStreamTextBuffer(
@@ -425,7 +458,9 @@ function flushCompleteMutationResponsePrefix(
 
   return {
     applied: applyMutationResponseChunksToRuntime(chunks, options),
-    pending: pending.slice(consumed),
+    // SPEC §6.6/§9.1: this remainder is still unclassified server transport bytes. A late
+    // String.prototype.slice replacement must not substitute a different query/fragment stream.
+    pending: mutationResponseSecurity.slice(pending, consumed),
   };
 }
 
@@ -436,25 +471,103 @@ function mergeAppliedMutationResponses(
   if (!next) return current;
   if (!current) return next;
 
-  const merged: AppliedMutationResponse | AppliedMutationResponseWithRoot = {
-    fragments: [...current.fragments, ...next.fragments],
-    queries: [...current.queries, ...next.queries],
-    ...('appliedFragments' in current || 'appliedFragments' in next
-      ? {
-          appliedFragments: [
-            ...('appliedFragments' in current ? current.appliedFragments : []),
-            ...('appliedFragments' in next ? next.appliedFragments : []),
-          ],
-        }
-      : {}),
-    ...(current.streams || next.streams
-      ? { streams: [...(current.streams ?? []), ...(next.streams ?? [])] }
-      : {}),
-    ...(current.texts || next.texts
-      ? { texts: [...(current.texts ?? []), ...(next.texts ?? [])] }
-      : {}),
+  const fragments: FragmentChunk[] = [];
+  const queries: string[] = [];
+  appendDenseSecurityValues(fragments, current.fragments, 'Browser merged mutation fragments');
+  appendDenseSecurityValues(fragments, next.fragments, 'Browser merged mutation fragments');
+  appendDenseSecurityValues(queries, current.queries, 'Browser merged mutation queries');
+  appendDenseSecurityValues(queries, next.queries, 'Browser merged mutation queries');
+  const merged: AppliedMutationResponse & { appliedFragments?: string[] } = {
+    fragments,
+    queries,
   };
+  const currentAppliedFragments = ownOptionalArray<string>(current, 'appliedFragments');
+  const nextAppliedFragments = ownOptionalArray<string>(next, 'appliedFragments');
+  if (currentAppliedFragments || nextAppliedFragments) {
+    const appliedFragments: string[] = [];
+    if (currentAppliedFragments)
+      appendDenseSecurityValues(
+        appliedFragments,
+        currentAppliedFragments,
+        'Browser merged applied fragment facts',
+      );
+    if (nextAppliedFragments)
+      appendDenseSecurityValues(
+        appliedFragments,
+        nextAppliedFragments,
+        'Browser merged applied fragment facts',
+      );
+    merged.appliedFragments = appliedFragments;
+  }
+  const currentStreams = ownOptionalArray<string>(current, 'streams');
+  const nextStreams = ownOptionalArray<string>(next, 'streams');
+  if (currentStreams || nextStreams) {
+    const streams: string[] = [];
+    if (currentStreams)
+      appendDenseSecurityValues(streams, currentStreams, 'Browser merged stream facts');
+    if (nextStreams) appendDenseSecurityValues(streams, nextStreams, 'Browser merged stream facts');
+    merged.streams = streams;
+  }
+  const currentTexts = ownOptionalArray<StreamTextChunk>(current, 'texts');
+  const nextTexts = ownOptionalArray<StreamTextChunk>(next, 'texts');
+  if (currentTexts || nextTexts) {
+    const texts: StreamTextChunk[] = [];
+    if (currentTexts)
+      appendDenseSecurityValues(texts, currentTexts, 'Browser merged stream text facts');
+    if (nextTexts) appendDenseSecurityValues(texts, nextTexts, 'Browser merged stream text facts');
+    merged.texts = texts;
+  }
   return merged;
+}
+
+function snapshotQueryIdentity(query: QueryChunk): { key?: string; name: string } {
+  const name = securityGetOwnPropertyDescriptor(query, 'name');
+  const key = securityGetOwnPropertyDescriptor(query, 'key');
+  if (!name || !('value' in name) || typeof name.value !== 'string') {
+    throw new TypeError('Kovo streamed query name must be own string data.');
+  }
+  if (key && (!('value' in key) || (key.value !== undefined && typeof key.value !== 'string'))) {
+    throw new TypeError('Kovo streamed query key must be own string data.');
+  }
+  return key && 'value' in key && typeof key.value === 'string'
+    ? { key: key.value, name: name.value }
+    : { name: name.value };
+}
+
+function ownOptionalArray<Value>(
+  value: object,
+  property: PropertyKey,
+): readonly Value[] | undefined {
+  const descriptor = securityGetOwnPropertyDescriptor(value, property);
+  if (!descriptor) return undefined;
+  if (!('value' in descriptor) || !securityArrayIsArray(descriptor.value)) {
+    throw new TypeError(`Kovo mutation result ${String(property)} must be own array data.`);
+  }
+  return descriptor.value as readonly Value[];
+}
+
+function appendDenseSecurityValues<Value>(
+  target: Value[],
+  source: readonly Value[],
+  label: string,
+): void {
+  if (!securityArrayIsArray(source)) throw new TypeError(`${label} must be an array.`);
+  const length = securityGetOwnPropertyDescriptor(source, 'length');
+  if (
+    !length ||
+    !('value' in length) ||
+    typeof length.value !== 'number' ||
+    length.value < 0 ||
+    length.value % 1 !== 0 ||
+    length.value > 100_000
+  ) {
+    throw new TypeError(`${label} length is invalid.`);
+  }
+  for (let index = 0; index < length.value; index += 1) {
+    const entry = securityOwnArrayEntry(source, index);
+    if (!entry.ok) throw new TypeError(`${label} must be dense own data.`);
+    securityArrayAppend(target, entry.value, label);
+  }
 }
 
 function emptyAppliedMutationResponse(

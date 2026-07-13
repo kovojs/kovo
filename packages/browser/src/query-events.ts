@@ -7,7 +7,17 @@ import type { CompiledQueryUpdatePlans } from './query-bindings.js';
 import type { QueryStore } from './query-store.js';
 import { readQueryElementChunk } from './wire-parser.js';
 import type { QueryChunk, QueryElementChunkLike } from './wire-parser.js';
-import { addRuntimeEventListener, removeRuntimeEventListener } from './runtime-dom-security.js';
+import {
+  addRuntimeEventListener,
+  readRuntimeCustomEventDetail,
+  removeRuntimeEventListener,
+} from './runtime-dom-security.js';
+import {
+  securityArrayAppend,
+  securityArrayIsArray,
+  securityGetOwnPropertyDescriptor,
+  securityOwnArrayEntry,
+} from './security-witness-intrinsics.js';
 
 /** Runtime API used by Kovo applications and generated runtime integration. */
 export interface InlineQueryEventDetail {
@@ -43,6 +53,7 @@ export function applyInlineQueryEventToRuntime(
   event: InlineQueryEvent,
   options: ApplyInlineQueryEventOptions,
 ): readonly string[] {
+  options = definedProps(options) as ApplyInlineQueryEventOptions;
   const chunks = queryChunksFromInlineEvent(event, options.onError);
   if (chunks.length === 0) return [];
 
@@ -62,6 +73,7 @@ export function applyInlineQueryEventToRuntime(
 export function installInlineQueryEventHydration(
   options: InstallInlineQueryEventHydrationOptions,
 ): () => void {
+  options = definedProps(options) as InstallInlineQueryEventHydrationOptions;
   const listener = (event: InlineQueryEvent) => {
     try {
       const applied = applyInlineQueryEventToRuntime(event, options);
@@ -84,29 +96,62 @@ function queryChunksFromInlineEvent(
   event: InlineQueryEvent,
   onError?: RuntimeErrorReporter,
 ): QueryChunk[] {
-  const detail = event.detail;
-  if (!isInlineQueryWireEventDetail(detail)) return [];
-
-  const queries = detail.queries ?? detail.qs ?? [];
+  const queries = snapshotInlineQueryWireElements(readRuntimeCustomEventDetail(event));
+  if (queries.length === 0) return [];
   const chunks: QueryChunk[] = [];
-  for (const query of queries) {
-    const chunk = readQueryElementChunk(query, onError);
-    if (chunk) chunks.push(chunk);
+  for (let index = 0; index < queries.length; index += 1) {
+    const query = securityOwnArrayEntry(queries, index);
+    if (!query.ok) throw new TypeError('Kovo inline query event snapshot must be dense.');
+    const chunk = readQueryElementChunk(query.value, onError);
+    if (chunk) securityArrayAppend(chunks, chunk, 'Kovo parsed inline query event snapshot');
   }
   return chunks;
 }
 
-function isInlineQueryWireEventDetail(value: unknown): value is InlineQueryEventDetail {
-  if (typeof value !== 'object' || value === null) return false;
+function snapshotInlineQueryWireElements(value: unknown): QueryElementChunkLike[] {
+  if (typeof value !== 'object' || value === null) return [];
+  const queriesDescriptor = securityGetOwnPropertyDescriptor(value, 'queries');
+  const fallbackDescriptor = securityGetOwnPropertyDescriptor(value, 'qs');
+  const selected = queriesDescriptor ?? fallbackDescriptor;
+  if (!selected || !('value' in selected) || !securityArrayIsArray(selected.value)) return [];
+  const length = securityGetOwnPropertyDescriptor(selected.value, 'length');
+  if (
+    !length ||
+    !('value' in length) ||
+    typeof length.value !== 'number' ||
+    length.value < 0 ||
+    length.value % 1 !== 0 ||
+    length.value > 100_000
+  ) {
+    throw new TypeError('Kovo inline query event length is invalid.');
+  }
 
-  const detail = value as Partial<InlineQueryEventDetail>;
-  const queries = detail.queries ?? detail.qs;
-  return Array.isArray(queries) && queries.every(isQueryElementChunkLike);
-}
-
-function isQueryElementChunkLike(value: unknown): value is QueryElementChunkLike {
-  if (typeof value !== 'object' || value === null) return false;
-
-  const chunk = value as Partial<QueryElementChunkLike>;
-  return typeof chunk.attrs === 'string' && typeof chunk.content === 'string';
+  // SPEC §6.6/§9.1: the inline loader's event is a server-query-truth handoff. Snapshot every
+  // carrier field as exact own data before parsing so late iterator/Array helpers, accessors, or
+  // an apply-error callback cannot substitute a different query batch midway through hydration.
+  const snapshot: QueryElementChunkLike[] = [];
+  for (let index = 0; index < length.value; index += 1) {
+    const entry = securityOwnArrayEntry(selected.value, index);
+    if (!entry.ok || typeof entry.value !== 'object' || entry.value === null) {
+      throw new TypeError('Kovo inline query event entries must be dense objects.');
+    }
+    const attrs = securityGetOwnPropertyDescriptor(entry.value, 'attrs');
+    const content = securityGetOwnPropertyDescriptor(entry.value, 'content');
+    if (
+      !attrs ||
+      !('value' in attrs) ||
+      typeof attrs.value !== 'string' ||
+      !content ||
+      !('value' in content) ||
+      typeof content.value !== 'string'
+    ) {
+      throw new TypeError('Kovo inline query event chunks must contain own string data.');
+    }
+    securityArrayAppend(
+      snapshot,
+      { attrs: attrs.value, content: content.value },
+      'Kovo inline query event snapshot',
+    );
+  }
+  return snapshot;
 }

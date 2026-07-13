@@ -23,8 +23,8 @@ import { stampPendingQueries } from './pending.js';
 import { rebaserApplyQueryInterposition } from './query-apply.js';
 import { queryStoreKey } from './query-store.js';
 import {
+  captureSessionTransitionPrincipalRetirement,
   reloadSessionTransitionDocument,
-  retireSessionTransitionPrincipal,
 } from './session-transition.js';
 import type { QueryChunk } from './wire-parser.js';
 import {
@@ -59,6 +59,8 @@ export async function submitOptimisticEnhancedMutation<Input>(
     targets: string[];
   }
 > {
+  options = definedProps(options) as OptimisticEnhancedMutationSubmitOptions<Input>;
+  const retirePrincipal = captureSessionTransitionPrincipalRetirement(options);
   const idem = options.idem ?? createMutationIdem();
   const queryNames = securityObjectKeys(options.optimistic.transforms);
   const optimisticChange = optimisticChangeFromInput(options.input, options.change);
@@ -84,7 +86,12 @@ export async function submitOptimisticEnhancedMutation<Input>(
     stampPendingQueries(options.pendingRoot, queryNames, true);
   }
 
-  const context: OptimisticSubmitContext = { idem, optimisticKeys, queryNames };
+  const context: OptimisticSubmitContext = {
+    idem,
+    optimisticKeys,
+    queryNames,
+    retirePrincipal,
+  };
 
   if (options.queue) {
     // SPEC.md §10.4: mutations that declare a named queue send as a named FIFO (the prediction
@@ -113,6 +120,7 @@ interface OptimisticSubmitContext {
   idem: string;
   optimisticKeys: Readonly<Record<string, string | undefined>>;
   queryNames: string[];
+  retirePrincipal: () => void;
 }
 
 interface OptimisticQueueState {
@@ -125,14 +133,14 @@ async function submitOptimisticEnhancedMutationDirect<Input>(
   signal?: AbortSignal,
   queueState?: OptimisticQueueState,
 ): Promise<EnhancedMutationAppliedResult> {
-  const { idem, optimisticKeys, queryNames } = context;
+  const { idem, optimisticKeys, queryNames, retirePrincipal } = context;
 
   try {
     const fetched = await fetchEnhancedMutation(
       {
         ...options,
         ...definedProps({ signal }),
-        onSessionTransition: () => retireSessionTransitionPrincipal(options),
+        onSessionTransition: retirePrincipal,
         onSessionTransitionReload: reloadSessionTransitionDocument,
       },
       idem,
@@ -164,11 +172,7 @@ async function submitOptimisticEnhancedMutationDirect<Input>(
           optimisticKeyValue(optimisticKeys, queryName.value),
         ) === 0
       ) {
-        securityArrayAppend(
-          settledQueries,
-          queryName.value,
-          'Browser settled optimistic queries',
-        );
+        securityArrayAppend(settledQueries, queryName.value, 'Browser settled optimistic queries');
       }
     }
     if (options.pendingRoot && settledQueries.length > 0) {

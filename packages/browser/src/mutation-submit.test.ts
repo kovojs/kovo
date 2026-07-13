@@ -46,6 +46,71 @@ function mutationSubmitSnapshot<
 }
 
 describe('enhanced mutation submit', () => {
+  it('pins principal retirement across in-flight submit option and method mutation', async () => {
+    const store = createQueryStore();
+    const channel = new FakeBroadcastChannel();
+    const broadcast = installMutationBroadcast({ channel, store });
+    const replacementClose = vi.fn();
+    const replacementBroadcast = { close: replacementClose, publish: vi.fn() };
+    let resolveFetch!: (response: {
+      headers: { get(name: string): string | null };
+      ok: boolean;
+      status: number;
+      text(): Promise<string>;
+    }) => void;
+    const reload = vi.fn();
+    const originalLocation = globalThis.location;
+    Object.defineProperty(globalThis, 'location', {
+      configurable: true,
+      value: { reload },
+    });
+    const options = {
+      broadcast,
+      fetch: () =>
+        new Promise<{
+          headers: { get(name: string): string | null };
+          ok: boolean;
+          status: number;
+          text(): Promise<string>;
+        }>((resolve) => {
+          resolveFetch = resolve;
+        }),
+      form: { action: '/_m/auth/custom-sign-in', method: 'post' },
+      formData: new FormData(),
+      root: new FakeMorphRoot(),
+      store,
+    };
+
+    try {
+      const pending = submitEnhancedMutation(options);
+      options.broadcast = replacementBroadcast;
+      broadcast.close = vi.fn();
+      resolveFetch({
+        headers: {
+          get(name: string) {
+            return name.toLowerCase() === 'kovo-session-transition' ? 'reload' : null;
+          },
+        },
+        ok: true,
+        status: 200,
+        async text() {
+          return '';
+        },
+      });
+      await pending;
+    } finally {
+      Object.defineProperty(globalThis, 'location', {
+        configurable: true,
+        value: originalLocation,
+      });
+    }
+
+    expect(channel.closed).toBe(true);
+    expect(channel.onmessage).toBeNull();
+    expect(replacementClose).not.toHaveBeenCalled();
+    expect(reload).toHaveBeenCalledOnce();
+  });
+
   it('closes the old-principal channel at the transition header before a slow body can apply', async () => {
     const store = createQueryStore();
     const channel = new FakeBroadcastChannel();

@@ -6,11 +6,15 @@ import { installKovoLoader } from './generated.js';
 const nativeDocumentQuerySelectorAll = Document.prototype.querySelectorAll;
 const nativeElementGetAttribute = Element.prototype.getAttribute;
 const nativeEventTargetAddEventListener = EventTarget.prototype.addEventListener;
+const nativeCustomEventDetail = Object.getOwnPropertyDescriptor(CustomEvent.prototype, 'detail');
 
 afterEach(() => {
   Document.prototype.querySelectorAll = nativeDocumentQuerySelectorAll;
   Element.prototype.getAttribute = nativeElementGetAttribute;
   EventTarget.prototype.addEventListener = nativeEventTargetAddEventListener;
+  if (nativeCustomEventDetail) {
+    Object.defineProperty(CustomEvent.prototype, 'detail', nativeCustomEventDetail);
+  }
   document.body.replaceChildren();
 });
 
@@ -264,6 +268,35 @@ describe('query hydration browser runtime', () => {
     // loader disposal must remove hydration.
     expect(store.get('cart')).toEqual({ count: 5 });
     expect(output.textContent).toBe('5');
+  });
+
+  it('reads inline query handoff detail through the boot-pinned CustomEvent getter', () => {
+    const store = createQueryStore();
+    const loader = installKovoLoader({ importModule: vi.fn(), queryStore: store, root: document });
+    const event = new CustomEvent('kovo:query', {
+      detail: {
+        queries: [{ attrs: ' name="account"', content: '{"role":"server"}' }],
+      },
+    });
+    Object.defineProperty(CustomEvent.prototype, 'detail', {
+      configurable: true,
+      get() {
+        return {
+          queries: [{ attrs: ' name="account"', content: '{"role":"attacker"}' }],
+        };
+      },
+    });
+
+    try {
+      window.dispatchEvent(event);
+    } finally {
+      if (nativeCustomEventDetail) {
+        Object.defineProperty(CustomEvent.prototype, 'detail', nativeCustomEventDetail);
+      }
+    }
+
+    expect(store.get('account')).toEqual({ role: 'server' });
+    loader.dispose();
   });
 
   it('threads the loader query apply hook through browser hydration events', () => {

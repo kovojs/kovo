@@ -212,4 +212,24 @@ describe('inline streaming recovery invariants', () => {
       expect(harness.formSubmit).not.toHaveBeenCalled();
     },
   );
+
+  it.each(inlineSourceInstallCases)(
+    'hard-recovers bytes hidden between multiple completion markers through %s',
+    async (_name, installSource) => {
+      const response = {
+        body: streamOf([
+          '<kovo-done reason="complete"></kovo-done>',
+          'ATTACKER-POST-TERMINATOR-BYTES',
+          '<kovo-done reason="complete"></kovo-done>',
+        ]),
+        headers: { get: (name: string) => (name === 'Kovo-Build' ? 'build-a' : null) },
+        ok: true,
+        status: 200,
+      };
+      const harness = await installStreamHarness(installSource, response);
+
+      await vi.waitFor(() => expect(harness.reload).toHaveBeenCalledTimes(1));
+      expect(harness.formSubmit).not.toHaveBeenCalled();
+    },
+  );
 });
