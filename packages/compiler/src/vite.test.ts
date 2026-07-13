@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -1120,6 +1120,70 @@ export const RealKv437 = component({
       );
     } finally {
       rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it('rejects client-module resolution and loading outside Vite server.fs.allow roots', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-vite-client-root-'));
+    const outside = mkdtempSync(join(tmpdir(), 'kovo-vite-client-outside-'));
+    const sourceFile = join(outside, 'probe.tsx');
+    const clientFile = join(outside, 'probe.client.js');
+    const plugin = createKovoVitePlugin(() => ({
+      files: [{ kind: 'client', source: 'export const leaked = true;' }],
+    }));
+
+    try {
+      writeFileSync(sourceFile, 'component(');
+      plugin.configResolved?.({ root, server: { fs: { allow: [root] } } });
+
+      expect(await plugin.resolveId?.(clientFile)).toBeNull();
+      expect(await plugin.load?.(clientFile)).toBeNull();
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+      rmSync(outside, { force: true, recursive: true });
+    }
+  });
+
+  it('allows client modules from an explicit Vite server.fs.allow workspace root', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-vite-client-root-'));
+    const workspace = mkdtempSync(join(tmpdir(), 'kovo-vite-client-workspace-'));
+    const sourceFile = join(workspace, 'probe.tsx');
+    const clientFile = join(workspace, 'probe.client.js');
+    const plugin = createKovoVitePlugin(() => ({
+      files: [{ kind: 'client', source: 'export const workspaceModule = true;' }],
+    }));
+
+    try {
+      writeFileSync(sourceFile, 'component(');
+      plugin.configResolved?.({ root, server: { fs: { allow: [root, workspace] } } });
+
+      expect(await plugin.resolveId?.(clientFile)).toBe(clientFile);
+      expect(await plugin.load?.(clientFile)).toContain('workspaceModule');
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+      rmSync(workspace, { force: true, recursive: true });
+    }
+  });
+
+  it('rejects a client-module source symlink that escapes an allowed root', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-vite-client-root-'));
+    const outside = mkdtempSync(join(tmpdir(), 'kovo-vite-client-outside-'));
+    const outsideSource = join(outside, 'probe.tsx');
+    const clientFile = join(root, 'probe.client.js');
+    const plugin = createKovoVitePlugin(() => ({
+      files: [{ kind: 'client', source: 'export const leaked = true;' }],
+    }));
+
+    try {
+      writeFileSync(outsideSource, 'component(');
+      symlinkSync(outsideSource, join(root, 'probe.tsx'));
+      plugin.configResolved?.({ root, server: { fs: { allow: [root] } } });
+
+      expect(await plugin.resolveId?.(clientFile)).toBeNull();
+      expect(await plugin.load?.(clientFile)).toBeNull();
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+      rmSync(outside, { force: true, recursive: true });
     }
   });
 

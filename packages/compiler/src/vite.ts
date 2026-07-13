@@ -66,6 +66,10 @@ import { queryExpressionFromBinding } from './scan/query-binding.js';
 import { deriveRegistryIdentity } from './registry-identities.js';
 import { rewriteClientModuleRuntimeImportsForBrowser } from './emit/client.js';
 import { lowerStandaloneSourceDerivedRegistryDeclarations } from './source-derived-lowering.js';
+import {
+  createCompilerSourceFileSystem,
+  type CompilerSourceFileSystem,
+} from './source-filesystem.js';
 import type {
   HmrImpactClassification,
   HmrImpactMetadata,
@@ -177,6 +181,11 @@ export interface KovoVitePluginOptions {
 export interface KovoViteDevServer {
   config?: {
     root?: string;
+    server?: {
+      fs?: {
+        allow?: readonly string[];
+      };
+    };
   };
   middlewares: {
     use(handler: KovoViteMiddleware): void;
@@ -188,6 +197,11 @@ export interface KovoViteDevServer {
 /** @internal Minimal Vite resolved config shape needed by the plugin. */
 export interface KovoViteResolvedConfig {
   root?: string;
+  server?: {
+    fs?: {
+      allow?: readonly string[];
+    };
+  };
 }
 
 /** @internal Connect-style middleware the plugin registers to serve emitted client islands. */
@@ -303,14 +317,19 @@ export function createFrameworkKovoVitePlugin(
   const cssAssetsByFileName = compilerCreateMap<string, readonly ComponentCssAsset[]>();
   const hmrImpacts = compilerCreateMap<string, HmrImpactMetadata>();
   let root = process.cwd();
+  // SPEC §5.2's one-to-one client module mapping does not authorize Kovo to widen Vite's
+  // configured source boundary. Pin the same roots before any remote dev-module request is served.
+  let clientSourceFileSystems = viteClientSourceFileSystems(root);
 
   return {
     enforce: 'pre',
     configResolved(config) {
       root = config.root ?? root;
+      clientSourceFileSystems = viteClientSourceFileSystems(root, config.server?.fs?.allow);
     },
     configureServer(server) {
       root = server.config?.root ?? root;
+      clientSourceFileSystems = viteClientSourceFileSystems(root, server.config?.server?.fs?.allow);
       server.middlewares.use((req, res, next) => {
         const key = devClientModuleKey(req.url);
         const source = key ? compilerMapGet(clientModules, key) : undefined;
@@ -352,7 +371,7 @@ export function createFrameworkKovoVitePlugin(
     },
     name: 'kovo',
     resolveId(source: string, importer?: string): null | string {
-      const resolvedId = resolveViteClientModuleId(source, importer, root);
+      const resolvedId = resolveViteClientModuleId(source, importer, root, clientSourceFileSystems);
       if (resolvedId === null) return null;
 
       return resolvedId;
@@ -364,6 +383,7 @@ export function createFrameworkKovoVitePlugin(
         compileCache,
         options,
         root,
+        clientSourceFileSystems,
         id,
       );
     },
@@ -1050,6 +1070,7 @@ function resolveViteClientModuleId(
   source: string,
   importer: string | undefined,
   root: string,
+  sourceFileSystems: readonly CompilerSourceFileSystem[],
 ): null | string {
   const sourceFileName = viteRequestFileName(source);
   if (!compilerStringEndsWith(sourceFileName, '.client.js')) return null;
@@ -1059,7 +1080,11 @@ function resolveViteClientModuleId(
     : importerFileName
       ? resolve(dirname(importerFileName), sourceFileName)
       : resolve(root, trimLeadingSlashes(sourceFileName));
-  if (!existsSync(viteClientModuleSourceFilePath(candidate))) return null;
+  if (
+    !viteClientSourceFileIsAllowed(sourceFileSystems, viteClientModuleSourceFilePath(candidate))
+  ) {
+    return null;
+  }
 
   return candidate;
 }
@@ -1070,17 +1095,18 @@ function loadViteClientModule(
   cache: CompileCache<ViteCompileResult>,
   options: KovoVitePluginOptions,
   root: string,
+  sourceFileSystems: readonly CompilerSourceFileSystem[],
   id: string,
 ): MaybePromise<null | string> {
   const clientFilePath = viteRequestFileName(id);
   if (!compilerStringEndsWith(clientFilePath, '.client.js')) return null;
 
   const sourceFilePath = viteClientModuleSourceFilePath(clientFilePath);
-  if (!existsSync(sourceFilePath)) return null;
+  const source = readViteClientSourceFile(sourceFileSystems, sourceFilePath);
+  if (source === null) return null;
 
   const fileName = viteComponentFileName(sourceFilePath, root);
   const componentId = viteComponentIdentity(sourceFilePath, root);
-  const source = readFileSync(sourceFilePath, 'utf8');
   if (!shouldTransformViteComponentSource(fileName, componentId, source, options)) return null;
 
   const result = compileCachedViteComponentModule(
@@ -1123,6 +1149,56 @@ function viteClientSource(files: readonly { kind: string; source: string }[]): n
 
 function viteClientModuleSourceFilePath(clientFilePath: string): string {
   return compilerRegExpReplace(/\.client\.js$/u, clientFilePath, '.tsx');
+}
+
+function viteClientSourceFileSystems(
+  root: string,
+  configuredRoots?: readonly string[],
+): readonly CompilerSourceFileSystem[] {
+  const roots =
+    configuredRoots === undefined
+      ? [root]
+      : compilerSnapshotDenseArray(configuredRoots, 'Vite server.fs.allow roots');
+  const fileSystems: CompilerSourceFileSystem[] = [];
+  const length = compilerArrayLength(roots, 'Vite client source roots');
+  for (let index = 0; index < length; index += 1) {
+    const allowedRoot = compilerOwnDataValue(roots, index, 'Vite client source roots');
+    if (typeof allowedRoot !== 'string') {
+      throw new TypeError(`Vite server.fs.allow[${index}] must be a string.`);
+    }
+    const fileSystem = createCompilerSourceFileSystem(allowedRoot);
+    if (fileSystem !== null) {
+      compilerArrayAppend(
+        fileSystems,
+        fileSystem,
+        'Compiler packages/compiler/src/vite.ts client source filesystems',
+      );
+    }
+  }
+  return compilerFreeze(fileSystems);
+}
+
+function viteClientSourceFileIsAllowed(
+  fileSystems: readonly CompilerSourceFileSystem[],
+  sourceFilePath: string,
+): boolean {
+  const length = compilerArrayLength(fileSystems, 'Vite client source filesystems');
+  for (let index = 0; index < length; index += 1) {
+    if (fileSystems[index]?.kind(sourceFilePath) === 'file') return true;
+  }
+  return false;
+}
+
+function readViteClientSourceFile(
+  fileSystems: readonly CompilerSourceFileSystem[],
+  sourceFilePath: string,
+): string | null {
+  const length = compilerArrayLength(fileSystems, 'Vite client source filesystems');
+  for (let index = 0; index < length; index += 1) {
+    const source = fileSystems[index]?.readFile(sourceFilePath);
+    if (source !== null && source !== undefined) return source;
+  }
+  return null;
 }
 
 function resolveViteRegistryFacts(
