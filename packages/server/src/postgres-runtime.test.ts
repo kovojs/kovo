@@ -3337,6 +3337,53 @@ describe('createPostgresAppRuntimeDb', () => {
     );
   });
 
+  it('refuses relations granted directly to the runtime login', async () => {
+    // SPEC §10.3 C10: relation reachability is the complete runtime-login plus assumable-role
+    // closure, not only the four configured framework roles. A managed-provider login can carry a
+    // direct legacy grant even while its role attributes and framework memberships are minimal.
+    const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-login-relation-'));
+    roots.push(dataDir);
+    const report = await migratePostgresAppDb({
+      dataDir,
+      driver: 'pglite',
+      migrations: [
+        {
+          id: '001_runtime_login_schema',
+          sql: ['CREATE ROLE provider_runtime_login LOGIN', runtimeSchemaMigrationSql].join('; '),
+        },
+      ],
+      runtimeDatabaseUrl: 'postgres://provider_runtime_login@127.0.0.1/kovo',
+      schema,
+    });
+    expect(report.posture.ok).toBe(true);
+
+    await execPglite(
+      dataDir,
+      [
+        'CREATE TABLE runtime_login_secret (id text PRIMARY KEY, secret text NOT NULL)',
+        "INSERT INTO runtime_login_secret VALUES ('victim', 'runtime-login-secret')",
+        'REVOKE ALL ON TABLE runtime_login_secret FROM PUBLIC',
+        'GRANT SELECT ON TABLE runtime_login_secret TO provider_runtime_login',
+      ].join('; '),
+    );
+
+    const drifted = await checkPostgresAppDbPosture({
+      dataDir,
+      databaseUrl: 'postgres://provider_runtime_login@127.0.0.1/kovo',
+      driver: 'pglite',
+      schema,
+    });
+    expect(drifted.ok).toBe(false);
+    expect(drifted.issues).toContainEqual(
+      expect.objectContaining({
+        code: 'KV433_REACHABLE_TABLE',
+        detail: expect.stringContaining(
+          'runtime_login_secret is reachable by an app role but is not a Kovo-protected table',
+        ),
+      }),
+    );
+  });
+
   it('refuses runtime logins that are the configured admin or system role', async () => {
     for (const [purpose, role] of [
       ['admin', 'kovo_admin'],

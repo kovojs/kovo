@@ -146,7 +146,7 @@ const POSTGRES_SECURITY_SEARCH_PATH_SQL = 'SET LOCAL search_path = pg_catalog, p
 // seed SQL and run its function with the provisioner's authority (SPEC §10.3 C9/C10).
 const POSTGRES_APP_DDL_SEARCH_PATH_SQL = 'SET LOCAL search_path = public, pg_temp';
 const POSTGRES_REACHABLE_RELATIONS_SQL = [
-  'WITH app_roles(role_name) AS (VALUES ($1), ($2), ($3), ($4)),',
+  'WITH app_roles(role_name) AS (SELECT unnest($1::text[])),',
   'existing_roles AS (',
   '  SELECT DISTINCT r.oid, r.rolname',
   '  FROM pg_roles r',
@@ -1857,7 +1857,7 @@ async function checkRuntimeDbPostureTransaction(
 
   appendPostgresDenseValues(
     issues,
-    await auditPostgresReachableClosure(client, input),
+    await auditPostgresReachableClosure(client, input, runtimeLoginRole),
     'Postgres reachable closure issues',
   );
   appendPostgresDenseValues(
@@ -2114,8 +2114,22 @@ async function auditPostgresReachableClosure(
     metadata: KovoRuntimeDbMetadata;
     schemaTables: readonly PgTable[];
   },
+  runtimeLoginRole: string | undefined,
 ): Promise<KovoPostgresPostureIssue[]> {
   const issues: KovoPostgresPostureIssue[] = [];
+  const auditedIdentities = await postgresRelationAuditIdentityNames(
+    client,
+    input.config,
+    runtimeLoginRole,
+  );
+  if (auditedIdentities === undefined) {
+    appendPostgresDenseValue(issues, {
+      code: 'KV433_REACHABILITY_AUDIT',
+      detail:
+        'could not enumerate runtime-login/assumable-role relation reachability from pg_roles/pg_has_role',
+    });
+    return issues;
+  }
   const protectedTables = resolveProtectedPostgresTables(input.schemaTables, input.metadata);
   const protectedRelations = createWitnessSet<string>();
   witnessMapForEach(protectedTables, (table) =>
@@ -2134,12 +2148,7 @@ async function auditPostgresReachableClosure(
   const reachableRows = await safeQuery<PostgresReachableRelationRow>(
     client,
     POSTGRES_REACHABLE_RELATIONS_QUERY,
-    [
-      input.config.readerRole,
-      input.config.writerRole,
-      input.config.adminRole,
-      input.config.systemRole,
-    ],
+    [auditedIdentities],
   );
   if (reachableRows === undefined) {
     appendPostgresDenseValue(issues, {
@@ -2242,7 +2251,7 @@ async function auditPostgresReachableClosure(
   }
   appendPostgresDenseValues(
     issues,
-    await auditPostgresAttachedCode(client, reachable, input.config),
+    await auditPostgresAttachedCode(client, reachable, auditedIdentities),
     'Postgres attached code issues',
   );
   return issues;
@@ -2251,7 +2260,7 @@ async function auditPostgresReachableClosure(
 async function auditPostgresAttachedCode(
   client: RuntimeTransactionClient,
   reachable: ReadonlyMap<string, PostgresReachableRelation>,
-  config: ResolvedPostgresRuntimeConfig,
+  auditedIdentities: readonly string[],
 ): Promise<KovoPostgresPostureIssue[]> {
   const writableRelations = postgresFilterDense(
     postgresMapValues(reachable),
@@ -2259,7 +2268,7 @@ async function auditPostgresAttachedCode(
     'Writable Postgres reachable relations',
   );
   if (writableRelations.length === 0) return [];
-  const writeClosure = await postgresWritePropagationClosure(client, config);
+  const writeClosure = await postgresWritePropagationClosure(client, auditedIdentities);
   if (writeClosure === undefined) {
     return [
       {
@@ -2394,13 +2403,13 @@ async function auditPostgresAttachedCode(
 
 async function postgresWritePropagationClosure(
   client: RuntimeTransactionClient,
-  config: ResolvedPostgresRuntimeConfig,
+  auditedIdentities: readonly string[],
 ): Promise<ReadonlySet<string> | undefined> {
   const closureRows = await safeQuery<PostgresWritePropagationClosureRow>(
     client,
     postgresJoin(
       [
-        'WITH RECURSIVE app_roles(role_name) AS (VALUES ($1), ($2), ($3), ($4)),',
+        'WITH RECURSIVE app_roles(role_name) AS (SELECT unnest($1::text[])),',
         'existing_roles AS (',
         '  SELECT DISTINCT r.oid',
         '  FROM pg_roles r',
@@ -2461,7 +2470,7 @@ async function postgresWritePropagationClosure(
       ],
       ' ',
     ),
-    [config.readerRole, config.writerRole, config.adminRole, config.systemRole],
+    [auditedIdentities],
   );
   if (closureRows === undefined) return undefined;
   const closure = createWitnessSet<string>();
@@ -2752,6 +2761,46 @@ async function postgresAppAuthorityIdentityNames(
   return rows === undefined
     ? undefined
     : postgresIdentityNamesFromRows(rows.rows, 'Postgres app authority identity rows');
+}
+
+/**
+ * Complete identity set for relation and attached-code reachability.
+ *
+ * The four configured framework roles preserve the existing privileged-handle posture audit. The
+ * runtime login and every role it can assume are additionally mandatory: managed-provider logins
+ * can carry direct legacy relation grants that are not inherited from reader/writer, and those
+ * grants still sit on the request-serving engine boundary (SPEC §10.3 C10).
+ */
+async function postgresRelationAuditIdentityNames(
+  client: RuntimeTransactionClient,
+  config: ResolvedPostgresRuntimeConfig,
+  runtimeLoginRole: string | undefined,
+): Promise<readonly string[] | undefined> {
+  const appAuthorityIdentities = await postgresAppAuthorityIdentityNames(
+    client,
+    config,
+    runtimeLoginRole,
+  );
+  if (appAuthorityIdentities === undefined) return undefined;
+
+  const identities: string[] = [];
+  const seen = createWitnessSet<string>();
+  appendUniquePostgresIdentity(identities, seen, config.readerRole);
+  appendUniquePostgresIdentity(identities, seen, config.writerRole);
+  appendUniquePostgresIdentity(identities, seen, config.adminRole);
+  appendUniquePostgresIdentity(identities, seen, config.systemRole);
+  const appIdentityCount = postgresDenseArrayLength(
+    appAuthorityIdentities,
+    'Postgres app authority identities',
+  );
+  for (let index = 0; index < appIdentityCount; index += 1) {
+    appendUniquePostgresIdentity(
+      identities,
+      seen,
+      postgresDenseArrayValue(appAuthorityIdentities, index, 'Postgres app authority identities'),
+    );
+  }
+  return identities;
 }
 
 function postgresAppAuthorityRootNames(
