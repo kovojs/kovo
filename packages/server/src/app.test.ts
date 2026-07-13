@@ -3036,15 +3036,37 @@ describe('server createApp request shell', () => {
 
     const routeResponse = await handler(new Request('https://example.test/cart'));
     const routeHtml = await routeResponse.text();
-    const layoutTarget = /<main[^>]*kovo-fragment-target="([^"]+)"/.exec(routeHtml)?.[1];
+    const layoutOpening = /<main[^>]*>/.exec(routeHtml)?.[0] ?? '';
+    const layoutTarget = /kovo-fragment-target="([^"]+)"/.exec(layoutOpening)?.[1];
+    const layoutComponent = /kovo-live-component="([^"]+)"/.exec(layoutOpening)?.[1];
+    const layoutToken = /kovo-live-token="([^"]+)"/.exec(layoutOpening)?.[1];
     expect(layoutTarget).toMatch(/^kovo-layout-/);
+    expect(layoutComponent).toBe(`kovo-layout-plan/${layoutTarget}`);
+    expect(layoutToken).toBeTruthy();
     expect(routeHtml).toContain('kovo-deps="cart"');
+
+    const forgedMutationResponse = await handler(
+      new Request('https://example.test/_m/cart/add', {
+        body: new FormData(),
+        headers: {
+          'Kovo-Current-Url': 'https://example.test/cart',
+          'Kovo-Fragment': 'true',
+          'Kovo-Live-Targets': `${layoutTarget}#${layoutComponent}@forged:{}`,
+          'Kovo-Targets': `${layoutTarget}=cart`,
+        },
+        method: 'POST',
+      }),
+    );
+    expect(forgedMutationResponse.status).toBe(200);
+    await expect(forgedMutationResponse.text()).resolves.toBe('');
 
     const mutationResponse = await handler(
       new Request('https://example.test/_m/cart/add', {
         body: new FormData(),
         headers: {
+          'Kovo-Current-Url': 'https://example.test/cart',
           'Kovo-Fragment': 'true',
+          'Kovo-Live-Targets': `${layoutTarget}#${layoutComponent}@${layoutToken}:{}`,
           'Kovo-Targets': `${layoutTarget}=cart`,
         },
         method: 'POST',
@@ -3053,7 +3075,7 @@ describe('server createApp request shell', () => {
 
     expect(mutationResponse.status).toBe(200);
     await expect(mutationResponse.text()).resolves.toBe(
-      '<kovo-query name="cart">{"count":2}</kovo-query>',
+      '<kovo-query name="cart">{"count":3}</kovo-query>',
     );
   });
 

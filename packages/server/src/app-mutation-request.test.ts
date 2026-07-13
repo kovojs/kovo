@@ -713,16 +713,37 @@ describe('server app mutation request boundary', () => {
         return input;
       },
     });
-    const app = createApp({
-      mutations: [refreshCatalog],
-      requestLimits: { maxQueryListItems: 2 },
-    });
+    const catalogPlanRenderer: LiveTargetRenderer = {
+      component: 'components/catalog/list-plan',
+      mutationKeys: [],
+      queries: ['catalogItems'],
+      queryDefinitions: [catalogQuery],
+      render: () => {
+        throw new Error('A query-plan target must not render a fragment.');
+      },
+      updateCoverage: 'plan',
+    };
+    const app = withCompilerLiveTargetRenderers([catalogPlanRenderer], () =>
+      createApp({
+        mutations: [refreshCatalog],
+        requestLimits: { maxQueryListItems: 2 },
+        routes: [route('/catalog', { page: () => renderedHtml('<main>Catalog</main>') })],
+      }),
+    );
     const form = new FormData();
     form.set('reason', 'test');
     const request = new Request('https://shop.example.test/_m/catalog/refresh', {
       body: form,
       headers: {
+        'Kovo-Current-Url': 'https://shop.example.test/catalog',
         'Kovo-Fragment': 'true',
+        'Kovo-Live-Targets': attestedLiveTargetHeader(
+          'catalog-list',
+          'components/catalog/list-plan',
+          appLiveTargetAttestationAudience(app),
+          {},
+          'https://shop.example.test/catalog',
+        ),
         'Kovo-Targets': 'catalog-list=catalogItems',
       },
       method: 'POST',

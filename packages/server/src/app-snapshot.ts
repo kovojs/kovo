@@ -356,6 +356,13 @@ export function snapshotLiveTargetRenderers(
       }
       record.queries = witnessFreeze(values);
     }
+    if (
+      record.updateCoverage !== undefined &&
+      record.updateCoverage !== 'fragment' &&
+      record.updateCoverage !== 'plan'
+    ) {
+      throw new TypeError("liveTargetRenderer.updateCoverage must be 'fragment' or 'plan'.");
+    }
     const mutationKeys = denseArrayValues(record.mutationKeys, 'liveTargetRenderer.mutationKeys');
     for (let mutationIndex = 0; mutationIndex < mutationKeys.length; mutationIndex += 1) {
       if (typeof mutationKeys[mutationIndex] !== 'string') {

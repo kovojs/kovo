@@ -453,6 +453,7 @@ export function selectMutationResponseTargets<Request>(
   }
 
   const liveTargetDescriptors: MutationLiveTargetDescriptor[] = [];
+  const planDescriptorReruns: QueryRerun[] = [];
   for (
     let descriptorIndex = 0;
     descriptorIndex < input.liveTargetDescriptors.length;
@@ -466,16 +467,21 @@ export function selectMutationResponseTargets<Request>(
     if (liveTarget === undefined) continue;
     const reruns = witnessMapGet(descriptorReruns, descriptor) ?? [];
     if (someQueryRerun(reruns, (query) => depsMatch(liveTarget, queryRerunTokens(query)))) {
-      witnessArrayAppend(
-        liveTargetDescriptors,
-        descriptor,
-        'Server packages/server/src/mutation/targets.ts collection',
-      );
+      if (renderer.updateCoverage === 'plan') {
+        appendArray(planDescriptorReruns, reruns);
+      } else {
+        witnessArrayAppend(
+          liveTargetDescriptors,
+          descriptor,
+          'Server packages/server/src/mutation/targets.ts collection',
+        );
+      }
     }
   }
 
   const mergedReruns: QueryRerun[] = [];
   appendArray(mergedReruns, rerunQueries);
+  appendArray(mergedReruns, planDescriptorReruns);
   for (let index = 0; index < liveTargetDescriptors.length; index += 1) {
     appendArray(mergedReruns, witnessMapGet(descriptorReruns, liveTargetDescriptors[index]!) ?? []);
   }
@@ -587,10 +593,12 @@ function targetIsPlanCovered(
   target: string,
   renderersByTarget: ReadonlyMap<string, FragmentRenderer>,
 ): boolean {
-  return (
-    witnessMapGet(renderersByTarget, target)?.updateCoverage === 'plan' ||
-    !witnessMapHas(renderersByTarget, target)
-  );
+  // SPEC §9.1: client Kovo-Targets names are stateless update hints, not query execution
+  // authority. A query-only rerun is allowed only when the compiler-owned response plan
+  // explicitly covers that exact target. Missing fragment renderers are not implicit plan
+  // coverage; server-refreshable components instead contribute query reruns through a verified
+  // Kovo-Live-Targets descriptor bound to their generated renderer above.
+  return witnessMapGet(renderersByTarget, target)?.updateCoverage === 'plan';
 }
 
 function queryRerunTokens(query: QueryRerun): string[] {

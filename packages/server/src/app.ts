@@ -28,8 +28,9 @@ import {
   registerAppLiveTargetIdentity,
 } from './live-target-app-identity.js';
 import { mutation } from './mutation.js';
+import type { LiveTargetRenderer } from './mutation-wire.js';
 import { query } from './query.js';
-import { layout, route } from './route.js';
+import { layout, route, routeLayoutLiveTargetRenderers } from './route.js';
 import { task } from './task.js';
 import {
   createWitnessSet,
@@ -207,9 +208,29 @@ export function createApp<
     'createApp.routes',
     (declaration) => snapshotAppRoute(declaration, snapshotContext),
   );
-  const liveTargetRenderers = snapshotLiveTargetRenderers(
+  const liveTargetRendererSources: LiveTargetRenderer<AppRequest>[] = [];
+  denseOwnArrayForEach(
     generatedLiveTargetRenderers,
-    snapshotContext,
+    (renderer) =>
+      witnessArrayAppend(
+        liveTargetRendererSources,
+        renderer,
+        'createApp generated live-target registry',
+      ),
+    'createApp generated live-target registry',
+  );
+  denseOwnArrayForEach(
+    routeLayoutLiveTargetRenderers(routes),
+    (renderer) =>
+      witnessArrayAppend(
+        liveTargetRendererSources,
+        renderer,
+        'createApp layout live-target registry',
+      ),
+    'createApp layout live-target registry',
+  );
+  const liveTargetRenderers = assertUniqueLiveTargetRendererComponents(
+    snapshotLiveTargetRenderers(liveTargetRendererSources, snapshotContext),
   );
   const authoredMutations = assertUniqueMutationKeys(
     snapshotAppRegistry(
@@ -646,6 +667,26 @@ function assertUniqueMutationKeys<Mutation extends AppMutationDeclaration<any>>(
     'createApp mutation registry',
   );
   return mutations;
+}
+
+function assertUniqueLiveTargetRendererComponents<Request>(
+  renderers: readonly LiveTargetRenderer<Request>[],
+): readonly LiveTargetRenderer<Request>[] {
+  const seen = createWitnessSet<string>();
+  denseOwnArrayForEach(
+    renderers,
+    (renderer) => {
+      if (witnessSetHas(seen, renderer.component)) {
+        throw new Error(
+          `createApp() received two generated live-target renderers for component "${renderer.component}". ` +
+            'Compiler-owned component and layout-plan identities must be globally unique.',
+        );
+      }
+      witnessSetAdd(seen, renderer.component);
+    },
+    'createApp live-target renderer registry',
+  );
+  return renderers;
 }
 
 function assertUniqueTaskKeys<Task extends AppTaskDeclaration>(

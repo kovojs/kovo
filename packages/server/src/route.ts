@@ -35,12 +35,16 @@ import type { PageHintOptions, RouteMetaSource } from './hints.js';
 import type { SignUrlContext } from './capability-route.js';
 import { runWithJsxRequestContext } from './jsx-context.js';
 import type { CsrfOptions } from './csrf.js';
+import type { LiveTargetRenderer } from './mutation-wire.js';
 import { accessDecisionFor, pinAccessDecision, type AccessDecision } from './access.js';
 import { createDeferredRegionChunkCollector } from './deferred-region.js';
 import { stampGuardFailureDocumentSecurityFloor } from './document-core.js';
 import type { DeferredRegionCollector } from './jsx-context.js';
 import type { MutationFail } from './mutation.js';
-import type { LiveTargetAttestationAuthority } from './live-target-app-identity.js';
+import {
+  createLiveTargetAttestationWithAuthority,
+  type LiveTargetAttestationAuthority,
+} from './live-target-app-identity.js';
 import {
   recordQueryRuntimeWarnings,
   runQuery,
@@ -126,6 +130,7 @@ type RouteSearchFor<SearchSchema extends MaybeSchema<Record<string, RouteSearchV
 type LayoutQueryMap<Request> = Readonly<Record<string, QueryDefinition<string, any, any, Request>>>;
 
 interface LayoutLiveTargetMetadata {
+  component: string;
   deps: readonly string[];
   target: string;
 }
@@ -358,10 +363,16 @@ export function layout<
   }
   if (deps.length > 0) {
     nextLayoutLiveTargetId += 1;
-    witnessWeakMapSet(layoutLiveTargetMetadata, declaration, {
-      deps,
-      target: `kovo-layout-${nextLayoutLiveTargetId}`,
-    });
+    const target = `kovo-layout-${nextLayoutLiveTargetId}`;
+    witnessWeakMapSet(
+      layoutLiveTargetMetadata,
+      declaration,
+      witnessFreeze({
+        component: `kovo-layout-plan/${target}`,
+        deps: witnessFreeze(deps),
+        target,
+      }),
+    );
   }
   return witnessFreeze(declaration);
 }
@@ -865,6 +876,7 @@ async function runRoutePageInternal<
           metadata,
           regions,
           options.maxListItems,
+          options.attestationAuthority,
         );
       },
     );
@@ -946,6 +958,7 @@ async function renderLayoutChain<Request>(
   metadata: CompiledRoutePageMetadata | undefined,
   regions: Readonly<Record<string, unknown>> = {},
   maxListItems?: number,
+  attestationAuthority?: LiveTargetAttestationAuthority,
 ): Promise<unknown> {
   const layoutSegments = routeLayoutSegments(metadata);
   let value = pageValue;
@@ -960,7 +973,7 @@ async function renderLayoutChain<Request>(
         regions,
         request,
       });
-      value = stampLayoutLiveTarget(layoutDeclaration, value);
+      value = stampLayoutLiveTarget(layoutDeclaration, value, request, attestationAuthority);
       value = stampRouteNavigationSegment(layoutSegments[index], value);
     } catch (error) {
       throw new RouteBoundaryRenderError(
@@ -1154,6 +1167,8 @@ function stampRouteNavigationAttributes(
 function stampLayoutLiveTarget(
   layoutDeclaration: LayoutDeclaration<any, any, any>,
   value: unknown,
+  request: unknown,
+  attestationAuthority?: LiveTargetAttestationAuthority,
 ): unknown {
   const rendered = stampableRouteHtml(value);
   if (!rendered) return value;
@@ -1165,7 +1180,11 @@ function stampLayoutLiveTarget(
   if (opening === undefined) return value;
 
   return renderedHtml(
-    replaceHtmlOpeningTag(html, opening, stampLayoutAttributes(opening.attrs, metadata)),
+    replaceHtmlOpeningTag(
+      html,
+      opening,
+      stampLayoutAttributes(opening.attrs, metadata, request, attestationAuthority),
+    ),
   );
 }
 
@@ -1177,7 +1196,12 @@ function stampableRouteHtml(value: unknown): RenderedHtml | undefined {
   return undefined;
 }
 
-function stampLayoutAttributes(attrs: string, metadata: LayoutLiveTargetMetadata): string {
+function stampLayoutAttributes(
+  attrs: string,
+  metadata: LayoutLiveTargetMetadata,
+  request: unknown,
+  attestationAuthority?: LiveTargetAttestationAuthority,
+): string {
   const deps = routeStampOwnStringArray(metadata, 'deps', 'Layout live-target metadata');
   const target = routeStampOwnString(metadata, 'target', 'Layout live-target metadata');
   if (deps.length === 0) return attrs;
@@ -1185,11 +1209,23 @@ function stampLayoutAttributes(attrs: string, metadata: LayoutLiveTargetMetadata
   let nextAttrs = setOrAppendHtmlAttribute(attrs, 'kovo-deps', joinHtmlAttributeTokens(mergedDeps));
 
   if (
+    attestationAuthority !== undefined &&
     htmlAttributeValue(nextAttrs, 'kovo-fragment-target') === undefined &&
     htmlAttributeValue(nextAttrs, 'id') === undefined &&
     htmlAttributeValue(nextAttrs, 'kovo-c') === undefined
   ) {
     nextAttrs = setOrAppendHtmlAttribute(nextAttrs, 'kovo-fragment-target', target);
+    const component = routeStampOwnString(metadata, 'component', 'Layout live-target metadata');
+    nextAttrs = setOrAppendHtmlAttribute(nextAttrs, 'kovo-live-component', component);
+    nextAttrs = setOrAppendHtmlAttribute(
+      nextAttrs,
+      'kovo-live-token',
+      createLiveTargetAttestationWithAuthority(
+        attestationAuthority,
+        { component, props: {}, target },
+        request,
+      ),
+    );
   }
 
   return nextAttrs;
@@ -1377,6 +1413,71 @@ export function routeHasBoundary(
   kind: RouteBoundaryKind,
 ): boolean {
   return routeBoundaryFor(kind, definition, routeLayoutChain(definition.layout)) !== undefined;
+}
+
+/**
+ * @internal Derive proof-bearing, query-only renderers for layout update-plan targets.
+ *
+ * Layouts cannot be reconstructed as fragments without their child slot, but their declared
+ * queries can still refresh through the browser update plan. The renderer binds the signed DOM
+ * target to the exact layout query definitions while `updateCoverage: 'plan'` prevents fragment
+ * rendering (SPEC §4.8/§9.1).
+ */
+export function routeLayoutLiveTargetRenderers<Request>(
+  routes: readonly RouteDeclaration<any, any, any, Request, any, any>[],
+): readonly LiveTargetRenderer<Request>[] {
+  const renderers: LiveTargetRenderer<Request>[] = [];
+  const seen = createWitnessSet<LayoutDeclaration<any, any, any>>();
+  for (let routeIndex = 0; routeIndex < routes.length; routeIndex += 1) {
+    const declaration = routes[routeIndex];
+    if (declaration === undefined) continue;
+    const layouts = routeLayoutChain(declaration.layout);
+    for (let layoutIndex = 0; layoutIndex < layouts.length; layoutIndex += 1) {
+      const layoutDeclaration = layouts[layoutIndex];
+      if (layoutDeclaration === undefined || witnessSetHas(seen, layoutDeclaration)) continue;
+      witnessSetAdd(seen, layoutDeclaration);
+      const metadata = witnessWeakMapGet(layoutLiveTargetMetadata, layoutDeclaration);
+      if (metadata === undefined) continue;
+      const queryDefinitions = layoutLiveTargetQueryDefinitions<Request>(layoutDeclaration);
+      if (queryDefinitions.length === 0) continue;
+      witnessArrayAppend(
+        renderers,
+        witnessFreeze({
+          component: routeStampOwnString(metadata, 'component', 'Layout live-target metadata'),
+          mutationKeys: witnessFreeze([]),
+          queries: metadata.deps,
+          queryDefinitions: witnessFreeze(queryDefinitions),
+          render: renderLayoutPlanTarget,
+          updateCoverage: 'plan' as const,
+        }),
+        'Route layout live-target renderer registry',
+      );
+    }
+  }
+  return witnessFreeze(renderers);
+}
+
+function layoutLiveTargetQueryDefinitions<Request>(
+  declaration: LayoutDeclaration<Request, any, any>,
+): RegisteredQueryDefinition[] {
+  const definitions: RegisteredQueryDefinition[] = [];
+  const queries = declaration.queries ?? witnessCreateNullRecord();
+  const names = witnessObjectKeys(queries);
+  for (let index = 0; index < names.length; index += 1) {
+    const descriptor = witnessGetOwnPropertyDescriptor(queries, names[index]!);
+    if (descriptor !== undefined && 'value' in descriptor) {
+      witnessArrayAppend(
+        definitions,
+        descriptor.value as RegisteredQueryDefinition,
+        'Route layout live-target query registry',
+      );
+    }
+  }
+  return definitions;
+}
+
+function renderLayoutPlanTarget(): never {
+  throw new TypeError('A layout update-plan target cannot render a standalone fragment.');
 }
 
 /**

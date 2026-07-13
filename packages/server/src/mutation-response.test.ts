@@ -241,6 +241,13 @@ describe('server mutation primitives', () => {
 
     await expect(
       renderMutationEndpointResponse(refreshCatalog, {
+        fragmentRenderers: [
+          {
+            render: () => renderedHtml('<catalog-list></catalog-list>'),
+            target: 'catalog-list',
+            updateCoverage: 'plan',
+          },
+        ],
         headers: {
           'Kovo-Fragment': 'true',
           'Kovo-Targets': 'catalog-list=catalogItems',
@@ -453,6 +460,13 @@ describe('server mutation primitives', () => {
 
     await expect(
       renderMutationEndpointResponse(addToCart, {
+        fragmentRenderers: [
+          {
+            render: () => renderedHtml('<cart-badge></cart-badge>'),
+            target: 'cart-badge',
+            updateCoverage: 'plan',
+          },
+        ],
         headers: {
           'Kovo-Fragment': 'true',
           'Kovo-Live-Targets': `${attestedLiveTargetHeader('admin-panel', 'components/admin/panel')}`,
@@ -790,6 +804,63 @@ describe('server mutation primitives', () => {
     expect(sensitiveRenderer).not.toHaveBeenCalled();
   });
 
+  it('does not let unattested Kovo-Targets entries select private query reruns', async () => {
+    const publicDomain = domain('public');
+    const privateDomain = domain('private');
+    const publicLoad = vi.fn(() => ({ value: 'PUBLIC_VALUE' }));
+    const privateLoad = vi.fn(() => ({ value: 'SERVER_DATABASE_SECRET' }));
+    const publicQuery = query('public', { load: publicLoad, reads: [publicDomain] });
+    const privateQuery = query('private', { load: privateLoad, reads: [privateDomain] });
+    const update = mutation('records/update', {
+      csrf: false,
+      csrfJustification: 'test fixture uses a non-browser caller',
+      input: s.object({}),
+      registry: {
+        queries: [publicQuery, privateQuery],
+        touches: [publicDomain, privateDomain],
+      },
+      handler: () => ({}),
+    });
+    const PublicPanel = component({
+      queries: { public: publicQuery },
+      render: () => renderedHtml('<output>PUBLIC_VALUE</output>'),
+    });
+    const PrivatePanel = component({
+      queries: { private: privateQuery },
+      render: () => renderedHtml('<output>SERVER_DATABASE_SECRET</output>'),
+    });
+
+    const response = await renderMutationEndpointResponse(update, {
+      headers: {
+        'Kovo-Fragment': 'true',
+        'Kovo-Live-Targets': [
+          attestedLiveTargetHeader('public-panel', 'components/public/panel'),
+          'private-panel#components/private/panel@forged:{}',
+        ].join(';'),
+        'Kovo-Targets': 'public-panel=public; private-panel=private',
+      },
+      liveTargetRenderers: [
+        componentLiveTargetRenderer({
+          component: PublicPanel,
+          componentId: 'components/public/panel',
+        }),
+        componentLiveTargetRenderer({
+          component: PrivatePanel,
+          componentId: 'components/private/panel',
+        }),
+      ],
+      rawInput: {},
+      redirectTo: '/',
+      request: {},
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.body).toContain('PUBLIC_VALUE');
+    expect(response.body).not.toContain('SERVER_DATABASE_SECRET');
+    expect(publicLoad).toHaveBeenCalled();
+    expect(privateLoad).not.toHaveBeenCalled();
+  });
+
   it('rejects duplicate generated fragment targets before either renderer executes', async () => {
     const cart = domain('cart');
     const cartQuery = query('cart', { load: () => ({ count: 1 }), reads: [cart] });
@@ -821,6 +892,58 @@ describe('server mutation primitives', () => {
     expect(response.body).toContain('RENDER_ERROR');
     expect(publicRenderer).not.toHaveBeenCalled();
     expect(sensitiveRenderer).not.toHaveBeenCalled();
+  });
+
+  it('rejects duplicate generated live-target components before query or render execution', async () => {
+    const records = domain('duplicate-live-records');
+    const load = vi.fn(() => ({ value: 'SERVER_DATABASE_SECRET_DUPLICATE_COMPONENT' }));
+    const recordsQuery = query('duplicateLiveRecords', { load, reads: [records] });
+    const update = mutation('records/duplicate-live-components', {
+      csrf: false,
+      csrfJustification: 'test fixture uses a non-browser caller',
+      input: s.object({}),
+      registry: { queries: [recordsQuery], touches: [records] },
+      handler: () => ({}),
+    });
+    const publicRender = vi.fn(() => '<output>PUBLIC_DUPLICATE_COMPONENT</output>');
+    const sensitiveRender = vi.fn(
+      () => '<output>SERVER_DATABASE_SECRET_DUPLICATE_COMPONENT</output>',
+    );
+
+    await expect(
+      renderMutationEndpointResponse(update, {
+        headers: {
+          'Kovo-Fragment': 'true',
+          'Kovo-Live-Targets': attestedLiveTargetHeader(
+            'shared-live-panel',
+            'components/shared/live-panel',
+          ),
+          'Kovo-Targets': 'shared-live-panel=duplicateLiveRecords',
+        },
+        liveTargetRenderers: [
+          {
+            component: 'components/shared/live-panel',
+            mutationKeys: [],
+            queryDefinitions: [recordsQuery],
+            queries: ['duplicateLiveRecords'],
+            render: publicRender,
+          },
+          {
+            component: 'components/shared/live-panel',
+            mutationKeys: [],
+            queryDefinitions: [recordsQuery],
+            queries: ['duplicateLiveRecords'],
+            render: sensitiveRender,
+          },
+        ],
+        rawInput: {},
+        redirectTo: '/',
+        request: {},
+      }),
+    ).rejects.toThrow(/Duplicate live-target renderer component/u);
+    expect(load).not.toHaveBeenCalled();
+    expect(publicRender).not.toHaveBeenCalled();
+    expect(sensitiveRender).not.toHaveBeenCalled();
   });
 
   it('bypasses success selection on failures and rerenders the submitted form target', async () => {

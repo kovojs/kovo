@@ -222,6 +222,11 @@ export interface LiveTargetRenderer<Request = unknown> {
   queryDefinitions?: readonly RegisteredQueryDefinition[];
   render(context: LiveTargetRenderContext<Request>): AwaitableGeneratedFragmentRenderable;
   stylesheets?: readonly (string | StylesheetAsset)[];
+  /**
+   * Compiler-owned response coverage. A plan renderer authorizes only its bound query reloads;
+   * it never emits a fragment because the browser update plan owns every affected position.
+   */
+  updateCoverage?: 'fragment' | 'plan';
 }
 
 /** @internal Context passed to a generated live-target renderer (SPEC §9.1). */

@@ -593,11 +593,26 @@ describe('server mutation endpoint routing', () => {
 
     await expect(
       renderMutationEndpointResponse(reserveProduct, {
-        fragmentRenderers: [],
         headers: {
           'Kovo-Fragment': 'true',
+          'Kovo-Live-Targets': attestedLiveTargetHeader(
+            'product-card:p1',
+            'components/product/card-plan',
+          ),
           'Kovo-Targets': 'product-card:p1=product:p1',
         },
+        liveTargetRenderers: [
+          {
+            component: 'components/product/card-plan',
+            mutationKeys: [],
+            queries: ['productDetail'],
+            queryDefinitions: [productP1, productP2],
+            render: () => {
+              throw new Error('A query-plan target must not render a fragment.');
+            },
+            updateCoverage: 'plan',
+          },
+        ],
         rawInput: { productId: 'p1' },
         redirectTo: '/products/p1',
         request: {},
@@ -642,11 +657,26 @@ describe('server mutation endpoint routing', () => {
     ]);
 
     const response = await renderMutationEndpointResponse(reserveProduct, {
-      fragmentRenderers: [],
       headers: {
         'Kovo-Fragment': 'true',
+        'Kovo-Live-Targets': attestedLiveTargetHeader(
+          'product-card:p1',
+          'components/generated-product/card-plan',
+        ),
         'Kovo-Targets': 'product-card:p1=generated-direct-product:p1',
       },
+      liveTargetRenderers: [
+        {
+          component: 'components/generated-product/card-plan',
+          mutationKeys: [],
+          queries: ['generatedProductDetail'],
+          queryDefinitions: [productP1, productP2],
+          render: () => {
+            throw new Error('A query-plan target must not render a fragment.');
+          },
+          updateCoverage: 'plan',
+        },
+      ],
       rawInput: { productId: 'p1' },
       redirectTo: '/products/p1',
       request: {},
@@ -692,11 +722,26 @@ describe('server mutation endpoint routing', () => {
 
     await expect(
       renderMutationEndpointResponse(refreshCatalog, {
-        fragmentRenderers: [],
         headers: {
           'Kovo-Fragment': 'true',
+          'Kovo-Live-Targets': attestedLiveTargetHeader(
+            'catalog-region',
+            'components/generated-catalog/region-plan',
+          ),
           'Kovo-Targets': 'catalog-region=generatedCatalogRead',
         },
+        liveTargetRenderers: [
+          {
+            component: 'components/generated-catalog/region-plan',
+            mutationKeys: [],
+            queries: ['generatedCatalogRead'],
+            queryDefinitions: [catalogQuery],
+            render: () => {
+              throw new Error('A query-plan target must not render a fragment.');
+            },
+            updateCoverage: 'plan',
+          },
+        ],
         rawInput: {},
         redirectTo: '/catalog',
         request: {},
