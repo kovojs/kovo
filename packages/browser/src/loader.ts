@@ -181,7 +181,7 @@ export function installGeneratedKovoLoader(
       ? null
       : loaderBrowserSecurity.queryOne(document, 'meta[name="kovo-session"]');
   const sessionFingerprint =
-    sessionMeta === null
+    sessionMeta === null || loaderBrowserSecurity === undefined
       ? undefined
       : (loaderBrowserSecurity.readAttribute(sessionMeta, 'content') ?? undefined);
   const enhancedMutationSetup = options.enhancedMutations
