@@ -41,7 +41,9 @@ const NativeNumber = globalThis.Number;
 const NativeObject = globalThis.Object;
 const NativePromise = globalThis.Promise;
 const NativeReflect = globalThis.Reflect;
+const NativeString = globalThis.String;
 const nativeFunctionHasInstance = NativeFunction.prototype[Symbol.hasInstance];
+const nativeNumberParseInt = NativeNumber.parseInt;
 const nativeNumberIsSafeInteger = NativeNumber.isSafeInteger;
 const nativeObjectFreeze = NativeObject.freeze;
 const nativeObjectCreate = NativeObject.create;
@@ -171,7 +173,13 @@ export async function startKovoDevServer(
       authoredPlugins,
       securityProfile.postPlugin,
     );
-    const liveConfig = trustedLiveDevConfig(root, options, authoredConfig.server, livePlugins);
+    const liveConfig = trustedLiveDevConfig(
+      root,
+      options,
+      security,
+      authoredConfig.server,
+      livePlugins,
+    );
 
     liveServer = await createServer(liveConfig);
     lockLiveDevEnvironmentPluginLists(liveServer.config);
@@ -407,6 +415,7 @@ export function isolateAuthoredDevPluginOptions(options: readonly PluginOption[]
 function trustedLiveDevConfig(
   root: string,
   options: KovoDevOptions,
+  security: KovoCommandSecurityDisposition,
   authoredServer: SupportedAuthoredDevServer,
   plugins: PluginOption[],
 ): InlineConfig {
@@ -414,6 +423,47 @@ function trustedLiveDevConfig(
   if (authoredServer.host !== undefined) server.host = authoredServer.host;
   if (authoredServer.port !== undefined) server.port = authoredServer.port;
   if (authoredServer.strictPort !== undefined) server.strictPort = authoredServer.strictPort;
+
+  // The supported runner deliberately does not evaluate an undeclared vite.config.ts. Preserve the
+  // generated starter's HOST/PORT operator contract through the immutable command-entry snapshot
+  // instead of consulting ambient process.env after authored modules have run (SPEC §5.2/§6.6).
+  const invocationHost = buildOwnDataValue(
+    security.invocationEnv,
+    'HOST',
+    'Kovo invocation environment',
+  );
+  if (invocationHost !== undefined) {
+    if (typeof invocationHost !== 'string' || invocationHost.length === 0) {
+      throw new TypeError('Kovo invocation environment HOST must be a non-empty string.');
+    }
+    server.host = invocationHost;
+  }
+  const invocationPort = buildOwnDataValue(
+    security.invocationEnv,
+    'PORT',
+    'Kovo invocation environment',
+  );
+  if (invocationPort !== undefined) {
+    if (typeof invocationPort !== 'string') {
+      throw new TypeError('Kovo invocation environment PORT must be a string.');
+    }
+    const port = nativeReflectApply(nativeNumberParseInt, NativeNumber, [
+      invocationPort,
+      10,
+    ]) as number;
+    if (
+      !nativeReflectApply(nativeNumberIsSafeInteger, NativeNumber, [port]) ||
+      port < 0 ||
+      port > 65_535 ||
+      NativeString(port) !== invocationPort
+    ) {
+      throw new TypeError(
+        'Kovo invocation environment PORT must be a canonical integer from 0 through 65535.',
+      );
+    }
+    server.port = port;
+    server.strictPort = true;
+  }
   if (options.host !== undefined) server.host = options.host;
   if (options.port !== undefined) server.port = options.port;
   if (options.strictPort) server.strictPort = true;

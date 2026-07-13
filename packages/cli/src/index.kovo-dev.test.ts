@@ -226,6 +226,40 @@ throw new Error('undeclared Vite config executed');
     }
   }, 40_000);
 
+  it('honors boot-pinned HOST and PORT without evaluating undeclared config', async () => {
+    const root = devFixture('pinned-listen-environment');
+    const port = await reservePort();
+    const invocationEnv = Object.freeze(
+      Object.assign(Object.create(null) as NodeJS.ProcessEnv, {
+        HOST: '127.0.0.1',
+        PORT: String(port),
+      }),
+    );
+    const handle = await startKovoDevServer(
+      {
+        appModulePath: join(root, 'src/app.ts'),
+        mode: 'development',
+        root,
+        strictPort: false,
+      },
+      {
+        invocationCwd: repoRoot,
+        invocationEnv,
+        paranoidStaticAdvisory: false,
+      },
+    );
+    try {
+      expect(handle.server.config.server.host).toBe('127.0.0.1');
+      expect(handle.server.config.server.port).toBe(port);
+      expect(handle.server.config.server.strictPort).toBe(true);
+      const response = await fetch(`http://127.0.0.1:${port}/`);
+      expect(response.status).toBe(200);
+      await expect(response.text()).resolves.toContain('<main>Bootstrap safe</main>');
+    } finally {
+      await handle.close();
+    }
+  }, 30_000);
+
   it('rejects authored app-level hooks that retain root-config or live-server authority', async () => {
     const hookNames = [
       'buildApp',
