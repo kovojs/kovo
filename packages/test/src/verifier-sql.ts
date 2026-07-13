@@ -163,9 +163,59 @@ function operationsForStatement(
       return operationsForDelete(statement, cteAliases);
     case 'truncate table':
       return operationsForTruncate(statement);
-    default:
+    case 'create table':
+      return operationsForTableWrite(statement.name);
+    case 'alter table':
+      return operationsForTableWrite(statement.table);
+    case 'create index':
+      return operationsForTableWrite(statement.table);
+    case 'drop table':
+      return operationsForTableWrites(statement.names);
+    case 'begin':
+    case 'commit':
+    case 'rollback':
+    case 'start transaction':
+    case 'show':
       return [];
+    default:
+      // SPEC §11.2: a parser-recognized statement must never disappear from the
+      // coverage oracle. Conservatively model every unclassified statement as an
+      // unscoped write so assertCovered() fails closed after the adapter call.
+      return unmodeledStatementWrite(statement.type);
   }
+}
+
+function operationsForTableWrite(table: QName): ParsedSqlOperation[] {
+  return [
+    {
+      kind: 'write',
+      mutationRead: undefined,
+      rowKey: undefined,
+      table: tableName(table),
+    },
+  ];
+}
+
+function operationsForTableWrites(tables: readonly QName[]): ParsedSqlOperation[] {
+  const operations: ParsedSqlOperation[] = [];
+  for (let index = 0; index < tables.length; index += 1) {
+    appendOperations(
+      operations,
+      operationsForTableWrite(arrayEntry(tables, index, 'SQL DDL tables')),
+    );
+  }
+  return operations;
+}
+
+function unmodeledStatementWrite(type: string): ParsedSqlOperation[] {
+  return [
+    {
+      kind: 'write',
+      mutationRead: undefined,
+      rowKey: undefined,
+      table: `<unmodeled:${type}>`,
+    },
+  ];
 }
 
 function operationsForSelect(
@@ -461,7 +511,9 @@ function refName(expression: Expr): string | undefined {
 }
 
 function tableName(identifier: QName): string {
-  return identifier.name;
+  return identifier.schema && identifier.schema !== 'public'
+    ? `${identifier.schema}.${identifier.name}`
+    : identifier.name;
 }
 
 function appendOperations(

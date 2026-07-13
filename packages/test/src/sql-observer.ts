@@ -90,7 +90,7 @@ function observeSqlStatement(
     if (operation === undefined) continue;
     verifierArrayPush(observed, {
       branch: undefined,
-      domain: config.domainByTable[operation.table],
+      domain: observedOperationDomain(config, operation),
       kind: operation.kind,
       mutationRead: operation.mutationRead,
       rowKey: operation.rowKey,
@@ -105,6 +105,15 @@ function observeSqlStatement(
   }
 
   return observed;
+}
+
+function observedOperationDomain(
+  config: DbVerificationConfig,
+  operation: Pick<ObservedDbOperation, 'kind' | 'table'>,
+): string | undefined {
+  const exact = config.domainByTable[operation.table];
+  if (exact !== undefined || operation.kind === 'write') return exact;
+  return config.domainByTable[unqualifiedTableName(operation.table)];
 }
 
 interface TableObservationSnapshot {

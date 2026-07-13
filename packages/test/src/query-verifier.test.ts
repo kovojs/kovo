@@ -82,6 +82,15 @@ describe('@kovojs/test query verifier', () => {
       {
         branch: undefined,
         domain: 'cart',
+        kind: 'write',
+        mutationRead: undefined,
+        rowKey: undefined,
+        sql: 'create table cart_items (id text)',
+        table: 'cart_items',
+      },
+      {
+        branch: undefined,
+        domain: 'cart',
         kind: 'read',
         mutationRead: undefined,
         rowKey: undefined,
@@ -89,6 +98,42 @@ describe('@kovojs/test query verifier', () => {
         table: 'cart_items',
       },
     ]);
+  });
+
+  it('does not let parser-recognized DDL and session authority changes disappear', () => {
+    for (const [statement, diagnostic] of [
+      ['drop table products', expectedDiagnostic('KV402', 'product')],
+      ['alter table products add column secret text', expectedDiagnostic('KV402', 'product')],
+      ["set role = 'admin'", expectedDiagnostic('KV404', '<unmodeled:set>')],
+    ] as const) {
+      const verifier = createDbVerifier({}, { domainByTable: { products: 'product' } });
+      const db = verifier.wrap(createFakeDb());
+
+      db.sql(statement);
+
+      expect(() => verifier.assertCovered()).toThrow(diagnostic);
+    }
+  });
+
+  it('preserves schema qualifiers when checking raw SQL write coverage', () => {
+    const verifier = createDbVerifier(
+      {
+        'contact.update': {
+          reads: [],
+          tables: ['contacts'],
+          touches: [{ domain: 'contact', keys: null, site: 'contact.ts:1', via: 'contacts' }],
+          unresolved: [],
+        },
+      },
+      { domainByTable: { contacts: 'contact' } },
+    );
+    const db = verifier.wrap(createFakeDb());
+
+    db.sql("update otherschema.contacts set name = 'attacker'");
+
+    expect(() => verifier.assertCovered()).toThrow(
+      expectedDiagnostic('KV406', 'otherschema.contacts'),
+    );
   });
 
   it('lets unparseable SQL reach wrapped methods before SQL verification', () => {
@@ -146,6 +191,15 @@ describe('@kovojs/test query verifier', () => {
       ['query', queryObject],
     ]);
     expect(verifier.observed).toEqual([
+      {
+        branch: undefined,
+        domain: 'cart',
+        kind: 'write',
+        mutationRead: undefined,
+        rowKey: undefined,
+        sql: 'create table cart_items (id text)',
+        table: 'cart_items',
+      },
       {
         branch: undefined,
         domain: 'cart',
