@@ -1,7 +1,14 @@
 import { createHash } from 'node:crypto';
 
 import { createFrameworkOutputFileSystemBoundary } from './internal/filesystem.js';
-import { securityArrayAppend } from './internal/security-witness-intrinsics.js';
+import {
+  securityArrayAppend,
+  securityDefineProperty,
+  securityGetOwnPropertyDescriptor,
+  securityIsArray,
+  securityNullRecord,
+  securityObjectKeys,
+} from './internal/security-witness-intrinsics.js';
 import {
   createFileSystemMap,
   createFileSystemReadableStream,
@@ -19,7 +26,6 @@ import {
   fileSystemMapDelete,
   fileSystemMapGet,
   fileSystemMapSet,
-  fileSystemObjectValues,
   fileSystemOwnDataProperty,
   fileSystemReadableStreamClose,
   fileSystemReadableStreamEnqueue,
@@ -209,7 +215,16 @@ const fileSystemObjectPrefix = 'kovo-storage-v1';
  */
 export function createMemoryStorage(options: MemoryStorageOptions = {}): StorageCapability {
   const objects = createFileSystemMap<string, StoredMemoryObject>();
-  const now = options.now ?? (() => new Date());
+  const nowProperty = fileSystemOwnDataProperty(options, 'now', 'Memory storage now');
+  if (
+    nowProperty.found &&
+    nowProperty.value !== undefined &&
+    typeof nowProperty.value !== 'function'
+  ) {
+    throw new TypeError('Memory storage now must be an own function data property when provided.');
+  }
+  const now = (nowProperty.found ? nowProperty.value : undefined) as (() => Date) | undefined;
+  const readNow = now ?? (() => new Date());
 
   return {
     async delete(key) {
@@ -220,19 +235,17 @@ export function createMemoryStorage(options: MemoryStorageOptions = {}): Storage
       const object = fileSystemMapGet(objects, normalizedKey);
       if (object === undefined) return undefined;
 
-      return {
-        ...copyInfo(object.info),
-        body: copyBytes(object.body),
-      };
+      return storageReadResult(copyInfo(object.info), copyBytes(object.body));
     },
     async put(key, body, putOptions = {}) {
       const normalizedKey = normalizeStorageKey(key);
+      const optionsSnapshot = snapshotStoragePutOptions(putOptions);
       const bytes = await storageBodyToBytes(body);
       const info = objectInfo(
         normalizedKey,
         fileSystemArrayBufferViewByteLength(bytes),
-        putOptions,
-        now(),
+        optionsSnapshot,
+        readNow(),
       );
       fileSystemMapSet(objects, normalizedKey, {
         body: copyBytes(bytes),
@@ -250,10 +263,7 @@ export function createMemoryStorage(options: MemoryStorageOptions = {}): Storage
       const object = fileSystemMapGet(objects, normalizedKey);
       if (object === undefined) return undefined;
 
-      return {
-        ...copyInfo(object.info),
-        body: bytesToReadableStream(object.body),
-      };
+      return storageReadResult(copyInfo(object.info), bytesToReadableStream(object.body));
     },
   };
 }
@@ -267,7 +277,11 @@ export function createMemoryStorage(options: MemoryStorageOptions = {}): Storage
  * @returns A `StorageCapability` backed by the filesystem.
  */
 export function createFileSystemStorage(options: FileSystemStorageOptions): StorageCapability {
-  const fileSystem = createFrameworkOutputFileSystemBoundary(options.root);
+  const rootProperty = fileSystemOwnDataProperty(options, 'root', 'Filesystem storage root');
+  if (!rootProperty.found || typeof rootProperty.value !== 'string') {
+    throw new TypeError('Filesystem storage root must be an own string data property.');
+  }
+  const fileSystem = createFrameworkOutputFileSystemBoundary(rootProperty.value);
   const writeLocks = createFileSystemMap<string, Promise<void>>();
 
   return {
@@ -293,21 +307,19 @@ export function createFileSystemStorage(options: FileSystemStorageOptions): Stor
       const bytes = await fileSystem.fileBytes(fileSystemStorageKey(normalizedKey));
       if (bytes === undefined) return undefined;
 
-      return {
-        ...info,
-        body: copyBytes(bytes),
-      };
+      return storageReadResult(info, copyBytes(bytes));
     },
     async put(key, body, putOptions = {}) {
       const normalizedKey = normalizeStorageKey(key);
       const physicalKey = fileSystemStorageKey(normalizedKey);
       const filePath = storageFilePath(fileSystem, physicalKey);
+      const optionsSnapshot = snapshotStoragePutOptions(putOptions);
       const bytes = await storageBodyToBytes(body);
       const lastModified = new Date();
       const info = objectInfo(
         normalizedKey,
         fileSystemArrayBufferViewByteLength(bytes),
-        putOptions,
+        optionsSnapshot,
         lastModified,
       );
 
@@ -334,10 +346,7 @@ export function createFileSystemStorage(options: FileSystemStorageOptions): Stor
       const bytes = await fileSystem.fileBytes(fileSystemStorageKey(normalizedKey));
       if (bytes === undefined) return undefined;
 
-      return {
-        ...info,
-        body: bytesToReadableStream(bytes),
-      };
+      return storageReadResult(info, bytesToReadableStream(bytes));
     },
   };
 }
@@ -410,14 +419,16 @@ export function createS3CompatibleStorage(options: S3CompatibleStorageOptions): 
       >(getObject, client, [{ bucket, key: s3ObjectKey(prefix, normalizedKey) }]);
       if (output === undefined) return undefined;
 
-      const body = await storageBodyToBytes(output.body);
-      return {
-        ...s3ObjectInfo(normalizedKey, output, fileSystemArrayBufferViewByteLength(body)),
+      const outputBody = s3OutputBody(output);
+      const body = await storageBodyToBytes(outputBody);
+      return storageReadResult(
+        s3ObjectInfo(normalizedKey, output, fileSystemArrayBufferViewByteLength(body)),
         body,
-      };
+      );
     },
     async put(key, body, putOptions = {}) {
       const normalizedKey = normalizeStorageKey(key);
+      const optionsSnapshot = snapshotStoragePutOptions(putOptions);
       // SPEC §6.6/§12: snapshot every accepted carrier through boot-pinned byte controls before
       // handing it to an adapter. The client must never observe bytes different from the body Kovo
       // classified merely because app code replaced ArrayBuffer/stream prototype operations.
@@ -430,16 +441,23 @@ export function createS3CompatibleStorage(options: S3CompatibleStorageOptions): 
           bucket,
           key: s3ObjectKey(prefix, normalizedKey),
           body: bytes,
-          ...(putOptions.contentType === undefined ? {} : { contentType: putOptions.contentType }),
+          ...(optionsSnapshot.contentType === undefined
+            ? {}
+            : { contentType: optionsSnapshot.contentType }),
           // Forward caller etag so a conforming client can persist + echo it (Part 3 bug L2 parity).
-          ...(putOptions.etag === undefined ? {} : { etag: putOptions.etag }),
-          ...(putOptions.metadata === undefined ? {} : { metadata: putOptions.metadata }),
+          ...(optionsSnapshot.etag === undefined ? {} : { etag: optionsSnapshot.etag }),
+          ...(optionsSnapshot.metadata === undefined ? {} : { metadata: optionsSnapshot.metadata }),
         },
       ]);
 
       // `size` (the materialized body length) is the out-of-band fallback; `s3ObjectInfo` prefers the
       // client's `contentLength`. Caller etag is honored uniformly (Part 3 bug L2).
-      return s3ObjectInfo(normalizedKey, output, output.size ?? size, putOptions.etag);
+      return s3ObjectInfo(
+        normalizedKey,
+        output,
+        s3PutFallbackSize(output, size),
+        optionsSnapshot.etag,
+      );
     },
     async stat(key) {
       const normalizedKey = normalizeStorageKey(key);
@@ -457,12 +475,12 @@ export function createS3CompatibleStorage(options: S3CompatibleStorageOptions): 
       >(getObject, client, [{ bucket, key: s3ObjectKey(prefix, normalizedKey) }]);
       if (output === undefined) return undefined;
 
-      return {
-        // Streaming does not pre-buffer the body, so size is the client-reported length or unknown
-        // (undefined) — never a fabricated 0 (Part 3 bug L2-storage-3).
-        ...s3ObjectInfo(normalizedKey, output, undefined),
-        body: storageBodyToReadableStream(output.body),
-      };
+      // Streaming does not pre-buffer the body, so size is the client-reported length or unknown
+      // (undefined) — never a fabricated 0 (Part 3 bug L2-storage-3).
+      return storageReadResult(
+        s3ObjectInfo(normalizedKey, output, undefined),
+        storageBodyToReadableStream(s3OutputBody(output)),
+      );
     },
   });
 }
@@ -605,33 +623,103 @@ export async function storageBodyToBytes(body: StorageBody): Promise<Uint8Array>
   return bytes;
 }
 
+function snapshotStoragePutOptions(options: StoragePutOptions): StoragePutOptions {
+  const contentType = fileSystemOwnDataProperty(options, 'contentType', 'Storage put contentType');
+  const etag = fileSystemOwnDataProperty(options, 'etag', 'Storage put etag');
+  const metadata = fileSystemOwnDataProperty(options, 'metadata', 'Storage put metadata');
+  if (
+    contentType.found &&
+    contentType.value !== undefined &&
+    typeof contentType.value !== 'string'
+  ) {
+    throw new TypeError('Storage put contentType must be an own string data property.');
+  }
+  if (etag.found && etag.value !== undefined && typeof etag.value !== 'string') {
+    throw new TypeError('Storage put etag must be an own string data property.');
+  }
+  const snapshot = securityNullRecord<unknown>();
+  if (contentType.found && contentType.value !== undefined) {
+    defineStorageData(snapshot, 'contentType', contentType.value);
+  }
+  if (etag.found && etag.value !== undefined) defineStorageData(snapshot, 'etag', etag.value);
+  if (metadata.found && metadata.value !== undefined) {
+    defineStorageData(snapshot, 'metadata', snapshotStorageMetadata(metadata.value));
+  }
+  return fileSystemFreeze(snapshot) as StoragePutOptions;
+}
+
+function snapshotStorageMetadata(value: unknown): Readonly<Record<string, string>> {
+  if (typeof value !== 'object' || value === null || securityIsArray(value)) {
+    throw new TypeError('Storage metadata must be an object with own string data properties.');
+  }
+  const snapshot = securityNullRecord<string>();
+  const keys = securityObjectKeys(value);
+  for (let index = 0; index < keys.length; index += 1) {
+    const keyDescriptor = securityGetOwnPropertyDescriptor(keys, index);
+    if (
+      keyDescriptor === undefined ||
+      !('value' in keyDescriptor) ||
+      typeof keyDescriptor.value !== 'string'
+    ) {
+      throw new TypeError('Storage metadata keys must be dense own strings.');
+    }
+    const key = keyDescriptor.value;
+    const entry = fileSystemOwnDataProperty(value, key, `Storage metadata ${key}`);
+    if (!entry.found || typeof entry.value !== 'string') {
+      throw new TypeError('Storage metadata values must be own string data properties.');
+    }
+    defineStorageData(snapshot, key, entry.value);
+  }
+  return fileSystemFreeze(snapshot);
+}
+
+function defineStorageData(target: object, key: PropertyKey, value: unknown): void {
+  securityDefineProperty(target, key, {
+    configurable: false,
+    enumerable: true,
+    value,
+    writable: false,
+  });
+  const committed = securityGetOwnPropertyDescriptor(target, key);
+  if (committed === undefined || !('value' in committed) || committed.value !== value) {
+    throw new TypeError('Storage metadata own-data commit failed.');
+  }
+}
+
 function objectInfo(
   key: string,
   size: number,
   options: StoragePutOptions,
   lastModified: Date,
 ): StorageObjectInfo {
-  return {
+  const contentType = storageOptionalOwnData(options, 'contentType', 'Storage put contentType');
+  const callerEtag = storageOptionalOwnData(options, 'etag', 'Storage put etag');
+  const metadata = storageOptionalOwnData(options, 'metadata', 'Storage put metadata');
+  return storageInfoRecord(
     key,
-    lastModified,
     size,
-    ...(options.contentType === undefined ? {} : { contentType: options.contentType }),
-    ...(options.etag === undefined
-      ? { etag: storageEtag(key, size, lastModified) }
-      : { etag: options.etag }),
-    ...(options.metadata === undefined ? {} : { metadata: { ...options.metadata } }),
-  };
+    contentType as string | undefined,
+    callerEtag === undefined ? storageEtag(key, size, lastModified) : (callerEtag as string),
+    lastModified,
+    metadata as Readonly<Record<string, string>> | undefined,
+  );
 }
 
 function metadataRecord(info: StorageObjectInfo): FileSystemMetadataRecord {
-  return {
-    lastModified: info.lastModified?.toISOString() ?? new Date().toISOString(),
-    logicalKey: info.key,
-    ...(info.size === undefined ? {} : { size: info.size }),
-    ...(info.contentType === undefined ? {} : { contentType: info.contentType }),
-    ...(info.etag === undefined ? {} : { etag: info.etag }),
-    ...(info.metadata === undefined ? {} : { metadata: info.metadata }),
-  };
+  const key = storageRequiredOwnData(info, 'key', 'Storage object key');
+  const lastModified = storageOptionalOwnData(info, 'lastModified', 'Storage lastModified');
+  const record = securityNullRecord<unknown>();
+  defineStorageData(
+    record,
+    'lastModified',
+    lastModified === undefined ? new Date().toISOString() : (lastModified as Date).toISOString(),
+  );
+  defineStorageData(record, 'logicalKey', key);
+  copyOptionalStorageInfoProperty(record, info, 'size');
+  copyOptionalStorageInfoProperty(record, info, 'contentType');
+  copyOptionalStorageInfoProperty(record, info, 'etag');
+  copyOptionalStorageInfoProperty(record, info, 'metadata');
+  return record as unknown as FileSystemMetadataRecord;
 }
 
 async function fileSystemStat(
@@ -648,14 +736,18 @@ async function fileSystemStat(
   const fileStats = await fileSystem.statFile(physicalKey);
   if (fileStats === undefined) return undefined;
 
-  return {
+  return storageInfoRecord(
     key,
-    lastModified: new Date(record.lastModified),
-    size: fileStats.size,
-    ...(record.contentType === undefined ? {} : { contentType: record.contentType }),
-    ...(record.etag === undefined ? {} : { etag: record.etag }),
-    ...(record.metadata === undefined ? {} : { metadata: record.metadata }),
-  };
+    fileStats.size,
+    storageOptionalOwnData(record, 'contentType', 'Filesystem metadata contentType') as
+      | string
+      | undefined,
+    storageOptionalOwnData(record, 'etag', 'Filesystem metadata etag') as string | undefined,
+    new Date(record.lastModified),
+    storageOptionalOwnData(record, 'metadata', 'Filesystem metadata custom metadata') as
+      | Readonly<Record<string, string>>
+      | undefined,
+  );
 }
 
 /**
@@ -679,35 +771,79 @@ async function readFileSystemMetadataRecord(
   if (bytes === undefined) return undefined;
   try {
     const value: unknown = fileSystemJsonParse(fileSystemUtf8Decode(bytes));
-    return isFileSystemMetadataRecord(value) ? value : undefined;
+    return parseFileSystemMetadataRecord(value);
   } catch (error) {
     if (error instanceof SyntaxError) return undefined;
     throw error;
   }
 }
 
-function isFileSystemMetadataRecord(value: unknown): value is FileSystemMetadataRecord {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
-  const record = value as Partial<FileSystemMetadataRecord>;
-  if (typeof record.logicalKey !== 'string' || typeof record.lastModified !== 'string')
-    return false;
-  if (!Number.isFinite(Date.parse(record.lastModified))) return false;
-  if (record.contentType !== undefined && typeof record.contentType !== 'string') return false;
-  if (record.etag !== undefined && typeof record.etag !== 'string') return false;
-  if (record.size !== undefined && (!Number.isSafeInteger(record.size) || record.size < 0))
-    return false;
+function parseFileSystemMetadataRecord(value: unknown): FileSystemMetadataRecord | undefined {
+  if (typeof value !== 'object' || value === null || securityIsArray(value)) return undefined;
+  const logicalKey = fileSystemOwnDataProperty(
+    value,
+    'logicalKey',
+    'Filesystem metadata logicalKey',
+  );
+  const lastModified = fileSystemOwnDataProperty(
+    value,
+    'lastModified',
+    'Filesystem metadata lastModified',
+  );
+  const contentType = fileSystemOwnDataProperty(
+    value,
+    'contentType',
+    'Filesystem metadata contentType',
+  );
+  const etag = fileSystemOwnDataProperty(value, 'etag', 'Filesystem metadata etag');
+  const size = fileSystemOwnDataProperty(value, 'size', 'Filesystem metadata size');
+  const metadata = fileSystemOwnDataProperty(
+    value,
+    'metadata',
+    'Filesystem metadata custom metadata',
+  );
+  if (!logicalKey.found || typeof logicalKey.value !== 'string') return undefined;
   if (
-    record.metadata !== undefined &&
-    (typeof record.metadata !== 'object' ||
-      record.metadata === null ||
-      Array.isArray(record.metadata) ||
-      fileSystemArraySome(
-        fileSystemObjectValues(record.metadata),
-        (entry) => typeof entry !== 'string',
-      ))
-  )
-    return false;
-  return true;
+    !lastModified.found ||
+    typeof lastModified.value !== 'string' ||
+    !Number.isFinite(Date.parse(lastModified.value))
+  ) {
+    return undefined;
+  }
+  if (
+    contentType.found &&
+    contentType.value !== undefined &&
+    typeof contentType.value !== 'string'
+  ) {
+    return undefined;
+  }
+  if (etag.found && etag.value !== undefined && typeof etag.value !== 'string') return undefined;
+  if (
+    size.found &&
+    size.value !== undefined &&
+    (typeof size.value !== 'number' || !Number.isSafeInteger(size.value) || size.value < 0)
+  ) {
+    return undefined;
+  }
+  let metadataSnapshot: Readonly<Record<string, string>> | undefined;
+  if (metadata.found && metadata.value !== undefined) {
+    try {
+      metadataSnapshot = snapshotStorageMetadata(metadata.value);
+    } catch (error) {
+      if (error instanceof TypeError) return undefined;
+      throw error;
+    }
+  }
+  const record = securityNullRecord<unknown>();
+  defineStorageData(record, 'logicalKey', logicalKey.value);
+  defineStorageData(record, 'lastModified', lastModified.value);
+  if (contentType.found && contentType.value !== undefined) {
+    defineStorageData(record, 'contentType', contentType.value);
+  }
+  if (etag.found && etag.value !== undefined) defineStorageData(record, 'etag', etag.value);
+  if (size.found && size.value !== undefined) defineStorageData(record, 'size', size.value);
+  if (metadataSnapshot !== undefined) defineStorageData(record, 'metadata', metadataSnapshot);
+  return fileSystemFreeze(record) as unknown as FileSystemMetadataRecord;
 }
 
 async function assertFileSystemStorageSlotOwnership(
@@ -770,11 +906,77 @@ function storageEtag(key: string, size: number, lastModified: Date): string {
 }
 
 function copyInfo(info: StorageObjectInfo): StorageObjectInfo {
-  return {
-    ...info,
-    ...(info.lastModified === undefined ? {} : { lastModified: new Date(info.lastModified) }),
-    ...(info.metadata === undefined ? {} : { metadata: { ...info.metadata } }),
-  };
+  const key = storageRequiredOwnData(info, 'key', 'Storage object key');
+  if (typeof key !== 'string') throw new TypeError('Storage object key must be an own string.');
+  const size = storageOptionalOwnData(info, 'size', 'Storage object size');
+  const contentType = storageOptionalOwnData(info, 'contentType', 'Storage object contentType');
+  const etag = storageOptionalOwnData(info, 'etag', 'Storage object etag');
+  const lastModified = storageOptionalOwnData(info, 'lastModified', 'Storage object lastModified');
+  const metadata = storageOptionalOwnData(info, 'metadata', 'Storage object metadata');
+  return storageInfoRecord(
+    key,
+    size as number | undefined,
+    contentType as string | undefined,
+    etag as string | undefined,
+    lastModified as Date | undefined,
+    metadata as Readonly<Record<string, string>> | undefined,
+  );
+}
+
+function storageInfoRecord(
+  key: string,
+  size: number | undefined,
+  contentType: string | undefined,
+  etag: string | undefined,
+  lastModified: Date | string | undefined,
+  metadata: Readonly<Record<string, string>> | undefined,
+): StorageObjectInfo {
+  const record = securityNullRecord<unknown>();
+  defineStorageData(record, 'key', key);
+  if (size !== undefined) defineStorageData(record, 'size', size);
+  if (contentType !== undefined) defineStorageData(record, 'contentType', contentType);
+  if (etag !== undefined) defineStorageData(record, 'etag', etag);
+  if (lastModified !== undefined) {
+    defineStorageData(record, 'lastModified', new Date(lastModified));
+  }
+  if (metadata !== undefined) {
+    defineStorageData(record, 'metadata', snapshotStorageMetadata(metadata));
+  }
+  return record as unknown as StorageObjectInfo;
+}
+
+function storageReadResult(info: StorageObjectInfo, body: Uint8Array): StorageGetResult;
+function storageReadResult(
+  info: StorageObjectInfo,
+  body: ReadableStream<Uint8Array>,
+): StorageStreamResult;
+function storageReadResult(
+  info: StorageObjectInfo,
+  body: Uint8Array | ReadableStream<Uint8Array>,
+): StorageGetResult | StorageStreamResult {
+  const result = copyInfo(info) as StorageObjectInfo & { body?: unknown };
+  defineStorageData(result, 'body', body);
+  return result as StorageGetResult | StorageStreamResult;
+}
+
+function storageOptionalOwnData(value: object, property: PropertyKey, label: string): unknown {
+  const own = fileSystemOwnDataProperty(value, property, label);
+  return own.found ? own.value : undefined;
+}
+
+function storageRequiredOwnData(value: object, property: PropertyKey, label: string): unknown {
+  const own = fileSystemOwnDataProperty(value, property, label);
+  if (!own.found) throw new TypeError(`${label} must be an own data property.`);
+  return own.value;
+}
+
+function copyOptionalStorageInfoProperty(
+  target: object,
+  info: StorageObjectInfo,
+  property: keyof StorageObjectInfo,
+): void {
+  const own = fileSystemOwnDataProperty(info, property, `Storage object ${property}`);
+  if (own.found && own.value !== undefined) defineStorageData(target, property, own.value);
 }
 
 function copyBytes(bytes: Uint8Array): Uint8Array {
@@ -837,16 +1039,53 @@ function s3ObjectInfo(
   fallbackSize: number | undefined,
   callerEtag?: string,
 ): StorageObjectInfo {
-  const size = metadata.contentLength ?? fallbackSize;
-  const etag = callerEtag ?? metadata.etag;
-  return {
+  const contentLength = storageOptionalOwnData(
+    metadata,
+    'contentLength',
+    'S3 object contentLength',
+  );
+  const contentType = storageOptionalOwnData(metadata, 'contentType', 'S3 object contentType');
+  const serverEtag = storageOptionalOwnData(metadata, 'etag', 'S3 object etag');
+  const lastModified = storageOptionalOwnData(metadata, 'lastModified', 'S3 object lastModified');
+  const customMetadata = storageOptionalOwnData(metadata, 'metadata', 'S3 object metadata');
+  if (
+    contentLength !== undefined &&
+    (typeof contentLength !== 'number' || !Number.isSafeInteger(contentLength) || contentLength < 0)
+  ) {
+    throw new TypeError('S3 object contentLength must be a non-negative safe integer.');
+  }
+  if (contentType !== undefined && typeof contentType !== 'string') {
+    throw new TypeError('S3 object contentType must be a string.');
+  }
+  if (serverEtag !== undefined && typeof serverEtag !== 'string') {
+    throw new TypeError('S3 object etag must be a string.');
+  }
+  if (
+    lastModified !== undefined &&
+    typeof lastModified !== 'string' &&
+    (typeof lastModified !== 'object' || lastModified === null)
+  ) {
+    throw new TypeError('S3 object lastModified must be a Date or date string.');
+  }
+  return storageInfoRecord(
     key,
-    ...(size === undefined ? {} : { size }),
-    ...(metadata.contentType === undefined ? {} : { contentType: metadata.contentType }),
-    ...(etag === undefined ? {} : { etag }),
-    ...(metadata.lastModified === undefined
-      ? {}
-      : { lastModified: new Date(metadata.lastModified) }),
-    ...(metadata.metadata === undefined ? {} : { metadata: { ...metadata.metadata } }),
-  };
+    (contentLength as number | undefined) ?? fallbackSize,
+    contentType as string | undefined,
+    callerEtag ?? (serverEtag as string | undefined),
+    lastModified as Date | string | undefined,
+    customMetadata as Readonly<Record<string, string>> | undefined,
+  );
+}
+
+function s3OutputBody(output: S3CompatibleGetObjectOutput): StorageBody {
+  return storageRequiredOwnData(output, 'body', 'S3 get object body') as StorageBody;
+}
+
+function s3PutFallbackSize(output: S3CompatiblePutObjectOutput, bodySize: number): number {
+  const size = storageOptionalOwnData(output, 'size', 'S3 put object size');
+  if (size === undefined) return bodySize;
+  if (typeof size !== 'number' || !Number.isSafeInteger(size) || size < 0) {
+    throw new TypeError('S3 put object size must be a non-negative safe integer.');
+  }
+  return size;
 }

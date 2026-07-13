@@ -344,6 +344,98 @@ describe('storage byte snapshots', () => {
   });
 });
 
+describe('storage constructor and metadata authority', () => {
+  it('does not inherit filesystem root authority from Object.prototype', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'kovo-storage-inherited-root-'));
+    Object.defineProperty(Object.prototype, 'root', { configurable: true, value: root });
+    try {
+      expect(() => createFileSystemStorage({} as { root: string })).toThrow(
+        'root must be an own string data property',
+      );
+    } finally {
+      delete (Object.prototype as { root?: unknown }).root;
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
+  it('does not inherit per-put content metadata from Object.prototype', async () => {
+    const storage = createMemoryStorage();
+    Object.defineProperty(Object.prototype, 'contentType', {
+      configurable: true,
+      value: 'text/html',
+    });
+    try {
+      await storage.put('safe.txt', '<script>not html</script>');
+    } finally {
+      delete (Object.prototype as { contentType?: unknown }).contentType;
+    }
+    await expect(storage.stat('safe.txt')).resolves.not.toHaveProperty('contentType');
+  });
+
+  it('does not synthesize metadata from late prototype pollution during memory reads', async () => {
+    const storage = createMemoryStorage();
+    await storage.put('safe.txt', 'plain text');
+    Object.defineProperty(Object.prototype, 'contentType', {
+      configurable: true,
+      value: 'text/html',
+    });
+    try {
+      await expect(storage.stat('safe.txt')).resolves.not.toHaveProperty('contentType');
+      await expect(storage.get('safe.txt')).resolves.not.toHaveProperty('contentType');
+      await expect(storage.stream('safe.txt')).resolves.not.toHaveProperty('contentType');
+    } finally {
+      delete (Object.prototype as { contentType?: unknown }).contentType;
+    }
+  });
+
+  it('does not inherit active content metadata while reading a filesystem sidecar', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'kovo-storage-sidecar-prototype-'));
+    try {
+      const storage = createFileSystemStorage({ root });
+      await storage.put('safe.txt', '<script>not html</script>');
+      Object.defineProperty(Object.prototype, 'contentType', {
+        configurable: true,
+        value: 'text/html',
+      });
+      try {
+        await expect(storage.stat('safe.txt')).resolves.not.toHaveProperty('contentType');
+      } finally {
+        delete (Object.prototype as { contentType?: unknown }).contentType;
+      }
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
+  it('does not trust inherited metadata from S3-compatible client outputs', async () => {
+    const client: S3CompatibleObjectClient = {
+      async deleteObject() {},
+      async getObject() {
+        return { body: 'plain text' };
+      },
+      async headObject() {
+        return {};
+      },
+      async putObject() {
+        return {};
+      },
+    };
+    const storage = createS3CompatibleStorage({ bucket: 'safe', client });
+    await storage.put('safe.txt', 'plain text');
+    Object.defineProperty(Object.prototype, 'contentType', {
+      configurable: true,
+      value: 'text/html',
+    });
+    try {
+      await expect(storage.stat('safe.txt')).resolves.not.toHaveProperty('contentType');
+      await expect(storage.get('safe.txt')).resolves.not.toHaveProperty('contentType');
+      await expect(storage.stream('safe.txt')).resolves.not.toHaveProperty('contentType');
+    } finally {
+      delete (Object.prototype as { contentType?: unknown }).contentType;
+    }
+  });
+});
+
 describe('storage read/write authority split', () => {
   it('keeps read-only storage views fail-closed even when cast back to a write shape', async () => {
     const storage = createMemoryStorage({ now: () => new Date('2026-06-11T12:00:00.000Z') });
