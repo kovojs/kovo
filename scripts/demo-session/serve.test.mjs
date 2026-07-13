@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { request as httpRequest, createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -148,6 +148,26 @@ describe('demo-session built asset serving', () => {
       await server.close();
     }
   });
+
+  it.skipIf(process.platform === 'win32')(
+    'does not follow an asset symlink outside the demo dist directory',
+    async () => {
+      const distDir = tempDist({});
+      const outsideDir = tempDist({ 'secret.txt': 'OUTSIDE_DEMO_SECRET' });
+      mkdirSync(path.join(distDir, 'assets'), { recursive: true });
+      symlinkSync(path.join(outsideDir, 'secret.txt'), path.join(distDir, 'assets/leak.txt'));
+      const server = await serveAssets(distDir);
+
+      try {
+        const response = await requestAsset(server.origin, '/assets/leak.txt', {});
+        expect(response.status).toBe(403);
+        expect(response.headers['cache-control']).toBe('no-store');
+        expect(response.body.toString('utf8')).not.toContain('OUTSIDE_DEMO_SECRET');
+      } finally {
+        await server.close();
+      }
+    },
+  );
 });
 
 function tempDist(files) {

@@ -1,5 +1,5 @@
 import { createReadStream } from 'node:fs';
-import { stat } from 'node:fs/promises';
+import { realpath, stat } from 'node:fs/promises';
 import { createServer as createNodeServer } from 'node:http';
 import path from 'node:path';
 import { createBrotliCompress, createGzip } from 'node:zlib';
@@ -173,7 +173,15 @@ export async function tryServeBuiltAsset(req, res, distDir) {
     return true;
   }
   try {
-    const info = await stat(filePath);
+    const [canonicalDistDir, canonicalFilePath] = await Promise.all([
+      realpath(distDir),
+      realpath(filePath),
+    ]);
+    if (!insideDirectory(canonicalDistDir, canonicalFilePath)) {
+      sendTextAssetResponse(req, res, 403, 'Refusing to serve outside the demo dist directory.\n');
+      return true;
+    }
+    const info = await stat(canonicalFilePath);
     if (!info.isFile()) {
       sendMissingBuiltAsset(req, res, pathname);
       return true;
@@ -195,7 +203,8 @@ export async function tryServeBuiltAsset(req, res, distDir) {
       res.end();
       return true;
     }
-    const source = createReadStream(filePath);
+    // Open the already-canonicalized path, never the attacker-influenced symlink spelling.
+    const source = createReadStream(canonicalFilePath);
     const body =
       compression === 'br'
         ? source.pipe(createBrotliCompress())
