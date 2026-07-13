@@ -142,6 +142,10 @@ describe('JSON value utilities', () => {
     expect(assertAndCloneJsonValue(cloneCarrier.value)).toEqual({ principalId: 'victim' });
     expect(cloneCarrier.counts()).toEqual({ descriptorReads: 1, propertyGets: 0 });
 
+    const assertedCarrier = makeCarrier();
+    expect(assertJsonValue(assertedCarrier.value)).toEqual({ principalId: 'victim' });
+    expect(assertedCarrier.counts()).toEqual({ descriptorReads: 1, propertyGets: 0 });
+
     const canonicalCarrier = makeCarrier();
     expect(canonicalJsonStringify(canonicalCarrier.value)).toBe('{"principalId":"victim"}');
     expect(canonicalCarrier.counts()).toEqual({ descriptorReads: 1, propertyGets: 0 });

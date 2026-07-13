@@ -68,13 +68,15 @@ export function cloneJsonValue<Value extends JsonValue>(value: Value): Value {
 
 /**
  * @internal
- * Assert that an unknown runtime value is plain JSON data without the lossy
+ * Assert that an unknown runtime value is plain JSON data and return the exact
+ * validated snapshot without the lossy
  * coercions performed by `JSON.stringify` for Date, bigint, undefined, holes,
- * functions, symbols, non-finite numbers, accessors, or cyclic objects.
+ * functions, symbols, non-finite numbers, accessors, or cyclic objects. Returning
+ * the snapshot keeps callers from accidentally validating a Proxy and then
+ * consuming different attacker-controlled truth from the live carrier.
  */
 export function assertJsonValue(value: unknown, options: AssertJsonValueOptions = {}): JsonValue {
-  snapshotJsonValue(value, jsonRoot(options), false);
-  return value as JsonValue;
+  return snapshotJsonValue(value, jsonRoot(options), false);
 }
 
 /** @internal Validate and clone JSON data in one proxy-safe pass boundary. */
