@@ -14,10 +14,9 @@ import {
   realpathSync,
   statSync,
   Stats,
+  writeFile as writeFileDescriptor,
 } from 'node:fs';
 import {
-  access,
-  copyFile,
   lstat,
   mkdir,
   mkdtemp,
@@ -27,7 +26,6 @@ import {
   rm,
   stat,
   unlink,
-  writeFile,
 } from 'node:fs/promises';
 
 /**
@@ -100,9 +98,7 @@ const nativeDataViewByteOffsetGetter = NativeObject.getOwnPropertyDescriptor(
   'byteOffset',
 )?.get;
 const nativeUint8ArraySet = NativeUint8Array.prototype.set;
-const nativeAccess = access;
 const nativeCloseFileDescriptor = closeFileDescriptor;
-const nativeCopyFile = copyFile;
 const nativeDirentIsDirectory = Dirent.prototype.isDirectory;
 const nativeDirentIsFile = Dirent.prototype.isFile;
 const nativeDirentIsSymbolicLink = Dirent.prototype.isSymbolicLink;
@@ -120,10 +116,14 @@ const nativePathResolve = path.resolve;
 const nativePathSeparator = path.sep;
 const nativeReadFileDescriptor = readFileDescriptor;
 const nativeReadFileDescriptorChunk = readFileDescriptorChunk;
-const nativeReadAccessMode = fsConstants.R_OK;
 const nativeReadDirectory = readdir;
 const nativeReadDirectorySync = readdirSync;
-const nativeReadOnlyOpenFlag = fsConstants.O_RDONLY;
+const nativeNoFollowOpenFlag =
+  typeof fsConstants.O_NOFOLLOW === 'number' ? fsConstants.O_NOFOLLOW : 0;
+const nativeReadOnlyOpenFlag = fsConstants.O_RDONLY | nativeNoFollowOpenFlag;
+const nativeExclusiveWriteOpenFlag =
+  fsConstants.O_WRONLY | fsConstants.O_CREAT | fsConstants.O_EXCL | nativeNoFollowOpenFlag;
+const nativePrivateFileMode = 0o600;
 const nativeReadableStreamControllerClose = NativeReadableStreamDefaultController.prototype.close;
 const nativeReadableStreamControllerEnqueue =
   NativeReadableStreamDefaultController.prototype.enqueue;
@@ -154,7 +154,7 @@ const nativeJsonStringify = NativeJSON.stringify;
 const nativeTextDecoderDecode = NativeTextDecoder.prototype.decode;
 const nativeTextEncoderEncode = NativeTextEncoder.prototype.encode;
 const nativeUnlink = unlink;
-const nativeWriteFile = writeFile;
+const nativeWriteFileDescriptor = writeFileDescriptor;
 const textDecoder = new NativeTextDecoder();
 const textEncoder = new NativeTextEncoder();
 
@@ -284,9 +284,7 @@ function capturedControlsAreSound(): boolean {
       copied.length === encoded.length &&
       copied[0] === encoded[0] &&
       uuidControl.length === 36 &&
-      typeof nativeAccess === 'function' &&
       typeof nativeCloseFileDescriptor === 'function' &&
-      typeof nativeCopyFile === 'function' &&
       typeof nativeLstat === 'function' &&
       typeof nativeLstatSync === 'function' &&
       typeof nativeMkdir === 'function' &&
@@ -307,9 +305,9 @@ function capturedControlsAreSound(): boolean {
       typeof nativeStatFileDescriptor === 'function' &&
       typeof nativeStatSync === 'function' &&
       typeof nativeUnlink === 'function' &&
-      typeof nativeWriteFile === 'function' &&
-      typeof nativeReadAccessMode === 'number' &&
+      typeof nativeWriteFileDescriptor === 'function' &&
       typeof nativeReadOnlyOpenFlag === 'number' &&
+      typeof nativeExclusiveWriteOpenFlag === 'number' &&
       parsed.logicalKey === 'safe/file.txt' &&
       stringified === '{"logicalKey":"safe/file.txt"}' &&
       readMethod !== undefined &&
@@ -631,11 +629,6 @@ export function fileSystemObjectValues(value: object): unknown[] {
   return apply(nativeObjectValues, NativeObject, [value]);
 }
 
-export function fileSystemAccess(filePath: string): Promise<void> {
-  assertFileSystemIntrinsics();
-  return nativeAccess(filePath, nativeReadAccessMode);
-}
-
 export function fileSystemCloseFileDescriptor(fileDescriptor: number): Promise<void> {
   assertFileSystemIntrinsics();
   return new NativePromise<void>((resolve, reject) => {
@@ -647,11 +640,6 @@ export function fileSystemCloseFileDescriptor(fileDescriptor: number): Promise<v
       },
     ]);
   });
-}
-
-export function fileSystemCopyFile(sourcePath: string, targetPath: string): Promise<void> {
-  assertFileSystemIntrinsics();
-  return nativeCopyFile(sourcePath, targetPath);
 }
 
 const FILE_SYSTEM_STREAM_CHUNK_SIZE = 64 * 1024;
@@ -775,6 +763,21 @@ export function fileSystemOpenFileDescriptor(filePath: string): Promise<number> 
   });
 }
 
+export function fileSystemCreateExclusiveFileDescriptor(filePath: string): Promise<number> {
+  assertFileSystemIntrinsics();
+  return new NativePromise<number>((resolve, reject) => {
+    apply(nativeOpenFileDescriptor, undefined, [
+      filePath,
+      nativeExclusiveWriteOpenFlag,
+      nativePrivateFileMode,
+      (error: Error | null, fileDescriptor: number) => {
+        if (error === null) resolve(fileDescriptor);
+        else reject(error);
+      },
+    ]);
+  });
+}
+
 export function fileSystemRandomUuid(): string {
   assertFileSystemIntrinsics();
   return nativeRandomUuid();
@@ -792,6 +795,23 @@ export function fileSystemReadFileDescriptor(fileDescriptor: number): Promise<Ui
       fileDescriptor,
       (error: Error | null, bytes: Buffer) => {
         if (error === null) resolve(bytes);
+        else reject(error);
+      },
+    ]);
+  });
+}
+
+export function fileSystemWriteFileDescriptor(
+  fileDescriptor: number,
+  source: string | Uint8Array,
+): Promise<void> {
+  assertFileSystemIntrinsics();
+  return new NativePromise<void>((resolve, reject) => {
+    apply(nativeWriteFileDescriptor, undefined, [
+      fileDescriptor,
+      source,
+      (error: Error | null) => {
+        if (error === null) resolve();
         else reject(error);
       },
     ]);
@@ -884,13 +904,6 @@ export function fileSystemCopyBytes(value: Uint8Array): Uint8Array {
 export function fileSystemUnlink(filePath: string): Promise<void> {
   assertFileSystemIntrinsics();
   return nativeUnlink(filePath);
-}
-
-export function fileSystemWriteFile(filePath: string, source: string | Uint8Array): Promise<void> {
-  assertFileSystemIntrinsics();
-  return typeof source === 'string'
-    ? nativeWriteFile(filePath, source, 'utf8')
-    : nativeWriteFile(filePath, source);
 }
 
 export function fileSystemPathBasename(value: string): string {

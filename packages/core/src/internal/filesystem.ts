@@ -7,10 +7,9 @@ import {
 } from '#security-witness-intrinsics';
 import {
   fileSystemArrayIncludesExact,
-  fileSystemAccess,
   fileSystemCloseFileDescriptor,
   fileSystemCopyBytes,
-  fileSystemCopyFile,
+  fileSystemCreateExclusiveFileDescriptor,
   fileSystemCreateReadableStream,
   fileSystemFreeze,
   fileSystemLstat,
@@ -43,7 +42,7 @@ import {
   fileSystemStringSplit,
   fileSystemStringStartsWith,
   fileSystemUnlink,
-  fileSystemWriteFile,
+  fileSystemWriteFileDescriptor,
   type FileSystemDirent as Dirent,
   type FileSystemStats as Stats,
 } from '#filesystem-intrinsics';
@@ -117,6 +116,12 @@ const FILESYSTEM_BOUNDARY_SINK: FileSystemBoundarySink = 'filesystem-boundary';
 interface FileSystemIdentity {
   readonly device: number;
   readonly inode: number;
+}
+
+interface IdentityBoundRegularFile {
+  readonly canonicalPath: string;
+  readonly fileDescriptor: number;
+  readonly fileStat: Stats;
 }
 
 interface PinnedDirectoryIdentity {
@@ -639,6 +644,15 @@ function sameFileSystemIdentity(left: FileSystemIdentity, right: FileSystemIdent
   return left.device === right.device && left.inode === right.inode;
 }
 
+function sameFileSystemVersion(left: Stats, right: Stats): boolean {
+  return (
+    sameFileSystemIdentity(fileSystemIdentity(left), fileSystemIdentity(right)) &&
+    left.size === right.size &&
+    left.mtimeMs === right.mtimeMs &&
+    left.ctimeMs === right.ctimeMs
+  );
+}
+
 function rootIdentityChangedError(root: string, detail: string): Error {
   return new Error(`Filesystem root identity changed for '${root}': ${detail}.`);
 }
@@ -653,39 +667,29 @@ async function readConfinedFile(
   const root = preparedRootPath(rootState);
   const candidate = confinedPath(root, relativePath);
   if (candidate === undefined) return undefined;
-
-  const resolved = await safeRealpath(candidate);
-  if (resolved === undefined || !containsPath(root, resolved)) return undefined;
-
-  const fileDescriptor = await safeOpen(resolved);
-  if (fileDescriptor === undefined) return undefined;
+  const opened = await openIdentityBoundRegularFile(candidate, root);
+  if (opened === undefined) return undefined;
 
   let streamOwnsFileDescriptor = false;
   try {
-    const fileStat = await fileSystemStatFileDescriptor(fileDescriptor);
-    const postOpenResolved = await safeRealpath(resolved);
-    if (
-      !fileSystemStatsIsFile(fileStat) ||
-      postOpenResolved === undefined ||
-      !containsPath(root, postOpenResolved)
-    ) {
-      return undefined;
-    }
-
     let body: ReadableStream<Uint8Array> | Uint8Array;
     if (options.body === 'stream') {
-      body = fileSystemCreateReadableStream(fileDescriptor);
+      body = fileSystemCreateReadableStream(opened.fileDescriptor);
       streamOwnsFileDescriptor = true;
     } else {
-      body = fileSystemCopyBytes(await fileSystemReadFileDescriptor(fileDescriptor));
+      body = fileSystemCopyBytes(await fileSystemReadFileDescriptor(opened.fileDescriptor));
+      const completedStat = await fileSystemStatFileDescriptor(opened.fileDescriptor);
+      if (!sameFileSystemVersion(opened.fileStat, completedStat)) return undefined;
     }
     return {
       body,
-      fileName: fileSystemPathBasename(postOpenResolved),
-      size: fileStat.size,
+      fileName: fileSystemPathBasename(opened.canonicalPath),
+      size: opened.fileStat.size,
     };
   } finally {
-    if (!streamOwnsFileDescriptor) await fileSystemCloseFileDescriptor(fileDescriptor);
+    if (!streamOwnsFileDescriptor) {
+      await fileSystemCloseFileDescriptor(opened.fileDescriptor);
+    }
   }
 }
 
@@ -698,14 +702,15 @@ async function statConfinedFile(
   const root = preparedRootPath(rootState);
   const candidate = confinedPath(root, relativePath);
   if (candidate === undefined) return undefined;
-  const resolved = await safeRealpath(candidate);
-  if (resolved === undefined || !containsPath(root, resolved)) return undefined;
-  const fileStat = await fileSystemStat(resolved).catch((error: unknown) => {
-    if (isMissingPathError(error)) return undefined;
-    throw error;
-  });
-  if (fileStat === undefined || !fileSystemStatsIsFile(fileStat)) return undefined;
-  return { mtime: fileStat.mtime, size: fileStat.size };
+  const opened = await openIdentityBoundRegularFile(candidate, root);
+  if (opened === undefined) return undefined;
+  try {
+    const completedStat = await fileSystemStatFileDescriptor(opened.fileDescriptor);
+    if (!sameFileSystemVersion(opened.fileStat, completedStat)) return undefined;
+    return { mtime: completedStat.mtime, size: completedStat.size };
+  } finally {
+    await fileSystemCloseFileDescriptor(opened.fileDescriptor);
+  }
 }
 
 async function readConfinedFileBytes(
@@ -738,19 +743,7 @@ async function writeConfinedFile(
   await validateConfinedFileTarget(rootState, relativePath);
   await fileSystemMkdir(fileSystemPathDirname(filePath), true);
   await revalidatePreparedRoot(rootState);
-  const tempPath = fileSystemPathJoin(
-    fileSystemPathDirname(filePath),
-    `.${fileSystemPathBasename(filePath)}.${process.pid}.${fileSystemRandomUuid()}.tmp`,
-  );
-  try {
-    await fileSystemWriteFile(tempPath, source);
-    await revalidatePreparedRoot(rootState);
-    await ensureParentsStayDirectories(root, filePath);
-    await fileSystemRename(tempPath, filePath);
-  } catch (error) {
-    await removeConfinedTemporaryFile(rootState, tempPath).catch(() => undefined);
-    throw error;
-  }
+  await writeExclusiveTemporaryFile(rootState, root, filePath, source);
 }
 
 async function deleteConfinedFile(
@@ -800,29 +793,15 @@ async function copyFileIntoRoot(
   const root = preparedRootPath(rootState);
   const targetPath = confinedPath(root, relativePath);
   if (targetPath === undefined) throw new Error('Filesystem path escapes its root.');
-  await fileSystemAccess(sourcePath);
+  const source = await readIdentityBoundCopySource(sourcePath);
   await validateConfinedFileTarget(rootState, relativePath);
   await fileSystemMkdir(fileSystemPathDirname(targetPath), true);
   await revalidatePreparedRoot(rootState);
   await ensureParentsStayDirectories(root, targetPath);
-  // SPEC §10.6 filesystem door: copyFile(2) follows an existing final-component symlink and
-  // writes through an existing hardlink's shared inode. Copy into a framework-minted sibling and
-  // atomically rename it over the directory entry instead, matching writeConfinedFile. The rename
-  // replaces a symlink, hardlink, FIFO, or device node without opening that caller-controlled
-  // target, so a confined copy cannot mutate an object reachable outside the root.
-  const tempPath = fileSystemPathJoin(
-    fileSystemPathDirname(targetPath),
-    `.${fileSystemPathBasename(targetPath)}.${process.pid}.${fileSystemRandomUuid()}.tmp`,
-  );
-  try {
-    await fileSystemCopyFile(sourcePath, tempPath);
-    await revalidatePreparedRoot(rootState);
-    await ensureParentsStayDirectories(root, targetPath);
-    await fileSystemRename(tempPath, targetPath);
-  } catch (error) {
-    await removeConfinedTemporaryFile(rootState, tempPath).catch(() => undefined);
-    throw error;
-  }
+  // SPEC §10.6 filesystem door: the source bytes came from an identity-bound descriptor, while the
+  // destination is an exclusive/no-follow temporary descriptor. No reviewed source or framework
+  // temporary name is reopened through an attacker-swappable path.
+  await writeExclusiveTemporaryFile(rootState, root, targetPath, source);
 }
 
 async function renameIntoRoot(
@@ -868,9 +847,87 @@ async function validateConfinedFileTarget(
   throw new Error(`Filesystem target '${filePath}' is a directory.`);
 }
 
-async function removeConfinedTemporaryFile(
+async function readIdentityBoundCopySource(sourcePath: string): Promise<Uint8Array> {
+  const opened = await openIdentityBoundRegularFile(sourcePath);
+  if (opened === undefined) {
+    throw new Error(`Filesystem copy source '${sourcePath}' is not a stable regular file.`);
+  }
+  try {
+    const bytes = fileSystemCopyBytes(await fileSystemReadFileDescriptor(opened.fileDescriptor));
+    const completedStat = await fileSystemStatFileDescriptor(opened.fileDescriptor);
+    const completedCanonicalPath = await safeRealpath(sourcePath);
+    if (
+      !sameFileSystemVersion(opened.fileStat, completedStat) ||
+      completedCanonicalPath !== opened.canonicalPath
+    ) {
+      throw new Error(`Filesystem copy source '${sourcePath}' changed during its descriptor read.`);
+    }
+    return bytes;
+  } finally {
+    await fileSystemCloseFileDescriptor(opened.fileDescriptor);
+  }
+}
+
+async function writeExclusiveTemporaryFile(
+  rootState: FileSystemRootState,
+  root: string,
+  targetPath: string,
+  source: string | Uint8Array,
+): Promise<void> {
+  const tempPath = fileSystemPathJoin(
+    fileSystemPathDirname(targetPath),
+    `.${fileSystemPathBasename(targetPath)}.${process.pid}.${fileSystemRandomUuid()}.tmp`,
+  );
+  let fileDescriptor: number | undefined;
+  let identity: FileSystemIdentity | undefined;
+  try {
+    await ensureParentsStayDirectories(root, targetPath);
+    await revalidatePreparedRoot(rootState);
+    fileDescriptor = await fileSystemCreateExclusiveFileDescriptor(tempPath);
+    const openedStat = await fileSystemStatFileDescriptor(fileDescriptor);
+    if (!fileSystemStatsIsFile(openedStat)) {
+      throw new Error(`Filesystem temporary '${tempPath}' is not a regular file.`);
+    }
+    identity = fileSystemIdentity(openedStat);
+    await fileSystemWriteFileDescriptor(fileDescriptor, source);
+
+    const lexicalStat = await fileSystemLstat(tempPath);
+    if (
+      fileSystemStatsIsSymbolicLink(lexicalStat) ||
+      !fileSystemStatsIsFile(lexicalStat) ||
+      !sameFileSystemIdentity(identity, fileSystemIdentity(lexicalStat))
+    ) {
+      throw new Error(`Filesystem temporary '${tempPath}' identity changed before commit.`);
+    }
+
+    await revalidatePreparedRoot(rootState);
+    await ensureParentsStayDirectories(root, targetPath);
+    await fileSystemRename(tempPath, targetPath);
+
+    const committedStat = await fileSystemLstat(targetPath);
+    if (
+      fileSystemStatsIsSymbolicLink(committedStat) ||
+      !fileSystemStatsIsFile(committedStat) ||
+      !sameFileSystemIdentity(identity, fileSystemIdentity(committedStat))
+    ) {
+      throw new Error(`Filesystem target '${targetPath}' identity changed during commit.`);
+    }
+  } catch (error) {
+    if (identity !== undefined) {
+      await removeIdentityBoundTemporaryFile(rootState, tempPath, identity).catch(() => undefined);
+    }
+    throw error;
+  } finally {
+    if (fileDescriptor !== undefined) {
+      await fileSystemCloseFileDescriptor(fileDescriptor);
+    }
+  }
+}
+
+async function removeIdentityBoundTemporaryFile(
   rootState: FileSystemRootState,
   tempPath: string,
+  identity: FileSystemIdentity,
 ): Promise<void> {
   await revalidatePreparedRoot(rootState);
   const root = preparedRootPath(rootState);
@@ -878,6 +935,14 @@ async function removeConfinedTemporaryFile(
   await ensureParentsStayDirectories(root, tempPath);
   await revalidatePreparedRoot(rootState);
   try {
+    const lexicalStat = await fileSystemLstat(tempPath);
+    if (
+      fileSystemStatsIsSymbolicLink(lexicalStat) ||
+      !fileSystemStatsIsFile(lexicalStat) ||
+      !sameFileSystemIdentity(identity, fileSystemIdentity(lexicalStat))
+    ) {
+      return;
+    }
     await fileSystemUnlink(tempPath);
   } catch (error) {
     if (!isMissingPathError(error)) throw error;
@@ -1193,9 +1258,88 @@ async function ensureParentsStayDirectories(root: string, targetPath: string): P
   }
 }
 
+/**
+ * Open one regular file only when the canonical entry observed before open still names the exact
+ * descriptor afterward. This binds realpath/stat decisions to the bytes or metadata consumed at
+ * the sink instead of reopening an attacker-swappable pathname (SPEC §10.6).
+ */
+async function openIdentityBoundRegularFile(
+  candidate: string,
+  confinedRoot?: string,
+): Promise<IdentityBoundRegularFile | undefined> {
+  const lexicalStat = await safeLstat(candidate);
+  if (lexicalStat === undefined) return undefined;
+  const lexicalIsSymbolicLink = fileSystemStatsIsSymbolicLink(lexicalStat);
+  const canonicalPath = await safeRealpath(candidate);
+  if (
+    canonicalPath === undefined ||
+    (confinedRoot !== undefined && !containsPath(confinedRoot, canonicalPath))
+  ) {
+    return undefined;
+  }
+  const expectedStat = await safeStat(canonicalPath);
+  if (expectedStat === undefined || !fileSystemStatsIsFile(expectedStat)) return undefined;
+  if (
+    !lexicalIsSymbolicLink &&
+    !sameFileSystemIdentity(fileSystemIdentity(lexicalStat), fileSystemIdentity(expectedStat))
+  ) {
+    return undefined;
+  }
+
+  const fileDescriptor = await safeOpen(canonicalPath);
+  if (fileDescriptor === undefined) return undefined;
+  try {
+    const openedStat = await fileSystemStatFileDescriptor(fileDescriptor);
+    const postOpenLexicalStat = await safeLstat(candidate);
+    const postOpenCanonicalPath = await safeRealpath(candidate);
+    const postOpenStat =
+      postOpenCanonicalPath === undefined ? undefined : await safeStat(postOpenCanonicalPath);
+    if (
+      !fileSystemStatsIsFile(openedStat) ||
+      !sameFileSystemVersion(expectedStat, openedStat) ||
+      postOpenLexicalStat === undefined ||
+      fileSystemStatsIsSymbolicLink(postOpenLexicalStat) !== lexicalIsSymbolicLink ||
+      !sameFileSystemIdentity(
+        fileSystemIdentity(lexicalStat),
+        fileSystemIdentity(postOpenLexicalStat),
+      ) ||
+      postOpenCanonicalPath !== canonicalPath ||
+      postOpenStat === undefined ||
+      !fileSystemStatsIsFile(postOpenStat) ||
+      !sameFileSystemVersion(expectedStat, postOpenStat) ||
+      (confinedRoot !== undefined && !containsPath(confinedRoot, postOpenCanonicalPath))
+    ) {
+      await fileSystemCloseFileDescriptor(fileDescriptor);
+      return undefined;
+    }
+    return { canonicalPath, fileDescriptor, fileStat: openedStat };
+  } catch (error) {
+    await fileSystemCloseFileDescriptor(fileDescriptor).catch(() => undefined);
+    throw error;
+  }
+}
+
 async function safeRealpath(filePath: string): Promise<string | undefined> {
   try {
     return await fileSystemRealpath(filePath);
+  } catch (error) {
+    if (isMissingPathError(error)) return undefined;
+    throw error;
+  }
+}
+
+async function safeLstat(filePath: string): Promise<Stats | undefined> {
+  try {
+    return await fileSystemLstat(filePath);
+  } catch (error) {
+    if (isMissingPathError(error)) return undefined;
+    throw error;
+  }
+}
+
+async function safeStat(filePath: string): Promise<Stats | undefined> {
+  try {
+    return await fileSystemStat(filePath);
   } catch (error) {
     if (isMissingPathError(error)) return undefined;
     throw error;
