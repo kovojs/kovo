@@ -518,10 +518,18 @@ export function mutationWireRequestFromHeaders<Request>(
  */
 export const MAX_MUTATION_WIRE_TARGETS = 64;
 
+/**
+ * @internal K2 (SPEC §9.5): total UTF-16 code-unit ceiling for each client-supplied
+ * target header. The entry cap bounds fan-out; this ceiling also bounds the scan and
+ * substring work for a single oversized entry before any target is accepted.
+ */
+export const MAX_MUTATION_WIRE_TARGET_HEADER_CHARACTERS = 64 * 1024;
+
 function parseLiveTargetHeader(value: string): MutationLiveTarget[] {
-  // K2 (SPEC §9.5): cap the raw entry list BEFORE per-entry parse so a flood header costs
-  // O(cap) parse work, not O(N). Dedup further shrinks the post-cap set.
-  const rawEntries = capEntries(splitTargetHeaderEntries(value));
+  // K2 (SPEC §9.5): reject an oversized aggregate before scanning it, then stop the
+  // splitter at the entry cap before per-entry parse. Dedup further shrinks the set.
+  if (value.length > MAX_MUTATION_WIRE_TARGET_HEADER_CHARACTERS) return [];
+  const rawEntries = splitTargetHeaderEntries(value);
   const parsed: MutationLiveTarget[] = [];
   for (let index = 0; index < rawEntries.length; index += 1) {
     const entry = parseLiveTargetEntry(rawEntries[index]!);
@@ -529,25 +537,6 @@ function parseLiveTargetHeader(value: string): MutationLiveTarget[] {
       witnessArrayAppend(parsed, entry, 'Server packages/server/src/mutation-wire.ts collection');
   }
   return dedupeLiveTargets(parsed);
-}
-
-/**
- * K2 (SPEC §9.5): bound a parsed entry list to {@link MAX_MUTATION_WIRE_TARGETS}. Applied
- * before dedup so the cap is on the post-filter distinct-enough set; dedup further shrinks
- * it. Capping here (parse time) keeps the rendered count and selection cost bounded.
- */
-function capEntries<T>(entries: readonly T[]): T[] {
-  const capped: T[] = [];
-  const length =
-    entries.length > MAX_MUTATION_WIRE_TARGETS ? MAX_MUTATION_WIRE_TARGETS : entries.length;
-  for (let index = 0; index < length; index += 1) {
-    witnessArrayAppend(
-      capped,
-      entries[index]!,
-      'Server packages/server/src/mutation-wire.ts capped target snapshot',
-    );
-  }
-  return capped;
 }
 
 function parseLiveTargetEntry(entry: string): MutationLiveTarget | null {
@@ -583,9 +572,10 @@ function readTargetDeps(value: string): string[] {
 }
 
 function parseLiveTargetDescriptorHeader(value: string): MutationLiveTargetDescriptor[] {
-  // K2 (SPEC §9.5): cap the raw entry list BEFORE per-entry parse (each entry runs a
-  // JSON.parse for its props) so a flood header costs O(cap) parse work, not O(N).
-  const rawEntries = capEntries(splitLiveTargetDescriptorEntries(value));
+  // K2 (SPEC §9.5): reject an oversized aggregate before scanning it, then stop the
+  // splitter at the entry cap before per-entry JSON parsing.
+  if (value.length > MAX_MUTATION_WIRE_TARGET_HEADER_CHARACTERS) return [];
+  const rawEntries = splitLiveTargetDescriptorEntries(value);
   const parsed: MutationLiveTargetDescriptor[] = [];
   for (let index = 0; index < rawEntries.length; index += 1) {
     const entry = parseLiveTargetDescriptorEntry(rawEntries[index]!);
@@ -629,14 +619,17 @@ function splitLiveTargetDescriptorEntries(value: string): string[] {
       securityStringSlice(value, start, index),
       'Server packages/server/src/mutation-wire.ts collection',
     );
+    if (entries.length === MAX_MUTATION_WIRE_TARGETS) return entries;
     start = index + 1;
   }
 
-  witnessArrayAppend(
-    entries,
-    securityStringSlice(value, start),
-    'Server packages/server/src/mutation-wire.ts collection',
-  );
+  if (entries.length < MAX_MUTATION_WIRE_TARGETS) {
+    witnessArrayAppend(
+      entries,
+      securityStringSlice(value, start),
+      'Server packages/server/src/mutation-wire.ts collection',
+    );
+  }
   return entries;
 }
 
@@ -855,6 +848,7 @@ function splitTargetHeaderEntries(value: string): string[] {
       securityStringSlice(value, start, index),
       'Server packages/server/src/mutation-wire.ts collection',
     );
+    if (entries.length === MAX_MUTATION_WIRE_TARGETS) return entries;
     start = index + 1;
   }
   return entries;

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createHash, createHmac } from 'node:crypto';
 
 import {
+  MAX_MUTATION_WIRE_TARGET_HEADER_CHARACTERS,
   MAX_MUTATION_WIRE_TARGETS,
   createLiveTargetAttestation,
   mutationWireRequestFromHeaders,
@@ -339,7 +340,7 @@ describe('mutation wire headers', () => {
   // count-capped at parse time so one mutation cannot amplify into thousands of
   // component renders + O(N·M) selection (a >1000× DoS).
   it('K2: caps parsed live-target and descriptor counts at MAX_MUTATION_WIRE_TARGETS', () => {
-    const count = 10_000;
+    const count = MAX_MUTATION_WIRE_TARGETS + 32;
     const liveTargetsHeader = Array.from({ length: count }, (_, i) => `t${i}=dep${i}`).join(',');
     const descriptorsHeader = Array.from(
       { length: count },
@@ -353,8 +354,22 @@ describe('mutation wire headers', () => {
     });
 
     expect(MAX_MUTATION_WIRE_TARGETS).toBeLessThan(count);
-    expect(headers.liveTargets.length).toBeLessThanOrEqual(MAX_MUTATION_WIRE_TARGETS);
-    expect(headers.liveTargetDescriptors.length).toBeLessThanOrEqual(MAX_MUTATION_WIRE_TARGETS);
-    expect(headers.targets.length).toBeLessThanOrEqual(MAX_MUTATION_WIRE_TARGETS);
+    expect(headers.liveTargets).toHaveLength(MAX_MUTATION_WIRE_TARGETS);
+    expect(headers.liveTargetDescriptors).toHaveLength(MAX_MUTATION_WIRE_TARGETS);
+    expect(headers.targets).toHaveLength(MAX_MUTATION_WIRE_TARGETS);
+  });
+
+  it('K2: rejects oversized target headers before scanning or retaining an entry', () => {
+    const oversizedEntry = 'x'.repeat(MAX_MUTATION_WIRE_TARGET_HEADER_CHARACTERS + 1);
+
+    const headers = readMutationWireHeaders({
+      'Kovo-Fragment': 'true',
+      'Kovo-Live-Targets': oversizedEntry,
+      'Kovo-Targets': oversizedEntry,
+    });
+
+    expect(headers.liveTargets).toEqual([]);
+    expect(headers.liveTargetDescriptors).toEqual([]);
+    expect(headers.targets).toEqual([]);
   });
 });
