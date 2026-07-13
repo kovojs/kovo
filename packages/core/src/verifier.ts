@@ -6,7 +6,10 @@ import {
   securityHasInstance,
   securityIsArray,
   securityIsMap,
+  securityMap,
   securityMapGet,
+  securityMapHas,
+  securityMapSet,
   securityObjectKeys,
   securityRegExpTest,
   securityStringCharCodeAt,
@@ -168,6 +171,10 @@ const frameworkHmacSignatureVerifiers = securityWeakSet<object>();
 // sentinel, so public hmacSignature() always owns timestamp binding when tolerance is configured.
 const payloadBindsTimestamp = Symbol('kovo.hmac.payload-binds-timestamp');
 type HmacTimestampBinding = typeof payloadBindsTimestamp | undefined;
+type ResolvedHmacToleranceTimestamp = {
+  parsedSeconds: number;
+  signedValue: number | string;
+};
 
 /** @internal Unforgeable provenance check for framework-constructed HMAC verifiers. */
 export function isFrameworkHmacSignatureVerifier(value: unknown): value is HmacSignatureVerifier {
@@ -435,12 +442,21 @@ async function verifyHmacSignature(
   const signatureHeader = getHeader(request.headers, options.header);
   if (signatureHeader === undefined || signatureHeader.length === 0) return false;
 
+  const headerCache = securityMap<string, string | undefined>();
+  securityMapSet(headerCache, securityStringToLowerCase(options.header), signatureHeader);
   const context: HmacSignaturePayloadContext = {
-    header: (name) => getHeader(request.headers, name),
+    header: (name) => {
+      const cacheKey = securityStringToLowerCase(name);
+      if (securityMapHas(headerCache, cacheKey)) return securityMapGet(headerCache, cacheKey);
+      const value = getHeader(request.headers, name);
+      securityMapSet(headerCache, cacheKey, value);
+      return value;
+    },
     signatureHeader,
   };
 
-  if (!isWithinTolerance(options.tolerance, request, context)) return false;
+  const toleranceTimestamp = resolveToleranceTimestamp(options.tolerance, request, context);
+  if (!isWithinTolerance(options.tolerance, toleranceTimestamp, request)) return false;
 
   const signedPayload =
     typeof options.payload === 'function'
@@ -454,12 +470,8 @@ async function verifyHmacSignature(
   // fixes the timestamp at another position in the signed payload.
   let signedPayloadBytes: Uint8Array;
   if (options.tolerance !== undefined && timestampBinding !== payloadBindsTimestamp) {
-    const timestampValue =
-      options.tolerance.timestamp?.(request, context) ??
-      (options.tolerance.header === undefined
-        ? undefined
-        : getHeader(request.headers, options.tolerance.header));
-    const prefix = timestampValue !== undefined ? `${timestampValue}.` : '';
+    if (toleranceTimestamp === undefined) return false;
+    const prefix = `${toleranceTimestamp.signedValue}.`;
     const prefixBytes = encodeUtf8(prefix);
     const payloadBytes = payloadToBytes(signedPayload);
     signedPayloadBytes = new IntrinsicUint8Array(prefixBytes.length + payloadBytes.length);
@@ -583,17 +595,27 @@ function stripStandardWebhookSecretPrefix(value: string): string {
   return securityStringSlice(value, 0, 6) === 'whsec_' ? securityStringSlice(value, 6) : value;
 }
 
-function isWithinTolerance(
+function resolveToleranceTimestamp(
   tolerance: HmacSignatureTolerance | undefined,
   request: WebhookVerificationRequest,
   context: HmacSignaturePayloadContext,
-): boolean {
-  if (tolerance === undefined) return true;
+): ResolvedHmacToleranceTimestamp | undefined {
+  if (tolerance === undefined) return undefined;
 
   const timestampValue =
     tolerance.timestamp?.(request, context) ??
-    (tolerance.header === undefined ? undefined : getHeader(request.headers, tolerance.header));
-  const timestamp = parseTimestampSeconds(timestampValue);
+    (tolerance.header === undefined ? undefined : context.header(tolerance.header));
+  const parsedSeconds = parseTimestampSeconds(timestampValue);
+  if (timestampValue === undefined || parsedSeconds === undefined) return undefined;
+  return { parsedSeconds, signedValue: timestampValue };
+}
+
+function isWithinTolerance(
+  tolerance: HmacSignatureTolerance | undefined,
+  timestamp: ResolvedHmacToleranceTimestamp | undefined,
+  request: WebhookVerificationRequest,
+): boolean {
+  if (tolerance === undefined) return true;
   if (timestamp === undefined) return false;
   if (!capturedVerifierScalarControlsSound) return false;
 
@@ -604,7 +626,7 @@ function isWithinTolerance(
         ? securityApply<number>(intrinsicDateGetTime, request.now, [])
         : securityApply<number>(intrinsicDateNow, IntrinsicDate, []);
   const nowSeconds = floorNumber(now / 1000);
-  const difference = nowSeconds - timestamp;
+  const difference = nowSeconds - timestamp.parsedSeconds;
   return (difference < 0 ? -difference : difference) <= tolerance.seconds;
 }
 

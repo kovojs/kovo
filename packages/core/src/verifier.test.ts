@@ -469,6 +469,46 @@ describe('webhook verifier kit', () => {
     await expect(verifier.verify({ ...request, now: providerNow - 301_000 })).resolves.toBe(false);
   });
 
+  it('uses one timestamp-header snapshot for Standard Webhooks tolerance and payload binding', async () => {
+    const messageId = 'msg_stateful';
+    const signingKey = Buffer.from(standardSecret.slice('whsec_'.length), 'base64');
+    const signatureBoundToSecondValue = createHmac('sha256', signingKey)
+      .update(`${messageId}.1000.${standardPayload}`)
+      .digest('base64');
+    let timestampReads = 0;
+    const verifier = standardWebhooks({ secret: standardSecret });
+
+    await expect(
+      verifier.verify({
+        headers: {
+          'webhook-id': messageId,
+          'webhook-signature': `v1,${signatureBoundToSecondValue}`,
+          'webhook-timestamp': '1000',
+        },
+        now: 1_000_000,
+        payload: standardPayload,
+      }),
+    ).resolves.toBe(true);
+    await expect(
+      verifier.verify({
+        headers: {
+          get(name) {
+            if (name === 'webhook-signature') return `v1,${signatureBoundToSecondValue}`;
+            if (name === 'webhook-id') return messageId;
+            if (name === 'webhook-timestamp') {
+              timestampReads += 1;
+              return timestampReads === 1 ? '1100' : '1000';
+            }
+            return undefined;
+          },
+        },
+        now: 1_100_000,
+        payload: standardPayload,
+      }),
+    ).resolves.toBe(false);
+    expect(timestampReads).toBe(1);
+  });
+
   // B5: SPEC §9.1.1:846 — when tolerance is set, the timestamp must be bound into
   // the signed bytes so that a captured (signature, body) cannot be replayed with a
   // different fresh x-timestamp. Without the fix, the same sig + body passes with any
@@ -514,6 +554,66 @@ describe('webhook verifier kit', () => {
       now: 1700000100 * 1000,
     };
     await expect(verifier.verify(replayedWithFreshTimestamp)).resolves.toBe(false);
+  });
+
+  it('resolves a stateful timestamp callback exactly once before checking and signing', async () => {
+    let timestampCalls = 0;
+    const verifier = hmacSignature({
+      encoding: 'hex',
+      header: 'x-signature',
+      payload: ({ payload }) => payload,
+      secret: replaySecret,
+      tolerance: {
+        seconds: 5,
+        timestamp: () => {
+          timestampCalls += 1;
+          return timestampCalls === 1 ? '1100' : '1000';
+        },
+      },
+    });
+    const signatureBoundToSecondValue = createHmac('sha256', replaySecret)
+      .update('1000.body')
+      .digest('hex');
+
+    await expect(
+      verifier.verify({
+        headers: { 'x-signature': signatureBoundToSecondValue },
+        now: 1_100_000,
+        payload: 'body',
+      }),
+    ).resolves.toBe(false);
+    expect(timestampCalls).toBe(1);
+  });
+
+  it('reads a timestamp header exactly once and signs the same resolved value', async () => {
+    const timestamp = '1100';
+    const signature = createHmac('sha256', replaySecret).update(`${timestamp}.body`).digest('hex');
+    let timestampReads = 0;
+    const verifier = hmacSignature({
+      encoding: 'hex',
+      header: 'x-signature',
+      payload: ({ payload }) => payload,
+      secret: replaySecret,
+      tolerance: { header: 'x-time', seconds: 5 },
+    });
+
+    await expect(
+      verifier.verify({
+        headers: {
+          get(name) {
+            if (name === 'x-signature') return signature;
+            if (name === 'x-time') {
+              timestampReads += 1;
+              return timestamp;
+            }
+            return undefined;
+          },
+        },
+        now: 1_100_000,
+        payload: 'body',
+      }),
+    ).resolves.toBe(true);
+    expect(timestampReads).toBe(1);
   });
 
   it('ignores the removed timestampBound opt-out and retains automatic replay binding', async () => {
