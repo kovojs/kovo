@@ -40,6 +40,7 @@ import {
   createWitnessWeakMap,
   createWitnessWeakSet,
   witnessCreateNullRecord,
+  witnessCreateWithPrototype,
   witnessDefineProperty,
   witnessFreeze,
   witnessGetOwnPropertyDescriptor,
@@ -524,13 +525,28 @@ export class KovoReadonlyHandleError extends Error {
   }
 }
 
+// Drizzle's node-postgres transaction path inspects the client's immediate prototype constructor
+// to distinguish a Pool from a checked-out client. Give the framework facade only that inert
+// nominal shape: it must not inherit ambient Object or Pool capabilities (SPEC §10.3).
+const kovoScopedPostgresClientConstructor = witnessFreeze(() => undefined);
+const kovoScopedPostgresClientPrototype = witnessCreateNullRecord<unknown>();
+witnessDefineProperty(kovoScopedPostgresClientPrototype, 'constructor', {
+  configurable: false,
+  enumerable: false,
+  value: kovoScopedPostgresClientConstructor,
+  writable: false,
+});
+witnessFreeze(kovoScopedPostgresClientPrototype);
+
 function postgresScopedClientFacade<Client extends object>(
   client: Client,
   options: PostgresScopedClientOptions,
 ): Client {
   const target = client as Record<PropertyKey, unknown>;
   const transactionMethod = postgresTransactionMethod(target);
-  const facade = witnessCreateNullRecord<unknown>();
+  const facade = witnessCreateWithPrototype<Record<PropertyKey, unknown>>(
+    kovoScopedPostgresClientPrototype,
+  );
   witnessDefineProperty(facade, 'query', {
     enumerable: true,
     value(query: unknown, params?: unknown[], queryOptions?: unknown) {

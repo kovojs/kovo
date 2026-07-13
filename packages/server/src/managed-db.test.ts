@@ -3674,6 +3674,23 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
     expect(() => scoped.exec('select 1')).toThrow(/parameterized db\.query/);
   });
 
+  it('provides only the inert client prototype shape Drizzle requires for transactions', () => {
+    const scoped = createPostgresScopedClient({
+      transaction<Result>(callback: (tx: unknown) => Result) {
+        return callback(this);
+      },
+    });
+    const prototype = Object.getPrototypeOf(scoped) as { constructor: unknown };
+
+    expect(prototype).not.toBe(Object.prototype);
+    expect(Object.isFrozen(prototype)).toBe(true);
+    expect(Reflect.ownKeys(prototype)).toEqual(['constructor']);
+    expect(typeof prototype.constructor).toBe('function');
+    expect((prototype.constructor as Function).name).not.toContain('Pool');
+    expect(Object.isFrozen(prototype.constructor)).toBe(true);
+    expect(() => Reflect.construct(prototype.constructor as Function, [])).toThrow(TypeError);
+  });
+
   it('pins the Postgres principal and role options before app code can mutate them', async () => {
     const log: string[] = [];
     const client = {
