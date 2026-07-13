@@ -611,11 +611,13 @@ describe('server createApp request shell', () => {
 
   it('pins retained opaque CSRF key-ring methods against a forged victim token', async () => {
     const mutationHandler = vi.fn(() => ({ ok: true }));
+    const originalSignature = Buffer.alloc(32, 0x11).toString('base64url');
+    const attackerSignature = Buffer.alloc(32, 0x22).toString('base64url');
     const ring = {
       currentKeyId: 'original',
-      sign: () => ({ keyId: 'original', signature: 'original-signature' }),
+      sign: () => ({ keyId: 'original', signature: originalSignature }),
       verify: (input: { signature: string }) =>
-        input.signature === 'original-signature'
+        input.signature === originalSignature
           ? ({ keyId: 'original', ok: true } as const)
           : ({ ok: false, reason: 'bad-signature' } as const),
     };
@@ -633,7 +635,7 @@ describe('server createApp request shell', () => {
     );
 
     ring.currentKeyId = 'attacker';
-    ring.sign = () => ({ keyId: 'attacker', signature: 'attacker-signature' });
+    ring.sign = () => ({ keyId: 'attacker', signature: attackerSignature });
     ring.verify = () => ({ keyId: 'attacker', ok: true }) as const;
     const forged = csrfToken({}, csrf, { audience: 'account/keyring-delete' });
     const form = new FormData();

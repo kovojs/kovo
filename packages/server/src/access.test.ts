@@ -1,6 +1,5 @@
 import { createHmac } from 'node:crypto';
 import {
-  customVerifier,
   hmacSignature,
   type HmacSignatureOptions,
   type HmacSignatureVerifier,
@@ -312,7 +311,12 @@ describe('structured access metadata', () => {
 
   it('pins a custom webhook verifier method and audit metadata when the app closes', async () => {
     let handlerCalls = 0;
-    const verifier = customVerifier('deny', () => false);
+    const verifier = {
+      kind: 'custom' as const,
+      name: 'deny',
+      scheme: 'custom:deny',
+      verify: async () => false,
+    };
     const declared = webhook('/custom-verifier-snapshot', {
       handler: () => {
         handlerCalls += 1;

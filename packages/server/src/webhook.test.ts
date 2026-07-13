@@ -331,7 +331,12 @@ describe('server webhook primitive', () => {
   it('binds app dispatch to the snapshotted verifier under a poisoned declaration pin', async () => {
     const nativeDefineProperty = Object.defineProperty;
     let handled = 0;
-    const verifier = customVerifier('closed-rejecting-verifier', () => false);
+    const verifier = {
+      kind: 'custom' as const,
+      name: 'closed-rejecting-verifier',
+      scheme: 'custom:closed-rejecting-verifier',
+      verify: async () => false,
+    };
     const definition = {
       handler() {
         handled += 1;
