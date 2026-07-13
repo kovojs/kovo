@@ -312,11 +312,25 @@ describe('page hints', () => {
         sourceFileName: 'components/cart/cart-drawer.css',
       },
       {
-        fragmentTargets: ['cart-drawer'],
+        fragmentTargets: ['cart-drawer-footer'],
         href: '/assets/components/cart/cart-drawer.css',
         sourceFileName: 'components/cart/cart-drawer.css',
       },
     ];
+
+    expect(stylesheetsForTargets(manifest)).toEqual([
+      {
+        criticalCss: 'cart-badge { color: teal; }',
+        fragmentTargets: ['cart-badge'],
+        href: '/assets/components/cart/cart-badge.css',
+        sourceFileName: 'components/cart/cart-badge.css',
+      },
+      {
+        fragmentTargets: ['cart-drawer', 'cart-drawer-footer'],
+        href: '/assets/components/cart/cart-drawer.css',
+        sourceFileName: 'components/cart/cart-drawer.css',
+      },
+    ]);
 
     expect(renderPageHints({ stylesheets: stylesheetsForTargets(manifest) })).toEqual({
       csp: {

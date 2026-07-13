@@ -269,11 +269,15 @@ export function stylesheetSourcePath(asset: StylesheetAsset): string | undefined
 
 /** @internal Descriptor-snapshot an authored stylesheet while preserving source provenance. */
 export function snapshotStylesheetAsset(source: StylesheetAsset): StylesheetAsset {
+  return snapshotStylesheetManifestAsset(source);
+}
+
+function snapshotStylesheetManifestAsset(source: StylesheetAsset): StylesheetManifestEntry {
   if (typeof source !== 'object' || source === null || securityArrayIsArray(source)) {
     throw new TypeError('Kovo stylesheet assets must be stable own-data objects.');
   }
 
-  const read = (property: keyof StylesheetAsset): unknown => {
+  const read = (property: keyof StylesheetManifestEntry): unknown => {
     const before = witnessGetOwnPropertyDescriptor(source, property);
     const after = witnessGetOwnPropertyDescriptor(source, property);
     if (
@@ -293,7 +297,9 @@ export function snapshotStylesheetAsset(source: StylesheetAsset): StylesheetAsse
   const criticalCss = read('criticalCss');
   const cspHash = read('cspHash');
   const deferFull = read('deferFull');
+  const fragmentTargets = read('fragmentTargets');
   const preload = read('preload');
+  const sourceFileName = read('sourceFileName');
   if (typeof href !== 'string') throw new TypeError('Kovo stylesheet asset.href must be a string.');
   if (criticalCss !== undefined && typeof criticalCss !== 'string') {
     throw new TypeError('Kovo stylesheet asset.criticalCss must be a string.');
@@ -304,16 +310,30 @@ export function snapshotStylesheetAsset(source: StylesheetAsset): StylesheetAsse
   if (deferFull !== undefined && typeof deferFull !== 'boolean') {
     throw new TypeError('Kovo stylesheet asset.deferFull must be a boolean.');
   }
+  if (fragmentTargets !== undefined && !securityArrayIsArray(fragmentTargets)) {
+    throw new TypeError('Kovo stylesheet asset.fragmentTargets must be an array.');
+  }
   if (preload !== undefined && typeof preload !== 'boolean') {
     throw new TypeError('Kovo stylesheet asset.preload must be a boolean.');
   }
+  if (sourceFileName !== undefined && typeof sourceFileName !== 'string') {
+    throw new TypeError('Kovo stylesheet asset.sourceFileName must be a string.');
+  }
 
+  const fragmentTargetSnapshot =
+    fragmentTargets === undefined
+      ? undefined
+      : witnessFreeze(snapshotStringHintArray(fragmentTargets, 'stylesheet asset fragmentTargets'));
+
+  // SPEC §13.1: page and late-fragment stylesheet delivery share compiler-owned target metadata.
   const snapshot = witnessFreeze({
     ...(criticalCss === undefined ? {} : { criticalCss }),
     ...(cspHash === undefined ? {} : { cspHash }),
     ...(deferFull === undefined ? {} : { deferFull }),
+    ...(fragmentTargetSnapshot === undefined ? {} : { fragmentTargets: fragmentTargetSnapshot }),
     href,
     ...(preload === undefined ? {} : { preload }),
+    ...(sourceFileName === undefined ? {} : { sourceFileName }),
   });
   const provenance = witnessWeakMapGet(stylesheetSourceProvenance, source);
   if (provenance !== undefined) witnessWeakMapSet(stylesheetSourceProvenance, snapshot, provenance);
@@ -413,14 +433,17 @@ function isKovoClientModuleHref(href: string): boolean {
 
 function dedupeStylesheets(values: readonly (string | StylesheetAsset)[]): StylesheetAsset[] {
   const seen = createSecurityMap<string, number>();
-  const assets: StylesheetAsset[] = [];
+  const assets: StylesheetManifestEntry[] = [];
 
   for (let index = 0; index < values.length; index += 1) {
     const value = values[index]!;
     const asset =
       typeof value === 'string'
-        ? snapshotStylesheetAsset({ href: safeHintUrl(value, 'stylesheet'), preload: true })
-        : snapshotStylesheetAsset(value);
+        ? snapshotStylesheetManifestAsset({
+            href: safeHintUrl(value, 'stylesheet'),
+            preload: true,
+          })
+        : snapshotStylesheetManifestAsset(value);
     if (!asset.href) continue;
 
     const existingIndex = securityMapGet(seen, asset.href);
@@ -438,14 +461,48 @@ function dedupeStylesheets(values: readonly (string | StylesheetAsset)[]): Style
 }
 
 function mergeStylesheetAsset(
-  existing: StylesheetAsset,
-  incoming: StylesheetAsset,
-): StylesheetAsset {
-  const merged: StylesheetAsset = { ...existing };
+  existing: StylesheetManifestEntry,
+  incoming: StylesheetManifestEntry,
+): StylesheetManifestEntry {
+  const fragmentTargets = mergeStylesheetFragmentTargets(
+    existing.fragmentTargets,
+    incoming.fragmentTargets,
+  );
+  const merged: StylesheetManifestEntry = {
+    ...existing,
+    ...(fragmentTargets === undefined ? {} : { fragmentTargets }),
+  };
   if (!merged.criticalCss && incoming.criticalCss) merged.criticalCss = incoming.criticalCss;
   if (incoming.cspHash !== undefined) merged.cspHash = incoming.cspHash;
   if (incoming.deferFull !== undefined) merged.deferFull = incoming.deferFull;
   if (incoming.preload !== undefined) merged.preload = incoming.preload;
+  if (incoming.sourceFileName !== undefined) merged.sourceFileName = incoming.sourceFileName;
+  const provenance =
+    witnessWeakMapGet(stylesheetSourceProvenance, existing) ??
+    witnessWeakMapGet(stylesheetSourceProvenance, incoming);
+  if (provenance !== undefined) witnessWeakMapSet(stylesheetSourceProvenance, merged, provenance);
+  return snapshotStylesheetManifestAsset(merged);
+}
+
+function mergeStylesheetFragmentTargets(
+  existing: readonly string[] | undefined,
+  incoming: readonly string[] | undefined,
+): readonly string[] | undefined {
+  if (existing === undefined) return incoming;
+  if (incoming === undefined) return existing;
+
+  const merged: string[] = [];
+  const seen = createSecuritySet<string>();
+  const append = (values: readonly string[]): void => {
+    for (let index = 0; index < values.length; index += 1) {
+      const value = values[index]!;
+      if (securitySetHas(seen, value)) continue;
+      securitySetAdd(seen, value);
+      securityArrayPush(merged, value);
+    }
+  };
+  append(existing);
+  append(incoming);
   return merged;
 }
 
