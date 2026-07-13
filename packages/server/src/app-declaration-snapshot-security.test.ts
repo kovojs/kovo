@@ -1,8 +1,13 @@
 import { trustedHtml } from '@kovojs/browser';
+import { customVerifier } from '@kovojs/core';
 import { describe, expect, it, vi } from 'vitest';
 
 import { publicAccess } from './access.js';
 import { createApp, createRequestHandler } from './app.js';
+import {
+  createAppDeclarationSnapshotContext,
+  snapshotAppEndpoint,
+} from './app-snapshot.js';
 import { createMemoryVersionedClientModuleRegistry } from './client-modules.js';
 import { csrfToken, type CsrfOptions } from './csrf.js';
 import { domain } from './domain.js';
@@ -12,8 +17,42 @@ import { mutation } from './mutation.js';
 import { query } from './query.js';
 import { layout, route } from './route.js';
 import { SchemaValidationError, s, type Schema } from './schema.js';
+import type { WebhookDeclaration } from './webhook.js';
 
 describe('closed app declaration semantics', () => {
+  it('fails closed when the app webhook verifier snapshot receives a truthy non-boolean result', async () => {
+    const source = {
+      csrf: { exempt: true, justification: 'app webhook snapshot verifier regression' },
+      handler: () => new Response('unreachable'),
+      method: 'POST',
+      mount: 'exact',
+      name: '/app-snapshot/truthy-webhook',
+      path: '/app-snapshot/truthy-webhook',
+      reason: 'app webhook snapshot verifier regression',
+      response: { appOwnedSafety: false, body: 'text', cache: 'no-store' },
+      webhook: true,
+      webhookDefinition: {
+        handler: () => undefined,
+        input: s.object({ id: s.string() }),
+        verify: customVerifier(
+          'app-snapshot-truthy-webhook',
+          async () => ({ ok: false }) as never,
+        ),
+      },
+    };
+    const snapshot = snapshotAppEndpoint(
+      source as never,
+      createAppDeclarationSnapshotContext(),
+    ) as WebhookDeclaration;
+    const verifier = snapshot.webhookDefinition.verify;
+
+    expect(verifier).not.toBe('none');
+    if (verifier === 'none') throw new Error('expected an executable app webhook verifier');
+    await expect(
+      verifier.verify({ headers: new Headers(), payload: new Uint8Array() }),
+    ).resolves.toBe(false);
+  });
+
   it('pins route parameter schema methods before request dispatch', async () => {
     const params: Schema<{ id: string }> = {
       parse() {

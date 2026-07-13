@@ -707,7 +707,8 @@ function snapshotExecutableVerifier(value: unknown): PinnedExecutableVerifier | 
       auditName: value.resolved.scheme,
       kind: 'hmac',
       verifier: value,
-      verify: async (request) => Boolean(await witnessReflectApply(verify, value, [request])),
+      verify: async (request) =>
+        (await witnessReflectApply(verify, value, [request])) === true,
     };
   }
   if (typeof value !== 'object' || value === null || witnessIsArray(value)) return undefined;
@@ -731,7 +732,7 @@ function snapshotExecutableVerifier(value: unknown): PinnedExecutableVerifier | 
     name,
     scheme,
     async verify(request: EndpointVerifierRequest): Promise<boolean> {
-      return Boolean(await witnessReflectApply(verify, canonical, [request]));
+      return (await witnessReflectApply(verify, canonical, [request])) === true;
     },
   });
   return {
@@ -899,7 +900,7 @@ export async function runEndpointAuth(
     verified = false;
   }
 
-  if (!verified) return endpointAuthFailureResponse();
+  if (verified !== true) return endpointAuthFailureResponse();
   markEndpointVerifierExecuted(definition, request);
   return undefined;
 }

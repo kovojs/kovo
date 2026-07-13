@@ -650,7 +650,7 @@ function snapshotWebhookVerifier(source: unknown): WebhookVerifier {
     name,
     scheme,
     async verify(request: WebhookVerificationRequest): Promise<boolean> {
-      return Boolean(await witnessReflectApply(verify, canonical, [request]));
+      return (await witnessReflectApply(verify, canonical, [request])) === true;
     },
   });
   return canonical;

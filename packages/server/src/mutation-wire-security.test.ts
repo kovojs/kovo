@@ -292,6 +292,66 @@ describe('mutation wire intrinsic security', () => {
     expect(unsafeNextResponse.headers['Kovo-Reauth']).toBe('/login?next=%2F');
   });
 
+  it('does not let inherited session users suppress stale-session CSRF reauthentication', async () => {
+    const guarded = mutation('account/csrf-reauth', {
+      csrf: {
+        secret: 'mutation-csrf-reauth-secret-0123456789abcdef',
+        sessionId: () => 'expired-session',
+      },
+      guard: guards.authed<{ session?: { user?: { id: string } | null } | null }>(),
+      input: s.object({ id: s.string() }),
+      handler: () => 'unreachable',
+    });
+    const request = Object.create({ session: { user: { id: 'prototype-attacker' } } }) as {
+      session?: { user?: { id: string } | null } | null;
+    };
+
+    const response = await renderMutationResponse(guarded, {
+      currentUrl: '/account',
+      rawInput: {
+        id: 'safe',
+        'kovo-csrf': `v1.${'A'.repeat(43)}.${'B'.repeat(43)}`,
+      },
+      request,
+    });
+
+    expect(response.status).toBe(401);
+    expect(response.headers['Kovo-Reauth']).toBe('/login?next=%2Faccount');
+  });
+
+  it('rejects session accessors without invoking them during stale-session CSRF reauthentication', async () => {
+    const guarded = mutation('account/csrf-reauth-accessor', {
+      csrf: {
+        secret: 'mutation-csrf-reauth-secret-0123456789abcdef',
+        sessionId: () => 'expired-session',
+      },
+      guard: guards.authed<{ session?: { user?: { id: string } | null } | null }>(),
+      input: s.object({ id: s.string() }),
+      handler: () => 'unreachable',
+    });
+    let sessionReads = 0;
+    const request = {} as { session?: { user?: { id: string } | null } | null };
+    Object.defineProperty(request, 'session', {
+      get() {
+        sessionReads += 1;
+        return { user: { id: 'accessor-attacker' } };
+      },
+    });
+
+    const response = await renderMutationResponse(guarded, {
+      currentUrl: '/account',
+      rawInput: {
+        id: 'safe',
+        'kovo-csrf': `v1.${'A'.repeat(43)}.${'B'.repeat(43)}`,
+      },
+      request,
+    });
+
+    expect(response.status).toBe(401);
+    expect(response.headers['Kovo-Reauth']).toBe('/login?next=%2Faccount');
+    expect(sessionReads).toBe(0);
+  });
+
   it('fails closed when descriptor JSON parsing was poisoned before framework import', async () => {
     const originalParse = JSON.parse;
     JSON.parse = () => ({ target: 'attacker' });

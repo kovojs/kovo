@@ -372,6 +372,37 @@ describe('server endpoints', () => {
     expect(thrown === undefined ? '' : await thrown.text()).toBe('Unauthorized');
   });
 
+  it('fails closed when a custom endpoint verifier returns a truthy non-boolean result', async () => {
+    let handlerCalls = 0;
+    const customEndpoint = endpoint('/machine/truthy-verifier', {
+      auth: {
+        kind: 'custom',
+        name: 'truthy-verifier',
+        verify: customVerifier('truthy-verifier', async () => ({ ok: false }) as never),
+      },
+      csrf: false,
+      csrfJustification: 'custom machine verifier',
+      handler: () => {
+        handlerCalls += 1;
+        return new Response('leaked');
+      },
+      method: 'POST',
+      reason: 'truthy custom verifier fail-closed regression',
+      response: rawTextResponse,
+    });
+
+    const request = new Request('https://example.test/machine/truthy-verifier', {
+      body: 'payload',
+      method: 'POST',
+    });
+    const authFailure = await runEndpointAuth(customEndpoint, request);
+    const rejected = authFailure ?? (await runEndpoint(customEndpoint, request));
+
+    expect(rejected.status).toBe(401);
+    expect(await rejected.text()).toBe('Unauthorized');
+    expect(handlerCalls).toBe(0);
+  });
+
   it('rejects forged HMAC provenance and dishonest executable auth metadata', async () => {
     const official = hmacSignature({
       encoding: 'hex',

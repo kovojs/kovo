@@ -1,6 +1,7 @@
 import { isUntrusted, revealUntrusted, type JsonValue } from '@kovojs/core';
 
 import { accessDecisionFor } from './access.js';
+import { requestPrincipalSnapshot } from './auth-principal.js';
 import {
   forwardSetCookie,
   serializeCookie,
@@ -1178,9 +1179,7 @@ function sessionGuardedMutation<Request>(definition: { guard?: Guard<Request> })
 }
 
 function requestHasSessionUser(request: unknown): boolean {
-  return Boolean(
-    (request as { session?: { user?: unknown } | null } | null | undefined)?.session?.user,
-  );
+  return requestPrincipalSnapshot(request).kind === 'proven';
 }
 
 function hasSubmittedCsrfTokenShape(rawInput: unknown, field: string): boolean {
