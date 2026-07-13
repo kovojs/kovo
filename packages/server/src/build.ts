@@ -3378,13 +3378,15 @@ if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) 
 }
 
 function nodeDockerfileSource(): string {
-  return `FROM node:22-alpine
+  return `FROM node:24-alpine@sha256:a0b9bf06e4e6193cf7a0f58816cc935ff8c2a908f81e6f1a95432d679c54fbfd
 ENV NODE_ENV=production
 WORKDIR /app
-COPY package.json ./
-COPY package-lock.json* npm-shrinkwrap.json* pnpm-lock.yaml* yarn.lock* ./
+RUN chown node:node /app
+USER node
+COPY --chown=node:node package.json ./
+COPY --chown=node:node package-lock.json* npm-shrinkwrap.json* pnpm-lock.yaml* yarn.lock* ./
 RUN if [ -f package-lock.json ] || [ -f npm-shrinkwrap.json ]; then npm ci --omit=dev --ignore-scripts; else npm install --omit=dev --ignore-scripts; fi
-COPY . .
+COPY --chown=node:node . .
 EXPOSE 3000
 CMD ["node", "server.mjs"]
 `;

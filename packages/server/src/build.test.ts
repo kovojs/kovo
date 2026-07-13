@@ -2403,7 +2403,13 @@ export default async function handler(request) {
       });
 
       const dockerfile = await readFile(join(nodeOutDir, 'Dockerfile'), 'utf8');
-      expect(dockerfile).toContain('COPY package.json ./');
+      expect(dockerfile).toContain(
+        'FROM node:24-alpine@sha256:a0b9bf06e4e6193cf7a0f58816cc935ff8c2a908f81e6f1a95432d679c54fbfd',
+      );
+      expect(dockerfile).toContain('USER node');
+      expect(dockerfile.indexOf('USER node')).toBeLessThan(dockerfile.indexOf('npm install'));
+      expect(dockerfile).toContain('COPY --chown=node:node package.json ./');
+      expect(dockerfile).toContain('COPY --chown=node:node . .');
       expect(dockerfile).toContain('npm install --omit=dev --ignore-scripts');
       expect(dockerfile).toContain('CMD ["node", "server.mjs"]');
 
