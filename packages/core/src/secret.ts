@@ -21,10 +21,12 @@ import {
 } from '#security-witness-intrinsics';
 
 const IntrinsicArrayBuffer = ArrayBuffer;
+const IntrinsicDate = Date;
 const IntrinsicDataView = DataView;
 const IntrinsicTextEncoder = TextEncoder;
 const IntrinsicUint8Array = Uint8Array;
 const intrinsicArrayBufferIsView = IntrinsicArrayBuffer.isView;
+const intrinsicDateToISOString = IntrinsicDate.prototype.toISOString;
 const comparableTextEncoder = new IntrinsicTextEncoder();
 const intrinsicTextEncoderEncode = IntrinsicTextEncoder.prototype.encode;
 const typedArrayPrototype = securityGetPrototypeOf(IntrinsicUint8Array.prototype);
@@ -202,8 +204,11 @@ class KovoPoisonBox<T> {
   }
 
   reveal(reason?: SecretRevealReason): T {
-    if (this.#kind === 'secret' || this.#kind === 'untrusted') validateRevealReason(reason);
-    if (this.#kind === 'secret') recordSecretReveal(reason);
+    const revealReason =
+      this.#kind === 'secret' || this.#kind === 'untrusted'
+        ? validateRevealReason(reason)
+        : undefined;
+    if (this.#kind === 'secret') recordSecretReveal(revealReason!);
     return this.#value;
   }
 
@@ -456,7 +461,11 @@ export interface RedactedOptions {
  */
 export function redacted<T>(value: T, options: RedactedOptions = {}): RedactedValue<T> {
   if (isRedacted(value)) return value as unknown as RedactedValue<T>;
-  const box = new KovoPoisonBox(value, options.mask ?? REDACTED_MASK, 'redacted');
+  const mask = ownSecretOption(options, 'mask', 'Redacted mask');
+  if (mask !== undefined && typeof mask !== 'string') {
+    throw new TypeError('Redacted mask must be an own string data property when provided.');
+  }
+  const box = new KovoPoisonBox(value, (mask as string | undefined) ?? REDACTED_MASK, 'redacted');
   return freezeSecurityValue(box) as unknown as RedactedValue<T>;
 }
 
@@ -471,19 +480,21 @@ export function isRedacted(value: unknown): value is RedactedValue<unknown> {
   );
 }
 
-function validateRevealReason(reason: SecretRevealReason | undefined): void {
-  const text = typeof reason === 'string' ? reason : reason?.justification;
+function validateRevealReason(reason: SecretRevealReason | undefined): string {
+  let text: unknown = reason;
+  if (reason !== undefined && reason !== null && typeof reason === 'object')
+    text = ownSecretOption(reason, 'justification', 'Secret reveal justification');
   if (typeof text !== 'string' || securityStringTrim(text) === '') {
     throw new Error('Secret/Untrusted reveal requires a non-empty justification.');
   }
+  return securityStringTrim(text);
 }
 
-function recordSecretReveal(reason: SecretRevealReason | undefined): void {
-  const text = typeof reason === 'string' ? reason : reason?.justification;
+function recordSecretReveal(reason: string): void {
   secretRevealAuditFacts.record({
     kind: 'secret-reveal',
-    reason: text === undefined ? '<missing>' : securityStringTrim(text),
-    revealedAt: new Date().toISOString(),
+    reason,
+    revealedAt: securityApply<string>(intrinsicDateToISOString, new IntrinsicDate(), []),
   });
 }
 
@@ -537,7 +548,8 @@ export interface DeclareOffWireOptions {
  * static recognition and for the audit ledger, not to transform the value.
  */
 export function publishToClient<T>(value: T, options: PublishToClientOptions): T {
-  if (!securityStringTrim(options.reason)) {
+  const reason = ownSecretOption(options, 'reason', 'publishToClient reason');
+  if (typeof reason !== 'string' || !securityStringTrim(reason)) {
     throw new Error('publishToClient requires a non-empty reason.');
   }
   return value;
@@ -553,7 +565,8 @@ export function publishToClient<T>(value: T, options: PublishToClientOptions): T
  * mutation response.
  */
 export function declareOffWire(run: () => void, options: DeclareOffWireOptions): void {
-  if (!securityStringTrim(options.justification)) {
+  const justification = ownSecretOption(options, 'justification', 'declareOffWire justification');
+  if (typeof justification !== 'string' || !securityStringTrim(justification)) {
     throw new Error('declareOffWire requires a non-empty justification.');
   }
   run();
@@ -684,12 +697,20 @@ export type TrustedRevealValue<T> = T extends Secret<infer Value> ? Value : T;
  * server-side projections that never select the secret.
  */
 export function trustedReveal<T>(value: T, options: TrustedRevealOptions): TrustedRevealValue<T> {
-  if (!securityStringTrim(options.justification)) {
+  const justification = ownSecretOption(options, 'justification', 'trustedReveal justification');
+  if (typeof justification !== 'string' || !securityStringTrim(justification)) {
     throw new Error('trustedReveal requires a non-empty justification.');
   }
   // Unwrap a runtime secret box so the reveal yields the value, not the poisoned
   // wrapper; a non-box value (e.g. a Drizzle column typed Secret) passes through.
   return (
-    isSecret(value) ? revealSecret(value, { justification: options.justification }) : value
+    isSecret(value) ? revealSecret(value, { justification }) : value
   ) as TrustedRevealValue<T>;
+}
+
+function ownSecretOption(value: object, key: PropertyKey, label: string): unknown {
+  const descriptor = securityGetOwnPropertyDescriptor(value, key);
+  if (descriptor === undefined) return undefined;
+  if (!('value' in descriptor)) throw new TypeError(`${label} must be an own data property.`);
+  return descriptor.value;
 }

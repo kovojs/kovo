@@ -7,6 +7,7 @@ import {
   isRedacted,
   isSecret,
   isUntrusted,
+  publishToClient,
   redacted,
   revealRedacted,
   revealSecret,
@@ -107,6 +108,56 @@ describe('runtime Secret non-coercible wrapper (SPEC §10.2/§11.2)', () => {
       { kind: 'secret-reveal', reason: 'needed for HMAC comparison' },
       { kind: 'secret-reveal', reason: 'needed for HMAC comparison' },
     ]);
+  });
+
+  it('does not inherit or execute reveal and audit justifications from prototypes/accessors', () => {
+    const value = secret('hunter2');
+    Object.defineProperty(Object.prototype, 'justification', {
+      configurable: true,
+      value: 'inherited audit bypass',
+    });
+    try {
+      expect(() => value.reveal({} as { justification: string })).toThrow(
+        'Secret/Untrusted reveal requires a non-empty justification.',
+      );
+      expect(() => trustedReveal(value, {} as { justification: string })).toThrow(
+        'trustedReveal requires a non-empty justification.',
+      );
+      expect(() => declareOffWire(() => {}, {} as { justification: string })).toThrow(
+        'declareOffWire requires a non-empty justification.',
+      );
+    } finally {
+      delete (Object.prototype as { justification?: unknown }).justification;
+    }
+
+    let reads = 0;
+    const reason = Object.defineProperty({}, 'justification', {
+      get() {
+        reads += 1;
+        return 'accessor audit bypass';
+      },
+    }) as { justification: string };
+    expect(() => value.reveal(reason)).toThrow(/own data property/u);
+    expect(reads).toBe(0);
+  });
+
+  it('pins secret reveal audit timestamps against late Date replacement', () => {
+    drainSecretRevealAuditFacts();
+    const NativeDate = globalThis.Date;
+    const originalToISOString = NativeDate.prototype.toISOString;
+    try {
+      globalThis.Date = function PoisonedDate() {
+        return new NativeDate(0);
+      } as unknown as DateConstructor;
+      NativeDate.prototype.toISOString = () => 'forged-date';
+      secret('hunter2').reveal('audit timestamp control');
+    } finally {
+      globalThis.Date = NativeDate;
+      NativeDate.prototype.toISOString = originalToISOString;
+    }
+    const [fact] = drainSecretRevealAuditFacts();
+    expect(fact?.revealedAt).not.toBe('forged-date');
+    expect(NativeDate.parse(fact?.revealedAt ?? '')).not.toBeNaN();
   });
 
   it('bounds request-time reveal observations to the newest 256 facts', () => {
@@ -291,6 +342,22 @@ describe('runtime Untrusted provenance wrapper (SPEC §5.2 rule 11)', () => {
 });
 
 describe('runtime redacted PII wrapper (SPEC §6.6 defense-in-depth)', () => {
+  it('does not inherit redaction masks or audited escape reasons from Object.prototype', () => {
+    Object.defineProperties(Object.prototype, {
+      mask: { configurable: true, value: 'inherited-mask' },
+      reason: { configurable: true, value: 'inherited publish reason' },
+    });
+    try {
+      expect(String(redacted('pii', {}))).toBe('[redacted]');
+      expect(() => publishToClient('public', {} as { reason: string })).toThrow(
+        'publishToClient requires a non-empty reason.',
+      );
+    } finally {
+      delete (Object.prototype as { mask?: unknown }).mask;
+      delete (Object.prototype as { reason?: unknown }).reason;
+    }
+  });
+
   it('renders the mask (not the raw PII) on every accidental-egress path', () => {
     const email = redacted('alice@example.com', { mask: 'a•••@example.com' });
     expect(String(email)).toBe('a•••@example.com');
