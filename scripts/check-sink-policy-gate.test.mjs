@@ -24,11 +24,14 @@ import {
 } from './check-sink-policy-gate.mjs';
 
 const validPolicy = `
-export const FRAMEWORK_BLESSED_SINK_KINDS = [
+const frameworkBlessedSinkKindRegistry = [
   'browser:response-fragment-html',
   'core:route-redirect',
   'parameterized-sql',
 ] as const;
+export const FRAMEWORK_BLESSED_SINK_KINDS = freezeSecurityValue(
+  frameworkBlessedSinkKindRegistry,
+);
 export type Blessed<Sink extends string> = { readonly __brand?: Sink };
 export function blessSink(sink, value) { return value; }
 export function isBlessedSink(sink, value) { return true; }
@@ -60,6 +63,19 @@ describe('sink-policy gate', () => {
       'browser:response-fragment-html',
       'core:route-redirect',
       'parameterized-sql',
+    ]);
+  });
+
+  it('rejects a public facade that is not bound to the parseable private registry', () => {
+    const decoupledPolicy = validPolicy.replace(
+      'frameworkBlessedSinkKindRegistry,\n);',
+      '[] as const,\n);',
+    );
+
+    expect([...extractRegisteredBlessedSinkKinds(decoupledPolicy)]).toEqual([]);
+    expect(runFixture({ 'sink-policy.ts': decoupledPolicy })).toEqual([
+      'sink-policy.ts: FRAMEWORK_BLESSED_SINK_KINDS registry is missing or empty',
+      'sink-policy.ts: FRAMEWORK_BLESSED_SINK_KINDS must register "browser:response-fragment-html" for the browser response-fragment raw HTML sink',
     ]);
   });
 
@@ -2015,7 +2031,10 @@ describe('sink-policy gate', () => {
         exists: (file) => file === 'sink-policy.ts',
         publicEntrypointFiles: [],
         readText: () => `
-          export const FRAMEWORK_BLESSED_SINK_KINDS = ['parameterized-sql'] as const;
+          const frameworkBlessedSinkKindRegistry = ['parameterized-sql'] as const;
+          export const FRAMEWORK_BLESSED_SINK_KINDS = freezeSecurityValue(
+            frameworkBlessedSinkKindRegistry,
+          );
           export type Blessed<Sink extends string> = { readonly __brand?: Sink };
           export function blessSink(sink, value) { return value; }
           export function isBlessedSink(sink, value) { return true; }

@@ -1946,10 +1946,14 @@ export function rootedFileServeInvariantFindings(filePath, text) {
 }
 
 export function extractRegisteredBlessedSinkKinds(text) {
-  const registry = /\bFRAMEWORK_BLESSED_SINK_KINDS\s*=\s*\[([\s\S]*?)\]\s+as\s+const\b/.exec(
-    stripComments(text),
-  );
-  if (!registry) return new Set();
+  const source = stripComments(text);
+  const registry =
+    /\bconst\s+frameworkBlessedSinkKindRegistry\s*=\s*\[([\s\S]*?)\]\s+as\s+const\b/.exec(source);
+  const immutableFacade =
+    /\bexport\s+const\s+FRAMEWORK_BLESSED_SINK_KINDS\s*=\s*freezeSecurityValue\s*\(\s*frameworkBlessedSinkKindRegistry\s*,?\s*\)/.test(
+      source,
+    );
+  if (!registry || !immutableFacade) return new Set();
   return new Set(stringLiterals(registry[1]));
 }
 

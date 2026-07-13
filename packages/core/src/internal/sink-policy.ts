@@ -79,7 +79,7 @@ export function hasUnsafeUrlScheme(value: string): boolean {
  * centrally auditable constructor monopoly. Additions here must be reviewed with their owning
  * validator/escaper; scripts/check-sink-policy-gate.mjs rejects unregistered drift.
  */
-export const FRAMEWORK_BLESSED_SINK_KINDS = freezeSecurityValue([
+const frameworkBlessedSinkKindRegistry = [
   'browser:response-fragment-html',
   'core:route-redirect',
   'parameterized-sql',
@@ -91,7 +91,10 @@ export const FRAMEWORK_BLESSED_SINK_KINDS = freezeSecurityValue([
   'sql-keyword',
   'static-sql',
   'trusted-sql',
-] as const);
+] as const;
+
+/** @internal Immutable facade over the statically audited sink-kind registry. */
+export const FRAMEWORK_BLESSED_SINK_KINDS = freezeSecurityValue(frameworkBlessedSinkKindRegistry);
 
 /** @internal */
 export type FrameworkBlessedSinkKind = (typeof FRAMEWORK_BLESSED_SINK_KINDS)[number];
