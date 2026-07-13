@@ -162,9 +162,9 @@ describe('security-test-build-gate', () => {
       "expect(output()).toContain('KV435')",
       'expectAllowedReadShapes(origin, jar)',
       'expectBlockedReadShapes(origin, jar)',
-      'expectBlockedWrites(origin, marker)',
+      'expectBlockedWrites(origin, jar, marker, output)',
       'expectStarterInScopeWrite(origin, jar, output, contactEmail)',
-      'expectWriteStatus(origin, marker, contactEmail)',
+      'expectWriteStatus(origin, marker, contactEmail, output)',
       'pruneParanoidPhase5SqliteReadSet(root)',
       'writeKovoProject(root, {',
     ]);
