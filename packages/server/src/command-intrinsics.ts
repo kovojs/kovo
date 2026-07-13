@@ -1,4 +1,5 @@
 import { execFile as builtinExecFile, type ExecFileOptions } from 'node:child_process';
+import { isAbsolute as builtinPathIsAbsolute, resolve as builtinPathResolve } from 'node:path';
 
 /**
  * Boot-pinned controls for the shell-free command door (SPEC §6.6 / §10.3 C9).
@@ -26,6 +27,8 @@ const nativeObjectFreeze = NativeObject.freeze;
 const nativeObjectGetOwnPropertyDescriptor = NativeObject.getOwnPropertyDescriptor;
 const nativeObjectIs = NativeObject.is;
 const nativeObjectIsFrozen = NativeObject.isFrozen;
+const nativePathIsAbsolute = builtinPathIsAbsolute;
+const nativePathResolve = builtinPathResolve;
 const nativeRegExpExec = NativeRegExp.prototype.exec;
 const nativeReflectApply = NativeReflect.apply;
 const nativeStringCharCodeAt = NativeString.prototype.charCodeAt;
@@ -98,6 +101,16 @@ function commandControlsAreSound(): boolean {
     if (apply<number>(nativeStringCharCodeAt, 'A\n', [0]) !== 0x41) return false;
     if (apply<number>(nativeStringCharCodeAt, 'A\n', [1]) !== 0x0a) return false;
     if (apply<number>(nativeStringIndexOf, 'kovo-command', ['command']) !== 5) return false;
+    const absolutePathControl = apply<string>(nativePathResolve, undefined, [
+      'kovo-command-control',
+    ]);
+    if (
+      apply<boolean>(nativePathIsAbsolute, undefined, [absolutePathControl]) !== true ||
+      apply<boolean>(nativePathIsAbsolute, undefined, ['kovo-command-control']) !== false ||
+      apply<string>(nativePathResolve, undefined, [absolutePathControl]) !== absolutePathControl
+    ) {
+      return false;
+    }
     if (
       apply<RegExpExecArray | null>(nativeRegExpExec, /^safe$/u, ['safe']) === null ||
       apply<RegExpExecArray | null>(nativeRegExpExec, /^safe$/u, ['unsafe']) !== null
@@ -240,6 +253,14 @@ export function commandJsonStringify(value: unknown): string {
   assertCommandIntrinsics();
   const rendered = apply<string | undefined>(nativeJsonStringify, NativeJSON, [value]);
   return rendered ?? 'undefined';
+}
+
+export function commandPathIsAbsoluteNormalized(value: string): boolean {
+  assertCommandIntrinsics();
+  return (
+    apply<boolean>(nativePathIsAbsolute, undefined, [value]) &&
+    apply<string>(nativePathResolve, undefined, [value]) === value
+  );
 }
 
 export function commandFreeze<Value extends object>(value: Value): Readonly<Value> {

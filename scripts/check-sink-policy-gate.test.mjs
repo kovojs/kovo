@@ -231,6 +231,7 @@ describe('sink-policy gate', () => {
           export function cmd(value) {
             const allowedPrograms = commandAllowlists.get(options?.allow);
             if (!allowedPrograms.has(program)) throw new TypeError();
+            assertAbsoluteCommandProgram(program, 'program');
             return blessSink(COMMAND_EXEC_FILE_SINK, value);
           }
           export function isCommand(value) {
@@ -254,6 +255,7 @@ describe('sink-policy gate', () => {
           export function cmd(value) {
             const allowedPrograms = witnessWeakMapGet(commandAllowlists, options.allow);
             if (!witnessSetHas(allowedPrograms as Set<string>, program)) throw new TypeError();
+            assertAbsoluteCommandProgram(program, 'program');
             return blessSink(COMMAND_EXEC_FILE_SINK, value);
           }
           export function isCommand(value) {
@@ -285,6 +287,7 @@ describe('sink-policy gate', () => {
     ).toEqual([
       'packages/server/src/command.ts: cmd() must mint Command values with the registered command execution witness',
       'packages/server/src/command.ts: cmd() must deny programs absent from the explicit allowlist',
+      'packages/server/src/command.ts: cmd() must require an absolute executable identity before minting Command values',
       'packages/server/src/command.ts: runCommand() must re-check the registered command execution witness',
       'packages/server/src/command.ts: runCommand() must execute the minted program/argv through execFile with explicit options',
       'packages/server/src/command.ts: runCommand() execFile options must set shell: false',
@@ -296,6 +299,7 @@ describe('sink-policy gate', () => {
         `
           const COMMAND_EXEC_FILE_SINK = 'server:command-exec-file';
           export function cmd(value) {
+            assertAbsoluteCommandProgram(program, 'program');
             return blessSink(COMMAND_EXEC_FILE_SINK, value);
           }
           export function isCommand(value) {
@@ -321,6 +325,7 @@ describe('sink-policy gate', () => {
         const configuredAllow = options.allow;
         const allowedPrograms = witnessWeakMapGet(commandAllowlists, configuredAllow);
         if (!witnessSetHas(allowedPrograms as Set<string>, program)) throw new TypeError();
+        assertAbsoluteCommandProgram(program, 'program');
         return blessSink(COMMAND_EXEC_FILE_SINK, program);
       }
       export function isCommand(value) {
@@ -359,6 +364,15 @@ describe('sink-policy gate', () => {
       }),
     ).toContain(
       'packages/server/src/command.ts: runCommand() execFile options must set shell: false',
+    );
+    expect(
+      commandPrimitiveInvariantFindings(
+        'packages/server/src/command.ts',
+        commandSource.replace("assertAbsoluteCommandProgram(program, 'program');", ''),
+        { intrinsicsText: intrinsicsSource },
+      ),
+    ).toContain(
+      'packages/server/src/command.ts: cmd() must require an absolute executable identity before minting Command values',
     );
   });
 

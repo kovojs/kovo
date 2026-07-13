@@ -1919,6 +1919,11 @@ export function commandPrimitiveInvariantFindings(filePath, text, options = {}) 
   if (!checksAllowedProgram) {
     findings.push(`${filePath}: cmd() must deny programs absent from the explicit allowlist`);
   }
+  if (!/\bassertAbsoluteCommandProgram\s*\(\s*program\s*,/.test(source)) {
+    findings.push(
+      `${filePath}: cmd() must require an absolute executable identity before minting Command values`,
+    );
+  }
   if (!/\bisBlessedSink\s*(?:<[^>()]*>)?\s*\(\s*COMMAND_EXEC_FILE_SINK\s*,/.test(source)) {
     findings.push(
       `${filePath}: runCommand() must re-check the registered command execution witness`,

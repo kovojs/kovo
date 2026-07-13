@@ -236,30 +236,34 @@ describe('server command primitive', () => {
   });
 
   it('denies command construction unless the program is explicitly allowed', () => {
-    const allow = commandAllowlist(['node'], {
-      justification: 'test boundary permits the node executable token',
+    const allow = commandAllowlist([process.execPath], {
+      justification: 'test boundary permits the absolute node executable path',
     });
 
     expect(() => cmd('node', [], undefined as unknown as { allow: CommandAllowlist })).toThrow(
-      /requires commandAllowlist/,
+      /absolute normalized executable path/,
     );
-    expect(() => cmd(process.execPath, [], { allow })).toThrow(/not in the explicit allowlist/);
-    expect(() => cmd('node', [''], { allow })).not.toThrow();
+    expect(() => cmd(join(tmpdir(), 'not-allowlisted'), [], { allow })).toThrow(
+      /not in the explicit allowlist/,
+    );
+    expect(() => cmd(process.execPath, [''], { allow })).not.toThrow();
   });
 
   it('rejects empty program, shell command strings, controls, unsafe argv, and bad allowlists', () => {
-    const allow = commandAllowlist(['node'], {
-      justification: 'test boundary permits the node executable token',
+    const allow = commandAllowlist([process.execPath], {
+      justification: 'test boundary permits the absolute node executable path',
     });
 
     expect(() => commandAllowlist([], { justification: 'empty program list' })).toThrow(
       /at least one program/,
     );
-    expect(() => commandAllowlist(['node'], { justification: '' })).toThrow(
+    expect(() => commandAllowlist([process.execPath], { justification: '' })).toThrow(
       /justification must be non-empty/,
     );
     expect(() =>
-      commandAllowlist(['node', 'node'], { justification: 'duplicate command token' }),
+      commandAllowlist([process.execPath, process.execPath], {
+        justification: 'duplicate command path',
+      }),
     ).toThrow(/duplicate programs/);
     expect(() => commandAllowlist(['node -e'], { justification: 'shell command string' })).toThrow(
       /one executable token/,
@@ -267,10 +271,26 @@ describe('server command primitive', () => {
     expect(() => cmd('', [], { allow })).toThrow(/program must be non-empty/);
     expect(() => cmd('node -e', [], { allow })).toThrow(/one executable token/);
     expect(() => cmd('node\n', [], { allow })).toThrow(/ASCII control/);
-    expect(() => cmd('node', ['ok', 'bad\rarg'], { allow })).toThrow(/ASCII control/);
-    expect(() => cmd('node', 'not-array' as unknown as string[], { allow })).toThrow(
+    expect(() => cmd(process.execPath, ['ok', 'bad\rarg'], { allow })).toThrow(/ASCII control/);
+    expect(() => cmd(process.execPath, 'not-array' as unknown as string[], { allow })).toThrow(
       /argv must be an array/,
     );
+  });
+
+  it('rejects relative executable and cwd identities before cwd can retarget a capability', () => {
+    expect(() =>
+      commandAllowlist(['./tool'], {
+        justification: 'relative executable identity regression',
+      }),
+    ).toThrow(/absolute normalized executable path/);
+    expect(() =>
+      commandAllowlist(['node'], {
+        justification: 'PATH executable identity regression',
+      }),
+    ).toThrow(/absolute normalized executable path/);
+
+    const command = cmd(process.execPath, ['--version'], { allow: nodeCommands() });
+    expect(() => runCommand(command, { cwd: '.' })).toThrow(/cwd must be an absolute normalized/);
   });
 
   it('keeps the Command brand type-only at TypeScript call sites', () => {

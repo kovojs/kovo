@@ -6,6 +6,7 @@ import {
   commandJsonStringify,
   commandNumberIsSafeInteger,
   commandOwnDataValue,
+  commandPathIsAbsoluteNormalized,
   commandPinnedExecOptions,
   commandRegExpTest,
   commandStringCharCodeAt,
@@ -34,7 +35,7 @@ const commandAllowlists = createWitnessWeakMap<CommandAllowlist, ReadonlySet<str
 
 /** A shell-free command minted by {@link cmd}. */
 export interface Command {
-  /** Executable path or program name passed as `file` to `child_process.execFile`. */
+  /** Absolute normalized executable path passed as `file` to `child_process.execFile`. */
   readonly program: string;
   /** Arguments passed as the `args` array to `child_process.execFile`. */
   readonly argv: readonly string[];
@@ -56,7 +57,7 @@ export interface CommandOptions {
 
 /** Options for executing a shell-free {@link Command}. */
 export interface CommandRunOptions {
-  /** Working directory for the child process. */
+  /** Absolute normalized working directory for the child process. */
   cwd?: string;
   /** Maximum bytes buffered for stdout/stderr. Defaults to Node's `execFile` default. */
   maxBufferBytes?: number;
@@ -73,7 +74,7 @@ export interface CommandResult {
 }
 
 /**
- * Declare the exact executable programs a command boundary may run.
+ * Declare the exact absolute executable paths a command boundary may run.
  *
  * SPEC §6.6 / KV424: subprocess execution is default-deny for framework/runtime
  * paths. A command is mintable only when its program is present in this explicit
@@ -106,6 +107,7 @@ export function commandAllowlist(
   for (let index = 0; index < sourcePrograms.length; index += 1) {
     const program = sourcePrograms[index]!;
     assertSafeCommandText(program, `allowlist[${index}]`, { rejectWhitespace: true });
+    assertAbsoluteCommandProgram(program, `allowlist[${index}]`);
     witnessDefineProperty(normalizedPrograms, index, {
       configurable: true,
       enumerable: true,
@@ -141,6 +143,7 @@ export function commandAllowlist(
  */
 export function cmd(program: string, argv: readonly string[], options: CommandOptions): Command {
   assertSafeCommandText(program, 'program', { rejectWhitespace: true });
+  assertAbsoluteCommandProgram(program, 'program');
   if ((typeof options !== 'object' && typeof options !== 'function') || options === null) {
     throw new TypeError(
       'Command construction requires commandAllowlist(...) (SPEC.md §6.6, KV424).',
@@ -201,6 +204,7 @@ export function runCommand(
   const execOptions = commandExecOptions(options);
 
   const program = commandOwnDataValue(command, 'program', 'Command') as string;
+  assertAbsoluteCommandProgram(program, 'program');
   const argv = commandCloneDenseStringArray(
     commandOwnDataValue(command, 'argv', 'Command'),
     'Command argv',
@@ -220,6 +224,11 @@ function commandExecOptions(options: CommandRunOptions) {
   const signal = commandOwnDataValue(options, 'signal', 'Command run options');
   if (cwd !== undefined) {
     assertSafeCommandText(cwd as string, 'cwd', { allowWhitespace: true });
+    if (!commandPathIsAbsoluteNormalized(cwd as string)) {
+      throw new TypeError(
+        'Command cwd must be an absolute normalized path so process working-directory drift cannot retarget it (SPEC.md §6.6, KV424).',
+      );
+    }
   }
   if (timeoutMs !== undefined) {
     assertNonNegativeInteger(timeoutMs as number, 'timeoutMs');
@@ -240,6 +249,14 @@ function commandExecOptions(options: CommandRunOptions) {
     ...(signal === undefined ? {} : { signal: signal as AbortSignal }),
     ...(timeoutMs === undefined ? {} : { timeout: timeoutMs as number }),
   });
+}
+
+function assertAbsoluteCommandProgram(value: string, field: string): void {
+  if (!commandPathIsAbsoluteNormalized(value)) {
+    throw new TypeError(
+      `Command ${field} must be an absolute normalized executable path; relative and PATH-resolved programs can change identity through cwd or PATH (SPEC.md §6.6, KV424).`,
+    );
+  }
 }
 
 function assertSafeCommandText(
