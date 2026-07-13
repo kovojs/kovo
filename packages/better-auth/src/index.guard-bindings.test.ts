@@ -4,6 +4,32 @@ import { type ActiveOrganizationRequest, activeOrganization, authed, role } from
 import { type AppRequest } from './test-fakes.js';
 
 describe('guard bindings', () => {
+  it('pins server guard constructors before late shared-export replacement', async () => {
+    const mutableGuards = serverGuards as unknown as {
+      authed: typeof serverGuards.authed;
+      role: typeof serverGuards.role;
+    };
+    const originalAuthed = mutableGuards.authed;
+    const originalRole = mutableGuards.role;
+    let authedGuard: ReturnType<typeof authed<AppRequest>> | undefined;
+    let roleGuard: ReturnType<typeof role<AppRequest>> | undefined;
+    try {
+      mutableGuards.authed = (() => async () => true) as typeof serverGuards.authed;
+      mutableGuards.role = (() => async () => true) as typeof serverGuards.role;
+      authedGuard = authed<AppRequest>();
+      roleGuard = role<AppRequest>('admin');
+    } finally {
+      mutableGuards.authed = originalAuthed;
+      mutableGuards.role = originalRole;
+    }
+    expect(await authedGuard?.({ session: null })).toMatchObject({
+      kind: 'unauthenticated',
+    });
+    expect(await roleGuard?.({ session: null })).toMatchObject({
+      kind: 'unauthenticated',
+    });
+  });
+
   it('keeps adapter guard failures aligned with the server guard contract', async () => {
     type ServerSessionRequest = {
       session?: {

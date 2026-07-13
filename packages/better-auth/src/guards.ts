@@ -1,6 +1,11 @@
 import { guards } from '@kovojs/server';
 import type { AuthenticatedRequest, Guard, SessionRequestLike } from '@kovojs/server';
 
+import { betterAuthApply, betterAuthCaptureOwnMethod } from './internal/intrinsics.js';
+
+const authedConstructor = betterAuthCaptureOwnMethod(guards, 'authed', 'Better Auth server guards');
+const roleConstructor = betterAuthCaptureOwnMethod(guards, 'role', 'Better Auth server guards');
+
 /**
  * Guard that requires an authenticated session, narrowing the request to an
  * `AuthenticatedRequest`. A thin re-export of the framework's `guards.authed` for use on
@@ -11,7 +16,11 @@ export function authed<Request extends SessionRequestLike>(): Guard<
   Request,
   AuthenticatedRequest<Request>
 > {
-  return guards.authed<Request>();
+  return betterAuthApply<Guard<Request, AuthenticatedRequest<Request>>>(
+    authedConstructor.method,
+    authedConstructor.receiver,
+    [],
+  );
 }
 
 /**
@@ -53,5 +62,9 @@ export function role<Request extends BetterAuthRoleRequest>(
 ): Guard<Request>;
 export function role(requiredRole: string): Guard<BetterAuthRoleRequest>;
 export function role(requiredRole: string): Guard<BetterAuthRoleRequest> {
-  return guards.role(requiredRole) as Guard<BetterAuthRoleRequest>;
+  return betterAuthApply<Guard<BetterAuthRoleRequest>>(
+    roleConstructor.method,
+    roleConstructor.receiver,
+    [requiredRole],
+  );
 }
