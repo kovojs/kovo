@@ -293,6 +293,42 @@ describe('egress bootstrap: dual-layer install + self-probe', () => {
     }
   });
 
+  it('cannot forge an audited production egress opt-out with late String.trim poison', () => {
+    const previous = process.env.NODE_ENV;
+    const originalTrim = String.prototype.trim;
+    process.env.NODE_ENV = 'production';
+    let failure: unknown;
+    try {
+      String.prototype.trim = () => 'forged-audit-justification';
+      try {
+        createApp({ egress: { enabled: false, justification: '' } });
+      } catch (error) {
+        failure = error;
+      }
+    } finally {
+      String.prototype.trim = originalTrim;
+      if (previous === undefined) delete process.env.NODE_ENV;
+      else process.env.NODE_ENV = previous;
+    }
+
+    expect(failure).toBeInstanceOf(EgressFloorBootError);
+  });
+
+  it('rejects accessor-backed egress opt-out authority without invoking it', () => {
+    let reads = 0;
+    const egress = { enabled: false } as { enabled: false; justification: string };
+    Object.defineProperty(egress, 'justification', {
+      enumerable: true,
+      get() {
+        reads += 1;
+        return 'forged external boundary';
+      },
+    });
+
+    expect(() => createApp({ egress })).toThrow(/stable own data properties/);
+    expect(reads).toBe(0);
+  });
+
   it('installs a production default empty-allowlist floor and denies loopback', async () => {
     const server = http.createServer((_req, res) => res.end('ok'));
     await new Promise<void>((r) => server.listen(0, '127.0.0.1', () => r()));

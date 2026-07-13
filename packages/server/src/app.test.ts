@@ -872,6 +872,68 @@ describe('server createApp request shell', () => {
     );
   });
 
+  it('cannot erase duplicate mutation dispatch ambiguity with late Set poison', () => {
+    const first = mutation('cart/poisoned-duplicate', {
+      handler: (input) => input,
+      input: s.object({ value: s.string() }),
+    });
+    const second = mutation('cart/poisoned-duplicate', {
+      handler: (input) => input,
+      input: s.object({ other: s.string() }),
+    });
+    const originalAdd = Set.prototype.add;
+    const originalHas = Set.prototype.has;
+    let failure: unknown;
+    try {
+      Set.prototype.add = function () {
+        return this;
+      };
+      Set.prototype.has = () => false;
+      try {
+        createApp({ mutations: [first, second] });
+      } catch (error) {
+        failure = error;
+      }
+    } finally {
+      Set.prototype.add = originalAdd;
+      Set.prototype.has = originalHas;
+    }
+
+    expect(failure).toBeInstanceOf(Error);
+    expect((failure as Error).message).toMatch(/two mutations with the same key/);
+  });
+
+  it('cannot erase duplicate durable task dispatch ambiguity with late Set poison', () => {
+    const first = task('tasks/poisoned-duplicate', {
+      input: s.object({ value: s.string() }),
+      run: (input) => input.value,
+    });
+    const second = task('tasks/poisoned-duplicate', {
+      input: s.object({ other: s.string() }),
+      run: (input) => input.other,
+    });
+    const originalAdd = Set.prototype.add;
+    const originalHas = Set.prototype.has;
+    let failure: unknown;
+    try {
+      Set.prototype.add = function () {
+        return this;
+      };
+      Set.prototype.has = () => false;
+      try {
+        createApp({ tasks: [first, second] });
+      } catch (error) {
+        failure = error;
+      }
+    } finally {
+      Set.prototype.add = originalAdd;
+      Set.prototype.has = originalHas;
+    }
+
+    expect(failure).toBeInstanceOf(Error);
+    expect((failure as Error).message).toMatch(/two tasks with the same key/);
+  });
+
   it('rejects object-form mutations before compiler-derived key metadata is attached', () => {
     const addToCart = mutation({
       csrf: false,
@@ -1195,6 +1257,35 @@ describe('server createApp request shell', () => {
     expect(body).toContain('<p class="kovo-diagnostic-code">KV228</p>');
     expect(body).toContain('/products/:id &lt;-&gt; /products/new');
     expect(body).not.toContain('<main>New</main>');
+  });
+
+  it('keeps blocking route diagnostics when late Array iteration is poisoned', async () => {
+    const originalIterator = Array.prototype[Symbol.iterator];
+    let app: ReturnType<typeof createApp> | undefined;
+    Array.prototype[Symbol.iterator] = function () {
+      const first = Object.getOwnPropertyDescriptor(this, 0);
+      if (first !== undefined && 'value' in first && first.value?.code === 'KV228') {
+        return originalIterator.call([]);
+      }
+      return originalIterator.call(this);
+    };
+    try {
+      app = createApp({
+        routes: [
+          route('/diagnostic/:id', { page: () => trustedHtml('<main>Param</main>') }),
+          route('/diagnostic/fixed', { page: () => trustedHtml('<main>Fixed</main>') }),
+        ],
+      });
+    } finally {
+      Array.prototype[Symbol.iterator] = originalIterator;
+    }
+
+    expect(app?.diagnostics[0]?.code).toBe('KV228');
+    const response = await createRequestHandler(app!)(
+      new Request('https://example.test/diagnostic/fixed'),
+    );
+    expect(response.status).toBe(500);
+    await expect(response.text()).resolves.toContain('KV228');
   });
 
   it('pins blocking diagnostics against entry mutation and late collection replacement', async () => {

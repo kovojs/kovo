@@ -27,11 +27,17 @@ import { query } from './query.js';
 import { layout, route } from './route.js';
 import { task } from './task.js';
 import {
+  createWitnessSet,
+  witnessArrayAppend,
   witnessCreateNullRecord,
   witnessDefineProperty,
   witnessFreeze,
   witnessGetOwnPropertyDescriptor,
+  witnessSetAdd,
+  witnessSetHas,
 } from './security-witness-intrinsics.js';
+import { denseOwnArrayForEach } from './registry-lookup.js';
+import { securityStringTrim } from './response-security-intrinsics.js';
 import { runtimeRegistryFacts } from './registry-facts.js';
 import {
   isDocumentConfig,
@@ -137,7 +143,7 @@ export function createApp<
   const documentSource = appOptionOwnDataValue(options, 'document') as AppOptions['document'];
   const env = appOptionOwnDataValue(options, 'env') as AppOptions['env'];
   const envSource = appOptionOwnDataValue(options, 'envSource') as AppOptions['envSource'];
-  const egress = appOptionOwnDataValue(options, 'egress') as AppOptions['egress'];
+  const egressSource = appOptionOwnDataValue(options, 'egress') as AppOptions['egress'];
   const endpointsSource = appOptionOwnDataValue(options, 'endpoints') as AppOptions['endpoints'];
   const errorShellsSource = appOptionOwnDataValue(
     options,
@@ -171,6 +177,7 @@ export function createApp<
   const tasksSource = appOptionOwnDataValue(options, 'tasks') as AppOptions['tasks'];
 
   const csrf = csrfSource === undefined ? undefined : snapshotAppCsrfOptions(csrfSource);
+  const egress = snapshotAppEgressOptions(egressSource);
   const document = normalizeAppDocumentOptions(documentSource);
   const errorShells = snapshotAppErrorShells(errorShellsSource ?? {});
   const mutationResponses = snapshotAppMutationResponses(mutationResponsesSource ?? {});
@@ -249,7 +256,7 @@ export function createApp<
   return closeKovoAppAggregate(
     {
       clientModules,
-      diagnostics: [...routeTableDiagnostics(routes), ...routePrefetchGuardDiagnostics(routes)],
+      diagnostics: collectAppDiagnostics(routes),
       document,
       endpoints,
       errorShells,
@@ -286,7 +293,7 @@ function bootstrapEgressFloor(egress: AppEgressOptions | undefined): void {
   const warn = (message: string): void => console.warn(`[kovo egress] ${message}`);
 
   if (isEgressOptOut(egress)) {
-    if (egress.justification.trim() === '') {
+    if (securityStringTrim(egress.justification) === '') {
       refuseOrWarnUnauditedDisabledEgress(mode, warn);
       return;
     }
@@ -337,9 +344,75 @@ function isEgressOptOut(value: AppEgressOptions | undefined): value is {
   enabled: false;
   justification: string;
 } {
-  return (
-    typeof value === 'object' && value !== null && 'enabled' in value && value.enabled === false
-  );
+  if (typeof value !== 'object' || value === null) return false;
+  const enabled = witnessGetOwnPropertyDescriptor(value, 'enabled');
+  return enabled !== undefined && 'value' in enabled && enabled.value === false;
+}
+
+/**
+ * Snapshot the operator's egress posture before transport installation (SPEC §6.6/§9.5 C9).
+ * App dependencies share the server realm and caller records may retain getters/mutable arrays;
+ * neither can become authority for disabling or widening the process egress floor.
+ */
+function snapshotAppEgressOptions(
+  value: AppEgressOptions | undefined,
+): AppEgressOptions | undefined {
+  if (value === undefined || value === false) return value;
+  if (typeof value !== 'object' || value === null || nativeArrayIsArray(value)) {
+    throw new TypeError('createApp({ egress }) must be false or a stable own-data object.');
+  }
+
+  const enabled = appEgressOwnDataValue(value, 'enabled');
+  if (enabled !== undefined) {
+    if (enabled !== false) {
+      throw new TypeError('createApp({ egress.enabled }) may only be false.');
+    }
+    const justification = appEgressOwnDataValue(value, 'justification');
+    if (typeof justification !== 'string') {
+      throw new TypeError(
+        'createApp({ egress: { enabled: false } }) requires an own string justification.',
+      );
+    }
+    return witnessFreeze({ enabled: false as const, justification });
+  }
+
+  const allowDestinations = appEgressOwnDataValue(value, 'allowDestinations');
+  const allowInternal = appEgressOwnDataValue(value, 'allowInternal');
+  const hardening = appEgressOwnDataValue(value, 'hardening');
+  if (
+    hardening !== undefined &&
+    hardening !== 'off' &&
+    hardening !== 'warn' &&
+    hardening !== 'freeze'
+  ) {
+    throw new TypeError('createApp({ egress.hardening }) must be off, warn, or freeze.');
+  }
+  const snapshottedHardening = hardening as EgressOptions['hardening'];
+  return witnessFreeze({
+    ...(allowDestinations === undefined
+      ? {}
+      : {
+          allowDestinations: snapshotAppDocumentStringArray(
+            allowDestinations,
+            'egress.allowDestinations',
+          ),
+        }),
+    ...(allowInternal === undefined
+      ? {}
+      : {
+          allowInternal: snapshotAppDocumentStringArray(allowInternal, 'egress.allowInternal'),
+        }),
+    ...(snapshottedHardening === undefined ? {} : { hardening: snapshottedHardening }),
+  });
+}
+
+function appEgressOwnDataValue(value: object, property: PropertyKey): unknown {
+  const descriptor = witnessGetOwnPropertyDescriptor(value, property);
+  if (descriptor === undefined) return undefined;
+  if (!('value' in descriptor)) {
+    throw new TypeError('createApp egress options must use stable own data properties.');
+  }
+  return descriptor.value;
 }
 
 function refuseOrWarnUnauditedDisabledEgress(
@@ -513,50 +586,89 @@ function appDocumentOwnDataValue(
 function assertUniqueMutationKeys<Mutation extends AppMutationDeclaration<any>>(
   mutations: readonly Mutation[],
 ): readonly Mutation[] {
-  const seen = new Set<string>();
-  for (const mutation of mutations) {
-    if (typeof mutation.key !== 'string' || mutation.key.length === 0) {
-      throw new Error(
-        'createApp() received a mutation without a derived key. ' +
-          'mutation({ input, handler }) requires compiler-emitted source-derived key metadata; ' +
-          'use the compiled artifact or the internal generated key path (SPEC §6.3).',
-      );
-    }
-    if (seen.has(mutation.key)) {
-      throw new Error(
-        `createApp() received two mutations with the same key "${mutation.key}". ` +
-          'Mutation keys address one handler for request dispatch (SPEC §6.1, §9.5); a duplicate ' +
-          'key makes the second handler unreachable and the invalidation registry ambiguous. ' +
-          'Rename one mutation so its key is unique (compile diagnostic KV421).',
-      );
-    }
-    seen.add(mutation.key);
-  }
+  const seen = createWitnessSet<string>();
+  denseOwnArrayForEach(
+    mutations,
+    (mutation) => {
+      const key = appDeclarationKey(mutation, 'mutation');
+      if (key.length === 0) {
+        throw new Error(
+          'createApp() received a mutation without a derived key. ' +
+            'mutation({ input, handler }) requires compiler-emitted source-derived key metadata; ' +
+            'use the compiled artifact or the internal generated key path (SPEC §6.3).',
+        );
+      }
+      if (witnessSetHas(seen, key)) {
+        throw new Error(
+          `createApp() received two mutations with the same key "${key}". ` +
+            'Mutation keys address one handler for request dispatch (SPEC §6.1, §9.5); a duplicate ' +
+            'key makes the second handler unreachable and the invalidation registry ambiguous. ' +
+            'Rename one mutation so its key is unique (compile diagnostic KV421).',
+        );
+      }
+      witnessSetAdd(seen, key);
+    },
+    'createApp mutation registry',
+  );
   return mutations;
 }
 
 function assertUniqueTaskKeys<Task extends AppTaskDeclaration>(
   tasks: readonly Task[],
 ): readonly Task[] {
-  const seen = new Set<string>();
-  for (const taskDeclaration of tasks) {
-    if (typeof taskDeclaration.key !== 'string' || taskDeclaration.key.length === 0) {
-      throw new Error(
-        'createApp() received a task without a derived key. ' +
-          'task({ input, run }) requires compiler-emitted source-derived key metadata or an ' +
-          'explicit task("key", ...) key (SPEC §9.6).',
-      );
-    }
-    if (seen.has(taskDeclaration.key)) {
-      throw new Error(
-        `createApp() received two tasks with the same key "${taskDeclaration.key}". ` +
-          'Task keys address one durable background handler for request.schedule() and the ' +
-          'JobRunner (SPEC §9.6); a duplicate key makes dispatch ambiguous.',
-      );
-    }
-    seen.add(taskDeclaration.key);
-  }
+  const seen = createWitnessSet<string>();
+  denseOwnArrayForEach(
+    tasks,
+    (taskDeclaration) => {
+      const key = appDeclarationKey(taskDeclaration, 'task');
+      if (key.length === 0) {
+        throw new Error(
+          'createApp() received a task without a derived key. ' +
+            'task({ input, run }) requires compiler-emitted source-derived key metadata or an ' +
+            'explicit task("key", ...) key (SPEC §9.6).',
+        );
+      }
+      if (witnessSetHas(seen, key)) {
+        throw new Error(
+          `createApp() received two tasks with the same key "${key}". ` +
+            'Task keys address one durable background handler for request.schedule() and the ' +
+            'JobRunner (SPEC §9.6); a duplicate key makes dispatch ambiguous.',
+        );
+      }
+      witnessSetAdd(seen, key);
+    },
+    'createApp task registry',
+  );
   return tasks;
+}
+
+function appDeclarationKey(value: object, kind: 'mutation' | 'task'): string {
+  const descriptor = witnessGetOwnPropertyDescriptor(value, 'key');
+  if (descriptor === undefined) return '';
+  if (!('value' in descriptor)) {
+    throw new Error(`createApp() received a ${kind} with an accessor-backed key.`);
+  }
+  return typeof descriptor.value === 'string' ? descriptor.value : '';
+}
+
+function collectAppDiagnostics(
+  routes: readonly AppRouteDeclaration<any>[],
+): KovoApp['diagnostics'] {
+  const diagnostics: KovoApp['diagnostics'][number][] = [];
+  appendAppDiagnosticGroup(diagnostics, routeTableDiagnostics(routes));
+  appendAppDiagnosticGroup(diagnostics, routePrefetchGuardDiagnostics(routes));
+  return witnessFreeze(diagnostics);
+}
+
+function appendAppDiagnosticGroup(
+  diagnostics: KovoApp['diagnostics'][number][],
+  group: KovoApp['diagnostics'],
+): void {
+  denseOwnArrayForEach(
+    group,
+    (diagnostic) => witnessArrayAppend(diagnostics, diagnostic, 'createApp diagnostics'),
+    'createApp diagnostic group',
+  );
 }
 
 /**

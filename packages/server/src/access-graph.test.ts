@@ -439,4 +439,65 @@ describe('app access graph extraction', () => {
     const unsignedGenuine = await handler(new Request('https://example.test/_kovo/storage/a.txt'));
     expect(unsignedGenuine.status).toBe(404);
   });
+
+  it('cannot erase or relabel access-ledger authority with late mutable intrinsics', () => {
+    const deny = guard('ledger-private', () => ({ kind: 'forbidden' as const }));
+    const app = createApp({
+      mutations: [
+        mutation('ledger/write', {
+          access: [deny],
+          handler: () => ({ ok: true }),
+          input: s.object({}),
+        }),
+      ],
+      queries: [query('ledger/read', { access: [deny], load: () => ({ secret: true }) })],
+      routes: [route('/ledger', { access: [deny], page: () => '<main>private</main>' })],
+    });
+    const originalFind = Array.prototype.find;
+    const originalJoin = Array.prototype.join;
+    const originalMap = Array.prototype.map;
+    const originalSort = Array.prototype.sort;
+    const originalLocaleCompare = String.prototype.localeCompare;
+    let facts: ReturnType<typeof accessFactsFromApp> | undefined;
+    try {
+      Array.prototype.find = () => undefined;
+      Array.prototype.join = () => 'forged-public';
+      Array.prototype.map = () => [];
+      Array.prototype.sort = function () {
+        return this;
+      };
+      String.prototype.localeCompare = () => 0;
+      facts = accessFactsFromApp(app);
+    } finally {
+      Array.prototype.find = originalFind;
+      Array.prototype.join = originalJoin;
+      Array.prototype.map = originalMap;
+      Array.prototype.sort = originalSort;
+      String.prototype.localeCompare = originalLocaleCompare;
+    }
+
+    expect(facts).toEqual([
+      {
+        decision: 'guard',
+        detail: 'access=guards guards=ledger-private',
+        kind: 'mutation',
+        name: 'ledger/write',
+        source: 'access',
+      },
+      {
+        decision: 'guard',
+        detail: 'access=guards guards=ledger-private',
+        kind: 'page',
+        name: '/ledger',
+        source: 'access',
+      },
+      {
+        decision: 'guard',
+        detail: 'access=guards guards=ledger-private',
+        kind: 'query',
+        name: 'ledger/read',
+        source: 'access',
+      },
+    ]);
+  });
 });

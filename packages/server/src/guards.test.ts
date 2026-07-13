@@ -12,6 +12,7 @@ import {
 import { csrfToken } from './csrf.js';
 import {
   explainGuard,
+  guard,
   guards,
   requestPassedRoleGuard,
   renderHttpGuardFailureResponse,
@@ -265,6 +266,88 @@ describe('guard principal resolution (Q.6 auth-decision fail-closed)', () => {
 });
 
 describe('server guard and session primitives', () => {
+  it('does not accept a blank audit name through late String.trim poison', () => {
+    const originalTrim = String.prototype.trim;
+    let failure: unknown;
+    try {
+      String.prototype.trim = () => 'forged-audit-name';
+      try {
+        guard('   ', () => true);
+      } catch (error) {
+        failure = error;
+      }
+    } finally {
+      String.prototype.trim = originalTrim;
+    }
+
+    expect(failure).toBeInstanceOf(TypeError);
+    expect((failure as Error).message).toMatch(/non-empty name/);
+  });
+
+  it('pins named guard facts and ownership audit paths against late intrinsic poison', () => {
+    const roleGuard = guards.role<{
+      session?: { user?: { id?: string; roles: readonly string[] } | null } | null;
+    }>('admin');
+    const originalFind = Array.prototype.find;
+    const originalIterator = Array.prototype[Symbol.iterator];
+    const originalSlice = String.prototype.slice;
+    const originalStartsWith = String.prototype.startsWith;
+    let named: ReturnType<typeof guard> | undefined;
+    let owns: ReturnType<typeof guards.owns> | undefined;
+    try {
+      Array.prototype.find = () => undefined;
+      Array.prototype[Symbol.iterator] = function () {
+        const first = Object.getOwnPropertyDescriptor(this, 0);
+        if (first !== undefined && 'value' in first && first.value?.kind === 'role') {
+          return originalIterator.call([]);
+        }
+        return originalIterator.call(this);
+      };
+      String.prototype.slice = () => 'forged.path';
+      String.prototype.startsWith = () => false;
+      named = guard('admin-only', roleGuard);
+      owns = guards.owns(
+        (request: GuardArgsRequest<{ session?: unknown }, { id: string }>) => request.args.id,
+        () => true,
+        { resourceKey: 'args.id' },
+      );
+    } finally {
+      Array.prototype.find = originalFind;
+      Array.prototype[Symbol.iterator] = originalIterator;
+      String.prototype.slice = originalSlice;
+      String.prototype.startsWith = originalStartsWith;
+    }
+
+    expect(explainGuard(named)).toEqual([
+      { kind: 'named', name: 'admin-only' },
+      {
+        auth: 'session-role',
+        kind: 'role',
+        name: 'role:admin',
+        principal: {
+          expression: 'session.user.roles',
+          path: 'user.roles',
+          source: 'session',
+        },
+        role: 'admin',
+      },
+    ]);
+    expect(explainGuard(owns)).toEqual([
+      {
+        auth: 'session-user',
+        kind: 'owns',
+        name: 'owns',
+        principal: {
+          expression: 'session.user.id',
+          path: 'user.id',
+          source: 'session',
+        },
+        resourceKey: { expression: 'args.id', path: 'id', source: 'args' },
+        staticProof: 'not-claimed',
+      },
+    ]);
+  });
+
   it('does not promote inherited or accessor-backed request db values into managed authority', async () => {
     const inherited = await resolveLifecycleRequest(
       Object.create({ db: { execute: () => 'prototype-db' } }),

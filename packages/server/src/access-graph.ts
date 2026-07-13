@@ -19,6 +19,8 @@ import {
 import { guardAuditName } from './guards.js';
 import type { LayoutDeclaration, RouteDeclaration } from './route.js';
 import type { WebhookDeclaration } from './webhook.js';
+import { appendDenseOwnArrayValue, denseOwnArrayForEach } from './registry-lookup.js';
+import { securityArrayJoin, securityArraySort } from './response-security-intrinsics.js';
 
 /**
  * @internal Build the producer-owned access ledger from an assembled app
@@ -28,12 +30,26 @@ import type { WebhookDeclaration } from './webhook.js';
 export function accessFactsFromApp(
   app: Pick<KovoApp, 'endpoints' | 'mutations' | 'queries' | 'routes'>,
 ): AccessExplainFact[] {
-  return [
-    ...app.endpoints.map(endpointAccessFact),
-    ...app.mutations.map(mutationAccessFact),
-    ...app.queries.map(queryAccessFact),
-    ...app.routes.map(routeAccessFact),
-  ].sort(compareAccessFact);
+  const facts: AccessExplainFact[] = [];
+  appendAccessFacts(facts, app.endpoints, endpointAccessFact, 'App endpoint access ledger');
+  appendAccessFacts(facts, app.mutations, mutationAccessFact, 'App mutation access ledger');
+  appendAccessFacts(facts, app.queries, queryAccessFact, 'App query access ledger');
+  appendAccessFacts(facts, app.routes, routeAccessFact, 'App route access ledger');
+  securityArraySort(facts, compareAccessFact);
+  return facts;
+}
+
+function appendAccessFacts<Input>(
+  target: AccessExplainFact[],
+  declarations: readonly Input[],
+  project: (declaration: Input) => AccessExplainFact,
+  label: string,
+): void {
+  denseOwnArrayForEach(
+    declarations,
+    (declaration) => appendDenseOwnArrayValue(target, project(declaration)),
+    label,
+  );
 }
 
 function queryAccessFact(query: AppQueryDeclaration): AccessExplainFact {
@@ -100,12 +116,15 @@ function endpointAccessDetail(
   endpoint: EndpointDeclaration<string, EndpointMethod, EndpointMount>,
   auth: EndpointAuthDeclaration | undefined,
 ): string {
-  return [
-    `method=${endpoint.method}`,
-    `path=${endpoint.path}`,
-    `mount=${endpoint.mount}`,
-    `auth=${auth === undefined ? '-' : auth.kind === 'none' ? 'none' : `${auth.kind}:${auth.name}`}`,
-  ].join(' ');
+  return securityArrayJoin(
+    [
+      `method=${endpoint.method}`,
+      `path=${endpoint.path}`,
+      `mount=${endpoint.mount}`,
+      `auth=${auth === undefined ? '-' : auth.kind === 'none' ? 'none' : `${auth.kind}:${auth.name}`}`,
+    ],
+    ' ',
+  );
 }
 
 function explicitLayoutAccessFact(
@@ -138,7 +157,7 @@ function explicitAccessFact(
     if (executable === undefined) return undefined;
     return {
       decision: 'guard',
-      detail: `access=guards guards=${accessGuardNames(executable).join(',')}`,
+      detail: `access=guards guards=${securityArrayJoin(accessGuardNames(executable), ',')}`,
       kind,
       name,
       source: 'access',
@@ -178,7 +197,13 @@ function missingAccessFact(kind: AccessExplainFact['kind'], name: string): Acces
 }
 
 function accessGuardNames(access: readonly import('./guards.js').Guard<any, any>[]): string[] {
-  return access.map((guard) => guardAuditName(guard));
+  const names: string[] = [];
+  denseOwnArrayForEach(
+    access,
+    (guard) => appendDenseOwnArrayValue(names, guardAuditName(guard)),
+    'Access guard audit ledger',
+  );
+  return names;
 }
 
 function isWebhookEndpoint(
@@ -200,5 +225,9 @@ function hasExecutableMachineAuth(
 }
 
 function compareAccessFact(left: AccessExplainFact, right: AccessExplainFact): number {
-  return left.kind.localeCompare(right.kind) || left.name.localeCompare(right.name);
+  return compareAccessString(left.kind, right.kind) || compareAccessString(left.name, right.name);
+}
+
+function compareAccessString(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0;
 }

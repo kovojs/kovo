@@ -63,6 +63,11 @@ import {
   witnessWeakMapGet,
   witnessWeakMapSet,
 } from './security-witness-intrinsics.js';
+import {
+  securityStringSlice,
+  securityStringStartsWith,
+  securityStringTrim,
+} from './response-security-intrinsics.js';
 
 /**
  * A guard denial that expresses the user-facing *intent* of a rejection, leaving
@@ -567,23 +572,41 @@ export function guard<Request, RefinedRequest extends Request = Request>(
   name: string,
   fn: Guard<Request, RefinedRequest>,
 ): Guard<Request, RefinedRequest> {
-  const trimmed = name.trim();
+  const trimmed = securityStringTrim(name);
   if (trimmed === '') throw new TypeError('guard(name, fn) requires a non-empty name.');
 
   const namedGuard: Guard<Request, RefinedRequest> = (request) => fn(request);
-  if (fn.refines !== undefined) {
-    Object.defineProperty(namedGuard, 'refines', {
+  const refinesDescriptor = witnessGetOwnPropertyDescriptor(fn, 'refines');
+  if (refinesDescriptor !== undefined && !('value' in refinesDescriptor)) {
+    throw new TypeError('guard(name, fn) rejects an accessor-backed refines predicate.');
+  }
+  const refines = refinesDescriptor?.value;
+  if (refines !== undefined) {
+    if (typeof refines !== 'function') {
+      throw new TypeError('guard(name, fn) requires refines to be a function when present.');
+    }
+    witnessDefineProperty(namedGuard, 'refines', {
       configurable: false,
       enumerable: false,
-      value: fn.refines,
+      value: refines,
       writable: false,
     });
   }
   const innerFacts = explainGuard(fn);
-  return stampGuardAudit(namedGuard, [
-    { kind: 'named', name: trimmed },
-    ...(innerFacts.length === 0 ? [{ kind: 'opaque' as const, name: trimmed }] : innerFacts),
-  ]);
+  const facts: GuardAuditFact[] = [];
+  appendGuardAuditFact(facts, { kind: 'named', name: trimmed });
+  if (innerFacts.length === 0) {
+    appendGuardAuditFact(facts, { kind: 'opaque', name: trimmed });
+  } else {
+    for (let index = 0; index < innerFacts.length; index += 1) {
+      const descriptor = witnessGetOwnPropertyDescriptor(innerFacts, index);
+      if (descriptor === undefined || !('value' in descriptor)) {
+        throw new TypeError('Guard audit facts must be a dense own-data array.');
+      }
+      appendGuardAuditFact(facts, descriptor.value as GuardAuditFact);
+    }
+  }
+  return stampGuardAudit(namedGuard, facts);
 }
 
 /**
@@ -788,10 +811,23 @@ export function explainGuard<Request>(
 /** @internal Project the stable audit name attached to an executable guard. */
 export function guardAuditName<Request>(guard: Guard<Request>): string {
   const facts = explainGuard(guard);
-  const named = facts.find((fact) => fact.kind === 'named');
-  if (named !== undefined) return named.name;
-  const firstNamedFact = facts.find((fact) => 'name' in fact);
-  return firstNamedFact?.name ?? guard.name ?? 'anonymous';
+  let firstName: string | undefined;
+  for (let index = 0; index < facts.length; index += 1) {
+    const descriptor = witnessGetOwnPropertyDescriptor(facts, index);
+    if (descriptor === undefined || !('value' in descriptor)) {
+      throw new TypeError('Guard audit facts must be a dense own-data array.');
+    }
+    const fact = descriptor.value as GuardAuditFact;
+    if (fact.kind === 'named') return fact.name;
+    if (firstName === undefined) firstName = fact.name;
+  }
+  if (firstName !== undefined) return firstName;
+  const functionName = witnessGetOwnPropertyDescriptor(guard, 'name');
+  return functionName !== undefined &&
+    'value' in functionName &&
+    typeof functionName.value === 'string'
+    ? functionName.value
+    : 'anonymous';
 }
 
 /** @internal SPEC §10.3 DEC-G: runtime evidence that a named role guard passed on this request. */
@@ -888,10 +924,21 @@ function normalizeAuditExpression(
   expression: string,
   knownSources: readonly string[],
 ): { path: string; source: string } {
-  const source = knownSources.find((candidate) => expression.startsWith(`${candidate}.`));
-  return source === undefined
-    ? { path: expression, source: 'request' }
-    : { path: expression.slice(source.length + 1), source };
+  for (let index = 0; index < knownSources.length; index += 1) {
+    const descriptor = witnessGetOwnPropertyDescriptor(knownSources, index);
+    if (
+      descriptor === undefined ||
+      !('value' in descriptor) ||
+      typeof descriptor.value !== 'string'
+    ) {
+      throw new TypeError('Guard audit sources must be a dense own string array.');
+    }
+    const source = descriptor.value;
+    if (securityStringStartsWith(expression, `${source}.`)) {
+      return { path: securityStringSlice(expression, source.length + 1), source };
+    }
+  }
+  return { path: expression, source: 'request' };
 }
 
 /**
