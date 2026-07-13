@@ -8,6 +8,154 @@ import {
 import { authTable } from './test-fakes.js';
 
 describe('schema.ts materialization', () => {
+  it('keeps credential-table annotations after late schema-control poisoning', () => {
+    const source = [
+      "import { pgTable, text } from 'drizzle-orm/pg-core';",
+      "export const session = pgTable('session', { id: text('id').primaryKey(), userId: text('user_id').notNull() });",
+    ].join('\n');
+    const tables = {
+      account: authTable(['userId']),
+      session: authTable(['userId']),
+      user: authTable(),
+      verification: authTable(),
+    };
+    const originals = {
+      arrayFilter: Array.prototype.filter,
+      arrayIsArray: Array.isArray,
+      arrayJoin: Array.prototype.join,
+      arrayMap: Array.prototype.map,
+      arrayPush: Array.prototype.push,
+      arrayReduce: Array.prototype.reduce,
+      arraySort: Array.prototype.sort,
+      jsonParse: JSON.parse,
+      mapForEach: Map.prototype.forEach,
+      mapGet: Map.prototype.get,
+      mapHas: Map.prototype.has,
+      mapSet: Map.prototype.set,
+      numberIsSafeInteger: Number.isSafeInteger,
+      objectDefineProperty: Object.defineProperty,
+      objectGetOwnPropertyDescriptor: Object.getOwnPropertyDescriptor,
+      objectKeys: Object.keys,
+      reflectApply: Reflect.apply,
+      regexpExec: RegExp.prototype.exec,
+      setAdd: Set.prototype.add,
+      setForEach: Set.prototype.forEach,
+      setHas: Set.prototype.has,
+      stringCharCodeAt: String.prototype.charCodeAt,
+      stringEndsWith: String.prototype.endsWith,
+      stringIncludes: String.prototype.includes,
+      stringIndexOf: String.prototype.indexOf,
+      stringReplace: String.prototype.replace,
+      stringReplaceAll: String.prototype.replaceAll,
+      stringSlice: String.prototype.slice,
+      stringSplit: String.prototype.split,
+      stringStartsWith: String.prototype.startsWith,
+      stringToLowerCase: String.prototype.toLowerCase,
+      stringToUpperCase: String.prototype.toUpperCase,
+      stringTrim: String.prototype.trim,
+    };
+    let result: ReturnType<typeof annotateBetterAuthSchemaSource> | undefined;
+    let generated: ReturnType<typeof generateBetterAuthSchemaSource> | undefined;
+
+    try {
+      Array.prototype.filter = (() => []) as typeof Array.prototype.filter;
+      Array.isArray = (() => false) as typeof Array.isArray;
+      Array.prototype.join = (() => '') as typeof Array.prototype.join;
+      Array.prototype.map = (() => []) as typeof Array.prototype.map;
+      Array.prototype.push = (() => 0) as typeof Array.prototype.push;
+      Array.prototype.reduce = (() => '') as typeof Array.prototype.reduce;
+      Array.prototype.sort = function () {
+        return this;
+      } as typeof Array.prototype.sort;
+      JSON.parse = (() => null) as typeof JSON.parse;
+      Map.prototype.forEach = (() => undefined) as typeof Map.prototype.forEach;
+      Map.prototype.get = (() => undefined) as typeof Map.prototype.get;
+      Map.prototype.has = (() => false) as typeof Map.prototype.has;
+      Map.prototype.set = function () {
+        return this;
+      } as typeof Map.prototype.set;
+      Number.isSafeInteger = (() => false) as typeof Number.isSafeInteger;
+      Object.defineProperty = (() => ({})) as typeof Object.defineProperty;
+      Object.getOwnPropertyDescriptor = (() => undefined) as typeof Object.getOwnPropertyDescriptor;
+      Object.keys = (() => []) as typeof Object.keys;
+      Reflect.apply = (() => undefined) as typeof Reflect.apply;
+      RegExp.prototype.exec = (() => null) as typeof RegExp.prototype.exec;
+      Set.prototype.add = function () {
+        return this;
+      } as typeof Set.prototype.add;
+      Set.prototype.forEach = (() => undefined) as typeof Set.prototype.forEach;
+      Set.prototype.has = (() => false) as typeof Set.prototype.has;
+      String.prototype.charCodeAt = (() => 0) as typeof String.prototype.charCodeAt;
+      String.prototype.endsWith = (() => false) as typeof String.prototype.endsWith;
+      String.prototype.includes = (() => false) as typeof String.prototype.includes;
+      String.prototype.indexOf = (() => -1) as typeof String.prototype.indexOf;
+      String.prototype.replace = function () {
+        return this;
+      } as typeof String.prototype.replace;
+      String.prototype.replaceAll = function () {
+        return this;
+      } as typeof String.prototype.replaceAll;
+      String.prototype.slice = (() => '') as typeof String.prototype.slice;
+      String.prototype.split = (() => []) as typeof String.prototype.split;
+      String.prototype.startsWith = (() => false) as typeof String.prototype.startsWith;
+      String.prototype.toLowerCase = function () {
+        return this;
+      } as typeof String.prototype.toLowerCase;
+      String.prototype.toUpperCase = function () {
+        return this;
+      } as typeof String.prototype.toUpperCase;
+      String.prototype.trim = (() => '') as typeof String.prototype.trim;
+      result = annotateBetterAuthSchemaSource(source, tables);
+      generated = generateBetterAuthSchemaSource(tables);
+    } finally {
+      Array.prototype.filter = originals.arrayFilter;
+      Array.isArray = originals.arrayIsArray;
+      Array.prototype.join = originals.arrayJoin;
+      Array.prototype.map = originals.arrayMap;
+      Array.prototype.push = originals.arrayPush;
+      Array.prototype.reduce = originals.arrayReduce;
+      Array.prototype.sort = originals.arraySort;
+      JSON.parse = originals.jsonParse;
+      Map.prototype.forEach = originals.mapForEach;
+      Map.prototype.get = originals.mapGet;
+      Map.prototype.has = originals.mapHas;
+      Map.prototype.set = originals.mapSet;
+      Number.isSafeInteger = originals.numberIsSafeInteger;
+      Object.defineProperty = originals.objectDefineProperty;
+      Object.getOwnPropertyDescriptor = originals.objectGetOwnPropertyDescriptor;
+      Object.keys = originals.objectKeys;
+      Reflect.apply = originals.reflectApply;
+      RegExp.prototype.exec = originals.regexpExec;
+      Set.prototype.add = originals.setAdd;
+      Set.prototype.forEach = originals.setForEach;
+      Set.prototype.has = originals.setHas;
+      String.prototype.charCodeAt = originals.stringCharCodeAt;
+      String.prototype.endsWith = originals.stringEndsWith;
+      String.prototype.includes = originals.stringIncludes;
+      String.prototype.indexOf = originals.stringIndexOf;
+      String.prototype.replace = originals.stringReplace;
+      String.prototype.replaceAll = originals.stringReplaceAll;
+      String.prototype.slice = originals.stringSlice;
+      String.prototype.split = originals.stringSplit;
+      String.prototype.startsWith = originals.stringStartsWith;
+      String.prototype.toLowerCase = originals.stringToLowerCase;
+      String.prototype.toUpperCase = originals.stringToUpperCase;
+      String.prototype.trim = originals.stringTrim;
+    }
+
+    expect(result?.validation.ok).toBe(true);
+    expect(result?.annotatedTables).toEqual(['session']);
+    expect(result?.source).toContain("kovo({ domain: 'auth', key: 'userId', secret: ['token'] })");
+    expect(generated?.generatedTables).toContainEqual({
+      exportName: 'session',
+      physicalTable: 'session',
+      table: 'session',
+    });
+    expect(generated?.source).toContain(
+      "kovo({ domain: 'auth', key: 'userId', secret: ['token'] })",
+    );
+  });
+
   it('materializes explicit plugin-table extension aliases into schema and verifier facts', () => {
     const tables = {
       account: authTable(['userId']),

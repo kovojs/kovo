@@ -92,12 +92,25 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
   {
     id: 'better-auth-credentials',
     marker: '@kovo-security-classifier-corpus better-auth-credentials',
-    testFiles: ['packages/better-auth/src/index.schema-bridge.test.ts'],
+    testFiles: [
+      'packages/better-auth/src/index.schema-bridge.test.ts',
+      'packages/better-auth/src/index.schema-materialize.test.ts',
+    ],
     verdictAnchors: [
       {
         id: 'apikey-secret-classification',
         file: 'packages/better-auth/src/index.schema-bridge.test.ts',
         snippets: ["apiKey: { domain: 'auth', key: 'userId', secret: ['key'] }"],
+      },
+      {
+        id: 'schema-intrinsic-poisoning-regression',
+        file: 'packages/better-auth/src/index.schema-materialize.test.ts',
+        snippets: [
+          'keeps credential-table annotations after late schema-control poisoning',
+          "kovo({ domain: 'auth', key: 'userId', secret: ['token'] })",
+          'Object.keys = (() => [])',
+          'RegExp.prototype.exec = (() => null)',
+        ],
       },
     ],
   },

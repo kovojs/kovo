@@ -1,28 +1,51 @@
-/** Boot-pinned controls for Better Auth redirect and session-evidence classification. */
+/* oxlint-disable typescript/unbound-method -- Boot-captured controls use pinned Reflect.apply. */
 
+/** Boot-pinned controls for Better Auth redirect, schema, and session-evidence classification. */
+
+const NativeArray = globalThis.Array;
 const NativeDate = globalThis.Date;
+const NativeJSON = globalThis.JSON;
+const NativeMap = globalThis.Map;
 const NativeNumber = globalThis.Number;
 const NativeObject = globalThis.Object;
+const NativeRegExp = globalThis.RegExp;
 const NativeReflect = globalThis.Reflect;
 const NativeResponse = globalThis.Response;
+const NativeSet = globalThis.Set;
 const NativeString = globalThis.String;
+const NativeTypeError = globalThis.TypeError;
+const nativeArrayIsArray = NativeArray.isArray;
 const nativeDateNow = NativeDate.now;
 const nativeDateParse = NativeDate.parse;
+const nativeJsonParse = NativeJSON.parse;
+const nativeMapForEach = NativeMap.prototype.forEach;
+const nativeMapGet = NativeMap.prototype.get;
+const nativeMapHas = NativeMap.prototype.has;
+const nativeMapSet = NativeMap.prototype.set;
 const nativeNumberIsNaN = NativeNumber.isNaN;
 const nativeNumberIsSafeInteger = NativeNumber.isSafeInteger;
 const nativeObjectDefineProperty = NativeObject.defineProperty;
 const nativeObjectGetOwnPropertyDescriptor = NativeObject.getOwnPropertyDescriptor;
+const nativeObjectKeys = NativeObject.keys;
 const nativeReflectApply = NativeReflect.apply;
-const nativeRegExpExec = RegExp.prototype.exec;
+const nativeRegExpExec = NativeRegExp.prototype.exec;
+const nativeRegExpGlobalGetter = getGetter(NativeRegExp.prototype, 'global');
 const nativeResponseClone = getMethod(NativeResponse.prototype, 'clone');
 const nativeResponseHeadersGetter = getGetter(NativeResponse.prototype, 'headers');
 const nativeResponseJson = getMethod(NativeResponse.prototype, 'json');
 const nativeResponseStatusGetter = getGetter(NativeResponse.prototype, 'status');
+const nativeSetAdd = NativeSet.prototype.add;
+const nativeSetForEach = NativeSet.prototype.forEach;
+const nativeSetHas = NativeSet.prototype.has;
 const nativeStringCharCodeAt = NativeString.prototype.charCodeAt;
+const nativeStringEndsWith = NativeString.prototype.endsWith;
+const nativeStringIncludes = NativeString.prototype.includes;
 const nativeStringIndexOf = NativeString.prototype.indexOf;
 const nativeStringSlice = NativeString.prototype.slice;
+const nativeStringStartsWith = NativeString.prototype.startsWith;
 const nativeStringSplit = NativeString.prototype.split;
 const nativeStringToLowerCase = NativeString.prototype.toLowerCase;
+const nativeStringToUpperCase = NativeString.prototype.toUpperCase;
 const nativeStringTrim = NativeString.prototype.trim;
 
 function apply<Return>(fn: Function, receiver: unknown, args: readonly unknown[]): Return {
@@ -60,17 +83,38 @@ function capturedControlsAreSound(): boolean {
       headers: { 'content-type': 'application/json' },
       status: 201,
     });
+    const map = new NativeMap<string, string>();
+    apply(nativeMapSet, map, ['safe', 'value']);
+    const set = new NativeSet<string>();
+    apply(nativeSetAdd, set, ['safe']);
+    const keys = apply<string[]>(nativeObjectKeys, NativeObject, [{ safe: true }]);
+    const parsed = apply<Record<string, unknown>>(nativeJsonParse, NativeJSON, ['{"safe":true}']);
     return (
+      apply(nativeArrayIsArray, NativeArray, [[]]) === true &&
+      apply(nativeArrayIsArray, NativeArray, [{}]) === false &&
+      typeof nativeRegExpGlobalGetter === 'function' &&
       match?.[0] === 'safe' &&
       miss === null &&
       descriptor !== undefined &&
       'value' in descriptor &&
       descriptor.value === 42 &&
+      keys.length === 1 &&
+      keys[0] === 'safe' &&
+      parsed.safe === true &&
+      apply(nativeMapGet, map, ['safe']) === 'value' &&
+      apply(nativeMapHas, map, ['safe']) === true &&
+      apply(nativeMapHas, map, ['missing']) === false &&
+      apply(nativeSetHas, set, ['safe']) === true &&
+      apply(nativeSetHas, set, ['missing']) === false &&
       apply(nativeStringCharCodeAt, '\n', [0]) === 10 &&
+      apply(nativeStringEndsWith, 'schema.ts', ['.ts']) === true &&
+      apply(nativeStringIncludes, 'pgTable', ['Table']) === true &&
       apply(nativeStringIndexOf, 'sid=value', ['=']) === 3 &&
       apply(nativeStringSlice, 'sid=value', [4]) === 'value' &&
+      apply(nativeStringStartsWith, 'schema.ts', ['schema']) === true &&
       apply<string[]>(nativeStringSplit, 'sid=value; Path=/', [';']).length === 2 &&
       apply(nativeStringToLowerCase, 'EXPIRES', []) === 'expires' &&
+      apply(nativeStringToUpperCase, 'kovo', []) === 'KOVO' &&
       apply(nativeStringTrim, ' safe ', []) === 'safe' &&
       apply(nativeDateParse, NativeDate, ['Thu, 01 Jan 1970 00:00:00 GMT']) === 0 &&
       apply(nativeDateParse, NativeDate, ['Tue, 19 Jan 2038 03:14:07 GMT']) === 2_147_483_647_000 &&
@@ -93,10 +137,15 @@ const capturedControlsSound = capturedControlsAreSound();
 
 export function assertBetterAuthIntrinsics(): void {
   if (!capturedControlsSound) {
-    throw new TypeError(
+    throw new NativeTypeError(
       'Kovo Better Auth controls are unavailable because server realm intrinsics were modified before framework initialization.',
     );
   }
+}
+
+export function betterAuthArrayIsArray(value: unknown): value is unknown[] {
+  assertBetterAuthIntrinsics();
+  return apply(nativeArrayIsArray, NativeArray, [value]);
 }
 
 export function betterAuthApply<Return>(
@@ -129,6 +178,33 @@ export function betterAuthGetOwnPropertyDescriptor(
 ): PropertyDescriptor | undefined {
   assertBetterAuthIntrinsics();
   return apply(nativeObjectGetOwnPropertyDescriptor, NativeObject, [value, property]);
+}
+
+/** @internal Enumerate own enumerable names through the boot-pinned Object control. */
+export function betterAuthObjectKeys(value: object, label: string): string[] {
+  assertBetterAuthIntrinsics();
+  return betterAuthSnapshotDenseArray(
+    apply<string[]>(nativeObjectKeys, NativeObject, [value]),
+    label,
+  );
+}
+
+/** @internal Read a stable own-data property without invoking a caller accessor. */
+export function betterAuthOwnDataValue(
+  source: object,
+  property: PropertyKey,
+  label: string,
+): unknown {
+  const before = betterAuthGetOwnPropertyDescriptor(source, property);
+  const after = betterAuthGetOwnPropertyDescriptor(source, property);
+  if (!sameDataDescriptor(before, after)) {
+    throw new NativeTypeError(`${label}.${String(property)} changed while it was inspected.`);
+  }
+  if (before === undefined) return undefined;
+  if (!('value' in before)) {
+    throw new NativeTypeError(`${label}.${String(property)} must be an own-data property.`);
+  }
+  return before.value;
 }
 
 /** @internal Read constructor authority without invoking accessors or inheriting polluted values. */
@@ -217,6 +293,83 @@ export function betterAuthArrayAppend<Value>(target: Value[], value: Value, labe
   betterAuthDefineOwnData(target, length.value, value, label);
 }
 
+export function betterAuthCreateMap<Key, Value>(): Map<Key, Value> {
+  assertBetterAuthIntrinsics();
+  return new NativeMap<Key, Value>();
+}
+
+export function betterAuthCreateSet<Value>(): Set<Value> {
+  assertBetterAuthIntrinsics();
+  return new NativeSet<Value>();
+}
+
+export function betterAuthMapGet<Key, Value>(
+  map: ReadonlyMap<Key, Value>,
+  key: Key,
+): Value | undefined {
+  assertBetterAuthIntrinsics();
+  return apply(nativeMapGet, map, [key]);
+}
+
+export function betterAuthMapHas<Key, Value>(map: ReadonlyMap<Key, Value>, key: Key): boolean {
+  assertBetterAuthIntrinsics();
+  return apply(nativeMapHas, map, [key]);
+}
+
+export function betterAuthMapSet<Key, Value>(map: Map<Key, Value>, key: Key, value: Value): void {
+  assertBetterAuthIntrinsics();
+  apply(nativeMapSet, map, [key, value]);
+}
+
+export function betterAuthMapValues<Key, Value>(
+  map: ReadonlyMap<Key, Value>,
+  label: string,
+): Value[] {
+  assertBetterAuthIntrinsics();
+  const values: Value[] = [];
+  apply(nativeMapForEach, map, [
+    (value: Value) => {
+      betterAuthArrayAppend(values, value, label);
+    },
+  ]);
+  return values;
+}
+
+export function betterAuthMapEntries<Key, Value>(
+  map: ReadonlyMap<Key, Value>,
+  label: string,
+): Array<readonly [Key, Value]> {
+  assertBetterAuthIntrinsics();
+  const entries: Array<readonly [Key, Value]> = [];
+  apply(nativeMapForEach, map, [
+    (value: Value, key: Key) => {
+      betterAuthArrayAppend(entries, [key, value], label);
+    },
+  ]);
+  return entries;
+}
+
+export function betterAuthSetAdd<Value>(set: Set<Value>, value: Value): void {
+  assertBetterAuthIntrinsics();
+  apply(nativeSetAdd, set, [value]);
+}
+
+export function betterAuthSetHas<Value>(set: ReadonlySet<Value>, value: Value): boolean {
+  assertBetterAuthIntrinsics();
+  return apply(nativeSetHas, set, [value]);
+}
+
+export function betterAuthSetValues<Value>(set: ReadonlySet<Value>, label: string): Value[] {
+  assertBetterAuthIntrinsics();
+  const values: Value[] = [];
+  apply(nativeSetForEach, set, [
+    (value: Value) => {
+      betterAuthArrayAppend(values, value, label);
+    },
+  ]);
+  return values;
+}
+
 export function betterAuthSnapshotDenseArray<Value>(
   source: readonly Value[],
   label: string,
@@ -264,6 +417,43 @@ export function betterAuthRegExpExec(pattern: RegExp, value: string): RegExpExec
   assertBetterAuthIntrinsics();
   pattern.lastIndex = 0;
   return apply(nativeRegExpExec, pattern, [value]);
+}
+
+export function betterAuthRegExpMatches(
+  pattern: RegExp,
+  value: string,
+  label: string,
+): RegExpExecArray[] {
+  assertBetterAuthIntrinsics();
+  if (nativeRegExpGlobalGetter === undefined) {
+    throw new NativeTypeError('Better Auth RegExp global control is unavailable.');
+  }
+  const global = apply<boolean>(nativeRegExpGlobalGetter, pattern, []);
+  pattern.lastIndex = 0;
+  const matches: RegExpExecArray[] = [];
+  while (true) {
+    const match = apply<RegExpExecArray | null>(nativeRegExpExec, pattern, [value]);
+    if (match === null) break;
+    const matched = betterAuthOwnDataValue(match, 0, label);
+    const index = betterAuthOwnDataValue(match, 'index', label);
+    if (
+      typeof matched !== 'string' ||
+      matched.length === 0 ||
+      typeof index !== 'number' ||
+      !apply(nativeNumberIsSafeInteger, NativeNumber, [index]) ||
+      index < 0
+    ) {
+      throw new NativeTypeError(`${label} returned an invalid RegExp match.`);
+    }
+    betterAuthArrayAppend(matches, match, label);
+    if (!global) break;
+  }
+  return matches;
+}
+
+export function betterAuthJsonParse(value: string): unknown {
+  assertBetterAuthIntrinsics();
+  return apply(nativeJsonParse, NativeJSON, [value]);
 }
 
 export function betterAuthResponseHeaders(value: object): Headers | undefined {
@@ -324,6 +514,37 @@ export function betterAuthSlice(value: string, start: number, end?: number): str
     : apply(nativeStringSlice, value, [start, end]);
 }
 
+export function betterAuthEndsWith(value: string, search: string): boolean {
+  assertBetterAuthIntrinsics();
+  return apply(nativeStringEndsWith, value, [search]);
+}
+
+export function betterAuthIncludes(value: string, search: string): boolean {
+  assertBetterAuthIntrinsics();
+  return apply(nativeStringIncludes, value, [search]);
+}
+
+export function betterAuthStartsWith(value: string, search: string): boolean {
+  assertBetterAuthIntrinsics();
+  return apply(nativeStringStartsWith, value, [search]);
+}
+
+/** Literal replace-all that never consults String.prototype or @@replace after bootstrap. */
+export function betterAuthReplaceAll(value: string, search: string, replacement: string): string {
+  assertBetterAuthIntrinsics();
+  if (search.length === 0) throw new NativeTypeError('Better Auth replacement search is empty.');
+  let output = '';
+  let sourceIndex = 0;
+  while (true) {
+    const matchIndex = apply<number>(nativeStringIndexOf, value, [search, sourceIndex]);
+    if (matchIndex < 0) break;
+    output += apply<string>(nativeStringSlice, value, [sourceIndex, matchIndex]);
+    output += replacement;
+    sourceIndex = matchIndex + search.length;
+  }
+  return output + apply<string>(nativeStringSlice, value, [sourceIndex]);
+}
+
 export function betterAuthSplit(value: string, separator: string, limit?: number): string[] {
   assertBetterAuthIntrinsics();
   return limit === undefined
@@ -334,6 +555,11 @@ export function betterAuthSplit(value: string, separator: string, limit?: number
 export function betterAuthToLowerCase(value: string): string {
   assertBetterAuthIntrinsics();
   return apply(nativeStringToLowerCase, value, []);
+}
+
+export function betterAuthToUpperCase(value: string): string {
+  assertBetterAuthIntrinsics();
+  return apply(nativeStringToUpperCase, value, []);
 }
 
 export function betterAuthTrim(value: string): string {
@@ -361,4 +587,18 @@ function readNativeResponseStatus(value: object): number | undefined {
 
 function isObject(value: unknown): value is object {
   return (typeof value === 'object' && value !== null) || typeof value === 'function';
+}
+
+function sameDataDescriptor(
+  left: PropertyDescriptor | undefined,
+  right: PropertyDescriptor | undefined,
+): boolean {
+  if (left === undefined || right === undefined) return left === right;
+  if ('value' in left !== 'value' in right) return false;
+  if ('value' in left && 'value' in right && left.value !== right.value) return false;
+  return (
+    left.configurable === right.configurable &&
+    left.enumerable === right.enumerable &&
+    left.writable === right.writable
+  );
 }

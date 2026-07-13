@@ -71,10 +71,37 @@ import type { BetterAuthCredentialMutationInternalOptions } from './credential-o
 import { betterAuthOAuthProviderSuccessorImportPaths } from './internal/plugin-metadata.js';
 import {
   betterAuthArrayAppend,
+  betterAuthArrayIsArray,
+  betterAuthCharacterCodeAt,
+  betterAuthCreateMap,
+  betterAuthCreateSet,
   betterAuthDefineOwnData,
+  betterAuthEndsWith,
+  betterAuthIncludes,
+  betterAuthIndexOf,
+  betterAuthIsSafeInteger,
+  betterAuthJsonParse,
+  betterAuthMapGet,
+  betterAuthMapEntries,
+  betterAuthMapHas,
+  betterAuthMapSet,
+  betterAuthMapValues,
+  betterAuthObjectKeys,
   betterAuthOwnDataOption,
+  betterAuthOwnDataValue,
+  betterAuthRegExpExec,
+  betterAuthRegExpMatches,
+  betterAuthReplaceAll,
+  betterAuthSetAdd,
+  betterAuthSetHas,
+  betterAuthSetValues,
+  betterAuthSlice,
+  betterAuthSplit,
   betterAuthSnapshotDenseArray,
+  betterAuthStartsWith,
   betterAuthToLowerCase,
+  betterAuthToUpperCase,
+  betterAuthTrim,
 } from './internal/intrinsics.js';
 
 // The package's 13 public symbols are authored in the honestly-named source files
@@ -296,12 +323,18 @@ function deriveBetterAuthCredentialMutationTouches(
   );
   for (let index = 0; index < apis.length; index += 1) {
     const api = apis[index]!;
-    const domains = new Map<BetterAuthTouchDomain, Domain>();
-    for (const touch of deriveBetterAuthDeclaredTableTouches(api, options)) {
-      if (!domains.has(touch.domain))
-        domains.set(touch.domain, betterAuthDomainHandle(touch.domain));
+    const domains = betterAuthCreateMap<BetterAuthTouchDomain, Domain>();
+    const touches = betterAuthSnapshotDenseArray(
+      deriveBetterAuthDeclaredTableTouches(api, options),
+      `Better Auth ${api} declared table touches`,
+    );
+    for (let touchIndex = 0; touchIndex < touches.length; touchIndex += 1) {
+      const touch = touches[touchIndex]!;
+      if (!betterAuthMapHas(domains, touch.domain)) {
+        betterAuthMapSet(domains, touch.domain, betterAuthDomainHandle(touch.domain));
+      }
     }
-    result[api] = [...domains.values()];
+    result[api] = betterAuthMapValues(domains, `Better Auth ${api} mutation domains`);
   }
   return result;
 }
@@ -480,7 +513,14 @@ export function createBetterAuthDbVerificationConfig(
   const exemptTables: string[] = [];
   const keyByTable: Record<string, string> = {};
 
-  for (const [table, annotation] of Object.entries(bridge)) {
+  const bridgeTables = betterAuthObjectKeys(bridge, 'Better Auth verifier schema bridge');
+  for (let tableIndex = 0; tableIndex < bridgeTables.length; tableIndex += 1) {
+    const table = bridgeTables[tableIndex]!;
+    const annotation = betterAuthOwnDataValue(
+      bridge,
+      table,
+      'Better Auth verifier schema bridge',
+    ) as BetterAuthSchemaBridgeAnnotation;
     const candidates = betterAuthSnapshotDenseArray(
       betterAuthPhysicalTableNames(table, tables),
       `Better Auth ${table} physical table names`,
@@ -488,7 +528,7 @@ export function createBetterAuthDbVerificationConfig(
     const physicalTables: string[] = [];
     for (let index = 0; index < candidates.length; index += 1) {
       const physicalTable = candidates[index]!;
-      if (!collidingPhysicalTables.has(physicalTable))
+      if (!betterAuthSetHas(collidingPhysicalTables, physicalTable))
         betterAuthArrayAppend(
           physicalTables,
           physicalTable,
@@ -497,7 +537,8 @@ export function createBetterAuthDbVerificationConfig(
     }
 
     if ('domain' in annotation) {
-      for (const physicalTable of physicalTables) {
+      for (let index = 0; index < physicalTables.length; index += 1) {
+        const physicalTable = physicalTables[index]!;
         betterAuthDefineOwnData(
           domainByTable,
           physicalTable,
@@ -558,12 +599,12 @@ function sortedUniqueBetterAuthStrings(values: readonly string[], label: string)
 
 function uniqueBetterAuthStrings(values: readonly string[], label: string): string[] {
   const snapshot = betterAuthSnapshotDenseArray(values, label);
-  const seen = new Set<string>();
+  const seen = betterAuthCreateSet<string>();
   const unique: string[] = [];
   for (let index = 0; index < snapshot.length; index += 1) {
     const value = snapshot[index]!;
-    if (seen.has(value)) continue;
-    seen.add(value);
+    if (betterAuthSetHas(seen, value)) continue;
+    betterAuthSetAdd(seen, value);
     betterAuthArrayAppend(unique, value, label);
   }
   return unique;
@@ -584,9 +625,7 @@ function joinBetterAuthStrings(
 }
 
 function betterAuthSetStrings(values: ReadonlySet<string>, label: string): string[] {
-  const snapshot: string[] = [];
-  for (const value of values) betterAuthArrayAppend(snapshot, value, label);
-  return snapshot;
+  return betterAuthSetValues(values, label);
 }
 
 function quoteBetterAuthStrings(values: readonly string[], label: string): string[] {
@@ -598,25 +637,173 @@ function quoteBetterAuthStrings(values: readonly string[], label: string): strin
   return quoted;
 }
 
+function quoteTsStrings(values: readonly string[]): string[] {
+  const snapshot = betterAuthSnapshotDenseArray(
+    values,
+    'Better Auth schema annotation secret fields',
+  );
+  const quoted: string[] = [];
+  for (let index = 0; index < snapshot.length; index += 1) {
+    betterAuthArrayAppend(
+      quoted,
+      quoteTsString(snapshot[index]!),
+      'Better Auth schema annotation secret fields',
+    );
+  }
+  return quoted;
+}
+
+function betterAuthSetFromStrings(values: readonly string[], label: string): Set<string> {
+  const snapshot = betterAuthSnapshotDenseArray(values, label);
+  const set = betterAuthCreateSet<string>();
+  for (let index = 0; index < snapshot.length; index += 1) {
+    betterAuthSetAdd(set, snapshot[index]!);
+  }
+  return set;
+}
+
+function betterAuthTableMetadata(tables: Record<string, unknown>, table: string): unknown {
+  return betterAuthOwnDataValue(tables, table, 'Better Auth metadata tables');
+}
+
+function compareBetterAuthStrings(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+
+function compareBetterAuthMetadataTables(
+  left: string,
+  right: string,
+  tables: Record<string, unknown>,
+): number {
+  const leftMetadata = betterAuthTableMetadata(tables, left);
+  const rightMetadata = betterAuthTableMetadata(tables, right);
+  const leftOrder = betterAuthTableOrder(leftMetadata);
+  const rightOrder = betterAuthTableOrder(rightMetadata);
+  return leftOrder === rightOrder
+    ? compareBetterAuthStrings(
+        betterAuthPhysicalTableName(left, leftMetadata),
+        betterAuthPhysicalTableName(right, rightMetadata),
+      )
+    : leftOrder - rightOrder;
+}
+
+function sortedBetterAuthGeneratedSchemaDegradations(
+  values: readonly BetterAuthGeneratedSchemaTableDegradation[],
+): BetterAuthGeneratedSchemaTableDegradation[] {
+  const input = betterAuthSnapshotDenseArray(values, 'Better Auth skipped generated schema tables');
+  const sorted: BetterAuthGeneratedSchemaTableDegradation[] = [];
+  for (let index = 0; index < input.length; index += 1) {
+    const value = input[index]!;
+    betterAuthArrayAppend(sorted, value, 'Better Auth skipped generated schema tables');
+    let insertion = sorted.length - 1;
+    while (
+      insertion > 0 &&
+      compareBetterAuthStrings(value.table, sorted[insertion - 1]!.table) < 0
+    ) {
+      betterAuthDefineOwnData(
+        sorted,
+        insertion,
+        sorted[insertion - 1]!,
+        'Better Auth skipped generated schema tables',
+      );
+      insertion -= 1;
+    }
+    betterAuthDefineOwnData(
+      sorted,
+      insertion,
+      value,
+      'Better Auth skipped generated schema tables',
+    );
+  }
+  return sorted;
+}
+
+function sortedBetterAuthSourceDeclarationDegradations(
+  values: readonly BetterAuthSchemaSourceDeclarationDegradation[],
+): BetterAuthSchemaSourceDeclarationDegradation[] {
+  const input = betterAuthSnapshotDenseArray(
+    values,
+    'Better Auth schema source declaration degradations',
+  );
+  const sorted: BetterAuthSchemaSourceDeclarationDegradation[] = [];
+  for (let index = 0; index < input.length; index += 1) {
+    const value = input[index]!;
+    betterAuthArrayAppend(sorted, value, 'Better Auth schema source declaration degradations');
+    let insertion = sorted.length - 1;
+    while (insertion > 0 && compareBetterAuthSourceDegradation(value, sorted[insertion - 1]!) < 0) {
+      betterAuthDefineOwnData(
+        sorted,
+        insertion,
+        sorted[insertion - 1]!,
+        'Better Auth schema source declaration degradations',
+      );
+      insertion -= 1;
+    }
+    betterAuthDefineOwnData(
+      sorted,
+      insertion,
+      value,
+      'Better Auth schema source declaration degradations',
+    );
+  }
+  return sorted;
+}
+
+function sortedBetterAuthSourcePluginDegradations(
+  values: readonly BetterAuthSchemaSourcePluginTableDegradation[],
+): BetterAuthSchemaSourcePluginTableDegradation[] {
+  const input = betterAuthSnapshotDenseArray(
+    values,
+    'Better Auth schema source plugin degradations',
+  );
+  const sorted: BetterAuthSchemaSourcePluginTableDegradation[] = [];
+  for (let index = 0; index < input.length; index += 1) {
+    const value = input[index]!;
+    betterAuthArrayAppend(sorted, value, 'Better Auth schema source plugin degradations');
+    let insertion = sorted.length - 1;
+    while (insertion > 0 && compareBetterAuthSourceDegradation(value, sorted[insertion - 1]!) < 0) {
+      betterAuthDefineOwnData(
+        sorted,
+        insertion,
+        sorted[insertion - 1]!,
+        'Better Auth schema source plugin degradations',
+      );
+      insertion -= 1;
+    }
+    betterAuthDefineOwnData(
+      sorted,
+      insertion,
+      value,
+      'Better Auth schema source plugin degradations',
+    );
+  }
+  return sorted;
+}
+
+function compareBetterAuthSourceDegradation(
+  left: { callee: string; table: string },
+  right: { callee: string; table: string },
+): number {
+  return left.table === right.table
+    ? compareBetterAuthStrings(left.callee, right.callee)
+    : compareBetterAuthStrings(left.table, right.table);
+}
+
 /** @internal Validate Better Auth table metadata against the schema bridge; reports KV406 gaps. */
 export function validateBetterAuthSchemaBridge(
   tables: Record<string, unknown>,
   options: BetterAuthSchemaBridgeValidationOptions = {},
 ): BetterAuthSchemaBridgeValidation {
   const schemaBridge = createBetterAuthSchemaBridge(options.schemaBridge);
-  const bridgeTables = betterAuthSnapshotDenseArray(
-    Object.keys(schemaBridge),
-    'Better Auth schema-bridge table names',
-  );
-  const tableKeys = betterAuthSnapshotDenseArray(
-    Object.keys(tables),
-    'Better Auth metadata table names',
-  );
-  const tableNames = new Set<string>();
-  for (let index = 0; index < tableKeys.length; index += 1) tableNames.add(tableKeys[index]!);
-  const bridgeTableNames = new Set<string>();
+  const bridgeTables = betterAuthObjectKeys(schemaBridge, 'Better Auth schema-bridge table names');
+  const tableKeys = betterAuthObjectKeys(tables, 'Better Auth metadata table names');
+  const tableNames = betterAuthCreateSet<string>();
+  for (let index = 0; index < tableKeys.length; index += 1) {
+    betterAuthSetAdd(tableNames, tableKeys[index]!);
+  }
+  const bridgeTableNames = betterAuthCreateSet<string>();
   for (let index = 0; index < bridgeTables.length; index += 1)
-    bridgeTableNames.add(bridgeTables[index]!);
+    betterAuthSetAdd(bridgeTableNames, bridgeTables[index]!);
   const missingTables: BetterAuthCoreTable[] = [];
   const requiredTables = betterAuthSnapshotDenseArray(
     betterAuthRequiredCoreTables,
@@ -624,13 +811,13 @@ export function validateBetterAuthSchemaBridge(
   );
   for (let index = 0; index < requiredTables.length; index += 1) {
     const table = requiredTables[index]!;
-    if (!tableNames.has(table))
+    if (!betterAuthSetHas(tableNames, table))
       betterAuthArrayAppend(missingTables, table, 'Better Auth missing required tables');
   }
   const unsortedUnbridgedTables: string[] = [];
   for (let index = 0; index < tableKeys.length; index += 1) {
     const table = tableKeys[index]!;
-    if (!bridgeTableNames.has(table))
+    if (!betterAuthSetHas(bridgeTableNames, table))
       betterAuthArrayAppend(unsortedUnbridgedTables, table, 'Better Auth unbridged table names');
   }
   const unbridgedTables = sortedBetterAuthStrings(
@@ -700,13 +887,19 @@ export function annotateBetterAuthSchemaSource(
     tables,
     options.schemaBridge === undefined ? {} : { schemaBridge: options.schemaBridge },
   );
-  const metadataTables = new Set(
-    Object.keys(tables).filter((table) => isBetterAuthSchemaTable(table, schemaBridge)),
-  );
+  const metadataTables = betterAuthCreateSet<string>();
+  const metadataTableNames = betterAuthObjectKeys(tables, 'Better Auth metadata table names');
+  for (let index = 0; index < metadataTableNames.length; index += 1) {
+    const table = metadataTableNames[index]!;
+    if (isBetterAuthSchemaTable(table, schemaBridge)) betterAuthSetAdd(metadataTables, table);
+  }
   const metadataTableByPhysicalName = betterAuthMetadataTableByPhysicalName(tables, schemaBridge);
   const sourceIr = parseBetterAuthSchemaSourceIr(source, options.tableFactories);
   const sourceTableCandidates = sourceIr.tableCallCandidates;
-  const sourceTables = sourceIr.drizzleTableCalls;
+  const sourceTables = betterAuthSnapshotDenseArray(
+    sourceIr.drizzleTableCalls,
+    'Better Auth schema source table calls',
+  );
   const unrecognizedSourceTables = unrecognizedBetterAuthSourceTableDeclarations(
     sourceTableCandidates,
     sourceTables,
@@ -736,10 +929,11 @@ export function annotateBetterAuthSchemaSource(
   const annotationCallee = annotationImport.localName;
   const hasRequiredImport = annotationImport.hasRequiredImport;
 
-  for (const call of sourceTables) {
-    const table = metadataTableByPhysicalName.get(call.tableName);
-    if (table === undefined || !metadataTables.has(table)) continue;
-    if (duplicateSourceTables.has(call.tableName)) continue;
+  for (let callIndex = 0; callIndex < sourceTables.length; callIndex += 1) {
+    const call = sourceTables[callIndex]!;
+    const table = betterAuthMapGet(metadataTableByPhysicalName, call.tableName);
+    if (table === undefined || !betterAuthSetHas(metadataTables, table)) continue;
+    if (betterAuthSetHas(duplicateSourceTables, call.tableName)) continue;
 
     if (call.extraConfigText !== null) {
       if (
@@ -751,14 +945,23 @@ export function annotateBetterAuthSchemaSource(
           betterAuthTableFieldNames(tables[table]),
         )
       ) {
-        alreadyAnnotatedTables.push(call.tableName);
+        betterAuthArrayAppend(
+          alreadyAnnotatedTables,
+          call.tableName,
+          'Better Auth already annotated source tables',
+        );
       } else {
-        existingExtraConfigTables.push(call.tableName);
+        betterAuthArrayAppend(
+          existingExtraConfigTables,
+          call.tableName,
+          'Better Auth source tables with extra config',
+        );
       }
       continue;
     }
 
-    replacements.push(
+    betterAuthArrayAppend(
+      replacements,
       betterAuthSchemaTableAnnotationReplacement(
         call,
         table,
@@ -766,25 +969,58 @@ export function annotateBetterAuthSchemaSource(
         schemaBridge,
         betterAuthTableFieldNames(tables[table]),
       ),
+      'Better Auth schema source replacements',
     );
-    annotatedTables.push(call.tableName);
+    betterAuthArrayAppend(annotatedTables, call.tableName, 'Better Auth annotated source tables');
   }
 
-  const sourceTableNames = new Set(sourceTables.map((call) => call.tableName));
-  const missingSourceTables = [...metadataTables]
-    .map((table) => betterAuthPhysicalTableName(table, tables[table]))
-    .filter((table) => !sourceTableNames.has(table))
-    .sort();
+  const sourceTableNames = betterAuthCreateSet<string>();
+  for (let index = 0; index < sourceTables.length; index += 1) {
+    betterAuthSetAdd(sourceTableNames, sourceTables[index]!.tableName);
+  }
+  const unsortedMissingSourceTables: string[] = [];
+  const metadataTablesSnapshot = betterAuthSetValues(
+    metadataTables,
+    'Better Auth bridged metadata tables',
+  );
+  for (let index = 0; index < metadataTablesSnapshot.length; index += 1) {
+    const table = metadataTablesSnapshot[index]!;
+    const physicalTable = betterAuthPhysicalTableName(table, tables[table]);
+    if (!betterAuthSetHas(sourceTableNames, physicalTable)) {
+      betterAuthArrayAppend(
+        unsortedMissingSourceTables,
+        physicalTable,
+        'Better Auth missing schema source tables',
+      );
+    }
+  }
+  const missingSourceTables = sortedBetterAuthStrings(
+    unsortedMissingSourceTables,
+    'Better Auth missing schema source tables',
+  );
   const insertedImport = annotatedTables.length > 0 && !hasRequiredImport;
-  const sourceReplacements = insertedImport
-    ? [...replacements, betterAuthSchemaImportReplacement(source, annotationCallee)]
-    : replacements;
+  const sourceReplacements = betterAuthSnapshotDenseArray(
+    replacements,
+    'Better Auth schema source replacements',
+  );
+  if (insertedImport) {
+    betterAuthArrayAppend(
+      sourceReplacements,
+      betterAuthSchemaImportReplacement(source, annotationCallee),
+      'Better Auth schema source replacements',
+    );
+  }
 
   return {
     alreadyAnnotatedTables: sortedBetterAuthTables(alreadyAnnotatedTables),
     annotatedTables: sortedBetterAuthTables(annotatedTables),
-    duplicateSourceTables: sortedBetterAuthTables([...duplicateSourceTables]),
-    existingExtraConfigTables: [...new Set(existingExtraConfigTables)].sort(),
+    duplicateSourceTables: sortedBetterAuthTables(
+      betterAuthSetValues(duplicateSourceTables, 'Better Auth duplicate schema source tables'),
+    ),
+    existingExtraConfigTables: sortedUniqueBetterAuthStrings(
+      existingExtraConfigTables,
+      'Better Auth source tables with extra config',
+    ),
     importNote: {
       hasRequiredImport,
       insertedImport,
@@ -825,10 +1061,13 @@ export function generateBetterAuthSchemaSource(
   const generatedTables: BetterAuthGeneratedSchemaTable[] = [];
   const skippedTables: BetterAuthGeneratedSchemaTableDegradation[] = [];
   const declarations: string[] = [];
-  const requiredBuilders = new Set<string>([tableFactory]);
-  const exportNames = new Set<string>();
+  const requiredBuilders = betterAuthCreateSet<string>();
+  betterAuthSetAdd(requiredBuilders, tableFactory);
+  const exportNames = betterAuthCreateSet<string>();
 
-  for (const table of orderedBetterAuthMetadataTables(tables, schemaBridge)) {
+  const orderedTables = orderedBetterAuthMetadataTables(tables, schemaBridge);
+  for (let tableIndex = 0; tableIndex < orderedTables.length; tableIndex += 1) {
+    const table = orderedTables[tableIndex]!;
     const annotation = betterAuthSchemaBridgeAnnotation(table, schemaBridge);
     if (annotation === undefined) continue;
 
@@ -836,8 +1075,9 @@ export function generateBetterAuthSchemaSource(
     const physicalTable = betterAuthPhysicalTableName(table, metadata);
     const fieldNames = betterAuthTableFieldNames(metadata);
 
-    if (collidingPhysicalTables.has(physicalTable)) {
-      skippedTables.push(
+    if (betterAuthSetHas(collidingPhysicalTables, physicalTable)) {
+      betterAuthArrayAppend(
+        skippedTables,
         generatedSchemaTableDegradation({
           fields: fieldNames,
           message: `${betterAuthTableLabel(
@@ -848,12 +1088,14 @@ export function generateBetterAuthSchemaSource(
           reason: 'ambiguous-physical-table',
           table,
         }),
+        'Better Auth skipped generated schema tables',
       );
       continue;
     }
 
     if (fieldNames === null) {
-      skippedTables.push(
+      betterAuthArrayAppend(
+        skippedTables,
         generatedSchemaTableDegradation({
           fields: null,
           message: `${betterAuthTableLabel(
@@ -864,12 +1106,18 @@ export function generateBetterAuthSchemaSource(
           reason: 'table-field-metadata-unavailable',
           table,
         }),
+        'Better Auth skipped generated schema tables',
       );
       continue;
     }
 
-    if ('domain' in annotation && annotation.key !== undefined && !fieldNames.has(annotation.key)) {
-      skippedTables.push(
+    if (
+      'domain' in annotation &&
+      annotation.key !== undefined &&
+      !betterAuthSetHas(fieldNames, annotation.key)
+    ) {
+      betterAuthArrayAppend(
+        skippedTables,
         generatedSchemaTableDegradation({
           fields: fieldNames,
           field: annotation.key,
@@ -881,21 +1129,37 @@ export function generateBetterAuthSchemaSource(
           reason: 'schema-bridge-key-unavailable',
           table,
         }),
+        'Better Auth skipped generated schema tables',
       );
       continue;
     }
 
     const columns = betterAuthGeneratedSchemaColumns(table, metadata, dialect);
     if ('degradation' in columns) {
-      skippedTables.push(columns.degradation);
+      betterAuthArrayAppend(
+        skippedTables,
+        columns.degradation,
+        'Better Auth skipped generated schema tables',
+      );
       continue;
     }
 
-    for (const builder of columns.builders) requiredBuilders.add(builder);
+    const columnBuilders = betterAuthSetValues(
+      columns.builders,
+      'Better Auth generated schema column builders',
+    );
+    for (let builderIndex = 0; builderIndex < columnBuilders.length; builderIndex += 1) {
+      betterAuthSetAdd(requiredBuilders, columnBuilders[builderIndex]!);
+    }
 
     const exportName = uniqueBetterAuthSchemaExportName(table, exportNames);
-    generatedTables.push({ exportName, physicalTable, table });
-    declarations.push(
+    betterAuthArrayAppend(
+      generatedTables,
+      { exportName, physicalTable, table },
+      'Better Auth generated schema tables',
+    );
+    betterAuthArrayAppend(
+      declarations,
       renderBetterAuthGeneratedSchemaDeclaration({
         annotationCall: betterAuthSchemaAnnotationCall(
           table,
@@ -909,22 +1173,37 @@ export function generateBetterAuthSchemaSource(
         physicalTable,
         tableFactory,
       }),
+      'Better Auth generated schema declarations',
     );
   }
 
-  const drizzleImport = `import { ${[...requiredBuilders]
-    .sort()
-    .join(', ')} } from '${drizzleCoreModule}';`;
+  const sortedBuilders = sortedBetterAuthStrings(
+    betterAuthSetValues(requiredBuilders, 'Better Auth generated schema builders'),
+    'Better Auth generated schema builders',
+  );
+  const drizzleImport = `import { ${joinBetterAuthStrings(
+    sortedBuilders,
+    ', ',
+    'Better Auth generated schema builders',
+  )} } from '${drizzleCoreModule}';`;
   const requiredImports = [betterAuthSchemaImportStatement(annotationCallee), drizzleImport];
   const source =
     declarations.length === 0
       ? ''
-      : [...requiredImports, '', declarations.join('\n\n'), ''].join('\n');
+      : `${joinBetterAuthStrings(
+          requiredImports,
+          '\n',
+          'Better Auth generated schema imports',
+        )}\n\n${joinBetterAuthStrings(
+          declarations,
+          '\n\n',
+          'Better Auth generated schema declarations',
+        )}\n`;
 
   return {
     generatedTables,
     requiredImports,
-    skippedTables: skippedTables.sort((left, right) => left.table.localeCompare(right.table)),
+    skippedTables: sortedBetterAuthGeneratedSchemaDegradations(skippedTables),
     source,
     unsupportedPluginTables: validation.pluginTableDegradations,
     validation,
@@ -958,7 +1237,7 @@ function declaredTableTouchMismatches(
 
     for (let touchIndex = 0; touchIndex < touches.length; touchIndex += 1) {
       const touch = touches[touchIndex]!;
-      if (!tableNames.has(touch.table)) {
+      if (!betterAuthSetHas(tableNames, touch.table)) {
         betterAuthArrayAppend(
           mismatches,
           `${api}.${touch.table} is declared touched but Better Auth table metadata is missing that table`,
@@ -1057,17 +1336,28 @@ function schemaBridgeKeyFieldMismatches(
 ): string[] {
   const mismatches = betterAuthPhysicalTableNameCollisionMismatches(tables, schemaBridge);
 
-  for (const [table, annotation] of Object.entries(schemaBridge)) {
+  const bridgeTables = betterAuthObjectKeys(
+    schemaBridge,
+    'Better Auth schema-bridge key validation tables',
+  );
+  for (let tableIndex = 0; tableIndex < bridgeTables.length; tableIndex += 1) {
+    const table = bridgeTables[tableIndex]!;
+    const annotation = betterAuthOwnDataValue(
+      schemaBridge,
+      table,
+      'Better Auth schema-bridge key validation',
+    ) as BetterAuthSchemaBridgeAnnotation;
     if (!('domain' in annotation) || annotation.key === undefined) continue;
 
-    const fieldNames = betterAuthTableFieldNames(tables[table]);
+    const metadata = betterAuthTableMetadata(tables, table);
+    const fieldNames = betterAuthTableFieldNames(metadata);
 
     if (fieldNames === null) continue;
-    if (fieldNames.has(annotation.key)) continue;
+    if (betterAuthSetHas(fieldNames, annotation.key)) continue;
 
     betterAuthArrayAppend(
       mismatches,
-      schemaBridgeKeyFieldMismatch(table, annotation.key, tables[table]),
+      schemaBridgeKeyFieldMismatch(table, annotation.key, metadata),
       'Better Auth schema-bridge key mismatches',
     );
   }
@@ -1092,7 +1382,12 @@ function betterAuthPhysicalTableNameCollisionMismatches(
   const physicalTables = betterAuthPhysicalTableNameGroups(tables, schemaBridge);
   const mismatches: string[] = [];
 
-  for (const [physicalTable, logicalTables] of physicalTables) {
+  const groups = betterAuthMapEntries(
+    physicalTables,
+    'Better Auth physical-table collision groups',
+  );
+  for (let groupIndex = 0; groupIndex < groups.length; groupIndex += 1) {
+    const [physicalTable, logicalTables] = groups[groupIndex]!;
     if (logicalTables.length < 2) continue;
 
     betterAuthArrayAppend(
@@ -1113,12 +1408,14 @@ function betterAuthCollidingPhysicalTableNames(
   tables: Record<string, unknown>,
   schemaBridge: BetterAuthSchemaBridgeExtensions = betterAuthSchemaBridge,
 ): Set<string> {
-  const collisions = new Set<string>();
-  for (const [physicalTable, logicalTables] of betterAuthPhysicalTableNameGroups(
-    tables,
-    schemaBridge,
-  )) {
-    if (logicalTables.length > 1) collisions.add(physicalTable);
+  const collisions = betterAuthCreateSet<string>();
+  const groups = betterAuthMapEntries(
+    betterAuthPhysicalTableNameGroups(tables, schemaBridge),
+    'Better Auth physical-table collision groups',
+  );
+  for (let index = 0; index < groups.length; index += 1) {
+    const [physicalTable, logicalTables] = groups[index]!;
+    if (logicalTables.length > 1) betterAuthSetAdd(collisions, physicalTable);
   }
   return collisions;
 }
@@ -1126,11 +1423,17 @@ function betterAuthCollidingPhysicalTableNames(
 function betterAuthTableFieldNames(table: unknown): Set<string> | null {
   if (!table || typeof table !== 'object') return null;
 
-  const fields = (table as { fields?: unknown }).fields;
+  const fields = betterAuthOwnDataValue(table, 'fields', 'Better Auth table metadata');
 
-  if (!fields || typeof fields !== 'object' || Array.isArray(fields)) return null;
+  if (!fields || typeof fields !== 'object' || betterAuthArrayIsArray(fields)) return null;
 
-  return new Set(['id', ...Object.keys(fields)]);
+  const fieldNames = betterAuthCreateSet<string>();
+  betterAuthSetAdd(fieldNames, 'id');
+  const keys = betterAuthObjectKeys(fields, 'Better Auth table field metadata');
+  for (let index = 0; index < keys.length; index += 1) {
+    betterAuthSetAdd(fieldNames, keys[index]!);
+  }
+  return fieldNames;
 }
 
 function unsupportedPluginTableDegradation(
@@ -1218,9 +1521,11 @@ function suggestedUnsupportedPluginTableAnnotation(
         'Better Auth plugin protocol/bookkeeping state is not an app read surface under SPEC.md §10.1.',
     };
   }
-  if (fields.has('organizationId')) return { domain: 'organization', key: 'organizationId' };
-  if (fields.has('teamId')) return { domain: 'organization', key: 'teamId' };
-  if (fields.has('userId'))
+  if (betterAuthSetHas(fields, 'organizationId')) {
+    return { domain: 'organization', key: 'organizationId' };
+  }
+  if (betterAuthSetHas(fields, 'teamId')) return { domain: 'organization', key: 'teamId' };
+  if (betterAuthSetHas(fields, 'userId'))
     return withBetterAuthSecretFields(fields, {
       domain: 'auth',
       key: 'userId',
@@ -1231,7 +1536,9 @@ function suggestedUnsupportedPluginTableAnnotation(
 
 function isLikelyBetterAuthProtocolTable(fields: ReadonlySet<string>): boolean {
   const nonIdFields: string[] = [];
-  for (const field of fields) {
+  const fieldValues = betterAuthSetValues(fields, 'Better Auth plugin protocol fields');
+  for (let index = 0; index < fieldValues.length; index += 1) {
+    const field = fieldValues[index]!;
     if (field !== 'id')
       betterAuthArrayAppend(nonIdFields, field, 'Better Auth plugin protocol fields');
   }
@@ -1240,32 +1547,38 @@ function isLikelyBetterAuthProtocolTable(fields: ReadonlySet<string>): boolean {
   let hasAnchor = false;
   for (let index = 0; index < nonIdFields.length; index += 1) {
     const field = nonIdFields[index]!;
-    if (protocolStateAnchorFields.has(field)) hasAnchor = true;
-    if (!protocolStateFields.has(field)) return false;
+    if (betterAuthSetHas(protocolStateAnchorFields, field)) hasAnchor = true;
+    if (!betterAuthSetHas(protocolStateFields, field)) return false;
   }
   return hasAnchor;
 }
 
-const protocolStateAnchorFields = new Set(['challenge', 'code', 'deviceCode', 'token', 'value']);
+const protocolStateAnchorFields = betterAuthSetFromStrings(
+  ['challenge', 'code', 'deviceCode', 'token', 'value'],
+  'Better Auth protocol-state anchor fields',
+);
 
-const protocolStateFields = new Set([
-  'challenge',
-  'clientId',
-  'code',
-  'createdAt',
-  'deviceCode',
-  'expiresAt',
-  'identifier',
-  'lastPolledAt',
-  'pollingInterval',
-  'scope',
-  'status',
-  'token',
-  'updatedAt',
-  'userCode',
-  'userId',
-  'value',
-]);
+const protocolStateFields = betterAuthSetFromStrings(
+  [
+    'challenge',
+    'clientId',
+    'code',
+    'createdAt',
+    'deviceCode',
+    'expiresAt',
+    'identifier',
+    'lastPolledAt',
+    'pollingInterval',
+    'scope',
+    'status',
+    'token',
+    'updatedAt',
+    'userCode',
+    'userId',
+    'value',
+  ],
+  'Better Auth protocol-state fields',
+);
 
 function formatBetterAuthSchemaDomainAnnotation(
   annotation: BetterAuthSchemaBridgeDomainAnnotation,
@@ -1295,17 +1608,22 @@ function betterAuthObservedSchemaAnnotation(
   );
   const classifiedSecret = betterAuthCredentialSecretFields(fields);
   const secret: string[] = [];
-  const seen = new Set<string>();
+  const seen = betterAuthCreateSet<string>();
   for (let index = 0; index < staticSecret.length; index += 1) {
     const column = staticSecret[index]!;
     betterAuthArrayAppend(secret, column, 'Better Auth schema secret fields');
-    seen.add(column);
+    betterAuthSetAdd(seen, column);
   }
 
-  for (const column of classifiedSecret) {
-    if (seen.has(column)) continue;
+  const classified = betterAuthSnapshotDenseArray(
+    classifiedSecret,
+    'Better Auth classified schema secret fields',
+  );
+  for (let index = 0; index < classified.length; index += 1) {
+    const column = classified[index]!;
+    if (betterAuthSetHas(seen, column)) continue;
     betterAuthArrayAppend(secret, column, 'Better Auth schema secret fields');
-    seen.add(column);
+    betterAuthSetAdd(seen, column);
   }
 
   return secret.length === 0 ? annotation : { ...annotation, secret };
@@ -1327,55 +1645,105 @@ function withBetterAuthSecretFields(
 // The rule is now POSITIVE and fail-closed: a plugin column whose final name segment is a
 // credential noun defaults to `secret:` unless the author explicitly annotates it non-secret. New
 // credential-shaped columns are classified secret by default rather than requiring a name edit.
-const betterAuthCredentialColumnNouns = new Set<string>([
-  'apikey',
-  'apisecret',
-  'backupcode',
-  'backupcodes',
-  'certificate',
-  'code',
-  'codes',
-  'credential',
-  'credentials',
-  'hash',
-  'key',
-  'keys',
-  'otp',
-  'passcode',
-  'passphrase',
-  'password',
-  'pin',
-  'privatekey',
-  'salt',
-  'secret',
-  'secrets',
-  'seed',
-  'signature',
-  'token',
-  'tokens',
-]);
+const betterAuthCredentialColumnNouns = betterAuthSetFromStrings(
+  [
+    'apikey',
+    'apisecret',
+    'backupcode',
+    'backupcodes',
+    'certificate',
+    'code',
+    'codes',
+    'credential',
+    'credentials',
+    'hash',
+    'key',
+    'keys',
+    'otp',
+    'passcode',
+    'passphrase',
+    'password',
+    'pin',
+    'privatekey',
+    'salt',
+    'secret',
+    'secrets',
+    'seed',
+    'signature',
+    'token',
+    'tokens',
+  ],
+  'Better Auth credential column nouns',
+);
 
 /**
  * @internal Split a Better Auth column name into lowercased word segments across camelCase and
  * non-alphanumeric boundaries. `refreshTokenExpiresAt` → `[refresh, token, expires, at]`.
  */
 function betterAuthColumnSegments(column: string): string[] {
-  const split = column
-    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
-    .replace(/([A-Z]+)([A-Z][a-z])/g, '$1 $2')
-    .split(/[^A-Za-z0-9]+/);
-  const snapshot = betterAuthSnapshotDenseArray(split, 'Better Auth credential column segments');
   const segments: string[] = [];
-  for (let index = 0; index < snapshot.length; index += 1) {
-    const segment = snapshot[index]!;
-    if (segment.length === 0) continue;
-    betterAuthArrayAppend(
-      segments,
-      betterAuthToLowerCase(segment),
-      'Better Auth credential column segments',
-    );
+  let segmentStart = -1;
+  for (let index = 0; index < column.length; index += 1) {
+    const code = betterAuthCharacterCodeAt(column, index);
+    const alphanumeric = isAsciiAlphaNumericCode(code);
+    if (!alphanumeric) {
+      if (segmentStart >= 0) {
+        appendBetterAuthColumnSegment(segments, column, segmentStart, index);
+        segmentStart = -1;
+      }
+      continue;
+    }
+
+    if (segmentStart < 0) {
+      segmentStart = index;
+      continue;
+    }
+
+    const previousCode = betterAuthCharacterCodeAt(column, index - 1);
+    const nextCode = index + 1 < column.length ? betterAuthCharacterCodeAt(column, index + 1) : -1;
+    const camelBoundary =
+      isAsciiUpperCode(code) &&
+      (isAsciiLowerCode(previousCode) ||
+        isAsciiDigitCode(previousCode) ||
+        (isAsciiUpperCode(previousCode) && isAsciiLowerCode(nextCode)));
+    if (camelBoundary) {
+      appendBetterAuthColumnSegment(segments, column, segmentStart, index);
+      segmentStart = index;
+    }
   }
+  if (segmentStart >= 0)
+    appendBetterAuthColumnSegment(segments, column, segmentStart, column.length);
   return segments;
+}
+
+function appendBetterAuthColumnSegment(
+  segments: string[],
+  column: string,
+  start: number,
+  end: number,
+): void {
+  if (end <= start) return;
+  betterAuthArrayAppend(
+    segments,
+    betterAuthToLowerCase(betterAuthSlice(column, start, end)),
+    'Better Auth credential column segments',
+  );
+}
+
+function isAsciiUpperCode(code: number): boolean {
+  return code >= 0x41 && code <= 0x5a;
+}
+
+function isAsciiLowerCode(code: number): boolean {
+  return code >= 0x61 && code <= 0x7a;
+}
+
+function isAsciiDigitCode(code: number): boolean {
+  return code >= 0x30 && code <= 0x39;
+}
+
+function isAsciiAlphaNumericCode(code: number): boolean {
+  return isAsciiUpperCode(code) || isAsciiLowerCode(code) || isAsciiDigitCode(code);
 }
 
 /**
@@ -1390,7 +1758,7 @@ export function isBetterAuthCredentialShapedColumn(column: string): boolean {
   const segments = betterAuthColumnSegments(column);
   if (segments.length === 0) return false;
   const last = segments[segments.length - 1];
-  return last !== undefined && betterAuthCredentialColumnNouns.has(last);
+  return last !== undefined && betterAuthSetHas(betterAuthCredentialColumnNouns, last);
 }
 
 /**
@@ -1401,7 +1769,9 @@ export function isBetterAuthCredentialShapedColumn(column: string): boolean {
  */
 export function betterAuthCredentialSecretFields(fields: ReadonlySet<string>): readonly string[] {
   const secretFields: string[] = [];
-  for (const field of fields) {
+  const fieldValues = betterAuthSetValues(fields, 'Better Auth credential candidate fields');
+  for (let index = 0; index < fieldValues.length; index += 1) {
+    const field = fieldValues[index]!;
     if (isBetterAuthCredentialShapedColumn(field))
       betterAuthArrayAppend(secretFields, field, 'Better Auth credential-shaped secret fields');
   }
@@ -1446,36 +1816,65 @@ export const betterAuthKnownReadablePluginColumns = [
   'userId',
 ] as const;
 
-const betterAuthSchemaTableNames = new Set<string>(Object.keys(betterAuthSchemaBridge));
+const betterAuthSchemaTableNames = betterAuthSetFromStrings(
+  betterAuthObjectKeys(betterAuthSchemaBridge, 'Better Auth built-in schema table names'),
+  'Better Auth built-in schema table names',
+);
 
 function betterAuthSchemaBridgeAnnotation(
   table: string,
   schemaBridge: BetterAuthSchemaBridgeExtensions = betterAuthSchemaBridge,
 ): BetterAuthSchemaBridgeAnnotation | undefined {
-  return schemaBridge[table];
+  return betterAuthOwnDataValue(schemaBridge, table, 'Better Auth schema bridge') as
+    | BetterAuthSchemaBridgeAnnotation
+    | undefined;
 }
 
 function createBetterAuthSchemaBridge(
   extensions: BetterAuthSchemaBridgeExtensions = {},
 ): BetterAuthSchemaBridgeExtensions {
-  return {
-    ...extensions,
-    ...betterAuthSchemaBridge,
-  };
+  const bridge: BetterAuthSchemaBridgeExtensions = {};
+  const extensionTables = betterAuthObjectKeys(extensions, 'Better Auth schema bridge extensions');
+  for (let index = 0; index < extensionTables.length; index += 1) {
+    const table = extensionTables[index]!;
+    const annotation = betterAuthOwnDataValue(
+      extensions,
+      table,
+      'Better Auth schema bridge extensions',
+    );
+    betterAuthDefineOwnData(bridge, table, annotation, 'Better Auth schema bridge extensions');
+  }
+  const builtInTables = betterAuthObjectKeys(
+    betterAuthSchemaBridge,
+    'Better Auth built-in schema bridge',
+  );
+  for (let index = 0; index < builtInTables.length; index += 1) {
+    const table = builtInTables[index]!;
+    const annotation = betterAuthOwnDataValue(
+      betterAuthSchemaBridge,
+      table,
+      'Better Auth built-in schema bridge',
+    );
+    betterAuthDefineOwnData(bridge, table, annotation, 'Better Auth built-in schema bridge');
+  }
+  return bridge;
 }
 
 function schemaBridgeExtensionCollisionMismatches(
   extensions: BetterAuthSchemaBridgeExtensions = {},
 ): string[] {
-  const builtInTables = new Set(Object.keys(betterAuthSchemaBridge));
+  const builtInTables = betterAuthSetFromStrings(
+    betterAuthObjectKeys(betterAuthSchemaBridge, 'Better Auth built-in schema table names'),
+    'Better Auth built-in schema table names',
+  );
   const collisions: string[] = [];
   const extensionTables = betterAuthSnapshotDenseArray(
-    Object.keys(extensions),
+    betterAuthObjectKeys(extensions, 'Better Auth schema-bridge extension table names'),
     'Better Auth schema-bridge extension table names',
   );
   for (let index = 0; index < extensionTables.length; index += 1) {
     const table = extensionTables[index]!;
-    if (!builtInTables.has(table)) continue;
+    if (!betterAuthSetHas(builtInTables, table)) continue;
     betterAuthArrayAppend(
       collisions,
       `${table} is a blessed Better Auth schema-bridge table; extension entries may only add plugin tables outside the built-in bridge`,
@@ -1486,7 +1885,7 @@ function schemaBridgeExtensionCollisionMismatches(
 }
 
 function betterAuthPhysicalTableNames(table: string, tables: Record<string, unknown>): string[] {
-  const physicalName = betterAuthPhysicalTableName(table, tables[table]);
+  const physicalName = betterAuthPhysicalTableName(table, betterAuthTableMetadata(tables, table));
 
   return physicalName === table ? [table] : [table, physicalName];
 }
@@ -1494,7 +1893,7 @@ function betterAuthPhysicalTableNames(table: string, tables: Record<string, unkn
 function betterAuthPhysicalTableName(table: string, metadata: unknown): string {
   if (!metadata || typeof metadata !== 'object') return table;
 
-  const modelName = (metadata as { modelName?: unknown }).modelName;
+  const modelName = betterAuthOwnDataValue(metadata, 'modelName', 'Better Auth table metadata');
 
   return typeof modelName === 'string' && modelName.length > 0 ? modelName : table;
 }
@@ -1503,13 +1902,18 @@ function betterAuthMetadataTableByPhysicalName(
   tables: Record<string, unknown>,
   schemaBridge: BetterAuthSchemaBridgeExtensions = betterAuthSchemaBridge,
 ): Map<string, string> {
-  const tableByPhysicalName = new Map<string, string>();
+  const tableByPhysicalName = betterAuthCreateMap<string, string>();
   const physicalTableGroups = betterAuthPhysicalTableNameGroups(tables, schemaBridge);
 
-  for (const [physicalTable, logicalTables] of physicalTableGroups) {
+  const groups = betterAuthMapEntries(
+    physicalTableGroups,
+    'Better Auth physical-to-logical table groups',
+  );
+  for (let index = 0; index < groups.length; index += 1) {
+    const [physicalTable, logicalTables] = groups[index]!;
     if (logicalTables.length !== 1) continue;
 
-    tableByPhysicalName.set(physicalTable, logicalTables[0] ?? physicalTable);
+    betterAuthMapSet(tableByPhysicalName, physicalTable, logicalTables[0] ?? physicalTable);
   }
 
   return tableByPhysicalName;
@@ -1519,15 +1923,21 @@ function betterAuthPhysicalTableNameGroups(
   tables: Record<string, unknown>,
   schemaBridge: BetterAuthSchemaBridgeExtensions = betterAuthSchemaBridge,
 ): Map<string, string[]> {
-  const physicalTables = new Map<string, string[]>();
+  const physicalTables = betterAuthCreateMap<string, string[]>();
 
-  for (const table of Object.keys(tables)) {
+  const tableNames = betterAuthObjectKeys(tables, 'Better Auth metadata table names');
+  for (let index = 0; index < tableNames.length; index += 1) {
+    const table = tableNames[index]!;
     if (!isBetterAuthSchemaTable(table, schemaBridge)) continue;
 
-    const physicalTable = betterAuthPhysicalTableName(table, tables[table]);
-    const logicalTables = physicalTables.get(physicalTable) ?? [];
+    const physicalTable = betterAuthPhysicalTableName(
+      table,
+      betterAuthTableMetadata(tables, table),
+    );
+    const logicalTables = betterAuthMapGet(physicalTables, physicalTable) ?? [];
     betterAuthArrayAppend(logicalTables, table, `Better Auth ${physicalTable} logical table names`);
-    physicalTables.set(
+    betterAuthMapSet(
+      physicalTables,
       physicalTable,
       sortedBetterAuthStrings(logicalTables, `Better Auth ${physicalTable} logical table names`),
     );
@@ -1540,26 +1950,36 @@ function orderedBetterAuthMetadataTables(
   tables: Record<string, unknown>,
   schemaBridge: BetterAuthSchemaBridgeExtensions = betterAuthSchemaBridge,
 ): string[] {
-  return Object.keys(tables)
-    .filter((table) => isBetterAuthSchemaTable(table, schemaBridge))
-    .sort((left, right) => {
-      const leftOrder = betterAuthTableOrder(tables[left]);
-      const rightOrder = betterAuthTableOrder(tables[right]);
-
-      return leftOrder === rightOrder
-        ? betterAuthPhysicalTableName(left, tables[left]).localeCompare(
-            betterAuthPhysicalTableName(right, tables[right]),
-          )
-        : leftOrder - rightOrder;
-    });
+  const tableNames = betterAuthObjectKeys(tables, 'Better Auth metadata table names');
+  const ordered: string[] = [];
+  for (let index = 0; index < tableNames.length; index += 1) {
+    const table = tableNames[index]!;
+    if (!isBetterAuthSchemaTable(table, schemaBridge)) continue;
+    betterAuthArrayAppend(ordered, table, 'Better Auth ordered metadata tables');
+    let insertion = ordered.length - 1;
+    while (
+      insertion > 0 &&
+      compareBetterAuthMetadataTables(ordered[insertion - 1]!, table, tables) > 0
+    ) {
+      betterAuthDefineOwnData(
+        ordered,
+        insertion,
+        ordered[insertion - 1]!,
+        'Better Auth ordered metadata tables',
+      );
+      insertion -= 1;
+    }
+    betterAuthDefineOwnData(ordered, insertion, table, 'Better Auth ordered metadata tables');
+  }
+  return ordered;
 }
 
 function betterAuthTableOrder(metadata: unknown): number {
-  if (!metadata || typeof metadata !== 'object') return Number.POSITIVE_INFINITY;
+  if (!metadata || typeof metadata !== 'object') return Infinity;
 
-  const order = (metadata as { order?: unknown }).order;
+  const order = betterAuthOwnDataValue(metadata, 'order', 'Better Auth table metadata');
 
-  return typeof order === 'number' ? order : Number.POSITIVE_INFINITY;
+  return typeof order === 'number' ? order : Infinity;
 }
 
 interface BetterAuthSchemaSourceArgument {
@@ -1634,15 +2054,28 @@ function betterAuthGeneratedSchemaColumns(
     };
   }
 
-  const idColumn = betterAuthGeneratedSchemaIdColumn(table, physicalTable, fields.id, dialect);
+  const idColumn = betterAuthGeneratedSchemaIdColumn(
+    table,
+    physicalTable,
+    betterAuthOwnDataValue(fields, 'id', 'Better Auth generated schema fields'),
+    dialect,
+  );
 
   if ('degradation' in idColumn) return idColumn;
 
   const columns = [idColumn.column];
-  const builders = new Set<BetterAuthGeneratedSchemaFieldBuilder>([idColumn.builder]);
+  const builders = betterAuthCreateSet<BetterAuthGeneratedSchemaFieldBuilder>();
+  betterAuthSetAdd(builders, idColumn.builder);
 
-  for (const [field, fieldMetadata] of Object.entries(fields)) {
+  const fieldNames = betterAuthObjectKeys(fields, 'Better Auth generated schema fields');
+  for (let fieldIndex = 0; fieldIndex < fieldNames.length; fieldIndex += 1) {
+    const field = fieldNames[fieldIndex]!;
     if (field === 'id') continue;
+    const fieldMetadata = betterAuthOwnDataValue(
+      fields,
+      field,
+      'Better Auth generated schema fields',
+    );
 
     const column = betterAuthGeneratedSchemaColumn(
       table,
@@ -1654,8 +2087,8 @@ function betterAuthGeneratedSchemaColumns(
 
     if ('degradation' in column) return column;
 
-    builders.add(column.builder);
-    columns.push(column.column);
+    betterAuthSetAdd(builders, column.builder);
+    betterAuthArrayAppend(columns, column.column, 'Better Auth generated schema columns');
   }
 
   return { builders, columns };
@@ -1699,9 +2132,9 @@ function betterAuthGeneratedSchemaIdColumn(
         message: `${betterAuthTableLabel(
           table,
           physicalTable,
-        )} cannot be generated because field id has unsupported Better Auth type ${String(
-          type ?? 'unavailable',
-        )}.`,
+        )} cannot be generated because field id has unsupported Better Auth type ${
+          type ?? 'unavailable'
+        }.`,
         physicalTable,
         reason: 'unsupported-field-type',
         table,
@@ -1749,9 +2182,9 @@ function betterAuthGeneratedSchemaColumn(
         message: `${betterAuthTableLabel(
           table,
           physicalTable,
-        )} cannot be generated because field ${field} has unsupported Better Auth type ${String(
-          type ?? 'unavailable',
-        )}.`,
+        )} cannot be generated because field ${field} has unsupported Better Auth type ${
+          type ?? 'unavailable'
+        }.`,
         physicalTable,
         reason: 'unsupported-field-type',
         table,
@@ -1779,9 +2212,9 @@ function betterAuthGeneratedSchemaColumn(
 function betterAuthTableFields(metadata: unknown): Record<string, unknown> | null {
   if (!metadata || typeof metadata !== 'object') return null;
 
-  const fields = (metadata as { fields?: unknown }).fields;
+  const fields = betterAuthOwnDataValue(metadata, 'fields', 'Better Auth table metadata');
 
-  if (!fields || typeof fields !== 'object' || Array.isArray(fields)) return null;
+  if (!fields || typeof fields !== 'object' || betterAuthArrayIsArray(fields)) return null;
 
   return fields as Record<string, unknown>;
 }
@@ -1789,7 +2222,7 @@ function betterAuthTableFields(metadata: unknown): Record<string, unknown> | nul
 function betterAuthFieldType(metadata: unknown): string | null {
   if (!metadata || typeof metadata !== 'object') return null;
 
-  const type = (metadata as { type?: unknown }).type;
+  const type = betterAuthOwnDataValue(metadata, 'type', 'Better Auth field metadata');
 
   return typeof type === 'string' ? type : null;
 }
@@ -1840,15 +2273,28 @@ function isBetterAuthGeneratedSchemaFieldType(
 function renderBetterAuthGeneratedSchemaDeclaration(
   declaration: BetterAuthGeneratedSchemaDeclarationIr,
 ): string {
-  return [
+  const lines = [
     `export const ${declaration.exportName} = ${declaration.tableFactory}(${quoteTsString(
       declaration.physicalTable,
     )}, {`,
-    ...declaration.columns.map(
-      (column) => `  ${renderBetterAuthGeneratedSchemaColumn(column, declaration.dialect)}`,
-    ),
+  ];
+  const columns = betterAuthSnapshotDenseArray(
+    declaration.columns,
+    'Better Auth generated schema declaration columns',
+  );
+  for (let index = 0; index < columns.length; index += 1) {
+    betterAuthArrayAppend(
+      lines,
+      `  ${renderBetterAuthGeneratedSchemaColumn(columns[index]!, declaration.dialect)}`,
+      'Better Auth generated schema declaration lines',
+    );
+  }
+  betterAuthArrayAppend(
+    lines,
     `}, ${declaration.annotationCall});`,
-  ].join('\n');
+    'Better Auth generated schema declaration lines',
+  );
+  return joinBetterAuthStrings(lines, '\n', 'Better Auth generated schema declaration lines');
 }
 
 function renderBetterAuthGeneratedSchemaColumn(
@@ -1881,12 +2327,16 @@ function betterAuthGeneratedSchemaColumnExpression(
 function betterAuthFieldName(field: string, metadata: unknown): string {
   if (!metadata || typeof metadata !== 'object') return field;
 
-  const fieldName = (metadata as { fieldName?: unknown }).fieldName;
+  const fieldName = betterAuthOwnDataValue(metadata, 'fieldName', 'Better Auth field metadata');
 
   if (typeof fieldName === 'string' && fieldName.length > 0) return fieldName;
 
   if (fieldName && typeof fieldName === 'object') {
-    const nestedFieldName = (fieldName as { fieldName?: unknown }).fieldName;
+    const nestedFieldName = betterAuthOwnDataValue(
+      fieldName,
+      'fieldName',
+      'Better Auth nested field metadata',
+    );
 
     if (typeof nestedFieldName === 'string' && nestedFieldName.length > 0) {
       return nestedFieldName;
@@ -1899,7 +2349,7 @@ function betterAuthFieldName(field: string, metadata: unknown): string {
 function betterAuthFieldRequired(metadata: unknown): boolean {
   if (!metadata || typeof metadata !== 'object') return false;
 
-  return (metadata as { required?: unknown }).required === true;
+  return betterAuthOwnDataValue(metadata, 'required', 'Better Auth field metadata') === true;
 }
 
 function generatedSchemaTableDegradation(options: {
@@ -1913,7 +2363,13 @@ function generatedSchemaTableDegradation(options: {
   return {
     diagnosticCode: 'KV406',
     ...(options.field === undefined ? {} : { field: options.field }),
-    fields: options.fields === null ? null : [...options.fields].sort(),
+    fields:
+      options.fields === null
+        ? null
+        : sortedBetterAuthStrings(
+            betterAuthSetValues(options.fields, 'Better Auth generated schema degradation fields'),
+            'Better Auth generated schema degradation fields',
+          ),
     manualBridgeSteps: generatedSchemaTableManualBridgeSteps(
       options.table,
       options.physicalTable,
@@ -1955,12 +2411,12 @@ function uniqueBetterAuthSchemaExportName(table: string, usedNames: Set<string>)
   let name = baseName;
   let index = 2;
 
-  while (usedNames.has(name)) {
+  while (betterAuthSetHas(usedNames, name)) {
     name = `${baseName}${index}`;
     index += 1;
   }
 
-  usedNames.add(name);
+  betterAuthSetAdd(usedNames, name);
 
   return name;
 }
@@ -1968,10 +2424,41 @@ function uniqueBetterAuthSchemaExportName(table: string, usedNames: Set<string>)
 function betterAuthSchemaExportIdentifier(table: string): string {
   if (isValidTypeScriptIdentifier(table) && !isReservedTypeScriptIdentifier(table)) return table;
 
-  const words = table.split(/[^0-9A-Za-z_$]+/).filter((word) => word.length > 0);
-  const suffix = words.map((word) => `${word[0]?.toUpperCase() ?? ''}${word.slice(1)}`).join('');
+  const words = splitBetterAuthIdentifierWords(table);
+  let suffix = '';
+  for (let index = 0; index < words.length; index += 1) {
+    const word = words[index]!;
+    suffix += `${betterAuthToUpperCase(betterAuthSlice(word, 0, 1))}${betterAuthSlice(word, 1)}`;
+  }
 
   return suffix.length === 0 ? 'betterAuthTable' : `betterAuth${suffix}`;
+}
+
+function splitBetterAuthIdentifierWords(value: string): string[] {
+  const words: string[] = [];
+  let start = -1;
+  for (let index = 0; index < value.length; index += 1) {
+    if (isIdentifierCharacter(value[index])) {
+      if (start < 0) start = index;
+      continue;
+    }
+    if (start >= 0) {
+      betterAuthArrayAppend(
+        words,
+        betterAuthSlice(value, start, index),
+        'Better Auth schema export identifier words',
+      );
+      start = -1;
+    }
+  }
+  if (start >= 0) {
+    betterAuthArrayAppend(
+      words,
+      betterAuthSlice(value, start),
+      'Better Auth schema export identifier words',
+    );
+  }
+  return words;
 }
 
 function betterAuthSchemaObjectPropertyName(value: string): string {
@@ -1981,71 +2468,88 @@ function betterAuthSchemaObjectPropertyName(value: string): string {
 }
 
 function isValidTypeScriptIdentifier(value: string): boolean {
-  return /^[A-Za-z_$][0-9A-Za-z_$]*$/.test(value);
+  if (value.length === 0 || !isIdentifierStart(value[0])) return false;
+  for (let index = 1; index < value.length; index += 1) {
+    if (!isIdentifierCharacter(value[index])) return false;
+  }
+  return true;
 }
 
-const reservedTypeScriptIdentifiers = new Set([
-  'break',
-  'case',
-  'catch',
-  'class',
-  'const',
-  'continue',
-  'debugger',
-  'default',
-  'delete',
-  'do',
-  'else',
-  'enum',
-  'export',
-  'extends',
-  'false',
-  'finally',
-  'for',
-  'function',
-  'if',
-  'import',
-  'in',
-  'instanceof',
-  'new',
-  'null',
-  'return',
-  'super',
-  'switch',
-  'this',
-  'throw',
-  'true',
-  'try',
-  'typeof',
-  'var',
-  'void',
-  'while',
-  'with',
-]);
+const reservedTypeScriptIdentifiers = betterAuthSetFromStrings(
+  [
+    'break',
+    'case',
+    'catch',
+    'class',
+    'const',
+    'continue',
+    'debugger',
+    'default',
+    'delete',
+    'do',
+    'else',
+    'enum',
+    'export',
+    'extends',
+    'false',
+    'finally',
+    'for',
+    'function',
+    'if',
+    'import',
+    'in',
+    'instanceof',
+    'new',
+    'null',
+    'return',
+    'super',
+    'switch',
+    'this',
+    'throw',
+    'true',
+    'try',
+    'typeof',
+    'var',
+    'void',
+    'while',
+    'with',
+  ],
+  'Better Auth reserved TypeScript identifiers',
+);
 
 function isReservedTypeScriptIdentifier(value: string): boolean {
-  return reservedTypeScriptIdentifiers.has(value);
+  return betterAuthSetHas(reservedTypeScriptIdentifiers, value);
 }
 
 function isBetterAuthSchemaTable(
   table: string,
   schemaBridge: BetterAuthSchemaBridgeExtensions = betterAuthSchemaBridge,
 ): boolean {
-  return betterAuthSchemaTableNames.has(table) || schemaBridge[table] !== undefined;
+  return (
+    betterAuthSetHas(betterAuthSchemaTableNames, table) ||
+    betterAuthOwnDataValue(schemaBridge, table, 'Better Auth schema bridge') !== undefined
+  );
 }
 
 function sortedBetterAuthTables(tables: readonly string[]): string[] {
-  return [...new Set(tables)].sort();
+  return sortedUniqueBetterAuthStrings(tables, 'Better Auth table names');
 }
 
 function duplicateDrizzleTableNames(calls: readonly DrizzleTableCall[]): Set<string> {
-  const counts = new Map<string, number>();
-
-  for (const call of calls) {
-    counts.set(call.tableName, (counts.get(call.tableName) ?? 0) + 1);
+  const counts = betterAuthCreateMap<string, number>();
+  const callSnapshot = betterAuthSnapshotDenseArray(calls, 'Better Auth schema table calls');
+  for (let index = 0; index < callSnapshot.length; index += 1) {
+    const call = callSnapshot[index]!;
+    betterAuthMapSet(counts, call.tableName, (betterAuthMapGet(counts, call.tableName) ?? 0) + 1);
   }
 
-  return new Set([...counts].filter(([, count]) => count > 1).map(([tableName]) => tableName));
+  const duplicates = betterAuthCreateSet<string>();
+  const entries = betterAuthMapEntries(counts, 'Better Auth schema table counts');
+  for (let index = 0; index < entries.length; index += 1) {
+    const [tableName, count] = entries[index]!;
+    if (count > 1) betterAuthSetAdd(duplicates, tableName);
+  }
+  return duplicates;
 }
 
 function duplicateBetterAuthSourceTableNames(
@@ -2053,13 +2557,19 @@ function duplicateBetterAuthSourceTableNames(
   metadataTables: ReadonlySet<string>,
   metadataTableByPhysicalName: ReadonlyMap<string, string>,
 ): Set<string> {
-  return new Set(
-    [...duplicateTableNames].filter((tableName) => {
-      const metadataTable = metadataTableByPhysicalName.get(tableName);
-
-      return metadataTable === undefined ? false : metadataTables.has(metadataTable);
-    }),
+  const duplicates = betterAuthCreateSet<string>();
+  const tableNames = betterAuthSetValues(
+    duplicateTableNames,
+    'Better Auth duplicate schema source tables',
   );
+  for (let index = 0; index < tableNames.length; index += 1) {
+    const tableName = tableNames[index]!;
+    const metadataTable = betterAuthMapGet(metadataTableByPhysicalName, tableName);
+    if (metadataTable !== undefined && betterAuthSetHas(metadataTables, metadataTable)) {
+      betterAuthSetAdd(duplicates, tableName);
+    }
+  }
+  return duplicates;
 }
 
 function unrecognizedBetterAuthSourceTableDeclarations(
@@ -2068,28 +2578,40 @@ function unrecognizedBetterAuthSourceTableDeclarations(
   metadataTables: ReadonlySet<string>,
   metadataTableByPhysicalName: ReadonlyMap<string, string>,
 ): BetterAuthSchemaSourceDeclarationDegradation[] {
-  const recognizedPhysicalTables = new Set(recognizedCalls.map((call) => call.tableName));
-  const seen = new Set<string>();
+  const recognizedPhysicalTables = betterAuthCreateSet<string>();
+  const recognizedSnapshot = betterAuthSnapshotDenseArray(
+    recognizedCalls,
+    'Better Auth recognized schema source calls',
+  );
+  for (let index = 0; index < recognizedSnapshot.length; index += 1) {
+    betterAuthSetAdd(recognizedPhysicalTables, recognizedSnapshot[index]!.tableName);
+  }
+  const seen = betterAuthCreateSet<string>();
   const degradations: BetterAuthSchemaSourceDeclarationDegradation[] = [];
 
-  for (const candidate of candidates) {
-    if (recognizedPhysicalTables.has(candidate.tableName)) continue;
+  const candidateSnapshot = betterAuthSnapshotDenseArray(
+    candidates,
+    'Better Auth schema source table candidates',
+  );
+  for (let index = 0; index < candidateSnapshot.length; index += 1) {
+    const candidate = candidateSnapshot[index]!;
+    if (betterAuthSetHas(recognizedPhysicalTables, candidate.tableName)) continue;
 
-    const table = metadataTableByPhysicalName.get(candidate.tableName);
-    if (table === undefined || !metadataTables.has(table)) continue;
+    const table = betterAuthMapGet(metadataTableByPhysicalName, candidate.tableName);
+    if (table === undefined || !betterAuthSetHas(metadataTables, table)) continue;
 
     const key = `${candidate.tableName}\0${candidate.callee}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
+    if (betterAuthSetHas(seen, key)) continue;
+    betterAuthSetAdd(seen, key);
 
-    degradations.push(unrecognizedSchemaTableDeclarationDegradation(table, candidate));
+    betterAuthArrayAppend(
+      degradations,
+      unrecognizedSchemaTableDeclarationDegradation(table, candidate),
+      'Better Auth unrecognized schema source tables',
+    );
   }
 
-  return degradations.sort((left, right) =>
-    left.table === right.table
-      ? left.callee.localeCompare(right.callee)
-      : left.table.localeCompare(right.table),
-  );
+  return sortedBetterAuthSourceDeclarationDegradations(degradations);
 }
 
 function unsupportedBetterAuthSourceTableDeclarations(
@@ -2098,46 +2620,76 @@ function unsupportedBetterAuthSourceTableDeclarations(
   pluginTableDegradations: readonly BetterAuthPluginTableDegradation[],
   tables: Record<string, unknown>,
 ): BetterAuthSchemaSourcePluginTableDegradation[] {
-  const recognizedSourceCalls = new Set(
-    recognizedCalls.map((call) => sourceTableDeclarationKey(call.tableName, call.callee)),
+  const recognizedSourceCalls = betterAuthCreateSet<string>();
+  const recognizedSnapshot = betterAuthSnapshotDenseArray(
+    recognizedCalls,
+    'Better Auth recognized schema source calls',
   );
-  const degradationsByPhysicalName = new Map<string, BetterAuthPluginTableDegradation[]>();
-  const seen = new Set<string>();
+  for (let index = 0; index < recognizedSnapshot.length; index += 1) {
+    const call = recognizedSnapshot[index]!;
+    betterAuthSetAdd(recognizedSourceCalls, sourceTableDeclarationKey(call.tableName, call.callee));
+  }
+  const degradationsByPhysicalName = betterAuthCreateMap<
+    string,
+    BetterAuthPluginTableDegradation[]
+  >();
+  const seen = betterAuthCreateSet<string>();
   const degradations: BetterAuthSchemaSourcePluginTableDegradation[] = [];
 
-  for (const degradation of pluginTableDegradations) {
-    const physicalTable = betterAuthPhysicalTableName(degradation.table, tables[degradation.table]);
-    const tableDegradations = degradationsByPhysicalName.get(physicalTable) ?? [];
-    tableDegradations.push(degradation);
-    degradationsByPhysicalName.set(physicalTable, tableDegradations);
+  const pluginDegradations = betterAuthSnapshotDenseArray(
+    pluginTableDegradations,
+    'Better Auth plugin table degradations',
+  );
+  for (let index = 0; index < pluginDegradations.length; index += 1) {
+    const degradation = pluginDegradations[index]!;
+    const physicalTable = betterAuthPhysicalTableName(
+      degradation.table,
+      betterAuthTableMetadata(tables, degradation.table),
+    );
+    const tableDegradations = betterAuthMapGet(degradationsByPhysicalName, physicalTable) ?? [];
+    betterAuthArrayAppend(
+      tableDegradations,
+      degradation,
+      'Better Auth physical plugin table degradations',
+    );
+    betterAuthMapSet(degradationsByPhysicalName, physicalTable, tableDegradations);
   }
 
-  for (const candidate of candidates) {
-    const tableDegradations = degradationsByPhysicalName.get(candidate.tableName);
+  const candidateSnapshot = betterAuthSnapshotDenseArray(
+    candidates,
+    'Better Auth schema source table candidates',
+  );
+  for (let candidateIndex = 0; candidateIndex < candidateSnapshot.length; candidateIndex += 1) {
+    const candidate = candidateSnapshot[candidateIndex]!;
+    const tableDegradations = betterAuthMapGet(degradationsByPhysicalName, candidate.tableName);
     if (tableDegradations === undefined) continue;
 
-    const sourceFactory = recognizedSourceCalls.has(
+    const sourceFactory = betterAuthSetHas(
+      recognizedSourceCalls,
       sourceTableDeclarationKey(candidate.tableName, candidate.callee),
     )
       ? 'recognized-drizzle-table'
       : 'unrecognized-table-factory';
 
-    for (const degradation of tableDegradations) {
+    const tableDegradationSnapshot = betterAuthSnapshotDenseArray(
+      tableDegradations,
+      'Better Auth physical plugin table degradations',
+    );
+    for (let index = 0; index < tableDegradationSnapshot.length; index += 1) {
+      const degradation = tableDegradationSnapshot[index]!;
       const key = `${candidate.tableName}\0${candidate.callee}\0${degradation.table}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
+      if (betterAuthSetHas(seen, key)) continue;
+      betterAuthSetAdd(seen, key);
 
-      degradations.push(
+      betterAuthArrayAppend(
+        degradations,
         unsupportedSchemaSourcePluginTableDegradation(degradation, candidate, sourceFactory),
+        'Better Auth unsupported schema source plugin tables',
       );
     }
   }
 
-  return degradations.sort((left, right) =>
-    left.table === right.table
-      ? left.callee.localeCompare(right.callee)
-      : left.table.localeCompare(right.table),
-  );
+  return sortedBetterAuthSourcePluginDegradations(degradations);
 }
 
 function sourceTableDeclarationKey(tableName: string, callee: string): string {
@@ -2154,18 +2706,29 @@ function unsupportedSchemaSourcePluginTableDegradation(
     sourceFactory === 'recognized-drizzle-table'
       ? `recognized Drizzle table factory ${call.callee}`
       : `unrecognized table factory ${call.callee}`;
+  const manualBridgeSteps = [
+    `${betterAuthTableLabel(
+      degradation.table,
+      physicalTable,
+    )} appears in schema.ts through ${factoryLabel}; the Better Auth adapter left it unannotated because it is outside the blessed schema bridge.`,
+  ];
+  const inheritedSteps = betterAuthSnapshotDenseArray(
+    degradation.manualBridgeSteps,
+    'Better Auth plugin schema-source manual bridge steps',
+  );
+  for (let index = 0; index < inheritedSteps.length; index += 1) {
+    betterAuthArrayAppend(
+      manualBridgeSteps,
+      inheritedSteps[index]!,
+      'Better Auth plugin schema-source manual bridge steps',
+    );
+  }
 
   return {
     callee: call.callee,
     diagnosticCode: 'KV406',
     fields: degradation.fields,
-    manualBridgeSteps: [
-      `${betterAuthTableLabel(
-        degradation.table,
-        physicalTable,
-      )} appears in schema.ts through ${factoryLabel}; the Better Auth adapter left it unannotated because it is outside the blessed schema bridge.`,
-      ...degradation.manualBridgeSteps,
-    ],
+    manualBridgeSteps,
     message: `${betterAuthTableLabel(
       degradation.table,
       physicalTable,
@@ -2223,7 +2786,11 @@ function betterAuthSchemaAnnotationCall(
     const secret =
       annotation.secret === undefined || annotation.secret.length === 0
         ? ''
-        : `, secret: [${annotation.secret.map((column) => quoteTsString(column)).join(', ')}]`;
+        : `, secret: [${joinBetterAuthStrings(
+            quoteTsStrings(annotation.secret),
+            ', ',
+            'Better Auth schema annotation secret fields',
+          )}]`;
 
     return `${annotationCallee}({ domain: ${quoteTsString(annotation.domain)}${key}${secret} })`;
   }
@@ -2251,13 +2818,27 @@ function betterAuthSchemaTableAnnotationReplacement(
   schemaBridge: BetterAuthSchemaBridgeExtensions = betterAuthSchemaBridge,
   fields: ReadonlySet<string> | null = null,
 ): { end: number; start: number; value: string } {
+  const args: string[] = [];
+  const callArguments = betterAuthSnapshotDenseArray(
+    call.arguments,
+    'Better Auth schema source table-call arguments',
+  );
+  for (let index = 0; index < callArguments.length; index += 1) {
+    betterAuthArrayAppend(
+      args,
+      betterAuthTrim(callArguments[index]!.text),
+      'Better Auth schema source table-call arguments',
+    );
+  }
+  betterAuthArrayAppend(
+    args,
+    betterAuthSchemaAnnotationCall(table, annotationCallee, schemaBridge, fields),
+    'Better Auth schema source table-call arguments',
+  );
   return {
     end: call.callEnd,
     start: call.callStart,
-    value: renderBetterAuthSchemaSourceTableCall(call, [
-      ...call.arguments.map((argument) => argument.text.trim()),
-      betterAuthSchemaAnnotationCall(table, annotationCallee, schemaBridge, fields),
-    ]),
+    value: renderBetterAuthSchemaSourceTableCall(call, args),
   };
 }
 
@@ -2265,7 +2846,11 @@ function renderBetterAuthSchemaSourceTableCall(
   call: DrizzleTableCall,
   args: readonly string[],
 ): string {
-  return `${call.callee}(${args.join(', ')})`;
+  return `${call.callee}(${joinBetterAuthStrings(
+    args,
+    ', ',
+    'Better Auth schema source table-call arguments',
+  )})`;
 }
 
 function resolveBetterAuthSchemaAnnotationImport(
@@ -2293,13 +2878,13 @@ function resolveBetterAuthSchemaAnnotationImport(
 }
 
 function uniqueBetterAuthSchemaAnnotationLocalName(localBindings: ReadonlySet<string>): string {
-  if (!localBindings.has('kovo')) return 'kovo';
+  if (!betterAuthSetHas(localBindings, 'kovo')) return 'kovo';
 
   const baseName = 'kovoSchema';
   let localName = baseName;
   let index = 2;
 
-  while (localBindings.has(localName)) {
+  while (betterAuthSetHas(localBindings, localName)) {
     localName = `${baseName}${index}`;
     index += 1;
   }
@@ -2321,7 +2906,7 @@ function betterAuthSchemaImportReplacement(
   const specifier = localName === 'kovo' ? 'kovo' : `kovo as ${localName}`;
 
   if (kovoDrizzleImport !== null) {
-    const existingSpecifiers = kovoDrizzleImport.specifiersText.trim();
+    const existingSpecifiers = betterAuthTrim(kovoDrizzleImport.specifiersText);
     const specifiers =
       existingSpecifiers.length === 0 ? specifier : `${existingSpecifiers}, ${specifier}`;
 
@@ -2357,11 +2942,14 @@ function findNamedImportLocal(
   importedName: string,
   preferredLocalName?: string,
 ): string | null {
-  for (const namedImport of findNamedImports(source)) {
+  const namedImports = findNamedImports(source);
+  for (let importIndex = 0; importIndex < namedImports.length; importIndex += 1) {
+    const namedImport = namedImports[importIndex]!;
     if (stringLiteralValue(namedImport.moduleText) !== moduleName) continue;
 
-    for (const specifier of namedImport.specifiersText.split(',')) {
-      const parsed = namedImportSpecifier(specifier.trim());
+    const specifiers = betterAuthSplit(namedImport.specifiersText, ',');
+    for (let specifierIndex = 0; specifierIndex < specifiers.length; specifierIndex += 1) {
+      const parsed = namedImportSpecifier(betterAuthTrim(specifiers[specifierIndex]!));
       if (parsed?.imported !== importedName) continue;
       if (preferredLocalName !== undefined && parsed.local !== preferredLocalName) continue;
 
@@ -2379,8 +2967,36 @@ interface NamedImportMatch {
   specifiersText: string;
 }
 
+function betterAuthMatchText(match: RegExpExecArray, index: number, label: string): string {
+  const value = betterAuthOwnDataValue(match, index, label);
+  if (typeof value !== 'string') throw new TypeError(`${label}[${index}] must be text.`);
+  return value;
+}
+
+function betterAuthMatchIndex(match: RegExpExecArray, label: string): number {
+  const value = betterAuthOwnDataValue(match, 'index', label);
+  if (typeof value !== 'number' || value < 0 || !betterAuthIsSafeInteger(value)) {
+    throw new TypeError(`${label}.index must be a non-negative safe integer.`);
+  }
+  return value;
+}
+
+function betterAuthMatchGroup(match: RegExpExecArray, name: string, label: string): string {
+  const groups = betterAuthOwnDataValue(match, 'groups', label);
+  if (groups === undefined) return '';
+  if (groups === null || typeof groups !== 'object') {
+    throw new TypeError(`${label}.groups must be an object.`);
+  }
+  const value = betterAuthOwnDataValue(groups, name, `${label}.groups`);
+  if (value === undefined) return '';
+  if (typeof value !== 'string') throw new TypeError(`${label}.groups.${name} must be text.`);
+  return value;
+}
+
 function findNamedImportFromModule(source: string, moduleName: string): NamedImportMatch | null {
-  for (const namedImport of findNamedImports(source)) {
+  const namedImports = findNamedImports(source);
+  for (let index = 0; index < namedImports.length; index += 1) {
+    const namedImport = namedImports[index]!;
     if (stringLiteralValue(namedImport.moduleText) === moduleName) return namedImport;
   }
 
@@ -2391,14 +3007,27 @@ function findNamedImports(source: string): NamedImportMatch[] {
   const imports: NamedImportMatch[] = [];
   const importPattern = /import\s*\{(?<specifiers>[^}]*)\}\s*from\s*(?<module>['"][^'"]+['"])/g;
 
-  for (const match of source.matchAll(importPattern)) {
-    const openBrace = match[0].indexOf('{');
-    imports.push({
-      moduleText: match.groups?.module ?? '',
-      specifiersEnd: match.index + match[0].indexOf('}'),
-      specifiersStart: match.index + openBrace + 1,
-      specifiersText: match.groups?.specifiers ?? '',
-    });
+  const matches = betterAuthRegExpMatches(
+    importPattern,
+    source,
+    'Better Auth named import matches',
+  );
+  for (let index = 0; index < matches.length; index += 1) {
+    const match = matches[index]!;
+    const fullMatch = betterAuthMatchText(match, 0, 'Better Auth named import match');
+    const matchIndex = betterAuthMatchIndex(match, 'Better Auth named import match');
+    const openBrace = betterAuthIndexOf(fullMatch, '{');
+    const closeBrace = betterAuthIndexOf(fullMatch, '}');
+    betterAuthArrayAppend(
+      imports,
+      {
+        moduleText: betterAuthMatchGroup(match, 'module', 'Better Auth named import match'),
+        specifiersEnd: matchIndex + closeBrace,
+        specifiersStart: matchIndex + openBrace + 1,
+        specifiersText: betterAuthMatchGroup(match, 'specifiers', 'Better Auth named import match'),
+      },
+      'Better Auth named imports',
+    );
   }
 
   return imports;
@@ -2414,20 +3043,30 @@ function findNamespaceImports(source: string): NamespaceImportMatch[] {
   const importPattern =
     /import\s+\*\s+as\s+(?<local>[A-Za-z_$][0-9A-Za-z_$]*)\s+from\s*(?<module>['"][^'"]+['"])/g;
 
-  for (const match of source.matchAll(importPattern)) {
-    imports.push({
-      localName: match.groups?.local ?? '',
-      moduleText: match.groups?.module ?? '',
-    });
+  const matches = betterAuthRegExpMatches(
+    importPattern,
+    source,
+    'Better Auth namespace import matches',
+  );
+  for (let index = 0; index < matches.length; index += 1) {
+    const match = matches[index]!;
+    betterAuthArrayAppend(
+      imports,
+      {
+        localName: betterAuthMatchGroup(match, 'local', 'Better Auth namespace import match'),
+        moduleText: betterAuthMatchGroup(match, 'module', 'Better Auth namespace import match'),
+      },
+      'Better Auth namespace imports',
+    );
   }
 
   return imports;
 }
 
 function findFirstImport(source: string): number {
-  const match = /^[ \t]*import\s/m.exec(source);
+  const match = betterAuthRegExpExec(/^[ \t]*import\s/m, source);
 
-  return match?.index ?? 0;
+  return match === null ? 0 : betterAuthMatchIndex(match, 'Better Auth first import match');
 }
 
 interface NamedImportSpecifier {
@@ -2436,17 +3075,21 @@ interface NamedImportSpecifier {
 }
 
 function namedImportSpecifier(specifier: string): NamedImportSpecifier | null {
-  const match =
-    /^(?<imported>[A-Za-z_$][0-9A-Za-z_$]*)(?:\s+as\s+(?<local>[A-Za-z_$][0-9A-Za-z_$]*))?$/.exec(
-      specifier,
-    );
+  const match = betterAuthRegExpExec(
+    /^(?<imported>[A-Za-z_$][0-9A-Za-z_$]*)(?:\s+as\s+(?<local>[A-Za-z_$][0-9A-Za-z_$]*))?$/,
+    specifier,
+  );
 
-  const imported = match?.groups?.imported;
+  const imported =
+    match === null ? '' : betterAuthMatchGroup(match, 'imported', 'Better Auth import specifier');
   if (!imported) return null;
 
   return {
     imported,
-    local: match.groups?.local ?? imported,
+    local:
+      match === null
+        ? imported
+        : betterAuthMatchGroup(match, 'local', 'Better Auth import specifier') || imported,
   };
 }
 
@@ -2456,11 +3099,20 @@ function parseBetterAuthSchemaSourceIr(
 ): BetterAuthSchemaSourceIr {
   const tableCallCandidates = findSchemaTableCallCandidates(source);
   const factoryCallees = drizzleTableFactoryCallees(source, factories);
-  const drizzleTableCalls = tableCallCandidates.filter((call) =>
-    call.callee.includes('.')
-      ? factoryCallees.members.has(call.callee)
-      : factoryCallees.identifiers.has(call.callee),
+  const candidates = betterAuthSnapshotDenseArray(
+    tableCallCandidates,
+    'Better Auth schema table-call candidates',
   );
+  const drizzleTableCalls: DrizzleTableCall[] = [];
+  for (let index = 0; index < candidates.length; index += 1) {
+    const call = candidates[index]!;
+    const recognized = betterAuthIncludes(call.callee, '.')
+      ? betterAuthSetHas(factoryCallees.members, call.callee)
+      : betterAuthSetHas(factoryCallees.identifiers, call.callee);
+    if (recognized) {
+      betterAuthArrayAppend(drizzleTableCalls, call, 'Better Auth recognized schema table calls');
+    }
+  }
 
   return {
     drizzleTableCalls,
@@ -2470,25 +3122,30 @@ function parseBetterAuthSchemaSourceIr(
 }
 
 function sourceLocalBindingNames(source: string): Set<string> {
-  const names = new Set<string>();
+  const names = betterAuthCreateSet<string>();
 
-  for (const namedImport of findNamedImports(source)) {
-    for (const specifierText of namedImport.specifiersText.split(',')) {
-      const specifier = namedImportSpecifier(specifierText.trim());
-      if (specifier !== null) names.add(specifier.local);
+  const namedImports = findNamedImports(source);
+  for (let importIndex = 0; importIndex < namedImports.length; importIndex += 1) {
+    const specifierTexts = betterAuthSplit(namedImports[importIndex]!.specifiersText, ',');
+    for (let index = 0; index < specifierTexts.length; index += 1) {
+      const specifier = namedImportSpecifier(betterAuthTrim(specifierTexts[index]!));
+      if (specifier !== null) betterAuthSetAdd(names, specifier.local);
     }
   }
 
-  for (const namespaceImport of findNamespaceImports(source)) {
-    names.add(namespaceImport.localName);
+  const namespaceImports = findNamespaceImports(source);
+  for (let index = 0; index < namespaceImports.length; index += 1) {
+    betterAuthSetAdd(names, namespaceImports[index]!.localName);
   }
 
-  for (const defaultImport of findDefaultImportLocalNames(source)) {
-    names.add(defaultImport);
+  const defaultImports = findDefaultImportLocalNames(source);
+  for (let index = 0; index < defaultImports.length; index += 1) {
+    betterAuthSetAdd(names, defaultImports[index]!);
   }
 
-  for (const declaration of findTopLevelDeclarationLocalNames(source)) {
-    names.add(declaration);
+  const declarations = findTopLevelDeclarationLocalNames(source);
+  for (let index = 0; index < declarations.length; index += 1) {
+    betterAuthSetAdd(names, declarations[index]!);
   }
 
   return names;
@@ -2499,9 +3156,20 @@ function findDefaultImportLocalNames(source: string): string[] {
   const importPattern =
     /import\s+(?!type\b)(?<local>[A-Za-z_$][0-9A-Za-z_$]*)\s*(?:,|\s+from\s*['"][^'"]+['"])/g;
 
-  for (const match of source.matchAll(importPattern)) {
-    const localName = match.groups?.local;
-    if (localName !== undefined) names.push(localName);
+  const matches = betterAuthRegExpMatches(
+    importPattern,
+    source,
+    'Better Auth default import matches',
+  );
+  for (let index = 0; index < matches.length; index += 1) {
+    const localName = betterAuthMatchGroup(
+      matches[index]!,
+      'local',
+      'Better Auth default import match',
+    );
+    if (localName !== '') {
+      betterAuthArrayAppend(names, localName, 'Better Auth default import local names');
+    }
   }
 
   return names;
@@ -2512,9 +3180,20 @@ function findTopLevelDeclarationLocalNames(source: string): string[] {
   const declarationPattern =
     /(?:^|[\n;])\s*(?:export\s+)?(?:const|let|var|function|class|enum|type|interface)\s+(?<local>[A-Za-z_$][0-9A-Za-z_$]*)/g;
 
-  for (const match of source.matchAll(declarationPattern)) {
-    const localName = match.groups?.local;
-    if (localName !== undefined) names.push(localName);
+  const matches = betterAuthRegExpMatches(
+    declarationPattern,
+    source,
+    'Better Auth top-level declaration matches',
+  );
+  for (let index = 0; index < matches.length; index += 1) {
+    const localName = betterAuthMatchGroup(
+      matches[index]!,
+      'local',
+      'Better Auth top-level declaration match',
+    );
+    if (localName !== '') {
+      betterAuthArrayAppend(names, localName, 'Better Auth top-level declaration names');
+    }
   }
 
   return names;
@@ -2552,18 +3231,22 @@ function findSchemaTableCallCandidates(source: string): DrizzleTableCall[] {
     if (closeParen === -1) continue;
 
     const args = splitTopLevelArguments(source, openParen + 1, closeParen);
-    const tableName = stringLiteralValue(args[0]?.text.trim() ?? '');
+    const tableName = stringLiteralValue(args[0] === undefined ? '' : betterAuthTrim(args[0].text));
 
     if (tableName !== null) {
-      calls.push({
-        arguments: args,
-        callEnd: closeParen + 1,
-        callStart: calleeStart,
-        callee: memberCallee?.value ?? identifier.value,
-        closeParen,
-        extraConfigText: args[2]?.text.trim() ?? null,
-        tableName,
-      });
+      betterAuthArrayAppend(
+        calls,
+        {
+          arguments: args,
+          callEnd: closeParen + 1,
+          callStart: calleeStart,
+          callee: memberCallee?.value ?? identifier.value,
+          closeParen,
+          extraConfigText: args[2] === undefined ? null : betterAuthTrim(args[2].text),
+          tableName,
+        },
+        'Better Auth schema source table calls',
+      );
     }
 
     index = closeParen;
@@ -2587,25 +3270,42 @@ function drizzleTableFactoryCallees(
   source: string,
   factories: readonly string[],
 ): DrizzleTableFactoryCallees {
-  const identifiers = new Set(factories.filter((factory) => !factory.includes('.')));
-  const members = new Set(factories.filter((factory) => factory.includes('.')));
+  const identifiers = betterAuthCreateSet<string>();
+  const members = betterAuthCreateSet<string>();
+  const factorySnapshot = betterAuthSnapshotDenseArray(
+    factories,
+    'Better Auth schema table factories',
+  );
+  for (let index = 0; index < factorySnapshot.length; index += 1) {
+    const factory = factorySnapshot[index]!;
+    if (betterAuthIncludes(factory, '.')) betterAuthSetAdd(members, factory);
+    else betterAuthSetAdd(identifiers, factory);
+  }
 
-  for (const namedImport of findNamedImports(source)) {
+  const namedImports = findNamedImports(source);
+  for (let importIndex = 0; importIndex < namedImports.length; importIndex += 1) {
+    const namedImport = namedImports[importIndex]!;
     const moduleName = stringLiteralValue(namedImport.moduleText);
     if (!isDrizzleCoreModule(moduleName)) continue;
 
     const moduleFactory = drizzleTableFactoryByModule[moduleName];
-    for (const specifierText of namedImport.specifiersText.split(',')) {
-      const specifier = namedImportSpecifier(specifierText.trim());
-      if (specifier?.imported === moduleFactory) identifiers.add(specifier.local);
+    const specifierTexts = betterAuthSplit(namedImport.specifiersText, ',');
+    for (let index = 0; index < specifierTexts.length; index += 1) {
+      const specifier = namedImportSpecifier(betterAuthTrim(specifierTexts[index]!));
+      if (specifier?.imported === moduleFactory) betterAuthSetAdd(identifiers, specifier.local);
     }
   }
 
-  for (const namespaceImport of findNamespaceImports(source)) {
+  const namespaceImports = findNamespaceImports(source);
+  for (let index = 0; index < namespaceImports.length; index += 1) {
+    const namespaceImport = namespaceImports[index]!;
     const moduleName = stringLiteralValue(namespaceImport.moduleText);
     if (!isDrizzleCoreModule(moduleName)) continue;
 
-    members.add(`${namespaceImport.localName}.${drizzleTableFactoryByModule[moduleName]}`);
+    betterAuthSetAdd(
+      members,
+      `${namespaceImport.localName}.${drizzleTableFactoryByModule[moduleName]}`,
+    );
   }
 
   return { identifiers, members };
@@ -2630,7 +3330,7 @@ function readIdentifierAt(
   return {
     end,
     start: index,
-    value: source.slice(index, end),
+    value: betterAuthSlice(source, index, end),
   };
 }
 
@@ -2649,7 +3349,7 @@ function readMemberCalleeBefore(
 
   return {
     start: objectStart,
-    value: `${source.slice(objectStart, objectEnd)}.${property.value}`,
+    value: `${betterAuthSlice(source, objectStart, objectEnd)}.${property.value}`,
   };
 }
 
@@ -2669,17 +3369,21 @@ function isLikelySchemaTableDeclaration(source: string, calleeStart: number): bo
 }
 
 function isIdentifierStart(char: string | undefined): boolean {
-  return char !== undefined && /[A-Za-z_$]/.test(char);
+  if (char === undefined || char.length === 0) return false;
+  const code = betterAuthCharacterCodeAt(char, 0);
+  return isAsciiUpperCode(code) || isAsciiLowerCode(code) || code === 0x5f || code === 0x24;
 }
 
 function isIdentifierCharacter(char: string | undefined): boolean {
-  return char !== undefined && /[0-9A-Za-z_$]/.test(char);
+  if (char === undefined || char.length === 0) return false;
+  const code = betterAuthCharacterCodeAt(char, 0);
+  return isAsciiAlphaNumericCode(code) || code === 0x5f || code === 0x24;
 }
 
 function skipWhitespace(source: string, index: number): number {
   let next = index;
 
-  while (/\s/.test(source[next] ?? '')) next += 1;
+  while (next < source.length && isSourceWhitespace(source, next)) next += 1;
 
   return next;
 }
@@ -2687,7 +3391,7 @@ function skipWhitespace(source: string, index: number): number {
 function skipWhitespaceBackward(source: string, index: number): number {
   let next = index;
 
-  while (next >= 0 && /\s/.test(source[next] ?? '')) next -= 1;
+  while (next >= 0 && isSourceWhitespace(source, next)) next -= 1;
 
   return next;
 }
@@ -2705,20 +3409,29 @@ function splitTopLevelArguments(
     const char = source[index];
 
     if (char === ',' && isTopLevelSeparator(source, start, index)) {
-      args.push({ end: index, start: argStart, text: source.slice(argStart, index) });
+      betterAuthArrayAppend(
+        args,
+        { end: index, start: argStart, text: betterAuthSlice(source, argStart, index) },
+        'Better Auth schema source call arguments',
+      );
       argStart = index + 1;
     }
 
     index = skipSourceToken(source, index);
   }
 
-  args.push({ end, start: argStart, text: source.slice(argStart, end) });
+  betterAuthArrayAppend(
+    args,
+    { end, start: argStart, text: betterAuthSlice(source, argStart, end) },
+    'Better Auth schema source call arguments',
+  );
 
   return args;
 }
 
 function isTopLevelSeparator(source: string, start: number, index: number): boolean {
   const stack: string[] = [];
+  let stackDepth = 0;
   let cursor = start;
 
   while (cursor < index) {
@@ -2726,13 +3439,19 @@ function isTopLevelSeparator(source: string, start: number, index: number): bool
     const matchingClose = closingDelimiterFor(char);
 
     if (matchingClose) {
-      stack.push(matchingClose);
+      betterAuthDefineOwnData(
+        stack,
+        stackDepth,
+        matchingClose,
+        'Better Auth schema delimiter stack',
+      );
+      stackDepth += 1;
       cursor += 1;
       continue;
     }
 
-    if (stack.length > 0 && char === stack[stack.length - 1]) {
-      stack.pop();
+    if (stackDepth > 0 && char === stack[stackDepth - 1]) {
+      stackDepth -= 1;
       cursor += 1;
       continue;
     }
@@ -2740,7 +3459,7 @@ function isTopLevelSeparator(source: string, start: number, index: number): bool
     cursor = skipSourceToken(source, cursor);
   }
 
-  return stack.length === 0;
+  return stackDepth === 0;
 }
 
 function findMatchingDelimiter(
@@ -2803,13 +3522,13 @@ function skipQuotedString(source: string, index: number, quote: string): number 
 }
 
 function skipLineComment(source: string, index: number): number {
-  const newline = source.indexOf('\n', index + 2);
+  const newline = betterAuthIndexOf(source, '\n', index + 2);
 
   return newline === -1 ? source.length : newline + 1;
 }
 
 function skipBlockComment(source: string, index: number): number {
-  const close = source.indexOf('*/', index + 2);
+  const close = betterAuthIndexOf(source, '*/', index + 2);
 
   return close === -1 ? source.length : close + 2;
 }
@@ -2823,37 +3542,91 @@ function closingDelimiterFor(char: string): string | null {
 }
 
 function stringLiteralValue(text: string): string | null {
-  if (text.startsWith("'") || text.startsWith('"')) {
+  if (betterAuthStartsWith(text, "'") || betterAuthStartsWith(text, '"')) {
     try {
-      return JSON.parse(text.replace(/^'/, '"').replace(/'$/, '"')) as string;
+      const jsonText = betterAuthStartsWith(text, "'") ? `"${betterAuthSlice(text, 1, -1)}"` : text;
+      const parsed = betterAuthJsonParse(jsonText);
+      return typeof parsed === 'string' ? parsed : null;
     } catch {
-      return text.slice(1, -1);
+      return betterAuthSlice(text, 1, -1);
     }
   }
 
-  if (text.startsWith('`') && text.endsWith('`') && !text.includes('${')) {
-    return text.slice(1, -1);
+  if (
+    betterAuthStartsWith(text, '`') &&
+    betterAuthEndsWith(text, '`') &&
+    !betterAuthIncludes(text, '${')
+  ) {
+    return betterAuthSlice(text, 1, -1);
   }
 
   return null;
 }
 
 function quoteTsString(value: string): string {
-  return `'${value.replaceAll('\\', '\\\\').replaceAll("'", "\\'")}'`;
+  return `'${betterAuthReplaceAll(betterAuthReplaceAll(value, '\\', '\\\\'), "'", "\\'")}'`;
 }
 
 function compactSourceText(source: string): string {
-  return source.replace(/\s+/g, '');
+  let compact = '';
+  for (let index = 0; index < source.length; index += 1) {
+    if (!isSourceWhitespace(source, index)) compact += source[index]!;
+  }
+  return compact;
 }
 
 function applyBetterAuthSchemaSourceReplacements(
   source: string,
   replacements: readonly { end: number; start: number; value: string }[],
 ): string {
-  return [...replacements]
-    .sort((left, right) => right.start - left.start)
-    .reduce(
-      (next, range) => `${next.slice(0, range.start)}${range.value}${next.slice(range.end)}`,
-      source,
-    );
+  const input = betterAuthSnapshotDenseArray(
+    replacements,
+    'Better Auth schema source replacements',
+  );
+  const sorted: { end: number; start: number; value: string }[] = [];
+  for (let index = 0; index < input.length; index += 1) {
+    const value = input[index]!;
+    betterAuthArrayAppend(sorted, value, 'Better Auth schema source replacements');
+    let insertion = sorted.length - 1;
+    while (insertion > 0 && value.start > sorted[insertion - 1]!.start) {
+      betterAuthDefineOwnData(
+        sorted,
+        insertion,
+        sorted[insertion - 1]!,
+        'Better Auth schema source replacements',
+      );
+      insertion -= 1;
+    }
+    betterAuthDefineOwnData(sorted, insertion, value, 'Better Auth schema source replacements');
+  }
+  let next = source;
+  for (let index = 0; index < sorted.length; index += 1) {
+    const range = sorted[index]!;
+    next = `${betterAuthSlice(next, 0, range.start)}${range.value}${betterAuthSlice(
+      next,
+      range.end,
+    )}`;
+  }
+  return next;
+}
+
+function isSourceWhitespace(source: string, index: number): boolean {
+  const code = betterAuthCharacterCodeAt(source, index);
+  return (
+    code === 0x09 ||
+    code === 0x0a ||
+    code === 0x0b ||
+    code === 0x0c ||
+    code === 0x0d ||
+    code === 0x20 ||
+    code === 0xa0 ||
+    code === 0x1680 ||
+    (code >= 0x2000 && code <= 0x200a) ||
+    code === 0x2028 ||
+    code === 0x2029 ||
+    code === 0x202f ||
+    code === 0x205f ||
+    code === 0x3000 ||
+    code === 0xfeff
+  );
 }
