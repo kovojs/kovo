@@ -35,7 +35,8 @@ const intrinsicUrlHostname = securityGetOwnPropertyDescriptor(
   'hostname',
 )?.get;
 const capturedUrlControlsSound = verifyCapturedUrlControls();
-const dynamicImportBrowserSecurity = createBrowserNavigationSecurityControls();
+const dynamicImportBrowserSecurity =
+  typeof document === 'undefined' ? undefined : createBrowserNavigationSecurityControls();
 
 export interface DynamicImportUrlOptions {
   allowedModuleUrls?: readonly string[];
@@ -198,7 +199,7 @@ function parseImportUrl(value: string): URL | null {
 
 function currentHref(): string {
   return (
-    dynamicImportBrowserSecurity.currentUrl()?.href ??
+    dynamicImportBrowserSecurity?.currentUrl()?.href ??
     lateStructuralLocationField('href') ??
     'http://localhost/'
   );
@@ -206,7 +207,7 @@ function currentHref(): string {
 
 function currentOrigin(): string {
   return (
-    dynamicImportBrowserSecurity.currentUrl()?.origin ??
+    dynamicImportBrowserSecurity?.currentUrl()?.origin ??
     lateStructuralLocationField('origin') ??
     urlOrigin(new IntrinsicURL(currentHref()))
   );
@@ -241,21 +242,17 @@ function allowedClientModuleUrlManifest(explicit?: readonly string[]): Set<strin
 
 function documentModulepreloadClientModules(): readonly string[] | undefined {
   if (typeof document === 'undefined') return undefined;
-  const markers = dynamicImportBrowserSecurity.queryAllElements(
-    document,
-    '[data-kovo-module-allowlist]',
-  );
+  const markers = documentModuleAllowlistMarkers();
 
   const hrefs: string[] = [];
   for (let index = 0; index < markers.length; index += 1) {
-    const marker = markers[index];
-    if (marker === undefined) continue;
-    const declared = dynamicImportBrowserSecurity.readAttribute(
-      marker,
-      'data-kovo-module-allowlist',
-    );
+    const markerEntry = securityOwnArrayEntry(markers, index);
+    if (!markerEntry.ok || typeof markerEntry.value !== 'object' || markerEntry.value === null)
+      continue;
+    const marker = markerEntry.value;
+    const declared = readModuleMarkerAttribute(marker, 'data-kovo-module-allowlist');
     if (declared) appendWhitespaceTokens(hrefs, declared);
-    const href = dynamicImportBrowserSecurity.readAttribute(marker, 'href');
+    const href = readModuleMarkerAttribute(marker, 'href');
     if (!declared && href)
       securityArrayAppend(
         hrefs,
@@ -264,6 +261,52 @@ function documentModulepreloadClientModules(): readonly string[] | undefined {
       );
   }
   return hrefs;
+}
+
+function documentModuleAllowlistMarkers(): readonly unknown[] {
+  if (dynamicImportBrowserSecurity !== undefined) {
+    return dynamicImportBrowserSecurity.queryAllElements(document, '[data-kovo-module-allowlist]');
+  }
+  const query = securityGetOwnPropertyDescriptor(document, 'querySelectorAll');
+  if (query === undefined || !('value' in query) || typeof query.value !== 'function') return [];
+  const markers = applySecurityIntrinsic<unknown>(query.value, document, [
+    '[data-kovo-module-allowlist]',
+  ]);
+  if (typeof markers !== 'object' || markers === null) return [];
+  const length = securityGetOwnPropertyDescriptor(markers, 'length');
+  if (
+    length === undefined ||
+    !('value' in length) ||
+    typeof length.value !== 'number' ||
+    length.value % 1 !== 0 ||
+    length.value < 0 ||
+    length.value > 100_000
+  ) {
+    return [];
+  }
+  const snapshot: unknown[] = [];
+  for (let index = 0; index < length.value; index += 1) {
+    const entry = securityGetOwnPropertyDescriptor(markers, index);
+    if (entry === undefined || !('value' in entry)) return [];
+    securityArrayAppend(snapshot, entry.value, 'Browser structural module allowlist snapshot');
+  }
+  return snapshot;
+}
+
+function readModuleMarkerAttribute(marker: object, name: string): string | null {
+  if (dynamicImportBrowserSecurity !== undefined) {
+    return dynamicImportBrowserSecurity.readAttribute(marker, name);
+  }
+  const getAttribute = securityGetOwnPropertyDescriptor(marker, 'getAttribute');
+  if (
+    getAttribute === undefined ||
+    !('value' in getAttribute) ||
+    typeof getAttribute.value !== 'function'
+  ) {
+    return null;
+  }
+  const value = applySecurityIntrinsic<unknown>(getAttribute.value, marker, [name]);
+  return typeof value === 'string' ? value : null;
 }
 
 function canonicalImportUrl(url: URL): string {

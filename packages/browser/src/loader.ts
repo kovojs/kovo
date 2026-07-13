@@ -27,7 +27,8 @@ import type { QueryRefetchOptions } from './query-refetch.js';
 import type { QueryStore } from './query-store.js';
 import { securityGetOwnPropertyDescriptor } from './security-witness-intrinsics.js';
 
-const loaderBrowserSecurity = createBrowserNavigationSecurityControls();
+const loaderBrowserSecurity =
+  typeof document === 'undefined' ? undefined : createBrowserNavigationSecurityControls();
 
 /**
  * App-facing enhanced-mutation wiring for `installKovoLoader`.
@@ -176,7 +177,7 @@ export function installGeneratedKovoLoader(
   // <meta name="kovo-session">; the broadcast uses it to discard cross-principal
   // rebroadcasts so shared-device tabs never apply another session's private data.
   const sessionMeta =
-    typeof document === 'undefined'
+    typeof document === 'undefined' || loaderBrowserSecurity === undefined
       ? null
       : loaderBrowserSecurity.queryOne(document, 'meta[name="kovo-session"]');
   const sessionFingerprint =
