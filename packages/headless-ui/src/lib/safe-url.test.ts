@@ -68,4 +68,22 @@ describe('safeUrl', () => {
     expect(safeUrl('')).toBe('#');
     expect(safeUrl('   ')).toBe('#');
   });
+
+  it('keeps URL classification closed after authored intrinsic poisoning', () => {
+    const nativeSetHas = Set.prototype.has;
+    const nativeRegExpExec = RegExp.prototype.exec;
+    let setResult = '';
+    let regexpResult = '';
+    try {
+      Set.prototype.has = () => true;
+      setResult = safeUrl('javascript:alert(1)');
+      RegExp.prototype.exec = () => null;
+      regexpResult = safeUrl('javascript:alert(1)');
+    } finally {
+      Set.prototype.has = nativeSetHas;
+      RegExp.prototype.exec = nativeRegExpExec;
+    }
+    expect(setResult).toBe('#');
+    expect(regexpResult).toBe('#');
+  });
 });

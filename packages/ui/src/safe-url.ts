@@ -1,14 +1,13 @@
-const safeUrlSchemes = new Set(['http', 'https', 'mailto', 'tel', 'ftp']);
-const urlSchemePattern = /^([a-zA-Z][a-zA-Z0-9+.-]*):/;
-const htmlColonReferencePattern = /&(?:#0*58(?![0-9])|#[xX]0*3[aA](?![0-9a-fA-F])|colon);?/;
-// eslint-disable-next-line no-control-regex
-const urlSchemeStripPattern = /[\u0000-\u0020\u007f-\u009f]+/g;
-
 /**
  * Browser-safe URL sink adapter for UI components.
  *
  * Keep this policy aligned with `@kovojs/core/internal/security-url`; UI modules
  * can be served as browser-visible source through the docs/gallery pipeline.
+ *
+ * This classifier intentionally uses only language-level string indexing and
+ * comparison. A component dependency can run authored code before the sink is
+ * called, so late-bound `RegExp.prototype.exec`, `String.prototype.replace`, or
+ * `Set.prototype.has` would let that code redefine what the URL allowlist means.
  */
 export function safeUrl(value: string | null | undefined, fallback = '#'): string {
   if (value === undefined || value === null) return fallback;
@@ -16,27 +15,115 @@ export function safeUrl(value: string | null | undefined, fallback = '#'): strin
   const normalized = normalizedUrlForSchemeCheck(value);
   if (normalized === '') return fallback;
 
-  return hasUnsafeUrlScheme(value) ? fallback : value;
+  return hasUnsafeUrlScheme(normalized) ? fallback : value;
 }
 
 function hasUnsafeUrlScheme(value: string): boolean {
-  const normalized = normalizedUrlForSchemeCheck(value);
-  if (hasHtmlColonReferenceInSchemePosition(normalized)) return true;
+  if (!isAsciiAlpha(value[0])) return false;
 
-  const match = urlSchemePattern.exec(normalized);
-  if (!match) return false;
-
-  return !safeUrlSchemes.has((match[1] ?? '').toLowerCase());
+  let index = 1;
+  while (index < value.length && isSchemeCharacter(value[index])) index += 1;
+  if (value[index] === ':') return !isAllowedScheme(value, index);
+  return value[index] === '&' && isHtmlColonReference(value, index);
 }
 
 function normalizedUrlForSchemeCheck(value: string): string {
-  return value.replace(urlSchemeStripPattern, '');
+  let normalized = '';
+  for (let index = 0; index < value.length; index += 1) {
+    const character = value[index] ?? '';
+    if (
+      character <= '\u0020' ||
+      (character >= '\u007f' && character <= '\u009f')
+    ) {
+      continue;
+    }
+    normalized += character;
+  }
+  return normalized;
 }
 
-function hasHtmlColonReferenceInSchemePosition(value: string): boolean {
-  const colonReference = htmlColonReferencePattern.exec(value);
-  if (!colonReference) return false;
+function isAsciiAlpha(character: string | undefined): boolean {
+  return (
+    character !== undefined &&
+    ((character >= 'A' && character <= 'Z') || (character >= 'a' && character <= 'z'))
+  );
+}
 
-  const prefix = value.slice(0, colonReference.index);
-  return /^[a-zA-Z][a-zA-Z0-9+.-]*$/.test(prefix);
+function isAsciiDigit(character: string | undefined): boolean {
+  return character !== undefined && character >= '0' && character <= '9';
+}
+
+function isAsciiHex(character: string | undefined): boolean {
+  return (
+    isAsciiDigit(character) ||
+    (character !== undefined &&
+      ((character >= 'A' && character <= 'F') || (character >= 'a' && character <= 'f')))
+  );
+}
+
+function isSchemeCharacter(character: string | undefined): boolean {
+  return (
+    isAsciiAlpha(character) ||
+    isAsciiDigit(character) ||
+    character === '+' ||
+    character === '.' ||
+    character === '-'
+  );
+}
+
+function isAllowedScheme(value: string, end: number): boolean {
+  let scheme = '';
+  for (let index = 0; index < end; index += 1) {
+    const character = value[index] ?? '';
+    scheme += character >= 'A' && character <= 'Z'
+      ? asciiLower(character)
+      : character;
+  }
+  switch (scheme) {
+    case 'ftp':
+    case 'http':
+    case 'https':
+    case 'mailto':
+    case 'tel':
+      return true;
+    default:
+      return false;
+  }
+}
+
+function asciiLower(character: string): string {
+  const upper = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  const lower = 'abcdefghijklmnopqrstuvwxyz';
+  for (let index = 0; index < upper.length; index += 1) {
+    if (upper[index] === character) return lower[index] ?? character;
+  }
+  return character;
+}
+
+function isHtmlColonReference(value: string, start: number): boolean {
+  if (matches(value, start, '&colon')) return true;
+  if (value[start + 1] !== '#') return false;
+
+  let index = start + 2;
+  const hexadecimal = value[index] === 'x' || value[index] === 'X';
+  if (hexadecimal) index += 1;
+  while (value[index] === '0') index += 1;
+
+  if (hexadecimal) {
+    if (value[index] !== '3' || (value[index + 1] !== 'a' && value[index + 1] !== 'A')) {
+      return false;
+    }
+    return !isAsciiHex(value[index + 2]);
+  }
+
+  if (value[index] !== '5' || value[index + 1] !== '8') return false;
+  return !isAsciiDigit(value[index + 2]);
+}
+
+function matches(value: string, start: number, expected: string): boolean {
+  if (start + expected.length > value.length) return false;
+  for (let index = 0; index < expected.length; index += 1) {
+    if (value[start + index] !== expected[index]) return false;
+  }
+  return true;
 }
