@@ -1,4 +1,5 @@
 import {
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readdirSync,
@@ -7,12 +8,14 @@ import {
   symlinkSync,
   writeFileSync,
 } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { mainAsync } from './index.js';
+import { captureKovoCommandSecurityDisposition } from './commands/security-disposition.js';
 
 describe('kovo db', () => {
   const roots: string[] = [];
@@ -133,7 +136,10 @@ describe('kovo db', () => {
     delete process.env.KOVO_RUNTIME_DATABASE_URL;
     process.env.KOVO_ADMIN_DATABASE_URL = 'postgres://bad@127.0.0.1:1/nope';
     try {
-      const check = await captureWrites(() => mainAsync(['db', 'check', '--schema', schemaPath]));
+      const security = captureKovoCommandSecurityDisposition();
+      const check = await captureWrites(() =>
+        mainAsync(['db', 'check', '--schema', schemaPath], security),
+      );
 
       expect(check.result).toBe(1);
       expect(check.stdout).toBe('');
@@ -348,9 +354,64 @@ describe('kovo db', () => {
     expect(output.stderr).toContain('usage: kovo db provision|migrate|generate|check');
   });
 
+  it('pins DB environment and relative paths before authored schema evaluation', () => {
+    const { root, schemaPath } = writeDbCommandFixture('operator-authority');
+    const outside = mkdtempSync(join(dirname(root), '.tmp-kovo-db-authority-outside-'));
+    roots.push(outside);
+    writeFileSync(
+      schemaPath,
+      [
+        `process.chdir(${JSON.stringify(outside)});`,
+        "Object.defineProperty(Object.prototype, 'KOVO_ADMIN_DATABASE_URL', {",
+        "  configurable: true, value: 'postgres://attacker@127.0.0.1:2/attacker',",
+        '});',
+        readFileSync(schemaPath, 'utf8'),
+      ].join('\n'),
+      'utf8',
+    );
+
+    const env = { ...process.env };
+    delete env.KOVO_ADMIN_DATABASE_URL;
+    delete env.KOVO_DATABASE_URL;
+    delete env.KOVO_DB_DRIVER;
+    delete env.KOVO_RUNTIME_DATABASE_URL;
+    const generated = runKovoDbCli(
+      root,
+      [
+        'db',
+        'generate',
+        '--schema',
+        './schema.ts',
+        '--driver',
+        'pglite',
+        '--data-dir',
+        './pglite',
+        '--migrations',
+        './migrations',
+      ],
+      env,
+    );
+    expect(generated.status, generated.stderr).toBe(0);
+    expect(readdirSync(join(root, 'migrations')).some((name) => name.endsWith('.up.sql'))).toBe(
+      true,
+    );
+    expect(existsSync(join(outside, 'migrations'))).toBe(false);
+    expect(existsSync(join(outside, 'pglite'))).toBe(false);
+
+    const checked = runKovoDbCli(
+      root,
+      ['db', 'check', '--schema', './schema.ts', '--data-dir', './pglite'],
+      env,
+    );
+    expect(checked.status).toBe(1);
+    expect(checked.stderr).toContain('DRIVER pglite');
+    expect(checked.stderr).not.toContain('127.0.0.1:2');
+  }, 120_000);
+
   function writeDbCommandFixture(name: string): {
     dataDir: string;
     migrationsDir: string;
+    root: string;
     schemaPath: string;
   } {
     const root = mkdtempSync(
@@ -394,9 +455,17 @@ describe('kovo db', () => {
       ].join('\n'),
       'utf8',
     );
-    return { dataDir, migrationsDir, schemaPath };
+    return { dataDir, migrationsDir, root, schemaPath };
   }
 });
+
+function runKovoDbCli(root: string, args: readonly string[], env: NodeJS.ProcessEnv) {
+  return spawnSync(fileURLToPath(new URL('./bin.ts', import.meta.url)), args, {
+    cwd: root,
+    encoding: 'utf8',
+    env,
+  });
+}
 
 function restoreEnv(name: string, value: string | undefined): void {
   if (value === undefined) delete process.env[name];

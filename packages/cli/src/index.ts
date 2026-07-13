@@ -28,7 +28,7 @@ import {
 } from './commands-manifest.js';
 import { runUpdateDocsCommand } from './commands/update-docs.js';
 import {
-  kovoCommandBootSecurityDisposition,
+  captureKovoCommandSecurityDisposition,
   type KovoCommandSecurityDisposition,
 } from './commands/security-disposition.js';
 import {
@@ -169,10 +169,10 @@ const ASYNC_COMMAND_HANDLERS: Record<KovoAsyncCommandName, AsyncCommandHandler> 
     if (!parsed.ok) return writeUsageError(parsed.message);
     return writeCommandResult(await runBuildCommand(parsed.options, security));
   },
-  async db(args) {
+  async db(args, security) {
     const parsed = parseDbArgs(args);
     if (!parsed.ok) return writeUsageError(parsed.message);
-    return writeCommandResult(await runDbCommand(parsed.options));
+    return writeCommandResult(await runDbCommand(parsed.options, security));
   },
   async dev(args, security) {
     const parsed = parseDevArgs(args, security.invocationCwd);
@@ -207,7 +207,7 @@ export const CLI_COMMAND_DISPATCHER_NAMES = {
 /** @internal Synchronous argv dispatcher for the `kovo` bin; not a public API. */
 export function main(
   args: readonly string[] = process.argv.slice(2),
-  security: KovoCommandSecurityDisposition = kovoCommandBootSecurityDisposition,
+  security: KovoCommandSecurityDisposition = captureKovoCommandSecurityDisposition(),
 ): number {
   if (args.length === 0) {
     process.stdout.write(formatNoArgsMessage());
@@ -231,7 +231,7 @@ export function main(
 /** @internal Async argv dispatcher (export/mcp) for the `kovo` bin; not a public API. */
 export async function mainAsync(
   args: readonly string[] = process.argv.slice(2),
-  security: KovoCommandSecurityDisposition = kovoCommandBootSecurityDisposition,
+  security: KovoCommandSecurityDisposition = captureKovoCommandSecurityDisposition(),
 ): Promise<number> {
   const command = resolveCommand(args[0]);
   if (!command || !isAsyncCommand(command)) return main(args, security);

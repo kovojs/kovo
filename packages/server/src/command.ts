@@ -11,6 +11,7 @@ import {
   commandStringCharCodeAt,
   commandStringTrim,
 } from './command-intrinsics.js';
+import { runtimeEnvironmentSnapshot } from './runtime-environment-authority.js';
 import { isNativeAbortSignal } from './request-carrier.js';
 import {
   createWitnessSet,
@@ -232,6 +233,9 @@ function commandExecOptions(options: CommandRunOptions) {
 
   return commandPinnedExecOptions({
     ...(cwd === undefined ? {} : { cwd: cwd as string }),
+    // SPEC §6.6 rule 6: subprocesses inherit operator boot authority, never app/request-time
+    // mutations to the shared process.env object. There is intentionally no app-authored env seam.
+    env: runtimeEnvironmentSnapshot(),
     ...(maxBufferBytes === undefined ? {} : { maxBuffer: maxBufferBytes as number }),
     ...(signal === undefined ? {} : { signal: signal as AbortSignal }),
     ...(timeoutMs === undefined ? {} : { timeout: timeoutMs as number }),

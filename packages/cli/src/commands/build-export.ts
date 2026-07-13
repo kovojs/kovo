@@ -583,6 +583,7 @@ export async function runBuildCommand(
         presetLogs.push(message);
       },
       outDir: presetOutDir,
+      projectRoot: invocationRoot,
       readServerHandlerSource() {
         return serverHandlerBuild.source;
       },

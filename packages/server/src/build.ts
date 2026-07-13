@@ -60,6 +60,9 @@ const staticErrorHeadersSource = buildSecuritySourceLiteral(staticHostHeaders('e
 const frameworkRuntimeClientModulePathSuffix = kovoDeferredRuntimeModulePath.replace(/^\/c\//, '/');
 const nativeExecFileSync = execFileSync;
 const nodeExecutablePath = process.execPath;
+const generatedJavaScriptValidationEnvironment = Object.freeze(
+  Object.create(null),
+) as NodeJS.ProcessEnv;
 
 /**
  * Build-time preset descriptor consumed by `kovo build` and deployment tooling.
@@ -124,6 +127,8 @@ export interface PresetContext extends PresetInspectContext {
   log(message: string): void;
   /** Platform output directory for the preset. */
   outDir: string;
+  /** Operator-selected project root used for project metadata and lockfile inputs. */
+  projectRoot?: string;
   /** Read the neutral build facts the preset is transforming. */
   readNeutral(): KovoNeutralBuild;
 }
@@ -251,10 +256,11 @@ export function defineConfig(config: KovoConfig): KovoConfig {
  */
 export function node(options: NodePresetOptions = {}): KovoPreset {
   const jobRunner = nodeJobRunnerCapability(options);
+  const constructionProjectRoot = resolvedFileSystemPath(process.cwd());
   return {
     ...(jobRunner === undefined ? {} : { capabilities: { jobRunner } }),
     emit(build, context) {
-      return emitNodePreset(build, context, options);
+      return emitNodePreset(build, context, options, constructionProjectRoot);
     },
     inspect(build, context) {
       const retentionDiagnostics = clientModuleRetentionDiagnostics(build, 'node', options);
@@ -367,12 +373,14 @@ async function emitNodePreset(
   build: KovoNeutralBuild,
   context: PresetContext,
   options: NodePresetOptions,
+  constructionProjectRoot: string,
 ): Promise<void> {
   if (build.serverHandlerPath === undefined) {
     throw new Error('The node preset requires a neutral build with server/handler.mjs.');
   }
 
   const outDir = resolvedFileSystemPath(context.outDir);
+  const projectRoot = resolvedFileSystemPath(context.projectRoot ?? constructionProjectRoot);
   await writePresetDirectory(build.clientDir, outDir, 'client', 'node client');
   if (build.publicAssetDir !== undefined) {
     await writePresetDirectory(build.publicAssetDir, outDir, 'static', 'node public assets');
@@ -385,7 +393,7 @@ async function emitNodePreset(
   const serverSource = nodeServerSource();
   validateGeneratedJavaScript(path.join(outDir, 'node-adapter.mjs'), nodeAdapterSource, 'module');
   validateGeneratedJavaScript(path.join(outDir, 'server.mjs'), serverSource, 'module');
-  const runtimeEntries = await nodeRuntimePackageEntries(outDir);
+  const runtimeEntries = await nodeRuntimePackageEntries(outDir, projectRoot);
   const generatedEntries: ArtifactOutputEntry[] = [
     presetContentEntry(outDir, 'node-adapter.mjs', nodeAdapterSource, 'node adapter'),
     presetContentEntry(outDir, 'server.mjs', serverSource, 'node server entry'),
@@ -802,6 +810,7 @@ function validateGeneratedJavaScript(
   try {
     nativeExecFileSync(nodeExecutablePath, ['--check', `--input-type=${format}`], {
       encoding: 'utf8',
+      env: generatedJavaScriptValidationEnvironment,
       input: source,
       stdio: ['pipe', 'pipe', 'pipe'],
     });
@@ -3234,8 +3243,11 @@ CMD ["node", "server.mjs"]
 `;
 }
 
-async function nodeRuntimePackageEntries(outDir: string): Promise<ArtifactOutputEntry[]> {
-  const source = await readPackageJsonForNodeRuntime();
+async function nodeRuntimePackageEntries(
+  outDir: string,
+  projectRoot: string,
+): Promise<ArtifactOutputEntry[]> {
+  const source = await readPackageJsonForNodeRuntime(projectRoot);
   const runtimePackage = {
     dependencies: source.dependencies ?? {},
     name: `${source.name ?? 'kovo-app'}-server`,
@@ -3252,21 +3264,21 @@ async function nodeRuntimePackageEntries(outDir: string): Promise<ArtifactOutput
       'node runtime package manifest',
     ),
   ];
-  const lockfile = await runtimeLockfileEntry(outDir);
+  const lockfile = await runtimeLockfileEntry(outDir, projectRoot);
   if (lockfile !== undefined) {
     commitBuildArrayValue(entries, lockfile, 'Node runtime package output entries');
   }
   return entries;
 }
 
-async function readPackageJsonForNodeRuntime(): Promise<{
+async function readPackageJsonForNodeRuntime(projectRoot: string): Promise<{
   dependencies?: Record<string, string>;
   name?: string;
   packageManager?: string;
 }> {
   let source: string;
   try {
-    source = await readFile(buildSecurityPathJoin(process.cwd(), 'package.json'), 'utf8');
+    source = await readFile(buildSecurityPathJoin(projectRoot, 'package.json'), 'utf8');
   } catch {
     return {};
   }
@@ -3280,9 +3292,12 @@ const runtimeLockfileNames = [
   'yarn.lock',
 ] as const;
 
-async function runtimeLockfileEntry(outDir: string): Promise<ArtifactOutputEntry | undefined> {
+async function runtimeLockfileEntry(
+  outDir: string,
+  projectRoot: string,
+): Promise<ArtifactOutputEntry | undefined> {
   const fileNames = snapshotBuildArray(runtimeLockfileNames, 'Node runtime lockfile candidates');
-  const project = createFrameworkOutputFileSystemBoundary(process.cwd());
+  const project = createFrameworkOutputFileSystemBoundary(projectRoot);
   await project.ensureDirectory();
   for (let index = 0; index < fileNames.length; index += 1) {
     const fileName = fileNames[index]!;

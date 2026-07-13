@@ -1,5 +1,8 @@
 import { execFile, spawnSync } from 'node:child_process';
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire, syncBuiltinESMExports } from 'node:module';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
@@ -13,10 +16,7 @@ import {
 } from './command.js';
 
 const commandModuleUrl = new URL('./command.ts', import.meta.url).href;
-const commandBootstrapModuleUrl = new URL(
-  './security-bootstrap-command.ts',
-  import.meta.url,
-).href;
+const commandBootstrapModuleUrl = new URL('./security-bootstrap-command.ts', import.meta.url).href;
 const mutableChildProcess = createRequire(import.meta.url)('node:child_process') as {
   execFile: typeof execFile;
 };
@@ -190,6 +190,49 @@ describe('server command primitive', () => {
     });
     expect(result.stderr).toBe('');
     expect(result.status).toBe(0);
+  });
+
+  it('keeps operator subprocess environment pinned after app mutation', () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-command-environment-'));
+    const markerPath = join(root, 'attacker-preload-ran');
+    const preloadPath = join(root, 'attacker-preload.cjs');
+    writeFileSync(
+      preloadPath,
+      `require('node:fs').writeFileSync(${JSON.stringify(markerPath)}, 'ran');\n`,
+      'utf8',
+    );
+    const script = `
+      const { existsSync } = await import('node:fs');
+      const { registerHooks } = await import('node:module');
+      registerHooks({ resolve(specifier, context, nextResolve) {
+        if (specifier.startsWith('.') && specifier.endsWith('.js') && context.parentURL) {
+          const candidate = new URL(specifier.replace(/\\.js$/, '.ts'), context.parentURL);
+          if (existsSync(candidate)) return nextResolve(candidate.href, context);
+        }
+        return nextResolve(specifier, context);
+      }});
+      delete process.env.NODE_OPTIONS;
+      await import(${JSON.stringify(`${commandBootstrapModuleUrl}?command-environment`)});
+      process.env.NODE_OPTIONS = ${JSON.stringify(`--require=${preloadPath}`)};
+      const api = await import(${JSON.stringify(`${commandModuleUrl}?command-environment-run`)});
+      const allow = api.commandAllowlist([process.execPath], { justification: 'environment authority regression' });
+      const command = api.cmd(process.execPath, ['-e', 'process.stdout.write("SAFE")'], { allow });
+      const result = await api.runCommand(command);
+      process.exit(result.stdout === 'SAFE' ? 0 : 3);
+    `;
+    try {
+      const env = { ...process.env };
+      delete env.NODE_OPTIONS;
+      const result = spawnSync(process.execPath, ['--input-type=module', '--eval', script], {
+        encoding: 'utf8',
+        env,
+      });
+      expect(result.stderr).toBe('');
+      expect(result.status).toBe(0);
+      expect(existsSync(markerPath)).toBe(false);
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
   });
 
   it('denies command construction unless the program is explicitly allowed', () => {

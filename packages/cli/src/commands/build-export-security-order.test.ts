@@ -436,6 +436,26 @@ export default createApp({
     const outside = mkdtempSync(join('/private/tmp', 'kovo-cli-cwd-outside-'));
     const appPath = join(root, 'app.ts');
     try {
+      writeFileSync(
+        join(root, 'package.json'),
+        '{"dependencies":{"root-runtime":"1.0.0"},"private":true,"type":"module"}\n',
+        'utf8',
+      );
+      writeFileSync(
+        join(root, 'pnpm-lock.yaml'),
+        "lockfileVersion: '9.0'\nroot-marker: true\n",
+        'utf8',
+      );
+      writeFileSync(
+        join(outside, 'package.json'),
+        '{"dependencies":{"attacker-runtime":"9.9.9"},"private":true,"type":"module"}\n',
+        'utf8',
+      );
+      writeFileSync(
+        join(outside, 'pnpm-lock.yaml'),
+        "lockfileVersion: '9.0'\nattacker-marker: true\n",
+        'utf8',
+      );
       mkdirSync(join(root, 'src'), { recursive: true });
       writeFileSync(
         join(root, 'index.html'),
@@ -467,6 +487,21 @@ export default createApp({
       expect(existsSync(join(root, '.kovo/cache/static-build-analysis'))).toBe(true);
       expect(existsSync(join(outside, 'dist'))).toBe(false);
       expect(existsSync(join(outside, '.kovo'))).toBe(false);
+
+      const deploy = runKovoCli(root, ['build', './app.ts', '--out', 'deploy-dist'], env);
+      expect(deploy.status, deploy.stderr).toBe(0);
+      expect(readFileSync(join(root, 'deploy-dist/server/package.json'), 'utf8')).toContain(
+        'root-runtime',
+      );
+      expect(readFileSync(join(root, 'deploy-dist/server/package.json'), 'utf8')).not.toContain(
+        'attacker-runtime',
+      );
+      expect(readFileSync(join(root, 'deploy-dist/server/pnpm-lock.yaml'), 'utf8')).toContain(
+        'root-marker',
+      );
+      expect(readFileSync(join(root, 'deploy-dist/server/pnpm-lock.yaml'), 'utf8')).not.toContain(
+        'attacker-marker',
+      );
 
       const exported = runKovoCli(root, ['export', './app.ts', '--out', 'export-dist'], env);
       expect(exported.status, exported.stderr).toBe(0);

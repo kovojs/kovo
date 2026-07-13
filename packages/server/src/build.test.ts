@@ -2395,6 +2395,44 @@ export default async function handler(request) {
     }
   });
 
+  it('does not inherit app-mutated NODE_OPTIONS in generated-JavaScript validation', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kovo-preset-validation-environment-'));
+    const preloadPath = join(root, 'attacker-preload.cjs');
+    const markerPath = join(root, 'attacker-preload-ran');
+    const previousNodeOptions = process.env.NODE_OPTIONS;
+
+    try {
+      await writeFile(
+        preloadPath,
+        `require('node:fs').writeFileSync(${JSON.stringify(markerPath)}, 'ran');\n`,
+        'utf8',
+      );
+      const build = await writeKovoNeutralBuild({
+        app: createApp({ routes: [route('/', { page: () => renderedHtml('<main>Home</main>') })] }),
+        outDir: join(root, '.kovo'),
+        serverHandlerSource: 'export default async () => new Response("ok");\n',
+      });
+      const preset = node({ dockerfile: false });
+
+      process.env.NODE_OPTIONS = `--require=${preloadPath}`;
+      await preset.emit!(build, {
+        declaredEnv: [],
+        log() {},
+        outDir: join(root, 'node-output'),
+        projectRoot: root,
+        readNeutral() {
+          return build;
+        },
+      });
+
+      await expect(stat(markerPath)).rejects.toMatchObject({ code: 'ENOENT' });
+    } finally {
+      if (previousNodeOptions === undefined) delete process.env.NODE_OPTIONS;
+      else process.env.NODE_OPTIONS = previousNodeOptions;
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
   it('C213 keeps runtime package metadata and lockfile authoritative after route-time poisoning', async () => {
     const root = await mkdtemp(join(tmpdir(), 'kovo-node-runtime-package-intrinsics-'));
     const originalJsonParse = JSON.parse;

@@ -61,6 +61,7 @@ function objectIs(left: unknown, right: unknown): boolean {
 
 interface PinnedCommandExecOptions extends ExecFileOptions {
   readonly cwd?: string;
+  readonly env?: NodeJS.ProcessEnv;
   readonly maxBuffer?: number;
   readonly shell: false;
   readonly signal?: AbortSignal;
@@ -248,6 +249,7 @@ export function commandFreeze<Value extends object>(value: Value): Readonly<Valu
 
 export function commandPinnedExecOptions(values: {
   cwd?: string;
+  env?: NodeJS.ProcessEnv;
   maxBuffer?: number;
   signal?: AbortSignal;
   timeout?: number;
@@ -255,6 +257,7 @@ export function commandPinnedExecOptions(values: {
   assertCommandIntrinsics();
   return commandFreeze({
     ...(values.cwd === undefined ? {} : { cwd: values.cwd }),
+    ...(values.env === undefined ? {} : { env: values.env }),
     ...(values.maxBuffer === undefined ? {} : { maxBuffer: values.maxBuffer }),
     shell: false as const,
     ...(values.signal === undefined ? {} : { signal: values.signal }),
