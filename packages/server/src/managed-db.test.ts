@@ -4524,6 +4524,33 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
     expect(callbackCalls).toBe(1);
   });
 
+  it('rejects non-callback managed transaction overloads before the driver', () => {
+    let reached = 0;
+    const raw = {
+      execute(statement: unknown) {
+        return statement;
+      },
+      transaction(statement: unknown) {
+        reached += 1;
+        return statement;
+      },
+    };
+    const handle = managedDb(raw, 'write', {
+      sqlWritePolicy: { tables: ['products'], touches: ['product'] },
+    }) as unknown as { transaction(statement: unknown): unknown };
+
+    expect(() => handle.transaction('delete from victim_accounts')).toThrow(/KV422/u);
+    expect(() =>
+      handle.transaction(
+        stampTrustedSql(
+          { text: 'delete from victim_accounts', values: [] },
+          'non-callback transaction overload regression',
+        ),
+      ),
+    ).toThrow(/KV422/u);
+    expect(reached).toBe(0);
+  });
+
   it('write mode enforces SQLite top-level raw SQL sinks', async () => {
     const log: string[] = [];
     const sqlite = {

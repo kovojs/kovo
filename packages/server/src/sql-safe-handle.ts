@@ -2087,7 +2087,9 @@ function guardedTransactionMethod(
       );
     }
     if (typeof callback !== 'function') {
-      return witnessReflectApply(value, target, prependSqlSafetyArgument(callback, args));
+      throw new Error(
+        'KV422: managed DB transactions require a callback; non-callback transaction overloads cannot bind statements to the declared SQL policy (SPEC §10.2/§10.3/§11.2).',
+      );
     }
     if (args.length === 0) {
       const sqlite = runSqliteAsyncTransaction(
