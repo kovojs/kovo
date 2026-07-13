@@ -5,6 +5,24 @@
 // extractors. Two public helpers still build on the wire-shape internals, so they
 // import them back here.
 import { htmlJsonScriptFacts, kovoResponseBodyFact } from '@kovojs/test/internal/html-wire';
+import {
+  verifierArrayPush,
+  verifierDefineProperty,
+  verifierGetOwnPropertyDescriptor,
+  verifierNullRecord,
+  verifierNumber,
+  verifierNumberParseInt,
+  verifierObjectKeys,
+  verifierRegExp,
+  verifierRegExpExec,
+  verifierStringFromCodePoint,
+  verifierStringIndexOf,
+  verifierStringReplace,
+  verifierStringSlice,
+  verifierStringToLowerCase,
+  verifierStringTrim,
+  verifierTypeError,
+} from './verifier-security-intrinsics.js';
 
 /**
  * Extracts the server-rendered HTML for a single fragment target from a page
@@ -28,7 +46,7 @@ export function fragmentHtml(html: string, target: string): string {
   const end = matchingElementEnd(html, stampedElement);
   if (end === undefined) return '';
 
-  return html.slice(stampedElement.index, end);
+  return verifierStringSlice(html, stampedElement.index, end);
 }
 
 /**
@@ -148,11 +166,11 @@ export function htmlElementFacts(
   selector: HtmlElementSelector = {},
 ): HtmlElementFact[] {
   const facts: HtmlElementFact[] = [];
-  const tag = selector.tag?.toLowerCase();
+  const tag = selector.tag === undefined ? undefined : verifierStringToLowerCase(selector.tag);
   let offset = 0;
 
   while (offset < html.length) {
-    const start = html.indexOf('<', offset);
+    const start = verifierStringIndexOf(html, '<', offset);
     if (start === -1) return facts;
 
     const element = readOpeningElement(html, start);
@@ -172,10 +190,10 @@ export function htmlElementFacts(
       (tag === undefined || element.tag === tag) &&
       selectorAttributesMatch(attrs, selector.attrs)
     ) {
-      facts.push({
+      verifierArrayPush(facts, {
         attrs,
-        html: html.slice(element.index, end),
-        innerHtml: html.slice(element.end, end - closingTagLength(element)),
+        html: verifierStringSlice(html, element.index, end),
+        innerHtml: verifierStringSlice(html, element.end, end - closingTagLength(element)),
         tag: element.tag,
       });
     }
@@ -217,9 +235,10 @@ export function htmlDocumentFacts(html: string): HtmlDocumentFact {
  * @returns The matching links' `href` values, in document order.
  */
 export function htmlLinkHrefs(html: string, attrs: Record<string, string | true> = {}): string[] {
-  return htmlElementFacts(html, { attrs, tag: 'link' })
-    .map((link) => link.attrs.href ?? '')
-    .filter((href) => href !== '');
+  return filterArray(
+    mapArray(htmlElementFacts(html, { attrs, tag: 'link' }), (link) => link.attrs.href ?? ''),
+    (href) => href !== '',
+  );
 }
 
 /**
@@ -243,20 +262,23 @@ export function kovoQueryJsonValues(html: string, name: string): unknown[] {
  * @returns Facts for every form, in document order.
  */
 export function htmlFormFacts(html: string): HtmlFormFact[] {
-  return htmlElementFacts(html, { tag: 'form' }).map((form) => ({
+  return mapArray(htmlElementFacts(html, { tag: 'form' }), (form) => ({
     action: form.attrs.action ?? '',
     attrs: form.attrs,
-    fields: htmlElementFacts(form.innerHtml)
-      .filter((element) => ['button', 'input', 'select', 'textarea'].includes(element.tag))
-      .map((element) => ({
-        attrs: element.attrs,
-        html: element.html,
-        name: element.attrs.name ?? '',
-        tag: element.tag,
-        type: element.attrs.type ?? '',
-        value: element.attrs.value ?? element.innerHtml,
-      }))
-      .filter((field) => field.name !== ''),
+    fields: filterArray(
+      mapArray(
+        filterArray(htmlElementFacts(form.innerHtml), (element) => isFormFieldTag(element.tag)),
+        (element) => ({
+          attrs: element.attrs,
+          html: element.html,
+          name: element.attrs.name ?? '',
+          tag: element.tag,
+          type: element.attrs.type ?? '',
+          value: element.attrs.value ?? element.innerHtml,
+        }),
+      ),
+      (field) => field.name !== '',
+    ),
     html: form.html,
     innerHtml: form.innerHtml,
     method: form.attrs.method ?? 'get',
@@ -271,7 +293,7 @@ export function htmlFormFacts(html: string): HtmlFormFact[] {
  * @returns Each form's `action`, in document order.
  */
 export function htmlFormActions(html: string): string[] {
-  return htmlFormFacts(html).map((form) => form.action);
+  return mapArray(htmlFormFacts(html), (form) => form.action);
 }
 
 /**
@@ -284,9 +306,10 @@ export function htmlFormActions(html: string): string[] {
  * @returns The matching field facts, in document order.
  */
 export function htmlFormFields(html: string, name?: string): HtmlFormFieldFact[] {
-  return htmlFormFacts(html)
-    .flatMap((form) => form.fields)
-    .filter((field) => name === undefined || field.name === name);
+  return filterArray(
+    flatMapArray(htmlFormFacts(html), (form) => form.fields),
+    (field) => name === undefined || field.name === name,
+  );
 }
 
 /**
@@ -300,7 +323,7 @@ export function htmlFormFields(html: string, name?: string): HtmlFormFieldFact[]
 export function htmlFormFieldsByName(
   form: HtmlFormFact | undefined,
 ): Record<string, HtmlFormFieldFact> {
-  return Object.fromEntries((form?.fields ?? []).map((field) => [field.name, field]));
+  return recordFromEntries(mapArray(form?.fields ?? [], (field) => [field.name, field] as const));
 }
 
 /**
@@ -313,17 +336,23 @@ export function htmlFormFieldsByName(
  * @returns The matching key facts, in document order.
  */
 export function htmlKeyFacts(html: string, key?: string): HtmlKeyFact[] {
-  return htmlElementFacts(html)
-    .filter((element) => element.attrs['kovo-key'] !== undefined)
-    .map((element) => ({
-      attrs: element.attrs,
-      html: element.html,
-      innerHtml: element.innerHtml,
-      key: element.attrs['kovo-key'] ?? '',
-      tag: element.tag,
-      text: htmlTextContent(element.innerHtml),
-    }))
-    .filter((fact) => key === undefined || fact.key === key);
+  return filterArray(
+    mapArray(
+      filterArray(
+        htmlElementFacts(html),
+        (element) => ownRecordValue(element.attrs, 'kovo-key') !== undefined,
+      ),
+      (element) => ({
+        attrs: element.attrs,
+        html: element.html,
+        innerHtml: element.innerHtml,
+        key: ownRecordValue(element.attrs, 'kovo-key') ?? '',
+        tag: element.tag,
+        text: htmlTextContent(element.innerHtml),
+      }),
+    ),
+    (fact) => key === undefined || fact.key === key,
+  );
 }
 
 /**
@@ -334,7 +363,7 @@ export function htmlKeyFacts(html: string, key?: string): HtmlKeyFact[] {
  * @returns Each keyed element's `kovo-key`, in document order.
  */
 export function htmlKeyValues(html: string): string[] {
-  return htmlKeyFacts(html).map((fact) => fact.key);
+  return mapArray(htmlKeyFacts(html), (fact) => fact.key);
 }
 
 /**
@@ -346,7 +375,7 @@ export function htmlKeyValues(html: string): string[] {
  * @returns A map from `kovo-key` to that element's text content.
  */
 export function htmlKeyTextMap(html: string): Record<string, string> {
-  return Object.fromEntries(htmlKeyFacts(html).map((fact) => [fact.key, fact.text]));
+  return recordFromEntries(mapArray(htmlKeyFacts(html), (fact) => [fact.key, fact.text] as const));
 }
 
 /**
@@ -362,24 +391,24 @@ export function htmlTextContent(html: string): string {
   let offset = 0;
 
   while (offset < html.length) {
-    const start = html.indexOf('<', offset);
+    const start = verifierStringIndexOf(html, '<', offset);
     if (start === -1) {
-      text += html.slice(offset);
+      text += verifierStringSlice(html, offset);
       break;
     }
 
-    text += html.slice(offset, start);
+    text += verifierStringSlice(html, offset, start);
 
     const close = tagClose(html, start + 1);
     if (close === undefined) {
-      text += html.slice(start);
+      text += verifierStringSlice(html, start);
       break;
     }
 
     offset = close + 1;
   }
 
-  return decodeHtmlText(text).replace(/\s+/g, ' ').trim();
+  return verifierStringTrim(verifierStringReplace(decodeHtmlText(text), /\s+/g, ' '));
 }
 
 function explicitFragmentHtml(html: string, target: string): string | undefined {
@@ -393,7 +422,7 @@ function explicitFragmentHtml(html: string, target: string): string | undefined 
   const end = matchingElementEnd(html, fragmentStart);
   if (end === undefined) return undefined;
 
-  return html.slice(fragmentStart.end, end - '</kovo-fragment>'.length);
+  return verifierStringSlice(html, fragmentStart.end, end - '</kovo-fragment>'.length);
 }
 
 interface OpeningElement {
@@ -421,7 +450,7 @@ function findOpeningElement(
   let offset = 0;
 
   while (offset < html.length) {
-    const start = html.indexOf('<', offset);
+    const start = verifierStringIndexOf(html, '<', offset);
     if (start === -1) return undefined;
 
     const element = readOpeningElement(html, start);
@@ -437,17 +466,17 @@ function findOpeningElement(
 }
 
 function readOpeningElement(html: string, start: number): OpeningElement | undefined {
-  const head = /^<(?<tag>[a-z][a-z0-9-]*)\b/i.exec(html.slice(start));
+  const head = verifierRegExpExec(/^<(?<tag>[a-z][a-z0-9-]*)\b/i, verifierStringSlice(html, start));
   if (!head?.groups?.tag) return undefined;
 
   const close = tagClose(html, start + head[0].length);
   if (close === undefined) return undefined;
 
   return {
-    attrs: html.slice(start + head[0].length, close),
+    attrs: verifierStringSlice(html, start + head[0].length, close),
     end: close + 1,
     index: start,
-    tag: head.groups.tag.toLowerCase(),
+    tag: verifierStringToLowerCase(head.groups.tag),
   };
 }
 
@@ -474,14 +503,15 @@ function tagClose(html: string, start: number): number | undefined {
 }
 
 function matchingElementEnd(html: string, element: OpeningElement): number | undefined {
-  if (/\/\s*$/.test(element.attrs) || isVoidElement(element.tag)) return element.end;
+  if (verifierRegExpExec(/\/\s*$/, element.attrs) !== null || isVoidElement(element.tag))
+    return element.end;
   if (isRawTextElement(element.tag)) return rawTextElementEnd(html, element);
 
   let offset = element.end;
   let depth = 1;
 
   while (offset < html.length) {
-    const start = html.indexOf('<', offset);
+    const start = verifierStringIndexOf(html, '<', offset);
     if (start === -1) return undefined;
 
     const closing = readClosingElement(html, start);
@@ -496,7 +526,7 @@ function matchingElementEnd(html: string, element: OpeningElement): number | und
 
     const opening = readOpeningElement(html, start);
     if (opening) {
-      if (opening.tag === element.tag && !/\/\s*$/.test(opening.attrs)) {
+      if (opening.tag === element.tag && verifierRegExpExec(/\/\s*$/, opening.attrs) === null) {
         depth += 1;
       }
       offset = opening.end;
@@ -510,19 +540,22 @@ function matchingElementEnd(html: string, element: OpeningElement): number | und
 }
 
 function elementFactEnd(html: string, element: OpeningElement): number | undefined {
-  return /\/\s*$/.test(element.attrs) || isVoidElement(element.tag)
+  return verifierRegExpExec(/\/\s*$/, element.attrs) !== null || isVoidElement(element.tag)
     ? element.end
     : matchingElementEnd(html, element);
 }
 
 function rawTextElementEnd(html: string, element: OpeningElement): number | undefined {
-  const closing = new RegExp(`</${escapeRegExp(element.tag)}\\s*>`, 'i');
-  const match = closing.exec(html.slice(element.end));
+  const closing = verifierRegExp(`</${escapeRegExp(element.tag)}\\s*>`, 'i');
+  const match = verifierRegExpExec(closing, verifierStringSlice(html, element.end));
   return match ? element.end + match.index + match[0].length : undefined;
 }
 
 function readClosingElement(html: string, start: number): { end: number; tag: string } | undefined {
-  const head = /^<\/(?<tag>[a-z][a-z0-9-]*)\b/i.exec(html.slice(start));
+  const head = verifierRegExpExec(
+    /^<\/(?<tag>[a-z][a-z0-9-]*)\b/i,
+    verifierStringSlice(html, start),
+  );
   if (!head?.groups?.tag) return undefined;
 
   const close = tagClose(html, start + head[0].length);
@@ -530,30 +563,35 @@ function readClosingElement(html: string, start: number): { end: number; tag: st
 
   return {
     end: close + 1,
-    tag: head.groups.tag.toLowerCase(),
+    tag: verifierStringToLowerCase(head.groups.tag),
   };
 }
 
 function readHtmlAttribute(attrs: string, name: string): string | null {
-  const pattern = new RegExp(
+  const pattern = verifierRegExp(
     `(?:^|\\s)${escapeRegExp(name)}(?:\\s*=\\s*(?:"(?<double>[^"]*)"|'(?<single>[^']*)'|(?<bare>[^\\s"'=<>\`]+)))?(?=\\s|$|/)`,
     'i',
   );
-  const match = pattern.exec(attrs);
+  const match = verifierRegExpExec(pattern, attrs);
   if (!match) return null;
 
   return match.groups?.double ?? match.groups?.single ?? match.groups?.bare ?? '';
 }
 
 function readHtmlAttributes(attrs: string): Record<string, string> {
-  const result: Record<string, string> = {};
+  const result = verifierNullRecord<string>();
   const pattern =
     /(?:^|\s)(?<name>[^\s"'=<>`/]+)(?:\s*=\s*(?:"(?<double>[^"]*)"|'(?<single>[^']*)'|(?<bare>[^\s"'=<>`]+)))?(?=\s|$|\/)/gi;
 
-  for (const match of attrs.matchAll(pattern)) {
-    const name = match.groups?.name?.toLowerCase();
+  let match: RegExpExecArray | null;
+  while ((match = verifierRegExpExec(pattern, attrs)) !== null) {
+    const name = match.groups?.name;
     if (!name) continue;
-    result[name] = match.groups?.double ?? match.groups?.single ?? match.groups?.bare ?? '';
+    defineOwnRecordValue(
+      result,
+      verifierStringToLowerCase(name),
+      match.groups?.double ?? match.groups?.single ?? match.groups?.bare ?? '',
+    );
   }
 
   return result;
@@ -565,33 +603,41 @@ function selectorAttributesMatch(
 ): boolean {
   if (!selectorAttrs) return true;
 
-  return Object.entries(selectorAttrs).every(([name, value]) => {
-    const actual = attrs[name.toLowerCase()];
+  const selectorEntries = ownRecordEntries(selectorAttrs);
+  for (let index = 0; index < selectorEntries.length; index += 1) {
+    const [name, value] = selectorEntries[index]!;
+    const actual = ownRecordValue(attrs, verifierStringToLowerCase(name));
     if (actual === undefined) return false;
-    return value === true || actual === value;
-  });
+    if (value !== true && actual !== value) return false;
+  }
+  return true;
 }
 
 function closingTagLength(element: OpeningElement): number {
-  return /\/\s*$/.test(element.attrs) || isVoidElement(element.tag) ? 0 : element.tag.length + 3;
+  return verifierRegExpExec(/\/\s*$/, element.attrs) !== null || isVoidElement(element.tag)
+    ? 0
+    : element.tag.length + 3;
 }
 
 function isVoidElement(tag: string): boolean {
-  return [
-    'area',
-    'base',
-    'br',
-    'col',
-    'embed',
-    'hr',
-    'img',
-    'input',
-    'link',
-    'meta',
-    'source',
-    'track',
-    'wbr',
-  ].includes(tag);
+  switch (tag) {
+    case 'area':
+    case 'base':
+    case 'br':
+    case 'col':
+    case 'embed':
+    case 'hr':
+    case 'img':
+    case 'input':
+    case 'link':
+    case 'meta':
+    case 'source':
+    case 'track':
+    case 'wbr':
+      return true;
+    default:
+      return false;
+  }
 }
 
 function isRawTextElement(tag: string): boolean {
@@ -601,17 +647,17 @@ function isRawTextElement(tag: string): boolean {
 function decodeHtmlText(text: string): string {
   const entity = /&(?:#(?<decimal>\d+)|#x(?<hex>[0-9a-f]+)|(?<named>amp|lt|gt|quot|apos));/gi;
 
-  return text.replace(entity, (match, ...args: unknown[]) => {
+  return verifierStringReplace(text, entity, (match, ...args: unknown[]) => {
     const groups = args[args.length - 1] as
       | { decimal?: string; hex?: string; named?: string }
       | undefined;
     const decimal = groups?.decimal;
-    if (decimal !== undefined) return String.fromCodePoint(Number(decimal));
+    if (decimal !== undefined) return verifierStringFromCodePoint(verifierNumber(decimal));
 
     const hex = groups?.hex;
-    if (hex !== undefined) return String.fromCodePoint(Number.parseInt(hex, 16));
+    if (hex !== undefined) return verifierStringFromCodePoint(verifierNumberParseInt(hex, 16));
 
-    switch (groups?.named?.toLowerCase()) {
+    switch (groups?.named === undefined ? undefined : verifierStringToLowerCase(groups.named)) {
       case 'amp':
         return '&';
       case 'lt':
@@ -629,5 +675,98 @@ function decodeHtmlText(text: string): string {
 }
 
 function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return verifierStringReplace(value, /[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function mapArray<Input, Output>(
+  values: readonly Input[],
+  mapper: (value: Input, index: number) => Output,
+): Output[] {
+  const output: Output[] = [];
+  for (let index = 0; index < values.length; index += 1) {
+    verifierArrayPush(output, mapper(values[index]!, index));
+  }
+  return output;
+}
+
+function filterArray<Value>(
+  values: readonly Value[],
+  predicate: (value: Value, index: number) => boolean,
+): Value[] {
+  const output: Value[] = [];
+  for (let index = 0; index < values.length; index += 1) {
+    const value = values[index]!;
+    if (predicate(value, index)) verifierArrayPush(output, value);
+  }
+  return output;
+}
+
+function flatMapArray<Input, Output>(
+  values: readonly Input[],
+  mapper: (value: Input, index: number) => readonly Output[],
+): Output[] {
+  const output: Output[] = [];
+  for (let index = 0; index < values.length; index += 1) {
+    const mapped = mapper(values[index]!, index);
+    for (let mappedIndex = 0; mappedIndex < mapped.length; mappedIndex += 1) {
+      verifierArrayPush(output, mapped[mappedIndex]!);
+    }
+  }
+  return output;
+}
+
+function isFormFieldTag(tag: string): boolean {
+  return tag === 'button' || tag === 'input' || tag === 'select' || tag === 'textarea';
+}
+
+function defineOwnRecordValue<Value>(
+  record: Record<string, Value>,
+  key: string,
+  value: Value,
+): void {
+  verifierDefineProperty(record, key, {
+    configurable: true,
+    enumerable: true,
+    value,
+    writable: true,
+  });
+}
+
+function ownRecordValue<Value>(
+  record: Readonly<Record<string, Value>>,
+  key: string,
+): Value | undefined {
+  const descriptor = verifierGetOwnPropertyDescriptor(record, key);
+  if (descriptor === undefined) return undefined;
+  if (!('value' in descriptor)) {
+    throw verifierTypeError('Kovo HTML fact records require own-data properties.');
+  }
+  return descriptor.value as Value;
+}
+
+function ownRecordEntries<Value>(
+  record: Readonly<Record<string, Value>>,
+): Array<readonly [string, Value]> {
+  const entries: Array<readonly [string, Value]> = [];
+  const keys = verifierObjectKeys(record);
+  for (let index = 0; index < keys.length; index += 1) {
+    const key = keys[index]!;
+    const descriptor = verifierGetOwnPropertyDescriptor(record, key);
+    if (descriptor === undefined || !('value' in descriptor)) {
+      throw verifierTypeError('Kovo HTML selectors require stable own-data properties.');
+    }
+    verifierArrayPush(entries, [key, descriptor.value as Value]);
+  }
+  return entries;
+}
+
+function recordFromEntries<Value>(
+  entries: readonly (readonly [string, Value])[],
+): Record<string, Value> {
+  const record = verifierNullRecord<Value>();
+  for (let index = 0; index < entries.length; index += 1) {
+    const [key, value] = entries[index]!;
+    defineOwnRecordValue(record, key, value);
+  }
+  return record;
 }

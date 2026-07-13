@@ -40,6 +40,124 @@ describe('@kovojs/test assertions', () => {
     );
   });
 
+  it('keeps optimistic counterexamples visible after tested code replaces array iteration', () => {
+    const iteratorDescriptor = Object.getOwnPropertyDescriptor(Array.prototype, Symbol.iterator)!;
+    let error: unknown;
+
+    try {
+      Object.defineProperty(Array.prototype, Symbol.iterator, {
+        configurable: true,
+        value: function* emptyArrayIterator() {},
+        writable: true,
+      });
+      try {
+        propertyTest({
+          apply(state: { count: number }, input: { quantity: number }) {
+            return { count: state.count + input.quantity };
+          },
+          cases: [{ input: { quantity: 1 }, state: { count: 0 } }],
+          predict(state) {
+            return { count: state.count };
+          },
+        });
+      } catch (caught) {
+        error = caught;
+      }
+    } finally {
+      Object.defineProperty(Array.prototype, Symbol.iterator, iteratorDescriptor);
+    }
+
+    expect(String(error)).toContain(
+      'Optimistic property failed for case 0: predicted { count: 0 }, eventual { count: 1 }',
+    );
+  });
+
+  it('keeps prediction-side mutation visible after tested code replaces structuredClone', () => {
+    const cloneDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'structuredClone')!;
+    let error: unknown;
+
+    try {
+      Object.defineProperty(globalThis, 'structuredClone', {
+        configurable: true,
+        value: <Value>(value: Value): Value => value,
+        writable: true,
+      });
+      try {
+        propertyTest({
+          apply(state: { count: number }) {
+            return { count: state.count };
+          },
+          cases: [{ input: {}, state: { count: 0 } }],
+          predict(state) {
+            state.count = 1;
+            return { count: state.count };
+          },
+        });
+      } catch (caught) {
+        error = caught;
+      }
+    } finally {
+      Object.defineProperty(globalThis, 'structuredClone', cloneDescriptor);
+    }
+
+    expect(String(error)).toContain(
+      'Optimistic property failed for case 0: predicted { count: 1 }, eventual { count: 0 }',
+    );
+  });
+
+  it('keeps lazy counterexamples visible after tested code replaces generator controls', () => {
+    function* cases() {
+      yield { input: { quantity: 1 }, state: { count: 0 } };
+    }
+    const iterable = cases();
+    let prototype: object | null = iterable;
+    let iteratorOwner: object | undefined;
+    let nextOwner: object | undefined;
+    while (prototype !== null) {
+      if (Object.getOwnPropertyDescriptor(prototype, Symbol.iterator) !== undefined) {
+        iteratorOwner = prototype;
+      }
+      if (Object.getOwnPropertyDescriptor(prototype, 'next') !== undefined) nextOwner = prototype;
+      prototype = Object.getPrototypeOf(prototype);
+    }
+    const iteratorDescriptor = Object.getOwnPropertyDescriptor(iteratorOwner!, Symbol.iterator)!;
+    const nextDescriptor = Object.getOwnPropertyDescriptor(nextOwner!, 'next')!;
+    let error: unknown;
+
+    try {
+      Object.defineProperty(iteratorOwner!, Symbol.iterator, {
+        configurable: true,
+        value: function* emptyGeneratorIterator() {},
+        writable: true,
+      });
+      Object.defineProperty(nextOwner!, 'next', {
+        configurable: true,
+        value: () => ({ done: true, value: undefined }),
+        writable: true,
+      });
+      try {
+        propertyTest({
+          apply(state: { count: number }, input: { quantity: number }) {
+            return { count: state.count + input.quantity };
+          },
+          cases: iterable,
+          predict(state) {
+            return { count: state.count };
+          },
+        });
+      } catch (caught) {
+        error = caught;
+      }
+    } finally {
+      Object.defineProperty(iteratorOwner!, Symbol.iterator, iteratorDescriptor);
+      Object.defineProperty(nextOwner!, 'next', nextDescriptor);
+    }
+
+    expect(String(error)).toContain(
+      'Optimistic property failed for case 0: predicted { count: 0 }, eventual { count: 1 }',
+    );
+  });
+
   it('stops lazy property case iteration after the first counterexample', () => {
     let consumedSecondCase = false;
     function* cases() {

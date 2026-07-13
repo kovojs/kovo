@@ -7,6 +7,14 @@
 // form / key / text extractors they build on stay public in `../html-fragment.ts`.
 
 import { htmlElementFacts, htmlKeyValues, type HtmlElementFact } from '@kovojs/test/html-fragment';
+import {
+  verifierArrayPush,
+  verifierDefineProperty,
+  verifierGetOwnPropertyDescriptor,
+  verifierJsonParse,
+  verifierNullRecord,
+  verifierTypeError,
+} from '../verifier-security-intrinsics.js';
 
 /** @internal */
 export interface HtmlJsonScriptFact {
@@ -75,10 +83,10 @@ export function htmlJsonScriptFacts(
   html: string,
   attrs: Record<string, string | true> = { type: 'application/json' },
 ): HtmlJsonScriptFact[] {
-  return htmlElementFacts(html, { attrs, tag: 'script' }).map((element) => ({
+  return mapArray(htmlElementFacts(html, { attrs, tag: 'script' }), (element) => ({
     attrs: element.attrs,
     html: element.html,
-    json: JSON.parse(element.innerHtml),
+    json: verifierJsonParse(element.innerHtml),
     rawJson: element.innerHtml,
   }));
 }
@@ -90,7 +98,7 @@ export function htmlDocumentRegions(html: string): HtmlDocumentRegions {
   const bodyRegions = htmlElementFacts(html, { tag: 'body' });
 
   if (htmlRegions.length !== 1 || headRegions.length !== 1 || bodyRegions.length !== 1) {
-    throw new Error(
+    throw verifierTypeError(
       `Expected one html/head/body document region; found html=${htmlRegions.length} head=${headRegions.length} body=${bodyRegions.length}`,
     );
   }
@@ -118,40 +126,48 @@ export function htmlMainMarkerFact(
 
 /** @internal */
 export function kovoQueryFacts(html: string, name?: string): KovoQueryFact[] {
-  return htmlElementFacts(html)
-    .filter(
-      (element) =>
-        element.tag === 'kovo-query' ||
-        (element.tag === 'script' && element.attrs['kovo-query'] !== undefined),
-    )
-    .map((element) => {
-      const queryName = element.attrs.name ?? element.attrs['kovo-query'] ?? '';
-      return {
-        attrs: element.attrs,
-        html: element.html,
-        json: JSON.parse(element.innerHtml),
-        name: queryName,
-        rawJson: element.innerHtml,
-        tag: element.tag,
-      };
-    })
-    .filter((fact) => name === undefined || fact.name === name);
+  return filterArray(
+    mapArray(
+      filterArray(
+        htmlElementFacts(html),
+        (element) =>
+          element.tag === 'kovo-query' ||
+          (element.tag === 'script' && element.attrs['kovo-query'] !== undefined),
+      ),
+      (element) => {
+        const queryName = element.attrs.name ?? element.attrs['kovo-query'] ?? '';
+        return {
+          attrs: element.attrs,
+          html: element.html,
+          json: verifierJsonParse(element.innerHtml),
+          name: queryName,
+          rawJson: element.innerHtml,
+          tag: element.tag,
+        };
+      },
+    ),
+    (fact) => name === undefined || fact.name === name,
+  );
 }
 
 /** @internal */
 export function kovoFragmentFacts(html: string, target?: string): KovoFragmentFact[] {
-  return htmlElementFacts(html, { tag: 'kovo-fragment' })
-    .map((element) => ({
+  return filterArray(
+    mapArray(htmlElementFacts(html, { tag: 'kovo-fragment' }), (element) => ({
       attrs: element.attrs,
       html: element.html,
       innerHtml: element.innerHtml,
-      stylesheetHrefs: htmlElementFacts(element.innerHtml, {
-        attrs: { rel: 'stylesheet' },
-        tag: 'link',
-      }).map((link) => link.attrs.href ?? ''),
+      stylesheetHrefs: mapArray(
+        htmlElementFacts(element.innerHtml, {
+          attrs: { rel: 'stylesheet' },
+          tag: 'link',
+        }),
+        (link) => link.attrs.href ?? '',
+      ),
       target: element.attrs.target ?? '',
-    }))
-    .filter((fact) => target === undefined || fact.target === target);
+    })),
+    (fact) => target === undefined || fact.target === target,
+  );
 }
 
 /** @internal */
@@ -160,14 +176,14 @@ export function kovoResponseBodyFact(html: string): KovoResponseBodyFact {
   const fragments = kovoFragmentFacts(html);
 
   return {
-    fragmentTargets: fragments.map((fragment) => fragment.target),
+    fragmentTargets: mapArray(fragments, (fragment) => fragment.target),
     fragments,
     keyValues: htmlKeyValues(html),
     queries,
     queryJsonByName: groupQueryJsonByName(queries),
-    queryNames: queries.map((query) => query.name),
-    stylesheetHrefsByTarget: Object.fromEntries(
-      fragments.map((fragment) => [fragment.target, fragment.stylesheetHrefs]),
+    queryNames: mapArray(queries, (query) => query.name),
+    stylesheetHrefsByTarget: recordFromEntries(
+      mapArray(fragments, (fragment) => [fragment.target, fragment.stylesheetHrefs] as const),
     ),
   };
 }
@@ -197,11 +213,16 @@ export function documentQueryScriptBehaviorFact(
 }
 
 function groupQueryJsonByName(queries: KovoQueryFact[]): Record<string, unknown[]> {
-  const grouped: Record<string, unknown[]> = {};
+  const grouped = verifierNullRecord<unknown[]>();
 
-  for (const query of queries) {
-    grouped[query.name] ??= [];
-    grouped[query.name]!.push(query.json);
+  for (let index = 0; index < queries.length; index += 1) {
+    const query = queries[index]!;
+    let values = ownRecordValue(grouped, query.name);
+    if (values === undefined) {
+      values = [];
+      defineOwnRecordValue(grouped, query.name, values);
+    }
+    verifierArrayPush(values, query.json);
   }
 
   return grouped;
@@ -210,8 +231,64 @@ function groupQueryJsonByName(queries: KovoQueryFact[]): Record<string, unknown[
 function compactQueryScriptFacts(
   queries: KovoQueryFact[],
 ): Array<Pick<KovoQueryFact, 'attrs' | 'rawJson'>> {
-  return queries.map((query) => ({
+  return mapArray(queries, (query) => ({
     attrs: query.attrs,
     rawJson: query.rawJson,
   }));
+}
+
+function mapArray<Input, Output>(
+  values: readonly Input[],
+  mapper: (value: Input, index: number) => Output,
+): Output[] {
+  const output: Output[] = [];
+  for (let index = 0; index < values.length; index += 1) {
+    verifierArrayPush(output, mapper(values[index]!, index));
+  }
+  return output;
+}
+
+function filterArray<Value>(
+  values: readonly Value[],
+  predicate: (value: Value, index: number) => boolean,
+): Value[] {
+  const output: Value[] = [];
+  for (let index = 0; index < values.length; index += 1) {
+    const value = values[index]!;
+    if (predicate(value, index)) verifierArrayPush(output, value);
+  }
+  return output;
+}
+
+function defineOwnRecordValue<Value>(
+  record: Record<string, Value>,
+  key: string,
+  value: Value,
+): void {
+  verifierDefineProperty(record, key, {
+    configurable: true,
+    enumerable: true,
+    value,
+    writable: true,
+  });
+}
+
+function ownRecordValue<Value>(record: Record<string, Value>, key: string): Value | undefined {
+  const descriptor = verifierGetOwnPropertyDescriptor(record, key);
+  if (descriptor === undefined) return undefined;
+  if (!('value' in descriptor)) {
+    throw verifierTypeError('Kovo HTML wire records require own-data properties.');
+  }
+  return descriptor.value as Value;
+}
+
+function recordFromEntries<Value>(
+  entries: readonly (readonly [string, Value])[],
+): Record<string, Value> {
+  const record = verifierNullRecord<Value>();
+  for (let index = 0; index < entries.length; index += 1) {
+    const [key, value] = entries[index]!;
+    defineOwnRecordValue(record, key, value);
+  }
+  return record;
 }

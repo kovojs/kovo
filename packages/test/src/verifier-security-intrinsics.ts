@@ -13,6 +13,7 @@ import { types as NodeUtilTypes } from 'node:util';
 
 const NativeArray = globalThis.Array;
 const NativeAsyncLocalStorage = AsyncLocalStorage;
+const NativeHeaders = globalThis.Headers;
 const NativeJSON = globalThis.JSON;
 const NativeMap = globalThis.Map;
 const NativeNumber = globalThis.Number;
@@ -25,9 +26,11 @@ const NativeRequest = globalThis.Request;
 const NativeResponse = globalThis.Response;
 const NativeSet = globalThis.Set;
 const NativeString = globalThis.String;
+const NativeSymbol = globalThis.Symbol;
 const NativeTypeError = globalThis.TypeError;
 const NativeURL = globalThis.URL;
 const NativeWeakMap = globalThis.WeakMap;
+const nativeStructuredClone = globalThis.structuredClone;
 
 const nativeReflectApply = NativeReflect.apply;
 const nativeReflectGet = NativeReflect.get;
@@ -36,12 +39,14 @@ const nativeArrayIsArray = NativeArray.isArray;
 const nativeArrayJoin = NativeArray.prototype.join;
 const nativeArraySlice = NativeArray.prototype.slice;
 const nativeArraySort = NativeArray.prototype.sort;
+const nativeJsonParse = NativeJSON.parse;
 const nativeJsonStringify = NativeJSON.stringify;
 const nativeMapForEach = NativeMap.prototype.forEach;
 const nativeMapGet = NativeMap.prototype.get;
 const nativeMapHas = NativeMap.prototype.has;
 const nativeMapSet = NativeMap.prototype.set;
 const nativeNumberIsSafeInteger = NativeNumber.isSafeInteger;
+const nativeNumberParseInt = NativeNumber.parseInt;
 const nativeObjectCreate = NativeObject.create;
 const nativeObjectDefineProperty = NativeObject.defineProperty;
 const nativeObjectFreeze = NativeObject.freeze;
@@ -50,6 +55,21 @@ const nativeObjectGetPrototypeOf = NativeObject.getPrototypeOf;
 const nativeObjectIsExtensible = NativeObject.isExtensible;
 const nativeObjectIsFrozen = NativeObject.isFrozen;
 const nativeObjectKeys = NativeObject.keys;
+const nativeHeadersGet = stableOwnFunction(NativeHeaders.prototype, 'get');
+const nativeHeadersGetSetCookie = optionalStableOwnFunction(
+  NativeHeaders.prototype,
+  'getSetCookie',
+);
+const nativeRegExpHasIndices = optionalStableOwnGetter(NativeRegExp.prototype, 'hasIndices');
+const nativeRegExpGlobal = stableOwnGetter(NativeRegExp.prototype, 'global');
+const nativeRegExpIgnoreCase = stableOwnGetter(NativeRegExp.prototype, 'ignoreCase');
+const nativeRegExpMultiline = stableOwnGetter(NativeRegExp.prototype, 'multiline');
+const nativeRegExpDotAll = stableOwnGetter(NativeRegExp.prototype, 'dotAll');
+const nativeRegExpUnicode = stableOwnGetter(NativeRegExp.prototype, 'unicode');
+const nativeRegExpUnicodeSets = optionalStableOwnGetter(NativeRegExp.prototype, 'unicodeSets');
+const nativeRegExpSticky = stableOwnGetter(NativeRegExp.prototype, 'sticky');
+const nativeRegExpSource = stableOwnGetter(NativeRegExp.prototype, 'source');
+const nativeRegExpReplace = NativeRegExp.prototype[NativeSymbol.replace];
 const nativeAsyncFunctionPrototype = apply<object>(nativeObjectGetPrototypeOf, NativeObject, [
   async function verifierAsyncFunctionControl(): Promise<void> {},
 ]);
@@ -65,11 +85,14 @@ const nativeStringEndsWith = NativeString.prototype.endsWith;
 const nativeStringIndexOf = NativeString.prototype.indexOf;
 const nativeStringIncludes = NativeString.prototype.includes;
 const nativeStringReplaceAll = NativeString.prototype.replaceAll;
+const nativeStringRepeat = NativeString.prototype.repeat;
 const nativeStringSlice = NativeString.prototype.slice;
 const nativeStringSplit = NativeString.prototype.split;
 const nativeStringStartsWith = NativeString.prototype.startsWith;
 const nativeStringToLowerCase = NativeString.prototype.toLowerCase;
 const nativeStringTrim = NativeString.prototype.trim;
+const nativeStringFromCodePoint = NativeString.fromCodePoint;
+const nativeUtilIsGeneratorObject = NodeUtilTypes.isGeneratorObject;
 const nativeUtilIsPromise = NodeUtilTypes.isPromise;
 const nativeUtilIsProxy = NodeUtilTypes.isProxy;
 const nativeWeakMapGet = NativeWeakMap.prototype.get;
@@ -85,6 +108,12 @@ const nativeUrlPathname = stableOwnGetter(NativeURL.prototype, 'pathname');
 const nativeUrlUsername = stableOwnGetter(NativeURL.prototype, 'username');
 const nativeAsyncStorageGetStore = stableOwnFunction(NativeAsyncLocalStorage.prototype, 'getStore');
 const nativeAsyncStorageRun = stableOwnFunction(NativeAsyncLocalStorage.prototype, 'run');
+const nativeGeneratorNext = stableOwnFunction(
+  (function* verifierGeneratorControl() {
+    yield undefined;
+  })(),
+  'next',
+);
 
 function apply<Return>(fn: Function, receiver: unknown, args: readonly unknown[]): Return {
   return nativeReflectApply(fn, receiver, args) as Return;
@@ -121,6 +150,147 @@ function stableOwnGetter(value: object, property: PropertyKey): Function {
   return descriptor.get;
 }
 
+function optionalStableOwnFunction(value: object, property: PropertyKey): Function | undefined {
+  const descriptor = apply<PropertyDescriptor | undefined>(
+    nativeObjectGetOwnPropertyDescriptor,
+    NativeObject,
+    [value, property],
+  );
+  if (descriptor === undefined) return undefined;
+  if (!('value' in descriptor) || typeof descriptor.value !== 'function') {
+    throw new NativeTypeError(`Kovo verifier control ${String(property)} is unavailable.`);
+  }
+  return descriptor.value;
+}
+
+function optionalStableOwnGetter(value: object, property: PropertyKey): Function | undefined {
+  const descriptor = apply<PropertyDescriptor | undefined>(
+    nativeObjectGetOwnPropertyDescriptor,
+    NativeObject,
+    [value, property],
+  );
+  if (descriptor === undefined) return undefined;
+  if (typeof descriptor.get !== 'function') {
+    throw new NativeTypeError(`Kovo verifier getter ${String(property)} is unavailable.`);
+  }
+  return descriptor.get;
+}
+
+function regExpControlValue(getter: Function | undefined, pattern: RegExp): boolean {
+  return getter !== undefined && apply(getter, pattern, []) === true;
+}
+
+function cloneControlledRegExp(pattern: RegExp): RegExp {
+  const hasIndices = regExpControlValue(nativeRegExpHasIndices, pattern);
+  const global = regExpControlValue(nativeRegExpGlobal, pattern);
+  const ignoreCase = regExpControlValue(nativeRegExpIgnoreCase, pattern);
+  const multiline = regExpControlValue(nativeRegExpMultiline, pattern);
+  const dotAll = regExpControlValue(nativeRegExpDotAll, pattern);
+  const unicode = regExpControlValue(nativeRegExpUnicode, pattern);
+  const unicodeSets = regExpControlValue(nativeRegExpUnicodeSets, pattern);
+  const sticky = regExpControlValue(nativeRegExpSticky, pattern);
+  let flags = '';
+  if (hasIndices) flags += 'd';
+  if (global) flags += 'g';
+  if (ignoreCase) flags += 'i';
+  if (multiline) flags += 'm';
+  if (dotAll) flags += 's';
+  if (unicode) flags += 'u';
+  if (unicodeSets) flags += 'v';
+  if (sticky) flags += 'y';
+  const source = apply<string>(nativeRegExpSource, pattern, []);
+  const clone = new NativeRegExp(source, flags);
+  apply(nativeObjectDefineProperty, NativeObject, [
+    clone,
+    'exec',
+    {
+      configurable: true,
+      enumerable: false,
+      value: controlledRegExpExec,
+      writable: false,
+    },
+  ]);
+  const controls: readonly (readonly [string, boolean])[] = [
+    ['global', global],
+    ['hasIndices', hasIndices],
+    ['ignoreCase', ignoreCase],
+    ['multiline', multiline],
+    ['dotAll', dotAll],
+    ['sticky', sticky],
+    ['unicode', unicode],
+    ['unicodeSets', unicodeSets],
+  ];
+  for (let index = 0; index < controls.length; index += 1) {
+    const control = controls[index]!;
+    apply(nativeObjectDefineProperty, NativeObject, [
+      clone,
+      control[0],
+      {
+        configurable: true,
+        enumerable: false,
+        value: control[1],
+        writable: false,
+      },
+    ]);
+  }
+  return clone;
+}
+
+function controlledRegExpExec(this: RegExp, value: string): RegExpExecArray | null {
+  return apply(nativeRegExpExec, this, [value]);
+}
+
+function controlledRegExpReplace(
+  value: string,
+  pattern: RegExp,
+  replacement: string | ((substring: string, ...args: unknown[]) => string),
+): string {
+  return apply(nativeRegExpReplace, cloneControlledRegExp(pattern), [value, replacement]);
+}
+
+function controlledStringReplace(
+  value: string,
+  search: string,
+  replacement: string | ((substring: string, ...args: unknown[]) => string),
+): string {
+  const index = apply<number>(nativeStringIndexOf, value, [search, 0]);
+  if (index === -1) return value;
+  const prefix = apply<string>(nativeStringSlice, value, [0, index]);
+  const suffix = apply<string>(nativeStringSlice, value, [index + search.length]);
+  const inserted =
+    typeof replacement === 'function'
+      ? apply<string>(replacement, undefined, [search, index, value])
+      : expandStringReplacement(replacement, search, prefix, suffix);
+  return `${prefix}${inserted}${suffix}`;
+}
+
+function expandStringReplacement(
+  replacement: string,
+  match: string,
+  prefix: string,
+  suffix: string,
+): string {
+  let result = '';
+  for (let index = 0; index < replacement.length; index += 1) {
+    const char = replacement[index]!;
+    if (char !== '$' || index + 1 >= replacement.length) {
+      result += char;
+      continue;
+    }
+    const next = replacement[index + 1]!;
+    if (next === '$') result += '$';
+    else if (next === '&') result += match;
+    else if (next === '`') result += prefix;
+    else if (next === "'") result += suffix;
+    else {
+      result += '$';
+      continue;
+    }
+    index += 1;
+  }
+  return result;
+}
+
 function capturedControlsAreSound(): boolean {
   try {
     const target = { safe: 7 };
@@ -154,9 +324,11 @@ function capturedControlsAreSound(): boolean {
       [target, 'safe'],
     );
     const response = new NativeResponse('safe', { status: 201 });
+    const headers = new NativeHeaders({ 'x-kovo-control': 'safe' });
     const request = new NativeRequest('https://example.test/safe?value=1');
     const url = new NativeURL('https://example.test/safe?value=1');
     const promise = apply<Promise<void>>(nativePromiseResolve, NativePromise, [undefined]);
+    const clone = apply<{ safe: number }>(nativeStructuredClone, undefined, [{ safe: 13 }]);
     return (
       proxy.safe === 7 &&
       apply(nativeUtilIsProxy, NodeUtilTypes, [proxy]) === true &&
@@ -169,7 +341,9 @@ function capturedControlsAreSound(): boolean {
       apply(nativeMapGet, map, ['safe']) === 11 &&
       apply(nativeSetHas, set, ['safe']) === true &&
       apply(nativeArrayJoin, array, [',']) === 'a,b' &&
+      apply<Record<string, unknown>>(nativeJsonParse, NativeJSON, ['{"safe":7}']).safe === 7 &&
       apply(nativeJsonStringify, NativeJSON, [{ safe: 7 }]) === '{"safe":7}' &&
+      apply(nativeHeadersGet, headers, ['x-kovo-control']) === 'safe' &&
       apply(nativeRequestUrl, request, []) === 'https://example.test/safe?value=1' &&
       apply(nativeUrlPathname, url, []) === '/safe' &&
       response.status === 201 &&
@@ -177,9 +351,14 @@ function capturedControlsAreSound(): boolean {
       descriptor !== undefined &&
       'value' in descriptor &&
       descriptor.value === 7 &&
+      clone.safe === 13 &&
       apply(nativeObjectGetPrototypeOf, NativeObject, [async function asyncControl() {}]) ===
         nativeAsyncFunctionPrototype &&
       apply(nativeStringTrim, ' safe ', []) === 'safe' &&
+      apply(nativeStringRepeat, 'a', [2]) === 'aa' &&
+      controlledRegExpReplace('unsafe', /^un/u, '') === 'safe' &&
+      apply(nativeNumberParseInt, NativeNumber, ['10', 10]) === 10 &&
+      apply(nativeStringFromCodePoint, NativeString, [0x61]) === 'a' &&
       apply<RegExpExecArray | null>(nativeRegExpExec, /^safe$/u, ['safe'])?.[0] === 'safe'
     );
   } catch {
@@ -418,6 +597,74 @@ export function verifierIsPromise(value: unknown): value is Promise<unknown> {
   return apply(nativeUtilIsPromise, NodeUtilTypes, [value]) === true;
 }
 
+export function verifierStructuredClone<T>(value: T): T {
+  assertVerifierSecurityIntrinsics();
+  return apply(nativeStructuredClone, undefined, [value]);
+}
+
+/** Iterate arrays through exact own-data snapshots and trusted iterators through pinned dispatch. */
+export function verifierForEachIterable<T>(
+  value: Iterable<T>,
+  label: string,
+  callback: (entry: T, index: number) => void,
+): void {
+  assertVerifierSecurityIntrinsics();
+  if (verifierIsArray(value)) {
+    const snapshot = verifierDenseArraySnapshot(value, label, (entry) => entry as T);
+    for (let index = 0; index < snapshot.length; index += 1) callback(snapshot[index]!, index);
+    return;
+  }
+  if (typeof value !== 'object' || value === null || verifierIsProxy(value)) {
+    throw new NativeTypeError(`${label} must be an array or stable iterable object.`);
+  }
+
+  let isNativeSet = false;
+  try {
+    const size = apply<unknown>(nativeSetSize, value, []);
+    isNativeSet = typeof size === 'number';
+  } catch {
+    // Not a native Set receiver; continue through the iterator protocol below.
+  }
+  if (isNativeSet) {
+    let index = 0;
+    apply(nativeSetForEach, value, [
+      (entry: T) => {
+        callback(entry, index);
+        index += 1;
+      },
+    ]);
+    return;
+  }
+
+  const valueIsGenerator = apply(nativeUtilIsGeneratorObject, NodeUtilTypes, [value]) === true;
+  const iterator = valueIsGenerator
+    ? value
+    : apply<unknown>(stableOwnFunction(value, NativeSymbol.iterator), value, []);
+  if (typeof iterator !== 'object' || iterator === null || verifierIsProxy(iterator)) {
+    throw new NativeTypeError(`${label} iterator must be a stable object.`);
+  }
+  const isGenerator =
+    valueIsGenerator || apply(nativeUtilIsGeneratorObject, NodeUtilTypes, [iterator]) === true;
+  const next = isGenerator ? nativeGeneratorNext : stableOwnFunction(iterator, 'next');
+  for (let index = 0; index < 1_000_000; index += 1) {
+    const result = apply<unknown>(next, iterator, []);
+    if (typeof result !== 'object' || result === null || verifierIsProxy(result)) {
+      throw new NativeTypeError(`${label} iterator result must be a stable object.`);
+    }
+    const done = verifierGetOwnPropertyDescriptor(result, 'done');
+    if (done !== undefined && !('value' in done)) {
+      throw new NativeTypeError(`${label} iterator done state must be own data.`);
+    }
+    if (done !== undefined && done.value) return;
+    const entry = verifierGetOwnPropertyDescriptor(result, 'value');
+    if (entry === undefined || !('value' in entry)) {
+      throw new NativeTypeError(`${label} iterator values must be own data.`);
+    }
+    callback(entry.value as T, index);
+  }
+  throw new NativeTypeError(`${label} exceeds the one-million-case verifier limit.`);
+}
+
 export function verifierArrayPush<T>(values: T[], value: T): number {
   assertVerifierSecurityIntrinsics();
   const lengthDescriptor = verifierGetOwnPropertyDescriptor(values, 'length');
@@ -470,6 +717,51 @@ export function verifierArraySort<T>(values: T[], compare: (left: T, right: T) =
 export function verifierJsonStringify(value: unknown): string | undefined {
   assertVerifierSecurityIntrinsics();
   return apply(nativeJsonStringify, NativeJSON, [value]);
+}
+
+export function verifierJsonParse(value: string): unknown {
+  assertVerifierSecurityIntrinsics();
+  return apply(nativeJsonParse, NativeJSON, [value]);
+}
+
+/**
+ * Read a native Headers object through boot-captured Web API controls. `undefined` means that
+ * `source` is not a native Headers receiver; an empty array means that it is a Headers receiver
+ * without the requested value.
+ */
+export function verifierHeadersValues(
+  source: object,
+  name: string,
+  readSetCookie: boolean,
+): string[] | undefined {
+  assertVerifierSecurityIntrinsics();
+  try {
+    apply(nativeHeadersGet, source, ['x-kovo-verifier-brand-check']);
+  } catch {
+    return undefined;
+  }
+
+  if (readSetCookie && nativeHeadersGetSetCookie !== undefined) {
+    const values = apply<unknown>(nativeHeadersGetSetCookie, source, []);
+    const snapshot = verifierDenseArraySnapshot(
+      values,
+      'Headers.getSetCookie() result',
+      (entry) => {
+        if (typeof entry !== 'string') {
+          throw new NativeTypeError('Headers.getSetCookie() returned a non-string value.');
+        }
+        return entry;
+      },
+    );
+    return verifierArraySlice(snapshot);
+  }
+
+  const value = apply<unknown>(nativeHeadersGet, source, [name]);
+  if (value === null) return [];
+  if (typeof value !== 'string') {
+    throw new NativeTypeError('Headers.get() returned a non-string value.');
+  }
+  return [value];
 }
 
 export function verifierDenseArraySnapshot<T>(
@@ -535,6 +827,22 @@ export function verifierStringReplaceAll(
   return apply(nativeStringReplaceAll, value, [search, replacement]);
 }
 
+export function verifierStringRepeat(value: string, count: number): string {
+  assertVerifierSecurityIntrinsics();
+  return apply(nativeStringRepeat, value, [count]);
+}
+
+export function verifierStringReplace(
+  value: string,
+  search: string | RegExp,
+  replacement: string | ((substring: string, ...args: unknown[]) => string),
+): string {
+  assertVerifierSecurityIntrinsics();
+  return typeof search === 'string'
+    ? controlledStringReplace(value, search, replacement)
+    : controlledRegExpReplace(value, search, replacement);
+}
+
 export function verifierStringSlice(value: string, start: number, end?: number): string {
   assertVerifierSecurityIntrinsics();
   return end === undefined
@@ -565,6 +873,21 @@ export function verifierStringTrim(value: string): string {
 export function verifierRegExpExec(pattern: RegExp, value: string): RegExpExecArray | null {
   assertVerifierSecurityIntrinsics();
   return apply(nativeRegExpExec, pattern, [value]);
+}
+
+export function verifierRegExp(source: string, flags?: string): RegExp {
+  assertVerifierSecurityIntrinsics();
+  return flags === undefined ? new NativeRegExp(source) : new NativeRegExp(source, flags);
+}
+
+export function verifierNumberParseInt(value: string, radix: number): number {
+  assertVerifierSecurityIntrinsics();
+  return apply(nativeNumberParseInt, NativeNumber, [value, radix]);
+}
+
+export function verifierStringFromCodePoint(value: number): string {
+  assertVerifierSecurityIntrinsics();
+  return apply(nativeStringFromCodePoint, NativeString, [value]);
 }
 
 export function verifierRequestUrl(request: Request): string {

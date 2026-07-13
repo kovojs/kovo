@@ -1,5 +1,12 @@
 import { inspect, isDeepStrictEqual } from 'node:util';
 import type { InferSchema, MutationDefinition, MutationResult, Schema } from '@kovojs/server';
+import {
+  verifierForEachIterable,
+  verifierGetOwnPropertyDescriptor,
+  verifierIsProxy,
+  verifierStructuredClone,
+  verifierTypeError,
+} from './verifier-security-intrinsics.js';
 
 /** An expected mutation failure: a code, or a code with an expected payload. */
 export type MutationErrorExpectation<
@@ -99,25 +106,94 @@ export function assertMutationError<
 export function propertyTest<State, Input, ClientShape = State>(
   options: PropertyTestOptions<State, Input, ClientShape>,
 ): PropertyTestResult {
-  let count = 0;
-  const shape = options.shape ?? ((state: State) => state as unknown as ClientShape);
-
-  for (const testCase of options.cases) {
-    const predicted = options.predict(structuredClone(testCase.state), testCase.input);
-    const eventual = shape(options.apply(structuredClone(testCase.state), testCase.input));
-
-    if (!deepEqual(predicted, eventual)) {
-      throw new Error(
-        `Optimistic property failed for case ${count}: predicted ${formatValue(
-          predicted,
-        )}, eventual ${formatValue(eventual)}`,
-      );
-    }
-
-    count += 1;
+  if (typeof options !== 'object' || options === null || verifierIsProxy(options)) {
+    throw verifierTypeError('Optimistic property options must be a stable object.');
   }
+  const apply = requiredPropertyFunction<(state: State, input: Input) => State>(
+    options,
+    'apply',
+    'Optimistic property options',
+  );
+  const predict = requiredPropertyFunction<(state: State, input: Input) => ClientShape>(
+    options,
+    'predict',
+    'Optimistic property options',
+  );
+  const cases = requiredOwnData(options, 'cases', 'Optimistic property options');
+  if (typeof cases !== 'object' || cases === null) {
+    throw verifierTypeError('Optimistic property cases must be an iterable object.');
+  }
+  const shapeValue = optionalOwnData(options, 'shape', 'Optimistic property options');
+  if (shapeValue !== undefined && typeof shapeValue !== 'function') {
+    throw verifierTypeError('Optimistic property shape must be a function.');
+  }
+  let count = 0;
+  const shape =
+    (shapeValue as ((state: State) => ClientShape) | undefined) ??
+    ((state: State) => state as unknown as ClientShape);
+
+  verifierForEachIterable<PropertyCase<State, Input>>(
+    cases as Iterable<PropertyCase<State, Input>>,
+    'Optimistic property cases',
+    (testCase, index) => {
+      if (typeof testCase !== 'object' || testCase === null || verifierIsProxy(testCase)) {
+        throw verifierTypeError(`Optimistic property case ${index} must be a stable object.`);
+      }
+      const state = verifierStructuredClone(
+        requiredOwnData(testCase, 'state', `Optimistic property case ${index}`) as State,
+      );
+      const input = verifierStructuredClone(
+        requiredOwnData(testCase, 'input', `Optimistic property case ${index}`) as Input,
+      );
+      const predicted = verifierStructuredClone(
+        predict(verifierStructuredClone(state), verifierStructuredClone(input)),
+      );
+      const eventual = verifierStructuredClone(
+        shape(apply(verifierStructuredClone(state), verifierStructuredClone(input))),
+      );
+
+      if (!deepEqual(predicted, eventual)) {
+        throw new Error(
+          `Optimistic property failed for case ${count}: predicted ${formatValue(
+            predicted,
+          )}, eventual ${formatValue(eventual)}`,
+        );
+      }
+
+      count += 1;
+    },
+  );
 
   return { cases: count };
+}
+
+function optionalOwnData(value: object, property: PropertyKey, label: string): unknown {
+  const descriptor = verifierGetOwnPropertyDescriptor(value, property);
+  if (descriptor === undefined) return undefined;
+  if (!('value' in descriptor)) {
+    throw verifierTypeError(`${label}.${String(property)} must be an own data property.`);
+  }
+  return descriptor.value;
+}
+
+function requiredOwnData(value: object, property: PropertyKey, label: string): unknown {
+  const descriptor = verifierGetOwnPropertyDescriptor(value, property);
+  if (descriptor === undefined || !('value' in descriptor)) {
+    throw verifierTypeError(`${label}.${String(property)} must be an own data property.`);
+  }
+  return descriptor.value;
+}
+
+function requiredPropertyFunction<Callback extends Function>(
+  value: object,
+  property: PropertyKey,
+  label: string,
+): Callback {
+  const callback = requiredOwnData(value, property, label);
+  if (typeof callback !== 'function') {
+    throw verifierTypeError(`${label}.${String(property)} must be a function.`);
+  }
+  return callback as Callback;
 }
 
 function deepEqual(left: unknown, right: unknown): boolean {
@@ -128,6 +204,7 @@ function formatValue(value: unknown): string {
   return inspect(value, {
     breakLength: Infinity,
     compact: true,
+    customInspect: false,
     depth: Infinity,
     sorted: true,
   });

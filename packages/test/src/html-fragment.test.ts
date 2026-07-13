@@ -27,6 +27,54 @@ import {
 } from '@kovojs/test/internal/html-wire';
 
 describe('@kovojs/test html fragment seam', () => {
+  it('keeps executable elements visible after tested app code replaces RegExp.exec', () => {
+    const originalExec = RegExp.prototype.exec;
+    let facts: ReturnType<typeof htmlElementFacts> | undefined;
+
+    try {
+      RegExp.prototype.exec = (() => null) as typeof RegExp.prototype.exec;
+      facts = htmlElementFacts('<main><script>globalThis.compromised = true</script></main>', {
+        tag: 'script',
+      });
+    } finally {
+      RegExp.prototype.exec = originalExec;
+    }
+
+    expect(facts).toEqual([
+      {
+        attrs: {},
+        html: '<script>globalThis.compromised = true</script>',
+        innerHtml: 'globalThis.compromised = true',
+        tag: 'script',
+      },
+    ]);
+  });
+
+  it('keeps rendered security-relevant text visible after RegExp replacement hooks are poisoned', () => {
+    const replaceDescriptor = Object.getOwnPropertyDescriptor(RegExp.prototype, Symbol.replace)!;
+    const execDescriptor = Object.getOwnPropertyDescriptor(RegExp.prototype, 'exec')!;
+    let text = '';
+
+    try {
+      Object.defineProperty(RegExp.prototype, Symbol.replace, {
+        configurable: true,
+        value: () => '',
+        writable: true,
+      });
+      Object.defineProperty(RegExp.prototype, 'exec', {
+        configurable: true,
+        value: () => null,
+        writable: true,
+      });
+      text = htmlTextContent('<div>Unsafe &amp; visible</div>');
+    } finally {
+      Object.defineProperty(RegExp.prototype, Symbol.replace, replaceDescriptor);
+      Object.defineProperty(RegExp.prototype, 'exec', execDescriptor);
+    }
+
+    expect(text).toBe('Unsafe & visible');
+  });
+
   it('extracts explicit fragments without constructing a harness page assertion', () => {
     expect(
       fragmentHtml(

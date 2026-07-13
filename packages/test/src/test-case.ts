@@ -3,6 +3,7 @@ import {
   type KovoTestContext,
   type KovoTestHarnessOptions,
 } from './harness.js';
+import { verifierDefineProperty, verifierFreeze } from './verifier-security-intrinsics.js';
 
 /** A test-runner adapter (e.g. vitest's `it`) `kovoTest` can register cases with. */
 export type KovoTestRunner = (name: string, run: () => Promise<void>) => unknown;
@@ -74,5 +75,16 @@ function configureKovoTest<Db>(
  * `kovoTest.configure(options)` to bind the harness once and call the result as
  * `test(name, fn)` (SPEC §12).
  */
-export const kovoTest: typeof kovoTestImpl & { configure: typeof configureKovoTest } =
-  Object.assign(kovoTestImpl, { configure: configureKovoTest });
+const kovoTestWithConfigure = kovoTestImpl as typeof kovoTestImpl & {
+  configure: typeof configureKovoTest;
+};
+verifierDefineProperty(kovoTestWithConfigure, 'configure', {
+  configurable: false,
+  enumerable: true,
+  value: configureKovoTest,
+  writable: false,
+});
+
+export const kovoTest: typeof kovoTestWithConfigure = verifierFreeze(
+  kovoTestWithConfigure,
+) as typeof kovoTestWithConfigure;

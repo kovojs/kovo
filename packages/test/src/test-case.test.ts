@@ -3,6 +3,18 @@ import { describe, expect, it } from 'vitest';
 import { kovoTest } from './test-case.js';
 
 describe('@kovojs/test case wrapper', () => {
+  it('does not expose mutable test-registration authority to tested plugins', () => {
+    const original = kovoTest.configure;
+    const changed = Reflect.set(kovoTest, 'configure', () => () => ({ name: 'skipped', run() {} }));
+
+    try {
+      expect(changed).toBe(false);
+      expect(kovoTest.configure).toBe(original);
+    } finally {
+      Reflect.set(kovoTest, 'configure', original);
+    }
+  });
+
   it('runs a provided callback with a harness context', async () => {
     await expect(
       kovoTest(

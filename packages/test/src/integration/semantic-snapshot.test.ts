@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { semanticSnapshot } from './semantic-snapshot.js';
+import { KOVO_SEMANTIC_ATTRS, semanticSnapshot } from './semantic-snapshot.js';
 
 describe('semanticSnapshot', () => {
   it('keeps Kovo semantic attributes and bound text', () => {
@@ -68,6 +68,43 @@ describe('semanticSnapshot', () => {
 
     const c = '<li kovo-key="a">Buy eggs</li>';
     expect(semanticSnapshot(a)).not.toBe(semanticSnapshot(c));
+  });
+
+  it('keeps semantic drift visible after tested code replaces Array.push', () => {
+    const originalPush = Array.prototype.push;
+    let before = '';
+    let after = '';
+
+    try {
+      Array.prototype.push = () => 0;
+      before = semanticSnapshot('<li kovo-key="reviewed">Buy milk</li>');
+      after = semanticSnapshot('<li kovo-key="attacker">Buy eggs</li>');
+    } finally {
+      Array.prototype.push = originalPush;
+    }
+
+    expect(before).not.toBe(after);
+    expect(after).toContain('kovo-key="attacker"');
+    expect(after).toContain('Buy eggs');
+  });
+
+  it('does not expose mutable semantic-attribute policy to tested plugins', () => {
+    const keyIndex = KOVO_SEMANTIC_ATTRS.indexOf('kovo-key');
+    const original = KOVO_SEMANTIC_ATTRS[keyIndex]!;
+    let changed = false;
+    let before = '';
+    let after = '';
+
+    try {
+      changed = Reflect.set(KOVO_SEMANTIC_ATTRS, keyIndex, 'data-attacker-hidden');
+      before = semanticSnapshot('<li kovo-key="reviewed">Same</li>');
+      after = semanticSnapshot('<li kovo-key="attacker">Same</li>');
+    } finally {
+      Reflect.set(KOVO_SEMANTIC_ATTRS, keyIndex, original);
+    }
+
+    expect(changed).toBe(false);
+    expect(before).not.toBe(after);
   });
 
   it('normalizes whitespace in text and across nesting', () => {
