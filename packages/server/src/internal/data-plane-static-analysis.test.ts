@@ -3,6 +3,7 @@ import { Stats } from 'node:fs';
 import { createRequire, syncBuiltinESMExports } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -690,6 +691,69 @@ export const status = query({
       ]);
     } finally {
       Stats.prototype.isDirectory = nativeIsDirectory;
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
+  it('does not redirect output-schema workers through a late global URL replacement', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kovo-data-plane-worker-url-poison-'));
+    const srcDir = join(root, 'src');
+    const forgedWorker = join(root, 'forged-worker.mjs');
+    const NativeURL = globalThis.URL;
+    const previousRequireWorker = process.env.KOVO_TEST_REQUIRE_OUTPUT_SCHEMA_WORKER;
+    let poisonHits = 0;
+    try {
+      await mkdir(srcDir, { recursive: true });
+      await writeFile(
+        join(srcDir, 'status.ts'),
+        [
+          'import { query, s } from "@kovojs/server";',
+          'export const status = query({',
+          '  reads: [],',
+          '  output: s.object({ ready: s.boolean() }),',
+          '  load: () => ({ ready: true }),',
+          '});',
+          `// ${root}`,
+        ].join('\n'),
+        'utf8',
+      );
+      for (let index = 1; index < 8; index += 1) {
+        await writeFile(
+          join(srcDir, `query-${index}.ts`),
+          `export const query${index} = ${index}; // ${root}\n`,
+          'utf8',
+        );
+      }
+      await writeFile(
+        forgedWorker,
+        'import { parentPort } from "node:worker_threads"; parentPort?.postMessage([]);\n',
+        'utf8',
+      );
+      const { collectDataPlaneAnalysis } = await loadSubject();
+      process.env.KOVO_TEST_REQUIRE_OUTPUT_SCHEMA_WORKER = '1';
+      globalThis.URL = function PoisonedStaticAnalysisUrl(input, base) {
+        if (`${input}`.includes('data-plane-static-analysis')) {
+          poisonHits += 1;
+          return new NativeURL(pathToFileURL(forgedWorker));
+        }
+        return base === undefined ? new NativeURL(input) : new NativeURL(input, base);
+      } as typeof URL;
+
+      await expect(
+        collectDataPlaneAnalysis({ appSourceDir: srcDir, root, skipStaticFacts: true }),
+      ).resolves.toMatchObject({
+        outputQueryShapeFacts: [
+          expect.objectContaining({ query: 'status', shape: { ready: 'boolean' } }),
+        ],
+      });
+      expect(poisonHits).toBe(0);
+    } finally {
+      globalThis.URL = NativeURL;
+      if (previousRequireWorker === undefined) {
+        delete process.env.KOVO_TEST_REQUIRE_OUTPUT_SCHEMA_WORKER;
+      } else {
+        process.env.KOVO_TEST_REQUIRE_OUTPUT_SCHEMA_WORKER = previousRequireWorker;
+      }
       await rm(root, { force: true, recursive: true });
     }
   });

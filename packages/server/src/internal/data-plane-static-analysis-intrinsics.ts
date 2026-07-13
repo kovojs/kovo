@@ -22,6 +22,7 @@ const NativeReflect = globalThis.Reflect;
 const NativeRegExp = globalThis.RegExp;
 const NativeString = globalThis.String;
 const NativeTypeError = globalThis.TypeError;
+const NativeURL = globalThis.URL;
 const nativeArrayIsArray = NativeArray.isArray;
 const nativeCreateHash = builtinCreateHash;
 const nativeCreateHmac = builtinCreateHmac;
@@ -54,6 +55,7 @@ const nativeStringSlice = NativeString.prototype.slice;
 const nativeStringStartsWith = NativeString.prototype.startsWith;
 const nativeStringToLowerCase = NativeString.prototype.toLowerCase;
 const nativeStatsIsDirectory = BuiltinStats.prototype.isDirectory;
+const nativeUrlHref = nativeObjectGetOwnPropertyDescriptor(NativeURL.prototype, 'href')?.get;
 
 function apply<Return>(fn: Function, receiver: unknown, args: readonly unknown[]): Return {
   return nativeReflectApply(fn, receiver, args) as Return;
@@ -103,7 +105,8 @@ function bootstrapSelfCheckPasses(): boolean {
       typeof nativeHashUpdate !== 'function' ||
       typeof nativeHashDigest !== 'function' ||
       typeof nativeHmacUpdate !== 'function' ||
-      typeof nativeHmacDigest !== 'function'
+      typeof nativeHmacDigest !== 'function' ||
+      typeof nativeUrlHref !== 'function'
     ) {
       return false;
     }
@@ -134,6 +137,8 @@ function bootstrapSelfCheckPasses(): boolean {
     if (apply(nativeStringLastIndexOf, 'a/b/c', ['/']) !== 3) return false;
     if (apply(nativeStringSlice, 'schema.ts', [0, 6]) !== 'schema') return false;
     if (apply(nativeStringToLowerCase, 'Schema.TS', []) !== 'schema.ts') return false;
+    const url = new NativeURL('./worker.js', 'file:///tmp/kovo/static-analysis.ts');
+    if (apply(nativeUrlHref, url, []) !== 'file:///tmp/kovo/worker.js') return false;
     if (!isUuidV4(nativeRandomUUID({ disableEntropyCache: true }))) return false;
     if (apply<RegExpExecArray | null>(nativeRegExpExec, /\.tsx?$/u, ['schema.ts']) === null) {
       return false;
@@ -500,6 +505,25 @@ export function staticAnalysisStringStartsWith(value: string, search: string): b
 export function staticAnalysisStringToLowerCase(value: string): string {
   assertDataPlaneStaticAnalysisIntrinsics();
   return apply(nativeStringToLowerCase, value, []);
+}
+
+export function staticAnalysisCreateUrl(input: string | URL, base?: string | URL): URL {
+  assertDataPlaneStaticAnalysisIntrinsics();
+  const value = base === undefined ? new NativeURL(input) : new NativeURL(input, base);
+  const href = apply<unknown>(nativeUrlHref!, value, []);
+  if (typeof href !== 'string' || href.length === 0) {
+    throw new NativeTypeError('Static-analysis URL construction returned an invalid URL.');
+  }
+  return value;
+}
+
+export function staticAnalysisUrlHref(value: URL): string {
+  assertDataPlaneStaticAnalysisIntrinsics();
+  const href = apply<unknown>(nativeUrlHref!, value, []);
+  if (typeof href !== 'string' || href.length === 0) {
+    throw new NativeTypeError('Static-analysis URL href is unavailable.');
+  }
+  return href;
 }
 
 export function staticAnalysisStatsIsDirectory(value: object): boolean {

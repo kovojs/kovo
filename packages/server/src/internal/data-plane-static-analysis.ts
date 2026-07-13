@@ -23,6 +23,7 @@ import {
   Worker as BuiltinWorker,
   workerData as builtinWorkerData,
 } from 'node:worker_threads';
+import { fileURLToPath as builtinFileURLToPath } from 'node:url';
 
 import type { DiagnosticCode } from '@kovojs/core';
 import { diagnosticDefinitions, isDiagnosticCode } from '@kovojs/core/internal/diagnostics';
@@ -38,6 +39,7 @@ import {
   staticAnalysisArrayLength,
   staticAnalysisArraySet,
   staticAnalysisCanonicalJson,
+  staticAnalysisCreateUrl,
   staticAnalysisCreatePromise,
   staticAnalysisDefineDataProperty,
   staticAnalysisHmacSha256,
@@ -64,6 +66,7 @@ import {
   staticAnalysisStringStartsWith,
   staticAnalysisStringToLowerCase,
   staticAnalysisStatsIsDirectory,
+  staticAnalysisUrlHref,
 } from './data-plane-static-analysis-intrinsics.ts';
 import type { RuntimeRegistryWireFacts } from './runtime-registry-wire.js';
 
@@ -189,6 +192,7 @@ const isMainThread = builtinIsMainThread;
 const parentPort = builtinParentPort;
 const Worker = BuiltinWorker;
 const workerData = builtinWorkerData;
+const fileURLToPath = builtinFileURLToPath;
 const processOnlyAnalyzerIdentity = staticAnalysisRandomUuid();
 // Cache storage is app-writable and therefore cannot authorize security facts. A key that exists
 // only in this bootstrapped process turns coordinated envelope edits into misses. Consequently,
@@ -618,9 +622,13 @@ async function importKovoDrizzleStaticModule(): Promise<KovoDrizzleStaticModule>
   try {
     return (await import(DRIZZLE_STATIC_ANALYZER_MODULE)) as unknown as KovoDrizzleStaticModule;
   } catch (error) {
-    const workspaceSource = new URL('../../../drizzle/src/static.ts', import.meta.url);
-    if (existsSync(workspaceSource)) {
-      return (await import(workspaceSource.href)) as unknown as KovoDrizzleStaticModule;
+    const workspaceSource = staticAnalysisCreateUrl(
+      '../../../drizzle/src/static.ts',
+      import.meta.url,
+    );
+    const workspaceSourceHref = staticAnalysisUrlHref(workspaceSource);
+    if (existsSync(fileURLToPath(workspaceSourceHref))) {
+      return (await import(workspaceSourceHref)) as unknown as KovoDrizzleStaticModule;
     }
     throw missingDrizzleError(error);
   }
@@ -1094,7 +1102,8 @@ function outputSchemaQueryShapeFactsInWorker(
 ): Promise<readonly QueryShapeFact[]> {
   return staticAnalysisCreatePromise((resolve, reject) => {
     let settled = false;
-    const worker = new Worker(new URL(import.meta.url), {
+    const workerModule = staticAnalysisCreateUrl(import.meta.url);
+    const worker = new Worker(fileURLToPath(staticAnalysisUrlHref(workerModule)), {
       workerData: {
         files,
         kind: OUTPUT_SCHEMA_QUERY_SHAPE_WORKER_KIND,
@@ -1544,8 +1553,9 @@ async function importRuntimeRegistryWireModule(): Promise<
   try {
     return await import('./runtime-registry-wire.js');
   } catch (error) {
-    const sourceUrl = new URL('./runtime-registry-wire.ts', import.meta.url);
-    if (existsSync(sourceUrl)) return await import(sourceUrl.href);
+    const sourceUrl = staticAnalysisCreateUrl('./runtime-registry-wire.ts', import.meta.url);
+    const sourceHref = staticAnalysisUrlHref(sourceUrl);
+    if (existsSync(fileURLToPath(sourceHref))) return await import(sourceHref);
     throw error;
   }
 }
@@ -1560,11 +1570,12 @@ function registerCompilerSourceResolutionHooks(): void {
         staticAnalysisStringEndsWith(specifier, '.js') &&
         context.parentURL
       ) {
-        const tsUrl = new URL(
+        const tsUrl = staticAnalysisCreateUrl(
           `${staticAnalysisStringSlice(specifier, 0, specifier.length - 3)}.ts`,
           context.parentURL,
         );
-        if (existsSync(tsUrl)) return nextResolve(tsUrl.href, context);
+        const tsHref = staticAnalysisUrlHref(tsUrl);
+        if (existsSync(fileURLToPath(tsHref))) return nextResolve(tsHref, context);
       }
       return nextResolve(specifier, context);
     },
