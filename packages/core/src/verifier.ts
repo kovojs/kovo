@@ -252,25 +252,85 @@ function createHmacSignature(
 }
 
 function snapshotHmacSignatureOptions(options: HmacSignatureOptions): HmacSignatureOptions {
-  const sourceTolerance = options.tolerance;
+  const encoding = ownHmacOption<HmacSignatureEncoding>(
+    options,
+    'encoding',
+    'HMAC signature encoding',
+    true,
+  );
+  const header = ownHmacOption<string>(options, 'header', 'HMAC signature header', true);
+  const multiSig = ownHmacOption<HmacMultiSignature>(
+    options,
+    'multiSig',
+    'HMAC signature multiSig',
+  );
+  const name = ownHmacOption<string>(options, 'name', 'HMAC signature name');
+  const payload = ownHmacOption<HmacSignaturePayload>(
+    options,
+    'payload',
+    'HMAC signature payload',
+    true,
+  );
+  const scheme = ownHmacOption<string>(options, 'scheme', 'HMAC signature scheme');
+  const secret = ownHmacOption<HmacSignatureOptions['secret']>(
+    options,
+    'secret',
+    'HMAC signature secret',
+    true,
+  );
+  const sourceTolerance = ownHmacOption<HmacSignatureTolerance>(
+    options,
+    'tolerance',
+    'HMAC signature tolerance',
+  );
+  if (encoding !== 'base64' && encoding !== 'base64url' && encoding !== 'hex') {
+    throw new TypeError('HMAC signature encoding must be base64, base64url, or hex.');
+  }
+  if (typeof header !== 'string' || header.length === 0) {
+    throw new TypeError('HMAC signature header must be a non-empty string.');
+  }
+  if (multiSig !== undefined && typeof multiSig !== 'boolean' && typeof multiSig !== 'function') {
+    throw new TypeError('HMAC signature multiSig must be a boolean or function.');
+  }
+  if (name !== undefined && typeof name !== 'string') {
+    throw new TypeError('HMAC signature name must be a string when provided.');
+  }
+  if (scheme !== undefined && typeof scheme !== 'string') {
+    throw new TypeError('HMAC signature scheme must be a string when provided.');
+  }
+  if (
+    sourceTolerance !== undefined &&
+    (typeof sourceTolerance !== 'object' || sourceTolerance === null)
+  ) {
+    throw new TypeError('HMAC signature tolerance must be an object when provided.');
+  }
   const tolerance =
     sourceTolerance === undefined ? undefined : snapshotHmacSignatureTolerance(sourceTolerance);
   return freezeSecurityValue({
-    encoding: options.encoding,
-    header: options.header,
-    ...(options.multiSig === undefined ? {} : { multiSig: options.multiSig }),
-    ...(options.name === undefined ? {} : { name: options.name }),
-    payload: snapshotWebhookPayload(options.payload),
-    ...(options.scheme === undefined ? {} : { scheme: options.scheme }),
-    secret: snapshotHmacSecrets(options.secret),
+    encoding,
+    header,
+    ...(multiSig === undefined ? {} : { multiSig }),
+    ...(name === undefined ? {} : { name }),
+    payload: snapshotWebhookPayload(payload),
+    ...(scheme === undefined ? {} : { scheme }),
+    secret: snapshotHmacSecrets(secret),
     ...(tolerance === undefined ? {} : { tolerance }),
   });
 }
 
 function snapshotHmacSignatureTolerance(tolerance: HmacSignatureTolerance): HmacSignatureTolerance {
-  const header = tolerance.header;
-  const seconds = tolerance.seconds;
-  const timestamp = tolerance.timestamp;
+  const header = ownHmacOption<string>(tolerance, 'header', 'HMAC signature tolerance.header');
+  const seconds = ownHmacOption<number>(
+    tolerance,
+    'seconds',
+    'HMAC signature tolerance.seconds',
+    true,
+  );
+  const timestamp = ownHmacOption<HmacSignatureTolerance['timestamp']>(
+    tolerance,
+    'timestamp',
+    'HMAC signature tolerance.timestamp',
+  );
   if (
     typeof seconds !== 'number' ||
     !isFiniteNumber(seconds) ||
@@ -331,9 +391,21 @@ function snapshotHmacSecret(secret: HmacSecret): HmacSecret {
   } else if (securityHasInstance(IntrinsicUint8Array, secret)) {
     snapshot = copyBytes(secret as Uint8Array);
   } else {
+    if (typeof secret !== 'object' || secret === null) {
+      throw new TypeError('HMAC signing material must be a string, Uint8Array, or encoded object.');
+    }
     const encoded = secret as Exclude<HmacSecret, string | Uint8Array>;
-    const encoding = encoded.encoding;
-    const value = encoded.value;
+    const encoding = ownHmacOption<Exclude<HmacSecret, string | Uint8Array>['encoding']>(
+      encoded,
+      'encoding',
+      'HMAC signing material encoding',
+    );
+    const value = ownHmacOption<string | Uint8Array>(
+      encoded,
+      'value',
+      'HMAC signing material value',
+      true,
+    );
     if (
       encoding !== undefined &&
       encoding !== 'base64' &&
@@ -411,6 +483,12 @@ export function customVerifier(
  * });
  */
 export function standardWebhooks(options: StandardWebhooksOptions): HmacSignatureVerifier {
+  const secret = ownHmacOption<StandardWebhooksOptions['secret']>(
+    options,
+    'secret',
+    'Standard Webhooks secret',
+    true,
+  );
   return createHmacSignature(
     {
       encoding: 'base64',
@@ -424,7 +502,7 @@ export function standardWebhooks(options: StandardWebhooksOptions): HmacSignatur
         return `${messageId}.${timestamp}.${payloadToString(request.payload)}`;
       },
       scheme: 'standard-webhooks:v1:hmac-sha256',
-      secret: normalizeStandardWebhooksSecrets(options.secret),
+      secret: normalizeStandardWebhooksSecrets(secret),
       tolerance: {
         header: 'webhook-timestamp',
         seconds: defaultWebhookToleranceSeconds,
@@ -584,15 +662,61 @@ function normalizeStandardWebhooksSecret(secret: HmacSecret): HmacSecret {
     return { encoding: 'base64', value: stripStandardWebhookSecretPrefix(secret) };
   }
   if (securityHasInstance(IntrinsicUint8Array, secret)) return secret as Uint8Array;
-  const encoded = secret as Exclude<HmacSecret, string | Uint8Array>;
-  if (typeof encoded.value === 'string' && encoded.encoding === undefined) {
-    return { encoding: 'base64', value: stripStandardWebhookSecretPrefix(encoded.value) };
+  if (typeof secret !== 'object' || secret === null) {
+    throw new TypeError('Standard Webhooks secret must be stable signing material.');
   }
-  return secret;
+  const encoded = secret as Exclude<HmacSecret, string | Uint8Array>;
+  const value = ownHmacOption<string | Uint8Array>(
+    encoded,
+    'value',
+    'Standard Webhooks signing material value',
+    true,
+  );
+  const encoding = ownHmacOption<Exclude<HmacSecret, string | Uint8Array>['encoding']>(
+    encoded,
+    'encoding',
+    'Standard Webhooks signing material encoding',
+  );
+  if (typeof value === 'string' && encoding === undefined) {
+    return { encoding: 'base64', value: stripStandardWebhookSecretPrefix(value) };
+  }
+  return freezeSecurityValue({ ...(encoding === undefined ? {} : { encoding }), value });
 }
 
 function stripStandardWebhookSecretPrefix(value: string): string {
   return securityStringSlice(value, 0, 6) === 'whsec_' ? securityStringSlice(value, 6) : value;
+}
+
+function ownHmacOption<Value>(
+  options: object,
+  property: PropertyKey,
+  label: string,
+  required: true,
+): Value;
+function ownHmacOption<Value>(
+  options: object,
+  property: PropertyKey,
+  label: string,
+  required?: false,
+): Value | undefined;
+function ownHmacOption<Value>(
+  options: object,
+  property: PropertyKey,
+  label: string,
+  required = false,
+): Value | undefined {
+  const descriptor = securityGetOwnPropertyDescriptor(options, property);
+  if (descriptor === undefined) {
+    if (required) throw new TypeError(`${label} must be an own-data property.`);
+    return undefined;
+  }
+  if (!('value' in descriptor)) {
+    throw new TypeError(`${label} must be an own-data property.`);
+  }
+  if (required && descriptor.value === undefined) {
+    throw new TypeError(`${label} must be an own-data property.`);
+  }
+  return descriptor.value as Value | undefined;
 }
 
 function resolveToleranceTimestamp(

@@ -102,6 +102,62 @@ describe('webhook verifier kit', () => {
     ).toThrow(/minimum is 32 bytes/);
   });
 
+  it('rejects inherited and accessor-backed HMAC constructor authority', async () => {
+    const attackerSecret = 'attacker-known-hmac-secret-at-least-32-bytes';
+    Object.defineProperty(Object.prototype, 'secret', {
+      configurable: true,
+      value: attackerSecret,
+    });
+    try {
+      expect(() =>
+        hmacSignature({
+          encoding: 'hex',
+          header: 'x-signature',
+          payload: (request) => request.payload,
+        } as HmacSignatureOptions),
+      ).toThrow('secret must be an own-data property');
+    } finally {
+      delete (Object.prototype as { secret?: unknown }).secret;
+    }
+
+    let secretReads = 0;
+    const options = Object.defineProperties(
+      {
+        encoding: 'hex',
+        header: 'x-signature',
+        payload: (request: WebhookVerificationRequest) => request.payload,
+      },
+      {
+        secret: {
+          get() {
+            secretReads += 1;
+            return attackerSecret;
+          },
+        },
+      },
+    );
+    expect(() => hmacSignature(options as HmacSignatureOptions)).toThrow(
+      'secret must be an own-data property',
+    );
+    expect(secretReads).toBe(0);
+
+    const payload = 'valid-own-data-control';
+    const valid = hmacSignature({
+      encoding: 'hex',
+      header: 'x-signature',
+      payload: (request) => request.payload,
+      secret: attackerSecret,
+    });
+    await expect(
+      valid.verify({
+        headers: {
+          'x-signature': createHmac('sha256', attackerSecret).update(payload).digest('hex'),
+        },
+        payload,
+      }),
+    ).resolves.toBe(true);
+  });
+
   it('rejects non-finite, fractional, negative, and over-one-day replay tolerances', () => {
     for (const seconds of [Number.NaN, Number.POSITIVE_INFINITY, -1, 0.5, 86_401]) {
       expect(() =>
