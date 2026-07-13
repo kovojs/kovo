@@ -9,6 +9,7 @@ import {
   readMutationWireHeaders,
 } from './mutation-wire.js';
 import { createMemoryMutationReplayStore } from './replay.js';
+import { registerFrameworkSessionPrincipalSnapshot } from './auth-principal.js';
 
 describe('mutation wire headers', () => {
   it('reads enhanced mutation wire headers case-insensitively', () => {
@@ -264,6 +265,95 @@ describe('mutation wire headers', () => {
         request: otherPrincipalRequest,
       }).liveTargetDescriptors,
     ).toEqual([]);
+  });
+
+  it('binds distinct configured CSRF session and pinned user identities', () => {
+    const descriptor = {
+      component: 'components/account/summary',
+      props: { accountId: 'account-a' },
+      target: 'account-summary',
+    };
+    const originalRequest = {
+      csrfPrincipal: 'session-shared',
+      session: { user: { id: 'user-a' } },
+    };
+    const confusedRequest = {
+      csrfPrincipal: 'session-shared',
+      session: { user: { id: 'user-b' } },
+    };
+    const rotatedSessionRequest = {
+      csrfPrincipal: 'session-rotated',
+      session: { user: { id: 'user-a' } },
+    };
+    const csrf = {
+      secret: 'live-target-secret-0123456789abcdef',
+      sessionId: (request: typeof originalRequest) => request.csrfPrincipal,
+    };
+    const token = createLiveTargetAttestation(descriptor, {
+      buildToken: 'principal-bound-audience',
+      csrf,
+      request: originalRequest,
+    });
+    const headers = {
+      'Kovo-Live-Targets': `account-summary#components/account/summary@${token}:{"accountId":"account-a"}`,
+    };
+
+    expect(
+      mutationWireRequestFromHeaders({
+        buildToken: 'principal-build',
+        csrf,
+        headers,
+        liveTargetAudience: 'principal-bound-audience',
+        rawInput: {},
+        request: originalRequest,
+      }).liveTargetDescriptors,
+    ).toHaveLength(1);
+    expect(
+      mutationWireRequestFromHeaders({
+        buildToken: 'principal-build',
+        csrf,
+        headers,
+        liveTargetAudience: 'principal-bound-audience',
+        rawInput: {},
+        request: confusedRequest,
+      }).liveTargetDescriptors,
+    ).toEqual([]);
+    expect(
+      mutationWireRequestFromHeaders({
+        buildToken: 'principal-build',
+        csrf,
+        headers,
+        liveTargetAudience: 'principal-bound-audience',
+        rawInput: {},
+        request: rotatedSessionRequest,
+      }).liveTargetDescriptors,
+    ).toEqual([]);
+  });
+
+  it('rejects a configured CSRF binding when the framework session principal is unresolved', () => {
+    const request = {
+      csrfPrincipal: 'session-a',
+      session: { account: { id: 'user-a' } },
+    };
+    registerFrameworkSessionPrincipalSnapshot(request, request.session);
+
+    expect(() =>
+      createLiveTargetAttestation(
+        {
+          component: 'components/account/summary',
+          props: { accountId: 'account-a' },
+          target: 'account-summary',
+        },
+        {
+          buildToken: 'principal-bound-audience',
+          csrf: {
+            secret: 'live-target-secret-0123456789abcdef',
+            sessionId: (value: typeof request) => value.csrfPrincipal,
+          },
+          request,
+        },
+      ),
+    ).toThrow(/unresolved framework session principal/u);
   });
 
   it('binds live-target descriptors to the exact document URL context that minted them', () => {

@@ -142,6 +142,7 @@ function authCarrierControlsAreSound(): boolean {
 
 const authCarrierControlsSound = authCarrierControlsAreSound();
 const requestPrincipalSnapshots = new NativeWeakMap<object, RequestPrincipalSnapshot>();
+const frameworkSessionPrincipalSnapshots = new NativeWeakMap<object, RequestPrincipalSnapshot>();
 const nonRequestPrincipalPostures = createWitnessWeakSet<object>();
 
 function assertAuthCarrierControls(): void {
@@ -351,19 +352,43 @@ export function registerFrameworkSessionPrincipalSnapshot(
   sessionValue: unknown,
 ): void {
   assertAuthCarrierControls();
-  authApply(nativeWeakMapSet, requestPrincipalSnapshots, [
-    carrier,
-    snapshotFromSessionValue(sessionValue),
-  ]);
+  const snapshot = snapshotFromSessionValue(sessionValue);
+  authApply(nativeWeakMapSet, requestPrincipalSnapshots, [carrier, snapshot]);
+  authApply(nativeWeakMapSet, frameworkSessionPrincipalSnapshots, [carrier, snapshot]);
 }
 
 /** @internal Carry already-pinned auth evidence across framework-owned request Proxy layers. */
 export function inheritFrameworkPrincipalSnapshot(carrier: object, source: unknown): void {
   assertAuthCarrierControls();
-  authApply(nativeWeakMapSet, requestPrincipalSnapshots, [
-    carrier,
-    requestPrincipalSnapshot(source),
-  ]);
+  const snapshot = requestPrincipalSnapshot(source);
+  authApply(nativeWeakMapSet, requestPrincipalSnapshots, [carrier, snapshot]);
+  if (authObjectLike(source)) {
+    const frameworkSnapshot = authApply<RequestPrincipalSnapshot | undefined>(
+      nativeWeakMapGet,
+      frameworkSessionPrincipalSnapshots,
+      [source],
+    );
+    if (frameworkSnapshot !== undefined) {
+      authApply(nativeWeakMapSet, frameworkSessionPrincipalSnapshots, [carrier, frameworkSnapshot]);
+    }
+  }
+}
+
+/** @internal Return principal evidence specifically installed by the framework session lifecycle. */
+export function frameworkSessionPrincipalPostureFromRequest(
+  request: unknown,
+): PrincipalPosture | undefined {
+  assertAuthCarrierControls();
+  if (!authObjectLike(request)) return undefined;
+  const snapshot = authApply<RequestPrincipalSnapshot | undefined>(
+    nativeWeakMapGet,
+    frameworkSessionPrincipalSnapshots,
+    [request],
+  );
+  if (snapshot === undefined) return undefined;
+  return snapshot.kind === 'proven' && snapshot.principal !== undefined
+    ? { kind: 'proven', principal: snapshot.principal }
+    : { kind: snapshot.kind === 'proven' ? 'unresolved' : snapshot.kind };
 }
 
 /** @internal SPEC §6.5/§6.6: auth decisions must only key on a positively resolved principal. */

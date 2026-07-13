@@ -2,7 +2,11 @@ import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 
 import type { JsonValue, Redirect } from '@kovojs/core';
 import { assertAndCloneJsonValue, canonicalJsonStringify } from '@kovojs/core/internal/json';
-import { isProvenPrincipal, principalPostureFromRequest } from './auth-principal.js';
+import {
+  frameworkSessionPrincipalPostureFromRequest,
+  isProvenPrincipal,
+  principalPostureFromRequest,
+} from './auth-principal.js';
 import type { CsrfOptions } from './csrf.js';
 import { signingKeyRingFromSecret } from './keyring.js';
 import type { RequestLifecycleOptions } from './guards.js';
@@ -837,29 +841,41 @@ function liveTargetAttestationPayload<Request>(
   if (typeof options.buildToken !== 'string' || options.buildToken.length === 0) {
     throw new Error('live-target attestation requires a non-empty app build token.');
   }
-  const principal = liveTargetAttestationPrincipal(options);
+  const identity = liveTargetAttestationIdentity(options);
   return canonicalJsonStringify({
     buildToken: options.buildToken,
     component: descriptor.component,
-    principal: principal ?? 'anonymous',
+    csrfBinding: identity.csrfBinding ?? 'anonymous',
+    principal: identity.principal ?? 'anonymous',
     props: descriptor.props,
     sourceUrl: liveTargetSourceContext(options.request, options.sourceUrl),
     target: descriptor.target,
   });
 }
 
-function liveTargetAttestationPrincipal<Request>(options: {
+function liveTargetAttestationIdentity<Request>(options: {
   csrf?: CsrfOptions<Request> | false;
   request: Request;
-}): string | undefined {
-  if (options.csrf === false) return undefined;
+}): { csrfBinding: string | undefined; principal: string | undefined } {
+  if (options.csrf === false) return { csrfBinding: undefined, principal: undefined };
 
+  // Pin the lifecycle-owned principal before invoking the app-configured CSRF resolver. The two
+  // identities are intentionally distinct: the starter binds CSRF to request.session.id while
+  // authorization and DB scoping bind to request.session.user.id. Both enter the attestation so a
+  // captured descriptor can cross neither a session rotation nor a principal change (SPEC
+  // §6.5/§6.6/§9.3).
+  const posture = principalPostureFromRequest(options.request);
+  const frameworkSessionPosture = frameworkSessionPrincipalPostureFromRequest(options.request);
+  if (frameworkSessionPosture?.kind === 'unresolved') {
+    throw new Error(
+      'live-target attestation cannot use an unresolved framework session principal.',
+    );
+  }
   const csrfPrincipal = options.csrf?.sessionId(options.request);
-  if (csrfPrincipal !== undefined) {
-    if (!isProvenPrincipal(csrfPrincipal)) {
-      throw new Error('live-target attestation cannot use an unresolved session principal.');
-    }
-    return csrfPrincipal;
+  if (csrfPrincipal !== undefined && !isProvenPrincipal(csrfPrincipal)) {
+    throw new Error(
+      'live-target attestation cannot use an unresolved session principal from the CSRF binding.',
+    );
   }
 
   // A deployment may use the framework-owned live-target secret without configuring a global
@@ -867,11 +883,19 @@ function liveTargetAttestationPrincipal<Request>(options: {
   // lifecycle still carry a classify-and-pin principal snapshot. Bind the descriptor to that
   // identity so a document retained across logout/login cannot reconstruct the prior principal's
   // component/query target under the new session (SPEC §6.5/§6.6/§9.3).
-  const posture = principalPostureFromRequest(options.request);
   if (posture.kind === 'unresolved') {
-    throw new Error('live-target attestation cannot use an unresolved session principal.');
+    // Direct/internal custom request carriers may deliberately delegate identity proof to their
+    // configured CSRF resolver. A framework-resolved session was rejected above; without a CSRF
+    // binding there is no remaining authority and the descriptor must fail closed.
+    if (csrfPrincipal === undefined) {
+      throw new Error('live-target attestation cannot use an unresolved session principal.');
+    }
+    return { csrfBinding: csrfPrincipal, principal: undefined };
   }
-  return posture.kind === 'proven' ? posture.principal : undefined;
+  return {
+    csrfBinding: csrfPrincipal,
+    principal: posture.kind === 'proven' ? posture.principal : undefined,
+  };
 }
 
 function liveTargetSourceContext(request: unknown, supplied?: string): string {

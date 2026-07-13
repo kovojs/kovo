@@ -6,9 +6,12 @@ import {
   actAsNonRequestPrincipal,
   assertNonRequestPrincipalPosture,
   declareSystemPrincipal,
+  frameworkSessionPrincipalPostureFromRequest,
+  inheritFrameworkPrincipalSnapshot,
   nonRequestPrincipalPostureDiagnostic,
   principalPostureFromRequest,
   principalFromNonRequestPrincipalPosture,
+  registerFrameworkSessionPrincipalSnapshot,
   requestPrincipalSnapshot,
 } from './auth-principal.js';
 
@@ -112,6 +115,27 @@ describe('request principal posture (SPEC §6.5/§6.6)', () => {
       kind: 'proven',
       principal: 'user_1',
       roles: ['member'],
+    });
+  });
+
+  it('distinguishes and propagates framework-installed session principal evidence', () => {
+    const classified = { session: { user: { id: 'classified-user' } } };
+    const frameworkCarrier = {};
+    const inheritedCarrier = {};
+
+    expect(frameworkSessionPrincipalPostureFromRequest(classified)).toBeUndefined();
+    registerFrameworkSessionPrincipalSnapshot(frameworkCarrier, {
+      user: { id: 'framework-user' },
+    });
+    expect(frameworkSessionPrincipalPostureFromRequest(frameworkCarrier)).toEqual({
+      kind: 'proven',
+      principal: 'framework-user',
+    });
+
+    inheritFrameworkPrincipalSnapshot(inheritedCarrier, frameworkCarrier);
+    expect(frameworkSessionPrincipalPostureFromRequest(inheritedCarrier)).toEqual({
+      kind: 'proven',
+      principal: 'framework-user',
     });
   });
 
