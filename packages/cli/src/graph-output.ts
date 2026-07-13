@@ -119,6 +119,10 @@ export {
 export { inputErrorMessage, readGraphInput, runGraphCommand } from './graph-input.js';
 import type { KovoCheckResult } from './shared.js';
 import { sourcesSinksCheckResult, sourcesSinksExplainResult } from './sources-sinks.js';
+import {
+  graphVerifierSecurityFailure,
+  snapshotGraphVerifierInvocation,
+} from './graph-security-boundary.js';
 
 export const outputVersion = 'kovo-check/v1';
 export const explainOutputVersion = 'kovo-explain/v1';
@@ -154,6 +158,10 @@ export type KovoExplainInput = unknown;
  * were present.
  */
 export function kovoExplain(input: KovoExplainInput, options: KovoExplainOptions): KovoCheckResult {
+  const invocation = snapshotGraphVerifierInvocation(input, options);
+  if (!invocation.ok) return graphVerifierSecurityFailure(explainOutputVersion);
+  input = invocation.input;
+  options = invocation.options;
   const validationErrors = validateKovoExplainInput(input);
   if (validationErrors.length > 0)
     return invalidGraphInputResult(explainOutputVersion, validationErrors);
@@ -563,6 +571,10 @@ export function kovoAudit(
   input: CoreGraph.KovoExplainInput,
   options: KovoAuditOptions = {},
 ): KovoCheckResult {
+  const invocation = snapshotGraphVerifierInvocation(input, options);
+  if (!invocation.ok) return graphVerifierSecurityFailure(auditOutputVersion);
+  input = invocation.input;
+  options = invocation.options;
   const validationErrors = validateKovoExplainInput(input);
   if (validationErrors.length > 0)
     return invalidGraphInputResult(auditOutputVersion, validationErrors);
@@ -619,6 +631,10 @@ export function kovoCheck(
   input: KovoCheckInput,
   options: { family?: KovoCheckFamily; paranoidStaticAdvisory?: boolean } = {},
 ): KovoCheckResult {
+  const invocation = snapshotGraphVerifierInvocation(input, options);
+  if (!invocation.ok) return graphVerifierSecurityFailure(outputVersion);
+  input = invocation.input;
+  options = invocation.options;
   if (options.family === 'sources-sinks') return sourcesSinksCheckResult(outputVersion);
 
   const validationErrors = validateKovoExplainInput(input);
