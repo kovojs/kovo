@@ -7,6 +7,13 @@ import {
 } from '@kovojs/core/internal/framework-identity';
 import * as ts from 'typescript';
 
+import {
+  compilerArrayLength,
+  compilerCreateSet,
+  compilerOwnDataValue,
+  compilerSetAdd,
+  compilerSetHas,
+} from './compiler-security-intrinsics.js';
 import type { ComponentModuleModel } from './scan/parse.js';
 
 /**
@@ -64,14 +71,20 @@ const RENDERED_HTML_RAW_SINK_EXPORTS = [frameworkExport('@kovojs/server', 'rende
  * the KV236 escape hatch must be recognized by symbol identity, not by a source-text name match.
  */
 export function trustedHtmlBrandLocalNames(model: ComponentModuleModel): ReadonlySet<string> {
-  const localNames = new Set<string>();
-  for (const imported of model.namedImports) {
+  const localNames = compilerCreateSet<string>();
+  const importCount = compilerArrayLength(model.namedImports, 'Trusted HTML named imports');
+  for (let index = 0; index < importCount; index += 1) {
+    const imported = compilerOwnDataValue(
+      model.namedImports,
+      index,
+      'Trusted HTML named imports',
+    ) as ComponentModuleModel['namedImports'][number];
     const identity = frameworkExportForModuleSpecifier(
       imported.moduleSpecifier,
       imported.importedName,
     );
     if (expressionIdentityIsTrustedHtmlEscape(identity)) {
-      localNames.add(imported.localName);
+      compilerSetAdd(localNames, imported.localName);
     }
   }
   return localNames;
@@ -132,14 +145,22 @@ export function expressionResolvesToRenderedHtmlRawSink(
 function expressionIdentityIsTrustedHtmlEscape(
   identity: ReturnType<typeof frameworkExportForModuleSpecifier>,
 ): boolean {
-  return TRUSTED_HTML_ESCAPE_EXPORTS.some(
-    (expected) =>
-      identity?.module === expected.module && identity.exportName === expected.exportName,
-  );
+  const count = compilerArrayLength(TRUSTED_HTML_ESCAPE_EXPORTS, 'Trusted HTML escape identities');
+  for (let index = 0; index < count; index += 1) {
+    const expected = compilerOwnDataValue(
+      TRUSTED_HTML_ESCAPE_EXPORTS,
+      index,
+      'Trusted HTML escape identities',
+    ) as (typeof TRUSTED_HTML_ESCAPE_EXPORTS)[number];
+    if (identity?.module === expected.module && identity.exportName === expected.exportName) {
+      return true;
+    }
+  }
+  return false;
 }
 
 export function outputContextForAttribute(name: string): OutputContext {
-  if (BOOLEAN_ATTRIBUTES.has(name)) return 'boolean-attribute';
+  if (compilerSetHas(BOOLEAN_ATTRIBUTES, name)) return 'boolean-attribute';
   if (isUrlAttribute(name)) return 'url-attribute';
   if (name === 'style') return 'style-property';
   return 'attribute';

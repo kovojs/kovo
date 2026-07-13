@@ -7,12 +7,7 @@
 // that preserves `component()` so a route page can call `Foo.definition.render(data)`
 // with live query results (SPEC §5.2).
 import { compileComponentModule } from '@kovojs/compiler';
-import {
-  CompileCache,
-  compileComponentCacheKeyInput,
-  type ComponentCssAsset,
-  type CompileResult,
-} from '@kovojs/compiler/internal';
+import { type ComponentCssAsset, type CompileResult } from '@kovojs/compiler/internal';
 import type { Plugin } from 'vite';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
@@ -31,7 +26,6 @@ import {
   verifierMapGet,
   verifierMapSet,
   verifierRegExpExec,
-  verifierStableMethod,
   verifierStringIncludes,
   verifierStringIndexOf,
   verifierStringReplaceAll,
@@ -46,7 +40,6 @@ const nativePathResolve = path.resolve;
 const nativePathSeparator = path.sep;
 const nativeDecodeURIComponent = globalThis.decodeURIComponent;
 const nativeProcessCwd = process.cwd;
-const compileCacheGetOrCreate = verifierStableMethod(CompileCache.prototype, 'getOrCreate');
 
 const virtualCssManifestId = 'virtual:kovo-fixture-css-manifest';
 const resolvedVirtualCssManifestId = `\0${virtualCssManifestId}`;
@@ -64,7 +57,6 @@ export function kovoFixtureCompilerPlugin(
   const resolvedPrivateCssRegistrationId = `\0${privateCssRegistrationId}`;
   let root = pathResolve(verifierApply<string>(nativeProcessCwd, process, []));
   const cssAssets = verifierMap<string, FixtureCssAsset>();
-  const compileCache = new CompileCache<CompileResult>();
 
   return {
     name: 'kovo-fixture-compiler',
@@ -287,14 +279,7 @@ export function kovoFixtureStylesheetsForTargets(targets) {
         packagePrefixDiscoveryRoot: root,
         source,
       };
-      const result = await verifierApply<CompileResult | Promise<CompileResult>>(
-        compileCacheGetOrCreate,
-        compileCache,
-        [
-          compileComponentCacheKeyInput(compileOptions),
-          () => snapshotCompileResult(compile(compileOptions)),
-        ],
-      );
+      const result = await snapshotCompileResult(compile(compileOptions));
 
       const errors: CompileResult['diagnostics'][number][] = [];
       for (let index = 0; index < result.diagnostics.length; index += 1) {

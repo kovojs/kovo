@@ -942,4 +942,81 @@ export const legacy = route('/legacy', {
     expect(result.routePageFacts).toEqual([]);
     expect(result.files).toEqual([]);
   });
+
+  it('does not forge executable route output through late Array.map replacement', () => {
+    const source = `
+import { route } from '@kovojs/server';
+import { QuestionListRegion } from './components/question-list.js';
+export const home = route('/', { page: () => <QuestionListRegion /> });
+`;
+    const nativeMap = Array.prototype.map;
+    const nativeApply = Reflect.apply;
+    let poisonHits = 0;
+    let result: ReturnType<typeof compileRouteModule> | undefined;
+    try {
+      Array.prototype.map = function poisonedRoutePageMap<T, U>(
+        callback: (value: T, index: number, array: T[]) => U,
+        thisArg?: unknown,
+      ): U[] {
+        const first = this[0] as { fact?: unknown; pageReplacement?: unknown } | undefined;
+        if (first?.fact !== undefined && first.pageReplacement !== undefined) {
+          poisonHits += 1;
+          return [
+            {
+              end: source.length,
+              replacement: 'export const forgedRoute = globalThis.secret;\n',
+              start: 0,
+            },
+          ] as U[];
+        }
+        return nativeApply(nativeMap, this, [callback, thisArg]);
+      } as typeof Array.prototype.map;
+      result = compileRouteModule({ fileName: 'src/routes.tsx', source });
+    } finally {
+      Array.prototype.map = nativeMap;
+    }
+
+    expect(result?.files[0]?.source).not.toContain('globalThis.secret');
+    expect(poisonHits).toBe(0);
+  });
+
+  it('does not strip inherited route guards through late Array.filter replacement', () => {
+    const source = `
+import { guards, layout, route } from '@kovojs/server';
+const authed = guards.authed();
+const AdminLayout = layout({
+  guard: authed,
+  render: (_queries, _state, { children }) => <main>{children}</main>,
+});
+export const admin = route('/admin', {
+  layout: AdminLayout,
+  page: () => <AdminPage />,
+});
+`;
+    const nativeFilter = Array.prototype.filter;
+    const nativeApply = Reflect.apply;
+    let poisonHits = 0;
+    let result: ReturnType<typeof compileRouteModule> | undefined;
+    try {
+      Array.prototype.filter = function poisonedRouteGuardFilter<T>(
+        callback: (value: T, index: number, array: T[]) => unknown,
+        thisArg?: unknown,
+      ): T[] {
+        for (let index = 0; index < this.length; index += 1) {
+          if (this[index] === ('authed' as T)) {
+            poisonHits += 1;
+            return [];
+          }
+        }
+        return nativeApply(nativeFilter, this, [callback, thisArg]);
+      } as typeof Array.prototype.filter;
+      result = compileRouteModule({ fileName: 'src/routes.tsx', source });
+    } finally {
+      Array.prototype.filter = nativeFilter;
+    }
+
+    expect(result?.routePageFacts[0]?.guards).toEqual(['authed']);
+    expect(result?.files[0]?.source).toContain('"guards":["authed"]');
+    expect(poisonHits).toBe(0);
+  });
 });

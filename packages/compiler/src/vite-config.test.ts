@@ -8,7 +8,7 @@ import { kovoVitePlugin } from './vite-config.js';
 import type { KovoViteMiddleware } from './vite.js';
 
 describe('config-safe kovoVitePlugin', () => {
-  it('loads the compiler lazily when transforming', async () => {
+  it('runs the statically bound genuine compiler when transforming', async () => {
     const root = mkdtempSync(join(tmpdir(), 'kovo-vite-config-'));
     const middlewares: KovoViteMiddleware[] = [];
     const plugin = kovoVitePlugin({ include: ['src/components'] });

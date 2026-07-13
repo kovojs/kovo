@@ -3,7 +3,7 @@ import { Transform, type TransformCallback } from 'node:stream';
 
 import type { CompileComponentOptions, CompileResult } from '@kovojs/compiler';
 import {
-  compileComponentModuleCached,
+  compileComponentModuleForFramework,
   snapshotCompileComponentOptions,
 } from '@kovojs/compiler/internal';
 import type * as CompilerInternal from '@kovojs/compiler/internal';
@@ -126,7 +126,7 @@ export type KovoMcpResponse =
 export async function compileComponentV1(
   input: CompileComponentV1Input,
 ): Promise<CompileComponentV1Result> {
-  const result = await compileCachedComponentModule(compileComponentOptions(input));
+  const result = await compileFrameworkComponentModule(compileComponentOptions(input));
 
   return {
     componentGraphFacts: [...result.componentGraphFacts],
@@ -170,15 +170,14 @@ export async function compileComponentV1(
   };
 }
 
-export async function compileCachedComponentModule(
+export async function compileFrameworkComponentModule(
   options: CompileComponentOptions,
-  cache = true,
 ): Promise<CompileResult> {
-  // Pin before the first await: callers can otherwise mutate source/path authority while the
-  // compiler module import yields, making cache authorization and emitted bytes observe a later
-  // carrier than the one supplied at invocation (SPEC.md §5.2.1).
+  // Pin before the first await: callers can otherwise mutate source/path authority while
+  // compilation yields, making emitted bytes observe a later carrier than the one supplied at
+  // invocation (SPEC.md §5.2.1).
   options = snapshotCompileComponentOptions(options);
-  return compileComponentModuleCached(options, cache);
+  return compileComponentModuleForFramework(options);
 }
 
 function compileComponentOptions(input: CompileComponentV1Input): CompileComponentOptions {

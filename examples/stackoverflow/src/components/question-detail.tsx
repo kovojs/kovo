@@ -1,6 +1,6 @@
 /** @jsxImportSource @kovojs/server */
-import { safeRichHtml, trustedHtml } from '@kovojs/browser';
-import { component } from '@kovojs/core';
+import { safeRichHtml } from '@kovojs/browser';
+import { component, type ComponentChild } from '@kovojs/core';
 import { Defer } from '@kovojs/server';
 import * as style from '@kovojs/style';
 
@@ -221,34 +221,26 @@ const detailStyles = style.create({
   },
 });
 
-function renderQuestionPost(question: QuestionDetailResult): string {
+function renderQuestionPost(question: QuestionDetailResult): ComponentChild {
   const tags = parseTags(question.tags);
   return (
     <div style={detailStyles.post}>
-      <div style={detailStyles.gutter}>
-        {trustedHtml(
-          voteButton(question.id, question.score),
-          'server-rendered vote control (JSX-escaped chrome markup)',
-        )}
-      </div>
+      <div style={detailStyles.gutter}>{voteButton(question.id, question.score)}</div>
       <div style={detailStyles.postMain}>
         {/* SPEC §9.1/§4.8: the post body is user-authored content, so it is sanitized through the
             safeRichHtml rich-HTML floor (NOT branded raw with trustedHtml) before reaching the
             raw-HTML sink — KV426 by-construction safe path for query/request-derived markup. */}
         <p style={detailStyles.body}>{safeRichHtml(question.body)}</p>
         <div style={detailStyles.postFooter}>
-          {trustedHtml(renderTags(tags), 'server-rendered tag pills (JSX-escaped chrome markup)')}
-          {trustedHtml(
-            renderUserCard(question.authorId, question.authorName, question.createdAt, 'asked'),
-            'server-rendered user card (JSX-escaped chrome markup)',
-          )}
+          {renderTags(tags)}
+          {renderUserCard(question.authorId, question.authorName, question.createdAt, 'asked')}
         </div>
       </div>
     </div>
   );
 }
 
-function renderAnswerPost(answer: QuestionAnswersResult[number]): string {
+function renderAnswerPost(answer: QuestionAnswersResult[number]): ComponentChild {
   return (
     <li kovo-key={answer.id} style={detailStyles.post}>
       <div style={detailStyles.gutter}>
@@ -279,10 +271,7 @@ function renderAnswerPost(answer: QuestionAnswersResult[number]): string {
         <p style={detailStyles.body}>{safeRichHtml(answer.body)}</p>
         <div style={detailStyles.postFooter}>
           <span />
-          {trustedHtml(
-            renderUserCard(answer.authorId, answer.authorName, answer.createdAt, 'answered'),
-            'server-rendered user card (JSX-escaped chrome markup)',
-          )}
+          {renderUserCard(answer.authorId, answer.authorName, answer.createdAt, 'answered')}
         </div>
       </div>
     </li>
@@ -293,7 +282,7 @@ function renderQuestionDetailSecondary(
   question: QuestionDetailResult,
   ordered: QuestionAnswersResult,
   questionId: string,
-): string {
+): ComponentChild {
   return (
     <section kovo-fragment-target={`question-detail-secondary:${question.id}`}>
       <div style={detailStyles.answersHead}>
@@ -302,14 +291,7 @@ function renderQuestionDetailSecondary(
         </h2>
         <span style={detailStyles.sortControl}>Sorted by: Highest score</span>
       </div>
-      <ul style={detailStyles.answerList}>
-        {ordered.map((answer) =>
-          trustedHtml(
-            renderAnswerPost(answer),
-            'server-rendered answer post (body sanitized via safeRichHtml; chrome JSX-escaped)',
-          ),
-        )}
-      </ul>
+      <ul style={detailStyles.answerList}>{ordered.map((answer) => renderAnswerPost(answer))}</ul>
 
       {/* Native form; enhanced submissions refresh this whole region. */}
       <form enhance mutation={postAnswerMutation} id="your-answer" style={detailStyles.composer}>
@@ -401,10 +383,7 @@ export const QuestionDetailRegion = component({
           </div>
         </div>
 
-        {trustedHtml(
-          renderQuestionPost(question),
-          'server-rendered question post (body sanitized via safeRichHtml; chrome JSX-escaped)',
-        )}
+        {renderQuestionPost(question)}
 
         <Defer
           fallback={

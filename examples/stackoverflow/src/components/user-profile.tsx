@@ -1,5 +1,4 @@
 /** @jsxImportSource @kovojs/server */
-import { trustedHtml } from '@kovojs/browser';
 import { component } from '@kovojs/core';
 import * as style from '@kovojs/style';
 
@@ -272,10 +271,7 @@ export const UserProfileRegion = component({
           {theirQuestions.length > 0 ? (
             <ul style={cardStyles.list}>
               {theirQuestions.map((question) =>
-                trustedHtml(
-                  renderQuestionRow(question, { interactive: false }),
-                  'StackOverflow demo question rows are rendered by framework JSX helpers that escape user text before this raw row boundary.',
-                ),
+                renderQuestionRow(question, { interactive: false }),
               )}
             </ul>
           ) : (

@@ -40,7 +40,7 @@ it('does not load generated client modules from outside the configured Vite root
     appType: 'custom',
     configFile: false,
     logLevel: 'silent',
-    plugins: [kovoVitePlugin({ cache: false })],
+    plugins: [kovoVitePlugin()],
     root,
     server: { hmr: false, host: '127.0.0.1', port: 0, watch: null, ws: false },
   });

@@ -34,6 +34,29 @@ import {
 import { ensureTypescriptRuntime } from '../ts-api.js';
 import { compileArtifactFileNames } from '../types.js';
 import { isCompilerAuditText } from '../security/audit-text.js';
+import {
+  compilerArrayAppend,
+  compilerArrayJoin,
+  compilerArrayLength,
+  compilerCreateMap,
+  compilerCreateSet,
+  compilerJsonStringify,
+  compilerMapGet,
+  compilerMapSet,
+  compilerNumberValue,
+  compilerOwnDataValue,
+  compilerRegExpExec,
+  compilerRegExpReplace,
+  compilerRegExpTest,
+  compilerSetAdd,
+  compilerSetHas,
+  compilerSnapshotJsonValue,
+  compilerStringEndsWith,
+  compilerStringIndexOf,
+  compilerStringReplaceAll,
+  compilerStringSlice,
+  compilerStringStartsWith,
+} from '../compiler-security-intrinsics.js';
 
 ensureTypescriptRuntime(ts);
 
@@ -89,9 +112,10 @@ const navigationSegmentStampAttributes = new Set([
 
 /** Compile route-page JSX composition facts (SPEC.md §4.5/§9.1). */
 export function compileRouteModule(options: CompileRouteModuleOptions): CompileRouteModuleResult {
+  const stableOptions = compilerSnapshotJsonValue(options, 'Compiler route module options');
   const sourceFile = ts.createSourceFile(
-    options.fileName,
-    options.source,
+    stableOptions.fileName,
+    stableOptions.source,
     ts.ScriptTarget.Latest,
     true,
     ts.ScriptKind.TSX,
@@ -99,13 +123,13 @@ export function compileRouteModule(options: CompileRouteModuleOptions): CompileR
   const routePages: CompiledRoutePage[] = [];
   const frameworkBindings = routeFrameworkBindings(sourceFile);
   const layouts = routeLayoutModels(sourceFile, frameworkBindings);
-  const componentImports = componentImportModels(options.fileName, sourceFile);
+  const componentImports = componentImportModels(stableOptions.fileName, sourceFile);
   const diagnostics: CompilerDiagnostic[] = [];
 
   const visit = (node: ts.Node): void => {
     const routePage = routePageFromCall(
-      options.fileName,
-      options.source,
+      stableOptions.fileName,
+      stableOptions.source,
       sourceFile,
       node,
       layouts,
@@ -113,38 +137,54 @@ export function compileRouteModule(options: CompileRouteModuleOptions): CompileR
       componentImports,
       diagnostics,
     );
-    if (routePage) routePages.push(routePage);
+    if (routePage) compilerArrayAppend(routePages, routePage, 'Compiler route pages');
     ts.forEachChild(node, visit);
   };
 
   visit(sourceFile);
-  const routePageFacts = routePages.map((routePage) => routePage.fact);
-  diagnostics.push(
-    ...routeAuthoringSurfaceDiagnostics(options.fileName, options.source, sourceFile),
+  const stableRoutePages = compilerSnapshotJsonValue(routePages, 'Compiler route-page facts');
+  const routePageFacts: RoutePageFact[] = [];
+  const routePageCount = compilerArrayLength(stableRoutePages, 'Compiler route-page facts');
+  for (let index = 0; index < routePageCount; index += 1) {
+    const routePage = compilerOwnDataValue(
+      stableRoutePages,
+      index,
+      'Compiler route-page facts',
+    ) as CompiledRoutePage;
+    compilerArrayAppend(routePageFacts, routePage.fact, 'Compiler route-page output facts');
+  }
+  appendRouteValues(
+    diagnostics,
+    routeAuthoringSurfaceDiagnostics(stableOptions.fileName, stableOptions.source, sourceFile),
+    'Compiler route diagnostics',
   );
 
-  const artifactFileName = options.artifactFileName ?? routeArtifactFileName(options.fileName);
+  const artifactFileName =
+    stableOptions.artifactFileName ?? routeArtifactFileName(stableOptions.fileName);
 
-  return {
-    diagnostics,
-    files:
-      routePages.length === 0
-        ? []
-        : [
-            {
-              fileName: artifactFileName,
-              kind: 'route',
-              source: emitCompiledRouteModule({
-                artifactFileName,
-                routePages,
-                componentImportRewrites: options.componentImportRewrites ?? [],
-                source: options.source,
-                sourceFile,
-              }),
-            },
-          ],
-    routePageFacts,
-  };
+  return compilerSnapshotJsonValue(
+    {
+      diagnostics,
+      files:
+        routePageCount === 0
+          ? []
+          : [
+              {
+                fileName: artifactFileName,
+                kind: 'route',
+                source: emitCompiledRouteModule({
+                  artifactFileName,
+                  routePages: stableRoutePages,
+                  componentImportRewrites: stableOptions.componentImportRewrites ?? [],
+                  source: stableOptions.source,
+                  sourceFile,
+                }),
+              },
+            ],
+      routePageFacts,
+    },
+    'Compiler route module result',
+  );
 }
 
 function routePageFromCall(
@@ -160,7 +200,12 @@ function routePageFromCall(
   if (!ts.isCallExpression(node)) return null;
   if (!isFrameworkRouteCall(node, frameworkBindings)) return null;
 
-  const [pathArg, definitionArg] = node.arguments;
+  const pathArg = compilerOwnDataValue(node.arguments, 0, 'Compiler route call arguments') as
+    | ts.Expression
+    | undefined;
+  const definitionArg = compilerOwnDataValue(node.arguments, 1, 'Compiler route call arguments') as
+    | ts.Expression
+    | undefined;
   if (!pathArg || !ts.isStringLiteralLike(pathArg)) return null;
   if (!definitionArg || !ts.isObjectLiteralExpression(definitionArg)) return null;
 
@@ -173,7 +218,7 @@ function routePageFromCall(
     componentImports,
     diagnostics,
   );
-  if (!pageHandler && regions.length === 0) return null;
+  if (!pageHandler && compilerArrayLength(regions, 'Compiler route regions') === 0) return null;
 
   const pageComponents = pageHandler
     ? routePageComponentFacts(
@@ -188,16 +233,28 @@ function routePageFromCall(
   const outcome = routeOutcomeFact(pageHandler?.node, frameworkBindings);
   if (
     pageHandler &&
-    pageComponents.length === 0 &&
-    regions.length === 0 &&
+    compilerArrayLength(pageComponents, 'Compiler route page components') === 0 &&
+    compilerArrayLength(regions, 'Compiler route regions') === 0 &&
     !containsJsx(pageHandler.node) &&
     outcome === undefined
   )
     return null;
-  const components = uniqueRouteComponents([
-    ...pageComponents,
-    ...regions.flatMap((region) => region.components),
-  ]);
+  const componentCandidates: RoutePageComponentFact[] = [];
+  appendRouteValues(componentCandidates, pageComponents, 'Compiler route component candidates');
+  const regionCount = compilerArrayLength(regions, 'Compiler route regions');
+  for (let index = 0; index < regionCount; index += 1) {
+    const region = compilerOwnDataValue(
+      regions,
+      index,
+      'Compiler route regions',
+    ) as RouteRegionFact;
+    appendRouteValues(
+      componentCandidates,
+      region.components,
+      'Compiler route component candidates',
+    );
+  }
+  const components = uniqueRouteComponents(componentCandidates);
   const routeLayouts = routeLayoutFacts(
     fileName,
     source,
@@ -215,16 +272,18 @@ function routePageFromCall(
   const css = routePageCssFact(components, componentImports);
   const access = routeAccessFact(definitionArg, routeLayouts, layouts, sourceFile);
   const guards = routeGuardFacts(definitionArg, routeLayouts, layouts, sourceFile);
-  const fact = {
+  const fact: RoutePageFact = {
     ...(access === undefined ? {} : { access }),
     ...(css === undefined ? {} : { css }),
     components,
     fileName,
-    ...(guards.length === 0 ? {} : { guards }),
-    ...(routeLayouts.length > 0 ? { layouts: routeLayouts } : {}),
+    ...(compilerArrayLength(guards, 'Compiler route guards') === 0 ? {} : { guards }),
+    ...(compilerArrayLength(routeLayouts, 'Compiler route layouts') > 0
+      ? { layouts: routeLayouts }
+      : {}),
     navigationSegments,
     ...(outcome === undefined ? {} : { outcome }),
-    ...(regions.length > 0 ? { regions } : {}),
+    ...(regionCount > 0 ? { regions } : {}),
     route: pathArg.text,
   };
 
@@ -233,8 +292,8 @@ function routePageFromCall(
     pageReplacement: {
       end: pageHandler?.replacementEnd ?? definitionArg.properties.pos,
       replacement: pageHandler
-        ? `${pageHandler.replacementPrefix}__kovoDefineCompiledRoutePage(${JSON.stringify(fact)}, ${pageHandler.sourceExpression})`
-        : `page: __kovoDefineCompiledRoutePage(${JSON.stringify(fact)}, () => null),\n`,
+        ? `${pageHandler.replacementPrefix}__kovoDefineCompiledRoutePage(${jsonRouteValue(fact)}, ${pageHandler.sourceExpression})`
+        : `page: __kovoDefineCompiledRoutePage(${jsonRouteValue(fact)}, () => null),\n`,
       start: pageHandler?.replacementStart ?? definitionArg.properties.pos,
     },
   };
@@ -243,18 +302,27 @@ function routePageFromCall(
 function uniqueRouteComponents(
   components: readonly RoutePageComponentFact[],
 ): RoutePageComponentFact[] {
-  const seen = new Set<string>();
+  const seen = compilerCreateSet<string>();
   const facts: RoutePageComponentFact[] = [];
-  for (const component of components) {
-    const key = [
-      component.localName,
-      component.keyExpression ?? '',
-      component.propsExpression,
-      component.serializedPropsExpression,
-    ].join('\0');
-    if (seen.has(key)) continue;
-    seen.add(key);
-    facts.push(component);
+  const componentCount = compilerArrayLength(components, 'Compiler route components');
+  for (let index = 0; index < componentCount; index += 1) {
+    const component = compilerOwnDataValue(
+      components,
+      index,
+      'Compiler route components',
+    ) as RoutePageComponentFact;
+    const key = compilerArrayJoin(
+      [
+        component.localName,
+        component.keyExpression ?? '',
+        component.propsExpression,
+        component.serializedPropsExpression,
+      ],
+      '\0',
+    );
+    if (compilerSetHas(seen, key)) continue;
+    compilerSetAdd(seen, key);
+    compilerArrayAppend(facts, component, 'Compiler unique route components');
   }
   return facts;
 }
@@ -263,14 +331,28 @@ function routePageCssFact(
   components: readonly RoutePageComponentFact[],
   componentImports: ReadonlyMap<string, RouteComponentImportModel>,
 ): RoutePageCssFact | undefined {
-  const sourceFileNames = uniqueSorted(
-    components.flatMap((component) => {
-      const componentImport = componentImports.get(component.localName);
-      return componentImport ? [compileArtifactFileNames(componentImport.sourceFileName).css] : [];
-    }),
-  );
+  const candidates: string[] = [];
+  const componentCount = compilerArrayLength(components, 'Compiler route CSS components');
+  for (let index = 0; index < componentCount; index += 1) {
+    const component = compilerOwnDataValue(
+      components,
+      index,
+      'Compiler route CSS components',
+    ) as RoutePageComponentFact;
+    const componentImport = compilerMapGet(componentImports, component.localName);
+    if (componentImport) {
+      compilerArrayAppend(
+        candidates,
+        compileArtifactFileNames(componentImport.sourceFileName).css,
+        'Compiler route CSS source files',
+      );
+    }
+  }
+  const sourceFileNames = uniqueSorted(candidates);
 
-  return sourceFileNames.length === 0 ? undefined : { sourceFileNames };
+  return compilerArrayLength(sourceFileNames, 'Compiler route CSS source files') === 0
+    ? undefined
+    : { sourceFileNames };
 }
 
 function routeNavigationSegments(
@@ -279,29 +361,71 @@ function routeNavigationSegments(
   layouts: readonly RoutePageLayoutFact[],
   regions: readonly RouteRegionFact[] = [],
 ): RouteNavigationSegmentFact[] {
-  return [
-    ...layouts.map((layout) => ({
-      id: `layout:${layout.localName}`,
-      kind: 'layout' as const,
-      localName: layout.localName,
-      queries: layout.queries,
-    })),
-    ...(regions.length > 0
-      ? regions.map((region) => ({
-          components: region.components.map((component) => component.localName),
+  const segments: RouteNavigationSegmentFact[] = [];
+  const layoutCount = compilerArrayLength(layouts, 'Compiler navigation layouts');
+  for (let index = 0; index < layoutCount; index += 1) {
+    const layout = compilerOwnDataValue(
+      layouts,
+      index,
+      'Compiler navigation layouts',
+    ) as RoutePageLayoutFact;
+    compilerArrayAppend(
+      segments,
+      {
+        id: `layout:${layout.localName}`,
+        kind: 'layout' as const,
+        localName: layout.localName,
+        queries: layout.queries,
+      },
+      'Compiler navigation segments',
+    );
+  }
+  const regionCount = compilerArrayLength(regions, 'Compiler navigation regions');
+  if (regionCount > 0) {
+    for (let index = 0; index < regionCount; index += 1) {
+      const region = compilerOwnDataValue(
+        regions,
+        index,
+        'Compiler navigation regions',
+      ) as RouteRegionFact;
+      compilerArrayAppend(
+        segments,
+        {
+          components: routeComponentLocalNames(region.components),
           id: region.name === 'page' ? `page:${routePath}` : `region:${region.name}`,
           kind: region.name === 'page' ? ('page' as const) : ('region' as const),
           localName: region.name,
-        }))
-      : [
-          {
-            components: pageComponents.map((component) => component.localName),
-            id: `page:${routePath}`,
-            kind: 'page' as const,
-            localName: 'page',
-          },
-        ]),
-  ];
+        },
+        'Compiler navigation segments',
+      );
+    }
+  } else {
+    compilerArrayAppend(
+      segments,
+      {
+        components: routeComponentLocalNames(pageComponents),
+        id: `page:${routePath}`,
+        kind: 'page' as const,
+        localName: 'page',
+      },
+      'Compiler navigation segments',
+    );
+  }
+  return segments;
+}
+
+function routeComponentLocalNames(components: readonly RoutePageComponentFact[]): string[] {
+  const names: string[] = [];
+  const count = compilerArrayLength(components, 'Compiler navigation components');
+  for (let index = 0; index < count; index += 1) {
+    const component = compilerOwnDataValue(
+      components,
+      index,
+      'Compiler navigation components',
+    ) as RoutePageComponentFact;
+    compilerArrayAppend(names, component.localName, 'Compiler navigation component names');
+  }
+  return names;
 }
 
 function routeRegionFacts(
@@ -315,12 +439,20 @@ function routeRegionFacts(
   const regions = objectPropertyInitializer(routeDefinition, 'regions');
   if (!regions || !ts.isObjectLiteralExpression(regions)) return [];
 
-  return regions.properties.flatMap((property) => {
-    if (!ts.isPropertyAssignment(property) && !ts.isMethodDeclaration(property)) return [];
+  const facts: RouteRegionFact[] = [];
+  const propertyCount = compilerArrayLength(regions.properties, 'Compiler route region properties');
+  for (let index = 0; index < propertyCount; index += 1) {
+    const property = compilerOwnDataValue(
+      regions.properties,
+      index,
+      'Compiler route region properties',
+    ) as ts.ObjectLiteralElementLike;
+    if (!ts.isPropertyAssignment(property) && !ts.isMethodDeclaration(property)) continue;
     const name = propertyNameText(property.name);
-    if (!name) return [];
+    if (!name) continue;
     const node = ts.isPropertyAssignment(property) ? property.initializer : property;
-    return [
+    compilerArrayAppend(
+      facts,
       {
         components: routePageComponentFacts(
           fileName,
@@ -332,17 +464,25 @@ function routeRegionFacts(
         ),
         name,
       },
-    ];
-  });
+      'Compiler route region facts',
+    );
+  }
+  return facts;
 }
 
 function componentImportModels(
   routeFileName: string,
   sourceFile: ts.SourceFile,
 ): ReadonlyMap<string, RouteComponentImportModel> {
-  const imports = new Map<string, RouteComponentImportModel>();
+  const imports = compilerCreateMap<string, RouteComponentImportModel>();
 
-  for (const statement of sourceFile.statements) {
+  const statementCount = compilerArrayLength(sourceFile.statements, 'Compiler route statements');
+  for (let statementIndex = 0; statementIndex < statementCount; statementIndex += 1) {
+    const statement = compilerOwnDataValue(
+      sourceFile.statements,
+      statementIndex,
+      'Compiler route statements',
+    ) as ts.Statement;
     if (!ts.isImportDeclaration(statement)) continue;
     if (!statement.moduleSpecifier || !ts.isStringLiteralLike(statement.moduleSpecifier)) continue;
     const sourceFileName = componentImportSourceFileName(
@@ -353,12 +493,18 @@ function componentImportModels(
 
     const importClause = statement.importClause;
     if (!importClause) continue;
-    if (importClause.name) imports.set(importClause.name.text, { sourceFileName });
+    if (importClause.name) compilerMapSet(imports, importClause.name.text, { sourceFileName });
     const namedBindings = importClause.namedBindings;
     if (!namedBindings || !ts.isNamedImports(namedBindings)) continue;
-    for (const element of namedBindings.elements) {
+    const elementCount = compilerArrayLength(namedBindings.elements, 'Compiler route imports');
+    for (let elementIndex = 0; elementIndex < elementCount; elementIndex += 1) {
+      const element = compilerOwnDataValue(
+        namedBindings.elements,
+        elementIndex,
+        'Compiler route imports',
+      ) as ts.ImportSpecifier;
       const exportName = element.propertyName?.text;
-      imports.set(element.name.text, {
+      compilerMapSet(imports, element.name.text, {
         ...(exportName && exportName !== element.name.text ? { exportName } : {}),
         sourceFileName,
       });
@@ -369,27 +515,27 @@ function componentImportModels(
 }
 
 function componentImportSourceFileName(routeFileName: string, specifier: string): string | null {
-  if (!specifier.startsWith('.')) return null;
+  if (!compilerStringStartsWith(specifier, '.')) return null;
 
   const absolute = resolve(dirname(routeFileName), specifier);
   return normalizeRouteFileName(sourceSpecifierToTsx(absolute));
 }
 
 function sourceSpecifierToTsx(fileName: string): string {
-  if (fileName.endsWith('.jsx')) return replaceExtension(fileName, '.tsx');
-  if (fileName.endsWith('.js')) return replaceExtension(fileName, '.tsx');
+  if (compilerStringEndsWith(fileName, '.jsx')) return replaceExtension(fileName, '.tsx');
+  if (compilerStringEndsWith(fileName, '.js')) return replaceExtension(fileName, '.tsx');
   return fileName;
 }
 
 function normalizeRouteFileName(fileName: string): string {
-  return relative('', fileName).replaceAll('\\', '/');
+  return compilerStringReplaceAll(relative('', fileName), '\\', '/');
 }
 
 function routeLayoutModels(
   sourceFile: ts.SourceFile,
   frameworkBindings: RouteFrameworkBindings,
 ): ReadonlyMap<string, RouteLayoutModel> {
-  const layouts = new Map<string, RouteLayoutModel>();
+  const layouts = compilerCreateMap<string, RouteLayoutModel>();
 
   const visit = (node: ts.Node): void => {
     if (
@@ -399,12 +545,16 @@ function routeLayoutModels(
       ts.isCallExpression(node.initializer) &&
       isFrameworkLayoutCall(node.initializer, frameworkBindings)
     ) {
-      const [definition] = node.initializer.arguments;
+      const definition = compilerOwnDataValue(
+        node.initializer.arguments,
+        0,
+        'Compiler layout call arguments',
+      ) as ts.Expression | undefined;
       if (definition && ts.isObjectLiteralExpression(definition)) {
         const parent = layoutParentName(definition);
         const access = accessDecisionFact(definition, sourceFile);
         const guard = namedInitializer(definition, 'guard', sourceFile)?.name;
-        layouts.set(node.name.text, {
+        compilerMapSet(layouts, node.name.text, {
           ...(access === undefined ? {} : { access }),
           ...(guard === undefined ? {} : { guard }),
           localName: node.name.text,
@@ -425,14 +575,14 @@ function routeLayoutModels(
 }
 
 function routeFrameworkBindings(sourceFile: ts.SourceFile): RouteFrameworkBindings {
-  const rootedFileHandleNames = new Set<string>();
+  const rootedFileHandleNames = compilerCreateSet<string>();
   const bindings = { rootedFileHandleNames, sourceFile };
 
   const visit = (node: ts.Node): void => {
     if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.initializer) {
       const initializer = unwrapExpression(node.initializer);
       if (ts.isCallExpression(initializer) && isFrameworkRootedFilesCall(initializer, bindings)) {
-        rootedFileHandleNames.add(node.name.text);
+        compilerSetAdd(rootedFileHandleNames, node.name.text);
       }
     }
 
@@ -521,7 +671,7 @@ function isRootedFilesServeReceiver(
 ): boolean {
   const unwrapped = unwrapExpression(expression);
   if (ts.isIdentifier(unwrapped)) {
-    return frameworkBindings.rootedFileHandleNames.has(unwrapped.text);
+    return compilerSetHas(frameworkBindings.rootedFileHandleNames, unwrapped.text);
   }
   if (ts.isCallExpression(unwrapped)) {
     return isFrameworkRootedFilesCall(unwrapped, frameworkBindings);
@@ -552,10 +702,13 @@ function routeAccessFact(
   const routeAccess = accessDecisionFact(routeDefinition, sourceFile);
   if (routeAccess) return routeAccess;
 
-  for (let index = routeLayouts.length - 1; index >= 0; index -= 1) {
-    const layout = routeLayouts[index];
+  const layoutCount = compilerArrayLength(routeLayouts, 'Compiler route access layouts');
+  for (let index = layoutCount - 1; index >= 0; index -= 1) {
+    const layout = compilerOwnDataValue(routeLayouts, index, 'Compiler route access layouts') as
+      | RoutePageLayoutFact
+      | undefined;
     if (!layout) continue;
-    const access = layouts.get(layout.localName)?.access;
+    const access = compilerMapGet(layouts, layout.localName)?.access;
     if (access) return access;
   }
 
@@ -568,10 +721,21 @@ function routeGuardFacts(
   layouts: ReadonlyMap<string, RouteLayoutModel>,
   sourceFile: ts.SourceFile,
 ): string[] {
-  const guards = [
-    namedInitializer(routeDefinition, 'guard', sourceFile)?.name,
-    ...routeLayouts.map((layout) => layouts.get(layout.localName)?.guard),
-  ].filter((guard): guard is string => guard !== undefined);
+  const guards: string[] = [];
+  const routeGuard = namedInitializer(routeDefinition, 'guard', sourceFile)?.name;
+  if (routeGuard !== undefined) {
+    compilerArrayAppend(guards, routeGuard, 'Compiler route guards');
+  }
+  const layoutCount = compilerArrayLength(routeLayouts, 'Compiler route guard layouts');
+  for (let index = 0; index < layoutCount; index += 1) {
+    const layout = compilerOwnDataValue(
+      routeLayouts,
+      index,
+      'Compiler route guard layouts',
+    ) as RoutePageLayoutFact;
+    const guard = compilerMapGet(layouts, layout.localName)?.guard;
+    if (guard !== undefined) compilerArrayAppend(guards, guard, 'Compiler route guards');
+  }
 
   return uniqueSorted(guards);
 }
@@ -591,7 +755,9 @@ function accessDecisionFact(
     ts.isCallExpression(access) &&
     isFrameworkAccessExpression(sourceFile, access.expression, PUBLIC_ACCESS_IDENTITY)
   ) {
-    const [reason] = access.arguments;
+    const reason = compilerOwnDataValue(access.arguments, 0, 'Compiler public access arguments') as
+      | ts.Expression
+      | undefined;
     if (reason && ts.isStringLiteralLike(reason) && isCompilerAuditText(reason.text)) {
       return { kind: 'public', reason: reason.text };
     }
@@ -630,16 +796,28 @@ function isFrameworkAccessExpression(
 }
 
 function accessGuardNames(access: ts.ArrayLiteralExpression, sourceFile: ts.SourceFile): string[] {
-  return access.elements.flatMap((element) => {
+  const names: string[] = [];
+  const elementCount = compilerArrayLength(access.elements, 'Compiler access guard elements');
+  for (let index = 0; index < elementCount; index += 1) {
+    const element = compilerOwnDataValue(
+      access.elements,
+      index,
+      'Compiler access guard elements',
+    ) as ts.Expression;
     if (
       !ts.isCallExpression(element) ||
       !isFrameworkAccessExpression(sourceFile, element.expression, GUARD_IDENTITY)
     ) {
-      return [];
+      continue;
     }
-    const [name] = element.arguments;
-    return name && ts.isStringLiteralLike(name) ? [name.text] : [];
-  });
+    const name = compilerOwnDataValue(element.arguments, 0, 'Compiler access guard arguments') as
+      | ts.Expression
+      | undefined;
+    if (name && ts.isStringLiteralLike(name)) {
+      compilerArrayAppend(names, name.text, 'Compiler access guard names');
+    }
+  }
+  return names;
 }
 
 function staticStringProperty(
@@ -674,13 +852,14 @@ function routeLayoutFacts(
   const layoutName = routeLayoutName(routeDefinition, sourceFile);
   if (!layoutName) return [];
 
-  const chain: RoutePageLayoutFact[] = [];
-  const seen = new Set<string>();
+  const reverseChain: RoutePageLayoutFact[] = [];
+  const seen = compilerCreateSet<string>();
   let current: { length: number; name: string; start: number } | undefined = layoutName;
 
   while (current) {
-    if (seen.has(current.name)) {
-      diagnostics.push(
+    if (compilerSetHas(seen, current.name)) {
+      compilerArrayAppend(
+        diagnostics,
         layoutChainDiagnostic(
           fileName,
           source,
@@ -688,13 +867,15 @@ function routeLayoutFacts(
           current.length,
           `Cyclic layout parent chain at '${current.name}'.`,
         ),
+        'Compiler route diagnostics',
       );
       return [];
     }
-    seen.add(current.name);
-    const layoutModel = layouts.get(current.name);
+    compilerSetAdd(seen, current.name);
+    const layoutModel = compilerMapGet(layouts, current.name);
     if (!layoutModel) {
-      diagnostics.push(
+      compilerArrayAppend(
+        diagnostics,
         layoutChainDiagnostic(
           fileName,
           source,
@@ -702,10 +883,15 @@ function routeLayoutFacts(
           current.length,
           `Route layout '${current.name}' does not resolve to a local layout() declaration.`,
         ),
+        'Compiler route diagnostics',
       );
       return [];
     }
-    chain.unshift({ localName: layoutModel.localName, queries: layoutModel.queries });
+    compilerArrayAppend(
+      reverseChain,
+      { localName: layoutModel.localName, queries: layoutModel.queries },
+      'Compiler reverse route layout chain',
+    );
     current =
       layoutModel.parent === undefined
         ? undefined
@@ -716,6 +902,19 @@ function routeLayoutFacts(
           };
   }
 
+  const chain: RoutePageLayoutFact[] = [];
+  const chainCount = compilerArrayLength(reverseChain, 'Compiler reverse route layout chain');
+  for (let index = chainCount - 1; index >= 0; index -= 1) {
+    compilerArrayAppend(
+      chain,
+      compilerOwnDataValue(
+        reverseChain,
+        index,
+        'Compiler reverse route layout chain',
+      ) as RoutePageLayoutFact,
+      'Compiler route layout chain',
+    );
+  }
   return chain;
 }
 
@@ -747,10 +946,13 @@ function layoutChainDiagnostic(
 ): CompilerDiagnostic {
   return {
     ...diagnosticFor(fileName, 'KV303', source, start, length),
-    help: [
-      diagnosticDefinitions.KV303.help,
-      'Route layouts must be statically reconstructible from local layout() declarations so layout queries, boundaries, and navigation segment metadata can be derived.',
-    ].join('\n'),
+    help: compilerArrayJoin(
+      [
+        diagnosticDefinitions.KV303.help,
+        'Route layouts must be statically reconstructible from local layout() declarations so layout queries, boundaries, and navigation segment metadata can be derived.',
+      ],
+      '\n',
+    ),
     message: `${diagnosticDefinitions.KV303.message} ${detail}`,
   };
 }
@@ -758,18 +960,32 @@ function layoutChainDiagnostic(
 function layoutQueryNames(layoutDefinition: ts.ObjectLiteralExpression): string[] {
   const value = objectPropertyInitializer(layoutDefinition, 'queries');
   if (!value || !ts.isObjectLiteralExpression(value)) return [];
-  return value.properties.flatMap((property) => {
-    if (!ts.isPropertyAssignment(property)) return [];
+  const names: string[] = [];
+  const propertyCount = compilerArrayLength(value.properties, 'Compiler layout query properties');
+  for (let index = 0; index < propertyCount; index += 1) {
+    const property = compilerOwnDataValue(
+      value.properties,
+      index,
+      'Compiler layout query properties',
+    ) as ts.ObjectLiteralElementLike;
+    if (!ts.isPropertyAssignment(property)) continue;
     const name = propertyNameText(property.name);
-    return name ? [name] : [];
-  });
+    if (name) compilerArrayAppend(names, name, 'Compiler layout query names');
+  }
+  return names;
 }
 
 function objectPropertyInitializer(
   object: ts.ObjectLiteralExpression,
   name: string,
 ): ts.Expression | null {
-  for (const property of object.properties) {
+  const propertyCount = compilerArrayLength(object.properties, 'Compiler route object properties');
+  for (let index = 0; index < propertyCount; index += 1) {
+    const property = compilerOwnDataValue(
+      object.properties,
+      index,
+      'Compiler route object properties',
+    ) as ts.ObjectLiteralElementLike;
     if (ts.isPropertyAssignment(property) && propertyNameText(property.name) === name) {
       return property.initializer;
     }
@@ -782,7 +998,13 @@ function objectPageHandler(
   name: string,
   sourceFile: ts.SourceFile,
 ): RoutePageHandler | null {
-  for (const property of object.properties) {
+  const propertyCount = compilerArrayLength(object.properties, 'Compiler route page properties');
+  for (let index = 0; index < propertyCount; index += 1) {
+    const property = compilerOwnDataValue(
+      object.properties,
+      index,
+      'Compiler route page properties',
+    ) as ts.ObjectLiteralElementLike;
     if (ts.isPropertyAssignment(property) && propertyNameText(property.name) === name) {
       const start = property.initializer.getStart(sourceFile);
       return {
@@ -790,7 +1012,11 @@ function objectPageHandler(
         replacementEnd: property.initializer.getEnd(),
         replacementPrefix: '',
         replacementStart: start,
-        sourceExpression: sourceFile.text.slice(start, property.initializer.getEnd()),
+        sourceExpression: compilerStringSlice(
+          sourceFile.text,
+          start,
+          property.initializer.getEnd(),
+        ),
       };
     }
 
@@ -811,19 +1037,48 @@ function methodDeclarationFunctionExpression(
   method: ts.MethodDeclaration,
   sourceFile: ts.SourceFile,
 ): string {
-  const asyncKeyword = method.modifiers?.some(
-    (modifier) => modifier.kind === ts.SyntaxKind.AsyncKeyword,
-  )
-    ? 'async '
-    : '';
+  let asyncKeyword = '';
+  if (method.modifiers !== undefined) {
+    const modifierCount = compilerArrayLength(method.modifiers, 'Compiler route method modifiers');
+    for (let index = 0; index < modifierCount; index += 1) {
+      const modifier = compilerOwnDataValue(
+        method.modifiers,
+        index,
+        'Compiler route method modifiers',
+      ) as ts.Modifier;
+      if (modifier.kind === ts.SyntaxKind.AsyncKeyword) {
+        asyncKeyword = 'async ';
+        break;
+      }
+    }
+  }
   const typeParameters =
-    method.typeParameters && method.typeParameters.length > 0
-      ? `<${method.typeParameters.map((parameter) => parameter.getText(sourceFile)).join(', ')}>`
+    method.typeParameters &&
+    compilerArrayLength(method.typeParameters, 'Compiler route method type parameters') > 0
+      ? `<${routeNodeTexts(method.typeParameters, sourceFile, 'Compiler route method type parameters')}>`
       : '';
-  const parameters = method.parameters.map((parameter) => parameter.getText(sourceFile)).join(', ');
+  const parameters = routeNodeTexts(
+    method.parameters,
+    sourceFile,
+    'Compiler route method parameters',
+  );
   const returnType = method.type ? `: ${method.type.getText(sourceFile)}` : '';
   const body = method.body?.getText(sourceFile) ?? '{}';
   return `${asyncKeyword}function ${propertyNameText(method.name) ?? 'page'}${typeParameters}(${parameters})${returnType} ${body}`;
+}
+
+function routeNodeTexts(
+  nodes: readonly ts.Node[],
+  sourceFile: ts.SourceFile,
+  label: string,
+): string {
+  const texts: string[] = [];
+  const count = compilerArrayLength(nodes, label);
+  for (let index = 0; index < count; index += 1) {
+    const node = compilerOwnDataValue(nodes, index, label) as ts.Node;
+    compilerArrayAppend(texts, node.getText(sourceFile), `${label} texts`);
+  }
+  return compilerArrayJoin(texts, ', ');
 }
 
 function containsJsx(root: ts.Node): boolean {
@@ -856,32 +1111,36 @@ function routePageComponentFacts(
     if (ts.isJsxElement(node)) {
       const tag = jsxTagName(node.openingElement.tagName);
       if (tag && componentTagName(tag)) {
-        diagnostics.push(
-          ...routePageComponentSpreadDiagnostics(
+        appendRouteValues(
+          diagnostics,
+          routePageComponentSpreadDiagnostics(
             fileName,
             source,
             sourceFile,
             tag,
             node.openingElement.attributes,
           ),
+          'Compiler route diagnostics',
         );
-        facts.push(
+        compilerArrayAppend(
+          facts,
           routePageComponentFact(sourceFile, tag, node.openingElement.attributes, componentImports),
+          'Compiler route component facts',
         );
       }
     } else if (ts.isJsxSelfClosingElement(node)) {
       const tag = jsxTagName(node.tagName);
       if (tag && componentTagName(tag)) {
-        diagnostics.push(
-          ...routePageComponentSpreadDiagnostics(
-            fileName,
-            source,
-            sourceFile,
-            tag,
-            node.attributes,
-          ),
+        appendRouteValues(
+          diagnostics,
+          routePageComponentSpreadDiagnostics(fileName, source, sourceFile, tag, node.attributes),
+          'Compiler route diagnostics',
         );
-        facts.push(routePageComponentFact(sourceFile, tag, node.attributes, componentImports));
+        compilerArrayAppend(
+          facts,
+          routePageComponentFact(sourceFile, tag, node.attributes, componentImports),
+          'Compiler route component facts',
+        );
       }
     }
 
@@ -899,21 +1158,42 @@ function routePageComponentSpreadDiagnostics(
   localName: string,
   attributes: ts.JsxAttributes,
 ): CompilerDiagnostic[] {
-  return attributes.properties.filter(ts.isJsxSpreadAttribute).map((attribute) => ({
-    ...diagnosticFor(
-      fileName,
-      'KV303',
-      source,
-      attribute.getStart(sourceFile),
-      attribute.getWidth(sourceFile),
-    ),
-    help: [
-      diagnosticDefinitions.KV303.help,
-      'Route component props must be statically reconstructible so route query, live target, and navigation segment metadata can be derived.',
-      'Fix: pass named props directly, for example `<QuestionDetail questionId={params.id} />`, instead of spreading an object.',
-    ].join('\n'),
-    message: `${diagnosticDefinitions.KV303.message} Route component '${localName}' uses spread props that cannot be represented in generated route metadata.`,
-  }));
+  const diagnostics: CompilerDiagnostic[] = [];
+  const propertyCount = compilerArrayLength(
+    attributes.properties,
+    'Compiler route component attributes',
+  );
+  for (let index = 0; index < propertyCount; index += 1) {
+    const attribute = compilerOwnDataValue(
+      attributes.properties,
+      index,
+      'Compiler route component attributes',
+    ) as ts.JsxAttributeLike;
+    if (!ts.isJsxSpreadAttribute(attribute)) continue;
+    compilerArrayAppend(
+      diagnostics,
+      {
+        ...diagnosticFor(
+          fileName,
+          'KV303',
+          source,
+          attribute.getStart(sourceFile),
+          attribute.getWidth(sourceFile),
+        ),
+        help: compilerArrayJoin(
+          [
+            diagnosticDefinitions.KV303.help,
+            'Route component props must be statically reconstructible so route query, live target, and navigation segment metadata can be derived.',
+            'Fix: pass named props directly, for example `<QuestionDetail questionId={params.id} />`, instead of spreading an object.',
+          ],
+          '\n',
+        ),
+        message: `${diagnosticDefinitions.KV303.message} Route component '${localName}' uses spread props that cannot be represented in generated route metadata.`,
+      },
+      'Compiler route spread diagnostics',
+    );
+  }
+  return diagnostics;
 }
 
 function routePageComponentFact(
@@ -923,10 +1203,20 @@ function routePageComponentFact(
   componentImports: ReadonlyMap<string, RouteComponentImportModel>,
 ): RoutePageComponentFact {
   const allProps = routePageComponentProps(sourceFile, attributes);
-  const key = allProps.find((prop) => prop.name === 'key');
-  const props = allProps.filter((prop) => prop.name !== 'key');
+  let key: RoutePageComponentPropFact | undefined;
+  const props: RoutePageComponentPropFact[] = [];
+  const propCount = compilerArrayLength(allProps, 'Compiler route component props');
+  for (let index = 0; index < propCount; index += 1) {
+    const prop = compilerOwnDataValue(
+      allProps,
+      index,
+      'Compiler route component props',
+    ) as RoutePageComponentPropFact;
+    if (prop.name === 'key') key = prop;
+    else compilerArrayAppend(props, prop, 'Compiler route component non-key props');
+  }
   const propsExpression = routePagePropsExpression(props);
-  const exportName = componentImports.get(localName)?.exportName;
+  const exportName = compilerMapGet(componentImports, localName)?.exportName;
 
   return {
     ...(exportName ? { exportName } : {}),
@@ -942,48 +1232,85 @@ function routePageComponentProps(
   sourceFile: ts.SourceFile,
   attributes: ts.JsxAttributes,
 ): RoutePageComponentPropFact[] {
-  return attributes.properties.flatMap((attribute) => {
-    if (!ts.isJsxAttribute(attribute)) return [];
-    if (!ts.isIdentifier(attribute.name)) return [];
+  const props: RoutePageComponentPropFact[] = [];
+  const propertyCount = compilerArrayLength(
+    attributes.properties,
+    'Compiler route component attributes',
+  );
+  for (let index = 0; index < propertyCount; index += 1) {
+    const attribute = compilerOwnDataValue(
+      attributes.properties,
+      index,
+      'Compiler route component attributes',
+    ) as ts.JsxAttributeLike;
+    if (!ts.isJsxAttribute(attribute)) continue;
+    if (!ts.isIdentifier(attribute.name)) continue;
     const name = attribute.name.text;
 
     if (attribute.initializer === undefined) {
-      return [{ expression: 'true', name, staticValue: true }];
+      compilerArrayAppend(
+        props,
+        { expression: 'true', name, staticValue: true },
+        'Compiler route component props',
+      );
+      continue;
     }
 
     if (ts.isStringLiteral(attribute.initializer)) {
-      return [
+      compilerArrayAppend(
+        props,
         {
           expression: attribute.initializer.getText(sourceFile),
           name,
           staticValue: attribute.initializer.text,
         },
-      ];
+        'Compiler route component props',
+      );
+      continue;
     }
 
-    if (!ts.isJsxExpression(attribute.initializer) || !attribute.initializer.expression) return [];
+    if (!ts.isJsxExpression(attribute.initializer) || !attribute.initializer.expression) continue;
 
     const expression = attribute.initializer.expression;
     const staticValue = staticLiteralValue(expression);
     const propertyAccesses = propertyAccessPaths(expression);
-    return [
+    compilerArrayAppend(
+      props,
       {
         expression: expression.getText(sourceFile),
         name,
-        ...(propertyAccesses.length > 0 ? { propertyAccesses } : {}),
+        ...(compilerArrayLength(propertyAccesses, 'Compiler route prop accesses') > 0
+          ? { propertyAccesses }
+          : {}),
         ...(staticValue === undefined ? {} : { staticValue }),
       },
-    ];
-  });
+      'Compiler route component props',
+    );
+  }
+  return props;
 }
 
 function routePagePropsExpression(props: readonly RoutePageComponentPropFact[]): string {
-  if (props.length === 0) return '{}';
-  return `{ ${props.map((prop) => `${prop.name}: ${prop.expression}`).join(', ')} }`;
+  const propCount = compilerArrayLength(props, 'Compiler route props expression');
+  if (propCount === 0) return '{}';
+  const entries: string[] = [];
+  for (let index = 0; index < propCount; index += 1) {
+    const prop = compilerOwnDataValue(
+      props,
+      index,
+      'Compiler route props expression',
+    ) as RoutePageComponentPropFact;
+    compilerArrayAppend(
+      entries,
+      `${prop.name}: ${prop.expression}`,
+      'Compiler route props expression entries',
+    );
+  }
+  return `{ ${compilerArrayJoin(entries, ', ')} }`;
 }
 
 function componentTagName(tag: string): boolean {
-  return /^[A-Z]/.test(tag);
+  return compilerRegExpTest(/^[A-Z]/, tag);
 }
 
 function jsxTagName(name: ts.JsxTagNameExpression): string | null {
@@ -998,27 +1325,35 @@ function staticLiteralValue(expression: ts.Expression): StaticLiteralValue | und
   if (unwrapped.kind === ts.SyntaxKind.TrueKeyword) return true;
   if (unwrapped.kind === ts.SyntaxKind.FalseKeyword) return false;
   if (unwrapped.kind === ts.SyntaxKind.NullKeyword) return null;
-  if (ts.isNumericLiteral(unwrapped)) return Number(unwrapped.text);
+  if (ts.isNumericLiteral(unwrapped)) return compilerNumberValue(unwrapped.text);
   if (ts.isPrefixUnaryExpression(unwrapped) && ts.isNumericLiteral(unwrapped.operand)) {
-    if (unwrapped.operator === ts.SyntaxKind.MinusToken) return -Number(unwrapped.operand.text);
-    if (unwrapped.operator === ts.SyntaxKind.PlusToken) return Number(unwrapped.operand.text);
+    if (unwrapped.operator === ts.SyntaxKind.MinusToken) {
+      return -compilerNumberValue(unwrapped.operand.text);
+    }
+    if (unwrapped.operator === ts.SyntaxKind.PlusToken) {
+      return compilerNumberValue(unwrapped.operand.text);
+    }
   }
   return undefined;
 }
 
 function propertyAccessPaths(expression: ts.Expression): string[] {
   const paths: string[] = [];
+  const seen = compilerCreateSet<string>();
 
   const visit = (node: ts.Node): void => {
     if (ts.isPropertyAccessExpression(node)) {
       const path = propertyAccessPath(node);
-      if (path) paths.push(path);
+      if (path && !compilerSetHas(seen, path)) {
+        compilerSetAdd(seen, path);
+        compilerArrayAppend(paths, path, 'Compiler route property access paths');
+      }
     }
     ts.forEachChild(node, visit);
   };
 
   visit(expression);
-  return [...new Set(paths)];
+  return paths;
 }
 
 function emitCompiledRouteModule(options: {
@@ -1028,34 +1363,59 @@ function emitCompiledRouteModule(options: {
   source: string;
   sourceFile: ts.SourceFile;
 }): string {
-  const replacements: SourceReplacement[] = options.routePages.map(
-    (routePage) => routePage.pageReplacement,
-  );
-  const lowered = applySourceReplacements(options.source, [
-    ...routeImportReplacements(
+  const replacements: SourceReplacement[] = [];
+  const routePageCount = compilerArrayLength(options.routePages, 'Compiler emitted route pages');
+  for (let index = 0; index < routePageCount; index += 1) {
+    const routePage = compilerOwnDataValue(
+      options.routePages,
+      index,
+      'Compiler emitted route pages',
+    ) as CompiledRoutePage;
+    compilerArrayAppend(
+      replacements,
+      routePage.pageReplacement,
+      'Compiler emitted route replacements',
+    );
+  }
+  const allReplacements: SourceReplacement[] = [];
+  appendRouteValues(
+    allReplacements,
+    routeImportReplacements(
       options.sourceFile,
       options.artifactFileName,
       options.componentImportRewrites,
     ),
-    ...replacements,
-  ]);
+    'Compiler route source replacements',
+  );
+  appendRouteValues(allReplacements, replacements, 'Compiler route source replacements');
+  const lowered = applySourceReplacements(options.source, allReplacements);
   const importSource =
     "import { defineCompiledRoutePage as __kovoDefineCompiledRoutePage } from '@kovojs/server/internal/route';\n";
   const insertAt = routeModuleImportInsertionIndex(lowered);
 
-  return [
-    `// @kovojs-ir - lowered route module generated by @kovojs/compiler (SPEC.md section 4.5). Do not edit.\n`,
-    lowered.slice(0, insertAt),
-    importSource,
-    lowered.slice(insertAt),
-  ].join('');
+  return compilerArrayJoin(
+    [
+      `// @kovojs-ir - lowered route module generated by @kovojs/compiler (SPEC.md section 4.5). Do not edit.\n`,
+      compilerStringSlice(lowered, 0, insertAt),
+      importSource,
+      compilerStringSlice(lowered, insertAt),
+    ],
+    '',
+  );
 }
 
 function routeModuleImportInsertionIndex(source: string): number {
-  const shebang = source.startsWith('#!') ? source.indexOf('\n') + 1 : 0;
-  const leading = source.slice(shebang);
-  const jsxImportSource = leading.match(/^\/\*\*?\s*@jsxImportSource[\s\S]*?\*\/\s*/);
-  if (jsxImportSource) return shebang + jsxImportSource[0].length;
+  const shebang = compilerStringStartsWith(source, '#!')
+    ? compilerStringIndexOf(source, '\n') + 1
+    : 0;
+  const leading = compilerStringSlice(source, shebang);
+  const jsxImportSource = compilerRegExpExec(/^\/\*\*?\s*@jsxImportSource[\s\S]*?\*\/\s*/, leading);
+  if (jsxImportSource) {
+    const match = compilerOwnDataValue(jsxImportSource, 0, 'Compiler JSX import-source match');
+    if (typeof match !== 'string')
+      throw new TypeError('Compiler JSX import-source match is invalid.');
+    return shebang + match.length;
+  }
   return shebang;
 }
 
@@ -1073,45 +1433,60 @@ function routeAuthoringSurfaceDiagnostics(
       ts.isStringLiteralLike(node.moduleSpecifier) &&
       appLocalGeneratedImport(node.moduleSpecifier.text)
     ) {
-      diagnostics.push({
-        ...diagnosticFor(
-          fileName,
-          'KV235',
-          source,
-          node.moduleSpecifier.getStart(sourceFile),
-          node.moduleSpecifier.getWidth(sourceFile),
-        ),
-        help: [
-          diagnosticDefinitions.KV235.help,
-          'Route/layout source should import the authored component, for example `../components/question-list.js`; the route compiler rewrites the generated route artifact to the lowered component module.',
-        ].join('\n'),
-        message: `${diagnosticDefinitions.KV235.message} app-local generated component import ${node.moduleSpecifier.getText(sourceFile)} in route/layout source.`,
-      });
+      compilerArrayAppend(
+        diagnostics,
+        {
+          ...diagnosticFor(
+            fileName,
+            'KV235',
+            source,
+            node.moduleSpecifier.getStart(sourceFile),
+            node.moduleSpecifier.getWidth(sourceFile),
+          ),
+          help: compilerArrayJoin(
+            [
+              diagnosticDefinitions.KV235.help,
+              'Route/layout source should import the authored component, for example `../components/question-list.js`; the route compiler rewrites the generated route artifact to the lowered component module.',
+            ],
+            '\n',
+          ),
+          message: `${diagnosticDefinitions.KV235.message} app-local generated component import ${node.moduleSpecifier.getText(sourceFile)} in route/layout source.`,
+        },
+        'Compiler route diagnostics',
+      );
     }
     if (
       ts.isJsxAttribute(node) &&
       ts.isIdentifier(node.name) &&
-      navigationSegmentStampAttributes.has(node.name.text)
+      compilerSetHas(navigationSegmentStampAttributes, node.name.text)
     ) {
-      diagnostics.push({
-        ...diagnosticFor(
-          fileName,
-          'KV235',
-          source,
-          node.name.getStart(sourceFile),
-          node.name.getWidth(sourceFile),
-        ),
-        help: [
-          diagnosticDefinitions.KV235.help,
-          'Navigation segment stamps are compiler-derived from route(), layout(), and the target document used by enhanced navigation.',
-          'Fix: remove the kovo-nav-* attribute and declare sibling route/layout regions with the public route({ regions }) API.',
-          'SPEC §8 makes enhanced navigation loader-owned; app TSX does not author segment stamps or persistence policy.',
-        ].join('\n'),
-        message: `${diagnosticDefinitions.KV235.message} hand-authored navigation segment stamp ${node.name.text}.`,
-      });
+      compilerArrayAppend(
+        diagnostics,
+        {
+          ...diagnosticFor(
+            fileName,
+            'KV235',
+            source,
+            node.name.getStart(sourceFile),
+            node.name.getWidth(sourceFile),
+          ),
+          help: compilerArrayJoin(
+            [
+              diagnosticDefinitions.KV235.help,
+              'Navigation segment stamps are compiler-derived from route(), layout(), and the target document used by enhanced navigation.',
+              'Fix: remove the kovo-nav-* attribute and declare sibling route/layout regions with the public route({ regions }) API.',
+              'SPEC §8 makes enhanced navigation loader-owned; app TSX does not author segment stamps or persistence policy.',
+            ],
+            '\n',
+          ),
+          message: `${diagnosticDefinitions.KV235.message} hand-authored navigation segment stamp ${node.name.text}.`,
+        },
+        'Compiler route diagnostics',
+      );
     }
     if (isDeferCallJsxChild(node)) {
-      diagnostics.push(
+      compilerArrayAppend(
+        diagnostics,
         diagnosticFor(
           fileName,
           'KV244',
@@ -1119,6 +1494,7 @@ function routeAuthoringSurfaceDiagnostics(
           node.expression.getStart(sourceFile),
           node.expression.getWidth(sourceFile),
         ),
+        'Compiler route diagnostics',
       );
     }
     ts.forEachChild(node, visit);
@@ -1144,7 +1520,7 @@ function isDeferCallJsxChild(node: ts.Node): node is ts.JsxExpression & {
 }
 
 function appLocalGeneratedImport(specifier: string): boolean {
-  return /^\.{1,2}\/(?:.*\/)?generated\//.test(specifier);
+  return compilerRegExpTest(/^\.{1,2}\/(?:.*\/)?generated\//, specifier);
 }
 
 function routeArtifactFileName(fileName: string): string {
@@ -1157,9 +1533,19 @@ function routeImportReplacements(
   componentImportRewrites: readonly { localName: string; specifier: string }[],
 ): SourceReplacement[] {
   const replacements: SourceReplacement[] = [];
-  const rewriteByLocalName = new Map(
-    componentImportRewrites.map((rewrite) => [rewrite.localName, rewrite.specifier]),
+  const rewriteByLocalName = compilerCreateMap<string, string>();
+  const rewriteCount = compilerArrayLength(
+    componentImportRewrites,
+    'Compiler route component import rewrites',
   );
+  for (let index = 0; index < rewriteCount; index += 1) {
+    const rewrite = compilerOwnDataValue(
+      componentImportRewrites,
+      index,
+      'Compiler route component import rewrites',
+    ) as { readonly localName: string; readonly specifier: string };
+    compilerMapSet(rewriteByLocalName, rewrite.localName, rewrite.specifier);
+  }
 
   const visit = (node: ts.Node): void => {
     if (
@@ -1174,11 +1560,15 @@ function routeImportReplacements(
       const rebased =
         rewritten ?? rebaseRelativeSpecifier(specifier, sourceFile.fileName, artifactFileName);
       if (rebased && rebased !== specifier) {
-        replacements.push({
-          end: node.moduleSpecifier.getEnd(),
-          replacement: JSON.stringify(rebased),
-          start: node.moduleSpecifier.getStart(sourceFile),
-        });
+        compilerArrayAppend(
+          replacements,
+          {
+            end: node.moduleSpecifier.getEnd(),
+            replacement: jsonRouteValue(rebased),
+            start: node.moduleSpecifier.getStart(sourceFile),
+          },
+          'Compiler route import replacements',
+        );
       }
     }
     ts.forEachChild(node, visit);
@@ -1195,13 +1585,26 @@ function componentImportRewriteSpecifier(
   const namedBindings = node.importClause?.namedBindings;
   if (!namedBindings || !ts.isNamedImports(namedBindings)) return null;
 
-  const matches = namedBindings.elements.flatMap((element) => {
+  const matches: string[] = [];
+  const elementCount = compilerArrayLength(
+    namedBindings.elements,
+    'Compiler route rewritten imports',
+  );
+  for (let index = 0; index < elementCount; index += 1) {
+    const element = compilerOwnDataValue(
+      namedBindings.elements,
+      index,
+      'Compiler route rewritten imports',
+    ) as ts.ImportSpecifier;
     const localName = element.name.text;
-    const specifier = rewriteByLocalName.get(localName);
-    return specifier ? [specifier] : [];
-  });
-  const unique = [...new Set(matches)];
-  return unique.length === 1 ? (unique[0] ?? null) : null;
+    const specifier = compilerMapGet(rewriteByLocalName, localName);
+    if (specifier) compilerArrayAppend(matches, specifier, 'Compiler route rewrite matches');
+  }
+  const unique = uniqueSorted(matches);
+  return compilerArrayLength(unique, 'Compiler route rewrite matches') === 1
+    ? ((compilerOwnDataValue(unique, 0, 'Compiler route rewrite matches') as string | undefined) ??
+        null)
+    : null;
 }
 
 function rebaseRelativeSpecifier(
@@ -1209,13 +1612,28 @@ function rebaseRelativeSpecifier(
   sourceFileName: string,
   artifactFileName: string,
 ): string | null {
-  if (!specifier.startsWith('.')) return null;
+  if (!compilerStringStartsWith(specifier, '.')) return null;
 
   const absoluteTarget = resolve(dirname(sourceFileName), specifier);
   const relativeTarget = normalizePath(relative(dirname(artifactFileName), absoluteTarget));
-  return relativeTarget.startsWith('.') ? relativeTarget : `./${relativeTarget}`;
+  return compilerStringStartsWith(relativeTarget, '.') ? relativeTarget : `./${relativeTarget}`;
 }
 
 function normalizePath(value: string): string {
-  return value.replace(/\\/g, '/');
+  return compilerRegExpReplace(/\\/g, value, '/');
+}
+
+function appendRouteValues<Value>(target: Value[], values: readonly Value[], label: string): void {
+  const count = compilerArrayLength(values, label);
+  for (let index = 0; index < count; index += 1) {
+    compilerArrayAppend(target, compilerOwnDataValue(values, index, label) as Value, label);
+  }
+}
+
+function jsonRouteValue(value: unknown): string {
+  const serialized = compilerJsonStringify(value);
+  if (serialized === undefined) {
+    throw new TypeError('Compiler route metadata must be JSON serializable.');
+  }
+  return serialized;
 }

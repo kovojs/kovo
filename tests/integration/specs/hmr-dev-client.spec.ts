@@ -848,8 +848,8 @@ function kovoSourceEditFixturePlugin(options: { onModuleDiagnostics: OnModuleDia
     async transform(source, id) {
       if (!/\.[cm]?tsx?$/.test(id) || !source.includes('component(')) return null;
 
-      // The compiler transform persists its cache asynchronously. Await it so closing the Vite
-      // fixture cannot race a late cache write and fail recursive cleanup with ENOTEMPTY.
+      // Keep the transport's diagnostics and retained HMR state ordered before the fixture's
+      // direct compiler inspection of the same authored source.
       await hmrTransport.transform(source, id);
       const result = compileComponentModule({
         fileName: fixtureComponentFileName(id, root),

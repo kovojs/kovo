@@ -4,7 +4,6 @@ import { performance } from 'node:perf_hooks';
 
 import { describe, expect, it } from 'vitest';
 
-import { CompileCache, compileComponentCacheKeyInput } from '../packages/compiler/src/internal.js';
 import {
   compileComponentModule,
   type CompileComponentOptions,
@@ -20,7 +19,6 @@ interface CompilerPerfBudget {
   coldMaxMs: number;
   fileCount: number;
   minLoc: number;
-  warmMaxMs: number;
 }
 
 interface CompilerPerfBudgets {
@@ -59,7 +57,6 @@ interface CompilerPerfCorpusResult {
   cold: CompilerPerfRunMetrics;
   input: CompilerPerfInputMetrics;
   name: string;
-  warm: CompilerPerfRunMetrics;
 }
 
 const budgets = JSON.parse(
@@ -85,57 +82,23 @@ describeCompilerPerf('compiler performance gates', () => {
 
       assertCorpusShape(result.name, result.input, budget);
       assertElapsedBudget(result.name, 'cold', result.cold.elapsedMs, budget.coldMaxMs);
-      assertElapsedBudget(result.name, 'warm', result.warm.elapsedMs, budget.warmMaxMs);
-      expect(result.warm.actualCompileCount, `${result.name} warm cache misses`).toBe(0);
       printCorpusResult(result);
     }
 
     assertCorpusShape('total', totals.input, budgets.total);
     assertElapsedBudget('total', 'cold', totals.cold.elapsedMs, budgets.total.coldMaxMs);
-    assertElapsedBudget('total', 'warm', totals.warm.elapsedMs, budgets.total.warmMaxMs);
-    expect(totals.warm.actualCompileCount, 'total warm cache misses').toBe(0);
     printCorpusResult(totals);
-  }, 60_000);
-
-  it('keeps an incremental single-file edit to O(changed files)', () => {
-    const files = compilerPerfCorpora().flatMap((corpus) => corpus.files);
-    const cache = new CompileCache<CompileResult>();
-    let actualCompileCount = 0;
-
-    for (const file of files) {
-      const options = compileOptions(file);
-      void cache.getOrCreate(compileComponentCacheKeyInput(options), () => {
-        actualCompileCount += 1;
-        return compileComponentModule(options);
-      });
-    }
-
-    const afterPrimeCompileCount = actualCompileCount;
-    const editedFiles = files.map((file, index) =>
-      index === 0 ? { ...file, source: file.source.replace('Item <span>', 'Edited <span>') } : file,
-    );
-    for (const file of editedFiles) {
-      const options = compileOptions(file);
-      void cache.getOrCreate(compileComponentCacheKeyInput(options), () => {
-        actualCompileCount += 1;
-        return compileComponentModule(options);
-      });
-    }
-
-    expect(actualCompileCount - afterPrimeCompileCount).toBe(1);
   }, 60_000);
 });
 
 function runCorpus(corpus: CompilerPerfCorpus): CompilerPerfCorpusResult {
   const input = inputMetrics(corpus.files);
   const cold = measureColdCompile(corpus.files);
-  const warm = measureWarmCompile(corpus.files);
 
   return {
     cold,
     input,
     name: corpus.name,
-    warm,
   };
 }
 
@@ -157,42 +120,6 @@ function measureColdCompile(files: readonly CompilerPerfFile[]): CompilerPerfRun
 
   return {
     actualCompileCount,
-    counters,
-    elapsedMs: performance.now() - startedAt,
-  };
-}
-
-function measureWarmCompile(files: readonly CompilerPerfFile[]): CompilerPerfRunMetrics {
-  const cache = new CompileCache<CompileResult>();
-  let actualCompileCount = 0;
-
-  for (const file of files) {
-    const options = compileOptions(file);
-    void cache.getOrCreate(compileComponentCacheKeyInput(options), () => {
-      actualCompileCount += 1;
-      return compileComponentModule(options);
-    });
-  }
-
-  const counters = emptyCounters();
-  const startedAt = performance.now();
-  for (const file of files) {
-    const options = compileOptions(file);
-    const result = cache.getOrCreate(compileComponentCacheKeyInput(options), () => {
-      actualCompileCount += 1;
-      return compileComponentModule(options);
-    });
-    if (result instanceof Promise) throw new Error('compileComponentModule should be synchronous');
-
-    const diagnostics = result.diagnostics.map(
-      (diagnostic) => `${diagnostic.code} ${diagnostic.fileName}: ${diagnostic.message}`,
-    );
-    expect(diagnostics, `compiler diagnostics in ${file.fileName}`).toEqual([]);
-    addResultCounters(counters, result);
-  }
-
-  return {
-    actualCompileCount: actualCompileCount - files.length,
     counters,
     elapsedMs: performance.now() - startedAt,
   };
@@ -242,7 +169,7 @@ function assertCorpusShape(
 
 function assertElapsedBudget(
   corpusName: string,
-  phase: 'cold' | 'warm',
+  phase: 'cold',
   elapsedMs: number,
   maxElapsedMs: number,
 ): void {
@@ -270,10 +197,8 @@ function printCorpusResult(result: CompilerPerfCorpusResult): void {
       `files=${result.input.fileCount}`,
       `inputLoc=${result.input.loc}`,
       `coldMs=${result.cold.elapsedMs.toFixed(1)}`,
-      `warmMs=${result.warm.elapsedMs.toFixed(1)}`,
-      `compileCount=${result.cold.counters.compileCount + result.warm.counters.compileCount}`,
+      `compileCount=${result.cold.counters.compileCount}`,
       `actualColdCompiles=${result.cold.actualCompileCount}`,
-      `actualWarmCompiles=${result.warm.actualCompileCount}`,
       `emittedFiles=${result.cold.counters.emittedFileCount}`,
       `emittedLoc=${result.cold.counters.emittedLoc}`,
       `transformFacts=${result.cold.counters.transformFactCount}`,
@@ -315,18 +240,14 @@ function totalResults(results: readonly CompilerPerfCorpusResult[]): CompilerPer
     cold: { actualCompileCount: 0, counters: emptyCounters(), elapsedMs: 0 },
     input: { fileCount: 0, loc: 0 },
     name: 'total',
-    warm: { actualCompileCount: 0, counters: emptyCounters(), elapsedMs: 0 },
   };
 
   for (const result of results) {
     total.input.fileCount += result.input.fileCount;
     total.input.loc += result.input.loc;
     total.cold.elapsedMs += result.cold.elapsedMs;
-    total.warm.elapsedMs += result.warm.elapsedMs;
     total.cold.actualCompileCount += result.cold.actualCompileCount;
-    total.warm.actualCompileCount += result.warm.actualCompileCount;
     addCounters(total.cold.counters, result.cold.counters);
-    addCounters(total.warm.counters, result.warm.counters);
   }
 
   return total;

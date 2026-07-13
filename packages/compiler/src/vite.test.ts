@@ -91,7 +91,7 @@ export const C = component({
 });
 `;
 
-    const plugin = kovoVitePlugin({ cache: false, include: ['src'] });
+    const plugin = kovoVitePlugin({ include: ['src'] });
     plugin.configResolved?.({ root });
 
     try {
@@ -135,7 +135,7 @@ export const C = component({
       "export { trustedHtml as th } from '@kovojs/browser';\n",
     );
     writeFileSync(join(src, 'browser-barrel.ts'), "export * from './browser-root';\n");
-    const plugin = kovoVitePlugin({ cache: false, include: ['src'] });
+    const plugin = kovoVitePlugin({ include: ['src'] });
     plugin.configResolved?.({ root });
     const nativeIterator = Array.prototype[Symbol.iterator];
     const nativeApply = Reflect.apply;
@@ -150,7 +150,7 @@ export const C = component({
         }
         return nativeApply(nativeIterator, this, []);
       };
-      await expect(
+      expect(() =>
         plugin.transform(
           `
 import { th } from './browser-barrel';
@@ -168,8 +168,8 @@ export const C = component({
     }
   });
 
-  it('invalidates the Vite transform cache when registered identity files change', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'kovo-vite-identity-cache-'));
+  it('observes registered identity-file changes on the next Vite transform', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-vite-identity-fresh-'));
     const src = join(root, 'src');
     mkdirSync(src, { recursive: true });
     writeFileSync(join(src, 'browser-root.ts'), 'export const th = (value: string) => value;\n');
@@ -303,10 +303,10 @@ export const rawUnescaped = (markup: string) => renderedHtml(markup);
     expect(compileComponentModule).not.toHaveBeenCalled();
   });
 
-  it('does not treat linked Kovo framework package source as app-authored source', async () => {
-    const frameworkRoot = mkdtempSync(join(tmpdir(), 'kovo-framework-source-'));
-    const packageRoot = join(frameworkRoot, 'packages/server');
-    const frameworkModule = join(packageRoot, 'src/jsx-runtime.ts');
+  it('does not let an authored package name exempt source from the app security boundary', async () => {
+    const appRoot = mkdtempSync(join(tmpdir(), 'kovo-self-named-package-'));
+    const packageRoot = join(appRoot, 'packages/server');
+    const authoredModule = join(packageRoot, 'src/raw-helper.ts');
     mkdirSync(join(packageRoot, 'src'), { recursive: true });
     writeFileSync(
       join(packageRoot, 'package.json'),
@@ -317,19 +317,47 @@ export const rawUnescaped = (markup: string) => renderedHtml(markup);
     const plugin = createKovoVitePlugin(compileComponentModule);
 
     try {
-      expect(
-        await plugin.transform(
+      expect(() =>
+        plugin.transform(
           `
 import { kovoTrustedHtmlContent } from '@kovojs/browser/internal/output';
 
 export const token = kovoTrustedHtmlContent;
 `,
-          frameworkModule,
+          authoredModule,
         ),
-      ).toBeNull();
+      ).toThrow('KV235');
       expect(compileComponentModule).not.toHaveBeenCalled();
     } finally {
-      rmSync(frameworkRoot, { force: true, recursive: true });
+      rmSync(appRoot, { force: true, recursive: true });
+    }
+  });
+
+  it('compiles component source even when its authored package claims a Kovo package name', async () => {
+    const appRoot = mkdtempSync(join(tmpdir(), 'kovo-self-named-component-'));
+    const packageRoot = join(appRoot, 'packages/core');
+    const authoredModule = join(packageRoot, 'src/forged.tsx');
+    mkdirSync(join(packageRoot, 'src'), { recursive: true });
+    writeFileSync(
+      join(packageRoot, 'package.json'),
+      JSON.stringify({ name: '@kovojs/core', type: 'module' }),
+    );
+
+    const compileComponentModule = vi.fn(() => ({ files: [] }));
+    const plugin = createKovoVitePlugin(compileComponentModule);
+
+    try {
+      await plugin.transform(
+        `
+import { component } from '@kovojs/core';
+
+export const Forged = component(() => <div>authored</div>);
+`,
+        authoredModule,
+      );
+      expect(compileComponentModule).toHaveBeenCalledOnce();
+    } finally {
+      rmSync(appRoot, { force: true, recursive: true });
     }
   });
 
@@ -637,7 +665,7 @@ export const RealKv437 = component({
     // selective late Array.prototype.filter replacement, returning deployable server code.
     const diagnostics = [
       {
-        code: 'KV435',
+        code: 'KV435' as const,
         fileName: 'src/account.tsx',
         message: kv435.message,
         severity: 'error' as const,
@@ -749,7 +777,7 @@ export const RealKv437 = component({
       diagnostics: [],
       files: [{ kind: 'server', source: 'export const forgedSafe = true;' }],
     };
-    const plugin = createKovoVitePlugin(async () => real, { cache: false });
+    const plugin = createKovoVitePlugin(async () => real);
     const nativeThen = Promise.prototype.then;
     let pending: ReturnType<typeof plugin.transform>;
     try {
@@ -764,19 +792,37 @@ export const RealKv437 = component({
     await expect(pending!).rejects.toThrow(/KV236/u);
   });
 
+  it('does not execute a compile-result then accessor while classifying asynchronous work', async () => {
+    let thenGetterHits = 0;
+    const compileResult = {
+      diagnostics: [],
+      files: [{ kind: 'server', source: 'export const reviewedServer = true;' }],
+      get then(): never {
+        thenGetterHits += 1;
+        throw new Error('attacker-controlled then getter executed');
+      },
+    };
+    const plugin = createKovoVitePlugin(() => compileResult);
+
+    await expect(plugin.transform('component(', 'src/reviewed.tsx')).resolves.toEqual({
+      code: 'export const reviewedServer = true;',
+      map: null,
+    });
+    expect(thenGetterHits).toBe(0);
+  });
+
   it('does not rewrite validated server render output through late String.replace', async () => {
     const serverSource =
       'export function renderSource() { return "export const reviewedServer = true;"; }';
-    const plugin = createKovoVitePlugin(
-      () => ({ diagnostics: [], files: [{ kind: 'server', source: serverSource }] }),
-      {
-        cache: false,
-      },
-    );
+    const plugin = createKovoVitePlugin(() => ({
+      diagnostics: [],
+      files: [{ kind: 'server', source: serverSource }],
+    }));
     const nativeReplace = String.prototype.replace;
     const nativeToString = String.prototype.toString;
     try {
       String.prototype.replace = function poisonedValidatedServerReplace(
+        this: string,
         searchValue: string | RegExp,
         replaceValue: string | ((substring: string, ...args: unknown[]) => string),
       ): string {
@@ -785,7 +831,7 @@ export const RealKv437 = component({
           return 'function renderSource() { return "export const attackerServer = true;"; }';
         }
         return Reflect.apply(nativeReplace, this, [searchValue, replaceValue]);
-      };
+      } as typeof String.prototype.replace;
       await expect(plugin.transform('component(', 'src/reviewed.tsx')).resolves.toEqual({
         code: 'export const reviewedServer = true;',
         map: null,
@@ -802,30 +848,28 @@ export const RealKv437 = component({
       'src/reviewed.tsx',
       clientModuleContentVersion(clientSource),
     );
-    const plugin = createKovoVitePlugin(
-      () => ({
-        clientExports: ['reviewedClient'],
-        diagnostics: [],
-        files: [
-          { kind: 'server', source: 'export const reviewedServer = true;' },
-          { kind: 'client', source: clientSource },
-        ],
-        hmrImpact: hmrMetadata({ clientHref }),
-      }),
-      { cache: false },
-    );
+    const plugin = createKovoVitePlugin(() => ({
+      clientExports: ['reviewedClient'],
+      diagnostics: [],
+      files: [
+        { kind: 'server', source: 'export const reviewedServer = true;' },
+        { kind: 'client', source: clientSource },
+      ],
+      hmrImpact: hmrMetadata({ clientHref }),
+    }));
     const nativeReplace = String.prototype.replace;
     const nativeToString = String.prototype.toString;
     const nativeExec = RegExp.prototype.exec;
     try {
       String.prototype.replace = function poisonedProductionClientReplace(
+        this: string,
         searchValue: string | RegExp,
         replaceValue: string | ((substring: string, ...args: unknown[]) => string),
       ): string {
         const value = Reflect.apply(nativeToString, this, []);
         if (value === clientSource) return 'export const attackerClient = globalThis.secret;';
         return Reflect.apply(nativeReplace, this, [searchValue, replaceValue]);
-      };
+      } as typeof String.prototype.replace;
       RegExp.prototype.exec = function poisonedProductionClientExec(value: string) {
         if (value === clientSource) return null;
         return Reflect.apply(nativeExec, this, [value]);
@@ -841,6 +885,11 @@ export const RealKv437 = component({
     expect(compiled?.source).toContain('export const reviewedClient = runQueryUpdatePlan;');
     expect(compiled?.source).not.toContain('attackerClient');
     expect(compiled?.version).toBe(clientModuleContentVersion(clientSource));
+    expect(Reflect.set(compiled!, 'source', 'globalThis.pwned = true;')).toBe(false);
+    expect(Reflect.set(compiled!, 'path', '/pwned.js')).toBe(false);
+    const [reread] = plugin.getClientModules?.() ?? [];
+    expect(reread?.source).toContain('export const reviewedClient = runQueryUpdatePlan;');
+    expect(reread?.path).not.toBe('/pwned.js');
   });
 
   it('reports warn, lint, and notice diagnostics without blocking the Vite transform', async () => {
@@ -1254,7 +1303,47 @@ export const Shell = component({
     }
   });
 
-  it('retains old versioned client modules after a newer transform', async () => {
+  it('recompiles when an imported package manifest changes prefix in the same plugin', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-vite-prefix-change-'));
+    const source = `
+import { component } from '@kovojs/core';
+import '@acme/primitives';
+import '@other/widgets/menu';
+
+export const Shell = component({
+  render: () => <section></section>,
+});
+`;
+
+    try {
+      writePackageManifest(root, '@acme/primitives', {
+        kovo: { prefix: 'acme-' },
+        name: '@acme/primitives',
+      });
+      writePackageManifest(root, '@other/widgets', {
+        kovo: { prefix: 'other-' },
+        name: '@other/widgets',
+      });
+
+      const plugin = kovoVitePlugin();
+      plugin.configResolved?.({ root });
+      await expect(plugin.transform(source, join(root, 'src/shell.tsx'))).resolves.toMatchObject({
+        map: null,
+      });
+
+      writePackageManifest(root, '@other/widgets', {
+        kovo: { prefix: 'acme-' },
+        name: '@other/widgets',
+      });
+      await expect(plugin.transform(source, join(root, 'src/shell.tsx'))).rejects.toThrow(
+        'Effective package prefix "acme-" is claimed by @acme/primitives and @other/widgets.',
+      );
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it('retains only the current and previous versioned client modules after newer transforms', async () => {
     const plugin = kovoVitePlugin();
     const middlewares: KovoViteMiddleware[] = [];
     const source = (handler: string) => `
@@ -1279,22 +1368,182 @@ export const CartBadge = component({
       'components/cart/cart-badge.client.js',
     );
     const second = await plugin.transform?.(source('clearCart'), 'components/cart/cart-badge.tsx');
-    const newClientRef = findVersionedClientRef(
+    const previousClientRef = findVersionedClientRef(
       second?.code,
       'components/cart/cart-badge.client.js',
     );
+    const third = await plugin.transform?.(source('addItem'), 'components/cart/cart-badge.tsx');
+    const currentClientRef = findVersionedClientRef(
+      third?.code,
+      'components/cart/cart-badge.client.js',
+    );
     const oldResponse = createMiddlewareResponse();
-    const newResponse = createMiddlewareResponse();
+    const previousResponse = createMiddlewareResponse();
+    const currentResponse = createMiddlewareResponse();
+    const oldNext = vi.fn();
 
     expect(oldClientRef).toBeDefined();
-    expect(newClientRef).toBeDefined();
-    expect(newClientRef).not.toBe(oldClientRef);
+    expect(previousClientRef).toBeDefined();
+    expect(currentClientRef).toBeDefined();
+    expect(previousClientRef).not.toBe(oldClientRef);
+    expect(currentClientRef).not.toBe(previousClientRef);
 
-    middlewares[0]?.({ url: oldClientRef ?? '' }, oldResponse, vi.fn());
-    middlewares[0]?.({ url: newClientRef ?? '' }, newResponse, vi.fn());
+    middlewares[0]?.({ url: oldClientRef ?? '' }, oldResponse, oldNext);
+    middlewares[0]?.({ url: previousClientRef ?? '' }, previousResponse, vi.fn());
+    middlewares[0]?.({ url: currentClientRef ?? '' }, currentResponse, vi.fn());
 
-    expect(oldResponse.body).toContain('return removeItem(event, ctx);');
-    expect(newResponse.body).toContain('return clearCart(event, ctx);');
+    expect(oldNext).toHaveBeenCalledTimes(1);
+    expect(oldResponse.body).toBe('');
+    expect(previousResponse.body).toContain('return clearCart(event, ctx);');
+    expect(currentResponse.body).toContain('return addItem(event, ctx);');
+  });
+
+  it('evicts the least-recently compiled file when the dev client-module file bound is reached', async () => {
+    const compileComponentModule = vi.fn(({ fileName }: { fileName: string }) => {
+      const identifier = fileName.match(/bounded-(\d+)/)?.[1] ?? 'unknown';
+      const clientSource = `export const bounded${identifier} = true;`;
+      return {
+        files: [
+          { kind: 'server', source: `export const server${identifier} = true;` },
+          { kind: 'client', source: clientSource },
+        ],
+      };
+    });
+    const plugin = createKovoVitePlugin(compileComponentModule);
+    const middlewares: KovoViteMiddleware[] = [];
+    plugin.configureServer?.({
+      middlewares: {
+        use(handler) {
+          middlewares.push(handler);
+        },
+      },
+    });
+
+    const firstFile = 'src/bounded-0.tsx';
+    const lastFile = 'src/bounded-1024.tsx';
+    for (let index = 0; index <= 1024; index += 1) {
+      await plugin.transform('component(', `src/bounded-${index}.tsx`);
+    }
+    const firstHref = clientModuleHrefForSourceFile(
+      firstFile,
+      clientModuleContentVersion('export const bounded0 = true;'),
+    );
+    const lastHref = clientModuleHrefForSourceFile(
+      lastFile,
+      clientModuleContentVersion('export const bounded1024 = true;'),
+    );
+    const firstResponse = createMiddlewareResponse();
+    const lastResponse = createMiddlewareResponse();
+    const firstNext = vi.fn();
+    const lastNext = vi.fn();
+
+    middlewares[0]?.({ url: firstHref }, firstResponse, firstNext);
+    middlewares[0]?.({ url: lastHref }, lastResponse, lastNext);
+
+    expect(firstNext).toHaveBeenCalledTimes(1);
+    expect(firstResponse.body).toBe('');
+    expect(lastNext).not.toHaveBeenCalled();
+    expect(lastResponse.body).toBe('export const bounded1024 = true;');
+  });
+
+  it('charges retained source-file identifiers to the Vite state budget', async () => {
+    const plugin = createKovoVitePlugin(() => ({
+      cssAssets: [
+        {
+          componentName: 'bounded-id',
+          criticalCss: '.bounded-id{display:block}',
+          fragmentTargets: [],
+          href: '/assets/bounded-id.css',
+          sourceFileName: 'src/bounded-id.css',
+        },
+      ],
+      files: [{ kind: 'server', source: 'export const boundedId = true;' }],
+    }));
+    plugin.configResolved?.({ command: 'build', root: process.cwd() });
+    const oversizedFileName = `src/${'x'.repeat(16 * 1024 * 1024)}.tsx`;
+
+    await expect(
+      Promise.resolve(plugin.transform('component(', oversizedFileName)),
+    ).rejects.toThrow(/one source file exceeds the bounded source limit/u);
+    expect(plugin.getCssAssetManifest?.().stylesheets).toEqual([]);
+  });
+
+  it('removes stale client and CSS build outputs when a file no longer emits them', async () => {
+    const clientSource = 'export const staleClient = true;';
+    const clientHref = clientModuleHrefForSourceFile(
+      'src/stale.tsx',
+      clientModuleContentVersion(clientSource),
+    );
+    let compileCount = 0;
+    const plugin = createKovoVitePlugin(() => {
+      compileCount += 1;
+      if (compileCount > 1) {
+        return { files: [{ kind: 'server', source: 'export const currentServer = true;' }] };
+      }
+      return {
+        clientExports: ['staleClient'],
+        cssAssets: [
+          {
+            componentName: 'stale',
+            criticalCss: '.stale{color:red}',
+            fragmentTargets: ['stale'],
+            href: '/assets/stale.css',
+            sourceFileName: 'src/stale.css',
+          },
+        ],
+        files: [
+          { kind: 'server', source: 'export const staleServer = true;' },
+          { kind: 'client', source: clientSource },
+        ],
+        hmrImpact: hmrMetadata({ clientHref }),
+      };
+    });
+    plugin.configResolved?.({ command: 'build', root: process.cwd() });
+
+    await plugin.transform('component(', 'src/stale.tsx');
+    expect(plugin.getClientModules?.()).toHaveLength(1);
+    expect(plugin.getCssAssetManifest?.().stylesheets).toHaveLength(1);
+
+    await plugin.transform('component(', 'src/stale.tsx');
+    expect(plugin.getClientModules?.()).toEqual([]);
+    expect(plugin.getCssAssetManifest?.().stylesheets).toEqual([]);
+  });
+
+  it('bounds CSS-only dev churn and fails loudly rather than truncating build output', async () => {
+    const compileCss = ({ fileName }: { fileName: string }) => {
+      const identifier = fileName.match(/css-only-(\d+)/)?.[1] ?? 'unknown';
+      return {
+        cssAssets: [
+          {
+            componentName: `css-only-${identifier}`,
+            criticalCss: `.css-only-${identifier}{display:block}`,
+            fragmentTargets: [],
+            href: `/assets/css-only-${identifier}.css`,
+            sourceFileName: `src/css-only-${identifier}.css`,
+          },
+        ],
+        files: [{ kind: 'server', source: `export const cssOnly${identifier} = true;` }],
+      };
+    };
+    const devPlugin = createKovoVitePlugin(compileCss);
+    devPlugin.configureServer?.({ middlewares: { use() {} } });
+    for (let index = 0; index <= 1024; index += 1) {
+      await devPlugin.transform('component(', `src/css-only-${index}.tsx`);
+    }
+    const devStyles = devPlugin.getCssAssetManifest?.().stylesheets ?? [];
+    expect(devStyles).toHaveLength(1024);
+    expect(devStyles.some((asset) => asset.sourceFileName === 'src/css-only-0.css')).toBe(false);
+    expect(devStyles.some((asset) => asset.sourceFileName === 'src/css-only-1024.css')).toBe(true);
+
+    const buildPlugin = createKovoVitePlugin(compileCss);
+    buildPlugin.configResolved?.({ command: 'build', root: process.cwd() });
+    for (let index = 0; index < 1024; index += 1) {
+      await buildPlugin.transform('component(', `src/css-only-${index}.tsx`);
+    }
+    await expect(
+      Promise.resolve(buildPlugin.transform('component(', 'src/css-only-1024.tsx')),
+    ).rejects.toThrow(/refusing incomplete output/u);
+    expect(buildPlugin.getCssAssetManifest?.().stylesheets).toHaveLength(1024);
   });
 
   it('passes through unknown Vite dev middleware requests', () => {
@@ -1320,9 +1569,11 @@ export const CartBadge = component({
   });
 
   it('scopes transforms with include and exclude filters', async () => {
-    const compileComponentModule = vi.fn(() => ({
-      files: [{ kind: 'server', source: 'export function renderSource() {}' }],
-    }));
+    const compileComponentModule = vi.fn(
+      (_: Parameters<Parameters<typeof createKovoVitePlugin>[0]>[0]) => ({
+        files: [{ kind: 'server', source: 'export function renderSource() {}' }],
+      }),
+    );
     const plugin = createKovoVitePlugin(compileComponentModule, {
       exclude: ['src/components/private'],
       include: ['src/components'],
@@ -1538,9 +1789,11 @@ export const ProductList = component({
   });
 
   it('deduplicates component-local query-shape aliases repeated across components', async () => {
-    const compileComponentModule = vi.fn(() => ({
-      files: [{ kind: 'server', source: 'export function renderSource() {}' }],
-    }));
+    const compileComponentModule = vi.fn(
+      (_: Parameters<Parameters<typeof createKovoVitePlugin>[0]>[0]) => ({
+        files: [{ kind: 'server', source: 'export function renderSource() {}' }],
+      }),
+    );
     const queryShapeFacts = [
       {
         query: 'queries/product-grid-query',
@@ -1640,13 +1893,13 @@ export const RegionB = component({
     );
   });
 
-  it('caches repeated transforms in memory without signing injected compiler output', async () => {
+  it('compiles repeated transforms fresh without retaining injected compiler output', async () => {
     const compileComponentModule = vi.fn(({ source }: { source: string }) => ({
       dependencyFootprint: {},
       files: [{ kind: 'server', source: `export const sourceLength = ${source.length};` }],
     }));
     const plugin = createKovoVitePlugin(compileComponentModule);
-    const root = mkdtempSync(join(tmpdir(), 'kovo-vite-persistent-cache-'));
+    const root = mkdtempSync(join(tmpdir(), 'kovo-vite-plugin-fresh-'));
     plugin.configResolved?.({ root } as never);
 
     try {
@@ -1659,7 +1912,7 @@ export const RegionB = component({
       expect((await plugin.transform('component(1)', 'src/cart-badge.tsx'))?.code).toBe(
         'export const sourceLength = 12;',
       );
-      expect(compileComponentModule).toHaveBeenCalledTimes(2);
+      expect(compileComponentModule).toHaveBeenCalledTimes(3);
 
       const secondCompile = vi.fn(() => ({
         dependencyFootprint: {},
@@ -1676,8 +1929,8 @@ export const RegionB = component({
     }
   });
 
-  it('does not persist injected compiler footprint outputs across plugin instances', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'kovo-vite-persistent-footprint-cache-'));
+  it('does not retain injected compiler footprint outputs across plugin instances', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-vite-plugin-footprint-fresh-'));
     const cartInput = [
       {
         coercion: 'number' as const,
@@ -1720,7 +1973,7 @@ export const RegionB = component({
 
       const secondCompile = vi.fn(() => ({
         dependencyFootprint: {},
-        files: [{ kind: 'server', source: 'export const cacheMiss = true;' }],
+        files: [{ kind: 'server', source: 'export const freshResult = true;' }],
       }));
       const secondPlugin = createKovoVitePlugin(secondCompile, {
         registryFacts: {
@@ -1742,31 +1995,9 @@ export const RegionB = component({
       secondPlugin.configResolved?.({ root } as never);
 
       expect((await secondPlugin.transform('component(', 'src/cart-badge.tsx'))?.code).toBe(
-        'export const cacheMiss = true;',
+        'export const freshResult = true;',
       );
       expect(secondCompile).toHaveBeenCalledTimes(1);
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
-  });
-
-  it('bypasses compiler caches when cache is false', async () => {
-    const compileComponentModule = vi.fn(({ source }: { source: string }) => ({
-      dependencyFootprint: {},
-      files: [{ kind: 'server', source: `export const sourceLength = ${source.length};` }],
-    }));
-    const plugin = createKovoVitePlugin(compileComponentModule, { cache: false });
-    const root = mkdtempSync(join(tmpdir(), 'kovo-vite-no-cache-'));
-    plugin.configResolved?.({ root } as never);
-
-    try {
-      expect((await plugin.transform('component(', 'src/cart-badge.tsx'))?.code).toBe(
-        'export const sourceLength = 10;',
-      );
-      expect((await plugin.transform('component(', 'src/cart-badge.tsx'))?.code).toBe(
-        'export const sourceLength = 10;',
-      );
-      expect(compileComponentModule).toHaveBeenCalledTimes(2);
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

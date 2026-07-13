@@ -4962,6 +4962,44 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
     ).toBeUndefined();
   });
 
+  it('binds layered builder methods to the raw handle without exposing its session', async () => {
+    // SPEC §10.2/§10.3: composing managed handles must preserve Drizzle's receiver identity for
+    // approved builder entrypoints. Invoking a raw method with the inner proxy as `this` makes
+    // Drizzle's own `this.session` lookup hit the app-facing raw-driver denial instead.
+    const calls: string[] = [];
+    const raw = {
+      session: { marker: 'raw-session' },
+      select(this: { session: { marker: string } }) {
+        const marker = this.session.marker;
+        calls.push(`select:${marker}`);
+        return {
+          session: this.session,
+          from(table: string) {
+            calls.push(`from:${table}`);
+            return Promise.resolve([{ marker, table }]);
+          },
+        };
+      },
+    };
+    const inner = managedDb(raw, 'write');
+    const outer = wrapManagedDbForSqlSafety(
+      inner,
+      undefined,
+      managedSqlExecutionPolicy({ capability: 'write', tables: ['products'] }),
+    ) as typeof raw;
+
+    const builder = outer.select();
+    await expect(builder.from('products')).resolves.toEqual([
+      { marker: 'raw-session', table: 'products' },
+    ]);
+    expect(() => void builder.session).toThrow(/raw driver escape db\.session|KV422/u);
+    expect(Object.getOwnPropertyDescriptor(builder, 'session')).toBeUndefined();
+    expect(Reflect.ownKeys(builder)).not.toContain('session');
+    expect(Object.getPrototypeOf(builder)).toBeNull();
+    expect(() => void outer.session).toThrow(/raw driver escape db\.session|KV422/u);
+    expect(calls).toEqual(['select:raw-session', 'from:products']);
+  });
+
   it('pins real SQLite frame controls through rollback after prototype poisoning', async () => {
     // SPEC §6.6 C9/§10.3: BEGIN and its matching COMMIT/ROLLBACK are one authority frame. The
     // callback cannot replace a shared driver prototype between those transitions.

@@ -9,8 +9,8 @@ const workerPath = resolve(repoRoot, 'tests/compiler-determinism-worker.mjs');
 
 describe('compiler determinism', () => {
   it('emits byte-identical perf-corpus artifacts in two fresh processes', () => {
-    // SPEC.md §5.2 requires compiler output to be reproducible; the incremental cache relies on
-    // identical declared inputs producing identical emitted bytes across process boundaries.
+    // SPEC.md §5.2 requires identical declared inputs to produce identical emitted bytes across
+    // process boundaries.
     const first = runDeterminismWorker();
     const second = runDeterminismWorker();
 

@@ -107,4 +107,57 @@ export const CartBadge = component({
 
     expect(composePageComponentArtifacts([cartBadge])).toEqual([cartBadge]);
   });
+
+  it('does not let a late Array.map replacement forge composed executable output', () => {
+    const cartBadge = compileComponentModule({
+      fileName: 'components/cart-badge.tsx',
+      source: `
+export const CartBadge = component({
+  render: () => <cart-badge>Cart</cart-badge>,
+});
+`,
+    });
+    const nativeMap = Array.prototype.map;
+    const nativeApply = Reflect.apply;
+    let poisonHits = 0;
+    let composed: ReturnType<typeof composePageComponentArtifacts> = [];
+
+    try {
+      Array.prototype.map = function forgeComposedCompileResult(
+        this: unknown[],
+        callback: (value: unknown, index: number, array: unknown[]) => unknown,
+        thisArg?: unknown,
+      ): unknown[] {
+        const first = this[0] as { componentGraphFacts?: unknown; files?: unknown } | undefined;
+        if (
+          this.length === 1 &&
+          first?.componentGraphFacts !== undefined &&
+          first.files !== undefined
+        ) {
+          poisonHits += 1;
+          return [
+            {
+              ...first,
+              files: [
+                {
+                  fileName: 'components/cart-badge.server.js',
+                  kind: 'server',
+                  source: 'export const forged = globalThis.secret;',
+                },
+              ],
+            },
+          ];
+        }
+        return nativeApply(nativeMap, this, [callback, thisArg]);
+      } as typeof Array.prototype.map;
+      composed = composePageComponentArtifacts([cartBadge]);
+    } finally {
+      Array.prototype.map = nativeMap;
+    }
+
+    expect(poisonHits).toBe(0);
+    expect(composed[0]?.files.find((file) => file.kind === 'server')?.source).not.toContain(
+      'globalThis.secret',
+    );
+  });
 });

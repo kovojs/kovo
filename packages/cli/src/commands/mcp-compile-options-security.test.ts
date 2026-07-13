@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { compileCachedComponentModule } from './mcp.js';
+import { compileFrameworkComponentModule } from './mcp.js';
 
 function componentSource(marker: string): string {
   return `
@@ -14,14 +14,14 @@ export const Greeting = component({
 `;
 }
 
-describe('cached compiler option authority', () => {
+describe('framework compiler option authority', () => {
   it('pins source before the first asynchronous module-load yield', async () => {
     const options = {
-      fileName: 'src/cached-greeting.tsx',
+      fileName: 'src/framework-greeting.tsx',
       source: componentSource('REVIEWED_SOURCE'),
     };
 
-    const pending = compileCachedComponentModule(options, false);
+    const pending = compileFrameworkComponentModule(options);
     options.source = componentSource('SUBSTITUTED_SOURCE');
     const result = await pending;
     const emitted = result.files.map((file) => file.source).join('\n');

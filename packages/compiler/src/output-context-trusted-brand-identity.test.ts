@@ -63,6 +63,40 @@ describe('F1: KV236 trusted-brand suppression is symbol-identity, fail-closed', 
     ).toBeGreaterThan(0);
   });
 
+  it('BYPASS CLOSED: late Array.some replacement cannot forge trusted-brand identity', () => {
+    const nativeSome = Array.prototype.some;
+    const nativeApply = Reflect.apply;
+    let poisonHits = 0;
+    let diagnosticCount = 0;
+
+    try {
+      Array.prototype.some = function forgeTrustedHtmlIdentity(
+        this: unknown[],
+        callback: (value: unknown, index: number, array: unknown[]) => unknown,
+        thisArg?: unknown,
+      ): boolean {
+        const first = this[0] as { exportName?: unknown; module?: unknown } | undefined;
+        if (
+          this.length === 3 &&
+          first?.module === '@kovojs/browser' &&
+          first.exportName === 'trustedHtml'
+        ) {
+          poisonHits += 1;
+          return true;
+        }
+        return nativeApply(nativeSome, this, [callback, thisArg]);
+      } as typeof Array.prototype.some;
+      diagnosticCount = kv236(
+        SCRIPT("import { trustedHtml } from './my-utils';", 'trustedHtml(cfg.inline)'),
+      );
+    } finally {
+      Array.prototype.some = nativeSome;
+    }
+
+    expect(poisonHits).toBe(0);
+    expect(diagnosticCount).toBeGreaterThan(0);
+  });
+
   it('BYPASS CLOSED: an undefined `trustedHtml` name no longer suppresses KV236', () => {
     expect(kv236(SCRIPT('', 'trustedHtml(cfg.inline)'))).toBeGreaterThan(0);
   });

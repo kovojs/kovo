@@ -91,6 +91,32 @@ describe('component CSS helpers', () => {
     );
   });
 
+  it('does not escape component scope through late selector Array.map replacement', () => {
+    const nativeMap = Array.prototype.map;
+    const nativeApply = Reflect.apply;
+    let poisonHits = 0;
+    let result: ReturnType<typeof scopeComponentCss> | undefined;
+    try {
+      Array.prototype.map = function poisonedCssSelectorMap<T, U>(
+        callback: (value: T, index: number, array: T[]) => U,
+        thisArg?: unknown,
+      ): U[] {
+        if (this[0] === ('.count' as T)) {
+          poisonHits += 1;
+          return ['body'] as U[];
+        }
+        return nativeApply(nativeMap, this, [callback, thisArg]);
+      } as typeof Array.prototype.map;
+      result = scopeComponentCss('[kovo-c="cart-badge"]', '.count { color: red; }');
+    } finally {
+      Array.prototype.map = nativeMap;
+    }
+
+    expect(result?.fallback).toContain('[kovo-c="cart-badge"] .count');
+    expect(result?.fallback).not.toContain('[kovo-c="cart-badge"] body');
+    expect(poisonHits).toBe(0);
+  });
+
   it('prefixes component CSS fallback selectors inside conditional at-rules', () => {
     const result = scopeComponentCss(
       '[kovo-c="cart-badge"]',
@@ -750,6 +776,78 @@ export const Reviews = component({
         sourceFileNames: ['components/cart.css', 'components/shell.css'],
       },
     ]);
+  });
+
+  it('pins route chunk-name normalization against late String.replace substitution', () => {
+    const reviewed = cssAccountingAsset('reviewed.css', 'reviewed', '.reviewed{color:green}');
+    const nativeReplace = String.prototype.replace;
+    const nativeToString = String.prototype.toString;
+    let poisonHits = 0;
+    let manifest: ReturnType<typeof collectCssAssetManifest> | undefined;
+
+    try {
+      String.prototype.replace = function forgeRouteChunkName(
+        this: string,
+        searchValue: string | RegExp,
+        replaceValue: string | ((substring: string, ...args: unknown[]) => string),
+      ): string {
+        const value = Reflect.apply(nativeToString, this, []);
+        if (value === '/safe') {
+          poisonHits += 1;
+          return '../../forged';
+        }
+        return Reflect.apply(nativeReplace, this, [searchValue, replaceValue]);
+      } as typeof String.prototype.replace;
+      manifest = collectCssAssetManifest(
+        { cssAssets: [reviewed] },
+        {
+          split: { routes: [{ route: '/safe', sourceFileNames: ['reviewed.css'] }] },
+        },
+      );
+    } finally {
+      String.prototype.replace = nativeReplace;
+    }
+
+    const routeChunk = manifest?.chunks?.routes['/safe']?.[0];
+    expect(poisonHits).toBe(0);
+    expect(routeChunk?.sourceFileName).toMatch(/^routes\/safe-[a-f0-9]{64}\.css$/u);
+    expect(routeChunk?.sourceFileName).not.toContain('..');
+  });
+
+  it('pins route chunk CSS collection against late Array.flatMap substitution', () => {
+    const reviewed = cssAccountingAsset('reviewed.css', 'reviewed', '.reviewed{color:green}');
+    const nativeFlatMap = Array.prototype.flatMap;
+    const nativeApply = Reflect.apply;
+    let reviewedAssetCalls = 0;
+    let manifest: ReturnType<typeof collectCssAssetManifest> | undefined;
+
+    try {
+      Array.prototype.flatMap = function forgeRouteChunkCss(
+        this: unknown[],
+        callback: (value: unknown, index: number, array: unknown[]) => unknown,
+        thisArg?: unknown,
+      ): unknown[] {
+        const first = this[0] as { sourceFileName?: unknown } | undefined;
+        if (first?.sourceFileName === 'reviewed.css') {
+          reviewedAssetCalls += 1;
+          if (reviewedAssetCalls === 2) return ['.attacker{background:url(secret)}'];
+        }
+        return nativeApply(nativeFlatMap, this, [callback, thisArg]);
+      } as typeof Array.prototype.flatMap;
+      manifest = collectCssAssetManifest(
+        { cssAssets: [reviewed] },
+        {
+          split: { routes: [{ route: '/safe', sourceFileNames: ['reviewed.css'] }] },
+        },
+      );
+    } finally {
+      Array.prototype.flatMap = nativeFlatMap;
+    }
+
+    const routeChunk = manifest?.chunks?.routes['/safe']?.[0];
+    expect(reviewedAssetCalls).toBe(0);
+    expect(routeChunk?.criticalCss).toBe('.reviewed{color:green}');
+    expect(routeChunk?.criticalCss).not.toContain('attacker');
   });
 });
 

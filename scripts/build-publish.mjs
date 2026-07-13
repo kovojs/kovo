@@ -163,6 +163,14 @@ function readPackageJson(pkg) {
 /** The `vp pack <entries> --dts` build command for a package. */
 function buildCommand(plan, pkgJson) {
   if (pkgJson.name === '@kovojs/icons') return 'node ./scripts/build-dist.mjs';
+  if (pkgJson.name === '@kovojs/compiler') {
+    // The public Vite entry statically binds the compiler authority. Loading the root workspace
+    // config while packing that entry would recursively load its source graph through Node's native
+    // TS resolver, so compiler packaging intentionally has no Vite config dependency.
+    const viteEntry = 'src/vite-config.ts';
+    const ordinaryEntries = plan.entries.filter((entry) => entry !== viteEntry);
+    return `vp pack ${ordinaryEntries.join(' ')} --no-config --dts && vp pack ${viteEntry} --no-config --no-clean --dts`;
+  }
   return `vp pack ${plan.entries.join(' ')} --dts`;
 }
 

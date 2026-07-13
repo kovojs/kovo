@@ -342,21 +342,6 @@ function compareOwnershipPostureFacts(
   );
 }
 
-/** @internal Process-lifetime cache for app graph derivation keyed by contribution fingerprints. */
-export class IncrementalAppGraphCache {
-  readonly #results = compilerCreateMap<string, CompileAppGraphResult>();
-
-  derive(options: CompileAppGraphOptions): CompileAppGraphResult {
-    const key = appGraphContributionHash(options);
-    const cached = compilerMapGet(this.#results, key);
-    if (cached) return cached;
-
-    const result = deriveAppGraph(options);
-    compilerMapSet(this.#results, key, result);
-    return result;
-  }
-}
-
 /** @internal Stable multiset hash of the facts that contribute to {@link deriveAppGraph}. */
 export function appGraphContributionHash(options: CompileAppGraphOptions): string {
   const input = compilerSnapshotJsonValue(options, 'App graph contribution options');

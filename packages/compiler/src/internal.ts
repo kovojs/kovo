@@ -1,23 +1,11 @@
 export type { CompilerDiagnostic, SourcePosition } from './diagnostics.js';
 /** @internal Supported runners call this before evaluating app/plugin modules. */
 export { assertCompilerSecurityIntrinsics } from './compiler-security-intrinsics.js';
-export { compilerBuildId, type CompilerBuildIdInput } from './cache-identity.js';
-export { CompileCache, compileComponentCacheKeyInput } from './compile-cache.js';
 export { snapshotCompileComponentOptions } from './compile-options.js';
-export type { CompileCacheKeyInput } from './compile-cache.js';
-/** @internal */
-export { compileCacheKey } from './compile-cache.js';
-/** @internal Safe high-level cache entry point; signing authority stays module-private. */
-export { compileComponentModuleCached } from './cached-compile.js';
-export {
-  persistentCompileCacheDir,
-  readPersistentCompileCacheEntry,
-  readPersistentCompileCacheManifest,
-  type PersistentCompileCacheEntry,
-  type PersistentCompileCacheManifest,
-} from './persistent-compile-cache.js';
+/** @internal Framework runner that snapshots options and compiles without retained state. */
+export { compileComponentModuleForFramework } from './framework-compile.js';
 export type { PlatformSubstitution } from './lower/platform.js';
-export { appGraphContributionHash, IncrementalAppGraphCache } from './app-graph.js';
+export { appGraphContributionHash } from './app-graph.js';
 export { factHash } from './fact-hash.js';
 export type {
   AttributeMergeResult,

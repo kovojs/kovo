@@ -191,10 +191,10 @@ describe('storage byte snapshots', () => {
     let copiedBuffer: Uint8Array | undefined;
 
     try {
-      ArrayBuffer.isView = () => {
+      ArrayBuffer.isView = (() => {
         poisonHits += 1;
         return false;
-      };
+      }) as unknown as typeof ArrayBuffer.isView;
       ArrayBuffer.prototype.slice = function substituteSlice() {
         poisonHits += 1;
         return attacker.buffer;
@@ -861,6 +861,50 @@ describe('storage adapters', () => {
     }
   });
 
+  it('rejects a sidecar generation that could retarget another in-root path', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'kovo-storage-generation-path-'));
+    try {
+      const storage = createFileSystemStorage({ root });
+      const key = 'docs/report.txt';
+      await storage.put(key, 'report', { contentType: 'text/plain' });
+      const sidecarPath = path.join(
+        root,
+        `${fileSystemPhysicalStorageKey(key)}${fileSystemSidecarSuffix}`,
+      );
+      const sidecar = JSON.parse(await readFile(sidecarPath, 'utf8')) as Record<string, unknown>;
+      sidecar.generation = '../../other-object';
+      await writeFile(sidecarPath, JSON.stringify(sidecar), 'utf8');
+
+      await expect(storage.stat(key)).resolves.toBeUndefined();
+      await expect(storage.get(key)).resolves.toBeUndefined();
+      await expect(storage.stream(key)).resolves.toBeUndefined();
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
+  it('rejects a generation whose published size does not match its immutable body', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'kovo-storage-generation-size-'));
+    try {
+      const storage = createFileSystemStorage({ root });
+      const key = 'docs/report.txt';
+      await storage.put(key, 'report', { contentType: 'text/plain' });
+      const sidecarPath = path.join(
+        root,
+        `${fileSystemPhysicalStorageKey(key)}${fileSystemSidecarSuffix}`,
+      );
+      const sidecar = JSON.parse(await readFile(sidecarPath, 'utf8')) as Record<string, unknown>;
+      sidecar.size = 7;
+      await writeFile(sidecarPath, JSON.stringify(sidecar), 'utf8');
+
+      await expect(storage.stat(key)).resolves.toBeUndefined();
+      await expect(storage.get(key)).resolves.toBeUndefined();
+      await expect(storage.stream(key)).resolves.toBeUndefined();
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
   it('pins logical-key hashing and sidecar decoding against late codec substitution', async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), 'kovo-storage-codec-authority-'));
     const originalEncode = TextEncoder.prototype.encode;
@@ -900,14 +944,14 @@ describe('storage adapters', () => {
     let poisonHits = 0;
     try {
       const storage = createFileSystemStorage({ root });
-      hashPrototype.update = function updatePoison() {
+      hashPrototype.update = function updatePoison(this: import('node:crypto').Hash) {
         poisonHits += 1;
         return this;
-      };
+      } as typeof hashPrototype.update;
       hashPrototype.digest = function digestPoison() {
         poisonHits += 1;
         return 'f'.repeat(64);
-      } as typeof hashPrototype.digest;
+      } as unknown as typeof hashPrototype.digest;
       String.prototype.slice = function slicePoison(start?: number) {
         poisonHits += 1;
         return start === 0 ? 'ff' : 'fixed-object-slot';

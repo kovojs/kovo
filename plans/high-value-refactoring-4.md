@@ -118,16 +118,13 @@ that removes the broader source of drift.
   - Verification: add forged-symbol negative tests; run `pnpm exec vitest --run packages/server/src/hints.test.ts packages/server/src/build.test.ts packages/server/src/static-export-assets.test.ts packages/server/src/neutral-build.test.ts`.
   - Evidence: `pnpm exec vitest --run packages/server/src/hints.test.ts packages/server/src/build.test.ts packages/server/src/static-export-assets.test.ts packages/server/src/neutral-build.test.ts` passed with the 3 existing files/54 tests after merging `agent/hvr4-server-security-20260630-235550`; `packages/server/src/neutral-build.test.ts` does not exist in this checkout, and `git diff --check HEAD^..HEAD` passed.
 
-- [x] **P0.9 - Preserve production render-plan gates in every compile-cache projection.**
-  - Current signals: exact compiler cache keys include `productionRenderPlanGate`, but
-    `narrowCompileCacheKeyInput()` drops that option when replaying learned dependency footprints;
-    persistent cache reuse follows the narrowed path.
-  - Refactor shape: add one typed compile-cache projection builder that always preserves compile-affecting
-    options such as production render-plan gating while narrowing only fact inputs by prior read sets.
-  - Risk reduced: a no-gate compile cannot be reused when KV416/KV435 production render-plan gates are
-    enabled, including across persistent cache restarts.
-  - Verification: add learned-footprint and persistent-cache regressions; run `pnpm exec vitest --run packages/compiler/src/compile-cache.test.ts packages/compiler/src/persistent-compile-cache.test.ts packages/compiler/src/render-plan-token-contract.test.ts`.
-  - Evidence: `pnpm exec vitest --run packages/compiler/src/compile-cache.test.ts packages/compiler/src/persistent-compile-cache.test.ts packages/compiler/src/render-plan-token-contract.test.ts` passed with 3 files/22 tests after merging `agent/hvr4-compiler-20260630-235527`; `git diff --check HEAD^..HEAD` passed.
+- [x] **P0.9 - Preserve production render-plan gates on every compile.**
+  - Current shape: the 2026-07-13 security pass retired process and persistent result caches entirely;
+    framework callers compile fresh, so there is no narrowed replay path that can omit the gate.
+  - Risk reduced: a no-gate result cannot be reused when KV416/KV435 production render-plan gates are
+    enabled.
+  - Evidence: `tests/compiler-runner-transparency.test.ts` exercises the fresh CLI/MCP/Vite/fixture runner
+    boundary; `packages/compiler/src/render-plan-token-contract.test.ts` verifies the gate/token contract.
 
 ## P1 - Cross-Package Drift and Runtime Chokepoints
 

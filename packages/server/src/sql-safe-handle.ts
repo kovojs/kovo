@@ -368,7 +368,8 @@ function wrapDbAdapter(
         );
       }
 
-      const value = managedSqlDataPropertyValue(target, prop);
+      const invocationTarget = managedSqlInvocationTarget(target);
+      const value = managedSqlDataPropertyValue(invocationTarget, prop);
 
       if (prop === 'query' && typeof value === 'object' && value !== null) {
         witnessWeakSetAdd(relationalManagedSqlNamespaces, value);
@@ -403,16 +404,20 @@ function wrapDbAdapter(
         return wrapDbAdapter(value, mode, proxyCache, methodCache, writePolicy, true);
       }
 
-      if (prop === 'sql' && typeof value === 'function' && isManagedDbAdapterLike(target)) {
+      if (
+        prop === 'sql' &&
+        typeof value === 'function' &&
+        isManagedDbAdapterLike(invocationTarget)
+      ) {
         return cachedSqlSafetyMethod(target, prop, value, methodCache, () =>
-          guardedSqlMethod(target, value, mode, writePolicy),
+          guardedSqlMethod(invocationTarget, value, mode, writePolicy),
         );
       }
 
       if (
         writePolicy !== undefined &&
         typeof value === 'function' &&
-        isRelationalManagedSqlTarget(target) &&
+        isRelationalManagedSqlTarget(invocationTarget) &&
         isRelationalManagedSqlMethod(prop)
       ) {
         return cachedSqlSafetyMethod(
@@ -426,7 +431,7 @@ function wrapDbAdapter(
                 prop === 'findMany' || prop === 'findFirst'
                   ? guardedSqlBuilderArguments(args)
                   : snapshotDenseSqlMethodArguments(args);
-              const result = witnessReflectApply<unknown>(value, target, callArgs);
+              const result = witnessReflectApply<unknown>(value, invocationTarget, callArgs);
               if (isRecord(result) && (isManagedDbAdapterLike(result) || isSqlHandleLike(result))) {
                 witnessWeakSetAdd(relationalManagedSqlTargets, result);
                 return wrapDbAdapter(result, mode, proxyCache, methodCache, writePolicy, true);
@@ -439,34 +444,48 @@ function wrapDbAdapter(
       if (
         isDirectSqlExecutionMethod(prop) &&
         typeof value === 'function' &&
-        (isManagedDbAdapterLike(target) || isSqlHandleLike(target))
+        (isManagedDbAdapterLike(invocationTarget) || isSqlHandleLike(invocationTarget))
       ) {
         return cachedSqlSafetyMethod(target, prop, value, methodCache, () =>
-          guardedSqlMethod(target, value, mode, writePolicy),
+          guardedSqlMethod(invocationTarget, value, mode, writePolicy),
         );
       }
 
-      if (prop === 'prepare' && typeof value === 'function' && isSqlHandleLike(target)) {
+      if (prop === 'prepare' && typeof value === 'function' && isSqlHandleLike(invocationTarget)) {
         return cachedSqlSafetyMethod(target, prop, value, methodCache, () =>
-          guardedPrepareMethod(target, value, mode, proxyCache, methodCache, writePolicy),
+          guardedPrepareMethod(invocationTarget, value, mode, proxyCache, methodCache, writePolicy),
         );
       }
 
       if (prop === 'with' && typeof value === 'function' && writePolicy?.capability === 'read') {
         return cachedSqlSafetyMethod(target, prop, value, methodCache, () =>
-          guardedReadWithMethod(target, value, proxyCache, methodCache),
+          guardedReadWithMethod(invocationTarget, value, proxyCache, methodCache),
         );
       }
 
       if (prop === 'with' && typeof value === 'function') {
         return cachedSqlSafetyMethod(target, prop, value, methodCache, () =>
-          guardedWriteWithMethod(target, value, mode, proxyCache, methodCache, writePolicy),
+          guardedWriteWithMethod(
+            invocationTarget,
+            value,
+            mode,
+            proxyCache,
+            methodCache,
+            writePolicy,
+          ),
         );
       }
 
       if (prop === 'transaction' && typeof value === 'function') {
         return cachedSqlSafetyMethod(target, prop, value, methodCache, () =>
-          guardedTransactionMethod(target, value, mode, proxyCache, methodCache, writePolicy),
+          guardedTransactionMethod(
+            invocationTarget,
+            value,
+            mode,
+            proxyCache,
+            methodCache,
+            writePolicy,
+          ),
         );
       }
 
@@ -481,7 +500,7 @@ function wrapDbAdapter(
       return cachedSqlSafetyMethod(target, prop, value, methodCache, () => {
         if (isSqlBuilderFastPath(prop, writePolicy)) {
           return guardedSqlBuilderEntry(
-            target,
+            invocationTarget,
             value,
             proxyCache,
             methodCache,
@@ -489,7 +508,7 @@ function wrapDbAdapter(
           );
         }
         return guardedUnknownSqlMethod(
-          target,
+          invocationTarget,
           prop,
           value,
           mode,
@@ -575,8 +594,12 @@ function managedSqlDescriptorCarriesCapability(descriptor: PropertyDescriptor): 
   );
 }
 
+function managedSqlInvocationTarget(target: object): object {
+  return frameworkManagedDbRawTarget(target) ?? target;
+}
+
 function managedSqlDataPropertyValue(target: object, property: PropertyKey): unknown {
-  const dispatchTarget = frameworkManagedDbRawTarget(target) ?? target;
+  const dispatchTarget = managedSqlInvocationTarget(target);
   if (witnessWeakSetHas(frameworkManagedSqlDispatchProxies, dispatchTarget)) {
     return witnessReflectGet(dispatchTarget, property, dispatchTarget);
   }
@@ -681,8 +704,24 @@ function wrapSqlBuilderSafety(
   if (cached) return cached;
 
   const proxy = witnessProxy(builder as Record<PropertyKey, unknown>, {
-    get(target, prop, receiver) {
-      const value = witnessReflectGet(target, prop, receiver);
+    defineProperty() {
+      return false;
+    },
+    deleteProperty() {
+      return false;
+    },
+    get(target, prop) {
+      if (isManagedRawDriverEscapeProperty(prop)) {
+        throw new Error(
+          `KV422: managed SQL builder raw driver escape ${describeSqlMethod(prop)} is not exposed from framework-owned handles (SPEC §10.2/§10.3).`,
+        );
+      }
+      const value = managedSqlDataPropertyValue(target, prop);
+      if (typeof value === 'object' && value !== null) {
+        throw new Error(
+          `KV422: managed SQL builder internal capability ${describeSqlMethod(prop)} is not exposed from framework-owned handles (SPEC §10.2/§10.3).`,
+        );
+      }
       if (typeof value !== 'function') return value;
       return cachedSqlSafetyMethod(target, prop, value, methodCache, () => (...args: unknown[]) => {
         if (secretWriteBoundary && (prop === 'values' || prop === 'set')) {
@@ -697,6 +736,24 @@ function wrapSqlBuilderSafety(
           ? wrapSqlBuilderSafety(result, proxyCache, methodCache, secretWriteBoundary)
           : result;
       });
+    },
+    getOwnPropertyDescriptor(target, prop) {
+      return managedSqlProxyDescriptor(target, prop);
+    },
+    getPrototypeOf() {
+      return null;
+    },
+    ownKeys(target) {
+      return managedSqlProxyOwnKeys(target);
+    },
+    preventExtensions() {
+      return false;
+    },
+    set() {
+      return false;
+    },
+    setPrototypeOf() {
+      return false;
     },
   });
   witnessWeakMapSet(proxyCache, builder, proxy);

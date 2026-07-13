@@ -29,11 +29,11 @@ const jsonCompileOptionNames = [
 ] as const;
 
 /**
- * Pin the complete compile decision carrier before cache authorization or lowering.
- * SPEC.md §5.2.1 requires the cache key and emitted result to consume one exact input; inherited
- * values, accessors, and caller mutation must not make those two phases observe different source.
+ * Pin the complete compile decision carrier before lowering or any asynchronous handoff.
+ * SPEC.md §5.2.1 requires every compiler phase to consume one exact input; inherited values,
+ * accessors, and caller mutation must not make successive phases observe different source.
  *
- * @internal Exported for compiler runners that authorize persistent cache hits.
+ * @internal Exported so compiler runners consume one pinned carrier.
  */
 export function snapshotCompileComponentOptions<Options extends CompileComponentOptions>(
   raw: Options,

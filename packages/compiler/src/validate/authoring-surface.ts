@@ -5,6 +5,7 @@ import {
   compilerArrayAppend,
   compilerArrayJoin,
   compilerArrayLength,
+  compilerJsonStringify,
   compilerOwnDataValue,
   compilerRegExpTest,
   compilerStringStartsWith,
@@ -41,6 +42,12 @@ export function validateAuthoringSurface(
   const diagnostics: CompilerDiagnostic[] = [];
 
   if (model !== null) {
+    appendComponentIdentityAssignmentDiagnostics(
+      diagnostics,
+      options.fileName,
+      options.source,
+      model,
+    );
     const specifierLength = compilerArrayLength(
       model.moduleSpecifiers,
       'Authoring-surface module specifiers',
@@ -109,6 +116,70 @@ export function validateAuthoringSurface(
 
   appendRenderDiagnostics(diagnostics, options.fileName, options.source, renders);
   return diagnostics;
+}
+
+function appendComponentIdentityAssignmentDiagnostics(
+  diagnostics: CompilerDiagnostic[],
+  fileName: string,
+  source: string,
+  model: ComponentModuleModel,
+): void {
+  const assignmentLength = compilerArrayLength(
+    model.componentIdentityAssignments,
+    'Authoring-surface component identity assignments',
+  );
+  const componentLength = compilerArrayLength(model.components, 'Authoring-surface components');
+  for (let assignmentIndex = 0; assignmentIndex < assignmentLength; assignmentIndex += 1) {
+    const assignment = compilerOwnDataValue(
+      model.componentIdentityAssignments,
+      assignmentIndex,
+      'Authoring-surface component identity assignments',
+    ) as ComponentModuleModel['componentIdentityAssignments'][number] | undefined;
+    if (assignment === undefined) {
+      throw new TypeError(
+        `Authoring-surface component identity assignments[${assignmentIndex}] must be dense.`,
+      );
+    }
+    let targetsComponent = false;
+    for (let componentIndex = 0; componentIndex < componentLength; componentIndex += 1) {
+      const component = compilerOwnDataValue(
+        model.components,
+        componentIndex,
+        'Authoring-surface components',
+      ) as ComponentModuleModel['components'][number] | undefined;
+      if (component === undefined) {
+        throw new TypeError(`Authoring-surface components[${componentIndex}] must be dense.`);
+      }
+      if (component.localName === assignment.target) {
+        targetsComponent = true;
+        break;
+      }
+    }
+    if (!targetsComponent) continue;
+    compilerArrayAppend(
+      diagnostics,
+      {
+        ...diagnosticFor(
+          fileName,
+          'KV235',
+          source,
+          assignment.start,
+          assignment.end - assignment.start,
+        ),
+        help: compilerArrayJoin(
+          [
+            `Blocked reason: app source assigns compiler-owned derived identity \`${assignment.target}.name = ${compilerJsonStringify(assignment.value)}\`.`,
+            'Fixes: remove the identity assignment and any copied lowered output; configure the component in TSX and let Kovo derive its registry and kovo-c identity.',
+            'SPEC.md §5.2 rules 3 and 7: compiler output is proof/fixpoint material, not a second app-authoring surface.',
+          ],
+          '\n',
+        ),
+        message:
+          'App source assigns a compiler-owned component identity; remove copied lowered output.',
+      },
+      'Authoring-surface diagnostics',
+    );
+  }
 }
 
 export function isNonPublicKovoSpecifier(specifier: string): boolean {

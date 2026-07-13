@@ -45,7 +45,7 @@ import {
   parseCommandArgv,
   requireSinglePositional,
 } from '../commands-manifest.js';
-import { compileCachedComponentModule } from './mcp.js';
+import { compileFrameworkComponentModule } from './mcp.js';
 import {
   addOutputVersion,
   byteLength,
@@ -121,7 +121,6 @@ interface CompileBaseOptions {
 
 interface CompileComponentCommandOptions extends CompileBaseOptions {
   allowedDiagnosticCodes: readonly DiagnosticCode[];
-  cache: boolean;
   emitClientFiles: boolean;
   factsOutPath?: string;
   fixpoint: boolean;
@@ -642,7 +641,6 @@ function parseCompileComponentArgs(args: readonly string[]): CompileArgParseResu
     ok: true,
     options: {
       allowedDiagnosticCodes,
-      cache: !parsedBooleanOption(parsed.value, '--no-cache'),
       check: parsedBooleanOption(parsed.value, '--check'),
       emitClientFiles: parsedBooleanOption(parsed.value, '--emit-client-files'),
       ...(factsOutPath === undefined ? {} : { factsOutPath }),
@@ -907,7 +905,7 @@ async function runCompileComponentCommand(
       CompileComponentOptions['queryShapeFacts']
     >;
   }
-  const result = await compileCachedComponentModule(compileOptions, options.cache);
+  const result = await compileFrameworkComponentModule(compileOptions);
   const allowedDiagnosticCodes = new Set(options.allowedDiagnosticCodes);
   const warnings = result.diagnostics.filter((diagnostic) =>
     allowedDiagnosticCodes.has(diagnostic.code),

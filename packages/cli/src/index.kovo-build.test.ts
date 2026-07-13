@@ -484,7 +484,7 @@ export default createApp({
     }
   });
 
-  it('lowers authored client islands during kovo build before deploy-skew retention inspection', async () => {
+  it('lowers authored client islands while other build caches are disabled', async () => {
     const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-client-island-'));
     const appPath = join(root, 'src/app.tsx');
     const outDir = join(root, 'dist');
@@ -544,7 +544,7 @@ export default createApp({
       );
 
       const exitCode = await withCwd(root, () =>
-        mainAsync(['build', './src/app.tsx', '--out', './dist']),
+        mainAsync(['build', './src/app.tsx', '--out', './dist', '--no-cache']),
       );
       const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
       expect(exitCode, errorOutput).toBe(0);
@@ -4275,11 +4275,13 @@ type DevMiddleware = (
 ) => void;
 
 interface DevPluginHarness extends ReturnType<typeof kovo> {
+  configResolved?(config: { root: string }): void | Promise<void>;
   configureServer?(server: {
     config: { root: string };
     middlewares: { use(handler: DevMiddleware): void };
     ssrLoadModule(id: string): Promise<Record<string, unknown>>;
   }): void | Promise<void>;
+  transform?(source: string, id: string): unknown | Promise<unknown>;
 }
 
 async function devRouteDocument(root: string, appPath: string): Promise<string> {

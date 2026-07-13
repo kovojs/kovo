@@ -6,12 +6,13 @@ import {
   randomUUID as builtinRandomUUID,
 } from 'node:crypto';
 import { Stats as BuiltinStats } from 'node:fs';
+import { types as BuiltinUtilTypes } from 'node:util';
 
 /**
- * Boot-captured controls for compiler identities and caches (SPEC §5.2/§5.2.1).
+ * Boot-captured controls for compiler security decisions and identities (SPEC §5.2/§5.2.1).
  *
  * Build hooks and app modules execute in the compiler's process. Node builtin ESM exports are live,
- * and ordinary realm prototypes remain writable, so a cache key or handler fingerprint must never
+ * and ordinary realm prototypes remain writable, so a security identity or handler fingerprint must never
  * dispatch through those controls after app evaluation. Supported Kovo runners eagerly evaluate
  * this module before loading Vite config, plugins, or app modules, then target work consumes only
  * these captured bindings. JavaScript cannot attest arbitrary host code that ran before that
@@ -33,6 +34,7 @@ const NativeTypeError = globalThis.TypeError;
 const NativeWeakMap = globalThis.WeakMap;
 const nativeArrayIsArray = NativeArray.isArray;
 const nativeArrayJoin = NativeArray.prototype.join;
+const nativeBufferByteLength = BuiltinBuffer.byteLength;
 const nativeBufferFrom = BuiltinBuffer.from;
 const nativeBufferToString = BuiltinBuffer.prototype.toString;
 const nativeCreateHash = builtinCreateHash;
@@ -67,12 +69,14 @@ const nativeStringCharCodeAt = NativeString.prototype.charCodeAt;
 const nativeStringEndsWith = NativeString.prototype.endsWith;
 const nativeStringIncludes = NativeString.prototype.includes;
 const nativeStringIndexOf = NativeString.prototype.indexOf;
+const nativeStringLastIndexOf = NativeString.prototype.lastIndexOf;
 const nativeStringLocaleCompare = NativeString.prototype.localeCompare;
 const nativeStringSlice = NativeString.prototype.slice;
 const nativeStringStartsWith = NativeString.prototype.startsWith;
 const nativeStringToLowerCase = NativeString.prototype.toLowerCase;
 const nativeStringToUpperCase = NativeString.prototype.toUpperCase;
 const nativeStringTrim = NativeString.prototype.trim;
+const nativeStringTrimEnd = NativeString.prototype.trimEnd;
 const nativeWeakMapGet = NativeWeakMap.prototype.get;
 const nativeWeakMapSet = NativeWeakMap.prototype.set;
 const nativeStatsIsDirectory = BuiltinStats.prototype.isDirectory;
@@ -94,6 +98,8 @@ function getOwnPropertyDescriptor(
 }
 
 const nativeRegExpGlobalGetter = getOwnPropertyDescriptor(NativeRegExp.prototype, 'global')?.get;
+const nativeMapSizeGetter = getOwnPropertyDescriptor(NativeMap.prototype, 'size')?.get;
+const nativeSetSizeGetter = getOwnPropertyDescriptor(NativeSet.prototype, 'size')?.get;
 
 function capturedMethod(value: object, property: PropertyKey): Function | undefined {
   let owner: object | null = value;
@@ -115,6 +121,7 @@ const nativeHashDigest = capturedMethod(hashControl, 'digest');
 const hmacControl = nativeCreateHmac('sha256', 'kovo-bootstrap-health');
 const nativeHmacUpdate = capturedMethod(hmacControl, 'update');
 const nativeHmacDigest = capturedMethod(hmacControl, 'digest');
+const nativeIsPromise = BuiltinUtilTypes.isPromise;
 
 function sameDataDescriptor(
   left: PropertyDescriptor | undefined,
@@ -138,7 +145,9 @@ function compilerBootstrapSelfCheckPasses(): boolean {
       typeof nativeHashDigest !== 'function' ||
       typeof nativeHmacUpdate !== 'function' ||
       typeof nativeHmacDigest !== 'function' ||
-      typeof nativeRegExpGlobalGetter !== 'function'
+      typeof nativeRegExpGlobalGetter !== 'function' ||
+      typeof nativeMapSizeGetter !== 'function' ||
+      typeof nativeSetSizeGetter !== 'function'
     ) {
       return false;
     }
@@ -180,6 +189,8 @@ function compilerBootstrapSelfCheckPasses(): boolean {
     const keys = apply<string[]>(nativeObjectKeys, NativeObject, [{ b: 1, a: 2 }]);
     if (!(keys.length === 2 && keys[0] === 'b' && keys[1] === 'a')) return false;
     const promise = apply<Promise<string>>(nativePromiseResolve, NativePromise, ['safe']);
+    if (!apply<boolean>(nativeIsPromise, BuiltinUtilTypes, [promise])) return false;
+    if (apply<boolean>(nativeIsPromise, BuiltinUtilTypes, [{}])) return false;
     return typeof apply(nativePromiseThen, promise, [(value: string) => value]) === 'object';
   } catch {
     return false;
@@ -230,6 +241,11 @@ export function compilerUtf8Text(bytes: Uint8Array): string {
     bytes,
   ]);
   return apply(nativeBufferToString, buffer, ['utf8']);
+}
+
+export function compilerUtf8ByteLength(value: string): number {
+  assertCompilerSecurityIntrinsics();
+  return apply(nativeBufferByteLength, BuiltinBuffer, [value, 'utf8']);
 }
 
 export function compilerArrayIsArray(value: unknown): value is unknown[] {
@@ -481,6 +497,14 @@ export function compilerMapGet<Key, Value>(
   return apply(nativeMapGet, map, [key]);
 }
 
+export function compilerMapSize(map: ReadonlyMap<unknown, unknown>): number {
+  assertCompilerSecurityIntrinsics();
+  if (typeof nativeMapSizeGetter !== 'function') {
+    throw new NativeTypeError('Compiler Map size control is unavailable.');
+  }
+  return apply(nativeMapSizeGetter, map, []);
+}
+
 export function compilerMapForEach<Key, Value>(
   map: ReadonlyMap<Key, Value>,
   callback: (value: Value, key: Key) => void,
@@ -534,6 +558,14 @@ export function compilerSetHas<Value>(set: ReadonlySet<Value>, value: Value): bo
   return apply(nativeSetHas, set, [value]);
 }
 
+export function compilerSetSize(set: ReadonlySet<unknown>): number {
+  assertCompilerSecurityIntrinsics();
+  if (typeof nativeSetSizeGetter !== 'function') {
+    throw new NativeTypeError('Compiler Set size control is unavailable.');
+  }
+  return apply(nativeSetSizeGetter, set, []);
+}
+
 export function compilerSetForEach<Value>(
   set: ReadonlySet<Value>,
   callback: (value: Value) => void,
@@ -557,6 +589,11 @@ export function compilerWeakMapSet<Key extends object, Value>(
 ): void {
   assertCompilerSecurityIntrinsics();
   apply(nativeWeakMapSet, map, [key, value]);
+}
+
+export function compilerPromiseIsPromise(value: unknown): value is Promise<unknown> {
+  assertCompilerSecurityIntrinsics();
+  return apply(nativeIsPromise, BuiltinUtilTypes, [value]);
 }
 
 export function compilerObservePromise<Value>(
@@ -653,6 +690,11 @@ export function compilerRegExpIsValid(source: string, flags: string): boolean {
   }
 }
 
+export function compilerCreateRegExp(source: string, flags?: string): RegExp {
+  assertCompilerSecurityIntrinsics();
+  return new NativeRegExp(source, flags);
+}
+
 export function compilerRegExpReplace(
   expression: RegExp,
   input: string,
@@ -730,6 +772,11 @@ export function compilerStringIndexOf(value: string, search: string, position?: 
   return apply(nativeStringIndexOf, value, position === undefined ? [search] : [search, position]);
 }
 
+export function compilerStringLastIndexOf(value: string, search: string): number {
+  assertCompilerSecurityIntrinsics();
+  return apply(nativeStringLastIndexOf, value, [search]);
+}
+
 export function compilerStringLocaleCompare(left: string, right: string): number {
   assertCompilerSecurityIntrinsics();
   return apply(nativeStringLocaleCompare, left, [right]);
@@ -804,6 +851,11 @@ export function compilerStringToUpperCase(value: string): string {
 export function compilerStringTrim(value: string): string {
   assertCompilerSecurityIntrinsics();
   return apply(nativeStringTrim, value, []);
+}
+
+export function compilerStringTrimEnd(value: string): string {
+  assertCompilerSecurityIntrinsics();
+  return apply(nativeStringTrimEnd, value, []);
 }
 
 export function compilerStatsIsDirectory(value: object): boolean {

@@ -179,7 +179,7 @@ describe('kovoFixtureCompilerPlugin', () => {
     }
   });
 
-  it('reuses the shared compile cache for repeated fixture transforms', async () => {
+  it('compiles repeated fixture transforms fresh', async () => {
     let count = 0;
     const compile = vi.fn(() => compileResult(`export const marker = ${++count};`));
     const plugin = kovoFixtureCompilerPlugin(compile);
@@ -197,7 +197,7 @@ describe('kovoFixtureCompilerPlugin', () => {
     await expect(
       Promise.resolve(transform('component(', '/workspace/app/src/demo.tsx')),
     ).resolves.toEqual({
-      code: 'export const marker = 1;\n',
+      code: 'export const marker = 2;\n',
       map: null,
     });
     await expect(
@@ -205,11 +205,11 @@ describe('kovoFixtureCompilerPlugin', () => {
         transform('component({ render: () => null })', '/workspace/app/src/demo.tsx'),
       ),
     ).resolves.toEqual({
-      code: 'export const marker = 2;\n',
+      code: 'export const marker = 3;\n',
       map: null,
     });
 
-    expect(compile).toHaveBeenCalledTimes(2);
+    expect(compile).toHaveBeenCalledTimes(3);
   });
 
   it('does not classify noExternal framework modules as fixture-authored source', async () => {

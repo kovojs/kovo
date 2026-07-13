@@ -8,6 +8,17 @@ import {
 } from '@kovojs/core/internal/framework-identity';
 
 import { deriveComponentNames } from './component-names.js';
+import {
+  compilerArrayAppend,
+  compilerArrayJoin,
+  compilerArrayLength,
+  compilerCreateSet,
+  compilerJsonStringify,
+  compilerOwnDataValue,
+  compilerSetAdd,
+  compilerSetForEach,
+  compilerStringSlice,
+} from './compiler-security-intrinsics.js';
 import { deriveRegistryIdentity } from './registry-identities.js';
 import { parseSourceFile } from './scan/parse.js';
 import { applySourceReplacements, type SourceReplacement } from './shared.js';
@@ -36,7 +47,7 @@ const registryAssignmentTable = {
       imported: 'assignDerivedComponentName',
       local: '__kovoAssignDerivedComponentName',
     },
-    identity: COMPONENT_IDENTITY,
+    identities: [COMPONENT_IDENTITY],
     key(fileName: string, binding: string) {
       return deriveComponentNames(fileName, { localName: binding }).registryKey;
     },
@@ -62,7 +73,7 @@ const registryAssignmentTable = {
       imported: 'assignDerivedMutationKey',
       local: '__kovoAssignDerivedMutationKey',
     },
-    identity: MUTATION_IDENTITY,
+    identities: [MUTATION_IDENTITY],
     key: registryIdentityKey,
     matches(_sourceFile: ts.SourceFile, call: ts.CallExpression) {
       return isSingleObjectArgument(call);
@@ -74,7 +85,7 @@ const registryAssignmentTable = {
       imported: 'assignDerivedQueryKey',
       local: '__kovoAssignDerivedQueryKey',
     },
-    identity: QUERY_IDENTITY,
+    identities: [QUERY_IDENTITY],
     key: registryIdentityKey,
     matches(_sourceFile: ts.SourceFile, call: ts.CallExpression) {
       return isSingleObjectArgument(call);
@@ -86,7 +97,7 @@ const registryAssignmentTable = {
       imported: 'assignDerivedTaskKey',
       local: '__kovoAssignDerivedTaskKey',
     },
-    identity: TASK_IDENTITY,
+    identities: [TASK_IDENTITY],
     key: registryIdentityKey,
     matches(_sourceFile: ts.SourceFile, call: ts.CallExpression) {
       return isSingleObjectArgument(call);
@@ -98,7 +109,7 @@ const registryAssignmentTable = {
       imported: 'assignDerivedWebhookName',
       local: '__kovoAssignDerivedWebhookName',
     },
-    identity: WEBHOOK_IDENTITY,
+    identities: [WEBHOOK_IDENTITY],
     key: registryIdentityKey,
     matches(_sourceFile: ts.SourceFile, call: ts.CallExpression) {
       return isPathFirstWebhookCall(call);
@@ -108,6 +119,14 @@ const registryAssignmentTable = {
 } as const;
 
 type SourceDerivedPrimitive = keyof typeof registryAssignmentTable;
+const SOURCE_DERIVED_PRIMITIVES: readonly SourceDerivedPrimitive[] = [
+  'component',
+  'domain',
+  'mutation',
+  'query',
+  'task',
+  'webhook',
+];
 
 interface SourceDerivedRegistryAssignment {
   binding: string;
@@ -122,20 +141,35 @@ export function lowerStandaloneSourceDerivedRegistryDeclarations(options: {
 }): string | null {
   const sourceFile = parseSourceFile(options.fileName, options.source);
   const assignments = exportedRegistryAssignments(sourceFile);
-  if (assignments.length === 0) return null;
+  const assignmentCount = compilerArrayLength(assignments, 'Source-derived assignments');
+  if (assignmentCount === 0) return null;
 
-  const replacements: SourceReplacement[] = assignments.map((assignment) => {
+  const replacements: SourceReplacement[] = [];
+  for (let index = 0; index < assignmentCount; index += 1) {
+    const assignment = compilerOwnDataValue(
+      assignments,
+      index,
+      'Source-derived assignments',
+    ) as SourceDerivedRegistryAssignment;
     const helper = registryAssignmentTable[assignment.primitive].helper.local;
     const key = derivedAssignmentKey(options.fileName, assignment);
-    return {
-      end: assignment.call.end,
-      replacement: `${helper}(${options.source.slice(
-        assignment.call.getStart(sourceFile),
-        assignment.call.end,
-      )}, ${JSON.stringify(key)})`,
-      start: assignment.call.getStart(sourceFile),
-    };
-  });
+    const encodedKey = compilerJsonStringify(key);
+    if (encodedKey === undefined) throw new TypeError('Source-derived key could not be encoded.');
+    const start = assignment.call.getStart(sourceFile);
+    compilerArrayAppend(
+      replacements,
+      {
+        end: assignment.call.end,
+        replacement: `${helper}(${compilerStringSlice(
+          options.source,
+          start,
+          assignment.call.end,
+        )}, ${encodedKey})`,
+        start,
+      },
+      'Source-derived replacements',
+    );
+  }
 
   const transformed = applySourceReplacements(options.source, replacements);
   return insertHelperImport(transformed, sourceFile, requiredPrimitives(assignments));
@@ -145,11 +179,30 @@ function exportedRegistryAssignments(
   sourceFile: ts.SourceFile,
 ): readonly SourceDerivedRegistryAssignment[] {
   const assignments: SourceDerivedRegistryAssignment[] = [];
-  for (const statement of sourceFile.statements) {
+  const statementCount = compilerArrayLength(
+    sourceFile.statements,
+    'Source-derived source statements',
+  );
+  for (let statementIndex = 0; statementIndex < statementCount; statementIndex += 1) {
+    const statement = compilerOwnDataValue(
+      sourceFile.statements,
+      statementIndex,
+      'Source-derived source statements',
+    ) as ts.Statement;
     if (!ts.isVariableStatement(statement)) continue;
     const exported = hasExportModifier(statement);
 
-    for (const declaration of statement.declarationList.declarations) {
+    const declarations = statement.declarationList.declarations;
+    const declarationCount = compilerArrayLength(
+      declarations,
+      'Source-derived variable declarations',
+    );
+    for (let declarationIndex = 0; declarationIndex < declarationCount; declarationIndex += 1) {
+      const declaration = compilerOwnDataValue(
+        declarations,
+        declarationIndex,
+        'Source-derived variable declarations',
+      ) as ts.VariableDeclaration;
       if (!ts.isIdentifier(declaration.name)) continue;
       const call = declaration.initializer;
       if (!call || !ts.isCallExpression(call)) continue;
@@ -157,7 +210,11 @@ function exportedRegistryAssignments(
       const primitive = sourceDerivedPrimitive(sourceFile, call);
       if (primitive === null) continue;
       if (registryAssignmentTable[primitive].requiresExport && !exported) continue;
-      assignments.push({ binding: declaration.name.text, call, primitive });
+      compilerArrayAppend(
+        assignments,
+        { binding: declaration.name.text, call, primitive },
+        'Source-derived assignments',
+      );
     }
   }
   return assignments;
@@ -167,13 +224,31 @@ function sourceDerivedPrimitive(
   sourceFile: ts.SourceFile,
   call: ts.CallExpression,
 ): SourceDerivedPrimitive | null {
-  for (const primitive of Object.keys(registryAssignmentTable) as SourceDerivedPrimitive[]) {
+  const primitiveCount = compilerArrayLength(
+    SOURCE_DERIVED_PRIMITIVES,
+    'Source-derived primitive list',
+  );
+  for (let primitiveIndex = 0; primitiveIndex < primitiveCount; primitiveIndex += 1) {
+    const primitive = compilerOwnDataValue(
+      SOURCE_DERIVED_PRIMITIVES,
+      primitiveIndex,
+      'Source-derived primitive list',
+    ) as SourceDerivedPrimitive;
     const entry = registryAssignmentTable[primitive];
-    const identities = 'identities' in entry ? entry.identities : [entry.identity];
-    if (
-      identities.some((identity) => resolvesTo(sourceFile, call.expression, identity)) &&
-      entry.matches(sourceFile, call)
-    ) {
+    const identityCount = compilerArrayLength(entry.identities, 'Source-derived identities');
+    let identityMatches = false;
+    for (let identityIndex = 0; identityIndex < identityCount; identityIndex += 1) {
+      const identity = compilerOwnDataValue(
+        entry.identities,
+        identityIndex,
+        'Source-derived identities',
+      ) as FrameworkExportIdentity;
+      if (resolvesTo(sourceFile, call.expression, identity)) {
+        identityMatches = true;
+        break;
+      }
+    }
+    if (identityMatches && entry.matches(sourceFile, call)) {
       return primitive;
     }
   }
@@ -212,17 +287,33 @@ function insertHelperImport(
   originalSourceFile: ts.SourceFile,
   primitives: ReadonlySet<SourceDerivedPrimitive>,
 ): string {
-  const imported = [...primitives].map((primitive) => {
+  const imported: string[] = [];
+  compilerSetForEach(primitives, (primitive) => {
     const helper = registryAssignmentTable[primitive].helper;
-    return `${helper.imported} as ${helper.local}`;
+    compilerArrayAppend(
+      imported,
+      `${helper.imported} as ${helper.local}`,
+      'Source-derived helper imports',
+    );
   });
-  const importLine = `import { ${imported.join(', ')} } from '${helperModule}';\n`;
-  const importDeclarationEnd =
-    originalSourceFile.statements.findLast((statement) => ts.isImportDeclaration(statement))?.end ??
-    0;
+  const importLine = `import { ${compilerArrayJoin(imported, ', ')} } from '${helperModule}';\n`;
+  const statements = originalSourceFile.statements;
+  const statementCount = compilerArrayLength(statements, 'Source-derived source statements');
+  let importDeclarationEnd = 0;
+  for (let index = statementCount - 1; index >= 0; index -= 1) {
+    const statement = compilerOwnDataValue(
+      statements,
+      index,
+      'Source-derived source statements',
+    ) as ts.Statement;
+    if (!ts.isImportDeclaration(statement)) continue;
+    importDeclarationEnd = statement.end;
+    break;
+  }
 
   if (importDeclarationEnd > 0) {
-    return `${source.slice(0, importDeclarationEnd)}\n${importLine}${source.slice(
+    return `${compilerStringSlice(source, 0, importDeclarationEnd)}\n${importLine}${compilerStringSlice(
+      source,
       importDeclarationEnd,
     )}`;
   }
@@ -232,7 +323,17 @@ function insertHelperImport(
 function requiredPrimitives(
   assignments: readonly SourceDerivedRegistryAssignment[],
 ): ReadonlySet<SourceDerivedPrimitive> {
-  return new Set(assignments.map((assignment) => assignment.primitive));
+  const primitives = compilerCreateSet<SourceDerivedPrimitive>();
+  const count = compilerArrayLength(assignments, 'Source-derived assignments');
+  for (let index = 0; index < count; index += 1) {
+    const assignment = compilerOwnDataValue(
+      assignments,
+      index,
+      'Source-derived assignments',
+    ) as SourceDerivedRegistryAssignment;
+    compilerSetAdd(primitives, assignment.primitive);
+  }
+  return primitives;
 }
 
 function derivedAssignmentKey(
@@ -247,7 +348,16 @@ function registryIdentityKey(fileName: string, binding: string): string {
 }
 
 function hasExportModifier(statement: ts.VariableStatement): boolean {
-  return (
-    statement.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword) === true
-  );
+  const modifiers = statement.modifiers;
+  if (modifiers === undefined) return false;
+  const count = compilerArrayLength(modifiers, 'Source-derived declaration modifiers');
+  for (let index = 0; index < count; index += 1) {
+    const modifier = compilerOwnDataValue(
+      modifiers,
+      index,
+      'Source-derived declaration modifiers',
+    ) as ts.ModifierLike;
+    if (modifier.kind === ts.SyntaxKind.ExportKeyword) return true;
+  }
+  return false;
 }

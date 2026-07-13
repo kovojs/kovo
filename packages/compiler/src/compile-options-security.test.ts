@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 
-import { compileComponentCacheKeyInput } from './compile-cache.js';
 import { compileComponentModule } from './index.js';
 
 const componentSource = `
@@ -25,20 +24,6 @@ describe('compiler option authority', () => {
     };
 
     expect(() => compileComponentModule(options)).toThrow(/source.*changed while/u);
-    expect(reads).toBe(0);
-  });
-
-  it('rejects accessors without invoking them at the cache-authorization boundary', () => {
-    let reads = 0;
-    const options = {
-      fileName: 'src/greeting.tsx',
-      get source() {
-        reads += 1;
-        return componentSource;
-      },
-    };
-
-    expect(() => compileComponentCacheKeyInput(options)).toThrow(/source.*changed while/u);
     expect(reads).toBe(0);
   });
 });

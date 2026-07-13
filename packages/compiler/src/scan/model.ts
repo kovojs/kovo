@@ -294,6 +294,14 @@ export interface ComponentModel {
   stringRenderReturns?: readonly StringRenderModel[];
 }
 
+/** Compiler-owned source-derived component identity assignment observed in module source. */
+export interface ComponentIdentityAssignmentModel {
+  end: number;
+  start: number;
+  target: string;
+  value: string;
+}
+
 // SPEC §4.5/§4.8: the render function's third parameter is the projected-children/named-slot
 // channel (`(_, state, { children, footer })` or `(_, state, slots)`). KV316 keys off whether a
 // component composes children/slots at all, independent of whether the param is destructured.
@@ -349,6 +357,7 @@ export interface ModuleScopeBindingModel {
 
 export interface ComponentModuleModel {
   calls: readonly CallExpressionModel[];
+  componentIdentityAssignments: readonly ComponentIdentityAssignmentModel[];
   components: readonly ComponentModel[];
   endpointHandlers: readonly MutationHandlerModel[];
   jsxComments: readonly JsxCommentModel[];

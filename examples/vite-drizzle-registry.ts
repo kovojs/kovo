@@ -1,12 +1,6 @@
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { kovoVitePlugin } from '../packages/compiler/src/vite-config-source.ts';
-import type { KovoVitePlugin } from '../packages/compiler/src/vite.ts';
-import type { KovoVitePluginOptions } from '../packages/compiler/src/vite.ts';
-import type { RegistryFacts } from '../packages/compiler/src/types.ts';
-
-type KovoVitePrePlugin = KovoVitePlugin & { enforce: 'pre' };
 type ExampleDrizzleRegistryVitePlugin = {
   configResolved(config: { root: string }): void;
   enforce: 'pre';
@@ -16,16 +10,13 @@ type ExampleDrizzleRegistryVitePlugin = {
   transform(code: string, id: string): { code: string; map: null } | undefined;
 };
 
-export function exampleKovoCompilerPlugin(options: KovoVitePluginOptions): KovoVitePrePlugin {
-  return Object.assign(kovoVitePlugin(options), { enforce: 'pre' as const });
-}
-
 interface ExampleDrizzleRegistryPluginOptions {
   appEntries: readonly string[];
   mutationTouchGraphKeys?: Readonly<Record<string, string>>;
   sourceRoot: string;
 }
 
+/** Root-workspace registry fixture plugin; deliberately has no compiler-authority dependency. */
 export function exampleDrizzleRegistryPlugin(
   options: ExampleDrizzleRegistryPluginOptions,
 ): ExampleDrizzleRegistryVitePlugin {
@@ -74,13 +65,6 @@ export function exampleDrizzleRegistryPlugin(
   };
 }
 
-export function commerceKovoCompilerPlugin(): KovoVitePrePlugin {
-  return exampleKovoCompilerPlugin({
-    include: ['src/components', 'src/domain.ts', 'src/queries.ts'],
-    registryFacts: commerceRegistryFacts,
-  });
-}
-
 function normalizePath(path: string): string {
   return path.replaceAll('\\', '/').replace(/[?#].*$/, '');
 }
@@ -90,31 +74,3 @@ function insertAfterJsxImportSourcePragma(source: string, insertion: string): st
   if (!pragma) return `${insertion}${source}`;
   return `${source.slice(0, pragma[0].length)}${insertion}${source.slice(pragma[0].length)}`;
 }
-
-function requiredString(name: string) {
-  return {
-    coercion: 'string' as const,
-    defaulted: false,
-    name,
-    optional: false,
-    provenance: 'registry' as const,
-    required: true,
-  };
-}
-
-export const commerceRegistryFacts = {
-  mutationInputs: {
-    'domain/add-to-cart': [
-      requiredString('productId'),
-      {
-        coercion: 'number' as const,
-        defaulted: true,
-        name: 'quantity',
-        optional: false,
-        provenance: 'registry' as const,
-        required: false,
-      },
-    ],
-  },
-  mutations: { 'domain/add-to-cart': 'typeof addToCart' },
-} satisfies RegistryFacts;

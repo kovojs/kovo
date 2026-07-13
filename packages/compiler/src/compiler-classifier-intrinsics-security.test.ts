@@ -3047,4 +3047,34 @@ export const RegistryRouteProbe = component({
       `\ndeclare global { interface Window { KOVO_REGISTRY_INJECTION: true } }`,
     );
   });
+
+  it('does not suppress unsafe static-spread URL diagnostics through String.trim', () => {
+    const source = `
+export const SpreadUrl = component({
+  render: () => <a {...{ href: "javascript:alert(1)" }}>x</a>,
+});
+`;
+    const nativeTrim = String.prototype.trim;
+    const nativeApply = Reflect.apply;
+    let poisonHits = 0;
+    let result: ReturnType<typeof compileComponentModule> | undefined;
+    try {
+      String.prototype.trim = function poisonedLiteralTrim(this: string): string {
+        if (`${this}` === '"javascript:alert(1)"') {
+          poisonHits += 1;
+          return '"/safe"';
+        }
+        return nativeApply(nativeTrim, this, []);
+      };
+      result = compileComponentModule({ fileName: 'spread-url.tsx', source });
+    } finally {
+      String.prototype.trim = nativeTrim;
+    }
+
+    expect(result?.diagnostics.some((diagnostic) => diagnostic.code === 'KV236')).toBe(true);
+    expect(result?.files.find((file) => file.kind === 'server')?.source).toContain(
+      'javascript:alert(1)',
+    );
+    expect(poisonHits).toBe(0);
+  });
 });

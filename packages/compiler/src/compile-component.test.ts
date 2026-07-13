@@ -241,7 +241,7 @@ export const Evil = component({
     expect(() => assertRenderEquivalence(result)).not.toThrow();
   });
 
-  it('records the consumed compile dependency footprint for incremental cache invalidation', () => {
+  it('records the consumed compile dependency footprint', () => {
     const packageComponentPrefixes = [{ packageName: '@acme/widgets', prefix: 'acme-' }];
     const previousRegistryFacts = {
       components: ['components/legacy-card/legacy-card', 'components/previous-cart/cart-badge'],
@@ -973,6 +973,27 @@ export const CartBadge = component({
     ]);
   });
 
+  it('reports KV235 for app-authored copies of compiler-derived component identity', () => {
+    const result = compileComponentModule({
+      fileName: 'card.tsx',
+      source: `
+import { component } from '@kovojs/core';
+export const Card = component({ render: () => <article kovo-c="card">Card</article> });
+Card.name = "card/card";
+`,
+    });
+
+    expect(result.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'KV235',
+          message:
+            'App source assigns a compiler-owned component identity; remove copied lowered output.',
+        }),
+      ]),
+    );
+  });
+
   it('reports KV235 for hand-authored navigation segment stamps in component TSX', () => {
     const result = compileComponentModule({
       fileName: 'cart-badge.tsx',
@@ -1287,7 +1308,11 @@ export const CartBadge = component({
     let result: ReturnType<typeof compileComponentModule> | undefined;
 
     try {
-      Array.prototype.filter = function eraseInternalImportDiagnostics(callback, thisArg) {
+      Array.prototype.filter = function eraseInternalImportDiagnostics(
+        this: unknown[],
+        callback: (value: unknown, index: number, array: unknown[]) => unknown,
+        thisArg?: unknown,
+      ): unknown[] {
         for (let index = 0; index < this.length; index += 1) {
           const value = this[index] as { specifier?: unknown } | undefined;
           if (value?.specifier === '@kovojs/server/internal/html') {

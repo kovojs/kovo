@@ -9,6 +9,7 @@ import {
   fileSystemArrayIncludesExact,
   fileSystemCloseFileDescriptor,
   fileSystemCopyBytes,
+  fileSystemCreatePromise,
   fileSystemCreateExclusiveFileDescriptor,
   fileSystemCreateReadableStream,
   fileSystemFreeze,
@@ -24,6 +25,7 @@ import {
   fileSystemPathRelative,
   fileSystemPathResolve,
   fileSystemPathSeparator,
+  fileSystemPromiseThen,
   fileSystemRandomUuid,
   fileSystemReadDirectory,
   fileSystemReadFileDescriptor,
@@ -154,6 +156,7 @@ const confinedFileSystemEntryProvenance = securityWeakMap<
   ConfinedFileSystemEntry,
   ConfinedFileSystemEntryProvenance
 >();
+let fileSystemCommitLock: Promise<void> | undefined;
 
 type FileSystemRootAccess = 'create' | 'observe' | 'required';
 
@@ -755,30 +758,31 @@ async function deleteConfinedFile(
   const root = preparedRootPath(rootState);
   const filePath = confinedPath(root, relativePath);
   if (filePath === undefined) return;
-
-  // SPEC §10.6 filesystem door: lexical confinement alone is insufficient because `unlink`/`rm`
-  // follows every parent directory component. Reject an existing symlink parent before reaching
-  // the destructive sink. `unlink` intentionally does not follow a final-component symlink, so a
-  // planted link at the object path removes only that link. Node does not expose portable
-  // unlinkat(2)-style directory-handle deletion, so a hostile local actor racing a parent swap
-  // remains outside this runtime-DiD boundary's honest platform ceiling.
-  await ensureParentsStayDirectories(root, filePath);
-  await revalidatePreparedRoot(rootState);
-  let targetStat: Stats;
-  try {
-    targetStat = await fileSystemLstat(filePath);
-  } catch (error) {
-    if (isMissingPathError(error)) return;
-    throw error;
-  }
-  if (fileSystemStatsIsDirectory(targetStat)) {
-    throw new Error(`Filesystem target '${filePath}' is a directory.`);
-  }
-  try {
-    await fileSystemUnlink(filePath);
-  } catch (error) {
-    if (!isMissingPathError(error)) throw error;
-  }
+  await withFileSystemRootCommitLock(root, async () => {
+    // SPEC §10.6 filesystem door: lexical confinement alone is insufficient because `unlink`/`rm`
+    // follows every parent directory component. Reject an existing symlink parent before reaching
+    // the destructive sink. `unlink` intentionally does not follow a final-component symlink, so a
+    // planted link at the object path removes only that link. Node does not expose portable
+    // unlinkat(2)-style directory-handle deletion, so a hostile local actor racing a parent swap
+    // remains outside this runtime-DiD boundary's honest platform ceiling.
+    await ensureParentsStayDirectories(root, filePath);
+    await revalidatePreparedRoot(rootState);
+    let targetStat: Stats;
+    try {
+      targetStat = await fileSystemLstat(filePath);
+    } catch (error) {
+      if (isMissingPathError(error)) return;
+      throw error;
+    }
+    if (fileSystemStatsIsDirectory(targetStat)) {
+      throw new Error(`Filesystem target '${filePath}' is a directory.`);
+    }
+    try {
+      await fileSystemUnlink(filePath);
+    } catch (error) {
+      if (!isMissingPathError(error)) throw error;
+    }
+  });
 }
 
 async function copyFileIntoRoot(
@@ -816,11 +820,13 @@ async function renameIntoRoot(
   const root = preparedRootPath(rootState);
   const targetPath = confinedPath(root, relativePath);
   if (targetPath === undefined) throw new Error('Filesystem path escapes its root.');
-  await validateConfinedFileTarget(rootState, relativePath);
-  await fileSystemMkdir(fileSystemPathDirname(targetPath), true);
-  await revalidatePreparedRoot(rootState);
-  await ensureParentsStayDirectories(root, targetPath);
-  await fileSystemRename(sourcePath, targetPath);
+  await withFileSystemRootCommitLock(root, async () => {
+    await validateConfinedFileTarget(rootState, relativePath);
+    await fileSystemMkdir(fileSystemPathDirname(targetPath), true);
+    await revalidatePreparedRoot(rootState);
+    await ensureParentsStayDirectories(root, targetPath);
+    await fileSystemRename(sourcePath, targetPath);
+  });
 }
 
 async function validateConfinedFileTarget(
@@ -869,6 +875,17 @@ async function readIdentityBoundCopySource(sourcePath: string): Promise<Uint8Arr
 }
 
 async function writeExclusiveTemporaryFile(
+  rootState: FileSystemRootState,
+  root: string,
+  targetPath: string,
+  source: string | Uint8Array,
+): Promise<void> {
+  await withFileSystemRootCommitLock(root, async () => {
+    await writeExclusiveTemporaryFileUnderLock(rootState, root, targetPath, source);
+  });
+}
+
+async function writeExclusiveTemporaryFileUnderLock(
   rootState: FileSystemRootState,
   root: string,
   targetPath: string,
@@ -924,6 +941,37 @@ async function writeExclusiveTemporaryFile(
   }
 }
 
+async function withFileSystemRootCommitLock<Result>(
+  _root: string,
+  run: () => Promise<Result>,
+): Promise<Result> {
+  // SPEC §2 / §10.6: independently-created boundaries share one boot-pinned commit queue. A
+  // process-global tail is the honest alias-complete baseline: exact/case-folded target aliases,
+  // overlapping roots (`/root/sub/x` vs `/root/sub` + `x`), and parent-tree removal all serialize.
+  // Reads and precomputation remain outside this short commit section.
+  const previous =
+    fileSystemCommitLock ?? fileSystemCreatePromise<void>((resolveLock) => resolveLock(undefined));
+  let releaseCurrent: () => void = () => undefined;
+  const current = fileSystemCreatePromise<void>((resolveLock) => {
+    releaseCurrent = resolveLock;
+  });
+  // Store the private gate directly. Returning it from a promise callback would trigger thenable
+  // assimilation through mutable Promise.prototype.then after app evaluation, letting authored
+  // code settle the queue tail before this commit releases it.
+  fileSystemCommitLock = current;
+  await fileSystemPromiseThen(
+    previous,
+    () => undefined,
+    () => undefined,
+  );
+  try {
+    return await run();
+  } finally {
+    releaseCurrent();
+    if (fileSystemCommitLock === current) fileSystemCommitLock = undefined;
+  }
+}
+
 async function removeIdentityBoundTemporaryFile(
   rootState: FileSystemRootState,
   tempPath: string,
@@ -955,8 +1003,11 @@ async function removeRootTree(rootState: FileSystemRootState): Promise<void> {
     rootState.retired = true;
     return;
   }
-  await revalidatePreparedRoot(rootState);
-  await fileSystemRemoveTree(preparedRootPath(rootState));
+  const root = preparedRootPath(rootState);
+  await withFileSystemRootCommitLock(root, async () => {
+    await revalidatePreparedRoot(rootState);
+    await fileSystemRemoveTree(root);
+  });
   rootState.retired = true;
 }
 

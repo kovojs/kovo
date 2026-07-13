@@ -173,7 +173,7 @@ _(beyond the S2 keystone findings)_
 - `[Low]` `semantic-snapshot` residue — no integration assertion of `kovo-props`/`kovo-live-component` stamp emission (the headline "allowlist drift" framing was overstated; named popover/command attrs are caught via per-spec `keepAttrs`). Add a meta-test tying the snapshot allowlist to `isGeneratedOnlyRenderAttribute`.
 - `[Low]` `global-css-manifest-never-cleared` — `globalThis.__kovoFixtureCssAssets` is never cleared on `close()`; latent if the single-fixture-per-worker invariant is ever relaxed.
 - `[Low]` `verification-failure-response-only-text` — the verifier 500 is an ad-hoc harness body (and leaks `audit_log` table name); no spec drives the _production_ diagnostic-failure surface (which doesn't fully exist yet).
-- `[Low]` `persistent-compile-cache + hmr-classify (partial)` — HMR impact classification _is_ browser-covered; the persistent-cache invalidation half is unit-only (dev-only, low impact).
+- `[Low]` `fresh-compiler-runner + hmr-classify (partial)` — HMR impact classification _is_ browser-covered; result caches have been retired, while fresh-runner transparency remains covered by focused compiler/unit integration rather than browser E2E.
 
 ---
 

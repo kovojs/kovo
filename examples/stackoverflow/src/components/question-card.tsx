@@ -1,5 +1,5 @@
 /** @jsxImportSource @kovojs/server */
-import { trustedHtml } from '@kovojs/browser';
+import type { ComponentChild } from '@kovojs/core';
 import * as style from '@kovojs/style';
 
 import type { QuestionListItem } from '../model.js';
@@ -135,7 +135,7 @@ export const cardStyles = style.create({
   },
 });
 
-function answerStat(answerCount: number): string {
+function answerStat(answerCount: number): ComponentChild {
   const label = answerCount === 1 ? 'answer' : 'answers';
   if (answerCount > 0) {
     return (
@@ -153,11 +153,11 @@ function answerStat(answerCount: number): string {
   );
 }
 
-function voteStat(question: QuestionListItem, interactive: boolean): string {
+function voteStat(question: QuestionListItem, interactive: boolean): ComponentChild {
   if (interactive) {
     return (
       <div style={cardStyles.statVotes}>
-        {trustedHtml(voteButton(question.id, question.score))}
+        {voteButton(question.id, question.score)}
         <span style={cardStyles.statVotesLabel}>votes</span>
       </div>
     );
@@ -177,15 +177,15 @@ export interface QuestionRowOptions {
 export function renderQuestionRow(
   question: QuestionListItem,
   options: QuestionRowOptions = {},
-): string {
+): ComponentChild {
   const interactive = options.interactive ?? true;
   const tags = parseTags(question.tags);
   const views = viewsFor(question.id, question.score);
   return (
     <li kovo-key={question.id} style={cardStyles.row}>
       <div style={cardStyles.stats}>
-        {trustedHtml(voteStat(question, interactive))}
-        {trustedHtml(answerStat(question.answerCount))}
+        {voteStat(question, interactive)}
+        {answerStat(question.answerCount)}
         <span style={cardStyles.statViews}>{`${compactCount(views)} views`}</span>
       </div>
       <div style={cardStyles.rowMain}>
@@ -194,10 +194,8 @@ export function renderQuestionRow(
         </a>
         {question.body ? <p style={cardStyles.rowExcerpt}>{question.body}</p> : ''}
         <div style={cardStyles.rowMeta}>
-          {trustedHtml(renderTags(tags))}
-          {trustedHtml(
-            renderUserCard(question.authorId, question.authorName, question.createdAt, 'asked'),
-          )}
+          {renderTags(tags)}
+          {renderUserCard(question.authorId, question.authorName, question.createdAt, 'asked')}
         </div>
       </div>
     </li>

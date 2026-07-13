@@ -9,9 +9,8 @@ import {
 /**
  * @internal Deterministic JSON serialization: object keys are sorted and `undefined`
  * values dropped, recursively. FN2 (plans/compiler-refactoring.md): the single shared
- * serializer behind compact fingerprints and the exact in-memory/persistent compile-cache
- * identities. Cache authorization compares the full canonical preimage; any SHA derived from it is
- * only a display/path locator, so digest collisions cannot become stale-output hits.
+ * serializer behind compact compile-fact, render-plan, and HMR fingerprints. Hashes serve as
+ * diagnostic/provenance identities rather than replacing authored input bytes.
  */
 export function canonicalJson(value: unknown): string {
   if (compilerArrayIsArray(value)) {
@@ -22,8 +21,8 @@ export function canonicalJson(value: unknown): string {
       const entry = compilerOwnDataValue(value, index, 'Canonical JSON array');
       // Match JSON's array semantics: an own `undefined` slot (and a sparse hole, which the
       // compiler treats equivalently here) is `null`, never an omitted byte sequence. Omitting the
-      // value aliased `[]` with `[undefined]` and made mixed arrays produce non-JSON holes, so cache
-      // identity was not injective over the accepted input domain (SPEC §5.2.1).
+      // value aliased `[]` with `[undefined]` and made mixed arrays produce non-JSON holes, so the
+      // canonical identity was not injective over the accepted input domain (SPEC §5.2.1).
       result += entry === undefined ? 'null' : canonicalJson(entry);
     }
     return `${result}]`;

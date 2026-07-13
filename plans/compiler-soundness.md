@@ -125,7 +125,7 @@ will carry; any non-strict-single-leading-slash result fails closed to `/`.
 - **P1-2 `external`:** not a trust bypass — the KV236 unsafe-scheme check runs before the `external` branch.
 - **P4 module-URL:** handler-ref/bootstrap module URLs are compiler-file-derived, never data-derived; KV236 refuses data into `on*`/handler sinks.
 - **P5 `@kovojs/*` prefix:** the npm scope is registry-owned; the reservation is sink-less.
-- **P0 tamper:** the on-disk compile cache shares the source/local-FS trust boundary; no SPEC text claims it as an adversarial boundary.
+- **P0 tamper:** compiler-result caches are retired; framework runners compile from fresh snapshotted inputs, so no cache artifact is an authorization boundary.
 - **S1-B:** dynamic `dangerouslySetInnerHTML={expr}` has no compile-time brand check but is fail-closed
   at runtime (`kovoTrustedHtmlContent` returns `''` for unbranded) — a tier-labeling nuance, not a live hole.
 
@@ -177,11 +177,11 @@ will carry; any non-strict-single-leading-slash result fails closed to `/`.
       `render-equivalence.ts:normalizeGeneratedSemanticExpression`, so the gate compares the actual encoded
       output and fails closed on any encoder asymmetry. No genuine divergence surfaced (both sides already
       carry `escapeText`); the two genuinely-generated-only mutation-field normalizations are kept.
-- [x] **P0 — fold `productionRenderPlanGate` into the compile cache key.** Done in `6607efcce` (branch
-      `agent/fu-eqcache`). `compileComponentCacheKeyInput` projects the option to a stable
-      `{ hasTokenFn, previous }` form and `compileCacheKey` includes it, so the key is now a total function
-      of compile-affecting options. Regression test asserts inputs differing only in the gate (presence /
-      `previous` / `tokenFn` presence) produce distinct keys.
+- [x] **P0 — keep `productionRenderPlanGate` on every compile.** The result-cache paths were retired in
+      the 2026-07-13 security pass, so CLI, MCP, Vite, and fixture compilation now run the fresh framework
+      compiler and cannot replay a no-gate result. `tests/compiler-runner-transparency.test.ts` proves the
+      fresh runner boundary; `packages/compiler/src/render-plan-token-contract.test.ts` owns the gate/token
+      behavior.
 
 ## Remaining follow-ups
 

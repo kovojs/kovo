@@ -48,7 +48,7 @@ This plan does not replace `plans/sql-injection.md`; it indexes SQL as one sink 
 - [x] Identify concrete query/live/cache/fragment source/sink code.
   - Evidence: `packages/server/src/query.ts` stamps `Cache-Control: private, no-store`, `Vary: Cookie`, and `Kovo-Build` on `/_q/` responses; `packages/browser/src/broadcast.ts` stamps/discards per-principal rebroadcasts; `packages/browser/src/fragment-targets.ts` and `packages/browser/src/inline-loader-build.ts` escape selector-based fragment target lookups.
 - [x] Identify concrete file/storage/path source/sink code.
-  - Evidence: `packages/server/src/schema.ts` models uploaded files; `packages/core/src/storage.ts` and related tests cover storage writes; `packages/cli/src/index.kovo-export.test.ts`, `packages/compiler/src/persistent-compile-cache.test.ts`, and `packages/server/src/static-export-*` tests cover path containment/static export references.
+  - Evidence: `packages/server/src/schema.ts` models uploaded files; `packages/core/src/storage.ts` and related tests cover storage writes; `packages/core/src/internal/filesystem-races.test.ts`, `packages/cli/src/index.kovo-export.test.ts`, and `packages/server/src/static-export-*` tests cover path containment/static export references.
 
 ## Source Taxonomy
 
@@ -81,7 +81,7 @@ This plan does not replace `plans/sql-injection.md`; it indexes SQL as one sink 
   - Sinks: `endpoint()` raw `Response`, `webhook()` responses, `/_q/` typed reads, SSE live query pushes, BroadcastChannel rebroadcast, HMR/dev-only refresh endpoints, mutation/defer streams, `Kovo-Changes`, and fragment target selection.
 - [x] Enroll file/storage/path/static-export sinks.
   - Evidence: `pnpm exec vitest --run packages/cli/src/sources-sinks.test.ts packages/cli/src/commands-manifest.test.ts packages/cli/src/index.kovo-check.test.ts packages/cli/src/index.kovo-explain.test.ts` verifies the inventory enrolls the file/storage/path/static-export sink taxonomy tokens.
-  - Sinks: upload schema storage, storage keys/metadata, filesystem and S3 adapters, `respond.file`, `respond.stream`, static export output paths, Vite manifest asset copies, compiler persistent cache refs, generated graph/output files, and content-disposition filenames.
+  - Sinks: upload schema storage, storage keys/metadata, filesystem and S3 adapters, `respond.file`, `respond.stream`, static export output paths, Vite manifest asset copies, generated graph/output files, and content-disposition filenames.
 - [x] Enroll auth/data-authorization sinks.
   - Evidence: `pnpm exec vitest --run packages/cli/src/sources-sinks.test.ts packages/cli/src/commands-manifest.test.ts packages/cli/src/index.kovo-check.test.ts packages/cli/src/index.kovo-explain.test.ts` verifies the inventory enrolls the auth/data-authorization sink taxonomy tokens.
   - Sinks: owner-annotated table reads/writes, guard/refinement results, session-provider cookies, unauthenticated redirects, CSRF-exempt mutations/endpoints, webhook `verify: none`, replay stores, rate-limit keys, and query cacheability.
@@ -130,7 +130,7 @@ This plan does not replace `plans/sql-injection.md`; it indexes SQL as one sink 
   - Expected: guard re-check, private cache posture, cross-principal discard, token mismatch refetch/reload, target spoofing cannot bypass authorization, and target caps hold.
 - [x] File/storage/static-export corpus.
   - Evidence: `packages/core/src/internal/source-sink-registry.ts` enrolls the file/storage/static-export red corpus payloads and positive/negative evidence; `pnpm exec vitest --run packages/cli/src/sources-sinks.test.ts packages/cli/src/commands-manifest.test.ts packages/cli/src/index.kovo-check.test.ts packages/cli/src/index.kovo-explain.test.ts` verifies those corpus rows are emitted and serialized.
-  - Payloads: traversal in params/filenames/storage keys, dot segments, backslashes, absolute paths, symlinks where relevant, unsafe MIME/SVG/HTML inline, content-disposition injection, oversized uploads, metadata control chars, Vite manifest path escapes, cache ref tampering, and static export links to reserved dynamic endpoints.
+  - Payloads: traversal in params/filenames/storage keys, dot segments, backslashes, absolute paths, symlinks where relevant, unsafe MIME/SVG/HTML inline, content-disposition injection, oversized uploads, metadata control chars, Vite manifest path escapes, generated-output temporary-name tampering, and static export links to reserved dynamic endpoints.
   - Expected: containment and output path checks reject; downloads default attachment + `nosniff`; MIME trust limits are documented; static export fails loudly for dynamic/reserved references.
 - [x] Dynamic code/process corpus.
   - Evidence: `packages/core/src/internal/source-sink-registry.ts` enrolls the dynamic code/process red corpus payloads and positive/negative evidence; `pnpm exec vitest --run packages/cli/src/sources-sinks.test.ts packages/cli/src/commands-manifest.test.ts packages/cli/src/index.kovo-check.test.ts packages/cli/src/index.kovo-explain.test.ts` verifies those corpus rows are emitted and serialized.

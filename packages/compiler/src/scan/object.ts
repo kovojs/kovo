@@ -1,4 +1,23 @@
 import { findStringEnd } from './text.js';
+import {
+  compilerArrayAppend,
+  compilerArrayLength,
+  compilerCreateNullRecord,
+  compilerDefineOwnDataProperty,
+  compilerNumberValue,
+  compilerOwnDataValue,
+  compilerRegExpExec,
+  compilerRegExpTest,
+  compilerStringEndsWith,
+  compilerStringIndexOf,
+  compilerStringSlice,
+  compilerStringStartsWith,
+  compilerStringTrim,
+} from '../compiler-security-intrinsics.js';
+
+const literalNumberPattern = /^-?\d+(?:\.\d+)?$/;
+const objectIdentifierPattern = /^[A-Za-z_$][\w$]*/;
+const whitespacePattern = /^\s$/;
 
 export type StaticLiteralValue =
   | boolean
@@ -11,31 +30,40 @@ export type StaticLiteralValue =
     };
 
 export function parseLiteralObject(source: string): Record<string, StaticLiteralValue> | null {
-  const trimmed = source.trim();
-  if (!trimmed.startsWith('{') || !trimmed.endsWith('}')) return null;
+  const trimmed = compilerStringTrim(source);
+  if (!compilerStringStartsWith(trimmed, '{') || !compilerStringEndsWith(trimmed, '}')) return null;
 
-  const entries: Record<string, StaticLiteralValue> = {};
-  for (const entry of topLevelObjectEntries(trimmed)) {
+  const parsedEntries = topLevelObjectEntries(trimmed);
+  const entries = compilerCreateNullRecord<StaticLiteralValue>();
+  const entryCount = compilerArrayLength(parsedEntries, 'Compiler literal object entries');
+  for (let index = 0; index < entryCount; index += 1) {
+    const entry = compilerOwnDataValue(parsedEntries, index, 'Compiler literal object entries') as {
+      key: string;
+      value: string;
+    };
     const value = literalValue(entry.value);
     if (value === undefined) return null;
-    entries[entry.key] = value;
+    compilerDefineOwnDataProperty(entries, entry.key, value);
   }
 
   return entries;
 }
 
 export function literalValue(value: string): StaticLiteralValue | undefined {
-  const trimmed = value.trim().replace(/,$/, '').trim();
-  if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+  let trimmed = compilerStringTrim(value);
+  if (compilerStringEndsWith(trimmed, ',')) {
+    trimmed = compilerStringTrim(compilerStringSlice(trimmed, 0, -1));
+  }
+  if (compilerStringStartsWith(trimmed, '{') && compilerStringEndsWith(trimmed, '}')) {
     return parseLiteralObject(trimmed) ?? undefined;
   }
-  if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+  if (compilerStringStartsWith(trimmed, '[') && compilerStringEndsWith(trimmed, ']')) {
     return parseLiteralArray(trimmed) ?? undefined;
   }
 
   const stringValue = literalStringValue(trimmed);
   if (stringValue !== null) return stringValue;
-  if (/^-?\d+(?:\.\d+)?$/.test(trimmed)) return Number(trimmed);
+  if (compilerRegExpTest(literalNumberPattern, trimmed)) return compilerNumberValue(trimmed);
   if (trimmed === 'true') return true;
   if (trimmed === 'false') return false;
   if (trimmed === 'null') return null;
@@ -54,9 +82,9 @@ function parseLiteralArray(source: string): readonly StaticLiteralValue[] | null
     }
 
     const valueEnd = skipObjectValue(source, index);
-    const value = literalValue(source.slice(index, valueEnd).trim());
+    const value = literalValue(compilerStringTrim(compilerStringSlice(source, index, valueEnd)));
     if (value === undefined) return null;
-    values.push(value);
+    compilerArrayAppend(values, value, 'Compiler literal array values');
     index = valueEnd;
   }
 
@@ -64,10 +92,11 @@ function parseLiteralArray(source: string): readonly StaticLiteralValue[] | null
 }
 
 export function literalStringValue(value: string): string | null {
-  const trimmed = value.trim();
+  const trimmed = compilerStringTrim(value);
   const quote = trimmed[0];
-  if ((quote !== '"' && quote !== "'") || trimmed.at(-1) !== quote) return null;
-  return trimmed.slice(1, -1);
+  const last = compilerStringSlice(trimmed, -1);
+  if ((quote !== '"' && quote !== "'") || last !== quote) return null;
+  return compilerStringSlice(trimmed, 1, -1);
 }
 
 function topLevelObjectEntries(objectSource: string): { key: string; value: string }[] {
@@ -95,7 +124,14 @@ function topLevelObjectEntries(objectSource: string): { key: string; value: stri
 
     const valueStart = skipWhitespaceAndComments(objectSource, afterKey + 1);
     const valueEnd = skipObjectValue(objectSource, valueStart);
-    entries.push({ key: key.name, value: objectSource.slice(valueStart, valueEnd).trim() });
+    compilerArrayAppend(
+      entries,
+      {
+        key: key.name,
+        value: compilerStringTrim(compilerStringSlice(objectSource, valueStart, valueEnd)),
+      },
+      'Compiler literal object entries',
+    );
     index = valueEnd;
   }
 
@@ -110,16 +146,23 @@ function readObjectKey(source: string, start: number): { name: string; end: numb
 
     return {
       end: end + 1,
-      name: source.slice(start + 1, end),
+      name: compilerStringSlice(source, start + 1, end),
     };
   }
 
-  const identifier = /^[A-Za-z_$][\w$]*/.exec(source.slice(start));
-  if (!identifier?.[0]) return null;
+  const identifier = compilerRegExpExec(
+    objectIdentifierPattern,
+    compilerStringSlice(source, start),
+  );
+  const identifierText =
+    identifier === null
+      ? undefined
+      : compilerOwnDataValue(identifier, 0, 'Compiler literal object key match');
+  if (typeof identifierText !== 'string' || identifierText === '') return null;
 
   return {
-    end: start + identifier[0].length,
-    name: identifier[0],
+    end: start + identifierText.length,
+    name: identifierText,
   };
 }
 
@@ -138,13 +181,13 @@ function skipObjectValue(source: string, start: number): number {
     }
 
     if (char === '/' && source[index + 1] === '/') {
-      const nextLine = source.indexOf('\n', index + 2);
+      const nextLine = compilerStringIndexOf(source, '\n', index + 2);
       index = nextLine === -1 ? source.length - 1 : nextLine + 1;
       continue;
     }
 
     if (char === '/' && source[index + 1] === '*') {
-      const commentEnd = source.indexOf('*/', index + 2);
+      const commentEnd = compilerStringIndexOf(source, '*/', index + 2);
       index = commentEnd === -1 ? source.length - 1 : commentEnd + 2;
       continue;
     }
@@ -174,19 +217,19 @@ function skipWhitespaceAndComments(source: string, start: number): number {
   let index = start;
 
   while (index < source.length) {
-    if (/\s/.test(source[index] ?? '')) {
+    if (compilerRegExpTest(whitespacePattern, source[index] ?? '')) {
       index += 1;
       continue;
     }
 
     if (source[index] === '/' && source[index + 1] === '/') {
-      const nextLine = source.indexOf('\n', index + 2);
+      const nextLine = compilerStringIndexOf(source, '\n', index + 2);
       index = nextLine === -1 ? source.length : nextLine + 1;
       continue;
     }
 
     if (source[index] === '/' && source[index + 1] === '*') {
-      const commentEnd = source.indexOf('*/', index + 2);
+      const commentEnd = compilerStringIndexOf(source, '*/', index + 2);
       index = commentEnd === -1 ? source.length : commentEnd + 2;
       continue;
     }

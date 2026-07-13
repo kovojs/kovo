@@ -1,5 +1,4 @@
 import { compileComponentModule } from './compile.js';
-import { compileComponentModuleCached } from './cached-compile.js';
 import {
   createFrameworkKovoVitePlugin,
   type KovoVitePlugin,
@@ -72,9 +71,5 @@ export {
  * of `@kovojs/compiler`.
  */
 export function kovoVitePlugin(options: KovoVitePluginOptions = {}): KovoVitePlugin {
-  return createFrameworkKovoVitePlugin(
-    (compileOptions) => compileComponentModuleCached(compileOptions),
-    compileComponentModule,
-    options,
-  );
+  return createFrameworkKovoVitePlugin(options);
 }

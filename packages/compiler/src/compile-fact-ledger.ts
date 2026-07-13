@@ -34,7 +34,7 @@ import type {
 /**
  * @internal A compiler pass owner for appended typed facts. SPEC.md §5.2 rule 10 keeps
  * post-parse decisions on typed facts; owner metadata makes fact propagation and hash inputs
- * inspectable when cache/HMR behavior changes.
+ * inspectable when compile-fact or HMR behavior changes.
  */
 export interface CompileFactOwner {
   readonly pass: string;

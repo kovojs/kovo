@@ -59,6 +59,7 @@ import type {
   ArrowFunctionPartsModel,
   CallExpressionModel,
   ConditionalExpressionModel,
+  ComponentIdentityAssignmentModel,
   ComponentModel,
   ComponentModuleModel,
   ComponentOptionEntry,
@@ -265,6 +266,7 @@ export function parseComponentModule(
   }
   const componentFactories = componentFactoryBindings(sourceFile);
   const calls: CallExpressionModel[] = [];
+  const componentIdentityAssignments: ComponentIdentityAssignmentModel[] = [];
   const components: ComponentModel[] = [];
   const endpointHandlers: MutationHandlerModel[] = [];
   const jsxComments: JsxCommentModel[] = [];
@@ -291,6 +293,14 @@ export function parseComponentModule(
   const domainBindings = domainBindingKeys(sourceFile);
 
   const visit = (node: ts.Node): void => {
+    const identityAssignment = componentIdentityAssignmentModel(sourceFile, node);
+    if (identityAssignment !== null) {
+      compilerArrayAppend(
+        componentIdentityAssignments,
+        identityAssignment,
+        'Component identity assignment models',
+      );
+    }
     const specifier = moduleSpecifierModel(node);
     if (specifier) {
       compilerArrayAppend(moduleSpecifiers, specifier, 'Module specifier models');
@@ -380,6 +390,7 @@ export function parseComponentModule(
 
   const model: ComponentModuleModel = {
     calls,
+    componentIdentityAssignments,
     components,
     endpointHandlers,
     jsxComments,
@@ -398,6 +409,29 @@ export function parseComponentModule(
   // reuse it rather than re-parsing the component, while the model stays a serializable fact bag.
   compilerDefineOwnDataProperty(model, 'sourceFile', sourceFile, false);
   return model;
+}
+
+function componentIdentityAssignmentModel(
+  sourceFile: ts.SourceFile,
+  node: ts.Node,
+): ComponentIdentityAssignmentModel | null {
+  if (!ts.isExpressionStatement(node) || !ts.isBinaryExpression(node.expression)) return null;
+  const assignment = node.expression;
+  if (assignment.operatorToken.kind !== ts.SyntaxKind.EqualsToken) return null;
+  if (
+    !ts.isPropertyAccessExpression(assignment.left) ||
+    !ts.isIdentifier(assignment.left.expression) ||
+    assignment.left.name.text !== 'name' ||
+    !ts.isStringLiteralLike(assignment.right)
+  ) {
+    return null;
+  }
+  return {
+    end: node.getEnd(),
+    start: node.getStart(sourceFile),
+    target: assignment.left.expression.text,
+    value: assignment.right.text,
+  };
 }
 
 function moduleSpecifierModel(node: ts.Node): ModuleSpecifierModel | null {

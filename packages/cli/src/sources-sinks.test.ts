@@ -153,7 +153,6 @@ describe('source/sink inventory', () => {
     expect(searchableInventory).toContain('respond.stream');
     expect(searchableInventory).toContain('static-export-output-paths');
     expect(searchableInventory).toContain('Vite-manifest-asset-copies');
-    expect(searchableInventory).toContain('compiler-persistent-cache-refs');
     expect(searchableInventory).toContain('generated-graph-output-files');
     expect(searchableInventory).toContain('content-disposition-filename');
     expect(searchableInventory).toContain('owner-annotated-table-reads-writes');

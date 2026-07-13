@@ -66,13 +66,12 @@ The adversarial review surfaced that the obvious gate is the _wrong_ one. Pick t
   Insufficient for `scan/`-extraction changes (they check emitted bytes, not internal model shape) — add
   **fact-level golden tests** when touching `scan/parse.ts` fact extraction.
 - **Fact-hash byte-stability is a THIRD, independent gate.** `factHash` (`hmr-impact.ts:60`) and
-  `appGraphContributionHash` (`internal-graph.ts:89`) hash internal fact objects for HMR/graph-cache keys
+  `appGraphContributionHash` (`internal-graph.ts:89`) hash internal fact objects for HMR/graph fingerprints
   and are covered by neither fixpoint nor render-equivalence. Snapshot `factHash` output before/after any
   change to query-update / graph / HMR facts (e.g. the non-enumerable `outputContext` channel at
   `query-updates.ts:782`).
-- **Cache-key soundness:** the dependency-footprint _producer_ (`compile.ts:470-518`) and the cache-key
-  _narrower_ (`compile-cache.ts:351-416`) express the read-set contract twice; snapshot computed cache keys
-  over the fixture corpus before/after touching either.
+- **Dependency-footprint honesty:** `compile.ts:470-518` is the declared read-set contract. Snapshot the emitted
+  footprint over the fixture corpus before/after touching fact discovery or slicing.
 - **Unchanged by every Part-1 item** (preserve exactly): source-derived handler names; 1:1 file mapping;
   teaching errors (rule 5); registry atomicity; the public/internal/generated import boundary (rule 8,
   api-surface gate — exported symbol names must stay identical across all moves/barrels); TSX-only authoring
@@ -126,44 +125,32 @@ behavior change never hides inside a "neutral" move.
     `output-context-raw-html.test.ts`, `output-context-payloads.test.ts`, `server-emit-security.test.ts` + render-equivalence.
   - Unlocks: CAP9.
 
-- [x] **FN3 · P1 · S/low — Delete the dead fact-invalidation + persistent-prune machinery (or commit to wiring it).** ✅ done (deletion branch)
-  - Done: removed `registryFactChanges`, `invalidateFacts`, `#inverseIndex`, `#indexEntry` (+ its two
-    per-compile call sites), `compileDependencyFootprintFactKeys`, `compileDependencyFactKey`,
-    `CompileDependencyFactChange`, `changedRecordKeys`/`changedArrayValues` from `compile-cache.ts`;
-    `prunePersistentCompileCache` from `persistent-compile-cache.ts`; the matching `internal.ts` re-exports and
-    dead tests. Live cache behavior (footprint-aware `getOrCreate`, key narrowing) unchanged; per-compile
-    index-write cost removed. Open decision deferred to CAP8 if fact-driven incremental dev is wanted. Verified:
-    grep (no remaining refs), `tsc` clean, compile-cache/persistent/hmr/cache-identity tests (21 pass), api-surface gate.
-  - Problem: `CompileCache.invalidateFacts` / `registryFactChanges` / `#inverseIndex` and
-    `prunePersistentCompileCache` are fully implemented, exported via `internal.ts`, and tested, but have **zero
-    production callers** (only `internal.ts` re-exports + their own tests). Worse, the inverse index is _written_
-    on every compile while its only reader is never called — production pays per-compile indexing cost for nothing.
-    The on-disk cache also has no GC/max-size/TTL wired anywhere.
-  - Evidence: `compile-cache.ts:38`, `:115`, `:133`; `persistent-compile-cache.ts:122`; `internal.ts:7`, `:13`.
-    (grep confirms no callers outside defs + `internal.ts` re-exports.)
-  - Approach: pick one coherent cache story. **Neutral branch:** remove `invalidateFacts` /
-    `registryFactChanges` / `#inverseIndex` / `#indexEntry` / `compileDependencyFootprintFactKeys` /
-    `prunePersistentCompileCache` from `internal.ts` and delete the dead code + tests (including the write-side
-    index machinery, not just the reader). **Or** commit to CAP8 and wire it (that path is _not_ neutral). Do not leave half-wired.
-  - Neutrality proof: deletion is strictly neutral — api-surface gate + grep confirm no consumer; removing the
-    unused index-write also yields a small per-compile speedup.
+- [x] **FN3 · P1 · S/low — Delete the dead fact-invalidation and disk-cache machinery.** ✅ done (deletion branch)
+  - Done: removed every compiler-result cache: the dead fact-invalidation/index machinery, the
+    unauthenticatable same-UID disk store, and the process/plugin-local result stores. Supported Vite, CLI, MCP,
+    and integration runners snapshot the input carrier and compile fresh on every request.
+  - Problem: the inverse index had zero readers while imposing per-compile writes; the disk store could not
+    authenticate entries against same-UID authored config (SPEC §2/§6.6) and raced concurrent manifest writers;
+    plugin-local keys omitted ambient package manifests that affect prefix discovery.
+  - Evidence: `framework-compile.ts`, `vite.ts`, `commands/compile.ts`, and `commands/mcp.ts` all use the fresh
+    runner; no compiler-result-cache source, export, option, or build-path reference remains.
+  - Approach: retain fresh compilation as the security baseline. Future reuse requires complete explicit
+    compile-affecting identities plus deterministic resource limits, or an isolated privileged broker.
+  - Neutrality proof: runner-transparency and same-plugin manifest-change regressions prove fresh results match
+    direct compilation and observe ambient fact changes.
   - Unlocks: CAP8 (mutually exclusive branch).
 
 - [x] **FN2 · P1 · S/low — De-duplicate the canonical-JSON serializer behind one shared helper.** ✅ done
-  - Done: new `packages/compiler/src/canonical-json.ts` exports the one `canonicalJson`; `fact-hash.ts`,
-    `cache-identity.ts`, `compile-cache.ts`, and `persistent-compile-cache.ts` import it and dropped their local
-    copies (the latter two kept the `stableJson` call shape by switching to `canonicalJson`). Intentional hash
-    divergence preserved (fnv1a vs sha256). Verified: no leftover `stableJson`, `tsc` clean, cache-identity /
-    compile-cache / persistent / hmr tests (21 pass) — byte-identical hashes/keys.
-  - Problem: the canonical serializer is copied four times under two names; divergence would silently break
-    cache-identity vs HMR fact-hash agreement.
-  - Evidence: `fact-hash.ts:6` & `cache-identity.ts:121` (`canonicalJson`); `compile-cache.ts:428` &
-    `persistent-compile-cache.ts:197` (`stableJson`). _(Spot-check found the 4th copy the original map missed.)_
-  - Approach: export one `canonicalJson` from a shared internal module; all four import it. Confirm byte-identical
-    output first. **Unify only the serializer, not the hash** — the fnv1a (fact-hash) vs sha256 (cache-identity /
-    compile-cache) split is intentional.
+  - Done: new `packages/compiler/src/canonical-json.ts` exports the one `canonicalJson`; live compile-fact,
+    deterministic emit, Vite fact, and fact-hash consumers share it.
+  - Problem: the canonical serializer was copied under multiple names; divergence would silently break compile-
+    fact de-duplication and HMR fingerprint agreement.
+  - Evidence: `compile.ts`, `compile-result.ts`, `compile-fact-ledger.ts`, `fact-hash.ts`, and `vite.ts` use
+    `canonicalJson`; retired result stores carried the historical duplicate copies.
+  - Approach: export one `canonicalJson` from a shared internal module; all live consumers import it. Confirm byte-identical
+    output first. **Unify only the serializer, not each consumer's semantic identity.**
   - Neutrality proof: identical bodies collapsed to one import; hash outputs unchanged. Covered by
-    `cache-identity.test.ts`, `compile-cache.test.ts`, `hmr-impact.test.ts`.
+    `canonical-json.test.ts`, `hmr-impact.test.ts`, and compiler conformance tests.
 
 - [x] **FN4 · P1 · S/low — Relocate `removeUnreferencedNamedImports` out of `compile.ts`.** ✅ done
   - Done: moved `removeUnreferencedNamedImports` + its 5 private helpers to new `emit/dead-imports.ts`; `compile.ts`
@@ -438,21 +425,20 @@ reason}` (`drizzle/derive.ts:41`); `serializeDerivedOptimistic` emits the artifa
 - [x] **CAP6 · P0 — Drift-proof render-plan token + cross-package ABI contract test.** ✅ done (contract test; remote-cache seam deferred)
   - Done: `render-plan-token-contract.test.ts` locks `computeCompilerRenderPlanFingerprint` to the shared
     `@kovojs/core` source `@kovojs/server` also re-exports (FN1), with order-insensitivity, KV416 monotonicity,
-    determinism, and the pinned grammar constant. Remote/distributed `CompileCacheBackend` seam remains future work.
+    determinism, and the pinned grammar constant. A privileged remote-reuse seam remains future work.
   - Summary: a build-failing cross-package conformance test that the compiler-produced render-plan token and the
     server-validated token agree; plus the seam for a distributed/remote content-addressed build cache.
   - Blocked by: grammar version + fingerprint fn are duplicated literals in two packages (`compile.ts:873`/`:890`;
-    `client-modules.ts:14`/`:32`) with no shared definition and no cross-package equality test. Separately, the
-    persistent cache read is hardwired to local-fs exact-key reads with hit semantics that diverge from the in-memory
-    footprint-aware cache; no `CompileCacheBackend` interface exists.
+    `client-modules.ts:14`/`:32`) with no shared definition and no cross-package equality test. Separately, no
+    authenticated remote result-broker interface exists; same-UID local disk files are not a trust
+    boundary under SPEC §2/§6.6.
   - Prereqs: FN1, FN6.
   - Sketch: with FN1's single core token home, add one cross-package conformance test asserting compiler == server
     token over a corpus (closes the silent stale-DOM-patch class). For remote cache: define
-    `CompileCacheBackend {read(key, footprintCtx), write(key, footprint, result)}` and adapt both caches. Near-free
-    unlock: the persistent cache already writes footprint to disk (`persistent-compile-cache.ts:112`) but never reads
-    it — add a footprint-narrowed read path for in-memory/persistent hit parity.
-  - Payoff: eliminates a high-severity silent-correctness class (deploy skew); enables cross-machine cache reuse
-    keyed by `compilerBuildId` + content footprint for cold CI/fresh checkouts.
+    result broker with explicit `read`/`write` requests behind a separately privileged process; do not reintroduce
+    an app-writable local-disk signer.
+  - Payoff: eliminates a high-severity silent-correctness class (deploy skew); a future broker can derive its own
+    authenticated implementation/content identity for cold CI/fresh checkouts.
 
 - [ ] **CAP2 · P1 — `<kovo-live>` live queries over SSE as a real authoring element.** (SPEC §9.3; `plans/data-layer-roadmap.md` v2)
   - Summary: a real `<kovo-live query=…>` element that subscribes to the identical `<kovo-query>`/`<kovo-fragment>`
@@ -487,17 +473,16 @@ reason}` (`drizzle/derive.ts:41`); `serializeDerivedOptimistic` emits the artifa
 - [ ] **CAP7 · P1 — Incremental / partial recompilation keyed by per-pass fact fingerprints.** (SPEC §5.2.1 incremental cache; §9.5.1 fact-based HMR ladder)
   - Summary: sub-file incremental recompile (re-run only passes whose actually-read facts changed) and faster
     watch/HMR, extending the dependency-footprint inverse-index from cross-module to intra-component.
-  - Blocked by: every compile re-parses 4–7 times and runs all passes start-to-finish; the only incrementality is
-    whole-result caching keyed by source hash (`compile-cache.ts:181`). Passes have no individual identity (inline
-    sequence) and the 11 independent `createSourceFile` sites defeat a single shared program; the model is flat
-    arrays with no span index, and span-equality joins (`parse.ts:519`/`:568`) break silently if an incremental
-    re-extraction shifts a span.
+  - Blocked by: every compile re-parses 4–7 times and runs all passes start-to-finish; no result cache remains.
+    Passes have no individual identity (inline sequence) and the 11 independent `createSourceFile` sites defeat a
+    single shared program; the model is flat arrays with no span index, and span-equality joins
+    (`parse.ts:519`/`:568`) break silently if an incremental re-extraction shifts a span.
   - Prereqs: FN5, FN7.
   - Sketch: with FN5 each pass is an addressable, individually cacheable unit and FN7 gives one canonical program
     model. Add a parse memo (identical source strings reuse one `ts.SourceFile`) and a span→fact index (build it
     _before_ incrementalizing, or replace the fragile span-equality joins first). Extend the existing
-    `CompileDependencyFootprint` inverse-index (`types.ts:135-152`) from cross-module to per-pass. `fact-hash.ts` /
-    `cache-identity.ts` supply the fingerprint primitives.
+    `CompileDependencyFootprint` read-set (`types.ts:135-152`) to per-pass facts. `fact-hash.ts` supplies the
+    deterministic fingerprint primitive; any store introduced here must satisfy CAP8's complete-input/bound rules.
   - Payoff: sub-linear rebuild on edits; lower watch-mode latency; faster CI on large component trees.
 
 - [x] **CAP9 · P1 — Output-context soundness gate (every policed sink maps to an escaped emitter context).** ✅ done
@@ -521,17 +506,15 @@ reason}` (`drizzle/derive.ts:41`); `serializeDerivedOptimistic` emits the artifa
   - Payoff: turns an invisible rule-10 convention into a structural guarantee; prerequisite for the prod delta path
     (KV416 delta-equivalence half) which re-renders text client-side.
 
-- [ ] **CAP8 · P2 — Fact-driven incremental dev rebuilds with bounded cache size.** (SPEC §9.5 HMR; §5.2 incremental cache)
-  - Summary: wire the existing (currently dead) fact-invalidation engine into Vite `handleHotUpdate` so only modules
-    whose actually-read facts changed recompile, and call `prunePersistentCompileCache` with a max-entries policy so
-    the on-disk cache stops growing unbounded.
-  - Blocked by: `invalidateFacts` / `registryFactChanges` / `#inverseIndex` and `prunePersistentCompileCache` are
-    built + tested but have zero production callers (FN3); `vite handleHotUpdate` (`vite.ts:283`) never invalidates by
-    fact and never prunes; `.kovo/cache/compiler` grows unbounded.
-  - Prereqs: FN3 (the **wire** branch — mutually exclusive with deletion), FN5.
-  - Sketch: connect `invalidateFacts` into `handleHotUpdate` when a registry/graph fact changes across a rebuild, and
-    call `prunePersistentCompileCache(maxEntries)` after writes. Gate with new watch-mode correctness tests — this is
-    **not** neutral (it changes _when_ recompiles happen).
+- [ ] **CAP8 · P2 — Fact-driven incremental dev rebuilds behind complete identities and bounded storage.** (SPEC §9.5 HMR; §5.2)
+  - Summary: consider result reuse only after ambient package manifests and registry/graph facts become explicit,
+    complete key material, with deterministic entry/byte limits and invalidation semantics.
+  - Blocked by: current prefix discovery consumes ambient package manifests that are not declared inputs. FN3
+    therefore established fresh compilation as the default and deleted all compiler-result stores.
+  - Prereqs: FN3 (deletion branch), FN5.
+  - Sketch: first make every ambient manifest/fact a descriptor-rooted snapshot in the compile carrier and prove
+    TOCTOU-safe identity. Only then add a bounded in-process store, or use a separately privileged broker for
+    cross-process reuse. Gate with watch-mode correctness and resource-exhaustion tests.
   - Payoff: faster, correct incremental dev/watch builds with a stable cache footprint.
 
 - [ ] **CAP10 · P2 — Machine-readable diagnostics + richer `kovo explain` decision graph.** (SPEC §5.2 rule 5; §5.3/§11.3/§11.4; `plans/devtools.md`)
@@ -576,13 +559,13 @@ reason}` (`drizzle/derive.ts:41`); `serializeDerivedOptimistic` emits the artifa
 
 **Cross-cutting gate discipline:** for every Part-1 item run the golden-output corpus + render-equivalence +
 conformance as the primary neutrality oracle; add a fact-hash snapshot for anything touching
-query-updates/internal-graph/HMR facts; add a cache-key snapshot for anything touching footprint/slicing; add
+query-updates/internal-graph/HMR facts; add an input-identity snapshot for anything touching footprint/slicing; add
 fact-level golden tests for FN7 Step 2. Never rely on `assertFixpoint` to prove an authored-source pass refactor neutral.
 
 ## Open questions
 
-- **Cache story (FN3 vs CAP8):** delete the fact-invalidation engine outright, or commit to wiring fact-driven
-  incremental dev now? Decide before Wave 0 so FN3 takes the right branch.
+- **Result-reuse story:** FN3 chose deletion; every current compiler runner is fresh. CAP8 requires complete explicit
+  ambient identities and bounded storage; cross-process reuse requires an isolated broker.
 - **Shared derivation IR home (CAP1):** `@kovojs/core/derivation.ts` already exists for part of it — confirm it can
   host the full `InlineOptimistic*Fact` contract that both `@kovojs/compiler` and `@kovojs/drizzle` import without
   creating a dependency cycle.
@@ -596,7 +579,7 @@ fact-level golden tests for FN7 Step 2. Never rely on `assertFixpoint` to prove 
 File:line citations above were spot-checked this session via grep against `packages/compiler/src` and
 `packages/server/src` on `main`. Confirmed: the render-plan grammar constant is byte-duplicated across
 `compile.ts:873` and `client-modules.ts:14` (FN1); four canonical-JSON serializer copies under two names (FN2);
-`invalidateFacts`/`registryFactChanges`/`prunePersistentCompileCache` have no production callers (FN3);
+the retired invalidation/disk-cache symbols have no remaining production references (FN3);
 `structuralJsxPhaseOrder` is read only by a snapshot test, never the orchestrator (FN5); 11 `createSourceFile`
 sites live outside `scan/` and the rule-9 guard scope is `(lower|validate|analyze|emit)/` only (FN7); `URL_ATTRIBUTES`
 is duplicated emit-side vs validation-side with `BOOLEAN_ATTRIBUTES` emit-only (FN8). The architecture map was produced

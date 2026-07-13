@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { CompileCache, compileComponentCacheKeyInput } from '../packages/compiler/src/internal.js';
+import { compileComponentModuleForFramework } from '../packages/compiler/src/internal.js';
 import {
   compileComponentModule,
   type CompileComponentOptions,
@@ -8,17 +8,20 @@ import {
 } from '../packages/compiler/src/index.js';
 import { compilerPerfCorpora, type CompilerPerfFile } from './compiler-perf-corpora.js';
 
-describe('compiler cache transparency', () => {
-  it('matches fresh compilation over the perf corpus, including after a targeted edit', () => {
-    // SPEC.md §5.2 keeps compiler artifacts deterministic; the incremental cache may change
-    // latency, not emitted bytes.
+describe('framework compiler runner transparency', () => {
+  it('matches direct fresh compilation over the perf corpus and after a targeted edit', async () => {
+    // SPEC.md §5.2 keeps compiler artifacts deterministic. The supported framework runner pins its
+    // input carrier but intentionally retains no result state, so it must match a direct fresh
+    // compile for both the original corpus and an in-process edit.
     const files = compilerPerfCorpora().flatMap((corpus) => corpus.files);
     const editedFiles = files.map((file, index) =>
       index === 0 ? { ...file, source: file.source.replace('Item <span>', 'Edited <span>') } : file,
     );
 
-    expect(compileWithCache(files)).toEqual(compileFresh(files));
-    expect(compileWithCache(editedFiles)).toEqual(compileFresh(editedFiles));
+    await expect(compileWithFrameworkRunner(files)).resolves.toEqual(compileFresh(files));
+    await expect(compileWithFrameworkRunner(editedFiles)).resolves.toEqual(
+      compileFresh(editedFiles),
+    );
   });
 });
 
@@ -26,17 +29,12 @@ function compileFresh(files: readonly CompilerPerfFile[]): unknown[] {
   return files.map((file) => signature(compileComponentModule(compileOptions(file))));
 }
 
-function compileWithCache(files: readonly CompilerPerfFile[]): unknown[] {
-  const cache = new CompileCache<CompileResult>();
-
-  return files.map((file) => {
-    const options = compileOptions(file);
-    const result = cache.getOrCreate(compileComponentCacheKeyInput(options), () =>
-      compileComponentModule(options),
-    );
-    if (result instanceof Promise) throw new Error('compileComponentModule should be synchronous');
-    return signature(result);
-  });
+async function compileWithFrameworkRunner(files: readonly CompilerPerfFile[]): Promise<unknown[]> {
+  return await Promise.all(
+    files.map(async (file) =>
+      signature(await compileComponentModuleForFramework(compileOptions(file))),
+    ),
+  );
 }
 
 function compileOptions(file: CompilerPerfFile): CompileComponentOptions {

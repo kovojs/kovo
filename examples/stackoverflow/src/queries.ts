@@ -122,7 +122,7 @@ export const questionAnswers = query({
     if (!sessionId) {
       throw new Error('stackoverflow query loaders require request.session.id');
     }
-    return db
+    const rows = await db
       .select({
         id: answers.id,
         questionId: answers.questionId,
@@ -136,6 +136,7 @@ export const questionAnswers = query({
       .from(answers)
       .where(and(eq(answers.sessionId, sessionId), eq(answers.questionId, input.questionId)))
       .orderBy(asc(answers.id));
+    return rows;
   },
 });
 

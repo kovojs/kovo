@@ -320,10 +320,7 @@ function commerceAuthResponse(
   status = 204,
 ): CommerceBetterAuthResponse {
   const headers = new Headers();
-
-  Object.defineProperty(headers, 'getSetCookie', {
-    value: () => [...cookies],
-  });
+  for (const cookie of cookies) headers.append('set-cookie', cookie);
 
   return { headers, status };
 }

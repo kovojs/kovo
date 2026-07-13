@@ -7,11 +7,7 @@ import {
   compileRouteModule,
   deriveAppGraph,
 } from './index.js';
-import {
-  appGraphContributionHash,
-  deriveRegistryFactsFromGraph,
-  IncrementalAppGraphCache,
-} from './app-graph.js';
+import { appGraphContributionHash, deriveRegistryFactsFromGraph } from './app-graph.js';
 
 const cartBadgeSource = `
 import { component } from '@kovojs/core';
@@ -481,7 +477,7 @@ export const products = route('/products', {
     expect(() => assertFixpoint(result)).not.toThrow();
   });
 
-  it('caches app graph derivation by the multiset of contributing fact hashes', () => {
+  it('hashes app graph derivation by the multiset of contributing facts', () => {
     const cart = {
       componentGraphFacts: [{ domName: 'cart-badge', name: 'components/cart/cart-badge' }],
     };
@@ -500,14 +496,10 @@ export const products = route('/products', {
         },
       ],
     };
-    const cache = new IncrementalAppGraphCache();
-
     expect(appGraphContributionHash(firstOptions)).toBe(appGraphContributionHash(reorderedOptions));
     expect(appGraphContributionHash(firstOptions)).not.toBe(
       appGraphContributionHash(changedOptions),
     );
-    expect(cache.derive(reorderedOptions)).toBe(cache.derive(firstOptions));
-    expect(cache.derive(changedOptions)).not.toBe(cache.derive(firstOptions));
   });
 
   it('derives route registry facts from compiled route-page JSX facts', () => {
@@ -1716,7 +1708,11 @@ export const stripeWebhook = webhook('/webhooks/stripe', {
     let derived!: ReturnType<typeof deriveAppGraph>;
 
     try {
-      Array.prototype.flatMap = function eraseComponentAuthorityFacts(callback, thisArg) {
+      Array.prototype.flatMap = function eraseComponentAuthorityFacts(
+        this: unknown[],
+        callback: (value: unknown, index: number, array: unknown[]) => unknown,
+        thisArg?: unknown,
+      ): unknown[] {
         if (this === components) {
           poisonHits += 1;
           return [];
@@ -1735,7 +1731,7 @@ export const stripeWebhook = webhook('/webhooks/stripe', {
     expect(poisonHits).toBe(0);
   });
 
-  it('does not retain caller-owned webhook facts in derived or cached graphs', () => {
+  it('does not retain caller-owned webhook facts in derived graphs', () => {
     const result = compileComponentModule({
       fileName: 'src/webhooks.ts',
       source: `
@@ -1753,8 +1749,7 @@ export const stripeWebhook = webhook('/webhooks/stripe', {
     const options = {
       components: [{ componentGraphFacts: result.componentGraphFacts, endpointGraphFacts }],
     };
-    const cache = new IncrementalAppGraphCache();
-    const first = cache.derive(options);
+    const first = deriveAppGraph(options);
 
     endpointGraphFacts[0]!.path = '/attacker';
     endpointGraphFacts.length = 0;
@@ -1763,7 +1758,7 @@ export const stripeWebhook = webhook('/webhooks/stripe', {
     }).toThrow();
 
     expect(first.graph.endpoints?.[0]?.path).toBe('/webhooks/stripe');
-    expect(cache.derive(options).graph.endpoints).toBeUndefined();
+    expect(deriveAppGraph(options).graph.endpoints).toBeUndefined();
   });
 
   it('derives page access facts from compiled JSX route pages', () => {

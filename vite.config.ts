@@ -1,10 +1,7 @@
 import { defineConfig } from 'vite-plus';
 
-import {
-  commerceRegistryFacts,
-  exampleDrizzleRegistryPlugin,
-  exampleKovoCompilerPlugin,
-} from './examples/vite-kovo-compiler.js';
+import { exampleDrizzleRegistryPlugin } from './examples/vite-drizzle-registry.js';
+import { commerceRegistryFacts, exampleKovoCompilerPlugin } from './examples/vite-kovo-compiler.js';
 
 const repoRoot = workspaceRootFromCwd();
 const exampleGeneratedGraphsGlobalSetup = repoRoot
@@ -123,8 +120,6 @@ export default defineConfig({
       scripts: true,
       tasks: true,
     },
-    // The fine-grained compiler cache is restored separately under `.kovo/cache`.
-    // Keep it out of task inputs/outputs so cache writes do not invalidate coarse `vp` tasks.
     tasks: {
       build: {
         command: 'vp pack && node scripts/prod-emit-check.mjs',
@@ -273,7 +268,7 @@ export default defineConfig({
           { pattern: 'tests/kovo-check.server-browser.node.mjs', base: 'workspace' },
           { pattern: 'tests/browser-acceptance.mjs', base: 'workspace' },
           { pattern: 'tests/p10-perf.node.mjs', base: 'workspace' },
-          { pattern: 'tests/compiler-cache-transparency.test.ts', base: 'workspace' },
+          { pattern: 'tests/compiler-runner-transparency.test.ts', base: 'workspace' },
           { pattern: 'tests/compiler-determinism.test.ts', base: 'workspace' },
           { pattern: 'tests/compiler-determinism-worker.mjs', base: 'workspace' },
           { pattern: 'tests/compiler-perf.test.ts', base: 'workspace' },

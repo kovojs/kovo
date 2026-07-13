@@ -825,4 +825,75 @@ export const InlineStyle = component({
     expect(result.diagnostics.filter((diagnostic) => diagnostic.severity === 'error')).toEqual([]);
     expect(() => assertFixpoint(result)).not.toThrow();
   });
+
+  it('does not lose static style bindings through late Object.entries replacement', () => {
+    const source = `
+import { component } from '@kovojs/core';
+import * as style from '@kovojs/style';
+const base = style.create({ root: { color: 'red' } });
+export const Badge = component({ render: () => <span style={base.root}>Hi</span> });
+`;
+    const nativeEntries = Object.entries;
+    let poisonHits = 0;
+    let result: ReturnType<typeof compileComponentModule> | undefined;
+    try {
+      Object.entries = function poisonedStyleEntries(value: object): [string, unknown][] {
+        const root = (value as { root?: { __rules?: unknown } }).root;
+        if (root?.__rules !== undefined) {
+          poisonHits += 1;
+          return [];
+        }
+        return nativeEntries(value);
+      } as typeof Object.entries;
+      result = compileComponentModule({ fileName: 'components/badge.tsx', source });
+    } finally {
+      Object.entries = nativeEntries;
+    }
+
+    expect(result?.files.find((file) => file.kind === 'server')?.source).toContain('class="kv-');
+    expect(result?.diagnostics.filter((diagnostic) => diagnostic.code === 'KV236')).toEqual([]);
+    expect(poisonHits).toBe(0);
+  });
+
+  it('does not drop defineVars or createTheme rules through late Array.isArray replacement', () => {
+    const source = `
+import { component } from '@kovojs/core';
+import * as style from '@kovojs/style';
+const buttonVars = style.defineVars({ accent: '#2563eb', onAccent: 'white' });
+const successTheme = style.createTheme(buttonVars, { accent: '#16a34a' });
+const base = style.create({
+  root: { backgroundColor: buttonVars.accent, color: buttonVars.onAccent },
+});
+export const Button = component({
+  render: () => <button style={base.root}>Buy</button>,
+});
+`;
+    const nativeIsArray = Array.isArray;
+    let poisonHits = 0;
+    let result: ReturnType<typeof compileComponentModule> | undefined;
+    try {
+      Array.isArray = function poisonedStyleMetadataArray(value: unknown): value is unknown[] {
+        if (
+          nativeIsArray(value) &&
+          typeof value[0] === 'object' &&
+          value[0] !== null &&
+          typeof (value[0] as { rule?: unknown }).rule === 'string' &&
+          (value[0] as { rule: string }).rule.includes('--kovo-')
+        ) {
+          poisonHits += 1;
+          return false;
+        }
+        return nativeIsArray(value);
+      };
+      result = compileComponentModule({ fileName: 'components/themed-button.tsx', source });
+    } finally {
+      Array.isArray = nativeIsArray;
+    }
+
+    const css = result?.files.find((file) => file.kind === 'css')?.source ?? '';
+    expect(css).toContain(':root{--kovo-button-accent:#2563eb}');
+    expect(css).toContain('--kovo-button-accent:#16a34a');
+    expect(css).toContain('background-color:var(--kovo-button-accent)');
+    expect(poisonHits).toBe(0);
+  });
 });

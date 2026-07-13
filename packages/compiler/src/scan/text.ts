@@ -1,3 +1,5 @@
+import { compilerStringIndexOf } from '../compiler-security-intrinsics.js';
+
 export function findMatchingToken(
   source: string,
   start: number,
@@ -15,13 +17,13 @@ export function findMatchingToken(
     }
 
     if (char === '/' && source[index + 1] === '/') {
-      const nextLine = source.indexOf('\n', index + 2);
+      const nextLine = compilerStringIndexOf(source, '\n', index + 2);
       index = nextLine === -1 ? source.length : nextLine;
       continue;
     }
 
     if (char === '/' && source[index + 1] === '*') {
-      const commentEnd = source.indexOf('*/', index + 2);
+      const commentEnd = compilerStringIndexOf(source, '*/', index + 2);
       index = commentEnd === -1 ? source.length : commentEnd + 1;
       continue;
     }

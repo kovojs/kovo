@@ -471,7 +471,7 @@ export function tagHref(tag: string): string {
 
 /** A row of tags rendered as Stack Overflow's light-blue pills, each linking to
  *  its filtered question list. */
-export function renderTags(tags: string[]): string {
+export function renderTags(tags: string[]): ComponentChild {
   if (tags.length === 0) return '';
   return (
     <div style={chromeStyles.tagRow}>
@@ -494,7 +494,7 @@ export function renderUserCard(
   name: string | undefined,
   iso: string | undefined,
   verb: string,
-): string {
+): ComponentChild {
   const resolvedName = displayName(authorId, name);
   const rep = reputationOf(authorId, name);
   const when = relativeTime(iso);
@@ -522,7 +522,7 @@ export function renderUserCard(
  * up-caret button stacked over the score. The CSRF token + form key are injected
  * automatically by the @kovojs/server JSX runtime for `enhance` mutation forms.
  */
-export function voteButton(questionId: string, value: number): string {
+export function voteButton(questionId: string, value: number): ComponentChild {
   return (
     <form enhance mutation={voteUpMutation} key={questionId} style={chromeStyles.voteForm}>
       <input type="hidden" name="id" value={`vote-${questionId}`} />

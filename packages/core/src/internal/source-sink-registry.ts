@@ -288,7 +288,7 @@ const sourceSinkInventory: readonly SourceSinkInventoryEntry[] = [
     runtimeGuard:
       'safe-content-disposition+reserved-dynamic-endpoint-refusal+storage-key-validation',
     schema:
-      'FileSchema|StoredFile|upload-schema-storage|storage-keys-metadata|filesystem-S3-adapters|respond.file|respond.stream|static-export-output-paths|Vite-manifest-asset-copies|compiler-persistent-cache-refs|generated-graph-output-files|static-export-route-paths-assets-manifests|storage-key|content-disposition-filename',
+      'FileSchema|StoredFile|upload-schema-storage|storage-keys-metadata|filesystem-S3-adapters|respond.file|respond.stream|static-export-output-paths|Vite-manifest-asset-copies|generated-graph-output-files|static-export-route-paths-assets-manifests|storage-key|content-disposition-filename',
     sink: 'file.storage.static-export',
     source:
       'file-upload-metadata|file-upload-bytes|static-export-route-paths-assets-manifests|route-paths|asset-manifest|storage-key|app-config-env-values',

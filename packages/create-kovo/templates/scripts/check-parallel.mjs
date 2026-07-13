@@ -11,14 +11,9 @@
 // prefixed with its step label.
 //
 // RACE SAFETY: `build:prod` (kovo build) and `check:endpoint-posture`
-// (vitest + `kovo check`) BOTH write the shared, gitignored `.kovo/cache`:
-//   - the compiler's persistent compile cache (manifest / entries / blobs), and
-//   - the tsc incremental preflight `.kovo/cache/tsc-preflight.tsbuildinfo`.
-// The compiler writes individual cache files atomically (write-temp-then-rename;
-// see packages/compiler/src/persistent-compile-cache.ts `atomicWriteFile`), but
-// its manifest is read-modify-written, and the tsc preflight build-info is
-// written in place by tsc. Running build + posture concurrently could therefore
-// lose manifest updates or corrupt the build-info. They are kept in ONE
+// (vitest + `kovo check`) BOTH write the shared, gitignored tsc incremental
+// preflight `.kovo/cache/tsc-preflight.tsbuildinfo`. It is written in place by
+// tsc, so running build + posture concurrently could corrupt it. They stay in ONE
 // SEQUENTIAL lane (build THEN posture). `vp check` and `check:sound-subset` do
 // not touch `.kovo/cache`, so each runs as its own concurrent lane.
 //

@@ -2324,7 +2324,6 @@ async function buildKovoClientManifest(
   },
 ): Promise<KovoClientManifestBuild> {
   const viteAssetPlugin = kovoVitePlugin({
-    cache: options.cache,
     queryShapeFacts: options.queryShapeFacts,
   });
   const routeTargets = buildSnapshotDenseArray(
@@ -2415,7 +2414,6 @@ async function buildKovoComponentClientModules(
   >['getCssAssetManifest'];
 }> {
   const kovoPlugin = kovoVitePlugin({
-    cache: options.cache,
     include: [kovoBuildAppSourceFilter(appModulePath, root)],
     queryShapeFacts: options.queryShapeFacts,
   });
