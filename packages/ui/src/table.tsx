@@ -5,6 +5,23 @@ import * as style from '@kovojs/style';
 
 import { uiTheme } from './theme.js';
 
+/* eslint-disable typescript/unbound-method */
+
+const NativeArray = globalThis.Array;
+const NativeObject = globalThis.Object;
+const NativePromise = globalThis.Promise;
+const NativeReflect = globalThis.Reflect;
+const NativeTypeError = globalThis.TypeError;
+const nativeArrayIsArray = NativeArray.isArray;
+const nativeGetOwnPropertyDescriptor = NativeObject.getOwnPropertyDescriptor;
+const nativePromiseResolve = NativePromise.resolve;
+const nativePromiseThen = NativePromise.prototype.then;
+const nativeReflectApply = NativeReflect.apply;
+
+function tableApply<Return>(method: Function, receiver: unknown, args: readonly unknown[]): Return {
+  return nativeReflectApply(method, receiver, args) as Return;
+}
+
 /**
  * Style override slots accepted by the table components.
  *
@@ -65,35 +82,92 @@ export interface TableCellProps {
 type MaybePromise<Value> = Promise<Value> | Value;
 type TableRenderedHtml = object;
 
-const tableRenderedHtmlValues = new WeakSet<object>();
-
 function escapeHtml(value: unknown): string {
-  if (isTableRenderedHtml(value)) return String(value);
   if (typeof value === 'object' && value !== null) return renderRouteHtml(value);
-  const text = tableTextValue(value);
-  return text.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+  return escapeHtmlText(tableTextValue(value), false);
 }
 
-function renderTableChildren(value: unknown): MaybePromise<string> {
-  if (Array.isArray(value)) {
-    const rendered = value.map((item) => renderTableChildren(item));
-    return rendered.every(isString)
-      ? rendered.join('')
-      : Promise.all(rendered.map((item) => Promise.resolve(item))).then((parts) => parts.join(''));
+type TableChildrenRendering =
+  | Readonly<{ kind: 'async'; value: Promise<string> }>
+  | Readonly<{ kind: 'sync'; value: string }>;
+
+const maxTableChildDepth = 64;
+const maxTableChildValues = 10_000;
+
+interface TableChildrenBudget {
+  remaining: number;
+}
+
+function renderTableChildren(
+  value: unknown,
+  budget: TableChildrenBudget,
+  depth: number,
+): TableChildrenRendering {
+  if (depth > maxTableChildDepth) {
+    throw new NativeTypeError('Kovo table children exceed the maximum nesting depth.');
   }
-  if (isPromiseLike(value)) return Promise.resolve(value).then(renderTableChildren);
-  return escapeHtml(value);
+  budget.remaining -= 1;
+  if (budget.remaining < 0) {
+    throw new NativeTypeError('Kovo table children exceed the maximum child count.');
+  }
+  if (tableApply<boolean>(nativeArrayIsArray, NativeArray, [value])) {
+    const values = value as readonly unknown[];
+    const length = stableArrayLength(values);
+    let rendered: TableChildrenRendering = { kind: 'sync', value: '' };
+    for (let index = 0; index < length; index += 1) {
+      rendered = concatTableChildren(
+        rendered,
+        renderTableChildren(arrayOwnValue(values, index), budget, depth + 1),
+      );
+    }
+    return rendered;
+  }
+  if (isPromiseLike(value)) {
+    return {
+      kind: 'async',
+      value: tableThen(tableResolve(value), (resolved) =>
+        tableRenderingValue(renderTableChildren(resolved, budget, depth + 1)),
+      ),
+    };
+  }
+  return { kind: 'sync', value: escapeHtml(value) };
 }
 
 function tableTextValue(value: unknown): string {
   if (value === null || value === undefined || typeof value === 'boolean') return '';
   if (typeof value === 'string') return value;
   if (typeof value === 'number' || typeof value === 'bigint') return `${value}`;
-  return JSON.stringify(value) ?? '';
+  return '';
 }
 
-function isString(value: unknown): value is string {
-  return typeof value === 'string';
+function concatTableChildren(
+  left: TableChildrenRendering,
+  right: TableChildrenRendering,
+): TableChildrenRendering {
+  if (left.kind === 'sync' && right.kind === 'sync') {
+    return { kind: 'sync', value: left.value + right.value };
+  }
+  return {
+    kind: 'async',
+    value: tableThen(tableResolve(tableRenderingValue(left)), (leftValue) =>
+      tableThen(tableResolve(tableRenderingValue(right)), (rightValue) => leftValue + rightValue),
+    ),
+  };
+}
+
+function tableRenderingValue(rendering: TableChildrenRendering): MaybePromise<string> {
+  return rendering.value;
+}
+
+function tableResolve<Value>(value: Value | PromiseLike<Value>): Promise<Value> {
+  return tableApply<Promise<Value>>(nativePromiseResolve, NativePromise, [value]);
+}
+
+function tableThen<Value, Result>(
+  promise: Promise<Value>,
+  onFulfilled: (value: Value) => Result | PromiseLike<Result>,
+): Promise<Result> {
+  return tableApply<Promise<Result>>(nativePromiseThen, promise, [onFulfilled]);
 }
 
 function isPromiseLike(value: unknown): value is PromiseLike<unknown> {
@@ -106,17 +180,24 @@ function isPromiseLike(value: unknown): value is PromiseLike<unknown> {
 }
 
 function tableRenderedHtml(html: string): TableRenderedHtml {
-  const rendered = trustedHtml(html, 'ui table primitive composition');
-  tableRenderedHtmlValues.add(rendered);
-  return rendered;
-}
-
-function isTableRenderedHtml(value: unknown): value is TableRenderedHtml {
-  return typeof value === 'object' && value !== null && tableRenderedHtmlValues.has(value);
+  return trustedHtml(html, 'ui table primitive composition');
 }
 
 function escapeAttribute(value: string): string {
-  return escapeHtml(value).replaceAll('"', '&quot;');
+  return escapeHtmlText(value, true);
+}
+
+function escapeHtmlText(value: string, attribute: boolean): string {
+  let escaped = '';
+  for (let index = 0; index < value.length; index += 1) {
+    const character = value[index] ?? '';
+    if (character === '&') escaped += '&amp;';
+    else if (character === '<') escaped += '&lt;';
+    else if (character === '>') escaped += '&gt;';
+    else if (attribute && character === '"') escaped += '&quot;';
+    else escaped += character;
+  }
+  return escaped;
 }
 const tableStyles = style.create({
   body: {
@@ -289,8 +370,8 @@ function withTableChildren(
   value: unknown,
   render: (children: string) => TableRenderedHtml,
 ): MaybePromise<TableRenderedHtml> {
-  const children = renderTableChildren(value);
-  return isPromiseLike(children) ? children.then(render) : render(children);
+  const children = renderTableChildren(value, { remaining: maxTableChildValues }, 0);
+  return children.kind === 'async' ? tableThen(children.value, render) : render(children.value);
 }
 
 function tablePartWithChildren(
@@ -316,8 +397,10 @@ function tablePart(
 
 function tableAttributes(attributes: TablePartAttributes | Record<string, unknown>): string {
   let rendered = '';
-
-  for (const [name, value] of Object.entries(attributes)) {
+  const names = ['class', 'data-style-src', 'style', 'colspan', 'scope'] as const;
+  for (let index = 0; index < names.length; index += 1) {
+    const name = names[index] as (typeof names)[number];
+    const value = ownTableAttribute(attributes, name);
     const attribute = tableAttributeValue(value);
     if (attribute === undefined) continue;
     rendered += ` ${name}="${escapeAttribute(attribute)}"`;
@@ -336,7 +419,71 @@ function tableAttributeValue(value: unknown): string | undefined {
   ) {
     return `${value}`;
   }
-  return JSON.stringify(value) ?? undefined;
+  return undefined;
+}
+
+function ownTableAttribute(value: object, property: string): unknown {
+  const descriptor = tableApply<PropertyDescriptor | undefined>(
+    nativeGetOwnPropertyDescriptor,
+    NativeObject,
+    [value, property],
+  );
+  if (descriptor === undefined) return undefined;
+  if (!('value' in descriptor)) {
+    throw new NativeTypeError(`Kovo table attribute ${property} must be an own data property.`);
+  }
+  return descriptor.value;
+}
+
+function arrayOwnValue(value: readonly unknown[], index: number): unknown {
+  const first = tableApply<PropertyDescriptor | undefined>(
+    nativeGetOwnPropertyDescriptor,
+    NativeObject,
+    [value, index],
+  );
+  const second = tableApply<PropertyDescriptor | undefined>(
+    nativeGetOwnPropertyDescriptor,
+    NativeObject,
+    [value, index],
+  );
+  if (first === undefined && second === undefined) return undefined;
+  if (
+    first === undefined ||
+    second === undefined ||
+    !('value' in first) ||
+    !('value' in second) ||
+    first.value !== second.value
+  ) {
+    throw new NativeTypeError('Kovo table children must use stable own data elements.');
+  }
+  return first.value;
+}
+
+function stableArrayLength(value: readonly unknown[]): number {
+  const first = tableApply<PropertyDescriptor | undefined>(
+    nativeGetOwnPropertyDescriptor,
+    NativeObject,
+    [value, 'length'],
+  );
+  const second = tableApply<PropertyDescriptor | undefined>(
+    nativeGetOwnPropertyDescriptor,
+    NativeObject,
+    [value, 'length'],
+  );
+  if (
+    first === undefined ||
+    second === undefined ||
+    !('value' in first) ||
+    !('value' in second) ||
+    first.value !== second.value ||
+    typeof first.value !== 'number' ||
+    first.value < 0 ||
+    first.value > maxTableChildValues ||
+    first.value % 1 !== 0
+  ) {
+    throw new NativeTypeError('Kovo table children must be a bounded stable dense array.');
+  }
+  return first.value;
 }
 
 type TablePartAttributes = Readonly<{
