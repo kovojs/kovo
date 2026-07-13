@@ -1,0 +1,177 @@
+import { constants as nodeSqliteConstants } from 'node:sqlite';
+import { describe, expect, it } from 'vitest';
+import { extractKovoRuntimeDbMetadata, kovo } from '@kovojs/drizzle';
+import { sqliteTable, text } from 'drizzle-orm/sqlite-core';
+import { csrfToken } from './csrf.js';
+import { domain } from './domain.js';
+import { managedDb } from './managed-db.js';
+import { mutation, runMutation } from './mutation.js';
+import { s } from './schema.js';
+import { createSqliteAppRuntimeDb } from './sqlite-runtime.js';
+
+const accounts = sqliteTable(
+  'accounts',
+  {
+    apiKey: text('api_key').notNull(),
+    displayName: text('display_name').notNull(),
+    id: text('id').primaryKey(),
+    ownerId: text('owner_id').notNull(),
+    role: text('role').notNull(),
+  },
+  kovo({
+    confidentialAtRest: ['apiKey'],
+    domain: 'account',
+    governed: ['role'],
+    key: 'id',
+    owner: 'ownerId',
+    secret: ['apiKey'],
+  }),
+);
+
+type GovernedColumn = 'apiKey' | 'id' | 'ownerId' | 'role';
+type WriteBoundary = 'insert' | 'onConflictDoUpdate' | 'update';
+
+interface DriverObservation {
+  boundary: 'insert.values' | 'onConflictDoUpdate.set' | 'update.set';
+  payload: unknown;
+}
+
+function generatedSqliteRuntime(observations: DriverObservation[]) {
+  const raw = {
+    insert(_table: unknown) {
+      return {
+        values(payload: unknown) {
+          observations.push({ boundary: 'insert.values' as const, payload });
+          return {
+            onConflictDoUpdate(config: { set: unknown }) {
+              observations.push({
+                boundary: 'onConflictDoUpdate.set' as const,
+                payload: config.set,
+              });
+              return Promise.resolve('conflict');
+            },
+          };
+        },
+      };
+    },
+    select() {
+      return { from: () => [] };
+    },
+    update(_table: unknown) {
+      return {
+        set(payload: unknown) {
+          observations.push({ boundary: 'update.set' as const, payload });
+          return Promise.resolve('update');
+        },
+      };
+    },
+  };
+  return createSqliteAppRuntimeDb({
+    db: raw,
+    metadata: extractKovoRuntimeDbMetadata([accounts]),
+    normalizeTableName: (table) => (table.includes('.') ? table : `main.${table}`),
+    sqliteAuthorizer: {
+      constants: nodeSqliteConstants,
+      openDatabase() {
+        throw new Error('The governed Drizzle builder reproduction must not execute raw SQL.');
+      },
+    },
+    tableNames: () => ['main.accounts'],
+  });
+}
+
+const cases = (['insert', 'update', 'onConflictDoUpdate'] as const).flatMap((boundary) =>
+  (['id', 'ownerId', 'apiKey', 'role'] as const).map((column) => ({ boundary, column })),
+);
+
+describe('KV438 protected mutation lifecycle over generated SQLite runtime', () => {
+  it.each(cases)(
+    'blocks parsed request $column at the managed $boundary builder after an early DB wrap',
+    async ({ boundary, column }: { boundary: WriteBoundary; column: GovernedColumn }) => {
+      const observations: DriverObservation[] = [];
+      const runtime = generatedSqliteRuntime(observations);
+      // App mutation dispatch resolves the provider before runMutation derives registry.tables.
+      // This first policy-free wrap is the production nesting that previously lost the sealed
+      // SQLite declared-write hook when the mutation lifecycle added its write policy.
+      const earlyManagedDb = managedDb(runtime.db, 'write');
+      const request = {
+        db: earlyManagedDb,
+        session: { id: 'session-1', user: { id: 'server-owner' } },
+      };
+      const csrf = {
+        secret: 'kv438-runtime-lifecycle-secret-0123456789abcdef',
+        sessionId(value: typeof request) {
+          return value.session.id;
+        },
+      };
+      const definition = mutation(`kv438/${boundary}/${column}`, {
+        csrf,
+        guard: (candidate: typeof request) => candidate.session.user.id === 'server-owner',
+        input: s.object({
+          apiKey: s.string(),
+          displayName: s.string(),
+          id: s.string(),
+          ownerId: s.string(),
+          role: s.string(),
+        }),
+        registry: { tables: ['accounts'], touches: [domain('account')] },
+        handler(input, guardedRequest: typeof request) {
+          const payload = { [column]: input[column] };
+          if (boundary === 'insert') {
+            return guardedRequest.db.insert(accounts).values(payload);
+          }
+          if (boundary === 'update') {
+            return guardedRequest.db.update(accounts).set(payload);
+          }
+          return guardedRequest.db
+            .insert(accounts)
+            .values({
+              apiKey: 'server-api-key',
+              displayName: input.displayName,
+              id: 'server-id',
+              ownerId: 'server-owner',
+              role: 'member',
+            })
+            .onConflictDoUpdate({ set: payload });
+        },
+      });
+      const rawInput = {
+        'kovo-csrf': csrfToken(request, csrf, { mutation: definition }),
+        apiKey: 'attacker-api-key',
+        displayName: 'Attacker controlled but non-governed',
+        id: 'attacker-id',
+        ownerId: 'attacker-owner',
+        role: 'admin',
+      };
+
+      await expect(runMutation(definition, rawInput, request)).rejects.toThrow(
+        new RegExp(
+          `KV438[\\s\\S]*${
+            boundary === 'onConflictDoUpdate'
+              ? 'onConflictDoUpdate\\.set'
+              : boundary === 'insert'
+                ? 'values'
+                : 'set'
+          }`,
+        ),
+      );
+      expect(observations.filter((item) => item.boundary !== 'insert.values')).toEqual([]);
+      expect(observations).toEqual(
+        boundary === 'onConflictDoUpdate'
+          ? [
+              {
+                boundary: 'insert.values',
+                payload: {
+                  apiKey: 'server-api-key',
+                  displayName: 'Attacker controlled but non-governed',
+                  id: 'server-id',
+                  ownerId: 'server-owner',
+                  role: 'member',
+                },
+              },
+            ]
+          : [],
+      );
+    },
+  );
+});

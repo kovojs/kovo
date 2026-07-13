@@ -3853,20 +3853,35 @@ function declaredWriteDbTarget<Db>(raw: Db, writePolicy: ManagedSqlWritePolicy |
   if (writePolicy === undefined) {
     return raw;
   }
-  const registeredCreateDeclaredWrite = isRecord(raw)
-    ? witnessWeakMapGet(authorizationCensusFrameworkHooks, raw)?.declaredWrite
-    : undefined;
+  const registeredCreateDeclaredWrite = frameworkDeclaredWriteHook(raw);
   if (registeredCreateDeclaredWrite !== undefined) {
     return witnessReflectApply<Db>(registeredCreateDeclaredWrite, raw, [writePolicy]);
   }
   const target = frameworkManagedDbRawTarget(raw) ?? raw;
   if (!isRecord(target)) return raw;
+  // App dispatch resolves the DB provider before the mutation registry policy is known, so the
+  // mutation lifecycle can legitimately hand us an already-managed KV422 proxy. Its sealed
+  // adapter hooks belong to the raw runtime handle, not to that outer proxy. Re-check the private
+  // hook after unwrapping or the second composition silently skips the governed-write KV438 floor
+  // and lets parsed request input reach insert/update/upsert builders (SPEC §10.3/§11.1).
+  const targetRegisteredCreateDeclaredWrite = frameworkDeclaredWriteHook(target);
+  if (targetRegisteredCreateDeclaredWrite !== undefined) {
+    return witnessReflectApply<Db>(targetRegisteredCreateDeclaredWrite, target, [writePolicy]);
+  }
   const createDeclaredWrite = optionalStrictInheritedFunctionDataProperty(
     target,
     kovoDeclaredWriteDbHandle,
   );
   if (createDeclaredWrite === undefined) return raw;
   return witnessReflectApply<Db>(createDeclaredWrite, target, [writePolicy]);
+}
+
+function frameworkDeclaredWriteHook(
+  value: unknown,
+): ((policy: ManagedSqlWritePolicy) => unknown) | undefined {
+  return isRecord(value)
+    ? witnessWeakMapGet(authorizationCensusFrameworkHooks, value)?.declaredWrite
+    : undefined;
 }
 
 function isRecord(value: unknown): value is Record<PropertyKey, unknown> {
