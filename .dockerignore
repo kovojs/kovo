@@ -8,3 +8,18 @@
 scratch
 tmp
 *.log
+
+# Both public images use `COPY . .`. Keep local operator/developer credentials
+# out of the build context even when a nested tool has gitignored them (for
+# example `.deepsec/.env.local`). These files must be injected at runtime.
+**/.env
+**/.env.*
+**/.netrc
+**/.git-credentials
+**/.ssh
+**/.aws
+**/.config/gcloud
+**/*.key
+**/*.pem
+**/*.p12
+**/*.pfx
