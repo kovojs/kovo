@@ -6,6 +6,7 @@ import {
   runtimeDefineOwnData,
   runtimeFreeze,
   runtimeOwnDataValue,
+  runtimeOwnKeys,
   runtimeRegExpTest,
   runtimeSealSet,
   runtimeSet,
@@ -229,6 +230,7 @@ function snapshotKovoAnnotation(annotation: KovoAnnotation): Readonly<Record<str
   if (typeof annotation !== 'object' || annotation === null) {
     throw new TypeError('kovo() requires an annotation object.');
   }
+  assertKnownKovoAnnotationFields(annotation, kovoAnnotationKeys, 'Kovo Drizzle annotation');
   const snapshot: Record<string, unknown> = {};
   for (let index = 0; index < kovoAnnotationKeys.length; index += 1) {
     const key = kovoAnnotationKeys[index]!;
@@ -273,6 +275,7 @@ function snapshotKovoRecord(value: unknown, keys: readonly string[]): Readonly<o
   if (typeof value !== 'object' || value === null) {
     throw new TypeError('Kovo Drizzle nested annotation must be an object.');
   }
+  assertKnownKovoAnnotationFields(value, keys, 'Kovo Drizzle nested annotation');
   const snapshot: Record<string, unknown> = {};
   for (let index = 0; index < keys.length; index += 1) {
     const key = keys[index]!;
@@ -282,6 +285,31 @@ function snapshotKovoRecord(value: unknown, keys: readonly string[]): Readonly<o
     }
   }
   return runtimeFreeze(snapshot);
+}
+
+function assertKnownKovoAnnotationFields(
+  value: object,
+  allowedKeys: readonly string[],
+  label: string,
+): void {
+  // SPEC §6.6: TypeScript's excess-property checks are not a security boundary.
+  // Runtime annotation snapshots reject unknown posture instead of silently
+  // erasing a misspelled secret/owner/governed field after a cast.
+  const ownKeys = runtimeOwnKeys(value);
+  for (let keyIndex = 0; keyIndex < ownKeys.length; keyIndex += 1) {
+    const key = ownKeys[keyIndex];
+    if (typeof key !== 'string') {
+      throw new TypeError(`${label} must not contain symbol fields.`);
+    }
+    let allowed = false;
+    for (let allowedIndex = 0; allowedIndex < allowedKeys.length; allowedIndex += 1) {
+      if (allowedKeys[allowedIndex] === key) {
+        allowed = true;
+        break;
+      }
+    }
+    if (!allowed) throw new TypeError(`Unknown ${label} field "${key}".`);
+  }
 }
 
 /**

@@ -340,4 +340,48 @@ describe('@kovojs/drizzle runtime surface', () => {
     expect(compatibilityBarrelSource).not.toContain('./invalidation.js');
     expect(compatibilityBarrelSource).toContain("from './runtime.js'");
   });
+
+  it('fails closed on unknown security annotation fields', async () => {
+    // SPEC §6.6: TypeScript/casts are not a security proof. Runtime metadata must
+    // reject misspelled confidentiality and ownership posture instead of dropping it.
+    const runtime = await import('@kovojs/drizzle');
+
+    expect(() =>
+      runtime.kovo({ domain: 'user', key: 'id', secrect: ['passwordHash'] } as never),
+    ).toThrow(/Unknown Kovo Drizzle annotation field "secrect"/u);
+    expect(() =>
+      runtime.kovo({
+        domain: 'order',
+        key: 'id',
+        ownerVia: { fk: 'accountId', parrent: {}, parentKey: 'id' },
+      } as never),
+    ).toThrow(/Unknown Kovo Drizzle nested annotation field "parrent"/u);
+    expect(() =>
+      runtime.kovo({
+        domain: 'post',
+        fans: [{ domain: 'comment', via: 'postId', whem: 'delete' }],
+        key: 'id',
+      } as never),
+    ).toThrow(/Unknown Kovo Drizzle nested annotation field "whem"/u);
+
+    const hidden = Object.defineProperty({ domain: 'user', key: 'id' }, 'secrect', {
+      value: ['passwordHash'],
+    });
+    expect(() => runtime.kovo(hidden as never)).toThrow(
+      /Unknown Kovo Drizzle annotation field "secrect"/u,
+    );
+    expect(() =>
+      runtime.kovo({ domain: 'user', key: 'id', [Symbol('secrect')]: ['passwordHash'] } as never),
+    ).toThrow(/must not contain symbol fields/u);
+
+    const originalOwnKeys = Reflect.ownKeys;
+    try {
+      Reflect.ownKeys = () => ['domain', 'key'];
+      expect(() =>
+        runtime.kovo({ domain: 'user', key: 'id', secrect: ['passwordHash'] } as never),
+      ).toThrow(/Unknown Kovo Drizzle annotation field "secrect"/u);
+    } finally {
+      Reflect.ownKeys = originalOwnKeys;
+    }
+  });
 });

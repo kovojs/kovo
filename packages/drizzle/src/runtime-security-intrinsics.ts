@@ -25,6 +25,7 @@ const intrinsicObjectGetOwnPropertySymbols = NativeObject.getOwnPropertySymbols;
 const intrinsicObjectIsFrozen = NativeObject.isFrozen;
 const intrinsicObjectKeys = NativeObject.keys;
 const intrinsicReflectApply = NativeReflect.apply;
+const intrinsicReflectOwnKeys = NativeReflect.ownKeys;
 const intrinsicRegExpTest = NativeRegExp.prototype.test;
 const intrinsicSetAdd = NativeSet.prototype.add;
 const intrinsicSetEntries = NativeSet.prototype.entries;
@@ -57,6 +58,14 @@ const controlsSound = (() => {
     const symbols = apply<symbol[]>(intrinsicObjectGetOwnPropertySymbols, NativeObject, [
       symbolObject,
     ]);
+    const ownKeysSymbol = Symbol('own-keys-control');
+    const ownKeysObject = { visible: 'visible-control', [ownKeysSymbol]: 'symbol-control' };
+    apply(intrinsicObjectDefineProperty, NativeObject, [
+      ownKeysObject,
+      'hidden',
+      { value: 'hidden-control' },
+    ]);
+    const ownKeys = apply<PropertyKey[]>(intrinsicReflectOwnKeys, NativeReflect, [ownKeysObject]);
     const defined: Record<string, unknown> = {};
     const nullRecord = apply<Record<string, unknown>>(intrinsicObjectCreate, NativeObject, [null]);
     apply(intrinsicObjectDefineProperty, NativeObject, [
@@ -93,6 +102,10 @@ const controlsSound = (() => {
       keys[0] === 'key' &&
       symbols.length === 1 &&
       symbols[0] === symbol &&
+      ownKeys.length === 3 &&
+      ownKeys[0] === 'visible' &&
+      ownKeys[1] === 'hidden' &&
+      ownKeys[2] === ownKeysSymbol &&
       defined.defined === 'define-control' &&
       apply(intrinsicObjectGetPrototypeOf, NativeObject, [nullRecord]) === null &&
       apply<string | undefined>(intrinsicMapGet, map, ['key']) === 'map-control' &&
@@ -218,6 +231,14 @@ export function runtimeObjectSymbols(value: object): readonly symbol[] {
   return runtimeSnapshotArray(
     apply<symbol[]>(intrinsicObjectGetOwnPropertySymbols, NativeObject, [value]),
     'Kovo Drizzle object symbols',
+  );
+}
+
+export function runtimeOwnKeys(value: object): readonly PropertyKey[] {
+  assertControls();
+  return runtimeSnapshotArray(
+    apply<PropertyKey[]>(intrinsicReflectOwnKeys, NativeReflect, [value]),
+    'Kovo Drizzle own keys',
   );
 }
 
