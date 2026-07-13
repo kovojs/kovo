@@ -1,4 +1,4 @@
-import { copyFile, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { readFile, stat } from 'node:fs/promises';
 
 import { clientModulePath } from '@kovojs/core/internal/client-module-url';
 import {
@@ -229,6 +229,8 @@ export async function writeKovoNeutralBuild(
       | readonly { css: string; href: string }[]
       | undefined,
   );
+  const neutralOutput = createFrameworkOutputFileSystemBoundary(outDir);
+  await neutralOutput.ensureDirectory();
   const clientDir = neutralPathJoin(outDir, 'client');
   const serverDir = neutralPathJoin(outDir, 'server');
   const manifestFilePath =
@@ -269,7 +271,6 @@ export async function writeKovoNeutralBuild(
     routeHints: snapshotBuildArray(appShellBuild.routeHints, 'neutral build route hints'),
   };
 
-  await mkdir(clientDir, { recursive: true });
   await writeKovoAppShellViteBuildOutput(buildWithRegisteredClientModules, {
     outDir: clientDir,
     staticExport: false,
@@ -277,8 +278,8 @@ export async function writeKovoNeutralBuild(
   const serverHandlerPath =
     serverHandlerSource === undefined ? undefined : neutralPathJoin(serverDir, 'handler.mjs');
   if (serverHandlerSource !== undefined && serverHandlerPath !== undefined) {
-    await mkdir(serverDir, { recursive: true });
-    await writeFile(serverHandlerPath, serverHandlerSource, 'utf8');
+    const serverOutput = createFrameworkOutputFileSystemBoundary(serverDir);
+    await serverOutput.writeFile('handler.mjs', serverHandlerSource);
   }
   await copyNeutralStaticAssets(appShellBuild.assets, clientDir, manifestDistDir);
   await materializeNeutralStylesheetAssets({
@@ -664,7 +665,7 @@ function neutralStaticExportAssets(
 }
 
 async function rmNeutralStaticOutput(staticDir: string): Promise<void> {
-  await rm(staticDir, { force: true, recursive: true });
+  await createFrameworkOutputFileSystemBoundary(staticDir).removeTree();
 }
 
 async function copyNeutralStaticAssets(
@@ -673,11 +674,12 @@ async function copyNeutralStaticAssets(
   manifestDistDir: string | undefined,
 ): Promise<void> {
   if (manifestDistDir === undefined) return;
+  const output = createFrameworkOutputFileSystemBoundary(clientDir);
 
   for (const asset of assets) {
     const outputPath = neutralClientOutputPath(clientDir, asset.path);
-    await mkdir(neutralPathDirname(outputPath), { recursive: true });
-    await copyFile(viteDistSourcePath(manifestDistDir, asset.file), outputPath);
+    const relativePath = neutralPathRelative(clientDir, outputPath);
+    await output.copyFile(viteDistSourcePath(manifestDistDir, asset.file), relativePath);
   }
 }
 
@@ -773,6 +775,7 @@ async function materializeNeutralStylesheetAssets({
     stylesheetEntries,
     'pinned neutral stylesheet materialization entries',
   );
+  const output = createFrameworkOutputFileSystemBoundary(rootDir);
 
   for (let index = 0; index < pinnedEntries.length; index += 1) {
     const { assetPath, cssChunks } = pinnedEntries[index]!;
@@ -800,11 +803,9 @@ async function materializeNeutralStylesheetAssets({
     const mergedCss = securityArrayJoin(dedupedCss, '\n');
     if (!mergedCss) continue;
 
-    await mkdir(neutralPathDirname(outputPath), { recursive: true });
-    await writeFile(
-      outputPath,
+    await output.writeFile(
+      neutralPathRelative(rootDir, outputPath),
       `${mergedCss}${securityStringEndsWith(mergedCss, '\n') ? '' : '\n'}`,
-      'utf8',
     );
   }
 }
@@ -1050,8 +1051,12 @@ function neutralClientOutputPath(clientDir: string, urlPath: string): string {
 }
 
 async function writeJson(filePath: string, value: unknown): Promise<void> {
-  await mkdir(neutralPathDirname(filePath), { recursive: true });
-  await writeFile(filePath, `${buildSecuritySourceLiteral(value)}\n`, 'utf8');
+  const parent = neutralPathDirname(filePath);
+  const output = createFrameworkOutputFileSystemBoundary(parent);
+  await output.writeFile(
+    neutralPathRelative(parent, filePath),
+    `${buildSecuritySourceLiteral(value)}\n`,
+  );
 }
 
 function neutralPathDirname(value: string): string {

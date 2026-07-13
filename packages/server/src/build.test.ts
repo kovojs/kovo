@@ -149,6 +149,27 @@ describe('server build-time deployment API', () => {
     }
   });
 
+  it('rejects a symlinked neutral-build output root without writing outside', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kovo-neutral-output-boundary-'));
+    const outside = join(root, 'outside');
+    const outDir = join(root, 'linked-output');
+    await mkdir(outside);
+    await symlink(outside, outDir, 'dir');
+
+    try {
+      await expect(
+        writeKovoNeutralBuild({
+          app: createApp({ routes: [] }),
+          outDir,
+          serverHandlerSource: 'export default function handler() {}\n',
+        }),
+      ).rejects.toThrow(/symbolic-link|symbolic link|cannot use/u);
+      await expect(readdir(outside)).resolves.toEqual([]);
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
   it('writes a deterministic neutral build layout from app-shell build inputs', async () => {
     const root = await mkdtemp(join(tmpdir(), 'kovo-neutral-build-'));
 
