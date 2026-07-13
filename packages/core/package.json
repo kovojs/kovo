@@ -10,6 +10,8 @@
   ],
   "type": "module",
   "imports": {
+    "#filesystem-intrinsics": "./src/internal/filesystem-intrinsics.ts",
+    "#sink-policy": "./src/internal/sink-policy.ts",
     "#security-witness-intrinsics": "./src/internal/security-witness-intrinsics.ts"
   },
   "exports": {

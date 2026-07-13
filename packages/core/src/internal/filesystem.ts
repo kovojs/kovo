@@ -1,4 +1,4 @@
-import { blessSink, isBlessedSink } from './sink-policy.js';
+import { blessSink, isBlessedSink } from '#sink-policy';
 import {
   securityDefineProperty,
   securityWeakMap,
@@ -46,7 +46,7 @@ import {
   fileSystemWriteFile,
   type FileSystemDirent as Dirent,
   type FileSystemStats as Stats,
-} from './filesystem-intrinsics.js';
+} from '#filesystem-intrinsics';
 
 type FileSystemBoundarySink = 'filesystem-boundary';
 
