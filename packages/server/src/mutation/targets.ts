@@ -20,6 +20,7 @@ import type {
 } from '../mutation-wire.js';
 import type { LiveTargetAttestationAuthority } from '../live-target-app-identity.js';
 import { revealUntrustedRequestValue } from '../untrusted-request-body.js';
+import { isSchemaValidationError } from '../schema.js';
 import {
   securityJsonStringify,
   securityStringIncludes,
@@ -30,6 +31,7 @@ import {
   witnessArrayAppend,
   createWitnessMap,
   createWitnessSet,
+  witnessDefineProperty,
   witnessIsArray,
   witnessMapForEach,
   witnessMapGet,
@@ -49,28 +51,64 @@ export function queriesToRerun(
   const reruns: QueryRerun[] = [];
   for (let queryIndex = 0; queryIndex < queries.length; queryIndex += 1) {
     const queryDefinition = queries[queryIndex]!;
+    const inputResult = queryInvalidationInput(queryDefinition, queryInput);
+    if (!inputResult.ok) continue;
+    const resolvedQueryInput = inputResult.value;
     if (
-      !someChange(changes, (change) => queryTouchedByChange(queryDefinition, change, queryInput))
+      !someChange(changes, (change) =>
+        queryTouchedByChange(queryDefinition, change, resolvedQueryInput),
+      )
     ) {
       continue;
     }
-    const instanceKey = readQueryInstanceKey(queryDefinition, queryInput);
+    const instanceKey = readQueryInstanceKey(queryDefinition, resolvedQueryInput);
+    const rerun: QueryRerun = {
+      ...(instanceKey === undefined ? {} : { instanceKey }),
+      key: queryDefinition.key,
+      ...(instanceKey !== undefined &&
+      someChange(changes, (change) =>
+        queryChangeInvalidatesWholeQueryInstance(queryDefinition, change, resolvedQueryInput),
+      )
+        ? { whole: true }
+        : {}),
+    };
+    if (queryDefinition.args !== undefined) {
+      // Keep parsed/coerced query args available to the response renderer without copying them into
+      // enumerable mutation result metadata. The descriptor path independently supplies its own
+      // compiler-bound props-derived args (SPEC §9.1/§10.2).
+      witnessDefineProperty(rerun, 'input', {
+        configurable: false,
+        enumerable: false,
+        value: resolvedQueryInput,
+        writable: false,
+      });
+    }
     witnessArrayAppend(
       reruns,
-      {
-        ...(instanceKey === undefined ? {} : { instanceKey }),
-        key: queryDefinition.key,
-        ...(instanceKey !== undefined &&
-        someChange(changes, (change) =>
-          queryChangeInvalidatesWholeQueryInstance(queryDefinition, change, queryInput),
-        )
-          ? { whole: true }
-          : {}),
-      },
+      rerun,
       'Server packages/server/src/mutation/targets.ts collection',
     );
   }
   return reruns;
+}
+
+function queryInvalidationInput(
+  queryDefinition: QueryDefinition<string, unknown, unknown, unknown>,
+  mutationInput: unknown,
+): { ok: true; value: unknown } | { ok: false } {
+  if (queryDefinition.args === undefined) return { ok: true, value: mutationInput };
+
+  try {
+    return { ok: true, value: queryDefinition.args.parse(mutationInput) };
+  } catch (error) {
+    if (isSchemaValidationError(error)) {
+      // A generated live-target query often has a different argument domain from the mutation
+      // that invalidated it. Do not invent an instance key from unrelated mutation fields;
+      // attested live descriptors derive the query's actual args from compiler-bound props.
+      return { ok: false };
+    }
+    throw error;
+  }
 }
 
 function queryTouchedByChange(
@@ -128,12 +166,12 @@ export async function renderQueryChunks(
   // Build affectedKeysByDomain once for all queries in this render pass (SPEC §9.1.1).
   const affectedKeysByDomain = buildAffectedKeysByDomain(changes);
 
-  for (let queryIndex = 0; queryIndex < queries.length; queryIndex += 1) {
-    const queryDefinition = queries[queryIndex]!;
-    const rerunQuery = findQueryRerun(rerunQueries, (target) =>
-      queryMatchesRerun(queryDefinition, defaultInput, target),
+  for (let rerunIndex = 0; rerunIndex < rerunQueries.length; rerunIndex += 1) {
+    const rerunQuery = rerunQueries[rerunIndex]!;
+    const queryDefinition = findQueryDefinition(queries, (candidate) =>
+      queryMatchesRerun(candidate, defaultInput, rerunQuery),
     );
-    if (rerunQuery === undefined) {
+    if (queryDefinition === undefined) {
       continue;
     }
 
@@ -658,10 +696,10 @@ function someQueryRerun(
   return false;
 }
 
-function findQueryRerun(
-  queries: readonly QueryRerun[],
-  predicate: (query: QueryRerun) => boolean,
-): QueryRerun | undefined {
+function findQueryDefinition(
+  queries: readonly QueryDefinition<string, unknown, unknown, unknown>[],
+  predicate: (query: QueryDefinition<string, unknown, unknown, unknown>) => boolean,
+): QueryDefinition<string, unknown, unknown, unknown> | undefined {
   for (let index = 0; index < queries.length; index += 1) {
     const query = queries[index]!;
     if (predicate(query)) return query;

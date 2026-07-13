@@ -659,6 +659,91 @@ describe('server mutation primitives', () => {
     expect(questionLoad).not.toHaveBeenCalledWith({ id: 'a2' }, { request: {} });
   });
 
+  it('does not confuse coarse mutation input with generated live-target query arguments', async () => {
+    const product = domain('coarse-product');
+    const instanceInputs: unknown[] = [];
+    const productLoad = vi.fn((input: { label: string; productId: string }) => ({
+      id: input.productId,
+      label: input.label,
+    }));
+    const productQuery = query('coarseProduct', {
+      args: s.object({ label: s.string(), productId: s.string() }),
+      instanceKey(input) {
+        instanceInputs.push(input);
+        return `coarseProduct:${input.productId}`;
+      },
+      load: productLoad,
+      reads: [product],
+    });
+    const ProductPanel = component({
+      render: ({ product }: { product: { id: string; label: string } }) =>
+        renderedHtml(`<product-panel>${product.id}:${product.label}</product-panel>`),
+    });
+    const restock = mutation('product/coarse-restock', {
+      csrf: false,
+      csrfJustification: 'test fixture uses a non-browser caller',
+      input: s.object({ category: s.string(), threshold: s.number().int() }),
+      registry: { queries: [productQuery] },
+      handler(_input, _request, context) {
+        context.invalidate(product);
+        return {};
+      },
+    });
+
+    const response = await renderMutationEndpointResponse(restock, {
+      headers: {
+        'Kovo-Fragment': 'true',
+        'Kovo-Live-Targets': [
+          attestedLiveTargetHeader('product-panel:p1', 'components/product/panel', {
+            label: 'Pen',
+            productId: 'p1',
+          }),
+          attestedLiveTargetHeader('product-panel:p2', 'components/product/panel', {
+            label: 'Notebook',
+            productId: 'p2',
+          }),
+        ].join('; '),
+        'Kovo-Targets': 'product-panel:p1=coarseProduct; product-panel:p2=coarseProduct',
+      },
+      liveTargetRenderers: [
+        componentLiveTargetRenderer({
+          component: ProductPanel,
+          componentId: 'components/product/panel',
+          queries: [
+            {
+              args: (props) => ({ label: props.label, productId: props.productId }),
+              name: 'product',
+              query: productQuery,
+            },
+          ],
+        }),
+      ],
+      rawInput: { category: 'office', threshold: 10 },
+      redirectTo: '/',
+      request: {},
+    });
+
+    expect(response.status, response.body).toBe(200);
+    expect(response.body).toContain(
+      '<kovo-query name="coarseProduct" key="coarseProduct:p1">',
+    );
+    expect(response.body).toContain(
+      '<kovo-query name="coarseProduct" key="coarseProduct:p2">',
+    );
+    expect(response.body).toContain('<product-panel>p1:Pen</product-panel>');
+    expect(response.body).toContain('<product-panel>p2:Notebook</product-panel>');
+    expect(response.body).not.toContain('undefined');
+    expect(productLoad).toHaveBeenCalledWith(
+      { label: 'Pen', productId: 'p1' },
+      { request: { args: { label: 'Pen', productId: 'p1' } } },
+    );
+    expect(productLoad).toHaveBeenCalledWith(
+      { label: 'Notebook', productId: 'p2' },
+      { request: { args: { label: 'Notebook', productId: 'p2' } } },
+    );
+    expect(instanceInputs).not.toContainEqual({ category: 'office', threshold: 10 });
+  });
+
   it('renders generated live target error boundaries per affected descriptor', async () => {
     const cart = domain('cart');
     const cartQuery = query('cart', {
