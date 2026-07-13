@@ -2,7 +2,19 @@ import { EventEmitter } from 'node:events';
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { Dirent } from 'node:fs';
-import { mkdir, mkdtemp, readdir, readFile, rm, stat, symlink, writeFile } from 'node:fs/promises';
+import {
+  link,
+  mkdir,
+  mkdtemp,
+  readdir,
+  readFile,
+  rename,
+  rm,
+  stat,
+  symlink,
+  unlink,
+  writeFile,
+} from 'node:fs/promises';
 import {
   createServer as createHttpServer,
   request as nodeHttpRequest,
@@ -1717,6 +1729,7 @@ export default async function handler(request) {
   it('keeps emitted Node static-file confinement after an authored handler poisons globals', async () => {
     const root = await mkdtemp(join(tmpdir(), 'kovo-node-static-intrinsics-'));
     const poisonGlobal = globalThis as typeof globalThis & {
+      __kovoPoisonedNodeCreateServerHits?: number;
       __kovoRestoreNodeStaticPoison?: () => void;
     };
 
@@ -1725,18 +1738,35 @@ export default async function handler(request) {
         app: createApp({}),
         outDir: join(root, '.kovo'),
         serverHandlerSource: `
+import { createRequire, syncBuiltinESMExports } from 'node:module';
+
+const require = createRequire(import.meta.url);
+const nodeHttp = require('node:http');
+const nodePath = require('node:path');
 const OriginalURL = globalThis.URL;
+const originalCreateServer = nodeHttp.createServer;
 const originalReflectApply = Reflect.apply;
 const originalStartsWith = String.prototype.startsWith;
 const originalSlice = String.prototype.slice;
+const originalPathSep = nodePath.sep;
 
 function restore() {
   globalThis.URL = OriginalURL;
+  nodeHttp.createServer = originalCreateServer;
   String.prototype.startsWith = originalStartsWith;
+  nodePath.sep = originalPathSep;
+  syncBuiltinESMExports();
 }
 
+globalThis.__kovoRestoreNodeStaticPoison = restore;
+nodeHttp.createServer = function poisonedCreateServer() {
+  globalThis.__kovoPoisonedNodeCreateServerHits =
+    (globalThis.__kovoPoisonedNodeCreateServerHits ?? 0) + 1;
+  throw new Error('POISONED_NODE_CREATE_SERVER');
+};
+syncBuiltinESMExports();
+
 export default async function handler() {
-  globalThis.__kovoRestoreNodeStaticPoison = restore;
   globalThis.URL = function SelectiveURL(input, base) {
     if (base === 'http://kovo.local' && typeof input === 'string' && input.includes('%2e')) {
       return { pathname: input };
@@ -1752,6 +1782,8 @@ export default async function handler() {
     }
     return originalReflectApply(originalStartsWith, this, [search, position]);
   };
+  nodePath.sep = '';
+  syncBuiltinESMExports();
   return new Response('poison armed', {
     headers: { 'content-type': 'text/plain; charset=utf-8' },
   });
@@ -1769,13 +1801,23 @@ export default async function handler() {
         },
       });
       await mkdir(join(nodeOutDir, 'client', 'assets'), { recursive: true });
+      await mkdir(join(nodeOutDir, 'client-secret'), { recursive: true });
       const secret = 'NODE_STATIC_CONFINEMENT_SECRET';
       await writeFile(join(nodeOutDir, 'secret.txt'), secret, 'utf8');
+      await writeFile(join(nodeOutDir, 'client-secret', 'secret.txt'), secret, 'utf8');
 
       const serverModule = (await import(
         `${pathToFileURL(join(nodeOutDir, 'server.mjs')).href}?t=${Date.now()}`
       )) as { createKovoNodeServer(): Server };
+      // Exercise the direct-execution order: the generated module captures its transport controls,
+      // then authored module evaluation happens before the listener is created.
+      await import(pathToFileURL(join(nodeOutDir, 'server', 'handler.mjs')).href);
+      expect(poisonGlobal.__kovoPoisonedNodeCreateServerHits ?? 0).toBe(0);
       const server = serverModule.createKovoNodeServer();
+      expect(poisonGlobal.__kovoPoisonedNodeCreateServerHits ?? 0).toBe(0);
+      // End the transport-binding poison before yielding to concurrently scheduled tests. The
+      // handler will still arm the path/global poison below for the static-serving assertions.
+      poisonGlobal.__kovoRestoreNodeStaticPoison?.();
       const baseUrl = await listen(server);
 
       try {
@@ -1787,14 +1829,125 @@ export default async function handler() {
         );
 
         expect(traversal).not.toContain(secret);
+        const synchronizedPathTraversal = await rawHttpExchange(
+          baseUrl,
+          'GET /assets/..%2f..%2fclient-secret/secret.txt HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n',
+        );
+        expect(synchronizedPathTraversal).not.toContain(secret);
       } finally {
         poisonGlobal.__kovoRestoreNodeStaticPoison?.();
+        delete poisonGlobal.__kovoPoisonedNodeCreateServerHits;
         delete poisonGlobal.__kovoRestoreNodeStaticPoison;
         await close(server);
       }
     } finally {
       poisonGlobal.__kovoRestoreNodeStaticPoison?.();
+      delete poisonGlobal.__kovoPoisonedNodeCreateServerHits;
       delete poisonGlobal.__kovoRestoreNodeStaticPoison;
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
+  it('binds emitted Node static bytes to one contained file identity across path swaps', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kovo-node-static-identity-'));
+
+    try {
+      const build = await writeKovoNeutralBuild({
+        app: createApp({}),
+        outDir: join(root, '.kovo'),
+        serverHandlerSource: 'export default async () => new Response("handler");\n',
+      });
+      const nodeOutDir = join(root, 'node-output');
+      await node({ dockerfile: false }).emit!(build, {
+        declaredEnv: [],
+        log() {},
+        outDir: nodeOutDir,
+        readNeutral() {
+          return build;
+        },
+      });
+
+      // SPEC §10.6: the generated artifact must read on the exact descriptor whose canonical
+      // contained inode was validated; O_NOFOLLOW alone does not cover intermediate-directory
+      // replacement, and realpath/stat followed by readFile(path) reopens an untrusted name.
+      const serverSource = await readFile(join(nodeOutDir, 'server.mjs'), 'utf8');
+      expect(serverSource).toContain('openFileDescriptor(path, fsReadOnlyNoFollowFlags');
+      expect(serverSource).toContain('statFileDescriptor(fileDescriptor');
+      expect(serverSource).toContain('readFileDescriptor(fileDescriptor');
+      expect(serverSource).toContain('sameStaticFileIdentity(expectedStat, openedStat)');
+      expect(serverSource).toContain('staticPathRetainsIdentity(realRoot, resolved, expectedStat)');
+      expect(serverSource).not.toContain('body: await readFile(resolved)');
+
+      const assets = join(nodeOutDir, 'client', 'assets');
+      await mkdir(assets, { recursive: true });
+      const finalTarget = join(assets, 'race.txt');
+      const finalParked = join(assets, 'race.parked');
+      const finalSwap = join(assets, 'race.swap');
+      const outsideFile = join(root, 'outside-file.txt');
+      const outsideFileSecret = 'GENERATED_NODE_FINAL_COMPONENT_SECRET';
+      await writeFile(finalTarget, 'SAFE_STATIC_BYTES');
+      await link(finalTarget, finalParked);
+      await writeFile(outsideFile, outsideFileSecret);
+
+      const directoryTarget = join(assets, 'race-dir');
+      const directoryParked = join(assets, 'race-dir.parked');
+      const outsideDirectory = join(root, 'outside-directory');
+      const outsideDirectorySecret = 'GENERATED_NODE_INTERMEDIATE_DIRECTORY_SECRET';
+      await mkdir(directoryTarget);
+      await mkdir(outsideDirectory);
+      await writeFile(join(directoryTarget, 'race.txt'), 'SAFE_DIRECTORY_BYTES');
+      await writeFile(join(outsideDirectory, 'race.txt'), outsideDirectorySecret);
+
+      const serverModule = (await import(
+        `${pathToFileURL(join(nodeOutDir, 'server.mjs')).href}?identity=${Date.now()}`
+      )) as { createKovoNodeServer(): Server };
+      const server = serverModule.createKovoNodeServer();
+      const baseUrl = await listen(server);
+      let running = true;
+      const turn = (): Promise<void> =>
+        new Promise((resolvePromise) => setImmediate(resolvePromise));
+      const finalSwapper = (async () => {
+        while (running) {
+          await symlink(outsideFile, finalSwap);
+          await rename(finalSwap, finalTarget);
+          await turn();
+          await link(finalParked, finalSwap);
+          await rename(finalSwap, finalTarget);
+          await turn();
+        }
+      })();
+      const directorySwapper = (async () => {
+        while (running) {
+          await rename(directoryTarget, directoryParked);
+          await symlink(outsideDirectory, directoryTarget, 'dir');
+          await turn();
+          await unlink(directoryTarget);
+          await rename(directoryParked, directoryTarget);
+          await turn();
+        }
+      })();
+
+      try {
+        for (let round = 0; round < 50; round += 1) {
+          const bodies = await Promise.all(
+            Array.from({ length: 20 }, async (_value, index) => {
+              const path = index % 2 === 0 ? '/assets/race.txt' : '/assets/race-dir/race.txt';
+              try {
+                return await (await fetch(`${baseUrl}${path}`)).text();
+              } catch {
+                return '';
+              }
+            }),
+          );
+          expect(bodies).not.toContain(outsideFileSecret);
+          expect(bodies).not.toContain(outsideDirectorySecret);
+        }
+      } finally {
+        running = false;
+        await Promise.all([finalSwapper, directorySwapper]);
+        await close(server);
+      }
+    } finally {
       await rm(root, { force: true, recursive: true });
     }
   });

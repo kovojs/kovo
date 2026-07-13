@@ -2895,11 +2895,27 @@ const generatedNodeDiagnosticFactorySource = buildSecurityFunctionSource(
 
 function nodeServerSource(): string {
   return `import { Buffer } from 'node:buffer';
-import { constants as fsConstants } from 'node:fs';
-import { readFile, realpath, stat } from 'node:fs/promises';
-import { createServer, ServerResponse } from 'node:http';
-import { basename, extname, isAbsolute, resolve, sep } from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import {
+  close as importedCloseFileDescriptor,
+  constants as fsConstants,
+  fstat as importedStatFileDescriptor,
+  open as importedOpenFileDescriptor,
+  readFile as importedReadFileDescriptor,
+  stat as importedStatFilePath,
+} from 'node:fs';
+import { realpath as importedRealpath } from 'node:fs/promises';
+import { createServer as importedCreateServer, ServerResponse } from 'node:http';
+import {
+  basename as importedPathBasename,
+  extname as importedPathExtname,
+  isAbsolute as importedPathIsAbsolute,
+  resolve as importedPathResolve,
+  sep as importedPathSeparator,
+} from 'node:path';
+import {
+  fileURLToPath as importedFileUrlToPath,
+  pathToFileURL as importedPathToFileUrl,
+} from 'node:url';
 import {
   armIncompleteNodeRequestClose,
   nodeRequestToWebRequest,
@@ -2909,11 +2925,29 @@ import {
 
 const NativeMap = globalThis.Map;
 const NativeObject = globalThis.Object;
+const NativePromise = globalThis.Promise;
 const NativeRegExp = globalThis.RegExp;
 const NativeRequest = globalThis.Request;
 const NativeSet = globalThis.Set;
 const NativeString = globalThis.String;
 const NativeURL = globalThis.URL;
+// Node's built-in ESM exports are live bindings: authored handler code can replace the CommonJS
+// export and call syncBuiltinESMExports(). Copy every later authority-bearing fs/path control into
+// a boot-owned constant before the handler module is evaluated (SPEC §6.6 rule 6 / §10.6).
+const closeFileDescriptor = importedCloseFileDescriptor;
+const createNodeHttpServer = importedCreateServer;
+const fileUrlToPath = importedFileUrlToPath;
+const openFileDescriptor = importedOpenFileDescriptor;
+const pathBasename = importedPathBasename;
+const pathExtname = importedPathExtname;
+const pathIsAbsolute = importedPathIsAbsolute;
+const pathResolve = importedPathResolve;
+const pathSeparator = importedPathSeparator;
+const pathToFileUrl = importedPathToFileUrl;
+const readFileDescriptor = importedReadFileDescriptor;
+const realpath = importedRealpath;
+const statFileDescriptor = importedStatFileDescriptor;
+const statFilePath = importedStatFilePath;
 const nativeReflectApply = Reflect.apply;
 const nativeDecodeURIComponent = globalThis.decodeURIComponent;
 const nativeMapGet = NativeMap.prototype.get;
@@ -2943,10 +2977,12 @@ const nativeConsoleError = console.error;
 const immutableAssetPathPattern = new NativeRegExp(${immutableAssetPathPatternSourceLiteral}, ${immutableAssetPathPatternFlagsLiteral});
 const fsFileTypeMask = fsConstants.S_IFMT;
 const fsRegularFileType = fsConstants.S_IFREG;
+const fsReadOnlyNoFollowFlags = fsConstants.O_RDONLY |
+  (typeof fsConstants.O_NOFOLLOW === 'number' ? fsConstants.O_NOFOLLOW : 0);
 const createNodeDiagnosticRecord = (${generatedNodeDiagnosticFactorySource})();
 
-const clientRoot = resolve(fileURLToPath(new NativeURL('.', import.meta.url)), 'client');
-const staticRoot = resolve(fileURLToPath(new NativeURL('.', import.meta.url)), 'static');
+const clientRoot = pathResolve(fileUrlToPath(new NativeURL('.', import.meta.url)), 'client');
+const staticRoot = pathResolve(fileUrlToPath(new NativeURL('.', import.meta.url)), 'static');
 const clientModuleHeaders = ${clientModuleHeadersSource};
 const immutableAssetHeaders = ${immutableAssetHeadersSource};
 const revalidatingAssetHeaders = ${revalidatingAssetHeadersSource};
@@ -3058,7 +3094,7 @@ function isBodylessMethod(method) {
 }
 
 export function createKovoNodeServer(options = {}) {
-  const server = createServer(async (nodeRequest, nodeResponse) => {
+  const server = createNodeHttpServer(async (nodeRequest, nodeResponse) => {
     let diagnosticRequestUrl;
     try {
       if (rejectUnsafeNodeMutationTarget(nodeRequest, nodeResponse)) return;
@@ -3239,48 +3275,161 @@ async function serveRootedStaticFileBytes(realRoot, requestedPath, options) {
   if (candidate === undefined) return undefined;
   const resolved = await safeRealpath(candidate);
   if (resolved === undefined || !containsPath(realRoot, resolved)) return undefined;
-  let fileStat;
+  const expectedStat = await staticFilePathStat(resolved);
+  if (!regularStaticFileStat(expectedStat)) return undefined;
+
+  // SPEC §10.6: realpath/stat followed by readFile(path) reopens an attacker-swappable name.
+  // Bind the canonical contained inode before opening, require the opened descriptor to retain
+  // that exact identity (covering final-component and intermediate-directory swaps), and read only
+  // through the descriptor. Post-read path/descriptor revalidation prevents returning bytes after
+  // the canonical entry was replaced while the request was in flight.
+  const fileDescriptor = await openStaticFileDescriptor(resolved);
+  if (fileDescriptor === undefined) return undefined;
   try {
-    fileStat = await stat(resolved);
-  } catch (error) {
-    if (isMissingStaticRootError(error)) return undefined;
-    throw error;
+    const openedStat = await staticFileDescriptorStat(fileDescriptor);
+    if (
+      !regularStaticFileStat(openedStat) ||
+      !sameStaticFileIdentity(expectedStat, openedStat) ||
+      !(await staticPathRetainsIdentity(realRoot, resolved, expectedStat))
+    ) {
+      return undefined;
+    }
+
+    const body = await readStaticFileDescriptor(fileDescriptor);
+    const completedStat = await staticFileDescriptorStat(fileDescriptor);
+    if (
+      !regularStaticFileStat(completedStat) ||
+      !sameStaticFileIdentity(expectedStat, completedStat) ||
+      !(await staticPathRetainsIdentity(realRoot, resolved, expectedStat))
+    ) {
+      return undefined;
+    }
+
+    const headers = ownDataValue(options, 'headers');
+    const contentType = ownDataValue(options, 'contentType');
+    return {
+      body,
+      contentDisposition: routeOutcomeContentDisposition(options, resolved),
+      contentType,
+      ...(headers === undefined ? {} : { headers }),
+      routeResponse: true,
+    };
+  } finally {
+    await closeStaticFileDescriptor(fileDescriptor);
   }
+}
+
+function openStaticFileDescriptor(path) {
+  return new NativePromise((resolvePromise, rejectPromise) => {
+    openFileDescriptor(path, fsReadOnlyNoFollowFlags, (error, fileDescriptor) => {
+      if (error) {
+        if (isStaticFileMissError(error)) resolvePromise(undefined);
+        else rejectPromise(error);
+        return;
+      }
+      resolvePromise(fileDescriptor);
+    });
+  });
+}
+
+function staticFileDescriptorStat(fileDescriptor) {
+  return new NativePromise((resolvePromise, rejectPromise) => {
+    statFileDescriptor(fileDescriptor, (error, fileStat) => {
+      if (error) rejectPromise(error);
+      else resolvePromise(fileStat);
+    });
+  });
+}
+
+function staticFilePathStat(path) {
+  return new NativePromise((resolvePromise, rejectPromise) => {
+    statFilePath(path, (error, fileStat) => {
+      if (error) {
+        if (isStaticFileMissError(error)) resolvePromise(undefined);
+        else rejectPromise(error);
+        return;
+      }
+      resolvePromise(fileStat);
+    });
+  });
+}
+
+function readStaticFileDescriptor(fileDescriptor) {
+  return new NativePromise((resolvePromise, rejectPromise) => {
+    readFileDescriptor(fileDescriptor, (error, body) => {
+      if (error) rejectPromise(error);
+      else resolvePromise(body);
+    });
+  });
+}
+
+function closeStaticFileDescriptor(fileDescriptor) {
+  return new NativePromise((resolvePromise, rejectPromise) => {
+    closeFileDescriptor(fileDescriptor, (error) => {
+      if (error) rejectPromise(error);
+      else resolvePromise();
+    });
+  });
+}
+
+function regularStaticFileStat(fileStat) {
+  if (fileStat === undefined) return false;
   const mode = ownDataValue(fileStat, 'mode');
-  if (typeof mode !== 'number' || (mode & fsFileTypeMask) !== fsRegularFileType) return undefined;
-  const headers = ownDataValue(options, 'headers');
-  const contentType = ownDataValue(options, 'contentType');
-  return {
-    body: await readFile(resolved),
-    contentDisposition: routeOutcomeContentDisposition(options, resolved),
-    contentType,
-    ...(headers === undefined ? {} : { headers }),
-    routeResponse: true,
-  };
+  return typeof mode === 'number' && (mode & fsFileTypeMask) === fsRegularFileType;
+}
+
+function sameStaticFileIdentity(left, right) {
+  const leftDevice = ownDataValue(left, 'dev');
+  const leftInode = ownDataValue(left, 'ino');
+  const rightDevice = ownDataValue(right, 'dev');
+  const rightInode = ownDataValue(right, 'ino');
+  return typeof leftDevice === 'number' &&
+    typeof leftInode === 'number' &&
+    leftDevice === rightDevice &&
+    leftInode === rightInode;
+}
+
+async function staticPathRetainsIdentity(realRoot, resolved, expectedStat) {
+  const currentResolved = await safeRealpath(resolved);
+  if (
+    currentResolved === undefined ||
+    currentResolved !== resolved ||
+    !containsPath(realRoot, currentResolved)
+  ) {
+    return false;
+  }
+  const currentStat = await staticFilePathStat(currentResolved);
+  return regularStaticFileStat(currentStat) && sameStaticFileIdentity(expectedStat, currentStat);
+}
+
+function isStaticFileMissError(error) {
+  const code = ownDataValue(error, 'code');
+  // Darwin realpath can report EINVAL while an entry is atomically replaced by a symlink.
+  return code === 'ENOENT' || code === 'ENOTDIR' || code === 'ELOOP' || code === 'EINVAL';
 }
 
 function rootedStaticCandidate(realRoot, requestedPath) {
-  if (stringIncludes(requestedPath, '\\0') || isAbsolute(requestedPath)) return undefined;
-  const candidate = resolve(realRoot, requestedPath);
+  if (stringIncludes(requestedPath, '\\0') || pathIsAbsolute(requestedPath)) return undefined;
+  const candidate = pathResolve(realRoot, requestedPath);
   return containsPath(realRoot, candidate) ? candidate : undefined;
 }
 
 function containsPath(root, target) {
-  return target === root || stringStartsWith(target, root + sep);
+  return target === root || stringStartsWith(target, root + pathSeparator);
 }
 
 async function safeRealpath(path) {
   try {
     return await realpath(path);
   } catch (error) {
-    if (isMissingStaticRootError(error)) return undefined;
+    if (isStaticFileMissError(error)) return undefined;
     throw error;
   }
 }
 
 function routeOutcomeContentDisposition(options, resolvedPath) {
   const disposition = ownDataValue(options, 'disposition') ?? 'attachment';
-  const filename = ownDataValue(options, 'filename') ?? basename(resolvedPath);
+  const filename = ownDataValue(options, 'filename') ?? pathBasename(resolvedPath);
   return filename
     ? disposition + '; filename="' + contentDispositionFilename(filename) + '"'
     : disposition;
@@ -3333,7 +3482,7 @@ const reservedRouteOutcomeHeaderNames = new NativeSet([
 ]);
 
 function contentType(filePath) {
-  switch (apply(nativeStringToLowerCase, extname(filePath), [])) {
+  switch (apply(nativeStringToLowerCase, pathExtname(filePath), [])) {
     case '.css':
       return 'text/css; charset=utf-8';
     case '.js':
@@ -3364,7 +3513,7 @@ function isImmutableStaticAssetPath(pathname) {
     apply(nativeRegExpExec, immutableAssetPathPattern, [pathname]) !== null;
 }
 
-if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) {
+if (process.argv[1] && pathToFileUrl(process.argv[1]).href === import.meta.url) {
   const port = Number.parseInt(process.env.PORT ?? '3000', 10);
   const host = process.env.HOST ?? '0.0.0.0';
   // Import the app before opening the listener so framework boot invariants (including the
