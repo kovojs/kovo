@@ -746,7 +746,9 @@ function installInlineKovoLoader(im) {
     for (let scriptIndex = 0; scriptIndex < scripts.length; scriptIndex += 1) {
       const old = scripts[scriptIndex];
       if (!old || !bns.readNodeIsConnected(old)) continue;
-      const fresh = doc.createElement('script');
+      // SPEC §6.6/§9.1: replaying a compiler-approved script is a script-creation sink. Use
+      // the boot-witnessed Document.createElement method, never a live authored prototype method.
+      const fresh = bns.createHtmlElement('script');
       const attributes = bns.snapshotElementAttributes(old);
       for (let attributeIndex = 0; attributeIndex < attributes.length; attributeIndex += 1) {
         const attribute = attributes[attributeIndex];

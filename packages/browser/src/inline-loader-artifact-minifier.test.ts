@@ -227,6 +227,10 @@ describe('inline loader minified artifact', () => {
     expect(inlineKovoLoaderInstallerSource).not.toContain('.forEach(');
     expect(inlineKovoLoaderInstallerSource).toContain('function m(c,n,security)');
     expect(inlineKovoLoaderInstallerSource).toContain(
+      "const fresh=bns.createHtmlElement('script');",
+    );
+    expect(inlineKovoLoaderInstallerSource).not.toContain("doc.createElement('script')");
+    expect(inlineKovoLoaderInstallerSource).toContain(
       'return p(chunks.fragments,(target)=>options.ff(target),options.security,(html)=>options.createHTML(html))',
     );
     expect(inlineKovoLoaderInstallerSource).toContain('function p(fs,f,security,createHTML)');

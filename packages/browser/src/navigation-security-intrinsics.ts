@@ -1167,6 +1167,26 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
     return true;
   }
 
+  function createHtmlElement(localName: string): Element {
+    if (
+      !controlsSound ||
+      !documentObject ||
+      !documentCreateElement ||
+      !regExpTest(/^[a-z][a-z0-9-]*$/, localName)
+    ) {
+      throw new TypeError('Kovo DOM element creation control is unavailable.');
+    }
+    const element = apply<unknown>(documentCreateElement, documentObject, [localName]);
+    if (
+      element === null ||
+      typeof element !== 'object' ||
+      readElementTagName(element) !== upper(localName)
+    ) {
+      throw new TypeError('Kovo DOM element creation returned a mismatched element.');
+    }
+    return element as Element;
+  }
+
   function createFragmentContent(html: string): DocumentFragment {
     if (!documentObject) throw new TypeError('Kovo DOM document control is unavailable.');
     const create = documentCreateElement ?? stableMethod(documentObject, 'createElement');
@@ -3300,6 +3320,7 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
     cloneDomNode,
     cloneElement,
     closestElement,
+    createHtmlElement,
     createSecurityMap,
     createMutationBroadcastChannel,
     createFragmentContent,

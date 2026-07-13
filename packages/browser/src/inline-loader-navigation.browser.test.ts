@@ -479,13 +479,23 @@ describe('browser inline loader enhanced navigation', () => {
     vi.stubGlobal('scrollTo', vi.fn());
 
     installNavigationLoader();
+    const nativeCreateElement = Document.prototype.createElement;
+    let poisonedScriptCreations = 0;
+    try {
+      Document.prototype.createElement = function poisonedCreateElement(localName: string) {
+        if (localName === 'script') poisonedScriptCreations += 1;
+        return Reflect.apply(nativeCreateElement, this, [localName]);
+      } as typeof Document.prototype.createElement;
 
-    dispatchAnchorLikeClick('/cart');
+      dispatchAnchorLikeClick('/cart');
 
-    await vi.waitFor(() => expect(document.title).toBe('Cart'));
-    await vi.waitFor(() =>
-      expect(document.querySelector('#cart-rail')?.textContent).toBe('Deferred rail'),
-    );
+      await vi.waitFor(() => expect(document.title).toBe('Cart'));
+      await vi.waitFor(() =>
+        expect(document.querySelector('#cart-rail')?.textContent).toBe('Deferred rail'),
+      );
+    } finally {
+      Document.prototype.createElement = nativeCreateElement;
+    }
 
     expect(
       (globalThis as typeof globalThis & { __navDeferredApplied?: number }).__navDeferredApplied,
@@ -493,6 +503,7 @@ describe('browser inline loader enhanced navigation', () => {
     expect(document.body.textContent).not.toContain('--kovo-boundary');
     expect(comparableBodyMarkup(document)).not.toContain('kovo-fragment');
     expect(document.querySelector('#cart-data')?.textContent).toBe('{"ok":true}');
+    expect(poisonedScriptCreations).toBe(0);
   });
 
   it('updates head, html, and body shell fields from the target document', async () => {
