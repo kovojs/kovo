@@ -888,6 +888,48 @@ describe('storage adapters', () => {
     }
   });
 
+  it('pins physical-key hashing and slicing against late prototype substitution', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'kovo-storage-hash-authority-'));
+    const hashPrototype = Object.getPrototypeOf(createHash('sha256')) as {
+      digest: typeof import('node:crypto').Hash.prototype.digest;
+      update: typeof import('node:crypto').Hash.prototype.update;
+    };
+    const originalDigest = hashPrototype.digest;
+    const originalUpdate = hashPrototype.update;
+    const originalSlice = String.prototype.slice;
+    let poisonHits = 0;
+    try {
+      const storage = createFileSystemStorage({ root });
+      hashPrototype.update = function updatePoison() {
+        poisonHits += 1;
+        return this;
+      };
+      hashPrototype.digest = function digestPoison() {
+        poisonHits += 1;
+        return 'f'.repeat(64);
+      } as typeof hashPrototype.digest;
+      String.prototype.slice = function slicePoison(start?: number) {
+        poisonHits += 1;
+        return start === 0 ? 'ff' : 'fixed-object-slot';
+      };
+
+      await storage.put('private/victim.txt', 'VICTIM');
+      expect(bytesToText((await storage.get('private/victim.txt'))?.body)).toBe('VICTIM');
+    } finally {
+      hashPrototype.digest = originalDigest;
+      hashPrototype.update = originalUpdate;
+      String.prototype.slice = originalSlice;
+    }
+
+    try {
+      const storage = createFileSystemStorage({ root });
+      expect(bytesToText((await storage.get('private/victim.txt'))?.body)).toBe('VICTIM');
+      expect(poisonHits).toBe(0);
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
   it('uses exact sidecar ownership to close physical digest collisions across every operation', async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), 'kovo-storage-exact-key-'));
     try {

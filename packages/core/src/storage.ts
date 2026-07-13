@@ -11,6 +11,7 @@ import {
   securityIsArray,
   securityNullRecord,
   securityObjectKeys,
+  securityStringSlice,
 } from './internal/security-witness-intrinsics.js';
 import {
   createFileSystemMap,
@@ -120,6 +121,11 @@ export interface FileSystemStorageOptions {
 export interface MemoryStorageOptions {
   now?: () => Date;
 }
+
+const storageHashProbe = createHash('sha256');
+const intrinsicStorageHashUpdate = storageHashProbe.update;
+const intrinsicStorageHashDigest = storageHashProbe.digest;
+const storageHashControlsSound = verifyStorageHashControls();
 
 /**
  * Input to an S3-compatible put-object call: target bucket and key, the body, and optional
@@ -818,8 +824,59 @@ async function fileSystemStat(
  * an authorization proof.
  */
 function fileSystemStorageKey(key: string): string {
-  const digest = createHash('sha256').update(fileSystemUtf8Encode(key)).digest('hex');
-  return `${fileSystemObjectPrefix}/${digest.slice(0, 2)}/${digest.slice(2)}`;
+  const digest = storageSha256Hex(fileSystemUtf8Encode(key));
+  return `${fileSystemObjectPrefix}/${securityStringSlice(digest, 0, 2)}/${securityStringSlice(
+    digest,
+    2,
+  )}`;
+}
+
+function storageSha256Hex(value: Uint8Array): string {
+  if (!storageHashControlsSound) {
+    throw new TypeError(
+      'Kovo storage hashing controls are unavailable because realm intrinsics were modified before framework initialization.',
+    );
+  }
+  const hash = createHash('sha256');
+  if (securityApply(intrinsicStorageHashUpdate, hash, [value]) !== hash) {
+    throw new TypeError('Kovo storage hash update changed digest authority.');
+  }
+  const digest = securityApply<unknown>(intrinsicStorageHashDigest, hash, ['hex']);
+  if (!isLowercaseSha256Hex(digest)) {
+    throw new TypeError('Kovo storage hash digest returned an invalid SHA-256 value.');
+  }
+  return digest;
+}
+
+function verifyStorageHashControls(): boolean {
+  try {
+    const hash = createHash('sha256');
+    if (
+      securityApply(intrinsicStorageHashUpdate, hash, [fileSystemUtf8Encode('Kovo')]) !== hash
+    ) {
+      return false;
+    }
+    return (
+      securityApply(intrinsicStorageHashDigest, hash, ['hex']) ===
+      '5414b0a8f893b1bcbfbf289673e27af6e63889eb9e764f992f90aa30bb9ee6b2'
+    );
+  } catch {
+    return false;
+  }
+}
+
+function isLowercaseSha256Hex(value: unknown): value is string {
+  if (typeof value !== 'string' || value.length !== 64) return false;
+  for (let index = 0; index < value.length; index += 1) {
+    const character = value[index];
+    if (
+      character === undefined ||
+      !((character >= '0' && character <= '9') || (character >= 'a' && character <= 'f'))
+    ) {
+      return false;
+    }
+  }
+  return true;
 }
 
 async function readFileSystemMetadataRecord(
