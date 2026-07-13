@@ -18,6 +18,30 @@ import {
 } from './vite-manifest.js';
 
 describe('server app shell Vite manifest planning', () => {
+  it('pins URL construction and classification for manifest asset paths', () => {
+    const NativeURL = globalThis.URL;
+    let poisonHits = 0;
+    const PoisonURL = function () {
+      poisonHits += 1;
+      return { pathname: '/attacker/index.html' };
+    } as unknown as typeof URL;
+
+    let assets: ReturnType<typeof kovoAppShellViteManifestAssets> | undefined;
+    globalThis.URL = PoisonURL;
+    try {
+      assets = kovoAppShellViteManifestAssets({
+        'src/cart.client.ts': { file: 'assets/cart.js' },
+      });
+    } finally {
+      globalThis.URL = NativeURL;
+    }
+
+    expect(poisonHits).toBe(0);
+    expect(assets).toEqual([
+      { file: 'assets/cart.js', href: '/assets/cart.js', path: '/assets/cart.js' },
+    ]);
+  });
+
   it('extracts deterministic stylesheet and modulepreload hints from a Vite manifest', () => {
     expect(
       kovoAppShellViteManifestHints(

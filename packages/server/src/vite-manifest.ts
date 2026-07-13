@@ -1,9 +1,9 @@
 import { readFile } from 'node:fs/promises';
-import { fileURLToPath } from 'node:url';
 import type { PageHintOptions } from './hints.js';
 import {
   buildOwnDataProperty,
   buildSecurityDecodeURIComponent,
+  buildSecurityFileUrlToPath,
   snapshotBuildArray,
 } from './build-security-intrinsics.js';
 import {
@@ -14,6 +14,7 @@ import {
   securityArraySort,
   securityBufferFrom,
   securityBufferToString,
+  securityIsUrl,
   securityJsonParse,
   securityMapForEach,
   securityMapGet,
@@ -29,6 +30,8 @@ import {
   securityStringSplit,
   securityStringStartsWith,
   securityStringTrim,
+  securityUrlObjectSnapshot,
+  securityUrlSnapshot,
 } from './response-security-intrinsics.js';
 import {
   witnessArrayAppend,
@@ -454,7 +457,7 @@ function addManifestBuildAsset(
   if (securityMapHas(assets, normalizedFile)) return;
 
   const href = manifestAssetHref(normalizedFile, options.base);
-  const url = new URL(href, 'https://kovo.local');
+  const url = securityUrlSnapshot(href, 'https://kovo.local');
 
   securityMapSet(assets, normalizedFile, {
     file: normalizedFile,
@@ -520,13 +523,14 @@ function isExternalAssetHref(file: string): boolean {
 }
 
 function resolvedManifestFile(manifestFile: string | URL): string | URL {
-  if (!(manifestFile instanceof URL)) return manifestFile;
-  if (manifestFile.protocol === 'file:') return fileURLToPath(manifestFile);
+  if (!securityIsUrl(manifestFile)) return manifestFile;
+  const snapshot = securityUrlObjectSnapshot(manifestFile);
+  if (snapshot.protocol === 'file:') return buildSecurityFileUrlToPath(snapshot.href);
 
   throw new StaticExportError([
     staticExportDiagnostic(
       'vite-manifestFile',
-      `KV229 Vite app-shell manifest files must be filesystem paths or file: URLs, received '${manifestFile.href}'. SPEC §9.5 static export reads Vite manifests from a local output file.`,
+      `KV229 Vite app-shell manifest files must be filesystem paths or file: URLs, received '${snapshot.href}'. SPEC §9.5 static export reads Vite manifests from a local output file.`,
     ),
   ]);
 }
