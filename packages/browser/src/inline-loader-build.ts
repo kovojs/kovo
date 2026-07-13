@@ -1,5 +1,8 @@
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
-import { createHash } from 'node:crypto';
+import { Buffer as NativeBuffer } from 'node:buffer';
+import { createHash, randomUUID } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import { lstat, readFile, realpath, rename, stat, unlink, writeFile } from 'node:fs/promises';
+import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { gzipSync } from 'node:zlib';
 
@@ -2487,15 +2490,17 @@ function unwrapInlineInstallerExpression(expression: ts.Expression): ts.Expressi
   return current;
 }
 
-export function emitInlineKovoLoaderModule(
+export async function emitInlineKovoLoaderModule(
   options: EmitInlineKovoLoaderModuleOptions = {},
-): EmitInlineKovoLoaderModuleResult {
-  const targetPath = options.targetPath ?? inlineKovoLoaderModulePath;
+): Promise<EmitInlineKovoLoaderModuleResult> {
+  const targetPath = resolve(options.targetPath ?? inlineKovoLoaderModulePath);
+  const outputRoot = dirname(targetPath);
+  const targetName = basename(targetPath);
   const source =
     options.source === undefined
       ? buildInlineKovoLoaderModuleSource()
       : buildInlineKovoLoaderModuleSource(options.source);
-  const current = existsSync(targetPath) ? readFileSync(targetPath, 'utf8') : undefined;
+  const current = await readInlineLoaderOutputFile(outputRoot, targetName);
   const changed = current !== source;
 
   if (options.check) {
@@ -2510,9 +2515,114 @@ export function emitInlineKovoLoaderModule(
     return { changed, source, targetPath };
   }
 
-  if (changed) writeFileSync(targetPath, source, 'utf8');
+  if (changed) {
+    await writeInlineLoaderOutputFile(outputRoot, targetName, source);
+  }
 
   return { changed, source, targetPath };
+}
+
+async function readInlineLoaderOutputFile(
+  outputRoot: string,
+  targetName: string,
+): Promise<string | undefined> {
+  const pinnedRoot = await pinInlineLoaderOutputRoot(outputRoot);
+  await verifyInlineLoaderOutputRoot(pinnedRoot);
+  const target = join(pinnedRoot.canonicalPath, targetName);
+  try {
+    const status = await lstat(target);
+    if (!status.isFile() || status.isSymbolicLink() || status.nlink !== 1) return undefined;
+    return NativeBuffer.from(await readFile(target)).toString('utf8');
+  } catch (error) {
+    if (isMissingInlineLoaderOutput(error)) return undefined;
+    throw error;
+  }
+}
+
+async function writeInlineLoaderOutputFile(
+  outputRoot: string,
+  targetName: string,
+  source: string,
+): Promise<void> {
+  const pinnedRoot = await pinInlineLoaderOutputRoot(outputRoot);
+  await verifyInlineLoaderOutputRoot(pinnedRoot);
+  const temporary = join(pinnedRoot.canonicalPath, `.${targetName}.${randomUUID()}.tmp`);
+  try {
+    await writeFile(temporary, source, { flag: 'wx' });
+    await verifyInlineLoaderOutputRoot(pinnedRoot);
+    await rename(temporary, join(pinnedRoot.canonicalPath, targetName));
+  } finally {
+    await unlink(temporary).catch((error: unknown) => {
+      if (!isMissingInlineLoaderOutput(error)) throw error;
+    });
+  }
+}
+
+interface PinnedInlineLoaderOutputRoot {
+  canonicalDev: number;
+  canonicalIno: number;
+  canonicalPath: string;
+  lexicalDev: number;
+  lexicalIno: number;
+  lexicalPath: string;
+}
+
+async function pinInlineLoaderOutputRoot(
+  outputRoot: string,
+): Promise<PinnedInlineLoaderOutputRoot> {
+  const lexicalPath = resolve(outputRoot);
+  const lexicalStatus = await lstat(lexicalPath);
+  if (lexicalStatus.isSymbolicLink() || !lexicalStatus.isDirectory()) {
+    throw new Error(
+      `Inline-loader output root '${lexicalPath}' must be a non-symbolic-link directory.`,
+    );
+  }
+  const canonicalPath = await realpath(lexicalPath);
+  const canonicalStatus = await stat(canonicalPath);
+  if (!canonicalStatus.isDirectory()) {
+    throw new Error(`Inline-loader output root '${lexicalPath}' does not resolve to a directory.`);
+  }
+  return {
+    canonicalDev: canonicalStatus.dev,
+    canonicalIno: canonicalStatus.ino,
+    canonicalPath,
+    lexicalDev: lexicalStatus.dev,
+    lexicalIno: lexicalStatus.ino,
+    lexicalPath,
+  };
+}
+
+async function verifyInlineLoaderOutputRoot(
+  pinnedRoot: PinnedInlineLoaderOutputRoot,
+): Promise<void> {
+  const lexicalStatus = await lstat(pinnedRoot.lexicalPath);
+  if (
+    lexicalStatus.isSymbolicLink() ||
+    !lexicalStatus.isDirectory() ||
+    lexicalStatus.dev !== pinnedRoot.lexicalDev ||
+    lexicalStatus.ino !== pinnedRoot.lexicalIno
+  ) {
+    throw new Error(`Inline-loader output root '${pinnedRoot.lexicalPath}' identity changed.`);
+  }
+  const canonicalPath = await realpath(pinnedRoot.lexicalPath);
+  const canonicalStatus = await stat(canonicalPath);
+  if (
+    canonicalPath !== pinnedRoot.canonicalPath ||
+    !canonicalStatus.isDirectory() ||
+    canonicalStatus.dev !== pinnedRoot.canonicalDev ||
+    canonicalStatus.ino !== pinnedRoot.canonicalIno
+  ) {
+    throw new Error(`Inline-loader output root '${pinnedRoot.lexicalPath}' identity changed.`);
+  }
+}
+
+function isMissingInlineLoaderOutput(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    (error as { code?: unknown }).code === 'ENOENT'
+  );
 }
 
 function inlineJavaScriptTemplateLiteral(value: string): string {
@@ -2528,7 +2638,7 @@ function createInlineKovoLoaderBootstrapSource(
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  const result = emitInlineKovoLoaderModule({ check: process.argv.includes('--check') });
+  const result = await emitInlineKovoLoaderModule({ check: process.argv.includes('--check') });
 
   if (!process.argv.includes('--check')) {
     console.log(

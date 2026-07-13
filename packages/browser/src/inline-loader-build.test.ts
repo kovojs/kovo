@@ -1,4 +1,13 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  linkSync,
+  lstatSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { gzipSync } from 'node:zlib';
@@ -117,7 +126,7 @@ describe('inline loader build source', () => {
     );
   });
 
-  it('checks the shipped source literal against the executable installer artifact', () => {
+  it('checks the shipped source literal against the executable installer artifact', async () => {
     // SPEC.md §4.4: the readable build, shipped source string, and callable inline loader are one artifact.
     const moduleSource = buildInlineKovoLoaderModuleSource();
     const driftedModuleSource = moduleSource.replace(
@@ -134,11 +143,63 @@ describe('inline loader build source', () => {
       );
 
       writeFileSync(targetPath, driftedModuleSource, 'utf8');
-      expect(() => emitInlineKovoLoaderModule({ check: true, targetPath })).toThrow(
+      await expect(emitInlineKovoLoaderModule({ check: true, targetPath })).rejects.toThrow(
         'embedded installer artifacts drifted',
       );
     } finally {
       rmSync(tempDir, { force: true, recursive: true });
+    }
+  });
+
+  it('does not overwrite outside files through inline-loader output aliases', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-inline-loader-output-alias-'));
+    const outside = mkdtempSync(join(tmpdir(), 'kovo-inline-loader-outside-'));
+    const outputDir = join(root, 'generated');
+    mkdirSync(outputDir, { recursive: true });
+    const symlinkOutside = join(outside, 'symlink.ts');
+    const symlinkTarget = join(outputDir, 'symlink.ts');
+    const hardlinkOutside = join(outside, 'hardlink.ts');
+    const hardlinkTarget = join(outputDir, 'hardlink.ts');
+    writeFileSync(symlinkOutside, 'outside-symlink\n', 'utf8');
+    writeFileSync(hardlinkOutside, 'outside-hardlink\n', 'utf8');
+    symlinkSync(symlinkOutside, symlinkTarget);
+    linkSync(hardlinkOutside, hardlinkTarget);
+
+    try {
+      await emitInlineKovoLoaderModule({ targetPath: symlinkTarget });
+      await emitInlineKovoLoaderModule({ targetPath: hardlinkTarget });
+      expect(readFileSync(symlinkOutside, 'utf8')).toBe('outside-symlink\n');
+      expect(readFileSync(hardlinkOutside, 'utf8')).toBe('outside-hardlink\n');
+      expect(lstatSync(symlinkTarget).isSymbolicLink()).toBe(false);
+      expect(lstatSync(hardlinkTarget).ino).not.toBe(lstatSync(hardlinkOutside).ino);
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+      rmSync(outside, { force: true, recursive: true });
+    }
+  });
+
+  it('rejects symlinked inline-loader output roots and parents', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-inline-loader-root-alias-'));
+    const outside = mkdtempSync(join(tmpdir(), 'kovo-inline-loader-root-outside-'));
+    const rootAlias = join(root, 'root-alias');
+    const parentAlias = join(root, 'parent-alias');
+    symlinkSync(outside, rootAlias, 'dir');
+    symlinkSync(outside, parentAlias, 'dir');
+
+    try {
+      await expect(
+        emitInlineKovoLoaderModule({ targetPath: join(rootAlias, 'inline-loader.ts') }),
+      ).rejects.toThrow('must be a non-symbolic-link directory');
+      await expect(
+        emitInlineKovoLoaderModule({
+          targetPath: join(parentAlias, 'nested', 'inline-loader.ts'),
+        }),
+      ).rejects.toThrow();
+      expect(() => lstatSync(join(outside, 'inline-loader.ts'))).toThrow();
+      expect(() => lstatSync(join(outside, 'nested'))).toThrow();
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+      rmSync(outside, { force: true, recursive: true });
     }
   });
 
