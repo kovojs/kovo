@@ -289,6 +289,34 @@ describe('@kovojs/style phase 1 runtime fork', () => {
     expect(theme.css).not.toContain(':root:not([data-theme="light"])');
   });
 
+  it('confines public theme selector, shape, and custom-name CSS inputs', () => {
+    expect(() => defineTheme({ seed: '#6750A4', selector: ':root}html{display:none' })).toThrow(
+      /unsafe CSS selector/u,
+    );
+    expect(() =>
+      defineTheme({ seed: '#6750A4', shape: { cornerSmall: '2px}html{display:none' } }),
+    ).toThrow(/unsafe CSS value/u);
+    expect(() =>
+      defineTheme({
+        colors: { 'success}html{display:none': '#16a34a' },
+        seed: '#6750A4',
+      }),
+    ).toThrow(/CSS-invalid token/u);
+  });
+
+  it('rejects theme option accessors before they can replace the CSS authority', () => {
+    let invoked = false;
+    const options = {
+      seed: '#6750A4',
+      get selector() {
+        invoked = true;
+        return ':root}html{display:none';
+      },
+    };
+    expect(() => defineTheme(options)).toThrow(/stable own data property/u);
+    expect(invoked).toBe(false);
+  });
+
   it('exports typed var references for theme tokens used in style.create', () => {
     const styles = create({
       root: {

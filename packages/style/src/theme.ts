@@ -20,6 +20,30 @@ import {
   type Theme as MaterialTheme,
 } from '@material/material-color-utilities';
 
+import {
+  assertCssCustomPropertyNameSafe,
+  assertCssSelectorSafe,
+  assertCssSyntaxFragmentSafe,
+  assertCssValueSafe,
+  cssPrimitiveText,
+} from './css-security.js';
+import {
+  styleArrayIsArray,
+  styleArrayJoin,
+  styleArrayPush,
+  styleArraySort,
+  styleDefineDataProperty,
+  styleFreeze,
+  styleMathMax,
+  styleMathMin,
+  styleNullRecord,
+  styleNumberIsFinite,
+  styleOwnDataEntries,
+  styleOwnDataValue,
+  styleStringLocaleCompare,
+  styleStringSplit,
+} from './style-security-intrinsics.js';
+
 /** Seed color accepted by Kovo's build-time theme generator. */
 export type ThemeSeed = string | number;
 
@@ -292,7 +316,7 @@ const SHAPE_DEFAULTS = {
 } as const satisfies ThemeShapeValues;
 
 /** Theme token references for authored styles; generated CSS supplies the values. */
-const publicThemeTokens = Object.freeze({
+const publicThemeTokens = deepFreezeData({
   customColor: (name: string) =>
     ({
       color: `var(${themeVar('custom', name, 'color')})`,
@@ -313,7 +337,7 @@ const publicThemeTokens = Object.freeze({
 export const tokens = publicThemeTokens;
 
 /** @internal Internal theme tokens include derived component vars for generated/repo-owned code only. */
-export const internalThemeTokens = Object.freeze({
+export const internalThemeTokens = deepFreezeData({
   ...publicThemeTokens,
   component: (name: string) => `var(${themeVar('component', name)})`,
 }) satisfies InternalThemeTokens;
@@ -325,29 +349,168 @@ export const internalThemeTokens = Object.freeze({
  * which delegates here.
  */
 export function themeFromSeed(seed: ThemeSeed, options: ThemeFromSeedOptions = {}): KovoTheme {
+  assertThemeSeed(seed, 'style.themeFromSeed seed');
+  const stableOptions = snapshotThemeOptions(options);
   const argb = seedToArgb(seed);
-  const variant = options.variant ?? DEFAULT_VARIANT;
-  const contrast = clampContrast(options.contrast ?? 0);
+  const variant = stableOptions.variant ?? DEFAULT_VARIANT;
+  const contrast = clampContrast(stableOptions.contrast ?? 0);
   if (variant !== 'tonal-spot' || contrast !== 0) {
-    return dynamicThemeFromSeed(argb, variant, contrast, options);
+    return dynamicThemeFromSeed(argb, variant, contrast, stableOptions);
   }
   const material = createMaterialTheme(argb, variant);
   const ref = referencePalettes(material);
-  const light = schemeValues(argb, material, false, options);
-  const dark = schemeValues(argb, material, true, options);
+  const light = schemeValues(argb, material, false, stableOptions);
+  const dark = schemeValues(argb, material, true, stableOptions);
 
   return themeFromValues({
     custom: light.custom,
     dark,
-    emitRef: options.emitRef ?? true,
+    emitRef: stableOptions.emitRef ?? true,
     light,
     ref,
     seed: hexFromArgb(argb),
-    selector: options.selector ?? DEFAULT_SELECTOR,
-    darkSelector: options.darkSelector ?? DEFAULT_DARK_SELECTOR,
+    selector: stableOptions.selector ?? DEFAULT_SELECTOR,
+    darkSelector: stableOptions.darkSelector ?? DEFAULT_DARK_SELECTOR,
     sys: light.sys,
     variant,
   });
+}
+
+function snapshotThemeOptions(options: ThemeFromSeedOptions): ThemeFromSeedOptions {
+  assertPlainThemeRecord(options, 'style.defineTheme options');
+  const contrast = styleOwnDataValue(options, 'contrast', 'style.defineTheme options');
+  const darkSelector = styleOwnDataValue(options, 'darkSelector', 'style.defineTheme options');
+  const emitRef = styleOwnDataValue(options, 'emitRef', 'style.defineTheme options');
+  const selector = styleOwnDataValue(options, 'selector', 'style.defineTheme options');
+  const variant = styleOwnDataValue(options, 'variant', 'style.defineTheme options');
+  if (contrast !== undefined && (typeof contrast !== 'number' || !styleNumberIsFinite(contrast))) {
+    throw new TypeError(
+      'style.defineTheme options.contrast must be a finite number own data property.',
+    );
+  }
+  if (emitRef !== undefined && typeof emitRef !== 'boolean') {
+    throw new TypeError('style.defineTheme options.emitRef must be a boolean own data property.');
+  }
+  if (selector !== undefined && typeof selector !== 'string') {
+    throw new TypeError('style.defineTheme options.selector must be a string own data property.');
+  }
+  if (darkSelector !== undefined && typeof darkSelector !== 'string') {
+    throw new TypeError(
+      'style.defineTheme options.darkSelector must be a string own data property.',
+    );
+  }
+  if (selector !== undefined) assertCssSelectorSafe(selector, 'style.defineTheme', 'selector');
+  if (darkSelector !== undefined) {
+    assertCssSelectorSafe(darkSelector, 'style.defineTheme', 'darkSelector');
+  }
+  if (variant !== undefined && !isThemeVariant(variant)) {
+    throw new TypeError('style.defineTheme options.variant must be a supported theme variant.');
+  }
+
+  const colorsValue = styleOwnDataValue(options, 'colors', 'style.defineTheme options');
+  const shapeValue = styleOwnDataValue(options, 'shape', 'style.defineTheme options');
+  const colors = colorsValue === undefined ? undefined : snapshotThemeColors(colorsValue);
+  const shape = shapeValue === undefined ? undefined : snapshotThemeShape(shapeValue);
+  return styleFreeze({
+    ...(colors === undefined ? {} : { colors }),
+    ...(contrast === undefined ? {} : { contrast }),
+    ...(darkSelector === undefined ? {} : { darkSelector }),
+    ...(emitRef === undefined ? {} : { emitRef }),
+    ...(selector === undefined ? {} : { selector }),
+    ...(shape === undefined ? {} : { shape }),
+    ...(variant === undefined ? {} : { variant }),
+  });
+}
+
+function snapshotThemeColors(value: unknown): ThemeCustomColorsInput {
+  assertPlainThemeRecord(value, 'style.defineTheme options.colors');
+  const snapshot = styleNullRecord<ThemeSeed | ThemeCustomColorInput>();
+  const entries = styleOwnDataEntries(value, 'style.defineTheme options.colors');
+  for (let index = 0; index < entries.length; index += 1) {
+    const [name, input] = entries[index] as readonly [string, unknown];
+    // Validate the final custom-property spelling now; it also rejects markup/rule delimiters.
+    themeVar('custom', name, 'color');
+    let stableInput: ThemeSeed | ThemeCustomColorInput;
+    if (typeof input === 'object' && input !== null) {
+      assertPlainThemeRecord(input, `style.defineTheme options.colors.${name}`);
+      const seed = styleOwnDataValue(input, 'value', `style.defineTheme options.colors.${name}`);
+      const blend = styleOwnDataValue(input, 'blend', `style.defineTheme options.colors.${name}`);
+      assertThemeSeed(seed, `style.defineTheme options.colors.${name}.value`);
+      if (blend !== undefined && typeof blend !== 'boolean') {
+        throw new TypeError(`style.defineTheme options.colors.${name}.blend must be boolean.`);
+      }
+      stableInput = styleFreeze({
+        ...(blend === undefined ? {} : { blend }),
+        value: seed,
+      });
+    } else {
+      assertThemeSeed(input, `style.defineTheme options.colors.${name}`);
+      stableInput = input;
+    }
+    styleDefineDataProperty(snapshot, name, stableInput);
+  }
+  return styleFreeze(snapshot);
+}
+
+function snapshotThemeShape(value: unknown): ThemeShapeInput {
+  assertPlainThemeRecord(value, 'style.defineTheme options.shape');
+  const snapshot = styleNullRecord<string>();
+  const entries = styleOwnDataEntries(value, 'style.defineTheme options.shape');
+  for (let index = 0; index < entries.length; index += 1) {
+    const [name, shapeValue] = entries[index] as readonly [string, unknown];
+    if (!isThemeShapeName(name)) {
+      throw new TypeError(
+        `style.defineTheme options.shape.${name} is not a supported shape token.`,
+      );
+    }
+    if (typeof shapeValue !== 'string') {
+      throw new TypeError(`style.defineTheme options.shape.${name} must be a string.`);
+    }
+    assertCssValueSafe(shapeValue, 'style.defineTheme', `shape.${name}`);
+    styleDefineDataProperty(snapshot, name, shapeValue);
+  }
+  return styleFreeze(snapshot) as ThemeShapeInput;
+}
+
+function assertThemeSeed(value: unknown, label: string): asserts value is ThemeSeed {
+  if (
+    (typeof value !== 'string' && typeof value !== 'number') ||
+    (typeof value === 'number' && !styleNumberIsFinite(value))
+  ) {
+    throw new TypeError(`${label} must be a string or finite number.`);
+  }
+}
+
+function assertPlainThemeRecord(value: unknown, label: string): asserts value is object {
+  if (typeof value !== 'object' || value === null)
+    throw new TypeError(`${label} must be an object.`);
+  styleOwnDataEntries(value, label);
+}
+
+function isThemeVariant(value: unknown): value is ThemeVariant {
+  switch (value) {
+    case 'content':
+    case 'expressive':
+    case 'fidelity':
+    case 'fruit-salad':
+    case 'monochrome':
+    case 'neutral':
+    case 'rainbow':
+    case 'tonal-spot':
+    case 'vibrant':
+      return true;
+    default:
+      return false;
+  }
+}
+
+function isThemeShapeName(value: string): value is ThemeShapeTokenName {
+  return (
+    value === 'cornerFull' ||
+    value === 'cornerLarge' ||
+    value === 'cornerMedium' ||
+    value === 'cornerSmall'
+  );
 }
 
 function dynamicThemeFromSeed(
@@ -383,7 +546,10 @@ function dynamicThemeFromSeed(
  * repo-internal capability exposed through `defineThemeFromBase`.
  */
 export function defineTheme(options: DefineThemeOptions): KovoTheme {
-  return themeFromSeed(options.seed, options);
+  assertPlainThemeRecord(options, 'style.defineTheme options');
+  const seed = styleOwnDataValue(options, 'seed', 'style.defineTheme options');
+  assertThemeSeed(seed, 'style.defineTheme options.seed');
+  return themeFromSeed(seed, options);
 }
 
 /**
@@ -426,7 +592,7 @@ interface ThemeValuesInput {
 }
 
 function themeFromValues(input: ThemeValuesInput): KovoTheme {
-  return {
+  const theme = {
     css: emitThemeCss(input),
     custom: input.custom,
     dark: input.dark,
@@ -436,6 +602,7 @@ function themeFromValues(input: ThemeValuesInput): KovoTheme {
     sys: input.sys,
     variant: input.variant,
   };
+  return deepFreezeData(theme);
 }
 
 function createMaterialTheme(argb: number, variant: ThemeVariant): MaterialTheme {
@@ -527,7 +694,10 @@ function systemColors(material: MaterialTheme, isDark: boolean): ThemeSystemColo
   const secondary = material.palettes.secondary;
   const tertiary = material.palettes.tertiary;
   const values: Partial<Record<ThemeSystemColorName, string>> = {};
-  for (const name of SYSTEM_COLOR_NAMES) values[name] = roleHex(schemeValues[name] ?? 0);
+  for (let index = 0; index < SYSTEM_COLOR_NAMES.length; index += 1) {
+    const name = SYSTEM_COLOR_NAMES[index] as ThemeSystemColorName;
+    values[name] = roleHex(schemeValues[name] ?? 0);
+  }
   values.surfaceDim = paletteHex(neutral, isDark ? 6 : 87);
   values.surfaceBright = paletteHex(neutral, isDark ? 24 : 98);
   values.surfaceContainerLowest = paletteHex(neutral, isDark ? 4 : 100);
@@ -557,7 +727,8 @@ function dynamicSystemColors(scheme: DynamicScheme): ThemeSystemColorValues {
     string,
     { getArgb: (scheme: DynamicScheme) => number } | undefined
   >;
-  for (const name of SYSTEM_COLOR_NAMES) {
+  for (let index = 0; index < SYSTEM_COLOR_NAMES.length; index += 1) {
+    const name = SYSTEM_COLOR_NAMES[index] as ThemeSystemColorName;
     const color = material[name];
     if (color) values[name] = hexFromArgb(color.getArgb(scheme));
   }
@@ -570,18 +741,27 @@ function customColors(
   isDark: boolean,
   colors: ThemeCustomColorsInput,
 ): Readonly<Record<string, ThemeCustomColorGroup>> {
-  const result: Record<string, ThemeCustomColorGroup> = {};
-  for (const [name, input] of Object.entries(colors)) {
+  const result = styleNullRecord<ThemeCustomColorGroup>();
+  const colorEntries = styleOwnDataEntries(colors, 'style.defineTheme colors');
+  for (let index = 0; index < colorEntries.length; index += 1) {
+    const [name, input] = colorEntries[index] as readonly [
+      string,
+      ThemeSeed | ThemeCustomColorInput,
+    ];
     const color = typeof input === 'object' ? input : { value: input, blend: true };
     const targetArgb = seedToArgb(color.value);
     const valueArgb = color.blend === false ? targetArgb : Blend.harmonize(targetArgb, sourceArgb);
     const palette = Hct.fromInt(valueArgb).toInt();
-    result[name] = {
-      color: hexFromArgb(tone(palette, isDark ? 80 : 40)),
-      colorContainer: hexFromArgb(tone(palette, isDark ? 30 : 90)),
-      onColor: hexFromArgb(tone(palette, isDark ? 20 : 100)),
-      onColorContainer: hexFromArgb(tone(palette, isDark ? 90 : 10)),
-    };
+    styleDefineDataProperty(
+      result,
+      name,
+      styleFreeze({
+        color: hexFromArgb(tone(palette, isDark ? 80 : 40)),
+        colorContainer: hexFromArgb(tone(palette, isDark ? 30 : 90)),
+        onColor: hexFromArgb(tone(palette, isDark ? 20 : 100)),
+        onColorContainer: hexFromArgb(tone(palette, isDark ? 90 : 10)),
+      }),
+    );
   }
   return result;
 }
@@ -626,7 +806,8 @@ function paletteTones(palette: {
   tone: (tone: number) => number;
 }): Readonly<Record<number, string>> {
   const values: Record<number, string> = {};
-  for (const toneValue of REFERENCE_TONES) {
+  for (let index = 0; index < REFERENCE_TONES.length; index += 1) {
+    const toneValue = REFERENCE_TONES[index] as number;
     values[toneValue] = hexFromArgb(palette.tone(toneValue));
   }
   return values;
@@ -647,18 +828,16 @@ function mergeScheme(
 }
 
 function emitThemeCss(input: ThemeValuesInput): string {
-  const rootDeclarations = [
-    ...(input.emitRef ? refDeclarations(input.ref) : []),
-    ...sysColorDeclarations(input.light.sys.color),
-    ...shapeDeclarations(input.light.sys.shape),
-    ...customDeclarations(input.light.custom),
-    ...componentDeclarations(input.component ?? {}),
-  ];
-  const darkDeclarations = [
-    ...sysColorDeclarations(input.dark.sys.color),
-    ...shapeDeclarations(input.dark.sys.shape),
-    ...customDeclarations(input.dark.custom),
-  ];
+  const rootDeclarations: string[] = [];
+  if (input.emitRef) appendStrings(rootDeclarations, refDeclarations(input.ref));
+  appendStrings(rootDeclarations, sysColorDeclarations(input.light.sys.color));
+  appendStrings(rootDeclarations, shapeDeclarations(input.light.sys.shape));
+  appendStrings(rootDeclarations, customDeclarations(input.light.custom));
+  appendStrings(rootDeclarations, componentDeclarations(input.component ?? {}));
+  const darkDeclarations: string[] = [];
+  appendStrings(darkDeclarations, sysColorDeclarations(input.dark.sys.color));
+  appendStrings(darkDeclarations, shapeDeclarations(input.dark.sys.shape));
+  appendStrings(darkDeclarations, customDeclarations(input.dark.custom));
   const darkBlocks =
     input.darkSelector === DEFAULT_DARK_SELECTOR
       ? [
@@ -670,15 +849,25 @@ function emitThemeCss(input: ThemeValuesInput): string {
           renderBlock(input.darkSelector, darkDeclarations),
         ]
       : [renderBlock(input.darkSelector, darkDeclarations)];
-  return [renderBlock(input.selector, rootDeclarations), ...darkBlocks].join('\n\n');
+  const blocks = [renderBlock(input.selector, rootDeclarations)];
+  appendStrings(blocks, darkBlocks);
+  return styleArrayJoin(blocks, '\n\n');
 }
 
 function refDeclarations(ref: ThemeReferencePalettes): string[] {
   const declarations: string[] = [];
-  for (const palette of REFERENCE_PALETTE_NAMES) {
-    for (const toneValue of REFERENCE_TONES) {
-      declarations.push(
-        `${themeVar('ref', 'palette', toKebabCase(palette), String(toneValue))}: ${ref[palette][toneValue]};`,
+  for (let paletteIndex = 0; paletteIndex < REFERENCE_PALETTE_NAMES.length; paletteIndex += 1) {
+    const palette = REFERENCE_PALETTE_NAMES[paletteIndex] as ThemeReferencePaletteName;
+    for (let toneIndex = 0; toneIndex < REFERENCE_TONES.length; toneIndex += 1) {
+      const toneValue = REFERENCE_TONES[toneIndex] as number;
+      const value = ref[palette][toneValue];
+      if (typeof value !== 'string') {
+        throw new TypeError(`style.defineTheme ref.${palette}.${toneValue} must be a string.`);
+      }
+      assertCssValueSafe(value, 'style.defineTheme', `ref.${palette}.${toneValue}`);
+      styleArrayPush(
+        declarations,
+        `${themeVar('ref', 'palette', toKebabCase(palette), cssPrimitiveText(toneValue))}: ${value};`,
       );
     }
   }
@@ -686,40 +875,81 @@ function refDeclarations(ref: ThemeReferencePalettes): string[] {
 }
 
 function sysColorDeclarations(colors: ThemeSystemColorValues): string[] {
-  return SYSTEM_COLOR_NAMES.map(
-    (name) => `${themeVar('sys', 'color', toKebabCase(name))}: ${colors[name]};`,
-  );
+  const declarations: string[] = [];
+  for (let index = 0; index < SYSTEM_COLOR_NAMES.length; index += 1) {
+    const name = SYSTEM_COLOR_NAMES[index] as ThemeSystemColorName;
+    const value = styleOwnDataValue(colors, name, 'style.defineTheme system colors');
+    if (typeof value !== 'string')
+      throw new TypeError(`style.defineTheme system color ${name} must be a string.`);
+    assertCssValueSafe(value, 'style.defineTheme', `sys.color.${name}`);
+    styleArrayPush(declarations, `${themeVar('sys', 'color', toKebabCase(name))}: ${value};`);
+  }
+  return declarations;
 }
 
 function shapeDeclarations(shape: ThemeShapeValues): string[] {
-  return Object.entries(shape).map(
-    ([name, value]) => `${themeVar('sys', 'shape', toKebabCase(name))}: ${value};`,
-  );
+  const declarations: string[] = [];
+  const entries = styleOwnDataEntries(shape, 'style.defineTheme shape');
+  for (let index = 0; index < entries.length; index += 1) {
+    const [name, value] = entries[index] as readonly [string, unknown];
+    if (typeof value !== 'string')
+      throw new TypeError(`style.defineTheme shape ${name} must be a string.`);
+    assertCssValueSafe(value, 'style.defineTheme', `shape.${name}`);
+    styleArrayPush(declarations, `${themeVar('sys', 'shape', toKebabCase(name))}: ${value};`);
+  }
+  return declarations;
 }
 
 function customDeclarations(custom: Readonly<Record<string, ThemeCustomColorGroup>>): string[] {
   const declarations: string[] = [];
-  for (const [name, group] of Object.entries(custom).sort(([left], [right]) =>
-    left.localeCompare(right),
-  )) {
-    declarations.push(`${themeVar('custom', name, 'color')}: ${group.color};`);
-    declarations.push(`${themeVar('custom', name, 'on-color')}: ${group.onColor};`);
-    declarations.push(`${themeVar('custom', name, 'color-container')}: ${group.colorContainer};`);
-    declarations.push(
-      `${themeVar('custom', name, 'on-color-container')}: ${group.onColorContainer};`,
+  const entries = mutableEntryCopy(styleOwnDataEntries(custom, 'style.defineTheme custom colors'));
+  styleArraySort(entries, ([left], [right]) => styleStringLocaleCompare(left, right));
+  for (let index = 0; index < entries.length; index += 1) {
+    const [name, group] = entries[index] as readonly [string, unknown];
+    assertPlainThemeRecord(group, `style.defineTheme custom color ${name}`);
+    const color = requiredCssString(group, 'color', `custom.${name}`);
+    const onColor = requiredCssString(group, 'onColor', `custom.${name}`);
+    const colorContainer = requiredCssString(group, 'colorContainer', `custom.${name}`);
+    const onColorContainer = requiredCssString(group, 'onColorContainer', `custom.${name}`);
+    styleArrayPush(declarations, `${themeVar('custom', name, 'color')}: ${color};`);
+    styleArrayPush(declarations, `${themeVar('custom', name, 'on-color')}: ${onColor};`);
+    styleArrayPush(
+      declarations,
+      `${themeVar('custom', name, 'color-container')}: ${colorContainer};`,
+    );
+    styleArrayPush(
+      declarations,
+      `${themeVar('custom', name, 'on-color-container')}: ${onColorContainer};`,
     );
   }
   return declarations;
 }
 
 function componentDeclarations(component: ThemeComponentTokensInput): string[] {
-  return Object.entries(component)
-    .sort(([left], [right]) => left.localeCompare(right))
-    .map(([name, value]) => `${themeVar('component', name)}: ${String(value)};`);
+  const entries = mutableEntryCopy(
+    styleOwnDataEntries(component, 'style.defineTheme component tokens'),
+  );
+  styleArraySort(entries, ([left], [right]) => styleStringLocaleCompare(left, right));
+  const declarations: string[] = [];
+  for (let index = 0; index < entries.length; index += 1) {
+    const [name, value] = entries[index] as readonly [string, unknown];
+    if (typeof value !== 'string' && typeof value !== 'number') {
+      throw new TypeError(`style.defineTheme component token ${name} must be a string or number.`);
+    }
+    const text = cssPrimitiveText(value);
+    assertCssValueSafe(value, 'style.defineTheme', `component.${name}`);
+    styleArrayPush(declarations, `${themeVar('component', name)}: ${text};`);
+  }
+  return declarations;
 }
 
 function renderBlock(selector: string, declarations: readonly string[]): string {
-  return `${selector} {\n${declarations.map((declaration) => `  ${declaration}`).join('\n')}\n}`;
+  assertCssSelectorSafe(selector, 'style.defineTheme', 'selector');
+  const indented: string[] = [];
+  for (let index = 0; index < declarations.length; index += 1) {
+    styleArrayPush(indented, `  ${declarations[index] as string}`);
+  }
+  return `${selector} {\n${styleArrayJoin(indented, '\n')}\n}`;
 }
 
 function renderMediaBlock(
@@ -727,19 +957,24 @@ function renderMediaBlock(
   selector: string,
   declarations: readonly string[],
 ): string {
-  return `@media ${query} {\n${renderBlock(selector, declarations)
-    .split('\n')
-    .map((line) => `  ${line}`)
-    .join('\n')}\n}`;
+  assertCssSyntaxFragmentSafe(query, 'style.defineTheme', 'media query');
+  const lines = styleStringSplit(renderBlock(selector, declarations), '\n');
+  const indented: string[] = [];
+  for (let index = 0; index < lines.length; index += 1) {
+    styleArrayPush(indented, `  ${lines[index] as string}`);
+  }
+  return `@media ${query} {\n${styleArrayJoin(indented, '\n')}\n}`;
 }
 
 function referenceTokenVars(): ThemeReferencePalettes {
   const palettes: Partial<Record<ThemeReferencePaletteName, Readonly<Record<number, string>>>> = {};
-  for (const palette of REFERENCE_PALETTE_NAMES) {
+  for (let paletteIndex = 0; paletteIndex < REFERENCE_PALETTE_NAMES.length; paletteIndex += 1) {
+    const palette = REFERENCE_PALETTE_NAMES[paletteIndex] as ThemeReferencePaletteName;
     const tones: Record<number, string> = {};
-    for (const toneValue of REFERENCE_TONES) {
+    for (let toneIndex = 0; toneIndex < REFERENCE_TONES.length; toneIndex += 1) {
+      const toneValue = REFERENCE_TONES[toneIndex] as number;
       tones[toneValue] =
-        `var(${themeVar('ref', 'palette', toKebabCase(palette), String(toneValue))})`;
+        `var(${themeVar('ref', 'palette', toKebabCase(palette), cssPrimitiveText(toneValue))})`;
     }
     palettes[palette] = tones;
   }
@@ -748,7 +983,8 @@ function referenceTokenVars(): ThemeReferencePalettes {
 
 function systemColorTokenVars(): ThemeSystemColorValues {
   const result: Partial<Record<ThemeSystemColorName, string>> = {};
-  for (const name of SYSTEM_COLOR_NAMES) {
+  for (let index = 0; index < SYSTEM_COLOR_NAMES.length; index += 1) {
+    const name = SYSTEM_COLOR_NAMES[index] as ThemeSystemColorName;
     result[name] = `var(${themeVar('sys', 'color', toKebabCase(name))})`;
   }
   return result as ThemeSystemColorValues;
@@ -769,16 +1005,89 @@ function seedToArgb(seed: ThemeSeed): number {
 }
 
 function clampContrast(contrast: number): number {
-  return Math.max(-1, Math.min(1, contrast));
+  return styleMathMax(-1, styleMathMin(1, contrast));
 }
 
 function themeVar(...parts: readonly string[]): string {
-  return `--kovo-theme-${parts.map(toKebabCase).join('-')}`;
+  const normalized: string[] = [];
+  for (let index = 0; index < parts.length; index += 1) {
+    styleArrayPush(normalized, toKebabCase(parts[index] as string));
+  }
+  const property = `--kovo-theme-${styleArrayJoin(normalized, '-')}`;
+  assertCssCustomPropertyNameSafe(property, 'style.defineTheme', styleArrayJoin(parts, '.'));
+  return property;
 }
 
 function toKebabCase(value: string): string {
-  return value
-    .replace(/([a-z0-9])([A-Z])/g, '$1-$2')
-    .replace(/[_\s]+/g, '-')
-    .toLowerCase();
+  let output = '';
+  let previousWasLowerOrDigit = false;
+  for (let index = 0; index < value.length; index += 1) {
+    const character = value[index] ?? '';
+    const upper = character >= 'A' && character <= 'Z';
+    const separator =
+      character === '_' ||
+      character === ' ' ||
+      character === '\t' ||
+      character === '\n' ||
+      character === '\r' ||
+      character === '\f';
+    if (separator) {
+      if (output[output.length - 1] !== '-') output += '-';
+      previousWasLowerOrDigit = false;
+      continue;
+    }
+    if (upper && previousWasLowerOrDigit) output += '-';
+    output += upper ? themeAsciiLower(character) : character;
+    previousWasLowerOrDigit =
+      (character >= 'a' && character <= 'z') || (character >= '0' && character <= '9');
+  }
+  return output;
+}
+
+function themeAsciiLower(character: string): string {
+  const upper = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  const lower = 'abcdefghijklmnopqrstuvwxyz';
+  for (let index = 0; index < upper.length; index += 1) {
+    if (upper[index] === character) return lower[index] ?? character;
+  }
+  return character;
+}
+
+function requiredCssString(value: object, property: string, label: string): string {
+  const result = styleOwnDataValue(value, property, label);
+  if (typeof result !== 'string') {
+    throw new TypeError(`style.defineTheme ${label}.${property} must be a string.`);
+  }
+  assertCssValueSafe(result, 'style.defineTheme', `${label}.${property}`);
+  return result;
+}
+
+function mutableEntryCopy(
+  entries: readonly (readonly [string, unknown])[],
+): (readonly [string, unknown])[] {
+  const copy: (readonly [string, unknown])[] = [];
+  for (let index = 0; index < entries.length; index += 1) {
+    styleArrayPush(copy, entries[index] as readonly [string, unknown]);
+  }
+  return copy;
+}
+
+function deepFreezeData<T>(value: T): T {
+  if ((typeof value !== 'object' || value === null) && typeof value !== 'function') return value;
+  if (styleArrayIsArray(value)) {
+    for (let index = 0; index < value.length; index += 1) deepFreezeData(value[index]);
+    return styleFreeze(value) as T;
+  }
+  if (typeof value === 'function') return styleFreeze(value) as T;
+  const entries = styleOwnDataEntries(value, 'style theme output');
+  for (let index = 0; index < entries.length; index += 1) {
+    deepFreezeData((entries[index] as readonly [string, unknown])[1]);
+  }
+  return styleFreeze(value) as T;
+}
+
+function appendStrings(target: string[], values: readonly string[]): void {
+  for (let index = 0; index < values.length; index += 1) {
+    styleArrayPush(target, values[index] as string);
+  }
 }

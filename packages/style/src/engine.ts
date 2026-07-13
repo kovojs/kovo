@@ -1,8 +1,55 @@
 import { cssLengthValue, getPriority } from './internal.js';
+import {
+  assertCssCustomPropertyNameSafe,
+  assertCssSyntaxFragmentSafe,
+  assertCssValueSafe,
+  assertCssVarReferenceSafe,
+  cssPrimitiveText,
+} from './css-security.js';
+import {
+  styleArrayIsArray,
+  styleArrayJoin,
+  styleArrayPush,
+  styleArraySort,
+  styleDenseArraySnapshot,
+  styleFreeze,
+  styleJsonStringify,
+  styleMap,
+  styleMapDelete,
+  styleMapEntries,
+  styleMapGet,
+  styleMapHas,
+  styleMapSet,
+  styleMapValues,
+  styleMathImul,
+  styleNumber,
+  styleNumberIsFinite,
+  styleNumberToBase36,
+  styleOwnDataEntries,
+  styleOwnDataValue,
+  styleErrorStack,
+  styleRegExpExec,
+  styleStringEndsWith,
+  styleStringCharCodeAt,
+  styleStringIncludes,
+  styleStringLastIndexOf,
+  styleStringLocaleCompare,
+  styleStringReplace,
+  styleStringReplaceAll,
+  styleStringSlice,
+  styleStringSplit,
+  styleStringStartsWith,
+  styleStringTrim,
+  styleWeakSet,
+  styleWeakSetAdd,
+  styleWeakSetHas,
+} from './style-security-intrinsics.js';
 
 const CSS_MARKER = '$$css';
 const STYLE_SRC = 'data-style-src';
 const DEFAULT_LAYER_NAME = 'kovo-style';
+const trustedAtomicRules = styleWeakSet<AtomicRule>();
+const trustedKeyframes = styleWeakSet<KeyframesResult>();
 
 /** CSS scalar values Kovo's static atomic compiler can emit without runtime CSS parsing. */
 export type StylePrimitive = string | number;
@@ -166,7 +213,10 @@ export function create<const Styles extends Record<string, StyleObject>>(
   identity: { readonly namespace?: string; readonly source?: string } = {},
 ): StyleNamespaces<Styles> {
   assertObjectInput(styles, 'style.create', 'styles');
-  return createAtomicStylesInternal(styles, identity).styles;
+  return createAtomicStylesInternal(
+    styles,
+    snapshotStyleIdentity(identity, 'style.create identity'),
+  ).styles;
 }
 
 /**
@@ -188,7 +238,10 @@ export function createAtomicStyles<const Styles extends Record<string, StyleObje
   identity: StyleIdentityOptions = {},
 ): AtomicCssResult<Styles> {
   assertObjectInput(styles, 'style.createAtomicStyles', 'styles');
-  return createAtomicStylesInternal(styles, identity);
+  return createAtomicStylesInternal(
+    styles,
+    snapshotStyleIdentity(identity, 'style.createAtomicStyles identity'),
+  );
 }
 
 function createAtomicStylesInternal<const Styles extends Record<string, StyleObject>>(
@@ -197,12 +250,15 @@ function createAtomicStylesInternal<const Styles extends Record<string, StyleObj
 ): AtomicCssResult<Styles> {
   const resolvedIdentity = resolveStyleIdentity(styles, identity);
   const namespace = slug(resolvedIdentity.namespace ?? resolvedIdentity.source ?? 'style');
-  const rulesByKey = new Map<string, AtomicRule>();
+  const rulesByKey = styleMap<string, AtomicRule>();
   const compiled: Record<string, CompiledStyle> = {};
 
-  for (const [styleKey, styleObject] of Object.entries(styles)) {
+  const styleEntries = styleOwnDataEntries(styles, 'style.create styles');
+  for (let styleIndex = 0; styleIndex < styleEntries.length; styleIndex += 1) {
+    const [styleKey, styleObject] = styleEntries[styleIndex] as readonly [string, unknown];
+    assertObjectInput(styleObject, 'style.create', `styles[${styleJsonStringify(styleKey)}]`);
     const ruleEntries: Array<readonly [string, string]> = [];
-    const styleRules = compileObject(styleObject, {
+    const styleRules = compileObject(styleObject as StyleObject, {
       atRules: [],
       namespace,
       ruleEntries,
@@ -214,12 +270,31 @@ function createAtomicStylesInternal<const Styles extends Record<string, StyleObj
     compiled[styleKey] = styleRecord(styleKey, styleRules, ruleEntries, resolvedIdentity.source);
   }
 
-  const rules = [...rulesByKey.values()].sort(compareRules);
-  return {
-    styles: compiled as { readonly [Key in keyof Styles]: CompiledStyle },
-    rules,
+  const rules = styleArraySort(styleMapValues(rulesByKey), compareRules);
+  return styleFreeze({
+    styles: styleFreeze(compiled) as { readonly [Key in keyof Styles]: CompiledStyle },
+    rules: styleFreeze(rules),
     css: emitAtomicCss(rules),
-  };
+  });
+}
+
+function snapshotStyleIdentity(
+  identity: StyleIdentityOptions,
+  label: string,
+): StyleIdentityOptions {
+  assertObjectInput(identity, label, 'options');
+  const namespace = styleOwnDataValue(identity, 'namespace', label);
+  const source = styleOwnDataValue(identity, 'source', label);
+  if (namespace !== undefined && typeof namespace !== 'string') {
+    throw new TypeError(`${label}.namespace must be a string own data property.`);
+  }
+  if (source !== undefined && typeof source !== 'string') {
+    throw new TypeError(`${label}.source must be a string own data property.`);
+  }
+  return styleFreeze({
+    ...(namespace === undefined ? {} : { namespace }),
+    ...(source === undefined ? {} : { source }),
+  });
 }
 
 function resolveStyleIdentity(
@@ -241,8 +316,8 @@ function inferStyleCallSite(): StyleCallSite | null {
   if (!site) return null;
   const filePath = slashPath(site.filePath);
   if (
-    !filePath.includes('/packages/ui/src/') &&
-    !filePath.includes('/node_modules/@kovojs/ui/src/')
+    !styleStringIncludes(filePath, '/packages/ui/src/') &&
+    !styleStringIncludes(filePath, '/node_modules/@kovojs/ui/src/')
   ) {
     return null;
   }
@@ -253,51 +328,70 @@ function inferStyleCallSite(): StyleCallSite | null {
 }
 
 function styleStackCallSite(): { column: number; filePath: string; line: number } | null {
-  const stack = new Error().stack ?? '';
-  for (const line of stack.split('\n')) {
-    const rawFrame = line.trim().replace(/^at\s+/, '');
-    const frame = rawFrame.includes('(')
-      ? rawFrame.slice(rawFrame.lastIndexOf('(') + 1, rawFrame.endsWith(')') ? -1 : undefined)
+  const stack = styleErrorStack();
+  const stackLines = styleStringSplit(stack, '\n');
+  for (let stackIndex = 0; stackIndex < stackLines.length; stackIndex += 1) {
+    const line = stackLines[stackIndex] as string;
+    const rawFrame = styleStringReplace(styleStringTrim(line), /^at\s+/, '');
+    const frame = styleStringIncludes(rawFrame, '(')
+      ? styleStringSlice(
+          rawFrame,
+          styleStringLastIndexOf(rawFrame, '(') + 1,
+          styleStringEndsWith(rawFrame, ')') ? -1 : undefined,
+        )
       : rawFrame;
     const match =
-      /\(?((?:file:\/\/)?\/[^():]+):(\d+):(\d+)\)?$/.exec(frame) ??
-      /\(?([A-Za-z]:\\[^():]+):(\d+):(\d+)\)?$/.exec(frame);
+      styleRegExpExec(/\(?((?:file:\/\/)?\/[^():]+):(\d+):(\d+)\)?$/, frame) ??
+      styleRegExpExec(/\(?([A-Za-z]:\\[^():]+):(\d+):(\d+)\)?$/, frame);
     if (!match) continue;
     const rawFilePath = match[1] ?? '';
-    if (rawFilePath.endsWith('/packages/style/src/engine.ts')) continue;
-    const filePath = rawFilePath.startsWith('file://')
+    if (styleStringEndsWith(rawFilePath, '/packages/style/src/engine.ts')) continue;
+    const filePath = styleStringStartsWith(rawFilePath, 'file://')
       ? new URL(rawFilePath).pathname
       : rawFilePath;
     return {
-      column: Number(match[3]),
+      column: styleNumber(match[3]),
       filePath,
-      line: Number(match[2]),
+      line: styleNumber(match[2]),
     };
   }
   return null;
 }
 
 function styleSourceFileName(filePath: string): string {
-  const fileName = filePath.split(/[\\/]/).filter(Boolean).at(-1) ?? 'style.tsx';
-  if (/\.[cm]?jsx?$/.test(fileName)) return fileName.replace(/\.[cm]?jsx?$/, '.tsx');
+  const parts = styleStringSplit(filePath, /[\\/]/);
+  let fileName = 'style.tsx';
+  for (let index = 0; index < parts.length; index += 1) {
+    if ((parts[index] ?? '') !== '') fileName = parts[index] ?? fileName;
+  }
+  if (styleRegExpExec(/\.[cm]?jsx?$/, fileName)) {
+    return styleStringReplace(fileName, /\.[cm]?jsx?$/, '.tsx');
+  }
   return fileName;
 }
 
 function slashPath(value: string): string {
-  return value.replaceAll('\\', '/');
+  return styleStringReplaceAll(value, '\\', '/');
 }
 
 function derivedRuntimeStyleNamespace(
   fileName: string,
   styles: Record<string, StyleObject>,
 ): string {
-  const fileBase = fileName
-    .split(/[\\/]/)
-    .filter(Boolean)
-    .at(-1)
-    ?.replace(/\.[cm]?[tj]sx?$/, '');
+  const fileParts = styleStringSplit(fileName, /[\\/]/);
+  let fileBase: string | undefined;
+  for (let index = 0; index < fileParts.length; index += 1) {
+    if ((fileParts[index] ?? '') !== '') fileBase = fileParts[index];
+  }
+  if (fileBase !== undefined) {
+    fileBase = styleStringReplace(fileBase, /\.[cm]?[tj]sx?$/, '');
+  }
   const fileNamespace = fileBase && fileBase.length > 0 ? fileBase : 'style';
-  const styleKeys = Object.keys(styles);
+  const styleKeys: string[] = [];
+  const entries = styleOwnDataEntries(styles, 'style identity styles');
+  for (let index = 0; index < entries.length; index += 1) {
+    styleArrayPush(styleKeys, (entries[index] as readonly [string, unknown])[0]);
+  }
 
   if (isSubset(styleKeys, ['bottom', 'left', 'right', 'top'])) return `${fileNamespace}-side`;
   if (isSubset(styleKeys, ['horizontal', 'vertical'])) return `${fileNamespace}-orientation`;
@@ -323,7 +417,15 @@ function derivedRuntimeStyleNamespace(
 }
 
 function isSubset(values: readonly string[], allowed: readonly string[]): boolean {
-  return values.length > 0 && values.every((value) => allowed.includes(value));
+  if (values.length === 0) return false;
+  for (let valueIndex = 0; valueIndex < values.length; valueIndex += 1) {
+    let found = false;
+    for (let allowedIndex = 0; allowedIndex < allowed.length; allowedIndex += 1) {
+      if (values[valueIndex] === allowed[allowedIndex]) found = true;
+    }
+    if (!found) return false;
+  }
+  return true;
 }
 
 /**
@@ -343,7 +445,9 @@ function mergeToResult(styles: readonly StyleInput[]): MergeResult {
     className: merged.className,
     inlineStyle: merged.inlineStyle,
   };
-  if (merged.styleSources.length > 0) result.styleSrc = merged.styleSources.join('; ');
+  if (merged.styleSources.length > 0) {
+    result.styleSrc = styleArrayJoin(merged.styleSources, '; ');
+  }
   return result;
 }
 
@@ -357,7 +461,7 @@ export function attrs(...styles: readonly StyleInput[]): AttrsResult {
   const attrsResult: { class?: string; [STYLE_SRC]?: string; style?: string } = {};
   if (merged.className.length > 0) attrsResult.class = merged.className;
   if (merged.styleSrc) attrsResult[STYLE_SRC] = merged.styleSrc;
-  if (Object.keys(merged.inlineStyle).length > 0)
+  if (styleOwnDataEntries(merged.inlineStyle, 'style.attrs inline style').length > 0)
     attrsResult.style = serializeInlineStyle(merged.inlineStyle);
   return attrsResult;
 }
@@ -375,36 +479,43 @@ export function defineVars<const Tokens extends Record<string, CssValue>>(
   identity: { readonly namespace?: string; readonly source?: string } = {},
 ): Vars<Tokens> {
   assertObjectInput(tokens, 'style.defineVars', 'tokens');
-  const namespace = slug(identity.namespace ?? identity.source ?? 'tokens');
+  const stableIdentity = snapshotStyleIdentity(identity, 'style.defineVars identity');
+  const namespace = slug(stableIdentity.namespace ?? stableIdentity.source ?? 'tokens');
   const result: Record<string, string | true | readonly AtomicRule[]> = {
     [CSS_MARKER]: true,
     __vars: true,
   };
   const rules: AtomicRule[] = [];
 
-  for (const [token, value] of Object.entries(tokens)) {
+  const tokenEntries = styleOwnDataEntries(tokens, 'style.defineVars tokens');
+  for (let tokenIndex = 0; tokenIndex < tokenEntries.length; tokenIndex += 1) {
+    const [token, value] = tokenEntries[tokenIndex] as readonly [string, unknown];
+    assertCssPrimitive(value, 'style.defineVars', token);
     assertCssNameSafe(token, 'style.defineVars', 'token');
     const cssProperty = `--kovo-${namespace}-${toKebabCase(token)}`;
     assertCssCustomPropertyNameSafe(cssProperty, 'style.defineVars', token);
     result[token] = `var(${cssProperty})`;
     if (value != null) {
       assertCssValueSafe(value, 'style.defineVars', token);
-      rules.push({
-        atRules: [],
-        className: ':root',
-        cssProperty,
-        property: token,
-        priority: getPriority(cssProperty),
-        rule: `:root{${cssProperty}:${String(value)}}`,
-        selectorSuffix: '',
-        source: `${identity.source ?? namespace}#${token}`,
-        value,
-      });
+      styleArrayPush(
+        rules,
+        registerAtomicRule({
+          atRules: [],
+          className: ':root',
+          cssProperty,
+          property: token,
+          priority: getPriority(cssProperty),
+          rule: `:root{${cssProperty}:${cssPrimitiveText(value)}}`,
+          selectorSuffix: '',
+          source: `${stableIdentity.source ?? namespace}#${token}`,
+          value,
+        }),
+      );
     }
   }
 
-  result.__rules = rules;
-  return result as Vars<Tokens>;
+  result.__rules = styleFreeze(rules);
+  return styleFreeze(result) as Vars<Tokens>;
 }
 
 /**
@@ -417,7 +528,14 @@ export function defineConsts<const Constants extends Record<string, StylePrimiti
   constants: Constants,
 ): Consts<Constants> {
   assertObjectInput(constants, 'style.defineConsts', 'constants');
-  return Object.freeze({ ...constants }) as Consts<Constants>;
+  const snapshot: Record<string, StylePrimitive> = {};
+  const constantEntries = styleOwnDataEntries(constants, 'style.defineConsts constants');
+  for (let index = 0; index < constantEntries.length; index += 1) {
+    const [name, value] = constantEntries[index] as readonly [string, unknown];
+    assertCssPrimitive(value, 'style.defineConsts', name);
+    snapshot[name] = value;
+  }
+  return styleFreeze(snapshot) as Consts<Constants>;
 }
 
 /**
@@ -435,12 +553,15 @@ export function createTheme<Tokens extends Record<string, CssValue>>(
 ): Theme {
   assertObjectInput(baseTokens, 'style.createTheme', 'baseTokens');
   assertObjectInput(overrides, 'style.createTheme', 'overrides');
-  const namespace = slug(identity.namespace ?? identity.source ?? 'theme');
-  const className = `kv-${namespace}-theme-${hash(JSON.stringify(overrides))}`;
+  const stableIdentity = snapshotStyleIdentity(identity, 'style.createTheme identity');
+  const overrideEntries = styleOwnDataEntries(overrides, 'style.createTheme overrides');
+  const namespace = slug(stableIdentity.namespace ?? stableIdentity.source ?? 'theme');
+  const className = `kv-${namespace}-theme-${hash(canonicalStyleData(overrides, 'style.createTheme overrides'))}`;
   const rules: AtomicRule[] = [];
 
-  for (const token of Object.keys(overrides) as Array<Extract<keyof Tokens, string>>) {
-    const value = overrides[token];
+  for (let overrideIndex = 0; overrideIndex < overrideEntries.length; overrideIndex += 1) {
+    const [token, value] = overrideEntries[overrideIndex] as readonly [string, unknown];
+    assertCssPrimitive(value, 'style.createTheme', token, true);
     if (value == null) continue;
     assertCssNameSafe(token, 'style.createTheme', 'token');
     assertCssCustomPropertyNameSafe(
@@ -449,35 +570,38 @@ export function createTheme<Tokens extends Record<string, CssValue>>(
       token,
     );
     assertCssValueSafe(value, 'style.createTheme', token);
-    const tokenValue = baseTokens[token];
+    const tokenValue = styleOwnDataValue(baseTokens, token, 'style.createTheme baseTokens');
     const cssProperty = assertCssVarReferenceSafe(tokenValue, 'style.createTheme', token);
-    rules.push({
-      atRules: [],
-      className,
-      cssProperty,
-      property: token,
-      priority: getPriority(cssProperty),
-      rule: `.${className}{${cssProperty}:${String(value)}}`,
-      selectorSuffix: '',
-      source: `${identity.source ?? namespace}#${token}`,
-      value,
-    });
+    styleArrayPush(
+      rules,
+      registerAtomicRule({
+        atRules: [],
+        className,
+        cssProperty,
+        property: token,
+        priority: getPriority(cssProperty),
+        rule: `.${className}{${cssProperty}:${cssPrimitiveText(value)}}`,
+        selectorSuffix: '',
+        source: `${stableIdentity.source ?? namespace}#${token}`,
+        value,
+      }),
+    );
   }
 
   const theme: {
     [CSS_MARKER]: true;
     [STYLE_SRC]?: string;
-    __rules: AtomicRule[];
+    __rules: readonly AtomicRule[];
     __theme: true;
     className: string;
   } = {
     [CSS_MARKER]: true,
-    __rules: rules,
+    __rules: styleFreeze(rules),
     __theme: true,
     className,
   };
-  if (identity.source) theme[STYLE_SRC] = identity.source;
-  return theme;
+  if (stableIdentity.source) theme[STYLE_SRC] = stableIdentity.source;
+  return styleFreeze(theme);
 }
 
 /**
@@ -488,7 +612,16 @@ export function createTheme<Tokens extends Record<string, CssValue>>(
  */
 export function raw(style: InlineStyle): readonly [null, InlineStyle] {
   assertObjectInput(style, 'style.raw', 'style');
-  return [null, style] as const;
+  const snapshot: Record<string, StylePrimitive> = {};
+  const rawEntries = styleOwnDataEntries(style, 'style.raw style');
+  for (let index = 0; index < rawEntries.length; index += 1) {
+    const [property, value] = rawEntries[index] as readonly [string, unknown];
+    assertCssPrimitive(value, 'style.raw', property);
+    assertCssSyntaxFragmentSafe(property, 'style.raw', 'property', true);
+    assertCssValueSafe(value, 'style.raw', property, { allowBackslash: true });
+    snapshot[property] = value;
+  }
+  return styleFreeze([null, styleFreeze(snapshot)] as const);
 }
 
 /**
@@ -522,71 +655,129 @@ export function createKeyframes(
   identity: StyleIdentityOptions = {},
 ): KeyframesResult {
   assertObjectInput(frames, 'style.keyframes', 'frames');
+  const stableIdentity = snapshotStyleIdentity(identity, 'style.keyframes identity');
+  const frameEntries = styleOwnDataEntries(frames, 'style.keyframes frames');
   // Hash the RAW frames object (not the emitted CSS) so the name is stable across
   // engine serialization changes and matches the prior name-only behavior.
-  const name = `kv-${slug(identity.namespace ?? identity.source ?? 'keyframes')}-${hash(JSON.stringify(frames))}`;
-  const steps = Object.entries(frames)
-    .map(([step, declarations]) => {
-      assertCssSyntaxFragmentSafe(step, 'style.keyframes', 'step');
-      assertObjectInput(declarations, 'style.keyframes', `frames[${JSON.stringify(step)}]`);
-      return `${step}{${keyframeDeclarations(declarations)}}`;
-    })
-    .join('');
-  return { css: `@keyframes ${name}{${steps}}`, name };
+  const name = `kv-${slug(stableIdentity.namespace ?? stableIdentity.source ?? 'keyframes')}-${hash(canonicalStyleData(frames, 'style.keyframes frames'))}`;
+  const stepCss: string[] = [];
+  for (let stepIndex = 0; stepIndex < frameEntries.length; stepIndex += 1) {
+    const [step, declarations] = frameEntries[stepIndex] as readonly [string, unknown];
+    assertCssSyntaxFragmentSafe(step, 'style.keyframes', 'step');
+    assertObjectInput(declarations, 'style.keyframes', `frames[${styleJsonStringify(step)}]`);
+    styleArrayPush(stepCss, `${step}{${keyframeDeclarations(declarations as StyleObject)}}`);
+  }
+  const result = styleFreeze({ css: `@keyframes ${name}{${styleArrayJoin(stepCss, '')}}`, name });
+  styleWeakSetAdd(trustedKeyframes, result);
+  return result;
 }
 
 function keyframeDeclarations(declarations: StyleObject): string {
   const parts: string[] = [];
-  for (const [property, value] of Object.entries(declarations)) {
+  const declarationEntries = styleOwnDataEntries(declarations, 'style.keyframes declarations');
+  for (let index = 0; index < declarationEntries.length; index += 1) {
+    const [property, value] = declarationEntries[index] as readonly [string, unknown];
     // Keyframe steps carry only flat declarations (no pseudos/at-rules/nesting),
     // matching CSS `@keyframes`. Skip null/undefined like atomic compilation does.
     if (value == null || isNestedStyle(value)) continue;
+    assertCssPrimitive(value, 'style.keyframes', property);
     assertCssSyntaxFragmentSafe(property, 'style.keyframes', 'property', true);
     assertCssValueSafe(value, 'style.keyframes', property, { allowBackslash: true });
-    const cssProperty = property.startsWith('--') ? property : toKebabCase(property);
-    parts.push(`${cssProperty}:${cssLengthValue(cssProperty, value)}`);
+    const cssProperty = styleStringStartsWith(property, '--') ? property : toKebabCase(property);
+    styleArrayPush(parts, `${cssProperty}:${cssLengthValue(cssProperty, value)}`);
   }
-  return parts.join(';');
+  return styleArrayJoin(parts, ';');
 }
 
 /** Emit atomic CSS in priority layers so split files do not depend on link order. */
 export function emitAtomicCss(rules: readonly AtomicRule[], options: CssEmitOptions = {}): string {
-  const layerName = options.layerName ?? DEFAULT_LAYER_NAME;
-  const byPriority = new Map<number, AtomicRule[]>();
-  for (const rule of rules) {
-    const bucket = byPriority.get(rule.priority) ?? [];
-    bucket.push(rule);
-    byPriority.set(rule.priority, bucket);
+  const stableRules = styleDenseArraySnapshot(rules, 'style.emitAtomicCss rules', (rule, index) => {
+    if (
+      typeof rule !== 'object' ||
+      rule === null ||
+      !styleWeakSetHas(trustedAtomicRules, rule as AtomicRule)
+    ) {
+      throw new TypeError(
+        `style.emitAtomicCss rules[${index}] must be a framework-created atomic rule.`,
+      );
+    }
+    return rule as AtomicRule;
+  });
+  assertObjectInput(options, 'style.emitAtomicCss', 'options');
+  const suppliedLayerName = styleOwnDataValue(options, 'layerName', 'style.emitAtomicCss options');
+  if (suppliedLayerName !== undefined && typeof suppliedLayerName !== 'string') {
+    throw new TypeError(
+      'style.emitAtomicCss options.layerName must be a string own data property.',
+    );
+  }
+  const layerName = suppliedLayerName ?? DEFAULT_LAYER_NAME;
+  assertCssCustomPropertyNameSafe(`--${layerName}`, 'style.emitAtomicCss', 'layerName');
+  const suppliedKeyframes = styleOwnDataValue(options, 'keyframes', 'style.emitAtomicCss options');
+  const keyframes =
+    suppliedKeyframes === undefined
+      ? styleFreeze([] as KeyframesResult[])
+      : styleDenseArraySnapshot(
+          suppliedKeyframes,
+          'style.emitAtomicCss options.keyframes',
+          (entry, index) => {
+            if (
+              typeof entry !== 'object' ||
+              entry === null ||
+              !styleWeakSetHas(trustedKeyframes, entry as KeyframesResult)
+            ) {
+              throw new TypeError(
+                `style.emitAtomicCss options.keyframes[${index}] must be a framework-created keyframes result.`,
+              );
+            }
+            return entry as KeyframesResult;
+          },
+        );
+  const byPriority = styleMap<number, AtomicRule[]>();
+  for (let index = 0; index < stableRules.length; index += 1) {
+    const rule = stableRules[index] as AtomicRule;
+    const bucket = styleMapGet(byPriority, rule.priority) ?? [];
+    styleArrayPush(bucket, rule);
+    styleMapSet(byPriority, rule.priority, bucket);
   }
 
-  const layers = [...byPriority.entries()]
-    .sort(([left], [right]) => left - right)
-    .map(([priority, bucket]) => {
-      const body = bucket
-        .sort(compareRules)
-        .map((rule) => rule.rule)
-        .join('');
-      // `kovo-style-${priority}` (hyphen, not `.${priority}`): a CSS layer-name
-      // segment cannot start with a digit, so `@layer kovo-style.1000` is invalid
-      // and a browser drops the whole block. Separate top-level priority layers
-      // keep the same cascade order (they order by first declaration, ascending
-      // priority here), matching the compiler's served-CSS normalization.
-      return `@layer ${layerName}-${priority}{${body}}`;
-    });
+  const priorityEntries = styleArraySort(
+    styleMapEntries(byPriority),
+    ([left], [right]) => left - right,
+  );
+  const layers: string[] = [];
+  for (let index = 0; index < priorityEntries.length; index += 1) {
+    const [priority, bucket] = priorityEntries[index] as [number, AtomicRule[]];
+    styleArraySort(bucket, compareRules);
+    const ruleText: string[] = [];
+    for (let ruleIndex = 0; ruleIndex < bucket.length; ruleIndex += 1) {
+      styleArrayPush(ruleText, (bucket[ruleIndex] as AtomicRule).rule);
+    }
+    const body = styleArrayJoin(ruleText, '');
+    // `kovo-style-${priority}` (hyphen, not `.${priority}`): a CSS layer-name
+    // segment cannot start with a digit, so `@layer kovo-style.1000` is invalid
+    // and a browser drops the whole block. Separate top-level priority layers
+    // keep the same cascade order (they order by first declaration, ascending
+    // priority here), matching the compiler's served-CSS normalization.
+    styleArrayPush(layers, `@layer ${layerName}-${priority}{${body}}`);
+  }
 
   // `@keyframes` blocks are emitted outside `@layer` (they carry no cascade
   // priority) and deduped by name so a keyframe shared across rules is written
   // once. They lead so the animation is defined before any rule references it.
-  const keyframeCss = dedupeKeyframes(options.keyframes ?? []);
-  return [...keyframeCss, ...layers].join('\n');
+  const keyframeCss = dedupeKeyframes(keyframes);
+  for (let index = 0; index < layers.length; index += 1) {
+    styleArrayPush(keyframeCss, layers[index] as string);
+  }
+  return styleArrayJoin(keyframeCss, '\n');
 }
 
 function dedupeKeyframes(keyframes: readonly KeyframesResult[]): string[] {
-  const byName = new Map<string, string>();
-  for (const keyframe of keyframes) {
-    if (!byName.has(keyframe.name)) byName.set(keyframe.name, keyframe.css);
+  const byName = styleMap<string, string>();
+  for (let index = 0; index < keyframes.length; index += 1) {
+    const keyframe = keyframes[index] as KeyframesResult;
+    if (!styleMapHas(byName, keyframe.name)) styleMapSet(byName, keyframe.name, keyframe.css);
   }
-  return [...byName.values()];
+  return styleMapValues(byName);
 }
 
 interface CompileContext {
@@ -610,150 +801,97 @@ function assertObjectInput(
   apiName: string,
   argumentName: string,
 ): asserts value is Record<string, unknown> {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+  if (!value || typeof value !== 'object' || styleArrayIsArray(value)) {
     throw new TypeError(`${apiName} requires ${argumentName} to be an object.`);
+  }
+  // Force the plain-record and accessor checks before any caller value is read.
+  styleOwnDataEntries(value, `${apiName} ${argumentName}`);
+}
+
+function assertCssPrimitive(
+  value: unknown,
+  apiName: string,
+  token: string,
+  allowNullish?: false,
+): asserts value is StylePrimitive;
+function assertCssPrimitive(
+  value: unknown,
+  apiName: string,
+  token: string,
+  allowNullish: true,
+): asserts value is StylePrimitive | null | undefined;
+function assertCssPrimitive(
+  value: unknown,
+  apiName: string,
+  token: string,
+  allowNullish = false,
+): asserts value is StylePrimitive | null | undefined {
+  if ((value === null || value === undefined) && allowNullish) return;
+  if (typeof value !== 'string' && typeof value !== 'number') {
+    throw new TypeError(`${apiName} requires token "${token}" to be a string or number.`);
+  }
+  if (typeof value === 'number' && !styleNumberIsFinite(value)) {
+    throw new TypeError(`${apiName} requires token "${token}" to be a finite number.`);
   }
 }
 
-// CSS rule/declaration delimiters (`<` `>` `{` `}` `;` and backslash) plus C0
-// control characters (newline/CR/tab/…). These let an author value break out of
-// the `:root{…}` / `.theme{…}` declaration block (`}` closes it, `;` appends a
-// sibling declaration) or, when the emitted CSS is inlined, out of a `<style>`
-// element (`</style>`). Ordinary values — `1px solid red`, `var(--x)`,
-// `color-mix(in srgb, #fff 50%, #000)`, `#16a34a` — contain none of these.
-const UNSAFE_CSS_DELIMITERS = new Set(['<', '>', '{', '}', ';', '\\']);
-const CSS_CUSTOM_PROPERTY_NAME = /^--[A-Za-z_][A-Za-z0-9_-]*$/;
-const CSS_VAR_REFERENCE = /^var\((--[A-Za-z_][A-Za-z0-9_-]*)\)$/;
-
-/**
- * Reject author CSS values that could break out of the declaration or rule they
- * are interpolated into. `style.defineVars` / `style.createTheme` are the only
- * public runtime functions that serialize an author value verbatim into a
- * `__rules[].rule` string (`:root{--x:<value>}` / `.theme{--x:<value>}`, and
- * thence `emitAtomicCss` output and, if an app inlines it, a `<style>` element).
- * On the static build path these are compiler-checked literals, but at runtime
- * an attacker-influenced value carrying `}` / `;` / `</style>` could inject new
- * rules or break out of the stylesheet. Kovo fails closed (CLAUDE.md technical-
- * preview bias; mirrors the CSP source-list validation in
- * `packages/server/src/csp.ts`), so a value carrying any of these is rejected
- * rather than escaped (SPEC.md §13.1).
- */
-function assertCssValueSafe(
-  value: StylePrimitive,
-  apiName: string,
-  token: string,
-  options: { allowBackslash?: boolean } = {},
-): void {
-  if (typeof value !== 'string') return;
-  for (const char of value) {
-    const code = char.codePointAt(0) ?? 0;
-    const unsafeDelimiter =
-      UNSAFE_CSS_DELIMITERS.has(char) && !(options.allowBackslash && char === '\\');
-    if (code <= 0x1f || unsafeDelimiter) {
-      throw new TypeError(
-        `${apiName} rejected an unsafe CSS value for token "${token}": value must not contain ` +
-          `${JSON.stringify(char)} (a CSS rule/declaration delimiter or markup/control character).`,
-      );
-    }
-  }
+function registerAtomicRule(rule: AtomicRule): AtomicRule {
+  const stableAtRules = styleFreeze(copyStrings(rule.atRules));
+  const stable = styleFreeze({ ...rule, atRules: stableAtRules });
+  styleWeakSetAdd(trustedAtomicRules, stable);
+  return stable;
 }
 
 function assertCssNameSafe(value: string, apiName: string, role: string): void {
   assertCssSyntaxFragmentSafe(value, apiName, role, true);
 }
 
-function assertCssCustomPropertyNameSafe(
-  cssProperty: string,
-  apiName: string,
-  token: string,
-): void {
-  if (!CSS_CUSTOM_PROPERTY_NAME.test(cssProperty)) {
-    throw new TypeError(
-      `${apiName} rejected CSS-invalid token "${token}": generated custom property ` +
-        `${JSON.stringify(cssProperty)} is not a valid unescaped CSS custom-property name.`,
-    );
-  }
-}
-
-function assertCssVarReferenceSafe(value: unknown, apiName: string, token: string): string {
-  if (typeof value !== 'string') {
-    throw new TypeError(
-      `${apiName} rejected token "${token}": base token must be a style.defineVars() ` +
-        'variable reference.',
-    );
-  }
-
-  const match = CSS_VAR_REFERENCE.exec(value);
-  if (!match) {
-    throw new TypeError(
-      `${apiName} rejected token "${token}": base token reference ${JSON.stringify(value)} ` +
-        'does not contain a valid unescaped CSS custom-property name.',
-    );
-  }
-
-  return match[1] as string;
-}
-
-function assertCssSyntaxFragmentSafe(
-  value: string,
-  apiName: string,
-  role: string,
-  rejectWhitespace = false,
-): void {
-  for (const char of value) {
-    const code = char.codePointAt(0) ?? 0;
-    if (
-      code <= 0x1f ||
-      code === 0x7f ||
-      (rejectWhitespace && /\s/.test(char)) ||
-      UNSAFE_CSS_DELIMITERS.has(char)
-    ) {
-      throw new TypeError(
-        `${apiName} rejected an unsafe CSS ${role} "${value}": names/fragments must not ` +
-          `contain ${JSON.stringify(char)} (a CSS rule/declaration delimiter, markup, or ` +
-          'control character).',
-      );
-    }
-  }
-}
-
 function compileObject(styleObject: StyleObject, context: CompileContext): AtomicRule[] {
   const rules: AtomicRule[] = [];
 
-  for (const [property, value] of Object.entries(styleObject)) {
+  const styleEntries = styleOwnDataEntries(styleObject, 'style.create style object');
+  for (let styleIndex = 0; styleIndex < styleEntries.length; styleIndex += 1) {
+    const [property, value] = styleEntries[styleIndex] as readonly [string, unknown];
     if (value == null) continue;
     assertCssSyntaxFragmentSafe(property, 'style.create', 'property');
     if (isNestedStyle(value)) {
-      if (property.startsWith('@')) {
-        rules.push(
-          ...compileObject(value, {
-            ...context,
-            atRules: [...context.atRules, property],
-          }),
-        );
+      if (styleStringStartsWith(property, '@')) {
+        const nestedRules = compileObject(value, {
+          ...context,
+          atRules: styleFreeze(copyStrings(context.atRules, property)),
+        });
+        for (let index = 0; index < nestedRules.length; index += 1) {
+          styleArrayPush(rules, nestedRules[index] as AtomicRule);
+        }
       } else if (isSelectorSuffix(property)) {
-        rules.push(
-          ...compileObject(value, {
-            ...context,
-            selectorSuffix: `${context.selectorSuffix}${property}`,
-          }),
-        );
+        const nestedRules = compileObject(value, {
+          ...context,
+          selectorSuffix: `${context.selectorSuffix}${property}`,
+        });
+        for (let index = 0; index < nestedRules.length; index += 1) {
+          styleArrayPush(rules, nestedRules[index] as AtomicRule);
+        }
       }
       continue;
     }
 
-    const cssProperty = property.startsWith('--') ? property : toKebabCase(property);
+    assertCssPrimitive(value, 'style.create', property);
+
+    const cssProperty = styleStringStartsWith(property, '--') ? property : toKebabCase(property);
     assertCssValueSafe(value, 'style.create', property, { allowBackslash: true });
     const priority = getPriority(cssProperty);
-    const key = `${cssProperty}\u0000${String(value)}\u0000${context.selectorSuffix}\u0000${context.atRules.join('\u0001')}`;
-    let rule = context.rulesByKey.get(key);
+    const key = `${cssProperty}\u0000${cssPrimitiveText(value)}\u0000${context.selectorSuffix}\u0000${styleArrayJoin(context.atRules, '\u0001')}`;
+    let rule = styleMapGet(context.rulesByKey, key);
     if (!rule) {
       const className = classNameFor(context.namespace, cssProperty, value, context);
       rule = atomicRule(className, property, cssProperty, value, priority, context);
-      context.rulesByKey.set(key, rule);
+      styleMapSet(context.rulesByKey, key, rule);
     }
-    context.ruleEntries.push([conflictKey(cssProperty, context), rule.className]);
-    rules.push(rule);
+    styleArrayPush(
+      context.ruleEntries,
+      styleFreeze([conflictKey(cssProperty, context), rule.className] as const),
+    );
+    styleArrayPush(rules, rule);
   }
 
   return rules;
@@ -771,10 +909,11 @@ function styleRecord(
     __styleKey: styleKey,
   };
   if (source) record[STYLE_SRC] = `${source}#${styleKey}`;
-  for (const [property, className] of ruleEntries) {
+  for (let index = 0; index < ruleEntries.length; index += 1) {
+    const [property, className] = ruleEntries[index] as readonly [string, string];
     record[property] = className;
   }
-  return record as CompiledStyle;
+  return styleFreeze(record) as CompiledStyle;
 }
 
 function atomicRule(
@@ -792,8 +931,8 @@ function atomicRule(
     rule = `${context.atRules[index]}{${rule}}`;
   }
 
-  return {
-    atRules: context.atRules,
+  return registerAtomicRule({
+    atRules: styleFreeze(copyStrings(context.atRules)),
     className,
     cssProperty,
     property,
@@ -802,7 +941,7 @@ function atomicRule(
     selectorSuffix: context.selectorSuffix,
     source: context.source,
     value,
-  };
+  });
 }
 
 function mergeStyles(styles: readonly StyleInput[]): {
@@ -811,40 +950,86 @@ function mergeStyles(styles: readonly StyleInput[]): {
   readonly styleSources: readonly string[];
 } {
   const state: MergeState = {
-    classesByProperty: new Map(),
+    classesByProperty: styleMap(),
     inlineStyle: {},
     styleSources: [],
   };
-  for (const style of styles) mergeStyleInput(style, state);
-  return {
-    className: [...state.classesByProperty.values()].join(' '),
-    inlineStyle: state.inlineStyle,
-    styleSources: [...new Set(state.styleSources)],
-  };
+  for (let index = 0; index < styles.length; index += 1) {
+    mergeStyleInput(styles[index] as StyleInput, state);
+  }
+  const uniqueSources = styleMap<string, true>();
+  for (let index = 0; index < state.styleSources.length; index += 1) {
+    styleMapSet(uniqueSources, state.styleSources[index] as string, true);
+  }
+  return styleFreeze({
+    className: styleArrayJoin(styleMapValues(state.classesByProperty), ' '),
+    inlineStyle: styleFreeze(state.inlineStyle),
+    styleSources: styleFreeze(uniqueMapKeys(uniqueSources)),
+  });
+}
+
+function uniqueMapKeys(map: Map<string, true>): string[] {
+  const entries = styleMapEntries(map);
+  const keys: string[] = [];
+  for (let index = 0; index < entries.length; index += 1) {
+    styleArrayPush(keys, (entries[index] as [string, true])[0]);
+  }
+  return keys;
 }
 
 function mergeStyleInput(style: StyleInput, state: MergeState): void {
   if (!style) return;
-  if (Array.isArray(style)) {
-    if (style.length === 2 && isStyleOrFalsy(style[0]) && isInlineStyle(style[1])) {
-      mergeStyleInput(style[0], state);
-      Object.assign(state.inlineStyle, style[1]);
+  if (styleArrayIsArray(style)) {
+    const stableStyles = styleDenseArraySnapshot(
+      style,
+      'style.attrs style array',
+      (entry) => entry,
+    );
+    if (
+      stableStyles.length === 2 &&
+      isStyleOrFalsy(stableStyles[0]) &&
+      isInlineStyle(stableStyles[1])
+    ) {
+      mergeStyleInput(stableStyles[0] as StyleInput, state);
+      const inlineEntries = styleOwnDataEntries(
+        stableStyles[1] as object,
+        'style.attrs inline style',
+      );
+      for (let index = 0; index < inlineEntries.length; index += 1) {
+        const [property, value] = inlineEntries[index] as readonly [string, unknown];
+        assertCssPrimitive(value, 'style.attrs inline style', property);
+        assertCssSyntaxFragmentSafe(property, 'style.attrs', 'inline property', true);
+        assertCssValueSafe(value, 'style.attrs', property, { allowBackslash: true });
+        state.inlineStyle[property] = value;
+      }
       return;
     }
-    for (const item of style) mergeStyleInput(item, state);
+    for (let index = 0; index < stableStyles.length; index += 1) {
+      mergeStyleInput(stableStyles[index] as StyleInput, state);
+    }
     return;
   }
   if (isCompiledStyle(style)) {
-    const styleSource = style[STYLE_SRC];
+    const styleSource = styleOwnDataValue(style, STYLE_SRC, 'style.attrs compiled style');
     if (typeof styleSource === 'string' && styleSource.length > 0)
-      state.styleSources.push(styleSource);
-    const cssMarker = style[CSS_MARKER];
-    if (typeof cssMarker === 'string' && cssMarker.length > 0) state.styleSources.push(cssMarker);
-    for (const [property, className] of Object.entries(style)) {
-      if (property === CSS_MARKER || property === STYLE_SRC || property.startsWith('__')) continue;
+      styleArrayPush(state.styleSources, styleSource);
+    const cssMarker = styleOwnDataValue(style, CSS_MARKER, 'style.attrs compiled style');
+    if (typeof cssMarker === 'string' && cssMarker.length > 0) {
+      styleArrayPush(state.styleSources, cssMarker);
+    }
+    const compiledEntries = styleOwnDataEntries(style, 'style.attrs compiled style');
+    for (let index = 0; index < compiledEntries.length; index += 1) {
+      const [property, className] = compiledEntries[index] as readonly [string, unknown];
+      if (
+        property === CSS_MARKER ||
+        property === STYLE_SRC ||
+        styleStringStartsWith(property, '__')
+      )
+        continue;
       if (typeof className !== 'string') continue;
-      state.classesByProperty.delete(property);
-      state.classesByProperty.set(property, className);
+      assertCssCustomPropertyNameSafe(`--${className}`, 'style.attrs', property);
+      styleMapDelete(state.classesByProperty, property);
+      styleMapSet(state.classesByProperty, property, className);
     }
   }
 }
@@ -856,24 +1041,31 @@ function classNameFor(
   context: CompileContext,
 ): string {
   return `kv-${namespace}-${propertyFamily(cssProperty)}-${hash(
-    `${context.styleKey}:${cssProperty}:${String(value)}:${context.selectorSuffix}:${context.atRules.join('|')}`,
+    `${context.styleKey}:${cssProperty}:${cssPrimitiveText(value)}:${context.selectorSuffix}:${styleArrayJoin(context.atRules, '|')}`,
   )}`;
 }
 
 function conflictKey(cssProperty: string, context: CompileContext): string {
-  return `${cssProperty}|${context.selectorSuffix}|${context.atRules.join('|')}`;
+  return `${cssProperty}|${context.selectorSuffix}|${styleArrayJoin(context.atRules, '|')}`;
 }
 
 function serializeInlineStyle(style: InlineStyle): string {
-  return Object.entries(style)
-    .map(([property, value]) => `${toKebabCase(property)}:${String(value)}`)
-    .join(';');
+  const declarations: string[] = [];
+  const entries = styleOwnDataEntries(style, 'style.attrs inline style');
+  for (let index = 0; index < entries.length; index += 1) {
+    const [property, value] = entries[index] as readonly [string, unknown];
+    assertCssPrimitive(value, 'style.attrs', property);
+    assertCssSyntaxFragmentSafe(property, 'style.attrs', 'inline property', true);
+    assertCssValueSafe(value, 'style.attrs', property, { allowBackslash: true });
+    styleArrayPush(declarations, `${toKebabCase(property)}:${cssPrimitiveText(value)}`);
+  }
+  return styleArrayJoin(declarations, ';');
 }
 
 function isCompiledStyle(value: unknown): value is CompiledStyle {
-  return Boolean(
-    value && typeof value === 'object' && (value as Record<string, unknown>)[CSS_MARKER],
-  );
+  if (!value || typeof value !== 'object') return false;
+  const marker = styleOwnDataValue(value, CSS_MARKER, 'style.attrs compiled style');
+  return marker === true || (typeof marker === 'string' && marker.length > 0);
 }
 
 function isStyleOrFalsy(value: unknown): value is Style {
@@ -882,58 +1074,131 @@ function isStyleOrFalsy(value: unknown): value is Style {
 
 function isInlineStyle(value: unknown): value is InlineStyle {
   return Boolean(
-    value && typeof value === 'object' && !Array.isArray(value) && !isCompiledStyle(value),
+    value && typeof value === 'object' && !styleArrayIsArray(value) && !isCompiledStyle(value),
   );
 }
 
-function isNestedStyle(value: CssValue | StyleObject): value is StyleObject {
+function isNestedStyle(value: unknown): value is StyleObject {
   return Boolean(value && typeof value === 'object');
 }
 
 function isSelectorSuffix(property: string): boolean {
-  return property.startsWith(':') || property.startsWith('::') || property.startsWith('[');
+  return (
+    styleStringStartsWith(property, ':') ||
+    styleStringStartsWith(property, '::') ||
+    styleStringStartsWith(property, '[')
+  );
 }
 
 function compareRules(left: AtomicRule, right: AtomicRule): number {
   return (
     left.priority - right.priority ||
-    left.className.localeCompare(right.className) ||
-    left.rule.localeCompare(right.rule)
+    styleStringLocaleCompare(left.className, right.className) ||
+    styleStringLocaleCompare(left.rule, right.rule)
   );
 }
 
 function propertyFamily(property: string): string {
-  if (property.startsWith('--')) return 'var';
-  if (property.startsWith('background')) return 'bg';
-  if (property.startsWith('border')) return 'bd';
-  if (property.startsWith('padding')) return 'pad';
-  if (property.startsWith('margin')) return 'm';
-  if (property.startsWith('font')) return 'font';
+  if (styleStringStartsWith(property, '--')) return 'var';
+  if (styleStringStartsWith(property, 'background')) return 'bg';
+  if (styleStringStartsWith(property, 'border')) return 'bd';
+  if (styleStringStartsWith(property, 'padding')) return 'pad';
+  if (styleStringStartsWith(property, 'margin')) return 'm';
+  if (styleStringStartsWith(property, 'font')) return 'font';
   if (property === 'color') return 'fg';
   if (property === 'display') return 'd';
   if (property === 'height') return 'h';
   if (property === 'width') return 'w';
-  return property.split('-')[0] ?? 'x';
+  return styleStringSplit(property, '-')[0] ?? 'x';
 }
 
 function toKebabCase(value: string): string {
-  return value.replace(/[A-Z]/g, (match) => `-${match.toLowerCase()}`);
+  let output = '';
+  for (let index = 0; index < value.length; index += 1) {
+    const character = value[index] ?? '';
+    if (character >= 'A' && character <= 'Z') {
+      output += `-${asciiLower(character)}`;
+    } else {
+      output += character;
+    }
+  }
+  return output;
 }
 
 function slug(value: string): string {
-  return (
-    toKebabCase(value)
-      .replace(/[^a-z0-9_-]+/g, '-')
-      .replace(/^-+|-+$/g, '')
-      .slice(0, 48) || 'style'
-  );
+  const kebab = toKebabCase(value);
+  let output = '';
+  let previousWasSeparator = false;
+  for (let index = 0; index < kebab.length && output.length < 48; index += 1) {
+    const character = kebab[index] ?? '';
+    const allowed =
+      (character >= 'a' && character <= 'z') ||
+      (character >= '0' && character <= '9') ||
+      character === '_';
+    if (allowed) {
+      output += character;
+      previousWasSeparator = false;
+    } else if (!previousWasSeparator && output.length > 0) {
+      output += '-';
+      previousWasSeparator = true;
+    }
+  }
+  while (output[output.length - 1] === '-') output = styleStringSlice(output, 0, -1);
+  return output || 'style';
+}
+
+function asciiLower(character: string): string {
+  const upper = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  const lower = 'abcdefghijklmnopqrstuvwxyz';
+  for (let index = 0; index < upper.length; index += 1) {
+    if (upper[index] === character) return lower[index] ?? character;
+  }
+  return character;
 }
 
 function hash(value: string): string {
   let result = 0x811c9dc5;
   for (let index = 0; index < value.length; index += 1) {
-    result ^= value.charCodeAt(index);
-    result = Math.imul(result, 0x01000193);
+    result ^= styleStringCharCodeAt(value, index);
+    result = styleMathImul(result, 0x01000193);
   }
-  return (result >>> 0).toString(36).slice(0, 6);
+  return styleStringSlice(styleNumberToBase36(result >>> 0), 0, 6);
+}
+
+function canonicalStyleData(value: unknown, label: string): string {
+  if (value === null) return 'null';
+  if (value === undefined) return 'undefined';
+  if (typeof value === 'string') return styleJsonStringify(value);
+  if (typeof value === 'number') return cssPrimitiveText(value);
+  if (typeof value === 'boolean') return value ? 'true' : 'false';
+  if (styleArrayIsArray(value)) {
+    const entries = styleDenseArraySnapshot(value, label, (entry) => entry);
+    const rendered: string[] = [];
+    for (let index = 0; index < entries.length; index += 1) {
+      styleArrayPush(rendered, canonicalStyleData(entries[index], `${label}[${index}]`));
+    }
+    return `[${styleArrayJoin(rendered, ',')}]`;
+  }
+  if (typeof value === 'object') {
+    const entries = styleOwnDataEntries(value, label);
+    const rendered: string[] = [];
+    for (let index = 0; index < entries.length; index += 1) {
+      const [key, entry] = entries[index] as readonly [string, unknown];
+      styleArrayPush(
+        rendered,
+        `${styleJsonStringify(key)}:${canonicalStyleData(entry, `${label}.${key}`)}`,
+      );
+    }
+    return `{${styleArrayJoin(rendered, ',')}}`;
+  }
+  throw new TypeError(`${label} contains a non-data value.`);
+}
+
+function copyStrings(values: readonly string[], appended?: string): string[] {
+  const copy: string[] = [];
+  for (let index = 0; index < values.length; index += 1) {
+    styleArrayPush(copy, values[index] as string);
+  }
+  if (appended !== undefined) styleArrayPush(copy, appended);
+  return copy;
 }

@@ -1,4 +1,10 @@
 import upstreamGetPriority from './property-priorities.js';
+import { cssPrimitiveText } from './css-security.js';
+import {
+  styleFreeze,
+  styleRegExpExec,
+  styleStringStartsWith,
+} from './style-security-intrinsics.js';
 
 // Repo-internal style ABI re-exports. These symbols are not part of the
 // app-facing public surface; the compiler and conformance tests consume them
@@ -22,12 +28,23 @@ export type {
 
 /** @internal Priority bucket compatible with StyleX's shorthand-before-longhand cascade model. */
 export function getPriority(property: string): number {
-  const cssProperty = property.startsWith('--') ? property : toKebabCase(property);
+  const cssProperty = styleStringStartsWith(property, '--') ? property : toKebabCase(property);
   return upstreamGetPriority(cssProperty);
 }
 
 function toKebabCase(value: string): string {
-  return value.replace(/[A-Z]/g, (match) => `-${match.toLowerCase()}`);
+  let output = '';
+  const upper = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  const lower = 'abcdefghijklmnopqrstuvwxyz';
+  for (let index = 0; index < value.length; index += 1) {
+    const character = value[index] ?? '';
+    let lowered = character;
+    for (let letter = 0; letter < upper.length; letter += 1) {
+      if (upper[letter] === character) lowered = lower[letter] ?? character;
+    }
+    output += lowered === character ? character : `-${lowered}`;
+  }
+  return output;
 }
 
 /**
@@ -37,7 +54,7 @@ function toKebabCase(value: string): string {
  * compiler's `package-css` extraction imports this same set so the runtime emit
  * and the served stylesheet stay in lockstep.
  */
-export const UNITLESS_CSS_PROPERTIES: ReadonlySet<string> = new Set([
+const UNITLESS_CSS_PROPERTY_VALUES = styleFreeze([
   'animation-iteration-count',
   'aspect-ratio',
   'columns',
@@ -66,7 +83,17 @@ export const UNITLESS_CSS_PROPERTIES: ReadonlySet<string> = new Set([
   'stop-opacity',
   'stroke-miterlimit',
   'stroke-opacity',
-]);
+] as const);
+
+/** @internal Immutable unitless-property classifier shared with compiler CSS extraction. */
+export const UNITLESS_CSS_PROPERTIES: ReadonlySet<string> = styleFreeze({
+  has(property: string): boolean {
+    for (let index = 0; index < UNITLESS_CSS_PROPERTY_VALUES.length; index += 1) {
+      if (UNITLESS_CSS_PROPERTY_VALUES[index] === property) return true;
+    }
+    return false;
+  },
+}) as unknown as ReadonlySet<string>;
 
 const BARE_NUMBER = /^-?\d+(?:\.\d+)?$/;
 
@@ -82,14 +109,14 @@ const BARE_NUMBER = /^-?\d+(?:\.\d+)?$/;
  * runtime `emitAtomicCss` path and `kovo compile package-css` agree byte-for-byte.
  */
 export function cssLengthValue(cssProperty: string, value: string | number): string {
-  const text = String(value);
+  const text = cssPrimitiveText(value);
   // CSS custom properties (`--gap`, `--cols`, …) are not lengths — their value is
   // opaque and substituted verbatim by `var()`. Appending `px` produces invalid
   // CSS (e.g. `grid-template-columns: repeat(var(--cols), 1fr)` with `--cols:3px`
   // collapses the grid). Every other engine path special-cases `--` (engine.ts
   // :532/:692, getPriority above); the length normalizer must too. (SPEC.md §5.2)
-  if (cssProperty.startsWith('--')) return text;
+  if (styleStringStartsWith(cssProperty, '--')) return text;
   if (UNITLESS_CSS_PROPERTIES.has(cssProperty)) return text;
-  if (text === '0' || !BARE_NUMBER.test(text)) return text;
+  if (text === '0' || styleRegExpExec(BARE_NUMBER, text) === null) return text;
   return `${text}px`;
 }

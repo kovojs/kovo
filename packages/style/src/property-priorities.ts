@@ -7,6 +7,16 @@
  * @flow strict
  */
 
+import {
+  styleMathMax,
+  styleRegExpExec,
+  styleSetHas,
+  styleStringIncludes,
+  styleStringMatch,
+  styleStringSplit,
+  styleStringStartsWith,
+} from './style-security-intrinsics.js';
+
 // Physical properties that have logical equivalents:
 const longHandPhysical = new Set<string>();
 // Logical properties *and* all other long hand properties:
@@ -738,13 +748,17 @@ const PSEUDO_PART_REGEX = /::[a-zA-Z-]+|:[a-zA-Z-]+(?:\([^)]*\))?/g;
 
 // We only handle chains of simple pseudo-classes and pseudo-elements and opt out of functional pseudo-classes
 function getCompoundPseudoPriority(key: string): number | void {
-  const parts = key.match(PSEUDO_PART_REGEX);
-  if (!parts || parts.length <= 1 || parts.some((p) => p.includes('('))) return;
+  const parts = styleStringMatch(key, PSEUDO_PART_REGEX);
+  if (!parts || parts.length <= 1) return;
+  for (let index = 0; index < parts.length; index += 1) {
+    if (styleStringIncludes(parts[index] ?? '', '(')) return;
+  }
 
   let total = 0;
 
-  for (const part of parts) {
-    total += part.startsWith('::')
+  for (let index = 0; index < parts.length; index += 1) {
+    const part = parts[index] ?? '';
+    total += styleStringStartsWith(part, '::')
       ? PSEUDO_ELEMENT_PRIORITY
       : (PSEUDO_CLASS_PRIORITIES[part] ?? 40);
   }
@@ -753,25 +767,25 @@ function getCompoundPseudoPriority(key: string): number | void {
 }
 
 export function getAtRulePriority(key: string): number | void {
-  if (key.startsWith('--')) {
+  if (styleStringStartsWith(key, '--')) {
     return 1;
   }
 
-  if (key.startsWith('@supports')) {
+  if (styleStringStartsWith(key, '@supports')) {
     return AT_RULE_PRIORITIES['@supports'];
   }
 
-  if (key.startsWith('@media')) {
+  if (styleStringStartsWith(key, '@media')) {
     return AT_RULE_PRIORITIES['@media'];
   }
 
-  if (key.startsWith('@container')) {
+  if (styleStringStartsWith(key, '@container')) {
     return AT_RULE_PRIORITIES['@container'];
   }
 }
 
 export function getPseudoElementPriority(key: string): number | void {
-  if (key.startsWith('::')) {
+  if (styleStringStartsWith(key, '::')) {
     return PSEUDO_ELEMENT_PRIORITY;
   }
 }
@@ -779,48 +793,48 @@ export function getPseudoElementPriority(key: string): number | void {
 export function getPseudoClassPriority(key: string): number | void {
   const pseudoBase = (p: string): number => (PSEUDO_CLASS_PRIORITIES[p] ?? 40) / 100;
 
-  const ancestorMatch = RELATIONAL_SELECTORS.ANCESTOR.exec(key);
+  const ancestorMatch = styleRegExpExec(RELATIONAL_SELECTORS.ANCESTOR, key);
   if (ancestorMatch?.[1]) {
     return 10 + pseudoBase(ancestorMatch[1]);
   }
 
-  const descendantMatch = RELATIONAL_SELECTORS.DESCENDANT.exec(key);
+  const descendantMatch = styleRegExpExec(RELATIONAL_SELECTORS.DESCENDANT, key);
   if (descendantMatch?.[1]) {
     return 15 + pseudoBase(descendantMatch[1]);
   }
 
-  const anySiblingMatch = RELATIONAL_SELECTORS.ANY_SIBLING.exec(key);
+  const anySiblingMatch = styleRegExpExec(RELATIONAL_SELECTORS.ANY_SIBLING, key);
   if (anySiblingMatch?.[1] && anySiblingMatch[2])
-    return 20 + Math.max(pseudoBase(anySiblingMatch[1]), pseudoBase(anySiblingMatch[2]));
+    return 20 + styleMathMax(pseudoBase(anySiblingMatch[1]), pseudoBase(anySiblingMatch[2]));
 
-  const siblingBeforeMatch = RELATIONAL_SELECTORS.SIBLING_BEFORE.exec(key);
+  const siblingBeforeMatch = styleRegExpExec(RELATIONAL_SELECTORS.SIBLING_BEFORE, key);
   if (siblingBeforeMatch?.[1]) {
     return 30 + pseudoBase(siblingBeforeMatch[1]);
   }
 
-  const siblingAfterMatch = RELATIONAL_SELECTORS.SIBLING_AFTER.exec(key);
+  const siblingAfterMatch = styleRegExpExec(RELATIONAL_SELECTORS.SIBLING_AFTER, key);
   if (siblingAfterMatch?.[1]) {
     return 40 + pseudoBase(siblingAfterMatch[1]);
   }
 
-  if (key.startsWith(':')) {
-    const prop = key.split('(')[0] ?? key;
+  if (styleStringStartsWith(key, ':')) {
+    const prop = styleStringSplit(key, '(')[0] ?? key;
 
     return PSEUDO_CLASS_PRIORITIES[prop] ?? 40;
   }
 }
 
 export function getDefaultPriority(key: string): number | void {
-  if (shorthandsOfShorthands.has(key)) {
+  if (styleSetHas(shorthandsOfShorthands, key)) {
     return 1000;
   }
-  if (shorthandsOfLonghands.has(key)) {
+  if (styleSetHas(shorthandsOfLonghands, key)) {
     return 2000;
   }
-  if (longHandLogical.has(key)) {
+  if (styleSetHas(longHandLogical, key)) {
     return 3000;
   }
-  if (longHandPhysical.has(key)) {
+  if (styleSetHas(longHandPhysical, key)) {
     return 4000;
   }
 }
