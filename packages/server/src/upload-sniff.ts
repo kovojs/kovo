@@ -1,7 +1,14 @@
 import { createBoundedRuntimeAuditCollector } from '@kovojs/core/internal/security-markers';
 
-import { witnessFreeze } from './security-witness-intrinsics.js';
 import {
+  witnessArrayAppend,
+  witnessFreeze,
+  witnessGetOwnPropertyDescriptor,
+  witnessIsArray,
+  witnessObjectIs,
+} from './security-witness-intrinsics.js';
+import {
+  securityNumberIsInteger,
   securityDecodeUtf8Fatal,
   securityRandomUuid,
   securityRegExpReplace,
@@ -264,7 +271,7 @@ const unverifiedMimeFacts = createBoundedRuntimeAuditCollector<UnverifiedMimeFac
  *   recorded for `kovo explain --capabilities`. Still attachment-forced.
  */
 export function accept(types: readonly string[]): readonly string[] {
-  return types;
+  return snapshotMimeTypes(types);
 }
 
 export namespace accept {
@@ -275,9 +282,55 @@ export namespace accept {
     if (!justification || securityStringTrim(justification).length === 0) {
       throw new Error('accept.unverified(...) requires a justification (KV428, SPEC §6.6/§9.1).');
     }
-    unverifiedMimeFacts.record({ justification, types });
-    return { justification, types, unverified: true };
+    const closedTypes = snapshotMimeTypes(types);
+    const fact = witnessFreeze({ justification, types: closedTypes });
+    unverifiedMimeFacts.record(fact);
+    return witnessFreeze({ justification, types: closedTypes, unverified: true });
   }
+}
+
+function snapshotMimeTypes(source: readonly string[]): readonly string[] {
+  if (!witnessIsArray(source)) {
+    throw new TypeError('Upload MIME allowlist must be an array.');
+  }
+  const length = stableMimeDescriptor(source, 'length');
+  if (
+    length === undefined ||
+    typeof length.value !== 'number' ||
+    !securityNumberIsInteger(length.value) ||
+    length.value < 0 ||
+    length.value > 1_000
+  ) {
+    throw new TypeError('Upload MIME allowlist must be a bounded array of at most 1,000 entries.');
+  }
+  const snapshot: string[] = [];
+  for (let index = 0; index < length.value; index += 1) {
+    const entry = stableMimeDescriptor(source, index);
+    if (entry === undefined || typeof entry.value !== 'string') {
+      throw new TypeError('Upload MIME allowlist must be a dense own-data string array.');
+    }
+    witnessArrayAppend(snapshot, entry.value, 'Upload MIME allowlist');
+  }
+  return witnessFreeze(snapshot);
+}
+
+function stableMimeDescriptor(
+  source: object,
+  property: PropertyKey,
+): { value: unknown } | undefined {
+  const before = witnessGetOwnPropertyDescriptor(source, property);
+  const after = witnessGetOwnPropertyDescriptor(source, property);
+  if ((before === undefined) !== (after === undefined)) {
+    throw new TypeError(`Upload MIME allowlist ${String(property)} must be stable.`);
+  }
+  if (before === undefined) return undefined;
+  if (!('value' in before) || after === undefined || !('value' in after)) {
+    throw new TypeError(`Upload MIME allowlist ${String(property)} must be own data.`);
+  }
+  if (!witnessObjectIs(before.value, after.value)) {
+    throw new TypeError(`Upload MIME allowlist ${String(property)} changed during validation.`);
+  }
+  return { value: before.value };
 }
 
 /**

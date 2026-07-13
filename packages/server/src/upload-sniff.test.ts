@@ -157,6 +157,44 @@ describe('accept.unverified escape (KV428)', () => {
   });
 
   it('plain accept(...) passes through the type allowlist', () => {
-    expect(accept(['image/png', 'image/jpeg'])).toEqual(['image/png', 'image/jpeg']);
+    const source = ['image/png', 'image/jpeg'];
+    const accepted = accept(source);
+    source[0] = 'text/html';
+    expect(accepted).toEqual(['image/png', 'image/jpeg']);
+    expect(Object.isFrozen(accepted)).toBe(true);
+  });
+
+  it('snapshots unverified acceptance and audit facts before caller mutation', () => {
+    drainUnverifiedMimeFacts();
+    const types = ['application/zip'];
+    const acceptance = accept.unverified(types, 'legacy importer trusts client type');
+    types[0] = 'text/html';
+
+    expect(acceptance.types).toEqual(['application/zip']);
+    expect(Object.isFrozen(acceptance)).toBe(true);
+    expect(Object.isFrozen(acceptance.types)).toBe(true);
+    const [fact] = drainUnverifiedMimeFacts();
+    expect(fact).toEqual({
+      justification: 'legacy importer trusts client type',
+      types: ['application/zip'],
+    });
+    expect(Object.isFrozen(fact)).toBe(true);
+    expect(Object.isFrozen(fact?.types)).toBe(true);
+  });
+
+  it('refuses accessor-backed, sparse, and oversized MIME allowlists without invoking getters', () => {
+    let getterCalls = 0;
+    const accessor = ['application/zip'];
+    Object.defineProperty(accessor, 0, {
+      configurable: true,
+      get() {
+        getterCalls += 1;
+        return 'text/html';
+      },
+    });
+    expect(() => accept.unverified(accessor, 'legacy importer')).toThrow('own data');
+    expect(getterCalls).toBe(0);
+    expect(() => accept(new Array(2))).toThrow('dense');
+    expect(() => accept(new Array(1_001).fill('application/zip'))).toThrow('bounded');
   });
 });
