@@ -812,6 +812,113 @@ export const EagerTrigger = component({
     expect(poisonHits).toBe(0);
   });
 
+  it('does not suppress eager-trigger validation through attribute Array.flatMap', () => {
+    const nativeFlatMap = Array.prototype.flatMap;
+    const nativeApply = Reflect.apply;
+    let poisonHits = 0;
+    let result: ReturnType<typeof compileComponentModule> | undefined;
+    try {
+      Array.prototype.flatMap = function poisonedEventTriggerFlatMap<T, U>(
+        callback: (value: T, index: number, array: T[]) => U | readonly U[],
+        thisArg?: unknown,
+      ): U[] {
+        if (
+          (this[0] as { executionTriggerName?: unknown } | undefined)?.executionTriggerName ===
+            'load' &&
+          new Error().stack?.includes('eventTriggerAttributes')
+        ) {
+          poisonHits += 1;
+          return [];
+        }
+        return nativeApply(nativeFlatMap, this, [callback, thisArg]);
+      };
+      result = compileComponentModule({
+        fileName: 'eager-trigger.tsx',
+        source: `export const C = component({ render: () => <stock-ticker on:load="/c/ticker.client.js#Ticker$start" /> });`,
+      });
+    } finally {
+      Array.prototype.flatMap = nativeFlatMap;
+    }
+    expect(result?.diagnostics.filter((diagnostic) => diagnostic.code === 'KV211')).toHaveLength(1);
+    expect(poisonHits).toBe(0);
+  });
+
+  it('cannot forge eager-trigger justification through diagnostic Array.includes', () => {
+    const nativeIncludes = Array.prototype.includes;
+    const nativeApply = Reflect.apply;
+    let poisonHits = 0;
+    let result: ReturnType<typeof compileComponentModule> | undefined;
+    try {
+      Array.prototype.includes = function poisonedJustificationIncludes(
+        searchElement: unknown,
+        fromIndex?: number,
+      ): boolean {
+        if (
+          this[0] === 'KV212' &&
+          searchElement === 'KV211' &&
+          new Error().stack?.includes('hasKv211Justification')
+        ) {
+          poisonHits += 1;
+          return true;
+        }
+        return nativeApply(nativeIncludes, this, [searchElement, fromIndex]);
+      };
+      result = compileComponentModule({
+        fileName: 'eager-trigger.tsx',
+        source: `
+export const C = component({
+  render: () => <section>{/* KV212: unrelated */}<stock-ticker on:load="/c/ticker.client.js#Ticker$start" /></section>,
+});
+`,
+      });
+    } finally {
+      Array.prototype.includes = nativeIncludes;
+    }
+    expect(result?.diagnostics.filter((diagnostic) => diagnostic.code === 'KV211')).toHaveLength(1);
+    expect(poisonHits).toBe(0);
+  });
+
+  it('does not suppress defer JSX-child validation through element Array.flatMap', () => {
+    const nativeFlatMap = Array.prototype.flatMap;
+    const nativeApply = Reflect.apply;
+    let poisonHits = 0;
+    let result: ReturnType<typeof compileComponentModule> | undefined;
+    try {
+      Array.prototype.flatMap = function poisonedDeferElementFlatMap<T, U>(
+        callback: (value: T, index: number, array: T[]) => U | readonly U[],
+        thisArg?: unknown,
+      ): U[] {
+        if (
+          Array.isArray(
+            (this[0] as { childExpressionContainers?: unknown } | undefined)
+              ?.childExpressionContainers,
+          ) &&
+          new Error().stack?.includes('validateDeferJsxChildren')
+        ) {
+          poisonHits += 1;
+          return [];
+        }
+        return nativeApply(nativeFlatMap, this, [callback, thisArg]);
+      };
+      result = compileComponentModule({
+        fileName: 'defer-child.tsx',
+        source: `
+export const C = component({
+  render: () => (
+    <section>
+      {defer({ target: 'panel', priority: 'after-paint', render: () => '<p>Ready</p>' })}
+    </section>
+  ),
+});
+`,
+      });
+    } finally {
+      Array.prototype.flatMap = nativeFlatMap;
+    }
+    expect(result?.diagnostics.filter((diagnostic) => diagnostic.code === 'KV244')).toHaveLength(1);
+    expect(poisonHits).toBe(0);
+  });
+
   it('does not publish a captured server secret through stateful Array.filter replacement', () => {
     const nativeFilter = Array.prototype.filter;
     const nativeApply = Reflect.apply;
