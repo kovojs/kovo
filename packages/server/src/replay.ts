@@ -96,11 +96,7 @@ export function snapshotMutationReplayStore<Response extends MutationReplayRespo
       return witnessReflectApply(get, source, [scope, idem, fingerprint]);
     },
     reserve(scope: string, idem: string, fingerprint?: string) {
-      const reservation = witnessReflectApply<unknown>(reserve, source, [
-        scope,
-        idem,
-        fingerprint,
-      ]);
+      const reservation = witnessReflectApply<unknown>(reserve, source, [scope, idem, fingerprint]);
       return reservation === undefined
         ? undefined
         : snapshotMutationReplayReservation<Response>(reservation);
@@ -245,15 +241,21 @@ type CsrfReplayScope<Request> =
 export function createMemoryMutationReplayStore<
   Response extends MutationReplayResponse = MutationReplayResponse,
 >(options: MutationReplayStoreOptions = {}): MutationReplayStore<Response> {
-  const maxEntries = options.maxEntries ?? 1_000;
+  if (typeof options !== 'object' || options === null || witnessIsArray(options)) {
+    throw new TypeError('createMemoryMutationReplayStore options must be an object.');
+  }
+  const configuredMaxEntries = stableMutationReplayOption(options, 'maxEntries');
+  const configuredMaxPending = stableMutationReplayOption(options, 'maxPending');
+  const configuredTtlMs = stableMutationReplayOption(options, 'ttlMs');
+  const maxEntries = configuredMaxEntries ?? 1_000;
   // E4 (SPEC §9.1:1073/§9.5:914): bound in-flight pending reservations independently of
   // `maxEntries` to cap peak memory under a concurrent-flood DoS. The default is a generous
   // absolute bound (`max(maxEntries, 256)`) rather than `maxEntries` itself, so it never
   // throttles legitimate concurrency under a deliberately tiny `maxEntries` (e.g. the A6
   // maxEntries-pressure scenario, where several pending records must coexist under
   // `maxEntries:2`) while still bounding the default-config peak to `maxEntries` (1000).
-  const maxPending = options.maxPending ?? requestStateMax(maxEntries, 256);
-  const ttlMs = options.ttlMs ?? 5 * 60_000;
+  const maxPending = configuredMaxPending ?? requestStateMax(maxEntries, 256);
+  const ttlMs = configuredTtlMs ?? 5 * 60_000;
   assertMutationReplayStoreOptions({ maxEntries, maxPending, ttlMs });
   const responses = createWitnessMap<string, MutationReplayRecord<Response>>();
 
@@ -418,6 +420,25 @@ export function createMemoryMutationReplayStore<
       evictCommittedOverCapacity();
     },
   };
+}
+
+function stableMutationReplayOption(
+  source: MutationReplayStoreOptions,
+  property: keyof MutationReplayStoreOptions,
+): number | undefined {
+  const before = witnessGetOwnPropertyDescriptor(source, property);
+  const after = witnessGetOwnPropertyDescriptor(source, property);
+  if ((before === undefined) !== (after === undefined)) {
+    throw new TypeError(`Mutation replay option ${property} must be stable own data.`);
+  }
+  if (before === undefined) return undefined;
+  if (!('value' in before) || after === undefined || !('value' in after)) {
+    throw new TypeError(`Mutation replay option ${property} must be an own data property.`);
+  }
+  if (!witnessObjectIs(before.value, after.value) || typeof before.value !== 'number') {
+    throw new TypeError(`Mutation replay option ${property} must be stable numeric own data.`);
+  }
+  return before.value;
 }
 
 function assertMutationReplayStoreOptions(options: {

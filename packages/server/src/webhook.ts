@@ -349,9 +349,15 @@ export interface WebhookRunResult<Input = unknown, Value = unknown> {
 export function createMemoryWebhookReplayStore(
   options: { maxEntries?: number; maxPending?: number; ttlMs?: number } = {},
 ): WebhookReplayStore {
-  const maxEntries = options.maxEntries ?? 1_000;
-  const maxPending = options.maxPending ?? requestStateMax(maxEntries, 256);
-  const ttlMs = options.ttlMs ?? 5 * 60_000;
+  if (typeof options !== 'object' || options === null || witnessIsArray(options)) {
+    throw new TypeError('createMemoryWebhookReplayStore options must be an object.');
+  }
+  const configuredMaxEntries = webhookReplayNumberOption(options, 'maxEntries');
+  const configuredMaxPending = webhookReplayNumberOption(options, 'maxPending');
+  const configuredTtlMs = webhookReplayNumberOption(options, 'ttlMs');
+  const maxEntries = configuredMaxEntries ?? 1_000;
+  const maxPending = configuredMaxPending ?? requestStateMax(maxEntries, 256);
+  const ttlMs = configuredTtlMs ?? 5 * 60_000;
   assertWebhookReplayStoreOptions({ maxEntries, maxPending, ttlMs });
   const responses = createWitnessMap<string, WebhookReplayRecord>();
   let committedCount = 0;
@@ -472,6 +478,22 @@ export function createMemoryWebhookReplayStore(
       evictCommittedOverCapacity();
     },
   };
+}
+
+function webhookReplayNumberOption(
+  source: { maxEntries?: number; maxPending?: number; ttlMs?: number },
+  property: 'maxEntries' | 'maxPending' | 'ttlMs',
+): number | undefined {
+  const value = stableOwnWebhookValue(
+    source,
+    property,
+    `createMemoryWebhookReplayStore().${property}`,
+    false,
+  );
+  if (value !== undefined && typeof value !== 'number') {
+    throw new TypeError(`createMemoryWebhookReplayStore ${property} must be a number.`);
+  }
+  return value;
 }
 
 type WebhookReplayRecord =

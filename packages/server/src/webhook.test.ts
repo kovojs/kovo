@@ -220,6 +220,24 @@ describe('server webhook primitive', () => {
     );
   });
 
+  it('ignores inherited webhook replay limits and refuses accessors without invoking them', () => {
+    const inherited = Object.create({ maxEntries: 0, maxPending: 0, ttlMs: 0 });
+    const inheritedStore = createPublicMemoryWebhookReplayStore(inherited);
+    expect(inheritedStore.reserve('scope', 'idem')).toBeDefined();
+
+    let getterCalls = 0;
+    const accessor = {} as { maxPending?: number };
+    Object.defineProperty(accessor, 'maxPending', {
+      configurable: true,
+      get() {
+        getterCalls += 1;
+        return 0;
+      },
+    });
+    expect(() => createPublicMemoryWebhookReplayStore(accessor)).toThrow();
+    expect(getterCalls).toBe(0);
+  });
+
   it('declares a registry-visible POST endpoint with resolved verifier metadata', () => {
     const verifier = hmacSignature({
       encoding: 'hex',

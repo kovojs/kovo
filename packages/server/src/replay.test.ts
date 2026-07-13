@@ -293,6 +293,24 @@ describe('server mutation replay store', () => {
     );
   });
 
+  it('ignores inherited replay-store limits and refuses accessors without invoking them', () => {
+    const inherited = Object.create({ maxEntries: 0, maxPending: 0, ttlMs: 0 });
+    const inheritedStore = createMemoryMutationReplayStore(inherited);
+    expect(inheritedStore.reserve('scope', 'idem')).toBeDefined();
+
+    let getterCalls = 0;
+    const accessor = {} as { maxPending?: number };
+    Object.defineProperty(accessor, 'maxPending', {
+      configurable: true,
+      get() {
+        getterCalls += 1;
+        return 0;
+      },
+    });
+    expect(() => createMemoryMutationReplayStore(accessor)).toThrow('own data');
+    expect(getterCalls).toBe(0);
+  });
+
   it('does not treat a missing stored fingerprint as a wildcard for byte-sensitive requests', () => {
     const replayStore = createMemoryMutationReplayStore();
     const response = { body: 'legacy', headers: {}, status: 200 } as const;
