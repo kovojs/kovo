@@ -3385,7 +3385,11 @@ RUN chown node:node /app
 USER node
 COPY --chown=node:node package.json ./
 COPY --chown=node:node package-lock.json* npm-shrinkwrap.json* pnpm-lock.yaml* yarn.lock* ./
-RUN if [ -f package-lock.json ] || [ -f npm-shrinkwrap.json ]; then npm ci --omit=dev --ignore-scripts; else npm install --omit=dev --ignore-scripts; fi
+RUN if [ -f package-lock.json ] || [ -f npm-shrinkwrap.json ]; then npm ci --omit=dev --ignore-scripts; \
+  elif [ -f pnpm-lock.yaml ]; then corepack pnpm install --prod --frozen-lockfile --ignore-scripts; \
+  elif [ -f yarn.lock ] && node -e "process.exit(JSON.parse(require('node:fs').readFileSync('package.json', 'utf8')).packageManager?.startsWith('yarn@1.') ? 0 : 1)"; then corepack yarn install --production --frozen-lockfile --ignore-scripts; \
+  elif [ -f yarn.lock ]; then corepack yarn install --immutable --mode=skip-builds; \
+  else echo 'Kovo node images require a package lockfile; refusing an unlocked production install.' >&2; exit 1; fi
 COPY --chown=node:node . .
 EXPOSE 3000
 CMD ["node", "server.mjs"]
@@ -3399,7 +3403,11 @@ async function nodeRuntimePackageEntries(
   const source = await readPackageJsonForNodeRuntime(projectRoot);
   const runtimePackage = {
     dependencies: source.dependencies ?? {},
+    ...(source.devDependencies === undefined ? {} : { devDependencies: source.devDependencies }),
     name: `${source.name ?? 'kovo-app'}-server`,
+    ...(source.optionalDependencies === undefined
+      ? {}
+      : { optionalDependencies: source.optionalDependencies }),
     private: true,
     scripts: { start: 'NODE_ENV=production node server.mjs' },
     type: 'module',
@@ -3420,11 +3428,17 @@ async function nodeRuntimePackageEntries(
   return entries;
 }
 
-async function readPackageJsonForNodeRuntime(projectRoot: string): Promise<{
+interface NodeRuntimePackageManifest {
   dependencies?: Record<string, string>;
+  devDependencies?: Record<string, string>;
   name?: string;
+  optionalDependencies?: Record<string, string>;
   packageManager?: string;
-}> {
+}
+
+async function readPackageJsonForNodeRuntime(
+  projectRoot: string,
+): Promise<NodeRuntimePackageManifest> {
   let source: string;
   try {
     source = await readFile(buildSecurityPathJoin(projectRoot, 'package.json'), 'utf8');
@@ -3462,30 +3476,31 @@ async function runtimeLockfileEntry(
   return undefined;
 }
 
-function snapshotNodeRuntimePackageManifest(value: unknown): {
-  dependencies?: Record<string, string>;
-  name?: string;
-  packageManager?: string;
-} {
+function snapshotNodeRuntimePackageManifest(value: unknown): NodeRuntimePackageManifest {
   if (typeof value !== 'object' || value === null) {
     throw new TypeError('Node runtime package manifest must be an own-data object.');
   }
-  const dependenciesProperty = buildOwnDataProperty(
-    value,
-    'dependencies',
-    'Node runtime package manifest.dependencies',
-  );
   const name = optionalNodeRuntimePackageString(value, 'name');
   const packageManager = optionalNodeRuntimePackageString(value, 'packageManager');
-  const dependencies =
-    !dependenciesProperty.present || dependenciesProperty.value === undefined
-      ? undefined
-      : snapshotNodeRuntimeDependencies(dependenciesProperty.value);
+  const dependencies = optionalNodeRuntimeDependencies(value, 'dependencies');
+  const devDependencies = optionalNodeRuntimeDependencies(value, 'devDependencies');
+  const optionalDependencies = optionalNodeRuntimeDependencies(value, 'optionalDependencies');
   return {
     ...(dependencies === undefined ? {} : { dependencies }),
+    ...(devDependencies === undefined ? {} : { devDependencies }),
     ...(name === undefined ? {} : { name }),
+    ...(optionalDependencies === undefined ? {} : { optionalDependencies }),
     ...(packageManager === undefined ? {} : { packageManager }),
   };
+}
+
+function optionalNodeRuntimeDependencies(
+  value: object,
+  property: 'dependencies' | 'devDependencies' | 'optionalDependencies',
+): Record<string, string> | undefined {
+  const field = buildOwnDataProperty(value, property, `Node runtime package manifest.${property}`);
+  if (!field.present || field.value === undefined) return undefined;
+  return snapshotNodeRuntimeDependencies(field.value);
 }
 
 function optionalNodeRuntimePackageString(

@@ -1,5 +1,6 @@
 import { EventEmitter } from 'node:events';
 import { createHash } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
 import { Dirent } from 'node:fs';
 import { mkdir, mkdtemp, readdir, readFile, rm, stat, symlink, writeFile } from 'node:fs/promises';
 import {
@@ -2407,10 +2408,18 @@ export default async function handler(request) {
         'FROM node:24-alpine@sha256:a0b9bf06e4e6193cf7a0f58816cc935ff8c2a908f81e6f1a95432d679c54fbfd',
       );
       expect(dockerfile).toContain('USER node');
-      expect(dockerfile.indexOf('USER node')).toBeLessThan(dockerfile.indexOf('npm install'));
+      expect(dockerfile.indexOf('USER node')).toBeLessThan(dockerfile.indexOf('npm ci'));
       expect(dockerfile).toContain('COPY --chown=node:node package.json ./');
       expect(dockerfile).toContain('COPY --chown=node:node . .');
-      expect(dockerfile).toContain('npm install --omit=dev --ignore-scripts');
+      expect(dockerfile).toContain('npm ci --omit=dev --ignore-scripts');
+      expect(dockerfile).toContain(
+        'corepack pnpm install --prod --frozen-lockfile --ignore-scripts',
+      );
+      expect(dockerfile).toContain(
+        'corepack yarn install --production --frozen-lockfile --ignore-scripts',
+      );
+      expect(dockerfile).toContain('corepack yarn install --immutable --mode=skip-builds');
+      expect(dockerfile).toContain('refusing an unlocked production install');
       expect(dockerfile).toContain('CMD ["node", "server.mjs"]');
 
       const runtimePackage = JSON.parse(
@@ -2484,7 +2493,9 @@ export default async function handler(request) {
                     parsePoisonHits += 1;
                     return {
                       dependencies: { 'attacker-runtime': '9.9.9' },
+                      devDependencies: { 'attacker-dev-runtime': '9.9.9' },
                       name: 'attacker-runtime',
+                      optionalDependencies: { 'attacker-optional-runtime': '9.9.9' },
                       packageManager: 'npm@0.0.0',
                     };
                   }
@@ -2532,15 +2543,25 @@ export default async function handler(request) {
 
       const runtimePackage = JSON.parse(runtimePackageText) as {
         dependencies?: Record<string, string>;
+        devDependencies?: Record<string, string>;
         name?: string;
         packageManager?: string;
       };
       expect(runtimePackage.name).toBe('kovo-monorepo-server');
       expect(runtimePackage.packageManager).toBe('pnpm@10.12.1');
       expect(runtimePackage.dependencies).not.toHaveProperty('attacker-runtime');
+      expect(runtimePackage.devDependencies).not.toHaveProperty('attacker-dev-runtime');
+      expect(runtimePackage.devDependencies).toHaveProperty('vitest', '4.1.8');
       expect(copiedLockfile).toBe(true);
       expect(parseHitsAfterEmit).toBe(0);
       expect(iteratorHitsAfterEmit).toBe(0);
+      expect(() =>
+        execFileSync(
+          'corepack',
+          ['pnpm', 'install', '--prod', '--frozen-lockfile', '--ignore-scripts', '--lockfile-only'],
+          { cwd: nodeOutDir, stdio: 'pipe' },
+        ),
+      ).not.toThrow();
     } finally {
       JSON.parse = originalJsonParse;
       Array.prototype[Symbol.iterator] = originalIterator;

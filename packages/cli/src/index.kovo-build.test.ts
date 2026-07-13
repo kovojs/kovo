@@ -2816,6 +2816,21 @@ export async function resetFixture() {
         mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
         symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
         symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
+        writeFileSync(
+          join(root, 'package.json'),
+          JSON.stringify({ name: 'kovo-docker-fixture', private: true, type: 'module' }),
+          'utf8',
+        );
+        writeFileSync(
+          join(root, 'package-lock.json'),
+          JSON.stringify({
+            lockfileVersion: 3,
+            name: 'kovo-docker-fixture-server',
+            packages: { '': { name: 'kovo-docker-fixture-server' } },
+            requires: true,
+          }),
+          'utf8',
+        );
         writeFileSync(appPath, appModuleSource(), 'utf8');
         writeClientEntry(root);
         writeRetentionProofConfig(root);

@@ -189,11 +189,14 @@ signed cookie, a session row), so any instance answers any request and you scale
 A minimal container, with `/c/*` artifacts baked into the image so they're served immutably:
 
 ```dockerfile
-FROM node:22-slim
+FROM node:24-slim@sha256:cb4e8f7c443347358b7875e717c29e27bf9befc8f5a26cf18af3c3dec80e58c5
+ENV NODE_ENV=production
 WORKDIR /app
-COPY package.json pnpm-lock.yaml ./
-RUN corepack enable && pnpm install --prod --frozen-lockfile
-COPY dist ./dist           # output of `pnpm run build:prod`, including /c/* client modules
+RUN chown node:node /app
+USER node
+COPY --chown=node:node package.json pnpm-lock.yaml ./
+RUN corepack pnpm install --prod --frozen-lockfile --ignore-scripts
+COPY --chown=node:node dist ./dist # output of `pnpm run build:prod`, including /c/* client modules
 ENV PORT=3000
 EXPOSE 3000
 CMD ["node", "dist/server/server.mjs"]
