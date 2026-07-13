@@ -375,10 +375,20 @@ export function credentialMutationDefinitionOptions<
       : guard === undefined
         ? contract.defaultAccess
         : undefined;
-  const transaction =
-    configuredTransaction ??
-    (<Result>(_request: Request, run: (transactionRequest: GuardedRequest) => Promise<Result>) =>
-      run(_request as unknown as GuardedRequest));
+  const transaction = async <Result>(
+    request: Request,
+    run: (transactionRequest: GuardedRequest) => Promise<Result>,
+  ): Promise<Result> => {
+    // SPEC §6.6/§10.2: a framework continuation adapter must own and await exactly one
+    // continuation invocation. Returning the lazy `run(...)` promise directly lets the server
+    // cardinality gate observe an adapter that never awaited completion. Keep both the configured
+    // option function and its receiver captured here, invoke through the boot-pinned Reflect.apply
+    // control, and await before this adapter completes.
+    const pending = configuredTransaction
+      ? betterAuthApply<Promise<Result>>(configuredTransaction, options, [request, run])
+      : betterAuthApply<Promise<Result>>(run, undefined, [request as unknown as GuardedRequest]);
+    return await pending;
+  };
 
   return {
     // SPEC.md §10.2: a credential mutation with no `guard` (sign-in/sign-up run

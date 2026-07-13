@@ -106,6 +106,35 @@ describe('credential mutation helpers', () => {
     expect(signIn.transaction).not.toBe(inheritedTransaction);
   });
 
+  it('owns and awaits configured and default credential continuations', async () => {
+    const auth = new FakeCredentialAuth();
+    const request = { headers: requestHeaders() };
+    const directReturnAdapter = <Result>(
+      adapterRequest: typeof request,
+      run: (transactionRequest: typeof request) => Promise<Result>,
+    ) => run(adapterRequest);
+    const configured = betterAuthSignInEmailMutation(auth, {
+      transaction: directReturnAdapter,
+    });
+    const defaulted = betterAuthSignUpEmailMutation(auth);
+
+    for (const transaction of [configured.transaction, defaulted.transaction]) {
+      if (!transaction) throw new Error('Missing credential transaction adapter');
+      let continuationInvocations = 0;
+      const continuation = Promise.resolve('complete');
+      const completion = transaction(request, () => {
+        continuationInvocations += 1;
+        return continuation;
+      });
+
+      // SPEC §10.2: returning the continuation promise itself is not an awaiting adapter. The
+      // wrapper owns a distinct completion promise and settles only after exactly one invocation.
+      expect(completion).not.toBe(continuation);
+      await expect(completion).resolves.toBe('complete');
+      expect(continuationInvocations).toBe(1);
+    }
+  });
+
   it('rejects credential option accessors without invoking them', () => {
     const auth = new FakeCredentialAuth();
     let reads = 0;
