@@ -1,12 +1,17 @@
 import type { DerivationStatus } from './derivation.js';
 
 import { isDiagnosticCode, type DiagnosticCode, type DiagnosticSeverity } from './diagnostics.js';
+import { snapshotAuditText } from './internal/audit-text.js';
 import {
   securityArrayAppend,
+  securityDefineProperty,
   securityGetOwnPropertyDescriptor,
   securityIsArray,
+  securityJsonStringify,
+  securityNullRecord,
   securityObjectKeys,
   securityOwnArrayEntry,
+  securityRegExpTest,
   securitySet,
   securitySetAdd,
   securitySetHas,
@@ -832,6 +837,427 @@ export interface AccessDerivationInput {
   queries?: readonly QueryReadSet[];
 }
 
+const MAX_GRAPH_DERIVATION_ENTRIES = 100_000;
+const MAX_GRAPH_DERIVATION_TEXT_CHARACTERS = 4_000_000;
+
+interface GraphTraversalBudget {
+  entries: number;
+  textCharacters: number;
+}
+
+function createGraphTraversalBudget(): GraphTraversalBudget {
+  return { entries: 0, textCharacters: 0 };
+}
+
+function snapshotAccessDerivationInput(input: AccessDerivationInput): AccessDerivationInput {
+  if (typeof input !== 'object' || input === null) {
+    throw new TypeError('Kovo access graph derivation input must be an object.');
+  }
+  const budget = createGraphTraversalBudget();
+  const endpoints = snapshotGraphList(
+    ownGraphData(input, 'endpoints', 'access graph endpoints'),
+    'endpoints',
+    snapshotEndpointDerivation,
+    budget,
+  );
+  const mutations = snapshotGraphList(
+    ownGraphData(input, 'mutations', 'access graph mutations'),
+    'mutations',
+    snapshotMutationDerivation,
+    budget,
+  );
+  const pages = snapshotGraphList(
+    ownGraphData(input, 'pages', 'access graph pages'),
+    'pages',
+    snapshotPageDerivation,
+    budget,
+  );
+  const queries = snapshotGraphList(
+    ownGraphData(input, 'queries', 'access graph queries'),
+    'queries',
+    snapshotQueryDerivation,
+    budget,
+  );
+  return graphSnapshotRecord({
+    ...(endpoints === undefined ? {} : { endpoints }),
+    ...(mutations === undefined ? {} : { mutations }),
+    ...(pages === undefined ? {} : { pages }),
+    ...(queries === undefined ? {} : { queries }),
+  });
+}
+
+function graphSnapshotRecord<const Value extends object>(source: Value): Value {
+  const snapshot = securityNullRecord<unknown>();
+  const keys = securityObjectKeys(source);
+  for (let index = 0; index < keys.length; index += 1) {
+    const key = securityOwnArrayEntry(keys, index);
+    if (!key.ok) throw new TypeError('Kovo graph snapshot keys must be dense.');
+    securityDefineProperty(snapshot, key.value, {
+      configurable: false,
+      enumerable: true,
+      value: ownGraphData(source, key.value, `snapshot.${key.value}`),
+      writable: false,
+    });
+  }
+  // The returned value was reconstructed above from exact own data fields on a
+  // null-prototype record; this assertion only restores its static shape.
+  return snapshot as Value;
+}
+
+function snapshotGraphList<Value>(
+  value: unknown,
+  label: string,
+  snapshot: (value: object, label: string, budget: GraphTraversalBudget) => Value,
+  budget: GraphTraversalBudget,
+): Value[] | undefined {
+  if (value === undefined) return undefined;
+  if (!securityIsArray(value)) throw new TypeError(`Kovo graph ${label} must be an array.`);
+  const length = snapshotGraphArrayLength(value, label, budget);
+  const values: Value[] = [];
+  for (let index = 0; index < length; index += 1) {
+    const entry = securityOwnArrayEntry(value, index);
+    if (!entry.ok || typeof entry.value !== 'object' || entry.value === null) {
+      throw new TypeError(`Kovo graph ${label}[${index}] must be an own object entry.`);
+    }
+    securityArrayAppend(values, snapshot(entry.value, `${label}[${index}]`, budget));
+  }
+  return values;
+}
+
+function snapshotEndpointDerivation(
+  value: object,
+  label: string,
+  budget: GraphTraversalBudget,
+): EndpointExplain {
+  const mount = snapshotOptionalGraphString(
+    ownGraphData(value, 'mount', `${label}.mount`),
+    `${label}.mount`,
+    budget,
+  );
+  if (mount !== undefined && mount !== 'exact' && mount !== 'prefix') {
+    throw new TypeError(`Kovo graph ${label}.mount must be exact or prefix.`);
+  }
+  const csrf = snapshotOptionalGraphString(
+    ownGraphData(value, 'csrf', `${label}.csrf`),
+    `${label}.csrf`,
+    budget,
+  );
+  if (csrf !== undefined && csrf !== 'checked' && csrf !== 'exempt') {
+    throw new TypeError(`Kovo graph ${label}.csrf must be checked or exempt.`);
+  }
+  const surface = snapshotOptionalGraphString(
+    ownGraphData(value, 'surface', `${label}.surface`),
+    `${label}.surface`,
+    budget,
+  );
+  if (
+    surface !== undefined &&
+    surface !== 'dynamic-export' &&
+    surface !== 'endpoint' &&
+    surface !== 'route-file' &&
+    surface !== 'route-stream' &&
+    surface !== 'webhook'
+  ) {
+    throw new TypeError(`Kovo graph ${label}.surface has an unsupported value.`);
+  }
+  const access = snapshotAccessDecision(
+    ownGraphData(value, 'access', `${label}.access`),
+    `${label}.access`,
+    budget,
+  );
+  const auth = snapshotOptionalGraphString(
+    ownGraphData(value, 'auth', `${label}.auth`),
+    `${label}.auth`,
+    budget,
+  );
+  const authJustification = snapshotOptionalGraphString(
+    ownGraphData(value, 'authJustification', `${label}.authJustification`),
+    `${label}.authJustification`,
+    budget,
+  );
+  const csrfJustification = snapshotOptionalGraphString(
+    ownGraphData(value, 'csrfJustification', `${label}.csrfJustification`),
+    `${label}.csrfJustification`,
+    budget,
+  );
+  const guards = snapshotGraphStringList(
+    ownGraphData(value, 'guards', `${label}.guards`),
+    `${label}.guards`,
+    budget,
+  );
+  const method = snapshotOptionalGraphString(
+    ownGraphData(value, 'method', `${label}.method`),
+    `${label}.method`,
+    budget,
+  );
+  const name = snapshotOptionalGraphString(
+    ownGraphData(value, 'name', `${label}.name`),
+    `${label}.name`,
+    budget,
+  );
+  return graphSnapshotRecord({
+    ...(access === undefined ? {} : { access }),
+    ...(auth === undefined ? {} : { auth }),
+    ...(authJustification === undefined ? {} : { authJustification }),
+    ...(csrf === undefined ? {} : { csrf: csrf as NonNullable<EndpointExplain['csrf']> }),
+    ...(csrfJustification === undefined ? {} : { csrfJustification }),
+    ...(guards === undefined ? {} : { guards }),
+    ...(method === undefined ? {} : { method }),
+    ...(mount === undefined ? {} : { mount: mount as NonNullable<EndpointExplain['mount']> }),
+    ...(name === undefined ? {} : { name }),
+    path: snapshotRequiredGraphString(
+      ownGraphData(value, 'path', `${label}.path`),
+      `${label}.path`,
+      budget,
+    ),
+    ...(surface === undefined
+      ? {}
+      : { surface: surface as NonNullable<EndpointExplain['surface']> }),
+  });
+}
+
+function snapshotMutationDerivation(
+  value: object,
+  label: string,
+  budget: GraphTraversalBudget,
+): MutationExplain {
+  const access = snapshotAccessDecision(
+    ownGraphData(value, 'access', `${label}.access`),
+    `${label}.access`,
+    budget,
+  );
+  const auth = snapshotOptionalGraphString(
+    ownGraphData(value, 'auth', `${label}.auth`),
+    `${label}.auth`,
+    budget,
+  );
+  const guards = snapshotGraphStringList(
+    ownGraphData(value, 'guards', `${label}.guards`),
+    `${label}.guards`,
+    budget,
+  );
+  const invalidates = snapshotGraphStringList(
+    ownGraphData(value, 'invalidates', `${label}.invalidates`),
+    `${label}.invalidates`,
+    budget,
+  );
+  const manualInvalidates = snapshotGraphStringList(
+    ownGraphData(value, 'manualInvalidates', `${label}.manualInvalidates`),
+    `${label}.manualInvalidates`,
+    budget,
+  );
+  const session = snapshotOptionalGraphString(
+    ownGraphData(value, 'session', `${label}.session`),
+    `${label}.session`,
+    budget,
+  );
+  const writes = snapshotGraphStringList(
+    ownGraphData(value, 'writes', `${label}.writes`),
+    `${label}.writes`,
+    budget,
+  );
+  return graphSnapshotRecord({
+    ...(access === undefined ? {} : { access }),
+    ...(auth === undefined ? {} : { auth }),
+    ...(guards === undefined ? {} : { guards }),
+    ...(invalidates === undefined ? {} : { invalidates }),
+    key: snapshotRequiredGraphString(
+      ownGraphData(value, 'key', `${label}.key`),
+      `${label}.key`,
+      budget,
+    ),
+    ...(manualInvalidates === undefined ? {} : { manualInvalidates }),
+    ...(session === undefined ? {} : { session }),
+    ...(writes === undefined ? {} : { writes }),
+  });
+}
+
+function snapshotPageDerivation(
+  value: object,
+  label: string,
+  budget: GraphTraversalBudget,
+): PageExplain {
+  const access = snapshotAccessDecision(
+    ownGraphData(value, 'access', `${label}.access`),
+    `${label}.access`,
+    budget,
+  );
+  const guards = snapshotGraphStringList(
+    ownGraphData(value, 'guards', `${label}.guards`),
+    `${label}.guards`,
+    budget,
+  );
+  const queries = snapshotGraphStringList(
+    ownGraphData(value, 'queries', `${label}.queries`),
+    `${label}.queries`,
+    budget,
+  );
+  return graphSnapshotRecord({
+    ...(access === undefined ? {} : { access }),
+    ...(guards === undefined ? {} : { guards }),
+    ...(queries === undefined ? {} : { queries }),
+    route: snapshotRequiredGraphString(
+      ownGraphData(value, 'route', `${label}.route`),
+      `${label}.route`,
+      budget,
+    ),
+  });
+}
+
+function snapshotQueryDerivation(
+  value: object,
+  label: string,
+  budget: GraphTraversalBudget,
+): QueryReadSet {
+  const access = snapshotAccessDecision(
+    ownGraphData(value, 'access', `${label}.access`),
+    `${label}.access`,
+    budget,
+  );
+  const guards = snapshotGraphStringList(
+    ownGraphData(value, 'guards', `${label}.guards`),
+    `${label}.guards`,
+    budget,
+  );
+  return graphSnapshotRecord({
+    ...(access === undefined ? {} : { access }),
+    domains:
+      snapshotGraphStringList(
+        ownGraphData(value, 'domains', `${label}.domains`),
+        `${label}.domains`,
+        budget,
+      ) ?? [],
+    ...(guards === undefined ? {} : { guards }),
+    query: snapshotRequiredGraphString(
+      ownGraphData(value, 'query', `${label}.query`),
+      `${label}.query`,
+      budget,
+    ),
+  });
+}
+
+function snapshotAccessDecision(
+  value: unknown,
+  label: string,
+  budget: GraphTraversalBudget,
+): AccessDecisionFact | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value !== 'object' || value === null) {
+    throw new TypeError(`Kovo graph ${label} must be an object.`);
+  }
+  const kind = snapshotRequiredGraphString(
+    ownGraphData(value, 'kind', `${label}.kind`),
+    `${label}.kind`,
+    budget,
+  );
+  if (kind === 'verified-machine-auth') return graphSnapshotRecord({ kind });
+  if (kind === 'public') {
+    return graphSnapshotRecord({
+      kind,
+      reason: snapshotRequiredGraphString(
+        ownGraphData(value, 'reason', `${label}.reason`),
+        `${label}.reason`,
+        budget,
+      ),
+    });
+  }
+  if (kind === 'guard-chain') {
+    const guards = snapshotGraphStringList(
+      ownGraphData(value, 'guards', `${label}.guards`),
+      `${label}.guards`,
+      budget,
+    );
+    if (guards === undefined) throw new TypeError(`Kovo graph ${label}.guards must be an array.`);
+    return graphSnapshotRecord({ guards, kind });
+  }
+  throw new TypeError(`Kovo graph ${label}.kind has an unsupported value.`);
+}
+
+function snapshotGraphStringList(
+  value: unknown,
+  label: string,
+  budget: GraphTraversalBudget,
+): string[] | undefined {
+  if (value === undefined) return undefined;
+  if (!securityIsArray(value)) throw new TypeError(`Kovo graph ${label} must be an array.`);
+  const length = snapshotGraphArrayLength(value, label, budget);
+  const values: string[] = [];
+  for (let index = 0; index < length; index += 1) {
+    const entry = securityOwnArrayEntry(value, index);
+    if (!entry.ok) throw new TypeError(`Kovo graph ${label}[${index}] must be an own entry.`);
+    securityArrayAppend(
+      values,
+      snapshotRequiredGraphString(entry.value, `${label}[${index}]`, budget),
+    );
+  }
+  return values;
+}
+
+function snapshotGraphArrayLength(
+  value: readonly unknown[],
+  label: string,
+  budget?: GraphTraversalBudget,
+): number {
+  const descriptor = securityGetOwnPropertyDescriptor(value, 'length');
+  const length = descriptor !== undefined && 'value' in descriptor ? descriptor.value : undefined;
+  if (
+    typeof length !== 'number' ||
+    length < 0 ||
+    length % 1 !== 0 ||
+    length > MAX_GRAPH_DERIVATION_ENTRIES
+  ) {
+    throw new TypeError(
+      `Kovo graph ${label} must contain at most ${MAX_GRAPH_DERIVATION_ENTRIES} entries.`,
+    );
+  }
+  if (budget !== undefined) {
+    consumeGraphTraversalEntries(budget, length);
+  }
+  return length;
+}
+
+function consumeGraphTraversalEntries(budget: GraphTraversalBudget, count: number): void {
+  budget.entries += count;
+  if (budget.entries > MAX_GRAPH_DERIVATION_ENTRIES) {
+    throw new TypeError(
+      `Kovo graph traversal exceeds the ${MAX_GRAPH_DERIVATION_ENTRIES}-entry aggregate bound.`,
+    );
+  }
+}
+
+function snapshotRequiredGraphString(
+  value: unknown,
+  label: string,
+  budget: GraphTraversalBudget,
+): string {
+  if (typeof value !== 'string') throw new TypeError(`Kovo graph ${label} must be a string.`);
+  const snapshot = snapshotAuditText(value, `Kovo graph ${label}`);
+  budget.textCharacters += snapshot.length;
+  if (budget.textCharacters > MAX_GRAPH_DERIVATION_TEXT_CHARACTERS) {
+    throw new TypeError(
+      `Kovo graph traversal exceeds the ${MAX_GRAPH_DERIVATION_TEXT_CHARACTERS}-character aggregate text bound.`,
+    );
+  }
+  return snapshot;
+}
+
+function snapshotOptionalGraphString(
+  value: unknown,
+  label: string,
+  budget: GraphTraversalBudget,
+): string | undefined {
+  return value === undefined ? undefined : snapshotRequiredGraphString(value, label, budget);
+}
+
+function ownGraphData(value: object, property: PropertyKey, label: string): unknown {
+  const descriptor = securityGetOwnPropertyDescriptor(value, property);
+  if (descriptor === undefined) return undefined;
+  if (!('value' in descriptor)) {
+    throw new TypeError(`Kovo graph ${label} must be an own data property.`);
+  }
+  return descriptor.value;
+}
+
 /**
  * @internal By-construction default-deny classifier (SPEC.md §10.2 / §6.6). Every
  * query/mutation/route-page/endpoint/webhook surface is classified into exactly one
@@ -845,6 +1271,10 @@ export interface AccessDerivationInput {
  * (the compiler runs no type checker, §6.6).
  */
 export function deriveAccessExplainFacts(input: AccessDerivationInput): AccessExplainFact[] {
+  return deriveAccessExplainFactsFromSnapshot(snapshotAccessDerivationInput(input));
+}
+
+function deriveAccessExplainFactsFromSnapshot(input: AccessDerivationInput): AccessExplainFact[] {
   const facts: AccessExplainFact[] = [];
   appendDerivedFacts(facts, input.endpoints, 'endpoints', endpointAccessFact);
   appendDerivedFacts(facts, input.mutations, 'mutations', mutationAccessFact);
@@ -855,16 +1285,17 @@ export function deriveAccessExplainFacts(input: AccessDerivationInput): AccessEx
 
 /** @internal Derive guarded/unguarded posture as producer-owned facts (SPEC.md §10.2). */
 export function deriveAuthPostureFacts(input: AccessDerivationInput): AuthPostureFact[] {
-  const decided = decidedAccessKeys(deriveAccessExplainFacts(input));
+  const snapshot = snapshotAccessDerivationInput(input);
+  const decided = decidedAccessKeys(deriveAccessExplainFactsFromSnapshot(snapshot));
   const facts: AuthPostureFact[] = [];
-  appendDerivedFacts(facts, input.endpoints, 'endpoints', (endpoint) =>
+  appendDerivedFacts(facts, snapshot.endpoints, 'endpoints', (endpoint) =>
     endpointAuthPostureFact(endpoint, decided),
   );
-  appendDerivedFacts(facts, input.mutations, 'mutations', (mutation) =>
+  appendDerivedFacts(facts, snapshot.mutations, 'mutations', (mutation) =>
     mutationAuthPostureFact(mutation, decided),
   );
-  appendDerivedFacts(facts, input.pages, 'pages', (page) => pageAuthPostureFact(page, decided));
-  appendDerivedFacts(facts, input.queries, 'queries', (query) =>
+  appendDerivedFacts(facts, snapshot.pages, 'pages', (page) => pageAuthPostureFact(page, decided));
+  appendDerivedFacts(facts, snapshot.queries, 'queries', (query) =>
     queryAuthPostureFact(query, decided),
   );
   return stableSortGraphFacts(facts, compareAuthPostureFact);
@@ -872,17 +1303,19 @@ export function deriveAuthPostureFacts(input: AccessDerivationInput): AuthPostur
 
 /** @internal Derive ambient session authority posture for KV418 producers (SPEC.md §9.1). */
 export function deriveSessionAuthorityFacts(input: AccessDerivationInput): SessionAuthorityFact[] {
+  const snapshot = snapshotAccessDerivationInput(input);
   const facts: SessionAuthorityFact[] = [];
-  appendDerivedFacts(facts, input.endpoints, 'endpoints', endpointSessionAuthorityFact);
-  appendDerivedFacts(facts, input.mutations, 'mutations', mutationSessionAuthorityFact);
+  appendDerivedFacts(facts, snapshot.endpoints, 'endpoints', endpointSessionAuthorityFact);
+  appendDerivedFacts(facts, snapshot.mutations, 'mutations', mutationSessionAuthorityFact);
   return stableSortGraphFacts(facts, compareSessionAuthorityFact);
 }
 
 /** @internal Derive owner-domain guard posture for KV414 producers (SPEC.md §10.3). */
 export function deriveOwnershipPostureFacts(input: AccessDerivationInput): OwnershipPostureFact[] {
+  const snapshot = snapshotAccessDerivationInput(input);
   const facts: OwnershipPostureFact[] = [];
-  appendOwnershipPostureFacts(facts, input.queries, 'queries', 'query');
-  appendOwnershipPostureFacts(facts, input.mutations, 'mutations', 'mutation');
+  appendOwnershipPostureFacts(facts, snapshot.queries, 'queries', 'query');
+  appendOwnershipPostureFacts(facts, snapshot.mutations, 'mutations', 'mutation');
   return stableSortGraphFacts(facts, compareOwnershipPostureFact);
 }
 
@@ -906,16 +1339,34 @@ function stableSortGraphFacts<Fact>(
   facts: Fact[],
   compare: (left: Fact, right: Fact) => number,
 ): Fact[] {
-  for (let index = 1; index < facts.length; index += 1) {
-    const current = facts[index]!;
-    let cursor = index - 1;
-    while (cursor >= 0 && compare(facts[cursor]!, current) > 0) {
-      facts[cursor + 1] = facts[cursor]!;
-      cursor -= 1;
-    }
-    facts[cursor + 1] = current;
+  // SPEC §6.6/§11.2: graph derivation processes app-shaped names during every
+  // check/explain run. A reverse-ordered graph must remain O(n log n), not make
+  // insertion-sort shifts an input-amplified build denial of service.
+  const length = facts.length;
+  if (length < 2) return facts;
+  let source: Fact[] = [];
+  for (let index = 0; index < length; index += 1) {
+    const entry = securityOwnArrayEntry(facts, index);
+    if (!entry.ok) throw new TypeError('Kovo graph fact list is unstable.');
+    securityArrayAppend(source, entry.value);
   }
-  return facts;
+
+  for (let width = 1; width < length; width *= 2) {
+    const target: Fact[] = [];
+    for (let start = 0; start < length; start += width * 2) {
+      const middle = start + width < length ? start + width : length;
+      const end = start + width * 2 < length ? start + width * 2 : length;
+      let left = start;
+      let right = middle;
+      while (left < middle || right < end) {
+        const useLeft =
+          right >= end || (left < middle && compare(source[left]!, source[right]!) <= 0);
+        securityArrayAppend(target, source[useLeft ? left++ : right++]!);
+      }
+    }
+    source = target;
+  }
+  return source;
 }
 
 function compareGraphString(left: string, right: string): number {
@@ -1354,10 +1805,19 @@ export function validateKovoExplainInput(input: unknown): GraphInputValidationEr
     return [{ message: 'input JSON must be an object', path: '$' }];
   }
 
+  const fields = securityNullRecord<unknown>();
+  const budget = createGraphTraversalBudget();
   for (let index = 0; index < arrayFields.length; index += 1) {
     const field = securityOwnArrayEntry(arrayFields, index);
     if (!field.ok) continue;
-    if (input[field.value] !== undefined && !securityIsArray(input[field.value])) {
+    const value = ownGraphData(input, field.value, `input.${field.value}`);
+    securityDefineProperty(fields, field.value, {
+      configurable: true,
+      enumerable: true,
+      value,
+      writable: false,
+    });
+    if (value !== undefined && !securityIsArray(value)) {
       securityArrayAppend(errors, {
         message: `${field.value} must be an array`,
         path: field.value,
@@ -1365,15 +1825,21 @@ export function validateKovoExplainInput(input: unknown): GraphInputValidationEr
     }
   }
 
-  if (input.touchGraph !== undefined && !isRecord(input.touchGraph)) {
+  const touchGraph = ownGraphData(input, 'touchGraph', 'input.touchGraph');
+  if (touchGraph !== undefined && !isRecord(touchGraph)) {
     securityArrayAppend(errors, { message: 'touchGraph must be an object', path: 'touchGraph' });
   }
 
-  validateDiagnosticFactCodes(input.diagnostics, 'diagnostics', errors);
-  validateDiagnosticFactCodes(input.verificationDiagnostics, 'verificationDiagnostics', errors);
-  validateDiagnosticFactCodes(input.lints, 'lints', errors);
-  validateAttributeMergeDiagnosticCodes(input.components, errors);
-  validateTouchGraphDiagnosticCodes(input.touchGraph, errors);
+  validateDiagnosticFactCodes(fields.diagnostics, 'diagnostics', errors, budget);
+  validateDiagnosticFactCodes(
+    fields.verificationDiagnostics,
+    'verificationDiagnostics',
+    errors,
+    budget,
+  );
+  validateDiagnosticFactCodes(fields.lints, 'lints', errors, budget);
+  validateAttributeMergeDiagnosticCodes(fields.components, errors, budget);
+  validateTouchGraphDiagnosticCodes(touchGraph, errors, budget);
 
   return errors;
 }
@@ -1382,34 +1848,62 @@ function validateDiagnosticFactCodes(
   values: unknown,
   path: string,
   errors: GraphInputValidationError[],
+  budget: GraphTraversalBudget,
 ): void {
   if (!securityIsArray(values)) return;
-  for (let index = 0; index < values.length; index += 1) {
+  const length = snapshotGraphArrayLength(values, path, budget);
+  for (let index = 0; index < length; index += 1) {
     const entry = securityOwnArrayEntry(values, index);
     if (!entry.ok) continue;
     const value = entry.value;
-    if (!isRecord(value) || value.code === undefined) continue;
-    validateDiagnosticCode(value.code, `${path}[${index}].code`, errors);
+    if (!isRecord(value)) continue;
+    const code = ownGraphData(value, 'code', `${path}[${index}].code`);
+    if (code === undefined) continue;
+    validateDiagnosticCode(code, `${path}[${index}].code`, errors);
   }
 }
 
 function validateAttributeMergeDiagnosticCodes(
   components: unknown,
   errors: GraphInputValidationError[],
+  budget: GraphTraversalBudget,
 ): void {
   if (!securityIsArray(components)) return;
-  for (let componentIndex = 0; componentIndex < components.length; componentIndex += 1) {
+  const componentLength = snapshotGraphArrayLength(components, 'components', budget);
+  for (let componentIndex = 0; componentIndex < componentLength; componentIndex += 1) {
     const componentEntry = securityOwnArrayEntry(components, componentIndex);
     if (!componentEntry.ok) continue;
     const component = componentEntry.value;
-    if (!isRecord(component) || !securityIsArray(component.attributeMerges)) continue;
-    for (let mergeIndex = 0; mergeIndex < component.attributeMerges.length; mergeIndex += 1) {
-      const mergeEntry = securityOwnArrayEntry(component.attributeMerges, mergeIndex);
+    if (!isRecord(component)) continue;
+    const attributeMerges = ownGraphData(
+      component,
+      'attributeMerges',
+      `components[${componentIndex}].attributeMerges`,
+    );
+    if (!securityIsArray(attributeMerges)) continue;
+    const mergeLength = snapshotGraphArrayLength(
+      attributeMerges,
+      `components[${componentIndex}].attributeMerges`,
+      budget,
+    );
+    for (let mergeIndex = 0; mergeIndex < mergeLength; mergeIndex += 1) {
+      const mergeEntry = securityOwnArrayEntry(attributeMerges, mergeIndex);
       if (!mergeEntry.ok) continue;
       const merge = mergeEntry.value;
-      if (!isRecord(merge) || !securityIsArray(merge.diagnostics)) continue;
-      for (let codeIndex = 0; codeIndex < merge.diagnostics.length; codeIndex += 1) {
-        const code = securityOwnArrayEntry(merge.diagnostics, codeIndex);
+      if (!isRecord(merge)) continue;
+      const diagnostics = ownGraphData(
+        merge,
+        'diagnostics',
+        `components[${componentIndex}].attributeMerges[${mergeIndex}].diagnostics`,
+      );
+      if (!securityIsArray(diagnostics)) continue;
+      const codeLength = snapshotGraphArrayLength(
+        diagnostics,
+        `components[${componentIndex}].attributeMerges[${mergeIndex}].diagnostics`,
+        budget,
+      );
+      for (let codeIndex = 0; codeIndex < codeLength; codeIndex += 1) {
+        const code = securityOwnArrayEntry(diagnostics, codeIndex);
         if (!code.ok) continue;
         validateDiagnosticCode(
           code.value,
@@ -1424,10 +1918,12 @@ function validateAttributeMergeDiagnosticCodes(
 function validateTouchGraphDiagnosticCodes(
   touchGraph: unknown,
   errors: GraphInputValidationError[],
+  budget: GraphTraversalBudget,
 ): void {
   if (!isRecord(touchGraph)) return;
 
   const names = securityObjectKeys(touchGraph);
+  consumeGraphTraversalEntries(budget, names.length);
   for (let nameIndex = 0; nameIndex < names.length; nameIndex += 1) {
     const nameEntry = securityOwnArrayEntry(names, nameIndex);
     if (!nameEntry.ok) continue;
@@ -1435,14 +1931,30 @@ function validateTouchGraphDiagnosticCodes(
     const descriptor = securityGetOwnPropertyDescriptor(touchGraph, entryName);
     if (descriptor === undefined || !('value' in descriptor)) continue;
     const entry = descriptor.value;
-    if (!isRecord(entry) || !securityIsArray(entry.unresolved)) continue;
-    for (let index = 0; index < entry.unresolved.length; index += 1) {
-      const unresolvedEntry = securityOwnArrayEntry(entry.unresolved, index);
+    if (!isRecord(entry)) continue;
+    const unresolved = ownGraphData(
+      entry,
+      'unresolved',
+      `touchGraph.${quotePathSegment(entryName)}.unresolved`,
+    );
+    if (!securityIsArray(unresolved)) continue;
+    const unresolvedLength = snapshotGraphArrayLength(
+      unresolved,
+      `touchGraph.${quotePathSegment(entryName)}.unresolved`,
+      budget,
+    );
+    for (let index = 0; index < unresolvedLength; index += 1) {
+      const unresolvedEntry = securityOwnArrayEntry(unresolved, index);
       if (!unresolvedEntry.ok) continue;
-      const unresolved = unresolvedEntry.value;
-      if (!isRecord(unresolved) || unresolved.code === undefined) continue;
+      if (!isRecord(unresolvedEntry.value)) continue;
+      const code = ownGraphData(
+        unresolvedEntry.value,
+        'code',
+        `touchGraph.${quotePathSegment(entryName)}.unresolved[${index}].code`,
+      );
+      if (code === undefined) continue;
       validateDiagnosticCode(
-        unresolved.code,
+        code,
         `touchGraph.${quotePathSegment(entryName)}.unresolved[${index}].code`,
         errors,
       );
@@ -1458,7 +1970,7 @@ function validateDiagnosticCode(
   if (isDiagnosticCode(value)) return;
 
   securityArrayAppend(errors, {
-    message: `unknown diagnostic code ${JSON.stringify(value)}`,
+    message: `unknown diagnostic code ${graphScalarLabel(value)}`,
     path,
   });
 }
@@ -1468,5 +1980,23 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function quotePathSegment(value: string): string {
-  return /^[A-Za-z_$][\w$]*$/.test(value) ? value : JSON.stringify(value);
+  if (value.length > 4_096) return '"<oversized-key>"';
+  return securityRegExpTest(/^[A-Za-z_$][\w$]*$/u, value)
+    ? value
+    : (securityJsonStringify(value) ?? '""');
+}
+
+function graphScalarLabel(value: unknown): string {
+  if (typeof value === 'string' && value.length > 4_096) {
+    return `[string:${value.length} characters]`;
+  }
+  if (
+    value === null ||
+    typeof value === 'boolean' ||
+    typeof value === 'number' ||
+    typeof value === 'string'
+  ) {
+    return securityJsonStringify(value) ?? 'undefined';
+  }
+  return `[${typeof value}]`;
 }

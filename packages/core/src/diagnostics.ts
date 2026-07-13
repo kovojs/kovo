@@ -158,12 +158,38 @@ export function diagnosticDefinitionText(
   code: DiagnosticCode,
   options: DiagnosticTextOptions = {},
 ): string {
+  if (!isDiagnosticCode(code)) {
+    throw new TypeError('Diagnostic code must be a registered Kovo diagnostic.');
+  }
+  if (typeof options !== 'object' || options === null) {
+    throw new TypeError('Diagnostic text options must be an object.');
+  }
+  const includeHelp = ownDiagnosticTextOption(options, 'includeHelp');
+  const preferHelp = ownDiagnosticTextOption(options, 'preferHelp');
   const definition = diagnosticDefinitions[code];
-  const help = 'help' in definition ? definition.help : undefined;
-  const message = options.preferHelp ? (help ?? definition.message) : definition.message;
-  if (!options.includeHelp || !help || message === help) return message;
+  const helpDescriptor = securityGetOwnPropertyDescriptor(definition, 'help');
+  const help =
+    helpDescriptor !== undefined &&
+    'value' in helpDescriptor &&
+    typeof helpDescriptor.value === 'string'
+      ? helpDescriptor.value
+      : undefined;
+  const message = preferHelp ? (help ?? definition.message) : definition.message;
+  if (!includeHelp || !help || message === help) return message;
 
   return `${message} ${help}`;
+}
+
+function ownDiagnosticTextOption(
+  options: DiagnosticTextOptions,
+  key: keyof DiagnosticTextOptions,
+): boolean {
+  const descriptor = securityGetOwnPropertyDescriptor(options, key);
+  if (descriptor === undefined) return false;
+  if (!('value' in descriptor) || typeof descriptor.value !== 'boolean') {
+    throw new TypeError(`Diagnostic text option ${key} must be an own boolean data property.`);
+  }
+  return descriptor.value;
 }
 
 /**

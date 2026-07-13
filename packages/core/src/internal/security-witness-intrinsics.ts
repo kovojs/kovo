@@ -40,6 +40,7 @@ const intrinsicObjectCreate = Object.create;
 const intrinsicObjectHasOwnProperty = Object.prototype.hasOwnProperty;
 const intrinsicObjectPropertyIsEnumerable = Object.prototype.propertyIsEnumerable;
 const intrinsicObjectKeys = Object.keys;
+const intrinsicObjectGetOwnPropertyNames = Object.getOwnPropertyNames;
 const intrinsicObjectGetOwnPropertySymbols = Object.getOwnPropertySymbols;
 const intrinsicObjectIs = Object.is;
 const intrinsicArrayIsArray = Array.isArray;
@@ -258,6 +259,9 @@ function assertObjectIntegrity(): void {
     [objectControl, 'missing'],
   );
   const keys = invoke<string[]>(intrinsicObjectKeys, IntrinsicObject, [objectControl]);
+  const propertyNames = invoke<string[]>(intrinsicObjectGetOwnPropertyNames, IntrinsicObject, [
+    objectControl,
+  ]);
   const symbols = invoke<symbol[]>(intrinsicObjectGetOwnPropertySymbols, IntrinsicObject, [
     objectControl,
   ]);
@@ -280,6 +284,9 @@ function assertObjectIntegrity(): void {
     invoke(intrinsicObjectIs, IntrinsicObject, [objectControlValue, objectControl]) !== false ||
     keys.length !== 1 ||
     keys[0] !== 'visible' ||
+    propertyNames.length !== 2 ||
+    propertyNames[0] !== 'visible' ||
+    propertyNames[1] !== 'hidden' ||
     symbols.length !== 1 ||
     symbols[0] !== objectControlSymbol ||
     invoke(intrinsicArrayIsArray, IntrinsicArray, [[]]) !== true ||
@@ -515,11 +522,14 @@ export function securityArrayAppend<T>(values: T[], value: T): void {
     writable: true,
   });
   const committed = securityGetOwnPropertyDescriptor(values, length);
+  const committedLength = securityGetOwnPropertyDescriptor(values, 'length');
   if (
     committed === undefined ||
     !('value' in committed) ||
     !securityObjectIs(committed.value, value) ||
-    values.length !== length + 1
+    committedLength === undefined ||
+    !('value' in committedLength) ||
+    committedLength.value !== length + 1
   ) {
     failIntrinsic('Array append own-data commit');
   }
@@ -629,13 +639,48 @@ export function securityDefineProperty<T extends object>(
   descriptor: PropertyDescriptor,
 ): T {
   assertCapturedSecurityControls();
+  // ToPropertyDescriptor consults inherited `get`/`set`/`value` fields. Passing
+  // an ordinary descriptor literal after Object.prototype pollution can change
+  // a data definition into an invalid or attacker-selected accessor definition.
+  const exactDescriptor = snapshotSecurityPropertyDescriptor(descriptor);
   const result = invoke<T>(intrinsicObjectDefineProperty, IntrinsicObject, [
     value,
     key,
-    descriptor,
+    exactDescriptor,
   ]);
   if (result !== value) failIntrinsic('Object.defineProperty');
   return result;
+}
+
+function snapshotSecurityPropertyDescriptor(descriptor: PropertyDescriptor): PropertyDescriptor {
+  if (typeof descriptor !== 'object' || descriptor === null) {
+    throw new TypeError('Kovo security property descriptor must be an object.');
+  }
+  const snapshot = invoke<Record<string, unknown>>(intrinsicObjectCreate, IntrinsicObject, [null]);
+  copySecurityDescriptorField(descriptor, snapshot, 'configurable');
+  copySecurityDescriptorField(descriptor, snapshot, 'enumerable');
+  copySecurityDescriptorField(descriptor, snapshot, 'value');
+  copySecurityDescriptorField(descriptor, snapshot, 'writable');
+  copySecurityDescriptorField(descriptor, snapshot, 'get');
+  copySecurityDescriptorField(descriptor, snapshot, 'set');
+  return snapshot;
+}
+
+function copySecurityDescriptorField(
+  descriptor: PropertyDescriptor,
+  snapshot: Record<string, unknown>,
+  field: string,
+): void {
+  const own = invoke<PropertyDescriptor | undefined>(
+    intrinsicObjectGetOwnPropertyDescriptor,
+    IntrinsicObject,
+    [descriptor, field],
+  );
+  if (own === undefined) return;
+  if (!('value' in own)) {
+    throw new TypeError('Kovo security property descriptor fields must be own data properties.');
+  }
+  snapshot[field] = own.value;
 }
 
 export function securityHasOwn(value: object, key: PropertyKey): boolean {
@@ -651,6 +696,11 @@ export function securityPropertyIsEnumerable(value: object, key: PropertyKey): b
 export function securityObjectKeys(value: object): string[] {
   assertCapturedSecurityControls();
   return invoke<string[]>(intrinsicObjectKeys, IntrinsicObject, [value]);
+}
+
+export function securityGetOwnPropertyNames(value: object): string[] {
+  assertCapturedSecurityControls();
+  return invoke<string[]>(intrinsicObjectGetOwnPropertyNames, IntrinsicObject, [value]);
 }
 
 export function securityGetOwnPropertySymbols(value: object): symbol[] {
@@ -679,7 +729,12 @@ export function securityOwnArrayEntry<T>(
 }
 
 export function securityArrayIncludesExact<T>(values: readonly T[], expected: T): boolean {
-  for (let index = 0; index < values.length; index += 1) {
+  const descriptor = securityGetOwnPropertyDescriptor(values, 'length');
+  const length = descriptor !== undefined && 'value' in descriptor ? descriptor.value : undefined;
+  if (typeof length !== 'number' || length % 1 !== 0 || length < 0 || length > 1_000_000) {
+    return false;
+  }
+  for (let index = 0; index < length; index += 1) {
     const entry = securityOwnArrayEntry(values, index);
     if (!entry.ok) return false;
     if (securityObjectIs(entry.value, expected)) return true;

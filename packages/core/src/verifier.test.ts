@@ -294,6 +294,135 @@ describe('webhook verifier kit', () => {
     expect(observedSecret).toBe(false);
   });
 
+  it('rejects forged signatures after late typed-array length poisoning', async () => {
+    const verifier = hmacSignature({
+      encoding: 'hex',
+      header: 'x-signature',
+      payload: ({ payload }) => payload,
+      secret: postImportSecret,
+    });
+    const typedArrayPrototype = Object.getPrototypeOf(Uint8Array.prototype) as object;
+    const emptyKeyEmptyPayloadSignature =
+      'b613679a0814d9ec772f95d778c35fc5ff1697c493715653c6c712144292c5ad';
+    const results: boolean[] = [];
+    for (const property of ['length', 'byteLength'] as const) {
+      const descriptor = Object.getOwnPropertyDescriptor(typedArrayPrototype, property);
+      try {
+        Object.defineProperty(typedArrayPrototype, property, {
+          configurable: true,
+          get: () => 0,
+        });
+        results.push(
+          await verifier.verify({
+            headers: { 'x-signature': emptyKeyEmptyPayloadSignature },
+            payload: 'authenticated-body',
+          }),
+        );
+      } finally {
+        if (descriptor !== undefined) {
+          Object.defineProperty(typedArrayPrototype, property, descriptor);
+        }
+      }
+    }
+
+    expect(results).toEqual([false, false]);
+  });
+
+  it('preserves exact HMAC inputs after late ArrayBuffer byte-length poisoning', async () => {
+    const verifier = hmacSignature({
+      encoding: 'hex',
+      header: 'x-signature',
+      payload: ({ payload }) => payload,
+      secret: postImportSecret,
+    });
+    const validSignature = createHmac('sha256', postImportSecret)
+      .update('authenticated-body')
+      .digest('hex');
+    const descriptor = Object.getOwnPropertyDescriptor(ArrayBuffer.prototype, 'byteLength');
+    let validAccepted = false;
+    let forgedAccepted = true;
+    try {
+      Object.defineProperty(ArrayBuffer.prototype, 'byteLength', {
+        configurable: true,
+        get: () => 0,
+      });
+      validAccepted = await verifier.verify({
+        headers: { 'x-signature': validSignature },
+        payload: 'authenticated-body',
+      });
+      forgedAccepted = await verifier.verify({
+        headers: { 'x-signature': '00'.repeat(32) },
+        payload: 'authenticated-body',
+      });
+    } finally {
+      if (descriptor !== undefined) {
+        Object.defineProperty(ArrayBuffer.prototype, 'byteLength', descriptor);
+      }
+    }
+    expect([validAccepted, forgedAccepted]).toEqual([true, false]);
+  });
+
+  it('ignores inherited and accessor-backed header lookup authority', async () => {
+    const verifier = hmacSignature({
+      encoding: 'hex',
+      header: 'x-signature',
+      payload: ({ payload }) => payload,
+      secret: genericSecret,
+    });
+    const validSignature = createHmac('sha256', genericSecret).update('body').digest('hex');
+    const inherited = Object.getOwnPropertyDescriptor(Object.prototype, 'get');
+    let inheritedAccepted = true;
+    try {
+      Object.defineProperty(Object.prototype, 'get', {
+        configurable: true,
+        value: () => validSignature,
+      });
+      inheritedAccepted = await verifier.verify({
+        headers: { 'x-signature': '00'.repeat(32) },
+        payload: 'body',
+      });
+    } finally {
+      delete (Object.prototype as { get?: unknown }).get;
+      if (inherited !== undefined) Object.defineProperty(Object.prototype, 'get', inherited);
+    }
+    expect(inheritedAccepted).toBe(false);
+
+    let accessorReads = 0;
+    const headers = Object.defineProperty({ 'x-signature': '00'.repeat(32) }, 'get', {
+      get() {
+        accessorReads += 1;
+        return () => validSignature;
+      },
+    });
+    await expect(verifier.verify({ headers, payload: 'body' })).resolves.toBe(false);
+    expect(accessorReads).toBe(0);
+  });
+
+  it('bounds HMAC rotation and candidate work before cryptographic verification', async () => {
+    expect(() =>
+      hmacSignature({
+        encoding: 'hex',
+        header: 'x-signature',
+        payload: ({ payload }) => payload,
+        secret: new Array(33).fill(genericSecret),
+      }),
+    ).toThrow(/at most 32 entries/);
+
+    const verifier = hmacSignature({
+      encoding: 'hex',
+      header: 'x-signature',
+      multiSig: () => new Array(65).fill('00'.repeat(32)),
+      payload: ({ payload }) => payload,
+      secret: genericSecret,
+    });
+    await expect(
+      verifier.verify({ headers: { 'x-signature': 'candidate' }, payload: 'body' }),
+    ).rejects.toThrow(/at most 64 entries/);
+    await expect(
+      verifier.verify({ headers: { 'x-signature': '0'.repeat(16_385) }, payload: 'body' }),
+    ).resolves.toBe(false);
+  });
+
   it('rejects forged signatures and stale timestamps after scalar prototype poisoning', async () => {
     const direct = hmacSignature({
       encoding: 'hex',

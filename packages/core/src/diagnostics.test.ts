@@ -36,6 +36,30 @@ describe('diagnostic registry', () => {
     }
   });
 
+  it('does not inherit or execute diagnostic text option authority', () => {
+    const ordinary = diagnosticDefinitionText('KV407');
+    Object.defineProperty(Object.prototype, 'preferHelp', {
+      configurable: true,
+      value: true,
+    });
+    try {
+      expect(diagnosticDefinitionText('KV407', {})).toBe(ordinary);
+    } finally {
+      delete (Object.prototype as { preferHelp?: unknown }).preferHelp;
+    }
+
+    let reads = 0;
+    const options = Object.defineProperty({}, 'includeHelp', {
+      get() {
+        reads += 1;
+        return true;
+      },
+    });
+    expect(() => diagnosticDefinitionText('KV407', options)).toThrow(/own boolean data/u);
+    expect(reads).toBe(0);
+    expect(() => diagnosticDefinitionText('__proto__' as never)).toThrow(/registered/u);
+  });
+
   it('contains the Phase 0 diagnostic registry from SPEC §11.3', () => {
     expect(Object.keys(diagnosticDefinitions)).toEqual([
       'KV201',

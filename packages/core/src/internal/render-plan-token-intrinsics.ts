@@ -3,10 +3,12 @@ import { createHash } from 'node:crypto';
 
 import {
   securityApply,
-  securityDefineProperty,
+  securityArrayAppend,
+  securityGetOwnPropertyNames,
+  securityGetOwnPropertySymbols,
   securityGetPrototypeOf,
   securityGetOwnPropertyDescriptor,
-  securityObjectKeys,
+  securityOwnArrayEntry,
 } from '#security-witness-intrinsics';
 
 /** Package-private controls for render-plan framing and hashing (SPEC §5.2.1). */
@@ -43,6 +45,7 @@ function controlsAreSound(): boolean {
 }
 
 const capturedControlsSound = controlsAreSound();
+const MAX_RENDER_PLAN_SHAPE_ENTRIES = 100_000;
 
 function assertControls(): void {
   if (!capturedControlsSound) {
@@ -60,11 +63,21 @@ export function renderPlanUtf8ByteLength(value: string): number {
 
 export function renderPlanOwnStringEntries(input: object): readonly (readonly [string, string])[] {
   assertControls();
-  const names = securityObjectKeys(input);
-  sortStrings(names);
+  if (securityGetOwnPropertySymbols(input).length !== 0) {
+    throw new TypeError('Render-plan shape maps must not contain symbol properties.');
+  }
+  const ownNames = securityGetOwnPropertyNames(input);
+  if (ownNames.length > MAX_RENDER_PLAN_SHAPE_ENTRIES) {
+    throw new TypeError(
+      `Render-plan shape maps must contain at most ${MAX_RENDER_PLAN_SHAPE_ENTRIES} entries.`,
+    );
+  }
+  const names = sortStrings(ownNames);
   const entries: [string, string][] = [];
   for (let index = 0; index < names.length; index += 1) {
-    const name = names[index]!;
+    const nameEntry = securityOwnArrayEntry(names, index);
+    if (!nameEntry.ok) throw new TypeError('Render-plan shape names must be dense.');
+    const name = nameEntry.value;
     const descriptor = securityGetOwnPropertyDescriptor(input, name);
     if (
       descriptor === undefined ||
@@ -75,16 +88,7 @@ export function renderPlanOwnStringEntries(input: object): readonly (readonly [s
       throw new TypeError(`Render-plan shape ${name} must be an enumerable string data property.`);
     }
     const entry: [string, string] = [name, descriptor.value];
-    securityDefineProperty(entries, entries.length, {
-      configurable: true,
-      enumerable: true,
-      value: entry,
-      writable: true,
-    });
-    const committed = securityGetOwnPropertyDescriptor(entries, entries.length - 1);
-    if (committed === undefined || !('value' in committed) || committed.value !== entry) {
-      throw new TypeError('Render-plan shape entry own-data commit failed.');
-    }
+    securityArrayAppend(entries, entry);
   }
   return entries;
 }
@@ -93,7 +97,9 @@ export function renderPlanHash16(parts: readonly string[]): string {
   assertControls();
   const hash = nativeCreateHash('sha256');
   for (let index = 0; index < parts.length; index += 1) {
-    const part = parts[index]!;
+    const partEntry = securityOwnArrayEntry(parts, index);
+    if (!partEntry.ok) throw new TypeError('Render-plan hash inputs must be dense.');
+    const part = partEntry.value;
     if (typeof part !== 'string') throw new TypeError('Render-plan hash inputs must be strings.');
     securityApply(nativeHashUpdate, hash, [part]);
   }
@@ -104,14 +110,45 @@ export function renderPlanHash16(parts: readonly string[]): string {
   return token;
 }
 
-function sortStrings(values: string[]): void {
-  for (let index = 1; index < values.length; index += 1) {
-    const value = values[index]!;
-    let insertAt = index;
-    while (insertAt > 0 && value < values[insertAt - 1]!) {
-      values[insertAt] = values[insertAt - 1]!;
-      insertAt -= 1;
+function sortStrings(values: string[]): string[] {
+  // Query names are app-shaped build input. Keep canonicalization O(n log n)
+  // so reverse-ordered names cannot turn the render-plan authority token into
+  // an insertion-sort build denial of service.
+  const length = values.length;
+  if (length < 2) return values;
+  let source = values;
+  for (let width = 1; width < length; width *= 2) {
+    const target: string[] = [];
+    for (let start = 0; start < length; start += width * 2) {
+      const middle = start + width < length ? start + width : length;
+      const end = start + width * 2 < length ? start + width * 2 : length;
+      let left = start;
+      let right = middle;
+      while (left < middle || right < end) {
+        const leftEntry = left < middle ? securityOwnArrayEntry(source, left) : undefined;
+        const rightEntry = right < end ? securityOwnArrayEntry(source, right) : undefined;
+        if ((left < middle && !leftEntry?.ok) || (right < end && !rightEntry?.ok)) {
+          throw new TypeError('Render-plan shape names must be dense.');
+        }
+        if (right >= end) {
+          if (!leftEntry?.ok) throw new TypeError('Render-plan shape names must be dense.');
+          securityArrayAppend(target, leftEntry.value);
+          left += 1;
+        } else if (left >= middle) {
+          if (!rightEntry?.ok) throw new TypeError('Render-plan shape names must be dense.');
+          securityArrayAppend(target, rightEntry.value);
+          right += 1;
+        } else if (leftEntry?.ok && rightEntry?.ok && leftEntry.value <= rightEntry.value) {
+          securityArrayAppend(target, leftEntry.value);
+          left += 1;
+        } else {
+          if (!rightEntry?.ok) throw new TypeError('Render-plan shape names must be dense.');
+          securityArrayAppend(target, rightEntry.value);
+          right += 1;
+        }
+      }
     }
-    values[insertAt] = value;
+    source = target;
   }
+  return source;
 }

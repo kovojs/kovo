@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { secret } from '../secret.js';
 
-import { parseWireJsonValue, stringifyWireValue, wireJsonRoundTripCorpus } from './wire-json.js';
+import {
+  malformedWireJsonError,
+  parseWireJsonValue,
+  stringifyWireValue,
+  wireJsonRoundTripCorpus,
+} from './wire-json.js';
 
 describe('wire-json core contract', () => {
   it('round-trips the shared wire JSON corpus', () => {
@@ -33,6 +38,14 @@ describe('wire-json core contract', () => {
     expect(parseWireJsonValue('{"$kovo":"thing","value":"x"}')).toEqual({
       ok: true,
       value: { $kovo: 'thing', value: 'x' },
+    });
+    expect(parseWireJsonValue('{"$kovo":"bigint","value":"0x10"}')).toEqual({
+      ok: true,
+      value: { $kovo: 'bigint', value: '0x10' },
+    });
+    expect(parseWireJsonValue('{"$kovo":"date","value":"2020-01-01"}')).toEqual({
+      ok: true,
+      value: { $kovo: 'date', value: '2020-01-01' },
     });
   });
 
@@ -118,6 +131,66 @@ describe('wire-json core contract', () => {
     expect(() => stringifyWireValue(accessor)).toThrow('stable own data properties');
   });
 
+  it('refuses lossy non-JSON values at the wire integrity boundary', () => {
+    for (const value of [
+      undefined,
+      Number.NaN,
+      Number.POSITIVE_INFINITY,
+      Number.NEGATIVE_INFINITY,
+      { value: undefined },
+      [undefined],
+      new Array(1),
+      new Map([['role', 'admin']]),
+    ]) {
+      expect(() => stringifyWireValue(value)).toThrow(/Kovo wire JSON/u);
+    }
+
+    class RoleCarrier {
+      role = 'admin';
+    }
+    expect(() => stringifyWireValue(new RoleCarrier())).toThrow(/plain JSON records/u);
+
+    const symbolRecord = { visible: true, [Symbol('hidden-authority')]: true };
+    expect(() => stringifyWireValue(symbolRecord)).toThrow(/symbol properties/u);
+
+    const customArray = ['member'] as string[] & { role?: string };
+    customArray.role = 'admin';
+    expect(() => stringifyWireValue(customArray)).toThrow(/without custom properties/u);
+
+    const hidden = { visible: true };
+    Object.defineProperty(hidden, 'authority', { value: 'admin' });
+    expect(() => stringifyWireValue(hidden)).toThrow(/non-enumerable properties/u);
+
+    const decoratedDate = new Date('2020-01-01T00:00:00.000Z') as Date & { role?: string };
+    decoratedDate.role = 'admin';
+    expect(() => stringifyWireValue(decoratedDate)).toThrow(/Date instances without custom/u);
+  });
+
+  it('does not coerce hostile parser and malformed-error carriers', () => {
+    let rawCoercions = 0;
+    const parsed = parseWireJsonValue({
+      toString() {
+        rawCoercions += 1;
+        return '{"admin":true}';
+      },
+    } as unknown as string);
+    expect(parsed.ok).toBe(false);
+    expect(rawCoercions).toBe(0);
+
+    let messageReads = 0;
+    const cause = new Error('safe');
+    Object.defineProperty(cause, 'message', {
+      get() {
+        messageReads += 1;
+        return 'forged';
+      },
+    });
+    expect(malformedWireJsonError('query response', cause).message).toBe(
+      'Malformed JSON in query response: unknown parse error',
+    );
+    expect(messageReads).toBe(0);
+  });
+
   it('rejects cyclic and over-deep wire values with bounded framework diagnostics', () => {
     const cyclic: Record<string, unknown> = {};
     cyclic.self = cyclic;
@@ -136,8 +209,14 @@ describe('wire-json core contract', () => {
       'Kovo wire JSON exceeds the 64-level depth bound',
     );
 
-    expect(() => stringifyWireValue(new Array(100_000))).toThrow(
-      'Kovo wire JSON exceeds the 100000-node bound',
+    const dense = new Array<null>(100_000);
+    dense.fill(null);
+    expect(() => stringifyWireValue(dense)).toThrow('Kovo wire JSON exceeds the 100000-node bound');
+
+    const overDeepJson = `${'['.repeat(65)}0${']'.repeat(65)}`;
+    expect(parseWireJsonValue(overDeepJson).ok).toBe(false);
+    expect(() => stringifyWireValue('x'.repeat(4_000_001))).toThrow(
+      /4000000-character aggregate bound/u,
     );
   });
 

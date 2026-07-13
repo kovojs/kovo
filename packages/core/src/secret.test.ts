@@ -112,6 +112,21 @@ describe('runtime Secret non-coercible wrapper (SPEC §10.2/§11.2)', () => {
     expect(reads).toBe(0);
   });
 
+  it('bounds structuredClone confidentiality-guard work on hostile graphs', () => {
+    const root: Record<string, unknown> = {};
+    let cursor = root;
+    for (let depth = 0; depth <= 64; depth += 1) {
+      const next: Record<string, unknown> = {};
+      cursor.next = next;
+      cursor = next;
+    }
+    expect(() => structuredClone(root)).toThrow(/64-level confidentiality guard depth bound/u);
+
+    expect(() => structuredClone(new Array(100_001))).toThrow(
+      /stable array length|100000-node confidentiality guard/u,
+    );
+  });
+
   it('reveals the value only on explicit reveal()/revealSecret()', () => {
     drainSecretRevealAuditFacts();
     const s = secret('hunter2');
@@ -252,6 +267,26 @@ describe('runtime Secret non-coercible wrapper (SPEC §10.2/§11.2)', () => {
     expect(invalidString).toBe(false);
     expect(validBytes).toBe(true);
     expect(invalidBytes).toBe(false);
+  });
+
+  it('does not accept a forged token after late typed-array length poisoning', () => {
+    const token = secret('correct-token');
+    const typedArrayPrototype = Object.getPrototypeOf(Uint8Array.prototype) as object;
+    const lengthDescriptor = Object.getOwnPropertyDescriptor(typedArrayPrototype, 'length');
+    let forgedAccepted = true;
+    try {
+      Object.defineProperty(typedArrayPrototype, 'length', {
+        configurable: true,
+        get: () => 0,
+      });
+      forgedAccepted = token.equals('forged-token!');
+    } finally {
+      if (lengthDescriptor !== undefined) {
+        Object.defineProperty(typedArrayPrototype, 'length', lengthDescriptor);
+      }
+    }
+
+    expect(forgedAccepted).toBe(false);
   });
 
   it('is idempotent: secret(secret(x)) does not double-wrap', () => {

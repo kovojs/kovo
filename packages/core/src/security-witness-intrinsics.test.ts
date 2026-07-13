@@ -4,6 +4,8 @@ import { describe, expect, it } from 'vitest';
 
 import {
   freezeSecurityValue,
+  securityArrayAppend,
+  securityArrayIncludesExact,
   securityMap,
   securityMapGet,
   securityMapSet,
@@ -99,6 +101,39 @@ describe('core security witness intrinsics', () => {
     expect(values).toHaveLength(1);
   });
 
+  it('commits exact data descriptors under late Object.prototype descriptor pollution', () => {
+    const getDescriptor = Object.getOwnPropertyDescriptor(Object.prototype, 'get');
+    const values: string[] = [];
+    try {
+      Object.defineProperty(Object.prototype, 'get', {
+        configurable: true,
+        value: () => 'forged',
+      });
+      securityArrayAppend(values, 'safe');
+    } finally {
+      delete (Object.prototype as { get?: unknown }).get;
+      if (getDescriptor !== undefined) {
+        Object.defineProperty(Object.prototype, 'get', getDescriptor);
+      }
+    }
+    expect(values).toEqual(['safe']);
+  });
+
+  it('reads exact array membership without a proxy length get trap', () => {
+    let lengthReads = 0;
+    const values = new Proxy(['KV435'], {
+      get(target, property, receiver) {
+        if (property === 'length') {
+          lengthReads += 1;
+          return 0;
+        }
+        return Reflect.get(target, property, receiver);
+      },
+    });
+    expect(securityArrayIncludesExact(values, 'KV435')).toBe(true);
+    expect(lengthReads).toBe(0);
+  });
+
   it('C241 resists an inherited Set-value setter installed before module import', () => {
     const script = `
       const marker = Symbol('pre-import-security-set-value');
@@ -179,6 +214,11 @@ describe('core security witness intrinsics', () => {
       'getOwnPropertySymbols',
       `const original = Object.getOwnPropertySymbols;
        Object.getOwnPropertySymbols = (value) => value && value.visible ? [] : original(value);`,
+    ],
+    [
+      'getOwnPropertyNames',
+      `const original = Object.getOwnPropertyNames;
+       Object.getOwnPropertyNames = (value) => value && value.visible ? ['visible'] : original(value);`,
     ],
     [
       'Array.isArray',

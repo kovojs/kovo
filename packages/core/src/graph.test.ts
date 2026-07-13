@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { performance } from 'node:perf_hooks';
 
 import {
   deriveAccessExplainFacts,
@@ -300,6 +301,77 @@ describe('kovo graph input validation', () => {
       expect.objectContaining({ domain: 'order', name: 'orderById', ownerGuarded: true }),
     ]);
     expect(poisonHits).toBe(0);
+  });
+
+  it('does not derive producer-owned access authority from inherited graph fields', () => {
+    Object.defineProperties(Object.prototype, {
+      access: {
+        configurable: true,
+        value: { kind: 'public', reason: 'prototype-forged access' },
+      },
+      guards: { configurable: true, value: ['authed'] },
+    });
+    try {
+      const input = { mutations: [{ key: 'billing/refund' }] } as never;
+      expect(deriveAccessExplainFacts(input)).toEqual([
+        expect.objectContaining({ decision: 'missing', name: 'billing/refund' }),
+      ]);
+      expect(deriveAuthPostureFacts(input)).toEqual([
+        expect.objectContaining({ guarded: false, name: 'billing/refund' }),
+      ]);
+    } finally {
+      delete (Object.prototype as { access?: unknown }).access;
+      delete (Object.prototype as { guards?: unknown }).guards;
+    }
+  });
+
+  it('does not execute accessor-backed access graph authority', () => {
+    let reads = 0;
+    const mutation = Object.defineProperties(
+      { key: 'billing/refund' },
+      {
+        access: {
+          get() {
+            reads += 1;
+            return { kind: 'public', reason: 'accessor-forged access' };
+          },
+        },
+      },
+    );
+
+    expect(() => deriveAccessExplainFacts({ mutations: [mutation] as never })).toThrow(
+      /access must be an own data property/u,
+    );
+    expect(reads).toBe(0);
+  });
+
+  it('keeps reverse-ordered access graph derivation within a bounded work floor', () => {
+    const count = 20_000;
+    const queries = Array.from({ length: count }, (_, index) => ({
+      access: { kind: 'verified-machine-auth' as const },
+      query: `query-${String(count - index).padStart(6, '0')}`,
+    }));
+    const started = performance.now();
+    const facts = deriveAccessExplainFacts({ queries });
+    const elapsed = performance.now() - started;
+
+    expect(facts).toHaveLength(count);
+    expect(facts[0]?.name).toBe('query-000001');
+    // The prior insertion sort took about 4.2 seconds locally at this size.
+    expect(elapsed).toBeLessThan(2_000);
+  });
+
+  it('enforces one aggregate budget across nested graph arrays', () => {
+    const domains = new Array<string>(50_000);
+    domains.fill('account');
+    expect(() =>
+      deriveAccessExplainFacts({
+        queries: [
+          { domains, query: 'first' },
+          { domains, query: 'second' },
+        ],
+      }),
+    ).toThrow(/100000-entry aggregate bound/u);
   });
 
   it('accepts durable task facts as graph arrays', () => {

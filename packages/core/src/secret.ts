@@ -13,7 +13,9 @@ import {
   securityMapForEach,
   securityObjectIs,
   securityObjectKeys,
+  securityOwnArrayEntry,
   securitySetForEach,
+  securityStringCharCodeAt,
   securityStringTrim,
   securityWeakMap,
   securityWeakMapGet,
@@ -58,6 +60,8 @@ const intrinsicDataViewByteLength = securityGetOwnPropertyDescriptor(
   'byteLength',
 )?.get;
 const capturedComparableByteControlsSound = verifyComparableByteControls();
+const MAX_STRUCTURED_CLONE_GUARD_DEPTH = 64;
+const MAX_STRUCTURED_CLONE_GUARD_NODES = 100_000;
 
 declare const secretBrand: unique symbol;
 declare const untrustedBrand: unique symbol;
@@ -307,18 +311,46 @@ function installStructuredCloneSecretGuard(): void {
 
 function assertNoSecretStructuredCloneValue(
   value: unknown,
-  seen: WeakSet<object> = securityWeakSet(),
+  state: { nodes: number; readonly seen: WeakSet<object> } = {
+    nodes: 0,
+    seen: securityWeakSet(),
+  },
+  depth = 0,
 ): void {
+  // SPEC §6.6/§9.5: the confidentiality guard itself is reachable with caller-owned
+  // graphs. Bound its work before recursive inspection so sparse/deep shapes fail
+  // with a deterministic framework error rather than stack or event-loop exhaustion.
+  if (depth > MAX_STRUCTURED_CLONE_GUARD_DEPTH) {
+    throw new TypeError(
+      `structuredClone input exceeds the ${MAX_STRUCTURED_CLONE_GUARD_DEPTH}-level confidentiality guard depth bound.`,
+    );
+  }
+  state.nodes += 1;
+  if (state.nodes > MAX_STRUCTURED_CLONE_GUARD_NODES) {
+    throw new TypeError(
+      `structuredClone input exceeds the ${MAX_STRUCTURED_CLONE_GUARD_NODES}-node confidentiality guard bound.`,
+    );
+  }
   if (isSecret(value)) throw nonCoercibleError('secret', 'structuredClone');
   if ((typeof value !== 'object' && typeof value !== 'function') || value === null) return;
-  if (securityWeakSetHas(seen, value)) return;
-  securityWeakSetAdd(seen, value);
+  if (securityWeakSetHas(state.seen, value)) return;
+  securityWeakSetAdd(state.seen, value);
+  if (
+    securityHasInstance(IntrinsicArrayBuffer, value) ||
+    (capturedComparableByteControlsSound &&
+      securityApply<boolean>(intrinsicArrayBufferIsView, IntrinsicArrayBuffer, [value]) === true)
+  ) {
+    return;
+  }
   if (securityIsArray(value)) {
     const lengthDescriptor = securityGetOwnPropertyDescriptor(value, 'length');
     if (
       lengthDescriptor === undefined ||
       !('value' in lengthDescriptor) ||
-      typeof lengthDescriptor.value !== 'number'
+      typeof lengthDescriptor.value !== 'number' ||
+      lengthDescriptor.value < 0 ||
+      lengthDescriptor.value % 1 !== 0 ||
+      lengthDescriptor.value > MAX_STRUCTURED_CLONE_GUARD_NODES
     ) {
       throw new TypeError('structuredClone input requires a stable array length.');
     }
@@ -328,30 +360,61 @@ function assertNoSecretStructuredCloneValue(
       if (!('value' in descriptor)) {
         throw new TypeError('structuredClone input must not hide secrets behind array accessors.');
       }
-      assertNoSecretStructuredCloneValue(descriptor.value, seen);
+      assertNoSecretStructuredCloneValue(descriptor.value, state, depth + 1);
+    }
+    // Structured clone also copies enumerable custom string properties on an
+    // Array. Inspect those separately so `array.metadata = secret(...)` cannot
+    // launder the box merely because indexed entries were clean.
+    const keys = securityObjectKeys(value);
+    if (keys.length > MAX_STRUCTURED_CLONE_GUARD_NODES) {
+      throw new TypeError(
+        `structuredClone input exceeds the ${MAX_STRUCTURED_CLONE_GUARD_NODES}-key confidentiality guard bound.`,
+      );
+    }
+    for (let index = 0; index < keys.length; index += 1) {
+      const keyEntry = securityOwnArrayEntry(keys, index);
+      if (!keyEntry.ok) {
+        throw new TypeError('structuredClone input requires stable own array keys.');
+      }
+      if (isStructuredCloneArrayIndex(keyEntry.value, lengthDescriptor.value)) continue;
+      const descriptor = securityGetOwnPropertyDescriptor(value, keyEntry.value);
+      if (descriptor === undefined || !('value' in descriptor)) {
+        throw new TypeError(
+          'structuredClone input must not hide secrets behind custom array accessors.',
+        );
+      }
+      assertNoSecretStructuredCloneValue(descriptor.value, state, depth + 1);
     }
     return;
   }
   if (securityIsMap(value)) {
     securityMapForEach(value, (item, key) => {
-      assertNoSecretStructuredCloneValue(key, seen);
-      assertNoSecretStructuredCloneValue(item, seen);
+      assertNoSecretStructuredCloneValue(key, state, depth + 1);
+      assertNoSecretStructuredCloneValue(item, state, depth + 1);
     });
     return;
   }
   if (securityIsSet(value)) {
-    securitySetForEach(value, (item) => assertNoSecretStructuredCloneValue(item, seen));
+    securitySetForEach(value, (item) => assertNoSecretStructuredCloneValue(item, state, depth + 1));
     return;
   }
   const keys = securityObjectKeys(value);
+  if (keys.length > MAX_STRUCTURED_CLONE_GUARD_NODES) {
+    throw new TypeError(
+      `structuredClone input exceeds the ${MAX_STRUCTURED_CLONE_GUARD_NODES}-key confidentiality guard bound.`,
+    );
+  }
   for (let index = 0; index < keys.length; index += 1) {
-    const key = keys[index];
-    if (key === undefined) continue;
+    const keyEntry = securityOwnArrayEntry(keys, index);
+    if (!keyEntry.ok) {
+      throw new TypeError('structuredClone input requires stable own object keys.');
+    }
+    const key = keyEntry.value;
     const descriptor = securityGetOwnPropertyDescriptor(value, key);
     if (descriptor === undefined || !('value' in descriptor)) {
       throw new TypeError('structuredClone input must not hide secrets behind object accessors.');
     }
-    assertNoSecretStructuredCloneValue(descriptor.value, seen);
+    assertNoSecretStructuredCloneValue(descriptor.value, state, depth + 1);
   }
   if (securityIsError(value)) {
     const cause = securityGetOwnPropertyDescriptor(value, 'cause');
@@ -359,9 +422,22 @@ function assertNoSecretStructuredCloneValue(
       if (!('value' in cause)) {
         throw new TypeError('structuredClone input must not hide secrets behind Error accessors.');
       }
-      assertNoSecretStructuredCloneValue(cause.value, seen);
+      assertNoSecretStructuredCloneValue(cause.value, state, depth + 1);
     }
   }
+}
+
+function isStructuredCloneArrayIndex(value: string, length: number): boolean {
+  if (value === '0') return length > 0;
+  if (value.length === 0 || securityStringCharCodeAt(value, 0) === 0x30) return false;
+  let parsed = 0;
+  for (let index = 0; index < value.length; index += 1) {
+    const code = securityStringCharCodeAt(value, index);
+    if (code < 0x30 || code > 0x39) return false;
+    parsed = parsed * 10 + code - 0x30;
+    if (parsed >= length) return false;
+  }
+  return parsed < length;
 }
 
 /**
@@ -617,12 +693,24 @@ function comparableBytes(value: unknown): ComparableBytes | null {
 }
 
 function fixedDigestEqual(left: ComparableBytes, right: ComparableBytes): boolean {
-  const length = left.bytes.length > right.bytes.length ? left.bytes.length : right.bytes.length;
-  let mismatch = left.bytes.length ^ right.bytes.length;
+  // SPEC §6.6: `equals()` is intended for token/signature decisions. Exact byte
+  // lengths must come from the boot-witnessed typed-array intrinsic so late realm
+  // poisoning cannot turn every comparison into a zero-byte match.
+  const leftLength = comparableByteLength(left.bytes);
+  const rightLength = comparableByteLength(right.bytes);
+  const length = leftLength > rightLength ? leftLength : rightLength;
+  let mismatch = leftLength ^ rightLength;
   for (let index = 0; index < length; index += 1) {
     mismatch |= (left.bytes[index] ?? 0) ^ (right.bytes[index] ?? 0);
   }
   return mismatch === 0;
+}
+
+function comparableByteLength(value: Uint8Array): number {
+  if (!capturedComparableByteControlsSound || intrinsicTypedArrayByteLength === undefined) {
+    throw new TypeError('Kovo secret equality byte controls are unavailable.');
+  }
+  return securityApply<number>(intrinsicTypedArrayByteLength, value, []);
 }
 
 function verifyComparableByteControls(): boolean {
@@ -640,10 +728,11 @@ function verifyComparableByteControls(): boolean {
     const encoded = securityApply<Uint8Array>(intrinsicTextEncoderEncode, comparableTextEncoder, [
       'Kovo',
     ]);
-    const bytes = new IntrinsicUint8Array(4);
-    const dataView = new IntrinsicDataView(bytes.buffer, 1, 2);
+    const controlBuffer = new IntrinsicArrayBuffer(4);
+    const bytes = new IntrinsicUint8Array(controlBuffer);
+    const dataView = new IntrinsicDataView(controlBuffer, 1, 2);
     return (
-      encoded.length === 4 &&
+      securityApply<number>(intrinsicTypedArrayByteLength, encoded, []) === 4 &&
       encoded[0] === 0x4b &&
       encoded[1] === 0x6f &&
       encoded[2] === 0x76 &&
@@ -652,10 +741,10 @@ function verifyComparableByteControls(): boolean {
       securityApply<boolean>(intrinsicArrayBufferIsView, IntrinsicArrayBuffer, [dataView]) ===
         true &&
       securityApply<boolean>(intrinsicArrayBufferIsView, IntrinsicArrayBuffer, [{}]) === false &&
-      securityApply<ArrayBufferLike>(intrinsicTypedArrayBuffer, bytes, []) === bytes.buffer &&
+      securityApply<ArrayBufferLike>(intrinsicTypedArrayBuffer, bytes, []) === controlBuffer &&
       securityApply<number>(intrinsicTypedArrayByteOffset, bytes, []) === 0 &&
       securityApply<number>(intrinsicTypedArrayByteLength, bytes, []) === 4 &&
-      securityApply<ArrayBufferLike>(intrinsicDataViewBuffer, dataView, []) === bytes.buffer &&
+      securityApply<ArrayBufferLike>(intrinsicDataViewBuffer, dataView, []) === controlBuffer &&
       securityApply<number>(intrinsicDataViewByteOffset, dataView, []) === 1 &&
       securityApply<number>(intrinsicDataViewByteLength, dataView, []) === 2
     );

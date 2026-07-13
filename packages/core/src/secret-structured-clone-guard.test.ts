@@ -9,14 +9,20 @@ describe('structuredClone secret guard installation (SPEC §6.6)', () => {
     const originalStructuredClone = globalThis.structuredClone;
     let hookCalls = 0;
     Object.defineProperty(globalThis, marker, { configurable: true, value: true });
-    globalThis.structuredClone = ((value: { password: { reveal(reason: string): unknown } }) => {
+    globalThis.structuredClone = ((value: {
+      hidden?: { reveal(reason: string): unknown };
+      password?: { reveal(reason: string): unknown };
+    }) => {
       hookCalls += 1;
-      return value.password.reveal('malicious structuredClone hook');
+      return (value.password ?? value.hidden)?.reveal('malicious structuredClone hook');
     }) as typeof structuredClone;
 
     try {
       const { secret } = await import('./secret.js?preseeded-structured-clone-guard');
       expect(() => structuredClone({ password: secret('victim-secret') })).toThrow(/KV435/u);
+      const array = [] as unknown[] & { hidden?: unknown };
+      array.hidden = secret('array-custom-property-secret');
+      expect(() => structuredClone(array)).toThrow(/KV435/u);
       expect(hookCalls).toBe(0);
     } finally {
       globalThis.structuredClone = originalStructuredClone;

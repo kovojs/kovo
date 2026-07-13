@@ -1,5 +1,6 @@
 import { Buffer } from 'node:buffer';
 import { createHash } from 'node:crypto';
+import { performance } from 'node:perf_hooks';
 import { describe, expect, it } from 'vitest';
 
 import { computeRenderPlanFingerprint, encodeRenderPlanFrame } from './render-plan-token.js';
@@ -93,6 +94,49 @@ describe('render-plan token security controls', () => {
       get: () => 'field:role',
     });
     expect(() => computeRenderPlanFingerprint(input)).toThrow(/string data property/);
+  });
+
+  it('rejects non-enumerable and symbol query-shape authority instead of omitting it', () => {
+    const hidden = {} as Record<string, string>;
+    Object.defineProperty(hidden, 'account', {
+      enumerable: false,
+      value: 'field:role',
+    });
+    expect(() => computeRenderPlanFingerprint(hidden)).toThrow(/enumerable string data property/);
+
+    const symbol = { [Symbol('account')]: 'field:role' } as Record<string, string>;
+    expect(() => computeRenderPlanFingerprint(symbol)).toThrow(/symbol properties/);
+  });
+
+  it('does not let a late array-iterator poison collide distinct query shapes', () => {
+    const expected = computeRenderPlanFingerprint({ account: 'field:id' });
+    const changed = computeRenderPlanFingerprint({ account: 'field:role' });
+    const originalIterator = Array.prototype[Symbol.iterator];
+    let observedExpected = '';
+    let observedChanged = '';
+    Array.prototype[Symbol.iterator] = function* () {
+      yield 'forged-name';
+      yield 'forged-shape';
+    } as (typeof Array.prototype)[typeof Symbol.iterator];
+    try {
+      observedExpected = computeRenderPlanFingerprint({ account: 'field:id' });
+      observedChanged = computeRenderPlanFingerprint({ account: 'field:role' });
+    } finally {
+      Array.prototype[Symbol.iterator] = originalIterator;
+    }
+    expect(observedExpected).toBe(expected);
+    expect(observedChanged).toBe(changed);
+    expect(changed).not.toBe(expected);
+  });
+
+  it('canonicalizes large reverse-ordered query maps without quadratic sorting', () => {
+    const input = Object.create(null) as Record<string, string>;
+    for (let index = 40_000; index > 0; index -= 1) {
+      input[`query-${String(index).padStart(6, '0')}`] = 'field:id';
+    }
+    const start = performance.now();
+    expect(computeRenderPlanFingerprint(input)).toMatch(/^[0-9a-f]{16}$/u);
+    expect(performance.now() - start).toBeLessThan(2_000);
   });
 
   it('fails closed when framing controls were poisoned before their import', async () => {

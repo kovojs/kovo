@@ -3,6 +3,7 @@ import {
   renderPlanOwnStringEntries,
   renderPlanUtf8ByteLength,
 } from './render-plan-token-intrinsics.ts';
+import { securityOwnArrayEntry } from './security-witness-intrinsics.js';
 
 /**
  * The render-plan grammar version folded into every render-plan token so that a
@@ -52,10 +53,16 @@ export function computeRenderPlanFingerprint(input: RenderPlanFingerprintInput):
   const shapeEntries = renderPlanOwnStringEntries(input);
   let entries = '';
   for (let index = 0; index < shapeEntries.length; index += 1) {
-    const [name, shape] = shapeEntries[index]!;
+    const entry = securityOwnArrayEntry(shapeEntries, index);
+    if (!entry.ok) throw new TypeError('Render-plan shape entries must be dense.');
+    const name = securityOwnArrayEntry(entry.value, 0);
+    const shape = securityOwnArrayEntry(entry.value, 1);
+    if (!name.ok || !shape.ok) {
+      throw new TypeError('Render-plan shape entries must contain a name and shape.');
+    }
     entries += encodeRenderPlanFrame(
       'query',
-      encodeRenderPlanFrame('name', name) + encodeRenderPlanFrame('shape', shape),
+      encodeRenderPlanFrame('name', name.value) + encodeRenderPlanFrame('shape', shape.value),
     );
   }
   return renderPlanHash16([
