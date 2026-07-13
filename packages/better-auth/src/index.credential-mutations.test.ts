@@ -77,6 +77,50 @@ describe('credential mutation helpers', () => {
     expect(auth.lastSignIn).toBeUndefined();
   });
 
+  it('does not inherit credential CSRF or transaction authority from Object.prototype', () => {
+    const auth = new FakeCredentialAuth();
+    const inheritedTransaction = async <Result>(
+      _request: unknown,
+      run: (request: never) => Promise<Result>,
+    ) => run({} as never);
+    Object.defineProperties(Object.prototype, {
+      csrf: {
+        configurable: true,
+        value: {
+          secret: 'attacker-known-inherited-csrf-secret-0123456789',
+          sessionId: () => 'attacker-session',
+        },
+      },
+      transaction: { configurable: true, value: inheritedTransaction },
+    });
+    let signIn: ReturnType<typeof betterAuthSignInEmailMutation>;
+    try {
+      signIn = betterAuthSignInEmailMutation(auth);
+    } finally {
+      delete (Object.prototype as { csrf?: unknown }).csrf;
+      delete (Object.prototype as { transaction?: unknown }).transaction;
+    }
+
+    expect(signIn.csrf).toBeUndefined();
+    expect(signIn.transaction).not.toBe(inheritedTransaction);
+  });
+
+  it('rejects credential option accessors without invoking them', () => {
+    const auth = new FakeCredentialAuth();
+    let reads = 0;
+    const options = Object.defineProperty({}, 'csrf', {
+      get() {
+        reads += 1;
+        return false;
+      },
+    });
+
+    expect(() => betterAuthSignInEmailMutation(auth, options as never)).toThrow(
+      'credential option csrf must be an own-data property',
+    );
+    expect(reads).toBe(0);
+  });
+
   it('rejects forged csrf:false options for every credential mutation', () => {
     const auth = new FakeCredentialAuth();
     const message = /credential mutations cannot disable CSRF.*SPEC §6\.6/i;
@@ -545,8 +589,7 @@ describe('credential mutation helpers', () => {
     });
   });
 
-  it('keeps Better Auth session cookie names readable under the production Secure floor', async () => {
-    process.env.NODE_ENV = 'production';
+  it('keeps Better Auth session cookie names readable under the HTTPS Secure floor', async () => {
     const auth: BetterAuthSignInEmailLike = {
       api: {
         signInEmail: () =>
@@ -558,7 +601,7 @@ describe('credential mutation helpers', () => {
     const result = await runProtectedCredentialMutation(
       signIn,
       { email: 'ada@example.com', password: 'correct' },
-      { headers: requestHeaders() },
+      new Request('https://example.test/login', { headers: requestHeaders() }),
     );
 
     expect(result).toMatchObject({

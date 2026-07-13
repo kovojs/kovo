@@ -131,6 +131,20 @@ export function betterAuthGetOwnPropertyDescriptor(
   return apply(nativeObjectGetOwnPropertyDescriptor, NativeObject, [value, property]);
 }
 
+/** @internal Read constructor authority without invoking accessors or inheriting polluted values. */
+export function betterAuthOwnDataOption<Value>(
+  options: object,
+  property: PropertyKey,
+  label: string,
+): Value | undefined {
+  const descriptor = betterAuthGetOwnPropertyDescriptor(options, property);
+  if (descriptor === undefined) return undefined;
+  if (!('value' in descriptor)) {
+    throw new TypeError(`${label} must be an own-data property.`);
+  }
+  return descriptor.value as Value | undefined;
+}
+
 export function betterAuthCaptureOwnApiMethod(
   auth: object,
   methodName: PropertyKey,

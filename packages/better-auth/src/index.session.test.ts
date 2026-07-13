@@ -310,4 +310,37 @@ describe('browser redirect protocol mount', () => {
       'Better Auth mount.handler must be a stable own-data method',
     );
   });
+
+  it('does not inherit mount auth authority and rejects option accessors', () => {
+    const auth = new FakeMountedAuth();
+    Object.defineProperty(Object.prototype, 'auth', {
+      configurable: true,
+      value: { justification: 'attacker downgrade', kind: 'none' },
+    });
+    let endpoint: ReturnType<typeof mount<'/auth', 'GET'>>;
+    try {
+      endpoint = mount('/auth', auth, { method: 'GET' });
+    } finally {
+      delete (Object.prototype as { auth?: unknown }).auth;
+    }
+    expect(endpoint.auth).toEqual({ kind: 'custom', name: 'better-auth' });
+
+    let reads = 0;
+    const options = Object.defineProperties(
+      {},
+      {
+        auth: {
+          get() {
+            reads += 1;
+            return { justification: 'attacker downgrade', kind: 'none' };
+          },
+        },
+        method: { value: 'GET' },
+      },
+    );
+    expect(() => mount('/auth', auth, options as never)).toThrow(
+      'Better Auth mount option auth must be an own-data property',
+    );
+    expect(reads).toBe(0);
+  });
 });

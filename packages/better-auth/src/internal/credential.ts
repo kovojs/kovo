@@ -25,6 +25,7 @@ import {
   betterAuthGetOwnPropertyDescriptor,
   betterAuthIndexOf,
   betterAuthIsNaN,
+  betterAuthOwnDataOption,
   betterAuthRegExpExec,
   betterAuthResponseHeaders,
   betterAuthResponseJson,
@@ -325,21 +326,44 @@ export function credentialMutationDefinitionOptions<
   // SPEC §6.6: anonymous CSRF is mandatory for pre-authentication forms. Keep a runtime
   // fail-closed check in addition to the public type so JavaScript callers and forged/cast values
   // cannot turn a credential mutation into a login-CSRF or logout-CSRF endpoint.
-  const csrf = (options as { csrf?: CsrfOptions<Request> | false }).csrf;
+  const csrf = betterAuthOwnDataOption<CsrfOptions<Request> | false>(
+    options,
+    'csrf',
+    'Better Auth credential option csrf',
+  );
   if (csrf === false) {
     throw new TypeError(
       'Better Auth credential mutations cannot disable CSRF. SPEC §6.6 requires CSRF protection for sign-in, sign-up, and sign-out forms.',
     );
   }
 
+  const configuredAccess = betterAuthOwnDataOption<AccessDecision>(
+    options,
+    'access',
+    'Better Auth credential option access',
+  );
+  const guard = betterAuthOwnDataOption<Guard<Request, GuardedRequest>>(
+    options,
+    'guard',
+    'Better Auth credential option guard',
+  );
+  const configuredTransaction = betterAuthOwnDataOption<
+    <Result>(
+      request: Request,
+      run: (transactionRequest: GuardedRequest) => Promise<Result>,
+    ) => Promise<Result>
+  >(options, 'transaction', 'Better Auth credential option transaction');
+  const registry = betterAuthOwnDataOption<
+    MutationDefinition<Key, never, never, Request, never, GuardedRequest>['registry']
+  >(options, 'registry', 'Better Auth credential option registry');
   const access =
-    options.access !== undefined
-      ? options.access
-      : options.guard === undefined
+    configuredAccess !== undefined
+      ? configuredAccess
+      : guard === undefined
         ? contract.defaultAccess
         : undefined;
   const transaction =
-    options.transaction ??
+    configuredTransaction ??
     (<Result>(_request: Request, run: (transactionRequest: GuardedRequest) => Promise<Result>) =>
       run(_request as unknown as GuardedRequest));
 
@@ -348,10 +372,10 @@ export function credentialMutationDefinitionOptions<
     // before authentication) declares its KV436 access decision via `access:`.
     ...(access === undefined ? {} : { access }),
     ...(csrf === undefined ? {} : { csrf }),
-    ...(options.guard === undefined ? {} : { guard: options.guard }),
+    ...(guard === undefined ? {} : { guard }),
     registry: {
-      ...options.registry,
-      touches: mergeDomainTouches(contract.touches, options.registry?.touches),
+      ...registry,
+      touches: mergeDomainTouches(contract.touches, registry?.touches),
     },
     // Better Auth credential APIs use the Better Auth Drizzle adapter internally; wrapping that
     // call in Kovo's default app-db transaction nests the same in-process PGlite connection.

@@ -7,7 +7,11 @@ import type {
 } from '@kovojs/server';
 
 import { betterAuthMountOperationContract } from './internal/contracts.js';
-import { betterAuthApply, betterAuthCaptureOwnMethod } from './internal/intrinsics.js';
+import {
+  betterAuthApply,
+  betterAuthCaptureOwnMethod,
+  betterAuthOwnDataOption,
+} from './internal/intrinsics.js';
 import { assertBetterAuthRequestSecretPath } from './internal/non-egress-proof.js';
 import type { BetterAuthMountHandler, BetterAuthMountLike } from './internal.js';
 
@@ -53,21 +57,43 @@ export function mount<
     typeof auth === 'function'
       ? { method: auth, receiver: undefined }
       : betterAuthCaptureOwnMethod(auth, 'handler', 'Better Auth mount');
-  const endpointAuth = options.auth ?? betterAuthMountOperationContract.auth;
+  const configuredAuth = betterAuthOwnDataOption<EndpointAuthDeclaration>(
+    options,
+    'auth',
+    'Better Auth mount option auth',
+  );
+  const access = betterAuthOwnDataOption<AccessDecision>(
+    options,
+    'access',
+    'Better Auth mount option access',
+  );
+  const csrfJustification = betterAuthOwnDataOption<string>(
+    options,
+    'csrfJustification',
+    'Better Auth mount option csrfJustification',
+  );
+  const method = betterAuthOwnDataOption<Method>(
+    options,
+    'method',
+    'Better Auth mount option method',
+  );
+  if (method === undefined) {
+    throw new TypeError('Better Auth mount option method must be an own-data property.');
+  }
+  const endpointAuth = configuredAuth ?? betterAuthMountOperationContract.auth;
 
   return endpoint(path, {
-    ...(options.access === undefined && options.auth !== undefined
+    ...(access === undefined && configuredAuth !== undefined
       ? {}
-      : { access: options.access ?? betterAuthMountOperationContract.access }),
+      : { access: access ?? betterAuthMountOperationContract.access }),
     auth: endpointAuth,
     csrf: false,
-    csrfJustification:
-      options.csrfJustification ?? betterAuthMountOperationContract.csrf.justification,
+    csrfJustification: csrfJustification ?? betterAuthMountOperationContract.csrf.justification,
     handler(request) {
       assertBetterAuthRequestSecretPath('better-auth.mount.handler-delegation');
       return betterAuthApply(handler, handlerReceiver, [request]);
     },
-    method: options.method,
+    method,
     mount: 'prefix',
     mountJustification: betterAuthMountOperationContract.mountJustification,
     reason: betterAuthMountOperationContract.reason,

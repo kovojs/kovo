@@ -34,6 +34,7 @@ import {
   pinBetterAuthSignOut,
   pinBetterAuthSignUpEmail,
 } from './internal/trusted-plaintext.js';
+import { betterAuthOwnDataOption } from './internal/intrinsics.js';
 
 const NativeError = Error;
 const betterAuthCredentialBoundaryFailureMessage =
@@ -88,7 +89,15 @@ export function betterAuthSignInEmailMutation<
   GuardedRequest
 > & { key: Key } {
   const pinnedAuth = pinBetterAuthSignInEmail(auth);
-  const defaultRedirectTo = redirectPath(options.defaultRedirectTo, '/');
+  const defaultRedirectTo = redirectPath(
+    betterAuthOwnDataOption<string>(
+      options,
+      'defaultRedirectTo',
+      'Better Auth credential option defaultRedirectTo',
+    ),
+    '/',
+  );
+  const key = betterAuthOwnDataOption<Key>(options, 'key', 'Better Auth credential option key');
   return assignBetterAuthMutationKey(
     mutation({
       ...credentialMutationDefinitionOptions(
@@ -129,7 +138,7 @@ export function betterAuthSignInEmailMutation<
         }
       },
     }),
-    options.key ?? ('auth/sign-in' as Key),
+    key ?? ('auth/sign-in' as Key),
   );
 }
 
@@ -156,7 +165,15 @@ export function betterAuthSignUpEmailMutation<
   GuardedRequest
 > & { key: Key } {
   const pinnedAuth = pinBetterAuthSignUpEmail(auth);
-  const defaultRedirectTo = redirectPath(options.defaultRedirectTo, '/');
+  const defaultRedirectTo = redirectPath(
+    betterAuthOwnDataOption<string>(
+      options,
+      'defaultRedirectTo',
+      'Better Auth credential option defaultRedirectTo',
+    ),
+    '/',
+  );
+  const key = betterAuthOwnDataOption<Key>(options, 'key', 'Better Auth credential option key');
   return assignBetterAuthMutationKey(
     mutation({
       ...credentialMutationDefinitionOptions(
@@ -198,7 +215,7 @@ export function betterAuthSignUpEmailMutation<
         }
       },
     }),
-    options.key ?? ('auth/sign-up' as Key),
+    key ?? ('auth/sign-up' as Key),
   );
 }
 
@@ -225,7 +242,15 @@ export function betterAuthSignOutMutation<
   GuardedRequest
 > & { key: Key } {
   const pinnedAuth = pinBetterAuthSignOut(auth);
-  const defaultRedirectTo = redirectPath(options.defaultRedirectTo, '/login');
+  const defaultRedirectTo = redirectPath(
+    betterAuthOwnDataOption<string>(
+      options,
+      'defaultRedirectTo',
+      'Better Auth credential option defaultRedirectTo',
+    ),
+    '/login',
+  );
+  const key = betterAuthOwnDataOption<Key>(options, 'key', 'Better Auth credential option key');
   return assignBetterAuthMutationKey(
     mutation({
       ...credentialMutationDefinitionOptions(
@@ -253,6 +278,6 @@ export function betterAuthSignOutMutation<
         };
       },
     }),
-    options.key ?? ('auth/sign-out' as Key),
+    key ?? ('auth/sign-out' as Key),
   );
 }
