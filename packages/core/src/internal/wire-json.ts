@@ -55,6 +55,12 @@ export interface KovoWireDateTag {
   readonly value: string | null;
 }
 
+/** @internal Escaped app record whose exact shape would otherwise collide with a wire tag. */
+export interface KovoWireRecordTag {
+  readonly [KOVO_WIRE_TAG]: 'record';
+  readonly value: readonly (readonly [string, KovoWireJsonEncodedValue | undefined])[];
+}
+
 /** @internal JSON-safe value after Kovo wire normalization. */
 export type KovoWireJsonEncodedValue =
   | null
@@ -63,6 +69,7 @@ export type KovoWireJsonEncodedValue =
   | string
   | KovoWireBigIntTag
   | KovoWireDateTag
+  | KovoWireRecordTag
   | readonly KovoWireJsonEncodedValue[]
   | { readonly [key: string]: KovoWireJsonEncodedValue | undefined };
 
@@ -281,7 +288,7 @@ function jsonSafeWireValueAt(
       });
     }
     securityWeakSetDelete(state.seen, value);
-    return out;
+    return escapeAmbiguousWireRecord(out, keys);
   }
   return value;
 }
@@ -313,6 +320,67 @@ function wireTag(
     writable: true,
   });
   return out as unknown as KovoWireBigIntTag | KovoWireDateTag;
+}
+
+function escapeAmbiguousWireRecord(
+  value: Record<string, unknown>,
+  keys: readonly string[],
+): Record<string, unknown> | KovoWireRecordTag {
+  if (keys.length !== 2) return value;
+  const tagDescriptor = securityGetOwnPropertyDescriptor(value, KOVO_WIRE_TAG);
+  const valueDescriptor = securityGetOwnPropertyDescriptor(value, 'value');
+  if (
+    tagDescriptor === undefined ||
+    !('value' in tagDescriptor) ||
+    valueDescriptor === undefined ||
+    !('value' in valueDescriptor) ||
+    valueDescriptor.value === undefined ||
+    (tagDescriptor.value !== 'bigint' &&
+      tagDescriptor.value !== 'date' &&
+      tagDescriptor.value !== 'record')
+  ) {
+    return value;
+  }
+
+  // SPEC §6.6/§9.4: `$kovo` is not reserved from JsonValue app records. Encode a colliding record
+  // as data entries so the bottom-up JSON reviver cannot mistake it for a framework primitive.
+  const entries: [string, KovoWireJsonEncodedValue | undefined][] = [];
+  shadowInheritedToJson(entries);
+  for (let index = 0; index < keys.length; index += 1) {
+    const keyEntry = securityOwnArrayEntry(keys, index);
+    if (!keyEntry.ok) {
+      throw new IntrinsicTypeError('Kovo wire JSON objects must contain stable own keys.');
+    }
+    const descriptor = securityGetOwnPropertyDescriptor(value, keyEntry.value);
+    if (descriptor === undefined || !('value' in descriptor)) {
+      throw new IntrinsicTypeError(
+        'Kovo wire JSON objects must contain stable own data properties.',
+      );
+    }
+    const entry: [string, KovoWireJsonEncodedValue | undefined] = [] as unknown as [
+      string,
+      KovoWireJsonEncodedValue | undefined,
+    ];
+    shadowInheritedToJson(entry);
+    securityArrayAppend(entry, keyEntry.value);
+    securityArrayAppend(entry, descriptor.value as KovoWireJsonEncodedValue | undefined);
+    securityArrayAppend(entries, entry);
+  }
+
+  const escaped = securityNullRecord<unknown>();
+  securityDefineProperty(escaped, KOVO_WIRE_TAG, {
+    configurable: true,
+    enumerable: true,
+    value: 'record',
+    writable: true,
+  });
+  securityDefineProperty(escaped, 'value', {
+    configurable: true,
+    enumerable: true,
+    value: entries,
+    writable: true,
+  });
+  return escaped as unknown as KovoWireRecordTag;
 }
 
 function shadowInheritedToJson(value: unknown[]): void {
@@ -362,6 +430,10 @@ export function reviveWireValue(_key: string, value: unknown): unknown {
   const tag = tagDescriptor.value;
   const wireValue = valueDescriptor.value;
 
+  if (tag === 'record') {
+    return reviveEscapedWireRecord(wireValue) ?? value;
+  }
+
   if (tag === 'bigint' && typeof wireValue === 'string') {
     try {
       assertWireJsonControls();
@@ -376,6 +448,48 @@ export function reviveWireValue(_key: string, value: unknown): unknown {
     if (typeof wireValue === 'string') return new IntrinsicDate(wireValue);
   }
   return value;
+}
+
+function reviveEscapedWireRecord(value: unknown): Record<string, unknown> | undefined {
+  if (!securityIsArray(value)) return undefined;
+  const lengthDescriptor = securityGetOwnPropertyDescriptor(value, 'length');
+  if (
+    lengthDescriptor === undefined ||
+    !('value' in lengthDescriptor) ||
+    lengthDescriptor.value !== 2
+  ) {
+    return undefined;
+  }
+
+  const record = securityNullRecord<unknown>();
+  for (let index = 0; index < 2; index += 1) {
+    const pairEntry = securityOwnArrayEntry(value, index);
+    if (!pairEntry.ok || !securityIsArray(pairEntry.value)) return undefined;
+    const pairLength = securityGetOwnPropertyDescriptor(pairEntry.value, 'length');
+    const keyEntry = securityOwnArrayEntry(pairEntry.value, 0);
+    const valueEntry = securityOwnArrayEntry(pairEntry.value, 1);
+    if (
+      pairLength === undefined ||
+      !('value' in pairLength) ||
+      pairLength.value !== 2 ||
+      !keyEntry.ok ||
+      typeof keyEntry.value !== 'string' ||
+      !valueEntry.ok ||
+      (keyEntry.value !== KOVO_WIRE_TAG && keyEntry.value !== 'value') ||
+      securityHasOwn(record, keyEntry.value)
+    ) {
+      return undefined;
+    }
+    securityDefineProperty(record, keyEntry.value, {
+      configurable: true,
+      enumerable: true,
+      value: valueEntry.value,
+      writable: true,
+    });
+  }
+  return securityHasOwn(record, KOVO_WIRE_TAG) && securityHasOwn(record, 'value')
+    ? record
+    : undefined;
 }
 
 /** @internal Parse a Kovo wire JSON string through the shared reviver. */
