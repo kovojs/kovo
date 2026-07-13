@@ -666,6 +666,7 @@ describe('mutation CSRF enforcement', () => {
     });
 
     const response = await renderMutationResponse(addToCart, {
+      buildToken: 'csrf-replay-order',
       csrf,
       idem: 'idem_01',
       rawInput: { productId: 'p1' },

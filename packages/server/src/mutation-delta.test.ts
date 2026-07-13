@@ -307,14 +307,13 @@ describe('Kovo-Build header (SPEC §5.1, §9.1.1)', () => {
       },
     });
 
-    const response = await renderMutationResponse(addToCart, {
-      fragment: true,
-      rawInput: { productId: 'p1' },
-      request: {},
-    });
-
-    expect(response.status).toBe(500);
-    expect(response.body).toContain('data-error-code="RENDER_ERROR"');
+    await expect(
+      renderMutationResponse(addToCart, {
+        fragment: true,
+        rawInput: { productId: 'p1' },
+        request: {},
+      }),
+    ).rejects.toThrow(/requires a non-empty buildToken/u);
   });
 
   it('emits Kovo-Build header on non-200 responses when buildToken is set', async () => {

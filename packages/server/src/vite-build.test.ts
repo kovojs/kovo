@@ -508,8 +508,11 @@ export const CartButton = component({
     expect(mutationA.headers.get('Kovo-Build')).toBe(tokenA);
     expect(mutationB.headers.get('Kovo-Build')).toBe(tokenB);
     expect(mutationB.headers.get('Kovo-Build')).not.toBe(tokenA);
-    await expect(mutationA.text()).resolves.toContain('<kovo-query name="cart"');
-    await expect(mutationB.text()).resolves.toContain('<kovo-query name="cart"');
+    // A bare client Kovo-Targets hint is not query execution authority. There is no generated
+    // live descriptor/response plan in this build-token fixture, so both servers answer an empty
+    // fragment body while still carrying their exact deploy-skew identity.
+    await expect(mutationA.text()).resolves.toBe('');
+    await expect(mutationB.text()).resolves.toBe('');
 
     const outDirA = await mkdtemp(join(tmpdir(), 'kovo-render-plan-shape-a-'));
     const outDirB = await mkdtemp(join(tmpdir(), 'kovo-render-plan-shape-b-'));

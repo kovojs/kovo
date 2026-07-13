@@ -53,7 +53,7 @@ describe('server security bootstrap census', () => {
     const buildIntrinsics = source.indexOf("from './build-security-intrinsics.ts';");
     const responseIntrinsics = source.indexOf("from './response-security-intrinsics.ts';");
     const firstAuthoredIntegrationImport = source.indexOf(
-      "from '@kovojs/server/internal/data-plane-static-analysis';",
+      "from './internal/data-plane-static-analysis.ts';",
     );
 
     expect(compilerBootstrap).toBeGreaterThanOrEqual(0);
@@ -66,7 +66,9 @@ describe('server security bootstrap census', () => {
   it('preloads the complete server profile before the authored Vite app graph', () => {
     const source = readFileSync(new URL('./vite-dev.ts', import.meta.url), 'utf8');
     const rootLoad = source.indexOf('await server.ssrLoadModule(kovoServerRootModuleId);');
-    const appLoad = source.indexOf('const module = await server.ssrLoadModule(moduleId);');
+    const appLoad = source.indexOf(
+      'const module = await runWithGeneratedLiveTargetRegistry(() => server.ssrLoadModule(moduleId));',
+    );
 
     expect(rootLoad).toBeGreaterThan(0);
     expect(appLoad).toBeGreaterThan(rootLoad);

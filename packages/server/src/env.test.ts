@@ -17,6 +17,10 @@ import { s } from './schema.js';
 const STRONG_SECRET = 'pX2k9QwErT7yUiOpAsDfGhJkLzXcVbNmQwErTyUiOpA';
 const STRONG_PREVIOUS_SECRET = 'nB7vCxZaQwErTyUiOpAsDfGhJkLzXcVbNmQwErTyU';
 const sessionId = () => 'session-1';
+const ENV_TEST_EGRESS = {
+  enabled: false,
+  justification: 'environment boot tests perform no outbound I/O',
+} as const;
 
 describe('validateAppEnv — framework secret refuse-to-boot (SPEC §6.6)', () => {
   describe('production: refuses boot (by-construction at the chokepoint)', () => {
@@ -340,20 +344,28 @@ describe('helpers', () => {
 
 describe('createApp boot integration (the chokepoint)', () => {
   it('boots fine in dev with a weak secret (warns, not bricks)', () => {
-    expect(() => createApp({ csrf: { secret: 'weak', sessionId } })).not.toThrow();
+    expect(() =>
+      createApp({ csrf: { secret: 'weak', sessionId }, egress: ENV_TEST_EGRESS }),
+    ).not.toThrow();
   });
 
   it('boots fine with a strong secret', () => {
-    expect(() => createApp({ csrf: { secret: STRONG_SECRET, sessionId } })).not.toThrow();
+    expect(() =>
+      createApp({ csrf: { secret: STRONG_SECRET, sessionId }, egress: ENV_TEST_EGRESS }),
+    ).not.toThrow();
   });
 
   it('refuses to boot in production with a missing secret (NODE_ENV=production)', () => {
     const previous = process.env.NODE_ENV;
     process.env.NODE_ENV = 'production';
     try {
-      expect(() => createApp({ csrf: { secret: '', sessionId } })).toThrow(CreateAppBootError);
+      expect(() => createApp({ csrf: { secret: '', sessionId }, egress: ENV_TEST_EGRESS })).toThrow(
+        CreateAppBootError,
+      );
       // a strong secret boots fine even in production
-      expect(() => createApp({ csrf: { secret: STRONG_SECRET, sessionId } })).not.toThrow();
+      expect(() =>
+        createApp({ csrf: { secret: STRONG_SECRET, sessionId }, egress: ENV_TEST_EGRESS }),
+      ).not.toThrow();
     } finally {
       if (previous === undefined) delete process.env.NODE_ENV;
       else process.env.NODE_ENV = previous;
@@ -367,6 +379,7 @@ describe('createApp boot integration (the chokepoint)', () => {
       expect(() =>
         createApp({
           csrf: { secret: STRONG_SECRET, sessionId },
+          egress: ENV_TEST_EGRESS,
           env: s.object({ DATABASE_URL: s.string() }),
           envSource: {},
         }),

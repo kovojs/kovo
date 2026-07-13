@@ -42,17 +42,27 @@ describe('server runtime operator-environment authority (SPEC §6.6 rule 6)', ()
     setEnvironment('KOVO_LIVE_TARGET_SECRET', 'attacker-live-target-secret-b-0123456789');
     setEnvironment('OPERATOR_BOOT_TOKEN', undefined);
 
-    const [appApi, cookies, egress, env, endpointApi, mutationWire, response, schema] =
-      await Promise.all([
-        import('./app.ts?operator-environment-production-app'),
-        import('./cookies.ts?operator-environment-production-cookies'),
-        import('./egress.ts?operator-environment-production-egress'),
-        import('./env.ts?operator-environment-production-env'),
-        import('./endpoint.ts?operator-environment-production-endpoint'),
-        import('./mutation-wire.ts?operator-environment-production-live-target'),
-        import('./response.ts?operator-environment-production-response'),
-        import('./schema.ts?operator-environment-production-schema'),
-      ]);
+    const [
+      appApi,
+      cookies,
+      egress,
+      env,
+      endpointApi,
+      liveTargetRegistry,
+      mutationWire,
+      response,
+      schema,
+    ] = await Promise.all([
+      import('./app.ts?operator-environment-production-app'),
+      import('./cookies.ts?operator-environment-production-cookies'),
+      import('./egress.ts?operator-environment-production-egress'),
+      import('./env.ts?operator-environment-production-env'),
+      import('./endpoint.ts?operator-environment-production-endpoint'),
+      import('./live-target-registry.ts'),
+      import('./mutation-wire.ts?operator-environment-production-live-target'),
+      import('./response.ts?operator-environment-production-response'),
+      import('./schema.ts?operator-environment-production-schema'),
+    ]);
 
     expect(env.resolveBootMode()).toBe('production');
     expect(() =>
@@ -63,19 +73,24 @@ describe('server runtime operator-environment authority (SPEC §6.6 rule 6)', ()
     ).toThrow(/refused to boot/u);
     const liveTargetRenderer = {
       component: 'components/operator-env',
+      mutationKeys: [],
       render: () => '<operator-env />',
     };
     expect(() =>
-      appApi.createApp({
-        egress: { enabled: false, justification: 'isolated authority regression' },
-        liveTargetRenderers: [liveTargetRenderer],
+      liveTargetRegistry.runWithGeneratedLiveTargetRegistry(() => {
+        liveTargetRegistry.registerGeneratedLiveTargetRenderer(liveTargetRenderer);
+        return appApi.createApp({
+          egress: { enabled: false, justification: 'isolated authority regression' },
+        });
       }),
     ).toThrow(/Production apps with live-target renderers require createApp\(\{ appId \}\)/u);
     expect(() =>
-      appApi.createApp({
-        appId: 'c1f7a1bc-3ded-4205-b0e0-a6120b56d18e',
-        egress: { enabled: false, justification: 'isolated authority regression' },
-        liveTargetRenderers: [liveTargetRenderer],
+      liveTargetRegistry.runWithGeneratedLiveTargetRegistry(() => {
+        liveTargetRegistry.registerGeneratedLiveTargetRenderer(liveTargetRenderer);
+        return appApi.createApp({
+          appId: 'c1f7a1bc-3ded-4205-b0e0-a6120b56d18e',
+          egress: { enabled: false, justification: 'isolated authority regression' },
+        });
       }),
     ).not.toThrow();
     expect(() =>

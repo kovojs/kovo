@@ -3,6 +3,7 @@ import { customVerifier, hmacSignature } from '@kovojs/core';
 import { stampTrustedSql } from '@kovojs/core/internal/sql-safety';
 import { describe, expect, it } from 'vitest';
 
+import './sql-parser-authority-bootstrap.js';
 import { createApp, createRequestHandler } from './app.js';
 import { domain } from './domain.js';
 import { runEndpoint, type EndpointRequest } from './endpoint.js';
