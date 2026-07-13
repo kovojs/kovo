@@ -32,6 +32,49 @@ describe('server rooted file primitive', () => {
     }
   });
 
+  it('pins inline-safety options before the asynchronous rooted read', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kovo-rooted-files-'));
+    try {
+      await writeFile(join(root, 'active.svg'), '<svg onload="alert(1)"></svg>', 'utf8');
+      const files = await rootedFiles(root);
+      const options = {
+        contentType: 'image/svg+xml',
+        disposition: 'attachment' as 'attachment' | 'inline',
+        verifiedSafe: false,
+      };
+      const pending = files.serve('active.svg', options);
+      options.disposition = 'inline';
+      options.verifiedSafe = true;
+
+      const outcome = await pending;
+      expect(outcome?.contentDisposition).toBe('attachment; filename="active.svg"');
+      expect(outcome?.contentType).toBe('image/svg+xml');
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
+  it('refuses accessor-backed rooted serve options without invoking them', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kovo-rooted-files-'));
+    try {
+      await writeFile(join(root, 'active.svg'), '<svg onload="alert(1)"></svg>', 'utf8');
+      const files = await rootedFiles(root);
+      let getterCalls = 0;
+      const options = {} as Parameters<typeof files.serve>[1];
+      Object.defineProperty(options, 'contentType', {
+        configurable: true,
+        get() {
+          getterCalls += 1;
+          return 'image/svg+xml';
+        },
+      });
+      await expect(files.serve('active.svg', options)).rejects.toThrow('own data property');
+      expect(getterCalls).toBe(0);
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
   it('treats traversal attempts as not found', async () => {
     const root = await mkdtemp(join(tmpdir(), 'kovo-rooted-files-'));
     const outside = await mkdtemp(join(tmpdir(), 'kovo-rooted-files-outside-'));

@@ -6,7 +6,14 @@ import {
 import { blessSink, isBlessedSink } from '@kovojs/core/internal/sink-policy';
 
 import { respond, type RouteResponseOutcome, type RouteStreamOptions } from './response.js';
-import { witnessFreeze } from './security-witness-intrinsics.js';
+import {
+  witnessCreateNullRecord,
+  witnessFreeze,
+  witnessGetOwnPropertyDescriptor,
+  witnessIsArray,
+  witnessObjectIs,
+  witnessObjectKeys,
+} from './security-witness-intrinsics.js';
 
 type RootedFileServeSink = 'rooted-file-serve';
 
@@ -63,10 +70,95 @@ async function serveRootedFile(
   options: RootedFileServeOptions,
 ): Promise<RouteResponseOutcome | undefined> {
   if (!isFrameworkFileSystemBoundary(fileSystem)) return undefined;
+  const closedOptions = snapshotRootedFileServeOptions(options);
   const file = await fileSystem.readFile(requestedPath);
   if (file === undefined || !(file.body instanceof Uint8Array)) return undefined;
   return respond.stream(file.body, {
-    ...options,
-    filename: options.filename ?? file.fileName,
+    ...closedOptions,
+    filename: closedOptions.filename ?? file.fileName,
   });
+}
+
+const ROOTED_FILE_SERVE_OPTION_KEYS = [
+  'contentType',
+  'disposition',
+  'etag',
+  'filename',
+  'headers',
+  'verifiedSafe',
+] as const satisfies readonly (keyof RootedFileServeOptions)[];
+
+function snapshotRootedFileServeOptions(options: RootedFileServeOptions): RootedFileServeOptions {
+  if (typeof options !== 'object' || options === null || witnessIsArray(options)) {
+    throw new TypeError('Rooted file serve options must be an object.');
+  }
+  const snapshot = witnessCreateNullRecord<unknown>() as Record<
+    keyof RootedFileServeOptions,
+    unknown
+  >;
+  for (let index = 0; index < ROOTED_FILE_SERVE_OPTION_KEYS.length; index += 1) {
+    const key = ROOTED_FILE_SERVE_OPTION_KEYS[index]!;
+    snapshot[key] = stableRootedFileOption(options, key);
+  }
+  if (typeof snapshot.contentType !== 'string') {
+    throw new TypeError('Rooted file serve contentType must be an own string data property.');
+  }
+  if (
+    snapshot.disposition !== undefined &&
+    snapshot.disposition !== 'attachment' &&
+    snapshot.disposition !== 'inline'
+  ) {
+    throw new TypeError('Rooted file serve disposition must be attachment or inline.');
+  }
+  if (snapshot.etag !== undefined && typeof snapshot.etag !== 'string') {
+    throw new TypeError('Rooted file serve etag must be a string.');
+  }
+  if (snapshot.filename !== undefined && typeof snapshot.filename !== 'string') {
+    throw new TypeError('Rooted file serve filename must be a string.');
+  }
+  if (snapshot.verifiedSafe !== undefined && typeof snapshot.verifiedSafe !== 'boolean') {
+    throw new TypeError('Rooted file serve verifiedSafe must be a boolean.');
+  }
+  if (snapshot.headers !== undefined) {
+    snapshot.headers = snapshotRootedFileHeaders(snapshot.headers);
+  }
+  return witnessFreeze(snapshot) as RootedFileServeOptions;
+}
+
+function snapshotRootedFileHeaders(source: unknown): Readonly<Record<string, string>> {
+  if (typeof source !== 'object' || source === null || witnessIsArray(source)) {
+    throw new TypeError('Rooted file serve headers must be an object.');
+  }
+  const names = witnessObjectKeys(source);
+  if (names.length > 100_000) {
+    throw new TypeError('Rooted file serve headers must be bounded.');
+  }
+  const snapshot = witnessCreateNullRecord<string>();
+  for (let index = 0; index < names.length; index += 1) {
+    const name = names[index]!;
+    const value = stableRootedFileOption(source, name);
+    if (typeof value !== 'string') {
+      throw new TypeError(`Rooted file serve header ${name} must be a string.`);
+    }
+    snapshot[name] = value;
+  }
+  return witnessFreeze(snapshot) as Readonly<Record<string, string>>;
+}
+
+function stableRootedFileOption(source: object, property: PropertyKey): unknown {
+  const before = witnessGetOwnPropertyDescriptor(source, property);
+  const after = witnessGetOwnPropertyDescriptor(source, property);
+  if ((before === undefined) !== (after === undefined)) {
+    throw new TypeError(`Rooted file serve option ${String(property)} must be stable.`);
+  }
+  if (before === undefined) return undefined;
+  if (!('value' in before) || after === undefined || !('value' in after)) {
+    throw new TypeError(
+      `Rooted file serve option ${String(property)} must be an own data property.`,
+    );
+  }
+  if (!witnessObjectIs(before.value, after.value)) {
+    throw new TypeError(`Rooted file serve option ${String(property)} changed during validation.`);
+  }
+  return before.value;
 }
