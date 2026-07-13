@@ -600,13 +600,26 @@ function importedKovoExportName(callee: Node): string | undefined {
 }
 
 /** Distinctive runtime METHOD names whose call is an audited capability escape (no import to resolve). */
-const METHOD_CAPABILITY_KINDS: Readonly<Record<string, CapabilityExplain['kind']>> = {
-  actAs: 'actAs',
-  crossOwnerRead: 'crossOwnerRead',
-  declareSystemRead: 'declareSystemRead',
-  declareSystemWrite: 'declareSystemWrite',
-  rawRead: 'rawRead',
-};
+function methodCapabilityKind(name: string): CapabilityExplain['kind'] | undefined {
+  // SPEC §6.6: this audit classifier is an exact, closed allowlist. A plain record lookup would
+  // inherit Object.prototype names such as `valueOf` and emit non-JSON function values as alleged
+  // capability kinds, breaking build preflight and making unrelated method calls authoritatively
+  // visible as security escapes.
+  switch (name) {
+    case 'actAs':
+      return 'actAs';
+    case 'crossOwnerRead':
+      return 'crossOwnerRead';
+    case 'declareSystemRead':
+      return 'declareSystemRead';
+    case 'declareSystemWrite':
+      return 'declareSystemWrite';
+    case 'rawRead':
+      return 'rawRead';
+    default:
+      return undefined;
+  }
+}
 
 /**
  * Collect every app-authored escape-hatch call site as a `CapabilityExplain` (SPEC §6.6,
@@ -756,7 +769,7 @@ function methodCapabilityEscape(
   if (!Node.isCallExpression(call)) return null;
   const callee = call.getExpression();
   if (!Node.isPropertyAccessExpression(callee)) return null;
-  const kind = METHOD_CAPABILITY_KINDS[callee.getName()];
+  const kind = methodCapabilityKind(callee.getName());
   if (!kind) return null;
 
   const args = call.getArguments();

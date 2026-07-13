@@ -160,6 +160,19 @@ describe('@kovojs/drizzle capability-escape collector (SPEC §6.6, audit-only, M
     ]);
   });
 
+  it('does not classify inherited Object.prototype method names as capabilities', () => {
+    const capabilities = capabilitiesFor(`
+      export function ordinaryCalls(value: object) {
+        value.valueOf();
+        value.toString();
+        value.constructor();
+        value.__proto__();
+      }
+    `);
+
+    expect(capabilities).toEqual([]);
+  });
+
   it('surfaces non-request principal elevations actAs, declareSystemRead, declareSystemWrite (DEC-G)', () => {
     const capabilities = capabilitiesFor(`
       export async function job(ctx: any) {
