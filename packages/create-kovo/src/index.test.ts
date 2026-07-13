@@ -1408,4 +1408,19 @@ describe('create-kovo starter (CLI)', () => {
       rmSync(dirname(root), { force: true, recursive: true });
     }
   });
+
+  it('rejects invalid scaffold option values before writing', () => {
+    const root = join(mkdtempSync(join(tmpdir(), 'create-kovo-invalid-options-')), 'app');
+    try {
+      expect(() => writeKovoProject(root, { disableGit: 'no' as unknown as boolean })).toThrow(
+        "create-kovo option 'disableGit' must be a boolean.",
+      );
+      expect(() => writeKovoProject(root, { name: 42 as unknown as string })).toThrow(
+        "create-kovo option 'name' must be a string.",
+      );
+      expect(existsSync(root)).toBe(false);
+    } finally {
+      rmSync(dirname(root), { force: true, recursive: true });
+    }
+  });
 });

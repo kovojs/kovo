@@ -24,6 +24,12 @@ import {
   renderKovoRulesBlock,
 } from '@kovojs/core/internal/agent-docs';
 
+const NativeObject = globalThis.Object;
+const NativeReflect = globalThis.Reflect;
+const nativeGetOwnPropertyDescriptor = NativeObject.getOwnPropertyDescriptor;
+const nativeObjectIs = NativeObject.is;
+const nativeReflectApply = NativeReflect.apply;
+
 export interface CreateKovoOptions {
   dialect?: CreateKovoDialect;
   name: string;
@@ -340,6 +346,19 @@ export function writeKovoProject(
   const configuredName = ownScaffoldOption(options, 'name');
   const configuredDialect = ownScaffoldOption(options, 'dialect');
   const disableGit = ownScaffoldOption(options, 'disableGit');
+  if (configuredName !== undefined && typeof configuredName !== 'string') {
+    throw new TypeError("create-kovo option 'name' must be a string.");
+  }
+  if (
+    configuredDialect !== undefined &&
+    configuredDialect !== 'postgres' &&
+    configuredDialect !== 'sqlite'
+  ) {
+    throw new TypeError("create-kovo option 'dialect' must be 'postgres' or 'sqlite'.");
+  }
+  if (disableGit !== undefined && typeof disableGit !== 'boolean') {
+    throw new TypeError("create-kovo option 'disableGit' must be a boolean.");
+  }
   const name = configuredName ?? basename(root);
   const project = createKovoProject({
     ...(configuredDialect === undefined ? {} : { dialect: configuredDialect }),
@@ -405,20 +424,20 @@ function ownScaffoldOption<Key extends keyof WriteKovoProjectOptions>(
   options: WriteKovoProjectOptions,
   key: Key,
 ): WriteKovoProjectOptions[Key] {
-  const before = Object.getOwnPropertyDescriptor(options, key);
-  const after = Object.getOwnPropertyDescriptor(options, key);
+  const before = nativeReflectApply(nativeGetOwnPropertyDescriptor, NativeObject, [options, key]);
+  const after = nativeReflectApply(nativeGetOwnPropertyDescriptor, NativeObject, [options, key]);
   if (before === undefined && after === undefined) return undefined;
   if (
     before === undefined ||
     after === undefined ||
     !('value' in before) ||
     !('value' in after) ||
-    !Object.is(before.value, after.value) ||
+    !nativeReflectApply(nativeObjectIs, NativeObject, [before.value, after.value]) ||
     before.configurable !== after.configurable ||
     before.enumerable !== after.enumerable ||
     before.writable !== after.writable
   ) {
-    throw new TypeError(`create-kovo option '${String(key)}' must be a stable own data property.`);
+    throw new TypeError(`create-kovo option '${key}' must be a stable own data property.`);
   }
   return before.value as WriteKovoProjectOptions[Key];
 }
