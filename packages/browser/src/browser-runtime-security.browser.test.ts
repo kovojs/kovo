@@ -349,6 +349,7 @@ describe('browser-runtime security regressions', () => {
       queryUrl: () => '',
       readAttribute: () => null,
       readElementAttribute: () => ({ present: false }),
+      readDomAttribute: (element, name) => security.readAttribute(element, name),
       readPageTransitionPersisted: (event) => security.readPageTransitionPersisted(event),
       readResponseStatus: (response) => {
         const status = security.readResponseField(response, 'status');
@@ -380,6 +381,204 @@ describe('browser-runtime security regressions', () => {
     await vi.waitFor(() => expect(target.textContent).toBe('SERVER-SAFE'));
     expect(document.querySelector('base[data-browser-runtime-security]')).toBeNull();
     expect(document.baseURI).toBe(originalBase);
+  });
+
+  it('pins lifecycle query authority and avoids late Promise and DOM dispatch', async () => {
+    const script = document.createElement('script');
+    script.setAttribute('kovo-query', 'cart');
+    script.setAttribute('key', 'primary');
+    document.body.append(script);
+    const security = createBrowserNavigationSecurityControls();
+    let safeFetchCalls = 0;
+    let safeFetchInput = '';
+    let safeFetchInit: object | undefined;
+    const safeFetch = async (input: string, init: object) => {
+      safeFetchCalls += 1;
+      safeFetchInput = input;
+      safeFetchInit = init;
+      return { response: 'safe' };
+    };
+    let attackerFetchCalls = 0;
+    const attackerFetch = async () => {
+      attackerFetchCalls += 1;
+      return { response: 'attacker' };
+    };
+    const applied: Array<{ body: string; build?: string }> = [];
+    const options = {
+      acceptHeader: 'text/html',
+      addLifecycleEventListener: () => true,
+      applyBody: (body: string, build?: string) => {
+        applied.push({ body, build });
+      },
+      buildHeader: () => '',
+      currentBuild: () => '',
+      currentHref: () => undefined,
+      document,
+      encodeAttribute: (value: string) => value,
+      fetchValue: safeFetch,
+      findTarget: () => undefined,
+      liveTargets: () => [],
+      parseHtmlDocument: () => undefined,
+      queryOne: () => null,
+      queryAll: () => [script],
+      queryUrl: (wireKey: string) => '/_q/' + wireKey,
+      readAttribute: () => null,
+      readElementAttribute: () => ({ present: false }),
+      readDomAttribute: (element: Element, name: string) => security.readAttribute(element, name),
+      readPageTransitionPersisted: () => false,
+      readResponseStatus: () => 200,
+      readResponseText: async () => '<kovo-fragment target="cart">SAFE</kovo-fragment>',
+      reload: () => false,
+      snapshotElementHtml: () => undefined,
+      targetHeader: () => [],
+      wireKey: (name: string | null, key: string | null) =>
+        name ? name + (key ? ':' + key : '') : '',
+    };
+    const recovery = createDocumentLifecycleRecovery(options);
+
+    options.fetchValue = attackerFetch;
+    options.queryUrl = () => 'https://attacker.example/collect';
+    options.readDomAttribute = () => 'attacker';
+    const thenDescriptor = Object.getOwnPropertyDescriptor(Promise.prototype, 'then');
+    const catchDescriptor = Object.getOwnPropertyDescriptor(Promise.prototype, 'catch');
+    const getAttributeDescriptor = Object.getOwnPropertyDescriptor(
+      Element.prototype,
+      'getAttribute',
+    );
+    if (!thenDescriptor || !catchDescriptor || !getAttributeDescriptor) {
+      throw new Error('browser Promise/Element descriptors unavailable');
+    }
+    Reflect.defineProperty(Promise.prototype, 'then', {
+      ...thenDescriptor,
+      value() {
+        throw new Error('late Promise.then poison');
+      },
+    });
+    Reflect.defineProperty(Promise.prototype, 'catch', {
+      ...catchDescriptor,
+      value() {
+        throw new Error('late Promise.catch poison');
+      },
+    });
+    Reflect.defineProperty(Element.prototype, 'getAttribute', {
+      ...getAttributeDescriptor,
+      value() {
+        return 'attacker';
+      },
+    });
+    try {
+      recovery.visibleReturnRefresh();
+    } finally {
+      Reflect.defineProperty(Promise.prototype, 'then', thenDescriptor);
+      Reflect.defineProperty(Promise.prototype, 'catch', catchDescriptor);
+      Reflect.defineProperty(Element.prototype, 'getAttribute', getAttributeDescriptor);
+    }
+
+    await vi.waitFor(() => expect(applied).toHaveLength(1));
+    expect(safeFetchCalls).toBe(1);
+    expect(safeFetchInput).toBe('/_q/cart:primary');
+    expect(safeFetchInit).toEqual(expect.objectContaining({ method: 'GET' }));
+    expect(attackerFetchCalls).toBe(0);
+    expect(applied).toEqual([
+      { body: '<kovo-fragment target="cart">SAFE</kovo-fragment>', build: '' },
+    ]);
+  });
+
+  it('commits lifecycle query facts through captured define and own-data array controls', () => {
+    const recovery = createDocumentLifecycleRecovery({
+      acceptHeader: 'text/html',
+      addLifecycleEventListener: () => true,
+      applyBody: () => undefined,
+      buildHeader: () => '',
+      currentBuild: () => '',
+      currentHref: () => undefined,
+      document,
+      encodeAttribute: (value) => value,
+      fetchValue: async () => ({}),
+      findTarget: () => undefined,
+      liveTargets: () => [],
+      parseHtmlDocument: () => undefined,
+      queryOne: () => null,
+      queryAll: () => [],
+      queryUrl: () => '',
+      readAttribute: (_attrs, name) => (name === 'name' ? 'safe-query' : null),
+      readElementAttribute: () => ({ present: false }),
+      readDomAttribute: () => null,
+      readPageTransitionPersisted: () => false,
+      readResponseStatus: () => 200,
+      readResponseText: async () => '',
+      reload: () => false,
+      snapshotElementHtml: () => undefined,
+      targetHeader: () => [],
+      wireKey: (name) => name ?? '',
+    });
+    const defineDescriptor = Object.getOwnPropertyDescriptor(Object, 'defineProperty');
+    const zeroDescriptor = Object.getOwnPropertyDescriptor(Array.prototype, '0');
+    if (!defineDescriptor) throw new Error('Object.defineProperty descriptor unavailable');
+    let inheritedSetterCalls = 0;
+    Reflect.defineProperty(Object, 'defineProperty', {
+      ...defineDescriptor,
+      value() {
+        throw new Error('late Object.defineProperty poison');
+      },
+    });
+    Reflect.defineProperty(Array.prototype, '0', {
+      configurable: true,
+      set() {
+        inheritedSetterCalls += 1;
+      },
+    });
+    let lifecycleError: unknown;
+    try {
+      recovery.rememberQueryChunk({ attrs: 'name="safe-query"' });
+    } catch (error) {
+      lifecycleError = error;
+    } finally {
+      Reflect.defineProperty(Object, 'defineProperty', defineDescriptor);
+      if (zeroDescriptor) Reflect.defineProperty(Array.prototype, '0', zeroDescriptor);
+      else Reflect.deleteProperty(Array.prototype, '0');
+    }
+    expect(lifecycleError).toBeUndefined();
+    expect(inheritedSetterCalls).toBe(0);
+  });
+
+  it('rejects accessor lifecycle controls without invoking them', () => {
+    const getter = vi.fn(() => async () => ({}));
+    const options = {
+      acceptHeader: 'text/html',
+      addLifecycleEventListener: () => true,
+      applyBody: () => undefined,
+      buildHeader: () => '',
+      currentBuild: () => '',
+      currentHref: () => undefined,
+      document,
+      encodeAttribute: (value: string) => value,
+      fetchValue: async () => ({}),
+      findTarget: () => undefined,
+      liveTargets: () => [],
+      parseHtmlDocument: () => undefined,
+      queryOne: () => null,
+      queryAll: () => [],
+      queryUrl: () => '',
+      readAttribute: () => null,
+      readElementAttribute: () => ({ present: false }),
+      readDomAttribute: () => null,
+      readPageTransitionPersisted: () => false,
+      readResponseStatus: () => 200,
+      readResponseText: async () => '',
+      reload: () => false,
+      snapshotElementHtml: () => undefined,
+      targetHeader: () => [],
+      wireKey: () => '',
+    };
+    Object.defineProperty(options, 'fetchValue', {
+      configurable: true,
+      enumerable: true,
+      get: getter,
+    });
+
+    expect(() => createDocumentLifecycleRecovery(options)).toThrow(/own-data property/);
+    expect(getter).not.toHaveBeenCalled();
   });
 
   it('strips framework control attributes from rich CMS markup before DOM insertion', async () => {

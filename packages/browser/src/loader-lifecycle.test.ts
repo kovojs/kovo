@@ -61,6 +61,42 @@ describe('loader lifecycle', () => {
     expect(root.listeners.has('click')).toBe(false);
   });
 
+  it('reports synthesized pointer failures without live Promise catch dispatch', async () => {
+    const root = new FakeRoot();
+    const element = new FakeElement({ 'on:pointerenter': '/c/cart.js#missing' });
+    const onError = vi.fn();
+    installDelegatedEventLifecycle({
+      events: [],
+      importModule: async () => ({}),
+      islandSignalScope: createIslandSignalScope(),
+      onError,
+      root,
+    });
+    const catchDescriptor = Object.getOwnPropertyDescriptor(Promise.prototype, 'catch');
+    if (!catchDescriptor) throw new Error('Promise.catch descriptor unavailable');
+    Object.defineProperty(Promise.prototype, 'catch', {
+      ...catchDescriptor,
+      value() {
+        throw new Error('late Promise.catch poison');
+      },
+    });
+    let listenerError: unknown;
+    try {
+      root.listeners.get('pointerover')?.({ target: element, type: 'pointerover' });
+    } catch (error) {
+      listenerError = error;
+    } finally {
+      Object.defineProperty(Promise.prototype, 'catch', catchDescriptor);
+    }
+
+    expect(listenerError).toBeUndefined();
+    await vi.waitFor(() => expect(onError).toHaveBeenCalledTimes(1));
+    expect(onError).toHaveBeenCalledWith(expect.any(Error), {
+      event: expect.objectContaining({ type: 'pointerover' }),
+      phase: 'delegated-event',
+    });
+  });
+
   it('intercepts enhanced submits without falling through to delegated handlers', async () => {
     // SPEC.md section 9.1: enhanced mutations own submitted forms before normal on:* dispatch.
     const root = new FakeRoot();
@@ -147,6 +183,43 @@ describe('loader lifecycle', () => {
     // handler module must never be imported
     await Promise.resolve(); // flush microtasks
     expect(importModule).not.toHaveBeenCalled();
+  });
+
+  it('runs queued execution triggers without live Promise catch dispatch', async () => {
+    const root = new FakeRoot();
+    const idleElement = new FakeElement({ 'on:idle': '/c/idle.js#warm' });
+    const idleCallbacks: Array<() => void> = [];
+    const warm = vi.fn();
+    root.elements.set('[on\\:idle]', [idleElement]);
+    installExecutionTriggers(
+      {
+        importModule: async () => ({ warm }),
+        requestIdle: (callback) => {
+          idleCallbacks.push(callback);
+        },
+        root,
+      },
+      createIslandSignalScope(),
+    );
+    const catchDescriptor = Object.getOwnPropertyDescriptor(Promise.prototype, 'catch');
+    if (!catchDescriptor) throw new Error('Promise.catch descriptor unavailable');
+    Object.defineProperty(Promise.prototype, 'catch', {
+      ...catchDescriptor,
+      value() {
+        throw new Error('late Promise.catch poison');
+      },
+    });
+    let triggerError: unknown;
+    try {
+      idleCallbacks[0]?.();
+    } catch (error) {
+      triggerError = error;
+    } finally {
+      Object.defineProperty(Promise.prototype, 'catch', catchDescriptor);
+    }
+
+    expect(triggerError).toBeUndefined();
+    await vi.waitFor(() => expect(warm).toHaveBeenCalledTimes(1));
   });
 
   it('installs declared load, idle, and visible execution triggers', async () => {

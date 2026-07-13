@@ -379,6 +379,14 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
     return found && 'value' in found ? found.value : undefined;
   }
 
+  function getOwnSecurityPropertyDescriptor(
+    value: object,
+    property: PropertyKey,
+  ): PropertyDescriptor | undefined {
+    if (!controlsSound) throw new TypeError('Kovo browser navigation controls are unavailable.');
+    return descriptor(value, property);
+  }
+
   function fetchResponsePlan(response: object): BrowserFetchResponsePlan | undefined {
     if (!nativeWeakMapGet) return undefined;
     return apply<BrowserFetchResponsePlan | undefined>(nativeWeakMapGet, fetchResponsePlans, [
@@ -2667,6 +2675,7 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
     fetchWith,
     fetchWithOptionalSyncResult,
     fetchValue,
+    getOwnSecurityPropertyDescriptor,
     hardNavigate,
     hasReloadControl,
     hasElementAttribute,

@@ -81,10 +81,10 @@ describe('inline loader minified artifact', () => {
       'readPageTransitionPersisted:(event)=>bns.readPageTransitionPersisted(event)',
     );
     expect(inlineKovoLoaderInstallerSource).toContain(
-      'if(options.readPageTransitionPersisted(event))visibleReturnRefresh()',
+      'if(readPageTransitionPersisted(event))visibleReturnRefresh()',
     );
     expect(inlineKovoLoaderInstallerSource).toContain(
-      'if(options.readPageTransitionPersisted(event))options.reload()',
+      'if(readPageTransitionPersisted(event))reload()',
     );
     expect(inlineKovoLoaderInstallerSource).not.toContain('if(event.persisted)');
   });
@@ -97,7 +97,7 @@ describe('inline loader minified artifact', () => {
     );
     expect(inlineKovoLoaderInstallerSource).toContain('queryOne:(root,sl)=>bns.queryOne(root,sl)');
     expect(inlineKovoLoaderInstallerSource).toContain(
-      'if(options.queryOne(doc,\'meta[name="kovo-session"]\'))',
+      'if(queryOne(doc,\'meta[name="kovo-session"]\'))',
     );
     expect(inlineKovoLoaderInstallerSource).not.toContain(
       'if(doc.querySelector?.(\'meta[name="kovo-session"]\'))',

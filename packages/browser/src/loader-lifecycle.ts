@@ -138,13 +138,14 @@ export function installDelegatedEventLifecycle(
           | null
           | undefined;
         if (!element || element.contains?.(crossing.relatedTarget ?? null) === true) return;
-        void dispatchDelegatedEvent(
+        dispatchLifecycleEvent(
           { target: element, type: enterType },
           options.importModule,
           options.islandSignalScope,
-        ).catch((error) => {
-          reportRuntimeContextError(options.onError, error, { event, phase: 'delegated-event' });
-        });
+          options.onError,
+          event,
+          'delegated-event',
+        );
       },
       disposers,
       { capture: true },
@@ -256,7 +257,31 @@ function dispatchExecutionTrigger(
   options: ExecutionTriggerOptions,
   islandSignalScope: IslandSignalScope,
 ): void {
-  void dispatchDelegatedEvent(event, options.importModule, islandSignalScope).catch((error) => {
-    reportRuntimeContextError(options.onError, error, { event, phase: 'execution-trigger' });
-  });
+  dispatchLifecycleEvent(
+    event,
+    options.importModule,
+    islandSignalScope,
+    options.onError,
+    event,
+    'execution-trigger',
+  );
+}
+
+function dispatchLifecycleEvent(
+  event: DelegatedEvent,
+  importModule: ImportHandlerModule,
+  islandSignalScope: IslandSignalScope,
+  onError: ((error: unknown, context: RuntimeErrorContext) => void) | undefined,
+  reportEvent: DelegatedEvent,
+  phase: 'delegated-event' | 'execution-trigger',
+): void {
+  // SPEC.md §6.6 rule 6: authored modules may replace Promise.prototype methods only after
+  // framework bootstrap. Async-function continuation uses the realm's pinned intrinsic machinery.
+  void (async () => {
+    try {
+      await dispatchDelegatedEvent(event, importModule, islandSignalScope);
+    } catch (error) {
+      reportRuntimeContextError(onError, error, { event: reportEvent, phase });
+    }
+  })();
 }

@@ -1,3 +1,8 @@
+import {
+  securityArrayAppend,
+  securityGetOwnPropertyDescriptor,
+} from './security-witness-intrinsics.js';
+
 export interface DocumentLifecycleRecoveryOptions {
   acceptHeader: string;
   /** Boot-pinned EventTarget enrollment; structural fake targets remain supported in tests. */
@@ -23,6 +28,8 @@ export interface DocumentLifecycleRecoveryOptions {
   queryAll: (root: ParentNode, selector: string) => Element[];
   /** Boot-pinned PageTransitionEvent.persisted read; uncertainty fails toward refresh/reload. */
   readPageTransitionPersisted: (event: unknown) => boolean;
+  /** Boot-pinned DOM attribute read for server-authored query-script identity. */
+  readDomAttribute: (element: Element, name: string) => string | null;
   readResponseStatus: (response: unknown) => number | undefined;
   readResponseText: (response: unknown) => Promise<string>;
   reload: () => boolean;
@@ -45,146 +52,237 @@ export interface DocumentLifecycleRecovery {
 export function createDocumentLifecycleRecovery(
   options: DocumentLifecycleRecoveryOptions,
 ): DocumentLifecycleRecovery {
-  const doc = options.document;
-  const fqs = new Set<string>();
+  // SPEC.md §6.6 rule 5: the lifecycle boundary retains these controls across later authored
+  // module execution, so classify-and-pin every option exactly once. Inherited/accessor options
+  // and later carrier mutation must never replace URL, credential-bearing fetch, or apply sinks.
+  const acceptHeader = lifecycleStringOption(options, 'acceptHeader');
+  const addLifecycleEventListener = lifecycleFunctionOption<
+    DocumentLifecycleRecoveryOptions['addLifecycleEventListener']
+  >(options, 'addLifecycleEventListener');
+  const applyBody = lifecycleFunctionOption<DocumentLifecycleRecoveryOptions['applyBody']>(
+    options,
+    'applyBody',
+  );
+  const buildHeader = lifecycleFunctionOption<DocumentLifecycleRecoveryOptions['buildHeader']>(
+    options,
+    'buildHeader',
+  );
+  const currentBuild = lifecycleFunctionOption<DocumentLifecycleRecoveryOptions['currentBuild']>(
+    options,
+    'currentBuild',
+  );
+  const currentHref = lifecycleFunctionOption<DocumentLifecycleRecoveryOptions['currentHref']>(
+    options,
+    'currentHref',
+  );
+  const doc = lifecycleObjectOption<Document>(options, 'document');
+  const encodeAttribute = lifecycleFunctionOption<
+    DocumentLifecycleRecoveryOptions['encodeAttribute']
+  >(options, 'encodeAttribute');
+  const fetchValue = lifecycleFunctionOption<DocumentLifecycleRecoveryOptions['fetchValue']>(
+    options,
+    'fetchValue',
+  );
+  const findTarget = lifecycleFunctionOption<DocumentLifecycleRecoveryOptions['findTarget']>(
+    options,
+    'findTarget',
+  );
+  const liveTargets = lifecycleFunctionOption<DocumentLifecycleRecoveryOptions['liveTargets']>(
+    options,
+    'liveTargets',
+  );
+  const parseHtmlDocument = lifecycleFunctionOption<
+    DocumentLifecycleRecoveryOptions['parseHtmlDocument']
+  >(options, 'parseHtmlDocument');
+  const queryOne = lifecycleFunctionOption<DocumentLifecycleRecoveryOptions['queryOne']>(
+    options,
+    'queryOne',
+  );
+  const queryUrl = lifecycleFunctionOption<DocumentLifecycleRecoveryOptions['queryUrl']>(
+    options,
+    'queryUrl',
+  );
+  const readAttribute = lifecycleFunctionOption<DocumentLifecycleRecoveryOptions['readAttribute']>(
+    options,
+    'readAttribute',
+  );
+  const readElementAttribute = lifecycleFunctionOption<
+    DocumentLifecycleRecoveryOptions['readElementAttribute']
+  >(options, 'readElementAttribute');
+  const queryAll = lifecycleFunctionOption<DocumentLifecycleRecoveryOptions['queryAll']>(
+    options,
+    'queryAll',
+  );
+  const readPageTransitionPersisted = lifecycleFunctionOption<
+    DocumentLifecycleRecoveryOptions['readPageTransitionPersisted']
+  >(options, 'readPageTransitionPersisted');
+  const readDomAttribute = lifecycleFunctionOption<
+    DocumentLifecycleRecoveryOptions['readDomAttribute']
+  >(options, 'readDomAttribute');
+  const readResponseStatus = lifecycleFunctionOption<
+    DocumentLifecycleRecoveryOptions['readResponseStatus']
+  >(options, 'readResponseStatus');
+  const readResponseText = lifecycleFunctionOption<
+    DocumentLifecycleRecoveryOptions['readResponseText']
+  >(options, 'readResponseText');
+  const reload = lifecycleFunctionOption<DocumentLifecycleRecoveryOptions['reload']>(
+    options,
+    'reload',
+  );
+  const snapshotElementHtml = lifecycleFunctionOption<
+    DocumentLifecycleRecoveryOptions['snapshotElementHtml']
+  >(options, 'snapshotElementHtml');
+  const targetHeader = lifecycleFunctionOption<DocumentLifecycleRecoveryOptions['targetHeader']>(
+    options,
+    'targetHeader',
+  );
+  const wireKey = lifecycleFunctionOption<DocumentLifecycleRecoveryOptions['wireKey']>(
+    options,
+    'wireKey',
+  );
+  const fqs: string[] = [];
   const isDeltaQuery = (query: { attrs: string; attributes?: readonly unknown[] }) =>
-    options.readElementAttribute(query, 'delta').present;
+    readElementAttribute(query, 'delta').present;
   const refreshQuery = (query: string | { attrs: string; attributes?: readonly unknown[] }) => {
     const u =
       typeof query === 'string'
-        ? options.queryUrl(query)
-        : options.queryUrl(
-            options.wireKey(
-              options.readAttribute(query.attrs, 'name'),
-              options.readAttribute(query.attrs, 'key'),
-            ),
-          );
+        ? queryUrl(query)
+        : queryUrl(wireKey(readAttribute(query.attrs, 'name'), readAttribute(query.attrs, 'key')));
     if (!u) return;
-    options
-      .fetchValue(u, {
-        cache: 'no-store',
-        headers: { Accept: 'text/html', 'Kovo-Fragment': 'true' },
-        method: 'GET',
-      })
-      .then((res) => {
-        const status = options.readResponseStatus(res);
+    void (async () => {
+      try {
+        const res = await fetchValue(u, {
+          cache: 'no-store',
+          headers: { Accept: 'text/html', 'Kovo-Fragment': 'true' },
+          method: 'GET',
+        });
+        const status = readResponseStatus(res);
         if (status === undefined || status >= 400) return;
-        if (
-          options.currentBuild() &&
-          (!options.buildHeader(res) || options.buildHeader(res) !== options.currentBuild())
-        ) {
-          options.reload();
+        const activeBuild = currentBuild();
+        const responseBuild = buildHeader(res);
+        if (activeBuild && (!responseBuild || responseBuild !== activeBuild)) {
+          reload();
           return;
         }
-        return options
-          .readResponseText(res)
-          .then((text) => options.applyBody(text, options.buildHeader(res)));
-      })
-      .catch(() => {});
+        const text = await readResponseText(res);
+        applyBody(text, responseBuild);
+      } catch {}
+    })();
   };
   const refreshLiveTargets = () => {
-    const live = options.liveTargets();
+    const live = lifecycleSnapshotStringArray(liveTargets(), 'Kovo lifecycle live targets');
     if (!live.length) return;
-    const href = options.currentHref();
+    const href = currentHref();
     if (!href) return;
-    options
-      .fetchValue(href, {
-        cache: 'no-store',
-        headers: {
-          Accept: options.acceptHeader,
-          'Kovo-Fragment': 'true',
-          'Kovo-Live-Targets': lifecycleJoin(live, '; '),
-          'Kovo-Targets': lifecycleJoin(options.targetHeader(), '; '),
-        },
-        method: 'GET',
-      })
-      .then((res) => {
-        const status = options.readResponseStatus(res);
+    const targets = lifecycleSnapshotStringArray(targetHeader(), 'Kovo lifecycle target header');
+    void (async () => {
+      try {
+        const res = await fetchValue(href, {
+          cache: 'no-store',
+          headers: {
+            Accept: acceptHeader,
+            'Kovo-Fragment': 'true',
+            'Kovo-Live-Targets': lifecycleJoin(live, '; '),
+            'Kovo-Targets': lifecycleJoin(targets, '; '),
+          },
+          method: 'GET',
+        });
+        const status = readResponseStatus(res);
         if (status === undefined || status >= 400) return;
-        const responseBuild = options.buildHeader(res);
-        if (options.currentBuild() && responseBuild && responseBuild !== options.currentBuild()) {
-          options.reload();
+        const activeBuild = currentBuild();
+        const responseBuild = buildHeader(res);
+        if (activeBuild && responseBuild && responseBuild !== activeBuild) {
+          reload();
           return;
         }
-        return options.readResponseText(res).then((text) => {
+        const text = await readResponseText(res);
+        {
           if (
             lifecycleContains(text, '<kovo-fragment') ||
             lifecycleContains(text, '<kovo-query') ||
             lifecycleContains(text, '<kovo-text')
           ) {
-            options.applyBody(text, responseBuild || options.currentBuild());
+            applyBody(text, responseBuild || activeBuild);
             return;
           }
-          const nextDoc = options.parseHtmlDocument(text);
+          const nextDoc = parseHtmlDocument(text);
           if (!nextDoc) return;
-          const nextBuild = responseBuild || options.currentBuild(nextDoc);
-          if (options.currentBuild() && (!nextBuild || nextBuild !== options.currentBuild())) {
-            options.reload();
+          const nextBuild = responseBuild || currentBuild(nextDoc);
+          if (activeBuild && (!nextBuild || nextBuild !== activeBuild)) {
+            reload();
             return;
           }
           let fragments = '';
-          const seen = new Set<string>();
+          const seen: string[] = [];
           for (let index = 0; index < live.length; index += 1) {
             const entry = live[index];
             if (entry === undefined) continue;
             const target = lifecycleBeforeHash(entry);
-            if (!target || seen.has(target)) continue;
-            seen.add(target);
-            const next = options.findTarget(nextDoc, target);
+            if (!target || lifecycleIncludes(seen, target)) continue;
+            securityArrayAppend(seen, target, 'Kovo lifecycle seen live targets');
+            const next = findTarget(nextDoc, target);
             if (next) {
-              const nextHtml = options.snapshotElementHtml(next);
+              const nextHtml = snapshotElementHtml(next);
               if (nextHtml === undefined) continue;
               fragments +=
                 '<kovo-fragment target="' +
-                options.encodeAttribute(target) +
+                encodeAttribute(target) +
                 '">' +
                 nextHtml +
                 '</kovo-fragment>';
             }
           }
-          if (fragments.length) options.applyBody(fragments, nextBuild || options.currentBuild());
-        });
-      })
-      .catch(() => {});
+          if (fragments.length) applyBody(fragments, nextBuild || activeBuild);
+        }
+      } catch {}
+    })();
   };
   const rememberQueryChunk = (query: { attrs: string; attributes?: readonly unknown[] }) => {
-    const w = options.wireKey(
-      options.readAttribute(query.attrs, 'name'),
-      options.readAttribute(query.attrs, 'key'),
-    );
-    if (w) fqs.add(w);
+    const w = wireKey(readAttribute(query.attrs, 'name'), readAttribute(query.attrs, 'key'));
+    if (w) lifecycleRememberUnique(fqs, w);
   };
   const rememberQueryScripts = () => {
-    for (const script of options.queryAll(doc, 'script[kovo-query]')) {
-      const w = options.wireKey(script.getAttribute?.('kovo-query'), script.getAttribute?.('key'));
-      if (w) fqs.add(w);
+    const scripts = lifecycleSnapshotOwnArray<Element>(
+      queryAll(doc, 'script[kovo-query]'),
+      'Kovo lifecycle query scripts',
+    );
+    for (let index = 0; index < scripts.length; index += 1) {
+      const script = scripts[index];
+      if (!script) continue;
+      const w = wireKey(readDomAttribute(script, 'kovo-query'), readDomAttribute(script, 'key'));
+      if (w) lifecycleRememberUnique(fqs, w);
     }
   };
   const visibleReturnRefresh = () => {
     rememberQueryScripts();
-    for (const query of fqs) refreshQuery(query);
+    const remembered = lifecycleSnapshotStringArray(fqs, 'Kovo lifecycle remembered queries');
+    for (let index = 0; index < remembered.length; index += 1) {
+      const query = remembered[index];
+      if (query !== undefined) refreshQuery(query);
+    }
     refreshLiveTargets();
   };
   const install = (navigation: { handlePopState(): void }) => {
+    const handlePopState = lifecycleFunctionOption<() => void>(navigation, 'handlePopState');
     const listen = (type: string, listener: (event: unknown) => void) => {
-      if (!options.addLifecycleEventListener(type, listener)) {
+      if (!addLifecycleEventListener(type, listener)) {
         throw new TypeError('Kovo document lifecycle listener enrollment failed.');
       }
     };
-    listen('popstate', () => navigation.handlePopState());
+    listen('popstate', () => handlePopState());
     rememberQueryScripts();
     listen('visibilitychange', () => {
       if (doc.visibilityState === 'hidden') return;
       visibleReturnRefresh();
     });
     listen('pageshow', (event) => {
-      if (options.readPageTransitionPersisted(event)) visibleReturnRefresh();
+      if (readPageTransitionPersisted(event)) visibleReturnRefresh();
     });
     // SPEC.md §8: guarded/session-dependent bfcache restores must revalidate
     // with a full server GET rather than presenting a persisted authenticated DOM.
-    if (options.queryOne(doc, 'meta[name="kovo-session"]')) {
+    if (queryOne(doc, 'meta[name="kovo-session"]')) {
       listen('pageshow', (event) => {
-        if (options.readPageTransitionPersisted(event)) options.reload();
+        if (readPageTransitionPersisted(event)) reload();
       });
     }
   };
@@ -198,6 +296,94 @@ export function createDocumentLifecycleRecovery(
     rememberQueryScripts,
     visibleReturnRefresh,
   };
+}
+
+function lifecycleOwnDataOption(options: object, property: string): unknown {
+  const descriptor = securityGetOwnPropertyDescriptor(options, property);
+  if (!descriptor) {
+    throw new TypeError('Kovo document lifecycle option ' + property + ' is required.');
+  }
+  if (!('value' in descriptor)) {
+    throw new TypeError(
+      'Kovo document lifecycle option ' + property + ' must be an own-data property.',
+    );
+  }
+  return descriptor.value;
+}
+
+function lifecycleFunctionOption<FunctionValue extends Function>(
+  options: object,
+  property: string,
+): FunctionValue {
+  const value = lifecycleOwnDataOption(options, property);
+  if (typeof value !== 'function') {
+    throw new TypeError('Kovo document lifecycle option ' + property + ' must be a function.');
+  }
+  return value as FunctionValue;
+}
+
+function lifecycleStringOption(options: object, property: string): string {
+  const value = lifecycleOwnDataOption(options, property);
+  if (typeof value !== 'string') {
+    throw new TypeError('Kovo document lifecycle option ' + property + ' must be a string.');
+  }
+  return value;
+}
+
+function lifecycleObjectOption<ObjectValue extends object>(
+  options: object,
+  property: string,
+): ObjectValue {
+  const value = lifecycleOwnDataOption(options, property);
+  if (value === null || typeof value !== 'object') {
+    throw new TypeError('Kovo document lifecycle option ' + property + ' must be an object.');
+  }
+  return value as ObjectValue;
+}
+
+function lifecycleSnapshotOwnArray<Value>(value: unknown, label: string): Value[] {
+  if (value === null || typeof value !== 'object') {
+    throw new TypeError(label + ' must be an own-data array.');
+  }
+  const lengthDescriptor = securityGetOwnPropertyDescriptor(value, 'length');
+  const length =
+    lengthDescriptor && 'value' in lengthDescriptor ? lengthDescriptor.value : undefined;
+  if (typeof length !== 'number' || length < 0 || length > 100_000 || length % 1 !== 0) {
+    throw new TypeError(label + ' must have a bounded own-data length.');
+  }
+  const snapshot: Value[] = [];
+  for (let index = 0; index < length; index += 1) {
+    const entry = securityGetOwnPropertyDescriptor(value, index);
+    if (!entry || !('value' in entry)) {
+      throw new TypeError(label + ' must contain dense own-data entries.');
+    }
+    securityArrayAppend(snapshot, entry.value as Value, label);
+  }
+  return snapshot;
+}
+
+function lifecycleSnapshotStringArray(value: unknown, label: string): string[] {
+  const values = lifecycleSnapshotOwnArray<unknown>(value, label);
+  const snapshot: string[] = [];
+  for (let index = 0; index < values.length; index += 1) {
+    const entry = values[index];
+    if (typeof entry !== 'string') throw new TypeError(label + ' entries must be strings.');
+    securityArrayAppend(snapshot, entry, label);
+  }
+  return snapshot;
+}
+
+function lifecycleIncludes(values: readonly string[], value: string): boolean {
+  for (let index = 0; index < values.length; index += 1) {
+    if (values[index] === value) return true;
+  }
+  return false;
+}
+
+function lifecycleRememberUnique(values: string[], value: string): void {
+  if (!lifecycleIncludes(values, value)) {
+    securityArrayAppend(values, value, 'Kovo lifecycle remembered queries');
+  }
 }
 
 function lifecycleBeforeHash(value: string): string {

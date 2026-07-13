@@ -683,8 +683,9 @@ function installInlineKovoLoader(im) {
     queryOne: (root, selector) => bns.queryOne(root, selector),
     queryAll: qa,
     queryUrl: qurl,
-    readAttribute,
+    'readAttribute': (attrs, name) => readAttribute(attrs, name),
     readElementAttribute: readWireElementAttribute,
+    readDomAttribute: (element, name) => bns.ra(element, name),
     readPageTransitionPersisted: (event) => bns.readPageTransitionPersisted(event),
     readResponseStatus: (response) => {
       const status = bns.readResponseField(response, 'status');
@@ -1817,7 +1818,10 @@ function extractInlineHelperReadableSource({
 
   return replaceInlineLoaderIdentifierTokens(
     transpiled.replace(/^"use strict";\s*/, '').trim(),
-    new Map([['securityArrayAppend', 'bns.appendDenseSecurityValue']]),
+    new Map([
+      ['securityArrayAppend', 'bns.appendDenseSecurityValue'],
+      ['securityGetOwnPropertyDescriptor', 'bns.getOwnSecurityPropertyDescriptor'],
+    ]),
   );
 }
 
@@ -2254,6 +2258,7 @@ function collectInlineHelperFunctionDependencies(
       if (name !== ownName && declarations.has(name) && !local) dependencies.add(name);
       if (
         name !== 'securityArrayAppend' &&
+        name !== 'securityGetOwnPropertyDescriptor' &&
         unsupportedTopLevelBindings.has(name) &&
         !declarations.has(name) &&
         !local
