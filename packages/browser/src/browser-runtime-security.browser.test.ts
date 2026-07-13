@@ -436,6 +436,7 @@ describe('browser-runtime security regressions', () => {
         return nextBody;
       },
       replaceElementAttributes() {},
+      retireIsland() {},
       runTriggers() {},
     });
 

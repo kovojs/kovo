@@ -51,6 +51,22 @@ interface StreamTextState {
 
 const DEFAULT_FLUSH_DELAY_MS = 25;
 const DEFAULT_FLUSH_THRESHOLD = 1024;
+const StreamTextAbortController = globalThis.AbortController;
+const StreamTextAbortSignal = globalThis.AbortSignal;
+const StreamTextTypeError = globalThis.TypeError;
+const streamTextAbort = securityGetOwnPropertyDescriptor(
+  StreamTextAbortController.prototype,
+  'abort',
+)?.value;
+const streamTextSignal = securityGetOwnPropertyDescriptor(
+  StreamTextAbortController.prototype,
+  'signal',
+)?.get;
+const streamTextSignalAborted = securityGetOwnPropertyDescriptor(
+  StreamTextAbortSignal.prototype,
+  'aborted',
+)?.get;
+const streamTextAbortControlsSound = verifyStreamTextAbortControls();
 
 export function applyStreamTextChunks(
   root: StreamTextRoot | undefined,
@@ -90,7 +106,7 @@ export class StreamTextBuffer {
   }
 
   push(root: StreamTextRoot, chunk: StreamTextChunk): boolean {
-    if (this.signal?.aborted) {
+    if (this.signal && readStreamTextSignalAborted(this.signal)) {
       this.onError?.(abortError());
       return false;
     }
@@ -250,6 +266,53 @@ export class StreamTextBuffer {
     if (!state.timer) return;
     clearTimeout(state.timer);
     state.timer = undefined;
+  }
+}
+
+function readStreamTextSignalAborted(signal: AbortSignal): boolean {
+  if (!streamTextAbortControlsSound || typeof streamTextSignalAborted !== 'function') {
+    throw new StreamTextTypeError(
+      'Kovo stream-text AbortSignal controls are unavailable because realm intrinsics were modified before runtime initialization.',
+    );
+  }
+  const aborted = applySecurityIntrinsic<unknown>(streamTextSignalAborted, signal, []);
+  if (typeof aborted !== 'boolean') {
+    throw new StreamTextTypeError('Kovo stream-text AbortSignal state is unavailable.');
+  }
+  return aborted;
+}
+
+function verifyStreamTextAbortControls(): boolean {
+  if (
+    typeof StreamTextAbortController !== 'function' ||
+    typeof StreamTextAbortSignal !== 'function' ||
+    typeof streamTextAbort !== 'function' ||
+    typeof streamTextSignal !== 'function' ||
+    typeof streamTextSignalAborted !== 'function'
+  ) {
+    return false;
+  }
+  try {
+    const controller = new StreamTextAbortController();
+    const signal = applySecurityIntrinsic<unknown>(streamTextSignal, controller, []);
+    if (
+      signal === null ||
+      typeof signal !== 'object' ||
+      applySecurityIntrinsic<unknown>(streamTextSignalAborted, signal, []) !== false
+    ) {
+      return false;
+    }
+    applySecurityIntrinsic(streamTextAbort, controller, []);
+    if (applySecurityIntrinsic<unknown>(streamTextSignalAborted, signal, []) !== true) return false;
+    let rejectedForeignReceiver = false;
+    try {
+      applySecurityIntrinsic(streamTextSignalAborted, {}, []);
+    } catch {
+      rejectedForeignReceiver = true;
+    }
+    return rejectedForeignReceiver;
+  } catch {
+    return false;
   }
 }
 

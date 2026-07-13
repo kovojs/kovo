@@ -2,7 +2,9 @@ import type { JsonValue } from '@kovojs/core';
 import { domAttributes } from './dom-like.js';
 import type { EventElementLike } from './events.js';
 import {
+  applySecurityIntrinsic,
   securityArrayAppend,
+  securityGetOwnPropertyDescriptor,
   securityMap,
   securityMapDelete,
   securityMapForEach,
@@ -34,6 +36,23 @@ import {
   setRuntimeElementAttribute,
 } from './runtime-dom-security.js';
 
+const IslandAbortController = globalThis.AbortController;
+const IslandAbortSignal = globalThis.AbortSignal;
+const IslandAbortTypeError = globalThis.TypeError;
+const islandAbort = securityGetOwnPropertyDescriptor(
+  IslandAbortController.prototype,
+  'abort',
+)?.value;
+const islandSignal = securityGetOwnPropertyDescriptor(
+  IslandAbortController.prototype,
+  'signal',
+)?.get;
+const islandSignalAborted = securityGetOwnPropertyDescriptor(
+  IslandAbortSignal.prototype,
+  'aborted',
+)?.get;
+const islandAbortControlsSound = verifyIslandAbortControls();
+
 /** Runtime API used by Kovo applications and generated runtime integration. */
 export type ElementParamValue = string | number | boolean;
 
@@ -60,7 +79,7 @@ export function abortIslandSignalScope(scope: IslandSignalScope): void {
   if (!controllers) return;
 
   securityMapForEach(controllers, (controller, key) => {
-    controller.abort();
+    abortIslandController(controller);
     securityMapDelete(controllers, key);
   });
   securityWeakMapDelete(islandSignalControllers, scope);
@@ -168,15 +187,18 @@ export function readElementStateHost(element: EventElementLike): EventElementLik
 
 function createHandlerSignal(element: EventElementLike, scope: IslandSignalScope): AbortSignal {
   const key = islandSignalKey(element);
-  if (!key) return new AbortController().signal;
+  if (!key) return readIslandControllerSignal(createIslandAbortController());
 
   const controllers = islandSignalControllersFor(scope);
   const existing = securityMapGet(controllers, key);
-  if (existing && !existing.signal.aborted) return existing.signal;
+  if (existing) {
+    const signal = readIslandControllerSignal(existing);
+    if (!readIslandSignalAborted(signal)) return signal;
+  }
 
-  const controller = new AbortController();
+  const controller = createIslandAbortController();
   securityMapSet(controllers, key, controller);
-  return controller.signal;
+  return readIslandControllerSignal(controller);
 }
 
 function islandSignalKey(element: EventElementLike): string | null {
@@ -212,7 +234,7 @@ export function abortRemovedIslandSignals(
     const controller = securityMapGet(controllers, id);
     if (!controller) continue;
 
-    controller.abort();
+    abortIslandController(controller);
     securityMapDelete(controllers, id);
   }
 
@@ -226,6 +248,85 @@ function islandSignalControllersFor(scope: IslandSignalScope): Map<string, Abort
   const controllers = securityMap<string, AbortController>();
   securityWeakMapSet(islandSignalControllers, scope, controllers);
   return controllers;
+}
+
+function createIslandAbortController(): AbortController {
+  assertIslandAbortControls();
+  return new IslandAbortController();
+}
+
+function readIslandControllerSignal(controller: AbortController): AbortSignal {
+  assertIslandAbortControls();
+  const signal = applySecurityIntrinsic<unknown>(islandSignal!, controller, []);
+  if (signal === null || typeof signal !== 'object') {
+    throw new IslandAbortTypeError('Kovo island AbortController signal is unavailable.');
+  }
+  if (typeof applySecurityIntrinsic<unknown>(islandSignalAborted!, signal, []) !== 'boolean') {
+    throw new IslandAbortTypeError('Kovo island AbortSignal state is unavailable.');
+  }
+  return signal as AbortSignal;
+}
+
+function readIslandSignalAborted(signal: AbortSignal): boolean {
+  assertIslandAbortControls();
+  const aborted = applySecurityIntrinsic<unknown>(islandSignalAborted!, signal, []);
+  if (typeof aborted !== 'boolean') {
+    throw new IslandAbortTypeError('Kovo island AbortSignal state is unavailable.');
+  }
+  return aborted;
+}
+
+function abortIslandController(controller: AbortController): void {
+  assertIslandAbortControls();
+  const signal = readIslandControllerSignal(controller);
+  if (!readIslandSignalAborted(signal)) {
+    applySecurityIntrinsic(islandAbort!, controller, []);
+  }
+  if (!readIslandSignalAborted(signal)) {
+    throw new IslandAbortTypeError('Kovo island AbortController failed to retire its signal.');
+  }
+}
+
+function assertIslandAbortControls(): void {
+  if (!islandAbortControlsSound) {
+    throw new IslandAbortTypeError(
+      'Kovo island AbortController controls are unavailable because realm intrinsics were modified before runtime initialization.',
+    );
+  }
+}
+
+function verifyIslandAbortControls(): boolean {
+  if (
+    typeof IslandAbortController !== 'function' ||
+    typeof IslandAbortSignal !== 'function' ||
+    typeof islandAbort !== 'function' ||
+    typeof islandSignal !== 'function' ||
+    typeof islandSignalAborted !== 'function'
+  ) {
+    return false;
+  }
+  try {
+    const controller = new IslandAbortController();
+    const signal = applySecurityIntrinsic<unknown>(islandSignal, controller, []);
+    if (
+      signal === null ||
+      typeof signal !== 'object' ||
+      applySecurityIntrinsic<unknown>(islandSignalAborted, signal, []) !== false
+    ) {
+      return false;
+    }
+    applySecurityIntrinsic(islandAbort, controller, []);
+    if (applySecurityIntrinsic<unknown>(islandSignalAborted, signal, []) !== true) return false;
+    let rejectedForeignReceiver = false;
+    try {
+      applySecurityIntrinsic(islandAbort, {}, []);
+    } catch {
+      rejectedForeignReceiver = true;
+    }
+    return rejectedForeignReceiver;
+  } catch {
+    return false;
+  }
 }
 
 function kovoComponentIds(html: string): Set<string> {

@@ -200,23 +200,17 @@ describe('browser inline loader response apply', () => {
     expect(feedLink?.getAttribute('style')).toBeNull();
   });
 
-  it('aborts removed same-component keyed island signals by identity', async () => {
+  it('removes same-component keyed islands by exact identity', () => {
     const root = document.createElement('main');
     root.innerHTML = [
       '<ul kovo-fragment-target="cart-list">',
-      '<li kovo-c="cart-row" kovo-key="row-1" on:click="/c/cart-row.js#mount">one</li>',
-      '<li kovo-c="cart-row" kovo-key="row-2" on:click="/c/cart-row.js#mount">two</li>',
+      '<li kovo-c="cart-row" kovo-key="row-1" on:click="/c/cart-row.js#mount" data-kovo-module-allowlist="/c/cart-row.js">one</li>',
+      '<li kovo-c="cart-row" kovo-key="row-2" on:click="/c/cart-row.js#mount" data-kovo-module-allowlist="/c/cart-row.js">two</li>',
       '</ul>',
     ].join('');
     document.body.append(root);
 
     installInlineKovoLoader(async () => ({}));
-    const firstController = new AbortController();
-    const secondController = new AbortController();
-    (root.querySelector('[kovo-key="row-1"]') as (Element & { a?: AbortController }) | null)!.a =
-      firstController;
-    (root.querySelector('[kovo-key="row-2"]') as (Element & { a?: AbortController }) | null)!.a =
-      secondController;
 
     // SPEC.md §4.4/§13.2/§14.1: a removed island is identified by kovo-c plus
     // kovo-key/id, not by a component-name substring in replacement HTML.
@@ -230,8 +224,6 @@ describe('browser inline loader response apply', () => {
       ].join(''),
     );
 
-    expect(firstController.signal.aborted).toBe(true);
-    expect(secondController.signal.aborted).toBe(false);
     expect(root.querySelector('[kovo-key="row-1"]')).toBeNull();
     expect(root.querySelector('[kovo-key="row-2"]')?.textContent).toBe('two fresh');
   });

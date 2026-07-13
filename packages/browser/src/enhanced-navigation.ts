@@ -17,6 +17,7 @@ export interface EnhancedNavigationRuntimeOptions {
   replayScripts: (root: ParentNode) => void;
   replaceBody: (nextBody: HTMLBodyElement) => HTMLBodyElement;
   replaceElementAttributes: (current: Element, next: Element) => void;
+  retireIsland: (island: Element) => void;
   runTriggers: () => void;
 }
 
@@ -42,6 +43,7 @@ export function installEnhancedNavigationRuntime(
   const replayScripts = options.replayScripts;
   const replaceBody = options.replaceBody;
   const replaceElementAttributes = options.replaceElementAttributes;
+  const retireIsland = options.retireIsland;
   const runTriggers = options.runTriggers;
   if (
     typeof acceptHeader !== 'string' ||
@@ -55,6 +57,7 @@ export function installEnhancedNavigationRuntime(
     typeof replayScripts !== 'function' ||
     typeof replaceBody !== 'function' ||
     typeof replaceElementAttributes !== 'function' ||
+    typeof retireIsland !== 'function' ||
     typeof runTriggers !== 'function'
   ) {
     throw new TypeError('Kovo enhanced-navigation options are invalid.');
@@ -188,21 +191,36 @@ export function installEnhancedNavigationRuntime(
     target.scrollIntoView?.();
   };
   const vt = async (apply: () => void) => {
-    const start = doc.startViewTransition?.bind(doc);
+    const start = doc.startViewTransition;
     if (typeof start !== 'function') {
       apply();
       return;
     }
-    let ran = false;
+    let attempted = false;
+    let committed = false;
+    const commitOnce = () => {
+      if (attempted) return;
+      attempted = true;
+      apply();
+      committed = true;
+    };
     try {
-      const transition = start.call(doc, () => {
-        ran = true;
-        apply();
-      });
-      await transition?.updateCallbackDone;
+      const transition = security.call<unknown>(start, doc, [commitOnce]);
+      const updateCallbackDone =
+        transition !== null && typeof transition === 'object'
+          ? (transition as { updateCallbackDone?: unknown }).updateCallbackDone
+          : undefined;
+      await updateCallbackDone;
+      // A late same-realm replacement can return a fulfilled lookalike without
+      // invoking the callback. Never advance URL/history while old server truth remains.
+      if (!attempted) commitOnce();
+      if (!committed) throw new TypeError('Kovo view-transition DOM commit failed.');
     } catch (error) {
-      if (!ran) apply();
-      else throw error;
+      if (!attempted) {
+        commitOnce();
+        return;
+      }
+      throw error;
     }
   };
   const navigate = async (href: string, pop = false) => {
@@ -273,7 +291,7 @@ export function installEnhancedNavigationRuntime(
         ) {
           const islands = qa(currentBody, '[kovo-c]');
           for (let index = 0; index < islands.length; index += 1) {
-            (islands[index] as { a?: AbortController } | undefined)?.a?.abort();
+            if (islands[index]) security.call(retireIsland, undefined, [islands[index]]);
           }
           triggerRoot = replaceBody(nextBody as HTMLBodyElement);
         } else {
@@ -290,7 +308,7 @@ export function installEnhancedNavigationRuntime(
           if (!same[0]) {
             const islands = qa(currentBody, '[kovo-c]');
             for (let index = 0; index < islands.length; index += 1) {
-              (islands[index] as { a?: AbortController } | undefined)?.a?.abort();
+              if (islands[index]) security.call(retireIsland, undefined, [islands[index]]);
             }
             triggerRoot = replaceBody(nextBody as HTMLBodyElement);
           } else {
@@ -310,7 +328,14 @@ export function installEnhancedNavigationRuntime(
               if (same[index]) continue;
               let parentChanged = false;
               for (let other = 0; other < index; other += 1) {
-                if (changed[other] && currentSegments[other]?.contains?.(currentSegments[index]!)) {
+                const possibleParent = currentSegments[other];
+                const currentSegment = currentSegments[index];
+                if (
+                  changed[other] &&
+                  possibleParent &&
+                  currentSegment &&
+                  security.elementContains(possibleParent, currentSegment)
+                ) {
                   parentChanged = true;
                   break;
                 }
@@ -320,7 +345,9 @@ export function installEnhancedNavigationRuntime(
               changed[index] = true;
               const islands = qa(currentSegments[index]!, '[kovo-c]');
               for (let islandIndex = 0; islandIndex < islands.length; islandIndex += 1) {
-                (islands[islandIndex] as { a?: AbortController } | undefined)?.a?.abort();
+                if (islands[islandIndex]) {
+                  security.call(retireIsland, undefined, [islands[islandIndex]]);
+                }
               }
               triggerRoot = morph(currentSegments[index]!, nextSegments[index]!) || triggerRoot;
             }

@@ -29,6 +29,64 @@ afterAll(restoreClientModuleManifest);
 // The loader-install lifecycle (per-install isolation, dispose, enhanced
 // submit/error hooks) lives in the sibling delegated-loader-lifecycle.test.ts file.
 describe('delegated island ctx.signal abort', () => {
+  it('pins signal construction before a late AbortController global replacement', async () => {
+    const scope = createIslandSignalScope();
+    let signal: AbortSignal | undefined;
+    const element = new FakeElement({
+      'kovo-c': 'secure-island',
+      'on:visible': '/c/cart-filter.client.js#mount',
+    });
+    const importModule = vi.fn(async () => ({
+      mount: (_event: Event, context: { signal: AbortSignal }) => {
+        signal = context.signal;
+      },
+    }));
+    const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'AbortController');
+    if (!descriptor) throw new Error('AbortController descriptor unavailable');
+    try {
+      Object.defineProperty(globalThis, 'AbortController', {
+        ...descriptor,
+        value: class ForgedAbortController {
+          readonly signal = { aborted: false };
+          abort(): void {
+            this.signal.aborted = true;
+          }
+        },
+      });
+      await dispatchDelegatedEvent({ target: element, type: 'visible' }, importModule, scope);
+    } finally {
+      Object.defineProperty(globalThis, 'AbortController', descriptor);
+    }
+
+    expect(signal).toBeInstanceOf(AbortSignal);
+    abortIslandSignalScope(scope);
+  });
+
+  it('pins signal retirement before a late AbortController.abort replacement', async () => {
+    const scope = createIslandSignalScope();
+    let signal: AbortSignal | undefined;
+    const element = new FakeElement({
+      'kovo-c': 'secure-island',
+      'on:visible': '/c/cart-filter.client.js#mount',
+    });
+    const importModule = vi.fn(async () => ({
+      mount: (_event: Event, context: { signal: AbortSignal }) => {
+        signal = context.signal;
+      },
+    }));
+    await dispatchDelegatedEvent({ target: element, type: 'visible' }, importModule, scope);
+    const nativeAbort = AbortController.prototype.abort;
+    try {
+      AbortController.prototype.abort = () => undefined;
+      abortRemovedIslandSignals('<i kovo-c="secure-island"></i>', '', scope);
+    } finally {
+      AbortController.prototype.abort = nativeAbort;
+    }
+
+    expect(signal?.aborted).toBe(true);
+    abortIslandSignalScope(scope);
+  });
+
   it('scopes ctx.signal to the island and aborts when fragment morph removes it', async () => {
     const signals: AbortSignal[] = [];
     const handler = vi.fn((_event, ctx: { signal: AbortSignal }) => {

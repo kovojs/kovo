@@ -104,7 +104,7 @@ it('ignores a caller-owned Trusted Types policy cache before generated fragment 
   );
 });
 
-it('aborts retired live output when Array iteration is poisoned after generated install', async () => {
+it('replaces retired live output when Array iteration is poisoned after generated install', async () => {
   // SPEC §6.6/§9.2: late app prototype changes cannot skip the decision that
   // retires an old live component before a replacement fragment is committed.
   const harness = await createFrame(
@@ -117,8 +117,6 @@ it('aborts retired live output when Array iteration is poisoned after generated 
   if (typeof apply !== 'function') throw new Error('generated fragment apply is unavailable');
   const oldLive = harness.window.document.querySelector('[kovo-c="old-live"]');
   if (!oldLive) throw new Error('missing old live component');
-  const controller = new harness.window.AbortController();
-  (oldLive as Element & { a?: AbortController }).a = controller;
   const originalIterator = harness.window.Array.prototype[Symbol.iterator];
 
   try {
@@ -132,10 +130,13 @@ it('aborts retired live output when Array iteration is poisoned after generated 
     harness.window.Array.prototype[Symbol.iterator] = originalIterator;
   }
 
-  expect(controller.signal.aborted).toBe(true);
+  expect(harness.window.document.querySelector('[kovo-c="old-live"]')).toBeNull();
+  expect(
+    harness.window.document.querySelector('[kovo-fragment-target="victim"] p')?.textContent,
+  ).toBe('NEW');
 });
 
-it('aborts retired live output when String.includes is poisoned after generated install', async () => {
+it('replaces retired live output when String.includes is poisoned after generated install', async () => {
   // SPEC §6.6/§9.2: a late String prototype poison cannot forge the fragment
   // identity comparison and preserve a live producer whose output was removed.
   const harness = await createFrame(
@@ -148,8 +149,6 @@ it('aborts retired live output when String.includes is poisoned after generated 
   if (typeof apply !== 'function') throw new Error('generated fragment apply is unavailable');
   const oldLive = harness.window.document.querySelector('[kovo-c="old-live"]');
   if (!oldLive) throw new Error('missing old live component');
-  const controller = new harness.window.AbortController();
-  (oldLive as Element & { a?: AbortController }).a = controller;
   const originalIncludes = harness.window.String.prototype.includes;
 
   try {
@@ -161,7 +160,10 @@ it('aborts retired live output when String.includes is poisoned after generated 
     harness.window.String.prototype.includes = originalIncludes;
   }
 
-  expect(controller.signal.aborted).toBe(true);
+  expect(harness.window.document.querySelector('[kovo-c="old-live"]')).toBeNull();
+  expect(
+    harness.window.document.querySelector('[kovo-fragment-target="victim"] p')?.textContent,
+  ).toBe('NEW');
 });
 
 it('fails closed when the Trusted Types factory was replaced before generated install', async () => {

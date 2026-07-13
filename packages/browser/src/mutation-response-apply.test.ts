@@ -672,6 +672,43 @@ describe('decoded mutation response apply', () => {
     }
   });
 
+  it('honors an aborted stream signal under late AbortSignal getter poisoning', () => {
+    // SPEC §9.1: once the response lifetime is aborted, no later stream text may
+    // mutate the document. A late realm mutation must not be able to forge that
+    // lifetime state back to active.
+    const root = new FakeMorphRoot();
+    const streamTarget = new FakeQueryBindingElement(
+      { 'data-stream-text': 'assistant:a1' },
+      { textContent: '' },
+    );
+    root.querySelectorAll = (selector: string) =>
+      selector === '[data-stream-text="assistant:a1"]' ? [streamTarget] : [];
+    const controller = new AbortController();
+    const onError = vi.fn();
+    const buffer = new StreamTextBuffer({ onError, signal: controller.signal });
+    const abortedDescriptor = Object.getOwnPropertyDescriptor(AbortSignal.prototype, 'aborted');
+    if (!abortedDescriptor) throw new Error('AbortSignal.prototype.aborted is unavailable');
+
+    controller.abort();
+    try {
+      Object.defineProperty(AbortSignal.prototype, 'aborted', {
+        ...abortedDescriptor,
+        get: () => false,
+      });
+      expect(
+        buffer.push(root as unknown as StreamTextRoot, {
+          target: 'assistant:a1',
+          text: 'must-not-commit',
+        }),
+      ).toBe(false);
+    } finally {
+      Object.defineProperty(AbortSignal.prototype, 'aborted', abortedDescriptor);
+    }
+
+    expect(streamTarget.textContent).toBe('');
+    expect(onError).toHaveBeenCalledWith(expect.objectContaining({ name: 'AbortError' }));
+  });
+
   it('clears textContent on a buffered empty-text checkpoint (K6 empty checkpoint)', async () => {
     // K6 / SPEC §9.1: "checkpoint replaces accumulated source" — an empty
     // checkpoint must clear textContent even when pending.length === 0.

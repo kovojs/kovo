@@ -712,8 +712,9 @@ function installInlineKovoLoader(im) {
     }
   };
   const ft = (target) => ftd(doc, target);
-  const hs = (el) =>
-    ((el = bns.closestElement(el, '[kovo-c]') || el).a ||= new AbortController()).signal;
+  // SPEC §4.4/§6.6: island lifetime authority is private framework state. A public
+  // element property would let authored code replace the controller or its abort method.
+  const hs = (el) => bns.islandAbortSignal(bns.closestElement(el, '[kovo-c]') || el);
   const kb = (root = doc) => {
     const meta = bns.queryOne(root, 'meta[name="kovo-build"]');
     return meta ? bns.readAttribute(meta, 'content') || '' : '';
@@ -862,7 +863,7 @@ function installInlineKovoLoader(im) {
     const flush = (anchor) => {
       for (let index = 0; index < pending.length; index += 1) {
         const next = pending[index];
-        if (next) doc.head.insertBefore(bns.cloneDomNode(next, true), anchor);
+        if (next) bns.insertDomNode(doc.head, bns.cloneDomNode(next, true), anchor);
       }
       pending.length = 0;
     };
@@ -909,6 +910,7 @@ function installInlineKovoLoader(im) {
     replayScripts: rscr,
     replaceBody: rbd,
     replaceElementAttributes: xa,
+    retireIsland: (island) => bns.retireIslandSignal(island),
     runTriggers: () => tr(),
   });
   const an = nav.navigate;
@@ -1036,7 +1038,7 @@ function installInlineKovoLoader(im) {
           ) {
             continue;
           }
-          y.a?.abort();
+          bns.retireIslandSignal(y);
         }
       }
     }
@@ -1550,7 +1552,7 @@ function installInlineKovoLoader(im) {
   const tr = (root = doc) => {
     const matches = (selector) => {
       const values = qa(root, selector);
-      if (root.matches?.(selector)) {
+      if (bns.matchesElement(root, selector)) {
         const snapshot = [root];
         for (let index = 0; index < values.length; index += 1) {
           const value = values[index];

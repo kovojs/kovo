@@ -120,6 +120,142 @@ afterEach(() => {
 });
 
 describe('browser inline loader enhanced navigation', () => {
+  it('pins head insertion before late Node.insertBefore replacement', async () => {
+    document.head.innerHTML = '<meta name="kovo-build" content="build-a"><title>Products</title>';
+    document.body.innerHTML = [
+      '<main kovo-nav-segment="layout:Shop" kovo-nav-kind="layout" kovo-nav-name="Shop">',
+      '<section kovo-nav-segment="page:/products" kovo-nav-kind="page" kovo-nav-name="page">Products</section>',
+      '</main>',
+    ].join('');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({
+        headers: { get: (name: string) => (name === 'content-type' ? 'text/html' : null) },
+        async text() {
+          return [
+            '<!doctype html><html><head>',
+            '<meta name="kovo-build" content="build-a">',
+            '<title>Cart</title>',
+            '<meta name="description" content="server-authoritative">',
+            '</head><body>',
+            '<main kovo-nav-segment="layout:Shop" kovo-nav-kind="layout" kovo-nav-name="Shop">',
+            '<section kovo-nav-segment="page:/cart" kovo-nav-kind="page" kovo-nav-name="page">Cart</section>',
+            '</main>',
+            '</body></html>',
+          ].join('');
+        },
+        url: new URL('/cart', location.href).href,
+      })),
+    );
+    vi.stubGlobal('scrollTo', vi.fn());
+    vi.spyOn(history, 'pushState').mockImplementation(() => undefined);
+    installNavigationLoader();
+
+    const nativeInsertBefore = Node.prototype.insertBefore;
+    try {
+      Node.prototype.insertBefore = function forgedInsert<NodeType extends Node>(node: NodeType) {
+        return node;
+      };
+      dispatchAnchorLikeClick('/cart');
+      await vi.waitFor(() => expect(document.title).toBe('Cart'));
+    } finally {
+      Node.prototype.insertBefore = nativeInsertBefore;
+    }
+
+    expect(document.querySelector('meta[name="description"]')?.getAttribute('content')).toBe(
+      'server-authoritative',
+    );
+    expect(document.querySelector('meta[name="kovo-build"]')?.getAttribute('content')).toBe(
+      'build-a',
+    );
+  });
+
+  it('does not preserve a revoked sibling segment through late Element.contains poisoning', async () => {
+    document.head.innerHTML = '<meta name="kovo-build" content="build-a"><title>Account</title>';
+    document.body.innerHTML = [
+      '<main kovo-nav-segment="layout:Account" kovo-nav-kind="layout" kovo-nav-name="Account">',
+      '<section kovo-nav-segment="panel:left" kovo-nav-kind="page" kovo-nav-name="left">OLD-LEFT</section>',
+      '<section kovo-nav-segment="panel:right" kovo-nav-kind="page" kovo-nav-name="right"><p id="privileged-old">PRIVILEGED</p></section>',
+      '</main>',
+    ].join('');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({
+        headers: { get: (name: string) => (name === 'content-type' ? 'text/html' : null) },
+        async text() {
+          return [
+            '<!doctype html><html><head>',
+            '<meta name="kovo-build" content="build-a">',
+            '<title>Account refreshed</title>',
+            '</head><body>',
+            '<main kovo-nav-segment="layout:Account" kovo-nav-kind="layout" kovo-nav-name="Account">',
+            '<section kovo-nav-segment="panel:left" kovo-nav-kind="page" kovo-nav-name="left">NEW-LEFT</section>',
+            '<section kovo-nav-segment="panel:right" kovo-nav-kind="page" kovo-nav-name="right"><p id="revoked-next">ACCESS-REVOKED</p></section>',
+            '</main>',
+            '</body></html>',
+          ].join('');
+        },
+        url: new URL('/account?refresh=1', location.href).href,
+      })),
+    );
+    vi.stubGlobal('scrollTo', vi.fn());
+    vi.spyOn(history, 'pushState').mockImplementation(() => undefined);
+    installNavigationLoader();
+
+    const nativeContains = Element.prototype.contains;
+    try {
+      Element.prototype.contains = () => true;
+      dispatchAnchorLikeClick('/account?refresh=1');
+      await vi.waitFor(() => expect(document.title).toBe('Account refreshed'));
+    } finally {
+      Element.prototype.contains = nativeContains;
+    }
+
+    expect(document.querySelector('#privileged-old')).toBeNull();
+    expect(document.querySelector('#revoked-next')?.textContent).toBe('ACCESS-REVOKED');
+  });
+
+  it('commits server truth when a late view-transition replacement skips its callback', async () => {
+    document.head.innerHTML = '<meta name="kovo-build" content="build-a"><title>Private</title>';
+    document.body.innerHTML = [
+      '<main kovo-nav-segment="layout:Account" kovo-nav-kind="layout" kovo-nav-name="Account">',
+      '<section kovo-nav-segment="page:/private" kovo-nav-kind="page" kovo-nav-name="private"><p id="private-old">PRIVATE</p></section>',
+      '</main>',
+    ].join('');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({
+        headers: { get: (name: string) => (name === 'content-type' ? 'text/html' : null) },
+        async text() {
+          return [
+            '<!doctype html><html><head>',
+            '<meta name="kovo-build" content="build-a">',
+            '<title>Revoked</title>',
+            '</head><body>',
+            '<main kovo-nav-segment="layout:Account" kovo-nav-kind="layout" kovo-nav-name="Account">',
+            '<section kovo-nav-segment="page:/private" kovo-nav-kind="page" kovo-nav-name="private"><p id="revoked-next">ACCESS-REVOKED</p></section>',
+            '</main>',
+            '</body></html>',
+          ].join('');
+        },
+        url: new URL('/private?refresh=1', location.href).href,
+      })),
+    );
+    vi.stubGlobal('scrollTo', vi.fn());
+    const pushState = vi.spyOn(history, 'pushState').mockImplementation(() => undefined);
+    Object.defineProperty(document, 'startViewTransition', {
+      configurable: true,
+      value: () => ({ updateCallbackDone: Promise.resolve() }),
+    });
+    installNavigationLoader();
+
+    dispatchAnchorLikeClick('/private?refresh=1');
+    await vi.waitFor(() => expect(pushState).toHaveBeenCalledTimes(1));
+
+    expect(document.querySelector('#private-old')).toBeNull();
+    expect(document.querySelector('#revoked-next')?.textContent).toBe('ACCESS-REVOKED');
+  });
+
   it('keeps enhanced navigation on the response transport captured at loader boot', async () => {
     document.head.innerHTML = [
       '<meta name="kovo-build" content="build-a">',
@@ -927,13 +1063,17 @@ describe('browser inline loader enhanced navigation', () => {
   });
 
   it('preserves layout island signals and starts inserted page triggers', async () => {
-    const layoutController = new AbortController();
-    const oldPageController = new AbortController();
+    let layoutSignal: AbortSignal | undefined;
+    let oldPageSignal: AbortSignal | undefined;
     const load = vi.fn();
     const idle = vi.fn();
     const visible = vi.fn();
+    const mount = (event: Event, context: { signal: AbortSignal }) => {
+      if ((event.target as Element).id === 'layout-island') layoutSignal = context.signal;
+      if ((event.target as Element).id === 'old-page-island') oldPageSignal = context.signal;
+    };
     inlineImportModule = async (url) => {
-      if (url === '/c/page.js') return { idle, load, visible };
+      if (url === '/c/page.js') return { idle, load, mount, visible };
       return {};
     };
     vi.stubGlobal('requestIdleCallback', (callback: IdleRequestCallback) => {
@@ -959,16 +1099,12 @@ describe('browser inline loader enhanced navigation', () => {
     document.head.innerHTML = '<meta name="kovo-build" content="build-a"><title>Products</title>';
     document.body.innerHTML = [
       '<main kovo-nav-segment="layout:Shop" kovo-nav-kind="layout" kovo-nav-name="Shop">',
-      '<section id="layout-island" kovo-c="layout-shell">Layout</section>',
+      '<section id="layout-island" kovo-c="layout-shell" on:click="/c/page.js#mount" data-kovo-module-allowlist="/c/page.js">Layout</section>',
       '<section kovo-nav-segment="page:/products" kovo-nav-kind="page" kovo-nav-name="page">',
-      '<article id="old-page-island" kovo-c="product-grid">Products</article>',
+      '<article id="old-page-island" kovo-c="product-grid" on:click="/c/page.js#mount" data-kovo-module-allowlist="/c/page.js">Products</article>',
       '</section>',
       '</main>',
     ].join('');
-    (document.querySelector('#layout-island') as (Element & { a?: AbortController }) | null)!.a =
-      layoutController;
-    (document.querySelector('#old-page-island') as (Element & { a?: AbortController }) | null)!.a =
-      oldPageController;
     const fetch = vi.fn(async () => ({
       headers: { get: (name: string) => (name === 'content-type' ? 'text/html' : null) },
       async text() {
@@ -978,7 +1114,7 @@ describe('browser inline loader enhanced navigation', () => {
           '<title>Cart</title>',
           '</head><body>',
           '<main kovo-nav-segment="layout:Shop" kovo-nav-kind="layout" kovo-nav-name="Shop">',
-          '<section id="layout-island" kovo-c="layout-shell">Layout</section>',
+          '<section id="layout-island" kovo-c="layout-shell" on:click="/c/page.js#mount" data-kovo-module-allowlist="/c/page.js">Layout</section>',
           '<section kovo-nav-segment="page:/cart" kovo-nav-kind="page" kovo-nav-name="page">',
           '<article id="new-page-island" on:load="/c/page.js#load" on:idle="/c/page.js#idle" on:visible="/c/page.js#visible" data-kovo-module-allowlist="/c/page.js">Cart</article>',
           '</section>',
@@ -993,6 +1129,16 @@ describe('browser inline loader enhanced navigation', () => {
     vi.spyOn(history, 'pushState').mockImplementation(() => undefined);
 
     installNavigationLoader();
+    document
+      .querySelector('#layout-island')
+      ?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+    document
+      .querySelector('#old-page-island')
+      ?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+    await vi.waitFor(() => {
+      expect(layoutSignal).toBeDefined();
+      expect(oldPageSignal).toBeDefined();
+    });
     dispatchAnchorLikeClick('/cart');
 
     await vi.waitFor(() => expect(document.title).toBe('Cart'));
@@ -1001,8 +1147,8 @@ describe('browser inline loader enhanced navigation', () => {
     expect(document.querySelector('#layout-island')).not.toBeNull();
     expect(document.querySelector('#old-page-island')).toBeNull();
     expect(document.querySelector('#new-page-island')).not.toBeNull();
-    expect(layoutController.signal.aborted).toBe(false);
-    expect(oldPageController.signal.aborted).toBe(true);
+    expect(layoutSignal?.aborted).toBe(false);
+    expect(oldPageSignal?.aborted).toBe(true);
     expect(load).toHaveBeenCalledTimes(1);
     expect(idle).toHaveBeenCalledTimes(1);
   });

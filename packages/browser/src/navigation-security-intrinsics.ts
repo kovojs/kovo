@@ -115,6 +115,8 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
   const NativePageTransitionEvent = scope.PageTransitionEvent;
   const NativeMessageEvent = scope.MessageEvent;
   const NativeBroadcastChannel = scope.BroadcastChannel;
+  const NativeAbortController = scope.AbortController;
+  const NativeAbortSignal = scope.AbortSignal;
   const cryptoObject = scope.crypto;
   const nativeDecodeURIComponent = scope.decodeURIComponent;
   const nativeReflectApply = NativeReflect.apply;
@@ -187,6 +189,9 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
   const elementHasAttribute = NativeElement
     ? valueMethod(NativeElement.prototype, 'hasAttribute')
     : undefined;
+  const elementMatches = NativeElement
+    ? valueMethod(NativeElement.prototype, 'matches')
+    : undefined;
   const elementRemoveAttribute = NativeElement
     ? valueMethod(NativeElement.prototype, 'removeAttribute')
     : undefined;
@@ -212,12 +217,24 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
     : undefined;
   const nodeCloneNode = NativeNode ? valueMethod(NativeNode.prototype, 'cloneNode') : undefined;
   const nodeAppendChild = NativeNode ? valueMethod(NativeNode.prototype, 'appendChild') : undefined;
+  const nodeInsertBefore = NativeNode
+    ? valueMethod(NativeNode.prototype, 'insertBefore')
+    : undefined;
   const nodeChildNodes = NativeNode ? getter(NativeNode.prototype, 'childNodes') : undefined;
   const nodeContains = NativeNode ? valueMethod(NativeNode.prototype, 'contains') : undefined;
   const nodeIsConnected = NativeNode ? getter(NativeNode.prototype, 'isConnected') : undefined;
   const nodeTextContent = NativeNode ? getter(NativeNode.prototype, 'textContent') : undefined;
   const nodeTextContentSetter = NativeNode
     ? setter(NativeNode.prototype, 'textContent')
+    : undefined;
+  const abortControllerAbort = NativeAbortController
+    ? valueMethod(NativeAbortController.prototype, 'abort')
+    : undefined;
+  const abortControllerSignal = NativeAbortController
+    ? getter(NativeAbortController.prototype, 'signal')
+    : undefined;
+  const abortSignalAborted = NativeAbortSignal
+    ? getter(NativeAbortSignal.prototype, 'aborted')
     : undefined;
   const elementScrollLeft = NativeElement
     ? stableGetter(NativeElement.prototype, 'scrollLeft')
@@ -452,6 +469,7 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
   const locationReload = locationObject ? stableMethod(locationObject, 'reload') : undefined;
   const locationHrefSetter = locationObject ? stableSetter(locationObject, 'href') : undefined;
   const fetchResponsePlans = new NativeWeakMap<object, BrowserFetchResponsePlan>();
+  const islandAbortControllers = new NativeWeakMap<object, AbortController>();
   const fetchHeaderNames = [
     ['content-type', 'content-type'],
     ['kovo-build', 'Kovo-Build'],
@@ -1039,6 +1057,75 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
     return call<unknown>(method, element, [node]) === true;
   }
 
+  function matchesElement(element: object, selector: string): boolean {
+    if (elementMatches) {
+      try {
+        return call<unknown>(elementMatches, element, [selector]) === true;
+      } catch {}
+    }
+    const custom = stableMethod(element, 'matches');
+    if (!custom) return false;
+    try {
+      return call<unknown>(custom, element, [selector]) === true;
+    } catch {
+      return false;
+    }
+  }
+
+  function readControllerSignal(controller: AbortController): AbortSignal {
+    if (!abortControllerSignal || !abortSignalAborted) {
+      throw new TypeError('Kovo island AbortController controls are unavailable.');
+    }
+    const signal = call<unknown>(abortControllerSignal, controller, []);
+    if (signal === null || typeof signal !== 'object') {
+      throw new TypeError('Kovo island AbortController signal is unavailable.');
+    }
+    const aborted = call<unknown>(abortSignalAborted, signal, []);
+    if (typeof aborted !== 'boolean') {
+      throw new TypeError('Kovo island AbortSignal state is unavailable.');
+    }
+    return signal as AbortSignal;
+  }
+
+  function islandAbortSignal(island: object): AbortSignal {
+    if (!controlsSound || !NativeAbortController || !nativeWeakMapGet || !nativeWeakMapSet) {
+      throw new TypeError('Kovo island AbortController controls are unavailable.');
+    }
+    let controller = apply<AbortController | undefined>(nativeWeakMapGet, islandAbortControllers, [
+      island,
+    ]);
+    if (controller === undefined) {
+      controller = new NativeAbortController();
+      if (
+        apply<unknown>(nativeWeakMapSet, islandAbortControllers, [island, controller]) !==
+        islandAbortControllers
+      ) {
+        throw new TypeError('Kovo island AbortController registry rejected its write.');
+      }
+    }
+    return readControllerSignal(controller);
+  }
+
+  function retireIslandSignal(island: object): boolean {
+    if (!controlsSound || !abortControllerAbort || !abortSignalAborted || !nativeWeakMapGet) {
+      throw new TypeError('Kovo island AbortController controls are unavailable.');
+    }
+    const controller = apply<AbortController | undefined>(
+      nativeWeakMapGet,
+      islandAbortControllers,
+      [island],
+    );
+    if (controller === undefined) return false;
+    const signal = readControllerSignal(controller);
+    if (call<unknown>(abortSignalAborted, signal, []) !== true) {
+      call(abortControllerAbort, controller, []);
+    }
+    if (call<unknown>(abortSignalAborted, signal, []) !== true) {
+      throw new TypeError('Kovo island AbortController failed to retire its signal.');
+    }
+    return true;
+  }
+
   function createFragmentContent(html: string): DocumentFragment {
     if (!documentObject) throw new TypeError('Kovo DOM document control is unavailable.');
     const create = documentCreateElement ?? stableMethod(documentObject, 'createElement');
@@ -1146,6 +1233,13 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
     const method = elementAppend ?? stableMethod(element, 'append');
     if (!method) throw new TypeError('Kovo DOM append control is unavailable.');
     call(method, element, nodes);
+  }
+
+  function insertDomNode(parent: Node, node: Node, anchor: Node | null): void {
+    const method = nodeInsertBefore ?? stableMethod(parent, 'insertBefore');
+    if (!method || call<unknown>(method, parent, [node, anchor]) !== node) {
+      throw new TypeError('Kovo DOM insertion control rejected its commit.');
+    }
   }
 
   function prependElementChildren(element: Element, nodes: readonly (Node | string)[]): void {
@@ -2460,6 +2554,11 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
         typeof nativeRegExpExec !== 'function' ||
         typeof nativeRegExpTest !== 'function' ||
         typeof nativeDecodeURIComponent !== 'function' ||
+        typeof NativeAbortController !== 'function' ||
+        typeof NativeAbortSignal !== 'function' ||
+        !abortControllerAbort ||
+        !abortControllerSignal ||
+        !abortSignalAborted ||
         typeof NativeURL !== 'function' ||
         typeof browserFetch !== 'function' ||
         !urlHref ||
@@ -2549,6 +2648,24 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
         rejectedForeignWeakMapReceiver = true;
       }
       if (!rejectedForeignWeakMapReceiver) return false;
+      const abortControllerControl = new NativeAbortController();
+      const abortSignalControl = apply<unknown>(abortControllerSignal, abortControllerControl, []);
+      if (
+        abortSignalControl === null ||
+        typeof abortSignalControl !== 'object' ||
+        apply<unknown>(abortSignalAborted, abortSignalControl, []) !== false
+      ) {
+        return false;
+      }
+      apply(abortControllerAbort, abortControllerControl, []);
+      if (apply<unknown>(abortSignalAborted, abortSignalControl, []) !== true) return false;
+      let rejectedForeignAbortReceiver = false;
+      try {
+        apply(abortControllerAbort, {}, []);
+      } catch {
+        rejectedForeignAbortReceiver = true;
+      }
+      if (!rejectedForeignAbortReceiver) return false;
       const decoderControl = new NativeTextDecoder();
       const decoderBytes = new NativeUint8Array([
         60, 107, 111, 118, 111, 45, 100, 111, 110, 101, 32, 114, 101, 97, 115, 111, 110, 61, 34,
@@ -2838,6 +2955,7 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
           !elementGetAttribute ||
           !elementClosest ||
           !elementHasAttribute ||
+          !elementMatches ||
           !elementRemoveAttribute ||
           !elementAttributes ||
           !elementChildren ||
@@ -2851,6 +2969,7 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
           !elementReplaceWith ||
           !nodeCloneNode ||
           !nodeAppendChild ||
+          !nodeInsertBefore ||
           !nodeChildNodes ||
           !nodeContains ||
           !nodeIsConnected ||
@@ -2894,6 +3013,9 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
         const formSubmitControl = apply<unknown>(documentCreateElement, documentObject, ['form']);
         const propertyControl = apply<unknown>(documentCreateElement, documentObject, ['input']);
         const textControl = apply<unknown>(documentCreateElement, documentObject, ['span']);
+        const insertParentControl = apply<unknown>(documentCreateElement, documentObject, ['div']);
+        const insertAnchorControl = apply<unknown>(documentCreateElement, documentObject, ['em']);
+        const insertNodeControl = apply<unknown>(documentCreateElement, documentObject, ['u']);
         if (
           snapshotControl === null ||
           typeof snapshotControl !== 'object' ||
@@ -2914,7 +3036,13 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
           propertyControl === null ||
           typeof propertyControl !== 'object' ||
           textControl === null ||
-          typeof textControl !== 'object'
+          typeof textControl !== 'object' ||
+          insertParentControl === null ||
+          typeof insertParentControl !== 'object' ||
+          insertAnchorControl === null ||
+          typeof insertAnchorControl !== 'object' ||
+          insertNodeControl === null ||
+          typeof insertNodeControl !== 'object'
         ) {
           return false;
         }
@@ -2952,10 +3080,20 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
           return false;
         }
         apply(nodeAppendChild, snapshotControl, [nestedControl]);
+        apply(nodeAppendChild, insertParentControl, [insertAnchorControl]);
         if (
           apply<unknown>(elementClosest, nestedControl, [
             '[kovo-nav-segment="security-control"]',
-          ]) !== snapshotControl
+          ]) !== snapshotControl ||
+          apply<unknown>(elementMatches, snapshotControl, [
+            '[kovo-nav-segment="security-control"]',
+          ]) !== true ||
+          apply<unknown>(nodeInsertBefore, insertParentControl, [
+            insertNodeControl,
+            insertAnchorControl,
+          ]) !== insertNodeControl ||
+          apply<unknown>(elementOuterHtml, insertParentControl, []) !==
+            '<div><u></u><em></em></div>'
         ) {
           return false;
         }
@@ -3117,11 +3255,14 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
     hardNavigate,
     hasReloadControl,
     hasElementAttribute,
+    islandAbortSignal,
+    insertDomNode,
     elementContains,
     isHtmlContentType,
     isTrimmedAsciiEqual,
     indexOf,
     lower,
+    matchesElement,
     navigateSameOrigin,
     parseHtmlDocument,
     parseUrl,
@@ -3151,6 +3292,7 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
     reload,
     removeElement,
     retireMutationBroadcastChannel,
+    retireIslandSignal,
     replaceElement,
     replaceElementChildren,
     releaseStreamReader,
