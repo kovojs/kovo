@@ -96,6 +96,33 @@ describe('createPerSessionDispatcher', () => {
     expect(sidFromRes(res)).toBeTruthy(); // replaced, not honored
   });
 
+  it('ignores a malformed encoded cookie and mints a fresh isolation id', async () => {
+    const dispatcher = createPerSessionDispatcher({
+      buildHandler: () => (_r, res) => res.writeHead(200),
+    });
+    const res = fakeRes();
+    await expect(dispatcher.dispatch(fakeReq('kovo_demo_sid=%'), res)).resolves.toBe(res);
+    expect(sidFromRes(res)).toBeTruthy();
+  });
+
+  it('uses a host-only secure HttpOnly isolation cookie in production', async () => {
+    const previousNodeEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = 'production';
+    try {
+      const dispatcher = createPerSessionDispatcher({
+        buildHandler: () => (_r, res) => res.writeHead(200),
+      });
+      const res = fakeRes();
+      await dispatcher.dispatch(fakeReq(), res);
+      const setCookie = res.getHeader('Set-Cookie').join('\n');
+      expect(setCookie).toContain('__Host-kovo_demo_sid=');
+      expect(setCookie).toContain('; Path=/; HttpOnly; Secure; SameSite=Lax');
+    } finally {
+      if (previousNodeEnv === undefined) delete process.env.NODE_ENV;
+      else process.env.NODE_ENV = previousNodeEnv;
+    }
+  });
+
   it('overwrites the internal session header with the resolved cookie session', async () => {
     const seen = [];
     const dispatcher = createPerSessionDispatcher({
@@ -160,7 +187,7 @@ describe('createPerSessionDispatcher', () => {
     let builds = 0;
     let resolveBuild;
     const dispatcher = createPerSessionDispatcher({
-      genId: () => 'fixedsid00000000', // both requests use the same minted id path
+      genId: () => '00000000-0000-4000-8000-000000000001', // both requests use the same minted id path
       buildHandler: () => {
         builds += 1;
         return new Promise((resolve) => {
@@ -168,8 +195,14 @@ describe('createPerSessionDispatcher', () => {
         });
       },
     });
-    const p1 = dispatcher.dispatch(fakeReq('kovo_demo_sid=fixedsid00000000'), fakeRes());
-    const p2 = dispatcher.dispatch(fakeReq('kovo_demo_sid=fixedsid00000000'), fakeRes());
+    const p1 = dispatcher.dispatch(
+      fakeReq('kovo_demo_sid=00000000-0000-4000-8000-000000000001'),
+      fakeRes(),
+    );
+    const p2 = dispatcher.dispatch(
+      fakeReq('kovo_demo_sid=00000000-0000-4000-8000-000000000001'),
+      fakeRes(),
+    );
     resolveBuild();
     await Promise.all([p1, p2]);
     expect(builds).toBe(1);
@@ -246,6 +279,9 @@ describe('createPerSessionDispatcher', () => {
 describe('parseCookies', () => {
   it('parses multiple cookies and url-decodes values', () => {
     expect(parseCookies('a=1; b=hello%20world; c=')).toEqual({ a: '1', b: 'hello world', c: '' });
+  });
+  it('ignores malformed encoded values instead of throwing', () => {
+    expect(parseCookies('broken=%; safe=value')).toEqual({ safe: 'value' });
   });
   it('returns empty for no header', () => {
     expect(parseCookies(undefined)).toEqual({});

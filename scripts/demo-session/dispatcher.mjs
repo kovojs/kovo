@@ -53,6 +53,11 @@ export function createPerSessionDispatcher({
   if (typeof buildHandler !== 'function') {
     throw new TypeError('createPerSessionDispatcher requires a buildHandler function.');
   }
+  if (!isCookieName(cookieName)) {
+    throw new TypeError('createPerSessionDispatcher cookieName must be an HTTP cookie token.');
+  }
+  const productionCookies = process.env.NODE_ENV === 'production';
+  const sessionCookieName = productionCookies ? hostCookieName(cookieName) : cookieName;
 
   /** @type {Map<string, { handler: unknown, pending: Promise<unknown> | null, lastSeen: number }>} */
   const sessions = new Map();
@@ -181,10 +186,16 @@ export function createPerSessionDispatcher({
     sweepIdle(at);
 
     const cookies = parseCookies(req.headers.cookie);
-    let sid = cookies[cookieName];
+    let sid = cookies[sessionCookieName];
     if (!sid || !isPlausibleSid(sid)) {
       sid = genId();
-      appendSetCookie(res, serializeSessionCookie(cookieName, sid));
+      if (!isPlausibleSid(sid)) {
+        throw new TypeError('createPerSessionDispatcher genId must return an RFC 4122 UUID.');
+      }
+      appendSetCookie(
+        res,
+        serializeSessionCookie(sessionCookieName, sid, { secure: productionCookies }),
+      );
     }
 
     const session = getSession(sid, at);
@@ -215,7 +226,8 @@ export function createPerSessionDispatcher({
 
 // A session id we minted is a UUID; reject anything else so a hostile/garbage
 // cookie can't pin an attacker-chosen key or bloat the map with junk.
-const SID_RE = /^[0-9a-fA-F-]{8,64}$/;
+const SID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 function isPlausibleSid(value) {
   return SID_RE.test(value);
 }
@@ -229,18 +241,31 @@ export function parseCookies(header) {
     if (eq === -1) continue;
     const name = part.slice(0, eq).trim();
     if (!name) continue;
-    out[name] = decodeURIComponent(part.slice(eq + 1).trim());
+    try {
+      out[name] = decodeURIComponent(part.slice(eq + 1).trim());
+    } catch {
+      // A malformed sibling cookie must not turn the entire request into a 500.
+      // Ignore it; dispatch will mint a fresh isolation id if the selected cookie
+      // was the malformed one.
+    }
   }
   return out;
 }
 
-function serializeSessionCookie(name, value) {
+function serializeSessionCookie(name, value, { secure }) {
   // Session cookie (no Max-Age → cleared when the tab/browser closes), scoped to
-  // the whole app, SameSite=Lax so it rides top-level navigations. Not HttpOnly:
-  // it carries no auth, only demo-instance identity, and staying readable keeps
-  // it debuggable. No Secure flag here so it also works over plain http in local
-  // dev; the hosting layer is TLS-terminated.
-  return `${name}=${encodeURIComponent(value)}; Path=/; SameSite=Lax`;
+  // the whole app, SameSite=Lax so it rides top-level navigations. The id selects
+  // one visitor's isolated mutable app, so keep it out of script and use the
+  // __Host- + Secure floor in production; local HTTP development remains usable.
+  return `${name}=${encodeURIComponent(value)}; Path=/; HttpOnly${secure ? '; Secure' : ''}; SameSite=Lax`;
+}
+
+function hostCookieName(name) {
+  return name.startsWith('__Host-') ? name : `__Host-${name}`;
+}
+
+function isCookieName(value) {
+  return typeof value === 'string' && /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/.test(value);
 }
 
 // Coexist with any Set-Cookie the app itself emits (auth/CSRF): seed our cookie
