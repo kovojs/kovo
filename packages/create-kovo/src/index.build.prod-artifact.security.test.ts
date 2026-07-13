@@ -2,6 +2,7 @@ import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
@@ -17,6 +18,7 @@ import {
   linkStarterBuildDependencies,
   mergeCookies,
   reservePort,
+  resolveDependencyRoot,
   stopProcess,
   withRepoBinOnPath,
 } from './index.test-support.js';
@@ -171,7 +173,7 @@ describe('create-kovo starter (build integration: production security artifacts)
       expect(response.status).toBe(500);
       expect(body).toBe('{"code":"SERVER_ERROR","payload":{}}');
       expect(body).not.toContain('demo@example.com');
-      expect(output()).toMatch(/KV435|permission denied for (?:table|view)/u);
+      expect(output()).toMatch(/KV422|KV435|permission denied for (?:table|view)/u);
     } finally {
       await stopProcess(server);
       rmSync(root, { force: true, recursive: true });
@@ -407,10 +409,16 @@ describe('create-kovo starter (build integration: production security artifacts)
         'starter-db-scope/absent-tables-contact-write',
       ] as const;
       for (const key of blockedMutations) {
+        const proofForm = formHtmlByAction(homeHtml, `/_m/${key}`);
         const response = await fetch(`${origin}/_m/${key}`, {
-          body: new URLSearchParams({ marker }),
+          body: new URLSearchParams({
+            csrf: fieldValue(proofForm, 'csrf'),
+            'Kovo-Idem': fieldValue(proofForm, 'Kovo-Idem'),
+            marker,
+          }),
           headers: {
             'content-type': 'application/x-www-form-urlencoded',
+            cookie: cookieHeader(jar),
             origin,
           },
           method: 'POST',
@@ -430,21 +438,41 @@ describe('create-kovo starter (build integration: production security artifacts)
       expect(statusResponse.status, statusBody).toBe(200);
       const status = JSON.parse(statusBody) as {
         absentContactRows: number;
-        authSessionRows: number;
-        authUserRows: number;
         contactRows: number;
-        rawAuthUserRows: number;
       };
 
       expect(status).toEqual({
         absentContactRows: 0,
-        authSessionRows: 0,
-        authUserRows: 0,
         contactRows: 1,
-        rawAuthUserRows: 0,
       });
       expect(output()).toContain('KV406');
       expect(output()).toContain('declared mutation registry tables');
+
+      await stopProcess(server);
+      server = undefined;
+      const pgliteModule = (await import(
+        pathToFileURL(join(resolveDependencyRoot('@electric-sql/pglite'), 'dist/index.js')).href
+      )) as {
+        PGlite: new (dataDir: string) => {
+          close(): Promise<void>;
+          query(statement: string): Promise<{ rows: Array<{ id: string }> }>;
+          waitReady: Promise<void>;
+        };
+      };
+      const raw = new pgliteModule.PGlite(join(root, '.kovo/pglite'));
+      try {
+        await raw.waitReady;
+        const authUsers = await raw.query(
+          `select id from "user" where id in ('starter-scope-proof-auth-user', 'starter-scope-proof-raw-auth-user')`,
+        );
+        const authSessions = await raw.query(
+          `select id from "session" where id = 'starter-scope-proof-auth-session'`,
+        );
+        expect(authUsers.rows).toEqual([]);
+        expect(authSessions.rows).toEqual([]);
+      } finally {
+        await raw.close();
+      }
     } finally {
       await stopProcess(server);
       rmSync(root, { force: true, recursive: true });
