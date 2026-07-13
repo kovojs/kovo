@@ -34,6 +34,8 @@ const nativeRegExpTest = NativeRegExp.prototype.test;
 const nativeSetAdd = NativeSet.prototype.add;
 const nativeSetHas = NativeSet.prototype.has;
 const nativeStringCharCodeAt = NativeString.prototype.charCodeAt;
+const nativeStringEndsWith = NativeString.prototype.endsWith;
+const nativeStringIncludes = NativeString.prototype.includes;
 const nativeStringSlice = NativeString.prototype.slice;
 const nativeStringSplit = NativeString.prototype.split;
 const nativeStringStartsWith = NativeString.prototype.startsWith;
@@ -93,6 +95,8 @@ const controlsSound = (() => {
       apply(nativeRegExpTest, /safe/u, ['safe']) === true &&
       apply(nativeStringSlice, 'safe', [1]) === 'afe' &&
       apply(nativeStringCharCodeAt, 'safe', [0]) === 115 &&
+      apply(nativeStringEndsWith, 'safe-output', ['output']) === true &&
+      apply(nativeStringIncludes, 'safe-output', ['-out']) === true &&
       ownDescriptor(split, 0)?.value === 'safe' &&
       ownDescriptor(split, 1)?.value === 'output' &&
       apply(nativeStringStartsWith, 'safe-output', ['safe-']) === true &&
@@ -361,6 +365,16 @@ export function stringCharCodeAt(value, index) {
   if (typeof value !== 'string')
     throw new NativeTypeError('Kovo devtool character read requires text.');
   return apply(nativeStringCharCodeAt, value, [index]);
+}
+
+export function stringEndsWith(value, suffix) {
+  if (typeof value !== 'string' || typeof suffix !== 'string') return false;
+  return apply(nativeStringEndsWith, value, [suffix]) === true;
+}
+
+export function stringIncludes(value, search) {
+  if (typeof value !== 'string' || typeof search !== 'string') return false;
+  return apply(nativeStringIncludes, value, [search]) === true;
 }
 
 export function stringSplit(value, separator) {
