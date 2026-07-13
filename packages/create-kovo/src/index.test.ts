@@ -8,6 +8,7 @@ import {
   readFileSync,
   realpathSync,
   rmSync,
+  statSync,
   symlinkSync,
   writeFileSync,
 } from 'node:fs';
@@ -1089,6 +1090,20 @@ describe('create-kovo starter (metadata)', () => {
       expect(gitignore).not.toContain('.kovo/endpoint-posture.json');
       expect(gitignore).not.toContain('graph.json');
     } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it('writes the generated secret environment file with owner-only permissions', () => {
+    const root = mkdtempSync(join(tmpdir(), 'create-kovo-secret-mode-'));
+    const previousUmask = process.umask(0);
+
+    try {
+      writeKovoProject(root, { disableGit: true, name: 'Secret Mode' });
+
+      expect(statSync(join(root, '.env')).mode & 0o777).toBe(0o600);
+    } finally {
+      process.umask(previousUmask);
       rmSync(root, { force: true, recursive: true });
     }
   });

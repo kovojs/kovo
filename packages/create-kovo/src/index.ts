@@ -398,7 +398,13 @@ export function writeKovoProject(
           continue;
         }
       }
-      writeFileSync(destination, file.source, 'utf8');
+      if (file.path === '.env') {
+        // SPEC §2: generated credentials cross a trust boundary. Do not let a permissive
+        // process umask make the CSRF key or demo password readable by other local users.
+        writeFileSync(destination, file.source, { encoding: 'utf8', mode: 0o600 });
+      } else {
+        writeFileSync(destination, file.source, 'utf8');
+      }
     }
 
     const stagedNames = readdirSync(stagingRoot);
