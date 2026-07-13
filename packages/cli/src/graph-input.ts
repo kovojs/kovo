@@ -1,5 +1,6 @@
 import type * as CoreGraph from '@kovojs/core/internal/graph';
 import { validateKovoExplainInput } from '@kovojs/core/internal/graph';
+import { resolve } from 'node:path';
 
 import type { CliCommandResult, KovoCheckResult } from './shared.js';
 import { findNearestFile, readJsonRecord } from './tooling.js';
@@ -7,8 +8,9 @@ import { findNearestFile, readJsonRecord } from './tooling.js';
 export function runGraphCommand(
   inputPath: string | undefined,
   run: (input: CoreGraph.KovoExplainInput) => KovoCheckResult,
+  invocationCwd = process.cwd(),
 ): CliCommandResult {
-  const input = readGraphInput(inputPath);
+  const input = readGraphInput(inputPath, invocationCwd);
   if (!input.ok) return { error: inputErrorMessage(input.error), exitCode: 1 };
   return run(input.value);
 }
@@ -31,32 +33,36 @@ type InputReadResult =
   | { ok: true; value: CoreGraph.KovoExplainInput }
   | { error: InputReadError; ok: false };
 
-export function readGraphInput(path: string | undefined): InputReadResult {
+export function readGraphInput(
+  path: string | undefined,
+  invocationCwd = process.cwd(),
+): InputReadResult {
   if (!path) {
-    const discoveredPath = discoverGraphInputPath();
+    const discoveredPath = discoverGraphInputPath(invocationCwd);
     if (discoveredPath === undefined) return { ok: true, value: {} };
-    return readGraphInput(discoveredPath);
+    return readGraphInput(discoveredPath, invocationCwd);
   }
 
-  const read = readJsonRecord(path);
+  const resolvedPath = resolve(invocationCwd, path);
+  const read = readJsonRecord(resolvedPath);
   if (!read.ok) return { error: read.error, ok: false };
 
   const validationErrors = validateKovoExplainInput(read.value);
   if (validationErrors.length > 0) {
     const validationError = validationErrors[0];
     if (validationError) {
-      return { error: graphInputValidationReadError(validationError, path), ok: false };
+      return { error: graphInputValidationReadError(validationError, resolvedPath), ok: false };
     }
   }
 
   return { ok: true, value: read.value as CoreGraph.KovoExplainInput };
 }
 
-export function discoverGraphInputPath(): string | undefined {
+export function discoverGraphInputPath(invocationCwd = process.cwd()): string | undefined {
   return (
-    findNearestFile(process.cwd(), 'graph.json', { stopDir: process.cwd() }) ??
-    findNearestFile(process.cwd(), '.kovo/graph.json', { stopDir: process.cwd() }) ??
-    findNearestFile(process.cwd(), 'dist/.kovo/graph.json', { stopDir: process.cwd() })
+    findNearestFile(invocationCwd, 'graph.json', { stopDir: invocationCwd }) ??
+    findNearestFile(invocationCwd, '.kovo/graph.json', { stopDir: invocationCwd }) ??
+    findNearestFile(invocationCwd, 'dist/.kovo/graph.json', { stopDir: invocationCwd })
   );
 }
 

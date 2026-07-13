@@ -37,11 +37,12 @@ registerHooks({
   },
 });
 
-// SPEC §6.6 rule 6: operator posture is command authority. Capture it before the dispatcher can
-// evaluate authored config/app/plugin modules; later process.env writes cannot opt a build into or
-// out of the paranoid static-advisory test disposition.
+// SPEC §6.6 rule 6: operator posture and invocation cwd are command authority. Capture them before
+// the dispatcher can evaluate authored config/app/plugin modules; later process.env/process.chdir
+// writes cannot change the security disposition or redirect framework-owned relative paths.
 const paranoidValue = process.env.KOVO_PARANOID;
 const commandSecurityDisposition = Object.freeze({
+  invocationCwd: process.cwd(),
   paranoidStaticAdvisory: paranoidValue === '1' || paranoidValue === 'true',
 });
 

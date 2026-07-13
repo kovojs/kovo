@@ -450,12 +450,13 @@ export async function runBuildCommand(
   security: KovoCommandSecurityDisposition = kovoCommandBootSecurityDisposition,
 ): Promise<CliCommandResult> {
   try {
-    const resolvedAppModulePath = resolve(options.appModulePath);
+    const invocationRoot = security.invocationCwd;
+    const resolvedAppModulePath = resolve(invocationRoot, options.appModulePath);
     // SPEC §6.6 rule 6: classify app-authored authority before config, plugins, or app evaluation
     // can mutate shared-realm prototypes. Runtime handler identity is joined after evaluation.
     const reachableSessionAuthorityFacts =
       await sessionAuthorityFactsFromEntry(resolvedAppModulePath);
-    const loadedConfig = await loadKovoBuildConfig(process.cwd(), resolvedAppModulePath);
+    const loadedConfig = await loadKovoBuildConfig(invocationRoot, resolvedAppModulePath);
     const selectedPreset = selectedKovoBuildPreset(options, loadedConfig.config);
     // plans/fast-kovo-check3.md: start the independent `tsc --noEmit` preflight subprocess here and
     // let it overlap the vite app load below AND the kovo-check security preflight, instead of
@@ -463,7 +464,7 @@ export async function runBuildCommand(
     // no-op `.catch` prevents an unhandled rejection if the load/check throws before we reach the
     // fail-closed join below; we still `await typeScriptPreflight` there, so its error is never
     // swallowed and ZERO artifacts are emitted on any preflight failure.
-    const typeScriptPreflight = runTypeScriptBuildPreflight(resolvedAppModulePath);
+    const typeScriptPreflight = runTypeScriptBuildPreflight(resolvedAppModulePath, invocationRoot);
     buildObservePromise(
       typeScriptPreflight,
       () => {},
@@ -495,6 +496,7 @@ export async function runBuildCommand(
           options,
           reachableSessionAuthorityFacts,
           security,
+          invocationRoot,
         ),
       };
     } catch (error) {
@@ -517,11 +519,11 @@ export async function runBuildCommand(
       vercel,
       writeKovoNeutralBuild,
     } = loadAndCheck.value;
-    const outDir = resolve(options.outDir);
+    const outDir = resolve(invocationRoot, options.outDir);
     const clientBuild = await withKovoBuildQueryShapeFacts(queryShapeFacts, () =>
       buildKovoClientManifest(
         join(outDir, '.kovo-client'),
-        kovoClientBuildRoot(resolvedAppModulePath),
+        kovoClientBuildRoot(resolvedAppModulePath, invocationRoot),
         resolvedAppModulePath,
         { cache: options.cache, queryShapeFacts },
       ),
@@ -533,6 +535,7 @@ export async function runBuildCommand(
     const buildApp = appWithBuildStylesheetAssets(app, buildCssAssets, deriveClosedKovoApp);
     const serverHandlerBuild = await withKovoBuildQueryShapeFacts(queryShapeFacts, () =>
       bundleKovoServerHandler(resolvedAppModulePath, {
+        buildRoot: invocationRoot,
         queryShapeFacts,
         runtimeRegistry: runtimeRegistryWireFactsFromGraph(checkGraph),
         stylesheetAssets: buildCssAssets,
@@ -626,12 +629,13 @@ async function loadAndCheckBuildApp(
   options: KovoBuildOptions,
   reachableSessionAuthorityFacts: readonly CoreGraph.SessionAuthorityFact[],
   security: KovoCommandSecurityDisposition,
+  invocationRoot: string,
 ) {
   // SPEC §6.6 rule 6: the exact app-resolved SSR graph must finish its trust-root transition
   // before any other build lane is allowed to evaluate authored modules. In particular, do not
   // race CSS discovery against the server/compiler/data-plane preload.
   const loadedBuildApp = await withBuildGraphDerivationContext(() =>
-    loadBuildAppModule(resolvedAppModulePath, process.cwd()),
+    loadBuildAppModule(resolvedAppModulePath, invocationRoot),
   );
   const buildStylesheetCss = await withBuildGraphDerivationContext(() =>
     kovoBuildStylesheetCss(resolvedAppModulePath),
@@ -646,6 +650,7 @@ async function loadAndCheckBuildApp(
     execution,
     paranoidStaticAdvisory: security.paranoidStaticAdvisory,
     reachableSessionAuthorityFacts,
+    root: invocationRoot,
   });
   return {
     app,
@@ -660,8 +665,11 @@ async function loadAndCheckBuildApp(
   };
 }
 
-async function runTypeScriptBuildPreflight(appModulePath: string): Promise<void> {
-  const tsconfigPath = findBuildTsconfig(appModulePath);
+async function runTypeScriptBuildPreflight(
+  appModulePath: string,
+  invocationRoot: string,
+): Promise<void> {
+  const tsconfigPath = findBuildTsconfig(appModulePath, invocationRoot);
   if (tsconfigPath === undefined) return;
 
   const projectDir = dirname(tsconfigPath);
@@ -721,6 +729,7 @@ async function runKovoBuildCheckPreflight(
     execution: BuildExecutionModule;
     paranoidStaticAdvisory: boolean;
     reachableSessionAuthorityFacts: readonly CoreGraph.SessionAuthorityFact[];
+    root: string;
   },
 ): Promise<KovoBuildCheckArtifacts> {
   const artifacts = await buildCheckGraph(app, appModulePath, options);
@@ -803,6 +812,7 @@ async function buildCheckGraph(
     cache: boolean;
     execution: BuildExecutionModule;
     reachableSessionAuthorityFacts: readonly CoreGraph.SessionAuthorityFact[];
+    root: string;
   },
 ): Promise<KovoBuildCheckArtifacts> {
   const { deriveAppGraph } = await import('@kovojs/compiler/graph');
@@ -894,6 +904,7 @@ async function staticBuildCheckGraph(
     cache: boolean;
     execution: BuildExecutionModule;
     reachableSessionAuthorityFacts: readonly CoreGraph.SessionAuthorityFact[];
+    root: string;
   },
 ): Promise<KovoBuildCheckArtifacts> {
   const { collectCapabilityEscapesFromProject, collectCookieDowngradesFromProject } =
@@ -910,7 +921,7 @@ async function staticBuildCheckGraph(
           },
         ]
       : await buildPromiseAll([
-          staticDataPlaneBuildFacts(files, { cache: options.cache }),
+          staticDataPlaneBuildFacts(files, { cache: options.cache, cacheRoot: options.root }),
           sourceGraphFactsFromFiles(files, dirname(appModulePath)),
         ]);
   // SPEC §6.6/§9.1 (audit-only, threat-matrix M3): surface every app-authored escape-hatch call site
@@ -1728,8 +1739,8 @@ function isWebhookEndpoint(
   return 'webhook' in endpoint && endpoint.webhook === true && 'webhookDefinition' in endpoint;
 }
 
-function findBuildTsconfig(appModulePath: string): string | undefined {
-  const relativeAppPath = relative(process.cwd(), appModulePath);
+function findBuildTsconfig(appModulePath: string, invocationRoot: string): string | undefined {
+  const relativeAppPath = relative(invocationRoot, appModulePath);
   if (
     buildSomeDense(buildPathSegments(relativeAppPath), 'Build app path segments', (part) =>
       buildStringStartsWith(part, '.'),
@@ -1738,7 +1749,7 @@ function findBuildTsconfig(appModulePath: string): string | undefined {
     return undefined;
   }
 
-  return findNearestFile(dirname(appModulePath), 'tsconfig.json', { stopDir: process.cwd() });
+  return findNearestFile(dirname(appModulePath), 'tsconfig.json', { stopDir: invocationRoot });
 }
 
 function isString(value: unknown): value is string {
@@ -2761,14 +2772,17 @@ export function appWithBuildStylesheetAssets(
   });
 }
 
-function kovoClientBuildRoot(appModulePath: string): string {
-  const indexHtml = findNearestFile(dirname(appModulePath), 'index.html');
-  return indexHtml === undefined ? process.cwd() : dirname(indexHtml);
+function kovoClientBuildRoot(appModulePath: string, invocationRoot: string): string {
+  const indexHtml = findNearestFile(dirname(appModulePath), 'index.html', {
+    stopDir: invocationRoot,
+  });
+  return indexHtml === undefined ? invocationRoot : dirname(indexHtml);
 }
 
 async function bundleKovoServerHandler(
   appModulePath: string,
   options: {
+    buildRoot: string;
     queryShapeFacts: readonly QueryShapeFact[];
     runtimeRegistry: RuntimeRegistryWireFacts;
     stylesheetAssets?: KovoBuildStylesheetAssets;
@@ -2782,7 +2796,7 @@ async function bundleKovoServerHandler(
     import('vite-plus'),
   ]);
   const kovoPlugin = kovoVitePlugin({
-    include: [kovoBuildAppSourceFilter(appModulePath, process.cwd())],
+    include: [kovoBuildAppSourceFilter(appModulePath, options.buildRoot)],
     queryShapeFacts: options.queryShapeFacts,
   });
   const stylesheetAssets = options.stylesheetAssets ?? emptyKovoBuildStylesheetAssets();
@@ -2865,7 +2879,7 @@ async function bundleKovoServerHandler(
           },
         ],
       },
-      root: process.cwd(),
+      root: options.buildRoot,
       ssr: { external: ['@node-rs/argon2'], noExternal: [/^@kovojs\//] },
     });
 
@@ -3089,8 +3103,11 @@ export function serializeBuildRuntimeRegistryWireModule(
   );
 }
 
-export async function runExportCommand(options: KovoExportOptions): Promise<CliCommandResult> {
-  const result = await runExportCommandStructured(options);
+export async function runExportCommand(
+  options: KovoExportOptions,
+  security: KovoCommandSecurityDisposition = kovoCommandBootSecurityDisposition,
+): Promise<CliCommandResult> {
+  const result = await runExportCommandStructured(options, security);
   if ('error' in result) return result;
 
   return {
@@ -3101,28 +3118,32 @@ export async function runExportCommand(options: KovoExportOptions): Promise<CliC
 
 export async function runExportCommandStructured(
   options: KovoExportOptions,
+  security: KovoCommandSecurityDisposition = kovoCommandBootSecurityDisposition,
 ): Promise<CliCommandResult | KovoExportCommandResult> {
   let loadedExport: LoadedExportAppModule | undefined;
   try {
-    const manifestPlan = await staticExportManifestPlan(options);
+    const resolvedOptions = resolveKovoExportOptions(options, security.invocationCwd);
+    const manifestPlan = await staticExportManifestPlan(resolvedOptions);
     const staticExport = await withStylesheetEnvOverlay(manifestPlan.stylesheetEnv, async () => {
-      loadedExport = await loadExportAppModule(options);
-      const app = appFromModule(loadedExport.appModule, options.appModulePath);
+      loadedExport = await loadExportAppModule(resolvedOptions, security.invocationCwd);
+      const app = appFromModule(loadedExport.appModule, resolvedOptions.appModulePath);
       return await loadedExport.exportStaticApp(app, {
         ...(manifestPlan.assets.length === 0 ? {} : { assets: manifestPlan.assets }),
-        ...(options.onNonExportable === undefined
+        ...(resolvedOptions.onNonExportable === undefined
           ? {}
-          : { onNonExportable: options.onNonExportable }),
+          : { onNonExportable: resolvedOptions.onNonExportable }),
         diagnostics: staticExportDiagnosticsFromModule(loadedExport.appModule),
-        ...(options.origin === undefined ? {} : { origin: options.origin }),
-        outDir: options.outDir,
-        ...(options.assetBase === undefined ? {} : { publicAssetBase: options.assetBase }),
+        ...(resolvedOptions.origin === undefined ? {} : { origin: resolvedOptions.origin }),
+        outDir: resolvedOptions.outDir,
+        ...(resolvedOptions.assetBase === undefined
+          ? {}
+          : { publicAssetBase: resolvedOptions.assetBase }),
         publicAssetRoot:
-          manifestPlan.publicAssetRoot ?? staticExportDefaultPublicAssetRoot(options),
+          manifestPlan.publicAssetRoot ?? staticExportDefaultPublicAssetRoot(resolvedOptions),
       });
     });
 
-    return kovoExportResult(staticExport, options);
+    return kovoExportResult(staticExport, resolvedOptions);
   } catch (error) {
     return exportErrorResult(error);
   } finally {
@@ -3130,16 +3151,36 @@ export async function runExportCommandStructured(
   }
 }
 
-async function loadExportAppModule(options: KovoExportOptions): Promise<LoadedExportAppModule> {
-  const root = resolve(options.root ?? process.cwd());
+function resolveKovoExportOptions(
+  options: KovoExportOptions,
+  invocationRoot: string,
+): KovoExportOptions {
+  const root = resolve(invocationRoot, options.root ?? '.');
   // `--vite --root` accepts Vite root-relative ids such as `/src/app.ts` (the documented CLI
-  // form). Resolve the physical file under the project root before deriving the app-local Kovo
-  // dependency graph; resolving `/src/app.ts` as a filesystem absolute would instead bootstrap
-  // from `/src` and silently miss the app's framework installation.
-  const resolvedAppModulePath =
+  // form). Resolve every path before app evaluation so authored process.chdir() cannot redirect
+  // the export sink or any source/manifest authority (SPEC §6.6 rule 6).
+  const appModulePath =
     options.vite && options.appModulePath.startsWith('/')
       ? resolve(root, options.appModulePath.slice(1))
-      : resolve(options.root === undefined ? process.cwd() : root, options.appModulePath);
+      : resolve(options.root === undefined ? invocationRoot : root, options.appModulePath);
+  return {
+    ...options,
+    appModulePath,
+    ...(options.distDir === undefined ? {} : { distDir: resolve(invocationRoot, options.distDir) }),
+    ...(options.manifestFile === undefined
+      ? {}
+      : { manifestFile: resolve(invocationRoot, options.manifestFile) }),
+    outDir: resolve(invocationRoot, options.outDir),
+    ...(options.root === undefined ? {} : { root }),
+  };
+}
+
+async function loadExportAppModule(
+  options: KovoExportOptions,
+  invocationRoot: string,
+): Promise<LoadedExportAppModule> {
+  const root = options.root ?? invocationRoot;
+  const resolvedAppModulePath = options.appModulePath;
   const requireFromApp = createRequire(pathToFileURL(resolvedAppModulePath));
   const appResolvedServerPath = requireFromApp.resolve('@kovojs/server');
   if (!options.vite && !exportAppModuleNeedsVite(options.appModulePath)) {

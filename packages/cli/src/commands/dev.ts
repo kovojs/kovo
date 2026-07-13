@@ -84,7 +84,10 @@ export interface KovoDevServerHandle {
 type DevArgParseResult = { ok: true; options: KovoDevOptions } | { message: string; ok: false };
 
 /** @internal Parse `kovo dev` without delegating security-sensitive setup to Vite's CLI. */
-export function parseDevArgs(args: readonly string[]): DevArgParseResult {
+export function parseDevArgs(
+  args: readonly string[],
+  invocationCwd = kovoCommandBootSecurityDisposition.invocationCwd,
+): DevArgParseResult {
   const parsed = parseCommandArgv(args, DEV_ARGV_SPEC);
   if (!parsed.ok) return commandArgvError('dev', parsed, DEV_USAGE);
   const app = requireSinglePositional(parsed.value, {
@@ -94,7 +97,7 @@ export function parseDevArgs(args: readonly string[]): DevArgParseResult {
   });
   if (!app.ok) return app;
 
-  const root = resolve(parsedStringOption(parsed.value, '--root') ?? process.cwd());
+  const root = resolve(invocationCwd, parsedStringOption(parsed.value, '--root') ?? '.');
   const portValue = parsedStringOption(parsed.value, '--port');
   let port: number | undefined;
   if (portValue !== undefined) {
@@ -131,7 +134,7 @@ export async function startKovoDevServer(
   security: KovoCommandSecurityDisposition = kovoCommandBootSecurityDisposition,
 ): Promise<KovoDevServerHandle> {
   const { createServer } = await import('vite-plus');
-  const root = resolve(options.root);
+  const root = resolve(security.invocationCwd, options.root);
   const configFile = resolveDevConfigFile(root, options.configFile);
   const bootstrapServer = await createServer({
     appType: 'custom',

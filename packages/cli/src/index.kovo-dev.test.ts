@@ -55,6 +55,26 @@ describe('kovo dev', () => {
     });
   });
 
+  it('resolves dev paths against the boot-pinned invocation cwd', () => {
+    const outside = mkdtempSync(join('/private/tmp', 'kovo-dev-cwd-mutation-'));
+    temporaryRoots.push(outside);
+    const previousCwd = process.cwd();
+    try {
+      process.chdir(outside);
+      expect(parseDevArgs(['./src/app.ts', '--root', './fixture'], repoRoot)).toEqual({
+        ok: true,
+        options: {
+          appModulePath: join(repoRoot, 'fixture/src/app.ts'),
+          mode: 'development',
+          root: join(repoRoot, 'fixture'),
+          strictPort: false,
+        },
+      });
+    } finally {
+      process.chdir(previousCwd);
+    }
+  });
+
   it('isolates plugins without dispatching late map, iterator, or hook getters', () => {
     const rawPlugin = { name: 'selective-client-hook', resolveId: () => null };
     const mapDescriptor = Object.getOwnPropertyDescriptor(Array.prototype, 'map')!;

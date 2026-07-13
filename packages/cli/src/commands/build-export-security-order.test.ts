@@ -1,5 +1,13 @@
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
@@ -419,6 +427,53 @@ export default createApp({
         'KV406',
       );
     } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  }, 120_000);
+
+  it('pins build and export paths before authored process.chdir() in the real CLI', () => {
+    const root = cliFixtureRoot('invocation-cwd');
+    const outside = mkdtempSync(join('/private/tmp', 'kovo-cli-cwd-outside-'));
+    const appPath = join(root, 'app.ts');
+    try {
+      mkdirSync(join(root, 'src'), { recursive: true });
+      writeFileSync(
+        join(root, 'index.html'),
+        '<!doctype html><script type="module" src="/src/client.ts"></script>\n',
+        'utf8',
+      );
+      writeFileSync(join(root, 'src/client.ts'), 'export {};\n', 'utf8');
+      writeFileSync(
+        appPath,
+        `import { createApp, publicAccess, route } from '@kovojs/server';
+
+process.chdir(process.env.APP_AUTHORED_CWD_MUTATION!);
+
+export default createApp({
+  routes: [route('/', {
+    access: publicAccess('invocation cwd regression'),
+    page: () => '<main>Invocation cwd</main>',
+  })],
+});
+`,
+        'utf8',
+      );
+
+      const env = { ...process.env, APP_AUTHORED_CWD_MUTATION: outside };
+      const build = runKovoCli(root, ['build', './app.ts', '--out', 'dist', '--check'], env);
+      expect(build.status, build.stderr).toBe(0);
+      expect(build.stdout).toContain(`NEUTRAL outDir=${JSON.stringify(join(root, 'dist/.kovo'))}`);
+      expect(existsSync(join(root, 'dist/.kovo/graph.json'))).toBe(true);
+      expect(existsSync(join(root, '.kovo/cache/static-build-analysis'))).toBe(true);
+      expect(existsSync(join(outside, 'dist'))).toBe(false);
+      expect(existsSync(join(outside, '.kovo'))).toBe(false);
+
+      const exported = runKovoCli(root, ['export', './app.ts', '--out', 'export-dist'], env);
+      expect(exported.status, exported.stderr).toBe(0);
+      expect(existsSync(join(root, 'export-dist/index.html'))).toBe(true);
+      expect(existsSync(join(outside, 'export-dist'))).toBe(false);
+    } finally {
+      rmSync(outside, { force: true, recursive: true });
       rmSync(root, { force: true, recursive: true });
     }
   }, 120_000);

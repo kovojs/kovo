@@ -109,12 +109,14 @@ const SYNC_COMMAND_HANDLERS: Record<KovoSyncCommandName, SyncCommandHandler> = {
     if (!parsed.ok) return writeUsageError(parsed.message);
     return writeCommandResult(runAddCommand(parsed.options));
   },
-  audit(args) {
+  audit(args, security) {
     const parsed = parseAuditArgs(args);
     if (!parsed.ok) return writeUsageError(parsed.message);
     return writeCommandResult(
-      runGraphCommand(parsed.inputPath, (input) =>
-        kovoAudit(input, { failOnFindings: parsed.failOnFindings }),
+      runGraphCommand(
+        parsed.inputPath,
+        (input) => kovoAudit(input, { failOnFindings: parsed.failOnFindings }),
+        security.invocationCwd,
       ),
     );
   },
@@ -124,28 +126,39 @@ const SYNC_COMMAND_HANDLERS: Record<KovoSyncCommandName, SyncCommandHandler> = {
     const { family, inputPath } = parsed;
     if (family === 'sources-sinks') {
       if (inputPath) {
-        const input = runGraphCommand(inputPath, () => ({ exitCode: 0, output: '' }));
+        const input = runGraphCommand(
+          inputPath,
+          () => ({ exitCode: 0, output: '' }),
+          security.invocationCwd,
+        );
         if (input.exitCode !== 0) return writeCommandResult(input);
       }
-      const driftScan = scanSourceSinkDrift();
-      writeSourcesSinksArtifact(process.cwd(), { driftScan });
+      const driftScan = scanSourceSinkDrift(security.invocationCwd);
+      writeSourcesSinksArtifact(security.invocationCwd, { driftScan });
       return writeCommandResult(sourcesSinksCheckResult(outputVersion, { driftScan }));
     }
     return writeCommandResult(
-      runGraphCommand(inputPath, (input) =>
-        kovoCheck(input, {
-          family,
-          paranoidStaticAdvisory: security.paranoidStaticAdvisory,
-        }),
+      runGraphCommand(
+        inputPath,
+        (input) =>
+          kovoCheck(input, {
+            family,
+            paranoidStaticAdvisory: security.paranoidStaticAdvisory,
+          }),
+        security.invocationCwd,
       ),
     );
   },
-  explain(args) {
+  explain(args, security) {
     const parsed = parseExplainArgs(args);
     if (!parsed.ok) return writeUsageError(parsed.message);
-    if ('sourcesSinks' in parsed.options) writeSourcesSinksArtifact();
+    if ('sourcesSinks' in parsed.options) writeSourcesSinksArtifact(security.invocationCwd);
     return writeCommandResult(
-      runGraphCommand(parsed.inputPath, (input) => kovoExplain(input, parsed.options)),
+      runGraphCommand(
+        parsed.inputPath,
+        (input) => kovoExplain(input, parsed.options),
+        security.invocationCwd,
+      ),
     );
   },
 };
@@ -162,7 +175,7 @@ const ASYNC_COMMAND_HANDLERS: Record<KovoAsyncCommandName, AsyncCommandHandler> 
     return writeCommandResult(await runDbCommand(parsed.options));
   },
   async dev(args, security) {
-    const parsed = parseDevArgs(args);
+    const parsed = parseDevArgs(args, security.invocationCwd);
     if (!parsed.ok) return writeUsageError(parsed.message);
     return writeCommandResult(await runDevCommand(parsed.options, security));
   },
@@ -171,10 +184,10 @@ const ASYNC_COMMAND_HANDLERS: Record<KovoAsyncCommandName, AsyncCommandHandler> 
     if (!parsed.ok) return writeUsageError(parsed.message);
     return writeCommandResult(await runCompileCommand(parsed.options));
   },
-  async export(args) {
+  async export(args, security) {
     const parsed = parseExportArgs(args);
     if (!parsed.ok) return writeUsageError(parsed.message);
-    return writeCommandResult(await runExportCommand(parsed.options));
+    return writeCommandResult(await runExportCommand(parsed.options, security));
   },
   async mcp(args) {
     return runMcpCommand(args);

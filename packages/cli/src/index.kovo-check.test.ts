@@ -2298,9 +2298,11 @@ describe('kovo check', () => {
     });
   });
 
-  it('threads the boot-pinned paranoid disposition through the check dispatcher', () => {
+  it('threads boot-pinned cwd and paranoid disposition through the check dispatcher', () => {
     const tempDir = mkdtempSync(join(tmpdir(), 'kovo-cli-paranoid-disposition-'));
+    const outside = mkdtempSync(join(tmpdir(), 'kovo-cli-check-cwd-mutation-'));
     const graphPath = join(tempDir, 'graph.json');
+    const previousCwd = process.cwd();
     const stdoutWrite = vi
       .spyOn(process.stdout, 'write')
       .mockImplementation((() => true) as typeof process.stdout.write);
@@ -2323,11 +2325,18 @@ describe('kovo check', () => {
         }),
       );
 
-      expect(main(['check', graphPath], { paranoidStaticAdvisory: false })).toBe(1);
-      expect(main(['check', graphPath], { paranoidStaticAdvisory: true })).toBe(0);
+      process.chdir(outside);
+      expect(
+        main(['check', 'graph.json'], { invocationCwd: tempDir, paranoidStaticAdvisory: false }),
+      ).toBe(1);
+      expect(
+        main(['check', 'graph.json'], { invocationCwd: tempDir, paranoidStaticAdvisory: true }),
+      ).toBe(0);
     } finally {
+      process.chdir(previousCwd);
       stdoutWrite.mockRestore();
       stderrWrite.mockRestore();
+      rmSync(outside, { force: true, recursive: true });
       rmSync(tempDir, { force: true, recursive: true });
     }
   });
