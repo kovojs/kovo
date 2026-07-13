@@ -900,7 +900,6 @@ export function addRuntimeMutationSafetyProofs(
             '',
             'export const managedWriteEscapeAttempt = mutation({',
             '  access: publicProof,',
-            '  csrf: false,',
             '  input: s.object({ id: s.string() }),',
             "  registry: { tables: ['tx_proofs'], touches: [txProof] },",
             '  async handler(input: { id: string }, request: AppRequest) {',
@@ -938,7 +937,6 @@ export function addRuntimeMutationSafetyProofs(
         : []),
       'export const failAfterWrite = mutation({',
       '  access: publicProof,',
-      '  csrf: false,',
       '  input: s.object({ id: s.string() }),',
       "  registry: { tables: ['tx_proofs'], touches: [txProof] },",
       '  async handler(input: { id: string }, request: AppRequest) {',
@@ -949,7 +947,6 @@ export function addRuntimeMutationSafetyProofs(
       '',
       'export const writeTxProof = mutation({',
       '  access: publicProof,',
-      '  csrf: false,',
       '  input: s.object({ id: s.string() }),',
       "  registry: { tables: ['tx_proofs'], touches: [txProof] },",
       '  async handler(input: { id: string }, request: AppRequest) {',
@@ -1005,7 +1002,6 @@ export function addRuntimeMutationSafetyProofs(
         ? [
             'export const rawTableDrift = mutation({',
             '  access: publicProof,',
-            '  csrf: false,',
             '  errors: { RUNTIME_TABLE_DRIFT: runtimeTableDriftError },',
             '  input: s.object({ id: s.string(), label: s.string() }),',
             "  registry: { tables: ['contacts'], touches: insertRawRuntimeDrift.touches },",
@@ -1044,7 +1040,6 @@ export function addRuntimeMutationSafetyProofs(
             '',
             'export const sqliteAuthorizerTriggerDrift = mutation({',
             '  access: publicProof,',
-            '  csrf: false,',
             '  errors: { RUNTIME_TABLE_DRIFT: runtimeTableDriftError },',
             '  input: s.object({ id: s.string(), label: s.string() }),',
             "  registry: { tables: ['kovo_authorizer_declared'], touches: [sqliteAuthorizerDeclaredDomain] },",
@@ -1198,6 +1193,36 @@ export function addRuntimeMutationSafetyProofs(
     'utf8',
   );
 
+  const runtimeSafetyProofFormMutations = [
+    'failAfterWrite',
+    ...(includeManagedWriteEscapeAttempt ? ['managedWriteEscapeAttempt'] : []),
+    ...(includeRawTableDrift ? ['rawTableDrift'] : []),
+    ...(includeSqliteAuthorizerTriggerDrift ? ['sqliteAuthorizerTriggerDrift'] : []),
+    'writeTxProof',
+  ];
+  writeFileSync(
+    join(root, 'src/runtime-safety-proof-forms.tsx'),
+    [
+      '/** @jsxImportSource @kovojs/server */',
+      "import { component } from '@kovojs/core';",
+      "import { mutationFormAttributes } from '@kovojs/server';",
+      `import { ${runtimeSafetyProofFormMutations.join(', ')} } from './runtime-safety-proofs.js';`,
+      '',
+      'export const RuntimeSafetyProofForms = component({',
+      `  mutations: { ${runtimeSafetyProofFormMutations.join(', ')} },`,
+      '  render: () => (',
+      '    <main data-proof="runtime-safety-forms">',
+      ...runtimeSafetyProofFormMutations.map(
+        (name) => `      <form data-proof="${name}" {...mutationFormAttributes(${name})} />`,
+      ),
+      '    </main>',
+      '  ),',
+      '});',
+      '',
+    ].join('\n'),
+    'utf8',
+  );
+
   const runtimeSafetyImports = [
     'failAfterWrite',
     ...(includeManagedWriteEscapeAttempt ? ['managedWriteEscapeAttempt'] : []),
@@ -1234,6 +1259,13 @@ export function addRuntimeMutationSafetyProofs(
   const appPath = join(root, 'src/app.tsx');
   const app = readFileSync(appPath, 'utf8')
     .replace(
+      "import { ContactsRegion } from './components/contacts.js';",
+      [
+        "import { ContactsRegion } from './components/contacts.js';",
+        "import { RuntimeSafetyProofForms } from './runtime-safety-proof-forms.js';",
+      ].join('\n'),
+    )
+    .replace(
       "import { addContact } from './mutations.js';",
       [
         "import { addContact } from './mutations.js';",
@@ -1246,6 +1278,19 @@ export function addRuntimeMutationSafetyProofs(
     .replace(
       'mutations: [addContact, appSignIn, appSignOut],',
       `mutations: [${runtimeSafetyMutations.join(', ')}],`,
+    )
+    .replace(
+      "  routes: [\n    route('/', {",
+      [
+        '  routes: [',
+        "    route('/runtime-safety-proof-forms', {",
+        "      access: publicAccess('public runtime safety CSRF regression proof'),",
+        '      page() {',
+        '        return <RuntimeSafetyProofForms />;',
+        '      },',
+        '    }),',
+        "    route('/', {",
+      ].join('\n'),
     );
   writeFileSync(appPath, app, 'utf8');
 }

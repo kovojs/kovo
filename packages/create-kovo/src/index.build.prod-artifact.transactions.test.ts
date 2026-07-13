@@ -8,8 +8,10 @@ import { describe, expect, it } from 'vitest';
 import { writeKovoProject } from './index.js';
 import {
   collectOutput,
+  cookieHeader,
   fetchTextWhenReady,
   linkStarterBuildDependencies,
+  mergeCookies,
   reservePort,
   stopProcess,
   withRepoBinOnPath,
@@ -19,12 +21,25 @@ import {
   buildProductionArtifact,
   buildReusableProductionArtifact,
   execFileSyncErrorOutput,
+  fieldValue,
+  formHtmlByAction,
 } from './index.build.test-support.js';
 
 interface ReadonlyAttemptResponse {
   blocked: boolean;
   message?: string;
   results?: Array<{ blocked: boolean; message: string; method: string }>;
+}
+
+async function csrfProofSession(
+  origin: string,
+  action: string,
+): Promise<{ cookie: string; token: string }> {
+  const jar = new Map<string, string>();
+  const page = await fetch(`${origin}/runtime-safety-proof-forms`);
+  mergeCookies(jar, page.headers.getSetCookie());
+  const form = formHtmlByAction(await page.text(), action);
+  return { cookie: cookieHeader(jar), token: fieldValue(form, 'csrf') };
 }
 
 async function expectReadonlyAttemptBlocked(origin: string): Promise<void> {
@@ -98,39 +113,48 @@ describe('create-kovo starter (build integration: production transaction artifac
       expect(afterReadonlyAttempt.count).toBe(0);
 
       const writeId = `success-${Date.now()}`;
+      const writeCsrf = await csrfProofSession(origin, '/_m/runtime-safety-proofs/write-tx-proof');
       const success = await fetch(`${origin}/_m/runtime-safety-proofs/write-tx-proof`, {
         body: new URLSearchParams({
+          csrf: writeCsrf.token,
           id: writeId,
           'Kovo-Idem': `idem-success-${Date.now()}`,
         }),
         headers: {
           'content-type': 'application/x-www-form-urlencoded',
+          cookie: writeCsrf.cookie,
           origin,
         },
         method: 'POST',
         redirect: 'manual',
       });
-      await success.text();
-      expect(success.status).toBe(303);
+      const successBody = await success.text();
+      expect(success.status, `${successBody}\n${output()}`).toBe(303);
       const afterSuccess = (await (await fetch(`${origin}/api/tx-proof-count`)).json()) as {
         count: number;
       };
       expect(afterSuccess.count).toBe(1);
 
+      const rollbackCsrf = await csrfProofSession(
+        origin,
+        '/_m/runtime-safety-proofs/fail-after-write',
+      );
       const response = await fetch(`${origin}/_m/runtime-safety-proofs/fail-after-write`, {
         body: new URLSearchParams({
+          csrf: rollbackCsrf.token,
           id: `partial-${Date.now()}`,
           'Kovo-Idem': `idem-tx-${Date.now()}`,
         }),
         headers: {
           'content-type': 'application/x-www-form-urlencoded',
+          cookie: rollbackCsrf.cookie,
           origin,
         },
         method: 'POST',
         redirect: 'manual',
       });
-      await response.text();
-      expect(response.status).toBe(500);
+      const responseBody = await response.text();
+      expect(response.status, `${responseBody}\n${output()}`).toBe(500);
 
       const after = (await (await fetch(`${origin}/api/tx-proof-count`)).json()) as {
         count: number;
@@ -226,16 +250,22 @@ describe('create-kovo starter (build integration: production transaction artifac
       };
       expect(beforeTriggerDrift.count).toBe(0);
 
+      const triggerCsrf = await csrfProofSession(
+        origin,
+        '/_m/runtime-safety-proofs/sqlite-authorizer-trigger-drift',
+      );
       const triggerDrift = await fetch(
         `${origin}/_m/runtime-safety-proofs/sqlite-authorizer-trigger-drift`,
         {
           body: new URLSearchParams({
+            csrf: triggerCsrf.token,
             id: 'c1',
             'Kovo-Idem': `idem-sqlite-authorizer-${Date.now()}`,
             label: `authorizer-${Date.now()}`,
           }),
           headers: {
             'content-type': 'application/x-www-form-urlencoded',
+            cookie: triggerCsrf.cookie,
             origin,
           },
           method: 'POST',
@@ -254,13 +284,16 @@ describe('create-kovo starter (build integration: production transaction artifac
       };
       expect(afterTriggerDrift.count).toBe(0);
 
+      const writeCsrf = await csrfProofSession(origin, '/_m/runtime-safety-proofs/write-tx-proof');
       const success = await fetch(`${origin}/_m/runtime-safety-proofs/write-tx-proof`, {
         body: new URLSearchParams({
+          csrf: writeCsrf.token,
           id: `sqlite-success-${Date.now()}`,
           'Kovo-Idem': `idem-sqlite-success-${Date.now()}`,
         }),
         headers: {
           'content-type': 'application/x-www-form-urlencoded',
+          cookie: writeCsrf.cookie,
           origin,
         },
         method: 'POST',
