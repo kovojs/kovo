@@ -1079,6 +1079,73 @@ export const Subscription = component({
     expect(poisonHits).toBe(0);
   });
 
+  it('does not suppress duplicate component identities through Map.get replacement', () => {
+    const nativeGet = Map.prototype.get;
+    const nativeApply = Reflect.apply;
+    let poisonHits = 0;
+    let result: ReturnType<typeof compileComponentModule> | undefined;
+    try {
+      Map.prototype.get = function poisonedComponentNameGet<K, V>(key: K): V | undefined {
+        if (
+          key === 'components/cart/cart-badge' &&
+          new Error().stack?.includes('validateDuplicateComponentNames')
+        ) {
+          poisonHits += 1;
+          return undefined;
+        }
+        return nativeApply(nativeGet, this, [key]);
+      };
+      result = compileComponentModule({
+        fileName: 'components/cart.tsx',
+        source: `
+export const CartBadge = component({ render: () => <cart-badge /> });
+export const Cart_Badge = component({ render: () => <cart-badge /> });
+`,
+      });
+    } finally {
+      Map.prototype.get = nativeGet;
+    }
+    expect(result?.diagnostics.filter((diagnostic) => diagnostic.code === 'KV237')).toHaveLength(1);
+    expect(poisonHits).toBe(0);
+  });
+
+  it('does not suppress duplicate transition identities through attribute Array.find', () => {
+    const nativeFind = Array.prototype.find;
+    const nativeApply = Reflect.apply;
+    let poisonHits = 0;
+    let result: ReturnType<typeof compileComponentModule> | undefined;
+    try {
+      Array.prototype.find = function poisonedTransitionAttributeFind<T>(
+        callback: (value: T, index: number, array: T[]) => unknown,
+        thisArg?: unknown,
+      ): T | undefined {
+        if (
+          (this[0] as { name?: unknown } | undefined)?.name === 'viewTransitionName' &&
+          new Error().stack?.includes('viewTransitionRegistrations')
+        ) {
+          poisonHits += 1;
+          return undefined;
+        }
+        return nativeApply(nativeFind, this, [callback, thisArg]);
+      };
+      result = compileComponentModule({
+        fileName: 'product-card.tsx',
+        source: `
+export const ProductCard = component({
+  render: () => <section>
+    <img viewTransitionName="product-image" src="/p1.png" />
+    <a viewTransitionName="product-image" href="/products/p1">View</a>
+  </section>,
+});
+`,
+      });
+    } finally {
+      Array.prototype.find = nativeFind;
+    }
+    expect(result?.diagnostics.filter((diagnostic) => diagnostic.code === 'KV239')).toHaveLength(1);
+    expect(poisonHits).toBe(0);
+  });
+
   it('does not publish a captured server secret through stateful Array.filter replacement', () => {
     const nativeFilter = Array.prototype.filter;
     const nativeApply = Reflect.apply;
