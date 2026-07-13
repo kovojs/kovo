@@ -1079,7 +1079,11 @@ async function assertEnhancedMutationWireServed(
   dialect: 'postgres' | 'sqlite',
   output: () => string,
 ): Promise<void> {
-  const pageHtml = await fetchTextWhenReady(`${origin}/enhanced-mutation-wire-proof`, output);
+  await fetchTextWhenReady(`${origin}/enhanced-mutation-wire-proof`, output);
+  const jar = new Map<string, string>();
+  const pageResponse = await fetch(`${origin}/enhanced-mutation-wire-proof`);
+  mergeCookies(jar, pageResponse.headers.getSetCookie());
+  const pageHtml = await pageResponse.text();
   const form = firstFormHtml(pageHtml);
   const action = attributeValue(form, 'action');
   if (!action) throw new Error('Expected enhanced mutation proof form action.');
@@ -1096,11 +1100,13 @@ async function assertEnhancedMutationWireServed(
   const response = await fetch(`${origin}${action}`, {
     body: new URLSearchParams({
       'Kovo-Idem': `enhanced-wire-${Date.now()}-${dialect}`,
+      csrf: fieldValue(form, 'csrf'),
       note: '<img src=x onerror="alert(1)"><script>alert(1)</script>',
     }),
     headers: {
       accept: 'text/vnd.kovo.fragment+html',
       'content-type': 'application/x-www-form-urlencoded',
+      cookie: cookieHeader(jar),
       'Kovo-Form-Target': target,
       'Kovo-Fragment': 'true',
       'Kovo-Live-Targets': `${target}#${component}@${liveToken}:${props}`,
@@ -1252,7 +1258,6 @@ function addEnhancedMutationWireProof(root: string): void {
       '',
       'export const refreshEnhancedMutationWireProof = mutation({',
       '  access: proofAccess,',
-      '  csrf: false,',
       '  input: s.object({ note: s.string() }),',
       '  registry: {',
       '    queries: [enhancedMutationWireProofQuery],',
