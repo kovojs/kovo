@@ -173,7 +173,10 @@ export class DomMorphRoot implements MorphRoot {
   }
 
   findFragmentTarget(target: string): MorphTarget | null {
-    const element = findFragmentTargetElement(this.root, target);
+    // SPEC §6.6/§9.1: target identity decides where authoritative server truth commits. Route
+    // every lookup through the boot-witnessed DOM controls so authored prototype replacement
+    // cannot retain a revoked target by redirecting the fragment into a decoy.
+    const element = findFragmentTargetElement(this.root, target, requireBrowserDomSecurity());
 
     return element ? new DomMorphTarget(element) : null;
   }

@@ -8,6 +8,7 @@ import { createQueryStore } from './query-store.js';
 const nativeArrayFrom = Array.from;
 const nativeArrayMap = Array.prototype.map;
 const nativeDocumentCreateElement = Document.prototype.createElement;
+const nativeDocumentQuerySelector = Document.prototype.querySelector;
 const nativeElementQuerySelectorAll = Element.prototype.querySelectorAll;
 const nativeElementSetAttribute = Element.prototype.setAttribute;
 const nativeHtmlCollectionIterator = HTMLCollection.prototype[Symbol.iterator];
@@ -25,6 +26,7 @@ afterEach(() => {
   Array.from = nativeArrayFrom;
   Array.prototype.map = nativeArrayMap;
   Document.prototype.createElement = nativeDocumentCreateElement;
+  Document.prototype.querySelector = nativeDocumentQuerySelector;
   Element.prototype.querySelectorAll = nativeElementQuerySelectorAll;
   Element.prototype.setAttribute = nativeElementSetAttribute;
   HTMLCollection.prototype[Symbol.iterator] = nativeHtmlCollectionIterator;
@@ -408,5 +410,28 @@ describe('browser mutation-response output membrane', () => {
     expect(target.firstElementChild?.getAttribute('data-server-safe')).not.toBeNull();
     expect(target.querySelector('[data-attacker]')).toBeNull();
     await expectInert('__kovo_plan_xss');
+  });
+
+  it('modular: pins fragment-target lookup before authored querySelector replacement', () => {
+    const name = 'modular-fragment-target-query';
+    const target = makeTarget(name);
+    target.textContent = 'PRIVILEGED';
+    const decoy = createNativeElement('main');
+    decoy.textContent = 'DECOY';
+    appendNative(document.body, decoy);
+
+    Document.prototype.querySelector = function poisonedQuerySelector(selector: string) {
+      if (selector === `[kovo-fragment-target="${name}"]`) return decoy;
+      return Reflect.apply(nativeDocumentQuerySelector, this, [selector]);
+    } as typeof Document.prototype.querySelector;
+
+    applyModular(
+      name,
+      '',
+      `<main kovo-fragment-target="${name}">ACCESS-REVOKED</main>`,
+    );
+
+    expect(target.textContent).toBe('ACCESS-REVOKED');
+    expect(decoy.textContent).toBe('DECOY');
   });
 });

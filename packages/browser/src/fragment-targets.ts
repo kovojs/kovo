@@ -7,24 +7,50 @@ export interface FragmentTargetRoot extends ParentNode {
   getElementById?(id: string): Element | null;
 }
 
+/** @internal Boot-witnessed DOM controls for security-bearing fragment routing (SPEC §6.6/§9.1). */
+export interface FragmentTargetSecurityControls {
+  getElementById(root: unknown, id: string): Element | undefined;
+  matchesElement(element: object, selector: string): boolean;
+  queryOne(root: unknown, selector: string): Element | null;
+}
+
 export function findFragmentTargetElement(
   root: FragmentTargetRoot,
   target: string,
+  security?: FragmentTargetSecurityControls,
 ): Element | null {
   // SPEC.md §9.1: fragment targets are live DOM targets. Apply lookup uses the
   // same identity precedence as Kovo-Targets collection: explicit fragment
   // target, then DOM id, then component stamp.
   return (
-    findRootOrDescendant(root, `[kovo-fragment-target="${escapeCssString(target)}"]`) ??
-    root.getElementById?.(target) ??
-    findRootOrDescendant(root, `[id="${escapeCssString(target)}"]`) ??
-    findRootOrDescendant(root, `[kovo-c="${escapeCssString(target)}"]`) ??
-    findRootOrDescendant(root, `kovo-defer[target="${escapeCssString(target)}"]`)
+    findRootOrDescendant(
+      root,
+      `[kovo-fragment-target="${escapeCssString(target)}"]`,
+      security,
+    ) ??
+    (security ? security.getElementById(root, target) : root.getElementById?.(target)) ??
+    findRootOrDescendant(root, `[id="${escapeCssString(target)}"]`, security) ??
+    findRootOrDescendant(root, `[kovo-c="${escapeCssString(target)}"]`, security) ??
+    findRootOrDescendant(
+      root,
+      `kovo-defer[target="${escapeCssString(target)}"]`,
+      security,
+    )
   );
 }
 
-function findRootOrDescendant(root: FragmentTargetRoot, selector: string): Element | null {
+function findRootOrDescendant(
+  root: FragmentTargetRoot,
+  selector: string,
+  security?: FragmentTargetSecurityControls,
+): Element | null {
   const maybeElement = root as Element & { matches?: (selector: string) => boolean };
+  if (security) {
+    return (
+      (security.matchesElement(maybeElement, selector) ? maybeElement : null) ??
+      security.queryOne(root, selector)
+    );
+  }
   if (typeof maybeElement.matches === 'function' && maybeElement.matches(selector)) {
     return maybeElement;
   }
