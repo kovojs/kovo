@@ -174,7 +174,10 @@ function isKovoServerHandlerExternalDependency(id: string): boolean {
 }
 
 function isKovoServerHandlerModuleSideEffectFree(id: string): boolean {
-  return /(?:^|[/\\])packages[/\\]server[/\\]src[/\\]postgres-runtime\.ts$/.test(id);
+  // These modules' top-level work only prepares their exported runtime primitives. Let Rollup
+  // remove them when an app does not use those primitives, so an unused native Argon2 sink is not
+  // loaded by Cloudflare/non-password handlers merely because the server barrel re-exports it.
+  return /(?:^|[/\\])packages[/\\]server[/\\]src[/\\](?:password|postgres-runtime)\.ts$/.test(id);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

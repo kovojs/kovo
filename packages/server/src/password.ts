@@ -1,3 +1,5 @@
+/* oxlint-disable typescript/unbound-method -- Boot-captured controls are invoked through pinned Reflect.apply. */
+import * as Argon2 from '@node-rs/argon2';
 import type { Options as Argon2Options } from '@node-rs/argon2';
 
 declare const passwordDigestBrand: unique symbol;
@@ -74,6 +76,12 @@ const nativeReflectApply = NativeReflect.apply;
 const nativeRegExpExec = RegExp.prototype.exec;
 const nativeStringIndexOf = NativeString.prototype.indexOf;
 const nativeStringSlice = NativeString.prototype.slice;
+const nativeArgon2Hash = Argon2.hash;
+const nativeArgon2Verify = Argon2.verify;
+
+if (typeof nativeArgon2Hash !== 'function' || typeof nativeArgon2Verify !== 'function') {
+  throw new NativeTypeError('Kovo Argon2 password authority is unavailable.');
+}
 
 function passwordApply<Return>(fn: Function, receiver: unknown, args: readonly unknown[]): Return {
   return nativeReflectApply(fn, receiver, args) as Return;
@@ -254,23 +262,17 @@ async function getDecoyDigest(params: Argon2Options): Promise<string> {
   if (!pending) {
     // Set the Promise before awaiting so concurrent callers all receive the same Promise.
     pending = (async () => {
-      const { hash } = await loadArgon2();
       // No AbortSignal: the decoy computation is cached across requests and must not be
       // abandoned mid-flight (a cancelled hash would leave the cache slot unresolved).
-      return hash(CREDENTIAL_DECOY_SECRET, params, null);
+      return passwordApply<Promise<string>>(nativeArgon2Hash, undefined, [
+        CREDENTIAL_DECOY_SECRET,
+        params,
+        null,
+      ]);
     })();
     passwordMapSet(decoyDigestCache, key, pending);
   }
   return pending;
-}
-
-type Argon2Module = typeof import('@node-rs/argon2');
-
-let argon2ModulePromise: Promise<Argon2Module> | undefined;
-
-function loadArgon2(): Promise<Argon2Module> {
-  argon2ModulePromise ??= import('@node-rs/argon2');
-  return argon2ModulePromise;
 }
 
 /**
@@ -284,8 +286,14 @@ export async function hashPassword(
   options: PasswordHashOptions = {},
 ): Promise<PasswordDigest> {
   const params = resolvePasswordHashOptions(options);
-  const { hash } = await loadArgon2();
-  const digest = await hash(password, params, options.signal ?? null);
+  // SPEC §6.6 rule 6: Argon2 decides the actual password work factor. The supported server
+  // graph captures this function before app evaluation; resolving it on first request would let a
+  // late module hook replace the advertised Argon2id sink with attacker-selected work.
+  const digest = await passwordApply<Promise<string>>(nativeArgon2Hash, undefined, [
+    password,
+    params,
+    options.signal ?? null,
+  ]);
   if (!isArgon2idPasswordDigest(digest)) {
     throw new NativeError(
       'Kovo password sink expected @node-rs/argon2 to emit an argon2id PHC digest.',
@@ -357,10 +365,15 @@ async function verifyParsedPasswordDigest(
   signal: AbortSignal | null,
 ): Promise<PasswordVerifyResult> {
   try {
-    const { verify } = await loadArgon2();
     // SPEC §6.6: verifier output is authentication evidence, so only exact boolean true may
     // authorize. A buggy/hostile native adapter cannot promote a truthy carrier into success.
-    const ok = (await verify(digest, password, params, signal)) === true;
+    const ok =
+      (await passwordApply<Promise<boolean>>(nativeArgon2Verify, undefined, [
+        digest,
+        password,
+        params,
+        signal,
+      ])) === true;
     return { ok, needsRehash: ok && digestNeedsRehash(parsed, params) };
   } catch {
     return { ok: false, needsRehash: false };

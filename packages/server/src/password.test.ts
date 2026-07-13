@@ -45,6 +45,42 @@ describe('password primitive: argon2id-only sink', () => {
     expect(isArgon2idPasswordDigest(digest)).toBe(true);
   });
 
+  it('binds Argon2 before late resolver hooks can replace password work', () => {
+    const forgedModule =
+      'data:text/javascript,' +
+      encodeURIComponent(
+        'export async function hash(){throw new Error("resolver-poisoned Argon2")} ' +
+          'export async function verify(){return true}',
+      );
+    const script = `
+      const { registerHooks } = await import('node:module');
+      const password = await import(${JSON.stringify(`${passwordModuleUrl}?boot-pinned-argon2`)});
+      let poisonHits = 0;
+      registerHooks({
+        resolve(specifier, context, nextResolve) {
+          if (specifier === '@node-rs/argon2') {
+            poisonHits += 1;
+            return nextResolve(${JSON.stringify(forgedModule)}, context);
+          }
+          return nextResolve(specifier, context);
+        },
+      });
+      try {
+        const digest = await password.hashPassword('correct horse battery staple');
+        process.exit(
+          poisonHits === 0 && digest.startsWith('$argon2id$v=19$m=19456,t=2,p=1$') ? 0 : 3,
+        );
+      } catch {
+        process.exit(3);
+      }
+    `;
+    const result = spawnSync(process.execPath, ['--input-type=module', '--eval', script], {
+      encoding: 'utf8',
+    });
+    expect(result.stderr).toBe('');
+    expect(result.status).toBe(0);
+  });
+
   it('verifies the correct password without requiring a rehash at the default floor', async () => {
     const digest = await hashPassword('correct horse battery staple');
 

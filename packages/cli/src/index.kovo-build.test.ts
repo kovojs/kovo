@@ -84,7 +84,9 @@ describe('kovo build', () => {
       const output = stdout.mock.calls.map(([chunk]) => String(chunk)).join('');
       expect(output).toContain('kovo-build/v1\nAPP module=');
       expect(output).toContain(`SUMMARY preset=node outDir=${JSON.stringify(outDir)}`);
-      expect(readFileSync(join(outDir, '.kovo/server/handler.mjs'), 'utf8')).not.toContain('vite');
+      const handlerSource = readFileSync(join(outDir, '.kovo/server/handler.mjs'), 'utf8');
+      expect(handlerSource).not.toContain('vite');
+      expect(handlerSource).not.toContain('@node-rs/argon2');
 
       const serverModule = (await import(
         `${pathToFileURL(join(outDir, 'server/server.mjs')).href}?t=${Date.now()}`
