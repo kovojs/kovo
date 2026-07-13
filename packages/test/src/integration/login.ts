@@ -3,7 +3,6 @@
 // field is part of the rendered form), so a test just supplies credentials. This
 // hides the CSRF/session dance that the commerce scratch drive script hand-rolled.
 import type { Page } from '@playwright/test';
-import { URL as NodeURL } from 'node:url';
 
 /* eslint-disable typescript/unbound-method */
 
@@ -13,6 +12,7 @@ import {
   verifierFreeze,
   verifierGetOwnPropertyDescriptor,
   verifierOwnKeys,
+  verifierUrlSnapshot,
 } from '../verifier-security-intrinsics.js';
 
 const nativeStringCharCodeAt = String.prototype.charCodeAt;
@@ -38,8 +38,8 @@ export interface LoginOptions {
 export async function login(page: Page, origin: string, options: LoginOptions): Promise<void> {
   const stable = snapshotLoginOptions(options);
   const loginPath = stable.loginPath ?? '/login';
-  const originUrl = new NodeURL(origin);
-  const loginUrl = new NodeURL(loginPath, originUrl);
+  const originUrl = verifierUrlSnapshot(origin);
+  const loginUrl = verifierUrlSnapshot(loginPath, originUrl.href);
   if (
     loginUrl.origin !== originUrl.origin ||
     loginUrl.username !== '' ||

@@ -37,4 +37,38 @@ describe('integration login security', () => {
     );
     expect(invoked).toBe(false);
   });
+
+  it('pins URL origin and href facts against authored getter poisoning', async () => {
+    const originalHref = Object.getOwnPropertyDescriptor(URL.prototype, 'href')!;
+    const originalOrigin = Object.getOwnPropertyDescriptor(URL.prototype, 'origin')!;
+    let navigated = false;
+    try {
+      Object.defineProperty(URL.prototype, 'origin', {
+        configurable: true,
+        get: () => 'http://fixture.local',
+      });
+      Object.defineProperty(URL.prototype, 'href', {
+        configurable: true,
+        get: () => 'https://attacker.test/login',
+      });
+      await expect(
+        login(
+          {
+            goto() {
+              navigated = true;
+            },
+          } as never,
+          'http://fixture.local',
+          {
+            fields: { email: 'a@example.test', password: 'secret' },
+            loginPath: 'https://attacker.test/login',
+          },
+        ),
+      ).rejects.toThrow(/must resolve on the fixture origin/u);
+      expect(navigated).toBe(false);
+    } finally {
+      Object.defineProperty(URL.prototype, 'href', originalHref);
+      Object.defineProperty(URL.prototype, 'origin', originalOrigin);
+    }
+  });
 });

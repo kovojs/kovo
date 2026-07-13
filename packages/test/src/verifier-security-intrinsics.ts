@@ -78,7 +78,11 @@ const nativeWeakMapSet = NativeWeakMap.prototype.set;
 const nativeMapSize = stableOwnGetter(NativeMap.prototype, 'size');
 const nativeSetSize = stableOwnGetter(NativeSet.prototype, 'size');
 const nativeRequestUrl = stableOwnGetter(NativeRequest.prototype, 'url');
+const nativeUrlHref = stableOwnGetter(NativeURL.prototype, 'href');
+const nativeUrlOrigin = stableOwnGetter(NativeURL.prototype, 'origin');
+const nativeUrlPassword = stableOwnGetter(NativeURL.prototype, 'password');
 const nativeUrlPathname = stableOwnGetter(NativeURL.prototype, 'pathname');
+const nativeUrlUsername = stableOwnGetter(NativeURL.prototype, 'username');
 const nativeAsyncStorageGetStore = stableOwnFunction(NativeAsyncLocalStorage.prototype, 'getStore');
 const nativeAsyncStorageRun = stableOwnFunction(NativeAsyncLocalStorage.prototype, 'run');
 
@@ -572,6 +576,20 @@ export function verifierUrlPathname(input: string, base?: string): string {
   assertVerifierSecurityIntrinsics();
   const url = base === undefined ? new NativeURL(input) : new NativeURL(input, base);
   return apply(nativeUrlPathname, url, []);
+}
+
+export function verifierUrlSnapshot(
+  input: string,
+  base?: string,
+): Readonly<{ href: string; origin: string; password: string; username: string }> {
+  assertVerifierSecurityIntrinsics();
+  const url = base === undefined ? new NativeURL(input) : new NativeURL(input, base);
+  return verifierFreeze({
+    href: apply<string>(nativeUrlHref, url, []),
+    origin: apply<string>(nativeUrlOrigin, url, []),
+    password: apply<string>(nativeUrlPassword, url, []),
+    username: apply<string>(nativeUrlUsername, url, []),
+  });
 }
 
 export function verifierPromiseResolve<T>(value: T | PromiseLike<T>): Promise<T> {
