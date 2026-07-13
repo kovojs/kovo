@@ -345,7 +345,12 @@ function styleStackCallSite(): { column: number; filePath: string; line: number 
       styleRegExpExec(/\(?([A-Za-z]:\\[^():]+):(\d+):(\d+)\)?$/, frame);
     if (!match) continue;
     const rawFilePath = match[1] ?? '';
-    if (styleStringEndsWith(rawFilePath, '/packages/style/src/engine.ts')) continue;
+    if (
+      styleStringEndsWith(rawFilePath, '/packages/style/src/engine.ts') ||
+      styleStringEndsWith(rawFilePath, '/packages/style/src/style-security-intrinsics.ts')
+    ) {
+      continue;
+    }
     const filePath = styleStringStartsWith(rawFilePath, 'file://')
       ? new URL(rawFilePath).pathname
       : rawFilePath;
