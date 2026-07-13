@@ -86,14 +86,12 @@ const UNITLESS_CSS_PROPERTY_VALUES = styleFreeze([
 ] as const);
 
 /** @internal Immutable unitless-property classifier shared with compiler CSS extraction. */
-export const UNITLESS_CSS_PROPERTIES: ReadonlySet<string> = styleFreeze({
-  has(property: string): boolean {
-    for (let index = 0; index < UNITLESS_CSS_PROPERTY_VALUES.length; index += 1) {
-      if (UNITLESS_CSS_PROPERTY_VALUES[index] === property) return true;
-    }
-    return false;
-  },
-}) as unknown as ReadonlySet<string>;
+export function isUnitlessCssProperty(property: string): boolean {
+  for (let index = 0; index < UNITLESS_CSS_PROPERTY_VALUES.length; index += 1) {
+    if (UNITLESS_CSS_PROPERTY_VALUES[index] === property) return true;
+  }
+  return false;
+}
 
 const BARE_NUMBER = /^-?\d+(?:\.\d+)?$/;
 
@@ -116,7 +114,7 @@ export function cssLengthValue(cssProperty: string, value: string | number): str
   // collapses the grid). Every other engine path special-cases `--` (engine.ts
   // :532/:692, getPriority above); the length normalizer must too. (SPEC.md §5.2)
   if (styleStringStartsWith(cssProperty, '--')) return text;
-  if (UNITLESS_CSS_PROPERTIES.has(cssProperty)) return text;
+  if (isUnitlessCssProperty(cssProperty)) return text;
   if (text === '0' || styleRegExpExec(BARE_NUMBER, text) === null) return text;
   return `${text}px`;
 }

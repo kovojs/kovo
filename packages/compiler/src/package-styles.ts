@@ -7,7 +7,7 @@ import {
   sep as pathSeparator,
 } from 'node:path';
 
-import { UNITLESS_CSS_PROPERTIES } from '@kovojs/style/internal';
+import { isUnitlessCssProperty } from '@kovojs/style/internal';
 
 import { dedupeCss } from './css.js';
 import {
@@ -529,7 +529,7 @@ function normalizeLayerNames(css: string): string {
  * `padding:8px`). Only matches a number that ends the declaration (`;`/`}`), so
  * multi-token values (`box-shadow:0 4px ...`) and already-unit'd values are left
  * untouched. Unitless properties (opacity, z-index, line-height, …) are skipped
- * via the shared `UNITLESS_CSS_PROPERTIES` set from `@kovojs/style/internal`.
+ * via the shared `isUnitlessCssProperty` classifier from `@kovojs/style/internal`.
  *
  * `@kovojs/style`'s `emitAtomicCss` now appends the unit at the source (see
  * `cssLengthValue`), so for engine-emitted CSS this pass is an idempotent no-op
@@ -553,7 +553,7 @@ export function normalizeNumericLengths(css: string): string {
     css,
     (match, property: string, value: string, terminator: string) =>
       compilerStringStartsWith(property, '--') ||
-      compilerSetHas(UNITLESS_CSS_PROPERTIES, property) ||
+      isUnitlessCssProperty(property) ||
       value === '0'
         ? match
         : `${property}:${value}px${terminator}`,
