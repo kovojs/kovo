@@ -90,7 +90,9 @@ import {
   witnessMapGet,
   witnessMapSet,
   witnessFreeze,
+  witnessObjectIs,
   witnessObjectKeys,
+  witnessOwnKeys,
   witnessSetAdd,
   witnessSetHas,
   witnessWeakMapGet,
@@ -339,9 +341,13 @@ export function layout<
 >(
   definition: LayoutDefinition<Request, Queries, Page, Regions>,
 ): LayoutDeclaration<Request, Queries, Page, Regions> {
-  const declaration = pinAccessDecision({ ...definition }, definition.access);
+  const closedDefinition = snapshotRouteAuthoringDefinition(
+    definition,
+    'layout() definition',
+  ) as LayoutDeclaration<Request, Queries, Page, Regions>;
+  const declaration = pinAccessDecision(closedDefinition, closedDefinition.access);
   const deps: string[] = [];
-  const queryDefinitions = definition.queries ?? {};
+  const queryDefinitions = closedDefinition.queries ?? witnessCreateNullRecord();
   const queryNames = witnessObjectKeys(queryDefinitions);
   for (let index = 0; index < queryNames.length; index += 1) {
     const descriptor = witnessGetOwnPropertyDescriptor(queryDefinitions, queryNames[index]!);
@@ -426,22 +432,63 @@ export function route<
     Regions
   > = {},
 ): RouteDeclaration<Path, ParamsSchema, SearchSchema, Request, Page, GuardedRequest> {
-  const declaration = pinAccessDecision(
-    { ...definition, path } as RouteDeclaration<
-      Path,
-      ParamsSchema,
-      SearchSchema,
-      Request,
-      Page,
-      GuardedRequest
-    >,
-    definition.access,
-  );
+  const closedDefinition = snapshotRouteAuthoringDefinition(
+    definition,
+    'route() definition',
+  ) as RouteDefinition<Path, ParamsSchema, SearchSchema, Request, Page, GuardedRequest, Regions>;
+  const declarationRecord = closedDefinition as RouteDeclaration<
+    Path,
+    ParamsSchema,
+    SearchSchema,
+    Request,
+    Page,
+    GuardedRequest
+  >;
+  witnessDefineProperty(declarationRecord, 'path', {
+    configurable: true,
+    enumerable: true,
+    value: path,
+    writable: false,
+  });
+  const declaration = pinAccessDecision(declarationRecord, closedDefinition.access);
   const metadata =
-    (definition.page as CompiledRoutePageFunction | undefined)?.kovoRoutePage ??
-    fallbackRoutePageMetadata(path, definition);
+    (closedDefinition.page as CompiledRoutePageFunction | undefined)?.kovoRoutePage ??
+    fallbackRoutePageMetadata(path, closedDefinition);
   if (metadata) witnessWeakMapSet(routePageMetadata, declaration, metadata);
   return witnessFreeze(declaration);
+}
+
+function snapshotRouteAuthoringDefinition(source: object, label: string): Record<string, unknown> {
+  if (typeof source !== 'object' || source === null || witnessIsArray(source)) {
+    throw new TypeError(`${label} must be a stable own-data record.`);
+  }
+  const keys = witnessOwnKeys(source);
+  if (keys.length > 100_000) throw new TypeError(`${label} must be bounded.`);
+  const snapshot = witnessCreateNullRecord<unknown>() as Record<string, unknown>;
+  for (let index = 0; index < keys.length; index += 1) {
+    const key = keys[index]!;
+    if (typeof key !== 'string') continue;
+    const before = witnessGetOwnPropertyDescriptor(source, key);
+    const after = witnessGetOwnPropertyDescriptor(source, key);
+    if (
+      before === undefined ||
+      after === undefined ||
+      !('value' in before) ||
+      !('value' in after)
+    ) {
+      throw new TypeError(`${label}.${key} must be an own data property.`);
+    }
+    if (!witnessObjectIs(before.value, after.value)) {
+      throw new TypeError(`${label}.${key} changed during validation.`);
+    }
+    witnessDefineProperty(snapshot, key, {
+      configurable: true,
+      enumerable: before.enumerable === true,
+      value: before.value,
+      writable: true,
+    });
+  }
+  return snapshot;
 }
 
 function fallbackRoutePageMetadata<Path extends string>(
@@ -889,7 +936,11 @@ async function renderRouteRegions<
   for (let index = 0; index < names.length; index += 1) {
     const name = names[index]!;
     const descriptor = witnessGetOwnPropertyDescriptor(regionDefinitions, name);
-    if (descriptor === undefined || !('value' in descriptor) || typeof descriptor.value !== 'function') {
+    if (
+      descriptor === undefined ||
+      !('value' in descriptor) ||
+      typeof descriptor.value !== 'function'
+    ) {
       throw new TypeError(`Route region ${name} must be an own renderer data property.`);
     }
     const render = descriptor.value as RegionRenderer;

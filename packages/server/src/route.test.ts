@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { redirect } from '@kovojs/core';
 
 import { renderedHtml, renderHtmlValue, type RenderedHtml } from './html.js';
+import { accessDecisionFor, publicAccess } from './access.js';
 import { renderPageHints } from './hints.js';
 import { guards } from './guards.js';
 import { meta } from './meta.js';
@@ -17,6 +18,37 @@ import {
 import { s } from './schema.js';
 
 describe('route primitives', () => {
+  it('ignores inherited route/layout access and refuses accessors without invoking them', () => {
+    const inheritedRoute = Object.create({
+      access: publicAccess('prototype-provided public route'),
+      page: () => renderedHtml('attacker'),
+    });
+    const routeDeclaration = route('/exact-route', inheritedRoute);
+    expect(accessDecisionFor(routeDeclaration)).toBeUndefined();
+    expect(routeDeclaration.page).toBeUndefined();
+
+    const inheritedLayout = Object.create({
+      access: publicAccess('prototype-provided public layout'),
+      render: () => renderedHtml('attacker'),
+    });
+    const layoutDeclaration = layout(inheritedLayout);
+    expect(accessDecisionFor(layoutDeclaration)).toBeUndefined();
+    expect(layoutDeclaration.render).toBeUndefined();
+
+    let getterCalls = 0;
+    const accessor = {} as Parameters<typeof route>[1];
+    Object.defineProperty(accessor, 'page', {
+      configurable: true,
+      enumerable: true,
+      get() {
+        getterCalls += 1;
+        return () => renderedHtml('attacker');
+      },
+    });
+    expect(() => route('/accessor-route', accessor)).toThrow('own data');
+    expect(getterCalls).toBe(0);
+  });
+
   it('rejects raw string route pages and layout renders', () => {
     const assertRawStringPageRejected = () => {
       route('/raw-page', {
