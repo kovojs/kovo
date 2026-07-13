@@ -256,6 +256,7 @@ function rejectHandler(handler: Dispatcher.DispatchHandler, error: Error): void 
 }
 
 let installedDispatcher: EgressGatingDispatcher | undefined;
+let installedDispatcherOwner: object | undefined;
 let dispatcherBeforeInstall: ReturnType<typeof getGlobalDispatcher> | undefined;
 
 /**
@@ -275,23 +276,28 @@ export function installUndiciFloor(policy: EgressPolicy): () => void {
   // public after policy tightening and then reuse its previously allowlisted private socket,
   // skipping the net.connect layer. A policy generation therefore owns a fresh Agent generation.
   if (dispatcherBeforeInstall === undefined) dispatcherBeforeInstall = getGlobalDispatcher();
-  const previousInstalled = installedDispatcher;
+  const installOwner = {};
   const dispatcher = new EgressGatingDispatcher(policy);
   installedDispatcher = dispatcher;
+  installedDispatcherOwner = installOwner;
   setGlobalDispatcher(dispatcher);
-  if (previousInstalled !== undefined) {
-    void previousInstalled.destroy().catch(() => {});
-  }
+
+  // Detaching the prior generation from both the global dispatcher and module state retires its
+  // pooled authority. Do not invoke Undici's close()/destroy() here: those third-party teardown
+  // paths late-bind ambient prototype methods such as Map.prototype.values, after app modules
+  // have already executed. Calling them during a later createApp() would let app code intercept
+  // or crash framework bootstrap. With no Kovo-owned reference, the retired Agent and its idle
+  // sockets are reclaimed by Undici's idle timeout/GC; only already-dispatched work can finish.
   let active = true;
   return () => {
     if (!active) return;
     active = false;
-    if (installedDispatcher === dispatcher) {
+    if (installedDispatcherOwner === installOwner) {
       const previous = dispatcherBeforeInstall;
       if (previous !== undefined) setGlobalDispatcher(previous);
       installedDispatcher = undefined;
+      installedDispatcherOwner = undefined;
       dispatcherBeforeInstall = undefined;
-      void dispatcher.close().catch(() => {});
     }
   };
 }

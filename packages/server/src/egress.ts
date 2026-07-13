@@ -1293,6 +1293,7 @@ interface NetConnectFloorState {
     warn: (message: string) => void;
   };
   httpAgentWrapper?: AddRequestFn;
+  installOwner: object;
   originalConnect: ConnectFn;
   originalHttpAgentAddRequest?: AddRequestFn;
   policy: EgressPolicy;
@@ -1340,13 +1341,15 @@ export function installNetConnectFloor(
   warn: (message: string) => void = (m) => console.warn(`[kovo egress] ${m}`),
 ): () => void {
   const proto = net.Socket.prototype as unknown as { connect: ConnectFn };
+  const installOwner = {};
 
   if (netConnectFloorState !== undefined) {
     // Already installed — just swap the active policy.
     netConnectFloorState.policy = policy;
     installHttpAgentReuseFloor(netConnectFloorState);
     applyNetConnectHardening(netConnectFloorState, proto, hardening, warn);
-    return makeUninstall(netConnectFloorState, proto);
+    netConnectFloorState.installOwner = installOwner;
+    return makeUninstall(netConnectFloorState, proto, installOwner);
   }
 
   const original = proto.connect;
@@ -1435,6 +1438,7 @@ export function installNetConnectFloor(
 
   state = {
     hardening: { mode: hardening, warn },
+    installOwner,
     originalConnect: original,
     policy,
     wrapper: patchedConnect,
@@ -1444,7 +1448,7 @@ export function installNetConnectFloor(
   installHttpAgentReuseFloor(state);
   applyNetConnectHardening(state, proto, hardening, warn);
 
-  return makeUninstall(state, proto);
+  return makeUninstall(state, proto, installOwner);
 }
 
 function installHttpAgentReuseFloor(state: NetConnectFloorState): void {
@@ -1538,9 +1542,13 @@ function evaluateHttpAgentRequest(
   return null;
 }
 
-function makeUninstall(state: NetConnectFloorState, proto: { connect: ConnectFn }): () => void {
+function makeUninstall(
+  state: NetConnectFloorState,
+  proto: { connect: ConnectFn },
+  installOwner: object,
+): () => void {
   return () => {
-    if (netConnectFloorState !== state) return;
+    if (netConnectFloorState !== state || state.installOwner !== installOwner) return;
     egressObjectDefineProperty(proto, 'connect', {
       value: state.originalConnect,
       writable: true,

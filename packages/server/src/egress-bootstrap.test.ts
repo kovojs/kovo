@@ -9,6 +9,7 @@ import {
   EgressFloorBootError,
   activeEgressFloor,
   installEgressFloor,
+  installEgressFloorSync,
   registerEgressDatabaseUrl,
   selfProbe,
 } from './egress-bootstrap.js';
@@ -58,6 +59,33 @@ describe('egress bootstrap: dual-layer install + self-probe', () => {
     expect(probe.undiciInstalled).toBe(true);
     expect(warnings.join('\n')).not.toContain('NOT installed');
     expect(warnings.join('\n')).not.toContain('PARTIALLY');
+  });
+
+  it('keeps the current floor installed when an older install is uninstalled', () => {
+    const older = installEgressFloorSync({ allowInternal: ['127.0.0.1:8080'] }, () => {});
+    const current = installEgressFloorSync({ allowInternal: [] }, () => {});
+    teardown = current.uninstall;
+
+    older.uninstall();
+
+    expect(() => selfProbe(() => {}, { failure: 'throw' })).not.toThrow();
+    const socket = new net.Socket();
+    let connectFailure: unknown;
+    try {
+      socket.connect({ host: '169.254.169.254', port: 80 });
+    } catch (error) {
+      connectFailure = error;
+    } finally {
+      socket.destroy();
+    }
+    expect(connectFailure).toMatchObject({ name: EGRESS_BLOCKED_ERROR_NAME });
+
+    current.uninstall();
+    teardown = undefined;
+    expect(selfProbe(() => {})).toEqual({
+      netConnectInstalled: false,
+      undiciInstalled: false,
+    });
   });
 
   it('does not trust public Symbol.for floor state seeded before production boot', async () => {

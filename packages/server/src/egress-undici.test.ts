@@ -76,6 +76,7 @@ describe('undici egress floor (layer a): gates every fetch incl. pooled reuse', 
     dnsLookupMock.mockResolvedValueOnce([{ address: '127.0.0.1', family: 4 }]);
     const allowPolicy = resolveEgressPolicy({ allowInternal: [`localhost:${port}`] }, () => {});
     const uninstallNet = installNetConnectFloor(allowPolicy);
+    let uninstallDenyNet: (() => void) | undefined;
     try {
       uninstall = await installUndiciFloor(allowPolicy);
       const allowed = await fetch(`http://localhost:${port}/hostname-a`);
@@ -83,14 +84,48 @@ describe('undici egress floor (layer a): gates every fetch incl. pooled reuse', 
 
       dnsLookupMock.mockResolvedValueOnce([{ address: '8.8.8.8', family: 4 }]);
       const denyPolicy = resolveEgressPolicy(undefined, () => {});
-      installNetConnectFloor(denyPolicy);
+      uninstallDenyNet = installNetConnectFloor(denyPolicy);
       uninstall = await installUndiciFloor(denyPolicy);
 
       await expect(fetch(`http://localhost:${port}/hostname-b`)).rejects.toSatisfy(
         (error) => reason(error) === EGRESS_BLOCKED_ERROR_NAME || reason(error) === 'loopback',
       );
     } finally {
+      uninstallDenyNet?.();
       uninstallNet();
+    }
+  });
+
+  it('rotates policy generations without consulting a late Map.values replacement', () => {
+    const policy = resolveEgressPolicy(undefined, () => {});
+    const uninstallOlder = installUndiciFloor(policy);
+    const originalValues = Map.prototype.values;
+    let poisonCalls = 0;
+    let installFailure: unknown;
+    let uninstallCurrent: (() => void) | undefined;
+
+    try {
+      Map.prototype.values = function poisonedMapValues() {
+        poisonCalls += 1;
+        throw new Error('late Map.values replacement reached Undici teardown');
+      } as typeof Map.prototype.values;
+      try {
+        uninstallCurrent = installUndiciFloor(policy);
+      } catch (error) {
+        installFailure = error;
+      }
+    } finally {
+      Map.prototype.values = originalValues;
+    }
+
+    const cleanup = uninstallCurrent ?? installUndiciFloor(policy);
+    try {
+      expect(installFailure).toBeUndefined();
+      expect(poisonCalls).toBe(0);
+      expect(isUndiciFloorInstalled()).toBe(true);
+    } finally {
+      cleanup();
+      uninstallOlder();
     }
   });
 
