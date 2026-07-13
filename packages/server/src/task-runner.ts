@@ -683,11 +683,17 @@ function snapshotDurableTaskRunnerHooks(source: unknown): DurableTaskRunnerHooks
   }
   return taskFreeze({
     ...(fetch === undefined ? {} : { fetch: fetch as typeof globalThis.fetch }),
-    ...(onError === undefined ? {} : { onError: onError as DurableTaskRunnerHooks['onError'] }),
+    ...(onError === undefined
+      ? {}
+      : { onError: onError as NonNullable<DurableTaskRunnerHooks['onError']> }),
     ...(runMutation === undefined
       ? {}
-      : { runMutation: runMutation as DurableTaskRunnerHooks['runMutation'] }),
-    ...(runQuery === undefined ? {} : { runQuery: runQuery as DurableTaskRunnerHooks['runQuery'] }),
+      : {
+          runMutation: runMutation as NonNullable<DurableTaskRunnerHooks['runMutation']>,
+        }),
+    ...(runQuery === undefined
+      ? {}
+      : { runQuery: runQuery as NonNullable<DurableTaskRunnerHooks['runQuery']> }),
   });
 }
 

@@ -19,6 +19,7 @@ import {
   type AccessDecision,
 } from './access.js';
 import type { Domain } from './domain.js';
+import { runExactlyOnceAdapter } from './exactly-once-continuation.js';
 import { runMutation, type RunMutationOptions } from './mutation.js';
 import {
   endpointRequestWithoutSession,
@@ -716,7 +717,11 @@ function snapshotRunWebhookOptions<Request extends EndpointRequest>(
     false,
   );
   if (mutationOptions === undefined) return witnessFreeze({});
-  if (typeof mutationOptions !== 'object' || mutationOptions === null || witnessIsArray(mutationOptions)) {
+  if (
+    typeof mutationOptions !== 'object' ||
+    mutationOptions === null ||
+    witnessIsArray(mutationOptions)
+  ) {
     throw new TypeError('runWebhook().mutationOptions must be a stable own-data record.');
   }
 
@@ -731,12 +736,7 @@ function snapshotRunWebhookOptions<Request extends EndpointRequest>(
     'runWebhook().mutationOptions.clientIp',
     false,
   );
-  const db = stableOwnWebhookValue(
-    mutationOptions,
-    'db',
-    'runWebhook().mutationOptions.db',
-    false,
-  );
+  const db = stableOwnWebhookValue(mutationOptions, 'db', 'runWebhook().mutationOptions.db', false);
   const onError = stableOwnWebhookValue(
     mutationOptions,
     'onError',
@@ -764,11 +764,17 @@ function snapshotRunWebhookOptions<Request extends EndpointRequest>(
   return witnessFreeze({
     ...(clientIp === undefined
       ? {}
-      : { clientIp: clientIp as PinnedWebhookMutationOptions<Request>['clientIp'] }),
-    ...(db === undefined ? {} : { db: db as PinnedWebhookMutationOptions<Request>['db'] }),
+      : {
+          clientIp: clientIp as NonNullable<PinnedWebhookMutationOptions<Request>['clientIp']>,
+        }),
+    ...(db === undefined
+      ? {}
+      : { db: db as NonNullable<PinnedWebhookMutationOptions<Request>['db']> }),
     ...(onError === undefined
       ? {}
-      : { onError: onError as PinnedWebhookMutationOptions<Request>['onError'] }),
+      : {
+          onError: onError as NonNullable<PinnedWebhookMutationOptions<Request>['onError']>,
+        }),
     ...(taskScheduler === undefined ? {} : { taskScheduler }),
   });
 }
@@ -1229,7 +1235,8 @@ export async function runWebhook<
   // for '' while still reserving, leaving a latent double-execute window.
   const idemActive = idem !== undefined;
   const replayScope = webhookReplayScope(name);
-  const replayed = idemActive ? await definition.replayStore?.get(replayScope, idem) : undefined;
+  const replayed =
+    idem === undefined ? undefined : await definition.replayStore?.get(replayScope, idem);
   if (replayed) {
     return {
       changes: [],
@@ -1316,8 +1323,8 @@ export async function runWebhook<
       return value as Value;
     };
     const value = definition.transaction
-      ? await definition.transaction(
-          { input, rawBody, request: endpointRequest },
+      ? await runExactlyOnceAdapter(
+          (run) => definition.transaction!({ input, rawBody, request: endpointRequest }, run),
           runHandler,
         )
       : await runHandler(undefined as Tx);

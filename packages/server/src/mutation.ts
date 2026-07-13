@@ -2,6 +2,7 @@ import { isUntrusted, revealUntrusted, type JsonValue } from '@kovojs/core';
 
 import { accessDecisionFor } from './access.js';
 import { requestPrincipalSnapshot } from './auth-principal.js';
+import { runExactlyOnceAdapter } from './exactly-once-continuation.js';
 import {
   forwardSetCookie,
   serializeCookie,
@@ -548,7 +549,10 @@ async function runMutationWithTrackedInput<
 
   try {
     value = definition.transaction
-      ? await definition.transaction(lifecycleRequest, runHandler)
+      ? await runExactlyOnceAdapter(
+          (run) => definition.transaction!(lifecycleRequest, run),
+          runHandler,
+        )
       : await runInDefaultTransaction(lifecycleRequest, runHandler, guardedRequest);
   } catch (error) {
     if (error instanceof MutationRollback) return error.failure;
@@ -566,7 +570,11 @@ async function runMutationWithTrackedInput<
     witnessArrayAppend(changes, registryChanges[index]!, 'Mutation registry change snapshot');
   }
   for (let index = 0; index < manualInvalidations.length; index += 1) {
-    witnessArrayAppend(changes, manualInvalidations[index]!, 'Mutation manual invalidation snapshot');
+    witnessArrayAppend(
+      changes,
+      manualInvalidations[index]!,
+      'Mutation manual invalidation snapshot',
+    );
   }
   const rerunQueryInstances = queriesToRerun(definition.registry?.queries ?? [], changes, input);
   const rerunQueries: string[] = [];
@@ -604,15 +612,18 @@ async function runInDefaultTransaction<Request, GuardedRequest, Value>(
   // request db can open one, so handler/DB errors roll back the framework-owned lifecycle.
   const runAsyncTransaction = asyncMutationTransaction(db);
   if (runAsyncTransaction) {
-    return runAsyncTransaction((transactionDb) =>
-      runHandler(requestWithTransactionDb(lifecycleRequest, transactionDb) as GuardedRequest),
+    return runExactlyOnceAdapter<unknown, Value, Value>(
+      (run) => runAsyncTransaction(run),
+      (transactionDb) =>
+        runHandler(requestWithTransactionDb(lifecycleRequest, transactionDb) as GuardedRequest),
     );
   }
 
-  return witnessReflectApply<Promise<Value> | Value>(db.transaction, db.target, [
-    (transactionDb: unknown) =>
+  return runExactlyOnceAdapter(
+    (run) => witnessReflectApply<Promise<Value> | Value>(db.transaction, db.target, [run]),
+    (transactionDb) =>
       runHandler(requestWithTransactionDb(lifecycleRequest, transactionDb) as GuardedRequest),
-  ]);
+  );
 }
 
 function transactionCapableRequestDb(request: unknown): TransactionCapableRequestDb | undefined {
@@ -665,7 +676,9 @@ function optionalPinnedMutationFunction(
     const descriptor = witnessGetOwnPropertyDescriptor(current, property);
     if (descriptor !== undefined) {
       if (!('value' in descriptor)) {
-        throw new TypeError(`Mutation transaction control ${String(property)} cannot be accessor-backed.`);
+        throw new TypeError(
+          `Mutation transaction control ${String(property)} cannot be accessor-backed.`,
+        );
       }
       return typeof descriptor.value === 'function' ? descriptor.value : undefined;
     }

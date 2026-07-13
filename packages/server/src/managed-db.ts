@@ -34,6 +34,7 @@ import {
   securityClassifier,
 } from '@kovojs/core/internal/security-markers';
 import { requestInputProvenanceForValue } from './request-input-provenance.js';
+import { runExactlyOnceAdapter } from './exactly-once-continuation.js';
 import {
   createWitnessMap,
   createWitnessSet,
@@ -398,11 +399,13 @@ export const createDeclaredWriteDb = securityClassifier(
         }
         if (prop === 'transaction' && typeof value === 'function') {
           return (callback: (tx: unknown) => unknown, ...args: unknown[]) => {
-            const secured = (tx: unknown) =>
-              witnessReflectApply(callback, undefined, [
-                createDeclaredWriteDb(tx as object, safePolicy, safeOptions),
-              ]);
-            return witnessReflectApply(value, target, prependManagedArgument(secured, args));
+            return runExactlyOnceAdapter(
+              (run) => witnessReflectApply(value, target, prependManagedArgument(run, args)),
+              (tx: unknown) =>
+                witnessReflectApply(callback, undefined, [
+                  createDeclaredWriteDb(tx as object, safePolicy, safeOptions),
+                ]),
+            );
           };
         }
         return typeof value === 'function'
@@ -2168,18 +2171,16 @@ function scopedPostgresTransaction(
       'KV414: Postgres scoped transactions require a callback so the framework can establish the request role frame (SPEC §10.3).',
     );
   }
-  const scopedCallback = (tx: unknown): unknown => {
-    if (!isPostgresTransactionClient(tx)) {
-      throw new KovoReadonlyHandleError(
-        'KV433: Postgres transaction callback did not receive a framework-scopeable query/exec client (SPEC §10.3).',
-      );
-    }
-    return runScopedPostgresTransactionCallback(tx, options, callback);
-  };
-  return witnessReflectApply(
-    transactionMethod,
-    target,
-    prependManagedArgument(scopedCallback, args),
+  return runExactlyOnceAdapter(
+    (run) => witnessReflectApply(transactionMethod, target, prependManagedArgument(run, args)),
+    (tx) => {
+      if (!isPostgresTransactionClient(tx)) {
+        throw new KovoReadonlyHandleError(
+          'KV433: Postgres transaction callback did not receive a framework-scopeable query/exec client (SPEC §10.3).',
+        );
+      }
+      return runScopedPostgresTransactionCallback(tx, options, callback);
+    },
   );
 }
 
@@ -2822,7 +2823,10 @@ function postgresTransaction<Result>(
   transaction: Function,
   callback: (tx: PostgresTransactionClient) => Promise<Result>,
 ): Promise<Result> {
-  return witnessReflectApply(transaction, client, [callback]) as Promise<Result>;
+  return runExactlyOnceAdapter<PostgresTransactionClient, Result, Result>(
+    (run) => witnessReflectApply(transaction, client, [run]),
+    callback,
+  );
 }
 
 interface PostgresTransactionControls {

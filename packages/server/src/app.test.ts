@@ -2601,7 +2601,7 @@ describe('server createApp request shell', () => {
       reads: string[];
       select(userId?: string): { count: number };
       state: { count: number; lastWriter: string };
-      transaction<Result>(callback: (db: AppDb) => Result): Result;
+      transaction<Result>(callback: (db: AppDb) => Promise<Result>): Promise<Result>;
       update(table: string): { set(value: { count: number; lastWriter: string }): void };
     }
 
@@ -2620,8 +2620,8 @@ describe('server createApp request shell', () => {
         return { count: this.state.count };
       },
       state,
-      transaction<Result>(callback: (transactionDb: AppDb) => Result) {
-        return callback(this);
+      async transaction<Result>(callback: (transactionDb: AppDb) => Promise<Result>) {
+        return await callback(this);
       },
       update() {
         return {

@@ -21,6 +21,7 @@ import {
   type SqlSafetyMode,
 } from '@kovojs/core/internal/sql-safety';
 import { securityClassifier } from '@kovojs/core/internal/security-markers';
+import { runExactlyOnceAdapter } from './exactly-once-continuation.js';
 import {
   Column,
   count as drizzleCount,
@@ -2100,16 +2101,12 @@ function guardedTransactionMethod(
       if (sqlite) return sqlite;
     }
     return runQueuedManagedTransaction(target, () =>
-      witnessReflectApply(
-        value,
-        target,
-        prependSqlSafetyArgument(
-          (tx: unknown) =>
-            witnessReflectApply(callback, undefined, [
-              wrapTransactionDb(tx, mode, proxyCache, methodCache, writePolicy),
-            ]),
-          args,
-        ),
+      runExactlyOnceAdapter(
+        (run) => witnessReflectApply(value, target, prependSqlSafetyArgument(run, args)),
+        (tx: unknown) =>
+          witnessReflectApply(callback, undefined, [
+            wrapTransactionDb(tx, mode, proxyCache, methodCache, writePolicy),
+          ]),
       ),
     );
   };

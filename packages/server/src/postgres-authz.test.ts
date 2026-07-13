@@ -218,9 +218,9 @@ describe('Postgres/PGlite owner RLS runtime floor', () => {
       transaction<Result>(callback: (tx: FakePostgresClient) => Promise<Result>): Promise<Result>;
     };
     const client: FakePostgresClient = {
-      transaction<Result>(callback: (tx: FakePostgresClient) => Promise<Result>) {
+      async transaction<Result>(callback: (tx: FakePostgresClient) => Promise<Result>) {
         log.push('transaction');
-        return callback(this);
+        return await callback(this);
       },
       exec(statement: string) {
         log.push(`exec:${statement}`);

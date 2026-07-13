@@ -24,6 +24,7 @@ import {
   type NonRequestPrincipalPosture,
 } from './auth-principal.js';
 import { registerEgressDatabaseUrl } from './egress-bootstrap.js';
+import { runExactlyOnceAdapter } from './exactly-once-continuation.js';
 import { egressDecodeURIComponent, egressUrl, egressUrlUsername } from './egress-intrinsics.js';
 import {
   createDeclaredWriteDb,
@@ -3277,16 +3278,22 @@ function invokeCapturedPgliteTransaction<Result>(
   if (typeof callback !== 'function') {
     throw new TypeError('PGlite transaction callback must be callable.');
   }
-  const invocationArgs: unknown[] = [
-    async (transaction: unknown): Promise<Result> =>
-      callback(pinPostgresPgliteTransactionClient(transaction)),
-  ];
-  appendPostgresDenseValues(
-    invocationArgs,
-    trailingArgs,
-    'PGlite transaction invocation arguments',
+  return runExactlyOnceAdapter(
+    (run) => {
+      const invocationArgs: unknown[] = [run];
+      appendPostgresDenseValues(
+        invocationArgs,
+        trailingArgs,
+        'PGlite transaction invocation arguments',
+      );
+      return witnessReflectApply<Promise<Result>>(
+        postgresPgliteTransaction,
+        receiver,
+        invocationArgs,
+      );
+    },
+    (transaction: unknown) => callback(pinPostgresPgliteTransactionClient(transaction)),
   );
-  return witnessReflectApply<Promise<Result>>(postgresPgliteTransaction, receiver, invocationArgs);
 }
 
 function pinPostgresPgliteTransactionClient(transaction: unknown): RuntimeTransactionClient {

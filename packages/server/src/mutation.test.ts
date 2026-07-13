@@ -1021,13 +1021,13 @@ describe('server mutation lifecycle', () => {
     const typeOnly = undefined as unknown as boolean;
     const transactional = mutation('cart/add', {
       input: s.object({ productId: s.string() }),
-      transaction(request: TxRequest, run) {
+      async transaction(request: TxRequest, run) {
         request.db.txOnly();
         if (typeOnly) {
           // @ts-expect-error transaction callbacks must receive the typed request shape.
           void run({ db: { write() {} } });
         }
-        return run(request);
+        return await run(request);
       },
       handler(input, request: TxRequest) {
         request.db.txOnly();
@@ -1092,6 +1092,58 @@ describe('server mutation lifecycle', () => {
       status: 422,
     });
     expect(events).toEqual(['begin', 'handler', 'rollback']);
+  });
+
+  it('rejects configured transaction adapters that invoke a mutation handler more than once', async () => {
+    let handlerCalls = 0;
+    const transactional = mutation('cart/transaction-handler-once', {
+      input: s.object({ productId: s.string() }),
+      async transaction(request: {}, run) {
+        const first = await run(request);
+        try {
+          await run(request);
+        } catch {
+          // A caught second call must still poison the adapter outcome.
+        }
+        return first;
+      },
+      handler(input) {
+        handlerCalls += 1;
+        return input.productId;
+      },
+    });
+
+    await expect(runMutation(transactional, { productId: 'p1' }, {})).rejects.toThrow(
+      /exactly one invocation/u,
+    );
+    expect(handlerCalls).toBe(1);
+  });
+
+  it('rejects default database transactions that invoke a mutation handler more than once', async () => {
+    let handlerCalls = 0;
+    const transactional = mutation('cart/default-transaction-handler-once', {
+      input: s.object({ productId: s.string() }),
+      handler(input) {
+        handlerCalls += 1;
+        return input.productId;
+      },
+    });
+    const db = {
+      async transaction<Result>(callback: (tx: typeof db) => Promise<Result>) {
+        const first = await callback(this);
+        try {
+          await callback(this);
+        } catch {
+          // A caught second callback must still poison the default transaction outcome.
+        }
+        return first;
+      },
+    };
+
+    await expect(runMutation(transactional, { productId: 'p1' }, { db })).rejects.toThrow(
+      /exactly one invocation/u,
+    );
+    expect(handlerCalls).toBe(1);
   });
 
   it('forwards committed mutation Set-Cookie headers in enhanced responses', async () => {
@@ -1416,10 +1468,10 @@ describe('server mutation lifecycle', () => {
         {},
         {
           db: () => ({
-            transaction<Result>(
-              callback: (tx: { execute(statement: unknown): unknown }) => Result,
-            ): Result {
-              return callback({
+            async transaction<Result>(
+              callback: (tx: { execute(statement: unknown): unknown }) => Promise<Result>,
+            ): Promise<Result> {
+              return await callback({
                 execute(statement: unknown) {
                   calls.push(statement);
                   return 'ok';

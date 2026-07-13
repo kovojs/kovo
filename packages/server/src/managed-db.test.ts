@@ -171,11 +171,11 @@ function fakeDb(log: string[]) {
       log.push('execute');
       return Promise.resolve(statement);
     },
-    transaction<Result>(
-      callback: (tx: { execute(statement: unknown): Promise<unknown> }) => Result,
+    async transaction<Result>(
+      callback: (tx: { execute(statement: unknown): Promise<unknown> }) => Promise<Result>,
     ) {
       log.push('transaction');
-      return callback({
+      return await callback({
         execute(statement: unknown) {
           log.push('tx.execute');
           return Promise.resolve(statement);
@@ -360,9 +360,9 @@ function runtimeSqlMatrixRawDb(
 
   if (sink === 'transaction') {
     return {
-      transaction(callback: (tx: { execute(statement: unknown): unknown }) => unknown) {
+      async transaction(callback: (tx: { execute(statement: unknown): unknown }) => unknown) {
         log.push(`${dialectName}.transaction`);
-        return callback({
+        return await callback({
           execute(statement: unknown) {
             log.push(`${dialectName}.transaction.execute`);
             return statement;
@@ -3125,6 +3125,38 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
     expect(log).toEqual(['insert:contacts']);
   });
 
+  it('rejects declared-write drivers that invoke the transaction callback twice', async () => {
+    let callbackCalls = 0;
+    const raw = {
+      async transaction<Result>(callback: (tx: typeof raw) => Promise<Result>) {
+        const first = await callback(this);
+        try {
+          await callback(this);
+        } catch {
+          // A driver cannot erase the second invocation by catching it.
+        }
+        return first;
+      },
+    };
+    const handle = createDeclaredWriteDb(
+      raw,
+      { tables: ['public.contacts'] },
+      {
+        dialectLabel: 'proof',
+        normalizeTableName: (table) => (table.includes('.') ? table : `public.${table}`),
+        tableNames: () => ['contacts'],
+      },
+    );
+
+    await expect(
+      handle.transaction(async () => {
+        callbackCalls += 1;
+        return 'ok';
+      }),
+    ).rejects.toThrow(/exactly one invocation/u);
+    expect(callbackCalls).toBe(1);
+  });
+
   it('keeps declared Drizzle writes closed after late Set.has replacement', async () => {
     const writes: string[] = [];
     const raw = {
@@ -3506,9 +3538,9 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
   it('server-owned Postgres read-only client sets transaction read-only before queries', async () => {
     const log: string[] = [];
     const client = {
-      transaction<Result>(callback: (tx: typeof client) => Promise<Result>) {
+      async transaction<Result>(callback: (tx: typeof client) => Promise<Result>) {
         log.push('transaction');
-        return callback(this);
+        return await callback(this);
       },
       exec(statement: string) {
         log.push(`exec:${statement}`);
@@ -3622,8 +3654,8 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
       },
     };
     const client = {
-      transaction<Result>(callback: (value: typeof tx) => Promise<Result>) {
-        return callback(tx);
+      async transaction<Result>(callback: (value: typeof tx) => Promise<Result>) {
+        return await callback(tx);
       },
     };
     const scoped = createPostgresScopedClient(client, {
@@ -3644,9 +3676,9 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
   it('server-owned Postgres scoped client parameterizes the principal before assuming the app role', async () => {
     const log: string[] = [];
     const client = {
-      transaction<Result>(callback: (tx: typeof client) => Promise<Result>) {
+      async transaction<Result>(callback: (tx: typeof client) => Promise<Result>) {
         log.push('transaction');
-        return callback(this);
+        return await callback(this);
       },
       exec(statement: string) {
         log.push(`exec:${statement}`);
@@ -3674,6 +3706,39 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
     expect(() => scoped.exec('select 1')).toThrow(/parameterized db\.query/);
   });
 
+  it('rejects scoped Postgres drivers that invoke the framework transaction callback twice', async () => {
+    const log: string[] = [];
+    const client = {
+      async transaction<Result>(callback: (tx: typeof client) => Promise<Result>) {
+        const first = await callback(this);
+        try {
+          await callback(this);
+        } catch {
+          // A caught second callback must still poison the driver outcome.
+        }
+        return first;
+      },
+      exec(statement: string) {
+        log.push(`exec:${statement}`);
+        return Promise.resolve();
+      },
+      query(statement: string, params?: unknown[]) {
+        log.push(`query:${statement}:${JSON.stringify(params ?? [])}`);
+        return Promise.resolve([{ id: 'c1' }]);
+      },
+    };
+    const scoped = createPostgresScopedClient(client, {
+      principal: 'user-1',
+      readOnly: true,
+      role: 'kovo_reader',
+    });
+
+    await expect(scoped.query('select id from contacts')).rejects.toThrow(
+      /exactly one invocation/u,
+    );
+    expect(log.filter((entry) => entry === 'query:select id from contacts:[]')).toHaveLength(1);
+  });
+
   it('provides only the inert client prototype shape Drizzle requires for transactions', () => {
     const scoped = createPostgresScopedClient({
       transaction<Result>(callback: (tx: unknown) => Result) {
@@ -3694,8 +3759,8 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
   it('pins the Postgres principal and role options before app code can mutate them', async () => {
     const log: string[] = [];
     const client = {
-      transaction<Result>(callback: (tx: typeof client) => Promise<Result>) {
-        return callback(this);
+      async transaction<Result>(callback: (tx: typeof client) => Promise<Result>) {
+        return await callback(this);
       },
       exec(statement: string) {
         log.push(`exec:${statement}`);
@@ -3738,9 +3803,9 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
         log.push(`raw:${statement}`);
         return Promise.resolve([{ secret: 'victim-secret' }]);
       },
-      transaction<Result>(callback: (tx: typeof client) => Promise<Result>) {
+      async transaction<Result>(callback: (tx: typeof client) => Promise<Result>) {
         log.push('transaction');
-        return callback(this);
+        return await callback(this);
       },
       exec(statement: string) {
         log.push(`exec:${statement}`);
@@ -3773,9 +3838,9 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
   it('rejects unsafe app SQL before scoped Postgres query execution', async () => {
     const log: string[] = [];
     const client = {
-      transaction<Result>(callback: (tx: typeof client) => Promise<Result>) {
+      async transaction<Result>(callback: (tx: typeof client) => Promise<Result>) {
         log.push('transaction');
-        return callback(this);
+        return await callback(this);
       },
       exec(statement: string) {
         log.push(`exec:${statement}`);
@@ -3955,9 +4020,9 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
   it('allows only the single-statement app Postgres command allowlist', async () => {
     const log: string[] = [];
     const client = {
-      transaction<Result>(callback: (tx: typeof client) => Promise<Result>) {
+      async transaction<Result>(callback: (tx: typeof client) => Promise<Result>) {
         log.push('transaction');
-        return callback(this);
+        return await callback(this);
       },
       exec(statement: string) {
         log.push(`exec:${statement}`);
@@ -3997,9 +4062,9 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
   it('scoped Postgres query configs preserve driver metadata with copied text and values', async () => {
     const log: string[] = [];
     const client = {
-      transaction<Result>(callback: (tx: typeof client) => Promise<Result>) {
+      async transaction<Result>(callback: (tx: typeof client) => Promise<Result>) {
         log.push('transaction');
-        return callback(this);
+        return await callback(this);
       },
       exec(statement: string) {
         log.push(`exec:${statement}`);
@@ -4095,11 +4160,9 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
         return Promise.resolve([]);
       }
 
-      transaction<Result>(
-        callback: (tx: this) => Promise<Result> | Result,
-      ): Promise<Result> | Result {
+      async transaction<Result>(callback: (tx: this) => Promise<Result>): Promise<Result> {
         if (!this.#ready) throw new Error('not ready');
-        return callback(this);
+        return await callback(this);
       }
     }
 
@@ -4430,6 +4493,35 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
       ),
     ).rejects.toThrow(/KV406/);
     expect(log).toEqual(['transaction', 'tx.execute', 'transaction']);
+  });
+
+  it('rejects managed SQL drivers that invoke a transaction callback twice', async () => {
+    let callbackCalls = 0;
+    const raw = {
+      execute(statement: unknown) {
+        return statement;
+      },
+      async transaction<Result>(callback: (tx: typeof raw) => Promise<Result> | Result) {
+        const first = await callback(this);
+        try {
+          await callback(this);
+        } catch {
+          // The managed wrapper must remember a caught second invocation.
+        }
+        return first;
+      },
+    };
+    const handle = managedDb(raw, 'write', {
+      sqlWritePolicy: { tables: ['products'], touches: ['product'] },
+    });
+
+    await expect(
+      handle.transaction(async () => {
+        callbackCalls += 1;
+        return 'ok';
+      }),
+    ).rejects.toThrow(/exactly one invocation/u);
+    expect(callbackCalls).toBe(1);
   });
 
   it('write mode enforces SQLite top-level raw SQL sinks', async () => {

@@ -1059,9 +1059,7 @@ export async function resolveLifecycleRequest<Request, SessionValue = unknown, D
   return lifecycleRequest as LifecycleRequest<Request, SessionValue, DbValue>;
 }
 
-function requestOwnDb(value: unknown):
-  | { present: false }
-  | { present: true; value: unknown } {
+function requestOwnDb(value: unknown): { present: false } | { present: true; value: unknown } {
   if ((typeof value !== 'object' && typeof value !== 'function') || value === null) {
     return { present: false };
   }
@@ -1205,10 +1203,10 @@ function snapshotRateLimitOptions<Request>(
   const per = stableRateLimitOption(source, 'per', false);
   const windowMs = stableRateLimitOption(source, 'windowMs', false);
   return witnessFreeze({
-    ...(key === undefined ? {} : { key: key as RateLimitOptions<Request>['key'] }),
+    ...(key === undefined ? {} : { key: key as NonNullable<RateLimitOptions<Request>['key']> }),
     max: max as number,
     ...(maxKeys === undefined ? {} : { maxKeys: maxKeys as number }),
-    ...(per === undefined ? {} : { per: per as RateLimitOptions<Request>['per'] }),
+    ...(per === undefined ? {} : { per: per as NonNullable<RateLimitOptions<Request>['per']> }),
     ...(windowMs === undefined ? {} : { windowMs: windowMs as number }),
   });
 }

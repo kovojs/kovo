@@ -76,8 +76,8 @@ describe('runMutation — StaleVersionError → typed 409 outcome (KV429)', () =
   it('StaleVersionError thrown inside a transaction wrapper also produces 409', async () => {
     const txMutation = mutation('products/tx-buy', {
       input: s.object({ id: s.string(), prevVer: s.number().int() }),
-      transaction(_request, run) {
-        return run(_request as never);
+      async transaction(_request, run) {
+        return await run(_request as never);
       },
       handler() {
         throw new StaleVersionError();

@@ -782,6 +782,129 @@ describe('server webhook primitive', () => {
     expect(writes).toBe(0);
   });
 
+  it('fails closed when a webhook transaction attempts to invoke its handler more than once', async () => {
+    const replayStore = createMemoryWebhookReplayStore();
+    let handlerCalls = 0;
+    const wh = webhook('/webhooks/transaction-handler-once', {
+      handler(input) {
+        handlerCalls += 1;
+        return input.id;
+      },
+      idempotency: (input) => input.id,
+      input: s.object({ id: s.string() }),
+      replayStore,
+      async transaction(_context, run) {
+        const first = await run({});
+        try {
+          await run({});
+        } catch {
+          // Catching the rejected second call must not clear the framework violation.
+        }
+        return first;
+      },
+      verify: 'none',
+      verifyJustification: 'fixture-only webhook transaction cardinality regression',
+    });
+
+    const result = await runWebhook(
+      wh,
+      new Request('https://example.test/webhooks/transaction-handler-once', {
+        body: JSON.stringify({ id: 'evt_once' }),
+        method: 'POST',
+      }),
+    );
+
+    expect(result.response.status).toBe(500);
+    expect(handlerCalls).toBe(1);
+  });
+
+  it('revokes a webhook transaction continuation returned without any handler invocation', async () => {
+    const replayStore = createMemoryWebhookReplayStore();
+    let handlerCalls = 0;
+    let lateRun: ((tx: {}) => Promise<string>) | undefined;
+    const wh = webhook('/webhooks/transaction-handler-late', {
+      handler(input) {
+        handlerCalls += 1;
+        return input.id;
+      },
+      idempotency: (input) => input.id,
+      input: s.object({ id: s.string() }),
+      replayStore,
+      transaction(_context, run) {
+        lateRun = run;
+        return Promise.resolve('forged');
+      },
+      verify: 'none',
+      verifyJustification: 'fixture-only webhook late transaction regression',
+    });
+
+    const result = await runWebhook(
+      wh,
+      new Request('https://example.test/webhooks/transaction-handler-late', {
+        body: JSON.stringify({ id: 'evt_late' }),
+        method: 'POST',
+      }),
+    );
+
+    expect(result.response.status).toBe(500);
+    expect(handlerCalls).toBe(0);
+    expect(() => lateRun?.({})).toThrow(/exactly once/u);
+    expect(handlerCalls).toBe(0);
+  });
+
+  it('waits for an unawaited started webhook handler to quiesce before failing closed', async () => {
+    const replayStore = createMemoryWebhookReplayStore();
+    let handlerCalls = 0;
+    let release!: () => void;
+    let markStarted!: () => void;
+    const blocker = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const started = new Promise<void>((resolve) => {
+      markStarted = resolve;
+    });
+    const wh = webhook('/webhooks/transaction-handler-pending', {
+      async handler(input) {
+        handlerCalls += 1;
+        markStarted();
+        await blocker;
+        return input.id;
+      },
+      idempotency: (input) => input.id,
+      input: s.object({ id: s.string() }),
+      replayStore,
+      transaction(_context, run) {
+        void run({}).then(
+          () => undefined,
+          () => undefined,
+        );
+        return Promise.resolve('forged');
+      },
+      verify: 'none',
+      verifyJustification: 'fixture-only webhook pending transaction regression',
+    });
+
+    let completed = false;
+    const pending = runWebhook(
+      wh,
+      new Request('https://example.test/webhooks/transaction-handler-pending', {
+        body: JSON.stringify({ id: 'evt_pending' }),
+        method: 'POST',
+      }),
+    ).then((result) => {
+      completed = true;
+      return result;
+    });
+    await started;
+    expect(handlerCalls).toBe(1);
+    expect(completed).toBe(false);
+
+    release();
+    const result = await pending;
+    expect(result.response.status).toBe(500);
+    expect(handlerCalls).toBe(1);
+  });
+
   it('pins the denied webhook transaction membrane against late global Proxy replacement', async () => {
     const replayStore = createMemoryWebhookReplayStore();
     let injectedWrites = 0;
