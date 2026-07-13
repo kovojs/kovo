@@ -16,6 +16,7 @@ import {
   securityArrayJoin,
   securityArrayPush,
   securityHeadersGet,
+  securityIsArrayBuffer,
   securityIsHeaders,
   securityIsMap,
   securityIsUint8Array,
@@ -34,6 +35,7 @@ import {
   securityStringToLowerCase,
   securityStringTrim,
   securityTextEncode,
+  securityUint8ArrayFromArrayBuffer,
   securityUrlSnapshot,
 } from './response-security-intrinsics.js';
 import {
@@ -753,7 +755,9 @@ export const routeResponseToDocumentResponse = wireEmitter(
   function (response: RoutePageResponse): DocumentRouteResponseBase {
     const documentResponse = {
       ...response,
-      body: response.body instanceof ArrayBuffer ? new Uint8Array(response.body) : response.body,
+      body: securityIsArrayBuffer(response.body)
+        ? securityUint8ArrayFromArrayBuffer(response.body)
+        : response.body,
     };
     const clonedResponse =
       (response as { routeResponse?: unknown }).routeResponse === true
@@ -803,8 +807,8 @@ function assertInlineBody(
 /** Buffer an in-memory body to bytes for sniffing; `undefined` for an un-bufferable stream. */
 function inlineBodyBytes(body: RouteResponseBody): Uint8Array | undefined {
   if (typeof body === 'string') return securityTextEncode(body);
-  if (body instanceof ArrayBuffer) return new Uint8Array(body);
-  if (body instanceof Uint8Array) return body;
+  if (securityIsArrayBuffer(body)) return securityUint8ArrayFromArrayBuffer(body);
+  if (securityIsUint8Array(body)) return body;
   return undefined; // ReadableStream — not bufferable without consuming it.
 }
 

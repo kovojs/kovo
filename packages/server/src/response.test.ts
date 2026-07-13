@@ -371,6 +371,41 @@ describe('server response adapters', () => {
     expect(new TextDecoder().decode(documentResponse.body as Uint8Array)).toBe('page');
   });
 
+  it('normalizes ArrayBuffer bodies through pinned carrier constructors', () => {
+    const NativeArrayBuffer = globalThis.ArrayBuffer;
+    const NativeUint8Array = globalThis.Uint8Array;
+    const source = new TextEncoder().encode('page').buffer;
+    const response: RoutePageResponse = {
+      body: source,
+      headers: { 'Content-Type': 'text/html; charset=utf-8' },
+      status: 200,
+    };
+
+    class PoisonArrayBuffer {
+      static [Symbol.hasInstance](): boolean {
+        throw new Error('ambient ArrayBuffer classifier reached');
+      }
+    }
+    class PoisonUint8Array {
+      constructor() {
+        throw new Error('ambient Uint8Array constructor reached');
+      }
+    }
+
+    let documentResponse: ReturnType<typeof routeResponseToDocumentResponse> | undefined;
+    globalThis.ArrayBuffer = PoisonArrayBuffer as unknown as ArrayBufferConstructor;
+    globalThis.Uint8Array = PoisonUint8Array as unknown as Uint8ArrayConstructor;
+    try {
+      documentResponse = routeResponseToDocumentResponse(response);
+    } finally {
+      globalThis.ArrayBuffer = NativeArrayBuffer;
+      globalThis.Uint8Array = NativeUint8Array;
+    }
+
+    expect(documentResponse?.body).toBeInstanceOf(NativeUint8Array);
+    expect(new TextDecoder().decode(documentResponse?.body as Uint8Array)).toBe('page');
+  });
+
   it('preserves blessed redirect Location headers through document wrapping', () => {
     const documentResponse = routeResponseToDocumentResponse(
       blessRedirectResponse({
@@ -475,6 +510,35 @@ describe('server response adapters', () => {
       verifiedSafe: true,
     });
     expect(ok.contentDisposition).toBe('inline');
+  });
+
+  it('does not let poisoned byte globals forge an inline stream sniff result (KV428)', () => {
+    const NativeArrayBuffer = globalThis.ArrayBuffer;
+    const NativeUint8Array = globalThis.Uint8Array;
+    const body = new ReadableStream<Uint8Array>();
+    const forgedPng = new NativeUint8Array([
+      0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x01,
+    ]);
+
+    class PoisonArrayBuffer {
+      static [Symbol.hasInstance](value: unknown): boolean {
+        return value === body;
+      }
+    }
+    const PoisonUint8Array = function () {
+      return forgedPng;
+    } as unknown as Uint8ArrayConstructor;
+
+    globalThis.ArrayBuffer = PoisonArrayBuffer as unknown as ArrayBufferConstructor;
+    globalThis.Uint8Array = PoisonUint8Array;
+    try {
+      expect(() =>
+        respond.stream(body, { contentType: 'text/html', disposition: 'inline' }),
+      ).toThrow(/KV428/u);
+    } finally {
+      globalThis.ArrayBuffer = NativeArrayBuffer;
+      globalThis.Uint8Array = NativeUint8Array;
+    }
   });
 
   it('does not let file header maps override reserved safety headers', () => {

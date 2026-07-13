@@ -6,6 +6,7 @@ import {
 import { blessSink, isBlessedSink } from '@kovojs/core/internal/sink-policy';
 
 import { respond, type RouteResponseOutcome, type RouteStreamOptions } from './response.js';
+import { securityIsUint8Array } from './response-security-intrinsics.js';
 import {
   witnessCreateNullRecord,
   witnessFreeze,
@@ -72,7 +73,7 @@ async function serveRootedFile(
   if (!isFrameworkFileSystemBoundary(fileSystem)) return undefined;
   const closedOptions = snapshotRootedFileServeOptions(options);
   const file = await fileSystem.readFile(requestedPath);
-  if (file === undefined || !(file.body instanceof Uint8Array)) return undefined;
+  if (file === undefined || !securityIsUint8Array(file.body)) return undefined;
   return respond.stream(file.body, {
     ...closedOptions,
     filename: closedOptions.filename ?? file.fileName,
