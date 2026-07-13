@@ -11,7 +11,9 @@ import { describe, expect, it } from 'vitest';
 
 import { applyInlineMutationResponseChunks } from '../../browser/src/inline-response-apply.js';
 import { applyMutationResponseChunksToRuntime } from '../../browser/src/apply-mutation-response.js';
+import { createBrowserNavigationSecurityControls } from '../../browser/src/navigation-security-intrinsics.js';
 import { applyQueryChunksToRuntime } from '../../browser/src/query-apply.js';
+import { kovoCreateHTML } from '../../browser/src/trusted-types.js';
 import {
   readQueryElementChunk,
   readMutationResponseBodyChunks,
@@ -144,9 +146,11 @@ describe('compiler/browser oracle contract', () => {
       },
     };
     const inlineAppliedFragments = applyInlineMutationResponseChunks(inlineChunks, {
+      createHTML: kovoCreateHTML,
       findFragmentTarget(target) {
         return inlineRoot.findFragmentTarget(target);
       },
+      security: createBrowserNavigationSecurityControls(),
     });
 
     try {
