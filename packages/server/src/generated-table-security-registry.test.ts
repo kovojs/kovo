@@ -39,9 +39,26 @@ describe('generated table-security registry', () => {
     expect(extractCompilerBoundKovoRuntimeDbMetadata([users]).secretTableNames.has('users')).toBe(
       true,
     );
+    registerGeneratedTableSecurityManifest(manifest);
     release();
 
-    registerGeneratedTableSecurityManifest(manifest);
+    const originalAnnotation = users[Table.Symbol.ExtraConfigBuilder];
+    Object.defineProperty(users, Table.Symbol.ExtraConfigBuilder, {
+      configurable: true,
+      enumerable: true,
+      value: Object.assign(() => [], { domain: 'public', public: true }),
+      writable: true,
+    });
+    expect(() => extractCompilerBoundKovoRuntimeDbMetadata([users])).toThrow(
+      /KV414: runtime Drizzle table security/u,
+    );
+    Object.defineProperty(users, Table.Symbol.ExtraConfigBuilder, {
+      configurable: true,
+      enumerable: true,
+      value: originalAnnotation,
+      writable: true,
+    });
+
     expect(registerGeneratedTableSecurityManifest(manifest)).toEqual(manifest);
     expect(extractCompilerBoundKovoRuntimeDbMetadata([users]).secretTableNames.has('users')).toBe(
       true,

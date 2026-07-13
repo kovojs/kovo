@@ -1653,6 +1653,53 @@ export default async function handler(request) {
     }
   });
 
+  it('normalizes C0 and DEL bytes in emitted Node static-file disposition filenames', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kovo-node-preset-filename-controls-'));
+    let server: Server | undefined;
+
+    try {
+      const build = await writeKovoNeutralBuild({
+        app: createApp({
+          routes: [
+            route('/dynamic', {
+              guard: () => true,
+              page: () => renderedHtml('<main>Dynamic</main>'),
+            }),
+          ],
+        }),
+        outDir: join(root, '.kovo'),
+        serverHandlerSource:
+          'export default async function handler() { return new Response("dynamic"); }\n',
+      });
+      const nodeOutDir = join(root, 'node-output');
+      await node({ dockerfile: false }).emit!(build, {
+        declaredEnv: [],
+        log() {},
+        outDir: nodeOutDir,
+        readNeutral() {
+          return build;
+        },
+      });
+
+      const fileName = 'safe\u0001\u007f.js';
+      await mkdir(join(nodeOutDir, 'client', 'assets'), { recursive: true });
+      await writeFile(join(nodeOutDir, 'client', 'assets', fileName), 'safe-asset');
+      const serverModule = (await import(
+        `${pathToFileURL(join(nodeOutDir, 'server.mjs')).href}?controls=${Date.now()}`
+      )) as { createKovoNodeServer(): Server };
+      server = serverModule.createKovoNodeServer();
+      const baseUrl = await listen(server);
+
+      const response = await fetch(`${baseUrl}/assets/${encodeURIComponent(fileName)}`);
+      expect(response.status).toBe(200);
+      expect(response.headers.get('content-disposition')).toBe('inline; filename="safe__.js"');
+      await expect(response.text()).resolves.toBe('safe-asset');
+    } finally {
+      if (server !== undefined) await close(server);
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
   it('logs unhandled production node server errors to stderr before returning a 500', async () => {
     const root = await mkdtemp(join(tmpdir(), 'kovo-node-preset-errors-'));
     const originalConsoleError = console.error;

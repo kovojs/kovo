@@ -2962,11 +2962,14 @@ const nativeObjectKeys = NativeObject.keys;
 const nativeRegExpExec = NativeRegExp.prototype.exec;
 const nativeRequestUrlGetter = nativeObjectGetOwnPropertyDescriptor(NativeRequest.prototype, 'url').get;
 const nativeSetHas = NativeSet.prototype.has;
+const nativeStringCharCodeAt = NativeString.prototype.charCodeAt;
 const nativeStringEndsWith = NativeString.prototype.endsWith;
+const nativeStringFromCharCode = NativeString.fromCharCode;
 const nativeStringIncludes = NativeString.prototype.includes;
 const nativeStringSlice = NativeString.prototype.slice;
 const nativeStringStartsWith = NativeString.prototype.startsWith;
 const nativeStringToLowerCase = NativeString.prototype.toLowerCase;
+const nativeStringTrim = NativeString.prototype.trim;
 const nativeUrlPathnameGetter = nativeObjectGetOwnPropertyDescriptor(NativeURL.prototype, 'pathname').get;
 const nativeBufferByteLength = Buffer.byteLength;
 const nativeServerResponseDestroy = stablePrototypeFunction(ServerResponse.prototype, 'destroy');
@@ -3435,12 +3438,25 @@ function routeOutcomeContentDisposition(options, resolvedPath) {
 }
 
 function contentDispositionFilename(filename) {
-  let safe = '';
+  let normalized = '';
   for (let index = 0; index < filename.length; index += 1) {
     const character = filename[index];
-    safe += character === '\\r' || character === '\\n' || character === '"' ? '_' : character;
+    const code = apply(nativeStringCharCodeAt, filename, [index]);
+    normalized += code <= 0x1f || code === 0x7f || character === '/' || character === '\\\\'
+      ? '_'
+      : character;
   }
-  return safe;
+  normalized = apply(nativeStringTrim, normalized, []);
+  const safe = normalized.length > 0
+    ? apply(nativeStringSlice, normalized, [0, 255])
+    : 'download';
+  let escaped = '';
+  for (let index = 0; index < safe.length; index += 1) {
+    escaped += safe[index] === '"'
+      ? apply(nativeStringFromCharCode, NativeString, [92, 34])
+      : safe[index];
+  }
+  return escaped;
 }
 
 async function writeRouteOutcomeToNode(outcome, nodeResponse, method) {

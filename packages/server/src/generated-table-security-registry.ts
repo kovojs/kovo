@@ -12,6 +12,7 @@ import { buildSecuritySourceLiteral } from './build-security-intrinsics.js';
 
 let registeredManifest: KovoRuntimeTableSecurityManifest | undefined;
 let registeredManifestLiteral: string | undefined;
+let registeredManifestPermanent = false;
 
 /**
  * @internal Register the compiler-owned table-security manifest before app modules evaluate.
@@ -25,11 +26,19 @@ export function registerGeneratedTableSecurityManifest(
 ): RuntimeTableSecurityWireManifest {
   const { literal, snapshot } = snapshotGeneratedTableSecurityManifest(manifest);
   if (registeredManifest !== undefined) {
-    if (literal === registeredManifestLiteral) return snapshot;
+    if (literal === registeredManifestLiteral) {
+      // A generated boot registration permanently adopts an identical command-scoped snapshot.
+      // Otherwise the caller that installed the temporary copy could retain its release closure,
+      // clear the compiler authority after this function returned, and make runtime extraction
+      // fall back to mutable Drizzle callbacks (SPEC §6.6 rule 6 / §10.3 C9).
+      registeredManifestPermanent = true;
+      return snapshot;
+    }
     throw new TypeError('Generated table-security manifest is already registered for this boot.');
   }
   registeredManifest = snapshot;
   registeredManifestLiteral = literal;
+  registeredManifestPermanent = true;
   return snapshot;
 }
 
@@ -52,13 +61,19 @@ export function installGeneratedTableSecurityManifestForCommand(
   }
   registeredManifest = snapshot;
   registeredManifestLiteral = literal;
+  registeredManifestPermanent = false;
   let active = true;
   return () => {
     if (!active) return;
     active = false;
-    if (registeredManifest === snapshot && registeredManifestLiteral === literal) {
+    if (
+      !registeredManifestPermanent &&
+      registeredManifest === snapshot &&
+      registeredManifestLiteral === literal
+    ) {
       registeredManifest = undefined;
       registeredManifestLiteral = undefined;
+      registeredManifestPermanent = false;
     }
   };
 }
