@@ -1,8 +1,5 @@
 import type { Guard } from './guards.js';
-import {
-  securityStringCharCodeAt,
-  securityStringTrim,
-} from './response-security-intrinsics.js';
+import { securityStringCharCodeAt, securityStringTrim } from './response-security-intrinsics.js';
 import {
   createWitnessWeakMap,
   createWitnessWeakSet,
