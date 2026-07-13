@@ -3688,6 +3688,7 @@ const homeQuery = query('home', {
 const touchHome = mutation('home/touch', {
   access: { kind: 'public', reason: 'build fixture mutation' },
   csrf: false,
+  csrfJustification: 'fixture mutation has no ambient browser authority',
   input: s.object({}),
   optimistic: { home: 'await-fragment' },
   registry: {
