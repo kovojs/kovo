@@ -25,10 +25,7 @@ import {
   trustedViteSecurityProfileIntegrationSentinel,
   trustedViteSecurityProfileSentinel,
 } from './internal/vite-security-sentinel.ts';
-import type {
-  KovoAppShellViteCompilerModuleDiagnosticReport,
-  KovoAppShellViteDevIntegration,
-} from './vite-dev.js';
+import type { KovoAppShellViteCompilerModuleDiagnosticReport } from './vite-dev.js';
 
 const viteClearTimeout = globalThis.clearTimeout;
 const viteSetTimeout = globalThis.setTimeout;
@@ -323,7 +320,8 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
             '@kovojs/server/internal/app-shell-vite must export createKovoAppShellViteDevIntegration.',
           );
         }
-        createDevIntegration = candidate as typeof createKovoAppShellViteDevIntegration;
+        createDevIntegration =
+          candidate as typeof import('./vite-dev.js').createKovoAppShellViteDevIntegration;
       }
 
       const integration = createDevIntegration({
