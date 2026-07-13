@@ -1,4 +1,12 @@
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import fs, {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
+import { syncBuiltinESMExports } from 'node:module';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -197,6 +205,137 @@ const generatedStyles = style.create({ root: { color: 'red' } });
         }),
       ]);
     } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it('does not follow a static-import symlink outside the app source root', () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-app-css-symlink-'));
+    const outside = mkdtempSync(join(tmpdir(), 'kovo-app-css-symlink-outside-'));
+
+    try {
+      writeFileSync(
+        join(root, 'app.tsx'),
+        `
+import * as style from '@kovojs/style';
+import { palette } from './palette.js';
+
+const styles = style.create({ root: { color: palette.accent } });
+export function App() {
+  return <main {...style.attrs(styles.root)}>App</main>;
+}
+`,
+        'utf8',
+      );
+      writeFileSync(
+        join(outside, 'palette.ts'),
+        `export const palette = { accent: 'outside-source-sentinel' } as const;`,
+        'utf8',
+      );
+      symlinkSync(join(outside, 'palette.ts'), join(root, 'palette.ts'), 'file');
+
+      const result = extractAppComponentCss({
+        fileName: join(root, 'app.tsx'),
+        packagePrefixDiscoveryRoot: root,
+        source: '',
+      });
+
+      expect(result.sourceFiles).toEqual([join(root, 'app.tsx')]);
+      expect(result.css).toBeNull();
+      expect(result.diagnostics.map((diagnostic) => diagnostic.fileName)).toEqual(['app.tsx']);
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+      rmSync(outside, { force: true, recursive: true });
+    }
+  });
+
+  it('does not scan a package export target outside the package root', () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-package-css-traversal-'));
+    const packageDir = join(root, 'node_modules', '@fixture', 'ui');
+
+    try {
+      mkdirSync(join(root, 'src'), { recursive: true });
+      mkdirSync(packageDir, { recursive: true });
+      writeFileSync(join(root, 'src/app.tsx'), `import '@fixture/ui';`, 'utf8');
+      writeFileSync(
+        join(packageDir, 'package.json'),
+        JSON.stringify({ exports: { '.': '../outside.tsx' }, name: '@fixture/ui' }),
+        'utf8',
+      );
+      writeFileSync(
+        join(root, 'node_modules', '@fixture', 'outside.tsx'),
+        `
+import * as style from '@kovojs/style';
+const styles = style.create({ root: { color: 'outside-package-sentinel' } });
+export function Outside() {
+  return <main {...style.attrs(styles.root)}>Outside</main>;
+}
+`,
+        'utf8',
+      );
+
+      const result = extractPackageComponentCss('@fixture/ui', {
+        fileName: join(root, 'src/app.tsx'),
+        packagePrefixDiscoveryRoot: root,
+        source: `import '@fixture/ui';`,
+      });
+
+      expect(result).toEqual({ css: null, cssAssets: [], diagnostics: [], sourceFiles: [] });
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it('keeps post-bootstrap fs and String substitutions outside source authority', () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-app-css-late-intrinsics-'));
+    const originalReadFileSync = fs.readFileSync;
+    const originalIncludes = String.prototype.includes;
+    let readPoisonHits = 0;
+    let includesPoisonHits = 0;
+
+    try {
+      writeFileSync(
+        join(root, 'app.tsx'),
+        `
+import * as style from '@kovojs/style';
+const styles = style.create({ root: { color: 'teal' } });
+export function App() {
+  return <main {...style.attrs(styles.root)}>App</main>;
+}
+`,
+        'utf8',
+      );
+
+      Reflect.set(fs, 'readFileSync', (() => {
+        readPoisonHits += 1;
+        return `import * as style from '@kovojs/style';\nconst styles = style.create({ root: { color: 'attacker' } });`;
+      }) as typeof fs.readFileSync);
+      String.prototype.includes = function (search, position) {
+        if (search === 'style.create' || search === '@kovojs/style') {
+          includesPoisonHits += 1;
+          return false;
+        }
+        return Reflect.apply(originalIncludes, this, [search, position]);
+      };
+      syncBuiltinESMExports();
+
+      const result = extractAppComponentCss({
+        fileName: join(root, 'app.tsx'),
+        packagePrefixDiscoveryRoot: root,
+        source: '',
+      });
+
+      Reflect.set(fs, 'readFileSync', originalReadFileSync);
+      String.prototype.includes = originalIncludes;
+      syncBuiltinESMExports();
+      expect(readPoisonHits).toBe(0);
+      expect(includesPoisonHits).toBe(0);
+      expect(result.css).toContain('color:teal');
+      expect(result.css).not.toContain('attacker');
+    } finally {
+      Reflect.set(fs, 'readFileSync', originalReadFileSync);
+      String.prototype.includes = originalIncludes;
+      syncBuiltinESMExports();
       rmSync(root, { force: true, recursive: true });
     }
   });

@@ -2,11 +2,18 @@ import { Buffer } from 'node:buffer';
 
 import { findMatchingToken } from './scan/text.js';
 import {
+  compilerArrayAppend,
+  compilerArrayJoin,
   compilerCreateMap,
+  compilerCreateSet,
   compilerMapGet,
   compilerMapSet,
+  compilerSetAdd,
+  compilerSetHas,
   compilerSha256Base64,
   compilerSha256Hex,
+  compilerSnapshotDenseArray,
+  compilerStringTrim,
 } from './compiler-security-intrinsics.js';
 import {
   componentOptionStaticTemplateValue,
@@ -177,7 +184,16 @@ export function scopeComponentCss(
 
 /** @internal Join CSS chunks, dropping blank and duplicate chunks. In-repo build use only. */
 export function dedupeCss(chunks: readonly string[]): string {
-  return [...new Set(chunks.map((chunk) => chunk.trim()).filter(Boolean))].join('\n\n');
+  const snapshot = compilerSnapshotDenseArray(chunks, 'Compiler CSS chunks');
+  const seen = compilerCreateSet<string>();
+  const output: string[] = [];
+  for (let index = 0; index < snapshot.length; index += 1) {
+    const chunk = compilerStringTrim(snapshot[index]!);
+    if (chunk.length === 0 || compilerSetHas(seen, chunk)) continue;
+    compilerSetAdd(seen, chunk);
+    compilerArrayAppend(output, chunk, 'Compiler deduplicated CSS chunks');
+  }
+  return compilerArrayJoin(output, '\n\n');
 }
 
 /**
