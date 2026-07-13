@@ -187,7 +187,10 @@ export function createPerSessionDispatcher({
 
     const cookies = parseCookies(req.headers.cookie);
     let sid = cookies[sessionCookieName];
-    if (!sid || !isPlausibleSid(sid)) {
+    // A syntactically valid but unknown id is still caller-chosen. Never let a
+    // cookie create a named session: only ids already minted into this process's
+    // live map can select an app instance. Expired/restarted sessions get a new id.
+    if (!sid || !isPlausibleSid(sid) || !sessions.has(sid)) {
       sid = genId();
       if (!isPlausibleSid(sid)) {
         throw new TypeError('createPerSessionDispatcher genId must return an RFC 4122 UUID.');

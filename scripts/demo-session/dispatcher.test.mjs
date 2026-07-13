@@ -96,6 +96,20 @@ describe('createPerSessionDispatcher', () => {
     expect(sidFromRes(res)).toBeTruthy(); // replaced, not honored
   });
 
+  it('does not let a valid but unknown caller-chosen UUID name a session', async () => {
+    const offered = '00000000-0000-4000-8000-000000000001';
+    const minted = '00000000-0000-4000-8000-000000000002';
+    const dispatcher = createPerSessionDispatcher({
+      buildHandler: () => (_r, res) => res.writeHead(200),
+      genId: () => minted,
+    });
+    const res = fakeRes();
+    await dispatcher.dispatch(fakeReq(`kovo_demo_sid=${offered}`), res);
+    expect(sidFromRes(res)).toBe(minted);
+    expect(dispatcher.sessions.has(offered)).toBe(false);
+    expect(dispatcher.sessions.has(minted)).toBe(true);
+  });
+
   it('ignores a malformed encoded cookie and mints a fresh isolation id', async () => {
     const dispatcher = createPerSessionDispatcher({
       buildHandler: () => (_r, res) => res.writeHead(200),
