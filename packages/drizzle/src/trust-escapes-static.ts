@@ -1533,6 +1533,7 @@ interface RequestProvenanceSession {
   readonly mutableFactoryReadMemo: Map<string, RequestMutableFactoryRead>;
   readonly mutationInvocationActive: Set<string>;
   readonly mutationInvocationMemo: Map<string, readonly Node[]>;
+  readonly memoryClientModuleRegistryPristineMemo: Map<string, boolean>;
   readonly promiseSettlementCallables: Set<string>;
   readonly prototypeSourceActive: Set<string>;
   readonly prototypeSourceMemo: Map<string, readonly Node[]>;
@@ -1568,6 +1569,7 @@ function createRequestProvenanceSession(): RequestProvenanceSession {
     mutableFactoryReadMemo: new Map(),
     mutationInvocationActive: new Set(),
     mutationInvocationMemo: new Map(),
+    memoryClientModuleRegistryPristineMemo: new Map(),
     promiseSettlementCallables: new Set(),
     prototypeSourceActive: new Set(),
     prototypeSourceMemo: new Map(),
@@ -4607,6 +4609,9 @@ function requestRetainedConfigCallIsReviewed(
   call: import('ts-morph').CallExpression,
   session: RequestProvenanceSession,
 ): boolean {
+  if (requestCallIsExactMemoryClientModuleRegistryConstructor(call, session)) return true;
+  if (requestCallIsExactClosedMemoryClientModuleRegistryPut(call, session)) return true;
+  if (requestCallIsExactClosedStylesheet(call)) return true;
   if (requestBuildConfigConstructorCallIsClosed(call)) return true;
   if (requestCallIsExactClosedRedirect(call)) return true;
   if (requestCallIsExactPostgresSchemaModule(call)) return true;
@@ -4643,7 +4648,6 @@ function requestRetainedConfigCallIsReviewed(
       '@kovojs/core:stylesheet',
       '@kovojs/core:verifiedMachineAccess',
       '@kovojs/drizzle:kovo',
-      '@kovojs/server:createMemoryVersionedClientModuleRegistry',
       '@kovojs/server:customVerifier',
       '@kovojs/server:component',
       '@kovojs/server:domain',
@@ -4652,7 +4656,6 @@ function requestRetainedConfigCallIsReviewed(
       '@kovojs/server:secret',
       '@kovojs/server:session',
       '@kovojs/server:standardWebhooks',
-      '@kovojs/server:stylesheet',
       '@kovojs/server:verifiedMachineAccess',
       '@kovojs/style:defineTheme',
     ].includes(`${identity.module}:${identity.exportName}`)
@@ -4664,6 +4667,243 @@ function requestRetainedConfigCallIsReviewed(
     requestStaticCallMember(callee) === 'freeze' &&
     expressionResolvesToGlobalNamespace(receiver, 'Object', new Set(), 0)
   );
+}
+
+/**
+ * SPEC §9.5: generated client modules may be registered before the app declaration, but the
+ * audit-only request classifier must not turn an arbitrary mutable registry into retained-config
+ * authority. Admit only the generated grammar: one unexported module-top-level const created by
+ * the exact server constructor, static top-level `put` records, then direct `createApp` retention.
+ */
+function requestCallIsExactMemoryClientModuleRegistryConstructor(
+  call: import('ts-morph').CallExpression,
+  session: RequestProvenanceSession,
+): boolean {
+  const declaration = requestExactMemoryClientModuleRegistryDeclaration(call);
+  return !!declaration && requestMemoryClientModuleRegistryIsPristine(declaration, session);
+}
+
+function requestExactMemoryClientModuleRegistryDeclaration(
+  call: import('ts-morph').CallExpression,
+): import('ts-morph').VariableDeclaration | undefined {
+  const callee = unwrapStaticExpression(call.getExpression());
+  if (
+    call.getArguments().length !== 0 ||
+    !Node.isIdentifier(callee) ||
+    callee.getText() !== 'createMemoryVersionedClientModuleRegistry' ||
+    !requestExpressionIsDirectImportedExport(
+      callee,
+      '@kovojs/server',
+      'createMemoryVersionedClientModuleRegistry',
+    ) ||
+    !requestExactImportedCarrierIsPristine(
+      callee,
+      '@kovojs/server',
+      'createMemoryVersionedClientModuleRegistry',
+    )
+  ) {
+    return undefined;
+  }
+
+  const declaration = call.getFirstAncestorByKind(SyntaxKind.VariableDeclaration);
+  const statement = declaration?.getVariableStatement();
+  const initializer = declaration?.getInitializer();
+  if (
+    !declaration ||
+    !statement ||
+    statement.getDeclarationKind() !== VariableDeclarationKind.Const ||
+    statement.isExported() ||
+    !Node.isSourceFile(statement.getParent()) ||
+    !Node.isIdentifier(declaration.getNameNode()) ||
+    !initializer ||
+    !requestNodesAreSame(unwrapStaticExpression(initializer), call)
+  ) {
+    return undefined;
+  }
+  return declaration;
+}
+
+function requestCallIsExactClosedMemoryClientModuleRegistryPut(
+  call: import('ts-morph').CallExpression,
+  session: RequestProvenanceSession,
+): boolean {
+  const declaration = requestMemoryClientModuleRegistryDeclarationForPut(call);
+  return !!declaration && requestMemoryClientModuleRegistryIsPristine(declaration, session);
+}
+
+function requestMemoryClientModuleRegistryDeclarationForPut(
+  call: import('ts-morph').CallExpression,
+): import('ts-morph').VariableDeclaration | undefined {
+  const callee = unwrapStaticExpression(call.getExpression());
+  if (
+    !Node.isPropertyAccessExpression(callee) ||
+    callee.getName() !== 'put' ||
+    !Node.isIdentifier(callee.getExpression()) ||
+    !requestMemoryClientModulePutRecordIsClosed(call) ||
+    !requestCallIsModuleTopLevelExpression(call)
+  ) {
+    return undefined;
+  }
+  const receiver = callee.getExpression();
+  const symbol = requestIdentifierValueSymbol(receiver) ?? receiver.getSymbol();
+  if (!symbol) return undefined;
+  const declarations = symbol.getDeclarations();
+  if (declarations.length !== 1 || !Node.isVariableDeclaration(declarations[0])) return undefined;
+  const declaration = declarations[0];
+  const initializer = declaration.getInitializer();
+  if (!initializer) return undefined;
+  const constructor = unwrapStaticExpression(initializer);
+  return Node.isCallExpression(constructor) &&
+    requestExactMemoryClientModuleRegistryDeclaration(constructor) === declaration
+    ? declaration
+    : undefined;
+}
+
+function requestCallIsModuleTopLevelExpression(call: import('ts-morph').CallExpression): boolean {
+  const statement = call.getParentIfKind(SyntaxKind.ExpressionStatement);
+  return !!statement && Node.isSourceFile(statement.getParent());
+}
+
+function requestMemoryClientModulePutRecordIsClosed(
+  call: import('ts-morph').CallExpression,
+): boolean {
+  const args = call.getArguments();
+  if (args.length !== 1) return false;
+  const record = unwrapStaticExpression(args[0]!);
+  if (!Node.isObjectLiteralExpression(record)) return false;
+
+  let contentType = false;
+  let path = false;
+  let source = false;
+  let version = false;
+  const properties = record.getProperties();
+  for (let index = 0; index < properties.length; index += 1) {
+    const property = properties[index]!;
+    if (!Node.isPropertyAssignment(property)) return false;
+    const nameNode = property.getNameNode();
+    const value = property.getInitializer();
+    if (Node.isComputedPropertyName(nameNode) || !value || !isStringLiteralLike(value))
+      return false;
+    const name = staticMemberName(nameNode);
+    if (name === 'contentType' && !contentType) {
+      contentType = true;
+      continue;
+    }
+    if (name === 'path' && !path) {
+      path = true;
+      continue;
+    }
+    if (name === 'source' && !source) {
+      source = true;
+      continue;
+    }
+    if (name === 'version' && !version) {
+      version = true;
+      continue;
+    }
+    return false;
+  }
+  return path && source && version;
+}
+
+function requestMemoryClientModuleRegistryIsPristine(
+  declaration: import('ts-morph').VariableDeclaration,
+  session: RequestProvenanceSession,
+): boolean {
+  const key = requestNodeIdentity(declaration);
+  const memoized = session.memoryClientModuleRegistryPristineMemo.get(key);
+  if (memoized !== undefined) return memoized;
+  const name = declaration.getNameNode();
+  const symbol = Node.isIdentifier(name) ? name.getSymbol() : undefined;
+  if (!symbol) {
+    session.memoryClientModuleRegistryPristineMemo.set(key, false);
+    return false;
+  }
+  const symbolKey = requestSymbolKey(symbol);
+  let pristine = true;
+  const sourceFiles = declaration.getSourceFile().getProject().getSourceFiles();
+  for (let fileIndex = 0; fileIndex < sourceFiles.length && pristine; fileIndex += 1) {
+    const identifiers = sourceFiles[fileIndex]!.getDescendantsOfKind(SyntaxKind.Identifier);
+    for (let index = 0; index < identifiers.length; index += 1) {
+      const identifier = identifiers[index]!;
+      const candidate = requestIdentifierValueSymbol(identifier) ?? identifier.getSymbol();
+      if (!candidate || requestSymbolKey(candidate) !== symbolKey) continue;
+      if (
+        requestNodesAreSame(identifier, name) ||
+        requestMemoryClientModuleRegistryPutUseIsReviewed(identifier, declaration) ||
+        requestMemoryClientModuleRegistryCreateAppUseIsReviewed(identifier)
+      ) {
+        continue;
+      }
+      pristine = false;
+      break;
+    }
+  }
+  session.memoryClientModuleRegistryPristineMemo.set(key, pristine);
+  return pristine;
+}
+
+function requestMemoryClientModuleRegistryPutUseIsReviewed(
+  identifier: import('ts-morph').Identifier,
+  declaration: import('ts-morph').VariableDeclaration,
+): boolean {
+  const access = identifier.getParentIfKind(SyntaxKind.PropertyAccessExpression);
+  if (
+    !access ||
+    !requestNodesAreSame(access.getExpression(), identifier) ||
+    access.getName() !== 'put'
+  ) {
+    return false;
+  }
+  const call = access.getParentIfKind(SyntaxKind.CallExpression);
+  return !!(
+    call &&
+    requestNodesAreSame(call.getExpression(), access) &&
+    requestMemoryClientModuleRegistryDeclarationForPut(call) === declaration
+  );
+}
+
+function requestMemoryClientModuleRegistryCreateAppUseIsReviewed(
+  identifier: import('ts-morph').Identifier,
+): boolean {
+  const parent = identifier.getParent();
+  const property =
+    parent &&
+    ((Node.isShorthandPropertyAssignment(parent) &&
+      requestNodesAreSame(parent.getNameNode(), identifier)) ||
+      (Node.isPropertyAssignment(parent) &&
+        requestNodesAreSame(parent.getInitializer(), identifier)))
+      ? parent
+      : undefined;
+  if (!property || staticMemberName(property.getNameNode()) !== 'clientModules') return false;
+  const object = property.getParentIfKind(SyntaxKind.ObjectLiteralExpression);
+  const call = object?.getParentIfKind(SyntaxKind.CallExpression);
+  if (!object || !call || !requestNodesAreSame(call.getArguments()[0], object)) return false;
+  const callee = unwrapStaticExpression(call.getExpression());
+  return !!(
+    Node.isIdentifier(callee) &&
+    callee.getText() === 'createApp' &&
+    requestExpressionIsDirectImportedExport(callee, '@kovojs/server', 'createApp') &&
+    requestExactImportedCarrierIsPristine(callee, '@kovojs/server', 'createApp')
+  );
+}
+
+function requestCallIsExactClosedStylesheet(call: import('ts-morph').CallExpression): boolean {
+  const callee = unwrapStaticExpression(call.getExpression());
+  if (
+    !Node.isIdentifier(callee) ||
+    callee.getText() !== 'stylesheet' ||
+    !requestExpressionIsDirectImportedExport(callee, '@kovojs/server', 'stylesheet') ||
+    !requestExactImportedCarrierIsPristine(callee, '@kovojs/server', 'stylesheet')
+  ) {
+    return false;
+  }
+  const args = call.getArguments();
+  if (args.length === 0 || args.length > 2) return false;
+  for (let index = 0; index < args.length; index += 1) {
+    if (!requestExpressionIsClosedStaticData(args[index]!)) return false;
+  }
+  return true;
 }
 
 function requestRetainedConfigDrizzleTableCallIsReviewed(

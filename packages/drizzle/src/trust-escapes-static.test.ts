@@ -3265,6 +3265,122 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
     expect(facts).toEqual([]);
   });
 
+  it('accepts only the exact static generated client-module registry grammar', () => {
+    const facts = sinksFor(`
+      import {
+        createApp,
+        createMemoryVersionedClientModuleRegistry,
+        stylesheet,
+      } from '@kovojs/server';
+      const clientModules = createMemoryVersionedClientModuleRegistry();
+      clientModules.put({
+        contentType: 'text/javascript; charset=utf-8',
+        path: '/c/cart.client.js',
+        source: 'export const cartClient = true;',
+        version: 'cart-v1',
+      });
+      export default createApp({
+        clientModules,
+        routes: [],
+        stylesheets: [stylesheet('./local.css')],
+      });
+    `);
+
+    expect(facts).toEqual([]);
+  });
+
+  it.each([
+    [
+      'an aliased registry receiver',
+      `const clientModules = createMemoryVersionedClientModuleRegistry();
+       const alias = clientModules;
+       alias.put({ path: '/c/x.js', source: 'export {};', version: 'v1' });`,
+    ],
+    [
+      'a reassigned registry binding',
+      `let clientModules = createMemoryVersionedClientModuleRegistry();
+       clientModules = createMemoryVersionedClientModuleRegistry();`,
+    ],
+    [
+      'a proxied registry',
+      `const clientModules = createMemoryVersionedClientModuleRegistry();
+       new Proxy(clientModules, {});`,
+    ],
+    [
+      'a registry constructed inside a helper',
+      `function makeRegistry() { return createMemoryVersionedClientModuleRegistry(); }
+       const clientModules = makeRegistry();`,
+    ],
+    [
+      'an aliased constructor',
+      `const makeRegistry = createMemoryVersionedClientModuleRegistry;
+       const clientModules = makeRegistry();`,
+    ],
+    [
+      'a put call inside a handler',
+      `const clientModules = createMemoryVersionedClientModuleRegistry();
+       const page = route('/', {
+         page(request) {
+           clientModules.put({ path: '/c/x.js', source: request.url, version: 'v1' });
+           return 'ok';
+         },
+       });`,
+    ],
+    [
+      'a computed put call',
+      `const clientModules = createMemoryVersionedClientModuleRegistry();
+       clientModules['put']({ path: '/c/x.js', source: 'export {};', version: 'v1' });`,
+    ],
+    [
+      'an aliased module record',
+      `const clientModules = createMemoryVersionedClientModuleRegistry();
+       const moduleRecord = { path: '/c/x.js', source: 'export {};', version: 'v1' };
+       clientModules.put(moduleRecord);`,
+    ],
+    [
+      'a spread module record',
+      `const clientModules = createMemoryVersionedClientModuleRegistry();
+       const moduleRecord = { path: '/c/x.js', source: 'export {};', version: 'v1' };
+       clientModules.put({ ...moduleRecord });`,
+    ],
+    [
+      'a replaced put method',
+      `const clientModules = createMemoryVersionedClientModuleRegistry();
+       Object.defineProperty(clientModules, 'put', { value() {} });`,
+    ],
+  ])('fails closed for generated client-module registry derived through %s', (_label, setup) => {
+    const facts = sinksFor(`
+      import {
+        createApp,
+        createMemoryVersionedClientModuleRegistry,
+        route,
+      } from '@kovojs/server';
+      ${setup}
+      export default createApp({ clientModules, routes: [] });
+    `);
+
+    expect(facts, JSON.stringify(facts)).toEqual(
+      expect.arrayContaining([expect.objectContaining({ sink: 'request-handler.opaque-source' })]),
+    );
+  });
+
+  it('does not whitelist a local stylesheet lookalike in retained app config', () => {
+    const facts = sinksFor(`
+      import { createApp } from '@kovojs/server';
+      const stylesheet = (source) => ({ href: source });
+      export default createApp({ routes: [], stylesheets: [stylesheet('./local.css')] });
+    `);
+
+    expect(facts, JSON.stringify(facts)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sink: 'request-handler.opaque-source',
+          source: '<opaque-retained-config-derivation>',
+        }),
+      ]),
+    );
+  });
+
   it('classifies many retained-config definitions and aliases within a low-second bound', () => {
     const accessAliases = Array.from({ length: 16 }, (_unused, index) =>
       index === 0
