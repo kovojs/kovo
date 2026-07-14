@@ -1089,6 +1089,63 @@ export default createApp({
       rmSync(root, { force: true, recursive: true });
     }
   }, 120_000);
+
+  it('rejects config and relative-config authority before either module can execute', () => {
+    for (const variant of ['direct', 'relative'] as const) {
+      const root = cliFixtureRoot(`config-preflight-${variant}`);
+      const markerPath = join(root, `${variant}-config-marker`);
+      try {
+        mkdirSync(join(root, 'src'), { recursive: true });
+        writeFileSync(
+          join(root, 'src/app.ts'),
+          `import { createApp, publicAccess, route } from '@kovojs/server';
+export default createApp({
+  routes: [route('/', {
+    access: publicAccess('config preflight regression'),
+    page: () => '<main>safe</main>',
+  })],
+});
+`,
+          'utf8',
+        );
+        if (variant === 'relative') {
+          writeFileSync(
+            join(root, 'config-marker.ts'),
+            `import { execFileSync } from 'node:child_process';
+execFileSync('/usr/bin/touch', [${JSON.stringify(markerPath)}]);
+`,
+            'utf8',
+          );
+          writeFileSync(
+            join(root, 'kovo.config.ts'),
+            `import './config-marker.js';
+import { defineConfig, node } from '@kovojs/server/build';
+export default defineConfig({ preset: node() });
+`,
+            'utf8',
+          );
+        } else {
+          writeFileSync(
+            join(root, 'kovo.config.ts'),
+            `import { execFileSync } from 'node:child_process';
+execFileSync('/usr/bin/touch', [${JSON.stringify(markerPath)}]);
+export default {};
+`,
+            'utf8',
+          );
+        }
+
+        const built = runKovoCli(root, ['build', './src/app.ts', '--out', './dist', '--check']);
+        expect(built.status, built.stderr).toBe(1);
+        expect(built.stderr).toContain('kovo build config preflight failed');
+        expect(built.stderr).toContain('ERROR KV424');
+        expect(readFileIfPresent(markerPath)).toBeUndefined();
+        expect(readFileIfPresent(join(root, 'dist/.kovo/graph.json'))).toBeUndefined();
+      } finally {
+        rmSync(root, { force: true, recursive: true });
+      }
+    }
+  }, 120_000);
 });
 
 function cliFixtureRoot(name: string): string {

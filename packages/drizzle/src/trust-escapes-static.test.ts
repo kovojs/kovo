@@ -5,6 +5,7 @@ import { builtinModules as nodeBuiltinModules } from 'node:module';
 import { describe, expect, it } from 'vitest';
 
 import {
+  collectStaticBuildTrustFactsFromProject,
   collectTrustEscapesFromProject,
   collectUnregisteredSinksFromProject,
 } from '@kovojs/drizzle/internal/static';
@@ -332,6 +333,7 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
       'child_process.fork',
       'child_process.spawn',
       'child_process.spawnSync',
+      'request-handler.opaque-protocol',
     ]);
   });
 
@@ -493,6 +495,7 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
       'import()',
       'node:vm.Script',
       'node:vm.runInNewContext',
+      'request-handler.opaque-protocol',
       'setTimeout',
     ]);
   });
@@ -5479,5 +5482,238 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
           fact.source === '<unresolved-query-declaration>',
       ),
     ).toEqual([]);
+  });
+
+  it('closes runtime import, re-export, import-equals, and unresolved relative initializer edges', () => {
+    const opaque = sinksFor(`
+      import {} from 'opaque-runtime-module';
+      import type { Erased } from 'opaque-type-only';
+      import { type AlsoErased, runtimeValue } from 'opaque-mixed-import';
+      import opaque = require('opaque-import-equals');
+      import type erased = require('opaque-type-import-equals');
+      export { value } from 'opaque-reexport';
+      import '/@fs/private/outside-app.js';
+      void opaque;
+      void runtimeValue;
+    `);
+    expect(opaque).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ source: '<opaque-module-initializer:opaque-runtime-module>' }),
+        expect.objectContaining({ source: '<opaque-module-initializer:opaque-mixed-import>' }),
+        expect.objectContaining({ source: '<opaque-module-initializer:opaque-import-equals>' }),
+        expect.objectContaining({ source: '<opaque-module-initializer:opaque-reexport>' }),
+        expect.objectContaining({
+          source: '<opaque-module-initializer:/@fs/private/outside-app.js>',
+        }),
+      ]),
+    );
+    expect(JSON.stringify(opaque)).not.toContain('opaque-type-only');
+    expect(JSON.stringify(opaque)).not.toContain('opaque-type-import-equals');
+
+    const relative = sinksForFiles([
+      {
+        fileName: 'src/app.ts',
+        source: `
+          import './reviewed.js';
+          import '../outside.js';
+        `,
+      },
+      { fileName: 'src/reviewed.ts', source: `export const reviewed = true;` },
+    ]);
+    expect(relative).toEqual([
+      expect.objectContaining({ source: '<opaque-module-initializer:../outside.js>' }),
+    ]);
+  });
+
+  it('scans eager local helpers and destructuring getters before module evaluation', () => {
+    const helper = sinksFor(`
+      import { execFileSync } from 'node:child_process';
+      function initialize() { execFileSync('/usr/bin/touch', ['helper-marker']); }
+      initialize();
+    `);
+    expect(helper).toEqual(
+      expect.arrayContaining([expect.objectContaining({ sink: 'child_process.execFileSync' })]),
+    );
+
+    const getter = sinksFor(`
+      import { execFileSync } from 'node:child_process';
+      const poison = {
+        get value() { execFileSync('/usr/bin/touch', ['getter-marker']); return 1; },
+      };
+      const { value } = poison;
+      void value;
+    `);
+    expect(getter).toEqual(
+      expect.arrayContaining([expect.objectContaining({ sink: 'child_process.execFileSync' })]),
+    );
+
+    const defaultsAndCatch = sinksFor(`
+      import { execFileSync } from 'node:child_process';
+      const executeMarker = () => execFileSync('/usr/bin/touch', ['default-marker']);
+      const { value = executeMarker() } = {};
+      const [item = executeMarker()] = [];
+      const { nested: { leaf = executeMarker() } } = { nested: {} };
+      const poison = { get value() { executeMarker(); return 1; } };
+      try { throw poison; } catch ({ value: caught }) { void caught; }
+      void value;
+      void item;
+      void leaf;
+    `);
+    expect(
+      defaultsAndCatch.filter((fact) => fact.sink === 'child_process.execFileSync').length,
+    ).toBeGreaterThanOrEqual(1);
+    expect(defaultsAndCatch).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sink: 'request-handler.opaque-protocol',
+          source: expect.stringContaining('catch-binding-destructuring'),
+        }),
+      ]),
+    );
+  });
+
+  it('scans runtime namespaces and top-level disposal protocols before module evaluation', () => {
+    const facts = sinksFor(`
+      import { execFileSync } from 'node:child_process';
+      namespace Simple { execFileSync('namespace-simple'); }
+      namespace Nested { export namespace Inner { execFileSync('namespace-nested'); } }
+      export namespace Exported { execFileSync('namespace-exported'); }
+      namespace Dotted.Inner { execFileSync('namespace-dotted'); }
+      namespace Merged { export const safe = true; }
+      namespace Merged { execFileSync('namespace-merged'); }
+      module Poison { execFileSync('module-poison'); }
+      namespace RuntimeValue { export const member = 1; }
+      namespace InternalAlias { import member = RuntimeValue.member; void member; }
+      namespace ExternalAlias { import opaque = require('opaque-namespace-module'); void opaque; }
+
+      using direct = {
+        [Symbol.dispose]() { execFileSync('using-direct'); },
+      };
+      const syncAlias = {
+        [Symbol.dispose]() { execFileSync('using-alias'); },
+      };
+      using aliased = syncAlias;
+      await using asyncDirect = {
+        async [Symbol.asyncDispose]() { execFileSync('await-using-direct'); },
+      };
+      const asyncAlias = {
+        async [Symbol.asyncDispose]() { execFileSync('await-using-alias'); },
+      };
+      await using asyncAliased = asyncAlias;
+
+      declare namespace ErasedNamespace { const value: string; }
+      declare module 'erased-module' { export const value: string; }
+      void direct;
+      void aliased;
+      void asyncDirect;
+      void asyncAliased;
+    `);
+
+    expect(
+      facts.filter((fact) => fact.sink === 'child_process.execFileSync').map((fact) => fact.source),
+    ).toEqual(
+      expect.arrayContaining([
+        "'namespace-simple'",
+        "'namespace-nested'",
+        "'namespace-exported'",
+        "'namespace-dotted'",
+        "'namespace-merged'",
+        "'module-poison'",
+        "'using-direct'",
+        "'using-alias'",
+        "'await-using-direct'",
+        "'await-using-alias'",
+      ]),
+    );
+    expect(facts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          source: '<opaque-module-initializer:import-alias:RuntimeValue.member>',
+        }),
+        expect.objectContaining({
+          source: '<opaque-module-initializer:opaque-namespace-module>',
+        }),
+      ]),
+    );
+  });
+
+  it('accepts only exact built-in kovo.config preset witnesses', () => {
+    const starter = collectStaticBuildTrustFactsFromProject({
+      buildConfigEntryFileName: 'kovo.config.ts',
+      files: [
+        {
+          fileName: 'kovo.config.ts',
+          source: `
+            import { defineConfig, node } from '@kovojs/server/build';
+            export default defineConfig({ preset: node({ dockerfile: false }) });
+          `,
+        },
+      ],
+    });
+    expect(starter.unregisteredSinks).toEqual([]);
+
+    const custom = collectStaticBuildTrustFactsFromProject({
+      buildConfigEntryFileName: 'kovo.config.ts',
+      files: [
+        {
+          fileName: 'kovo.config.ts',
+          source: `
+            import { defineConfig } from '@kovojs/server/build';
+            export default defineConfig({
+              preset: {
+                name: 'node',
+                inspect() { return []; },
+                emit() { return undefined; },
+              },
+            });
+          `,
+        },
+      ],
+    });
+    expect(custom.unregisteredSinks).toEqual(
+      expect.arrayContaining([expect.objectContaining({ sink: 'build-config.opaque-authority' })]),
+    );
+
+    const relative = collectStaticBuildTrustFactsFromProject({
+      buildConfigEntryFileName: 'kovo.config.ts',
+      files: [
+        {
+          fileName: 'kovo.config.ts',
+          source: `import './config-helper.js'; export default {};`,
+        },
+        {
+          fileName: 'config-helper.ts',
+          source: `
+            import { execFileSync } from 'node:child_process';
+            execFileSync('/usr/bin/touch', ['config-relative-marker']);
+          `,
+        },
+      ],
+    });
+    expect(relative.unregisteredSinks).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ sink: 'build-config.opaque-authority' }),
+        expect.objectContaining({ sink: 'child_process.execFileSync' }),
+      ]),
+    );
+  });
+
+  it('keeps reviewed imports open and skips large unused lazy bodies within a low-second bound', () => {
+    const lazy = Array.from(
+      { length: 4_000 },
+      (_unused, index) => `const lazy${index} = ${index};`,
+    ).join('\n');
+    const started = Date.now();
+    const facts = sinksFor(`
+      import {} from 'drizzle-orm';
+      import { execFileSync } from 'node:child_process';
+      function neverCalled() {
+        ${lazy}
+        execFileSync('/usr/bin/touch', ['unused-lazy-marker']);
+      }
+      void neverCalled;
+    `);
+    expect(facts).toEqual([]);
+    expect(Date.now() - started).toBeLessThan(3_000);
   });
 });

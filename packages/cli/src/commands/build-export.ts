@@ -71,6 +71,7 @@ import { withKovoBuildContext } from '@kovojs/server/internal/build-context';
 import type { KovoAppShellCompiledClientModule } from '@kovojs/server/internal/app-shell-vite';
 import {
   buildCheckSourceFiles,
+  buildCheckSourceGraphFiles,
   buildCompilerQueryShapeFacts,
   collectRuntimeRegistryFacts,
   type DataPlaneSourceFile as BuildCheckSourceFile,
@@ -499,7 +500,20 @@ export async function runBuildCommand(
     // can mutate shared-realm prototypes. Runtime handler identity is joined after evaluation.
     const reachableSessionAuthorityFacts =
       await sessionAuthorityFactsFromEntry(resolvedAppModulePath);
-    const loadedConfig = await loadKovoBuildConfig(invocationRoot, resolvedAppModulePath);
+    const configPath = findKovoBuildConfig(invocationRoot);
+    const approvedConfig =
+      configPath === undefined
+        ? undefined
+        : runPreEvaluationBuildConfigTrustPreflight(
+            configPath,
+            invocationRoot,
+            security.paranoidStaticAdvisory,
+          );
+    const loadedConfig = await loadKovoBuildConfig(
+      invocationRoot,
+      resolvedAppModulePath,
+      approvedConfig,
+    );
     const selectedPreset = selectedKovoBuildPreset(
       options,
       loadedConfig.config,
@@ -735,6 +749,37 @@ async function loadAndCheckBuildApp(
 interface PreEvaluationStaticTrust {
   readonly facts: ReturnType<typeof collectStaticBuildTrustFactsFromProject>;
   readonly files: readonly BuildCheckSourceFile[];
+}
+
+interface PreEvaluationBuildConfigTrust extends PreEvaluationStaticTrust {
+  readonly path: string;
+}
+
+function runPreEvaluationBuildConfigTrustPreflight(
+  configPath: string,
+  root: string,
+  paranoidStaticAdvisory: boolean,
+): PreEvaluationBuildConfigTrust {
+  // SPEC §6.6 rule 6: kovo.config is authored authority-bearing code. Snapshot its exact entry and
+  // relative-import closure through the descriptor-bound source capability, classify both eager
+  // module execution and deferred preset methods, and only then permit Vite to evaluate those same
+  // bytes. Config discovery is intentionally performed once by the caller so an extension swap
+  // cannot select a different file after approval.
+  const files = buildCheckSourceGraphFiles(configPath, root);
+  const entryFileName = relative(dirname(configPath), configPath) || basename(configPath);
+  const facts = collectStaticBuildTrustFactsFromProject({
+    buildConfigEntryFileName: slashPath(entryFileName),
+    files,
+  });
+  const { unregisteredSinks } = facts;
+  if (unregisteredSinks.length === 0) return { facts, files, path: configPath };
+
+  const result = kovoCheck({ unregisteredSinks }, { paranoidStaticAdvisory });
+  if (result.exitCode === 0) return { facts, files, path: configPath };
+  if (paranoidStaticAdvisory && paranoidBuildCheckMayProceed(result.output)) {
+    return { facts, files, path: configPath };
+  }
+  throw new Error(`kovo build config preflight failed:\n${buildCheckFailureOutput(result.output)}`);
 }
 
 function runPreEvaluationStaticTrustPreflight(
@@ -2052,14 +2097,16 @@ function selectedConfiguredKovoBuildPreset(preset: KovoPreset): SelectedKovoBuil
 async function loadKovoBuildConfig(
   root: string,
   appModulePath: string,
+  approvedConfig: PreEvaluationBuildConfigTrust | undefined,
 ): Promise<LoadedKovoBuildConfig> {
-  const configPath = findKovoBuildConfig(root);
-  if (configPath === undefined) return {};
+  if (approvedConfig === undefined) return {};
+  const configPath = approvedConfig.path;
 
   const lifetime = await createBuildTimeViteServer({
     appType: 'custom',
     configFile: false,
     logLevel: 'error',
+    plugins: [approvedBuildSourcesVitePlugin(configPath, root, approvedConfig.files, 'config')],
     root,
     server: buildTimeViteServerOptions(),
     ssr: { noExternal: [/^@kovojs\//] },
@@ -3110,6 +3157,7 @@ function approvedBuildSourcesVitePlugin(
   appModulePath: string,
   buildRoot: string,
   sourceFiles: readonly BuildCheckSourceFile[],
+  sourceLabel: 'app' | 'config' = 'app',
 ): Plugin {
   const approvedByPath = buildCreateMap<string, string>();
   const appSourcePaths = buildCreateSet<string>();
@@ -3161,7 +3209,7 @@ function approvedBuildSourcesVitePlugin(
       }
       buildSetAdd(appSourcePaths, resolvedFileName);
       if (!buildMapHas(approvedByPath, resolvedFileName)) {
-        throw unapprovedBuildSourceError(buildRoot, resolvedFileName);
+        throw unapprovedBuildSourceError(buildRoot, resolvedFileName, sourceLabel);
       }
       return resolved;
     },
@@ -3172,11 +3220,11 @@ function approvedBuildSourcesVitePlugin(
       if (!approved && !isBuildAppSourcePath(appSourceRoot, fileName)) return null;
       const displayName = relative(buildRoot, fileName) || fileName;
       if (!approved) {
-        throw unapprovedBuildSourceError(buildRoot, fileName);
+        throw unapprovedBuildSourceError(buildRoot, fileName, sourceLabel);
       }
       if (code !== buildMapGet(approvedByPath, fileName)) {
         throw new Error(
-          `Kovo build refused changed app source ${displayName}; its bytes no longer match the security-preflight snapshot (SPEC \u00a75.2/\u00a76.6).`,
+          `Kovo build refused changed ${sourceLabel} source ${displayName}; its bytes no longer match the security-preflight snapshot (SPEC \u00a75.2/\u00a76.6).`,
         );
       }
       return null;
@@ -3184,10 +3232,14 @@ function approvedBuildSourcesVitePlugin(
   };
 }
 
-function unapprovedBuildSourceError(buildRoot: string, fileName: string): Error {
+function unapprovedBuildSourceError(
+  buildRoot: string,
+  fileName: string,
+  sourceLabel: 'app' | 'config' = 'app',
+): Error {
   const displayName = relative(buildRoot, fileName) || fileName;
   return new Error(
-    `Kovo build refused unapproved app source ${displayName}; the module was introduced after the security preflight (SPEC \u00a75.2/\u00a76.6).`,
+    `Kovo build refused unapproved ${sourceLabel} source ${displayName}; the module was introduced after the security preflight (SPEC \u00a75.2/\u00a76.6).`,
   );
 }
 

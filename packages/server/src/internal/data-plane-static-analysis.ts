@@ -200,6 +200,44 @@ export function buildCheckSourceFiles(
   return sourceFilesWithinBoundary(sourceDir, sourceDir, sourceBoundaryRoot, false);
 }
 
+/** @internal Snapshot one authored entry and its exact relative-import closure. */
+export function buildCheckSourceGraphFiles(
+  entryModulePath: string,
+  sourceBoundaryRoot: string = dirname(entryModulePath),
+): DataPlaneSourceFile[] {
+  const entryPath = resolve(entryModulePath);
+  const boundaryRoot = resolve(sourceBoundaryRoot);
+  if (!existsSync(boundaryRoot)) return [];
+  if (!pathIsWithinDataPlaneBoundary(boundaryRoot, entryPath)) {
+    throw new TypeError(`Kovo source entry escapes the project root: ${entryModulePath}`);
+  }
+  const fileSystem = createCompilerSourceFileSystem(boundaryRoot);
+  if (fileSystem === null) {
+    throw new TypeError(`Kovo source root is unavailable or unstable: ${boundaryRoot}`);
+  }
+  const kind = fileSystem.kind(entryPath);
+  if (kind !== 'file') {
+    throw new TypeError(
+      kind === 'other'
+        ? `Kovo source entry resolves through a symbolic link or special entry: ${entryPath}`
+        : `Kovo source entry is unavailable: ${entryPath}`,
+    );
+  }
+  if (!isDataPlaneAppSourcePath(entryPath, { includeDeclarations: false })) {
+    throw new TypeError(`Kovo source entry is not a supported source module: ${entryPath}`);
+  }
+  const source = fileSystem.readFile(entryPath);
+  if (source === null) {
+    throw new TypeError(`Kovo source entry is unavailable or unstable: ${entryPath}`);
+  }
+  const fileNameRoot = dirname(entryPath);
+  const files: DataPlaneSourceFile[] = [
+    { fileName: slashPath(relative(fileNameRoot, entryPath)), source },
+  ];
+  collectImportedSourceFilesWithinBoundary(fileNameRoot, boundaryRoot, fileSystem, false, files);
+  return files;
+}
+
 /** @internal Run Vite/server app source static analysis and cache by source snapshot. */
 export async function collectDataPlaneAnalysis(options: {
   appSourceDir: string;
