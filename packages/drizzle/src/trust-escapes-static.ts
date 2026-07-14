@@ -5806,10 +5806,7 @@ function scanRequestCallable(callable: RequestCallable, context: RequestProcessS
     .filter((candidate) => {
       const parent = candidate.getParent();
       if (!Node.isIdentifier(candidate)) return true;
-      if (
-        Node.isJsxAttribute(parent) &&
-        requestNodesAreSame(parent.getNameNode(), candidate)
-      ) {
+      if (Node.isJsxAttribute(parent) && requestNodesAreSame(parent.getNameNode(), candidate)) {
         return false;
       }
       // Static object keys are likewise grammar. `{ style: styles.root }` must scan the value,
@@ -9026,6 +9023,7 @@ function scanRequestJsxComponents(
     if (requestJsxTagIsReviewedPublicComponent(tag)) {
       for (const value of requestJsxValueExpressions(element)) {
         scanRequestProxyUse(value, element, context);
+        scanRequestCallableValuesInExpression(value, context, true);
         if (!requestExpressionIsProtocolSafe(value, callable, new Set(), context.provenance)) {
           for (const accessor of requestAccessorCallablesForExpression(
             value,
@@ -9051,6 +9049,7 @@ function scanRequestJsxComponents(
     const values = requestJsxValueExpressions(element);
     for (const value of values) {
       scanRequestProxyUse(value, element, context);
+      scanRequestCallableValuesInExpression(value, context);
       if (!requestExpressionIsProtocolSafe(value, callable, new Set(), context.provenance)) {
         for (const accessor of requestAccessorCallablesForExpression(
           value,
@@ -9080,6 +9079,51 @@ function scanRequestJsxComponents(
         context,
       );
     }
+  }
+}
+
+/** Reviewed server-rendered component props can still contain executable callbacks/getters. */
+function scanRequestCallableValuesInExpression(
+  expression: Node,
+  context: RequestProcessScanContext,
+  parametersAreInput = false,
+): void {
+  const reviewed = (callable: RequestCallable): RequestCallable =>
+    parametersAreInput
+      ? {
+          ...callable,
+          rootParameterRoles: requestCallableParameters(callable.declaration).map(() => 'input'),
+        }
+      : callable;
+  const resolvedObject = resolveStaticObjectLiteral(expression, new Set(), 0);
+  const root = resolvedObject ?? expression;
+  const candidates = [
+    expression,
+    ...(root === expression ? [] : [root]),
+    ...root
+      .getDescendants()
+      .filter(
+        (candidate) =>
+          Node.isArrowFunction(candidate) ||
+          Node.isFunctionExpression(candidate) ||
+          Node.isFunctionDeclaration(candidate) ||
+          Node.isMethodDeclaration(candidate) ||
+          Node.isGetAccessorDeclaration(candidate) ||
+          Node.isSetAccessorDeclaration(candidate),
+      ),
+  ];
+  for (const candidate of candidates) {
+    const direct = requestCallableForFunctionNode(candidate);
+    if (direct) scanRequestCallable(reviewed(direct), context);
+  }
+  for (const callable of dedupeRequestCallables([
+    ...resolveRequestCallable(expression, new Set(), 0, context.provenance).callables,
+    ...requestAccessorCallablesForExpression(expression, undefined, new Set(), context.provenance),
+    ...(root === expression
+      ? []
+      : requestAccessorCallablesForExpression(root, undefined, new Set(), context.provenance)),
+  ])) {
+    scanRequestCallable(reviewed(callable), context);
   }
 }
 
@@ -10149,7 +10193,9 @@ function requestExpressionIsPlainWireValue(
   }
   if (Node.isPropertyAccessExpression(node) || Node.isElementAccessExpression(node)) {
     if (requestExpressionIsReviewedFrozenStyleValue(node)) return true;
-    const role = requestExpressionRootParameterRole(node, state.rootCallable, new Set(), 0);
+    const role =
+      requestExpressionRootParameterRole(node, state.rootCallable, new Set(), 0) ??
+      requestExpressionRootParameterRole(node, state.scopeCallable, new Set(), 0);
     return role === 'request' || requestRootRoleIncludesInput(role);
   }
   if (Node.isCallExpression(node)) {
@@ -10233,10 +10279,7 @@ function requestWireAuthoritiesForJsxElement(
     ]);
   }
   if (requestJsxTagIsReviewedPublicComponent(tag)) {
-    return dedupeRequestWireAuthorities([
-      ...requestWireAuthoritiesForJsxAttributes(opening.getAttributes(), state),
-      ...requestWireAuthoritiesForJsxChildren(children, state),
-    ]);
+    return requestWireAuthoritiesForReviewedFormError(element, state);
   }
 
   const resolution = resolveRequestCallable(tag, new Set(), 0, state.session);
@@ -10260,6 +10303,99 @@ function requestWireAuthoritiesForJsxElement(
   return dedupeRequestWireAuthorities(authorities);
 }
 
+function requestWireAuthoritiesForReviewedFormError(
+  element: import('ts-morph').JsxElement | import('ts-morph').JsxSelfClosingElement,
+  state: RequestWireAnalysisState,
+): RequestWireAuthority[] {
+  const opening = Node.isJsxElement(element) ? element.getOpeningElement() : element;
+  const authorities: RequestWireAuthority[] = [];
+  const add = (name: string, value: Node): void => {
+    if (name === 'message' || name === 'children') {
+      authorities.push(...requestWireAuthoritiesForReviewedFormErrorMessage(value, state));
+      return;
+    }
+    if (name === 'failure') {
+      const code = requestWireProjectedExpression(value, ['code'], new Set(), 0);
+      if (code) authorities.push(...requestWireAuthoritiesForExpression(code, state));
+      else if (!requestExpressionIsPlainWireValue(value, state, new Set())) {
+        authorities.push(requestOpaqueWireAuthority(value, 'form-error-failure'));
+      }
+      return;
+    }
+    if (['class', 'code', 'id', 'role'].includes(name)) {
+      authorities.push(...requestWireAuthoritiesForExpression(value, state));
+      return;
+    }
+    // Compiler-owned mutation/result carriers select server-side form state; they are not emitted.
+    if (name === 'mutation' || name === 'result') return;
+    // FormErrorProps intentionally has an index signature. Unknown current/future props must not
+    // become an untracked output channel merely because today's renderer ignores them.
+    authorities.push(...requestWireAuthoritiesForExpression(value, state));
+  };
+
+  for (const attribute of opening.getAttributes()) {
+    if (Node.isJsxSpreadAttribute(attribute)) {
+      const spread = resolveStaticObjectLiteral(attribute.getExpression(), new Set(), 0);
+      if (!spread) {
+        authorities.push(...requestWireAuthoritiesForExpression(attribute.getExpression(), state));
+        continue;
+      }
+      for (const property of spread.getProperties()) {
+        const name = staticMemberName(requestObjectLiteralElementNameNode(property));
+        const value = requestHandlerPropertyExpression(property);
+        if (name && value) add(name, value);
+        else if (Node.isSpreadAssignment(property)) {
+          authorities.push(...requestWireAuthoritiesForExpression(property.getExpression(), state));
+        }
+      }
+      continue;
+    }
+    const name = attribute.getNameNode().getText();
+    const initializer = attribute.getInitializer();
+    if (!initializer) continue;
+    if (Node.isJsxExpression(initializer)) {
+      const value = initializer.getExpression();
+      if (value) add(name, value);
+    }
+  }
+  if (Node.isJsxElement(element)) {
+    for (const child of element.getJsxChildren()) {
+      if (Node.isJsxText(child)) continue;
+      const value = Node.isJsxExpression(child) ? child.getExpression() : child;
+      if (value) add('children', value);
+    }
+  }
+  return dedupeRequestWireAuthorities(authorities);
+}
+
+function requestWireAuthoritiesForReviewedFormErrorMessage(
+  value: Node,
+  state: RequestWireAnalysisState,
+): RequestWireAuthority[] {
+  const resolution = resolveRequestCallable(value, new Set(), 0, state.session);
+  if (resolution.callables.length === 0) {
+    return requestWireAuthoritiesForExpression(value, state);
+  }
+  const authorities: RequestWireAuthority[] = [];
+  for (const callable of resolution.callables) {
+    const reviewed: RequestCallable = {
+      ...callable,
+      rootParameterRoles: requestCallableParameters(callable.declaration).map(() => 'input'),
+    };
+    const nestedState: RequestWireAnalysisState = {
+      bindingKey: state.bindingKey,
+      bindings: state.bindings,
+      rootCallable: state.rootCallable,
+      scopeCallable: reviewed,
+      session: state.session,
+    };
+    for (const output of requestWireOutputExpressions(reviewed)) {
+      authorities.push(...requestWireAuthoritiesForExpression(output, nestedState));
+    }
+  }
+  return dedupeRequestWireAuthorities(authorities);
+}
+
 function requestWireAuthoritiesForJsxAttributes(
   attributes: readonly import('ts-morph').JsxAttributeLike[],
   state: RequestWireAnalysisState,
@@ -10277,7 +10413,8 @@ function requestWireAuthoritiesForJsxAttributes(
         expression &&
         !(
           state.scopeCallable.compilerOwnedJsxEventHandlers &&
-          requestJsxAttributeIsCompilerOwnedEventHandler(attribute)
+          requestJsxAttributeIsCompilerOwnedEventHandler(attribute) &&
+          requestJsxEventHandlerIsAuthoredInCallable(expression, state.scopeCallable, state.session)
         )
       ) {
         authorities.push(...requestWireAuthoritiesForExpression(expression, state));
@@ -10285,6 +10422,20 @@ function requestWireAuthoritiesForJsxAttributes(
     }
   }
   return dedupeRequestWireAuthorities(authorities);
+}
+
+function requestJsxEventHandlerIsAuthoredInCallable(
+  expression: Node,
+  callable: RequestCallable,
+  session: RequestProvenanceSession,
+): boolean {
+  const resolution = resolveRequestCallable(expression, new Set(), 0, session);
+  return (
+    resolution.callables.length > 0 &&
+    resolution.callables.every((candidate) =>
+      nodeBelongsToRequestCallable(candidate.declaration, callable),
+    )
+  );
 }
 
 function requestJsxAttributeIsCompilerOwnedEventHandler(
@@ -14366,21 +14517,21 @@ function requestStyleCreateCallForExpression(
   return undefined;
 }
 
-function requestStyleCreateResultIsPristine(
-  create: import('ts-morph').CallExpression,
-): boolean {
+function requestStyleCreateResultIsPristine(create: import('ts-morph').CallExpression): boolean {
   const memoized = REQUEST_STYLE_CREATE_PRISTINE_MEMO.get(create);
   if (memoized !== undefined) return memoized;
   const referencesCreate = (expression: Node | undefined): boolean => {
     if (!expression) return false;
     const candidates = [
       expression,
-      ...expression.getDescendants().filter(
-        (candidate) =>
-          Node.isIdentifier(candidate) ||
-          Node.isPropertyAccessExpression(candidate) ||
-          Node.isElementAccessExpression(candidate),
-      ),
+      ...expression
+        .getDescendants()
+        .filter(
+          (candidate) =>
+            Node.isIdentifier(candidate) ||
+            Node.isPropertyAccessExpression(candidate) ||
+            Node.isElementAccessExpression(candidate),
+        ),
     ];
     return candidates.some(
       (candidate) => requestStyleCreateCallForExpression(candidate, new Set()) === create,
@@ -14445,18 +14596,13 @@ function requestCallIsPublicMutationFormAttributes(call: Node): boolean {
   if (!Node.isCallExpression(node)) return false;
   if (
     !requestSourceImportsExactExport(node, '@kovojs/server', 'mutationFormAttributes') &&
-    !requestSourceImportsExactExport(
-      node,
-      '@kovojs/server/api/data',
-      'mutationFormAttributes',
-    )
+    !requestSourceImportsExactExport(node, '@kovojs/server/api/data', 'mutationFormAttributes')
   ) {
     return false;
   }
   const imported = requestImportedModuleExportForExpression(
     node.getExpression(),
-    (specifier) =>
-      specifier === '@kovojs/server' || specifier === '@kovojs/server/api/data',
+    (specifier) => specifier === '@kovojs/server' || specifier === '@kovojs/server/api/data',
     new Set(),
     0,
   );
@@ -14471,11 +14617,7 @@ function requestCallIsReviewedPublicJsxAttributeHelper(call: Node): boolean {
   return requestCallIsPublicStyleAttrs(call) || requestCallIsPublicMutationFormAttributes(call);
 }
 
-function requestSourceImportsExactExport(
-  node: Node,
-  module: string,
-  exportName: string,
-): boolean {
+function requestSourceImportsExactExport(node: Node, module: string, exportName: string): boolean {
   return node
     .getSourceFile()
     .getImportDeclarations()
@@ -14496,10 +14638,7 @@ function requestCallIsExactJsxSpreadExpression(call: Node): boolean {
     node = node.getParent()!;
   }
   const parent = node.getParent();
-  return !!(
-    Node.isJsxSpreadAttribute(parent) &&
-    requestNodesAreSame(parent.getExpression(), node)
-  );
+  return !!(Node.isJsxSpreadAttribute(parent) && requestNodesAreSame(parent.getExpression(), node));
 }
 
 const REQUEST_COMPONENT_DESCRIPTOR_CALL_MEMO = new WeakMap<
@@ -14541,9 +14680,7 @@ function requestComponentDescriptorCallForExpression(
       0,
     );
     const result =
-      imported?.module === '@kovojs/core' && imported.exportName === 'component'
-        ? node
-        : undefined;
+      imported?.module === '@kovojs/core' && imported.exportName === 'component' ? node : undefined;
     REQUEST_COMPONENT_DESCRIPTOR_CALL_MEMO.set(node, result ?? false);
     return result;
   }
@@ -14653,9 +14790,10 @@ function requestReviewedPublicUiComponentForExpression(
   }
   const imported = requestImportedModuleExportForExpression(
     expression,
-    (specifier) => REQUEST_REVIEWED_PUBLIC_UI_COMPONENTS.has(
-      specifier as RequestReviewedPublicUiComponent['module'],
-    ),
+    (specifier) =>
+      REQUEST_REVIEWED_PUBLIC_UI_COMPONENTS.has(
+        specifier as RequestReviewedPublicUiComponent['module'],
+      ),
     new Set(),
     0,
   );
@@ -14671,21 +14809,15 @@ function requestReviewedPublicUiComponentForExpression(
     : undefined;
 }
 
-function requestCallIsReviewedPublicUiRender(
-  call: import('ts-morph').CallExpression,
-): boolean {
+function requestCallIsReviewedPublicUiRender(call: import('ts-morph').CallExpression): boolean {
   const callee = unwrapStaticExpression(call.getExpression());
-  if (
-    !Node.isPropertyAccessExpression(callee) &&
-    !Node.isElementAccessExpression(callee)
-  ) {
+  if (!Node.isPropertyAccessExpression(callee) && !Node.isElementAccessExpression(callee)) {
     return false;
   }
   if (requestStaticCallMember(callee) !== 'render') return false;
   const definition = unwrapStaticExpression(callee.getExpression());
   if (
-    (!Node.isPropertyAccessExpression(definition) &&
-      !Node.isElementAccessExpression(definition)) ||
+    (!Node.isPropertyAccessExpression(definition) && !Node.isElementAccessExpression(definition)) ||
     (Node.isPropertyAccessExpression(definition)
       ? definition.getName()
       : staticMemberName(definition.getArgumentExpression())) !== 'definition'
@@ -14708,10 +14840,7 @@ function requestPropertyAccessBelongsToReviewedPublicUiRenderCall(access: Node):
       candidate = parent;
       continue;
     }
-    if (
-      Node.isCallExpression(parent) &&
-      requestNodesAreSame(parent.getExpression(), candidate)
-    ) {
+    if (Node.isCallExpression(parent) && requestNodesAreSame(parent.getExpression(), candidate)) {
       return requestCallIsReviewedPublicUiRender(parent);
     }
     return false;

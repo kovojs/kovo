@@ -402,6 +402,31 @@ describe('server mutation lifecycle', () => {
     );
   });
 
+  it('rejects getter-bearing retained mutation fields without invoking them', () => {
+    for (const property of ['key', 'input', 'fileFields', 'csrf'] as const) {
+      let reads = 0;
+      const definition: Record<string, unknown> = {
+        csrf: false,
+        fileFields: [],
+        input: s.object({ value: s.string() }),
+        key: 'proof/write',
+      };
+      Object.defineProperty(definition, property, {
+        configurable: true,
+        enumerable: true,
+        get() {
+          reads += 1;
+          return property === 'key' ? 'attacker/write' : undefined;
+        },
+      });
+
+      expect(() => mutationFormAttributes(definition as never)).toThrow(
+        new RegExp(`definition\\.${property} must be a stable own data property`, 'u'),
+      );
+      expect(reads).toBe(0);
+    }
+  });
+
   it('uses compiler-derived keys on object-form mutation values', () => {
     const addToCart = assignDerivedMutationKey(
       defineMutation({

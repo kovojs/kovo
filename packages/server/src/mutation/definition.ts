@@ -627,12 +627,19 @@ export function assignDerivedMutationKey<Mutation extends MutationDefinition<str
 export function mutationFormAttributes<const Key extends string, Request = unknown>(
   definition: MutationFormDefinition<Key, Request>,
 ): MutationFormAttributes<Key, Request> {
-  assertMutationKey(definition);
+  if (typeof definition !== 'object' || definition === null || witnessIsArray(definition)) {
+    throw new TypeError('mutationFormAttributes() requires a stable mutation definition object.');
+  }
+  const key = mutationFormDefinitionKey(definition);
+  mutationFormDefinitionOwnDataValue(definition, 'csrf');
+  const declaredFileFields = mutationFormDefinitionOwnDataValue(definition, 'fileFields');
+  const input = mutationFormDefinitionOwnDataValue(definition, 'input');
   const fileFields =
-    definition.fileFields ?? (definition.input ? mutationInputFileFields(definition.input) : []);
+    (declaredFileFields as readonly string[] | undefined) ??
+    (input ? mutationInputFileFields(input as Schema<unknown>) : []);
   return witnessFreeze({
-    action: `/_m/${definition.key}`,
-    'data-mutation': definition.key,
+    action: `/_m/${key}`,
+    'data-mutation': key,
     enhance: true,
     ...(fileFields.length === 0 ? {} : { enctype: 'multipart/form-data' as const }),
     method: 'post',
@@ -656,15 +663,41 @@ export function renderMutationFormAttributes<const Key extends string>(
   )}"${attributes.enctype ? ` enctype="${attributes.enctype}"` : ''} enhance data-mutation="${escapeAttribute(attributes['data-mutation'])}"`;
 }
 
-function assertMutationKey<Key extends string, Request>(
+function mutationFormDefinitionKey<Key extends string, Request>(
   definition: MutationFormDefinition<Key, Request>,
-): asserts definition is MutationFormDefinition<Key, Request> & { key: Key } {
-  if (typeof definition.key !== 'string' || definition.key.length === 0) {
+): Key {
+  const key = mutationFormDefinitionOwnDataValue(definition, 'key');
+  if (typeof key !== 'string' || key.length === 0) {
     throw new TypeError(
       'mutation({ input, handler }) has no runtime key until the Kovo compiler derives one from ' +
         'the exported binding. Use the compiled artifact or keep the internal generated key path.',
     );
   }
+  return key as Key;
+}
+
+function mutationFormDefinitionOwnDataValue(
+  definition: object,
+  property: 'csrf' | 'fileFields' | 'input' | 'key',
+): unknown {
+  const before = witnessGetOwnPropertyDescriptor(definition, property);
+  const after = witnessGetOwnPropertyDescriptor(definition, property);
+  if (before === undefined && after === undefined) return undefined;
+  if (
+    before === undefined ||
+    after === undefined ||
+    !('value' in before) ||
+    !('value' in after) ||
+    !witnessObjectIs(before.value, after.value) ||
+    before.configurable !== after.configurable ||
+    before.enumerable !== after.enumerable ||
+    before.writable !== after.writable
+  ) {
+    throw new TypeError(
+      `mutationFormAttributes() definition.${property} must be a stable own data property.`,
+    );
+  }
+  return before.value;
 }
 
 /**

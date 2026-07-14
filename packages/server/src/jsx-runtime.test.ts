@@ -385,6 +385,114 @@ describe('server jsx runtime', () => {
     expect(rendered.match(/name="csrf"/g)).toHaveLength(1);
   });
 
+  it('rejects getter-bearing retained mutation key and csrf fields without invoking them', () => {
+    for (const property of ['key', 'csrf'] as const) {
+      let reads = 0;
+      const mutation: Record<string, unknown> = { csrf: false, key: 'cart/add' };
+      const attributes = mutationFormAttributes(mutation as never);
+      Object.defineProperty(mutation, property, {
+        configurable: true,
+        enumerable: true,
+        get() {
+          reads += 1;
+          return property === 'key' ? 'attacker/write' : false;
+        },
+      });
+
+      expect(() => html(jsx('form', { ...attributes, children: '' }))).toThrow(
+        new RegExp(`Retained JSX mutation\\.${property} must be a stable own data property`, 'u'),
+      );
+      expect(reads).toBe(0);
+    }
+  });
+
+  it('rejects an empty retained mutation key before rendering a form action', () => {
+    expect(() =>
+      html(
+        jsx('form', {
+          mutation: { csrf: false, key: '' },
+          children: '',
+        }),
+      ),
+    ).toThrow('Retained JSX mutation.key must be a non-empty stable own data string.');
+  });
+
+  it('rejects getter-bearing retained mutation CSRF options without invoking them', () => {
+    const request = { session: { id: 's1' } };
+    for (const property of [
+      'anonymousCookie',
+      'field',
+      'secret',
+      'sessionId',
+      'trustedOrigins',
+    ] as const) {
+      let reads = 0;
+      const csrf: Record<string, unknown> = {
+        field: 'csrf',
+        secret: TEST_CSRF_SECRET,
+        sessionId: (value: typeof request) => value.session.id,
+      };
+      const mutation = { csrf, key: 'cart/add' };
+      const attributes = mutationFormAttributes(mutation as never);
+      Object.defineProperty(csrf, property, {
+        configurable: true,
+        enumerable: true,
+        get() {
+          reads += 1;
+          return undefined;
+        },
+      });
+
+      expect(() =>
+        html(
+          runWithJsxRequestContext(request, () =>
+            jsx('form', {
+              ...attributes,
+              children: '',
+            }),
+          ),
+        ),
+      ).toThrow(
+        new RegExp(`Mutation CSRF options\\.${property} must be a stable own data property`, 'u'),
+      );
+      expect(reads).toBe(0);
+    }
+  });
+
+  it('rejects getter-bearing anonymous CSRF cookie options without invoking them', () => {
+    const request = { session: { id: 's1' } };
+    let reads = 0;
+    const anonymousCookie: Record<string, unknown> = {};
+    const csrf = {
+      anonymousCookie,
+      field: 'csrf',
+      secret: TEST_CSRF_SECRET,
+      sessionId: (_value: typeof request) => undefined,
+    };
+    const mutation = { csrf, key: 'cart/add' };
+    const attributes = mutationFormAttributes(mutation);
+    Object.defineProperty(anonymousCookie, 'name', {
+      configurable: true,
+      enumerable: true,
+      get() {
+        reads += 1;
+        return 'attacker-cookie';
+      },
+    });
+
+    expect(() =>
+      html(
+        runWithJsxRequestContext(request, () =>
+          jsx('form', {
+            ...attributes,
+            children: '',
+          }),
+        ),
+      ),
+    ).toThrow('Mutation CSRF options.anonymousCookie.name must be a stable own data property.');
+    expect(reads).toBe(0);
+  });
+
   it('escapes attribute values', () => {
     expect(html(jsx('input', { value: 'a"b<c&d' }))).toBe('<input value="a&quot;b&lt;c&amp;d">');
   });

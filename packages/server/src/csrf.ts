@@ -253,9 +253,17 @@ export function renderMutationCsrfField<Request>(definition: {
   csrf?: CsrfOptions<Request> | false;
   key: string;
 }): string {
-  if (definition.csrf === false) return '';
+  const key = mutationCsrfOwnDataValue(definition, 'key');
+  if (typeof key !== 'string' || key.length === 0) {
+    throw new TypeError('Mutation CSRF definition.key must be a stable own data string.');
+  }
+  const declaredCsrf = mutationCsrfOwnDataValue(definition, 'csrf') as
+    | CsrfOptions<Request>
+    | false
+    | undefined;
+  if (declaredCsrf === false) return '';
   const context = currentJsxFrameworkContext();
-  const csrf = definition.csrf ?? context?.csrf;
+  const csrf = declaredCsrf ? snapshotMutationCsrfOptions(declaredCsrf) : context?.csrf;
   if (!context || !csrf) return '';
   context.anonymousCsrfBindings ??= createSecurityMap();
   const binding = resolveCsrfBinding(context.request as Request, csrf, {
@@ -264,7 +272,102 @@ export function renderMutationCsrfField<Request>(definition: {
   });
   if (!binding) return '';
   if (binding.setCookie) context.onCsrfSetCookie?.(binding.setCookie);
-  return csrfFieldForBinding(binding.value, csrf, csrfAudience(csrf, definition.key));
+  return csrfFieldForBinding(binding.value, csrf, csrfAudience(csrf, key));
+}
+
+function snapshotMutationCsrfOptions<Request>(source: CsrfOptions<Request>): CsrfOptions<Request> {
+  if (typeof source !== 'object' || source === null || witnessIsArray(source)) {
+    throw new TypeError('Mutation CSRF options must be a stable own-data object.');
+  }
+  const anonymousCookie = mutationCsrfOptionOwnDataValue(source, 'anonymousCookie');
+  const field = mutationCsrfOptionOwnDataValue(source, 'field');
+  const secret = mutationCsrfOptionOwnDataValue(source, 'secret');
+  const sessionId = mutationCsrfOptionOwnDataValue(source, 'sessionId');
+  const trustedOrigins = mutationCsrfOptionOwnDataValue(source, 'trustedOrigins');
+  let stableAnonymousCookie = anonymousCookie;
+  if (typeof anonymousCookie === 'object' && anonymousCookie !== null) {
+    if (witnessIsArray(anonymousCookie)) {
+      throw new TypeError('Mutation CSRF options.anonymousCookie must be an own-data object.');
+    }
+    stableAnonymousCookie = {
+      maxAge: mutationCsrfAnonymousOwnDataValue(anonymousCookie, 'maxAge'),
+      name: mutationCsrfAnonymousOwnDataValue(anonymousCookie, 'name'),
+      path: mutationCsrfAnonymousOwnDataValue(anonymousCookie, 'path'),
+      sameSite: mutationCsrfAnonymousOwnDataValue(anonymousCookie, 'sameSite'),
+      secure: mutationCsrfAnonymousOwnDataValue(anonymousCookie, 'secure'),
+    };
+  }
+  return {
+    ...(stableAnonymousCookie === undefined
+      ? {}
+      : { anonymousCookie: stableAnonymousCookie as CsrfAnonymousCookieOptions | false }),
+    ...(field === undefined ? {} : { field: field as string }),
+    secret: secret as SigningSecret,
+    sessionId: sessionId as (request: Request) => string | undefined,
+    ...(trustedOrigins === undefined
+      ? {}
+      : { trustedOrigins: trustedOrigins as readonly string[] }),
+  };
+}
+
+function mutationCsrfOptionOwnDataValue(
+  source: object,
+  property: keyof CsrfOptions<unknown>,
+): unknown {
+  return stableMutationCsrfOwnDataValue(source, property, `Mutation CSRF options.${property}`);
+}
+
+function mutationCsrfAnonymousOwnDataValue(
+  source: object,
+  property: keyof CsrfAnonymousCookieOptions,
+): unknown {
+  return stableMutationCsrfOwnDataValue(
+    source,
+    property,
+    `Mutation CSRF options.anonymousCookie.${property}`,
+  );
+}
+
+function stableMutationCsrfOwnDataValue(
+  source: object,
+  property: PropertyKey,
+  label: string,
+): unknown {
+  const before = witnessGetOwnPropertyDescriptor(source, property);
+  const after = witnessGetOwnPropertyDescriptor(source, property);
+  if (before === undefined && after === undefined) return undefined;
+  if (
+    before === undefined ||
+    after === undefined ||
+    !('value' in before) ||
+    !('value' in after) ||
+    !witnessObjectIs(before.value, after.value) ||
+    before.configurable !== after.configurable ||
+    before.enumerable !== after.enumerable ||
+    before.writable !== after.writable
+  ) {
+    throw new TypeError(`${label} must be a stable own data property.`);
+  }
+  return before.value;
+}
+
+function mutationCsrfOwnDataValue(definition: object, property: 'csrf' | 'key'): unknown {
+  const before = witnessGetOwnPropertyDescriptor(definition, property);
+  const after = witnessGetOwnPropertyDescriptor(definition, property);
+  if (before === undefined && after === undefined) return undefined;
+  if (
+    before === undefined ||
+    after === undefined ||
+    !('value' in before) ||
+    !('value' in after) ||
+    !witnessObjectIs(before.value, after.value) ||
+    before.configurable !== after.configurable ||
+    before.enumerable !== after.enumerable ||
+    before.writable !== after.writable
+  ) {
+    throw new TypeError(`Mutation CSRF definition.${property} must be a stable own data property.`);
+  }
+  return before.value;
 }
 
 /**

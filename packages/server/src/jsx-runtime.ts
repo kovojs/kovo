@@ -70,6 +70,7 @@ import {
 import {
   witnessCreateNullRecord,
   witnessGetOwnPropertyDescriptor,
+  witnessObjectIs,
   witnessObjectKeys,
 } from './security-witness-intrinsics.js';
 import { renderServerRenderable } from './renderable.js';
@@ -330,9 +331,12 @@ function renderJsxAttributes(type: string, props: JsxProps, jsxKey?: unknown): s
     ) {
       continue;
     }
-    if (type === 'form' && name === 'mutation' && isMutationDefinitionLike(value)) {
-      rendered += renderMutationFormAttributes(value.key, props);
-      continue;
+    if (type === 'form' && name === 'mutation') {
+      const mutation = retainedMutationDefinition(value);
+      if (mutation) {
+        rendered += renderMutationFormAttributes(mutation.key, props);
+        continue;
+      }
     }
     if (name === 'stream') {
       continue;
@@ -460,7 +464,8 @@ function renderFormAfterChildrenContent(props: JsxProps, jsxKey?: unknown): stri
 }
 
 function renderFormKeyContent(props: JsxProps, jsxKey?: unknown): string {
-  if (!isMutationDefinitionLike(props.mutation)) return '';
+  const mutation = retainedMutationDefinition(formHelperOwnDataValue(props, 'mutation'));
+  if (!mutation) return '';
   const key = formKeyValue(props, jsxKey);
   if (key === undefined) return '';
 
@@ -468,20 +473,46 @@ function renderFormKeyContent(props: JsxProps, jsxKey?: unknown): string {
 }
 
 function renderFormCsrfContent(props: JsxProps): string {
-  if (!isMutationDefinitionLike(props.mutation)) return '';
+  const mutation = retainedMutationDefinition(formHelperOwnDataValue(props, 'mutation'));
+  if (!mutation) return '';
   // SPEC.md §10.3:1063/1065: no-JS forms must carry a per-submit idem field so
   // the server can dedup double-submits and Back-resubmit via the replay store.
-  return renderMutationCsrfField(props.mutation) + renderMutationIdemField();
+  return renderMutationCsrfField(mutation) + renderMutationIdemField();
 }
 
-function isMutationDefinitionLike(
-  value: unknown,
-): value is { csrf?: CsrfOptions<unknown> | false; key: string } {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    typeof (value as { key?: unknown }).key === 'string'
-  );
+interface RetainedMutationDefinition {
+  readonly csrf?: CsrfOptions<unknown> | false;
+  readonly key: string;
+}
+
+function retainedMutationDefinition(value: unknown): RetainedMutationDefinition | undefined {
+  if (typeof value !== 'object' || value === null || formHelperIsArray(value)) return undefined;
+  const key = retainedMutationOwnDataValue(value, 'key');
+  if (typeof key !== 'string') return undefined;
+  if (key.length === 0) {
+    throw new TypeError('Retained JSX mutation.key must be a non-empty stable own data string.');
+  }
+  const csrf = retainedMutationOwnDataValue(value, 'csrf');
+  return { ...(csrf === undefined ? {} : { csrf: csrf as CsrfOptions<unknown> | false }), key };
+}
+
+function retainedMutationOwnDataValue(value: object, property: 'csrf' | 'key'): unknown {
+  const before = witnessGetOwnPropertyDescriptor(value, property);
+  const after = witnessGetOwnPropertyDescriptor(value, property);
+  if (before === undefined && after === undefined) return undefined;
+  if (
+    before === undefined ||
+    after === undefined ||
+    !('value' in before) ||
+    !('value' in after) ||
+    !witnessObjectIs(before.value, after.value) ||
+    before.configurable !== after.configurable ||
+    before.enumerable !== after.enumerable ||
+    before.writable !== after.writable
+  ) {
+    throw new TypeError(`Retained JSX mutation.${property} must be a stable own data property.`);
+  }
+  return before.value;
 }
 
 function renderFormChildrenContent(
@@ -937,7 +968,8 @@ function componentRenderSlots(
     const name = formHelperOwnDataValue(names, index);
     if (typeof name !== 'string') continue;
     const mutation = formHelperOwnDataValue(component.definition.mutations, name);
-    if (isMutationDefinitionLike(mutation) && mutation.key === failureContext.mutationKey) {
+    const retainedMutation = retainedMutationDefinition(mutation);
+    if (retainedMutation && retainedMutation.key === failureContext.mutationKey) {
       slots = componentMutationFailureSlots(name, failureContext.failure, slots, {
         submitted: failureContext.input,
       });

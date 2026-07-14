@@ -4112,7 +4112,7 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
       import { query } from '@kovojs/server';
       export const unsafe = query({ load(_input, context) {
         const credential = context.request.headers.get('authorization');
-        return <FormError failure={{ code: 'FAILED' }} message={credential} />;
+        return <FormError failure={{ code: 'FAILED' }} futureProp={credential} message="fixed" />;
       } });
     `);
     expect(exactFormErrorLeak).toEqual(
@@ -4141,9 +4141,9 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
         return [styleAttributes.evil, formAttributes.mutation];
       } });
     `);
-    expect(
-      helperResults.filter((fact) => fact.sink === 'child_process.execFileSync'),
-    ).toHaveLength(2);
+    expect(helperResults.filter((fact) => fact.sink === 'child_process.execFileSync')).toHaveLength(
+      2,
+    );
     expect(helperResults).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ sink: 'request-handler.opaque-protocol' }),
@@ -4176,6 +4176,66 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
       expect.arrayContaining([
         expect.objectContaining({ sink: 'request-handler.opaque-call' }),
         expect.objectContaining({ sink: 'request-handler.opaque-protocol' }),
+      ]),
+    );
+  });
+
+  it('scans direct, spread, and getter-backed FormError callbacks', () => {
+    const facts = sinksFor(`
+      import { component, FormError } from '@kovojs/core';
+      import { createApp, route } from '@kovojs/server';
+      import { execFileSync } from 'node:child_process';
+      const spread = {
+        message: () => execFileSync('form-error-spread-callback'),
+      };
+      const getterBacked = {
+        get message() {
+          execFileSync('form-error-message-getter');
+          return () => 'fixed';
+        },
+      };
+      const Proof = component({ render: () => <main>
+        <FormError
+          failure={{ code: 'FAILED' }}
+          message={() => execFileSync('form-error-direct-callback')}
+        />
+        <FormError failure={{ code: 'FAILED' }} {...spread} />
+        <FormError failure={{ code: 'FAILED' }} {...getterBacked} />
+      </main> });
+      createApp({ routes: [route('/', { page: () => <Proof /> })] });
+    `);
+
+    expect(
+      facts.filter((fact) => fact.sink === 'child_process.execFileSync').map((fact) => fact.source),
+    ).toEqual(
+      expect.arrayContaining([
+        "'form-error-direct-callback'",
+        "'form-error-spread-callback'",
+        "'form-error-message-getter'",
+      ]),
+    );
+  });
+
+  it('does not exempt a callable forwarded into a compiler-owned intrinsic event slot', () => {
+    const facts = sinksFor(`
+      import { component } from '@kovojs/core';
+      import { createApp, route } from '@kovojs/server';
+      import { execFileSync } from 'node:child_process';
+      const Child = component({
+        render: (props) => <button onClick={props.onClick}>Run</button>,
+      });
+      const Parent = component({
+        render: () => <Child onClick={() => execFileSync('forwarded-event-callback')} />,
+      });
+      createApp({ routes: [route('/', { page: () => <Parent /> })] });
+    `);
+
+    expect(facts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sink: 'child_process.execFileSync',
+          source: "'forwarded-event-callback'",
+        }),
       ]),
     );
   });
