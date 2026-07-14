@@ -257,6 +257,7 @@ describe('@kovojs/test server fixture facts', () => {
         headers: {
           'Cache-Control': 'private, no-store',
           'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
+          'Kovo-Build': 'conformance-server-test-build',
           Vary: 'Cookie',
         },
         status: 422,
@@ -409,7 +410,7 @@ describe('@kovojs/test server fixture facts', () => {
         'Cache-Control': 'private, no-store',
         'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
         'Kovo-Build': 'conformance-server-test-build',
-        'Kovo-Changes': '[]',
+        'Kovo-Changes': '[{"domain":"product"}]',
         Vary: 'Cookie',
       },
       status: 200,

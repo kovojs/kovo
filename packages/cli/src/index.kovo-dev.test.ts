@@ -285,7 +285,9 @@ export default config;\n`,
       /Authored Vite config\.resolve (?:changed while it was inspected|must be an own data property)/u,
     );
     expect(existsSync(marker)).toBe(false);
-  }, 40_000);
+    // This deliberately boots and rejects ten independent authored Vite config graphs. Keep the
+    // security cases serial, but leave headroom for the fully populated four-way CI test shard.
+  }, 90_000);
 
   it('fails closed before a poison-first plugin can replace a live lowerer collection method', async () => {
     const root = devFixture('lowerer-poison');
