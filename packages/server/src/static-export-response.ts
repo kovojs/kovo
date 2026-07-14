@@ -5,7 +5,6 @@ import {
   buildSecurityResponseText,
 } from './build-security-intrinsics.js';
 import {
-  securityStringIncludes,
   securityStringSplit,
   securityStringToLowerCase,
   securityStringTrim,
@@ -46,15 +45,39 @@ export async function readStaticExportReplayedResponse(
   const status = buildSecurityResponseStatus(response);
   const responseHeaders = buildSecurityResponseHeaders(response);
   const path = staticExportResponsePath(options);
-  const frameworkBuildToken =
-    options.kind === 'route-document' ? frameworkDocumentResponseBuildToken(response) : undefined;
-  const headers =
-    frameworkBuildToken === undefined
-      ? staticExportHeaders(responseHeaders, { path })
-      : staticExportFrameworkDocumentHeaders(responseHeaders, {
-          buildToken: frameworkBuildToken,
-          path,
-        });
+  let headers: Record<string, string>;
+  if (options.kind === 'route-document') {
+    const frameworkBuildToken = frameworkDocumentResponseBuildToken(response);
+    if (frameworkBuildToken === undefined) {
+      const unprovenHeaders = staticExportHeaders(responseHeaders, { path });
+      const outcomeDiagnostics = routeDocumentNonExportableOutcomeDiagnostics(
+        options,
+        status,
+        unprovenHeaders,
+        unprovenHeaders['content-type'] ?? null,
+        undefined,
+      );
+      if (outcomeDiagnostics.length > 0) throw new StaticExportError(outcomeDiagnostics);
+
+      // SPEC §6.6/§9.5: HTML syntax and headers are attacker-copyable. Route-document capture starts
+      // only from the module-private response receipt minted by framework document assembly; its
+      // transport token is then exact-verified below. Generic HTML is never static-export authority.
+      throw new StaticExportError([
+        staticExportDiagnostic(
+          options.routePath,
+          `KV229 static export cannot export route '${options.routePath}' because replay did not return a provenance-marked framework document with an exact Kovo-Build transport proof. SPEC §6.6/§9.5 static export accepts only request-shell route documents, never generic HTML responses.`,
+          options.routePath,
+        ),
+      ]);
+    }
+
+    headers = staticExportFrameworkDocumentHeaders(responseHeaders, {
+      buildToken: frameworkBuildToken,
+      path,
+    });
+  } else {
+    headers = staticExportHeaders(responseHeaders, { path });
+  }
   const contentType = headers['content-type'] ?? null;
   const body = await buildSecurityResponseText(response);
   const routeDocumentProtocol =
@@ -215,15 +238,19 @@ function isExpectedStaticExportContentType(
 }
 
 function isHtmlDocumentContentType(contentType: string | null): boolean {
-  return contentType === null
-    ? false
-    : securityStringIncludes(securityStringToLowerCase(contentType), 'text/html');
+  // SPEC §6.6/§9.5: media-type classification is an exact grammar decision. A substring such as
+  // `application/x-text/html-evil` is active app output, not a framework HTML document.
+  return staticExportMediaType(contentType) === 'text/html';
 }
 
 function isJavaScriptClientModuleContentType(contentType: string | null): boolean {
-  if (contentType === null) return false;
-  const mime = securityStringToLowerCase(
+  const mime = staticExportMediaType(contentType);
+  return mime === 'text/javascript' || mime === 'application/javascript';
+}
+
+function staticExportMediaType(contentType: string | null): string | null {
+  if (contentType === null) return null;
+  return securityStringToLowerCase(
     securityStringTrim(securityStringSplit(contentType, ';')[0] ?? ''),
   );
-  return mime === 'text/javascript' || mime === 'application/javascript';
 }

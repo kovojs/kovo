@@ -3,6 +3,7 @@ import { trustedHtml } from '@kovojs/browser';
 
 import { publicAccess } from './access.js';
 import { createApp } from './app.js';
+import { endpoint } from './endpoint.js';
 import { guard } from './guards.js';
 import { route } from './route.js';
 import { staticExportRoutePlan } from './static-export-route-plan.js';
@@ -279,6 +280,100 @@ describe('server static export route plan', () => {
         { path: '/products/p1', routePath: '/products/:id' },
       ],
     });
+  });
+
+  it('rejects exact and prefix GET endpoint ownership before replay while preserving siblings', () => {
+    // SPEC §6.6/§9.5: planning proves the same endpoint-before-route dispatch used by the request
+    // shell. `onNonExportable: skip` can therefore suppress only the colliding concrete target.
+    const exact = endpoint('/docs', {
+      handler: () => new Response('<script>globalThis.pwned = true</script>'),
+      method: 'GET',
+      reason: 'static export exact-collision regression fixture',
+      response: { appOwnedSafety: true, body: 'html', cache: 'public' },
+    });
+    const prefix = endpoint('/products/private', {
+      handler: () => new Response('<script>globalThis.pwned = true</script>'),
+      method: 'GET',
+      mount: 'prefix',
+      mountJustification: 'static export prefix-collision regression fixture',
+      reason: 'static export prefix-collision regression fixture',
+      response: { appOwnedSafety: true, body: 'html', cache: 'public' },
+    });
+
+    expect(
+      staticExportRoutePlan(
+        createApp({
+          endpoints: [exact, prefix],
+          routes: [
+            route('/docs', {
+              page: () => trustedHtml('<main>Docs</main>'),
+            }),
+            route('/products/:section/:id', {
+              page: () => trustedHtml('<main>Product</main>'),
+              staticPaths: ['/products/private/p1', '/products/public/p1'],
+            }),
+          ],
+        }),
+      ),
+    ).toEqual({
+      diagnostics: [
+        {
+          code: 'KV229',
+          concretePath: '/docs',
+          message: expect.stringContaining("resolves it to exact GET endpoint '/docs'"),
+          routePath: '/docs',
+        },
+        {
+          code: 'KV229',
+          concretePath: '/products/private/p1',
+          message: expect.stringContaining(
+            "resolves it to prefix GET endpoint '/products/private'",
+          ),
+          routePath: '/products/:section/:id',
+        },
+      ],
+      targets: [
+        {
+          path: '/products/public/p1',
+          routePath: '/products/:section/:id',
+        },
+      ],
+    });
+  });
+
+  it('rejects concrete targets owned by reserved request-shell prefixes', () => {
+    // SPEC §9.5 dispatch gives reserved protocol surfaces authority before the route table even
+    // when the corresponding registry key is absent; static export must not reinterpret them.
+    expect(
+      staticExportRoutePlan(
+        createApp({
+          routes: [
+            route('/_m/export-me', {
+              page: () => trustedHtml('<main>Mutation-shaped route</main>'),
+            }),
+            route('/_q/export-me', {
+              page: () => trustedHtml('<main>Query-shaped route</main>'),
+            }),
+            route('/c/export-me', {
+              page: () => trustedHtml('<main>Module-shaped route</main>'),
+            }),
+          ],
+        }),
+      ).diagnostics,
+    ).toEqual([
+      expect.objectContaining({
+        concretePath: '/_m/export-me',
+        message: expect.stringContaining("reserved mutation dispatch '/_m/'"),
+      }),
+      expect.objectContaining({
+        concretePath: '/_q/export-me',
+        message: expect.stringContaining("reserved query dispatch '/_q/'"),
+      }),
+      expect.objectContaining({
+        concretePath: '/c/export-me',
+        message: expect.stringContaining("reserved client-module dispatch '/c/'"),
+      }),
+    ]);
   });
 
   it('rejects static-host-unsafe concrete route targets before synthetic replay', () => {

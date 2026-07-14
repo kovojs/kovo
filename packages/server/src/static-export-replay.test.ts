@@ -6,15 +6,17 @@ import {
   kovoDeferredRuntimeModuleVersion,
 } from '@kovojs/browser/internal/inline-loader';
 
-import { createApp } from './app.js';
+import { createApp, createRequestHandler } from './app.js';
 import {
   createMemoryVersionedClientModuleRegistry,
   versionedClientModuleHref,
 } from './client-modules.js';
 import { cspSha256 } from './csp.js';
+import { endpoint } from './endpoint.js';
 import { respond } from './response.js';
 import { layout, route } from './route.js';
 import { replayStaticExportApp } from './static-export-replay.js';
+import { readStaticExportReplayedResponse } from './static-export-response.js';
 import { renderedHtml } from './html.js';
 
 const runtimeClientModulePath = /^\/c\/__v\/[^/]+\/kovo-runtime\.client\.js$/;
@@ -203,6 +205,114 @@ describe('server static export app replay boundary', () => {
         routePath: '/products/download',
       },
     ]);
+  });
+
+  it('refuses an active-HTML GET endpoint collision before replay and skips only that target', async () => {
+    // SPEC §6.6/§9.5: a path in staticPaths is not route authority. Exact endpoints dispatch first,
+    // so their arbitrary active HTML must never become a durable route document.
+    let endpointCalls = 0;
+    const collision = endpoint('/articles/pwned', {
+      handler() {
+        endpointCalls += 1;
+        return new Response('<script>globalThis.staticExportPwned = true</script>', {
+          headers: { 'Content-Type': 'text/html; charset=utf-8' },
+        });
+      },
+      method: 'GET',
+      reason: 'static export active HTML collision regression fixture',
+      response: { appOwnedSafety: true, body: 'html', cache: 'public' },
+    });
+    const app = createApp({
+      endpoints: [collision],
+      routes: [
+        route('/articles/:slug', {
+          page: ({ params }) =>
+            trustedHtml(`<main data-article="${String(params.slug)}">Article</main>`),
+          staticPaths: ['/articles/safe', '/articles/pwned'],
+        }),
+      ],
+    });
+
+    const result = await replayStaticExportApp({ app, onNonExportable: 'skip' });
+
+    expect(endpointCalls).toBe(0);
+    expect(result.artifacts.map((artifact) => artifact.path)).toEqual([
+      '/articles/safe/index.html',
+    ]);
+    expect(result.diagnostics).toEqual([
+      expect.objectContaining({
+        concretePath: '/articles/pwned',
+        message: expect.stringContaining("resolves it to exact GET endpoint '/articles/pwned'"),
+        routePath: '/articles/:slug',
+      }),
+    ]);
+  });
+
+  it('rejects a prefix collision even when its handler returns another genuine framework document', async () => {
+    // A module-private document receipt proves framework assembly, not ownership by this app's
+    // intended route. SPEC §9.5 shell dispatch identity must therefore be proven before replay.
+    const decoyHandler = createRequestHandler(
+      createApp({
+        routes: [
+          route('/catalog/:section/:id', {
+            page: () => trustedHtml('<main data-decoy="true">Decoy document</main>'),
+          }),
+        ],
+      }),
+    );
+    const control = await decoyHandler(
+      new Request('https://kovo.local/catalog/private/p1', { method: 'GET' }),
+    );
+    expect(control.headers.get('Kovo-Build')).toBeTruthy();
+    await expect(
+      readStaticExportReplayedResponse({
+        kind: 'route-document',
+        response: control,
+        routePath: '/catalog/private/p1',
+      }),
+    ).resolves.toMatchObject({
+      body: expect.stringContaining('data-decoy="true"'),
+      status: 200,
+    });
+
+    let endpointCalls = 0;
+    const collision = endpoint('/catalog/private', {
+      handler(request) {
+        endpointCalls += 1;
+        return decoyHandler(request);
+      },
+      method: 'GET',
+      mount: 'prefix',
+      mountJustification: 'static export genuine-document collision regression fixture',
+      reason: 'static export genuine-document collision regression fixture',
+      response: {
+        appOwnedSafety: true,
+        body: 'html',
+        cache: 'public',
+        reservedHeaders: ['Kovo-Build'],
+      },
+    });
+    const app = createApp({
+      endpoints: [collision],
+      routes: [
+        route('/catalog/:section/:id', {
+          page: () => trustedHtml('<main data-intended="true">Intended document</main>'),
+          staticPaths: ['/catalog/private/p1'],
+        }),
+      ],
+    });
+
+    await expect(replayStaticExportApp({ app })).rejects.toMatchObject({
+      code: 'KV229',
+      diagnostics: [
+        expect.objectContaining({
+          concretePath: '/catalog/private/p1',
+          message: expect.stringContaining("resolves it to prefix GET endpoint '/catalog/private'"),
+          routePath: '/catalog/:section/:id',
+        }),
+      ],
+    });
+    expect(endpointCalls).toBe(0);
   });
 
   it('reports route-plan diagnostics before replaying route documents', async () => {

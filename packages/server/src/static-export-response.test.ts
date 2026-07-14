@@ -3,12 +3,24 @@ import { describe, expect, it } from 'vitest';
 import { markFrameworkDocumentResponse } from './response.js';
 import { readStaticExportReplayedResponse } from './static-export-response.js';
 
+const responseTestBuildToken = 'static-export-response-test-build';
+
+function frameworkDocumentResponse(body: BodyInit | null, init: ResponseInit = {}): Response {
+  const headers = new Headers(init.headers);
+  if (!headers.has('Content-Type')) headers.set('Content-Type', 'text/html; charset=utf-8');
+  headers.set('Kovo-Build', responseTestBuildToken);
+  return markFrameworkDocumentResponse(
+    new Response(body, { ...init, headers }),
+    responseTestBuildToken,
+  );
+}
+
 describe('server static export replay response boundary', () => {
   it('snapshots successful route document responses with sorted headers', async () => {
     await expect(
       readStaticExportReplayedResponse({
         kind: 'route-document',
-        response: new Response('<main>Docs</main>', {
+        response: frameworkDocumentResponse('<main>Docs</main>', {
           headers: { 'X-Route': '/docs', 'Content-Type': 'text/html; charset=utf-8' },
         }),
         routePath: '/docs',
@@ -20,6 +32,28 @@ describe('server static export replay response boundary', () => {
         'x-route': '/docs',
       },
       status: 200,
+    });
+  });
+
+  it('rejects generic HTML without framework document provenance', async () => {
+    // SPEC §6.6/§9.5: copyable HTML syntax and headers cannot substitute for the module-private
+    // receipt minted by request-shell document assembly.
+    await expect(
+      readStaticExportReplayedResponse({
+        kind: 'route-document',
+        response: new Response('<script>globalThis.staticExportPwned = true</script>', {
+          headers: { 'Content-Type': 'text/html; charset=utf-8' },
+        }),
+        routePath: '/docs',
+      }),
+    ).rejects.toMatchObject({
+      code: 'KV229',
+      diagnostics: [
+        expect.objectContaining({
+          message: expect.stringContaining('provenance-marked framework document'),
+          routePath: '/docs',
+        }),
+      ],
     });
   });
 
@@ -58,11 +92,28 @@ describe('server static export replay response boundary', () => {
     ).rejects.toThrow(/Kovo-Build transport proof does not match/u);
   });
 
+  it('rejects a provenance-marked document without its exact Kovo-Build transport proof', async () => {
+    const response = markFrameworkDocumentResponse(
+      new Response('<main>Docs</main>', {
+        headers: { 'Content-Type': 'text/html; charset=utf-8' },
+      }),
+      'build-a',
+    );
+
+    await expect(
+      readStaticExportReplayedResponse({
+        kind: 'route-document',
+        response,
+        routePath: '/docs',
+      }),
+    ).rejects.toThrow(/missing its Kovo-Build transport proof/u);
+  });
+
   it('rejects static route document response headers that cannot be exported', async () => {
     await expect(
       readStaticExportReplayedResponse({
         kind: 'route-document',
-        response: new Response('<main>Docs</main>', {
+        response: frameworkDocumentResponse('<main>Docs</main>', {
           headers: { 'Content-Type': 'text/html; charset=utf-8', 'Set-Cookie': 'sid=1; Path=/' },
         }),
         routePath: '/docs',
@@ -83,7 +134,7 @@ describe('server static export replay response boundary', () => {
     await expect(
       readStaticExportReplayedResponse({
         kind: 'route-document',
-        response: new Response('nope', {
+        response: frameworkDocumentResponse('nope', {
           headers: { 'Content-Type': 'application/json' },
           status: 200,
         }),
@@ -99,6 +150,30 @@ describe('server static export replay response boundary', () => {
           ),
           routePath: '/docs',
         },
+      ],
+    });
+  });
+
+  it('does not classify media types that merely contain the text/html substring', async () => {
+    // SPEC §6.6/§9.5: exact media-type classification prevents an active app response from using a
+    // token such as application/x-text/html-evil to enter the route-document publication path.
+    await expect(
+      readStaticExportReplayedResponse({
+        kind: 'route-document',
+        response: frameworkDocumentResponse('<script>globalThis.pwned = true</script>', {
+          headers: { 'Content-Type': 'application/x-text/html-evil' },
+        }),
+        routePath: '/malformed-media',
+      }),
+    ).rejects.toMatchObject({
+      code: 'KV229',
+      diagnostics: [
+        expect.objectContaining({
+          message: expect.stringContaining(
+            "returned status 200 with Content-Type 'application/x-text/html-evil'",
+          ),
+          routePath: '/malformed-media',
+        }),
       ],
     });
   });
@@ -270,7 +345,7 @@ describe('server static export replay response boundary', () => {
     await expect(
       readStaticExportReplayedResponse({
         kind: 'route-document',
-        response: new Response(
+        response: frameworkDocumentResponse(
           [
             '<!doctype html><main>',
             '<kovo-defer target="reviews:p1" state="pending">Loading</kovo-defer>',
@@ -301,7 +376,7 @@ describe('server static export replay response boundary', () => {
     await expect(
       readStaticExportReplayedResponse({
         kind: 'route-document',
-        response: new Response(
+        response: frameworkDocumentResponse(
           [
             '<!doctype html><main>',
             '<pre class="shiki"><code>',
@@ -328,7 +403,7 @@ describe('server static export replay response boundary', () => {
     await expect(
       readStaticExportReplayedResponse({
         kind: 'route-document',
-        response: new Response(
+        response: frameworkDocumentResponse(
           [
             '<!doctype html><main>',
             '<template>',
@@ -356,7 +431,7 @@ describe('server static export replay response boundary', () => {
     await expect(
       readStaticExportReplayedResponse({
         kind: 'route-document',
-        response: new Response(
+        response: frameworkDocumentResponse(
           '<main><kovo-fragment target="feed">Loading</kovo-fragment></main>',
           {
             headers: { 'Content-Type': 'text/html; charset=utf-8' },
@@ -381,7 +456,7 @@ describe('server static export replay response boundary', () => {
     await expect(
       readStaticExportReplayedResponse({
         kind: 'route-document',
-        response: new Response(
+        response: frameworkDocumentResponse(
           [
             '<main>',
             '<form action="/_m/chat/send" data-mutation-stream="true">',

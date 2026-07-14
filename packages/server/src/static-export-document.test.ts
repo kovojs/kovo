@@ -5,6 +5,7 @@ import {
   collectStaticExportClientModuleHrefs,
   collectStaticExportServerEndpointRefs,
 } from './static-export-document-refs.js';
+import { markFrameworkDocumentResponse } from './response.js';
 import { replayStaticExportRouteDocumentArtifact } from './static-export-document.js';
 
 describe('server static export document boundary', () => {
@@ -13,10 +14,17 @@ describe('server static export document boundary', () => {
     const handler: RequestHandler = async (request) => {
       const url = new URL(request.url);
       seen.push(`${request.method} ${url.pathname}${url.search}`);
-      return new Response('<main>Docs</main>', {
-        headers: { 'Content-Type': 'text/html; charset=utf-8', 'X-Route': url.pathname },
-        status: 200,
-      });
+      return markFrameworkDocumentResponse(
+        new Response('<main>Docs</main>', {
+          headers: {
+            'Content-Type': 'text/html; charset=utf-8',
+            'Kovo-Build': 'static-export-document-test-build',
+            'X-Route': url.pathname,
+          },
+          status: 200,
+        }),
+        'static-export-document-test-build',
+      );
     };
     const context = { handler, origin: 'https://kovo.local/root?ignored=1' };
 
@@ -55,9 +63,7 @@ describe('server static export document boundary', () => {
       diagnostics: [
         {
           code: 'KV229',
-          message: expect.stringContaining(
-            "successful HTML route documents; '/private' returned status 405",
-          ),
+          message: expect.stringContaining('provenance-marked framework document'),
           routePath: '/private',
         },
       ],

@@ -17,7 +17,8 @@ import {
   staticExportDiagnostic,
   type StaticExportDiagnostic,
 } from './static-export-diagnostics.js';
-import { witnessArrayAppend } from './security-witness-intrinsics.js';
+import { matchShellDispatch } from './shell.js';
+import { witnessArrayAppend, witnessObjectIs } from './security-witness-intrinsics.js';
 
 export interface StaticExportRouteTarget {
   path: string;
@@ -75,16 +76,23 @@ export function staticExportRoutePlan(app: KovoApp): StaticExportRoutePlan {
     }
 
     if (routeHasParams(route.path)) {
-      const planned = staticExportParamRouteTargets(route, targetPaths);
+      const planned = staticExportParamRouteTargets(app, route, targetPaths);
       appendStaticExportPlanItems(diagnostics, planned.diagnostics);
       appendStaticExportPlanItems(targets, planned.targets);
       continue;
     }
 
-    addStaticExportRouteTarget(targets, targetPaths, diagnostics, {
-      path: normalizePathname(route.path).pathname,
-      routePath: route.path,
-    });
+    addStaticExportRouteTarget(
+      targets,
+      targetPaths,
+      diagnostics,
+      {
+        path: normalizePathname(route.path).pathname,
+        routePath: route.path,
+      },
+      app,
+      route,
+    );
   }
 
   return { diagnostics, targets };
@@ -106,6 +114,7 @@ function appRouteMayEmitAnonymousCsrfCookie(app: KovoApp): boolean {
 }
 
 function staticExportParamRouteTargets(
+  app: KovoApp,
   route: KovoApp['routes'][number],
   targetPaths: Map<string, StaticExportRouteTarget>,
 ): StaticExportRoutePlan {
@@ -199,10 +208,17 @@ function staticExportParamRouteTargets(
       continue;
     }
 
-    addStaticExportRouteTarget(targets, targetPaths, diagnostics, {
-      path: normalized.pathname,
-      routePath: route.path,
-    });
+    addStaticExportRouteTarget(
+      targets,
+      targetPaths,
+      diagnostics,
+      {
+        path: normalized.pathname,
+        routePath: route.path,
+      },
+      app,
+      route,
+    );
   }
 
   return { diagnostics, targets };
@@ -213,6 +229,8 @@ function addStaticExportRouteTarget(
   targetPaths: Map<string, StaticExportRouteTarget>,
   diagnostics: StaticExportDiagnostic[],
   target: StaticExportRouteTarget,
+  app: KovoApp,
+  intendedRoute: KovoApp['routes'][number],
 ): void {
   if (!staticExportRouteTargetPathIsSafe(target.path)) {
     witnessArrayAppend(
@@ -239,11 +257,60 @@ function addStaticExportRouteTarget(
     return;
   }
 
+  const dispatchDiagnostic = staticExportRouteDispatchDiagnostic(app, intendedRoute, target);
+  if (dispatchDiagnostic !== undefined) {
+    witnessArrayAppend(
+      diagnostics,
+      dispatchDiagnostic,
+      'Server packages/server/src/static-export-route-plan.ts collection',
+    );
+    return;
+  }
+
   securityMapSet(targetPaths, target.path, target);
   witnessArrayAppend(
     targets,
     target,
     'Server packages/server/src/static-export-route-plan.ts collection',
+  );
+}
+
+function staticExportRouteDispatchDiagnostic(
+  app: KovoApp,
+  intendedRoute: KovoApp['routes'][number],
+  target: StaticExportRouteTarget,
+): StaticExportDiagnostic | undefined {
+  // SPEC §6.6/§9.5: static export must prove route ownership from the same normative GET shell
+  // dispatch used by production before any app code runs. A path-shaped plan alone is not proof:
+  // reserved surfaces and exact/prefix endpoints dispatch before routes and could otherwise have
+  // their arbitrary response bytes published as the intended route document.
+  const match = matchShellDispatch({
+    endpoints: app.endpoints,
+    method: 'GET',
+    pathname: target.path,
+    routes: app.routes,
+  });
+  if (match.kind === 'route' && witnessObjectIs(match.route, intendedRoute)) return undefined;
+
+  let owner: string;
+  if (match.kind === 'endpoint') {
+    owner = `${match.endpoint.mount} GET endpoint '${match.endpoint.path}'`;
+  } else if (
+    match.kind === 'mutation' ||
+    match.kind === 'query' ||
+    match.kind === 'client-module'
+  ) {
+    owner = `reserved ${match.kind} dispatch '${match.entry.prefix}'`;
+  } else if (match.kind === 'route') {
+    owner = `route '${match.route.path}'`;
+  } else {
+    owner = 'the not-found shell';
+  }
+
+  return staticExportDiagnostic(
+    target.routePath,
+    `KV229 static export cannot export concrete route target '${target.path}' for route '${target.routePath}' because SPEC §9.5 GET shell dispatch resolves it to ${owner} instead of the intended route. Static export replays only targets whose normative shell owner is that exact route.`,
+    target.path,
   );
 }
 
