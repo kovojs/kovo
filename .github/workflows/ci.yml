@@ -155,27 +155,31 @@ jobs:
           browsers: chromium
           cache-key: kovo-playwright-${{ runner.os }}-${{ env.PLAYWRIGHT_VERSION }}-chromium-${{ hashFiles('pnpm-lock.yaml') }}
           restore-key: kovo-playwright-${{ runner.os }}-${{ env.PLAYWRIGHT_VERSION }}-chromium-
-      - name: Download previous timing history
+      - name: Download and combine previous timing histories
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          mkdir -p "$RUNNER_TEMP/kovo-timing"
-          run_id="$(gh run list --workflow CI --branch main --status success --limit 1 --json databaseId --jq '.[0].databaseId // ""')"
+          mkdir -p "$RUNNER_TEMP/kovo-prior-timing"
+          run_created_at="$(gh run view "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" --json createdAt --jq '.createdAt')"
+          run_id="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow CI --branch main --status success --limit 100 --json databaseId,updatedAt --jq "[.[] | select(.updatedAt < \"$run_created_at\")][0].databaseId // \"\"")"
           if [ -n "$run_id" ]; then
-            gh run download "$run_id" -n kovo-root-timing-history-${{ matrix.shard }} -D "$RUNNER_TEMP/kovo-timing" || true
+            for shard in $(seq 1 "${{ matrix.total }}"); do
+              gh run download "$run_id" --repo "$GITHUB_REPOSITORY" -n "kovo-root-timing-history-$shard" -D "$RUNNER_TEMP/kovo-prior-timing/shard-$shard"
+            done
           fi
+          vp exec node scripts/ci-shards.mjs combine-histories --inputDir "$RUNNER_TEMP/kovo-prior-timing" --out "$RUNNER_TEMP/kovo-common-timing/timing-history.json"
       - id: shard
         name: Generate deterministic test shard
         run: |
-          manifest="$(vp exec node scripts/ci-shards.mjs generate --kind vitest --shards ${{ matrix.total }} --index ${{ matrix.shard }} --outDir "$RUNNER_TEMP/kovo-shards" --history "$RUNNER_TEMP/kovo-timing/timing-history.json")"
+          manifest="$(vp exec node scripts/ci-shards.mjs generate --kind vitest --shards ${{ matrix.total }} --index ${{ matrix.shard }} --outDir "$RUNNER_TEMP/kovo-shards" --history "$RUNNER_TEMP/kovo-common-timing/timing-history.json")"
           echo "manifest=$manifest" >> "$GITHUB_OUTPUT"
       - name: Root Vitest shard
         run: |
           xargs -a "${{ steps.shard.outputs.manifest }}" vp exec vitest --run --reporter=default --reporter=json --outputFile="$RUNNER_TEMP/kovo-vitest-${{ matrix.shard }}.json"
-      - name: Merge root timing history
+      - name: Extract root timing history
         if: always()
         run: |
-          vp exec node scripts/ci-shards.mjs merge-vitest --previous "$RUNNER_TEMP/kovo-timing/timing-history.json" --report "$RUNNER_TEMP/kovo-vitest-${{ matrix.shard }}.json" --out "$RUNNER_TEMP/kovo-root-timing-history/timing-history.json"
+          vp exec node scripts/ci-shards.mjs merge-vitest --report "$RUNNER_TEMP/kovo-vitest-${{ matrix.shard }}.json" --out "$RUNNER_TEMP/kovo-root-timing-history/timing-history.json"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:

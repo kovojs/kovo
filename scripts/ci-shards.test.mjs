@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -7,6 +7,8 @@ import { describe, expect, it } from 'vitest';
 import {
   balanceStarterShards,
   balanceShards,
+  combineDurationHistories,
+  combineTimingHistoryDirectory,
   extractPlaywrightDurations,
   extractVitestDurations,
   discoverTests,
@@ -19,6 +21,7 @@ import {
   starterShardNeedsPacked,
   unknownDurationSeconds,
   validateShardAssignment,
+  writeShardManifests,
 } from './ci-shards.mjs';
 
 describe('ci-shards', () => {
@@ -73,6 +76,124 @@ describe('ci-shards', () => {
       'new.test.ts': { seconds: 5 },
       'stale.test.ts': { seconds: 3 },
     });
+  });
+
+  it('combines every prior shard history deterministically', () => {
+    const first = {
+      'b.test.ts': { seconds: 10 },
+      'a.test.ts': { seconds: 4 },
+    };
+    const second = {
+      'c.test.ts': { seconds: 7 },
+      'a.test.ts': { seconds: 10 },
+    };
+    const expected = {
+      'a.test.ts': { seconds: 7 },
+      'b.test.ts': { seconds: 10 },
+      'c.test.ts': { seconds: 7 },
+    };
+
+    expect(combineDurationHistories([first, second])).toEqual(expected);
+    expect(combineDurationHistories([second, first])).toEqual(expected);
+    expect(() => combineDurationHistories([{ 'a.test.ts': { seconds: 0 } }])).toThrow(
+      /invalid duration for a\.test\.ts/,
+    );
+  });
+
+  it('gives independently generated jobs one complete, duplicate-free assignment', async () => {
+    const root = await fixtureRoot();
+    for (const name of ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']) {
+      await writeFixture(root, `tests/${name}.test.ts`, `it("${name}", () => {});\n`);
+    }
+    const discovered = await discoverTests('vitest', { roots: [root] });
+    const priorRoot = path.join(root, 'prior-timing');
+
+    for (let jobIndex = 0; jobIndex < 4; jobIndex += 1) {
+      const history = Object.fromEntries(
+        discovered.map((file, fileIndex) => [file, { seconds: fileIndex === jobIndex ? 100 : 1 }]),
+      );
+      await writeFixture(
+        priorRoot,
+        `shard-${jobIndex + 1}/timing-history.json`,
+        `${JSON.stringify(history, null, 2)}\n`,
+      );
+    }
+
+    const divergentJobs = await Promise.all(
+      [1, 2, 3, 4].map((jobIndex) =>
+        writeShardManifests({
+          kind: 'vitest',
+          shardCount: 4,
+          shardIndex: jobIndex,
+          historyPath: path.join(priorRoot, `shard-${jobIndex}`, 'timing-history.json'),
+          outputDir: path.join(root, `divergent-job-${jobIndex}`),
+          roots: [root],
+        }),
+      ),
+    );
+    expect(() =>
+      validateShardAssignment(
+        discovered,
+        divergentJobs.map((job) => job.selected),
+      ),
+    ).toThrow(/missing: .*d\.test\.ts; duplicated: .*a\.test\.ts/);
+
+    const commonHistoryPath = path.join(root, 'common-timing', 'timing-history.json');
+    const commonHistory = await combineTimingHistoryDirectory(priorRoot, commonHistoryPath);
+    expect(JSON.parse(await readFile(commonHistoryPath, 'utf8'))).toEqual(commonHistory);
+    expect(commonHistory).toEqual(
+      Object.fromEntries(
+        discovered.map((file, fileIndex) => [file, { seconds: fileIndex < 4 ? 25.75 : 1 }]),
+      ),
+    );
+
+    const commonJobs = await Promise.all(
+      [1, 2, 3, 4].map((jobIndex) =>
+        writeShardManifests({
+          kind: 'vitest',
+          shardCount: 4,
+          shardIndex: jobIndex,
+          historyPath: commonHistoryPath,
+          outputDir: path.join(root, `common-job-${jobIndex}`),
+          roots: [root],
+        }),
+      ),
+    );
+    const commonAssignments = commonJobs.map((job) => job.selected);
+    expect(() => validateShardAssignment(discovered, commonAssignments)).not.toThrow();
+    const assigned = commonAssignments.flatMap((shard) => shard.files);
+    expect(assigned.toSorted(compareStrings)).toEqual(discovered);
+    expect(new Set(assigned).size).toBe(discovered.length);
+  });
+
+  it('wires every root test job to the same combined history', async () => {
+    const workflow = await readFile(
+      new URL('../.github/workflows/ci.yml', import.meta.url),
+      'utf8',
+    );
+    const rootTestJob = workflow.slice(
+      workflow.indexOf('  test:'),
+      workflow.indexOf('  starter-packages:'),
+    );
+
+    expect(workflow).toContain('permissions:\n  contents: read\n  actions: read');
+    const actionRefs = [...workflow.matchAll(/uses:\s+[^\s@]+@([^\s]+)/gu)].map(
+      (match) => match[1],
+    );
+    expect(actionRefs.length).toBeGreaterThan(0);
+    for (const ref of actionRefs) expect(ref).toMatch(/^[0-9a-f]{40}$/u);
+    expect(rootTestJob).toContain('select(.updatedAt < \\"$run_created_at\\")');
+    expect(rootTestJob).toContain('for shard in $(seq 1 "${{ matrix.total }}"); do');
+    expect(rootTestJob).toContain('-n "kovo-root-timing-history-$shard"');
+    expect(rootTestJob).toContain('scripts/ci-shards.mjs combine-histories');
+    expect(rootTestJob).toContain(
+      '--history "$RUNNER_TEMP/kovo-common-timing/timing-history.json"',
+    );
+    expect(rootTestJob).not.toContain(
+      'gh run download "$run_id" -n kovo-root-timing-history-${{ matrix.shard }}',
+    );
+    const extractStep = rootTestJob.slice(rootTestJob.indexOf('name: Extract root timing history'));
+    expect(extractStep).not.toContain('merge-vitest --previous');
   });
 
   it('extracts vitest per-file durations from tolerant JSON reporter shapes', () => {
@@ -344,9 +465,12 @@ function compareStrings(a, b) {
 }
 
 async function fixtureRoot() {
-  return mkdir(path.join(tmpdir(), `kovo-ci-shards-${process.pid}-${Date.now()}`), {
-    recursive: true,
-  });
+  return mkdir(
+    path.join(process.env.RUNNER_TEMP ?? tmpdir(), `kovo-ci-shards-${process.pid}-${Date.now()}`),
+    {
+      recursive: true,
+    },
+  );
 }
 
 async function writeFixture(rootDir, relativePath, source) {

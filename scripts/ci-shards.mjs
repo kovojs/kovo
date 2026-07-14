@@ -435,6 +435,53 @@ export function mergeDurationHistory(previous = {}, latest = {}, options = {}) {
   return Object.fromEntries(Object.entries(merged).sort(([a], [b]) => a.localeCompare(b)));
 }
 
+export function combineDurationHistories(histories = []) {
+  const durationsByFile = new Map();
+  for (const history of histories) {
+    if (!history || Array.isArray(history) || typeof history !== 'object') {
+      throw new Error('Timing history must be a JSON object.');
+    }
+    for (const [file, value] of Object.entries(history)) {
+      const seconds = Number(value?.seconds ?? value);
+      if (!Number.isFinite(seconds) || seconds <= 0) {
+        throw new Error(`Timing history has an invalid duration for ${file}.`);
+      }
+      const durations = durationsByFile.get(file) ?? [];
+      durations.push(seconds);
+      durationsByFile.set(file, durations);
+    }
+  }
+
+  return Object.fromEntries(
+    [...durationsByFile]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([file, durations]) => [
+        file,
+        {
+          seconds: roundSeconds(
+            durations.toSorted((a, b) => a - b).reduce((total, seconds) => total + seconds, 0) /
+              durations.length,
+          ),
+        },
+      ]),
+  );
+}
+
+export async function combineTimingHistoryDirectory(inputDir, outputFile) {
+  const entries = await readdir(inputDir, { withFileTypes: true });
+  const artifactDirectories = entries
+    .filter((entry) => entry.isDirectory())
+    .sort((a, b) => a.name.localeCompare(b.name));
+  const histories = await Promise.all(
+    artifactDirectories.map((entry) =>
+      readJson(path.join(inputDir, entry.name, DEFAULT_HISTORY_NAME)),
+    ),
+  );
+  const combined = combineDurationHistories(histories);
+  await writeJson(outputFile, combined);
+  return combined;
+}
+
 export async function discoverTests(kind, options = {}) {
   const roots = options.roots ?? DEFAULT_ROOTS[kind];
   if (!roots) throw new Error(`Unknown shard kind: ${kind}`);
@@ -493,8 +540,9 @@ export async function writeShardManifests({
   shardIndex,
   historyPath,
   outputDir,
+  roots,
 }) {
-  const files = await discoverTests(kind);
+  const files = await discoverTests(kind, roots === undefined ? {} : { roots });
   const history = await readJsonIfExists(historyPath);
   const shards = balanceShards(files, history, shardCount);
   const root = outputDir ?? path.join(process.env.RUNNER_TEMP ?? process.cwd(), 'kovo-shards');
@@ -714,6 +762,10 @@ async function readJsonIfExists(file) {
   }
 }
 
+async function readJson(file) {
+  return JSON.parse(await readFile(file, 'utf8'));
+}
+
 async function writeJson(file, value) {
   await mkdir(path.dirname(file), { recursive: true });
   await writeFile(file, `${JSON.stringify(value, null, 2)}\n`);
@@ -830,6 +882,11 @@ async function main(argv) {
     return;
   }
 
+  if (command === 'combine-histories') {
+    await combineTimingHistoryDirectory(String(args.inputDir), String(args.out));
+    return;
+  }
+
   if (command === 'merge-vitest' || command === 'merge-playwright') {
     const previous = await readJsonIfExists(args.previous);
     const report = await readJsonIfExists(args.report);
@@ -851,6 +908,7 @@ async function main(argv) {
   node scripts/ci-shards.mjs starter-needs-packed --manifest starter-shard.json
   node scripts/ci-shards.mjs pack-starter --outDir "$RUNNER_TEMP/kovo-packed-starter"
   node scripts/ci-shards.mjs run-starter --manifest starter-shard.json
+  node scripts/ci-shards.mjs combine-histories --inputDir "$RUNNER_TEMP/kovo-prior-timing" --out timing-history.json
   node scripts/ci-shards.mjs merge-vitest --report vitest.json --out timing-history.json [--previous timing-history.json]
   node scripts/ci-shards.mjs merge-playwright --report playwright.json --out timing-history.json [--previous timing-history.json]`);
 }
