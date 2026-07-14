@@ -17,7 +17,6 @@ import {
   kovoCheck,
   kovoExplain,
   handleKovoMcpRequest,
-  mainAsync,
   runMcpFallbackStdio,
 } from '../dist/cli/src/index.mjs';
 import {
@@ -61,7 +60,6 @@ import {
   loadVitePlusConfig,
   p10PerfAcceptanceProjectFact,
   pnpmRunScriptNames,
-  runCapturedCliCommand,
   vitePlusTaskInputFacts,
   workflowStepCommands,
 } from '../packages/conformance-fixtures/src/command-fixtures.ts';
@@ -88,7 +86,6 @@ import {
   kovoCheckOkAssertionFact,
   kovoCheckUnguardedAuditBehaviorFact,
 } from '../packages/conformance-fixtures/src/kovo-check-fixtures.ts';
-import { kovoExportStaticBehaviorFact } from '../packages/conformance-fixtures/src/kovo-export-fixtures.ts';
 import {
   executeGeneratedClientArtifact,
   executeGeneratedBootstrapModule,
@@ -187,7 +184,6 @@ import {
   session,
   s,
   t,
-  exportStaticApp,
 } from '../dist/server/src/index.mjs';
 import { runMutation, runQuery, runRoutePage } from '../dist/server/src/internal/execution.mjs';
 import {
@@ -219,7 +215,17 @@ function commerceGraphFixture() {
   return commerceGraphCache;
 }
 
-const runCliCommand = (args) => runCapturedCliCommand(mainAsync, args);
+const runBootstrappedExportStaticBehaviorFact = async (options) => {
+  const { stdout } = await execFileAsync(
+    process.execPath,
+    [
+      fileURLToPath(new URL('./kovo-check.export-static-worker.mjs', import.meta.url)),
+      JSON.stringify(options),
+    ],
+    { cwd: projectRootPath, maxBuffer: 20 * 1024 * 1024 },
+  );
+  return JSON.parse(stdout);
+};
 
 const generatedModuleRuntime = {
   applyCompiledQueryUpdatePlan,
@@ -762,7 +768,8 @@ void test('P10 starter template stays wired to the current app-shell contract', 
   assert.match(viteConfigSource, /kovo\(\{ app: '\/src\/app\.tsx' \}\)/);
   assert.doesNotMatch(viteConfigSource, /\brun\s*:/);
   assert.match(appSource, /createMemoryVersionedClientModuleRegistry/);
-  assert.match(appSource, /createRequestHandler/);
+  // SPEC.md §6.6 keeps request-handler construction in the framework-owned runner.
+  assert.doesNotMatch(appSource, /createRequestHandler/);
   assert.match(appSource, /route\('\/login'/);
   assert.match(appSource, /contactsQuery/);
   assert.match(stylesSource, /@layer kovo-app-base/);
@@ -1535,19 +1542,11 @@ document.querySelector('#app')!.textContent = 'D10 build green';
     start: { column: 25, line: 5 },
   };
 
-  const exportBehavior = await kovoExportStaticBehaviorFact({
-    appCoreModuleUrl: '@kovojs/server',
-    cliFixtureParent: join(projectRoot, 'packages/cli'),
-    createApp,
+  const exportBehavior = await runBootstrappedExportStaticBehaviorFact({
     errorDiagnostic,
     expectedStaticExportCliError,
     expectedStaticExportError,
-    exportStaticApp,
-    fixturePrefix: 'kovo-d10-kovo-export-',
     lintDiagnostic,
-    runCliCommand,
-    serverModuleUrl: '@kovojs/server',
-    serverRoute,
   });
   assert.match(exportBehavior.cli.green.summary?.outDir ?? '', /^".*green-out"$/);
   assert.deepEqual(exportBehavior, {

@@ -25,6 +25,10 @@ describe('check-security-classifier-corpus gate', () => {
         createRequestHandler;
         new Worker(new URL('./p10-perf-browser-worker.mjs', import.meta.url));
       `,
+      'tests/kovo-check.export-static-worker.mjs': `
+        import assert from 'node:assert/strict';
+        kovoExportStaticBehaviorFact;
+      `,
       'vite.config.ts': `pack entry packages/server/src/index.ts`,
       'examples/gallery/scripts/export-static.mjs': `createSecurityLockedViteServer`,
       'examples/reference/scripts/export-static.mjs': `createSecurityLockedViteServer`,
@@ -63,6 +67,8 @@ describe('check-security-classifier-corpus gate', () => {
     expect(evaluateCustomRunnerBootstrapOrdering((file) => files[file])).toEqual([
       "request-safe-runtime: tests/p10-perf.node.mjs must start imports with import '../dist/server/src/runtime-bootstrap.mjs';",
       'request-safe-runtime: tests/p10-perf.node.mjs must isolate Playwright from the locked request-serving realm',
+      'request-safe-runtime: tests/kovo-check.export-static-worker.mjs must keep the public guarded static exporter behind its supported runner',
+      "request-safe-runtime: tests/kovo-check.export-static-worker.mjs must start imports with import '../dist/server/src/runtime-bootstrap.mjs';",
       'request-safe-runtime: vite.config.ts root pack must emit packages/server/src/runtime-bootstrap.ts',
       'request-safe-runtime: tests/compiler-determinism-worker.mjs must not construct Vite outside the compiler-first locked runner',
       'request-safe-runtime: scripts/lib/secure-vite-runtime.mjs must lock compiler then server before importing Vite',
@@ -125,6 +131,10 @@ describe('check-security-classifier-corpus gate', () => {
         import '../dist/server/src/runtime-bootstrap.mjs';
         import { createRequestHandler } from '../dist/server/src/index.mjs';
         new Worker(new URL('./p10-perf-browser-worker.mjs', import.meta.url));
+      `,
+      'tests/kovo-check.export-static-worker.mjs': `
+        import '../dist/server/src/runtime-bootstrap.mjs';
+        import { exportStaticApp } from '../dist/server/src/index.mjs';
       `,
       'vite.config.ts': `pack entry 'packages/server/src/runtime-bootstrap.ts'`,
       'examples/gallery/scripts/export-static.mjs': `createSecurityLockedViteServer`,

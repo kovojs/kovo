@@ -269,6 +269,7 @@ export default defineConfig({
           { pattern: 'scripts/kovo-check.mjs', base: 'workspace' },
           { pattern: 'scripts/commerce-graph.mjs', base: 'workspace' },
           { pattern: 'tests/kovo-check.compiler-runtime.node.mjs', base: 'workspace' },
+          { pattern: 'tests/kovo-check.export-static-worker.mjs', base: 'workspace' },
           { pattern: 'tests/kovo-check.node.mjs', base: 'workspace' },
           { pattern: 'tests/kovo-check.server-browser.node.mjs', base: 'workspace' },
           { pattern: 'tests/browser-acceptance.mjs', base: 'workspace' },

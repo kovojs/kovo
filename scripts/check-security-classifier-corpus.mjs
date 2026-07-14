@@ -31,6 +31,7 @@ const CUSTOM_REQUEST_HANDLER_ENTRY_FILES = [
   'site/src/aux.ts',
 ];
 const PACKED_REQUEST_HANDLER_RUNNER_FILES = ['tests/p10-perf.node.mjs'];
+const PACKED_STATIC_EXPORT_RUNNER_FILES = ['tests/kovo-check.export-static-worker.mjs'];
 const ROOT_PACK_CONFIG_FILE = 'vite.config.ts';
 const SECURITY_LOCKED_SCRIPT_FILES = [
   'examples/commerce/scripts/measure-style-size.mjs',
@@ -662,6 +663,26 @@ export function evaluateCustomRunnerBootstrapOrdering(readText) {
     if (!source.includes("new Worker(new URL('./p10-perf-browser-worker.mjs'")) {
       findings.push(
         `request-safe-runtime: ${file} must run the Playwright client in its isolated worker realm`,
+      );
+    }
+  }
+  for (const file of PACKED_STATIC_EXPORT_RUNNER_FILES) {
+    let source;
+    try {
+      source = readText(file);
+    } catch {
+      findings.push(`request-safe-runtime: missing ${file}`);
+      continue;
+    }
+    if (!source.includes('exportStaticApp')) {
+      findings.push(
+        `request-safe-runtime: ${file} must keep the public guarded static exporter behind its supported runner`,
+      );
+    }
+    const firstImport = source.split('\n').find((line) => line.trimStart().startsWith('import '));
+    if (firstImport?.trim() !== PACKED_RUNTIME_BOOTSTRAP_IMPORT) {
+      findings.push(
+        `request-safe-runtime: ${file} must start imports with ${PACKED_RUNTIME_BOOTSTRAP_IMPORT}`,
       );
     }
   }
