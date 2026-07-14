@@ -378,7 +378,13 @@ export function collectUnregisteredSinksFromProject(
       if (!file) continue;
       facts.push(...unregisteredSinksForSourceFile(file, sourceFile));
     }
-    facts.push(...requestProcessSinksForProject(options.files, sourceFiles));
+    facts.push(
+      ...requestProcessSinksForProject(
+        options.files,
+        sourceFiles,
+        options.buildConfigEntryFileName,
+      ),
+    );
     return facts.sort(
       (left, right) => left.site.localeCompare(right.site) || left.sink.localeCompare(right.sink),
     );
@@ -446,7 +452,13 @@ export function collectStaticBuildTrustFactsFromProject(options: TrustEscapeProj
         }
       }
     }
-    unregisteredSinks.push(...requestProcessSinksForProject(options.files, sourceFiles));
+    unregisteredSinks.push(
+      ...requestProcessSinksForProject(
+        options.files,
+        sourceFiles,
+        options.buildConfigEntryFileName,
+      ),
+    );
     return {
       capabilities: capabilities.sort(
         (left, right) =>
@@ -1487,6 +1499,7 @@ interface RequestCallableResolution {
 }
 
 interface RequestProcessScanContext {
+  readonly buildConfigEntryFileName?: string;
   readonly facts: UnregisteredSinkFact[];
   readonly filesByPath: ReadonlyMap<string, TrustEscapeSourceFileInput>;
   readonly provenance: RequestProvenanceSession;
@@ -1590,6 +1603,7 @@ function requestProvenanceStep(session: RequestProvenanceSession, node: Node): b
 function requestProcessSinksForProject(
   files: readonly TrustEscapeSourceFileInput[],
   sourceFiles: readonly SourceFile[],
+  buildConfigEntryFileName?: string,
 ): UnregisteredSinkFact[] {
   const filesByPath = new Map<string, TrustEscapeSourceFileInput>();
   for (const [index, sourceFile] of sourceFiles.entries()) {
@@ -1598,6 +1612,7 @@ function requestProcessSinksForProject(
   }
 
   const context: RequestProcessScanContext = {
+    ...(buildConfigEntryFileName === undefined ? {} : { buildConfigEntryFileName }),
     facts: [],
     filesByPath,
     provenance: createRequestProvenanceSession(),
@@ -1715,6 +1730,7 @@ function scanRequestModuleInitializerEdges(
           requestBuildEvaluatedModuleEdgeRequiresReview(
             module,
             statement.getExternalModuleReferenceSourceFile(),
+            statement.getSourceFile(),
             context,
           )
         ) {
@@ -1743,6 +1759,7 @@ function scanRequestModuleInitializerEdges(
         requestBuildEvaluatedModuleEdgeRequiresReview(
           module,
           statement.getModuleSpecifierSourceFile(),
+          statement.getSourceFile(),
           context,
         )
       ) {
@@ -1758,6 +1775,7 @@ function scanRequestModuleInitializerEdges(
         requestBuildEvaluatedModuleEdgeRequiresReview(
           module,
           statement.getModuleSpecifierSourceFile(),
+          statement.getSourceFile(),
           context,
         )
       ) {
@@ -2081,7 +2099,6 @@ const REQUEST_REVIEWED_BUILD_EVALUATED_MODULES = new Set([
   '@kovojs/core',
   '@kovojs/drizzle',
   '@kovojs/server',
-  '@kovojs/server/build',
   '@kovojs/style',
   '@kovojs/ui/badge',
   '@kovojs/ui/button',
@@ -2115,9 +2132,17 @@ function requestBuildStaticAssetModuleSpecifierIsReviewed(module: string): boole
 function requestBuildEvaluatedModuleEdgeRequiresReview(
   module: string,
   resolved: SourceFile | undefined,
+  importer: SourceFile,
   context: RequestProcessScanContext,
 ): boolean {
   if (requestBuildStaticAssetModuleSpecifierIsReviewed(module)) return false;
+  if (
+    module === '@kovojs/server/build' &&
+    context.buildConfigEntryFileName !== undefined &&
+    context.filesByPath.get(importer.getFilePath())?.fileName === context.buildConfigEntryFileName
+  ) {
+    return false;
+  }
   if (!module.startsWith('.')) return requestBuildEvaluatedModuleRequiresReview(module);
   // A relative spelling is not proof that Vite will stay inside the immutable preflight graph.
   // The exact resolved source must be one of the caller-supplied snapshots; unresolved `../`
@@ -4582,6 +4607,7 @@ function requestRetainedConfigCallIsReviewed(
   session: RequestProvenanceSession,
 ): boolean {
   if (requestBuildConfigConstructorCallIsClosed(call)) return true;
+  if (requestCallIsExactClosedRedirect(call)) return true;
   if (requestHandlerFactoryInvocationsForCall(call, session).length > 0) return true;
   if (requestStaticFrameworkGuardIsClosed(call)) return true;
   if (requestVerifierFactoryName(call.getExpression())) return true;
@@ -4610,7 +4636,6 @@ function requestRetainedConfigCallIsReviewed(
       '@kovojs/core:domain',
       '@kovojs/core:hmacSignature',
       '@kovojs/core:publicAccess',
-      '@kovojs/core:redirect',
       '@kovojs/core:secret',
       '@kovojs/core:standardWebhooks',
       '@kovojs/core:stylesheet',
@@ -4622,7 +4647,6 @@ function requestRetainedConfigCallIsReviewed(
       '@kovojs/server:domain',
       '@kovojs/server:hmacSignature',
       '@kovojs/server:publicAccess',
-      '@kovojs/server:redirect',
       '@kovojs/server:secret',
       '@kovojs/server:session',
       '@kovojs/server:standardWebhooks',

@@ -5696,6 +5696,52 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
         expect.objectContaining({ sink: 'child_process.execFileSync' }),
       ]),
     );
+
+    const buildAuthorityOutsideConfig = collectStaticBuildTrustFactsFromProject({
+      buildConfigEntryFileName: 'kovo.config.ts',
+      files: [
+        {
+          fileName: 'app.ts',
+          source: `import * as build from '@kovojs/server/build'; void build;`,
+        },
+        {
+          fileName: 'kovo.config.ts',
+          source: `
+            import { defineConfig, node } from '@kovojs/server/build';
+            export default defineConfig({ preset: node() });
+          `,
+        },
+      ],
+    });
+    expect(buildAuthorityOutsideConfig.unregisteredSinks).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sink: 'request-handler.opaque-source',
+          source: '<opaque-module-initializer:@kovojs/server/build>',
+        }),
+      ]),
+    );
+  });
+
+  it('accepts only direct named closed redirect calls', () => {
+    const direct = sinksFor(`
+      import { redirect } from '@kovojs/server';
+      export const response = redirect('/login', { status: 303 });
+    `);
+    expect(direct).toEqual([]);
+
+    const computed = sinksFor(`
+      import * as server from '@kovojs/server';
+      export const response = server['redirect']('/login', { status: 303 });
+    `);
+    expect(computed).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sink: 'request-handler.opaque-call',
+          source: "server['redirect']",
+        }),
+      ]),
+    );
   });
 
   it('keeps reviewed imports open and skips large unused lazy bodies within a low-second bound', () => {
