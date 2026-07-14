@@ -168,6 +168,12 @@ function expectOpaqueKv424(root: string, result: { code: number; stderr: string 
   expect(existsSync(join(root, 'dist'))).toBe(false);
 }
 
+function expectRejectedKv424(root: string, result: { code: number; stderr: string }): void {
+  expect(result, result.stderr).toMatchObject({ code: 1 });
+  expect(result.stderr).toContain('ERROR KV424');
+  expect(existsSync(join(root, 'dist'))).toBe(false);
+}
+
 function expectProcessKv424(root: string, result: { code: number; stderr: string }): void {
   expect(result, result.stderr).toMatchObject({ code: 1 });
   expect(result.stderr).toContain('ERROR KV424');
@@ -736,7 +742,8 @@ export function registerSemanticIntrinsicStrictCorpus(bucket: 0 | 1 | 2 | 3): vo
         writeApp(root, appSource(imports, statement, declarations));
 
         const result = await strictBuild(root);
-        expectOpaqueKv424(root, result);
+        if (_label.startsWith('node:')) expectRejectedKv424(root, result);
+        else expectOpaqueKv424(root, result);
       },
       120_000,
     );
@@ -1072,15 +1079,12 @@ ${declarations}`,
         expectProcessKv424(root, result);
       }, 120_000);
 
-      it('accepts plain semantic intrinsic controls', async () => {
+      it('accepts plain controls and rejects stronger-default boundary controls', async () => {
         const root = fixture('plain-controls');
         writeApp(
           root,
           appSource(
-            `import assert from 'node:assert/strict';
-import { Buffer as NodeBuffer } from 'node:buffer';
-import querystring from 'node:querystring';
-import * as nodeUrl from 'node:url';`,
+            '',
             `Object.groupBy(['safe'], (value) => value);
 Object.values({ value: 'safe' });
 Response.json({ nested: { value: 'safe' } }, { status: 200 });
@@ -1088,11 +1092,6 @@ new Headers({ 'x-test': 'safe' });
 new URLSearchParams({ x: 'safe' });
 new Response('safe', { statusText: 'safe' });
 Response.json({ ok: true }, { headers: [['x-test', 'safe']] });
-assert.throws(() => { throw new Error('expected'); });
-querystring.parse('x=y', '&', '=', { decodeURIComponent });
-NodeBuffer.from('safe');
-NodeBuffer.from([1, 2]);
-nodeUrl.format({ protocol: 'https:', host: 'example.test', pathname: '/' });
 Math.max(1, 2);
 String.raw({ raw: ['safe'] });
 new Blob(['safe']);
@@ -1108,7 +1107,6 @@ Array.fromAsync(['safe'], () => 'safe');
 [1, 2].join(',');
 (1.25).toFixed(1);
 'a'.localeCompare('b', 'en', { sensitivity: 'base' });
-JSON.rawJSON('1');
 [].concat({ length: 1, 0: 'safe', [Symbol.isConcatSpreadable]: true });
 [1].flatMap(() => ['safe']);
 new ArrayBuffer(8, { maxByteLength: 8 });
@@ -1125,10 +1123,6 @@ void returnsValue();
 void fetch('data:,safe', { headers: [['x-test', 'safe']] });
 void setTimeout(() => {}, 0);
 void setInterval(() => {}, 1);
-global.JSON.stringify({ safe: true });
-globalThis.Math.abs(-1);
-void globalThis.fetch('data:,safe');
-globalThis.queueMicrotask(() => {});
 const proto = { get secret() { return 'safe'; } };
 void Object.create(proto).secret;
 const inherited = { __proto__: proto };
@@ -1164,6 +1158,43 @@ async function returnsValue() { return 'safe'; }`,
         expect(result, result.stderr).toMatchObject({ code: 0 });
         expect(result.stderr).not.toContain('ERROR KV424');
         expect(existsSync(join(root, 'dist'))).toBe(true);
+
+        const rejectedRoot = fixture('stronger-default-controls');
+        writeApp(
+          rejectedRoot,
+          appSource(
+            `import assert from 'node:assert/strict';
+import { Buffer as NodeBuffer } from 'node:buffer';
+import querystring from 'node:querystring';
+import * as nodeUrl from 'node:url';`,
+            `assert.throws(() => { throw new Error('expected'); });
+querystring.parse('x=y', '&', '=', { decodeURIComponent });
+NodeBuffer.from('safe');
+NodeBuffer.from([1, 2]);
+nodeUrl.format({ protocol: 'https:', host: 'example.test', pathname: '/' });
+JSON.rawJSON('1');
+global.JSON.stringify({ safe: true });
+globalThis.Math.abs(-1);
+void globalThis.fetch('data:,safe');
+globalThis.queueMicrotask(() => {});`,
+          ),
+        );
+
+        const rejected = await strictBuild(rejectedRoot);
+        expectRejectedKv424(rejectedRoot, rejected);
+        for (const sink of [
+          'sink=node:assert/strict.throws',
+          'sink=node:querystring.parse',
+          'sink=node:buffer.Buffer',
+          'sink=node:url.format',
+          'source=JSON.rawJSON',
+          'source=global.JSON.stringify',
+          'source=globalThis.Math.abs',
+          'source=globalThis.fetch',
+          'source=globalThis.queueMicrotask',
+        ]) {
+          expect(rejected.stderr).toContain(sink);
+        }
       }, 120_000);
 
       it('accepts plain JSX spreads through the emitted build', async () => {

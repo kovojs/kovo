@@ -2524,7 +2524,7 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
     );
   });
 
-  it('traverses process Proxy traps through querystring.stringify', () => {
+  it('fails closed before process Proxy traps can reach querystring.stringify', () => {
     const facts = sinksFor(`
       import { execFileSync } from 'node:child_process';
       import querystring from 'node:querystring';
@@ -2541,8 +2541,8 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
     expect(facts, JSON.stringify(facts)).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          sink: 'child_process.execFileSync',
-          source: "'proxy-querystring-stringify'",
+          sink: 'node:querystring.stringify',
+          source: 'dangerous',
         }),
       ]),
     );
@@ -2575,7 +2575,7 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
     );
   });
 
-  it('traverses a mutable querystring.escape replacement used by stringify', () => {
+  it('fails closed before a mutable querystring.escape replacement can run', () => {
     const facts = sinksFor(`
       import { execFileSync } from 'node:child_process';
       import querystring from 'node:querystring';
@@ -2593,8 +2593,7 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
     expect(facts, JSON.stringify(facts)).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          sink: 'child_process.execFileSync',
-          source: "'querystring-escape-replacement'",
+          sink: 'node:querystring.stringify',
         }),
       ]),
     );
@@ -3403,5 +3402,170 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
         expect.objectContaining({ sink: 'request-handler.opaque-package-call' }),
       ]),
     );
+  });
+
+  it('fails closed on opaque package carriers used by implicit property protocols', () => {
+    const facts = sinksFor(`
+      import carrier from 'opaque-carrier';
+      import { query } from '@kovojs/server';
+      export const unsafe = query({ load() {
+        const { value } = carrier;
+        const copy = { ...carrier };
+        'value' in carrier;
+        delete carrier.value;
+        carrier.value = 1;
+        carrier.value++;
+        for (const key in carrier) void key;
+        return [value, copy, carrier.other];
+      } });
+    `);
+
+    expect(
+      facts.filter((fact) => fact.sink === 'request-handler.opaque-protocol').length,
+    ).toBeGreaterThanOrEqual(6);
+  });
+
+  it('fails closed on opaque Object/Reflect targets and nested descriptor carriers', () => {
+    const facts = sinksFor(`
+      import carrier from 'opaque-carrier';
+      import { query } from '@kovojs/server';
+      export const unsafe = query({ load() {
+        Object.keys(carrier);
+        Object.getPrototypeOf(carrier);
+        Object.defineProperties({}, { value: carrier });
+        Reflect.get(carrier, 'value');
+        Reflect.set({}, 'value', 1, carrier);
+        Reflect.construct(Array, [], carrier);
+        return null;
+      } });
+    `);
+
+    expect(facts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ sink: 'request-handler.opaque-protocol' }),
+      ]),
+    );
+  });
+
+  it('traverses local prototype getters and rejects opaque prototype chains', () => {
+    const facts = sinksFor(`
+      import { execFileSync } from 'node:child_process';
+      import carrier from 'opaque-carrier';
+      import { query } from '@kovojs/server';
+      const proto = { get secret() { return execFileSync('fixed'); } };
+      export const unsafe = query({ load() {
+        const created = Object.create(proto);
+        const mutated = {};
+        Object.setPrototypeOf(mutated, proto);
+        const literal = { __proto__: proto };
+        const opaque = Object.create(carrier);
+        return [created.secret, mutated.secret, literal.secret, opaque.secret];
+      } });
+    `);
+
+    expect(facts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ sink: 'child_process.execFileSync' }),
+        expect.objectContaining({ sink: 'request-handler.opaque-protocol' }),
+      ]),
+    );
+  });
+
+  it('does not trust writable global-object aliases for namespaces, fetch, or timers', () => {
+    const facts = sinksFor(`
+      import carrier from 'opaque-carrier';
+      import { query } from '@kovojs/server';
+      export const unsafe = query({ load() {
+        globalThis.JSON = carrier;
+        globalThis.fetch = carrier;
+        globalThis.setTimeout = carrier;
+        globalThis.JSON.stringify({ ok: true });
+        globalThis.fetch('https://example.test');
+        globalThis.setTimeout(() => {}, 1);
+        return null;
+      } });
+    `);
+
+    expect(
+      facts.filter(
+        (fact) =>
+          fact.sink === 'request-handler.opaque-call' ||
+          fact.sink === 'request-handler.opaque-package-call',
+      ).length,
+    ).toBeGreaterThanOrEqual(3);
+  });
+
+  it('scans JSX spreads, decorators, and class heritage at definition time', () => {
+    const facts = sinksFor(`
+      import { execFileSync } from 'node:child_process';
+      import carrier from 'opaque-carrier';
+      import { query } from '@kovojs/server';
+      function decorate(value) { execFileSync('fixed'); return value; }
+      export const unsafe = query({ load() {
+        @decorate class Decorated {}
+        class Derived extends carrier {}
+        const intrinsic = <div {...carrier} />;
+        return [Decorated.name, Derived.name, intrinsic];
+      } });
+    `);
+
+    expect(facts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ sink: 'child_process.execFileSync' }),
+        expect.objectContaining({ sink: 'request-handler.opaque-protocol' }),
+      ]),
+    );
+  });
+
+  it('closes Web dictionary, JSON auxiliary, RegExp, timer, and async assimilation hooks', () => {
+    const facts = sinksFor(`
+      import carrier from 'opaque-carrier';
+      import { query } from '@kovojs/server';
+      export const unsafe = query({ async load() {
+        new Headers({ value: carrier });
+        Response.json({}, { statusText: carrier, headers: [['value', carrier]] });
+        JSON.stringify({}, [carrier], carrier);
+        new ArrayBuffer(8, { maxByteLength: carrier });
+        new RegExp(carrier, carrier);
+        setTimeout(() => {}, carrier);
+        for await (const value of [carrier]) void value;
+        async function* values() { yield carrier; }
+        void values;
+        return carrier;
+      } });
+    `);
+
+    expect(
+      facts.filter((fact) => fact.sink === 'request-handler.opaque-protocol').length,
+    ).toBeGreaterThanOrEqual(8);
+  });
+
+  it('rejects reviewed receiver calls after own-member or prototype replacement', () => {
+    const facts = sinksFor(`
+      import carrier from 'opaque-carrier';
+      import { endpoint, query } from '@kovojs/server';
+      export const requestCase = endpoint('/unsafe', { async handler(request) {
+        Object.setPrototypeOf(request, carrier);
+        return request.text();
+      } });
+      export const responseCase = query({ async load() {
+        const response = await fetch('https://example.test');
+        Object.defineProperty(response, 'json', { value: carrier });
+        return response.json();
+      } });
+      export const errorCase = query({ load() {
+        const error = new Error('fixed');
+        error.name = carrier;
+        return error.toString();
+      } });
+    `);
+
+    expect(
+      facts.filter(
+        (fact) =>
+          fact.sink === 'request-handler.opaque-call' ||
+          fact.sink === 'request-handler.opaque-package-call',
+      ).length,
+    ).toBeGreaterThanOrEqual(3);
   });
 });

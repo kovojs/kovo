@@ -13,6 +13,10 @@ function expectOpaqueSemanticBoundary(facts: ReturnType<typeof sinksFor>): void 
   ).toBe(true);
 }
 
+function expectRejectedSemanticBoundary(facts: ReturnType<typeof sinksFor>): void {
+  expect(facts, JSON.stringify(facts)).not.toEqual([]);
+}
+
 function expectProcessMarker(facts: ReturnType<typeof sinksFor>, marker: string): void {
   expect(facts, JSON.stringify(facts)).toEqual(
     expect.arrayContaining([
@@ -139,7 +143,7 @@ describe('KV424 semantic intrinsic adversarial corpus', () => {
     (_label, imports, statement) => {
       const facts = sinksFor(routeSource(imports, statement));
 
-      expectOpaqueSemanticBoundary(facts);
+      expectRejectedSemanticBoundary(facts);
     },
   );
 
@@ -1154,7 +1158,7 @@ describe('KV424 semantic intrinsic adversarial corpus', () => {
     expect(facts).toEqual([]);
   });
 
-  it('keeps primitive safe-method and implicit-syntax controls open', () => {
+  it('keeps primitive safe-method controls open while rejecting JSON.rawJSON', () => {
     const facts = sinksFor(
       routeSource(
         '',
@@ -1193,10 +1197,15 @@ describe('KV424 semantic intrinsic adversarial corpus', () => {
       ),
     );
 
-    expect(facts).toEqual([]);
+    expect(facts).toEqual([
+      expect.objectContaining({
+        sink: 'request-handler.opaque-call',
+        source: 'JSON.rawJSON',
+      }),
+    ]);
   });
 
-  it('keeps plain async, prototype, mutation, and genuine-global controls open', () => {
+  it('keeps plain async, prototype, and mutation controls open while rejecting global aliases', () => {
     const facts = sinksFor(
       routeSource(
         '',
@@ -1226,7 +1235,17 @@ describe('KV424 semantic intrinsic adversarial corpus', () => {
       ),
     );
 
-    expect(facts).toEqual([]);
+    expect(facts).toHaveLength(6);
+    expect(facts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ source: 'global.JSON.stringify' }),
+        expect.objectContaining({ source: '<property-getter:global>' }),
+        expect.objectContaining({ source: 'globalThis.Math.abs' }),
+        expect.objectContaining({ source: '<property-getter:globalThis>' }),
+        expect.objectContaining({ source: 'globalThis.fetch' }),
+        expect.objectContaining({ source: 'globalThis.queueMicrotask' }),
+      ]),
+    );
   });
 
   it('keeps plain decorators and JSX spreads open', () => {
@@ -1248,7 +1267,7 @@ describe('KV424 semantic intrinsic adversarial corpus', () => {
     expect(facts).toEqual([]);
   });
 
-  it('keeps reviewed Node builtin operations on plain values open', () => {
+  it('rejects unreviewed Node builtin operations even on plain values', () => {
     const facts = sinksFor(
       routeSource(
         `
@@ -1267,7 +1286,17 @@ describe('KV424 semantic intrinsic adversarial corpus', () => {
       ),
     );
 
-    expect(facts).toEqual([]);
+    expect(facts).toHaveLength(6);
+    expect(facts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ sink: 'node:assert/strict.throws' }),
+        expect.objectContaining({ sink: 'node:querystring.stringify' }),
+        expect.objectContaining({ sink: 'node:querystring.parse' }),
+        expect.objectContaining({ sink: 'node:buffer.Buffer' }),
+        expect.objectContaining({ sink: 'request-handler.opaque-package-call' }),
+        expect.objectContaining({ sink: 'node:url.format' }),
+      ]),
+    );
   });
 
   it('keeps plain Map entries and Array.fromAsync values open', () => {

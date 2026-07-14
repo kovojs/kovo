@@ -817,7 +817,11 @@ export default createApp({ routes: [unsafe] });
       );
 
       const result = await strictBuild(root, entry);
-      expectKv424Source(root, result, rawProcessSink, '/usr/bin/true');
+      if (marker === 'proxy-querystring-stringify') {
+        expectKv424(root, result, 'node:querystring.stringify');
+      } else {
+        expectKv424Source(root, result, rawProcessSink, '/usr/bin/true');
+      }
     },
     120_000,
   );
@@ -871,7 +875,7 @@ export default createApp({ routes: [unsafe] });
     );
 
     const result = await strictBuild(root, entry);
-    expectKv424Source(root, result, rawProcessSink, '/usr/bin/true');
+    expectKv424(root, result, 'node:querystring.stringify');
   }, 120_000);
 
   it('rejects input prototype laundering through a Proxy before input.toString()', async () => {
