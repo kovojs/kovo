@@ -11,6 +11,15 @@ export type InlineSourceInstall = (
   globalRecord: Record<string, unknown>,
 ) => void;
 
+let freshlyMinifiedInstallerSource: string | undefined;
+
+function getFreshlyMinifiedInstallerSource(): string {
+  // The builder is deterministic and independent of each dispatched event. Build
+  // once per isolated test module so parity cases do not repeatedly parse and
+  // fingerprint the same large source inside a single test timeout.
+  return (freshlyMinifiedInstallerSource ??= buildInlineKovoLoaderInstallerSource());
+}
+
 export const inlineSourceInstallCases: readonly [string, InlineSourceInstall][] = [
   [
     'readable build source',
@@ -27,9 +36,7 @@ export const inlineSourceInstallCases: readonly [string, InlineSourceInstall][] 
     (importModule, globalRecord) => {
       installDefaultLocation(globalRecord);
       globalRecord.__kovoInlineImport = importModule;
-      runInThisContext(
-        `(${buildInlineKovoLoaderInstallerSource()})(globalThis.__kovoInlineImport);`,
-      );
+      runInThisContext(`(${getFreshlyMinifiedInstallerSource()})(globalThis.__kovoInlineImport);`);
     },
   ],
   [
