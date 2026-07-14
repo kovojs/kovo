@@ -14,7 +14,10 @@
  * not an app-level input Kovo can distinguish inside the same realm.
  */
 
-import { lockRequestSafeRuntimeRealm } from '@kovojs/core/internal/classifier-verdict';
+import {
+  assertRequestSafeRuntimeRealmLocked,
+  lockRequestSafeRuntimeRealm,
+} from '@kovojs/core/internal/classifier-verdict';
 
 import '@kovojs/core/internal/client-module-url';
 import '@kovojs/core/internal/filesystem';
@@ -50,18 +53,33 @@ assertRequestStateIntrinsics();
 assertResponseSecurityIntrinsics();
 assertTaskSecurityIntrinsics();
 
-let serverRequestSafeRuntimeLocked = false;
-
 /**
  * @internal Lock classifier-reviewed globals at the last trusted server-runner boundary.
  *
  * This is explicit because the Vitest host must retain its timer controls while importing server
  * modules. Supported generated/dev/build runners call it before authored modules; tests that prove
- * the irreversible transition run in a child realm. Profile-specific Node builtin facades are
- * locked by the compiler or generated Node/Vercel outer runner.
+ * the irreversible transition run in a child realm. Node builtins are not classifier-trusted
+ * request intrinsics, so the shared lock is intentionally runtime-neutral.
  */
 export function lockServerRequestSafeRuntimeRealm(): void {
-  if (serverRequestSafeRuntimeLocked) return;
   lockRequestSafeRuntimeRealm();
-  serverRequestSafeRuntimeLocked = true;
+}
+
+/** @internal Refuse programmatic request dispatch until a supported runner established order. */
+export function assertServerRequestSafeRuntimeRealmLocked(
+  operation = 'createRequestHandler()',
+): void {
+  try {
+    assertRequestSafeRuntimeRealmLocked();
+  } catch (error) {
+    if (
+      error instanceof TypeError &&
+      error.message === 'Kovo request-safe runtime realm is not locked.'
+    ) {
+      throw new TypeError(
+        `${operation} refuses an unbootstrapped custom runner. Import @kovojs/server/runtime-bootstrap as the literal first entry-module import, before any authored app or package module (SPEC §6.6).`,
+      );
+    }
+    throw error;
+  }
 }

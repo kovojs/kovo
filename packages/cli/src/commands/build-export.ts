@@ -3517,9 +3517,8 @@ export function kovoServerHandlerEntrySource(
 ): string {
   return buildJoinStrings(
     [
-      "import { createRequestHandler } from '@kovojs/server';",
       "import './runtime-registry.mjs';",
-      "import { deriveClosedKovoApp, runWithGeneratedLiveTargetRegistry } from '@kovojs/server/internal/app-shell-vite';",
+      "import { createRequestHandler, deriveClosedKovoApp, runWithGeneratedLiveTargetRegistry } from '@kovojs/server/internal/app-shell-vite';",
       "import { appendFrameworkRuntimeArrayValue } from '@kovojs/server/internal/execution';",
       `const appModule = await runWithGeneratedLiveTargetRegistry(() => import(${stringifyBuildValue(pathToFileURL(appModulePath).href)}));`,
       'const app = appModule.default ?? appModule.app;',
@@ -3816,7 +3815,9 @@ async function loadExportAppModule(
       pathToFileURL(requireFromApp.resolve('@kovojs/server/internal/data-plane-static-analysis'))
         .href
     );
-    const serverModule = await import(pathToFileURL(appResolvedServerPath).href);
+    const serverModule = await import(
+      pathToFileURL(requireFromApp.resolve('@kovojs/server/internal/static-export')).href
+    );
     const serverInternalBuildModule = await import(
       pathToFileURL(requireFromApp.resolve('@kovojs/server/internal/build')).href
     );
@@ -3839,7 +3840,9 @@ async function loadExportAppModule(
   const { server } = lifetime;
   try {
     await preloadKovoSsrSecurityProfile(server, resolvedAppModulePath, root);
-    const serverModule = await server.ssrLoadModule(viteSsrModuleId(appResolvedServerPath, root));
+    const serverModule = await server.ssrLoadModule(
+      viteSsrModuleId(requireFromApp.resolve('@kovojs/server/internal/static-export'), root),
+    );
     const serverInternalBuildModule = (await server.ssrLoadModule(
       viteSsrModuleId(requireFromApp.resolve('@kovojs/server/internal/build'), root),
     )) as typeof import('@kovojs/server/internal/build');

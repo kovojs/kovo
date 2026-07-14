@@ -60,8 +60,8 @@ export {
   ComponentXmlError,
   parseComponentXml,
   renderRegistry,
-  renderTree,
 } from '../render-tree.js';
+export { renderTree } from '../render-tree-public.js';
 export type {
   ComponentElementNode,
   ComponentNode,

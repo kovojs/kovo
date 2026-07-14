@@ -10,6 +10,7 @@ import {
 } from '@kovojs/core';
 
 import * as packageRootApi from '@kovojs/server';
+import * as packageTestingApi from '@kovojs/server/testing';
 import * as packageViteApi from '@kovojs/server/vite';
 import * as packageInternalAuditFactsApi from '@kovojs/server/internal/audit-facts';
 import * as packageInternalCapabilitiesApi from '@kovojs/server/internal/capabilities';
@@ -46,6 +47,7 @@ import * as componentRenderApi from '../component-render.js';
 import * as cspApi from '../csp.js';
 import * as deferredStreamApi from '../deferred-stream.js';
 import * as publicApi from '../index.js';
+import * as requestHandlerApi from '../request-handler.js';
 import * as internalClientModulesApi from '../internal/client-modules.js';
 import * as internalAuditFactsApi from '../internal/audit-facts.js';
 import * as internalCapabilitiesApi from '../internal/capabilities.js';
@@ -74,7 +76,7 @@ import * as redosApi from '../redos.js';
 import * as secretReadBoundaryApi from '../secret-read-boundary.js';
 import * as sqliteRuntimeApi from '../sqlite-runtime.js';
 import * as staticExportDiagnosticsApi from '../static-export-diagnostics.js';
-import * as staticExportOrchestratorApi from '../static-export.js';
+import * as staticExportOrchestratorApi from '../static-export-public.js';
 import * as staticExportOutputApi from '../static-export-output.js';
 import * as staticExportResultApi from '../static-export-result.js';
 import * as taskObservabilityApi from '../task-observability.js';
@@ -564,7 +566,7 @@ describe('server app-shell public API barrels', () => {
       usePostgresSystemDb: postgresRuntimeApi.usePostgresSystemDb,
       postgresSchemaModule: postgresRuntimeApi.postgresSchemaModule,
       runtimeDbMetadataForSchema: sqliteRuntimeApi.runtimeDbMetadataForSchema,
-      createRequestHandler: appApi.createRequestHandler,
+      createRequestHandler: requestHandlerApi.createRequestHandler,
       exportStaticApp: staticExportOrchestratorApi.exportStaticApp,
       isKovoApp: appGuardsApi.isKovoApp,
       // SPEC.md §10.3/§11.1 / plans/secure-framework.md Phase 3: the mass-assignment
@@ -588,7 +590,8 @@ describe('server app-shell public API barrels', () => {
     expect(Object.keys(staticExportOrchestratorApi).sort()).toEqual(['exportStaticApp']);
 
     expect(publicApi.createApp).toBe(appApi.createApp);
-    expect(publicApi.createRequestHandler).toBe(appApi.createRequestHandler);
+    expect(publicApi.createRequestHandler).toBe(requestHandlerApi.createRequestHandler);
+    expect(publicApi.createRequestHandler).not.toBe(appApi.createRequestHandler);
     expect(publicApi.exportStaticApp).toBe(staticExportOrchestratorApi.exportStaticApp);
     expect(publicApi.isKovoApp).toBe(appGuardsApi.isKovoApp);
     expect(publicApi.stylesheet).toBe(hintsApi.stylesheet);
@@ -1000,12 +1003,13 @@ describe('server app-shell public API barrels', () => {
     expect(packageViteApi.kovo({ app: './src/app.tsx' }).name).toBe('kovo');
     expect(viteApi.kovo({ app: './src/app.tsx' }).name).toBe('kovo');
     expect(serverPackage.exports as Record<string, string>).toMatchObject({
+      './runtime-bootstrap': './src/runtime-bootstrap.ts',
       './vite': './src/vite-source.ts',
     });
     expect(serverPackage.exports as Record<string, string>).not.toHaveProperty('./app-shell/vite');
 
     expect(packageRootApi.createApp).toBe(appApi.createApp);
-    expect(packageRootApi.createRequestHandler).toBe(appApi.createRequestHandler);
+    expect(packageRootApi.createRequestHandler).toBe(requestHandlerApi.createRequestHandler);
     expect(packageRootApi.exportStaticApp).toBe(staticExportOrchestratorApi.exportStaticApp);
     expect(packageRootApi.isKovoApp).toBe(appGuardsApi.isKovoApp);
     expect(packageRootApi.layout).toBe(routeApi.layout);
@@ -1013,6 +1017,7 @@ describe('server app-shell public API barrels', () => {
     expect(packageRootApi.route).toBe(routeApi.route);
     expect(packageRootApi.stylesheet).toBe(hintsApi.stylesheet);
     expect(packageRootApi.toNodeHandler).toBe(nodeSourceApi.toNodeHandler);
+    expect(packageTestingApi).not.toHaveProperty('createRequestHandler');
     expect(packageInternalClientModulesApi.renderVersionedClientModuleResponse).toBe(
       internalClientModulesApi.renderVersionedClientModuleResponse,
     );

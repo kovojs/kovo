@@ -7,24 +7,16 @@
  * framework `.js` source specifiers. This entry therefore uses a source-real `.ts` edge plus only
  * Node builtins and the compiler's declared TypeScript runtime; it never evaluates authored code.
  */
-import builtinAssert from 'node:assert';
-import builtinAssertStrict from 'node:assert/strict';
-import builtinBuffer, { Buffer as BuiltinBuffer } from 'node:buffer';
+import { Buffer as BuiltinBuffer } from 'node:buffer';
 import builtinCrypto from 'node:crypto';
 import builtinFs, { Dirent as BuiltinDirent, Stats as BuiltinStats } from 'node:fs';
 import builtinFsPromises from 'node:fs/promises';
 import builtinPath from 'node:path';
-import builtinQuerystring from 'node:querystring';
-import builtinStringDecoder from 'node:string_decoder';
 import builtinUrl from 'node:url';
-import builtinUtilTypes from 'node:util/types';
 
 import typescript from 'typescript';
 
-import {
-  lockRequestSafeNodeBuiltinFacades,
-  lockRequestSafeRuntimeRealm,
-} from '@kovojs/core/internal/classifier-verdict';
+import { lockRequestSafeRuntimeRealm } from '@kovojs/core/internal/classifier-verdict';
 
 import { assertCompilerSecurityIntrinsics } from './compiler-security-intrinsics.ts';
 
@@ -78,8 +70,12 @@ export function lockCompilerSecurityRealm(): void {
   assertCompilerSecurityIntrinsics();
   if (compilerRealmLocked) return;
 
-  // Establish the classifier's exact shared inventory first. Its module-private descriptor record
-  // is then the sole idempotence authority when the compiler reaches the shared checkpoint again.
+  // Vite decorates each package-cache Map instance with an own `set` method. Install the exact
+  // audited Map guard before the shared immutable lock so instance decoration remains possible
+  // without leaving Map.prototype mutable. No authored module has evaluated at this boundary.
+  guardPrototypeFunctions(NativeMap.prototype);
+
+  // Establish the classifier's exact shared inventory before any remaining compiler work.
   lockRequestSafeRuntimeRealm();
 
   // Convert prototype functions to non-configurable accessors that always return the captured
@@ -200,16 +196,6 @@ export function lockCompilerSecurityRealm(): void {
   // broader than the compiler's own implementation intrinsics. Pin that shared inventory too so
   // app/config/package code cannot replace a classifier-trusted callable or constructor.
   lockRequestSafeRuntimeRealm();
-  lockRequestSafeNodeBuiltinFacades([
-    builtinAssert,
-    builtinAssertStrict,
-    builtinBuffer,
-    builtinQuerystring,
-    builtinStringDecoder,
-    builtinUrl,
-    builtinUtilTypes,
-  ]);
-
   compilerRealmLocked = true;
 }
 

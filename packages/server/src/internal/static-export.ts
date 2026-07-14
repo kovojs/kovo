@@ -1,5 +1,9 @@
 import '../security-bootstrap.js';
 
+// Framework-owned build runners preload the exact security profile before authored modules and
+// use this raw orchestrator to avoid the public custom-runner assertion (SPEC §6.6/§9.5).
+export { exportStaticApp } from '../static-export.js';
+
 export {
   createStaticExportOutputPlan,
   STATIC_EXPORT_DRY_RUN_ROOT,

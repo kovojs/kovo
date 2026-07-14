@@ -861,7 +861,7 @@ describe('net.connect floor: live enforcement (dual-path: http.get and fetch)', 
     expect(result.status).toBe(0);
   });
 
-  it('frameworkEgressFetch allows only explicitly allowlisted destinations', async () => {
+  it('frameworkEgressFetch uses its boot-captured fetch after late global replacement', async () => {
     installFrameworkFetchFloor(
       resolveEgressPolicy(
         {
@@ -871,9 +871,13 @@ describe('net.connect floor: live enforcement (dual-path: http.get and fetch)', 
         () => {},
       ),
     );
+    const lateFetch = vi
+      .spyOn(globalThis, 'fetch')
+      .mockRejectedValue(new Error('late global fetch poison'));
 
     const ok = await frameworkEgressFetch(`http://127.0.0.1:${port}/`);
     expect(await ok.text()).toBe('ok');
+    expect(lateFetch).not.toHaveBeenCalled();
     await expect(frameworkEgressFetch(`http://localhost:${port}/`)).rejects.toMatchObject({
       reason: 'destination-allowlist',
     });
@@ -884,12 +888,13 @@ describe('net.connect floor: live enforcement (dual-path: http.get and fetch)', 
       resolveEgressPolicy({ allowDestinations: ['https://api.service.test'] }, () => {}),
     );
     mockDnsLookup([{ address: '93.184.216.34', family: 4 }]);
-    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('public-ok'));
+    const rejection = await frameworkEgressFetch('https://api.service.test/v1', {
+      signal: AbortSignal.abort(),
+    }).catch((error: unknown) => error);
 
-    const ok = await frameworkEgressFetch('https://api.service.test/v1');
-
-    expect(await ok.text()).toBe('public-ok');
-    expect(fetchSpy).toHaveBeenCalledOnce();
+    // The public DNS result reaches native fetch, which observes the already-aborted request.
+    // A policy rejection here would instead be an EgressBlockedError.
+    expect(rejection).toMatchObject({ name: 'AbortError' });
   });
 
   it('frameworkEgressFetch blocks an allowlisted hostname that resolves to a private IP', async () => {
@@ -897,7 +902,6 @@ describe('net.connect floor: live enforcement (dual-path: http.get and fetch)', 
       resolveEgressPolicy({ allowDestinations: [`http://internal-alias.test:${port}`] }, () => {}),
     );
     mockDnsLookup([{ address: '127.0.0.1', family: 4 }]);
-    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('unexpected'));
 
     await expect(frameworkEgressFetch(`http://internal-alias.test:${port}/`)).rejects.toMatchObject(
       {
@@ -905,7 +909,6 @@ describe('net.connect floor: live enforcement (dual-path: http.get and fetch)', 
         classification: 'loopback',
       },
     );
-    expect(fetchSpy).not.toHaveBeenCalled();
   });
 
   it('frameworkEgressFetch keeps an allowlisted private literal blocked after late Array.some poisoning', async () => {

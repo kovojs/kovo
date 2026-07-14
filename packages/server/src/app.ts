@@ -109,6 +109,8 @@ if (!nativeArrayIsArray([]) || nativeArrayIsArray({}) || !nativeNumberIsFinite(1
  * @param options - Routes, queries, mutations, endpoints, document, CSRF, and session config.
  * @returns A `KovoApp` aggregate with defaults filled in.
  * @example
+ * import '@kovojs/server/runtime-bootstrap';
+ *
  * import { createApp, createRequestHandler, route } from '@kovojs/server';
  *
  * const app = createApp({
@@ -754,6 +756,7 @@ function appendAppDiagnosticGroup(
  *
  * @param app - An app aggregate from `createApp`.
  * @returns A request handler suitable for the platform's server.
+ * @internal Use the root `@kovojs/server` wrapper, which enforces runtime bootstrap ordering.
  */
 export function createRequestHandler(app: KovoApp): RequestHandler {
   if (!isKovoApp(app)) {

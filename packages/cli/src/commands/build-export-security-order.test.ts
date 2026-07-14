@@ -11,6 +11,7 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
@@ -32,13 +33,17 @@ describe('build/export security bootstrap ordering', () => {
       fragments: {},
       routes: {},
     });
-    const serverImport = source.indexOf("import { createRequestHandler } from '@kovojs/server';");
     const registryImport = source.indexOf("import './runtime-registry.mjs';");
+    const serverImport = source.indexOf(
+      "import { createRequestHandler, deriveClosedKovoApp, runWithGeneratedLiveTargetRegistry } from '@kovojs/server/internal/app-shell-vite';",
+    );
     const appImport = source.indexOf('const appModule = await runWithGeneratedLiveTargetRegistry');
 
     expect(serverImport).toBeGreaterThanOrEqual(0);
-    expect(serverImport).toBeLessThan(registryImport);
-    expect(registryImport).toBeLessThan(appImport);
+    expect(registryImport).toBeLessThan(serverImport);
+    expect(serverImport).toBeLessThan(appImport);
+    expect(source).not.toContain("from '@kovojs/server';");
+    expect(source).not.toContain('lockServerRequestSafeRuntimeRealm();');
     expect(source).not.toContain('import * as appModule from');
     expect(source).toContain('appendFrameworkRuntimeArrayValue');
     expect(source).not.toContain('[result.length]');
@@ -271,13 +276,9 @@ export default createApp({
         `import { createApp, publicAccess, route } from '@kovojs/server';
 import { renderedHtml } from '@kovojs/server/internal/html';
 
-let poisonRejected = false;
-try {
-  Reflect.set(String.prototype, 'replace', () => 'attacker-output');
-} catch {
-  poisonRejected = true;
+if (Reflect.set(String.prototype, 'replace', () => 'attacker-output')) {
+  throw new Error('String.replace poison unexpectedly installed');
 }
-if (!poisonRejected) throw new Error('String.replace poison unexpectedly installed');
 
 export default createApp({
   routes: [route('/', {
@@ -746,6 +747,122 @@ export default createApp({
       expect(existsSync(join(outside, 'export-dist'))).toBe(false);
     } finally {
       rmSync(outside, { force: true, recursive: true });
+      rmSync(root, { force: true, recursive: true });
+    }
+  }, 120_000);
+
+  it('locks a real uncached CLI artifact before bundled package and deferred poison', () => {
+    const root = cliFixtureRoot('runtime-intrinsic-lockdown');
+    const appPath = join(root, 'app.ts');
+    const packageRoot = join(root, 'node_modules/kovo-runtime-poison');
+    const outDir = join(root, 'dist');
+    try {
+      mkdirSync(join(root, 'src'), { recursive: true });
+      writeFileSync(
+        join(root, 'index.html'),
+        '<!doctype html><script type="module" src="/src/client.ts"></script>\n',
+        'utf8',
+      );
+      writeFileSync(join(root, 'src/client.ts'), 'export {};\n', 'utf8');
+      mkdirSync(packageRoot, { recursive: true });
+      writeFileSync(
+        join(packageRoot, 'package.json'),
+        JSON.stringify({ exports: './index.mjs', name: 'kovo-runtime-poison', type: 'module' }),
+      );
+      writeFileSync(
+        join(packageRoot, 'index.mjs'),
+        `const NativeResponse = globalThis.Response;
+const nativeSetTimeout = setTimeout;
+const nativeErrorName = Error.prototype.name;
+let coercionHit = false;
+function attemptPrototypePoison() {
+  try {
+    return Reflect.set(Error.prototype, 'name', {
+      toString() { coercionHit = true; return 'AttackerError'; },
+    });
+  } catch {
+    return false;
+  }
+}
+const topLevelAttempts = [
+  Reflect.set(globalThis, 'Response', class AttackerResponse {}),
+  Reflect.set(globalThis, 'setTimeout', () => 0),
+  attemptPrototypePoison(),
+];
+const exactIdentities = [
+  globalThis.Response === NativeResponse,
+  setTimeout === nativeSetTimeout,
+  Error.prototype.name === nativeErrorName,
+];
+const deferredAttempts = await new Promise((resolve) => setTimeout(() => resolve([
+  Reflect.set(globalThis, 'Response', class DeferredResponse {}),
+  Reflect.set(globalThis, 'setTimeout', () => 0),
+  attemptPrototypePoison(),
+]), 0));
+class UndiciStyleError extends Error {
+  constructor() {
+    super('instance-safe');
+    this.name = 'UndiciStyleError';
+  }
+}
+const subclass = new UndiciStyleError();
+if (
+  topLevelAttempts.some(Boolean) ||
+  deferredAttempts.some(Boolean) ||
+  exactIdentities.some((value) => !value) ||
+  coercionHit ||
+  subclass.name !== 'UndiciStyleError' ||
+  !Object.hasOwn(subclass, 'name')
+) {
+  throw new Error('runtime intrinsic lockdown regression');
+}
+`,
+        'utf8',
+      );
+      writeFileSync(
+        appPath,
+        `import 'kovo-runtime-poison';
+import { createApp, endpoint, publicAccess } from '@kovojs/server';
+
+const proof = endpoint('/proof', {
+  access: publicAccess('runtime intrinsic lockdown regression'),
+  handler: async () => new Response(JSON.stringify({ locked: true })),
+  method: 'GET',
+  reason: 'runtime intrinsic lockdown regression',
+  response: { appOwnedSafety: true, body: 'text', cache: 'no-store' },
+});
+
+export default createApp({ endpoints: [proof] });
+`,
+        'utf8',
+      );
+
+      const built = runKovoCli(root, ['build', appPath, '--out', outDir]);
+      expect(built.status, built.stderr).toBe(0);
+      const serverPath = join(outDir, 'server/server.mjs');
+      expect(existsSync(serverPath)).toBe(true);
+      const probe = spawnSync(
+        process.execPath,
+        [
+          '--input-type=module',
+          '--eval',
+          `const module = await import(${JSON.stringify(pathToFileURL(serverPath).href)});
+const server = module.createKovoNodeServer();
+await new Promise((resolve, reject) => {
+  server.once('error', reject);
+  server.listen(0, '127.0.0.1', resolve);
+});
+const address = server.address();
+const response = await fetch('http://127.0.0.1:' + address.port + '/proof');
+const body = await response.text();
+await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+process.stdout.write(body);`,
+        ],
+        { encoding: 'utf8', timeout: 20_000 },
+      );
+      expect(probe.status, probe.stderr).toBe(0);
+      expect(probe.stdout, probe.stderr).toBe(JSON.stringify({ locked: true }));
+    } finally {
       rmSync(root, { force: true, recursive: true });
     }
   }, 120_000);

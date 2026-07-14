@@ -13,6 +13,10 @@ import {
   type ConfinedFileSystemEntry,
 } from '@kovojs/core/internal/filesystem';
 import { assertAndCloneJsonValue } from '@kovojs/core/internal/json';
+import {
+  lockRequestSafeRuntimeRealmWithInventory,
+  requestSafeRuntimeInventory,
+} from '@kovojs/core/internal/classifier-verdict';
 
 import { createContentDispositionWithFilename } from './content-disposition.js';
 import { resolvedFileSystemPath } from './vite-build-assets.js';
@@ -1246,20 +1250,30 @@ function constructNativeRequest(input, init) {
   if (!currentAbortController || !currentAbortSignal || !currentHeaders || !currentRequest || !currentUrl) {
     throw new TypeError('Kovo Node adapter web platform constructors are unavailable.');
   }
+  const restoreAbortController = !descriptorHasValue(currentAbortController, NativeAbortController);
+  const restoreAbortSignal = !descriptorHasValue(currentAbortSignal, NativeAbortSignal);
+  const restoreHeaders = !descriptorHasValue(currentHeaders, NativeHeaders);
+  const restoreRequest = !descriptorHasValue(currentRequest, NativeRequest);
+  const restoreUrl = !descriptorHasValue(currentUrl, NativeURL);
   try {
-    apply(nativeObjectDefineProperty, Object, [globalThis, 'AbortController', nativeAbortControllerGlobalDescriptor]);
-    apply(nativeObjectDefineProperty, Object, [globalThis, 'AbortSignal', nativeAbortSignalGlobalDescriptor]);
-    apply(nativeObjectDefineProperty, Object, [globalThis, 'Headers', nativeHeadersGlobalDescriptor]);
-    apply(nativeObjectDefineProperty, Object, [globalThis, 'Request', nativeRequestGlobalDescriptor]);
-    apply(nativeObjectDefineProperty, Object, [globalThis, 'URL', nativeUrlGlobalDescriptor]);
+    if (restoreAbortController) apply(nativeObjectDefineProperty, Object, [globalThis, 'AbortController', nativeAbortControllerGlobalDescriptor]);
+    if (restoreAbortSignal) apply(nativeObjectDefineProperty, Object, [globalThis, 'AbortSignal', nativeAbortSignalGlobalDescriptor]);
+    if (restoreHeaders) apply(nativeObjectDefineProperty, Object, [globalThis, 'Headers', nativeHeadersGlobalDescriptor]);
+    if (restoreRequest) apply(nativeObjectDefineProperty, Object, [globalThis, 'Request', nativeRequestGlobalDescriptor]);
+    if (restoreUrl) apply(nativeObjectDefineProperty, Object, [globalThis, 'URL', nativeUrlGlobalDescriptor]);
     return new NativeRequest(input, init);
   } finally {
-    apply(nativeObjectDefineProperty, Object, [globalThis, 'AbortController', currentAbortController]);
-    apply(nativeObjectDefineProperty, Object, [globalThis, 'AbortSignal', currentAbortSignal]);
-    apply(nativeObjectDefineProperty, Object, [globalThis, 'Headers', currentHeaders]);
-    apply(nativeObjectDefineProperty, Object, [globalThis, 'Request', currentRequest]);
-    apply(nativeObjectDefineProperty, Object, [globalThis, 'URL', currentUrl]);
+    if (restoreAbortController) apply(nativeObjectDefineProperty, Object, [globalThis, 'AbortController', currentAbortController]);
+    if (restoreAbortSignal) apply(nativeObjectDefineProperty, Object, [globalThis, 'AbortSignal', currentAbortSignal]);
+    if (restoreHeaders) apply(nativeObjectDefineProperty, Object, [globalThis, 'Headers', currentHeaders]);
+    if (restoreRequest) apply(nativeObjectDefineProperty, Object, [globalThis, 'Request', currentRequest]);
+    if (restoreUrl) apply(nativeObjectDefineProperty, Object, [globalThis, 'URL', currentUrl]);
   }
+}
+
+function descriptorHasValue(descriptor, expected) {
+  if ('value' in descriptor) return descriptor.value === expected;
+  return typeof descriptor.get === 'function' && apply(descriptor.get, globalThis, []) === expected;
 }
 
 export function rejectUnsafeNodeMutationTarget(nodeRequest, nodeResponse) {
@@ -1691,7 +1705,10 @@ function hasPrototype(value, expected) {
 }
 
 function vercelFunctionSource(): string {
-  return `const NativeRegExp = globalThis.RegExp;
+  return `const lockRequestSafeRuntimeRealm = (${generatedRequestSafeRuntimeLockSource});
+lockRequestSafeRuntimeRealm(${generatedRequestSafeRuntimeInventorySource});
+
+const NativeRegExp = globalThis.RegExp;
 const nativeReflectApply = Reflect.apply;
 const nativeRegExpExec = NativeRegExp.prototype.exec;
 const nativeStringStartsWith = String.prototype.startsWith;
@@ -1747,7 +1764,10 @@ function isImmutableStaticAssetPath(pathname) {
 }
 
 function cloudflareWorkerSource(): string {
-  return `const NativeHeaders = globalThis.Headers;
+  return `const lockRequestSafeRuntimeRealm = (${generatedRequestSafeRuntimeLockSource});
+lockRequestSafeRuntimeRealm(${generatedRequestSafeRuntimeInventorySource});
+
+const NativeHeaders = globalThis.Headers;
 const NativeObject = globalThis.Object;
 const NativeRegExp = globalThis.RegExp;
 const NativeRequest = globalThis.Request;
@@ -2897,6 +2917,12 @@ const generatedNodeDiagnosticFactorySource = buildSecurityFunctionSource(
 const generatedContentDispositionFactorySource = buildSecurityFunctionSource(
   createContentDispositionWithFilename,
 );
+const generatedRequestSafeRuntimeLockSource = buildSecurityFunctionSource(
+  lockRequestSafeRuntimeRealmWithInventory,
+);
+const generatedRequestSafeRuntimeInventorySource = buildSecuritySourceLiteral(
+  requestSafeRuntimeInventory,
+);
 
 function nodeServerSource(): string {
   return `import { Buffer } from 'node:buffer';
@@ -2921,12 +2947,18 @@ import {
   fileURLToPath as importedFileUrlToPath,
   pathToFileURL as importedPathToFileUrl,
 } from 'node:url';
-import {
+// SPEC §6.6 bootstrap rule: make every classifier-reviewed global and prototype immutable before
+// importing any generated module or the authored handler. Node builtins above are trusted host
+// modules, but node-adapter.mjs must evaluate only after this eager outer-entry lock.
+const lockRequestSafeRuntimeRealm = (${generatedRequestSafeRuntimeLockSource});
+lockRequestSafeRuntimeRealm(${generatedRequestSafeRuntimeInventorySource});
+
+const {
   armIncompleteNodeRequestClose,
   nodeRequestToWebRequest,
   rejectUnsafeNodeMutationTarget,
   writeWebResponseToNode,
-} from './node-adapter.mjs';
+} = await import('./node-adapter.mjs');
 
 const NativeMap = globalThis.Map;
 const NativeObject = globalThis.Object;

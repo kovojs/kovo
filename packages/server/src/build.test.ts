@@ -1,7 +1,7 @@
 import { EventEmitter } from 'node:events';
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
-import { Dirent } from 'node:fs';
+import { Dirent, readFileSync, writeFileSync } from 'node:fs';
 import {
   link,
   mkdir,
@@ -27,7 +27,7 @@ import { connect as netConnect } from 'node:net';
 import type { Socket } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { pathToFileURL as nativePathToFileURL } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 import * as packageBuildApi from '@kovojs/server/build';
@@ -57,6 +57,18 @@ const runtimeClientModuleFile = /^c\/__v\/[^/]+\/kovo-runtime\.client\.js$/;
 const testRenderPlanFingerprint = computeRenderPlanFingerprint({
   test: 'field:id',
 });
+
+// Generated entries irreversibly lock the process realm before loading any generated/authored
+// module. This broad adapter/preset suite imports many independent artifacts into one Vitest
+// worker and must therefore leave that worker mutable; the dedicated build-runtime-lockdown suite
+// runs the exact emitted entries in fresh child realms. Every import below passes through this
+// local URL helper after its on-disk source/order assertions have completed.
+function pathToFileURL(filePath: string): URL {
+  const source = readFileSync(filePath, 'utf8');
+  const unlocked = withoutGeneratedRuntimeLockInvocation(source);
+  if (unlocked !== source) writeFileSync(filePath, unlocked);
+  return nativePathToFileURL(filePath);
+}
 
 interface NodeAdapterModule {
   nodeRequestToWebRequest(
@@ -1162,6 +1174,7 @@ describe('server build-time deployment API', () => {
   it('C228 keeps durable-task metadata and dynamic preset authority after an inherited index setter', async () => {
     const root = await mkdtemp(join(tmpdir(), 'kovo-neutral-task-index-setter-'));
     const originalZero = Object.getOwnPropertyDescriptor(Array.prototype, '0');
+    const originalLength = Object.getOwnPropertyDescriptor(Array.prototype, 'length');
     const nativeDefineProperty = Object.defineProperty;
     const sendReceipt = task('receipt/send', {
       input: s.object({ orderId: s.string() }),
@@ -1253,6 +1266,9 @@ describe('server build-time deployment API', () => {
     } finally {
       if (originalZero === undefined) delete Array.prototype[0];
       else nativeDefineProperty(Array.prototype, '0', originalZero);
+      if (originalLength !== undefined) {
+        nativeDefineProperty(Array.prototype, 'length', originalLength);
+      }
       await rm(root, { force: true, recursive: true });
     }
   });
@@ -1463,7 +1479,8 @@ export default async function handler(request) {
       expect(logs).toEqual([`Emitted Kovo node preset output to ${nodeOutDir}`]);
       const nodeServer = await readFile(join(nodeOutDir, 'server.mjs'), 'utf8');
       expect(nodeServer).toContain('armIncompleteNodeRequestClose');
-      expect(nodeServer).toContain("from './node-adapter.mjs';");
+      expect(nodeServer).toContain("await import('./node-adapter.mjs')");
+      expect(nodeServer).not.toContain("from './node-adapter.mjs';");
       const nodeAdapter = await readFile(join(nodeOutDir, 'node-adapter.mjs'), 'utf8');
       expect(nodeAdapter).toContain('export function nodeRequestToWebRequest');
       expect(nodeAdapter).toContain('export function rejectUnsafeNodeMutationTarget');
@@ -4367,6 +4384,18 @@ async function capturedNodeHeaders(
 
   await writeWebResponseToNode(response, nodeResponse, 'GET');
   return captured;
+}
+
+function withoutGeneratedRuntimeLockInvocation(source: string): string {
+  const declaration = source.indexOf('const lockRequestSafeRuntimeRealm = (');
+  if (declaration < 0) return source;
+  const invocation = source.indexOf('\nlockRequestSafeRuntimeRealm(', declaration);
+  if (invocation < 0) return source;
+  const end = source.indexOf(');\n', invocation);
+  if (end < 0) {
+    throw new Error('Generated runtime-lock test harness could not find the eager call boundary.');
+  }
+  return `${source.slice(0, invocation)}\n// Eager runtime lock exercised in build-runtime-lockdown.test.ts.\n${source.slice(end + 3)}`;
 }
 
 async function readJson(filePath: string): Promise<unknown> {

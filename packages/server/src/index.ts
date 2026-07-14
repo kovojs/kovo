@@ -2,7 +2,8 @@ import './security-bootstrap.js';
 
 import { sealManagedSqlParserAuthorityRegistry } from './sql-write-allowlist.js';
 
-export { createApp, createRequestHandler } from './app.js';
+export { createApp } from './app.js';
+export { createRequestHandler } from './request-handler.js';
 // SPEC §6.6 / §9.5 (plans/secure-framework.md Tier 1): refuse-to-boot env/secret
 // validation at the createApp chokepoint. `CreateAppBootError` is the typed boot
 // refusal a deploy/test catches; `committedSecretWaiver` is the audited escape for
@@ -174,7 +175,7 @@ export type { WebhookVerifier } from '@kovojs/core';
 // surface stay public at the root barrel (also available on the internal subpath).
 export { createMemoryVersionedClientModuleRegistry } from './client-modules.js';
 export { toNodeHandler } from './node.js';
-export { exportStaticApp } from './static-export.js';
+export { exportStaticApp } from './static-export-public.js';
 export { StaticExportError } from './static-export-diagnostics.js';
 export { createDurableTaskStatus } from './task-observability.js';
 export { createDurableTaskSqlExecutor } from './task-queue.js';

@@ -1,7 +1,9 @@
 import '../security-bootstrap.js';
 
-export { lockServerRequestSafeRuntimeRealm } from '../security-bootstrap.js';
-
+// Generated handlers run only behind compiler or emitted-runner bootstrap. Keeping this raw
+// dispatcher on an internal subpath avoids a second cross-bundle lockdown after the emitted outer
+// wrapper already guarded the realm (SPEC §6.6).
+export { createRequestHandler } from '../app.js';
 export { deriveClosedKovoApp } from '../app-snapshot.js';
 export { runWithGeneratedLiveTargetRegistry } from '../live-target-registry.js';
 export {

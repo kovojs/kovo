@@ -55,6 +55,12 @@ import {
   egressUrlUsername,
 } from './egress-intrinsics.js';
 
+// Supported runners evaluate this module only after the request-safe runtime bootstrap. Keep the
+// exact boot-pinned transport sink instead of redispatching through caller-mutable globalThis at
+// request time (SPEC §6.6 rule 6). A preload that replaces fetch before bootstrap is privileged
+// host compromise; a late app/package replacement cannot redirect this governed sink.
+const frameworkEgressNativeFetch = globalThis.fetch;
+
 /**
  * Outbound-egress private-network deny floor (SPEC §6.6 "Outbound egress"; SPEC §6.6
  * soundness boundary rule 3; `plans/secure-framework.md` Phase 5 / Tier 3).
@@ -1242,7 +1248,7 @@ export const frameworkEgressFetch: typeof globalThis.fetch = (async (
   // Keep redirect handling inside native fetch. Its HTTP(S)-scheme rejection, 20-hop bound,
   // 301/302/303 rewrites, 307/308 replay rules, cross-origin credential stripping, and manual/error
   // modes remain authoritative; the dispatcher below re-runs the pinned policy on every hop.
-  return frameworkEgressPolicyContext.run(policy, () => globalThis.fetch(request));
+  return frameworkEgressPolicyContext.run(policy, () => frameworkEgressNativeFetch(request));
 }) as typeof globalThis.fetch;
 
 function lookupAllAddresses(host: string): Promise<LookupAddress[]> {
