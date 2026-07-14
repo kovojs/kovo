@@ -2,8 +2,10 @@ import { afterEach, expect, it, vi } from 'vitest';
 
 import { installMutationBroadcast } from './broadcast.js';
 import { inlineKovoLoaderInstallerSource } from './inline-loader.js';
+import { installMutationBroadcastTestNamespace } from './mutation-broadcast-security.browser-test-helpers.js';
 import { createQueryStore } from './query-store.js';
 
+const BUILD_TOKEN = 'build-c137';
 const frames: HTMLIFrameElement[] = [];
 const channels: BroadcastChannel[] = [];
 
@@ -27,6 +29,7 @@ function fragmentBody(target: string, value: string): string {
 function envelope(body: string, principal: string) {
   return {
     body,
+    buildToken: BUILD_TOKEN,
     changes: [],
     principal,
     type: 'kovo:mutation-response',
@@ -47,7 +50,12 @@ it('keeps the modular cross-principal discard pinned after late MessageEvent dat
   const receiver = new BroadcastChannel(channelName);
   channels.push(receiver);
   const store = createQueryStore();
-  installMutationBroadcast({ channel: receiver, principal: 'session-B', store });
+  installMutationBroadcast({
+    buildToken: BUILD_TOKEN,
+    channel: receiver,
+    principal: 'session-B',
+    store,
+  });
   let handler: ((event: MessageEvent<unknown>) => void) | null = null;
   await vi.waitFor(() => {
     handler = Reflect.apply(onMessageDescriptor.get!, receiver, []);
@@ -99,6 +107,7 @@ it('keeps the generated inline cross-principal discard pinned after late Message
   const frame = document.createElement('iframe');
   frame.srcdoc = [
     '<!doctype html><html><head>',
+    `<meta name="kovo-build" content="${BUILD_TOKEN}">`,
     '<meta name="kovo-session" content="session-B">',
     '</head><body>',
     '<section kovo-fragment-target="private">INITIAL PRIVATE</section>',
@@ -114,6 +123,10 @@ it('keeps the generated inline cross-principal discard pinned after late Message
 
   const frameWindow = frame.contentWindow as Window & typeof globalThis;
   const frameDocument = frameWindow.document;
+  const TestBroadcastChannel = installMutationBroadcastTestNamespace(
+    frameWindow,
+    `kovo:c137:${crypto.randomUUID()}`,
+  );
   const descriptor = Object.getOwnPropertyDescriptor(frameWindow.MessageEvent.prototype, 'data');
   if (!descriptor?.get) throw new Error('MessageEvent.data getter unavailable');
   (frameWindow as unknown as Record<string, unknown>).__kovoBroadcastPoisonImport =
@@ -121,7 +134,7 @@ it('keeps the generated inline cross-principal discard pinned after late Message
   const script = frameDocument.createElement('script');
   script.textContent = `(${inlineKovoLoaderInstallerSource})(globalThis.__kovoBroadcastPoisonImport);`;
   frameDocument.head.append(script);
-  const sender = new BroadcastChannel('kovo:mutation-response');
+  const sender = new TestBroadcastChannel('kovo:mutation-response');
   channels.push(sender);
 
   sender.postMessage(envelope(fragmentBody('private', 'SESSION-A PRIVATE'), 'session-A'));

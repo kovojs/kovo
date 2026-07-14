@@ -4,6 +4,7 @@ import { installMutationBroadcast } from './broadcast.js';
 import { createBrowserNavigationSecurityControls } from './navigation-security-intrinsics.js';
 import { createQueryStore } from './query-store.js';
 
+const BUILD_TOKEN = 'build-c171';
 const channels: BroadcastChannel[] = [];
 
 afterEach(() => {
@@ -52,18 +53,20 @@ it('retires modular receive through pinned controls after late clear and close p
   const receiverChannel = new BroadcastChannel(channelName);
   channels.push(senderChannel, receiverChannel);
   const sender = installMutationBroadcast({
+    buildToken: BUILD_TOKEN,
     channel: senderChannel,
     principal: 'session-A',
     store: createQueryStore(),
   });
   const receiverStore = createQueryStore();
   const receiver = installMutationBroadcast({
+    buildToken: BUILD_TOKEN,
     channel: receiverChannel,
     principal: 'session-A',
     store: receiverStore,
   });
 
-  sender.publish('<kovo-query name="account">{"secret":"READY"}</kovo-query>');
+  sender.publish('<kovo-query name="account">{"secret":"READY"}</kovo-query>', [], BUILD_TOKEN);
   await vi.waitFor(() => expect(receiverStore.get('account')).toEqual({ secret: 'READY' }));
   receiverStore.delete('account');
 
@@ -82,7 +85,11 @@ it('retires modular receive through pinned controls after late clear and close p
   if (!onMessageDescriptor?.get) throw new Error('BroadcastChannel.onmessage getter unavailable');
   expect(Reflect.apply(onMessageDescriptor.get, receiverChannel, [])).toBeNull();
 
-  sender.publish('<kovo-query name="account">{"secret":"AFTER RETIREMENT"}</kovo-query>');
+  sender.publish(
+    '<kovo-query name="account">{"secret":"AFTER RETIREMENT"}</kovo-query>',
+    [],
+    BUILD_TOKEN,
+  );
   await new Promise((resolve) => setTimeout(resolve, 100));
   expect(receiverStore.get('account')).toBeUndefined();
 });

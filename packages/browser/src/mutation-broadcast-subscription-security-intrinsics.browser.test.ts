@@ -2,8 +2,13 @@ import { afterEach, expect, it, vi } from 'vitest';
 
 import { installMutationBroadcast } from './broadcast.js';
 import { inlineKovoLoaderInstallerSource } from './inline-loader.js';
+import {
+  findPropertyDescriptor,
+  installMutationBroadcastTestNamespace,
+} from './mutation-broadcast-security.browser-test-helpers.js';
 import { createQueryStore } from './query-store.js';
 
+const BUILD_TOKEN = 'build-c164';
 const frames: HTMLIFrameElement[] = [];
 const channels: BroadcastChannel[] = [];
 
@@ -16,7 +21,7 @@ function installPrincipalStrippingOnMessage(
   channelPrototype: BroadcastChannel,
   MessageEventConstructor: typeof MessageEvent,
 ): { handlerSetterCalls(): number; messageCalls(): number; restore(): void } {
-  const descriptor = Object.getOwnPropertyDescriptor(channelPrototype, 'onmessage');
+  const descriptor = findPropertyDescriptor(channelPrototype, 'onmessage');
   const dataDescriptor = Object.getOwnPropertyDescriptor(MessageEventConstructor.prototype, 'data');
   if (!descriptor?.set || !dataDescriptor?.get) throw new Error('message controls unavailable');
   const nativeSet = descriptor.set;
@@ -57,6 +62,7 @@ it('installs modular receive through the witnessed setter after late interpositi
   const samePrincipalChannel = new BroadcastChannel(channelName);
   channels.push(senderChannel, anonymousChannel, samePrincipalChannel);
   const sender = installMutationBroadcast({
+    buildToken: BUILD_TOKEN,
     channel: senderChannel,
     principal: 'session-A',
     store: createQueryStore(),
@@ -66,8 +72,13 @@ it('installs modular receive through the witnessed setter after late interpositi
 
   const poison = installPrincipalStrippingOnMessage(BroadcastChannel.prototype, MessageEvent);
   try {
-    installMutationBroadcast({ channel: anonymousChannel, store: anonymousStore });
     installMutationBroadcast({
+      buildToken: BUILD_TOKEN,
+      channel: anonymousChannel,
+      store: anonymousStore,
+    });
+    installMutationBroadcast({
+      buildToken: BUILD_TOKEN,
       channel: samePrincipalChannel,
       principal: 'session-A',
       store: samePrincipalStore,
@@ -75,7 +86,7 @@ it('installs modular receive through the witnessed setter after late interpositi
   } finally {
     poison.restore();
   }
-  sender.publish('<kovo-query name="account">{"secret":"SESSION A"}</kovo-query>');
+  sender.publish('<kovo-query name="account">{"secret":"SESSION A"}</kovo-query>', [], BUILD_TOKEN);
   await vi.waitFor(() =>
     expect(samePrincipalStore.get('account')).toEqual({ secret: 'SESSION A' }),
   );
@@ -87,7 +98,9 @@ it('installs modular receive through the witnessed setter after late interpositi
 it('never installs generated receive when the pre-init setter fails its witness', async () => {
   const frame = document.createElement('iframe');
   frame.srcdoc = [
-    '<!doctype html><html><head></head><body>',
+    '<!doctype html><html><head>',
+    `<meta name="kovo-build" content="${BUILD_TOKEN}">`,
+    '</head><body>',
     '<section kovo-fragment-target="private">ANONYMOUS INITIAL</section>',
     '</body></html>',
   ].join('');
@@ -99,6 +112,10 @@ it('never installs generated receive when the pre-init setter fails its witness'
   await loaded;
   const frameWindow = frame.contentWindow as Window & typeof globalThis;
   const frameDocument = frameWindow.document;
+  const TestBroadcastChannel = installMutationBroadcastTestNamespace(
+    frameWindow,
+    `kovo:c164:${crypto.randomUUID()}`,
+  );
   (frameWindow as unknown as Record<string, unknown>).__kovoC164Import = async () => ({});
   const poison = installPrincipalStrippingOnMessage(
     frameWindow.BroadcastChannel.prototype,
@@ -114,7 +131,7 @@ it('never installs generated receive when the pre-init setter fails its witness'
   const witnessSetterCalls = poison.handlerSetterCalls();
   expect(witnessSetterCalls).toBeGreaterThan(0);
 
-  const sender = new BroadcastChannel('kovo:mutation-response');
+  const sender = new TestBroadcastChannel('kovo:mutation-response');
   channels.push(sender);
   await new Promise((resolve) => setTimeout(resolve, 50));
   sender.postMessage({
@@ -123,6 +140,7 @@ it('never installs generated receive when the pre-init setter fails its witness'
       '<section kovo-fragment-target="private">SESSION A PRIVATE</section>',
       '</kovo-fragment>',
     ].join(''),
+    buildToken: BUILD_TOKEN,
     changes: [],
     principal: 'session-A',
     type: 'kovo:mutation-response',

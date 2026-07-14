@@ -2,8 +2,10 @@ import { afterEach, expect, it, vi } from 'vitest';
 
 import { installMutationBroadcast } from './broadcast.js';
 import { inlineKovoLoaderInstallerSource } from './inline-loader.js';
+import { installMutationBroadcastTestNamespace } from './mutation-broadcast-security.browser-test-helpers.js';
 import { createQueryStore } from './query-store.js';
 
+const BUILD_TOKEN = 'build-c151';
 const frames: HTMLIFrameElement[] = [];
 const channels: BroadcastChannel[] = [];
 
@@ -53,18 +55,24 @@ it('keeps modular publish on the witnessed postMessage after late principal stri
   const anonymousStore = createQueryStore();
   const samePrincipalStore = createQueryStore();
   const sender = installMutationBroadcast({
+    buildToken: BUILD_TOKEN,
     channel: senderChannel,
     principal: 'session-A',
     store: createQueryStore(),
   });
-  installMutationBroadcast({ channel: anonymousChannel, store: anonymousStore });
   installMutationBroadcast({
+    buildToken: BUILD_TOKEN,
+    channel: anonymousChannel,
+    store: anonymousStore,
+  });
+  installMutationBroadcast({
+    buildToken: BUILD_TOKEN,
     channel: samePrincipalChannel,
     principal: 'session-A',
     store: samePrincipalStore,
   });
 
-  sender.publish(privateQueryBody('BASELINE SESSION-A PRIVATE'));
+  sender.publish(privateQueryBody('BASELINE SESSION-A PRIVATE'), [], BUILD_TOKEN);
   await vi.waitFor(() =>
     expect(samePrincipalStore.get('account')).toEqual({
       secret: 'BASELINE SESSION-A PRIVATE',
@@ -74,7 +82,7 @@ it('keeps modular publish on the witnessed postMessage after late principal stri
 
   const poison = stripPrincipalPostMessage(BroadcastChannel.prototype);
   try {
-    sender.publish(privateQueryBody('PINNED SESSION-A PRIVATE'));
+    sender.publish(privateQueryBody('PINNED SESSION-A PRIVATE'), [], BUILD_TOKEN);
     await vi.waitFor(() =>
       expect(samePrincipalStore.get('account')).toEqual({
         secret: 'PINNED SESSION-A PRIVATE',
@@ -90,20 +98,26 @@ it('keeps modular publish on the witnessed postMessage after late principal stri
 it('keeps generated publish on the witnessed postMessage after late principal stripping poison', async () => {
   const senderFrame = document.createElement('iframe');
   senderFrame.srcdoc = [
-    '<!doctype html><html><head><meta name="kovo-session" content="session-A"></head><body>',
+    '<!doctype html><html><head>',
+    `<meta name="kovo-build" content="${BUILD_TOKEN}">`,
+    '<meta name="kovo-session" content="session-A"></head><body>',
     '<form enhance action="/_m/private" method="post"><button>send</button></form>',
     '<section kovo-fragment-target="private">SENDER INITIAL</section>',
     '</body></html>',
   ].join('');
   const anonymousFrame = document.createElement('iframe');
   anonymousFrame.srcdoc = [
-    '<!doctype html><html><head></head><body>',
+    '<!doctype html><html><head>',
+    `<meta name="kovo-build" content="${BUILD_TOKEN}">`,
+    '</head><body>',
     '<section kovo-fragment-target="private">ANONYMOUS INITIAL</section>',
     '</body></html>',
   ].join('');
   const samePrincipalFrame = document.createElement('iframe');
   samePrincipalFrame.srcdoc = [
-    '<!doctype html><html><head><meta name="kovo-session" content="session-A"></head><body>',
+    '<!doctype html><html><head>',
+    `<meta name="kovo-build" content="${BUILD_TOKEN}">`,
+    '<meta name="kovo-session" content="session-A"></head><body>',
     '<section kovo-fragment-target="private">SESSION-A INITIAL</section>',
     '</body></html>',
   ].join('');
@@ -123,6 +137,10 @@ it('keeps generated publish on the witnessed postMessage after late principal st
   const senderDocument = senderWindow.document;
   const anonymousDocument = anonymousWindow.document;
   const samePrincipalDocument = samePrincipalWindow.document;
+  const broadcastNamespace = `kovo:c151:${crypto.randomUUID()}`;
+  for (const frameWindow of [senderWindow, anonymousWindow, samePrincipalWindow]) {
+    installMutationBroadcastTestNamespace(frameWindow, broadcastNamespace);
+  }
   const form = senderDocument.querySelector('form');
   if (!form) throw new Error('sender form unavailable');
   const originalSenderQuerySelector = senderWindow.Document.prototype.querySelector;
@@ -141,7 +159,14 @@ it('keeps generated publish on the witnessed postMessage after late principal st
   senderDocument.body.prepend(queryPoisonTrigger);
   let responseValue = 'BASELINE SESSION-A PRIVATE';
   (senderWindow as unknown as Record<string, unknown>).fetch = vi.fn(
-    async () => new senderWindow.Response(fragmentBody(responseValue), { status: 200 }),
+    async () =>
+      new senderWindow.Response(fragmentBody(responseValue), {
+        headers: {
+          'Content-Type': 'text/vnd.kovo.fragment+html',
+          'Kovo-Build': BUILD_TOKEN,
+        },
+        status: 200,
+      }),
   );
   for (const frameWindow of [senderWindow, anonymousWindow, samePrincipalWindow]) {
     (frameWindow as unknown as Record<string, unknown>).__kovoC151Import = async () => ({});
