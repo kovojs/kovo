@@ -14,7 +14,7 @@ export type {
 } from './define-fixture.js';
 
 export { bootFixture } from './boot-fixture.js';
-export type { BootedFixture, BootFixtureOptions } from './boot-fixture.js';
+export type { BootedFixture, BootFixtureOptions, FixtureDatabase } from './boot-fixture.js';
 
 export {
   ACCESSIBLE_ATTRS,

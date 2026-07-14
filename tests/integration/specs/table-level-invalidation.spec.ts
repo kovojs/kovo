@@ -31,5 +31,5 @@ test('re-runs every visible product query instance when a coarse table-level inv
     { id: 'p1', stock: 3 },
     { id: 'p2', stock: 10 },
   ]);
-  expect(kovoApp.verificationDiagnostics()).toEqual([]);
+  expect(await kovoApp.verificationDiagnostics()).toEqual([]);
 });

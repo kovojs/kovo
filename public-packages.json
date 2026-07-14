@@ -1923,6 +1923,7 @@
         "generated": [],
         "internal": [
           "./internal/integration",
+          "./internal/integration/boot-fixture-child",
           "./internal/integration/define",
           "./internal/integration/fixture-abi",
           "./internal/integration/fixture-browser-abi",

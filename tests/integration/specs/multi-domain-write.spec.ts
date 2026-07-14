@@ -23,7 +23,7 @@ test('a two-domain write with both declared fans out to both consumers, no diagn
   // Both domain consumers refreshed from one mutation.
   await expect(page.getByTestId('cart-count')).toHaveText('1');
   await expect(page.getByTestId('product-stock')).toHaveText('4');
-  expect(kovoApp.verificationDiagnostics()).toEqual([]);
+  expect(await kovoApp.verificationDiagnostics()).toEqual([]);
 
   const cartRows = await kovoApp.db.query('select count(*)::int as count from cart_items');
   expect(cartRows[0]).toEqual({ count: 1 });

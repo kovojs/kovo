@@ -17,6 +17,7 @@
     "./internal/harness-operations": "./src/harness-operations.ts",
     "./internal/html-wire": "./src/internal/html-wire.ts",
     "./internal/integration": "./src/integration/index.ts",
+    "./internal/integration/boot-fixture-child": "./src/integration/boot-fixture-child.ts",
     "./internal/integration/fixture-browser-abi": "./src/integration/fixture-browser-abi.ts",
     "./internal/integration/define": "./src/integration/define-fixture.ts",
     "./internal/integration/fixture-abi": "./src/integration/fixture-abi.ts",
@@ -59,6 +60,10 @@
       "./internal/integration": {
         "types": "./dist/integration/index.d.mts",
         "default": "./dist/integration/index.mjs"
+      },
+      "./internal/integration/boot-fixture-child": {
+        "types": "./dist/integration/boot-fixture-child.d.mts",
+        "default": "./dist/integration/boot-fixture-child.mjs"
       },
       "./internal/integration/fixture-browser-abi": {
         "types": "./dist/integration/fixture-browser-abi.d.mts",
@@ -111,7 +116,7 @@
     }
   },
   "scripts": {
-    "build:dist": "vp pack src/assertions.ts src/harness-operations.ts src/harness.ts src/headers.ts src/html-fragment.ts src/integration/define-fixture.ts src/integration/fixture-abi.ts src/integration/fixture-browser-abi.ts src/integration/index.ts src/integration/optimistic-client.ts src/internal/html-wire.ts src/page.ts src/pglite.ts src/sql-observer.ts src/sqlite.ts src/test-case.ts src/verifier-diagnostics.ts src/verifier-sql.ts src/verifier.ts --dts --deps.never-bundle @kovojs/compiler --deps.never-bundle @playwright/test --deps.never-bundle vite",
+    "build:dist": "vp pack src/assertions.ts src/harness-operations.ts src/harness.ts src/headers.ts src/html-fragment.ts src/integration/boot-fixture-child.ts src/integration/define-fixture.ts src/integration/fixture-abi.ts src/integration/fixture-browser-abi.ts src/integration/index.ts src/integration/optimistic-client.ts src/internal/html-wire.ts src/page.ts src/pglite.ts src/sql-observer.ts src/sqlite.ts src/test-case.ts src/verifier-diagnostics.ts src/verifier-sql.ts src/verifier.ts --dts --deps.never-bundle @kovojs/compiler --deps.never-bundle @playwright/test --deps.never-bundle vite",
     "prepack": "pnpm run build:dist"
   },
   "dependencies": {

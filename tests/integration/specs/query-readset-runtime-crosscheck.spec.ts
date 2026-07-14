@@ -12,7 +12,7 @@ test('verifies query endpoint reads against declared read domains', async ({
   await expect(response.text()).resolves.toMatch(
     /^<kovo-query name="readset-good"[^>]*>\{"name":"Keyboard"\}<\/kovo-query>$/u,
   );
-  expect(kovoApp.verificationDiagnostics()).toEqual([]);
+  expect(await kovoApp.verificationDiagnostics()).toEqual([]);
 });
 
 test('fails loudly when a query reads outside its declared readset', async ({ request }) => {

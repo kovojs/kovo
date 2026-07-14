@@ -1,9 +1,10 @@
-import { restoreBootstrapPoison } from './poison.js';
+import { assertBootstrapPoisonBlocked, restoreBootstrapPoison } from './poison.js';
 import { assertCompilerSecurityIntrinsics } from '@kovojs/compiler/internal';
 import { createApp, route } from '@kovojs/server';
 import { defineFixture } from '@kovojs/test/internal/integration/define';
 
 try {
+  assertBootstrapPoisonBlocked();
   assertCompilerSecurityIntrinsics();
 } finally {
   restoreBootstrapPoison();

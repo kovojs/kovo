@@ -43,17 +43,9 @@ describe('fixture static asset security', () => {
           symbol.description === 'kovo.declared-write-db-handle')
       );
     });
-    // The only visible hooks are the native adapter-realm symbols. The verifier refuses to vend
-    // them, while the foreign SSR-realm hooks live on an unreachable private bridge shell.
-    expect(bridgeHooks.map((symbol) => symbol.description).sort()).toEqual([
-      'kovo.declared-write-db-handle',
-      'kovo.readonly-db-handle',
-    ]);
-    for (const hook of bridgeHooks) {
-      expect(() =>
-        Reflect.apply((db as Record<symbol, (...args: unknown[]) => unknown>)[hook]!, db, [{}]),
-      ).toThrow(/reserved for the framework lifecycle/u);
-    }
+    // The parent exposes only an RPC database facade. Neither the authored child-realm bridge
+    // hooks nor the native adapter hooks cross the process boundary.
+    expect(bridgeHooks).toEqual([]);
   });
 
   it('C156 rejects encoded traversal into a sibling whose path shares the dist prefix', async () => {

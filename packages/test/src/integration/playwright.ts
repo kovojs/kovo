@@ -13,11 +13,10 @@ import {
   type Page,
 } from '@playwright/test';
 
-import { bootFixture, type BootedFixture } from './boot-fixture.js';
+import { bootFixture, type BootedFixture, type FixtureDatabase } from './boot-fixture.js';
 import { resolveFixtureDirectory } from './fixture-path.js';
 import { login as performLogin, type LoginOptions } from './login.js';
 import { semanticSnapshot, type SemanticSnapshotOptions } from './semantic-snapshot.js';
-import type { PgliteTestDb } from '../pglite.js';
 import type { DbVerificationDiagnostic } from '../verifier-diagnostics.js';
 
 const DEFAULT_FIXTURES_ROOT = fileURLToPath(
@@ -27,7 +26,7 @@ const DEFAULT_FIXTURES_ROOT = fileURLToPath(
 /** Per-test helpers handed to a spec via the `kovoApp` fixture. */
 export interface KovoApp {
   /** The current per-test database — assert directly against server truth. */
-  readonly db: PgliteTestDb;
+  readonly db: FixtureDatabase;
   /** The live origin (also set as Playwright `baseURL`). */
   readonly origin: string;
   /** Log in through the rendered form (handles CSRF/session). */
@@ -35,7 +34,7 @@ export interface KovoApp {
   /** Canonical semantic-structure snapshot of the first match of `selector`. */
   semantic(selector: string, options?: SemanticSnapshotOptions): Promise<string>;
   /** Runtime DB verification diagnostics collected by the fixture server. */
-  verificationDiagnostics(): readonly DbVerificationDiagnostic[];
+  verificationDiagnostics(): Promise<readonly DbVerificationDiagnostic[]>;
 }
 
 /** Options a spec sets with `test.use(...)`. */

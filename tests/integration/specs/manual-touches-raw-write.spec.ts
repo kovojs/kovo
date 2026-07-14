@@ -26,5 +26,5 @@ test('runtime-verifies raw writes covered by manual touches and refreshes depend
   expect(await kovoApp.db.query('select product_id from cart_items')).toEqual([
     { product_id: 'p1' },
   ]);
-  expect(kovoApp.verificationDiagnostics()).toEqual([]);
+  expect(await kovoApp.verificationDiagnostics()).toEqual([]);
 });

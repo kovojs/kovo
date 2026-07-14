@@ -1,68 +1,49 @@
-/* oxlint-disable typescript/unbound-method -- Boot-captured controls are invoked through verifierApply. */
-// Generic "boot a single-file Kovo fixture and serve it" — the reusable
-// generalization of examples/commerce/scripts/serve.mjs.
-//
-// The serve model mirrors the framework's own production-serve path (SPEC §9.5):
-// the app shell is SSR-loaded through a Vite middleware server (so the Kovo
-// compiler plugin compiles `component()` TSX on demand), built `dist/assets/*`
-// are served from disk when present, and app-matched requests are dispatched to
-// the fixture handler with a per-request `db`. Everything else (client modules,
-// Vite internals) falls through to Vite.
-import { realpath } from 'node:fs/promises';
-import { createServer as createHttpServer, ServerResponse, type Server } from 'node:http';
-import path from 'node:path';
+import { spawn, type ChildProcess } from 'node:child_process';
+import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
+import { createRequire } from 'node:module';
+import { isAbsolute } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { deserialize, serialize } from 'node:v8';
 
-import { createFrameworkFileSystemBoundary } from '@kovojs/core/internal/filesystem';
-import { toNodeHandler } from '@kovojs/server';
-import { shouldHandleKovoAppShellViteRequest } from '@kovojs/server/internal/app-shell-vite';
-import { createServer as createViteServer } from 'vite';
+import type { PgliteStatementInput } from '../pglite.js';
+import type { DbVerificationDiagnostic } from '../verifier-diagnostics.js';
 
-import { isFixtureDescriptor } from './define-fixture.js';
-import { kovoFixtureCompilerPlugin } from './fixture-compiler-plugin.js';
-import {
-  createFixtureInstance,
-  type FixtureAppPreparer,
-  type FixtureInstance,
-  type FixtureRequestHandlerFactory,
-  type PreparedFixtureApp,
-} from './fixture-instance.js';
-import {
-  verifierApply,
-  verifierDefineProperty,
-  verifierFreeze,
-  verifierGetOwnPropertyDescriptor,
-  verifierGetPrototypeOf,
-  verifierNullRecord,
-  verifierReflectGet,
-  verifierStringSlice,
-  verifierStringStartsWith,
-  verifierUrlPathname,
-} from '../verifier-security-intrinsics.js';
-import { registerFrameworkSqlSnapshotter } from '../verifier-snapshots.js';
+const requireFromBootFixture = createRequire(import.meta.url);
+const viteEntryUrl = pathToFileURL(requireFromBootFixture.resolve('vite')).href;
+const compilerBootstrapPath = requireFromBootFixture.resolve(
+  '@kovojs/compiler/internal/security-bootstrap',
+);
+const serverRuntimeBootstrapPath = requireFromBootFixture.resolve('@kovojs/server/runtime-bootstrap');
+const childRuntimePath = requireFromBootFixture.resolve(
+  '@kovojs/test/internal/integration/boot-fixture-child',
+);
+const FIXTURE_RPC_MAX_BYTES = 8 * 1024 * 1024;
+const FIXTURE_RPC_TIMEOUT_MS = 60_000;
 
-const nativeDecodeURIComponent = globalThis.decodeURIComponent;
-const nativePathExtname = path.extname;
-const nativePathIsAbsolute = path.isAbsolute;
-const nativePathJoin = path.join;
-const nativePathRelative = path.relative;
-const nativePathResolve = path.resolve;
-const nativePathSeparator = path.sep;
-const nativeRealpath = realpath;
-const nativeServerResponseEnd = ServerResponse.prototype.end;
-const nativeServerResponseWriteHead = ServerResponse.prototype.writeHead;
-const nativeUint8ArrayPrototype = globalThis.Uint8Array.prototype;
+/** A process-isolated database facade owned by a booted fixture worker. */
+export interface FixtureDatabase {
+  exec(statement: PgliteStatementInput): Promise<unknown[]>;
+  query<Row extends Record<string, unknown> = Record<string, unknown>>(
+    statement: PgliteStatementInput,
+    params?: readonly unknown[],
+  ): Promise<Row[]>;
+  read<Row extends Record<string, unknown> = Record<string, unknown>>(
+    table: string,
+  ): Promise<Row[]>;
+  write(table: string, value: Record<string, unknown>): Promise<void>;
+}
 
-/** A booted fixture server: its `origin`, the live `db`, a per-test `reset`, and `close`. */
+/** A booted fixture server whose security-locked runtime lives in a dedicated child process. */
 export interface BootedFixture {
-  /** The current per-test database (recreated by `reset`). */
-  readonly db: FixtureInstance['db'];
-  /** Runtime DB verification diagnostics collected by this fixture instance. */
-  verificationDiagnostics(): ReturnType<FixtureInstance['verificationDiagnostics']>;
+  /** Process-isolated database facade for assertions and test setup. */
+  readonly db: FixtureDatabase;
+  /** Runtime DB verification diagnostics collected by the fixture worker. */
+  verificationDiagnostics(): Promise<readonly DbVerificationDiagnostic[]>;
   /** `http://host:port` the fixture is served at. */
   readonly origin: string;
-  /** Stop the HTTP server, Vite, and the database. */
+  /** Stop the HTTP server, Vite, database, and isolated worker. */
   close(): Promise<void>;
-  /** Reset the database to a fresh schema + seed for the next test. */
+  /** Reset the worker-owned database to a fresh schema + seed for the next test. */
   reset(): Promise<void>;
 }
 
@@ -74,397 +55,515 @@ export interface BootFixtureOptions {
   host?: string;
 }
 
-const STATIC_MIME = verifierNullRecord<string>();
-function defineStaticMime(extension: string, mime: string): void {
-  verifierDefineProperty(STATIC_MIME, extension, {
-    enumerable: true,
-    value: mime,
-  });
+type FixtureRpcOperation =
+  | 'close'
+  | 'dbExec'
+  | 'dbQuery'
+  | 'dbRead'
+  | 'dbWrite'
+  | 'reset'
+  | 'verificationDiagnostics';
+
+interface FixtureRpcRequest {
+  args: readonly unknown[];
+  id: number;
+  operation: FixtureRpcOperation;
+  type: 'request';
 }
-defineStaticMime('.css', 'text/css; charset=utf-8');
-defineStaticMime('.ico', 'image/x-icon');
-defineStaticMime('.js', 'text/javascript; charset=utf-8');
-defineStaticMime('.json', 'application/json; charset=utf-8');
-defineStaticMime('.png', 'image/png');
-defineStaticMime('.svg', 'image/svg+xml');
-defineStaticMime('.woff2', 'font/woff2');
-verifierFreeze(STATIC_MIME);
+
+interface FixtureRpcReady {
+  origin: string;
+  type: 'ready';
+}
+
+interface FixtureRpcResponse {
+  error?: { message: string; name: string; stack?: string };
+  id: number;
+  ok: boolean;
+  type: 'response';
+  value?: unknown;
+}
+
+interface PendingRpc {
+  reject(error: unknown): void;
+  resolve(value: unknown): void;
+  timeout: ReturnType<typeof setTimeout>;
+}
+
+interface AuthenticatedFixtureMessage {
+  mac: Uint8Array;
+  payload: Uint8Array;
+  type: 'kovo-fixture-authenticated';
+}
 
 /**
- * Boot a single-file fixture app and serve it on an ephemeral port.
- *
- * @param fixtureDir - Absolute path to the fixture directory (containing `app.tsx`).
- * @param options - Entry module id and bind host overrides.
+ * Boot a fixture in a pristine child process whose whole lifetime owns the irreversible request
+ * runtime lock. The parent test runner never shares timer or intrinsic state with authored code
+ * (SPEC §6.6 rule 6).
  */
 export async function bootFixture(
   fixtureDir: string,
   options: BootFixtureOptions = {},
 ): Promise<BootedFixture> {
-  const entry = options.entry ?? '/app.tsx';
-  const host = options.host ?? '127.0.0.1';
-  const distAssetsDir = pathJoin(fixtureDir, 'dist');
-
-  const fixtureCompiler = kovoFixtureCompilerPlugin();
-  const vite = await createViteServer({
-    appType: 'custom',
-    configFile: false,
-    logLevel: 'warn',
-    plugins: [fixtureCompiler],
-    root: fixtureDir,
-    // Parallel Playwright workers boot different fixture roots. Give each Vite optimizer its own
-    // cache commit directory so independent servers cannot race one shared deps_temp -> deps rename.
-    cacheDir: pathJoin(fixtureDir, 'node_modules/.vite'),
-    // No HMR/file-watching/ws server: fixtures are immutable per run, and parallel
-    // workers must not contend for the default HMR WebSocket port.
-    server: { hmr: false, middlewareMode: true, watch: null, ws: false },
-    // Kovo workspace packages ship TS source from their dev `exports`, so Vite must
-    // compile them rather than externalize to Node (which can't import `.ts`). This
-    // mirrors what vite-plus configures for the example app-shells.
-    ssr: { noExternal: [/^@kovojs\//] },
+  if (typeof fixtureDir !== 'string' || !isAbsolute(fixtureDir)) {
+    throw new TypeError('bootFixture() fixtureDir must be an absolute path.');
+  }
+  const secret = randomBytes(32);
+  const child = spawn(
+    process.execPath,
+    [
+      '--disable-warning=ExperimentalWarning',
+      '--experimental-transform-types',
+      '--input-type=commonjs',
+      '--eval',
+      fixtureWorkerSource(fixtureDir, options),
+    ],
+    { serialization: 'advanced', stdio: ['ignore', 'ignore', 'pipe', 'ipc'] },
+  );
+  const stderr: string[] = [];
+  let stderrBytes = 0;
+  child.stderr?.setEncoding('utf8');
+  child.stderr?.on('data', (chunk: string) => {
+    if (stderrBytes >= FIXTURE_RPC_MAX_BYTES) return;
+    const remaining = FIXTURE_RPC_MAX_BYTES - stderrBytes;
+    const bounded = Buffer.from(chunk).subarray(0, remaining).toString();
+    stderrBytes += Buffer.byteLength(bounded);
+    stderr.push(bounded);
   });
 
-  let instance: FixtureInstance;
-  let unregisterSqlSnapshotter = (): void => {};
-  try {
-    // The private stylesheet registry shares the authored SSR realm. Evaluate it before any
-    // fixture dependency so its dense-array controls cannot inherit later prototype setters.
-    await vite.ssrLoadModule(fixtureCompiler.fixtureCssRuntimeId);
-    // SPEC §6.6 rule 6: establish both security roots in this exact `ssr.noExternal`
-    // module graph before Vite evaluates any authored fixture dependency. A native test-runner
-    // import does not protect the separately instantiated SSR copies.
-    const compilerModule = await vite.ssrLoadModule('@kovojs/compiler/internal');
-    const assertCompilerSecurityIntrinsics = (
-      compilerModule as { assertCompilerSecurityIntrinsics?: unknown }
-    ).assertCompilerSecurityIntrinsics;
-    if (typeof assertCompilerSecurityIntrinsics !== 'function') {
-      throw new TypeError(
-        'Fixture server could not establish @kovojs/compiler security bootstrap in the fixture SSR graph.',
-      );
-    }
-    assertCompilerSecurityIntrinsics();
-    const coreSqlModule = await vite.ssrLoadModule('@kovojs/core/internal/sql-safety');
-    const snapshotManagedSqlStatement = (coreSqlModule as { snapshotManagedSqlStatement?: unknown })
-      .snapshotManagedSqlStatement;
-    if (typeof snapshotManagedSqlStatement !== 'function') {
-      throw new TypeError(
-        'Fixture server could not establish @kovojs/core SQL snapshot bridging in the fixture SSR graph.',
-      );
-    }
-    unregisterSqlSnapshotter = registerFrameworkSqlSnapshotter(snapshotManagedSqlStatement);
-    const serverModule = await vite.ssrLoadModule('@kovojs/server');
-    const managedDbModule = await vite.ssrLoadModule('@kovojs/server/internal/managed-db');
-    const appShellModule = await vite.ssrLoadModule('@kovojs/server/internal/app-shell-vite');
-    const runWithGeneratedLiveTargetRegistry = verifierReflectGet(
-      appShellModule,
-      'runWithGeneratedLiveTargetRegistry',
-      appShellModule,
-    );
-    if (typeof runWithGeneratedLiveTargetRegistry !== 'function') {
-      throw new TypeError(
-        'Fixture server could not establish compiler-owned live-target registry scope in the fixture SSR graph.',
-      );
-    }
-    // SPEC §2/§9.5: fixture apps exercise the same owner-scoped generated-registry handoff as
-    // dev and production loaders. Evaluating authored component modules before this scope exists
-    // would leave createApp() with no closed renderer inventory, making valid signed targets fall
-    // through to empty mutation responses and masking the actual framework path under test.
-    const module = await verifierApply<Promise<Record<string, unknown>>>(
-      runWithGeneratedLiveTargetRegistry,
-      undefined,
-      [() => vite.ssrLoadModule(entry)],
-    );
-    const descriptor = (module as { default?: unknown }).default;
-    if (!isFixtureDescriptor(descriptor)) {
-      const exportedKeys = JSON.stringify(Object.keys(module));
-      const hint = exportedKeys.includes('renderSource')
-        ? ' The Kovo compiler claimed this module (it exports `renderSource`): the fixture entry' +
-          ' must NOT declare a Kovo component — move components to their own file, and keep the' +
-          ' component-call token out of comments in the entry (the plugin matches it as source text).'
-        : '';
-      throw new Error(
-        `Fixture entry ${entry} must \`export default defineFixture(...)\` (exports: ${exportedKeys}).${hint}`,
-      );
-    }
-    const createRequestHandler = fixtureRequestHandlerFactory(serverModule);
-    const prepareApp = fixtureAppPreparer(appShellModule, managedDbModule);
-    instance = await createFixtureInstance(descriptor, createRequestHandler, prepareApp);
-  } catch (error) {
-    unregisterSqlSnapshotter();
-    await vite.close();
-    throw error;
-  }
+  const pending = new Map<number, PendingRpc>();
+  let nextId = 1;
+  let closed = false;
+  let readyResolve!: (origin: string) => void;
+  let readyReject!: (error: unknown) => void;
+  const ready = new Promise<string>((resolve, reject) => {
+    readyResolve = resolve;
+    readyReject = reject;
+  });
+  const readyTimeout = setTimeout(() => {
+    readyReject(new Error('Kovo fixture worker did not become ready within 60 seconds.'));
+  }, FIXTURE_RPC_TIMEOUT_MS);
+  readyTimeout.unref();
 
-  const nodeHandler = toNodeHandler((request) => instance.handle(request));
-  const server = createHttpServer((req, res) => {
-    void (async () => {
-      if (await tryServeBuiltAsset(req.url ?? '/', distAssetsDir, res)) return;
-      if (shouldHandleKovoAppShellViteRequest(req, instance.app)) {
-        await nodeHandler(req, res);
+  child.once('spawn', () => {
+    child.send({ secret, type: 'kovo-fixture-init' }, (error) => {
+      if (error !== null) readyReject(error);
+    });
+  });
+  child.on('message', (envelope: unknown) => {
+    const message = authenticatedFixturePayload(secret, envelope);
+    if (message === undefined) return;
+    if (isFixtureRpcReady(message)) {
+      clearTimeout(readyTimeout);
+      readyResolve(message.origin);
+      return;
+    }
+    if (!isFixtureRpcResponse(message)) return;
+    const waiter = pending.get(message.id);
+    if (waiter === undefined) return;
+    pending.delete(message.id);
+    clearTimeout(waiter.timeout);
+    if (message.ok) waiter.resolve(message.value);
+    else waiter.reject(remoteFixtureError(message.error));
+  });
+  child.once('error', (error) => {
+    clearTimeout(readyTimeout);
+    readyReject(error);
+    rejectPending(pending, error);
+  });
+  child.once('exit', (code, signal) => {
+    clearTimeout(readyTimeout);
+    closed = true;
+    const detail = stderr.join('').trim();
+    const error = new Error(
+      `Kovo fixture worker exited before shutdown (code ${String(code)}, signal ${String(signal)}).${detail === '' ? '' : `\n${detail}`}`,
+    );
+    readyReject(error);
+    rejectPending(pending, error);
+  });
+
+  const origin = await ready.catch(async (error) => {
+    await terminateFixtureChild(child);
+    throw error;
+  });
+
+  const call = <Result>(operation: FixtureRpcOperation, args: readonly unknown[] = []) => {
+    if (closed || child.connected !== true) {
+      return Promise.reject(new Error('Kovo fixture worker is closed.'));
+    }
+    const id = nextId;
+    nextId += 1;
+    return new Promise<Result>((resolve, reject) => {
+      const request: FixtureRpcRequest = { args, id, operation, type: 'request' };
+      let requestBytes: number;
+      try {
+        requestBytes = serialize(request).byteLength;
+      } catch (error) {
+        reject(new TypeError(`Kovo fixture RPC arguments are not serializable: ${String(error)}`));
         return;
       }
-      vite.middlewares(req, res);
-    })().catch((error: unknown) => {
-      console.error('[kovo fixture] request routing error:', error);
-      if (!res.headersSent) res.writeHead(500, { 'content-type': 'text/plain; charset=utf-8' });
-      res.end('Internal Server Error');
+      if (requestBytes > FIXTURE_RPC_MAX_BYTES) {
+        reject(new RangeError('Kovo fixture RPC request exceeds the 8 MiB message limit.'));
+        return;
+      }
+      const timeout = setTimeout(() => {
+        pending.delete(id);
+        reject(new Error(`Kovo fixture RPC ${operation} timed out after 60 seconds.`));
+      }, FIXTURE_RPC_TIMEOUT_MS);
+      timeout.unref();
+      pending.set(id, { resolve: resolve as (value: unknown) => void, reject, timeout });
+      try {
+        child.send(authenticatedFixtureMessage(secret, request), (error) => {
+          if (error === null) return;
+          pending.delete(id);
+          clearTimeout(timeout);
+          reject(error);
+        });
+      } catch (error) {
+        pending.delete(id);
+        clearTimeout(timeout);
+        reject(error);
+      }
     });
-  });
+  };
 
-  const port = await listen(server, host);
+  const db: FixtureDatabase = {
+    exec: (statement) => call('dbExec', [statement]),
+    query: (statement, params = []) => call('dbQuery', [statement, params]),
+    read: (table) => call('dbRead', [table]),
+    write: (table, value) => call('dbWrite', [table, value]),
+  };
 
   return {
-    get db() {
-      return instance.db;
-    },
-    verificationDiagnostics: () => instance.verificationDiagnostics(),
-    origin: `http://${host}:${port}`,
+    db,
+    origin,
+    verificationDiagnostics: () => call('verificationDiagnostics'),
     async close() {
-      await closeHttpServer(server);
-      unregisterSqlSnapshotter();
-      await vite.close();
-      await instance.close();
+      if (closed) return;
+      try {
+        await call('close');
+      } finally {
+        await terminateFixtureChild(child);
+        closed = true;
+      }
     },
-    reset: () => instance.reset(),
+    reset: () => call('reset'),
   };
 }
 
-function fixtureRequestHandlerFactory(serverModule: unknown): FixtureRequestHandlerFactory {
-  const createRequestHandler = (serverModule as { createRequestHandler?: unknown })
-    .createRequestHandler;
-  if (typeof createRequestHandler !== 'function') {
-    throw new TypeError(
-      'Fixture server could not load @kovojs/server.createRequestHandler from the fixture SSR graph.',
+function fixtureWorkerSource(fixtureDir: string, options: BootFixtureOptions): string {
+  return `
+const { existsSync } = require('node:fs');
+const { createHmac, timingSafeEqual } = require('node:crypto');
+const { registerHooks } = require('node:module');
+const { deserialize, serialize } = require('node:v8');
+
+void (async () => {
+  const nativeProcessDisconnect = process.disconnect.bind(process);
+  const nativeProcessOff = process.off.bind(process);
+  const nativeProcessOn = process.on.bind(process);
+  const nativeProcessSend = process.send.bind(process);
+  const secret = await new Promise((resolve) => {
+    const receiveSecret = (message) => {
+      if (
+        message === null ||
+        typeof message !== 'object' ||
+        message.type !== 'kovo-fixture-init' ||
+        !Buffer.isBuffer(message.secret) ||
+        message.secret.byteLength !== 32
+      ) {
+        return;
+      }
+      nativeProcessOff('message', receiveSecret);
+      resolve(Buffer.from(message.secret));
+    };
+    nativeProcessOn('message', receiveSecret);
+  });
+  const usedRequestIds = new Set();
+  let fixture;
+  let runner;
+
+  // Workspace packages publish TypeScript source in development. This trusted source hook is
+  // established before lockdown and only maps relative framework .js edges to existing .ts
+  // files; packed .mjs entries need no rewrite.
+  registerHooks({
+    resolve(specifier, context, nextResolve) {
+      if (specifier.startsWith('.') && specifier.endsWith('.js') && context.parentURL) {
+        const candidate = new URL(specifier.replace(/\\.js$/, '.ts'), context.parentURL);
+        if (existsSync(candidate)) return nextResolve(candidate.href, context);
+      }
+      return nextResolve(specifier, context);
+    },
+  });
+
+  // SPEC §6.6 rule 6: compiler first installs its audited Vite Map-instance exception and the
+  // shared request lock. Only then may the worker import Vite or any authored fixture module.
+  const compilerBootstrap = await import(${JSON.stringify(pathToFileURL(compilerBootstrapPath).href)});
+  if (typeof compilerBootstrap.lockCompilerSecurityRealm !== 'function') {
+    throw new TypeError('Kovo fixture worker could not establish compiler security bootstrap.');
+  }
+  compilerBootstrap.lockCompilerSecurityRealm();
+  await import(${JSON.stringify(pathToFileURL(serverRuntimeBootstrapPath).href)});
+  const { createServer } = await import(${JSON.stringify(viteEntryUrl)});
+
+  nativeProcessOn('message', (envelope) => {
+    const message = authenticatedPayload(envelope);
+    if (message === undefined) return;
+    if (
+      message === null ||
+      typeof message !== 'object' ||
+      message.type !== 'request' ||
+      !Number.isSafeInteger(message.id) ||
+      message.id < 1 ||
+      !Array.isArray(message.args) ||
+      usedRequestIds.has(message.id)
+    ) {
+      return;
+    }
+    usedRequestIds.add(message.id);
+    void dispatch(message);
+  });
+
+  runner = await createServer({
+    appType: 'custom',
+    configFile: false,
+    logLevel: 'silent',
+    server: { middlewareMode: true },
+    ssr: { noExternal: [/^@kovojs\\//] },
+  });
+  const module = await runner.ssrLoadModule(${JSON.stringify(childRuntimePath)});
+  fixture = await module.bootFixtureInLockedChild(
+    ${JSON.stringify(fixtureDir)},
+    ${JSON.stringify(snapshotBootFixtureOptions(options))},
+  );
+  sendBounded({ type: 'ready', origin: fixture.origin });
+
+  async function dispatch(message) {
+    let value;
+    try {
+      if (fixture === undefined) throw new Error('Kovo fixture worker is not ready.');
+      switch (message.operation) {
+        case 'dbExec': value = await fixture.db.exec(...message.args); break;
+        case 'dbQuery': value = await fixture.db.query(...message.args); break;
+        case 'dbRead': value = await fixture.db.read(...message.args); break;
+        case 'dbWrite': value = await fixture.db.write(...message.args); break;
+        case 'reset': value = await fixture.reset(); break;
+        case 'verificationDiagnostics': value = fixture.verificationDiagnostics(); break;
+        case 'close':
+          await fixture.close();
+          await runner.close();
+          sendBounded({ type: 'response', id: message.id, ok: true }, () => {
+            nativeProcessDisconnect();
+          });
+          return;
+        default: throw new TypeError('Unknown Kovo fixture worker operation.');
+      }
+      sendBounded({ type: 'response', id: message.id, ok: true, value });
+    } catch (error) {
+      sendBounded({
+        type: 'response',
+        id: message.id,
+        ok: false,
+        error: {
+          message: String(error?.message ?? error),
+          name: typeof error?.name === 'string' ? error.name : 'Error',
+          ...(typeof error?.stack === 'string' ? { stack: error.stack } : {}),
+        },
+      });
+    }
+  }
+
+  function sendBounded(message, callback) {
+    let response = message;
+    try {
+      if (serialize(response).byteLength > ${String(FIXTURE_RPC_MAX_BYTES)}) {
+        response = {
+          type: 'response',
+          id: message.id,
+          ok: false,
+          error: { name: 'RangeError', message: 'Kovo fixture RPC response exceeds the 8 MiB message limit.' },
+        };
+      }
+    } catch {
+      response = {
+        type: 'response',
+        id: message.id,
+        ok: false,
+        error: { name: 'TypeError', message: 'Kovo fixture RPC response is not serializable.' },
+      };
+    }
+    const payload = serialize(response);
+    const mac = createHmac('sha256', secret).update(payload).digest();
+    nativeProcessSend(
+      { type: 'kovo-fixture-authenticated', payload, mac },
+      callback,
     );
   }
-  return createRequestHandler as FixtureRequestHandlerFactory;
+
+  function authenticatedPayload(envelope) {
+    if (
+      envelope === null ||
+      typeof envelope !== 'object' ||
+      envelope.type !== 'kovo-fixture-authenticated' ||
+      !Buffer.isBuffer(envelope.payload) ||
+      !Buffer.isBuffer(envelope.mac) ||
+      envelope.payload.byteLength > ${String(FIXTURE_RPC_MAX_BYTES)}
+    ) {
+      return undefined;
+    }
+    const expected = createHmac('sha256', secret).update(envelope.payload).digest();
+    if (expected.byteLength !== envelope.mac.byteLength || !timingSafeEqual(expected, envelope.mac)) {
+      return undefined;
+    }
+    try {
+      return deserialize(envelope.payload);
+    } catch {
+      return undefined;
+    }
+  }
+})().catch((error) => {
+  setImmediate(() => { throw error; });
+});
+`;
 }
 
-function fixtureAppPreparer(serverModule: unknown, managedDbModule: unknown): FixtureAppPreparer {
-  const deriveClosedKovoApp = (serverModule as { deriveClosedKovoApp?: unknown })
-    .deriveClosedKovoApp;
-  if (typeof deriveClosedKovoApp !== 'function') {
-    throw new TypeError(
-      'Fixture server could not load @kovojs/server deriveClosedKovoApp from the fixture SSR graph.',
-    );
-  }
-  const createDispatchProxy = (
-    managedDbModule as { createFrameworkManagedSqlDispatchProxy?: unknown }
-  ).createFrameworkManagedSqlDispatchProxy;
-  const managedDb = (managedDbModule as { managedDb?: unknown }).managedDb;
-  const readonlyHook = (managedDbModule as { kovoReadonlyDbHandle?: unknown }).kovoReadonlyDbHandle;
-  const declaredWriteHook = (managedDbModule as { kovoDeclaredWriteDbHandle?: unknown })
-    .kovoDeclaredWriteDbHandle;
+function authenticatedFixtureMessage(
+  secret: Uint8Array,
+  payloadValue: unknown,
+): AuthenticatedFixtureMessage {
+  const payload = serialize(payloadValue);
+  return {
+    mac: createHmac('sha256', secret).update(payload).digest(),
+    payload,
+    type: 'kovo-fixture-authenticated',
+  };
+}
+
+function authenticatedFixturePayload(secret: Uint8Array, value: unknown): unknown | undefined {
   if (
-    typeof createDispatchProxy !== 'function' ||
-    typeof managedDb !== 'function' ||
-    typeof readonlyHook !== 'symbol' ||
-    typeof declaredWriteHook !== 'symbol'
+    typeof value !== 'object' ||
+    value === null ||
+    (value as { type?: unknown }).type !== 'kovo-fixture-authenticated'
   ) {
-    throw new TypeError(
-      'Fixture server could not establish managed DB capability bridging in the fixture SSR graph.',
-    );
+    return undefined;
   }
-
-  return (app, db, capabilities): PreparedFixtureApp => {
-    const bridgeDispatch = (target: object): object =>
-      verifierApply<object>(createDispatchProxy, undefined, [
-        target,
-        {
-          get(value: object, property: PropertyKey, receiver: unknown) {
-            return verifierReflectGet(value, property, receiver);
-          },
-        },
-        'test-fixture',
-      ]);
-
-    // Keep the cross-SSR capability hooks off the authored/seed-retainable DB object entirely.
-    // A private null-prototype shell lets the foreign server realm resolve sealed own hooks while
-    // every ordinary adapter property still dispatches through the verifier-wrapped delegate.
-    const rootShell = verifierNullRecord();
-    verifierDefineProperty(rootShell, readonlyHook, {
-      value: () => {
-        const verifiedReader = bridgeDispatch(capabilities.readonly());
-        const policyReader = verifierApply<object>(managedDb, undefined, [
-          verifiedReader,
-          'read',
-          verifierFreeze({
-            rawRead: verifierFreeze({
-              dialectLabel: 'PGlite integration fixture',
-              executeMethod: 'query',
-              normalizeTableName: normalizePgliteFixtureTableName,
-            }),
-          }),
-        ]);
-        const rawRead = verifierReflectGet(policyReader, 'rawRead', policyReader);
-        if (typeof rawRead !== 'function') {
-          throw new TypeError('Fixture reader bridge could not resolve its rawRead policy method.');
-        }
-        // `ssr.noExternal` can instantiate more than one server security module. Keep the
-        // policy-enforced method as an own adapter capability so a second managedDb() layer
-        // preserves it from the engine-readonly hook without relying on a foreign WeakSet brand.
-        const readerShell = verifierNullRecord();
-        verifierDefineProperty(readerShell, 'rawRead', {
-          configurable: true,
-          value: (...args: unknown[]) => verifierApply(rawRead, policyReader, args),
-        });
-        return verifierApply<object>(createDispatchProxy, undefined, [
-          readerShell,
-          {
-            get(value: object, property: PropertyKey, receiver: unknown) {
-              return verifierGetOwnPropertyDescriptor(value, property) === undefined
-                ? verifierReflectGet(verifiedReader, property, verifiedReader)
-                : verifierReflectGet(value, property, receiver);
-            },
-          },
-          'test-fixture',
-        ]);
-      },
-    });
-    verifierDefineProperty(rootShell, declaredWriteHook, {
-      value: (policy: unknown) => bridgeDispatch(capabilities.declaredWrite(policy)),
-    });
-    const bridgedDb = verifierApply<object>(createDispatchProxy, undefined, [
-      rootShell,
-      {
-        get(value: object, property: PropertyKey, receiver: unknown) {
-          return verifierGetOwnPropertyDescriptor(value, property) === undefined
-            ? verifierReflectGet(db, property, db)
-            : verifierReflectGet(value, property, receiver);
-        },
-      },
-      'test-fixture',
-    ]);
-    return verifierFreeze({
-      app: verifierApply(deriveClosedKovoApp, undefined, [
-        app,
-        {
-          db: () => bridgedDb,
-        },
-      ]),
-      managesDb: true,
-    });
-  };
-}
-
-function normalizePgliteFixtureTableName(table: string): string {
-  return table;
-}
-
-async function tryServeBuiltAsset(
-  rawUrl: string,
-  distDir: string,
-  res: import('node:http').ServerResponse,
-): Promise<boolean> {
-  const pathname = decodeURIComponentControl(verifierUrlPathname(rawUrl, 'http://x'));
-  if (!verifierStringStartsWith(pathname, '/assets/')) return false;
-  const assetsRoot = pathResolve(distDir, 'assets');
-  const relativeAssetPath = verifierStringSlice(pathname, '/assets/'.length);
-  const requestedPath = pathResolve(assetsRoot, relativeAssetPath);
-  if (!pathContains(assetsRoot, requestedPath)) return false;
-
+  const payload = (value as { payload?: unknown }).payload;
+  const mac = (value as { mac?: unknown }).mac;
+  if (
+    !Buffer.isBuffer(payload) ||
+    !Buffer.isBuffer(mac) ||
+    payload.byteLength > FIXTURE_RPC_MAX_BYTES
+  ) {
+    return undefined;
+  }
+  const expected = createHmac('sha256', secret).update(payload).digest();
+  if (expected.byteLength !== mac.byteLength || !timingSafeEqual(expected, mac)) return undefined;
   try {
-    // Canonical containment rejects a symlinked dist root, a symlinked assets root, and symlinks
-    // under dist/assets. Each trust tier must remain a strict descendant of the one above it.
-    const canonicalFixture = await nativeRealpath(pathResolve(distDir, '..'));
-    const canonicalDist = await nativeRealpath(distDir);
-    if (
-      canonicalDist !== pathResolve(canonicalFixture, 'dist') ||
-      !pathContains(canonicalFixture, canonicalDist)
-    ) {
-      return false;
-    }
-    const canonicalRoot = await nativeRealpath(assetsRoot);
-    if (
-      canonicalRoot !== pathResolve(canonicalDist, 'assets') ||
-      !pathContains(canonicalDist, canonicalRoot)
-    ) {
-      return false;
-    }
-    const fileSystem = await createFrameworkFileSystemBoundary(assetsRoot);
-    if (fileSystem.root !== canonicalRoot) return false;
-    const loaded = await fileSystem.readFile(relativeAssetPath);
-    if (loaded === undefined || !isVerifierByteArray(loaded.body)) return false;
-    verifierApply(nativeServerResponseWriteHead, res, [
-      200,
-      {
-        'cache-control': 'public, max-age=31536000, immutable',
-        'content-length': loaded.size,
-        'content-type': staticMime(pathExtname(loaded.fileName)),
-        'x-content-type-options': 'nosniff',
-      },
-    ]);
-    verifierApply(nativeServerResponseEnd, res, [loaded.body]);
-    return true;
+    return deserialize(payload);
   } catch {
-    return false;
+    return undefined;
   }
 }
 
-function isVerifierByteArray(value: unknown): value is Uint8Array {
+function isFixtureRpcReady(value: unknown): value is FixtureRpcReady {
+  if (
+    typeof value === 'object' &&
+    value !== null &&
+    (value as { type?: unknown }).type === 'ready' &&
+    typeof (value as { origin?: unknown }).origin === 'string'
+  ) {
+    const origin = (value as { origin: string }).origin;
+    if (origin.length > 2_048) return false;
+    try {
+      const url = new URL(origin);
+      return (
+        url.protocol === 'http:' &&
+        url.pathname === '/' &&
+        url.search === '' &&
+        url.hash === '' &&
+        (url.hostname === '127.0.0.1' || url.hostname === '::1' || url.hostname === 'localhost') &&
+        url.port !== ''
+      );
+    } catch {
+      return false;
+    }
+  }
+  return false;
+}
+
+function isFixtureRpcResponse(value: unknown): value is FixtureRpcResponse {
+  const id =
+    typeof value === 'object' && value !== null ? (value as { id?: unknown }).id : undefined;
   return (
     typeof value === 'object' &&
     value !== null &&
-    verifierGetPrototypeOf(value) === nativeUint8ArrayPrototype
+    (value as { type?: unknown }).type === 'response' &&
+    typeof id === 'number' &&
+    Number.isSafeInteger(id) &&
+    id > 0 &&
+    typeof (value as { ok?: unknown }).ok === 'boolean'
   );
 }
 
-function staticMime(extension: string): string {
-  const descriptor = verifierGetOwnPropertyDescriptor(STATIC_MIME, extension);
-  return descriptor !== undefined && 'value' in descriptor && typeof descriptor.value === 'string'
-    ? descriptor.value
-    : 'application/octet-stream';
+function remoteFixtureError(error: FixtureRpcResponse['error']): Error {
+  const result = new Error(error?.message ?? 'Kovo fixture worker request failed.');
+  result.name = error?.name ?? 'Error';
+  if (error?.stack !== undefined) result.stack = error.stack;
+  return result;
 }
 
-function pathContains(root: string, candidate: string): boolean {
-  const relative = pathRelative(root, candidate);
-  return (
-    !pathIsAbsolute(relative) &&
-    relative !== '..' &&
-    !verifierStringStartsWith(relative, `..${nativePathSeparator}`)
-  );
+function rejectPending(pending: Map<number, PendingRpc>, error: unknown): void {
+  for (const waiter of pending.values()) {
+    clearTimeout(waiter.timeout);
+    waiter.reject(error);
+  }
+  pending.clear();
 }
 
-function decodeURIComponentControl(value: string): string {
-  return verifierApply<string>(nativeDecodeURIComponent, undefined, [value]);
+function snapshotBootFixtureOptions(options: BootFixtureOptions): BootFixtureOptions {
+  if (typeof options !== 'object' || options === null || Array.isArray(options)) {
+    throw new TypeError('bootFixture() options must be an object.');
+  }
+  const keys = Reflect.ownKeys(options);
+  for (const key of keys) {
+    if (key !== 'entry' && key !== 'host') {
+      throw new TypeError(`bootFixture() options has unknown key ${String(key)}.`);
+    }
+  }
+  const result: BootFixtureOptions = {};
+  for (const key of ['entry', 'host'] as const) {
+    const descriptor = Object.getOwnPropertyDescriptor(options, key);
+    if (descriptor === undefined) continue;
+    if (!('value' in descriptor) || typeof descriptor.value !== 'string') {
+      throw new TypeError(`bootFixture() options.${key} must be an own string value.`);
+    }
+    result[key] = descriptor.value;
+  }
+  return Object.freeze(result);
 }
 
-function pathExtname(value: string): string {
-  return verifierApply<string>(nativePathExtname, path, [value]);
+async function terminateFixtureChild(child: ChildProcess): Promise<void> {
+  if (child.exitCode !== null || child.signalCode !== null) return;
+  if (child.connected) child.disconnect();
+  child.kill('SIGTERM');
+  if (await waitForFixtureChildExit(child, 2_000)) return;
+  child.kill('SIGKILL');
+  if (await waitForFixtureChildExit(child, 5_000)) return;
+  throw new Error('Kovo fixture worker did not exit after SIGKILL.');
 }
 
-function pathIsAbsolute(value: string): boolean {
-  return verifierApply<boolean>(nativePathIsAbsolute, path, [value]);
-}
-
-function pathJoin(...values: string[]): string {
-  return verifierApply<string>(nativePathJoin, path, values);
-}
-
-function pathRelative(from: string, to: string): string {
-  return verifierApply<string>(nativePathRelative, path, [from, to]);
-}
-
-function pathResolve(...values: string[]): string {
-  return verifierApply<string>(nativePathResolve, path, values);
-}
-
-function listen(server: Server, host: string): Promise<number> {
-  return new Promise((resolve, reject) => {
-    server.once('error', reject);
-    server.listen(0, host, () => {
-      server.off('error', reject);
-      const address = server.address();
-      if (typeof address === 'object' && address !== null) {
-        resolve(address.port);
-        return;
-      }
-      reject(new Error('Fixture server did not expose a TCP port.'));
-    });
-  });
-}
-
-function closeHttpServer(server: Server): Promise<void> {
-  return new Promise((resolve, reject) => {
-    server.close((error) => (error ? reject(error) : resolve()));
+function waitForFixtureChildExit(child: ChildProcess, timeoutMs: number): Promise<boolean> {
+  if (child.exitCode !== null || child.signalCode !== null) return Promise.resolve(true);
+  return new Promise((resolve) => {
+    const onExit = () => {
+      clearTimeout(timeout);
+      resolve(true);
+    };
+    const timeout = setTimeout(() => {
+      child.off('exit', onExit);
+      resolve(false);
+    }, timeoutMs);
+    timeout.unref();
+    child.once('exit', onExit);
   });
 }

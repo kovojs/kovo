@@ -21,7 +21,7 @@ test('verifies observed mutation writes against the static touch graph', async (
   await expect(page.getByTestId('cart-count')).toHaveText('1');
   const rows = await kovoApp.db.query('select product_id from cart_items order by product_id');
   expect(rows).toEqual([{ product_id: 'p1' }]);
-  expect(kovoApp.verificationDiagnostics()).toEqual([]);
+  expect(await kovoApp.verificationDiagnostics()).toEqual([]);
 });
 
 test('fails loudly when a mutation smuggles a write outside its touch set', async ({
