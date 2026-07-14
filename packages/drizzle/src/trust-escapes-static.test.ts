@@ -817,6 +817,49 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
     expect(facts.filter((fact) => fact.sink === 'import.meta.env')).toHaveLength(3);
   });
 
+  it('keeps retained-config environment authority out of callback parameter fields', () => {
+    const facts = sinksForFiles([
+      {
+        fileName: 'auth.ts',
+        source: `
+          export const appCsrf = {
+            field: 'csrf',
+            secret: process.env.APP_SECRET,
+            sessionId(request) { return request.session?.id; },
+          };
+        `,
+      },
+      {
+        fileName: 'schema.ts',
+        source: `
+          import { pgTable, text } from 'drizzle-orm/pg-core';
+          export const contacts = pgTable('contacts', { email: text('email') });
+        `,
+      },
+      {
+        fileName: 'mutations.ts',
+        source: `
+          import { mutation, publicAccess, s } from '@kovojs/server';
+          import { eq } from 'drizzle-orm';
+          import { appCsrf } from './auth.js';
+          import { contacts } from './schema.js';
+          export const addContact = mutation({
+            access: publicAccess('fixture'),
+            csrf: appCsrf,
+            input: s.object({ email: s.string(), name: s.string() }),
+            async handler({ email, name }, request) {
+              const rows = await request.db.select().from(contacts)
+                .where(eq(contacts.email, email)).limit(1);
+              return { name, count: rows.length };
+            },
+          });
+        `,
+      },
+    ]);
+
+    expect(facts.filter((fact) => fact.sink === 'node:process.env')).toEqual([]);
+  });
+
   it('closes raw credential headers and whole request carriers returned across public wires', () => {
     const facts = sinksFor(`
       import { endpoint, mutation, query, webhook } from '@kovojs/server';
@@ -4166,6 +4209,114 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
         }),
       ]),
     );
+  });
+
+  it('accepts exact mutation request.db chains without opening request lookalikes', () => {
+    const schemaSource = `
+      import { pgTable, text } from 'drizzle-orm/pg-core';
+      export const contacts = pgTable('contacts', {
+        id: text('id').primaryKey(),
+        email: text('email').notNull(),
+      });
+    `;
+    const mutationSource = (prefix = '') => `
+      import { mutation, publicAccess, s, serverValue } from '@kovojs/server';
+      import { eq } from 'drizzle-orm';
+      import { contacts } from './schema.js';
+      export const addContact = mutation({
+        access: publicAccess('fixture'),
+        csrf: false,
+        csrfJustification: 'fixture',
+        input: s.object({ email: s.string() }),
+        async handler({ email }, request) {
+          ${prefix}
+          const [existing] = await request.db
+            .select()
+            .from(contacts)
+            .where(eq(contacts.email, email))
+            .limit(1);
+          if (existing) return { id: existing.id };
+          const id = crypto.randomUUID();
+          await request.db
+            .insert(contacts)
+            .values({ id: serverValue(id, 'server-generated fixture id'), email });
+          return { id };
+        },
+      });
+    `;
+    const exact = sinksForFiles([
+      { fileName: 'schema.ts', source: schemaSource },
+      { fileName: 'mutations.ts', source: mutationSource() },
+    ]);
+    expect(exact).toEqual([]);
+
+    for (const poisoning of [
+      `request.db = new Proxy(request.db, {});`,
+      `Object.defineProperty(request, 'db', { get() { return new Proxy(request.db, {}); } });`,
+      `Reflect.set(request, 'db', new Proxy(request.db, {}));`,
+    ]) {
+      const poisoned = sinksForFiles([
+        { fileName: 'schema.ts', source: schemaSource },
+        { fileName: 'mutations.ts', source: mutationSource(poisoning) },
+      ]);
+      expect(poisoned, poisoning).not.toEqual([]);
+    }
+
+    const computed = sinksForFiles([
+      { fileName: 'schema.ts', source: schemaSource },
+      {
+        fileName: 'mutations.ts',
+        source: mutationSource(
+          `const db = request['db']; await db.insert(contacts).values({ email });`,
+        ),
+      },
+    ]);
+    expect(computed).not.toEqual([]);
+
+    const defaultedRequest = sinksForFiles([
+      { fileName: 'schema.ts', source: schemaSource },
+      {
+        fileName: 'mutations.ts',
+        source: mutationSource().replace(
+          `async handler({ email }, request)`,
+          `async handler({ email }, request = null)`,
+        ),
+      },
+    ]);
+    expect(defaultedRequest).not.toEqual([]);
+
+    for (const source of [
+      mutationSource()
+        .replace(
+          `import { mutation, publicAccess, s, serverValue } from '@kovojs/server';`,
+          `import { mutation, publicAccess, s } from '@kovojs/server';\nimport * as server from '@kovojs/server';`,
+        )
+        .replace(`serverValue(id,`, `server.serverValue(id,`),
+      mutationSource(`const markServerValue = serverValue;`).replace(
+        `serverValue(id,`,
+        `markServerValue(id,`,
+      ),
+      mutationSource().replace(`'server-generated fixture id'`, `''`),
+    ]) {
+      expect(
+        sinksForFiles([
+          { fileName: 'schema.ts', source: schemaSource },
+          { fileName: 'mutations.ts', source },
+        ]),
+      ).not.toEqual([]);
+    }
+
+    const rawEnvironmentValue = sinksForFiles([
+      { fileName: 'schema.ts', source: schemaSource },
+      {
+        fileName: 'mutations.ts',
+        source: mutationSource().replace(
+          `serverValue(id, 'server-generated fixture id')`,
+          `serverValue(process.env.CONTACT_ID, 'server-generated fixture id')`,
+        ),
+      },
+    ]);
+    expect(rawEnvironmentValue.map((fact) => fact.sink)).toContain('node:process.env');
   });
 
   it('accepts only closed built-in Postgres column builders and exact references', () => {

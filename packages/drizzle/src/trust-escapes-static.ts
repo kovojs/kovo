@@ -11224,6 +11224,18 @@ function requestExpressionIsProtocolSafe(
     const callee = unwrapStaticExpression(node.getExpression());
     if (callee.getKind() === SyntaxKind.ImportKeyword) return true;
     if (requestCallIsExactTrustedOutput(node)) return true;
+    if (requestCallIsExactServerValueOutput(node)) return true;
+    if (requestCallIsReviewedDrizzleDbReadChain(node, callable)) {
+      const receiver = requestCallReceiver(callee);
+      if (
+        receiver &&
+        requestRootCapabilityMethodIsPristine(receiver, callable) &&
+        (!requestExpressionResolvesToExactRequestDbCapability(receiver, callable, new Set()) ||
+          requestExactRequestDbRootIsPristine(callable))
+      ) {
+        return true;
+      }
+    }
     if (requestCallIsExactFrameworkNativePromise(node) || requestCallIsExactRespondMethod(node)) {
       return true;
     }
@@ -13564,6 +13576,14 @@ function requestWireIterationValues(
   }
   seen.add(key);
 
+  if (Node.isAwaitExpression(node)) {
+    const awaited = unwrapStaticExpression(node.getExpression());
+    return Node.isCallExpression(awaited) &&
+      requestCallIsReviewedDrizzleDbReadChainInDeclaredRoot(awaited, state.session)
+      ? { candidates: [], handled: true }
+      : { candidates: [], handled: false };
+  }
+
   if (Node.isStringLiteral(node) || Node.isNoSubstitutionTemplateLiteral(node)) {
     return { candidates: [], handled: true };
   }
@@ -13608,6 +13628,11 @@ function requestWireIterationValues(
     };
   }
   if (Node.isCallExpression(node)) {
+    if (requestCallIsReviewedDrizzleDbReadChainInDeclaredRoot(node, state.session)) {
+      // A reviewed Drizzle select chain yields native iterable row data. Selector arguments stay
+      // server-side and are independently reviewed by the request-handler sink pass.
+      return { candidates: [], handled: true };
+    }
     const invocation = requestNormalizedCall(node);
     const resolution = resolveRequestCallable(invocation.target, new Set(), 0, state.session);
     if (resolution.callables.length > 0) {
@@ -14989,6 +15014,11 @@ function requestCallIsKnownSafe(
     return true;
   }
 
+  if (requestCallIsExactServerValueOutput(call)) {
+    scanRequestFunctionArguments(call, context);
+    return true;
+  }
+
   if (requestCallIsPublicStyleCreate(call)) {
     scanRequestFunctionArguments(call, context);
     return true;
@@ -15129,6 +15159,17 @@ function requestCallIsKnownSafe(
   }
 
   if (!receiver || !member) return false;
+  if (requestCallIsReviewedDrizzleDbDataCall(call, callable)) {
+    if (
+      requestExpressionResolvesToExactRequestDbCapability(receiver, callable, new Set()) &&
+      !requestExactRequestDbRootIsPristine(callable)
+    ) {
+      return false;
+    }
+    if (!requestRootCapabilityMethodIsPristine(receiver, callable)) return false;
+    scanRequestFunctionArguments(call, context);
+    return true;
+  }
   if (
     REQUEST_SAFE_FETCH_RESPONSE_METHODS.has(member) &&
     requestExpressionIsFetchResponse(receiver, new Set())
@@ -15255,6 +15296,10 @@ function requestRootCapabilityKey(
       : node.getArgumentExpression()
         ? (requestStaticStringExpressionValue(node.getArgumentExpression()!) ?? '*')
         : '*';
+    if (Node.isPropertyAccessExpression(node) && member === 'db') {
+      const request = requestDirectRootRequestParameterKey(node.getExpression(), callable);
+      if (request) return `${request}.db`;
+    }
     const receiver = requestRootCapabilityKey(node.getExpression(), callable, new Set(seen));
     return receiver ? `${receiver}.${member}` : undefined;
   }
@@ -15267,6 +15312,112 @@ function requestRootCapabilityKey(
     }
   }
   return undefined;
+}
+
+function requestDirectRootRequestParameterKey(
+  expression: Node,
+  callable: RequestCallable,
+): string | undefined {
+  const node = unwrapStaticExpression(expression);
+  if (!Node.isIdentifier(node)) return undefined;
+  const symbol = node.getSymbol();
+  if (!symbol || requestAssignedBindingProjections(symbol).length > 0) return undefined;
+  const parameters = requestCallableParameters(callable.declaration);
+  for (const [index, parameter] of parameters.entries()) {
+    const name = parameter.getNameNode();
+    if (!Node.isIdentifier(name) || name.getSymbol() !== symbol) continue;
+    if (parameter.getInitializer() || parameter.getDotDotDotToken()) return undefined;
+    if (callable.rootParameterRoles?.[index] !== 'request') return undefined;
+    return `request:${requestSymbolKey(symbol)}`;
+  }
+  return undefined;
+}
+
+function requestExpressionResolvesToExactRequestDbCapability(
+  expression: Node,
+  callable: RequestCallable,
+  seen: Set<string>,
+): boolean {
+  const node = unwrapStaticExpression(expression);
+  const key = `request-db:${requestNodeIdentity(node)}`;
+  if (seen.has(key)) return false;
+  seen.add(key);
+  if (Node.isPropertyAccessExpression(node)) {
+    return (
+      node.getName() === 'db' &&
+      requestDirectRootRequestParameterKey(node.getExpression(), callable) !== undefined
+    );
+  }
+  if (!Node.isCallExpression(node)) return false;
+  const callee = unwrapStaticExpression(node.getExpression());
+  if (!Node.isPropertyAccessExpression(callee)) return false;
+  const receiver = callee.getExpression();
+  return (
+    REQUEST_REVIEWED_DRIZZLE_DB_DATA_METHODS.has(callee.getName()) &&
+    requestExpressionResolvesToExactRequestDbCapability(receiver, callable, new Set(seen))
+  );
+}
+
+function requestExactRequestDbRootIsPristine(callable: RequestCallable): boolean {
+  const requestParameters = requestCallableParameters(callable.declaration).filter(
+    (parameter, index) =>
+      callable.rootParameterRoles?.[index] === 'request' &&
+      Node.isIdentifier(parameter.getNameNode()),
+  );
+  if (requestParameters.length !== 1) return false;
+  const request = requestParameters[0]!.getNameNode();
+  if (!Node.isIdentifier(request) || !request.getSymbol()) return false;
+  const symbol = request.getSymbol()!;
+  if (requestAssignedBindingProjections(symbol).length > 0) return false;
+  const isRequest = (candidate: Node | undefined): boolean => {
+    const node = candidate ? unwrapStaticExpression(candidate) : undefined;
+    return !!node && Node.isIdentifier(node) && node.getSymbol() === symbol;
+  };
+
+  for (const assignment of callable.body.getDescendantsOfKind(SyntaxKind.BinaryExpression)) {
+    if (!nodeBelongsToRequestCallable(assignment, callable)) continue;
+    const operator = assignment.getOperatorToken().getKind();
+    if (operator < SyntaxKind.FirstAssignment || operator > SyntaxKind.LastAssignment) continue;
+    const left = unwrapStaticExpression(assignment.getLeft());
+    if (isRequest(left)) return false;
+    if (
+      (Node.isPropertyAccessExpression(left) || Node.isElementAccessExpression(left)) &&
+      isRequest(left.getExpression())
+    ) {
+      return false;
+    }
+  }
+  for (const deletion of callable.body.getDescendantsOfKind(SyntaxKind.DeleteExpression)) {
+    if (!nodeBelongsToRequestCallable(deletion, callable)) continue;
+    const target = unwrapStaticExpression(deletion.getExpression());
+    if (
+      isRequest(target) ||
+      ((Node.isPropertyAccessExpression(target) || Node.isElementAccessExpression(target)) &&
+        isRequest(target.getExpression()))
+    ) {
+      return false;
+    }
+  }
+  for (const call of callable.body.getDescendantsOfKind(SyntaxKind.CallExpression)) {
+    if (!nodeBelongsToRequestCallable(call, callable)) continue;
+    const callee = unwrapStaticExpression(call.getExpression());
+    const receiver = requestCallReceiver(callee);
+    const member = requestStaticCallMember(callee);
+    const [target] = call.getArguments();
+    if (
+      target &&
+      isRequest(target) &&
+      receiver &&
+      member &&
+      ((expressionResolvesToGlobalNamespace(receiver, 'Object', new Set(), 0) &&
+        ['assign', 'defineProperties', 'defineProperty', 'setPrototypeOf'].includes(member)) ||
+        (expressionResolvesToGlobalNamespace(receiver, 'Reflect', new Set(), 0) &&
+          ['defineProperty', 'deleteProperty', 'set', 'setPrototypeOf'].includes(member)))
+    ) {
+      return false;
+    }
+  }
+  return true;
 }
 
 function requestExpressionContainsIdentityCarrier(
@@ -17553,9 +17704,10 @@ function requestCallIsReviewedDrizzleDbDataCall(
     receiver &&
     member &&
     REQUEST_REVIEWED_DRIZZLE_DB_DATA_METHODS.has(member) &&
-    requestRootRoleIncludesCapability(
+    (requestRootRoleIncludesCapability(
       requestExpressionRootParameterRole(receiver, callable, new Set(), 0),
-    )
+    ) ||
+      requestExpressionResolvesToExactRequestDbCapability(receiver, callable, new Set()))
   );
 }
 
@@ -17927,6 +18079,26 @@ function requestCallIsExactTrustedOutput(call: Node): boolean {
     0,
   );
   return !!identity && ['safeRichHtml', 'trustedHtml', 'trustedUrl'].includes(identity.exportName);
+}
+
+function requestCallIsExactServerValueOutput(call: Node): boolean {
+  if (!Node.isCallExpression(call)) return false;
+  const callee = unwrapStaticExpression(call.getExpression());
+  if (
+    !Node.isIdentifier(callee) ||
+    !requestExpressionIsDirectImportedExport(callee, '@kovojs/server', 'serverValue') ||
+    !requestExactImportedCarrierIsPristine(callee, '@kovojs/server', 'serverValue')
+  ) {
+    return false;
+  }
+  const [value, reason, ...extra] = call.getArguments();
+  return !!(
+    value &&
+    reason &&
+    extra.length === 0 &&
+    (Node.isStringLiteral(reason) || Node.isNoSubstitutionTemplateLiteral(reason)) &&
+    reason.getLiteralText().trim().length > 0
+  );
 }
 
 function requestCallIsPublicStyleCreate(call: Node): boolean {
@@ -21591,8 +21763,11 @@ function valueDeclarationInitializer(declaration: Node): Node | undefined {
 
 function bindingElementSourceExpression(binding: Node): Node | undefined {
   if (!Node.isBindingElement(binding)) return undefined;
-  const pattern = binding.getFirstAncestorByKind(SyntaxKind.ObjectBindingPattern);
-  return pattern?.getFirstAncestorByKind(SyntaxKind.VariableDeclaration)?.getInitializer();
+  // The source must own this binding pattern. Looking for any enclosing variable declaration
+  // accidentally associates a destructured callback parameter with the outer
+  // `const declaration = factory({ ...callback... })` initializer and contaminates every field
+  // with unrelated retained-config authority.
+  return requestBindingElementProjection(binding)?.expression;
 }
 
 function requestBindingElementProjection(
