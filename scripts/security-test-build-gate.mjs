@@ -238,7 +238,7 @@ export function paranoidGeneratorAcceptanceProofNeedles(options) {
     'addParanoidPhase5WriteBoundaryProof(root)',
     'buildParanoidProductionArtifact(root)',
     'expectBlockedReadShapes(origin, jar)',
-    'expectAllowedReadShapes(origin, jar)',
+    'expectAllowedReadShapes(origin, jar, output)',
     'expectStarterInScopeWrite(origin, jar, output, contactEmail)',
     'expectBlockedWrites(origin, jar, marker, output)',
     'expectWriteStatus(origin, marker, contactEmail, output)',
@@ -512,7 +512,8 @@ export const SECURITY_BUILD_PROOFS = [
       (needle) => needle === "KOVO_PARANOID: '1'",
     ),
     sourceFile: 'packages/create-kovo/src/index.build.prod-artifact.paranoid-runtime.test.ts',
-    testName: 'runs the Phase 5.1 full-paranoid dogfood acceptance across read and write shapes',
+    testName:
+      'rejects volatile SQLite replay in production, then runs Phase 5.1 sink acceptance under test posture',
   },
   {
     buildInvocation: 'starter-build-production-artifact',
@@ -526,7 +527,8 @@ export const SECURITY_BUILD_PROOFS = [
       return needle === "KOVO_PARANOID: '1'";
     }),
     sourceFile: 'packages/create-kovo/src/index.build.prod-artifact.paranoid-runtime.test.ts',
-    testName: 'runs the Phase 5.1 full-paranoid dogfood acceptance across read and write shapes',
+    testName:
+      'rejects volatile SQLite replay in production, then runs Phase 5.1 sink acceptance under test posture',
   },
   {
     buildInvocation: 'starter-build-production-artifact',
