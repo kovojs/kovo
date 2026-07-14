@@ -3,27 +3,17 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
-import { createApp, exportStaticApp, guards, route } from '@kovojs/server';
 import { expect, test } from '@kovojs/test/internal/integration';
+
+import { runStaticExportCase } from '../static-export-runner';
 
 test.use({ kovoFixture: 'static-export-rejects-dynamic' });
 
 test('rejects guarded and unenumerated param routes before writing partial artifacts', async () => {
   const outDir = await mkdtemp(path.join(tmpdir(), 'kovo-static-export-dynamic-'));
-  const app = createApp({
-    routes: [
-      route('/account', {
-        guard: guards.authed<{ session?: { user?: { id: string } | null } | null }>(),
-        page: () => '<main>Account</main>',
-      }),
-      route('/products/:id', {
-        page: () => '<main>Product</main>',
-      }),
-    ],
-  });
 
   try {
-    await expect(exportStaticApp(app, { outDir })).rejects.toMatchObject({
+    expect(runStaticExportCase('rejects-dynamic', outDir)).toMatchObject({
       code: 'KV229',
       diagnostics: expect.arrayContaining([
         expect.objectContaining({
@@ -37,6 +27,7 @@ test('rejects guarded and unenumerated param routes before writing partial artif
           routePath: '/products/:id',
         }),
       ]),
+      status: 'rejected',
     });
     await expect(readFile(path.join(outDir, 'account', 'index.html'), 'utf8')).rejects.toThrow();
     await expect(readFile(path.join(outDir, 'products', 'index.html'), 'utf8')).rejects.toThrow();

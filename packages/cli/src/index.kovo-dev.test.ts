@@ -9,8 +9,9 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   isolateAuthoredDevPluginOptions,
   parseDevArgs,
-  startKovoDevServer,
+  type KovoDevOptions,
 } from './commands/dev.js';
+import type { KovoCommandSecurityDisposition } from './commands/security-disposition.js';
 
 const repoRoot = process.cwd();
 const temporaryRoots: string[] = [];
@@ -166,7 +167,7 @@ throw new Error('undeclared Vite config executed');
         PORT: String(port),
       }),
     );
-    const handle = await startKovoDevServer(
+    const result = await runKovoDevWorker(
       {
         appModulePath: join(root, 'src/app.ts'),
         mode: 'development',
@@ -178,17 +179,13 @@ throw new Error('undeclared Vite config executed');
         invocationEnv,
         paranoidStaticAdvisory: false,
       },
+      `http://127.0.0.1:${port}/`,
     );
-    try {
-      expect(handle.server.config.server.host).toBe('127.0.0.1');
-      expect(handle.server.config.server.port).toBe(port);
-      expect(handle.server.config.server.strictPort).toBe(true);
-      const response = await fetch(`http://127.0.0.1:${port}/`);
-      expect(response.status).toBe(200);
-      await expect(response.text()).resolves.toContain('<main>Bootstrap safe</main>');
-    } finally {
-      await handle.close();
-    }
+    expect(result, workerFailure(result)).toMatchObject({
+      ok: true,
+      response: { body: expect.stringContaining('<main>Bootstrap safe</main>'), status: 200 },
+      server: { host: '127.0.0.1', port, strictPort: true },
+    });
   }, 30_000);
 
   it('rejects authored app-level hooks that retain root-config or live-server authority', async () => {
@@ -218,17 +215,19 @@ throw new Error('undeclared Vite config executed');
         'utf8',
       );
 
-      await expect(
-        startKovoDevServer({
-          appModulePath: join(root, 'src/app.ts'),
-          configFile: join(root, 'vite.config.ts'),
-          mode: 'development',
-          root,
-          strictPort: false,
-        }),
-      ).rejects.toThrow(
-        `kovo dev rejects authored Vite plugin ${hookName}: supported plugins are client-environment transforms`,
-      );
+      const result = await runKovoDevWorker({
+        appModulePath: join(root, 'src/app.ts'),
+        configFile: join(root, 'vite.config.ts'),
+        mode: 'development',
+        root,
+        strictPort: false,
+      });
+      expect(result).toMatchObject({
+        error: expect.stringContaining(
+          `kovo dev rejects authored Vite plugin ${hookName}: supported plugins are client-environment transforms`,
+        ),
+        ok: false,
+      });
     }
 
     const root = devFixture('custom-ssr-environment');
@@ -247,15 +246,17 @@ throw new Error('undeclared Vite config executed');
 };\n`,
       'utf8',
     );
-    await expect(
-      startKovoDevServer({
-        appModulePath: join(root, 'src/app.ts'),
-        configFile: join(root, 'vite.config.ts'),
-        mode: 'development',
-        root,
-        strictPort: false,
-      }),
-    ).rejects.toThrow(/rejects authored Vite config key environments/u);
+    const environmentResult = await runKovoDevWorker({
+      appModulePath: join(root, 'src/app.ts'),
+      configFile: join(root, 'vite.config.ts'),
+      mode: 'development',
+      root,
+      strictPort: false,
+    });
+    expect(environmentResult).toMatchObject({
+      error: expect.stringMatching(/rejects authored Vite config key environments/u),
+      ok: false,
+    });
 
     const accessorRoot = devFixture('config-accessor');
     const marker = join(accessorRoot, 'config-getter-ran.marker');
@@ -273,17 +274,19 @@ Object.defineProperty(config, 'resolve', {
 export default config;\n`,
       'utf8',
     );
-    await expect(
-      startKovoDevServer({
-        appModulePath: join(accessorRoot, 'src/app.ts'),
-        configFile: join(accessorRoot, 'vite.config.ts'),
-        mode: 'development',
-        root: accessorRoot,
-        strictPort: false,
-      }),
-    ).rejects.toThrow(
-      /Authored Vite config\.resolve (?:changed while it was inspected|must be an own data property)/u,
-    );
+    const accessorResult = await runKovoDevWorker({
+      appModulePath: join(accessorRoot, 'src/app.ts'),
+      configFile: join(accessorRoot, 'vite.config.ts'),
+      mode: 'development',
+      root: accessorRoot,
+      strictPort: false,
+    });
+    expect(accessorResult).toMatchObject({
+      error: expect.stringMatching(
+        /Authored Vite config\.resolve (?:changed while it was inspected|must be an own data property)/u,
+      ),
+      ok: false,
+    });
     expect(existsSync(marker)).toBe(false);
     // This deliberately boots and rejects ten independent authored Vite config graphs. Keep the
     // security cases serial, but leave headroom for the fully populated four-way CI test shard.
@@ -300,15 +303,17 @@ export default { server: { host: '127.0.0.1', port: 0, strictPort: true } };\n`,
       'utf8',
     );
 
-    await expect(
-      startKovoDevServer({
-        appModulePath: join(root, 'src/app.ts'),
-        configFile: join(root, 'vite.config.ts'),
-        mode: 'development',
-        root,
-        strictPort: false,
-      }),
-    ).rejects.toThrow(/filter|read only|Cannot assign/u);
+    const result = await runKovoDevWorker({
+      appModulePath: join(root, 'src/app.ts'),
+      configFile: join(root, 'vite.config.ts'),
+      mode: 'development',
+      root,
+      strictPort: false,
+    });
+    expect(result).toMatchObject({
+      error: expect.stringMatching(/filter|read only|Cannot assign/u),
+      ok: false,
+    });
   }, 30_000);
 
   it('rejects function-valued plugin apply hooks before Vite can expose mutable config', async () => {
@@ -327,15 +332,17 @@ export default { server: { host: '127.0.0.1', port: 0, strictPort: true } };\n`,
       'utf8',
     );
 
-    await expect(
-      startKovoDevServer({
-        appModulePath: join(root, 'src/app.ts'),
-        configFile: join(root, 'vite.config.ts'),
-        mode: 'development',
-        root,
-        strictPort: false,
-      }),
-    ).rejects.toThrow(/requires authored Vite plugin apply to be the static/u);
+    const result = await runKovoDevWorker({
+      appModulePath: join(root, 'src/app.ts'),
+      configFile: join(root, 'vite.config.ts'),
+      mode: 'development',
+      root,
+      strictPort: false,
+    });
+    expect(result).toMatchObject({
+      error: expect.stringMatching(/requires authored Vite plugin apply to be the static/u),
+      ok: false,
+    });
   }, 30_000);
 
   it('makes the real CLI reject all authored resolver authority', async () => {
@@ -448,7 +455,7 @@ const probe = createHmac('sha256', 'probe-key');
 const hmacPrototype = Object.getPrototypeOf(probe);
 const nativeHmacUpdate = hmacPrototype.update;
 let hmacCalls = 0;
-hmacPrototype.update = function selectiveRuntimeHmac(data, encoding) {
+Reflect.set(hmacPrototype, 'update', function selectiveRuntimeHmac(data, encoding) {
   hmacCalls += 1;
   const text = typeof data === 'string' ? data : '';
   const size = typeof data === 'string' ? Buffer.byteLength(data) : (data?.byteLength ?? -1);
@@ -456,10 +463,10 @@ hmacPrototype.update = function selectiveRuntimeHmac(data, encoding) {
     ? 'attacker-controlled-binding'
     : data;
   return nativeApply(nativeHmacUpdate, this, [replacement, encoding]);
-};
+});
 
 const nativeGetRandomValues = globalThis.crypto.getRandomValues;
-Object.defineProperty(globalThis.crypto, 'getRandomValues', {
+Reflect.defineProperty(globalThis.crypto, 'getRandomValues', {
   configurable: true,
   value(array) {
     if (array?.byteLength === 16) {
@@ -566,6 +573,45 @@ export async function dispatchKovoAppShellViteDevRequest(
 
 function writeAttackerIntegration(fileName: string): void {
   writeFileSync(fileName, attackerIntegrationSource(), 'utf8');
+}
+
+type KovoDevWorkerResult =
+  | { error: string; ok: false }
+  | {
+      ok: true;
+      response?: { body: string; status: number };
+      server: { host?: boolean | string; port?: number; strictPort?: boolean };
+    };
+
+async function runKovoDevWorker(
+  options: KovoDevOptions,
+  security?: KovoCommandSecurityDisposition,
+  probeUrl?: string,
+): Promise<KovoDevWorkerResult> {
+  const payload = Buffer.from(JSON.stringify({ options, probeUrl, security }), 'utf8').toString(
+    'base64url',
+  );
+  const child = spawn(
+    process.execPath,
+    [
+      '--disable-warning=ExperimentalWarning',
+      '--experimental-transform-types',
+      join(repoRoot, 'tests/kovo-dev-worker.mjs'),
+      payload,
+    ],
+    { cwd: repoRoot, env: process.env },
+  );
+  const output = collectChildOutput(child);
+  const status = await waitForChildExit(child, 30_000);
+  const match = /kovo-dev-worker\/v1\n([^\n]+)\n/u.exec(output.stdout);
+  if (status !== 0 || match?.[1] === undefined) {
+    throw new Error(`Kovo dev worker failed with status ${status}.\n${output.combined()}`);
+  }
+  return JSON.parse(match[1]) as KovoDevWorkerResult;
+}
+
+function workerFailure(result: KovoDevWorkerResult): string | undefined {
+  return result.ok ? undefined : result.error;
 }
 
 function spawnKovoDev(

@@ -3,9 +3,9 @@
     <meta>
     <meta name="viewport">
     <meta name="kovo-build">
+    <script>
     <title>
       "Document Shell"
-    <script>
   <body>
     <script kovo-query="shell" type="application/json">
     <main>

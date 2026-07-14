@@ -2,11 +2,11 @@
   <head>
     <meta>
     <meta name="viewport">
-    <meta name="kovo-document">
     <meta name="kovo-build">
+    <script>
     <title>
       "Structured Document Shell"
-    <script>
+    <meta name="kovo-document">
   <body>
     <header role="banner">
       "Custom Chrome"

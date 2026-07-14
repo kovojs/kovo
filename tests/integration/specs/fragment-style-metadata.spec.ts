@@ -9,15 +9,17 @@ test('late mutation fragments request compiler-metadata styles without duplicate
   await page.goto('/');
   await expect(page.locator('link[rel="stylesheet"][href="/assets/late-card.css"]')).toHaveCount(0);
 
-  const [response] = await Promise.all([
-    page.waitForResponse(
+  // Start reading as soon as Chromium reports the response. Deferring `text()` until after the
+  // enhanced click settles lets CDP discard the completed resource body under a loaded CI shard.
+  const responseBody = page
+    .waitForResponse(
       (candidate) =>
         candidate.url().endsWith('/_m/fragment-style-metadata/reveal') &&
         candidate.status() === 200,
-    ),
-    page.getByRole('button', { name: 'Reveal card' }).click(),
-  ]);
-  expect((await response.text()).match(/href="\/assets\/late-card\.css"/g)).toHaveLength(1);
+    )
+    .then((response) => response.text());
+  await page.getByRole('button', { name: 'Reveal card' }).click();
+  expect((await responseBody).match(/href="\/assets\/late-card\.css"/g)).toHaveLength(1);
 
   const card = page.locator('[data-late-card]');
   await expect(card).toHaveText('Late styled card');

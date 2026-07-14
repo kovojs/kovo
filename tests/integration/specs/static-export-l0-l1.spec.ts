@@ -5,41 +5,28 @@ import { createServer, type Server } from 'node:http';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
-import { exportStaticApp } from '@kovojs/server';
 import { expect, test } from '@kovojs/test/internal/integration';
 
-import {
-  createStaticExportL0L1App,
-  type StaticExportRenderCounter,
-} from '../fixtures/static-export-l0-l1/app';
+import { runStaticExportCase } from '../static-export-runner';
 import { isAuthoredStaticClientModulePath } from './client-module-requests';
 
 test.use({ kovoFixture: 'static-export-l0-l1' });
 
 test('exports L0/L1 documents and serves them without a second render path', async ({ page }) => {
   const outDir = await mkdtemp(path.join(tmpdir(), 'kovo-static-export-l0-l1-'));
-  const counter: StaticExportRenderCounter = { renders: 0 };
-  const app = createStaticExportL0L1App(counter);
 
   try {
-    const result = await exportStaticApp(app, { outDir });
+    const result = runStaticExportCase('l0-l1', outDir);
+    expect(result.status).toBe('ok');
+    if (result.status !== 'ok') throw new Error('Static export worker did not return artifacts.');
 
     expect(result.diagnostics).toEqual([]);
-    expect(result.artifacts.map((artifact) => artifact.path).sort()).toEqual([
-      '/docs/index.html',
-      '/index.html',
-      '/search/index.html',
-    ]);
-    expect(
-      result.clientModules
-        .map((artifact) => artifact.path)
-        .filter(isAuthoredStaticClientModulePath)
-        .sort(),
-    ).toEqual([
+    expect(result.artifacts).toEqual(['/docs/index.html', '/index.html', '/search/index.html']);
+    expect(result.clientModules.filter(isAuthoredStaticClientModulePath)).toEqual([
       '/c/__v/static-export-analytics-1/static-export-analytics.client.js',
       '/c/__v/static-export-docs-1/static-export-docs.client.js',
     ]);
-    expect(counter.renders).toBe(3);
+    expect(result.renders).toBe(3);
 
     await expect(readFile(path.join(outDir, 'index.html'), 'utf8')).resolves.toContain(
       '<main data-page="home">',
@@ -77,7 +64,7 @@ test('exports L0/L1 documents and serves them without a second render path', asy
       await page.getByRole('button', { name: 'Search' }).click();
       await expect(page).toHaveURL(`${server.origin}/search?q=kovo`);
       await expect(page.getByRole('heading', { name: 'Exported Search' })).toBeVisible();
-      expect(counter.renders).toBe(3);
+      expect(result.renders).toBe(3);
     } finally {
       await server.close();
     }
