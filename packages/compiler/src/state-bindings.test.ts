@@ -77,6 +77,31 @@ export const ToggleDemo = component({
     expect(() => assertFixpoint(result)).not.toThrow();
   });
 
+  it('keeps reactive attribute expressions out of mixed text lowering', () => {
+    const result = compileComponentModule({
+      fileName: 'toggle-label.tsx',
+      source: `
+export const ToggleLabel = component({
+  state: () => ({ pressed: false }),
+  render: (_queries, state) => (
+    <output aria-label={state.pressed ? 'pressed' : 'released'}>
+      Toggle is {state.pressed}
+    </output>
+  ),
+});
+`,
+    });
+    const serverSource = result.files[0]?.source ?? '';
+
+    expect(serverSource).toContain("aria-label={state.pressed ? 'pressed' : 'released'}");
+    expect(serverSource).toContain('data-bind:aria-label="/c/__v/');
+    expect(serverSource).toContain(
+      'Toggle is <span data-bind="state.pressed">{escapeText(state.pressed)}</span>',
+    );
+    expect(result.diagnostics).toEqual([]);
+    expect(() => assertFixpoint(result)).not.toThrow();
+  });
+
   it('lowers state-only text expressions to versioned derive bindings', () => {
     const result = compileComponentModule({
       fileName: 'accordion-demo.tsx',
