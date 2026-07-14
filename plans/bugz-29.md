@@ -168,12 +168,14 @@ fails closed.
     manifest identity, rejects duplicate/escaping/symlinked paths, revalidates the real path,
     tarball hash, file list, and manifest, and compares already-published `dist.integrity`.
 
-- [ ] **C22 - Structurally forgeable and mutable route outcomes could mint same-origin active
+- [x] **C22 - Structurally forgeable and mutable route outcomes could mint same-origin active
       content without the audited inline-response authority.**
   - A plain `{ routeResponse: true, ... }` page value served attacker-authored inline HTML, while a
     genuine `respond.file()` outcome could have its body, type, disposition, or exposed byte array
     replaced after construction. The exact emitted Node artifact returned the forged script as a
     200 `text/html` inline response. SPEC §2, §6.6, §9.1.
+  - **Evidence:** `c2cfad653`, `8a85243d7`; the focused filesystem/response/route/upload/emitted-
+    artifact matrix is 222/222 green and `check:sink-policy` passes.
 
 ## High
 
@@ -393,26 +395,34 @@ fails closed.
     optional fields, retain defaults and explicitly present values, and the real typed-read wire
     regression plus schema/wire suites are 129/129 green. SPEC §6, §9.4.
 
-- [ ] **M13 - Closed build-time Vite environments retained their complete module graphs across
+- [x] **M13 - Closed build-time Vite environments retained their complete module graphs across
       repeated commands.**
   - The isolated CLI build suite exhausted the default 4 GiB heap. Forced-GC profiling retained
     roughly 58 MiB per build in closed environment graphs while ts-morph retained about 1 MiB;
     `server.close()` emptied evaluated modules but left roughly 350 graph nodes per environment.
     SPEC §6.6 availability floor.
+  - **Evidence:** `92b52156a`; `build-vite-lifetime.test.ts` is 3/3 green and proves every captured
+    graph collection is empty after each repeated SSR lifetime.
 
-- [ ] **M14 - Rooted file serving accepted outside-origin inodes hardlinked under its root.**
+- [x] **M14 - Rooted file serving accepted outside-origin inodes hardlinked under its root.**
   - A same-filesystem `link(outside/secret.txt, root/hardlink.txt)` bypassed the symlink/path
     confinement that correctly rejected an escaping symbolic link. SPEC §6.6, §10.6.
+  - **Evidence:** `c2cfad653`; the focused 222-test matrix rejects multiply linked HTTP-serving
+    inodes while preserving ordinary internal-reader hardlink semantics.
 
-- [ ] **M15 - Active PDF documents were classified as passive inline-safe uploads.**
+- [x] **M15 - Active PDF documents were classified as passive inline-safe uploads.**
   - A PDF carrying `/OpenAction`, `/JavaScript`, and `/JS` received
     `{ contentType: "application/pdf", inlineSafe: true }`, bypassing KV428's passive-only default.
     SPEC §6.6, §9.1.
+  - **Evidence:** `c2cfad653`; the focused 222-test matrix classifies PDF as attachment-only through
+    sniffing, stored-file, and response paths.
 
-- [ ] **M16 - Unicode download filenames could create persistent Web-header failures.**
+- [x] **M16 - Unicode download filenames could create persistent Web-header failures.**
   - Stored metadata retained a surrogate-pair emoji that `Content-Disposition` passed to the Web
     `Response` ByteString sink, producing a stable 500 on every later capability download. SPEC
     §6.6, §9.1.
+  - **Evidence:** `c2cfad653`; the focused 222-test matrix serializes Unicode and malformed-surrogate
+    filenames into a valid ASCII fallback plus RFC 5987 filename.
 
 ## Low
 
@@ -422,10 +432,12 @@ fails closed.
 - [x] **L2 - Control-bearing public-access reasons could forge endpoint-audit output.**
   - **Evidence:** `f5ec993f7`; C0/DEL/line-separator controls are rejected before audit rendering.
 
-- [ ] **L3 - Guarded file 304 responses omitted the private cache floor.**
+- [x] **L3 - Guarded file 304 responses omitted the private cache floor.**
   - A matching file ETag returned 304 without `Cache-Control: no-store` or `Vary: Cookie`; no
     concrete cross-principal body disclosure was reproduced, but the conditional path violated the
     guarded route cache contract. SPEC §9.4, §9.5.
+  - **Evidence:** `c2cfad653`; the focused 222-test matrix preserves the private cache floor on
+    witnessed file ETag 304 responses through route, response, and document conversion.
 
 ## Closure gates
 
