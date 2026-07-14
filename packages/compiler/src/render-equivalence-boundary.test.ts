@@ -10,6 +10,7 @@ import {
   authoredStaticTextEquivalenceCheck,
   semanticRenderEquivalenceCheck,
 } from './emit/render-equivalence.js';
+import { emitServerModule } from './emit/server-render.js';
 import { parseComponentModule } from './scan/parse.js';
 
 const compilerSrcDir = dirname(fileURLToPath(import.meta.url));
@@ -60,7 +61,8 @@ describe('render-equivalence production boundary', () => {
     expect(violations).toEqual([]);
 
     const compileSource = readFileSync(join(compilerSrcDir, 'compile.ts'), 'utf8');
-    // Leg 1: the lowered round-trip is still wired against the lowered model + executed render source.
+    // Leg 1: the lowered round-trip is wired against the lowered model plus the exact statically
+    // decoded and validated generated render source.
     expect(compileSource).toMatch(
       /semanticRenderEquivalenceCheck\(\s*registryFileName\(parsed\),\s*lowered\.model,\s*server\.serverModule\.executableSource,/,
     );
@@ -170,13 +172,9 @@ export const CartList = component({
   ),
 });
 `;
-    const executableSource = [
-      'function renderSource() {',
-      '  return `',
+    const executableSource = emitServerModule(
       source.replace(' data-bind-list="cart.items"', ''),
-      '  `;',
-      '}',
-    ].join('\n');
+    ).executableSource;
     const check = semanticRenderEquivalenceCheck(
       'components/cart-list.server.js',
       parseComponentModule('components/cart-list.tsx', source),

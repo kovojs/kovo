@@ -490,7 +490,7 @@ export const CartBadge = component({
     );
   });
 
-  it('executes generated renderSource for semantic render-equivalence checks', () => {
+  it('rejects noncanonical JavaScript escapes in generated renderSource checks', () => {
     const expectedSource = `
 import { component } from '@kovojs/core';
 
@@ -519,11 +519,112 @@ export const CartBadge = component({
     );
 
     expect(check).toMatchObject({
-      actual: '<cart-badge>2</cart-badge>',
+      actual: '',
       artifact: 'components/cart/cart-badge.server.js',
       expected: '<cart-badge>u0032</cart-badge>',
       ok: false,
     });
+  });
+
+  it('decodes the exact generated renderSource escape grammar without executing it', () => {
+    const escapedSource = [
+      '// generated wrapper escapes: C:\\tmp ${name} `tick`',
+      "import { component } from '@kovojs/core';",
+      '',
+      'export const Escapes = component({',
+      '  render: () => <pre>safe</pre>,',
+      '});',
+      '',
+    ].join('\r\n');
+    const executableSource = emitServerModule(escapedSource).executableSource;
+    const check = semanticRenderEquivalenceCheck(
+      'components/escapes.server.js',
+      parseComponentModule('components/escapes.tsx', escapedSource),
+      executableSource,
+    );
+
+    expect(check).toMatchObject({
+      actual: '<pre>safe</pre>',
+      expected: '<pre>safe</pre>',
+      ok: true,
+    });
+
+    const executableSubstitution = executableSource.replace('\\${name}', '${name}');
+    expect(
+      semanticRenderEquivalenceCheck(
+        'components/escapes.server.js',
+        parseComponentModule('components/escapes.tsx', escapedSource),
+        executableSubstitution,
+      ),
+    ).toMatchObject({ actual: '', expected: '<pre>safe</pre>', ok: false });
+  });
+
+  it('bounds exact-wrapper lookahead against poisoned String prototype indices', () => {
+    const source = [
+      "import { component } from '@kovojs/core';",
+      'export const Safe = component({ render: () => <pre>safe</pre> });',
+      `// ${'x'.repeat(4096)}$`,
+    ].join('\n');
+    const executableSource = emitServerModule(source).executableSource;
+    const suffix = '`;\n}\n';
+    const bodyStart = executableSource.indexOf('return `') + 'return `'.length;
+    const bodyEnd = executableSource.length - suffix.length;
+    const outOfRangeProperty = String(bodyEnd - bodyStart);
+    const malformedTrailingBackslash = `${executableSource.slice(0, bodyEnd - 1)}\\${executableSource.slice(bodyEnd)}`;
+    const originalDescriptor = Object.getOwnPropertyDescriptor(
+      String.prototype,
+      outOfRangeProperty,
+    );
+    let getterHits = 0;
+
+    Object.defineProperty(String.prototype, outOfRangeProperty, {
+      configurable: true,
+      get() {
+        getterHits += 1;
+        return '{';
+      },
+    });
+    try {
+      const expectedModel = parseComponentModule('components/safe.tsx', source);
+      expect(
+        semanticRenderEquivalenceCheck('components/safe.server.js', expectedModel, executableSource)
+          .ok,
+      ).toBe(true);
+      expect(
+        semanticRenderEquivalenceCheck(
+          'components/safe.server.js',
+          expectedModel,
+          malformedTrailingBackslash,
+        ),
+      ).toMatchObject({ actual: '', expected: '<pre>safe</pre>', ok: false });
+      expect(getterHits).toBe(0);
+    } finally {
+      if (originalDescriptor === undefined) {
+        Reflect.deleteProperty(String.prototype, outOfRangeProperty);
+      } else {
+        Object.defineProperty(String.prototype, outOfRangeProperty, originalDescriptor);
+      }
+    }
+  });
+
+  it('fails malformed wrappers closed when the expected component renders nothing', () => {
+    const source = `
+import { component } from '@kovojs/core';
+
+export const Empty = component({ render: () => null });
+`;
+    const model = parseComponentModule('components/empty.tsx', source);
+    const executableSource = emitServerModule(source).executableSource;
+
+    expect(
+      semanticRenderEquivalenceCheck('components/empty.server.js', model, executableSource),
+    ).toMatchObject({ actual: '', expected: '', ok: true });
+
+    for (const malformed of ['', 'garbage', `${executableSource}throw new Error('appended');\n`]) {
+      expect(
+        semanticRenderEquivalenceCheck('components/empty.server.js', model, malformed),
+      ).toMatchObject({ actual: '', expected: '', ok: false });
+    }
   });
 
   it('fails the semantic render differential when visible HTML drifts', () => {

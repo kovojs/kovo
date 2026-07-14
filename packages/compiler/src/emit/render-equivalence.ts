@@ -1,7 +1,6 @@
-import { runInNewContext } from 'node:vm';
-
 import { isGeneratedOnlySemanticAttribute } from '@kovojs/core/internal/semantic-attributes';
 
+import { compilerIrHeader } from '../ir.js';
 import {
   compilerArrayAppend,
   compilerCreateMap,
@@ -58,7 +57,8 @@ import {
   staticStringAttributeValue,
 } from './server-emit-shared.js';
 
-const compilerRunInNewContext = runInNewContext;
+const executableRenderSourcePrefix = `${compilerIrHeader}\nfunction renderSource() {\n  return \``;
+const executableRenderSourceSuffix = '`;\n}\n';
 
 function appendSemanticValue<Value>(target: Value[], value: Value): void {
   compilerArrayAppend(
@@ -118,6 +118,16 @@ export function semanticRenderEquivalenceCheck(
 ): RenderEquivalenceCheck {
   const expected = semanticRenderModel(expectedModel, options);
   const actualSource = emittedServerRenderSource(executableSource);
+  if (actualSource === null) {
+    return {
+      actual: '',
+      artifact,
+      detail:
+        'SPEC §5.2 semantic render differential: render(src) differed from render(compile(src)).',
+      expected,
+      ok: false,
+    };
+  }
   const actualModel = parseComponentModule(artifact, actualSource);
   const actual = semanticRenderModel(actualModel);
   const normalizedExpected = normalizeSemanticHtmlForComparison(expected);
@@ -221,17 +231,60 @@ function firstMissingSubsequenceToken(needle: string[], haystack: string[]): str
   return null;
 }
 
-function emittedServerRenderSource(serverSource: string): string {
-  try {
-    const actual = compilerRunInNewContext(
-      `${serverSource}\n;renderSource();`,
-      {},
-      { timeout: 1000 },
-    );
-    return typeof actual === 'string' ? actual : '';
-  } catch {
-    return '';
+function emittedServerRenderSource(serverSource: string): string | null {
+  // SPEC §5.2 permits generated-artifact verification here. The server emitter has one exact
+  // executable grammar and escapes only backslash, backtick, and `${`. Decode that closed grammar
+  // without executing generated JavaScript; any extra statement, template substitution, or
+  // noncanonical JavaScript escape fails closed instead of gaining compiler-process execution.
+  if (
+    !compilerStringStartsWith(serverSource, executableRenderSourcePrefix) ||
+    !compilerStringEndsWith(serverSource, executableRenderSourceSuffix)
+  ) {
+    return null;
   }
+
+  const encoded = compilerStringSlice(
+    serverSource,
+    executableRenderSourcePrefix.length,
+    serverSource.length - executableRenderSourceSuffix.length,
+  );
+  let decoded = '';
+  let segmentStart = 0;
+  for (let index = 0; index < encoded.length; index += 1) {
+    const char = encoded[index]!;
+    if (
+      char === '`' ||
+      (char === '$' && index + 1 < encoded.length && encoded[index + 1] === '{')
+    ) {
+      return null;
+    }
+    if (char === '\r') {
+      decoded += compilerStringSlice(encoded, segmentStart, index);
+      if (index + 1 < encoded.length && encoded[index + 1] === '\n') index += 1;
+      decoded += '\n';
+      segmentStart = index + 1;
+      continue;
+    }
+    if (char !== '\\') continue;
+
+    decoded += compilerStringSlice(encoded, segmentStart, index);
+    if (index + 1 >= encoded.length) return null;
+    const escaped = encoded[index + 1];
+    if (escaped === '\\' || escaped === '`') {
+      decoded += escaped;
+      index += 1;
+      segmentStart = index + 1;
+      continue;
+    }
+    if (escaped === '$' && index + 2 < encoded.length && encoded[index + 2] === '{') {
+      decoded += '${';
+      index += 2;
+      segmentStart = index + 1;
+      continue;
+    }
+    return null;
+  }
+  return decoded + compilerStringSlice(encoded, segmentStart);
 }
 
 function normalizeSemanticHtmlForComparison(html: string): string {

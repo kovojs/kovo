@@ -224,7 +224,7 @@ describe('compiler SPEC coverage map', () => {
           "accepted": [
             "preserves emitted IR on recompilation",
             "keeps compiler-emitted IR accepted through explicit fixpoint provenance",
-            "executes generated renderSource for semantic render-equivalence checks",
+            "decodes the exact generated renderSource escape grammar without executing it",
             "uses SPEC §5.2 semantic render equivalence, not source-normalization evidence",
             "inserts generated imports deterministically for mixed structural helpers",
           ],

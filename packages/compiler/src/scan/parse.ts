@@ -1001,16 +1001,7 @@ export function jsxExpressions(model: ComponentModuleModel): JsxExpressionModel[
 }
 
 function snapshotCompilerModelArray<Value>(values: readonly Value[], label: string): Value[] {
-  const length = compilerArrayLength(values, label);
-  const snapshot: Value[] = [];
-  for (let index = 0; index < length; index += 1) {
-    const value = compilerOwnDataValue(values, index, label) as Value | undefined;
-    if (value === undefined) {
-      throw new TypeError(`${label}[${index}] must be an own compiler model fact.`);
-    }
-    compilerArrayAppend(snapshot, value, label);
-  }
-  return snapshot;
+  return compilerSnapshotDenseArray(values, label);
 }
 
 export function jsxComments(model: ComponentModuleModel): JsxCommentModel[] {

@@ -32,6 +32,7 @@ const NativeSet = globalThis.Set;
 const NativeString = globalThis.String;
 const NativeTypeError = globalThis.TypeError;
 const NativeWeakMap = globalThis.WeakMap;
+const nativeArrayFrom = NativeArray.from;
 const nativeArrayIsArray = NativeArray.isArray;
 const nativeArrayJoin = NativeArray.prototype.join;
 const nativeBufferByteLength = BuiltinBuffer.byteLength;
@@ -145,6 +146,7 @@ function compilerBootstrapSelfCheckPasses(): boolean {
       typeof nativeHashDigest !== 'function' ||
       typeof nativeHmacUpdate !== 'function' ||
       typeof nativeHmacDigest !== 'function' ||
+      typeof nativeArrayFrom !== 'function' ||
       typeof nativeRegExpGlobalGetter !== 'function' ||
       typeof nativeMapSizeGetter !== 'function' ||
       typeof nativeSetSizeGetter !== 'function'
@@ -279,22 +281,22 @@ export function compilerArrayJoin(values: readonly unknown[], separator: string)
 export function compilerSnapshotDenseArray<Value>(value: readonly Value[], label: string): Value[] {
   if (!compilerArrayIsArray(value)) throw new NativeTypeError(`${label} must be an array.`);
   const length = compilerArrayLength(value, label);
-  const snapshot: Value[] = [];
+  // Stage through a null-prototype array-like record. Its direct writes cannot reach an inherited
+  // numeric setter, and boot-captured Array.from commits the final ordinary Array entries with the
+  // specification's CreateDataProperty operation. This retains the own-data guarantee without one
+  // Object.defineProperty call per compiler-owned output entry.
+  const staging = apply<Record<number | 'length', Value | number>>(
+    nativeObjectCreate,
+    NativeObject,
+    [null],
+  );
+  staging.length = length;
   for (let index = 0; index < length; index += 1) {
-    const entry = compilerOwnDataValue(value, index, label);
+    const entry = compilerOwnDataValue(value, index, label) as Value | undefined;
     if (entry === undefined) throw new NativeTypeError(`${label}[${index}] must be dense.`);
-    // This helper is also the compiler's mutable working-copy primitive (sorting and appending are
-    // common consumers), so commit an own writable data property without ever consulting an
-    // inherited numeric setter. The input length and every input entry are still independently
-    // checked as stable own data; the compiler-private output needs only the pinned define.
-    nativeObjectDefineProperty(snapshot, index, {
-      configurable: true,
-      enumerable: true,
-      value: entry,
-      writable: true,
-    });
+    staging[index] = entry;
   }
-  return snapshot;
+  return apply<Value[]>(nativeArrayFrom, NativeArray, [staging]);
 }
 
 export function compilerOwnDataValue(

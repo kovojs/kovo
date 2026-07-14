@@ -238,7 +238,7 @@ export const compilerSpecCoverageMap = [
       },
       {
         file: 'packages/compiler/src/compile-component.test.ts',
-        testName: 'executes generated renderSource for semantic render-equivalence checks',
+        testName: 'decodes the exact generated renderSource escape grammar without executing it',
       },
       {
         file: 'packages/compiler/src/render-equivalence-boundary.test.ts',
