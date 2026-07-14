@@ -8,9 +8,9 @@ import {
 import { types as nodeUtilTypes } from 'node:util';
 
 import Database from 'better-sqlite3';
-import { Table } from 'drizzle-orm';
+import { getTableColumns, getTableName } from 'drizzle-orm';
 import { drizzle, type BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
-import { getTableConfig, SQLiteTable } from 'drizzle-orm/sqlite-core';
+import { getTableConfig } from 'drizzle-orm/sqlite-core';
 
 import {
   createSqliteSystemDb,
@@ -521,10 +521,7 @@ function assertCompilerBoundColumn(
   if (typeof rawColumn !== 'object' || rawColumn === null) {
     throw new TypeError('KV414: SQLite runtime column identity is invalid (SPEC §10.3).');
   }
-  const source = witnessMapGet(
-    metadata.columnSources as Map<object, { column: string; key: string; table: string }>,
-    rawColumn,
-  );
+  const source = witnessMapGet(metadata.columnSources, rawColumn);
   if (source === undefined || source.table !== tableName || source.column !== column.name) {
     throw new TypeError(
       `KV414: SQLite table ${tableName} changed after compiler-bound metadata extraction (SPEC §6.6/§10.3).`,
@@ -536,21 +533,13 @@ function assertCompilerBoundTableStillStable(
   table: SqliteTableDraft,
   metadata: KovoSqliteAppRuntimeMetadata,
 ): void {
-  const currentName = stableOwnDataValue(
-    table.table,
-    Table.Symbol.Name,
-    `SQLite table ${table.name} bound name`,
-  );
+  const currentName = getTableName(table.table);
   if (currentName !== table.name) {
     throw new TypeError(
       `KV414: SQLite table ${table.name} changed after compiler-bound metadata extraction (SPEC §6.6/§10.3).`,
     );
   }
-  const currentColumns = stableOwnDataValue(
-    table.table,
-    SQLiteTable.Symbol.Columns,
-    `SQLite table ${table.name} bound columns`,
-  );
+  const currentColumns = getTableColumns(table.table);
   if (
     typeof currentColumns !== 'object' ||
     currentColumns === null ||
@@ -568,10 +557,7 @@ function assertCompilerBoundTableStillStable(
     const current = snapshotColumn(rawColumn, table.table, table.name);
     assertSameColumnSnapshot(expected, current, table.name);
     assertCompilerBoundColumn(metadata, rawColumn, current, table.name);
-    const source = witnessMapGet(
-      metadata.columnSources as Map<object, { column: string; key: string; table: string }>,
-      rawColumn,
-    );
+    const source = witnessMapGet(metadata.columnSources, rawColumn);
     if (
       source === undefined ||
       !witnessObjectIs(

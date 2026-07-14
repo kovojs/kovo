@@ -466,7 +466,9 @@ export function createFrameworkManagedDbProvider<RawRequest, DbValue, SessionVal
 ): FrameworkManagedDbProvider<DbValue> {
   const token = witnessFreeze(witnessCreateNullRecord());
   witnessWeakMapSet(frameworkManagedDbProviders, token, resolver as FrameworkManagedDbResolver);
-  return token as FrameworkManagedDbProvider<DbValue>;
+  // The private WeakMap is the runtime proof; this assertion only carries the already-minted
+  // provider's DB type through createApp authoring without placing a forgeable brand on the token.
+  return token as unknown as FrameworkManagedDbProvider<DbValue>;
 }
 
 /** @internal Return whether a value is an exact framework-minted opaque DB provider token. */
