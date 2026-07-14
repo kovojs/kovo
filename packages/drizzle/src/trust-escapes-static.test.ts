@@ -621,11 +621,9 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
       'assert',
       'assert/strict',
       'buffer',
-      'events',
       'querystring',
       'string_decoder',
       'url',
-      'util',
       'util/types',
     ]);
     const modules = [
@@ -648,6 +646,22 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
     );
 
     expect(facts).toHaveLength(modules.filter((module) => !safeBuiltins.has(module)).length);
+  });
+
+  it('fails closed for the unpinnable structuredClone global', () => {
+    const facts = sinksFor(`
+      import { mutation } from '@kovojs/server';
+      mutation({ handler(input) { return structuredClone(input); } });
+    `);
+
+    expect(facts, JSON.stringify(facts)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sink: 'request-handler.opaque-call',
+          source: 'structuredClone',
+        }),
+      ]),
+    );
   });
 
   it('closes callback, Reflect.apply, bind, and computed-namespace authority escapes', () => {
@@ -956,6 +970,226 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
     `);
 
     expect(facts).toEqual([]);
+  });
+
+  it('propagates credential aliases returned by public-wire transforming callbacks', () => {
+    const facts = sinksFor(`
+      import { query } from '@kovojs/server';
+      export const leak = query({ load(_input, { request }) {
+        const auth = request.headers.get('authorization');
+        return {
+          arrayFrom: Array.from([0], () => auth),
+          flatMap: [0].flatMap(() => auth),
+          grouped: Object.groupBy([0], () => auth),
+          jsonParse: JSON.parse('{}', () => auth),
+          jsonStringify: JSON.stringify({}, () => auth),
+          map: [0].map(() => auth),
+          reduce: [0].reduce(() => auth, ''),
+          replace: 'x'.replace('x', () => auth),
+          replaceAll: 'x'.replaceAll('x', () => auth),
+        };
+      } });
+    `);
+
+    expect(facts, JSON.stringify(facts)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ sink: 'client-wire.request.header.Authorization' }),
+      ]),
+    );
+  });
+
+  it('propagates credential resolution through authored thenables and template tags', () => {
+    const facts = sinksFor(`
+      import { query } from '@kovojs/server';
+      query({ async load(_input, { request }) {
+        const auth = request.headers.get('authorization');
+        const thenable = { then(resolve) { resolve(auth); } };
+        return await thenable;
+      } });
+      query({ load(_input, { request }) {
+        const auth = request.headers.get('authorization');
+        function tag() { return auth; }
+        return tag\`safe\`;
+      } });
+    `);
+
+    expect(facts, JSON.stringify(facts)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ sink: 'client-wire.request.header.Authorization' }),
+      ]),
+    );
+  });
+
+  it('propagates credential resolution through Promise combinators and executors', () => {
+    const facts = sinksFor(`
+      import { execFileSync } from 'node:child_process';
+      import { query } from '@kovojs/server';
+      query({ async load(_input, { request }) {
+        const auth = request.headers.get('authorization');
+        const thenable = { then(resolve) { execFileSync('promise-assimilation'); resolve(auth); } };
+        return await Promise.all([thenable]);
+      } });
+      query({ async load(_input, { request }) {
+        const auth = request.headers.get('authorization');
+        return await new Promise((resolve) => resolve(auth));
+      } });
+    `);
+
+    expect(
+      facts.filter((fact) => fact.sink === 'client-wire.request.header.Authorization'),
+      JSON.stringify(facts),
+    ).toHaveLength(2);
+    expect(facts, JSON.stringify(facts)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sink: 'child_process.execFileSync',
+          source: "'promise-assimilation'",
+        }),
+      ]),
+    );
+    expect(
+      facts.filter(
+        (fact) => fact.sink === 'request-handler.opaque-call' && fact.source === 'resolve',
+      ),
+    ).toEqual([]);
+  });
+
+  it('fails closed for unreviewed public-wire expression syntax', () => {
+    const facts = sinksFor(`
+      import { query } from '@kovojs/server';
+      query({ load() { return import.meta; } });
+    `);
+
+    expect(facts, JSON.stringify(facts)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ sink: 'client-wire.request.opaque-value' }),
+      ]),
+    );
+  });
+
+  it('preserves thrown credential provenance through catch bindings and local helpers', () => {
+    const facts = sinksFor(`
+      import { query } from '@kovojs/server';
+      function reveal(request) {
+        throw { nested: { token: request.headers.get('authorization') } };
+      }
+      query({ load(_input, { request }) {
+        try {
+          reveal(request);
+          return 'unreachable';
+        } catch ({ nested: { token } }) {
+          return token;
+        }
+      } });
+      query({ load(_input, { request }) {
+        try {
+          throw request.headers.get('authorization');
+        } catch (caught) {
+          return caught;
+        }
+      } });
+    `);
+
+    expect(facts, JSON.stringify(facts)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ sink: 'client-wire.request.header.Authorization' }),
+      ]),
+    );
+  });
+
+  it('traverses intrinsic JSX and local component props, children, closures, and execution', () => {
+    const facts = sinksFor(`
+      /** @jsxImportSource @kovojs/server */
+      import { execFileSync } from 'node:child_process';
+      import { route } from '@kovojs/server';
+      function Card({ token, children }) {
+        return <section data-token={token}>{children}</section>;
+      }
+      route('/', { page(_context, request) {
+        const auth = request.headers.get('authorization');
+        function ClosureLeak() {
+          execFileSync('jsx-component-execution');
+          return <span>{request.headers.get('authorization')}</span>;
+        }
+        return <Card token={auth}><ClosureLeak /></Card>;
+      } });
+    `);
+
+    expect(facts, JSON.stringify(facts)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ sink: 'client-wire.request.header.Authorization' }),
+        expect.objectContaining({
+          sink: 'child_process.execFileSync',
+          source: "'jsx-component-execution'",
+        }),
+      ]),
+    );
+  });
+
+  it('fails closed for unresolved package JSX components', () => {
+    const facts = sinksFor(`
+      /** @jsxImportSource @kovojs/server */
+      import { route } from '@kovojs/server';
+      import { ExternalCard } from 'external-components';
+      route('/', { page() { return <ExternalCard value="safe" />; } });
+    `);
+
+    expect(facts, JSON.stringify(facts)).toEqual(
+      expect.arrayContaining([expect.objectContaining({ sink: 'request-handler.opaque-source' })]),
+    );
+  });
+
+  it('does not bless authored proxy values passed through component props', () => {
+    const facts = sinksFor(`
+      /** @jsxImportSource @kovojs/server */
+      import { execFileSync } from 'node:child_process';
+      import { route } from '@kovojs/server';
+      const dangerous = new Proxy({}, {
+        get() { execFileSync('jsx-proxy-prop'); return 'value'; },
+      });
+      function Render({ value }) { return <span>{String(value)}</span>; }
+      route('/', { page() { return <Render value={dangerous} />; } });
+    `);
+
+    expect(facts, JSON.stringify(facts)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ sink: 'request-handler.opaque-protocol' }),
+        expect.objectContaining({
+          sink: 'child_process.execFileSync',
+          source: "'jsx-proxy-prop'",
+        }),
+      ]),
+    );
+  });
+
+  it('keeps credential predicates as server-side decisions while tracking result mutations', () => {
+    const safe = sinksFor(`
+      import { query } from '@kovojs/server';
+      query({ load(_input, { request }) {
+        const auth = request.headers.get('authorization');
+        return {
+          every: [1].every(() => Boolean(auth)),
+          filter: [1].filter(() => Boolean(auth)),
+          some: [1].some(() => Boolean(auth)),
+        };
+      } });
+    `);
+    expect(safe).toEqual([]);
+
+    const unsafe = sinksFor(`
+      import { query } from '@kovojs/server';
+      query({ load(_input, { request }) {
+        const auth = request.headers.get('authorization');
+        const result = {};
+        Object.assign(result, { auth });
+        return result;
+      } });
+    `);
+    expect(unsafe, JSON.stringify(unsafe)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ sink: 'client-wire.request.header.Authorization' }),
+      ]),
+    );
   });
 
   it('keeps canonical file responses, streams, and storage capabilities open', () => {
@@ -1638,6 +1872,95 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
     expect(sources).not.toContain("'post-snapshot'");
   });
 
+  it('orders config mutations by reachable helper invocation rather than helper source text', () => {
+    const facts = sinksFor(`
+      import { execFileSync } from 'node:child_process';
+      import { createApp, publicAccess, route } from '@kovojs/server';
+      const before = { access: publicAccess('before'), page() { return 'safe'; } };
+      poisonBefore();
+      const unsafe = route('/before', before);
+      function poisonBefore() {
+        before.page = function (_context, request) {
+          execFileSync('helper-before-snapshot');
+          return request.url;
+        };
+      }
+
+      const after = { access: publicAccess('after'), page() { return 'safe'; } };
+      function poisonAfter() {
+        after.page = function (_context, request) {
+          execFileSync('helper-after-snapshot');
+          return request.url;
+        };
+      }
+      const safe = route('/after', after);
+      poisonAfter();
+      createApp({ routes: [unsafe, safe] });
+    `);
+
+    const sources = facts
+      .filter((fact) => fact.sink === 'child_process.execFileSync')
+      .map((fact) => fact.source);
+    expect(sources, JSON.stringify(facts)).toContain("'helper-before-snapshot'");
+    expect(sources).not.toContain("'helper-after-snapshot'");
+  });
+
+  it('closes interprocedural and implicit pre-snapshot config mutation paths', () => {
+    const facts = sinksFor(`
+      import { execFileSync } from 'node:child_process';
+      import { route } from '@kovojs/server';
+      const access = { kind: 'public', reason: 'temporal closure' };
+
+      const helperConfig = { access, page() { return 'safe'; } };
+      function install(target) { target.page = function () { execFileSync('plain-helper'); return 'unsafe'; }; }
+      install(helperConfig);
+      route('/plain', helperConfig);
+
+      const objectConfig = { access, page() { return 'safe'; } };
+      const installer = { install(target) { target.page = function () { execFileSync('object-helper'); return 'unsafe'; }; } };
+      installer.install(objectConfig);
+      route('/object', objectConfig);
+
+      const constructorConfig = { access, page() { return 'safe'; } };
+      function Installer(target) { target.page = function () { execFileSync('constructor-helper'); return 'unsafe'; }; }
+      new Installer(constructorConfig);
+      route('/constructor', constructorConfig);
+
+      const callbackConfig = { access, page() { return 'safe'; } };
+      function poison() { callbackConfig.page = function () { execFileSync('callback-helper'); return 'unsafe'; }; }
+      [0].forEach(poison);
+      route('/callback', callbackConfig);
+
+      const staticConfig = { access, page() { return 'safe'; } };
+      class StaticInstaller {
+        static install(target) { target.page = function () { execFileSync('static-helper'); return 'unsafe'; }; }
+        static { this.install(staticConfig); }
+      }
+      void StaticInstaller;
+      route('/static', staticConfig);
+
+      const afterConfig = { access, page() { return 'safe'; } };
+      route('/after', afterConfig);
+      function post(target) { target.page = function () { execFileSync('post-snapshot'); return 'unsafe'; }; }
+      post(afterConfig);
+    `);
+
+    const sources = facts
+      .filter((fact) => fact.sink === 'child_process.execFileSync')
+      .map((fact) => fact.source);
+    expect(sources, JSON.stringify(facts)).toEqual(
+      expect.arrayContaining([
+        "'callback-helper'",
+        "'constructor-helper'",
+        "'object-helper'",
+        "'plain-helper'",
+        "'static-helper'",
+      ]),
+    );
+    expect(JSON.stringify(facts)).not.toContain('post-snapshot');
+    expect(facts.filter((fact) => fact.sink === 'child_process.execFileSync')).toHaveLength(5);
+  });
+
   it('keeps session values server-only while scanning setCookies and db-provider authority', () => {
     const facts = sinksFor(`
       import { createApp } from '@kovojs/server';
@@ -1711,6 +2034,228 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
         expect.objectContaining({ sink: 'client-wire.request.header.Authorization' }),
         expect.objectContaining({ sink: 'client-wire.request.header.Cookie' }),
         expect.objectContaining({ sink: 'client-wire.request.header.Proxy-Authorization' }),
+      ]),
+    );
+  });
+
+  it('tracks instance field, constructor, and direct-assignment toJSON serialization', () => {
+    const facts = sinksFor(`
+      import { query } from '@kovojs/server';
+      query({ load(_input, { request }) {
+        class FieldBox {
+          toJSON = () => request.headers.get('authorization');
+        }
+        return new FieldBox();
+      } });
+      query({ load(_input, { request }) {
+        class ConstructorBox {
+          constructor() {
+            this.toJSON = () => request.headers.get('proxy-authorization');
+          }
+        }
+        return new ConstructorBox();
+      } });
+      query({ load(_input, { request }) {
+        const box = {};
+        box.toJSON = () => request.headers.get('cookie');
+        return box;
+      } });
+    `);
+
+    expect(facts, JSON.stringify(facts)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ sink: 'client-wire.request.header.Authorization' }),
+        expect.objectContaining({ sink: 'client-wire.request.header.Cookie' }),
+        expect.objectContaining({ sink: 'client-wire.request.header.Proxy-Authorization' }),
+      ]),
+    );
+  });
+
+  it('rejects callable and class wire values while following callable toJSON hooks', () => {
+    const facts = sinksFor(`
+      import { query } from '@kovojs/server';
+      query({ load(_input, { request }) {
+        function callable() {}
+        callable.toJSON = () => request.headers.get('authorization');
+        return callable;
+      } });
+      query({ load() { return function unsupported() {}; } });
+      query({ load() { return class Unsupported {}; } });
+    `);
+
+    expect(facts, JSON.stringify(facts)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ sink: 'client-wire.request.header.Authorization' }),
+        expect.objectContaining({ sink: 'client-wire.request.opaque-value' }),
+      ]),
+    );
+  });
+
+  it('executes module-scope getters reached through object destructuring, rest, and spread', () => {
+    const facts = sinksFor(`
+      import { execFileSync } from 'node:child_process';
+      import { query } from '@kovojs/server';
+      const source = {
+        get nested() {
+          execFileSync('outer-getter');
+          return { get value() { execFileSync('nested-getter'); return 'ok'; } };
+        },
+        get token() { execFileSync('token-getter'); return 'token'; },
+      };
+      query({ load() {
+        const { token: alias } = source;
+        const { ['token']: computed } = source;
+        const { nested: { value = 'fallback' } } = source;
+        const { ...rest } = source;
+        let assigned;
+        ({ token: assigned } = source);
+        const copied = { ...source };
+        return { alias, assigned, computed, copied, rest, value };
+      } });
+    `);
+
+    const sources = facts
+      .filter((fact) => fact.sink === 'child_process.execFileSync')
+      .map((fact) => fact.source);
+    expect(sources, JSON.stringify(facts)).toEqual(
+      expect.arrayContaining(["'nested-getter'", "'outer-getter'", "'token-getter'"]),
+    );
+  });
+
+  it('closes implicit coercion, iteration, await, symbol dispatch, tags, and disposal hooks', () => {
+    const facts = sinksFor(`
+      import { execFileSync } from 'node:child_process';
+      import { query } from '@kovojs/server';
+      const protocols = {
+        [Symbol.dispose]() { execFileSync('dispose-hook'); },
+        [Symbol.hasInstance]() { execFileSync('has-instance-hook'); return false; },
+        [Symbol.iterator]() { execFileSync('iterator-hook'); return [1][Symbol.iterator](); },
+        [Symbol.replace]() { execFileSync('replace-hook'); return 'replaced'; },
+        [Symbol.toPrimitive]() { execFileSync('coercion-hook'); return 'value'; },
+        then(resolve) { execFileSync('then-hook'); resolve('ok'); },
+      };
+      function tag() { execFileSync('tag-hook'); return 'tagged'; }
+      query({ async load() {
+        void protocols + '';
+        void (protocols == 1);
+        void (protocols < 1);
+        void ({} instanceof protocols);
+        void \`value:\${protocols}\`;
+        void tag\`value\`;
+        const [first] = protocols;
+        for (const value of protocols) void value;
+        await protocols;
+        using resource = protocols;
+        return 'x'.replace(protocols, String(first));
+      } });
+    `);
+
+    const sources = facts
+      .filter((fact) => fact.sink === 'child_process.execFileSync')
+      .map((fact) => fact.source);
+    expect(sources, JSON.stringify(facts)).toEqual(
+      expect.arrayContaining([
+        "'coercion-hook'",
+        "'dispose-hook'",
+        "'has-instance-hook'",
+        "'iterator-hook'",
+        "'replace-hook'",
+        "'tag-hook'",
+        "'then-hook'",
+      ]),
+    );
+  });
+
+  it('fails closed for request operations on authored proxies while traversing traps', () => {
+    const facts = sinksFor(`
+      import { execFileSync } from 'node:child_process';
+      import { query } from '@kovojs/server';
+      const proxy = new Proxy({}, {
+        get(target, key) { execFileSync('proxy-get'); return Reflect.get(target, key); },
+        ownKeys(target) { execFileSync('proxy-own-keys'); return Reflect.ownKeys(target); },
+        set(target, key, value) { execFileSync('proxy-set'); return Reflect.set(target, key, value); },
+      });
+      query({ load() {
+        proxy.value = proxy.value;
+        const { ...rest } = proxy;
+        return { ...rest };
+      } });
+    `);
+
+    expect(facts, JSON.stringify(facts)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ sink: 'request-handler.opaque-protocol' }),
+        expect.objectContaining({ sink: 'child_process.execFileSync', source: "'proxy-get'" }),
+        expect.objectContaining({ sink: 'child_process.execFileSync', source: "'proxy-own-keys'" }),
+        expect.objectContaining({ sink: 'child_process.execFileSync', source: "'proxy-set'" }),
+      ]),
+    );
+  });
+
+  it('keeps reviewed primitive and plain-array implicit protocols open', () => {
+    const facts = sinksFor(`
+      import { query } from '@kovojs/server';
+      query({ async load(input) {
+        const values = [input.value, 'safe'];
+        const copied = [...values];
+        const [first] = copied;
+        for (const value of copied) void String(value);
+        await Promise.resolve(first);
+        const settled = await new Promise((resolve) => resolve('ok'));
+        return \`value:\${first}:\${settled}\`;
+      } });
+    `);
+
+    expect(facts.filter((fact) => fact.sink === 'request-handler.opaque-protocol')).toEqual([]);
+  });
+
+  it('rejects inherited, constructor-coercion, and async-assimilation protocol escapes', () => {
+    const facts = sinksFor(`
+      import { execFileSync } from 'node:child_process';
+      import { query } from '@kovojs/server';
+      const inherited = Object.create({
+        toString() { execFileSync('inherited-coercion'); return '/path'; },
+      });
+      async function assimilated() {
+        return { then(resolve) { execFileSync('async-assimilation'); resolve('ok'); } };
+      }
+      query({ async load() {
+        void \`value:\${inherited}\`;
+        void new URL(inherited, 'https://example.test').href;
+        await assimilated();
+        return 'ok';
+      } });
+    `);
+
+    const sources = facts
+      .filter((fact) => fact.sink === 'child_process.execFileSync')
+      .map((fact) => fact.source);
+    expect(sources, JSON.stringify(facts)).toEqual(
+      expect.arrayContaining(["'async-assimilation'", "'inherited-coercion'"]),
+    );
+  });
+
+  it('preserves credential provenance through getter-backed destructuring projections', () => {
+    const facts = sinksFor(`
+      import { query } from '@kovojs/server';
+      let current;
+      const source = {
+        get nested() { return { get token() { return current.headers.get('authorization'); } }; },
+        get token() { return current.headers.get('authorization'); },
+      };
+      query({ load(_input, { request }) {
+        current = request;
+        const { token: alias } = source;
+        const { nested: { token: nested } } = source;
+        let assigned;
+        ({ token: assigned } = source);
+        return { alias, assigned, nested };
+      } });
+    `);
+
+    expect(facts, JSON.stringify(facts)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ sink: 'client-wire.request.header.Authorization' }),
       ]),
     );
   });
@@ -1830,6 +2375,261 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
         "'object-assign'",
         "'object-spread'",
         "'object-values'",
+      ]),
+    );
+  });
+
+  it('tracks temporal mutable factory containers, descriptors, aliases, and iteration', () => {
+    const facts = sinksFor(`
+      import { execFileSync } from 'node:child_process';
+      import { endpoint } from '@kovojs/server';
+      const response = { appOwnedSafety: true, body: 'text', cache: 'no-store' };
+
+      const map = new Map();
+      const mapAlias = map;
+      mapAlias.set('factory', endpoint);
+      map.get('factory')('/map-write', { handler() { execFileSync('map-write'); return new Response('ok'); }, method: 'GET', reason: 'map-write', response });
+
+      const weakKey = {};
+      const weak = new WeakMap();
+      weak.set(weakKey, endpoint);
+      weak.get(weakKey)('/weak-map-write', { handler() { execFileSync('weak-map-write'); return new Response('ok'); }, method: 'GET', reason: 'weak-map-write', response });
+
+      const pushed = [];
+      pushed.push(endpoint);
+      pushed[0]('/push-write', { handler() { execFileSync('push-write'); return new Response('ok'); }, method: 'GET', reason: 'push-write', response });
+      const unshifted = [];
+      unshifted.unshift(endpoint);
+      unshifted.at(0)('/unshift-write', { handler() { execFileSync('unshift-write'); return new Response('ok'); }, method: 'GET', reason: 'unshift-write', response });
+      const spliced = [];
+      spliced.splice(0, 0, endpoint);
+      spliced[0]('/splice-write', { handler() { execFileSync('splice-write'); return new Response('ok'); }, method: 'GET', reason: 'splice-write', response });
+
+      const set = new Set();
+      set.add(endpoint);
+      [...set][0]('/set-write', { handler() { execFileSync('set-write'); return new Response('ok'); }, method: 'GET', reason: 'set-write', response });
+
+      const described = {};
+      Object.defineProperty(described, 'factory', { get: () => endpoint });
+      described.factory('/descriptor-getter', { handler() { execFileSync('descriptor-getter'); return new Response('ok'); }, method: 'GET', reason: 'descriptor-getter', response });
+      const describedMany = {};
+      Object.defineProperties(describedMany, { factory: { value: endpoint } });
+      describedMany.factory('/descriptor-values', { handler() { execFileSync('descriptor-values'); return new Response('ok'); }, method: 'GET', reason: 'descriptor-values', response });
+      const reflected = {};
+      Reflect.set(reflected, 'factory', endpoint);
+      reflected.factory('/reflect-write', { handler() { execFileSync('reflect-write'); return new Response('ok'); }, method: 'GET', reason: 'reflect-write', response });
+
+      const postRead = new Map();
+      const missing = postRead.get('factory');
+      postRead.set('factory', endpoint);
+      if (missing) missing('/post-read', { handler() { execFileSync('post-read-must-stay-safe'); return new Response('ok'); }, method: 'GET', reason: 'post-read', response });
+    `);
+
+    const sources = facts
+      .filter((fact) => fact.sink === 'child_process.execFileSync')
+      .map((fact) => fact.source);
+    expect(sources, JSON.stringify(facts)).toEqual(
+      expect.arrayContaining([
+        "'descriptor-getter'",
+        "'descriptor-values'",
+        "'map-write'",
+        "'push-write'",
+        "'reflect-write'",
+        "'set-write'",
+        "'splice-write'",
+        "'unshift-write'",
+        "'weak-map-write'",
+      ]),
+    );
+    expect(facts.filter((fact) => fact.sink === 'child_process.execFileSync')).toHaveLength(9);
+    expect(JSON.stringify(facts)).not.toContain('post-read-must-stay-safe');
+  });
+
+  it('tracks class fields and constructor/prototype writes while rejecting factory proxies', () => {
+    const facts = sinksFor(`
+      import { execFileSync } from 'node:child_process';
+      import { route } from '@kovojs/server';
+      const access = { kind: 'public', reason: 'class factory audit' };
+      class InstanceField { factory = route; }
+      new InstanceField().factory('/instance-field', { access, page() { execFileSync('instance-field'); return 'ok'; } });
+      class StaticField { static factory = route; }
+      StaticField.factory('/static-field', { access, page() { execFileSync('static-field'); return 'ok'; } });
+      class ConstructorField { constructor() { this.factory = route; } }
+      new ConstructorField().factory('/constructor-field', { access, page() { execFileSync('constructor-field'); return 'ok'; } });
+      class PrototypeField {}
+      PrototypeField.prototype.factory = route;
+      new PrototypeField().factory('/prototype-field', { access, page() { execFileSync('prototype-field'); return 'ok'; } });
+      new Proxy(route, {})('/proxy', { access, page() { execFileSync('proxy'); return 'ok'; } });
+      new Proxy(route, { apply() { return () => 'safe'; } })('/opaque-proxy', { access, page() { execFileSync('opaque-proxy'); return 'ok'; } });
+    `);
+
+    const sources = facts
+      .filter((fact) => fact.sink === 'child_process.execFileSync')
+      .map((fact) => fact.source);
+    expect(sources, JSON.stringify(facts)).toEqual(
+      expect.arrayContaining([
+        "'constructor-field'",
+        "'instance-field'",
+        "'prototype-field'",
+        "'static-field'",
+      ]),
+    );
+    expect(facts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sink: 'request-handler.opaque-source',
+          source: '<unresolved-mutable-factory-provenance>',
+        }),
+      ]),
+    );
+  });
+
+  it('executes module-class instance fields and preserves their wire provenance', () => {
+    const facts = sinksFor(`
+      import { execFileSync } from 'node:child_process';
+      import { mutation, query } from '@kovojs/server';
+      let currentProgram;
+      let currentRequest;
+      class Runner {
+        result = execFileSync(currentProgram);
+        #privateResult = execFileSync(currentProgram);
+        read() { return this.#privateResult; }
+      }
+      class WireBox {
+        token = currentRequest.headers.get('authorization');
+      }
+      mutation({ handler(input) {
+        currentProgram = input.program;
+        const runner = new Runner();
+        return { result: runner.result, privateResult: runner.read() };
+      } });
+      query({ load(_input, { request }) {
+        currentRequest = request;
+        return new WireBox();
+      } });
+    `);
+
+    expect(facts, JSON.stringify(facts)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ sink: 'child_process.execFileSync' }),
+        expect.objectContaining({ sink: 'client-wire.request.header.Authorization' }),
+      ]),
+    );
+  });
+
+  it('fails closed when decorators can replace request-reachable classes', () => {
+    const facts = sinksFor(`
+      import { mutation } from '@kovojs/server';
+      function replace(Base) { return class extends Base {}; }
+      @replace
+      class Runner {}
+      mutation({ handler() { return new Runner(); } });
+    `);
+
+    expect(facts, JSON.stringify(facts)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ sink: 'request-handler.opaque-protocol' }),
+      ]),
+    );
+  });
+
+  it('normalizes nested and aliased call/apply/construct factory adapters', () => {
+    const facts = sinksFor(`
+      import { execFileSync } from 'node:child_process';
+      import { route } from '@kovojs/server';
+      const access = { kind: 'public', reason: 'adapter audit' };
+      Function.prototype.call.call(route, null, '/call-call', { access, page() { execFileSync('call-call'); return 'ok'; } });
+      const invoke = Reflect.apply;
+      invoke(route, null, ['/aliased-reflect', { access, page() { execFileSync('aliased-reflect'); return 'ok'; } }]);
+      Reflect.apply.call(null, route, null, ['/reflect-call', { access, page() { execFileSync('reflect-call'); return 'ok'; } }]);
+      Reflect.construct(route, ['/reflect-construct', { access, page() { execFileSync('reflect-construct'); return 'ok'; } }]);
+    `);
+
+    const sources = facts
+      .filter((fact) => fact.sink === 'child_process.execFileSync')
+      .map((fact) => fact.source);
+    expect(sources, JSON.stringify(facts)).toEqual(
+      expect.arrayContaining([
+        "'aliased-reflect'",
+        "'call-call'",
+        "'reflect-call'",
+        "'reflect-construct'",
+      ]),
+    );
+  });
+
+  it('resolves handler factories through named, default, namespace, and dynamic-import barrels', () => {
+    const facts = sinksForFiles([
+      {
+        fileName: 'app.ts',
+        source: `
+          import named from './default.js';
+          import { r, server } from './barrel.js';
+          import { execFileSync } from 'node:child_process';
+          const access = { kind: 'public', reason: 'barrel audit' };
+          r('/named', { access, page() { execFileSync('named-barrel'); return 'ok'; } });
+          named('/default', { access, page() { execFileSync('default-barrel'); return 'ok'; } });
+          server.route('/namespace', { access, page() { execFileSync('namespace-barrel'); return 'ok'; } });
+          const dynamic = await import('@kovojs/server');
+          dynamic.route('/dynamic', { access, page() { execFileSync('dynamic-import'); return 'ok'; } });
+        `,
+      },
+      {
+        fileName: 'barrel.ts',
+        source: `
+          export { route as r } from '@kovojs/server';
+          export * as server from '@kovojs/server';
+        `,
+      },
+      {
+        fileName: 'default.ts',
+        source: `export { route as default } from '@kovojs/server';`,
+      },
+    ]);
+
+    const sources = facts
+      .filter((fact) => fact.sink === 'child_process.execFileSync')
+      .map((fact) => fact.source);
+    expect(sources, JSON.stringify(facts)).toEqual(
+      expect.arrayContaining([
+        "'default-barrel'",
+        "'dynamic-import'",
+        "'named-barrel'",
+        "'namespace-barrel'",
+      ]),
+    );
+  });
+
+  it('fails closed for unresolved createApp declaration collections while following local factories', () => {
+    const facts = sinksFor(`
+      import { execFileSync } from 'node:child_process';
+      import { createApp, route } from '@kovojs/server';
+      import { externalRoutes, makeRoutes } from 'external-routes';
+      createApp({ routes: externalRoutes });
+      createApp({ routes: [...externalRoutes] });
+      createApp({ routes: globalThis.__routes });
+      createApp({ routes: makeRoutes(route) });
+      function parameterFed(routes) { createApp({ routes }); }
+      parameterFed([]);
+      function localRoutes() {
+        return [route('/local', {
+          access: { kind: 'public', reason: 'local collection audit' },
+          page() { execFileSync('local-collection'); return 'ok'; },
+        })];
+      }
+      createApp({ routes: localRoutes() });
+    `);
+
+    expect(
+      facts.filter((fact) => fact.sink === 'request-handler.opaque-source').length,
+      JSON.stringify(facts),
+    ).toBeGreaterThanOrEqual(5);
+    expect(facts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sink: 'child_process.execFileSync',
+          source: "'local-collection'",
+        }),
       ]),
     );
   });
