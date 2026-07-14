@@ -62,7 +62,9 @@ function appModuleSource(options: {
     '  document: {},',
     '  endpoints: [],',
     '  errorShells: {},',
-    '  liveTargetRenderers: [],',
+    // SPEC §9.1/§9.5: createApp receives its live-target inventory only from the compiler-owned
+    // registry scope. The deliberately open aggregate keeps the field solely to remain shape-valid.
+    ...(closed ? [] : ['  liveTargetRenderers: [],']),
     '  mutations: [],',
     '  queries: [],',
     `  routes: [${options.route}],`,
