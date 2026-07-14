@@ -345,6 +345,43 @@ describe('@kovojs/drizzle static framework identity resolver', () => {
     }
   });
 
+  it('binds source-resolved Reader proof to the exact package import symbol', () => {
+    const extraction = createProjectExtraction({
+      files: [
+        DB,
+        bridgeFile,
+        {
+          fileName: 'reader-source.ts',
+          source: [
+            'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+            'import type { Reader as GenuineReader } from "@kovojs/server";',
+            'import type { AppReader } from "./framework";',
+            'type AppDb = PgAsyncDatabase<any, any>;',
+            'type Reader<Db> = Pick<Db, Extract<keyof Db, "select">> & { readonly local: true };',
+            'declare const direct: GenuineReader<AppDb>;',
+            'declare const reexported: AppReader<AppDb>;',
+            'declare const lookalike: Reader<AppDb>;',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    try {
+      const sourceFile = extraction.sourceFiles.find(
+        (file) => file.getBaseName() === 'reader-source.ts',
+      );
+      expect(sourceFile).toBeDefined();
+      for (const name of ['direct', 'reexported']) {
+        const declaration = sourceFile!.getVariableDeclarationOrThrow(name);
+        expect(isDrizzleDatabaseType(declaration.getType(), declaration.getNameNode())).toBe(true);
+      }
+      const lookalike = sourceFile!.getVariableDeclarationOrThrow('lookalike');
+      expect(isDrizzleDatabaseType(lookalike.getType(), lookalike.getNameNode())).toBe(false);
+    } finally {
+      extraction.dispose();
+    }
+  });
+
   it('resolves task through re-export and destructuring without trusting local shadows', () => {
     const project = new Project({ useInMemoryFileSystem: true });
     project.createSourceFile('/app/framework.ts', bridgeFile.source);

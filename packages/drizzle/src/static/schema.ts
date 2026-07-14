@@ -255,7 +255,7 @@ function secretQueryShape(shape: QueryShape): QueryShape {
 
 /** @internal */ export function isDrizzleReceiver(receiver: Node): boolean {
   const type = receiver.getType();
-  if (isDrizzleDatabaseType(type)) {
+  if (isDrizzleDatabaseType(type, receiver)) {
     return true;
   }
   if (isDrizzleDatabaseTypeAnnotation(receiver)) {
@@ -273,17 +273,18 @@ function secretQueryShape(shape: QueryShape): QueryShape {
   return typeNode ? isDrizzleDatabaseTypeNode(typeNode) : false;
 }
 
-/** @internal */ export function isDrizzleDatabaseType(type: MorphType): boolean {
+/** @internal */ export function isDrizzleDatabaseType(type: MorphType, location?: Node): boolean {
   // SPEC §11.1: project receiver proof comes from ts-morph type identity. Avoid source-text
   // membership checks that can promote arbitrary aliases like `NotPgDatabase`.
   if (type.isUnion()) {
     const candidates = type.getUnionTypes().filter((part) => !isNullishType(part));
     return (
-      candidates.length > 0 && candidates.every((candidate) => isDrizzleDatabaseType(candidate))
+      candidates.length > 0 &&
+      candidates.every((candidate) => isDrizzleDatabaseType(candidate, location))
     );
   }
 
-  if (isKovoReaderOfDrizzleDatabaseType(type)) return true;
+  if (isKovoReaderOfDrizzleDatabaseType(type, location)) return true;
 
   return (
     drizzleDatabaseTypeNames(type, new Set()).some(isDrizzleDatabaseTypeName) &&
@@ -293,19 +294,22 @@ function secretQueryShape(shape: QueryShape): QueryShape {
   );
 }
 
-/** @internal */ export function isKovoReaderOfDrizzleDatabaseType(type: MorphType): boolean {
+/** @internal */ export function isKovoReaderOfDrizzleDatabaseType(
+  type: MorphType,
+  location?: Node,
+): boolean {
   // SPEC §9.4/§11.1: Kovo threads query loaders a `Reader<Db>` handle at `context.db`; it is the
   // read-only mirror of the same framework-owned Drizzle database and remains valid read proof.
   if (type.isUnion()) {
     const candidates = type.getUnionTypes().filter((part) => !isNullishType(part));
     return (
       candidates.length > 0 &&
-      candidates.every((candidate) => isKovoReaderOfDrizzleDatabaseType(candidate))
+      candidates.every((candidate) => isKovoReaderOfDrizzleDatabaseType(candidate, location))
     );
   }
 
   const readerIdentity = frameworkExport('@kovojs/server', 'Reader');
-  if (!typeAliasResolvesToFrameworkExport(type, readerIdentity)) return false;
+  if (!typeAliasResolvesToFrameworkExport(type, readerIdentity, {}, location)) return false;
 
   return type
     .getAliasTypeArguments()

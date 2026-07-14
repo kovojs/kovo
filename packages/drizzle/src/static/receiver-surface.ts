@@ -1650,13 +1650,13 @@ import {
   // ts-morph proves a Postgres Drizzle database member, instead of relying on source carrier paths.
   if (depth > 4) return false;
   const typeText = type.getText(location);
-  if (isDrizzleDatabaseType(type)) return true;
+  if (isDrizzleDatabaseType(type, location)) return true;
   if (seen.has(typeText)) return false;
   seen.add(typeText);
 
   for (const property of type.getProperties()) {
     const propertyType = property.getTypeAtLocation(location);
-    if (isDrizzleDatabaseType(propertyType)) return true;
+    if (isDrizzleDatabaseType(propertyType, location)) return true;
     if (projectTypeContainsDrizzleReceiver(propertyType, location, seen, depth + 1)) {
       return true;
     }

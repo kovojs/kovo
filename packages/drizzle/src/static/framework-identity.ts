@@ -165,6 +165,7 @@ export function typeAliasResolvesToFrameworkExport(
   type: MorphType,
   expected: CanonicalFrameworkExportIdentity,
   options: FrameworkIdentityOptions = {},
+  location?: Node,
 ): boolean {
   const symbols = [
     type.getAliasSymbol(),
@@ -172,7 +173,33 @@ export function typeAliasResolvesToFrameworkExport(
     type.getApparentType().getAliasSymbol(),
     type.getApparentType().getSymbol(),
   ];
-  return symbols.some((symbol) => symbolResolvesToFrameworkExport(symbol, expected, options));
+  if (symbols.some((symbol) => symbolResolvesToFrameworkExport(symbol, expected, options))) {
+    return true;
+  }
+  if (!location) return false;
+
+  // A real workspace install resolves the type alias to Kovo's source declaration. Source paths
+  // are intentionally not framework identity, so recover provenance only from an exact import (or
+  // exact relative re-export chain) in the authored module and require that import to alias the
+  // same compiler symbol as this type. An unused genuine import cannot bless a local lookalike.
+  const targetKeys = new Set(
+    symbols.flatMap((symbol) => {
+      if (!symbol) return [];
+      return [symbolKey(safeAliasedSymbol(symbol) ?? symbol)];
+    }),
+  );
+  for (const declaration of location.getSourceFile().getImportDeclarations()) {
+    for (const named of declaration.getNamedImports()) {
+      const localSymbol =
+        named.getAliasNode()?.getSymbol() ?? named.getNameNode().getSymbol() ?? named.getSymbol();
+      if (!localSymbol || !symbolResolvesToFrameworkExport(localSymbol, expected, options)) {
+        continue;
+      }
+      const resolved = safeAliasedSymbol(localSymbol) ?? localSymbol;
+      if (targetKeys.has(symbolKey(resolved))) return true;
+    }
+  }
+  return false;
 }
 
 /** @internal */
