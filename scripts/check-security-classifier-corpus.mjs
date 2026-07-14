@@ -211,6 +211,126 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
       },
     ],
   },
+  {
+    id: 'kv424-request-process',
+    marker: '@kovo-security-classifier-corpus kv424-request-process',
+    testFiles: ['packages/drizzle/src/trust-escapes-static.test.ts'],
+    verdictAnchors: [
+      {
+        id: 'existing-dangerous-sink-closed-verdicts',
+        file: 'packages/drizzle/src/trust-escapes-static.test.ts',
+        snippets: [
+          'el.innerHTML = userInput',
+          'document.write(markup)',
+          'setTimeout("doThing()", 100)',
+          'new Function("return 1")',
+        ],
+      },
+      {
+        id: 'process-import-and-request-surface-superset',
+        file: 'packages/drizzle/src/trust-escapes-static.test.ts',
+        snippets: [
+          'execFileSync as runFile',
+          'const { spawnSync: runSpawn } = processApi',
+          'required.fork(input.module)',
+          'request-handler.opaque-package-call',
+        ],
+      },
+      {
+        id: 'dynamic-code-server-root-superset',
+        file: 'packages/drizzle/src/trust-escapes-static.test.ts',
+        snippets: [
+          'await import(input.module)',
+          'new vm.Script(input.code)',
+          'runInNewContext: execute',
+        ],
+      },
+      {
+        id: 'aliased-code-timer-and-module-resolution-superset',
+        file: 'packages/drizzle/src/trust-escapes-static.test.ts',
+        snippets: [
+          'Reflect.apply(moduleEval',
+          'later(input.code, 1)',
+          'process.getBuiltinModule',
+          'createRequire(import.meta.url)',
+          'require(input.module)',
+        ],
+      },
+      {
+        id: 'filesystem-path-and-reference-escape-superset',
+        file: 'packages/drizzle/src/trust-escapes-static.test.ts',
+        snippets: [
+          'readFileSync as read',
+          'requiredPath[request.method]',
+          '[input.value].map(execFileSync)',
+          'Reflect.apply(execFileSync',
+          'child[input.method]',
+        ],
+      },
+      {
+        id: 'filesystem-and-node-builtin-census-superset',
+        file: 'packages/drizzle/src/trust-escapes-static.test.ts',
+        snippets: [
+          "expect.arrayContaining(['mkdtempDisposableSync', 'openAsBlob', 'readFileSync'])",
+          "expect.arrayContaining(['inspector', 'process', 'sqlite'])",
+          'fails closed over every unreviewed Node builtin namespace',
+        ],
+      },
+      {
+        id: 'adjacent-process-runtime-superset',
+        file: 'packages/drizzle/src/trust-escapes-static.test.ts',
+        snippets: [
+          'Worker as Thread',
+          'cluster.fork()',
+          'Bun.spawn([input.code])',
+          'new Deno.Command(input.code)',
+        ],
+      },
+      {
+        id: 'framework-owned-file-storage-controls',
+        file: 'packages/drizzle/src/trust-escapes-static.test.ts',
+        snippets: [
+          "context.storage.get('fixed-key')",
+          'respond.stream(context.stream',
+          "respond.file('safe'",
+        ],
+      },
+      {
+        id: 'request-minted-framework-authority-superset',
+        file: 'packages/drizzle/src/trust-escapes-static.test.ts',
+        snippets: [
+          'rootedFiles(input.root)',
+          'createFileSystemStorage({ root: input.root })',
+          'createS3CompatibleStorage(input.storage)',
+          'commandAllowlist([input.program]',
+          'cmd(input.program, input.argv',
+          'server[input.exportName]',
+        ],
+      },
+      {
+        id: 'module-scope-authority-controls',
+        file: 'packages/drizzle/src/trust-escapes-static.test.ts',
+        snippets: [
+          "rootedFiles('/srv/kovo/files')",
+          "createFileSystemStorage({ root: '/srv/kovo/storage' })",
+          "commandAllowlist(['/usr/bin/true']",
+          "cmd('/usr/bin/true', [], { allow })",
+        ],
+      },
+      {
+        id: 'closed-call-graph-and-safe-call-controls',
+        file: 'packages/drizzle/src/trust-escapes-static.test.ts',
+        snippets: [
+          'makeRunner()(input.value)',
+          'helpers[input.method](input.value)',
+          'runner.run(input.value)',
+          'return callback(value)',
+          '[body].map((value) => String(value).trim())',
+          'await request.text()',
+        ],
+      },
+    ],
+  },
 ];
 
 export function evaluateSecurityClassifierCorpus(options = {}) {

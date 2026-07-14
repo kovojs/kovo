@@ -1,3 +1,7 @@
+import * as nodeFs from 'node:fs';
+import * as nodeFsPromises from 'node:fs/promises';
+import { builtinModules as nodeBuiltinModules } from 'node:module';
+
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -16,6 +20,10 @@ function trustEscapesForFiles(files: readonly TrustEscapeSourceFileInput[]) {
 
 function sinksFor(source: string, fileName = 'app.tsx') {
   return collectUnregisteredSinksFromProject({ files: [{ fileName, source }] });
+}
+
+function sinksForFiles(files: readonly TrustEscapeSourceFileInput[]) {
+  return collectUnregisteredSinksFromProject({ files });
 }
 
 describe('@kovojs/drizzle trust-escape collector (KV426, audit-only)', () => {
@@ -222,6 +230,7 @@ describe('@kovojs/drizzle trust-escape collector (KV426, audit-only)', () => {
   });
 });
 
+// @kovo-security-classifier-corpus kv424-request-process
 describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () => {
   it('flags an innerHTML write inside a JSX event handler', () => {
     const facts = sinksFor(`
@@ -292,6 +301,568 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
         return <button onClick={() => { setTimeout(() => doThing(), 100); }}>go</button>;
       }
     `);
+    expect(facts).toEqual([]);
+  });
+
+  it('flags child_process exports across every request-handler surface and static import shape', () => {
+    const facts = sinksFor(
+      `
+      import childProcess, {
+        exec as runShell,
+        execFileSync as runFile,
+      } from 'node:child_process';
+      import * as processApi from 'child_process';
+      import { endpoint, mutation, query, task, webhook } from '@kovojs/server';
+
+      const { spawnSync: runSpawn } = processApi;
+      const required = require('node:child_process');
+
+      export const mutate = mutation({ handler(input) { runFile(input.program); } });
+      export const load = query({ load(input) { runShell(input.command); } });
+      export const raw = endpoint('/raw', { handler(request) { childProcess.spawn(request.url); } });
+      export const job = task({ run(input) { runSpawn(input.program); } });
+      export const hook = webhook('/hook', { handler(input) { required.fork(input.module); } });
+    `,
+      'app.mjs',
+    );
+
+    expect(facts.map((fact) => fact.sink).sort()).toEqual([
+      'child_process.exec',
+      'child_process.execFileSync',
+      'child_process.fork',
+      'child_process.spawn',
+      'child_process.spawnSync',
+    ]);
+  });
+
+  it('follows local and relative helper aliases to raw process sinks', () => {
+    const facts = sinksForFiles([
+      {
+        fileName: 'app.ts',
+        source: `
+          import { mutation } from '@kovojs/server';
+          import { invoke } from './worker.js';
+          const alias = invoke;
+          export const run = mutation({ handler(input) { return alias(input.program); } });
+        `,
+      },
+      {
+        fileName: 'worker.ts',
+        source: `
+          import * as child from 'node:child_process';
+          export function invoke(program: string) { return child.execFileSync(program); }
+        `,
+      },
+    ]);
+
+    expect(facts).toEqual([
+      expect.objectContaining({
+        sink: 'child_process.execFileSync',
+        source: 'program',
+      }),
+    ]);
+  });
+
+  it('fails closed for bare-package handlers and request-reachable helper calls outside the snapshot', () => {
+    const facts = sinksFor(`
+      import { hiddenHandler, helper as packageHelper } from 'external-actions';
+      import * as external from 'external-namespace';
+      import { mutation, query } from '@kovojs/server';
+
+      export const direct = mutation({ handler: hiddenHandler });
+      export const wrapped = mutation({ handler(input) { return packageHelper(input.value); } });
+      export const namespaced = query({ load(input) { return external.load(input.value); } });
+    `);
+
+    expect(facts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sink: 'request-handler.opaque-source',
+          source: 'external-actions',
+        }),
+        expect.objectContaining({
+          sink: 'request-handler.opaque-package-call',
+          source: 'external-actions',
+        }),
+        expect.objectContaining({
+          sink: 'request-handler.opaque-package-call',
+          source: 'external-namespace',
+        }),
+      ]),
+    );
+  });
+
+  it('keeps the canonical runCommand surface open but rejects raw literal process calls and local lookalikes', () => {
+    const facts = sinksFor(`
+      import { execFileSync } from 'node:child_process';
+      import { commandAllowlist, cmd, mutation, runCommand } from '@kovojs/server';
+
+      const allow = commandAllowlist(['/usr/bin/true'], { justification: 'fixture' });
+      const command = cmd('/usr/bin/true', [], { allow });
+      function localRunCommand() { return execFileSync('/usr/bin/true'); }
+
+      export const safe = mutation({ handler() { return runCommand(command); } });
+      export const unsafe = mutation({ handler() { return localRunCommand(); } });
+    `);
+
+    expect(facts).toEqual([
+      expect.objectContaining({
+        sink: 'child_process.execFileSync',
+        source: "'/usr/bin/true'",
+      }),
+    ]);
+  });
+
+  it('resolves local static configs and fails closed for opaque factory configs', () => {
+    const facts = sinksFor(`
+      import { execSync } from 'node:child_process';
+      import { mutation } from '@kovojs/server';
+      import { externalConfig } from 'external-actions';
+
+      const localConfig = { handler(input) { return execSync(input.command); } };
+      export const local = mutation(localConfig);
+      export const external = mutation(externalConfig);
+    `);
+
+    expect(facts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ sink: 'child_process.execSync', source: 'input.command' }),
+        expect.objectContaining({
+          sink: 'request-handler.opaque-source',
+          source: 'external-actions',
+        }),
+      ]),
+    );
+  });
+
+  it('closes dynamic import, eval, Function, string timers, and node:vm at server-handler roots', () => {
+    const facts = sinksFor(`
+      import * as vm from 'node:vm';
+      import { mutation } from '@kovojs/server';
+      const { runInNewContext: execute } = vm;
+
+      export const unsafe = mutation({
+        async handler(input) {
+          eval(input.code);
+          Function(input.code);
+          new Function(input.code);
+          setTimeout('globalThis.compromised = true', 1);
+          await import(input.module);
+          execute(input.code);
+          return new vm.Script(input.code).runInThisContext();
+        },
+      });
+    `);
+
+    expect(facts.map((fact) => fact.sink).sort()).toEqual([
+      'Function',
+      'Function',
+      'eval',
+      'import()',
+      'node:vm.Script',
+      'node:vm.runInNewContext',
+      'setTimeout',
+    ]);
+  });
+
+  it('closes aliased eval, Function, timers, and function-constructor indirection', () => {
+    const facts = sinksFor(`
+      import { mutation } from '@kovojs/server';
+      const moduleEval = eval;
+      const ModuleFunction = Function;
+      const later = setTimeout;
+
+      export const unsafe = mutation({
+        handler(input) {
+          const localEval = eval;
+          localEval(input.code);
+          (0, eval)(input.code);
+          Reflect.apply(moduleEval, null, [input.code]);
+          new ModuleFunction(input.code);
+          later(input.code, 1);
+          [input.code].map(setInterval);
+          return (() => {}).constructor(input.code)();
+        },
+      });
+    `);
+
+    expect(facts.map((fact) => fact.sink)).toEqual(
+      expect.arrayContaining([
+        'Function',
+        'Function.constructor',
+        'eval',
+        'setInterval',
+        'setTimeout',
+      ]),
+    );
+  });
+
+  it('keeps direct and aliased timers open for statically resolved function callbacks', () => {
+    const facts = sinksFor(`
+      import { mutation } from '@kovojs/server';
+      const later = setTimeout;
+      function callback() {}
+      export const safe = mutation({ handler() {
+        setTimeout(() => {}, 1);
+        later(callback, 1);
+      } });
+    `);
+
+    expect(facts).toEqual([]);
+  });
+
+  it('closes process.getBuiltinModule, createRequire, and dynamic require resolution', () => {
+    const facts = sinksFor(`
+      import { createRequire } from 'node:module';
+      import { mutation } from '@kovojs/server';
+      const localRequire = createRequire(import.meta.url);
+
+      export const unsafe = mutation({ handler(input) {
+        process.getBuiltinModule('node:child_process').execFileSync(input.program);
+        localRequire('node:fs').readFileSync(input.path);
+        return require(input.module);
+      } });
+    `);
+
+    expect(facts.map((fact) => fact.sink)).toEqual(
+      expect.arrayContaining([
+        'child_process.execFileSync',
+        'node:fs.readFileSync',
+        'node:module.dynamic-resolution',
+      ]),
+    );
+  });
+
+  it('closes raw filesystem and path authority across aliases, namespaces, require, and computed access', () => {
+    const facts = sinksFor(
+      `
+      import { readFileSync as read } from 'node:fs';
+      import * as fsApi from 'fs';
+      import pathApi, { posix as posixPath, resolve as resolvePath } from 'node:path';
+      import { endpoint } from '@kovojs/server';
+
+      const { promises: fsPromises } = require('node:fs');
+      const requiredFs = require('fs');
+      const requiredPath = require('path');
+
+      export const raw = endpoint('/raw', {
+        async handler(request) {
+          read(resolvePath(request.url));
+          fsApi['writeFileSync'](request.url, 'unsafe');
+          await fsPromises.readFile(request.url);
+          requiredFs.createReadStream(pathApi.posix.join('/tmp', request.url));
+          posixPath.resolve(request.url);
+          requiredPath[request.method](request.url);
+          return fsApi[request.method](request.url);
+        },
+      });
+    `,
+      'app.mjs',
+    );
+
+    expect(facts.map((fact) => fact.sink)).toEqual(
+      expect.arrayContaining([
+        'node:fs.[computed]',
+        'node:fs.createReadStream',
+        'node:fs.readFile',
+        'node:fs.readFileSync',
+        'node:fs.writeFileSync',
+        'node:path.[computed]',
+        'node:path.join',
+        'node:path.resolve',
+      ]),
+    );
+  });
+
+  it('fails closed over the current node:fs and node:fs/promises export census', () => {
+    const inert = new Set([
+      'Dir',
+      'Dirent',
+      'Stats',
+      'Utf8Stream',
+      '_toUnixTimestamp',
+      'constants',
+    ]);
+    const filesystemExports = Object.keys(nodeFs).sort();
+    const promiseExports = Object.keys(nodeFsPromises).sort();
+    expect(filesystemExports).toEqual(
+      expect.arrayContaining(['mkdtempDisposableSync', 'openAsBlob', 'readFileSync']),
+    );
+    expect(promiseExports).toEqual(expect.arrayContaining(['mkdtempDisposable', 'readFile']));
+    const collectModule = (module: string, exports: readonly string[]) => {
+      const bindings = exports.map((name, index) => `${name} as authority_${index}`);
+      const references = exports.map((_name, index) => `authority_${index}`);
+      return sinksFor(
+        `
+          import { ${bindings.join(', ')} } from '${module}';
+          import { mutation } from '@kovojs/server';
+          export const census = mutation({ handler() { return [
+            ${references.join(',\n')}
+          ]; } });
+        `,
+        'app.mjs',
+      );
+    };
+
+    for (const [module, exports] of [
+      ['node:fs', filesystemExports],
+      ['node:fs/promises', promiseExports],
+    ] as const) {
+      const expected = new Set(exports.filter((name) => !inert.has(name)));
+      const actual = new Set(
+        collectModule(module, exports).map((fact) => fact.sink.replace('node:fs.', '')),
+      );
+      expect(actual, module).toEqual(expected);
+    }
+  });
+
+  it('fails closed over every unreviewed Node builtin namespace', () => {
+    const safeBuiltins = new Set([
+      'assert',
+      'assert/strict',
+      'buffer',
+      'events',
+      'querystring',
+      'string_decoder',
+      'url',
+      'util',
+      'util/types',
+    ]);
+    const modules = [
+      ...new Set(nodeBuiltinModules.map((module) => module.replace(/^node:/u, ''))),
+    ].sort();
+    expect(modules).toEqual(expect.arrayContaining(['inspector', 'process', 'sqlite']));
+    const imports = modules.map(
+      (module, index) => `import * as builtin_${index} from 'node:${module}';`,
+    );
+    const references = modules.map((_module, index) => `builtin_${index}`);
+    const facts = sinksFor(
+      `
+        ${imports.join('\n')}
+        import { mutation } from '@kovojs/server';
+        export const census = mutation({ handler() { return [
+          ${references.join(',\n')}
+        ]; } });
+      `,
+      'app.mjs',
+    );
+
+    expect(facts).toHaveLength(modules.filter((module) => !safeBuiltins.has(module)).length);
+  });
+
+  it('closes callback, Reflect.apply, bind, and computed-namespace authority escapes', () => {
+    const facts = sinksFor(`
+      import { execFileSync } from 'node:child_process';
+      import * as child from 'child_process';
+      import * as fs from 'node:fs';
+      import { mutation } from '@kovojs/server';
+
+      const moduleBound = execFileSync.bind(null);
+
+      export const unsafe = mutation({
+        async handler(input) {
+          [input.value].map(execFileSync);
+          [input.value].map(moduleBound);
+          await Promise.resolve(input.value).then(fs.readFileSync);
+          Reflect.apply(execFileSync, null, [input.value]);
+          const bound = execFileSync.bind(null);
+          bound(input.value);
+          return child[input.method];
+        },
+      });
+    `);
+
+    expect(facts.filter((fact) => fact.sink === 'child_process.execFileSync')).toHaveLength(5);
+    expect(facts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ sink: 'child_process.[computed]' }),
+        expect.objectContaining({ sink: 'node:fs.readFileSync' }),
+      ]),
+    );
+  });
+
+  it('closes worker, cluster, Bun, and Deno process authority at request roots', () => {
+    const facts = sinksFor(`
+      import { Worker as Thread } from 'node:worker_threads';
+      import cluster from 'node:cluster';
+      import { mutation } from '@kovojs/server';
+
+      export const unsafe = mutation({
+        handler(input) {
+          new Thread(input.code, { eval: true });
+          cluster.fork();
+          Bun.spawn([input.code]);
+          Bun.$\`\${input.code}\`;
+          Bun.file(input.path);
+          Deno.run({ cmd: [input.code] });
+          await Deno.readTextFile(input.path);
+          await Deno.writeFile(input.path, input.bytes);
+          Bun[input.method];
+          Deno[input.method];
+          globalThis['process'][input.method];
+          return new Deno.Command(input.code);
+        },
+      });
+    `);
+
+    expect(facts.map((fact) => fact.sink)).toEqual(
+      expect.arrayContaining([
+        'Bun.spawn',
+        'Bun.$',
+        'Bun.[computed]',
+        'Bun.file',
+        'Deno.Command',
+        'Deno.[computed]',
+        'Deno.readTextFile',
+        'Deno.run',
+        'Deno.writeFile',
+        'node:cluster.fork',
+        'node:process.[computed]',
+        'node:worker_threads.Worker',
+      ]),
+    );
+  });
+
+  it('keeps canonical file responses, streams, and storage capabilities open', () => {
+    const facts = sinksFor(`
+      import { endpoint, respond } from '@kovojs/server';
+
+      export const safe = endpoint('/safe', {
+        async handler(_request, context) {
+          await context.storage.get('fixed-key');
+          if (context.stream) {
+            return respond.stream(context.stream, { contentType: 'text/plain' });
+          }
+          return respond.file('safe', { contentType: 'text/plain' });
+        },
+      });
+    `);
+
+    expect(facts).toEqual([]);
+  });
+
+  it('closes request-minted framework filesystem, storage, and command authority', () => {
+    const facts = sinksFor(`
+      import * as server from '@kovojs/server';
+      import {
+        cmd,
+        commandAllowlist,
+        createFileSystemStorage,
+        createS3CompatibleStorage,
+        mutation,
+        rootedFiles,
+        runCommand,
+      } from '@kovojs/server';
+
+      export const unsafe = mutation({
+        async handler(input) {
+          await rootedFiles(input.root);
+          createFileSystemStorage({ root: input.root });
+          createS3CompatibleStorage(input.storage);
+          const allow = commandAllowlist([input.program], { justification: 'dynamic program' });
+          runCommand(cmd(input.program, input.argv, { allow }));
+          return server[input.exportName];
+        },
+      });
+    `);
+
+    expect(facts.map((fact) => fact.sink)).toEqual(
+      expect.arrayContaining([
+        '@kovojs/core.createFileSystemStorage',
+        '@kovojs/core.createS3CompatibleStorage',
+        '@kovojs/server.[computed]',
+        '@kovojs/server.cmd',
+        '@kovojs/server.commandAllowlist',
+        '@kovojs/server.rootedFiles',
+      ]),
+    );
+  });
+
+  it('keeps module-scope literal framework authority and audited terminal capabilities open', () => {
+    const facts = sinksFor(`
+      import {
+        cmd,
+        commandAllowlist,
+        createFileSystemStorage,
+        mutation,
+        rootedFiles,
+        runCommand,
+      } from '@kovojs/server';
+
+      const files = rootedFiles('/srv/kovo/files');
+      const storage = createFileSystemStorage({ root: '/srv/kovo/storage' });
+      const allow = commandAllowlist(['/usr/bin/true'], { justification: 'fixed probe' });
+      const command = cmd('/usr/bin/true', [], { allow });
+
+      export const safe = mutation({
+        async handler() {
+          await files;
+          await storage.get('fixed-key');
+          return runCommand(command);
+        },
+      });
+    `);
+
+    expect(facts).toEqual([]);
+  });
+
+  it('closes factories, object methods, class methods, and higher-order parameter calls', () => {
+    const facts = sinksFor(`
+      import { execFileSync } from 'node:child_process';
+      import { mutation } from '@kovojs/server';
+
+      function makeRunner() {
+        return (value) => execFileSync(value);
+      }
+      const helpers = {
+        run(value) { return execFileSync(value); },
+      };
+      class Runner {
+        run(value) { return execFileSync(value); }
+      }
+      const runner = new Runner();
+      function invoke(callback, value) {
+        return callback(value);
+      }
+
+      export const unsafe = mutation({ handler(input) {
+        makeRunner()(input.value);
+        helpers.run(input.value);
+        runner.run(input.value);
+        helpers[input.method](input.value);
+        return invoke(input.callback, input.value);
+      } });
+    `);
+
+    expect(facts.filter((fact) => fact.sink === 'child_process.execFileSync')).toHaveLength(3);
+    expect(facts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sink: 'request-handler.opaque-call',
+          source: 'helpers[input.method]',
+        }),
+        expect.objectContaining({ sink: 'request-handler.opaque-call', source: 'callback' }),
+      ]),
+    );
+  });
+
+  it('keeps reviewed intrinsic callbacks, request methods, and framework capabilities open', () => {
+    const facts = sinksFor(`
+      import { createFileSystemStorage, endpoint, respond } from '@kovojs/server';
+
+      const storage = createFileSystemStorage({ root: '/srv/kovo/storage' });
+      export const safe = endpoint('/safe', { async handler(request, context) {
+        const body = await request.text();
+        const normalized = [body].map((value) => String(value).trim());
+        const encoded = JSON.stringify({ normalized });
+        await storage.get('fixed-key');
+        await context.actAs('reviewed-principal');
+        return encoded.length > 0
+          ? respond.file('safe', { contentType: 'text/plain' })
+          : Response.json({ ok: true });
+      } });
+    `);
+
     expect(facts).toEqual([]);
   });
 });
