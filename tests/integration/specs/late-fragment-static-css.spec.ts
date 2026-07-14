@@ -19,15 +19,16 @@ test('enhanced mutation fragments deliver static late stylesheet links once', as
   await page.goto('/');
   await expect(page.locator('link[href="/assets/fragment.css"]')).toHaveCount(0);
 
-  const [response] = await Promise.all([
-    page.waitForResponse(
-      (candidate) =>
-        candidate.url().endsWith('/_m/late-fragment-static-css/reveal') &&
-        candidate.status() === 200,
-    ),
+  const [body] = await Promise.all([
+    page
+      .waitForResponse(
+        (candidate) =>
+          candidate.url().endsWith('/_m/late-fragment-static-css/reveal') &&
+          candidate.status() === 200,
+      )
+      .then((response) => response.text()),
     page.getByRole('button', { name: 'Show recommendation' }).click(),
   ]);
-  const body = await response.text();
   expect(body).toContain('<kovo-fragment target="recommendations" mode="append">');
   expect(body.match(/href="\/assets\/fragment\.css"/g)).toHaveLength(1);
   expect(body).toContain('<article class="recommendation-card" data-recommendation>');
