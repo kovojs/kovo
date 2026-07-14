@@ -813,10 +813,7 @@ export function addRuntimeMutationSafetyProofs(
             '  schema.txProofs,',
             '  schema.rawRuntimeDrift,',
             ...(includeSqliteAuthorizerTriggerDrift
-              ? [
-                  '  schema.sqliteAuthorizerDeclared,',
-                  '  schema.sqliteAuthorizerSideEffects,',
-                ]
+              ? ['  schema.sqliteAuthorizerDeclared,', '  schema.sqliteAuthorizerSideEffects,']
               : []),
           ].join('\n'),
         )
