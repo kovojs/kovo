@@ -34,7 +34,7 @@ import {
   closeBuiltServerProcess,
   listenBuiltServerProcess,
   type BuiltServerProcess,
-} from './built-server.test-support.js';
+} from '../test/built-server.js';
 import { main, mainAsync } from './index.js';
 
 const repoRoot = process.cwd();
