@@ -20,6 +20,10 @@ import { actAsNonRequestPrincipal, declareSystemPrincipal } from './auth-princip
 import { isDurableCapabilityReplayStore } from './capability-url.js';
 import { guards } from './guards.js';
 import {
+  usePostgresAppRuntimeDb,
+  usePostgresSystemDb,
+} from './internal/postgres-capability.js';
+import {
   checkPostgresAppDbPosture,
   createPostgresAppRuntimeDb,
   declarePublicRelation,
@@ -27,8 +31,8 @@ import {
   __testPostgresRuntimeInternals,
   migratePostgresAppDb,
   postgresSchemaModule,
-  usePostgresSystemDb,
   type KovoPostgresAppRuntimeOptions,
+  type KovoPostgresAppRuntimeDb,
   type KovoPostgresRuntimeDb,
 } from './postgres-runtime.js';
 import { PostgresDurableTaskQueue, createDurableTaskSqlExecutor } from './task-queue.js';
@@ -259,6 +263,10 @@ describe('createPostgresAppRuntimeDb', () => {
       // SPEC §10.3: the framework-owned aggregate is immutable even when app helpers retain it;
       // request DB and replay authority cannot be replaced before createApp snapshots a provider.
       expect(Object.isFrozen(runtime)).toBe(true);
+      expect(Object.isFrozen(runtime.db)).toBe(true);
+      expect(typeof runtime.db).toBe('object');
+      expect(Reflect.ownKeys(runtime.db)).toEqual([]);
+      assertOpaquePostgresProviderTypes(runtime);
       const originalDb = runtime.db;
       const poison = (value: typeof runtime) => Reflect.set(value, 'db', () => ({ forged: true }));
       expect(poison(runtime)).toBe(false);
@@ -274,8 +282,8 @@ describe('createPostgresAppRuntimeDb', () => {
       await expect(
         runtime.capabilityReplayStore.consume('runtime-capability', expiresAt),
       ).resolves.toBe(false);
-      const u1Db = runtime.db({ principalPosture: actAsRuntimePrincipal('u1') });
-      const u2Db = runtime.db({ principalPosture: actAsRuntimePrincipal('u2') });
+      const u1Db = usePostgresAppRuntimeDb(runtime, { principalPosture: actAsRuntimePrincipal('u1') });
+      const u2Db = usePostgresAppRuntimeDb(runtime, { principalPosture: actAsRuntimePrincipal('u2') });
 
       await expect(
         u1Db.select({ id: notes.id, ownerId: notes.ownerId, title: notes.title }).from(notes),
@@ -390,8 +398,9 @@ describe('createPostgresAppRuntimeDb', () => {
     try {
       await runtime.ready;
       await expect(
-        runtime
-          .db({ principalPosture: actAsRuntimePrincipal('u1') })
+        usePostgresAppRuntimeDb(runtime, {
+          principalPosture: actAsRuntimePrincipal('u1'),
+        })
           .select({ id: notes.id })
           .from(notes),
       ).resolves.toEqual([{ id: 'n1' }]);
@@ -581,8 +590,9 @@ describe('createPostgresAppRuntimeDb', () => {
     try {
       await runtime.ready;
       await expect(
-        runtime
-          .db({ principalPosture: actAsRuntimePrincipal('u1') })
+        usePostgresAppRuntimeDb(runtime, {
+          principalPosture: actAsRuntimePrincipal('u1'),
+        })
           .select({ id: primordialPolicyNotes.id })
           .from(primordialPolicyNotes)
           .orderBy(primordialPolicyNotes.id),
@@ -656,8 +666,9 @@ describe('createPostgresAppRuntimeDb', () => {
     try {
       await runtime.ready;
       await expect(
-        runtime
-          .db({ principalPosture: actAsRuntimePrincipal('u1') })
+        usePostgresAppRuntimeDb(runtime, {
+          principalPosture: actAsRuntimePrincipal('u1'),
+        })
           .select({ id: notes.id })
           .from(notes)
           .orderBy(notes.id),
@@ -1068,7 +1079,7 @@ describe('createPostgresAppRuntimeDb', () => {
     const runtime = createPostgresAppRuntimeDb({ dataDir, driver: 'pglite', schema, seedSql });
     try {
       await runtime.ready;
-      const u1Db = runtime.db({ principalPosture: actAsRuntimePrincipal('u1') });
+      const u1Db = usePostgresAppRuntimeDb(runtime, { principalPosture: actAsRuntimePrincipal('u1') });
       await expect(u1Db.select().from(shadowNotes)).rejects.toThrow();
     } finally {
       await runtime.close();
@@ -1081,7 +1092,7 @@ describe('createPostgresAppRuntimeDb', () => {
     });
     try {
       await declaredRuntime.ready;
-      const u1Db = declaredRuntime.db({ principalPosture: actAsRuntimePrincipal('u1') });
+      const u1Db = usePostgresAppRuntimeDb(declaredRuntime, { principalPosture: actAsRuntimePrincipal('u1') });
       await expect(u1Db.select().from(shadowNotes)).resolves.toEqual([
         { id: 's1', ownerId: 'u1', title: 'Shadow' },
       ]);
@@ -1097,7 +1108,7 @@ describe('createPostgresAppRuntimeDb', () => {
 
     try {
       await runtime.ready;
-      const appDb = runtime.db();
+      const appDb = usePostgresAppRuntimeDb(runtime);
 
       await expect(
         appDb
@@ -1120,7 +1131,7 @@ describe('createPostgresAppRuntimeDb', () => {
 
     try {
       await runtime.ready;
-      const writer = runtime.db({ principalPosture: actAsRuntimePrincipal('u1') });
+      const writer = usePostgresAppRuntimeDb(runtime, { principalPosture: actAsRuntimePrincipal('u1') });
       const readDb = managedDb(writer, 'read');
 
       const rows = await readDb.rawRead<{ id: string; title: string }>(
@@ -1183,7 +1194,7 @@ describe('createPostgresAppRuntimeDb', () => {
     try {
       await runtime.ready;
       drainPostgresRlsSilentDenyDiagnostics();
-      const writer = runtime.db({ principalPosture: actAsRuntimePrincipal('missing') });
+      const writer = usePostgresAppRuntimeDb(runtime, { principalPosture: actAsRuntimePrincipal('missing') });
       const readDb = managedDb(writer, 'read');
 
       await expect(
@@ -1210,8 +1221,8 @@ describe('createPostgresAppRuntimeDb', () => {
 
     try {
       await runtime.ready;
-      const u1Db = runtime.db({ principalPosture: actAsRuntimePrincipal('u1') });
-      const systemDb = runtime.db({
+      const u1Db = usePostgresAppRuntimeDb(runtime, { principalPosture: actAsRuntimePrincipal('u1') });
+      const systemDb = usePostgresAppRuntimeDb(runtime, {
         principalPosture: declareSystemPrincipal('repair owner index in runtime test', {
           ingress: 'task',
           operation: 'write',
@@ -1237,8 +1248,7 @@ describe('createPostgresAppRuntimeDb', () => {
           .orderBy(notes.id),
       ).resolves.toEqual([{ id: 'n1', ownerId: 'u1', title: 'System touched' }]);
       await expect(
-        runtime
-          .db({})
+        usePostgresAppRuntimeDb(runtime, {})
           .select({ id: notes.id, ownerId: notes.ownerId, title: notes.title })
           .from(notes),
       ).resolves.toEqual([]);
@@ -1258,7 +1268,7 @@ describe('createPostgresAppRuntimeDb', () => {
 
     try {
       await runtime.ready;
-      const executor = createDurableTaskSqlExecutor(runtime.db({}));
+      const executor = createDurableTaskSqlExecutor(usePostgresAppRuntimeDb(runtime, {}));
       const queue = new PostgresDurableTaskQueue(executor);
 
       await expect(
@@ -1622,7 +1632,7 @@ describe('createPostgresAppRuntimeDb', () => {
     try {
       await runtime.ready;
       expect(() =>
-        runtime.db({ principalPosture: { kind: 'system', reason: 'plain object' } }),
+        usePostgresAppRuntimeDb(runtime, { principalPosture: { kind: 'system', reason: 'plain object' } }),
       ).toThrow(/framework-minted actAs\(id\) or declareSystemRead\/Write\(reason\)/);
     } finally {
       await runtime.close();
@@ -1636,7 +1646,7 @@ describe('createPostgresAppRuntimeDb', () => {
 
     try {
       await runtime.ready;
-      expect(() => runtime.db({ principalPosture: { kind: 'act-as', principal: 'u1' } })).toThrow(
+      expect(() => usePostgresAppRuntimeDb(runtime, { principalPosture: { kind: 'act-as', principal: 'u1' } })).toThrow(
         /framework-minted actAs\(id\) or declareSystemRead\/Write\(reason\)/,
       );
     } finally {
@@ -2513,7 +2523,7 @@ describe('createPostgresAppRuntimeDb', () => {
     });
     try {
       await runtime.ready;
-      const u1Db = runtime.db({ principalPosture: actAsRuntimePrincipal('u1') });
+      const u1Db = usePostgresAppRuntimeDb(runtime, { principalPosture: actAsRuntimePrincipal('u1') });
       await expect(
         u1Db.insert(serialNotes).values({ ownerId: 'u1', title: 'Two' }).returning(),
       ).resolves.toEqual([expect.objectContaining({ ownerId: 'u1', title: 'Two' })]);
@@ -3556,7 +3566,7 @@ describe('createPostgresAppRuntimeDb', () => {
     try {
       await runtime.ready;
       const request = { session: { user: { id: 'admin-user', roles: ['admin'] } } };
-      const writer = runtime.db(request);
+      const writer = usePostgresAppRuntimeDb(runtime, request);
       const readDb = managedDb(writer, 'read');
       expect(() =>
         readDb.crossOwnerRead(sql`SELECT id, title FROM ${notes} ORDER BY id`, {
@@ -3636,7 +3646,7 @@ describe('createPostgresAppRuntimeDb', () => {
     try {
       await runtime.ready;
       const request = { session: { user: { id: 'admin-user', roles: ['admin'] } } };
-      const readDb = managedDb(runtime.db(request), 'read');
+      const readDb = managedDb(usePostgresAppRuntimeDb(runtime, request), 'read');
       expect(await guards.role<typeof request>('admin')(request)).toBe(true);
       Array.prototype[Symbol.iterator] = function* (this: unknown[]) {
         if (this.length === 1 && this[0] === 'u1') {
@@ -4234,8 +4244,8 @@ describe('createPostgresAppRuntimeDb', () => {
 
     try {
       await runtime.ready;
-      const u1Db = runtime.db({ principalPosture: actAsRuntimePrincipal('u1') });
-      const u2Db = runtime.db({ principalPosture: actAsRuntimePrincipal('u2') });
+      const u1Db = usePostgresAppRuntimeDb(runtime, { principalPosture: actAsRuntimePrincipal('u1') });
+      const u2Db = usePostgresAppRuntimeDb(runtime, { principalPosture: actAsRuntimePrincipal('u2') });
 
       await expect(u1Db.select().from(teamDocuments)).resolves.toEqual([
         { id: 'd1', teamId: 'team-a', title: 'Alpha' },
@@ -4342,6 +4352,19 @@ describe('createPostgresAppRuntimeDb', () => {
     ).toThrow(/KV433_AUTHZ_POLICY_UNSUPPORTED/);
   });
 });
+
+function assertOpaquePostgresProviderTypes(runtime: KovoPostgresAppRuntimeDb): void {
+  if (false) {
+    // @ts-expect-error SPEC §10.3: the app provider is an opaque token, not a raw callback.
+    runtime.db({});
+    runtime.systemDb({
+      // @ts-expect-error SPEC §10.3 C9: public system capabilities are write-only.
+      operation: 'read',
+      reason: 'compile-time negative proof',
+      surface: 'postgres-runtime.test',
+    });
+  }
+}
 
 async function execPglite(dataDir: string, statement: string): Promise<void> {
   const client = new PGlite(dataDir);

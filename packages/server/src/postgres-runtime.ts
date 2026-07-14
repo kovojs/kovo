@@ -21,6 +21,13 @@ import {
 } from 'pg';
 
 import {
+  createPostgresSystemDb,
+  registerPostgresAppRuntimeDb,
+  type KovoPostgresSystemDb,
+} from '@kovojs/server/internal/postgres-capability';
+import { runtimeEnvironmentValue } from '@kovojs/server/internal/runtime-environment';
+
+import {
   declareSystemPrincipal,
   principalFromNonRequestPrincipalPosture,
   type NonRequestPrincipalPosture,
@@ -43,7 +50,11 @@ import {
   type PostgresScopedClientOptions,
   type Reader,
 } from './managed-db.js';
-import { requestPassedRoleGuard } from './guards.js';
+import {
+  createFrameworkManagedDbProvider,
+  requestPassedRoleGuard,
+  type FrameworkManagedDbProvider,
+} from './guards.js';
 import {
   createPostgresCapabilityReplayStoreFromExecutor,
   createPostgresMutationReplayStoreFromExecutor,
@@ -55,7 +66,6 @@ import {
 } from './postgres-replay.js';
 import type { CapabilityReplayStore } from './capability-url.js';
 import type { MutationReplayStore } from './replay.js';
-import { runtimeEnvironmentValue } from '@kovojs/server/internal/runtime-environment';
 import {
   forEachReadonlyMapEntry,
   forEachReadonlySetValue,
@@ -118,8 +128,6 @@ const DEFAULT_SYSTEM_ROLE = 'kovo_system';
 const DEFAULT_WRITER_ROLE = 'kovo_writer';
 const MIGRATIONS_TABLE = 'kovo_migrations';
 const SCHEMA_STATE_TABLE = 'kovo_schema_state';
-const postgresSystemDbBrand: unique symbol = Symbol('kovo.postgres-system-db');
-const postgresSystemDbValues = createWitnessWeakMap<KovoPostgresSystemDb, KovoPostgresRuntimeDb>();
 const postgresPinnedNodePools = createWitnessWeakMap<object, true>();
 const postgresPinnedNodeClients = createWitnessWeakMap<object, true>();
 const postgresNodeClientReleaseValues = createWitnessWeakMap<object, Function>();
@@ -1285,7 +1293,8 @@ export interface KovoPostgresMigrationPlan {
 export interface KovoPostgresAppRuntimeDb {
   /** Framework-system durable one-time capability replay truth (SPEC §6.6/§10.3). */
   readonly capabilityReplayStore: CapabilityReplayStore;
-  db(request?: unknown): KovoPostgresRuntimeDb;
+  /** Opaque framework provider token accepted by `createApp({ db })`. */
+  readonly db: FrameworkManagedDbProvider<KovoPostgresRuntimeDb>;
   /** Framework-system durable mutation idempotency truth (SPEC §10.3). */
   readonly mutationReplayStore: MutationReplayStore;
   readonlyDb: Reader<KovoPostgresRuntimeDb>;
@@ -1297,7 +1306,7 @@ export interface KovoPostgresAppRuntimeDb {
   ): Promise<boolean>;
   /** Framework-owned non-request DB capability for generated auth/seed wiring, still RLS-subject. */
   systemDb(options: {
-    operation: 'read' | 'write';
+    operation: 'write';
     reason: string;
     surface: string;
   }): KovoPostgresSystemDb;
@@ -1306,30 +1315,7 @@ export interface KovoPostgresAppRuntimeDb {
   close(): Promise<void>;
 }
 
-/** Opaque framework-owned system DB capability; consume through `usePostgresSystemDb(...)`. */
-export interface KovoPostgresSystemDb {
-  readonly [postgresSystemDbBrand]: {
-    readonly scope: 'postgres-system-db';
-  };
-}
-
-/**
- * Consume a framework-owned Postgres system DB capability at a narrow generated/internal sink.
- *
- * SPEC §10.3: the raw system DB remains non-structural and is not returned as an app value.
- */
-export function usePostgresSystemDb<Result>(
-  capability: KovoPostgresSystemDb,
-  use: (db: KovoPostgresRuntimeDb) => Result,
-): Result {
-  const db = witnessWeakMapGet(postgresSystemDbValues, capability);
-  if (db === undefined) {
-    throw new Error(
-      'KV414: invalid Postgres system DB capability; use createPostgresAppRuntimeDb().systemDb(...) (SPEC §10.3).',
-    );
-  }
-  return use(db);
-}
+export type { KovoPostgresSystemDb } from '@kovojs/server/internal/postgres-capability';
 
 /** Privileged external Postgres provisioning options for the app schema. */
 export interface KovoPostgresProvisionOptions extends KovoPostgresAppRuntimeOptions {
@@ -1501,9 +1487,11 @@ export function createPostgresAppRuntimeDb(
   });
   mintFrameworkDurableReplayStoreReceipt(webhookStore, 'webhook');
 
-  return witnessFreeze({
+  const runtime: KovoPostgresAppRuntimeDb = witnessFreeze({
     capabilityReplayStore: capabilityStore,
-    db: dbForRequest,
+    db: createFrameworkManagedDbProvider<unknown, KovoPostgresRuntimeDb>((request) =>
+      dbForRequest(request),
+    ),
     mutationReplayStore: mutationStore,
     readonlyDb: createRequestScopedReadonlyDb(client, config, metadata),
     ready,
@@ -1528,14 +1516,8 @@ export function createPostgresAppRuntimeDb(
     webhookReplayStore: webhookStore,
     close: () => client.close(),
   });
-}
-
-function createPostgresSystemDb(db: KovoPostgresRuntimeDb): KovoPostgresSystemDb {
-  const capability = witnessFreeze({
-    [postgresSystemDbBrand]: { scope: 'postgres-system-db' as const },
-  });
-  witnessWeakMapSet(postgresSystemDbValues, capability, db);
-  return capability;
+  registerPostgresAppRuntimeDb(runtime, dbForRequest);
+  return runtime;
 }
 
 /**

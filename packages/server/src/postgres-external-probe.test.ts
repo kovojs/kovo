@@ -12,6 +12,7 @@ import { afterAll, describe, expect, it } from 'vitest';
 
 import { actAsNonRequestPrincipal } from './auth-principal.js';
 import { guards } from './guards.js';
+import { usePostgresAppRuntimeDb } from './internal/postgres-capability.js';
 import {
   createPostgresReadonlyClient,
   createPostgresScopedClient,
@@ -308,8 +309,8 @@ async function expectOwnerIsolation(
   });
   try {
     await runtime.ready;
-    const u1Db = runtime.db({ principalPosture: actAsProbePrincipal('u1') });
-    const u2Db = runtime.db({ principalPosture: actAsProbePrincipal('u2') });
+    const u1Db = usePostgresAppRuntimeDb(runtime, { principalPosture: actAsProbePrincipal('u1') });
+    const u2Db = usePostgresAppRuntimeDb(runtime, { principalPosture: actAsProbePrincipal('u2') });
 
     await u1Db
       .insert(probeNotes)
@@ -394,7 +395,7 @@ async function expectSchemaEvolutionWithData(adminUrl: string, runtimeUrl: strin
   });
   try {
     await runtime.ready;
-    const u1Db = runtime.db({ principalPosture: actAsProbePrincipal('u1') });
+    const u1Db = usePostgresAppRuntimeDb(runtime, { principalPosture: actAsProbePrincipal('u1') });
     await expect(
       u1Db
         .select({ id: probeNotesV2.id, summary: probeNotesV2.summary, title: probeNotesV2.title })
@@ -479,7 +480,7 @@ async function expectCrossOwnerRead(databaseUrl: string, adminDatabaseUrl: strin
   try {
     await runtime.ready;
     const request = { session: { user: { id: 'admin-user', roles: ['admin'] } } };
-    const readDb = managedDb(runtime.db(request), 'read');
+    const readDb = managedDb(usePostgresAppRuntimeDb(runtime, request), 'read');
     expect(() =>
       readDb.crossOwnerRead(sql`SELECT id, title FROM ${probeNotes} ORDER BY id`, {
         reads: ['kovo_ext_probe_notes'],

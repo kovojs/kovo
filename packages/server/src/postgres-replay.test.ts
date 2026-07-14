@@ -8,10 +8,10 @@ import { pgTable, text } from 'drizzle-orm/pg-core';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { signCapability, verifyCapability } from './capability-url.js';
+import { usePostgresSystemDb } from './internal/postgres-capability.js';
 import {
   createPostgresAppRuntimeDb,
   postgresSchemaModule,
-  usePostgresSystemDb,
   type KovoPostgresAppRuntimeDb,
 } from './postgres-runtime.js';
 import {

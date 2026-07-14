@@ -20,7 +20,6 @@ export {
   planPostgresAppDbMigration,
   postgresSchemaModule,
   provisionPostgresAppDb,
-  usePostgresSystemDb,
 } from './postgres-runtime.js';
 // SPEC §6.6/§10.3: deployed capability/mutation/webhook replay truth stays on the authenticated
 // createPostgresAppRuntimeDb() store properties; raw SQL-backed constructors remain private.

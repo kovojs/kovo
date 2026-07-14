@@ -11,6 +11,7 @@ import {
   isProvenPrincipal,
 } from './auth-principal.js';
 import { guards } from './guards.js';
+import { usePostgresAppRuntimeDb } from './internal/postgres-capability.js';
 import { managedDb, type Reader } from './managed-db.js';
 import { createPostgresAppRuntimeDb, type KovoPostgresRuntimeDb } from './postgres-runtime.js';
 import type { KovoPostgresAppRuntimeOptions } from './postgres-runtime.js';
@@ -161,7 +162,7 @@ export async function createPostgresTestRuntime(
         operation: 'write',
         surface: 'createPostgresTestRuntime.withPrincipal',
       });
-      return await callback(runtime.db({ principalPosture: posture }));
+      return await callback(usePostgresAppRuntimeDb(runtime, { principalPosture: posture }));
     },
     async asAdmin<Result>(
       principalId: string,
@@ -181,7 +182,7 @@ export async function createPostgresTestRuntime(
       if (guardResult !== true) {
         throw new Error('asAdmin(id, fn) could not establish the admin role guard.');
       }
-      return await callback(managedDb(runtime.db(request), 'read'));
+      return await callback(managedDb(usePostgresAppRuntimeDb(runtime, request), 'read'));
     },
     async asSystem<Result>(
       reason: string,
@@ -193,7 +194,7 @@ export async function createPostgresTestRuntime(
         operation: 'write',
         surface: 'createPostgresTestRuntime.asSystem',
       });
-      return await callback(runtime.db({ principalPosture: posture }));
+      return await callback(usePostgresAppRuntimeDb(runtime, { principalPosture: posture }));
     },
   };
 }

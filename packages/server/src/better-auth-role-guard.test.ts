@@ -7,6 +7,7 @@ import { pgTable, text } from 'drizzle-orm/pg-core';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { role } from '../../better-auth/src/guards.js';
+import { usePostgresAppRuntimeDb } from './internal/postgres-capability.js';
 import { drainCrossOwnerReadAuditFacts, managedDb } from './managed-db.js';
 import { explainGuard } from './guards.js';
 import { createPostgresAppRuntimeDb } from './postgres-runtime.js';
@@ -56,7 +57,7 @@ describe('@kovojs/better-auth role guard runtime integration', () => {
     try {
       await runtime.ready;
       const request = { session: { user: { id: 'admin-user', roles: ['admin'] } } };
-      const readDb = managedDb(runtime.db(request), 'read');
+      const readDb = managedDb(usePostgresAppRuntimeDb(runtime, request), 'read');
 
       expect(() =>
         readDb.crossOwnerRead(sql`SELECT id, title FROM ${notes} ORDER BY id`, {

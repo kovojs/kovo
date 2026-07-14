@@ -1832,6 +1832,7 @@
           "./internal/execution",
           "./internal/html",
           "./internal/managed-db",
+          "./internal/postgres-capability",
           "./internal/runtime-registry-wire",
           "./internal/runtime-environment",
           "./internal/route",

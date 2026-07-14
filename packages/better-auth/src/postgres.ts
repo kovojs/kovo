@@ -1,11 +1,11 @@
 import {
   postgresSchemaModule,
-  usePostgresSystemDb,
   type AccessDecision,
   type CsrfOptions,
   type KovoPostgresSystemDb,
   type SessionProvider,
 } from '@kovojs/server';
+import { usePostgresSystemDb } from '@kovojs/server/internal/postgres-capability';
 import { betterAuth, type Session, type User } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 

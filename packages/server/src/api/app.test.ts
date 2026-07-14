@@ -22,6 +22,7 @@ import * as packageInternalEscapeApi from '@kovojs/server/internal/escape';
 import * as packageInternalExecutionApi from '@kovojs/server/internal/execution';
 import * as packageInternalHtmlApi from '@kovojs/server/internal/html';
 import * as packageInternalManagedDbApi from '@kovojs/server/internal/managed-db';
+import * as packageInternalPostgresCapabilityApi from '@kovojs/server/internal/postgres-capability';
 import * as packageInternalRouteApi from '@kovojs/server/internal/route';
 import * as packageInternalStaticExportApi from '@kovojs/server/internal/static-export';
 import * as packageInternalWireApi from '@kovojs/server/internal/wire';
@@ -58,6 +59,7 @@ import * as internalEscapeApi from '../internal/escape.js';
 import * as internalExecutionApi from '../internal/execution.js';
 import * as internalHtmlApi from '../internal/html.js';
 import * as internalManagedDbApi from '../internal/managed-db.js';
+import * as internalPostgresCapabilityApi from '../internal/postgres-capability.js';
 import * as internalRouteApi from '../internal/route.js';
 import * as mutationApi from '../mutation.js';
 import * as nodeSourceApi from '../node.js';
@@ -90,6 +92,12 @@ import * as wireHtmlApi from '../wire-html.js';
 
 // eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
 type RootAppDocumentOptions = import('../index.js').AppDocumentOptions;
+// eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
+type RootKovoPostgresSystemDb = import('@kovojs/server').KovoPostgresSystemDb;
+// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
+type RemovedRootUsePostgresSystemDb =
+  // @ts-expect-error SPEC §6.6/§10.3: raw capability consumers are package-internal.
+  typeof import('@kovojs/server').usePostgresSystemDb;
 // eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
 type RootAppErrorShellOptions = import('../index.js').AppErrorShellOptions;
 const removedRootLiveTargetRendererOption: import('../index.js').CreateAppOptions = {
@@ -560,9 +568,6 @@ describe('server app-shell public API barrels', () => {
       verifyPassword: passwordApi.verifyPassword,
       createMemoryVersionedClientModuleRegistry:
         internalClientModulesApi.createMemoryVersionedClientModuleRegistry,
-      // SPEC §10.3/§11.2: generated auth adapters consume opaque framework-owned system DB
-      // capabilities through this public helper; raw system DB handles stay unexported.
-      usePostgresSystemDb: postgresRuntimeApi.usePostgresSystemDb,
       postgresSchemaModule: postgresRuntimeApi.postgresSchemaModule,
       createRequestHandler: requestHandlerApi.createRequestHandler,
       exportStaticApp: staticExportOrchestratorApi.exportStaticApp,
@@ -846,6 +851,8 @@ describe('server app-shell public API barrels', () => {
       secretReadBoundaryApi.declareSecretReadCapability,
     );
     expect(packageInternalManagedDbApi).toEqual(internalManagedDbApi);
+    expect(packageInternalPostgresCapabilityApi).toEqual(internalPostgresCapabilityApi);
+    expect(packageRootApi).not.toHaveProperty('usePostgresSystemDb');
     expect(packageInternalHtmlApi.renderComponent).toBe(componentRenderApi.renderComponent);
     expect(packageInternalHtmlApi.renderDeferredDocument).toBe(
       documentCoreApi.renderDeferredDocument,
