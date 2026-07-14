@@ -164,6 +164,24 @@ const promisify = builtinPromisify;
 
 const requireFromCli = createRequire(new URL('../index.ts', import.meta.url));
 
+// Exact first-party package names whose source entries may live inside the invocation root while
+// dogfooding the workspace. Ordinary workspace/package dependencies remain app source and must be
+// present in the preflight snapshot; this exception is deliberately limited to Kovo's reviewed
+// package graph (SPEC §5.2/§6.6).
+const kovoFrameworkSourcePackages = [
+  '@kovojs/better-auth',
+  '@kovojs/browser',
+  '@kovojs/compiler',
+  '@kovojs/core',
+  '@kovojs/devtool',
+  '@kovojs/drizzle',
+  '@kovojs/headless-ui',
+  '@kovojs/icons',
+  '@kovojs/server',
+  '@kovojs/style',
+  '@kovojs/ui',
+] as const;
+
 const execFileAsync = promisify(execFile);
 
 function isKovoServerHandlerExternalDependency(id: string): boolean {
@@ -3161,6 +3179,7 @@ function approvedBuildSourcesVitePlugin(
 ): Plugin {
   const approvedByPath = buildCreateMap<string, string>();
   const appSourcePaths = buildCreateSet<string>();
+  const frameworkSourceRoots = kovoFrameworkSourceRoots(appModulePath);
   const approvedFiles = buildSnapshotDenseArray(sourceFiles, 'Approved build source files');
   const sourceRoot = dirname(appModulePath);
   for (let index = 0; index < approvedFiles.length; index += 1) {
@@ -3217,6 +3236,7 @@ function approvedBuildSourcesVitePlugin(
       const fileName = viteBuildSourceFileName(id);
       if (fileName === undefined || !isBuildSourceModulePath(fileName)) return null;
       const approved = buildMapHas(approvedByPath, fileName);
+      if (!approved && isKovoFrameworkSourcePath(frameworkSourceRoots, fileName)) return null;
       if (!approved && !isBuildAppSourcePath(appSourceRoot, fileName)) return null;
       const displayName = relative(buildRoot, fileName) || fileName;
       if (!approved) {
@@ -3230,6 +3250,37 @@ function approvedBuildSourcesVitePlugin(
       return null;
     },
   };
+}
+
+function kovoFrameworkSourceRoots(appModulePath: string): readonly string[] {
+  const requireFromApp = createRequire(pathToFileURL(appModulePath));
+  const roots: string[] = [];
+  for (let index = 0; index < kovoFrameworkSourcePackages.length; index += 1) {
+    const packageName = kovoFrameworkSourcePackages[index]!;
+    try {
+      const entry = resolve(requireFromApp.resolve(packageName));
+      const root = dirname(entry);
+      let duplicate = false;
+      for (let rootIndex = 0; rootIndex < roots.length; rootIndex += 1) {
+        if (roots[rootIndex] === root) {
+          duplicate = true;
+          break;
+        }
+      }
+      if (!duplicate) buildSecurityArrayAppend(roots, root, 'Kovo framework source roots');
+    } catch {
+      // An uninstalled optional first-party package contributes no trusted source root. If app
+      // resolution later produces code for it, the ordinary approved-source gate still applies.
+    }
+  }
+  return buildSnapshotDenseArray(roots, 'Kovo framework source roots');
+}
+
+function isKovoFrameworkSourcePath(roots: readonly string[], fileName: string): boolean {
+  for (let index = 0; index < roots.length; index += 1) {
+    if (isBuildPathWithinRoot(roots[index]!, fileName)) return true;
+  }
+  return false;
 }
 
 function unapprovedBuildSourceError(
@@ -3261,12 +3312,8 @@ function isBuildSourceModulePath(fileName: string): boolean {
 }
 
 function isBuildAppSourcePath(root: string, fileName: string): boolean {
+  if (!isBuildPathWithinRoot(root, fileName)) return false;
   const relativePath = relative(root, fileName);
-  const withinRoot =
-    relativePath === '' ||
-    (!isAbsolute(relativePath) &&
-      buildRegExpExec(/^(?:\.\.(?:[/\\]|$)|[/\\])/u, relativePath) === null);
-  if (!withinRoot) return false;
   const normalized = slashPath(relativePath);
   return !(
     normalized === 'node_modules' ||
@@ -3275,6 +3322,15 @@ function isBuildAppSourcePath(root: string, fileName: string): boolean {
     buildStringStartsWith(normalized, 'dist/') ||
     normalized === '.kovo' ||
     buildStringStartsWith(normalized, '.kovo/')
+  );
+}
+
+function isBuildPathWithinRoot(root: string, fileName: string): boolean {
+  const relativePath = relative(root, fileName);
+  return (
+    relativePath === '' ||
+    (!isAbsolute(relativePath) &&
+      buildRegExpExec(/^(?:\.\.(?:[/\\]|$)|[/\\])/u, relativePath) === null)
   );
 }
 
