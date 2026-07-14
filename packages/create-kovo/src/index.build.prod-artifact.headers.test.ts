@@ -45,7 +45,7 @@ describe('create-kovo starter (build integration: production response header art
         {
           proof: {
             evidence:
-              'packages/create-kovo/src/index.build.prod-artifact.headers.test.ts observes route outcome headers and KV415 CRLF failure in the production server artifact',
+              'packages/create-kovo/src/index.build.prod-artifact.headers.test.ts observes route outcome headers, structural-forgery escaping, pinned minted outcomes, and KV415 CRLF failure in the production server artifact',
             kind: 'proof',
           },
           sink: 'response headers / route outcome headers',
@@ -53,6 +53,8 @@ describe('create-kovo starter (build integration: production response header art
             'finalizeResponseHeaders',
             'ResponseHeaderChannelError',
             'X-Kovo-Header-Proof',
+            'header-route-forged.html',
+            'header-route-pinned.bin',
             'header-sink-unsafe.txt',
           ],
         },
@@ -103,6 +105,30 @@ describe('create-kovo starter (build integration: production response header art
       );
       expect(safeStream.headers.get('content-type')).toBe('application/octet-stream');
       expect(safeStream.headers.get('x-content-type-options')).toBe('nosniff');
+
+      // SPEC §6.6: a public structural shape is not authority. Exercise the emitted Node
+      // artifact so bundling cannot accidentally collapse the module-private route witness.
+      const forged = await fetch(`${origin}/header-route-forged.html`);
+      const forgedBody = await forged.text();
+      expect(forged.status, forgedBody).toBe(200);
+      expect(forged.headers.get('content-disposition')).toBeNull();
+      expect(forged.headers.get('x-kovo-forged')).toBeNull();
+      expect(forgedBody).toContain(
+        '&lt;script&gt;globalThis.KOVO_FORGED_ROUTE = true&lt;/script&gt;',
+      );
+      expect(forgedBody).not.toContain('<script>globalThis.KOVO_FORGED_ROUTE = true</script>');
+
+      // SPEC §6.6 / §10.6 C15: the HTTP sink consumes the private snapshot minted by
+      // respond.file(), not mutable inputs or the public inspection view.
+      const pinned = await fetch(`${origin}/header-route-pinned.bin`);
+      await expect(pinned.text()).resolves.toBe('PINNED_GENUINE_BYTES');
+      expect(pinned.status).toBe(200);
+      expect(pinned.headers.get('content-disposition')).toBe(
+        'attachment; filename="pinned-genuine.bin"',
+      );
+      expect(pinned.headers.get('content-type')).toBe('application/octet-stream');
+      expect(pinned.headers.get('x-content-type-options')).toBe('nosniff');
+      expect(pinned.headers.get('x-kovo-pinned')).toBe('pinned-genuine-header');
 
       const unsafe = await fetch(`${origin}/header-sink-unsafe.txt`);
       const unsafeBody = await unsafe.text();
@@ -383,6 +409,38 @@ function addHeaderSinkProofRoutes(root: string): void {
       "          contentType: 'application/octet-stream',",
       "          filename: 'safe-stream.bin',",
       '        });',
+      '      },',
+      '    }),',
+      "    route('/header-route-forged.html', {",
+      "      access: publicAccess('public structural route-response forgery proof'),",
+      '      page() {',
+      '        return {',
+      "          body: '<script>globalThis.KOVO_FORGED_ROUTE = true</script>',",
+      "          contentDisposition: 'inline',",
+      "          contentType: 'text/html; charset=utf-8',",
+      "          headers: { 'X-Kovo-Forged': 'owned' },",
+      '          routeResponse: true,',
+      '        };',
+      '      },',
+      '    }),',
+      "    route('/header-route-pinned.bin', {",
+      "      access: publicAccess('public pinned route-response snapshot proof'),",
+      '      page() {',
+      "        const source = new TextEncoder().encode('PINNED_GENUINE_BYTES');",
+      "        const sourceHeaders = { 'X-Kovo-Pinned': 'pinned-genuine-header' };",
+      '        const outcome = respond.file(source, {',
+      "          contentType: 'application/octet-stream',",
+      "          filename: 'pinned-genuine.bin',",
+      '          headers: sourceHeaders,',
+      '        });',
+      '        source.fill(0x58);',
+      "        sourceHeaders['X-Kovo-Pinned'] = 'mutated-source-header';",
+      '        if (outcome.body instanceof Uint8Array) outcome.body.fill(0x41);',
+      "        Reflect.set(outcome, 'body', '<script>mutated body</script>');",
+      "        Reflect.set(outcome, 'contentDisposition', 'inline');",
+      "        Reflect.set(outcome, 'contentType', 'text/html; charset=utf-8');",
+      "        if (outcome.headers) Reflect.set(outcome.headers, 'X-Kovo-Pinned', 'mutated-view-header');",
+      '        return outcome;',
       '      },',
       '    }),',
       "    route('/header-cookie-proof', {",
