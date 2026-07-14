@@ -86,6 +86,7 @@ function lazyPromise<T>(load: () => Promise<T>): Promise<T> {
     finally(onFinally) {
       return load().finally(onFinally);
     },
+    // oxlint-disable-next-line unicorn/no-thenable -- Framework-owned lazy Promise facade defers database boot until first observation.
     then(onFulfilled, onRejected) {
       return load().then(onFulfilled, onRejected);
     },

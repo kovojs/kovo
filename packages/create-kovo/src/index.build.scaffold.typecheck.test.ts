@@ -40,7 +40,7 @@ describe('create-kovo starter (build integration: scaffold typecheck)', () => {
     }
   });
 
-  it('runs the generated in-app tests (data layer + request shell)', () => {
+  it('runs the generated in-app tests (app aggregate + data layer)', () => {
     const app = createStarterApp({
       name: 'Vitest Proof',
       tempParent: join(process.cwd(), 'node_modules/.tmp'),
