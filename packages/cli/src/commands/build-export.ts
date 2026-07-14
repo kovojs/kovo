@@ -112,6 +112,11 @@ import {
   type KovoCommandSecurityDisposition,
 } from './security-disposition.js';
 import {
+  captureBuildTimeViteServerLifetime,
+  combineBuildTimeViteFailures,
+  type BuildTimeViteServerLifetime,
+} from './build-vite-lifetime.js';
+import {
   buildByteLength,
   buildSecurityArrayAppend,
   buildArrayIsArray,
@@ -589,6 +594,7 @@ export async function runBuildCommand(
       approvedSourceFiles,
       buildRoot: invocationRoot,
       queryShapeFacts,
+      runtimeTarget: selectedPreset.name,
       runtimeRegistry: {
         ...runtimeRegistryWireFactsFromGraph(checkGraph),
         ...(staticRuntimeRegistry.tableSecurity === undefined
@@ -2007,7 +2013,7 @@ async function loadKovoBuildConfig(
   const configPath = findKovoBuildConfig(root);
   if (configPath === undefined) return {};
 
-  const server = await createViteServer({
+  const lifetime = await createBuildTimeViteServer({
     appType: 'custom',
     configFile: false,
     logLevel: 'error',
@@ -2015,13 +2021,20 @@ async function loadKovoBuildConfig(
     server: buildTimeViteServerOptions(),
     ssr: { noExternal: [/^@kovojs\//] },
   });
+  const { server } = lifetime;
+  let primaryError: unknown;
+  let hasPrimaryError = false;
   try {
     await preloadKovoSsrSecurityProfile(server, appModulePath, root);
     const configModule = await server.ssrLoadModule(`/${basename(configPath)}`);
     const config = kovoBuildConfigFromModule(configModule, configPath);
     return { config, path: configPath };
+  } catch (error) {
+    primaryError = error;
+    hasPrimaryError = true;
+    throw error;
   } finally {
-    await server.close();
+    await closeBuildTimeViteServerLifetime(lifetime, hasPrimaryError, primaryError);
   }
 }
 
@@ -2034,7 +2047,7 @@ async function loadBuildAppModule(
   root: string,
 ): Promise<LoadedBuildAppModule> {
   const requireFromApp = createRequire(pathToFileURL(appModulePath));
-  const server = await createViteServer({
+  const lifetime = await createBuildTimeViteServer({
     appType: 'custom',
     configFile: false,
     logLevel: 'error',
@@ -2053,6 +2066,9 @@ async function loadBuildAppModule(
     // externalized by Vite.
     ssr: { noExternal: [/^@kovojs\//] },
   });
+  const { server } = lifetime;
+  let primaryError: unknown;
+  let hasPrimaryError = false;
   try {
     await preloadKovoSsrSecurityProfile(server, appModulePath, root);
     // Keep the profile entries sequential too: the app is not permitted to overlap any portion of
@@ -2077,8 +2093,12 @@ async function loadBuildAppModule(
       serverExecutionModule: serverExecutionModule as LoadedBuildAppModule['serverExecutionModule'],
       serverInternalBuildModule: trustedInternalBuild,
     };
+  } catch (error) {
+    primaryError = error;
+    hasPrimaryError = true;
+    throw error;
   } finally {
-    await server.close();
+    await closeBuildTimeViteServerLifetime(lifetime, hasPrimaryError, primaryError);
   }
 }
 
@@ -3169,6 +3189,7 @@ async function bundleKovoServerHandler(
     approvedSourceFiles: readonly BuildCheckSourceFile[];
     buildRoot: string;
     queryShapeFacts: readonly QueryShapeFact[];
+    runtimeTarget: KovoBuildPresetName;
     runtimeRegistry: RuntimeRegistryWireFacts;
     stylesheetAssets?: KovoBuildStylesheetAssets;
   },
@@ -3236,6 +3257,9 @@ async function bundleKovoServerHandler(
         },
       },
       plugins: [
+        ...(options.runtimeTarget === 'cloudflare'
+          ? [cloudflareUnavailableDgramFloorVitePlugin()]
+          : []),
         approvedBuildSourcesVitePlugin(
           appModulePath,
           options.buildRoot,
@@ -3354,6 +3378,46 @@ function kovoBuildFilterFileName(fileName: string, root: string): string {
 }
 
 const bundledUndiciRuntimeModuleId = '\0kovo-bundled-undici-runtime';
+
+const cloudflareUnavailableDgramFloorModuleId = '\0kovo-cloudflare-unavailable-dgram-floor';
+
+/**
+ * Cloudflare exposes node:dgram only as a non-functional compatibility stub. The framework's
+ * Node process floor is therefore vacuously satisfied in that runtime and must not make every
+ * Cloudflare build fail its own unsupported-API inspection. Restrict this substitution to the
+ * framework-owned relative import from egress-bootstrap; an app-authored node:dgram import stays
+ * external in the server bundle and remains a blocking cloudflare-unsupported-node-api finding.
+ */
+function cloudflareUnavailableDgramFloorVitePlugin(): {
+  enforce: 'pre';
+  load(id: string): null | string;
+  name: string;
+  resolveId(source: string, importer?: string): null | string;
+} {
+  return {
+    enforce: 'pre',
+    name: 'kovo-cloudflare-unavailable-dgram-floor',
+    resolveId(source, importer) {
+      const normalizedImporter = importer ? slashPath(importer) : '';
+      if (
+        source === './egress-dgram.js' &&
+        buildRegExpExec(/\/egress-bootstrap\.(?:js|ts)$/u, normalizedImporter) !== null
+      ) {
+        return cloudflareUnavailableDgramFloorModuleId;
+      }
+      return null;
+    },
+    load(id) {
+      if (id !== cloudflareUnavailableDgramFloorModuleId) return null;
+      return `export function installDgramFloor() { return () => {}; }
+export function dgramFloorTamperStatus() {
+  return { installed: true, tampered: false };
+}
+export function isDgramFloorInstalled() { return true; }
+`;
+    },
+  };
+}
 
 function bundledUndiciRuntimeVitePlugin(): {
   enforce: 'pre';
@@ -3528,6 +3592,9 @@ export async function runExportCommandStructured(
 ): Promise<CliCommandResult | KovoExportCommandResult> {
   let loadedExport: LoadedExportAppModule | undefined;
   let manifestPlan: ExportManifestPlan | undefined;
+  let result!: CliCommandResult | KovoExportCommandResult;
+  let primaryError: unknown;
+  let hasPrimaryError = false;
   try {
     options = snapshotKovoExportOptions(options);
     const resolvedOptions = resolveKovoExportOptions(options, security.invocationCwd);
@@ -3558,16 +3625,34 @@ export async function runExportCommandStructured(
       },
     );
 
-    return kovoExportResult(staticExport, resolvedOptions);
+    result = kovoExportResult(staticExport, resolvedOptions);
   } catch (error) {
-    return exportErrorResult(error);
-  } finally {
-    try {
-      await loadedExport?.close?.();
-    } finally {
-      manifestPlan?.cleanup?.();
-    }
+    primaryError = error;
+    hasPrimaryError = true;
+    result = exportErrorResult(error);
   }
+
+  let teardownError: unknown;
+  let hasTeardownError = false;
+  try {
+    await loadedExport?.close?.();
+  } catch (error) {
+    teardownError = error;
+    hasTeardownError = true;
+  }
+  try {
+    manifestPlan?.cleanup?.();
+  } catch (error) {
+    teardownError = hasTeardownError ? combineBuildTimeViteFailures(teardownError, error) : error;
+    hasTeardownError = true;
+  }
+  if (hasTeardownError) {
+    if (hasPrimaryError) {
+      return exportErrorResult(combineBuildTimeViteFailures(primaryError, teardownError));
+    }
+    return exportErrorResult(teardownError);
+  }
+  return result;
 }
 
 function snapshotKovoBuildOptions(value: KovoBuildOptions): KovoBuildOptions {
@@ -3701,7 +3786,7 @@ async function loadExportAppModule(
     };
   }
 
-  const server = await createViteServer({
+  const lifetime = await createBuildTimeViteServer({
     appType: 'custom',
     configFile: false,
     logLevel: 'error',
@@ -3709,6 +3794,7 @@ async function loadExportAppModule(
     server: buildTimeViteServerOptions(),
     ssr: { noExternal: [/^@kovojs\//] },
   });
+  const { server } = lifetime;
   try {
     await preloadKovoSsrSecurityProfile(server, resolvedAppModulePath, root);
     const serverModule = await server.ssrLoadModule(viteSsrModuleId(appResolvedServerPath, root));
@@ -3720,11 +3806,11 @@ async function loadExportAppModule(
     );
     return {
       appModule,
-      close: () => server.close(),
+      close: () => lifetime.close(),
       exportStaticApp: exportStaticAppFromModule(serverModule),
     };
   } catch (error) {
-    await server.close();
+    await closeBuildTimeViteServerLifetime(lifetime, true, error);
     throw error;
   }
 }
@@ -3760,6 +3846,40 @@ const exportPublicSnapshotMaxDepth = 64;
 
 function buildTimeViteServerOptions(): { hmr: false } {
   return { hmr: false };
+}
+
+async function createBuildTimeViteServer(
+  config: Parameters<typeof createViteServer>[0],
+): Promise<BuildTimeViteServerLifetime> {
+  const server = await createViteServer(config);
+  try {
+    // Capture every owner before config/app evaluation. The lifetime enforces the exact Vite Plus
+    // graph shape and clears only these command-private environments after their runners close.
+    // SPEC §6.6 rule 6: authored code cannot replace the controls used for trust-root teardown.
+    return captureBuildTimeViteServerLifetime(server);
+  } catch (error) {
+    try {
+      await server.close();
+    } catch (teardownError) {
+      throw combineBuildTimeViteFailures(error, teardownError);
+    }
+    throw error;
+  }
+}
+
+async function closeBuildTimeViteServerLifetime(
+  lifetime: BuildTimeViteServerLifetime,
+  hasPrimaryError: boolean,
+  primaryError: unknown,
+): Promise<void> {
+  try {
+    await lifetime.close();
+  } catch (teardownError) {
+    if (hasPrimaryError) {
+      throw combineBuildTimeViteFailures(primaryError, teardownError);
+    }
+    throw teardownError;
+  }
 }
 
 async function staticExportManifestPlan(options: KovoExportOptions): Promise<ExportManifestPlan> {

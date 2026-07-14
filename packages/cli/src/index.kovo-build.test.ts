@@ -803,6 +803,7 @@ import { createApp, guards, mutation, publicAccess, s } from '@kovojs/server';
 const unsafe = mutation('auth/unsafe-cookie', {
   access: publicAccess('machine callback'),
   csrf: false,
+  csrfJustification: 'machine-authority security regression fixture',
   input: s.object({}),
   handler(_input, request) {
     return { cookie: request.headers.get('Cookie') };
@@ -811,6 +812,7 @@ const unsafe = mutation('auth/unsafe-cookie', {
 const unsafeAuthorization = mutation('auth/unsafe-authorization', {
   access: publicAccess('browser Authorization callback'),
   csrf: false,
+  csrfJustification: 'machine-authority security regression fixture',
   input: s.object({}),
   handler(_input, request) {
     return { authorization: request.headers.get('Authorization') };
@@ -819,6 +821,7 @@ const unsafeAuthorization = mutation('auth/unsafe-authorization', {
 const unsafeProxyIdentity = mutation('auth/unsafe-proxy-identity', {
   access: publicAccess('proxy identity callback'),
   csrf: false,
+  csrfJustification: 'machine-authority security regression fixture',
   input: s.object({}),
   handler(_input, request) {
     return { user: request.headers.get('X-Auth-Request-User') };
@@ -827,6 +830,7 @@ const unsafeProxyIdentity = mutation('auth/unsafe-proxy-identity', {
 const unsafeDynamicCode = mutation('auth/unsafe-dynamic-code', {
   access: publicAccess('dynamic code callback'),
   csrf: false,
+  csrfJustification: 'machine-authority security regression fixture',
   input: s.object({}),
   handler(_input, request) {
     return eval('request.headers.get("cookie")');
@@ -835,6 +839,7 @@ const unsafeDynamicCode = mutation('auth/unsafe-dynamic-code', {
 const unsafeCookieOutput = mutation('auth/unsafe-cookie-output', {
   access: publicAccess('cookie-minting callback'),
   csrf: false,
+  csrfJustification: 'machine-authority security regression fixture',
   input: s.object({}),
   handler(_input, _request, context) {
     context.setCookie('session', 'attacker');
@@ -843,6 +848,7 @@ const unsafeCookieOutput = mutation('auth/unsafe-cookie-output', {
 const unsafeFakeThis = mutation('auth/unsafe-fake-this', {
   access: publicAccess('fake this callback'),
   csrf: false,
+  csrfJustification: 'machine-authority security regression fixture',
   input: s.object({}),
   handler(this: void, _input, request) {
     return request.headers.get('Cookie');
@@ -851,6 +857,7 @@ const unsafeFakeThis = mutation('auth/unsafe-fake-this', {
 const unsafeContextEscape = mutation('auth/unsafe-context-escape', {
   access: publicAccess('context prototype escape'),
   csrf: false,
+  csrfJustification: 'machine-authority security regression fixture',
   input: s.object({}),
   handler(_input, _request, context) {
     context.valueOf().setCookie('session', 'attacker');
@@ -859,6 +866,7 @@ const unsafeContextEscape = mutation('auth/unsafe-context-escape', {
 const safe = mutation('auth/signed-machine', {
   access: publicAccess('signed machine callback'),
   csrf: false,
+  csrfJustification: 'machine-authority security regression fixture',
   input: s.object({}),
   handler(_input, request) {
     return { signature: request.headers.get('X-Machine-Signature') };
@@ -870,12 +878,14 @@ const referencedHandler = (_input, request) => ({
 const unproven = mutation('auth/unproven-handler', {
   access: publicAccess('referenced machine callback'),
   csrf: false,
+  csrfJustification: 'machine-authority security regression fixture',
   input: s.object({}),
   handler: referencedHandler,
 });
 const guarded = mutation('auth/session-guarded', {
   access: [guards.authed()],
   csrf: false,
+  csrfJustification: 'machine-authority security regression fixture',
   input: s.object({}),
   handler(_input, request) {
     return { signature: request.headers.get('X-Machine-Signature') };
@@ -885,6 +895,7 @@ const customGuard = () => true;
 const compositeGuarded = mutation('auth/composite-opaque-guard', {
   access: [guards.all(customGuard, guards.rateLimit({ max: 10, per: 'ip' }))],
   csrf: false,
+  csrfJustification: 'machine-authority security regression fixture',
   input: s.object({}),
   handler(_input, request) {
     return { signature: request.headers.get('X-Machine-Signature') };
@@ -893,6 +904,7 @@ const compositeGuarded = mutation('auth/composite-opaque-guard', {
 const proxiedGuarded = mutation('auth/proxied-guard', {
   access: [new Proxy(guards.rateLimit({ max: 10, per: 'global' }), {})],
   csrf: false,
+  csrfJustification: 'machine-authority security regression fixture',
   input: s.object({}),
   handler(_input, request) {
     return { signature: request.headers.get('X-Machine-Signature') };
@@ -901,6 +913,7 @@ const proxiedGuarded = mutation('auth/proxied-guard', {
 const globalRateGuarded = mutation('auth/global-rate-guard', {
   access: [guards.rateLimit({ max: 10, per: 'global' })],
   csrf: false,
+  csrfJustification: 'machine-authority security regression fixture',
   input: s.object({}),
   handler(_input, request) {
     return { signature: request.headers.get('X-Machine-Signature') };
@@ -974,6 +987,7 @@ import { createApp, mutation, publicAccess, s } from '@kovojs/server';
 const unsafe = mutation('auth/map-poison', {
   access: publicAccess('machine callback'),
   csrf: false,
+  csrfJustification: 'machine-authority security regression fixture',
   input: s.object({}),
   handler(_input, request) {
     return request.headers.get('Cookie');
@@ -1034,6 +1048,7 @@ import { createApp, mutation, publicAccess, s } from '@kovojs/server';
 const unsafe = mutation('auth/lowercase-poison', {
   access: publicAccess('machine callback'),
   csrf: false,
+  csrfJustification: 'machine-authority security regression fixture',
   input: s.object({}),
   handler(_input, request) {
     return request.headers.get('Cookie');
@@ -1092,6 +1107,7 @@ const runtimeKey = 'auth/runtime-key';
 const dynamicKey = mutation(runtimeKey, {
   access: publicAccess('dynamic-key machine callback'),
   csrf: false,
+  csrfJustification: 'machine-authority security regression fixture',
   input: s.object({}),
   handler(_input, request) {
     return { cookie: request.headers.get('Cookie') };
@@ -1137,6 +1153,7 @@ import { mutation, publicAccess, s } from '@kovojs/server';
 export const outside = mutation('auth/outside-scan', {
   access: publicAccess('outside-scan callback'),
   csrf: false,
+  csrfJustification: 'machine-authority security regression fixture',
   input: s.object({}),
   handler(_input, request) {
     return { cookie: request.headers.get('Cookie') };
@@ -1152,6 +1169,7 @@ import { mutation, publicAccess, s } from '@kovojs/server';
 export const decoy = mutation('auth/outside-scan', {
   access: publicAccess('unreachable safe decoy'),
   csrf: false,
+  csrfJustification: 'machine-authority security regression fixture',
   input: s.object({}),
   handler(_input, request) {
     return { signature: request.headers.get('X-Machine-Signature') };
@@ -1218,6 +1236,7 @@ export function createActual({ mutation, publicAccess, s }) {
   return mutation('auth/colliding-handler', {
     access: publicAccess('bare-package callback'),
     csrf: false,
+    csrfJustification: 'machine-authority security regression fixture',
     input: s.object({}),
     handler(_input, request) {
       return request.headers.get('Cookie');
@@ -1234,6 +1253,7 @@ import { mutation, publicAccess, s } from '@kovojs/server';
 export const decoy = mutation('auth/colliding-handler', {
   access: publicAccess('reachable safe decoy'),
   csrf: false,
+  csrfJustification: 'machine-authority security regression fixture',
   input: s.object({}),
   handler(_input, request) {
     return request.headers.get('X-Machine-Signature');
@@ -1416,7 +1436,7 @@ export async function search(input, db) {
     }
   });
 
-  it('keeps KV422 fail-closed when evaluated app code selectively replaces Array.filter', async () => {
+  it('rejects evaluated app code that selectively replaces Array.filter at the verifier boundary', async () => {
     const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-static-filter-poison-'));
     const appPath = join(root, 'app.mjs');
     const outDir = join(root, 'dist');
@@ -1475,8 +1495,8 @@ export async function unsafe(db, input) {
         'utf8',
       );
 
-      // SPEC §2/§11.4: build-time app evaluation shares a realm with security analysis.
-      // The complete source census must survive selective ambient prototype replacement.
+      // SPEC §2/§11.4: build-time app evaluation shares a realm with security analysis. Reject a
+      // changed ambient control before trusting the downstream KV422 source census.
       const exitCode = await mainAsync([
         'build',
         appPath,
@@ -1487,7 +1507,9 @@ export async function unsafe(db, input) {
       ]);
       const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
       expect(exitCode, errorOutput).toBe(1);
-      expect(errorOutput).toMatch(/ERROR (?:KV422|KV245)[\s\S]*src\/search\.js/);
+      expect(errorOutput).toContain(
+        'ERROR SECURITY Kovo verifier security boundary rejected unstable input or changed controls.',
+      );
       expect(errorOutput).not.toContain('CHECK ok');
       expect(existsSync(join(outDir, '.kovo/graph.json'))).toBe(false);
     } finally {
@@ -2635,7 +2657,7 @@ export async function resetFixture() {
     }
   });
 
-  it('references build fragment CSS chunks from enhanced mutation live targets', async () => {
+  it('keeps enhanced mutation CSS bound to the attested source route', async () => {
     const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-fragment-css-'));
     const appPath = join(root, 'app.tsx');
     const outDir = join(root, 'dist');
@@ -2709,6 +2731,7 @@ export const homeQuery = {
           const loginMutationResponse = await fetch(`${origin}/_m/home/touch`, {
             body: new URLSearchParams(),
             headers: {
+              'Kovo-Current-Url': `${origin}/login`,
               'Kovo-Fragment': 'true',
               'Kovo-Live-Targets': homePanelLiveTarget,
               'Kovo-Targets': 'home-panel=home',
@@ -2718,16 +2741,14 @@ export const homeQuery = {
           });
           const loginMutationBody = await loginMutationResponse.text();
           expect(loginMutationResponse.status, loginMutationBody).toBe(200);
-          expect(loginMutationBody).toContain(`<link rel="stylesheet" href="${baseCss.href}">`);
-          expect(loginMutationBody).toContain(`<link rel="stylesheet" href="${loginCss.href}">`);
-          expect(loginMutationBody).toContain(
-            `<link rel="stylesheet" href="${homeFragmentCss.href}">`,
-          );
-          expect(loginMutationBody).not.toContain(homeCss.href);
+          // SPEC §9.1/§9.3: the descriptor was minted by the home document. Replaying it
+          // under /login cannot authorize either renderer reconstruction or CSS disclosure.
+          expect(loginMutationBody).toBe('');
 
           const homeMutationResponse = await fetch(`${origin}/_m/home/touch`, {
             body: new URLSearchParams(),
             headers: {
+              'Kovo-Current-Url': `${origin}/`,
               'Kovo-Fragment': 'true',
               'Kovo-Live-Targets': homePanelLiveTarget,
               'Kovo-Targets': 'home-panel=home',
@@ -3233,6 +3254,11 @@ export const homeQuery = {
         join(outDir, 'cloudflare/server/handler.mjs'),
         'utf8',
       );
+      expect(
+        /\b(?:from\s*['"]node:dgram['"]|import\s*['"]node:dgram['"]|import\s*\(\s*['"]node:dgram['"]\s*\)|require\s*\(\s*['"]node:dgram['"]\s*\))/u.exec(
+          cloudflareHandlerSource,
+        ),
+      ).toBeNull();
       expect(cloudflareHandlerSource).not.toContain('node:vm');
       expect(cloudflareHandlerSource).not.toContain('readFileSync');
       expect(cloudflareHandlerSource).not.toContain('pgsql-ast-parser');
@@ -3986,6 +4012,7 @@ const cartQuery = query('cart', {
 const addToCart = mutation('cart/add', {
   access: { kind: 'public', reason: 'fatal KV310 fixture' },
   csrf: false,
+  csrfJustification: 'machine-authority security regression fixture',
   input: s.object({ quantity: s.number().default(1) }),
   registry: { touches: [cart] },
   handler: () => ({ ok: true }),
@@ -4317,7 +4344,7 @@ type DevMiddleware = (
 ) => void;
 
 interface DevPluginHarness extends ReturnType<typeof kovo> {
-  configResolved?(config: { root: string }): void | Promise<void>;
+  configResolved?(config: { command: 'serve'; root: string }): void | Promise<void>;
   configureServer?(server: {
     config: { root: string };
     middlewares: { use(handler: DevMiddleware): void };
@@ -4331,12 +4358,7 @@ async function devRouteDocument(root: string, appPath: string): Promise<string> 
     app: `/${appPath.slice(root.length + 1).replaceAll('\\', '/')}`,
   }) as DevPluginHarness;
   const middlewares: DevMiddleware[] = [];
-  await plugin.configResolved?.({ root });
-
-  for (const fileName of ['src/home-panel.tsx', 'src/login-panel.tsx', 'src/shared-card.tsx']) {
-    const absoluteFileName = join(root, fileName);
-    await plugin.transform?.(readFileSync(absoluteFileName, 'utf8'), absoluteFileName);
-  }
+  await plugin.configResolved?.({ command: 'serve', root });
 
   await plugin.configureServer?.({
     config: { root },
@@ -4367,6 +4389,14 @@ async function devRouteDocument(root: string, appPath: string): Promise<string> 
       };
     },
   });
+
+  // Real Vite configures the dev server before transforming request-reachable modules. Keep the
+  // fixture on that lifecycle so the compiler's configureServer epoch does not correctly discard
+  // CSS collected under a superseded configuration.
+  for (const fileName of ['src/home-panel.tsx', 'src/login-panel.tsx', 'src/shared-card.tsx']) {
+    const absoluteFileName = join(root, fileName);
+    await plugin.transform?.(readFileSync(absoluteFileName, 'utf8'), absoluteFileName);
+  }
 
   const server = createHttpServer((request, response) => {
     runDevMiddlewareChain(middlewares, request, response, (error) => {
@@ -4523,7 +4553,10 @@ async function listen(server: Server): Promise<string> {
   }
 
   const origin = `http://127.0.0.1:${address.port}`;
-  installEgressFloorSync({ allowInternal: [`127.0.0.1:${address.port}`] }, () => {});
+  // SPEC §6.6: keep one process-global development posture across this integration file. A
+  // per-port allowInternal policy changes after every listener and makes later createApp calls
+  // correctly refuse a same-process authority replacement.
+  installEgressFloorSync(undefined, () => {}, { allowPrivateNetwork: true });
   return origin;
 }
 

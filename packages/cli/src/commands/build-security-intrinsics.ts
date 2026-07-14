@@ -27,6 +27,7 @@ const nativeBufferToString = NativeBuffer.prototype.toString;
 const nativeDateToISOString = NativeDate.prototype.toISOString;
 const nativeFunctionToString = NativeFunction.prototype.toString;
 const nativeJsonStringify = NativeJSON.stringify;
+const nativeMapClear = NativeMap.prototype.clear;
 const nativeMapGet = NativeMap.prototype.get;
 const nativeMapHas = NativeMap.prototype.has;
 const nativeMapSet = NativeMap.prototype.set;
@@ -38,13 +39,16 @@ const nativeObjectGetPrototypeOf = NativeObject.getPrototypeOf;
 const nativeObjectIs = NativeObject.is;
 const nativeObjectKeys = NativeObject.keys;
 const nativeObjectSetPrototypeOf = NativeObject.setPrototypeOf;
+const nativeMapSizeGetter = nativeObjectGetOwnPropertyDescriptor(NativeMap.prototype, 'size')?.get;
 const nativePromiseResolve = NativePromise.resolve;
 const nativePromiseThen = NativePromise.prototype.then;
 const nativeReflectApply = NativeReflect.apply;
 const nativeRegExpExec = NativeRegExp.prototype.exec;
 const nativeRegExpReplace = NativeRegExp.prototype[Symbol.replace];
 const nativeSetAdd = NativeSet.prototype.add;
+const nativeSetClear = NativeSet.prototype.clear;
 const nativeSetHas = NativeSet.prototype.has;
+const nativeSetSizeGetter = nativeObjectGetOwnPropertyDescriptor(NativeSet.prototype, 'size')?.get;
 const nativeStringIncludes = NativeString.prototype.includes;
 const nativeStringEndsWith = NativeString.prototype.endsWith;
 const nativeStringIndexOf = NativeString.prototype.indexOf;
@@ -92,7 +96,12 @@ function ownDataValueUnchecked(source: object, key: PropertyKey): unknown {
 
 function bootstrapSelfCheckPasses(): boolean {
   try {
-    if (typeof nativeTypedArrayByteLengthGetter !== 'function') return false;
+    if (
+      typeof nativeMapSizeGetter !== 'function' ||
+      typeof nativeSetSizeGetter !== 'function' ||
+      typeof nativeTypedArrayByteLengthGetter !== 'function'
+    )
+      return false;
     if (apply(nativeArrayIsArray, NativeArray, [[]]) !== true) return false;
     if (apply(nativeArrayIsArray, NativeArray, [{}]) !== false) return false;
     if (apply(nativeBufferByteLength, NativeBuffer, ['kovo', 'utf8']) !== 4) return false;
@@ -105,9 +114,17 @@ function bootstrapSelfCheckPasses(): boolean {
     const map = new NativeMap<string, string>();
     apply(nativeMapSet, map, ['safe', 'value']);
     if (apply(nativeMapGet, map, ['safe']) !== 'value') return false;
+    if (apply(nativeMapSizeGetter, map, []) !== 1) return false;
+    apply(nativeMapClear, map, []);
+    if (apply(nativeMapHas, map, ['safe']) || apply(nativeMapSizeGetter, map, []) !== 0)
+      return false;
     const set = new NativeSet<string>();
     apply(nativeSetAdd, set, ['safe']);
     if (apply(nativeSetHas, set, ['safe']) !== true) return false;
+    if (apply(nativeSetSizeGetter, set, []) !== 1) return false;
+    apply(nativeSetClear, set, []);
+    if (apply(nativeSetHas, set, ['safe']) || apply(nativeSetSizeGetter, set, []) !== 0)
+      return false;
     if (apply(nativeStringStartsWith, 'ERROR KV418', ['ERROR ']) !== true) return false;
     if (apply<RegExpExecArray | null>(nativeRegExpExec, /^ERROR/u, ['ERROR KV418']) === null) {
       return false;
@@ -244,6 +261,11 @@ export function buildMapGet<Key, Value>(map: ReadonlyMap<Key, Value>, key: Key):
   return apply(nativeMapGet, map, [key]);
 }
 
+export function buildMapClear<Key, Value>(map: Map<Key, Value>): void {
+  assertBuildSecurityIntrinsics();
+  apply(nativeMapClear, map, []);
+}
+
 export function buildMapHas<Key, Value>(map: ReadonlyMap<Key, Value>, key: Key): boolean {
   assertBuildSecurityIntrinsics();
   return apply(nativeMapHas, map, [key]);
@@ -252,6 +274,11 @@ export function buildMapHas<Key, Value>(map: ReadonlyMap<Key, Value>, key: Key):
 export function buildMapSet<Key, Value>(map: Map<Key, Value>, key: Key, value: Value): void {
   assertBuildSecurityIntrinsics();
   apply(nativeMapSet, map, [key, value]);
+}
+
+export function buildMapSize(map: ReadonlyMap<unknown, unknown>): number {
+  assertBuildSecurityIntrinsics();
+  return apply(nativeMapSizeGetter!, map, []);
 }
 
 export function buildCreateSet<Value>(): Set<Value> {
@@ -264,9 +291,28 @@ export function buildSetAdd<Value>(set: Set<Value>, value: Value): void {
   apply(nativeSetAdd, set, [value]);
 }
 
+export function buildSetClear<Value>(set: Set<Value>): void {
+  assertBuildSecurityIntrinsics();
+  apply(nativeSetClear, set, []);
+}
+
+export function buildApply<Return>(
+  fn: Function,
+  receiver: unknown,
+  args: readonly unknown[],
+): Return {
+  assertBuildSecurityIntrinsics();
+  return apply(fn, receiver, args);
+}
+
 export function buildSetHas<Value>(set: ReadonlySet<Value>, value: Value): boolean {
   assertBuildSecurityIntrinsics();
   return apply(nativeSetHas, set, [value]);
+}
+
+export function buildSetSize(set: ReadonlySet<unknown>): number {
+  assertBuildSecurityIntrinsics();
+  return apply(nativeSetSizeGetter!, set, []);
 }
 
 export function buildObjectKeys(value: object): string[] {
