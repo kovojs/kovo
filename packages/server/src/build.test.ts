@@ -1,7 +1,7 @@
 import { EventEmitter } from 'node:events';
 import { createHash } from 'node:crypto';
-import { execFileSync } from 'node:child_process';
-import { Dirent, readFileSync, writeFileSync } from 'node:fs';
+import { execFileSync, spawn } from 'node:child_process';
+import { Dirent } from 'node:fs';
 import {
   link,
   mkdir,
@@ -16,18 +16,16 @@ import {
   writeFile,
 } from 'node:fs/promises';
 import {
-  createServer as createHttpServer,
   request as nodeHttpRequest,
   type IncomingHttpHeaders,
   type IncomingMessage,
-  type Server,
   type ServerResponse,
 } from 'node:http';
 import { connect as netConnect } from 'node:net';
 import type { Socket } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { pathToFileURL as nativePathToFileURL } from 'node:url';
+import { pathToFileURL } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 import * as packageBuildApi from '@kovojs/server/build';
@@ -57,18 +55,6 @@ const runtimeClientModuleFile = /^c\/__v\/[^/]+\/kovo-runtime\.client\.js$/;
 const testRenderPlanFingerprint = computeRenderPlanFingerprint({
   test: 'field:id',
 });
-
-// Generated entries irreversibly lock the process realm before loading any generated/authored
-// module. This broad adapter/preset suite imports many independent artifacts into one Vitest
-// worker and must therefore leave that worker mutable; the dedicated build-runtime-lockdown suite
-// runs the exact emitted entries in fresh child realms. Every import below passes through this
-// local URL helper after its on-disk source/order assertions have completed.
-function pathToFileURL(filePath: string): URL {
-  const source = readFileSync(filePath, 'utf8');
-  const unlocked = withoutGeneratedRuntimeLockInvocation(source);
-  if (unlocked !== source) writeFileSync(filePath, unlocked);
-  return nativePathToFileURL(filePath);
-}
 
 interface NodeAdapterModule {
   nodeRequestToWebRequest(
@@ -1417,24 +1403,18 @@ describe('server build-time deployment API', () => {
         },
         serverHandlerSource: `
 const originalObjectEntries = Object.entries;
-function restoreNodeRequestBridge() {
-  Object.entries = originalObjectEntries;
-}
 export default async function handler(request) {
-  globalThis.__kovoNodeRawTargetHandlerCalls =
-    (globalThis.__kovoNodeRawTargetHandlerCalls ?? 0) + 1;
   const url = new URL(request.url);
   if (url.pathname === '/request-bridge-poison') {
-    globalThis.__kovoRestoreNodeRequestBridge = restoreNodeRequestBridge;
-    Object.entries = function selectiveOriginSubstitution(value) {
+    const applied = Reflect.set(Object, 'entries', function selectiveOriginSubstitution(value) {
       const entries = Reflect.apply(originalObjectEntries, Object, [value]);
       if (!entries.some(([name]) => name === 'origin')) return entries;
       return entries.map(([name, entry]) => [
         name,
         name === 'origin' ? 'https://trusted.example' : entry,
       ]);
-    };
-    return new Response('armed');
+    });
+    return new Response(applied ? 'armed' : 'blocked');
   }
   if (url.pathname === '/request-bridge-echo') {
     return new Response(request.method + ':' + request.headers.get('origin'));
@@ -1506,23 +1486,13 @@ export default async function handler(request) {
       expect(nodeServer).toContain("await import('./server/handler.mjs')");
       expect(nodeServer).not.toContain('sanitizeDiagnosticUrl.toString');
 
-      const serverModule = (await import(pathToFileURL(join(nodeOutDir, 'server.mjs')).href)) as {
-        createKovoNodeServer(): Server;
-      };
       const emittedNodeAdapter = (await import(
         `${pathToFileURL(join(nodeOutDir, 'node-adapter.mjs')).href}?t=${Date.now()}`
       )) as NodeAdapterModule;
       await expectEmittedAdapterParity(emittedNodeAdapter);
 
-      const server = serverModule.createKovoNodeServer();
-      expect(server.headersTimeout).toBe(10_000);
-      expect(server.requestTimeout).toBe(30_000);
-      const baseUrl = await listen(server);
-      const rawTargetCounter = globalThis as typeof globalThis & {
-        __kovoNodeRawTargetHandlerCalls?: number;
-        __kovoRestoreNodeRequestBridge?: () => void;
-      };
-      rawTargetCounter.__kovoNodeRawTargetHandlerCalls = 0;
+      const server = await startGeneratedNodeServer(join(nodeOutDir, 'server.mjs'));
+      const baseUrl = server.baseUrl;
 
       try {
         for (const target of [
@@ -1543,39 +1513,22 @@ export default async function handler(request) {
           expect(aliasResponse).toContain('Not Found');
           expect(aliasResponse).not.toContain('EMITTED_NODE_ALIAS_CREDENTIAL');
         }
-        expect(rawTargetCounter.__kovoNodeRawTargetHandlerCalls).toBe(0);
-
         const canonicalMutationPath = await rawHttpExchange(
           baseUrl,
           rawMutationRequest('/_m/a/b', 'EMITTED_NODE_CANONICAL_CREDENTIAL'),
         );
         expect(canonicalMutationPath).toContain('HTTP/1.1 200');
         expect(canonicalMutationPath).toContain('route:/_m/a/b:');
-        expect(rawTargetCounter.__kovoNodeRawTargetHandlerCalls).toBe(1);
 
-        const originalSetHas = Set.prototype.has;
-        Set.prototype.has = function (value) {
-          const bodylessClassifier =
-            this.size === 2 &&
-            originalSetHas.call(this, 'GET') &&
-            originalSetHas.call(this, 'HEAD');
-          if (bodylessClassifier && value === 'POST') return true;
-          if (bodylessClassifier && value === 'GET') return false;
-          return originalSetHas.call(this, value);
-        } as typeof Set.prototype.has;
-        try {
-          const poisonedPost = await rawHttpExchange(
-            baseUrl,
-            'POST /assets/cart.css HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\nContent-Length: 0\r\n\r\n',
-          );
-          expect(poisonedPost).toContain('route:/assets/cart.css:');
-          expect(poisonedPost).not.toContain('body { color: navy; }');
+        const postedAsset = await rawHttpExchange(
+          baseUrl,
+          'POST /assets/cart.css HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\nContent-Length: 0\r\n\r\n',
+        );
+        expect(postedAsset).toContain('route:/assets/cart.css:');
+        expect(postedAsset).not.toContain('body { color: navy; }');
 
-          const poisonedGet = await fetch(`${baseUrl}/assets/cart.css`);
-          await expect(poisonedGet.text()).resolves.toBe('body { color: navy; }');
-        } finally {
-          Set.prototype.has = originalSetHas;
-        }
+        const fetchedAsset = await fetch(`${baseUrl}/assets/cart.css`);
+        await expect(fetchedAsset.text()).resolves.toBe('body { color: navy; }');
 
         const declaredOversized = await rawHttpExchange(
           baseUrl,
@@ -1611,12 +1564,12 @@ export default async function handler(request) {
         );
         expect(routeResponse.headers.get('content-type')).toBe('text/plain; charset=utf-8');
 
-        await fetch(`${baseUrl}/request-bridge-poison`);
+        const bridgePoison = await fetch(`${baseUrl}/request-bridge-poison`);
+        await expect(bridgePoison.text()).resolves.toBe('blocked');
         const exactBridgeResponse = await fetch(`${baseUrl}/request-bridge-echo`, {
           headers: { Origin: 'https://attacker.example' },
         });
         await expect(exactBridgeResponse.text()).resolves.toBe('GET:https://attacker.example');
-        rawTargetCounter.__kovoRestoreNodeRequestBridge?.();
 
         const cookieResponse = await nodeGet(baseUrl, '/cookies');
         expect(cookieResponse.headers['set-cookie']).toEqual([
@@ -1660,10 +1613,7 @@ export default async function handler(request) {
         expect(missingClientModule.headers.get('vary')).toBeNull();
         expect(missingClientModule.headers.get('set-cookie')).toBeNull();
       } finally {
-        rawTargetCounter.__kovoRestoreNodeRequestBridge?.();
-        delete rawTargetCounter.__kovoRestoreNodeRequestBridge;
-        delete rawTargetCounter.__kovoNodeRawTargetHandlerCalls;
-        await close(server);
+        await server.close();
       }
     } finally {
       await rm(root, { force: true, recursive: true });
@@ -1672,7 +1622,7 @@ export default async function handler(request) {
 
   it('serializes control and Unicode emitted Node static-file disposition filenames', async () => {
     const root = await mkdtemp(join(tmpdir(), 'kovo-node-preset-filename-controls-'));
-    let server: Server | undefined;
+    let server: GeneratedServerProcess | undefined;
 
     try {
       const build = await writeKovoNeutralBuild({
@@ -1701,11 +1651,8 @@ export default async function handler(request) {
       const fileName = 'safe\u0001\u007f.js';
       await mkdir(join(nodeOutDir, 'client', 'assets'), { recursive: true });
       await writeFile(join(nodeOutDir, 'client', 'assets', fileName), 'safe-asset');
-      const serverModule = (await import(
-        `${pathToFileURL(join(nodeOutDir, 'server.mjs')).href}?controls=${Date.now()}`
-      )) as { createKovoNodeServer(): Server };
-      server = serverModule.createKovoNodeServer();
-      const baseUrl = await listen(server);
+      server = await startGeneratedNodeServer(join(nodeOutDir, 'server.mjs'));
+      const baseUrl = server.baseUrl;
 
       const response = await fetch(`${baseUrl}/assets/${encodeURIComponent(fileName)}`);
       expect(response.status).toBe(200);
@@ -1723,15 +1670,13 @@ export default async function handler(request) {
       );
       await expect(unicodeResponse.text()).resolves.toBe('unicode-asset');
     } finally {
-      if (server !== undefined) await close(server);
+      if (server !== undefined) await server.close();
       await rm(root, { force: true, recursive: true });
     }
   });
 
   it('logs unhandled production node server errors to stderr before returning a 500', async () => {
     const root = await mkdtemp(join(tmpdir(), 'kovo-node-preset-errors-'));
-    const originalConsoleError = console.error;
-    const consoleErrors: unknown[][] = [];
 
     try {
       const build = await writeKovoNeutralBuild({
@@ -1762,14 +1707,8 @@ export default async function handler(request) {
         },
       });
 
-      console.error = (...args: unknown[]) => {
-        consoleErrors.push(args);
-      };
-      const serverModule = (await import(pathToFileURL(join(nodeOutDir, 'server.mjs')).href)) as {
-        createKovoNodeServer(): Server;
-      };
-      const server = serverModule.createKovoNodeServer();
-      const baseUrl = await listen(server);
+      const server = await startGeneratedNodeServer(join(nodeOutDir, 'server.mjs'));
+      const baseUrl = server.baseUrl;
 
       try {
         const response = await fetch(
@@ -1778,35 +1717,27 @@ export default async function handler(request) {
         );
         expect(response.status).toBe(500);
         await expect(response.text()).resolves.toBe('Internal Server Error');
+        await waitForGeneratedServerStderr(server, 'boom from generated handler');
       } finally {
-        console.error = originalConsoleError;
-        await close(server);
+        await server.close();
       }
 
-      expect(consoleErrors).toHaveLength(1);
-      expect(consoleErrors[0]?.[0]).toBe('[kovo] unhandled node server error');
-      expect(consoleErrors[0]?.[1]).toMatchObject({
-        method: 'POST',
-        url: '/boom?kovo-cap&State&state',
-      });
-      const loggedError = (consoleErrors[0]?.[1] as { error?: unknown } | undefined)?.error;
-      expect(String(loggedError)).toContain(
+      const generatedStderr = server.stderr();
+      expect(generatedStderr).toContain('[kovo] unhandled node server error');
+      expect(generatedStderr).toContain("method: 'POST'");
+      expect(generatedStderr).toContain("url: '/boom?kovo-cap&State&state'");
+      expect(generatedStderr).toContain(
         'Error: boom from generated handler at /boom?kovo-cap&State&state',
       );
-      expect(String(loggedError)).toContain('handler');
-      expect(JSON.stringify(consoleErrors)).not.toContain('NODE_CAPABILITY_SHOULD_NEVER_LOG');
+      expect(generatedStderr).toContain('handler');
+      expect(generatedStderr).not.toContain('NODE_CAPABILITY_SHOULD_NEVER_LOG');
     } finally {
-      console.error = originalConsoleError;
       await rm(root, { force: true, recursive: true });
     }
   });
 
   it('keeps emitted Node static-file confinement after an authored handler poisons globals', async () => {
     const root = await mkdtemp(join(tmpdir(), 'kovo-node-static-intrinsics-'));
-    const poisonGlobal = globalThis as typeof globalThis & {
-      __kovoPoisonedNodeCreateServerHits?: number;
-      __kovoRestoreNodeStaticPoison?: () => void;
-    };
 
     try {
       const build = await writeKovoNeutralBuild({
@@ -1819,36 +1750,24 @@ const require = createRequire(import.meta.url);
 const nodeHttp = require('node:http');
 const nodePath = require('node:path');
 const OriginalURL = globalThis.URL;
-const originalCreateServer = nodeHttp.createServer;
 const originalReflectApply = Reflect.apply;
 const originalStartsWith = String.prototype.startsWith;
 const originalSlice = String.prototype.slice;
-const originalPathSep = nodePath.sep;
-
-function restore() {
-  globalThis.URL = OriginalURL;
-  nodeHttp.createServer = originalCreateServer;
-  String.prototype.startsWith = originalStartsWith;
-  nodePath.sep = originalPathSep;
-  syncBuiltinESMExports();
-}
-
-globalThis.__kovoRestoreNodeStaticPoison = restore;
-nodeHttp.createServer = function poisonedCreateServer() {
+Reflect.set(nodeHttp, 'createServer', function poisonedCreateServer() {
   globalThis.__kovoPoisonedNodeCreateServerHits =
     (globalThis.__kovoPoisonedNodeCreateServerHits ?? 0) + 1;
   throw new Error('POISONED_NODE_CREATE_SERVER');
-};
+});
 syncBuiltinESMExports();
 
 export default async function handler() {
-  globalThis.URL = function SelectiveURL(input, base) {
+  Reflect.set(globalThis, 'URL', function SelectiveURL(input, base) {
     if (base === 'http://kovo.local' && typeof input === 'string' && input.includes('%2e')) {
       return { pathname: input };
     }
     return new OriginalURL(input, base);
-  };
-  String.prototype.startsWith = function selectiveStartsWith(search, position) {
+  });
+  Reflect.set(String.prototype, 'startsWith', function selectiveStartsWith(search, position) {
     if (
       typeof search === 'string' &&
       originalReflectApply(originalSlice, search, [-8]) === '/client/'
@@ -1856,8 +1775,8 @@ export default async function handler() {
       return true;
     }
     return originalReflectApply(originalStartsWith, this, [search, position]);
-  };
-  nodePath.sep = '';
+  });
+  Reflect.set(nodePath, 'sep', '');
   syncBuiltinESMExports();
   return new Response('poison armed', {
     headers: { 'content-type': 'text/plain; charset=utf-8' },
@@ -1881,19 +1800,10 @@ export default async function handler() {
       await writeFile(join(nodeOutDir, 'secret.txt'), secret, 'utf8');
       await writeFile(join(nodeOutDir, 'client-secret', 'secret.txt'), secret, 'utf8');
 
-      const serverModule = (await import(
-        `${pathToFileURL(join(nodeOutDir, 'server.mjs')).href}?t=${Date.now()}`
-      )) as { createKovoNodeServer(): Server };
-      // Exercise the direct-execution order: the generated module captures its transport controls,
-      // then authored module evaluation happens before the listener is created.
-      await import(pathToFileURL(join(nodeOutDir, 'server', 'handler.mjs')).href);
-      expect(poisonGlobal.__kovoPoisonedNodeCreateServerHits ?? 0).toBe(0);
-      const server = serverModule.createKovoNodeServer();
-      expect(poisonGlobal.__kovoPoisonedNodeCreateServerHits ?? 0).toBe(0);
-      // End the transport-binding poison before yielding to concurrently scheduled tests. The
-      // handler will still arm the path/global poison below for the static-serving assertions.
-      poisonGlobal.__kovoRestoreNodeStaticPoison?.();
-      const baseUrl = await listen(server);
+      // Execute the unchanged emitted entry in a dedicated child realm; its generated listener
+      // lazily imports the authored handler under the already-installed runtime lock.
+      const server = await startGeneratedNodeServer(join(nodeOutDir, 'server.mjs'));
+      const baseUrl = server.baseUrl;
 
       try {
         const arm = await fetch(`${baseUrl}/arm`);
@@ -1910,15 +1820,9 @@ export default async function handler() {
         );
         expect(synchronizedPathTraversal).not.toContain(secret);
       } finally {
-        poisonGlobal.__kovoRestoreNodeStaticPoison?.();
-        delete poisonGlobal.__kovoPoisonedNodeCreateServerHits;
-        delete poisonGlobal.__kovoRestoreNodeStaticPoison;
-        await close(server);
+        await server.close();
       }
     } finally {
-      poisonGlobal.__kovoRestoreNodeStaticPoison?.();
-      delete poisonGlobal.__kovoPoisonedNodeCreateServerHits;
-      delete poisonGlobal.__kovoRestoreNodeStaticPoison;
       await rm(root, { force: true, recursive: true });
     }
   });
@@ -1973,11 +1877,8 @@ export default async function handler() {
       await writeFile(join(directoryTarget, 'race.txt'), 'SAFE_DIRECTORY_BYTES');
       await writeFile(join(outsideDirectory, 'race.txt'), outsideDirectorySecret);
 
-      const serverModule = (await import(
-        `${pathToFileURL(join(nodeOutDir, 'server.mjs')).href}?identity=${Date.now()}`
-      )) as { createKovoNodeServer(): Server };
-      const server = serverModule.createKovoNodeServer();
-      const baseUrl = await listen(server);
+      const server = await startGeneratedNodeServer(join(nodeOutDir, 'server.mjs'));
+      const baseUrl = server.baseUrl;
       let running = true;
       const turn = (): Promise<void> =>
         new Promise((resolvePromise) => setImmediate(resolvePromise));
@@ -2020,7 +1921,7 @@ export default async function handler() {
       } finally {
         running = false;
         await Promise.all([finalSwapper, directorySwapper]);
-        await close(server);
+        await server.close();
       }
     } finally {
       await rm(root, { force: true, recursive: true });
@@ -2060,11 +1961,8 @@ export default async function handler() {
       expect(serverSource).toContain("const links = ownDataValue(fileStat, 'nlink')");
       expect(serverSource).toContain('links === 1');
 
-      const serverModule = (await import(
-        `${pathToFileURL(join(nodeOutDir, 'server.mjs')).href}?root-identity=${Date.now()}`
-      )) as { createKovoNodeServer(): Server };
-      const server = serverModule.createKovoNodeServer();
-      const baseUrl = await listen(server);
+      const server = await startGeneratedNodeServer(join(nodeOutDir, 'server.mjs'));
+      const baseUrl = server.baseUrl;
 
       try {
         const reviewed = await fetch(`${baseUrl}/assets/root-swap.js`);
@@ -2083,7 +1981,7 @@ export default async function handler() {
         expect(replacement.status).toBe(404);
         await expect(replacement.text()).resolves.not.toContain('ATTACKER_REPLACEMENT_BYTES');
       } finally {
-        await close(server);
+        await server.close();
       }
     } finally {
       await rm(root, { force: true, recursive: true });
@@ -2092,9 +1990,6 @@ export default async function handler() {
 
   it('pins emitted Node Response fields before authored getters can substitute output', async () => {
     const root = await mkdtemp(join(tmpdir(), 'kovo-node-response-intrinsics-'));
-    const poisonGlobal = globalThis as typeof globalThis & {
-      __kovoRestoreNodeResponsePoison?: () => void;
-    };
 
     try {
       const build = await writeKovoNeutralBuild({
@@ -2119,17 +2014,10 @@ const attacker = new Response('<script>emittedAttackerOutput()</script>', {
   statusText: 'ATTACKER',
 });
 
-function restore() {
-  for (const property of properties) {
-    Object.defineProperty(Response.prototype, property, descriptors.get(property));
-  }
-}
-
 export default async function handler() {
-  globalThis.__kovoRestoreNodeResponsePoison = restore;
   for (const property of properties) {
     const descriptor = descriptors.get(property);
-    Object.defineProperty(Response.prototype, property, {
+    Reflect.defineProperty(Response.prototype, property, {
       ...descriptor,
       get() {
         return Reflect.apply(descriptor.get, this === safe ? attacker : this, []);
@@ -2150,11 +2038,8 @@ export default async function handler() {
         },
       });
 
-      const serverModule = (await import(
-        `${pathToFileURL(join(nodeOutDir, 'server.mjs')).href}?t=${Date.now()}`
-      )) as { createKovoNodeServer(): Server };
-      const server = serverModule.createKovoNodeServer();
-      const baseUrl = await listen(server);
+      const server = await startGeneratedNodeServer(join(nodeOutDir, 'server.mjs'));
+      const baseUrl = server.baseUrl;
 
       try {
         const response = await fetch(baseUrl);
@@ -2162,22 +2047,15 @@ export default async function handler() {
         expect(response.headers.get('set-cookie')).toBeNull();
         await expect(response.text()).resolves.toBe('SAFE-EMITTED-RESPONSE');
       } finally {
-        poisonGlobal.__kovoRestoreNodeResponsePoison?.();
-        delete poisonGlobal.__kovoRestoreNodeResponsePoison;
-        await close(server);
+        await server.close();
       }
     } finally {
-      poisonGlobal.__kovoRestoreNodeResponsePoison?.();
-      delete poisonGlobal.__kovoRestoreNodeResponsePoison;
       await rm(root, { force: true, recursive: true });
     }
   });
 
   it('pins emitted Node response writers before an authored handler can replace the transport', async () => {
     const root = await mkdtemp(join(tmpdir(), 'kovo-node-native-transport-'));
-    const poisonGlobal = globalThis as typeof globalThis & {
-      __kovoRestoreEmittedNodeTransport?: () => void;
-    };
 
     try {
       const build = await writeKovoNeutralBuild({
@@ -2188,22 +2066,16 @@ import { ServerResponse } from 'node:http';
 const originalWriteHead = ServerResponse.prototype.writeHead;
 const originalEnd = ServerResponse.prototype.end;
 
-function restore() {
-  ServerResponse.prototype.writeHead = originalWriteHead;
-  ServerResponse.prototype.end = originalEnd;
-}
-
 export default async function handler() {
-  globalThis.__kovoRestoreEmittedNodeTransport = restore;
-  ServerResponse.prototype.writeHead = function attackerWriteHead() {
+  Reflect.set(ServerResponse.prototype, 'writeHead', function attackerWriteHead() {
     return Reflect.apply(originalWriteHead, this, [202, 'ATTACKER', {
       'content-type': 'text/html; charset=utf-8',
       'set-cookie': 'admin=attacker; Path=/; HttpOnly',
     }]);
-  };
-  ServerResponse.prototype.end = function attackerEnd() {
+  });
+  Reflect.set(ServerResponse.prototype, 'end', function attackerEnd() {
     return Reflect.apply(originalEnd, this, ['<script>emittedNativeTransportAttacker()</script>']);
-  };
+  });
   return new Response('SAFE-EMITTED-NATIVE-TRANSPORT', {
     headers: { 'content-type': 'text/plain; charset=utf-8' },
     status: 200,
@@ -2221,11 +2093,8 @@ export default async function handler() {
         },
       });
 
-      const serverModule = (await import(
-        `${pathToFileURL(join(nodeOutDir, 'server.mjs')).href}?t=${Date.now()}`
-      )) as { createKovoNodeServer(): Server };
-      const server = serverModule.createKovoNodeServer();
-      const baseUrl = await listen(server);
+      const server = await startGeneratedNodeServer(join(nodeOutDir, 'server.mjs'));
+      const baseUrl = server.baseUrl;
 
       try {
         const response = await fetch(baseUrl);
@@ -2233,13 +2102,9 @@ export default async function handler() {
         expect(response.headers.get('set-cookie')).toBeNull();
         await expect(response.text()).resolves.toBe('SAFE-EMITTED-NATIVE-TRANSPORT');
       } finally {
-        poisonGlobal.__kovoRestoreEmittedNodeTransport?.();
-        delete poisonGlobal.__kovoRestoreEmittedNodeTransport;
-        await close(server);
+        await server.close();
       }
     } finally {
-      poisonGlobal.__kovoRestoreEmittedNodeTransport?.();
-      delete poisonGlobal.__kovoRestoreEmittedNodeTransport;
       await rm(root, { force: true, recursive: true });
     }
   });
@@ -2247,9 +2112,6 @@ export default async function handler() {
   it('does not serialize attacker source through a late Function.toString replacement', async () => {
     const root = await mkdtemp(join(tmpdir(), 'kovo-node-source-injection-'));
     const originalFunctionToString = Function.prototype.toString;
-    const injectionGlobal = globalThis as typeof globalThis & {
-      __kovoGeneratedNodeSourceInjection?: string;
-    };
 
     try {
       const build = await writeKovoNeutralBuild({
@@ -2284,11 +2146,12 @@ export default async function handler() {
       const emittedSource = await readFile(join(nodeOutDir, 'server.mjs'), 'utf8');
       expect(emittedSource).not.toContain('ATTACKER-CODE-RAN');
 
-      await import(`${pathToFileURL(join(nodeOutDir, 'server.mjs')).href}?t=${Date.now()}`);
-      expect(injectionGlobal.__kovoGeneratedNodeSourceInjection).toBeUndefined();
+      const childGlobals = importGeneratedRuntimeEntry(join(nodeOutDir, 'server.mjs'), [
+        '__kovoGeneratedNodeSourceInjection',
+      ]);
+      expect(childGlobals.__kovoGeneratedNodeSourceInjection).toBeUndefined();
     } finally {
       Function.prototype.toString = originalFunctionToString;
-      delete injectionGlobal.__kovoGeneratedNodeSourceInjection;
       await rm(root, { force: true, recursive: true });
     }
   });
@@ -2299,9 +2162,6 @@ export default async function handler() {
     const originalFunctionToString = Function.prototype.toString;
     const originalRegExpToString = RegExp.prototype.toString;
     const marker = 'KOVO_ALL_PRESET_SOURCE_INJECTION';
-    const injectionGlobal = globalThis as typeof globalThis & {
-      __kovoAllPresetSourceInjection?: boolean;
-    };
 
     try {
       const build = await writeKovoNeutralBuild({
@@ -2376,25 +2236,26 @@ export default async function handler() {
         algorithm: 'sha256',
         files: { 'worker.mjs': sha256(executableSources[4]!) },
       });
-      await import(`${pathToFileURL(join(nodeOut, 'server.mjs')).href}?t=${Date.now()}`);
-      await import(
-        `${pathToFileURL(join(vercelOut, 'functions/kovo.func/index.cjs')).href}?t=${Date.now()}`
-      );
-      await import(`${pathToFileURL(join(cloudflareOut, 'worker.mjs')).href}?t=${Date.now()}`);
-      expect(injectionGlobal.__kovoAllPresetSourceInjection).toBeUndefined();
+      for (const entryPath of [
+        join(nodeOut, 'server.mjs'),
+        join(vercelOut, 'functions/kovo.func/index.cjs'),
+        join(cloudflareOut, 'worker.mjs'),
+      ]) {
+        const childGlobals = importGeneratedRuntimeEntry(entryPath, [
+          '__kovoAllPresetSourceInjection',
+        ]);
+        expect(childGlobals.__kovoAllPresetSourceInjection).toBeUndefined();
+      }
     } finally {
       JSON.stringify = originalJsonStringify;
       Function.prototype.toString = originalFunctionToString;
       RegExp.prototype.toString = originalRegExpToString;
-      delete injectionGlobal.__kovoAllPresetSourceInjection;
       await rm(root, { force: true, recursive: true });
     }
   });
 
   it('scrubs secret-tagged material from generated node server error logs', async () => {
     const root = await mkdtemp(join(tmpdir(), 'kovo-node-preset-secret-errors-'));
-    const originalConsoleError = console.error;
-    const consoleErrors: unknown[][] = [];
 
     try {
       const build = await writeKovoNeutralBuild({
@@ -2431,38 +2292,28 @@ export default async function handler() {
         },
       });
 
-      console.error = (...args: unknown[]) => {
-        consoleErrors.push(args);
-      };
-      const serverModule = (await import(pathToFileURL(join(nodeOutDir, 'server.mjs')).href)) as {
-        createKovoNodeServer(): Server;
-      };
-      const server = serverModule.createKovoNodeServer();
-      const baseUrl = await listen(server);
+      const server = await startGeneratedNodeServer(join(nodeOutDir, 'server.mjs'));
+      const baseUrl = server.baseUrl;
 
       try {
         const response = await fetch(`${baseUrl}/boom`, { method: 'POST' });
         expect(response.status).toBe(500);
+        await waitForGeneratedServerStderr(server, 'provider failed');
       } finally {
-        console.error = originalConsoleError;
-        await close(server);
+        await server.close();
       }
 
-      expect(consoleErrors).toHaveLength(1);
-      expect(consoleErrors[0]?.[1]).toMatchObject({
-        error: { reason: 'provider failed', token: '[secret]' },
-      });
-      expect(JSON.stringify(consoleErrors)).not.toContain('sk_live_q5_generated_node');
+      const generatedStderr = server.stderr();
+      expect(generatedStderr).toContain("reason: 'provider failed'");
+      expect(generatedStderr).toContain("token: '[secret]'");
+      expect(generatedStderr).not.toContain('sk_live_q5_generated_node');
     } finally {
-      console.error = originalConsoleError;
       await rm(root, { force: true, recursive: true });
     }
   });
 
   it('redacts isolated request credentials and controls from post-response node errors', async () => {
     const root = await mkdtemp(join(tmpdir(), 'kovo-node-preset-stream-errors-'));
-    const originalConsoleError = console.error;
-    const consoleErrors: unknown[][] = [];
     const basicPassword = 'BASIC_PASSWORD_SHOULD_NOT_LOG';
     const basic = Buffer.from(`basic-user:${basicPassword}`).toString('base64');
 
@@ -2514,14 +2365,8 @@ export default async function handler(request) {
         },
       });
 
-      console.error = (...args: unknown[]) => {
-        consoleErrors.push(args);
-      };
-      const serverModule = (await import(pathToFileURL(join(nodeOutDir, 'server.mjs')).href)) as {
-        createKovoNodeServer(): Server;
-      };
-      const server = serverModule.createKovoNodeServer();
-      const baseUrl = await listen(server);
+      const server = await startGeneratedNodeServer(join(nodeOutDir, 'server.mjs'));
+      const baseUrl = server.baseUrl;
 
       try {
         const response = await fetch(
@@ -2540,37 +2385,27 @@ export default async function handler(request) {
         const proxyResponse = await fetch(`${baseUrl}/proxy-stream-error`);
         expect(proxyResponse.status).toBe(200);
         await expect(proxyResponse.text()).rejects.toThrow();
-        await waitForConsoleErrorCount(consoleErrors, 2);
+        await waitForGeneratedServerErrorCount(server, 2);
       } finally {
-        console.error = originalConsoleError;
-        await close(server);
+        await server.close();
       }
 
-      expect(consoleErrors).toHaveLength(2);
-      const loggedError = (consoleErrors[0]?.[1] as { error?: unknown } | undefined)?.error;
-      expect(typeof loggedError).toBe('string');
-      expect(String(loggedError)).toContain('[redacted]');
-      expect(String(loggedError)).toContain('\\u000aFORGED-LINE\\u001b[31m');
-      expect(String(loggedError)).not.toContain('\n');
-      expect(String(loggedError)).not.toContain('\u001b');
-      expect(consoleErrors[1]?.[1]).toMatchObject({ error: '[redacted]' });
-      expect(JSON.stringify(consoleErrors)).not.toContain('QUERY_SECRET_SHOULD_NOT_LOG');
-      expect(JSON.stringify(consoleErrors)).not.toContain('COOKIE_SECRET_SHOULD_NOT_LOG');
-      expect(JSON.stringify(consoleErrors)).not.toContain('HEADER_SECRET_SHOULD_NOT_LOG');
-      expect(JSON.stringify(consoleErrors)).not.toContain(basicPassword);
+      const generatedStderr = server.stderr();
+      expect(generatedStderr.match(/\[kovo\] unhandled node server error/gu)).toHaveLength(2);
+      expect(generatedStderr).toContain('[redacted]');
+      expect(generatedStderr).toContain('\\\\u000aFORGED-LINE\\\\u001b[31m');
+      expect(generatedStderr).not.toContain('\u001b');
+      expect(generatedStderr).not.toContain('QUERY_SECRET_SHOULD_NOT_LOG');
+      expect(generatedStderr).not.toContain('COOKIE_SECRET_SHOULD_NOT_LOG');
+      expect(generatedStderr).not.toContain('HEADER_SECRET_SHOULD_NOT_LOG');
+      expect(generatedStderr).not.toContain(basicPassword);
     } finally {
-      console.error = originalConsoleError;
       await rm(root, { force: true, recursive: true });
     }
   });
 
   it('keeps generated Node diagnostics useful under selective ambient intrinsic poisoning', async () => {
     const root = await mkdtemp(join(tmpdir(), 'kovo-node-preset-poisoned-errors-'));
-    const originalConsoleError = console.error;
-    const consoleErrors: unknown[][] = [];
-    const poisonGlobal = globalThis as typeof globalThis & {
-      __kovoRestoreGeneratedLoggingPoison?: () => void;
-    };
 
     try {
       const build = await writeKovoNeutralBuild({
@@ -2580,31 +2415,25 @@ export default async function handler(request) {
 const originalGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
 const originalReplaceAll = String.prototype.replaceAll;
 const originalSort = Array.prototype.sort;
-function restoreLoggingPoison() {
-  Object.getOwnPropertyDescriptor = originalGetOwnPropertyDescriptor;
-  String.prototype.replaceAll = originalReplaceAll;
-  Array.prototype.sort = originalSort;
-}
 export default async function handler(request) {
-  globalThis.__kovoRestoreGeneratedLoggingPoison = restoreLoggingPoison;
-  Object.getOwnPropertyDescriptor = function (_target, property) {
+  Reflect.set(Object, 'getOwnPropertyDescriptor', function (_target, property) {
     if (property === 'stack') throw new Error('ambient descriptor reached generated logger');
     return Reflect.apply(originalGetOwnPropertyDescriptor, Object, arguments);
-  };
-  String.prototype.replaceAll = function (search, replacement) {
+  });
+  Reflect.set(String.prototype, 'replaceAll', function (search, replacement) {
     if (search === 'POISON_LOG_SECRET') {
       throw new Error('ambient replaceAll reached generated logger');
     }
     return Reflect.apply(originalReplaceAll, this, [search, replacement]);
-  };
-  Array.prototype.sort = function (compare) {
+  });
+  Reflect.set(Array.prototype, 'sort', function (compare) {
     for (let index = 0; index < this.length; index += 1) {
       if (this[index] === 'POISON_LOG_SECRET') {
         throw new Error('ambient sort reached generated logger');
       }
     }
     return Reflect.apply(originalSort, this, [compare]);
-  };
+  });
   throw new Error(
     'generated poison at ' + request.url +
     ' token=POISON_LOG_SECRET\\nFORGED-LINE\\u001b[31m'
@@ -2621,45 +2450,29 @@ export default async function handler(request) {
           return build;
         },
       });
-      console.error = (...args: unknown[]) => {
-        consoleErrors.push(args);
-      };
-      const serverModule = (await import(
-        `${pathToFileURL(join(nodeOutDir, 'server.mjs')).href}?t=${Date.now()}`
-      )) as { createKovoNodeServer(): Server };
-      const server = serverModule.createKovoNodeServer();
-      const baseUrl = await listen(server);
+      const server = await startGeneratedNodeServer(join(nodeOutDir, 'server.mjs'));
+      const baseUrl = server.baseUrl;
 
       try {
         const response = await fetch(`${baseUrl}/poison?apiKey=POISON_LOG_SECRET`, {
           method: 'POST',
         });
-        poisonGlobal.__kovoRestoreGeneratedLoggingPoison?.();
         expect(response.status).toBe(500);
         await expect(response.text()).resolves.toBe('Internal Server Error');
+        await waitForGeneratedServerStderr(server, 'generated poison');
       } finally {
-        poisonGlobal.__kovoRestoreGeneratedLoggingPoison?.();
-        delete poisonGlobal.__kovoRestoreGeneratedLoggingPoison;
-        console.error = originalConsoleError;
-        await close(server);
+        await server.close();
       }
 
-      expect(consoleErrors).toHaveLength(1);
-      expect(consoleErrors[0]?.[1]).toMatchObject({
-        method: 'POST',
-        url: '/poison?apiKey',
-      });
-      const loggedError = (consoleErrors[0]?.[1] as { error?: unknown } | undefined)?.error;
-      expect(String(loggedError)).toContain('generated poison at /poison?apiKey');
-      expect(String(loggedError)).toContain('token=[redacted]');
-      expect(String(loggedError)).toContain('\\u000aFORGED-LINE\\u001b[31m');
-      expect(String(loggedError)).not.toContain('POISON_LOG_SECRET');
-      expect(String(loggedError)).not.toContain('\n');
-      expect(String(loggedError)).not.toContain('\u001b');
+      const generatedStderr = server.stderr();
+      expect(generatedStderr).toContain("method: 'POST'");
+      expect(generatedStderr).toContain("url: '/poison?apiKey'");
+      expect(generatedStderr).toContain('generated poison at /poison?apiKey');
+      expect(generatedStderr).toContain('token=[redacted]');
+      expect(generatedStderr).toContain('\\\\u000aFORGED-LINE\\\\u001b[31m');
+      expect(generatedStderr).not.toContain('POISON_LOG_SECRET');
+      expect(generatedStderr).not.toContain('\u001b');
     } finally {
-      poisonGlobal.__kovoRestoreGeneratedLoggingPoison?.();
-      delete poisonGlobal.__kovoRestoreGeneratedLoggingPoison;
-      console.error = originalConsoleError;
       await rm(root, { force: true, recursive: true });
     }
   });
@@ -2911,43 +2724,32 @@ import { ServerResponse } from 'node:http';
 const originalWriteHead = ServerResponse.prototype.writeHead;
 const originalEnd = ServerResponse.prototype.end;
 const originalObjectEntries = Object.entries;
-function restoreVercelTransport() {
-  ServerResponse.prototype.writeHead = originalWriteHead;
-  ServerResponse.prototype.end = originalEnd;
-}
-function restoreVercelRequestBridge() {
-  Object.entries = originalObjectEntries;
-}
 export default async function handler(request) {
-  globalThis.__kovoVercelRawTargetHandlerCalls =
-    (globalThis.__kovoVercelRawTargetHandlerCalls ?? 0) + 1;
   const url = new URL(request.url);
   if (url.pathname === '/request-bridge-poison') {
-    globalThis.__kovoRestoreVercelRequestBridge = restoreVercelRequestBridge;
-    Object.entries = function selectiveOriginSubstitution(value) {
+    const applied = Reflect.set(Object, 'entries', function selectiveOriginSubstitution(value) {
       const entries = Reflect.apply(originalObjectEntries, Object, [value]);
       if (!entries.some(([name]) => name === 'origin')) return entries;
       return entries.map(([name, entry]) => [
         name,
         name === 'origin' ? 'https://trusted.example' : entry,
       ]);
-    };
-    return new Response('armed');
+    });
+    return new Response(applied ? 'armed' : 'blocked');
   }
   if (url.pathname === '/request-bridge-echo') {
     return new Response(request.method + ':' + request.headers.get('origin'));
   }
   if (url.pathname === '/transport-poison') {
-    globalThis.__kovoRestoreVercelTransport = restoreVercelTransport;
-    ServerResponse.prototype.writeHead = function attackerWriteHead() {
+    Reflect.set(ServerResponse.prototype, 'writeHead', function attackerWriteHead() {
       return Reflect.apply(originalWriteHead, this, [202, 'ATTACKER', {
         'content-type': 'text/html; charset=utf-8',
         'set-cookie': 'admin=attacker; Path=/; HttpOnly',
       }]);
-    };
-    ServerResponse.prototype.end = function attackerEnd() {
+    });
+    Reflect.set(ServerResponse.prototype, 'end', function attackerEnd() {
       return Reflect.apply(originalEnd, this, ['<script>vercelTransportAttacker()</script>']);
-    };
+    });
     return new Response('SAFE-VERCEL-TRANSPORT', {
       headers: { 'content-type': 'text/plain; charset=utf-8' },
       status: 200,
@@ -3084,24 +2886,15 @@ export default async function handler(request) {
         staticFiles: ['assets/cart.css', 'c/__v/cart-v1/cart.client.js'],
       });
 
-      const functionModule = (await import(
-        `${pathToFileURL(join(vercelOutDir, 'functions/kovo.func/index.cjs')).href}?t=${Date.now()}`
-      )) as {
-        default: (request: unknown, response: unknown) => void;
-      };
       const emittedVercelAdapter = (await import(
         `${pathToFileURL(join(vercelOutDir, 'functions/kovo.func/node-adapter.mjs')).href}?t=${Date.now()}`
       )) as NodeAdapterModule;
       await expectEmittedAdapterParity(emittedVercelAdapter);
 
-      const server = createHttpServer(functionModule.default);
-      const baseUrl = await listen(server);
-      const rawTargetCounter = globalThis as typeof globalThis & {
-        __kovoVercelRawTargetHandlerCalls?: number;
-        __kovoRestoreVercelRequestBridge?: () => void;
-        __kovoRestoreVercelTransport?: () => void;
-      };
-      rawTargetCounter.__kovoVercelRawTargetHandlerCalls = 0;
+      const server = await startGeneratedVercelServer(
+        join(vercelOutDir, 'functions/kovo.func/index.cjs'),
+      );
+      const baseUrl = server.baseUrl;
 
       try {
         const aliasResponse = await rawHttpExchange(
@@ -3111,15 +2904,12 @@ export default async function handler(request) {
         expect(aliasResponse).toContain('HTTP/1.1 404');
         expect(aliasResponse).toContain('Not Found');
         expect(aliasResponse).not.toContain('VERCEL_ALIAS_CREDENTIAL');
-        expect(rawTargetCounter.__kovoVercelRawTargetHandlerCalls).toBe(0);
-
         const canonicalMutationPath = await rawHttpExchange(
           baseUrl,
           rawMutationRequest('/_m/a/b', 'VERCEL_CANONICAL_CREDENTIAL'),
         );
         expect(canonicalMutationPath).toContain('HTTP/1.1 200');
         expect(canonicalMutationPath).toContain('vercel:/_m/a/b:');
-        expect(rawTargetCounter.__kovoVercelRawTargetHandlerCalls).toBe(1);
 
         const response = await fetch(`${baseUrl}/hello`, {
           headers: { 'x-from-test': 'function-header' },
@@ -3127,12 +2917,12 @@ export default async function handler(request) {
         await expect(response.text()).resolves.toBe('vercel:/hello:function-header');
         expect(response.headers.get('content-type')).toBe('text/plain; charset=utf-8');
 
-        await fetch(`${baseUrl}/request-bridge-poison`);
+        const bridgePoison = await fetch(`${baseUrl}/request-bridge-poison`);
+        await expect(bridgePoison.text()).resolves.toBe('blocked');
         const exactBridgeResponse = await fetch(`${baseUrl}/request-bridge-echo`, {
           headers: { Origin: 'https://attacker.example' },
         });
         await expect(exactBridgeResponse.text()).resolves.toBe('GET:https://attacker.example');
-        rawTargetCounter.__kovoRestoreVercelRequestBridge?.();
 
         const cookieResponse = await nodeGet(baseUrl, '/cookies');
         expect(cookieResponse.headers['set-cookie']).toEqual([
@@ -3144,14 +2934,8 @@ export default async function handler(request) {
         expect(transportResponse.status).toBe(200);
         expect(transportResponse.headers.get('set-cookie')).toBeNull();
         await expect(transportResponse.text()).resolves.toBe('SAFE-VERCEL-TRANSPORT');
-        rawTargetCounter.__kovoRestoreVercelTransport?.();
       } finally {
-        rawTargetCounter.__kovoRestoreVercelRequestBridge?.();
-        delete rawTargetCounter.__kovoRestoreVercelRequestBridge;
-        rawTargetCounter.__kovoRestoreVercelTransport?.();
-        delete rawTargetCounter.__kovoRestoreVercelTransport;
-        delete rawTargetCounter.__kovoVercelRawTargetHandlerCalls;
-        await close(server);
+        await server.close();
       }
     } finally {
       await rm(root, { force: true, recursive: true });
@@ -3364,13 +3148,8 @@ export default async function handler(request) {
       await expect(
         readFile(join(nodeOutDir, 'static/static/index.html'), 'utf8'),
       ).resolves.toContain('Static Route');
-      const serverModule = (await import(
-        `${pathToFileURL(join(nodeOutDir, 'server.mjs')).href}?t=${Date.now()}`
-      )) as {
-        createKovoNodeServer(): Server;
-      };
-      const server = serverModule.createKovoNodeServer();
-      const baseUrl = await listen(server);
+      const server = await startGeneratedNodeServer(join(nodeOutDir, 'server.mjs'));
+      const baseUrl = server.baseUrl;
       try {
         const staticResponse = await fetch(`${baseUrl}/static`);
         await expect(staticResponse.text()).resolves.toContain('Static Route');
@@ -3384,7 +3163,7 @@ export default async function handler(request) {
         await expect(dynamicResponse.text()).resolves.toBe('dynamic:/dynamic');
         expect(dynamicResponse.headers.get('content-type')).toBe('text/plain; charset=utf-8');
       } finally {
-        await close(server);
+        await server.close();
       }
 
       const vercelOutDir = join(root, '.vercel/output');
@@ -3476,42 +3255,30 @@ export default async function handler(request) {
         "ownDataValue(env, 'ASSETS')",
       );
 
-      const workerModule = (await import(
-        `${pathToFileURL(join(cloudflareOutDir, 'worker.mjs')).href}?t=${Date.now()}`
-      )) as {
-        default: {
-          fetch(
-            request: Request,
-            env: { ASSETS?: { fetch(request: Request): Promise<Response> } },
-          ): Promise<Response> | Response;
-        };
-      };
-
-      const staticWorkerResponse = await workerModule.default.fetch(
-        new Request('https://worker.test/static'),
-        {
-          ASSETS: {
-            fetch: async () =>
-              new Response('<main>Static Route</main>', {
-                headers: { 'content-type': 'text/html; charset=utf-8' },
-              }),
+      const [staticWorkerProbe, dynamicWorkerProbe] = runGeneratedCloudflareWorker(
+        join(cloudflareOutDir, 'worker.mjs'),
+        [
+          {
+            asset: {
+              body: '<main>Static Route</main>',
+              headers: { 'content-type': 'text/html; charset=utf-8' },
+            },
+            url: 'https://worker.test/static',
           },
-        },
+          {
+            asset: { body: 'Not Found', status: 404 },
+            url: 'https://worker.test/dynamic',
+          },
+        ],
       );
+      const staticWorkerResponse = staticWorkerProbe!.response;
       await expect(staticWorkerResponse.text()).resolves.toContain('Static Route');
       expect(staticWorkerResponse.headers.get('cache-control')).toBeNull();
       expect(staticWorkerResponse.headers.get('x-content-type-options')).toBe('nosniff');
       expect(staticWorkerResponse.headers.get('vary')).toBeNull();
       expect(staticWorkerResponse.headers.get('set-cookie')).toBeNull();
 
-      const dynamicWorkerResponse = await workerModule.default.fetch(
-        new Request('https://worker.test/dynamic'),
-        {
-          ASSETS: {
-            fetch: async () => new Response('Not Found', { status: 404 }),
-          },
-        },
-      );
+      const dynamicWorkerResponse = dynamicWorkerProbe!.response;
       await expect(dynamicWorkerResponse.text()).resolves.toBe('dynamic:/dynamic');
     } finally {
       await rm(root, { force: true, recursive: true });
@@ -3587,13 +3354,8 @@ export default async function handler(request) {
         '<svg viewBox="0 0 1 1"></svg>',
       );
 
-      const serverModule = (await import(
-        `${pathToFileURL(join(nodeOutDir, 'server.mjs')).href}?t=${Date.now()}`
-      )) as {
-        createKovoNodeServer(): Server;
-      };
-      const server = serverModule.createKovoNodeServer();
-      const baseUrl = await listen(server);
+      const server = await startGeneratedNodeServer(join(nodeOutDir, 'server.mjs'));
+      const baseUrl = server.baseUrl;
       try {
         const pageResponse = await fetch(`${baseUrl}/asset-proof`);
         await expect(pageResponse.text()).resolves.toContain('<img src="/logo.svg"');
@@ -3603,7 +3365,7 @@ export default async function handler(request) {
         expect(assetResponse.headers.get('content-type')).toBe('image/svg+xml');
         await expect(assetResponse.text()).resolves.toBe('<svg viewBox="0 0 1 1"></svg>');
       } finally {
-        await close(server);
+        await server.close();
       }
     } finally {
       await rm(root, { force: true, recursive: true });
@@ -3680,70 +3442,60 @@ export default async function handler(request) {
         ].join('\n'),
       );
 
-      const workerModule = (await import(
-        `${pathToFileURL(join(cloudflareOutDir, 'worker.mjs')).href}?t=${Date.now()}`
-      )) as {
-        default: {
-          fetch(
-            request: Request,
-            env: { ASSETS?: { fetch(request: Request): Promise<Response> } },
-          ): Promise<Response> | Response;
-        };
-      };
-
-      const originalSetHas = Set.prototype.has;
-      Set.prototype.has = function (value) {
-        const bodylessClassifier =
-          this.size === 2 && originalSetHas.call(this, 'GET') && originalSetHas.call(this, 'HEAD');
-        if (bodylessClassifier && value === 'POST') return true;
-        if (bodylessClassifier && value === 'GET') return false;
-        return originalSetHas.call(this, value);
-      } as typeof Set.prototype.has;
-      try {
-        let postAssetCalls = 0;
-        const poisonedPost = await workerModule.default.fetch(
-          new Request('https://worker.test/assets/cart.css', { method: 'POST' }),
-          {
-            ASSETS: {
-              fetch: async () => {
-                postAssetCalls += 1;
-                return new Response('STATIC_POST_MUST_NOT_WIN');
-              },
-            },
-          },
-        );
-        await expect(poisonedPost.text()).resolves.toBe('cloudflare:/assets/cart.css');
-        expect(postAssetCalls).toBe(0);
-
-        let getAssetCalls = 0;
-        const poisonedGet = await workerModule.default.fetch(
-          new Request('https://worker.test/assets/cart.css'),
-          {
-            ASSETS: {
-              fetch: async () => {
-                getAssetCalls += 1;
-                return new Response('STATIC_GET_MUST_WIN');
-              },
-            },
-          },
-        );
-        await expect(poisonedGet.text()).resolves.toBe('STATIC_GET_MUST_WIN');
-        expect(getAssetCalls).toBe(1);
-      } finally {
-        Set.prototype.has = originalSetHas;
-      }
-
-      const assetResponse = await workerModule.default.fetch(
-        new Request('https://worker.test/assets/cart.css'),
+      const [
+        postedAssetProbe,
+        fetchedAssetProbe,
+        assetProbe,
+        immutableAssetProbe,
+        assetErrorProbe,
+        routeProbe,
+      ] = runGeneratedCloudflareWorker(join(cloudflareOutDir, 'worker.mjs'), [
         {
-          ASSETS: {
-            fetch: async () =>
-              new Response('body { color: navy; }', {
-                headers: { 'content-type': 'text/css; charset=utf-8' },
-              }),
-          },
+          asset: { body: 'STATIC_POST_MUST_NOT_WIN' },
+          method: 'POST',
+          url: 'https://worker.test/assets/cart.css',
         },
-      );
+        {
+          asset: { body: 'STATIC_GET_MUST_WIN' },
+          url: 'https://worker.test/assets/cart.css',
+        },
+        {
+          asset: {
+            body: 'body { color: navy; }',
+            headers: { 'content-type': 'text/css; charset=utf-8' },
+          },
+          url: 'https://worker.test/assets/cart.css',
+        },
+        {
+          asset: {
+            body: 'export const asset = true;',
+            headers: { 'content-type': 'text/javascript; charset=utf-8' },
+          },
+          url: 'https://worker.test/c/__v/cart-v1/cart.client.js',
+        },
+        {
+          asset: {
+            body: 'Asset Error',
+            headers: { 'content-type': 'text/plain; charset=utf-8' },
+            status: 500,
+          },
+          url: 'https://worker.test/c/__v/cart-v1/missing.client.js',
+        },
+        {
+          asset: { body: 'Not Found', status: 404 },
+          url: 'https://worker.test/hello',
+        },
+      ]);
+
+      const postedAsset = postedAssetProbe!;
+      await expect(postedAsset.response.text()).resolves.toBe('cloudflare:/assets/cart.css');
+      expect(postedAsset.assetCalls).toBe(0);
+
+      const fetchedAsset = fetchedAssetProbe!;
+      await expect(fetchedAsset.response.text()).resolves.toBe('STATIC_GET_MUST_WIN');
+      expect(fetchedAsset.assetCalls).toBe(1);
+
+      const assetResponse = assetProbe!.response;
       await expect(assetResponse.text()).resolves.toBe('body { color: navy; }');
       expect(assetResponse.headers.get('cache-control')).toBe('public, max-age=0, must-revalidate');
       expect(assetResponse.headers.get('cross-origin-resource-policy')).toBe('same-origin');
@@ -3752,17 +3504,7 @@ export default async function handler(request) {
       expect(assetResponse.headers.get('vary')).toBeNull();
       expect(assetResponse.headers.get('set-cookie')).toBeNull();
 
-      const immutableAssetResponse = await workerModule.default.fetch(
-        new Request('https://worker.test/c/__v/cart-v1/cart.client.js'),
-        {
-          ASSETS: {
-            fetch: async () =>
-              new Response('export const asset = true;', {
-                headers: { 'content-type': 'text/javascript; charset=utf-8' },
-              }),
-          },
-        },
-      );
+      const immutableAssetResponse = immutableAssetProbe!.response;
       await expect(immutableAssetResponse.text()).resolves.toBe('export const asset = true;');
       expect(immutableAssetResponse.headers.get('cache-control')).toBe(
         'public, max-age=31536000, immutable',
@@ -3775,18 +3517,7 @@ export default async function handler(request) {
       expect(immutableAssetResponse.headers.get('vary')).toBeNull();
       expect(immutableAssetResponse.headers.get('set-cookie')).toBeNull();
 
-      const assetErrorResponse = await workerModule.default.fetch(
-        new Request('https://worker.test/c/__v/cart-v1/missing.client.js'),
-        {
-          ASSETS: {
-            fetch: async () =>
-              new Response('Asset Error', {
-                headers: { 'content-type': 'text/plain; charset=utf-8' },
-                status: 500,
-              }),
-          },
-        },
-      );
+      const assetErrorResponse = assetErrorProbe!.response;
       expect(assetErrorResponse.status).toBe(500);
       expect(assetErrorResponse.headers.get('cache-control')).toBe('no-store');
       expect(assetErrorResponse.headers.get('cross-origin-resource-policy')).toBe('same-origin');
@@ -3794,14 +3525,7 @@ export default async function handler(request) {
       expect(assetErrorResponse.headers.get('vary')).toBeNull();
       expect(assetErrorResponse.headers.get('set-cookie')).toBeNull();
 
-      const routeResponse = await workerModule.default.fetch(
-        new Request('https://worker.test/hello'),
-        {
-          ASSETS: {
-            fetch: async () => new Response('Not Found', { status: 404 }),
-          },
-        },
-      );
+      const routeResponse = routeProbe!.response;
       await expect(routeResponse.text()).resolves.toBe('cloudflare:/hello');
       expect(routeResponse.headers.get('content-type')).toBe('text/plain; charset=utf-8');
     } finally {
@@ -3994,9 +3718,6 @@ export default async function handler() {
 
   it('keeps emitted Cloudflare static security headers after handler-module poisoning', async () => {
     const root = await mkdtemp(join(tmpdir(), 'kovo-cloudflare-static-intrinsics-'));
-    const poisonGlobal = globalThis as typeof globalThis & {
-      __kovoRestoreCloudflareStaticPoison?: () => void;
-    };
 
     try {
       const build = await writeKovoNeutralBuild({
@@ -4005,13 +3726,10 @@ export default async function handler() {
         serverHandlerSource: `
 const originalHeadersSet = Headers.prototype.set;
 const originalReflectApply = Reflect.apply;
-globalThis.__kovoRestoreCloudflareStaticPoison = () => {
-  Headers.prototype.set = originalHeadersSet;
-};
-Headers.prototype.set = function selectiveSet(name, value) {
+Reflect.set(Headers.prototype, 'set', function selectiveSet(name, value) {
   if (name === 'x-content-type-options') return;
   return originalReflectApply(originalHeadersSet, this, [name, value]);
-};
+});
 
 export default async function handler() {
   return new Response('dynamic');
@@ -4027,35 +3745,25 @@ export default async function handler() {
           return build;
         },
       });
-      const workerModule = (await import(
-        `${pathToFileURL(join(cloudflareOutDir, 'worker.mjs')).href}?t=${Date.now()}`
-      )) as {
-        default: {
-          fetch(
-            request: Request,
-            env: { ASSETS?: { fetch(request: Request): Promise<Response> } },
-          ): Promise<Response> | Response;
-        };
-      };
-
-      const arm = await workerModule.default.fetch(new Request('https://worker.test/arm'), {});
-      await expect(arm.text()).resolves.toBe('dynamic');
-      const response = await workerModule.default.fetch(
-        new Request('https://worker.test/assets/app.css'),
-        {
-          ASSETS: {
-            fetch: async () =>
-              new Response('body { color: navy; }', {
-                headers: { 'content-type': 'text/css; charset=utf-8' },
-              }),
+      const [armProbe, assetProbe] = runGeneratedCloudflareWorker(
+        join(cloudflareOutDir, 'worker.mjs'),
+        [
+          { url: 'https://worker.test/arm' },
+          {
+            asset: {
+              body: 'body { color: navy; }',
+              headers: { 'content-type': 'text/css; charset=utf-8' },
+            },
+            url: 'https://worker.test/assets/app.css',
           },
-        },
+        ],
       );
+      const arm = armProbe!.response;
+      await expect(arm.text()).resolves.toBe('dynamic');
+      const response = assetProbe!.response;
 
       expect(response.headers.get('x-content-type-options')).toBe('nosniff');
     } finally {
-      poisonGlobal.__kovoRestoreCloudflareStaticPoison?.();
-      delete poisonGlobal.__kovoRestoreCloudflareStaticPoison;
       await rm(root, { force: true, recursive: true });
     }
   });
@@ -4386,16 +4094,193 @@ async function capturedNodeHeaders(
   return captured;
 }
 
-function withoutGeneratedRuntimeLockInvocation(source: string): string {
-  const declaration = source.indexOf('const lockRequestSafeRuntimeRealm = (');
-  if (declaration < 0) return source;
-  const invocation = source.indexOf('\nlockRequestSafeRuntimeRealm(', declaration);
-  if (invocation < 0) return source;
-  const end = source.indexOf(');\n', invocation);
-  if (end < 0) {
-    throw new Error('Generated runtime-lock test harness could not find the eager call boundary.');
+interface GeneratedServerProcess {
+  readonly baseUrl: string;
+  close(): Promise<void>;
+  stderr(): string;
+}
+
+interface GeneratedWorkerAssetResponse {
+  readonly body: string;
+  readonly headers?: Readonly<Record<string, string>>;
+  readonly status?: number;
+}
+
+interface GeneratedWorkerRequest {
+  readonly asset?: GeneratedWorkerAssetResponse;
+  readonly body?: string;
+  readonly headers?: Readonly<Record<string, string>>;
+  readonly method?: string;
+  readonly url: string;
+}
+
+interface GeneratedWorkerResult {
+  readonly assetCalls: number;
+  readonly response: Response;
+}
+
+// Generated entries eagerly and irreversibly lock their request-safe realm (SPEC §6.6). Exercise
+// those exact bytes in disposable child processes so one deployment probe cannot freeze Vitest's
+// shared worker or weaken the emitted artifact just to make a broad build suite reusable.
+async function startGeneratedNodeServer(serverPath: string): Promise<GeneratedServerProcess> {
+  const source = `
+const imported = await import(${JSON.stringify(pathToFileURL(serverPath).href)});
+const server = imported.createKovoNodeServer();
+server.listen(0, '127.0.0.1', () => {
+  console.log('KOVO_GENERATED_TEST_SERVER:' + server.address().port);
+});
+`;
+  return await startGeneratedServerProcess(['--input-type=module', '--eval', source]);
+}
+
+async function startGeneratedVercelServer(entryPath: string): Promise<GeneratedServerProcess> {
+  const source = `
+import { createServer } from 'node:http';
+const imported = await import(${JSON.stringify(pathToFileURL(entryPath).href)});
+const handler = imported.default ?? imported;
+const server = createServer((request, response) => handler(request, response));
+server.listen(0, '127.0.0.1', () => {
+  console.log('KOVO_GENERATED_TEST_SERVER:' + server.address().port);
+});
+`;
+  return await startGeneratedServerProcess(['--input-type=module', '--eval', source]);
+}
+
+async function startGeneratedServerProcess(
+  args: readonly string[],
+): Promise<GeneratedServerProcess> {
+  const child = spawn(process.execPath, [...args], {
+    env: {
+      ...process.env,
+      HOST: '127.0.0.1',
+    },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  const stdout: string[] = [];
+  const stderr: string[] = [];
+  child.stdout.setEncoding('utf8');
+  child.stderr.setEncoding('utf8');
+  child.stdout.on('data', (chunk: string) => stdout.push(chunk));
+  child.stderr.on('data', (chunk: string) => stderr.push(chunk));
+
+  let port: number;
+  try {
+    port = await waitForGeneratedServerReady(child, stdout, stderr);
+  } catch (error) {
+    child.kill('SIGKILL');
+    throw error;
   }
-  return `${source.slice(0, invocation)}\n// Eager runtime lock exercised in build-runtime-lockdown.test.ts.\n${source.slice(end + 3)}`;
+
+  return {
+    baseUrl: `http://127.0.0.1:${port}`,
+    async close() {
+      if (child.exitCode !== null || child.signalCode !== null) return;
+      const exited = new Promise<void>((resolve) => child.once('exit', () => resolve()));
+      child.kill('SIGTERM');
+      await exited;
+    },
+    stderr() {
+      return stderr.join('');
+    },
+  };
+}
+
+async function waitForGeneratedServerReady(
+  child: ReturnType<typeof spawn>,
+  stdout: readonly string[],
+  stderr: readonly string[],
+): Promise<number> {
+  const deadline = Date.now() + 10_000;
+  while (Date.now() < deadline) {
+    const port = /KOVO_GENERATED_TEST_SERVER:(\d+)/u.exec(stdout.join(''))?.[1];
+    if (port !== undefined) return Number(port);
+    if (child.exitCode !== null || child.signalCode !== null) {
+      throw new Error(
+        `Generated server exited before listening (exit=${child.exitCode}, signal=${child.signalCode}):\nstdout=${stdout.join('')}\nstderr=${stderr.join('')}`,
+      );
+    }
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+  throw new Error(`Timed out waiting for generated server:\n${stderr.join('')}`);
+}
+
+function importGeneratedRuntimeEntry(
+  entryPath: string,
+  globalNames: readonly string[] = [],
+): Readonly<Record<string, unknown>> {
+  const source = `
+await import(${JSON.stringify(pathToFileURL(entryPath).href)});
+const names = ${JSON.stringify(globalNames)};
+const result = Object.fromEntries(names.map((name) => [name, globalThis[name]]));
+process.stdout.write(JSON.stringify(result));
+`;
+  const stdout = execFileSync(
+    process.execPath,
+    ['--disable-warning=ExperimentalWarning', '--input-type=module', '--eval', source],
+    { encoding: 'utf8', timeout: 20_000 },
+  );
+  return JSON.parse(stdout) as Readonly<Record<string, unknown>>;
+}
+
+function runGeneratedCloudflareWorker(
+  workerPath: string,
+  requests: readonly GeneratedWorkerRequest[],
+): readonly GeneratedWorkerResult[] {
+  const encodedInput = Buffer.from(JSON.stringify(requests)).toString('base64');
+  const source = `
+const requests = JSON.parse(Buffer.from(process.env.KOVO_BUILD_TEST_PROBE, 'base64').toString());
+delete process.env.KOVO_BUILD_TEST_PROBE;
+const worker = (await import(${JSON.stringify(pathToFileURL(workerPath).href)})).default;
+const results = [];
+for (const probe of requests) {
+  let assetCalls = 0;
+  const env = probe.asset === undefined ? {} : {
+    ASSETS: {
+      async fetch() {
+        assetCalls += 1;
+        return new Response(probe.asset.body, {
+          headers: probe.asset.headers,
+          status: probe.asset.status,
+        });
+      },
+    },
+  };
+  const response = await worker.fetch(new Request(probe.url, {
+    body: probe.body,
+    headers: probe.headers,
+    method: probe.method,
+  }), env);
+  results.push({
+    assetCalls,
+    body: await response.text(),
+    headers: [...response.headers.entries()],
+    status: response.status,
+  });
+}
+process.stdout.write(JSON.stringify(results));
+`;
+  const stdout = execFileSync(
+    process.execPath,
+    ['--disable-warning=ExperimentalWarning', '--input-type=module', '--eval', source],
+    {
+      encoding: 'utf8',
+      env: { ...process.env, KOVO_BUILD_TEST_PROBE: encodedInput },
+      timeout: 20_000,
+    },
+  );
+  const results = JSON.parse(stdout) as readonly {
+    readonly assetCalls: number;
+    readonly body: string;
+    readonly headers: readonly [string, string][];
+    readonly status: number;
+  }[];
+  return results.map((result) => ({
+    assetCalls: result.assetCalls,
+    response: new Response(result.body, {
+      headers: result.headers.map(([name, value]): [string, string] => [name, value]),
+      status: result.status,
+    }),
+  }));
 }
 
 async function readJson(filePath: string): Promise<unknown> {
@@ -4496,18 +4381,6 @@ function sqliteDurableTaskStoreError(presetName: string, taskList: string) {
   };
 }
 
-async function listen(server: Server): Promise<string> {
-  await new Promise<void>((resolve) => {
-    server.listen(0, '127.0.0.1', resolve);
-  });
-  const address = server.address();
-  if (address === null || typeof address === 'string') {
-    throw new Error('Expected node preset test server to listen on an ephemeral port.');
-  }
-
-  return `http://127.0.0.1:${address.port}`;
-}
-
 async function nodeGet(
   baseUrl: string,
   pathname: string,
@@ -4576,24 +4449,31 @@ function rawMutationRequest(target: string, credential: string): string {
   ].join('\r\n');
 }
 
-async function waitForConsoleErrorCount(
-  errors: readonly unknown[][],
-  count: number,
+async function waitForGeneratedServerStderr(
+  server: GeneratedServerProcess,
+  expected: string,
 ): Promise<void> {
-  const deadline = Date.now() + 1_000;
-  while (errors.length < count && Date.now() < deadline) {
+  const deadline = Date.now() + 2_000;
+  while (!server.stderr().includes(expected) && Date.now() < deadline) {
     await new Promise((resolve) => setTimeout(resolve, 5));
   }
-  if (errors.length < count) {
-    throw new Error(`Timed out waiting for ${count} generated Node error log entries.`);
+  if (!server.stderr().includes(expected)) {
+    throw new Error(`Timed out waiting for generated Node stderr to include ${expected}.`);
   }
 }
 
-async function close(server: Server): Promise<void> {
-  await new Promise<void>((resolve, reject) => {
-    server.close((error) => {
-      if (error) reject(error);
-      else resolve();
-    });
-  });
+async function waitForGeneratedServerErrorCount(
+  server: GeneratedServerProcess,
+  count: number,
+): Promise<void> {
+  const deadline = Date.now() + 2_000;
+  while (
+    (server.stderr().match(/\[kovo\] unhandled node server error/gu)?.length ?? 0) < count &&
+    Date.now() < deadline
+  ) {
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+  if ((server.stderr().match(/\[kovo\] unhandled node server error/gu)?.length ?? 0) < count) {
+    throw new Error(`Timed out waiting for ${count} generated Node stderr entries.`);
+  }
 }
