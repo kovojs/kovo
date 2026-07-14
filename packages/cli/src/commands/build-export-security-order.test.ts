@@ -1,4 +1,5 @@
 import { spawnSync } from 'node:child_process';
+import { createRequire, syncBuiltinESMExports } from 'node:module';
 import {
   existsSync,
   mkdirSync,
@@ -15,8 +16,12 @@ import { pathToFileURL } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
+import { mutationHandlerFingerprintFromRuntimeSource } from '@kovojs/compiler/internal';
+import type { KovoApp } from '@kovojs/server';
+
 import {
   appWithBuildStylesheetAssets,
+  completeMutationSessionAuthorityFacts,
   kovoServerHandlerEntrySource,
   serializeBuildRuntimeRegistryWireModule,
 } from './build-export.js';
@@ -27,6 +32,63 @@ import {
 } from './build-security-intrinsics.js';
 
 describe('build/export security bootstrap ordering', () => {
+  it('keeps the production authority join fail-closed under a late createHash replacement', () => {
+    // SPEC §2/§11.4: an evaluated csrf-exempt handler must match the exact handler inspected
+    // statically. A late digest collision must not let an ambient-authority handler inherit proof.
+    const safeHandler = () => 'safe';
+    const unsafeHandler = () => globalThis.document.cookie;
+    const safeFingerprint = mutationHandlerFingerprintFromRuntimeSource(
+      Function.prototype.toString.call(safeHandler),
+    );
+    const unsafeFingerprint = mutationHandlerFingerprintFromRuntimeSource(
+      Function.prototype.toString.call(unsafeHandler),
+    );
+    expect(safeFingerprint).toMatch(/^[0-9a-f]{64}$/u);
+    expect(unsafeFingerprint).toMatch(/^[0-9a-f]{64}$/u);
+    expect(safeFingerprint).not.toBe(unsafeFingerprint);
+
+    const require = createRequire(import.meta.url);
+    const mutableCrypto = require('node:crypto') as {
+      createHash: (typeof import('node:crypto'))['createHash'];
+    };
+    const nativeCreateHash = mutableCrypto.createHash;
+    mutableCrypto.createHash = (() => ({
+      digest: () => '0'.repeat(64),
+      update() {
+        return this;
+      },
+    })) as unknown as typeof mutableCrypto.createHash;
+    syncBuiltinESMExports();
+
+    try {
+      const facts = completeMutationSessionAuthorityFacts(
+        {
+          mutations: [{ csrf: false, handler: unsafeHandler, key: 'auth/save' }],
+        } as unknown as KovoApp,
+        [
+          {
+            handlerFingerprints: [safeFingerprint!],
+            kind: 'mutation',
+            name: 'auth/save',
+            referencesSession: false,
+            source: 'session-authority',
+          },
+        ],
+      );
+
+      expect(facts).toContainEqual({
+        detail: 'runtime csrf-exempt handler identity was not covered by the static authority scan',
+        kind: 'mutation',
+        name: 'auth/save',
+        referencesSession: true,
+        source: 'session-authority',
+      });
+    } finally {
+      mutableCrypto.createHash = nativeCreateHash;
+      syncBuiltinESMExports();
+    }
+  });
+
   it('imports the server bootstrap owner before generated registry and app modules', () => {
     const source = kovoServerHandlerEntrySource('/tmp/kovo/app.mjs', {
       app: [],

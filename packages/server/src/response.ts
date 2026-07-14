@@ -616,7 +616,7 @@ export function shouldEmitDocumentHsts(secureRequest: boolean): boolean {
  *     }),
  * });
  */
-export const respond = {
+export const respond = witnessFreeze({
   file(body: Exclude<RouteResponseBody, ReadableStream<Uint8Array>>, options: RouteFileOptions) {
     return routeResponseOutcome(body, options, 'attachment');
   },
@@ -742,7 +742,7 @@ export const respond = {
       disposition,
     );
   },
-};
+});
 
 export const routeOutcomeResponse = wireEmitter(
   'server.wire.route-outcome-response',

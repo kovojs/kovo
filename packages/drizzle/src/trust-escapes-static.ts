@@ -907,7 +907,7 @@ interface RequestRootCallbackSpec {
   readonly publicWireMethods?: readonly string[];
   readonly publicWirePaths?: readonly (readonly string[])[];
   readonly roles?: readonly RequestRootParameterRole[];
-  readonly staticValue?: 'access' | 'redirect' | 'scalar';
+  readonly staticValue?: 'access' | 'guard' | 'redirect' | 'scalar';
 }
 
 interface RequestHandlerFactory {
@@ -1047,7 +1047,12 @@ const REQUEST_HANDLER_FACTORIES = [
         roles: ['request'],
         staticValue: 'access',
       },
-      { carriers: [{ carrier: 'request', index: 0 }], property: 'guard', roles: ['request'] },
+      {
+        carriers: [{ carrier: 'request', index: 0 }],
+        property: 'guard',
+        roles: ['request'],
+        staticValue: 'guard',
+      },
       { property: 'input.parse', roles: ['input'] },
       { property: 'input.parseAsync', roles: ['input'] },
       {
@@ -1086,7 +1091,12 @@ const REQUEST_HANDLER_FACTORIES = [
         roles: ['request'],
         staticValue: 'access',
       },
-      { carriers: [{ carrier: 'request', index: 0 }], property: 'guard', roles: ['request'] },
+      {
+        carriers: [{ carrier: 'request', index: 0 }],
+        property: 'guard',
+        roles: ['request'],
+        staticValue: 'guard',
+      },
       { property: 'args.parse', roles: ['input'] },
       { property: 'args.parseAsync', roles: ['input'] },
       { property: 'output.parse', publicWire: true, roles: ['input'] },
@@ -1174,7 +1184,12 @@ const REQUEST_HANDLER_FACTORIES = [
         roles: ['request'],
         staticValue: 'access',
       },
-      { carriers: [{ carrier: 'request', index: 0 }], property: 'guard', roles: ['request'] },
+      {
+        carriers: [{ carrier: 'request', index: 0 }],
+        property: 'guard',
+        roles: ['request'],
+        staticValue: 'guard',
+      },
       { property: 'params.parse', roles: ['input'] },
       { property: 'params.parseAsync', roles: ['input'] },
       { property: 'search.parse', roles: ['input'] },
@@ -1219,7 +1234,12 @@ const REQUEST_HANDLER_FACTORIES = [
         roles: ['request'],
         staticValue: 'access',
       },
-      { carriers: [{ carrier: 'request', index: 0 }], property: 'guard', roles: ['request'] },
+      {
+        carriers: [{ carrier: 'request', index: 0 }],
+        property: 'guard',
+        roles: ['request'],
+        staticValue: 'guard',
+      },
       {
         carriers: [{ carrier: 'context', index: 0 }],
         kind: 'record',
@@ -1278,6 +1298,33 @@ const REQUEST_REVIEWED_DRIZZLE_EXPRESSIONS = new Set([
   'notLike',
   'or',
 ]);
+
+const REQUEST_REVIEWED_DRIZZLE_DB_DATA_METHODS = new Set([
+  'delete',
+  'from',
+  'fullJoin',
+  'groupBy',
+  'having',
+  'innerJoin',
+  'insert',
+  'leftJoin',
+  'limit',
+  'offset',
+  'onConflictDoNothing',
+  'onConflictDoUpdate',
+  'orderBy',
+  'returning',
+  'rightJoin',
+  'select',
+  'selectDistinct',
+  'selectDistinctOn',
+  'set',
+  'update',
+  'values',
+  'where',
+]);
+
+const REQUEST_REVIEWED_RESPOND_METHODS = new Set(['file', 'storedFile', 'stream']);
 
 const REQUEST_SENSITIVE_WIRE_HEADERS: ReadonlyMap<string, string> = new Map([
   ['authorization', 'Authorization'],
@@ -1366,6 +1413,7 @@ interface RequestProvenanceSession {
   readonly callableSymbolMemo: Map<string, RequestCallableResolution>;
   readonly carrierActive: Set<string>;
   readonly carrierMemo: Map<string, RequestWireCarrier | null>;
+  readonly drizzleTablePristineMemo: Map<string, boolean>;
   exhaustedAt?: Node;
   readonly factoryActive: Set<string>;
   readonly factoryMemo: Map<string, readonly RequestHandlerFactoryName[]>;
@@ -1398,6 +1446,7 @@ function createRequestProvenanceSession(): RequestProvenanceSession {
     callableSymbolMemo: new Map(),
     carrierActive: new Set(),
     carrierMemo: new Map(),
+    drizzleTablePristineMemo: new Map(),
     factoryActive: new Set(),
     factoryMemo: new Map(),
     factorySymbolActive: new Set(),
@@ -5149,6 +5198,12 @@ function requestStaticCallbackValueIsClosed(
   const node = unwrapStaticExpression(expression);
   if (Node.isStringLiteral(node) || Node.isNoSubstitutionTemplateLiteral(node)) return true;
   if (kind === 'scalar' && Node.isNumericLiteral(node)) return true;
+  if (
+    (kind === 'access' || kind === 'guard') &&
+    requestStaticFrameworkGuardIsClosed(node)
+  ) {
+    return true;
+  }
   if (kind === 'access' && Node.isCallExpression(node)) {
     return ['publicAccess', 'verifiedMachineAccess'].some(
       (name) =>
@@ -5203,6 +5258,210 @@ function requestStaticCallbackValueIsClosed(
     }
   }
   return false;
+}
+
+function requestStaticFrameworkGuardIsClosed(expression: Node): boolean {
+  const node = unwrapStaticExpression(expression);
+  if (!Node.isCallExpression(node)) return false;
+  const callee = unwrapStaticExpression(node.getExpression());
+  const receiver = requestCallReceiver(callee);
+  const member = requestStaticCallMember(callee);
+  if (
+    !receiver ||
+    !requestExpressionIsDirectImportedExport(receiver, '@kovojs/server', 'guards') ||
+    !requestExactImportedCarrierIsPristine(receiver, '@kovojs/server', 'guards')
+  ) {
+    return false;
+  }
+
+  if (member === 'authed') return node.getArguments().length === 0;
+  if (member !== 'rateLimit') return false;
+
+  const [options] = node.getArguments();
+  const record = options ? unwrapStaticExpression(options) : undefined;
+  if (!record || !Node.isObjectLiteralExpression(record)) return false;
+  for (const property of record.getProperties()) {
+    if (
+      Node.isSpreadAssignment(property) ||
+      Node.isGetAccessorDeclaration(property) ||
+      Node.isSetAccessorDeclaration(property)
+    ) {
+      return false;
+    }
+    const name = requestObjectLiteralElementNameNode(property);
+    if (!name || (Node.isComputedPropertyName(name) && staticMemberName(name) === undefined)) {
+      return false;
+    }
+    // `key` executes for every request. It remains an authored callback and must go through the
+    // ordinary callable scanner instead of inheriting framework authority from rateLimit().
+    if (staticMemberName(name) === 'key') return false;
+  }
+  return true;
+}
+
+function requestExpressionIsDirectImportedExport(
+  expression: Node,
+  module: string,
+  exportName: string,
+): boolean {
+  const node = unwrapStaticExpression(expression);
+  if (Node.isIdentifier(node)) {
+    const local = node.getText();
+    return node
+      .getSourceFile()
+      .getImportDeclarations()
+      .some(
+        (declaration) =>
+          declaration.getModuleSpecifierValue() === module &&
+          declaration
+            .getNamedImports()
+            .some(
+              (named) =>
+                named.getName() === exportName &&
+                (named.getAliasNode()?.getText() ?? named.getName()) === local,
+            ),
+      );
+  }
+  if (!Node.isPropertyAccessExpression(node) && !Node.isElementAccessExpression(node)) {
+    return false;
+  }
+  const member = Node.isPropertyAccessExpression(node)
+    ? staticMemberName(node.getNameNode())
+    : staticMemberName(node.getArgumentExpression());
+  const namespace = unwrapStaticExpression(node.getExpression());
+  if (member !== exportName || !Node.isIdentifier(namespace)) return false;
+  return namespace
+    .getSourceFile()
+    .getImportDeclarations()
+    .some(
+      (declaration) =>
+        declaration.getModuleSpecifierValue() === module &&
+        declaration.getNamespaceImport()?.getText() === namespace.getText(),
+    );
+}
+
+function requestExactImportedCarrierIsPristine(
+  expression: Node,
+  module: string,
+  exportName: string,
+): boolean {
+  const project = expression.getSourceFile().getProject();
+  const resolvesToCarrier = (candidate: Node | undefined): boolean =>
+    !!candidate &&
+    requestExpressionResolvesToExactImportedCarrier(
+      candidate,
+      module,
+      exportName,
+      new Set(),
+    );
+
+  for (const sourceFile of project.getSourceFiles()) {
+    for (const assignment of sourceFile.getDescendantsOfKind(SyntaxKind.BinaryExpression)) {
+      const operator = assignment.getOperatorToken().getKind();
+      if (operator < SyntaxKind.FirstAssignment || operator > SyntaxKind.LastAssignment) continue;
+      const target = unwrapStaticExpression(assignment.getLeft());
+      if (
+        (Node.isPropertyAccessExpression(target) || Node.isElementAccessExpression(target)) &&
+        resolvesToCarrier(target.getExpression())
+      ) {
+        return false;
+      }
+    }
+    for (const deletion of sourceFile.getDescendantsOfKind(SyntaxKind.DeleteExpression)) {
+      const target = unwrapStaticExpression(deletion.getExpression());
+      if (
+        (Node.isPropertyAccessExpression(target) || Node.isElementAccessExpression(target)) &&
+        resolvesToCarrier(target.getExpression())
+      ) {
+        return false;
+      }
+    }
+    for (const update of [
+      ...sourceFile.getDescendantsOfKind(SyntaxKind.PrefixUnaryExpression),
+      ...sourceFile.getDescendantsOfKind(SyntaxKind.PostfixUnaryExpression),
+    ]) {
+      const target = unwrapStaticExpression(update.getOperand());
+      if (
+        (Node.isPropertyAccessExpression(target) || Node.isElementAccessExpression(target)) &&
+        resolvesToCarrier(target.getExpression())
+      ) {
+        return false;
+      }
+    }
+    for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
+      const callee = unwrapStaticExpression(call.getExpression());
+      const receiver = requestCallReceiver(callee);
+      const member = requestStaticCallMember(callee);
+      if (!receiver || !member) continue;
+      const objectGlobal = expressionResolvesToGlobalNamespace(receiver, 'Object', new Set(), 0);
+      const reflectGlobal = expressionResolvesToGlobalNamespace(receiver, 'Reflect', new Set(), 0);
+      const [target] = call.getArguments();
+      if (
+        resolvesToCarrier(target) &&
+        ((objectGlobal &&
+          ['assign', 'defineProperties', 'defineProperty', 'setPrototypeOf'].includes(member)) ||
+          (reflectGlobal &&
+            ['defineProperty', 'deleteProperty', 'set', 'setPrototypeOf'].includes(member)))
+      ) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
+function requestExpressionResolvesToExactImportedCarrier(
+  expression: Node,
+  module: string,
+  exportName: string,
+  seen: Set<string>,
+): boolean {
+  const node = unwrapStaticExpression(expression);
+  if (requestExpressionIsDirectImportedExport(node, module, exportName)) return true;
+  if (!Node.isIdentifier(node)) return false;
+  const symbol = node.getSymbol();
+  if (!symbol) return false;
+  const key = requestSymbolKey(symbol);
+  if (seen.has(key)) return false;
+  seen.add(key);
+  return symbol.getDeclarations().some((declaration) => {
+    if (
+      Node.isVariableDeclaration(declaration) &&
+      declaration.getVariableStatement()?.getDeclarationKind() !== VariableDeclarationKind.Const
+    ) {
+      return false;
+    }
+    const initializer = valueDeclarationInitializer(declaration);
+    return initializer
+      ? requestExpressionResolvesToExactImportedCarrier(
+          initializer,
+          module,
+          exportName,
+          new Set(seen),
+        )
+      : false;
+  });
+}
+
+function requestCallIsExactRespondMethod(call: import('ts-morph').CallExpression): boolean {
+  const callee = unwrapStaticExpression(call.getExpression());
+  const receiver = requestCallReceiver(callee);
+  const member = requestStaticCallMember(callee);
+  return !!(
+    receiver &&
+    member &&
+    REQUEST_REVIEWED_RESPOND_METHODS.has(member) &&
+    requestExpressionIsDirectImportedExport(receiver, '@kovojs/server', 'respond') &&
+    requestExactImportedCarrierIsPristine(receiver, '@kovojs/server', 'respond')
+  );
+}
+
+function requestCallIsExactFrameworkPromiseMinter(
+  call: import('ts-morph').CallExpression,
+): boolean {
+  return ['rootedFiles', 'runCommand'].some((exportName) =>
+    requestExpressionIsDirectImportedExport(call.getExpression(), '@kovojs/server', exportName),
+  );
 }
 
 function requestHandlerPropertyExpression(property: Node): Node | undefined {
@@ -7624,6 +7883,13 @@ function scanRequestPropertyAccessProtocols(
   const member = Node.isPropertyAccessExpression(access)
     ? access.getName()
     : staticMemberName(access.getArgumentExpression());
+  if (
+    !write &&
+    member !== undefined &&
+    requestPropertyAccessIsReviewedDrizzleColumn(access, member, callable, context)
+  ) {
+    return;
+  }
   if (receiver.getKind() === SyntaxKind.SuperKeyword) {
     scanRequestSuperPropertyAccess(access, member, site, callable, context, write);
     return;
@@ -7866,7 +8132,6 @@ function scanRequestOpaqueInternalMethodTarget(
     requestRootRoleIncludesCapability(role) ||
     requestRootRoleIncludesInput(role) ||
     role === 'request' ||
-    requestExpressionIsFrameworkCapability(receiver, new Set(), 0) ||
     requestExpressionContainsClosedAuthority(receiver, new Set(), 0) ||
     requestExpressionIsSafeGlobalNamespace(receiver) ||
     requestExpressionIsProtocolSafe(receiver, callable, new Set(), context.provenance) ||
@@ -8365,7 +8630,9 @@ function requestExpressionIsProtocolSafe(
   if (Node.isCallExpression(node)) {
     const callee = unwrapStaticExpression(node.getExpression());
     if (callee.getKind() === SyntaxKind.ImportKeyword) return true;
-    if (canonicalFrameworkExportForExpression(callee)) return true;
+    if (requestCallIsExactFrameworkPromiseMinter(node) || requestCallIsExactRespondMethod(node)) {
+      return true;
+    }
     if (
       Node.isIdentifier(callee) &&
       [...REQUEST_SAFE_GLOBAL_CALLABLES, 'Symbol'].includes(callee.getText()) &&
@@ -8443,7 +8710,6 @@ function requestExpressionIsProtocolSafe(
       if (
         requestRootRoleIncludesCapability(role) ||
         requestRootRoleIncludesInput(role) ||
-        requestExpressionIsFrameworkCapability(receiver, new Set(), 0) ||
         requestExpressionContainsClosedAuthority(receiver, new Set(), 0)
       ) {
         return true;
@@ -8488,6 +8754,7 @@ function requestExpressionIsProtocolSafe(
   }
   if (!Node.isIdentifier(node)) return false;
   if (unshadowedGlobalIdentifier(node, 'undefined')) return true;
+  if (requestIdentifierIsImportedMutableContainer(node)) return false;
   const role = requestExpressionRootParameterRole(node, callable, new Set(), 0);
   if (requestRootRoleIncludesInput(role)) return true;
   const symbol = requestIdentifierValueSymbol(node);
@@ -9796,12 +10063,13 @@ function requestExpressionIsPlainWireValue(
     }
     if (
       receiver &&
-      (requestExpressionIsFrameworkCapability(receiver, new Set(), 0) ||
-        requestExpressionContainsClosedAuthority(receiver, new Set(), 0))
+      requestExpressionContainsClosedAuthority(receiver, new Set(), 0)
     ) {
       return true;
     }
-    if (canonicalFrameworkExportForExpression(callee)) return true;
+    if (requestCallIsExactFrameworkPromiseMinter(node) || requestCallIsExactRespondMethod(node)) {
+      return true;
+    }
   }
   if (Node.isNewExpression(node)) {
     const callee = unwrapStaticExpression(node.getExpression());
@@ -9813,6 +10081,7 @@ function requestExpressionIsPlainWireValue(
   }
   if (!Node.isIdentifier(node)) return false;
   if (unshadowedGlobalIdentifier(node, 'undefined')) return true;
+  if (requestIdentifierIsImportedMutableContainer(node)) return false;
   const carrier = requestWireCarrierForExpression(node, state, new Set(), 0);
   if (carrier) return false;
   const symbol = requestIdentifierValueSymbol(node);
@@ -11839,7 +12108,7 @@ function requestCallIsKnownSafe(
     scanRequestFunctionArguments(call, context);
     return true;
   }
-  if (receiver && canonicalFrameworkExportForExpression(receiver)) {
+  if (requestCallIsExactRespondMethod(call)) {
     scanRequestFunctionArguments(call, context);
     return true;
   }
@@ -11955,10 +12224,6 @@ function requestCallIsKnownSafe(
     ) {
       return false;
     }
-    scanRequestFunctionArguments(call, context);
-    return true;
-  }
-  if (requestExpressionIsFrameworkCapability(receiver, new Set(), 0)) {
     scanRequestFunctionArguments(call, context);
     return true;
   }
@@ -13270,6 +13535,400 @@ function requestCallIsReviewedPureDrizzleExpression(
   return !!imported && REQUEST_REVIEWED_DRIZZLE_EXPRESSIONS.has(imported.exportName);
 }
 
+interface RequestReviewedDrizzleTable {
+  readonly columns: import('ts-morph').ObjectLiteralExpression;
+  readonly declaration: import('ts-morph').VariableDeclaration;
+}
+
+function requestPropertyAccessIsReviewedDrizzleColumn(
+  access: import('ts-morph').PropertyAccessExpression | import('ts-morph').ElementAccessExpression,
+  member: string,
+  callable: RequestCallable,
+  context: RequestProcessScanContext,
+): boolean {
+  const table = requestReviewedDrizzleTableForDirectReference(access.getExpression());
+  if (!table || !requestReviewedDrizzleTableHasColumn(table, member)) return false;
+  if (!requestReviewedDrizzleTableIsPristine(table, callable, context)) return false;
+  return requestNodeIsReviewedDrizzleDataArgument(access, callable);
+}
+
+function requestReviewedDrizzleTableForDirectReference(
+  expression: Node,
+): RequestReviewedDrizzleTable | undefined {
+  const node = unwrapStaticExpression(expression);
+  if (!Node.isIdentifier(node)) return undefined;
+  const symbol = node.getSymbol();
+  if (!symbol) return undefined;
+  const symbols = [symbol];
+  const seen = new Set<string>();
+  while (symbols.length > 0) {
+    const candidate = symbols.pop()!;
+    const key = requestSymbolKey(candidate);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    try {
+      const aliased = candidate.getAliasedSymbol();
+      if (aliased && aliased !== candidate) symbols.push(aliased);
+    } catch {
+      // Unresolved imports remain closed below.
+    }
+    for (const declaration of candidate.getDeclarations()) {
+      if (!Node.isVariableDeclaration(declaration)) continue;
+      const statement = declaration.getVariableStatement();
+      const initializer = declaration.getInitializer();
+      if (
+        !statement ||
+        statement.getParent() !== declaration.getSourceFile() ||
+        statement.getDeclarationKind() !== VariableDeclarationKind.Const ||
+        !initializer
+      ) {
+        continue;
+      }
+      const call = unwrapStaticExpression(initializer);
+      if (!Node.isCallExpression(call)) continue;
+      if (
+        !requestExpressionIsDirectImportedExport(
+          call.getExpression(),
+          'drizzle-orm/pg-core',
+          'pgTable',
+        )
+      ) {
+        continue;
+      }
+      const [name, columns, extra] = call.getArguments();
+      if (
+        !name ||
+        !isStringLiteralLike(unwrapStaticExpression(name)) ||
+        !columns ||
+        !Node.isObjectLiteralExpression(unwrapStaticExpression(columns)) ||
+        !requestDrizzleColumnsObjectIsClosed(unwrapStaticExpression(columns)) ||
+        (extra !== undefined && !requestDrizzleExtraConfigIsClosed(extra))
+      ) {
+        continue;
+      }
+      return {
+        columns: unwrapStaticExpression(columns) as import('ts-morph').ObjectLiteralExpression,
+        declaration,
+      };
+    }
+  }
+  return undefined;
+}
+
+function requestDrizzleColumnsObjectIsClosed(
+  columns: import('ts-morph').ObjectLiteralExpression,
+): boolean {
+  return columns.getProperties().every((property) => {
+    if (!Node.isPropertyAssignment(property)) return false;
+    const name = property.getNameNode();
+    return !Node.isComputedPropertyName(name) || staticMemberName(name) !== undefined;
+  });
+}
+
+function requestDrizzleExtraConfigIsClosed(expression: Node): boolean {
+  const node = unwrapStaticExpression(expression);
+  if (!Node.isCallExpression(node)) return false;
+  if (
+    !requestExpressionIsDirectImportedExport(
+      node.getExpression(),
+      '@kovojs/drizzle',
+      'kovo',
+    )
+  ) {
+    return false;
+  }
+  return node.getArguments().every(requestExpressionIsClosedStaticData);
+}
+
+function requestExpressionIsClosedStaticData(expression: Node): boolean {
+  const node = unwrapStaticExpression(expression);
+  if (
+    Node.isStringLiteral(node) ||
+    Node.isNoSubstitutionTemplateLiteral(node) ||
+    Node.isNumericLiteral(node) ||
+    Node.isBigIntLiteral(node) ||
+    Node.isTrueLiteral(node) ||
+    Node.isFalseLiteral(node) ||
+    node.getKind() === SyntaxKind.NullKeyword
+  ) {
+    return true;
+  }
+  if (Node.isArrayLiteralExpression(node)) {
+    return node
+      .getElements()
+      .every(
+        (element) =>
+          !Node.isSpreadElement(element) && requestExpressionIsClosedStaticData(element),
+      );
+  }
+  if (Node.isObjectLiteralExpression(node)) {
+    return node.getProperties().every((property) => {
+      if (!Node.isPropertyAssignment(property)) return false;
+      const name = property.getNameNode();
+      const initializer = property.getInitializer();
+      return (
+        (!Node.isComputedPropertyName(name) || staticMemberName(name) !== undefined) &&
+        !!initializer &&
+        requestExpressionIsClosedStaticData(initializer)
+      );
+    });
+  }
+  return false;
+}
+
+function requestReviewedDrizzleTableHasColumn(
+  table: RequestReviewedDrizzleTable,
+  member: string,
+): boolean {
+  return table.columns.getProperties().some((property) => {
+    if (!Node.isPropertyAssignment(property)) return false;
+    return staticMemberName(property.getNameNode()) === member;
+  });
+}
+
+function requestNodeIsReviewedDrizzleDataArgument(
+  node: Node,
+  callable: RequestCallable,
+): boolean {
+  let current = node;
+  while (true) {
+    const parent = current.getParent();
+    if (!parent || !nodeBelongsToRequestCallable(parent, callable)) return false;
+    if (
+      Node.isArrowFunction(parent) ||
+      Node.isFunctionExpression(parent) ||
+      Node.isFunctionDeclaration(parent) ||
+      Node.isMethodDeclaration(parent) ||
+      Node.isGetAccessorDeclaration(parent) ||
+      Node.isSetAccessorDeclaration(parent)
+    ) {
+      return false;
+    }
+    if (Node.isCallExpression(parent)) {
+      if (!parent.getArguments().some((argument) => requestNodesAreSame(argument, current))) {
+        return false;
+      }
+      return (
+        requestCallIsReviewedPureDrizzleExpression(parent) ||
+        requestCallIsReviewedDrizzleDbDataCall(parent, callable)
+      );
+    }
+    current = parent;
+  }
+}
+
+function requestCallIsReviewedDrizzleDbDataCall(
+  call: import('ts-morph').CallExpression,
+  callable: RequestCallable,
+): boolean {
+  const callee = unwrapStaticExpression(call.getExpression());
+  const receiver = requestCallReceiver(callee);
+  const member = requestStaticCallMember(callee);
+  return !!(
+    receiver &&
+    member &&
+    REQUEST_REVIEWED_DRIZZLE_DB_DATA_METHODS.has(member) &&
+    requestRootRoleIncludesCapability(
+      requestExpressionRootParameterRole(receiver, callable, new Set(), 0),
+    )
+  );
+}
+
+function requestReviewedDrizzleTableIsPristine(
+  table: RequestReviewedDrizzleTable,
+  callable: RequestCallable,
+  context: RequestProcessScanContext,
+): boolean {
+  const key = requestNodeIdentity(table.declaration);
+  const cached = context.provenance.drizzleTablePristineMemo.get(key);
+  if (cached !== undefined) return cached;
+  const resolvesToTable = (candidate: Node | undefined): boolean =>
+    !!candidate &&
+    requestExpressionResolvesToReviewedDrizzleTable(
+      candidate,
+      table.declaration,
+      new Set(),
+    );
+
+  let pristine = true;
+  for (const sourceFile of table.declaration.getSourceFile().getProject().getSourceFiles()) {
+    for (const assignment of sourceFile.getDescendantsOfKind(SyntaxKind.BinaryExpression)) {
+      const operator = assignment.getOperatorToken().getKind();
+      if (operator < SyntaxKind.FirstAssignment || operator > SyntaxKind.LastAssignment) continue;
+      const target = unwrapStaticExpression(assignment.getLeft());
+      if (
+        (Node.isPropertyAccessExpression(target) || Node.isElementAccessExpression(target)) &&
+        resolvesToTable(target.getExpression())
+      ) {
+        pristine = false;
+        break;
+      }
+    }
+    if (!pristine) break;
+    for (const deletion of sourceFile.getDescendantsOfKind(SyntaxKind.DeleteExpression)) {
+      const target = unwrapStaticExpression(deletion.getExpression());
+      if (
+        (Node.isPropertyAccessExpression(target) || Node.isElementAccessExpression(target)) &&
+        resolvesToTable(target.getExpression())
+      ) {
+        pristine = false;
+        break;
+      }
+    }
+    if (!pristine) break;
+    for (const update of [
+      ...sourceFile.getDescendantsOfKind(SyntaxKind.PrefixUnaryExpression),
+      ...sourceFile.getDescendantsOfKind(SyntaxKind.PostfixUnaryExpression),
+    ]) {
+      const target = unwrapStaticExpression(update.getOperand());
+      if (
+        (Node.isPropertyAccessExpression(target) || Node.isElementAccessExpression(target)) &&
+        resolvesToTable(target.getExpression())
+      ) {
+        pristine = false;
+        break;
+      }
+    }
+    if (!pristine) break;
+    for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
+      const callee = unwrapStaticExpression(call.getExpression());
+      const receiver = requestCallReceiver(callee);
+      const member = requestStaticCallMember(callee);
+      if (receiver && resolvesToTable(receiver)) {
+        pristine = false;
+        break;
+      }
+      if (!call.getArguments().some(resolvesToTable)) continue;
+      const objectGlobal =
+        !!receiver && expressionResolvesToGlobalNamespace(receiver, 'Object', new Set(), 0);
+      const reflectGlobal =
+        !!receiver && expressionResolvesToGlobalNamespace(receiver, 'Reflect', new Set(), 0);
+      if (
+        (objectGlobal &&
+          member !== undefined &&
+          ['assign', 'defineProperties', 'defineProperty', 'setPrototypeOf'].includes(member)) ||
+        (reflectGlobal &&
+          member !== undefined &&
+          ['defineProperty', 'deleteProperty', 'set', 'setPrototypeOf'].includes(member)) ||
+        (!requestCallIsReviewedPureDrizzleExpression(call) &&
+          !requestCallIsReviewedDrizzleDbDataCall(call, callable) &&
+          !requestCallIsReviewedDrizzleDbDataCallInDeclaredRoot(call, context.provenance))
+      ) {
+        pristine = false;
+        break;
+      }
+    }
+    if (!pristine) break;
+    for (const construct of sourceFile.getDescendantsOfKind(SyntaxKind.NewExpression)) {
+      if (construct.getArguments().some(resolvesToTable)) {
+        pristine = false;
+        break;
+      }
+    }
+    if (!pristine) break;
+  }
+  context.provenance.drizzleTablePristineMemo.set(key, pristine);
+  return pristine;
+}
+
+function requestCallIsReviewedDrizzleDbDataCallInDeclaredRoot(
+  call: import('ts-morph').CallExpression,
+  session: RequestProvenanceSession,
+): boolean {
+  const owner = call.getFirstAncestor(
+    (ancestor) =>
+      Node.isArrowFunction(ancestor) ||
+      Node.isFunctionExpression(ancestor) ||
+      Node.isMethodDeclaration(ancestor),
+  );
+  if (!owner) return false;
+  const direct = requestCallableForFunctionNode(owner);
+  if (!direct) return false;
+
+  let property: Node | undefined;
+  let definition: Node | undefined;
+  if (Node.isMethodDeclaration(owner)) {
+    property = owner;
+    definition = owner.getParent();
+  } else {
+    const parent = owner.getParent();
+    if (Node.isPropertyAssignment(parent)) {
+      property = parent;
+      definition = parent.getParent();
+    }
+  }
+  if (!property || !Node.isObjectLiteralExpression(definition)) return false;
+  const callback = staticMemberName(requestObjectLiteralElementNameNode(property));
+  const declarationCall = definition.getParentIfKind(SyntaxKind.CallExpression);
+  if (!callback || !declarationCall) return false;
+
+  for (const invocation of requestHandlerFactoryInvocationsForCall(declarationCall, session)) {
+    const spec = (invocation.factory.callbacks as readonly RequestRootCallbackSpec[]).find(
+      (candidate) => candidate.property === callback,
+    );
+    if (!spec) continue;
+    const rootCallable: RequestCallable = {
+      ...direct,
+      rootCallback: callback,
+      rootFactory: invocation.factory.exportName,
+      ...(spec.roles ? { rootParameterRoles: spec.roles } : {}),
+    };
+    return requestCallIsReviewedDrizzleDbDataCall(call, rootCallable);
+  }
+  return false;
+}
+
+function requestExpressionResolvesToReviewedDrizzleTable(
+  expression: Node,
+  target: import('ts-morph').VariableDeclaration,
+  seen: Set<string>,
+): boolean {
+  const node = unwrapStaticExpression(expression);
+  if (!Node.isIdentifier(node)) return false;
+  const direct = requestReviewedDrizzleTableForDirectReference(node);
+  if (direct && requestNodesAreSame(direct.declaration, target)) return true;
+  const symbol = node.getSymbol();
+  if (!symbol) return false;
+  const key = requestSymbolKey(symbol);
+  if (seen.has(key)) return false;
+  seen.add(key);
+  const symbols = [symbol];
+  const visited = new Set<string>();
+  while (symbols.length > 0) {
+    const candidate = symbols.pop()!;
+    const candidateKey = requestSymbolKey(candidate);
+    if (visited.has(candidateKey)) continue;
+    visited.add(candidateKey);
+    try {
+      const aliased = candidate.getAliasedSymbol();
+      if (aliased && aliased !== candidate) symbols.push(aliased);
+    } catch {
+      // Unresolved imports remain closed.
+    }
+    for (const declaration of candidate.getDeclarations()) {
+      if (requestNodesAreSame(declaration, target)) return true;
+      if (
+        Node.isVariableDeclaration(declaration) &&
+        declaration.getVariableStatement()?.getDeclarationKind() ===
+          VariableDeclarationKind.Const
+      ) {
+        const initializer = declaration.getInitializer();
+        if (
+          initializer &&
+          requestExpressionResolvesToReviewedDrizzleTable(
+            initializer,
+            target,
+            new Set(seen),
+          )
+        ) {
+          return true;
+        }
+      }
+    }
+  }
+  return false;
+}
+
 function requestExpressionContainsClosedAuthority(
   expression: Node,
   seen: Set<string>,
@@ -13547,10 +14206,14 @@ function requestExpressionRootParameterRole(
     }
   }
 
-  const declaration = localValueDeclaration(node);
+  const declarationSymbol = node.getSymbol();
+  const declaration =
+    declarationSymbol
+      ?.getDeclarations()
+      .find((candidate) => valueDeclarationInitializer(candidate) !== undefined) ??
+    localValueDeclaration(node);
   const initializer = declaration ? valueDeclarationInitializer(declaration) : undefined;
   if (!initializer) return undefined;
-  const declarationSymbol = node.getSymbol();
   if (declarationSymbol) {
     const key = requestSymbolKey(declarationSymbol);
     if (seen.has(key)) return undefined;
@@ -13599,37 +14262,6 @@ function requestCallableParameters(declaration: Node) {
     return declaration.getParameters();
   }
   return [];
-}
-
-function requestExpressionIsFrameworkCapability(
-  expression: Node,
-  seen: Set<string>,
-  depth: number,
-): boolean {
-  const node = unwrapStaticExpression(expression);
-  if (canonicalFrameworkExportForExpression(node)) return true;
-  if (Node.isAwaitExpression(node)) {
-    return requestExpressionIsFrameworkCapability(node.getExpression(), seen, depth + 1);
-  }
-  if (Node.isPropertyAccessExpression(node) || Node.isElementAccessExpression(node)) {
-    return requestExpressionIsFrameworkCapability(node.getExpression(), seen, depth + 1);
-  }
-  if (Node.isCallExpression(node)) {
-    const callee = unwrapStaticExpression(node.getExpression());
-    if (canonicalFrameworkExportForExpression(callee)) return true;
-    const receiver = requestCallReceiver(callee);
-    return receiver ? requestExpressionIsFrameworkCapability(receiver, seen, depth + 1) : false;
-  }
-  if (!Node.isIdentifier(node)) return false;
-  const symbol = node.getSymbol();
-  if (symbol) {
-    const key = requestSymbolKey(symbol);
-    if (seen.has(key)) return false;
-    seen.add(key);
-  }
-  const declaration = localValueDeclaration(node);
-  const initializer = declaration ? valueDeclarationInitializer(declaration) : undefined;
-  return initializer ? requestExpressionIsFrameworkCapability(initializer, seen, depth + 1) : false;
 }
 
 function requestExpressionIsSafeBuiltinCapability(
@@ -16324,6 +16956,37 @@ function requestIdentifierValueSymbol(
     // Unresolved/bare aliases remain represented by the import symbol and therefore fail closed.
   }
   return symbol;
+}
+
+function requestIdentifierIsImportedMutableContainer(identifier: Node): boolean {
+  if (!Node.isIdentifier(identifier)) return false;
+  const importSymbol = identifier.getSymbol();
+  if (!importSymbol) return false;
+  const relativeImport = importSymbol.getDeclarations().some((declaration) => {
+    const importDeclaration = declaration.getFirstAncestorByKind(SyntaxKind.ImportDeclaration);
+    return importDeclaration?.getModuleSpecifierValue().startsWith('.') === true;
+  });
+  if (!relativeImport) return false;
+
+  const valueSymbol = requestIdentifierValueSymbol(identifier);
+  if (!valueSymbol) return true;
+  const initializers = valueSymbol
+    .getDeclarations()
+    .map(valueDeclarationInitializer)
+    .filter((initializer): initializer is Node => initializer !== undefined);
+  if (initializers.length === 0) return true;
+  return initializers.some((initializer) => {
+    const node = unwrapStaticExpression(initializer);
+    return !(
+      Node.isStringLiteral(node) ||
+      Node.isNoSubstitutionTemplateLiteral(node) ||
+      Node.isNumericLiteral(node) ||
+      Node.isBigIntLiteral(node) ||
+      Node.isTrueLiteral(node) ||
+      Node.isFalseLiteral(node) ||
+      node.getKind() === SyntaxKind.NullKeyword
+    );
+  });
 }
 
 function requestBindingIdentifierNames(name: Node): string[] {

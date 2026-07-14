@@ -967,6 +967,16 @@ describe('server guard and session primitives', () => {
     expect(guard({})).toMatchObject({ kind: 'rateLimited' });
   });
 
+  it('freezes the built-in guard factory carrier so app code cannot replace reviewed methods', () => {
+    expect(Object.isFrozen(guards)).toBe(true);
+    expect(() => {
+      (guards as { rateLimit: unknown }).rateLimit = () => true;
+    }).toThrow();
+    expect(() => {
+      (guards as Record<string, unknown>).pwn = () => true;
+    }).toThrow();
+  });
+
   it('rejects rate-limit accessors before validation and enforcement can observe different maxima', () => {
     let maxReads = 0;
     const options = {

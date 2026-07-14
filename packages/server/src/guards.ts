@@ -627,7 +627,7 @@ export function guard<Request, RefinedRequest extends Request = Request>(
  *   page: () => <h1>Dashboard</h1>,
  * });
  */
-export const guards = {
+export const guards = witnessFreeze({
   all<Request, RefinedRequest extends Request = Request>(
     ...items: Guard<Request, RefinedRequest>[]
   ): Guard<Request, RefinedRequest> {
@@ -801,7 +801,7 @@ export const guards = {
       ],
     );
   },
-};
+});
 
 /**
  * Return framework-owned audit metadata stamped on a built-in guard. These facts are intentionally

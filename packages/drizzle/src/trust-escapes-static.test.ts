@@ -1410,6 +1410,71 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
     expect(facts).toEqual([]);
   });
 
+  it('does not grant generic capability authority to mutable framework carriers or results', () => {
+    for (const mutation of [
+      `respond.file = hostile;`,
+      `const alias = respond; alias.file = hostile;`,
+      `Object.defineProperty(respond, 'file', { value: hostile });`,
+      `Object.setPrototypeOf(respond, { file: hostile });`,
+    ]) {
+      const facts = sinksFor(`
+        import { execFileSync } from 'node:child_process';
+        import { endpoint, respond } from '@kovojs/server';
+        const hostile = () => { execFileSync('respond-hostile'); return 'unsafe'; };
+        ${mutation}
+        export const unsafe = endpoint('/unsafe', {
+          handler() { return respond.file('safe', { contentType: 'text/plain' }); },
+        });
+      `);
+      expect(facts.length).toBeGreaterThan(0);
+    }
+
+    const functionObject = sinksFor(`
+      import { execFileSync } from 'node:child_process';
+      import { component, query } from '@kovojs/server';
+      component.pwn = () => execFileSync('component-function-object');
+      export const unsafe = query({ load() { return component.pwn(); } });
+    `);
+    expect(functionObject).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ sink: 'request-handler.opaque-call', source: 'component.pwn' }),
+      ]),
+    );
+
+    const componentResult = sinksFor(`
+      import { execFileSync } from 'node:child_process';
+      import { component, query } from '@kovojs/server';
+      const descriptor = component({ render: () => '<main>safe</main>' });
+      descriptor.pwn = () => execFileSync('component-result');
+      export const unsafe = query({ load() { return descriptor.pwn(); } });
+    `);
+    expect(componentResult).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sink: 'request-handler.opaque-call',
+          source: 'descriptor.pwn',
+        }),
+      ]),
+    );
+
+    const attrsResult = sinksFor(`
+      import { execFileSync } from 'node:child_process';
+      import { query } from '@kovojs/server';
+      import * as style from '@kovojs/style';
+      const attributes = style.attrs('safe');
+      attributes.pwn = () => execFileSync('attrs-result');
+      export const unsafe = query({ load() { return attributes.pwn(); } });
+    `);
+    expect(attrsResult).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sink: 'request-handler.opaque-call',
+          source: 'attributes.pwn',
+        }),
+      ]),
+    );
+  });
+
   it('closes request-minted framework filesystem, storage, and command authority', () => {
     const facts = sinksFor(`
       import * as server from '@kovojs/server';
@@ -3401,6 +3466,265 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
     );
   });
 
+  it('recognizes exact Postgres table and request DB capability chains without blessing lookalikes', () => {
+    const schemaSource = `
+      import { pgTable, text } from 'drizzle-orm/pg-core';
+      export const users = pgTable('users', { id: text('id').primaryKey() });
+    `;
+    const safe = sinksForFiles([
+      {
+        fileName: 'schema.ts',
+        source: schemaSource,
+      },
+      {
+        fileName: 'app.ts',
+        source: `
+          import { eq } from 'drizzle-orm';
+          import { query } from '@kovojs/server';
+          import { users } from './schema.js';
+          export const directById = query('direct-by-id', { load(input, db) {
+            return db.select({ id: users.id }).from(users).where(eq(users.id, input.id));
+          } });
+          export const byId = query({ load(input, context) {
+            return context.db.select({ id: users.id }).from(users).where(eq(users.id, input.id));
+          } });
+          export const aliasedById = query({ load(input, context) {
+            const db = context!.db!;
+            return db.select({ id: users.id }).from(users).where(eq(users.id, input.id));
+          } });
+        `,
+      },
+    ]);
+    expect(safe).toEqual([]);
+
+    const lookalike = sinksFor(`
+      import { query } from '@kovojs/server';
+      import { pgTable } from 'local-drizzle';
+      const users = pgTable('users', { id: 'id' });
+      export const byId = query({ load(_input, context) {
+        return context.db.select({ id: users.id }).from(users);
+      } });
+    `);
+    expect(lookalike).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ sink: 'request-handler.opaque-protocol' }),
+      ]),
+    );
+
+    for (const mutation of [
+      `users.id = { forged: true };`,
+      `const alias = users; alias.id = { forged: true };`,
+      `Object.defineProperty(users, 'id', { value: { forged: true } });`,
+      `Object.setPrototypeOf(users, { get id() { return { forged: true }; } });`,
+    ]) {
+      const mutated = sinksForFiles([
+        { fileName: 'schema.ts', source: schemaSource },
+        {
+          fileName: 'app.ts',
+          source: `
+            import { query } from '@kovojs/server';
+            import { users } from './schema.js';
+            ${mutation}
+            export const byId = query({ load(_input, context) {
+              return context.db.select({ id: users.id }).from(users);
+            } });
+          `,
+        },
+      ]);
+      expect(mutated).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ sink: 'request-handler.opaque-protocol' }),
+        ]),
+      );
+    }
+
+    const localAlias = sinksForFiles([
+      { fileName: 'schema.ts', source: schemaSource },
+      {
+        fileName: 'app.ts',
+        source: `
+          import { query } from '@kovojs/server';
+          import { users } from './schema.js';
+          const alias = users;
+          export const byId = query({ load(_input, context) {
+            return context.db.select({ id: alias.id }).from(users);
+          } });
+        `,
+      },
+    ]);
+    expect(localAlias).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ sink: 'request-handler.opaque-protocol' }),
+      ]),
+    );
+  });
+
+  it('accepts only exact callback-free guards.rateLimit provenance', () => {
+    const safe = sinksFor(`
+      import * as server from '@kovojs/server';
+      import { guards as serverGuards, query } from '@kovojs/server';
+      const allow = serverGuards.rateLimit({ max: 10, per: 'global' });
+      const authed = server.guards.authed();
+      export const guarded = query({ guard: allow, load() { return { ok: true }; } });
+      export const authenticated = query({ guard: authed, load() { return { ok: true }; } });
+    `);
+    expect(safe).toEqual([]);
+
+    const lookalike = sinksFor(`
+      import { execFileSync } from 'node:child_process';
+      import { query } from '@kovojs/server';
+      const guards = { rateLimit() {
+        return () => { execFileSync('local-lookalike'); return true; };
+      } };
+      const allow = guards.rateLimit({ max: 10, per: 'global' });
+      export const guarded = query({ guard: allow, load() { return { ok: true }; } });
+    `);
+    expect(lookalike).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sink: 'child_process.execFileSync',
+          source: "'local-lookalike'",
+        }),
+      ]),
+    );
+
+    const callbackBearing = sinksFor(`
+      import { guards, query } from '@kovojs/server';
+      const allow = guards.rateLimit({ key: request => request.url, max: 10 });
+      export const guarded = query({ guard: allow, load() { return { ok: true }; } });
+    `);
+    expect(callbackBearing).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sink: 'request-handler.opaque-source',
+          source: '<dynamic-callback>',
+        }),
+      ]),
+    );
+
+    for (const source of [
+      `
+        import { execFileSync } from 'node:child_process';
+        import { guards, query } from '@kovojs/server';
+        const hostile = () => { execFileSync('replace-rate-limit'); return true; };
+        guards.rateLimit = hostile;
+        export const guarded = query({
+          guard: guards.rateLimit({ max: 10, per: 'global' }),
+          load() { return { ok: true }; },
+        });
+      `,
+      `
+        import { execFileSync } from 'node:child_process';
+        import { guards, query } from '@kovojs/server';
+        const hostile = () => { execFileSync('add-pwn'); return true; };
+        guards.pwn = hostile;
+        export const guarded = query({ guard: guards.pwn(), load() { return { ok: true }; } });
+      `,
+      `
+        import { execFileSync } from 'node:child_process';
+        import { guards, query } from '@kovojs/server';
+        const alias = guards;
+        alias.rateLimit = () => { execFileSync('alias-replace'); return true; };
+        export const guarded = query({
+          guard: guards.rateLimit({ max: 10, per: 'global' }),
+          load() { return { ok: true }; },
+        });
+      `,
+      `
+        import { execFileSync } from 'node:child_process';
+        import { guards, query } from '@kovojs/server';
+        Object.defineProperty(guards, 'rateLimit', {
+          value: () => { execFileSync('descriptor-replace'); return true; },
+        });
+        export const guarded = query({
+          guard: guards.rateLimit({ max: 10, per: 'global' }),
+          load() { return { ok: true }; },
+        });
+      `,
+    ]) {
+      expect(sinksFor(source)).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            sink: 'request-handler.opaque-source',
+            source: '<dynamic-callback>',
+          }),
+        ]),
+      );
+    }
+
+    for (const source of [
+      `
+        import { guards, query } from '@kovojs/server';
+        const opts = { max: 10, per: 'global' };
+        opts.key = request => request.url;
+        export const guarded = query({ guard: guards.rateLimit(opts), load() { return true; } });
+      `,
+      `
+        import { guards, query } from '@kovojs/server';
+        const base = { max: 10, per: 'global' };
+        const opts = base;
+        export const guarded = query({ guard: guards.rateLimit(opts), load() { return true; } });
+      `,
+      `
+        import { guards, query } from '@kovojs/server';
+        const opts = { max: 10, per: 'global' };
+        Object.defineProperty(opts, 'key', { value: request => request.url });
+        export const guarded = query({ guard: guards.rateLimit(opts), load() { return true; } });
+      `,
+    ]) {
+      expect(sinksFor(source)).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            sink: 'request-handler.opaque-source',
+            source: '<dynamic-callback>',
+          }),
+        ]),
+      );
+    }
+  });
+
+  it('does not bless composite or proxied guard construction', () => {
+    // SPEC §6.6: only the finite, exact guard constructors reviewed by the classifier are
+    // closed. Composition and Proxy preserve arbitrary callback/protocol execution surfaces.
+    const composite = sinksFor(`
+      import { execFileSync } from 'node:child_process';
+      import { guards, query } from '@kovojs/server';
+      const customGuard = () => { execFileSync('composite-guard'); return true; };
+      export const guarded = query({
+        guard: guards.all(customGuard, guards.rateLimit({ max: 10, per: 'global' })),
+        load() { return { ok: true }; },
+      });
+    `);
+    expect(composite).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sink: 'request-handler.opaque-source',
+          source: '<dynamic-callback>',
+        }),
+      ]),
+    );
+
+    const proxied = sinksFor(`
+      import { guards, query } from '@kovojs/server';
+      const guardedByProxy = new Proxy(
+        guards.rateLimit({ max: 10, per: 'global' }),
+        { apply() { return true; } },
+      );
+      export const guarded = query({
+        guard: guardedByProxy,
+        load() { return { ok: true }; },
+      });
+    `);
+    expect(proxied).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sink: 'request-handler.opaque-source',
+          source: '<dynamic-callback>',
+        }),
+      ]),
+    );
+  });
+
   it('fails closed on opaque package carriers used by implicit property protocols', () => {
     const facts = sinksFor(`
       import carrier from 'opaque-carrier';
@@ -3687,26 +4011,47 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
     ).toEqual([]);
   });
 
-  it('keeps a local imported plain numeric container inside the reviewed protocol set', () => {
+  it('rejects imported mutable containers before cross-module accessors or mutations can run', () => {
     const facts = sinksForFiles([
       {
         fileName: 'state.ts',
-        source: `export const state = { count: 0 };`,
+        source: `
+          import { execFileSync } from 'node:child_process';
+          export const state = {
+            get secret() { return execFileSync('exported-getter').toString(); },
+            count: 0,
+          };
+        `,
+      },
+      {
+        fileName: 'mutator.ts',
+        source: `
+          import { execFileSync } from 'node:child_process';
+          import { state } from './state.js';
+          Object.defineProperty(state, 'count', {
+            get() { return execFileSync('side-effect-getter').length; },
+          });
+          Object.setPrototypeOf(state, { inherited: 1 });
+        `,
       },
       {
         fileName: 'app.ts',
         source: `
+          import './mutator.js';
           import { mutation } from '@kovojs/server';
           import { state } from './state.js';
           export const update = mutation({ handler() {
-            state.count += 1;
-            return { count: state.count };
+            return { count: state.count, secret: state.secret };
           } });
         `,
       },
     ]);
 
-    expect(facts.filter((fact) => fact.sink === 'request-handler.opaque-protocol')).toEqual([]);
+    expect(facts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ sink: 'request-handler.opaque-protocol' }),
+      ]),
+    );
   });
 
   it('scans endpoint and webhook descriptors in the shared app endpoint collection', () => {

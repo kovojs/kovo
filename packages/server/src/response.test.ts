@@ -23,6 +23,14 @@ import {
 } from './response.js';
 
 describe('server response adapters', () => {
+  it('freezes the public response factory carrier', () => {
+    expect(Object.isFrozen(respond)).toBe(true);
+    expect(() => {
+      (respond as { file: unknown }).file = () => undefined;
+    }).toThrow();
+    expect(() => Object.setPrototypeOf(respond, {})).toThrow();
+  });
+
   it('commits Set-Cookie without inherited credential setter dispatch', () => {
     const headers: Record<string, string | string[]> = {};
     const previous = Object.getOwnPropertyDescriptor(Object.prototype, 'Set-Cookie');

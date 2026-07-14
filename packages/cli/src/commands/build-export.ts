@@ -1197,7 +1197,8 @@ async function sessionAuthorityFactsFromEntry(
   return result;
 }
 
-function completeMutationSessionAuthorityFacts(
+/** @internal Security-order regression seam for the SPEC §2/§11.4 static/runtime authority join. */
+export function completeMutationSessionAuthorityFacts(
   app: KovoApp,
   sourceFacts: readonly CoreGraph.SessionAuthorityFact[],
 ): CoreGraph.SessionAuthorityFact[] {
