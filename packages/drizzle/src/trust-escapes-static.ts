@@ -4608,6 +4608,7 @@ function requestRetainedConfigCallIsReviewed(
 ): boolean {
   if (requestBuildConfigConstructorCallIsClosed(call)) return true;
   if (requestCallIsExactClosedRedirect(call)) return true;
+  if (requestCallIsExactPostgresSchemaModule(call)) return true;
   if (requestHandlerFactoryInvocationsForCall(call, session).length > 0) return true;
   if (requestStaticFrameworkGuardIsClosed(call)) return true;
   if (requestVerifierFactoryName(call.getExpression())) return true;
@@ -7657,6 +7658,41 @@ function requestCallIsExactPostgresRuntimeConstructor(
     Node.isIdentifier(callee) &&
     call.getArguments().length === 1 &&
     requestExpressionIsDirectImportedExport(callee, '@kovojs/server', 'createPostgresAppRuntimeDb')
+  );
+}
+
+function requestExpressionIsDirectLocalNamespaceImport(expression: Node): boolean {
+  const node = unwrapStaticExpression(expression);
+  if (!Node.isIdentifier(node)) return false;
+  const useSymbol = node.getSymbol();
+  if (!useSymbol) return false;
+  const useKey = requestSymbolKey(useSymbol);
+  return node
+    .getSourceFile()
+    .getImportDeclarations()
+    .some((declaration) => {
+      const module = declaration.getModuleSpecifierValue();
+      const namespace = declaration.getNamespaceImport();
+      const importSymbol = namespace?.getSymbol();
+      return !!(
+        module.startsWith('.') &&
+        declaration.getModuleSpecifierSourceFile() &&
+        importSymbol &&
+        requestSymbolKey(importSymbol) === useKey
+      );
+    });
+}
+
+function requestCallIsExactPostgresSchemaModule(call: import('ts-morph').CallExpression): boolean {
+  const callee = unwrapStaticExpression(call.getExpression());
+  const [namespace, ...extra] = call.getArguments();
+  return !!(
+    Node.isIdentifier(callee) &&
+    namespace &&
+    extra.length === 0 &&
+    requestExpressionIsDirectImportedExport(callee, '@kovojs/server', 'postgresSchemaModule') &&
+    requestExactImportedCarrierIsPristine(callee, '@kovojs/server', 'postgresSchemaModule') &&
+    requestExpressionIsDirectLocalNamespaceImport(namespace)
   );
 }
 

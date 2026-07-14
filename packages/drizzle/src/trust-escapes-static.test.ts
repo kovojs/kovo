@@ -4108,6 +4108,66 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
     );
   });
 
+  it('accepts only a direct local schema namespace through postgresSchemaModule', () => {
+    const schemaSource = `
+      import { pgTable, text } from 'drizzle-orm/pg-core';
+      export const users = pgTable('users', { id: text('id').primaryKey() });
+    `;
+    const exact = sinksForFiles([
+      { fileName: 'schema.ts', source: schemaSource },
+      {
+        fileName: 'runtime-options.ts',
+        source: `
+          import { postgresSchemaModule } from '@kovojs/server';
+          import * as schema from './schema.js';
+          export const appRuntimeSchema = postgresSchemaModule(schema);
+        `,
+      },
+    ]);
+    expect(exact).toEqual([]);
+
+    const localAlias = sinksForFiles([
+      { fileName: 'schema.ts', source: schemaSource },
+      {
+        fileName: 'runtime-options.ts',
+        source: `
+          import { postgresSchemaModule } from '@kovojs/server';
+          import * as schema from './schema.js';
+          const aliasedSchema = schema;
+          export const appRuntimeSchema = postgresSchemaModule(aliasedSchema);
+        `,
+      },
+    ]);
+    expect(localAlias).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sink: 'request-handler.opaque-call',
+          source: 'postgresSchemaModule',
+        }),
+      ]),
+    );
+
+    const namespaceCallee = sinksForFiles([
+      { fileName: 'schema.ts', source: schemaSource },
+      {
+        fileName: 'runtime-options.ts',
+        source: `
+          import * as server from '@kovojs/server';
+          import * as schema from './schema.js';
+          export const appRuntimeSchema = server.postgresSchemaModule(schema);
+        `,
+      },
+    ]);
+    expect(namespaceCallee).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sink: 'request-handler.opaque-call',
+          source: 'server.postgresSchemaModule',
+        }),
+      ]),
+    );
+  });
+
   it('accepts only closed built-in Postgres column builders and exact references', () => {
     const safe = sinksFor(`
       import { pgTable, text } from 'drizzle-orm/pg-core';
