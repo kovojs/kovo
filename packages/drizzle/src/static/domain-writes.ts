@@ -288,7 +288,17 @@ import { staticAccessExpression, staticAccessName } from './summaries.js';
           (declaration) => !domainWritePropertyFromDeclaration(memberName, declaration, new Set()),
         )
       ) {
-        unresolved.push({ memberName, siteNode: declarations[0] ?? property });
+        const declaration = declarations[0];
+        // A shared syntactic Project can resolve namespace-spread members across source files,
+        // making the member name more precise than the old `<spread>` fallback. External members
+        // still belong to this local spread: callers pair `siteNode` with the containing file's
+        // snapshotted source, so an external declaration offset would produce a false line. Keep a
+        // same-file declaration because its member-specific source location is valid and useful.
+        const siteNode =
+          declaration?.getSourceFile().getFilePath() === property.getSourceFile().getFilePath()
+            ? declaration
+            : property;
+        unresolved.push({ memberName, siteNode });
       }
     }
   }

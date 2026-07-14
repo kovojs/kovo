@@ -60,7 +60,7 @@ describe('Drizzle pinned subset conformance', () => {
         ],
         unresolved: [],
       },
-      'cart.<spread>': {
+      'cart.hiddenAction': {
         reads: [],
         touches: [],
         unresolved: [

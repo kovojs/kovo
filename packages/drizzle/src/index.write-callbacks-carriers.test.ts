@@ -1277,7 +1277,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
         ],
         unresolved: [],
       },
-      'cart.<spread>': {
+      'cart.hiddenAction': {
         reads: [],
         touches: [],
         unresolved: [
