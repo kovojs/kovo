@@ -8,6 +8,7 @@ import {
   securityGetOwnPropertySymbols,
   securityGetPrototypeOf,
   securityGetOwnPropertyDescriptor,
+  securityNullRecord,
   securityOwnArrayEntry,
 } from '#security-witness-intrinsics';
 
@@ -113,42 +114,61 @@ export function renderPlanHash16(parts: readonly string[]): string {
 function sortStrings(values: string[]): string[] {
   // Query names are app-shaped build input. Keep canonicalization O(n log n)
   // so reverse-ordered names cannot turn the render-plan authority token into
-  // an insertion-sort build denial of service.
+  // an insertion-sort build denial of service. Merge through framework-owned
+  // null-prototype buffers: they cannot dispatch inherited setters, and unlike
+  // securityArrayAppend they do not repeat descriptor witnesses for every item
+  // on every merge pass (SPEC §6.6).
   const length = values.length;
   if (length < 2) return values;
-  let source = values;
+  let source = securityNullRecord<string>();
+  let target = securityNullRecord<string>();
+  for (let index = 0; index < length; index += 1) {
+    const entry = securityOwnArrayEntry(values, index);
+    if (!entry.ok) throw new TypeError('Render-plan shape names must be dense.');
+    source[index] = entry.value;
+  }
   for (let width = 1; width < length; width *= 2) {
-    const target: string[] = [];
+    let write = 0;
     for (let start = 0; start < length; start += width * 2) {
       const middle = start + width < length ? start + width : length;
       const end = start + width * 2 < length ? start + width * 2 : length;
       let left = start;
       let right = middle;
       while (left < middle || right < end) {
-        const leftEntry = left < middle ? securityOwnArrayEntry(source, left) : undefined;
-        const rightEntry = right < end ? securityOwnArrayEntry(source, right) : undefined;
-        if ((left < middle && !leftEntry?.ok) || (right < end && !rightEntry?.ok)) {
+        const leftValue = left < middle ? source[left] : undefined;
+        const rightValue = right < end ? source[right] : undefined;
+        if (
+          (left < middle && typeof leftValue !== 'string') ||
+          (right < end && typeof rightValue !== 'string')
+        )
           throw new TypeError('Render-plan shape names must be dense.');
-        }
         if (right >= end) {
-          if (!leftEntry?.ok) throw new TypeError('Render-plan shape names must be dense.');
-          securityArrayAppend(target, leftEntry.value);
+          target[write] = leftValue!;
           left += 1;
         } else if (left >= middle) {
-          if (!rightEntry?.ok) throw new TypeError('Render-plan shape names must be dense.');
-          securityArrayAppend(target, rightEntry.value);
+          target[write] = rightValue!;
           right += 1;
-        } else if (leftEntry?.ok && rightEntry?.ok && leftEntry.value <= rightEntry.value) {
-          securityArrayAppend(target, leftEntry.value);
+        } else if (leftValue! <= rightValue!) {
+          target[write] = leftValue!;
           left += 1;
         } else {
-          if (!rightEntry?.ok) throw new TypeError('Render-plan shape names must be dense.');
-          securityArrayAppend(target, rightEntry.value);
+          target[write] = rightValue!;
           right += 1;
         }
+        write += 1;
       }
     }
+    const previous = source;
     source = target;
+    target = previous;
   }
-  return source;
+  const sorted: string[] = [];
+  for (let index = 0; index < length; index += 1) {
+    const value = source[index];
+    if (typeof value !== 'string') {
+      throw new TypeError('Render-plan shape names must be dense.');
+    }
+    securityArrayAppend(sorted, value);
+  }
+  return sorted;
 }
