@@ -6,13 +6,11 @@ import { fileURLToPath } from 'node:url';
 import {
   createApp,
   createMemoryVersionedClientModuleRegistry,
-  createRequestHandler,
   layout,
   publicAccess,
   route,
   s,
   stylesheet,
-  type RequestHandler,
   type RoutePageResult,
   type StylesheetAsset,
 } from '@kovojs/server';
@@ -189,7 +187,6 @@ function stackOverflowCriticalCss(): string | undefined {
 export interface SoInteractiveApp {
   app: ReturnType<typeof createApp>;
   db: SoDb;
-  handler: RequestHandler;
 }
 
 export interface BuildSoInteractiveAppOptions {
@@ -296,9 +293,7 @@ export async function buildSoInteractiveApp(
     sessionProvider: soDemoSessionProvider,
   });
 
-  const handler: RequestHandler = createRequestHandler(app);
-
-  return { app, db: database, handler };
+  return { app, db: database };
 }
 
 function soDemoSessionProvider(request: Request) {

@@ -2,16 +2,12 @@
 import { ErrorBoundary, type ComponentChild } from '@kovojs/core';
 import {
   createApp,
-  createRequestHandler,
   layout,
   publicAccess,
   renderRouteHtml,
   route,
   stylesheet,
-  toNodeHandler,
   type KovoApp,
-  type NodeRequestHandler,
-  type RequestHandler,
   type ServerErrorHandler,
 } from '@kovojs/server';
 
@@ -44,11 +40,9 @@ export interface CommerceAppOptions {
   onError?: ServerErrorHandler;
 }
 
-export interface CommerceApp {
+export interface CommerceApplication {
   app: KovoApp<CommerceSession>;
   db: CommerceDb;
-  nodeHandler: NodeRequestHandler;
-  requestHandler: RequestHandler;
 }
 
 const commerceAppStyles = style.create({
@@ -146,7 +140,7 @@ export const commerceLoginRoute = route('/login', {
   stylesheets: commerceStylesheets,
 });
 
-export function createCommerceApp(options: CommerceAppOptions = {}): CommerceApp {
+export function createCommerceApplication(options: CommerceAppOptions = {}): CommerceApplication {
   const db = options.db ?? createCommerceDb();
   const app: KovoApp<CommerceSession> = createApp<CommerceSession, CommerceDb>({
     db: () => db,
@@ -162,20 +156,13 @@ export function createCommerceApp(options: CommerceAppOptions = {}): CommerceApp
       KovoApp<CommerceSession>['sessionProvider']
     >,
   });
-  const requestHandler = createRequestHandler(app);
-
-  return {
-    app,
-    db,
-    nodeHandler: toNodeHandler(requestHandler),
-    requestHandler,
-  };
+  return { app, db };
 }
 
 export function routeValueToHtml(value: unknown): string {
   return renderRouteHtml(value);
 }
 
-export const commerceApp = createCommerceApp();
+export const commerceApp = createCommerceApplication();
 
 export default commerceApp.app;

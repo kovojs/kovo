@@ -30,9 +30,9 @@ export {
   galleryInteractiveAppShell,
   galleryHeadlessUiClientModuleHrefs,
   galleryInteractiveClientModuleHrefs,
-  galleryInteractiveNodeHandler,
   galleryInteractiveRoute,
   createGalleryInteractiveAppShell,
+  createGalleryInteractiveApplication,
 } from './app-shell.js';
 export {
   interactiveGalleryDemos,

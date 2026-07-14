@@ -1,13 +1,13 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { createServer } from 'vite-plus';
+import { createSecurityLockedViteServer } from '../../../scripts/lib/secure-vite-runtime.mjs';
 
 const referenceRoot = fileURLToPath(new URL('../', import.meta.url));
 const defaultDistDir = path.join(referenceRoot, 'dist');
 
 export async function exportReferenceStaticApp({
-  createViteServer = createServer,
+  createViteServer = createSecurityLockedViteServer,
   outDir = defaultDistDir,
   publicOnly = false,
 } = {}) {

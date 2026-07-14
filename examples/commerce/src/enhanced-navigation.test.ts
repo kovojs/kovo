@@ -7,7 +7,7 @@ import { chromium, type Browser } from 'playwright';
 import { afterEach, describe, expect, it } from 'vitest';
 import axe from 'axe-core';
 
-import { createCommerceApp } from './app.js';
+import { createCommerceTestApp } from './app-test-helpers.js';
 
 let browser: Browser | undefined;
 let server: Server | undefined;
@@ -24,7 +24,7 @@ afterEach(async () => {
 
 describe('commerce enhanced navigation', () => {
   it('applies enhanced navigation and matches the full target document', async () => {
-    const shell = createCommerceApp();
+    const shell = createCommerceTestApp();
     server = createServer(shell.nodeHandler);
     await listen(server);
     const origin = serverOrigin(server);

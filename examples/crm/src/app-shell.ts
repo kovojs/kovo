@@ -1,4 +1,4 @@
-import { toNodeHandler } from '@kovojs/server';
+import { createRequestHandler, toNodeHandler } from '@kovojs/server';
 
 import { buildCrmInteractiveApp } from './interactive-app.js';
 
@@ -11,6 +11,6 @@ export const crmApp = interactive.app;
 export const crmDb = interactive.db;
 
 // Used by scripts/serve.mjs and the Vite dev plugin.
-export const crmNodeHandler = toNodeHandler(interactive.handler);
+export const crmNodeHandler = toNodeHandler(createRequestHandler(interactive.app));
 
 export default crmApp;

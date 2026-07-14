@@ -2,14 +2,12 @@
 import {
   createApp,
   createMemoryVersionedClientModuleRegistry,
-  createRequestHandler,
   endpoint,
   layout,
   publicAccess,
   redirect,
   route,
   stylesheet,
-  type RequestHandler,
 } from '@kovojs/server';
 import * as style from '@kovojs/style';
 
@@ -215,5 +213,4 @@ const app = createApp({
   ],
 });
 
-export const requestHandler: RequestHandler = createRequestHandler(app);
 export default app;

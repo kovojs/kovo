@@ -87,7 +87,7 @@ export const galleryInteractiveRoute = route('/gallery/interactive', {
   stylesheets: ['/assets/site.css'],
 });
 
-export function createGalleryInteractiveAppShell() {
+export function createGalleryInteractiveApplication() {
   const app = createApp({
     appId: 'a6a65802-25f9-40ce-a2ad-5ab960ff3277',
     clientModules: galleryInteractiveClientModules,
@@ -97,17 +97,16 @@ export function createGalleryInteractiveAppShell() {
     },
     routes: [galleryInteractiveRoute],
   });
-  const requestHandler = createRequestHandler(app);
-
-  return {
-    app,
-    nodeHandler: toNodeHandler(requestHandler),
-    requestHandler,
-  };
+  return { app };
 }
 
-export const galleryInteractiveAppShell = createGalleryInteractiveAppShell();
-export const galleryInteractiveNodeHandler = galleryInteractiveAppShell.nodeHandler;
+export function createGalleryInteractiveAppShell() {
+  const application = createGalleryInteractiveApplication();
+  const requestHandler = createRequestHandler(application.app);
+  return { ...application, nodeHandler: toNodeHandler(requestHandler), requestHandler };
+}
+
+export const galleryInteractiveAppShell = createGalleryInteractiveApplication();
 
 export default galleryInteractiveAppShell.app;
 

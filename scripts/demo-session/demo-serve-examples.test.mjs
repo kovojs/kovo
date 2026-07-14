@@ -1,4 +1,8 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+vi.mock('../lib/secure-vite-runtime.mjs', async () => ({
+  createSecurityLockedViteServer: (await import('vite-plus')).createServer,
+}));
 
 import { createCrmDemoServer } from '../../examples/crm/scripts/demo-serve.mjs';
 import { createSoDemoServer } from '../../examples/stackoverflow/scripts/demo-serve.mjs';

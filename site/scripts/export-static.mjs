@@ -6,7 +6,10 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { createServer } from 'vite-plus';
+import {
+  createSecurityLockedViteServer,
+  securityLockedViteRuntime,
+} from '../../scripts/lib/secure-vite-runtime.mjs';
 
 import { runContentPipeline } from './content-pipeline.mjs';
 import { writeScriptArtifacts } from '../../scripts/output-staging.mjs';
@@ -315,10 +318,13 @@ async function appendSiteAppCssToBuiltStylesheet() {
 }
 
 export async function exportSiteStaticApp({
-  createViteServer = createServer,
+  createViteServer = createSecurityLockedViteServer,
   outDir = defaultDistDir,
   skipPipeline = false,
 } = {}) {
+  // The CLI command module imports Vite. Establish the compiler/server realm
+  // lock before even evaluating that trusted runner graph (SPEC §6.6 rule 6).
+  await securityLockedViteRuntime();
   const { runExportCommandStructured } =
     await import('../../packages/cli/src/commands/build-export.js');
   if (!skipPipeline) await runContentPipeline();

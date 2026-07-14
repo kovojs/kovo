@@ -16,19 +16,20 @@ export function createCommerceDemoServer(options = {}) {
     label: 'commerce-demo-serve',
     root: commerceRoot,
     configFile: fileURLToPath(new URL('../vite.config.ts', import.meta.url)),
-    async loadInstanceFactory(vite) {
+    async loadInstanceFactory(vite, { createRequestHandler }) {
       const appShell = await vite.ssrLoadModule('/src/app.tsx');
-      const { createCommerceApp } = appShell;
-      if (typeof createCommerceApp !== 'function') {
-        throw new Error('commerce /src/app.tsx must export createCommerceApp.');
+      const { createCommerceApplication } = appShell;
+      const { toNodeHandler } = await vite.ssrLoadModule('@kovojs/server');
+      if (typeof createCommerceApplication !== 'function') {
+        throw new Error('commerce /src/app.tsx must export createCommerceApplication.');
       }
       // A reference instance only supplies the route table for the ownership
       // predicate; every visitor's requests run against their own fresh instance
-      // (createCommerceApp() with no db mints a fresh seeded PGlite).
-      const reference = createCommerceApp();
+      // (createCommerceApplication() with no db mints a fresh seeded PGlite).
+      const reference = createCommerceApplication();
       return {
         referenceApp: reference.app,
-        buildHandler: () => createCommerceApp().nodeHandler,
+        buildHandler: () => toNodeHandler(createRequestHandler(createCommerceApplication().app)),
       };
     },
     ...options,

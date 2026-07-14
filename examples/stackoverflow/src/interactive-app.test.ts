@@ -6,9 +6,13 @@ import { and, asc, eq } from 'drizzle-orm';
 import { describe, expect, it } from 'vitest';
 
 import { csrfToken } from '@kovojs/server';
+import { createExampleTestRequestHandler } from '../../../tests/example-raw-request-handler.js';
 import { createLiveTargetAttestation } from '@kovojs/server/internal/wire';
 
-import { buildSoInteractiveApp } from './interactive-app.js';
+import {
+  buildSoInteractiveApp as buildSoInteractiveApplication,
+  type BuildSoInteractiveAppOptions,
+} from './interactive-app.js';
 import { soCsrf } from './mutations.js';
 import { answers, questions, votes } from './schema.js';
 
@@ -17,6 +21,11 @@ const questionListComponent = 'components/question-list/question-list-region';
 const questionDetailTarget = 'question-detail-region';
 const questionDetailComponent = 'components/question-detail/question-detail-region';
 const demoSessionHeader = 'x-kovo-demo-sid';
+
+async function buildSoInteractiveApp(options: BuildSoInteractiveAppOptions = {}) {
+  const application = await buildSoInteractiveApplication(options);
+  return { ...application, handler: createExampleTestRequestHandler(application.app) };
+}
 
 function withCsrf(mutation: string, fields: Record<string, string>): Record<string, string> {
   return withSessionCsrf('demo-session', mutation, fields);

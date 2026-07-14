@@ -1,5 +1,3 @@
-import type { IncomingMessage, ServerResponse } from 'node:http';
-
 import { defineConfig } from 'vite-plus';
 
 export default defineConfig({
@@ -19,67 +17,32 @@ export default defineConfig({
   },
 });
 
-type DevMiddleware = (
-  request: IncomingMessage,
-  response: ServerResponse,
-  next: (error?: unknown) => void,
-) => void;
-
 interface ReferenceDevServer {
-  middlewares: {
-    use(handler: DevMiddleware): void;
-  };
   ssrLoadModule(id: string): Promise<Record<string, unknown>>;
 }
 
 interface ReferenceDevPlugin {
-  configureServer(server: ReferenceDevServer): () => void;
+  configureServer(server: ReferenceDevServer): Promise<unknown>;
   name: string;
 }
 
 function referenceAppShellDevPlugin(): ReferenceDevPlugin {
   return {
-    configureServer(server) {
-      return () => {
-        server.middlewares.use((request, response, next) => {
-          if (!isReferenceShellRequest(request)) {
-            next();
-            return;
-          }
-
-          Promise.resolve(loadReferenceNodeHandler(server))
-            .then((referenceNodeHandler) => referenceNodeHandler(request, response, next))
-            .catch(next);
-        });
-      };
+    async configureServer(server) {
+      const module = await server.ssrLoadModule('@kovojs/server/internal/app-shell-vite');
+      const createDevIntegration = module.createKovoAppShellViteDevIntegration;
+      if (typeof createDevIntegration !== 'function') {
+        throw new Error(
+          '@kovojs/server/internal/app-shell-vite must export createKovoAppShellViteDevIntegration.',
+        );
+      }
+      const integration = createDevIntegration({
+        moduleId: '/src/app-shell.ts',
+        name: 'kovo-reference-app-shell-dev',
+        order: 'post',
+      }) as { plugin: { configureServer(server: ReferenceDevServer): unknown } };
+      return integration.plugin.configureServer(server);
     },
     name: 'kovo-reference-app-shell-dev',
   };
-}
-
-async function loadReferenceNodeHandler(server: ReferenceDevServer): Promise<DevMiddleware> {
-  const module = await server.ssrLoadModule('/src/app-shell.ts');
-  const referenceNodeHandler = module.referenceNodeHandler;
-
-  if (typeof referenceNodeHandler !== 'function') {
-    throw new Error('src/app-shell.ts must export referenceNodeHandler.');
-  }
-
-  return referenceNodeHandler as DevMiddleware;
-}
-
-function isReferenceShellRequest(request: IncomingMessage): boolean {
-  if (!request.url) return false;
-
-  const pathname = new URL(request.url, 'http://kovo.local').pathname;
-
-  if (request.method === 'GET' || request.method === 'HEAD') {
-    return pathname === '/login' || pathname === '/account' || pathname === '/admin';
-  }
-
-  if (request.method === 'POST') {
-    return pathname.startsWith('/_m/');
-  }
-
-  return false;
 }

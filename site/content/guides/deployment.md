@@ -143,6 +143,8 @@ the `sessionProvider`. `toNodeHandler()` adapts its Web-standard `Request -> Res
 `node:http` listener. Start with the adapter shape:
 
 ```ts
+import '@kovojs/server/runtime-bootstrap';
+
 import { createServer } from 'node:http';
 import { createApp, createRequestHandler, toNodeHandler } from '@kovojs/server';
 
@@ -156,6 +158,8 @@ hints:
 
 ```ts
 // server.ts — production entrypoint
+import '@kovojs/server/runtime-bootstrap';
+
 import { createServer } from 'node:http';
 import { createApp, createRequestHandler, toNodeHandler } from '@kovojs/server';
 
@@ -182,6 +186,13 @@ const handler = toNodeHandler(createRequestHandler(app), { earlyHints: true });
 const port = Number(process.env.PORT ?? 3000);
 createServer(handler).listen(port, () => console.log(`listening on :${port}`));
 ```
+
+That side-effect import must be the literal first import in a custom entry module. It locks Kovo's
+classifier-reviewed runtime controls before Node, your app, or any package dependency evaluates.
+Kovo-generated deployment entries install the same bootstrap automatically. The public handler's
+boot check detects an omitted bootstrap; it cannot authenticate earlier evaluation in the same
+JavaScript realm. Importing app or package code first and bootstrapping later is unsupported
+privileged-host misuse, not a repair path—restart the process with the documented order.
 
 The instance pins nothing per-request: `sessionProvider` reads whatever your auth layer stored (a
 signed cookie, a session row), so any instance answers any request and you scale by adding instances.

@@ -205,7 +205,7 @@ async function readTextStreamWithFirstChunk(
 function addDeferProofRoutes(root: string): void {
   const appPath = join(root, 'src/app.tsx');
   const app = readFileSync(appPath, 'utf8')
-    .replace('  createRequestHandler,', ['  createRequestHandler,', '  Defer,'].join('\n'))
+    .replace('  createApp,', ['  createApp,', '  Defer,'].join('\n'))
     .replace(
       '  endpoints: [healthEndpoint],',
       [

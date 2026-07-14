@@ -80,6 +80,16 @@ export const referenceLoginRoute = route('/login', {
 });
 
 export function createReferenceAppShell(options: ReferenceAppShellOptions = {}) {
+  const application = createReferenceApplication(options);
+  const requestHandler = createRequestHandler(application.app);
+  return {
+    ...application,
+    nodeHandler: toNodeHandler(requestHandler),
+    requestHandler,
+  };
+}
+
+export function createReferenceApplication(options: ReferenceAppShellOptions = {}) {
   const auth = options.auth ?? createReferenceAuth(createReferenceBetterAuth());
   const app = createApp({
     appId: '1f067065-c40a-4579-b35a-7fbcf928e32c',
@@ -92,17 +102,16 @@ export function createReferenceAppShell(options: ReferenceAppShellOptions = {}) 
     routes: [referenceLoginRoute, accountRoute, adminRoute],
     sessionProvider: (request) => auth.sessionProvider(request as ReferenceShellRequest),
   });
-  const requestHandler = createRequestHandler(app);
-
-  return {
-    app,
-    auth,
-    nodeHandler: toNodeHandler(requestHandler),
-    requestHandler,
-  };
+  return { app, auth };
 }
 
 export function createReferencePublicAppShell() {
+  const application = createReferencePublicApplication();
+  const requestHandler = createRequestHandler(application.app);
+  return { ...application, nodeHandler: toNodeHandler(requestHandler), requestHandler };
+}
+
+export function createReferencePublicApplication() {
   const app = createApp({
     appId: '1f067065-c40a-4579-b35a-7fbcf928e32c',
     clientModules: publicClientModules,
@@ -112,22 +121,14 @@ export function createReferencePublicAppShell() {
     },
     routes: [referencePublicRoute],
   });
-  const requestHandler = createRequestHandler(app);
-
-  return {
-    app,
-    nodeHandler: toNodeHandler(requestHandler),
-    requestHandler,
-  };
+  return { app };
 }
 
 export function routeValueToHtml(value: unknown): string {
   return renderRouteHtml(value);
 }
 
-export const referenceAppShell = createReferenceAppShell();
-export const referencePublicAppShell = createReferencePublicAppShell();
-export const referenceRequestHandler = referenceAppShell.requestHandler;
-export const referenceNodeHandler = referenceAppShell.nodeHandler;
+export const referenceAppShell = createReferenceApplication();
+export const referencePublicAppShell = createReferencePublicApplication();
 
 export default referenceAppShell.app;

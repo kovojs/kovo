@@ -4,7 +4,7 @@ import path from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
-import { createServer } from 'vite-plus';
+import { createSecurityLockedViteServer } from '../../../scripts/lib/secure-vite-runtime.mjs';
 
 const defaultCommerceRoot = fileURLToPath(new URL('../', import.meta.url));
 
@@ -31,7 +31,7 @@ const jsFiles = assetFiles.filter((file) => file.endsWith('.js'));
 const cssBytes = sumBytes(cssFiles);
 const jsBytes = sumBytes(jsFiles);
 
-const viteServer = await createServer({
+const viteServer = await createSecurityLockedViteServer({
   appType: 'custom',
   logLevel: 'error',
   optimizeDeps: { noDiscovery: true },
@@ -45,12 +45,10 @@ const builtRouteResults = [];
 try {
   const appModule = await viteServer.ssrLoadModule('/src/app.tsx');
   const app = appModule.default ?? appModule.commerceApp?.app;
-  const requestHandler =
-    typeof appModule.createCommerceApp === 'function'
-      ? appModule.createCommerceApp().requestHandler
-      : undefined;
+  const serverModule = await viteServer.ssrLoadModule('@kovojs/server');
+  const requestHandler = app ? serverModule.createRequestHandler(app) : undefined;
   if (!requestHandler || !app) {
-    throw new Error('/src/app.tsx must export createCommerceApp and default app.');
+    throw new Error('/src/app.tsx must export its default app.');
   }
   for (const route of routes) {
     const response = await requestHandler(new Request(new URL(route, 'https://commerce.test')));

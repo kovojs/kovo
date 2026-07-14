@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { createServer } from 'vite-plus';
+import { createSecurityLockedViteServer } from '../../../scripts/lib/secure-vite-runtime.mjs';
 
 const galleryRoot = fileURLToPath(new URL('../', import.meta.url));
 const repoRoot = path.resolve(galleryRoot, '../..');
@@ -13,7 +13,7 @@ const defaultDistDir = path.join(galleryRoot, 'dist');
 const galleryStylesheetSource = path.join(repoRoot, 'site/dist-css/assets/site.css');
 
 export async function exportGalleryInteractiveStatic({
-  createViteServer = createServer,
+  createViteServer = createSecurityLockedViteServer,
   outDir = defaultDistDir,
 } = {}) {
   const viteServer = await createViteServer({

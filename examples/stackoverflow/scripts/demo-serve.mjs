@@ -12,7 +12,7 @@ export function createSoDemoServer(options = {}) {
     label: 'stackoverflow-demo-serve',
     root: soRoot,
     configFile: fileURLToPath(new URL('../vite.config.ts', import.meta.url)),
-    async loadInstanceFactory(vite) {
+    async loadInstanceFactory(vite, { createRequestHandler }) {
       const { buildSoInteractiveApp } = await vite.ssrLoadModule('/src/interactive-app.tsx');
       const { toNodeHandler } = await vite.ssrLoadModule('@kovojs/server');
       if (typeof buildSoInteractiveApp !== 'function') {
@@ -24,7 +24,7 @@ export function createSoDemoServer(options = {}) {
       // dispatcher can reuse this handler instead of rebuilding Kovo + PGlite
       // for every cookieless visitor.
       const reference = await buildSoInteractiveApp();
-      const sharedHandler = toNodeHandler(reference.handler);
+      const sharedHandler = toNodeHandler(createRequestHandler(reference.app));
       return {
         referenceApp: reference.app,
         buildHandler: () => sharedHandler,

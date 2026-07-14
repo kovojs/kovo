@@ -12,7 +12,7 @@ import {
 } from 'node:path';
 import { brotliCompress, gzip } from 'node:zlib';
 
-import { createServer as createViteServer } from 'vite-plus';
+import { createSecurityLockedViteServer } from '../lib/secure-vite-runtime.mjs';
 
 import { readConfinedFilePath } from '../lib/confined-static-file.mjs';
 import { createPerSessionDispatcher } from './dispatcher.mjs';
@@ -76,7 +76,10 @@ const DEMO_FAVICON_ICO = Buffer.from([
  *   label: string,
  *   root: string,
  *   configFile: string,
- *   loadInstanceFactory: (vite: import('vite-plus').ViteDevServer) =>
+ *   loadInstanceFactory: (
+ *     vite: import('vite-plus').ViteDevServer,
+ *     runtime: { createRequestHandler: (app: unknown) => unknown },
+ *   ) =>
  *     Promise<{ referenceApp: unknown, buildHandler: () => unknown }>,
  *   host?: string,
  *   port?: number,
@@ -97,7 +100,7 @@ export async function createDemoServeServer({
   process.env.KOVO_DEMO_MULTITENANT = '1';
 
   const distDir = pathJoin(root, 'dist');
-  const vite = await createViteServer({
+  const vite = await createSecurityLockedViteServer({
     appType: 'custom',
     configFile,
     logLevel: 'info',
@@ -108,13 +111,19 @@ export async function createDemoServeServer({
   try {
     const serverModule = await vite.ssrLoadModule('@kovojs/server/internal/app-shell-vite');
     const shouldHandle = serverModule.shouldHandleKovoAppShellViteRequest;
+    const createRequestHandler = serverModule.createRequestHandler;
     if (typeof shouldHandle !== 'function') {
       throw new Error(
         '@kovojs/server/internal/app-shell-vite must export shouldHandleKovoAppShellViteRequest.',
       );
     }
+    if (typeof createRequestHandler !== 'function') {
+      throw new Error('@kovojs/server/internal/app-shell-vite must export createRequestHandler.');
+    }
 
-    const { referenceApp, buildHandler } = await loadInstanceFactory(vite);
+    const { referenceApp, buildHandler } = await loadInstanceFactory(vite, {
+      createRequestHandler,
+    });
     const dispatcher = createPerSessionDispatcher({
       buildHandler,
       idleMs: positiveEnvInt('KOVO_DEMO_IDLE_MS', 20 * 60_000),

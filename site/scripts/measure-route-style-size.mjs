@@ -4,7 +4,7 @@ import path from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
-import { createServer } from 'vite-plus';
+import { createSecurityLockedViteServer } from '../../scripts/lib/secure-vite-runtime.mjs';
 
 import { runContentPipeline } from './content-pipeline.mjs';
 import { buildSiteUiCss } from './export-static.mjs';
@@ -35,7 +35,7 @@ const cssFiles = [
   path.join(distCssRoot, 'assets/kovo-ui.css'),
 ];
 const cssBytes = sumBytes(cssFiles);
-const viteServer = await createServer({
+const viteServer = await createSecurityLockedViteServer({
   appType: 'custom',
   logLevel: 'error',
   root: siteRoot,

@@ -23,7 +23,8 @@ import {
   commerceSignIn,
   commerceSignOut,
 } from './domain.js';
-import { createCommerceApp, routeValueToHtml } from './app.js';
+import { createCommerceTestApp } from './app-test-helpers.js';
+import { routeValueToHtml } from './app.js';
 
 let server: Server | undefined;
 
@@ -58,7 +59,7 @@ describe('commerce app HTTP entry', () => {
 
   it('serves the commerce cart document and query endpoint over node:http', async () => {
     const errors: unknown[] = [];
-    const shell = createCommerceApp({
+    const shell = createCommerceTestApp({
       onError(error) {
         errors.push(error);
       },
@@ -83,7 +84,7 @@ describe('commerce app HTTP entry', () => {
   });
 
   it('serves every commerce route as no-JS full HTML documents', async () => {
-    const shell = createCommerceApp();
+    const shell = createCommerceTestApp();
 
     server = createServer(shell.nodeHandler);
     await listen(server);
@@ -104,7 +105,7 @@ describe('commerce app HTTP entry', () => {
   });
 
   it('renders home and cart with a shared navigation layout segment', async () => {
-    const shell = createCommerceApp();
+    const shell = createCommerceTestApp();
 
     server = createServer(shell.nodeHandler);
     await listen(server);
@@ -129,7 +130,7 @@ describe('commerce app HTTP entry', () => {
   });
 
   it('dispatches enhanced and no-JS cart mutations through the shared app over HTTP', async () => {
-    const shell = createCommerceApp();
+    const shell = createCommerceTestApp();
     const sessionCookie = await signInCookie(shell.db);
     const sessionRequest = {
       db: shell.db,
@@ -193,7 +194,7 @@ describe('commerce app HTTP entry', () => {
   });
 
   it('dispatches shell login and logout mutations', async () => {
-    const shell = createCommerceApp();
+    const shell = createCommerceTestApp();
 
     server = createServer(shell.nodeHandler);
     await listen(server);
@@ -291,7 +292,7 @@ function expectCommerceShellDocument(html: string): void {
   expect(htmlFormActions(html)).not.toContain('/_m/domain/add-to-cart');
 }
 
-async function signInCookie(db: ReturnType<typeof createCommerceApp>['db']): Promise<string> {
+async function signInCookie(db: ReturnType<typeof createCommerceTestApp>['db']): Promise<string> {
   const request = {
     authCsrfId: 'commerce-shell-login',
     db,
@@ -316,7 +317,7 @@ async function signInCookie(db: ReturnType<typeof createCommerceApp>['db']): Pro
   return sessionCookie;
 }
 
-function shellLoginCsrfRequest(db: ReturnType<typeof createCommerceApp>['db']) {
+function shellLoginCsrfRequest(db: ReturnType<typeof createCommerceTestApp>['db']) {
   return {
     authCsrfId: 'commerce-shell-login',
     db,

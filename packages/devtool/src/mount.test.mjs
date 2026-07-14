@@ -1,4 +1,10 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+
+vi.mock('@kovojs/server', async (importOriginal) => ({
+  ...(await importOriginal()),
+  createRequestHandler: (await import('@kovojs/server/internal/app-shell-vite'))
+    .createRequestHandler,
+}));
 
 import { createDevtoolApp } from './mount.mjs';
 

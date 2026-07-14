@@ -1,7 +1,13 @@
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync, rmSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+
+vi.mock('@kovojs/server', async (importOriginal) => ({
+  ...(await importOriginal()),
+  createRequestHandler: (await import('@kovojs/server/internal/app-shell-vite'))
+    .createRequestHandler,
+}));
 
 import {
   galleryInteractiveClientModuleHrefs,

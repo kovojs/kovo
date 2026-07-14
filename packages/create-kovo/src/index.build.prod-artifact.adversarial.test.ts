@@ -612,7 +612,7 @@ async function withRunningProject(
 function addM1DeferAndShellProof(root: string): void {
   const appPath = join(root, 'src/app.tsx');
   const app = readFileSync(appPath, 'utf8')
-    .replace('  createRequestHandler,', '  createRequestHandler,\n  Defer,')
+    .replace('  createApp,', '  createApp,\n  Defer,')
     .replace(
       '  endpoints: [healthEndpoint],',
       [

@@ -11,12 +11,53 @@ export const repoRoot = findRepoRoot();
 const REQUEST_SAFE_RUNTIME_INVENTORY_FILE =
   'packages/core/src/internal/request-safe-runtime-inventory.ts';
 const REQUEST_PROCESS_CLASSIFIER_FILE = 'packages/drizzle/src/trust-escapes-static.ts';
+const REQUEST_SAFE_RUNTIME_RUNNER_FILES = {
+  cliHandler: 'packages/cli/src/commands/build-export.ts',
+  compiler: 'packages/compiler/src/security-bootstrap.ts',
+  generatedPresets: 'packages/server/src/build.ts',
+  requestHandler: 'packages/server/src/request-handler.ts',
+  runtimeBootstrap: 'packages/server/src/runtime-bootstrap.ts',
+};
+const CUSTOM_REQUEST_HANDLER_ENTRY_FILES = [
+  'examples/commerce/scripts/demo-serve.mjs',
+  'examples/commerce/scripts/measure-style-size.mjs',
+  'examples/crm/scripts/demo-serve.mjs',
+  'examples/crm/src/app-shell.ts',
+  'examples/gallery/src/app-shell.ts',
+  'examples/reference/src/app-shell.ts',
+  'examples/stackoverflow/scripts/demo-serve.mjs',
+  'examples/stackoverflow/src/app-shell.ts',
+  'packages/devtool/src/mount.mjs',
+  'site/src/aux.ts',
+];
+const SECURITY_LOCKED_SCRIPT_FILES = [
+  'examples/commerce/scripts/measure-style-size.mjs',
+  'examples/gallery/scripts/export-static.mjs',
+  'examples/reference/scripts/export-static.mjs',
+  'scripts/demo-session/serve.mjs',
+  'site/scripts/capture.mjs',
+  'site/scripts/export-static.mjs',
+  'site/scripts/measure-route-style-size.mjs',
+];
+const SECURITY_LOCKED_VITE_RUNNER_FILE = 'scripts/lib/secure-vite-runtime.mjs';
+const SITE_STATIC_EXPORT_RUNNER_FILE = 'site/scripts/export-static.mjs';
+const PURE_APP_ENTRY_FILES = [
+  'examples/commerce/src/app.tsx',
+  'examples/crm/src/interactive-app.tsx',
+  'examples/stackoverflow/src/interactive-app.tsx',
+  'packages/create-kovo/templates/src/app.tsx',
+  'site/src/app.tsx',
+];
+const CUSTOM_REQUEST_HANDLER_DOC_FILES = [
+  'site/content/guides/deployment.md',
+  'site/content/guides/request-shell.md',
+];
+const RUNTIME_BOOTSTRAP_IMPORT = "import '@kovojs/server/runtime-bootstrap';";
 
 const REQUEST_SAFE_RUNTIME_SET_ALIGNMENT = [
   ['requestSafeGlobalCallables', 'REQUEST_SAFE_GLOBAL_CALLABLES'],
   ['requestSafeGlobalNamespaces', 'REQUEST_SAFE_GLOBAL_NAMESPACES'],
   ['requestSafeGlobalConstructors', 'REQUEST_SAFE_GLOBAL_CONSTRUCTORS'],
-  ['requestSafeNodeBuiltinModules', 'REQUEST_SAFE_BUILTIN_MODULES'],
 ];
 
 export const REQUIRED_CLASSIFIER_CORPORA = [
@@ -461,6 +502,41 @@ export function evaluateRequestSafeRuntimeInventoryAlignment(readText) {
     }
   }
 
+  const classifiedBuiltins = sourceStringArray(classifierSource, 'REQUEST_SAFE_BUILTIN_MODULES');
+  if (classifiedBuiltins === undefined) {
+    findings.push('request-safe-runtime: cannot read classifier set REQUEST_SAFE_BUILTIN_MODULES');
+  } else if (classifiedBuiltins.length > 0) {
+    findings.push(
+      `request-safe-runtime: REQUEST_SAFE_BUILTIN_MODULES must remain empty: ${[...new Set(classifiedBuiltins)].sort().join(', ')}`,
+    );
+  }
+
+  const lockedNamespaceMembers = sourceStringArray(
+    inventorySource,
+    'requestSafeGlobalNamespaceMemberPaths',
+  );
+  const classifiedNamespaceMembers = sourceReviewedGlobalNamespaceMembers(classifierSource);
+  if (lockedNamespaceMembers === undefined || classifiedNamespaceMembers === undefined) {
+    findings.push(
+      'request-safe-runtime: cannot read the reviewed global namespace member inventory',
+    );
+  } else {
+    const locked = new Set(lockedNamespaceMembers);
+    const classified = new Set(classifiedNamespaceMembers);
+    const excess = [...classified].filter((path) => !locked.has(path)).sort();
+    const stale = [...locked].filter((path) => !classified.has(path)).sort();
+    if (excess.length > 0) {
+      findings.push(
+        `request-safe-runtime: REQUEST_REVIEWED_GLOBAL_NAMESPACE_MEMBERS exceeds requestSafeGlobalNamespaceMemberPaths: ${excess.join(', ')}`,
+      );
+    }
+    if (stale.length > 0) {
+      findings.push(
+        `request-safe-runtime: requestSafeGlobalNamespaceMemberPaths exceeds REQUEST_REVIEWED_GLOBAL_NAMESPACE_MEMBERS: ${stale.join(', ')}`,
+      );
+    }
+  }
+
   const callbackInventory = sourceStringArray(inventorySource, 'requestSafeCallbackGlobals');
   const callbackClassifier = sourceStringArray(classifierSource, 'callbackGlobal of');
   if (callbackInventory === undefined || callbackClassifier === undefined) {
@@ -475,14 +551,184 @@ export function evaluateRequestSafeRuntimeInventoryAlignment(readText) {
     }
   }
 
+  const governedGlobals = sourceStringArray(inventorySource, 'requestGovernedGlobalBindings');
+  if (governedGlobals === undefined) {
+    findings.push('request-safe-runtime: cannot read the governed global inventory');
+  } else {
+    const governed = [...new Set(governedGlobals)].sort();
+    if (governed.length !== 1 || governed[0] !== 'fetch') {
+      findings.push(
+        `request-safe-runtime: requestGovernedGlobalBindings must contain exactly fetch: ${governed.join(', ')}`,
+      );
+    }
+  }
+  if (!classifierSource.includes("expressionResolvesToGlobalCallable(node, 'fetch'")) {
+    findings.push('request-safe-runtime: classifier is missing the governed direct-fetch rule');
+  }
+
   for (const requiredLockReference of [
-    'appendUniqueNames(requestSafeGlobalCallables)',
-    'appendUniqueNames(requestSafeGlobalNamespaces)',
-    'appendUniqueNames(requestSafeGlobalConstructors)',
-    'appendUniqueNames(requestSafeCallbackGlobals)',
+    'appendUniqueNames(inventory.globalCallables',
+    'appendUniqueNames(inventory.globalNamespaces',
+    'appendUniqueNames(inventory.globalConstructors',
+    'appendUniqueNames(inventory.callbackGlobals',
+    'appendUniqueNames(inventory.governedGlobals',
+    'inventory.globalNamespaceMemberPaths',
   ]) {
     if (!inventorySource.includes(requiredLockReference)) {
       findings.push(`request-safe-runtime: global lock is missing ${requiredLockReference}`);
+    }
+  }
+
+  const requiredRunnerReferences = {
+    cliHandler: [
+      'createRequestHandler, deriveClosedKovoApp, runWithGeneratedLiveTargetRegistry',
+      'runWithGeneratedLiveTargetRegistry',
+    ],
+    compiler: ['lockRequestSafeRuntimeRealm();'],
+    generatedPresets: [
+      'lockRequestSafeRuntimeRealmWithInventory',
+      'lockRequestSafeRuntimeRealm(${generatedRequestSafeRuntimeInventorySource});',
+    ],
+    requestHandler: ['assertServerRequestSafeRuntimeRealmLocked();'],
+    runtimeBootstrap: ['lockServerRequestSafeRuntimeRealm();'],
+  };
+  for (const [runner, file] of Object.entries(REQUEST_SAFE_RUNTIME_RUNNER_FILES)) {
+    let source;
+    try {
+      source = readText(file);
+    } catch {
+      findings.push(`request-safe-runtime: missing ${file}`);
+      continue;
+    }
+    for (const reference of requiredRunnerReferences[runner]) {
+      if (!source.includes(reference)) {
+        findings.push(`request-safe-runtime: ${file} is missing ${reference}`);
+      }
+    }
+  }
+  findings.push(...evaluateCustomRunnerBootstrapOrdering(readText));
+  return findings;
+}
+
+/** Keep reusable framework-owned app shells raw and custom-runner docs bootstrap-first. */
+export function evaluateCustomRunnerBootstrapOrdering(readText) {
+  const findings = [];
+  for (const file of CUSTOM_REQUEST_HANDLER_ENTRY_FILES) {
+    let source;
+    try {
+      source = readText(file);
+    } catch {
+      findings.push(`request-safe-runtime: missing ${file}`);
+      continue;
+    }
+    if (
+      !source.includes('createRequestHandler') ||
+      source.includes('@kovojs/server/internal/app-shell-vite')
+    ) {
+      findings.push(
+        `request-safe-runtime: ${file} must keep the public guarded request handler behind its supported runner`,
+      );
+    }
+  }
+  for (const file of SECURITY_LOCKED_SCRIPT_FILES) {
+    let source;
+    try {
+      source = readText(file);
+    } catch {
+      findings.push(`request-safe-runtime: missing ${file}`);
+      continue;
+    }
+    if (!source.includes('createSecurityLockedViteServer')) {
+      findings.push(`request-safe-runtime: ${file} must use the compiler-first locked Vite runner`);
+    }
+  }
+
+  let secureViteRunnerSource;
+  try {
+    secureViteRunnerSource = readText(SECURITY_LOCKED_VITE_RUNNER_FILE);
+  } catch {
+    findings.push(`request-safe-runtime: missing ${SECURITY_LOCKED_VITE_RUNNER_FILE}`);
+  }
+  if (secureViteRunnerSource !== undefined) {
+    const orderedReferences = [
+      "'../../packages/compiler/src/security-bootstrap.ts'",
+      'compilerBootstrap.lockCompilerSecurityRealm();',
+      "'../../packages/server/src/runtime-bootstrap.ts'",
+      "return import('vite-plus');",
+    ];
+    let priorIndex = -1;
+    for (const reference of orderedReferences) {
+      const index = secureViteRunnerSource.indexOf(reference);
+      if (index < 0 || index <= priorIndex) {
+        findings.push(
+          `request-safe-runtime: ${SECURITY_LOCKED_VITE_RUNNER_FILE} must lock compiler then server before importing Vite`,
+        );
+        break;
+      }
+      priorIndex = index;
+    }
+    if (/\bfrom\s+['"]vite-plus['"]/u.test(secureViteRunnerSource)) {
+      findings.push(
+        `request-safe-runtime: ${SECURITY_LOCKED_VITE_RUNNER_FILE} must not statically import Vite`,
+      );
+    }
+  }
+
+  let siteStaticExportSource;
+  try {
+    siteStaticExportSource = readText(SITE_STATIC_EXPORT_RUNNER_FILE);
+  } catch {
+    findings.push(`request-safe-runtime: missing ${SITE_STATIC_EXPORT_RUNNER_FILE}`);
+  }
+  if (siteStaticExportSource !== undefined) {
+    const lockIndex = siteStaticExportSource.indexOf('await securityLockedViteRuntime();');
+    const cliImportIndex = siteStaticExportSource.indexOf(
+      "await import('../../packages/cli/src/commands/build-export.js')",
+    );
+    if (lockIndex < 0 || cliImportIndex < 0 || lockIndex >= cliImportIndex) {
+      findings.push(
+        `request-safe-runtime: ${SITE_STATIC_EXPORT_RUNNER_FILE} must lock the runtime before importing the CLI/Vite graph`,
+      );
+    }
+  }
+
+  for (const file of PURE_APP_ENTRY_FILES) {
+    let source;
+    try {
+      source = readText(file);
+    } catch {
+      findings.push(`request-safe-runtime: missing ${file}`);
+      continue;
+    }
+    if (source.includes('createRequestHandler')) {
+      findings.push(
+        `request-safe-runtime: ${file} must export a pure app without a request handler`,
+      );
+    }
+  }
+  for (const file of CUSTOM_REQUEST_HANDLER_DOC_FILES) {
+    let source;
+    try {
+      source = readText(file);
+    } catch {
+      findings.push(`request-safe-runtime: missing ${file}`);
+      continue;
+    }
+    const codeBlocks = source.matchAll(/```(?:ts|tsx)\n([\s\S]*?)```/gu);
+    let covered = 0;
+    for (const block of codeBlocks) {
+      const code = block[1] ?? '';
+      if (!code.includes('createRequestHandler')) continue;
+      covered += 1;
+      const firstImport = code.split('\n').find((line) => line.trimStart().startsWith('import '));
+      if (firstImport?.trim() !== RUNTIME_BOOTSTRAP_IMPORT) {
+        findings.push(
+          `request-safe-runtime: ${file} createRequestHandler block ${covered} must start imports with ${RUNTIME_BOOTSTRAP_IMPORT}`,
+        );
+      }
+    }
+    if (covered === 0) {
+      findings.push(`request-safe-runtime: ${file} has no createRequestHandler bootstrap example`);
     }
   }
   return findings;
@@ -494,11 +740,34 @@ function sourceStringArray(source, declarationName) {
     `(?:const\\s+${escapedName}\\s*=|${escapedName}\\s*)[^\\[]*\\[([\\s\\S]*?)\\]`,
     'u',
   ).exec(source);
-  if (declaration === null) return undefined;
+  if (declaration === null) {
+    const emptySet = new RegExp(
+      `const\\s+${escapedName}\\s*=\\s*new\\s+Set(?:<[^>]+>)?\\(\\s*\\)`,
+      'u',
+    );
+    return emptySet.test(source) ? [] : undefined;
+  }
   const values = [];
   const stringPattern = /(['"])(.*?)\1/gu;
   for (const match of declaration[1].matchAll(stringPattern)) values.push(match[2]);
   return values;
+}
+
+function sourceReviewedGlobalNamespaceMembers(source) {
+  const start = source.indexOf('const REQUEST_REVIEWED_GLOBAL_NAMESPACE_MEMBERS');
+  const end = start < 0 ? -1 : source.indexOf(']);', start);
+  if (start < 0 || end < 0) return undefined;
+  const block = source.slice(start, end + 3);
+  const paths = [];
+  const entryPattern =
+    /\[\s*(['"])([^'"]+)\1\s*,\s*new Set\(\s*(?:\[([\s\S]*?)\])?\s*\)\s*,?\s*\]/gu;
+  for (const entry of block.matchAll(entryPattern)) {
+    const memberSource = entry[3] ?? '';
+    for (const member of memberSource.matchAll(/(['"])(.*?)\1/gu)) {
+      paths.push(`${entry[2]}.${member[2]}`);
+    }
+  }
+  return paths;
 }
 
 export function main(options = {}) {

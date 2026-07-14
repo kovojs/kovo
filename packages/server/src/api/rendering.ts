@@ -56,11 +56,7 @@ export type { SafeRichHtmlOptions } from '../rendering/html/safe-html.js';
 // SPEC §4.10: render LLM/DB-authored rich text that embeds a closed, pre-approved set of
 // components as well-formed XML. `parseComponentXml` is the trust boundary (untrusted string →
 // plain AST); `renderRegistry` declares the closed set; `renderTree` renders it safely server-side.
-export {
-  ComponentXmlError,
-  parseComponentXml,
-  renderRegistry,
-} from '../render-tree.js';
+export { ComponentXmlError, parseComponentXml, renderRegistry } from '../render-tree.js';
 export { renderTree } from '../render-tree-public.js';
 export type {
   ComponentElementNode,

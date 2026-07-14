@@ -58,6 +58,7 @@ kovo export ./src/app.ts --out dist/static --origin https://example.com
 If you own the build script, call `exportStaticApp` directly:
 
 ```ts
+import '@kovojs/server/runtime-bootstrap';
 import { exportStaticApp, type StaticExportOptions } from '@kovojs/server';
 import app from './app.js';
 

@@ -6,8 +6,14 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createServer as createViteServer } from 'vite-plus';
+
+vi.mock('@kovojs/server', async (importOriginal) => ({
+  ...(await importOriginal()),
+  createRequestHandler: (await import('@kovojs/server/internal/app-shell-vite'))
+    .createRequestHandler,
+}));
 
 import { createReferenceAppShell, routeValueToHtml } from './app-shell.js';
 

@@ -120,7 +120,6 @@ export function siteSharedAppShellDevPlugin(): SiteDevPlugin {
       const integration = createDevIntegration({
         moduleId: '/src/app.tsx',
         name: 'kovo-site-app-shell-dev',
-        nodeHandlerExportName: 'siteNodeHandler',
         order: 'post',
       }) as { plugin: { configureServer(server: SiteDevServer): void | DevPostHook } };
 

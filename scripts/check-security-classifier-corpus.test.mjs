@@ -1,11 +1,59 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  evaluateCustomRunnerBootstrapOrdering,
   evaluateRequestSafeRuntimeInventoryAlignment,
   evaluateSecurityClassifierCorpus,
 } from './check-security-classifier-corpus.mjs';
 
 describe('check-security-classifier-corpus gate', () => {
+  it('rejects Vite runners that import Vite or the CLI before compiler/server lockdown', () => {
+    const files = {
+      'examples/commerce/scripts/demo-serve.mjs': `createRequestHandler`,
+      'examples/commerce/scripts/measure-style-size.mjs': `createRequestHandler; createSecurityLockedViteServer`,
+      'examples/crm/scripts/demo-serve.mjs': `createRequestHandler`,
+      'examples/crm/src/app-shell.ts': `createRequestHandler`,
+      'examples/gallery/src/app-shell.ts': `createRequestHandler`,
+      'examples/reference/src/app-shell.ts': `createRequestHandler`,
+      'examples/stackoverflow/scripts/demo-serve.mjs': `createRequestHandler`,
+      'examples/stackoverflow/src/app-shell.ts': `createRequestHandler`,
+      'packages/devtool/src/mount.mjs': `createRequestHandler`,
+      'site/src/aux.ts': `createRequestHandler`,
+      'examples/gallery/scripts/export-static.mjs': `createSecurityLockedViteServer`,
+      'examples/reference/scripts/export-static.mjs': `createSecurityLockedViteServer`,
+      'scripts/demo-session/serve.mjs': `createSecurityLockedViteServer`,
+      'site/scripts/capture.mjs': `createSecurityLockedViteServer`,
+      'site/scripts/export-static.mjs': `
+        createSecurityLockedViteServer;
+        await import('../../packages/cli/src/commands/build-export.js');
+        await securityLockedViteRuntime();
+      `,
+      'site/scripts/measure-route-style-size.mjs': `createSecurityLockedViteServer`,
+      'scripts/lib/secure-vite-runtime.mjs': `
+        import { createServer } from 'vite-plus';
+        const compilerBootstrap = await import('../../packages/compiler/src/security-bootstrap.ts');
+        await import('../../packages/server/src/runtime-bootstrap.ts');
+        compilerBootstrap.lockCompilerSecurityRealm();
+        return import('vite-plus');
+      `,
+      'packages/create-kovo/templates/src/app.tsx': `export default app`,
+      'examples/commerce/src/app.tsx': `export default app`,
+      'examples/crm/src/interactive-app.tsx': `export default app`,
+      'examples/stackoverflow/src/interactive-app.tsx': `export default app`,
+      'site/src/app.tsx': `export default app`,
+      'site/content/guides/deployment.md':
+        "```ts\nimport '@kovojs/server/runtime-bootstrap';\ncreateRequestHandler\n```",
+      'site/content/guides/request-shell.md':
+        "```ts\nimport '@kovojs/server/runtime-bootstrap';\ncreateRequestHandler\n```",
+    };
+
+    expect(evaluateCustomRunnerBootstrapOrdering((file) => files[file])).toEqual([
+      'request-safe-runtime: scripts/lib/secure-vite-runtime.mjs must lock compiler then server before importing Vite',
+      'request-safe-runtime: scripts/lib/secure-vite-runtime.mjs must not statically import Vite',
+      'request-safe-runtime: site/scripts/export-static.mjs must lock the runtime before importing the CLI/Vite graph',
+    ]);
+  });
+
   it('rejects classifier-safe globals that are absent from the locked runtime inventory', () => {
     const files = {
       'packages/core/src/internal/request-safe-runtime-inventory.ts': `
@@ -13,25 +61,81 @@ describe('check-security-classifier-corpus gate', () => {
         export const requestSafeGlobalNamespaces = Object.freeze(['JSON']);
         export const requestSafeGlobalConstructors = Object.freeze(['Response']);
         export const requestSafeCallbackGlobals = Object.freeze(['setTimeout']);
-        export const requestSafeNodeBuiltinModules = Object.freeze(['util']);
-        appendUniqueNames(requestSafeGlobalCallables);
-        appendUniqueNames(requestSafeGlobalNamespaces);
-        appendUniqueNames(requestSafeGlobalConstructors);
-        appendUniqueNames(requestSafeCallbackGlobals);
+        export const requestSafeGlobalNamespaceMemberPaths = Object.freeze(['JSON.stringify']);
+        export const requestGovernedGlobalBindings = Object.freeze(['fetch']);
+        appendUniqueNames(inventory.globalCallables);
+        appendUniqueNames(inventory.globalNamespaces);
+        appendUniqueNames(inventory.globalConstructors);
+        appendUniqueNames(inventory.callbackGlobals);
+        appendUniqueNames(inventory.governedGlobals);
+        inventory.globalNamespaceMemberPaths;
+      `,
+      'packages/cli/src/commands/build-export.ts': `
+        createRequestHandler, deriveClosedKovoApp, runWithGeneratedLiveTargetRegistry;
+        runWithGeneratedLiveTargetRegistry;
+      `,
+      'packages/compiler/src/security-bootstrap.ts': `
+        lockRequestSafeRuntimeRealm();
       `,
       'packages/drizzle/src/trust-escapes-static.ts': `
         const REQUEST_SAFE_GLOBAL_CALLABLES = new Set(['String', 'evil']);
         const REQUEST_SAFE_GLOBAL_NAMESPACES = new Set(['JSON']);
         const REQUEST_SAFE_GLOBAL_CONSTRUCTORS = new Set(['Response']);
         const REQUEST_SAFE_BUILTIN_MODULES = new Set(['util', 'child_process']);
+        const REQUEST_REVIEWED_GLOBAL_NAMESPACE_MEMBERS = new Map([
+          ['JSON', new Set(['parse', 'stringify'])],
+        ]);
         for (const callbackGlobal of ['setTimeout', 'setImmediate']) {}
+        if (expressionResolvesToGlobalCallable(node, 'fetch', new Set(), 0)) return true;
       `,
+      'packages/server/src/build.ts': `
+        lockRequestSafeRuntimeRealmWithInventory;
+        lockRequestSafeRuntimeRealm(\${generatedRequestSafeRuntimeInventorySource});
+      `,
+      'packages/server/src/request-handler.ts': `assertServerRequestSafeRuntimeRealmLocked();`,
+      'packages/server/src/runtime-bootstrap.ts': `lockServerRequestSafeRuntimeRealm();`,
+      'examples/commerce/scripts/demo-serve.mjs': `createRequestHandler`,
+      'examples/commerce/scripts/measure-style-size.mjs': `createRequestHandler; createSecurityLockedViteServer`,
+      'examples/crm/scripts/demo-serve.mjs': `createRequestHandler`,
+      'examples/crm/src/app-shell.ts': `createRequestHandler`,
+      'examples/gallery/src/app-shell.ts': `import { createRequestHandler } from '@kovojs/server';`,
+      'examples/reference/src/app-shell.ts': `import { createRequestHandler } from '@kovojs/server';`,
+      'examples/stackoverflow/scripts/demo-serve.mjs': `createRequestHandler`,
+      'examples/stackoverflow/src/app-shell.ts': `createRequestHandler`,
+      'packages/devtool/src/mount.mjs': `import { createRequestHandler } from '@kovojs/server';`,
+      'site/src/aux.ts': `import { createRequestHandler } from '@kovojs/server';`,
+      'examples/gallery/scripts/export-static.mjs': `createSecurityLockedViteServer`,
+      'examples/reference/scripts/export-static.mjs': `createSecurityLockedViteServer`,
+      'scripts/demo-session/serve.mjs': `createSecurityLockedViteServer`,
+      'site/scripts/capture.mjs': `createSecurityLockedViteServer`,
+      'site/scripts/measure-route-style-size.mjs': `createSecurityLockedViteServer`,
+      'scripts/lib/secure-vite-runtime.mjs': `
+        const compilerBootstrap = await import('../../packages/compiler/src/security-bootstrap.ts');
+        compilerBootstrap.lockCompilerSecurityRealm();
+        await import('../../packages/server/src/runtime-bootstrap.ts');
+        return import('vite-plus');
+      `,
+      'site/scripts/export-static.mjs': `
+        createSecurityLockedViteServer;
+        await securityLockedViteRuntime();
+        await import('../../packages/cli/src/commands/build-export.js');
+      `,
+      'packages/create-kovo/templates/src/app.tsx': `export default app;`,
+      'examples/commerce/src/app.tsx': `export default app;`,
+      'examples/crm/src/interactive-app.tsx': `export default app;`,
+      'examples/stackoverflow/src/interactive-app.tsx': `export default app;`,
+      'site/src/app.tsx': `export default siteStaticExportApp;`,
+      'site/content/guides/deployment.md':
+        "```ts\nimport '@kovojs/server/runtime-bootstrap';\nimport { createRequestHandler } from '@kovojs/server';\n```",
+      'site/content/guides/request-shell.md':
+        "```ts\nimport '@kovojs/server/runtime-bootstrap';\nimport { createRequestHandler } from '@kovojs/server';\n```",
     };
     const findings = evaluateRequestSafeRuntimeInventoryAlignment((file) => files[file]);
 
     expect(findings).toEqual([
       'request-safe-runtime: REQUEST_SAFE_GLOBAL_CALLABLES exceeds requestSafeGlobalCallables: evil',
-      'request-safe-runtime: REQUEST_SAFE_BUILTIN_MODULES exceeds requestSafeNodeBuiltinModules: child_process',
+      'request-safe-runtime: REQUEST_SAFE_BUILTIN_MODULES must remain empty: child_process, util',
+      'request-safe-runtime: REQUEST_REVIEWED_GLOBAL_NAMESPACE_MEMBERS exceeds requestSafeGlobalNamespaceMemberPaths: JSON.parse',
       'request-safe-runtime: callback globals exceed requestSafeCallbackGlobals: setImmediate',
     ]);
   });

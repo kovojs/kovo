@@ -2,7 +2,7 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { createRequire } from 'node:module';
 import { isAbsolute } from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { pathToFileURL } from 'node:url';
 import { deserialize, serialize } from 'node:v8';
 
 import type { PgliteStatementInput } from '../pglite.js';
@@ -13,7 +13,9 @@ const viteEntryUrl = pathToFileURL(requireFromBootFixture.resolve('vite')).href;
 const compilerBootstrapPath = requireFromBootFixture.resolve(
   '@kovojs/compiler/internal/security-bootstrap',
 );
-const serverRuntimeBootstrapPath = requireFromBootFixture.resolve('@kovojs/server/runtime-bootstrap');
+const serverRuntimeBootstrapPath = requireFromBootFixture.resolve(
+  '@kovojs/server/runtime-bootstrap',
+);
 const childRuntimePath = requireFromBootFixture.resolve(
   '@kovojs/test/internal/integration/boot-fixture-child',
 );

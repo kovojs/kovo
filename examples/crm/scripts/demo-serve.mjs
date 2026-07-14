@@ -11,7 +11,7 @@ export function createCrmDemoServer(options = {}) {
     label: 'crm-demo-serve',
     root: crmRoot,
     configFile: fileURLToPath(new URL('../vite.config.ts', import.meta.url)),
-    async loadInstanceFactory(vite) {
+    async loadInstanceFactory(vite, { createRequestHandler }) {
       const { buildCrmInteractiveApp } = await vite.ssrLoadModule('/src/interactive-app.tsx');
       const { toNodeHandler } = await vite.ssrLoadModule('@kovojs/server');
       if (typeof buildCrmInteractiveApp !== 'function') {
@@ -23,7 +23,8 @@ export function createCrmDemoServer(options = {}) {
       const reference = await buildCrmInteractiveApp();
       return {
         referenceApp: reference.app,
-        buildHandler: async () => toNodeHandler((await buildCrmInteractiveApp()).handler),
+        buildHandler: async () =>
+          toNodeHandler(createRequestHandler((await buildCrmInteractiveApp()).app)),
       };
     },
     ...options,

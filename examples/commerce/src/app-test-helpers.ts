@@ -1,5 +1,6 @@
 import { enhancedMutationHeaders, headerValues, setCookieValues } from '@kovojs/test/headers';
-import { csrfToken, readonlyDb } from '@kovojs/server';
+import { csrfToken, readonlyDb, toNodeHandler } from '@kovojs/server';
+import { createExampleTestRequestHandler } from '../../../tests/example-raw-request-handler.js';
 import { htmlFormFacts, htmlFormFieldsByName } from '@kovojs/test/html-fragment';
 import { eq } from 'drizzle-orm';
 
@@ -11,7 +12,11 @@ import {
   type CommerceDb,
   type ProductGridInput,
 } from './domain.js';
-import { createCommerceApp, type CommerceApp } from './app.js';
+import {
+  createCommerceApplication,
+  type CommerceAppOptions,
+  type CommerceApplication,
+} from './app.js';
 import { cartQuery, orderHistoryQuery, productGridQuery } from './queries.js';
 import { cartItems, orders, products } from './schema.js';
 import type { CartQueryResult, OrderHistoryResult, ProductGridResult } from './queries.js';
@@ -178,7 +183,7 @@ export function productGridInput(after: string | null, limit?: number): ProductG
 }
 
 export interface CommerceScenarioClient {
-  readonly shell: CommerceApp;
+  readonly shell: CommerceTestApp;
   get(path: string, options?: CommerceScenarioRequestOptions): Promise<Response>;
   postForm(
     path: string,
@@ -203,7 +208,21 @@ export interface CommerceScenarioEnhancedOptions extends CommerceScenarioRequest
 }
 
 const commerceOrigin = 'https://commerce.test';
-export function createCommerceScenarioClient(shell = createCommerceApp()): CommerceScenarioClient {
+export interface CommerceTestApp extends CommerceApplication {
+  nodeHandler: ReturnType<typeof toNodeHandler>;
+  requestHandler: ReturnType<typeof createExampleTestRequestHandler>;
+}
+
+/** Vitest-only raw dispatch seam; production entries retain the guarded public wrapper. */
+export function createCommerceTestApp(options: CommerceAppOptions = {}): CommerceTestApp {
+  const application = createCommerceApplication(options);
+  const requestHandler = createExampleTestRequestHandler(application.app);
+  return { ...application, nodeHandler: toNodeHandler(requestHandler), requestHandler };
+}
+
+export function createCommerceScenarioClient(
+  shell = createCommerceTestApp(),
+): CommerceScenarioClient {
   const cookies = new Map<string, string>();
 
   async function dispatch(

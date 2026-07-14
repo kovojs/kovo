@@ -2,12 +2,10 @@
 import {
   createApp,
   createMemoryVersionedClientModuleRegistry,
-  createRequestHandler,
   layout,
   route,
   s,
   stylesheet,
-  type RequestHandler,
 } from '@kovojs/server';
 
 import { ContactsRegion } from './components/contacts.js';
@@ -71,7 +69,6 @@ const ContactsLayout = layout({
 export interface CrmInteractiveApp {
   app: ReturnType<typeof createApp>;
   db: CrmDb;
-  handler: RequestHandler;
 }
 
 export interface BuildCrmInteractiveAppOptions {
@@ -81,8 +78,8 @@ export interface BuildCrmInteractiveAppOptions {
 /**
  * Build the interactive CRM app over a (seeded) PGlite database. Pass an existing
  * `db` to share state with an already-rendered shell; otherwise a fresh seeded
- * database is created. The returned handler is what the Node server
- * (scripts/serve.mjs) serves — mutations round-trip natively over PGlite.
+ * database is created. Runtime entries construct the guarded handler only
+ * after their supported runner establishes realm lockdown (SPEC §6.6).
  */
 export async function buildCrmInteractiveApp(
   options: BuildCrmInteractiveAppOptions = {},
@@ -145,7 +142,5 @@ export async function buildCrmInteractiveApp(
     sessionProvider: () => demoSession,
   });
 
-  const handler: RequestHandler = createRequestHandler(app);
-
-  return { app, db: database, handler };
+  return { app, db: database };
 }

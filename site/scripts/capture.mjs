@@ -7,7 +7,7 @@ import { basename, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { gzipSync } from 'node:zlib';
 
-import { createServer } from 'vite-plus';
+import { createSecurityLockedViteServer } from '../../scripts/lib/secure-vite-runtime.mjs';
 
 /**
  * Artifact-capture harness (plan W3). Every landing/docs visual is regenerated
@@ -205,7 +205,7 @@ export async function captureKovoExplain(_repoRoot) {
 
 /** The inline loader budget, measured from the artifact that actually ships. */
 export async function captureLoaderBudget() {
-  const viteServer = await createServer({
+  const viteServer = await createSecurityLockedViteServer({
     appType: 'custom',
     logLevel: 'error',
     root: siteRoot,

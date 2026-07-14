@@ -1,4 +1,4 @@
-import { toNodeHandler } from '@kovojs/server';
+import { createRequestHandler, toNodeHandler } from '@kovojs/server';
 
 import { buildSoInteractiveApp } from './interactive-app.js';
 
@@ -16,6 +16,6 @@ export const soDb = interactive.db;
 
 // The Node handler over the interactive app (db attached so mutations work), used
 // by scripts/serve.mjs and the Vite dev plugin.
-export const soNodeHandler = toNodeHandler(interactive.handler);
+export const soNodeHandler = toNodeHandler(createRequestHandler(interactive.app));
 
 export default soApp;

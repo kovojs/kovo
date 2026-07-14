@@ -4,12 +4,11 @@ import { describe, expect, it } from 'vitest';
 
 import { htmlElementFacts, htmlFormFacts, kovoQueryJsonValues } from '@kovojs/test/html-fragment';
 
-import { createCommerceScenarioClient } from './app-test-helpers.js';
-import { createCommerceApp } from './app.js';
+import { createCommerceScenarioClient, createCommerceTestApp } from './app-test-helpers.js';
 
 describe('commerce authored live-target artifacts', () => {
   it('stamps live-target hooks into the rendered cart document', async () => {
-    const client = createCommerceScenarioClient(createCommerceApp());
+    const client = createCommerceScenarioClient(createCommerceTestApp());
     const response = await client.get('/cart');
     const html = await response.text();
 
@@ -20,7 +19,7 @@ describe('commerce authored live-target artifacts', () => {
   });
 
   it('renders live-target query chunks for enhanced addToCart success', async () => {
-    const client = createCommerceScenarioClient(createCommerceApp());
+    const client = createCommerceScenarioClient(createCommerceTestApp());
     const login = await client.signIn({ remoteAddress: '203.0.113.171' });
     expect(login.status).toBe(303);
 
@@ -48,7 +47,7 @@ describe('commerce authored live-target artifacts', () => {
   });
 
   it('renders live-target failure fragments with form helpers', async () => {
-    const client = createCommerceScenarioClient(createCommerceApp());
+    const client = createCommerceScenarioClient(createCommerceTestApp());
     const login = await client.signIn({ remoteAddress: '203.0.113.174' });
     expect(login.status).toBe(303);
 

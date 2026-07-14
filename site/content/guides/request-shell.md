@@ -142,12 +142,20 @@ The handler currency is Web-standard `Request -> Response`. Adapters convert hos
 objects at the edge:
 
 ```ts
+import '@kovojs/server/runtime-bootstrap';
+
 import { createServer } from 'node:http';
 import { createRequestHandler, toNodeHandler } from '@kovojs/server';
 import app from './app.js';
 
 createServer(toNodeHandler(createRequestHandler(app))).listen(3000);
 ```
+
+For a custom adapter entry, keep `@kovojs/server/runtime-bootstrap` as the literal first import so
+request-reachable package code cannot replace classifier-reviewed globals before dispatch starts.
+Generated Kovo runners apply this bootstrap for you. The dispatch refusal detects omission, not the
+history of a mutable JavaScript realm: a bootstrap imported after app/package evaluation cannot
+repair that ordering and is outside the supported custom-runner contract.
 
 Edge, Node, and test adapters should preserve the same protocol fields: status, headers,
 `Kovo-*` framework headers, `Location`, and body. App code should not branch on adapter-specific

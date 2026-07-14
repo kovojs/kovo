@@ -6,8 +6,12 @@ import { asc, eq } from 'drizzle-orm';
 import { describe, expect, it } from 'vitest';
 
 import { csrfToken } from '@kovojs/server';
+import { createExampleTestRequestHandler } from '../../../tests/example-raw-request-handler.js';
 
-import { buildCrmInteractiveApp } from './interactive-app.js';
+import {
+  buildCrmInteractiveApp as buildCrmInteractiveApplication,
+  type BuildCrmInteractiveAppOptions,
+} from './interactive-app.js';
 import { crmCsrf } from './mutations.js';
 import { contacts, deals } from './schema.js';
 
@@ -28,6 +32,11 @@ const spoofedOwnerContactId = 'c-33333333-3333-4333-8333-333333333333';
 const insertedDealId = 'd-11111111-1111-4111-8111-111111111111';
 const unownedDealInputId = 'd-22222222-2222-4222-8222-222222222222';
 const invalidStageDealId = 'd-33333333-3333-4333-8333-333333333333';
+
+async function buildCrmInteractiveApp(options: BuildCrmInteractiveAppOptions = {}) {
+  const application = await buildCrmInteractiveApplication(options);
+  return { ...application, handler: createExampleTestRequestHandler(application.app) };
+}
 
 function withCsrf(fields: Record<string, string>): Record<string, string> {
   return fields;

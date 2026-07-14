@@ -1,5 +1,5 @@
 /** @jsxImportSource @kovojs/server */
-import { createApp, createRequestHandler, layout, route, toNodeHandler } from '@kovojs/server';
+import { createApp, layout, route } from '@kovojs/server';
 
 import { buildSiteRouteData, type SiteRoutePage } from './app-data.js';
 import { clientHrefs, siteClientModules } from './client/modules.js';
@@ -40,8 +40,6 @@ export const siteStaticExportApp = createApp({
   document: siteDocument,
   routes,
 });
-
-export const siteNodeHandler = toNodeHandler(createRequestHandler(siteStaticExportApp));
 
 export default siteStaticExportApp;
 
