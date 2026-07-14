@@ -1,4 +1,4 @@
-import { query, type JsonValue, type QueryLoadContext, type Reader } from '@kovojs/server';
+import { query, type JsonValue, type QueryLoadContext } from '@kovojs/server';
 
 import { appAuthed } from './auth.js';
 import type { AppDb } from './db.js';
@@ -35,33 +35,19 @@ type AppQueryLoadContext = QueryLoadContext<AppQueryRequest, AppDb>;
 export const contactsQuery = query({
   access: [appAuthed],
   async load(_input: unknown, context?: AppQueryLoadContext): Promise<ContactListResult> {
-    const db = requireDb(context);
-    const rows = await db
-      .select({
-        id: contacts.id,
-        name: contacts.name,
-        email: contacts.email,
-        company: contacts.company,
-      })
-      .from(contacts)
-      .orderBy(contacts.id);
-    const items: ContactRow[] = rows.map((row) => ({
-      company: row.company,
-      email: row.email,
-      id: row.id,
-      name: row.name,
-    }));
-    return { items };
+    if (!context?.db) {
+      throw new Error('contacts query requires the framework-provided context.db');
+    }
+    return {
+      items: await context.db
+        .select({
+          id: contacts.id,
+          name: contacts.name,
+          email: contacts.email,
+          company: contacts.company,
+        })
+        .from(contacts)
+        .orderBy(contacts.id),
+    };
   },
 });
-
-// SPEC §9.4 (MARQUEE): the framework provides `context.db` as the read-only managed handle. A loader
-// destructures it directly; this guard surfaces a clear error when a loader is invoked without the
-// framework-threaded handle (e.g. a direct `query.load()` call missing its db).
-function requireDb(context?: AppQueryLoadContext): Reader<AppDb> {
-  const db = context?.db;
-  if (!db) {
-    throw new Error('contacts query requires the framework-provided context.db');
-  }
-  return db;
-}

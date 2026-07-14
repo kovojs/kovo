@@ -176,14 +176,6 @@ const styles = style.create({
 });
 
 function renderContactCard(contact: ContactRow): string {
-  const initials =
-    contact.name
-      .split(/\s+/u)
-      .filter(Boolean)
-      .slice(0, 2)
-      .map((part) => part.charAt(0))
-      .join('') || 'C';
-
   return Card.definition.render({
     style: styles.card,
     children: (
@@ -191,7 +183,7 @@ function renderContactCard(contact: ContactRow): string {
         <div style={styles.rowTop}>
           <div style={styles.person}>
             <span aria-hidden="true" style={styles.avatar}>
-              {initials}
+              C
             </span>
             <div style={styles.personCopy}>
               <p style={styles.name}>{contact.name}</p>

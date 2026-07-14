@@ -26,22 +26,6 @@ export interface AddContactInput {
 
 const duplicateEmailError = s.object({ email: s.string() });
 
-async function addContactRow(
-  { name, email, company }: AddContactInput,
-  db: AppRequest['db'],
-  context: MutationContext<{ DUPLICATE_EMAIL: typeof duplicateEmailError }>,
-) {
-  const [existing] = await db.select().from(contacts).where(eq(contacts.email, email)).limit(1);
-  if (existing) {
-    return context.fail('DUPLICATE_EMAIL', { email });
-  }
-  const id = crypto.randomUUID();
-  await db
-    .insert(contacts)
-    .values({ id: serverValue(id, 'server-generated contact id'), name, email, company });
-  return { id };
-}
-
 // One real write: validate input, guard it behind a session, insert a row, and
 // predict the optimistic list update. No-JS clients POST to the typed mutation
 // endpoint and get the refreshed page; `enhance` upgrades the same form to a fragment swap.
@@ -69,11 +53,23 @@ export const addContact = mutation({
   },
   registry: { tables: ['contacts'], touches: [contact] },
   async handler(
-    input,
+    { name, email, company },
     request: AppRequest,
     context: MutationContext<{ DUPLICATE_EMAIL: typeof duplicateEmailError }>,
   ) {
-    return addContactRow(input, request.db, context);
+    const [existing] = await request.db
+      .select()
+      .from(contacts)
+      .where(eq(contacts.email, email))
+      .limit(1);
+    if (existing) {
+      return context.fail('DUPLICATE_EMAIL', { email });
+    }
+    const id = crypto.randomUUID();
+    await request.db
+      .insert(contacts)
+      .values({ id: serverValue(id, 'server-generated contact id'), name, email, company });
+    return { id };
   },
 });
 
