@@ -5,8 +5,14 @@ import { dirname, join, normalize, relative } from 'node:path';
 const ts = await loadTypeScript();
 const root = process.cwd();
 const findings = [];
-const RUNTIME_DB_MODULE_PATH = 'src/_kovo/app-runtime-db';
-const FRAMEWORK_GENERATED_SOUND_SUBSET_EXEMPT_FILES = new Set(['src/_kovo/app-runtime-db.ts']);
+const RUNTIME_DB_MODULE_PATHS = new Set([
+  'src/_kovo/app-runtime-db',
+  'src/_kovo/app-runtime-db-options',
+]);
+const FRAMEWORK_GENERATED_SOUND_SUBSET_EXEMPT_FILES = new Set([
+  'src/_kovo/app-runtime-db-options.ts',
+  'src/_kovo/app-runtime-db.ts',
+]);
 const SECURITY_SURFACE_FILES = new Set([
   'src/app.test.ts',
   'src/app.tsx',
@@ -33,7 +39,7 @@ const RUNTIME_DB_IMPORT_ALLOWLIST = new Map([
   ['src/db.sqlite.ts', new Set(['appRuntimeReadonlyDb'])],
 ]);
 const RUNTIME_DB_IMPORT_MESSAGE =
-  'SPEC.md §6.6 sound subset bans non-type imports of src/_kovo/app-runtime-db outside framework-owned starter files';
+  'SPEC.md §6.6 sound subset bans non-type imports of src/_kovo/app-runtime-db or src/_kovo/app-runtime-db-options outside framework-owned starter files';
 const AUTH_BINDING_FACTORY = 'createAppAuthBindings';
 const AUTH_BINDING_SAFE_MEMBERS = new Set(['seedDemoUser', 'sessionProvider', 'signIn', 'signOut']);
 const AUTH_BINDING_CONFINEMENT_MESSAGE =
@@ -716,7 +722,7 @@ function isRuntimeDbModuleSpecifier(relativeFile, specifier) {
   const resolved = stripModuleExtension(
     toPosixPath(normalize(join(dirname(relativeFile), specifier))),
   );
-  return resolved === RUNTIME_DB_MODULE_PATH;
+  return RUNTIME_DB_MODULE_PATHS.has(resolved);
 }
 
 function stripModuleExtension(value) {

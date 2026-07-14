@@ -245,7 +245,7 @@ describe('create-kovo starter (build integration: runtime and dev server)', () =
         join(root, 'src/schema-namespace-proof.test.ts'),
         [
           "import { describe, expect, it } from 'vitest';",
-          "import { appRuntimeDbOptions } from './_kovo/app-runtime-db.js';",
+          "import { appRuntimeDbOptions } from './_kovo/app-runtime-db-options.js';",
           "import * as schema from './schema.js';",
           '',
           "describe('generated Postgres schema namespace', () => {",

@@ -107,11 +107,11 @@ import {
   betterAuthTrim,
 } from './internal/intrinsics.js';
 
-// The package's 13 public symbols are authored in the honestly-named source files
-// (`session.ts`, `mount.ts`, `mutations.ts`, `guards.ts`) and re-exported from the
-// package root by `index.ts` (api-devex-fixes #6). They are re-exported here so the
-// `./internal` subpath — and the colocated tests that import from it — keep resolving
-// the same names; the `@internal` machinery below stays authored in this file.
+// Public symbols are authored in honestly named source files (`session.ts`, `mount.ts`,
+// `mutations.ts`, `guards.ts`, and `postgres.ts`) and explicitly curated by the package root.
+// The legacy shared symbols below are also re-exported here so the `./internal` subpath — and
+// colocated tests that import from it — keep resolving the same names; the `@internal` machinery
+// below stays authored in this file.
 export type * from './internal/contracts.js';
 export { authed, role } from './guards.js';
 export type { BetterAuthMountOptions } from './mount.js';

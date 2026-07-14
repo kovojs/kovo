@@ -154,6 +154,12 @@ export function installStarterAppDependencies(
 }
 
 export function runStarterTypecheck(root: string): void {
+  const generatedRuntimeFiles = [
+    ...(existsSync(join(root, 'src/_kovo/app-runtime-db-options.ts'))
+      ? ['src/_kovo/app-runtime-db-options.ts']
+      : []),
+    'src/_kovo/app-runtime-db.ts',
+  ];
   execFileSync(
     resolveStarterBin(root, 'tsc'),
     [
@@ -178,7 +184,7 @@ export function runStarterTypecheck(root: string): void {
       'node',
       'src/schema.ts',
       'src/db.ts',
-      'src/_kovo/app-runtime-db.ts',
+      ...generatedRuntimeFiles,
       'src/auth.ts',
       'src/queries.ts',
       'src/mutations.ts',

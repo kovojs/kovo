@@ -204,6 +204,7 @@ export const CREATE_KOVO_HELP = renderCreateKovoHelp();
 const templateRoot = new URL('../templates/', import.meta.url);
 interface TemplateFile {
   path: string;
+  postgresOnly?: boolean;
   sourcePath?: string;
   sqlitePath?: string;
 }
@@ -221,6 +222,7 @@ const templateFiles: readonly TemplateFile[] = [
   'scripts/check-parallel.mjs',
   { path: 'src/schema.ts', sqlitePath: 'src/schema.sqlite.ts' },
   { path: 'src/db.ts', sqlitePath: 'src/db.sqlite.ts' },
+  { path: 'src/_kovo/app-runtime-db-options.ts', postgresOnly: true },
   { path: 'src/_kovo/app-runtime-db.ts', sqlitePath: 'src/_kovo/app-runtime-db.sqlite.ts' },
   { path: 'src/auth.ts', sqlitePath: 'src/auth.sqlite.ts' },
   'src/model.ts',
@@ -331,10 +333,12 @@ export function createKovoProject(options: CreateKovoOptions): CreateKovoProject
         path: `.kovo/docs/${file.path}`,
         source: file.source,
       })),
-      ...templateFiles.map((file) => ({
-        path: file.path,
-        source: renderTemplate(readTemplate(templatePathForDialect(file, dialect)), values),
-      })),
+      ...templateFiles
+        .filter((file) => dialect === 'postgres' || file.postgresOnly !== true)
+        .map((file) => ({
+          path: file.path,
+          source: renderTemplate(readTemplate(templatePathForDialect(file, dialect)), values),
+        })),
       // Generated (non-template) project files: a per-project random CSRF secret and the
       // ignore rules that keep the real secret out of version control.
       { path: '.env', source: renderEnvFile(csrfSecret, demoPassword) },

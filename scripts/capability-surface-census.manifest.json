@@ -5,11 +5,9 @@
       "id": "generated-postgres-auth-adapter",
       "kind": "auth-adapter-db",
       "authority": "Postgres system DB used only to construct Better Auth's Drizzle adapter",
-      "mint": "packages/create-kovo/templates/src/_kovo/app-runtime-db.ts#createAuthAdapter",
-      "publicStatus": "module-private",
-      "allowedConsumers": [
-        "packages/create-kovo/templates/src/_kovo/app-runtime-db.ts#createAppAuthBindings"
-      ],
+      "mint": "packages/better-auth/src/postgres.ts#createBetterAuthPostgresBindings",
+      "publicStatus": "raw adapter private; sanitized constructor public",
+      "allowedConsumers": ["packages/better-auth/src/postgres.ts#createBetterAuthPostgresBindings"],
       "buildDiagnostic": "packages/create-kovo/templates/scripts/check-sound-subset.mjs permits src/auth.ts to import only the sanitized createAppAuthBindings facade",
       "evidence": "vp exec pnpm exec vitest --run packages/create-kovo/src/index.test.ts --config ./vite.config.ts"
     },
@@ -51,7 +49,9 @@
       "authority": "KovoPostgresAppRuntimeDb.systemDb mints system-principal DB access for framework construction paths",
       "mint": "packages/server/src/postgres-runtime.ts#systemDb",
       "publicStatus": "runtime-method",
-      "allowedConsumers": ["generated createAuthAdapter and internal framework system paths"],
+      "allowedConsumers": [
+        "generated authSystemDb passed only to @kovojs/better-auth createBetterAuthPostgresBindings and internal framework system paths"
+      ],
       "buildDiagnostic": "scripts/capability-surface-census-gate.mjs rejects generated raw system DB exports",
       "evidence": "scripts/capability-surface-census-gate.mjs scans generated templates for raw systemDb exports"
     },

@@ -56,6 +56,7 @@ const sqliteRuntime = readRepoFile(
 );
 const postgresAuth = readRepoFile('packages/create-kovo/templates/src/auth.ts');
 const sqliteAuth = readRepoFile('packages/create-kovo/templates/src/auth.sqlite.ts');
+const betterAuthPostgres = readRepoFile('packages/better-auth/src/postgres.ts');
 const soundSubset = readRepoFile('packages/create-kovo/templates/scripts/check-sound-subset.mjs');
 const sqlSafeHandle = readRepoFile('packages/server/src/sql-safe-handle.ts');
 
@@ -71,18 +72,18 @@ rejectPattern(
 );
 requirePattern(
   postgresRuntime,
-  /\bfunction\s+authAdapterDb\(\):\s*KovoPostgresSystemDb\b/u,
-  'generated Postgres auth DB mint must return an opaque system capability',
+  /\bconst\s+authSystemDb\s*=\s*appDatabase\.systemDb\(\{/u,
+  'generated Postgres runtime must mint one module-private opaque auth system capability',
+);
+requirePattern(
+  betterAuthPostgres,
+  /\busePostgresSystemDb\(systemDb,\s*\(db\)\s*=>\s*\n?\s*drizzleAdapter\(db,\s*\{\s*provider:\s*'pg',\s*schema:\s*pinnedSchema\s*\}\)\s*,?\s*\)/u,
+  'Better Auth Postgres constructor must unwrap the system DB only at the adapter sink',
 );
 requirePattern(
   postgresRuntime,
-  /\busePostgresSystemDb\(authAdapterDb\(\),\s*\(db\)\s*=>/u,
-  'generated Postgres auth adapter must unwrap the system DB only at the adapter sink',
-);
-requirePattern(
-  postgresRuntime,
-  /\bfunction\s+createAuthAdapter\(\):\s*ReturnType<typeof drizzleAdapter>/u,
-  'generated Postgres auth adapter factory must remain in the framework-owned runtime module',
+  /import\s+\{[^}]*\bcreateBetterAuthPostgresBindings\b[^}]*\}\s+from\s+['"]@kovojs\/better-auth['"]/su,
+  'generated Postgres runtime must route adapter construction through @kovojs/better-auth',
 );
 requirePattern(
   sqliteRuntime,
@@ -96,8 +97,18 @@ rejectPattern(
 );
 requirePattern(
   postgresRuntime,
-  /\bexport\s+function\s+createAppAuthBindings\([\s\S]{0,900}?\bdatabase:\s*createAuthAdapter\(\)/u,
-  'generated Postgres runtime must consume the private adapter inside createAppAuthBindings',
+  /\bexport\s+function\s+createAppAuthBindings\([\s\S]{0,1200}?\bcreateBetterAuthPostgresBindings<[\s\S]{0,700}?\bsystemDb:\s*authSystemDb\b/u,
+  'generated Postgres runtime must pass only its opaque capability into the sanitized binding constructor',
+);
+rejectPattern(
+  postgresRuntime,
+  /\b(?:drizzleAdapter|usePostgresSystemDb|betterAuth\s*\()/u,
+  'generated Postgres runtime must not construct or unwrap the raw Better Auth adapter directly',
+);
+requirePattern(
+  betterAuthPostgres,
+  /return\s+betterAuthFreezeOwn\(\s*\{\s*seedDemoUser,\s*sessionProvider,\s*signIn,\s*signOut\s*\}/u,
+  'Better Auth Postgres constructor must return only the frozen sanitized binding record',
 );
 requirePattern(
   sqliteRuntime,

@@ -1372,7 +1372,7 @@ export function addTrustedOutputProvenanceBuildProof(
   );
   app = replaceRequired(
     app,
-    ['function HomePage({ request }: { request: AppRequest }): string {', '  return ('].join('\n'),
+    ['function HomePage({ userName }: { userName: string }): string {', '  return ('].join('\n'),
     [
       "const dynamicTrustedUrlKey: 'trustedUrl' = 'trustedUrl';",
       "const dynamicTrustedHtmlKey: 'trustedHtml' = 'trustedHtml';",
@@ -1410,7 +1410,7 @@ export function addTrustedOutputProvenanceBuildProof(
       '  ),',
       '});',
       '',
-      'function HomePage({ request }: { request: AppRequest }): string {',
+      'function HomePage({ userName }: { userName: string }): string {',
       '  return (',
     ].join('\n'),
     'trusted output proof component',
@@ -1898,17 +1898,17 @@ export function addAuthSecretLeakProof(root: string, options: { leakToWire?: boo
 }
 
 export function addSecretViewEgressProof(root: string): void {
-  const runtimeDbPath = join(root, 'src/_kovo/app-runtime-db.ts');
+  const runtimeDbPath = join(root, 'src/_kovo/app-runtime-db-options.ts');
   const runtimeDb = replaceRequired(
     readFileSync(runtimeDbPath, 'utf8'),
-    'export const appRuntimeDbOptions = {',
+    'export const appRuntimeDbOptions = Object.freeze({',
     [
       'const SECRET_VIEW_EGRESS_SEED = [',
       '  \'CREATE OR REPLACE VIEW "account_secret_view" WITH (security_invoker=true) AS SELECT id, "userId", password FROM "account";\',',
       '  \'GRANT SELECT ON "account_secret_view" TO "kovo_reader";\',',
       '];',
       '',
-      'export const appRuntimeDbOptions = {',
+      'export const appRuntimeDbOptions = Object.freeze({',
     ].join('\n'),
     'secret view proof runtime view DDL',
   );
@@ -2077,11 +2077,11 @@ export function addRuntimeSecretBoundaryProof(root: string): void {
   );
   writeFileSync(schemaPath, withRuntimeSecretTable, 'utf8');
 
-  const runtimeDbPath = join(root, 'src/_kovo/app-runtime-db.ts');
+  const runtimeDbPath = join(root, 'src/_kovo/app-runtime-db-options.ts');
   let runtimeDb = readFileSync(runtimeDbPath, 'utf8');
   runtimeDb = replaceRequired(
     runtimeDb,
-    'export const appRuntimeDbOptions = {',
+    'export const appRuntimeDbOptions = Object.freeze({',
     [
       'const RUNTIME_SECRET_BOUNDARY_SEED = [',
       "  'INSERT INTO \"runtime_secret_proof\" (id, label, classified) VALUES (\\'s1\\', \\'public label\\', \\'runtime-secret-value\\') ON CONFLICT (id) DO NOTHING;',",
@@ -2095,7 +2095,7 @@ export function addRuntimeSecretBoundaryProof(root: string): void {
       '  \'GRANT SELECT ON "runtime_secret_proof_view" TO "kovo_reader";\',',
       '];',
       '',
-      'export const appRuntimeDbOptions = {',
+      'export const appRuntimeDbOptions = Object.freeze({',
     ].join('\n'),
     'runtime secret proof seed',
   );
@@ -3737,11 +3737,11 @@ export function addPostgresParanoidPhase5DogfoodProof(root: string): void {
   );
   writeFileSync(schemaPath, schema, 'utf8');
 
-  const runtimeDbPath = join(root, 'src/_kovo/app-runtime-db.ts');
-  let runtimeDb = readFileSync(runtimeDbPath, 'utf8');
-  runtimeDb = replaceRequired(
-    runtimeDb,
-    'export const appRuntimeDbOptions = {',
+  const runtimeDbOptionsPath = join(root, 'src/_kovo/app-runtime-db-options.ts');
+  let runtimeDbOptions = readFileSync(runtimeDbOptionsPath, 'utf8');
+  runtimeDbOptions = replaceRequired(
+    runtimeDbOptions,
+    'export const appRuntimeDbOptions = Object.freeze({',
     [
       'const PHASE5_PG_PARANOID_SEED = [',
       "  \"INSERT INTO phase5_pg_orders (id, user_id, label, classified) VALUES ('phase5-pg-demo', 'demo-user', 'owner-visible', 'phase5-pg-secret-demo'), ('phase5-pg-other', 'other-user', 'cross-owner-hidden', 'phase5-pg-secret-other') ON CONFLICT (id) DO NOTHING;\",",
@@ -3751,20 +3751,24 @@ export function addPostgresParanoidPhase5DogfoodProof(root: string): void {
       '  "GRANT SELECT ON phase5_pg_order_view TO kovo_reader;",',
       '];',
       '',
-      'export const appRuntimeDbOptions = {',
+      'export const appRuntimeDbOptions = Object.freeze({',
     ].join('\n'),
     'phase 5 postgres seed const',
   );
-  runtimeDb = replaceRequired(
-    runtimeDb,
+  runtimeDbOptions = replaceRequired(
+    runtimeDbOptions,
     '  seedSql: SEED_CONTACTS,',
     '  seedSql: [SEED_CONTACTS, ...PHASE5_PG_PARANOID_SEED],',
     'phase 5 postgres seed registration',
   );
+  writeFileSync(runtimeDbOptionsPath, runtimeDbOptions, 'utf8');
+
+  const runtimeDbPath = join(root, 'src/_kovo/app-runtime-db.ts');
+  let runtimeDb = readFileSync(runtimeDbPath, 'utf8');
   const mutationReplayExport = [
     '/** Durable SPEC §10.3 mutation replay truth, reachable only through the framework system role. */',
     'export function appRuntimeMutationReplayStore(): MutationReplayStore {',
-    '  return getAppDatabase().mutationReplayStore;',
+    '  return appDatabase.mutationReplayStore;',
     '}',
   ].join('\n');
   runtimeDb = replaceRequired(
@@ -3775,7 +3779,7 @@ export function addPostgresParanoidPhase5DogfoodProof(root: string): void {
       '',
       '/** Durable SPEC §10.3 webhook replay truth for the Phase 5 production proof. */',
       'export function appRuntimeWebhookReplayStore() {',
-      '  return getAppDatabase().webhookReplayStore;',
+      '  return appDatabase.webhookReplayStore;',
       '}',
     ].join('\n'),
     'phase 5 postgres durable webhook replay export',

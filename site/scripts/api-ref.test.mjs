@@ -354,7 +354,7 @@ describe('api-ref generator', () => {
       '@kovojs/browser': 39,
       '@kovojs/server': 150,
       '@kovojs/style': 34,
-      '@kovojs/better-auth': 13,
+      '@kovojs/better-auth': 19,
       '@kovojs/cli': 11,
       '@kovojs/test': 26,
       '@kovojs/ui': 2,

@@ -57,12 +57,12 @@ describe('kovo db', () => {
     expect(check.stdout).toContain('SUMMARY issues=0\n');
   });
 
-  it('prefers scaffolded app runtime options when the sibling runtime module exports them', async () => {
+  it('prefers scaffolded app runtime options without importing the eager runtime module', async () => {
     const { dataDir, schemaPath } = writeDbCommandFixture('runtime-options');
-    const runtimeModulePath = join(dirname(schemaPath), '_kovo', 'app-runtime-db.ts');
-    mkdirSync(dirname(runtimeModulePath), { recursive: true });
+    const optionsModulePath = join(dirname(schemaPath), '_kovo', 'app-runtime-db-options.ts');
+    mkdirSync(dirname(optionsModulePath), { recursive: true });
     writeFileSync(
-      runtimeModulePath,
+      optionsModulePath,
       [
         "import type { KovoPostgresAppRuntimeOptions } from '@kovojs/server';",
         "import * as schema from '../schema.js';",
@@ -73,6 +73,11 @@ describe('kovo db', () => {
         '} satisfies KovoPostgresAppRuntimeOptions;',
         '',
       ].join('\n'),
+      'utf8',
+    );
+    writeFileSync(
+      join(dirname(schemaPath), '_kovo', 'app-runtime-db.ts'),
+      "throw new Error('eager app runtime must not load during kovo db');\n",
       'utf8',
     );
 

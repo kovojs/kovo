@@ -143,7 +143,7 @@ const healthEndpoint = endpoint('/api/health', {
   response: { appOwnedSafety: true, body: 'json', cache: 'no-store' },
 });
 
-function HomePage({ request }: { request: AppRequest }): string {
+function HomePage({ userName }: { userName: string }): string {
   return (
     <div>
       <header style={styles.header}>
@@ -157,7 +157,7 @@ function HomePage({ request }: { request: AppRequest }): string {
           </div>
         </div>
         <span style={styles.who}>
-          <span style={styles.userName}>{request.session?.user.name ?? 'Guest'}</span>
+          <span style={styles.userName}>{userName}</span>
           <SignOutForm />
         </span>
       </header>
@@ -193,7 +193,7 @@ const app = createApp({
         // The read is public-shaped, but the page requires a session so the guarded
         // add-contact form always has one (SPEC.md §9.5 redirect outcome).
         if (!request.session) return redirect('/login', {});
-        return <HomePage request={request} />;
+        return <HomePage userName={request.session.user.name} />;
       },
     }),
     route('/login', {

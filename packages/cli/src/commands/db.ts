@@ -291,7 +291,7 @@ async function resolveRuntimeOptionsModulePath(schemaPath: string): Promise<stri
   const candidates =
     extension === '' ? ['.ts', '.tsx', '.js', '.jsx', '.mts', '.mjs'] : [extension];
   for (const candidate of candidates) {
-    const filePath = resolve(dirname(schemaPath), '_kovo', `app-runtime-db${candidate}`);
+    const filePath = resolve(dirname(schemaPath), '_kovo', `app-runtime-db-options${candidate}`);
     try {
       await access(filePath);
       return filePath;
