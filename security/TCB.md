@@ -912,6 +912,15 @@ review remains manual and is the point of the `reviewTrigger`. See `rules/depend
       "decision": "server.wire.static-export-headers"
     },
     {
+      "id": "server.static-export-headers.framework-document-headers",
+      "file": "packages/server/src/static-export-headers.ts",
+      "name": "staticExportFrameworkDocumentHeaders",
+      "kind": "wire-emitter",
+      "classification": "delegating-wire-emitter",
+      "wrapper": "wireEmitter",
+      "decision": "server.wire.static-export-framework-document-headers"
+    },
+    {
       "id": "compiler.trusted-html.validate",
       "file": "packages/compiler/src/validate/trusted-html-provenance.ts",
       "name": "validateTrustedHtmlProvenance",
