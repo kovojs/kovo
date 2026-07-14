@@ -111,23 +111,23 @@
     }
   },
   "scripts": {
-    "build:dist": "vp pack src/assertions.ts src/harness-operations.ts src/harness.ts src/headers.ts src/html-fragment.ts src/integration/define-fixture.ts src/integration/fixture-abi.ts src/integration/fixture-browser-abi.ts src/integration/index.ts src/integration/optimistic-client.ts src/internal/html-wire.ts src/page.ts src/pglite.ts src/sql-observer.ts src/sqlite.ts src/test-case.ts src/verifier-diagnostics.ts src/verifier-sql.ts src/verifier.ts --dts",
+    "build:dist": "vp pack src/assertions.ts src/harness-operations.ts src/harness.ts src/headers.ts src/html-fragment.ts src/integration/define-fixture.ts src/integration/fixture-abi.ts src/integration/fixture-browser-abi.ts src/integration/index.ts src/integration/optimistic-client.ts src/internal/html-wire.ts src/page.ts src/pglite.ts src/sql-observer.ts src/sqlite.ts src/test-case.ts src/verifier-diagnostics.ts src/verifier-sql.ts src/verifier.ts --dts --deps.never-bundle @kovojs/compiler --deps.never-bundle @playwright/test --deps.never-bundle vite",
     "prepack": "pnpm run build:dist"
   },
   "dependencies": {
     "@electric-sql/pglite": "0.5.1",
     "@kovojs/browser": "workspace:*",
+    "@kovojs/compiler": "workspace:*",
     "@kovojs/core": "workspace:*",
     "@kovojs/server": "workspace:*",
+    "@playwright/test": "1.60.0",
     "better-sqlite3": "12.11.1",
-    "pgsql-ast-parser": "12.0.2"
+    "pgsql-ast-parser": "12.0.2",
+    "vite": "8.0.16"
   },
   "devDependencies": {
-    "@kovojs/compiler": "workspace:*",
     "@kovojs/drizzle": "workspace:*",
-    "@playwright/test": "1.60.0",
     "@types/better-sqlite3": "^7.6.13",
-    "vite": "^8.0.16",
     "vitest": "4.1.8"
   }
 }

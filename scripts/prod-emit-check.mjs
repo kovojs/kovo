@@ -10,8 +10,23 @@ export async function loadCompileComponentModule() {
   return compileComponentModule;
 }
 
-export async function runProdEmitCheck({ compileComponentModule, stdout = process.stdout } = {}) {
+export async function loadCreateApp() {
+  const { createApp } = await import('../dist/server/src/index.mjs');
+  return createApp;
+}
+
+export async function runProdEmitCheck({
+  compileComponentModule,
+  createApp,
+  stdout = process.stdout,
+} = {}) {
   const compile = compileComponentModule ?? (await loadCompileComponentModule());
+  const createAppExport = createApp ?? (await loadCreateApp());
+  assert.equal(
+    typeof createAppExport,
+    'function',
+    'dist/server createApp export must be a function',
+  );
   const result = compile(generatedProdEmitInput);
   assert.deepEqual(validateGeneratedEmitContract(result.files), []);
   stdout.write('prod-emit-check/v1\n');

@@ -225,6 +225,7 @@ export function linkStarterBuildDependencies(root: string): void {
   const nodeModulesBin = join(nodeModules, '.bin');
   mkdirSync(join(nodeModules, '@kovojs'), { recursive: true });
   mkdirSync(join(nodeModules, '@electric-sql'), { recursive: true });
+  mkdirSync(join(nodeModules, '@node-rs'), { recursive: true });
   mkdirSync(join(nodeModules, '@types'), { recursive: true });
   mkdirSync(nodeModulesBin, { recursive: true });
 
@@ -253,6 +254,7 @@ export function linkStarterBuildDependencies(root: string): void {
     resolveDependencyRoot('@electric-sql/pglite'),
     join(nodeModules, '@electric-sql/pglite'),
   );
+  symlinkSync(resolveDependencyRoot('@node-rs/argon2'), join(nodeModules, '@node-rs/argon2'));
   for (const pkg of [
     'better-auth',
     'better-sqlite3',

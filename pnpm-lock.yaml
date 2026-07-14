@@ -14,6 +14,9 @@ importers:
       '@kovojs/test':
         specifier: workspace:*
         version: link:packages/test
+      '@node-rs/argon2':
+        specifier: 2.0.2
+        version: 2.0.2
       '@playwright/test':
         specifier: 1.60.0
         version: 1.60.0
@@ -35,6 +38,9 @@ importers:
       playwright:
         specifier: ^1.60.0
         version: 1.60.0
+      ts-morph:
+        specifier: 28.0.0
+        version: 28.0.0
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
@@ -678,34 +684,34 @@ importers:
       '@kovojs/browser':
         specifier: workspace:*
         version: link:../browser
+      '@kovojs/compiler':
+        specifier: workspace:*
+        version: link:../compiler
       '@kovojs/core':
         specifier: workspace:*
         version: link:../core
       '@kovojs/server':
         specifier: workspace:*
         version: link:../server
+      '@playwright/test':
+        specifier: 1.60.0
+        version: 1.60.0
       better-sqlite3:
         specifier: 12.11.1
         version: 12.11.1
       pgsql-ast-parser:
         specifier: 12.0.2
         version: 12.0.2
+      vite:
+        specifier: 8.0.16
+        version: 8.0.16(@types/node@25.9.2)(esbuild@0.28.1)(jiti@2.7.0)
     devDependencies:
-      '@kovojs/compiler':
-        specifier: workspace:*
-        version: link:../compiler
       '@kovojs/drizzle':
         specifier: workspace:*
         version: link:../drizzle
-      '@playwright/test':
-        specifier: 1.60.0
-        version: 1.60.0
       '@types/better-sqlite3':
         specifier: ^7.6.13
         version: 7.6.13
-      vite:
-        specifier: ^8.0.16
-        version: 8.0.16(@types/node@25.9.2)(esbuild@0.28.1)(jiti@2.7.0)
       vitest:
         specifier: 4.1.8
         version: 4.1.8(@types/node@25.9.2)(@vitest/browser-playwright@4.1.8)(vite@8.0.16(@types/node@25.9.2)(esbuild@0.28.1)(jiti@2.7.0))

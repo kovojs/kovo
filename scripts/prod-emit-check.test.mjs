@@ -12,6 +12,7 @@ describe('prod-emit-check gate', () => {
         receivedInput = input;
         return { files: validProdEmitFiles() };
       },
+      createApp() {},
       stdout,
     });
 
@@ -44,6 +45,7 @@ describe('prod-emit-check gate', () => {
             ],
           };
         },
+        createApp() {},
         stdout: bufferedStdout(),
       }),
     ).rejects.toMatchObject({
@@ -51,6 +53,18 @@ describe('prod-emit-check gate', () => {
         expect.stringContaining('product-card.server.js missing stable source-derived handler'),
       ]),
     });
+  });
+
+  it('fails when the built server entry does not expose createApp', async () => {
+    await expect(
+      runProdEmitCheck({
+        compileComponentModule() {
+          return { files: validProdEmitFiles() };
+        },
+        createApp: 'not-a-function',
+        stdout: bufferedStdout(),
+      }),
+    ).rejects.toThrow('dist/server createApp export must be a function');
   });
 });
 

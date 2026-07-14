@@ -27,7 +27,7 @@ describe('create-kovo starter (build integration: packed SQLite scaffold)', () =
       const packageJson = JSON.parse(readFileSync(join(app.root, 'package.json'), 'utf8')) as {
         dependencies?: Record<string, string>;
       };
-      expect(packageJson.dependencies?.['pgsql-ast-parser']).toBe('^12.0.2');
+      expect(packageJson.dependencies?.['pgsql-ast-parser']).toBe('12.0.2');
       expectPackedKovoPackageShape(app.root);
       expect(installedPackageJson(app.root, 'pgsql-ast-parser')).toMatchObject({
         name: 'pgsql-ast-parser',

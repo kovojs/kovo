@@ -161,7 +161,7 @@ describe('create-kovo starter (metadata)', () => {
         devDependencies?: Record<string, string>;
         name?: string;
         packageManager?: string;
-        pnpm?: unknown;
+        pnpm?: { onlyBuiltDependencies?: string[] };
         scripts?: Record<string, string>;
       };
 
@@ -173,6 +173,7 @@ describe('create-kovo starter (metadata)', () => {
         '@kovojs/server': expect.stringMatching(/^\d+\.\d+\.\d+/),
         '@kovojs/style': expect.stringMatching(/^\d+\.\d+\.\d+/),
         '@kovojs/ui': expect.stringMatching(/^\d+\.\d+\.\d+/),
+        '@node-rs/argon2': '2.0.2',
         'better-auth': expect.any(String),
         'drizzle-orm': expect.any(String),
         pg: expect.any(String),
@@ -188,7 +189,7 @@ describe('create-kovo starter (metadata)', () => {
         );
       }
       expect(packageJson.packageManager).toBe('pnpm@10.12.1');
-      expect(packageJson.pnpm).toBeUndefined();
+      expect(packageJson.pnpm?.onlyBuiltDependencies).toEqual(['@node-rs/argon2']);
       expect(packageJson.dependencies).not.toHaveProperty('better-sqlite3');
       expect(packageJson.dependencies?.['pgsql-ast-parser']).toBe('12.0.2');
       expect(packageJson.devDependencies).toMatchObject({
@@ -249,12 +250,16 @@ describe('create-kovo starter (metadata)', () => {
   it('keeps Postgres as the default scaffold dialect', () => {
     const project = createKovoProject({ name: 'Default Dialect' });
     const files = new Map(project.files.map((file) => [file.path, file.source]));
-    const packageJson = JSON.parse(files.get('package.json') ?? '{}') as { pnpm?: unknown };
+    const packageJson = JSON.parse(files.get('package.json') ?? '{}') as {
+      dependencies?: Record<string, string>;
+      pnpm?: { onlyBuiltDependencies?: string[] };
+    };
 
     expect(files.get('package.json')).toContain('"pg"');
     expect(files.get('package.json')).toContain('"@electric-sql/pglite"');
     expect(files.get('package.json')).not.toContain('"better-sqlite3"');
-    expect(packageJson.pnpm).toBeUndefined();
+    expect(packageJson.dependencies?.['@node-rs/argon2']).toBe('2.0.2');
+    expect(packageJson.pnpm?.onlyBuiltDependencies).toEqual(['@node-rs/argon2']);
     expect(files.get('src/db.ts')).toContain("import type { Reader } from '@kovojs/server'");
     expect(files.get('src/db.ts')).toContain(
       "import type { PgAsyncDatabase, PgQueryResultHKT } from 'drizzle-orm/pg-core'",
@@ -898,6 +903,7 @@ describe('create-kovo starter (metadata)', () => {
     expect(files.get('package.json')).toContain('"better-sqlite3"');
     // rules/dependency-policy.md: the experimental native SQLite runtime is still an
     // exact-pinned dependency so a fresh scaffold cannot silently install a new binary.
+    expect(packageJson.dependencies?.['@node-rs/argon2']).toBe('2.0.2');
     expect(packageJson.dependencies?.['better-sqlite3']).toBe('12.11.1');
     expect(packageJson.dependencies?.['pgsql-ast-parser']).toBe('12.0.2');
     expect(files.get('package.json')).toContain(
@@ -907,7 +913,7 @@ describe('create-kovo starter (metadata)', () => {
       '"serve": "pnpm run build:prod && NODE_ENV=production node dist/server/server.mjs"',
     );
     expect(files.get('package.json')).not.toContain('"@electric-sql/pglite"');
-    expect(packageJson.pnpm?.onlyBuiltDependencies).toEqual(['better-sqlite3']);
+    expect(packageJson.pnpm?.onlyBuiltDependencies).toEqual(['@node-rs/argon2', 'better-sqlite3']);
     expect(files.get('src/db.ts')).toContain(
       "import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3'",
     );

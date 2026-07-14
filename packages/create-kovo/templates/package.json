@@ -21,6 +21,7 @@
     "@kovojs/server": "{{kovo_server_version}}",
     "@kovojs/style": "{{kovo_style_version}}",
     "@kovojs/ui": "{{kovo_ui_version}}",
+    "@node-rs/argon2": "2.0.2",
     "better-auth": "1.6.17",
     "drizzle-orm": "1.0.0-rc.4",
     "pg": "8.22.0",
@@ -38,5 +39,10 @@
   "engines": {
     "node": ">=24.10.0"
   },
-  "packageManager": "{{package_manager}}"
+  "packageManager": "{{package_manager}}",
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@node-rs/argon2"
+    ]
+  }
 }

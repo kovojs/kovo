@@ -361,8 +361,14 @@ export default defineConfig({
     deps: {
       // Vite resolves runtime asset paths relative to its installed package. Bundling it into the
       // root CLI artifact rewrites that base to /dist and breaks every Vite-backed CLI command.
-      neverBundle: ['typescript', 'vite-plus'],
+      // Argon2 is a native runtime boundary and must keep resolving its platform package normally.
+      // Drizzle validates ts-morph's real module namespace as classifier authority, so bundling it
+      // into a synthetic namespace would correctly fail that security gate at CLI startup.
+      neverBundle: ['@node-rs/argon2', 'ts-morph', 'typescript', 'vite', 'vite-plus'],
     },
+    // The bundled compiler graph includes TypeScript's CommonJS `__filename` probe. Keep the ESM
+    // artifact self-contained now that an unrelated Vite bundle no longer supplies that shim.
+    shims: true,
     clean: true,
   },
 });

@@ -40,7 +40,7 @@ describe('create-kovo starter (build integration: scaffold SQLite)', () => {
       const packageJson = JSON.parse(readFileSync(join(app.root, 'package.json'), 'utf8')) as {
         dependencies?: Record<string, string>;
       };
-      expect(packageJson.dependencies?.['pgsql-ast-parser']).toBe('^12.0.2');
+      expect(packageJson.dependencies?.['pgsql-ast-parser']).toBe('12.0.2');
     } finally {
       app.cleanup();
     }
