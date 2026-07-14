@@ -27,6 +27,7 @@ import {
   expressionResolvesToFrameworkExport,
   frameworkExport,
 } from './static/framework-identity.js';
+import { runtimeRegExpTest } from './runtime-security-intrinsics.js';
 
 /** @internal */
 export interface TrustEscapeSourceFileInput {
@@ -15323,7 +15324,8 @@ function requestDirectRootRequestParameterKey(
   const symbol = node.getSymbol();
   if (!symbol || requestAssignedBindingProjections(symbol).length > 0) return undefined;
   const parameters = requestCallableParameters(callable.declaration);
-  for (const [index, parameter] of parameters.entries()) {
+  for (let index = 0; index < parameters.length; index += 1) {
+    const parameter = parameters[index]!;
     const name = parameter.getNameNode();
     if (!Node.isIdentifier(name) || name.getSymbol() !== symbol) continue;
     if (parameter.getInitializer() || parameter.getDotDotDotToken()) return undefined;
@@ -15359,13 +15361,21 @@ function requestExpressionResolvesToExactRequestDbCapability(
 }
 
 function requestExactRequestDbRootIsPristine(callable: RequestCallable): boolean {
-  const requestParameters = requestCallableParameters(callable.declaration).filter(
-    (parameter, index) =>
-      callable.rootParameterRoles?.[index] === 'request' &&
-      Node.isIdentifier(parameter.getNameNode()),
-  );
-  if (requestParameters.length !== 1) return false;
-  const request = requestParameters[0]!.getNameNode();
+  const parameters = requestCallableParameters(callable.declaration);
+  let requestParameter: (typeof parameters)[number] | undefined;
+  for (let index = 0; index < parameters.length; index += 1) {
+    const parameter = parameters[index]!;
+    if (
+      callable.rootParameterRoles?.[index] !== 'request' ||
+      !Node.isIdentifier(parameter.getNameNode())
+    ) {
+      continue;
+    }
+    if (requestParameter) return false;
+    requestParameter = parameter;
+  }
+  if (!requestParameter) return false;
+  const request = requestParameter.getNameNode();
   if (!Node.isIdentifier(request) || !request.getSymbol()) return false;
   const symbol = request.getSymbol()!;
   if (requestAssignedBindingProjections(symbol).length > 0) return false;
@@ -15410,9 +15420,15 @@ function requestExactRequestDbRootIsPristine(callable: RequestCallable): boolean
       receiver &&
       member &&
       ((expressionResolvesToGlobalNamespace(receiver, 'Object', new Set(), 0) &&
-        ['assign', 'defineProperties', 'defineProperty', 'setPrototypeOf'].includes(member)) ||
+        (member === 'assign' ||
+          member === 'defineProperties' ||
+          member === 'defineProperty' ||
+          member === 'setPrototypeOf')) ||
         (expressionResolvesToGlobalNamespace(receiver, 'Reflect', new Set(), 0) &&
-          ['defineProperty', 'deleteProperty', 'set', 'setPrototypeOf'].includes(member)))
+          (member === 'defineProperty' ||
+            member === 'deleteProperty' ||
+            member === 'set' ||
+            member === 'setPrototypeOf')))
     ) {
       return false;
     }
@@ -18097,7 +18113,7 @@ function requestCallIsExactServerValueOutput(call: Node): boolean {
     reason &&
     extra.length === 0 &&
     (Node.isStringLiteral(reason) || Node.isNoSubstitutionTemplateLiteral(reason)) &&
-    reason.getLiteralText().trim().length > 0
+    runtimeRegExpTest(/\S/u, reason.getLiteralText())
   );
 }
 

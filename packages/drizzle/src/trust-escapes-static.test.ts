@@ -4252,7 +4252,9 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
 
     for (const poisoning of [
       `request.db = new Proxy(request.db, {});`,
+      `request.db.select = () => null;`,
       `Object.defineProperty(request, 'db', { get() { return new Proxy(request.db, {}); } });`,
+      `Object.defineProperty(request.db, 'select', { value: () => null });`,
       `Reflect.set(request, 'db', new Proxy(request.db, {}));`,
     ]) {
       const poisoned = sinksForFiles([
