@@ -37,10 +37,7 @@ import {
   type ZeroArgArrowModel,
 } from '../scan/parse.js';
 import { normalizeComponentFileName } from '../shared.js';
-import {
-  emitAllowedImportLocalNames,
-  emitAllowedModuleConstantNames,
-} from '../validate/client-capture.js';
+import { analyzeClientCaptures, type ClientCaptureAnalysis } from '../validate/client-capture.js';
 import type {
   ClientImportDependency,
   ClientConstantDependency,
@@ -58,6 +55,7 @@ export function lowerEventHandlers(
   options: CompileComponentOptions,
   componentName: string,
   model: ComponentModuleModel,
+  clientCaptureAnalysis?: ClientCaptureAnalysis,
 ): HandlerLowering[] {
   const handlers: HandlerLowering[] = [];
   const anonymousNameCounts = compilerCreateMap<string, number>();
@@ -66,8 +64,9 @@ export function lowerEventHandlers(
   // is callee-only (client code) or publishToClient-wrapped (audited escape). Any other captured
   // import is WITHHELD here so the secret specifier never reaches the bundler; the matching KV437
   // teaching diagnostic is produced by validate/client-capture.ts over the authored source.
-  const emitAllowedImports = emitAllowedImportLocalNames(model);
-  const emitAllowedModuleConstants = emitAllowedModuleConstantNames(model);
+  const analysis = clientCaptureAnalysis ?? analyzeClientCaptures(model);
+  const emitAllowedImports = analysis.emitAllowed;
+  const emitAllowedModuleConstants = analysis.emitAllowedModuleConstants;
 
   const attributes = eventAttributes(model);
   const attributeLength = compilerArrayLength(attributes, 'Lowered event attributes');

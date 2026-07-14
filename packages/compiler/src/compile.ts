@@ -473,6 +473,7 @@ function validateComponentPhase(
     { ...parsed.compileOptions, source: lowered.source },
     parsed.componentName,
     lowered.model,
+    clientCaptureAnalysis,
   );
   const queryUpdatePlans = mergeQueryUpdatePlans([
     ...collectQueryUpdatePlans(lowered.model, parsed.componentName),

@@ -1,8 +1,10 @@
 import * as ts from 'typescript';
 
 import {
+  canonicalFrameworkExportForExpression,
   expressionResolvesToFrameworkExport,
   frameworkExport,
+  frameworkExportEquals,
   registerFrameworkIdentityProject,
   type FrameworkExportIdentity,
   type FrameworkIdentityTypeScript,
@@ -108,6 +110,12 @@ const ENDPOINT_FACTORY_IDENTITY = frameworkExport('@kovojs/server', 'endpoint');
 const MUTATION_FACTORY_IDENTITY = frameworkExport('@kovojs/server', 'mutation');
 const TASK_FACTORY_IDENTITY = frameworkExport('@kovojs/server', 'task');
 const WEBHOOK_FACTORY_IDENTITY = frameworkExport('@kovojs/server', 'webhook');
+const SERVER_CALL_FACTORY_IDENTITIES: readonly FrameworkExportIdentity[] = [
+  ENDPOINT_FACTORY_IDENTITY,
+  MUTATION_FACTORY_IDENTITY,
+  TASK_FACTORY_IDENTITY,
+  WEBHOOK_FACTORY_IDENTITY,
+];
 const HANDLER_WRITE_SINK_OPERATIONS = compilerCreateSet<HandlerWriteSinkOperationKind>();
 compilerSetAdd(HANDLER_WRITE_SINK_OPERATIONS, 'batch');
 compilerSetAdd(HANDLER_WRITE_SINK_OPERATIONS, 'delete');
@@ -346,28 +354,34 @@ export function parseComponentModule(
       (ts.isIdentifier(node.expression) || ts.isPropertyAccessExpression(node.expression))
     ) {
       compilerArrayAppend(calls, callExpressionModel(sourceFile, source, node), 'Call models');
-      if (isFrameworkExpression(sourceFile, node.expression, ENDPOINT_FACTORY_IDENTITY)) {
+      const factoryIdentity = canonicalFrameworkExportForExpression(
+        ts as FrameworkIdentityTypeScript,
+        sourceFile,
+        node.expression,
+        { legacyGlobals: SERVER_CALL_FACTORY_IDENTITIES },
+      );
+      if (frameworkExportEquals(factoryIdentity, ENDPOINT_FACTORY_IDENTITY)) {
         appendDenseValues(
           endpointHandlers,
           endpointHandlerModels(sourceFile, source, node),
           'Endpoint handler models',
         );
       }
-      if (isFrameworkExpression(sourceFile, node.expression, MUTATION_FACTORY_IDENTITY)) {
+      if (frameworkExportEquals(factoryIdentity, MUTATION_FACTORY_IDENTITY)) {
         appendDenseValues(
           mutationHandlers,
           mutationHandlerModels(sourceFile, source, node),
           'Mutation handler models',
         );
       }
-      if (isFrameworkExpression(sourceFile, node.expression, TASK_FACTORY_IDENTITY)) {
+      if (frameworkExportEquals(factoryIdentity, TASK_FACTORY_IDENTITY)) {
         appendDenseValues(
           taskRunHandlers,
           taskRunHandlerModels(sourceFile, source, node),
           'Task run handler models',
         );
       }
-      if (isFrameworkExpression(sourceFile, node.expression, WEBHOOK_FACTORY_IDENTITY)) {
+      if (frameworkExportEquals(factoryIdentity, WEBHOOK_FACTORY_IDENTITY)) {
         appendDenseValues(
           webhookHandlers,
           webhookHandlerModels(sourceFile, source, node, domainBindings),
