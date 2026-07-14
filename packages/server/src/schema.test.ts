@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { File } from 'node:buffer';
 import type { JsonValue, Secret, StorageCapability, StorageReadCapability } from '@kovojs/core';
 import { createMemoryStorage, storageBodyToBytes } from '@kovojs/core/internal/storage';
+import { stringifyWireValue } from '@kovojs/core/internal/wire-json';
 
 import { runMutation } from './mutation.js';
 import {
@@ -143,7 +144,7 @@ describe('server schemas', () => {
     });
   });
 
-  it('supports optional and default string/number schema fields', () => {
+  it('omits absent optional object fields while retaining defaults and explicit undefined', async () => {
     const search = s.object({
       max: s.number().int().min(1).optional(),
       page: s.number().int().min(1).default(1),
@@ -151,17 +152,43 @@ describe('server schemas', () => {
       tab: s.string().default('all'),
     });
 
-    expect(search.parse({})).toEqual({
-      max: undefined,
-      page: 1,
-      q: undefined,
-      tab: 'all',
-    });
+    const missingSync = search.parse({});
+    expect(missingSync).toEqual({ page: 1, tab: 'all' });
+    expect(Object.getOwnPropertyDescriptor(missingSync, 'max')).toBeUndefined();
+    expect(Object.getOwnPropertyDescriptor(missingSync, 'q')).toBeUndefined();
+
+    const missingAsync = await parseSchemaAsync(search, {});
+    expect(missingAsync).toEqual({ page: 1, tab: 'all' });
+    expect(Object.getOwnPropertyDescriptor(missingAsync, 'max')).toBeUndefined();
+    expect(Object.getOwnPropertyDescriptor(missingAsync, 'q')).toBeUndefined();
+
+    const explicitSync = search.parse({ max: undefined, q: undefined });
+    expect(explicitSync).toEqual({ max: undefined, page: 1, q: undefined, tab: 'all' });
+    expect(Object.getOwnPropertyDescriptor(explicitSync, 'max')?.value).toBeUndefined();
+    expect(Object.getOwnPropertyDescriptor(explicitSync, 'q')?.value).toBeUndefined();
+    expect(() => stringifyWireValue(explicitSync)).toThrow(
+      'Kovo wire JSON cannot encode undefined values',
+    );
+
+    const explicitAsync = await parseSchemaAsync(search, { max: undefined, q: undefined });
+    expect(explicitAsync).toEqual({ max: undefined, page: 1, q: undefined, tab: 'all' });
+    expect(Object.getOwnPropertyDescriptor(explicitAsync, 'max')?.value).toBeUndefined();
+    expect(Object.getOwnPropertyDescriptor(explicitAsync, 'q')?.value).toBeUndefined();
+
     expect(search.parse({ max: '3', page: '2', q: '', tab: 'open' })).toEqual({
       max: 3,
       page: 2,
       q: '',
       tab: 'open',
+    });
+
+    const form = new FormData();
+    form.set('q', '');
+    expect(search.parse(form)).toEqual({ page: 1, q: '', tab: 'all' });
+    await expect(parseSchemaAsync(search, form)).resolves.toEqual({
+      page: 1,
+      q: '',
+      tab: 'all',
     });
 
     const assertInferredTypes = () => {

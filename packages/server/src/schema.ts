@@ -465,9 +465,18 @@ export const s = {
           const key = keys[index] as keyof Shape;
           const fieldSchema = closedShape[key]!;
           try {
-            output[key] = fieldSchema.parse(
-              readOwnInputField(record, securityString(key)),
-            ) as InferSchema<Shape[keyof Shape]>;
+            const field = readOwnInputFieldSnapshot(record, securityString(key));
+            const parsed = fieldSchema.parse(field.value) as InferSchema<Shape[keyof Shape]>;
+            // SPEC §6/§9.4: an absent optional field is absent from schema-shaped JSON; an
+            // explicitly present `undefined` remains observable and is refused by the wire sink.
+            // Defaults still materialize because their parsed value is not `undefined`.
+            if (!field.present && parsed === undefined) continue;
+            witnessDefineProperty(output, key, {
+              configurable: true,
+              enumerable: true,
+              value: parsed,
+              writable: true,
+            });
           } catch (error) {
             throw validationErrorFrom(error, [securityString(key)]);
           }
@@ -484,11 +493,17 @@ export const s = {
           const key = keys[index] as keyof Shape;
           const fieldSchema = closedShape[key]!;
           try {
-            output[key] = (await parseSchemaAsync(
-              fieldSchema,
-              readOwnInputField(record, securityString(key)),
-              true,
-            )) as InferSchema<Shape[keyof Shape]>;
+            const field = readOwnInputFieldSnapshot(record, securityString(key));
+            const parsed = (await parseSchemaAsync(fieldSchema, field.value, true)) as InferSchema<
+              Shape[keyof Shape]
+            >;
+            if (!field.present && parsed === undefined) continue;
+            witnessDefineProperty(output, key, {
+              configurable: true,
+              enumerable: true,
+              value: parsed,
+              writable: true,
+            });
           } catch (error) {
             throw validationErrorFrom(error, [securityString(key)]);
           }
@@ -1352,11 +1367,25 @@ function assertSafeRecordKey(key: string): void {
 }
 
 function readOwnInputField(record: Record<string, unknown>, key: string): unknown {
+  return readOwnInputFieldSnapshot(record, key).value;
+}
+
+interface OwnInputFieldSnapshot {
+  readonly present: boolean;
+  readonly value: unknown;
+}
+
+function readOwnInputFieldSnapshot(
+  record: Record<string, unknown>,
+  key: string,
+): OwnInputFieldSnapshot {
   // OPP-19 (SPEC §6.6 runtime-DiD): schema decode is shape-bound and must not let inherited
   // properties satisfy declared fields. JSON/form payloads can carry prototype-pollution names, but
   // object schemas project only own, declared fields into the validated value.
   const descriptor = witnessGetOwnPropertyDescriptor(record, key);
-  return descriptor !== undefined && 'value' in descriptor ? descriptor.value : undefined;
+  return descriptor !== undefined && 'value' in descriptor
+    ? { present: true, value: descriptor.value }
+    : { present: false, value: undefined };
 }
 
 function parseFileLikeSync(input: unknown, options: FileSchemaOptions): FileLike {

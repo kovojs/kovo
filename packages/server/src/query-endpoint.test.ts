@@ -804,6 +804,45 @@ describe('query endpoints', () => {
     });
   });
 
+  it('omits absent optional output fields before rendering typed read wire HTML', async () => {
+    const onError = vi.fn();
+    const productQuery = query('product-optional-output', {
+      args: s.object({ mode: s.string() }),
+      load(input: { mode: string }) {
+        return input.mode === 'present' ? { id: 'p1', note: 'available' } : { id: 'p1' };
+      },
+      output: s.object({ id: s.string(), note: s.string().optional() }),
+      reads: [],
+    });
+
+    await expect(runQuery(productQuery, { mode: 'absent' }, {})).resolves.toEqual({
+      input: { mode: 'absent' },
+      ok: true,
+      value: { id: 'p1' },
+    });
+    await expect(
+      renderQueryEndpointResponse(productQuery, {
+        onError,
+        request: {},
+        search: new URLSearchParams({ mode: 'absent' }),
+      }),
+    ).resolves.toMatchObject({
+      body: '<kovo-query name="product-optional-output">{"id":"p1"}</kovo-query>',
+      status: 200,
+    });
+    await expect(
+      renderQueryEndpointResponse(productQuery, {
+        onError,
+        request: {},
+        search: new URLSearchParams({ mode: 'present' }),
+      }),
+    ).resolves.toMatchObject({
+      body: '<kovo-query name="product-optional-output">{"id":"p1","note":"available"}</kovo-query>',
+      status: 200,
+    });
+    expect(onError).not.toHaveBeenCalled();
+  });
+
   it('reports query output schema drift as safe KV410 JSON', async () => {
     const productQuery = query('product', {
       load() {
