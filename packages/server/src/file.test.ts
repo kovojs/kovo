@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
+import { link, mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
 
@@ -104,6 +104,24 @@ describe('server rooted file primitive', () => {
 
       await expect(
         files.serve('linked-outside/secret.txt', { contentType: 'text/plain' }),
+      ).resolves.toBeUndefined();
+    } finally {
+      await rm(root, { force: true, recursive: true });
+      await rm(outside, { force: true, recursive: true });
+    }
+  });
+
+  it('treats an outside inode hardlinked under the served root as not found', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kovo-rooted-files-'));
+    const outside = await mkdtemp(join(tmpdir(), 'kovo-rooted-files-outside-'));
+    try {
+      const outsideFile = join(outside, 'secret.txt');
+      await writeFile(outsideFile, 'outside inode', 'utf8');
+      await link(outsideFile, join(root, 'hardlink.txt'));
+      const files = await rootedFiles(root);
+
+      await expect(
+        files.serve('hardlink.txt', { contentType: 'text/plain' }),
       ).resolves.toBeUndefined();
     } finally {
       await rm(root, { force: true, recursive: true });

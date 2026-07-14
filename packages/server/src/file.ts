@@ -68,7 +68,9 @@ async function serveRootedFile(
 ): Promise<RouteResponseOutcome | undefined> {
   if (!isFrameworkFileSystemBoundary(fileSystem)) return undefined;
   const closedOptions = snapshotRootedFileServeOptions(options);
-  const file = await fileSystem.readFile(requestedPath);
+  // SPEC §2 / §6.6 / §10.6: containment is authority, not merely lexical shape. Refuse hardlinked
+  // aliases so an inode whose other name lives outside this capability cannot become downloadable.
+  const file = await fileSystem.readFile(requestedPath, { requireSingleLink: true });
   if (file === undefined || !securityIsUint8Array(file.body)) return undefined;
   return respond.stream(file.body, {
     ...closedOptions,

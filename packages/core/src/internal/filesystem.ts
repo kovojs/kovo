@@ -57,6 +57,12 @@ export type ConfinedFileSystemReadBody = 'buffer' | 'stream';
 /** @internal Options for reading a file through the framework-owned filesystem boundary. */
 export interface ConfinedFileSystemReadOptions {
   body?: ConfinedFileSystemReadBody;
+  /**
+   * Refuse regular files with more than one directory entry. Rooted HTTP serving enables this so
+   * an inode first named outside the configured root cannot enter it through a hardlink alias
+   * (SPEC §2 / §6.6 / §10.6). Other internal readers retain ordinary filesystem semantics.
+   */
+  requireSingleLink?: boolean;
 }
 
 /** @internal Confined file read result returned by the framework-owned filesystem boundary. */
@@ -670,7 +676,8 @@ async function readConfinedFile(
   const root = preparedRootPath(rootState);
   const candidate = confinedPath(root, relativePath);
   if (candidate === undefined) return undefined;
-  const opened = await openIdentityBoundRegularFile(candidate, root);
+  const requireSingleLink = options.requireSingleLink === true;
+  const opened = await openIdentityBoundRegularFile(candidate, root, requireSingleLink);
   if (opened === undefined) return undefined;
 
   let streamOwnsFileDescriptor = false;
@@ -682,7 +689,12 @@ async function readConfinedFile(
     } else {
       body = fileSystemCopyBytes(await fileSystemReadFileDescriptor(opened.fileDescriptor));
       const completedStat = await fileSystemStatFileDescriptor(opened.fileDescriptor);
-      if (!sameFileSystemVersion(opened.fileStat, completedStat)) return undefined;
+      if (
+        !sameFileSystemVersion(opened.fileStat, completedStat) ||
+        !hasSingleLinkIfRequired(completedStat, requireSingleLink)
+      ) {
+        return undefined;
+      }
     }
     return {
       body,
@@ -1317,9 +1329,12 @@ async function ensureParentsStayDirectories(root: string, targetPath: string): P
 async function openIdentityBoundRegularFile(
   candidate: string,
   confinedRoot?: string,
+  requireSingleLink = false,
 ): Promise<IdentityBoundRegularFile | undefined> {
   const lexicalStat = await safeLstat(candidate);
-  if (lexicalStat === undefined) return undefined;
+  if (lexicalStat === undefined || !hasSingleLinkIfRequired(lexicalStat, requireSingleLink)) {
+    return undefined;
+  }
   const lexicalIsSymbolicLink = fileSystemStatsIsSymbolicLink(lexicalStat);
   const canonicalPath = await safeRealpath(candidate);
   if (
@@ -1329,7 +1344,13 @@ async function openIdentityBoundRegularFile(
     return undefined;
   }
   const expectedStat = await safeStat(canonicalPath);
-  if (expectedStat === undefined || !fileSystemStatsIsFile(expectedStat)) return undefined;
+  if (
+    expectedStat === undefined ||
+    !fileSystemStatsIsFile(expectedStat) ||
+    !hasSingleLinkIfRequired(expectedStat, requireSingleLink)
+  ) {
+    return undefined;
+  }
   if (
     !lexicalIsSymbolicLink &&
     !sameFileSystemIdentity(fileSystemIdentity(lexicalStat), fileSystemIdentity(expectedStat))
@@ -1347,8 +1368,10 @@ async function openIdentityBoundRegularFile(
       postOpenCanonicalPath === undefined ? undefined : await safeStat(postOpenCanonicalPath);
     if (
       !fileSystemStatsIsFile(openedStat) ||
+      !hasSingleLinkIfRequired(openedStat, requireSingleLink) ||
       !sameFileSystemVersion(expectedStat, openedStat) ||
       postOpenLexicalStat === undefined ||
+      !hasSingleLinkIfRequired(postOpenLexicalStat, requireSingleLink) ||
       fileSystemStatsIsSymbolicLink(postOpenLexicalStat) !== lexicalIsSymbolicLink ||
       !sameFileSystemIdentity(
         fileSystemIdentity(lexicalStat),
@@ -1357,6 +1380,7 @@ async function openIdentityBoundRegularFile(
       postOpenCanonicalPath !== canonicalPath ||
       postOpenStat === undefined ||
       !fileSystemStatsIsFile(postOpenStat) ||
+      !hasSingleLinkIfRequired(postOpenStat, requireSingleLink) ||
       !sameFileSystemVersion(expectedStat, postOpenStat) ||
       (confinedRoot !== undefined && !containsPath(confinedRoot, postOpenCanonicalPath))
     ) {
@@ -1368,6 +1392,10 @@ async function openIdentityBoundRegularFile(
     await fileSystemCloseFileDescriptor(fileDescriptor).catch(() => undefined);
     throw error;
   }
+}
+
+function hasSingleLinkIfRequired(fileStat: Stats, requireSingleLink: boolean): boolean {
+  return !requireSingleLink || fileStat.nlink === 1;
 }
 
 async function safeRealpath(filePath: string): Promise<string | undefined> {

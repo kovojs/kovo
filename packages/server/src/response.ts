@@ -20,6 +20,7 @@ import {
   securityArrayBufferSlice,
   securityArrayJoin,
   securityArrayPush,
+  securityEncodeURIComponent,
   securityHeadersGet,
   securityIsArrayBuffer,
   securityIsHeaders,
@@ -46,6 +47,7 @@ import {
 } from './response-security-intrinsics.js';
 import {
   createWitnessWeakMap,
+  createWitnessWeakSet,
   witnessDefineProperty,
   witnessFreeze,
   witnessGetOwnPropertyDescriptor,
@@ -53,6 +55,8 @@ import {
   witnessReflectApply,
   witnessWeakMapGet,
   witnessWeakMapSet,
+  witnessWeakSetAdd,
+  witnessWeakSetHas,
 } from './security-witness-intrinsics.js';
 import { runtimeEnvironmentValue } from './runtime-environment-authority.js';
 
@@ -146,15 +150,35 @@ export interface NotFound {
   status: 404;
 }
 
-/** A non-document route outcome (file/stream) produced by `respond`. */
+declare const routeResponseOutcomeBrand: unique symbol;
+
+/**
+ * An opaque non-document route outcome (file/stream) produced only by {@link respond}.
+ *
+ * SPEC §2 / §6.6 / §9.1: the private type brand is author-time ergonomics only. Runtime route and
+ * document dispatch re-check a module-private witness and consume an inaccessible pinned snapshot,
+ * so a structural object, cast, or post-construction mutation cannot acquire response authority.
+ */
 export interface RouteResponseOutcome {
-  body: RouteResponseBody;
-  contentDisposition: string;
-  contentType: string;
-  etag?: string;
-  headers?: Record<string, string>;
-  routeResponse: true;
+  readonly body: RouteResponseBody;
+  readonly contentDisposition: string;
+  readonly contentType: string;
+  readonly etag?: string;
+  readonly headers?: Readonly<Record<string, string>>;
+  readonly routeResponse: true;
+  readonly [routeResponseOutcomeBrand]: true;
 }
+
+interface RouteResponseOutcomeSnapshot {
+  readonly body: RouteResponseBody;
+  readonly contentDisposition: string;
+  readonly contentType: string;
+  readonly etag?: string;
+  readonly headers?: Readonly<Record<string, string>>;
+}
+
+const routeResponseOutcomeSnapshots = createWitnessWeakMap<object, RouteResponseOutcomeSnapshot>();
+const routePageResponseOutcomes = createWitnessWeakSet<object>();
 
 /** Options for `respond.file`: content type and optional filename/etag/headers. */
 export interface RouteFileOptions {
@@ -255,7 +279,7 @@ export interface RoutePageResponse extends ServerResponseBase<
   lifecycleRequest?: unknown;
 }
 
-function markRouteResponseOutcome<Response extends object>(
+function defineRouteResponseMarker<Response extends object>(
   response: Response,
 ): Response & { routeResponse: true } {
   witnessDefineProperty(response, 'routeResponse', {
@@ -263,7 +287,33 @@ function markRouteResponseOutcome<Response extends object>(
     enumerable: false,
     value: true,
   });
-  return response as Response & RouteResponseOutcome;
+  return response as Response & { routeResponse: true };
+}
+
+function markRoutePageResponseOutcome<Response extends object>(
+  response: Response,
+): Response & { routeResponse: true } {
+  const marked = defineRouteResponseMarker(response);
+  witnessWeakSetAdd(routePageResponseOutcomes, marked);
+  return marked;
+}
+
+/** @internal True only for a non-document route outcome genuinely minted by `respond`. */
+export function isRouteResponseOutcome(value: unknown): value is RouteResponseOutcome {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    witnessWeakMapGet(routeResponseOutcomeSnapshots, value) !== undefined
+  );
+}
+
+/** @internal True only for a final route page response marked inside this module. */
+export function isRoutePageResponseOutcome(value: unknown): boolean {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    witnessWeakSetHas(routePageResponseOutcomes, value)
+  );
 }
 
 export interface DocumentRouteResponseBase extends ServerResponseBase<
@@ -684,19 +734,23 @@ export const routeOutcomeResponse = wireEmitter(
     const snapshot = snapshotRouteResponseOutcome(outcome);
     const headers = routeOutcomeHeaders(snapshot);
     if (snapshot.etag && requestHeader(request, 'if-none-match') === snapshot.etag) {
-      return {
+      return markRoutePageResponseOutcome({
         body: '',
         headers,
         status: 304,
-      };
+      });
     }
 
     const response: RoutePageResponse = {
-      body: snapshot.body,
+      // Reconstruct a distinct final carrier for copyable bodies so the private classified bytes
+      // remain inaccessible even to callers of this package-internal adapter (SPEC §6.6 / §10.6
+      // C15). ReadableStream bodies are intentionally live and retain their one-shot identity;
+      // their attachment posture (or explicit unsafeInline receipt) is pinned in the snapshot.
+      body: snapshotRouteResponseBody(snapshot.body),
       headers,
       status: 200,
     };
-    return markRouteResponseOutcome(response);
+    return markRoutePageResponseOutcome(response);
   },
 );
 
@@ -820,10 +874,9 @@ export const routeResponseToDocumentResponse = wireEmitter(
         ? securityUint8ArrayFromArrayBuffer(response.body)
         : response.body,
     };
-    const clonedResponse =
-      (response as { routeResponse?: unknown }).routeResponse === true
-        ? markRouteResponseOutcome(documentResponse)
-        : documentResponse;
+    const clonedResponse = isRoutePageResponseOutcome(response)
+      ? markRoutePageResponseOutcome(documentResponse)
+      : documentResponse;
     return isBlessedRedirectResponse(response)
       ? blessRedirectResponse(clonedResponse)
       : clonedResponse;
@@ -906,22 +959,45 @@ function routeResponseOutcome(
   const headers =
     rawHeaders === undefined
       ? undefined
-      : snapshotStringHeaderRecord(rawHeaders, 'respond.file()/stream() headers');
+      : witnessFreeze(snapshotStringHeaderRecord(rawHeaders, 'respond.file()/stream() headers'));
   const contentDisposition = filename
-    ? `${disposition}; filename="${contentDispositionFilename(filename)}"`
+    ? contentDispositionWithFilename(disposition, filename)
     : disposition;
-  return markRouteResponseOutcome({
+  const snapshot: RouteResponseOutcomeSnapshot = witnessFreeze({
     body: bodySnapshot,
     contentDisposition,
     contentType,
     ...(etag === undefined ? {} : { etag }),
     ...(headers === undefined ? {} : { headers }),
   });
+  return mintRouteResponseOutcome(snapshot);
+}
+
+function mintRouteResponseOutcome(snapshot: RouteResponseOutcomeSnapshot): RouteResponseOutcome {
+  // SPEC §6.6 / §10.6 C15: the public view is deliberately distinct from the private snapshot.
+  // In particular, mutable byte buffers and header records exposed for inspection cannot mutate
+  // the exact carrier later consumed by the HTTP sink. ReadableStream is the intentional exception:
+  // it is a live one-shot carrier, so the private snapshot pins its identity and response posture.
+  const exposedHeaders =
+    snapshot.headers === undefined
+      ? undefined
+      : witnessFreeze(
+          snapshotStringHeaderRecord(snapshot.headers, 'Kovo route response outcome headers'),
+        );
+  const outcome = defineRouteResponseMarker({
+    body: snapshotRouteResponseBody(snapshot.body),
+    contentDisposition: snapshot.contentDisposition,
+    contentType: snapshot.contentType,
+    ...(snapshot.etag === undefined ? {} : { etag: snapshot.etag }),
+    ...(exposedHeaders === undefined ? {} : { headers: exposedHeaders }),
+  });
+  witnessWeakMapSet(routeResponseOutcomeSnapshots, outcome, snapshot);
+  return witnessFreeze(outcome) as RouteResponseOutcome;
 }
 
 const routeOutcomeHeaders = wireEmitter(
   'server.wire.route-outcome-headers',
-  function (outcome: RouteResponseOutcome): Record<string, string> {
+  function (outcome: RouteResponseOutcomeSnapshot): Record<string, string> {
     return {
       ...safeRouteOutcomeHeaders(outcome.headers),
       'Content-Disposition': outcome.contentDisposition,
@@ -945,7 +1021,7 @@ function reservedRouteResponseHeaders(): Set<string> {
 }
 
 function safeRouteOutcomeHeaders(
-  headers: Record<string, string> | undefined,
+  headers: Readonly<Record<string, string>> | undefined,
 ): Record<string, string> {
   if (headers === undefined) return {};
   const safeHeaders: Record<string, string> = createSecurityNullRecord<string>();
@@ -968,21 +1044,67 @@ function escapeHeaderValue(value: string): string {
   return securityStringReplaceAll(securityStringReplaceAll(value, '\\', '\\\\'), '"', '\\"');
 }
 
-function replaceControlOrDelete(value: string): string {
-  let result = '';
-  for (let i = 0; i < value.length; i += 1) {
-    const code = securityStringCharCodeAt(value, i);
-    result += code <= 0x1f || code === 0x7f ? '_' : value[i];
-  }
-  return result;
+function contentDispositionWithFilename(
+  disposition: 'attachment' | 'inline',
+  filename: string,
+): string {
+  const normalized = normalizedContentDispositionFilename(filename);
+  const asciiFallback = asciiContentDispositionFilename(normalized);
+  const fallbackParameter = `${disposition}; filename="${escapeHeaderValue(asciiFallback)}"`;
+  if (asciiFallback === normalized) return fallbackParameter;
+
+  // RFC 5987 / RFC 8187: retain the normalized UTF-8 filename in filename* while keeping the
+  // legacy filename parameter strictly printable ASCII. encodeURIComponent leaves ['()*]
+  // unescaped even though they are not attr-char, so close those four residues explicitly.
+  let extended = securityEncodeURIComponent(normalized);
+  extended = securityStringReplaceAll(extended, "'", '%27');
+  extended = securityStringReplaceAll(extended, '(', '%28');
+  extended = securityStringReplaceAll(extended, ')', '%29');
+  extended = securityStringReplaceAll(extended, '*', '%2A');
+  return `${fallbackParameter}; filename*=UTF-8''${extended}`;
 }
 
-function contentDispositionFilename(value: string): string {
-  const normalized = securityStringTrim(
-    securityRegExpReplace(replaceControlOrDelete(value), /[/\\]+/g, '_'),
-  );
-  const safe = normalized.length > 0 ? securityStringSlice(normalized, 0, 255) : 'download';
-  return escapeHeaderValue(safe);
+function normalizedContentDispositionFilename(value: string): string {
+  let normalized = '';
+  for (let index = 0; index < value.length && normalized.length < 255; index += 1) {
+    const code = securityStringCharCodeAt(value, index);
+    if (code >= 0xd800 && code <= 0xdbff) {
+      const next =
+        index + 1 < value.length ? securityStringCharCodeAt(value, index + 1) : undefined;
+      if (next !== undefined && next >= 0xdc00 && next <= 0xdfff) {
+        if (normalized.length + 2 > 255) break;
+        normalized += securityStringSlice(value, index, index + 2);
+        index += 1;
+      } else {
+        normalized += '\ufffd';
+      }
+      continue;
+    }
+    if (code >= 0xdc00 && code <= 0xdfff) {
+      normalized += '\ufffd';
+      continue;
+    }
+    normalized +=
+      code <= 0x1f || code === 0x7f ? '_' : securityStringSlice(value, index, index + 1);
+  }
+  normalized = securityStringTrim(securityRegExpReplace(normalized, /[/\\]+/g, '_'));
+  return normalized.length > 0 ? normalized : 'download';
+}
+
+function asciiContentDispositionFilename(value: string): string {
+  let fallback = '';
+  for (let index = 0; index < value.length; index += 1) {
+    const code = securityStringCharCodeAt(value, index);
+    if (code >= 0xd800 && code <= 0xdbff) {
+      const next =
+        index + 1 < value.length ? securityStringCharCodeAt(value, index + 1) : undefined;
+      if (next !== undefined && next >= 0xdc00 && next <= 0xdfff) index += 1;
+      fallback += '_';
+      continue;
+    }
+    fallback += code >= 0x20 && code <= 0x7e ? securityStringSlice(value, index, index + 1) : '_';
+  }
+  return fallback.length > 0 ? fallback : 'download';
 }
 
 function requestHeader(request: unknown, name: string): string | undefined {
@@ -1243,31 +1365,13 @@ function snapshotStringHeaderRecord(value: unknown, label: string): Record<strin
   return snapshot;
 }
 
-function snapshotRouteResponseOutcome(outcome: RouteResponseOutcome): RouteResponseOutcome {
+function snapshotRouteResponseOutcome(outcome: RouteResponseOutcome): RouteResponseOutcomeSnapshot {
   if (typeof outcome !== 'object' || outcome === null) {
-    throw new TypeError('Kovo route response outcome must be an object.');
+    throw new TypeError('Kovo route response outcome must be an object minted by respond.');
   }
-  const body = stableOwnDataValue(outcome, 'body');
-  const contentDisposition = stableOwnDataValue(outcome, 'contentDisposition');
-  const contentType = stableOwnDataValue(outcome, 'contentType');
-  const etag = stableOwnDataValue(outcome, 'etag');
-  const rawHeaders = stableOwnDataValue(outcome, 'headers');
-  if (typeof contentDisposition !== 'string' || typeof contentType !== 'string') {
-    throw new TypeError('Kovo route response outcome content controls must be strings.');
+  const snapshot = witnessWeakMapGet(routeResponseOutcomeSnapshots, outcome);
+  if (snapshot === undefined) {
+    throw new TypeError('Kovo route response outcome must be minted by respond.');
   }
-  if (etag !== undefined && typeof etag !== 'string') {
-    throw new TypeError('Kovo route response outcome etag must be a string.');
-  }
-  const headers =
-    rawHeaders === undefined
-      ? undefined
-      : snapshotStringHeaderRecord(rawHeaders, 'Kovo route response outcome headers');
-  return {
-    body: snapshotRouteResponseBody(body as RouteResponseBody),
-    contentDisposition,
-    contentType,
-    ...(etag === undefined ? {} : { etag }),
-    ...(headers === undefined ? {} : { headers }),
-    routeResponse: true,
-  };
+  return snapshot;
 }

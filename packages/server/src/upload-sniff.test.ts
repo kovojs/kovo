@@ -22,10 +22,22 @@ describe('upload byte sniffer (KV428)', () => {
   const svg = new TextEncoder().encode('<svg xmlns="http://www.w3.org/2000/svg"><script/></svg>');
   const html = new TextEncoder().encode('<!doctype html><script>alert(1)</script>');
 
-  it('mints a passive type from magic bytes and marks it inline-safe', () => {
+  it('mints passive raster types from magic bytes and marks them inline-safe', () => {
     expect(sniffUploadBytes(png)).toEqual({ contentType: 'image/png', inlineSafe: true });
     expect(sniffUploadBytes(jpeg)).toEqual({ contentType: 'image/jpeg', inlineSafe: true });
-    expect(sniffUploadBytes(pdf)).toEqual({ contentType: 'application/pdf', inlineSafe: true });
+  });
+
+  it('recognizes PDFs for download but never treats an active-document prefix as inline proof', () => {
+    const activePdf = new TextEncoder().encode(
+      '%PDF-1.7\n1 0 obj << /OpenAction 2 0 R >> endobj\n' +
+        '2 0 obj << /S /JavaScript /JS (app.alert("active")) >> endobj\n%%EOF\n',
+    );
+    expect(sniffUploadBytes(pdf)).toEqual({ contentType: 'application/pdf', inlineSafe: false });
+    expect(sniffUploadBytes(activePdf)).toEqual({
+      contentType: 'application/pdf',
+      inlineSafe: false,
+    });
+    expect(() => assertInlineSafe(activePdf)).toThrow(InlineUnverifiedUploadError);
   });
 
   it('rejects SVG/HTML/XML as inline-safe (active content)', () => {

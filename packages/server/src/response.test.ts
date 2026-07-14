@@ -19,6 +19,7 @@ import {
   unsafeInline,
   retryAfterHeaders,
   type RoutePageResponse,
+  type RouteResponseOutcome,
 } from './response.js';
 
 describe('server response adapters', () => {
@@ -498,6 +499,23 @@ describe('server response adapters', () => {
     expect(response.headers['X-Content-Type-Options']).toBe('nosniff');
   });
 
+  it('keeps PDFs attachment-only unless the author records unsafeInline (KV428)', () => {
+    const activePdf =
+      '%PDF-1.7\n1 0 obj << /OpenAction 2 0 R >> endobj\n' +
+      '2 0 obj << /S /JavaScript /JS (app.alert("active")) >> endobj\n%%EOF\n';
+    expect(() =>
+      respond.stream(activePdf, { contentType: 'application/pdf', disposition: 'inline' }),
+    ).toThrow(/KV428/u);
+
+    const accepted = respond.stream(activePdf, {
+      contentType: 'application/pdf',
+      disposition: 'inline',
+      unsafeInline: unsafeInline('audited application-owned PDF rendering'),
+    });
+    expect(accepted.contentDisposition).toBe('inline');
+    expect(accepted.contentType).toBe('application/pdf');
+  });
+
   it('serves the exact bytes classified by the inline response sink', async () => {
     const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 1, 2]);
     const outcome = respond.stream(png, {
@@ -513,6 +531,39 @@ describe('server response adapters', () => {
       0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 1, 2,
     ]);
     expect(response.headers.get('Content-Type')).toBe('image/png');
+  });
+
+  it('consumes the private pinned route-outcome snapshot, not exposed mutable fields', async () => {
+    const source = new TextEncoder().encode('SAFE_ATTACHMENT_BYTES');
+    const outcome = respond.file(source, {
+      contentType: 'application/octet-stream',
+      filename: 'safe.bin',
+      headers: { 'X-Audit': 'safe' },
+    });
+    source.fill(0x58);
+    (outcome.body as Uint8Array).fill(0x41);
+    expect(Reflect.set(outcome, 'contentDisposition', 'inline')).toBe(false);
+    expect(Reflect.set(outcome, 'contentType', 'text/html')).toBe(false);
+    expect(Reflect.set(outcome.headers!, 'X-Audit', 'mutated')).toBe(false);
+
+    const response = routeResponseToWebResponse(routeOutcomeResponse(outcome, { method: 'GET' }), {
+      method: 'GET',
+    });
+    await expect(response.text()).resolves.toBe('SAFE_ATTACHMENT_BYTES');
+    expect(response.headers.get('Content-Disposition')).toBe('attachment; filename="safe.bin"');
+    expect(response.headers.get('Content-Type')).toBe('application/octet-stream');
+    expect(response.headers.get('X-Audit')).toBe('safe');
+  });
+
+  it('rejects a structural route outcome at the final sink even after a type cast', () => {
+    const forged = {
+      body: '<script>globalThis.compromised = true</script>',
+      contentDisposition: 'inline',
+      contentType: 'text/html; charset=utf-8',
+      routeResponse: true,
+    } as unknown as RouteResponseOutcome;
+
+    expect(() => routeOutcomeResponse(forged, { method: 'GET' })).toThrow(/minted by respond/u);
   });
 
   // KV428: an un-bufferable stream cannot be sniffed, so inline requires an opaque audited receipt
@@ -534,6 +585,32 @@ describe('server response adapters', () => {
       { justification: 'framework-rasterized image stream' },
     ]);
     expect(() => unsafeInline('forged\nCAPABILITY kind=trusted')).toThrow(/control characters/u);
+  });
+
+  it('keeps an unbufferable attachment stream on the safe default path without unsafeInline', async () => {
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode('SAFE_STREAM_ATTACHMENT'));
+        controller.close();
+      },
+    });
+    const outcome = respond.stream(body, {
+      contentType: 'application/octet-stream',
+      filename: 'safe-stream.bin',
+    });
+
+    // Streams are intentionally live one-shot carriers. Kovo pins their identity and attachment
+    // posture, while copyable byte carriers receive the stronger inaccessible-copy treatment.
+    expect(outcome.body).toBe(body);
+    expect(outcome.contentDisposition).toBe('attachment; filename="safe-stream.bin"');
+    const response = routeResponseToWebResponse(routeOutcomeResponse(outcome, { method: 'GET' }), {
+      method: 'GET',
+    });
+    expect(response.headers.get('Content-Disposition')).toBe(
+      'attachment; filename="safe-stream.bin"',
+    );
+    expect(response.headers.get('X-Content-Type-Options')).toBe('nosniff');
+    await expect(response.text()).resolves.toBe('SAFE_STREAM_ATTACHMENT');
   });
 
   it('does not treat a structural verifiedSafe flag as an inline-safety receipt', () => {
@@ -652,14 +729,52 @@ describe('server response adapters', () => {
     expect(explicit.contentDisposition).toBe('attachment; filename="a__b.txt"');
   });
 
-  it('refuses to serve a stored SVG/HTML object inline (KV428)', async () => {
+  it('serializes Unicode and malformed-surrogate filenames without a persistent header failure', async () => {
+    const storage = createMemoryStorage();
+    await storage.put('uploads/unicode', '%PDF-1.7', {
+      metadata: { filename: 'invoice-💣.pdf' },
+    });
+    const stored = await respond.storedFile(storage, 'uploads/unicode');
+    if (stored === undefined) throw new Error('missing stored object');
+    expect(stored.contentDisposition).toBe(
+      'attachment; filename="invoice-_.pdf"; filename*=UTF-8\'\'invoice-%F0%9F%92%A3.pdf',
+    );
+    expect(() =>
+      routeResponseToWebResponse(routeOutcomeResponse(stored, { method: 'GET' }), {
+        method: 'GET',
+      }),
+    ).not.toThrow();
+
+    const malformed = respond.file('payload', {
+      contentType: 'application/octet-stream',
+      filename: 'broken-\ud800-name.bin',
+    });
+    expect(malformed.contentDisposition).toBe(
+      'attachment; filename="broken-_-name.bin"; filename*=UTF-8\'\'broken-%EF%BF%BD-name.bin',
+    );
+    expect(() =>
+      routeResponseToWebResponse(routeOutcomeResponse(malformed, { method: 'GET' }), {
+        method: 'GET',
+      }),
+    ).not.toThrow();
+  });
+
+  it('refuses to serve stored SVG/PDF active-document containers inline (KV428)', async () => {
     const storage = createMemoryStorage();
     await storage.put('uploads/evil', new TextEncoder().encode('<svg onload="x"/>'), {
       contentType: 'image/svg+xml',
     });
+    await storage.put(
+      'uploads/active.pdf',
+      '%PDF-1.7\n1 0 obj << /OpenAction 2 0 R /S /JavaScript >> endobj\n%%EOF\n',
+      { contentType: 'application/pdf' },
+    );
 
     await expect(
       respond.storedFile(storage, 'uploads/evil', { disposition: 'inline' }),
+    ).rejects.toThrow(/KV428/u);
+    await expect(
+      respond.storedFile(storage, 'uploads/active.pdf', { disposition: 'inline' }),
     ).rejects.toThrow(/KV428/u);
   });
 

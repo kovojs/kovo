@@ -32,6 +32,7 @@ import {
 import {
   DOCUMENT_HSTS_VALUE,
   DOCUMENT_ISOLATION_HEADERS,
+  isRoutePageResponseOutcome,
   readHeader,
   shouldEmitDocumentHsts,
   type DocumentRouteResponseBase,
@@ -410,8 +411,9 @@ export const renderRouteDocumentResponse = wireEmitter(
       ...assemblyOptions
     } = options;
     const contentType = readHeader(response.headers, 'Content-Type');
+    const frameworkRouteOutcome = isRoutePageResponseOutcome(response);
     if (
-      isRouteResponseOutcome(response) ||
+      frameworkRouteOutcome ||
       (response.status !== 200 && wrapNonOk !== true) ||
       typeof response.body !== 'string' ||
       (contentType !== undefined &&
@@ -423,8 +425,12 @@ export const renderRouteDocumentResponse = wireEmitter(
       // floor the HTML path computes — it was shared-cache-storable (cross-principal CDN leak),
       // bfcache-restorable after logout, AND BREACH-compressible. A per-principal route outcome
       // MUST get the same floor the HTML document path gets (no-store + Vary: Cookie + the §6.6
-      // isolation baseline). Non-200 outcomes (redirects/304/5xx) still pass through unchanged.
-      if (response.status === 200 && noStore) {
+      // isolation baseline). A matching file ETag still carries that identity-varying floor on its
+      // witnessed 304 metadata response; unrelated non-200 outcomes continue unchanged.
+      if (
+        noStore &&
+        (response.status === 200 || (response.status === 304 && frameworkRouteOutcome))
+      ) {
         return stampPerPrincipalRouteOutcomeFloor(response);
       }
       return response;
@@ -570,13 +576,9 @@ function isPromiseLike<Value>(value: unknown): value is PromiseLike<Value> {
   );
 }
 
-function isRouteResponseOutcome(response: DocumentRoutePageResponse): boolean {
-  return (response as { routeResponse?: unknown }).routeResponse === true;
-}
-
 /**
  * bugz-3 M2 (SPEC §9.4:927 caching contract, §9.5:780 bfcache posture): stamp the
- * per-principal cache + isolation floor onto a NON-HTML 200 route outcome
+ * per-principal cache + isolation floor onto a NON-HTML 200 or witnessed 304 route outcome
  * (`respond.file`/`respond.stream`/`respond.storedFile`). These outcomes skip HTML document
  * assembly, so without this a guarded/per-principal download would ship with no caching or
  * isolation headers at all — shared-cache-storable across principals, bfcache-restorable

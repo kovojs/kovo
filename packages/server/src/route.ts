@@ -54,6 +54,7 @@ import {
 import {
   htmlServerErrorResponse,
   blessRedirectResponse,
+  isRouteResponseOutcome,
   redirectLocationHeader,
   retryAfterHeaders,
   routeOutcomeResponse,
@@ -1806,13 +1807,4 @@ function isStructuralRouteRedirect(value: object): boolean {
     if (keys[index] === 'status') status = true;
   }
   return location && status;
-}
-
-function isRouteResponseOutcome(value: unknown): value is RouteResponseOutcome {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    'routeResponse' in value &&
-    value.routeResponse === true
-  );
 }

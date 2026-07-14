@@ -28,6 +28,7 @@ import {
   StylesheetLink,
 } from './document-structured.js';
 import { jsx } from './jsx-runtime.js';
+import { respond, routeOutcomeResponse, routeResponseToDocumentResponse } from './response.js';
 
 // G1 (bugs-part3 CSP-1): the deferred apply/cleanup scripts now carry a CSP hash attr.
 const deferredApplyScriptBody =
@@ -480,6 +481,27 @@ describe('server app shell document assembly', () => {
       const vary = String(wrapped.headers.Vary);
       expect(vary).toContain('Accept-Encoding');
       expect(vary).toContain('Cookie');
+    });
+
+    it('stamps the same private floor on a witnessed file ETag 304 response', () => {
+      const conditional = routeResponseToDocumentResponse(
+        routeOutcomeResponse(
+          respond.file('principal-specific-report', {
+            contentType: 'text/plain; charset=utf-8',
+            etag: '"principal-report-v1"',
+            filename: 'report.txt',
+          }),
+          { headers: { 'If-None-Match': '"principal-report-v1"' }, method: 'GET' },
+        ),
+      );
+      const wrapped = renderRouteDocumentResponse(conditional, { noStore: true });
+
+      expect(wrapped.status).toBe(304);
+      expect(wrapped.headers['Cache-Control']).toBe('no-store');
+      expect(wrapped.headers.Vary).toBe('Cookie');
+      expect(wrapped.headers['X-Frame-Options']).toBe('DENY');
+      expect(wrapped.headers['Referrer-Policy']).toBe('strict-origin-when-cross-origin');
+      expect(wrapped.headers.ETag).toBe('"principal-report-v1"');
     });
   });
 

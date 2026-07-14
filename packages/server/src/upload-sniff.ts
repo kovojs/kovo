@@ -45,7 +45,7 @@ declare const unverifiedAcceptanceBrand: unique symbol;
  *  2. The served `Content-Type` is minted from SNIFFED bytes (server truth overrides the client
  *     lie). {@link sniffUploadBytes} probes magic bytes and ZIP/OOXML containers.
  *  3. Inline rendering is a BRANDED opt-in requiring verified-safe bytes: the sniffer must return
- *     an `inlineSafe` type (a known-passive raster image / PDF / plain media). HTML / SVG / XML /
+ *     an `inlineSafe` type (a known-passive raster image). HTML / SVG / XML / PDF /
  *     ambiguous / polyglot bytes are NEVER inline-safe — SVG is XML+script, so a magic-prefix
  *     check on it is meaningless; SVG must be rasterized or downloaded, never sniff-and-trusted.
  *
@@ -63,8 +63,8 @@ export interface SniffedContentType {
    */
   readonly contentType: string;
   /**
-   * `true` only for bytes proven to be a passive, non-active-content type (raster image / PDF /
-   * plain media). HTML, SVG, XML, scripts, ambiguous, and unrecognised bytes are `false`: they
+   * `true` only for bytes proven to be a passive, non-active-content type (raster image).
+   * HTML, SVG, XML, PDF, scripts, ambiguous, and unrecognised bytes are `false`: they
    * may only be served as `attachment`.
    */
   readonly inlineSafe: boolean;
@@ -140,14 +140,18 @@ export function sniffUploadBytes(bytes: Uint8Array): SniffedContentType {
   const recognized = recognizePassiveMagic(bytes);
   if (recognized !== undefined) {
     // A recognised passive type is inline-safe only if the prefix carries no active-content
-    // markers (polyglot defense) AND is not a ZIP/OOXML container.
-    // ZIP is download-only by policy (SPEC §6.6/§9.1, KV428): a ZIP archive can carry HTML or
-    // other active content in its members; recognising the PK header doesn't make it safe to
-    // render inline. The `active` flag alone is not sufficient here because the NUL byte at
+    // markers (polyglot defense) AND is neither PDF nor a ZIP/OOXML container. SPEC §2 / §6.6 /
+    // §9.1: PDFs are active-document containers (actions, scripts, forms, embedded content), so a
+    // `%PDF-` prefix can identify their download MIME but can never prove inline safety. ZIP is
+    // likewise download-only because it can carry HTML or other active content in its members.
+    // The `active` flag alone is not sufficient here because the NUL byte at
     // offset ~5 in a real PK header truncates `leadingAsciiLower` before any embedded markup
     // is reached, so `active===false` for a vanilla ZIP — contradicting the file's own
     // invariant at the `recognizePassiveMagic` return site (:136-137).
-    return { contentType: recognized, inlineSafe: !active && recognized !== 'application/zip' };
+    return {
+      contentType: recognized,
+      inlineSafe: !active && recognized !== 'application/pdf' && recognized !== 'application/zip',
+    };
   }
 
   if (!active && looksLikePlainText(bytes)) {

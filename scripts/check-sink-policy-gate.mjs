@@ -2038,15 +2038,26 @@ export function commandPrimitiveInvariantFindings(filePath, text, options = {}) 
 export function rootedFileServeInvariantFindings(filePath, text) {
   const source = stripComments(text);
   const findings = [];
-  const delegatesToFrameworkFileSystem =
+  const delegatesToFrameworkFileSystemBase =
     /\bconst\s+fileSystem\s*=\s*await\s+createFrameworkFileSystemBoundary\s*\(\s*root\s*\)/.test(
       source,
     ) &&
     /\bserve\s*:\s*\([^)]*\)\s*=>\s*serveRootedFile\s*\(\s*fileSystem\s*,\s*path\s*,\s*options\s*\)/.test(
       source,
     ) &&
-    /\bisFrameworkFileSystemBoundary\s*\(\s*fileSystem\s*\)/.test(source) &&
-    /\bfileSystem\s*\.\s*readFile\s*\(\s*requestedPath\s*\)/.test(source);
+    /\bisFrameworkFileSystemBoundary\s*\(\s*fileSystem\s*\)/.test(source);
+  const requiresSingleLinkRead =
+    /\bfileSystem\s*\.\s*readFile\s*\(\s*requestedPath\s*,\s*\{\s*requireSingleLink\s*:\s*true\s*,?\s*\}\s*\)/.test(
+      source,
+    );
+  const delegatesToFrameworkFileSystem =
+    delegatesToFrameworkFileSystemBase && requiresSingleLinkRead;
+
+  if (delegatesToFrameworkFileSystemBase && !requiresSingleLinkRead) {
+    findings.push(
+      `${filePath}: rooted file serving must require single-link reads so hardlink aliases cannot import outside-root inode authority`,
+    );
+  }
 
   if (!/\bconst\s+ROOTED_FILE_SERVE_SINK\s*(?::[^=]+)?=\s*['"]rooted-file-serve['"]/.test(source)) {
     findings.push(

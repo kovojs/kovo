@@ -52,6 +52,27 @@ describe('framework filesystem boundary', () => {
     }
   });
 
+  it('can require a unique directory entry for rooted HTTP file serving', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kovo-filesystem-single-link-root-'));
+    const outside = await mkdtemp(join(tmpdir(), 'kovo-filesystem-single-link-outside-'));
+    try {
+      const outsideFile = join(outside, 'secret.txt');
+      await writeFile(outsideFile, 'outside inode', 'utf8');
+      await link(outsideFile, join(root, 'hardlink.txt'));
+      const fileSystem = await createFrameworkFileSystemBoundary(root);
+
+      // Other internal readers retain normal hardlink semantics; the HTTP serving door opts into
+      // the stricter SPEC §2 / §6.6 / §10.6 authority invariant.
+      await expect(fileSystem.readFile('hardlink.txt')).resolves.toBeDefined();
+      await expect(
+        fileSystem.readFile('hardlink.txt', { requireSingleLink: true }),
+      ).resolves.toBeUndefined();
+    } finally {
+      await rm(root, { force: true, recursive: true });
+      await rm(outside, { force: true, recursive: true });
+    }
+  });
+
   it('streams from the validated open handle when the root name changes after open', async () => {
     const root = await mkdtemp(join(tmpdir(), 'kovo-filesystem-stream-root-'));
     const parkedRoot = `${root}-parked`;

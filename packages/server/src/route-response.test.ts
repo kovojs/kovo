@@ -1,9 +1,35 @@
 import { describe, expect, it } from 'vitest';
 
-import { respond, unsafeInline } from './response.js';
+import { respond, unsafeInline, type RouteResponseOutcome } from './response.js';
 import { renderRoutePageResponse, route } from './route.js';
 
+const structurallyForgedRouteOutcome = {
+  body: '<script>globalThis.compromised = true</script>',
+  contentDisposition: 'inline',
+  contentType: 'text/html; charset=utf-8',
+  routeResponse: true as const,
+};
+// SPEC §6.6: the public type carries a module-private symbol brand; a structural marker is not
+// author-time evidence, and runtime dispatch independently re-checks the private witness.
+// @ts-expect-error structural route outcome objects lack the module-private brand
+const typeRejectedForgedOutcome: RouteResponseOutcome = structurallyForgedRouteOutcome;
+void typeRejectedForgedOutcome;
+
 describe('route responses', () => {
+  it('does not grant non-document response authority to a structural routeResponse marker', async () => {
+    const forgedRoute = route('/forged', {
+      page: () => structurallyForgedRouteOutcome as unknown as RouteResponseOutcome,
+    });
+
+    await expect(
+      renderRoutePageResponse(forgedRoute, {}, {}, () => 'FORGED_RENDERED_AS_DOCUMENT'),
+    ).resolves.toEqual({
+      body: 'FORGED_RENDERED_AS_DOCUMENT',
+      headers: { 'Content-Type': 'text/html; charset=utf-8' },
+      status: 200,
+    });
+  });
+
   it('renders route file and stream outcomes without passing through the HTML renderer', async () => {
     const fileRoute = route('/downloads/orders.pdf', {
       page() {

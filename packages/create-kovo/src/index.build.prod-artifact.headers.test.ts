@@ -95,6 +95,15 @@ describe('create-kovo starter (build integration: production response header art
       expect(safe.status).toBe(200);
       expect(safe.headers.get('x-kovo-header-proof')).toBe('safe-header-value');
 
+      const safeStream = await fetch(`${origin}/header-stream-safe.bin`);
+      await expect(safeStream.text()).resolves.toBe('safe stream proof\n');
+      expect(safeStream.status).toBe(200);
+      expect(safeStream.headers.get('content-disposition')).toBe(
+        'attachment; filename="safe-stream.bin"',
+      );
+      expect(safeStream.headers.get('content-type')).toBe('application/octet-stream');
+      expect(safeStream.headers.get('x-content-type-options')).toBe('nosniff');
+
       const unsafe = await fetch(`${origin}/header-sink-unsafe.txt`);
       const unsafeBody = await unsafe.text();
       expect(unsafe.status, unsafeBody).toBe(500);
@@ -359,6 +368,20 @@ function addHeaderSinkProofRoutes(root: string): void {
       "        return respond.file('unsafe header proof\\n', {",
       "          contentType: 'text/plain; charset=utf-8',",
       "          headers: { 'X-Kovo-Header-Proof': 'unsafe\\r\\nSet-Cookie: c2=owned' },",
+      '        });',
+      '      },',
+      '    }),',
+      "    route('/header-stream-safe.bin', {",
+      "      access: publicAccess('public response stream sink proof'),",
+      '      page() {',
+      '        return respond.stream(new ReadableStream({',
+      '          start(controller) {',
+      "            controller.enqueue(new TextEncoder().encode('safe stream proof\\n'));",
+      '            controller.close();',
+      '          },',
+      '        }), {',
+      "          contentType: 'application/octet-stream',",
+      "          filename: 'safe-stream.bin',",
       '        });',
       '      },',
       '    }),',
