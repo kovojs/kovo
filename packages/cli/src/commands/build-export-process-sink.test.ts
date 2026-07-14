@@ -721,6 +721,551 @@ export default createApp({
     expect(result.stderr).toContain('sink=outbound-fetch.request.header.Authorization');
   }, 120_000);
 
+  it('rejects the strict request-derived process, filesystem, code, command, and storage matrix', async () => {
+    const root = fixture('strict-known-authority-matrix');
+    writeFileSync(
+      join(root, 'app.ts'),
+      `import { execFileSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import {
+  cmd,
+  commandAllowlist,
+  createApp,
+  createFileSystemStorage,
+  mutation,
+  publicAccess,
+  rootedFiles,
+  route,
+  runCommand,
+  s,
+  trustedHtml,
+} from '@kovojs/server';
+
+export const unsafeMatrix = mutation({
+  access: publicAccess('strict request-derived authority matrix'),
+  input: s.object({
+    args: s.array(s.string()),
+    expression: s.string(),
+    path: s.string(),
+    program: s.string(),
+    root: s.string(),
+  }),
+  async handler(input) {
+    execFileSync(input.program, input.args);
+    readFileSync(resolve(input.path), 'utf8');
+    new Function(input.expression);
+    const allow = commandAllowlist([input.program], {
+      justification: 'request-selected program is intentionally rejected',
+    });
+    runCommand(cmd(input.program, input.args, { allow }));
+    createFileSystemStorage({ root: input.root });
+    await rootedFiles(input.root);
+    return { ok: true };
+  },
+});
+
+export default createApp({
+  mutations: [unsafeMatrix],
+  routes: [
+    route('/', {
+      access: publicAccess('matrix route'),
+      page: () => trustedHtml('<main>safe</main>', 'fixed test fixture'),
+    }),
+  ],
+});
+`,
+      'utf8',
+    );
+
+    expectTypechecks(root, 'app.ts');
+
+    const result = await check(root, './app.ts');
+    expect(result, result.stderr).toMatchObject({ code: 1 });
+    expect(result.stderr).toContain('ERROR KV424');
+    expect(result.stderr).toContain('sink=child_process.execFileSync');
+    expect(result.stderr).toContain('sink=node:fs.readFileSync');
+    expect(result.stderr).toContain('sink=node:path.resolve');
+    expect(result.stderr).toContain('sink=Function');
+    expect(result.stderr).toContain('sink=@kovojs/server.commandAllowlist');
+    expect(result.stderr).toContain('sink=@kovojs/server.cmd');
+    expect(result.stderr).toContain('sink=@kovojs/core.createFileSystemStorage');
+    expect(result.stderr).toContain('sink=@kovojs/server.rootedFiles');
+  }, 120_000);
+
+  it('rejects strict public query and route credential plus import.meta carrier leaks', async () => {
+    const root = fixture('strict-public-wire-carriers');
+    writeFileSync(
+      join(root, 'app.ts'),
+      `import {
+  createApp,
+  publicAccess,
+  query,
+  route,
+  trustedHtml,
+  type QueryLoadContext,
+} from '@kovojs/server';
+
+declare global {
+  interface ImportMeta {
+    readonly env: Record<string, string>;
+  }
+}
+
+const meta = import.meta;
+const { env } = import.meta;
+const holder = { meta: import.meta };
+const tuple = [import.meta];
+let assigned = import.meta;
+let assignedEnv: Record<string, string>;
+({ env: assignedEnv } = import.meta);
+
+export const unsafeQuery = query({
+  access: publicAccess('strict public query wire audit'),
+  load(_input: unknown, { request }: QueryLoadContext<Request>) {
+    return {
+      authorization: request.headers.get('authorization'),
+      cookie: request.headers.get('cookie'),
+      secret: env.QUERY_SECRET ?? null,
+    };
+  },
+});
+
+export const unsafeRoute = route('/', {
+  access: publicAccess('strict public route wire audit'),
+  bootstrapScript: meta.env.BOOTSTRAP,
+  modulepreloads: [holder.meta.env.PRELOAD, tuple[0].env.TUPLE],
+  page(_context, request: Request) {
+    return trustedHtml(
+      JSON.stringify({
+        authorization: request.headers.get('authorization'),
+        cookie: request.headers.get('cookie'),
+        secret: assigned.env.ROUTE_SECRET,
+      }),
+      'credential leak fixture rejected by KV424',
+    );
+  },
+  prerenderUrls: [assignedEnv.PRERENDER],
+});
+
+export default createApp({ queries: [unsafeQuery], routes: [unsafeRoute] });
+`,
+      'utf8',
+    );
+
+    expectTypechecks(root, 'app.ts');
+
+    const result = await check(root, './app.ts');
+    expect(result, result.stderr).toMatchObject({ code: 1 });
+    expect(result.stderr).toContain('ERROR KV424');
+    expect(result.stderr).toContain('sink=import.meta.env');
+    expect(result.stderr).toContain('sink=client-wire.request.header.Cookie');
+    expect(result.stderr).toContain('sink=client-wire.request.header.Authorization');
+  }, 120_000);
+
+  it('rejects strict endpoint env and Authorization leaks while keeping Cookie server-only', async () => {
+    const root = fixture('strict-endpoint-wire');
+    writeFileSync(
+      join(root, 'app.ts'),
+      `import {
+  createApp,
+  endpoint,
+  publicAccess,
+  route,
+  trustedHtml,
+} from '@kovojs/server';
+
+declare global {
+  interface ImportMeta {
+    readonly env: Record<string, string>;
+  }
+}
+
+const meta = import.meta;
+const unsafeEndpoint = endpoint('/unsafe', {
+  handler(request) {
+    return Response.json({
+      authorization: request.headers.get('authorization'),
+      cookie: request.headers.get('cookie'),
+      secret: meta.env.ENDPOINT_SECRET,
+    });
+  },
+  method: 'GET',
+  reason: 'strict endpoint wire audit',
+  response: { appOwnedSafety: true, body: 'json', cache: 'no-store' },
+});
+
+export default createApp({
+  endpoints: [unsafeEndpoint],
+  routes: [
+    route('/', {
+      access: publicAccess('endpoint fixture route'),
+      page: () => trustedHtml('<main>safe</main>', 'fixed test fixture'),
+    }),
+  ],
+});
+`,
+      'utf8',
+    );
+
+    expectTypechecks(root, 'app.ts');
+
+    const result = await check(root, './app.ts');
+    expect(result, result.stderr).toMatchObject({ code: 1 });
+    expect(result.stderr).toContain('ERROR KV424');
+    expect(result.stderr).toContain('sink=import.meta.env');
+    expect(result.stderr).toContain('sink=client-wire.request.header.Authorization');
+    expect(result.stderr).not.toContain('sink=client-wire.request.header.Cookie');
+  }, 120_000);
+
+  it('keeps strict session values server-only but rejects setCookies credential authority', async () => {
+    const safeRoot = fixture('strict-session-value-safe');
+    writeFileSync(
+      join(safeRoot, 'app.ts'),
+      `import { createApp, publicAccess, route, trustedHtml } from '@kovojs/server';
+export default createApp<{ session: string }>({
+  routes: [
+    route('/', {
+      access: publicAccess('session value fixture route'),
+      page: () => trustedHtml('<main>safe</main>', 'fixed test fixture'),
+    }),
+  ],
+  sessionProvider(request) {
+    return {
+      setCookies: [],
+      value: { session: request.headers.get('cookie') ?? '' },
+    };
+  },
+});
+`,
+      'utf8',
+    );
+    expectTypechecks(safeRoot, 'app.ts');
+    const safeResult = await check(safeRoot, './app.ts');
+    expect(safeResult, safeResult.stderr).toMatchObject({ code: 0 });
+
+    const unsafeRoot = fixture('strict-session-set-cookie-unsafe');
+    writeFileSync(
+      join(unsafeRoot, 'app.ts'),
+      `import { createApp, publicAccess, route, trustedHtml } from '@kovojs/server';
+export default createApp<{ session: string }>({
+  routes: [
+    route('/', {
+      access: publicAccess('session set-cookie fixture route'),
+      page: () => trustedHtml('<main>safe</main>', 'fixed test fixture'),
+    }),
+  ],
+  sessionProvider(request) {
+    return {
+      setCookies: [request.headers.get('authorization') ?? ''],
+      value: { session: request.headers.get('cookie') ?? '' },
+    };
+  },
+});
+`,
+      'utf8',
+    );
+    expectTypechecks(unsafeRoot, 'app.ts');
+    const unsafeResult = await check(unsafeRoot, './app.ts');
+    expect(unsafeResult, unsafeResult.stderr).toMatchObject({ code: 1 });
+    expect(unsafeResult.stderr).toContain('ERROR KV424');
+    expect(unsafeResult.stderr).toContain('sink=client-wire.request.header.Authorization');
+    expect(unsafeResult.stderr).not.toContain('sink=client-wire.request.header.Cookie');
+  }, 120_000);
+
+  it('rejects strict reflective factories, pre-snapshot writes, access mutation, and prototype authority', async () => {
+    const root = fixture('strict-reflective-prototype-authority');
+    writeFileSync(
+      join(root, 'app.ts'),
+      String.raw`import { execFileSync } from 'node:child_process';
+import * as serverApi from '@kovojs/server';
+import {
+  createApp,
+  endpoint,
+  publicAccess,
+  route,
+  type EndpointDefinition,
+  type Guard,
+} from '@kovojs/server';
+
+const response = { appOwnedSafety: true, body: 'text', cache: 'no-store' } as const;
+
+let assigned: typeof endpoint;
+({ endpoint: assigned } = serverApi);
+const reflected: typeof endpoint = Reflect.get(serverApi, 'endpoint');
+const descriptor = Object.getOwnPropertyDescriptor(serverApi, 'endpoint');
+if (!descriptor) throw new Error('endpoint descriptor missing');
+const described: typeof endpoint = descriptor.value;
+
+assigned('/assigned', {
+  handler(request) { execFileSync('factory-assigned'); return new Response(request.url); },
+  method: 'GET', reason: 'assigned factory audit', response,
+});
+reflected('/reflected', {
+  handler(request) { execFileSync('factory-reflected'); return new Response(request.url); },
+  method: 'GET', reason: 'reflected factory audit', response,
+});
+described('/described', {
+  handler(request) { execFileSync('factory-described'); return new Response(request.url); },
+  method: 'GET', reason: 'descriptor factory audit', response,
+});
+
+const fromArray = [endpoint].at(0);
+const fromMap = new Map([['endpoint', endpoint]]).get('endpoint');
+const fromValues = Object.values({ endpoint })[0];
+if (!fromArray || !fromMap || !fromValues) throw new Error('factory aggregate missing');
+fromArray('/array', {
+  handler() { execFileSync('factory-array'); return new Response('ok'); },
+  method: 'GET', reason: 'array factory audit', response,
+});
+fromMap('/map', {
+  handler() { execFileSync('factory-map'); return new Response('ok'); },
+  method: 'GET', reason: 'map factory audit', response,
+});
+({ ...serverApi }).endpoint('/spread', {
+  handler() { execFileSync('factory-spread'); return new Response('ok'); },
+  method: 'GET', reason: 'spread factory audit', response,
+});
+Object.assign({}, serverApi).endpoint('/assign', {
+  handler() { execFileSync('factory-object-assign'); return new Response('ok'); },
+  method: 'GET', reason: 'Object.assign factory audit', response,
+});
+fromValues('/values', {
+  handler() { execFileSync('factory-values'); return new Response('ok'); },
+  method: 'GET', reason: 'Object.values factory audit', response,
+});
+
+const memberFactory: { endpoint?: typeof endpoint } = {};
+memberFactory.endpoint = endpoint;
+memberFactory.endpoint('/member-write', {
+  handler() { execFileSync('factory-member-write'); return new Response('ok'); },
+  method: 'GET', reason: 'member-write factory audit', response,
+});
+
+const configured: EndpointDefinition<'GET'> = {
+  handler() { return new Response('safe'); },
+  method: 'GET', reason: 'defineProperty config audit', response,
+};
+Object.defineProperty(configured, 'handler', {
+  value(request: Request) {
+    execFileSync('config-define-property');
+    return new Response(request.url);
+  },
+});
+endpoint('/configured', configured);
+
+const reflectedConfig: EndpointDefinition<'GET'> = {
+  handler() { return new Response('safe'); },
+  method: 'GET', reason: 'Reflect.set config audit', response,
+};
+Reflect.set(reflectedConfig, 'handler', (request: Request) => {
+  execFileSync('config-reflect-set');
+  return new Response(request.url);
+});
+endpoint('/reflected-config', reflectedConfig);
+
+const postSnapshot: EndpointDefinition<'GET'> = {
+  handler() { return new Response('safe'); },
+  method: 'GET', reason: 'post-snapshot precision audit', response,
+};
+endpoint('/post-snapshot', postSnapshot);
+postSnapshot.handler = (request: Request) => {
+  execFileSync('post-snapshot-must-stay-safe');
+  return new Response(request.url);
+};
+
+const pushedAccess: Guard<Request>[] = [];
+pushedAccess.push((request) => {
+  execFileSync('access-push');
+  return request.url.length > 0;
+});
+endpoint('/access-push', {
+  access: pushedAccess,
+  handler() { return new Response('ok'); },
+  method: 'GET', reason: 'pushed access audit', response,
+});
+const indexedAccess: Guard<Request>[] = [];
+indexedAccess[0] = (request) => {
+  execFileSync('access-index');
+  return request.url.length > 0;
+};
+endpoint('/access-index', {
+  access: indexedAccess,
+  handler() { return new Response('ok'); },
+  method: 'GET', reason: 'indexed access audit', response,
+});
+
+String.prototype.trim = function (this: string): string {
+  execFileSync('trim-prototype');
+  return String(this);
+};
+Object.defineProperty(Array.prototype, 'map', {
+  value(this: unknown[]) {
+    execFileSync('map-prototype');
+    return this;
+  },
+});
+
+export const serializationRoute = route('/serialize', {
+  access: publicAccess('prototype serialization audit'),
+  page(_context, request: Request) {
+    String(request.url).trim();
+    [request.url].map((value) => value);
+    let captured = request.headers.get('cookie');
+    class Computed {
+      ['to' + 'JSON']() { return { cookie: captured }; }
+    }
+    class Assigned {
+      toJSON(): unknown { return null; }
+    }
+    Assigned.prototype.toJSON = () => ({
+      authorization: request.headers.get('authorization'),
+    });
+    class Described {}
+    Object.defineProperty(Described.prototype, 'toJSON', {
+      value() { return { proxy: request.headers.get('proxy-authorization') }; },
+    });
+    captured = request.headers.get('cookie');
+    return Math.random() > 0.5
+      ? new Computed()
+      : Math.random() > 0.5
+        ? new Assigned()
+        : new Described();
+  },
+});
+
+export default createApp({ routes: [serializationRoute] });
+`,
+      'utf8',
+    );
+
+    expectTypechecks(root, 'app.ts');
+
+    const result = await check(root, './app.ts');
+    expect(result, result.stderr).toMatchObject({ code: 1 });
+    expect(result.stderr).toContain('ERROR KV424');
+    expect(result.stderr).toContain('sink=child_process.execFileSync');
+    expect(result.stderr).toContain('sink=client-wire.request.header.Cookie');
+    expect(result.stderr).toContain('sink=client-wire.request.header.Authorization');
+    expect(result.stderr).toContain('sink=client-wire.request.header.Proxy-Authorization');
+    expect(result.stderr).toContain("source='factory-assigned'");
+    expect(result.stderr).toContain("source='factory-member-write'");
+    expect(result.stderr).toContain("source='config-define-property'");
+    expect(result.stderr).toContain("source='access-push'");
+    expect(result.stderr).toContain("source='trim-prototype'");
+    expect(result.stderr).not.toContain('post-snapshot-must-stay-safe');
+  }, 120_000);
+
+  it('rejects strict inherited schema, replay, and client-module adapter authority', async () => {
+    const root = fixture('strict-inherited-adapter-authority');
+    writeFileSync(
+      join(root, 'app.ts'),
+      `import { execFileSync } from 'node:child_process';
+import {
+  createApp,
+  publicAccess,
+  query,
+  route,
+  trustedHtml,
+  webhook,
+  type MutationReplayStore,
+  type Schema,
+  type VersionedClientModuleInput,
+  type VersionedClientModuleRegistry,
+  type WebhookReplayStore,
+} from '@kovojs/server';
+
+class BaseSchema implements Schema<Record<string, never>> {
+  parse(_input: unknown): Record<string, never> {
+    execFileSync('schema-parse');
+    return {};
+  }
+  async parseAsync(_input: unknown): Promise<Record<string, never>> {
+    execFileSync('schema-parse-async');
+    return {};
+  }
+}
+class InheritedSchema extends BaseSchema {}
+
+class BaseReplay implements WebhookReplayStore, MutationReplayStore {
+  get(_scope: string, _idem: string): undefined {
+    execFileSync('replay-get');
+    return undefined;
+  }
+  reserve(_scope: string, _idem: string): undefined {
+    execFileSync('replay-reserve');
+    return undefined;
+  }
+  set(_scope: string, _idem: string, _response: unknown): void {
+    execFileSync('replay-set');
+  }
+}
+class InheritedReplay extends BaseReplay {}
+
+class BaseRegistry implements VersionedClientModuleRegistry {
+  buildToken(): string {
+    execFileSync('registry-build-token');
+    return 'strict-inherited-registry';
+  }
+  entries(): readonly VersionedClientModuleInput[] {
+    return [];
+  }
+  put(_module: VersionedClientModuleInput): string {
+    return '/c/strict-inherited.js';
+  }
+  resolve(_href: string) {
+    execFileSync('registry-resolve');
+    const status: 200 = 200;
+    return { body: '', headers: {}, status };
+  }
+}
+class InheritedRegistry extends BaseRegistry {}
+
+const schema = new InheritedSchema();
+const replay = new InheritedReplay();
+const hook = webhook('/hook', {
+  handler() { return { ok: true }; },
+  input: schema,
+  replayStore: replay,
+  verify: 'none',
+  verifyJustification: 'strict inherited adapter fixture',
+});
+const read = query({
+  access: publicAccess('strict inherited schema query'),
+  args: schema,
+  load() { return { ok: true }; },
+});
+
+export default createApp({
+  clientModules: new InheritedRegistry(),
+  endpoints: [hook],
+  mutationReplayStore: replay,
+  queries: [read],
+  routes: [
+    route('/', {
+      access: publicAccess('inherited adapter fixture route'),
+      page: () => trustedHtml('<main>safe</main>', 'fixed test fixture'),
+    }),
+  ],
+});
+`,
+      'utf8',
+    );
+
+    expectTypechecks(root, 'app.ts');
+
+    const result = await check(root, './app.ts');
+    expect(result, result.stderr).toMatchObject({ code: 1 });
+    expect(result.stderr).toContain('ERROR KV424');
+    expect(result.stderr).toContain("source='schema-parse'");
+    expect(result.stderr).toContain("source='schema-parse-async'");
+    expect(result.stderr).toContain("source='replay-get'");
+    expect(result.stderr).toContain("source='replay-reserve'");
+    expect(result.stderr).toContain("source='replay-set'");
+    expect(result.stderr).toContain("source='registry-build-token'");
+    expect(result.stderr).toContain("source='registry-resolve'");
+  }, 120_000);
+
   it('rejects type-safe factory mutation, method rebinding, static hints, and toJSON in a real build', async () => {
     const root = fixture('final-adversarial-census');
     writeFileSync(

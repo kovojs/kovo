@@ -1144,24 +1144,86 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
     expect(Date.now() - started).toBeLessThan(3_000);
   });
 
-  it('follows more than sixteen module-scope authority aliases without a fail-open cutoff', () => {
-    const aliases = Array.from({ length: 24 }, (_unused, index) =>
-      index === 0
-        ? 'const authority0 = execFileSync;'
-        : `const authority${index} = authority${index - 1};`,
+  it('resolves linear module-scope authority aliases iteratively through 1024 links', () => {
+    for (const length of [64, 128, 256, 512, 1_024]) {
+      const aliases = Array.from({ length }, (_unused, index) =>
+        index === 0
+          ? 'const authority0 = execFileSync;'
+          : `const authority${index} = authority${index - 1};`,
+      ).join('\n');
+      const started = Date.now();
+      const facts = sinksFor(`
+        import { execFileSync } from 'node:child_process';
+        import { mutation } from '@kovojs/server';
+        ${aliases}
+        export const unsafe = mutation({ handler(input) {
+          return authority${length - 1}(input.program);
+        } });
+      `);
+
+      expect(facts, `alias length ${length}`).toEqual(
+        expect.arrayContaining([expect.objectContaining({ sink: 'child_process.execFileSync' })]),
+      );
+      expect(Date.now() - started, `alias length ${length}`).toBeLessThan(3_000);
+    }
+  });
+
+  it('resolves a framework-factory member write through 1024 module aliases', () => {
+    const aliases = Array.from({ length: 1_024 }, (_unused, index) =>
+      index === 0 ? 'const holder0 = {};' : `const holder${index} = holder${index - 1};`,
     ).join('\n');
+    const started = Date.now();
     const facts = sinksFor(`
       import { execFileSync } from 'node:child_process';
       import { mutation } from '@kovojs/server';
       ${aliases}
-      export const unsafe = mutation({ handler(input) {
-        return authority23(input.program);
-      } });
+      holder1023.run = mutation;
+      holder0.run({ handler(input) { return execFileSync(input.program); } });
     `);
 
     expect(facts).toEqual(
       expect.arrayContaining([expect.objectContaining({ sink: 'child_process.execFileSync' })]),
     );
+    expect(Date.now() - started).toBeLessThan(3_000);
+  });
+
+  it('keeps four hundred independent request roots within a low-second bound', () => {
+    const roots = Array.from(
+      { length: 400 },
+      (_unused, index) =>
+        `export const unsafe${index} = mutation({ handler(input) { return execFileSync(input.program); } });`,
+    ).join('\n');
+    const started = Date.now();
+    const facts = sinksFor(`
+      import { execFileSync } from 'node:child_process';
+      import { mutation } from '@kovojs/server';
+      ${roots}
+    `);
+
+    expect(facts.filter((fact) => fact.sink === 'child_process.execFileSync')).toHaveLength(400);
+    expect(Date.now() - started).toBeLessThan(3_000);
+  });
+
+  it('fails closed before oversized independent request-root breadth can grow unbounded', () => {
+    const roots = Array.from(
+      { length: 1_000 },
+      (_unused, index) =>
+        `export const unsafe${index} = mutation({ handler(input) { return execFileSync(input.program); } });`,
+    ).join('\n');
+    const started = Date.now();
+    const facts = sinksFor(`
+      import { execFileSync } from 'node:child_process';
+      import { mutation } from '@kovojs/server';
+      ${roots}
+    `);
+
+    expect(facts.filter((fact) => fact.sink === 'child_process.execFileSync')).toHaveLength(512);
+    expect(facts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ sink: 'request-handler.provenance-budget' }),
+      ]),
+    );
+    expect(Date.now() - started).toBeLessThan(5_000);
   });
 
   it('discovers framework roots through containers, local factories, and invocation adapters', () => {
@@ -1467,7 +1529,7 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
     const sources = facts
       .filter((fact) => fact.sink === 'child_process.execFileSync')
       .map((fact) => fact.source);
-    expect(sources).toEqual(
+    expect(sources, JSON.stringify(facts)).toEqual(
       expect.arrayContaining([
         "'client-ip'",
         "'csrf-session-id'",
@@ -1492,6 +1554,282 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
         "'verify-payload'",
         "'verify-timestamp'",
         "'webhook-access'",
+      ]),
+    );
+  });
+
+  it('tracks import.meta env through aliases, destructuring, containers, and assignments', () => {
+    const facts = sinksFor(
+      `
+        import { route } from '@kovojs/server';
+        void import.meta.env.SSR;
+        const meta = import.meta;
+        const { env } = import.meta;
+        const holder = { meta: import.meta };
+        const tuple = [import.meta];
+        let assigned;
+        assigned = import.meta;
+        let assignedEnv;
+        ({ env: assignedEnv } = import.meta);
+        route('/', {
+          bootstrapScript: meta.env.BOOTSTRAP,
+          i18n: [{ locale: 'en', messages: { key: env.MESSAGE } }],
+          meta: { title: assignedEnv.TITLE },
+          modulepreloads: [holder.meta.env.PRELOAD],
+          page: () => 'ok',
+          prerenderUrls: [tuple[0].env.TUPLE],
+          stylesheets: [assigned.env.STYLE],
+        });
+      `,
+      'app.mts',
+    );
+
+    expect(
+      facts.filter((fact) => fact.sink === 'import.meta.env'),
+      JSON.stringify(facts),
+    ).toHaveLength(6);
+  });
+
+  it('recovers destructuring-assignment, Reflect.get, and descriptor factories', () => {
+    const facts = sinksFor(`
+      import { execFileSync } from 'node:child_process';
+      import * as serverApi from '@kovojs/server';
+      let assigned;
+      ({ endpoint: assigned } = serverApi);
+      const reflected = Reflect.get(serverApi, 'endpoint');
+      const descriptor = Object.getOwnPropertyDescriptor(serverApi, 'endpoint');
+      const described = descriptor.value;
+      assigned('/assigned', { handler(request) { execFileSync('assigned'); return new Response(request.url); } });
+      reflected('/reflected', { handler(request) { execFileSync('reflected'); return new Response(request.url); } });
+      described('/described', { handler(request) { execFileSync('described'); return new Response(request.url); } });
+    `);
+
+    const sources = facts
+      .filter((fact) => fact.sink === 'child_process.execFileSync')
+      .map((fact) => fact.source);
+    expect(sources).toEqual(expect.arrayContaining(["'assigned'", "'described'", "'reflected'"]));
+  });
+
+  it('tracks descriptor and Reflect config writes only before the declaration snapshot', () => {
+    const facts = sinksFor(`
+      import { execFileSync } from 'node:child_process';
+      import { endpoint } from '@kovojs/server';
+      const response = { appOwnedSafety: true, body: 'text', cache: 'no-store' };
+      const a = { handler() { return new Response('safe'); }, method: 'GET', reason: 'a', response };
+      Object.defineProperty(a, 'handler', { value(request) { execFileSync('define-property'); return new Response(request.url); } });
+      endpoint('/a', a);
+      const b = { handler() { return new Response('safe'); }, method: 'GET', reason: 'b', response };
+      Object.defineProperties(b, { handler: { value(request) { execFileSync('define-properties'); return new Response(request.url); } } });
+      endpoint('/b', b);
+      const c = { handler() { return new Response('safe'); }, method: 'GET', reason: 'c', response };
+      Reflect.set(c, 'handler', function(request) { execFileSync('reflect-set'); return new Response(request.url); });
+      endpoint('/c', c);
+      const after = { handler() { return new Response('safe'); }, method: 'GET', reason: 'after', response };
+      endpoint('/after', after);
+      after.handler = function(request) { execFileSync('post-snapshot'); return new Response(request.url); };
+    `);
+
+    const sources = facts
+      .filter((fact) => fact.sink === 'child_process.execFileSync')
+      .map((fact) => fact.source);
+    expect(sources, JSON.stringify(facts)).toEqual(
+      expect.arrayContaining(["'define-properties'", "'define-property'", "'reflect-set'"]),
+    );
+    expect(sources).not.toContain("'post-snapshot'");
+  });
+
+  it('keeps session values server-only while scanning setCookies and db-provider authority', () => {
+    const facts = sinksFor(`
+      import { createApp } from '@kovojs/server';
+      createApp({
+        db(request) { request.headers.get('cookie'); return {}; },
+        sessionProvider(request) {
+          return {
+            value: { session: request.headers.get('cookie') },
+            setCookies: [request.headers.get('authorization')],
+          };
+        },
+      });
+    `);
+
+    expect(facts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ sink: 'client-wire.request.header.Authorization' }),
+      ]),
+    );
+    expect(facts.map((fact) => fact.sink)).not.toContain('client-wire.request.header.Cookie');
+  });
+
+  it('models endpoint Cookie neutralization while preserving Authorization wire authority', () => {
+    const facts = sinksFor(`
+      import { endpoint } from '@kovojs/server';
+      endpoint('/raw', { handler(request) {
+        return Response.json({
+          authorization: request.headers.get('authorization'),
+          cookie: request.headers.get('cookie'),
+        });
+      } });
+    `);
+
+    expect(facts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ sink: 'client-wire.request.header.Authorization' }),
+      ]),
+    );
+    expect(facts.map((fact) => fact.sink)).not.toContain('client-wire.request.header.Cookie');
+  });
+
+  it('tracks computed and prototype-installed toJSON credential serialization', () => {
+    const facts = sinksFor(`
+      import { query } from '@kovojs/server';
+      query({ load(_input, { request }) {
+        let captured;
+        class Computed {
+          ['to' + 'JSON']() { return captured; }
+        }
+        captured = request.headers.get('cookie');
+        return new Computed();
+      } });
+      query({ load(_input, { request }) {
+        let captured;
+        class Assigned {}
+        Assigned.prototype.toJSON = () => captured;
+        captured = request.headers.get('authorization');
+        return new Assigned();
+      } });
+      query({ load(_input, { request }) {
+        class Described {}
+        Object.defineProperty(Described.prototype, 'toJSON', {
+          value() { return request.headers.get('proxy-authorization'); },
+        });
+        return new Described();
+      } });
+    `);
+
+    expect(facts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ sink: 'client-wire.request.header.Authorization' }),
+        expect.objectContaining({ sink: 'client-wire.request.header.Cookie' }),
+        expect.objectContaining({ sink: 'client-wire.request.header.Proxy-Authorization' }),
+      ]),
+    );
+  });
+
+  it('closes mutated intrinsic prototypes while preserving local intrinsic helpers', () => {
+    const facts = sinksFor(`
+      import { execFileSync } from 'node:child_process';
+      import { query } from '@kovojs/server';
+      String.prototype.trim = function() { execFileSync('trim-rebind'); return String(this); };
+      Object.defineProperty(Array.prototype, 'map', {
+        value() { execFileSync('map-rebind'); return []; },
+      });
+      query({ load(input) {
+        String(input.program).trim();
+        [input.program].map((value) => value);
+        return 'ok';
+      } });
+    `);
+    const sources = facts
+      .filter((fact) => fact.sink === 'child_process.execFileSync')
+      .map((fact) => fact.source);
+    expect(sources).toEqual(expect.arrayContaining(["'map-rebind'", "'trim-rebind'"]));
+
+    const safe = sinksFor(`
+      import { query } from '@kovojs/server';
+      function trim(value) { return value.trim(); }
+      query({ load(input) { return trim(input.value); } });
+    `);
+    expect(safe.map((fact) => fact.sink)).not.toContain('request-handler.opaque-call');
+  });
+
+  it('closes pre-snapshot access-array push and index mutations', () => {
+    const facts = sinksFor(`
+      import { execFileSync } from 'node:child_process';
+      import { endpoint } from '@kovojs/server';
+      const response = { appOwnedSafety: true, body: 'text', cache: 'no-store' };
+      const pushed = [];
+      pushed.push((request) => { execFileSync('access-push'); return request.url.length > 0; });
+      endpoint('/push', { access: pushed, handler() { return new Response('ok'); }, method: 'GET', reason: 'push', response });
+      const indexed = [];
+      indexed[0] = (request) => { execFileSync('access-index'); return request.url.length > 0; };
+      endpoint('/index', { access: indexed, handler() { return new Response('ok'); }, method: 'GET', reason: 'index', response });
+    `);
+    const sources = facts
+      .filter((fact) => fact.sink === 'child_process.execFileSync')
+      .map((fact) => fact.source);
+    expect(sources).toEqual(expect.arrayContaining(["'access-index'", "'access-push'"]));
+  });
+
+  it('traverses inherited schema, replay, registry, and mutation-replay adapter methods', () => {
+    const facts = sinksFor(`
+      import { execFileSync } from 'node:child_process';
+      import { createApp, query, webhook } from '@kovojs/server';
+      class BaseSchema {
+        parse(value) { execFileSync('schema-parse'); return value; }
+        parseAsync(value) { execFileSync('schema-parse-async'); return value; }
+      }
+      class Schema extends BaseSchema {}
+      class BaseReplay {
+        get() { execFileSync('replay-get'); return undefined; }
+        reserve() { execFileSync('replay-reserve'); return { commit() {}, abort() {} }; }
+        set() { execFileSync('replay-set'); }
+      }
+      class Replay extends BaseReplay {}
+      class BaseRegistry {
+        buildToken() { execFileSync('registry-build'); return 'build'; }
+        resolve() { execFileSync('registry-resolve'); return { body: '', headers: {}, status: 200 }; }
+      }
+      class Registry extends BaseRegistry {}
+      const schema = new Schema();
+      const replay = new Replay();
+      const hook = webhook('/hook', { handler() { return {}; }, input: schema, replayStore: replay });
+      createApp({
+        clientModules: new Registry(),
+        endpoints: [hook],
+        mutationReplayStore: replay,
+        queries: [query('q', { args: schema, load() { return 'ok'; } })],
+      });
+    `);
+    const sources = facts
+      .filter((fact) => fact.sink === 'child_process.execFileSync')
+      .map((fact) => fact.source);
+    expect(sources, JSON.stringify(facts)).toEqual(
+      expect.arrayContaining([
+        "'registry-build'",
+        "'registry-resolve'",
+        "'replay-get'",
+        "'replay-reserve'",
+        "'replay-set'",
+        "'schema-parse'",
+        "'schema-parse-async'",
+      ]),
+    );
+  });
+
+  it('closes factory laundering through aggregate selectors and namespace copies', () => {
+    const facts = sinksFor(`
+      import { execFileSync } from 'node:child_process';
+      import { endpoint } from '@kovojs/server';
+      import * as serverApi from '@kovojs/server';
+      const response = { appOwnedSafety: true, body: 'text', cache: 'no-store' };
+      [endpoint].at(0)('/at', { handler() { execFileSync('array-at'); return new Response('ok'); }, method: 'GET', reason: 'at', response });
+      new Map([['x', endpoint]]).get('x')('/map', { handler() { execFileSync('map-get'); return new Response('ok'); }, method: 'GET', reason: 'map', response });
+      ({ ...serverApi }).endpoint('/spread', { handler() { execFileSync('object-spread'); return new Response('ok'); }, method: 'GET', reason: 'spread', response });
+      Object.assign({}, serverApi).endpoint('/assign', { handler() { execFileSync('object-assign'); return new Response('ok'); }, method: 'GET', reason: 'assign', response });
+      Object.values({ endpoint })[0]('/values', { handler() { execFileSync('object-values'); return new Response('ok'); }, method: 'GET', reason: 'values', response });
+      serverApi['end' + 'point']('/computed', { handler() { execFileSync('computed-key'); return new Response('ok'); }, method: 'GET', reason: 'computed', response });
+    `);
+    const sources = facts
+      .filter((fact) => fact.sink === 'child_process.execFileSync')
+      .map((fact) => fact.source);
+    expect(sources, JSON.stringify(facts)).toEqual(
+      expect.arrayContaining([
+        "'array-at'",
+        "'computed-key'",
+        "'map-get'",
+        "'object-assign'",
+        "'object-spread'",
+        "'object-values'",
       ]),
     );
   });
@@ -1528,7 +1866,7 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
     expect(
       facts.filter((fact) => fact.sink === '@kovojs/server.rootedFiles'),
       JSON.stringify(facts),
-    ).toHaveLength(2);
+    ).toHaveLength(1);
   });
 
   it('classifies static app/route wire hints but not currently non-emitted layout hints', () => {
