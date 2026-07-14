@@ -9,7 +9,7 @@ export const handlerLoweringDiagnosticCoverage = defineDiagnosticCoverage('handl
       coverageFixtures.compileComponentModule({
         fileName: 'handler-captures-ok.tsx',
         source: `
-import { openPanel } from './actions';
+import { tabsTriggerClick as openPanel } from '@kovojs/headless-ui/tabs';
 
 export const HandlerCapturesOk = component({
   state: () => ({ open: false }),

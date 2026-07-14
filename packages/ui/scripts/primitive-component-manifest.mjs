@@ -291,6 +291,7 @@ export const primitiveComponentManifest = {
       subpath: 'alert-dialog',
     },
     {
+      clientHelpers: ['autocompleteSuggestions'],
       handlers: ['autocompleteInput', 'autocompleteKeyDown', 'autocompleteOptionClick'],
       subpath: 'autocomplete',
     },
@@ -311,10 +312,12 @@ export const primitiveComponentManifest = {
       subpath: 'collapsible',
     },
     {
+      clientHelpers: ['comboboxFilteredItems'],
       handlers: ['comboboxInput', 'comboboxKeyDown', 'comboboxOptionClick'],
       subpath: 'combobox',
     },
     {
+      clientHelpers: ['commandFilteredItems'],
       handlers: [
         'commandBeforeToggle',
         'commandCancel',
@@ -327,6 +330,8 @@ export const primitiveComponentManifest = {
       subpath: 'command',
     },
     {
+      clientHelpers: ['contextMenuFocusElement', 'contextMenuMove', 'contextMenuTypeahead'],
+      generatedClientHelperWrappers: ['contextMenuMove', 'contextMenuTypeahead'],
       handlers: [
         'contextMenuItemClick',
         'contextMenuItemKeyDown',
@@ -345,6 +350,8 @@ export const primitiveComponentManifest = {
       subpath: 'disclosure',
     },
     {
+      clientHelpers: ['dropdownMenuFocusElement', 'dropdownMenuMove', 'dropdownMenuTypeahead'],
+      generatedClientHelperWrappers: ['dropdownMenuMove', 'dropdownMenuTypeahead'],
       handlers: [
         'dropdownMenuItemClick',
         'dropdownMenuItemKeyDown',
@@ -373,6 +380,8 @@ export const primitiveComponentManifest = {
       subpath: 'hover-card',
     },
     {
+      clientHelpers: ['menubarFocusElement', 'menubarMove', 'menubarTypeahead'],
+      generatedClientHelperWrappers: ['menubarMove', 'menubarTypeahead'],
       handlers: [
         'menubarItemClick',
         'menubarItemKeyDown',
@@ -383,10 +392,17 @@ export const primitiveComponentManifest = {
       subpath: 'menubar',
     },
     {
+      clientHelpers: ['meterValueState'],
       handlers: [],
       subpath: 'meter',
     },
     {
+      clientHelpers: [
+        'navigationMenuFocusElement',
+        'navigationMenuMove',
+        'navigationMenuTypeahead',
+      ],
+      generatedClientHelperWrappers: ['navigationMenuMove', 'navigationMenuTypeahead'],
       handlers: [
         'navigationMenuKeyDown',
         'navigationMenuLinkClick',
@@ -422,6 +438,7 @@ export const primitiveComponentManifest = {
       subpath: 'radio-group',
     },
     {
+      clientHelpers: ['scrollAreaThumbGeometry'],
       handlers: [
         'scrollAreaScrollTo',
         'scrollAreaThumbDrag',
@@ -436,6 +453,8 @@ export const primitiveComponentManifest = {
       subpath: 'separator',
     },
     {
+      clientHelpers: ['selectMove'],
+      generatedClientHelperWrappers: ['selectMove'],
       handlers: ['selectItemClick', 'selectKeyDown', 'selectTriggerChange', 'selectTriggerClick'],
       subpath: 'select',
     },
@@ -458,6 +477,7 @@ export const primitiveComponentManifest = {
       subpath: 'tabs',
     },
     {
+      clientHelpers: ['normalizeToastDuration'],
       handlers: [
         'toastActionClick',
         'toastAnimationEnd',

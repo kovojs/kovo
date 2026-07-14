@@ -1,26 +1,39 @@
 import * as ts from 'typescript';
 
 import {
+  canonicalFrameworkExportForExpression,
   expressionResolvesToFrameworkExport,
   frameworkExport,
+  type FrameworkExportIdentity,
   type FrameworkIdentityTypeScript,
 } from '@kovojs/core/internal/framework-identity';
+import { securityClassifier } from '@kovojs/core/internal/security-markers';
 
+import {
+  reviewedCanonicalClientHandlerImportTarget,
+  reviewedClientHandlerImportTarget,
+  type ClientHandlerImportKind,
+} from '../client-handler-import-policy.js';
 import type { CompilerDiagnostic, DiagnosticFactory } from '../diagnostics.js';
 import {
   compilerArrayAppend,
   compilerArrayLength,
   compilerCreateMap,
   compilerCreateSet,
+  compilerFreeze,
   compilerMapGet,
   compilerMapSet,
   compilerOwnDataValue,
-  compilerRegExpTest,
   compilerSetAdd,
   compilerSetHas,
 } from '../compiler-security-intrinsics.js';
-import type { ComponentModuleModel } from '../scan/parse.js';
-import type { PublishToClientFact } from '../types.js';
+import {
+  identifierIsShadowedBeforeScope,
+  jsxElements,
+  type ComponentModuleModel,
+} from '../scan/parse.js';
+import type { JsxElementModel } from '../scan/model.js';
+import type { ClientImportDependencyProvenance, PublishToClientFact } from '../types.js';
 import { isCompilerAuditText } from '../security/audit-text.js';
 
 /**
@@ -38,10 +51,8 @@ import { isCompilerAuditText } from '../security/audit-text.js';
  * a secret". Instead we refuse to ship the EVALUATED VALUE of ANY captured cross-module import into
  * the client unless it is provably client-safe:
  *
- *   - **callee-position only** — the import is INVOKED (`track(x)`, `keyDown(event, …)`). The
- *     browser runs the function; its identity, not its evaluated value, is what crosses. This is
- *     ordinary client logic (the de-facto contract for `./analytics`/`@kovojs/headless-ui`), so it
- *     is client-safe to emit.
+ *   - **exact reviewed executable identity** — a finite compiler registry, optionally reached
+ *     through compiler-proven local re-exports, identifies the callable and its browser ABI.
  *   - **publishToClient(value, { reason })** — an author assertion (audit-grade, NOT statically
  *     checked) that a value-position captured import is safe to ship. The capture is allowed to
  *     emit and the site+reason are recorded for `kovo explain --capabilities`.
@@ -51,10 +62,8 @@ import { isCompilerAuditText } from '../security/audit-text.js';
  * specifier is withheld from the emitted `*.client.js` (the by-construction half lives in
  * lower/handlers.ts, which consumes {@link emitAllowedImportLocalNames}).
  *
- * Honest ceiling (documented for the handoff): a callee-position function import whose own module
- * transitively reads a server secret is a different, far weaker channel — it requires that module to
- * be client-bundlable at all, the same trust the author already extends to every client util. This
- * gate closes the inlined-value channel, not arbitrary cross-module code trust.
+ * Callee position alone never establishes trust: arbitrary relative modules, bare packages, Node
+ * builtins, loader forms, and aliases are refused and their whole handler artifact is omitted.
  */
 
 const PUBLISH_TO_CLIENT_IDENTITY = frameworkExport('@kovojs/core', 'publishToClient');
@@ -65,7 +74,7 @@ interface ImportBinding {
   /** Local name the handler closure can reference. */
   localName: string;
   /** Named / default / namespace — covers all laundering forms the threat model lists. */
-  kind: 'named' | 'default' | 'namespace';
+  kind: ClientHandlerImportKind | 'local-alias';
   importedName: string;
   /** Surface module specifier (followed only as a label; the binding itself is the resolved fact). */
   moduleSpecifier: string;
@@ -80,24 +89,36 @@ interface ModuleConstantBinding {
 type CaptureBinding = ImportBinding | ModuleConstantBinding;
 
 interface CaptureUse {
+  /** Start of the JSX attribute that owns the generated handler. */
+  attributeStart: number;
   binding: CaptureBinding;
-  /** True when the import is the callee of a call expression (client-safe code). */
+  /** True when the import is the callee of a call expression (position only; never provenance). */
   callee: boolean;
   /** True when this value-position use is the first arg of a recognized publishToClient(...) call. */
   published: boolean;
+  publishReason?: string;
+  reviewedIdentity?: FrameworkExportIdentity;
   start: number;
   length: number;
 }
 
+interface UnsafeCaptureUse extends CaptureUse {
+  reason: 'client-import-policy' | 'client-value-capture' | 'module-constant-capture';
+}
+
 export interface ClientCaptureAnalysis {
   /** Un-wrapped value-position captures: each is a KV437 site. */
-  unsafeUses: readonly CaptureUse[];
+  unsafeUses: readonly UnsafeCaptureUse[];
   /** Audited publishToClient escapes recorded for the capabilities ledger. */
   publishFacts: readonly PublishToClientFact[];
   /** Import local names whose every value-position use is callee-only or published → safe to emit. */
   emitAllowed: ReadonlySet<string>;
+  /** Immutable compiler proof carried to the final client import sink. */
+  emitImportProvenance: ReadonlyMap<string, ClientImportDependencyProvenance>;
   /** Same-file module constants whose every value-position use is publishToClient-wrapped. */
   emitAllowedModuleConstants: ReadonlySet<string>;
+  /** Handler attributes omitted wholesale because one of their captures is closed. */
+  blockedHandlerAttributeStarts: ReadonlySet<number>;
 }
 
 /**
@@ -118,39 +139,51 @@ function importBindings(sourceFile: ts.SourceFile): ImportBinding[] {
     ) as ts.Statement | undefined;
     if (!statement)
       throw new TypeError(`Client-capture statements[${statementIndex}] must be dense.`);
-    if (!ts.isImportDeclaration(statement)) continue;
+    if (ts.isImportEqualsDeclaration(statement)) {
+      const expression = ts.isExternalModuleReference(statement.moduleReference)
+        ? statement.moduleReference.expression
+        : undefined;
+      appendImportBinding(bindings, {
+        importedName: '*',
+        kind: statement.isTypeOnly ? 'type-only' : 'import-equals',
+        localName: statement.name.text,
+        moduleSpecifier:
+          expression && ts.isStringLiteralLike(expression) ? expression.text : '<import-equals>',
+        source: 'import',
+      });
+      continue;
+    }
+    if (!ts.isImportDeclaration(statement)) {
+      appendCommonJsBindings(bindings, statement);
+      continue;
+    }
     if (!ts.isStringLiteralLike(statement.moduleSpecifier)) continue;
     const moduleSpecifier = statement.moduleSpecifier.text;
     const clause = statement.importClause;
     if (!clause) continue;
+    const clauseKind: ClientHandlerImportKind | undefined = clause.isTypeOnly
+      ? 'type-only'
+      : undefined;
 
     if (clause.name) {
-      compilerArrayAppend(
-        bindings,
-        {
-          importedName: 'default',
-          kind: 'default',
-          localName: clause.name.text,
-          moduleSpecifier,
-          source: 'import',
-        },
-        'Client-capture import bindings',
-      );
+      appendImportBinding(bindings, {
+        importedName: 'default',
+        kind: clauseKind ?? 'default',
+        localName: clause.name.text,
+        moduleSpecifier,
+        source: 'import',
+      });
     }
 
     const named = clause.namedBindings;
     if (named && ts.isNamespaceImport(named)) {
-      compilerArrayAppend(
-        bindings,
-        {
-          importedName: '*',
-          kind: 'namespace',
-          localName: named.name.text,
-          moduleSpecifier,
-          source: 'import',
-        },
-        'Client-capture import bindings',
-      );
+      appendImportBinding(bindings, {
+        importedName: '*',
+        kind: clauseKind ?? 'namespace',
+        localName: named.name.text,
+        moduleSpecifier,
+        source: 'import',
+      });
     } else if (named && ts.isNamedImports(named)) {
       const elementLength = compilerArrayLength(named.elements, 'Client-capture named imports');
       for (let elementIndex = 0; elementIndex < elementLength; elementIndex += 1) {
@@ -162,22 +195,110 @@ function importBindings(sourceFile: ts.SourceFile): ImportBinding[] {
         if (!element) {
           throw new TypeError(`Client-capture named imports[${elementIndex}] must be dense.`);
         }
-        compilerArrayAppend(
-          bindings,
-          {
-            importedName: element.propertyName?.text ?? element.name.text,
-            kind: 'named',
-            localName: element.name.text,
-            moduleSpecifier,
-            source: 'import',
-          },
-          'Client-capture import bindings',
-        );
+        appendImportBinding(bindings, {
+          importedName: element.propertyName?.text ?? element.name.text,
+          kind: clauseKind ?? (element.isTypeOnly ? 'type-only' : 'named'),
+          localName: element.name.text,
+          moduleSpecifier,
+          source: 'import',
+        });
       }
     }
   }
 
   return bindings;
+}
+
+function appendImportBinding(bindings: ImportBinding[], binding: ImportBinding): void {
+  compilerArrayAppend(bindings, binding, 'Client-capture import bindings');
+}
+
+function appendCommonJsBindings(bindings: ImportBinding[], statement: ts.Statement): void {
+  if (!ts.isVariableStatement(statement)) return;
+  const declarationLength = compilerArrayLength(
+    statement.declarationList.declarations,
+    'Client-capture CommonJS declarations',
+  );
+  for (let declarationIndex = 0; declarationIndex < declarationLength; declarationIndex += 1) {
+    const declaration = compilerOwnDataValue(
+      statement.declarationList.declarations,
+      declarationIndex,
+      'Client-capture CommonJS declarations',
+    ) as ts.VariableDeclaration | undefined;
+    if (!declaration?.initializer) continue;
+    const required = commonJsRequirement(declaration.initializer);
+    if (!required) continue;
+    if (ts.isIdentifier(declaration.name)) {
+      appendImportBinding(bindings, {
+        importedName: required.importedName,
+        kind: 'commonjs',
+        localName: declaration.name.text,
+        moduleSpecifier: required.moduleSpecifier,
+        source: 'import',
+      });
+      continue;
+    }
+    if (!ts.isObjectBindingPattern(declaration.name)) continue;
+    const elementLength = compilerArrayLength(
+      declaration.name.elements,
+      'Client-capture CommonJS binding elements',
+    );
+    for (let elementIndex = 0; elementIndex < elementLength; elementIndex += 1) {
+      const element = compilerOwnDataValue(
+        declaration.name.elements,
+        elementIndex,
+        'Client-capture CommonJS binding elements',
+      ) as ts.BindingElement | undefined;
+      if (!element || !ts.isIdentifier(element.name)) continue;
+      appendImportBinding(bindings, {
+        importedName:
+          element.propertyName && ts.isIdentifier(element.propertyName)
+            ? element.propertyName.text
+            : element.name.text,
+        kind: 'commonjs',
+        localName: element.name.text,
+        moduleSpecifier: required.moduleSpecifier,
+        source: 'import',
+      });
+    }
+  }
+}
+
+function commonJsRequirement(
+  expression: ts.Expression,
+): { importedName: string; moduleSpecifier: string } | undefined {
+  let current = unwrapClientCaptureExpression(expression);
+  let importedName = '*';
+  if (ts.isPropertyAccessExpression(current)) {
+    importedName = current.name.text;
+    current = unwrapClientCaptureExpression(current.expression);
+  }
+  if (
+    !ts.isCallExpression(current) ||
+    !ts.isIdentifier(current.expression) ||
+    current.expression.text !== 'require'
+  ) {
+    return undefined;
+  }
+  const argument = current.arguments[0];
+  return {
+    importedName,
+    moduleSpecifier: argument && ts.isStringLiteralLike(argument) ? argument.text : '<dynamic>',
+  };
+}
+
+function unwrapClientCaptureExpression(expression: ts.Expression): ts.Expression {
+  let current = expression;
+  while (
+    ts.isParenthesizedExpression(current) ||
+    ts.isAsExpression(current) ||
+    ts.isSatisfiesExpression(current) ||
+    ts.isNonNullExpression(current) ||
+    ts.isTypeAssertionExpression(current)
+  ) {
+    current = current.expression;
+  }
+  return current;
 }
 
 function moduleConstantBindings(model: ComponentModuleModel): ModuleConstantBinding[] {
@@ -201,36 +322,75 @@ function moduleConstantBindings(model: ComponentModuleModel): ModuleConstantBind
   return bindings;
 }
 
-/** Every event-handler arrow body in the module (the closures lowered into the client bundle). */
-function handlerArrowBodies(sourceFile: ts.SourceFile): ts.Node[] {
-  const bodies: ts.Node[] = [];
+interface HandlerCaptureRoot {
+  attributeStart: number;
+  directCallable: boolean;
+  root: ts.Node;
+  scopeBoundary: ts.Node;
+}
+
+/** Every parser-proven host/reviewed-UI event expression that lowering can emit. */
+function handlerCaptureRoots(model: ComponentModuleModel): HandlerCaptureRoot[] {
+  const sourceFile = model.sourceFile;
+  const handlerAttributeStarts = compilerCreateSet<number>();
+  const elements = jsxElements(model);
+  const elementLength = compilerArrayLength(elements, 'Client-capture JSX elements');
+  for (let elementIndex = 0; elementIndex < elementLength; elementIndex += 1) {
+    const element = compilerOwnDataValue(elements, elementIndex, 'Client-capture JSX elements') as
+      | JsxElementModel
+      | undefined;
+    if (!element)
+      throw new TypeError(`Client-capture JSX elements[${elementIndex}] must be dense.`);
+    const attributeLength = compilerArrayLength(
+      element.attributes,
+      'Client-capture JSX attributes',
+    );
+    for (let attributeIndex = 0; attributeIndex < attributeLength; attributeIndex += 1) {
+      const attribute = compilerOwnDataValue(
+        element.attributes,
+        attributeIndex,
+        'Client-capture JSX attributes',
+      ) as JsxElementModel['attributes'][number] | undefined;
+      if (
+        attribute?.domEventName !== undefined &&
+        attribute.expression !== undefined &&
+        attribute.componentEventProp !== true
+      ) {
+        compilerSetAdd(handlerAttributeStarts, attribute.start);
+      }
+    }
+  }
+
+  const roots: HandlerCaptureRoot[] = [];
 
   const visit = (node: ts.Node): void => {
     if (
       ts.isJsxAttribute(node) &&
-      ts.isIdentifier(node.name) &&
-      isDomEventName(node.name.text) &&
+      compilerSetHas(handlerAttributeStarts, node.getStart(sourceFile)) &&
       node.initializer &&
       ts.isJsxExpression(node.initializer) &&
       node.initializer.expression
     ) {
       const expression = node.initializer.expression;
-      if (ts.isArrowFunction(expression) && expression.parameters.length === 0) {
-        compilerArrayAppend(bodies, expression.body, 'Client-capture handler bodies');
-      }
+      compilerArrayAppend(
+        roots,
+        {
+          attributeStart: node.getStart(sourceFile),
+          directCallable: !ts.isArrowFunction(expression) && !ts.isFunctionExpression(expression),
+          root:
+            ts.isArrowFunction(expression) || ts.isFunctionExpression(expression)
+              ? expression.body
+              : expression,
+          scopeBoundary: node,
+        },
+        'Client-capture handler roots',
+      );
     }
     ts.forEachChild(node, visit);
   };
 
   visit(sourceFile);
-  return bodies;
-}
-
-// React-style camelCase DOM handler attributes (onClick, onKeyDown, …). Mirrors the lowering's
-// own `jsxDomEventName` recognition exactly, so the gate analyzes precisely the closures that are
-// lowered into the client bundle — no more, no less.
-function isDomEventName(name: string): boolean {
-  return compilerRegExpTest(/^on[A-Z][A-Za-z0-9]*$/, name);
+  return roots;
 }
 
 /**
@@ -238,29 +398,59 @@ function isDomEventName(name: string): boolean {
  * publishToClient-wrapped (audited escape), or an un-wrapped value-position use (the leak).
  */
 function classifyCaptures(
-  body: ts.Node,
+  captureRoot: HandlerCaptureRoot,
   bindingByName: ReadonlyMap<string, CaptureBinding>,
   fileName: string,
   uses: CaptureUse[],
   publishFacts: PublishToClientFact[],
 ): void {
-  // Identifiers declared locally inside the handler shadow a module import of the same name; track
-  // them so a local `const track = …` is never mistaken for the captured import.
-  const shadowed = compilerCreateSet<string>();
-  collectLocalDeclarations(body, shadowed);
+  const { attributeStart, directCallable, root, scopeBoundary } = captureRoot;
 
   const visit = (node: ts.Node): void => {
+    const loaderBinding = moduleLoaderBinding(node);
+    if (loaderBinding) {
+      compilerArrayAppend(
+        uses,
+        {
+          attributeStart,
+          binding: loaderBinding,
+          callee: true,
+          length: node.getEnd() - node.getStart(),
+          published: false,
+          start: node.getStart(),
+        },
+        'Client-capture uses',
+      );
+    }
     if (ts.isIdentifier(node) && isValueReferenceIdentifier(node)) {
       const binding = compilerMapGet(bindingByName as Map<string, CaptureBinding>, node.text);
-      if (binding && !compilerSetHas(shadowed, node.text)) {
+      if (binding && !identifierIsShadowedBeforeScope(node, undefined, scopeBoundary)) {
         const parent = node.parent;
-        const callee = isCalleeReferenceIdentifier(node);
+        const callee =
+          isDirectCalleeReferenceIdentifier(node) ||
+          (directCallable && isDirectHandlerCallableReference(node, root));
         const publishReason = isPublishToClientArgument(node, parent)
           ? publishToClientReason(parent as ts.CallExpression)
           : null;
         // SPEC §6.6: the exact recorded reason must remain unambiguous in source,
         // `kovo explain`, CI logs, and review tooling.
         const published = publishReason !== null && isCompilerAuditText(publishReason);
+        const canonicalIdentity =
+          binding.source === 'import' && binding.kind === 'named'
+            ? canonicalFrameworkExportForExpression(
+                ts as FrameworkIdentityTypeScript,
+                node.getSourceFile(),
+                node,
+              )
+            : undefined;
+        const reviewedIdentity =
+          canonicalIdentity &&
+          reviewedCanonicalClientHandlerImportTarget(
+            canonicalIdentity.module,
+            canonicalIdentity.exportName,
+          ) !== undefined
+            ? canonicalIdentity
+            : undefined;
         if (published) {
           compilerArrayAppend(
             publishFacts,
@@ -270,7 +460,7 @@ function classifyCaptures(
               moduleSpecifier:
                 binding.source === 'import' ? binding.moduleSpecifier : `${fileName}#module-scope`,
               reason: publishReason,
-              site: sourceSite(fileName, body.getSourceFile(), node.getStart()),
+              site: sourceSite(fileName, root.getSourceFile(), node.getStart()),
               start: node.getStart(),
             },
             'Client-capture publish facts',
@@ -279,10 +469,13 @@ function classifyCaptures(
         compilerArrayAppend(
           uses,
           {
+            attributeStart,
             binding,
             callee,
             length: node.getEnd() - node.getStart(),
             published,
+            ...(published && publishReason !== null ? { publishReason } : {}),
+            ...(reviewedIdentity ? { reviewedIdentity } : {}),
             start: node.getStart(),
           },
           'Client-capture uses',
@@ -292,17 +485,81 @@ function classifyCaptures(
     ts.forEachChild(node, visit);
   };
 
-  visit(body);
+  visit(root);
 }
 
-function isCalleeReferenceIdentifier(node: ts.Identifier): boolean {
+function moduleLoaderBinding(node: ts.Node): ImportBinding | undefined {
+  if (
+    ts.isMetaProperty(node) &&
+    node.keywordToken === ts.SyntaxKind.ImportKeyword &&
+    node.name.text === 'meta'
+  ) {
+    return {
+      importedName: 'meta',
+      kind: 'dynamic',
+      localName: 'import.meta',
+      moduleSpecifier: '<import.meta>',
+      source: 'import',
+    };
+  }
+  if (!ts.isCallExpression(node)) return undefined;
+  if (node.expression.kind === ts.SyntaxKind.ImportKeyword) {
+    const argument = node.arguments[0];
+    return {
+      importedName: '*',
+      kind: 'dynamic',
+      localName: 'import()',
+      moduleSpecifier: argument && ts.isStringLiteralLike(argument) ? argument.text : '<dynamic>',
+      source: 'import',
+    };
+  }
+  if (ts.isIdentifier(node.expression) && node.expression.text === 'require') {
+    const argument = node.arguments[0];
+    return {
+      importedName: '*',
+      kind: 'commonjs',
+      localName: 'require()',
+      moduleSpecifier: argument && ts.isStringLiteralLike(argument) ? argument.text : '<dynamic>',
+      source: 'import',
+    };
+  }
+  return undefined;
+}
+
+function isDirectCalleeReferenceIdentifier(node: ts.Identifier): boolean {
   let current: ts.Node = node;
   let parent = current.parent;
-  while (parent && ts.isPropertyAccessExpression(parent) && parent.expression === current) {
+  while (
+    parent &&
+    (ts.isParenthesizedExpression(parent) ||
+      ts.isAsExpression(parent) ||
+      ts.isSatisfiesExpression(parent) ||
+      ts.isNonNullExpression(parent) ||
+      ts.isTypeAssertionExpression(parent))
+  ) {
     current = parent;
     parent = current.parent;
   }
   return !!parent && ts.isCallExpression(parent) && parent.expression === current;
+}
+
+function isDirectHandlerCallableReference(node: ts.Identifier, root: ts.Node): boolean {
+  let current: ts.Node = node;
+  let parent = current.parent;
+  while (
+    parent &&
+    ((ts.isPropertyAccessExpression(parent) && parent.expression === current) ||
+      (ts.isElementAccessExpression(parent) && parent.expression === current) ||
+      ts.isParenthesizedExpression(parent) ||
+      ts.isAsExpression(parent) ||
+      ts.isSatisfiesExpression(parent) ||
+      ts.isNonNullExpression(parent) ||
+      ts.isTypeAssertionExpression(parent))
+  ) {
+    current = parent;
+    parent = current.parent;
+  }
+  return current === root;
 }
 
 /** True when `node` is the first argument of a `publishToClient(value, …)` call. */
@@ -350,19 +607,6 @@ function sourceSite(fileName: string, sourceFile: ts.SourceFile, position: numbe
   return `${fileName}:${line + 1}`;
 }
 
-function collectLocalDeclarations(root: ts.Node, names: Set<string>): void {
-  const visit = (node: ts.Node): void => {
-    if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name)) {
-      compilerSetAdd(names, node.name.text);
-    }
-    if ((ts.isFunctionDeclaration(node) || ts.isClassDeclaration(node)) && node.name) {
-      compilerSetAdd(names, node.name.text);
-    }
-    ts.forEachChild(node, visit);
-  };
-  visit(root);
-}
-
 // A value reference (not a declaration site, property name, or import binding name). Reused from the
 // scanner's own `isReferenceIdentifier` discipline: a callee identifier IS a value reference (we
 // then separate callee vs non-callee by parent shape, not by excluding it here).
@@ -380,6 +624,122 @@ function isValueReferenceIdentifier(node: ts.Identifier): boolean {
   return true;
 }
 
+interface ModuleBindingDeclaration {
+  localName: string;
+  node: ts.Node;
+}
+
+function appendTaintedModuleBindings(
+  sourceFile: ts.SourceFile,
+  bindingByName: Map<string, CaptureBinding>,
+): void {
+  const declarations = moduleBindingDeclarations(sourceFile);
+  for (let pass = 0; pass <= declarations.length; pass += 1) {
+    let changed = false;
+    for (let index = 0; index < declarations.length; index += 1) {
+      const declaration = declarations[index]!;
+      if (compilerMapGet(bindingByName, declaration.localName) !== undefined) continue;
+      const dependency = closedModuleDependency(declaration.node, bindingByName);
+      if (!dependency) continue;
+      compilerMapSet(bindingByName, declaration.localName, {
+        importedName: dependency.importedName,
+        kind: 'local-alias',
+        localName: declaration.localName,
+        moduleSpecifier: dependency.moduleSpecifier,
+        source: 'import',
+      });
+      changed = true;
+    }
+    if (!changed) return;
+  }
+}
+
+function moduleBindingDeclarations(sourceFile: ts.SourceFile): ModuleBindingDeclaration[] {
+  const declarations: ModuleBindingDeclaration[] = [];
+  const statementLength = compilerArrayLength(
+    sourceFile.statements,
+    'Client-capture module declarations',
+  );
+  for (let statementIndex = 0; statementIndex < statementLength; statementIndex += 1) {
+    const statement = compilerOwnDataValue(
+      sourceFile.statements,
+      statementIndex,
+      'Client-capture module declarations',
+    ) as ts.Statement | undefined;
+    if (!statement) continue;
+    if (ts.isFunctionDeclaration(statement) && statement.name && statement.body) {
+      compilerArrayAppend(
+        declarations,
+        { localName: statement.name.text, node: statement.body },
+        'Client-capture module declarations',
+      );
+      continue;
+    }
+    if (!ts.isVariableStatement(statement)) continue;
+    const declarationLength = compilerArrayLength(
+      statement.declarationList.declarations,
+      'Client-capture module variable declarations',
+    );
+    for (let declarationIndex = 0; declarationIndex < declarationLength; declarationIndex += 1) {
+      const declaration = compilerOwnDataValue(
+        statement.declarationList.declarations,
+        declarationIndex,
+        'Client-capture module variable declarations',
+      ) as ts.VariableDeclaration | undefined;
+      if (!declaration?.initializer || !ts.isIdentifier(declaration.name)) continue;
+      compilerArrayAppend(
+        declarations,
+        { localName: declaration.name.text, node: declaration.initializer },
+        'Client-capture module declarations',
+      );
+    }
+  }
+  return declarations;
+}
+
+function closedModuleDependency(
+  root: ts.Node,
+  bindingByName: ReadonlyMap<string, CaptureBinding>,
+): ImportBinding | undefined {
+  let found: ImportBinding | undefined;
+  const visit = (node: ts.Node): void => {
+    if (found) return;
+    const loader = moduleLoaderBinding(node);
+    if (loader) {
+      found = loader;
+      return;
+    }
+    if (ts.isIdentifier(node) && isValueReferenceIdentifier(node)) {
+      const binding = compilerMapGet(bindingByName as Map<string, CaptureBinding>, node.text);
+      if (binding?.source === 'import') {
+        if (binding.kind !== 'named') {
+          found = binding;
+          return;
+        }
+        const identity = canonicalFrameworkExportForExpression(
+          ts as FrameworkIdentityTypeScript,
+          node.getSourceFile(),
+          node,
+        );
+        const target = identity
+          ? reviewedCanonicalClientHandlerImportTarget(identity.module, identity.exportName)
+          : reviewedClientHandlerImportTarget(
+              binding.moduleSpecifier,
+              binding.importedName,
+              binding.kind,
+            );
+        if (target === undefined) {
+          found = binding;
+          return;
+        }
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(root);
+  return found;
+}
+
 /**
  * Run the whole-channel capture analysis over a parsed component module. Pure over `model.sourceFile`
  * so the diagnostic validator and the lowering emit gate share ONE definition of "client-safe".
@@ -394,6 +754,7 @@ export function analyzeClientCaptures(model: ComponentModuleModel): ClientCaptur
     const binding = bindings[index]!;
     compilerMapSet(bindingByName, binding.localName, binding);
   }
+  appendTaintedModuleBindings(sourceFile, bindingByName);
   for (let index = 0; index < constants.length; index += 1) {
     const binding = constants[index]!;
     compilerMapSet(bindingByName, binding.localName, binding);
@@ -401,40 +762,131 @@ export function analyzeClientCaptures(model: ComponentModuleModel): ClientCaptur
 
   const allUses: CaptureUse[] = [];
   const publishFacts: PublishToClientFact[] = [];
-  const bodies = handlerArrowBodies(sourceFile);
-  for (let index = 0; index < bodies.length; index += 1) {
-    const body = bodies[index]!;
-    classifyCaptures(body, bindingByName, fileName, allUses, publishFacts);
+  const roots = handlerCaptureRoots(model);
+  for (let index = 0; index < roots.length; index += 1) {
+    const root = roots[index]!;
+    classifyCaptures(root, bindingByName, fileName, allUses, publishFacts);
   }
 
   // An import is UNSAFE at a use iff that use is value-position (not callee) and not published.
   // Same-file serializable module constants are stricter: they are evaluated into `*.client.js`, so
   // every captured use must be explicitly publishToClient-wrapped. A bare callee-position use is
   // not a meaningful client-code channel for a literal constant and remains blocked.
-  const unsafeUses: CaptureUse[] = [];
+  const unsafeUses: UnsafeCaptureUse[] = [];
+  const blockedHandlerAttributeStarts = compilerCreateSet<number>();
   const blockedImports: string[] = [];
   const referencedImports: string[] = [];
   const blockedConstants: string[] = [];
   const referencedConstants: string[] = [];
   for (let index = 0; index < allUses.length; index += 1) {
     const use = allUses[index]!;
-    const unsafe =
-      use.binding.source === 'module-constant' ? !use.published : !use.callee && !use.published;
-    if (unsafe) compilerArrayAppend(unsafeUses, use, 'Unsafe client-capture uses');
+    const reason = unsafeCaptureReason(use);
+    if (reason !== undefined) {
+      compilerArrayAppend(unsafeUses, { ...use, reason }, 'Unsafe client-capture uses');
+      compilerSetAdd(blockedHandlerAttributeStarts, use.attributeStart);
+    }
     const referenced = use.binding.source === 'import' ? referencedImports : referencedConstants;
     appendUniqueName(referenced, use.binding.localName);
-    if (unsafe) {
+    if (reason !== undefined) {
       const blocked = use.binding.source === 'import' ? blockedImports : blockedConstants;
       appendUniqueName(blocked, use.binding.localName);
     }
   }
 
-  // Emit is allowed for a binding iff it has NO un-wrapped value-position use anywhere — callee-only
-  // captures and publishToClient-wrapped captures keep their import line; everything else is withheld.
+  // Import emission is module-global, while handlers are emitted independently. If any use closes
+  // one binding, every handler that references that binding must be omitted; otherwise a separately
+  // published use could survive with an unbound identifier after the import is withheld.
+  for (let index = 0; index < allUses.length; index += 1) {
+    const use = allUses[index]!;
+    const blocked = use.binding.source === 'import' ? blockedImports : blockedConstants;
+    if (captureNameIsListed(blocked, use.binding.localName)) {
+      compilerSetAdd(blockedHandlerAttributeStarts, use.attributeStart);
+    }
+  }
+
+  // Emit is allowed only when every use has a finite reviewed executable identity or an audited
+  // publishToClient value escape. Position alone never authorizes executable code.
   const emitAllowed = allowedCaptureNames(referencedImports, blockedImports);
   const emitAllowedModuleConstants = allowedCaptureNames(referencedConstants, blockedConstants);
+  const emitImportProvenance = clientImportProvenance(allUses, emitAllowed);
 
-  return { emitAllowed, emitAllowedModuleConstants, publishFacts, unsafeUses };
+  return {
+    blockedHandlerAttributeStarts,
+    emitAllowed,
+    emitAllowedModuleConstants,
+    emitImportProvenance,
+    publishFacts,
+    unsafeUses,
+  };
+}
+
+function unsafeCaptureReason(use: CaptureUse): UnsafeCaptureUse['reason'] | undefined {
+  if (use.binding.source === 'module-constant') {
+    return use.published ? undefined : 'module-constant-capture';
+  }
+  if (use.binding.kind !== 'named') return 'client-import-policy';
+  if (reviewedTargetForUse(use) !== undefined) {
+    return use.callee || use.published ? undefined : 'client-import-policy';
+  }
+  if (use.published) return undefined;
+  return use.callee ? 'client-import-policy' : 'client-value-capture';
+}
+
+function reviewedTargetForUse(use: CaptureUse): string | undefined {
+  if (use.binding.source !== 'import' || use.binding.kind !== 'named') return undefined;
+  if (use.reviewedIdentity) {
+    return reviewedCanonicalClientHandlerImportTarget(
+      use.reviewedIdentity.module,
+      use.reviewedIdentity.exportName,
+    );
+  }
+  return reviewedClientHandlerImportTarget(
+    use.binding.moduleSpecifier,
+    use.binding.importedName,
+    use.binding.kind,
+  );
+}
+
+function clientImportProvenance(
+  uses: readonly CaptureUse[],
+  emitAllowed: ReadonlySet<string>,
+): ReadonlyMap<string, ClientImportDependencyProvenance> {
+  const result = compilerCreateMap<string, ClientImportDependencyProvenance>();
+  for (let index = 0; index < uses.length; index += 1) {
+    const use = uses[index]!;
+    if (
+      use.binding.source !== 'import' ||
+      !compilerSetHas(emitAllowed, use.binding.localName) ||
+      compilerMapGet(result, use.binding.localName) !== undefined
+    ) {
+      continue;
+    }
+    const target = reviewedTargetForUse(use);
+    if (target !== undefined) {
+      compilerMapSet(
+        result,
+        use.binding.localName,
+        compilerFreeze({
+          canonicalExportName: use.reviewedIdentity?.exportName ?? use.binding.importedName,
+          canonicalModule: use.reviewedIdentity?.module ?? use.binding.moduleSpecifier,
+          emittedModuleSpecifier: target,
+          kind: 'reviewed-executable' as const,
+        }),
+      );
+      continue;
+    }
+    if (use.published && use.publishReason) {
+      compilerMapSet(
+        result,
+        use.binding.localName,
+        compilerFreeze({
+          auditReason: use.publishReason,
+          kind: 'audited-published-value' as const,
+        }),
+      );
+    }
+  }
+  return result;
 }
 
 function appendUniqueName(names: string[], name: string): void {
@@ -442,6 +894,13 @@ function appendUniqueName(names: string[], name: string): void {
     if (names[index] === name) return;
   }
   compilerArrayAppend(names, name, 'Client-capture names');
+}
+
+function captureNameIsListed(names: readonly string[], name: string): boolean {
+  for (let index = 0; index < names.length; index += 1) {
+    if (names[index] === name) return true;
+  }
+  return false;
 }
 
 function allowedCaptureNames(
@@ -495,11 +954,12 @@ export function validateClientHandlerSecretCapture(
   const length = compilerArrayLength(analysis.unsafeUses, 'Unsafe client-capture uses');
   for (let index = 0; index < length; index += 1) {
     const use = compilerOwnDataValue(analysis.unsafeUses, index, 'Unsafe client-capture uses') as
-      | CaptureUse
+      | UnsafeCaptureUse
       | undefined;
     if (!use) {
       throw new TypeError(`Unsafe client-capture uses[${index}] must be an own capture fact.`);
     }
+    if (use.reason === 'client-import-policy') continue;
     compilerArrayAppend(
       found,
       diagnostics.at(
@@ -514,3 +974,41 @@ export function validateClientHandlerSecretCapture(
   }
   return found;
 }
+
+/**
+ * SPEC §5.2 executable-code boundary: generated browser handlers may call only an exact reviewed
+ * import identity. A relative barrel is accepted only when finite project identity resolution
+ * proves that it re-exports one of those identities, after which emission bypasses the barrel.
+ */
+export const validateClientHandlerImportPolicy = securityClassifier(
+  'compiler.client-handler-import.validate',
+  function (diagnostics: DiagnosticFactory, model: ComponentModuleModel): CompilerDiagnostic[] {
+    const analysis = analyzeClientCaptures(model);
+    const found: CompilerDiagnostic[] = [];
+    const length = compilerArrayLength(analysis.unsafeUses, 'Closed client-handler import uses');
+    for (let index = 0; index < length; index += 1) {
+      const use = compilerOwnDataValue(
+        analysis.unsafeUses,
+        index,
+        'Closed client-handler import uses',
+      ) as UnsafeCaptureUse | undefined;
+      if (!use) {
+        throw new TypeError(`Closed client-handler import uses[${index}] must be own data.`);
+      }
+      if (use.reason !== 'client-import-policy') continue;
+      const binding = use.binding;
+      compilerArrayAppend(
+        found,
+        diagnostics.at(
+          'KV201',
+          { length: use.length, start: use.start },
+          binding.source === 'import'
+            ? `clientImport="${binding.localName}" from="${binding.moduleSpecifier}" form=${binding.kind} reviewed=false`
+            : `moduleConstant="${binding.localName}" reviewed=false`,
+        ),
+        'Closed client-handler import diagnostics',
+      );
+    }
+    return found;
+  },
+);

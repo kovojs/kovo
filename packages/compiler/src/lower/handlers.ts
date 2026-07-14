@@ -14,6 +14,7 @@ import {
   compilerCreateSet,
   compilerDefineOwnDataProperty,
   compilerFailClosed,
+  compilerFreeze,
   compilerMapGet,
   compilerMapSet,
   compilerOwnDataValue,
@@ -40,6 +41,7 @@ import { normalizeComponentFileName } from '../shared.js';
 import { analyzeClientCaptures, type ClientCaptureAnalysis } from '../validate/client-capture.js';
 import type {
   ClientImportDependency,
+  ClientImportDependencyProvenance,
   ClientConstantDependency,
   CompileComponentOptions,
   ElementParam,
@@ -60,12 +62,12 @@ export function lowerEventHandlers(
   const handlers: HandlerLowering[] = [];
   const anonymousNameCounts = compilerCreateMap<string, number>();
   // SPEC §6.6/§6.2 + secure-framework Phase 4 / Tier 0 item 3: fail-closed, whole-channel emit gate.
-  // Only re-emit a captured cross-module import into `*.client.js` when its every value-position use
-  // is callee-only (client code) or publishToClient-wrapped (audited escape). Any other captured
-  // import is WITHHELD here so the secret specifier never reaches the bundler; the matching KV437
-  // teaching diagnostic is produced by validate/client-capture.ts over the authored source.
+  // Only re-emit a captured cross-module import when it carries exact reviewed executable provenance
+  // or a publishToClient audit escape. Every closed handler is omitted wholesale, so neither a
+  // specifier nor an unbound body can reach generated browser artifacts.
   const analysis = clientCaptureAnalysis ?? analyzeClientCaptures(model);
   const emitAllowedImports = analysis.emitAllowed;
+  const emitImportProvenance = analysis.emitImportProvenance;
   const emitAllowedModuleConstants = analysis.emitAllowedModuleConstants;
 
   const attributes = eventAttributes(model);
@@ -80,6 +82,7 @@ export function lowerEventHandlers(
       compilerFailClosed(`Lowered event attributes[${attributeIndex}] must be dense own data.`);
     }
     const { attributeEnd, attributeStart, eventName, tag } = eventAttribute;
+    if (compilerSetHas(analysis.blockedHandlerAttributeStarts, attributeStart)) continue;
     // SPEC §5.2: branch on the typed parser fact, not a regex over the raw attribute snippet, and
     // use the typed bare-identifier NAME (parenthesization-resistant) for the lowered export name
     // and the emitted call-through. The raw `expression` is reserved for diagnostic help text.
@@ -155,6 +158,7 @@ export function lowerEventHandlers(
           model.namedImports,
           handlerReferenceNames(eventAttribute),
           emitAllowedImports,
+          emitImportProvenance,
         ),
         ...(primaryDiagnostic ? { diagnostic: primaryDiagnostic, diagnostics } : {}),
         expression,
@@ -345,14 +349,15 @@ function clientImportDependencies(
   namedImports: readonly NamedImportModel[],
   references: ReadonlySet<string>,
   emitAllowedImports: ReadonlySet<string>,
+  emitImportProvenance: ReadonlyMap<string, ClientImportDependencyProvenance>,
 ): { clientImports: readonly ClientImportDependency[] } | {} {
   // Fail-closed: a referenced named import is re-emitted ONLY when the whole-channel capture analysis
-  // proved it client-safe (callee-only or publishToClient-wrapped). A captured server-only binding
+  // proved it client-safe (exact reviewed identity or publishToClient-wrapped). A captured binding
   // (`() => sendPayment(STRIPE_SECRET_KEY)`) is value-position, so it is excluded from
   // `emitAllowedImports` and its `import { STRIPE_SECRET_KEY } from "…"` line is never written into
   // `*.client.js` — the bundler can no longer inline the evaluated secret. (KV437 from
   // validate/client-capture.ts.)
-  const clientImports: NamedImportModel[] = [];
+  const clientImports: ClientImportDependency[] = [];
   const length = compilerArrayLength(namedImports, 'Client handler named imports');
   for (let index = 0; index < length; index += 1) {
     const item = compilerOwnDataValue(namedImports, index, 'Client handler named imports') as
@@ -363,7 +368,25 @@ function clientImportDependencies(
       compilerSetHas(references, item.localName) &&
       compilerSetHas(emitAllowedImports, item.localName)
     ) {
-      appendHandlerFact(clientImports, item, 'Client handler imports');
+      const provenance = compilerMapGet(
+        emitImportProvenance as Map<string, ClientImportDependencyProvenance>,
+        item.localName,
+      );
+      if (provenance === undefined) {
+        compilerFailClosed(
+          `Client handler import ${item.localName} was allowed without immutable provenance.`,
+        );
+      }
+      appendHandlerFact(
+        clientImports,
+        compilerFreeze({
+          importedName: item.importedName,
+          localName: item.localName,
+          moduleSpecifier: item.moduleSpecifier,
+          provenance,
+        }),
+        'Client handler imports',
+      );
     }
   }
 
@@ -446,7 +469,16 @@ function eventAttributes(model: ComponentModuleModel): Array<{
         compilerFailClosed(`Handler JSX attributes[${attributeIndex}] must be own data.`);
       }
       const eventName = attribute.domEventName;
-      if (!eventName || attribute.expression === undefined) continue;
+      // SPEC §5.2: a DOM-style event on an unresolved component tag is a callback prop, not a
+      // host event. The parser-owned fact keeps lowering from turning that closure into a client
+      // module; validate/component-event-props.ts emits the matching teaching error.
+      if (
+        !eventName ||
+        attribute.expression === undefined ||
+        attribute.componentEventProp === true
+      ) {
+        continue;
+      }
       appendHandlerFact(
         attributes,
         {

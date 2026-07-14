@@ -2311,7 +2311,7 @@ export const QuestionDetail = component({
         fileName: 'host-button.tsx',
         source: `
 import { component } from '@kovojs/core';
-import { track } from './analytics';
+import { tabsTriggerClick as track } from '@kovojs/headless-ui/tabs';
 export const HostButton = component({
   render: () => <button onClick={() => track('click')}>Track</button>,
 });
@@ -2353,7 +2353,7 @@ export const HostButton = component({
         fileName: 'setter-host-button.tsx',
         source: `
 import { component } from '@kovojs/core';
-import { track } from './analytics';
+import { tabsTriggerClick as track } from '@kovojs/headless-ui/tabs';
 export const HostButton = component({
   render: () => <button onClick={() => track('click')}>Track</button>,
 });

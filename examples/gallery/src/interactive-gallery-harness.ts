@@ -11,6 +11,7 @@ import {
   transpileGalleryClientModuleForVm,
   type GalleryClientModuleManifest,
 } from './client-module-manifest.js';
+import { galleryHandlerCompilerProjectFiles } from './compiler-project.js';
 
 export const galleryRoot = resolve(import.meta.dirname, '..');
 const compiledInteractiveDemos = new Map<string, CompiledInteractiveDemo>();
@@ -142,8 +143,11 @@ function compileInteractiveDemo(fileName: string): CompiledInteractiveDemo {
   const source = readFileSync(sourcePath, 'utf8');
   const componentFileName = `src/interactive/${demoName}.tsx`;
   const result = compileComponentModule({
+    extraFiles: galleryHandlerCompilerProjectFiles(),
     fileName: componentFileName,
     source,
+  } as Parameters<typeof compileComponentModule>[0] & {
+    extraFiles: ReturnType<typeof galleryHandlerCompilerProjectFiles>;
   });
   const errors = result.diagnostics.filter((diagnostic) => diagnostic.severity === 'error');
   if (errors.length > 0) {

@@ -1,7 +1,7 @@
 import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
 import { describe, expect, it } from 'vitest';
 
-import { compileComponentModule } from './index.js';
+import { assertFixpoint, compileComponentModule } from './index.js';
 import { collectMinifierReservedNames } from './internal.js';
 import { capturesUnserializableReferences, lowerEventHandlers } from './lower/handlers.js';
 import { parseComponentModule } from './scan/parse.js';
@@ -129,12 +129,12 @@ export const DisclosureDemo = component({
       fileName: 'cart-badge.tsx',
       source: `
 import { component } from '@kovojs/core';
-import { removeItem } from './actions';
+import { tabsTriggerClick } from '@kovojs/headless-ui/tabs';
 
 export const CartBadge = component({
   queries: { cart: {} },
   render: () => (
-    <button onClick={() => removeItem(state, item.id)}>
+    <button onClick={() => tabsTriggerClick()}>
       <span data-bind="cart.count">2</span>
     </button>
   ),
@@ -184,6 +184,202 @@ export const CartBadge = component({
     expect(kv201?.start).toEqual({ column: 9, line: 1 });
   });
 
+  it('fails closed before a forwarded component event can emit a server-only client import', () => {
+    const result = compileComponentModule({
+      fileName: 'forwarded-event.tsx',
+      source: `
+import { execFileSync } from 'node:child_process';
+import { component } from '@kovojs/core';
+
+const Child = component({
+  render: (props) => <button onClick={props.onClick}>Go</button>,
+});
+
+export const Page = component({
+  render: () => (
+    <Child onClick={() => { execFileSync('forwarded-event'); }} />
+  ),
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'KV201',
+          severity: 'error',
+          start: { column: 12, line: 11 },
+        }),
+      ]),
+    );
+    const clientSource = result.files.find((file) => file.kind === 'client')?.source ?? '';
+    expect(clientSource).not.toContain('node:child_process');
+    expect(clientSource).not.toContain('execFileSync');
+    expect(result.handlerExports).not.toContain('Page$Child_click');
+    expect(() => assertFixpoint(result)).not.toThrow();
+  });
+
+  it('fails closed for inline, aliased, and namespaced component event props', () => {
+    const cases = [
+      `
+import { execFileSync } from 'node:child_process';
+const Child = component({ render: () => <span>Child</span> });
+export const Page = component({
+  render: () => <Child {...{ onClick: () => execFileSync('inline-spread') }} />,
+});
+`,
+      `
+import { execFileSync } from 'node:child_process';
+const Child = component({ render: () => <span>Child</span> });
+const hostileProps = { onClick: () => execFileSync('alias-spread') };
+export const Page = component({ render: () => <Child {...hostileProps} /> });
+`,
+      `
+import { execFileSync } from 'node:child_process';
+const Child = component({ render: () => <span>Child</span> });
+const UI = { Child };
+export const Page = component({
+  render: () => <UI.Child onClick={() => execFileSync('namespace-event')} />,
+});
+`,
+      `
+import { execFileSync } from 'node:child_process';
+import { Anything as Reviewed } from '@kovojs/ui/not-a-real-entry';
+export const Page = component({
+  render: () => <Reviewed onClick={() => execFileSync('ui-prefix-forgery')} />,
+});
+`,
+      `
+import { execFileSync } from 'node:child_process';
+import { Anything as Reviewed } from '@kovojs/ui/button';
+export const Page = component({
+  render: () => <Reviewed onClick={() => execFileSync('ui-export-forgery')} />,
+});
+`,
+      `
+import { execFileSync } from 'node:child_process';
+import { uiTheme as Reviewed } from '@kovojs/ui/theme';
+export const Page = component({
+  render: () => <Reviewed onClick={() => execFileSync('ui-helper-forgery')} />,
+});
+`,
+      `
+import { execFileSync } from 'node:child_process';
+const Button = component({ render: () => <span>Local lookalike</span> });
+export const Page = component({
+  render: () => <Button onClick={() => execFileSync('local-lookalike')} />,
+});
+`,
+      `
+import { execFileSync } from 'node:child_process';
+import { Button } from '@kovojs/ui/button';
+export const Page = component({
+  render: () => {
+    const Button = component({ render: () => <span>Shadowed lookalike</span> });
+    return <Button onClick={() => execFileSync('shadowed-lookalike')} />;
+  },
+});
+`,
+      `
+import { execFileSync } from 'node:child_process';
+import type { Button } from '@kovojs/ui/button';
+export const Page = component({
+  render: () => <Button onClick={() => execFileSync('type-only-forgery')} />,
+});
+`,
+    ];
+
+    for (const source of cases) {
+      const result = compileComponentModule({ fileName: 'component-event-case.tsx', source });
+      expect(result.diagnostics).toEqual(
+        expect.arrayContaining([expect.objectContaining({ code: 'KV201', severity: 'error' })]),
+      );
+      const clientSource = result.files.find((file) => file.kind === 'client')?.source ?? '';
+      expect(clientSource).not.toContain('node:child_process');
+      expect(clientSource).not.toContain('execFileSync');
+      expect(() => assertFixpoint(result)).not.toThrow();
+    }
+  });
+
+  it('allows statically known data-only component spreads', () => {
+    const result = compileComponentModule({
+      fileName: 'safe-component-spreads.tsx',
+      source: `
+const Child = component({ render: (props) => <span>{props.label}</span> });
+const safeProps = { label: 'aliased' };
+export const Page = component({
+  render: () => (
+    <>
+      <Child {...{ label: 'inline' }} />
+      <Child {...safeProps} />
+    </>
+  ),
+});
+`,
+    });
+
+    expect(result.diagnostics.some((diagnostic) => diagnostic.code === 'KV201')).toBe(false);
+    expect(() => assertFixpoint(result)).not.toThrow();
+  });
+
+  it('keeps unresolved component spreads outside DOM event handler lowering', () => {
+    const result = compileComponentModule({
+      fileName: 'dynamic-component-spreads.tsx',
+      source: `
+const Child = component({ render: (props) => <span>{props.label}</span> });
+export const Page = component({
+  render: () => (
+    <>
+      <Child {...selectedState} />
+      <Child {...getSelectedState()} />
+    </>
+  ),
+});
+`,
+    });
+
+    expect(result.diagnostics.some((diagnostic) => diagnostic.code === 'KV201')).toBe(false);
+    expect(result.handlerExports.some((name) => name.includes('$Child_'))).toBe(false);
+    expect(() => assertFixpoint(result)).not.toThrow();
+  });
+
+  it('keeps an ordinary host button event on the reviewed handler lowering path', () => {
+    const result = compileComponentModule({
+      fileName: 'host-event.tsx',
+      source: `
+export const Counter = component({
+  state: () => ({ count: 0 }),
+  render: (_props, state) => (
+    <button onClick={() => { state.count += 1; }}>{state.count}</button>
+  ),
+});
+`,
+    });
+
+    expect(result.diagnostics.some((diagnostic) => diagnostic.code === 'KV201')).toBe(false);
+    expect(result.handlerExports).toContain('Counter$button_click');
+    expect(() => assertFixpoint(result)).not.toThrow();
+  });
+
+  it('keeps reviewed @kovojs/ui component events on the host handler lowering path', () => {
+    const result = compileComponentModule({
+      fileName: 'reviewed-ui-event.tsx',
+      source: `
+import { Button as ReviewedButton } from '@kovojs/ui/button';
+export const Counter = component({
+  state: () => ({ count: 0 }),
+  render: (_props, state) => (
+    <ReviewedButton onClick={() => { state.count += 1; }}>{state.count}</ReviewedButton>
+  ),
+});
+`,
+    });
+
+    expect(result.diagnostics.some((diagnostic) => diagnostic.code === 'KV201')).toBe(false);
+    expect(result.handlerExports).toContain('Counter$ReviewedButton_click');
+    expect(() => assertFixpoint(result)).not.toThrow();
+  });
+
   it('reports KV201 for globals outside the handler channels', () => {
     for (const expression of ['fetch("/api/cart")', 'localStorage.getItem("cart")']) {
       const result = compileComponentModule({
@@ -231,12 +427,12 @@ export const CartBadge = component({
       fileName: 'cart-badge.tsx',
       source: `
 import { component } from '@kovojs/core';
-import { track } from './analytics';
+import { tabsTriggerClick } from '@kovojs/headless-ui/tabs';
 
 export const CartBadge = component({
   render: () => {
     const snapshot = readSnapshot();
-    return <button onClick={() => track(snapshot)}>Track</button>;
+    return <button onClick={() => tabsTriggerClick(snapshot)}>Track</button>;
   },
 });
 `,
@@ -245,12 +441,12 @@ export const CartBadge = component({
     expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toEqual(['KV210', 'KV201']);
   });
 
-  it('allows handler references through state, element params, named imports, and static module constants', () => {
+  it('allows state, element params, reviewed imports, and audited static module constants', () => {
     const result = compileComponentModule({
       fileName: 'cart-badge.tsx',
       source: `
-import { component } from '@kovojs/core';
-import { track } from './analytics';
+import { component, publishToClient } from '@kovojs/core';
+import { tabsTriggerClick } from '@kovojs/headless-ui/tabs';
 
 const LABEL = 'cart';
 
@@ -259,7 +455,7 @@ export const CartBadge = component({
   render: ({ quantity }) => (
     <button onClick={() => {
       state.count += quantity;
-      track(LABEL, event.type, state.count);
+      tabsTriggerClick(publishToClient(LABEL, { reason: 'public label' }), event.type, state.count);
     }}>Track</button>
   ),
 });
@@ -269,26 +465,28 @@ export const CartBadge = component({
     const serverSource = result.files[0]?.source ?? '';
     const clientSource = result.files[1]?.source ?? '';
 
-    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toEqual(['KV210', 'KV437']);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toEqual(['KV210']);
     expect(serverSource).toContain('data-p-quantity="{quantity}"');
-    expect(clientSource).toContain('import { track } from "./analytics";');
-    expect(clientSource).not.toContain("const LABEL = 'cart';");
+    expect(clientSource).toContain(
+      'import { tabsTriggerClick } from "@kovojs/headless-ui/generated";',
+    );
+    expect(clientSource).toContain("const LABEL = 'cart';");
     expect(clientSource).toContain('ctx.state.count += ctx.params.quantity;');
-    expect(clientSource).toContain('track(LABEL, event.type, ctx.state.count);');
+    expect(clientSource).toContain(
+      "tabsTriggerClick(publishToClient(LABEL, { reason: 'public label' }), event.type, ctx.state.count);",
+    );
   });
 
   it('passes a model-backed capture context through handler lowering', () => {
     const fileName = 'components/cart/cart-actions.tsx';
     const source = `
 import { component } from '@kovojs/core';
-import { track } from './analytics';
-
-const LABEL = 'cart';
+import { tabsTriggerClick } from '@kovojs/headless-ui/tabs';
 
 export const CartActions = component({
   state: () => ({ count: 0 }),
   render: () => (
-    <button onClick={() => track(LABEL, state.count)}>Track</button>
+    <button onClick={() => tabsTriggerClick(state.count)}>Track</button>
   ),
 });
 `;
@@ -633,6 +831,8 @@ export const CartActions = component({
     expect(serverSource).not.toContain('onClick=');
     expect(serverSource).toContain('data-p-quantity="{item.quantity}"');
     expect(serverSource).toContain('kovo-param-types="quantity:number"');
+    expect(result.diagnostics.some((diagnostic) => diagnostic.code === 'KV201')).toBe(false);
+    expect(() => assertFixpoint(result)).not.toThrow();
   });
 
   it('lowers attrs-function primitive wrappers onto the behavior-attribute merge path', () => {

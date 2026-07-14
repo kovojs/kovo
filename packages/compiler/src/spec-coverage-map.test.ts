@@ -91,7 +91,7 @@ describe('compiler SPEC coverage map', () => {
       [
         {
           "accepted": [
-            "allows handler references through state, element params, named imports, and static module constants",
+            "allows state, element params, reviewed imports, and audited static module constants",
             "emits executable handler bodies with stable unique anonymous names",
             "declares boolean coercion for boolean-ish captured handler params",
           ],
@@ -324,7 +324,7 @@ describe('compiler SPEC coverage map', () => {
         },
         {
           "accepted": [
-            "emits a callee-position import (ordinary client util) without KV437",
+            "allows an exact reviewed Headless UI callable and normalizes its module",
             "allows a publishToClient(captured, { reason }) escape: emits and records the fact",
             "does not report KV435 for explicitly revealed query shape fields",
           ],

@@ -921,6 +921,51 @@ review remains manual and is the point of the `reviewTrigger`. See `rules/depend
       "decision": "server.wire.static-export-framework-document-headers"
     },
     {
+      "id": "compiler.component-event-boundary.is-reviewed",
+      "file": "packages/compiler/src/component-event-boundary-registry.ts",
+      "name": "isReviewedComponentEventBoundary",
+      "kind": "classifier",
+      "classification": "advisory-static-classifier",
+      "wrapper": "securityClassifier",
+      "decision": "compiler.component-event-boundary.is-reviewed"
+    },
+    {
+      "id": "compiler.component-event-props.validate",
+      "file": "packages/compiler/src/validate/component-event-props.ts",
+      "name": "validateComponentEventProps",
+      "kind": "classifier",
+      "classification": "advisory-static-classifier",
+      "wrapper": "securityClassifier",
+      "decision": "compiler.component-event-props.validate"
+    },
+    {
+      "id": "compiler.client-handler-import.reviewed-target",
+      "file": "packages/compiler/src/client-handler-import-policy.ts",
+      "name": "reviewedClientHandlerImportTarget",
+      "kind": "classifier",
+      "classification": "advisory-static-classifier",
+      "wrapper": "securityClassifier",
+      "decision": "compiler.client-handler-import.reviewed-target"
+    },
+    {
+      "id": "compiler.client-handler-import.reviewed-canonical-target",
+      "file": "packages/compiler/src/client-handler-import-policy.ts",
+      "name": "reviewedCanonicalClientHandlerImportTarget",
+      "kind": "classifier",
+      "classification": "advisory-static-classifier",
+      "wrapper": "securityClassifier",
+      "decision": "compiler.client-handler-import.reviewed-canonical-target"
+    },
+    {
+      "id": "compiler.client-handler-import.validate",
+      "file": "packages/compiler/src/validate/client-capture.ts",
+      "name": "validateClientHandlerImportPolicy",
+      "kind": "classifier",
+      "classification": "advisory-static-classifier",
+      "wrapper": "securityClassifier",
+      "decision": "compiler.client-handler-import.validate"
+    },
+    {
       "id": "compiler.trusted-html.validate",
       "file": "packages/compiler/src/validate/trusted-html-provenance.ts",
       "name": "validateTrustedHtmlProvenance",

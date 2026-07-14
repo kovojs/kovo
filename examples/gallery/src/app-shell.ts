@@ -19,12 +19,12 @@ import {
   galleryPrimitiveActionsGeneratedImportManifest,
   galleryPrimitiveActionsGeneratedModuleSpecifier,
   galleryHeadlessGeneratedModuleSpecifier,
-  galleryHeadlessPrimitiveModuleSpecifier,
   galleryRuntimeModuleSpecifier,
   rebaseGalleryClientModuleManifest,
   resolveGalleryClientModuleSpecifiers,
   type GalleryClientModuleManifest,
 } from './client-module-manifest.js';
+import { galleryHandlerCompilerProjectFiles } from './compiler-project.js';
 import { interactiveGalleryDemos, renderInteractiveGalleryRoute } from './interactive-docs.js';
 
 const headlessUiSourceRoot = fileURLToPath(
@@ -185,7 +185,17 @@ function compileGalleryInteractiveClientModule(
   version: string;
 } {
   const source = readFileSync(new URL(`./interactive/${demoName}.tsx`, import.meta.url), 'utf8');
-  const result = compileComponentModule({ fileName, source });
+  const generatedDirectory = fileName.includes('/generated/interactive/') ? 'src/generated' : 'src';
+  // SPEC §5.2: local handler barrels are accepted only through finite compiler project provenance.
+  // Supply the authored adapter graph explicitly; the compiler emits the canonical reviewed
+  // Headless UI identity rather than trusting or shipping the relative barrel path.
+  const result = compileComponentModule({
+    extraFiles: galleryHandlerCompilerProjectFiles(generatedDirectory),
+    fileName,
+    source,
+  } as Parameters<typeof compileComponentModule>[0] & {
+    extraFiles: readonly { fileName: string; source: string }[];
+  });
   const clientSource = result.files.find((file) => file.kind === 'client')?.source;
   if (clientSource === undefined) {
     throw new Error(`Gallery interactive demo ${demoName} produced no client module.`);
@@ -209,7 +219,7 @@ function registerHeadlessUiClientModules(): ReadonlyMap<string, string> {
   const hrefs = new Map<string, string>();
   const modules: Array<{ modulePath: string; source: string }> = [];
 
-  for (const sourcePath of ['generated.ts', 'primitive-internal.ts']) {
+  for (const sourcePath of ['client-helper-abi.ts', 'generated.ts']) {
     modules.push(headlessUiClientModuleSource(sourcePath));
   }
 
@@ -316,10 +326,6 @@ function resolveGalleryClientModuleSpecifier(moduleSpecifier: string): string {
   if (moduleSpecifier === galleryHeadlessGeneratedModuleSpecifier) {
     return headlessUiClientModuleHref('generated');
   }
-  if (moduleSpecifier === galleryHeadlessPrimitiveModuleSpecifier) {
-    return headlessUiClientModuleHref('primitive-internal');
-  }
-
   const family = moduleSpecifier.match(/^@kovojs\/(?:headless-ui|ui)\/([a-z0-9-]+)$/)?.[1];
   if (family !== undefined) return headlessUiClientModuleHref(`primitives/${family}`);
 

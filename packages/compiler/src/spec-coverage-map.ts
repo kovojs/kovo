@@ -44,7 +44,7 @@ export const compilerSpecCoverageMap = [
       {
         file: 'packages/compiler/src/handler-lowering.test.ts',
         testName:
-          'allows handler references through state, element params, named imports, and static module constants',
+          'allows state, element params, reviewed imports, and audited static module constants',
       },
       {
         file: 'packages/compiler/src/handler-lowering.test.ts',
@@ -384,8 +384,8 @@ export const compilerSpecCoverageMap = [
       'static security facts reject secret client-wire and client-handler capture channels while preserving explicit audited escapes',
     accepted: [
       {
-        file: 'packages/compiler/src/client-secret-capture.test.ts',
-        testName: 'emits a callee-position import (ordinary client util) without KV437',
+        file: 'packages/compiler/src/client-handler-import-policy.test.ts',
+        testName: 'allows an exact reviewed Headless UI callable and normalizes its module',
       },
       {
         file: 'packages/compiler/src/client-secret-capture.test.ts',

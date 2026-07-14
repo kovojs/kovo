@@ -19,6 +19,8 @@ const pkgRoot = fileURLToPath(new URL('../', import.meta.url));
 const repoRoot = path.resolve(pkgRoot, '../..');
 const uiSrcDir = path.join(pkgRoot, 'src');
 const headlessRoot = path.join(repoRoot, 'packages/headless-ui');
+const compilerRoot = path.join(repoRoot, 'packages/compiler');
+const coreRoot = path.join(repoRoot, 'packages/core');
 const galleryRoot = path.join(repoRoot, 'examples/gallery');
 const publicPackagesPath = path.join(repoRoot, 'public-packages.json');
 const componentsGuidePath = path.join(repoRoot, 'site', 'content', 'guides', 'components.md');
@@ -39,7 +41,20 @@ const paths = {
   galleryComponentManifest: path.join(galleryRoot, 'src', 'gallery-component-manifest.ts'),
   galleryPrimitiveActions: path.join(galleryRoot, 'src', 'primitive-actions.ts'),
   galleryPrimitiveActionsGenerated: path.join(galleryRoot, 'src', 'primitive-actions.generated.ts'),
+  headlessClientHelperAbi: path.join(headlessRoot, 'src', 'client-helper-abi.ts'),
   headlessGenerated: path.join(headlessRoot, 'src', 'generated.ts'),
+  compilerHeadlessClientExecutables: path.join(
+    compilerRoot,
+    'src',
+    'generated',
+    'headless-ui-client-executables.ts',
+  ),
+  coreHeadlessClientExecutableIdentities: path.join(
+    coreRoot,
+    'src',
+    'internal',
+    'generated-headless-client-executable-identities.ts',
+  ),
   headlessPackageJson: path.join(headlessRoot, 'package.json'),
   headlessPublicDir: path.join(headlessRoot, 'src', 'public'),
   uiRegistry: path.join(pkgRoot, 'registry.json'),
@@ -84,6 +99,18 @@ const generatedTargets = [
     label: 'packages/headless-ui/src/generated.ts',
     path: paths.headlessGenerated,
     source: generateHeadlessGeneratedTs(),
+  },
+  {
+    compare: 'text',
+    label: 'packages/compiler/src/generated/headless-ui-client-executables.ts',
+    path: paths.compilerHeadlessClientExecutables,
+    source: generateCompilerHeadlessClientExecutablesTs(),
+  },
+  {
+    compare: 'text',
+    label: 'packages/core/src/internal/generated-headless-client-executable-identities.ts',
+    path: paths.coreHeadlessClientExecutableIdentities,
+    source: generateCoreHeadlessClientExecutableIdentitiesTs(),
   },
   {
     compare: 'json',
@@ -505,17 +532,100 @@ function replaceMarkedSection(source, startMarker, endMarker, replacement) {
 
 function generateHeadlessGeneratedTs() {
   const groups = primitiveComponentManifest.headlessPrimitives
-    .filter((primitive) => primitive.handlers.length > 0)
+    .filter((primitive) => primitiveDirectGeneratedCallables(primitive).length > 0)
     .map((primitive) =>
-      formatNamedExport(primitive.handlers, `./primitives/${primitive.subpath}.js`),
+      formatNamedExport(
+        primitiveDirectGeneratedCallables(primitive),
+        `./primitives/${primitive.subpath}.js`,
+      ),
+    );
+  const wrappedClientHelpers = primitiveComponentManifest.headlessPrimitives.flatMap(
+    (primitive) => primitive.generatedClientHelperWrappers ?? [],
+  );
+
+  return [
+    generatedSourceComment,
+    '// Browser-callable ABI for compiler-emitted client modules. App-authored source must not import this subpath.',
+    ...groups,
+    ...(wrappedClientHelpers.length > 0
+      ? [formatNamedExport(wrappedClientHelpers, './client-helper-abi.js')]
+      : []),
+    '',
+  ].join('\n');
+}
+
+function generateCompilerHeadlessClientExecutablesTs() {
+  const entries = primitiveComponentManifest.headlessPrimitives
+    .filter((primitive) => primitiveClientCallables(primitive).length > 0)
+    .map((primitive) =>
+      [
+        '  {',
+        `    moduleSpecifier: '@kovojs/headless-ui/${primitive.subpath}',`,
+        formatGeneratedHandlerNames(primitiveClientCallables(primitive)),
+        '  },',
+      ].join('\n'),
     );
 
   return [
     generatedSourceComment,
-    '// Handler ABI for compiler-emitted client modules. App-authored source must not import this subpath.',
-    ...groups,
+    '// Exact authored-import identities that may normalize to the compiler-owned browser handler ABI.',
+    'export const headlessUiClientExecutableImports = [',
+    ...entries,
+    '] as const;',
     '',
   ].join('\n');
+}
+
+function generateCoreHeadlessClientExecutableIdentitiesTs() {
+  const entries = primitiveComponentManifest.headlessPrimitives.flatMap((primitive) =>
+    primitiveClientCallables(primitive).map((exportName) => {
+      const formattedExportName = formatTypeScriptString(exportName);
+      const specifier = `'@kovojs/headless-ui/${primitive.subpath}'`;
+      const inline = `  { exportName: ${formattedExportName}, specifier: ${specifier} },`;
+      return inline.length <= 100
+        ? inline
+        : [
+            '  {',
+            `    exportName: ${formattedExportName},`,
+            `    specifier: ${specifier},`,
+            '  },',
+          ].join('\n');
+    }),
+  );
+
+  return [
+    generatedSourceComment,
+    '// Exact Headless UI browser-callable identities consumed by the framework provenance resolver.',
+    'export const generatedHeadlessClientExecutableIdentities = [',
+    ...entries,
+    '] as const;',
+    '',
+  ].join('\n');
+}
+
+function primitiveClientCallables(primitive) {
+  return [...primitive.handlers, ...(primitive.clientHelpers ?? [])];
+}
+
+function primitiveDirectGeneratedCallables(primitive) {
+  const wrapped = new Set(primitive.generatedClientHelperWrappers ?? []);
+  return [
+    ...primitive.handlers,
+    ...(primitive.clientHelpers ?? []).filter((helper) => !wrapped.has(helper)),
+  ];
+}
+
+function formatGeneratedHandlerNames(names) {
+  const values = names.map(formatTypeScriptString);
+  const inline = `[${values.join(', ')}]`;
+  if (`    importedNames: ${inline},`.length <= 100) {
+    return `    importedNames: ${inline},`;
+  }
+  return ['    importedNames: [', ...values.map((value) => `      ${value},`), '    ],'].join('\n');
+}
+
+function formatTypeScriptString(value) {
+  return `'${value.replaceAll('\\', '\\\\').replaceAll("'", "\\'")}'`;
 }
 
 function generateHeadlessPackageJson() {
@@ -642,7 +752,6 @@ function generateGalleryGeneratedPrimitiveActionsTs() {
     generatedSourceComment,
     '// Gallery-generated ABI adapter for compiled primitive demos. App-authored source imports ../primitive-actions.js instead.',
     "export * from '@kovojs/headless-ui/generated';",
-    "export * from '@kovojs/headless-ui/internal/primitive';",
     '',
   ].join('\n');
 }
@@ -725,6 +834,31 @@ function validateManifestDrift() {
     primitiveComponentManifest.headlessPrimitives.map((entry) => entry.subpath),
   );
   addDuplicateFindings(findings, 'interactive demos', primitiveComponentManifest.interactiveDemos);
+
+  const generatedClientHelperWrappers = primitiveComponentManifest.headlessPrimitives.flatMap(
+    (primitive) => primitive.generatedClientHelperWrappers ?? [],
+  );
+  addDuplicateFindings(
+    findings,
+    'generated client helper ABI wrappers',
+    generatedClientHelperWrappers,
+  );
+  for (const primitive of primitiveComponentManifest.headlessPrimitives) {
+    const clientHelpers = new Set(primitive.clientHelpers ?? []);
+    for (const wrapper of primitive.generatedClientHelperWrappers ?? []) {
+      if (!clientHelpers.has(wrapper)) {
+        findings.push(
+          `${primitive.subpath}: generated client helper wrapper ${wrapper} is not a declared client helper`,
+        );
+      }
+    }
+  }
+  addSetDrift(
+    findings,
+    'client-helper-abi @kovoGeneratedClientHelper exports',
+    generatedClientHelperWrappers,
+    clientHelperAbiExportsFromSource(readFileSync(paths.headlessClientHelperAbi, 'utf8')),
+  );
 
   const headlessPackageJson = JSON.parse(readFileSync(paths.headlessPackageJson, 'utf8'));
   const headlessExportSubpaths = Object.keys(headlessPackageJson.exports)
@@ -1027,6 +1161,22 @@ function primitiveHandlerExportsFromSource(fileName, source) {
 
   if (source.includes('@kovoPrimitiveHandler') && names.length === 0) {
     throw new Error(`Unable to parse @kovoPrimitiveHandler exports from ${fileName}`);
+  }
+  return names;
+}
+
+function clientHelperAbiExportsFromSource(source) {
+  const names = [];
+  const re = /\/\*\*[\s\S]*?@kovoGeneratedClientHelper[\s\S]*?\*\/\s*export\s+const\s+(\w+)\s*:/g;
+  let match;
+
+  while ((match = re.exec(source)) !== null) {
+    const name = match[1];
+    if (name) names.push(name);
+  }
+
+  if (source.includes('@kovoGeneratedClientHelper') && names.length === 0) {
+    throw new Error('Unable to parse @kovoGeneratedClientHelper exports from client-helper-abi.ts');
   }
   return names;
 }

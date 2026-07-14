@@ -16,6 +16,9 @@ registerHooks({
 const { compileComponentModule } = await import(
   new URL('../../../packages/compiler/src/compile.ts', import.meta.url).href
 );
+const { galleryHandlerCompilerProjectFiles } = await import(
+  new URL('../src/compiler-project.ts', import.meta.url).href
+);
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const galleryRoot = resolve(scriptDir, '..');
 const inputDir = resolve(galleryRoot, 'src/interactive');
@@ -26,6 +29,7 @@ mkdirSync(outputDir, { recursive: true });
 for (const demoName of interactiveDemoNames()) {
   const componentFileName = `src/interactive/${demoName}.tsx`;
   const result = compileComponentModule({
+    extraFiles: galleryHandlerCompilerProjectFiles(),
     fileName: componentFileName,
     source: readFileSync(resolve(galleryRoot, componentFileName), 'utf8'),
   });

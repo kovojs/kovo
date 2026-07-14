@@ -33,6 +33,7 @@ import {
   validateDuplicateFragmentTargetNames as validateFragmentTargetNameUniqueness,
   validateDuplicateStaticViewTransitionNames as validateStaticViewTransitionNameUniqueness,
 } from './component-names.js';
+import { validateComponentEventProps } from './component-event-props.js';
 import { validateEventTriggerNames } from './event-triggers.js';
 import { validateDeferJsxChildren } from './defer-jsx.js';
 import {
@@ -46,7 +47,10 @@ import {
 import { validateLiteralHrefs } from './navigation.js';
 import { validateOutputContexts } from '../security/output-context.js';
 import { queryShapeFactDiagnostics } from '../types.js';
-import { validateClientHandlerSecretCapture } from './client-capture.js';
+import {
+  validateClientHandlerImportPolicy,
+  validateClientHandlerSecretCapture,
+} from './client-capture.js';
 import { validateTrustedHtmlProvenance } from './trusted-html-provenance.js';
 import { validateNonLiteralPattern } from './redos-pattern.js';
 import { validateSecretQueryWire } from './confidentiality.js';
@@ -143,6 +147,9 @@ const compilerValidators: readonly CompilerValidator[] = [
     validateIsomorphicSlotComposition(diagnostics, model),
   ),
   loweredValidator(({ diagnostics, model }) => validateFragmentTargetChildren(diagnostics, model)),
+  // SPEC §5.2: evaluate parser-owned component-event facts after primitive lowering and import
+  // classification; unresolved component callbacks close while reviewed @kovojs/ui events remain.
+  mappedValidator(({ diagnostics, model }) => validateComponentEventProps(diagnostics, model)),
   loweredValidator(({ diagnostics, model, options }) =>
     validateNestedStatefulIslandInRefreshTarget(diagnostics, model, options),
   ),
@@ -153,6 +160,11 @@ const compilerValidators: readonly CompilerValidator[] = [
   // diagnostic site is the real capture, not a lowered rewrite (peer of the KV435 query-wire gate).
   originalValidator(({ diagnostics, model }) =>
     validateClientHandlerSecretCapture(diagnostics, model),
+  ),
+  // SPEC §5.2: the executable import decision consumes the fully lowered handler attributes so
+  // static spreads and reviewed UI primitives cannot bypass the exact client-import registry.
+  mappedValidator(({ diagnostics, model }) =>
+    validateClientHandlerImportPolicy(diagnostics, model),
   ),
   // SPEC §6.6/§9.5 + secure-framework Phase 6 (Tier 3): KV434 fires on the authored source so the
   // diagnostic site is the real `s.string().pattern(<non-literal>)` call — the compile-time half of

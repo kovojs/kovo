@@ -444,6 +444,91 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
       },
     ],
   },
+  {
+    id: 'client-handler-import',
+    marker: '@kovo-security-classifier-corpus client-handler-import',
+    testFiles: [
+      'packages/compiler/src/client-handler-import-policy.test.ts',
+      'packages/compiler/src/component-event-boundary-registry.test.ts',
+      'packages/compiler/src/handler-lowering.test.ts',
+    ],
+    verdictAnchors: [
+      {
+        id: 'node-and-loader-authority-closed',
+        file: 'packages/compiler/src/client-handler-import-policy.test.ts',
+        snippets: [
+          "import { execFileSync } from 'node:child_process'",
+          'dynamic import',
+          'CommonJS require',
+          'TypeScript import equals',
+          'import.meta authority',
+        ],
+      },
+      {
+        id: 'alias-wrapper-and-host-spread-closed',
+        file: 'packages/compiler/src/client-handler-import-policy.test.ts',
+        snippets: [
+          'module alias',
+          'module wrapper',
+          'inline host spread',
+          'module host spread',
+          'blocks every handler sharing a globally withheld binding',
+        ],
+      },
+      {
+        id: 'reviewed-function-dynamic-authority-closed',
+        file: 'packages/compiler/src/client-handler-import-policy.test.ts',
+        snippets: [
+          'constructor property',
+          'computed constructor property',
+          'prototype constructor',
+        ],
+      },
+      {
+        id: 'canonical-and-audited-positive-controls',
+        file: 'packages/compiler/src/client-handler-import-policy.test.ts',
+        snippets: [
+          'allows an exact reviewed Headless UI callable',
+          'projects the canonical name into code and manifest',
+          'preserves an audited publishToClient value import',
+          'tabsKeyDown as safeTabs',
+        ],
+      },
+      {
+        id: 'lexical-and-registry-integrity',
+        file: 'packages/compiler/src/client-handler-import-policy.test.ts',
+        snippets: [
+          'sibling nested-block declaration',
+          'genuine same-block lexical shadow',
+          'requires an exact reviewed module and export pair',
+          'snapshots generated registry data before later mutation attempts',
+        ],
+      },
+      {
+        id: 'component-event-boundary-closed',
+        file: 'packages/compiler/src/handler-lowering.test.ts',
+        snippets: [
+          'fails closed before a forwarded component event',
+          'inline-spread',
+          'alias-spread',
+          'ui-prefix-forgery',
+          'ui-export-forgery',
+          'type-only-forgery',
+          'allows statically known data-only component spreads',
+          'keeps reviewed @kovojs/ui component events',
+        ],
+      },
+      {
+        id: 'component-registry-exact-and-immutable',
+        file: 'packages/compiler/src/component-event-boundary-registry.test.ts',
+        snippets: [
+          'stays pinned to the generated @kovojs/ui component descriptors',
+          'requires an exact reviewed module and export pair',
+          'cannot be mutated to widen or replace a reviewed decision',
+        ],
+      },
+    ],
+  },
 ];
 
 export function evaluateSecurityClassifierCorpus(options = {}) {

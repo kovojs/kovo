@@ -58,6 +58,21 @@ import { tabsKeyDown as keyDown, tabsTriggerClick } from '@kovojs/headless-ui/ta
     ]);
   });
 
+  it('excludes type-only bindings from runtime named-import facts', () => {
+    const source = `
+import type { Button } from '@kovojs/ui/button';
+import { type AccordionItemProps, AccordionTrigger as Trigger } from '@kovojs/ui/accordion';
+`;
+
+    expect(parseComponentModule('type-imports.tsx', source).namedImports).toEqual([
+      {
+        importedName: 'AccordionTrigger',
+        localName: 'Trigger',
+        moduleSpecifier: '@kovojs/ui/accordion',
+      },
+    ]);
+  });
+
   it('recognizes imported and local aliases for component factory calls', () => {
     const source = `
 import { component as defineComponent } from '@kovojs/core';
@@ -1245,6 +1260,58 @@ export const CartActions = component({
       bodySourceStart: source.indexOf("log('item.id');"),
       references: ['log', 'state', 'item'],
     });
+  });
+
+  it('records component event props separately from host DOM events', () => {
+    const model = parseComponentModule(
+      'forwarded-event.tsx',
+      `
+        import { Button as ReviewedButton } from '@kovojs/ui/button';
+        const Child = component({ render: () => <button onClick={() => {}}>Go</button> });
+        export const Page = component({ render: () => <Child onClick={() => {}} /> });
+        const eventProps = { onClick: () => {} };
+        export const InlineSpread = component({
+          render: () => <Child {...{ onInput: () => {} }} />,
+        });
+        export const AliasSpread = component({ render: () => <Child {...eventProps} /> });
+        const UI = { Child };
+        export const Namespaced = component({ render: () => <UI.Child onClick={() => {}} /> });
+        export const Reviewed = component({
+          render: () => <ReviewedButton onClick={() => {}}>Go</ReviewedButton>,
+        });
+      `,
+    );
+    const elements = jsxElements(model);
+    const buttonClick = elements
+      .find((element) => element.tag === 'button')
+      ?.attributes.find((attribute) => attribute.name === 'onClick');
+    const childClick = elements
+      .find((element) => element.tag === 'Child')
+      ?.attributes.find((attribute) => attribute.name === 'onClick');
+    const inlineSpread = elements.find(
+      (element) =>
+        element.tag === 'Child' &&
+        element.spreadAttributes[0]?.objectEntries?.[0]?.key === 'onInput',
+    )?.spreadAttributes[0];
+    const aliasSpread = elements.find(
+      (element) =>
+        element.tag === 'Child' && element.spreadAttributes[0]?.expression === 'eventProps',
+    )?.spreadAttributes[0];
+    const namespacedClick = elements
+      .find((element) => element.tag === 'UI.Child')
+      ?.attributes.find((attribute) => attribute.name === 'onClick');
+    const reviewedButtonClick = elements
+      .find((element) => element.tag === 'ReviewedButton')
+      ?.attributes.find((attribute) => attribute.name === 'onClick');
+
+    expect(buttonClick).toMatchObject({ domEventName: 'click' });
+    expect(buttonClick?.componentEventProp).toBeUndefined();
+    expect(childClick).toMatchObject({ componentEventProp: true, domEventName: 'click' });
+    expect(inlineSpread?.componentEventPropNames).toEqual(['onInput']);
+    expect(aliasSpread?.componentEventPropNames).toEqual(['onClick']);
+    expect(namespacedClick).toMatchObject({ componentEventProp: true, domEventName: 'click' });
+    expect(reviewedButtonClick).toMatchObject({ domEventName: 'click' });
+    expect(reviewedButtonClick?.componentEventProp).toBeUndefined();
   });
 
   it('records local declaration names inside zero-argument JSX arrow attributes', () => {

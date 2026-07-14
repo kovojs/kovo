@@ -8,8 +8,9 @@ import { analyzeClientCaptures } from './validate/client-capture.js';
 // SPEC §6.6/§6.2 + secure-framework Phase 4 / Tier 0 item 3: the named-import handler-closure
 // secret-emit channel. A client handler capturing a cross-module import in VALUE position re-emits
 // `import { X } from "…"` into `*.client.js`, so the bundler inlines the evaluated secret. The gate
-// is whole-channel fail-closed: refuse to emit any value-position captured import (KV437) unless it
-// is callee-only client code or wrapped in publishToClient. KV435 covers only the query wire.
+// is whole-channel fail-closed: refuse un-audited value-position captures (KV437), and independently
+// refuse executable imports outside the exact reviewed registry (KV201). KV435 covers only the query
+// wire; neither diagnostic may leave a partial or unbound generated handler behind.
 
 interface TestExtraFile {
   fileName: string;
@@ -47,17 +48,16 @@ export const PayButton = component({
 `;
       expect(codes(source)).toContain('KV437');
       // The secret IMPORT must NOT reach the client bundle: with no `import { STRIPE_SECRET_KEY }`
-      // line the bundler cannot resolve/inline the evaluated secret value (the closed channel). The
-      // identifier text may survive as a now-unbound reference in the body — but the build fails on
-      // the KV437 error, so the broken module never ships, and the secret value is never inlined.
+      // line the bundler cannot resolve/inline the evaluated secret value. The unreviewed callable
+      // independently closes with KV201, so the whole generated handler is omitted.
       const client = clientSource(source);
       expect(client).not.toContain('import { STRIPE_SECRET_KEY }');
       expect(client).not.toContain('../../config/secrets');
-      // sendPayment is callee-position → still client-safe to emit.
-      expect(client).toContain('import { sendPayment } from "./payments";');
+      expect(client).not.toContain('sendPayment');
+      expect(codes(source)).toContain('KV201');
     });
 
-    it('fires KV437 for a captured DEFAULT import in value position', () => {
+    it('closes a captured DEFAULT import form with KV201', () => {
       const source = `
 import { component } from '@kovojs/core';
 import secrets from '../../config/secrets';
@@ -68,13 +68,11 @@ export const PayButton = component({
   ),
 });
 `;
-      expect(codes(source)).toContain('KV437');
-      // Default imports are never modeled into clientImports, so the bundle stays clean either way,
-      // but the diagnostic must still fire (the channel is covered, not just the named form).
+      expect(codes(source)).toContain('KV201');
       expect(clientSource(source)).not.toContain("from '../../config/secrets'");
     });
 
-    it('fires KV437 for a captured NAMESPACE import in value position', () => {
+    it('closes a captured NAMESPACE import form with KV201', () => {
       const source = `
 import { component } from '@kovojs/core';
 import * as secrets from '../../config/secrets';
@@ -85,7 +83,7 @@ export const PayButton = component({
   ),
 });
 `;
-      expect(codes(source)).toContain('KV437');
+      expect(codes(source)).toContain('KV201');
     });
 
     it('fires KV437 through a barrel/re-export (resolved binding, not surface specifier)', () => {
@@ -138,8 +136,8 @@ export const Badge = component({
     });
   });
 
-  describe('POSITIVE: client-safe captures still compile and emit', () => {
-    it('emits a callee-position import (ordinary client util) without KV437', () => {
+  describe('reviewed and audited captures', () => {
+    it('refuses an arbitrary callee-position client util with KV201', () => {
       const source = `
 import { component } from '@kovojs/core';
 import { track } from './analytics';
@@ -150,8 +148,8 @@ export const Badge = component({
   ),
 });
 `;
-      expect(codes(source)).not.toContain('KV437');
-      expect(clientSource(source)).toContain('import { track } from "./analytics";');
+      expect(codes(source)).toContain('KV201');
+      expect(clientSource(source)).not.toContain('./analytics');
     });
 
     it('allows a publishToClient-wrapped same-file module constant escape', () => {
@@ -162,7 +160,7 @@ const LABEL = 'cart';
 
 export const Badge = component({
   render: () => (
-    <button onClick={() => log(publishToClient(LABEL, { reason: 'label is public' }))}>Track</button>
+    <button onClick={() => publishToClient(LABEL, { reason: 'label is public' })}>Track</button>
   ),
 });
 `;
@@ -187,7 +185,7 @@ import { STRIPE_PUBLISHABLE_KEY } from './config';
 
 export const PayButton = component({
   render: () => (
-    <button onClick={() => mountStripe(publishToClient(STRIPE_PUBLISHABLE_KEY, { reason: 'publishable key is public' }))}>Pay</button>
+    <button onClick={() => publishToClient(STRIPE_PUBLISHABLE_KEY, { reason: 'publishable key is public' })}>Pay</button>
   ),
 });
 `;
@@ -236,7 +234,7 @@ import { STRIPE_PUBLISHABLE_KEY } from './config';
 
 export const PayButton = component({
   render: () => (
-    <button onClick={() => mountStripe(publish(STRIPE_PUBLISHABLE_KEY, { reason: 'publishable key is public' }))}>Pay</button>
+    <button onClick={() => publish(STRIPE_PUBLISHABLE_KEY, { reason: 'publishable key is public' })}>Pay</button>
   ),
 });
 `;
@@ -251,7 +249,7 @@ export const PayButton = component({
       expect(clientSource(source)).toContain('import { STRIPE_PUBLISHABLE_KEY } from "./config";');
     });
 
-    it('allows namespace publishToClient calls through framework identity', () => {
+    it('refuses namespace publishToClient calls because namespace authority is not exact', () => {
       const source = `
 import { component } from '@kovojs/core';
 import * as core from '@kovojs/core';
@@ -259,18 +257,19 @@ import { STRIPE_PUBLISHABLE_KEY } from './config';
 
 export const PayButton = component({
   render: () => (
-    <button onClick={() => mountStripe(core.publishToClient(STRIPE_PUBLISHABLE_KEY, { reason: 'publishable key is public' }))}>Pay</button>
+    <button onClick={() => core.publishToClient(STRIPE_PUBLISHABLE_KEY, { reason: 'publishable key is public' })}>Pay</button>
   ),
 });
 `;
       const result = compile(source);
-      expect(result.diagnostics.map((diagnostic) => diagnostic.code)).not.toContain('KV437');
+      expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toContain('KV201');
       expect(result.publishToClientFacts).toEqual([
         expect.objectContaining({
           localName: 'STRIPE_PUBLISHABLE_KEY',
           reason: 'publishable key is public',
         }),
       ]);
+      expect(clientSource(source)).not.toContain('./config');
     });
 
     it('allows publishToClient through a registered local re-export barrel', () => {
@@ -287,7 +286,7 @@ import { STRIPE_PUBLISHABLE_KEY } from './config';
 
 export const PayButton = component({
   render: () => (
-    <button onClick={() => mountStripe(publish(STRIPE_PUBLISHABLE_KEY, { reason: 'publishable key is public' }))}>Pay</button>
+    <button onClick={() => publish(STRIPE_PUBLISHABLE_KEY, { reason: 'publishable key is public' })}>Pay</button>
   ),
 });
 `;
@@ -312,7 +311,7 @@ function publishToClient<T>(value: T): T {
 
 export const PayButton = component({
   render: () => (
-    <button onClick={() => mountStripe(publishToClient(STRIPE_PUBLISHABLE_KEY))}>Pay</button>
+    <button onClick={() => publishToClient(STRIPE_PUBLISHABLE_KEY)}>Pay</button>
   ),
 });
 
@@ -359,7 +358,7 @@ import { STRIPE_PUBLISHABLE_KEY } from './config';
 
 export const PayButton = component({
   render: () => (
-    <button onClick={() => mountStripe(publishToClient(STRIPE_PUBLISHABLE_KEY, { reason: '   ' }))}>Pay</button>
+    <button onClick={() => publishToClient(STRIPE_PUBLISHABLE_KEY, { reason: '   ' })}>Pay</button>
   ),
 });
 `;
@@ -384,7 +383,7 @@ import { STRIPE_PUBLISHABLE_KEY } from './config';
 
 export const PayButton = component({
   render: () => (
-    <button onClick={() => mountStripe(publishToClient(STRIPE_PUBLISHABLE_KEY, { reason: ${JSON.stringify(reason)} }))}>Pay</button>
+    <button onClick={() => publishToClient(STRIPE_PUBLISHABLE_KEY, { reason: ${JSON.stringify(reason)} })}>Pay</button>
   ),
 });
 `;
@@ -412,8 +411,8 @@ export const Badge = component({
     });
   });
 
-  describe('mixed: one handler captures both a callee util and a value-position secret', () => {
-    it('emits the util but withholds the secret and fires KV437', () => {
+  describe('mixed: one handler captures an unreviewed callee and a value-position secret', () => {
+    it('omits the whole handler and reports both closed channels', () => {
       const source = `
 import { component } from '@kovojs/core';
 import { sendPayment } from './payments';
@@ -426,9 +425,10 @@ export const PayButton = component({
 });
 `;
       const client = clientSource(source);
-      expect(client).toContain('import { sendPayment } from "./payments";');
+      expect(client).not.toContain('sendPayment');
       expect(client).not.toContain('import { STRIPE_SECRET_KEY }');
       expect(codes(source).filter((code) => code === 'KV437')).toHaveLength(1);
+      expect(codes(source)).toContain('KV201');
     });
   });
 });

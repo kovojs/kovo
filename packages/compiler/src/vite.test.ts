@@ -17,7 +17,7 @@ import type { HmrImpactMetadata } from './types.js';
 
 const cartBadgeSource = `
 import { component } from '@kovojs/core';
-import { removeItem } from './cart-actions';
+import { tabsTriggerClick as removeItem } from '@kovojs/headless-ui/tabs';
 
 export const CartBadge = component({
   queries: { cart: {} },
@@ -641,7 +641,7 @@ export const RealKv236 = component({
         fileName: 'src/real-kv437.tsx',
         source: `
 import { component } from '@kovojs/core';
-import { sendPayment } from './payments';
+import { tabsTriggerClick as sendPayment } from '@kovojs/headless-ui/tabs';
 import { STRIPE_SECRET_KEY } from './secrets';
 
 export const RealKv437 = component({
@@ -1378,7 +1378,7 @@ export const Shell = component({
     const middlewares: KovoViteMiddleware[] = [];
     const source = (handler: string) => `
 import { component } from '@kovojs/core';
-import { ${handler} } from './cart-actions';
+import { tabsTriggerClick as ${handler} } from '@kovojs/headless-ui/tabs';
 
 export const CartBadge = component({
   render: () => <button onClick={${handler}}>Add</button>,

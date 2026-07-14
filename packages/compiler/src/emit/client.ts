@@ -1,5 +1,8 @@
 import { compilerIrHeader } from '../ir.js';
-import { headlessUiGeneratedHandlerNames } from '../generated/headless-ui-generated-handlers.js';
+import {
+  reviewedCanonicalClientHandlerImportTarget,
+  reviewedClientHandlerImportTarget,
+} from '../client-handler-import-policy.js';
 import {
   compilerArrayJoin,
   compilerArrayLength,
@@ -28,6 +31,7 @@ import {
   runtimeOutputHelpers,
   templateStampHtmlEscapeExpression,
 } from '../security/output-context.js';
+import { isCompilerAuditText } from '../security/audit-text.js';
 import {
   applySourceReplacements,
   dedupeBy,
@@ -517,30 +521,38 @@ export function install${componentName}ClockUpdates(root) {
 // SPEC §6.6/§6.2 + secure-framework Phase 4 / Tier 0 item 3: this emitter is the single sink that
 // writes captured cross-module import lines into `*.client.js`. The fail-closed secret-emit gate is
 // applied UPSTREAM in lower/handlers.ts (`clientImportDependencies` filters by the whole-channel
-// `emitAllowedImportLocalNames` analysis), so by the time imports reach here they are already proven
-// client-safe (callee-only or publishToClient-wrapped). A value-position capture of a server-only
-// import is withheld before this point and its specifier never reaches the bundler.
+// exact-provenance analysis), so by the time imports reach here they carry a reviewed executable
+// identity or an audited published-value discriminant. Closed handlers and their dependencies are
+// withheld before this point.
 function emitClientImportDependencies(imports: readonly ClientImportDependency[]): string {
   const importSnapshot = compilerSnapshotDenseArray(imports, 'Client import dependencies');
-  const normalizedFacts: { item: ClientImportDependency; moduleSpecifier: string }[] = [];
+  const normalizedFacts: {
+    importedName: string;
+    item: ClientImportDependency;
+    moduleSpecifier: string;
+  }[] = [];
   for (let index = 0; index < importSnapshot.length; index += 1) {
     const item = importSnapshot[index]!;
     appendClientValue(
       normalizedFacts,
-      { item, moduleSpecifier: generatedHandlerModuleSpecifier(item) },
+      {
+        importedName: generatedHandlerImportedName(item),
+        item,
+        moduleSpecifier: generatedHandlerModuleSpecifier(item),
+      },
       'Normalized client import dependencies',
     );
   }
   const normalized = dedupeBy(
     normalizedFacts,
-    (entry) => `${entry.moduleSpecifier}\0${entry.item.importedName}\0${entry.item.localName}`,
+    (entry) => `${entry.moduleSpecifier}\0${entry.importedName}\0${entry.item.localName}`,
   );
   const entries = stableSortedClientValues(
     normalized,
     (left, right) =>
       compilerStringLocaleCompare(left.moduleSpecifier, right.moduleSpecifier) ||
       compilerStringLocaleCompare(left.item.localName, right.item.localName) ||
-      compilerStringLocaleCompare(left.item.importedName, right.item.importedName),
+      compilerStringLocaleCompare(left.importedName, right.importedName),
     'Normalized client import dependencies',
   );
   const lines: string[] = [];
@@ -563,9 +575,9 @@ function emitClientImportDependencies(imports: readonly ClientImportDependency[]
     }
     appendClientValue(
       specifiers,
-      entry.item.importedName === entry.item.localName
-        ? entry.item.importedName
-        : `${entry.item.importedName} as ${entry.item.localName}`,
+      entry.importedName === entry.item.localName
+        ? entry.importedName
+        : `${entry.importedName} as ${entry.item.localName}`,
       'Client import specifiers',
     );
   }
@@ -576,10 +588,22 @@ function emitClientImportDependencies(imports: readonly ClientImportDependency[]
 function clientImportDependenciesManifest(
   imports: readonly ClientImportDependency[],
 ): readonly ClientModuleImportManifestEntry[] {
-  const entriesByModule = compilerCreateMap<string, ClientImportDependency[]>();
+  type NormalizedDependency = { importedName: string; item: ClientImportDependency };
+  const entriesByModule = compilerCreateMap<string, NormalizedDependency[]>();
+  const normalizedInputs: NormalizedDependency[] = [];
+  const importSnapshot = compilerSnapshotDenseArray(imports, 'Client dependency imports');
+  for (let index = 0; index < importSnapshot.length; index += 1) {
+    const item = importSnapshot[index]!;
+    appendClientValue(
+      normalizedInputs,
+      { importedName: generatedHandlerImportedName(item), item },
+      'Normalized client dependency imports',
+    );
+  }
   const unique = dedupeBy(
-    imports,
-    (entry) => `${entry.moduleSpecifier}\0${entry.importedName}\0${entry.localName}`,
+    normalizedInputs,
+    (entry) =>
+      `${generatedHandlerModuleSpecifier(entry.item)}\0${entry.importedName}\0${entry.item.localName}`,
   );
   const uniqueLength = compilerArrayLength(unique, 'Unique client dependency imports');
   for (let index = 0; index < uniqueLength; index += 1) {
@@ -587,13 +611,13 @@ function clientImportDependenciesManifest(
       unique,
       index,
       'Unique client dependency imports',
-    ) as ClientImportDependency;
-    const moduleSpecifier = generatedHandlerModuleSpecifier(item);
+    ) as NormalizedDependency;
+    const moduleSpecifier = generatedHandlerModuleSpecifier(item.item);
     const entries = compilerMapGet(entriesByModule, moduleSpecifier) ?? [];
     appendClientValue(entries, item, 'Client imports by module');
     compilerMapSet(entriesByModule, moduleSpecifier, entries);
   }
-  const groups: { entries: ClientImportDependency[]; moduleSpecifier: string }[] = [];
+  const groups: { entries: NormalizedDependency[]; moduleSpecifier: string }[] = [];
   compilerMapForEach(entriesByModule, (entries, moduleSpecifier) => {
     appendClientValue(groups, { entries, moduleSpecifier }, 'Client import module groups');
   });
@@ -612,7 +636,7 @@ function clientImportDependenciesManifest(
     ) as (typeof sortedGroups)[number];
     const sortedEntries = stableSortedClientValues(
       group.entries,
-      (left, right) => compilerStringLocaleCompare(left.localName, right.localName),
+      (left, right) => compilerStringLocaleCompare(left.item.localName, right.item.localName),
       'Client imports by module',
     );
     const projected: { importedName: string; localName: string }[] = [];
@@ -622,10 +646,10 @@ function clientImportDependenciesManifest(
         sortedEntries,
         entryIndex,
         'Client imports by module',
-      ) as ClientImportDependency;
+      ) as NormalizedDependency;
       appendClientValue(
         projected,
-        { importedName: entry.importedName, localName: entry.localName },
+        { importedName: entry.importedName, localName: entry.item.localName },
         'Client import manifest specifiers',
       );
     }
@@ -759,17 +783,81 @@ function runtimeGeneratedImportNames(
 }
 
 function generatedHandlerModuleSpecifier(item: ClientImportDependency): string {
-  if (
-    // Compiler-owned Headless UI helper imports are normalized to the generated helper module.
-    // This is emitted dependency hygiene, not app-authored API recognition.
-    compilerStringStartsWith(item.moduleSpecifier, '@kovojs/headless-ui/') &&
-    item.moduleSpecifier !== '@kovojs/headless-ui/generated' &&
-    compilerSetHas(headlessUiGeneratedHandlerNames, item.importedName)
-  ) {
-    return '@kovojs/headless-ui/generated';
+  // SPEC §5.2: this is the final client-import sink. Every authored dependency reaching it must
+  // carry an exact compiler-reviewed (module, export) identity; prefix and callee-position trust
+  // are intentionally insufficient.
+  const provenance = compilerOwnDataValue(item, 'provenance', 'Client-handler import dependency');
+  const kind = compilerOwnDataValue(provenance, 'kind', 'Client-handler import provenance');
+  if (kind === 'audited-published-value') {
+    const auditReason = compilerOwnDataValue(
+      provenance,
+      'auditReason',
+      'Audited client-handler import provenance',
+    );
+    if (typeof auditReason !== 'string' || !isCompilerAuditText(auditReason)) {
+      compilerFailClosed('Audited client-handler import provenance must carry valid audit text.');
+    }
+    return item.moduleSpecifier;
   }
+  if (kind !== 'reviewed-executable') {
+    compilerFailClosed('Client-handler import provenance must have a reviewed discriminant.');
+  }
+  const canonicalModule = compilerOwnDataValue(
+    provenance,
+    'canonicalModule',
+    'Reviewed client-handler import provenance',
+  );
+  const canonicalExportName = compilerOwnDataValue(
+    provenance,
+    'canonicalExportName',
+    'Reviewed client-handler import provenance',
+  );
+  const emittedModuleSpecifier = compilerOwnDataValue(
+    provenance,
+    'emittedModuleSpecifier',
+    'Reviewed client-handler import provenance',
+  );
+  if (
+    typeof canonicalModule !== 'string' ||
+    typeof canonicalExportName !== 'string' ||
+    typeof emittedModuleSpecifier !== 'string'
+  ) {
+    compilerFailClosed('Reviewed client-handler import provenance must be complete own data.');
+  }
+  const directTarget = reviewedClientHandlerImportTarget(
+    item.moduleSpecifier,
+    item.importedName,
+    'named',
+  );
+  const canonicalTarget = reviewedCanonicalClientHandlerImportTarget(
+    canonicalModule,
+    canonicalExportName,
+  );
+  const target = directTarget ?? canonicalTarget;
+  if (target === undefined || target !== emittedModuleSpecifier) {
+    compilerFailClosed(
+      `Unreviewed client-handler import reached emission: ${item.moduleSpecifier}#${item.importedName}.`,
+    );
+  }
+  return target;
+}
 
-  return item.moduleSpecifier;
+function generatedHandlerImportedName(item: ClientImportDependency): string {
+  const provenance = compilerOwnDataValue(item, 'provenance', 'Client-handler import dependency');
+  const kind = compilerOwnDataValue(provenance, 'kind', 'Client-handler import provenance');
+  if (kind === 'audited-published-value') return item.importedName;
+  if (kind !== 'reviewed-executable') {
+    compilerFailClosed('Client-handler import provenance must have a reviewed discriminant.');
+  }
+  const canonicalExportName = compilerOwnDataValue(
+    provenance,
+    'canonicalExportName',
+    'Reviewed client-handler import provenance',
+  );
+  if (typeof canonicalExportName !== 'string' || canonicalExportName.length === 0) {
+    compilerFailClosed('Reviewed client-handler import provenance must carry an export name.');
+  }
+  return canonicalExportName;
 }
 
 function emitClientConstantDependencies(constants: readonly ClientConstantDependency[]): string {

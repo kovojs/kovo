@@ -103,7 +103,7 @@ function hmrSource({
 } = {}): string {
   return `
 import { component } from '@kovojs/core';
-import { removeItem } from './actions';
+import { tabsTriggerClick as removeItem } from '@kovojs/headless-ui/tabs';
 
 export const CartBadge = component({
   queries: { cart: {} },
@@ -121,7 +121,7 @@ export const CartBadge = component({
 function nonRefreshableHandlerSource(): string {
   return `
 import { component } from '@kovojs/core';
-import { removeItem } from './actions';
+import { tabsTriggerClick as removeItem } from '@kovojs/headless-ui/tabs';
 
 export const ActionButton = component({
   render: () => <button onClick={removeItem}>Run</button>,

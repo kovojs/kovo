@@ -10,7 +10,7 @@ describe('structural JSX IR lowering', () => {
       registryFacts: { queries: { product: 'ProductQuery' }, routes: ['/products/:id'] },
       source: `
 import * as style from '@kovojs/style';
-import { selectProduct } from './handlers';
+import { selectItemClick as selectProduct } from '@kovojs/headless-ui/select';
 
 const styles = style.create({
   badge: {

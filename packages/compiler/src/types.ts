@@ -508,7 +508,22 @@ export interface ClientImportDependency {
   importedName: string;
   localName: string;
   moduleSpecifier: string;
+  provenance: ClientImportDependencyProvenance;
 }
+
+export type ClientImportDependencyProvenance =
+  | {
+      /** Explicit publishToClient audit escape for an otherwise unregistered named value import. */
+      auditReason: string;
+      kind: 'audited-published-value';
+    }
+  | {
+      /** Canonical identity proven through exact import or finite local re-export resolution. */
+      canonicalExportName: string;
+      canonicalModule: string;
+      emittedModuleSpecifier: string;
+      kind: 'reviewed-executable';
+    };
 
 /** One generated client-module import dependency emitted from compiler-owned facts. */
 export interface ClientModuleImportManifestEntry {

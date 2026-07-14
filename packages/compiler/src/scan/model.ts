@@ -192,6 +192,8 @@ export interface JsxCommentModel {
 }
 
 export interface JsxAttributeModel {
+  /** Parser-owned proof that this DOM-style `onX` attribute is attached to a component tag. */
+  componentEventProp?: true;
   domEventName?: string;
   end: number;
   executionTriggerName?: string;
@@ -216,6 +218,8 @@ export interface JsxAttributeModel {
 }
 
 export interface JsxSpreadAttributeModel {
+  /** Known top-level DOM-style `onX` keys spread onto a component tag. */
+  componentEventPropNames?: readonly string[];
   end: number;
   expression: string;
   expressionCallArgumentBareIdentifierName?: string;

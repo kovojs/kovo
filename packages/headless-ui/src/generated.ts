@@ -1,5 +1,5 @@
 // Generated from packages/ui/scripts/primitive-component-manifest.mjs. Run `node packages/ui/scripts/build-registry.mjs --write`.
-// Handler ABI for compiler-emitted client modules. App-authored source must not import this subpath.
+// Browser-callable ABI for compiler-emitted client modules. App-authored source must not import this subpath.
 export { accordionKeyDown, accordionTriggerClick } from './primitives/accordion.js';
 export {
   alertDialogActionClick,
@@ -12,12 +12,18 @@ export {
   autocompleteInput,
   autocompleteKeyDown,
   autocompleteOptionClick,
+  autocompleteSuggestions,
 } from './primitives/autocomplete.js';
 export { avatarImageError, avatarImageLoad } from './primitives/avatar.js';
 export { checkboxTriggerClick } from './primitives/checkbox.js';
 export { checkboxGroupItemClick, checkboxGroupKeyDown } from './primitives/checkbox-group.js';
 export { collapsibleTriggerClick } from './primitives/collapsible.js';
-export { comboboxInput, comboboxKeyDown, comboboxOptionClick } from './primitives/combobox.js';
+export {
+  comboboxInput,
+  comboboxKeyDown,
+  comboboxOptionClick,
+  comboboxFilteredItems,
+} from './primitives/combobox.js';
 export {
   commandBeforeToggle,
   commandCancel,
@@ -26,6 +32,7 @@ export {
   commandItemClick,
   commandKeyDown,
   commandTriggerClick,
+  commandFilteredItems,
 } from './primitives/command.js';
 export {
   contextMenuItemClick,
@@ -33,6 +40,7 @@ export {
   contextMenuKeyDown,
   contextMenuTriggerContextMenu,
   contextMenuTriggerKeyDown,
+  contextMenuFocusElement,
 } from './primitives/context-menu.js';
 export {
   dialogBeforeToggle,
@@ -47,6 +55,7 @@ export {
   dropdownMenuKeyDown,
   dropdownMenuTriggerClick,
   dropdownMenuTriggerKeyDown,
+  dropdownMenuFocusElement,
 } from './primitives/dropdown-menu.js';
 export {
   hoverCardContentBlur,
@@ -65,13 +74,16 @@ export {
   menubarItemPointerEnter,
   menubarKeyDown,
   menubarSubmenuTriggerClick,
+  menubarFocusElement,
 } from './primitives/menubar.js';
+export { meterValueState } from './primitives/meter.js';
 export {
   navigationMenuKeyDown,
   navigationMenuLinkClick,
   navigationMenuTriggerClick,
   navigationMenuTriggerFocus,
   navigationMenuTriggerPointerEnter,
+  navigationMenuFocusElement,
 } from './primitives/navigation-menu.js';
 export {
   numberFieldDecrementClick,
@@ -92,6 +104,7 @@ export {
   scrollAreaThumbDragStart,
   scrollAreaTrackPointerDown,
   scrollAreaViewportScroll,
+  scrollAreaThumbGeometry,
 } from './primitives/scroll-area.js';
 export {
   selectItemClick,
@@ -114,6 +127,7 @@ export {
   toastCloseClick,
   toastEscapeKeyDown,
   toastViewportKeyDown,
+  normalizeToastDuration,
 } from './primitives/toast.js';
 export { toggleTriggerClick } from './primitives/toggle.js';
 export { toggleGroupItemClick, toggleGroupKeyDown } from './primitives/toggle-group.js';
@@ -125,3 +139,14 @@ export {
   tooltipTriggerPointerEnter,
   tooltipTriggerPointerLeave,
 } from './primitives/tooltip.js';
+export {
+  contextMenuMove,
+  contextMenuTypeahead,
+  dropdownMenuMove,
+  dropdownMenuTypeahead,
+  menubarMove,
+  menubarTypeahead,
+  navigationMenuMove,
+  navigationMenuTypeahead,
+  selectMove,
+} from './client-helper-abi.js';

@@ -12,7 +12,6 @@ export interface GalleryClientModuleStub {
 export const galleryRuntimeModuleSpecifier = '@kovojs/browser/generated';
 export const galleryPrimitiveActionsGeneratedModuleSpecifier = './primitive-actions.generated.js';
 export const galleryHeadlessGeneratedModuleSpecifier = '@kovojs/headless-ui/generated';
-export const galleryHeadlessPrimitiveModuleSpecifier = '@kovojs/headless-ui/internal/primitive';
 
 export function rebaseGalleryClientModuleManifest(
   manifest: GalleryClientModuleManifest,
@@ -108,10 +107,7 @@ export function galleryPrimitiveActionsImportManifest(): GalleryClientModuleMani
 }
 
 export function galleryPrimitiveActionsGeneratedImportManifest(): GalleryClientModuleManifest {
-  return [
-    { imports: [], moduleSpecifier: galleryHeadlessGeneratedModuleSpecifier },
-    { imports: [], moduleSpecifier: galleryHeadlessPrimitiveModuleSpecifier },
-  ];
+  return [{ imports: [], moduleSpecifier: galleryHeadlessGeneratedModuleSpecifier }];
 }
 
 export function transpileGalleryClientModuleForVm(source: string): string {
@@ -149,7 +145,7 @@ export function primitiveActionsStub(
 ): GalleryClientModuleStub {
   return {
     exports: primitiveActions,
-    moduleSpecifier: '../primitive-actions.js',
+    moduleSpecifier: galleryHeadlessGeneratedModuleSpecifier,
   };
 }
 

@@ -10,11 +10,14 @@ import {
   securitySetForEach,
 } from '#security-witness-intrinsics';
 
+import { generatedHeadlessClientExecutableIdentities } from './generated-headless-client-executable-identities.js';
+
 /** @internal Canonical package identity used by compiler/static gates. */
 export type FrameworkIdentityModule =
   | '@kovojs/browser'
   | '@kovojs/core'
   | '@kovojs/drizzle'
+  | '@kovojs/headless-ui'
   | '@kovojs/server'
   | '@kovojs/style'
   | 'drizzle-orm';
@@ -170,6 +173,15 @@ function coreAuthoring(exportName: string): FrameworkIdentityCatalogEntry {
   };
 }
 
+function headlessHandler(exportName: string, specifier: string): FrameworkIdentityCatalogEntry {
+  return {
+    exportName,
+    module: '@kovojs/headless-ui',
+    scopes: ['authoring'],
+    specifiers: [specifier],
+  };
+}
+
 // SPEC §13.1 / §6.6: recognize the exact public TSX style calls the compiler reviews. Do not
 // promote the rest of the package (or its internal extraction ABI) into classifier authority.
 function styleAuthoring(exportName: string): FrameworkIdentityCatalogEntry {
@@ -251,6 +263,18 @@ appendCatalogFactories(
   ['component', 'declareOffWire', 'publishToClient', 'trustedReveal'],
   coreAuthoring,
 );
+for (let index = 0; index < generatedHeadlessClientExecutableIdentities.length; index += 1) {
+  const entry = securityOwnArrayEntry(generatedHeadlessClientExecutableIdentities, index);
+  if (!entry.ok) {
+    throw new TypeError(
+      `Generated Headless UI client executable identities[${index}] must be dense.`,
+    );
+  }
+  appendCatalogEntry(
+    catalogEntries,
+    headlessHandler(entry.value.exportName, entry.value.specifier),
+  );
+}
 appendCatalogEntry(catalogEntries, styleAuthoring('create'));
 appendCatalogEntry(catalogEntries, serverRendering('safeRichHtml', '@kovojs/browser'));
 appendCatalogFactories(

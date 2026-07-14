@@ -11,6 +11,7 @@ import {
 } from '@kovojs/core/internal/framework-identity';
 import type { SessionAuthorityFact } from '@kovojs/core/internal/graph';
 
+import { isReviewedComponentEventBoundary } from '../component-event-boundary-registry.js';
 import { offsetToPosition, type CompilerDiagnostic } from '../diagnostics.js';
 import {
   compilerArrayAppend,
@@ -484,7 +485,9 @@ function namedImportModels(node: ts.Node): NamedImportModel[] {
     return [];
   }
 
-  const bindings = node.importClause?.namedBindings;
+  const importClause = node.importClause;
+  if (!importClause || importClause.isTypeOnly) return [];
+  const bindings = importClause.namedBindings;
   if (!bindings || !ts.isNamedImports(bindings)) return [];
   const moduleSpecifier = node.moduleSpecifier.text;
   const result: NamedImportModel[] = [];
@@ -494,6 +497,7 @@ function namedImportModels(node: ts.Node): NamedImportModel[] {
       | ts.ImportSpecifier
       | undefined;
     if (!element) throw new TypeError(`Named import elements[${index}] must be own data.`);
+    if (element.isTypeOnly) continue;
     compilerArrayAppend(
       result,
       {
@@ -1614,7 +1618,7 @@ function identifierResolvesToUnshadowedGlobal(
   );
 }
 
-function identifierIsShadowedBeforeScope(
+export function identifierIsShadowedBeforeScope(
   identifier: ts.Identifier,
   binding: ts.Identifier | undefined,
   boundary: ts.Node,
@@ -1655,27 +1659,40 @@ function scopeDeclaresIdentifierNamed(
     }
   };
 
-  const visit = (node: ts.Node): void => {
+  const visit = (node: ts.Node, insideNestedLexicalBlock: boolean): void => {
     if (found) return;
     if (node !== scope && isFunctionScopeNode(node)) {
-      if (ts.isFunctionDeclaration(node) && node.name) visitBindingName(node.name);
+      if (ts.isFunctionDeclaration(node) && node.name && !insideNestedLexicalBlock) {
+        visitBindingName(node.name);
+      }
       return;
     }
     if (node !== scope && ts.isClassDeclaration(node)) {
-      if (node.name) visitBindingName(node.name);
+      if (node.name && !insideNestedLexicalBlock) visitBindingName(node.name);
       return;
     }
     if (ts.isImportClause(node) && node.name) visitBindingName(node.name);
     if (ts.isNamespaceImport(node)) visitBindingName(node.name);
     if (ts.isImportSpecifier(node)) visitBindingName(node.name);
     if (ts.isParameter(node)) visitBindingName(node.name);
-    if (ts.isVariableDeclaration(node)) visitBindingName(node.name);
-    if (ts.isFunctionDeclaration(node) && node.name) visitBindingName(node.name);
-    if (ts.isClassDeclaration(node) && node.name) visitBindingName(node.name);
-    ts.forEachChild(node, visit);
+    if (ts.isVariableDeclaration(node)) {
+      const declarationList = ts.isVariableDeclarationList(node.parent) ? node.parent : undefined;
+      const blockScoped =
+        declarationList !== undefined && (declarationList.flags & ts.NodeFlags.BlockScoped) !== 0;
+      if (!insideNestedLexicalBlock || !blockScoped) visitBindingName(node.name);
+    }
+    if (ts.isFunctionDeclaration(node) && node.name && !insideNestedLexicalBlock) {
+      visitBindingName(node.name);
+    }
+    if (ts.isClassDeclaration(node) && node.name && !insideNestedLexicalBlock) {
+      visitBindingName(node.name);
+    }
+    const nestedForChildren =
+      insideNestedLexicalBlock || (node !== scope && (ts.isBlock(node) || ts.isModuleBlock(node)));
+    ts.forEachChild(node, (child) => visit(child, nestedForChildren));
   };
 
-  visit(scope);
+  visit(scope, false);
   return found;
 }
 
@@ -4349,10 +4366,15 @@ function jsxElementModel(
     ? compilerStringSlice(source, openingElement.getEnd(), closingStart)
     : '';
   const selfClosing = !ts.isJsxElement(node);
+  const tag = openingElement.tagName.getText(sourceFile);
+  const componentTag = jsxTagIsComponent(tag);
+  const unreviewedComponentTag =
+    componentTag &&
+    !jsxTagHasReviewedKovoUiEventBoundary(sourceFile, openingElement.tagName, tag, namedImports);
 
   return {
     ancestorTags: jsxAncestorTags(sourceFile, node),
-    attributes: jsxAttributeModels(sourceFile, source, openingElement),
+    attributes: jsxAttributeModels(sourceFile, source, openingElement, unreviewedComponentTag),
     childBody: jsxChildBody(childSource, openingElement.getEnd(), selfClosing),
     ...jsxChildFacts(node, sourceFile),
     closingStart,
@@ -4373,9 +4395,10 @@ function jsxElementModel(
       openingElement,
       moduleScopeObjectEntries,
       namedImports,
+      unreviewedComponentTag,
     ),
     start: node.getStart(sourceFile),
-    tag: openingElement.tagName.getText(sourceFile),
+    tag,
   };
 }
 
@@ -4383,6 +4406,7 @@ function jsxAttributeModels(
   sourceFile: ts.SourceFile,
   source: string,
   openingElement: ts.JsxOpeningElement | ts.JsxSelfClosingElement,
+  unreviewedComponentTag: boolean,
 ): JsxElementModel['attributes'][number][] {
   const result: JsxElementModel['attributes'][number][] = [];
   const properties = openingElement.attributes.properties;
@@ -4398,10 +4422,14 @@ function jsxAttributeModels(
     const value = staticJsxAttributeValue(property);
     const expression = jsxAttributeExpression(sourceFile, source, property);
     const name = property.name.getText(sourceFile);
+    const eventFacts = jsxAttributeEventFacts(name);
     compilerArrayAppend(
       result,
       {
-        ...jsxAttributeEventFacts(name),
+        ...eventFacts,
+        ...(unreviewedComponentTag && eventFacts.domEventName !== undefined
+          ? { componentEventProp: true as const }
+          : {}),
         end: property.getEnd(),
         leadingStart: attributeLeadingStart(source, property.getStart(sourceFile)),
         name,
@@ -4415,12 +4443,55 @@ function jsxAttributeModels(
   return result;
 }
 
+function jsxTagIsComponent(tag: string): boolean {
+  return compilerStringIncludes(tag, '.') || compilerRegExpTest(/^[A-Z]/, tag);
+}
+
+/**
+ * `@kovojs/ui` components are framework-reviewed host/primitive boundaries whose event props the
+ * compiler intentionally lowers. Every other component tag remains an unresolved prop boundary.
+ * The decision is parser-owned and import-identity based so post-parse phases consume only facts.
+ */
+function jsxTagHasReviewedKovoUiEventBoundary(
+  sourceFile: ts.SourceFile,
+  tagName: ts.JsxTagNameExpression,
+  tag: string,
+  namedImports: readonly NamedImportModel[],
+): boolean {
+  if (
+    compilerStringIncludes(tag, '.') ||
+    !ts.isIdentifier(tagName) ||
+    identifierIsShadowedBeforeScope(tagName, undefined, sourceFile)
+  ) {
+    return false;
+  }
+  const importLength = compilerArrayLength(namedImports, 'Reviewed Kovo UI event imports');
+  for (let importIndex = 0; importIndex < importLength; importIndex += 1) {
+    const entry = compilerOwnDataValue(
+      namedImports,
+      importIndex,
+      'Reviewed Kovo UI event imports',
+    ) as NamedImportModel | undefined;
+    if (!entry) {
+      throw new TypeError(`Reviewed Kovo UI event imports[${importIndex}] must be own data.`);
+    }
+    if (
+      entry.localName === tag &&
+      isReviewedComponentEventBoundary(entry.moduleSpecifier, entry.importedName)
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
 function jsxSpreadAttributeModels(
   sourceFile: ts.SourceFile,
   source: string,
   openingElement: ts.JsxOpeningElement | ts.JsxSelfClosingElement,
   moduleScopeObjectEntries: ReadonlyMap<string, readonly ObjectLiteralEntry[]>,
   namedImports: readonly NamedImportModel[],
+  unreviewedComponentTag: boolean,
 ): JsxElementModel['spreadAttributes'][number][] {
   const result: JsxElementModel['spreadAttributes'][number][] = [];
   const properties = openingElement.attributes.properties;
@@ -4466,9 +4537,13 @@ function jsxSpreadAttributeModels(
       : bareIdentifierName === undefined
         ? undefined
         : compilerMapGet(moduleScopeObjectEntries, bareIdentifierName);
+    const componentEventPropNames = unreviewedComponentTag
+      ? componentEventPropNamesForEntries(objectEntries)
+      : undefined;
     compilerArrayAppend(
       result,
       {
+        ...(componentEventPropNames === undefined ? {} : { componentEventPropNames }),
         end: property.getEnd(),
         expression: compilerStringTrim(
           compilerStringSlice(source, expression.getStart(sourceFile), expression.getEnd()),
@@ -4496,6 +4571,25 @@ function jsxSpreadAttributeModels(
     );
   }
   return result;
+}
+
+function componentEventPropNamesForEntries(
+  entries: readonly ObjectLiteralEntry[] | undefined,
+): string[] | undefined {
+  if (entries === undefined) return undefined;
+  const names: string[] = [];
+  const length = compilerArrayLength(entries, 'Component event spread entries');
+  for (let index = 0; index < length; index += 1) {
+    const entry = compilerOwnDataValue(entries, index, 'Component event spread entries') as
+      | ObjectLiteralEntry
+      | undefined;
+    if (!entry) throw new TypeError(`Component event spread entries[${index}] must be own data.`);
+    const event = jsxDomEventName(entry.key);
+    if ('domEventName' in event) {
+      compilerArrayAppend(names, entry.key, 'Component event spread names');
+    }
+  }
+  return names.length > 0 ? names : undefined;
 }
 
 function jsxAttributeEventFacts(name: string): {

@@ -10,7 +10,6 @@ import { createServer as createViteServer } from 'vite-plus';
 
 import {
   galleryHeadlessGeneratedModuleSpecifier,
-  galleryHeadlessPrimitiveModuleSpecifier,
   galleryPrimitiveActionsGeneratedImportManifest,
   galleryPrimitiveActionsGeneratedModuleSpecifier,
   galleryPrimitiveActionsImportManifest,
@@ -201,7 +200,7 @@ function registerGalleryInteractiveSupportClientModules(
   moduleHrefs.set(runtimePath, runtimeHref);
 
   const modules: Array<{ pathName: string; source: string }> = [];
-  for (const sourcePath of ['generated.ts', 'primitive-internal.ts']) {
+  for (const sourcePath of ['client-helper-abi.ts', 'generated.ts']) {
     modules.push(headlessUiClientModuleSource(sourcePath));
   }
   for (const directory of ['lib', 'primitives']) {
@@ -454,10 +453,6 @@ function resolveGalleryClientModuleSpecifier(
   if (moduleSpecifier === galleryHeadlessGeneratedModuleSpecifier) {
     return headlessUiClientModuleHref(support.headlessUiModuleHrefs, 'generated');
   }
-  if (moduleSpecifier === galleryHeadlessPrimitiveModuleSpecifier) {
-    return headlessUiClientModuleHref(support.headlessUiModuleHrefs, 'primitive-internal');
-  }
-
   const family = moduleSpecifier.match(/^@kovojs\/(?:headless-ui|ui)\/([a-z0-9-]+)$/)?.[1];
   if (family !== undefined) {
     return headlessUiClientModuleHref(support.headlessUiModuleHrefs, `primitives/${family}`);
