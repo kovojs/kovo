@@ -1487,6 +1487,177 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
     );
   });
 
+  it('keeps runCommand binding-pattern projections off public wires', () => {
+    const facts = sinksFor(`
+      import { cmd, commandAllowlist, mutation, runCommand } from '@kovojs/server';
+      const allow = commandAllowlist(['/usr/bin/true'], { justification: 'fixture' });
+      const command = cmd('/usr/bin/true', [], { allow });
+      export const direct = mutation({ async handler() {
+        const { stdout } = await runCommand(command);
+        return stdout;
+      } });
+      export const aliased = mutation({ async handler() {
+        const result = await runCommand(command);
+        const { stdout } = result;
+        return stdout;
+      } });
+    `);
+
+    expect(
+      facts.filter(
+        (fact) =>
+          fact.sink === 'client-wire.request.opaque-value' && fact.source === 'runCommand(command)',
+      ),
+      JSON.stringify(facts),
+    ).toHaveLength(2);
+  });
+
+  it('accepts respond outcomes only as the whole route result', () => {
+    const safe = sinksFor(`
+      import { endpoint, respond } from '@kovojs/server';
+      export const direct = endpoint('/direct', { handler() {
+        return respond.file('direct', { contentType: 'text/plain' });
+      } });
+      export const conditional = endpoint('/conditional', { handler() {
+        return true
+          ? respond.file('file', { contentType: 'text/plain' })
+          : respond.stream('stream', { contentType: 'text/plain' });
+      } });
+    `);
+    expect(safe).toEqual([]);
+
+    const unsafe = sinksFor(`
+      import { endpoint, respond } from '@kovojs/server';
+      const identity = value => value;
+      function download() {
+        return respond.file('helper', { contentType: 'text/plain' });
+      }
+      export const object = endpoint('/object', { handler() {
+        return { leak: respond.file('object', { contentType: 'text/plain' }) };
+      } });
+      export const array = endpoint('/array', { handler() {
+        return [respond.stream('array', { contentType: 'text/plain' })];
+      } });
+      export const argument = endpoint('/argument', { handler() {
+        return identity(respond.file('argument', { contentType: 'text/plain' }));
+      } });
+      export const alias = endpoint('/alias', { handler() {
+        const outcome = respond.stream('alias', { contentType: 'text/plain' });
+        return outcome;
+      } });
+      export const helper = endpoint('/helper', { handler() { return download(); } });
+    `);
+    expect(unsafe.filter((fact) => fact.sink === 'client-wire.request.opaque-value')).toHaveLength(
+      5,
+    );
+  });
+
+  it('rejects respond outcomes retained by a nested callback', () => {
+    const facts = sinksFor(`
+      import { endpoint, respond } from '@kovojs/server';
+      let saved;
+      export const route = endpoint('/retained', { handler() {
+        const outcomes = [0].map(() =>
+          respond.file('retained', { contentType: 'text/plain' }),
+        );
+        saved = outcomes[0];
+        return Response.json({ ok: true });
+      } });
+    `);
+
+    expect(facts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sink: 'request-handler.opaque-call',
+          source: 'respond.file',
+        }),
+      ]),
+    );
+  });
+
+  it.each([
+    [
+      'guards conditional container',
+      `import { guards, query } from '@kovojs/server';
+       const alias = ({ carrier: true ? guards : guards }).carrier;
+       alias.authed = () => () => true;
+       export const unsafe = query({
+         access: [guards.authed()],
+         load() { return { ok: true }; },
+       });`,
+      'request-handler.opaque-source',
+      '<dynamic-callback>',
+    ],
+    [
+      'guards helper return',
+      `import { guards, query } from '@kovojs/server';
+       const alias = (() => true && guards)();
+       alias.authed = () => () => true;
+       export const unsafe = query({
+         access: [guards.authed()],
+         load() { return { ok: true }; },
+       });`,
+      'request-handler.opaque-source',
+      '<dynamic-callback>',
+    ],
+    [
+      'respond conditional container',
+      `import { endpoint, respond } from '@kovojs/server';
+       const alias = [false || respond][0];
+       alias.file = () => 'unsafe';
+       export const unsafe = endpoint('/x', { handler() {
+         return respond.file('safe', { contentType: 'text/plain' });
+       } });`,
+      'request-handler.opaque-call',
+      'respond.file',
+    ],
+    [
+      'respond helper return',
+      `import { endpoint, respond } from '@kovojs/server';
+       const alias = (() => (0, respond))();
+       alias.file = () => 'unsafe';
+       export const unsafe = endpoint('/x', { handler() {
+         return respond.file('safe', { contentType: 'text/plain' });
+       } });`,
+      'request-handler.opaque-call',
+      'respond.file',
+    ],
+    [
+      'guards class field',
+      `import { guards, query } from '@kovojs/server';
+       class Poisoner {
+         target = guards;
+         run() { this.target.authed = () => () => true; }
+       }
+       new Poisoner().run();
+       export const unsafe = query({
+         access: [guards.authed()],
+         load() { return { ok: true }; },
+       });`,
+      'request-handler.opaque-source',
+      '<dynamic-callback>',
+    ],
+    [
+      'respond class field',
+      `import { endpoint, respond } from '@kovojs/server';
+       class Poisoner {
+         target = respond;
+         run() { this.target.file = () => 'unsafe'; }
+       }
+       new Poisoner().run();
+       export const unsafe = endpoint('/x', { handler() {
+         return respond.file('safe', { contentType: 'text/plain' });
+       } });`,
+      'request-handler.opaque-call',
+      'respond.file',
+    ],
+  ])('rejects exact carrier mutation through %s', (_label, source, sink, factSource) => {
+    const facts = sinksFor(source);
+    expect(facts, JSON.stringify(facts)).toEqual(
+      expect.arrayContaining([expect.objectContaining({ sink, source: factSource })]),
+    );
+  });
+
   it('does not grant generic capability authority to mutable framework carriers or results', () => {
     for (const mutation of [
       `respond.file = hostile;`,
@@ -2944,6 +3115,294 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
     expect(sources).toEqual(expect.arrayContaining(["'access-index'", "'access-push'"]));
   });
 
+  it.each([
+    ['fill replacement', `access.fill(hostile);`],
+    ['length weakening', `access.length = 0;`],
+    ['reflective replacement', `Object.assign(access, { 0: hostile });`],
+    ['reflective removal', `Reflect.deleteProperty(access, 0);`],
+    [
+      'ErrorBoundary identity result',
+      `const alias = ErrorBoundary({ children: access as never, fallback: null }) as unknown as typeof access;
+       alias[0] = hostile;`,
+    ],
+    [
+      'publishToClient identity result',
+      `const alias = publishToClient(access, { reason: 'public fixture' });
+       alias[0] = hostile;`,
+    ],
+  ])('rejects retained access-array %s', (_label, mutation) => {
+    const facts = sinksFor(`
+      import { ErrorBoundary, publishToClient } from '@kovojs/core';
+      import { execFileSync } from 'node:child_process';
+      import { guards, route } from '@kovojs/server';
+      const access = [guards.authed()];
+      const hostile = () => { execFileSync('retained-access'); return true; };
+      ${mutation}
+      export const page = route('/x', {
+        access,
+        page() { return '<main>safe</main>'; },
+      });
+    `);
+
+    expect(facts, JSON.stringify(facts)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sink: 'request-handler.opaque-source',
+          source: '<mutated-retained-config>',
+        }),
+      ]),
+    );
+  });
+
+  it('links cross-module helper caches to retained schema identities', () => {
+    const facts = sinksForFiles([
+      {
+        fileName: 'factory.ts',
+        source: `
+          export let cached;
+          export function makeOutput() {
+            cached = { parse(value) { return value; } };
+            return cached;
+          }
+        `,
+      },
+      {
+        fileName: 'poison.ts',
+        source: `
+          import { cached } from './factory.js';
+          export function poison() {
+            cached.parse = (value) => value;
+          }
+        `,
+      },
+      {
+        fileName: 'app.ts',
+        source: `
+          import { query } from '@kovojs/server';
+          import { makeOutput } from './factory.js';
+          import { poison } from './poison.js';
+          const output = makeOutput();
+          poison();
+          export const read = query({
+            output,
+            load() { return { ok: true }; },
+          });
+        `,
+      },
+    ]);
+
+    expect(facts, JSON.stringify(facts)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sink: 'request-handler.opaque-source',
+          source: '<opaque-retained-config-derivation>',
+        }),
+      ]),
+    );
+  });
+
+  it('accepts the finite literal and const-alias retained-config grammar', () => {
+    const facts = sinksFor(`
+      import { guards, query } from '@kovojs/server';
+      const access = [guards.authed()];
+      const schemas = {
+        output: { parse(value) { return value; } },
+      };
+      const { output } = schemas;
+      export const read = query({
+        access,
+        output,
+        load() { return { ok: true }; },
+      });
+    `);
+
+    expect(facts).toEqual([]);
+  });
+
+  it('classifies many retained-config definitions and aliases within a low-second bound', () => {
+    const accessAliases = Array.from({ length: 16 }, (_unused, index) =>
+      index === 0
+        ? 'const access0 = [guards.authed()];'
+        : `const access${index} = access${index - 1};`,
+    ).join('\n');
+    const outputAliases = Array.from({ length: 16 }, (_unused, index) =>
+      index === 0
+        ? 'const output0 = { parse(value) { return value; } };'
+        : `const output${index} = output${index - 1};`,
+    ).join('\n');
+    const definitions = Array.from(
+      { length: 32 },
+      (_unused, index) => `export const read${index} = query({
+        access: access15,
+        output: output15,
+        load() { return { index: ${index} }; },
+      });`,
+    ).join('\n');
+    const started = Date.now();
+    const facts = sinksFor(`
+      import { guards, query } from '@kovojs/server';
+      ${accessAliases}
+      ${outputAliases}
+      ${definitions}
+    `);
+
+    expect(facts).toEqual([]);
+    expect(Date.now() - started).toBeLessThan(3_000);
+  });
+
+  it.each([
+    [
+      'app helper result',
+      `function makeOutput() { return { parse(value) { return value; } }; }
+       const output = makeOutput();`,
+    ],
+    [
+      'app constructor result',
+      `class OutputSchema { parse(value) { return value; } }
+       const output = new OutputSchema();`,
+    ],
+    [
+      'accessor result',
+      `const holder = { get output() { return { parse(value) { return value; } }; } };
+       const output = holder.output;`,
+    ],
+    [
+      'computed method name',
+      `function makeKey() { return 'parse'; }
+       const output = { [makeKey()](value) { return value; } };`,
+    ],
+    [
+      'object-literal prototype setter',
+      `const output = { __proto__: { parse(value) { return value; } } };`,
+    ],
+    [
+      'arbitrary method on an Object.freeze result',
+      `const output = Object.freeze({
+         make() { return { parse(value) { return value; } }; },
+       }).make();`,
+    ],
+    [
+      'a replaced framework schema namespace constructor',
+      `import { execFileSync } from 'node:child_process';
+       import { s } from '@kovojs/server';
+       (s as any).string = () => ({
+         parse(value) { execFileSync('poisoned-schema-namespace'); return value; },
+       });
+       const output = s.string();`,
+    ],
+    [
+      'a replaced framework schema refinement prototype',
+      `import { execFileSync } from 'node:child_process';
+       import { s } from '@kovojs/server';
+       const prototype = Object.getPrototypeOf(s.string()) as any;
+       prototype.optional = () => ({
+         parse(value) { execFileSync('poisoned-schema-refinement'); return value; },
+       });
+       const output = s.string().optional();`,
+    ],
+  ])('fails closed for retained config derived through %s', (_label, setup) => {
+    const facts = sinksFor(`
+      import { query } from '@kovojs/server';
+      ${setup}
+      export const read = query({
+        output,
+        load() { return { ok: true }; },
+      });
+    `);
+
+    expect(facts, JSON.stringify(facts)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sink: 'request-handler.opaque-source',
+          source: '<opaque-retained-config-derivation>',
+        }),
+      ]),
+    );
+  });
+
+  it.each([
+    [
+      'default parameter',
+      `const output = { parse(value) { return value; } };
+       function poison(alias = output) { alias.parse = (value) => value; }
+       poison();`,
+      '<mutated-retained-config>',
+    ],
+    [
+      'class field',
+      `const output = { parse(value) { return value; } };
+       class Poisoner {
+         target = output;
+         run() { this.target.parse = (value) => value; }
+       }
+       new Poisoner().run();`,
+      '<mutated-retained-config>',
+    ],
+    [
+      'constructor return',
+      `const shared = { parse(value) { return value; } };
+       class OutputFactory { constructor() { return shared; } }
+       const output = new OutputFactory();
+       shared.parse = (value) => value;`,
+      '<opaque-retained-config-derivation>',
+    ],
+    [
+      'function prototype',
+      `const prototype = { parse(value) { return value; } };
+       function OutputSchema() {}
+       OutputSchema.prototype = prototype;
+       const output = new OutputSchema();
+       prototype.parse = (value) => value;`,
+      '<opaque-retained-config-derivation>',
+    ],
+  ])('links retained schema identity through %s', (_label, setup, expectedSource) => {
+    const facts = sinksFor(`
+      import { query } from '@kovojs/server';
+      ${setup}
+      export const read = query({
+        output,
+        load() { return { ok: true }; },
+      });
+    `);
+
+    expect(facts, JSON.stringify(facts)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sink: 'request-handler.opaque-source',
+          source: expectedSource,
+        }),
+      ]),
+    );
+  });
+
+  it('rejects prototype replacement on retained schema instances', () => {
+    const facts = sinksFor(`
+      import { execFileSync } from 'node:child_process';
+      import { query } from '@kovojs/server';
+      class OutputSchema {
+        parse(value) { return value; }
+      }
+      OutputSchema.prototype.parse = function hostile(value) {
+        execFileSync('prototype-output');
+        return value;
+      };
+      const output = new OutputSchema();
+      export const read = query({
+        output,
+        load() { return { ok: true }; },
+      });
+    `);
+
+    expect(facts, JSON.stringify(facts)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sink: 'request-handler.opaque-source',
+          source: '<opaque-retained-config-derivation>',
+        }),
+      ]),
+    );
+  });
+
   it('traverses inherited schema, replay, registry, and mutation-replay adapter methods', () => {
     const facts = sinksFor(`
       import { execFileSync } from 'node:child_process';
@@ -3598,6 +4057,11 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
       `const holder = [users]; holder[0].id = { forged: true };`,
       `const holder = { table: users }; const { table: alias } = holder; alias.id = { forged: true };`,
       `function mutate(table) { table.id = { forged: true }; } mutate(users);`,
+      `users.id.mapFromDriverValue = () => 'forged';`,
+      `Object.assign(users.id, { mapFromDriverValue: () => 'forged' });`,
+      `Object.defineProperty(users.id, 'mapFromDriverValue', { value: () => 'forged' });`,
+      `const column = users.id; column.mapFromDriverValue = () => 'forged';`,
+      `const holder = { column: users.id }; holder.column.mapFromDriverValue = () => 'forged';`,
     ]) {
       const mutated = sinksForFiles([
         { fileName: 'schema.ts', source: schemaSource },
@@ -3641,6 +4105,232 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
     );
   });
 
+  it('accepts only closed built-in Postgres column builders and exact references', () => {
+    const safe = sinksFor(`
+      import { pgTable, text } from 'drizzle-orm/pg-core';
+      import { query } from '@kovojs/server';
+      const users = pgTable('users', { id: text('id').primaryKey() });
+      const posts = pgTable('posts', {
+        id: text('id').primaryKey(),
+        userId: text('user_id').notNull().references(() => users.id),
+      });
+      export const byId = query({ load(_input, context) {
+        return context.db.select({ id: posts.id, userId: posts.userId }).from(posts);
+      } });
+    `);
+    expect(safe).toEqual([]);
+
+    const custom = sinksFor(`
+      import { execFileSync } from 'node:child_process';
+      import { customType, pgTable } from 'drizzle-orm/pg-core';
+      import { query } from '@kovojs/server';
+      const dangerousText = customType({
+        dataType() { return 'text'; },
+        fromDriver(value) { execFileSync(String(value)); return String(value); },
+      });
+      const users = pgTable('users', { id: dangerousText('id') });
+      export const unsafe = query({ load(_input, context) {
+        return context.db.select({ id: users.id }).from(users);
+      } });
+    `);
+    expect(custom.length).toBeGreaterThan(0);
+
+    const callbackSideEffect = sinksFor(`
+      import { execFileSync } from 'node:child_process';
+      import { pgTable, text } from 'drizzle-orm/pg-core';
+      import { query } from '@kovojs/server';
+      const users = pgTable('users', { id: text('id').primaryKey() });
+      const posts = pgTable('posts', {
+        userId: text('user_id').references(() => {
+          execFileSync('reference-callback');
+          return users.id;
+        }),
+      });
+      export const unsafe = query({ load(_input, context) {
+        return context.db.select({ userId: posts.userId }).from(posts);
+      } });
+    `);
+    expect(callbackSideEffect.length).toBeGreaterThan(0);
+
+    for (const [builderImport, prototypePoison] of [
+      [
+        '',
+        `
+        const prototype = Object.getPrototypeOf(text('probe'));
+        prototype.primaryKey = hostile;
+      `,
+      ],
+      [
+        `import { PgTextBuilder } from 'drizzle-orm/pg-core';`,
+        `PgTextBuilder.prototype.primaryKey = hostile;`,
+      ],
+      [
+        `import { PgTextBuilder } from 'drizzle-orm/pg-core/columns/text';`,
+        `PgTextBuilder.prototype.primaryKey = hostile;`,
+      ],
+      [
+        `import { ColumnBuilder } from 'drizzle-orm/column-builder';`,
+        `ColumnBuilder.prototype.primaryKey = hostile;`,
+      ],
+      [
+        `import { PgText } from 'drizzle-orm/pg-core';`,
+        `PgText.prototype.mapFromDriverValue = hostile;`,
+      ],
+      [`import { SQL } from 'drizzle-orm';`, `SQL.prototype.toQuery = hostile;`],
+      [
+        `import { Table } from 'drizzle-orm/table';`,
+        `Object.defineProperty(Table.Symbol, 'Columns', { get: hostile });`,
+      ],
+    ] as const) {
+      const poisoned = sinksFor(`
+        import { execFileSync } from 'node:child_process';
+        import { pgTable, text } from 'drizzle-orm/pg-core';
+        import { query } from '@kovojs/server';
+        ${builderImport}
+        function hostile() {
+          execFileSync('column-builder-prototype');
+          return this;
+        }
+        ${prototypePoison}
+        const users = pgTable('users', { id: text('id').primaryKey() });
+        export const unsafe = query({ load(_input, context) {
+          return context.db.select({ id: users.id }).from(users);
+        } });
+      `);
+      expect(poisoned.length, prototypePoison).toBeGreaterThan(0);
+    }
+
+    const expressionPrototype = sinksFor(`
+      import { eq } from 'drizzle-orm';
+      import { execFileSync } from 'node:child_process';
+      import { pgTable, text } from 'drizzle-orm/pg-core';
+      import { query } from '@kovojs/server';
+      const users = pgTable('users', { id: text('id').primaryKey() });
+      const prototype = Object.getPrototypeOf(eq(users.id, 'probe'));
+      prototype.toQuery = () => { execFileSync('sql-prototype'); return {}; };
+      export const unsafe = query({ load(input, context) {
+        return context.db.select({ id: users.id }).from(users).where(eq(users.id, input.id));
+      } });
+    `);
+    expect(expressionPrototype.length).toBeGreaterThan(0);
+
+    const indirectRuntimeImports = sinksForFiles([
+      {
+        fileName: 'barrel.ts',
+        source: `export { SQL } from 'drizzle-orm';`,
+      },
+      {
+        fileName: 'app.ts',
+        source: `
+          import { execFileSync } from 'node:child_process';
+          import { pgTable, text } from 'drizzle-orm/pg-core';
+          import { query } from '@kovojs/server';
+          import { SQL } from './barrel.js';
+          SQL.prototype.toQuery = () => { execFileSync('barrel-sql'); return {}; };
+          const users = pgTable('users', { id: text('id').primaryKey() });
+          export const unsafe = query({ load(_input, context) {
+            return context.db.select({ id: users.id }).from(users);
+          } });
+        `,
+      },
+    ]);
+    expect(indirectRuntimeImports.length).toBeGreaterThan(0);
+
+    const dynamicRuntimeImport = sinksFor(`
+      import { execFileSync } from 'node:child_process';
+      import { pgTable, text } from 'drizzle-orm/pg-core';
+      import { query } from '@kovojs/server';
+      const { SQL } = await import('drizzle-orm');
+      SQL.prototype.toQuery = () => { execFileSync('dynamic-sql'); return {}; };
+      const users = pgTable('users', { id: text('id').primaryKey() });
+      export const unsafe = query({ load(_input, context) {
+        return context.db.select({ id: users.id }).from(users);
+      } });
+    `);
+    expect(dynamicRuntimeImport.length).toBeGreaterThan(0);
+  });
+
+  it('accepts exact pristine domain config and rejects opaque or mutated aliases', () => {
+    const safe = sinksForFiles([
+      {
+        fileName: 'model.ts',
+        source: `
+          import { domain } from '@kovojs/server';
+          export const usersDomain = domain('users');
+        `,
+      },
+      {
+        fileName: 'schema.ts',
+        source: `
+          import { kovo } from '@kovojs/drizzle';
+          import { pgTable, text } from 'drizzle-orm/pg-core';
+          import { usersDomain } from './model.js';
+          export const users = pgTable(
+            'users',
+            { id: text('id').primaryKey() },
+            kovo({ domain: usersDomain, key: (table) => table.id }),
+          );
+        `,
+      },
+      {
+        fileName: 'app.ts',
+        source: `
+          import { mutation, query } from '@kovojs/server';
+          import { usersDomain } from './model.js';
+          import { users } from './schema.js';
+          export const byId = query({ load(_input, context) {
+            return context.db.select({ id: users.id }).from(users);
+          } });
+          export const touch = mutation({
+            registry: { tables: ['users'], touches: [usersDomain] },
+            handler() { return { ok: true }; },
+          });
+        `,
+      },
+    ]);
+    expect(safe).toEqual([]);
+
+    for (const declaration of [
+      `
+        const usersDomain = new Proxy({ key: 'users' }, {
+          ownKeys(target) { execFileSync('domain-proxy'); return Reflect.ownKeys(target); },
+        });
+      `,
+      `
+        const exact = domain('users');
+        const usersDomain = true ? exact : null;
+        usersDomain.key = 'forged';
+      `,
+      `
+        const exact = domain('users');
+        const usersDomain = true && exact;
+        usersDomain.key = 'forged';
+      `,
+      `
+        const exact = domain('users');
+        const usersDomain = (true, exact);
+        usersDomain.key = 'forged';
+      `,
+    ]) {
+      const unsafe = sinksFor(`
+        import { execFileSync } from 'node:child_process';
+        import { kovo } from '@kovojs/drizzle';
+        import { domain, query } from '@kovojs/server';
+        import { pgTable, text } from 'drizzle-orm/pg-core';
+        ${declaration}
+        const users = pgTable(
+          'users',
+          { id: text('id').primaryKey() },
+          kovo({ domain: usersDomain }),
+        );
+        export const route = query({ load(_input, context) {
+          return context.db.select({ id: users.id }).from(users);
+        } });
+      `);
+      expect(unsafe.length, declaration).toBeGreaterThan(0);
+    }
+  });
+
   it('rejects direct, container-laundered, and captured DB capability mutation', () => {
     for (const body of [
       `
@@ -3661,7 +4351,31 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
         return context.db.select();
       `,
       `
+        const hostile = () => ({ forged: true });
+        function poison(db) { db.select = hostile; }
+        poison(context.db);
+        return context.db.select();
+      `,
+      `
+        const hostile = () => ({ forged: true });
+        function poison(ctx) { ctx.db = { select: hostile }; }
+        poison(context);
+        return context.db.select();
+      `,
+      `
+        const hostile = () => ({ forged: true });
+        let leaked = context.db;
+        leaked.select = hostile;
+        return context.db.select();
+      `,
+      `
         Object.defineProperty(context.db, 'select', { value: () => ({ forged: true }) });
+        return context.db.select();
+      `,
+      `
+        Object.defineProperty(context, 'db', {
+          value: { select: () => ({ forged: true }) },
+        });
         return context.db.select();
       `,
       `
@@ -3676,14 +4390,90 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
         respond.stream(context.db, { contentType: 'application/octet-stream' });
         return context.db.select();
       `,
+      `
+        let saved;
+        saved = input.flag ? context.db : null;
+        return context.db.select();
+      `,
+      `
+        let saved;
+        saved = input.flag && context.db;
+        return context.db.select();
+      `,
+      `
+        let saved;
+        saved = input.value ?? context.db;
+        return context.db.select();
+      `,
+      `
+        let saved;
+        saved = (input.flag, context.db);
+        return context.db.select();
+      `,
+      `
+        let saved;
+        saved = { db: input.flag ? context.db : null };
+        return context.db.select();
+      `,
+      `
+        let saved;
+        saved = [input.flag ? context.db : null];
+        return context.db.select();
+      `,
+      `
+        let saved;
+        saved = () => context.db;
+        return context.db.select();
+      `,
+      `
+        let saved;
+        saved = async () => context.db;
+        return context.db.select();
+      `,
+      `
+        let saved;
+        saved = () => input.flag ? context.db : null;
+        return context.db.select();
+      `,
+      `
+        let saved;
+        saved = (db = context.db) => db;
+        return context.db.select();
+      `,
+      `
+        let saved;
+        saved = function* () { yield context.db; };
+        return context.db.select();
+      `,
+      `
+        let saved;
+        saved = { leak: () => context.db };
+        return context.db.select();
+      `,
+      `
+        const leaked = context['d' + 'b'];
+        leaked.select = () => ({ forged: true });
+        return context.db.select();
+      `,
+      `
+        const key = input.key;
+        const leaked = context[key];
+        leaked.select = () => ({ forged: true });
+        return context.db.select();
+      `,
+      `
+        const leaked = context[\`d\${'b'}\`];
+        leaked.select = () => ({ forged: true });
+        return context.db.select();
+      `,
     ]) {
       const facts = sinksFor(`
         import { query, respond } from '@kovojs/server';
-        export const unsafe = query({ load(_input, context) {
+        export const unsafe = query({ load(input, context) {
           ${body}
         } });
       `);
-      expect(facts).toEqual(
+      expect(facts, body).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
             sink: 'request-handler.opaque-call',
@@ -3692,6 +4482,39 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
         ]),
       );
     }
+
+    const crossModule = sinksForFiles([
+      {
+        fileName: 'helper.ts',
+        source: `export function poison(context) {
+          context.db = { select() { return { forged: true }; } };
+        }`,
+      },
+      {
+        fileName: 'app.ts',
+        source: `
+          import { query } from '@kovojs/server';
+          import { poison } from './helper.js';
+          export const unsafe = query({ load(_input, context) {
+            poison(context);
+            return context.db.select();
+          } });
+        `,
+      },
+    ]);
+    expect(crossModule.length).toBeGreaterThan(0);
+
+    const safePredicates = sinksFor(`
+      import { query } from '@kovojs/server';
+      export const safe = query({ load(input, context) {
+        const hasDb = context.db !== undefined;
+        const selected = context.db ? 'present' : 'missing';
+        const marker = input.flag && hasDb;
+        if (marker && selected === 'missing') throw new Error('unreachable fixture');
+        return context.db.select();
+      } });
+    `);
+    expect(safePredicates).toEqual([]);
   });
 
   it('accepts only exact callback-free guards.rateLimit provenance', () => {
@@ -3736,6 +4559,15 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
         }),
       ]),
     );
+
+    const sideEffectingOption = sinksFor(`
+      import { execFileSync } from 'node:child_process';
+      import { guards, query } from '@kovojs/server';
+      function dangerousMax() { execFileSync('rate-limit-option'); return 10; }
+      const allow = guards.rateLimit({ max: dangerousMax(), per: 'global' });
+      export const guarded = query({ guard: allow, load() { return { ok: true }; } });
+    `);
+    expect(sideEffectingOption.length).toBeGreaterThan(0);
 
     for (const source of [
       `
@@ -3787,6 +4619,21 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
       );
     }
 
+    const dynamicCarrier = sinksFor(`
+      import { execFileSync } from 'node:child_process';
+      import { guards, query } from '@kovojs/server';
+      const server = await import('@kovojs/server');
+      server.guards.rateLimit = () => {
+        execFileSync('dynamic-guard-carrier');
+        return true;
+      };
+      export const guarded = query({
+        guard: guards.rateLimit({ max: 10, per: 'global' }),
+        load() { return { ok: true }; },
+      });
+    `);
+    expect(dynamicCarrier.length).toBeGreaterThan(0);
+
     for (const source of [
       `
         import { guards, query } from '@kovojs/server';
@@ -3816,6 +4663,32 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
         ]),
       );
     }
+  });
+
+  it('rejects side effects in exact static access values and conditional tests', () => {
+    const argument = sinksFor(`
+      import { execFileSync } from 'node:child_process';
+      import { publicAccess, query } from '@kovojs/server';
+      function dangerousReason() { execFileSync('access-reason'); return 'public'; }
+      export const unsafe = query({
+        access: publicAccess(dangerousReason()),
+        load() { return { ok: true }; },
+      });
+    `);
+    expect(argument.length).toBeGreaterThan(0);
+
+    const condition = sinksFor(`
+      import { execFileSync } from 'node:child_process';
+      import { publicAccess, query } from '@kovojs/server';
+      function dangerousCondition() { execFileSync('access-condition'); return true; }
+      export const unsafe = query({
+        access: dangerousCondition()
+          ? publicAccess('left')
+          : publicAccess('right'),
+        load() { return { ok: true }; },
+      });
+    `);
+    expect(condition.length).toBeGreaterThan(0);
   });
 
   it('does not bless composite or proxied guard construction', () => {
@@ -3906,6 +4779,45 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
         expect.objectContaining({ source: 'respond.file' }),
       ]),
     );
+  });
+
+  it('rejects helper and container laundering of exact guard and respond carriers', () => {
+    for (const body of [
+      `
+        function poison(carrier) { carrier.file = hostile; }
+        poison(respond);
+        return respond.file('safe', { contentType: 'text/plain' });
+      `,
+      `
+        const holder = { carrier: respond };
+        holder.carrier.file = hostile;
+        return respond.file('safe', { contentType: 'text/plain' });
+      `,
+    ]) {
+      const facts = sinksFor(`
+        import { execFileSync } from 'node:child_process';
+        import { endpoint, respond } from '@kovojs/server';
+        const hostile = () => { execFileSync('respond-carrier'); return 'unsafe'; };
+        export const unsafe = endpoint('/unsafe', { handler() { ${body} } });
+      `);
+      expect(facts.length).toBeGreaterThan(0);
+    }
+
+    for (const setup of [
+      `function poison(carrier) { carrier.rateLimit = hostile; } poison(guards);`,
+      `const holder = { carrier: guards }; holder.carrier.rateLimit = hostile;`,
+    ]) {
+      const facts = sinksFor(`
+        import { guards, query } from '@kovojs/server';
+        const hostile = () => () => true;
+        ${setup}
+        export const unsafe = query({
+          guard: guards.rateLimit({ max: 10, per: 'global' }),
+          load() { return { ok: true }; },
+        });
+      `);
+      expect(facts.length).toBeGreaterThan(0);
+    }
   });
 
   it('fails closed on opaque package carriers used by implicit property protocols', () => {

@@ -64,6 +64,63 @@ describe('server schemas', () => {
     expect(() => imageFile.parse(file)).toThrow('Expected file <= 10 bytes');
   });
 
+  it('pins the schema namespace, every schema result, and refinement prototypes', () => {
+    const storage = createMemoryStorage();
+    const schemas: readonly Schema<unknown>[] = [
+      s.array(s.string()),
+      s.boolean(),
+      s.date(),
+      s.date().default('2026-07-14'),
+      s.date().optional(),
+      s.datetime(),
+      s.decimal(),
+      s.decimal().default('1.25'),
+      s.decimal().optional(),
+      s.file(),
+      s.file().accept(['image/png']),
+      s.file().maxBytes(1_024),
+      s.file().store({ storage }),
+      s.json(),
+      s.number(),
+      s.number().int().min(0).max(10).default(1),
+      s.number().optional(),
+      s.object({ id: s.string() }),
+      s.record(s.string()),
+      s.secret(s.string()),
+      s.string(),
+      s.string().email().optional(),
+    ];
+
+    expect(Object.isFrozen(s)).toBe(true);
+    expect(schemas.every((schema) => Object.isFrozen(schema))).toBe(true);
+    expect(Reflect.set(s as object, 'string', () => ({ parse: () => 'poisoned' }))).toBe(false);
+
+    const refinable = [s.date(), s.decimal(), s.file(), s.number(), s.string()];
+    for (const schema of refinable) {
+      const prototype = Object.getPrototypeOf(schema) as object;
+      const Constructor = (schema as { constructor: { prototype: object } }).constructor;
+      expect(Object.isFrozen(prototype)).toBe(true);
+      expect(Object.isFrozen(Constructor.prototype)).toBe(true);
+      expect(() =>
+        Object.defineProperty(prototype, 'parse', {
+          configurable: true,
+          value: () => 'poisoned',
+          writable: true,
+        }),
+      ).toThrow(TypeError);
+    }
+
+    const stringPrototype = Object.getPrototypeOf(s.string()) as object;
+    expect(() =>
+      Object.defineProperty(stringPrototype, 'optional', {
+        configurable: true,
+        value: () => ({ parse: () => 'poisoned' }),
+        writable: true,
+      }),
+    ).toThrow(TypeError);
+    expect(s.string().optional().parse('safe')).toBe('safe');
+  });
+
   it('closes composite schema topology and child parse identities at declaration time', () => {
     const child: Schema<string> = { parse: (input) => `original:${String(input)}` };
     const shape = { accountId: child };

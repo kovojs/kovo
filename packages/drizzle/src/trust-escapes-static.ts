@@ -1299,6 +1299,49 @@ const REQUEST_REVIEWED_DRIZZLE_EXPRESSIONS = new Set([
   'or',
 ]);
 
+const REQUEST_REVIEWED_PG_COLUMN_BUILDERS = new Set([
+  'bigint',
+  'bigserial',
+  'bit',
+  'boolean',
+  'char',
+  'cidr',
+  'date',
+  'doublePrecision',
+  'geometry',
+  'halfvec',
+  'inet',
+  'integer',
+  'interval',
+  'json',
+  'jsonb',
+  'macaddr',
+  'macaddr8',
+  'numeric',
+  'real',
+  'serial',
+  'smallint',
+  'smallserial',
+  'sparsevec',
+  'text',
+  'time',
+  'timestamp',
+  'uuid',
+  'varchar',
+  'vector',
+]);
+
+// Callback-bearing column methods (`references`, `$defaultFn`, `$onUpdateFn`, generated
+// expressions) are deliberately absent. Their authored code must not inherit pgTable trust.
+const REQUEST_REVIEWED_PG_COLUMN_METHODS = new Set([
+  'array',
+  'default',
+  'defaultNow',
+  'notNull',
+  'primaryKey',
+  'unique',
+]);
+
 const REQUEST_REVIEWED_DRIZZLE_DB_DATA_METHODS = new Set([
   'delete',
   'from',
@@ -1396,6 +1439,7 @@ interface RequestProcessScanContext {
   readonly facts: UnregisteredSinkFact[];
   readonly filesByPath: ReadonlyMap<string, TrustEscapeSourceFileInput>;
   readonly provenance: RequestProvenanceSession;
+  readonly retainedConfigTargets: Set<string>;
   readonly scanned: Set<string>;
 }
 
@@ -1430,6 +1474,9 @@ interface RequestProvenanceSession {
   readonly protocolPrototypeMemo: Map<string, RequestProtocolPrototypeMutations>;
   readonly reflectivePropertyActive: Set<string>;
   readonly reflectivePropertyMemo: Map<string, RequestReflectivePropertyRead | null>;
+  readonly retainedConfigGrammarActive: Set<string>;
+  readonly retainedConfigGrammarMemo: Map<string, Node | null>;
+  readonly schemaBuilderPristineMemo: Map<string, boolean>;
   remaining: number;
   readonly wireActive: Set<string>;
   readonly wireMemo: Map<string, readonly RequestWireAuthority[]>;
@@ -1462,6 +1509,9 @@ function createRequestProvenanceSession(): RequestProvenanceSession {
     protocolPrototypeMemo: new Map(),
     reflectivePropertyActive: new Set(),
     reflectivePropertyMemo: new Map(),
+    retainedConfigGrammarActive: new Set(),
+    retainedConfigGrammarMemo: new Map(),
+    schemaBuilderPristineMemo: new Map(),
     remaining: REQUEST_PROVENANCE_BUDGET,
     wireActive: new Set(),
     wireMemo: new Map(),
@@ -1500,6 +1550,7 @@ function requestProcessSinksForProject(
     facts: [],
     filesByPath,
     provenance: createRequestProvenanceSession(),
+    retainedConfigTargets: new Set(),
     scanned: new Set(),
   };
   let requestRootCount = 0;
@@ -1519,6 +1570,7 @@ function requestProcessSinksForProject(
       for (const invocation of requestHandlerFactoryInvocationsForCall(call, context.provenance)) {
         if (requestRootCount >= REQUEST_ROOT_BUDGET) {
           appendRequestProvenanceBudgetFact(context, invocation.site);
+          flushRequestRetainedConfigPristine(context, sourceFiles);
           return context.facts;
         }
         requestRootCount += 1;
@@ -1537,6 +1589,7 @@ function requestProcessSinksForProject(
         if (!definition) {
           if (args.length > 0) {
             const candidate = args[args.length - 1]!;
+            scanRequestRetainedConfigPristine(candidate, context);
             appendOpaqueRequestHandlerFact(
               context,
               candidate,
@@ -1555,6 +1608,8 @@ function requestProcessSinksForProject(
       }
     }
   }
+
+  flushRequestRetainedConfigPristine(context, sourceFiles);
 
   if (context.provenance.exhaustedAt) {
     appendRequestProvenanceBudgetFact(context, context.provenance.exhaustedAt);
@@ -3039,6 +3094,7 @@ function scanRequestRootCallbacks(
   definitionSource: Node = definition,
   snapshotBoundary = Number.POSITIVE_INFINITY,
 ): void {
+  scanRequestRetainedConfigPristine(definitionSource, context);
   for (const spec of factory.callbacks as readonly RequestRootCallbackSpec[]) {
     for (const property of requestRootPropertyCandidates(
       definitionSource,
@@ -3075,6 +3131,913 @@ function scanRequestRootCallbacks(
       appendOpaqueRequestHandlerFact(context, entry, '<computed-config-property>');
     }
   }
+}
+
+/**
+ * SPEC §6.6: framework definitions retain nested guard, schema, adapter, and callback containers.
+ * Static resolution is sound only while every authored identity feeding that retained graph stays
+ * pristine. Prove that invariant project-wide so aliases, imports, helper calls, containers, and
+ * reflective mutators cannot rewrite a callback after the source literal was inspected.
+ */
+function scanRequestRetainedConfigPristine(
+  expression: Node,
+  context: RequestProcessScanContext,
+): void {
+  const opaque = requestRetainedConfigOpaqueDerivation(expression, context.provenance);
+  if (opaque) {
+    appendOpaqueRequestHandlerFact(context, opaque, '<opaque-retained-config-derivation>');
+    return;
+  }
+  for (const target of requestRetainedConfigInitialTargets(expression, new Set(), 0)) {
+    context.retainedConfigTargets.add(target);
+  }
+}
+
+function requestRetainedConfigOpaqueDerivation(
+  expression: Node,
+  session: RequestProvenanceSession,
+): Node | undefined {
+  const node = unwrapStaticExpression(expression);
+  const key = requestNodeIdentity(node);
+  const memoized = session.retainedConfigGrammarMemo.get(key);
+  if (memoized !== undefined) return memoized ?? undefined;
+  if (session.retainedConfigGrammarActive.has(key)) return node;
+  session.retainedConfigGrammarActive.add(key);
+  const close = (opaque: Node | undefined): Node | undefined => {
+    session.retainedConfigGrammarActive.delete(key);
+    session.retainedConfigGrammarMemo.set(key, opaque ?? null);
+    return opaque;
+  };
+  const firstOpaque = (values: readonly (Node | undefined)[]): Node | undefined => {
+    for (const value of values) {
+      if (!value) continue;
+      const opaque = requestRetainedConfigOpaqueDerivation(value, session);
+      if (opaque) return opaque;
+    }
+    return undefined;
+  };
+
+  if (
+    Node.isStringLiteral(node) ||
+    Node.isNoSubstitutionTemplateLiteral(node) ||
+    Node.isNumericLiteral(node) ||
+    Node.isBigIntLiteral(node) ||
+    Node.isTrueLiteral(node) ||
+    Node.isFalseLiteral(node) ||
+    node.getKind() === SyntaxKind.NullKeyword ||
+    (Node.isIdentifier(node) && unshadowedGlobalIdentifier(node, 'undefined')) ||
+    Node.isArrowFunction(node) ||
+    Node.isFunctionExpression(node) ||
+    Node.isFunctionDeclaration(node) ||
+    Node.isMethodDeclaration(node)
+  ) {
+    return close(undefined);
+  }
+  if (Node.isObjectLiteralExpression(node)) {
+    const values: Node[] = [];
+    for (const property of node.getProperties()) {
+      const name = requestObjectLiteralElementNameNode(property);
+      if (name && Node.isComputedPropertyName(name) && staticMemberName(name) === undefined) {
+        return close(name);
+      }
+      if (
+        Node.isPropertyAssignment(property) &&
+        name &&
+        !Node.isComputedPropertyName(name) &&
+        staticMemberName(name) === '__proto__'
+      ) {
+        return close(property);
+      }
+      if (Node.isMethodDeclaration(property)) continue;
+      if (
+        Node.isSpreadAssignment(property) ||
+        Node.isGetAccessorDeclaration(property) ||
+        Node.isSetAccessorDeclaration(property)
+      ) {
+        return close(property);
+      }
+      const value = Node.isPropertyAssignment(property)
+        ? property.getInitializer()
+        : Node.isShorthandPropertyAssignment(property)
+          ? property.getNameNode()
+          : undefined;
+      if (!value) return close(property);
+      values.push(value);
+    }
+    return close(firstOpaque(values));
+  }
+  if (Node.isArrayLiteralExpression(node)) {
+    const values: Node[] = [];
+    for (const element of node.getElements()) {
+      if (Node.isOmittedExpression(element)) continue;
+      if (Node.isSpreadElement(element)) return close(element);
+      values.push(element);
+    }
+    return close(firstOpaque(values));
+  }
+  if (Node.isIdentifier(node)) {
+    const symbol = requestIdentifierValueSymbol(node) ?? node.getSymbol();
+    if (!symbol) return close(node);
+    const declarations = symbol.getDeclarations();
+    if (declarations.length === 0) return close(node);
+    const values: Node[] = [];
+    for (const declaration of declarations) {
+      if (Node.isFunctionDeclaration(declaration)) continue;
+      if (Node.isVariableDeclaration(declaration)) {
+        if (
+          declaration.getVariableStatement()?.getDeclarationKind() !== VariableDeclarationKind.Const
+        ) {
+          return close(declaration);
+        }
+        const initializer = declaration.getInitializer();
+        if (!initializer) return close(declaration);
+        values.push(initializer);
+        continue;
+      }
+      if (Node.isBindingElement(declaration)) {
+        if (declaration.getInitializer()) return close(declaration);
+        const variable = declaration.getFirstAncestorByKind(SyntaxKind.VariableDeclaration);
+        if (
+          !variable ||
+          variable.getVariableStatement()?.getDeclarationKind() !== VariableDeclarationKind.Const
+        ) {
+          return close(declaration);
+        }
+        const projection = requestBindingElementProjection(declaration);
+        if (!projection) return close(declaration);
+        const projected = requestWireProjectedExpression(
+          projection.expression,
+          projection.path,
+          new Set(),
+          0,
+        );
+        if (!projected) return close(declaration);
+        values.push(projected);
+        continue;
+      }
+      return close(declaration);
+    }
+    return close(firstOpaque(values));
+  }
+  if (Node.isPropertyAccessExpression(node) || Node.isElementAccessExpression(node)) {
+    const identity = canonicalFrameworkExportForExpression(node);
+    if (
+      identity &&
+      requestRetainedConfigFrameworkValueIsReviewed(identity.module, identity.exportName)
+    ) {
+      return close(undefined);
+    }
+    const member = Node.isPropertyAccessExpression(node)
+      ? staticMemberName(node.getNameNode())
+      : staticMemberName(node.getArgumentExpression());
+    const projected = member
+      ? requestWireProjectedExpression(node.getExpression(), [member], new Set(), 0)
+      : undefined;
+    return close(projected ? requestRetainedConfigOpaqueDerivation(projected, session) : node);
+  }
+  if (Node.isCallExpression(node)) {
+    if (!requestRetainedConfigCallIsReviewed(node, session)) return close(node);
+    return close(firstOpaque(node.getArguments()));
+  }
+  if (Node.isTemplateExpression(node)) {
+    return close(firstOpaque(node.getTemplateSpans().map((span) => span.getExpression())));
+  }
+  if (Node.isPrefixUnaryExpression(node)) {
+    return close(requestRetainedConfigOpaqueDerivation(node.getOperand(), session));
+  }
+  return close(node);
+}
+
+function requestRetainedConfigFrameworkValueIsReviewed(
+  module: string,
+  exportName: string,
+): boolean {
+  return ['@kovojs/core:standardWebhooks', '@kovojs/server:standardWebhooks'].includes(
+    `${module}:${exportName}`,
+  );
+}
+
+function flushRequestRetainedConfigPristine(
+  context: RequestProcessScanContext,
+  sourceFiles: readonly SourceFile[],
+): void {
+  const targets = context.retainedConfigTargets;
+  if (targets.size === 0) return;
+
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const sourceFile of sourceFiles) {
+      const declarations: Node[] = [
+        ...sourceFile.getDescendantsOfKind(SyntaxKind.VariableDeclaration),
+        ...sourceFile.getDescendantsOfKind(SyntaxKind.Parameter),
+        ...sourceFile.getDescendantsOfKind(SyntaxKind.PropertyDeclaration),
+      ];
+      for (const declaration of declarations) {
+        const initializer = Node.isPropertyDeclaration(declaration)
+          ? declaration.getInitializer()
+          : valueDeclarationInitializer(declaration);
+        if (
+          !initializer ||
+          !requestRetainedConfigExpressionContainsTarget(initializer, targets, new Set(), 0)
+        ) {
+          continue;
+        }
+        const name =
+          Node.isVariableDeclaration(declaration) || Node.isParameterDeclaration(declaration)
+            ? declaration.getNameNode()
+            : Node.isPropertyDeclaration(declaration)
+              ? declaration.getNameNode()
+              : undefined;
+        for (const symbol of name ? requestRetainedConfigBindingSymbols(name) : []) {
+          const key = requestSymbolKey(symbol);
+          if (!targets.has(key)) {
+            targets.add(key);
+            changed = true;
+          }
+        }
+      }
+      for (const binding of sourceFile.getDescendantsOfKind(SyntaxKind.BindingElement)) {
+        const fallback = binding.getInitializer();
+        if (
+          !fallback ||
+          !requestRetainedConfigExpressionContainsTarget(fallback, targets, new Set(), 0)
+        ) {
+          continue;
+        }
+        for (const symbol of requestRetainedConfigBindingSymbols(binding.getNameNode())) {
+          const key = requestSymbolKey(symbol);
+          if (!targets.has(key)) {
+            targets.add(key);
+            changed = true;
+          }
+        }
+      }
+      for (const assignment of sourceFile.getDescendantsOfKind(SyntaxKind.BinaryExpression)) {
+        if (
+          assignment.getOperatorToken().getKind() !== SyntaxKind.EqualsToken ||
+          !requestRetainedConfigExpressionTargetsIdentity(
+            assignment.getLeft(),
+            targets,
+            new Set(),
+            0,
+          )
+        ) {
+          continue;
+        }
+        for (const target of requestRetainedConfigInitialTargets(
+          assignment.getRight(),
+          new Set(),
+          0,
+        )) {
+          if (!targets.has(target)) {
+            targets.add(target);
+            changed = true;
+          }
+        }
+      }
+    }
+  }
+
+  const reject = (site: Node): void => {
+    appendOpaqueRequestHandlerFact(context, site, '<mutated-retained-config>');
+  };
+  for (const sourceFile of sourceFiles) {
+    for (const assignment of sourceFile.getDescendantsOfKind(SyntaxKind.BinaryExpression)) {
+      const operator = assignment.getOperatorToken().getKind();
+      if (operator < SyntaxKind.FirstAssignment || operator > SyntaxKind.LastAssignment) continue;
+      const targetsLeft = requestRetainedConfigExpressionTargetsIdentity(
+        assignment.getLeft(),
+        targets,
+        new Set(),
+        0,
+      );
+      if (
+        (targetsLeft &&
+          !requestRetainedConfigAssignmentIsFreshInitialization(assignment, targets)) ||
+        requestRetainedConfigExpressionTargetsIdentity(assignment.getRight(), targets, new Set(), 0)
+      ) {
+        reject(assignment);
+      }
+    }
+    for (const deletion of sourceFile.getDescendantsOfKind(SyntaxKind.DeleteExpression)) {
+      if (
+        requestRetainedConfigExpressionTargetsIdentity(
+          deletion.getExpression(),
+          targets,
+          new Set(),
+          0,
+        )
+      ) {
+        reject(deletion);
+      }
+    }
+    for (const update of [
+      ...sourceFile.getDescendantsOfKind(SyntaxKind.PrefixUnaryExpression),
+      ...sourceFile.getDescendantsOfKind(SyntaxKind.PostfixUnaryExpression),
+    ]) {
+      if (
+        requestRetainedConfigExpressionTargetsIdentity(update.getOperand(), targets, new Set(), 0)
+      ) {
+        reject(update);
+      }
+    }
+    for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
+      const callee = unwrapStaticExpression(call.getExpression());
+      const receiver = requestCallReceiver(callee);
+      const receiverTargets =
+        !!receiver &&
+        requestRetainedConfigExpressionTargetsIdentity(receiver, targets, new Set(), 0);
+      const argumentTargets = call
+        .getArguments()
+        .some((argument) =>
+          requestRetainedConfigExpressionTargetsIdentity(argument, targets, new Set(), 0),
+        );
+      if (
+        (receiverTargets || argumentTargets) &&
+        !requestRetainedConfigCallIsReviewed(call, context.provenance)
+      ) {
+        reject(call);
+        scanRequestRetainedConfigMutationCallables(call, context);
+      }
+    }
+    for (const construct of sourceFile.getDescendantsOfKind(SyntaxKind.NewExpression)) {
+      if (
+        construct
+          .getArguments()
+          .some((argument) =>
+            requestRetainedConfigExpressionTargetsIdentity(argument, targets, new Set(), 0),
+          )
+      ) {
+        reject(construct);
+      }
+    }
+    for (const returned of sourceFile.getDescendantsOfKind(SyntaxKind.ReturnStatement)) {
+      const value = returned.getExpression();
+      if (value && requestRetainedConfigExpressionTargetsIdentity(value, targets, new Set(), 0)) {
+        reject(returned);
+      }
+    }
+  }
+}
+
+function requestRetainedConfigAssignmentIsFreshInitialization(
+  assignment: import('ts-morph').BinaryExpression,
+  targets: ReadonlySet<string>,
+): boolean {
+  if (assignment.getOperatorToken().getKind() !== SyntaxKind.EqualsToken) return false;
+  const left = unwrapStaticExpression(assignment.getLeft());
+  if (!Node.isIdentifier(left)) return false;
+  const symbol = requestIdentifierValueSymbol(left) ?? left.getSymbol();
+  if (!symbol || !targets.has(requestSymbolKey(symbol))) return false;
+  const declarations = symbol.getDeclarations();
+  if (
+    declarations.length === 0 ||
+    declarations.some(
+      (declaration) =>
+        !Node.isVariableDeclaration(declaration) || declaration.getInitializer() !== undefined,
+    )
+  ) {
+    return false;
+  }
+  const right = unwrapStaticExpression(assignment.getRight());
+  if (
+    !Node.isObjectLiteralExpression(right) &&
+    !Node.isArrayLiteralExpression(right) &&
+    !Node.isNewExpression(right) &&
+    !Node.isCallExpression(right)
+  ) {
+    return false;
+  }
+  return !assignment
+    .getSourceFile()
+    .getDescendantsOfKind(SyntaxKind.BinaryExpression)
+    .some(
+      (candidate) =>
+        candidate.getStart() < assignment.getStart() &&
+        candidate.getOperatorToken().getKind() === SyntaxKind.EqualsToken &&
+        requestRetainedConfigExpressionTargetsIdentity(
+          candidate.getLeft(),
+          new Set([requestSymbolKey(symbol)]),
+          new Set(),
+          0,
+        ),
+    );
+}
+
+function requestRetainedConfigInitialTargets(
+  expression: Node,
+  seen: Set<string>,
+  depth: number,
+): Set<string> {
+  const targets = new Set<string>();
+  if (depth > 64) return targets;
+  const node = unwrapStaticExpression(expression);
+  const nodeKey = requestNodeIdentity(node);
+  if (seen.has(nodeKey)) return targets;
+  seen.add(nodeKey);
+  const collect = (candidate: Node | undefined): void => {
+    if (!candidate) return;
+    for (const target of requestRetainedConfigInitialTargets(candidate, new Set(seen), depth + 1)) {
+      targets.add(target);
+    }
+  };
+
+  if (Node.isIdentifier(node)) {
+    const symbol = requestIdentifierValueSymbol(node) ?? node.getSymbol();
+    if (!symbol) return targets;
+    const symbolKey = requestSymbolKey(symbol);
+    if (seen.has(symbolKey)) return targets;
+    seen.add(symbolKey);
+    let retainedIdentity = false;
+    for (const declaration of symbol.getDeclarations()) {
+      if (Node.isClassDeclaration(declaration) || Node.isClassExpression(declaration)) {
+        retainedIdentity = true;
+        collect(declaration.getExtends()?.getExpression());
+        for (const property of declaration.getProperties()) collect(property.getInitializer());
+        for (const constructor of declaration.getConstructors()) {
+          const body = constructor.getBody();
+          if (!body) continue;
+          for (const output of requestWireOutputExpressions({ body, declaration: constructor })) {
+            collect(output);
+          }
+          for (const assignment of body.getDescendantsOfKind(SyntaxKind.BinaryExpression)) {
+            const operator = assignment.getOperatorToken().getKind();
+            if (operator >= SyntaxKind.FirstAssignment && operator <= SyntaxKind.LastAssignment) {
+              collect(assignment.getRight());
+            }
+          }
+        }
+        continue;
+      }
+      if (Node.isFunctionDeclaration(declaration)) {
+        retainedIdentity = true;
+        continue;
+      }
+      if (Node.isBindingElement(declaration)) {
+        retainedIdentity = true;
+        const projection = requestBindingElementProjection(declaration);
+        if (projection) {
+          const projected = requestWireProjectedExpression(
+            projection.expression,
+            projection.path,
+            new Set(),
+            0,
+          );
+          collect(projected ?? projection.expression);
+        }
+        continue;
+      }
+      const initializer = valueDeclarationInitializer(declaration);
+      if (Node.isVariableDeclaration(declaration)) retainedIdentity = true;
+      if (!initializer) continue;
+      const initialNode = unwrapStaticExpression(initializer);
+      if (
+        !Node.isStringLiteral(initialNode) &&
+        !Node.isNoSubstitutionTemplateLiteral(initialNode) &&
+        !Node.isNumericLiteral(initialNode) &&
+        !Node.isBigIntLiteral(initialNode) &&
+        !Node.isTrueLiteral(initialNode) &&
+        !Node.isFalseLiteral(initialNode) &&
+        initialNode.getKind() !== SyntaxKind.NullKeyword &&
+        !Node.isArrowFunction(initialNode) &&
+        !Node.isFunctionExpression(initialNode)
+      ) {
+        retainedIdentity = true;
+      }
+      collect(initializer);
+    }
+    if (retainedIdentity) targets.add(symbolKey);
+    return targets;
+  }
+  if (Node.isPropertyAccessExpression(node) || Node.isElementAccessExpression(node)) {
+    collect(node.getExpression());
+    const member = Node.isPropertyAccessExpression(node)
+      ? staticMemberName(node.getNameNode())
+      : staticMemberName(node.getArgumentExpression());
+    if (member) {
+      collect(requestWireProjectedExpression(node.getExpression(), [member], new Set(), 0));
+    }
+    return targets;
+  }
+  if (Node.isObjectLiteralExpression(node)) {
+    for (const property of node.getProperties()) {
+      collect(
+        Node.isPropertyAssignment(property)
+          ? property.getInitializer()
+          : Node.isShorthandPropertyAssignment(property)
+            ? property.getNameNode()
+            : Node.isSpreadAssignment(property)
+              ? property.getExpression()
+              : undefined,
+      );
+    }
+    return targets;
+  }
+  if (Node.isArrayLiteralExpression(node)) {
+    for (const element of node.getElements()) {
+      collect(Node.isSpreadElement(element) ? element.getExpression() : element);
+    }
+    return targets;
+  }
+  if (Node.isCallExpression(node) || Node.isNewExpression(node)) {
+    for (const argument of node.getArguments()) collect(argument);
+    if (Node.isCallExpression(node)) {
+      const receiver = requestCallReceiver(unwrapStaticExpression(node.getExpression()));
+      if (receiver) collect(receiver);
+      for (const callable of resolveRequestCallable(node.getExpression(), new Set(), 0).callables) {
+        for (const output of requestWireOutputExpressions(callable)) collect(output);
+        for (const yielded of callable.body.getDescendantsOfKind(SyntaxKind.YieldExpression)) {
+          collect(yielded.getExpression());
+        }
+      }
+    } else {
+      collect(node.getExpression());
+      for (const callable of resolveRequestCallable(node.getExpression(), new Set(), 0).callables) {
+        for (const output of requestWireOutputExpressions(callable)) collect(output);
+        for (const yielded of callable.body.getDescendantsOfKind(SyntaxKind.YieldExpression)) {
+          collect(yielded.getExpression());
+        }
+      }
+      for (const declaration of requestClassDeclarationsForExpression(
+        node.getExpression(),
+        new Set(),
+      )) {
+        for (const constructor of declaration.getConstructors()) {
+          const body = constructor.getBody();
+          if (!body) continue;
+          for (const output of requestWireOutputExpressions({ body, declaration: constructor })) {
+            collect(output);
+          }
+        }
+      }
+    }
+    return targets;
+  }
+  if (Node.isConditionalExpression(node)) {
+    collect(node.getWhenTrue());
+    collect(node.getWhenFalse());
+    return targets;
+  }
+  if (Node.isBinaryExpression(node)) {
+    const operator = node.getOperatorToken().getKind();
+    if (
+      [
+        SyntaxKind.AmpersandAmpersandToken,
+        SyntaxKind.BarBarToken,
+        SyntaxKind.QuestionQuestionToken,
+        SyntaxKind.CommaToken,
+        SyntaxKind.EqualsToken,
+      ].includes(operator)
+    ) {
+      collect(node.getLeft());
+      collect(node.getRight());
+    }
+    return targets;
+  }
+  if (Node.isAwaitExpression(node) || Node.isSpreadElement(node)) collect(node.getExpression());
+  return targets;
+}
+
+function requestRetainedConfigBindingSymbols(
+  name: Node,
+): NonNullable<ReturnType<Node['getSymbol']>>[] {
+  if (Node.isIdentifier(name)) return name.getSymbol() ? [name.getSymbol()!] : [];
+  if (!Node.isObjectBindingPattern(name) && !Node.isArrayBindingPattern(name)) return [];
+  return name
+    .getElements()
+    .flatMap((element) =>
+      Node.isOmittedExpression(element)
+        ? []
+        : requestRetainedConfigBindingSymbols(element.getNameNode()),
+    );
+}
+
+function requestRetainedConfigExpressionContainsTarget(
+  expression: Node,
+  targets: ReadonlySet<string>,
+  seen: Set<string>,
+  depth: number,
+): boolean {
+  if (depth > 64) return true;
+  const node = unwrapStaticExpression(expression);
+  const key = requestNodeIdentity(node);
+  if (seen.has(key)) return false;
+  seen.add(key);
+  if (Node.isIdentifier(node)) {
+    const symbol = requestIdentifierValueSymbol(node) ?? node.getSymbol();
+    return !!symbol && targets.has(requestSymbolKey(symbol));
+  }
+  if (Node.isPropertyAccessExpression(node) || Node.isElementAccessExpression(node)) {
+    return requestRetainedConfigExpressionContainsTarget(
+      node.getExpression(),
+      targets,
+      new Set(seen),
+      depth + 1,
+    );
+  }
+  if (Node.isObjectLiteralExpression(node)) {
+    return node.getProperties().some((property) => {
+      const value = Node.isPropertyAssignment(property)
+        ? property.getInitializer()
+        : Node.isShorthandPropertyAssignment(property)
+          ? property.getNameNode()
+          : Node.isSpreadAssignment(property)
+            ? property.getExpression()
+            : undefined;
+      return (
+        !!value &&
+        requestRetainedConfigExpressionContainsTarget(value, targets, new Set(seen), depth + 1)
+      );
+    });
+  }
+  if (Node.isArrayLiteralExpression(node)) {
+    return node
+      .getElements()
+      .some((element) =>
+        requestRetainedConfigExpressionContainsTarget(
+          Node.isSpreadElement(element) ? element.getExpression() : element,
+          targets,
+          new Set(seen),
+          depth + 1,
+        ),
+      );
+  }
+  if (Node.isCallExpression(node) || Node.isNewExpression(node)) {
+    if (Node.isCallExpression(node)) {
+      const callee = unwrapStaticExpression(node.getExpression());
+      const receiver = requestCallReceiver(callee);
+      const [value] = node.getArguments();
+      return !!(
+        receiver &&
+        requestStaticCallMember(callee) === 'freeze' &&
+        expressionResolvesToGlobalNamespace(receiver, 'Object', new Set(), 0) &&
+        value &&
+        requestRetainedConfigExpressionContainsTarget(value, targets, new Set(seen), depth + 1)
+      );
+    }
+    return false;
+  }
+  if (Node.isConditionalExpression(node)) {
+    return [node.getWhenTrue(), node.getWhenFalse()].some((branch) =>
+      requestRetainedConfigExpressionContainsTarget(branch, targets, new Set(seen), depth + 1),
+    );
+  }
+  if (Node.isBinaryExpression(node)) {
+    return [node.getLeft(), node.getRight()].some((part) =>
+      requestRetainedConfigExpressionContainsTarget(part, targets, new Set(seen), depth + 1),
+    );
+  }
+  if (Node.isAwaitExpression(node) || Node.isSpreadElement(node)) {
+    return requestRetainedConfigExpressionContainsTarget(
+      node.getExpression(),
+      targets,
+      new Set(seen),
+      depth + 1,
+    );
+  }
+  return false;
+}
+
+function requestRetainedConfigExpressionTargetsIdentity(
+  expression: Node,
+  targets: ReadonlySet<string>,
+  seen: Set<string>,
+  depth: number,
+): boolean {
+  if (depth > 64) return true;
+  const node = unwrapStaticExpression(expression);
+  const key = requestNodeIdentity(node);
+  if (seen.has(key)) return false;
+  seen.add(key);
+  if (Node.isIdentifier(node)) {
+    const symbol = requestIdentifierValueSymbol(node) ?? node.getSymbol();
+    if (!symbol) return false;
+    if (targets.has(requestSymbolKey(symbol))) return true;
+    for (const declaration of symbol.getDeclarations()) {
+      if (Node.isBindingElement(declaration)) {
+        const projection = requestBindingElementProjection(declaration);
+        if (projection) {
+          const projected = requestWireProjectedExpression(
+            projection.expression,
+            projection.path,
+            new Set(),
+            0,
+          );
+          if (
+            requestRetainedConfigExpressionTargetsIdentity(
+              projected ?? projection.expression,
+              targets,
+              new Set(seen),
+              depth + 1,
+            )
+          ) {
+            return true;
+          }
+        }
+      }
+    }
+    return false;
+  }
+  if (Node.isPropertyAccessExpression(node) || Node.isElementAccessExpression(node)) {
+    const memberSymbol =
+      (Node.isPropertyAccessExpression(node) ? node.getNameNode().getSymbol() : node.getSymbol()) ??
+      undefined;
+    if (memberSymbol && targets.has(requestSymbolKey(memberSymbol))) return true;
+    return requestRetainedConfigExpressionTargetsIdentity(
+      node.getExpression(),
+      targets,
+      new Set(seen),
+      depth + 1,
+    );
+  }
+  if (Node.isObjectLiteralExpression(node)) {
+    return node.getProperties().some((property) => {
+      const value = Node.isPropertyAssignment(property)
+        ? property.getInitializer()
+        : Node.isShorthandPropertyAssignment(property)
+          ? property.getNameNode()
+          : Node.isSpreadAssignment(property)
+            ? property.getExpression()
+            : undefined;
+      return (
+        !!value &&
+        requestRetainedConfigExpressionTargetsIdentity(value, targets, new Set(seen), depth + 1)
+      );
+    });
+  }
+  if (Node.isArrayLiteralExpression(node)) {
+    return node
+      .getElements()
+      .some((element) =>
+        requestRetainedConfigExpressionTargetsIdentity(
+          Node.isSpreadElement(element) ? element.getExpression() : element,
+          targets,
+          new Set(seen),
+          depth + 1,
+        ),
+      );
+  }
+  if (Node.isCallExpression(node) || Node.isNewExpression(node)) {
+    if (
+      node
+        .getArguments()
+        .some((argument) =>
+          requestRetainedConfigExpressionTargetsIdentity(
+            argument,
+            targets,
+            new Set(seen),
+            depth + 1,
+          ),
+        )
+    ) {
+      return true;
+    }
+    if (Node.isCallExpression(node)) {
+      const receiver = requestCallReceiver(unwrapStaticExpression(node.getExpression()));
+      return (
+        !!receiver &&
+        requestRetainedConfigExpressionTargetsIdentity(receiver, targets, new Set(seen), depth + 1)
+      );
+    }
+    return false;
+  }
+  if (Node.isConditionalExpression(node)) {
+    return [node.getWhenTrue(), node.getWhenFalse()].some((branch) =>
+      requestRetainedConfigExpressionTargetsIdentity(branch, targets, new Set(seen), depth + 1),
+    );
+  }
+  if (Node.isBinaryExpression(node)) {
+    return [node.getLeft(), node.getRight()].some((part) =>
+      requestRetainedConfigExpressionTargetsIdentity(part, targets, new Set(seen), depth + 1),
+    );
+  }
+  if (Node.isAwaitExpression(node)) {
+    return requestRetainedConfigExpressionTargetsIdentity(
+      node.getExpression(),
+      targets,
+      new Set(seen),
+      depth + 1,
+    );
+  }
+  return false;
+}
+
+function requestRetainedConfigCallIsReviewed(
+  call: import('ts-morph').CallExpression,
+  session: RequestProvenanceSession,
+): boolean {
+  if (requestHandlerFactoryInvocationsForCall(call, session).length > 0) return true;
+  if (requestStaticFrameworkGuardIsClosed(call)) return true;
+  if (requestVerifierFactoryName(call.getExpression())) return true;
+  if (requestRetainedConfigDrizzleTableCallIsReviewed(call)) return true;
+  const callee = unwrapStaticExpression(call.getExpression());
+  const receiver = requestCallReceiver(callee);
+  if (
+    requestExpressionIsFrameworkSchemaBuilderCall(call) &&
+    requestFrameworkSchemaBuilderCallIsPristine(call, session)
+  ) {
+    return true;
+  }
+  const identity = canonicalFrameworkExportForExpression(call.getExpression());
+  // Finite constructors that intentionally snapshot/retain authored option records. Do not grant
+  // package-wide trust: a future identity-returning Kovo API must not become a laundering path.
+  if (
+    identity &&
+    [
+      '@kovojs/core:customVerifier',
+      '@kovojs/core:component',
+      '@kovojs/core:domain',
+      '@kovojs/core:hmacSignature',
+      '@kovojs/core:publicAccess',
+      '@kovojs/core:redirect',
+      '@kovojs/core:secret',
+      '@kovojs/core:standardWebhooks',
+      '@kovojs/core:verifiedMachineAccess',
+      '@kovojs/drizzle:kovo',
+      '@kovojs/server:customVerifier',
+      '@kovojs/server:component',
+      '@kovojs/server:domain',
+      '@kovojs/server:hmacSignature',
+      '@kovojs/server:publicAccess',
+      '@kovojs/server:redirect',
+      '@kovojs/server:secret',
+      '@kovojs/server:standardWebhooks',
+      '@kovojs/server:verifiedMachineAccess',
+    ].includes(`${identity.module}:${identity.exportName}`)
+  ) {
+    return true;
+  }
+  return !!(
+    receiver &&
+    requestStaticCallMember(callee) === 'freeze' &&
+    expressionResolvesToGlobalNamespace(receiver, 'Object', new Set(), 0)
+  );
+}
+
+function requestRetainedConfigDrizzleTableCallIsReviewed(
+  call: import('ts-morph').CallExpression,
+): boolean {
+  if (
+    !requestExpressionIsDirectImportedExport(
+      call.getExpression(),
+      'drizzle-orm/pg-core',
+      'pgTable',
+    ) ||
+    !requestDrizzleColumnBuilderProtocolsArePristine(call)
+  ) {
+    return false;
+  }
+  const [name, columns, extra, ...rest] = call.getArguments();
+  const columnRecord = columns ? unwrapStaticExpression(columns) : undefined;
+  return !!(
+    rest.length === 0 &&
+    name &&
+    isStringLiteralLike(unwrapStaticExpression(name)) &&
+    columnRecord &&
+    Node.isObjectLiteralExpression(columnRecord) &&
+    requestDrizzleColumnsObjectIsClosed(columnRecord) &&
+    (extra === undefined || requestDrizzleExtraConfigIsClosed(extra, columnRecord))
+  );
+}
+
+function scanRequestRetainedConfigMutationCallables(
+  call: import('ts-morph').CallExpression,
+  context: RequestProcessScanContext,
+): void {
+  const visit = (candidate: Node): void => {
+    const node = unwrapStaticExpression(candidate);
+    if (Node.isObjectLiteralExpression(node)) {
+      for (const property of node.getProperties()) {
+        const value = Node.isPropertyAssignment(property)
+          ? property.getInitializer()
+          : Node.isShorthandPropertyAssignment(property)
+            ? property.getNameNode()
+            : Node.isSpreadAssignment(property)
+              ? property.getExpression()
+              : undefined;
+        if (value) visit(value);
+      }
+      return;
+    }
+    if (Node.isArrayLiteralExpression(node)) {
+      for (const element of node.getElements()) {
+        visit(Node.isSpreadElement(element) ? element.getExpression() : element);
+      }
+      return;
+    }
+    const direct = requestCallableForFunctionNode(node);
+    const resolution = direct
+      ? { callables: [direct] }
+      : resolveRequestCallable(node, new Set(), 0, context.provenance);
+    for (const callable of resolution.callables) scanRequestCallable(callable, context);
+  };
+  const invocation = requestNormalizedCall(call);
+  for (const callable of resolveRequestCallable(invocation.target, new Set(), 0, context.provenance)
+    .callables) {
+    scanRequestCallable(callable, context);
+  }
+  for (const argument of call.getArguments()) visit(argument);
 }
 
 function scanRequestRootCallbackProperty(
@@ -3372,6 +4335,327 @@ function requestExpressionIsFrameworkSchemaNamespace(expression: Node): boolean 
     expressionResolvesToFrameworkExport(expression, frameworkExport('@kovojs/server', 's')) ||
     expressionResolvesToFrameworkExport(expression, frameworkExport('@kovojs/core', 's'))
   );
+}
+
+function requestExpressionIsFrameworkSchemaBuilderCall(expression: Node): boolean {
+  const node = unwrapStaticExpression(expression);
+  if (!Node.isCallExpression(node)) return false;
+  const callee = unwrapStaticExpression(node.getExpression());
+  const receiver = requestCallReceiver(callee);
+  const member = requestStaticCallMember(callee);
+  if (!receiver || !member) return false;
+  if (requestExpressionIsFrameworkSchemaNamespace(receiver)) {
+    return [
+      'array',
+      'boolean',
+      'date',
+      'datetime',
+      'decimal',
+      'file',
+      'json',
+      'number',
+      'object',
+      'record',
+      'secret',
+      'string',
+    ].includes(member);
+  }
+  return (
+    requestExpressionIsFrameworkSchemaBuilderCall(receiver) &&
+    [
+      'accept',
+      'allowControlChars',
+      'default',
+      'email',
+      'format',
+      'int',
+      'matches',
+      'max',
+      'maxBytes',
+      'min',
+      'multiline',
+      'optional',
+      'pattern',
+      'slug',
+      'store',
+      'url',
+      'uuid',
+    ].includes(member)
+  );
+}
+
+function requestFrameworkSchemaBuilderCallIsPristine(
+  call: import('ts-morph').CallExpression,
+  session: RequestProvenanceSession,
+): boolean {
+  const base = requestFrameworkSchemaBuilderBaseReceiver(call);
+  if (!base || !requestFrameworkSchemaNamespaceIsPristine(base)) return false;
+  const projectKey = requestNodeIdentity(call.getSourceFile());
+  const memoized = session.schemaBuilderPristineMemo.get(projectKey);
+  if (memoized !== undefined) return memoized;
+  const pristine = requestFrameworkSchemaBuilderPrototypesArePristine(call);
+  session.schemaBuilderPristineMemo.set(projectKey, pristine);
+  return pristine;
+}
+
+function requestFrameworkSchemaBuilderBaseReceiver(
+  call: import('ts-morph').CallExpression,
+): Node | undefined {
+  let current = call;
+  while (true) {
+    const receiver = requestCallReceiver(unwrapStaticExpression(current.getExpression()));
+    if (!receiver) return undefined;
+    if (requestExpressionIsFrameworkSchemaNamespace(receiver)) return receiver;
+    const unwrapped = unwrapStaticExpression(receiver);
+    if (!Node.isCallExpression(unwrapped)) return undefined;
+    current = unwrapped;
+  }
+}
+
+function requestFrameworkSchemaNamespaceIsPristine(expression: Node): boolean {
+  for (const module of ['@kovojs/core', '@kovojs/server']) {
+    if (
+      requestExpressionResolvesToExactImportedCarrier(expression, module, 's', new Set()) &&
+      requestExactImportedCarrierIsPristine(expression, module, 's')
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function requestFrameworkSchemaBuilderPrototypesArePristine(expression: Node): boolean {
+  const project = expression.getSourceFile().getProject();
+  const resolvesToPrototype = (candidate: Node | undefined): boolean =>
+    !!candidate &&
+    requestExpressionResolvesToFrameworkSchemaBuilderPrototype(candidate, new Set(), 0);
+
+  for (const sourceFile of project.getSourceFiles()) {
+    for (const access of [
+      ...sourceFile.getDescendantsOfKind(SyntaxKind.PropertyAccessExpression),
+      ...sourceFile.getDescendantsOfKind(SyntaxKind.ElementAccessExpression),
+    ]) {
+      const member = Node.isPropertyAccessExpression(access)
+        ? staticMemberName(access.getNameNode())
+        : staticMemberName(access.getArgumentExpression());
+      if (
+        (member === '__proto__' || member === 'constructor') &&
+        requestExpressionResolvesToFrameworkSchemaBuilderValue(access.getExpression(), new Set(), 0)
+      ) {
+        return false;
+      }
+    }
+    for (const binding of sourceFile.getDescendantsOfKind(SyntaxKind.BindingElement)) {
+      const member = staticMemberName(binding.getPropertyNameNode() ?? binding.getNameNode());
+      const source = bindingElementSourceExpression(binding);
+      if (
+        (member === '__proto__' || member === 'constructor') &&
+        source &&
+        requestExpressionResolvesToFrameworkSchemaBuilderValue(source, new Set(), 0)
+      ) {
+        return false;
+      }
+    }
+    for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
+      const method =
+        requestGlobalNamespaceMethodForExpression(
+          call.getExpression(),
+          'Object',
+          new Set(['getPrototypeOf']),
+          new Set(),
+          0,
+        ) ??
+        requestGlobalNamespaceMethodForExpression(
+          call.getExpression(),
+          'Reflect',
+          new Set(['getPrototypeOf']),
+          new Set(),
+          0,
+        );
+      const [target] = call.getArguments();
+      if (
+        method === 'getPrototypeOf' &&
+        target &&
+        requestExpressionResolvesToFrameworkSchemaBuilderValue(target, new Set(), 0)
+      ) {
+        return false;
+      }
+    }
+    for (const assignment of sourceFile.getDescendantsOfKind(SyntaxKind.BinaryExpression)) {
+      const operator = assignment.getOperatorToken().getKind();
+      if (operator < SyntaxKind.FirstAssignment || operator > SyntaxKind.LastAssignment) continue;
+      const target = unwrapStaticExpression(assignment.getLeft());
+      if (
+        ((Node.isPropertyAccessExpression(target) || Node.isElementAccessExpression(target)) &&
+          resolvesToPrototype(target.getExpression())) ||
+        resolvesToPrototype(assignment.getRight())
+      ) {
+        return false;
+      }
+    }
+    for (const deletion of sourceFile.getDescendantsOfKind(SyntaxKind.DeleteExpression)) {
+      const target = unwrapStaticExpression(deletion.getExpression());
+      if (
+        (Node.isPropertyAccessExpression(target) || Node.isElementAccessExpression(target)) &&
+        resolvesToPrototype(target.getExpression())
+      ) {
+        return false;
+      }
+    }
+    for (const update of [
+      ...sourceFile.getDescendantsOfKind(SyntaxKind.PrefixUnaryExpression),
+      ...sourceFile.getDescendantsOfKind(SyntaxKind.PostfixUnaryExpression),
+    ]) {
+      const target = unwrapStaticExpression(update.getOperand());
+      if (
+        (Node.isPropertyAccessExpression(target) || Node.isElementAccessExpression(target)) &&
+        resolvesToPrototype(target.getExpression())
+      ) {
+        return false;
+      }
+    }
+    for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
+      if (call.getArguments().some(resolvesToPrototype)) return false;
+      const receiver = requestCallReceiver(unwrapStaticExpression(call.getExpression()));
+      if (receiver && resolvesToPrototype(receiver)) return false;
+    }
+    for (const construct of sourceFile.getDescendantsOfKind(SyntaxKind.NewExpression)) {
+      if (construct.getArguments().some(resolvesToPrototype)) return false;
+    }
+    for (const returned of sourceFile.getDescendantsOfKind(SyntaxKind.ReturnStatement)) {
+      if (resolvesToPrototype(returned.getExpression())) return false;
+    }
+    for (const property of sourceFile.getDescendantsOfKind(SyntaxKind.PropertyDeclaration)) {
+      if (resolvesToPrototype(property.getInitializer())) return false;
+    }
+    for (const parameter of sourceFile.getDescendantsOfKind(SyntaxKind.Parameter)) {
+      if (resolvesToPrototype(parameter.getInitializer())) return false;
+    }
+  }
+  return true;
+}
+
+function requestExpressionResolvesToFrameworkSchemaBuilderPrototype(
+  expression: Node,
+  seen: Set<string>,
+  depth: number,
+): boolean {
+  if (depth > 64) return true;
+  const node = unwrapStaticExpression(expression);
+  const key = requestNodeIdentity(node);
+  if (seen.has(key)) return false;
+  seen.add(key);
+  if (Node.isCallExpression(node)) {
+    const callee = unwrapStaticExpression(node.getExpression());
+    const receiver = requestCallReceiver(callee);
+    const [target, ...rest] = node.getArguments();
+    return !!(
+      receiver &&
+      rest.length === 0 &&
+      requestStaticCallMember(callee) === 'getPrototypeOf' &&
+      (expressionResolvesToGlobalNamespace(receiver, 'Object', new Set(), 0) ||
+        expressionResolvesToGlobalNamespace(receiver, 'Reflect', new Set(), 0)) &&
+      target &&
+      requestExpressionResolvesToFrameworkSchemaBuilderValue(target, new Set(seen), depth + 1)
+    );
+  }
+  if (Node.isPropertyAccessExpression(node) || Node.isElementAccessExpression(node)) {
+    const member = Node.isPropertyAccessExpression(node)
+      ? staticMemberName(node.getNameNode())
+      : staticMemberName(node.getArgumentExpression());
+    if (
+      member === '__proto__' &&
+      requestExpressionResolvesToFrameworkSchemaBuilderValue(
+        node.getExpression(),
+        new Set(seen),
+        depth + 1,
+      )
+    ) {
+      return true;
+    }
+    if (member !== 'prototype') return false;
+    const constructor = unwrapStaticExpression(node.getExpression());
+    if (
+      !Node.isPropertyAccessExpression(constructor) &&
+      !Node.isElementAccessExpression(constructor)
+    ) {
+      return false;
+    }
+    const constructorMember = Node.isPropertyAccessExpression(constructor)
+      ? staticMemberName(constructor.getNameNode())
+      : staticMemberName(constructor.getArgumentExpression());
+    return (
+      constructorMember === 'constructor' &&
+      requestExpressionResolvesToFrameworkSchemaBuilderValue(
+        constructor.getExpression(),
+        new Set(seen),
+        depth + 1,
+      )
+    );
+  }
+  if (Node.isConditionalExpression(node)) {
+    return [node.getWhenTrue(), node.getWhenFalse()].some((branch) =>
+      requestExpressionResolvesToFrameworkSchemaBuilderPrototype(branch, new Set(seen), depth + 1),
+    );
+  }
+  if (Node.isBinaryExpression(node)) {
+    return [node.getLeft(), node.getRight()].some((part) =>
+      requestExpressionResolvesToFrameworkSchemaBuilderPrototype(part, new Set(seen), depth + 1),
+    );
+  }
+  if (!Node.isIdentifier(node)) return false;
+  const symbol = requestIdentifierValueSymbol(node) ?? node.getSymbol();
+  if (!symbol) return false;
+  const symbolKey = requestSymbolKey(symbol);
+  if (seen.has(symbolKey)) return false;
+  seen.add(symbolKey);
+  return symbol.getDeclarations().some((declaration) => {
+    const initializer = valueDeclarationInitializer(declaration);
+    return !!(
+      initializer &&
+      requestExpressionResolvesToFrameworkSchemaBuilderPrototype(
+        initializer,
+        new Set(seen),
+        depth + 1,
+      )
+    );
+  });
+}
+
+function requestExpressionResolvesToFrameworkSchemaBuilderValue(
+  expression: Node,
+  seen: Set<string>,
+  depth: number,
+): boolean {
+  if (depth > 64) return true;
+  const node = unwrapStaticExpression(expression);
+  const key = requestNodeIdentity(node);
+  if (seen.has(key)) return false;
+  seen.add(key);
+  if (Node.isCallExpression(node)) return requestExpressionIsFrameworkSchemaBuilderCall(node);
+  if (Node.isConditionalExpression(node)) {
+    return [node.getWhenTrue(), node.getWhenFalse()].some((branch) =>
+      requestExpressionResolvesToFrameworkSchemaBuilderValue(branch, new Set(seen), depth + 1),
+    );
+  }
+  if (Node.isBinaryExpression(node)) {
+    return [node.getLeft(), node.getRight()].some((part) =>
+      requestExpressionResolvesToFrameworkSchemaBuilderValue(part, new Set(seen), depth + 1),
+    );
+  }
+  if (!Node.isIdentifier(node)) return false;
+  const symbol = requestIdentifierValueSymbol(node) ?? node.getSymbol();
+  if (!symbol) return false;
+  const symbolKey = requestSymbolKey(symbol);
+  if (seen.has(symbolKey)) return false;
+  seen.add(symbolKey);
+  return symbol.getDeclarations().some((declaration) => {
+    const initializer = valueDeclarationInitializer(declaration);
+    return !!(
+      initializer &&
+      requestExpressionResolvesToFrameworkSchemaBuilderValue(initializer, new Set(seen), depth + 1)
+    );
+  });
 }
 
 function requestVerifierFactoryName(
@@ -5197,28 +6481,40 @@ function requestStaticCallbackValueIsClosed(
 ): boolean {
   const node = unwrapStaticExpression(expression);
   if (Node.isStringLiteral(node) || Node.isNoSubstitutionTemplateLiteral(node)) return true;
-  if (kind === 'scalar' && Node.isNumericLiteral(node)) return true;
   if (
-    (kind === 'access' || kind === 'guard') &&
-    requestStaticFrameworkGuardIsClosed(node)
+    kind === 'scalar' &&
+    (Node.isNumericLiteral(node) ||
+      Node.isTrueLiteral(node) ||
+      Node.isFalseLiteral(node) ||
+      node.getKind() === SyntaxKind.NullKeyword)
   ) {
     return true;
   }
+  if ((kind === 'access' || kind === 'guard') && requestStaticFrameworkGuardIsClosed(node)) {
+    return true;
+  }
   if (kind === 'access' && Node.isCallExpression(node)) {
-    return ['publicAccess', 'verifiedMachineAccess'].some(
-      (name) =>
-        expressionResolvesToFrameworkExport(
-          node.getExpression(),
-          frameworkExport('@kovojs/server', name),
-        ) ||
-        expressionResolvesToFrameworkExport(
-          node.getExpression(),
-          frameworkExport('@kovojs/core', name),
-        ),
+    const [reason, ...extra] = node.getArguments();
+    return !!(
+      reason &&
+      extra.length === 0 &&
+      requestStaticCallbackValueIsClosed(reason, 'scalar', new Set(seen)) &&
+      ['publicAccess', 'verifiedMachineAccess'].some(
+        (name) =>
+          expressionResolvesToFrameworkExport(
+            node.getExpression(),
+            frameworkExport('@kovojs/server', name),
+          ) ||
+          expressionResolvesToFrameworkExport(
+            node.getExpression(),
+            frameworkExport('@kovojs/core', name),
+          ),
+      )
     );
   }
   if (Node.isConditionalExpression(node)) {
     return (
+      requestStaticCallbackValueIsClosed(node.getCondition(), 'scalar', new Set(seen)) &&
       requestStaticCallbackValueIsClosed(node.getWhenTrue(), kind, new Set(seen)) &&
       requestStaticCallbackValueIsClosed(node.getWhenFalse(), kind, new Set(seen))
     );
@@ -5277,24 +6573,17 @@ function requestStaticFrameworkGuardIsClosed(expression: Node): boolean {
   if (member === 'authed') return node.getArguments().length === 0;
   if (member !== 'rateLimit') return false;
 
-  const [options] = node.getArguments();
+  const [options, ...extra] = node.getArguments();
   const record = options ? unwrapStaticExpression(options) : undefined;
-  if (!record || !Node.isObjectLiteralExpression(record)) return false;
+  if (extra.length > 0 || !record || !Node.isObjectLiteralExpression(record)) return false;
   for (const property of record.getProperties()) {
-    if (
-      Node.isSpreadAssignment(property) ||
-      Node.isGetAccessorDeclaration(property) ||
-      Node.isSetAccessorDeclaration(property)
-    ) {
-      return false;
-    }
-    const name = requestObjectLiteralElementNameNode(property);
-    if (!name || (Node.isComputedPropertyName(name) && staticMemberName(name) === undefined)) {
-      return false;
-    }
-    // `key` executes for every request. It remains an authored callback and must go through the
-    // ordinary callable scanner instead of inheriting framework authority from rateLimit().
-    if (staticMemberName(name) === 'key') return false;
+    if (!Node.isPropertyAssignment(property)) return false;
+    const name = staticMemberName(property.getNameNode());
+    const value = property.getInitializer();
+    if (!name || !value || !['max', 'maxKeys', 'per', 'windowMs'].includes(name)) return false;
+    // `key` is intentionally absent from the finite list: it executes for every request and must
+    // go through the ordinary callable scanner instead of inheriting rateLimit() authority.
+    if (!requestExpressionIsClosedStaticData(value)) return false;
   }
   return true;
 }
@@ -5315,14 +6604,12 @@ function requestExpressionIsDirectImportedExport(
       .some(
         (declaration) =>
           declaration.getModuleSpecifierValue() === module &&
-          declaration
-            .getNamedImports()
-            .some((named) => {
-              if (named.getName() !== exportName) return false;
-              const local = named.getAliasNode() ?? named.getNameNode();
-              const importSymbol = local.getSymbol();
-              return !!importSymbol && requestSymbolKey(importSymbol) === useKey;
-            }),
+          declaration.getNamedImports().some((named) => {
+            if (named.getName() !== exportName) return false;
+            const local = named.getAliasNode() ?? named.getNameNode();
+            const importSymbol = local.getSymbol();
+            return !!importSymbol && requestSymbolKey(importSymbol) === useKey;
+          }),
       );
   }
   if (!Node.isPropertyAccessExpression(node) && !Node.isElementAccessExpression(node)) {
@@ -5355,14 +6642,25 @@ function requestExactImportedCarrierIsPristine(
   const project = expression.getSourceFile().getProject();
   const resolvesToCarrier = (candidate: Node | undefined): boolean =>
     !!candidate &&
-    requestExpressionResolvesToExactImportedCarrier(
-      candidate,
-      module,
-      exportName,
-      new Set(),
-    );
+    requestExpressionResolvesToExactImportedCarrier(candidate, module, exportName, new Set());
 
   for (const sourceFile of project.getSourceFiles()) {
+    for (const property of sourceFile.getDescendantsOfKind(SyntaxKind.PropertyDeclaration)) {
+      if (resolvesToCarrier(property.getInitializer())) return false;
+    }
+    for (const parameter of sourceFile.getDescendantsOfKind(SyntaxKind.Parameter)) {
+      if (resolvesToCarrier(parameter.getInitializer())) return false;
+    }
+    for (const declaration of sourceFile.getExportDeclarations()) {
+      if (declaration.getModuleSpecifierValue() !== module || declaration.isTypeOnly()) continue;
+      const exported = declaration.getNamedExports();
+      if (
+        exported.length === 0 ||
+        exported.some((specifier) => !specifier.isTypeOnly() && specifier.getName() === exportName)
+      ) {
+        return false;
+      }
+    }
     for (const assignment of sourceFile.getDescendantsOfKind(SyntaxKind.BinaryExpression)) {
       const operator = assignment.getOperatorToken().getKind();
       if (operator < SyntaxKind.FirstAssignment || operator > SyntaxKind.LastAssignment) continue;
@@ -5373,6 +6671,7 @@ function requestExactImportedCarrierIsPristine(
       ) {
         return false;
       }
+      if (resolvesToCarrier(assignment.getRight())) return false;
     }
     for (const deletion of sourceFile.getDescendantsOfKind(SyntaxKind.DeleteExpression)) {
       const target = unwrapStaticExpression(deletion.getExpression());
@@ -5396,6 +6695,17 @@ function requestExactImportedCarrierIsPristine(
       }
     }
     for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
+      const callTarget = unwrapStaticExpression(call.getExpression());
+      if (
+        callTarget.getKind() === SyntaxKind.ImportKeyword ||
+        (Node.isIdentifier(callTarget) && callTarget.getText() === 'require')
+      ) {
+        const [specifier] = call.getArguments();
+        if (specifier && isStringLiteralLike(specifier) && specifier.getLiteralText() === module) {
+          return false;
+        }
+      }
+      if (call.getArguments().some(resolvesToCarrier)) return false;
       const callee = unwrapStaticExpression(call.getExpression());
       const receiver = requestCallReceiver(callee);
       const member = requestStaticCallMember(callee);
@@ -5413,6 +6723,35 @@ function requestExactImportedCarrierIsPristine(
         return false;
       }
     }
+    for (const object of sourceFile.getDescendantsOfKind(SyntaxKind.ObjectLiteralExpression)) {
+      for (const property of object.getProperties()) {
+        const value = Node.isPropertyAssignment(property)
+          ? property.getInitializer()
+          : Node.isShorthandPropertyAssignment(property)
+            ? property.getNameNode()
+            : Node.isSpreadAssignment(property)
+              ? property.getExpression()
+              : undefined;
+        if (resolvesToCarrier(value)) return false;
+      }
+    }
+    for (const array of sourceFile.getDescendantsOfKind(SyntaxKind.ArrayLiteralExpression)) {
+      if (
+        array
+          .getElements()
+          .some((element) =>
+            resolvesToCarrier(Node.isSpreadElement(element) ? element.getExpression() : element),
+          )
+      ) {
+        return false;
+      }
+    }
+    for (const returned of sourceFile.getDescendantsOfKind(SyntaxKind.ReturnStatement)) {
+      if (resolvesToCarrier(returned.getExpression())) return false;
+    }
+    for (const construct of sourceFile.getDescendantsOfKind(SyntaxKind.NewExpression)) {
+      if (construct.getArguments().some(resolvesToCarrier)) return false;
+    }
   }
   return true;
 }
@@ -5425,6 +6764,55 @@ function requestExpressionResolvesToExactImportedCarrier(
 ): boolean {
   const node = unwrapStaticExpression(expression);
   if (requestExpressionIsDirectImportedExport(node, module, exportName)) return true;
+  if (Node.isAwaitExpression(node)) {
+    return requestExpressionResolvesToExactImportedCarrier(
+      node.getExpression(),
+      module,
+      exportName,
+      new Set(seen),
+    );
+  }
+  if (Node.isConditionalExpression(node)) {
+    return [node.getWhenTrue(), node.getWhenFalse()].some((branch) =>
+      requestExpressionResolvesToExactImportedCarrier(branch, module, exportName, new Set(seen)),
+    );
+  }
+  if (Node.isBinaryExpression(node)) {
+    const operator = node.getOperatorToken().getKind();
+    if (
+      ![
+        SyntaxKind.AmpersandAmpersandToken,
+        SyntaxKind.BarBarToken,
+        SyntaxKind.QuestionQuestionToken,
+        SyntaxKind.CommaToken,
+        SyntaxKind.EqualsToken,
+      ].includes(operator)
+    ) {
+      return false;
+    }
+    return [node.getLeft(), node.getRight()].some((part) =>
+      requestExpressionResolvesToExactImportedCarrier(part, module, exportName, new Set(seen)),
+    );
+  }
+  if (Node.isPropertyAccessExpression(node) || Node.isElementAccessExpression(node)) {
+    const member = Node.isPropertyAccessExpression(node)
+      ? staticMemberName(node.getNameNode())
+      : staticMemberName(node.getArgumentExpression());
+    const projected = member
+      ? requestWireProjectedExpression(node.getExpression(), [member], new Set(), 0)
+      : undefined;
+    return !!(
+      projected &&
+      requestExpressionResolvesToExactImportedCarrier(projected, module, exportName, new Set(seen))
+    );
+  }
+  if (Node.isCallExpression(node)) {
+    return resolveRequestCallable(node.getExpression(), new Set(), 0).callables.some((callable) =>
+      requestWireOutputExpressions(callable).some((output) =>
+        requestExpressionResolvesToExactImportedCarrier(output, module, exportName, new Set(seen)),
+      ),
+    );
+  }
   if (!Node.isIdentifier(node)) return false;
   const symbol = node.getSymbol();
   if (!symbol) return false;
@@ -5471,6 +6859,57 @@ function requestCallIsExactFrameworkNativePromise(
   );
 }
 
+function requestExpressionContainsExactFrameworkNativePromise(
+  expression: Node,
+  seen: Set<string>,
+): boolean {
+  const node = unwrapStaticExpression(expression);
+  if (Node.isAwaitExpression(node)) {
+    return requestExpressionContainsExactFrameworkNativePromise(node.getExpression(), seen);
+  }
+  if (Node.isCallExpression(node)) return requestCallIsExactFrameworkNativePromise(node);
+  if (Node.isConditionalExpression(node)) {
+    return [node.getWhenTrue(), node.getWhenFalse()].some((branch) =>
+      requestExpressionContainsExactFrameworkNativePromise(branch, new Set(seen)),
+    );
+  }
+  if (Node.isBinaryExpression(node)) {
+    const operator = node.getOperatorToken().getKind();
+    if (
+      ![
+        SyntaxKind.AmpersandAmpersandToken,
+        SyntaxKind.BarBarToken,
+        SyntaxKind.QuestionQuestionToken,
+        SyntaxKind.CommaToken,
+        SyntaxKind.EqualsToken,
+      ].includes(operator)
+    ) {
+      return false;
+    }
+    return [node.getLeft(), node.getRight()].some((part) =>
+      requestExpressionContainsExactFrameworkNativePromise(part, new Set(seen)),
+    );
+  }
+  if (!Node.isIdentifier(node)) return false;
+  const symbol = node.getSymbol();
+  if (!symbol) return false;
+  const key = requestSymbolKey(symbol);
+  if (seen.has(key)) return false;
+  seen.add(key);
+  const candidates = [
+    ...symbol
+      .getDeclarations()
+      .map(valueDeclarationInitializer)
+      .filter((initializer): initializer is Node => initializer !== undefined),
+    ...requestAssignedBindingProjections(symbol)
+      .filter((projection) => projection.path.length === 0)
+      .map((projection) => projection.expression),
+  ];
+  return candidates.some((candidate) =>
+    requestExpressionContainsExactFrameworkNativePromise(candidate, new Set(seen)),
+  );
+}
+
 function requestCallIsExactRunCommand(call: import('ts-morph').CallExpression): boolean {
   return requestExpressionIsDirectImportedExport(
     call.getExpression(),
@@ -5488,6 +6927,55 @@ function requestCallIsReviewedRouteOutcome(
     (callable.rootFactory === 'endpoint' && callable.rootCallback === 'handler') ||
     (callable.rootFactory === 'route' && callable.rootCallback === 'page')
   );
+}
+
+function requestRespondOutcomeCallIsWholeFunctionReturn(
+  call: import('ts-morph').CallExpression,
+  callable: RequestCallable,
+): boolean {
+  if (
+    !(
+      (callable.rootFactory === 'endpoint' && callable.rootCallback === 'handler') ||
+      (callable.rootFactory === 'route' && callable.rootCallback === 'page')
+    )
+  ) {
+    return false;
+  }
+  let current: Node = call;
+  while (true) {
+    const parent = current.getParent();
+    if (!parent) return false;
+    if (
+      Node.isParenthesizedExpression(parent) ||
+      Node.isAsExpression(parent) ||
+      Node.isSatisfiesExpression(parent) ||
+      Node.isTypeAssertion(parent) ||
+      Node.isNonNullExpression(parent) ||
+      Node.isAwaitExpression(parent)
+    ) {
+      current = parent;
+      continue;
+    }
+    if (
+      Node.isConditionalExpression(parent) &&
+      (requestNodesAreSame(parent.getWhenTrue(), current) ||
+        requestNodesAreSame(parent.getWhenFalse(), current))
+    ) {
+      current = parent;
+      continue;
+    }
+    if (
+      Node.isReturnStatement(parent) &&
+      !!parent.getExpression() &&
+      requestNodesAreSame(parent.getExpression()!, current)
+    ) {
+      return nodeBelongsToRequestCallable(parent, callable);
+    }
+    if (Node.isArrowFunction(parent) && requestNodesAreSame(parent.getBody(), current)) {
+      return requestNodesAreSame(parent, callable.declaration);
+    }
+    return false;
+  }
 }
 
 function requestHandlerPropertyExpression(property: Node): Node | undefined {
@@ -9327,8 +10815,19 @@ function scanRequestWireConfidentiality(
     }
     wireExpressions.push(call);
   }
+  const directRouteOutcomeOutputs = new Set(
+    callable.publicWire &&
+      ((callable.rootFactory === 'endpoint' && callable.rootCallback === 'handler') ||
+        (callable.rootFactory === 'route' && callable.rootCallback === 'page'))
+      ? requestWireOutputExpressions(callable).map(requestNodeIdentity)
+      : [],
+  );
   for (const output of wireExpressions) {
-    const authorities = requestWireAuthoritiesForExpression(output, state);
+    const authorities = requestWireAuthoritiesForExpression(
+      output,
+      state,
+      directRouteOutcomeOutputs.has(requestNodeIdentity(output)),
+    );
     for (const authority of authorities) {
       appendRequestAuthorityFact(context, output, authority, authority.source);
     }
@@ -9405,9 +10904,14 @@ function requestWireOutputExpressions(callable: RequestCallable): Node[] {
 function requestWireAuthoritiesForExpression(
   expression: Node,
   state: RequestWireAnalysisState,
+  routeOutcomePosition = false,
 ): RequestWireAuthority[] {
   const node = unwrapStaticExpression(expression);
-  const nodeKey = requestWireStateKey('wire', node, state);
+  const nodeKey = requestWireStateKey(
+    routeOutcomePosition ? 'wire-route-outcome' : 'wire',
+    node,
+    state,
+  );
   const memoized = state.session.wireMemo.get(nodeKey);
   if (memoized) return [...memoized];
   if (state.session.wireActive.has(nodeKey)) return [];
@@ -9415,7 +10919,11 @@ function requestWireAuthoritiesForExpression(
     return [requestProvenanceBudgetAuthority(node)];
   }
   state.session.wireActive.add(nodeKey);
-  const authorities = requestWireAuthoritiesForExpressionUncached(node, state);
+  const authorities = requestWireAuthoritiesForExpressionUncached(
+    node,
+    state,
+    routeOutcomePosition,
+  );
   state.session.wireActive.delete(nodeKey);
   const result = dedupeRequestWireAuthorities(
     state.session.exhaustedAt
@@ -9429,10 +10937,11 @@ function requestWireAuthoritiesForExpression(
 function requestWireAuthoritiesForExpressionUncached(
   node: Node,
   state: RequestWireAnalysisState,
+  routeOutcomePosition: boolean,
 ): RequestWireAuthority[] {
   if (Node.isAwaitExpression(node)) {
     return dedupeRequestWireAuthorities([
-      ...requestWireAuthoritiesForExpression(node.getExpression(), state),
+      ...requestWireAuthoritiesForExpression(node.getExpression(), state, routeOutcomePosition),
       ...requestWireThenableAuthorities(node.getExpression(), state),
     ]);
   }
@@ -9441,7 +10950,7 @@ function requestWireAuthoritiesForExpressionUncached(
     if (
       requestCallIsExactFrameworkNativePromise(node) ||
       (requestCallIsExactRespondMethod(node) &&
-        !requestCallIsReviewedRouteOutcome(node, state.rootCallable))
+        (!routeOutcomePosition || !requestCallIsReviewedRouteOutcome(node, state.rootCallable)))
     ) {
       return dedupeRequestWireAuthorities([
         ...requestWireAuthoritiesForExpressions(node.getArguments(), state),
@@ -9502,7 +11011,12 @@ function requestWireAuthoritiesForExpressionUncached(
           scopeCallable: nested,
         };
         for (const output of requestWireOutputExpressions(nested)) {
-          authorities.push(...requestWireAuthoritiesForExpression(output, nestedState));
+          authorities.push(
+            // A helper result is ordinary authored data. Only the endpoint handler/route page's
+            // own return slot may carry a respond.* outcome; propagating this positional bit into
+            // helpers also blesses retained callback results such as array.map(() => respond.file()).
+            ...requestWireAuthoritiesForExpression(output, nestedState),
+          );
         }
       }
       if (invocation.args === undefined) {
@@ -9648,10 +11162,11 @@ function requestWireAuthoritiesForExpressionUncached(
     return yielded ? requestWireAuthoritiesForExpression(yielded, state) : [];
   }
   if (Node.isConditionalExpression(node)) {
-    return requestWireAuthoritiesForExpressions(
-      [node.getCondition(), node.getWhenTrue(), node.getWhenFalse()],
-      state,
-    );
+    return dedupeRequestWireAuthorities([
+      ...requestWireAuthoritiesForExpression(node.getCondition(), state),
+      ...requestWireAuthoritiesForExpression(node.getWhenTrue(), state, routeOutcomePosition),
+      ...requestWireAuthoritiesForExpression(node.getWhenFalse(), state, routeOutcomePosition),
+    ]);
   }
   if (Node.isBinaryExpression(node)) {
     return requestWireAuthoritiesForExpressions([node.getLeft(), node.getRight()], state);
@@ -9671,6 +11186,11 @@ function requestWireAuthoritiesForExpressionUncached(
   if (Node.isPrefixUnaryExpression(node) || Node.isPostfixUnaryExpression(node)) {
     return requestWireAuthoritiesForExpression(node.getOperand(), state);
   }
+
+  // Drizzle retains this exact zero-argument callback as schema metadata; the function object is
+  // not a query result. Its expression-bodied output is separately restricted to one reviewed
+  // table column by requestDrizzleReferenceCallbackIsClosed().
+  if (requestDrizzleReferenceCallbackIsExactArgument(node)) return [];
 
   return requestExpressionIsPlainWireValue(node, state, new Set())
     ? []
@@ -10227,10 +11747,7 @@ function requestExpressionIsPlainWireValue(
     ) {
       return true;
     }
-    if (
-      receiver &&
-      requestExpressionContainsClosedAuthority(receiver, new Set(), 0)
-    ) {
+    if (receiver && requestExpressionContainsClosedAuthority(receiver, new Set(), 0)) {
       return true;
     }
   }
@@ -10729,6 +12246,16 @@ function requestWireAuthoritiesForBindingProjection(
       next.push(...getterOutputs);
       const projected = requestWireProjectedExpression(candidate, [member], new Set(), 0);
       if (projected) next.push(projected);
+      // SPEC §6.6: binding-pattern projection must not erase governed server authority. Exact
+      // runCommand/rootedFiles results are opaque on public wires even when authored code selects
+      // a property through one-step or aliased destructuring rather than ordinary member access.
+      if (
+        getterOutputs.length === 0 &&
+        !projected &&
+        requestExpressionContainsExactFrameworkNativePromise(candidate, new Set())
+      ) {
+        authorities.push(...requestWireAuthoritiesForExpression(candidate, state));
+      }
     }
     candidates = dedupeRequestNodes(next);
     if (candidates.length === 0) break;
@@ -12398,6 +13925,7 @@ function requestCallIsKnownSafe(
     return true;
   }
   if (requestCallIsExactRespondMethod(call)) {
+    if (!requestRespondOutcomeCallIsWholeFunctionReturn(call, callable)) return false;
     scanRequestFunctionArguments(call, context);
     return true;
   }
@@ -12529,7 +14057,7 @@ function requestCallIsKnownSafe(
 
   const role = requestExpressionRootParameterRole(receiver, callable, new Set(), 0);
   if (requestRootRoleIncludesCapability(role)) {
-    if (!requestRootCapabilityMethodIsPristine(receiver, callable, context)) return false;
+    if (!requestRootCapabilityMethodIsPristine(receiver, callable)) return false;
     scanRequestFunctionArguments(call, context);
     return true;
   }
@@ -12595,12 +14123,17 @@ function requestRootCapabilityKey(
     const symbolKey = requestSymbolKey(symbol);
     if (seen.has(symbolKey)) return undefined;
     seen.add(symbolKey);
-    const declaration = localValueDeclaration(node);
-    if (
-      declaration &&
-      Node.isVariableDeclaration(declaration) &&
-      declaration.getVariableStatement()?.getDeclarationKind() === VariableDeclarationKind.Const
-    ) {
+    const declarations = [localValueDeclaration(node), ...symbol.getDeclarations()].filter(
+      (declaration, index, all): declaration is Node =>
+        !!declaration && all.indexOf(declaration) === index,
+    );
+    for (const declaration of declarations) {
+      if (
+        !Node.isVariableDeclaration(declaration) ||
+        declaration.getVariableStatement()?.getDeclarationKind() !== VariableDeclarationKind.Const
+      ) {
+        continue;
+      }
       const initializer = declaration.getInitializer();
       if (initializer) {
         const aliased = requestRootCapabilityKey(initializer, callable, new Set(seen));
@@ -12616,8 +14149,9 @@ function requestRootCapabilityKey(
   if (Node.isPropertyAccessExpression(node) || Node.isElementAccessExpression(node)) {
     const member = Node.isPropertyAccessExpression(node)
       ? staticMemberName(node.getNameNode())
-      : staticMemberName(node.getArgumentExpression());
-    if (!member) return undefined;
+      : node.getArgumentExpression()
+        ? (requestStaticStringExpressionValue(node.getArgumentExpression()!) ?? '*')
+        : '*';
     const receiver = requestRootCapabilityKey(node.getExpression(), callable, new Set(seen));
     return receiver ? `${receiver}.${member}` : undefined;
   }
@@ -12632,13 +14166,118 @@ function requestRootCapabilityKey(
   return undefined;
 }
 
-function requestRootCapabilityMethodIsPristine(
-  receiver: Node,
-  callable: RequestCallable,
-  context: RequestProcessScanContext,
+function requestExpressionContainsIdentityCarrier(
+  expression: Node | undefined,
+  identifiesCarrier: (candidate: Node | undefined) => boolean,
+  seen: Set<string>,
 ): boolean {
+  if (!expression) return false;
+  const node = unwrapStaticExpression(expression);
+  const key = requestNodeIdentity(node);
+  if (seen.has(key)) return false;
+  seen.add(key);
+  if (identifiesCarrier(node)) return true;
+  if (Node.isConditionalExpression(node)) {
+    return [node.getWhenTrue(), node.getWhenFalse()].some((part) =>
+      requestExpressionContainsIdentityCarrier(part, identifiesCarrier, new Set(seen)),
+    );
+  }
+  if (Node.isBinaryExpression(node)) {
+    const operator = node.getOperatorToken().getKind();
+    if (
+      ![
+        SyntaxKind.AmpersandAmpersandToken,
+        SyntaxKind.BarBarToken,
+        SyntaxKind.QuestionQuestionToken,
+        SyntaxKind.CommaToken,
+        SyntaxKind.EqualsToken,
+      ].includes(operator)
+    ) {
+      return false;
+    }
+    return (
+      requestExpressionContainsIdentityCarrier(node.getLeft(), identifiesCarrier, new Set(seen)) ||
+      requestExpressionContainsIdentityCarrier(node.getRight(), identifiesCarrier, new Set(seen))
+    );
+  }
+  if (Node.isObjectLiteralExpression(node)) {
+    return node.getProperties().some((property) => {
+      const value = Node.isPropertyAssignment(property)
+        ? property.getInitializer()
+        : Node.isShorthandPropertyAssignment(property)
+          ? property.getNameNode()
+          : Node.isSpreadAssignment(property)
+            ? property.getExpression()
+            : undefined;
+      return requestExpressionContainsIdentityCarrier(value, identifiesCarrier, new Set(seen));
+    });
+  }
+  if (Node.isArrayLiteralExpression(node)) {
+    return node
+      .getElements()
+      .some((element) =>
+        requestExpressionContainsIdentityCarrier(
+          Node.isSpreadElement(element) ? element.getExpression() : element,
+          identifiesCarrier,
+          new Set(seen),
+        ),
+      );
+  }
+  if (Node.isAwaitExpression(node) || Node.isSpreadElement(node)) {
+    return requestExpressionContainsIdentityCarrier(
+      node.getExpression(),
+      identifiesCarrier,
+      new Set(seen),
+    );
+  }
+  if (
+    Node.isArrowFunction(node) ||
+    Node.isFunctionExpression(node) ||
+    Node.isFunctionDeclaration(node) ||
+    Node.isMethodDeclaration(node) ||
+    Node.isGetAccessorDeclaration(node) ||
+    Node.isSetAccessorDeclaration(node)
+  ) {
+    return [node, ...node.getDescendants()].some(
+      (candidate) => candidate !== node && identifiesCarrier(candidate),
+    );
+  }
+  if (Node.isIdentifier(node)) {
+    const symbol = node.getSymbol();
+    if (!symbol) return false;
+    return symbol.getDeclarations().some((declaration) => {
+      if (Node.isFunctionDeclaration(declaration)) {
+        return requestExpressionContainsIdentityCarrier(
+          declaration,
+          identifiesCarrier,
+          new Set(seen),
+        );
+      }
+      const initializer = valueDeclarationInitializer(declaration);
+      return !!(
+        initializer &&
+        (Node.isArrowFunction(unwrapStaticExpression(initializer)) ||
+          Node.isFunctionExpression(unwrapStaticExpression(initializer))) &&
+        requestExpressionContainsIdentityCarrier(initializer, identifiesCarrier, new Set(seen))
+      );
+    });
+  }
+  return false;
+}
+
+function requestRootCapabilityMethodIsPristine(receiver: Node, callable: RequestCallable): boolean {
   const targetKey = requestRootCapabilityKey(receiver, callable, new Set());
   if (!targetKey) return false;
+  const keyMayPrefix = (prefix: string, value: string): boolean => {
+    const prefixParts = prefix.split('.');
+    const valueParts = value.split('.');
+    return (
+      prefixParts.length <= valueParts.length &&
+      prefixParts.every(
+        (part, index) => part === '*' || valueParts[index] === '*' || part === valueParts[index],
+      )
+    );
+  };
   const isTargetRoot = (candidate: Node | undefined): boolean => {
     if (!candidate) return false;
     const node = unwrapStaticExpression(candidate);
@@ -12651,8 +14290,17 @@ function requestRootCapabilityMethodIsPristine(
   const isTargetMember = (candidate: Node | undefined): boolean => {
     if (!candidate) return false;
     const key = requestRootCapabilityKey(candidate, callable, new Set());
-    return key === targetKey || key?.startsWith(`${targetKey}.`) === true;
+    return !!key && keyMayPrefix(targetKey, key);
   };
+  const isTargetOrAncestorCarrier = (candidate: Node | undefined): boolean => {
+    if (!candidate) return false;
+    const node = unwrapStaticExpression(candidate);
+    if (Node.isCallExpression(node)) return false;
+    const key = requestRootCapabilityKey(node, callable, new Set());
+    return !!key && keyMayPrefix(key, targetKey);
+  };
+  const expressionContainsTargetOrAncestorCarrier = (candidate: Node | undefined): boolean =>
+    requestExpressionContainsIdentityCarrier(candidate, isTargetOrAncestorCarrier, new Set());
   const sourceFile = callable.declaration.getSourceFile();
 
   for (const assignment of sourceFile.getDescendantsOfKind(SyntaxKind.BinaryExpression)) {
@@ -12660,7 +14308,7 @@ function requestRootCapabilityMethodIsPristine(
     if (operator < SyntaxKind.FirstAssignment || operator > SyntaxKind.LastAssignment) continue;
     const left = unwrapStaticExpression(assignment.getLeft());
     if (isTargetMember(left)) return false;
-    if (isTargetRoot(assignment.getRight())) return false;
+    if (expressionContainsTargetOrAncestorCarrier(assignment.getRight())) return false;
   }
   for (const deletion of sourceFile.getDescendantsOfKind(SyntaxKind.DeleteExpression)) {
     if (isTargetMember(deletion.getExpression())) {
@@ -12684,43 +14332,58 @@ function requestRootCapabilityMethodIsPristine(
           : Node.isSpreadAssignment(property)
             ? property.getExpression()
             : undefined;
-      if (value && isTargetRoot(value)) return false;
+      if (expressionContainsTargetOrAncestorCarrier(value)) return false;
     }
+  }
+  for (const declaration of sourceFile.getDescendantsOfKind(SyntaxKind.VariableDeclaration)) {
+    const initializer = declaration.getInitializer();
+    if (!initializer || !expressionContainsTargetOrAncestorCarrier(initializer)) continue;
+    if (
+      declaration.getVariableStatement()?.getDeclarationKind() === VariableDeclarationKind.Const &&
+      Node.isIdentifier(declaration.getNameNode()) &&
+      isTargetRoot(initializer)
+    ) {
+      continue;
+    }
+    return false;
   }
   for (const array of sourceFile.getDescendantsOfKind(SyntaxKind.ArrayLiteralExpression)) {
     if (
       array
         .getElements()
         .some((element) =>
-          isTargetRoot(Node.isSpreadElement(element) ? element.getExpression() : element),
+          expressionContainsTargetOrAncestorCarrier(
+            Node.isSpreadElement(element) ? element.getExpression() : element,
+          ),
         )
     ) {
       return false;
     }
   }
   for (const returned of sourceFile.getDescendantsOfKind(SyntaxKind.ReturnStatement)) {
-    if (isTargetRoot(returned.getExpression())) {
+    if (expressionContainsTargetOrAncestorCarrier(returned.getExpression())) {
       return false;
     }
   }
   for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
-    const matchingArguments = call.getArguments().filter(isTargetRoot);
+    const matchingArguments = call
+      .getArguments()
+      .filter((argument) => expressionContainsTargetOrAncestorCarrier(argument));
     if (matchingArguments.length === 0) continue;
     const exactRespondMember = requestCallIsExactRespondMethod(call)
       ? requestStaticCallMember(unwrapStaticExpression(call.getExpression()))
       : undefined;
-    if (
-      exactRespondMember === 'storedFile' &&
-      isTargetRoot(call.getArguments()[0])
-    ) {
+    if (exactRespondMember === 'storedFile' && isTargetRoot(call.getArguments()[0])) {
       continue;
     }
-    const resolution = resolveRequestCallable(call.getExpression(), new Set(), 0, context.provenance);
-    if (resolution.callables.length > 0) continue;
     return false;
   }
   for (const construct of sourceFile.getDescendantsOfKind(SyntaxKind.NewExpression)) {
-    if (construct.getArguments().some(isTargetRoot)) {
+    if (
+      construct
+        .getArguments()
+        .some((argument) => expressionContainsTargetOrAncestorCarrier(argument))
+    ) {
       return false;
     }
   }
@@ -12731,7 +14394,7 @@ function requestRootCapabilityMethodIsPristine(
     const [target] = call.getArguments();
     if (
       target &&
-      isTargetRoot(target) &&
+      isTargetOrAncestorCarrier(target) &&
       global &&
       member &&
       ((expressionResolvesToGlobalNamespace(global, 'Object', new Set(), 0) &&
@@ -13983,7 +15646,11 @@ function requestCallIsReviewedPureDrizzleExpression(
     new Set(),
     0,
   );
-  return !!imported && REQUEST_REVIEWED_DRIZZLE_EXPRESSIONS.has(imported.exportName);
+  return !!(
+    imported &&
+    REQUEST_REVIEWED_DRIZZLE_EXPRESSIONS.has(imported.exportName) &&
+    requestDrizzleColumnBuilderProtocolsArePristine(call)
+  );
 }
 
 interface RequestReviewedDrizzleTable {
@@ -14042,28 +15709,222 @@ function requestReviewedDrizzleTableForDirectReference(
           call.getExpression(),
           'drizzle-orm/pg-core',
           'pgTable',
-        )
+        ) ||
+        !requestDrizzleColumnBuilderProtocolsArePristine(call)
       ) {
         continue;
       }
       const [name, columns, extra] = call.getArguments();
+      const columnRecord = columns ? unwrapStaticExpression(columns) : undefined;
       if (
         !name ||
         !isStringLiteralLike(unwrapStaticExpression(name)) ||
-        !columns ||
-        !Node.isObjectLiteralExpression(unwrapStaticExpression(columns)) ||
-        !requestDrizzleColumnsObjectIsClosed(unwrapStaticExpression(columns)) ||
-        (extra !== undefined && !requestDrizzleExtraConfigIsClosed(extra))
+        !columnRecord ||
+        !Node.isObjectLiteralExpression(columnRecord) ||
+        !requestDrizzleColumnsObjectIsClosed(columnRecord) ||
+        (extra !== undefined && !requestDrizzleExtraConfigIsClosed(extra, columnRecord))
       ) {
         continue;
       }
       return {
-        columns: unwrapStaticExpression(columns) as import('ts-morph').ObjectLiteralExpression,
+        columns: columnRecord,
         declaration,
       };
     }
   }
   return undefined;
+}
+
+const REQUEST_DRIZZLE_COLUMN_BUILDER_PROTOCOLS_PRISTINE_MEMO = new WeakMap<object, boolean>();
+
+function requestDrizzleRuntimeModuleSpecifier(module: string): boolean {
+  return module === 'drizzle-orm' || module.startsWith('drizzle-orm/');
+}
+
+function requestDrizzleRuntimeExportIsReviewed(module: string, exportName: string): boolean {
+  if (module === 'drizzle-orm') return REQUEST_REVIEWED_DRIZZLE_EXPRESSIONS.has(exportName);
+  if (module === 'drizzle-orm/pg-core') {
+    return exportName === 'pgTable' || REQUEST_REVIEWED_PG_COLUMN_BUILDERS.has(exportName);
+  }
+  return false;
+}
+
+function requestDrizzleBuilderFactoryCallIsDirectColumnInitializer(
+  factoryCall: import('ts-morph').CallExpression,
+): boolean {
+  let current: Node = factoryCall;
+  while (true) {
+    const parent = current.getParent();
+    if (!parent) return false;
+    if (
+      Node.isParenthesizedExpression(parent) ||
+      Node.isAsExpression(parent) ||
+      Node.isSatisfiesExpression(parent) ||
+      Node.isTypeAssertion(parent) ||
+      Node.isNonNullExpression(parent)
+    ) {
+      current = parent;
+      continue;
+    }
+    if (
+      (Node.isPropertyAccessExpression(parent) || Node.isElementAccessExpression(parent)) &&
+      requestNodesAreSame(parent.getExpression(), current)
+    ) {
+      const invocation = parent.getParentIfKind(SyntaxKind.CallExpression);
+      if (invocation && requestNodesAreSame(invocation.getExpression(), parent)) {
+        current = invocation;
+        continue;
+      }
+      return false;
+    }
+    if (
+      Node.isPropertyAssignment(parent) &&
+      !!parent.getInitializer() &&
+      requestNodesAreSame(unwrapStaticExpression(parent.getInitializer()!), current)
+    ) {
+      const columns = parent.getParentIfKind(SyntaxKind.ObjectLiteralExpression);
+      const tableCall = columns?.getParentIfKind(SyntaxKind.CallExpression);
+      return !!(
+        columns &&
+        tableCall &&
+        tableCall.getArguments()[1] &&
+        requestNodesAreSame(unwrapStaticExpression(tableCall.getArguments()[1]!), columns) &&
+        requestExpressionIsDirectImportedExport(
+          tableCall.getExpression(),
+          'drizzle-orm/pg-core',
+          'pgTable',
+        )
+      );
+    }
+    return false;
+  }
+}
+
+function requestReviewedDrizzleExpressionCallIsDirectDbArgument(
+  expressionCall: import('ts-morph').CallExpression,
+): boolean {
+  let current: Node = expressionCall;
+  while (true) {
+    const parent = current.getParent();
+    if (!parent) return false;
+    if (
+      Node.isParenthesizedExpression(parent) ||
+      Node.isAsExpression(parent) ||
+      Node.isSatisfiesExpression(parent) ||
+      Node.isTypeAssertion(parent) ||
+      Node.isNonNullExpression(parent)
+    ) {
+      current = parent;
+      continue;
+    }
+    if (
+      !Node.isCallExpression(parent) ||
+      !parent.getArguments().some((argument) => requestNodesAreSame(argument, current))
+    ) {
+      return false;
+    }
+    const nested = requestImportedModuleExportForExpression(
+      parent.getExpression(),
+      (specifier) => specifier === 'drizzle-orm',
+      new Set(),
+      0,
+    );
+    if (nested && REQUEST_REVIEWED_DRIZZLE_EXPRESSIONS.has(nested.exportName)) {
+      current = parent;
+      continue;
+    }
+    const member = requestStaticCallMember(unwrapStaticExpression(parent.getExpression()));
+    return !!member && REQUEST_REVIEWED_DRIZZLE_DB_DATA_METHODS.has(member);
+  }
+}
+
+function requestDrizzleColumnBuilderProtocolsArePristine(
+  schemaCall: import('ts-morph').CallExpression,
+): boolean {
+  const project = schemaCall.getSourceFile().getProject();
+  const memoized = REQUEST_DRIZZLE_COLUMN_BUILDER_PROTOCOLS_PRISTINE_MEMO.get(project);
+  if (memoized !== undefined) return memoized;
+  let pristine = true;
+  for (const sourceFile of project.getSourceFiles()) {
+    for (const declaration of sourceFile.getImportDeclarations()) {
+      const module = declaration.getModuleSpecifierValue();
+      if (!requestDrizzleRuntimeModuleSpecifier(module)) continue;
+      if (declaration.isTypeOnly()) continue;
+      if (declaration.getNamespaceImport() || declaration.getDefaultImport()) {
+        pristine = false;
+        break;
+      }
+      for (const imported of declaration.getNamedImports()) {
+        if (imported.isTypeOnly()) continue;
+        const exportName = imported.getName();
+        if (!requestDrizzleRuntimeExportIsReviewed(module, exportName)) {
+          pristine = false;
+          break;
+        }
+      }
+      if (!pristine) break;
+    }
+    if (!pristine) break;
+    for (const declaration of sourceFile.getExportDeclarations()) {
+      const module = declaration.getModuleSpecifierValue();
+      if (!module || !requestDrizzleRuntimeModuleSpecifier(module)) continue;
+      if (declaration.isTypeOnly()) continue;
+      const exported = declaration.getNamedExports();
+      if (
+        exported.length === 0 ||
+        exported.some(
+          (specifier) =>
+            !specifier.isTypeOnly() &&
+            !requestDrizzleRuntimeExportIsReviewed(module, specifier.getName()),
+        )
+      ) {
+        pristine = false;
+        break;
+      }
+    }
+    if (!pristine) break;
+    for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
+      const callTarget = unwrapStaticExpression(call.getExpression());
+      if (
+        callTarget.getKind() === SyntaxKind.ImportKeyword ||
+        (Node.isIdentifier(callTarget) && callTarget.getText() === 'require')
+      ) {
+        const [specifier] = call.getArguments();
+        const value =
+          specifier && isStringLiteralLike(specifier) ? specifier.getLiteralText() : undefined;
+        if (value && requestDrizzleRuntimeModuleSpecifier(value)) {
+          pristine = false;
+          break;
+        }
+      }
+      const imported = requestImportedModuleExportForExpression(
+        call.getExpression(),
+        requestDrizzleRuntimeModuleSpecifier,
+        new Set(),
+        0,
+      );
+      if (!imported) continue;
+      if (
+        imported.module === 'drizzle-orm/pg-core' &&
+        REQUEST_REVIEWED_PG_COLUMN_BUILDERS.has(imported.exportName) &&
+        !requestDrizzleBuilderFactoryCallIsDirectColumnInitializer(call)
+      ) {
+        pristine = false;
+        break;
+      }
+      if (
+        imported.module === 'drizzle-orm' &&
+        REQUEST_REVIEWED_DRIZZLE_EXPRESSIONS.has(imported.exportName) &&
+        !requestReviewedDrizzleExpressionCallIsDirectDbArgument(call)
+      ) {
+        pristine = false;
+        break;
+      }
+    }
+    if (!pristine) break;
+  }
+  REQUEST_DRIZZLE_COLUMN_BUILDER_PROTOCOLS_PRISTINE_MEMO.set(project, pristine);
+  return pristine;
 }
 
 function requestDrizzleColumnsObjectIsClosed(
@@ -14072,23 +15933,395 @@ function requestDrizzleColumnsObjectIsClosed(
   return columns.getProperties().every((property) => {
     if (!Node.isPropertyAssignment(property)) return false;
     const name = property.getNameNode();
-    return !Node.isComputedPropertyName(name) || staticMemberName(name) !== undefined;
+    const initializer = property.getInitializer();
+    return !!(
+      (!Node.isComputedPropertyName(name) || staticMemberName(name) !== undefined) &&
+      initializer &&
+      requestDrizzleColumnInitializerIsClosed(initializer)
+    );
   });
 }
 
-function requestDrizzleExtraConfigIsClosed(expression: Node): boolean {
+function requestDrizzleColumnInitializerIsClosed(expression: Node): boolean {
   const node = unwrapStaticExpression(expression);
   if (!Node.isCallExpression(node)) return false;
+  for (const exportName of REQUEST_REVIEWED_PG_COLUMN_BUILDERS) {
+    if (
+      requestExpressionIsDirectImportedExport(
+        node.getExpression(),
+        'drizzle-orm/pg-core',
+        exportName,
+      )
+    ) {
+      return node.getArguments().every(requestExpressionIsClosedStaticData);
+    }
+  }
+  const callee = unwrapStaticExpression(node.getExpression());
+  const receiver = requestCallReceiver(callee);
+  const member = requestStaticCallMember(callee);
+  if (receiver && member === 'references' && requestDrizzleColumnInitializerIsClosed(receiver)) {
+    const [reference, options, ...extra] = node.getArguments();
+    return !!(
+      reference &&
+      extra.length === 0 &&
+      requestDrizzleReferenceCallbackIsClosed(reference) &&
+      (options === undefined || requestExpressionIsClosedStaticData(options))
+    );
+  }
+  return !!(
+    receiver &&
+    member &&
+    REQUEST_REVIEWED_PG_COLUMN_METHODS.has(member) &&
+    requestDrizzleColumnInitializerIsClosed(receiver) &&
+    node.getArguments().every(requestExpressionIsClosedStaticData)
+  );
+}
+
+function requestDrizzleReferenceCallbackIsClosed(expression: Node): boolean {
+  const callable = requestCallableForFunctionNode(unwrapStaticExpression(expression));
   if (
-    !requestExpressionIsDirectImportedExport(
-      node.getExpression(),
-      '@kovojs/drizzle',
-      'kovo',
-    )
+    !callable ||
+    !Node.isArrowFunction(callable.declaration) ||
+    Node.isBlock(callable.declaration.getBody()) ||
+    requestCallableParameters(callable.declaration).length !== 0
   ) {
     return false;
   }
-  return node.getArguments().every(requestExpressionIsClosedStaticData);
+  const outputs = requestWireOutputExpressions(callable);
+  if (outputs.length !== 1) return false;
+  const output = unwrapStaticExpression(outputs[0]!);
+  if (!Node.isPropertyAccessExpression(output) && !Node.isElementAccessExpression(output)) {
+    return false;
+  }
+  const member = Node.isPropertyAccessExpression(output)
+    ? staticMemberName(output.getNameNode())
+    : staticMemberName(output.getArgumentExpression());
+  if (!member) return false;
+  const table = requestReviewedDrizzleTableForDirectReference(output.getExpression());
+  return !!table && requestReviewedDrizzleTableHasColumn(table, member);
+}
+
+function requestDrizzleReferenceCallbackIsExactArgument(expression: Node): boolean {
+  const callable = requestCallableForFunctionNode(unwrapStaticExpression(expression));
+  if (!callable || !requestDrizzleReferenceCallbackIsClosed(expression)) return false;
+  const parent = callable.declaration.getParent();
+  if (
+    !Node.isCallExpression(parent) ||
+    !parent.getArguments().some((argument) => requestNodesAreSame(argument, callable.declaration))
+  ) {
+    return false;
+  }
+  const callee = unwrapStaticExpression(parent.getExpression());
+  return requestStaticCallMember(callee) === 'references';
+}
+
+function requestDrizzleExtraConfigIsClosed(
+  expression: Node,
+  columns: import('ts-morph').ObjectLiteralExpression,
+): boolean {
+  const node = unwrapStaticExpression(expression);
+  if (!Node.isCallExpression(node)) return false;
+  if (!requestExpressionIsDirectImportedExport(node.getExpression(), '@kovojs/drizzle', 'kovo')) {
+    return false;
+  }
+  const [config, ...extra] = node.getArguments();
+  return !!config && extra.length === 0 && requestDrizzleKovoConfigValueIsClosed(config, columns);
+}
+
+function requestDrizzleKovoConfigValueIsClosed(
+  expression: Node,
+  columns: import('ts-morph').ObjectLiteralExpression,
+  seen = new Set<string>(),
+): boolean {
+  const node = unwrapStaticExpression(expression);
+  if (requestExpressionIsClosedStaticData(node)) return true;
+  if (Node.isIdentifier(node)) {
+    const symbol = node.getSymbol();
+    if (!symbol) return false;
+    const key = requestSymbolKey(symbol);
+    if (seen.has(key)) return false;
+    seen.add(key);
+
+    const symbols = [symbol];
+    const visited = new Set<string>();
+    const initializers: Node[] = [];
+    let invalidDeclaration = false;
+    while (symbols.length > 0) {
+      const candidate = symbols.pop()!;
+      const candidateKey = requestSymbolKey(candidate);
+      if (visited.has(candidateKey)) continue;
+      visited.add(candidateKey);
+      try {
+        const aliased = candidate.getAliasedSymbol();
+        if (aliased && aliased !== candidate) symbols.push(aliased);
+      } catch {
+        // Unresolved package/import aliases remain closed below.
+      }
+      for (const declaration of candidate.getDeclarations()) {
+        if (
+          Node.isImportSpecifier(declaration) ||
+          Node.isImportClause(declaration) ||
+          Node.isExportSpecifier(declaration)
+        ) {
+          continue;
+        }
+        if (
+          !Node.isVariableDeclaration(declaration) ||
+          declaration.getVariableStatement()?.getDeclarationKind() !== VariableDeclarationKind.Const
+        ) {
+          invalidDeclaration = true;
+          continue;
+        }
+        const initializer = declaration.getInitializer();
+        if (!initializer) invalidDeclaration = true;
+        else initializers.push(initializer);
+      }
+    }
+    return !!(
+      !invalidDeclaration &&
+      initializers.length > 0 &&
+      initializers.every((initializer) =>
+        requestDrizzleKovoConfigValueIsClosed(initializer, columns, new Set(seen)),
+      )
+    );
+  }
+  if (Node.isCallExpression(node) && requestCallIsExactClosedDomainDeclaration(node)) {
+    return requestExactDomainResultIsPristine(node);
+  }
+  const callable = requestCallableForFunctionNode(node);
+  if (callable) return requestDrizzleTableSelectorCallbackIsClosed(callable, columns);
+  if (Node.isArrayLiteralExpression(node)) {
+    return node
+      .getElements()
+      .every(
+        (element) =>
+          !Node.isSpreadElement(element) &&
+          requestDrizzleKovoConfigValueIsClosed(element, columns, new Set(seen)),
+      );
+  }
+  if (!Node.isObjectLiteralExpression(node)) return false;
+  return node.getProperties().every((property) => {
+    if (!Node.isPropertyAssignment(property)) return false;
+    const name = property.getNameNode();
+    const initializer = property.getInitializer();
+    return !!(
+      (!Node.isComputedPropertyName(name) || staticMemberName(name) !== undefined) &&
+      initializer &&
+      requestDrizzleKovoConfigValueIsClosed(initializer, columns, new Set(seen))
+    );
+  });
+}
+
+function requestCallIsExactClosedDomainDeclaration(
+  call: import('ts-morph').CallExpression,
+): boolean {
+  if (!requestExpressionIsDirectImportedExport(call.getExpression(), '@kovojs/server', 'domain')) {
+    return false;
+  }
+  const args = call.getArguments();
+  return args.length <= 1 && args.every(requestExpressionIsClosedStaticData);
+}
+
+function requestExpressionResolvesToExactDomainCall(
+  expression: Node,
+  target: import('ts-morph').CallExpression,
+  seen: Set<string>,
+): boolean {
+  const node = unwrapStaticExpression(expression);
+  if (requestNodesAreSame(node, target)) return true;
+  if (!Node.isIdentifier(node)) return false;
+  const symbol = node.getSymbol();
+  if (!symbol) return false;
+  const key = requestSymbolKey(symbol);
+  if (seen.has(key)) return false;
+  seen.add(key);
+  const symbols = [symbol];
+  const visited = new Set<string>();
+  while (symbols.length > 0) {
+    const candidate = symbols.pop()!;
+    const candidateKey = requestSymbolKey(candidate);
+    if (visited.has(candidateKey)) continue;
+    visited.add(candidateKey);
+    try {
+      const aliased = candidate.getAliasedSymbol();
+      if (aliased && aliased !== candidate) symbols.push(aliased);
+    } catch {
+      // Unresolved aliases do not resolve to the exact local domain declaration.
+    }
+    for (const declaration of candidate.getDeclarations()) {
+      if (
+        Node.isVariableDeclaration(declaration) &&
+        declaration.getVariableStatement()?.getDeclarationKind() === VariableDeclarationKind.Const
+      ) {
+        const initializer = declaration.getInitializer();
+        if (
+          initializer &&
+          requestExpressionContainsIdentityCarrier(
+            initializer,
+            (candidate) =>
+              !!candidate &&
+              requestExpressionResolvesToExactDomainCall(candidate, target, new Set(seen)),
+            new Set(seen),
+          )
+        ) {
+          return true;
+        }
+      }
+    }
+  }
+  return false;
+}
+
+function requestDomainValueContainerIsReviewed(expression: Node): boolean {
+  let current = expression;
+  while (true) {
+    const parent = current.getParent();
+    if (!parent) return false;
+    if (
+      Node.isPropertyAssignment(parent) ||
+      Node.isShorthandPropertyAssignment(parent) ||
+      Node.isArrayLiteralExpression(parent) ||
+      Node.isObjectLiteralExpression(parent) ||
+      Node.isParenthesizedExpression(parent) ||
+      Node.isAsExpression(parent) ||
+      Node.isSatisfiesExpression(parent) ||
+      Node.isTypeAssertion(parent) ||
+      Node.isNonNullExpression(parent)
+    ) {
+      current = parent;
+      continue;
+    }
+    if (
+      !Node.isCallExpression(parent) ||
+      !parent.getArguments().some((argument) => requestNodesAreSame(argument, current))
+    ) {
+      return false;
+    }
+    return (
+      requestExpressionIsDirectImportedExport(parent.getExpression(), '@kovojs/drizzle', 'kovo') ||
+      ['mutation', 'query'].some((exportName) =>
+        requestExpressionIsDirectImportedExport(
+          parent.getExpression(),
+          '@kovojs/server',
+          exportName,
+        ),
+      )
+    );
+  }
+}
+
+function requestExactDomainResultIsPristine(target: import('ts-morph').CallExpression): boolean {
+  const resolves = (candidate: Node | undefined): boolean =>
+    !!candidate && requestExpressionResolvesToExactDomainCall(candidate, target, new Set());
+  const contains = (candidate: Node | undefined): boolean =>
+    requestExpressionContainsIdentityCarrier(candidate, resolves, new Set());
+  const isMember = (candidate: Node | undefined): boolean => {
+    if (!candidate) return false;
+    let node = unwrapStaticExpression(candidate);
+    if (!Node.isPropertyAccessExpression(node) && !Node.isElementAccessExpression(node)) {
+      return false;
+    }
+    while (Node.isPropertyAccessExpression(node) || Node.isElementAccessExpression(node)) {
+      node = unwrapStaticExpression(node.getExpression());
+    }
+    return resolves(node);
+  };
+
+  for (const sourceFile of target.getSourceFile().getProject().getSourceFiles()) {
+    for (const declaration of sourceFile.getDescendantsOfKind(SyntaxKind.VariableDeclaration)) {
+      const initializer = declaration.getInitializer();
+      if (
+        initializer &&
+        contains(initializer) &&
+        declaration.getVariableStatement()?.getDeclarationKind() !== VariableDeclarationKind.Const
+      ) {
+        return false;
+      }
+    }
+    for (const assignment of sourceFile.getDescendantsOfKind(SyntaxKind.BinaryExpression)) {
+      const operator = assignment.getOperatorToken().getKind();
+      if (operator < SyntaxKind.FirstAssignment || operator > SyntaxKind.LastAssignment) continue;
+      if (isMember(assignment.getLeft()) || contains(assignment.getRight())) return false;
+    }
+    for (const deletion of sourceFile.getDescendantsOfKind(SyntaxKind.DeleteExpression)) {
+      if (isMember(deletion.getExpression())) return false;
+    }
+    for (const update of [
+      ...sourceFile.getDescendantsOfKind(SyntaxKind.PrefixUnaryExpression),
+      ...sourceFile.getDescendantsOfKind(SyntaxKind.PostfixUnaryExpression),
+    ]) {
+      if (isMember(update.getOperand())) return false;
+    }
+    for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
+      for (const argument of call.getArguments()) {
+        if (contains(argument) && !requestDomainValueContainerIsReviewed(argument)) {
+          return false;
+        }
+      }
+    }
+    for (const object of sourceFile.getDescendantsOfKind(SyntaxKind.ObjectLiteralExpression)) {
+      for (const property of object.getProperties()) {
+        const value = Node.isPropertyAssignment(property)
+          ? property.getInitializer()
+          : Node.isShorthandPropertyAssignment(property)
+            ? property.getNameNode()
+            : Node.isSpreadAssignment(property)
+              ? property.getExpression()
+              : undefined;
+        if (value && contains(value) && !requestDomainValueContainerIsReviewed(value)) {
+          return false;
+        }
+      }
+    }
+    for (const array of sourceFile.getDescendantsOfKind(SyntaxKind.ArrayLiteralExpression)) {
+      for (const element of array.getElements()) {
+        const value = Node.isSpreadElement(element) ? element.getExpression() : element;
+        if (contains(value) && !requestDomainValueContainerIsReviewed(value)) return false;
+      }
+    }
+    for (const returned of sourceFile.getDescendantsOfKind(SyntaxKind.ReturnStatement)) {
+      if (contains(returned.getExpression())) return false;
+    }
+    for (const construct of sourceFile.getDescendantsOfKind(SyntaxKind.NewExpression)) {
+      if (construct.getArguments().some(contains)) return false;
+    }
+  }
+  return true;
+}
+
+function requestDrizzleTableSelectorCallbackIsClosed(
+  callable: RequestCallable,
+  columns: import('ts-morph').ObjectLiteralExpression,
+): boolean {
+  if (!Node.isArrowFunction(callable.declaration) || Node.isBlock(callable.declaration.getBody())) {
+    return false;
+  }
+  const [parameter, ...extra] = requestCallableParameters(callable.declaration);
+  if (!parameter || extra.length > 0 || !Node.isIdentifier(parameter.getNameNode())) return false;
+  const parameterSymbol = parameter.getNameNode().getSymbol();
+  const outputs = requestWireOutputExpressions(callable);
+  if (!parameterSymbol || outputs.length !== 1) return false;
+  const output = unwrapStaticExpression(outputs[0]!);
+  if (!Node.isPropertyAccessExpression(output) && !Node.isElementAccessExpression(output)) {
+    return false;
+  }
+  const receiver = unwrapStaticExpression(output.getExpression());
+  const member = Node.isPropertyAccessExpression(output)
+    ? staticMemberName(output.getNameNode())
+    : staticMemberName(output.getArgumentExpression());
+  return !!(
+    Node.isIdentifier(receiver) &&
+    receiver.getSymbol() &&
+    requestSymbolKey(receiver.getSymbol()!) === requestSymbolKey(parameterSymbol) &&
+    member &&
+    columns
+      .getProperties()
+      .some(
+        (property) =>
+          Node.isPropertyAssignment(property) &&
+          staticMemberName(property.getNameNode()) === member,
+      )
+  );
 }
 
 function requestExpressionIsClosedStaticData(expression: Node): boolean {
@@ -14108,8 +16341,7 @@ function requestExpressionIsClosedStaticData(expression: Node): boolean {
     return node
       .getElements()
       .every(
-        (element) =>
-          !Node.isSpreadElement(element) && requestExpressionIsClosedStaticData(element),
+        (element) => !Node.isSpreadElement(element) && requestExpressionIsClosedStaticData(element),
       );
   }
   if (Node.isObjectLiteralExpression(node)) {
@@ -14137,10 +16369,7 @@ function requestReviewedDrizzleTableHasColumn(
   });
 }
 
-function requestNodeIsReviewedDrizzleDataArgument(
-  node: Node,
-  callable: RequestCallable,
-): boolean {
+function requestNodeIsReviewedDrizzleDataArgument(node: Node, callable: RequestCallable): boolean {
   let current = node;
   while (true) {
     const parent = current.getParent();
@@ -14162,6 +16391,37 @@ function requestNodeIsReviewedDrizzleDataArgument(
       return (
         requestCallIsReviewedPureDrizzleExpression(parent) ||
         requestCallIsReviewedDrizzleDbDataCall(parent, callable)
+      );
+    }
+    current = parent;
+  }
+}
+
+function requestNodeIsReviewedDrizzleDataArgumentInDeclaredRoot(
+  node: Node,
+  session: RequestProvenanceSession,
+): boolean {
+  let current = node;
+  while (true) {
+    const parent = current.getParent();
+    if (!parent) return false;
+    if (
+      Node.isArrowFunction(parent) ||
+      Node.isFunctionExpression(parent) ||
+      Node.isFunctionDeclaration(parent) ||
+      Node.isMethodDeclaration(parent) ||
+      Node.isGetAccessorDeclaration(parent) ||
+      Node.isSetAccessorDeclaration(parent)
+    ) {
+      return false;
+    }
+    if (Node.isCallExpression(parent)) {
+      if (!parent.getArguments().some((argument) => requestNodesAreSame(argument, current))) {
+        return false;
+      }
+      return (
+        requestCallIsReviewedPureDrizzleExpression(parent) ||
+        requestCallIsReviewedDrizzleDbDataCallInDeclaredRoot(parent, session)
       );
     }
     current = parent;
@@ -14195,14 +16455,30 @@ function requestReviewedDrizzleTableIsPristine(
   if (cached !== undefined) return cached;
   const resolvesToTable = (candidate: Node | undefined): boolean =>
     !!candidate &&
-    requestExpressionResolvesToReviewedDrizzleTable(
-      candidate,
-      table.declaration,
-      new Set(),
-    );
+    requestExpressionResolvesToReviewedDrizzleTable(candidate, table.declaration, new Set());
 
   let pristine = true;
   for (const sourceFile of table.declaration.getSourceFile().getProject().getSourceFiles()) {
+    for (const access of [
+      ...sourceFile.getDescendantsOfKind(SyntaxKind.PropertyAccessExpression),
+      ...sourceFile.getDescendantsOfKind(SyntaxKind.ElementAccessExpression),
+    ]) {
+      const member = Node.isPropertyAccessExpression(access)
+        ? staticMemberName(access.getNameNode())
+        : staticMemberName(access.getArgumentExpression());
+      if (
+        member &&
+        resolvesToTable(access.getExpression()) &&
+        requestReviewedDrizzleTableHasColumn(table, member) &&
+        !requestDrizzleColumnAccessIsExactReferenceCallback(access) &&
+        !requestNodeIsReviewedDrizzleDataArgument(access, callable) &&
+        !requestNodeIsReviewedDrizzleDataArgumentInDeclaredRoot(access, context.provenance)
+      ) {
+        pristine = false;
+        break;
+      }
+    }
+    if (!pristine) break;
     for (const reference of sourceFile.getDescendantsOfKind(SyntaxKind.Identifier)) {
       if (
         resolvesToTable(reference) &&
@@ -14292,6 +16568,28 @@ function requestReviewedDrizzleTableIsPristine(
   return pristine;
 }
 
+function requestDrizzleColumnAccessIsExactReferenceCallback(access: Node): boolean {
+  const callableOwner = access.getFirstAncestor(
+    (ancestor) =>
+      Node.isArrowFunction(ancestor) ||
+      Node.isFunctionExpression(ancestor) ||
+      Node.isFunctionDeclaration(ancestor),
+  );
+  if (!callableOwner) return false;
+  const parent = callableOwner.getParent();
+  if (
+    !Node.isCallExpression(parent) ||
+    !parent.getArguments().some((arg) => requestNodesAreSame(arg, callableOwner))
+  ) {
+    return false;
+  }
+  const callee = unwrapStaticExpression(parent.getExpression());
+  return (
+    requestStaticCallMember(callee) === 'references' &&
+    requestDrizzleReferenceCallbackIsClosed(callableOwner)
+  );
+}
+
 function requestReviewedDrizzleTableReferenceIsClosed(
   reference: import('ts-morph').Identifier,
   callable: RequestCallable,
@@ -14323,10 +16621,7 @@ function requestReviewedDrizzleTableReferenceIsClosed(
   ) {
     return true;
   }
-  if (
-    Node.isVariableDeclaration(parent) &&
-    requestNodesAreSame(parent.getNameNode(), current)
-  ) {
+  if (Node.isVariableDeclaration(parent) && requestNodesAreSame(parent.getNameNode(), current)) {
     return true;
   }
   if (
@@ -14340,7 +16635,10 @@ function requestReviewedDrizzleTableReferenceIsClosed(
     parent.getVariableStatement()?.getDeclarationKind() === VariableDeclarationKind.Const &&
     Node.isIdentifier(parent.getNameNode()) &&
     !!parent.getInitializer() &&
-    requestNodesAreSame(unwrapStaticExpression(parent.getInitializer()!), unwrapStaticExpression(current))
+    requestNodesAreSame(
+      unwrapStaticExpression(parent.getInitializer()!),
+      unwrapStaticExpression(current),
+    )
   ) {
     return true;
   }
@@ -14371,7 +16669,10 @@ function requestCallIsReviewedDrizzleDbDataCallInDeclaredRoot(
   const direct = requestCallableForFunctionNode(owner);
   if (!direct) return false;
 
-  let property: Node | undefined;
+  let property:
+    | import('ts-morph').MethodDeclaration
+    | import('ts-morph').PropertyAssignment
+    | undefined;
   let definition: Node | undefined;
   if (Node.isMethodDeclaration(owner)) {
     property = owner;
@@ -14436,17 +16737,12 @@ function requestExpressionResolvesToReviewedDrizzleTable(
       if (requestNodesAreSame(declaration, target)) return true;
       if (
         Node.isVariableDeclaration(declaration) &&
-        declaration.getVariableStatement()?.getDeclarationKind() ===
-          VariableDeclarationKind.Const
+        declaration.getVariableStatement()?.getDeclarationKind() === VariableDeclarationKind.Const
       ) {
         const initializer = declaration.getInitializer();
         if (
           initializer &&
-          requestExpressionResolvesToReviewedDrizzleTable(
-            initializer,
-            target,
-            new Set(seen),
-          )
+          requestExpressionResolvesToReviewedDrizzleTable(initializer, target, new Set(seen))
         ) {
           return true;
         }

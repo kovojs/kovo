@@ -338,7 +338,7 @@ function firstValidationIssueMessage(issues: readonly ValidationIssue[]): string
  * const parsed = input.parse({ productId: 'p1', quantity: '2', tags: 'a' });
  * // parsed.quantity === 2, parsed.tags === ['a']
  */
-export const s = {
+export const s = witnessFreeze({
   array<Item>(item: Schema<Item>): Schema<Item[]> {
     const closedItem = snapshotSchemaForRuntime(item, 's.array(item)');
     // `parseAsync` mirrors `s.object` (SPEC §6): each item flows through
@@ -392,7 +392,7 @@ export const s = {
     return witnessFreeze(schema);
   },
   boolean(): Schema<boolean> {
-    return {
+    return witnessFreeze({
       parse(input: unknown): boolean {
         input = revealSchemaInput(input);
         if (typeof input === 'boolean') return input;
@@ -407,7 +407,7 @@ export const s = {
 
         throw validationError('Expected boolean');
       },
-    };
+    });
   },
   date(): DateSchema {
     return new DateSchemaImpl('date');
@@ -422,7 +422,7 @@ export const s = {
     return new FileSchemaImpl(options);
   },
   json<Value extends JsonValue = JsonValue>(): Schema<Value> {
-    return {
+    return witnessFreeze({
       parse(input: unknown): Value {
         input = revealSchemaInput(input);
         const value = typeof input === 'string' ? parseJsonInput(input) : input;
@@ -434,7 +434,7 @@ export const s = {
           throw validationError('Expected JSON value');
         }
       },
-    };
+    });
   },
   string(): StringSchema {
     return new StringSchemaImpl();
@@ -561,7 +561,7 @@ export const s = {
     });
     return witnessFreeze(schema);
   },
-};
+});
 
 /** @internal Returns top-level mutation input fields that require multipart form encoding. */
 export function mutationInputFileFields(schema: Schema<unknown>): readonly string[] {
@@ -725,6 +725,7 @@ class DecimalSchemaImpl implements DecimalSchema {
   constructor(options: DecimalSchemaOptions & { defaultValue?: string } = {}) {
     this.#defaultValue = options.defaultValue;
     this.#scale = options.scale;
+    witnessFreeze(this);
   }
 
   default(value: string): DecimalSchema {
@@ -761,6 +762,7 @@ class DateSchemaImpl implements DateSchema {
   constructor(kind: 'date' | 'datetime', defaultValue?: Date) {
     this.#kind = kind;
     this.#defaultValue = defaultValue;
+    witnessFreeze(this);
   }
 
   default(value: Date | string): DateSchema {
@@ -797,6 +799,7 @@ class NumberSchemaImpl implements NumberSchema {
     this.#integer = options.integer ?? false;
     this.#maximum = options.maximum;
     this.#minimum = options.minimum;
+    witnessFreeze(this);
   }
 
   default(value: number): NumberSchema {
@@ -880,6 +883,7 @@ class StringSchemaImpl implements StringSchema {
     this.#checks = checks;
     this.#defaultValue = defaultValue;
     this.#controlPolicy = controlPolicy;
+    witnessFreeze(this);
   }
 
   #with(check: StringCheck): StringSchema {
@@ -1189,6 +1193,7 @@ class FileSchemaImpl implements FileSchema {
       kind: 'file',
       ...(this.#maxBytes === undefined ? {} : { maxBytes: this.#maxBytes }),
     });
+    witnessFreeze(this);
   }
 
   maxBytes(value: number): FileSchema {
@@ -1229,6 +1234,7 @@ class StoredFileSchemaImpl implements StoredFileSchema {
       kind: 'stored-file',
       ...(fileOptions.maxBytes === undefined ? {} : { maxBytes: fileOptions.maxBytes }),
     });
+    witnessFreeze(this);
   }
 
   parse(_input: unknown): StoredFileUpload {
@@ -1273,6 +1279,16 @@ class StoredFileSchemaImpl implements StoredFileSchema {
     return { file, key, storage };
   }
 }
+
+// SPEC §6.6: schema constructors are retained executable authority. Pin their method tables before
+// any application module can observe the shared realm; frozen instances then prevent prototype
+// replacement or own-method shadowing from changing the parser identity accepted at declaration.
+witnessFreeze(DecimalSchemaImpl.prototype);
+witnessFreeze(DateSchemaImpl.prototype);
+witnessFreeze(NumberSchemaImpl.prototype);
+witnessFreeze(StringSchemaImpl.prototype);
+witnessFreeze(FileSchemaImpl.prototype);
+witnessFreeze(StoredFileSchemaImpl.prototype);
 
 function isUnverifiedAcceptance(
   accept: UnverifiedAcceptance | readonly string[] | undefined,
@@ -1325,12 +1341,12 @@ function optionalSchema<Value>(
   schema: Schema<Value>,
   isMissing: (input: unknown) => boolean,
 ): Schema<Value | undefined> {
-  return {
+  return witnessFreeze({
     parse(input: unknown): Value | undefined {
       input = revealSchemaInput(input);
       return isMissing(input) ? undefined : schema.parse(input);
     },
-  };
+  });
 }
 
 function isMissingStringInput(input: unknown): boolean {
