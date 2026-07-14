@@ -138,6 +138,30 @@ describe('framework identity resolver', () => {
     });
   });
 
+  it('catalogs only the reviewed public style authoring calls', () => {
+    expect(frameworkCatalogExportForModuleSpecifier('@kovojs/style', 'create')).toEqual({
+      exportName: 'create',
+      module: '@kovojs/style',
+    });
+    expect(frameworkCatalogExportForModuleSpecifier('@kovojs/style', 'attrs')).toEqual({
+      exportName: 'attrs',
+      module: '@kovojs/style',
+    });
+    expect(
+      frameworkCatalogExportForSourcePath('/repo/packages/style/src/engine.ts', 'attrs'),
+    ).toEqual({
+      exportName: 'attrs',
+      module: '@kovojs/style',
+    });
+    expect(frameworkCatalogExportsForModule('@kovojs/style')).toEqual(new Set(['attrs', 'create']));
+    expect(
+      frameworkCatalogExportForModuleSpecifier('@kovojs/style', 'defineTheme'),
+    ).toBeUndefined();
+    expect(
+      frameworkCatalogExportForModuleSpecifier('@kovojs/style/internal', 'createAtomicStyles'),
+    ).toBeUndefined();
+  });
+
   it('does not expose mutable catalog authority through lookup results', () => {
     const identity = frameworkCatalogExportForModuleSpecifier('@kovojs/browser', 'trustedHtml')!;
     const exports = frameworkCatalogExportsForModule('@kovojs/browser') as Set<string>;

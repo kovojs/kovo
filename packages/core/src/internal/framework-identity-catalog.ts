@@ -18,6 +18,7 @@ export type FrameworkIdentityModule =
   | '@kovojs/core'
   | '@kovojs/drizzle'
   | '@kovojs/server'
+  | '@kovojs/style'
   | 'drizzle-orm';
 
 /** @internal Identity scopes make the shared catalog reviewable by analyzer surface. */
@@ -170,6 +171,18 @@ function coreAuthoring(exportName: string): FrameworkIdentityCatalogEntry {
   };
 }
 
+// SPEC §13.1 / §6.6: recognize the exact public TSX style calls the compiler reviews. Do not
+// promote the rest of the package (or its internal extraction ABI) into classifier authority.
+function styleAuthoring(exportName: string): FrameworkIdentityCatalogEntry {
+  return {
+    exportName,
+    module: '@kovojs/style',
+    packageSourceFiles: ['engine', 'index'],
+    scopes: ['authoring', 'rendering'],
+    specifiers: ['@kovojs/style'],
+  };
+}
+
 function drizzleSql(exportName: string): FrameworkIdentityCatalogEntry {
   return {
     exportName,
@@ -239,6 +252,7 @@ appendCatalogFactories(
   ['component', 'declareOffWire', 'publishToClient', 'trustedReveal'],
   coreAuthoring,
 );
+appendCatalogFactories(catalogEntries, ['attrs', 'create'], styleAuthoring);
 appendCatalogEntry(catalogEntries, serverRendering('safeRichHtml', '@kovojs/browser'));
 appendCatalogFactories(
   catalogEntries,

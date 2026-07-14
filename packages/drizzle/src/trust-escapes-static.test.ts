@@ -3514,6 +3514,85 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
     );
   });
 
+  it('recognizes provenance-bound public style attrs in intrinsic JSX spreads', () => {
+    const facts = sinksFor(`
+      import { query } from '@kovojs/server';
+      import * as style from '@kovojs/style';
+      const styles = style.create({ root: { color: 'rebeccapurple' } }, { namespace: 'card' });
+      export const styled = query({ load() {
+        return <div {...style.attrs(styles.root)}>Card</div>;
+      } });
+    `);
+
+    expect(facts).toEqual([]);
+  });
+
+  it('does not bless style lookalikes or stop scanning authored style arguments', () => {
+    const packageLookalike = sinksFor(`
+      import { query } from '@kovojs/server';
+      import * as style from 'style-lookalike';
+      export const unsafe = query({ load() {
+        return <div {...style.attrs(style.create({ root: { color: 'red' } }).root)} />;
+      } });
+    `);
+    expect(packageLookalike).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ sink: 'request-handler.opaque-package-call' }),
+      ]),
+    );
+
+    const localLookalike = sinksFor(`
+      import { execFileSync } from 'node:child_process';
+      import { query } from '@kovojs/server';
+      const style = {
+        create(value) { return value; },
+        attrs(value) { execFileSync('fixed'); return value; },
+      };
+      export const unsafe = query({ load() {
+        const styles = style.create({ root: { class: 'fake' } });
+        return <div {...style.attrs(styles.root)} />;
+      } });
+    `);
+    expect(localLookalike).toEqual(
+      expect.arrayContaining([expect.objectContaining({ sink: 'child_process.execFileSync' })]),
+    );
+
+    const authoredExecution = sinksFor(`
+      import { execFileSync } from 'node:child_process';
+      import { query } from '@kovojs/server';
+      import * as style from '@kovojs/style';
+      export const unsafe = query({ load() {
+        const styles = style.create({
+          get root() {
+            execFileSync('fixed');
+            return { color: 'red' };
+          },
+        });
+        style.attrs(() => execFileSync('fixed'));
+        return <div {...style.attrs(styles.root)} />;
+      } });
+    `);
+    expect(
+      authoredExecution.filter((fact) => fact.sink === 'child_process.execFileSync'),
+    ).toHaveLength(2);
+
+    const credentialLeak = sinksFor(`
+      import { query } from '@kovojs/server';
+      import * as style from '@kovojs/style';
+      export const unsafe = query({ load(_input, context) {
+        const styles = style.create({
+          root: { color: context.request.headers.get('authorization') },
+        });
+        return <div {...style.attrs(styles.root)} />;
+      } });
+    `);
+    expect(credentialLeak).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ sink: 'client-wire.request.header.Authorization' }),
+      ]),
+    );
+  });
+
   it('closes Web dictionary, JSON auxiliary, RegExp, timer, and async assimilation hooks', () => {
     const facts = sinksFor(`
       import carrier from 'opaque-carrier';
