@@ -2244,16 +2244,17 @@ function emitDerive(options: EmitDeriveOptions): { exportName: string; stampName
 
 /**
  * SPEC §5.2 keeps the typed scanner model authoritative: the JSX IR admits expressions here
- * only from an element's `childExpressionContainers`, never from author attribute expressions.
- * Preserve the flat-root recursive traversal, including duplicate nested occurrences and order.
+ * only from an element's `childExpressionContainers`, never from author attribute expressions,
+ * and records that source owner before primitive composition can move the IR child. Preserve the
+ * flat-root recursive traversal, including duplicate nested occurrences and order.
  */
 function expressionChildren(elements: readonly JsxIrElement[]): MixedTextExpressionChild[] {
   const result: MixedTextExpressionChild[] = [];
-  const visit = (child: JsxIrChild, owner: JsxIrElement): void => {
+  const visit = (child: JsxIrChild): void => {
     if (child.kind === 'expression') {
       appendCompilerFact(
         result,
-        { containingElement: owner.element, expression: child },
+        { containingElement: child.containingElement, expression: child },
         'Structural expressions',
       );
     }
@@ -2266,7 +2267,6 @@ function expressionChildren(elements: readonly JsxIrElement[]): MixedTextExpress
             nestedIndex,
             'Structural nested children',
           ) as JsxIrChild,
-          child,
         );
       }
     }
@@ -2286,7 +2286,6 @@ function expressionChildren(elements: readonly JsxIrElement[]): MixedTextExpress
           childIndex,
           'Structural element children',
         ) as JsxIrChild,
-        element,
       );
     }
   }

@@ -86,6 +86,7 @@ export interface JsxIrElement {
 
 export interface JsxIrExpression {
   anchor: JsxIrDiagnosticAnchor;
+  readonly containingElement: JsxElementModel;
   expression: JsxExpressionModel;
   kind: 'expression';
   ownership: JsxIrOwnership;
@@ -534,7 +535,7 @@ function childrenForElement(
       {
         end: span.end,
         kind: 'expression',
-        node: jsxIrExpression(expression, options),
+        node: jsxIrExpression(expression, element.element, options),
         start: span.start,
       },
       'Positioned JSX IR children',
@@ -587,6 +588,7 @@ function childrenForElement(
 
 function jsxIrExpression(
   expression: JsxExpressionModel,
+  containingElement: JsxElementModel,
   options: { fileName: string; source: string },
 ): JsxIrExpression {
   return {
@@ -595,6 +597,7 @@ function jsxIrExpression(
       fileName: options.fileName,
       start: expression.containerStart,
     },
+    containingElement,
     expression,
     kind: 'expression',
     ownership: 'author',

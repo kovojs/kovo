@@ -102,6 +102,35 @@ export const ToggleLabel = component({
     expect(() => assertFixpoint(result)).not.toThrow();
   });
 
+  it('preserves mixed-text expression ownership across primitive composition', () => {
+    const result = compileComponentModule({
+      fileName: 'primitive-state.tsx',
+      source: `
+export const PrimitiveState = component({
+  state: () => ({ open: false }),
+  render: (_queries, state) => (
+    <Tooltip.Trigger asChild attrs={{ role: 'button' }}>
+      <button>State {state.open ? 'yes' : 'no'}</button>
+    </Tooltip.Trigger>
+  ),
+});
+`,
+    });
+    const serverSource = result.files[0]?.source ?? '';
+    const clientSource = result.files[1]?.source ?? '';
+
+    expect(clientSource.match(/^export const PrimitiveState\$button_text_derive.*$/gm)).toEqual([
+      `export const PrimitiveState$button_text_derive = derive(["state"], (state) => state.open ? 'yes' : 'no');`,
+      `export const PrimitiveState$button_text_derive_2 = derive(["state"], (state) => state.open ? 'yes' : 'no');`,
+    ]);
+    expect(serverSource).toContain(
+      "#PrimitiveState$button_text_derive_2\">{escapeText(state.open ? 'yes' : 'no')}</span>",
+    );
+    expect(serverSource).not.toContain('Tooltip.Trigger');
+    expect(result.diagnostics).toEqual([]);
+    expect(() => assertFixpoint(result)).not.toThrow();
+  });
+
   it('lowers state-only text expressions to versioned derive bindings', () => {
     const result = compileComponentModule({
       fileName: 'accordion-demo.tsx',
