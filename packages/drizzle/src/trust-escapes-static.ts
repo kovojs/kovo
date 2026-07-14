@@ -1796,7 +1796,7 @@ function requestModuleInitializerRoots(statement: Node): RequestCallable[] {
       // the CLI imports the authored module (SPEC.md §6.5).
       return [{ body: statement, declaration: statement, moduleInitializer: true }];
     }
-    return statement.getDeclarations().flatMap((declaration) => {
+    return statement.getDeclarations().flatMap((declaration): RequestCallable[] => {
       const initializer = declaration.getInitializer();
       if (!initializer) return [];
       const binding = declaration.getNameNode();
@@ -2017,8 +2017,9 @@ function requestBuildConfigOpaqueNode(sourceFile: SourceFile): Node | undefined 
     }
     if (staticMemberName(property.getNameNode()) !== 'preset' || sawPreset) return property;
     sawPreset = true;
-    if (!requestBuildConfigPresetCallIsClosed(property.getInitializer())) {
-      return property.getInitializer();
+    const initializer = property.getInitializer();
+    if (!initializer || !requestBuildConfigPresetCallIsClosed(initializer)) {
+      return initializer ?? property;
     }
   }
   return undefined;
@@ -2064,7 +2065,8 @@ function requestBuildConfigConstructorCallIsClosed(
     }
     if (staticMemberName(property.getNameNode()) !== 'preset' || sawPreset) return false;
     sawPreset = true;
-    return requestBuildConfigPresetCallIsClosed(property.getInitializer());
+    const initializer = property.getInitializer();
+    return !!initializer && requestBuildConfigPresetCallIsClosed(initializer);
   });
 }
 
@@ -2191,7 +2193,8 @@ function requestModuleInitializerStyleValueIsClosed(expression: Node): boolean {
         (property) =>
           Node.isPropertyAssignment(property) &&
           !Node.isComputedPropertyName(property.getNameNode()) &&
-          requestModuleInitializerStyleValueIsClosed(property.getInitializer()),
+          !!property.getInitializer() &&
+          requestModuleInitializerStyleValueIsClosed(property.getInitializer()!),
       );
   }
   return false;
@@ -2230,12 +2233,11 @@ function requestModuleInitializerAuthorityArgumentIsClosed(
   if (Node.isObjectLiteralExpression(node)) {
     return node.getProperties().every((property) => {
       if (Node.isPropertyAssignment(property)) {
+        const initializer = property.getInitializer();
         return (
           !Node.isComputedPropertyName(property.getNameNode()) &&
-          requestModuleInitializerAuthorityArgumentIsClosed(
-            property.getInitializer(),
-            new Set(seen),
-          )
+          !!initializer &&
+          requestModuleInitializerAuthorityArgumentIsClosed(initializer, new Set(seen))
         );
       }
       if (Node.isShorthandPropertyAssignment(property)) {

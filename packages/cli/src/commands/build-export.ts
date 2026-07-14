@@ -70,10 +70,10 @@ import type { KovoNeutralBuild } from '@kovojs/server/internal/build';
 import { withKovoBuildContext } from '@kovojs/server/internal/build-context';
 import type { KovoAppShellCompiledClientModule } from '@kovojs/server/internal/app-shell-vite';
 import {
-  buildCheckSourceFiles,
   buildCheckSourceGraphFiles,
   buildCompilerQueryShapeFacts,
   collectRuntimeRegistryFacts,
+  dataPlaneSourceFiles,
   type DataPlaneSourceFile as BuildCheckSourceFile,
   type QueryReadFactLike,
   staticDataPlaneBuildFacts,
@@ -787,7 +787,11 @@ function runPreEvaluationStaticTrustPreflight(
   root: string,
   paranoidStaticAdvisory: boolean,
 ): PreEvaluationStaticTrust {
-  const files = buildCheckSourceFiles(appModulePath, root);
+  // SPEC §5.2 rule 9 / §6.6: the pre-evaluation authority gate owns the selected app entry and
+  // its exact relative-import closure, plus the conventional src/ client tree that the disabled-
+  // config Vite build can transform. A project-root census would incorrectly promote unrelated
+  // authored tooling such as vite.config.ts into app runtime authority.
+  const files = preEvaluationAppSourceFiles(appModulePath, root);
   // SPEC §6.6: authored modules are untrusted inputs to the compiler. Reject statically visible
   // authority and credential-wire escapes before SSR evaluation can execute top-level app code or
   // reject a framework factory shape that the runtime-derived registry does not understand. The
@@ -806,6 +810,36 @@ function runPreEvaluationStaticTrustPreflight(
   }
 
   throw new Error(`kovo build check preflight failed:\n${buildCheckFailureOutput(result.output)}`);
+}
+
+function preEvaluationAppSourceFiles(appModulePath: string, root: string): BuildCheckSourceFile[] {
+  const sourceRoot = dirname(appModulePath);
+  const files = buildCheckSourceGraphFiles(appModulePath, root);
+  const clientRoot = kovoClientBuildRoot(appModulePath, root);
+  const clientFiles = dataPlaneSourceFiles(resolve(clientRoot, 'src'), root);
+  for (let index = 0; index < clientFiles.length; index += 1) {
+    const clientFile = clientFiles[index]!;
+    const fileName = slashPath(relative(sourceRoot, resolve(root, clientFile.fileName)));
+    let existing: BuildCheckSourceFile | undefined;
+    for (let candidateIndex = 0; candidateIndex < files.length; candidateIndex += 1) {
+      if (files[candidateIndex]!.fileName === fileName) {
+        existing = files[candidateIndex];
+        break;
+      }
+    }
+    if (existing !== undefined) {
+      if (existing.source !== clientFile.source) {
+        throw new TypeError(`Kovo app source snapshot conflicts for ${fileName}.`);
+      }
+      continue;
+    }
+    buildSecurityArrayAppend(
+      files,
+      { fileName, source: clientFile.source },
+      'Pre-evaluation app and client source snapshot',
+    );
+  }
+  return files;
 }
 
 async function runTypeScriptBuildPreflight(
@@ -3186,7 +3220,7 @@ function approvedBuildSourcesVitePlugin(
     buildSetAdd(appSourcePaths, absoluteFileName);
   }
 
-  const appSourceRoot = resolve(dirname(appModulePath));
+  const appSourceRoot = resolve(buildRoot);
   return {
     enforce: 'pre',
     name: 'kovo-approved-build-sources',

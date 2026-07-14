@@ -12,7 +12,6 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { pathToFileURL } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
@@ -263,7 +262,7 @@ describe('build/export security bootstrap ordering', () => {
     }
   });
 
-  it('keeps a real CLI build blocking after app-first Array.filter poisoning is refused', () => {
+  it('rejects compiler-global config poisoning before authored app evaluation', () => {
     const root = cliFixtureRoot('build-lowerer-poison');
     const appPath = join(root, 'app.ts');
     const outDir = join(root, 'dist');
@@ -323,7 +322,12 @@ export default createApp({
 
       const result = runKovoCli(root, ['build', appPath, '--out', outDir]);
       expect(result.status).toBe(1);
-      expect(result.stderr).toContain('ERROR KV418 MUTATION auth/lowerer-poison');
+      expect(result.stderr).toContain('kovo build config preflight failed');
+      expect(result.stderr).toContain('ERROR KV424');
+      expect(result.stderr).toContain('build-config.opaque-authority');
+      expect(result.stderr).not.toContain(
+        'compiler path/TypeScript/time/URL poison unexpectedly installed',
+      );
       expect(readFileIfPresent(join(outDir, '.kovo/graph.json'))).toBeUndefined();
     } finally {
       rmSync(root, { force: true, recursive: true });
@@ -366,7 +370,7 @@ export default createApp({
     }
   }, 60_000);
 
-  it('keeps first-use compiler truth across process restarts under selective lookalikes', () => {
+  it('rejects selective compiler lookalikes before every process-restart app evaluation', () => {
     const root = cliFixtureRoot('restart-selective-matrix');
     const appPath = join(root, 'app.ts');
     try {
@@ -429,7 +433,9 @@ export default createApp({
         const outDir = join(root, `dist-${restart}`);
         const result = runKovoCli(root, ['build', appPath, '--out', outDir]);
         expect(result.status, result.stderr).toBe(1);
-        expect(result.stderr).toContain('ERROR KV418 MUTATION auth/restart-selective');
+        expect(result.stderr).toContain('kovo build config preflight failed');
+        expect(result.stderr).toContain('ERROR KV424');
+        expect(result.stderr).toContain('build-config.opaque-authority');
         expect(result.stderr).not.toContain('path-specific compiler poison installed');
         expect(readFileIfPresent(join(outDir, '.kovo/graph.json'))).toBeUndefined();
       }
@@ -438,7 +444,7 @@ export default createApp({
     }
   }, 120_000);
 
-  it('eagerly binds compiler graph and Drizzle analyzer truth before authored resolver hooks', () => {
+  it('rejects authored resolver hooks before compiler and Drizzle modules can be redirected', () => {
     const root = cliFixtureRoot('resolver-hook-static-gates');
     const appPath = join(root, 'app.ts');
     try {
@@ -488,15 +494,16 @@ export default createApp({
       const outDir = join(root, 'dist');
       const result = runKovoCli(root, ['build', appPath, '--out', outDir]);
       expect(result.status, result.stderr).toBe(1);
-      expect(result.stderr).toContain('ERROR KV422');
-      expect(result.stderr).toContain('sql.raw');
+      expect(result.stderr).toContain('kovo build config preflight failed');
+      expect(result.stderr).toContain('ERROR KV424');
+      expect(result.stderr).toContain('build-config.opaque-authority');
       expect(readFileIfPresent(join(outDir, '.kovo/graph.json'))).toBeUndefined();
     } finally {
       rmSync(root, { force: true, recursive: true });
     }
   }, 60_000);
 
-  it('refuses server source changed by an authored config timer after security preflight', () => {
+  it('rejects an authored config timer before it can change snapshotted server source', () => {
     const root = cliFixtureRoot('build-source-snapshot');
     const appPath = join(root, 'src/app.ts');
     const helperPath = join(root, 'dangerous.ts');
@@ -553,10 +560,11 @@ export default createApp({
       );
 
       const result = runKovoCli(root, ['build', appPath, '--out', outDir]);
-      expect(readFileSync(helperPath, 'utf8')).toBe(unsafeSource);
+      expect(readFileSync(helperPath, 'utf8')).toBe(safeSource);
       expect(result.status).toBe(1);
-      expect(result.stderr).toContain('Kovo build refused changed app source dangerous.ts');
-      expect(result.stderr).toContain('security-preflight snapshot');
+      expect(result.stderr).toContain('kovo build config preflight failed');
+      expect(result.stderr).toContain('ERROR KV424');
+      expect(result.stderr).toContain('build-config.opaque-authority');
       expect(readFileIfPresent(join(outDir, '.kovo/server/handler.mjs'))).toBeUndefined();
       expect(readFileIfPresent(join(outDir, 'server/server/handler.mjs'))).toBeUndefined();
     } finally {
@@ -564,7 +572,7 @@ export default createApp({
     }
   }, 60_000);
 
-  it('refuses a new relative app module introduced after security preflight', () => {
+  it('rejects an authored config timer before it can introduce a relative app module', () => {
     const root = cliFixtureRoot('build-new-source-snapshot');
     const appPath = join(root, 'src/app.ts');
     const lateDir = join(root, 'late');
@@ -618,10 +626,11 @@ export default createApp({
       );
 
       const result = runKovoCli(root, ['build', appPath, '--out', outDir]);
-      expect(readFileSync(latePath, 'utf8')).toBe(lateSource);
+      expect(readFileIfPresent(latePath)).toBeUndefined();
       expect(result.status).toBe(1);
-      expect(result.stderr).toContain('Kovo build refused unapproved app source late/unsafe.ts');
-      expect(result.stderr).toContain('introduced after the security preflight');
+      expect(result.stderr).toContain('kovo build config preflight failed');
+      expect(result.stderr).toContain('ERROR KV424');
+      expect(result.stderr).toContain('build-config.opaque-authority');
       expect(readFileIfPresent(join(outDir, '.kovo/server/handler.mjs'))).toBeUndefined();
       expect(readFileIfPresent(join(outDir, 'server/server/handler.mjs'))).toBeUndefined();
     } finally {
@@ -650,9 +659,7 @@ export default createApp({
       writeFileSync(join(root, 'src/client.ts'), 'export {};\n', 'utf8');
       writeFileSync(
         appPath,
-        `import { sql } from '@kovojs/drizzle';
-import { createApp, publicAccess, route } from '@kovojs/server';
-export const reviewed = sql.raw('select 1');
+        `import { createApp, publicAccess, route } from '@kovojs/server';
 export default createApp({
   routes: [route('/', { access: publicAccess('cache symlink regression'), page: () => '<main>Safe</main>' })],
 });
@@ -670,7 +677,7 @@ export default createApp({
     }
   }, 60_000);
 
-  it('pins operator paranoid disposition before app evaluation in the real CLI', () => {
+  it('rejects app-authored paranoid disposition mutation before app evaluation', () => {
     const root = cliFixtureRoot('paranoid-disposition');
     const appPath = join(root, 'app.ts');
     try {
@@ -717,7 +724,9 @@ export default createApp({
         ordinaryEnv,
       );
       expect(appEnabled.status, appEnabled.stderr).toBe(1);
-      expect(appEnabled.stderr).toContain('ERROR KV406 QUERY badRead');
+      expect(appEnabled.stderr).toContain('kovo build check preflight failed');
+      expect(appEnabled.stderr).toContain('ERROR KV424');
+      expect(appEnabled.stderr).toContain('process.env');
       expect(readFileIfPresent(join(root, 'app-enabled/.kovo/graph.json'))).toBeUndefined();
 
       const operatorParanoid = runKovoCli(
@@ -725,17 +734,17 @@ export default createApp({
         ['build', appPath, '--out', join(root, 'operator-paranoid'), '--check'],
         { ...process.env, APP_PARANOID_MUTATION: 'disable', KOVO_PARANOID: '1' },
       );
-      expect(operatorParanoid.status, operatorParanoid.stderr).toBe(0);
-      expect(operatorParanoid.stdout).toContain('CHECK ok preset=node');
-      expect(readFileSync(join(root, 'operator-paranoid/.kovo/graph.json'), 'utf8')).toContain(
-        'KV406',
-      );
+      expect(operatorParanoid.status, operatorParanoid.stderr).toBe(1);
+      expect(operatorParanoid.stderr).toContain('kovo build check preflight failed');
+      expect(operatorParanoid.stderr).toContain('ERROR KV424');
+      expect(operatorParanoid.stderr).toContain('process.env');
+      expect(readFileIfPresent(join(root, 'operator-paranoid/.kovo/graph.json'))).toBeUndefined();
     } finally {
       rmSync(root, { force: true, recursive: true });
     }
   }, 120_000);
 
-  it('pins build and export paths before authored process.chdir() in the real CLI', () => {
+  it('rejects authored process.chdir() before build paths can be retargeted', () => {
     const root = cliFixtureRoot('invocation-cwd');
     const outside = mkdtempSync(join(tmpdir(), 'kovo-cli-cwd-outside-'));
     const appPath = join(root, 'app.ts');
@@ -785,43 +794,33 @@ export default createApp({
 
       const env = { ...process.env, APP_AUTHORED_CWD_MUTATION: outside };
       const build = runKovoCli(root, ['build', './app.ts', '--out', 'dist', '--check'], env);
-      expect(build.status, build.stderr).toBe(0);
-      expect(build.stdout).toContain(`NEUTRAL outDir=${JSON.stringify(join(root, 'dist/.kovo'))}`);
-      expect(existsSync(join(root, 'dist/.kovo/graph.json'))).toBe(true);
+      expect(build.status, build.stderr).toBe(1);
+      expect(build.stderr).toContain('kovo build check preflight failed');
+      expect(build.stderr).toContain('ERROR KV424');
+      expect(build.stderr).toContain('node:process.chdir');
+      expect(existsSync(join(root, 'dist/.kovo/graph.json'))).toBe(false);
       expect(existsSync(join(root, '.kovo/cache/static-build-analysis'))).toBe(false);
       expect(existsSync(join(outside, 'dist'))).toBe(false);
       expect(existsSync(join(outside, '.kovo'))).toBe(false);
 
       const deploy = runKovoCli(root, ['build', './app.ts', '--out', 'deploy-dist'], env);
-      expect(deploy.status, deploy.stderr).toBe(0);
-      expect(readFileSync(join(root, 'deploy-dist/server/package.json'), 'utf8')).toContain(
-        'root-runtime',
-      );
-      expect(readFileSync(join(root, 'deploy-dist/server/package.json'), 'utf8')).not.toContain(
-        'attacker-runtime',
-      );
-      expect(readFileSync(join(root, 'deploy-dist/server/pnpm-lock.yaml'), 'utf8')).toContain(
-        'root-marker',
-      );
-      expect(readFileSync(join(root, 'deploy-dist/server/pnpm-lock.yaml'), 'utf8')).not.toContain(
-        'attacker-marker',
-      );
-
-      const exported = runKovoCli(root, ['export', './app.ts', '--out', 'export-dist'], env);
-      expect(exported.status, exported.stderr).toBe(0);
-      expect(existsSync(join(root, 'export-dist/index.html'))).toBe(true);
-      expect(existsSync(join(outside, 'export-dist'))).toBe(false);
+      expect(deploy.status, deploy.stderr).toBe(1);
+      expect(deploy.stderr).toContain('ERROR KV424');
+      expect(deploy.stderr).toContain('node:process.chdir');
+      expect(existsSync(join(root, 'deploy-dist'))).toBe(false);
+      expect(existsSync(join(outside, 'deploy-dist'))).toBe(false);
     } finally {
       rmSync(outside, { force: true, recursive: true });
       rmSync(root, { force: true, recursive: true });
     }
   }, 120_000);
 
-  it('locks a real uncached CLI artifact before bundled package and deferred poison', () => {
+  it('rejects an opaque package initializer before bundled and deferred poison can run', () => {
     const root = cliFixtureRoot('runtime-intrinsic-lockdown');
     const appPath = join(root, 'app.ts');
     const packageRoot = join(root, 'node_modules/kovo-runtime-poison');
     const outDir = join(root, 'dist');
+    const markerPath = join(root, 'runtime-poison-evaluated.marker');
     try {
       mkdirSync(join(root, 'src'), { recursive: true });
       writeFileSync(
@@ -837,7 +836,9 @@ export default createApp({
       );
       writeFileSync(
         join(packageRoot, 'index.mjs'),
-        `const NativeResponse = globalThis.Response;
+        `import { writeFileSync } from 'node:fs';
+writeFileSync(${JSON.stringify(markerPath)}, 'evaluated', 'utf8');
+const NativeResponse = globalThis.Response;
 const nativeSetTimeout = setTimeout;
 const nativeErrorName = Error.prototype.name;
 let coercionHit = false;
@@ -904,36 +905,18 @@ export default createApp({ endpoints: [proof] });
       );
 
       const built = runKovoCli(root, ['build', appPath, '--out', outDir]);
-      expect(built.status, built.stderr).toBe(0);
-      const serverPath = join(outDir, 'server/server.mjs');
-      expect(existsSync(serverPath)).toBe(true);
-      const probe = spawnSync(
-        process.execPath,
-        [
-          '--input-type=module',
-          '--eval',
-          `const module = await import(${JSON.stringify(pathToFileURL(serverPath).href)});
-const server = module.createKovoNodeServer();
-await new Promise((resolve, reject) => {
-  server.once('error', reject);
-  server.listen(0, '127.0.0.1', resolve);
-});
-const address = server.address();
-const response = await fetch('http://127.0.0.1:' + address.port + '/proof');
-const body = await response.text();
-await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
-process.stdout.write(body);`,
-        ],
-        { encoding: 'utf8', timeout: 20_000 },
-      );
-      expect(probe.status, probe.stderr).toBe(0);
-      expect(probe.stdout, probe.stderr).toBe(JSON.stringify({ locked: true }));
+      expect(built.status, built.stderr).toBe(1);
+      expect(built.stderr).toContain('kovo build check preflight failed');
+      expect(built.stderr).toContain('ERROR KV424');
+      expect(built.stderr).toContain('opaque-module-initializer:kovo-runtime-poison');
+      expect(readFileIfPresent(markerPath)).toBeUndefined();
+      expect(existsSync(join(outDir, 'server/server.mjs'))).toBe(false);
     } finally {
       rmSync(root, { force: true, recursive: true });
     }
   }, 120_000);
 
-  it('pins deploy preset environment before authored config evaluation in the real CLI', () => {
+  it('rejects deploy-preset environment mutation before authored config evaluation', () => {
     const root = cliFixtureRoot('preset-environment');
     try {
       mkdirSync(join(root, 'src'), { recursive: true });
@@ -974,8 +957,10 @@ export default {};
         ['build', './app.ts', '--out', 'enabled', '--check'],
         ordinaryEnv,
       );
-      expect(configEnabled.status, configEnabled.stderr).toBe(0);
-      expect(configEnabled.stdout).toContain('CHECK ok preset=node');
+      expect(configEnabled.status, configEnabled.stderr).toBe(1);
+      expect(configEnabled.stderr).toContain('kovo build config preflight failed');
+      expect(configEnabled.stderr).toContain('ERROR KV424');
+      expect(configEnabled.stderr).toContain('build-config.opaque-authority');
 
       rmSync(join(root, 'enabled'), { force: true, recursive: true });
       rmSync(join(root, '.kovo'), { force: true, recursive: true });
@@ -984,14 +969,16 @@ export default {};
         ['build', './app.ts', '--out', 'operator-vercel', '--check'],
         { ...ordinaryEnv, APP_PRESET_MUTATION: 'disable', KOVO_PRESET: 'vercel' },
       );
-      expect(operatorVercel.status, operatorVercel.stderr).toBe(0);
-      expect(operatorVercel.stdout).toContain('CHECK ok preset=vercel');
+      expect(operatorVercel.status, operatorVercel.stderr).toBe(1);
+      expect(operatorVercel.stderr).toContain('kovo build config preflight failed');
+      expect(operatorVercel.stderr).toContain('ERROR KV424');
+      expect(operatorVercel.stderr).toContain('build-config.opaque-authority');
     } finally {
       rmSync(root, { force: true, recursive: true });
     }
   }, 120_000);
 
-  it('pins configured preset methods before authored app evaluation in the real CLI', () => {
+  it('rejects structural preset methods before authored app evaluation', () => {
     const root = cliFixtureRoot('preset-method-authority');
     try {
       mkdirSync(join(root, 'src'), { recursive: true });
@@ -1033,9 +1020,11 @@ export default createApp({
 
       const outDir = join(root, 'dist');
       const built = runKovoCli(root, ['build', './app.ts', '--out', outDir]);
-      expect(built.status, built.stderr).toBe(0);
-      expect(existsSync(join(outDir, 'server/server.mjs'))).toBe(true);
-      expect(existsSync(join(outDir, 'server/Dockerfile'))).toBe(false);
+      expect(built.status, built.stderr).toBe(1);
+      expect(built.stderr).toContain('kovo build config preflight failed');
+      expect(built.stderr).toContain('ERROR KV424');
+      expect(built.stderr).toContain('build-config.opaque-authority');
+      expect(existsSync(join(outDir, 'server/server.mjs'))).toBe(false);
     } finally {
       rmSync(root, { force: true, recursive: true });
     }
