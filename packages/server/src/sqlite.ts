@@ -20,7 +20,11 @@ import { runtimeEnvironmentValue } from '@kovojs/server/internal/runtime-environ
 
 import { snapshotAuditReason, snapshotAuditText } from './audit-justification.js';
 import { createFrameworkManagedDbProvider, type FrameworkManagedDbProvider } from './guards.js';
-import type { DeclaredWriteSqliteAuthorizerConstants, Reader } from './managed-db.js';
+import type {
+  DeclaredWriteSqliteAuthorizerConstants,
+  DeclaredWriteSqliteAuthorizerDatabase,
+  Reader,
+} from './managed-db.js';
 import { createMemoryMutationReplayStore, type MutationReplayStore } from './replay.js';
 import {
   securityArrayJoin,
@@ -68,6 +72,8 @@ const sqliteIsProxy = nodeUtilTypes.isProxy;
 const sqliteNodeDatabaseSync = NodeSqliteDatabaseSync;
 const sqliteNodeDatabaseExec = NodeSqliteDatabaseSync.prototype.exec;
 const sqliteNodeDatabaseClose = NodeSqliteDatabaseSync.prototype.close;
+const sqliteNodeDatabasePrepare = NodeSqliteDatabaseSync.prototype.prepare;
+const sqliteNodeDatabaseSetAuthorizer = NodeSqliteDatabaseSync.prototype.setAuthorizer;
 const sqliteConsole = console;
 const sqliteConsoleWarn = console.warn;
 const sqliteDatabasePragma = Database.prototype.pragma;
@@ -278,7 +284,26 @@ export function createSqliteAppRuntime(
                 authorizerSchemaDdl[index]!,
               ]);
             }
-            return authorizerDatabase;
+            // SPEC §6.6/§10.3 C9: app callbacks run before this clone opens and can mutate the
+            // public node:sqlite prototype. Keep the raw handle private and expose only frozen
+            // methods that dispatch through the bootstrap-captured native controls.
+            return witnessFreeze({
+              close(): void {
+                witnessReflectApply(sqliteNodeDatabaseClose, authorizerDatabase, []);
+              },
+              prepare(statement: string): unknown {
+                return witnessReflectApply(sqliteNodeDatabasePrepare, authorizerDatabase, [
+                  statement,
+                ]);
+              },
+              setAuthorizer(
+                callback: Parameters<DeclaredWriteSqliteAuthorizerDatabase['setAuthorizer']>[0],
+              ): void {
+                witnessReflectApply(sqliteNodeDatabaseSetAuthorizer, authorizerDatabase, [
+                  callback,
+                ]);
+              },
+            });
           } catch (error) {
             witnessReflectApply(sqliteNodeDatabaseClose, authorizerDatabase, []);
             throw error;

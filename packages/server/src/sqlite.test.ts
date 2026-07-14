@@ -543,6 +543,147 @@ describe('public SQLite runtime boundary (SPEC §6.6/§10.3)', () => {
     expect(runtime).toBeDefined();
     if (runtime !== undefined) runtimes.push(runtime);
   });
+
+  it('pins the authorizer methods used for raw-read and declared-write enforcement', () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const prefix = `kovo_fk_authorizer_${Date.now()}`;
+    const parentName = `${prefix}_parent`;
+    const childName = `${prefix}_child`;
+    const builtinSqlite = sqliteTestRequire('node:sqlite') as {
+      DatabaseSync: { prototype: Record<PropertyKey, unknown> };
+    };
+    const authorizerPrototype = builtinSqlite.DatabaseSync.prototype;
+    const authorizerMethodDescriptors = (
+      ['close', 'exec', 'prepare', 'setAuthorizer'] as const
+    ).map((property) => {
+      const descriptor = Object.getOwnPropertyDescriptor(authorizerPrototype, property);
+      if (descriptor === undefined) {
+        throw new Error(`node:sqlite DatabaseSync.prototype.${property} is unavailable`);
+      }
+      return [property, descriptor] as const;
+    });
+    let poisonHits = 0;
+    let poisoned = false;
+    const parent = sqliteTable(
+      parentName,
+      { id: text('id').primaryKey() },
+      kovo({ domain: parentName, key: 'id' }),
+    );
+    const child = sqliteTable(
+      childName,
+      {
+        id: text('id').primaryKey(),
+        parentId: text('parent_id')
+          .notNull()
+          .references(
+            () => {
+              if (!poisoned) {
+                poisoned = true;
+                for (const [property, descriptor] of authorizerMethodDescriptors) {
+                  Object.defineProperty(authorizerPrototype, property, {
+                    ...descriptor,
+                    value: () => {
+                      poisonHits += 1;
+                      if (property !== 'close' && property !== 'setAuthorizer') {
+                        throw new Error(`late node:sqlite prototype poison reached ${property}`);
+                      }
+                    },
+                  });
+                }
+              }
+              return parent.id;
+            },
+            { onDelete: 'cascade' },
+          ),
+      },
+      kovo({ domain: childName, key: 'id' }),
+    );
+    const release = installGeneratedTableSecurityManifestForCommand(
+      manifestFor([
+        { columns: [{ key: 'id', name: 'id' }], name: parentName },
+        {
+          columns: [
+            { key: 'id', name: 'id' },
+            { key: 'parentId', name: 'parent_id' },
+          ],
+          name: childName,
+        },
+      ]),
+    );
+    let runtime: Readonly<sqlitePublicApi.KovoSqliteAppRuntime> | undefined;
+    let writeError: unknown;
+    let readError: unknown;
+    let childRows: unknown;
+    try {
+      runtime = sqlitePublicApi.createSqliteAppRuntime({
+        seed: [
+          { rows: [{ id: 'p1' }], table: parent },
+          { rows: [{ id: 'c1', parent_id: 'p1' }], table: child },
+        ],
+        // Deliberately build the FK source before its target to exercise clone DDL ordering.
+        tables: [child, parent],
+      });
+      runtimes.push(runtime);
+      const providerDb = resolveDbProvider(runtime.db, new Request('http://localhost'));
+      if (providerDb instanceof Promise) {
+        throw new Error('SQLite provider unexpectedly resolved asynchronously.');
+      }
+      const writer = managedDb(providerDb, 'write', {
+        sqlWritePolicy: {
+          tables: [`main.${parentName}`, `public.${parentName}`],
+          touches: [`main.${parentName}`],
+        },
+      });
+      try {
+        writer.run(
+          trustedSql(sql.raw(`delete from "${parentName}" where id = 'p1'`), {
+            justification: 'foreign-key cascade declared-write authorizer regression',
+          }),
+        );
+      } catch (error) {
+        writeError = error;
+      }
+      const rawRead = runtime.readonlyDb.rawRead as <Row>(
+        statement: unknown,
+        declaration: { reads: readonly string[] },
+      ) => Row[];
+      try {
+        rawRead(
+          trustedSql(sql.raw(`select id from "${childName}"`), {
+            justification: 'poisoned SQLite raw-read authorizer regression',
+          }),
+          { reads: [`main.${parentName}`] },
+        );
+      } catch (error) {
+        readError = error;
+      }
+
+      const capability = runtime.systemDb({
+        operation: 'write',
+        reason: 'Inspect the engine state after the rejected cascade regression',
+        surface: 'sqlite.test#foreign-key-authorizer-parity',
+      });
+      childRows = useSqliteSystemDb(capability, (db) =>
+        db.select({ id: child.id }).from(child).all(),
+      );
+    } finally {
+      try {
+        for (const [property, descriptor] of authorizerMethodDescriptors) {
+          Object.defineProperty(authorizerPrototype, property, descriptor);
+        }
+      } finally {
+        runtime?.close();
+        release();
+      }
+    }
+    expect(poisoned).toBe(true);
+    expect(poisonHits).toBe(0);
+    expect(writeError).toBeInstanceOf(Error);
+    expect((writeError as Error).message).toMatch(/SQLite authorizer rejected/u);
+    expect(readError).toBeInstanceOf(Error);
+    expect((readError as Error).message).toMatch(/outside the declared reads set/u);
+    expect(childRows).toEqual([{ id: 'c1' }]);
+  });
 });
 
 function runtimeSchema(prefix: string) {
