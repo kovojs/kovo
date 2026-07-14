@@ -3,9 +3,38 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { installInlineKovoLoader } from './inline-loader.js';
 
 const testBroadcastChannels: BroadcastChannel[] = [];
+const testWindowListeners: Array<{
+  listener: EventListenerOrEventListenerObject;
+  options: AddEventListenerOptions | boolean | undefined;
+  type: string;
+}> = [];
+const nativeBroadcastChannelClose = BroadcastChannel.prototype.close;
+const nativeEventTargetAddEventListener = EventTarget.prototype.addEventListener;
+const nativeEventTargetRemoveEventListener = EventTarget.prototype.removeEventListener;
+const nativeWindowAddEventListener = globalThis.addEventListener;
+const NativeBroadcastChannel = BroadcastChannel;
+const initialInlineApplyDescriptor = Object.getOwnPropertyDescriptor(globalThis, '__kovo_a');
+const initialScrollRestoration = history.scrollRestoration;
 
 afterEach(() => {
-  for (const channel of testBroadcastChannels.splice(0)) channel.close();
+  for (const entry of testWindowListeners.splice(0)) {
+    nativeEventTargetRemoveEventListener.call(
+      globalThis,
+      entry.type,
+      entry.listener,
+      entry.options,
+    );
+  }
+  for (const channel of testBroadcastChannels.splice(0)) {
+    channel.onmessage = null;
+    nativeBroadcastChannelClose.call(channel);
+  }
+  if (initialInlineApplyDescriptor) {
+    Object.defineProperty(globalThis, '__kovo_a', initialInlineApplyDescriptor);
+  } else {
+    Reflect.deleteProperty(globalThis, '__kovo_a');
+  }
+  history.scrollRestoration = initialScrollRestoration;
   document.head.replaceChildren();
   document.body.replaceChildren();
   vi.unstubAllGlobals();
@@ -57,7 +86,7 @@ describe('browser inline loader response apply', () => {
     }));
     vi.stubGlobal('fetch', fetch);
 
-    installInlineKovoLoader(async () => ({}));
+    installTestInlineKovoLoader(async () => ({}));
     form.dispatchEvent(new SubmitEvent('submit', { bubbles: true, cancelable: true }));
 
     await vi.waitFor(() =>
@@ -100,7 +129,7 @@ describe('browser inline loader response apply', () => {
       })),
     );
 
-    installInlineKovoLoader(async () => ({}));
+    installTestInlineKovoLoader(async () => ({}));
     form.dispatchEvent(new SubmitEvent('submit', { bubbles: true, cancelable: true }));
 
     await vi.waitFor(() =>
@@ -138,7 +167,7 @@ describe('browser inline loader response apply', () => {
       })),
     );
 
-    installInlineKovoLoader(async () => ({}));
+    installTestInlineKovoLoader(async () => ({}));
     form.dispatchEvent(new SubmitEvent('submit', { bubbles: true, cancelable: true }));
 
     await vi.waitFor(() => {
@@ -162,7 +191,7 @@ describe('browser inline loader response apply', () => {
     ].join('');
     document.body.append(root);
 
-    installInlineKovoLoader(async () => ({}));
+    installTestInlineKovoLoader(async () => ({}));
     (globalThis as unknown as { __kovo_a?: (body: string) => void }).__kovo_a?.(
       [
         '<kovo-fragment target="promo">',
@@ -207,7 +236,7 @@ describe('browser inline loader response apply', () => {
       received = event as CustomEvent;
     };
     window.addEventListener('kovo:query', listener);
-    installInlineKovoLoader(async () => ({}));
+    installTestInlineKovoLoader(async () => ({}));
     vi.stubGlobal(
       'CustomEvent',
       class PoisonedCustomEvent extends NativeCustomEvent {
@@ -247,7 +276,7 @@ describe('browser inline loader response apply', () => {
     ].join('');
     document.body.append(root);
 
-    installInlineKovoLoader(async () => ({}));
+    installTestInlineKovoLoader(async () => ({}));
 
     // SPEC.md §4.4/§13.2/§14.1: a removed island is identified by kovo-c plus
     // kovo-key/id, not by a component-name substring in replacement HTML.
@@ -276,7 +305,7 @@ describe('browser inline loader response apply', () => {
     root.innerHTML = '<section kovo-fragment-target="cart">old cart</section>';
     document.body.append(root);
 
-    installInlineKovoLoader(async () => ({}));
+    installTestInlineKovoLoader(async () => ({}));
     sender.postMessage({
       body: '<kovo-fragment target="cart"><section kovo-fragment-target="cart">wrong session</section></kovo-fragment>',
       changes: [],
@@ -337,7 +366,7 @@ describe('browser inline loader response apply', () => {
       })),
     );
 
-    installInlineKovoLoader(async () => ({}));
+    installTestInlineKovoLoader(async () => ({}));
     root
       .querySelector('form')
       ?.dispatchEvent(new SubmitEvent('submit', { bubbles: true, cancelable: true }));
@@ -360,21 +389,27 @@ describe('browser inline loader response apply', () => {
       '<script type="application/json" kovo-query="cart" key="cart:c1">{"count":1}</script>',
       '<section kovo-fragment-target="cart">cart</section>',
     ].join('');
-    const fetch = vi.fn(async () => ({
-      headers: {
-        get(name: string) {
-          return name === 'Kovo-Build' ? 'build-a' : null;
-        },
-      },
-      ok: true,
-      status: 200,
-      async text() {
-        return '<kovo-query name="cart" key="cart:c1">{"count":2}</kovo-query>';
-      },
-    }));
+    const fetch = vi.fn(
+      async () =>
+        new Response('<kovo-query name="cart" key="cart:c1">{"count":2}</kovo-query>', {
+          headers: {
+            'Content-Type': 'text/vnd.kovo.fragment+html',
+            'Kovo-Build': 'build-a',
+          },
+          status: 200,
+        }),
+    );
     vi.stubGlobal('fetch', fetch);
+    let appliedQueryEvents = 0;
+    window.addEventListener(
+      'kovo:query',
+      () => {
+        appliedQueryEvents += 1;
+      },
+      { once: true },
+    );
 
-    installInlineKovoLoader(async () => ({}));
+    installTestInlineKovoLoader(async () => ({}));
     dispatchEvent(new Event('visibilitychange'));
 
     await vi.waitFor(() =>
@@ -384,6 +419,7 @@ describe('browser inline loader response apply', () => {
         method: 'GET',
       }),
     );
+    await vi.waitFor(() => expect(appliedQueryEvents).toBe(1));
     const rememberedQueryRefetches = fetch.mock.calls.filter(
       ([url, init]) =>
         url === '/_q/cart?key=c1' &&
@@ -392,7 +428,7 @@ describe('browser inline loader response apply', () => {
         'method' in init &&
         init.method === 'GET',
     );
-    expect(rememberedQueryRefetches.length).toBeGreaterThanOrEqual(1);
+    expect(rememberedQueryRefetches).toHaveLength(1);
     expect(rememberedQueryRefetches[0]?.[1]).toEqual({
       cache: 'no-store',
       headers: { Accept: 'text/html', 'Kovo-Fragment': 'true' },
@@ -400,3 +436,88 @@ describe('browser inline loader response apply', () => {
     });
   });
 });
+
+function installTestInlineKovoLoader(
+  importModule: (url: string) => Promise<Record<string, unknown>>,
+): void {
+  // SPEC §6.6/§14: keep hard reload and boot-pinned fetch behavior real. Isolate each test by
+  // retiring the installer's durable host enrollment instead of stubbing fail-closed recovery.
+  const addDescriptor = Object.getOwnPropertyDescriptor(EventTarget.prototype, 'addEventListener');
+  const channelDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'BroadcastChannel');
+  const globalAddDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'addEventListener');
+  if (
+    !addDescriptor ||
+    !('value' in addDescriptor) ||
+    addDescriptor.value !== nativeEventTargetAddEventListener ||
+    !channelDescriptor ||
+    !('value' in channelDescriptor) ||
+    channelDescriptor.value !== NativeBroadcastChannel ||
+    globalThis.addEventListener !== nativeWindowAddEventListener
+  ) {
+    throw new Error('browser test could not isolate inline-loader host controls');
+  }
+
+  class TestBroadcastChannel extends NativeBroadcastChannel {
+    constructor(name: string) {
+      super(name);
+      testBroadcastChannels.push(this);
+    }
+  }
+
+  Object.defineProperty(EventTarget.prototype, 'addEventListener', {
+    ...addDescriptor,
+    value: function testAddEventListener(
+      this: EventTarget,
+      type: string,
+      listener: EventListenerOrEventListenerObject,
+      options?: AddEventListenerOptions | boolean,
+    ): void {
+      if (this === (globalThis as unknown as EventTarget)) {
+        testWindowListeners.push({ listener, options, type });
+      }
+      nativeEventTargetAddEventListener.call(this, type, listener, options);
+    },
+  });
+  try {
+    Object.defineProperty(globalThis, 'addEventListener', {
+      configurable: true,
+      enumerable: globalAddDescriptor?.enumerable ?? false,
+      value: function testWindowAddEventListener(
+        this: Window,
+        type: string,
+        listener: EventListenerOrEventListenerObject,
+        options?: AddEventListenerOptions | boolean,
+      ): void {
+        testWindowListeners.push({ listener, options, type });
+        nativeWindowAddEventListener.call(this, type, listener, options);
+      },
+      writable: true,
+    });
+    try {
+      Object.defineProperty(globalThis, 'BroadcastChannel', {
+        ...channelDescriptor,
+        value: TestBroadcastChannel,
+      });
+      try {
+        const listenerStart = testWindowListeners.length;
+        installInlineKovoLoader(importModule);
+        const installedTypes = testWindowListeners.slice(listenerStart).map((entry) => entry.type);
+        if (!installedTypes.includes('submit') || !installedTypes.includes('visibilitychange')) {
+          throw new Error(
+            'browser test did not capture inline-loader delegated and lifecycle state',
+          );
+        }
+      } finally {
+        Object.defineProperty(globalThis, 'BroadcastChannel', channelDescriptor);
+      }
+    } finally {
+      if (globalAddDescriptor) {
+        Object.defineProperty(globalThis, 'addEventListener', globalAddDescriptor);
+      } else {
+        Reflect.deleteProperty(globalThis, 'addEventListener');
+      }
+    }
+  } finally {
+    Object.defineProperty(EventTarget.prototype, 'addEventListener', addDescriptor);
+  }
+}
