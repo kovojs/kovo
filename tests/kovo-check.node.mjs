@@ -789,6 +789,7 @@ void test('S2 loader budget and inline enhanced form behavior are acceptance evi
     body: { kind: 'form-data' },
     headers: {
       Accept: 'text/vnd.kovo.fragment+html',
+      'Kovo-Current-Url': 'http://localhost/cart',
       'Kovo-Form-Target': '',
       'Kovo-Fragment': 'true',
       'Kovo-Idem': generatedIdem,

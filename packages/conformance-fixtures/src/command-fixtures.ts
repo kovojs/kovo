@@ -679,11 +679,15 @@ export async function loadVitePlusConfig(source: string): Promise<VitePlusConfig
       if (specifier === './examples/vite-kovo-compiler.js') {
         return {
           commerceRegistryFacts: {},
+          exampleKovoCompilerPlugin: () => ({ enforce: 'pre', name: 'kovo-compiler-test-stub' }),
+        };
+      }
+      if (specifier === './examples/vite-drizzle-registry.js') {
+        return {
           exampleDrizzleRegistryPlugin: () => ({
             enforce: 'pre',
             name: 'kovo-example-drizzle-registry-test-stub',
           }),
-          exampleKovoCompilerPlugin: () => ({ enforce: 'pre', name: 'kovo-compiler-test-stub' }),
         };
       }
       assert.fail(`unexpected Vite+ config import ${specifier}`);

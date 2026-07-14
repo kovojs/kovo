@@ -354,6 +354,7 @@ export default defineConfig({
       'packages/server/src/internal/html.ts',
       'packages/server/src/internal/route.ts',
       'packages/server/src/internal/wire.ts',
+      'packages/server/src/jsx-runtime.ts',
       'packages/test/src/harness.ts',
       'packages/test/src/verifier.ts',
     ],

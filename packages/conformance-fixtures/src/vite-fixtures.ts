@@ -347,8 +347,7 @@ export async function viteRedGreenBuildFixtureFact(
         `import { kovoVitePlugin } from ${JSON.stringify(options.vitePluginImportUrl)};`,
         '',
         `const jsxRuntimeAlias = ${JSON.stringify(
-          options.jsxRuntimeAlias ??
-            join(options.projectRoot, 'packages/server/src/jsx-runtime.ts'),
+          options.jsxRuntimeAlias ?? join(options.projectRoot, 'dist/server/src/jsx-runtime.mjs'),
         )};`,
         `const coreInternalAlias = ${JSON.stringify(
           join(options.projectRoot, 'dist/core/src/internal/$1.mjs'),

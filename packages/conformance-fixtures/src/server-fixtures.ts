@@ -274,6 +274,8 @@ export async function serverDataPlaneBehaviorFact(
   runtime: ServerDataPlaneRuntime,
 ): Promise<ServerDataPlaneBehaviorFact> {
   // SPEC.md §6.4/§9.3: query, route, CSRF, and endpoint helpers are public data-plane APIs.
+  // SPEC §9.1: Kovo-Targets is an update hint, so the fixture must prove that the generated
+  // renderer dependency intersects a query affected by the committed mutation change.
   const product = runtime.domain('product');
   const productQuery = runtime.query('productDetail', {
     args: runtime.s.object({
@@ -530,6 +532,7 @@ export async function serverCommerceStylesheetBehaviorFact(
       tags: deferredElements.map((element) => element.tag),
     },
     failure: await runtime.renderMutationEndpointResponse(addToCart, {
+      buildToken: 'conformance-server-test-build',
       failureStylesheets: ['/assets/styles.css'],
       failureTarget: 'product-form:p2',
       headers: { 'Kovo-Fragment': 'true' },
@@ -710,6 +713,13 @@ export async function serverCommerceAdoptDontInventBehaviorFact(
     store: runtime.createQueryStore(),
   });
 
+  const product = runtime.domain('product');
+  const productGrid = runtime.query('productGrid', {
+    load() {
+      return { refreshed: true };
+    },
+    reads: [product],
+  });
   const fragmentFailure = runtime.mutation('product-grid/reload', {
     csrf: false,
     csrfJustification: 'conformance fixture uses a non-browser caller',
@@ -717,6 +727,7 @@ export async function serverCommerceAdoptDontInventBehaviorFact(
       return input;
     },
     input: runtime.s.object({ productId: runtime.s.string() }),
+    registry: { queries: [productGrid], touches: [product] },
   });
   const failureResponse = await runtime.renderMutationEndpointResponse(fragmentFailure, {
     buildToken: 'conformance-server-test-build',
@@ -737,7 +748,7 @@ export async function serverCommerceAdoptDontInventBehaviorFact(
         },
       ),
     ],
-    headers: { 'Kovo-Fragment': 'true', 'Kovo-Targets': 'product-grid' },
+    headers: { 'Kovo-Fragment': 'true', 'Kovo-Targets': 'product-grid=productGrid' },
     rawInput: { productId: 'p1' },
     request: {},
   });
