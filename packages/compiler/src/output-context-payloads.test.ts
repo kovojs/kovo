@@ -295,7 +295,7 @@ export const PayloadCard = component({
         "serverSource": "// @kovojs-ir
       export function renderSource() {
         return \`import { escapeText } from '@kovojs/server/internal/escape';
-      import { derive } from '@kovojs/browser/generated';
+      import { derive } from '@kovojs/browser/internal/output';
       import { componentLiveTargetRenderer, registerGeneratedLiveTargetRenderer } from '@kovojs/server/internal/wire';
 
 

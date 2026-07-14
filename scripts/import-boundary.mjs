@@ -28,6 +28,10 @@ const explicitlyAllowedInternalImports = new Set([
   // source used by create-kovo and `kovo update-docs`; app-authored site/content
   // remains covered by the zero-exception default.
   'site/src/aux.ts -> @kovojs/core/internal/agent-docs',
+  // The framework-owned docs export runs this nested gallery loader only inside the
+  // bootstrap-first site runner. Keep its fail-closed realm assertion exact without
+  // making security-bootstrap plumbing part of Kovo's public app-author API.
+  'site/src/gallery.ts -> @kovojs/core/internal/classifier-verdict',
 ]);
 const explicitlyAllowedGeneratedImports = new Set([]);
 
