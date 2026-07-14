@@ -367,7 +367,9 @@ export default { server: { host: '127.0.0.1', port: 0, strictPort: true } };\n`,
       expect(output.stderr).toContain('kovo dev rejects authored Vite config key resolve');
       expect(output.combined()).not.toContain('ALIASED FRAMEWORK');
     }
-  }, 40_000);
+    // This boots three independent real CLI processes serially. The fully populated four-way CI
+    // shard can make the same assertions take ~40s even though each child stays within its bound.
+  }, 90_000);
 
   it('keeps real CLI SSR loads outside authored resolve/load/transform hooks', async () => {
     const root = devFixture('plugin-graph-isolation');
