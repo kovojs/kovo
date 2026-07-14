@@ -19,7 +19,9 @@ import {
   compilerSetAdd,
   compilerSetHas,
   compilerSnapshotDenseArray,
+  compilerStringCharCodeAt,
   compilerStringEndsWith,
+  compilerStringIncludes,
   compilerStringIndexOf,
   compilerStringLocaleCompare,
   compilerStringSlice,
@@ -704,7 +706,17 @@ function renderSemanticAttributeWithName(
   attribute: JsxAttributeModel,
 ): string | null {
   if (isGeneratedOnlySemanticAttribute(attribute.name)) return null;
-  if (attribute.domEventName || compilerRegExpTest(/^on[A-Z][\w-]*$/, attribute.name)) return null;
+  if (attribute.domEventName) return null;
+  if (compilerStringStartsWith(attribute.name, 'on') && attribute.name.length > 2) {
+    const eventInitial = compilerStringCharCodeAt(attribute.name, 2);
+    if (
+      eventInitial >= 0x41 &&
+      eventInitial <= 0x5a &&
+      compilerRegExpTest(/^on[A-Z][\w-]*$/, attribute.name)
+    ) {
+      return null;
+    }
+  }
 
   if (attribute.value !== undefined) {
     return ` ${name}="${escapeAttribute(attribute.value)}"`;
@@ -810,6 +822,7 @@ function normalizeGeneratedSemanticExpression(expression: string): string {
   // asymmetry between authored and lowered sources is caught (fails closed), not silently
   // equated. The mutation-field helpers are generated-only with no authored equivalent and
   // are always stripped.
+  if (!compilerStringIncludes(expression, '__kovoRenderMutation')) return expression;
   return compilerRegExpReplace(
     /\b__kovoRenderMutationIdemField\(\)/g,
     compilerRegExpReplace(/\b__kovoRenderMutationCsrfField\([^()]*\)/g, expression, ''),
