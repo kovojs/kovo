@@ -36,6 +36,7 @@ import { assignDerivedTaskKey, task } from './task.js';
 import { renderedHtml } from './html.js';
 import { jsx } from './jsx-runtime.js';
 import { createLiveTargetAttestation } from './mutation-wire.js';
+import { respond } from './response.js';
 import type { LiveTargetRenderer } from './mutation-wire.js';
 
 function withCompilerLiveTargetRenderers<Result>(
@@ -352,6 +353,143 @@ describe('framework-owned CSP reporting endpoint (OPP-14)', () => {
 });
 
 describe('server createApp request shell', () => {
+  it('keeps guarded file 200/304 responses private across route and parent-layout access graphs', async () => {
+    const allowVictim = (request: Request) =>
+      request.headers.get('x-principal') === 'victim' ? true : ({ kind: 'forbidden' } as const);
+    const filePage = () =>
+      respond.file('PRIVATE:victim', {
+        contentType: 'text/plain; charset=utf-8',
+        etag: '"private-v1"',
+        filename: 'private.txt',
+      });
+
+    const directAccessLayout = layout({ access: [allowVictim] });
+    const parentAccessLayout = layout({ access: [allowVictim] });
+    const childOfAccessLayout = layout({ parent: parentAccessLayout });
+    const directLegacyGuardLayout = layout({ guard: allowVictim });
+    const parentLegacyGuardLayout = layout({ guard: allowVictim });
+    const childOfLegacyGuardLayout = layout({ parent: parentLegacyGuardLayout });
+    const guardedRoutes = [
+      route('/private-route-access', { access: [allowVictim], page: filePage }),
+      route('/private-route-guard', { guard: allowVictim, page: filePage }),
+      route('/private-layout-access', { layout: directAccessLayout, page: filePage }),
+      route('/private-parent-layout-access', { layout: childOfAccessLayout, page: filePage }),
+      route('/private-layout-guard', { layout: directLegacyGuardLayout, page: filePage }),
+      route('/private-parent-layout-guard', {
+        layout: childOfLegacyGuardLayout,
+        page: filePage,
+      }),
+    ];
+    const explicitPublic = route('/explicit-public-file', {
+      access: publicAccess('public cache-floor control'),
+      // An explicit access decision suppresses the legacy fallback. Cache posture must mirror that
+      // exact enforcement rule rather than treating property presence as authority.
+      guard: allowVictim,
+      page: () =>
+        respond.file('PUBLIC', {
+          contentType: 'text/plain; charset=utf-8',
+          etag: '"public-v1"',
+          filename: 'public.txt',
+        }),
+    });
+    const handler = createRequestHandler(createApp({ routes: [...guardedRoutes, explicitPublic] }));
+
+    for (let index = 0; index < guardedRoutes.length; index += 1) {
+      const path = guardedRoutes[index]!.path;
+      const unauthorized = await handler(new Request(`https://example.test${path}`));
+      expect(unauthorized.status, path).toBe(403);
+      await expect(unauthorized.text()).resolves.not.toContain('PRIVATE:victim');
+
+      const authorized = await handler(
+        new Request(`https://example.test${path}`, {
+          headers: { 'x-principal': 'victim' },
+        }),
+      );
+      expect(authorized.status, path).toBe(200);
+      expect(authorized.headers.get('cache-control'), path).toBe('no-store');
+      expect(authorized.headers.get('vary'), path).toContain('Cookie');
+      await expect(authorized.text()).resolves.toBe('PRIVATE:victim');
+
+      const notModified = await handler(
+        new Request(`https://example.test${path}`, {
+          headers: {
+            'if-none-match': '"private-v1"',
+            'x-principal': 'victim',
+          },
+        }),
+      );
+      expect(notModified.status, path).toBe(304);
+      expect(notModified.headers.get('cache-control'), path).toBe('no-store');
+      expect(notModified.headers.get('vary'), path).toContain('Cookie');
+      await expect(notModified.text()).resolves.toBe('');
+    }
+
+    for (const headers of [undefined, { 'if-none-match': '"public-v1"' }]) {
+      const response = await handler(
+        new Request('https://example.test/explicit-public-file', { headers }),
+      );
+      expect(response.status).toBe(headers === undefined ? 200 : 304);
+      expect(response.headers.get('cache-control')).toBeNull();
+      expect(response.headers.get('vary')).toBeNull();
+    }
+  });
+
+  it('ignores late Object.prototype policy when a pinned file outcome reaches the full handler', async () => {
+    const outcome = respond.file('PINNED_BODY', {
+      contentType: 'text/plain; charset=utf-8',
+      filename: 'safe.txt',
+    });
+    const handler = createRequestHandler(
+      createApp({
+        routes: [
+          route('/prototype-safe-file', {
+            access: publicAccess('prototype snapshot regression'),
+            page: () => outcome,
+          }),
+        ],
+      }),
+    );
+    const previousEtag = Object.getOwnPropertyDescriptor(Object.prototype, 'etag');
+    const previousHeaders = Object.getOwnPropertyDescriptor(Object.prototype, 'headers');
+    let response: Response | undefined;
+
+    try {
+      Object.defineProperty(Object.prototype, 'etag', {
+        configurable: true,
+        value: '"inherited-forgery"',
+        writable: true,
+      });
+      Object.defineProperty(Object.prototype, 'headers', {
+        configurable: true,
+        value: {
+          'Cache-Control': 'public, max-age=86400',
+          'X-Inherited-Forgery': 'reached-sink',
+        },
+        writable: true,
+      });
+      response = await handler(
+        new Request('https://example.test/prototype-safe-file', {
+          headers: { 'If-None-Match': '"inherited-forgery"' },
+        }),
+      );
+    } finally {
+      if (previousEtag === undefined) delete (Object.prototype as { etag?: unknown }).etag;
+      else Object.defineProperty(Object.prototype, 'etag', previousEtag);
+      if (previousHeaders === undefined) {
+        delete (Object.prototype as { headers?: unknown }).headers;
+      } else {
+        Object.defineProperty(Object.prototype, 'headers', previousHeaders);
+      }
+    }
+
+    expect(response).toBeDefined();
+    expect(response!.status).toBe(200);
+    expect(response!.headers.get('etag')).toBeNull();
+    expect(response!.headers.get('cache-control')).toBeNull();
+    expect(response!.headers.get('x-inherited-forgery')).toBeNull();
+    await expect(response!.text()).resolves.toBe('PINNED_BODY');
+  });
+
   it('emits Kovo-Warn when SSR component query hydration caps a primary list read', async () => {
     const contactsQuery = query('contacts', {
       load: () => ({ items: Array.from({ length: 105 }, (_, index) => ({ id: index })) }),

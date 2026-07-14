@@ -1653,7 +1653,7 @@ export default async function handler(request) {
     }
   });
 
-  it('normalizes C0 and DEL bytes in emitted Node static-file disposition filenames', async () => {
+  it('serializes control and Unicode emitted Node static-file disposition filenames', async () => {
     const root = await mkdtemp(join(tmpdir(), 'kovo-node-preset-filename-controls-'));
     let server: Server | undefined;
 
@@ -1694,6 +1694,17 @@ export default async function handler(request) {
       expect(response.status).toBe(200);
       expect(response.headers.get('content-disposition')).toBe('inline; filename="safe__.js"');
       await expect(response.text()).resolves.toBe('safe-asset');
+
+      const unicodeFileName = 'emoji-💣.txt';
+      await writeFile(join(nodeOutDir, 'client', 'assets', unicodeFileName), 'unicode-asset');
+      const unicodeResponse = await fetch(
+        `${baseUrl}/assets/${encodeURIComponent(unicodeFileName)}`,
+      );
+      expect(unicodeResponse.status).toBe(200);
+      expect(unicodeResponse.headers.get('content-disposition')).toBe(
+        `inline; filename="emoji-_.txt"; filename*=UTF-8''emoji-%F0%9F%92%A3.txt`,
+      );
+      await expect(unicodeResponse.text()).resolves.toBe('unicode-asset');
     } finally {
       if (server !== undefined) await close(server);
       await rm(root, { force: true, recursive: true });

@@ -555,6 +555,65 @@ describe('server response adapters', () => {
     expect(response.headers.get('X-Audit')).toBe('safe');
   });
 
+  it('does not inherit omitted route outcome fields from late Object.prototype pollution', async () => {
+    const outcome = respond.file('PINNED_BODY', {
+      contentType: 'text/plain; charset=utf-8',
+      filename: 'safe.txt',
+    });
+    const previousEtag = Object.getOwnPropertyDescriptor(Object.prototype, 'etag');
+    const previousHeaders = Object.getOwnPropertyDescriptor(Object.prototype, 'headers');
+    let directResponse: Response | undefined;
+    let documentResponse: Response | undefined;
+
+    try {
+      Object.defineProperty(Object.prototype, 'etag', {
+        configurable: true,
+        value: '"inherited-forgery"',
+        writable: true,
+      });
+      Object.defineProperty(Object.prototype, 'headers', {
+        configurable: true,
+        value: {
+          'Cache-Control': 'public, max-age=86400',
+          'X-Inherited-Forgery': 'reached-sink',
+        },
+        writable: true,
+      });
+
+      const matchingForgedEtag = {
+        headers: { 'If-None-Match': '"inherited-forgery"' },
+        method: 'GET',
+      };
+      directResponse = routeResponseToWebResponse(
+        routeOutcomeResponse(outcome, matchingForgedEtag),
+        matchingForgedEtag,
+      );
+      documentResponse = routeResponseToWebResponse(
+        routeResponseToDocumentResponse(routeOutcomeResponse(outcome, matchingForgedEtag)),
+        matchingForgedEtag,
+      );
+    } finally {
+      if (previousEtag === undefined) delete (Object.prototype as { etag?: unknown }).etag;
+      else Object.defineProperty(Object.prototype, 'etag', previousEtag);
+      if (previousHeaders === undefined) {
+        delete (Object.prototype as { headers?: unknown }).headers;
+      } else {
+        Object.defineProperty(Object.prototype, 'headers', previousHeaders);
+      }
+    }
+
+    for (const response of [directResponse, documentResponse]) {
+      expect(response).toBeDefined();
+      expect(response!.status).toBe(200);
+      expect(response!.headers.get('etag')).toBeNull();
+      expect(response!.headers.get('cache-control')).toBeNull();
+      expect(response!.headers.get('x-inherited-forgery')).toBeNull();
+      await expect(response!.text()).resolves.toBe('PINNED_BODY');
+    }
+    expect(Object.hasOwn(outcome, 'etag')).toBe(true);
+    expect(Object.hasOwn(outcome, 'headers')).toBe(true);
+  });
+
   it('rejects a structural route outcome at the final sink even after a type cast', () => {
     const forged = {
       body: '<script>globalThis.compromised = true</script>',

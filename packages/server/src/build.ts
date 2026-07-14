@@ -14,6 +14,7 @@ import {
 } from '@kovojs/core/internal/filesystem';
 import { assertAndCloneJsonValue } from '@kovojs/core/internal/json';
 
+import { createContentDispositionWithFilename } from './content-disposition.js';
 import { resolvedFileSystemPath } from './vite-build-assets.js';
 import {
   buildOwnDataProperty,
@@ -2893,6 +2894,9 @@ function generatedNodeDiagnosticFactory(): (
 const generatedNodeDiagnosticFactorySource = buildSecurityFunctionSource(
   generatedNodeDiagnosticFactory,
 );
+const generatedContentDispositionFactorySource = buildSecurityFunctionSource(
+  createContentDispositionWithFilename,
+);
 
 function nodeServerSource(): string {
   return `import { Buffer } from 'node:buffer';
@@ -2951,6 +2955,7 @@ const statFileDescriptor = importedStatFileDescriptor;
 const statFilePath = importedStatFilePath;
 const nativeReflectApply = Reflect.apply;
 const nativeDecodeURIComponent = globalThis.decodeURIComponent;
+const nativeEncodeURIComponent = globalThis.encodeURIComponent;
 const nativeMapGet = NativeMap.prototype.get;
 const nativeMapHas = NativeMap.prototype.has;
 const nativeMapSet = NativeMap.prototype.set;
@@ -2966,7 +2971,6 @@ const nativeRequestUrlGetter = nativeObjectGetOwnPropertyDescriptor(NativeReques
 const nativeSetHas = NativeSet.prototype.has;
 const nativeStringCharCodeAt = NativeString.prototype.charCodeAt;
 const nativeStringEndsWith = NativeString.prototype.endsWith;
-const nativeStringFromCharCode = NativeString.fromCharCode;
 const nativeStringIncludes = NativeString.prototype.includes;
 const nativeStringSlice = NativeString.prototype.slice;
 const nativeStringStartsWith = NativeString.prototype.startsWith;
@@ -2986,6 +2990,22 @@ const fsRegularFileType = fsConstants.S_IFREG;
 const fsReadOnlyNoFollowFlags = fsConstants.O_RDONLY |
   (typeof fsConstants.O_NOFOLLOW === 'number' ? fsConstants.O_NOFOLLOW : 0);
 const createNodeDiagnosticRecord = (${generatedNodeDiagnosticFactorySource})();
+const contentDispositionWithFilename = (${generatedContentDispositionFactorySource})({
+  charCodeAt(value, index) {
+    return apply(nativeStringCharCodeAt, value, [index]);
+  },
+  encodeURIComponent(value) {
+    return apply(nativeEncodeURIComponent, undefined, [value]);
+  },
+  slice(value, start, end) {
+    return end === undefined
+      ? apply(nativeStringSlice, value, [start])
+      : apply(nativeStringSlice, value, [start, end]);
+  },
+  trim(value) {
+    return apply(nativeStringTrim, value, []);
+  },
+});
 
 const clientRoot = pathResolve(fileUrlToPath(new NativeURL('.', import.meta.url)), 'client');
 const staticRoot = pathResolve(fileUrlToPath(new NativeURL('.', import.meta.url)), 'static');
@@ -3478,31 +3498,7 @@ async function safeRealpath(path) {
 function routeOutcomeContentDisposition(options, resolvedPath) {
   const disposition = ownDataValue(options, 'disposition') ?? 'attachment';
   const filename = ownDataValue(options, 'filename') ?? pathBasename(resolvedPath);
-  return filename
-    ? disposition + '; filename="' + contentDispositionFilename(filename) + '"'
-    : disposition;
-}
-
-function contentDispositionFilename(filename) {
-  let normalized = '';
-  for (let index = 0; index < filename.length; index += 1) {
-    const character = filename[index];
-    const code = apply(nativeStringCharCodeAt, filename, [index]);
-    normalized += code <= 0x1f || code === 0x7f || character === '/' || character === '\\\\'
-      ? '_'
-      : character;
-  }
-  normalized = apply(nativeStringTrim, normalized, []);
-  const safe = normalized.length > 0
-    ? apply(nativeStringSlice, normalized, [0, 255])
-    : 'download';
-  let escaped = '';
-  for (let index = 0; index < safe.length; index += 1) {
-    escaped += safe[index] === '"'
-      ? apply(nativeStringFromCharCode, NativeString, [92, 34])
-      : safe[index];
-  }
-  return escaped;
+  return filename ? contentDispositionWithFilename(disposition, filename) : disposition;
 }
 
 async function writeRouteOutcomeToNode(outcome, nodeResponse, method) {

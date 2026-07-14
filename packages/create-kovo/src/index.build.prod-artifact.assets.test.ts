@@ -35,12 +35,15 @@ describe('create-kovo starter (build integration: production asset artifacts)', 
         '<svg viewBox="0 0 1 1"><path d="M0 0h1v1H0z"/></svg>',
         'utf8',
       );
+      writeFileSync(join(root, 'public/emoji-💣.txt'), 'UNICODE_STATIC_ASSET', 'utf8');
       const appPath = join(root, 'src/app.tsx');
       writeFileSync(
         appPath,
         readFileSync(appPath, 'utf8').replace(
           '      <ContactsRegion />',
-          '      <img src="/dogfood-marker.svg" alt="" />\n      <ContactsRegion />',
+          '      <img src="/dogfood-marker.svg" alt="" />\n' +
+            '      <a href="/emoji-💣.txt">Unicode asset</a>\n' +
+            '      <ContactsRegion />',
         ),
         'utf8',
       );
@@ -76,6 +79,15 @@ describe('create-kovo starter (build integration: production asset artifacts)', 
       await expect(assetResponse.text()).resolves.toBe(
         '<svg viewBox="0 0 1 1"><path d="M0 0h1v1H0z"/></svg>',
       );
+
+      // SPEC §6.6/§9.1: the emitted server uses the same Unicode-safe serializer as respond.file.
+      // A non-ASCII basename must remain a valid Node header instead of throwing ERR_INVALID_CHAR.
+      const unicodeAssetResponse = await fetch(`${origin}/emoji-💣.txt`);
+      expect(unicodeAssetResponse.status).toBe(200);
+      expect(unicodeAssetResponse.headers.get('content-disposition')).toBe(
+        `inline; filename="emoji-_.txt"; filename*=UTF-8''emoji-%F0%9F%92%A3.txt`,
+      );
+      await expect(unicodeAssetResponse.text()).resolves.toBe('UNICODE_STATIC_ASSET');
     } finally {
       await stopProcess(server);
       rmSync(root, { force: true, recursive: true });

@@ -45,7 +45,7 @@ describe('create-kovo starter (build integration: production response header art
         {
           proof: {
             evidence:
-              'packages/create-kovo/src/index.build.prod-artifact.headers.test.ts observes route outcome headers, structural-forgery escaping, pinned minted outcomes, and KV415 CRLF failure in the production server artifact',
+              'packages/create-kovo/src/index.build.prod-artifact.headers.test.ts observes route outcome headers, guarded cache floors, structural-forgery escaping, prototype-safe pinned outcomes, and KV415 CRLF failure in the production server artifact',
             kind: 'proof',
           },
           sink: 'response headers / route outcome headers',
@@ -55,6 +55,8 @@ describe('create-kovo starter (build integration: production response header art
             'X-Kovo-Header-Proof',
             'header-route-forged.html',
             'header-route-pinned.bin',
+            'header-route-prototype.bin',
+            'header-route-access-private.txt',
             'header-sink-unsafe.txt',
           ],
         },
@@ -228,6 +230,52 @@ describe('create-kovo starter (build integration: production response header art
       expect(rawRedirect.headers.get('location')).toBeNull();
       expect(rawRedirect.headers.getSetCookie()).toEqual([]);
       expect(rawRedirectBody).toContain('Server Error');
+
+      for (const path of [
+        '/header-route-access-private.txt',
+        '/header-parent-layout-access-private.txt',
+      ]) {
+        const unauthorized = await fetch(`${origin}${path}`);
+        const unauthorizedBody = await unauthorized.text();
+        expect(unauthorized.status, `${path}\n${unauthorizedBody}`).toBe(403);
+        expect(unauthorizedBody).not.toContain('PRIVATE:victim');
+
+        const authorized = await fetch(`${origin}${path}`, {
+          headers: { 'x-principal': 'victim' },
+        });
+        await expect(authorized.text()).resolves.toBe('PRIVATE:victim');
+        expect(authorized.status, path).toBe(200);
+        expect(authorized.headers.get('cache-control'), path).toBe('no-store');
+        expect(authorized.headers.get('vary'), path).toContain('Cookie');
+
+        const notModified = await fetch(`${origin}${path}`, {
+          headers: {
+            'if-none-match': '"private-v1"',
+            'x-principal': 'victim',
+          },
+        });
+        expect(notModified.status, path).toBe(304);
+        expect(notModified.headers.get('cache-control'), path).toBe('no-store');
+        expect(notModified.headers.get('vary'), path).toContain('Cookie');
+      }
+
+      const publicCacheControl = await fetch(`${origin}/header-public-cache-control.txt`, {
+        headers: { 'if-none-match': '"public-v1"' },
+      });
+      expect(publicCacheControl.status).toBe(304);
+      expect(publicCacheControl.headers.get('cache-control')).toBeNull();
+      expect(publicCacheControl.headers.get('vary')).toBeNull();
+
+      // Run this final: the hostile app route deliberately leaves its server realm polluted. The
+      // private outcome snapshot must retain exact-own undefined policy through the HTTP sink.
+      const prototypeSafe = await fetch(`${origin}/header-route-prototype.bin`, {
+        headers: { 'if-none-match': '"inherited-forgery"' },
+      });
+      await expect(prototypeSafe.text()).resolves.toBe('PINNED_PROTOTYPE_BYTES');
+      expect(prototypeSafe.status).toBe(200);
+      expect(prototypeSafe.headers.get('etag')).toBeNull();
+      expect(prototypeSafe.headers.get('cache-control')).toBeNull();
+      expect(prototypeSafe.headers.get('x-inherited-forgery')).toBeNull();
     } finally {
       await stopProcess(server);
       rmSync(root, { force: true, recursive: true });
@@ -338,6 +386,12 @@ function addHeaderSinkProofRoutes(root: string): void {
       '    });',
       '  },',
       '});',
+      'const headerCacheAllowVictim = (request: AppRequest) =>',
+      "  request.headers.get('x-principal') === 'victim'",
+      '    ? true',
+      "    : { kind: 'forbidden' as const };",
+      'const HeaderCacheParentLayout = layout<AppRequest>({ access: [headerCacheAllowVictim] });',
+      'const HeaderCacheChildLayout = layout<AppRequest>({ parent: HeaderCacheParentLayout });',
     ].join('\n'),
     'response-header proof raw endpoints',
   );
@@ -385,6 +439,37 @@ function addHeaderSinkProofRoutes(root: string): void {
       "        return respond.file('safe header proof\\n', {",
       "          contentType: 'text/plain; charset=utf-8',",
       "          headers: { 'X-Kovo-Header-Proof': 'safe-header-value' },",
+      '        });',
+      '      },',
+      '    }),',
+      "    route('/header-route-access-private.txt', {",
+      '      access: [headerCacheAllowVictim],',
+      '      page(_context, request: AppRequest) {',
+      "        return respond.file(`PRIVATE:${request.headers.get('x-principal')}`, {",
+      "          contentType: 'text/plain; charset=utf-8',",
+      '          etag: \'"private-v1"\',',
+      "          filename: 'private.txt',",
+      '        });',
+      '      },',
+      '    }),',
+      "    route('/header-parent-layout-access-private.txt', {",
+      "      access: publicAccess('parent layout owns private access proof'),",
+      '      layout: HeaderCacheChildLayout,',
+      '      page(_context, request: AppRequest) {',
+      "        return respond.file(`PRIVATE:${request.headers.get('x-principal')}`, {",
+      "          contentType: 'text/plain; charset=utf-8',",
+      '          etag: \'"private-v1"\',',
+      "          filename: 'private.txt',",
+      '        });',
+      '      },',
+      '    }),',
+      "    route('/header-public-cache-control.txt', {",
+      "      access: publicAccess('public cache posture control'),",
+      '      page() {',
+      "        return respond.file('PUBLIC', {",
+      "          contentType: 'text/plain; charset=utf-8',",
+      '          etag: \'"public-v1"\',',
+      "          filename: 'public.txt',",
       '        });',
       '      },',
       '    }),',
@@ -440,6 +525,29 @@ function addHeaderSinkProofRoutes(root: string): void {
       "        Reflect.set(outcome, 'contentDisposition', 'inline');",
       "        Reflect.set(outcome, 'contentType', 'text/html; charset=utf-8');",
       "        if (outcome.headers) Reflect.set(outcome.headers, 'X-Kovo-Pinned', 'mutated-view-header');",
+      '        return outcome;',
+      '      },',
+      '    }),',
+      "    route('/header-route-prototype.bin', {",
+      "      access: publicAccess('private route outcome prototype snapshot proof'),",
+      '      page() {',
+      "        const outcome = respond.file('PINNED_PROTOTYPE_BYTES', {",
+      "          contentType: 'application/octet-stream',",
+      "          filename: 'prototype-safe.bin',",
+      '        });',
+      "        Object.defineProperty(Object.prototype, 'etag', {",
+      '          configurable: true,',
+      '          value: \'"inherited-forgery"\',',
+      '          writable: true,',
+      '        });',
+      "        Object.defineProperty(Object.prototype, 'headers', {",
+      '          configurable: true,',
+      '          value: {',
+      "            'Cache-Control': 'public, max-age=86400',",
+      "            'X-Inherited-Forgery': 'reached-artifact-sink',",
+      '          },',
+      '          writable: true,',
+      '        });',
       '        return outcome;',
       '      },',
       '    }),',

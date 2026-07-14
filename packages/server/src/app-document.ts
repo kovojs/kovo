@@ -35,6 +35,7 @@ import type { ForbiddenRenderer } from './guards.js';
 import {
   renderRoutePageResponse,
   parseRouteRequest,
+  routeHasEnforcedAuthorization,
   routeHasBoundary,
   type RouteJsxContextOptions,
   type RouteDeclaration,
@@ -244,7 +245,9 @@ export async function renderAppRouteDocumentResponse({
   // bfcache across the guard; otherwise the cached page replays one principal's private content
   // (and any per-principal `Set-Cookie`) to other visitors (cross-principal leak / takeover). Three
   // independent signals make a document session-dependent:
-  //   1. `route.guard !== undefined` — a guarded route renders per-principal content (§9.5:780).
+  //   1. `routeHasEnforcedAuthorization(route)` — the exact route + parent-layout access graph
+  //      contains an effective guard. `access` arrays own enforcement; legacy `guard` is only the
+  //      fallback when an explicit public/verified decision is absent (§9.4/§9.5).
   //   2. `refreshSetCookies.length > 0` — a rolling/refresh session token forwarded by the
   //      sessionProvider via `onSessionSetCookie`/`onCsrfSetCookie` (part-3 I2) rides the response.
   //   3. `sessionFingerprint !== undefined` — the route lifecycle resolved a per-principal session
@@ -255,7 +258,7 @@ export async function renderAppRouteDocumentResponse({
   //      on the RESOLVED session identity, not on whether a refresh cookie happened to be emitted.
   // (We do NOT change the cookie forwarding itself.)
   const noStore =
-    route.guard !== undefined ||
+    routeHasEnforcedAuthorization(route) ||
     refreshSetCookies.length > 0 ||
     sessionFingerprint !== undefined ||
     principalPosture.kind === 'unresolved';

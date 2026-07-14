@@ -10,6 +10,7 @@ import {
 } from '@kovojs/core/internal/sink-policy';
 
 import { snapshotAuditJustification, snapshotAuditReason } from './audit-justification.js';
+import { createContentDispositionWithFilename } from './content-disposition.js';
 import { InlineUnverifiedUploadError, sniffUploadBytes } from './upload-sniff.js';
 import { finalizeServerResponse } from './response-posture.js';
 import { assertNoSecretEgressValue } from './secret-egress.js';
@@ -29,13 +30,11 @@ import {
   securityMapForEach,
   securityNumberIsInteger,
   securityObjectKeys,
-  securityRegExpReplace,
   securitySetHas,
   securitySetAdd,
   securityString,
   securityStringCharCodeAt,
   securityStringIncludes,
-  securityStringReplaceAll,
   securityStringSlice,
   securityStringStartsWith,
   securityStringToLowerCase,
@@ -963,13 +962,17 @@ function routeResponseOutcome(
   const contentDisposition = filename
     ? contentDispositionWithFilename(disposition, filename)
     : disposition;
-  const snapshot: RouteResponseOutcomeSnapshot = witnessFreeze({
-    body: bodySnapshot,
-    contentDisposition,
-    contentType,
-    ...(etag === undefined ? {} : { etag }),
-    ...(headers === undefined ? {} : { headers }),
-  });
+  // SPEC §6.6 / §10.6 C15: private response authority must not inherit optional security
+  // fields from the shared app realm. Keep every field exact-own (including explicit undefined)
+  // on a null-prototype record so late Object.prototype.etag/headers pollution cannot mint a 304
+  // or inject cache/header policy into the final sink.
+  const snapshotRecord = createSecurityNullRecord<unknown>();
+  snapshotRecord.body = bodySnapshot;
+  snapshotRecord.contentDisposition = contentDisposition;
+  snapshotRecord.contentType = contentType;
+  snapshotRecord.etag = etag;
+  snapshotRecord.headers = headers;
+  const snapshot = witnessFreeze(snapshotRecord) as unknown as RouteResponseOutcomeSnapshot;
   return mintRouteResponseOutcome(snapshot);
 }
 
@@ -988,8 +991,10 @@ function mintRouteResponseOutcome(snapshot: RouteResponseOutcomeSnapshot): Route
     body: snapshotRouteResponseBody(snapshot.body),
     contentDisposition: snapshot.contentDisposition,
     contentType: snapshot.contentType,
-    ...(snapshot.etag === undefined ? {} : { etag: snapshot.etag }),
-    ...(exposedHeaders === undefined ? {} : { headers: exposedHeaders }),
+    // These inspection fields are not runtime authority, but exact-own undefined values prevent
+    // adjacent internal consumers from accidentally observing inherited app-realm policy.
+    etag: snapshot.etag,
+    headers: exposedHeaders,
   });
   witnessWeakMapSet(routeResponseOutcomeSnapshots, outcome, snapshot);
   return witnessFreeze(outcome) as RouteResponseOutcome;
@@ -1040,72 +1045,12 @@ function safeRouteOutcomeHeaders(
   return safeHeaders;
 }
 
-function escapeHeaderValue(value: string): string {
-  return securityStringReplaceAll(securityStringReplaceAll(value, '\\', '\\\\'), '"', '\\"');
-}
-
-function contentDispositionWithFilename(
-  disposition: 'attachment' | 'inline',
-  filename: string,
-): string {
-  const normalized = normalizedContentDispositionFilename(filename);
-  const asciiFallback = asciiContentDispositionFilename(normalized);
-  const fallbackParameter = `${disposition}; filename="${escapeHeaderValue(asciiFallback)}"`;
-  if (asciiFallback === normalized) return fallbackParameter;
-
-  // RFC 5987 / RFC 8187: retain the normalized UTF-8 filename in filename* while keeping the
-  // legacy filename parameter strictly printable ASCII. encodeURIComponent leaves ['()*]
-  // unescaped even though they are not attr-char, so close those four residues explicitly.
-  let extended = securityEncodeURIComponent(normalized);
-  extended = securityStringReplaceAll(extended, "'", '%27');
-  extended = securityStringReplaceAll(extended, '(', '%28');
-  extended = securityStringReplaceAll(extended, ')', '%29');
-  extended = securityStringReplaceAll(extended, '*', '%2A');
-  return `${fallbackParameter}; filename*=UTF-8''${extended}`;
-}
-
-function normalizedContentDispositionFilename(value: string): string {
-  let normalized = '';
-  for (let index = 0; index < value.length && normalized.length < 255; index += 1) {
-    const code = securityStringCharCodeAt(value, index);
-    if (code >= 0xd800 && code <= 0xdbff) {
-      const next =
-        index + 1 < value.length ? securityStringCharCodeAt(value, index + 1) : undefined;
-      if (next !== undefined && next >= 0xdc00 && next <= 0xdfff) {
-        if (normalized.length + 2 > 255) break;
-        normalized += securityStringSlice(value, index, index + 2);
-        index += 1;
-      } else {
-        normalized += '\ufffd';
-      }
-      continue;
-    }
-    if (code >= 0xdc00 && code <= 0xdfff) {
-      normalized += '\ufffd';
-      continue;
-    }
-    normalized +=
-      code <= 0x1f || code === 0x7f ? '_' : securityStringSlice(value, index, index + 1);
-  }
-  normalized = securityStringTrim(securityRegExpReplace(normalized, /[/\\]+/g, '_'));
-  return normalized.length > 0 ? normalized : 'download';
-}
-
-function asciiContentDispositionFilename(value: string): string {
-  let fallback = '';
-  for (let index = 0; index < value.length; index += 1) {
-    const code = securityStringCharCodeAt(value, index);
-    if (code >= 0xd800 && code <= 0xdbff) {
-      const next =
-        index + 1 < value.length ? securityStringCharCodeAt(value, index + 1) : undefined;
-      if (next !== undefined && next >= 0xdc00 && next <= 0xdfff) index += 1;
-      fallback += '_';
-      continue;
-    }
-    fallback += code >= 0x20 && code <= 0x7e ? securityStringSlice(value, index, index + 1) : '_';
-  }
-  return fallback.length > 0 ? fallback : 'download';
-}
+const contentDispositionWithFilename = createContentDispositionWithFilename({
+  charCodeAt: securityStringCharCodeAt,
+  encodeURIComponent: securityEncodeURIComponent,
+  slice: securityStringSlice,
+  trim: securityStringTrim,
+});
 
 function requestHeader(request: unknown, name: string): string | undefined {
   if (request && typeof request === 'object' && 'headers' in request) {

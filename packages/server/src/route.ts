@@ -952,6 +952,36 @@ function routeLayoutChain(
   return chain;
 }
 
+/**
+ * Return whether route execution enforces an authored route/layout guard before rendering.
+ *
+ * SPEC §9.4/§9.5: cache posture must follow the exact authorization graph, including every
+ * parent layout. An `access` guard array is authoritative; a legacy `guard` is effective only when
+ * `access` is absent because explicit `publicAccess`/`verifiedAccess` decisions suppress that
+ * fallback in {@link runAccessDecisionGuards}.
+ *
+ * @internal
+ */
+export function routeHasEnforcedAuthorization(
+  definition: RouteDeclaration<any, any, any, any, any, any>,
+): boolean {
+  const layouts = routeLayoutChain(definition.layout);
+  for (let index = 0; index < layouts.length; index += 1) {
+    const layoutDeclaration = layouts[index];
+    if (layoutDeclaration && declarationHasEnforcedAuthorization(layoutDeclaration)) return true;
+  }
+  return declarationHasEnforcedAuthorization(definition);
+}
+
+function declarationHasEnforcedAuthorization(
+  declaration: object & { access?: AccessDecision; guard?: Guard<any> },
+): boolean {
+  const access = accessDecisionFor(declaration);
+  return (
+    witnessIsArray(access) || (access === undefined && typeof declaration.guard === 'function')
+  );
+}
+
 async function renderLayoutChain<Request>(
   layouts: readonly LayoutDeclaration<any, any, any>[],
   pageValue: unknown,
