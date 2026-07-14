@@ -332,6 +332,7 @@ export function printJsxIrChild(child: JsxIrChild): string {
 export function jsxIrReplacements(tree: JsxIrTree): SourceReplacement[] {
   const replacements: SourceReplacement[] = [];
   const changedElements: JsxIrElement[] = [];
+  const changedElementSet = compilerCreateSet<JsxIrElement>();
   const treeElementLength = compilerArrayLength(tree.elements, 'JSX IR replacement elements');
   for (let elementIndex = 0; elementIndex < treeElementLength; elementIndex += 1) {
     const element = compilerOwnDataValue(
@@ -341,6 +342,7 @@ export function jsxIrReplacements(tree: JsxIrTree): SourceReplacement[] {
     ) as JsxIrElement;
     if (elementOwnChanged(element)) {
       appendMutableFact(changedElements, element, 'Changed JSX IR elements');
+      compilerSetAdd(changedElementSet, element);
     }
   }
   const changedRoots: JsxIrElement[] = [];
@@ -352,16 +354,17 @@ export function jsxIrReplacements(tree: JsxIrTree): SourceReplacement[] {
       'Changed JSX IR elements',
     ) as JsxIrElement;
     let contained = false;
-    for (let candidateIndex = 0; candidateIndex < changedLength; candidateIndex += 1) {
-      const candidate = compilerOwnDataValue(
-        changedElements,
-        candidateIndex,
-        'Changed JSX IR elements',
-      ) as JsxIrElement;
-      if (contains(candidate, element)) {
+    let ancestor = compilerOwnDataValue(element, 'parent', 'Changed JSX IR element') as
+      | JsxIrElement
+      | undefined;
+    while (ancestor !== undefined) {
+      if (compilerSetHas(changedElementSet, ancestor)) {
         contained = true;
         break;
       }
+      ancestor = compilerOwnDataValue(ancestor, 'parent', 'Changed JSX IR ancestor') as
+        | JsxIrElement
+        | undefined;
     }
     if (!contained) appendMutableFact(changedRoots, element, 'Changed JSX IR roots');
   }
@@ -731,26 +734,44 @@ function compilerSortedDenseArray<Value>(
   label: string,
 ): Value[] {
   const length = compilerArrayLength(values, label);
-  const selected = compilerCreateSet<number>();
-  const result: Value[] = [];
-  for (let outputIndex = 0; outputIndex < length; outputIndex += 1) {
-    let bestIndex = -1;
-    let best: Value | undefined;
-    for (let inputIndex = 0; inputIndex < length; inputIndex += 1) {
-      if (compilerSetHas(selected, inputIndex)) continue;
-      const candidate = compilerOwnDataValue(values, inputIndex, label) as Value;
-      if (bestIndex === -1 || compare(candidate, best as Value) < 0) {
-        bestIndex = inputIndex;
-        best = candidate;
+  let source: Value[] = [];
+  for (let index = 0; index < length; index += 1) {
+    const value = compilerOwnDataValue(values, index, label) as Value | undefined;
+    if (value === undefined) compilerFailClosed(`${label} must be a dense array.`);
+    appendMutableFact(source, value, label);
+  }
+
+  // A bottom-up stable merge keeps this compiler-owned sort O(n log n). The previous selection
+  // pass re-read descriptor-checked scanner facts O(n^2) times, which made a single large TSX
+  // component dominate the SPEC §5.2 cold-compile budget after the security-intrinsic hardening.
+  for (let width = 1; width < length; width *= 2) {
+    const merged: Value[] = [];
+    for (let start = 0; start < length; start += width * 2) {
+      const middleCandidate = start + width;
+      const middle = middleCandidate < length ? middleCandidate : length;
+      const endCandidate = start + width * 2;
+      const end = endCandidate < length ? endCandidate : length;
+      let left = start;
+      let right = middle;
+      while (left < middle || right < end) {
+        const takeLeft =
+          right >= end ||
+          (left < middle &&
+            compare(
+              compilerOwnDataValue(source, left, label) as Value,
+              compilerOwnDataValue(source, right, label) as Value,
+            ) <= 0);
+        const selectedIndex = takeLeft ? left++ : right++;
+        appendMutableFact(
+          merged,
+          compilerOwnDataValue(source, selectedIndex, label) as Value,
+          label,
+        );
       }
     }
-    if (bestIndex === -1 || best === undefined) {
-      compilerFailClosed(`${label} must be a dense array.`);
-    }
-    compilerSetAdd(selected, bestIndex);
-    appendMutableFact(result, best, label);
+    source = merged;
   }
-  return result;
+  return source;
 }
 
 function provenance(

@@ -246,6 +246,30 @@ export const ModeControl = component({
     expect(threeComponents.diagnostics).toEqual([]);
   });
 
+  it('preserves first-component state fallback for a later component without state', () => {
+    const result = compileComponentModule({
+      fileName: 'fallback-state-controls.tsx',
+      source: `
+export const StateOwner = component({
+  state: () => ({ enabled: false }),
+  render: (_queries, state) => <state-owner>{state.enabled}</state-owner>,
+});
+
+export const StateConsumer = component({
+  render: (_queries, state) => (
+    <state-consumer>
+      <output data-bind="state.enabled">{state.enabled}</output>
+    </state-consumer>
+  ),
+});
+`,
+    });
+
+    // The historical module-level fallback is intentional: a containing component without a
+    // state object validates against the first component's state object.
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV302')).toEqual([]);
+  });
+
   it('reports KV302 for a missing state key in a later component', () => {
     const result = compileComponentModule({
       fileName: 'bad-settings-controls.tsx',

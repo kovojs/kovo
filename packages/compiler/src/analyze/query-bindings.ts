@@ -92,10 +92,10 @@ export function pushOutputContext(
   query: string,
   fact: GeneratedOutputWriteFact,
 ): void {
-  const facts = compilerSnapshotDenseArray(
-    compilerMapGet(factsByQuery, query) ?? [],
-    'Compiler query output contexts',
-  );
+  const facts = compilerMapGet(factsByQuery, query) ?? [];
+  // The map and its arrays are compiler-owned locals for one plan assembly. Append through the
+  // pinned intrinsic so a large set of bindings for one query stays linear instead of cloning the
+  // entire descriptor-checked prefix for every fact (SPEC §5.2).
   compilerArrayAppend(facts, fact, 'Compiler query output contexts');
   compilerMapSet(factsByQuery, query, facts);
 }

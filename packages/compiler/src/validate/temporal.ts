@@ -73,11 +73,17 @@ interface SourceSpan {
   start: number;
 }
 
+interface TemporalRenderContext {
+  eventAttributeExpressionSpans: readonly SourceSpan[];
+  expressions: ReturnType<typeof jsxExpressions>;
+}
+
 export function validateDeclaredClockReadsInRender(
   diagnostics: DiagnosticFactory,
   model: ComponentModuleModel,
   options: Pick<CompileComponentOptions, 'queryShapeFacts' | 'queryShapes' | 'registryFacts'> = {},
 ): CompilerDiagnostic[] {
+  const renderContext = createTemporalRenderContext(model);
   const declaredClocks = compilerCreateSet<string>();
   const clockNames = componentOptionObjectKeys(model, 'clocks');
   const clockNameLength = compilerArrayLength(clockNames, 'Declared clock names');
@@ -101,7 +107,7 @@ export function validateDeclaredClockReadsInRender(
   }
 
   const found: CompilerDiagnostic[] = [];
-  const clockReads = renderedClockReads(model);
+  const clockReads = renderedClockReads(renderContext);
   const clockReadLength = compilerArrayLength(clockReads, 'Rendered clock reads');
   for (let index = 0; index < clockReadLength; index += 1) {
     const read = ownArrayEntry(clockReads, index, 'Rendered clock reads');
@@ -133,7 +139,7 @@ export function validateDeclaredClockReadsInRender(
   }
 
   const refreshedQueries = refreshedComponentQueryNames(model);
-  const volatileReads = renderedVolatileQueryReads(model, options);
+  const volatileReads = renderedVolatileQueryReads(renderContext, options);
   const volatileReadLength = compilerArrayLength(volatileReads, 'Rendered volatile query reads');
   for (let index = 0; index < volatileReadLength; index += 1) {
     const read = ownArrayEntry(volatileReads, index, 'Rendered volatile query reads');
@@ -169,13 +175,13 @@ function clockSpecIsTickDriven(clockSpecs: unknown, clockName: string): boolean 
   return typeof every === 'string' || renderOnce === true;
 }
 
-function renderedClockReads(model: ComponentModuleModel): ClockRead[] {
+function renderedClockReads(context: TemporalRenderContext): ClockRead[] {
   const reads: ClockRead[] = [];
-  const expressions = jsxExpressions(model);
+  const expressions = context.expressions;
   const expressionLength = compilerArrayLength(expressions, 'Temporal JSX expressions');
   for (let expressionIndex = 0; expressionIndex < expressionLength; expressionIndex += 1) {
     const expression = ownArrayEntry(expressions, expressionIndex, 'Temporal JSX expressions');
-    if (isJsxEventAttributeExpression(expression, model)) continue;
+    if (isJsxEventAttributeExpression(expression, context)) continue;
     const accesses = expression.propertyAccesses;
     const accessLength = compilerArrayLength(accesses, 'Temporal JSX property accesses');
     for (let accessIndex = 0; accessIndex < accessLength; accessIndex += 1) {
@@ -197,14 +203,14 @@ interface VolatileQueryRead {
 }
 
 function renderedVolatileQueryReads(
-  model: ComponentModuleModel,
+  context: TemporalRenderContext,
   options: Pick<CompileComponentOptions, 'queryShapeFacts' | 'queryShapes' | 'registryFacts'>,
 ): VolatileQueryRead[] {
   const queryShapes = componentQueryShapes(options);
   if (!queryShapes) return [];
 
   const reads: VolatileQueryRead[] = [];
-  const expressions = jsxExpressions(model);
+  const expressions = context.expressions;
   const expressionLength = compilerArrayLength(expressions, 'Volatile-query JSX expressions');
   for (let expressionIndex = 0; expressionIndex < expressionLength; expressionIndex += 1) {
     const expression = ownArrayEntry(
@@ -212,7 +218,7 @@ function renderedVolatileQueryReads(
       expressionIndex,
       'Volatile-query JSX expressions',
     );
-    if (isJsxEventAttributeExpression(expression, model)) continue;
+    if (isJsxEventAttributeExpression(expression, context)) continue;
     const accesses = expression.propertyAccesses;
     const accessLength = compilerArrayLength(accesses, 'Volatile-query property accesses');
     for (let accessIndex = 0; accessIndex < accessLength; accessIndex += 1) {
@@ -345,8 +351,24 @@ function dedupeBy<T>(items: readonly T[], keyOf: (item: T) => string, label: str
 
 function isJsxEventAttributeExpression(
   expression: { end: number; start: number },
-  model: ComponentModuleModel,
+  context: TemporalRenderContext,
 ): boolean {
+  const spans = context.eventAttributeExpressionSpans;
+  const spanLength = compilerArrayLength(spans, 'Temporal event-attribute spans');
+  for (let index = 0; index < spanLength; index += 1) {
+    const span = ownArrayEntry(spans, index, 'Temporal event-attribute spans');
+    if (expression.start >= span.start && expression.end <= span.end) return true;
+  }
+  return false;
+}
+
+/**
+ * Snapshot the scanner-owned temporal model once for the complete validator. SPEC §5.2 keeps
+ * these typed spans authoritative; indexing event attributes up front avoids rebuilding and
+ * rescanning the full JSX element model for every rendered expression.
+ */
+function createTemporalRenderContext(model: ComponentModuleModel): TemporalRenderContext {
+  const eventAttributeExpressionSpans: SourceSpan[] = [];
   const elements = jsxElements(model);
   const elementLength = compilerArrayLength(elements, 'Temporal JSX elements');
   for (let elementIndex = 0; elementIndex < elementLength; elementIndex += 1) {
@@ -358,15 +380,17 @@ function isJsxEventAttributeExpression(
       if (
         (attribute.domEventName !== undefined || attribute.executionTriggerName !== undefined) &&
         attribute.expressionStart !== undefined &&
-        attribute.expressionEnd !== undefined &&
-        expression.start >= attribute.expressionStart &&
-        expression.end <= attribute.expressionEnd
+        attribute.expressionEnd !== undefined
       ) {
-        return true;
+        compilerArrayAppend(
+          eventAttributeExpressionSpans,
+          { end: attribute.expressionEnd, start: attribute.expressionStart },
+          'Temporal event-attribute spans',
+        );
       }
     }
   }
-  return false;
+  return { eventAttributeExpressionSpans, expressions: jsxExpressions(model) };
 }
 
 function arrayEntryOrUndefined<T>(

@@ -337,6 +337,11 @@ interface SemanticRenderIndex {
   readonly expressionsByStart: Map<number, Map<number, SemanticExpressionModel>>;
 }
 
+interface SemanticParentFrame {
+  readonly element: JsxElementModel;
+  readonly previous: SemanticParentFrame | null;
+}
+
 interface SemanticRenderState extends SemanticRenderContext {
   readonly index: SemanticRenderIndex;
 }
@@ -369,29 +374,30 @@ function createSemanticRenderIndex(model: ComponentModuleModel): SemanticRenderI
     'Semantic render indexed elements',
   );
   const directChildren = compilerCreateMap<JsxElementModel, JsxElementModel[]>();
+  let activeParent: SemanticParentFrame | null = null;
   for (let childIndex = 0; childIndex < elements.length; childIndex += 1) {
     const child = elements[childIndex]!;
-    let directParent: JsxElementModel | undefined;
-    let directParentSpan = Infinity;
-    for (let parentIndex = 0; parentIndex < elements.length; parentIndex += 1) {
-      const candidate = elements[parentIndex]!;
-      if (
-        candidate === child ||
-        child.start < candidate.openingEnd ||
-        child.end > candidate.closingStart
-      ) {
-        continue;
-      }
-      const candidateSpan = candidate.end - candidate.start;
-      if (candidateSpan < directParentSpan) {
-        directParent = candidate;
-        directParentSpan = candidateSpan;
-      }
+    while (activeParent !== null && activeParent.element.end <= child.start) {
+      activeParent = activeParent.previous;
     }
-    if (directParent === undefined) continue;
-    const siblings = compilerMapGet(directChildren, directParent) ?? [];
-    appendSemanticValue(siblings, child);
-    compilerMapSet(directChildren, directParent, siblings);
+
+    // The scanner emits JSX elements in source/preorder. Walk only the active ancestor chain to
+    // find the narrowest semantic child-body parent; JSX nested in an opening-tag expression must
+    // not become a rendered child. This preserves the previous span rule without comparing every
+    // element with every other element.
+    let parent = activeParent;
+    while (
+      parent !== null &&
+      (child.start < parent.element.openingEnd || child.end > parent.element.closingStart)
+    ) {
+      parent = parent.previous;
+    }
+    if (parent !== null) {
+      const siblings = compilerMapGet(directChildren, parent.element) ?? [];
+      appendSemanticValue(siblings, child);
+      compilerMapSet(directChildren, parent.element, siblings);
+    }
+    activeParent = { element: child, previous: activeParent };
   }
 
   const expressions = compilerSnapshotDenseArray(

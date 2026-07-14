@@ -15,8 +15,6 @@ import { type CompilerDiagnostic, type DiagnosticFactory } from '../diagnostics.
 import { dedupeBy } from '../shared.js';
 import {
   callExpressions,
-  componentModelForSourceSpan,
-  componentStateReturnObjectModel,
   jsxElements,
   soleJsxExpressionChild,
   type ComponentModel,
@@ -55,10 +53,9 @@ export function validateDataBindings(
 ): CompilerDiagnostic[] {
   const queryShapes = componentQueryShapes(options);
 
-  const listStamps = collectDataBindListStamps(model);
-  const listBindings = dataBindListAttributes(model);
   const bindingAttributes = dataBindAttributes(model);
   const output: CompilerDiagnostic[] = [];
+  let stateBindingContext: StateBindingValidationContext | undefined;
   const bindings = compilerSnapshotDenseArray(
     bindingAttributes,
     'Compiler binding validation attributes',
@@ -82,16 +79,24 @@ export function validateDataBindings(
       }
     }
 
-    if (binding.query === 'state' && !validateStateBindingPath(binding, model).exists) {
-      compilerArrayAppend(
-        output,
-        diagnostics.at('KV302', { start: binding.index, length: binding.length }, binding.path),
-        'Compiler state binding diagnostics',
-      );
+    if (binding.query === 'state') {
+      const context = (stateBindingContext ??= createStateBindingValidationContext(model));
+      if (!validateStateBindingPath(binding, context).exists) {
+        compilerArrayAppend(
+          output,
+          diagnostics.at('KV302', { start: binding.index, length: binding.length }, binding.path),
+          'Compiler state binding diagnostics',
+        );
+      }
     }
   }
 
   if (queryShapes !== null) {
+    // List-stamp and list-binding shape checks are meaningful only when a query-shape authority is
+    // available. Keep their descriptor-checked model scans lazy so shape-less builds do not walk
+    // every JSX attribute three times merely to prove that there is nothing to validate.
+    const listStamps = collectDataBindListStamps(model);
+    const listBindings = listStamps.length === 0 ? [] : dataBindListAttributes(model);
     const stamps = compilerSnapshotDenseArray(
       listStamps,
       'Compiler binding validation list stamps',
@@ -271,9 +276,21 @@ function validateListStampInQueryShapes(
   return validateListBindingInQueryShapes(stamp.list, stamp.key, itemBindingPaths, queryShapes);
 }
 
+interface StateBindingScope {
+  readonly allowedRoots: ReadonlySet<string>;
+  readonly end: number;
+  readonly hasAllowedRoot: boolean;
+  readonly start: number;
+}
+
+interface StateBindingValidationContext {
+  readonly fallback: StateBindingScope;
+  readonly scopes: readonly StateBindingScope[];
+}
+
 function validateStateBindingPath(
   binding: DataBindAttribute,
-  model: ComponentModuleModel,
+  context: StateBindingValidationContext,
 ): PathShapeValidation {
   const { path } = binding;
   const segments = parseBindingPath(path);
@@ -281,39 +298,88 @@ function validateStateBindingPath(
   const firstSegment = segments[1];
   if (root?.name !== 'state') return { exists: true };
 
-  const bindingComponent = componentModelForSourceSpan(model, {
-    start: binding.index,
-    end: binding.index + binding.length,
-  });
-  const stateObject = stateReturnObjectForBindingComponent(model, bindingComponent);
+  const scope = stateBindingScope(context, binding.index, binding.index + binding.length);
+  if (firstSegment === undefined) return { exists: scope.hasAllowedRoot };
+
+  return { exists: compilerSetHas(scope.allowedRoots, firstSegment.name) };
+}
+
+function createStateBindingValidationContext(
+  model: ComponentModuleModel,
+): StateBindingValidationContext {
+  // SPEC §5.2: state-binding checks consume one typed scanner snapshot for this compile. Building
+  // the component scopes once preserves the descriptor-checked trust boundary without rescanning
+  // every component and state object for each generated data-bind attribute.
+  const components = compilerSnapshotDenseArray(
+    model.components,
+    'Compiler state binding components',
+  );
+  const derives = compilerSnapshotDenseArray(
+    exportedStateDeriveNames(model),
+    'Compiler exported state derive names',
+  );
+  const fallbackStateReturnObject = components[0]?.stateReturnObject;
+  const scopes: StateBindingScope[] = [];
+  for (let index = 0; index < components.length; index += 1) {
+    const component = components[index]!;
+    compilerArrayAppend(
+      scopes,
+      createStateBindingScope(component, fallbackStateReturnObject, derives),
+      'Compiler state binding scopes',
+    );
+  }
+
+  return {
+    fallback: createStateBindingScope(null, fallbackStateReturnObject, derives),
+    scopes,
+  };
+}
+
+function createStateBindingScope(
+  component: ComponentModel | null,
+  fallbackStateReturnObject: ComponentModel['stateReturnObject'],
+  derives: readonly string[],
+): StateBindingScope {
   const allowedRoots = compilerCreateSet<string>();
   let hasAllowedRoot = false;
   const entries = compilerSnapshotDenseArray(
-    stateObject?.entries ?? [],
+    (component?.stateReturnObject ?? fallbackStateReturnObject)?.entries ?? [],
     'Compiler state binding entries',
   );
   for (let index = 0; index < entries.length; index += 1) {
     compilerSetAdd(allowedRoots, entries[index]!.key);
     hasAllowedRoot = true;
   }
-  const derives = compilerSnapshotDenseArray(
-    exportedStateDeriveNames(model),
-    'Compiler exported state derive names',
-  );
   for (let index = 0; index < derives.length; index += 1) {
     compilerSetAdd(allowedRoots, derives[index]!);
     hasAllowedRoot = true;
   }
-  if (firstSegment === undefined) return { exists: hasAllowedRoot };
-
-  return { exists: compilerSetHas(allowedRoots, firstSegment.name) };
+  return {
+    allowedRoots,
+    end: component?.declarationEnd ?? 0,
+    hasAllowedRoot,
+    start: component?.localNameSpan?.start ?? 0,
+  };
 }
 
-function stateReturnObjectForBindingComponent(
-  model: ComponentModuleModel,
-  component: ComponentModel | null,
-): ReturnType<typeof componentStateReturnObjectModel> {
-  return component?.stateReturnObject ?? componentStateReturnObjectModel(model);
+function stateBindingScope(
+  context: StateBindingValidationContext,
+  start: number,
+  end: number,
+): StateBindingScope {
+  const scopes = compilerSnapshotDenseArray(context.scopes, 'Compiler state binding scopes');
+  let containing: StateBindingScope | undefined;
+  let containingWidth: number | undefined;
+  for (let index = 0; index < scopes.length; index += 1) {
+    const scope = scopes[index]!;
+    if (start < scope.start || end > scope.end) continue;
+    const width = scope.end - scope.start;
+    if (containingWidth === undefined || width < containingWidth) {
+      containing = scope;
+      containingWidth = width;
+    }
+  }
+  return containing ?? context.fallback;
 }
 
 function exportedStateDeriveNames(model: ComponentModuleModel): string[] {

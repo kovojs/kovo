@@ -138,6 +138,15 @@ interface InlineQueryTextDerive {
   wrapper?: JsxIrElement;
 }
 
+interface MixedTextExpressionFact {
+  attributeExpression: boolean;
+  containingElement: JsxElementModel | null;
+}
+
+interface MixedTextExpressionIndex {
+  facts: Map<JsxExpressionModel, MixedTextExpressionFact>;
+}
+
 export interface StructuralJsxLowering {
   diagnostics: readonly CompilerDiagnostic[];
   outputContexts: readonly GeneratedOutputWriteFact[];
@@ -1554,6 +1563,7 @@ function lowerInlineTextBindings(
   }
 
   const expressions = expressionChildren(elements);
+  const mixedTextIndex = createMixedTextExpressionIndex(model);
   const expressionLength = compilerArrayLength(expressions, 'Inline mixed text expressions');
   for (let expressionIndex = 0; expressionIndex < expressionLength; expressionIndex += 1) {
     const expression = compilerOwnDataValue(
@@ -1561,7 +1571,7 @@ function lowerInlineTextBindings(
       expressionIndex,
       'Inline mixed text expressions',
     ) as JsxIrExpression;
-    const binding = inlineMixedTextBinding(expression, model, knownQueries);
+    const binding = inlineMixedTextBinding(expression, mixedTextIndex, knownQueries);
     if (binding) {
       expression.replacement = `<span data-bind="${escapeAttribute(binding)}">{escapeText(${binding})}</span>`;
       escapeApplied = true;
@@ -1578,7 +1588,7 @@ function lowerInlineTextBindings(
       );
       continue;
     }
-    const derive = inlineMixedTextDerive(expression, model, componentName);
+    const derive = inlineMixedTextDerive(expression, model, componentName, mixedTextIndex);
     if (derive) {
       const { stampName } = recordStateDerive(
         derive,
@@ -1591,7 +1601,12 @@ function lowerInlineTextBindings(
       escapeApplied = true;
       continue;
     }
-    const queryDerive = inlineMixedQueryTextDerive(expression, model, componentName, knownQueries);
+    const queryDerive = inlineMixedQueryTextDerive(
+      expression,
+      componentName,
+      knownQueries,
+      mixedTextIndex,
+    );
     if (!queryDerive) continue;
     const { stampName } = recordQueryTextDerive(
       queryDerive,
@@ -2013,13 +2028,13 @@ function inlineQueryTextDerive(
 
 function inlineMixedTextBinding(
   expression: JsxIrExpression,
-  model: ComponentModuleModel,
+  index: MixedTextExpressionIndex,
   knownQueries: ReadonlySet<string>,
 ): string | null {
   const path = soleKnownQueryPath(expression.expression, knownQueries);
   if (!path) return null;
-  if (isJsxAttributeExpression(expression.expression, model)) return null;
-  const element = innermostContainingElement(expression.expression, model);
+  if (isJsxAttributeExpression(expression.expression, index)) return null;
+  const element = innermostContainingElement(expression.expression, index);
   if (!element) return null;
   if (hasAnyBindingAttribute(element.attributes)) return null;
   if (element.childNonWhitespaceCount === 1) return null;
@@ -2030,13 +2045,14 @@ function inlineMixedTextDerive(
   expression: JsxIrExpression,
   model: ComponentModuleModel,
   componentName: string,
+  index: MixedTextExpressionIndex,
 ): InlineStateTextDerive | null {
   const accesses = reactivePropertyAccessesForJsxExpression(expression.expression, model);
   if (!isStateOnlyExpression(accesses)) {
     return null;
   }
-  if (isJsxAttributeExpression(expression.expression, model)) return null;
-  const element = innermostContainingElement(expression.expression, model);
+  if (isJsxAttributeExpression(expression.expression, index)) return null;
+  const element = innermostContainingElement(expression.expression, index);
   if (!element) return null;
   if (hasAnyBindingAttribute(element.attributes)) return null;
   if (element.childNonWhitespaceCount === 1) return null;
@@ -2053,14 +2069,14 @@ function inlineMixedTextDerive(
 
 function inlineMixedQueryTextDerive(
   expression: JsxIrExpression,
-  model: ComponentModuleModel,
   componentName: string,
   knownQueries: ReadonlySet<string>,
+  index: MixedTextExpressionIndex,
 ): InlineQueryTextDerive | null {
   const inputs = clockQueryInputsFromAccesses(expression.expression.propertyAccesses, knownQueries);
   if (!inputs) return null;
-  if (isJsxAttributeExpression(expression.expression, model)) return null;
-  const element = innermostContainingElement(expression.expression, model);
+  if (isJsxAttributeExpression(expression.expression, index)) return null;
+  const element = innermostContainingElement(expression.expression, index);
   if (!element) return null;
   if (hasAnyBindingAttribute(element.attributes)) return null;
   if (element.childNonWhitespaceCount === 1) return null;
@@ -2484,63 +2500,92 @@ function inlineAttributeDeriveSkippedBySpan(
 }
 
 function isJsxAttributeExpression(
-  expression: { end: number; start: number },
-  model: ComponentModuleModel,
+  expression: JsxExpressionModel,
+  index: MixedTextExpressionIndex,
 ): boolean {
-  const elementLength = compilerArrayLength(model.jsxElements, 'JSX attribute elements');
-  for (let elementIndex = 0; elementIndex < elementLength; elementIndex += 1) {
-    const element = compilerOwnDataValue(
-      model.jsxElements,
-      elementIndex,
-      'JSX attribute elements',
-    ) as JsxElementModel;
-    const attributeLength = compilerArrayLength(element.attributes, 'JSX source attributes');
-    for (let attributeIndex = 0; attributeIndex < attributeLength; attributeIndex += 1) {
-      const attribute = compilerOwnDataValue(
-        element.attributes,
-        attributeIndex,
-        'JSX source attributes',
-      ) as JsxAttributeModel;
-      if (
-        attribute.expressionStart !== undefined &&
-        attribute.expressionEnd !== undefined &&
-        expression.start >= attribute.expressionStart &&
-        expression.end <= attribute.expressionEnd
-      ) {
-        return true;
-      }
-    }
-  }
-  return false;
+  return mixedTextExpressionFact(expression, index).attributeExpression;
 }
 
 function innermostContainingElement(
-  expression: { end: number; start: number },
-  model: ComponentModuleModel,
-) {
-  let best: JsxElementModel | null = null;
-  let bestWidth = 0;
-  const length = compilerArrayLength(model.jsxElements, 'Containing JSX elements');
-  for (let index = 0; index < length; index += 1) {
-    const element = compilerOwnDataValue(
-      model.jsxElements,
-      index,
-      'Containing JSX elements',
-    ) as JsxElementModel;
-    if (
-      element.selfClosing ||
-      expression.start < element.openingEnd ||
-      expression.end > element.closingStart
-    ) {
-      continue;
-    }
-    const width = element.end - element.start;
-    if (best === null || width < bestWidth) {
-      best = element;
-      bestWidth = width;
+  expression: JsxExpressionModel,
+  index: MixedTextExpressionIndex,
+): JsxElementModel | null {
+  return mixedTextExpressionFact(expression, index).containingElement;
+}
+
+function mixedTextExpressionFact(
+  expression: JsxExpressionModel,
+  index: MixedTextExpressionIndex,
+): MixedTextExpressionFact {
+  const fact = compilerMapGet(index.facts, expression);
+  if (fact === undefined) {
+    compilerFailClosed('Mixed-text expression must belong to the indexed scanner model.');
+  }
+  return fact;
+}
+
+/**
+ * Snapshot the scanner-owned JSX facts once for the complete mixed-text pass. SPEC §5.2 keeps
+ * the typed scanner model authoritative; indexing these two span classifications preserves the
+ * exact duplicate-expression lowering order while avoiding full model rescans per occurrence.
+ */
+function createMixedTextExpressionIndex(model: ComponentModuleModel): MixedTextExpressionIndex {
+  const elements = compilerSnapshotDenseArray(model.jsxElements, 'Mixed-text JSX elements');
+  const expressions = compilerSnapshotDenseArray(
+    model.jsxExpressions,
+    'Mixed-text JSX expressions',
+  );
+  const attributeSpans: SourceSpan[] = [];
+  for (let elementIndex = 0; elementIndex < elements.length; elementIndex += 1) {
+    const attributes = compilerSnapshotDenseArray(
+      elements[elementIndex]!.attributes,
+      'Mixed-text JSX attributes',
+    );
+    for (let attributeIndex = 0; attributeIndex < attributes.length; attributeIndex += 1) {
+      const attribute = attributes[attributeIndex]!;
+      if (attribute.expressionStart === undefined || attribute.expressionEnd === undefined) {
+        continue;
+      }
+      appendCompilerFact(
+        attributeSpans,
+        { end: attribute.expressionEnd, start: attribute.expressionStart },
+        'Mixed-text attribute spans',
+      );
     }
   }
-  return best;
+
+  const facts = compilerCreateMap<JsxExpressionModel, MixedTextExpressionFact>();
+  for (let expressionIndex = 0; expressionIndex < expressions.length; expressionIndex += 1) {
+    const expression = expressions[expressionIndex]!;
+    let attributeExpression = false;
+    for (let spanIndex = 0; spanIndex < attributeSpans.length; spanIndex += 1) {
+      const span = attributeSpans[spanIndex]!;
+      if (expression.start >= span.start && expression.end <= span.end) {
+        attributeExpression = true;
+        break;
+      }
+    }
+
+    let containingElement: JsxElementModel | null = null;
+    let containingWidth = 0;
+    for (let elementIndex = 0; elementIndex < elements.length; elementIndex += 1) {
+      const element = elements[elementIndex]!;
+      if (
+        element.selfClosing ||
+        expression.start < element.openingEnd ||
+        expression.end > element.closingStart
+      ) {
+        continue;
+      }
+      const width = element.end - element.start;
+      if (containingElement === null || width < containingWidth) {
+        containingElement = element;
+        containingWidth = width;
+      }
+    }
+    compilerMapSet(facts, expression, { attributeExpression, containingElement });
+  }
+  return { facts };
 }
 
 function soleKnownQueryPath(
