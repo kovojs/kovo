@@ -789,8 +789,8 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
       export const raw = endpoint('/raw', { handler(request) {
         return Response.json({ proxy: request.headers.get('Proxy-Authorization') });
       } });
-      export const hook = webhook('/hook', { handler(_input, { request }) {
-        return { headers: request.headers };
+      export const hook = webhook('/hook', { handler(_input, context) {
+        return context.fail('credential-leak', { headers: context.request.headers });
       } });
     `);
 
@@ -1288,7 +1288,7 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
     ).toHaveLength(14);
   });
 
-  it('closes createApp renderRoute and app error-shell wire roots', () => {
+  it('closes createApp renderRoute while treating error-shell request metadata as authority-neutral', () => {
     const facts = sinksFor(`
       import { execFileSync } from 'node:child_process';
       import { createApp } from '@kovojs/server';
@@ -1311,8 +1311,18 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
     expect(facts.filter((fact) => fact.sink === 'child_process.execFileSync')).toHaveLength(4);
     expect(facts).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ sink: 'client-wire.request.header.Authorization' }),
         expect.objectContaining({ sink: 'client-wire.request.header.Cookie' }),
+      ]),
+    );
+    expect(facts.map((fact) => fact.sink)).not.toContain(
+      'client-wire.request.header.Authorization',
+    );
+    expect(facts).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sink: 'request-handler.opaque-call',
+          source: 'request.headers.get',
+        }),
       ]),
     );
   });
@@ -1343,6 +1353,282 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
     `);
 
     expect(facts.filter((fact) => fact.sink === 'child_process.execFileSync')).toHaveLength(3);
+  });
+
+  it('closes the authoritative provider, access, schema, verifier, replay, registry, and nested-layout census', () => {
+    const facts = sinksFor(`
+      import { execFileSync } from 'node:child_process';
+      import {
+        createApp,
+        customVerifier,
+        endpoint,
+        hmacSignature,
+        layout,
+        query,
+        route,
+        webhook,
+      } from '@kovojs/server';
+
+      const schema = {
+        parse(value) { execFileSync('schema-parse'); return value; },
+        async parseAsync(value) { execFileSync('schema-parse-async'); return value; },
+      };
+      const replayStore = {
+        get() { execFileSync('replay-get'); return undefined; },
+        reserve() {
+          execFileSync('replay-reserve');
+          return {
+            abort() { execFileSync('replay-abort'); },
+            commit() { execFileSync('replay-commit'); },
+          };
+        },
+        set() { execFileSync('replay-set'); },
+      };
+      const clientModules = {
+        buildToken() { execFileSync('registry-build-token'); return 'build'; },
+        entries() { return []; },
+        put() { return '/c/example.js?v=1'; },
+        resolve() {
+          execFileSync('registry-resolve');
+          return { body: 'export {}', headers: {}, status: 200 };
+        },
+      };
+      const verifier = hmacSignature({
+        encoding: 'hex',
+        header: 'x-signature',
+        secret: '0123456789abcdef0123456789abcdef',
+        payload(request) { execFileSync('verify-payload'); return request.payload; },
+        tolerance: {
+          seconds: 300,
+          timestamp() { execFileSync('verify-timestamp'); return 1; },
+        },
+        multiSig(value) { execFileSync('verify-multi'); return [value]; },
+      });
+      const custom = customVerifier('machine', () => {
+        execFileSync('verify-custom');
+        return true;
+      });
+
+      const shell = layout({
+        access: [() => { execFileSync('layout-access'); return true; }],
+        queries: {
+          nested: query('nested', {
+            load() { execFileSync('layout-query'); return 'ok'; },
+          }),
+        },
+        render(_queries, _state, slots) { return slots.children; },
+      });
+      const page = route('/items/:id', {
+        access: [() => { execFileSync('route-access'); return true; }],
+        layout: shell,
+        params: schema,
+        search: schema,
+        page() { return 'ok'; },
+      });
+      const machine = endpoint('/machine', {
+        access: [() => { execFileSync('endpoint-access'); return true; }],
+        auth: { kind: 'verifier', name: 'machine', verify: custom },
+        handler() { return new Response('ok'); },
+        method: 'POST',
+        reason: 'classifier census',
+        response: { appOwnedSafety: true, body: 'text', cache: 'no-store' },
+      });
+      const hook = webhook('/hook', {
+        access: [() => { execFileSync('webhook-access'); return true; }],
+        handler() { return { ok: true }; },
+        idempotency() { return 'event'; },
+        input: schema,
+        replayStore,
+        transaction(_context, run) { return run({}); },
+        verify: verifier,
+      });
+
+      createApp({
+        clientModules,
+        csrf: {
+          secret: '0123456789abcdef0123456789abcdef',
+          sessionId() { execFileSync('csrf-session-id'); return 'session'; },
+        },
+        db() { execFileSync('db-provider'); return {}; },
+        endpoints: [machine, hook],
+        mutationReplayStore: replayStore,
+        onError() { execFileSync('on-error'); },
+        requestLimits: {
+          clientIp() { execFileSync('client-ip'); return '127.0.0.1'; },
+        },
+        routes: [page],
+        sessionProvider() {
+          execFileSync('session-provider');
+          return { setCookies: [], value: {} };
+        },
+      });
+    `);
+
+    const sources = facts
+      .filter((fact) => fact.sink === 'child_process.execFileSync')
+      .map((fact) => fact.source);
+    expect(sources).toEqual(
+      expect.arrayContaining([
+        "'client-ip'",
+        "'csrf-session-id'",
+        "'db-provider'",
+        "'endpoint-access'",
+        "'layout-access'",
+        "'layout-query'",
+        "'on-error'",
+        "'registry-build-token'",
+        "'registry-resolve'",
+        "'replay-abort'",
+        "'replay-commit'",
+        "'replay-get'",
+        "'replay-reserve'",
+        "'replay-set'",
+        "'route-access'",
+        "'schema-parse'",
+        "'schema-parse-async'",
+        "'session-provider'",
+        "'verify-multi'",
+        "'verify-custom'",
+        "'verify-payload'",
+        "'verify-timestamp'",
+        "'webhook-access'",
+      ]),
+    );
+  });
+
+  it('resolves conditional and destructured factories plus mutable callback/config assignments', () => {
+    const facts = sinksFor(`
+      import * as server from '@kovojs/server';
+      import { endpoint, rootedFiles } from '@kovojs/server';
+
+      const { endpoint: destructuredEndpoint } = server;
+      const conditionalEndpoint = Math.random() > 0.5 ? endpoint : endpoint;
+      let assignedHandler = (_request) => new Response('safe');
+      assignedHandler = (request) => {
+        rootedFiles(request.url);
+        return new Response('assigned');
+      };
+      const config = {
+        handler: (_request) => new Response('initial'),
+        method: 'GET',
+        reason: 'mutable callback provenance',
+        response: { appOwnedSafety: true, body: 'text', cache: 'no-store' },
+      };
+      conditionalEndpoint('/conditional', config);
+      config.handler = assignedHandler;
+      destructuredEndpoint('/destructured', {
+        ...config,
+        handler(request) {
+          rootedFiles(request.url);
+          return new Response('destructured');
+        },
+      });
+    `);
+
+    expect(
+      facts.filter((fact) => fact.sink === '@kovojs/server.rootedFiles'),
+      JSON.stringify(facts),
+    ).toHaveLength(2);
+  });
+
+  it('classifies static app/route wire hints but not currently non-emitted layout hints', () => {
+    const facts = sinksFor(
+      `
+        import { createApp, route } from '@kovojs/server';
+        const appStyle = process.env.APP_STYLE;
+        const page = route('/', {
+          bootstrapScript: import.meta.env.BOOTSTRAP,
+          i18n: [{ locale: 'en', messages: { greeting: process.env.GREETING } }],
+          meta: { title: process.env.TITLE },
+          modulepreloads: [import.meta.env.PRELOAD],
+          page: () => 'ok',
+          stylesheets: [{ href: process.env.STYLE, criticalCss: import.meta.env.CRITICAL }],
+        });
+        createApp({ routes: [page], stylesheets: [appStyle] });
+      `,
+      'app.mts',
+    );
+
+    expect(facts.filter((fact) => fact.sink === 'import.meta.env')).toHaveLength(3);
+    expect(facts.filter((fact) => fact.sink === 'node:process.env')).toHaveLength(4);
+
+    const layoutFacts = sinksFor(`
+      import { layout } from '@kovojs/server';
+      layout({
+        bootstrapScript: process.env.NON_EMITTED_BOOTSTRAP,
+        meta: { title: process.env.NON_EMITTED_TITLE },
+        render(_queries, _state, slots) { return slots.children; },
+        stylesheets: [process.env.NON_EMITTED_STYLE],
+      });
+    `);
+    expect(layoutFacts.filter((fact) => fact.sink === 'node:process.env')).toEqual([]);
+  });
+
+  it('rejects commented, escaped, and constant-computed import.meta.env spellings', () => {
+    const facts = sinksFor(
+      String.raw`
+        import { route } from '@kovojs/server';
+        route('/', {
+          bootstrapScript: (import /* authority */ . meta).\u0065nv.BOOTSTRAP,
+          modulepreloads: [import.meta['e' + 'nv'].PRELOAD],
+          page: () => 'ok',
+          stylesheets: [import.meta.\u0065nv.STYLE],
+        });
+      `,
+      'app.mts',
+    );
+
+    expect(facts.filter((fact) => fact.sink === 'import.meta.env')).toHaveLength(3);
+  });
+
+  it('rejects mutable intrinsic-method rebinding and class toJSON credential serialization', () => {
+    const facts = sinksFor(`
+      import { mutation, query, rootedFiles } from '@kovojs/server';
+      const helper: { trim(value: string): unknown } = {
+        trim(value) { return value.trim(); },
+      };
+      helper.trim = rootedFiles;
+
+      mutation({ handler(input) {
+        helper.trim(input.root);
+        return { ok: true };
+      } });
+      query({ load(_input, { request }) {
+        class CredentialBox {
+          toJSON() { return { cookie: request.headers.get('cookie') }; }
+        }
+        return new CredentialBox();
+      } });
+    `);
+
+    expect(facts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ sink: '@kovojs/server.rootedFiles' }),
+        expect.objectContaining({ sink: 'client-wire.request.header.Cookie' }),
+      ]),
+    );
+  });
+
+  it('resolves a shared twenty-four-layer conditional callback DAG within a low-second bound', () => {
+    const layers = Array.from({ length: 24 }, (_unused, index) => {
+      const previous = index === 0 ? 'leaf' : `left${index - 1}`;
+      const other = index === 0 ? 'leaf' : `right${index - 1}`;
+      return `
+        const left${index} = flag ? ${previous} : ${other};
+        const right${index} = flag ? ${other} : ${previous};`;
+    }).join('\n');
+    const started = Date.now();
+    const facts = sinksFor(`
+      import { execFileSync } from 'node:child_process';
+      import { query } from '@kovojs/server';
+      const flag = Math.random() > 0.5;
+      const leaf = (input) => execFileSync(input.program);
+      ${layers}
+      query({ load: left23 });
+    `);
+
+    expect(facts.filter((fact) => fact.sink === 'child_process.execFileSync')).toHaveLength(1);
+    expect(Date.now() - started).toBeLessThan(3_000);
   });
 
   it('closes route credential HTML, getters, reflective env, computed containers, and iterable copies', () => {

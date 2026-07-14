@@ -450,24 +450,48 @@ const STATIC_BUILD_TRUST_LEXICAL_SIGNAL = new RegExp(
 );
 
 const STATIC_BUILD_REQUEST_PROPERTIES = new Set([
+  'access',
+  'args',
+  'auth',
+  'bootstrapScript',
   'boundaries',
+  'clientModules',
+  'csrf',
+  'db',
+  'document',
   'errorShells',
   'guard',
   'handler',
   'idempotency',
+  'i18n',
+  'input',
   'instanceKey',
+  'layout',
   'load',
   'meta',
+  'modulepreloads',
+  'mutationReplayStore',
+  'onError',
   'onUnauthenticated',
+  'output',
   'page',
+  'params',
+  'parent',
+  'queries',
   'redirectTo',
   'regions',
   'render',
   'renderRoute',
+  'replayStore',
+  'requestLimits',
   'run',
+  'search',
+  'sessionProvider',
   'stream',
+  'stylesheets',
   'transaction',
   'version',
+  'verify',
 ]);
 
 function staticBuildTrustAnalysisRequired(files: readonly TrustEscapeSourceFileInput[]): boolean {
@@ -520,6 +544,10 @@ function staticBuildTrustSourceRequiresAnalysis(
   let required = false;
   const visit = (node: ts.Node): void => {
     if (required) return;
+    if (staticBuildTrustImportMetaEnvironment(node)) {
+      required = true;
+      return;
+    }
     if (ts.isObjectLiteralExpression(node)) {
       const spread = node.properties.some(ts.isSpreadAssignment);
       if (spread && snapshotHasFactoryToken) {
@@ -563,6 +591,53 @@ function staticBuildTrustSourceRequiresAnalysis(
   };
   visit(sourceFile);
   return required;
+}
+
+function staticBuildTrustImportMetaEnvironment(node: ts.Node): boolean {
+  if (ts.isPropertyAccessExpression(node)) {
+    return (
+      staticBuildTrustIdentifierText(node.name) === 'env' &&
+      isStaticBuildImportMeta(node.expression)
+    );
+  }
+  if (ts.isElementAccessExpression(node)) {
+    return (
+      staticBuildTrustStaticString(node.argumentExpression) === 'env' &&
+      isStaticBuildImportMeta(node.expression)
+    );
+  }
+  return false;
+}
+
+function isStaticBuildImportMeta(node: ts.Expression): boolean {
+  let expression = node;
+  while (ts.isParenthesizedExpression(expression)) expression = expression.expression;
+  return (
+    ts.isMetaProperty(expression) &&
+    expression.keywordToken === ts.SyntaxKind.ImportKeyword &&
+    expression.name.text === 'meta'
+  );
+}
+
+function staticBuildTrustIdentifierText(identifier: ts.MemberName): string | undefined {
+  return ts.isIdentifier(identifier) ? identifier.text : undefined;
+}
+
+function staticBuildTrustStaticString(expression: ts.Expression | undefined): string | undefined {
+  if (!expression) return undefined;
+  if (ts.isStringLiteralLike(expression)) return expression.text;
+  if (ts.isParenthesizedExpression(expression)) {
+    return staticBuildTrustStaticString(expression.expression);
+  }
+  if (
+    ts.isBinaryExpression(expression) &&
+    expression.operatorToken.kind === ts.SyntaxKind.PlusToken
+  ) {
+    const left = staticBuildTrustStaticString(expression.left);
+    const right = staticBuildTrustStaticString(expression.right);
+    return left === undefined || right === undefined ? undefined : `${left}${right}`;
+  }
+  return undefined;
 }
 
 function staticBuildTrustBareModuleRequiresAnalysis(specifier: string): boolean {
@@ -841,12 +916,18 @@ const REQUEST_NODE_PROCESS_INERT_EXPORTS = new Set([
 ]);
 const REQUEST_NO_INERT_EXPORTS = new Set<string>();
 
-type RequestRootParameterRole = 'capability' | 'input' | 'request';
+type RequestRootParameterRole = 'capability' | 'hybrid' | 'input' | 'request';
 
-type RequestWireCarrier = 'context' | 'header-enumerator' | 'header-getter' | 'headers' | 'request';
+type RequestWireCarrier =
+  | 'context'
+  | 'header-enumerator'
+  | 'header-getter'
+  | 'headers'
+  | 'request'
+  | 'verification';
 
 interface RequestRootCarrier {
-  readonly carrier: Extract<RequestWireCarrier, 'context' | 'request'>;
+  readonly carrier: Extract<RequestWireCarrier, 'context' | 'request' | 'verification'>;
   readonly index: number;
 }
 
@@ -855,8 +936,9 @@ interface RequestRootCallbackSpec {
   readonly kind?: 'direct' | 'meta' | 'record';
   readonly property: string;
   readonly publicWire?: boolean;
+  readonly publicWireMethods?: readonly string[];
   readonly roles?: readonly RequestRootParameterRole[];
-  readonly staticValue?: 'redirect' | 'scalar';
+  readonly staticValue?: 'access' | 'redirect' | 'scalar';
 }
 
 interface RequestHandlerFactory {
@@ -893,11 +975,43 @@ const REQUEST_HANDLER_FACTORIES = [
         roles: ['input', 'capability'],
       },
       {
-        carriers: [{ carrier: 'context', index: 0 }],
         kind: 'record',
         property: 'errorShells',
         publicWire: true,
         roles: ['capability'],
+      },
+      {
+        carriers: [{ carrier: 'request', index: 0 }],
+        property: 'sessionProvider',
+        publicWire: true,
+        roles: ['request'],
+      },
+      {
+        carriers: [{ carrier: 'request', index: 0 }],
+        property: 'db',
+        roles: ['request'],
+      },
+      {
+        carriers: [{ carrier: 'request', index: 0 }],
+        property: 'requestLimits.clientIp',
+        roles: ['request'],
+      },
+      {
+        carriers: [{ carrier: 'request', index: 0 }],
+        property: 'csrf.sessionId',
+        roles: ['request'],
+      },
+      {
+        property: 'onError',
+        roles: ['input', 'input'],
+      },
+      { property: 'clientModules.buildToken', publicWire: true, roles: [] },
+      { property: 'clientModules.resolve', publicWire: true, roles: ['input'] },
+      { property: 'mutationReplayStore.get', publicWire: true, roles: ['input', 'input', 'input'] },
+      { property: 'mutationReplayStore.reserve', roles: ['input', 'input', 'input'] },
+      {
+        property: 'mutationReplayStore.set',
+        roles: ['input', 'input', 'input', 'input'],
       },
     ],
   },
@@ -911,6 +1025,40 @@ const REQUEST_HANDLER_FACTORIES = [
         publicWire: true,
         roles: ['request', 'capability'],
       },
+      {
+        carriers: [{ carrier: 'request', index: 0 }],
+        kind: 'meta',
+        property: 'access',
+        roles: ['request'],
+        staticValue: 'access',
+      },
+      {
+        carriers: [{ carrier: 'verification', index: 0 }],
+        property: 'auth.verify.verify',
+        roles: ['input'],
+      },
+      {
+        carriers: [{ carrier: 'verification', index: 0 }],
+        property: 'auth.verify.payload',
+        roles: ['input', 'capability'],
+      },
+      {
+        carriers: [{ carrier: 'verification', index: 0 }],
+        property: 'auth.verify.tolerance.timestamp',
+        roles: ['input', 'capability'],
+      },
+      { property: 'auth.verify.multiSig', roles: ['input'] },
+      {
+        carriers: [{ carrier: 'verification', index: 0 }],
+        property: 'auth.verify.config.payload',
+        roles: ['input', 'capability'],
+      },
+      {
+        carriers: [{ carrier: 'verification', index: 0 }],
+        property: 'auth.verify.config.tolerance.timestamp',
+        roles: ['input', 'capability'],
+      },
+      { property: 'auth.verify.config.multiSig', roles: ['input'] },
     ],
   },
   {
@@ -923,7 +1071,16 @@ const REQUEST_HANDLER_FACTORIES = [
         publicWire: true,
         roles: ['input', 'request', 'capability'],
       },
+      {
+        carriers: [{ carrier: 'request', index: 0 }],
+        kind: 'meta',
+        property: 'access',
+        roles: ['request'],
+        staticValue: 'access',
+      },
       { carriers: [{ carrier: 'request', index: 0 }], property: 'guard', roles: ['request'] },
+      { property: 'input.parse', roles: ['input'] },
+      { property: 'input.parseAsync', roles: ['input'] },
       {
         carriers: [{ carrier: 'request', index: 0 }],
         property: 'transaction',
@@ -953,7 +1110,18 @@ const REQUEST_HANDLER_FACTORIES = [
         publicWire: true,
         roles: ['input', 'capability'],
       },
+      {
+        carriers: [{ carrier: 'request', index: 0 }],
+        kind: 'meta',
+        property: 'access',
+        roles: ['request'],
+        staticValue: 'access',
+      },
       { carriers: [{ carrier: 'request', index: 0 }], property: 'guard', roles: ['request'] },
+      { property: 'args.parse', roles: ['input'] },
+      { property: 'args.parseAsync', roles: ['input'] },
+      { property: 'output.parse', publicWire: true, roles: ['input'] },
+      { property: 'output.parseAsync', publicWire: true, roles: ['input'] },
       { property: 'instanceKey', roles: ['input'], staticValue: 'scalar' },
       { property: 'version', roles: ['input', 'input'], staticValue: 'scalar' },
     ],
@@ -970,15 +1138,54 @@ const REQUEST_HANDLER_FACTORIES = [
       {
         carriers: [{ carrier: 'context', index: 1 }],
         property: 'handler',
-        publicWire: true,
+        publicWireMethods: ['fail'],
         roles: ['input', 'capability'],
       },
+      {
+        carriers: [{ carrier: 'request', index: 0 }],
+        kind: 'meta',
+        property: 'access',
+        roles: ['request'],
+        staticValue: 'access',
+      },
+      { property: 'input.parse', roles: ['input'] },
+      { property: 'input.parseAsync', roles: ['input'] },
       { property: 'idempotency', roles: ['input'] },
       {
         carriers: [{ carrier: 'context', index: 0 }],
         property: 'transaction',
         roles: ['capability', 'capability'],
       },
+      {
+        carriers: [{ carrier: 'verification', index: 0 }],
+        property: 'verify.verify',
+        roles: ['input'],
+      },
+      {
+        carriers: [{ carrier: 'verification', index: 0 }],
+        property: 'verify.payload',
+        roles: ['input', 'capability'],
+      },
+      {
+        carriers: [{ carrier: 'verification', index: 0 }],
+        property: 'verify.tolerance.timestamp',
+        roles: ['input', 'capability'],
+      },
+      { property: 'verify.multiSig', roles: ['input'] },
+      {
+        carriers: [{ carrier: 'verification', index: 0 }],
+        property: 'verify.config.payload',
+        roles: ['input', 'capability'],
+      },
+      {
+        carriers: [{ carrier: 'verification', index: 0 }],
+        property: 'verify.config.tolerance.timestamp',
+        roles: ['input', 'capability'],
+      },
+      { property: 'verify.config.multiSig', roles: ['input'] },
+      { property: 'replayStore.get', publicWire: true, roles: ['input', 'input'] },
+      { property: 'replayStore.reserve', roles: ['input', 'input'] },
+      { property: 'replayStore.set', roles: ['input', 'input', 'input'] },
     ],
   },
   {
@@ -989,9 +1196,20 @@ const REQUEST_HANDLER_FACTORIES = [
         carriers: [{ carrier: 'request', index: 1 }],
         property: 'page',
         publicWire: true,
-        roles: ['input', 'request'],
+        roles: ['hybrid', 'request'],
+      },
+      {
+        carriers: [{ carrier: 'request', index: 0 }],
+        kind: 'meta',
+        property: 'access',
+        roles: ['request'],
+        staticValue: 'access',
       },
       { carriers: [{ carrier: 'request', index: 0 }], property: 'guard', roles: ['request'] },
+      { property: 'params.parse', roles: ['input'] },
+      { property: 'params.parseAsync', roles: ['input'] },
+      { property: 'search.parse', roles: ['input'] },
+      { property: 'search.parseAsync', roles: ['input'] },
       {
         carriers: [{ carrier: 'context', index: 0 }],
         property: 'onUnauthenticated',
@@ -1010,9 +1228,9 @@ const REQUEST_HANDLER_FACTORIES = [
         kind: 'record',
         property: 'regions',
         publicWire: true,
-        roles: ['input', 'request'],
+        roles: ['hybrid', 'request'],
       },
-      { kind: 'meta', property: 'meta', publicWire: true, roles: ['input', 'input'] },
+      { kind: 'meta', property: 'meta', publicWire: true, roles: ['hybrid', 'input'] },
     ],
   },
   {
@@ -1024,6 +1242,13 @@ const REQUEST_HANDLER_FACTORIES = [
         property: 'render',
         publicWire: true,
         roles: ['input', 'input', 'capability'],
+      },
+      {
+        carriers: [{ carrier: 'request', index: 0 }],
+        kind: 'meta',
+        property: 'access',
+        roles: ['request'],
+        staticValue: 'access',
       },
       { carriers: [{ carrier: 'request', index: 0 }], property: 'guard', roles: ['request'] },
       {
@@ -1131,6 +1356,7 @@ interface RequestCallable {
   readonly body: Node;
   readonly declaration: Node;
   readonly publicWire?: boolean;
+  readonly publicWireMethods?: readonly string[];
   readonly rootCallback?: string;
   readonly rootCarriers?: readonly RequestRootCarrier[];
   readonly rootFactory?: RequestHandlerFactoryName;
@@ -1152,6 +1378,10 @@ interface RequestProcessScanContext {
 const REQUEST_PROVENANCE_BUDGET = 250_000;
 
 interface RequestProvenanceSession {
+  readonly callableActive: Set<string>;
+  readonly callableMemo: Map<string, RequestCallableResolution>;
+  readonly callableSymbolActive: Set<string>;
+  readonly callableSymbolMemo: Map<string, RequestCallableResolution>;
   readonly carrierActive: Set<string>;
   readonly carrierMemo: Map<string, RequestWireCarrier | null>;
   exhaustedAt?: Node;
@@ -1168,6 +1398,10 @@ interface RequestProvenanceSession {
 
 function createRequestProvenanceSession(): RequestProvenanceSession {
   return {
+    callableActive: new Set(),
+    callableMemo: new Map(),
+    callableSymbolActive: new Set(),
+    callableSymbolMemo: new Map(),
     carrierActive: new Set(),
     carrierMemo: new Map(),
     factoryActive: new Set(),
@@ -1243,7 +1477,7 @@ function requestProcessSinksForProject(
           }
           continue;
         }
-        scanRequestRootCallbacks(definition, factory, context);
+        scanRequestRootCallbacks(definition, factory, context, args[args.length - 1]!);
       }
     }
   }
@@ -1331,12 +1565,12 @@ function requestFrameworkFactoriesForExpression(
   session.factoryActive.add(key);
 
   const resolved = new Set<RequestHandlerFactoryName>();
-  const appAuthoringFactory = requestAppAuthoringFactoryForExpression(node);
+  const appAuthoringFactory = requestAppAuthoringFactoryForExpression(node, session);
   if (appAuthoringFactory) resolved.add(appAuthoringFactory);
   if (
     Node.isElementAccessExpression(node) &&
     staticMemberName(node.getArgumentExpression()) === undefined &&
-    requestExpressionIsCreateAppAuthoringContext(node.getExpression(), new Set())
+    requestExpressionIsCreateAppAuthoringContext(node.getExpression(), new Set(), session)
   ) {
     for (const factory of REQUEST_APP_AUTHORING_FACTORIES) resolved.add(factory);
   }
@@ -1358,10 +1592,31 @@ function requestFrameworkFactoriesForExpression(
       resolved.add(name);
     }
   }
+  if (Node.isConditionalExpression(node)) {
+    for (const branch of [node.getWhenTrue(), node.getWhenFalse()]) {
+      for (const name of requestFrameworkFactoriesForExpression(branch, session)) {
+        resolved.add(name);
+      }
+    }
+  }
+  if (Node.isBinaryExpression(node)) {
+    const operator = node.getOperatorToken().getKind();
+    if (
+      operator === SyntaxKind.BarBarToken ||
+      operator === SyntaxKind.AmpersandAmpersandToken ||
+      operator === SyntaxKind.QuestionQuestionToken
+    ) {
+      for (const branch of [node.getLeft(), node.getRight()]) {
+        for (const name of requestFrameworkFactoriesForExpression(branch, session)) {
+          resolved.add(name);
+        }
+      }
+    }
+  }
 
   if (Node.isPropertyAccessExpression(node) || Node.isElementAccessExpression(node)) {
     const member = Node.isPropertyAccessExpression(node)
-      ? node.getName()
+      ? staticMemberName(node.getNameNode())
       : staticMemberName(node.getArgumentExpression());
     if (member === 'bind') {
       for (const name of requestFrameworkFactoriesForExpression(node.getExpression(), session)) {
@@ -1391,7 +1646,7 @@ function requestFrameworkFactoriesForExpression(
       ) {
         for (const factory of REQUEST_HANDLER_FACTORIES) resolved.add(factory.exportName);
       }
-      for (const candidate of requestStaticContainerValues(receiver, new Set())) {
+      for (const candidate of requestStaticContainerValues(receiver, new Set(), session)) {
         for (const name of requestFrameworkFactoriesForExpression(candidate, session)) {
           resolved.add(name);
         }
@@ -1407,7 +1662,7 @@ function requestFrameworkFactoriesForExpression(
         resolved.add(name);
       }
     } else {
-      const factoryResolution = resolveRequestCallable(called, new Set(), 0);
+      const factoryResolution = resolveRequestCallable(called, new Set(), 0, session);
       for (const callable of factoryResolution.callables) {
         for (const output of requestWireOutputExpressions(callable)) {
           for (const name of requestFrameworkFactoriesForExpression(output, session)) {
@@ -1459,6 +1714,7 @@ const REQUEST_APP_AUTHORING_FACTORIES = new Set<RequestHandlerFactoryName>([
 
 function requestAppAuthoringFactoryForExpression(
   expression: Node,
+  session: RequestProvenanceSession,
 ): RequestHandlerFactoryName | undefined {
   const node = unwrapStaticExpression(expression);
   if (Node.isPropertyAccessExpression(node) || Node.isElementAccessExpression(node)) {
@@ -1469,7 +1725,7 @@ function requestAppAuthoringFactoryForExpression(
       return undefined;
     }
     const receiver = unwrapStaticExpression(node.getExpression());
-    const context = requestExpressionIsCreateAppAuthoringContext(receiver, new Set());
+    const context = requestExpressionIsCreateAppAuthoringContext(receiver, new Set(), session);
     return context ? (member as RequestHandlerFactoryName) : undefined;
   }
   if (!Node.isIdentifier(node)) return undefined;
@@ -1485,12 +1741,12 @@ function requestAppAuthoringFactoryForExpression(
       parameter &&
       owner &&
       requestNodesAreSame(requestCallableParameters(owner)[0], parameter) &&
-      requestCallableIsCreateAppAuthoringCallback(owner)
+      requestCallableIsCreateAppAuthoringCallback(owner, session)
     ) {
       return name;
     }
     const source = bindingElementSourceExpression(declaration);
-    if (source && requestExpressionIsCreateAppAuthoringContext(source, new Set())) {
+    if (source && requestExpressionIsCreateAppAuthoringContext(source, new Set(), session)) {
       return name;
     }
   }
@@ -1500,6 +1756,7 @@ function requestAppAuthoringFactoryForExpression(
 function requestExpressionIsCreateAppAuthoringContext(
   expression: Node,
   seen: Set<string>,
+  session: RequestProvenanceSession,
 ): boolean {
   const node = unwrapStaticExpression(expression);
   if (!Node.isIdentifier(node)) return false;
@@ -1513,7 +1770,7 @@ function requestExpressionIsCreateAppAuthoringContext(
       const owner = declaration.getParent();
       if (
         requestNodesAreSame(requestCallableParameters(owner)[0], declaration) &&
-        requestCallableIsCreateAppAuthoringCallback(owner)
+        requestCallableIsCreateAppAuthoringCallback(owner, session)
       ) {
         return true;
       }
@@ -1522,26 +1779,34 @@ function requestExpressionIsCreateAppAuthoringContext(
         for (const call of owner.getSourceFile().getDescendantsOfKind(SyntaxKind.CallExpression)) {
           const invocation = requestNormalizedCall(call);
           if (
-            !resolveRequestCallable(invocation.target, new Set(), 0).callables.some((callable) =>
-              requestNodesAreSame(callable.declaration, owner),
+            !resolveRequestCallable(invocation.target, new Set(), 0, session).callables.some(
+              (callable) => requestNodesAreSame(callable.declaration, owner),
             )
           ) {
             continue;
           }
           const argument = invocation.args?.[parameterIndex];
-          if (argument && requestExpressionIsCreateAppAuthoringContext(argument, new Set(seen))) {
+          if (
+            argument &&
+            requestExpressionIsCreateAppAuthoringContext(argument, new Set(seen), session)
+          ) {
             return true;
           }
         }
       }
     }
     const initializer = valueDeclarationInitializer(declaration);
-    if (initializer && requestExpressionIsCreateAppAuthoringContext(initializer, seen)) return true;
+    if (initializer && requestExpressionIsCreateAppAuthoringContext(initializer, seen, session)) {
+      return true;
+    }
   }
   return false;
 }
 
-function requestCallableIsCreateAppAuthoringCallback(declaration: Node): boolean {
+function requestCallableIsCreateAppAuthoringCallback(
+  declaration: Node,
+  session: RequestProvenanceSession,
+): boolean {
   const authoringProperties = new Set(['mutations', 'queries', 'routes', 'tasks']);
   for (const call of declaration.getSourceFile().getDescendantsOfKind(SyntaxKind.CallExpression)) {
     const isCreateApp = expressionResolvesToFrameworkExport(
@@ -1563,7 +1828,7 @@ function requestCallableIsCreateAppAuthoringCallback(declaration: Node): boolean
       const direct = requestCallableForFunctionNode(candidate);
       if (direct && requestNodesAreSame(direct.declaration, declaration)) return true;
       if (
-        resolveRequestCallable(candidate, new Set(), 0).callables.some((callable) =>
+        resolveRequestCallable(candidate, new Set(), 0, session).callables.some((callable) =>
           requestNodesAreSame(callable.declaration, declaration),
         )
       ) {
@@ -1574,7 +1839,11 @@ function requestCallableIsCreateAppAuthoringCallback(declaration: Node): boolean
   return false;
 }
 
-function requestStaticContainerValues(expression: Node, seen: Set<string>): Node[] {
+function requestStaticContainerValues(
+  expression: Node,
+  seen: Set<string>,
+  session: RequestProvenanceSession,
+): Node[] {
   const node = unwrapStaticExpression(expression);
   const nodeKey = `node:${requestNodeIdentity(node)}`;
   if (seen.has(nodeKey)) return [];
@@ -1587,7 +1856,7 @@ function requestStaticContainerValues(expression: Node, seen: Set<string>): Node
       }
       if (Node.isShorthandPropertyAssignment(property)) return [property.getNameNode()];
       if (Node.isSpreadAssignment(property)) {
-        return requestStaticContainerValues(property.getExpression(), new Set(seen));
+        return requestStaticContainerValues(property.getExpression(), new Set(seen), session);
       }
       return [];
     });
@@ -1597,16 +1866,16 @@ function requestStaticContainerValues(expression: Node, seen: Set<string>): Node
       .getElements()
       .flatMap((element) =>
         Node.isSpreadElement(element)
-          ? requestStaticContainerValues(element.getExpression(), new Set(seen))
+          ? requestStaticContainerValues(element.getExpression(), new Set(seen), session)
           : [element],
       );
   }
   if (Node.isCallExpression(node)) {
-    return resolveRequestCallable(node.getExpression(), new Set(), 0).callables.flatMap(
+    return resolveRequestCallable(node.getExpression(), new Set(), 0, session).callables.flatMap(
       (callable) =>
         requestWireOutputExpressions(callable).flatMap((output) => [
           output,
-          ...requestStaticContainerValues(output, new Set(seen)),
+          ...requestStaticContainerValues(output, new Set(seen), session),
         ]),
     );
   }
@@ -1618,7 +1887,7 @@ function requestStaticContainerValues(expression: Node, seen: Set<string>): Node
   seen.add(key);
   return symbol.getDeclarations().flatMap((declaration) => {
     const initializer = valueDeclarationInitializer(declaration);
-    return initializer ? requestStaticContainerValues(initializer, new Set(seen)) : [];
+    return initializer ? requestStaticContainerValues(initializer, new Set(seen), session) : [];
   });
 }
 
@@ -1648,7 +1917,7 @@ function requestFrameworkFactoriesForSymbol(
         for (const call of owner.getSourceFile().getDescendantsOfKind(SyntaxKind.CallExpression)) {
           const invocation = requestNormalizedCall(call);
           if (
-            !resolveRequestCallable(invocation.target, new Set(), 0).callables.some(
+            !resolveRequestCallable(invocation.target, new Set(), 0, session).callables.some(
               (callable) => callable.declaration === owner,
             )
           ) {
@@ -1672,9 +1941,41 @@ function requestFrameworkFactoriesForSymbol(
         resolved.add(imported);
       }
     }
+    if (Node.isBindingElement(declaration)) {
+      const name = staticMemberName(
+        declaration.getPropertyNameNode() ?? declaration.getNameNode(),
+      ) as RequestHandlerFactoryName | undefined;
+      const source = bindingElementSourceExpression(declaration);
+      if (name && REQUEST_HANDLER_FACTORIES.some((factory) => factory.exportName === name)) {
+        if (
+          source &&
+          expressionResolvesToModuleNamespace(
+            source,
+            (specifier) => specifier === '@kovojs/server',
+            new Set(),
+            0,
+          )
+        ) {
+          resolved.add(name);
+        }
+        if (source) {
+          const projected = requestWireProjectedExpression(source, [name], new Set(), 0);
+          if (projected) {
+            for (const candidate of requestFrameworkFactoriesForExpression(projected, session)) {
+              resolved.add(candidate);
+            }
+          }
+        }
+      }
+    }
     const initializer = valueDeclarationInitializer(declaration);
     if (!initializer) continue;
     for (const name of requestFrameworkFactoriesForExpression(initializer, session)) {
+      resolved.add(name);
+    }
+  }
+  for (const assigned of requestCallableAssignmentExpressions(symbol)) {
+    for (const name of requestFrameworkFactoriesForExpression(assigned, session)) {
       resolved.add(name);
     }
   }
@@ -1688,74 +1989,21 @@ function scanRequestRootCallbacks(
   definition: import('ts-morph').ObjectLiteralExpression,
   factory: (typeof REQUEST_HANDLER_FACTORIES)[number],
   context: RequestProcessScanContext,
+  definitionSource: Node = definition,
 ): void {
   for (const spec of factory.callbacks as readonly RequestRootCallbackSpec[]) {
-    const property = requestStaticObjectProperty(definition, spec.property);
-    if (!property) continue;
-    if (Node.isGetAccessorDeclaration(property) || Node.isSetAccessorDeclaration(property)) {
-      appendOpaqueRequestHandlerFact(context, property, '<accessor-callback>');
-      continue;
-    }
-    const expression = requestHandlerPropertyExpression(property);
-    if (spec.kind === 'record') {
-      if (!expression) {
-        appendOpaqueRequestHandlerFact(context, property, '<dynamic-callback-record>');
-        continue;
-      }
-      const record = resolveStaticObjectLiteral(expression, new Set(), 0);
-      if (!record) {
-        const opaque = opaqueBareModuleForExpression(expression, new Set(), 0);
-        if (opaque) appendOpaqueRequestHandlerFact(context, property, opaque);
-        continue;
-      }
-      for (const entry of record.getProperties()) {
-        if (Node.isSpreadAssignment(entry)) {
-          appendOpaqueRequestHandlerFact(context, entry, '<spread-callback-record>');
-          continue;
-        }
-        if (Node.isGetAccessorDeclaration(entry) || Node.isSetAccessorDeclaration(entry)) {
-          appendOpaqueRequestHandlerFact(context, entry, '<accessor-callback>');
-          continue;
-        }
-        const name = requestObjectLiteralElementNameNode(entry);
-        if (name && Node.isComputedPropertyName(name) && staticMemberName(name) === undefined) {
-          appendOpaqueRequestHandlerFact(context, entry, '<computed-callback-name>');
-          continue;
-        }
-        scanRequestRootCallbackCandidate(
-          requestHandlerPropertyExpression(entry) ?? entry,
-          factory.exportName,
-          `${spec.property}.${staticMemberName(requestObjectLiteralElementNameNode(entry)) ?? '[computed]'}`,
-          spec,
-          context,
-        );
-      }
-      continue;
-    }
-
-    if (spec.kind === 'meta') {
-      if (!expression) {
-        scanRequestRootCallbackCandidate(
-          property,
-          factory.exportName,
-          spec.property,
-          spec,
-          context,
-        );
-        continue;
-      }
-      scanRequestMetaCallbacks(expression, factory.exportName, spec, context);
-      continue;
-    }
-
-    scanRequestRootCallbackCandidate(
-      expression ?? property,
-      factory.exportName,
-      spec.property,
-      spec,
+    for (const property of requestRootPropertyCandidates(
+      definitionSource,
+      definition,
+      spec.property.split('.'),
       context,
-    );
+    )) {
+      scanRequestRootCallbackProperty(property, factory, spec, context);
+    }
   }
+
+  scanRequestNestedDeclarations(definitionSource, definition, factory.exportName, context);
+  scanRequestStaticPublicWire(definitionSource, definition, factory.exportName, context);
 
   if (definition.getProperties().some((entry) => Node.isSpreadAssignment(entry))) {
     appendOpaqueRequestHandlerFact(context, definition, '<spread>');
@@ -1765,6 +2013,669 @@ function scanRequestRootCallbacks(
     if (name && Node.isComputedPropertyName(name) && staticMemberName(name) === undefined) {
       appendOpaqueRequestHandlerFact(context, entry, '<computed-config-property>');
     }
+  }
+}
+
+function scanRequestRootCallbackProperty(
+  property: Node,
+  factory: (typeof REQUEST_HANDLER_FACTORIES)[number],
+  spec: RequestRootCallbackSpec,
+  context: RequestProcessScanContext,
+): void {
+  if (Node.isGetAccessorDeclaration(property) || Node.isSetAccessorDeclaration(property)) {
+    appendOpaqueRequestHandlerFact(context, property, '<accessor-callback>');
+    return;
+  }
+  const expression =
+    requestHandlerPropertyExpression(property) ??
+    (!Node.isPropertyAssignment(property) && !Node.isShorthandPropertyAssignment(property)
+      ? property
+      : undefined);
+  if (spec.kind === 'record') {
+    if (!expression) {
+      appendOpaqueRequestHandlerFact(context, property, '<dynamic-callback-record>');
+      return;
+    }
+    const record = resolveStaticObjectLiteral(expression, new Set(), 0);
+    if (!record) {
+      const opaque = opaqueBareModuleForExpression(expression, new Set(), 0);
+      if (opaque) appendOpaqueRequestHandlerFact(context, property, opaque);
+      return;
+    }
+    for (const entry of record.getProperties()) {
+      if (Node.isSpreadAssignment(entry)) {
+        appendOpaqueRequestHandlerFact(context, entry, '<spread-callback-record>');
+        continue;
+      }
+      if (Node.isGetAccessorDeclaration(entry) || Node.isSetAccessorDeclaration(entry)) {
+        appendOpaqueRequestHandlerFact(context, entry, '<accessor-callback>');
+        continue;
+      }
+      const name = requestObjectLiteralElementNameNode(entry);
+      if (name && Node.isComputedPropertyName(name) && staticMemberName(name) === undefined) {
+        appendOpaqueRequestHandlerFact(context, entry, '<computed-callback-name>');
+        continue;
+      }
+      scanRequestRootCallbackCandidate(
+        requestHandlerPropertyExpression(entry) ?? entry,
+        factory.exportName,
+        `${spec.property}.${staticMemberName(requestObjectLiteralElementNameNode(entry)) ?? '[computed]'}`,
+        spec,
+        context,
+      );
+    }
+    return;
+  }
+
+  if (spec.kind === 'meta') {
+    if (!expression) {
+      scanRequestRootCallbackCandidate(property, factory.exportName, spec.property, spec, context);
+      return;
+    }
+    scanRequestMetaCallbacks(expression, factory.exportName, spec, context);
+    return;
+  }
+
+  scanRequestRootCallbackCandidate(
+    expression ?? property,
+    factory.exportName,
+    spec.property,
+    spec,
+    context,
+  );
+}
+
+function requestRootPropertyCandidates(
+  ownerSource: Node,
+  owner: import('ts-morph').ObjectLiteralExpression,
+  path: readonly string[],
+  context: RequestProcessScanContext,
+): Node[] {
+  let owners: readonly {
+    readonly object?: import('ts-morph').ObjectLiteralExpression;
+    readonly source: Node;
+  }[] = [{ object: owner, source: ownerSource }];
+  for (const [index, name] of path.entries()) {
+    const terminal = index === path.length - 1;
+    const candidates: Node[] = [];
+    for (const current of owners) {
+      const property = current.object
+        ? requestStaticObjectProperty(current.object, name)
+        : undefined;
+      if (property) candidates.push(property);
+      candidates.push(...requestAssignedObjectPropertyExpressions(current.source, name, context));
+      candidates.push(
+        ...requestKnownFactoryMemberCandidates(current.source, name, context.provenance, new Set()),
+      );
+      candidates.push(
+        ...requestAccessorCallablesForExpression(
+          current.source,
+          name,
+          new Set(),
+          context.provenance,
+        ).map((callable) => callable.declaration),
+      );
+
+      if (
+        candidates.length === 0 &&
+        !current.object &&
+        !requestKnownFrameworkMemberIsClosed(current.source, name, new Set())
+      ) {
+        const opaque = opaqueBareModuleForExpression(current.source, new Set(), 0);
+        if (opaque) appendOpaqueRequestHandlerFact(context, current.source, opaque);
+      }
+    }
+    if (terminal) return dedupeRequestNodes(candidates);
+    const nested: {
+      object?: import('ts-morph').ObjectLiteralExpression;
+      source: Node;
+    }[] = [];
+    for (const candidate of candidates) {
+      if (Node.isGetAccessorDeclaration(candidate) || Node.isSetAccessorDeclaration(candidate)) {
+        appendOpaqueRequestHandlerFact(context, candidate, '<accessor-callback-container>');
+        continue;
+      }
+      const source = requestHandlerPropertyExpression(candidate) ?? candidate;
+      const object = resolveStaticObjectLiteral(source, new Set(), 0);
+      nested.push({ ...(object ? { object } : {}), source });
+    }
+    owners = nested;
+    if (owners.length === 0) return [];
+  }
+  return [];
+}
+
+function requestKnownFactoryMemberCandidates(
+  expression: Node,
+  member: string,
+  session: RequestProvenanceSession,
+  seen: Set<string>,
+): Node[] {
+  const node = unwrapStaticExpression(expression);
+  const nodeKey = `node:${requestNodeIdentity(node)}:${member}`;
+  if (seen.has(nodeKey) || !requestProvenanceStep(session, node)) return [];
+  seen.add(nodeKey);
+
+  if (Node.isConditionalExpression(node)) {
+    return dedupeRequestNodes(
+      [node.getWhenTrue(), node.getWhenFalse()].flatMap((branch) =>
+        requestKnownFactoryMemberCandidates(branch, member, session, new Set(seen)),
+      ),
+    );
+  }
+  if (Node.isBinaryExpression(node)) {
+    const operator = node.getOperatorToken().getKind();
+    if (
+      operator === SyntaxKind.BarBarToken ||
+      operator === SyntaxKind.AmpersandAmpersandToken ||
+      operator === SyntaxKind.QuestionQuestionToken
+    ) {
+      return dedupeRequestNodes(
+        [node.getLeft(), node.getRight()].flatMap((branch) =>
+          requestKnownFactoryMemberCandidates(branch, member, session, new Set(seen)),
+        ),
+      );
+    }
+  }
+  if (Node.isCallExpression(node)) {
+    const verifierFactory = requestVerifierFactoryName(node.getExpression());
+    if (verifierFactory === 'customVerifier' && member === 'verify') {
+      const verify = node.getArguments()[1];
+      return verify ? [verify] : [];
+    }
+    if (verifierFactory === 'hmacSignature') {
+      const options = node.getArguments()[0];
+      if (!options) return [];
+      if (member === 'config') return [options];
+      if (member === 'payload' || member === 'multiSig' || member === 'tolerance') {
+        const object = resolveStaticObjectLiteral(options, new Set(), 0);
+        const property = object ? requestStaticObjectProperty(object, member) : undefined;
+        return property ? [property] : [];
+      }
+      // The generated verify method is framework-owned and closes over the callback-bearing
+      // options above. It is not an app callback to scan independently.
+      if (member === 'verify') return [];
+    }
+
+    const candidates = resolveRequestCallable(
+      node.getExpression(),
+      new Set(),
+      0,
+      session,
+    ).callables.flatMap((callable) =>
+      requestWireOutputExpressions(callable).flatMap((output) =>
+        requestKnownFactoryMemberCandidates(output, member, session, new Set(seen)),
+      ),
+    );
+    if (candidates.length > 0) return dedupeRequestNodes(candidates);
+  }
+
+  const symbol = node.getSymbol();
+  if (!symbol) return [];
+  const symbolKey = requestSymbolKey(symbol);
+  if (seen.has(symbolKey)) return [];
+  seen.add(symbolKey);
+  const candidates: Node[] = [];
+  try {
+    const aliased = symbol.getAliasedSymbol();
+    if (aliased && aliased !== symbol) {
+      for (const declaration of aliased.getDeclarations()) {
+        const initializer = valueDeclarationInitializer(declaration);
+        if (initializer) {
+          candidates.push(
+            ...requestKnownFactoryMemberCandidates(initializer, member, session, new Set(seen)),
+          );
+        }
+      }
+    }
+  } catch {
+    // A bare-package alias is surfaced by requestRootPropertyCandidates as an opaque source.
+  }
+  for (const declaration of symbol.getDeclarations()) {
+    const initializer = valueDeclarationInitializer(declaration);
+    if (initializer) {
+      candidates.push(
+        ...requestKnownFactoryMemberCandidates(initializer, member, session, new Set(seen)),
+      );
+    }
+  }
+  return dedupeRequestNodes(candidates);
+}
+
+function requestKnownFrameworkMemberIsClosed(
+  expression: Node,
+  member: string,
+  seen: Set<string>,
+): boolean {
+  const node = unwrapStaticExpression(expression);
+  const nodeKey = `${requestNodeIdentity(node)}:${member}`;
+  if (seen.has(nodeKey)) return false;
+  seen.add(nodeKey);
+  if (Node.isCallExpression(node)) {
+    const callee = unwrapStaticExpression(node.getExpression());
+    const verifierFactory = requestVerifierFactoryName(callee);
+    if (
+      verifierFactory === 'standardWebhooks' ||
+      (verifierFactory === 'hmacSignature' && member === 'verify')
+    ) {
+      return true;
+    }
+    const receiver = requestCallReceiver(callee);
+    if (
+      (member === 'parse' || member === 'parseAsync') &&
+      receiver &&
+      requestExpressionIsFrameworkSchemaNamespace(receiver)
+    ) {
+      return true;
+    }
+  }
+  if (Node.isConditionalExpression(node)) {
+    return [node.getWhenTrue(), node.getWhenFalse()].every((branch) =>
+      requestKnownFrameworkMemberIsClosed(branch, member, new Set(seen)),
+    );
+  }
+  if (Node.isNewExpression(node)) {
+    return requestClassDeclarationsForExpression(node.getExpression(), new Set()).length > 0;
+  }
+  if (!Node.isIdentifier(node)) return false;
+  const symbol = node.getSymbol();
+  if (!symbol) return false;
+  const symbolKey = requestSymbolKey(symbol);
+  if (seen.has(symbolKey)) return false;
+  seen.add(symbolKey);
+  return symbol.getDeclarations().some((declaration) => {
+    const initializer = valueDeclarationInitializer(declaration);
+    return initializer
+      ? requestKnownFrameworkMemberIsClosed(initializer, member, new Set(seen))
+      : false;
+  });
+}
+
+function requestExpressionIsFrameworkSchemaNamespace(expression: Node): boolean {
+  const imported = requestImportedModuleExportForExpression(
+    expression,
+    (specifier) => specifier === '@kovojs/core' || specifier === '@kovojs/server',
+    new Set(),
+    0,
+  );
+  return (
+    imported?.exportName === 's' ||
+    expressionResolvesToFrameworkExport(expression, frameworkExport('@kovojs/server', 's')) ||
+    expressionResolvesToFrameworkExport(expression, frameworkExport('@kovojs/core', 's'))
+  );
+}
+
+function requestVerifierFactoryName(
+  expression: Node,
+): 'customVerifier' | 'hmacSignature' | 'standardWebhooks' | undefined {
+  const imported = requestImportedModuleExportForExpression(
+    expression,
+    (specifier) => specifier === '@kovojs/core' || specifier === '@kovojs/server',
+    new Set(),
+    0,
+  );
+  if (
+    imported &&
+    (imported.exportName === 'customVerifier' ||
+      imported.exportName === 'hmacSignature' ||
+      imported.exportName === 'standardWebhooks')
+  ) {
+    return imported.exportName;
+  }
+  for (const name of ['customVerifier', 'hmacSignature', 'standardWebhooks'] as const) {
+    if (
+      expressionResolvesToFrameworkExport(expression, frameworkExport('@kovojs/server', name)) ||
+      expressionResolvesToFrameworkExport(expression, frameworkExport('@kovojs/core', name))
+    ) {
+      return name;
+    }
+  }
+  return undefined;
+}
+
+function requestAssignedObjectPropertyExpressions(
+  owner: Node,
+  name: string,
+  context: RequestProcessScanContext,
+): Node[] {
+  const node = unwrapStaticExpression(owner);
+  if (!Node.isIdentifier(node) || !node.getSymbol()) return [];
+  const target = requestSymbolKey(node.getSymbol()!);
+  const expressions: Node[] = [];
+  const sourceFile = node.getSourceFile();
+  for (const assignment of sourceFile.getDescendantsOfKind(SyntaxKind.BinaryExpression)) {
+    const operator = assignment.getOperatorToken().getKind();
+    if (
+      operator !== SyntaxKind.EqualsToken &&
+      operator !== SyntaxKind.BarBarEqualsToken &&
+      operator !== SyntaxKind.AmpersandAmpersandEqualsToken &&
+      operator !== SyntaxKind.QuestionQuestionEqualsToken
+    ) {
+      continue;
+    }
+    const left = unwrapStaticExpression(assignment.getLeft());
+    if (!Node.isPropertyAccessExpression(left) && !Node.isElementAccessExpression(left)) continue;
+    if (!requestWireExpressionResolvesToSymbol(left.getExpression(), target, new Set(), 0))
+      continue;
+    const member = Node.isPropertyAccessExpression(left)
+      ? staticMemberName(left.getNameNode())
+      : staticMemberName(left.getArgumentExpression());
+    if (member === name) expressions.push(assignment.getRight());
+    if (member === undefined) {
+      appendOpaqueRequestHandlerFact(context, assignment, '<computed-config-mutation>');
+    }
+  }
+  for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
+    const callee = unwrapStaticExpression(call.getExpression());
+    const receiver = requestCallReceiver(callee);
+    if (
+      !receiver ||
+      requestStaticCallMember(callee) !== 'assign' ||
+      !expressionResolvesToGlobalNamespace(receiver, 'Object', new Set(), 0)
+    ) {
+      continue;
+    }
+    const [assigned, ...sources] = call.getArguments();
+    if (!assigned || !requestWireExpressionResolvesToSymbol(assigned, target, new Set(), 0)) {
+      continue;
+    }
+    for (const source of sources) {
+      const object = resolveStaticObjectLiteral(source, new Set(), 0);
+      const property = object ? requestStaticObjectProperty(object, name) : undefined;
+      if (property) expressions.push(property);
+      if (!object) appendOpaqueRequestHandlerFact(context, source, '<dynamic-config-mutation>');
+    }
+  }
+  return dedupeRequestNodes(expressions);
+}
+
+function requestAssignedMemberExpressions(owner: Node, name: string): Node[] {
+  const node = unwrapStaticExpression(owner);
+  if (!Node.isIdentifier(node) || !node.getSymbol()) return [];
+  const target = requestSymbolKey(node.getSymbol()!);
+  const expressions: Node[] = [];
+  const sourceFile = node.getSourceFile();
+  for (const assignment of sourceFile.getDescendantsOfKind(SyntaxKind.BinaryExpression)) {
+    if (
+      assignment.getOperatorToken().getKind() < SyntaxKind.FirstAssignment ||
+      assignment.getOperatorToken().getKind() > SyntaxKind.LastAssignment
+    ) {
+      continue;
+    }
+    const left = unwrapStaticExpression(assignment.getLeft());
+    if (!Node.isPropertyAccessExpression(left) && !Node.isElementAccessExpression(left)) continue;
+    if (!requestWireExpressionResolvesToSymbol(left.getExpression(), target, new Set(), 0))
+      continue;
+    const member = Node.isPropertyAccessExpression(left)
+      ? staticMemberName(left.getNameNode())
+      : staticMemberName(left.getArgumentExpression());
+    if (member === name) expressions.push(assignment.getRight());
+  }
+  for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
+    const callee = unwrapStaticExpression(call.getExpression());
+    const receiver = requestCallReceiver(callee);
+    if (
+      !receiver ||
+      requestStaticCallMember(callee) !== 'assign' ||
+      !expressionResolvesToGlobalNamespace(receiver, 'Object', new Set(), 0)
+    ) {
+      continue;
+    }
+    const [assigned, ...sources] = call.getArguments();
+    if (!assigned || !requestWireExpressionResolvesToSymbol(assigned, target, new Set(), 0)) {
+      continue;
+    }
+    for (const source of sources) {
+      const object = resolveStaticObjectLiteral(source, new Set(), 0);
+      const property = object ? requestStaticObjectProperty(object, name) : undefined;
+      const expression = property ? requestHandlerPropertyExpression(property) : undefined;
+      if (expression) expressions.push(expression);
+    }
+  }
+  return dedupeRequestNodes(expressions);
+}
+
+function dedupeRequestNodes(nodes: readonly Node[]): Node[] {
+  return [...new Map(nodes.map((node) => [requestNodeIdentity(node), node])).values()];
+}
+
+const REQUEST_CREATE_APP_DECLARATION_COLLECTIONS = [
+  ['endpoints', 'endpoint'],
+  ['mutations', 'mutation'],
+  ['queries', 'query'],
+  ['routes', 'route'],
+  ['tasks', 'task'],
+] as const satisfies readonly (readonly [string, RequestHandlerFactoryName])[];
+
+function scanRequestNestedDeclarations(
+  definitionSource: Node,
+  definition: import('ts-morph').ObjectLiteralExpression,
+  factory: RequestHandlerFactoryName,
+  context: RequestProcessScanContext,
+): void {
+  if (factory === 'createApp') {
+    for (const [property, nestedFactory] of REQUEST_CREATE_APP_DECLARATION_COLLECTIONS) {
+      for (const candidate of requestRootPropertyCandidates(
+        definitionSource,
+        definition,
+        [property],
+        context,
+      )) {
+        const expression = requestHandlerPropertyExpression(candidate) ?? candidate;
+        for (const nested of requestDeclarationDefinitions(
+          expression,
+          nestedFactory,
+          context,
+          new Set(),
+        )) {
+          const spec = REQUEST_HANDLER_FACTORIES.find(
+            (entry) => entry.exportName === nestedFactory,
+          );
+          if (spec) scanRequestRootCallbacks(nested.definition, spec, context, nested.source);
+        }
+      }
+    }
+  }
+
+  if (factory === 'layout') {
+    for (const candidate of requestRootPropertyCandidates(
+      definitionSource,
+      definition,
+      ['queries'],
+      context,
+    )) {
+      const expression = requestHandlerPropertyExpression(candidate) ?? candidate;
+      const record = resolveStaticObjectLiteral(expression, new Set(), 0);
+      if (!record) {
+        const opaque = opaqueBareModuleForExpression(expression, new Set(), 0);
+        if (opaque) appendOpaqueRequestHandlerFact(context, expression, opaque);
+        continue;
+      }
+      for (const entry of record.getProperties()) {
+        if (Node.isSpreadAssignment(entry)) {
+          appendOpaqueRequestHandlerFact(context, entry, '<spread-layout-queries>');
+          continue;
+        }
+        const querySource = requestHandlerPropertyExpression(entry);
+        if (!querySource) {
+          appendOpaqueRequestHandlerFact(context, entry, '<dynamic-layout-query>');
+          continue;
+        }
+        for (const nested of requestDeclarationDefinitions(
+          querySource,
+          'query',
+          context,
+          new Set(),
+        )) {
+          const spec = REQUEST_HANDLER_FACTORIES.find((item) => item.exportName === 'query');
+          if (spec) scanRequestRootCallbacks(nested.definition, spec, context, nested.source);
+        }
+      }
+    }
+  }
+
+  const nestedLayoutProperty =
+    factory === 'route' ? 'layout' : factory === 'layout' ? 'parent' : undefined;
+  if (!nestedLayoutProperty) return;
+  for (const candidate of requestRootPropertyCandidates(
+    definitionSource,
+    definition,
+    [nestedLayoutProperty],
+    context,
+  )) {
+    const expression = requestHandlerPropertyExpression(candidate) ?? candidate;
+    for (const nested of requestDeclarationDefinitions(expression, 'layout', context, new Set())) {
+      const spec = REQUEST_HANDLER_FACTORIES.find((entry) => entry.exportName === 'layout');
+      if (spec) scanRequestRootCallbacks(nested.definition, spec, context, nested.source);
+    }
+  }
+}
+
+interface RequestDeclarationDefinition {
+  readonly definition: import('ts-morph').ObjectLiteralExpression;
+  readonly source: Node;
+}
+
+function requestDeclarationDefinitions(
+  expression: Node,
+  factory: RequestHandlerFactoryName,
+  context: RequestProcessScanContext,
+  seen: Set<string>,
+): RequestDeclarationDefinition[] {
+  const node = unwrapStaticExpression(expression);
+  const key = `node:${requestNodeIdentity(node)}:${factory}`;
+  if (seen.has(key) || !requestProvenanceStep(context.provenance, node)) return [];
+  seen.add(key);
+  const object = resolveStaticObjectLiteral(node, new Set(), 0);
+  if (object) return [{ definition: object, source: node }];
+  if (Node.isArrayLiteralExpression(node)) {
+    return node
+      .getElements()
+      .flatMap((element) =>
+        requestDeclarationDefinitions(
+          Node.isSpreadElement(element) ? element.getExpression() : element,
+          factory,
+          context,
+          new Set(seen),
+        ),
+      );
+  }
+  if (Node.isConditionalExpression(node)) {
+    return [node.getWhenTrue(), node.getWhenFalse()].flatMap((branch) =>
+      requestDeclarationDefinitions(branch, factory, context, new Set(seen)),
+    );
+  }
+  if (Node.isCallExpression(node)) {
+    const invocations = requestHandlerFactoryInvocationsForCall(node, context.provenance).filter(
+      (invocation) => invocation.factory.exportName === factory,
+    );
+    const direct = invocations.flatMap((invocation) => {
+      const candidate = invocation.args?.[invocation.args.length - 1];
+      const definition = candidate
+        ? resolveStaticObjectLiteral(candidate, new Set(), 0)
+        : undefined;
+      return definition && candidate ? [{ definition, source: candidate }] : [];
+    });
+    if (direct.length > 0) return direct;
+    return resolveRequestCallable(
+      node.getExpression(),
+      new Set(),
+      0,
+      context.provenance,
+    ).callables.flatMap((callable) =>
+      requestWireOutputExpressions(callable).flatMap((output) =>
+        requestDeclarationDefinitions(output, factory, context, new Set(seen)),
+      ),
+    );
+  }
+  if (
+    Node.isArrowFunction(node) ||
+    Node.isFunctionExpression(node) ||
+    Node.isFunctionDeclaration(node)
+  ) {
+    const callable = requestCallableForFunctionNode(node);
+    return callable
+      ? requestWireOutputExpressions(callable).flatMap((output) =>
+          requestDeclarationDefinitions(output, factory, context, new Set(seen)),
+        )
+      : [];
+  }
+  if (!Node.isIdentifier(node)) return [];
+  const callableOutputs = resolveRequestCallable(
+    node,
+    new Set(),
+    0,
+    context.provenance,
+  ).callables.flatMap((callable) =>
+    requestWireOutputExpressions(callable).flatMap((output) =>
+      requestDeclarationDefinitions(output, factory, context, new Set(seen)),
+    ),
+  );
+  if (callableOutputs.length > 0) return callableOutputs;
+  const symbol = node.getSymbol();
+  if (!symbol) return [];
+  const symbolKey = requestSymbolKey(symbol);
+  if (seen.has(symbolKey)) return [];
+  seen.add(symbolKey);
+  return symbol.getDeclarations().flatMap((declaration) => {
+    const initializer = valueDeclarationInitializer(declaration);
+    return initializer
+      ? requestDeclarationDefinitions(initializer, factory, context, new Set(seen))
+      : [];
+  });
+}
+
+const REQUEST_STATIC_PUBLIC_WIRE_PROPERTIES = new Map<RequestHandlerFactoryName, readonly string[]>(
+  [
+    ['createApp', ['document', 'stylesheets']],
+    // LayoutDefinition currently preserves PageHintOptions in its public snapshot, but the request
+    // document assembler merges only app + matched-route hints. Do not claim a confidentiality sink
+    // that the runtime does not emit; add layout hints here when that composition path ships.
+    [
+      'route',
+      ['bootstrapScript', 'i18n', 'meta', 'modulepreloads', 'prerenderUrls', 'stylesheets'],
+    ],
+  ],
+);
+
+function scanRequestStaticPublicWire(
+  definitionSource: Node,
+  definition: import('ts-morph').ObjectLiteralExpression,
+  factory: RequestHandlerFactoryName,
+  context: RequestProcessScanContext,
+): void {
+  for (const property of REQUEST_STATIC_PUBLIC_WIRE_PROPERTIES.get(factory) ?? []) {
+    for (const candidate of requestRootPropertyCandidates(
+      definitionSource,
+      definition,
+      [property],
+      context,
+    )) {
+      scanRequestPublicWireValue(requestHandlerPropertyExpression(candidate) ?? candidate, context);
+    }
+  }
+}
+
+function scanRequestPublicWireValue(expression: Node, context: RequestProcessScanContext): void {
+  const direct = requestCallableForFunctionNode(expression);
+  const resolution = direct
+    ? { callables: [direct] }
+    : resolveRequestCallable(expression, new Set(), 0, context.provenance);
+  for (const callable of resolution.callables) {
+    scanRequestCallable({ ...callable, publicWire: true }, context);
+  }
+  const candidates = dedupeRequestNodes([
+    expression,
+    ...expression.getDescendantsOfKind(SyntaxKind.Identifier),
+    ...expression.getDescendantsOfKind(SyntaxKind.PropertyAccessExpression),
+    ...expression.getDescendantsOfKind(SyntaxKind.ElementAccessExpression),
+    ...expression.getDescendantsOfKind(SyntaxKind.CallExpression),
+  ]);
+  for (const candidate of candidates) {
+    const raw = requestRawAuthorityForExpression(candidate, new Set(), 0);
+    if (raw) appendRequestAuthorityFact(context, candidate, raw, candidate);
+    const framework = requestFrameworkAuthorityForExpression(candidate);
+    if (framework) appendRequestAuthorityFact(context, candidate, framework, candidate);
   }
 }
 
@@ -1828,7 +2739,7 @@ function scanRequestRootCallbackCandidate(
   const direct = requestCallableForFunctionNode(expression);
   const resolution = direct
     ? { callables: [direct] }
-    : resolveRequestCallable(expression, new Set(), 0);
+    : resolveRequestCallable(expression, new Set(), 0, context.provenance);
   if (resolution.callables.length === 0) {
     if (resolution.opaqueModule) {
       appendOpaqueRequestHandlerFact(context, expression, resolution.opaqueModule);
@@ -1845,6 +2756,7 @@ function scanRequestRootCallbackCandidate(
       {
         ...callable,
         ...(spec.publicWire ? { publicWire: true } : {}),
+        ...(spec.publicWireMethods ? { publicWireMethods: spec.publicWireMethods } : {}),
         rootCallback: callback,
         ...(spec.carriers ? { rootCarriers: spec.carriers } : {}),
         rootFactory: factory,
@@ -1863,6 +2775,19 @@ function requestStaticCallbackValueIsClosed(
   const node = unwrapStaticExpression(expression);
   if (Node.isStringLiteral(node) || Node.isNoSubstitutionTemplateLiteral(node)) return true;
   if (kind === 'scalar' && Node.isNumericLiteral(node)) return true;
+  if (kind === 'access' && Node.isCallExpression(node)) {
+    return ['publicAccess', 'verifiedMachineAccess'].some(
+      (name) =>
+        expressionResolvesToFrameworkExport(
+          node.getExpression(),
+          frameworkExport('@kovojs/server', name),
+        ) ||
+        expressionResolvesToFrameworkExport(
+          node.getExpression(),
+          frameworkExport('@kovojs/core', name),
+        ),
+    );
+  }
   if (Node.isConditionalExpression(node)) {
     return (
       requestStaticCallbackValueIsClosed(node.getWhenTrue(), kind, new Set(seen)) &&
@@ -2081,7 +3006,12 @@ function scanRequestCallable(callable: RequestCallable, context: RequestProcessS
     // Exact framework authority minters were classified above. Other package calls terminate at
     // their imported implementation, while local same-named wrappers remain traversable. There is
     // deliberately no blanket "framework-owned means safe" exemption.
-    const resolution = resolveRequestCallable(call.getExpression(), new Set(), 0);
+    const resolution = resolveRequestCallable(
+      call.getExpression(),
+      new Set(),
+      0,
+      context.provenance,
+    );
     for (const nested of resolution.callables) scanRequestCallable(nested, context);
     if (resolution.callables.length === 0) {
       if (resolution.opaqueModule !== undefined) {
@@ -2271,7 +3201,7 @@ function scanRequestWireConfidentiality(
   callable: RequestCallable,
   context: RequestProcessScanContext,
 ): void {
-  if (!callable.publicWire) return;
+  if (!callable.publicWire && !callable.publicWireMethods?.length) return;
   const state: RequestWireAnalysisState = {
     bindingKey: 'root',
     bindings: new Map(),
@@ -2279,7 +3209,24 @@ function scanRequestWireConfidentiality(
     session: context.provenance,
     scopeCallable: callable,
   };
-  for (const output of requestWireOutputExpressions(callable)) {
+  const wireExpressions = callable.publicWire ? requestWireOutputExpressions(callable) : [];
+  for (const call of callable.body.getDescendantsOfKind(SyntaxKind.CallExpression)) {
+    const callee = unwrapStaticExpression(call.getExpression());
+    const receiver = requestCallReceiver(callee);
+    const member = requestStaticCallMember(callee);
+    if (
+      !receiver ||
+      !member ||
+      !callable.publicWireMethods?.includes(member) ||
+      !requestRootRoleIncludesCapability(
+        requestExpressionRootParameterRole(receiver, callable, new Set(), 0),
+      )
+    ) {
+      continue;
+    }
+    wireExpressions.push(call);
+  }
+  for (const output of wireExpressions) {
     const authorities = requestWireAuthoritiesForExpression(output, state);
     for (const authority of authorities) {
       appendRequestAuthorityFact(context, output, authority, authority.source);
@@ -2349,7 +3296,7 @@ function requestWireAuthoritiesForExpressionUncached(
       return requestWireAuthoritiesForExpressions(invocationArguments, state);
     }
 
-    const resolution = resolveRequestCallable(callee, new Set(), 0);
+    const resolution = resolveRequestCallable(callee, new Set(), 0, state.session);
     if (resolution.callables.length > 0) {
       const authorities: RequestWireAuthority[] = [];
       for (const nested of resolution.callables) {
@@ -2382,6 +3329,10 @@ function requestWireAuthoritiesForExpressionUncached(
       ...requestWireAuthoritiesForExpressions(node.getArguments(), state),
       ...requestWireAuthoritiesForExpressions(
         requestGetterOutputExpressions(node, undefined, new Set()),
+        state,
+      ),
+      ...requestWireAuthoritiesForExpressions(
+        requestJsonSerializationOutputExpressions(node, state.session),
         state,
       ),
     ]);
@@ -2607,7 +3558,7 @@ function requestWireAuthoritiesWrittenToSymbol(
 
     for (const [index, argument] of call.getArguments().entries()) {
       if (!requestWireExpressionResolvesToSymbol(argument, symbolKey, new Set(), 0)) continue;
-      const resolution = resolveRequestCallable(callee, new Set(), 0);
+      const resolution = resolveRequestCallable(callee, new Set(), 0, state.session);
       for (const nested of resolution.callables) {
         const parameter = requestCallableParameters(nested.declaration)[index];
         const name = parameter?.getNameNode();
@@ -2887,6 +3838,7 @@ function requestWireCarrierForMember(
 ): RequestWireCarrier | undefined {
   if (!member) return base === 'context' ? 'request' : base;
   if (base === 'context') return member === 'request' ? 'request' : undefined;
+  if (base === 'verification') return member === 'headers' ? 'headers' : undefined;
   if (base === 'request') return member === 'headers' ? 'headers' : undefined;
   if (base === 'headers') {
     if (member === 'get') return 'header-getter';
@@ -3456,7 +4408,7 @@ function requestCallIsKnownSafe(
   }
 
   const role = requestExpressionRootParameterRole(receiver, callable, new Set(), 0);
-  if (role === 'capability') {
+  if (requestRootRoleIncludesCapability(role)) {
     scanRequestFunctionArguments(call, context);
     return true;
   }
@@ -3465,13 +4417,38 @@ function requestCallIsKnownSafe(
     return true;
   }
   if (
-    (role === 'input' || requestExpressionIsIntrinsicValue(receiver, callable, new Set(), 0)) &&
+    (requestRootRoleIncludesInput(role) ||
+      (requestExpressionIsIntrinsicValue(receiver, callable, new Set(), 0) &&
+        !requestExpressionHasMutableObjectOrigin(receiver, new Set()))) &&
     REQUEST_SAFE_JSON_VALUE_METHODS.has(member)
   ) {
     scanRequestFunctionArguments(call, context);
     return requestKnownCallbacksAreClosed(call, member, context);
   }
   return false;
+}
+
+function requestExpressionHasMutableObjectOrigin(expression: Node, seen: Set<string>): boolean {
+  const node = unwrapStaticExpression(expression);
+  if (Node.isObjectLiteralExpression(node)) return true;
+  if (Node.isConditionalExpression(node)) {
+    return (
+      requestExpressionHasMutableObjectOrigin(node.getWhenTrue(), new Set(seen)) ||
+      requestExpressionHasMutableObjectOrigin(node.getWhenFalse(), new Set(seen))
+    );
+  }
+  if (!Node.isIdentifier(node)) return false;
+  const symbol = node.getSymbol();
+  if (!symbol) return false;
+  const key = requestSymbolKey(symbol);
+  if (seen.has(key)) return false;
+  seen.add(key);
+  return symbol.getDeclarations().some((declaration) => {
+    const initializer = valueDeclarationInitializer(declaration);
+    return initializer
+      ? requestExpressionHasMutableObjectOrigin(initializer, new Set(seen))
+      : false;
+  });
 }
 
 interface RequestNormalizedInvocation {
@@ -3603,7 +4580,7 @@ function requestReflectiveTargetIsClosed(
 ): boolean {
   const [target] = call.getArguments();
   if (!target) return false;
-  const resolution = resolveRequestCallable(target, new Set(), 0);
+  const resolution = resolveRequestCallable(target, new Set(), 0, context.provenance);
   if (resolution.callables.length > 0) {
     for (const nested of resolution.callables) scanRequestCallable(nested, context);
     return true;
@@ -3654,13 +4631,31 @@ function requestAccessorCallablesForExpression(
   expression: Node,
   member: string | undefined,
   seen: Set<string>,
+  session: RequestProvenanceSession = createRequestProvenanceSession(),
 ): RequestCallable[] {
   const node = unwrapStaticExpression(expression);
   const direct = requestCallableForFunctionNode(node);
-  if (direct) return [direct];
-  const nodeKey = `node:${requestNodeIdentity(node)}`;
-  if (seen.has(nodeKey)) return [];
+  if (direct && member === undefined) return [direct];
+  const nodeKey = `node:${requestNodeIdentity(node)}:${member ?? '*'}`;
+  if (seen.has(nodeKey) || !requestProvenanceStep(session, node)) return [];
   seen.add(nodeKey);
+  if (Node.isConditionalExpression(node)) {
+    return [node.getWhenTrue(), node.getWhenFalse()].flatMap((branch) =>
+      requestAccessorCallablesForExpression(branch, member, new Set(seen), session),
+    );
+  }
+  if (Node.isBinaryExpression(node)) {
+    const operator = node.getOperatorToken().getKind();
+    if (
+      operator === SyntaxKind.BarBarToken ||
+      operator === SyntaxKind.AmpersandAmpersandToken ||
+      operator === SyntaxKind.QuestionQuestionToken
+    ) {
+      return [node.getLeft(), node.getRight()].flatMap((branch) =>
+        requestAccessorCallablesForExpression(branch, member, new Set(seen), session),
+      );
+    }
+  }
   if (Node.isObjectLiteralExpression(node)) {
     return node.getProperties().flatMap((property) => {
       if (
@@ -3677,7 +4672,15 @@ function requestAccessorCallablesForExpression(
           property.getExpression(),
           member,
           new Set(seen),
+          session,
         );
+      }
+      if (
+        member !== undefined &&
+        staticMemberName(requestObjectLiteralElementNameNode(property)) === member
+      ) {
+        const nested = requestHandlerPropertyExpression(property);
+        return nested ? resolveRequestCallable(nested, new Set(), 0, session).callables : [];
       }
       if (member !== undefined) return [];
       const nested = Node.isPropertyAssignment(property)
@@ -3685,7 +4688,9 @@ function requestAccessorCallablesForExpression(
         : Node.isShorthandPropertyAssignment(property)
           ? property.getNameNode()
           : undefined;
-      return nested ? requestAccessorCallablesForExpression(nested, undefined, new Set(seen)) : [];
+      return nested
+        ? requestAccessorCallablesForExpression(nested, undefined, new Set(seen), session)
+        : [];
     });
   }
   if (Node.isArrayLiteralExpression(node)) {
@@ -3696,6 +4701,7 @@ function requestAccessorCallablesForExpression(
           Node.isSpreadElement(element) ? element.getExpression() : element,
           undefined,
           new Set(seen),
+          session,
         ),
       );
   }
@@ -3715,10 +4721,10 @@ function requestAccessorCallablesForExpression(
     );
   }
   if (Node.isCallExpression(node)) {
-    return resolveRequestCallable(node.getExpression(), new Set(), 0).callables.flatMap(
+    return resolveRequestCallable(node.getExpression(), new Set(), 0, session).callables.flatMap(
       (resolved) =>
         requestWireOutputExpressions(resolved).flatMap((output) =>
-          requestAccessorCallablesForExpression(output, member, new Set(seen)),
+          requestAccessorCallablesForExpression(output, member, new Set(seen), session),
         ),
     );
   }
@@ -3729,7 +4735,9 @@ function requestAccessorCallablesForExpression(
     const projected = projectedMember
       ? requestWireProjectedExpression(node.getExpression(), [projectedMember], new Set(), 0)
       : undefined;
-    return projected ? requestAccessorCallablesForExpression(projected, member, new Set(seen)) : [];
+    return projected
+      ? requestAccessorCallablesForExpression(projected, member, new Set(seen), session)
+      : [];
   }
   if (!Node.isIdentifier(node)) return [];
   const symbol = node.getSymbol();
@@ -3737,14 +4745,30 @@ function requestAccessorCallablesForExpression(
   const key = requestSymbolKey(symbol);
   if (seen.has(key)) return [];
   seen.add(key);
-  return symbol.getDeclarations().flatMap((declaration) => {
+  const declarations = [...symbol.getDeclarations()];
+  try {
+    const aliased = symbol.getAliasedSymbol();
+    if (aliased && aliased !== symbol) declarations.push(...aliased.getDeclarations());
+  } catch {
+    // Bare-package aliases remain opaque at the call/root classifier.
+  }
+  return declarations.flatMap((declaration) => {
     const declaredCallable = requestCallableForFunctionNode(declaration);
-    if (declaredCallable) return [declaredCallable];
+    if (declaredCallable && member === undefined) return [declaredCallable];
     const initializer = valueDeclarationInitializer(declaration);
     return initializer
-      ? requestAccessorCallablesForExpression(initializer, member, new Set(seen))
+      ? requestAccessorCallablesForExpression(initializer, member, new Set(seen), session)
       : [];
   });
+}
+
+function requestJsonSerializationOutputExpressions(
+  expression: Node,
+  session: RequestProvenanceSession,
+): Node[] {
+  return requestAccessorCallablesForExpression(expression, 'toJSON', new Set(), session).flatMap(
+    (callable) => requestWireOutputExpressions(callable),
+  );
 }
 
 function requestExpressionIsFetchResponse(expression: Node, seen: Set<string>): boolean {
@@ -3848,7 +4872,7 @@ function requestConstructorIsKnownSafe(
   context: RequestProcessScanContext,
 ): boolean {
   const callee = unwrapStaticExpression(construct.getExpression());
-  const resolution = resolveRequestCallable(callee, new Set(), 0);
+  const resolution = resolveRequestCallable(callee, new Set(), 0, context.provenance);
   if (resolution.callables.length > 0) {
     for (const nested of resolution.callables) scanRequestCallable(nested, context);
     return true;
@@ -3902,7 +4926,7 @@ function scanRequestFunctionArguments(
   context: RequestProcessScanContext,
 ): void {
   for (const argument of expression.getArguments()) {
-    const resolution = resolveRequestCallable(argument, new Set(), 0);
+    const resolution = resolveRequestCallable(argument, new Set(), 0, context.provenance);
     for (const nested of resolution.callables) scanRequestCallable(nested, context);
   }
 }
@@ -3919,7 +4943,7 @@ function requestKnownCallbacksAreClosed(
   for (const index of indexes) {
     const callback = args[index];
     if (!callback) continue;
-    const resolution = resolveRequestCallable(callback, new Set(), 0);
+    const resolution = resolveRequestCallable(callback, new Set(), 0, context.provenance);
     if (resolution.callables.length > 0) {
       for (const nested of resolution.callables) scanRequestCallable(nested, context);
       continue;
@@ -3980,16 +5004,13 @@ function requestExpressionRootParameterRole(
     scopeCallable: callable,
   });
   if (wireCarrier === 'context') return 'capability';
+  if (wireCarrier === 'verification') return 'input';
   if (wireCarrier) return 'request';
 
   const parameters = requestCallableParameters(callable.declaration);
-  const symbol = node.getSymbol();
   for (const [index, parameter] of parameters.entries()) {
     const name = parameter.getNameNode();
-    if (
-      Node.isIdentifier(name) &&
-      ((symbol && name.getSymbol() === symbol) || (!symbol && name.getText() === node.getText()))
-    ) {
+    if (requestBindingNameContainsIdentifier(name, node)) {
       return callable.rootParameterRoles?.[index] ?? 'capability';
     }
   }
@@ -4004,6 +5025,33 @@ function requestExpressionRootParameterRole(
     seen.add(key);
   }
   return requestExpressionRootParameterRole(initializer, callable, seen, depth + 1);
+}
+
+function requestBindingNameContainsIdentifier(name: Node, target: Node): boolean {
+  if (!Node.isIdentifier(target)) return false;
+  if (Node.isIdentifier(name)) {
+    const targetSymbol = target.getSymbol();
+    const nameSymbol = name.getSymbol();
+    return targetSymbol && nameSymbol
+      ? targetSymbol === nameSymbol
+      : name.getText() === target.getText();
+  }
+  if (!Node.isObjectBindingPattern(name) && !Node.isArrayBindingPattern(name)) return false;
+  return name
+    .getElements()
+    .some(
+      (element) =>
+        !Node.isOmittedExpression(element) &&
+        requestBindingNameContainsIdentifier(element.getNameNode(), target),
+    );
+}
+
+function requestRootRoleIncludesCapability(role: RequestRootParameterRole | undefined): boolean {
+  return role === 'capability' || role === 'hybrid';
+}
+
+function requestRootRoleIncludesInput(role: RequestRootParameterRole | undefined): boolean {
+  return role === 'input' || role === 'hybrid';
 }
 
 function requestCallableParameters(declaration: Node) {
@@ -4166,7 +5214,11 @@ function requestExpressionIsIntrinsicValue(
     return requestExpressionIsIntrinsicValue(node.getExpression(), callable, seen, depth + 1);
   }
   if (!Node.isIdentifier(node)) return false;
-  if (requestExpressionRootParameterRole(node, callable, new Set(), depth + 1) === 'input') {
+  if (
+    requestRootRoleIncludesInput(
+      requestExpressionRootParameterRole(node, callable, new Set(), depth + 1),
+    )
+  ) {
     return true;
   }
   const symbol = node.getSymbol();
@@ -4424,13 +5476,56 @@ function resolveRequestCallable(
   expression: Node,
   seen: Set<string>,
   depth: number,
+  session: RequestProvenanceSession = createRequestProvenanceSession(),
 ): RequestCallableResolution {
   const node = unwrapStaticExpression(expression);
+  const key = requestNodeIdentity(node);
+  const memoized = session.callableMemo.get(key);
+  if (memoized) return memoized;
+  if (session.callableActive.has(key) || !requestProvenanceStep(session, node)) {
+    return { callables: [] };
+  }
+  session.callableActive.add(key);
+  const resolved = resolveRequestCallableUncached(node, seen, depth, session);
+  session.callableActive.delete(key);
+  session.callableMemo.set(key, resolved);
+  return resolved;
+}
+
+function resolveRequestCallableUncached(
+  node: Node,
+  seen: Set<string>,
+  depth: number,
+  session: RequestProvenanceSession,
+): RequestCallableResolution {
   const direct = requestCallableForFunctionNode(node);
   if (direct) return { callables: [direct] };
   const nodeKey = `node:${requestNodeIdentity(node)}`;
   if (seen.has(nodeKey)) return { callables: [] };
   seen.add(nodeKey);
+
+  if (Node.isConditionalExpression(node)) {
+    return mergeRequestCallableResolutions([
+      resolveRequestCallable(node.getWhenTrue(), new Set(seen), depth + 1, session),
+      resolveRequestCallable(node.getWhenFalse(), new Set(seen), depth + 1, session),
+    ]);
+  }
+  if (Node.isBinaryExpression(node)) {
+    const operator = node.getOperatorToken().getKind();
+    if (operator === SyntaxKind.CommaToken) {
+      return resolveRequestCallable(node.getRight(), new Set(seen), depth + 1, session);
+    }
+    if (
+      operator === SyntaxKind.BarBarToken ||
+      operator === SyntaxKind.AmpersandAmpersandToken ||
+      operator === SyntaxKind.QuestionQuestionToken
+    ) {
+      return mergeRequestCallableResolutions([
+        resolveRequestCallable(node.getLeft(), new Set(seen), depth + 1, session),
+        resolveRequestCallable(node.getRight(), new Set(seen), depth + 1, session),
+      ]);
+    }
+  }
 
   if (Node.isCallExpression(node)) {
     const callee = node.getExpression();
@@ -4438,10 +5533,10 @@ function resolveRequestCallable(
       Node.isPropertyAccessExpression(callee) &&
       (callee.getName() === 'bind' || callee.getName() === 'call' || callee.getName() === 'apply')
     ) {
-      return resolveRequestCallable(callee.getExpression(), seen, depth + 1);
+      return resolveRequestCallable(callee.getExpression(), seen, depth + 1, session);
     }
 
-    const factory = resolveRequestCallable(callee, new Set(seen), depth + 1);
+    const factory = resolveRequestCallable(callee, new Set(seen), depth + 1, session);
     const returned: RequestCallable[] = [];
     let opaqueModule = factory.opaqueModule;
     for (const callable of factory.callables) {
@@ -4450,7 +5545,7 @@ function resolveRequestCallable(
       for (const statement of callable.body.getDescendantsOfKind(SyntaxKind.ReturnStatement)) {
         const expression = statement.getExpression();
         if (!expression) continue;
-        const resolution = resolveRequestCallable(expression, new Set(seen), depth + 1);
+        const resolution = resolveRequestCallable(expression, new Set(seen), depth + 1, session);
         returned.push(...resolution.callables);
         opaqueModule ??= resolution.opaqueModule;
       }
@@ -4461,13 +5556,18 @@ function resolveRequestCallable(
   }
 
   const symbol = node.getSymbol();
-  const fromSymbol = resolveRequestCallableSymbol(symbol, seen, depth + 1);
+  const fromSymbol = resolveRequestCallableSymbol(symbol, seen, depth + 1, session);
   if (fromSymbol.callables.length > 0 || fromSymbol.opaqueModule !== undefined) return fromSymbol;
 
   if (Node.isIdentifier(node)) {
     const declaration = localValueDeclaration(node);
     if (declaration) {
-      const fromDeclaration = resolveRequestCallableDeclaration(declaration, seen, depth + 1);
+      const fromDeclaration = resolveRequestCallableDeclaration(
+        declaration,
+        seen,
+        depth + 1,
+        session,
+      );
       if (fromDeclaration.callables.length > 0 || fromDeclaration.opaqueModule !== undefined) {
         return fromDeclaration;
       }
@@ -4484,55 +5584,74 @@ function resolveRequestCallableSymbol(
   symbol: ReturnType<Node['getSymbol']>,
   seen: Set<string>,
   depth: number,
+  session: RequestProvenanceSession,
 ): RequestCallableResolution {
   if (!symbol) return { callables: [] };
   const key = requestSymbolKey(symbol);
+  const memoized = session.callableSymbolMemo.get(key);
+  if (memoized) return memoized;
+  if (session.callableSymbolActive.has(key)) return { callables: [] };
   if (seen.has(key)) return { callables: [] };
   seen.add(key);
+  session.callableSymbolActive.add(key);
 
+  const resolutions: RequestCallableResolution[] = [];
   try {
     const aliased = symbol.getAliasedSymbol();
     if (aliased && aliased !== symbol) {
-      const resolved = resolveRequestCallableSymbol(aliased, seen, depth + 1);
-      if (resolved.callables.length > 0 || resolved.opaqueModule !== undefined) return resolved;
+      resolutions.push(resolveRequestCallableSymbol(aliased, seen, depth + 1, session));
     }
   } catch {
     // An unresolved alias is handled from its import declaration below and fails closed for a
     // bare package instead of being treated as safe.
   }
 
-  let opaqueModule: string | undefined;
-  const callables: RequestCallable[] = [];
   for (const declaration of symbol.getDeclarations()) {
-    const resolved = resolveRequestCallableDeclaration(declaration, seen, depth + 1);
-    callables.push(...resolved.callables);
-    opaqueModule ??= resolved.opaqueModule;
+    resolutions.push(
+      resolveRequestCallableDeclaration(declaration, new Set(seen), depth + 1, session),
+    );
   }
-  return { callables, ...optionalOpaqueModule(opaqueModule) };
+  // Mutable callback bindings are a union of every authored value, not merely a fallback when the
+  // initializer is absent. Otherwise `let handler = safe; handler = unsafe` launders the later
+  // request-reachable body through the first declaration.
+  for (const assigned of requestCallableAssignmentExpressions(symbol)) {
+    resolutions.push(resolveRequestCallable(assigned, new Set(seen), depth + 1, session));
+  }
+  const resolved = mergeRequestCallableResolutions(resolutions);
+  session.callableSymbolActive.delete(key);
+  session.callableSymbolMemo.set(key, resolved);
+  return resolved;
 }
 
 function resolveRequestCallableDeclaration(
   declaration: Node,
   seen: Set<string>,
   depth: number,
+  session: RequestProvenanceSession,
 ): RequestCallableResolution {
   const direct = requestCallableForFunctionNode(declaration);
   if (direct) return { callables: [direct] };
 
   if (Node.isVariableDeclaration(declaration)) {
     const initializer = declaration.getInitializer();
-    return initializer ? resolveRequestCallable(initializer, seen, depth + 1) : { callables: [] };
+    return initializer
+      ? resolveRequestCallable(initializer, seen, depth + 1, session)
+      : { callables: [] };
   }
   if (Node.isPropertyAssignment(declaration)) {
     const initializer = declaration.getInitializer();
-    return initializer ? resolveRequestCallable(initializer, seen, depth + 1) : { callables: [] };
+    return initializer
+      ? resolveRequestCallable(initializer, seen, depth + 1, session)
+      : { callables: [] };
   }
   if (Node.isShorthandPropertyAssignment(declaration)) {
-    return resolveRequestCallable(declaration.getNameNode(), seen, depth + 1);
+    return resolveRequestCallable(declaration.getNameNode(), seen, depth + 1, session);
   }
   if (Node.isBindingElement(declaration)) {
     const initializer = bindingElementSourceExpression(declaration);
-    return initializer ? resolveRequestCallable(initializer, seen, depth + 1) : { callables: [] };
+    return initializer
+      ? resolveRequestCallable(initializer, seen, depth + 1, session)
+      : { callables: [] };
   }
   if (Node.isImportSpecifier(declaration)) {
     const module = declaration.getImportDeclaration().getModuleSpecifierValue();
@@ -4553,6 +5672,47 @@ function resolveRequestCallableDeclaration(
       : { callables: [] };
   }
   return { callables: [] };
+}
+
+function mergeRequestCallableResolutions(
+  resolutions: readonly RequestCallableResolution[],
+): RequestCallableResolution {
+  const callables = new Map<string, RequestCallable>();
+  let opaqueModule: string | undefined;
+  for (const resolution of resolutions) {
+    opaqueModule ??= resolution.opaqueModule;
+    for (const callable of resolution.callables) {
+      callables.set(requestNodeIdentity(callable.declaration), callable);
+    }
+  }
+  return { callables: [...callables.values()], ...optionalOpaqueModule(opaqueModule) };
+}
+
+function requestCallableAssignmentExpressions(
+  symbol: NonNullable<ReturnType<Node['getSymbol']>>,
+): Node[] {
+  const key = requestSymbolKey(symbol);
+  const sourceFiles = new Set(
+    symbol.getDeclarations().map((declaration) => declaration.getSourceFile()),
+  );
+  const expressions: Node[] = [];
+  for (const sourceFile of sourceFiles) {
+    for (const assignment of sourceFile.getDescendantsOfKind(SyntaxKind.BinaryExpression)) {
+      const operator = assignment.getOperatorToken().getKind();
+      if (
+        operator !== SyntaxKind.EqualsToken &&
+        operator !== SyntaxKind.BarBarEqualsToken &&
+        operator !== SyntaxKind.AmpersandAmpersandEqualsToken &&
+        operator !== SyntaxKind.QuestionQuestionEqualsToken
+      ) {
+        continue;
+      }
+      const target = unwrapStaticExpression(assignment.getLeft());
+      if (!Node.isIdentifier(target) || !target.getSymbol()) continue;
+      if (requestSymbolKey(target.getSymbol()!) === key) expressions.push(assignment.getRight());
+    }
+  }
+  return expressions;
 }
 
 function requestCallableForFunctionNode(node: Node): RequestCallable | undefined {
@@ -4660,7 +5820,7 @@ function requestEnvironmentAuthorityForExpression(
 
   if (Node.isPropertyAccessExpression(node) || Node.isElementAccessExpression(node)) {
     const member = Node.isPropertyAccessExpression(node)
-      ? node.getName()
+      ? staticMemberName(node.getNameNode())
       : staticMemberName(node.getArgumentExpression());
     const receiver = unwrapStaticExpression(node.getExpression());
     if (
@@ -4954,7 +6114,11 @@ function requestEnvironmentAuthorityForImportedIdentifier(
 
 function requestExpressionIsImportMeta(expression: Node): boolean {
   const node = unwrapStaticExpression(expression);
-  return node.getKind() === SyntaxKind.MetaProperty && node.getText() === 'import.meta';
+  if (node.getKind() !== SyntaxKind.MetaProperty) return false;
+  const compilerNode = node.compilerNode as ts.MetaProperty;
+  return (
+    compilerNode.keywordToken === ts.SyntaxKind.ImportKeyword && compilerNode.name.text === 'meta'
+  );
 }
 
 function requestRawAuthorityForExpression(
@@ -4962,6 +6126,18 @@ function requestRawAuthorityForExpression(
   seen: Set<string>,
   depth: number,
 ): RequestRawAuthority | undefined {
+  const node = unwrapStaticExpression(expression);
+  if (Node.isPropertyAccessExpression(node) || Node.isElementAccessExpression(node)) {
+    const member = Node.isPropertyAccessExpression(node)
+      ? staticMemberName(node.getNameNode())
+      : staticMemberName(node.getArgumentExpression());
+    if (member) {
+      for (const assigned of requestAssignedMemberExpressions(node.getExpression(), member)) {
+        const authority = requestRawAuthorityForExpression(assigned, new Set(seen), depth + 1);
+        if (authority) return authority;
+      }
+    }
+  }
   const environment = requestEnvironmentAuthorityForExpression(expression, new Set(seen), depth);
   if (environment) return environment;
   if (expressionResolvesToGlobalCallable(expression, 'eval', new Set(seen), depth)) {
@@ -5177,8 +6353,33 @@ function expressionResolvesToGlobalCallable(
   return false;
 }
 
-function requestFrameworkAuthorityForExpression(expression: Node): RequestRawAuthority | undefined {
-  const identity = canonicalFrameworkExportForExpression(expression);
+function requestFrameworkAuthorityForExpression(
+  expression: Node,
+  seen: Set<string> = new Set(),
+): RequestRawAuthority | undefined {
+  const node = unwrapStaticExpression(expression);
+  const key = requestNodeIdentity(node);
+  if (seen.has(key)) return undefined;
+  seen.add(key);
+  let identity = canonicalFrameworkExportForExpression(node);
+  if (
+    !identity &&
+    (Node.isPropertyAccessExpression(node) || Node.isElementAccessExpression(node))
+  ) {
+    const member = Node.isPropertyAccessExpression(node)
+      ? staticMemberName(node.getNameNode())
+      : staticMemberName(node.getArgumentExpression());
+    const projected = member
+      ? requestWireProjectedExpression(node.getExpression(), [member], new Set(), 0)
+      : undefined;
+    if (projected) identity = canonicalFrameworkExportForExpression(projected);
+    if (!identity && member) {
+      for (const assigned of requestAssignedMemberExpressions(node.getExpression(), member)) {
+        const authority = requestFrameworkAuthorityForExpression(assigned, new Set(seen));
+        if (authority) return authority;
+      }
+    }
+  }
   if (!identity) return undefined;
   const minter = REQUEST_FRAMEWORK_AUTHORITY_MINTERS.find(
     (candidate) =>
@@ -6391,7 +7592,7 @@ function staticMemberName(node: Node | undefined): string | undefined {
       ((Node.isElementAccessExpression(parent) && parent.getArgumentExpression() === node) ||
         (Node.isComputedPropertyName(parent) && parent.getExpression() === node))
       ? undefined
-      : node.getText();
+      : node.compilerNode.text;
   }
   if (Node.isNumericLiteral(node)) return node.getText();
   if (Node.isStringLiteral(node) || Node.isNoSubstitutionTemplateLiteral(node)) {
@@ -6403,6 +7604,20 @@ function staticMemberName(node: Node | undefined): string | undefined {
     if (Node.isStringLiteral(expression) || Node.isNoSubstitutionTemplateLiteral(expression)) {
       return expression.getLiteralText();
     }
+    return requestStaticStringExpressionValue(expression);
+  }
+  return requestStaticStringExpressionValue(node);
+}
+
+function requestStaticStringExpressionValue(expression: Node): string | undefined {
+  const node = unwrapStaticExpression(expression);
+  if (Node.isStringLiteral(node) || Node.isNoSubstitutionTemplateLiteral(node)) {
+    return node.getLiteralText();
+  }
+  if (Node.isBinaryExpression(node) && node.getOperatorToken().getKind() === SyntaxKind.PlusToken) {
+    const left = requestStaticStringExpressionValue(node.getLeft());
+    const right = requestStaticStringExpressionValue(node.getRight());
+    return left === undefined || right === undefined ? undefined : `${left}${right}`;
   }
   return undefined;
 }

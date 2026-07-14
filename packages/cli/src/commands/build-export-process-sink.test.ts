@@ -1,3 +1,4 @@
+import { spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -29,13 +30,16 @@ function fixture(name: string): string {
   return root;
 }
 
-async function check(root: string): Promise<{ code: number; stdout: string; stderr: string }> {
+async function check(
+  root: string,
+  entry = './app.mjs',
+): Promise<{ code: number; stdout: string; stderr: string }> {
   const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
   const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
   const before = process.cwd();
   try {
     process.chdir(root);
-    const code = await mainAsync(['build', './app.mjs', '--out', './dist', '--check']);
+    const code = await mainAsync(['build', entry, '--out', './dist', '--check']);
     return {
       code,
       stdout: stdout.mock.calls.map(([chunk]) => String(chunk)).join(''),
@@ -44,6 +48,31 @@ async function check(root: string): Promise<{ code: number; stdout: string; stde
   } finally {
     process.chdir(before);
   }
+}
+
+function expectTypechecks(root: string, entry: string): void {
+  const result = spawnSync(
+    process.execPath,
+    [
+      join(repoRoot, 'node_modules/typescript/bin/tsc'),
+      '--allowImportingTsExtensions',
+      '--ignoreConfig',
+      '--lib',
+      'ES2022,DOM,DOM.Iterable',
+      '--module',
+      'NodeNext',
+      '--moduleResolution',
+      'NodeNext',
+      '--noEmit',
+      '--skipLibCheck',
+      '--strict',
+      '--target',
+      'ES2022',
+      entry,
+    ],
+    { cwd: root, encoding: 'utf8' },
+  );
+  expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
 }
 
 // @kovo-security-certifies KV424 request-process-local-build
@@ -690,6 +719,81 @@ export default createApp({
     expect(result, result.stderr).toMatchObject({ code: 1 });
     expect(result.stderr).toContain('ERROR KV424');
     expect(result.stderr).toContain('sink=outbound-fetch.request.header.Authorization');
+  }, 120_000);
+
+  it('rejects type-safe factory mutation, method rebinding, static hints, and toJSON in a real build', async () => {
+    const root = fixture('final-adversarial-census');
+    writeFileSync(
+      join(root, 'app.ts'),
+      String.raw`import * as server from '@kovojs/server';
+import {
+  createApp,
+  endpoint,
+  publicAccess,
+  rootedFiles,
+  route,
+  type EndpointDefinition,
+  type EndpointHandler,
+} from '@kovojs/server';
+
+declare global {
+  interface ImportMeta {
+    readonly env: Record<string, string>;
+  }
+}
+
+const helper: { trim(value: string): unknown } = {
+  trim(value) { return value.trim(); },
+};
+helper.trim = rootedFiles;
+
+let assignedHandler: EndpointHandler = () => new Response('safe');
+const config = {
+  handler: assignedHandler,
+  method: 'GET',
+  reason: 'type-safe mutable callback audit',
+  response: { appOwnedSafety: true, body: 'text', cache: 'no-store' },
+} satisfies EndpointDefinition<'GET'>;
+const conditionalEndpoint = Math.random() > 0.5 ? endpoint : endpoint;
+const declaredEndpoint = conditionalEndpoint('/conditional', config);
+assignedHandler = (request) => {
+  helper.trim(new URL(request.url).pathname);
+  return new Response('unsafe');
+};
+config.handler = assignedHandler;
+
+const { endpoint: destructuredEndpoint } = server;
+const destructured = destructuredEndpoint('/destructured', {
+  ...config,
+  handler: assignedHandler,
+});
+
+const page = route('/', {
+  access: publicAccess('adversarial classifier route'),
+  bootstrapScript: (import /* comment */ . meta).\u0065nv.BOOTSTRAP,
+  modulepreloads: [import.meta.env.PRELOAD],
+  page(_context, request: Request) {
+    class CredentialBox {
+      toJSON() { return { cookie: request.headers.get('cookie') }; }
+    }
+    return new CredentialBox();
+  },
+  stylesheets: [import.meta.\u0065nv.STYLE],
+});
+
+export default createApp({ endpoints: [declaredEndpoint, destructured], routes: [page] });
+`,
+      'utf8',
+    );
+
+    expectTypechecks(root, 'app.ts');
+
+    const result = await check(root, './app.ts');
+    expect(result, result.stderr).toMatchObject({ code: 1 });
+    expect(result.stderr).toContain('ERROR KV424');
+    expect(result.stderr).toContain('sink=@kovojs/server.rootedFiles');
+    expect(result.stderr).toContain('sink=client-wire.request.header.Cookie');
+    expect(result.stderr).toContain('sink=import.meta.env');
   }, 120_000);
 
   it('accepts reviewed intrinsic calls and statically closed callbacks', async () => {
