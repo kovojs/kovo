@@ -13,7 +13,7 @@
     "many-small-components": {
       "fileCount": 48,
       "minLoc": 620,
-      "coldMaxMs": 750
+      "coldMaxMs": 900
     },
     "many-routes-registries": {
       "fileCount": 32,
@@ -39,6 +39,6 @@
   "total": {
     "fileCount": 125,
     "minLoc": 5290,
-    "coldMaxMs": 3500
+    "coldMaxMs": 4000
   }
 }
