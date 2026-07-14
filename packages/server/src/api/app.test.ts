@@ -74,7 +74,6 @@ import * as responseApi from '../response.js';
 import * as routeApi from '../route.js';
 import * as redosApi from '../redos.js';
 import * as secretReadBoundaryApi from '../secret-read-boundary.js';
-import * as sqliteRuntimeApi from '../sqlite-runtime.js';
 import * as staticExportDiagnosticsApi from '../static-export-diagnostics.js';
 import * as staticExportOrchestratorApi from '../static-export-public.js';
 import * as staticExportOutputApi from '../static-export-output.js';
@@ -565,7 +564,6 @@ describe('server app-shell public API barrels', () => {
       // capabilities through this public helper; raw system DB handles stay unexported.
       usePostgresSystemDb: postgresRuntimeApi.usePostgresSystemDb,
       postgresSchemaModule: postgresRuntimeApi.postgresSchemaModule,
-      runtimeDbMetadataForSchema: sqliteRuntimeApi.runtimeDbMetadataForSchema,
       createRequestHandler: requestHandlerApi.createRequestHandler,
       exportStaticApp: staticExportOrchestratorApi.exportStaticApp,
       isKovoApp: appGuardsApi.isKovoApp,
@@ -729,12 +727,10 @@ describe('server app-shell public API barrels', () => {
     expect(packageRootApi.declareSecretReadCapability).toBe(
       secretReadBoundaryApi.declareSecretReadCapability,
     );
-    expect(publicApi.createSqliteAppRuntimeDb).toBe(sqliteRuntimeApi.createSqliteAppRuntimeDb);
-    expect(packageRootApi.createSqliteAppRuntimeDb).toBe(sqliteRuntimeApi.createSqliteAppRuntimeDb);
-    expect(publicApi.runtimeDbMetadataForSchema).toBe(sqliteRuntimeApi.runtimeDbMetadataForSchema);
-    expect(packageRootApi.runtimeDbMetadataForSchema).toBe(
-      sqliteRuntimeApi.runtimeDbMetadataForSchema,
-    );
+    expect(publicApi).not.toHaveProperty('createSqliteAppRuntimeDb');
+    expect(packageRootApi).not.toHaveProperty('createSqliteAppRuntimeDb');
+    expect(publicApi).not.toHaveProperty('runtimeDbMetadataForSchema');
+    expect(packageRootApi).not.toHaveProperty('runtimeDbMetadataForSchema');
     for (const key of renderingSubpathOnlyValues) {
       expect(publicValues).not.toHaveProperty(key);
       expect(packageRootValues).not.toHaveProperty(key);
@@ -756,7 +752,7 @@ describe('server app-shell public API barrels', () => {
     expect(dataApi.declareSecretReadCapability).toBe(
       secretReadBoundaryApi.declareSecretReadCapability,
     );
-    expect(dataApi.createSqliteAppRuntimeDb).toBe(sqliteRuntimeApi.createSqliteAppRuntimeDb);
+    expect(dataApi).not.toHaveProperty('createSqliteAppRuntimeDb');
     expect(dataApi).not.toHaveProperty('drainCrossOwnerReadAuditFacts');
     expect(dataApi).not.toHaveProperty('drainPostgresRlsSilentDenyDiagnostics');
     expect(dataApi).not.toHaveProperty('drainPostgresPostureCheckOptOutFacts');

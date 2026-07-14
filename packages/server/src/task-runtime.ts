@@ -18,6 +18,7 @@ import {
   type DurableTaskQueueStore,
 } from './task-queue.js';
 import type { KovoApp } from './app-types.js';
+import { resolveDbProvider } from './guards.js';
 import type { DurableTaskRunnerErrorContext } from './task-runner.js';
 import { scrubConsoleArgs } from './logging.js';
 import {
@@ -223,7 +224,7 @@ class DefaultAppTaskRuntime implements AppTaskRuntime {
         'createRequestHandler() cannot run durable tasks without createApp({ db }) (SPEC §9.6).',
       );
     }
-    return this.app.db(undefined as never);
+    return resolveDbProvider(this.app.db, undefined as never);
   }
 
   private queueForRequest(request: unknown): DurableTaskQueueStore {

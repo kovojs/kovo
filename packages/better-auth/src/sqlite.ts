@@ -1,11 +1,7 @@
-import {
-  postgresSchemaModule,
-  usePostgresSystemDb,
-  type AccessDecision,
-  type CsrfOptions,
-  type KovoPostgresSystemDb,
-  type SessionProvider,
-} from '@kovojs/server';
+import { snapshotSqliteSchemaRecord } from '@kovojs/server/internal/sqlite';
+import { useSqliteSystemDb } from '@kovojs/server/internal/sqlite-capability';
+import type { AccessDecision, CsrfOptions, SessionProvider } from '@kovojs/server';
+import type { KovoSqliteSystemDb } from '@kovojs/server/sqlite';
 import { betterAuth, type Session, type User } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 
@@ -21,124 +17,100 @@ import { betterAuthSession, type BetterAuthSessionMapper } from './session.js';
 
 const NativeHeaders = globalThis.Headers;
 const NativeTypeError = globalThis.TypeError;
-const betterAuthPostgresSecretMinimumLength = 32;
+const betterAuthSqliteSecretMinimumLength = 32;
 
-declare const betterAuthPostgresSecretBrand: unique symbol;
+declare const betterAuthSqliteSecretBrand: unique symbol;
 
-/**
- * Better Auth signing material that cleared Kovo's non-empty 32-character security floor.
- *
- * The brand is an author-time guardrail. `createBetterAuthPostgresBindings` repeats the runtime
- * validation, so a cast or value crossing an untyped boundary cannot bypass the sink (SPEC §6.6).
- */
-export type BetterAuthPostgresSecret = string & {
-  readonly [betterAuthPostgresSecretBrand]: 'better-auth-postgres-secret';
+/** Better Auth signing material that cleared Kovo's 32-character SQLite binding floor. */
+export type BetterAuthSqliteSecret = string & {
+  readonly [betterAuthSqliteSecretBrand]: 'better-auth-sqlite-secret';
 };
 
-/**
- * Validate signing material before it can reach Better Auth's Postgres constructor.
- *
- * Generate a high-entropy value with `crypto.randomBytes(32).toString('base64url')`; this
- * constructor enforces the same 32-character absolute floor as Kovo's app signing-secret gate.
- */
-export function betterAuthPostgresSecret(value: string): BetterAuthPostgresSecret {
-  if (typeof value !== 'string' || value.length < betterAuthPostgresSecretMinimumLength) {
+/** Validate signing material before it can reach the Better Auth SQLite constructor. */
+export function betterAuthSqliteSecret(value: string): BetterAuthSqliteSecret {
+  if (typeof value !== 'string' || value.length < betterAuthSqliteSecretMinimumLength) {
     throw new NativeTypeError(
-      `Better Auth Postgres secret must be a string of at least ${betterAuthPostgresSecretMinimumLength} characters (SPEC §6.6).`,
+      `Better Auth SQLite secret must be a string of at least ${betterAuthSqliteSecretMinimumLength} characters (SPEC §6.6).`,
     );
   }
-  return value as BetterAuthPostgresSecret;
+  return value as BetterAuthSqliteSecret;
 }
 
-/** A fixed development-only account that the Postgres binding may create after database boot. */
-export interface BetterAuthDevelopmentSeed {
+/** A fixed development-only account that the SQLite binding may create. */
+export interface BetterAuthSqliteDevelopmentSeed {
   /** Email address for the local development account. */
   email: string;
   /** Display name for the local development account. */
   name: string;
-  /** Password for the local development account. An absent value disables seeding. */
+  /** Password for the local account; absent/null disables seeding. */
   password?: string | null;
 }
 
-/**
- * Options for the framework-owned Better Auth/Postgres construction boundary.
- *
- * The database input is an opaque system capability rather than a Drizzle handle. The constructor
- * consumes it internally, snapshots the schema/options it retains, and returns only sanitized Kovo
- * session and credential-mutation bindings (SPEC §6.6 and §10.3 capability ownership/C9).
- */
-export interface BetterAuthPostgresBindingsOptions<
+/** Options for the framework-owned Better Auth/SQLite construction boundary. */
+export interface BetterAuthSqliteBindingsOptions<
   Request extends BetterAuthRequestLike,
   SessionValue,
 > {
-  /** Absolute Better Auth base URL for this deployment. */
+  /** Absolute Better Auth base URL for this local app. */
   baseURL: string;
-  /** Kovo CSRF configuration shared by the generated credential mutations. */
+  /** Kovo CSRF configuration shared by generated credential mutations. */
   csrf: CsrfOptions<Request>;
   /** Optional fixed local account; ignored when `NODE_ENV=production`. */
-  developmentSeed?: BetterAuthDevelopmentSeed;
+  developmentSeed?: BetterAuthSqliteDevelopmentSeed;
   /** Sanitized projection from Better Auth's credential-free session/user records. */
   mapSession: BetterAuthSessionMapper<Session, User, SessionValue>;
-  /** Exact Better Auth Drizzle table record from the app's pinned Postgres schema. */
+  /** Exact Better Auth Drizzle table record from the app's SQLite schema. */
   schema: Record<string, unknown>;
   /** Better Auth signing secret. */
-  secret: BetterAuthPostgresSecret;
-  /** Explicit pre-auth access decision for the sign-in mutation. */
+  secret: BetterAuthSqliteSecret;
+  /** Explicit pre-auth access decision for sign-in. */
   signInAccess: AccessDecision;
-  /** Explicit authenticated access decision for the sign-out mutation. */
+  /** Explicit authenticated access decision for sign-out. */
   signOutAccess: AccessDecision;
-  /** Opaque framework-minted database capability consumed only by this constructor. */
-  systemDb: KovoPostgresSystemDb;
+  /** Opaque framework-minted capability; no raw client is structurally reachable from it. */
+  systemDb: KovoSqliteSystemDb;
 }
 
 /** Generated-app binding options whose secrets/URL/demo seed come from boot-pinned operator env. */
-export type BetterAuthPostgresEnvironmentBindingsOptions<
+export type BetterAuthSqliteEnvironmentBindingsOptions<
   Request extends BetterAuthRequestLike,
   SessionValue,
 > = Omit<
-  BetterAuthPostgresBindingsOptions<Request, SessionValue>,
+  BetterAuthSqliteBindingsOptions<Request, SessionValue>,
   'baseURL' | 'developmentSeed' | 'secret'
 >;
 
-/**
- * Sanitized bindings produced by `createBetterAuthPostgresBindings`.
- *
- * The raw Better Auth instance, Drizzle adapter, and system database never appear on this object.
- */
-export interface BetterAuthPostgresBindings<
+/** Sanitized bindings produced by `createBetterAuthSqliteBindings`. */
+export interface BetterAuthSqliteBindings<
   Request extends BetterAuthRequestLike,
   SessionValue,
   AuthenticatedRequest extends Request = Request,
 > {
   /** Create the configured fixed development account, or do nothing when disabled/production. */
   seedDemoUser(): Promise<void>;
-  /** Runtime-sanitized Better Auth session provider for `session(schema).provider(...)`. */
+  /** Runtime-sanitized Better Auth session provider. */
   sessionProvider: SessionProvider<BetterAuthRequestLike, SessionValue>;
-  /** CSRF-protected Better Auth email/password sign-in mutation. */
+  /** CSRF-protected email/password sign-in mutation. */
   signIn: ReturnType<typeof betterAuthSignInEmailMutation<'auth/sign-in', Request, Request>>;
-  /** CSRF-protected Better Auth sign-out mutation. */
+  /** CSRF-protected sign-out mutation. */
   signOut: ReturnType<
     typeof betterAuthSignOutMutation<'auth/sign-out', Request, AuthenticatedRequest>
   >;
 }
 
-/**
- * Construct Postgres bindings without exposing raw operator environment values to generated code.
- */
-export function createBetterAuthPostgresBindingsFromEnvironment<
+/** Construct SQLite bindings without exposing raw operator environment values to generated code. */
+export function createBetterAuthSqliteBindingsFromEnvironment<
   Request extends BetterAuthRequestLike,
   SessionValue,
   AuthenticatedRequest extends Request = Request,
 >(
-  options: BetterAuthPostgresEnvironmentBindingsOptions<Request, SessionValue>,
-): Readonly<BetterAuthPostgresBindings<Request, SessionValue, AuthenticatedRequest>> {
+  options: BetterAuthSqliteEnvironmentBindingsOptions<Request, SessionValue>,
+): Readonly<BetterAuthSqliteBindings<Request, SessionValue, AuthenticatedRequest>> {
   if (typeof options !== 'object' || options === null) {
-    throw new NativeTypeError(
-      'Better Auth Postgres environment binding options must be an object.',
-    );
+    throw new NativeTypeError('Better Auth SQLite environment binding options must be an object.');
   }
   const environment = resolveBetterAuthEnvironment();
-  return createBetterAuthPostgresBindings<Request, SessionValue, AuthenticatedRequest>({
+  return createBetterAuthSqliteBindings<Request, SessionValue, AuthenticatedRequest>({
     baseURL: environment.baseURL,
     csrf: requiredOption<CsrfOptions<Request>>(options, 'csrf'),
     ...(environment.developmentSeed === undefined
@@ -149,30 +121,29 @@ export function createBetterAuthPostgresBindingsFromEnvironment<
       'mapSession',
     ),
     schema: requiredOption<Record<string, unknown>>(options, 'schema'),
-    secret: betterAuthPostgresSecret(environment.secret),
+    secret: betterAuthSqliteSecret(environment.secret),
     signInAccess: requiredOption<AccessDecision>(options, 'signInAccess'),
     signOutAccess: requiredOption<AccessDecision>(options, 'signOutAccess'),
-    systemDb: requiredOption<KovoPostgresSystemDb>(options, 'systemDb'),
+    systemDb: requiredOption<KovoSqliteSystemDb>(options, 'systemDb'),
   });
 }
 
 /**
- * Construct the Better Auth/Postgres adapter behind one framework-owned capability door.
+ * Construct Better Auth's SQLite adapter behind the package-internal raw-capability consumer.
  *
- * Only the opaque `KovoPostgresSystemDb` capability crosses generated app source. The raw Drizzle
- * database is revealed inside this package just long enough to construct Better Auth's adapter;
- * the returned frozen record contains only a sanitized session provider, Kovo credential
- * mutations, and a fixed development seed operation (SPEC §6.6 and §10.3 C9).
+ * The public result is a frozen record of sanitized Kovo bindings. The raw Drizzle/native client,
+ * Better Auth instance, and capability consumer never cross this function's boundary (SPEC
+ * §6.6/§10.3 C9).
  */
-export function createBetterAuthPostgresBindings<
+export function createBetterAuthSqliteBindings<
   Request extends BetterAuthRequestLike,
   SessionValue,
   AuthenticatedRequest extends Request = Request,
 >(
-  options: BetterAuthPostgresBindingsOptions<Request, SessionValue>,
-): Readonly<BetterAuthPostgresBindings<Request, SessionValue, AuthenticatedRequest>> {
+  options: BetterAuthSqliteBindingsOptions<Request, SessionValue>,
+): Readonly<BetterAuthSqliteBindings<Request, SessionValue, AuthenticatedRequest>> {
   if (typeof options !== 'object' || options === null) {
-    throw new NativeTypeError('Better Auth Postgres binding options must be an object.');
+    throw new NativeTypeError('Better Auth SQLite binding options must be an object.');
   }
 
   const baseURL = requiredTextOption(options, 'baseURL');
@@ -182,27 +153,27 @@ export function createBetterAuthPostgresBindings<
     'mapSession',
   );
   if (typeof mapSession !== 'function') {
-    throw new NativeTypeError('Better Auth Postgres binding mapSession must be a function.');
+    throw new NativeTypeError('Better Auth SQLite binding mapSession must be a function.');
   }
   const schema = requiredOption<Record<string, unknown>>(options, 'schema');
   if (typeof schema !== 'object' || schema === null) {
-    throw new NativeTypeError('Better Auth Postgres binding schema must be an object.');
+    throw new NativeTypeError('Better Auth SQLite binding schema must be an object.');
   }
-  const pinnedSchema = postgresSchemaModule(schema);
-  const secret = betterAuthPostgresSecret(requiredTextOption(options, 'secret'));
+  const pinnedSchema = snapshotSqliteSchemaRecord(schema);
+  const secret = betterAuthSqliteSecret(requiredTextOption(options, 'secret'));
   const signInAccess = requiredOption<AccessDecision>(options, 'signInAccess');
   const signOutAccess = requiredOption<AccessDecision>(options, 'signOutAccess');
-  const systemDb = requiredOption<KovoPostgresSystemDb>(options, 'systemDb');
+  const systemDb = requiredOption<KovoSqliteSystemDb>(options, 'systemDb');
   const developmentSeed = snapshotDevelopmentSeed(
-    betterAuthOwnDataOption<BetterAuthDevelopmentSeed>(
+    betterAuthOwnDataOption<BetterAuthSqliteDevelopmentSeed>(
       options,
       'developmentSeed',
-      'Better Auth Postgres binding option developmentSeed',
+      'Better Auth SQLite binding option developmentSeed',
     ),
   );
 
-  const database = usePostgresSystemDb(systemDb, (db) =>
-    drizzleAdapter(db, { provider: 'pg', schema: pinnedSchema }),
+  const database = useSqliteSystemDb(systemDb, (db) =>
+    drizzleAdapter(db, { provider: 'sqlite', schema: pinnedSchema }),
   );
   const auth = betterAuth({
     advanced: { disableCSRFCheck: true },
@@ -223,6 +194,7 @@ export function createBetterAuthPostgresBindings<
     defaultRedirectTo: '/login',
   });
   const seedAuth = developmentSeed === undefined ? undefined : pinBetterAuthSignUpEmail(auth);
+
   async function seedDemoUser(): Promise<void> {
     if (
       betterAuthEnvironmentIsProduction() ||
@@ -242,27 +214,27 @@ export function createBetterAuthPostgresBindings<
         new NativeHeaders(),
       );
     } catch {
-      // The configured fixed account already exists or the local database is not seedable.
+      // The configured fixed local account already exists or is not seedable.
     }
   }
 
   return betterAuthFreezeOwn(
     { seedDemoUser, sessionProvider, signIn, signOut },
-    'Better Auth Postgres bindings',
+    'Better Auth SQLite bindings',
   );
 }
 
 function requiredOption<Value>(
   options: object,
-  property: keyof BetterAuthPostgresBindingsOptions<BetterAuthRequestLike, unknown>,
+  property: keyof BetterAuthSqliteBindingsOptions<BetterAuthRequestLike, unknown>,
 ): Value {
   const value = betterAuthOwnDataOption<Value>(
     options,
     property,
-    `Better Auth Postgres binding option ${property}`,
+    `Better Auth SQLite binding option ${property}`,
   );
   if (value === undefined) {
-    throw new NativeTypeError(`Better Auth Postgres binding option ${property} is required.`);
+    throw new NativeTypeError(`Better Auth SQLite binding option ${property} is required.`);
   }
   return value;
 }
@@ -270,35 +242,35 @@ function requiredOption<Value>(
 function requiredTextOption(options: object, property: 'baseURL' | 'secret'): string {
   const value = requiredOption<string>(options, property);
   if (typeof value !== 'string' || value.length === 0) {
-    throw new NativeTypeError(`Better Auth Postgres binding option ${property} must not be empty.`);
+    throw new NativeTypeError(`Better Auth SQLite binding option ${property} must not be empty.`);
   }
   return value;
 }
 
 function snapshotDevelopmentSeed(
-  value: BetterAuthDevelopmentSeed | undefined,
+  value: BetterAuthSqliteDevelopmentSeed | undefined,
 ): Readonly<{ email: string; name: string; password: string }> | undefined {
   if (value === undefined) return undefined;
   if (typeof value !== 'object' || value === null) {
-    throw new NativeTypeError('Better Auth Postgres binding developmentSeed must be an object.');
+    throw new NativeTypeError('Better Auth SQLite binding developmentSeed must be an object.');
   }
   const email = requiredSeedText(value, 'email');
   const name = requiredSeedText(value, 'name');
   const password = betterAuthOwnDataOption<string | null>(
     value,
     'password',
-    'Better Auth Postgres binding developmentSeed.password',
+    'Better Auth SQLite binding developmentSeed.password',
   );
   if (password === undefined || password === null) return undefined;
   if (typeof password !== 'string') {
     throw new NativeTypeError(
-      'Better Auth Postgres binding developmentSeed.password must be a string when present.',
+      'Better Auth SQLite binding developmentSeed.password must be a string when present.',
     );
   }
   if (password.length === 0) return undefined;
   return betterAuthFreezeOwn(
     { email, name, password },
-    'Better Auth Postgres binding development seed',
+    'Better Auth SQLite binding development seed',
   );
 }
 
@@ -306,11 +278,11 @@ function requiredSeedText(value: object, property: 'email' | 'name'): string {
   const field = betterAuthOwnDataOption<string>(
     value,
     property,
-    `Better Auth Postgres binding developmentSeed.${property}`,
+    `Better Auth SQLite binding developmentSeed.${property}`,
   );
   if (typeof field !== 'string' || field.length === 0) {
     throw new NativeTypeError(
-      `Better Auth Postgres binding developmentSeed.${property} must be a non-empty string.`,
+      `Better Auth SQLite binding developmentSeed.${property} must be a non-empty string.`,
     );
   }
   return field;

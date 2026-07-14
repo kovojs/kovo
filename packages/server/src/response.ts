@@ -57,7 +57,7 @@ import {
   witnessWeakSetAdd,
   witnessWeakSetHas,
 } from './security-witness-intrinsics.js';
-import { runtimeEnvironmentValue } from './runtime-environment-authority.js';
+import { runtimeEnvironmentValue } from '@kovojs/server/internal/runtime-environment';
 
 /** A single header value: one string or a list of strings. */
 export type ResponseHeaderValue = string | string[];

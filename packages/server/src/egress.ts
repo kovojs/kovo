@@ -3,7 +3,7 @@ import dns from 'node:dns';
 import http from 'node:http';
 import net from 'node:net';
 import type { LookupAddress } from 'node:dns';
-import { runtimeEnvironmentValue } from './runtime-environment-authority.js';
+import { runtimeEnvironmentValue } from '@kovojs/server/internal/runtime-environment';
 import { isUndiciFloorInstalled } from './egress-undici.js';
 
 import {

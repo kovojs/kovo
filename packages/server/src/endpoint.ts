@@ -7,7 +7,12 @@ import {
   snapshotAuditText,
 } from './audit-justification.js';
 import { actAsNonRequestPrincipal, type NonRequestPrincipalPosture } from './auth-principal.js';
-import { runAccessDecisionGuards, type DbProvider, type ResolvedGuardFailure } from './guards.js';
+import {
+  resolveDbProvider,
+  runAccessDecisionGuards,
+  type DbProvider,
+  type ResolvedGuardFailure,
+} from './guards.js';
 import { managedDb, type Reader, type Writer } from './managed-db.js';
 import {
   markEndpointBrowserCredentialDelegation,
@@ -889,7 +894,7 @@ function createEndpointDbContext<Db>(
         surface: definition.path,
       });
       const dbRequest = requestWithEndpointPrincipalPosture(request, principalPosture);
-      const rawDb = await options.db(dbRequest);
+      const rawDb = await resolveDbProvider(options.db, dbRequest);
       return {
         db: {
           read: managedDb(rawDb, 'read'),

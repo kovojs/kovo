@@ -1,12 +1,31 @@
 export type { BetterAuthRoleRequest, BetterAuthRoleSession, BetterAuthRoleUser } from './guards.js';
 export { authed, role } from './guards.js';
+export type { BetterAuthEnvironmentCsrfOptions } from './environment.js';
+export { betterAuthCsrfFromEnvironment } from './environment.js';
 export type {
   BetterAuthDevelopmentSeed,
   BetterAuthPostgresBindings,
   BetterAuthPostgresBindingsOptions,
+  BetterAuthPostgresEnvironmentBindingsOptions,
   BetterAuthPostgresSecret,
 } from './postgres.js';
-export { betterAuthPostgresSecret, createBetterAuthPostgresBindings } from './postgres.js';
+export {
+  betterAuthPostgresSecret,
+  createBetterAuthPostgresBindings,
+  createBetterAuthPostgresBindingsFromEnvironment,
+} from './postgres.js';
+export type {
+  BetterAuthSqliteBindings,
+  BetterAuthSqliteBindingsOptions,
+  BetterAuthSqliteEnvironmentBindingsOptions,
+  BetterAuthSqliteDevelopmentSeed,
+  BetterAuthSqliteSecret,
+} from './sqlite.js';
+export {
+  betterAuthSqliteSecret,
+  createBetterAuthSqliteBindings,
+  createBetterAuthSqliteBindingsFromEnvironment,
+} from './sqlite.js';
 export type { BetterAuthCredentialMutationOptions } from './credential-options.js';
 export type { BetterAuthMountOptions } from './mount.js';
 export { mount } from './mount.js';

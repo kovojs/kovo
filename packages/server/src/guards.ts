@@ -48,6 +48,7 @@ import {
 } from './request-state-intrinsics.js';
 import {
   createWitnessMap,
+  witnessCreateNullRecord,
   createWitnessSet,
   createWitnessWeakMap,
   witnessDefineProperty,
@@ -60,6 +61,7 @@ import {
   witnessMapSet,
   witnessMapSize,
   witnessObjectIs,
+  witnessReflectApply,
   witnessSetAdd,
   witnessSetHas,
   witnessWeakMapGet,
@@ -435,9 +437,66 @@ export function isSessionProviderResult<SessionValue>(
 }
 
 /** A function that resolves the app database/transaction handle for a request. */
-export type DbProvider<RawRequest, DbValue, SessionValue = unknown> = (
+declare const frameworkManagedDbProviderBrand: unique symbol;
+
+/**
+ * Opaque framework-owned DB provider token.
+ *
+ * The token carries the lifecycle DB type for `createApp({ db })` inference without exposing a
+ * callable that claims to return a raw database. Framework packages register its resolver in a
+ * private WeakMap; casts or structurally similar objects cannot mint a working provider.
+ */
+export interface FrameworkManagedDbProvider<DbValue> {
+  readonly [frameworkManagedDbProviderBrand]: (value: DbValue) => DbValue;
+}
+
+/** A request DB resolver or an opaque framework-owned provider token. */
+export type DbProvider<RawRequest, DbValue, SessionValue = unknown> =
+  | FrameworkManagedDbProvider<DbValue>
+  | ((request: LifecycleRequest<RawRequest, SessionValue, never>) => Promise<DbValue> | DbValue);
+
+type FrameworkManagedDbResolver = (request: unknown) => Promise<unknown> | unknown;
+const frameworkManagedDbProviders = createWitnessWeakMap<object, FrameworkManagedDbResolver>();
+
+/** @internal Register a package-owned resolver behind an opaque, frozen provider token. */
+export function createFrameworkManagedDbProvider<RawRequest, DbValue, SessionValue = unknown>(
+  resolver: (
+    request: LifecycleRequest<RawRequest, SessionValue, never>,
+  ) => Promise<DbValue> | DbValue,
+): FrameworkManagedDbProvider<DbValue> {
+  const token = witnessFreeze(witnessCreateNullRecord());
+  witnessWeakMapSet(frameworkManagedDbProviders, token, resolver as FrameworkManagedDbResolver);
+  return token as FrameworkManagedDbProvider<DbValue>;
+}
+
+/** @internal Return whether a value is an exact framework-minted opaque DB provider token. */
+export function isFrameworkManagedDbProvider(
+  provider: unknown,
+): provider is FrameworkManagedDbProvider<unknown> {
+  return (
+    typeof provider === 'object' &&
+    provider !== null &&
+    witnessWeakMapGet(frameworkManagedDbProviders, provider) !== undefined
+  );
+}
+
+/** @internal Resolve either a conventional callback provider or a framework-owned opaque token. */
+export function resolveDbProvider<RawRequest, DbValue, SessionValue = unknown>(
+  provider: DbProvider<RawRequest, DbValue, SessionValue>,
   request: LifecycleRequest<RawRequest, SessionValue, never>,
-) => Promise<DbValue> | DbValue;
+): Promise<DbValue> | DbValue {
+  if (typeof provider === 'function') {
+    return witnessReflectApply<Promise<DbValue> | DbValue>(provider, undefined, [request]);
+  }
+  if (typeof provider !== 'object' || provider === null) {
+    throw new TypeError('Framework-managed DB provider capability is invalid (SPEC §6.6/§10.3).');
+  }
+  const resolver = witnessWeakMapGet(frameworkManagedDbProviders, provider);
+  if (resolver === undefined) {
+    throw new TypeError('Framework-managed DB provider capability is forged (SPEC §6.6/§10.3).');
+  }
+  return witnessReflectApply<Promise<DbValue> | DbValue>(resolver, undefined, [request]);
+}
 
 /** Request shape after the framework has installed configured lifecycle channels. */
 export type LifecycleRequest<RawRequest, SessionValue = never, DbValue = never> = RawRequest &
@@ -1204,7 +1263,10 @@ export async function resolveLifecycleRequest<Request, SessionValue = unknown, D
   }
 
   if (options.db) {
-    const dbValue = await options.db(lifecycleRequest as LifecycleRequest<Request, SessionValue>);
+    const dbValue = await resolveDbProvider(
+      options.db,
+      lifecycleRequest as LifecycleRequest<Request, SessionValue>,
+    );
     // SPEC §6.6/§9.4/§10.3 (MARQUEE): the framework OWNS the handle threaded onto `request.db`.
     // `managedDb` composes the KV422 SQL-safe wrap with the KV433 read/write mode: a query loader's
     // request carries the read-only handle (write verbs throw), a mutation/write request carries

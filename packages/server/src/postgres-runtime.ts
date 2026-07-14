@@ -55,7 +55,7 @@ import {
 } from './postgres-replay.js';
 import type { CapabilityReplayStore } from './capability-url.js';
 import type { MutationReplayStore } from './replay.js';
-import { runtimeEnvironmentValue } from './runtime-environment-authority.js';
+import { runtimeEnvironmentValue } from '@kovojs/server/internal/runtime-environment';
 import {
   forEachReadonlyMapEntry,
   forEachReadonlySetValue,

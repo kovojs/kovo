@@ -5,6 +5,7 @@ import {
   witnessGetOwnPropertyDescriptor,
   witnessObjectIs,
   witnessObjectKeys,
+  witnessReflectApply,
 } from './security-witness-intrinsics.js';
 
 /**
@@ -23,6 +24,31 @@ import {
 type RuntimeEnvironment = Readonly<Record<PropertyKey, string>>;
 
 let pinnedRuntimeEnvironment: RuntimeEnvironment | undefined;
+
+const bootProcess =
+  typeof process === 'undefined' || process === null || typeof process !== 'object'
+    ? undefined
+    : process;
+const bootLoadEnvFile = bootProcessValue('loadEnvFile');
+
+/**
+ * Load the conventional local `.env` file through the boot-captured Node host hook, then pin the
+ * operator environment before authored ESM evaluates. Missing `.env` is the only ignored failure;
+ * malformed/unreadable operator configuration fails closed.
+ *
+ * @internal
+ */
+export function loadAndPinServerRuntimeEnvironment(): void {
+  if (pinnedRuntimeEnvironment !== undefined) return;
+  if (bootProcess !== undefined && typeof bootLoadEnvFile === 'function') {
+    try {
+      witnessReflectApply(bootLoadEnvFile, bootProcess, []);
+    } catch (error) {
+      if (!isMissingEnvironmentFileError(error)) throw error;
+    }
+  }
+  pinServerRuntimeEnvironment();
+}
 
 /** Pin the operator environment once, before authored modules evaluate. @internal */
 export function pinServerRuntimeEnvironment(): void {
@@ -51,6 +77,23 @@ function liveProcessEnvironment(): Record<string, string | undefined> | undefine
     return undefined;
   }
   return process.env;
+}
+
+function bootProcessValue(property: PropertyKey): unknown {
+  if (bootProcess === undefined) return undefined;
+  const before = witnessGetOwnPropertyDescriptor(bootProcess, property);
+  const after = witnessGetOwnPropertyDescriptor(bootProcess, property);
+  if (!sameDataDescriptor(before, after)) {
+    throw new TypeError(`Kovo process.${String(property)} changed during framework bootstrap.`);
+  }
+  return before === undefined || !('value' in before) ? undefined : before.value;
+}
+
+function isMissingEnvironmentFileError(error: unknown): boolean {
+  if (typeof error !== 'object' || error === null) return false;
+  const before = witnessGetOwnPropertyDescriptor(error, 'code');
+  const after = witnessGetOwnPropertyDescriptor(error, 'code');
+  return sameDataDescriptor(before, after) && before !== undefined && before.value === 'ENOENT';
 }
 
 function snapshotEnvironment(

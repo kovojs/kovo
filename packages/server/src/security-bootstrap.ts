@@ -34,7 +34,7 @@ import './mutation-wire-intrinsics.js';
 import { assertRequestBodyIntrinsics } from './request-body-intrinsics.js';
 import { assertRequestStateIntrinsics } from './request-state-intrinsics.js';
 import { assertResponseSecurityIntrinsics } from './response-security-intrinsics.js';
-import { pinServerRuntimeEnvironment } from './runtime-environment-authority.js';
+import { loadAndPinServerRuntimeEnvironment } from '@kovojs/server/internal/runtime-environment';
 import { assertSecurityWitnessIntrinsics } from './security-witness-intrinsics.js';
 import { assertTaskSecurityIntrinsics } from './task-security-intrinsics.js';
 
@@ -42,7 +42,7 @@ import { assertTaskSecurityIntrinsics } from './task-security-intrinsics.js';
 // trust-root transition. These checks are health assertions over controls already captured by the
 // runner; they are not provenance tests and must never be used to bless a late bootstrap.
 assertSecurityWitnessIntrinsics();
-pinServerRuntimeEnvironment();
+loadAndPinServerRuntimeEnvironment();
 assertCapabilityIntrinsics();
 assertConfidentialAtRestIntrinsics();
 assertEgressIntrinsics();

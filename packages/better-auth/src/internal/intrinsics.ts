@@ -14,6 +14,7 @@ const NativeResponse = globalThis.Response;
 const NativeSet = globalThis.Set;
 const NativeString = globalThis.String;
 const NativeTypeError = globalThis.TypeError;
+const NativeURL = globalThis.URL;
 const nativeArrayIsArray = NativeArray.isArray;
 const nativeDateGetTime = NativeDate.prototype.getTime;
 const nativeDateNow = NativeDate.now;
@@ -51,6 +52,7 @@ const nativeStringSplit = NativeString.prototype.split;
 const nativeStringToLowerCase = NativeString.prototype.toLowerCase;
 const nativeStringToUpperCase = NativeString.prototype.toUpperCase;
 const nativeStringTrim = NativeString.prototype.trim;
+const nativeUrlProtocolGetter = getGetter(NativeURL.prototype, 'protocol');
 
 function apply<Return>(fn: Function, receiver: unknown, args: readonly unknown[]): Return {
   return nativeReflectApply(fn, receiver, args) as Return;
@@ -72,6 +74,12 @@ function getMethod(prototype: object, property: PropertyKey): Function | undefin
   return descriptor !== undefined && 'value' in descriptor && typeof descriptor.value === 'function'
     ? descriptor.value
     : undefined;
+}
+
+function readNativeUrlProtocol(value: object): string | undefined {
+  return nativeUrlProtocolGetter === undefined
+    ? undefined
+    : apply<string>(nativeUrlProtocolGetter, value, []);
 }
 
 function capturedControlsAreSound(): boolean {
@@ -145,6 +153,7 @@ function capturedControlsAreSound(): boolean {
       apply(nativeNumberIsNaN, NativeNumber, [0]) === false &&
       apply(nativeNumberIsSafeInteger, NativeNumber, [1]) === true &&
       apply(nativeNumberIsSafeInteger, NativeNumber, [1.5]) === false &&
+      readNativeUrlProtocol(new NativeURL('https://kovo.example/path')) === 'https:' &&
       readNativeResponseStatus(response) === 201 &&
       readNativeResponseHeaders(response) !== undefined &&
       nativeResponseClone !== undefined &&
@@ -203,6 +212,16 @@ export function betterAuthCloneDate(value: object): Date | undefined {
 export function betterAuthDateParse(value: string): number {
   assertBetterAuthIntrinsics();
   return apply(nativeDateParse, NativeDate, [value]);
+}
+
+/** @internal Parse a URL and read its scheme without consulting a mutable late prototype getter. */
+export function betterAuthUrlProtocol(value: string): string {
+  assertBetterAuthIntrinsics();
+  const protocol = readNativeUrlProtocol(new NativeURL(value));
+  if (protocol === undefined) {
+    throw new NativeTypeError('Kovo Better Auth URL protocol control is unavailable.');
+  }
+  return protocol;
 }
 
 export function betterAuthGetOwnPropertyDescriptor(

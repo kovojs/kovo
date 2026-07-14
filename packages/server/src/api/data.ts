@@ -146,14 +146,6 @@ export type {
   KovoPostgresRuntimeDb,
   KovoPostgresRuntimeDriver,
 } from '../postgres-runtime.js';
-export { createSqliteAppRuntimeDb } from '../sqlite-runtime.js';
-export type {
-  KovoSqliteAppRuntimeDb,
-  KovoSqliteAppRuntimeMetadata,
-  KovoSqliteAppRuntimeOptions,
-  KovoSqliteColumnOriginClient,
-  KovoSqliteRuntimeColumnSource,
-} from '../sqlite-runtime.js';
 export { declareSecretReadCapability } from '../secret-read-boundary.js';
 export type { DeclaredSecretReadCapability } from '../secret-read-boundary.js';
 export { s, SchemaValidationError } from '../schema.js';

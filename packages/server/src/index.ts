@@ -47,16 +47,6 @@ export type {
   KovoPostgresRuntimeDriver,
   KovoPostgresSystemDb,
 } from './postgres-runtime.js';
-// SPEC §5.2/§10.3/§11.2: generated SQLite starter source must use public Kovo entrypoints, while
-// the adapter hooks and low-level secret/read/write wrappers remain internal.
-export { createSqliteAppRuntimeDb, runtimeDbMetadataForSchema } from './sqlite-runtime.js';
-export type {
-  KovoSqliteAppRuntimeDb,
-  KovoSqliteAppRuntimeMetadata,
-  KovoSqliteAppRuntimeOptions,
-  KovoSqliteColumnOriginClient,
-  KovoSqliteRuntimeColumnSource,
-} from './sqlite-runtime.js';
 export { declareSecretReadCapability } from './secret-read-boundary.js';
 export type { DeclaredSecretReadCapability } from './secret-read-boundary.js';
 export { isKovoApp } from './app-guards.js';
@@ -210,6 +200,10 @@ export type {
   ResolvedAppRequestLimitOptions,
   ResolvedAppRequestRateLimitOptions,
 } from './app-types.js';
+// `@kovojs/server/sqlite` names this opaque carrier in KovoSqliteDbProvider. Export the recursive
+// type without exposing its module-private mint/resolve controls (rules/api-surface.md; SPEC
+// §6.6/§10.3 C9).
+export type { FrameworkManagedDbProvider } from './guards.js';
 // CSP allowlist config named by `createApp({ document: { csp } })` (recursive publicness,
 // rules/api-surface.md): an app declares third-party analytics/Stripe origins through these.
 // SPEC §6.6: a cross-browser runtime DiD floor, not a by-construction proof.

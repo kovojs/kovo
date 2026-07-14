@@ -34,7 +34,7 @@ import {
   endpointBrowserStateAuthExecuted,
 } from './endpoint-auth-proof.js';
 import { isTrustedSecureRequest } from './request-scheme.js';
-import { runtimeEnvironmentValue } from './runtime-environment-authority.js';
+import { runtimeEnvironmentValue } from '@kovojs/server/internal/runtime-environment';
 import type {
   EndpointDeclaration,
   EndpointMethod,

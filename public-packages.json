@@ -1814,7 +1814,7 @@
       "visibility": "public",
       "kind": "library",
       "apiBoundary": {
-        "public": [".", "./build", "./runtime-bootstrap", "./testing", "./vite"],
+        "public": [".", "./build", "./runtime-bootstrap", "./sqlite", "./testing", "./vite"],
         "generated": ["./jsx-runtime", "./jsx-dev-runtime"],
         "internal": [
           "./internal/app-shell-vite",
@@ -1833,7 +1833,10 @@
           "./internal/html",
           "./internal/managed-db",
           "./internal/runtime-registry-wire",
+          "./internal/runtime-environment",
           "./internal/route",
+          "./internal/sqlite",
+          "./internal/sqlite-capability",
           "./internal/static-export",
           "./internal/vite-security-profile",
           "./internal/wire"
@@ -1858,6 +1861,11 @@
             "path": "./runtime-bootstrap",
             "slug": "server-runtime-bootstrap",
             "description": "First-import runtime lockdown for custom server entries."
+          },
+          {
+            "path": "./sqlite",
+            "slug": "server-sqlite",
+            "description": "Experimental single-principal SQLite runtime with framework-owned native database construction."
           },
           {
             "path": "./testing",

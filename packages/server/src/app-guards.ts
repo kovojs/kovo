@@ -1,5 +1,6 @@
 import type { KovoApp } from './app-types.js';
 import { isDocumentConfig } from './document-structured.js';
+import { isFrameworkManagedDbProvider } from './guards.js';
 import {
   createWitnessWeakSet,
   witnessWeakSetAdd,
@@ -38,7 +39,7 @@ export function isKovoApp(value: unknown): value is KovoApp {
     isLiveTargetRenderers(value.liveTargetRenderers) &&
     isVersionedClientModuleRegistry(value.clientModules) &&
     isOptionalMutationReplayStore(value.mutationReplayStore) &&
-    isOptionalFunction(value.db) &&
+    (isOptionalFunction(value.db) || isFrameworkManagedDbProvider(value.db)) &&
     isOptionalFunction(value.onError) &&
     isOptionalFunction(value.renderRoute) &&
     isAppRequestLimits(value.requestLimits) &&

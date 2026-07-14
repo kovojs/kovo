@@ -31,7 +31,7 @@ import {
   witnessSetHas,
   witnessSetSize,
 } from './security-witness-intrinsics.js';
-import { runtimeEnvironmentValue } from './runtime-environment-authority.js';
+import { runtimeEnvironmentValue } from '@kovojs/server/internal/runtime-environment';
 import { securityPromiseResolve } from './response-security-intrinsics.js';
 
 /**

@@ -7,7 +7,7 @@ import type {
 } from './task-observability.js';
 import { scrubSecretLifecycleValue } from './logging.js';
 import { frameworkManagedDbRawTarget } from './sql-safe-handle.js';
-import { runtimeEnvironmentValue } from './runtime-environment-authority.js';
+import { runtimeEnvironmentValue } from '@kovojs/server/internal/runtime-environment';
 import {
   taskApply,
   taskArrayPush,

@@ -4,7 +4,7 @@ import { isSigningKeyRing, SIGNING_SECRET_MIN_BYTES } from './keyring.js';
 import {
   runtimeEnvironmentSnapshot,
   runtimeEnvironmentValue,
-} from './runtime-environment-authority.js';
+} from '@kovojs/server/internal/runtime-environment';
 import { isSchemaValidationError } from './schema.js';
 import {
   securityIsUint8Array,

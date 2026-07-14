@@ -19,6 +19,15 @@ describe('custom runtime bootstrap entries', () => {
     });
     expect(packed.status, `${packed.stdout}\n${packed.stderr}`).toBe(0);
 
+    const packedBetterAuth = spawnSync(
+      'pnpm',
+      ['--filter', '@kovojs/better-auth', 'run', 'build:dist'],
+      { cwd: serverRoot, encoding: 'utf8' },
+    );
+    expect(packedBetterAuth.status, `${packedBetterAuth.stdout}\n${packedBetterAuth.stderr}`).toBe(
+      0,
+    );
+
     const distRoot = join(serverRoot, 'dist');
     const omission = runPackedServerChild(distRoot, false);
     expect(omission.status, omission.stderr).toBe(0);
@@ -39,6 +48,35 @@ describe('custom runtime bootstrap entries', () => {
       tokenFrozen: true,
       tokenStringKeys: [],
       tokenSymbolKeys: 1,
+    });
+
+    const environmentRoot = mkdtempSync(join(tmpdir(), 'kovo-packed-runtime-environment-'));
+    try {
+      writeFileSync(
+        join(environmentRoot, '.env'),
+        'PACKED_KOVO_ENV_PROOF=loaded-before-bootstrap\n',
+      );
+      const environmentProof = runPackedEnvironmentChild(distRoot, environmentRoot);
+      expect(environmentProof.status, environmentProof.stderr).toBe(0);
+      expect(JSON.parse(environmentProof.stdout)).toEqual({
+        afterMutation: 'loaded-before-bootstrap',
+        beforeMutation: 'loaded-before-bootstrap',
+      });
+    } finally {
+      rmSync(environmentRoot, { force: true, recursive: true });
+    }
+
+    const sqliteBoundary = runPackedSqliteBoundaryChild(
+      distRoot,
+      fileURLToPath(new URL('../../better-auth/dist/index.mjs', import.meta.url)),
+    );
+    expect(sqliteBoundary.status, sqliteBoundary.stderr).toBe(0);
+    expect(JSON.parse(sqliteBoundary.stdout)).toEqual({
+      bindingKeys: ['seedDemoUser', 'sessionProvider', 'signIn', 'signOut'],
+      bindingsFrozen: true,
+      providerOwnKeys: 0,
+      queryBodyIncludesSeed: true,
+      queryStatus: 200,
     });
   }, 30_000);
 
@@ -362,4 +400,139 @@ process.stdout.write(JSON.stringify({
   } finally {
     rmSync(root, { force: true, recursive: true });
   }
+}
+
+function runPackedEnvironmentChild(distRoot: string, cwd: string) {
+  const bootstrapEntry = pathToFileURL(join(distRoot, 'runtime-bootstrap.mjs')).href;
+  const environmentEntry = pathToFileURL(join(distRoot, 'internal/runtime-environment.mjs')).href;
+  const source = `
+import { existsSync } from 'node:fs';
+import { registerHooks } from 'node:module';
+registerHooks({
+  resolve(specifier, context, nextResolve) {
+    if (specifier.startsWith('.') && specifier.endsWith('.js') && context.parentURL) {
+      const candidate = new URL(specifier.replace(/\\.js$/, '.ts'), context.parentURL);
+      if (existsSync(candidate)) return nextResolve(candidate.href, context);
+    }
+    return nextResolve(specifier, context);
+  },
+});
+await import(${JSON.stringify(bootstrapEntry)});
+const environment = await import(${JSON.stringify(environmentEntry)});
+const beforeMutation = environment.runtimeEnvironmentValue('PACKED_KOVO_ENV_PROOF');
+process.env.PACKED_KOVO_ENV_PROOF = 'late-authored-mutation';
+const afterMutation = environment.runtimeEnvironmentValue('PACKED_KOVO_ENV_PROOF');
+process.stdout.write(JSON.stringify({ afterMutation, beforeMutation }));
+`;
+  const environment = { ...process.env };
+  delete environment.PACKED_KOVO_ENV_PROOF;
+  return spawnSync(
+    process.execPath,
+    [
+      '--disable-warning=ExperimentalWarning',
+      '--experimental-transform-types',
+      '--input-type=module',
+      '--eval',
+      source,
+    ],
+    { cwd, encoding: 'utf8', env: environment },
+  );
+}
+
+function runPackedSqliteBoundaryChild(distRoot: string, betterAuthEntry: string) {
+  const entries = {
+    'drizzle-orm/sqlite-core': pathToFileURL(
+      requireFromServerTest.resolve('drizzle-orm/sqlite-core'),
+    ).href,
+    '@kovojs/server': pathToFileURL(join(distRoot, 'index.mjs')).href,
+    '@kovojs/server/internal/runtime-environment': pathToFileURL(
+      join(distRoot, 'internal/runtime-environment.mjs'),
+    ).href,
+    '@kovojs/server/internal/sqlite': pathToFileURL(join(distRoot, 'internal/sqlite.mjs')).href,
+    '@kovojs/server/internal/sqlite-capability': pathToFileURL(
+      join(distRoot, 'internal/sqlite-capability.mjs'),
+    ).href,
+    '@kovojs/server/sqlite': pathToFileURL(join(distRoot, 'sqlite.mjs')).href,
+  };
+  const bootstrapEntry = pathToFileURL(join(distRoot, 'runtime-bootstrap.mjs')).href;
+  const betterAuthUrl = pathToFileURL(betterAuthEntry).href;
+  const source = `
+import { existsSync } from 'node:fs';
+import { registerHooks } from 'node:module';
+registerHooks({
+  resolve(specifier, context, nextResolve) {
+    const mapped = ${JSON.stringify(entries)}[specifier];
+    if (mapped) return nextResolve(mapped, context);
+    if (specifier.startsWith('.') && specifier.endsWith('.js') && context.parentURL) {
+      const candidate = new URL(specifier.replace(/\\.js$/, '.ts'), context.parentURL);
+      if (existsSync(candidate)) return nextResolve(candidate.href, context);
+    }
+    return nextResolve(specifier, context);
+  },
+});
+await import(${JSON.stringify(bootstrapEntry)});
+const server = await import(${JSON.stringify(entries['@kovojs/server'])});
+const sqlite = await import(${JSON.stringify(entries['@kovojs/server/sqlite'])});
+const betterAuth = await import(${JSON.stringify(betterAuthUrl)});
+const { sqliteTable, text } = await import('drizzle-orm/sqlite-core');
+const proof = sqliteTable('kovo_packed_provider_proof', {
+  id: text('id').primaryKey(),
+  value: text('value').notNull(),
+});
+const runtime = sqlite.createSqliteAppRuntime({
+  seed: [{ rows: [{ id: 'p1', value: 'packed-seed-visible' }], table: proof }],
+  tables: [proof],
+});
+try {
+  const bindings = betterAuth.createBetterAuthSqliteBindings({
+    baseURL: 'http://localhost:5173',
+    csrf: { secret: 'packed-csrf-secret-0123456789abcdef', sessionId: () => undefined },
+    mapSession: ({ session, user }) => ({ id: session.id, user: { id: user.id } }),
+    schema: { proof },
+    secret: betterAuth.betterAuthSqliteSecret('packed-auth-secret-0123456789abcdef'),
+    signInAccess: server.publicAccess('packed Better Auth sign-in proof'),
+    signOutAccess: server.publicAccess('packed Better Auth sign-out proof'),
+    systemDb: runtime.systemDb({
+      operation: 'write',
+      reason: 'Packed Better Auth adapter construction proof',
+      surface: 'runtime-bootstrap.test#packed-sqlite-auth',
+    }),
+  });
+  const packedQuery = server.query('packed-provider-proof', {
+    access: server.publicAccess('packed managed provider query proof'),
+    load: async (_input, context) => ({
+      items: await context.db.select({ id: proof.id, value: proof.value }).from(proof).all(),
+    }),
+    reads: [],
+  });
+  const app = server.createApp({
+    db: runtime.db,
+    egress: { enabled: false, justification: 'isolated packed provider proof' },
+    queries: [packedQuery],
+  });
+  const handler = server.createRequestHandler(app);
+  const response = await handler(new Request('http://localhost/_q/packed-provider-proof'));
+  const body = await response.text();
+  process.stdout.write(JSON.stringify({
+    bindingKeys: Object.keys(bindings).sort(),
+    bindingsFrozen: Object.isFrozen(bindings),
+    providerOwnKeys: Reflect.ownKeys(runtime.db).length,
+    queryBodyIncludesSeed: body.includes('packed-seed-visible'),
+    queryStatus: response.status,
+  }));
+} finally {
+  runtime.close();
+}
+`;
+  return spawnSync(
+    process.execPath,
+    [
+      '--disable-warning=ExperimentalWarning',
+      '--experimental-transform-types',
+      '--input-type=module',
+      '--eval',
+      source,
+    ],
+    { encoding: 'utf8', env: { ...process.env, NODE_ENV: 'development' } },
+  );
 }

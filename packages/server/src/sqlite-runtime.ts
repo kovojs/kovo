@@ -9,10 +9,19 @@ import { createSecretBoxingReadDb } from './secret-read-boundary.js';
 import { assertManagedSqlParserAuthorityReady } from './sql-parser-authority-bootstrap.js';
 import { extractCompilerBoundKovoRuntimeDbMetadata } from './generated-table-security-registry.js';
 import {
+  forEachReadonlyMapEntry,
+  forEachReadonlySetValue,
+} from './readonly-collection-snapshot.js';
+import {
+  createWitnessMap,
+  createWitnessSet,
   witnessFreeze,
+  witnessCreateNullRecord,
   witnessGetOwnPropertyDescriptor,
   witnessIsArray,
+  witnessMapSet,
   witnessObjectIs,
+  witnessSetAdd,
 } from './security-witness-intrinsics.js';
 
 /** Runtime source metadata for one SQLite result column. */
@@ -75,6 +84,8 @@ export interface KovoSqliteAppRuntimeOptions<Db extends object> {
 export interface KovoSqliteAppRuntimeDb<Db extends object> {
   /** Write-capable framework construction/auth adapter handle. */
   db: Db;
+  /** Opaque provider carrier resolved only through framework-owned managed DB hooks. */
+  providerDb: Db;
   /** Read-only endpoint/query handle with secret-read boxing applied. */
   readonlyDb: Reader<Db>;
 }
@@ -89,7 +100,7 @@ export interface KovoSqliteAppRuntimeDb<Db extends object> {
 export function runtimeDbMetadataForSchema(
   tables: readonly unknown[],
 ): KovoSqliteAppRuntimeMetadata {
-  return extractCompilerBoundKovoRuntimeDbMetadata(tables);
+  return snapshotSqliteRuntimeMetadata(extractCompilerBoundKovoRuntimeDbMetadata(tables));
 }
 
 /**
@@ -127,7 +138,7 @@ export function createSqliteAppRuntimeDb<Db extends object>(
     throw new TypeError('SQLite runtime options contain an invalid authority value.');
   }
   const db = rawDb as Db;
-  const metadata = rawMetadata as KovoSqliteAppRuntimeMetadata;
+  const metadata = snapshotSqliteRuntimeMetadata(rawMetadata as KovoSqliteAppRuntimeMetadata);
   const normalizeTableName = rawNormalizeTableName as (table: string) => string;
   const sqliteAuthorizer = rawSqliteAuthorizer as DeclaredWriteSqliteAuthorizerOptions;
   const sqliteColumnOrigins = rawSqliteColumnOrigins as KovoSqliteColumnOriginClient | undefined;
@@ -156,10 +167,121 @@ export function createSqliteAppRuntimeDb<Db extends object>(
         tableNames,
       }),
   );
+  // SPEC §10.3 C9: the generated provider must not receive the Drizzle/native database object.
+  // This type-only mirror is resolved through the private WeakMap hooks below before a query or
+  // mutation can use it; direct property access on the frozen null-record exposes no authority.
+  const providerDb = witnessFreeze(witnessCreateNullRecord()) as Db;
+  registerFrameworkManagedDbHooks(
+    providerDb,
+    () => readDb,
+    (policy: Parameters<typeof createDeclaredWriteDb>[1]) =>
+      createDeclaredWriteDb(db, policy, {
+        dialectLabel: 'SQLite',
+        governedColumns: metadata,
+        normalizeTableName,
+        sqliteAuthorizer,
+        tableNames,
+      }),
+  );
   return witnessFreeze({
     db,
+    providerDb,
     readonlyDb: readDb,
   });
+}
+
+function snapshotSqliteRuntimeMetadata(
+  metadata: KovoSqliteAppRuntimeMetadata,
+): KovoSqliteAppRuntimeMetadata {
+  return witnessFreeze({
+    allColumnKeys: snapshotSqliteReadonlySet(
+      requiredSqliteRuntimeValue(metadata, 'allColumnKeys'),
+      'SQLite runtime all-column keys',
+    ),
+    columnSources: snapshotSqliteReadonlyMap(
+      requiredSqliteRuntimeValue(metadata, 'columnSources'),
+      'SQLite runtime column sources',
+      snapshotSqliteColumnSource,
+    ),
+    governedColumnKeysByTable: snapshotSqliteReadonlyMap(
+      requiredSqliteRuntimeValue(metadata, 'governedColumnKeysByTable'),
+      'SQLite runtime governed column keys',
+      (values, tableName) =>
+        snapshotSqliteReadonlySet(values, `SQLite runtime governed keys for ${String(tableName)}`),
+    ),
+    governedColumnNamesByTable: snapshotSqliteReadonlyMap(
+      requiredSqliteRuntimeValue(metadata, 'governedColumnNamesByTable'),
+      'SQLite runtime governed column names',
+      (values, tableName) =>
+        snapshotSqliteReadonlySet(values, `SQLite runtime governed names for ${String(tableName)}`),
+    ),
+    secretColumnKeys: snapshotSqliteReadonlySet(
+      requiredSqliteRuntimeValue(metadata, 'secretColumnKeys'),
+      'SQLite runtime secret column keys',
+    ),
+    secretColumnKeysByTable: snapshotSqliteReadonlyMap(
+      requiredSqliteRuntimeValue(metadata, 'secretColumnKeysByTable'),
+      'SQLite runtime secret column keys by table',
+      (values, tableName) =>
+        snapshotSqliteReadonlySet(values, `SQLite runtime secret keys for ${String(tableName)}`),
+    ),
+    secretColumnNames: snapshotSqliteReadonlySet(
+      requiredSqliteRuntimeValue(metadata, 'secretColumnNames'),
+      'SQLite runtime secret column names',
+    ),
+    secretColumnNamesByTable: snapshotSqliteReadonlyMap(
+      requiredSqliteRuntimeValue(metadata, 'secretColumnNamesByTable'),
+      'SQLite runtime secret column names by table',
+      (values, tableName) =>
+        snapshotSqliteReadonlySet(values, `SQLite runtime secret names for ${String(tableName)}`),
+    ),
+    secretTableNames: snapshotSqliteReadonlySet(
+      requiredSqliteRuntimeValue(metadata, 'secretTableNames'),
+      'SQLite runtime secret table names',
+    ),
+  });
+}
+
+function snapshotSqliteReadonlyMap<Key, Value, OutputValue = Value>(
+  value: unknown,
+  label: string,
+  snapshot: (entry: Value, key: Key) => OutputValue = (entry) => entry as unknown as OutputValue,
+): Map<Key, OutputValue> {
+  const output = createWitnessMap<Key, OutputValue>();
+  forEachReadonlyMapEntry<Key, Value>(value, label, (entry, key) => {
+    witnessMapSet(output, key, snapshot(entry, key));
+  });
+  return output;
+}
+
+function snapshotSqliteReadonlySet<Value>(value: unknown, label: string): Set<Value> {
+  const output = createWitnessSet<Value>();
+  forEachReadonlySetValue<Value>(value, label, (entry) => {
+    witnessSetAdd(output, entry);
+  });
+  return output;
+}
+
+function snapshotSqliteColumnSource(
+  value: KovoSqliteRuntimeColumnSource,
+  key: object,
+): KovoSqliteRuntimeColumnSource {
+  if (typeof key !== 'object' || key === null || typeof value !== 'object' || value === null) {
+    throw new TypeError('SQLite runtime column-source metadata is invalid.');
+  }
+  const column = requiredSqliteRuntimeValue(value, 'column');
+  const selectionKey = requiredSqliteRuntimeValue(value, 'key');
+  const secret = requiredSqliteRuntimeValue(value, 'secret');
+  const table = requiredSqliteRuntimeValue(value, 'table');
+  if (
+    typeof column !== 'string' ||
+    typeof selectionKey !== 'string' ||
+    typeof secret !== 'boolean' ||
+    typeof table !== 'string'
+  ) {
+    throw new TypeError('SQLite runtime column-source metadata is invalid.');
+  }
+  return witnessFreeze({ column, key: selectionKey, secret, table });
 }
 
 function optionalSqliteRuntimeValue(source: object, property: PropertyKey): unknown {

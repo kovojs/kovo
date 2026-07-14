@@ -13,7 +13,7 @@ import {
   commandStringCharCodeAt,
   commandStringTrim,
 } from './command-intrinsics.js';
-import { runtimeEnvironmentSnapshot } from './runtime-environment-authority.js';
+import { runtimeEnvironmentSnapshot } from '@kovojs/server/internal/runtime-environment';
 import { isNativeAbortSignal } from './request-carrier.js';
 import {
   createWitnessSet,

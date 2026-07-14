@@ -13,6 +13,7 @@
     ".": "./src/index.ts",
     "./build": "./src/build.ts",
     "./runtime-bootstrap": "./src/runtime-bootstrap.ts",
+    "./sqlite": "./src/sqlite.ts",
     "./testing": "./src/testing.ts",
     "./vite": "./src/vite-source.ts",
     "./internal/app-shell-vite": "./src/internal/app-shell-vite.ts",
@@ -31,7 +32,10 @@
     "./internal/html": "./src/internal/html.ts",
     "./internal/managed-db": "./src/internal/managed-db.ts",
     "./internal/runtime-registry-wire": "./src/internal/runtime-registry-wire.ts",
+    "./internal/runtime-environment": "./src/internal/runtime-environment.ts",
     "./internal/route": "./src/internal/route.ts",
+    "./internal/sqlite": "./src/internal/sqlite.ts",
+    "./internal/sqlite-capability": "./src/internal/sqlite-capability.ts",
     "./internal/static-export": "./src/internal/static-export.ts",
     "./internal/vite-security-profile": "./src/internal/vite-security-profile.ts",
     "./internal/wire": "./src/internal/wire.ts",
@@ -51,6 +55,10 @@
       "./runtime-bootstrap": {
         "types": "./dist/runtime-bootstrap.d.mts",
         "default": "./dist/runtime-bootstrap.mjs"
+      },
+      "./sqlite": {
+        "types": "./dist/sqlite.d.mts",
+        "default": "./dist/sqlite.mjs"
       },
       "./testing": {
         "types": "./dist/testing.d.mts",
@@ -124,9 +132,21 @@
         "types": "./dist/internal/runtime-registry-wire.d.mts",
         "default": "./dist/internal/runtime-registry-wire.mjs"
       },
+      "./internal/runtime-environment": {
+        "types": "./dist/internal/runtime-environment.d.mts",
+        "default": "./dist/internal/runtime-environment.mjs"
+      },
       "./internal/route": {
         "types": "./dist/internal/route.d.mts",
         "default": "./dist/internal/route.mjs"
+      },
+      "./internal/sqlite": {
+        "types": "./dist/internal/sqlite.d.mts",
+        "default": "./dist/internal/sqlite.mjs"
+      },
+      "./internal/sqlite-capability": {
+        "types": "./dist/internal/sqlite-capability.d.mts",
+        "default": "./dist/internal/sqlite-capability.mjs"
       },
       "./internal/static-export": {
         "types": "./dist/internal/static-export.d.mts",
@@ -151,7 +171,7 @@
     }
   },
   "scripts": {
-    "build:dist": "vp pack src/build-preset-internal.ts src/build.ts src/index.ts src/internal/app-shell-vite.ts src/internal/audit-facts.ts src/internal/build-context.ts src/internal/build.ts src/internal/capabilities.ts src/internal/client-modules.ts src/internal/csp.ts src/internal/csrf.ts src/internal/data-plane-static-analysis.ts src/internal/egress.ts src/internal/escape.ts src/internal/execution.ts src/internal/html.ts src/internal/managed-db.ts src/internal/route.ts src/internal/runtime-registry-wire.ts src/internal/static-export.ts src/internal/vite-security-profile.ts src/internal/wire.ts src/jsx-runtime.ts src/runtime-bootstrap.ts src/testing.ts src/vite.ts --dts",
+    "build:dist": "vp pack src/build-preset-internal.ts src/build.ts src/index.ts src/internal/app-shell-vite.ts src/internal/audit-facts.ts src/internal/build-context.ts src/internal/build.ts src/internal/capabilities.ts src/internal/client-modules.ts src/internal/csp.ts src/internal/csrf.ts src/internal/data-plane-static-analysis.ts src/internal/egress.ts src/internal/escape.ts src/internal/execution.ts src/internal/html.ts src/internal/managed-db.ts src/internal/route.ts src/internal/runtime-environment.ts src/internal/runtime-registry-wire.ts src/internal/sqlite-capability.ts src/internal/sqlite.ts src/internal/static-export.ts src/internal/vite-security-profile.ts src/internal/wire.ts src/jsx-runtime.ts src/runtime-bootstrap.ts src/sqlite.ts src/testing.ts src/vite.ts --dts",
     "prepack": "pnpm run build:dist"
   },
   "dependencies": {
@@ -173,5 +193,13 @@
     "@types/pg": "^8.15.6",
     "better-sqlite3": "12.11.1",
     "vitest": "4.1.8"
+  },
+  "peerDependencies": {
+    "better-sqlite3": "12.11.1"
+  },
+  "peerDependenciesMeta": {
+    "better-sqlite3": {
+      "optional": true
+    }
   }
 }

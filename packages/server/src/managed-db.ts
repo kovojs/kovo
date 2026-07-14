@@ -67,7 +67,7 @@ import {
   forEachReadonlyMapEntry,
   forEachReadonlySetValue,
 } from './readonly-collection-snapshot.js';
-import { runtimeEnvironmentValue } from './runtime-environment-authority.js';
+import { runtimeEnvironmentValue } from '@kovojs/server/internal/runtime-environment';
 
 declare const readerDbBrand: unique symbol;
 declare const writerDbBrand: unique symbol;

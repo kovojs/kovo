@@ -24,7 +24,7 @@ import type { MutationReplayStore } from './replay.js';
 import type { MutationRenderRequestResolver } from './mutation-render-request-authority.js';
 import { isNativeRequest } from './request-carrier.js';
 import { requestCreateUrl, requestUrl, requestUrlSnapshot } from './request-body-intrinsics.js';
-import { runtimeEnvironmentValue } from './runtime-environment-authority.js';
+import { runtimeEnvironmentValue } from '@kovojs/server/internal/runtime-environment';
 import {
   readHeader,
   type FrameworkWireBody,
