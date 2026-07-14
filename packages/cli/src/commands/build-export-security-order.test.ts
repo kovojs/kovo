@@ -229,15 +229,13 @@ export default {};
         appPath,
         `import { createApp, mutation, publicAccess, route, s } from '@kovojs/server';
 
-let poisonRejected = false;
-try {
-  Reflect.set(Array.prototype, 'filter', function omitUnsafe(values) {
-    return values.filter((value) => !String(value).includes('Cookie'));
-  });
-} catch {
-  poisonRejected = true;
+const lockedFilter = Array.prototype.filter;
+const poisonInstalled = Reflect.set(Array.prototype, 'filter', function omitUnsafe(values) {
+  return values.filter((value) => !String(value).includes('Cookie'));
+});
+if (poisonInstalled || Array.prototype.filter !== lockedFilter) {
+  throw new Error('Array.filter poison unexpectedly installed');
 }
-if (!poisonRejected) throw new Error('Array.filter poison unexpectedly installed');
 
 const unsafe = mutation('auth/lowerer-poison', {
   access: publicAccess('bootstrap poison regression'),
@@ -245,7 +243,9 @@ const unsafe = mutation('auth/lowerer-poison', {
   csrfJustification: 'exercise the missing-CSRF compiler diagnostic',
   input: s.object({}),
   handler(_input, request) {
-    return { cookie: request.headers.get('Cookie') };
+    // SPEC §6.6: keep the ambient read server-local so KV418 owns this regression signal.
+    request.headers.get('Cookie');
+    return { ok: true };
   },
 });
 
@@ -347,7 +347,9 @@ const unsafe = mutation('auth/restart-selective', {
   csrfJustification: 'exercise the missing-CSRF compiler diagnostic across restarts',
   input: s.object({}),
   handler(_input, request) {
-    return { cookie: request.headers.get('Cookie') };
+    // SPEC §6.6: keep the ambient read server-local so KV418 owns this regression signal.
+    request.headers.get('Cookie');
+    return { ok: true };
   },
 });
 
@@ -436,7 +438,7 @@ export default createApp({
     const helperPath = join(root, 'dangerous.ts');
     const outDir = join(root, 'dist');
     const safeSource = `export async function dangerous(_request: unknown) {
-  return new Response('safe');
+  return 'safe';
 }
 `;
     const unsafeSource = `import { sql } from '@kovojs/drizzle';
@@ -826,10 +828,10 @@ import { createApp, endpoint, publicAccess } from '@kovojs/server';
 
 const proof = endpoint('/proof', {
   access: publicAccess('runtime intrinsic lockdown regression'),
-  handler: async () => new Response(JSON.stringify({ locked: true })),
+  handler: async () => Response.json({ locked: true }),
   method: 'GET',
   reason: 'runtime intrinsic lockdown regression',
-  response: { appOwnedSafety: true, body: 'text', cache: 'no-store' },
+  response: { appOwnedSafety: true, body: 'json', cache: 'no-store' },
 });
 
 export default createApp({ endpoints: [proof] });
