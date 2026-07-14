@@ -13,9 +13,9 @@ fails closed.
 
 | Severity | Families | Items  |
 | -------- | -------: | ------ |
-| Critical |       15 | C1-C15 |
-| High     |       19 | H1-H19 |
-| Medium   |        9 | M1-M9  |
+| Critical |       21 | C1-C21 |
+| High     |       23 | H1-H23 |
+| Medium   |       10 | M1-M10 |
 | Low      |        2 | L1-L2  |
 
 ## Critical
@@ -84,12 +84,11 @@ fails closed.
     bounded schemas, authenticated stores, and awaited settlement own replay truth. SPEC §9.1,
     §10.3.
 
-- [ ] **C11 - Forgeable Vite re-entry provenance could suppress KV235 and accept attacker-selected
+- [x] **C11 - Forgeable Vite re-entry provenance could suppress KV235 and accept attacker-selected
       lowered server output.**
-  - A source-visible trusted factory accepted an injected compiler callback, while persistent
-    file/source recognition let one plugin suppress the genuine compiler in a later plugin.
-  - **Open proof:** integrate the exact forged-factory regression and require a framework-owned,
-    root/file-bound, one-shot compiler outcome before re-entry can be skipped. SPEC §2, §5.2.
+  - **Evidence:** `cab4b4b84`; Vite config/options and framework-compile regressions require a
+    root/file-bound framework outcome, while retired cross-configuration caches cannot suppress a
+    genuine compile. `vp check` and the focused compiler/Vite suites pass. SPEC §2, §5.2.
 
 - [x] **C12 - Production bundles could consume app source bytes different from the snapshot that
       passed the build security preflight.**
@@ -99,24 +98,18 @@ fails closed.
     source value with the approved closed source graph, and changed/new-module timer attacks fail
     before server artifact emission. SPEC §5.2, §6.6.
 
-- [ ] **C13 - Runtime security engines could be first-resolved after app evaluation or consume
+- [x] **C13 - Runtime security engines could be first-resolved after app evaluation or consume
       app-realm collection authority.**
-  - Reproductions replaced the managed SQL parser, Argon2 password work, and the Undici-floor
-    witness after framework initialization; a later selective `Array.prototype.map` replacement
-    also made the captured SQL parser report no write targets and bypass the managed write policy.
-  - **Open proof:** keep `9b6b1a4e6`, `716f2fa69`, and `5b90d62d6`; replace the incomplete parser
-    pin in `ea30e8c0e` with an isolated, exact-dependency parser realm and prove both classifier and
-    managed-execution attacks fail. SPEC §6.6.
+  - **Evidence:** `9b6b1a4e6`, `716f2fa69`, `5b90d62d6`, `a2f615be8`, `3abc7bad3`; password and
+    egress work is boot-owned, while managed SQL parsing runs in an exact-dependency private realm
+    installed by a capability-authenticated bootstrap. Parser-registry attacks and 158 direct
+    managed-DB/mutation/guard/task regressions pass. SPEC §6.6.
 
-- [ ] **C14 - Generated live-target renderer authority leaked across app aggregates in one
+- [x] **C14 - Generated live-target renderer authority leaked across app aggregates in one
       process.**
-  - Registering app A's generated renderer, creating app A, then registering app B's renderer and
-    creating app B left both renderers in `appB.liveTargetRenderers`. With a shared process
-    attestation secret, an A descriptor can therefore select A's query-backed renderer while it is
-    running with B's request and DB context.
-  - **Open proof:** bind generated renderers to the exact app aggregate/module graph, prove two
-    sequential apps cannot observe each other's renderer authority, and cover removal/HMR without
-    retaining a deleted renderer. SPEC §2, §6.6, §9.1, §9.5.
+  - **Evidence:** `e851d70b9`; an async-local, single-consumer app-graph scope owns generated
+    renderer registration, late/unscoped registration has no authority, and sequential/concurrent
+    app plus HMR/removal isolation regressions pass. SPEC §2, §6.6, §9.1, §9.5.
 
 - [x] **C15 - A later app aggregate could replace the process-wide egress floor and widen an
       earlier app's outbound authority.**
@@ -127,11 +120,60 @@ fails closed.
     before any transport policy is replaced. The exact transport repro plus 102 egress tests,
     egress-boundary, sink-policy, and `vp check` pass. SPEC §6.6.
 
+- [x] **C16 - Live-target refresh could cross the source route's authorization and request
+      context.**
+  - A public page descriptor could be replayed through dev HMR for a forbidden route, or through a
+    denied/invalid production mutation while response queries observed the mutation URL. Both
+    variants returned route-context secrets without the source route owning the render decision.
+  - **Evidence:** `7ea6d7d5a`, `4a9221421`, `b6ebaf70d`, `42d207482`, `5c804e3d5`, and
+    `96e1e1336`; attestations bind the canonical source URL, mutation/HMR rerun the exact source
+    guard chain, and every response query/renderer receives a sanitized canonical GET. SPEC §6.6,
+    §9.1, §9.3, §9.5.1.
+
+- [x] **C17 - A valid public live descriptor could select an unsigned private query-only target.**
+  - Forging `Kovo-Targets` beside a valid public descriptor executed a private query loader and
+    returned its server secret because query-only targets were not bound to the signed renderer.
+  - **Evidence:** `94a7f8c54`; every query-only layout/update target is now generated, signed, and
+    exact-renderer-bound, with the affected eight-file 219-test matrix green. SPEC §6.6, §9.1.
+
+- [x] **C18 - Mutation input could steer a live target's unrelated query argument domain.**
+  - A signed descriptor's component props did not exclusively own query instance arguments, so an
+    unrelated mutation input could select a different row while retaining the descriptor's target.
+  - **Evidence:** `9fa0cb209`; descriptor props now own query arguments and all generated dynamic
+    instances render without consulting mutation input. SPEC §6.6, §9.1.
+
+- [x] **C19 - Live-target attestations were reusable across app, build, session, or principal
+      boundaries.**
+  - Reproductions crossed same-contract apps, stale builds, two users sharing one CSRF session
+    binding, no-global-CSRF principals, and anonymous CSRF cookies A/B.
+  - **Evidence:** `d19ba17a1`, `3ccf1f20c`, `3b18368e7`, `8642a0ec5`, and `0b5ad9f45`; the payload
+    binds the exact app/build audience, CSRF session or anonymous-cookie identity, and independently
+    resolved framework principal. The final server suite is 182 files/2742 tests green. SPEC §6.6,
+    §9.1, §9.3.
+
+- [x] **C20 - Release OIDC authority was reachable before exact trusted-CI authorization and by
+      checkout, install, build, and pack code.**
+  - Dispatch could skip validation, same-name checks were not bound to the official CI workflow,
+    and the drift check omitted part of the tracked tree.
+  - **Evidence:** `8b0f43d0a`; a no-checkout/no-OIDC job binds the exact main SHA to the official
+    GitHub Actions app, CI workflow, suite, repository, and successful push run; a separate no-OIDC
+    prepare job owns all repository code, dry runs stop there, and only the reviewed archive reaches
+    the minimal publish job.
+
+- [x] **C21 - A self-attested packed manifest could select a decoy package identity and publish an
+      arbitrary tarball outside the verified release directory.**
+  - The exact `../../outside.tgz` reproduction reached `npm publish` while a valid package name was
+    present elsewhere in the manifest.
+  - **Evidence:** `8b0f43d0a`; the publisher exact-matches the ordered release inventory and packed
+    manifest identity, rejects duplicate/escaping/symlinked paths, revalidates the real path,
+    tarball hash, file list, and manifest, and compares already-published `dist.integrity`.
+
 ## High
 
 - [x] **H1 - Starter dependencies, tools, and CI actions were not fully immutable.**
-  - **Evidence:** `7e232d8cf`, `93613ddc0`, `e7a09b6a7`; exact versions/digests and patched
-    transports pass supply-chain policy gates.
+  - **Evidence:** `7e232d8cf`, `93613ddc0`, `e7a09b6a7`, and `8b0f43d0a`; exact versions/digests,
+    exact generated starter tool versions, npmjs registry pins, and patched transports pass
+    supply-chain policy gates.
 
 - [x] **H2 - Production starter boot could seed a known credential or accept weak secret/cookie
       posture.**
@@ -208,14 +250,44 @@ fails closed.
     canonical snapshots are bounded to one entry per lane, and the symlink regression leaves the
     outside victim untouched. SPEC §2, §10.6.
 
-- [ ] **H19 - Concurrent filesystem storage reads could combine an object body and metadata from
+- [x] **H19 - Concurrent filesystem storage reads could combine an object body and metadata from
       different committed generations.**
-  - Writers were serialized only per adapter instance while `get`, `stat`, and `stream` read the
-    body and sidecar separately; two same-root adapters reproduced a new body with the prior
-    content type, ETag, and metadata.
-  - **Open proof:** commit body bytes behind one atomic generation pointer, share read/write
-    coordination across same-root instances, and prove `get`, `stat`, and `stream` each observe one
-    complete generation. SPEC §6.6, §10.6.
+  - **Evidence:** `cab4b4b84`; same-root adapters share a process-global generation lock and body,
+    metadata, stat, and stream reads resolve one atomically committed generation. Core storage and
+    overlapping-adapter race suites pass. SPEC §6.6, §10.6.
+
+- [x] **H20 - Ordinary app-authored mutation/live-target response registries exposed arbitrary
+      render and query authority.**
+  - Root `mutationResponses`, `fragmentRenderers`, and `liveTargetRenderers` options let request
+    target headers select app callbacks. Empty targets acted as a wildcard, duplicate targets could
+    amplify work, and CSRF/schema/guard/replay failures could invoke callbacks before handler
+    authority existed.
+  - **Evidence:** `e5a7bba5d`, `4861d9fb9`, `d19ba17a1`, `052e3acad`, and `5455450b9`; root response
+    options are rejected, only scoped compiler-generated registries carry authority, targets are
+    exact/deduped, and typed failure renderers declare the submitted mutation key. The migrated
+    Chromium live-target matrix is 29/29 green. SPEC §2, §6.6, §9.1, §9.5.
+
+- [x] **H21 - Principal-specific HMR refresh output was cacheable and live refresh accepted safe
+      methods that its framework client never used.**
+  - A proxy/browser cache could retain session-specific route or fragment bytes, while GET/HEAD
+    unnecessarily widened the dev refresh transport.
+  - **Evidence:** `e4f7eb604`; live refresh is POST-only and every route/live success or failure has
+    `Cache-Control: private, no-store` plus `Vary: Cookie`; the final focused six-file matrix is
+    172/172 green. SPEC §9.5.1.
+
+- [x] **H22 - Final release tarballs were rebuilt through lifecycle scripts outside the reviewed
+      scanner and egress path, while registry state was ambient and integrity-blind.**
+  - The bytes scanned by pack-security were not necessarily the bytes later published; uncommon
+    and NUL-bearing files also escaped the prior scan.
+  - **Evidence:** `8b0f43d0a`; one lifecycle-disabled pack path produces the final bytes, then exact
+    tarball contents, snapshot, manifest, and sha512 are scanned and attested; npmjs is explicitly
+    pinned and an existing version is skipped only when `dist.integrity` matches.
+
+- [x] **H23 - An obsolete placeholder bootstrap remained a second ambient-registry npm mutation
+      authority and treated every registry lookup error as a missing package.**
+  - **Evidence:** `fabca7f08`; all 13 public packages were confirmed present, the publisher was
+    removed, and the supply-chain gate now requires exactly one npm publish authority: the attested
+    packed-package publisher.
 
 ## Medium
 
@@ -252,11 +324,13 @@ fails closed.
 - [x] **M8 - Starter/runtime-package verification omitted full CI and lock-relevant package policy.**
   - **Evidence:** `4baecfe0e`, `b75d59ed2`; full starter CI and frozen generated installs are proven.
 
-- [ ] **M9 - Concurrent framework output commits used alias-incomplete lock keys.**
-  - Parent and nested filesystem roots could address the same target through different queues,
-    overlap their rename/post-commit checks, and spuriously reject a legitimate build write.
-  - **Open proof:** integrate the process-global commit queue and the overlapping-root regression,
-    then rerun storage/filesystem race suites. SPEC §10.6.
+- [x] **M9 - Concurrent framework output commits used alias-incomplete lock keys.**
+  - **Evidence:** `cab4b4b84`; a process-global canonical commit queue serializes overlapping roots,
+    and the nested/parent alias regression plus filesystem race suites pass. SPEC §10.6.
+
+- [x] **M10 - HMR live-target descriptors used an ambiguous comma delimiter.**
+  - **Evidence:** `e851d70b9`; HMR emits the canonical semicolon-separated descriptor list, strict
+    parsing regressions pass, and `hmr-dev-client.spec.ts` is 7/7 green. SPEC §9.1, §9.5.1.
 
 ## Low
 
