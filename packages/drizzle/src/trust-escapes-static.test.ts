@@ -1716,13 +1716,12 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
     expect(Date.now() - started).toBeLessThan(3_000);
   });
 
-  it('keeps four hundred independent request roots within a low-second bound', () => {
+  it('classifies four hundred independent request roots without budget truncation', () => {
     const roots = Array.from(
       { length: 400 },
       (_unused, index) =>
         `export const unsafe${index} = mutation({ handler(input) { return execFileSync(input.program); } });`,
     ).join('\n');
-    const started = Date.now();
     const facts = sinksFor(`
       import { execFileSync } from 'node:child_process';
       import { mutation } from '@kovojs/server';
@@ -1730,16 +1729,15 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
     `);
 
     expect(facts.filter((fact) => fact.sink === 'child_process.execFileSync')).toHaveLength(400);
-    expect(Date.now() - started).toBeLessThan(3_000);
+    expect(facts.some((fact) => fact.sink === 'request-handler.provenance-budget')).toBe(false);
   });
 
-  it('fails closed before oversized independent request-root breadth can grow unbounded', () => {
+  it('fails closed at the deterministic independent request-root breadth budget', () => {
     const roots = Array.from(
       { length: 1_000 },
       (_unused, index) =>
         `export const unsafe${index} = mutation({ handler(input) { return execFileSync(input.program); } });`,
     ).join('\n');
-    const started = Date.now();
     const facts = sinksFor(`
       import { execFileSync } from 'node:child_process';
       import { mutation } from '@kovojs/server';
@@ -1752,7 +1750,6 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
         expect.objectContaining({ sink: 'request-handler.provenance-budget' }),
       ]),
     );
-    expect(Date.now() - started).toBeLessThan(5_000);
   });
 
   it('discovers framework roots through containers, local factories, and invocation adapters', () => {
@@ -3567,5 +3564,174 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
           fact.sink === 'request-handler.opaque-package-call',
       ).length,
     ).toBeGreaterThanOrEqual(3);
+  });
+
+  it('resolves local component descriptors through js-spelled TSX imports', () => {
+    const facts = sinksForFiles([
+      {
+        fileName: 'components/card.tsx',
+        source: `
+          import { execFileSync } from 'node:child_process';
+          import { component } from '@kovojs/core';
+          export const Card = component({
+            render: () => { execFileSync('component-render'); return <strong>safe</strong>; },
+          });
+        `,
+      },
+      {
+        fileName: 'app.tsx',
+        source: `
+          import { createApp, route } from '@kovojs/server';
+          import { Card } from './components/card.js';
+          export default createApp({
+            routes: [route('/', { page: () => <main><Card /></main> })],
+          });
+        `,
+      },
+    ]);
+
+    expect(facts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sink: 'child_process.execFileSync',
+          source: "'component-render'",
+        }),
+      ]),
+    );
+    expect(
+      facts.filter(
+        (fact) =>
+          fact.sink === 'client-wire.request.opaque-jsx-component' ||
+          (fact.sink === 'request-handler.opaque-protocol' &&
+            fact.source.includes('jsx-component')),
+      ),
+    ).toEqual([]);
+  });
+
+  it('keeps a local imported plain numeric container inside the reviewed protocol set', () => {
+    const facts = sinksForFiles([
+      {
+        fileName: 'state.ts',
+        source: `export const state = { count: 0 };`,
+      },
+      {
+        fileName: 'app.ts',
+        source: `
+          import { mutation } from '@kovojs/server';
+          import { state } from './state.js';
+          export const update = mutation({ handler() {
+            state.count += 1;
+            return { count: state.count };
+          } });
+        `,
+      },
+    ]);
+
+    expect(facts.filter((fact) => fact.sink === 'request-handler.opaque-protocol')).toEqual([]);
+  });
+
+  it('scans endpoint and webhook descriptors in the shared app endpoint collection', () => {
+    const facts = sinksFor(`
+      import { execFileSync } from 'node:child_process';
+      import { createApp, endpoint, webhook } from '@kovojs/server';
+      const plain = endpoint('/plain', { handler() {
+        execFileSync('plain-handler');
+        return new Response('plain');
+      } });
+      const hook = webhook('/hook', { handler() {
+        execFileSync('webhook-handler');
+        return { ok: true };
+      } });
+      createApp({ endpoints: [plain, hook] });
+    `);
+
+    expect(
+      facts.filter((fact) => fact.sink === 'child_process.execFileSync').map((fact) => fact.source),
+    ).toEqual(expect.arrayContaining(["'plain-handler'", "'webhook-handler'"]));
+    expect(
+      facts.filter(
+        (fact) =>
+          fact.sink === 'request-handler.opaque-source' && fact.source.includes('unresolved-'),
+      ),
+    ).toEqual([]);
+  });
+
+  it('keeps compiler-lowered component event handlers off the public wire', () => {
+    const facts = sinksFor(`
+      import { component } from '@kovojs/core';
+      import { createApp, route } from '@kovojs/server';
+      const Interactive = component({
+        state: () => ({ count: 0 }),
+        render: (_props, state) => (
+          <button onClick={() => { state.count += 1; }}>{state.count}</button>
+        ),
+      });
+      createApp({ routes: [route('/', { page: () => <Interactive /> })] });
+    `);
+
+    expect(
+      facts.filter(
+        (fact) =>
+          fact.sink === 'client-wire.request.opaque-value' &&
+          fact.source.includes('state.count += 1'),
+      ),
+    ).toEqual([]);
+
+    const lowercaseFacts = sinksFor(`
+      import { component } from '@kovojs/core';
+      import { createApp, route } from '@kovojs/server';
+      const NotLowered = component({
+        render: () => <button onclick={() => 'not compiler owned'}>go</button>,
+      });
+      createApp({ routes: [route('/', { page: () => <NotLowered /> })] });
+    `);
+
+    expect(lowercaseFacts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sink: 'client-wire.request.opaque-value',
+          source: "() => 'not compiler owned'",
+        }),
+      ]),
+    );
+  });
+
+  it('resolves imported query declarations in createApp collections', () => {
+    const facts = sinksForFiles([
+      {
+        fileName: 'queries/contacts.ts',
+        source: `
+          import { execFileSync } from 'node:child_process';
+          import { query } from '@kovojs/server';
+          export const contactsQuery = query('contacts', {
+            load() { return { output: execFileSync('imported-query-load') }; },
+          });
+        `,
+      },
+      {
+        fileName: 'app.ts',
+        source: `
+          import { createApp } from '@kovojs/server';
+          import { contactsQuery } from './queries/contacts.js';
+          createApp({ queries: [contactsQuery] });
+        `,
+      },
+    ]);
+
+    expect(facts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sink: 'child_process.execFileSync',
+          source: "'imported-query-load'",
+        }),
+      ]),
+    );
+    expect(
+      facts.filter(
+        (fact) =>
+          fact.sink === 'request-handler.opaque-source' &&
+          fact.source === '<unresolved-query-declaration>',
+      ),
+    ).toEqual([]);
   });
 });

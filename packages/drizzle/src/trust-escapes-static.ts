@@ -1323,6 +1323,13 @@ const REQUEST_FRAMEWORK_AUTHORITY_MINTERS = [
 
 interface RequestCallable {
   readonly body: Node;
+  /**
+   * True only for a render callback recovered from the canonical `@kovojs/core` `component()`
+   * authoring surface. The compiler replaces exact `onX` JSX handler expressions in these
+   * callbacks with generated client-module references, so the function object is not public wire
+   * data (SPEC §5.2 / §6.6).
+   */
+  readonly compilerOwnedJsxEventHandlers?: boolean;
   readonly declaration: Node;
   readonly publicWire?: boolean;
   readonly publicWireMethods?: readonly string[];
@@ -4674,6 +4681,10 @@ function dedupeRequestNodes(nodes: readonly Node[]): Node[] {
 
 const REQUEST_CREATE_APP_DECLARATION_COLLECTIONS = [
   ['endpoints', 'endpoint'],
+  // `webhook()` returns the same public endpoint-family descriptor and is installed through the
+  // app's `endpoints` collection. Scan each recognized factory without treating the sibling
+  // framework factory as an unresolved declaration (SPEC §6.5 / §6.6).
+  ['endpoints', 'webhook'],
   ['mutations', 'mutation'],
   ['queries', 'query'],
   ['routes', 'route'],
@@ -4838,7 +4849,8 @@ function requestDeclarationDefinitions(
     );
   }
   if (Node.isCallExpression(node)) {
-    const invocations = requestHandlerFactoryInvocationsForCall(node, context.provenance).filter(
+    const recognizedInvocations = requestHandlerFactoryInvocationsForCall(node, context.provenance);
+    const invocations = recognizedInvocations.filter(
       (invocation) => invocation.factory.exportName === factory,
     );
     const direct = invocations.flatMap((invocation) => {
@@ -4851,6 +4863,10 @@ function requestDeclarationDefinitions(
         : [];
     });
     if (direct.length > 0) return direct;
+    // The same declaration collection can admit multiple reviewed framework descriptor families
+    // (notably endpoint + webhook). A call proven to be a different framework factory is not an
+    // opaque user factory; the sibling scan owns its definition and callbacks.
+    if (recognizedInvocations.length > 0) return [];
     const outputs = resolveRequestCallable(
       node.getExpression(),
       new Set(),
@@ -4897,7 +4913,7 @@ function requestDeclarationDefinitions(
     ),
   );
   if (callableOutputs.length > 0) return callableOutputs;
-  const symbol = node.getSymbol();
+  const symbol = requestIdentifierValueSymbol(node);
   if (!symbol) {
     appendOpaqueRequestHandlerFact(context, node, `<unresolved-${factory}-declaration>`);
     return [];
@@ -4917,7 +4933,20 @@ function requestDeclarationDefinitions(
         )
       : [];
   });
-  if (declarations.length === 0) {
+  const resolvedAsSiblingFactory = symbol
+    .getDeclarations()
+    .map(valueDeclarationInitializer)
+    .filter((initializer): initializer is Node => initializer !== undefined)
+    .some((initializer) => {
+      const candidate = unwrapStaticExpression(initializer);
+      if (!Node.isCallExpression(candidate)) return false;
+      const invocations = requestHandlerFactoryInvocationsForCall(candidate, context.provenance);
+      return (
+        invocations.length > 0 &&
+        invocations.every((invocation) => invocation.factory.exportName !== factory)
+      );
+    });
+  if (declarations.length === 0 && !resolvedAsSiblingFactory) {
     appendOpaqueRequestHandlerFact(context, node, `<unresolved-${factory}-declaration>`);
   }
   return declarations;
@@ -9852,10 +9881,27 @@ function requestWireAuthoritiesForJsxAttributes(
     const initializer = attribute.getInitializer();
     if (initializer && Node.isJsxExpression(initializer)) {
       const expression = initializer.getExpression();
-      if (expression) authorities.push(...requestWireAuthoritiesForExpression(expression, state));
+      if (
+        expression &&
+        !(
+          state.scopeCallable.compilerOwnedJsxEventHandlers &&
+          requestJsxAttributeIsCompilerOwnedEventHandler(attribute)
+        )
+      ) {
+        authorities.push(...requestWireAuthoritiesForExpression(expression, state));
+      }
     }
   }
   return dedupeRequestWireAuthorities(authorities);
+}
+
+function requestJsxAttributeIsCompilerOwnedEventHandler(
+  attribute: import('ts-morph').JsxAttribute,
+): boolean {
+  // Keep this grammar identical to the typed parser fact in
+  // packages/compiler/src/scan/parse.ts. Lower-case `onclick`, `on:*`, spreads, component props,
+  // and local lookalikes remain ordinary wire values and therefore fail closed here.
+  return /^on[A-Z][A-Za-z0-9]*$/u.test(attribute.getNameNode().getText());
 }
 
 function requestWireAuthoritiesForJsxChildren(
@@ -14049,6 +14095,35 @@ function resolveRequestCallableUncached(
       return resolveRequestCallable(callee.getExpression(), seen, depth + 1, session);
     }
 
+    const componentIdentity = canonicalFrameworkExportForExpression(callee);
+    if (
+      componentIdentity?.module === '@kovojs/core' &&
+      componentIdentity.exportName === 'component'
+    ) {
+      const definition = resolveStaticObjectLiteral(node.getArguments()[0], new Set(), depth + 1);
+      const render = definition ? requestStaticObjectProperty(definition, 'render') : undefined;
+      if (render) {
+        const expression = requestHandlerPropertyExpression(render);
+        if (expression) {
+          const resolved = resolveRequestCallable(expression, new Set(seen), depth + 1, session);
+          return {
+            ...resolved,
+            callables: resolved.callables.map((callable) => ({
+              ...callable,
+              compilerOwnedJsxEventHandlers: true,
+            })),
+          };
+        }
+        const directRender = requestCallableForFunctionNode(render);
+        if (directRender) {
+          return {
+            callables: [{ ...directRender, compilerOwnedJsxEventHandlers: true }],
+          };
+        }
+      }
+      return { callables: [] };
+    }
+
     const factory = resolveRequestCallable(callee, new Set(seen), depth + 1, session);
     const returned: RequestCallable[] = [];
     let opaqueModule = factory.opaqueModule;
@@ -16236,7 +16311,19 @@ function requestIdentifierValueSymbol(
 ): NonNullable<ReturnType<Node['getSymbol']>> | undefined {
   if (!Node.isIdentifier(identifier)) return undefined;
   const shorthand = identifier.getParentIfKind(SyntaxKind.ShorthandPropertyAssignment);
-  return shorthand?.getValueSymbol() ?? identifier.getSymbol();
+  const symbol = shorthand?.getValueSymbol() ?? identifier.getSymbol();
+  if (!symbol) return undefined;
+  try {
+    // Source snapshots form a closed in-memory module graph. Resolve a relative import's value
+    // declaration before classifying local containers/protocols; retaining only the
+    // ImportSpecifier would make ordinary `.js`-spelled TS/TSX imports look opaque while bare
+    // packages (which have no source declaration in this graph) still fail closed.
+    const aliased = symbol.getAliasedSymbol();
+    if (aliased && aliased !== symbol) return aliased;
+  } catch {
+    // Unresolved/bare aliases remain represented by the import symbol and therefore fail closed.
+  }
+  return symbol;
 }
 
 function requestBindingIdentifierNames(name: Node): string[] {
