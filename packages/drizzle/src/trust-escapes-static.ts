@@ -7312,7 +7312,14 @@ function requestWireAuthoritiesForExpressionUncached(
     return requestWireAuthoritiesForExpressions(node.getElements(), state);
   }
   if (Node.isSpreadElement(node)) {
-    return requestWireAuthoritiesForExpression(node.getExpression(), state);
+    const iterable = node.getExpression();
+    const iteration = requestWireIterationValues(iterable, state, new Set(), false);
+    return dedupeRequestWireAuthorities([
+      ...requestWireAuthoritiesForExpression(iterable, state),
+      ...(iteration.handled
+        ? requestWireAuthoritiesForIterationCandidates(iteration.candidates, [])
+        : [requestOpaqueWireAuthority(iterable, 'iterator-value')]),
+    ]);
   }
   if (Node.isYieldExpression(node)) {
     const yielded = node.getExpression();
@@ -7913,6 +7920,8 @@ function requestWireAuthoritiesForIdentifier(
 
   const iterationAuthority = requestWireHeaderIterationAuthority(identifier, state);
   if (iterationAuthority) return [iterationAuthority];
+  const iteration = requestWireIterationBindingAuthorities(identifier, state);
+  if (iteration.handled) return [...iteration.authorities];
 
   const authorities: RequestWireAuthority[] = [];
   const catchBinding = requestWireCatchBindingAuthorities(identifier, state);
@@ -7926,6 +7935,15 @@ function requestWireAuthoritiesForIdentifier(
   const declarations = symbol?.getDeclarations() ?? [];
   for (const declaration of declarations) {
     if (Node.isBindingElement(declaration)) {
+      const destructuredIteration = requestWireDestructuredIterationAuthorities(
+        identifier,
+        declaration,
+        state,
+      );
+      if (destructuredIteration.handled) {
+        authorities.push(...destructuredIteration.authorities);
+        continue;
+      }
       const projection = requestBindingElementProjection(declaration);
       if (projection) {
         authorities.push(...requestWireAuthoritiesForBindingProjection(projection, state));
@@ -8202,6 +8220,305 @@ function requestWireComputedMutationKeys(expression: Node): Node[] {
     node = unwrapStaticExpression(node.getExpression());
   }
   return keys;
+}
+
+interface RequestWireIterationCandidate {
+  readonly expression: Node;
+  readonly state: RequestWireAnalysisState;
+}
+
+interface RequestWireIterationValues {
+  readonly candidates: readonly RequestWireIterationCandidate[];
+  readonly handled: boolean;
+}
+
+interface RequestWireIterationAuthorities {
+  readonly authorities: readonly RequestWireAuthority[];
+  readonly handled: boolean;
+}
+
+function requestWireAuthoritiesForIterationCandidates(
+  candidates: readonly RequestWireIterationCandidate[],
+  path: readonly string[],
+): RequestWireAuthority[] {
+  return dedupeRequestWireAuthorities(
+    candidates.flatMap((candidate) =>
+      requestWireAuthoritiesForBindingProjection(
+        { expression: candidate.expression, path },
+        candidate.state,
+      ),
+    ),
+  );
+}
+
+function requestWireIterationBindingAuthorities(
+  identifier: import('ts-morph').Identifier,
+  state: RequestWireAnalysisState,
+): RequestWireIterationAuthorities {
+  const authorities: RequestWireAuthority[] = [];
+  let handled = false;
+  for (const declaration of identifier.getSymbol()?.getDeclarations() ?? []) {
+    const variable = Node.isVariableDeclaration(declaration)
+      ? declaration
+      : declaration.getFirstAncestorByKind(SyntaxKind.VariableDeclaration);
+    const loop = variable?.getFirstAncestorByKind(SyntaxKind.ForOfStatement);
+    if (!variable || !loop) continue;
+    const path = requestPatternPathForIdentifier(variable.getNameNode(), identifier, []);
+    if (!path) continue;
+    handled = true;
+    const iterable = loop.getExpression();
+    const iteration = requestWireIterationValues(
+      iterable,
+      state,
+      new Set(),
+      loop.getAwaitKeyword() !== undefined,
+    );
+    if (!iteration.handled) {
+      authorities.push(requestOpaqueWireAuthority(iterable, 'iterator-value'));
+      continue;
+    }
+    authorities.push(...requestWireAuthoritiesForIterationCandidates(iteration.candidates, path));
+    if (loop.getAwaitKeyword()) {
+      for (const candidate of iteration.candidates) {
+        authorities.push(...requestWireThenableAuthorities(candidate.expression, candidate.state));
+      }
+    }
+  }
+  return { authorities: dedupeRequestWireAuthorities(authorities), handled };
+}
+
+function requestWireDestructuredIterationAuthorities(
+  identifier: import('ts-morph').Identifier,
+  declaration: import('ts-morph').BindingElement,
+  state: RequestWireAnalysisState,
+): RequestWireIterationAuthorities {
+  const variable = declaration.getFirstAncestorByKind(SyntaxKind.VariableDeclaration);
+  const initializer = variable?.getInitializer();
+  const name = variable?.getNameNode();
+  if (!variable || !initializer || !name || !Node.isArrayBindingPattern(name)) {
+    return { authorities: [], handled: false };
+  }
+  const path = requestPatternPathForIdentifier(name, identifier, []);
+  const index = path?.[0] === undefined ? undefined : Number(path[0]);
+  if (!path || index === undefined || !Number.isSafeInteger(index) || index < 0) {
+    return {
+      authorities: [requestOpaqueWireAuthority(initializer, 'iterator-binding')],
+      handled: true,
+    };
+  }
+  const iteration = requestWireIterationValues(initializer, state, new Set(), false);
+  if (!iteration.handled) {
+    return {
+      authorities: [requestOpaqueWireAuthority(initializer, 'iterator-value')],
+      handled: true,
+    };
+  }
+  const candidate = iteration.candidates[index];
+  return {
+    authorities: candidate
+      ? requestWireAuthoritiesForIterationCandidates([candidate], path.slice(1))
+      : [],
+    handled: true,
+  };
+}
+
+function requestWireIterationValues(
+  expression: Node,
+  state: RequestWireAnalysisState,
+  seen: Set<string>,
+  asyncIteration: boolean,
+): RequestWireIterationValues {
+  const node = unwrapStaticExpression(expression);
+  const key = `wire-iteration:${requestNodeIdentity(node)}:${asyncIteration ? 'async' : 'sync'}:${state.bindingKey}`;
+  if (seen.has(key) || !requestProvenanceStep(state.session, node)) {
+    return { candidates: [], handled: false };
+  }
+  seen.add(key);
+
+  if (Node.isStringLiteral(node) || Node.isNoSubstitutionTemplateLiteral(node)) {
+    return { candidates: [], handled: true };
+  }
+  if (Node.isTemplateExpression(node)) {
+    return { candidates: [{ expression: node, state }], handled: true };
+  }
+  if (Node.isArrayLiteralExpression(node)) {
+    const candidates: RequestWireIterationCandidate[] = [];
+    for (const element of node.getElements()) {
+      if (Node.isOmittedExpression(element)) continue;
+      if (!Node.isSpreadElement(element)) {
+        candidates.push({ expression: element, state });
+        continue;
+      }
+      const spread = requestWireIterationValues(
+        element.getExpression(),
+        state,
+        new Set(seen),
+        false,
+      );
+      if (!spread.handled) return { candidates, handled: false };
+      candidates.push(...spread.candidates);
+    }
+    return { candidates, handled: true };
+  }
+  if (Node.isConditionalExpression(node)) {
+    const whenTrue = requestWireIterationValues(
+      node.getWhenTrue(),
+      state,
+      new Set(seen),
+      asyncIteration,
+    );
+    const whenFalse = requestWireIterationValues(
+      node.getWhenFalse(),
+      state,
+      new Set(seen),
+      asyncIteration,
+    );
+    return {
+      candidates: [...whenTrue.candidates, ...whenFalse.candidates],
+      handled: whenTrue.handled && whenFalse.handled,
+    };
+  }
+  if (Node.isCallExpression(node)) {
+    const invocation = requestNormalizedCall(node);
+    const resolution = resolveRequestCallable(invocation.target, new Set(), 0, state.session);
+    if (resolution.callables.length > 0) {
+      const candidates: RequestWireIterationCandidate[] = [];
+      let handled = true;
+      for (const callable of resolution.callables) {
+        const bindings = requestWireBindingsForCall(
+          callable,
+          invocation.args ?? node.getArguments(),
+          state.bindings,
+        );
+        const nestedState: RequestWireAnalysisState = {
+          bindingKey: requestWireBindingKey(bindings),
+          bindings,
+          rootCallable: state.rootCallable,
+          session: state.session,
+          scopeCallable: callable,
+        };
+        const yielded = requestWireYieldedIterationValues(
+          callable,
+          nestedState,
+          new Set(seen),
+          asyncIteration,
+        );
+        if (yielded.handled) {
+          candidates.push(...yielded.candidates);
+          continue;
+        }
+        const outputs = requestWireOutputExpressions(callable);
+        if (outputs.length === 0) {
+          handled = false;
+          continue;
+        }
+        for (const output of outputs) {
+          const returned = requestWireIterationValues(
+            output,
+            nestedState,
+            new Set(seen),
+            asyncIteration,
+          );
+          handled &&= returned.handled;
+          candidates.push(...returned.candidates);
+        }
+      }
+      return { candidates, handled };
+    }
+  }
+  if (Node.isIdentifier(node)) {
+    const symbol = node.getSymbol();
+    const symbolKey = symbol ? requestSymbolKey(symbol) : undefined;
+    const binding = symbolKey ? state.bindings.get(symbolKey) : undefined;
+    if (binding) {
+      const projected = requestWireProjectedExpression(
+        binding.expression,
+        binding.path,
+        new Set(),
+        0,
+      );
+      if (projected) {
+        return requestWireIterationValues(projected, state, new Set(seen), asyncIteration);
+      }
+    }
+    const initializers = symbol
+      ? symbol
+          .getDeclarations()
+          .map(valueDeclarationInitializer)
+          .filter((initializer): initializer is Node => initializer !== undefined)
+      : [];
+    if (initializers.length > 0) {
+      const results = initializers.map((initializer) =>
+        requestWireIterationValues(initializer, state, new Set(seen), asyncIteration),
+      );
+      return {
+        candidates: results.flatMap((result) => result.candidates),
+        handled: results.every((result) => result.handled),
+      };
+    }
+    if (
+      requestRootRoleIncludesInput(
+        requestExpressionRootParameterRole(node, state.rootCallable, new Set(), 0),
+      )
+    ) {
+      return { candidates: [], handled: true };
+    }
+  }
+
+  const hooks = asyncIteration ? ['@@asyncIterator', '@@iterator'] : ['@@iterator'];
+  const callables = dedupeRequestCallables(
+    hooks.flatMap((hook) =>
+      requestAccessorCallablesForExpression(node, hook, new Set(), state.session),
+    ),
+  );
+  if (callables.length === 0) return { candidates: [], handled: false };
+  const candidates: RequestWireIterationCandidate[] = [];
+  let handled = true;
+  for (const callable of callables) {
+    const nestedState: RequestWireAnalysisState = {
+      bindingKey: state.bindingKey,
+      bindings: state.bindings,
+      rootCallable: state.rootCallable,
+      session: state.session,
+      scopeCallable: callable,
+    };
+    const yielded = requestWireYieldedIterationValues(
+      callable,
+      nestedState,
+      new Set(seen),
+      asyncIteration,
+    );
+    handled &&= yielded.handled;
+    candidates.push(...yielded.candidates);
+  }
+  return { candidates, handled };
+}
+
+function requestWireYieldedIterationValues(
+  callable: RequestCallable,
+  state: RequestWireAnalysisState,
+  seen: Set<string>,
+  asyncIteration: boolean,
+): RequestWireIterationValues {
+  const yields = [
+    ...(Node.isYieldExpression(callable.body) ? [callable.body] : []),
+    ...callable.body.getDescendantsOfKind(SyntaxKind.YieldExpression),
+  ].filter((yielded) => nodeBelongsToRequestCallable(yielded, callable));
+  if (yields.length === 0) return { candidates: [], handled: false };
+  const candidates: RequestWireIterationCandidate[] = [];
+  let handled = true;
+  for (const yielded of yields) {
+    const value = yielded.getExpression();
+    if (!value) continue;
+    if (!yielded.getAsteriskToken()) {
+      candidates.push({ expression: value, state });
+      continue;
+    }
+    const delegated = requestWireIterationValues(value, state, new Set(seen), asyncIteration);
+    handled &&= delegated.handled;
+    candidates.push(...delegated.candidates);
+  }
+  return { candidates, handled };
 }
 
 function requestWireHeaderIterationAuthority(
@@ -9257,6 +9574,43 @@ function requestCallIsKnownSafe(
     return true;
   }
 
+  if (receiver && member) {
+    const localContainer = requestLocalIntrinsicContainerKind(
+      receiver,
+      callable,
+      context,
+      new Set(),
+    );
+    const reviewedMethods =
+      localContainer === 'array'
+        ? new Set(['push'])
+        : localContainer === 'map'
+          ? new Set(['get', 'set'])
+          : localContainer === 'url-search-params'
+            ? new Set(['append', 'toString'])
+            : undefined;
+    if (reviewedMethods?.has(member)) {
+      if (
+        !requestLocalIntrinsicContainerIsPristine(
+          receiver,
+          call,
+          reviewedMethods,
+          callable,
+          context,
+        )
+      ) {
+        return false;
+      }
+      if (scanRequestKnownSafePrototypeMutations(call, member, context)) return false;
+      if (localContainer === 'url-search-params' && member === 'append') {
+        for (const argument of call.getArguments()) {
+          scanRequestProtocolUse(argument, REQUEST_TO_PRIMITIVE_HOOKS, call, callable, context);
+        }
+      }
+      return true;
+    }
+  }
+
   if (Node.isIdentifier(callee) && REQUEST_SAFE_GLOBAL_CALLABLES.has(callee.getText())) {
     if (!unshadowedGlobalIdentifier(callee, callee.getText())) return false;
     scanRequestFunctionArguments(call, context);
@@ -9310,6 +9664,214 @@ function requestCallIsKnownSafe(
     return requestKnownCallbacksAreClosed(call, member, context);
   }
   return false;
+}
+
+type RequestLocalIntrinsicContainerKind = 'array' | 'map' | 'url-search-params';
+
+function requestLocalIntrinsicContainerKind(
+  expression: Node,
+  callable: RequestCallable,
+  context: RequestProcessScanContext,
+  seen: Set<string>,
+): RequestLocalIntrinsicContainerKind | undefined {
+  const node = unwrapStaticExpression(expression);
+  const nodeKey = `local-container:${requestNodeIdentity(node)}`;
+  if (seen.has(nodeKey)) return undefined;
+  seen.add(nodeKey);
+  if (Node.isArrayLiteralExpression(node)) return 'array';
+  if (Node.isNewExpression(node)) {
+    const callee = unwrapStaticExpression(node.getExpression());
+    if (!Node.isIdentifier(callee) || !unshadowedGlobalIdentifier(callee, callee.getText())) {
+      return undefined;
+    }
+    const name = callee.getText();
+    if (requestGlobalIntrinsicBindingIsMutated(name, node.getSourceFile())) return undefined;
+    if (name === 'Array') return 'array';
+    if (name === 'Map') return 'map';
+    if (name === 'URLSearchParams') return 'url-search-params';
+    return undefined;
+  }
+  if (!Node.isIdentifier(node)) return undefined;
+  const symbol = node.getSymbol();
+  if (!symbol) return undefined;
+  const symbolKey = requestSymbolKey(symbol);
+  if (seen.has(symbolKey)) return undefined;
+  seen.add(symbolKey);
+  const declarations = symbol.getDeclarations();
+  if (
+    declarations.length === 0 ||
+    declarations.some(
+      (declaration) =>
+        !Node.isVariableDeclaration(declaration) ||
+        !nodeBelongsToRequestCallable(declaration, callable) ||
+        declaration.getVariableStatement()?.getDeclarationKind() !== VariableDeclarationKind.Const,
+    ) ||
+    requestAssignedBindingProjections(symbol, context.provenance).some(
+      (projection) => projection.path.length === 0,
+    )
+  ) {
+    return undefined;
+  }
+  const kinds = declarations.map((declaration) => {
+    const initializer = valueDeclarationInitializer(declaration);
+    const initialNode = initializer ? unwrapStaticExpression(initializer) : undefined;
+    if (
+      !initialNode ||
+      Node.isIdentifier(initialNode) ||
+      Node.isConditionalExpression(initialNode)
+    ) {
+      return undefined;
+    }
+    return initializer
+      ? requestLocalIntrinsicContainerKind(initializer, callable, context, new Set(seen))
+      : undefined;
+  });
+  const [kind] = kinds;
+  return kind && kinds.every((candidate) => candidate === kind) ? kind : undefined;
+}
+
+function requestLocalIntrinsicContainerIsPristine(
+  receiver: Node,
+  call: import('ts-morph').CallExpression,
+  reviewedMethods: ReadonlySet<string>,
+  callable: RequestCallable,
+  context: RequestProcessScanContext,
+): boolean {
+  const node = unwrapStaticExpression(receiver);
+  if (!Node.isIdentifier(node)) return true;
+  const symbol = node.getSymbol();
+  if (!symbol) return false;
+  const target = requestSymbolKey(symbol);
+  const body = callable.body;
+
+  for (const assignment of body.getDescendantsOfKind(SyntaxKind.BinaryExpression)) {
+    const operator = assignment.getOperatorToken().getKind();
+    if (operator < SyntaxKind.FirstAssignment || operator > SyntaxKind.LastAssignment) continue;
+    if (
+      requestExpressionReferencesSymbol(assignment.getLeft(), target) ||
+      requestExpressionReferencesSymbol(assignment.getRight(), target)
+    ) {
+      return false;
+    }
+  }
+  for (const declaration of body.getDescendantsOfKind(SyntaxKind.VariableDeclaration)) {
+    if (symbol.getDeclarations().some((candidate) => requestNodesAreSame(candidate, declaration))) {
+      continue;
+    }
+    const initializer = declaration.getInitializer();
+    if (initializer && requestExpressionReferencesSymbol(initializer, target)) return false;
+  }
+  for (const invocation of body.getDescendantsOfKind(SyntaxKind.CallExpression)) {
+    if (
+      invocation
+        .getArguments()
+        .some((argument) => requestExpressionReferencesSymbol(argument, target))
+    ) {
+      return false;
+    }
+    const invocationCallee = unwrapStaticExpression(invocation.getExpression());
+    const invocationReceiver = requestCallReceiver(invocationCallee);
+    if (!invocationReceiver || !requestExpressionReferencesSymbol(invocationReceiver, target)) {
+      continue;
+    }
+    const invocationMember = requestStaticCallMember(invocationCallee);
+    if (!invocationMember || !reviewedMethods.has(invocationMember)) return false;
+  }
+  for (const deletion of body.getDescendantsOfKind(SyntaxKind.DeleteExpression)) {
+    if (requestExpressionReferencesSymbol(deletion.getExpression(), target)) return false;
+  }
+
+  const member = requestStaticCallMember(unwrapStaticExpression(call.getExpression()));
+  if (!member) return false;
+  const assigned = requestAssignedMemberExpressions(
+    node,
+    member,
+    call.getStart(),
+    context.provenance,
+  );
+  if (assigned.length > 0) {
+    for (const expression of assigned) {
+      for (const nested of resolveRequestCallable(expression, new Set(), 0, context.provenance)
+        .callables) {
+        scanRequestCallable(nested, context);
+      }
+    }
+    return false;
+  }
+  return true;
+}
+
+function requestExpressionReferencesSymbol(expression: Node, target: string): boolean {
+  const node = unwrapStaticExpression(expression);
+  const identifiers = [
+    ...(Node.isIdentifier(node) ? [node] : []),
+    ...node.getDescendantsOfKind(SyntaxKind.Identifier),
+  ];
+  return identifiers.some((identifier) => {
+    const symbol = identifier.getSymbol();
+    return !!symbol && requestSymbolKey(symbol) === target;
+  });
+}
+
+function requestGlobalIntrinsicBindingIsMutated(name: string, sourceFile: SourceFile): boolean {
+  for (const assignment of sourceFile.getDescendantsOfKind(SyntaxKind.BinaryExpression)) {
+    const operator = assignment.getOperatorToken().getKind();
+    if (operator < SyntaxKind.FirstAssignment || operator > SyntaxKind.LastAssignment) continue;
+    const target = unwrapStaticExpression(assignment.getLeft());
+    if (
+      (Node.isIdentifier(target) &&
+        target.getText() === name &&
+        unshadowedGlobalIdentifier(target, name)) ||
+      ((Node.isPropertyAccessExpression(target) || Node.isElementAccessExpression(target)) &&
+        staticMemberName(
+          Node.isPropertyAccessExpression(target)
+            ? target.getNameNode()
+            : target.getArgumentExpression(),
+        ) === name &&
+        requestExpressionIsGlobalObject(target.getExpression()))
+    ) {
+      return true;
+    }
+  }
+  for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
+    const callee = unwrapStaticExpression(call.getExpression());
+    const receiver = requestCallReceiver(callee);
+    const member = requestStaticCallMember(callee);
+    if (!receiver || !member) continue;
+    const objectGlobal = expressionResolvesToGlobalNamespace(receiver, 'Object', new Set(), 0);
+    const reflectGlobal = expressionResolvesToGlobalNamespace(receiver, 'Reflect', new Set(), 0);
+    const [target, property] = call.getArguments();
+    if (!target || !requestExpressionIsGlobalObject(target)) continue;
+    if ((objectGlobal || reflectGlobal) && ['defineProperty', 'set'].includes(member)) {
+      const propertyName = staticMemberName(property);
+      if (propertyName === undefined || propertyName === name) return true;
+    }
+    if (objectGlobal && member === 'assign') {
+      for (const source of call.getArguments().slice(1)) {
+        const object = resolveStaticObjectLiteral(source, new Set(), 0);
+        if (!object) return true;
+        if (
+          object.getProperties().some((candidate) => {
+            const propertyName = staticMemberName(requestObjectLiteralElementNameNode(candidate));
+            return propertyName === undefined || propertyName === name;
+          })
+        ) {
+          return true;
+        }
+      }
+    }
+  }
+  return false;
+}
+
+function requestExpressionIsGlobalObject(expression: Node): boolean {
+  const node = unwrapStaticExpression(expression);
+  return (
+    (Node.isIdentifier(node) &&
+      (unshadowedGlobalIdentifier(node, 'globalThis') ||
+        unshadowedGlobalIdentifier(node, 'global'))) ||
+    false
+  );
 }
 
 function requestCallIsPromiseSettlement(
@@ -9435,6 +9997,34 @@ function scanRequestKnownSafePrototypeMutations(
     const reflectGlobal = expressionResolvesToGlobalNamespace(receiver, 'Reflect', new Set(), 0);
     const [target, property, descriptorOrValue] = expression.getArguments();
     if (!target || !requestExpressionIsKnownGlobalPrototype(target, new Set())) continue;
+    if (objectGlobal && method === 'assign') {
+      for (const source of expression.getArguments().slice(1)) {
+        const map = resolveStaticObjectLiteral(source, new Set(), 0);
+        if (!map) {
+          mutated = true;
+          appendOpaqueRequestHandlerFact(context, source, '<dynamic-prototype-mutation>');
+          continue;
+        }
+        const assigned = requestStaticObjectProperty(map, member);
+        if (assigned) {
+          mutated = true;
+          candidates.push(requestHandlerPropertyExpression(assigned) ?? assigned);
+        }
+        if (
+          map
+            .getProperties()
+            .some(
+              (candidate) =>
+                Node.isSpreadAssignment(candidate) ||
+                staticMemberName(requestObjectLiteralElementNameNode(candidate)) === undefined,
+            )
+        ) {
+          mutated = true;
+          appendOpaqueRequestHandlerFact(context, source, '<computed-prototype-mutation>');
+        }
+      }
+      continue;
+    }
     if (reflectGlobal && method === 'set') {
       if (staticMemberName(property) === member && descriptorOrValue) {
         mutated = true;

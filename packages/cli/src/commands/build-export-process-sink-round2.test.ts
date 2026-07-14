@@ -325,7 +325,11 @@ export default createApp({ routes: [unsafe] });
     );
 
     const result = await strictBuild(root, entry);
-    expectKv424(root, result, rawProcessSink);
+    expectKv424(
+      root,
+      result,
+      /sink=(?:request-handler\.opaque-source|child_process\.execFileSync)/u,
+    );
   }, 120_000);
 });
 

@@ -1054,6 +1054,42 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
     ).toEqual([]);
   });
 
+  it('propagates credential values yielded by authored iterators', () => {
+    const facts = sinksFor(`
+      import { query } from '@kovojs/server';
+      function iterator(request) {
+        return { *[Symbol.iterator]() { yield request.headers.get('authorization'); } };
+      }
+      query({ load(_input, { request }) {
+        for (const token of iterator(request)) return token;
+        return null;
+      } });
+      query({ load(_input, { request }) {
+        const [token] = iterator(request);
+        return token;
+      } });
+      query({ load(_input, { request }) {
+        return [...iterator(request)];
+      } });
+      query({ load(_input, { request }) {
+        const [character] = \`token:\${request.headers.get('authorization')}\`;
+        return character;
+      } });
+      query({ load(_input, { request }) {
+        for (const character of \`token:\${request.headers.get('authorization')}\`) return character;
+        return null;
+      } });
+      query({ load(_input, { request }) {
+        return [...\`token:\${request.headers.get('authorization')}\`];
+      } });
+    `);
+
+    expect(
+      facts.filter((fact) => fact.sink === 'client-wire.request.header.Authorization'),
+      JSON.stringify(facts),
+    ).toHaveLength(6);
+  });
+
   it('fails closed for unreviewed public-wire expression syntax', () => {
     const facts = sinksFor(`
       import { query } from '@kovojs/server';
@@ -1333,6 +1369,101 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
     `);
 
     expect(facts).toEqual([]);
+  });
+
+  it('keeps request-local intrinsic container mutation precise without losing wire authority', () => {
+    const safe = sinksFor(`
+      import { query } from '@kovojs/server';
+      query({ load() {
+        const array = []; array.push('safe');
+        const map = new Map(); map.set('key', 'safe');
+        const params = new URLSearchParams(); params.append('key', 'safe');
+        return { array: array[0], map: map.get('key'), params: params.toString() };
+      } });
+    `);
+    expect(safe).toEqual([]);
+
+    const unsafe = sinksFor(`
+      import { query } from '@kovojs/server';
+      query({ load(_input, { request }) {
+        const values = [];
+        values.push(request.headers.get('authorization'));
+        return values[0];
+      } });
+      query({ load(_input, { request }) {
+        const values = new Map();
+        values.set('key', request.headers.get('authorization'));
+        return values.get('key');
+      } });
+      query({ load(_input, { request }) {
+        const values = new URLSearchParams();
+        values.append('key', request.headers.get('authorization'));
+        return values.toString();
+      } });
+    `);
+    expect(
+      unsafe.filter((fact) => fact.sink === 'client-wire.request.header.Authorization'),
+      JSON.stringify(unsafe),
+    ).toHaveLength(3);
+    expect(
+      unsafe.filter((fact) => fact.sink === 'request-handler.opaque-call'),
+      JSON.stringify(unsafe),
+    ).toEqual([]);
+  });
+
+  it('rejects subclassed, proxied, and prototype-mutated intrinsic containers', () => {
+    const facts = sinksFor(`
+      import { execFileSync } from 'node:child_process';
+      import { query } from '@kovojs/server';
+      class AuthoredMap extends Map {}
+      Object.assign(Map.prototype, {
+        set() { execFileSync('mutated-map-set'); return this; },
+      });
+      globalThis.URLSearchParams = class {
+        append() { execFileSync('replaced-url-params'); }
+        toString() { return ''; }
+      };
+      function poison(value) {
+        value.push = () => execFileSync('escaped-array');
+      }
+      query({ load() {
+        const subclass = new AuthoredMap(); subclass.set('key', 'safe');
+        const proxied = new Proxy(new Map(), {}); proxied.set('key', 'safe');
+        const local = new Map(); local.set('key', 'safe');
+        const defined = [];
+        Object.defineProperty(defined, 'push', {
+          value() { execFileSync('defined-array'); },
+        });
+        defined.push('safe');
+        const reflected = [];
+        Reflect.set(reflected, 'push', () => execFileSync('reflected-array'));
+        reflected.push('safe');
+        const proto = [];
+        Object.setPrototypeOf(proto, { push() { execFileSync('prototype-array'); } });
+        proto.push('safe');
+        const escaped = [];
+        poison(escaped);
+        escaped.push('safe');
+        const params = new URLSearchParams();
+        params.append('key', 'safe');
+        return 'safe';
+      } });
+    `);
+
+    expect(facts, JSON.stringify(facts)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sink: 'child_process.execFileSync',
+          source: "'mutated-map-set'",
+        }),
+        expect.objectContaining({ sink: 'request-handler.opaque-call', source: 'defined.push' }),
+        expect.objectContaining({ sink: 'request-handler.opaque-call', source: 'escaped.push' }),
+        expect.objectContaining({ sink: 'request-handler.opaque-call', source: 'params.append' }),
+        expect.objectContaining({ sink: 'request-handler.opaque-call', source: 'proto.push' }),
+        expect.objectContaining({ sink: 'request-handler.opaque-call', source: 'reflected.push' }),
+        expect.objectContaining({ sink: 'request-handler.opaque-protocol' }),
+      ]),
+    );
   });
 
   it('keeps call-site provenance context-sensitive across order and repeated calls', () => {
