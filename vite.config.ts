@@ -152,6 +152,7 @@ export default defineConfig({
         input: [
           { auto: true },
           { pattern: 'tests/p10-perf.node.mjs', base: 'workspace' },
+          { pattern: 'tests/p10-perf-browser-worker.mjs', base: 'workspace' },
           { pattern: 'dist/**', base: 'workspace' },
         ],
       },
@@ -272,6 +273,7 @@ export default defineConfig({
           { pattern: 'tests/kovo-check.server-browser.node.mjs', base: 'workspace' },
           { pattern: 'tests/browser-acceptance.mjs', base: 'workspace' },
           { pattern: 'tests/p10-perf.node.mjs', base: 'workspace' },
+          { pattern: 'tests/p10-perf-browser-worker.mjs', base: 'workspace' },
           { pattern: 'tests/compiler-runner-transparency.test.ts', base: 'workspace' },
           { pattern: 'tests/compiler-determinism.test.ts', base: 'workspace' },
           { pattern: 'tests/compiler-determinism-worker.mjs', base: 'workspace' },
@@ -352,6 +354,7 @@ export default defineConfig({
       'packages/browser/src/internal/inline-loader.ts',
       'packages/browser/src/internal/morph.ts',
       'packages/browser/src/internal/mutation.ts',
+      'packages/server/src/runtime-bootstrap.ts',
       'packages/server/src/api/app-shell/*.ts',
       'packages/server/src/internal/escape.ts',
       'packages/server/src/internal/execution.ts',

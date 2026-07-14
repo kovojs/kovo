@@ -30,6 +30,8 @@ const CUSTOM_REQUEST_HANDLER_ENTRY_FILES = [
   'packages/devtool/src/mount.mjs',
   'site/src/aux.ts',
 ];
+const PACKED_REQUEST_HANDLER_RUNNER_FILES = ['tests/p10-perf.node.mjs'];
+const ROOT_PACK_CONFIG_FILE = 'vite.config.ts';
 const SECURITY_LOCKED_SCRIPT_FILES = [
   'examples/commerce/scripts/measure-style-size.mjs',
   'examples/gallery/scripts/export-static.mjs',
@@ -38,7 +40,9 @@ const SECURITY_LOCKED_SCRIPT_FILES = [
   'site/scripts/capture.mjs',
   'site/scripts/export-static.mjs',
   'site/scripts/measure-route-style-size.mjs',
+  'tests/compiler-determinism-worker.mjs',
 ];
+const COMPILER_DETERMINISM_RUNNER_FILE = 'tests/compiler-determinism-worker.mjs';
 const SECURITY_LOCKED_VITE_RUNNER_FILE = 'scripts/lib/secure-vite-runtime.mjs';
 const SITE_STATIC_EXPORT_RUNNER_FILE = 'site/scripts/export-static.mjs';
 const PURE_APP_ENTRY_FILES = [
@@ -53,6 +57,7 @@ const CUSTOM_REQUEST_HANDLER_DOC_FILES = [
   'site/content/guides/request-shell.md',
 ];
 const RUNTIME_BOOTSTRAP_IMPORT = "import '@kovojs/server/runtime-bootstrap';";
+const PACKED_RUNTIME_BOOTSTRAP_IMPORT = "import '../dist/server/src/runtime-bootstrap.mjs';";
 
 const REQUEST_SAFE_RUNTIME_SET_ALIGNMENT = [
   ['requestSafeGlobalCallables', 'REQUEST_SAFE_GLOBAL_CALLABLES'],
@@ -630,6 +635,51 @@ export function evaluateCustomRunnerBootstrapOrdering(readText) {
       );
     }
   }
+  for (const file of PACKED_REQUEST_HANDLER_RUNNER_FILES) {
+    let source;
+    try {
+      source = readText(file);
+    } catch {
+      findings.push(`request-safe-runtime: missing ${file}`);
+      continue;
+    }
+    if (!source.includes('createRequestHandler')) {
+      findings.push(
+        `request-safe-runtime: ${file} must keep the public guarded request handler behind its supported runner`,
+      );
+    }
+    const firstImport = source.split('\n').find((line) => line.trimStart().startsWith('import '));
+    if (firstImport?.trim() !== PACKED_RUNTIME_BOOTSTRAP_IMPORT) {
+      findings.push(
+        `request-safe-runtime: ${file} must start imports with ${PACKED_RUNTIME_BOOTSTRAP_IMPORT}`,
+      );
+    }
+    if (/(?:from\s+|import\(\s*)['"]playwright['"]/u.test(source)) {
+      findings.push(
+        `request-safe-runtime: ${file} must isolate Playwright from the locked request-serving realm`,
+      );
+    }
+    if (!source.includes("new Worker(new URL('./p10-perf-browser-worker.mjs'")) {
+      findings.push(
+        `request-safe-runtime: ${file} must run the Playwright client in its isolated worker realm`,
+      );
+    }
+  }
+
+  let rootPackConfigSource;
+  try {
+    rootPackConfigSource = readText(ROOT_PACK_CONFIG_FILE);
+  } catch {
+    findings.push(`request-safe-runtime: missing ${ROOT_PACK_CONFIG_FILE}`);
+  }
+  if (
+    rootPackConfigSource !== undefined &&
+    !rootPackConfigSource.includes("'packages/server/src/runtime-bootstrap.ts'")
+  ) {
+    findings.push(
+      `request-safe-runtime: ${ROOT_PACK_CONFIG_FILE} root pack must emit packages/server/src/runtime-bootstrap.ts`,
+    );
+  }
   for (const file of SECURITY_LOCKED_SCRIPT_FILES) {
     let source;
     try {
@@ -640,6 +690,27 @@ export function evaluateCustomRunnerBootstrapOrdering(readText) {
     }
     if (!source.includes('createSecurityLockedViteServer')) {
       findings.push(`request-safe-runtime: ${file} must use the compiler-first locked Vite runner`);
+    }
+    if (file === COMPILER_DETERMINISM_RUNNER_FILE) {
+      if (
+        /\bcreateServer\b/u.test(source) ||
+        /(?:from\s+|import\(\s*)['"]vite(?:-plus)?['"]/u.test(source) ||
+        /['"][^'"]*\/vite\/dist\//u.test(source)
+      ) {
+        findings.push(
+          `request-safe-runtime: ${file} must not construct Vite outside the compiler-first locked runner`,
+        );
+      }
+      const lockIndex = source.indexOf('createSecurityLockedViteServer(');
+      const corpusIndex = source.indexOf("server.ssrLoadModule('/tests/compiler-perf-corpora.ts')");
+      const compilerIndex = source.indexOf(
+        "server.ssrLoadModule('/packages/compiler/src/index.ts')",
+      );
+      if (lockIndex < 0 || corpusIndex <= lockIndex || compilerIndex <= corpusIndex) {
+        findings.push(
+          `request-safe-runtime: ${file} must lock Vite before loading compiler corpora and compiler source`,
+        );
+      }
     }
   }
 

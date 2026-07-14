@@ -1265,6 +1265,7 @@ void test('P10 perf acceptance is wired through Playwright and CDP', async () =>
     inputFacts: [
       { auto: true },
       { base: 'workspace', pattern: 'tests/p10-perf.node.mjs' },
+      { base: 'workspace', pattern: 'tests/p10-perf-browser-worker.mjs' },
       { base: 'workspace', pattern: 'dist/**' },
     ],
     ordering: {

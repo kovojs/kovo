@@ -1,16 +1,10 @@
-import { createRequire } from 'node:module';
 import { dirname, resolve } from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
+
+import { createSecurityLockedViteServer } from '../scripts/lib/secure-vite-runtime.mjs';
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const require = createRequire(import.meta.url);
-const viteEntry = resolve(
-  dirname(require.resolve('vitest/package.json')),
-  '../vite/dist/node/index.js',
-);
-const { createServer } = await import(pathToFileURL(viteEntry).href);
-
-const server = await createServer({
+const server = await createSecurityLockedViteServer({
   appType: 'custom',
   configFile: false,
   logLevel: 'silent',

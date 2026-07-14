@@ -7,7 +7,7 @@ import {
 } from './check-security-classifier-corpus.mjs';
 
 describe('check-security-classifier-corpus gate', () => {
-  it('rejects Vite runners that import Vite or the CLI before compiler/server lockdown', () => {
+  it('rejects request and Vite runners that load dependencies before compiler/server lockdown', () => {
     const files = {
       'examples/commerce/scripts/demo-serve.mjs': `createRequestHandler`,
       'examples/commerce/scripts/measure-style-size.mjs': `createRequestHandler; createSecurityLockedViteServer`,
@@ -19,6 +19,13 @@ describe('check-security-classifier-corpus gate', () => {
       'examples/stackoverflow/src/app-shell.ts': `createRequestHandler`,
       'packages/devtool/src/mount.mjs': `createRequestHandler`,
       'site/src/aux.ts': `createRequestHandler`,
+      'tests/p10-perf.node.mjs': `
+        import assert from 'node:assert/strict';
+        import { chromium } from 'playwright';
+        createRequestHandler;
+        new Worker(new URL('./p10-perf-browser-worker.mjs', import.meta.url));
+      `,
+      'vite.config.ts': `pack entry packages/server/src/index.ts`,
       'examples/gallery/scripts/export-static.mjs': `createSecurityLockedViteServer`,
       'examples/reference/scripts/export-static.mjs': `createSecurityLockedViteServer`,
       'scripts/demo-session/serve.mjs': `createSecurityLockedViteServer`,
@@ -29,6 +36,12 @@ describe('check-security-classifier-corpus gate', () => {
         await securityLockedViteRuntime();
       `,
       'site/scripts/measure-route-style-size.mjs': `createSecurityLockedViteServer`,
+      'tests/compiler-determinism-worker.mjs': `
+        createSecurityLockedViteServer();
+        server.ssrLoadModule('/tests/compiler-perf-corpora.ts');
+        server.ssrLoadModule('/packages/compiler/src/index.ts');
+        const { createServer } = await import('vite');
+      `,
       'scripts/lib/secure-vite-runtime.mjs': `
         import { createServer } from 'vite-plus';
         const compilerBootstrap = await import('../../packages/compiler/src/security-bootstrap.ts');
@@ -48,6 +61,10 @@ describe('check-security-classifier-corpus gate', () => {
     };
 
     expect(evaluateCustomRunnerBootstrapOrdering((file) => files[file])).toEqual([
+      "request-safe-runtime: tests/p10-perf.node.mjs must start imports with import '../dist/server/src/runtime-bootstrap.mjs';",
+      'request-safe-runtime: tests/p10-perf.node.mjs must isolate Playwright from the locked request-serving realm',
+      'request-safe-runtime: vite.config.ts root pack must emit packages/server/src/runtime-bootstrap.ts',
+      'request-safe-runtime: tests/compiler-determinism-worker.mjs must not construct Vite outside the compiler-first locked runner',
       'request-safe-runtime: scripts/lib/secure-vite-runtime.mjs must lock compiler then server before importing Vite',
       'request-safe-runtime: scripts/lib/secure-vite-runtime.mjs must not statically import Vite',
       'request-safe-runtime: site/scripts/export-static.mjs must lock the runtime before importing the CLI/Vite graph',
@@ -104,11 +121,22 @@ describe('check-security-classifier-corpus gate', () => {
       'examples/stackoverflow/src/app-shell.ts': `createRequestHandler`,
       'packages/devtool/src/mount.mjs': `import { createRequestHandler } from '@kovojs/server';`,
       'site/src/aux.ts': `import { createRequestHandler } from '@kovojs/server';`,
+      'tests/p10-perf.node.mjs': `
+        import '../dist/server/src/runtime-bootstrap.mjs';
+        import { createRequestHandler } from '../dist/server/src/index.mjs';
+        new Worker(new URL('./p10-perf-browser-worker.mjs', import.meta.url));
+      `,
+      'vite.config.ts': `pack entry 'packages/server/src/runtime-bootstrap.ts'`,
       'examples/gallery/scripts/export-static.mjs': `createSecurityLockedViteServer`,
       'examples/reference/scripts/export-static.mjs': `createSecurityLockedViteServer`,
       'scripts/demo-session/serve.mjs': `createSecurityLockedViteServer`,
       'site/scripts/capture.mjs': `createSecurityLockedViteServer`,
       'site/scripts/measure-route-style-size.mjs': `createSecurityLockedViteServer`,
+      'tests/compiler-determinism-worker.mjs': `
+        createSecurityLockedViteServer();
+        server.ssrLoadModule('/tests/compiler-perf-corpora.ts');
+        server.ssrLoadModule('/packages/compiler/src/index.ts');
+      `,
       'scripts/lib/secure-vite-runtime.mjs': `
         const compilerBootstrap = await import('../../packages/compiler/src/security-bootstrap.ts');
         compilerBootstrap.lockCompilerSecurityRealm();
