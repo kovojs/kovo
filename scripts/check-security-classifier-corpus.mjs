@@ -287,6 +287,28 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
         ],
       },
       {
+        id: 'environment-and-request-credential-wire-superset',
+        file: 'packages/drizzle/src/trust-escapes-static.test.ts',
+        snippets: [
+          'const viteEnvironment = import.meta.env',
+          'processEnvironment = nodeProcess.env',
+          "import { serverSecret } from './config.js'",
+          "request.headers.get('COOKIE')",
+          "context.request.headers.get('authorization')",
+          "request.headers.get('Proxy-Authorization')",
+          'return Object.fromEntries(headers)',
+          'result.token = get(input.headerName)',
+          'token: reveal(context.request)',
+          "import { reveal, safeUrl } from './helper.js'",
+          'token?.slice(0, 4)',
+          'alias.token = request.headers.get',
+          'fill(result, request)',
+          'revealDestructured(request)',
+          'request.headers.forEach((value, name)',
+          'request.headers.entries()) result[name] = value',
+        ],
+      },
+      {
         id: 'framework-owned-file-storage-controls',
         file: 'packages/drizzle/src/trust-escapes-static.test.ts',
         snippets: [

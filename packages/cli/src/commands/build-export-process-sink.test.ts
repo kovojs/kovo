@@ -49,6 +49,7 @@ async function check(root: string): Promise<{ code: number; stdout: string; stde
 // @kovo-security-certifies KV424 request-process-local-build
 // @kovo-security-certifies KV424 request-process-package-build
 // @kovo-security-certifies KV424 request-raw-authority-build
+// @kovo-security-certifies KV424 request-wire-confidentiality-build
 describe('kovo build KV424 request process-sink preflight', () => {
   it('rejects a local mutation child_process sink before artifact emission', async () => {
     const root = fixture('local');
@@ -494,6 +495,60 @@ export default createApp({
     expect(result.stderr).toContain('sink=Bun.[computed]');
     expect(result.stderr).toContain('sink=Deno.[computed]');
     expect(result.stderr).toContain('sink=node:process.[computed]');
+  }, 120_000);
+
+  it('rejects raw server environment values returned from a request handler', async () => {
+    const root = fixture('raw-environment-wire');
+    writeFileSync(
+      join(root, 'app.mjs'),
+      `import { createApp, mutation, publicAccess, route, s } from '@kovojs/server';
+const environment = import.meta.env;
+export const unsafeEnvironment = mutation({
+  access: publicAccess('raw environment wire audit'),
+  input: s.object({}),
+  handler() {
+    return { secret: environment.APP_SECRET };
+  },
+});
+export default createApp({
+  mutations: [unsafeEnvironment],
+  routes: [route('/', { access: publicAccess('authority audit'), page: () => 'safe' })],
+});
+`,
+      'utf8',
+    );
+
+    const result = await check(root);
+    expect(result, result.stderr).toMatchObject({ code: 1 });
+    expect(result.stderr).toContain('ERROR KV424');
+    expect(result.stderr).toContain('sink=import.meta.env');
+  }, 120_000);
+
+  it('rejects a raw Authorization value returned from an endpoint', async () => {
+    const root = fixture('request-credential-wire');
+    writeFileSync(
+      join(root, 'app.mjs'),
+      `import { createApp, endpoint, publicAccess, route } from '@kovojs/server';
+const unsafeEndpoint = endpoint('/unsafe', {
+  method: 'GET',
+  reason: 'request credential wire audit',
+  response: { appOwnedSafety: true, body: 'json', cache: 'no-store' },
+  handler(request) {
+    return Response.json({ token: request.headers.get('Authorization') });
+  },
+});
+export default createApp({
+  endpoints: [unsafeEndpoint],
+  routes: [route('/', { access: publicAccess('authority audit'), page: () => 'safe' })],
+});
+`,
+      'utf8',
+    );
+
+    const result = await check(root);
+    expect(result, result.stderr).toMatchObject({ code: 1 });
+    expect(result.stderr).toContain('ERROR KV424');
+    expect(result.stderr).toContain('sink=client-wire.request.header.Authorization');
   }, 120_000);
 
   it('accepts reviewed intrinsic calls and statically closed callbacks', async () => {

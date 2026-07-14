@@ -723,6 +723,241 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
     );
   });
 
+  it('closes raw server environment namespaces and aliases at request roots', () => {
+    const facts = sinksFor(
+      `
+      import nodeProcess from 'node:process';
+      import { query } from '@kovojs/server';
+
+      const viteEnvironment = import.meta.env;
+      const processEnvironment = nodeProcess.env;
+      export const unsafe = query({ load() {
+        return {
+          bun: Bun.env.SECRET,
+          deno: Deno.env.get('SECRET'),
+          globalProcess: process.env.SECRET,
+          importedProcess: processEnvironment.SECRET,
+          vite: viteEnvironment.SECRET,
+        };
+      } });
+    `,
+      'app.mjs',
+    );
+
+    expect(facts.map((fact) => fact.sink)).toEqual(
+      expect.arrayContaining(['Bun.env', 'Deno.env', 'import.meta.env', 'node:process.env']),
+    );
+  });
+
+  it('follows raw environment values through relative modules', () => {
+    const facts = sinksForFiles([
+      {
+        fileName: 'config.ts',
+        source: `
+          export const serverSecret = import.meta.env.APP_SECRET;
+          export default { publicValue: 'safe', secret: import.meta.env.OTHER_SECRET };
+        `,
+      },
+      {
+        fileName: 'app.ts',
+        source: `
+          import { query } from '@kovojs/server';
+          import config from './config.js';
+          import * as configNamespace from './config.js';
+          import { serverSecret } from './config.js';
+          export const named = query({ load() { return { serverSecret }; } });
+          export const namespace = query({ load() { return configNamespace.serverSecret; } });
+          export const defaultSecret = query({ load() { return config.secret; } });
+          export const safe = query({ load() { return config.publicValue; } });
+        `,
+      },
+    ]);
+
+    expect(facts.filter((fact) => fact.sink === 'import.meta.env')).toHaveLength(3);
+  });
+
+  it('closes raw credential headers and whole request carriers returned across public wires', () => {
+    const facts = sinksFor(`
+      import { endpoint, mutation, query, webhook } from '@kovojs/server';
+
+      export const mutate = mutation({ handler(_input, request) {
+        return { cookie: request.headers.get('COOKIE') };
+      } });
+      export const load = query({ load(_input, context) {
+        return { authorization: context.request.headers.get('authorization') };
+      } });
+      export const raw = endpoint('/raw', { handler(request) {
+        return Response.json({ proxy: request.headers.get('Proxy-Authorization') });
+      } });
+      export const hook = webhook('/hook', { handler(_input, { request }) {
+        return { headers: request.headers };
+      } });
+    `);
+
+    expect(facts.map((fact) => fact.sink)).toEqual(
+      expect.arrayContaining([
+        'client-wire.request.header.Authorization',
+        'client-wire.request.header.Cookie',
+        'client-wire.request.header.Proxy-Authorization',
+        'client-wire.request.headers',
+      ]),
+    );
+  });
+
+  it('closes destructured, bound, dynamic, enumerated, and container credential escapes', () => {
+    const facts = sinksFor(`
+      import { mutation, query } from '@kovojs/server';
+
+      export const dynamic = mutation({ handler(input, { headers }) {
+        const get = headers.get.bind(headers);
+        const result = { safe: true };
+        result.token = get(input.headerName);
+        return result;
+      } });
+      export const enumerated = query({ load(_input, { request: { headers } }) {
+        return Object.fromEntries(headers);
+      } });
+    `);
+
+    expect(facts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ sink: 'client-wire.request.headers.dynamic' }),
+        expect.objectContaining({ sink: 'client-wire.request.headers' }),
+      ]),
+    );
+  });
+
+  it('follows local helper returns without rejecting a helper that projects safe request metadata', () => {
+    const facts = sinksFor(`
+      import { query } from '@kovojs/server';
+      function safeUrl(request) { return request.url; }
+      function reveal(request) { return request.headers.get('authorization'); }
+
+      export const load = query({ load(_input, context) {
+        return { safe: safeUrl(context.request), token: reveal(context.request) };
+      } });
+    `);
+
+    expect(facts.filter((fact) => fact.sink === 'client-wire.request.credentials')).toEqual([]);
+    expect(facts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ sink: 'client-wire.request.header.Authorization' }),
+      ]),
+    );
+  });
+
+  it('follows credential projections through relative helper modules', () => {
+    const facts = sinksForFiles([
+      {
+        fileName: 'helper.ts',
+        source: `
+          export function reveal(request) { return request.headers.get('authorization'); }
+          export function safeUrl(request) { return request.url; }
+        `,
+      },
+      {
+        fileName: 'app.ts',
+        source: `
+          import { query } from '@kovojs/server';
+          import { reveal, safeUrl } from './helper.js';
+          export const load = query({ load(_input, context) {
+            return { safe: safeUrl(context.request), token: reveal(context.request) };
+          } });
+        `,
+      },
+    ]);
+
+    expect(
+      facts.filter((fact) => fact.sink === 'client-wire.request.header.Authorization'),
+    ).toHaveLength(1);
+    expect(facts.filter((fact) => fact.sink === 'client-wire.request.credentials')).toEqual([]);
+  });
+
+  it('closes transformed, closure-captured, aliased-container, and helper-write credential flows', () => {
+    const facts = sinksFor(`
+      import { query } from '@kovojs/server';
+      function revealDestructured({ headers }) { return headers.get('authorization'); }
+      function fill(result, request) { result.token = request.headers.get('authorization'); }
+      function safeProjection({ request }) { return request.url; }
+
+      export const transformed = query({ load(_input, { request }) {
+        const token = request.headers.get('authorization');
+        return { prefix: token?.slice(0, 4) };
+      } });
+      export const closure = query({ load(_input, { request }) {
+        const reveal = () => request.headers.get('authorization');
+        return { token: reveal() };
+      } });
+      export const aliasedContainer = query({ load(_input, { request }) {
+        const result = {};
+        const alias = result;
+        alias.token = request.headers.get('authorization');
+        return result;
+      } });
+      export const helperWrite = query({ load(_input, { request }) {
+        const result = {};
+        fill(result, request);
+        return result;
+      } });
+      export const destructuredHelper = query({ load(_input, { request }) {
+        return { token: revealDestructured(request) };
+      } });
+      export const safeHelper = query({ load(_input, { request }) {
+        return { url: safeProjection({ request }) };
+      } });
+    `);
+
+    expect(
+      facts.filter((fact) => fact.sink === 'client-wire.request.header.Authorization'),
+    ).toHaveLength(5);
+    expect(facts.filter((fact) => fact.sink === 'client-wire.request.credentials')).toEqual([]);
+  });
+
+  it('closes whole-header callback and iterator copies into returned containers', () => {
+    const facts = sinksFor(`
+      import { query } from '@kovojs/server';
+      export const callbackCopy = query({ load(_input, { request }) {
+        const result = {};
+        request.headers.forEach((value, name) => { result[name] = value; });
+        return result;
+      } });
+      export const iteratorCopy = query({ load(_input, { request }) {
+        const result = {};
+        for (const [name, value] of request.headers.entries()) result[name] = value;
+        return result;
+      } });
+    `);
+
+    expect(
+      facts.filter((fact) => fact.sink === 'client-wire.request.headers'),
+      JSON.stringify(facts),
+    ).toHaveLength(2);
+  });
+
+  it('keeps exact server-side credential decisions and non-credential projections open', () => {
+    const facts = sinksFor(`
+      import { endpoint, mutation, query } from '@kovojs/server';
+
+      export const mutate = mutation({ handler(_input, request) {
+        const authorized = request.headers.get('authorization');
+        if (!authorized) throw new Error('missing authorization');
+        return { ok: true };
+      } });
+      export const load = query({ load(_input, { request }) {
+        return {
+          contentType: request.headers.get('content-type'),
+          hasAuthorization: request.headers.has('authorization'),
+          url: request.url,
+        };
+      } });
+      export const raw = endpoint('/raw', { handler(request) {
+        return Response.json({ method: request.method, url: request.url });
+      } });
+    `);
+
+    expect(facts).toEqual([]);
+  });
+
   it('keeps canonical file responses, streams, and storage capabilities open', () => {
     const facts = sinksFor(`
       import { endpoint, respond } from '@kovojs/server';
