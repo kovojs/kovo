@@ -35,7 +35,7 @@ export const crmViteConfig = defineConfig({
       sourceRoot: 'src',
     }),
     exampleKovoCompilerPlugin({
-      include: ['src/components', 'src/mutations.ts', 'src/queries.ts'],
+      include: ['src'],
     }),
     ...(process.env.KOVO_DEMO_MULTITENANT ? [] : [kovo({ app: '/src/app-shell.ts' })]),
   ],

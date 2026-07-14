@@ -8,6 +8,7 @@ import {
   componentLiveTargetRenderer,
   registerGeneratedLiveTargetRenderer,
 } from '../packages/server/src/internal/wire.js';
+import { runWithGeneratedLiveTargetRegistry } from '../packages/server/src/live-target-registry.js';
 
 import {
   activity as crmActivity,
@@ -106,89 +107,93 @@ if (!setupState[setupKey]) {
       { domain: 'model/question', keys: null, via: 'questions' },
     ],
   });
-
-  const [
-    { CartBadge },
-    { OrderHistory },
-    { ProductGrid },
-    { ContactsRegion },
-    { DealDetailRegion },
-    { PipelineRegion },
-    { QuestionDetailRegion },
-    { QuestionListRegion },
-  ] = await Promise.all([
-    import('../examples/commerce/src/components/cart-badge.js'),
-    import('../examples/commerce/src/components/order-history.js'),
-    import('../examples/commerce/src/components/product-grid.js'),
-    import('../examples/crm/src/components/contacts.js'),
-    import('../examples/crm/src/components/deal-detail.js'),
-    import('../examples/crm/src/components/pipeline.js'),
-    import('../examples/stackoverflow/src/components/question-detail.js'),
-    import('../examples/stackoverflow/src/components/question-list.js'),
-  ]);
-
-  registerExampleLiveTargetRenderer(
-    componentLiveTargetRenderer({
-      component: CartBadge,
-      componentId: 'components/cart-badge/cart-badge',
-    }),
-  );
-  registerExampleLiveTargetRenderer(
-    componentLiveTargetRenderer({
-      component: ProductGrid,
-      componentId: 'components/product-grid/product-grid',
-    }),
-  );
-  registerExampleLiveTargetRenderer(
-    componentLiveTargetRenderer({
-      component: OrderHistory,
-      componentId: 'components/order-history/order-history',
-    }),
-  );
-  registerExampleLiveTargetRenderer(
-    componentLiveTargetRenderer({
-      component: ContactsRegion,
-      componentId: 'components/contacts/contacts-region',
-    }),
-  );
-  registerExampleLiveTargetRenderer(
-    componentLiveTargetRenderer({
-      component: PipelineRegion,
-      componentId: 'components/pipeline/pipeline-region',
-    }),
-  );
-  registerExampleLiveTargetRenderer(
-    componentLiveTargetRenderer({
-      component: DealDetailRegion,
-      componentId: 'components/deal-detail/deal-detail-region',
-    }),
-  );
-  registerExampleLiveTargetRenderer(
-    componentLiveTargetRenderer({
-      component: QuestionListRegion,
-      componentId: 'components/question-list/question-list-region',
-    }),
-  );
-  registerExampleLiveTargetRenderer(
-    componentLiveTargetRenderer({
-      component: QuestionDetailRegion,
-      componentId: 'components/question-detail/question-detail-region',
-    }),
-  );
 }
 
-function registerExampleLiveTargetRenderer(
-  renderer: Parameters<typeof registerGeneratedLiveTargetRenderer>[0],
-) {
-  try {
-    registerGeneratedLiveTargetRenderer(renderer);
-  } catch (error) {
-    if (
-      error instanceof Error &&
-      error.message.startsWith('Duplicate generated live target renderer for component ')
-    ) {
-      return;
-    }
-    throw error;
-  }
+const [
+  { CartBadge },
+  { OrderHistory },
+  { ProductGrid },
+  { ContactsRegion },
+  { DealDetailRegion },
+  { PipelineRegion },
+  { QuestionDetailRegion },
+  { QuestionListRegion },
+] = await Promise.all([
+  import('../examples/commerce/src/components/cart-badge.js'),
+  import('../examples/commerce/src/components/order-history.js'),
+  import('../examples/commerce/src/components/product-grid.js'),
+  import('../examples/crm/src/components/contacts.js'),
+  import('../examples/crm/src/components/deal-detail.js'),
+  import('../examples/crm/src/components/pipeline.js'),
+  import('../examples/stackoverflow/src/components/question-detail.js'),
+  import('../examples/stackoverflow/src/components/question-list.js'),
+]);
+
+const commerceLiveTargetRenderers = [
+  componentLiveTargetRenderer({
+    component: CartBadge,
+    componentId: 'components/cart-badge/cart-badge',
+  }),
+  componentLiveTargetRenderer({
+    component: ProductGrid,
+    componentId: 'components/product-grid/product-grid',
+  }),
+  componentLiveTargetRenderer({
+    component: OrderHistory,
+    componentId: 'components/order-history/order-history',
+  }),
+];
+
+const crmLiveTargetRenderers = [
+  componentLiveTargetRenderer({
+    component: ContactsRegion,
+    componentId: 'components/contacts/contacts-region',
+  }),
+  componentLiveTargetRenderer({
+    component: PipelineRegion,
+    componentId: 'components/pipeline/pipeline-region',
+  }),
+  componentLiveTargetRenderer({
+    component: DealDetailRegion,
+    componentId: 'components/deal-detail/deal-detail-region',
+  }),
+];
+
+const stackOverflowLiveTargetRenderers = [
+  componentLiveTargetRenderer({
+    component: QuestionListRegion,
+    componentId: 'components/question-list/question-list-region',
+  }),
+  componentLiveTargetRenderer({
+    component: QuestionDetailRegion,
+    componentId: 'components/question-detail/question-detail-region',
+  }),
+];
+
+/**
+ * Vitest-only generated-module seam. Production app graphs are evaluated by the Vite/CLI loader,
+ * which establishes this owner-local scope before generated renderer side effects run. Tests import
+ * source modules eagerly, so they replay only the matching app's generated renderer inventory inside
+ * a fresh scope before createApp consumes it (SPEC §6.6/§9.1/§9.5).
+ */
+export function runWithCommerceGeneratedGraphs<Value>(load: () => Value): Value {
+  return runWithExampleGeneratedGraphs(commerceLiveTargetRenderers, load);
+}
+
+export function runWithCrmGeneratedGraphs<Value>(load: () => Value): Value {
+  return runWithExampleGeneratedGraphs(crmLiveTargetRenderers, load);
+}
+
+export function runWithStackOverflowGeneratedGraphs<Value>(load: () => Value): Value {
+  return runWithExampleGeneratedGraphs(stackOverflowLiveTargetRenderers, load);
+}
+
+function runWithExampleGeneratedGraphs<Value>(
+  renderers: readonly Parameters<typeof registerGeneratedLiveTargetRenderer>[0][],
+  load: () => Value,
+): Value {
+  return runWithGeneratedLiveTargetRegistry(() => {
+    for (const renderer of renderers) registerGeneratedLiveTargetRenderer(renderer);
+    return load();
+  });
 }

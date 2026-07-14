@@ -24,6 +24,7 @@ import {
   compilerCreateMap,
   compilerCreateNullRecord,
   compilerCreateSet,
+  compilerCreateWeakMap,
   compilerDefineOwnDataProperty,
   compilerFreeze,
   compilerMapDelete,
@@ -47,6 +48,8 @@ import {
   compilerStringReplaceAll,
   compilerStringSlice,
   compilerStringStartsWith,
+  compilerWeakMapGet,
+  compilerWeakMapSet,
 } from './compiler-security-intrinsics.js';
 import type { CompilerDiagnostic } from './diagnostics.js';
 import { compileComponentModuleForFramework } from './framework-compile.js';
@@ -330,6 +333,30 @@ type ViteCompileComponentModule = (options: ViteCompileOptions) => MaybePromise<
 const KOVO_DEV_CLIENT_MODULE_FILE_LIMIT = 1024;
 const KOVO_DEV_CLIENT_MODULE_SOURCE_UNIT_LIMIT = 16 * 1024 * 1024;
 
+const FRAMEWORK_VITE_PLUGIN_IDENTITY_PROPERTIES = compilerFreeze([
+  'configResolved',
+  'configureServer',
+  'enforce',
+  'getClientModules',
+  'getCssAssetManifest',
+  'handleHotUpdate',
+  'load',
+  'name',
+  'resolveId',
+  'transform',
+  'watchChange',
+] as const);
+
+interface FrameworkVitePluginAuthority {
+  readonly identities: Readonly<Record<string, unknown>>;
+  readonly sourceRootCoverage: '*' | string | null;
+}
+
+const frameworkVitePluginAuthorities = compilerCreateWeakMap<
+  KovoVitePlugin,
+  FrameworkVitePluginAuthority
+>();
+
 /**
  * Build a KovoVitePlugin bound to a given component-compile function, lowering authored
  * component modules through the compiler on `transform` and serving emitted client islands
@@ -341,19 +368,88 @@ export function createKovoVitePlugin(
   compileComponentModule: ViteCompileComponentModule,
   options: KovoVitePluginOptions = {},
 ): KovoVitePlugin {
-  return createBoundKovoVitePlugin(compileComponentModule, options);
+  return createBoundKovoVitePlugin(compileComponentModule, snapshotKovoVitePluginOptions(options));
 }
 
 /** @internal Construct the plugin with the statically owned fresh compiler entry point. */
 export function createFrameworkKovoVitePlugin(options: KovoVitePluginOptions = {}): KovoVitePlugin {
-  return createBoundKovoVitePlugin(compileComponentModuleForFramework, options);
+  const optionsSnapshot = snapshotKovoVitePluginOptions(options);
+  const plugin = createBoundKovoVitePlugin(compileComponentModuleForFramework, optionsSnapshot);
+  const identities = compilerCreateNullRecord<unknown>();
+  const identityPropertyCount = compilerArrayLength(
+    FRAMEWORK_VITE_PLUGIN_IDENTITY_PROPERTIES,
+    'Framework Vite plugin identity properties',
+  );
+  for (let index = 0; index < identityPropertyCount; index += 1) {
+    const property = compilerOwnDataValue(
+      FRAMEWORK_VITE_PLUGIN_IDENTITY_PROPERTIES,
+      index,
+      'Framework Vite plugin identity properties',
+    ) as (typeof FRAMEWORK_VITE_PLUGIN_IDENTITY_PROPERTIES)[number];
+    compilerDefineOwnDataProperty(
+      identities,
+      property,
+      compilerOwnDataValue(plugin, property, 'Framework Vite plugin'),
+    );
+  }
+  compilerWeakMapSet(frameworkVitePluginAuthorities, plugin, {
+    identities: compilerFreeze(identities),
+    sourceRootCoverage: frameworkVitePluginSourceRootCoverage(optionsSnapshot),
+  });
+
+  // The app-shell owner may rely on this plugin having already transformed the complete authored
+  // source directory. Freezing the genuine object closes the configResolved-to-transform gap: an
+  // authored sibling plugin cannot replace a hook or move it out of `enforce: 'pre'` after the
+  // private authority check (SPEC.md §2 / §5.2 / §6.6).
+  return compilerFreeze(plugin);
+}
+
+/**
+ * @internal True only for an unmodified framework-minted compiler plugin whose immutable filter
+ * snapshot covers the complete requested authored source root without exclusions. This is a
+ * read-only proof query: public custom-compiler factories never enter the private authority map.
+ */
+export function isFrameworkKovoVitePluginOwnerForSourceRoot(
+  value: unknown,
+  sourceRoot: string,
+): value is KovoVitePlugin {
+  if (typeof value !== 'object' || value === null) return false;
+  const authority = compilerWeakMapGet(frameworkVitePluginAuthorities, value as KovoVitePlugin);
+  if (authority === undefined) return false;
+
+  const identityPropertyCount = compilerArrayLength(
+    FRAMEWORK_VITE_PLUGIN_IDENTITY_PROPERTIES,
+    'Framework Vite plugin identity properties',
+  );
+  for (let index = 0; index < identityPropertyCount; index += 1) {
+    const property = compilerOwnDataValue(
+      FRAMEWORK_VITE_PLUGIN_IDENTITY_PROPERTIES,
+      index,
+      'Framework Vite plugin identity properties',
+    ) as (typeof FRAMEWORK_VITE_PLUGIN_IDENTITY_PROPERTIES)[number];
+    if (
+      compilerOwnDataValue(value, property, 'Framework Vite plugin') !==
+      compilerOwnDataValue(authority.identities, property, 'Framework Vite plugin authority')
+    ) {
+      return false;
+    }
+  }
+  if (compilerOwnDataValue(value, 'enforce', 'Framework Vite plugin') !== 'pre') return false;
+
+  const normalizedSourceRoot = normalizeFrameworkViteSourceRoot(sourceRoot);
+  if (normalizedSourceRoot === null) return false;
+  if (authority.sourceRootCoverage === '*') return true;
+  if (authority.sourceRootCoverage === null) return false;
+  return (
+    normalizedSourceRoot === authority.sourceRootCoverage ||
+    compilerStringStartsWith(normalizedSourceRoot, `${authority.sourceRootCoverage}/`)
+  );
 }
 
 function createBoundKovoVitePlugin(
   compileComponentModule: ViteCompileComponentModule,
   options: KovoVitePluginOptions,
 ): KovoVitePlugin {
-  options = snapshotKovoVitePluginOptions(options);
   let devState = createViteDevStateStore(true);
   let root = process.cwd();
   let configurationEpoch = 0;
@@ -716,6 +812,45 @@ function createBoundKovoVitePlugin(
       compilerMapDelete(latestCompileIssueByFile, fileName);
     },
   };
+}
+
+function frameworkVitePluginSourceRootCoverage(
+  options: KovoVitePluginOptions,
+): '*' | string | null {
+  // A genuine compiler implementation does not make authored graph context authoritative. The
+  // app-shell's built-in owner obtains query/registry context from framework analyzers; therefore a
+  // separately configured owner carrying app-supplied fact overrides is never eligible for
+  // adoption (SPEC.md §2 / §5.2 / §6.6 honesty boundary).
+  if (
+    options.packageComponentPrefixes !== undefined ||
+    options.queryShapeFacts !== undefined ||
+    options.registryFacts !== undefined
+  ) {
+    return null;
+  }
+  if (options.exclude !== undefined) return null;
+  if (options.include === undefined) return '*';
+  if (compilerArrayLength(options.include, 'Kovo Vite include filters') !== 1) return null;
+  const filter = compilerOwnDataValue(options.include, 0, 'Kovo Vite include filters');
+  return typeof filter === 'string' ? normalizeFrameworkViteSourceRoot(filter) : null;
+}
+
+function normalizeFrameworkViteSourceRoot(value: string): string | null {
+  if (typeof value !== 'string') return null;
+  let normalized = slashPath(value);
+  while (normalized.length > 0 && compilerStringEndsWith(normalized, '/')) {
+    normalized = compilerStringSlice(normalized, 0, normalized.length - 1);
+  }
+  if (
+    normalized.length === 0 ||
+    compilerStringStartsWith(normalized, '/') ||
+    normalized === '..' ||
+    compilerStringStartsWith(normalized, '../') ||
+    compilerStringIncludes(normalized, '/../')
+  ) {
+    return null;
+  }
+  return normalized;
 }
 
 function rewriteDevClientModuleRuntimeImports(source: string): string {

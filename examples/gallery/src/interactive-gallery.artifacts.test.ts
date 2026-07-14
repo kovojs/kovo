@@ -177,6 +177,9 @@ describe('compiled interactive gallery demos', () => {
       expect(html).toContain('data-gallery-route="/gallery/interactive"');
       expect(html).toContain('data-gallery-interactive="progress"');
       expect(html).toContain('data-gallery-interactive="meter"');
+      expect(html).toContain(
+        '<style>@keyframes gallery-toast-auto-dismiss{from{opacity:1}to{opacity:1}}</style>',
+      );
 
       for (const href of [
         ...galleryInteractiveSupportClientModuleHrefs,

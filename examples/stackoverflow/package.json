@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "vp build && node scripts/materialize-demo-css.mjs",
+    "build": "node ../../scripts/lib/secure-vite-build.mjs && node scripts/materialize-demo-css.mjs",
     "dev": "kovo dev ./src/app-shell.ts",
     "start": "node scripts/serve.mjs",
     "test": "vitest --run"

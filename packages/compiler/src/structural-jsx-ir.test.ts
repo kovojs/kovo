@@ -200,7 +200,7 @@ export const ImportOrder = component({
         return \`
       /** @jsxImportSource @kovojs/server */
       import { escapeText } from '@kovojs/server/internal/escape';
-      import { derive, kovoStyleProperty } from '@kovojs/browser/generated';
+      import { derive, kovoStyleProperty } from '@kovojs/browser/internal/output';
 
       export const ImportOrder$img_style_derive = derive(["product"], (product) => kovoStyleProperty("view-transition-name", product.slug));
       export const ImportOrder$span_style_derive = derive(["state"], (state) => [kovoStyleProperty("width", \\\`\\\${state.value}%\\\`)].filter(Boolean).join('; '));
@@ -249,7 +249,7 @@ export const JsxPragmas = component({
       "import { escapeText } from '@kovojs/server/internal/escape';",
     );
     const deriveImportOffset = serverSource.indexOf(
-      "import { derive, kovoStyleProperty } from '@kovojs/browser/generated';",
+      "import { derive, kovoStyleProperty } from '@kovojs/browser/internal/output';",
     );
 
     expect(result.diagnostics).toEqual([]);
@@ -257,6 +257,7 @@ export const JsxPragmas = component({
     expect(runtimeOffset).toBeGreaterThan(importSourceOffset);
     expect(escapeImportOffset).toBeGreaterThan(runtimeOffset);
     expect(deriveImportOffset).toBeGreaterThan(runtimeOffset);
+    expect(serverSource).not.toContain("from '@kovojs/browser/generated'");
     expect(serverSource.slice(importSourceOffset, escapeImportOffset)).not.toContain('import {');
     expect(() => assertFixpoint(result)).not.toThrow();
   });

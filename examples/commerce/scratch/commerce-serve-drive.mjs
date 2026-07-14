@@ -15,8 +15,8 @@
 //     server truth. We removed per-fragment `stylesheets` (Phase R1 learning) so a
 //     leading <link> can't become the morph root and wipe the region.
 //
-// Run after `vp build` (the styled production-serve path):
-//   cd examples/commerce && vp build && node scratch/commerce-serve-drive.mjs
+// Run after the bootstrap-first demo build (the styled source-serve path):
+//   cd examples/commerce && pnpm run build:demo && node scratch/commerce-serve-drive.mjs
 //
 // Prod serve note: in-memory PGlite resets per server start; this demo seeds its
 // catalog on boot, so a fresh run starts from a 0 cart.

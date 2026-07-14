@@ -1,4 +1,5 @@
 /** @jsxImportSource @kovojs/server */
+import { trustedHtml } from '@kovojs/browser';
 import { component } from '@kovojs/core';
 import {
   normalizeToastDuration,
@@ -50,7 +51,12 @@ export const GalleryToastDemo = component({
         data-gallery-interactive="toast"
         style="display:flex;flex-direction:column;gap:0.5rem;align-items:flex-start"
       >
-        <style>{'@keyframes gallery-toast-auto-dismiss{from{opacity:1}to{opacity:1}}'}</style>
+        <style
+          rawHtml={trustedHtml(
+            '@keyframes gallery-toast-auto-dismiss{from{opacity:1}to{opacity:1}}',
+            'KV426: static gallery toast keyframes literal; no request or query data',
+          )}
+        />
         {/* better-components-ux: the trigger lives in the normal demo flow; the
             fixed ToastViewport is a sibling that holds only Toast instances. */}
         <button

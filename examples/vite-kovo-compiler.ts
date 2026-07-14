@@ -17,7 +17,7 @@ type ExampleDrizzleRegistryVitePlugin = {
 };
 
 export function exampleKovoCompilerPlugin(options: KovoVitePluginOptions): KovoVitePrePlugin {
-  return Object.assign(kovoVitePlugin(options), { enforce: 'pre' as const });
+  return kovoVitePlugin(options) as KovoVitePrePlugin;
 }
 
 interface ExampleDrizzleRegistryPluginOptions {
@@ -75,10 +75,7 @@ export function exampleDrizzleRegistryPlugin(
 }
 
 export function commerceKovoCompilerPlugin(): KovoVitePrePlugin {
-  return exampleKovoCompilerPlugin({
-    include: ['src/components', 'src/domain.ts', 'src/queries.ts'],
-    registryFacts: commerceRegistryFacts,
-  });
+  return exampleKovoCompilerPlugin({ include: ['src'] });
 }
 
 function normalizePath(path: string): string {

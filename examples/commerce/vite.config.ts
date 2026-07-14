@@ -2,7 +2,7 @@ import { kovo } from '@kovojs/server/vite';
 import { defineConfig } from 'vite-plus';
 import { fileURLToPath } from 'node:url';
 
-import { commerceRegistryFacts, exampleKovoCompilerPlugin } from '../vite-kovo-compiler.js';
+import { exampleKovoCompilerPlugin } from '../vite-kovo-compiler.js';
 import { kovoExampleServeTask } from '../vite-plus-tasks.js';
 
 const exampleGeneratedGraphsGlobalSetup = fileURLToPath(
@@ -31,10 +31,7 @@ export const commerceViteConfig = defineConfig({
   plugins: isVitest
     ? [kovo({ app: '/src/app.tsx' })]
     : [
-        exampleKovoCompilerPlugin({
-          include: ['src/components', 'src/domain.ts', 'src/model.ts', 'src/queries.ts'],
-          registryFacts: commerceRegistryFacts,
-        }),
+        exampleKovoCompilerPlugin({ include: ['src'] }),
         ...(process.env.KOVO_DEMO_MULTITENANT ? [] : [kovo({ app: '/src/app.tsx' })]),
       ],
   // The Drizzle/PGlite (WASM) data layer makes the build/dev tests (which spawn

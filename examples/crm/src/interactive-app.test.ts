@@ -1,4 +1,4 @@
-import '../../../tests/example-generated-graphs.setup.js';
+import { runWithCrmGeneratedGraphs } from '../../../tests/example-generated-graphs.setup.js';
 
 import { readFileSync } from 'node:fs';
 
@@ -34,8 +34,10 @@ const unownedDealInputId = 'd-22222222-2222-4222-8222-222222222222';
 const invalidStageDealId = 'd-33333333-3333-4333-8333-333333333333';
 
 async function buildCrmInteractiveApp(options: BuildCrmInteractiveAppOptions = {}) {
-  const application = await buildCrmInteractiveApplication(options);
-  return { ...application, handler: createExampleTestRequestHandler(application.app) };
+  return runWithCrmGeneratedGraphs(async () => {
+    const application = await buildCrmInteractiveApplication(options);
+    return { ...application, handler: createExampleTestRequestHandler(application.app) };
+  });
 }
 
 function withCsrf(fields: Record<string, string>): Record<string, string> {
@@ -58,6 +60,7 @@ async function postForm(
         'Kovo-Idem': `${key}-${Object.values(fields).join('-')}`,
         'Kovo-Live-Targets': headers.liveTargets,
         'Kovo-Targets': headers.targets,
+        'Kovo-Current-Url': headers.currentUrl,
         Origin: 'http://example.test',
       },
       body: new URLSearchParams({
@@ -73,9 +76,10 @@ async function enhancedHeadersForRoute(
   handler: (request: Request) => Promise<Response>,
   route: string,
   targets: readonly string[],
-): Promise<{ liveTargets: string; targets: string }> {
+): Promise<{ currentUrl: string; liveTargets: string; targets: string }> {
+  const currentUrl = `http://example.test${route}`;
   const response = await handler(
-    new Request(`http://example.test${route}`, {
+    new Request(currentUrl, {
       headers: { Accept: 'text/html' },
     }),
   );
@@ -100,6 +104,7 @@ async function enhancedHeadersForRoute(
   }
 
   return {
+    currentUrl,
     liveTargets: [...liveTargets.values()].join('; '),
     targets: [...targetHeaders].join('; '),
   };

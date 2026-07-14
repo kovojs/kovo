@@ -4,9 +4,8 @@ import { createServer as createNodeServer } from 'node:http';
 import { extname as importedPathExtname, join as importedPathJoin } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { createServer as createViteServer } from 'vite';
-
 import { readConfinedStaticFile } from '../../../scripts/lib/confined-static-file.mjs';
+import { createSecurityLockedViteServer } from '../../../scripts/lib/secure-vite-runtime.mjs';
 
 const NativeURL = globalThis.URL;
 const nativeFunctionBind = globalThis.Function.prototype.bind;
@@ -30,7 +29,7 @@ const STATIC_MIME = {
 // SPEC.md §9.5: dev/demo source serve for the commerce example. Production uses
 // `kovo build ./src/app.tsx` and the generated `dist/server/server.mjs`.
 // This helper keeps the Vite middleware path available for local source-serving
-// checks, serving built `/assets/*` from `dist/` when `vp build` has populated it.
+// checks, serving built `/assets/*` from `dist/` when `pnpm run build:demo` has populated it.
 async function tryServeBuiltAsset(req, res) {
   const pathname = new NativeURL(req.url, 'http://x').pathname;
   const loaded = await readConfinedStaticFile(distDir, pathname, '/assets/', req.method !== 'HEAD');
@@ -56,7 +55,7 @@ export async function createCommerceServeServer({
   port = Number(process.env.PORT ?? 5174),
   strictPort = false,
 } = {}) {
-  const vite = await createViteServer({
+  const vite = await createSecurityLockedViteServer({
     appType: 'custom',
     configFile: fileURLToPath(new URL('../vite.config.ts', import.meta.url)),
     logLevel: 'info',

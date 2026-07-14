@@ -1,7 +1,7 @@
 import { createServer as createNodeServer } from 'node:http';
 import { fileURLToPath } from 'node:url';
 
-import { createServer as createViteServer } from 'vite-plus';
+import { createSecurityLockedViteServer } from '../../scripts/lib/secure-vite-runtime.mjs';
 
 import { runContentPipeline } from './content-pipeline.mjs';
 
@@ -19,7 +19,7 @@ export async function createSiteServeServer({
 } = {}) {
   await runContentPipeline();
 
-  const vite = await createViteServer({
+  const vite = await createSecurityLockedViteServer({
     appType: 'custom',
     configFile: fileURLToPath(new URL('../vite.config.ts', import.meta.url)),
     logLevel: 'info',

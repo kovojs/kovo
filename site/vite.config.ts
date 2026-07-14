@@ -60,6 +60,10 @@ export default defineConfig({
       },
     },
   },
+  // Workspace packages expose TypeScript source during framework development. Keep the shared
+  // request shell inside Vite's transform graph; Node's strip-only loader cannot execute namespace
+  // syntax and, more importantly, would bypass this locked runner's configured module pipeline.
+  ssr: { noExternal: ['@kovojs/browser', '@kovojs/core', '@kovojs/server'] },
 });
 
 type DevMiddleware = (

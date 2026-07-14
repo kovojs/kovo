@@ -354,7 +354,7 @@ export async function viteRedGreenBuildFixtureFact(
         )};`,
         '',
         'export default {',
-        "  plugins: [Object.assign(kovoVitePlugin(), { enforce: 'pre' })],",
+        '  plugins: [kovoVitePlugin()],',
         '  resolve: {',
         '    alias: [',
         '      { find: /^@kovojs\\/core\\/internal\\/(.+)$/, replacement: coreInternalAlias },',

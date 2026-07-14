@@ -11,7 +11,10 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 
 import { extractAppRouteCssTargets } from '@kovojs/compiler/package-styles';
 import type { QueryShapeFact as CompilerViteQueryShapeFact } from '@kovojs/compiler/internal';
-import { kovoVitePlugin as createCompilerVitePlugin } from '@kovojs/compiler/vite';
+import {
+  isFrameworkKovoVitePluginOwnerForSourceRoot,
+  kovoVitePlugin as createCompilerVitePlugin,
+} from '@kovojs/compiler/vite';
 
 import type { DiagnosticDocumentDiagnostic } from './document-diagnostics.js';
 import type { StylesheetAsset } from './hints.js';
@@ -120,6 +123,7 @@ interface KovoViteRuntimePlugin extends KovoVitePlugin {
 }
 
 interface KovoViteResolvedConfig {
+  plugins?: readonly unknown[];
   root?: string;
 }
 
@@ -225,6 +229,7 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
   const runtimeRegistryResolvedId = `\0${runtimeRegistryPublicId}`;
   let root = process.cwd();
   let compilerPluginValue: KovoCompilerVitePlugin | undefined;
+  let externalCompilerPlugin: KovoCompilerVitePlugin | undefined;
   let compilerQueryShapeFacts: readonly CompilerViteQueryShapeFact[] | undefined;
   let appShellPlugin: KovoAppShellDevPlugin | undefined;
   let onModuleDiagnostics: ((report: unknown) => void) | undefined;
@@ -294,6 +299,7 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
   };
 
   const compilerPlugin = async (): Promise<KovoCompilerVitePlugin> => {
+    if (externalCompilerPlugin !== undefined) return externalCompilerPlugin;
     compilerPluginValue ??= createCompilerVitePlugin({
       include: [(fileName: string) => isAuthoredAppSourceFile(fileName, app, root)],
       onModuleDiagnostics(report: unknown) {
@@ -334,12 +340,13 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
       const commandProperty = buildOwnDataProperty(config, 'command', 'Vite resolved command');
       viteCommand =
         commandProperty.present && commandProperty.value === 'serve' ? 'serve' : 'build';
+      externalCompilerPlugin = configuredExternalCompilerPlugin(config, plugin, app, root);
       compilerQueryShapeFacts = snapshotBuildArray(
         await collectCompilerQueryShapeFacts(root, app),
         'compiler query-shape facts',
       );
       const compiler = await compilerPlugin();
-      await compiler.configResolved?.(config);
+      if (externalCompilerPlugin === undefined) await compiler.configResolved?.(config);
     },
     async buildStart() {
       // SPEC.md §11.4 (shared verification surface) / §10.2 / §10.3: run the data-plane safety
@@ -379,7 +386,7 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
         }
       }
       const compiler = await compilerPlugin();
-      await compiler.configureServer?.(server);
+      if (externalCompilerPlugin === undefined) await compiler.configureServer?.(server);
       const appRouteTargets = await routeTargets();
       let createDevIntegration: typeof import('./vite-dev.js').createKovoAppShellViteDevIntegration;
       if (trustedCreateDevIntegration !== undefined) {
@@ -422,12 +429,14 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
     },
     async resolveId(source, importer) {
       if (source === runtimeRegistryPublicId) return runtimeRegistryResolvedId;
+      if (externalCompilerPlugin !== undefined) return null;
       return (await compilerPlugin()).resolveId?.(source, importer) ?? null;
     },
     async load(id) {
       if (id === runtimeRegistryResolvedId) {
         return serializeRuntimeRegistryWireModule(await collectRuntimeRegistry(root, app));
       }
+      if (externalCompilerPlugin !== undefined) return null;
       return (await compilerPlugin()).load?.(id) ?? null;
     },
     async transform(source, id) {
@@ -437,6 +446,9 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
             `import ${buildSecuritySourceLiteral(runtimeRegistryPublicId)};\n`,
           )
         : source;
+      if (externalCompilerPlugin !== undefined) {
+        return transformedSource === source ? null : { code: transformedSource, map: null };
+      }
       const transformed = await (await compilerPlugin()).transform?.(transformedSource, id);
       if (transformed !== null && transformed !== undefined) return transformed;
       if (transformedSource !== source) return { code: transformedSource, map: null };
@@ -450,11 +462,62 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
       const appShellResult = await appShellPlugin?.handleHotUpdate?.(context);
       if (appShellResult !== undefined) return appShellResult;
 
+      if (externalCompilerPlugin !== undefined) return context.modules ?? [];
       return (await compilerPlugin()).handleHotUpdate?.(context) ?? context.modules ?? [];
     },
     name: 'kovo',
   };
   return plugin;
+}
+
+/**
+ * Adopt a separately configured compiler plugin instead of compiling its output a second time,
+ * but only when the compiler's private authority proves immutable hooks, whole-app-directory
+ * coverage, no excludes, and resolved ordering before this app-shell plugin. Structural lookalikes,
+ * custom compiler factories, narrow filters, and later plugins retain the built-in fail-closed
+ * compiler (SPEC §2/§5.2/§6.6).
+ */
+function configuredExternalCompilerPlugin(
+  config: KovoViteResolvedConfig,
+  appShellPlugin: KovoViteRuntimePlugin,
+  app: string,
+  root: string,
+): KovoCompilerVitePlugin | undefined {
+  const pluginsProperty = buildOwnDataProperty(config, 'plugins', 'Vite resolved plugins');
+  if (!pluginsProperty.present) return undefined;
+  const plugins = snapshotBuildArray(
+    pluginsProperty.value as readonly unknown[],
+    'Vite resolved plugins',
+  );
+  const sourceRoot = authoredAppSourceRoot(app, root);
+  if (sourceRoot === undefined) return undefined;
+  let appShellIndex = -1;
+  for (let index = 0; index < plugins.length; index += 1) {
+    if (plugins[index] !== appShellPlugin) continue;
+    if (appShellIndex !== -1) {
+      throw new TypeError('Kovo Vite integration must appear exactly once in resolved plugins.');
+    }
+    appShellIndex = index;
+  }
+  if (appShellIndex === -1) return undefined;
+
+  let selected: KovoCompilerVitePlugin | undefined;
+  for (let index = 0; index < appShellIndex; index += 1) {
+    const candidate = plugins[index];
+    if (!isFrameworkKovoVitePluginOwnerForSourceRoot(candidate, sourceRoot)) continue;
+    if (selected !== undefined) {
+      throw new TypeError('Kovo Vite integration received multiple compiler plugin owners.');
+    }
+    selected = candidate as KovoCompilerVitePlugin;
+  }
+  return selected;
+}
+
+function authoredAppSourceRoot(app: string, root: string): string | undefined {
+  const appDir = buildSecurityPathDirname(appEntryFileName(app, root));
+  const relativeAppDir = slashPath(buildSecurityPathRelative(root, appDir));
+  if (!relativeAppDir || securityStringStartsWith(relativeAppDir, '..')) return undefined;
+  return relativeAppDir;
 }
 
 function authoredAppEntry(app: unknown): string {

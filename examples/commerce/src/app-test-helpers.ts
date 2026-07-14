@@ -1,6 +1,7 @@
 import { enhancedMutationHeaders, headerValues, setCookieValues } from '@kovojs/test/headers';
 import { csrfToken, readonlyDb, toNodeHandler } from '@kovojs/server';
 import { createExampleTestRequestHandler } from '../../../tests/example-raw-request-handler.js';
+import { runWithCommerceGeneratedGraphs } from '../../../tests/example-generated-graphs.setup.js';
 import { htmlFormFacts, htmlFormFieldsByName } from '@kovojs/test/html-fragment';
 import { eq } from 'drizzle-orm';
 
@@ -215,9 +216,11 @@ export interface CommerceTestApp extends CommerceApplication {
 
 /** Vitest-only raw dispatch seam; production entries retain the guarded public wrapper. */
 export function createCommerceTestApp(options: CommerceAppOptions = {}): CommerceTestApp {
-  const application = createCommerceApplication(options);
-  const requestHandler = createExampleTestRequestHandler(application.app);
-  return { ...application, nodeHandler: toNodeHandler(requestHandler), requestHandler };
+  return runWithCommerceGeneratedGraphs(() => {
+    const application = createCommerceApplication(options);
+    const requestHandler = createExampleTestRequestHandler(application.app);
+    return { ...application, nodeHandler: toNodeHandler(requestHandler), requestHandler };
+  });
 }
 
 export function createCommerceScenarioClient(

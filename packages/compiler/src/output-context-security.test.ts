@@ -140,8 +140,9 @@ export const ProductCard = component({
     const clientSource = result.files.find((file) => file.kind === 'client')?.source ?? '';
 
     expect(serverSource).toContain(
-      `import { derive, kovoStyleProperty } from '@kovojs/browser/generated';`,
+      `import { derive, kovoStyleProperty } from '@kovojs/browser/internal/output';`,
     );
+    expect(serverSource).not.toContain(`from '@kovojs/browser/generated';`);
     expect(serverSource).toContain(
       `derive(["product"], (product) => kovoStyleProperty("view-transition-name", product.slug));`,
     );
@@ -184,7 +185,7 @@ export const SliderDemo = component({
         "diagnostics": [],
         "serverSource": "// @kovojs-ir
       export function renderSource() {
-        return \`import { derive, kovoStyleProperty } from '@kovojs/browser/generated';
+        return \`import { derive, kovoStyleProperty } from '@kovojs/browser/internal/output';
 
       export const SliderDemo$span_style_derive = derive(["state"], (state) => [kovoStyleProperty("width", \\\`\\\${state.value}%\\\`)].filter(Boolean).join('; '));
       export const SliderDemo$span_style_derive_2 = derive(["state"], (state) => [kovoStyleProperty("left", \\\`\\\${state.value}%\\\`), kovoStyleProperty("top", '50%'), kovoStyleProperty("transform", 'translate(-50%, -50%)')].filter(Boolean).join('; '));

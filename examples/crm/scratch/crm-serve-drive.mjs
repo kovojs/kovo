@@ -1,6 +1,6 @@
 // Playwright drive of the REAL served CRM Node app (Phase R3 proof).
 //
-// Builds nothing — run `vp build` first so the styled assets exist — then starts
+// Builds nothing — run `pnpm run build` first so the styled assets exist — then starts
 // scripts/serve.mjs (Node + PGlite, the interactive createApp handler) and drives
 // it in real Chromium, proving the enhance server-action forms round-trip:
 //   1. /contacts: add a contact -> the new person appears in the morphed list.
@@ -10,7 +10,7 @@
 // Each step asserts the server-truth fragment morph (no full navigation) and
 // reports before/after; any browser console error fails the run.
 //
-// Usage: cd examples/crm && vp build && node scratch/crm-serve-drive.mjs
+// Usage: cd examples/crm && pnpm run build && node scratch/crm-serve-drive.mjs
 
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';

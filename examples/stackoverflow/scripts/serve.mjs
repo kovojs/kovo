@@ -8,9 +8,8 @@ import {
 } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { createServer as createViteServer } from 'vite';
-
 import { readConfinedStaticFile } from '../../../scripts/lib/confined-static-file.mjs';
+import { createSecurityLockedViteServer } from '../../../scripts/lib/secure-vite-runtime.mjs';
 
 const NativeURL = globalThis.URL;
 const nativeFunctionBind = globalThis.Function.prototype.bind;
@@ -70,7 +69,7 @@ export async function createSoServeServer({
   port = Number(process.env.PORT ?? 5176),
   strictPort = false,
 } = {}) {
-  const vite = await createViteServer({
+  const vite = await createSecurityLockedViteServer({
     appType: 'custom',
     configFile: fileURLToPath(new URL('../vite.config.ts', import.meta.url)),
     logLevel: 'info',

@@ -6,7 +6,7 @@ import { questionList } from '../queries.js';
 import type { QuestionListItem } from '../model.js';
 import { answersByUser, displayName, reputationOf, userById } from '../directory.js';
 import { initials, tagHref } from './chrome.js';
-import { cardStyles, newestFirst, renderQuestionRow } from './question-card.js';
+import { newestFirst, renderQuestionRow } from './question-card.js';
 
 // Palette inlined as a same-file literal (StyleX-style extraction resolves only
 // same-file literals; SPEC §13.1). Mirrors the `so` palette in chrome.tsx.
@@ -178,13 +178,27 @@ const profileStyles = style.create({
     ':hover': { backgroundColor: so.tagBgHover, color: so.tagTextHover },
   },
   section: { marginBlockStart: 26 },
+  list: {
+    borderTopColor: so.border,
+    borderTopStyle: 'solid',
+    borderTopWidth: 1,
+    listStyle: 'none',
+    margin: 0,
+    padding: 0,
+  },
   empty: { color: so.textMuted, fontSize: 14, paddingBlock: 16 },
 });
 
-function badgeDot(dotStyle: unknown, count: number, label: string): string {
+function badgeDot(kind: 'bronze' | 'gold' | 'silver', count: number, label: string): string {
   return (
     <span style={profileStyles.badge}>
-      <span style={[profileStyles.dot, dotStyle]} />
+      {kind === 'gold' ? (
+        <span style={[profileStyles.dot, profileStyles.dotGold]} />
+      ) : kind === 'silver' ? (
+        <span style={[profileStyles.dot, profileStyles.dotSilver]} />
+      ) : (
+        <span style={[profileStyles.dot, profileStyles.dotBronze]} />
+      )}
       <span style={profileStyles.badgeText}>{count}</span> {label}
     </span>
   );
@@ -244,9 +258,9 @@ export const UserProfileRegion = component({
             <span style={profileStyles.statLabel}>answers</span>
           </div>
           <div style={profileStyles.badgeTile}>
-            {badgeDot(profileStyles.dotGold, badges.gold, 'gold')}
-            {badgeDot(profileStyles.dotSilver, badges.silver, 'silver')}
-            {badgeDot(profileStyles.dotBronze, badges.bronze, 'bronze')}
+            {badgeDot('gold', badges.gold, 'gold')}
+            {badgeDot('silver', badges.silver, 'silver')}
+            {badgeDot('bronze', badges.bronze, 'bronze')}
           </div>
         </div>
 
@@ -269,7 +283,7 @@ export const UserProfileRegion = component({
         <div style={profileStyles.section}>
           <h2 style={profileStyles.sectionTitle}>Questions ({theirQuestions.length})</h2>
           {theirQuestions.length > 0 ? (
-            <ul style={cardStyles.list}>
+            <ul style={profileStyles.list}>
               {theirQuestions.map((question) =>
                 renderQuestionRow(question, { interactive: false }),
               )}

@@ -81,7 +81,7 @@ import {
   compilerStringTrim,
 } from '../compiler-security-intrinsics.js';
 
-const RUNTIME_GENERATED_IMPORT = '@kovojs/browser/generated';
+const RUNTIME_OUTPUT_IMPORT = '@kovojs/browser/internal/output';
 import {
   platformAttributeList,
   platformElementSubstitution,
@@ -290,7 +290,7 @@ export function lowerStructuralJsx(
   const runtimeImportLength = compilerArrayLength(runtimeImports, 'Structural runtime imports');
   const derivePrefix =
     runtimeImportLength > 0
-      ? `import { ${compilerArrayJoin(runtimeImports, ', ')} } from '${RUNTIME_GENERATED_IMPORT}';\n\n${compilerArrayJoin(deriveExports, '\n')}\n\n`
+      ? `import { ${compilerArrayJoin(runtimeImports, ', ')} } from '${RUNTIME_OUTPUT_IMPORT}';\n\n${compilerArrayJoin(deriveExports, '\n')}\n\n`
       : '';
   const prefix = `${escapeImport}${derivePrefix}`;
   const replacements = compilerSnapshotDenseArray(

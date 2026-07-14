@@ -6,7 +6,7 @@ import { questionList } from '../queries.js';
 import type { QuestionListItem } from '../model.js';
 import { tagDescription } from '../directory.js';
 import { parseTags } from './chrome.js';
-import { cardStyles, newestFirst, renderQuestionRow } from './question-card.js';
+import { newestFirst, renderQuestionRow } from './question-card.js';
 
 // Palette inlined as a same-file literal (StyleX-style extraction resolves only
 // same-file literals; SPEC §13.1). Mirrors the `so` palette in chrome.tsx.
@@ -72,6 +72,14 @@ const taggedStyles = style.create({
     ':hover': { backgroundColor: so.blueHover },
   },
   count: { color: so.textSecondary, fontSize: 15, marginBlock: 14 },
+  list: {
+    borderTopColor: '#e3e6e8',
+    borderTopStyle: 'solid',
+    borderTopWidth: 1,
+    listStyle: 'none',
+    margin: 0,
+    padding: 0,
+  },
   back: {
     alignItems: 'center',
     color: so.link,
@@ -114,7 +122,7 @@ export const TaggedQuestionsRegion = component({
           {matches.length.toLocaleString('en-US')} {matches.length === 1 ? 'question' : 'questions'}
         </p>
         {matches.length > 0 ? (
-          <ul style={cardStyles.list}>
+          <ul style={taggedStyles.list}>
             {matches.map((question) => renderQuestionRow(question, { interactive: false }))}
           </ul>
         ) : (

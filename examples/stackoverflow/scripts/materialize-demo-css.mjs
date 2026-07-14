@@ -1,17 +1,10 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
-import { registerHooks } from 'node:module';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-registerHooks({
-  resolve(specifier, context, nextResolve) {
-    if (specifier.startsWith('.') && specifier.endsWith('.js') && context.parentURL) {
-      const tsUrl = new URL(specifier.replace(/\.js$/, '.ts'), context.parentURL);
-      if (existsSync(tsUrl)) return nextResolve(tsUrl.href, context);
-    }
-    return nextResolve(specifier, context);
-  },
-});
+import { securityLockedCompilerRuntime } from '../../../scripts/lib/secure-vite-runtime.mjs';
+
+await securityLockedCompilerRuntime();
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const exampleRoot = resolve(scriptDir, '..');
@@ -39,7 +32,9 @@ if (!result.css) {
 }
 
 if (!existsSync(stylesheetPath)) {
-  throw new Error(`stackoverflow demo CSS target missing: ${stylesheetPath}. Run vp build first.`);
+  throw new Error(
+    `stackoverflow demo CSS target missing: ${stylesheetPath}. Run the package build first.`,
+  );
 }
 
 const currentCss = readFileSync(stylesheetPath, 'utf8');

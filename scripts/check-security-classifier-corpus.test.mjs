@@ -11,11 +11,14 @@ describe('check-security-classifier-corpus gate', () => {
     const files = {
       'examples/commerce/scripts/demo-serve.mjs': `createRequestHandler`,
       'examples/commerce/scripts/measure-style-size.mjs': `createRequestHandler; createSecurityLockedViteServer`,
+      'examples/commerce/scripts/serve.mjs': `createSecurityLockedViteServer`,
       'examples/crm/scripts/demo-serve.mjs': `createRequestHandler`,
+      'examples/crm/scripts/serve.mjs': `createSecurityLockedViteServer`,
       'examples/crm/src/app-shell.ts': `createRequestHandler`,
       'examples/gallery/src/app-shell.ts': `createRequestHandler`,
       'examples/reference/src/app-shell.ts': `createRequestHandler`,
       'examples/stackoverflow/scripts/demo-serve.mjs': `createRequestHandler`,
+      'examples/stackoverflow/scripts/serve.mjs': `createSecurityLockedViteServer`,
       'examples/stackoverflow/src/app-shell.ts': `createRequestHandler`,
       'packages/devtool/src/mount.mjs': `createRequestHandler`,
       'site/src/aux.ts': `createRequestHandler`,
@@ -32,14 +35,29 @@ describe('check-security-classifier-corpus gate', () => {
       'vite.config.ts': `pack entry packages/server/src/index.ts`,
       'examples/gallery/scripts/export-static.mjs': `createSecurityLockedViteServer`,
       'examples/reference/scripts/export-static.mjs': `createSecurityLockedViteServer`,
+      'examples/reference/scripts/serve.mjs': `createSecurityLockedViteServer`,
       'scripts/demo-session/serve.mjs': `createSecurityLockedViteServer`,
       'site/scripts/capture.mjs': `createSecurityLockedViteServer`,
       'site/scripts/export-static.mjs': `
         createSecurityLockedViteServer;
+        buildWithSecurityLockedVite;
         await import('../../packages/cli/src/commands/build-export.js');
         await securityLockedViteRuntime();
       `,
-      'site/scripts/measure-route-style-size.mjs': `createSecurityLockedViteServer`,
+      'site/scripts/measure-route-style-size.mjs': `createSecurityLockedViteServer; buildWithSecurityLockedVite`,
+      'site/scripts/serve.mjs': `createSecurityLockedViteServer`,
+      'site/src/gallery.ts': `import { createServer as createViteServer } from 'vite-plus';
+        await ensureGalleryInteractiveServerArtifacts();
+        await createViteServer({});`,
+      'scripts/lib/secure-vite-build.mjs': `buildWithSecurityLockedVite`,
+      'examples/stackoverflow/scripts/materialize-demo-css.mjs': `
+        await securityLockedCompilerRuntime();
+        await import('@kovojs/compiler');
+      `,
+      'examples/commerce/package.json': `"build:demo": "node ../../scripts/lib/secure-vite-build.mjs"`,
+      'examples/crm/package.json': `"build": "node ../../scripts/lib/secure-vite-build.mjs"`,
+      'examples/stackoverflow/package.json': `"build": "node ../../scripts/lib/secure-vite-build.mjs && node scripts/materialize-demo-css.mjs"`,
+      'site/package.json': `"build:css": "node ../scripts/lib/secure-vite-build.mjs"`,
       'tests/compiler-determinism-worker.mjs': `
         createSecurityLockedViteServer();
         server.ssrLoadModule('/tests/compiler-perf-corpora.ts');
@@ -71,6 +89,7 @@ describe('check-security-classifier-corpus gate', () => {
       "request-safe-runtime: tests/kovo-check.export-static-worker.mjs must start imports with import '../dist/server/src/runtime-bootstrap.mjs';",
       'request-safe-runtime: vite.config.ts root pack must emit packages/server/src/runtime-bootstrap.ts',
       'request-safe-runtime: tests/compiler-determinism-worker.mjs must not construct Vite outside the compiler-first locked runner',
+      'request-safe-runtime: site/src/gallery.ts must assert the established runtime lock before compiler work and nested Vite creation',
       'request-safe-runtime: scripts/lib/secure-vite-runtime.mjs must lock compiler then server before importing Vite',
       'request-safe-runtime: scripts/lib/secure-vite-runtime.mjs must not statically import Vite',
       'request-safe-runtime: site/scripts/export-static.mjs must lock the runtime before importing the CLI/Vite graph',
@@ -119,11 +138,14 @@ describe('check-security-classifier-corpus gate', () => {
       'packages/server/src/runtime-bootstrap.ts': `lockServerRequestSafeRuntimeRealm();`,
       'examples/commerce/scripts/demo-serve.mjs': `createRequestHandler`,
       'examples/commerce/scripts/measure-style-size.mjs': `createRequestHandler; createSecurityLockedViteServer`,
+      'examples/commerce/scripts/serve.mjs': `createSecurityLockedViteServer`,
       'examples/crm/scripts/demo-serve.mjs': `createRequestHandler`,
+      'examples/crm/scripts/serve.mjs': `createSecurityLockedViteServer`,
       'examples/crm/src/app-shell.ts': `createRequestHandler`,
       'examples/gallery/src/app-shell.ts': `import { createRequestHandler } from '@kovojs/server';`,
       'examples/reference/src/app-shell.ts': `import { createRequestHandler } from '@kovojs/server';`,
       'examples/stackoverflow/scripts/demo-serve.mjs': `createRequestHandler`,
+      'examples/stackoverflow/scripts/serve.mjs': `createSecurityLockedViteServer`,
       'examples/stackoverflow/src/app-shell.ts': `createRequestHandler`,
       'packages/devtool/src/mount.mjs': `import { createRequestHandler } from '@kovojs/server';`,
       'site/src/aux.ts': `import { createRequestHandler } from '@kovojs/server';`,
@@ -139,9 +161,24 @@ describe('check-security-classifier-corpus gate', () => {
       'vite.config.ts': `pack entry 'packages/server/src/runtime-bootstrap.ts'`,
       'examples/gallery/scripts/export-static.mjs': `createSecurityLockedViteServer`,
       'examples/reference/scripts/export-static.mjs': `createSecurityLockedViteServer`,
+      'examples/reference/scripts/serve.mjs': `createSecurityLockedViteServer`,
       'scripts/demo-session/serve.mjs': `createSecurityLockedViteServer`,
       'site/scripts/capture.mjs': `createSecurityLockedViteServer`,
-      'site/scripts/measure-route-style-size.mjs': `createSecurityLockedViteServer`,
+      'site/scripts/measure-route-style-size.mjs': `createSecurityLockedViteServer; buildWithSecurityLockedVite`,
+      'site/scripts/serve.mjs': `createSecurityLockedViteServer`,
+      'site/src/gallery.ts': `import { createServer as createViteServer } from 'vite-plus';
+        assertRequestSafeRuntimeRealmLocked();
+        await ensureGalleryInteractiveServerArtifacts();
+        await createViteServer({});`,
+      'scripts/lib/secure-vite-build.mjs': `buildWithSecurityLockedVite`,
+      'examples/stackoverflow/scripts/materialize-demo-css.mjs': `
+        await securityLockedCompilerRuntime();
+        await import('@kovojs/compiler');
+      `,
+      'examples/commerce/package.json': `"build:demo": "node ../../scripts/lib/secure-vite-build.mjs"`,
+      'examples/crm/package.json': `"build": "node ../../scripts/lib/secure-vite-build.mjs"`,
+      'examples/stackoverflow/package.json': `"build": "node ../../scripts/lib/secure-vite-build.mjs && node scripts/materialize-demo-css.mjs"`,
+      'site/package.json': `"build:css": "node ../scripts/lib/secure-vite-build.mjs"`,
       'tests/compiler-determinism-worker.mjs': `
         createSecurityLockedViteServer();
         server.ssrLoadModule('/tests/compiler-perf-corpora.ts');
@@ -155,6 +192,7 @@ describe('check-security-classifier-corpus gate', () => {
       `,
       'site/scripts/export-static.mjs': `
         createSecurityLockedViteServer;
+        buildWithSecurityLockedVite;
         await securityLockedViteRuntime();
         await import('../../packages/cli/src/commands/build-export.js');
       `,

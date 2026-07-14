@@ -40,13 +40,7 @@ export const soViteConfig = defineConfig({
       sourceRoot: 'src',
     }),
     exampleKovoCompilerPlugin({
-      include: [
-        'src/components/question-card.tsx',
-        'src/components/question-detail.tsx',
-        'src/components/question-list.tsx',
-        'src/mutations.ts',
-        'src/queries.ts',
-      ],
+      include: ['src'],
     }),
     ...(process.env.KOVO_DEMO_MULTITENANT ? [] : [kovo({ app: '/src/app-shell.ts' })]),
   ],

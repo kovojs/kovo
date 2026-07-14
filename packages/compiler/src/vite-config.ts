@@ -1,4 +1,7 @@
-import { createFrameworkKovoVitePlugin } from './vite.ts';
+import {
+  createFrameworkKovoVitePlugin,
+  isFrameworkKovoVitePluginOwnerForSourceRoot,
+} from './vite.ts';
 import type { KovoVitePlugin, KovoVitePluginOptions } from './vite.ts';
 
 /**
@@ -11,3 +14,9 @@ export function kovoVitePlugin(options: KovoVitePluginOptions = {}): KovoVitePlu
 
   return plugin;
 }
+
+/**
+ * @internal Read-only proof query used by the server app-shell plugin to avoid recompiling output
+ * from an earlier, immutable, full-source framework compiler owner (SPEC.md §5.2 / §6.6).
+ */
+export { isFrameworkKovoVitePluginOwnerForSourceRoot };

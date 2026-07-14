@@ -1,4 +1,4 @@
-import '../../../tests/example-generated-graphs.setup.js';
+import { runWithStackOverflowGeneratedGraphs } from '../../../tests/example-generated-graphs.setup.js';
 
 import { readFileSync } from 'node:fs';
 
@@ -7,7 +7,6 @@ import { describe, expect, it } from 'vitest';
 
 import { csrfToken } from '@kovojs/server';
 import { createExampleTestRequestHandler } from '../../../tests/example-raw-request-handler.js';
-import { createLiveTargetAttestation } from '@kovojs/server/internal/wire';
 
 import {
   buildSoInteractiveApp as buildSoInteractiveApplication,
@@ -17,14 +16,15 @@ import { soCsrf } from './mutations.js';
 import { answers, questions, votes } from './schema.js';
 
 const questionListTarget = 'question-list-region';
-const questionListComponent = 'components/question-list/question-list-region';
 const questionDetailTarget = 'question-detail-region';
 const questionDetailComponent = 'components/question-detail/question-detail-region';
 const demoSessionHeader = 'x-kovo-demo-sid';
 
 async function buildSoInteractiveApp(options: BuildSoInteractiveAppOptions = {}) {
-  const application = await buildSoInteractiveApplication(options);
-  return { ...application, handler: createExampleTestRequestHandler(application.app) };
+  return runWithStackOverflowGeneratedGraphs(async () => {
+    const application = await buildSoInteractiveApplication(options);
+    return { ...application, handler: createExampleTestRequestHandler(application.app) };
+  });
 }
 
 function withCsrf(mutation: string, fields: Record<string, string>): Record<string, string> {
@@ -45,17 +45,29 @@ function withSessionCsrf(
   };
 }
 
-function liveHeader(
-  app: Parameters<typeof createLiveTargetAttestation>[0],
-  target: string,
-  component: string,
-  props: Record<string, unknown> = {},
-): string {
-  const token = createLiveTargetAttestation(app, { component, props, target }, {});
-  return `${target}#${component}@${token}:${JSON.stringify(props)}`;
+interface BrowserCollectedLiveHeaders {
+  currentUrl: string;
+  liveTargets: string;
+  targets: string;
 }
 
-function browserCollectedLiveHeaders(html: string): { targets: string; liveTargets: string } {
+async function browserCollectedLiveHeadersForRoute(
+  handler: (request: Request) => Promise<Response>,
+  route: string,
+  headers: Record<string, string> = {},
+): Promise<BrowserCollectedLiveHeaders> {
+  const currentUrl = `http://example.test${route}`;
+  const response = await handler(
+    new Request(currentUrl, {
+      headers: { Accept: 'text/html', ...headers },
+    }),
+  );
+  return { currentUrl, ...browserCollectedLiveHeaders(await response.text()) };
+}
+
+function browserCollectedLiveHeaders(
+  html: string,
+): Omit<BrowserCollectedLiveHeaders, 'currentUrl'> {
   const targets = new Set<string>();
   const liveTargets = new Map<string, string>();
 
@@ -121,8 +133,7 @@ async function postForm(
   handler: (request: Request) => Promise<Response>,
   key: string,
   fields: Record<string, string>,
-  targets: string,
-  liveTargets: string,
+  live: BrowserCollectedLiveHeaders,
   headers: Record<string, string> = {},
 ): Promise<{ status: number; html: string }> {
   const response = await handler(
@@ -135,8 +146,9 @@ async function postForm(
         Origin: 'http://example.test',
         'Kovo-Fragment': 'true',
         'Kovo-Idem': `${key}-${Object.values(fields).join('-')}`,
-        'Kovo-Live-Targets': liveTargets,
-        'Kovo-Targets': targets,
+        'Kovo-Current-Url': live.currentUrl,
+        'Kovo-Live-Targets': live.liveTargets,
+        'Kovo-Targets': live.targets,
         ...headers,
       },
       body: new URLSearchParams(fields),
@@ -225,7 +237,7 @@ describe('stackoverflow interactive app', () => {
   });
 
   it('voteUp response reconciles derived optimism to committed PGlite query truth', async () => {
-    const { app, db, handler } = await buildSoInteractiveApp();
+    const { db, handler } = await buildSoInteractiveApp();
 
     const [first] = await db.select().from(questions).orderBy(asc(questions.id)).limit(1);
     if (!first) throw new Error('seed produced no questions');
@@ -234,6 +246,7 @@ describe('stackoverflow interactive app', () => {
       (total, row) => total + row.value,
       0,
     );
+    const live = await browserCollectedLiveHeadersForRoute(handler, '/');
 
     const response = await handler(
       new Request('http://example.test/_m/mutations/vote-up-mutation', {
@@ -243,8 +256,9 @@ describe('stackoverflow interactive app', () => {
           Origin: 'http://example.test',
           'Kovo-Fragment': 'true',
           'Kovo-Idem': 'test-vote-1',
-          'Kovo-Live-Targets': liveHeader(app, questionListTarget, questionListComponent),
-          'Kovo-Targets': `${questionListTarget}=queries/question-list queries/question-score`,
+          'Kovo-Current-Url': live.currentUrl,
+          'Kovo-Live-Targets': live.liveTargets,
+          'Kovo-Targets': live.targets,
         },
         body: new URLSearchParams(
           withCsrf('mutations/vote-up-mutation', {
@@ -291,10 +305,11 @@ describe('stackoverflow interactive app', () => {
   });
 
   it('postAnswer inserts the answer, bumps the count, and re-renders the detail region', async () => {
-    const { app, db, handler } = await buildSoInteractiveApp();
+    const { db, handler } = await buildSoInteractiveApp();
     const [question] = await db.select().from(questions).orderBy(asc(questions.id)).limit(1);
     if (!question) throw new Error('seed produced no questions');
     const beforeCount = question.answerCount;
+    const live = await browserCollectedLiveHeadersForRoute(handler, `/questions/${question.id}`);
 
     const { status, html } = await postForm(
       handler,
@@ -305,10 +320,7 @@ describe('stackoverflow interactive app', () => {
         body: 'A fresh demo answer.',
         authorId: 'demo-viewer',
       }),
-      `${questionDetailTarget}:${question.id}=queries/question-answers queries/question-detail`,
-      liveHeader(app, `${questionDetailTarget}:${question.id}`, questionDetailComponent, {
-        questionId: question.id,
-      }),
+      live,
     );
 
     expect(status).toBe(200);
@@ -323,23 +335,17 @@ describe('stackoverflow interactive app', () => {
   });
 
   it('postAnswer refreshes when submitted with the live headers collected from the full document', async () => {
-    const { app, db, handler } = await buildSoInteractiveApp();
+    const { db, handler } = await buildSoInteractiveApp();
     const [question] = await db.select().from(questions).orderBy(asc(questions.id)).limit(1);
     if (!question) throw new Error('seed produced no questions');
 
-    const page = await handler(
-      new Request(`http://example.test/questions/${question.id}`, {
-        headers: { Accept: 'text/html' },
-      }),
-    );
-    const headers = browserCollectedLiveHeaders(await page.text());
+    const headers = await browserCollectedLiveHeadersForRoute(handler, `/questions/${question.id}`);
     const detailTarget = `${questionDetailTarget}:${question.id}`;
     expect(headers.targets).toContain(
       `${detailTarget}=queries/question-answers queries/question-detail`,
     );
-    expect(headers.liveTargets).toContain(
-      liveHeader(app, detailTarget, questionDetailComponent, { questionId: question.id }),
-    );
+    expect(headers.liveTargets).toContain(`${detailTarget}#${questionDetailComponent}@`);
+    expect(headers.liveTargets).toContain(`:${JSON.stringify({ questionId: question.id })}`);
 
     const { status, html } = await postForm(
       handler,
@@ -350,8 +356,7 @@ describe('stackoverflow interactive app', () => {
         body: 'Visible without refresh.',
         authorId: 'demo-viewer',
       }),
-      headers.targets,
-      headers.liveTargets,
+      headers,
     );
 
     expect(status).toBe(200);
@@ -360,8 +365,9 @@ describe('stackoverflow interactive app', () => {
   });
 
   it('postQuestion inserts the question and re-renders the list region', async () => {
-    const { app, db, handler } = await buildSoInteractiveApp();
+    const { db, handler } = await buildSoInteractiveApp();
     const before = (await db.select().from(questions)).length;
+    const live = await browserCollectedLiveHeadersForRoute(handler, '/');
 
     const { status, html } = await postForm(
       handler,
@@ -372,8 +378,7 @@ describe('stackoverflow interactive app', () => {
         body: 'Asking for a friend.',
         authorId: 'demo-viewer',
       }),
-      `${questionListTarget}=queries/question-list queries/question-score`,
-      liveHeader(app, questionListTarget, questionListComponent),
+      live,
     );
 
     expect(status).toBe(200);
@@ -386,9 +391,10 @@ describe('stackoverflow interactive app', () => {
   });
 
   it('postQuestion typed failure re-renders the list form with duplicate-title state', async () => {
-    const { app, db, handler } = await buildSoInteractiveApp();
+    const { db, handler } = await buildSoInteractiveApp();
     const [question] = await db.select().from(questions).orderBy(asc(questions.id)).limit(1);
     if (!question) throw new Error('seed produced no questions');
+    const live = await browserCollectedLiveHeadersForRoute(handler, '/');
 
     const { status, html } = await postForm(
       handler,
@@ -399,8 +405,7 @@ describe('stackoverflow interactive app', () => {
         body: 'Asking again should surface a typed form failure.',
         authorId: 'demo-viewer',
       }),
-      `${questionListTarget}=queries/question-list queries/question-score`,
-      liveHeader(app, questionListTarget, questionListComponent),
+      live,
     );
 
     expect(status).toBe(422);
@@ -410,16 +415,14 @@ describe('stackoverflow interactive app', () => {
   });
 
   it('shares one handler while keeping browser sessions isolated by session id', async () => {
-    const { app, db, handler } = await buildSoInteractiveApp();
+    const { db, handler } = await buildSoInteractiveApp();
     const sessionA = 'session-a';
     const sessionB = 'session-b';
     const title = 'Session A only question';
 
-    await handler(
-      new Request('http://example.test/', {
-        headers: { Accept: 'text/html', [demoSessionHeader]: sessionA },
-      }),
-    );
+    const live = await browserCollectedLiveHeadersForRoute(handler, '/', {
+      [demoSessionHeader]: sessionA,
+    });
     await handler(
       new Request('http://example.test/', {
         headers: { Accept: 'text/html', [demoSessionHeader]: sessionB },
@@ -435,8 +438,7 @@ describe('stackoverflow interactive app', () => {
         body: 'This should not appear in another browser session.',
         authorId: 'demo-viewer',
       }),
-      `${questionListTarget}=queries/question-list queries/question-score`,
-      liveHeader(app, questionListTarget, questionListComponent),
+      live,
       { [demoSessionHeader]: sessionA },
     );
 

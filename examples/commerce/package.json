@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "build": "kovo build ./src/app.tsx --preset node",
-    "build:demo": "vp build",
+    "build:demo": "node ../../scripts/lib/secure-vite-build.mjs",
     "dev": "kovo dev ./src/app.tsx",
     "start": "node dist/server/server.mjs",
     "serve:demo": "pnpm run build:demo && node scripts/demo-serve.mjs",

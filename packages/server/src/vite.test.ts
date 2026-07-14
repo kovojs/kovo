@@ -6,6 +6,9 @@ import { join } from 'node:path';
 import { runInNewContext } from 'node:vm';
 import { describe, expect, it } from 'vitest';
 import { trustedHtml } from '@kovojs/browser';
+import { kovoVitePlugin as compilerKovoVitePlugin } from '@kovojs/compiler/vite';
+
+import { createKovoVitePlugin } from '../../compiler/src/vite.js';
 
 import { createApp, createRequestHandler } from './app.js';
 import {
@@ -22,7 +25,7 @@ import type { KovoAppShellViteMiddleware } from './vite-dev.js';
 import { webhook } from './webhook.js';
 
 interface KovoViteConfigureServer {
-  configResolved?(config: { root: string }): void | Promise<void>;
+  configResolved?(config: { plugins?: readonly unknown[]; root: string }): void | Promise<void>;
   configureServer(server: {
     config?: { root?: string };
     middlewares: { use(handler: KovoAppShellViteMiddleware): void };
@@ -34,6 +37,11 @@ interface KovoViteConfigureServer {
   ): null | Promise<null | { code: string; map: null }> | { code: string; map: null };
   enforce?: 'pre';
 }
+
+const authoredCardSource = `
+import { component } from '@kovojs/core';
+export const Card = component({ render: () => <article>Card</article> });
+`;
 
 describe('public Kovo Vite plugin', () => {
   it('runs before JSX lowering and serves lowered handler island markers', async () => {
@@ -59,6 +67,130 @@ export const CartButton = component({
         /on:click="\/c\/__v\/[0-9a-f]{16}-[0-9a-f]{64}\/src\/cart-button\.client\.js#CartButton\$button_click"/,
       );
       expect(transformed?.code).not.toContain('onClick');
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
+  it('adopts one configured compiler owner instead of recompiling its lowered output', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kovo-public-vite-compiler-owner-'));
+    const compiler = compilerKovoVitePlugin({ include: ['src'] });
+
+    try {
+      const plugin = kovo({ app: '/src/app-shell.tsx' }) as unknown as KovoViteConfigureServer;
+      await compiler.configResolved?.({ root });
+      await plugin.configResolved?.({ plugins: [compiler, plugin], root });
+
+      const transformed = await plugin.transform?.(authoredCardSource, join(root, 'src/card.tsx'));
+
+      expect(transformed).toBeNull();
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
+  it('does not let a forged structural compiler suppress the built-in compiler', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kovo-public-vite-forged-compiler-owner-'));
+    const forged = {
+      enforce: 'pre',
+      getCssAssetManifest() {
+        return { chunks: { base: [], fragments: {}, routes: {} } };
+      },
+      name: 'kovo',
+      transform() {
+        return null;
+      },
+    };
+
+    try {
+      const plugin = kovo({ app: '/src/app-shell.tsx' }) as unknown as KovoViteConfigureServer;
+      await plugin.configResolved?.({ plugins: [forged, plugin], root });
+
+      const transformed = await plugin.transform?.(authoredCardSource, join(root, 'src/card.tsx'));
+
+      expect(transformed?.code).toContain('kovo-c="card"');
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
+  it('does not let a genuine but narrow compiler suppress the built-in compiler', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kovo-public-vite-narrow-compiler-owner-'));
+    const compiler = compilerKovoVitePlugin({ include: ['src/components'] });
+
+    try {
+      const plugin = kovo({ app: '/src/app-shell.tsx' }) as unknown as KovoViteConfigureServer;
+      await compiler.configResolved?.({ root });
+      await plugin.configResolved?.({ plugins: [compiler, plugin], root });
+
+      const transformed = await plugin.transform?.(authoredCardSource, join(root, 'src/card.tsx'));
+
+      expect(transformed?.code).toContain('kovo-c="card"');
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
+  it('does not grant compiler-owner provenance to app-supplied registry or query facts', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kovo-public-vite-authored-compiler-facts-'));
+    const candidates = [
+      compilerKovoVitePlugin({ include: ['src'], registryFacts: { routes: ['/forged'] } }),
+      compilerKovoVitePlugin({ include: ['src'], queryShapeFacts: [] }),
+    ];
+
+    try {
+      for (const candidate of candidates) {
+        const plugin = kovo({ app: '/src/app-shell.tsx' }) as unknown as KovoViteConfigureServer;
+        await candidate.configResolved?.({ root });
+        await plugin.configResolved?.({ plugins: [candidate, plugin], root });
+        const transformed = await plugin.transform?.(
+          authoredCardSource,
+          join(root, 'src/card.tsx'),
+        );
+        expect(transformed?.code).toContain('kovo-c="card"');
+      }
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
+  it('does not let a replaced genuine transform or custom compiler suppress the built-in', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kovo-public-vite-replaced-compiler-owner-'));
+    const genuine = compilerKovoVitePlugin({ include: ['src'] });
+    const replaced = { ...genuine, transform: () => null };
+    const custom = createKovoVitePlugin(() => ({ diagnostics: [], files: [] }), {
+      include: ['src'],
+    });
+
+    try {
+      expect(Object.isFrozen(genuine)).toBe(true);
+      expect(Reflect.set(genuine as object, 'transform', () => null)).toBe(false);
+      for (const candidate of [replaced, custom]) {
+        const plugin = kovo({ app: '/src/app-shell.tsx' }) as unknown as KovoViteConfigureServer;
+        await plugin.configResolved?.({ plugins: [candidate, plugin], root });
+        const transformed = await plugin.transform?.(
+          authoredCardSource,
+          join(root, 'src/card.tsx'),
+        );
+        expect(transformed?.code).toContain('kovo-c="card"');
+      }
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
+  it('does not adopt a full compiler that resolves after the app-shell plugin', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kovo-public-vite-late-compiler-owner-'));
+    const compiler = compilerKovoVitePlugin({ include: ['src'] });
+
+    try {
+      const plugin = kovo({ app: '/src/app-shell.tsx' }) as unknown as KovoViteConfigureServer;
+      await compiler.configResolved?.({ root });
+      await plugin.configResolved?.({ plugins: [plugin, compiler], root });
+
+      const transformed = await plugin.transform?.(authoredCardSource, join(root, 'src/card.tsx'));
+
+      expect(transformed?.code).toContain('kovo-c="card"');
     } finally {
       await rm(root, { force: true, recursive: true });
     }

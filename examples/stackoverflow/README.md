@@ -35,9 +35,9 @@ pnpm --filter @kovojs/example-stackoverflow dev       # bootstrap-first kovo dev
 pnpm --filter @kovojs/example-stackoverflow test       # vitest --run
 
 # Build and serve:
-pnpm --filter @kovojs/example-stackoverflow build       # vp build
+pnpm --filter @kovojs/example-stackoverflow build       # bootstrap-first Vite build
 pnpm --filter @kovojs/example-stackoverflow start       # node scripts/serve.mjs
 ```
 
-`vp` is the Vite-plus toolchain runner; `kovo` is the framework CLI. This example
-drives its build through `vp`.
+The package build uses Kovo's bootstrap-first Vite runner so compiler and server
+lockdown happen before the authored Vite config loads.

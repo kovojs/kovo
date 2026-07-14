@@ -35,16 +35,49 @@ const PACKED_STATIC_EXPORT_RUNNER_FILES = ['tests/kovo-check.export-static-worke
 const ROOT_PACK_CONFIG_FILE = 'vite.config.ts';
 const SECURITY_LOCKED_SCRIPT_FILES = [
   'examples/commerce/scripts/measure-style-size.mjs',
+  'examples/commerce/scripts/serve.mjs',
+  'examples/crm/scripts/serve.mjs',
   'examples/gallery/scripts/export-static.mjs',
   'examples/reference/scripts/export-static.mjs',
+  'examples/reference/scripts/serve.mjs',
+  'examples/stackoverflow/scripts/serve.mjs',
   'scripts/demo-session/serve.mjs',
   'site/scripts/capture.mjs',
   'site/scripts/export-static.mjs',
   'site/scripts/measure-route-style-size.mjs',
+  'site/scripts/serve.mjs',
   'tests/compiler-determinism-worker.mjs',
 ];
 const COMPILER_DETERMINISM_RUNNER_FILE = 'tests/compiler-determinism-worker.mjs';
+const SECURITY_LOCKED_NESTED_VITE_FILES = ['site/src/gallery.ts'];
 const SECURITY_LOCKED_VITE_RUNNER_FILE = 'scripts/lib/secure-vite-runtime.mjs';
+const SECURITY_LOCKED_VITE_BUILD_RUNNER_FILE = 'scripts/lib/secure-vite-build.mjs';
+const SECURITY_LOCKED_IN_PROCESS_BUILD_FILES = [
+  'site/scripts/export-static.mjs',
+  'site/scripts/measure-route-style-size.mjs',
+];
+const SECURITY_LOCKED_COMPILER_SCRIPT_FILES = [
+  'examples/stackoverflow/scripts/materialize-demo-css.mjs',
+];
+const SECURITY_LOCKED_PACKAGE_BUILD_FILES = [
+  {
+    file: 'examples/commerce/package.json',
+    snippet: '"build:demo": "node ../../scripts/lib/secure-vite-build.mjs"',
+  },
+  {
+    file: 'examples/crm/package.json',
+    snippet: '"build": "node ../../scripts/lib/secure-vite-build.mjs"',
+  },
+  {
+    file: 'examples/stackoverflow/package.json',
+    snippet:
+      '"build": "node ../../scripts/lib/secure-vite-build.mjs && node scripts/materialize-demo-css.mjs"',
+  },
+  {
+    file: 'site/package.json',
+    snippet: '"build:css": "node ../scripts/lib/secure-vite-build.mjs"',
+  },
+];
 const SITE_STATIC_EXPORT_RUNNER_FILE = 'site/scripts/export-static.mjs';
 const PURE_APP_ENTRY_FILES = [
   'examples/commerce/src/app.tsx',
@@ -732,6 +765,96 @@ export function evaluateCustomRunnerBootstrapOrdering(readText) {
           `request-safe-runtime: ${file} must lock Vite before loading compiler corpora and compiler source`,
         );
       }
+    }
+  }
+  for (const file of SECURITY_LOCKED_NESTED_VITE_FILES) {
+    let source;
+    try {
+      source = readText(file);
+    } catch {
+      findings.push(`request-safe-runtime: missing ${file}`);
+      continue;
+    }
+    const assertionIndex = source.indexOf('assertRequestSafeRuntimeRealmLocked();');
+    const artifactIndex = source.indexOf('ensureGalleryInteractiveServerArtifacts();');
+    const createIndex = source.indexOf('createViteServer({');
+    if (
+      !source.includes("from 'vite-plus'") ||
+      assertionIndex < 0 ||
+      artifactIndex < 0 ||
+      createIndex < 0 ||
+      assertionIndex >= artifactIndex ||
+      assertionIndex >= createIndex
+    ) {
+      findings.push(
+        `request-safe-runtime: ${file} must assert the established runtime lock before compiler work and nested Vite creation`,
+      );
+    }
+    if (source.includes('secure-vite-runtime.mjs') || source.includes('registerHooks')) {
+      findings.push(
+        `request-safe-runtime: ${file} must reuse the established Vite runtime without requesting loader hooks`,
+      );
+    }
+  }
+  let secureViteBuildRunnerSource;
+  try {
+    secureViteBuildRunnerSource = readText(SECURITY_LOCKED_VITE_BUILD_RUNNER_FILE);
+  } catch {
+    findings.push(`request-safe-runtime: missing ${SECURITY_LOCKED_VITE_BUILD_RUNNER_FILE}`);
+  }
+  if (
+    secureViteBuildRunnerSource !== undefined &&
+    !secureViteBuildRunnerSource.includes('buildWithSecurityLockedVite')
+  ) {
+    findings.push(
+      `request-safe-runtime: ${SECURITY_LOCKED_VITE_BUILD_RUNNER_FILE} must use the compiler-first locked Vite build runner`,
+    );
+  }
+  for (const file of SECURITY_LOCKED_IN_PROCESS_BUILD_FILES) {
+    let source;
+    try {
+      source = readText(file);
+    } catch {
+      findings.push(`request-safe-runtime: missing ${file}`);
+      continue;
+    }
+    if (!source.includes('buildWithSecurityLockedVite')) {
+      findings.push(`request-safe-runtime: ${file} must build Vite in its locked process`);
+    }
+    if (/execFileSync\s*\(\s*['"](?:vp|corepack)['"]/u.test(source)) {
+      findings.push(
+        `request-safe-runtime: ${file} must not delegate Vite build authority to a child`,
+      );
+    }
+  }
+  for (const file of SECURITY_LOCKED_COMPILER_SCRIPT_FILES) {
+    let source;
+    try {
+      source = readText(file);
+    } catch {
+      findings.push(`request-safe-runtime: missing ${file}`);
+      continue;
+    }
+    const lockIndex = source.indexOf('await securityLockedCompilerRuntime();');
+    const compilerImportIndex = source.indexOf("await import('@kovojs/compiler')");
+    if (lockIndex < 0 || compilerImportIndex < 0 || lockIndex >= compilerImportIndex) {
+      findings.push(
+        `request-safe-runtime: ${file} must lock the compiler before importing compiler authority`,
+      );
+    }
+  }
+  for (const { file, snippet } of SECURITY_LOCKED_PACKAGE_BUILD_FILES) {
+    let source;
+    try {
+      source = readText(file);
+    } catch {
+      findings.push(`request-safe-runtime: missing ${file}`);
+      continue;
+    }
+    if (!source.includes(snippet)) {
+      findings.push(
+        `request-safe-runtime: ${file} must route supported Vite builds through the locked build script`,
+      );
     }
   }
 

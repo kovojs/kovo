@@ -1,14 +1,12 @@
-import { execFile } from 'node:child_process';
+import { execFile, spawn, type ChildProcess } from 'node:child_process';
 import { mkdtemp, readFile, readdir, rm } from 'node:fs/promises';
-import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
+import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createServer as createViteServer } from 'vite-plus';
-
 vi.mock('@kovojs/server', async (importOriginal) => ({
   ...(await importOriginal()),
   createRequestHandler: (await import('@kovojs/server/internal/app-shell-vite'))
@@ -18,8 +16,13 @@ vi.mock('@kovojs/server', async (importOriginal) => ({
 import { createReferenceAppShell, routeValueToHtml } from './app-shell.js';
 
 let server: Server | undefined;
+let referenceServeProcess: ChildProcess | undefined;
 
 afterEach(async () => {
+  if (referenceServeProcess) {
+    await stopChild(referenceServeProcess);
+    referenceServeProcess = undefined;
+  }
   if (!server) return;
   await new Promise<void>((resolve, reject) => {
     server?.close((error) => (error ? reject(error) : resolve()));
@@ -44,34 +47,15 @@ describe('reference app shell HTTP entry', () => {
   });
 
   it('serves auth routes and mutations through the reference Vite dev middleware', async () => {
-    const vite = await createViteServer({
-      appType: 'custom',
-      configFile: fileURLToPath(new URL('../vite.config.ts', import.meta.url)),
-      logLevel: 'error',
-      root: fileURLToPath(new URL('..', import.meta.url)),
-      server: { middlewareMode: true },
-    });
-    let devServerError: unknown;
-    vite.middlewares.use(
-      (
-        error: unknown,
-        _request: IncomingMessage,
-        _response: ServerResponse,
-        next: (error?: unknown) => void,
-      ) => {
-        devServerError = error;
-        next(error);
-      },
-    );
-    server = createServer(vite.middlewares);
+    const served = await startReferenceServeProcess();
+    referenceServeProcess = served.child;
 
     try {
-      await listen(server);
-      const origin = serverOrigin(server);
+      const origin = served.origin;
 
       const loginPage = await fetch(`${origin}/login?next=/admin`);
       const loginPageBody = await loginPage.text();
-      expect(loginPage.status, formatDevServerFailure(loginPageBody, devServerError)).toBe(200);
+      expect(loginPage.status, formatDevServerFailure(loginPageBody, served.stderr())).toBe(200);
       expect(loginPageBody).toContain('<title>Kovo Reference Sign In</title>');
       expect(loginPageBody).toContain('action="/_m/auth/sign-in"');
       const loginCsrf = hiddenInputValue(loginPageBody, 'csrf');
@@ -96,7 +80,7 @@ describe('reference app shell HTTP entry', () => {
         redirect: 'manual',
       });
       const loginBody = await login.text();
-      expect(login.status, formatDevServerFailure(loginBody, devServerError)).toBe(303);
+      expect(login.status, formatDevServerFailure(loginBody, served.stderr())).toBe(303);
       const sessionCookie = cookiePair(login.headers.get('set-cookie') ?? '');
 
       const admin = await fetch(`${origin}/admin`, {
@@ -104,17 +88,18 @@ describe('reference app shell HTTP entry', () => {
         redirect: 'manual',
       });
       const adminBody = await admin.text();
-      expect(admin.status, formatDevServerFailure(adminBody, devServerError)).toBe(200);
+      expect(admin.status, formatDevServerFailure(adminBody, served.stderr())).toBe(200);
       expect(adminBody).toContain('admin:u1');
 
       const sourceModule = await fetch(`${origin}/src/app.ts`);
       const sourceModuleBody = await sourceModule.text();
-      expect(sourceModule.status, formatDevServerFailure(sourceModuleBody, devServerError)).toBe(
+      expect(sourceModule.status, formatDevServerFailure(sourceModuleBody, served.stderr())).toBe(
         200,
       );
       expect(sourceModuleBody).toContain('referenceSignIn');
     } finally {
-      await vite.close();
+      await stopChild(served.child);
+      referenceServeProcess = undefined;
     }
   });
 
@@ -357,6 +342,64 @@ function formatDevServerFailure(body: string, error: unknown): string {
 function formatUnknownError(error: unknown): string {
   if (error instanceof Error) return error.stack ?? error.message;
   return JSON.stringify(error);
+}
+
+async function startReferenceServeProcess(): Promise<{
+  child: ChildProcess;
+  origin: string;
+  stderr(): string;
+}> {
+  const referenceRoot = fileURLToPath(new URL('..', import.meta.url));
+  const child = spawn(process.execPath, ['scripts/serve.mjs', '--port', '0'], {
+    cwd: referenceRoot,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  let stderr = '';
+  child.stderr?.on('data', (chunk) => {
+    stderr += String(chunk);
+  });
+  try {
+    const origin = await new Promise<string>((resolve, reject) => {
+      let stdout = '';
+      const timeout = setTimeout(
+        () => reject(new Error(`reference serve did not start:\n${stderr}`)),
+        60_000,
+      );
+      child.stdout?.on('data', (chunk) => {
+        stdout += String(chunk);
+        const match = /reference-serve\/v1\n(http:\/\/[^\n]+)\n/u.exec(stdout);
+        if (!match?.[1]) return;
+        clearTimeout(timeout);
+        resolve(match[1]);
+      });
+      child.once('error', (error) => {
+        clearTimeout(timeout);
+        reject(error);
+      });
+      child.once('exit', (code) => {
+        clearTimeout(timeout);
+        reject(new Error(`reference serve exited with ${code}:\n${stderr}`));
+      });
+    });
+    return { child, origin, stderr: () => stderr };
+  } catch (error) {
+    await stopChild(child);
+    throw error;
+  }
+}
+
+async function stopChild(child: ChildProcess): Promise<void> {
+  if (child.exitCode !== null || child.signalCode !== null) return;
+  await new Promise<void>((resolve) => {
+    const timeout = setTimeout(() => {
+      child.kill('SIGKILL');
+    }, 10_000);
+    child.once('exit', () => {
+      clearTimeout(timeout);
+      resolve();
+    });
+    child.kill('SIGTERM');
+  });
 }
 
 interface ExecFileResult {

@@ -119,7 +119,6 @@ export async function captureWireTrace(repoRoot) {
 
 /** kovo explain against the commerce app graph — the queryable behavior surface. */
 export async function captureKovoExplain(_repoRoot) {
-  const { kovoExplain } = await import('@kovojs/cli');
   const graph = {
     endpoints: [],
     mutations: [
@@ -182,15 +181,26 @@ export async function captureKovoExplain(_repoRoot) {
     },
   };
 
-  const result = kovoExplain(graph, { kind: 'mutation', optimistic: true, target: 'cart/add' });
-  if (result.exitCode !== 0) {
-    throw new Error(`capture: kovo explain failed:\n${result.output}`);
+  const root = mkdtempSync(resolve(tmpdir(), 'kovo-site-explain-'));
+  const graphPath = resolve(root, 'graph.json');
+  let output;
+  try {
+    writeFileSync(graphPath, `${JSON.stringify(graph, null, 2)}\n`);
+    output = execFileSync(kovoBin, ['explain', 'mutation', 'cart/add', '--optimistic', graphPath], {
+      cwd: root,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+  } catch (error) {
+    throw new Error(`capture: kovo explain failed:\n${error?.stderr || error?.message || error}`);
+  } finally {
+    rmSync(root, { force: true, recursive: true });
   }
 
   const body = [
     `<span class="tok-dim">$ kovo explain mutation cart/add --optimistic graph.json</span>`,
     '',
-    ...result.output
+    ...output
       .trimEnd()
       .split('\n')
       .map((line) =>
@@ -207,9 +217,12 @@ export async function captureKovoExplain(_repoRoot) {
 export async function captureLoaderBudget() {
   const viteServer = await createSecurityLockedViteServer({
     appType: 'custom',
+    configFile: false,
     logLevel: 'error',
+    optimizeDeps: { noDiscovery: true },
     root: siteRoot,
     server: { hmr: false, middlewareMode: true, watch: null, ws: false },
+    ssr: { noExternal: ['@kovojs/browser', '@kovojs/core', '@kovojs/server'] },
   });
   let kovoLoaderSource;
   try {

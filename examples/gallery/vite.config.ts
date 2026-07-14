@@ -4,6 +4,9 @@ import { exampleKovoCompilerPlugin } from '../vite-kovo-compiler.js';
 
 export default defineConfig({
   plugins: [exampleKovoCompilerPlugin({ include: ['src/interactive'] })],
+  // The repository example consumes workspace TypeScript sources. Keep Kovo packages in Vite's
+  // SSR transform graph instead of Node's strip-only TypeScript loader.
+  ssr: { noExternal: ['@kovojs/browser', '@kovojs/core', '@kovojs/server'] },
   run: {
     tasks: {
       export: {

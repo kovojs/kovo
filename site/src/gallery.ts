@@ -4,8 +4,9 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { compileComponentModule } from '../../packages/compiler/src/compile.ts';
+import { assertRequestSafeRuntimeRealmLocked } from '@kovojs/core/internal/classifier-verdict';
 import ts from 'typescript';
-import { createServer } from 'vite-plus';
+import { createServer as createViteServer } from 'vite-plus';
 
 import {
   galleryHeadlessGeneratedModuleSpecifier,
@@ -41,6 +42,7 @@ const gallerySummaries = new Map<string, string>(
 // generated dependencies to versioned /c/ URLs).
 
 const repoRoot = fileURLToPath(new URL('../../', import.meta.url));
+const galleryRoot = path.join(repoRoot, 'examples/gallery');
 const headlessUiSourceRoot = path.join(repoRoot, 'packages/headless-ui/src');
 
 export interface GalleryDeps {
@@ -91,22 +93,29 @@ function galleryUrl(galleryRoutePath: string): string {
 
 /** SSR-load the gallery fixtures (static styled), the compiled interactive demos,
  * and the support module hrefs from examples/gallery/src/app-shell.ts. gallery.ts
- * itself runs inside the export's vite SSR graph; spinning a nested vite server to
- * load the gallery sources is what scripts/build.mjs did and is acceptable. */
+ * itself runs inside the export's locked Vite SSR graph; the nested server reuses and
+ * reasserts that established boundary so this module cannot become an unbootstrapped entrypoint. */
 async function loadGalleryData(): Promise<GalleryData> {
+  // This module is evaluated by the outer supported site runner after compiler/server lockdown.
+  // Reassert that established realm state before compiler/filesystem work and before reusing Vite
+  // for the nested gallery graph. Do not import the bootstrap runner here: Vite may instantiate
+  // this transformed module again, and a second copy must never request late node:module loader
+  // authority (SPEC §6.6 rule 6).
+  assertRequestSafeRuntimeRealmLocked();
   const cleanupGeneratedServerArtifacts = await ensureGalleryInteractiveServerArtifacts();
-  let vite: Awaited<ReturnType<typeof createServer>> | undefined;
+  let vite: Awaited<ReturnType<typeof createViteServer>> | undefined;
 
   try {
-    vite = await createServer({
+    vite = await createViteServer({
       appType: 'custom',
+      configFile: path.join(galleryRoot, 'vite.config.ts'),
       logLevel: 'error',
-      root: repoRoot,
+      root: galleryRoot,
       server: { hmr: false, middlewareMode: true, watch: null, ws: false },
     });
-    const gallery = await vite.ssrLoadModule('/examples/gallery/src/demo-fixtures.tsx');
-    const interactive = await vite.ssrLoadModule('/examples/gallery/src/interactive-docs.tsx');
-    const appShell = await vite.ssrLoadModule('/examples/gallery/src/app-shell.ts');
+    const gallery = await vite.ssrLoadModule('/src/demo-fixtures.tsx');
+    const interactive = await vite.ssrLoadModule('/src/interactive-docs.tsx');
+    const appShell = await vite.ssrLoadModule('/src/app-shell.ts');
     return {
       clientHrefs: appShell.galleryInteractiveClientModuleHrefs,
       galleryRoutes: gallery.galleryRoutes,

@@ -7,6 +7,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import {
+  buildWithSecurityLockedVite,
   createSecurityLockedViteServer,
   securityLockedViteRuntime,
 } from '../../scripts/lib/secure-vite-runtime.mjs';
@@ -237,7 +238,7 @@ function builtStylesheetPath() {
   } catch (error) {
     throw new Error(
       `site export: could not read the CSS build manifest at ${manifestPath}; ` +
-        `the bundled /assets/site.css cannot be verified. Did \`vp build\` run?` +
+        `the bundled /assets/site.css cannot be verified. Did the secure Vite build run?` +
         `\nUnderlying error: ${error?.message ?? error}`,
     );
   }
@@ -258,7 +259,7 @@ function assertServedStylesheet() {
     css = readFileSync(stylesheetPath, 'utf8');
   } catch (error) {
     throw new Error(
-      `site export: bundled stylesheet ${stylesheetPath} is missing; \`vp build\` did not ` +
+      `site export: bundled stylesheet ${stylesheetPath} is missing; the secure Vite build did not ` +
         `produce the served /assets/site.css.\nUnderlying error: ${error?.message ?? error}`,
     );
   }
@@ -332,7 +333,7 @@ export async function exportSiteStaticApp({
   // so removed pages cannot linger (the W9 link gate would otherwise pass on
   // orphaned files). dist-css holds the Vite manifest and is left untouched.
   await rm(outDir, { force: true, recursive: true });
-  execFileSync('vp', ['build'], { cwd: siteRoot, stdio: 'inherit' });
+  await buildWithSecurityLockedVite({ root: siteRoot });
   await appendSiteAppCssToBuiltStylesheet();
   await buildSiteUiCss();
   // Fail loudly if the bundled stylesheet is short or missing app atoms,

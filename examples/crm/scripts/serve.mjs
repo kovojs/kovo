@@ -1,7 +1,7 @@
 import { createServer as createNodeServer } from 'node:http';
 import { fileURLToPath } from 'node:url';
 
-import { createServer as createViteServer } from 'vite';
+import { createSecurityLockedViteServer } from '../../../scripts/lib/secure-vite-runtime.mjs';
 
 const crmRoot = fileURLToPath(new URL('../', import.meta.url));
 
@@ -10,7 +10,7 @@ export async function createCrmServeServer({
   port = Number(process.env.PORT ?? 5175),
   strictPort = false,
 } = {}) {
-  const vite = await createViteServer({
+  const vite = await createSecurityLockedViteServer({
     appType: 'custom',
     configFile: fileURLToPath(new URL('../vite.config.ts', import.meta.url)),
     logLevel: 'info',

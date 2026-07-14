@@ -1,10 +1,12 @@
-import { execFileSync } from 'node:child_process';
 import { mkdirSync, readFileSync, rmSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
-import { createSecurityLockedViteServer } from '../../scripts/lib/secure-vite-runtime.mjs';
+import {
+  buildWithSecurityLockedVite,
+  createSecurityLockedViteServer,
+} from '../../scripts/lib/secure-vite-runtime.mjs';
 
 import { runContentPipeline } from './content-pipeline.mjs';
 import { buildSiteUiCss } from './export-static.mjs';
@@ -21,9 +23,9 @@ const routes =
 await runContentPipeline();
 rmSync(distCssRoot, { force: true, recursive: true });
 const buildStart = performance.now();
-execFileSync('corepack', ['pnpm', '--dir', siteRoot, 'run', 'build:css'], {
-  cwd: siteRoot,
-  stdio: options.verbose ? 'inherit' : 'pipe',
+await buildWithSecurityLockedVite({
+  logLevel: options.verbose ? 'info' : 'error',
+  root: siteRoot,
 });
 const buildMs = Math.round(performance.now() - buildStart);
 
