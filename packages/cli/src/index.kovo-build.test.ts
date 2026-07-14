@@ -151,7 +151,10 @@ describe('kovo build', () => {
       stderr.mockRestore();
       rmSync(root, { force: true, recursive: true });
     }
-  });
+    // This exercises a complete checked production build and then boots its emitted server. The
+    // four-way CI shard also runs the security-heavy build corpus, so retain per-test headroom for
+    // the real artifact path instead of letting the generic 30 second timeout interrupt cleanup.
+  }, 90_000);
 
   it('serves referenced public assets and local stylesheet declarations from node static output', async () => {
     const root = mkdtempSync(join(process.cwd(), '.tmp-kovo-build-static-assets-'));
@@ -1571,7 +1574,10 @@ export const marker = sql.raw('select 1');
       stderr.mockRestore();
       rmSync(root, { force: true, recursive: true });
     }
-  });
+    // Three independent production builds prove that no app-writable security cache survives.
+    // On the fully populated CI shard their combined runtime can legitimately exceed the generic
+    // 30 second timeout; keep the bound local to this exact multi-build proof.
+  }, 90_000);
 
   it('treats fragment-only component consumers as dead hand-written optimistic transforms in build preflight', async () => {
     const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-fragment-only-optimistic-'));
