@@ -363,7 +363,7 @@ it('keeps generated query and live-target recovery on the captured response tran
   expect(attackFetch).not.toHaveBeenCalled();
 });
 
-it('retires the old channel and hard-navigates before applying a same-build new-session document', async () => {
+it('retires the old channel when mutable session meta is forged to match the next document', async () => {
   const harness = await createFrame(
     [
       '<main kovo-nav-segment="layout:a" kovo-nav-kind="layout" kovo-nav-name="a">',
@@ -444,6 +444,9 @@ it('retires the old channel and hard-navigates before applying a same-build new-
     });
     Object.defineProperty(broadcastPrototype, 'onmessage', onMessageDescriptor);
     if (!runtimeChannel) throw new Error('inline mutation BroadcastChannel unavailable');
+    // SPEC §9.3: authored DOM can forge the live marker, but the generated loader's page-load
+    // principal remains session-a and must retire before any session-b document is applied.
+    oldDocument.querySelector('meta[name="kovo-session"]')?.setAttribute('content', 'session-b');
     oldDocument
       .querySelector<HTMLAnchorElement>('#switch')
       ?.dispatchEvent(new harness.window.MouseEvent('click', { bubbles: true, cancelable: true }));
@@ -452,7 +455,7 @@ it('retires the old channel and hard-navigates before applying a same-build new-
     expect(Reflect.apply(nativeOnMessageGet, runtimeChannel, [])).toBeNull();
     expect(oldAccount?.textContent).toBe('A INITIAL');
     expect(oldDocument.querySelector('meta[name="kovo-session"]')?.getAttribute('content')).toBe(
-      'session-a',
+      'session-b',
     );
   } finally {
     Object.defineProperty(broadcastPrototype, 'onmessage', onMessageDescriptor);

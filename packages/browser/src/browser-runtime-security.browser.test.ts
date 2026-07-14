@@ -438,6 +438,7 @@ describe('browser-runtime security regressions', () => {
       replaceElementAttributes() {},
       retireIsland() {},
       runTriggers() {},
+      sessionFingerprint: 'same-principal',
     });
 
     const nativeOuterHtmlGet = originalOuterHtmlDescriptor.get;
@@ -456,6 +457,88 @@ describe('browser-runtime security regressions', () => {
     expect(pushState).toHaveBeenCalledWith({}, '', new URL('/orders?page=2', location.href).href);
     expect(document.querySelector('#privileged-old')).toBeNull();
     expect(document.querySelector('#revoked-next')?.textContent).toBe('ACCESS-REVOKED');
+  });
+
+  it('pins session authority before mutable DOM can forge a same-principal navigation', async () => {
+    // SPEC §9.3: BroadcastChannel is origin-scoped, so enhanced navigation must compare the next
+    // document against the loader's immutable principal rather than a mutable live meta value.
+    document.head.innerHTML = [
+      '<meta name="kovo-build" content="build-a">',
+      '<meta name="kovo-session" content="principal-a">',
+    ].join('');
+    document.body.innerHTML = [
+      '<main kovo-nav-segment="page:/account" kovo-nav-kind="page" kovo-nav-name="account">',
+      '<p id="principal-a">A PRIVATE</p>',
+      '</main>',
+    ].join('');
+    const targetHtml = [
+      '<!doctype html><html><head>',
+      '<meta name="kovo-build" content="build-a">',
+      '<meta name="kovo-session" content="principal-b">',
+      '</head><body>',
+      '<main kovo-nav-segment="page:/account" kovo-nav-kind="page" kovo-nav-name="account">',
+      '<p id="principal-b">B PRIVATE</p>',
+      '</main>',
+      '</body></html>',
+    ].join('');
+    vi.stubGlobal('fetch', async () => ({
+      headers: { get: (name: string) => (name === 'content-type' ? 'text/html' : null) },
+      text: async () => targetHtml,
+      url: new URL('/account?principal=b', location.href).href,
+    }));
+    const pushState = vi.spyOn(history, 'pushState').mockImplementation(() => undefined);
+    vi.stubGlobal('scrollTo', vi.fn());
+    const onSessionTransition = vi.fn();
+    const runtime = installEnhancedNavigationRuntime({
+      acceptHeader: 'text/html',
+      applyDocumentElementAttributes() {},
+      applyHead() {},
+      applyStylePromotion() {},
+      document,
+      morph(current, next) {
+        current.replaceWith(next);
+        return next;
+      },
+      onSessionTransition,
+      queryAll(root, selector) {
+        return [...root.querySelectorAll(selector)];
+      },
+      replayScripts() {},
+      replaceBody(nextBody) {
+        document.body.replaceWith(nextBody);
+        return nextBody;
+      },
+      replaceElementAttributes() {},
+      retireIsland() {},
+      runTriggers() {},
+      sessionFingerprint: 'principal-a',
+    });
+
+    document.querySelector('meta[name="kovo-session"]')?.setAttribute('content', 'principal-b');
+    const ownScrollRestoration = Object.getOwnPropertyDescriptor(history, 'scrollRestoration');
+    Object.defineProperty(history, 'scrollRestoration', {
+      configurable: true,
+      get: () => 'manual',
+      set: () => {
+        throw new Error('test trapped hard navigation');
+      },
+    });
+    try {
+      await expect(runtime.navigate('/account?principal=b')).rejects.toThrow(
+        'test trapped hard navigation',
+      );
+    } finally {
+      if (ownScrollRestoration) {
+        Object.defineProperty(history, 'scrollRestoration', ownScrollRestoration);
+      } else {
+        Reflect.deleteProperty(history, 'scrollRestoration');
+      }
+    }
+
+    expect(onSessionTransition).toHaveBeenCalledOnce();
+    expect(pushState).not.toHaveBeenCalled();
+    expect(document.querySelector('#principal-a')?.textContent).toBe('A PRIVATE');
+    expect(document.querySelector('#principal-b')).toBeNull();
   });
 
   it('uses stable snapshots when reconstructing fetched live-target fragments', async () => {

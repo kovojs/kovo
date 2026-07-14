@@ -19,6 +19,11 @@ export interface EnhancedNavigationRuntimeOptions {
   replaceElementAttributes: (current: Element, next: Element) => void;
   retireIsland: (island: Element) => void;
   runTriggers: () => void;
+  /**
+   * The page-load principal fingerprint pinned by the loader. `undefined` is the anonymous
+   * posture. This must never be reconstructed from mutable live DOM after installation.
+   */
+  sessionFingerprint: string | undefined;
 }
 
 export interface EnhancedNavigationRuntime {
@@ -45,6 +50,7 @@ export function installEnhancedNavigationRuntime(
   const replaceElementAttributes = options.replaceElementAttributes;
   const retireIsland = options.retireIsland;
   const runTriggers = options.runTriggers;
+  const sessionFingerprint = options.sessionFingerprint;
   if (
     typeof acceptHeader !== 'string' ||
     !doc ||
@@ -58,7 +64,8 @@ export function installEnhancedNavigationRuntime(
     typeof replaceBody !== 'function' ||
     typeof replaceElementAttributes !== 'function' ||
     typeof retireIsland !== 'function' ||
-    typeof runTriggers !== 'function'
+    typeof runTriggers !== 'function' ||
+    (sessionFingerprint !== undefined && typeof sessionFingerprint !== 'string')
   ) {
     throw new TypeError('Kovo enhanced-navigation options are invalid.');
   }
@@ -69,7 +76,7 @@ export function installEnhancedNavigationRuntime(
 
   const kb = (root: ParentNode = doc) =>
     security.readAttribute(security.queryOne(root, 'meta[name="kovo-build"]'), 'content') || '';
-  const sessionFingerprint = (root: ParentNode = doc) =>
+  const readSessionFingerprint = (root: ParentNode) =>
     security.readAttribute(security.queryOne(root, 'meta[name="kovo-session"]'), 'content') ??
     undefined;
   const qa = (root: ParentNode, selector: string) =>
@@ -274,7 +281,7 @@ export function installEnhancedNavigationRuntime(
       // `kovo-session` meta would otherwise leave the page-load principal closure installed over
       // the new principal's DOM. Compare presence as well as value before ANY head/body mutation;
       // retire the old runtime, then let a hard navigation install a fresh loader and fingerprint.
-      if (sessionFingerprint() !== sessionFingerprint(nextDoc)) {
+      if (sessionFingerprint !== readSessionFingerprint(nextDoc)) {
         onSessionTransition?.();
         ng(finalUrl.href);
         return;

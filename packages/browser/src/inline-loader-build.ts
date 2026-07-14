@@ -756,6 +756,10 @@ function installInlineKovoLoader(im) {
     const meta = bns.queryOne(root, 'meta[name="kovo-build"]');
     return meta ? bns.readAttribute(meta, 'content') || '' : '';
   };
+  // SPEC §9.3: BroadcastChannel and enhanced navigation share one immutable page-load
+  // principal. A live meta read after install is authored DOM, not principal authority.
+  const sessionMeta = bns.queryOne(doc, 'meta[name="kovo-session"]');
+  const sfp = sessionMeta ? bns.readAttribute(sessionMeta, 'content') ?? undefined : undefined;
   const bh = (res) => bns.readHeader(res, 'Kovo-Build') ?? '';
   const qwk = (name, key) => {
     if (!name) return '';
@@ -955,6 +959,7 @@ function installInlineKovoLoader(im) {
     replaceElementAttributes: xa,
     retireIsland: (island) => bns.retireIslandSignal(island),
     runTriggers: () => tr(),
+    sessionFingerprint: sfp,
   });
   const an = nav.navigate;
   const inav = nav.handleClick;
@@ -1337,8 +1342,6 @@ function installInlineKovoLoader(im) {
       return [];
     }
   };
-  const sessionMeta = bns.queryOne(doc, 'meta[name="kovo-session"]');
-  const sfp = sessionMeta ? bns.readAttribute(sessionMeta, 'content') ?? undefined : undefined;
   let bc;
   let broadcastRetired = false;
   try {
