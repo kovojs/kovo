@@ -401,7 +401,10 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
       const command = cmd('/usr/bin/true', [], { allow });
       function localRunCommand() { return execFileSync('/usr/bin/true'); }
 
-      export const safe = mutation({ handler() { return runCommand(command); } });
+      export const safe = mutation({ async handler() {
+        await runCommand(command);
+        return { ok: true };
+      } });
       export const unsafe = mutation({ handler() { return localRunCommand(); } });
     `);
 
@@ -411,6 +414,35 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
         source: "'/usr/bin/true'",
       }),
     ]);
+  });
+
+  it('does not grant framework trust through reflective or constructor adapters', () => {
+    const facts = sinksFor(`
+      import { execFileSync } from 'node:child_process';
+      import { cmd, commandAllowlist, query, runCommand } from '@kovojs/server';
+      const allow = commandAllowlist(['/usr/bin/true'], { justification: 'fixture' });
+      const command = cmd('/usr/bin/true', [], { allow });
+      Object.defineProperty(query, 'pwn', {
+        value: () => execFileSync('mutated-framework-member'),
+      });
+      export const reflected = query({ load() {
+        Reflect.apply(runCommand, null, [command]);
+        return Reflect.apply(query.pwn, null, []);
+      } });
+      export const constructed = query({ load() {
+        return new query({ load() { return { ok: true }; } });
+      } });
+    `);
+
+    expect(facts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ sink: 'request-handler.opaque-call', source: 'Reflect.apply' }),
+        expect.objectContaining({
+          sink: 'request-handler.opaque-constructor',
+          source: 'query',
+        }),
+      ]),
+    );
   });
 
   it('resolves local static configs and fails closed for opaque factory configs', () => {
@@ -1410,6 +1442,51 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
     expect(facts).toEqual([]);
   });
 
+  it('keeps privileged framework results off query and mutation public wires', () => {
+    const facts = sinksFor(`
+      import {
+        cmd,
+        commandAllowlist,
+        mutation,
+        query,
+        respond,
+        rootedFiles,
+        runCommand,
+      } from '@kovojs/server';
+      const allow = commandAllowlist(['/usr/bin/true'], { justification: 'fixture' });
+      const command = cmd('/usr/bin/true', [], { allow });
+      export const commandOutput = mutation({ handler() { return runCommand(command); } });
+      export const files = query({ async load() { return await rootedFiles('/secret'); } });
+      export const fileOutcome = query({ load() {
+        return respond.file('private', { contentType: 'text/plain' });
+      } });
+      export const streamOutcome = query({ load() {
+        return respond.stream('private', { contentType: 'text/plain' });
+      } });
+    `);
+
+    expect(facts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sink: 'client-wire.request.opaque-value',
+          source: 'runCommand(command)',
+        }),
+        expect.objectContaining({
+          sink: 'client-wire.request.opaque-value',
+          source: "rootedFiles('/secret')",
+        }),
+        expect.objectContaining({
+          sink: 'client-wire.request.opaque-value',
+          source: "respond.file('private', { contentType: 'text/plain' })",
+        }),
+        expect.objectContaining({
+          sink: 'client-wire.request.opaque-value',
+          source: "respond.stream('private', { contentType: 'text/plain' })",
+        }),
+      ]),
+    );
+  });
+
   it('does not grant generic capability authority to mutable framework carriers or results', () => {
     for (const mutation of [
       `respond.file = hostile;`,
@@ -1532,7 +1609,8 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
         async handler() {
           await files;
           await storage.get('fixed-key');
-          return runCommand(command);
+          await runCommand(command);
+          return { ok: true };
         },
       });
     `);
@@ -3516,6 +3594,10 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
       `const alias = users; alias.id = { forged: true };`,
       `Object.defineProperty(users, 'id', { value: { forged: true } });`,
       `Object.setPrototypeOf(users, { get id() { return { forged: true }; } });`,
+      `const holder = { users }; holder.users.id = { forged: true };`,
+      `const holder = [users]; holder[0].id = { forged: true };`,
+      `const holder = { table: users }; const { table: alias } = holder; alias.id = { forged: true };`,
+      `function mutate(table) { table.id = { forged: true }; } mutate(users);`,
     ]) {
       const mutated = sinksForFiles([
         { fileName: 'schema.ts', source: schemaSource },
@@ -3531,7 +3613,7 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
           `,
         },
       ]);
-      expect(mutated).toEqual(
+      expect(mutated, mutation).toEqual(
         expect.arrayContaining([
           expect.objectContaining({ sink: 'request-handler.opaque-protocol' }),
         ]),
@@ -3557,6 +3639,59 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
         expect.objectContaining({ sink: 'request-handler.opaque-protocol' }),
       ]),
     );
+  });
+
+  it('rejects direct, container-laundered, and captured DB capability mutation', () => {
+    for (const body of [
+      `
+        const hostile = () => ({ forged: true });
+        context.db.select = hostile;
+        return context.db.select();
+      `,
+      `
+        const hostile = () => ({ forged: true });
+        const holder = { db: context.db };
+        holder.db.select = hostile;
+        return context.db.select();
+      `,
+      `
+        const hostile = () => ({ forged: true });
+        function mutate() { context.db.select = hostile; }
+        mutate();
+        return context.db.select();
+      `,
+      `
+        Object.defineProperty(context.db, 'select', { value: () => ({ forged: true }) });
+        return context.db.select();
+      `,
+      `
+        Object.setPrototypeOf(context.db, { select: () => ({ forged: true }) });
+        return context.db.select();
+      `,
+      `
+        respond.file(context.db, { contentType: 'application/octet-stream' });
+        return context.db.select();
+      `,
+      `
+        respond.stream(context.db, { contentType: 'application/octet-stream' });
+        return context.db.select();
+      `,
+    ]) {
+      const facts = sinksFor(`
+        import { query, respond } from '@kovojs/server';
+        export const unsafe = query({ load(_input, context) {
+          ${body}
+        } });
+      `);
+      expect(facts).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            sink: 'request-handler.opaque-call',
+            source: 'context.db.select',
+          }),
+        ]),
+      );
+    }
   });
 
   it('accepts only exact callback-free guards.rateLimit provenance', () => {
@@ -3721,6 +3856,54 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
           sink: 'request-handler.opaque-source',
           source: '<dynamic-callback>',
         }),
+      ]),
+    );
+  });
+
+  it('binds exact guard and respond trust to the use-site import symbol', () => {
+    const facts = sinksFor(`
+      import { execFileSync } from 'node:child_process';
+      import { guards, query, respond } from '@kovojs/server';
+      void guards;
+      void respond;
+
+      function withGuard(guards) {
+        const allow = guards.rateLimit({ max: 10, per: 'global' });
+        return query({ guard: allow, load() { return { ok: true }; } });
+      }
+      withGuard({ rateLimit() {
+        return () => { execFileSync('parameter-guard'); return true; };
+      } });
+
+      function withRespond(respond) {
+        return query({ load() { return respond.file('parameter-respond'); } });
+      }
+      withRespond({ file() { execFileSync('parameter-respond'); return 'unsafe'; } });
+
+      function withLocalGuard() {
+        const guards = { rateLimit() {
+          return () => { execFileSync('const-guard'); return true; };
+        } };
+        return query({
+          guard: guards.rateLimit({ max: 10, per: 'global' }),
+          load() { return { ok: true }; },
+        });
+      }
+      withLocalGuard();
+
+      function withLocalRespond() {
+        function respond() { return undefined; }
+        respond.file = () => { execFileSync('function-respond'); return 'unsafe'; };
+        return query({ load() { return respond.file(); } });
+      }
+      withLocalRespond();
+    `);
+
+    expect(facts.length).toBeGreaterThanOrEqual(4);
+    expect(facts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ source: '<dynamic-callback>' }),
+        expect.objectContaining({ source: 'respond.file' }),
       ]),
     );
   });

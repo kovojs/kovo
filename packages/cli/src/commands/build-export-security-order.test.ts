@@ -53,7 +53,9 @@ describe('build/export security bootstrap ordering', () => {
     };
     const nativeCreateHash = mutableCrypto.createHash;
     mutableCrypto.createHash = (() => ({
-      digest: () => '0'.repeat(64),
+      // A vulnerable late-hash join would now cross-bind the unsafe runtime handler to the exact
+      // safe static fingerprint. Returning an unrelated digest would not exercise that bypass.
+      digest: () => safeFingerprint!,
       update() {
         return this;
       },

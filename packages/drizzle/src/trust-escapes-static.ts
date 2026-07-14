@@ -5306,7 +5306,9 @@ function requestExpressionIsDirectImportedExport(
 ): boolean {
   const node = unwrapStaticExpression(expression);
   if (Node.isIdentifier(node)) {
-    const local = node.getText();
+    const useSymbol = node.getSymbol();
+    if (!useSymbol) return false;
+    const useKey = requestSymbolKey(useSymbol);
     return node
       .getSourceFile()
       .getImportDeclarations()
@@ -5315,11 +5317,12 @@ function requestExpressionIsDirectImportedExport(
           declaration.getModuleSpecifierValue() === module &&
           declaration
             .getNamedImports()
-            .some(
-              (named) =>
-                named.getName() === exportName &&
-                (named.getAliasNode()?.getText() ?? named.getName()) === local,
-            ),
+            .some((named) => {
+              if (named.getName() !== exportName) return false;
+              const local = named.getAliasNode() ?? named.getNameNode();
+              const importSymbol = local.getSymbol();
+              return !!importSymbol && requestSymbolKey(importSymbol) === useKey;
+            }),
       );
   }
   if (!Node.isPropertyAccessExpression(node) && !Node.isElementAccessExpression(node)) {
@@ -5330,14 +5333,18 @@ function requestExpressionIsDirectImportedExport(
     : staticMemberName(node.getArgumentExpression());
   const namespace = unwrapStaticExpression(node.getExpression());
   if (member !== exportName || !Node.isIdentifier(namespace)) return false;
+  const useSymbol = namespace.getSymbol();
+  if (!useSymbol) return false;
+  const useKey = requestSymbolKey(useSymbol);
   return namespace
     .getSourceFile()
     .getImportDeclarations()
-    .some(
-      (declaration) =>
-        declaration.getModuleSpecifierValue() === module &&
-        declaration.getNamespaceImport()?.getText() === namespace.getText(),
-    );
+    .some((declaration) => {
+      if (declaration.getModuleSpecifierValue() !== module) return false;
+      const importedNamespace = declaration.getNamespaceImport();
+      const importSymbol = importedNamespace?.getSymbol();
+      return !!importSymbol && requestSymbolKey(importSymbol) === useKey;
+    });
 }
 
 function requestExactImportedCarrierIsPristine(
@@ -5456,11 +5463,30 @@ function requestCallIsExactRespondMethod(call: import('ts-morph').CallExpression
   );
 }
 
-function requestCallIsExactFrameworkPromiseMinter(
+function requestCallIsExactFrameworkNativePromise(
   call: import('ts-morph').CallExpression,
 ): boolean {
   return ['rootedFiles', 'runCommand'].some((exportName) =>
     requestExpressionIsDirectImportedExport(call.getExpression(), '@kovojs/server', exportName),
+  );
+}
+
+function requestCallIsExactRunCommand(call: import('ts-morph').CallExpression): boolean {
+  return requestExpressionIsDirectImportedExport(
+    call.getExpression(),
+    '@kovojs/server',
+    'runCommand',
+  );
+}
+
+function requestCallIsReviewedRouteOutcome(
+  call: import('ts-morph').CallExpression,
+  callable: RequestCallable,
+): boolean {
+  if (!requestCallIsExactRespondMethod(call)) return false;
+  return (
+    (callable.rootFactory === 'endpoint' && callable.rootCallback === 'handler') ||
+    (callable.rootFactory === 'route' && callable.rootCallback === 'page')
   );
 }
 
@@ -8630,7 +8656,7 @@ function requestExpressionIsProtocolSafe(
   if (Node.isCallExpression(node)) {
     const callee = unwrapStaticExpression(node.getExpression());
     if (callee.getKind() === SyntaxKind.ImportKeyword) return true;
-    if (requestCallIsExactFrameworkPromiseMinter(node) || requestCallIsExactRespondMethod(node)) {
+    if (requestCallIsExactFrameworkNativePromise(node) || requestCallIsExactRespondMethod(node)) {
       return true;
     }
     if (
@@ -9302,6 +9328,16 @@ function requestWireAuthoritiesForExpressionUncached(
   }
 
   if (Node.isCallExpression(node)) {
+    if (
+      requestCallIsExactFrameworkNativePromise(node) ||
+      (requestCallIsExactRespondMethod(node) &&
+        !requestCallIsReviewedRouteOutcome(node, state.rootCallable))
+    ) {
+      return dedupeRequestWireAuthorities([
+        ...requestWireAuthoritiesForExpressions(node.getArguments(), state),
+        requestOpaqueWireAuthority(node, 'value'),
+      ]);
+    }
     const headerCall = requestWireHeaderCallClassification(node, state);
     if (headerCall.handled) return headerCall.authority ? [headerCall.authority] : [];
 
@@ -10065,9 +10101,6 @@ function requestExpressionIsPlainWireValue(
       receiver &&
       requestExpressionContainsClosedAuthority(receiver, new Set(), 0)
     ) {
-      return true;
-    }
-    if (requestCallIsExactFrameworkPromiseMinter(node) || requestCallIsExactRespondMethod(node)) {
       return true;
     }
   }
@@ -12104,7 +12137,7 @@ function requestCallIsKnownSafe(
 
   if (requestCallIsPromiseSettlement(call, callable, context)) return true;
 
-  if (canonicalFrameworkExportForExpression(callee)) {
+  if (requestCallIsExactRunCommand(call)) {
     scanRequestFunctionArguments(call, context);
     return true;
   }
@@ -12240,6 +12273,7 @@ function requestCallIsKnownSafe(
 
   const role = requestExpressionRootParameterRole(receiver, callable, new Set(), 0);
   if (requestRootRoleIncludesCapability(role)) {
+    if (!requestRootCapabilityMethodIsPristine(receiver, callable, context)) return false;
     scanRequestFunctionArguments(call, context);
     return true;
   }
@@ -12291,6 +12325,168 @@ function requestCallIsKnownSafe(
     return requestKnownCallbacksAreClosed(call, member, context);
   }
   return false;
+}
+
+function requestRootCapabilityKey(
+  expression: Node,
+  callable: RequestCallable,
+  seen: Set<string>,
+): string | undefined {
+  const node = unwrapStaticExpression(expression);
+  if (Node.isIdentifier(node)) {
+    const symbol = node.getSymbol();
+    if (!symbol) return undefined;
+    const symbolKey = requestSymbolKey(symbol);
+    if (seen.has(symbolKey)) return undefined;
+    seen.add(symbolKey);
+    const declaration = localValueDeclaration(node);
+    if (
+      declaration &&
+      Node.isVariableDeclaration(declaration) &&
+      declaration.getVariableStatement()?.getDeclarationKind() === VariableDeclarationKind.Const
+    ) {
+      const initializer = declaration.getInitializer();
+      if (initializer) {
+        const aliased = requestRootCapabilityKey(initializer, callable, new Set(seen));
+        if (aliased) return aliased;
+      }
+    }
+    return requestRootRoleIncludesCapability(
+      requestExpressionRootParameterRole(node, callable, new Set(), 0),
+    )
+      ? `root:${symbolKey}`
+      : undefined;
+  }
+  if (Node.isPropertyAccessExpression(node) || Node.isElementAccessExpression(node)) {
+    const member = Node.isPropertyAccessExpression(node)
+      ? staticMemberName(node.getNameNode())
+      : staticMemberName(node.getArgumentExpression());
+    if (!member) return undefined;
+    const receiver = requestRootCapabilityKey(node.getExpression(), callable, new Set(seen));
+    return receiver ? `${receiver}.${member}` : undefined;
+  }
+  if (Node.isCallExpression(node)) {
+    const callee = unwrapStaticExpression(node.getExpression());
+    const receiver = requestCallReceiver(callee);
+    const member = requestStaticCallMember(callee);
+    if (receiver && member && REQUEST_REVIEWED_DRIZZLE_DB_DATA_METHODS.has(member)) {
+      return requestRootCapabilityKey(receiver, callable, new Set(seen));
+    }
+  }
+  return undefined;
+}
+
+function requestRootCapabilityMethodIsPristine(
+  receiver: Node,
+  callable: RequestCallable,
+  context: RequestProcessScanContext,
+): boolean {
+  const targetKey = requestRootCapabilityKey(receiver, callable, new Set());
+  if (!targetKey) return false;
+  const isTargetRoot = (candidate: Node | undefined): boolean => {
+    if (!candidate) return false;
+    const node = unwrapStaticExpression(candidate);
+    // A reviewed DB method's result remains associated with its receiver only so chained methods
+    // can be checked. It is data/query-builder output, not an escape of the DB carrier itself.
+    if (Node.isCallExpression(node)) return false;
+    const key = requestRootCapabilityKey(node, callable, new Set());
+    return key === targetKey;
+  };
+  const isTargetMember = (candidate: Node | undefined): boolean => {
+    if (!candidate) return false;
+    const key = requestRootCapabilityKey(candidate, callable, new Set());
+    return key === targetKey || key?.startsWith(`${targetKey}.`) === true;
+  };
+  const sourceFile = callable.declaration.getSourceFile();
+
+  for (const assignment of sourceFile.getDescendantsOfKind(SyntaxKind.BinaryExpression)) {
+    const operator = assignment.getOperatorToken().getKind();
+    if (operator < SyntaxKind.FirstAssignment || operator > SyntaxKind.LastAssignment) continue;
+    const left = unwrapStaticExpression(assignment.getLeft());
+    if (isTargetMember(left)) return false;
+    if (isTargetRoot(assignment.getRight())) return false;
+  }
+  for (const deletion of sourceFile.getDescendantsOfKind(SyntaxKind.DeleteExpression)) {
+    if (isTargetMember(deletion.getExpression())) {
+      return false;
+    }
+  }
+  for (const update of [
+    ...sourceFile.getDescendantsOfKind(SyntaxKind.PrefixUnaryExpression),
+    ...sourceFile.getDescendantsOfKind(SyntaxKind.PostfixUnaryExpression),
+  ]) {
+    if (isTargetMember(update.getOperand())) {
+      return false;
+    }
+  }
+  for (const object of sourceFile.getDescendantsOfKind(SyntaxKind.ObjectLiteralExpression)) {
+    for (const property of object.getProperties()) {
+      const value = Node.isPropertyAssignment(property)
+        ? property.getInitializer()
+        : Node.isShorthandPropertyAssignment(property)
+          ? property.getNameNode()
+          : Node.isSpreadAssignment(property)
+            ? property.getExpression()
+            : undefined;
+      if (value && isTargetRoot(value)) return false;
+    }
+  }
+  for (const array of sourceFile.getDescendantsOfKind(SyntaxKind.ArrayLiteralExpression)) {
+    if (
+      array
+        .getElements()
+        .some((element) =>
+          isTargetRoot(Node.isSpreadElement(element) ? element.getExpression() : element),
+        )
+    ) {
+      return false;
+    }
+  }
+  for (const returned of sourceFile.getDescendantsOfKind(SyntaxKind.ReturnStatement)) {
+    if (isTargetRoot(returned.getExpression())) {
+      return false;
+    }
+  }
+  for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
+    const matchingArguments = call.getArguments().filter(isTargetRoot);
+    if (matchingArguments.length === 0) continue;
+    const exactRespondMember = requestCallIsExactRespondMethod(call)
+      ? requestStaticCallMember(unwrapStaticExpression(call.getExpression()))
+      : undefined;
+    if (
+      exactRespondMember === 'storedFile' &&
+      isTargetRoot(call.getArguments()[0])
+    ) {
+      continue;
+    }
+    const resolution = resolveRequestCallable(call.getExpression(), new Set(), 0, context.provenance);
+    if (resolution.callables.length > 0) continue;
+    return false;
+  }
+  for (const construct of sourceFile.getDescendantsOfKind(SyntaxKind.NewExpression)) {
+    if (construct.getArguments().some(isTargetRoot)) {
+      return false;
+    }
+  }
+  for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
+    const callee = unwrapStaticExpression(call.getExpression());
+    const global = requestCallReceiver(callee);
+    const member = requestStaticCallMember(callee);
+    const [target] = call.getArguments();
+    if (
+      target &&
+      isTargetRoot(target) &&
+      global &&
+      member &&
+      ((expressionResolvesToGlobalNamespace(global, 'Object', new Set(), 0) &&
+        ['assign', 'defineProperties', 'defineProperty', 'setPrototypeOf'].includes(member)) ||
+        (expressionResolvesToGlobalNamespace(global, 'Reflect', new Set(), 0) &&
+          ['defineProperty', 'deleteProperty', 'set', 'setPrototypeOf'].includes(member)))
+    ) {
+      return false;
+    }
+  }
+  return true;
 }
 
 function requestSafeBuiltinCapabilityIsMutated(expression: Node): boolean {
@@ -13198,7 +13394,6 @@ function requestReflectiveTargetIsClosed(
   if (requestImportedModuleExportForExpression(target, isReviewedSafeBuiltinModule, new Set(), 0)) {
     return true;
   }
-  if (canonicalFrameworkExportForExpression(target)) return true;
   return (
     member === 'construct' && requestKnownLocalClassConstructorIsClosed(target, callable, context)
   );
@@ -13752,6 +13947,16 @@ function requestReviewedDrizzleTableIsPristine(
 
   let pristine = true;
   for (const sourceFile of table.declaration.getSourceFile().getProject().getSourceFiles()) {
+    for (const reference of sourceFile.getDescendantsOfKind(SyntaxKind.Identifier)) {
+      if (
+        resolvesToTable(reference) &&
+        !requestReviewedDrizzleTableReferenceIsClosed(reference, callable, context.provenance)
+      ) {
+        pristine = false;
+        break;
+      }
+    }
+    if (!pristine) break;
     for (const assignment of sourceFile.getDescendantsOfKind(SyntaxKind.BinaryExpression)) {
       const operator = assignment.getOperatorToken().getKind();
       if (operator < SyntaxKind.FirstAssignment || operator > SyntaxKind.LastAssignment) continue;
@@ -13831,6 +14036,71 @@ function requestReviewedDrizzleTableIsPristine(
   return pristine;
 }
 
+function requestReviewedDrizzleTableReferenceIsClosed(
+  reference: import('ts-morph').Identifier,
+  callable: RequestCallable,
+  session: RequestProvenanceSession,
+): boolean {
+  let current: Node = reference;
+  while (true) {
+    const parent = current.getParent();
+    if (
+      !parent ||
+      !(
+        Node.isParenthesizedExpression(parent) ||
+        Node.isAsExpression(parent) ||
+        Node.isSatisfiesExpression(parent) ||
+        Node.isTypeAssertion(parent) ||
+        Node.isNonNullExpression(parent)
+      )
+    ) {
+      break;
+    }
+    current = parent;
+  }
+  const parent = current.getParent();
+  if (!parent) return false;
+  if (
+    Node.isImportSpecifier(parent) ||
+    Node.isExportSpecifier(parent) ||
+    Node.isNamespaceImport(parent)
+  ) {
+    return true;
+  }
+  if (
+    Node.isVariableDeclaration(parent) &&
+    requestNodesAreSame(parent.getNameNode(), current)
+  ) {
+    return true;
+  }
+  if (
+    (Node.isPropertyAccessExpression(parent) || Node.isElementAccessExpression(parent)) &&
+    requestNodesAreSame(parent.getExpression(), current)
+  ) {
+    return true;
+  }
+  if (
+    Node.isVariableDeclaration(parent) &&
+    parent.getVariableStatement()?.getDeclarationKind() === VariableDeclarationKind.Const &&
+    Node.isIdentifier(parent.getNameNode()) &&
+    !!parent.getInitializer() &&
+    requestNodesAreSame(unwrapStaticExpression(parent.getInitializer()!), unwrapStaticExpression(current))
+  ) {
+    return true;
+  }
+  if (
+    Node.isCallExpression(parent) &&
+    parent.getArguments().some((argument) => requestNodesAreSame(argument, current))
+  ) {
+    return (
+      requestCallIsReviewedPureDrizzleExpression(parent) ||
+      requestCallIsReviewedDrizzleDbDataCall(parent, callable) ||
+      requestCallIsReviewedDrizzleDbDataCallInDeclaredRoot(parent, session)
+    );
+  }
+  return false;
+}
+
 function requestCallIsReviewedDrizzleDbDataCallInDeclaredRoot(
   call: import('ts-morph').CallExpression,
   session: RequestProvenanceSession,
@@ -13887,7 +14157,8 @@ function requestExpressionResolvesToReviewedDrizzleTable(
   if (!Node.isIdentifier(node)) return false;
   const direct = requestReviewedDrizzleTableForDirectReference(node);
   if (direct && requestNodesAreSame(direct.declaration, target)) return true;
-  const symbol = node.getSymbol();
+  const shorthand = node.getParentIfKind(SyntaxKind.ShorthandPropertyAssignment);
+  const symbol = shorthand?.getValueSymbol() ?? node.getSymbol();
   if (!symbol) return false;
   const key = requestSymbolKey(symbol);
   if (seen.has(key)) return false;
@@ -13990,10 +14261,6 @@ function requestConstructorIsKnownSafe(
   const resolution = resolveRequestCallable(callee, new Set(), 0, context.provenance);
   if (resolution.callables.length > 0) {
     for (const nested of resolution.callables) scanRequestCallable(nested, context);
-    return true;
-  }
-  if (canonicalFrameworkExportForExpression(callee)) {
-    scanRequestFunctionArguments(construct, context);
     return true;
   }
   if (requestImportedModuleExportForExpression(callee, isReviewedSafeBuiltinModule, new Set(), 0)) {
