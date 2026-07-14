@@ -1,8 +1,41 @@
 import { describe, expect, it } from 'vitest';
 
-import { evaluateSecurityClassifierCorpus } from './check-security-classifier-corpus.mjs';
+import {
+  evaluateRequestSafeRuntimeInventoryAlignment,
+  evaluateSecurityClassifierCorpus,
+} from './check-security-classifier-corpus.mjs';
 
 describe('check-security-classifier-corpus gate', () => {
+  it('rejects classifier-safe globals that are absent from the locked runtime inventory', () => {
+    const files = {
+      'packages/core/src/internal/request-safe-runtime-inventory.ts': `
+        export const requestSafeGlobalCallables = Object.freeze(['String']);
+        export const requestSafeGlobalNamespaces = Object.freeze(['JSON']);
+        export const requestSafeGlobalConstructors = Object.freeze(['Response']);
+        export const requestSafeCallbackGlobals = Object.freeze(['setTimeout']);
+        export const requestSafeNodeBuiltinModules = Object.freeze(['util']);
+        appendUniqueNames(requestSafeGlobalCallables);
+        appendUniqueNames(requestSafeGlobalNamespaces);
+        appendUniqueNames(requestSafeGlobalConstructors);
+        appendUniqueNames(requestSafeCallbackGlobals);
+      `,
+      'packages/drizzle/src/trust-escapes-static.ts': `
+        const REQUEST_SAFE_GLOBAL_CALLABLES = new Set(['String', 'evil']);
+        const REQUEST_SAFE_GLOBAL_NAMESPACES = new Set(['JSON']);
+        const REQUEST_SAFE_GLOBAL_CONSTRUCTORS = new Set(['Response']);
+        const REQUEST_SAFE_BUILTIN_MODULES = new Set(['util', 'child_process']);
+        for (const callbackGlobal of ['setTimeout', 'setImmediate']) {}
+      `,
+    };
+    const findings = evaluateRequestSafeRuntimeInventoryAlignment((file) => files[file]);
+
+    expect(findings).toEqual([
+      'request-safe-runtime: REQUEST_SAFE_GLOBAL_CALLABLES exceeds requestSafeGlobalCallables: evil',
+      'request-safe-runtime: REQUEST_SAFE_BUILTIN_MODULES exceeds requestSafeNodeBuiltinModules: child_process',
+      'request-safe-runtime: callback globals exceed requestSafeCallbackGlobals: setImmediate',
+    ]);
+  });
+
   it('requires a marker for every configured security classifier corpus', () => {
     const result = evaluateSecurityClassifierCorpus({
       corpora: [

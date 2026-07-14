@@ -14,6 +14,8 @@
  * not an app-level input Kovo can distinguish inside the same realm.
  */
 
+import { lockRequestSafeRuntimeRealm } from '@kovojs/core/internal/classifier-verdict';
+
 import '@kovojs/core/internal/client-module-url';
 import '@kovojs/core/internal/filesystem';
 import '@kovojs/core/internal/render-plan-token';
@@ -47,3 +49,19 @@ assertRequestBodyIntrinsics();
 assertRequestStateIntrinsics();
 assertResponseSecurityIntrinsics();
 assertTaskSecurityIntrinsics();
+
+let serverRequestSafeRuntimeLocked = false;
+
+/**
+ * @internal Lock classifier-reviewed globals at the last trusted server-runner boundary.
+ *
+ * This is explicit because the Vitest host must retain its timer controls while importing server
+ * modules. Supported generated/dev/build runners call it before authored modules; tests that prove
+ * the irreversible transition run in a child realm. Profile-specific Node builtin facades are
+ * locked by the compiler or generated Node/Vercel outer runner.
+ */
+export function lockServerRequestSafeRuntimeRealm(): void {
+  if (serverRequestSafeRuntimeLocked) return;
+  lockRequestSafeRuntimeRealm();
+  serverRequestSafeRuntimeLocked = true;
+}

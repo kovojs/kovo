@@ -1,5 +1,7 @@
 import '../security-bootstrap.js';
 
+export { lockServerRequestSafeRuntimeRealm } from '../security-bootstrap.js';
+
 export { deriveClosedKovoApp } from '../app-snapshot.js';
 export { runWithGeneratedLiveTargetRegistry } from '../live-target-registry.js';
 export {

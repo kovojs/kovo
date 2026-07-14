@@ -27,3 +27,13 @@ export function enforceOrThrow<UnsafeDetail>(
   if (verdict.kind === 'proven-safe') return;
   throw closedError(verdict);
 }
+
+export {
+  lockRequestSafeRuntimeRealm,
+  requestSafeCallbackGlobals,
+  requestSafeGlobalCallables,
+  requestSafeGlobalConstructors,
+  requestSafeGlobalNamespaces,
+  requestSafeNodeBuiltinModules,
+  requestSafeRuntimeInventory,
+} from './request-safe-runtime-inventory.ts';

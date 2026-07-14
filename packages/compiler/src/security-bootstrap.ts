@@ -16,6 +16,8 @@ import builtinUrl from 'node:url';
 
 import typescript from 'typescript';
 
+import { lockRequestSafeRuntimeRealm } from '@kovojs/core/internal/classifier-verdict';
+
 import { assertCompilerSecurityIntrinsics } from './compiler-security-intrinsics.ts';
 
 assertCompilerSecurityIntrinsics();
@@ -178,6 +180,11 @@ export function lockCompilerSecurityRealm(): void {
   pinGlobalBinding('URLSearchParams', NativeURLSearchParams);
   pinGlobalBinding('WeakMap', NativeWeakMap);
   pinGlobalBinding('WeakSet', NativeWeakSet);
+
+  // SPEC §6.6 rule 6: the request-authority classifier's exact reviewed global inventory is
+  // broader than the compiler's own implementation intrinsics. Pin that shared inventory too so
+  // app/config/package code cannot replace a classifier-trusted callable or constructor.
+  lockRequestSafeRuntimeRealm();
 
   compilerRealmLocked = true;
 }

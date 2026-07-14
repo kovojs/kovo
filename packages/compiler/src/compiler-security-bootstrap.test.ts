@@ -42,6 +42,55 @@ describe('compiler supported-runner security bootstrap', () => {
     expect(result.stdout).toBe('promise-lockdown-ok');
   });
 
+  it('pins every reviewed global before deferred or external replacement can run', () => {
+    const bootstrapUrl = new URL('./security-bootstrap.ts', import.meta.url).href;
+    const source = `
+      import { lockCompilerSecurityRealm } from ${JSON.stringify(bootstrapUrl)};
+      const NativeResponse = globalThis.Response;
+      const nativeConsoleLog = console.log;
+      const nativeQueueMicrotask = queueMicrotask;
+      const nativeSetTimeout = setTimeout;
+      const attempts = [];
+      lockCompilerSecurityRealm();
+
+      const poison = () => {
+        attempts.push(Reflect.set(console, 'log', () => { throw new Error('poisoned console'); }));
+        attempts.push(Reflect.set(globalThis, 'Response', class EvilResponse {}));
+        attempts.push(Reflect.set(globalThis, 'queueMicrotask', () => {}));
+        attempts.push(Reflect.set(globalThis, 'setTimeout', () => 0));
+      };
+      const externalInvoke = (callback) => callback();
+      externalInvoke(poison);
+      await new Promise((resolve) => nativeQueueMicrotask(() => {
+        poison();
+        nativeSetTimeout(resolve, 0);
+      }));
+
+      if (attempts.some(Boolean)) throw new Error('a locked replacement succeeded');
+      if (globalThis.Response !== NativeResponse) throw new Error('Response identity changed');
+      if (console.log !== nativeConsoleLog) throw new Error('console.log identity changed');
+      if (queueMicrotask !== nativeQueueMicrotask) throw new Error('queueMicrotask changed');
+      if (setTimeout !== nativeSetTimeout) throw new Error('setTimeout changed');
+      const response = new Response('locked');
+      if (await response.text() !== 'locked') throw new Error('Response stopped working');
+      process.stdout.write('reviewed-globals-locked');
+    `;
+    const result = spawnSync(
+      process.execPath,
+      [
+        '--disable-warning=ExperimentalWarning',
+        '--experimental-transform-types',
+        '--input-type=module',
+        '--eval',
+        source,
+      ],
+      { encoding: 'utf8' },
+    );
+
+    expect(result.status, result.stderr).toBe(0);
+    expect(result.stdout).toBe('reviewed-globals-locked');
+  });
+
   it('keeps exact identities after a selective lookalike Hash.update replacement', () => {
     // Importing compiler-security-intrinsics above is the supported runner bootstrap. App/plugin
     // evaluation happens after that point; source-comment likeness is deliberately irrelevant.

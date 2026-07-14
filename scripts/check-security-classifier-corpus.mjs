@@ -8,6 +8,17 @@ import { repoRoot as findRepoRoot } from './lib/repo-root.mjs';
 
 export const repoRoot = findRepoRoot();
 
+const REQUEST_SAFE_RUNTIME_INVENTORY_FILE =
+  'packages/core/src/internal/request-safe-runtime-inventory.ts';
+const REQUEST_PROCESS_CLASSIFIER_FILE = 'packages/drizzle/src/trust-escapes-static.ts';
+
+const REQUEST_SAFE_RUNTIME_SET_ALIGNMENT = [
+  ['requestSafeGlobalCallables', 'REQUEST_SAFE_GLOBAL_CALLABLES'],
+  ['requestSafeGlobalNamespaces', 'REQUEST_SAFE_GLOBAL_NAMESPACES'],
+  ['requestSafeGlobalConstructors', 'REQUEST_SAFE_GLOBAL_CONSTRUCTORS'],
+  ['requestSafeNodeBuiltinModules', 'REQUEST_SAFE_BUILTIN_MODULES'],
+];
+
 export const REQUIRED_CLASSIFIER_CORPORA = [
   {
     id: 'redos',
@@ -365,6 +376,10 @@ export function evaluateSecurityClassifierCorpus(options = {}) {
   const testFiles = [];
   const fileText = new Map();
 
+  if (options.enforceRuntimeInventory ?? options.corpora === undefined) {
+    findings.push(...evaluateRequestSafeRuntimeInventoryAlignment(readText));
+  }
+
   for (const corpus of corpora) {
     const markerFiles = [];
     for (const testFile of corpus.testFiles) {
@@ -405,6 +420,85 @@ export function evaluateSecurityClassifierCorpus(options = {}) {
     ok: findings.length === 0,
     testFiles: [...new Set(testFiles)],
   };
+}
+
+/**
+ * Keep classifier-safe names within the exact bootstrap-locked inventory (SPEC §6.6 rule 6).
+ * This reads source declarations instead of importing TypeScript through the plain-Node gate.
+ */
+export function evaluateRequestSafeRuntimeInventoryAlignment(readText) {
+  let inventorySource;
+  let classifierSource;
+  try {
+    inventorySource = readText(REQUEST_SAFE_RUNTIME_INVENTORY_FILE);
+  } catch {
+    return [`request-safe-runtime: missing ${REQUEST_SAFE_RUNTIME_INVENTORY_FILE}`];
+  }
+  try {
+    classifierSource = readText(REQUEST_PROCESS_CLASSIFIER_FILE);
+  } catch {
+    return [`request-safe-runtime: missing ${REQUEST_PROCESS_CLASSIFIER_FILE}`];
+  }
+
+  const findings = [];
+  for (const [inventoryName, classifierName] of REQUEST_SAFE_RUNTIME_SET_ALIGNMENT) {
+    const locked = sourceStringArray(inventorySource, inventoryName);
+    const classified = sourceStringArray(classifierSource, classifierName);
+    if (locked === undefined) {
+      findings.push(`request-safe-runtime: cannot read locked inventory ${inventoryName}`);
+      continue;
+    }
+    if (classified === undefined) {
+      findings.push(`request-safe-runtime: cannot read classifier set ${classifierName}`);
+      continue;
+    }
+    const lockedNames = new Set(locked);
+    const excess = [...new Set(classified)].filter((name) => !lockedNames.has(name)).sort();
+    if (excess.length > 0) {
+      findings.push(
+        `request-safe-runtime: ${classifierName} exceeds ${inventoryName}: ${excess.join(', ')}`,
+      );
+    }
+  }
+
+  const callbackInventory = sourceStringArray(inventorySource, 'requestSafeCallbackGlobals');
+  const callbackClassifier = sourceStringArray(classifierSource, 'callbackGlobal of');
+  if (callbackInventory === undefined || callbackClassifier === undefined) {
+    findings.push('request-safe-runtime: cannot read the reviewed callback-global inventory');
+  } else {
+    const lockedNames = new Set(callbackInventory);
+    const excess = [...new Set(callbackClassifier)].filter((name) => !lockedNames.has(name)).sort();
+    if (excess.length > 0) {
+      findings.push(
+        `request-safe-runtime: callback globals exceed requestSafeCallbackGlobals: ${excess.join(', ')}`,
+      );
+    }
+  }
+
+  for (const requiredLockReference of [
+    'appendUniqueNames(requestSafeGlobalCallables)',
+    'appendUniqueNames(requestSafeGlobalNamespaces)',
+    'appendUniqueNames(requestSafeGlobalConstructors)',
+    'appendUniqueNames(requestSafeCallbackGlobals)',
+  ]) {
+    if (!inventorySource.includes(requiredLockReference)) {
+      findings.push(`request-safe-runtime: global lock is missing ${requiredLockReference}`);
+    }
+  }
+  return findings;
+}
+
+function sourceStringArray(source, declarationName) {
+  const escapedName = declarationName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const declaration = new RegExp(
+    `(?:const\\s+${escapedName}\\s*=|${escapedName}\\s*)[^\\[]*\\[([\\s\\S]*?)\\]`,
+    'u',
+  ).exec(source);
+  if (declaration === null) return undefined;
+  const values = [];
+  const stringPattern = /(['"])(.*?)\1/gu;
+  for (const match of declaration[1].matchAll(stringPattern)) values.push(match[2]);
+  return values;
 }
 
 export function main(options = {}) {
