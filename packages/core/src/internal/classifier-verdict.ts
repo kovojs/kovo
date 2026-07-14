@@ -29,7 +29,10 @@ export function enforceOrThrow<UnsafeDetail>(
 }
 
 export {
+  lockRequestSafeNodeBuiltinFacades,
+  lockRequestSafeNodeBuiltinFacadesWithInventory,
   lockRequestSafeRuntimeRealm,
+  lockRequestSafeRuntimeRealmWithInventory,
   requestSafeCallbackGlobals,
   requestSafeGlobalCallables,
   requestSafeGlobalConstructors,
@@ -37,3 +40,4 @@ export {
   requestSafeNodeBuiltinModules,
   requestSafeRuntimeInventory,
 } from './request-safe-runtime-inventory.ts';
+export type { RequestSafeRuntimeGlobalInventory } from './request-safe-runtime-inventory.ts';

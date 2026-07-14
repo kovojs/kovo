@@ -11,6 +11,85 @@ import {
 } from './compiler-security-intrinsics.js';
 
 describe('compiler supported-runner security bootstrap', () => {
+  it('allows only its module-private record to authorize an idempotent global relock', () => {
+    const inventoryUrl = new URL(
+      '../../core/src/internal/request-safe-runtime-inventory.ts',
+      import.meta.url,
+    ).href;
+    const relockSource = `
+      import { lockRequestSafeRuntimeRealm } from ${JSON.stringify(inventoryUrl)};
+      lockRequestSafeRuntimeRealm();
+      const before = Object.getOwnPropertyDescriptor(globalThis, 'Response');
+      lockRequestSafeRuntimeRealm();
+      const after = Object.getOwnPropertyDescriptor(globalThis, 'Response');
+      if (!before || !after || before.get !== after.get || before.set !== after.set) {
+        throw new Error('framework relock did not preserve the recorded descriptor identities');
+      }
+      process.stdout.write('framework-relock-ok');
+    `;
+    const relockResult = runTypedChild(relockSource);
+    expect(relockResult.status, relockResult.stderr).toBe(0);
+    expect(relockResult.stdout).toBe('framework-relock-ok');
+
+    const attackerAccessorSource = `
+      import { lockRequestSafeRuntimeRealmWithInventory } from ${JSON.stringify(inventoryUrl)};
+      let current = globalThis.Response;
+      Object.defineProperty(globalThis, 'Response', {
+        configurable: false,
+        enumerable: true,
+        get() { return current; },
+        set(next) { current = next; },
+      });
+      let rejection = '';
+      try {
+        lockRequestSafeRuntimeRealmWithInventory({
+          callbackGlobals: [],
+          globalCallables: [],
+          globalConstructors: [],
+          globalNamespaces: ['Response'],
+        });
+      } catch (error) {
+        rejection = String(error?.message ?? error);
+      }
+      if (!rejection.includes('cannot be pinned')) {
+        throw new Error('preexisting non-configurable accessor was accepted: ' + rejection);
+      }
+      process.stdout.write('attacker-accessor-rejected');
+    `;
+    const attackerAccessorResult = runTypedChild(attackerAccessorSource);
+    expect(attackerAccessorResult.status, attackerAccessorResult.stderr).toBe(0);
+    expect(attackerAccessorResult.stdout).toBe('attacker-accessor-rejected');
+  });
+
+  it('pins behavior-bearing prototype data before authored packages can replace it', () => {
+    const bootstrapUrl = new URL('./security-bootstrap.ts', import.meta.url).href;
+    const source = `
+      import { lockCompilerSecurityRealm } from ${JSON.stringify(bootstrapUrl)};
+      lockCompilerSecurityRealm();
+      let coercionHit = false;
+      let errorNameRejected = false;
+      try {
+        Error.prototype.name = { toString() { coercionHit = true; return 'Evil'; } };
+      } catch {
+        errorNameRejected = true;
+      }
+      const rendered = String(new Error('safe'));
+      const arrayLength = Object.getOwnPropertyDescriptor(Array.prototype, 'length');
+      let arrayLengthRejected = false;
+      try { Array.prototype.length = 1000000; } catch { arrayLengthRejected = true; }
+      if (!errorNameRejected || coercionHit || rendered !== 'Error: safe') {
+        throw new Error('Error.prototype behavior-bearing data remained mutable');
+      }
+      if (!arrayLengthRejected || !arrayLength || arrayLength.writable !== false || arrayLength.value !== 0) {
+        throw new Error('Array.prototype.length remained mutable');
+      }
+      process.stdout.write('prototype-data-locked');
+    `;
+    const result = runTypedChild(source);
+    expect(result.status, result.stderr).toBe(0);
+    expect(result.stdout).toBe('prototype-data-locked');
+  });
+
   it('locks native promise methods without turning them into accessor-backed thenables', () => {
     const bootstrapUrl = new URL('./security-bootstrap.ts', import.meta.url).href;
     const source = `
@@ -66,7 +145,6 @@ describe('compiler supported-runner security bootstrap', () => {
         nativeSetTimeout(resolve, 0);
       }));
 
-      if (attempts.some(Boolean)) throw new Error('a locked replacement succeeded');
       if (globalThis.Response !== NativeResponse) throw new Error('Response identity changed');
       if (console.log !== nativeConsoleLog) throw new Error('console.log identity changed');
       if (queueMicrotask !== nativeQueueMicrotask) throw new Error('queueMicrotask changed');
@@ -89,6 +167,108 @@ describe('compiler supported-runner security bootstrap', () => {
 
     expect(result.status, result.stderr).toBe(0);
     expect(result.stdout).toBe('reviewed-globals-locked');
+  });
+
+  it('pins every lockable reviewed Node facade before CommonJS-to-ESM resynchronization', () => {
+    const bootstrapUrl = new URL('./security-bootstrap.ts', import.meta.url).href;
+    const source = `
+      import { createRequire, syncBuiltinESMExports } from 'node:module';
+      import querystring, { escape as importedEscape } from 'node:querystring';
+      import { StringDecoder } from 'node:string_decoder';
+      import utilTypes, { isDate as importedIsDate } from 'node:util/types';
+      import { lockCompilerSecurityRealm } from ${JSON.stringify(bootstrapUrl)};
+      const require = createRequire(import.meta.url);
+      const querystringFacade = require('node:querystring');
+      const utilTypesFacade = require('node:util/types');
+      const nativeEscape = querystring.escape;
+      const nativeIsDate = utilTypes.isDate;
+      lockCompilerSecurityRealm();
+
+      const attempts = [
+        Reflect.set(querystringFacade, 'escape', () => 'attacker-query'),
+        Reflect.set(utilTypesFacade, 'isDate', () => true),
+      ];
+      syncBuiltinESMExports();
+      if (attempts.some(Boolean)) throw new Error('a reviewed Node facade replacement succeeded');
+      if (querystring.escape !== nativeEscape || importedEscape !== nativeEscape) {
+        throw new Error('querystring escape identity changed');
+      }
+      if (utilTypes.isDate !== nativeIsDate || importedIsDate !== nativeIsDate) {
+        throw new Error('util/types isDate identity changed');
+      }
+      if (querystring.escape('safe value') !== 'safe%20value') {
+        throw new Error('querystring facade stopped working');
+      }
+      const decoder = new StringDecoder('utf8');
+      if (decoder.write(Buffer.from('safe')) !== 'safe') {
+        throw new Error('StringDecoder instance state stopped working');
+      }
+      process.stdout.write('reviewed-node-facades-locked');
+    `;
+    const result = spawnSync(
+      process.execPath,
+      [
+        '--disable-warning=ExperimentalWarning',
+        '--experimental-transform-types',
+        '--input-type=module',
+        '--eval',
+        source,
+      ],
+      { encoding: 'utf8' },
+    );
+
+    expect(result.status, result.stderr).toBe(0);
+    expect(result.stdout).toBe('reviewed-node-facades-locked');
+  });
+
+  it('keeps unpinnable events and util graphs outside the reviewed-safe inventory', () => {
+    const inventoryUrl = new URL(
+      '../../core/src/internal/request-safe-runtime-inventory.ts',
+      import.meta.url,
+    ).href;
+    const source = `
+      import events from 'node:events';
+      import util from 'node:util';
+      import { requestSafeNodeBuiltinModules } from ${JSON.stringify(inventoryUrl)};
+
+      if (requestSafeNodeBuiltinModules.includes('events') || requestSafeNodeBuiltinModules.includes('util')) {
+        throw new Error('an unpinnable Node facade is still classifier-reviewed');
+      }
+      const captureKey = Reflect.ownKeys(events.EventEmitter.prototype)
+        .find((key) => String(key) === 'Symbol(kCapture)');
+      const capture = Object.getOwnPropertyDescriptor(events.EventEmitter.prototype, captureKey);
+      if (!capture || capture.configurable !== false || capture.writable !== true) {
+        throw new Error('EventEmitter blocker proof no longer describes this Node runtime');
+      }
+      // Materialize stdout before the proof intentionally makes future EventEmitter construction
+      // impossible; Node lazily constructs stdout as a Socket.
+      process.stdout.write('unpinnable-node-facades-excluded');
+      Object.defineProperty(events.EventEmitter.prototype, captureKey, { writable: false });
+      let constructionRejected = false;
+      try { new events.EventEmitter(); } catch { constructionRejected = true; }
+      if (!constructionRejected) {
+        throw new Error('EventEmitter became lockable; reconsider the inventory with fresh proof');
+      }
+
+      const defaultOptions = Object.getOwnPropertyDescriptor(util.inspect, 'defaultOptions');
+      if (!defaultOptions || defaultOptions.configurable !== false || typeof defaultOptions.set !== 'function') {
+        throw new Error('util.inspect blocker proof no longer describes this Node runtime');
+      }
+    `;
+    const result = spawnSync(
+      process.execPath,
+      [
+        '--disable-warning=ExperimentalWarning',
+        '--experimental-transform-types',
+        '--input-type=module',
+        '--eval',
+        source,
+      ],
+      { encoding: 'utf8' },
+    );
+
+    expect(result.status, result.stderr).toBe(0);
+    expect(result.stdout).toBe('unpinnable-node-facades-excluded');
   });
 
   it('keeps exact identities after a selective lookalike Hash.update replacement', () => {
@@ -155,3 +335,17 @@ describe('compiler supported-runner security bootstrap', () => {
     }
   });
 });
+
+function runTypedChild(source: string) {
+  return spawnSync(
+    process.execPath,
+    [
+      '--disable-warning=ExperimentalWarning',
+      '--experimental-transform-types',
+      '--input-type=module',
+      '--eval',
+      source,
+    ],
+    { encoding: 'utf8' },
+  );
+}

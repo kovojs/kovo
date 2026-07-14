@@ -22,7 +22,6 @@ export const requestSafeGlobalCallables = Object.freeze([
   'isNaN',
   'parseFloat',
   'parseInt',
-  'structuredClone',
 ] as const);
 
 /** @internal */
@@ -102,11 +101,9 @@ export const requestSafeNodeBuiltinModules = Object.freeze([
   'assert',
   'assert/strict',
   'buffer',
-  'events',
   'querystring',
   'string_decoder',
   'url',
-  'util',
   'util/types',
 ] as const);
 
@@ -131,6 +128,64 @@ interface CapturedGlobalBinding {
   readonly value: unknown;
 }
 
+interface FrameworkOwnedGlobalBinding {
+  readonly configurable: boolean | undefined;
+  readonly enumerable: boolean | undefined;
+  readonly getter: (() => unknown) | undefined;
+  readonly name: RequestSafeGlobalName;
+  readonly setter: ((value: unknown) => void) | undefined;
+  readonly value: unknown;
+  readonly writable: boolean | undefined;
+}
+
+let frameworkOwnedGlobalBindings: readonly FrameworkOwnedGlobalBinding[] | undefined;
+
+const runtimeLockGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
+const runtimeLockDefineProperty = Object.defineProperty;
+const runtimeLockObjectIs = Object.is;
+
+function frameworkOwnedGlobalBinding(name: RequestSafeGlobalName): FrameworkOwnedGlobalBinding {
+  const descriptor = runtimeLockGetOwnPropertyDescriptor(globalThis, name);
+  return {
+    configurable: descriptor?.configurable,
+    enumerable: descriptor?.enumerable,
+    getter: descriptor !== undefined && 'get' in descriptor ? descriptor.get : undefined,
+    name,
+    setter: descriptor !== undefined && 'set' in descriptor ? descriptor.set : undefined,
+    value: descriptor !== undefined && 'value' in descriptor ? descriptor.value : undefined,
+    writable: descriptor !== undefined && 'value' in descriptor ? descriptor.writable : undefined,
+  };
+}
+
+function assertFrameworkOwnedGlobalBindings(
+  bindings: readonly FrameworkOwnedGlobalBinding[],
+): void {
+  for (let index = 0; index < bindings.length; index += 1) {
+    const expected = bindings[index]!;
+    const current = frameworkOwnedGlobalBinding(expected.name);
+    if (
+      current.configurable !== expected.configurable ||
+      current.enumerable !== expected.enumerable ||
+      current.getter !== expected.getter ||
+      current.setter !== expected.setter ||
+      !runtimeLockObjectIs(current.value, expected.value) ||
+      current.writable !== expected.writable
+    ) {
+      throw new TypeError(
+        `Kovo runtime global ${expected.name} no longer has its framework-owned lock.`,
+      );
+    }
+  }
+}
+
+/** Runtime-neutral global portion of the classifier inventory. @internal */
+export interface RequestSafeRuntimeGlobalInventory {
+  readonly callbackGlobals: readonly string[];
+  readonly globalCallables: readonly string[];
+  readonly globalConstructors: readonly string[];
+  readonly globalNamespaces: readonly string[];
+}
+
 /**
  * Pin every classifier-reviewed global to a framework-owned immutable binding (SPEC §6.6 rule 6).
  *
@@ -141,11 +196,67 @@ interface CapturedGlobalBinding {
  * @internal
  */
 export function lockRequestSafeRuntimeRealm(): void {
+  if (frameworkOwnedGlobalBindings !== undefined) {
+    assertFrameworkOwnedGlobalBindings(frameworkOwnedGlobalBindings);
+    return;
+  }
+  lockRequestSafeRuntimeRealmWithInventory(requestSafeRuntimeInventory);
+  const names: RequestSafeGlobalName[] = [];
+  const bindings: FrameworkOwnedGlobalBinding[] = [];
+  const appendBindings = (values: readonly RequestSafeGlobalName[]): void => {
+    for (let index = 0; index < values.length; index += 1) {
+      const name = values[index]!;
+      let found = false;
+      for (let prior = 0; prior < names.length; prior += 1) {
+        if (names[prior] === name) {
+          found = true;
+          break;
+        }
+      }
+      if (found) continue;
+      runtimeLockDefineProperty(names, names.length, {
+        configurable: true,
+        enumerable: true,
+        value: name,
+        writable: true,
+      });
+      runtimeLockDefineProperty(bindings, bindings.length, {
+        configurable: true,
+        enumerable: true,
+        value: Object.freeze(frameworkOwnedGlobalBinding(name)),
+        writable: true,
+      });
+    }
+  };
+  appendBindings(requestSafeGlobalCallables);
+  appendBindings(requestSafeGlobalNamespaces);
+  appendBindings(requestSafeGlobalConstructors);
+  appendBindings(requestSafeCallbackGlobals);
+  frameworkOwnedGlobalBindings = Object.freeze(bindings);
+}
+
+/**
+ * Self-contained form used by generated deployment entries that cannot import framework source.
+ * The build serializes this function with its boot-pinned source control and supplies the exact
+ * shared inventory as inert generated data (SPEC §6.6 rule 6).
+ *
+ * @internal
+ */
+export function lockRequestSafeRuntimeRealmWithInventory(
+  inventory: RequestSafeRuntimeGlobalInventory,
+): void {
   const NativeArray = globalThis.Array;
+  const NativeBuffer = globalThis.Buffer;
+  const NativeDate = globalThis.Date;
   const NativeObject = globalThis.Object;
+  const NativePromise = globalThis.Promise;
   const NativeReflect = globalThis.Reflect;
   const NativeString = globalThis.String;
+  const NativeTextDecoder = globalThis.TextDecoder;
+  const NativeTextEncoder = globalThis.TextEncoder;
   const NativeTypeError = globalThis.TypeError;
+  const NativeURL = globalThis.URL;
+  const NativeURLSearchParams = globalThis.URLSearchParams;
   const nativeArrayIsArray = NativeArray.isArray;
   const nativeDefineProperty = NativeObject.defineProperty;
   const nativeFreeze = NativeObject.freeze;
@@ -182,10 +293,10 @@ export function lockRequestSafeRuntimeRealm(): void {
       }
     }
   };
-  appendUniqueNames(requestSafeGlobalCallables);
-  appendUniqueNames(requestSafeGlobalNamespaces);
-  appendUniqueNames(requestSafeGlobalConstructors);
-  appendUniqueNames(requestSafeCallbackGlobals);
+  appendUniqueNames(inventory.globalCallables as readonly RequestSafeGlobalName[]);
+  appendUniqueNames(inventory.globalNamespaces as readonly RequestSafeGlobalName[]);
+  appendUniqueNames(inventory.globalConstructors as readonly RequestSafeGlobalName[]);
+  appendUniqueNames(inventory.callbackGlobals as readonly RequestSafeGlobalName[]);
 
   const captured: CapturedGlobalBinding[] = [];
   for (let index = 0; index < names.length; index += 1) {
@@ -223,7 +334,7 @@ export function lockRequestSafeRuntimeRealm(): void {
     }
   };
 
-  const guardPrototypeFunctions = (prototype: object): void => {
+  const guardPrototypeDescriptors = (prototype: object): void => {
     const keys = apply<readonly PropertyKey[]>(nativeReflectOwnKeys, NativeReflect, [prototype]);
     for (let index = 0; index < keys.length; index += 1) {
       const key = keys[index]!;
@@ -232,49 +343,115 @@ export function lockRequestSafeRuntimeRealm(): void {
         NativeObject,
         [prototype, key],
       );
-      if (
-        descriptor === undefined ||
-        !('value' in descriptor) ||
-        typeof descriptor.value !== 'function'
-      ) {
-        continue;
-      }
+      if (descriptor === undefined) continue;
       if (descriptor.configurable === false) {
-        if (descriptor.writable !== false) {
+        if ('value' in descriptor && descriptor.writable !== false) {
+          // Array.prototype.length is a non-configurable array-exotic slot, but ECMAScript permits
+          // its one-way writable true -> false transition. Pin it before sealing so trusted Array
+          // methods cannot inherit attacker-sized length state.
+          if (
+            prototype === NativeArray.prototype &&
+            key === 'length' &&
+            apply<boolean>(nativeObjectIs, NativeObject, [descriptor.value, 0])
+          ) {
+            apply(nativeDefineProperty, NativeObject, [
+              prototype,
+              key,
+              {
+                configurable: false,
+                enumerable: descriptor.enumerable,
+                value: descriptor.value,
+                writable: false,
+              },
+            ]);
+            continue;
+          }
           throw new NativeTypeError(
             `Kovo runtime lockdown found mutable non-configurable ${nativeStringValue(key)}.`,
           );
         }
+        if ('get' in descriptor && typeof descriptor.set === 'function') {
+          throw new NativeTypeError(
+            `Kovo runtime lockdown found a mutable non-configurable ${nativeStringValue(key)} accessor.`,
+          );
+        }
         continue;
       }
-      const method = descriptor.value;
+
+      const capturedValue = 'value' in descriptor ? descriptor.value : undefined;
+      const capturedGetter = 'get' in descriptor ? descriptor.get : undefined;
+      const capturedSetter = 'set' in descriptor ? descriptor.set : undefined;
+      if (
+        (typeof capturedValue === 'object' && capturedValue !== null) ||
+        typeof capturedValue === 'function'
+      ) {
+        freezeTarget(capturedValue as object);
+      }
+      const guardedGetter =
+        'value' in descriptor
+          ? function kovoRuntimePrototypeGetter(): unknown {
+              return capturedValue;
+            }
+          : capturedGetter;
+      const guardedSetter = function kovoRuntimePrototypeSetter(this: object, next: unknown): void {
+        if (this === prototype) {
+          throw new NativeTypeError(
+            `Kovo runtime prototype ${nativeStringValue(key)} is immutable.`,
+          );
+        }
+        if ('value' in descriptor) {
+          if (descriptor.writable !== true) {
+            throw new NativeTypeError(
+              `Kovo runtime prototype ${nativeStringValue(key)} is read-only.`,
+            );
+          }
+          apply(nativeDefineProperty, NativeObject, [
+            this,
+            key,
+            {
+              configurable: true,
+              enumerable: descriptor.enumerable,
+              value: next,
+              writable: true,
+            },
+          ]);
+          return;
+        }
+        if (typeof capturedSetter === 'function') {
+          apply(capturedSetter, this, [next]);
+          return;
+        }
+        throw new NativeTypeError(
+          `Kovo runtime prototype ${nativeStringValue(key)} has no setter.`,
+        );
+      };
+      const keepImmutableDataMethod =
+        'value' in descriptor &&
+        typeof capturedValue === 'function' &&
+        (prototype === NativeArray.prototype ||
+          (typeof NativeBuffer === 'function' && prototype === NativeBuffer.prototype) ||
+          prototype === NativeDate.prototype ||
+          prototype === NativePromise.prototype ||
+          prototype === NativeTextDecoder.prototype ||
+          prototype === NativeTextEncoder.prototype ||
+          prototype === NativeURL.prototype ||
+          prototype === NativeURLSearchParams.prototype);
       apply(nativeDefineProperty, NativeObject, [
         prototype,
         key,
-        {
-          configurable: false,
-          enumerable: descriptor.enumerable,
-          get() {
-            return method;
-          },
-          set(this: object, replacement: unknown) {
-            if (this === prototype) {
-              throw new NativeTypeError(
-                `Kovo runtime lockdown rejected replacement of ${nativeStringValue(key)}.`,
-              );
+        keepImmutableDataMethod
+          ? {
+              configurable: false,
+              enumerable: descriptor.enumerable,
+              value: capturedValue,
+              writable: false,
             }
-            apply(nativeDefineProperty, NativeObject, [
-              this,
-              key,
-              {
-                configurable: true,
-                enumerable: descriptor.enumerable,
-                value: replacement,
-                writable: true,
-              },
-            ]);
-          },
-        },
+          : {
+              configurable: false,
+              enumerable: descriptor.enumerable,
+              get: guardedGetter,
+              set: guardedSetter,
+            },
       ]);
     }
     apply(nativeSeal, NativeObject, [prototype]);
@@ -293,7 +470,7 @@ export function lockRequestSafeRuntimeRealm(): void {
       guardedPrototypes.length,
       { configurable: true, enumerable: true, value: prototype, writable: true },
     ]);
-    guardPrototypeFunctions(prototype);
+    guardPrototypeDescriptors(prototype);
   };
 
   const lockCallable = (value: Function): void => {
@@ -327,18 +504,48 @@ export function lockRequestSafeRuntimeRealm(): void {
     }
     const keys = apply<readonly PropertyKey[]>(nativeReflectOwnKeys, NativeReflect, [value]);
     for (let index = 0; index < keys.length; index += 1) {
+      const key = keys[index]!;
       const descriptor = apply<PropertyDescriptor | undefined>(
         nativeGetOwnPropertyDescriptor,
         NativeObject,
-        [value, keys[index]!],
+        [value, key],
       );
-      if (
-        descriptor !== undefined &&
-        'value' in descriptor &&
-        typeof descriptor.value === 'function'
-      ) {
-        lockCallable(descriptor.value);
+      if (descriptor === undefined) continue;
+      if (descriptor.configurable === false) {
+        if ('value' in descriptor && descriptor.writable === true) {
+          throw new NativeTypeError(
+            `Kovo runtime namespace has mutable non-configurable ${nativeStringValue(key)}.`,
+          );
+        }
+        if ('get' in descriptor && typeof descriptor.set === 'function') {
+          throw new NativeTypeError(
+            `Kovo runtime namespace has a mutable non-configurable ${nativeStringValue(key)} accessor.`,
+          );
+        }
+        continue;
       }
+      const capturedGetter = 'get' in descriptor ? descriptor.get : undefined;
+      const capturedValue =
+        'value' in descriptor
+          ? descriptor.value
+          : typeof capturedGetter === 'function'
+            ? apply(capturedGetter, value, [])
+            : undefined;
+      if (typeof capturedValue === 'function') lockCallable(capturedValue);
+      apply(nativeDefineProperty, NativeObject, [
+        value,
+        key,
+        {
+          configurable: false,
+          enumerable: descriptor.enumerable,
+          get() {
+            return capturedValue;
+          },
+          // A no-op setter keeps test-host cleanup and redundant same-realm assignments from
+          // throwing while the getter permanently preserves the framework-owned identity.
+          set(_next: unknown) {},
+        },
+      ]);
     }
     freezeTarget(value);
   };
@@ -393,13 +600,252 @@ export function lockRequestSafeRuntimeRealm(): void {
       {
         configurable: false,
         enumerable: current?.enumerable ?? false,
-        value,
-        writable: false,
+        get() {
+          return value;
+        },
+        // Assignment may report success, but the immutable getter never publishes its input.
+        // This preserves teardown compatibility without reopening classifier provenance.
+        set(_next: unknown) {},
       },
     ]);
   }
 
   if (!apply<boolean>(nativeArrayIsArray, NativeArray, [captured])) {
     throw new NativeTypeError('Kovo runtime lockdown lost its intrinsic inventory.');
+  }
+}
+
+/** Lock the CommonJS facades behind every classifier-reviewed Node builtin module. @internal */
+export function lockRequestSafeNodeBuiltinFacades(facades: readonly unknown[]): void {
+  lockRequestSafeNodeBuiltinFacadesWithInventory(requestSafeNodeBuiltinModules, facades);
+}
+
+/**
+ * Self-contained generated-entry form of `lockRequestSafeNodeBuiltinFacades`.
+ *
+ * Node named ESM exports can be rewritten from their mutable CommonJS facade through
+ * `syncBuiltinESMExports()`. Freezing only the ESM namespace is therefore not provenance. This
+ * locks each facade's complete own-data graph and guards constructor prototypes while preserving
+ * instance-owned state (SPEC §6.6 bootstrap rule).
+ *
+ * @internal
+ */
+export function lockRequestSafeNodeBuiltinFacadesWithInventory(
+  moduleNames: readonly string[],
+  facades: readonly unknown[],
+): void {
+  const NativeArray = globalThis.Array;
+  const NativeObject = globalThis.Object;
+  const NativeReflect = globalThis.Reflect;
+  const NativeString = globalThis.String;
+  const NativeTypeError = globalThis.TypeError;
+  const NativeWeakSet = globalThis.WeakSet;
+  const nativeArrayIsArray = NativeArray.isArray;
+  const nativeDefineProperty = NativeObject.defineProperty;
+  const nativeFreeze = NativeObject.freeze;
+  const nativeGetOwnPropertyDescriptor = NativeObject.getOwnPropertyDescriptor;
+  const nativeIsFrozen = NativeObject.isFrozen;
+  const nativeIsSealed = NativeObject.isSealed;
+  const nativeReflectApply = NativeReflect.apply;
+  const nativeReflectOwnKeys = NativeReflect.ownKeys;
+  const nativeSeal = NativeObject.seal;
+  const nativeStringValue = NativeString;
+  const nativeWeakSetAdd = NativeWeakSet.prototype.add;
+  const nativeWeakSetHas = NativeWeakSet.prototype.has;
+
+  const apply = <Return>(fn: Function, receiver: unknown, args: readonly unknown[]): Return =>
+    nativeReflectApply(fn, receiver, args) as Return;
+  const has = (set: WeakSet<object>, value: object): boolean =>
+    apply<boolean>(nativeWeakSetHas, set, [value]);
+  const add = (set: WeakSet<object>, value: object): void => {
+    apply(nativeWeakSetAdd, set, [value]);
+  };
+  const ownDataValue = (value: object, property: PropertyKey): unknown => {
+    const descriptor = apply<PropertyDescriptor | undefined>(
+      nativeGetOwnPropertyDescriptor,
+      NativeObject,
+      [value, property],
+    );
+    if (descriptor === undefined || !('value' in descriptor)) {
+      throw new NativeTypeError('Kovo Node builtin inventory must use own data properties.');
+    }
+    return descriptor.value;
+  };
+
+  if (
+    !apply<boolean>(nativeArrayIsArray, NativeArray, [moduleNames]) ||
+    !apply<boolean>(nativeArrayIsArray, NativeArray, [facades]) ||
+    moduleNames.length !== facades.length
+  ) {
+    throw new NativeTypeError('Kovo Node builtin inventory does not match its captured facades.');
+  }
+
+  const discovered = new NativeWeakSet<object>();
+  const prototypeObjects = new NativeWeakSet<object>();
+  const collect = (value: unknown): void => {
+    if ((typeof value !== 'object' || value === null) && typeof value !== 'function') return;
+    const object = value as object;
+    if (has(discovered, object)) return;
+    add(discovered, object);
+    const keys = apply<readonly PropertyKey[]>(nativeReflectOwnKeys, NativeReflect, [object]);
+    for (let index = 0; index < keys.length; index += 1) {
+      const key = keys[index]!;
+      const descriptor = apply<PropertyDescriptor | undefined>(
+        nativeGetOwnPropertyDescriptor,
+        NativeObject,
+        [object, key],
+      );
+      if (descriptor === undefined || !('value' in descriptor)) continue;
+      if (
+        key === 'prototype' &&
+        typeof value === 'function' &&
+        typeof descriptor.value === 'object' &&
+        descriptor.value !== null
+      ) {
+        add(prototypeObjects, descriptor.value as object);
+      }
+      collect(descriptor.value);
+    }
+  };
+
+  for (let index = 0; index < facades.length; index += 1) {
+    const moduleName = ownDataValue(moduleNames, index);
+    const facade = ownDataValue(facades, index);
+    if (typeof moduleName !== 'string') {
+      throw new NativeTypeError('Kovo Node builtin inventory contains an invalid module name.');
+    }
+    if ((typeof facade !== 'object' || facade === null) && typeof facade !== 'function') {
+      throw new NativeTypeError(`Kovo Node builtin ${moduleName} facade is unavailable.`);
+    }
+    collect(facade);
+  }
+
+  const locked = new NativeWeakSet<object>();
+  const lockPrototype = (prototype: object): void => {
+    const keys = apply<readonly PropertyKey[]>(nativeReflectOwnKeys, NativeReflect, [prototype]);
+    for (let index = 0; index < keys.length; index += 1) {
+      const key = keys[index]!;
+      const descriptor = apply<PropertyDescriptor | undefined>(
+        nativeGetOwnPropertyDescriptor,
+        NativeObject,
+        [prototype, key],
+      );
+      if (descriptor === undefined) continue;
+      if (descriptor.configurable === false) {
+        if ('value' in descriptor && descriptor.writable === true) {
+          throw new NativeTypeError(
+            `Kovo Node builtin prototype has mutable non-configurable ${nativeStringValue(key)}.`,
+          );
+        }
+        // An immutable accessor descriptor may retain its native instance setter. The attacker
+        // cannot replace that setter, and invoking it with the prototype itself either performs
+        // the native receiver check or affects only native state owned by that exact prototype.
+        continue;
+      }
+
+      const captured = 'value' in descriptor ? descriptor.value : undefined;
+      const capturedGetter = 'get' in descriptor ? descriptor.get : undefined;
+      const capturedSetter = 'set' in descriptor ? descriptor.set : undefined;
+      const guardedGetter =
+        'value' in descriptor
+          ? function kovoNodeBuiltinPrototypeGetter(): unknown {
+              return captured;
+            }
+          : capturedGetter;
+      const guardedSetter = function kovoNodeBuiltinPrototypeSetter(
+        this: object,
+        next: unknown,
+      ): void {
+        if (this === prototype) {
+          throw new NativeTypeError(
+            `Kovo Node builtin prototype ${nativeStringValue(key)} is immutable.`,
+          );
+        }
+        if (typeof capturedSetter === 'function') {
+          apply(capturedSetter, this, [next]);
+          return;
+        }
+        apply(nativeDefineProperty, NativeObject, [
+          this,
+          key,
+          { configurable: true, enumerable: descriptor.enumerable, value: next, writable: true },
+        ]);
+      };
+      apply(nativeDefineProperty, NativeObject, [
+        prototype,
+        key,
+        {
+          configurable: false,
+          enumerable: descriptor.enumerable,
+          get: guardedGetter,
+          set: guardedSetter,
+        },
+      ]);
+    }
+    apply(nativeSeal, NativeObject, [prototype]);
+    if (!apply<boolean>(nativeIsSealed, NativeObject, [prototype])) {
+      throw new NativeTypeError('Kovo could not seal a Node builtin prototype.');
+    }
+  };
+
+  const lock = (value: unknown): void => {
+    if ((typeof value !== 'object' || value === null) && typeof value !== 'function') return;
+    const object = value as object;
+    if (has(locked, object)) return;
+    add(locked, object);
+    const keys = apply<readonly PropertyKey[]>(nativeReflectOwnKeys, NativeReflect, [object]);
+    for (let index = 0; index < keys.length; index += 1) {
+      const descriptor = apply<PropertyDescriptor | undefined>(
+        nativeGetOwnPropertyDescriptor,
+        NativeObject,
+        [object, keys[index]!],
+      );
+      if (descriptor !== undefined && 'value' in descriptor) lock(descriptor.value);
+    }
+    if (has(prototypeObjects, object)) {
+      lockPrototype(object);
+      return;
+    }
+
+    // Snapshot configurable facade accessors into immutable data. Leaving a setter on a frozen
+    // object (for example events.defaultMaxListeners) would still permit shared-process mutation.
+    for (let index = 0; index < keys.length; index += 1) {
+      const key = keys[index]!;
+      const descriptor = apply<PropertyDescriptor | undefined>(
+        nativeGetOwnPropertyDescriptor,
+        NativeObject,
+        [object, key],
+      );
+      if (descriptor === undefined || 'value' in descriptor) continue;
+      if (descriptor.configurable === false) {
+        if (typeof descriptor.set === 'function') {
+          throw new NativeTypeError(
+            `Kovo Node builtin facade has mutable non-configurable ${nativeStringValue(key)}.`,
+          );
+        }
+        continue;
+      }
+      const captured =
+        typeof descriptor.get === 'function' ? apply(descriptor.get, object, []) : undefined;
+      lock(captured);
+      apply(nativeDefineProperty, NativeObject, [
+        object,
+        key,
+        {
+          configurable: false,
+          enumerable: descriptor.enumerable,
+          value: captured,
+          writable: false,
+        },
+      ]);
+    }
+    apply(nativeFreeze, NativeObject, [object]);
+    if (!apply<boolean>(nativeIsFrozen, NativeObject, [object])) {
+      throw new NativeTypeError('Kovo could not freeze a Node builtin facade.');
+    }
+  };
+
+  for (let index = 0; index < facades.length; index += 1) {
+    lock(ownDataValue(facades, index));
   }
 }
