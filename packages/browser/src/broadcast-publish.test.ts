@@ -261,6 +261,75 @@ describe('mutation broadcast publish', () => {
     }
   });
 
+  it('does not create or retain a default broadcast for unresolved session-dependent state', () => {
+    const originalBroadcastChannel = globalThis.BroadcastChannel;
+    const createdChannels: FakeBroadcastChannel[] = [];
+    const suppliedBroadcast = {
+      close: vi.fn(),
+      publish: vi.fn(),
+    };
+    class DefaultBroadcastChannel extends FakeBroadcastChannel {
+      constructor() {
+        super();
+        createdChannels.push(this);
+      }
+    }
+    globalThis.BroadcastChannel = DefaultBroadcastChannel as never;
+
+    try {
+      const setup = withDefaultMutationBroadcast({
+        broadcast: suppliedBroadcast,
+        buildToken: TEST_BUILD,
+        root: new FakeMorphRoot(),
+        sessionDependent: true,
+        store: createQueryStore(),
+      });
+
+      expect(createdChannels).toEqual([]);
+      expect(setup.options.broadcast).toBeUndefined();
+      expect(setup.dispose).toBeUndefined();
+      expect(suppliedBroadcast.publish).not.toHaveBeenCalled();
+    } finally {
+      globalThis.BroadcastChannel = originalBroadcastChannel;
+    }
+  });
+
+  it('isolates an unresolved session-dependent tab from an anonymous tab in both directions', () => {
+    const hub = new FakeBroadcastHub();
+    const unresolvedChannel = new FakeBroadcastChannel(hub);
+    const anonymousChannel = new FakeBroadcastChannel(hub);
+    const unresolvedStore = createQueryStore();
+    const anonymousStore = createQueryStore();
+    const unresolved = installMutationBroadcast({
+      buildToken: TEST_BUILD,
+      channel: unresolvedChannel,
+      sessionDependent: true,
+      store: unresolvedStore,
+    });
+    const anonymous = installMutationBroadcast({
+      buildToken: TEST_BUILD,
+      channel: anonymousChannel,
+      store: anonymousStore,
+    });
+
+    expect(unresolvedChannel.closed).toBe(true);
+    expect(unresolvedChannel.onmessage).toBeNull();
+    unresolved.publish(
+      '<kovo-query name="account">{"secret":"private"}</kovo-query>',
+      [],
+      TEST_BUILD,
+    );
+    expect(unresolvedChannel.messages).toEqual([]);
+    expect(anonymousStore.get('account')).toBeUndefined();
+
+    anonymous.publish(
+      '<kovo-query name="account">{"posture":"anonymous"}</kovo-query>',
+      [],
+      TEST_BUILD,
+    );
+    expect(unresolvedStore.get('account')).toBeUndefined();
+  });
+
   it('stamps the principal on publish and discards cross-principal rebroadcasts (bugs-1 F13)', () => {
     const channel = new FakeBroadcastChannel();
     const store = createQueryStore();

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { markFrameworkDocumentResponse } from './response.js';
 import { readStaticExportReplayedResponse } from './static-export-response.js';
 
 describe('server static export replay response boundary', () => {
@@ -20,6 +21,41 @@ describe('server static export replay response boundary', () => {
       },
       status: 200,
     });
+  });
+
+  it('verifies and omits only a provenance-marked framework Kovo-Build header', async () => {
+    const response = markFrameworkDocumentResponse(
+      new Response('<meta name="kovo-build" content="build-a"><main>Docs</main>', {
+        headers: {
+          'Content-Type': 'text/html; charset=utf-8',
+          'Kovo-Build': 'build-a',
+          'X-Route': '/docs',
+        },
+      }),
+      'build-a',
+    );
+
+    await expect(
+      readStaticExportReplayedResponse({
+        kind: 'route-document',
+        response,
+        routePath: '/docs',
+      }),
+    ).resolves.toMatchObject({
+      headers: {
+        'content-type': 'text/html; charset=utf-8',
+        'x-route': '/docs',
+      },
+    });
+
+    response.headers.set('Kovo-Build', 'build-b');
+    await expect(
+      readStaticExportReplayedResponse({
+        kind: 'route-document',
+        response,
+        routePath: '/docs',
+      }),
+    ).rejects.toThrow(/Kovo-Build transport proof does not match/u);
   });
 
   it('rejects static route document response headers that cannot be exported', async () => {

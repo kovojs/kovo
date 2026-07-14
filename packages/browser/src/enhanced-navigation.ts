@@ -80,6 +80,11 @@ export function installEnhancedNavigationRuntime(
   const readSessionFingerprint = (root: ParentNode) =>
     security.readAttribute(security.queryOne(root, 'meta[name="kovo-session"]'), 'content') ??
     undefined;
+  const readSessionDependent = (root: ParentNode) =>
+    !!security.queryOne(root, 'meta[name="kovo-session-dependent"]');
+  // SPEC §8/§9.3: posture is loader authority too. A session-dependent document without a
+  // resolved principal must never be enhanced into another document inside this realm.
+  const pageSessionDependent = readSessionDependent(doc);
   const qa = (root: ParentNode, selector: string) =>
     security.call<Element[]>(queryAll, undefined, [root, selector]);
   const ns = (root: ParentNode) => qa(root, '[kovo-nav-segment]');
@@ -234,6 +239,7 @@ export function installEnhancedNavigationRuntime(
       const currentDocumentElement = security.readDocumentField(doc, 'documentElement') as
         | Element
         | undefined;
+      const nextBuild = nextDoc ? kb(nextDoc) : '';
       if (
         !nextDoc ||
         !nextBody ||
@@ -241,7 +247,9 @@ export function installEnhancedNavigationRuntime(
         !nextDocumentElement ||
         !currentBody ||
         !currentDocumentElement ||
-        pageBuild !== kb(nextDoc)
+        !pageBuild ||
+        !nextBuild ||
+        pageBuild !== nextBuild
       ) {
         throw Error();
       }
@@ -250,7 +258,13 @@ export function installEnhancedNavigationRuntime(
       // `kovo-session` meta would otherwise leave the page-load principal closure installed over
       // the new principal's DOM. Compare presence as well as value before ANY head/body mutation;
       // retire the old runtime, then let a hard navigation install a fresh loader and fingerprint.
-      if (sessionFingerprint !== readSessionFingerprint(nextDoc)) {
+      const nextSessionFingerprint = readSessionFingerprint(nextDoc);
+      const nextSessionDependent = readSessionDependent(nextDoc);
+      if (
+        sessionFingerprint !== nextSessionFingerprint ||
+        ((pageSessionDependent || nextSessionDependent) &&
+          (!sessionFingerprint || !nextSessionFingerprint))
+      ) {
         onSessionTransition?.();
         ng(finalUrl.href);
         return;

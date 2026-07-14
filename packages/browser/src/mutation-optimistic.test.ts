@@ -19,7 +19,7 @@ describe('optimistic enhanced mutation submission', () => {
     const store = createQueryStore();
     const rebaser = new OptimisticRebaser(store);
     const channel = new FakeBroadcastChannel();
-    const broadcast = installMutationBroadcast({ channel, store });
+    const broadcast = installMutationBroadcast({ buildToken: 'build-test', channel, store });
     const root = new FakeMorphRoot();
     store.set('account', { owner: 'anonymous' });
     const reload = vi.fn();
@@ -83,7 +83,7 @@ describe('optimistic enhanced mutation submission', () => {
     const store = createQueryStore();
     const rebaser = new OptimisticRebaser(store);
     const channel = new FakeBroadcastChannel();
-    const broadcast = installMutationBroadcast({ channel, store });
+    const broadcast = installMutationBroadcast({ buildToken: 'build-test', channel, store });
     const root = new FakeMorphRoot();
     const cartBadge = new FakePendingElement({ 'kovo-deps': 'cart' });
     const pendingRoot = new FakePendingRoot([cartBadge]);
@@ -101,9 +101,11 @@ describe('optimistic enhanced mutation submission', () => {
       return {
         headers: {
           get(name: string) {
-            return name === 'Kovo-Changes'
-              ? '[{"domain":"cart","input":{"productId":"p1","quantity":2}}]'
-              : null;
+            if (name === 'Kovo-Changes') {
+              return '[{"domain":"cart","input":{"productId":"p1","quantity":2}}]';
+            }
+            if (name === 'Kovo-Build') return 'build-test';
+            return null;
           },
         },
         async text() {
@@ -144,6 +146,7 @@ describe('optimistic enhanced mutation submission', () => {
           '<kovo-query name="cart">{"count":4}</kovo-query>',
           '<kovo-fragment target="cart-badge"><cart-badge>4</cart-badge></kovo-fragment>',
         ].join('\n'),
+        buildToken: 'build-test',
         changes: [{ domain: 'cart' }],
         type: 'kovo:mutation-response',
       },

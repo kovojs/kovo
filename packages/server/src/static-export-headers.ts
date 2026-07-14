@@ -27,6 +27,10 @@ interface StaticExportHeaderSinkOptions {
   path: string;
 }
 
+interface StaticExportFrameworkDocumentHeaderOptions extends StaticExportHeaderSinkOptions {
+  buildToken: string;
+}
+
 interface StaticExportHeaderSink {
   append(name: unknown, value: unknown): void;
   set(name: unknown, value: unknown): void;
@@ -100,6 +104,54 @@ export const staticExportHeaders = wireEmitter(
       sink.append(entry[0], entry[1]);
     }
 
+    return sink.toJSON();
+  },
+);
+
+/**
+ * @internal Capture a provenance-marked framework document's durable headers. The runtime-only
+ * `Kovo-Build` transport proof is verified against the private render token and omitted from the
+ * file artifact; generic/app-authored Kovo headers still fail in {@link staticExportHeaders}.
+ */
+export const staticExportFrameworkDocumentHeaders = wireEmitter(
+  'server.wire.static-export-framework-document-headers',
+  function (
+    source: Headers,
+    options: StaticExportFrameworkDocumentHeaderOptions,
+  ): Record<string, string> {
+    const sink = createStaticExportHeaderSink(options);
+    const entries = staticExportHeaderEntries(source, options);
+    let observedBuildToken = false;
+
+    for (let index = 0; index < entries.length; index += 1) {
+      const entry = entries[index]!;
+      const rawName = securityString(entry[0]);
+      if (securityStringToLowerCase(rawName) !== 'kovo-build') {
+        sink.append(entry[0], entry[1]);
+        continue;
+      }
+      if (observedBuildToken) {
+        throw staticExportHeaderError(
+          options,
+          'framework document responses must carry exactly one Kovo-Build proof.',
+        );
+      }
+      observedBuildToken = true;
+      const value = normalizeStaticExportHeaderValue('kovo-build', entry[1], options);
+      if (options.buildToken === '' || value !== options.buildToken) {
+        throw staticExportHeaderError(
+          options,
+          'framework document Kovo-Build transport proof does not match its render proof.',
+        );
+      }
+    }
+
+    if (!observedBuildToken) {
+      throw staticExportHeaderError(
+        options,
+        'framework document response is missing its Kovo-Build transport proof.',
+      );
+    }
     return sink.toJSON();
   },
 );

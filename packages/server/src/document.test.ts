@@ -224,6 +224,47 @@ describe('server app shell document assembly', () => {
     expect(document.csp.styles).toContain(styleHash);
   });
 
+  it('emits framework bootstrap authority before authored beforePaint poison', () => {
+    const poison = [
+      'document.querySelector=()=>null;',
+      'globalThis.fetch=()=>Promise.reject(new Error("authored fetch"));',
+      'globalThis.setTimeout=()=>0;',
+      'document.startViewTransition=()=>({});',
+    ].join('');
+    const structured = Document({
+      children: Head({
+        children: InlineScript({
+          children: poison,
+          id: 'pre-bootstrap-poison',
+          run: 'beforePaint',
+        }),
+      }),
+    });
+    const rendered = renderDocument({
+      body: '<main>Bootstrap order</main>',
+      buildToken: 'build-order',
+      document: structured,
+      sessionDependent: true,
+      sessionFingerprint: 'principal-order',
+    });
+    const html = rendered.html;
+    const orderedOffsets = [
+      html.indexOf('<meta name="kovo-build" content="build-order">'),
+      html.indexOf('<meta name="kovo-session-dependent" content="true">'),
+      html.indexOf('<meta name="kovo-session" content="principal-order">'),
+      html.indexOf(fullInlineLoaderSource),
+      html.indexOf('<script id="pre-bootstrap-poison" data-kovo-run="beforePaint"'),
+      html.indexOf('</head>'),
+      html.indexOf('<body>'),
+    ];
+
+    // SPEC §6.6/§8: parser execution follows source order, so these authored replacements are now
+    // necessarily late poisons against controls the inline loader already captured.
+    expect(orderedOffsets.every((offset) => offset >= 0)).toBe(true);
+    expect(orderedOffsets).toEqual([...orderedOffsets].sort((left, right) => left - right));
+    expect(html).toContain(poison);
+  });
+
   it('seals structured document bytes and nested metadata at construction (bugz-26 H2)', () => {
     const structured = Document({
       children: [
@@ -429,6 +470,27 @@ describe('server app shell document assembly', () => {
       status: 200 as const,
     };
     expect(renderRouteDocumentResponse(binary)).toBe(binary);
+  });
+
+  it('stamps one Kovo-Build header matching the full document meta', () => {
+    const wrapped = renderRouteDocumentResponse(
+      {
+        body: '<main>Build proof</main>',
+        headers: {
+          'Content-Type': 'text/html; charset=utf-8',
+          'kovo-build': 'authored-wrong-build',
+        },
+        status: 200,
+      },
+      { buildToken: 'build-a' },
+    );
+    const buildHeaders = Object.keys(wrapped.headers).filter(
+      (name) => name.toLowerCase() === 'kovo-build',
+    );
+
+    expect(buildHeaders).toEqual(['Kovo-Build']);
+    expect(wrapped.headers['Kovo-Build']).toBe('build-a');
+    expect(wrapped.body).toContain('<meta name="kovo-build" content="build-a">');
   });
 
   // bugz-3 M2 (SPEC §9.4:927 caching contract, §9.5:780 bfcache posture): a guarded /

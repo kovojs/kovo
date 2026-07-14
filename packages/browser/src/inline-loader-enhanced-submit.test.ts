@@ -86,8 +86,10 @@ describe('inline loader enhanced submit source', () => {
           listeners.set(type, listener);
         };
         globalRecord.document = {
-          querySelector() {
-            return null;
+          querySelector(selector: string) {
+            return selector === 'meta[name="kovo-build"]'
+              ? { getAttribute: () => 'build-A' }
+              : null;
           },
           querySelectorAll() {
             return [];
@@ -233,6 +235,11 @@ describe('inline loader enhanced submit source', () => {
             listeners.set(type, listener);
           };
           globalRecord.document = {
+            querySelector(selector: string) {
+              return selector === 'meta[name="kovo-build"]'
+                ? { getAttribute: () => 'build-A' }
+                : null;
+            },
             querySelectorAll() {
               return [];
             },
@@ -343,6 +350,11 @@ describe('inline loader enhanced submit source', () => {
             listeners.set(type, listener);
           };
           globalRecord.document = {
+            querySelector(selector: string) {
+              return selector === 'meta[name="kovo-build"]'
+                ? { getAttribute: () => 'build-A' }
+                : null;
+            },
             querySelectorAll() {
               return [];
             },
@@ -464,6 +476,11 @@ describe('inline loader enhanced submit source', () => {
             listeners.set(type, listener);
           };
           globalRecord.document = {
+            querySelector(selector: string) {
+              return selector === 'meta[name="kovo-build"]'
+                ? { getAttribute: () => 'build-A' }
+                : null;
+            },
             querySelectorAll() {
               return [];
             },
@@ -558,6 +575,11 @@ describe('inline loader enhanced submit source', () => {
           listeners.set(type, listener);
         };
         globalRecord.document = {
+          querySelector(selector: string) {
+            return selector === 'meta[name="kovo-build"]'
+              ? { getAttribute: () => 'build-A' }
+              : null;
+          },
           querySelectorAll() {
             return [];
           },
@@ -565,7 +587,10 @@ describe('inline loader enhanced submit source', () => {
         globalRecord.fetch = vi.fn(async () => ({
           headers: {
             get(name: string) {
-              return name.toLowerCase() === 'kovo-reauth' ? '/login' : null;
+              const normalized = name.toLowerCase();
+              if (normalized === 'kovo-reauth') return '/login';
+              if (normalized === 'kovo-build') return 'build-A';
+              return null;
             },
           },
           ok: true,
@@ -1659,14 +1684,26 @@ describe('inline loader enhanced submit source', () => {
         const fetch = vi.fn(async (url: string) =>
           url === '/_q/cart'
             ? {
-                headers: { get: (name: string) => (name === 'Kovo-Build' ? 'build-A' : null) },
+                headers: {
+                  get(name: string) {
+                    if (name === 'Kovo-Build') return 'build-A';
+                    if (name === 'content-type') return 'text/vnd.kovo.fragment+html';
+                    return null;
+                  },
+                },
                 status: 200,
                 async text() {
                   return '<kovo-query name="cart">{"count":3}</kovo-query>';
                 },
               }
             : {
-                headers: { get: (name: string) => (name === 'Kovo-Build' ? 'build-A' : null) },
+                headers: {
+                  get(name: string) {
+                    if (name === 'Kovo-Build') return 'build-A';
+                    if (name === 'content-type') return 'text/vnd.kovo.fragment+html';
+                    return null;
+                  },
+                },
                 status: 200,
                 async text() {
                   return '<kovo-query name="cart" delta>{"set":{"count":3}}</kovo-query>';
@@ -1845,7 +1882,7 @@ describe('inline loader enhanced submit source', () => {
   );
 
   it.each(inlineSourceInstallCases)(
-    'does not apply inline mutation fragments on build skew through %s',
+    'hard-recovers fragment-only inline mutation build skew through %s',
     async (_name, installSource) => {
       const globalRecord = globalThis as unknown as Record<string, unknown>;
       const originals = {
@@ -1856,12 +1893,14 @@ describe('inline loader enhanced submit source', () => {
         dispatchEvent: globalRecord.dispatchEvent,
         fetch: globalRecord.fetch,
         importModule: globalRecord.__kovoInlineImport,
+        location: globalRecord.location,
       };
       const listeners = new Map<string, (event: unknown) => void>();
       const target = {
         insertAdjacentHTML: vi.fn(),
         replaceChildren: vi.fn(),
       };
+      const reload = vi.fn();
 
       try {
         globalRecord.CustomEvent = class CustomEvent {
@@ -1878,6 +1917,7 @@ describe('inline loader enhanced submit source', () => {
           listeners.set(type, listener);
         };
         globalRecord.dispatchEvent = vi.fn();
+        globalRecord.location = { reload };
         globalRecord.document = {
           getElementById(id: string) {
             return id === 'cart-panel' ? target : null;
@@ -1895,10 +1935,7 @@ describe('inline loader enhanced submit source', () => {
           headers: { get: (name: string) => (name === 'Kovo-Build' ? 'build-B' : null) },
           status: 200,
           async text() {
-            return [
-              '<kovo-query name="cart" delta>{"set":{"count":3}}</kovo-query>',
-              '<kovo-fragment target="cart-panel" mode="append"><section>wrong-build</section></kovo-fragment>',
-            ].join('');
+            return '<kovo-fragment target="cart-panel" mode="append"><section>wrong-build</section></kovo-fragment>';
           },
         }));
 
@@ -1928,6 +1965,7 @@ describe('inline loader enhanced submit source', () => {
 
         // SPEC.md §14: build-skew mutation data is not merged into the stale document.
         expect(target.insertAdjacentHTML).not.toHaveBeenCalled();
+        expect(reload).toHaveBeenCalledTimes(1);
       } finally {
         Object.assign(globalRecord, {
           CustomEvent: originals.CustomEvent,
@@ -1936,6 +1974,7 @@ describe('inline loader enhanced submit source', () => {
           document: originals.document,
           dispatchEvent: originals.dispatchEvent,
           fetch: originals.fetch,
+          location: originals.location,
         });
         if (originals.importModule === undefined) {
           delete globalRecord.__kovoInlineImport;

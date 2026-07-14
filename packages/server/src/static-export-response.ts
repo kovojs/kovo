@@ -10,7 +10,11 @@ import {
   securityStringToLowerCase,
   securityStringTrim,
 } from './response-security-intrinsics.js';
-import { staticExportHeaders } from './static-export-headers.js';
+import {
+  staticExportFrameworkDocumentHeaders,
+  staticExportHeaders,
+} from './static-export-headers.js';
+import { frameworkDocumentResponseBuildToken } from './response.js';
 import {
   scanStaticExportDocumentProtocol,
   type StaticExportDocumentProtocol,
@@ -40,9 +44,17 @@ export async function readStaticExportReplayedResponse(
   // SPEC §6.6: classification and body capture use boot-pinned web controls. A route cannot hide
   // Content-Disposition or alter status/content type by replacing Headers/Response prototypes.
   const status = buildSecurityResponseStatus(response);
-  const headers = staticExportHeaders(buildSecurityResponseHeaders(response), {
-    path: staticExportResponsePath(options),
-  });
+  const responseHeaders = buildSecurityResponseHeaders(response);
+  const path = staticExportResponsePath(options);
+  const frameworkBuildToken =
+    options.kind === 'route-document' ? frameworkDocumentResponseBuildToken(response) : undefined;
+  const headers =
+    frameworkBuildToken === undefined
+      ? staticExportHeaders(responseHeaders, { path })
+      : staticExportFrameworkDocumentHeaders(responseHeaders, {
+          buildToken: frameworkBuildToken,
+          path,
+        });
   const contentType = headers['content-type'] ?? null;
   const body = await buildSecurityResponseText(response);
   const routeDocumentProtocol =

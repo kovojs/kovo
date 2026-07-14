@@ -168,6 +168,7 @@ describe('loader query apply interposition', () => {
       installKovoLoader({
         applyQuery,
         enhancedMutations: {
+          buildToken: 'build-test',
           fetch: vi.fn(),
           root: mutationRoot,
           store,
@@ -179,6 +180,7 @@ describe('loader query apply interposition', () => {
       channels[0]?.onmessage?.({
         data: {
           body: '<kovo-query name="reviews">{"total":3}</kovo-query>',
+          buildToken: 'build-test',
           changes: [],
           type: 'kovo:mutation-response',
         },
@@ -224,6 +226,7 @@ describe('loader query apply interposition', () => {
         applyQuery: loaderApplyQuery,
         enhancedMutations: {
           applyQuery: enhancedApplyQuery,
+          buildToken: 'build-test',
           fetch: vi.fn(),
           root: mutationRoot,
           store,
@@ -235,6 +238,7 @@ describe('loader query apply interposition', () => {
       channels[0]?.onmessage?.({
         data: {
           body: '<kovo-query name="cart">{"count":4}</kovo-query>',
+          buildToken: 'build-test',
           changes: [],
           type: 'kovo:mutation-response',
         },

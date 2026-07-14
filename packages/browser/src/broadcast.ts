@@ -10,6 +10,7 @@ import { createBrowserNavigationSecurityControls } from './navigation-security-i
 import type { OnDeltaMiss, QueryApplyInterposition } from './query-apply.js';
 import type { QueryStore } from './query-store.js';
 import type { MutationChangeRecord } from './optimism.js';
+import { reloadSessionTransitionDocument } from './session-transition.js';
 
 // SPEC §6.6/§9.3: capture MessageEvent.data while the framework module graph
 // initializes. The generated inline runtime owns an equivalent boot-local set.
@@ -71,6 +72,11 @@ export interface InstallMutationBroadcastOptions {
    * session's UI on a shared/fast-user-switched device.
    */
   principal?: string;
+  /**
+   * SPEC §8/§9.3: whether this document can contain session-dependent state. When true,
+   * installation is disabled unless {@link principal} is a nonempty resolved fingerprint.
+   */
+  sessionDependent?: boolean;
   queryPlans?: CompiledQueryUpdatePlans;
   root?: MorphRoot;
   store: QueryStore;
@@ -91,6 +97,8 @@ export interface DefaultMutationBroadcastOptions {
   onAppliedQueries?: (queries: readonly string[]) => void;
   /** bugs-1 F13: opaque per-session fingerprint for cross-principal discard (SPEC §9.3). */
   principal?: string;
+  /** SPEC §8/§9.3: fail closed when session-dependent state has no resolved principal. */
+  sessionDependent?: boolean;
   queryPlans?: CompiledQueryUpdatePlans;
   root: MorphRoot;
   store: QueryStore;
@@ -101,8 +109,18 @@ export function withDefaultMutationBroadcast<Options extends DefaultMutationBroa
   options: Options,
 ): {
   dispose?: () => void;
-  options: Options & { broadcast?: MutationBroadcast };
+  options: Omit<Options, 'broadcast'> & { broadcast?: MutationBroadcast };
 } {
+  // SPEC §8/§9.3: an unresolved session-dependent page is neither anonymous nor a proven
+  // principal. It must not join the origin-wide channel, including through a caller-supplied
+  // broadcast capability, because principal-less envelopes would cross that posture boundary.
+  if (options.sessionDependent === true && !options.principal) {
+    const { broadcast: _disabledBroadcast, ...disabledOptions } = options;
+    void _disabledBroadcast;
+    return {
+      options: disabledOptions,
+    };
+  }
   if (options.broadcast) return { options };
 
   try {
@@ -123,6 +141,7 @@ export function withDefaultMutationBroadcast<Options extends DefaultMutationBroa
         onAppliedQueries: options.onAppliedQueries,
         principal: options.principal,
         queryPlans: options.queryPlans,
+        sessionDependent: options.sessionDependent,
       }),
       root: options.root,
       store: options.store,
@@ -157,6 +176,16 @@ export function installMutationBroadcast(
   if (runtimeOptions.store === undefined) {
     throw new TypeError('Kovo mutation broadcast store must be an own-data property.');
   }
+  // SPEC §8/§9.3: a session-dependent document whose fingerprint could not be resolved cannot
+  // safely identify its BroadcastChannel principal. Retire even a directly supplied channel
+  // before installing a receive handler, and expose a permanently inert publisher.
+  if (runtimeOptions.sessionDependent === true && !runtimeOptions.principal) {
+    browserBroadcastSecurity.retireMutationBroadcastChannel(runtimeOptions.channel);
+    return {
+      close() {},
+      publish() {},
+    };
+  }
   // D3 / SPEC §9.1.1, §847, §14: resolve this page's render-plan version token
   // once. The same token is stamped onto outgoing envelopes (so peers can detect
   // skew against their own page) and used as the `expectedBuildToken` for incoming
@@ -165,6 +194,17 @@ export function installMutationBroadcast(
   // base — exactly the long-open-tab redeploy skew base-version validation catches.
   const pageBuildToken = runtimeOptions.buildToken ?? readPageBuildToken();
   let retired = false;
+  const retire = () => {
+    if (retired) return;
+    retired = true;
+    browserBroadcastSecurity.retireMutationBroadcastChannel(runtimeOptions.channel);
+  };
+  const recoverBuildSkew = () => {
+    // SPEC §6.6/§14: a foreign-build origin-wide message proves this realm stale. Cut the
+    // receive/publish capability before asking the browser for a full server render.
+    retire();
+    reloadSessionTransitionDocument();
+  };
   const onMessage = (event: { data: unknown }) => {
     if (retired) return;
     if (!pageBuildToken) return;
@@ -193,6 +233,7 @@ export function installMutationBroadcast(
         expectedBuildToken: pageBuildToken,
         islandSignalScope: runtimeOptions.islandSignalScope,
         morph: runtimeOptions.morph,
+        onBuildSkew: recoverBuildSkew,
         onDeltaMiss: runtimeOptions.onDeltaMiss,
         onError: runtimeOptions.onError,
         queryPlans: runtimeOptions.queryPlans,
@@ -202,6 +243,7 @@ export function installMutationBroadcast(
       body: data.body,
       store: runtimeOptions.store,
     });
+    if (retired) return;
     runtimeOptions.onAppliedQueries?.(applied.queries);
     if (changes.length > 0) {
       runtimeOptions.onChanges?.(changes);
@@ -217,9 +259,7 @@ export function installMutationBroadcast(
 
   return {
     close() {
-      if (retired) return;
-      retired = true;
-      browserBroadcastSecurity.retireMutationBroadcastChannel(runtimeOptions.channel);
+      retire();
     },
     publish(
       body: string,

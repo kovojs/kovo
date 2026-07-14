@@ -30,6 +30,8 @@ export interface DocumentLifecycleRecoveryOptions {
   readPageTransitionPersisted: (event: unknown) => boolean;
   /** Boot-pinned DOM attribute read for server-authored query-script identity. */
   readDomAttribute: (element: Element, name: string) => string | null;
+  /** Boot-pinned, ASCII-lowercased response Content-Type used to distinguish wire from document. */
+  responseContentType: (response: unknown) => string;
   readResponseStatus: (response: unknown) => number | undefined;
   readResponseText: (response: unknown) => Promise<string>;
   reload: () => boolean;
@@ -119,6 +121,9 @@ export function createDocumentLifecycleRecovery(
   const readDomAttribute = lifecycleFunctionOption<
     DocumentLifecycleRecoveryOptions['readDomAttribute']
   >(options, 'readDomAttribute');
+  const responseContentType = lifecycleFunctionOption<
+    DocumentLifecycleRecoveryOptions['responseContentType']
+  >(options, 'responseContentType');
   const readResponseStatus = lifecycleFunctionOption<
     DocumentLifecycleRecoveryOptions['readResponseStatus']
   >(options, 'readResponseStatus');
@@ -167,6 +172,10 @@ export function createDocumentLifecycleRecovery(
           reload();
           return;
         }
+        if (!lifecycleMediaTypeEquals(responseContentType(res), 'text/vnd.kovo.fragment+html')) {
+          reload();
+          return;
+        }
         const text = await readResponseText(res);
         applyBody(text, responseBuild);
       } catch {}
@@ -199,19 +208,22 @@ export function createDocumentLifecycleRecovery(
           return;
         }
         const text = await readResponseText(res);
-        {
-          if (
-            lifecycleContains(text, '<kovo-fragment') ||
-            lifecycleContains(text, '<kovo-query') ||
-            lifecycleContains(text, '<kovo-text')
-          ) {
-            // The response header is the transport proof. Never manufacture proof for fetched
-            // bytes from the page's token (SPEC §9.1.1/§14).
-            applyBody(text, responseBuild);
+        const contentType = responseContentType(res);
+        if (lifecycleMediaTypeEquals(contentType, 'text/vnd.kovo.fragment+html')) {
+          // The exact wire media type is transport grammar. Never infer it from protocol-looking
+          // substrings that can also occur inside a full deferred HTML document.
+          applyBody(text, responseBuild);
+          return;
+        }
+        if (
+          lifecycleMediaTypeEquals(contentType, 'text/html') ||
+          lifecycleMediaTypeEquals(contentType, 'text/vnd.kovo.document+html')
+        ) {
+          const nextDoc = parseHtmlDocument(text);
+          if (!nextDoc) {
+            reload();
             return;
           }
-          const nextDoc = parseHtmlDocument(text);
-          if (!nextDoc) return;
           const documentBuild = currentBuild(nextDoc);
           if (
             !activeBuild ||
@@ -244,7 +256,9 @@ export function createDocumentLifecycleRecovery(
             }
           }
           if (fragments.length) applyBody(fragments, responseBuild);
+          return;
         }
+        reload();
       } catch {}
     })();
   };
@@ -405,20 +419,6 @@ function lifecycleBeforeHash(value: string): string {
   return target;
 }
 
-function lifecycleContains(value: string, search: string): boolean {
-  for (let offset = 0; offset + search.length <= value.length; offset += 1) {
-    let equal = true;
-    for (let index = 0; index < search.length; index += 1) {
-      if (value[offset + index] !== search[index]) {
-        equal = false;
-        break;
-      }
-    }
-    if (equal) return true;
-  }
-  return false;
-}
-
 function lifecycleJoin(values: readonly string[], separator: string): string {
   let result = '';
   for (let index = 0; index < values.length; index += 1) {
@@ -427,4 +427,17 @@ function lifecycleJoin(values: readonly string[], separator: string): string {
     result += (result === '' ? '' : separator) + value;
   }
   return result;
+}
+
+function lifecycleMediaTypeEquals(value: unknown, expected: string): boolean {
+  if (typeof value !== 'string') return false;
+  let offset = 0;
+  while (value[offset] === ' ' || value[offset] === '\t') offset += 1;
+  for (let index = 0; index < expected.length; index += 1) {
+    const character = value[offset + index];
+    if (character === undefined || character !== expected[index]) return false;
+  }
+  offset += expected.length;
+  while (value[offset] === ' ' || value[offset] === '\t') offset += 1;
+  return offset === value.length || value[offset] === ';';
 }

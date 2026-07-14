@@ -14,7 +14,11 @@ import type { OnDeltaMiss, QueryApplyInterposition } from './query-apply.js';
 import type { QueryStore } from './query-store.js';
 import type { QueryChunk } from './wire-parser.js';
 import type { ImportHandlerModule } from './handlers.js';
-import { retireSessionTransitionRuntime } from './session-transition.js';
+import {
+  captureSessionTransitionPrincipalRetirement,
+  reloadSessionTransitionDocument,
+  retireSessionTransitionRuntime,
+} from './session-transition.js';
 
 /** @internal Inputs for applying a fetched enhanced mutation response to the runtime (SPEC §9.1). */
 export interface EnhancedMutationRuntimeApplyOptions {
@@ -25,6 +29,8 @@ export interface EnhancedMutationRuntimeApplyOptions {
   islandSignalScope?: IslandSignalScope;
   importModule?: ImportHandlerModule;
   morph?: MorphFragment;
+  /** Whole-response build-skew recovery; defaults to a framework-pinned full reload. */
+  onBuildSkew?: () => void;
   /** Refetch-full handler invoked for delta chunks with a missing/stale base (SPEC §9.1.1). */
   onDeltaMiss?: OnDeltaMiss;
   onError?: (error: unknown) => void;
@@ -54,6 +60,8 @@ export function applyFetchedEnhancedMutationResponseToRuntime(
   hooks: MutationRuntimeApplyHooks = {},
 ): EnhancedMutationAppliedResult {
   if (fetched.sessionTransition) return sessionTransitionResult(options, fetched);
+  const recoverBuildSkew = captureBuildSkewRecovery(options);
+  const buildSkew = isFetchedBuildSkew(options, fetched);
 
   // SPEC.md §9.1/§9.2: enhanced submit, validation failure fragments, and
   // same-user broadcast all parse mutation bodies before entering the canonical
@@ -68,6 +76,7 @@ export function applyFetchedEnhancedMutationResponseToRuntime(
       expectedBuildToken: options.expectedBuildToken,
       islandSignalScope: options.islandSignalScope,
       morph: options.morph,
+      onBuildSkew: recoverBuildSkew,
       onDeltaMiss: options.onDeltaMiss,
       onError: options.onError,
       queryPlans: options.queryPlans,
@@ -77,7 +86,7 @@ export function applyFetchedEnhancedMutationResponseToRuntime(
     root: options.root,
     store: options.store,
   });
-  publishSuccessfulMutation(options, fetched);
+  if (!buildSkew) publishSuccessfulMutation(options, fetched);
 
   return {
     ...applied,
@@ -94,6 +103,7 @@ export async function applyStreamingFetchedEnhancedMutationResponseToRuntime(
   hooks: MutationRuntimeApplyHooks = {},
 ): Promise<EnhancedMutationAppliedResult> {
   if (fetched.sessionTransition) return sessionTransitionResult(options, fetched);
+  const recoverBuildSkew = captureBuildSkewRecovery(options);
 
   const applied = await applyStreamingMutationResponseBodyToRuntime({
     ...definedProps({
@@ -103,6 +113,7 @@ export async function applyStreamingFetchedEnhancedMutationResponseToRuntime(
       importModule: options.importModule,
       islandSignalScope: options.islandSignalScope,
       morph: options.morph,
+      onBuildSkew: recoverBuildSkew,
       onDeltaMiss: options.onDeltaMiss,
       onError: options.onError,
       queryPlans: options.queryPlans,
@@ -119,6 +130,28 @@ export async function applyStreamingFetchedEnhancedMutationResponseToRuntime(
     idem: fetched.idem,
     targets: fetched.targets,
   };
+}
+
+function captureBuildSkewRecovery(options: EnhancedMutationRuntimeApplyOptions): () => void {
+  // SPEC §6.6/§9.1.1/§14: a foreign-build response proves this realm stale. Capture the channel
+  // retirement and recovery sink before any async stream work, then cut origin-wide authority
+  // before requesting a full render. Navigation may be delayed or suppressed by the user agent.
+  const retirePrincipal = captureSessionTransitionPrincipalRetirement(options);
+  const recover = options.onBuildSkew ?? reloadSessionTransitionDocument;
+  return () => {
+    retirePrincipal();
+    recover();
+  };
+}
+
+function isFetchedBuildSkew(
+  options: EnhancedMutationRuntimeApplyOptions,
+  fetched: FetchedEnhancedMutation,
+): boolean {
+  return (
+    options.expectedBuildToken !== undefined &&
+    (fetched.buildToken === undefined || fetched.buildToken !== options.expectedBuildToken)
+  );
 }
 
 /**

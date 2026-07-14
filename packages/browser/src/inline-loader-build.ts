@@ -760,6 +760,8 @@ function installInlineKovoLoader(im) {
   const pbt = kb();
   // SPEC §9.3: BroadcastChannel and enhanced navigation share one immutable page-load
   // principal. A live meta read after install is authored DOM, not principal authority.
+  const sessionDependentMeta = bns.queryOne(doc, 'meta[name="kovo-session-dependent"]');
+  const sdp = !!sessionDependentMeta;
   const sessionMeta = bns.queryOne(doc, 'meta[name="kovo-session"]');
   const sfp = sessionMeta ? bns.readAttribute(sessionMeta, 'content') ?? undefined : undefined;
   const bh = (res) => bns.readHeader(res, 'Kovo-Build') ?? '';
@@ -1034,6 +1036,7 @@ function installInlineKovoLoader(im) {
     readElementAttribute: readWireElementAttribute,
     readDomAttribute: (element, name) => bns.ra(element, name),
     readPageTransitionPersisted: (event) => bns.readPageTransitionPersisted(event),
+    responseContentType: (response) => bns.lower(bns.readHeader(response, 'Content-Type') ?? ''),
     readResponseStatus: (response) => {
       const status = bns.readResponseField(response, 'status');
       return typeof status === 'number' ? status : undefined;
@@ -1112,15 +1115,21 @@ function installInlineKovoLoader(im) {
     );
   };
   const ab = (body, build = pbt) => {
-    const chunks = readInlineMutationResponseBodyChunks(body);
     const skew = pbt && (!build || build !== pbt);
     if (skew) {
+      // SPEC §6.6/§14: skew rejects the whole response, including fragment/text-only bodies.
+      // Gate before parsing too: malformed foreign-build bytes cannot suppress recovery. Retire
+      // stale origin-wide authority before invoking the boot-pinned hard recovery sink.
+      retireBroadcast();
+      bns.reload();
+      const chunks = readInlineMutationResponseBodyChunks(body);
       for (let index = 0; index < chunks.queries.length; index += 1) {
         const q = chunks.queries[index];
         if (q) qr(q);
       }
       return;
     }
+    const chunks = readInlineMutationResponseBodyChunks(body);
     aq(chunks.queries, 1);
     af(chunks.fragments);
     at(chunks.texts);
@@ -1344,7 +1353,8 @@ function installInlineKovoLoader(im) {
   };
   let bc;
   let broadcastRetired = false;
-  if (pbt) {
+  // SPEC §8/§9.3: unresolved session-dependent state has no safe BroadcastChannel principal.
+  if (pbt && (!sdp || !!sfp)) {
     try {
       bc = bns.createMutationBroadcastChannel('kovo:mutation-response');
     } catch {}

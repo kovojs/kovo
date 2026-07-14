@@ -178,6 +178,23 @@ interface RouteResponseOutcomeSnapshot {
 
 const routeResponseOutcomeSnapshots = createWitnessWeakMap<object, RouteResponseOutcomeSnapshot>();
 const routePageResponseOutcomes = createWitnessWeakSet<object>();
+const frameworkDocumentResponseBuildTokens = createWitnessWeakMap<object, string>();
+
+/** @internal Mark a framework-assembled document response with its trusted build proof. */
+export function markFrameworkDocumentResponse<Response extends object>(
+  response: Response,
+  buildToken: string,
+): Response {
+  witnessWeakMapSet(frameworkDocumentResponseBuildTokens, response, buildToken);
+  return response;
+}
+
+/** @internal Read framework document provenance without trusting structural fields or headers. */
+export function frameworkDocumentResponseBuildToken(response: unknown): string | undefined {
+  return typeof response === 'object' && response !== null
+    ? witnessWeakMapGet(frameworkDocumentResponseBuildTokens, response)
+    : undefined;
+}
 
 /** Options for `respond.file`: content type and optional filename/etag/headers. */
 export interface RouteFileOptions {
@@ -784,7 +801,11 @@ export const serverResponseToWebResponse = wireEmitter(
     response: ServerResponseBase<WebResponseBody, ResponseHeaders>,
     request: Pick<Request, 'method'>,
   ): Response {
-    return finalizeServerResponse(response, request);
+    const buildToken = frameworkDocumentResponseBuildToken(response);
+    const finalized = finalizeServerResponse(response, request);
+    return buildToken === undefined
+      ? finalized
+      : markFrameworkDocumentResponse(finalized, buildToken);
   },
 );
 

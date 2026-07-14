@@ -228,6 +228,36 @@ describe('enhanced mutation response apply orchestration', () => {
     expect(store.get('cart')).toEqual({ count: 2, items: [{ id: 'p1', qty: 1 }] });
   });
 
+  it('hard-recovers fragment-only build skew without waiting for a query miss', () => {
+    const root = new FakeMorphRoot();
+    const target = new FakeMorphTarget('<span>current</span>');
+    const broadcast = { close: vi.fn(), publish: vi.fn() };
+    const retirementStates: boolean[] = [];
+    const onBuildSkew = vi.fn(() => retirementStates.push(broadcast.close.mock.calls.length === 1));
+    const onDeltaMiss = vi.fn();
+    root.targets.set('cart-panel', target);
+
+    applyFetchedEnhancedMutationResponseToRuntime(
+      applyOptions({
+        broadcast,
+        expectedBuildToken: 'build_A',
+        onBuildSkew,
+        onDeltaMiss,
+        root,
+      }),
+      fetchedMutation('<kovo-fragment target="cart-panel"><span>foreign</span></kovo-fragment>', {
+        buildToken: 'build_B',
+      }),
+    );
+
+    expect(target.html).toBe('<span>current</span>');
+    expect(onDeltaMiss).not.toHaveBeenCalled();
+    expect(onBuildSkew).toHaveBeenCalledTimes(1);
+    expect(broadcast.close).toHaveBeenCalledTimes(1);
+    expect(broadcast.publish).not.toHaveBeenCalled();
+    expect(retirementStates).toEqual([true]);
+  });
+
   it.each([
     ['missing', undefined],
     ['mismatched', 'build_B'],

@@ -4,7 +4,7 @@ import { trustedHtml } from '@kovojs/browser';
 import { createApp } from './app.js';
 import { renderAppErrorDocumentResponse, renderAppRouteDocumentResponse } from './app-document.js';
 import { Defer, defer } from './deferred-region.js';
-import { Document, Head, Meta } from './document-structured.js';
+import { Document, Head, InlineScript, Meta } from './document-structured.js';
 import { guards } from './guards.js';
 import { renderedHtml, renderHtmlValue } from './html.js';
 import { stylesheet } from './hints.js';
@@ -808,7 +808,23 @@ describe('server app document boundary', () => {
       },
     });
     const request = new Request('https://shop.example.test/products/p1');
-    const app = createApp({ routes: [productRoute] });
+    const poison =
+      'document.querySelector=()=>null;globalThis.fetch=()=>Promise.reject(new Error("authored fetch"));';
+    const app = createApp({
+      document: {
+        structured: Document({
+          children: Head({
+            children: InlineScript({
+              children: poison,
+              id: 'stream-pre-bootstrap-poison',
+              run: 'beforePaint',
+            }),
+          }),
+        }),
+      },
+      routes: [productRoute],
+      sessionProvider: () => ({ user: { id: 'stream-user' } }),
+    });
 
     const response = await renderAppRouteDocumentResponse({
       app,
@@ -824,6 +840,21 @@ describe('server app document boundary', () => {
     const first = await reader.read();
     expect(first.done).toBe(false);
     const firstText = new TextDecoder().decode(first.value);
+    const orderedOffsets = [
+      firstText.indexOf('<meta name="kovo-build" content='),
+      firstText.indexOf('<meta name="kovo-session-dependent" content="true">'),
+      firstText.indexOf('<meta name="kovo-session" content='),
+      firstText.indexOf('<script data-kovo-csp-hash="'),
+      firstText.indexOf('<script id="stream-pre-bootstrap-poison" data-kovo-run="beforePaint"'),
+      firstText.indexOf('</head>'),
+      firstText.indexOf('<body>'),
+    ];
+    expect(orderedOffsets).not.toContain(-1);
+    expect(orderedOffsets).toEqual([...orderedOffsets].sort((left, right) => left - right));
+    expect(firstText).toContain(poison);
+    const streamedBuild = firstText.match(/<meta name="kovo-build" content="([^"]+)"/)?.[1];
+    expect(streamedBuild).toBeTruthy();
+    expect(headerValue(response.headers, 'kovo-build')).toBe(streamedBuild);
     expect(firstText).toContain('<h1>Product p1</h1>');
     expect(firstText).toContain(
       '<kovo-defer target="reviews:p1" state="pending" data-kovo-region-priority="after-paint"><section aria-busy="true">Loading reviews</section></kovo-defer>',

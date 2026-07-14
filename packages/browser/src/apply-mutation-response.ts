@@ -64,6 +64,12 @@ export interface ApplyMutationResponseChunksToRuntimeOptions {
   morph?: MorphFragment;
   /** Invoked for each delta chunk whose base is missing or stale (SPEC §9.1.1). */
   onDeltaMiss?: OnDeltaMiss;
+  /**
+   * Invoked once when the response build proof is missing or mismatched. This whole-response
+   * recovery is independent of query chunks, so fragment/text-only skew cannot fail silently.
+   * Defaults to a framework-pinned full reload (SPEC §6.6/§14).
+   */
+  onBuildSkew?: () => void;
   onError?: (error: unknown) => void;
   queryRoot?: unknown;
   queryPlans?: CompiledQueryUpdatePlans;
@@ -114,11 +120,8 @@ export function applyMutationResponseChunksToRuntime(
   // converge here after their transport-specific parser has decoded wire chunks.
 
   if (isWholeResponseBuildTokenMiss(options)) {
-    for (let index = 0; index < chunks.queries.length; index += 1) {
-      const query = securityOwnArrayEntry(chunks.queries, index);
-      if (!query.ok) throw new TypeError('Kovo mutation response queries must be dense.');
-      options.onDeltaMiss?.(query.value.name, query.value.key);
-    }
+    (options.onBuildSkew ?? reloadSessionTransitionDocument)();
+    notifyWholeResponseBuildTokenMissQueries(chunks, options);
     return emptyAppliedMutationResponse(options.root);
   }
 
@@ -177,6 +180,19 @@ export function applyMutationResponseBodyToRuntime(
   options = definedProps(options) as ApplyMutationResponseBodyToRuntimeOptions;
   const { body, ...applyOptions } = options;
 
+  // SPEC §6.6/§9.1.1/§14: the response header proof gates the bytes themselves, not merely their
+  // decoded chunks. Recover before parsing so malformed foreign-build bytes cannot suppress the
+  // mandatory full-render path by failing inside the wire grammar.
+  if (isWholeResponseBuildTokenMiss(applyOptions)) {
+    (applyOptions.onBuildSkew ?? reloadSessionTransitionDocument)();
+    // Preserve the existing query-refetch hint after mandatory recovery has been invoked. The
+    // parser is deliberately second: even if foreign-build grammar is malformed, it cannot keep
+    // the stale realm and its origin-wide capabilities alive.
+    const chunks = readMutationResponseBodyChunks(body, options.onError);
+    notifyWholeResponseBuildTokenMissQueries(chunks, applyOptions);
+    return emptyAppliedMutationResponse(options.root);
+  }
+
   // SPEC.md §9.1: mutation-body transport callers share the parser/apply seam
   // so enhanced submit, broadcast replay, and deferred chunks cannot drift.
   return applyMutationResponseChunksToRuntime(
@@ -201,6 +217,7 @@ export async function applyStreamingMutationResponseBodyToRuntime(
   const { body, ...applyOptions } = options;
   if (isWholeResponseBuildTokenMiss(applyOptions)) {
     await mutationResponseSecurity.cancelReadableStream(body);
+    (applyOptions.onBuildSkew ?? reloadSessionTransitionDocument)();
     return emptyAppliedMutationResponse(options.root);
   }
   const readerPlan = await mutationResponseSecurity.acquireStreamReader(body);
@@ -586,4 +603,15 @@ function isWholeResponseBuildTokenMiss(
     (options.responseBuildToken === undefined ||
       options.responseBuildToken !== options.expectedBuildToken)
   );
+}
+
+function notifyWholeResponseBuildTokenMissQueries(
+  chunks: MutationResponseBodyChunks,
+  options: ApplyMutationResponseChunksToRuntimeOptions,
+): void {
+  for (let index = 0; index < chunks.queries.length; index += 1) {
+    const query = securityOwnArrayEntry(chunks.queries, index);
+    if (!query.ok) throw new TypeError('Kovo mutation response queries must be dense.');
+    options.onDeltaMiss?.(query.value.name, query.value.key);
+  }
 }

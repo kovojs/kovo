@@ -530,6 +530,7 @@ describe('browser-runtime security regressions', () => {
       readElementAttribute: () => ({ present: false }),
       readDomAttribute: (element, name) => security.readAttribute(element, name),
       readPageTransitionPersisted: (event) => security.readPageTransitionPersisted(event),
+      responseContentType: () => 'text/html; charset=utf-8',
       readResponseStatus: (response) => {
         const status = security.readResponseField(response, 'status');
         return typeof status === 'number' ? status : undefined;
@@ -587,7 +588,7 @@ describe('browser-runtime security regressions', () => {
       acceptHeader: 'text/html',
       addLifecycleEventListener: () => true,
       applyBody: (body: string, build?: string) => {
-        applied.push({ body, build });
+        applied.push(build === undefined ? { body } : { body, build });
       },
       buildHeader: () => 'build-test',
       currentBuild: () => 'build-test',
@@ -605,6 +606,7 @@ describe('browser-runtime security regressions', () => {
       readElementAttribute: () => ({ present: false }),
       readDomAttribute: (element: Element, name: string) => security.readAttribute(element, name),
       readPageTransitionPersisted: () => false,
+      responseContentType: () => 'text/vnd.kovo.fragment+html; charset=utf-8',
       readResponseStatus: () => 200,
       readResponseText: async () => '<kovo-fragment target="cart">SAFE</kovo-fragment>',
       reload: () => false,
@@ -684,6 +686,7 @@ describe('browser-runtime security regressions', () => {
       readElementAttribute: () => ({ present: false }),
       readDomAttribute: () => null,
       readPageTransitionPersisted: () => false,
+      responseContentType: () => 'text/vnd.kovo.fragment+html; charset=utf-8',
       readResponseStatus: () => 200,
       readResponseText: async () => '',
       reload: () => false,
@@ -743,6 +746,7 @@ describe('browser-runtime security regressions', () => {
       readElementAttribute: () => ({ present: false }),
       readDomAttribute: () => null,
       readPageTransitionPersisted: () => false,
+      responseContentType: () => 'text/vnd.kovo.fragment+html; charset=utf-8',
       readResponseStatus: () => 200,
       readResponseText: async () => '',
       reload: () => false,

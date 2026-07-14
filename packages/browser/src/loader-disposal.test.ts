@@ -37,6 +37,7 @@ describe('loader disposal', () => {
       const loader = installKovoLoader({
         discardPendingOptimism,
         enhancedMutations: {
+          buildToken: 'build-test',
           fetch: vi.fn(),
           root: mutationRoot,
           store,

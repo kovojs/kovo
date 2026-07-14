@@ -8,6 +8,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   applyMutationResponseBodyToRuntime,
   applyMutationResponseChunksToRuntime,
+  applyStreamingMutationResponseBodyToRuntime,
 } from './apply-mutation-response.js';
 import { createQueryStore } from './query-store.js';
 
@@ -94,6 +95,64 @@ describe('apply-mutation-response delta / build-token (SPEC §9.1.1)', () => {
     expect(result.queries).toEqual([]);
     expect(store.get('cart')).toEqual({ count: 1 });
     expect(onDeltaMiss).toHaveBeenCalledWith('cart', undefined);
+  });
+
+  it.each([
+    [
+      'fragment-only',
+      '<kovo-fragment target="cart"><cart-badge>foreign</cart-badge></kovo-fragment>',
+    ],
+    ['text-only', '<kovo-text target="assistant:a1">foreign</kovo-text>'],
+  ])('hard-recovers a %s whole-response build mismatch without query chunks', (_label, body) => {
+    const onBuildSkew = vi.fn();
+    const onDeltaMiss = vi.fn();
+
+    const result = applyMutationResponseBodyToRuntime({
+      body,
+      expectedBuildToken: 'build-1',
+      onBuildSkew,
+      onDeltaMiss,
+      responseBuildToken: 'build-2',
+      store: createQueryStore(),
+    });
+
+    expect(result).toEqual({ fragments: [], queries: [] });
+    expect(onDeltaMiss).not.toHaveBeenCalled();
+    expect(onBuildSkew).toHaveBeenCalledTimes(1);
+  });
+
+  it('hard-recovers foreign-build bytes before invoking the mutation wire parser', () => {
+    const order: string[] = [];
+
+    const result = applyMutationResponseBodyToRuntime({
+      body: '<kovo-query name="cart">not-json</kovo-query>',
+      expectedBuildToken: 'build-1',
+      onBuildSkew: () => order.push('recover'),
+      onError: () => order.push('parse-error'),
+      responseBuildToken: 'build-2',
+      store: createQueryStore(),
+    });
+
+    expect(result).toEqual({ fragments: [], queries: [] });
+    expect(order).toEqual(['recover', 'parse-error']);
+  });
+
+  it('cancels and hard-recovers a streaming whole-response build mismatch', async () => {
+    const cancel = vi.fn();
+    const onBuildSkew = vi.fn();
+    const body = new ReadableStream<Uint8Array>({ cancel });
+
+    const result = await applyStreamingMutationResponseBodyToRuntime({
+      body,
+      expectedBuildToken: 'build-1',
+      onBuildSkew,
+      responseBuildToken: 'build-2',
+      store: createQueryStore(),
+    });
+
+    expect(cancel).toHaveBeenCalledTimes(1);
+    expect(onBuildSkew).toHaveBeenCalledTimes(1);
+    expect(result).toEqual({ fragments: [], queries: [] });
   });
 
   it('applies delta chunks normally when build tokens match', () => {

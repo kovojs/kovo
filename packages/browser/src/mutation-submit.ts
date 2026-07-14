@@ -228,11 +228,12 @@ export async function submitEnhancedMutation(
     // and recovers on a miss/skew. Both stay injectable for tests.
     const expectedBuildToken = options.expectedBuildToken ?? readPageBuildToken();
     const onDeltaMiss = options.onDeltaMiss ?? defaultDeltaMissRefetcher(options);
+    const onBuildSkew = options.onBuildSkew ?? defaultBuildSkewReload;
     if (fetched.streamBody) {
       return applyStreamingFetchedEnhancedMutationResponseToRuntime(
         {
           ...options,
-          ...definedProps({ expectedBuildToken, onDeltaMiss }),
+          ...definedProps({ expectedBuildToken, onBuildSkew, onDeltaMiss }),
         },
         { ...fetched, streamBody: fetched.streamBody },
       );
@@ -241,7 +242,7 @@ export async function submitEnhancedMutation(
     return applyFetchedEnhancedMutationResponseToRuntime(
       {
         ...options,
-        ...definedProps({ expectedBuildToken, onDeltaMiss }),
+        ...definedProps({ expectedBuildToken, onBuildSkew, onDeltaMiss }),
       },
       fetched,
     );

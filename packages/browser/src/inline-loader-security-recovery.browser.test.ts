@@ -333,7 +333,7 @@ it('keeps generated query and live-target recovery on the captured response tran
   );
   const globalRecord = harness.window as unknown as Record<string, unknown>;
   const safeFetch = vi.fn(async (input: string) => ({
-    headers: responseHeaders('build-a'),
+    headers: responseHeaders('build-a', 'text/vnd.kovo.fragment+html'),
     status: 200,
     async text() {
       return String(input).includes('/_q/cart')
@@ -342,7 +342,7 @@ it('keeps generated query and live-target recovery on the captured response tran
     },
   }));
   const attackFetch = vi.fn(async () => ({
-    headers: responseHeaders('build-a'),
+    headers: responseHeaders('build-a', 'text/vnd.kovo.fragment+html'),
     status: 200,
     async text() {
       return '<kovo-fragment target="account"><section kovo-fragment-target="account">ATTACKER</section></kovo-fragment>';

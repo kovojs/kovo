@@ -242,6 +242,27 @@ describe('mutation broadcast replay', () => {
       expect(store.get('cart')).toEqual({ count: 1 });
     });
 
+    it('retires the channel and rejects a cross-build fragment-only envelope', () => {
+      const channel = new FakeBroadcastChannel();
+      const root = new FakeMorphRoot();
+      const target = new FakeMorphTarget('<cart-badge>current</cart-badge>');
+      root.targets.set('cart-badge', target);
+      installMutationBroadcast({ buildToken: 'N', channel, root, store: createQueryStore() });
+
+      channel.onmessage?.({
+        data: {
+          body: '<kovo-fragment target="cart-badge"><cart-badge>foreign</cart-badge></kovo-fragment>',
+          buildToken: 'N+1',
+          changes: [],
+          type: 'kovo:mutation-response',
+        },
+      });
+
+      expect(target.html).toBe('<cart-badge>current</cart-badge>');
+      expect(channel.closed).toBe(true);
+      expect(channel.onmessage).toBeNull();
+    });
+
     it('treats a missing broadcast token as a whole-response miss when the receiver is stamped', () => {
       const store = createQueryStore();
       const channel = new FakeBroadcastChannel();

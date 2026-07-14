@@ -129,6 +129,7 @@ describe('loader visible-return refetch', () => {
 
       installKovoLoader({
         enhancedMutations: {
+          buildToken: 'build-test',
           fetch: vi.fn(),
           root: mutationRoot,
           store,
@@ -143,6 +144,7 @@ describe('loader visible-return refetch', () => {
       channels[0]?.onmessage?.({
         data: {
           body: '<kovo-query name="reviews">{"items":["r1"]}</kovo-query>',
+          buildToken: 'build-test',
           changes: [],
           type: 'kovo:mutation-response',
         },

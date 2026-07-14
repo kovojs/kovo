@@ -182,6 +182,10 @@ export function installGeneratedKovoLoader(
     typeof document === 'undefined' || loaderBrowserSecurity === undefined
       ? null
       : loaderBrowserSecurity.queryOne(document, 'meta[name="kovo-session"]');
+  const sessionDependent =
+    typeof document !== 'undefined' &&
+    loaderBrowserSecurity !== undefined &&
+    !!loaderBrowserSecurity.queryOne(document, 'meta[name="kovo-session-dependent"]');
   const sessionFingerprint =
     sessionMeta === null || loaderBrowserSecurity === undefined
       ? undefined
@@ -211,6 +215,7 @@ export function installGeneratedKovoLoader(
           islandSignalScope,
           expectedBuildToken: pageBuildToken,
           principal: sessionFingerprint,
+          sessionDependent,
         }),
         onAppliedQueries: rememberAppliedQueries,
       })

@@ -108,6 +108,7 @@ describe('session-transition reload security', () => {
     installBfcacheSessionReload({
       document: {
         querySelector(selector: string) {
+          if (selector === 'meta[name="kovo-session-dependent"]') return {};
           return selector === 'meta[name="kovo-session"]'
             ? { getAttribute: () => 'principal-fingerprint' }
             : null;

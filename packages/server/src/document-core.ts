@@ -33,6 +33,7 @@ import {
   DOCUMENT_HSTS_VALUE,
   DOCUMENT_ISOLATION_HEADERS,
   isRoutePageResponseOutcome,
+  markFrameworkDocumentResponse,
   readHeader,
   shouldEmitDocumentHsts,
   type DocumentRouteResponseBase,
@@ -392,7 +393,9 @@ function assembleDocumentShellParts(
     earlyHints: hints.earlyHints,
     parts: {
       body: options.body,
-      head: `${buildMeta}${sessionDependentMeta}${sessionMeta}${hints.html}${loader?.html ?? ''}`,
+      // SPEC §6.6/§8: even module bootstrap hints are app-authored executable head content. Keep
+      // the framework loader ahead of all hints, then structured document head contributions.
+      head: `${buildMeta}${sessionDependentMeta}${sessionMeta}${loader?.html ?? ''}${hints.html}`,
       lang: options.lang ?? options.document?.lang ?? langFromHints(options.hints) ?? 'en',
       queryScripts: renderedQueryScripts,
     },
@@ -518,8 +521,13 @@ export const renderRouteDocumentResponse = wireEmitter(
       // `mergeVaryHeader` preserves any existing `Vary` (e.g. the enhanced-navigation `Accept`).
       htmlHeaders = mergeVaryHeader(htmlHeaders, 'Cookie');
     }
+    if (assemblyOptions.buildToken !== undefined) {
+      // SPEC §9.1.1/§14: a full-document response carries the same build proof in transport and
+      // DOM. Replace every case variant supplied by route code so adapters observe one exact value.
+      htmlHeaders = replaceDocumentHeader(htmlHeaders, 'Kovo-Build', assemblyOptions.buildToken);
+    }
 
-    return {
+    const renderedResponse = {
       body: document.body,
       // CSP-3 (bugs-part3): surface the assembled CSP so the dispatch path can attach a
       // `Content-Security-Policy` header when the app opts in (previously discarded).
@@ -527,6 +535,9 @@ export const renderRouteDocumentResponse = wireEmitter(
       headers: htmlHeaders,
       status: response.status,
     };
+    return assemblyOptions.buildToken === undefined
+      ? renderedResponse
+      : markFrameworkDocumentResponse(renderedResponse, assemblyOptions.buildToken);
   },
 );
 
@@ -844,8 +855,12 @@ function renderStructuredDocumentShell(
     '<meta charset="utf-8">',
     '<meta name="viewport" content="width=device-width, initial-scale=1">',
   ];
-  appendDocumentStrings(shell, document?.head);
+  // SPEC §6.6/§8/§9.5: the framework bootstrap is the browser authority boundary. Build/session
+  // posture and the inline loader must execute before any app-authored structured head script can
+  // replace fetch, DOM lookup, navigation, lifecycle, or timer controls. `beforePaint` remains in
+  // `<head>` (and therefore before paint), but it is never pre-bootstrap.
   securityArrayPush(shell, parts.head);
+  appendDocumentStrings(shell, document?.head);
   securityArrayPush(shell, securityArrayJoin(parts.queryScripts, ''));
   securityArrayPush(shell, '</head>');
   securityArrayPush(shell, `<body${renderShellAttributes(document?.bodyAttrs ?? {})}>`);
@@ -875,8 +890,9 @@ function renderStructuredDeferredDocumentShell(
     '<meta charset="utf-8">',
     '<meta name="viewport" content="width=device-width, initial-scale=1">',
   ];
-  appendDocumentStrings(shell, document?.head);
+  // Keep streaming and buffered documents on the same bootstrap-first authority order.
   securityArrayPush(shell, parts.head);
+  appendDocumentStrings(shell, document?.head);
   securityArrayPush(shell, securityArrayJoin(parts.queryScripts, ''));
   securityArrayPush(shell, '</head>');
   securityArrayPush(shell, `<body${renderShellAttributes(document?.bodyAttrs ?? {})}>`);
@@ -1011,6 +1027,27 @@ function joinHeaderValues(left: readonly string[], right: readonly string[]): st
 
 function headerValueArray(value: string | readonly string[]): readonly string[] {
   return typeof value === 'string' ? [value] : value;
+}
+
+function replaceDocumentHeader(
+  headers: ResponseHeaders,
+  name: string,
+  value: string,
+): ResponseHeaders {
+  const replaced = createSecurityNullRecord<ResponseHeaders[string]>() as ResponseHeaders;
+  const normalizedName = securityStringToLowerCase(name);
+  const names = securityObjectKeys(headers);
+  for (let index = 0; index < names.length; index += 1) {
+    const existingName = names[index]!;
+    const descriptor = witnessGetOwnPropertyDescriptor(headers, existingName);
+    if (descriptor === undefined || !('value' in descriptor)) {
+      throw new TypeError(`Document response header ${existingName} must be an own data property.`);
+    }
+    if (securityStringToLowerCase(existingName) === normalizedName) continue;
+    replaced[existingName] = descriptor.value as ResponseHeaders[string];
+  }
+  replaced[name] = value;
+  return replaced;
 }
 
 export function mergeVaryHeader(headers: ResponseHeaders, token: string): ResponseHeaders {
