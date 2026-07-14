@@ -766,6 +766,7 @@ async function serveViteSourceEditFixture(options: {
             ),
           ),
         ]);
+        await waitForKovoSourceEditEvent(hmrEvents, startIndex, 'app-shell');
         return hmrEvents.slice(startIndex);
       },
       async writeCard(source) {
@@ -788,6 +789,7 @@ async function serveViteSourceEditFixture(options: {
             ),
           ),
         ]);
+        await waitForKovoSourceEditEvent(hmrEvents, startIndex, 'component');
         return hmrEvents.slice(startIndex);
       },
     };
@@ -795,6 +797,23 @@ async function serveViteSourceEditFixture(options: {
     await vite?.close();
     await rm(root, { force: true, recursive: true });
     throw error;
+  }
+}
+
+async function waitForKovoSourceEditEvent(
+  events: readonly { event: string }[],
+  startIndex: number,
+  label: string,
+): Promise<void> {
+  // The real Vite watcher and the fixture's direct hook invocation intentionally race. When the
+  // watcher owns the in-flight update, the direct call can settle before Vite publishes the custom
+  // Kovo event. Wait for that observable completion rather than treating hook return as delivery.
+  const deadline = Date.now() + 5_000;
+  while (events.length === startIndex) {
+    if (Date.now() >= deadline) {
+      throw new Error(`Timed out waiting for the Kovo ${label} source-edit event.`);
+    }
+    await new Promise<void>((resolve) => setTimeout(resolve, 10));
   }
 }
 

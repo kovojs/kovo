@@ -16,6 +16,10 @@ const HARNESS_IMPORTS = new Set([
 ]);
 
 const ALLOWED_INTERNAL_IMPORTS: Record<string, Record<string, string>> = {
+  'tests/integration/fixtures/bootstrap-order/app.tsx': {
+    '@kovojs/compiler/internal':
+      'Bootstrap-order fixture imports the compiler assertion after poisoning shared intrinsics to prove framework boot ownership.',
+  },
   'tests/integration/fixtures/bfcache-hygiene/client.ts': {
     '@kovojs/browser/generated':
       'bfcache fixture exercises generated visible-return query refetch hooks, not app-authored public client APIs.',
