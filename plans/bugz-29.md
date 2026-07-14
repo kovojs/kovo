@@ -15,7 +15,7 @@ fails closed.
 | -------- | -------: | ------ |
 | Critical |       21 | C1-C21 |
 | High     |       23 | H1-H23 |
-| Medium   |       10 | M1-M10 |
+| Medium   |       12 | M1-M12 |
 | Low      |        2 | L1-L2  |
 
 ## Critical
@@ -264,8 +264,8 @@ fails closed.
     authority existed.
   - **Evidence:** `e5a7bba5d`, `4861d9fb9`, `d19ba17a1`, `052e3acad`, and `5455450b9`; root response
     options are rejected, only scoped compiler-generated registries carry authority, targets are
-    exact/deduped, and typed failure renderers declare the submitted mutation key. The migrated
-    Chromium live-target matrix is 29/29 green. SPEC §2, §6.6, §9.1, §9.5.
+    exact/deduped, and typed failure renderers declare the submitted mutation key. The complete
+    migrated integration matrix is 160/160 green. SPEC §2, §6.6, §9.1, §9.5.
 
 - [x] **H21 - Principal-specific HMR refresh output was cacheable and live refresh accepted safe
       methods that its framework client never used.**
@@ -331,6 +331,22 @@ fails closed.
 - [x] **M10 - HMR live-target descriptors used an ambiguous comma delimiter.**
   - **Evidence:** `e851d70b9`; HMR emits the canonical semicolon-separated descriptor list, strict
     parsing regressions pass, and `hmr-dev-client.spec.ts` is 7/7 green. SPEC §9.1, §9.5.1.
+
+- [x] **M11 - Static analysis retained one ts-morph project per source file and exhausted memory
+      on an ordinary starter build.**
+  - A 59 KiB, 13-file starter database analysis grew beyond 4 GiB and terminated before its
+    fail-closed security facts could be produced.
+  - **Evidence:** `7fd1b40c5`; one bounded syntactic project is shared per analysis run, changed
+    same-name snapshots fail closed, and the exact paranoid production-artifact gate is 7/7 green.
+    SPEC §11.1.
+
+- [x] **M12 - Absent optional query-output fields passed schema validation but became enumerable
+      `undefined` values that the canonical wire rejected.**
+  - A client-selectable query branch could turn a valid optional projection into a stable 500,
+    affecting query endpoints and dependent render/rerun paths.
+  - **Evidence:** `4677caa86`; synchronous and asynchronous object parsing now omit only absent
+    optional fields, retain defaults and explicitly present values, and the real typed-read wire
+    regression plus schema/wire suites are 129/129 green. SPEC §6, §9.4.
 
 ## Low
 
