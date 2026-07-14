@@ -266,6 +266,57 @@ describe('@kovojs/drizzle static framework identity resolver', () => {
     ]);
   });
 
+  it('does not derive framework authority from attacker-controlled source path substrings', () => {
+    const project = new Project({ useInMemoryFileSystem: true });
+    project.createSourceFile(
+      '/app/attacker/packages/style/src/engine.ts',
+      'export function attrs(value: unknown): unknown { return value; }',
+    );
+    project.createSourceFile(
+      '/app/vendor/@kovojs/style/engine.ts',
+      'export function create(value: unknown): unknown { return value; }',
+    );
+    project.createSourceFile(
+      '/app/vendor/drizzle-orm-lookalike.ts',
+      'export function sql(value: unknown): unknown { return value; }',
+    );
+    const sourceFile = project.createSourceFile(
+      '/app/attack.ts',
+      [
+        'import { attrs } from "./attacker/packages/style/src/engine.js";',
+        'import { create } from "./vendor/@kovojs/style/engine.js";',
+        'import { sql } from "./vendor/drizzle-orm-lookalike.js";',
+        'attrs({});',
+        'create({});',
+        'sql("select 1");',
+      ].join('\n'),
+    );
+    const calls = new Map(
+      sourceFile
+        .getDescendantsOfKind(SyntaxKind.CallExpression)
+        .map((call) => [call.getExpression().getText(), call] as const),
+    );
+
+    expect(
+      expressionResolvesToFrameworkExport(
+        calls.get('attrs')!.getExpression(),
+        frameworkExport('@kovojs/style', 'attrs'),
+      ),
+    ).toBe(false);
+    expect(
+      expressionResolvesToFrameworkExport(
+        calls.get('create')!.getExpression(),
+        frameworkExport('@kovojs/style', 'create'),
+      ),
+    ).toBe(false);
+    expect(
+      expressionResolvesToFrameworkExport(
+        calls.get('sql')!.getExpression(),
+        frameworkExport('drizzle-orm', 'sql'),
+      ),
+    ).toBe(false);
+  });
+
   it('recognizes re-exported Reader type identity for Drizzle receiver proof', () => {
     const extraction = createProjectExtraction({
       files: [

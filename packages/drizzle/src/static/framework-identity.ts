@@ -1,6 +1,5 @@
 import {
   frameworkCatalogExportForModuleSpecifier,
-  frameworkCatalogExportForSourcePath,
   type FrameworkExportIdentity as CanonicalFrameworkExportIdentity,
   type FrameworkIdentityModule as CanonicalFrameworkModule,
 } from '@kovojs/core/internal/framework-identity';
@@ -350,9 +349,6 @@ function moduleExportIdentity(
   if (seen.has(key)) return undefined;
   seen.add(key);
 
-  const direct = sourceFileExportIdentity(sourceFile, exportedName);
-  if (direct) return direct;
-
   for (const declaration of sourceFile.getExportDeclarations()) {
     const specifier = declaration.getModuleSpecifierValue();
     const moduleSourceFile = declaration.getModuleSpecifierSourceFile();
@@ -404,9 +400,6 @@ function localExportIdentity(
   seen: Set<string>,
   depth: number,
 ): CanonicalFrameworkExportIdentity | undefined {
-  const direct = sourceFileExportIdentity(sourceFile, local);
-  if (direct) return direct;
-
   for (const declaration of sourceFile.getImportDeclarations()) {
     for (const named of declaration.getNamedImports()) {
       const localName = named.getAliasNode()?.getText() ?? named.getName();
@@ -561,24 +554,7 @@ function sourceDeclarationIdentity(
 ): CanonicalFrameworkExportIdentity | undefined {
   const exportName = declarationName(declaration);
   if (!exportName) return undefined;
-  return (
-    sourcePathIdentity(declaration.getSourceFile().getFilePath(), exportName) ??
-    ambientModuleDeclarationIdentity(declaration, exportName)
-  );
-}
-
-function sourceFileExportIdentity(
-  sourceFile: SourceFile,
-  exportName: string,
-): CanonicalFrameworkExportIdentity | undefined {
-  return sourcePathIdentity(sourceFile.getFilePath(), exportName);
-}
-
-function sourcePathIdentity(
-  filePath: string,
-  exportName: string,
-): CanonicalFrameworkExportIdentity | undefined {
-  return frameworkCatalogExportForSourcePath(filePath, exportName);
+  return ambientModuleDeclarationIdentity(declaration, exportName);
 }
 
 function ambientModuleDeclarationIdentity(

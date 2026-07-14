@@ -27,7 +27,6 @@ import {
 
 export {
   frameworkCatalogExportForModuleSpecifier,
-  frameworkCatalogExportForSourcePath,
   frameworkCatalogExportsForModule,
   frameworkIdentityCatalog,
   type FrameworkExportIdentity,

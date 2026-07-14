@@ -8,8 +8,6 @@ import {
   securitySet,
   securitySetAdd,
   securitySetForEach,
-  securityStringCharCodeAt,
-  securityStringSlice,
 } from '#security-witness-intrinsics';
 
 /** @internal Canonical package identity used by compiler/static gates. */
@@ -37,6 +35,7 @@ export interface FrameworkExportIdentity {
 
 /** @internal Manifest row for one recognized framework export. */
 export interface FrameworkIdentityCatalogEntry extends FrameworkExportIdentity {
+  /** Review metadata only; app-supplied source paths never establish framework identity. */
   readonly packageSourceFiles?: readonly string[];
   readonly scopes: readonly FrameworkIdentityScope[];
   readonly specifiers: readonly string[];
@@ -359,6 +358,10 @@ export function frameworkCatalogExportForModuleSpecifier(
   return exports && securityMapGet(exports, exportName);
 }
 
+// SPEC §6.6 keeps classifier identity provenance-bound. Callers intentionally get no source-path
+// lookup: in-memory app projects control their file names and can spell nested paths that resemble
+// `packages/*/src` or `node_modules`, so only exact reviewed module specifiers establish authority.
+
 /** @internal */
 export function frameworkCatalogExportsForModule(
   module: FrameworkIdentityModule,
@@ -371,87 +374,6 @@ export function frameworkCatalogExportsForModule(
     });
   }
   return snapshot;
-}
-
-/** @internal */
-export function frameworkCatalogExportForSourcePath(
-  filePath: string,
-  exportName: string,
-): FrameworkExportIdentity | undefined {
-  const normalized = normalizeCatalogPath(filePath);
-  for (let index = 0; index < frameworkIdentityCatalog.length; index += 1) {
-    const catalogEntry = securityOwnArrayEntry(frameworkIdentityCatalog, index);
-    if (!catalogEntry.ok) {
-      throw new TypeError(`Framework identity catalog[${index}] must be dense.`);
-    }
-    const entry = catalogEntry.value;
-    if (entry.exportName !== exportName) continue;
-    if (entry.module === 'drizzle-orm') {
-      if (catalogStringIncludes(normalized, 'drizzle-orm')) return catalogIdentity(entry);
-      continue;
-    }
-    const packageName = securityStringSlice(entry.module, '@kovojs/'.length);
-    if (catalogStringIncludes(normalized, `/@kovojs/${packageName}/`)) {
-      return catalogIdentity(entry);
-    }
-    if (!entry.packageSourceFiles?.length) continue;
-    const sourceMarker = `/packages/${packageName}/src/`;
-    const markerIndex = catalogStringIndexOf(normalized, sourceMarker);
-    const relative =
-      markerIndex < 0
-        ? undefined
-        : securityStringSlice(normalized, markerIndex + sourceMarker.length);
-    if (!relative) continue;
-    const withoutExtension = catalogSourcePathWithoutExtension(relative);
-    if (catalogArrayIncludes(entry.packageSourceFiles, withoutExtension)) {
-      return catalogIdentity(entry);
-    }
-  }
-  return undefined;
-}
-
-function normalizeCatalogPath(value: string): string {
-  let normalized = '';
-  for (let index = 0; index < value.length; index += 1) {
-    normalized +=
-      securityStringCharCodeAt(value, index) === 0x5c
-        ? '/'
-        : securityStringSlice(value, index, index + 1);
-  }
-  return normalized;
-}
-
-function catalogStringIncludes(value: string, search: string): boolean {
-  return catalogStringIndexOf(value, search) >= 0;
-}
-
-function catalogStringIndexOf(value: string, search: string): number {
-  if (search.length === 0) return 0;
-  for (let index = 0; index + search.length <= value.length; index += 1) {
-    if (securityStringSlice(value, index, index + search.length) === search) return index;
-  }
-  return -1;
-}
-
-function catalogSourcePathWithoutExtension(value: string): string {
-  const extensions = ['.tsx', '.jsx', '.mts', '.cts', '.mjs', '.cjs', '.ts', '.js'];
-  for (let index = 0; index < extensions.length; index += 1) {
-    const entry = securityOwnArrayEntry(extensions, index);
-    if (!entry.ok) throw new TypeError(`Framework source extensions[${index}] must be dense.`);
-    if (securityStringSlice(value, -entry.value.length) === entry.value) {
-      return securityStringSlice(value, 0, value.length - entry.value.length);
-    }
-  }
-  return value;
-}
-
-function catalogArrayIncludes(values: readonly string[], expected: string): boolean {
-  for (let index = 0; index < values.length; index += 1) {
-    const entry = securityOwnArrayEntry(values, index);
-    if (!entry.ok) throw new TypeError(`Framework source files[${index}] must be dense.`);
-    if (entry.value === expected) return true;
-  }
-  return false;
 }
 
 function catalogIdentity(entry: FrameworkExportIdentity): FrameworkExportIdentity {
