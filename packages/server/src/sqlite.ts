@@ -259,6 +259,7 @@ export function createSqliteAppRuntime(
     // legacy lazy locator is intentionally bypassed at this framework-owned construction sink.
     client = new Database(':memory:', { nativeBinding: sqliteNativeBinding });
     witnessReflectApply(sqliteDatabasePragma, client, ['foreign_keys = ON']);
+    witnessReflectApply(sqliteDatabasePragma, client, ['temp_store = MEMORY']);
     for (let index = 0; index < authorizerSchemaDdl.length; index += 1) {
       witnessReflectApply(sqliteDatabaseExec, client, [authorizerSchemaDdl[index]!]);
     }
@@ -279,6 +280,9 @@ export function createSqliteAppRuntime(
         openDatabase: () => {
           const authorizerDatabase = new sqliteNodeDatabaseSync(':memory:');
           try {
+            witnessReflectApply(sqliteNodeDatabaseExec, authorizerDatabase, [
+              'PRAGMA foreign_keys = ON; PRAGMA temp_store = MEMORY;',
+            ]);
             for (let index = 0; index < authorizerSchemaDdl.length; index += 1) {
               witnessReflectApply(sqliteNodeDatabaseExec, authorizerDatabase, [
                 authorizerSchemaDdl[index]!,

@@ -37,6 +37,33 @@ describe('public SQLite runtime boundary (SPEC §6.6/§10.3)', () => {
     expect(JSON.parse(development.stdout)).toEqual({ created: true });
   });
 
+  it('keeps the main database and SQLite temporary storage in memory', () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const schema = runtimeSchema(`kovo_memory_posture_${Date.now()}`);
+    const release = installGeneratedTableSecurityManifestForCommand(schema.manifest);
+    try {
+      const runtime = sqlitePublicApi.createSqliteAppRuntime({
+        tables: [schema.parent, schema.child],
+      });
+      runtimes.push(runtime);
+      const capability = runtime.systemDb({
+        operation: 'write',
+        reason: 'Inspect the framework-owned SQLite storage posture',
+        surface: 'sqlite.test#memory-posture',
+      });
+      const posture = useSqliteSystemDb(capability, (db) => ({
+        databases: db.all<{ file: string; name: string }>(sql.raw('PRAGMA database_list')),
+        tempStore: db.get<{ temp_store: number }>(sql.raw('PRAGMA temp_store')),
+      }));
+      expect(posture).toEqual({
+        databases: [{ file: '', name: 'main', seq: 0 }],
+        tempStore: { temp_store: 2 },
+      });
+    } finally {
+      release();
+    }
+  });
+
   it('exposes only an opaque provider/capability and seeds exact non-enumerable own keys', () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {});
     const schema = runtimeSchema('kovo_public_boundary');
