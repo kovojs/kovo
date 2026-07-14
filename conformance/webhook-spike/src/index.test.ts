@@ -196,7 +196,7 @@ async function runStripeWebhookSpike(
   const replayed = await options.replayStore.get(replayScope, event.id);
   if (replayed) return replayed;
 
-  const reservation = options.replayStore.reserve(replayScope, event.id);
+  const reservation = await options.replayStore.reserve(replayScope, event.id);
   if (!reservation) {
     const pendingReplay = await options.replayStore.get(replayScope, event.id);
     if (pendingReplay) return pendingReplay;
