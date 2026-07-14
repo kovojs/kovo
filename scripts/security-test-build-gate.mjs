@@ -7,6 +7,7 @@ const thisFile = fileURLToPath(import.meta.url);
 const defaultRepoRoot = path.resolve(path.dirname(thisFile), '..');
 
 export const SECURITY_BUILD_CERTIFICATION_CODES = [
+  'KV235',
   'KV414',
   'KV422',
   'KV426',
@@ -27,10 +28,6 @@ export const TRUSTED_OUTPUT_SINK_POSITION_GRAMMAR = Object.freeze({
     {
       helper: 'trustedUrl',
       position: 'url-brand',
-    },
-    {
-      helper: 'renderedHtml',
-      position: 'rendered-html-brand',
     },
     {
       helper: 'trustedHtml',
@@ -57,7 +54,7 @@ const TRUSTED_OUTPUT_CERTIFICATION_CASES = [
     wrapping: 'direct-call',
   },
   {
-    sink: 'renderedHtml',
+    sink: 'trustedUrl',
     source: 'query',
     wrapping: 'helper-call',
   },
@@ -112,8 +109,8 @@ export const SECURITY_WRAPPING_GRAMMAR = Object.freeze({
     },
     {
       form: 'local-wrapper',
-      needle: 'renderedHtml() sends query-derived data',
-      surface: 'KV426 server wrapper renderedHtml',
+      needle: 'trustedHtml() sends request-derived data',
+      surface: 'KV426 local trustedHtml wrapper',
     },
   ]),
 });
@@ -305,6 +302,22 @@ export const SECURITY_BUILD_CERTIFICATION_SOURCES = [
 ];
 
 export const SECURITY_BUILD_PROOFS = [
+  {
+    buildInvocation: 'starter-build-production-artifact',
+    claimId: 'internal-raw-html-import',
+    code: 'KV235',
+    proofFile: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
+    requiredNeedles: [
+      'addInternalHtmlImportProof(root)',
+      'buildProductionArtifact(root)',
+      'KV235',
+      'App source imports a non-public Kovo subpath',
+      'raw-helper.ts',
+    ],
+    sourceFile: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
+    testName:
+      'blocks internal raw-HTML helper imports from authored .ts modules in production build',
+  },
   {
     buildInvocation: 'cli-main-build',
     code: 'KV414',

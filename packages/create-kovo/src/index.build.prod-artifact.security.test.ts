@@ -569,6 +569,7 @@ describe('create-kovo starter (build integration: production security artifacts)
     }
   }, 240_000);
 
+  // @kovo-security-certifies KV235 internal-raw-html-import
   it('blocks internal raw-HTML helper imports from authored .ts modules in production build', () => {
     const tempParent = tmpdir();
     mkdirSync(tempParent, { recursive: true });

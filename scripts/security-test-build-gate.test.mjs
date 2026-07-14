@@ -67,7 +67,7 @@ describe('security-test-build-gate', () => {
     expect(defaultCases).toEqual(sameSeedCases);
     expect(defaultCases).not.toEqual(alternateSeedCases);
     expect(new Set(defaultCases.map((testCase) => testCase.sink))).toEqual(
-      new Set(['trustedHtml', 'trustedUrl', 'renderedHtml']),
+      new Set(['trustedHtml', 'trustedUrl']),
     );
     expect(new Set(defaultCases.map((testCase) => testCase.source))).toEqual(
       new Set(['request', 'query']),
@@ -76,8 +76,8 @@ describe('security-test-build-gate', () => {
       new Set(['direct-call', 'helper-call', 'component-prop']),
     );
     expect(trustedOutputSinkPositionProofNeedles().sort()).toEqual([
-      'renderedHtml() sends query-derived data',
       'trustedHtml() sends request-derived data',
+      'trustedUrl() sends query-derived data',
       'trustedUrl() sends query-derived data',
     ]);
   });
@@ -115,7 +115,7 @@ describe('security-test-build-gate', () => {
       'query="secrets0" path="secrets0\\.accessToken"',
       'query="secrets1" path="secrets1\\.password"',
       'query="secrets3" path="secrets3\\.accessToken"',
-      'renderedHtml() sends query-derived data',
+      'trustedHtml() sends request-derived data',
       'trustedHtml() sends request-derived data',
     ]);
   });
@@ -441,7 +441,6 @@ describe('security-test-build-gate', () => {
           '  buildReusableProductionArtifact(safeRoot);',
           "  expect(output).toContain('KV426');",
           "  expect(output).toContain('trustedUrl() sends query-derived data');",
-          "  expect(output).toContain('trustedHtml() sends request-derived data');",
           '});',
         ].join('\n'),
       );
@@ -477,7 +476,7 @@ describe('security-test-build-gate', () => {
           repoRoot,
         }),
       ).toContain(
-        'packages/create-kovo/src/index.build.prod-artifact.security.test.ts KV426/trusted-output-prod-artifact -> packages/create-kovo/src/index.build.prod-artifact.security.test.ts: proof test is missing required evidence "renderedHtml() sends query-derived data"',
+        'packages/create-kovo/src/index.build.prod-artifact.security.test.ts KV426/trusted-output-prod-artifact -> packages/create-kovo/src/index.build.prod-artifact.security.test.ts: proof test is missing required evidence "trustedHtml() sends request-derived data"',
       );
     });
   });
