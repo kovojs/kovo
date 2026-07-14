@@ -48,6 +48,8 @@ const SERVER_WRITE_GOVERNANCE_SPECIFIERS = [
   '@kovojs/server',
   '@kovojs/server/write-governance',
 ] as const;
+const SERVER_COMMAND_SPECIFIERS = ['@kovojs/server'] as const;
+const CORE_STORAGE_SPECIFIERS = ['@kovojs/core', '@kovojs/server'] as const;
 
 const serverDataSourceFiles = [
   'api/data',
@@ -126,6 +128,26 @@ function serverWriteGovernance(exportName: string): FrameworkIdentityCatalogEntr
   };
 }
 
+function serverCommand(exportName: string): FrameworkIdentityCatalogEntry {
+  return {
+    exportName,
+    module: '@kovojs/server',
+    packageSourceFiles: ['command', 'index'],
+    scopes: ['authoring', 'data-plane'],
+    specifiers: SERVER_COMMAND_SPECIFIERS,
+  };
+}
+
+function coreStorage(exportName: string): FrameworkIdentityCatalogEntry {
+  return {
+    exportName,
+    module: '@kovojs/core',
+    packageSourceFiles: ['index', 'storage'],
+    scopes: ['authoring', 'data-plane'],
+    specifiers: CORE_STORAGE_SPECIFIERS,
+  };
+}
+
 function coreAuthoring(exportName: string): FrameworkIdentityCatalogEntry {
   return {
     exportName,
@@ -192,6 +214,12 @@ appendCatalogEntry(catalogEntries, serverData('encryptAtRest'));
 appendCatalogEntry(catalogEntries, serverData('hashPassword'));
 appendCatalogEntry(catalogEntries, serverWriteGovernance('serverValue'));
 appendCatalogEntry(catalogEntries, serverData('stream'));
+appendCatalogFactories(catalogEntries, ['cmd', 'commandAllowlist', 'runCommand'], serverCommand);
+appendCatalogFactories(
+  catalogEntries,
+  ['createFileSystemStorage', 'createS3CompatibleStorage'],
+  coreStorage,
+);
 appendCatalogFactories(
   catalogEntries,
   ['component', 'declareOffWire', 'publishToClient', 'trustedReveal'],

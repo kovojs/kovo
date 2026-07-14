@@ -102,6 +102,29 @@ function expectedExpressionSyntaxKinds(): readonly ts.SyntaxKind[] {
 }
 
 describe('framework identity resolver', () => {
+  it('catalogs public command and storage authority across server re-exports', () => {
+    expect(frameworkCatalogExportForModuleSpecifier('@kovojs/server', 'commandAllowlist')).toEqual({
+      exportName: 'commandAllowlist',
+      module: '@kovojs/server',
+    });
+    expect(frameworkCatalogExportForModuleSpecifier('@kovojs/server', 'runCommand')).toEqual({
+      exportName: 'runCommand',
+      module: '@kovojs/server',
+    });
+    expect(
+      frameworkCatalogExportForModuleSpecifier('@kovojs/server', 'createFileSystemStorage'),
+    ).toEqual({
+      exportName: 'createFileSystemStorage',
+      module: '@kovojs/core',
+    });
+    expect(
+      frameworkCatalogExportForModuleSpecifier('@kovojs/core', 'createS3CompatibleStorage'),
+    ).toEqual({
+      exportName: 'createS3CompatibleStorage',
+      module: '@kovojs/core',
+    });
+  });
+
   it('does not expose mutable catalog authority through lookup results', () => {
     const identity = frameworkCatalogExportForModuleSpecifier('@kovojs/browser', 'trustedHtml')!;
     const exports = frameworkCatalogExportsForModule('@kovojs/browser') as Set<string>;
