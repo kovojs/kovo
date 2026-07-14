@@ -19,6 +19,7 @@
     "./internal/audit-facts": "./src/internal/audit-facts.ts",
     "./internal/build": "./src/internal/build.ts",
     "./internal/build-context": "./src/internal/build-context.ts",
+    "./internal/build-preset": "./src/build-preset-internal.ts",
     "./internal/capabilities": "./src/internal/capabilities.ts",
     "./internal/client-modules": "./src/internal/client-modules.ts",
     "./internal/csp": "./src/internal/csp.ts",
@@ -74,6 +75,10 @@
       "./internal/build-context": {
         "types": "./dist/internal/build-context.d.mts",
         "default": "./dist/internal/build-context.mjs"
+      },
+      "./internal/build-preset": {
+        "types": "./dist/build-preset-internal.d.mts",
+        "default": "./dist/build-preset-internal.mjs"
       },
       "./internal/capabilities": {
         "types": "./dist/internal/capabilities.d.mts",
@@ -146,7 +151,7 @@
     }
   },
   "scripts": {
-    "build:dist": "vp pack src/build.ts src/index.ts src/internal/app-shell-vite.ts src/internal/audit-facts.ts src/internal/build-context.ts src/internal/build.ts src/internal/capabilities.ts src/internal/client-modules.ts src/internal/csp.ts src/internal/csrf.ts src/internal/data-plane-static-analysis.ts src/internal/egress.ts src/internal/escape.ts src/internal/execution.ts src/internal/html.ts src/internal/managed-db.ts src/internal/route.ts src/internal/runtime-registry-wire.ts src/internal/static-export.ts src/internal/vite-security-profile.ts src/internal/wire.ts src/jsx-runtime.ts src/runtime-bootstrap.ts src/testing.ts src/vite.ts --dts",
+    "build:dist": "vp pack src/build-preset-internal.ts src/build.ts src/index.ts src/internal/app-shell-vite.ts src/internal/audit-facts.ts src/internal/build-context.ts src/internal/build.ts src/internal/capabilities.ts src/internal/client-modules.ts src/internal/csp.ts src/internal/csrf.ts src/internal/data-plane-static-analysis.ts src/internal/egress.ts src/internal/escape.ts src/internal/execution.ts src/internal/html.ts src/internal/managed-db.ts src/internal/route.ts src/internal/runtime-registry-wire.ts src/internal/static-export.ts src/internal/vite-security-profile.ts src/internal/wire.ts src/jsx-runtime.ts src/runtime-bootstrap.ts src/testing.ts src/vite.ts --dts",
     "prepack": "pnpm run build:dist"
   },
   "dependencies": {

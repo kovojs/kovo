@@ -58,15 +58,12 @@ import type {
   StaticExportResult,
   StylesheetAsset,
 } from '@kovojs/server';
-import type {
-  JobRunnerCapability,
-  KovoConfig,
-  KovoPreset,
-  KovoPresetCapabilities,
-  PresetContext,
-  PresetDiagnostic,
-} from '@kovojs/server/build';
 import type { KovoNeutralBuild } from '@kovojs/server/internal/build';
+import type {
+  KovoBuildPreset,
+  KovoBuildPresetContext,
+  KovoBuildPresetDiagnostic,
+} from '@kovojs/server/internal/build-preset';
 import { withKovoBuildContext } from '@kovojs/server/internal/build-context';
 import type { KovoAppShellCompiledClientModule } from '@kovojs/server/internal/app-shell-vite';
 import {
@@ -363,6 +360,7 @@ interface KovoBuildOptions {
 interface LoadedBuildAppModule {
   appModule: unknown;
   serverBuildModule: typeof import('@kovojs/server/build');
+  serverBuildPresetModule: typeof import('@kovojs/server/internal/build-preset');
   serverExecutionModule: typeof import('@kovojs/server/internal/execution');
   serverInternalBuildModule: typeof import('@kovojs/server/internal/build');
 }
@@ -385,13 +383,13 @@ export interface KovoExportCommandResult extends KovoCheckResult {
 type BuildArgParseResult = { ok: true; options: KovoBuildOptions } | { message: string; ok: false };
 
 interface LoadedKovoBuildConfig {
-  config?: KovoConfig;
   path?: string;
+  preset?: KovoBuildPreset;
 }
 
 interface SelectedKovoBuildPreset {
   name: KovoBuildPresetName;
-  preset?: KovoPreset;
+  preset?: KovoBuildPreset;
 }
 
 export function parseBuildArgs(args: readonly string[]): BuildArgParseResult {
@@ -516,7 +514,7 @@ export async function runBuildCommand(
     );
     const selectedPreset = selectedKovoBuildPreset(
       options,
-      loadedConfig.config,
+      loadedConfig.preset,
       security.invocationEnv,
     );
     // plans/fast-kovo-check3.md: start the independent `tsc --noEmit` preflight subprocess here and
@@ -582,6 +580,7 @@ export async function runBuildCommand(
       deriveClosedKovoApp,
       node,
       queryShapeFacts,
+      resolveKovoBuildPreset,
       vercel,
       writeKovoNeutralBuild,
     } = loadAndCheck.value;
@@ -628,21 +627,22 @@ export async function runBuildCommand(
       stylesheetSourceRoot: dirname(resolvedAppModulePath),
     });
     writeKovoBuildGraphArtifact(neutralBuild, checkGraph);
-    const preset =
-      selectedPreset.preset ??
-      (selectedPreset.name === 'cloudflare'
+    const presetToken =
+      selectedPreset.name === 'cloudflare'
         ? cloudflare()
         : selectedPreset.name === 'vercel'
           ? vercel()
-          : node());
+          : node();
+    const preset = selectedPreset.preset ?? resolveKovoBuildPreset(presetToken);
+    if (preset === undefined) {
+      throw new Error(
+        `kovo build could not resolve framework-owned preset ${selectedPreset.name}.`,
+      );
+    }
     const presetOutDir = buildPresetOutDir(outDir, selectedPreset.name);
     const presetLogs: string[] = [];
-    if (typeof preset.emit !== 'function') {
-      throw new Error(`kovo build preset ${selectedPreset.name} cannot emit build output.`);
-    }
-
     const declaredEnv = inferredKovoBuildDeclaredEnv(serverHandlerBuild.source);
-    const presetContext: PresetContext = {
+    const presetContext: KovoBuildPresetContext = {
       declaredEnv,
       log(message) {
         presetLogs.push(message);
@@ -720,6 +720,7 @@ async function loadAndCheckBuildApp(
     kovoBuildStylesheetCss(resolvedAppModulePath),
   );
   const { cloudflare, node, vercel } = loadedBuildApp.serverBuildModule;
+  const { resolveKovoBuildPreset } = loadedBuildApp.serverBuildPresetModule;
   const execution = loadedBuildApp.serverExecutionModule;
   const { deriveClosedKovoApp, writeKovoNeutralBuild } = loadedBuildApp.serverInternalBuildModule;
   const appModule = loadedBuildApp.appModule;
@@ -741,6 +742,7 @@ async function loadAndCheckBuildApp(
     deriveClosedKovoApp,
     node,
     queryShapeFacts: buildCheck.queryShapeFacts,
+    resolveKovoBuildPreset,
     vercel,
     writeKovoNeutralBuild,
   };
@@ -1994,10 +1996,10 @@ function execFileErrorOutput(error: unknown): string {
 }
 
 async function inspectKovoBuildPreset(
-  preset: KovoPreset,
+  preset: KovoBuildPreset,
   neutralBuild: KovoNeutralBuild,
-  context: PresetContext,
-): Promise<readonly PresetDiagnostic[]> {
+  context: KovoBuildPresetContext,
+): Promise<readonly KovoBuildPresetDiagnostic[]> {
   if (typeof preset.inspect !== 'function') return [];
   return preset.inspect(neutralBuild, context);
 }
@@ -2103,7 +2105,7 @@ function assertKovoBuildCssDelivery(
 
 function selectedKovoBuildPreset(
   options: KovoBuildOptions,
-  config: KovoConfig | undefined,
+  configuredPreset: KovoBuildPreset | undefined,
   invocationEnv: NodeJS.ProcessEnv,
 ): SelectedKovoBuildPreset {
   if (options.preset !== undefined) return { name: options.preset };
@@ -2115,14 +2117,14 @@ function selectedKovoBuildPreset(
     return { name: parsedPreset };
   }
 
-  if (config?.preset !== undefined) return selectedConfiguredKovoBuildPreset(config.preset);
+  if (configuredPreset !== undefined) return selectedConfiguredKovoBuildPreset(configuredPreset);
 
   if (invocationEnv.VERCEL) return { name: 'vercel' };
   if (invocationEnv.CF_PAGES || invocationEnv.CLOUDFLARE) return { name: 'cloudflare' };
   return { name: 'node' };
 }
 
-function selectedConfiguredKovoBuildPreset(preset: KovoPreset): SelectedKovoBuildPreset {
+function selectedConfiguredKovoBuildPreset(preset: KovoBuildPreset): SelectedKovoBuildPreset {
   const name = parseKovoBuildPresetName(preset.name);
   if (!name) throw new Error(`unsupported kovo.config preset ${stableValue(preset.name)}`);
   return { name, preset };
@@ -2135,6 +2137,7 @@ async function loadKovoBuildConfig(
 ): Promise<LoadedKovoBuildConfig> {
   if (approvedConfig === undefined) return {};
   const configPath = approvedConfig.path;
+  const requireFromApp = createRequire(pathToFileURL(appModulePath));
 
   const lifetime = await createBuildTimeViteServer({
     appType: 'custom',
@@ -2150,9 +2153,16 @@ async function loadKovoBuildConfig(
   let hasPrimaryError = false;
   try {
     await preloadKovoSsrSecurityProfile(server, appModulePath, root);
+    const serverBuildPresetModule = (await server.ssrLoadModule(
+      viteSsrModuleId(requireFromApp.resolve('@kovojs/server/internal/build-preset'), root),
+    )) as typeof import('@kovojs/server/internal/build-preset');
     const configModule = await server.ssrLoadModule(`/${basename(configPath)}`);
-    const config = kovoBuildConfigFromModule(configModule, configPath);
-    return { config, path: configPath };
+    const preset = kovoBuildPresetFromModule(
+      configModule,
+      configPath,
+      serverBuildPresetModule.resolveKovoBuildPreset,
+    );
+    return { path: configPath, ...(preset === undefined ? {} : { preset }) };
   } catch (error) {
     primaryError = error;
     hasPrimaryError = true;
@@ -2200,6 +2210,9 @@ async function loadBuildAppModule(
     const serverBuildModule = await server.ssrLoadModule(
       viteSsrModuleId(requireFromApp.resolve('@kovojs/server/build'), root),
     );
+    const serverBuildPresetModule = await server.ssrLoadModule(
+      viteSsrModuleId(requireFromApp.resolve('@kovojs/server/internal/build-preset'), root),
+    );
     const serverExecutionModule = await server.ssrLoadModule(
       viteSsrModuleId(requireFromApp.resolve('@kovojs/server/internal/execution'), root),
     );
@@ -2214,6 +2227,8 @@ async function loadBuildAppModule(
     return {
       appModule,
       serverBuildModule: serverBuildModule as LoadedBuildAppModule['serverBuildModule'],
+      serverBuildPresetModule:
+        serverBuildPresetModule as LoadedBuildAppModule['serverBuildPresetModule'],
       serverExecutionModule: serverExecutionModule as LoadedBuildAppModule['serverExecutionModule'],
       serverInternalBuildModule: trustedInternalBuild,
     };
@@ -2454,19 +2469,28 @@ function findKovoBuildConfig(root: string): string | undefined {
   return undefined;
 }
 
-function kovoBuildConfigFromModule(module: unknown, configPath: string): KovoConfig {
+function kovoBuildPresetFromModule(
+  module: unknown,
+  configPath: string,
+  resolveKovoBuildPreset: (value: unknown) => KovoBuildPreset | undefined,
+): KovoBuildPreset | undefined {
   const moduleDefault =
     typeof module === 'object' && module !== null
       ? kovoBuildModuleDefaultExport(module, configPath)
       : undefined;
   const value = moduleDefault ?? module;
-  if (value === undefined || value === null) return {};
+  if (value === undefined || value === null) return undefined;
   if (!isRecord(value)) throw new Error(`${configPath} must export a config object.`);
 
-  const config = buildCreateNullRecord<unknown>() as KovoConfig;
-  const preset = buildOwnDataValue(value, 'preset', `${configPath} config`);
-  if (preset !== undefined) config.preset = snapshotConfiguredKovoPreset(preset, configPath);
-  return config;
+  const token = buildOwnDataValue(value, 'preset', `${configPath} config`);
+  if (token === undefined) return undefined;
+  const preset = resolveKovoBuildPreset(token);
+  if (preset === undefined) {
+    throw new Error(
+      `${configPath} preset must be a framework-owned value returned directly by node(), vercel(), or cloudflare().`,
+    );
+  }
+  return preset;
 }
 
 function kovoBuildModuleDefaultExport(module: object, configPath: string): unknown {
@@ -2484,64 +2508,6 @@ function kovoBuildModuleDefaultExport(module: object, configPath: string): unkno
     }
   }
   return undefined;
-}
-
-function snapshotConfiguredKovoPreset(value: unknown, configPath: string): KovoPreset {
-  if (!isRecord(value)) {
-    throw new Error(`${configPath} preset must be a Kovo preset value such as node().`);
-  }
-  const name = buildOwnDataValue(value, 'name', `${configPath} preset`);
-  const emit = buildOwnDataValue(value, 'emit', `${configPath} preset`);
-  const inspect = buildOwnDataValue(value, 'inspect', `${configPath} preset`);
-  const capabilities = buildOwnDataValue(value, 'capabilities', `${configPath} preset`);
-  if (
-    typeof name !== 'string' ||
-    (emit !== undefined && typeof emit !== 'function') ||
-    (inspect !== undefined && typeof inspect !== 'function')
-  ) {
-    throw new Error(`${configPath} preset must be a Kovo preset value such as node().`);
-  }
-  return buildSetNullPrototype({
-    ...(capabilities === undefined
-      ? {}
-      : { capabilities: snapshotConfiguredKovoPresetCapabilities(capabilities, configPath) }),
-    ...(emit === undefined ? {} : { emit: emit as NonNullable<KovoPreset['emit']> }),
-    ...(inspect === undefined ? {} : { inspect: inspect as NonNullable<KovoPreset['inspect']> }),
-    name,
-  } satisfies KovoPreset);
-}
-
-function snapshotConfiguredKovoPresetCapabilities(
-  value: unknown,
-  configPath: string,
-): KovoPresetCapabilities {
-  if (!isRecord(value)) {
-    throw new Error(`${configPath} preset capabilities must be an own-data object.`);
-  }
-  const jobRunner = buildOwnDataValue(value, 'jobRunner', `${configPath} preset capabilities`);
-  const snapshot = buildCreateNullRecord<unknown>() as KovoPresetCapabilities;
-  if (jobRunner !== undefined) {
-    snapshot.jobRunner = snapshotConfiguredJobRunnerCapability(jobRunner, configPath);
-  }
-  return snapshot;
-}
-
-function snapshotConfiguredJobRunnerCapability(
-  value: unknown,
-  configPath: string,
-): JobRunnerCapability {
-  if (!isRecord(value)) {
-    throw new Error(`${configPath} preset JobRunner capability must be an own-data object.`);
-  }
-  const adapter = buildOwnDataValue(value, 'adapter', `${configPath} preset JobRunner`);
-  const mode = buildOwnDataValue(value, 'mode', `${configPath} preset JobRunner`);
-  if (adapter !== 'node-in-process' || mode !== 'serve-and-run') {
-    throw new Error(`${configPath} preset JobRunner capability is unsupported.`);
-  }
-  const snapshot = buildCreateNullRecord<unknown>() as unknown as JobRunnerCapability;
-  snapshot.adapter = adapter;
-  snapshot.mode = mode;
-  return snapshot;
 }
 
 interface KovoClientManifestBuild {
@@ -4410,7 +4376,7 @@ function kovoBuildResult(options: {
   neutralOutDir: string;
   outDir: string;
   preset: KovoBuildPresetName;
-  presetDiagnostics: readonly PresetDiagnostic[];
+  presetDiagnostics: readonly KovoBuildPresetDiagnostic[];
   presetLogs: readonly string[];
   serverOutDir: string;
 }): KovoCheckResult {
@@ -4456,7 +4422,7 @@ function kovoBuildCheckResult(options: {
   appModulePath: string;
   neutralOutDir: string;
   preset: KovoBuildPresetName;
-  presetDiagnostics: readonly PresetDiagnostic[];
+  presetDiagnostics: readonly KovoBuildPresetDiagnostic[];
   presetLogs: readonly string[];
 }): KovoCheckResult {
   const lines = [
@@ -4501,9 +4467,9 @@ function kovoBuildCheckResult(options: {
 }
 
 class KovoBuildPresetDiagnosticError extends Error {
-  readonly diagnostics: readonly PresetDiagnostic[];
+  readonly diagnostics: readonly KovoBuildPresetDiagnostic[];
 
-  constructor(diagnostics: readonly PresetDiagnostic[]) {
+  constructor(diagnostics: readonly KovoBuildPresetDiagnostic[]) {
     super(
       buildJoinStrings(
         appendDense(
@@ -4519,7 +4485,7 @@ class KovoBuildPresetDiagnosticError extends Error {
   }
 }
 
-function presetDiagnosticOutputLine(diagnostic: PresetDiagnostic): string {
+function presetDiagnosticOutputLine(diagnostic: KovoBuildPresetDiagnostic): string {
   const label = diagnostic.severity === 'warning' ? 'WARN' : 'ERROR';
   return `${label} ${diagnostic.code} ${stableText(diagnostic.message)}`;
 }

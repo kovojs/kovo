@@ -2958,7 +2958,46 @@ export const homeQuery = {
     }
   });
 
-  it('passes inferred DATABASE_URL env to configured presets', async () => {
+  it('rejects copied built-in preset tokens during config preflight', async () => {
+    const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-config-copied-preset-'));
+    const outDir = join(root, 'dist');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    try {
+      mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
+      symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
+      symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
+      writeFileSync(join(root, 'app.mjs'), dynamicAppModuleSource(), 'utf8');
+      writeClientEntry(root);
+      writeFileSync(
+        join(root, 'kovo.config.ts'),
+        [
+          "import { defineConfig, node } from '@kovojs/server/build';",
+          'const builtIn = node({ dockerfile: false });',
+          'export default defineConfig({ preset: { ...builtIn } });',
+          '',
+        ].join('\n'),
+        'utf8',
+      );
+
+      const exitCode = await withCwd(root, () =>
+        mainAsync(['build', './app.mjs', '--out', './dist']),
+      );
+      const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
+      expect(exitCode).toBe(1);
+      expect(errorOutput).toContain('kovo build config preflight failed');
+      expect(errorOutput).toContain('ERROR KV424');
+      expect(errorOutput).toContain('build-config.opaque-authority');
+      expect(() => readFileSync(join(outDir, 'server/server.mjs'), 'utf8')).toThrow();
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it('passes inferred DATABASE_URL env to configured built-in presets', async () => {
     const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-config-env-'));
     const outDir = join(root, 'dist');
     const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
@@ -2973,23 +3012,9 @@ export const homeQuery = {
       writeFileSync(
         join(root, 'kovo.config.ts'),
         [
-          "import { mkdir, writeFile } from 'node:fs/promises';",
-          "import { defineConfig } from '@kovojs/server/build';",
+          "import { cloudflare, defineConfig } from '@kovojs/server/build';",
           'export default defineConfig({',
-          '  preset: {',
-          "    name: 'node',",
-          '    async emit(_build, context) {',
-          '      await mkdir(context.outDir, { recursive: true });',
-          "      await writeFile(context.outDir + '/declared-env.txt', context.declaredEnv.join(','), 'utf8');",
-          '    },',
-          '    inspect(_build, context) {',
-          '      return [{',
-          "        code: 'test-declared-env',",
-          "        message: 'declared=' + context.declaredEnv.join(','),",
-          "        severity: 'warning',",
-          '      }];',
-          '    },',
-          '  },',
+          '  preset: cloudflare(),',
           '});',
           '',
         ].join('\n'),
@@ -3003,8 +3028,13 @@ export const homeQuery = {
       expect(exitCode, errorOutput).toBe(0);
       expect(stderr).not.toHaveBeenCalled();
       const output = stdout.mock.calls.map(([chunk]) => String(chunk)).join('');
-      expect(output).toContain('WARN test-declared-env declared=DATABASE_URL');
-      expect(readFileSync(join(outDir, 'server/declared-env.txt'), 'utf8')).toBe('DATABASE_URL');
+      expect(output).toContain(
+        'WARN cloudflare-tcp-database The cloudflare preset emits a Worker with nodejs_compat.',
+      );
+      expect(output).toContain('SUMMARY preset=cloudflare');
+      expect(readFileSync(join(outDir, 'cloudflare/wrangler.toml'), 'utf8')).toContain(
+        'compatibility_flags = ["nodejs_compat"]',
+      );
     } finally {
       stdout.mockRestore();
       stderr.mockRestore();
@@ -3735,7 +3765,7 @@ export default createApp({
   routes: [
     route('/db', {
       access: { kind: 'public', reason: 'build fixture route' },
-      page: () => trustedHtml('<main>') + (process.env.DATABASE_URL ?? 'missing') + '</main>',
+      page: () => trustedHtml('<main data-env-name="DATABASE_URL">Database</main>'),
     }),
   ],
 });

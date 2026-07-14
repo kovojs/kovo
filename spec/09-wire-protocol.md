@@ -232,4 +232,10 @@ Delayed self-reschedule carries a lineage generation counter with a conservative
 a delay floor, so polling/saga loops are explicit and runaway loops dead-letter instead of hammering
 the database.
 
+The capability declaration above is framework-internal build authority. The public value returned by
+a built-in preset factory is only the opaque selection token defined by §6.6: it exposes neither the
+`JobRunner` record nor any inspection/emission callback. Build preflight resolves the exact token and
+checks the internal capability; app-authored structural or copied preset objects cannot declare a
+runner and cannot bypass the missing-runner diagnostic.
+
 ---

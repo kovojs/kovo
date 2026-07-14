@@ -1821,6 +1821,7 @@
           "./internal/audit-facts",
           "./internal/build",
           "./internal/build-context",
+          "./internal/build-preset",
           "./internal/capabilities",
           "./internal/client-modules",
           "./internal/csp",

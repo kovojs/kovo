@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -11,7 +11,7 @@ const requireFromServerTest = createRequire(import.meta.url);
 const viteEntryUrl = pathToFileURL(requireFromServerTest.resolve('vite')).href;
 
 describe('custom runtime bootstrap entries', () => {
-  it('shares bootstrap state between the real packed side-effect and root entries', () => {
+  it('shares framework singleton state across the real packed entries', () => {
     const serverRoot = fileURLToPath(new URL('..', import.meta.url));
     const packed = spawnSync('pnpm', ['run', 'build:dist'], {
       cwd: serverRoot,
@@ -29,6 +29,17 @@ describe('custom runtime bootstrap entries', () => {
     const bootstrapped = runPackedServerChild(distRoot, true);
     expect(bootstrapped.status, bootstrapped.stderr).toBe(0);
     expect(JSON.parse(bootstrapped.stdout)).toEqual({ callable: 'function' });
+
+    const presetRegistry = runPackedPresetRegistryChild(serverRoot, distRoot);
+    expect(presetRegistry.status, presetRegistry.stderr).toBe(0);
+    expect(JSON.parse(presetRegistry.stdout)).toEqual({
+      engineEmit: 'function',
+      engineName: 'node',
+      forgedAccepted: false,
+      tokenFrozen: true,
+      tokenStringKeys: [],
+      tokenSymbolKeys: 1,
+    });
   }, 30_000);
 
   it('refuses the public request-handler chokepoint when bootstrap is absent', () => {
@@ -296,4 +307,59 @@ if (${JSON.stringify(withBootstrap)}) {
     ],
     { encoding: 'utf8' },
   );
+}
+
+function runPackedPresetRegistryChild(serverRoot: string, distRoot: string) {
+  const root = mkdtempSync(join(serverRoot, '.tmp-packed-preset-registry-'));
+  try {
+    const packageJson = JSON.parse(readFileSync(join(serverRoot, 'package.json'), 'utf8')) as {
+      publishConfig: { exports: Record<string, unknown> };
+    };
+    cpSync(distRoot, join(root, 'dist'), { recursive: true });
+    writeFileSync(
+      join(root, 'package.json'),
+      `${JSON.stringify({
+        exports: packageJson.publishConfig.exports,
+        name: '@kovojs/server',
+        type: 'module',
+      })}\n`,
+      'utf8',
+    );
+    writeFileSync(
+      join(root, 'proof.mjs'),
+      `import { existsSync } from 'node:fs';
+import { registerHooks } from 'node:module';
+registerHooks({
+  resolve(specifier, context, nextResolve) {
+    if (specifier.startsWith('.') && specifier.endsWith('.js') && context.parentURL) {
+      const candidate = new URL(specifier.replace(/\\.js$/, '.ts'), context.parentURL);
+      if (existsSync(candidate)) return nextResolve(candidate.href, context);
+    }
+    return nextResolve(specifier, context);
+  },
+});
+const { node } = await import('@kovojs/server/build');
+const { resolveKovoBuildPreset } = await import('@kovojs/server/internal/build-preset');
+const token = node({ dockerfile: false });
+const engine = resolveKovoBuildPreset(token);
+const forged = resolveKovoBuildPreset({ name: 'node', emit() {} });
+process.stdout.write(JSON.stringify({
+  engineEmit: typeof engine?.emit,
+  engineName: engine?.name,
+  forgedAccepted: forged !== undefined,
+  tokenFrozen: Object.isFrozen(token),
+  tokenStringKeys: Object.getOwnPropertyNames(token),
+  tokenSymbolKeys: Object.getOwnPropertySymbols(token).length,
+}));
+`,
+      'utf8',
+    );
+    return spawnSync(
+      process.execPath,
+      ['--disable-warning=ExperimentalWarning', '--experimental-transform-types', 'proof.mjs'],
+      { cwd: root, encoding: 'utf8' },
+    );
+  } finally {
+    rmSync(root, { force: true, recursive: true });
+  }
 }

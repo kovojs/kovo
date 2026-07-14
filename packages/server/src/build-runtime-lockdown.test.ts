@@ -8,6 +8,7 @@ import { describe, expect, it } from 'vitest';
 
 import { createApp } from './app.js';
 import { cloudflare, node, vercel, type KovoPreset } from './build.js';
+import { resolveKovoBuildPreset, type KovoBuildPreset } from '@kovojs/server/internal/build-preset';
 import { writeKovoNeutralBuild, type KovoNeutralBuild } from './neutral-build.js';
 
 describe('generated request-safe runtime lockdown', () => {
@@ -121,7 +122,9 @@ export default async function handler() {
 });
 
 async function emit(preset: KovoPreset, build: KovoNeutralBuild, outDir: string): Promise<void> {
-  await preset.emit!(build, {
+  const engine: KovoBuildPreset | undefined = resolveKovoBuildPreset(preset);
+  if (engine === undefined) throw new TypeError('Expected a framework-owned build preset token.');
+  await engine.emit(build, {
     declaredEnv: [],
     log() {},
     outDir,

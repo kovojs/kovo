@@ -19,6 +19,16 @@ import {
 } from '@kovojs/core/internal/classifier-verdict';
 
 import { createContentDispositionWithFilename } from './content-disposition.js';
+import {
+  registerKovoBuildPreset,
+  type KovoBuildJobRunnerCapability as JobRunnerCapability,
+  type KovoBuildPreset as InternalKovoPreset,
+  type KovoBuildPresetCapabilities as KovoPresetCapabilities,
+  type KovoBuildPresetContext as PresetContext,
+  type KovoBuildPresetDiagnostic as PresetDiagnostic,
+  type KovoBuildPresetInspectContext as PresetInspectContext,
+  type KovoBuildPresetName,
+} from '@kovojs/server/internal/build-preset';
 import { resolvedFileSystemPath } from './vite-build-assets.js';
 import {
   buildOwnDataProperty,
@@ -73,87 +83,21 @@ const generatedJavaScriptValidationEnvironment = Object.freeze(
   Object.create(null),
 ) as NodeJS.ProcessEnv;
 
-/**
- * Build-time preset descriptor consumed by `kovo build` and deployment tooling.
- *
- * @experimental
- */
-export interface KovoPreset {
-  /** Build-time capabilities this preset can actually host. */
-  capabilities?: KovoPresetCapabilities;
-  /** Emit platform-native output from an already-written neutral build. */
-  emit?(build: KovoNeutralBuild, context: PresetContext): Promise<void> | void;
-  /** Return target-specific diagnostics before output is emitted. */
-  inspect?(
-    build: KovoNeutralBuild,
-    context: PresetInspectContext,
-  ): Promise<readonly PresetDiagnostic[]> | readonly PresetDiagnostic[];
-  /** Stable preset name, such as `node`, `vercel`, or `cloudflare`. */
-  name: string;
-}
+const kovoPresetTypeBrand: unique symbol = Symbol('Kovo built-in preset');
 
 /**
- * Deployment capabilities declared by a preset.
+ * Opaque framework-owned deployment preset selected by `kovo build`.
+ *
+ * Preset emission, inspection, and capability descriptors are intentionally not public. Create a
+ * value only through `node()`, `vercel()`, or `cloudflare()`; app-authored structural preset objects
+ * are rejected by the build preflight (SPEC §5.2 and §9.6).
  *
  * @experimental
  */
-export interface KovoPresetCapabilities {
-  /** Durable task drainer available to run jobs enqueued by `request.schedule(...)` (SPEC §9.6). */
-  jobRunner?: JobRunnerCapability;
-}
-
-/**
- * Preset-owned durable task runner capability (SPEC §9.6).
- *
- * @experimental
- */
-export interface JobRunnerCapability {
-  /** Concrete runner adapter owned by the preset. */
-  adapter: 'node-in-process';
-  /** Whether the artifact serves HTTP while draining jobs. */
-  mode: 'serve-and-run';
-}
-
-/**
- * Context passed to a preset while it validates target-specific constraints.
- *
- * @experimental
- */
-export interface PresetInspectContext {
-  /** Environment variables the app declares or the build inferred, such as `DATABASE_URL`. */
-  declaredEnv: readonly string[];
-  /** Read the bundled request handler source when a preset needs target-specific inspection. */
-  readServerHandlerSource?(): Promise<string | undefined> | string | undefined;
-}
-
-/**
- * Context passed to a preset while it transforms the neutral build output.
- *
- * @experimental
- */
-export interface PresetContext extends PresetInspectContext {
-  /** Build log sink supplied by the CLI or host integration. */
-  log(message: string): void;
-  /** Platform output directory for the preset. */
-  outDir: string;
-  /** Operator-selected project root used for project metadata and lockfile inputs. */
-  projectRoot?: string;
-  /** Read the neutral build facts the preset is transforming. */
-  readNeutral(): KovoNeutralBuild;
-}
-
-/**
- * A preset validation diagnostic reported before platform output is emitted.
- *
- * @experimental
- */
-export interface PresetDiagnostic {
-  /** Stable diagnostic code owned by the preset. */
-  code: string;
-  /** Human-readable diagnostic message. */
-  message: string;
-  /** Whether the diagnostic blocks the build. */
-  severity: 'error' | 'warning';
+export interface KovoPreset<
+  Name extends 'cloudflare' | 'node' | 'vercel' = 'cloudflare' | 'node' | 'vercel',
+> {
+  readonly [kovoPresetTypeBrand]: Name;
 }
 
 /**
@@ -242,7 +186,7 @@ export interface CloudflarePresetOptions extends DeploySkewPresetOptions {
  */
 export interface KovoConfig {
   /** Platform preset used by `kovo build` when CLI/env overrides are absent. */
-  preset?: KovoPreset;
+  readonly preset?: KovoPreset;
 }
 
 /**
@@ -263,42 +207,43 @@ export function defineConfig(config: KovoConfig): KovoConfig {
  *
  * @experimental
  */
-export function node(options: NodePresetOptions = {}): KovoPreset {
+export function node(options: NodePresetOptions = {}): KovoPreset<'node'> {
   const pinnedOptions = snapshotNodePresetOptions(options);
   const jobRunner = nodeJobRunnerCapability(pinnedOptions);
   const constructionProjectRoot = resolvedFileSystemPath(process.cwd());
-  const preset = createSecurityNullRecord() as unknown as KovoPreset;
-  if (jobRunner !== undefined) {
-    const capabilities = createSecurityNullRecord() as KovoPresetCapabilities;
-    capabilities.jobRunner = jobRunner;
-    preset.capabilities = freezeBuildSecurityValue(capabilities);
-  }
-  preset.emit = (build, context) =>
-    emitNodePreset(build, context, pinnedOptions, constructionProjectRoot);
-  preset.inspect = (build, context) => {
-    const retentionDiagnostics = clientModuleRetentionDiagnostics(build, 'node', pinnedOptions);
-    const runnerDiagnostics = nodeJobRunnerDiagnostics(build, pinnedOptions, jobRunner, context);
-    const appendNodeDiagnostics = (
-      jobRunnerDiagnostics: readonly PresetDiagnostic[],
-    ): readonly PresetDiagnostic[] =>
-      nodePresetDiagnostics(
-        build,
-        concatenatePresetDiagnostics(
-          retentionDiagnostics,
-          jobRunnerDiagnostics,
-          'node preset diagnostics',
-        ),
-      );
-    if (securityIsPromise(runnerDiagnostics)) {
-      return securityPromiseThen(
-        runnerDiagnostics as Promise<readonly PresetDiagnostic[]>,
-        appendNodeDiagnostics,
-      );
-    }
-    return appendNodeDiagnostics(runnerDiagnostics);
-  };
-  preset.name = 'node';
-  return freezeBuildSecurityValue(preset) as KovoPreset;
+  const capabilities =
+    jobRunner === undefined
+      ? undefined
+      : freezeBuildSecurityValue({ jobRunner } satisfies KovoPresetCapabilities);
+  const engine = freezeBuildSecurityValue({
+    ...(capabilities === undefined ? {} : { capabilities }),
+    emit: (build, context) =>
+      emitNodePreset(build, context, pinnedOptions, constructionProjectRoot),
+    inspect: (build, context) => {
+      const retentionDiagnostics = clientModuleRetentionDiagnostics(build, 'node', pinnedOptions);
+      const runnerDiagnostics = nodeJobRunnerDiagnostics(build, pinnedOptions, jobRunner, context);
+      const appendNodeDiagnostics = (
+        jobRunnerDiagnostics: readonly PresetDiagnostic[],
+      ): readonly PresetDiagnostic[] =>
+        nodePresetDiagnostics(
+          build,
+          concatenatePresetDiagnostics(
+            retentionDiagnostics,
+            jobRunnerDiagnostics,
+            'node preset diagnostics',
+          ),
+        );
+      if (securityIsPromise(runnerDiagnostics)) {
+        return securityPromiseThen(
+          runnerDiagnostics as Promise<readonly PresetDiagnostic[]>,
+          appendNodeDiagnostics,
+        );
+      }
+      return appendNodeDiagnostics(runnerDiagnostics);
+    },
+    name: 'node',
+  } satisfies InternalKovoPreset);
+  return builtInKovoPresetToken('node', engine);
 }
 
 /**
@@ -310,31 +255,32 @@ export function node(options: NodePresetOptions = {}): KovoPreset {
  *
  * @experimental
  */
-export function vercel(options: VercelPresetOptions = {}): KovoPreset {
+export function vercel(options: VercelPresetOptions = {}): KovoPreset<'vercel'> {
   const pinnedOptions = snapshotVercelPresetOptions(options);
-  const preset = createSecurityNullRecord() as unknown as KovoPreset;
-  preset.emit = (build, context) => emitVercelPreset(build, context, pinnedOptions);
-  preset.inspect = (build, _context) => {
-    const diagnostics = concatenatePresetDiagnostics(
-      clientModuleRetentionDiagnostics(build, 'vercel', pinnedOptions),
-      missingJobRunnerDiagnostics(build, 'vercel'),
-      'vercel preset diagnostics',
-    );
-    if (build.serverHandlerPath === undefined && build.staticOutput === undefined) {
-      appendPresetDiagnostic(
-        diagnostics,
-        {
-          code: 'vercel-missing-handler',
-          message: 'The vercel preset requires a neutral build with server/handler.mjs.',
-          severity: 'error',
-        },
-        'vercel missing-handler diagnostic',
+  const engine = freezeBuildSecurityValue({
+    emit: (build, context) => emitVercelPreset(build, context, pinnedOptions),
+    inspect: (build) => {
+      const diagnostics = concatenatePresetDiagnostics(
+        clientModuleRetentionDiagnostics(build, 'vercel', pinnedOptions),
+        missingJobRunnerDiagnostics(build, 'vercel'),
+        'vercel preset diagnostics',
       );
-    }
-    return diagnostics;
-  };
-  preset.name = 'vercel';
-  return freezeBuildSecurityValue(preset) as KovoPreset;
+      if (build.serverHandlerPath === undefined && build.staticOutput === undefined) {
+        appendPresetDiagnostic(
+          diagnostics,
+          {
+            code: 'vercel-missing-handler',
+            message: 'The vercel preset requires a neutral build with server/handler.mjs.',
+            severity: 'error',
+          },
+          'vercel missing-handler diagnostic',
+        );
+      }
+      return diagnostics;
+    },
+    name: 'vercel',
+  } satisfies InternalKovoPreset);
+  return builtInKovoPresetToken('vercel', engine);
 }
 
 /**
@@ -345,38 +291,47 @@ export function vercel(options: VercelPresetOptions = {}): KovoPreset {
  *
  * @experimental
  */
-export function cloudflare(options: CloudflarePresetOptions = {}): KovoPreset {
+export function cloudflare(options: CloudflarePresetOptions = {}): KovoPreset<'cloudflare'> {
   const pinnedOptions = snapshotCloudflarePresetOptions(options);
-  const preset = createSecurityNullRecord() as unknown as KovoPreset;
-  preset.emit = (build, context) => emitCloudflarePreset(build, context, pinnedOptions);
-  preset.inspect = async (build, context) => {
-    const diagnostics = concatenatePresetDiagnostics(
-      clientModuleRetentionDiagnostics(build, 'cloudflare', pinnedOptions),
-      missingJobRunnerDiagnostics(build, 'cloudflare'),
-      'cloudflare preset diagnostics',
-    );
-    if (build.serverHandlerPath === undefined && build.staticOutput === undefined) {
-      appendPresetDiagnostic(
-        diagnostics,
-        {
-          code: 'cloudflare-missing-handler',
-          message: 'The cloudflare preset requires a neutral build with server/handler.mjs.',
-          severity: 'error',
-        },
-        'cloudflare missing-handler diagnostic',
+  const engine = freezeBuildSecurityValue({
+    emit: (build, context) => emitCloudflarePreset(build, context, pinnedOptions),
+    inspect: async (build, context) => {
+      const diagnostics = concatenatePresetDiagnostics(
+        clientModuleRetentionDiagnostics(build, 'cloudflare', pinnedOptions),
+        missingJobRunnerDiagnostics(build, 'cloudflare'),
+        'cloudflare preset diagnostics',
       );
-    }
-    if (build.serverHandlerPath === undefined) return diagnostics;
+      if (build.serverHandlerPath === undefined && build.staticOutput === undefined) {
+        appendPresetDiagnostic(
+          diagnostics,
+          {
+            code: 'cloudflare-missing-handler',
+            message: 'The cloudflare preset requires a neutral build with server/handler.mjs.',
+            severity: 'error',
+          },
+          'cloudflare missing-handler diagnostic',
+        );
+      }
+      if (build.serverHandlerPath === undefined) return diagnostics;
 
-    appendPresetDiagnostics(
-      diagnostics,
-      await cloudflareRuntimeDiagnostics(build, context),
-      'cloudflare runtime diagnostics',
-    );
-    return diagnostics;
-  };
-  preset.name = 'cloudflare';
-  return freezeBuildSecurityValue(preset) as KovoPreset;
+      appendPresetDiagnostics(
+        diagnostics,
+        await cloudflareRuntimeDiagnostics(build, context),
+        'cloudflare runtime diagnostics',
+      );
+      return diagnostics;
+    },
+    name: 'cloudflare',
+  } satisfies InternalKovoPreset);
+  return builtInKovoPresetToken('cloudflare', engine);
+}
+
+function builtInKovoPresetToken<Name extends KovoBuildPresetName>(
+  name: Name,
+  engine: InternalKovoPreset,
+): KovoPreset<Name> {
+  const token = freezeBuildSecurityValue({ [kovoPresetTypeBrand]: name });
+  return registerKovoBuildPreset(token, engine);
 }
 
 async function emitNodePreset(
@@ -650,10 +605,13 @@ function deploySkewRetentionProofSatisfiesFloor(
 function nodeJobRunnerCapability(options: NodePresetOptions): JobRunnerCapability | undefined {
   if (options.jobRunner === false) return undefined;
   if (options.jobRunner?.mode === 'runner-only') return undefined;
-  const capability = createSecurityNullRecord() as unknown as JobRunnerCapability;
+  const capability = createSecurityNullRecord() as unknown as {
+    adapter: JobRunnerCapability['adapter'];
+    mode: JobRunnerCapability['mode'];
+  };
   capability.adapter = 'node-in-process';
   capability.mode = 'serve-and-run';
-  return freezeBuildSecurityValue(capability) as JobRunnerCapability;
+  return freezeBuildSecurityValue(capability);
 }
 
 function nodeJobRunnerDiagnostics(

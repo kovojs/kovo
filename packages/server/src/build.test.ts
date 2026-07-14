@@ -34,12 +34,13 @@ import { computeRenderPlanFingerprint } from './client-modules.js';
 import { renderedHtml } from './html.js';
 import { route } from './route.js';
 import {
-  cloudflare,
-  node,
-  vercel,
+  cloudflare as cloudflareToken,
+  node as nodeToken,
+  vercel as vercelToken,
   type NodePresetOptions,
   type VercelPresetOptions,
 } from './build.js';
+import { resolveKovoBuildPreset, type KovoBuildPreset } from '@kovojs/server/internal/build-preset';
 import { stylesheet, type StylesheetAsset } from './hints.js';
 import { writeKovoNeutralBuild } from './neutral-build.js';
 import {
@@ -69,32 +70,69 @@ interface NodeAdapterModule {
   ): Promise<void>;
 }
 
+function presetEngine(token: object): KovoBuildPreset {
+  const preset = resolveKovoBuildPreset(token);
+  if (preset === undefined) throw new TypeError('Expected a framework-owned build preset token.');
+  return preset;
+}
+
+function node(...args: Parameters<typeof nodeToken>): KovoBuildPreset {
+  return presetEngine(nodeToken(...args));
+}
+
+function vercel(...args: Parameters<typeof vercelToken>): KovoBuildPreset {
+  return presetEngine(vercelToken(...args));
+}
+
+function cloudflare(...args: Parameters<typeof cloudflareToken>): KovoBuildPreset {
+  return presetEngine(cloudflareToken(...args));
+}
+
 describe('server build-time deployment API', () => {
   it('exposes the build subpath without promoting it to the runtime root', () => {
-    expect(packageBuildApi.cloudflare).toBe(cloudflare);
-    expect(packageBuildApi.node).toBe(node);
-    expect(packageBuildApi.vercel).toBe(vercel);
+    expect(packageBuildApi.cloudflare).toBe(cloudflareToken);
+    expect(packageBuildApi.node).toBe(nodeToken);
+    expect(packageBuildApi.vercel).toBe(vercelToken);
     expect(packageBuildApi).not.toHaveProperty('writeKovoNeutralBuild');
-    expect(node()).toMatchObject({ name: 'node' });
-    expect(node({ dockerfile: false })).toMatchObject({ name: 'node' });
-    expect(vercel({ maxDuration: 10, regions: ['iad1'] })).toMatchObject({ name: 'vercel' });
-    expect(cloudflare({ compatibilityDate: '2026-06-18', name: 'kovo-test' })).toMatchObject({
-      name: 'cloudflare',
+    const nodePreset = nodeToken();
+    const vercelPreset = vercelToken({ maxDuration: 10, regions: ['iad1'] });
+    const cloudflarePreset = cloudflareToken({
+      compatibilityDate: '2026-06-18',
+      name: 'kovo-test',
     });
-    expect(node()).toMatchObject({
+    if (false) {
+      // @ts-expect-error SPEC §5.2/§9.6: app-authored structural descriptors are not presets.
+      packageBuildApi.defineConfig({ preset: { name: 'node' } });
+      // @ts-expect-error Built-in preset authority is private and cannot be invoked from the token.
+      void nodePreset.emit;
+    }
+    for (const token of [nodePreset, vercelPreset, cloudflarePreset]) {
+      expect(Object.isFrozen(token)).toBe(true);
+      expect(token).not.toHaveProperty('capabilities');
+      expect(token).not.toHaveProperty('emit');
+      expect(token).not.toHaveProperty('inspect');
+      expect(token).not.toHaveProperty('name');
+      expect(Reflect.ownKeys(token)).toHaveLength(1);
+      expect(typeof Reflect.ownKeys(token)[0]).toBe('symbol');
+    }
+    expect(presetEngine(nodePreset)).toMatchObject({
       capabilities: { jobRunner: { adapter: 'node-in-process', mode: 'serve-and-run' } },
       name: 'node',
     });
+    expect(presetEngine(vercelPreset).name).toBe('vercel');
+    expect(presetEngine(cloudflarePreset).name).toBe('cloudflare');
     expect(node({ jobRunner: false }).capabilities).toBeUndefined();
     expect(node({ jobRunner: false }).name).toBe('node');
     expect(
-      node({
-        retention: {
-          hours: 24,
-          immutableClientModules: 'retained',
-          priorTokenQueryReads: 'retained',
-        },
-      }),
+      presetEngine(
+        nodeToken({
+          retention: {
+            hours: 24,
+            immutableClientModules: 'retained',
+            priorTokenQueryReads: 'retained',
+          },
+        }),
+      ),
     ).toMatchObject({ name: 'node' });
   });
 
