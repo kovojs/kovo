@@ -135,7 +135,11 @@ export default defineConfig({
         ],
       },
       browser: {
-        command: 'vitest --config vitest.browser.config.ts --run',
+        // The complexity floor uses wall-clock time. Run it once per engine after the broad
+        // multi-engine suite so three 6,000-node reconciliations cannot contend on a four-core CI
+        // runner and manufacture a false resource-regression verdict (SPEC §6.6).
+        command:
+          'vitest --config vitest.browser.config.ts --run --exclude packages/browser/src/morph-complexity.browser.test.ts && vitest --config vitest.browser.config.ts --run packages/browser/src/morph-complexity.browser.test.ts --browser.name chromium && vitest --config vitest.browser.config.ts --run packages/browser/src/morph-complexity.browser.test.ts --browser.name firefox && vitest --config vitest.browser.config.ts --run packages/browser/src/morph-complexity.browser.test.ts --browser.name webkit',
         input: [
           { auto: true },
           { pattern: 'vitest.browser.config.ts', base: 'workspace' },
