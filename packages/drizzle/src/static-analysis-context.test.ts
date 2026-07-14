@@ -14,9 +14,48 @@ import {
   type ExtractedFunction,
   type TouchGraphProjectOptions,
 } from '@kovojs/drizzle/internal/static';
+import { runWithSourceFileParseCache, withParsedSourceFile } from './static/tables.js';
 import { pgDatabaseTypes } from './test-helpers.js';
 
 describe('@kovojs/drizzle static analysis context', () => {
+  it('shares one syntactic project across the per-run source parse cache', () => {
+    let firstProject: unknown;
+    let secondProject: unknown;
+
+    runWithSourceFileParseCache(() => {
+      withParsedSourceFile(
+        { fileName: 'src/first.ts', source: 'export const first = 1;' },
+        (sourceFile) => {
+          firstProject = sourceFile.getProject();
+        },
+      );
+      withParsedSourceFile(
+        { fileName: 'src/second.ts', source: 'export const second = 2;' },
+        (sourceFile) => {
+          secondProject = sourceFile.getProject();
+        },
+      );
+    });
+
+    // SPEC §11.1: the run cache is one bounded syntactic project, not one retained project/file.
+    expect(firstProject).toBe(secondProject);
+  });
+
+  it('fails closed when one parse-cache run sees different bytes for the same file', () => {
+    expect(() =>
+      runWithSourceFileParseCache(() => {
+        withParsedSourceFile(
+          { fileName: 'src/changing.ts', source: 'export const value = 1;' },
+          () => undefined,
+        );
+        withParsedSourceFile(
+          { fileName: 'src/changing.ts', source: 'export const value = 2;' },
+          () => undefined,
+        );
+      }),
+    ).toThrow('changed within one parse-cache run');
+  });
+
   it('projects the build aggregate from the same facts as the individual passes', () => {
     const project = fixtureProject();
     const queries = extractQueryFactsFromProject(project);

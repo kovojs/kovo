@@ -91,13 +91,24 @@ function variableDeclarationIsExported(
 }
 
 /**
- * Per-run cache of syntactic {@link SourceFile}s keyed by `${fileName}\0${source}`
- * (SPEC §11.1). Populated only while a {@link runWithSourceFileParseCache} scope is
+ * Per-run cache of syntactic {@link SourceFile}s keyed by file name and bound to the first
+ * observed source snapshot (SPEC §11.1). Populated only while a
+ * {@link runWithSourceFileParseCache} scope is
  * active, and the OUTERMOST scope owns teardown (`forget()` + drop the Map) on exit.
  * It is deliberately NOT process-global: a global cache (or a no-op dispose) leaks
  * ts-morph Projects and OOM'd the drizzle suite in a prior prototype.
  */
-let activeParseCache: Map<string, SourceFile> | undefined;
+interface CachedSyntacticSourceFile {
+  readonly source: string;
+  readonly sourceFile: SourceFile;
+}
+
+interface SourceFileParseCache {
+  readonly files: Map<string, CachedSyntacticSourceFile>;
+  readonly project: Project;
+}
+
+let activeParseCache: SourceFileParseCache | undefined;
 
 /**
  * Run `fn` with a per-run {@link withParsedSourceFile} parse cache active so repeated
@@ -115,18 +126,21 @@ export function runWithSourceFileParseCache<T>(fn: () => T): T {
   // Reentrant: an outer scope already owns a cache and its teardown; reuse it.
   if (activeParseCache) return fn();
 
-  const cache = new Map<string, SourceFile>();
+  const cache: SourceFileParseCache = {
+    files: new Map(),
+    project: createSyntacticProject(),
+  };
   activeParseCache = cache;
   try {
     return fn();
   } finally {
-    for (const sourceFile of cache.values()) sourceFile.forget();
+    for (const cached of cache.files.values()) cached.sourceFile.forget();
     activeParseCache = undefined;
   }
 }
 
-function createSyntacticSourceFile(file: SourceFileInput): SourceFile {
-  const project = new Project({
+function createSyntacticProject(): Project {
+  return new Project({
     compilerOptions: {
       allowJs: false,
       moduleResolution: ts.ModuleResolutionKind.Bundler,
@@ -137,6 +151,12 @@ function createSyntacticSourceFile(file: SourceFileInput): SourceFile {
     },
     skipAddingFilesFromTsConfig: true,
   });
+}
+
+function createSyntacticSourceFile(
+  file: SourceFileInput,
+  project: Project = createSyntacticProject(),
+): SourceFile {
   // `overwrite: true` so an absolute `fileName` that already exists on disk (e.g. the
   // build-time data-plane gate passes resolved app paths, SPEC §11.4) does not throw the
   // ts-morph "source file already exists" error. Mirrors project-setup.ts createSourceFile.
@@ -150,12 +170,18 @@ function createSyntacticSourceFile(file: SourceFileInput): SourceFile {
   const cache = activeParseCache;
   if (cache) {
     // Within a run scope the scope owns teardown, so never `forget()` here.
-    const key = `${file.fileName}\0${file.source}`;
-    const cached = cache.get(key);
-    if (cached) return visit(cached);
+    const cached = cache.files.get(file.fileName);
+    if (cached) {
+      if (cached.source !== file.source) {
+        throw new TypeError(
+          `Kovo static-analysis source ${JSON.stringify(file.fileName)} changed within one parse-cache run.`,
+        );
+      }
+      return visit(cached.sourceFile);
+    }
 
-    const sourceFile = createSyntacticSourceFile(file);
-    cache.set(key, sourceFile);
+    const sourceFile = createSyntacticSourceFile(file, cache.project);
+    cache.files.set(file.fileName, { source: file.source, sourceFile });
     return visit(sourceFile);
   }
 

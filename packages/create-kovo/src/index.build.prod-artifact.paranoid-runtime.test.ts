@@ -184,12 +184,13 @@ describe('create-kovo starter (build integration: paranoid runtime chokes)', () 
 
   // @kovo-security-certifies KV435 phase-5-1-full-paranoid-dogfood-read-acceptance
   // @kovo-security-certifies KV406 phase-5-1-full-paranoid-dogfood-write-acceptance
-  it('runs the Phase 5.1 full-paranoid dogfood acceptance across read and write shapes', async () => {
+  it('rejects volatile SQLite replay in production, then runs Phase 5.1 sink acceptance under test posture', async () => {
     const tempParent = tmpdir();
     mkdirSync(tempParent, { recursive: true });
     const root = mkdtempSync(join(tempParent, 'create-kovo-phase5-paranoid-dogfood-'));
     const port = await reservePort();
     const jar = new Map<string, string>();
+    let productionServer: ChildProcessWithoutNullStreams | undefined;
     let server: ChildProcessWithoutNullStreams | undefined;
 
     try {
@@ -207,19 +208,47 @@ describe('create-kovo starter (build integration: paranoid runtime chokes)', () 
 
       buildParanoidProductionArtifact(root);
 
+      productionServer = spawn(process.execPath, ['dist/server/server.mjs'], {
+        cwd: root,
+        detached: process.platform !== 'win32',
+        env: {
+          ...withRepoBinOnPath(),
+          BETTER_AUTH_URL: 'http://127.0.0.1',
+          HOST: '127.0.0.1',
+          KOVO_PARANOID: '1',
+          NODE_ENV: 'production',
+          PORT: '0',
+        },
+      });
+      const productionOutput = collectOutput(productionServer);
+      await Promise.race([
+        onceExit(productionServer),
+        delay(30_000).then(() => {
+          throw new Error(
+            `SQLite production artifact did not reject volatile replay:\n${productionOutput()}`,
+          );
+        }),
+      ]);
+      expect(productionOutput()).toContain('KV436');
+      expect(productionOutput()).toContain('volatile memory mutationReplayStore');
+
+      // SPEC §10.3 production rejection is proven above. NODE_ENV=test below is deliberately
+      // limited to exercising the SQLite-specific paranoid read/write sink acceptance matrix.
+      const origin = `http://127.0.0.1:${port}`;
+
       server = spawn(process.execPath, ['dist/server/server.mjs'], {
         cwd: root,
         detached: process.platform !== 'win32',
         env: {
           ...withRepoBinOnPath(),
+          BETTER_AUTH_URL: origin,
           HOST: '127.0.0.1',
           KOVO_PARANOID: '1',
-          NODE_ENV: 'production',
+          NODE_ENV: 'test',
           PORT: String(port),
         },
       });
       const output = collectOutput(server);
-      const origin = `http://127.0.0.1:${port}`;
       const marker = `phase5-${Date.now()}-${Math.random().toString(16).slice(2)}`;
       const contactEmail = `${marker}-contact@example.com`;
 
@@ -227,7 +256,7 @@ describe('create-kovo starter (build integration: paranoid runtime chokes)', () 
       await signInDemoUser(root, origin, jar, output);
       await expectAuthorizationQueryShapes(origin, jar);
       await expectBlockedReadShapes(origin, jar);
-      await expectAllowedReadShapes(origin, jar);
+      await expectAllowedReadShapes(origin, jar, output);
       await expectNonSecretAggregateEndpoint(origin);
       await expectSafeBuilderExpressionEndpoint(origin);
       await expectHiddenBuilderExpressionEndpoint(origin);
@@ -247,10 +276,11 @@ describe('create-kovo starter (build integration: paranoid runtime chokes)', () 
       expect(output()).not.toContain('phase5-builder-secret');
       expect(output()).not.toContain('phase5-raw-secret');
     } finally {
+      await stopProcess(productionServer);
       await stopProcess(server);
       rmSync(root, { force: true, recursive: true });
     }
-  }, 240_000);
+  }, 300_000);
 });
 
 describeIfPostgres(
@@ -669,14 +699,18 @@ async function expectBlockedReadShapes(origin: string, jar: Map<string, string>)
   }
 }
 
-async function expectAllowedReadShapes(origin: string, jar: Map<string, string>): Promise<void> {
+async function expectAllowedReadShapes(
+  origin: string,
+  jar: Map<string, string>,
+  output: () => string,
+): Promise<void> {
   for (const testCase of allowedReadCases) {
     const response = await fetch(`${origin}/_q/${testCase.key}`, {
       headers: { cookie: cookieHeader(jar) },
     });
     const body = await response.text();
 
-    expect(response.status, `${testCase.key}: ${body}`).toBe(200);
+    expect(response.status, `${testCase.key}: ${body}\n${output()}`).toBe(200);
     expect(body).toContain(`<kovo-query name="${testCase.key}"`);
     expect(body).toContain(testCase.witness);
     if (!testCase.leaksSecret) expect(body).not.toContain('runtime-secret-value');

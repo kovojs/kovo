@@ -2609,6 +2609,8 @@ export function addSqliteRuntimeSecretProvenanceProof(root: string): void {
       '  total: s.number().optional(),',
       '});',
       'const sqliteSecretRowsSchema = s.object({ items: s.array(sqliteSecretRowSchema) });',
+      'const sqliteSecretPublicRowsSchema = s.object({ items: s.array(s.object({ id: s.string(), label: s.string() })) });',
+      'const sqliteSecretRevealRowsSchema = s.object({ items: s.array(s.object({ company: s.string(), id: s.string() })) });',
       '',
       'function runtimeSecretSource(): typeof runtimeSecretProof {',
       '  return runtimeSecretProof;',
@@ -2897,7 +2899,7 @@ export function addSqliteRuntimeSecretProvenanceProof(root: string): void {
       '',
       'export const sqliteSecretNonSecretProjectionQuery = query({',
       '  access: [appAuthed],',
-      '  output: sqliteSecretRowsSchema,',
+      '  output: sqliteSecretPublicRowsSchema,',
       '  reads: [],',
       '  async load(_input: unknown, context?: AppQueryLoadContext): Promise<SqliteSecretRows> {',
       '    const db = requireDb(context);',
@@ -2910,14 +2912,14 @@ export function addSqliteRuntimeSecretProvenanceProof(root: string): void {
       '',
       'export const sqliteSecretComputedPublicQuery = query({',
       '  access: [appAuthed],',
-      '  output: sqliteSecretRowsSchema,',
+      '  output: sqliteSecretPublicRowsSchema,',
       '  reads: [],',
       '  async load(_input: unknown, context?: AppQueryLoadContext): Promise<SqliteSecretRows> {',
       '    const db = requireDb(context);',
       '    const proof = runtimeSecretSource();',
       '    const rows = await db.select({ id: proof.id, label: proof.label }).from(proof);',
       '    return {',
-      '      items: rows.map((row) => ({ id: row.id, label: row.label?.toUpperCase() })),',
+      '      items: rows.map((row) => ({ id: row.id, label: row.label.toUpperCase() })),',
       '    };',
       '  },',
       '});',
@@ -2961,7 +2963,7 @@ export function addSqliteRuntimeSecretProvenanceProof(root: string): void {
       '',
       'export const sqliteSecretRevealQuery = query({',
       '  access: [appAuthed],',
-      '  output: sqliteSecretRowsSchema,',
+      '  output: sqliteSecretRevealRowsSchema,',
       '  reads: [],',
       '  async load(_input: unknown, context?: AppQueryLoadContext): Promise<SqliteSecretRows> {',
       '    const db = requireDb(context);',
@@ -3754,6 +3756,25 @@ export function addPostgresParanoidPhase5DogfoodProof(root: string): void {
     '  seedSql: [SEED_CONTACTS, ...PHASE5_PG_PARANOID_SEED],',
     'phase 5 postgres seed registration',
   );
+  const mutationReplayExport = [
+    '/** Durable SPEC §10.3 mutation replay truth, reachable only through the framework system role. */',
+    'export function appRuntimeMutationReplayStore(): MutationReplayStore {',
+    '  return getAppDatabase().mutationReplayStore;',
+    '}',
+  ].join('\n');
+  runtimeDb = replaceRequired(
+    runtimeDb,
+    mutationReplayExport,
+    [
+      mutationReplayExport,
+      '',
+      '/** Durable SPEC §10.3 webhook replay truth for the Phase 5 production proof. */',
+      'export function appRuntimeWebhookReplayStore() {',
+      '  return getAppDatabase().webhookReplayStore;',
+      '}',
+    ].join('\n'),
+    'phase 5 postgres durable webhook replay export',
+  );
   writeFileSync(runtimeDbPath, runtimeDb, 'utf8');
 
   writeFileSync(
@@ -3762,8 +3783,9 @@ export function addPostgresParanoidPhase5DogfoodProof(root: string): void {
       "import { sql, trustedSql } from '@kovojs/drizzle';",
       "import { eq } from 'drizzle-orm';",
       "import { alias, pgTable, text } from 'drizzle-orm/pg-core';",
-      "import { createMemoryWebhookReplayStore, domain, endpoint, mutation, publicAccess, query, s, serverValue, task, webhook, type JsonValue, type QueryLoadContext, type TaskSchedulingRequest } from '@kovojs/server';",
+      "import { domain, endpoint, mutation, publicAccess, query, s, serverValue, task, webhook, type JsonValue, type QueryLoadContext, type TaskSchedulingRequest } from '@kovojs/server';",
       '',
+      "import { appRuntimeWebhookReplayStore } from './_kovo/app-runtime-db.js';",
       "import { appAuthed, appCsrf, type AppRequest } from './auth.js';",
       "import type { AppDb } from './db.js';",
       "import { readonlyAppDb } from './db.js';",
@@ -4058,7 +4080,7 @@ export function addPostgresParanoidPhase5DogfoodProof(root: string): void {
       "  method: 'GET', reason: 'phase 5 postgres status proof', response: { appOwnedSafety: true, body: 'json', cache: 'no-store' },",
       '});',
       '',
-      'const webhookReplayStore = createMemoryWebhookReplayStore();',
+      'const webhookReplayStore = appRuntimeWebhookReplayStore();',
       "export const phase5PgWebhook = webhook('/webhooks/phase5-pg-read', {",
       '  access: publicProof, idempotency: (input) => input.id, input: s.object({ id: s.string() }), replayStore: webhookReplayStore, verify: "none", verifyJustification: "local phase 5 postgres webhook proof", writes: [eventDomain],',
       '  async handler(input, context) {',
@@ -4196,7 +4218,7 @@ export function addPostgresParanoidFollowup8Shapes(root: string): void {
   );
   proof = replaceRequired(
     proof,
-    'const webhookReplayStore = createMemoryWebhookReplayStore();',
+    'const webhookReplayStore = appRuntimeWebhookReplayStore();',
     [
       "export const phase5PgReferenceMembershipEndpoint = endpoint('/api/phase5-pg-reference-memberships', {",
       '  access: publicProof, auth: { justification: "public phase 5 postgres reference-membership proof", kind: "none" }, csrf: false, csrfJustification: "read-only phase 5 postgres reference-membership proof", db: true,',
@@ -4214,7 +4236,7 @@ export function addPostgresParanoidFollowup8Shapes(root: string): void {
       "  method: 'GET', reason: 'phase 5 postgres reference-membership proof', response: { appOwnedSafety: true, body: 'json', cache: 'no-store' },",
       '});',
       '',
-      'const webhookReplayStore = createMemoryWebhookReplayStore();',
+      'const webhookReplayStore = appRuntimeWebhookReplayStore();',
     ].join('\n'),
     'phase 5 postgres followup 8 endpoint insertion',
   );
