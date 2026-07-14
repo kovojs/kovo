@@ -691,6 +691,11 @@ async function loadAndCheckBuildApp(
   security: KovoCommandSecurityDisposition,
   invocationRoot: string,
 ) {
+  const preEvaluationStaticTrust = runPreEvaluationStaticTrustPreflight(
+    resolvedAppModulePath,
+    invocationRoot,
+    security.paranoidStaticAdvisory,
+  );
   // SPEC §6.6 rule 6: the exact app-resolved SSR graph must finish its trust-root transition
   // before any other build lane is allowed to evaluate authored modules. In particular, do not
   // race CSS discovery against the server/compiler/data-plane preload.
@@ -709,6 +714,7 @@ async function loadAndCheckBuildApp(
     cache: options.cache,
     execution,
     paranoidStaticAdvisory: security.paranoidStaticAdvisory,
+    preEvaluationStaticTrust,
     reachableSessionAuthorityFacts,
     root: invocationRoot,
   });
@@ -724,6 +730,37 @@ async function loadAndCheckBuildApp(
     vercel,
     writeKovoNeutralBuild,
   };
+}
+
+interface PreEvaluationStaticTrust {
+  readonly facts: ReturnType<typeof collectStaticBuildTrustFactsFromProject>;
+  readonly files: readonly BuildCheckSourceFile[];
+}
+
+function runPreEvaluationStaticTrustPreflight(
+  appModulePath: string,
+  root: string,
+  paranoidStaticAdvisory: boolean,
+): PreEvaluationStaticTrust {
+  const files = buildCheckSourceFiles(appModulePath, root);
+  // SPEC §6.6: authored modules are untrusted inputs to the compiler. Reject statically visible
+  // authority and credential-wire escapes before SSR evaluation can execute top-level app code or
+  // reject a framework factory shape that the runtime-derived registry does not understand. The
+  // full graph preflight still runs after app loading so this only advances the existing KV424 gate.
+  const facts =
+    files.length === 0
+      ? { capabilities: [], cookieDowngrades: [], unregisteredSinks: [] }
+      : collectStaticBuildTrustFactsFromProject({ files });
+  const { unregisteredSinks } = facts;
+  if (unregisteredSinks.length === 0) return { facts, files };
+
+  const result = kovoCheck({ unregisteredSinks }, { paranoidStaticAdvisory });
+  if (result.exitCode === 0) return { facts, files };
+  if (paranoidStaticAdvisory && paranoidBuildCheckMayProceed(result.output)) {
+    return { facts, files };
+  }
+
+  throw new Error(`kovo build check preflight failed:\n${buildCheckFailureOutput(result.output)}`);
 }
 
 async function runTypeScriptBuildPreflight(
@@ -800,6 +837,7 @@ async function runKovoBuildCheckPreflight(
     cache: boolean;
     execution: BuildExecutionModule;
     paranoidStaticAdvisory: boolean;
+    preEvaluationStaticTrust: PreEvaluationStaticTrust;
     reachableSessionAuthorityFacts: readonly CoreGraph.SessionAuthorityFact[];
     root: string;
   },
@@ -884,6 +922,7 @@ async function buildCheckGraph(
   options: {
     cache: boolean;
     execution: BuildExecutionModule;
+    preEvaluationStaticTrust: PreEvaluationStaticTrust;
     reachableSessionAuthorityFacts: readonly CoreGraph.SessionAuthorityFact[];
     root: string;
   },
@@ -980,11 +1019,12 @@ async function staticBuildCheckGraph(
   options: {
     cache: boolean;
     execution: BuildExecutionModule;
+    preEvaluationStaticTrust: PreEvaluationStaticTrust;
     reachableSessionAuthorityFacts: readonly CoreGraph.SessionAuthorityFact[];
     root: string;
   },
 ): Promise<KovoBuildCheckArtifacts> {
-  const files = buildCheckSourceFiles(appModulePath, options.root);
+  const files = options.preEvaluationStaticTrust.files;
   const [drizzleFacts, sourceGraphFacts] =
     files.length === 0
       ? [
@@ -1009,9 +1049,7 @@ async function staticBuildCheckGraph(
   // corpus and adds request-handler process/call-closure facts before any deploy artifact writes.
   // The aggregate shares one in-memory syntactic project across all three build trust surfaces.
   const { capabilities, cookieDowngrades, unregisteredSinks } =
-    files.length === 0
-      ? { capabilities: [], cookieDowngrades: [], unregisteredSinks: [] }
-      : collectStaticBuildTrustFactsFromProject({ files });
+    options.preEvaluationStaticTrust.facts;
   const queryShapeFacts = buildCompilerQueryShapeFacts(
     files,
     drizzleFacts,

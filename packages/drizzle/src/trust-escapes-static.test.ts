@@ -727,7 +727,7 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
     const facts = sinksFor(
       `
       import nodeProcess from 'node:process';
-      import { query } from '@kovojs/server';
+      import { query, route } from '@kovojs/server';
 
       const viteEnvironment = import.meta.env;
       const processEnvironment = nodeProcess.env;
@@ -1099,5 +1099,385 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
     `);
 
     expect(facts).toEqual([]);
+  });
+
+  it('keeps call-site provenance context-sensitive across order and repeated calls', () => {
+    const facts = sinksFor(`
+      import { query } from '@kovojs/server';
+      function id(value) { return value; }
+      export const safeFirst = query({ load(_input, { request }) {
+        return { safe: id('ok'), token: id(request.headers.get('authorization')) };
+      } });
+      export const secretFirst = query({ load(_input, { request }) {
+        return { token: id(request.headers.get('authorization')), safe: id('ok') };
+      } });
+      export const repeated = query({ load(_input, { request }) {
+        const token = id(request.headers.get('authorization'));
+        return { one: id(token), two: id(token) };
+      } });
+    `);
+
+    expect(
+      facts.filter((fact) => fact.sink === 'client-wire.request.header.Authorization'),
+      JSON.stringify(facts),
+    ).toHaveLength(3);
+  });
+
+  it('memoizes a credential alias chain of at least twenty links within a low-second bound', () => {
+    const aliases = Array.from({ length: 24 }, (_unused, index) =>
+      index === 0
+        ? `const a0 = request.headers.get('authorization');`
+        : `const a${index} = a${index - 1};`,
+    ).join('\n');
+    const started = Date.now();
+    const facts = sinksFor(`
+      import { query } from '@kovojs/server';
+      export const longChain = query({ load(_input, { request }) {
+        ${aliases}
+        return { token: a23 };
+      } });
+    `);
+
+    expect(facts).toEqual([
+      expect.objectContaining({ sink: 'client-wire.request.header.Authorization' }),
+    ]);
+    expect(Date.now() - started).toBeLessThan(3_000);
+  });
+
+  it('follows more than sixteen module-scope authority aliases without a fail-open cutoff', () => {
+    const aliases = Array.from({ length: 24 }, (_unused, index) =>
+      index === 0
+        ? 'const authority0 = execFileSync;'
+        : `const authority${index} = authority${index - 1};`,
+    ).join('\n');
+    const facts = sinksFor(`
+      import { execFileSync } from 'node:child_process';
+      import { mutation } from '@kovojs/server';
+      ${aliases}
+      export const unsafe = mutation({ handler(input) {
+        return authority23(input.program);
+      } });
+    `);
+
+    expect(facts).toEqual(
+      expect.arrayContaining([expect.objectContaining({ sink: 'child_process.execFileSync' })]),
+    );
+  });
+
+  it('discovers framework roots through containers, local factories, and invocation adapters', () => {
+    const facts = sinksFor(`
+      import { execFileSync } from 'node:child_process';
+      import * as kovo from '@kovojs/server';
+      import { mutation, query, rootedFiles } from '@kovojs/server';
+      const objectFactory = { query };
+      const arrayFactory = [query];
+      function factory() { return query; }
+      objectFactory.query({ load(input) { return execFileSync(input.program); } });
+      arrayFactory[0]({ load(input) { return execFileSync(input.program); } });
+      factory()({ load(input) { return execFileSync(input.program); } });
+      query.bind(null)({ load(input) { return execFileSync(input.program); } });
+      (0, query)({ load(input) { return execFileSync(input.program); } });
+      query.call(null, { load(input) { return execFileSync(input.program); } });
+      Reflect.apply(query, null, [{ load(input) { return execFileSync(input.program); } }]);
+      const dynamicFactoryName = 'query';
+      objectFactory[dynamicFactoryName]({ load(input) { return execFileSync(input.program); } });
+      kovo[dynamicFactoryName]({ load(input) { return execFileSync(input.program); } });
+      const mutationFactory = { mutation };
+      mutationFactory.mutation({ handler(input) {
+        return rootedFiles(input.root).serve(input.path);
+      } });
+    `);
+
+    expect(facts.filter((fact) => fact.sink === 'child_process.execFileSync')).toHaveLength(9);
+    expect(facts).toEqual(
+      expect.arrayContaining([expect.objectContaining({ sink: '@kovojs/server.rootedFiles' })]),
+    );
+  });
+
+  it('fails closed on dynamic factory adapters, accessor callbacks, and parameter initializers', () => {
+    const facts = sinksFor(`
+      import { execFileSync } from 'node:child_process';
+      import { opaqueWork } from 'external-actions';
+      import { query } from '@kovojs/server';
+      const dynamicArgs = Math.random() > 0.5
+        ? [{ load() { return execFileSync('dynamic-left'); } }]
+        : [{ load() { return execFileSync('dynamic-right'); } }];
+      Reflect.apply(query, null, dynamicArgs);
+      query({ get load() { return () => execFileSync('accessor'); } });
+      query({ ['load']() { return execFileSync('literal-computed'); } });
+      const callbackName = 'load';
+      query({ [callbackName]() { return execFileSync('dynamic-computed'); } });
+      const handlers = [() => execFileSync('dynamic-handler')];
+      query({ load: handlers[Math.floor(Math.random() * handlers.length)] });
+      query({ instanceKey: handlers[0], load: () => 'safe' });
+      query({ load(value = execFileSync('parameter')) { return value; } });
+      query({ load() { return Reflect.apply(opaqueWork, null, []); } });
+      const metaCallbacks = [() => ({ title: execFileSync('meta-alias') })];
+      route('/', { page: () => 'safe', meta: metaCallbacks });
+      route('/spread', { page: () => 'safe', meta: [...metaCallbacks] });
+      const reflectiveBox = { get value() { return execFileSync('reflective-getter'); } };
+      query({ load() { return Reflect.get(reflectiveBox, 'value'); } });
+    `);
+
+    expect(facts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sink: 'request-handler.opaque-source',
+          source: '<dynamic-or-empty-config>',
+        }),
+        expect.objectContaining({
+          sink: 'request-handler.opaque-source',
+          source: '<accessor-callback>',
+        }),
+        expect.objectContaining({
+          sink: 'request-handler.opaque-source',
+          source: '<computed-config-property>',
+        }),
+        expect.objectContaining({
+          sink: 'request-handler.opaque-source',
+          source: '<dynamic-callback>',
+        }),
+        expect.objectContaining({
+          sink: 'request-handler.opaque-source',
+          source: '<spread-meta-callbacks>',
+        }),
+        expect.objectContaining({ sink: 'request-handler.opaque-call' }),
+        expect.objectContaining({ sink: 'child_process.execFileSync' }),
+        expect.objectContaining({
+          sink: 'child_process.execFileSync',
+          source: "'reflective-getter'",
+        }),
+      ]),
+    );
+  });
+
+  it('closes every route and layout request-reachable callback family', () => {
+    const facts = sinksFor(`
+      import { execFileSync } from 'node:child_process';
+      import { layout, route } from '@kovojs/server';
+      const shell = layout({
+        guard(request) { execFileSync('layout-guard'); return true; },
+        render(_queries, _state, slots) { execFileSync('layout-render'); return slots.children; },
+        boundaries: {
+          error() { return execFileSync('layout-error'); },
+          notFound() { return execFileSync('layout-not-found'); },
+          unauthorized() { return execFileSync('layout-unauthorized'); },
+        },
+      });
+      export const unsafe = route('/', {
+        layout: shell,
+        guard(request) { execFileSync('route-guard'); return true; },
+        page({ params }, request) { return execFileSync(params.bin ?? request.url); },
+        regions: { sidebar(_context, request) { return execFileSync(request.url); } },
+        meta: [
+          () => ({ title: execFileSync('route-meta') }),
+          { queries: [], resolve() { return { title: execFileSync('route-meta-resolve') }; } },
+        ],
+        boundaries: {
+          error() { return execFileSync('route-error'); },
+          notFound() { return execFileSync('route-not-found'); },
+          unauthorized() { return execFileSync('route-unauthorized'); },
+        },
+        onUnauthenticated() { return execFileSync('route-unauthenticated'); },
+      });
+    `);
+
+    expect(
+      facts.filter((fact) => fact.sink === 'child_process.execFileSync'),
+      JSON.stringify(facts),
+    ).toHaveLength(14);
+  });
+
+  it('closes createApp renderRoute and app error-shell wire roots', () => {
+    const facts = sinksFor(`
+      import { execFileSync } from 'node:child_process';
+      import { createApp } from '@kovojs/server';
+      createApp({
+        renderRoute(_value, { request }) {
+          execFileSync('render-route');
+          return request.headers.get('cookie');
+        },
+        errorShells: {
+          forbidden({ request }) {
+            execFileSync('forbidden-shell');
+            return request.headers.get('authorization');
+          },
+          notFound() { return execFileSync('not-found-shell'); },
+          serverError() { return execFileSync('server-error-shell'); },
+        },
+      });
+    `);
+
+    expect(facts.filter((fact) => fact.sink === 'child_process.execFileSync')).toHaveLength(4);
+    expect(facts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ sink: 'client-wire.request.header.Authorization' }),
+        expect.objectContaining({ sink: 'client-wire.request.header.Cookie' }),
+      ]),
+    );
+  });
+
+  it('discovers request roots supplied by createApp authoring callbacks', () => {
+    const facts = sinksFor(`
+      import { execFileSync } from 'node:child_process';
+      import { createApp } from '@kovojs/server';
+      function makeQuery(factory) {
+        return factory({ load(input) { return execFileSync(input.program); } });
+      }
+      function makeRoute(factories) {
+        return factories.route('/', {
+          page(context) { return execFileSync(context.params.program); },
+        });
+      }
+      function defineRoutes(factories) { return [makeRoute(factories)]; }
+      createApp({
+        queries: ({ query: defineQuery }) => [makeQuery(defineQuery)],
+        mutations: (factories) => {
+          const { mutation: defineMutation } = factories;
+          return [defineMutation({
+            handler(input) { return execFileSync(input.program); },
+          })];
+        },
+        routes: defineRoutes,
+      });
+    `);
+
+    expect(facts.filter((fact) => fact.sink === 'child_process.execFileSync')).toHaveLength(3);
+  });
+
+  it('closes route credential HTML, getters, reflective env, computed containers, and iterable copies', () => {
+    const facts = sinksFor(`
+      import { query, route } from '@kovojs/server';
+      export const routeLeak = route('/', { page(_context, request) {
+        return request.headers.get('cookie');
+      } });
+      export const getterLeak = query({ load(_input, { request }) {
+        class Box { get token() { return request.headers.get('authorization'); } }
+        return { get env() { return process.env.APP_SECRET; }, token: new Box().token };
+      } });
+      export const defineLeak = query({ load(_input, { request }) {
+        const result = {};
+        Object.defineProperty(result, 'token', {
+          value: request.headers.get('authorization'), enumerable: true,
+        });
+        return result;
+      } });
+      export const computedLeak = query({ load(_input, { request }) {
+        const result = { [request.headers.get('authorization')]: true };
+        result[request.headers.get('cookie')] = true;
+        return result;
+      } });
+      export const computedDestructure = query({ load(input, { request }) {
+        const key = input.headers ? 'headers' : 'url';
+        const { [key]: selected } = request;
+        return selected;
+      } });
+      export const computedContext = query({ load(input, context) {
+        const key = input.requestKey;
+        return context[key].headers.get('authorization');
+      } });
+      export const reflectiveLeak = query({ load() {
+        function reveal() { return Reflect.get(process, 'env').APP_SECRET; }
+        return {
+          descriptor: Object.getOwnPropertyDescriptor(process, 'env').value.OTHER_SECRET,
+          global: Reflect.get(globalThis, 'process').env.FOURTH_SECRET,
+          iife: (() => process.env.THIRD_SECRET)(),
+          local: reveal(),
+        };
+      } });
+      export const mutableName = query({ load(input, { request }) {
+        let name = 'content-type';
+        if (input.headerName) name = input.headerName;
+        return { value: request.headers.get(name) };
+      } });
+      export const iterable = query({ load(_input, { request }) {
+        return [...request.headers];
+      } });
+    `);
+
+    expect(facts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ sink: 'client-wire.request.header.Cookie' }),
+        expect.objectContaining({ sink: 'client-wire.request.header.Authorization' }),
+        expect.objectContaining({ sink: 'client-wire.request.headers.dynamic' }),
+        expect.objectContaining({ sink: 'client-wire.request.headers' }),
+        expect.objectContaining({ sink: 'client-wire.request.credentials' }),
+        expect.objectContaining({ sink: 'node:process.env' }),
+      ]),
+    );
+  });
+
+  it('permits governed fetch/Response body flow but rejects forwarding ambient credentials', () => {
+    const safe = sinksFor(`
+      import { query } from '@kovojs/server';
+      export const remote = query({ async load() {
+        const response = await fetch('https://api.example.test/data');
+        const cloned = response.clone();
+        return { value: await cloned.json() };
+      } });
+    `);
+    expect(safe).toEqual([]);
+
+    const unsafe = sinksFor(`
+      import { query } from '@kovojs/server';
+      export const remote = query({ async load(input, { request }) {
+        await fetch(request.headers.get('authorization'));
+        await fetch('https://api.example.test/data', {
+          body: request.headers.get('cookie'), method: 'POST',
+        });
+        await fetch.call(null, 'https://api.example.test/call', {
+          body: request.headers.get('authorization'), method: 'POST',
+        });
+        const boundFetch = fetch.bind(null);
+        await boundFetch('https://api.example.test/bound', {
+          body: request.headers.get('cookie'), method: 'POST',
+        });
+        await Reflect.apply(fetch, null, ['https://api.example.test/reflect', {
+          body: request.headers.get('authorization'), method: 'POST',
+        }]);
+        const reflectedCredential = request.headers.get.call(
+          request.headers,
+          'authorization',
+        );
+        await fetch('https://api.example.test/header-call', {
+          body: reflectedCredential, method: 'POST',
+        });
+        const dynamicArgs = input.enabled
+          ? ['https://api.example.test/left']
+          : ['https://api.example.test/right'];
+        await Reflect.apply(fetch, null, dynamicArgs);
+        return { ok: true };
+      } });
+    `);
+    expect(unsafe.map((fact) => fact.sink)).toEqual(
+      expect.arrayContaining([
+        'outbound-fetch.request.header.Authorization',
+        'outbound-fetch.request.header.Cookie',
+        'outbound-fetch.dynamic-arguments',
+      ]),
+    );
+  });
+
+  it('reviews pure Drizzle expression builders without opening opaque package calls', () => {
+    const safe = sinksFor(`
+      import { and, eq, isNotNull } from 'drizzle-orm';
+      import { query } from '@kovojs/server';
+      const users = { id: {}, name: {} };
+      export const byId = query({ load(input, context) {
+        return context.db.select().from(users).where(and(eq(users.id, input.id), isNotNull(users.name)));
+      } });
+    `);
+    expect(safe).toEqual([]);
+
+    const unsafe = sinksFor(`
+      import { sql } from 'drizzle-orm';
+      import { query } from '@kovojs/server';
+      export const raw = query({ load(input) { return sql(input.value); } });
+    `);
+    expect(unsafe).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ sink: 'request-handler.opaque-package-call' }),
+      ]),
+    );
   });
 });

@@ -42,6 +42,7 @@ export interface FrameworkIdentityCatalogEntry extends FrameworkExportIdentity {
 }
 
 const SERVER_DATA_SPECIFIERS = ['@kovojs/server', '@kovojs/server/api/data'] as const;
+const SERVER_APP_SPECIFIERS = ['@kovojs/server'] as const;
 const SERVER_ROUTING_SPECIFIERS = ['@kovojs/server', '@kovojs/server/api/routing'] as const;
 const SERVER_RENDERING_SPECIFIERS = ['@kovojs/server', '@kovojs/server/api/rendering'] as const;
 const SERVER_WRITE_GOVERNANCE_SPECIFIERS = [
@@ -61,6 +62,7 @@ const serverDataSourceFiles = [
   'schema',
   'task',
 ] as const;
+const serverAppSourceFiles = ['app', 'index'] as const;
 const serverRoutingSourceFiles = ['api/routing', 'endpoint', 'index', 'route', 'webhook'] as const;
 const serverRenderingSourceFiles = ['api/rendering', 'index', 'rendering/html/safe-html'] as const;
 const serverWriteGovernanceSourceFiles = ['index', 'write-governance'] as const;
@@ -72,6 +74,16 @@ function serverData(exportName: string): FrameworkIdentityCatalogEntry {
     packageSourceFiles: serverDataSourceFiles,
     scopes: ['authoring', 'data-plane'],
     specifiers: SERVER_DATA_SPECIFIERS,
+  };
+}
+
+function serverApp(exportName: string): FrameworkIdentityCatalogEntry {
+  return {
+    exportName,
+    module: '@kovojs/server',
+    packageSourceFiles: serverAppSourceFiles,
+    scopes: ['authoring', 'routing'],
+    specifiers: SERVER_APP_SPECIFIERS,
   };
 }
 
@@ -178,6 +190,8 @@ function drizzleOrmSql(exportName: string): FrameworkIdentityCatalogEntry {
 }
 
 const catalogEntries: FrameworkIdentityCatalogEntry[] = [];
+
+appendCatalogEntry(catalogEntries, serverApp('createApp'));
 
 appendCatalogFactories(
   catalogEntries,

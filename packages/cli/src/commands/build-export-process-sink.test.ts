@@ -551,6 +551,147 @@ export default createApp({
     expect(result.stderr).toContain('sink=client-wire.request.header.Authorization');
   }, 120_000);
 
+  it('rejects bracketed import.meta env access before the aggregate build prefilter can skip it', async () => {
+    const root = fixture('raw-bracket-environment-wire');
+    writeFileSync(
+      join(root, 'app.mjs'),
+      `import { createApp, mutation, publicAccess, route, s } from '@kovojs/server';
+const secret = import.meta['env'].APP_SECRET;
+export const unsafeEnvironment = mutation({
+  access: publicAccess('raw bracket environment wire audit'),
+  input: s.object({}),
+  handler() { return { secret }; },
+});
+export default createApp({
+  mutations: [unsafeEnvironment],
+  routes: [route('/', { access: publicAccess('authority audit'), page: () => 'safe' })],
+});
+`,
+      'utf8',
+    );
+
+    const result = await check(root);
+    expect(result, result.stderr).toMatchObject({ code: 1 });
+    expect(result.stderr).toContain('ERROR KV424');
+    expect(result.stderr).toContain('sink=import.meta.env');
+  }, 120_000);
+
+  it('rejects process authority and credential HTML from a route page root', async () => {
+    const root = fixture('route-page-authority');
+    writeFileSync(
+      join(root, 'app.mjs'),
+      `import { execFileSync } from 'node:child_process';
+import { createApp, publicAccess, route } from '@kovojs/server';
+export const unsafeRoute = route('/', {
+  access: publicAccess('route authority audit'),
+  page(_context, request) {
+    execFileSync('/usr/bin/true');
+    return request.headers.get('cookie');
+  },
+});
+export default createApp({ routes: [unsafeRoute] });
+`,
+      'utf8',
+    );
+
+    const result = await check(root);
+    expect(result, result.stderr).toMatchObject({ code: 1 });
+    expect(result.stderr).toContain('ERROR KV424');
+    expect(result.stderr).toContain('sink=child_process.execFileSync');
+    expect(result.stderr).toContain('sink=client-wire.request.header.Cookie');
+  }, 120_000);
+
+  it('rejects a framework authority constructor behind an object factory root', async () => {
+    const root = fixture('object-factory-authority');
+    writeFileSync(
+      join(root, 'app.mjs'),
+      `import { createApp, mutation, publicAccess, rootedFiles, route, s } from '@kovojs/server';
+const factories = { mutation };
+export const unsafeMutation = factories.mutation({
+  access: publicAccess('object factory authority audit'),
+  input: s.object({ root: s.string() }),
+  async handler(input) {
+    await rootedFiles(input.root);
+    return { ok: true };
+  },
+});
+export default createApp({
+  mutations: [unsafeMutation],
+  routes: [route('/', { access: publicAccess('authority audit'), page: () => 'safe' })],
+});
+`,
+      'utf8',
+    );
+
+    const result = await check(root);
+    expect(result, result.stderr).toMatchObject({ code: 1 });
+    expect(result.stderr).toContain('ERROR KV424');
+    expect(result.stderr).toContain('sink=@kovojs/server.rootedFiles');
+  }, 120_000);
+
+  it('accepts governed fetch response flow and reviewed Drizzle expressions in a real build', async () => {
+    const root = fixture('safe-fetch-drizzle');
+    symlinkSync(
+      join(repoRoot, 'packages/drizzle/node_modules/drizzle-orm'),
+      join(root, 'node_modules/drizzle-orm'),
+    );
+    writeFileSync(
+      join(root, 'app.mjs'),
+      `import { and, eq, isNotNull } from 'drizzle-orm';
+import { createApp, publicAccess, query, route } from '@kovojs/server';
+const fields = { id: {}, name: {} };
+export const safeQuery = query({
+  access: publicAccess('governed fetch and Drizzle expression audit'),
+  async load() {
+    const response = await fetch('https://api.example.test/data');
+    return {
+      predicate: Boolean(and(eq(fields.id, 'fixed'), isNotNull(fields.name))),
+      value: await response.clone().json(),
+    };
+  },
+});
+export default createApp({
+  queries: [safeQuery],
+  routes: [route('/', { access: publicAccess('authority audit'), page: () => 'safe' })],
+});
+`,
+      'utf8',
+    );
+
+    const result = await check(root);
+    expect(result, result.stderr).toMatchObject({ code: 0 });
+    expect(result.stdout).toContain('CHECK ok preset=node');
+  }, 120_000);
+
+  it('rejects ambient request credentials forwarded through outbound fetch', async () => {
+    const root = fixture('unsafe-fetch-credentials');
+    writeFileSync(
+      join(root, 'app.mjs'),
+      `import { createApp, publicAccess, query, route } from '@kovojs/server';
+export const unsafeQuery = query({
+  access: publicAccess('outbound credential audit'),
+  async load(_input, { request }) {
+    await fetch('https://api.example.test/data', {
+      body: request.headers.get('authorization'),
+      method: 'POST',
+    });
+    return { ok: true };
+  },
+});
+export default createApp({
+  queries: [unsafeQuery],
+  routes: [route('/', { access: publicAccess('authority audit'), page: () => 'safe' })],
+});
+`,
+      'utf8',
+    );
+
+    const result = await check(root);
+    expect(result, result.stderr).toMatchObject({ code: 1 });
+    expect(result.stderr).toContain('ERROR KV424');
+    expect(result.stderr).toContain('sink=outbound-fetch.request.header.Authorization');
+  }, 120_000);
+
   it('accepts reviewed intrinsic calls and statically closed callbacks', async () => {
     const root = fixture('safe-intrinsic-calls');
     writeFileSync(

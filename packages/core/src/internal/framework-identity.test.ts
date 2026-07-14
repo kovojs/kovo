@@ -102,6 +102,19 @@ function expectedExpressionSyntaxKinds(): readonly ts.SyntaxKind[] {
 }
 
 describe('framework identity resolver', () => {
+  it('catalogs createApp as the app-authoring root by package and source identity', () => {
+    expect(frameworkCatalogExportForModuleSpecifier('@kovojs/server', 'createApp')).toEqual({
+      exportName: 'createApp',
+      module: '@kovojs/server',
+    });
+    expect(
+      frameworkCatalogExportForSourcePath('/repo/packages/server/src/app.ts', 'createApp'),
+    ).toEqual({
+      exportName: 'createApp',
+      module: '@kovojs/server',
+    });
+  });
+
   it('catalogs public command and storage authority across server re-exports', () => {
     expect(frameworkCatalogExportForModuleSpecifier('@kovojs/server', 'commandAllowlist')).toEqual({
       exportName: 'commandAllowlist',
