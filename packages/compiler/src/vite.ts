@@ -336,7 +336,6 @@ const KOVO_DEV_CLIENT_MODULE_SOURCE_UNIT_LIMIT = 16 * 1024 * 1024;
 const FRAMEWORK_VITE_PLUGIN_IDENTITY_PROPERTIES = compilerFreeze([
   'configResolved',
   'configureServer',
-  'enforce',
   'getClientModules',
   'getCssAssetManifest',
   'handleHotUpdate',
@@ -414,7 +413,8 @@ export function isFrameworkKovoVitePluginOwnerForSourceRoot(
   sourceRoot: string,
 ): value is KovoVitePlugin {
   if (typeof value !== 'object' || value === null) return false;
-  const authority = compilerWeakMapGet(frameworkVitePluginAuthorities, value as KovoVitePlugin);
+  const plugin = value as KovoVitePlugin;
+  const authority = compilerWeakMapGet(frameworkVitePluginAuthorities, plugin);
   if (authority === undefined) return false;
 
   const identityPropertyCount = compilerArrayLength(
@@ -428,13 +428,17 @@ export function isFrameworkKovoVitePluginOwnerForSourceRoot(
       'Framework Vite plugin identity properties',
     ) as (typeof FRAMEWORK_VITE_PLUGIN_IDENTITY_PROPERTIES)[number];
     if (
-      compilerOwnDataValue(value, property, 'Framework Vite plugin') !==
+      compilerOwnDataValue(plugin, property, 'Framework Vite plugin') !==
       compilerOwnDataValue(authority.identities, property, 'Framework Vite plugin authority')
     ) {
       return false;
     }
   }
-  if (compilerOwnDataValue(value, 'enforce', 'Framework Vite plugin') !== 'pre') return false;
+  // `enforce` is the one intentionally accessor-backed field. Vite 8 writes its normalized
+  // ordering value back onto plugin objects before `configResolved`; the frozen framework plugin
+  // accepts that host-owned write through its sealed no-op setter while this getter keeps the
+  // effective order pinned to `pre` (SPEC.md §2 / §5.2 / §6.6).
+  if (plugin.enforce !== 'pre') return false;
 
   const normalizedSourceRoot = normalizeFrameworkViteSourceRoot(sourceRoot);
   if (normalizedSourceRoot === null) return false;
@@ -460,7 +464,13 @@ function createBoundKovoVitePlugin(
   let clientSourceFileSystems = viteClientSourceFileSystems(root);
 
   return {
-    enforce: 'pre',
+    get enforce(): 'pre' {
+      return 'pre';
+    },
+    // Vite 8 normalizes plugin metadata by assigning `enforce` back to the plugin object. Keep the
+    // framework plugin freeze (and therefore every authority-bearing hook identity) while allowing
+    // that host-owned assignment to complete; the getter above remains the sole effective value.
+    set enforce(_normalizedEnforce: 'pre') {},
     configResolved(config) {
       configurationEpoch += 1;
       latestCompileIssueByFile = compilerCreateMap<string, number>();
