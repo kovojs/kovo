@@ -812,6 +812,12 @@ export function addRuntimeMutationSafetyProofs(
             '  schema.contacts,',
             '  schema.txProofs,',
             '  schema.rawRuntimeDrift,',
+            ...(includeSqliteAuthorizerTriggerDrift
+              ? [
+                  '  schema.sqliteAuthorizerDeclared,',
+                  '  schema.sqliteAuthorizerSideEffects,',
+                ]
+              : []),
           ].join('\n'),
         )
     : runtimeDbSource

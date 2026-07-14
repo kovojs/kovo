@@ -213,6 +213,9 @@ describe('create-kovo starter (build integration: production transaction artifac
       const proofSource = readFileSync(join(root, 'src/runtime-safety-proofs.ts'), 'utf8');
       expect(proofSource).toContain('txProofWebhook');
       expect(proofSource).toContain('sqliteAuthorizerTriggerDrift');
+      const runtimeDbSource = readFileSync(join(root, 'src/_kovo/app-runtime-db.ts'), 'utf8');
+      expect(runtimeDbSource).toContain('schema.sqliteAuthorizerDeclared');
+      expect(runtimeDbSource).toContain('schema.sqliteAuthorizerSideEffects');
 
       buildReusableProductionArtifact(root);
 
