@@ -744,10 +744,12 @@ async function serveViteSourceEditFixture(options: {
       },
       origin: `http://127.0.0.1:${(server.address() as AddressInfo).port}`,
       async writeAppShell(nextOptions) {
+        // Capture before the filesystem write: Vite's real watcher may publish
+        // the Kovo event before this helper invokes handleHotUpdate directly.
+        const startIndex = hmrEvents.length;
         const source = hmrSourceAppShell({ appId, signingSecret, ...nextOptions });
         await writeFile(appShellPath, source, 'utf8');
         vite?.moduleGraph?.invalidateAll();
-        const startIndex = hmrEvents.length;
         await Promise.race([
           integration.plugin.handleHotUpdate?.({
             file: appShellPath,
@@ -767,9 +769,9 @@ async function serveViteSourceEditFixture(options: {
         return hmrEvents.slice(startIndex);
       },
       async writeCard(source) {
+        const startIndex = hmrEvents.length;
         await writeFile(cardPath, source, 'utf8');
         vite?.moduleGraph?.invalidateAll();
-        const startIndex = hmrEvents.length;
         await Promise.race([
           hmrPlugin.handleHotUpdate?.({
             file: cardPath,
