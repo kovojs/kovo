@@ -617,15 +617,7 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
   });
 
   it('fails closed over every unreviewed Node builtin namespace', () => {
-    const safeBuiltins = new Set([
-      'assert',
-      'assert/strict',
-      'buffer',
-      'querystring',
-      'string_decoder',
-      'url',
-      'util/types',
-    ]);
+    const safeBuiltins = new Set<string>();
     const modules = [
       ...new Set(nodeBuiltinModules.map((module) => module.replace(/^node:/u, ''))),
     ].sort();
