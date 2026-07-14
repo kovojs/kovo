@@ -14,7 +14,7 @@ fails closed.
 | Severity | Families | Items  |
 | -------- | -------: | ------ |
 | Critical |       21 | C1-C21 |
-| High     |       23 | H1-H23 |
+| High     |       24 | H1-H24 |
 | Medium   |       12 | M1-M12 |
 | Low      |        2 | L1-L2  |
 
@@ -288,6 +288,15 @@ fails closed.
   - **Evidence:** `fabca7f08`; all 13 public packages were confirmed present, the publisher was
     removed, and the supply-chain gate now requires exactly one npm publish authority: the attested
     packed-package publisher.
+
+- [x] **H24 - Enhanced navigation trusted mutable live session metadata instead of its page-load
+      principal.**
+  - Same-realm code could forge the current `kovo-session` marker to match a fetched document for a
+    different principal, bypass runtime retirement, apply the foreign DOM, and leave the old
+    origin-wide BroadcastChannel authority installed across the principal boundary.
+  - **Evidence:** `a55d1f542`; enhanced navigation and mutation rebroadcast share one immutable
+    install-time fingerprint, and modular plus generated-inline regressions are green on Chromium,
+    Firefox, and WebKit. SPEC §9.3.
 
 ## Medium
 
