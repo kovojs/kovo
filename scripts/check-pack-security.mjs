@@ -14,6 +14,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { isMainEntry, runGate } from './lib/cli-entry.mjs';
+import { packWithoutLifecycleScripts } from './lib/pack-without-lifecycle.mjs';
 import { derivePublishPlan } from './build-publish.mjs';
 import { collectFiles } from './lib/source-files.mjs';
 import { normalizePackageExports, resolveSourceExportTarget } from './package-exports.mjs';
@@ -37,7 +38,6 @@ const forbiddenPathSegments = new Set([
 const sourceFilePattern = /\.(?:[cm]?ts|tsx|jsx)$/;
 const declarationPattern = /\.d\.(?:[cm]?ts|ts)$/;
 const sourcemapPattern = /\.map$/;
-const textFilePattern = /\.(?:json|mjs|cjs|js|[cm]?ts|tsx|jsx|d\.[cm]?ts|map|md|txt|css)$/;
 const secretPatterns = [
   { label: 'private key block', pattern: /-----BEGIN (?:[A-Z]+ )?PRIVATE KEY-----/ },
   { label: 'AWS access key id', pattern: /\bAKIA[0-9A-Z]{16}\b/ },
@@ -66,13 +66,25 @@ export function validateFirstPartyScopeRegistryPolicy({
   const findings = [];
   const config = parseIniAssignments(npmConfigText);
   const scopes = collectFirstPartyScopes(packageNames).filter((scope) => scope.startsWith('@'));
+  const unscoped = [...new Set(packageNames.filter((name) => !name.startsWith('@')))].sort(
+    compareStrings,
+  );
+  const requiredRegistries = scopes.map((scope) => ({
+    key: `${scope}:registry`,
+    subject: `first-party scope ${scope}`,
+  }));
+  if (unscoped.length > 0) {
+    requiredRegistries.push({
+      key: 'registry',
+      subject: `unscoped first-party package${unscoped.length === 1 ? '' : 's'} ${unscoped.join(', ')}`,
+    });
+  }
 
-  for (const scope of scopes) {
-    const key = `${scope}:registry`;
+  for (const { key, subject } of requiredRegistries) {
     const configuredRegistry = config.get(key);
     if (!configuredRegistry) {
       findings.push(
-        `${npmConfigPath}: missing ${key} pin; first-party scopes must resolve from ${safeFirstPartyRegistry}`,
+        `${npmConfigPath}: missing ${key} pin; ${subject} must resolve from ${safeFirstPartyRegistry}`,
       );
       continue;
     }
@@ -158,7 +170,6 @@ export function validatePackedPackage({
       );
     }
 
-    if (!textFilePattern.test(rel) && !starterTemplate) continue;
     const text = readTextFile(rel);
     if (text === undefined) continue;
 
@@ -238,7 +249,7 @@ function wildcardTargetPattern(target) {
   return new RegExp(`^${escaped}$`);
 }
 
-function allowedPublishedSourceFiles(pkgJson) {
+export function allowedPublishedSourceFiles(pkgJson) {
   if (pkgJson.name !== '@kovojs/ui') return [];
 
   const files = new Set();
@@ -381,17 +392,7 @@ function packageDir(pkg) {
 }
 
 function packPackage(pkg, destination) {
-  const output = execFileSync('pnpm', ['pack', '--json', '--pack-destination', destination], {
-    cwd: packageDir(pkg),
-    encoding: 'utf8',
-    stdio: ['ignore', 'pipe', 'inherit'],
-  });
-  const result = parsePackJson(output, pkg.name);
-  const filename = Array.isArray(result) ? result[0]?.filename : result.filename;
-  if (!filename || typeof filename !== 'string') {
-    throw new Error(`${pkg.name}: pnpm pack --json did not report a filename`);
-  }
-  return path.isAbsolute(filename) ? filename : path.join(destination, path.basename(filename));
+  return packWithoutLifecycleScripts({ dirPath: packageDir(pkg), name: pkg.name }, destination);
 }
 
 export function parsePackJson(output, packageName = 'package') {
@@ -437,7 +438,6 @@ function createReader(files) {
     const file = byPath.get(rel);
     if (!file) return undefined;
     const bytes = file.bytes ?? readFileSync(file.diskPath);
-    if (bytes.includes(0)) return undefined;
     return bytes.toString('utf8');
   };
 }
@@ -449,7 +449,7 @@ function readPackedManifest(files, packageName) {
   return JSON.parse(bytes.toString('utf8'));
 }
 
-function buildSnapshot(packages) {
+export function buildPackSecuritySnapshot(packages) {
   return {
     packages: Object.fromEntries(
       packages
@@ -459,8 +459,29 @@ function buildSnapshot(packages) {
   };
 }
 
-function readSnapshot() {
+export function readPackSecuritySnapshot() {
   return JSON.parse(readFileSync(packSecuritySnapshotPath, 'utf8'));
+}
+
+export function inspectPackedTarball({ extractBaseDir, packageJson, packageName, tarballPath }) {
+  const plan = derivePublishPlan(packageJson);
+  const files = readTarball(tarballPath, extractBaseDir);
+  const manifest = readPackedManifest(files, packageName);
+  const findings = validatePackedPackage({
+    allowedSourceFiles: allowedPublishedSourceFiles(packageJson),
+    files,
+    manifest,
+    packageName,
+    readTextFile: createReader(files),
+    targetFiles: plan.targetFiles,
+  });
+  return { files, findings, manifest };
+}
+
+export function assertNoPackSecurityFindings(findings) {
+  if (findings.length > 0) {
+    throw new Error(`Pack-security findings:\n  ${findings.join('\n  ')}`);
+  }
 }
 
 function readWorkspacePackageNames() {
@@ -484,18 +505,13 @@ function main() {
   try {
     for (const pkg of publicPackages()) {
       const pkgJson = JSON.parse(readFileSync(path.join(packageDir(pkg), 'package.json'), 'utf8'));
-      const plan = derivePublishPlan(pkgJson);
       console.log(`Packing ${pkg.name} for tarball security inspection...`);
       const tarballPath = packPackage(pkg, tempDir);
-      const files = readTarball(tarballPath, tempDir);
-      const manifest = readPackedManifest(files, pkg.name);
-      const packageFindings = validatePackedPackage({
-        allowedSourceFiles: allowedPublishedSourceFiles(pkgJson),
-        files,
-        manifest,
+      const { files, findings: packageFindings } = inspectPackedTarball({
+        extractBaseDir: tempDir,
+        packageJson: pkgJson,
         packageName: pkg.name,
-        readTextFile: createReader(files),
-        targetFiles: plan.targetFiles,
+        tarballPath,
       });
       findings.push(...packageFindings);
       packedPackages.push({ files, name: pkg.name });
@@ -507,16 +523,14 @@ function main() {
     rmSync(tempDir, { recursive: true, force: true });
   }
 
-  if (findings.length > 0) {
-    throw new Error(`Pack-security findings:\n  ${findings.join('\n  ')}`);
-  }
+  assertNoPackSecurityFindings(findings);
 
-  const snapshot = buildSnapshot(packedPackages);
+  const snapshot = buildPackSecuritySnapshot(packedPackages);
   if (write) {
     writeFileSync(packSecuritySnapshotPath, stableJson(snapshot), 'utf8');
     console.log(`Wrote ${path.relative(repoRoot, packSecuritySnapshotPath)}`);
   } else {
-    assertSnapshotMatches(snapshot, readSnapshot());
+    assertSnapshotMatches(snapshot, readPackSecuritySnapshot());
     console.log('Pack-security file snapshots match.');
   }
 }

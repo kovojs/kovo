@@ -35,32 +35,30 @@ export function validateReleaseInput(
     );
   }
 
-  if (env.SKIP_NPM_PUBLISHED_CHECK !== '1') {
-    const states = packages.map((pkg) => ({
-      name: pkg.name,
-      result: npmPublishedState(pkg.name, version),
-    }));
-    const registryErrors = states.filter(({ result }) => result.state === 'error');
-    if (registryErrors.length > 0) {
-      throw new Error(
-        `Failed to verify npm published state for release ${version}:\n` +
-          registryErrors
-            .map(({ name, result }) => `  ${name}@${version}: ${result.detail}`)
-            .join('\n'),
-      );
-    }
-    const alreadyPublished = states
-      .filter(({ result }) => result.state === 'published')
-      .map(({ name }) => name);
-    if (alreadyPublished.length > 0) {
-      log(
-        `Release ${version} is partially published; these packages will be skipped on publish:\n` +
-          alreadyPublished.map((name) => `  ${name}@${version}`).join('\n'),
-      );
-    }
+  const states = packages.map((pkg) => ({
+    name: pkg.name,
+    result: npmPublishedState(pkg.name, version),
+  }));
+  const registryErrors = states.filter(({ result }) => result.state === 'error');
+  if (registryErrors.length > 0) {
+    throw new Error(
+      `Failed to verify npm published state for release ${version}:\n` +
+        registryErrors
+          .map(({ name, result }) => `  ${name}@${version}: ${result.detail}`)
+          .join('\n'),
+    );
+  }
+  const alreadyPublished = states
+    .filter(({ result }) => result.state === 'published')
+    .map(({ name }) => name);
+  if (alreadyPublished.length > 0) {
+    log(
+      `Release ${version} is partially published; these packages will be skipped on publish:\n` +
+        alreadyPublished.map((name) => `  ${name}@${version}`).join('\n'),
+    );
   }
 
-  if (env.GITHUB_ACTIONS === 'true' && env.SKIP_RELEASE_CHECKS !== '1') {
+  if (env.GITHUB_ACTIONS === 'true') {
     verifyExactCommitChecksFn();
   }
 
@@ -84,23 +82,16 @@ function verifyExactCommitChecks() {
   }
 
   const checkRuns = JSON.parse(
-    execFileSync('gh', ['api', `/repos/${repo}/commits/${sha}/check-runs`, '-q', '.check_runs'], {
-      encoding: 'utf8',
-    }),
-  );
-  const statuses = JSON.parse(
-    execFileSync('gh', ['api', `/repos/${repo}/commits/${sha}/status`, '-q', '.statuses'], {
-      encoding: 'utf8',
-    }),
+    execFileSync(
+      'gh',
+      ['api', `/repos/${repo}/commits/${sha}/check-runs?per_page=100`, '-q', '.check_runs'],
+      {
+        encoding: 'utf8',
+      },
+    ),
   );
 
-  const passed = new Set();
-  for (const run of checkRuns) {
-    if (run?.status === 'completed' && run?.conclusion === 'success') passed.add(run.name);
-  }
-  for (const status of statuses) {
-    if (status?.state === 'success') passed.add(status.context);
-  }
+  const passed = trustedSuccessfulCheckNames(checkRuns, sha);
 
   const missing = requiredChecks.filter((check) => !passed.has(check));
   if (missing.length > 0) {
@@ -109,6 +100,25 @@ function verifyExactCommitChecks() {
     );
   }
   console.log(`Release commit ${sha} has required successful checks: ${requiredChecks.join(', ')}`);
+}
+
+export function trustedSuccessfulCheckNames(checkRuns, expectedSha) {
+  const passed = new Set();
+  for (const run of Array.isArray(checkRuns) ? checkRuns : []) {
+    if (
+      run?.status === 'completed' &&
+      run?.conclusion === 'success' &&
+      run?.head_sha === expectedSha &&
+      run?.app?.id === 15368 &&
+      run?.app?.slug === 'github-actions' &&
+      run?.app?.owner?.id === 9919 &&
+      run?.app?.owner?.login === 'github' &&
+      typeof run.name === 'string'
+    ) {
+      passed.add(run.name);
+    }
+  }
+  return passed;
 }
 
 function requiredEnv(name) {

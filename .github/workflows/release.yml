@@ -20,12 +20,6 @@ on:
         required: true
         default: true
         type: boolean
-      skip_verify_release_input:
-        description: Skip the Verify release input step
-        required: true
-        default: false
-        type: boolean
-
 permissions:
   contents: read
 
@@ -37,57 +31,187 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  release:
+  authorize:
     runs-on: ubuntu-latest
-    environment: release
     permissions:
+      actions: read
+      checks: read
       contents: read
-      id-token: write
+    steps:
+      - name: Authorize exact main commit
+        # No checkout, repository program, dependency setup, release
+        # environment, or OIDC permission exists in this job. Only the pinned
+        # workflow statement may authorize the later release job.
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_REF: ${{ github.ref }}
+          RELEASE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          test "$RELEASE_REF" = refs/heads/main
+          check_run="$(
+            gh api "/repos/${GITHUB_REPOSITORY}/commits/${RELEASE_SHA}/check-runs?check_name=check&filter=latest&per_page=100" |
+              jq -ce --arg sha "$RELEASE_SHA" '
+                [
+                  .check_runs[]
+                  | select(
+                      .name == "check"
+                      and .status == "completed"
+                      and .conclusion == "success"
+                      and .head_sha == $sha
+                      and .app.id == 15368
+                      and .app.slug == "github-actions"
+                      and .app.owner.id == 9919
+                      and .app.owner.login == "github"
+                    )
+                ]
+                | if length == 1 then .[0] else error("expected one trusted aggregate check") end
+              '
+          )"
+          check_suite_id="$(jq -er '.check_suite.id' <<<"$check_run")"
+          gh api "/repos/${GITHUB_REPOSITORY}/actions/workflows/293607412/runs?branch=main&event=push&head_sha=${RELEASE_SHA}&status=completed&per_page=100" |
+            jq -e \
+              --arg repo "$GITHUB_REPOSITORY" \
+              --arg sha "$RELEASE_SHA" \
+              --argjson suite "$check_suite_id" '
+                [
+                  .workflow_runs[]
+                  | select(
+                      .workflow_id == 293607412
+                      and .check_suite_id == $suite
+                      and .event == "push"
+                      and .head_branch == "main"
+                      and .head_sha == $sha
+                      and .path == ".github/workflows/ci.yml"
+                      and .status == "completed"
+                      and .conclusion == "success"
+                      and .repository.full_name == $repo
+                      and .head_repository.full_name == $repo
+                    )
+                ]
+                | length == 1
+              '
+
+  prepare:
+    needs: authorize
+    runs-on: ubuntu-latest
+    permissions:
+      checks: read
+      contents: read
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
           fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ github.sha }}
 
       - uses: voidzero-dev/setup-vp@2dec1e33f4ab2c6d5bce1b0c4607961bb1a3f7a1
         with:
           node-version: 24.18.0
 
-      - run: vp install --frozen-lockfile
-
-      - name: Ensure trusted-publishing npm CLI
-        run: npm install -g npm@11.6.4
-
       - name: Verify release input
-        if: ${{ !inputs.skip_verify_release_input }}
-        run: vp exec pnpm exec node scripts/verify-release-input.mjs "$VERSION"
+        # The no-checkout authorize job already bound this release to the
+        # exact successful main CI run. This repository validator independently
+        # checks package versions, the trusted check app, and public-registry
+        # state before install/build code runs (SPEC §2 default-deny).
+        run: vp exec node scripts/verify-release-input.mjs "$VERSION"
         env:
           GH_TOKEN: ${{ github.token }}
           REQUIRED_RELEASE_CHECKS: check
           VERSION: ${{ inputs.version }}
 
+      - run: vp install --frozen-lockfile
+
       - name: Supply-chain policy gates
         run: vp exec pnpm run check:supply-chain
 
-      - name: Build publish artifacts
+      - name: Build and verify packed publish artifacts
         run: vp exec pnpm run check:publish
-
-      - name: Pack public packages
-        run: vp exec pnpm exec node scripts/pack-public-packages.mjs
 
       - name: Verify release metadata did not drift
         run: |
           git diff --check
-          git diff --exit-code -- \
-            package.json \
-            pnpm-lock.yaml \
-            public-packages.json \
-            packages/*/package.json \
-            scripts \
-            .github/workflows/release.yml
+          git diff --exit-code
+
+      - name: Archive exact verified release payload
+        env:
+          RELEASE_ARCHIVE: ${{ runner.temp }}/kovo-release-${{ github.sha }}.tgz
+        run: tar --create --gzip --file "$RELEASE_ARCHIVE" --directory "$GITHUB_WORKSPACE" .release
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: kovo-release-${{ github.sha }}
+          path: ${{ runner.temp }}/kovo-release-${{ github.sha }}.tgz
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
+
+  publish:
+    if: ${{ !inputs.dry_run }}
+    needs: prepare
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      actions: read
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+          ref: ${{ github.sha }}
+
+      - uses: voidzero-dev/setup-vp@2dec1e33f4ab2c6d5bce1b0c4607961bb1a3f7a1
+        with:
+          node-version: 24.18.0
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: kovo-release-${{ github.sha }}
+          path: ${{ runner.temp }}/kovo-release-artifact
+
+      - name: Verify trusted-publishing npm CLI
+        run: |
+          npm_version="$(vp exec npm --version)"
+          vp exec node -e '
+            const actual = process.argv[1].split(".").map(Number);
+            const [major = 0, minor = 0, patch = 0] = actual;
+            const supported = actual.length >= 3 && actual.every(Number.isInteger) &&
+              (major > 11 || (major === 11 && (minor > 5 || (minor === 5 && patch >= 1))));
+            if (!supported) throw new Error(`npm >=11.5.1 is required; received ${process.argv[1]}`);
+          ' "$npm_version"
+
+      - name: Restore exact verified release payload
+        env:
+          RELEASE_ARCHIVE: ${{ runner.temp }}/kovo-release-artifact/kovo-release-${{ github.sha }}.tgz
+        run: |
+          set -euo pipefail
+          tar --list --gzip --file "$RELEASE_ARCHIVE" |
+            awk '
+              BEGIN { count = 0 }
+              {
+                member = $0
+                count += 1
+                if (member == "" || member ~ /^\// || index(member, "\\") != 0) exit 1
+                if (member != ".release" && member != ".release/" && index(member, ".release/") != 1) exit 1
+                segments = split(member, segment, "/")
+                for (index_ = 1; index_ <= segments; index_ += 1) {
+                  if (segment[index_] == ".." || (segment[index_] == "." && index_ != 1)) exit 1
+                  if (segment[index_] == "" && index_ != segments) exit 1
+                }
+              }
+              END { if (count == 0) exit 1 }
+            '
+          tar --list --verbose --gzip --file "$RELEASE_ARCHIVE" |
+            awk 'substr($1, 1, 1) != "-" && substr($1, 1, 1) != "d" { exit 1 }'
+          tar --extract --gzip --file "$RELEASE_ARCHIVE" --directory "$GITHUB_WORKSPACE"
 
       - name: Publish packed packages
-        if: ${{ !inputs.dry_run }}
-        run: vp exec pnpm exec node scripts/publish-packed-packages.mjs --tag "$DIST_TAG"
+        # This job has OIDC authority, so it deliberately performs no dependency
+        # install, repository build, or package lifecycle step. The publisher
+        # revalidates the prepared manifest, tarball identities, and sha512 bytes.
+        run: vp exec node scripts/publish-packed-packages.mjs --tag "$DIST_TAG"
         env:
           DIST_TAG: ${{ inputs.dist_tag }}
           NPM_CONFIG_PROVENANCE: 'true'

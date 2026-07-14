@@ -33,6 +33,7 @@ import { linkStarterBuildDependencies, resolveDependencyRoot } from './index.tes
 
 const TEMPLATE_FILES = [
   'package.json',
+  '.npmrc',
   'tsconfig.json',
   'kovo.config.ts',
   'vite.config.ts',
@@ -84,7 +85,7 @@ describe('create-kovo starter (metadata)', () => {
     try {
       const templateUrl = new URL('../templates/', import.meta.url);
       for (const file of TEMPLATE_FILES) {
-        expect(existsSync(new URL(file, templateUrl))).toBe(true);
+        expect(existsSync(new URL(file === '.npmrc' ? 'npmrc' : file, templateUrl))).toBe(true);
       }
       for (const file of SQLITE_TEMPLATE_FILES) {
         expect(existsSync(new URL(file, templateUrl))).toBe(true);
@@ -178,6 +179,14 @@ describe('create-kovo starter (metadata)', () => {
       });
       expect(Object.values(packageJson.dependencies ?? {})).not.toContain('workspace:*');
       expect(Object.values(packageJson.devDependencies ?? {})).not.toContain('workspace:*');
+      for (const [name, version] of Object.entries({
+        ...(packageJson.dependencies ?? {}),
+        ...(packageJson.devDependencies ?? {}),
+      })) {
+        expect(version, `${name} must be immutable in a generated starter`).toMatch(
+          /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/u,
+        );
+      }
       expect(packageJson.packageManager).toBe('pnpm@10.12.1');
       expect(packageJson.pnpm).toBeUndefined();
       expect(packageJson.dependencies).not.toHaveProperty('better-sqlite3');
@@ -186,6 +195,9 @@ describe('create-kovo starter (metadata)', () => {
         '@kovojs/cli': expect.stringMatching(/^\d+\.\d+\.\d+/),
       });
       expect(packageJson.devDependencies).not.toHaveProperty('@kovojs/compiler');
+      expect(readFileSync(join(root, '.npmrc'), 'utf8')).toBe(
+        'registry=https://registry.npmjs.org/\n@kovojs:registry=https://registry.npmjs.org/\n',
+      );
       expect(packageJson.scripts).toMatchObject({
         'build:prod': 'kovo build ./src/app.tsx',
         check: 'node scripts/check-parallel.mjs',

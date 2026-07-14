@@ -204,11 +204,13 @@ export const CREATE_KOVO_HELP = renderCreateKovoHelp();
 const templateRoot = new URL('../templates/', import.meta.url);
 interface TemplateFile {
   path: string;
+  sourcePath?: string;
   sqlitePath?: string;
 }
 
 const templateFiles: readonly TemplateFile[] = [
   { path: 'package.json', sqlitePath: 'package.sqlite.json' },
+  { path: '.npmrc', sourcePath: 'npmrc' },
   'tsconfig.json',
   'kovo.config.ts',
   'vite.config.ts',
@@ -501,7 +503,7 @@ function readTemplate(path: string): string {
 }
 
 function templatePathForDialect(file: TemplateFile, dialect: CreateKovoDialect): string {
-  return dialect === 'sqlite' && file.sqlitePath ? file.sqlitePath : file.path;
+  return dialect === 'sqlite' && file.sqlitePath ? file.sqlitePath : (file.sourcePath ?? file.path);
 }
 
 function renderTemplate(source: string, values: Record<string, string>): string {

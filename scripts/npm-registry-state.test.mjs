@@ -1,13 +1,34 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
-import { formatNpmRegistryError, readNpmPublishedState } from './npm-registry-state.mjs';
+import {
+  formatNpmRegistryError,
+  parsePublishedIntegrity,
+  readNpmPublishedState,
+} from './npm-registry-state.mjs';
+
+const integrity = `sha512-${'A'.repeat(86)}==`;
 
 describe('npm-registry-state', () => {
   it('returns published when npm view succeeds', () => {
+    const exec = vi.fn(() => `${JSON.stringify(integrity)}\n`);
     const result = readNpmPublishedState('@kovojs/core', '1.2.3', {
-      exec: () => '"1.2.3"\n',
+      exec,
     });
-    expect(result).toEqual({ state: 'published' });
+    expect(result).toEqual({ state: 'published', integrity });
+    expect(exec).toHaveBeenCalledWith(
+      'vp',
+      [
+        'exec',
+        'npm',
+        'view',
+        '@kovojs/core@1.2.3',
+        'dist.integrity',
+        '--json',
+        '--registry',
+        'https://registry.npmjs.org/',
+      ],
+      expect.any(Object),
+    );
   });
 
   it('treats npm E404 as missing', () => {
@@ -37,5 +58,17 @@ describe('npm-registry-state', () => {
 
   it('formats sparse child-process failures', () => {
     expect(formatNpmRegistryError({ message: 'socket hang up' })).toBe('socket hang up');
+  });
+
+  it('fails closed on missing, weak, or malformed published integrity', () => {
+    expect(() => parsePublishedIntegrity('{}', '@kovojs/core', '1.2.3')).toThrow(
+      'valid sha512 dist.integrity',
+    );
+    expect(() => parsePublishedIntegrity('"sha1-deadbeef"', '@kovojs/core', '1.2.3')).toThrow(
+      'valid sha512 dist.integrity',
+    );
+    expect(() => parsePublishedIntegrity('not-json', '@kovojs/core', '1.2.3')).toThrow(
+      'invalid JSON',
+    );
   });
 });

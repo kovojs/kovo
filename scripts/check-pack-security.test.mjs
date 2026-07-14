@@ -145,6 +145,26 @@ describe('pack-security gate', () => {
     );
   });
 
+  it('scans uncommon extensions and NUL-bearing packed files for secrets', () => {
+    const findings = validateFixture([
+      { path: 'package.json', text: '{}' },
+      { path: 'dist/index.d.mts', text: 'export {};' },
+      { path: 'dist/index.mjs', text: 'export {};' },
+      {
+        path: 'dist/leaked.pem',
+        text: '-----BEGIN PRIVATE KEY-----\nnot-a-real-key\n-----END PRIVATE KEY-----',
+      },
+      { path: 'dist/leaked.bin', text: '\0AKIA0123456789ABCDEF\0' },
+    ]);
+
+    expect(findings).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('dist/leaked.pem matches private key block'),
+        expect.stringContaining('dist/leaked.bin matches AWS access key id'),
+      ]),
+    );
+  });
+
   it('rejects oversized generated blobs', () => {
     const findings = validateFixture([
       { path: 'package.json', text: '{}' },
@@ -245,7 +265,8 @@ describe('pack-security gate', () => {
         packageNames: ['@kovojs/core', 'create-kovo'],
       }),
     ).toEqual([
-      '.npmrc: missing @kovojs:registry pin; first-party scopes must resolve from https://registry.npmjs.org/',
+      '.npmrc: missing @kovojs:registry pin; first-party scope @kovojs must resolve from https://registry.npmjs.org/',
+      '.npmrc: missing registry pin; unscoped first-party package create-kovo must resolve from https://registry.npmjs.org/',
     ]);
   });
 
@@ -275,6 +296,28 @@ describe('pack-security gate', () => {
         npmConfigText: '@kovojs:registry=https://registry.npmjs.org\n',
         npmConfigPath: '.npmrc',
         packageNames: ['@kovojs/core'],
+      }),
+    ).toEqual([]);
+  });
+
+  it('rejects registry drift for unscoped first-party packages', () => {
+    expect(
+      validateFirstPartyScopeRegistryPolicy({
+        npmConfigText:
+          'registry=https://mirror.example.invalid/\n@kovojs:registry=https://registry.npmjs.org/\n',
+        npmConfigPath: '.npmrc',
+        packageNames: ['@kovojs/core', 'create-kovo'],
+      }),
+    ).toEqual([
+      '.npmrc: registry must resolve to https://registry.npmjs.org/; got https://mirror.example.invalid/',
+    ]);
+
+    expect(
+      validateFirstPartyScopeRegistryPolicy({
+        npmConfigText:
+          'registry=https://registry.npmjs.org/\n@kovojs:registry=https://registry.npmjs.org/\n',
+        npmConfigPath: '.npmrc',
+        packageNames: ['@kovojs/core', 'create-kovo'],
       }),
     ).toEqual([]);
   });
