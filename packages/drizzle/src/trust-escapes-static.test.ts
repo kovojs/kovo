@@ -1046,6 +1046,178 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
     ).toEqual([]);
   });
 
+  // SPEC §2 and §6.6 require request authority to stay AST-proven across implicit protocols.
+  it('propagates Authorization through Object.fromEntries custom iterator output', () => {
+    const facts = sinksFor(`
+      import { query } from '@kovojs/server';
+      query({ load(_input, { request }) {
+        const entries = {
+          *[Symbol.iterator]() {
+            yield ['token', request.headers.get('authorization')];
+          },
+        };
+        return Object.fromEntries(entries);
+      } });
+    `);
+
+    expect(facts, JSON.stringify(facts)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ sink: 'client-wire.request.header.Authorization' }),
+      ]),
+    );
+  });
+
+  it('propagates Authorization through Array.fromAsync custom async iterator output', () => {
+    const facts = sinksFor(`
+      import { query } from '@kovojs/server';
+      query({ async load(_input, { request }) {
+        const values = {
+          async *[Symbol.asyncIterator]() {
+            yield request.headers.get('authorization');
+          },
+        };
+        return await Array.fromAsync(values);
+      } });
+    `);
+
+    expect(facts, JSON.stringify(facts)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ sink: 'client-wire.request.header.Authorization' }),
+      ]),
+    );
+  });
+
+  it('traverses Promise.resolve(...).then callbacks at request roots', () => {
+    const facts = sinksFor(`
+      import { execFileSync } from 'node:child_process';
+      import { query } from '@kovojs/server';
+      query({ async load(input) {
+        return await Promise.resolve(input.value).then((value) => {
+          execFileSync('promise-then-callback');
+          return value;
+        });
+      } });
+    `);
+
+    expect(facts, JSON.stringify(facts)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sink: 'child_process.execFileSync',
+          source: "'promise-then-callback'",
+        }),
+      ]),
+    );
+  });
+
+  it.each([
+    [
+      'direct descriptor replacement',
+      `const promise = Promise.resolve('safe');
+       Object.defineProperty(promise, 'then', {
+         value(onFulfilled) {
+           execFileSync('promise-own-then-direct');
+           return Promise.resolve(onFulfilled('safe'));
+         },
+       });`,
+      'promise-own-then-direct',
+    ],
+    [
+      'helper-installed descriptor replacement',
+      `function install(promise) {
+         Object.defineProperty(promise, 'then', {
+           value(onFulfilled) {
+             execFileSync('promise-own-then-helper');
+             return Promise.resolve(onFulfilled('safe'));
+           },
+         });
+       }
+       const promise = Promise.resolve('safe');
+       install(promise);`,
+      'promise-own-then-helper',
+    ],
+    [
+      'constructor-installed descriptor replacement',
+      `class InstallThen {
+         constructor(promise) {
+           Object.defineProperty(promise, 'then', {
+             value(onFulfilled) {
+               execFileSync('promise-own-then-new');
+               return Promise.resolve(onFulfilled('safe'));
+             },
+           });
+         }
+       }
+       const promise = Promise.resolve('safe');
+       new InstallThen(promise);`,
+      'promise-own-then-new',
+    ],
+    [
+      'tag-installed descriptor replacement',
+      `function installThen(_parts, promise) {
+         Object.defineProperty(promise, 'then', {
+           value(onFulfilled) {
+             execFileSync('promise-own-then-tag');
+             return Promise.resolve(onFulfilled('safe'));
+           },
+         });
+         return promise;
+       }
+       const nativePromise = Promise.resolve('safe');
+       const promise = installThen\`install:\${nativePromise}\`;`,
+      'promise-own-then-tag',
+    ],
+  ])('rejects a hostile Promise own then via %s', (_label, setup, marker) => {
+    const facts = sinksFor(`
+      import { execFileSync } from 'node:child_process';
+      import { query } from '@kovojs/server';
+      query({ async load() {
+        ${setup}
+        return await promise.then((value) => value);
+      } });
+    `);
+
+    expect(facts, JSON.stringify(facts)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sink: 'child_process.execFileSync',
+          source: `'${marker}'`,
+        }),
+      ]),
+    );
+  });
+
+  it('rejects a hostile Promise own then installed by a local JSX component', () => {
+    const facts = sinksFor(`
+      /** @jsxImportSource @kovojs/server */
+      import { execFileSync } from 'node:child_process';
+      import { route } from '@kovojs/server';
+      function InstallThen({ promise }) {
+        Object.defineProperty(promise, 'then', {
+          value(onFulfilled) {
+            execFileSync('promise-own-then-jsx');
+            return Promise.resolve(onFulfilled('safe'));
+          },
+        });
+        return <span>installed</span>;
+      }
+      route('/', { async page() {
+        const promise = Promise.resolve('safe');
+        const view = <InstallThen promise={promise} />;
+        await promise.then((value) => value);
+        return view;
+      } });
+    `);
+
+    expect(facts, JSON.stringify(facts)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sink: 'child_process.execFileSync',
+          source: "'promise-own-then-jsx'",
+        }),
+      ]),
+    );
+  });
+
   it('propagates credential values yielded by authored iterators', () => {
     const facts = sinksFor(`
       import { query } from '@kovojs/server';
@@ -2315,6 +2487,171 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
     );
   });
 
+  it.each([
+    ['object spread', 'return { ...dangerous };', 'proxy-object-spread'],
+    [
+      'object rest destructuring',
+      'const { ...result } = dangerous; return result;',
+      'proxy-object-rest',
+    ],
+    ['Object.assign source', 'return Object.assign({}, dangerous);', 'proxy-object-assign'],
+    ['JSON.stringify', 'return JSON.stringify(dangerous);', 'proxy-json-stringify'],
+    ['Response.json', 'return Response.json(dangerous);', 'proxy-response-json'],
+  ])('traverses process Proxy traps through %s', (_label, operation, marker) => {
+    const facts = sinksFor(`
+      import { execFileSync } from 'node:child_process';
+      import { query } from '@kovojs/server';
+      const dangerous = new Proxy({ value: 'safe' }, {
+        get(target, key, receiver) {
+          if (key === 'toJSON') execFileSync('${marker}');
+          return Reflect.get(target, key, receiver);
+        },
+        ownKeys(target) {
+          execFileSync('${marker}');
+          return Reflect.ownKeys(target);
+        },
+      });
+      query({ load() { ${operation} } });
+    `);
+
+    expect(facts, JSON.stringify(facts)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sink: 'child_process.execFileSync',
+          source: `'${marker}'`,
+        }),
+      ]),
+    );
+  });
+
+  it('traverses process Proxy traps through querystring.stringify', () => {
+    const facts = sinksFor(`
+      import { execFileSync } from 'node:child_process';
+      import querystring from 'node:querystring';
+      import { query } from '@kovojs/server';
+      const dangerous = new Proxy({ value: 'safe' }, {
+        ownKeys(target) {
+          execFileSync('proxy-querystring-stringify');
+          return Reflect.ownKeys(target);
+        },
+      });
+      query({ load() { return querystring.stringify(dangerous); } });
+    `);
+
+    expect(facts, JSON.stringify(facts)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sink: 'child_process.execFileSync',
+          source: "'proxy-querystring-stringify'",
+        }),
+      ]),
+    );
+  });
+
+  it('traverses authored iterators used by destructuring assignment', () => {
+    const facts = sinksFor(`
+      import { execFileSync } from 'node:child_process';
+      import { query } from '@kovojs/server';
+      const dangerousIterable = {
+        [Symbol.iterator]() {
+          execFileSync('destructuring-assignment-iterator');
+          return ['safe'][Symbol.iterator]();
+        },
+      };
+      query({ load() {
+        let value;
+        [value] = dangerousIterable;
+        return value;
+      } });
+    `);
+
+    expect(facts, JSON.stringify(facts)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sink: 'child_process.execFileSync',
+          source: "'destructuring-assignment-iterator'",
+        }),
+      ]),
+    );
+  });
+
+  it('traverses a mutable querystring.escape replacement used by stringify', () => {
+    const facts = sinksFor(`
+      import { execFileSync } from 'node:child_process';
+      import querystring from 'node:querystring';
+      import { query } from '@kovojs/server';
+      const originalEscape = querystring.escape;
+      querystring.escape = (value) => {
+        execFileSync('querystring-escape-replacement');
+        return originalEscape(value);
+      };
+      query({ load(input) {
+        return querystring.stringify({ value: input.value });
+      } });
+    `);
+
+    expect(facts, JSON.stringify(facts)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sink: 'child_process.execFileSync',
+          source: "'querystring-escape-replacement'",
+        }),
+      ]),
+    );
+  });
+
+  it('closes input prototype laundering through a Proxy before input.toString()', () => {
+    const facts = sinksFor(`
+      import { execFileSync } from 'node:child_process';
+      import { query } from '@kovojs/server';
+      const dangerousPrototype = new Proxy(Object.prototype, {
+        get(target, key, receiver) {
+          if (key === 'toString') {
+            return () => {
+              execFileSync('input-prototype-proxy');
+              return 'safe';
+            };
+          }
+          return Reflect.get(target, key, receiver);
+        },
+      });
+      query({ load(input) {
+        Object.setPrototypeOf(input, dangerousPrototype);
+        return input.toString();
+      } });
+    `);
+
+    expect(facts, JSON.stringify(facts)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sink: 'child_process.execFileSync',
+          source: "'input-prototype-proxy'",
+        }),
+      ]),
+    );
+  });
+
+  it('does not admit console.log after an opaque helper can poison console output', () => {
+    const facts = sinksFor(`
+      import { poisonConsole } from 'opaque-console-poison';
+      import { query } from '@kovojs/server';
+      query({ load() {
+        poisonConsole(console);
+        console.log('safe');
+        return 'safe';
+      } });
+    `);
+
+    expect(facts, JSON.stringify(facts)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sink: 'request-handler.opaque-call',
+          source: 'console.log',
+        }),
+      ]),
+    );
+  });
+
   it('keeps reviewed primitive and plain-array implicit protocols open', () => {
     const facts = sinksFor(`
       import { query } from '@kovojs/server';
@@ -2330,6 +2667,46 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
     `);
 
     expect(facts.filter((fact) => fact.sink === 'request-handler.opaque-protocol')).toEqual([]);
+  });
+
+  it('keeps aliased plain-array spread open', () => {
+    const facts = sinksFor(`
+      import { query } from '@kovojs/server';
+      query({ load(input) {
+        const values = [input.value, 'safe'];
+        const alias = values;
+        const copied = [...alias];
+        return copied;
+      } });
+    `);
+
+    expect(facts).toEqual([]);
+  });
+
+  it('keeps local generator spread open', () => {
+    const facts = sinksFor(`
+      import { query } from '@kovojs/server';
+      function* values(value) {
+        yield value;
+        yield 'safe';
+      }
+      query({ load(input) {
+        return [...values(input.value)];
+      } });
+    `);
+
+    expect(facts).toEqual([]);
+  });
+
+  it('keeps a plain Promise.resolve(...).then projection open', () => {
+    const facts = sinksFor(`
+      import { query } from '@kovojs/server';
+      query({ async load() {
+        return await Promise.resolve('safe').then((value) => value);
+      } });
+    `);
+
+    expect(facts).toEqual([]);
   });
 
   it('rejects inherited, constructor-coercion, and async-assimilation protocol escapes', () => {

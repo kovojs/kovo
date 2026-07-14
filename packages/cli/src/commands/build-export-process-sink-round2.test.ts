@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import nodeQuerystring from 'node:querystring';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -7,9 +8,11 @@ import { mainAsync } from '../index.js';
 
 const repoRoot = process.cwd();
 const roots: string[] = [];
+const originalQuerystringEscape = nodeQuerystring.escape;
 
 afterEach(() => {
   vi.restoreAllMocks();
+  nodeQuerystring.escape = originalQuerystringEscape;
   for (const root of roots.splice(0)) rmSync(root, { force: true, recursive: true });
 });
 
@@ -77,6 +80,16 @@ function expectKv424(
   if (typeof sink === 'string') expect(result.stderr).toContain(`sink=${sink}`);
   else expect(result.stderr).toMatch(sink);
   expect(existsSync(join(root, 'dist'))).toBe(false);
+}
+
+function expectKv424Source(
+  root: string,
+  result: { code: number; stderr: string },
+  sink: string,
+  source: string,
+): void {
+  expectKv424(root, result, sink);
+  expect(result.stderr).toContain(`source='${source}'`);
 }
 
 const rawProcessSink = 'child_process.execFileSync';
@@ -700,6 +713,430 @@ export default createApp({ routes: [unsafe] });
       /sink=(?:request-handler\.opaque-constructor|request-handler\.opaque-source|child_process\.execFileSync)/u,
     );
   }, 120_000);
+});
+
+// SPEC §2 and §6.6 require these real builds to reject every unproven request authority edge.
+// @kovo-security-certifies KV424 remaining-implicit-protocol-build
+describe('kovo build KV424 strict remaining implicit-protocol corpus', () => {
+  it('rejects Authorization returned through Object.fromEntries custom iteration', async () => {
+    const root = fixture('from-entries-iterator-wire');
+    const entry = writeApp(
+      root,
+      `import { createApp, publicAccess, query, route } from '@kovojs/server';
+export const leak = query({
+  access: publicAccess('Object.fromEntries iterator wire audit'),
+  load(_input, { request }) {
+    const entries = {
+      *[Symbol.iterator]() {
+        yield ['token', request.headers.get('authorization')];
+      },
+    };
+    return Object.fromEntries(entries);
+  },
+});
+export default createApp({
+  queries: [leak],
+  routes: [route('/', { access: publicAccess('fixture'), page: () => 'safe' })],
+});
+`,
+    );
+
+    const result = await strictBuild(root, entry);
+    expectKv424(root, result, authorizationSink);
+  }, 120_000);
+
+  it('rejects Authorization returned through Array.fromAsync custom iteration', async () => {
+    const root = fixture('from-async-iterator-wire');
+    const entry = writeApp(
+      root,
+      `import { createApp, publicAccess, query, route } from '@kovojs/server';
+export const leak = query({
+  access: publicAccess('Array.fromAsync iterator wire audit'),
+  async load(_input, { request }) {
+    const values = {
+      async *[Symbol.asyncIterator]() {
+        yield request.headers.get('authorization');
+      },
+    };
+    return await Array.fromAsync(values);
+  },
+});
+export default createApp({
+  queries: [leak],
+  routes: [route('/', { access: publicAccess('fixture'), page: () => 'safe' })],
+});
+`,
+    );
+
+    const result = await strictBuild(root, entry);
+    expectKv424(root, result, authorizationSink);
+  }, 120_000);
+
+  it.each([
+    ['object spread', '', 'return { ...dangerous };', 'proxy-object-spread'],
+    [
+      'object rest destructuring',
+      '',
+      'const { ...result } = dangerous; return result;',
+      'proxy-object-rest',
+    ],
+    ['Object.assign source', '', 'return Object.assign({}, dangerous);', 'proxy-object-assign'],
+    ['JSON.stringify', '', 'return JSON.stringify(dangerous);', 'proxy-json-stringify'],
+    ['Response.json', '', 'return Response.json(dangerous);', 'proxy-response-json'],
+    [
+      'querystring.stringify',
+      "import querystring from 'node:querystring';",
+      'return querystring.stringify(dangerous);',
+      'proxy-querystring-stringify',
+    ],
+  ])(
+    'rejects process Proxy traps reached through %s',
+    async (_label, extraImport, operation, marker) => {
+      const root = fixture(`proxy-consumer-${marker}`);
+      const entry = writeApp(
+        root,
+        `import { execFileSync } from 'node:child_process';
+${extraImport}
+import { createApp, publicAccess, route } from '@kovojs/server';
+const dangerous = new Proxy({ value: 'safe' }, {
+  get(target, key, receiver) {
+    if (key === 'toJSON') execFileSync('/usr/bin/true');
+    return Reflect.get(target, key, receiver);
+  },
+  ownKeys(target) {
+    execFileSync('/usr/bin/true');
+    return Reflect.ownKeys(target);
+  },
+});
+const unsafe = route('/', {
+  access: publicAccess('Proxy consumer audit'),
+  page() { ${operation} },
+});
+export default createApp({ routes: [unsafe] });
+`,
+      );
+
+      const result = await strictBuild(root, entry);
+      expectKv424Source(root, result, rawProcessSink, '/usr/bin/true');
+    },
+    120_000,
+  );
+
+  it('rejects an authored iterator reached by destructuring assignment', async () => {
+    const root = fixture('destructuring-assignment-iterator');
+    const entry = writeApp(
+      root,
+      `import { execFileSync } from 'node:child_process';
+import { createApp, publicAccess, route } from '@kovojs/server';
+const dangerousIterable = {
+  [Symbol.iterator]() {
+    execFileSync('/usr/bin/true');
+    return ['safe'][Symbol.iterator]();
+  },
+};
+const unsafe = route('/', {
+  access: publicAccess('destructuring assignment iterator audit'),
+  page() {
+    let value;
+    [value] = dangerousIterable;
+    return value;
+  },
+});
+export default createApp({ routes: [unsafe] });
+`,
+    );
+
+    const result = await strictBuild(root, entry);
+    expectKv424Source(root, result, rawProcessSink, '/usr/bin/true');
+  }, 120_000);
+
+  it('rejects a mutable querystring.escape replacement used by stringify', async () => {
+    const root = fixture('querystring-escape-replacement');
+    const entry = writeApp(
+      root,
+      `import { execFileSync } from 'node:child_process';
+import querystring from 'node:querystring';
+import { createApp, publicAccess, route } from '@kovojs/server';
+const originalEscape = querystring.escape;
+querystring.escape = (value) => {
+  execFileSync('/usr/bin/true');
+  return originalEscape(value);
+};
+const unsafe = route('/', {
+  access: publicAccess('querystring escape mutation audit'),
+  page() { return querystring.stringify({ value: 'safe' }); },
+});
+export default createApp({ routes: [unsafe] });
+`,
+    );
+
+    const result = await strictBuild(root, entry);
+    expectKv424Source(root, result, rawProcessSink, '/usr/bin/true');
+  }, 120_000);
+
+  it('rejects input prototype laundering through a Proxy before input.toString()', async () => {
+    const root = fixture('input-prototype-proxy');
+    const entry = writeApp(
+      root,
+      `import { execFileSync } from 'node:child_process';
+import { createApp, publicAccess, query, route } from '@kovojs/server';
+const dangerousPrototype = new Proxy(Object.prototype, {
+  get(target, key, receiver) {
+    if (key === 'toString') {
+      return () => {
+        execFileSync('/usr/bin/true');
+        return 'safe';
+      };
+    }
+    return Reflect.get(target, key, receiver);
+  },
+});
+export const unsafe = query({
+  access: publicAccess('input prototype Proxy audit'),
+  load(input) {
+    Object.setPrototypeOf(input, dangerousPrototype);
+    return input.toString();
+  },
+});
+export default createApp({
+  queries: [unsafe],
+  routes: [route('/', { access: publicAccess('fixture'), page: () => 'safe' })],
+});
+`,
+    );
+
+    const result = await strictBuild(root, entry);
+    expectKv424Source(root, result, rawProcessSink, '/usr/bin/true');
+  }, 120_000);
+
+  it('rejects console.log after an opaque helper can poison console output', async () => {
+    const root = fixture('opaque-console-poison');
+    writePackage(
+      root,
+      'opaque-console-poison',
+      `import { execFileSync } from 'node:child_process';
+export function poisonConsole(consoleObject) {
+  const original = consoleObject._stdout;
+  consoleObject._stdout = new Proxy(original, {
+    get(target, key, receiver) {
+      if (key === 'write') {
+        return (...args) => {
+          execFileSync('/usr/bin/true');
+          return target.write(...args);
+        };
+      }
+      return Reflect.get(target, key, receiver);
+    },
+  });
+  return () => { consoleObject._stdout = original; };
+}
+`,
+    );
+    const entry = writeApp(
+      root,
+      `import { poisonConsole } from 'opaque-console-poison';
+import { createApp, publicAccess, route } from '@kovojs/server';
+const unsafe = route('/', {
+  access: publicAccess('opaque console mutation audit'),
+  page() {
+    const restore = poisonConsole(console);
+    try {
+      console.log('safe');
+      return 'safe';
+    } finally {
+      restore();
+    }
+  },
+});
+export default createApp({ routes: [unsafe] });
+`,
+    );
+
+    const result = await strictBuild(root, entry);
+    expectKv424(root, result, /sink=request-handler\.opaque-call source=console\.log/u);
+  }, 120_000);
+
+  it('rejects a process callback reached through Promise.resolve(...).then', async () => {
+    const root = fixture('promise-then-callback');
+    const entry = writeApp(
+      root,
+      `import { execFileSync } from 'node:child_process';
+import { createApp, publicAccess, query, route } from '@kovojs/server';
+export const unsafe = query({
+  access: publicAccess('Promise.then callback audit'),
+  async load() {
+    return await Promise.resolve('safe').then((value) => {
+      execFileSync('/usr/bin/true');
+      return value;
+    });
+  },
+});
+export default createApp({
+  queries: [unsafe],
+  routes: [route('/', { access: publicAccess('fixture'), page: () => 'safe' })],
+});
+`,
+    );
+
+    const result = await strictBuild(root, entry);
+    expectKv424Source(root, result, rawProcessSink, '/usr/bin/true');
+  }, 120_000);
+
+  it.each([
+    [
+      'direct descriptor replacement',
+      `const promise = Promise.resolve('safe');
+       Object.defineProperty(promise, 'then', {
+         value(onFulfilled) {
+           execFileSync('/usr/bin/true');
+           return Promise.resolve(onFulfilled('safe'));
+         },
+       });`,
+    ],
+    [
+      'helper-installed descriptor replacement',
+      `function install(promise) {
+         Object.defineProperty(promise, 'then', {
+           value(onFulfilled) {
+             execFileSync('/usr/bin/true');
+             return Promise.resolve(onFulfilled('safe'));
+           },
+         });
+       }
+       const promise = Promise.resolve('safe');
+       install(promise);`,
+    ],
+    [
+      'constructor-installed descriptor replacement',
+      `class InstallThen {
+         constructor(promise) {
+           Object.defineProperty(promise, 'then', {
+             value(onFulfilled) {
+               execFileSync('/usr/bin/true');
+               return Promise.resolve(onFulfilled('safe'));
+             },
+           });
+         }
+       }
+       const promise = Promise.resolve('safe');
+       new InstallThen(promise);`,
+    ],
+    [
+      'tag-installed descriptor replacement',
+      `function installThen(_parts, promise) {
+         Object.defineProperty(promise, 'then', {
+           value(onFulfilled) {
+             execFileSync('/usr/bin/true');
+             return Promise.resolve(onFulfilled('safe'));
+           },
+         });
+         return promise;
+       }
+       const nativePromise = Promise.resolve('safe');
+       const promise = installThen\`install:\${nativePromise}\`;`,
+    ],
+  ])(
+    'rejects a hostile Promise own then via %s',
+    async (_label, setup) => {
+      const root = fixture(`promise-own-then-${_label.replaceAll(/[^a-z]+/giu, '-')}`);
+      const entry = writeApp(
+        root,
+        `import { execFileSync } from 'node:child_process';
+import { createApp, publicAccess, query, route } from '@kovojs/server';
+export const unsafe = query({
+  access: publicAccess('hostile Promise own then audit'),
+  async load() {
+    ${setup}
+    return await promise.then((value) => value);
+  },
+});
+export default createApp({
+  queries: [unsafe],
+  routes: [route('/', { access: publicAccess('fixture'), page: () => 'safe' })],
+});
+`,
+      );
+
+      const result = await strictBuild(root, entry);
+      expectKv424Source(root, result, rawProcessSink, '/usr/bin/true');
+    },
+    120_000,
+  );
+
+  it('rejects a hostile Promise own then installed by a local JSX component', async () => {
+    const root = fixture('promise-own-then-jsx');
+    const entry = writeApp(
+      root,
+      `/** @jsxImportSource @kovojs/server */
+import { execFileSync } from 'node:child_process';
+import { createApp, publicAccess, route } from '@kovojs/server';
+function InstallThen({ promise }) {
+  Object.defineProperty(promise, 'then', {
+    value(onFulfilled) {
+      execFileSync('/usr/bin/true');
+      return Promise.resolve(onFulfilled('safe'));
+    },
+  });
+  return <span>installed</span>;
+}
+const unsafe = route('/', {
+  access: publicAccess('hostile Promise JSX audit'),
+  async page() {
+    const promise = Promise.resolve('safe');
+    const view = <InstallThen promise={promise} />;
+    await promise.then((value) => value);
+    return view;
+  },
+});
+export default createApp({ routes: [unsafe] });
+`,
+      'app.tsx',
+    );
+
+    const result = await strictBuild(root, entry);
+    expectKv424Source(root, result, rawProcessSink, '/usr/bin/true');
+  }, 120_000);
+
+  it.each([
+    [
+      'aliased plain-array spread',
+      `const values = ['safe'];
+        const alias = values;
+        return [...alias].join(',');`,
+    ],
+    [
+      'local generator spread',
+      `function* values() { yield 'safe'; }
+        return [...values()].join(',');`,
+    ],
+    [
+      'plain Promise.resolve(...).then projection',
+      `return await Promise.resolve('safe').then((value) => value);`,
+    ],
+  ])(
+    'accepts %s',
+    async (_label, body) => {
+      const root = fixture(`protocol-precision-${_label.replaceAll(/[^a-z]+/giu, '-')}`);
+      const entry = writeApp(
+        root,
+        `import { createApp, publicAccess, route } from '@kovojs/server';
+const safe = route('/', {
+  access: publicAccess('reviewed protocol precision audit'),
+  async page() {
+    ${body}
+  },
+});
+export default createApp({ routes: [safe] });
+`,
+      );
+
+      const result = await strictBuild(root, entry);
+      expect(result, result.stderr).toMatchObject({ code: 0 });
+      expect(result.stderr).not.toContain('ERROR KV424');
+      expect(existsSync(join(root, 'dist'))).toBe(true);
+    },
+    120_000,
+  );
 });
 
 describe('kovo build KV424 strict round-two precision corpus', () => {
