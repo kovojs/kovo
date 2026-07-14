@@ -84,6 +84,10 @@ function createSyntacticProject(files: readonly TrustEscapeSourceFileInput[]): {
     sourceFiles,
     dispose: () => {
       for (const sourceFile of sourceFiles) sourceFile.forget();
+      // `forget()` detaches wrappers but ts-morph's compiler language service otherwise retains
+      // its program caches until GC. Build test processes create many short-lived projects; dispose
+      // the service eagerly so security analysis stays bounded under the default Node heap.
+      project.getLanguageService().compilerObject.dispose();
     },
   };
 }
@@ -378,6 +382,253 @@ export function collectUnregisteredSinksFromProject(
   } finally {
     dispose();
   }
+}
+
+/**
+ * Build-only aggregate for the three static trust surfaces consumed together by `kovo build`.
+ * One immutable in-memory syntactic project is shared across the passes so repeated build checks
+ * do not retain three ts-morph programs for the same source snapshot. The project still has no
+ * ambient filesystem/module-resolution authority: unresolved package code remains a closed
+ * verdict (SPEC §6.6 / §11.4).
+ *
+ * @internal
+ */
+export function collectStaticBuildTrustFactsFromProject(options: TrustEscapeProjectOptions): {
+  capabilities: CapabilityExplain[];
+  cookieDowngrades: CookieDowngradeExplain[];
+  unregisteredSinks: UnregisteredSinkFact[];
+} {
+  if (!staticBuildTrustAnalysisRequired(options.files)) {
+    return { capabilities: [], cookieDowngrades: [], unregisteredSinks: [] };
+  }
+  const { sourceFiles, dispose } = createSyntacticProject(options.files);
+  try {
+    const capabilities: CapabilityExplain[] = [];
+    const cookieDowngrades: CookieDowngradeExplain[] = [];
+    const unregisteredSinks: UnregisteredSinkFact[] = [];
+    for (const [index, sourceFile] of sourceFiles.entries()) {
+      const file = options.files[index];
+      if (!file) continue;
+      capabilities.push(...capabilityEscapesForSourceFile(file, sourceFile));
+      unregisteredSinks.push(...unregisteredSinksForSourceFile(file, sourceFile));
+      for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
+        const downgrade = cookieDowngradeForCall(file, call);
+        if (downgrade) cookieDowngrades.push(downgrade);
+      }
+    }
+    unregisteredSinks.push(...requestProcessSinksForProject(options.files, sourceFiles));
+    return {
+      capabilities: capabilities.sort(
+        (left, right) =>
+          left.kind.localeCompare(right.kind) ||
+          left.site.localeCompare(right.site) ||
+          (left.target ?? '').localeCompare(right.target ?? ''),
+      ),
+      cookieDowngrades: cookieDowngrades.sort(
+        (left, right) =>
+          left.name.localeCompare(right.name) || (left.site ?? '').localeCompare(right.site ?? ''),
+      ),
+      unregisteredSinks: unregisteredSinks.sort(
+        (left, right) => left.site.localeCompare(right.site) || left.sink.localeCompare(right.sink),
+      ),
+    };
+  } finally {
+    dispose();
+  }
+}
+
+const STATIC_BUILD_TRUST_LEXICAL_SIGNAL = new RegExp(
+  [
+    '\\b(?:Bun|Deno|Function|Worker|cluster|cmd|commandAllowlist|createFileSystemStorage|createRequire|createS3CompatibleStorage|declarePublicRelation|eval|getBuiltinModule|process|require|rootedFiles|serializeCookie|serverValue|setInterval|setTimeout|trustedAssign|unsafeCookie|unsafeInline|unsafeRegex|usePostgresSystemDb)\\b',
+    '\\.(?:actAs|crossOwnerRead|declareSystemRead|declareSystemWrite|innerHTML|outerHTML|rawRead|unverified)\\b',
+    '\\ballowInternal\\b',
+    '\\bdocument\\s*(?:\\.|\\[)\\s*[\'"]?write\\b',
+  ].join('|'),
+  'u',
+);
+
+const STATIC_BUILD_REQUEST_PROPERTIES = new Set(['handler', 'load', 'run']);
+
+function staticBuildTrustAnalysisRequired(files: readonly TrustEscapeSourceFileInput[]): boolean {
+  const snapshotHasFactoryToken = files.some((file) =>
+    /\b(?:endpoint|mutation|query|task|webhook)\b/u.test(file.source),
+  );
+  return files.some((file) =>
+    staticBuildTrustSourceRequiresAnalysis(file, snapshotHasFactoryToken),
+  );
+}
+
+function staticBuildTrustSourceRequiresAnalysis(
+  file: TrustEscapeSourceFileInput,
+  snapshotHasFactoryToken: boolean,
+): boolean {
+  if (STATIC_BUILD_TRUST_LEXICAL_SIGNAL.test(file.source)) return true;
+  const sourceFile = ts.createSourceFile(
+    file.fileName,
+    file.source,
+    ts.ScriptTarget.ESNext,
+    false,
+    staticBuildTrustScriptKind(file.fileName),
+  );
+  const factoryAliases = new Map<string, (typeof REQUEST_HANDLER_FACTORIES)[number]['exportName']>(
+    REQUEST_HANDLER_FACTORIES.map((factory) => [factory.exportName, factory.exportName]),
+  );
+  const serverNamespaces = new Set<string>();
+  for (const statement of sourceFile.statements) {
+    if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier)) {
+      continue;
+    }
+    const specifier = statement.moduleSpecifier.text;
+    if (staticBuildTrustBareModuleRequiresAnalysis(specifier)) return true;
+    if (!specifier.startsWith('@kovojs/server')) continue;
+    const clause = statement.importClause;
+    if (!clause?.namedBindings) continue;
+    if (ts.isNamespaceImport(clause.namedBindings)) {
+      serverNamespaces.add(clause.namedBindings.name.text);
+      continue;
+    }
+    for (const element of clause.namedBindings.elements) {
+      const imported = element.propertyName?.text ?? element.name.text;
+      const factory = REQUEST_HANDLER_FACTORIES.find(
+        (candidate) => candidate.exportName === imported,
+      );
+      if (factory) factoryAliases.set(element.name.text, factory.exportName);
+    }
+  }
+
+  let required = false;
+  const visit = (node: ts.Node): void => {
+    if (required) return;
+    if (ts.isObjectLiteralExpression(node)) {
+      const spread = node.properties.some(ts.isSpreadAssignment);
+      if (spread && snapshotHasFactoryToken) {
+        required = true;
+        return;
+      }
+      for (const property of node.properties) {
+        const name = staticBuildTrustElementName(property);
+        if (!name || !STATIC_BUILD_REQUEST_PROPERTIES.has(name)) continue;
+        if (staticBuildTrustHandlerPropertyRequiresAnalysis(property)) {
+          required = true;
+          return;
+        }
+      }
+    }
+    if (ts.isCallExpression(node)) {
+      const factory = staticBuildTrustFactoryForCall(
+        node.expression,
+        factoryAliases,
+        serverNamespaces,
+      );
+      if (factory) {
+        const definition = [...node.arguments].reverse().find(ts.isObjectLiteralExpression);
+        if (!definition) {
+          required = true;
+          return;
+        }
+        const property = definition.properties.find(
+          (candidate) => staticBuildTrustElementName(candidate) === factory.property,
+        );
+        if (
+          (!property && definition.properties.some(ts.isSpreadAssignment)) ||
+          (property && staticBuildTrustHandlerPropertyRequiresAnalysis(property))
+        ) {
+          required = true;
+          return;
+        }
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  return required;
+}
+
+function staticBuildTrustBareModuleRequiresAnalysis(specifier: string): boolean {
+  if (specifier.startsWith('.') || specifier.startsWith('/') || specifier.startsWith('@kovojs/')) {
+    return false;
+  }
+  // Ordinary packages and Node builtins can hide request-reachable authority outside the supplied
+  // snapshot. The full identity-aware pass decides the verdict; this lightweight prepass only
+  // decides whether it is sound to avoid constructing a ts-morph project at all.
+  return true;
+}
+
+function staticBuildTrustFactoryForCall(
+  callee: ts.Expression,
+  aliases: ReadonlyMap<string, (typeof REQUEST_HANDLER_FACTORIES)[number]['exportName']>,
+  namespaces: ReadonlySet<string>,
+): (typeof REQUEST_HANDLER_FACTORIES)[number] | undefined {
+  let exportName: (typeof REQUEST_HANDLER_FACTORIES)[number]['exportName'] | undefined;
+  if (ts.isIdentifier(callee)) exportName = aliases.get(callee.text);
+  if (
+    ts.isPropertyAccessExpression(callee) &&
+    ts.isIdentifier(callee.expression) &&
+    namespaces.has(callee.expression.text)
+  ) {
+    exportName = REQUEST_HANDLER_FACTORIES.find(
+      (candidate) => candidate.exportName === callee.name.text,
+    )?.exportName;
+  }
+  return exportName
+    ? REQUEST_HANDLER_FACTORIES.find((candidate) => candidate.exportName === exportName)
+    : undefined;
+}
+
+function staticBuildTrustHandlerPropertyRequiresAnalysis(
+  property: ts.ObjectLiteralElementLike,
+): boolean {
+  if (ts.isMethodDeclaration(property)) {
+    return !!property.body && staticBuildTrustHandlerBodyRequiresAnalysis(property.body);
+  }
+  if (ts.isPropertyAssignment(property)) {
+    const initializer = property.initializer;
+    if (ts.isArrowFunction(initializer) || ts.isFunctionExpression(initializer)) {
+      return staticBuildTrustHandlerBodyRequiresAnalysis(initializer.body);
+    }
+  }
+  // Shorthands, accessors, imported handlers, and dynamic property values need symbol resolution.
+  return true;
+}
+
+function staticBuildTrustHandlerBodyRequiresAnalysis(body: ts.ConciseBody): boolean {
+  let required = false;
+  const visit = (node: ts.Node): void => {
+    if (required) return;
+    if (
+      ts.isCallExpression(node) ||
+      ts.isNewExpression(node) ||
+      ts.isTaggedTemplateExpression(node) ||
+      (ts.isElementAccessExpression(node) && !ts.isStringLiteralLike(node.argumentExpression))
+    ) {
+      required = true;
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(body);
+  return required;
+}
+
+function staticBuildTrustElementName(element: ts.ObjectLiteralElementLike): string | undefined {
+  if (
+    ts.isMethodDeclaration(element) ||
+    ts.isPropertyAssignment(element) ||
+    ts.isShorthandPropertyAssignment(element) ||
+    ts.isGetAccessorDeclaration(element) ||
+    ts.isSetAccessorDeclaration(element)
+  ) {
+    const name = element.name;
+    if (ts.isIdentifier(name) || ts.isStringLiteralLike(name)) return name.text;
+  }
+  return undefined;
+}
+
+function staticBuildTrustScriptKind(fileName: string): ts.ScriptKind {
+  if (fileName.endsWith('.tsx')) return ts.ScriptKind.TSX;
+  if (fileName.endsWith('.jsx')) return ts.ScriptKind.JSX;
+  if (/\.[cm]?js$/u.test(fileName)) return ts.ScriptKind.JS;
+  return ts.ScriptKind.TS;
 }
 
 const REQUEST_PROCESS_METHODS = new Set([

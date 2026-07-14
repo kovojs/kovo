@@ -110,6 +110,7 @@ export {
 export {
   collectCapabilityEscapesFromProject,
   collectCookieDowngradesFromProject,
+  collectStaticBuildTrustFactsFromProject,
   collectTrustEscapesFromProject,
   collectUnregisteredSinksFromProject,
 } from './trust-escapes-static.js';

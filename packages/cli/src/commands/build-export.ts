@@ -49,10 +49,7 @@ import {
   viteFrameworkIdentityFiles,
 } from '@kovojs/compiler/internal';
 import { extractAppRouteCssTargets } from '@kovojs/compiler/package-styles';
-import {
-  collectCapabilityEscapesFromProject,
-  collectCookieDowngradesFromProject,
-} from '@kovojs/drizzle/internal/static';
+import { collectStaticBuildTrustFactsFromProject } from '@kovojs/drizzle/internal/static';
 import type {
   AccessDecision,
   Guard,
@@ -1007,8 +1004,14 @@ async function staticBuildCheckGraph(
   // graph.json — the static producers detect them at their call site, so a merely-built (not run) app
   // still enumerates its whole intentional-security-hole surface for a reviewer. (The runtime
   // `drain*Facts()` collectors only fire during live requests and never populate a built graph.)
-  const capabilities = files.length === 0 ? [] : collectCapabilityEscapesFromProject({ files });
-  const cookieDowngrades = files.length === 0 ? [] : collectCookieDowngradesFromProject({ files });
+  // SPEC §6.6 / KV424: the full build preflight must consume the same immutable app-source
+  // snapshots as standalone static analysis. This preserves the existing browser-handler sink
+  // corpus and adds request-handler process/call-closure facts before any deploy artifact writes.
+  // The aggregate shares one in-memory syntactic project across all three build trust surfaces.
+  const { capabilities, cookieDowngrades, unregisteredSinks } =
+    files.length === 0
+      ? { capabilities: [], cookieDowngrades: [], unregisteredSinks: [] }
+      : collectStaticBuildTrustFactsFromProject({ files });
   const queryShapeFacts = buildCompilerQueryShapeFacts(
     files,
     drizzleFacts,
@@ -1076,6 +1079,7 @@ async function staticBuildCheckGraph(
       ...(drizzleFacts.toctouFacts.length === 0 ? {} : { toctouFacts: drizzleFacts.toctouFacts }),
       ...(capabilities.length === 0 ? {} : { capabilities }),
       ...(cookieDowngrades.length === 0 ? {} : { cookieDowngrades }),
+      ...(unregisteredSinks.length === 0 ? {} : { unregisteredSinks }),
       endpoints,
       mutations,
       optimistic,

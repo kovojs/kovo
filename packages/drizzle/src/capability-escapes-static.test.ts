@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest';
 import {
   collectCapabilityEscapesFromProject,
   collectCookieDowngradesFromProject,
+  collectStaticBuildTrustFactsFromProject,
+  collectUnregisteredSinksFromProject,
 } from '@kovojs/drizzle/internal/static';
 import type { TrustEscapeSourceFileInput } from '@kovojs/drizzle/internal/static';
 
@@ -332,6 +334,58 @@ describe('@kovojs/drizzle cookie-downgrade collector (SPEC §6.6/§9.1, audit-on
         name: 'legacy_token',
         site: 'app.tsx:3',
       },
+    ]);
+  });
+});
+
+describe('@kovojs/drizzle static build trust-fact aggregate', () => {
+  it('projects the exact individual collector facts from one immutable syntactic project', () => {
+    const files = [
+      {
+        fileName: 'app.mjs',
+        source: `
+          import { execFileSync } from 'node:child_process';
+          import { mutation, serializeCookie, serverValue, unsafeCookie } from '@kovojs/server';
+          export const header = serializeCookie('embed_sid', value, {
+            class: 'session',
+            unsafe: unsafeCookie({
+              downgrade: { sameSite: 'none' },
+              justification: 'third-party embed login',
+            }),
+          });
+          export const generated = serverValue(value, 'server generated');
+          export const unsafe = mutation({ handler(input) { execFileSync(input.value); } });
+        `,
+      },
+    ];
+
+    expect(collectStaticBuildTrustFactsFromProject({ files })).toEqual({
+      capabilities: collectCapabilityEscapesFromProject({ files }),
+      cookieDowngrades: collectCookieDowngradesFromProject({ files }),
+      unregisteredSinks: collectUnregisteredSinksFromProject({ files }),
+    });
+  });
+
+  it('keeps the lightweight project prefilter closed for an otherwise unmarked opaque call', () => {
+    const facts = collectStaticBuildTrustFactsFromProject({
+      files: [
+        {
+          fileName: 'app.mjs',
+          source: `
+            import { mutation } from '@kovojs/server';
+            export const unsafe = mutation({
+              handler(input) { return input.callback(input.value); },
+            });
+          `,
+        },
+      ],
+    });
+
+    expect(facts.unregisteredSinks).toEqual([
+      expect.objectContaining({
+        sink: 'request-handler.opaque-call',
+        source: 'input.callback',
+      }),
     ]);
   });
 });
