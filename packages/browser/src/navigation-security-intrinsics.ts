@@ -470,6 +470,16 @@ export function createBrowserNavigationSecurityControls(
   const nativeClearTimeout = stableMethod(scope, 'clearTimeout');
   const locationObject = scope.location;
   const documentObject = scope.document;
+  const historyObject = scope.history;
+  // SPEC §6.6/§8: enhanced-navigation recovery remains framework authority after authored
+  // modules execute. Capture these optional browser controls once; live document/history reads
+  // would let a late same-realm replacement retain stale privileged DOM.
+  const documentStartViewTransition = documentObject
+    ? stableMethod(documentObject, 'startViewTransition')
+    : undefined;
+  const historyScrollRestorationSetter = historyObject
+    ? stableSetter(historyObject, 'scrollRestoration')
+    : undefined;
   const documentBody = documentObject ? stableGetter(documentObject, 'body') : undefined;
   const documentElement = documentObject
     ? stableGetter(documentObject, 'documentElement')
@@ -2646,6 +2656,60 @@ export function createBrowserNavigationSecurityControls(
     return false;
   }
 
+  function setHistoryScrollRestoration(value: 'auto' | 'manual'): boolean {
+    if (!controlsSound || !historyObject || !historyScrollRestorationSetter) return false;
+    try {
+      apply(historyScrollRestorationSetter, historyObject, [value]);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * SPEC §6.6/§8: invoke only the construction-time view-transition method and never trust its
+   * returned carrier. The callback is the security-bearing server-truth commit, so a captured
+   * implementation that omits it receives a bounded fallback through boot-pinned timer controls.
+   */
+  async function commitViewTransition(document: Document, callback: () => void): Promise<void> {
+    await new NativePromise<void>((resolve, reject) => {
+      let committed = false;
+      let timer: unknown;
+      const commit = () => {
+        if (committed) return;
+        committed = true;
+        if (timer !== undefined && nativeClearTimeout) {
+          try {
+            apply(nativeClearTimeout, scope, [timer]);
+          } catch {}
+        }
+        try {
+          callback();
+          resolve();
+        } catch (error) {
+          reject(error);
+        }
+      };
+
+      if (
+        !controlsSound ||
+        document !== documentObject ||
+        !documentStartViewTransition ||
+        !nativeSetTimeout
+      ) {
+        commit();
+        return;
+      }
+
+      try {
+        timer = apply(nativeSetTimeout, scope, [commit, 50]);
+        apply(documentStartViewTransition, documentObject, [commit]);
+      } catch {
+        commit();
+      }
+    });
+  }
+
   function hardNavigate(value: string): boolean {
     const location = currentUrl();
     const parsed = location ? parseUrl(value, location.href) : undefined;
@@ -3471,6 +3535,7 @@ export function createBrowserNavigationSecurityControls(
     cloneDomNode,
     cloneElement,
     closestElement,
+    commitViewTransition,
     createHtmlElement,
     createSecurityMap,
     createMutationBroadcastChannel,
@@ -3540,6 +3605,7 @@ export function createBrowserNavigationSecurityControls(
     setElementAttribute,
     setElementProperty,
     setFormDataValue,
+    setHistoryScrollRestoration,
     setSecurityMapValue,
     setNodeTextContent,
     slice,

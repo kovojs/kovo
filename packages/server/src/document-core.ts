@@ -105,6 +105,11 @@ export interface DocumentAssemblyOptions {
    * rebroadcast can discard cross-principal messages on shared devices.
    */
   sessionFingerprint?: string;
+  /**
+   * SPEC §8: non-secret document posture indicating that a persisted bfcache restore must perform
+   * a full server GET. Unlike sessionFingerprint, this also represents unresolved principals.
+   */
+  sessionDependent?: boolean;
 }
 
 /** @internal */
@@ -326,6 +331,7 @@ function assembleDocumentShellParts(
     | 'loader'
     | 'metaContext'
     | 'queries'
+    | 'sessionDependent'
     | 'sessionFingerprint'
     | 'loaderRuntimeHref'
   >,
@@ -372,6 +378,8 @@ function assembleDocumentShellParts(
     options.sessionFingerprint !== undefined && options.sessionFingerprint !== ''
       ? `<meta name="kovo-session" content="${escapeAttribute(options.sessionFingerprint)}">`
       : '';
+  const sessionDependentMeta =
+    options.sessionDependent === true ? '<meta name="kovo-session-dependent" content="true">' : '';
 
   const renderedQueryScripts: string[] = [];
   for (let index = 0; index < queryScripts.length; index += 1) {
@@ -384,7 +392,7 @@ function assembleDocumentShellParts(
     earlyHints: hints.earlyHints,
     parts: {
       body: options.body,
-      head: `${buildMeta}${sessionMeta}${hints.html}${loader?.html ?? ''}`,
+      head: `${buildMeta}${sessionDependentMeta}${sessionMeta}${hints.html}${loader?.html ?? ''}`,
       lang: options.lang ?? options.document?.lang ?? langFromHints(options.hints) ?? 'en',
       queryScripts: renderedQueryScripts,
     },

@@ -107,10 +107,10 @@ describe('inline loader minified artifact', () => {
     );
     expect(inlineKovoLoaderInstallerSource).toContain('queryOne:(root,sl)=>bns.queryOne(root,sl)');
     expect(inlineKovoLoaderInstallerSource).toContain(
-      'if(queryOne(doc,\'meta[name="kovo-session"]\'))',
+      'if(queryOne(doc,\'meta[name="kovo-session-dependent"]\'))',
     );
     expect(inlineKovoLoaderInstallerSource).not.toContain(
-      'if(doc.querySelector?.(\'meta[name="kovo-session"]\'))',
+      'if(doc.querySelector?.(\'meta[name="kovo-session-dependent"]\'))',
     );
     expect(inlineKovoLoaderInstallerSource).toContain(
       'const sessionMeta=bns.queryOne(doc,\'meta[name="kovo-session"]\')',
@@ -118,6 +118,7 @@ describe('inline loader minified artifact', () => {
     expect(inlineKovoLoaderInstallerSource).toContain(
       'const meta=bns.queryOne(root,\'meta[name="kovo-build"]\')',
     );
+    expect(inlineKovoLoaderInstallerSource).toContain('const pbt=kb()');
     expect(inlineKovoLoaderInstallerSource).not.toContain(
       'root.querySelector?.(\'meta[name="kovo-build"]\')',
     );

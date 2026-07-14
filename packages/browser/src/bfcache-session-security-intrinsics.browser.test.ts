@@ -59,7 +59,7 @@ it('keeps modular bfcache enrollment pinned after late real-document query poiso
     throw new Error('Document/EventTarget controls unavailable');
   }
   const meta = document.createElement('meta');
-  meta.setAttribute('name', 'kovo-session');
+  meta.setAttribute('name', 'kovo-session-dependent');
   meta.setAttribute('content', 'principal-fp');
   document.head.append(meta);
   const target = new EventTarget();
@@ -70,7 +70,7 @@ it('keeps modular bfcache enrollment pinned after late real-document query poiso
   Object.defineProperty(Document.prototype, 'querySelector', {
     ...queryDescriptor,
     value(this: Document, selector: string) {
-      if (this === document && selector === 'meta[name="kovo-session"]') {
+      if (this === document && selector === 'meta[name="kovo-session-dependent"]') {
         queryPoisonCalls += 1;
         return null;
       }
@@ -121,7 +121,7 @@ it('keeps modular bfcache enrollment and disposal pinned after late EventTarget 
     throw new Error('EventTarget controls unavailable');
   }
   const meta = document.createElement('meta');
-  meta.setAttribute('name', 'kovo-session');
+  meta.setAttribute('name', 'kovo-session-dependent');
   meta.setAttribute('content', 'principal-fp');
   document.head.append(meta);
   const target = new EventTarget();
@@ -191,7 +191,7 @@ it('keeps the generated inline session reload pinned after late PageTransitionEv
   const frame = document.createElement('iframe');
   frame.srcdoc = [
     '<!doctype html><html><head>',
-    '<meta name="kovo-session" content="principal-fp">',
+    '<meta name="kovo-session-dependent" content="true">',
     '</head><body><main id="booted">SESSION TRUTH</main></body></html>',
   ].join('');
   frames.push(frame);

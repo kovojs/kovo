@@ -10,6 +10,28 @@ import {
   FakeRoot,
 } from './runtime-test-fakes.js';
 
+const TEST_BUILD = 'build-test';
+
+function installBuildDocument(): () => void {
+  const globals = globalThis as unknown as Record<string, unknown>;
+  const hadDocument = Object.prototype.hasOwnProperty.call(globals, 'document');
+  const originalDocument = globals.document;
+  const meta = {
+    getAttribute(name: string) {
+      return name === 'content' ? TEST_BUILD : null;
+    },
+  };
+  globals.document = {
+    querySelector(selector: string) {
+      return selector === 'meta[name="kovo-build"]' ? meta : null;
+    },
+  };
+  return () => {
+    if (hadDocument) globals.document = originalDocument;
+    else delete globals.document;
+  };
+}
+
 // SPEC.md §9.2: loader-installed BroadcastChannel replay shares the enhanced
 // mutation apply path and loader error seam; split from the submit and failure
 // seams in the sibling loader-enhanced-mutation-*.test.ts files.
@@ -17,6 +39,7 @@ describe('loader enhanced mutation broadcasts', () => {
   it('auto-wires enhanced mutation broadcasts through the loader bridge', async () => {
     const globalRecord = globalThis as unknown as Record<string, unknown>;
     const originalBroadcastChannel = globalRecord.BroadcastChannel;
+    const restoreDocument = installBuildDocument();
     const hub = new FakeBroadcastHub();
     const channelNames: string[] = [];
     class TestBroadcastChannel extends FakeBroadcastChannel {
@@ -46,7 +69,9 @@ describe('loader enhanced mutation broadcasts', () => {
         },
       );
       const fetch = vi.fn(async () => ({
-        headers: { get: () => null },
+        headers: {
+          get: (name: string) => (name.toLowerCase() === 'kovo-build' ? TEST_BUILD : null),
+        },
         async text() {
           return [
             '<kovo-query name="cart">{"count":4}</kovo-query>',
@@ -96,12 +121,14 @@ describe('loader enhanced mutation broadcasts', () => {
       expect(mutationRootB.targets.get('cart-badge')?.html).toBe('<cart-badge>4</cart-badge>');
     } finally {
       globalRecord.BroadcastChannel = originalBroadcastChannel;
+      restoreDocument();
     }
   });
 
   it('reports default broadcast replay apply failures through the loader error hook', () => {
     const globalRecord = globalThis as unknown as Record<string, unknown>;
     const originalBroadcastChannel = globalRecord.BroadcastChannel;
+    const restoreDocument = installBuildDocument();
     const channels: FakeBroadcastChannel[] = [];
     class TestBroadcastChannel extends FakeBroadcastChannel {
       constructor() {
@@ -138,6 +165,7 @@ describe('loader enhanced mutation broadcasts', () => {
             '<kovo-query name="cart">{"count":2}</kovo-query>',
             '<kovo-query name="product:p1">{"stock":8}</kovo-query>',
           ].join('\n'),
+          buildToken: TEST_BUILD,
           changes: [],
           type: 'kovo:mutation-response',
         },
@@ -150,6 +178,7 @@ describe('loader enhanced mutation broadcasts', () => {
       expect(onError).toHaveBeenCalledWith(applyError, { phase: 'mutation-broadcast' });
     } finally {
       globalRecord.BroadcastChannel = originalBroadcastChannel;
+      restoreDocument();
     }
   });
 });

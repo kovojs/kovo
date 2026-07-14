@@ -27,6 +27,7 @@ import type { CompiledQueryUpdatePlans } from './query-bindings.js';
 import type { QueryRefetchOptions } from './query-refetch.js';
 import type { QueryStore } from './query-store.js';
 import { securityGetOwnPropertyDescriptor } from './security-witness-intrinsics.js';
+import { readPageBuildToken } from './build-token.js';
 
 const loaderBrowserSecurity =
   typeof document === 'undefined' ? undefined : createBrowserNavigationSecurityControls();
@@ -185,11 +186,15 @@ export function installGeneratedKovoLoader(
     sessionMeta === null || loaderBrowserSecurity === undefined
       ? undefined
       : (loaderBrowserSecurity.readAttribute(sessionMeta, 'content') ?? undefined);
+  // SPEC §6.6/§9.1.1: generated loader authority uses one construction-time page build proof for
+  // direct mutation apply and BroadcastChannel publish/receive.
+  const pageBuildToken = readPageBuildToken();
   const enhancedMutationSetup = options.enhancedMutations
     ? withDefaultMutationBroadcast({
         ...options.enhancedMutations,
         ...definedProps({
           applyQuery: options.enhancedMutations.applyQuery ?? options.applyQuery,
+          buildToken: pageBuildToken,
           broadcastOnError: options.onError
             ? (error: unknown) => {
                 reportRuntimeContextError(options.onError, error, { phase: 'mutation-broadcast' });
@@ -204,6 +209,7 @@ export function installGeneratedKovoLoader(
           // K4 / SPEC §4.7: thread the loader's islandSignalScope into the broadcast
           // so a broadcast morph that removes an island correctly aborts its ctx.signal.
           islandSignalScope,
+          expectedBuildToken: pageBuildToken,
           principal: sessionFingerprint,
         }),
         onAppliedQueries: rememberAppliedQueries,

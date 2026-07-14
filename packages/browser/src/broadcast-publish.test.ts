@@ -9,10 +9,36 @@ import {
   FakeMorphTarget,
 } from './runtime-test-fakes.js';
 
+const TEST_BUILD = 'build-test';
+
 // SPEC.md §9.2: the publish side sanitizes change records, owns default
 // BroadcastChannel installation/teardown, and syncs across tabs; the incoming
 // replay apply behavior lives in the sibling broadcast-replay.test.ts file.
 describe('mutation broadcast publish', () => {
+  it('never restamps missing or mismatched response proof with the page build token', () => {
+    const channel = new FakeBroadcastChannel();
+    const broadcast = installMutationBroadcast({
+      buildToken: 'build-old',
+      channel,
+      store: createQueryStore(),
+    });
+    const body = '<kovo-query name="account">{"secret":"new-build"}</kovo-query>';
+
+    broadcast.publish(body);
+    broadcast.publish(body, [], 'build-new');
+    expect(channel.messages).toEqual([]);
+
+    broadcast.publish(body, [], 'build-old');
+    expect(channel.messages).toEqual([
+      {
+        body,
+        buildToken: 'build-old',
+        changes: [],
+        type: 'kovo:mutation-response',
+      },
+    ]);
+  });
+
   it('publishes sanitized change records and applies received mutation wire bodies', () => {
     const channel = new FakeBroadcastChannel();
     const store = createQueryStore();
@@ -22,6 +48,7 @@ describe('mutation broadcast publish', () => {
     root.targets.set('cart-badge', new FakeMorphTarget());
 
     const broadcast = installMutationBroadcast({
+      buildToken: TEST_BUILD,
       channel,
       onAppliedQueries,
       onChanges,
@@ -29,14 +56,19 @@ describe('mutation broadcast publish', () => {
       store,
     });
 
-    broadcast.publish('<kovo-query name="cart">{"count":1}</kovo-query>', [
-      { domain: 'cart', input: { productId: 'p1' } },
-      { domain: 'product', keys: ['p1'] },
-    ] as never);
+    broadcast.publish(
+      '<kovo-query name="cart">{"count":1}</kovo-query>',
+      [
+        { domain: 'cart', input: { productId: 'p1' } },
+        { domain: 'product', keys: ['p1'] },
+      ] as never,
+      TEST_BUILD,
+    );
 
     expect(channel.messages).toEqual([
       {
         body: '<kovo-query name="cart">{"count":1}</kovo-query>',
+        buildToken: TEST_BUILD,
         changes: [{ domain: 'cart' }, { domain: 'product', keys: ['p1'] }],
         type: 'kovo:mutation-response',
       },
@@ -55,6 +87,7 @@ describe('mutation broadcast publish', () => {
           '<kovo-query name="cart">{"count":2}</kovo-query>',
           '<kovo-fragment target="cart-badge"><cart-badge>2</cart-badge></kovo-fragment>',
         ].join(''),
+        buildToken: TEST_BUILD,
         changes: [{ domain: 'cart', keys: ['cart:1'] }],
         type: 'kovo:mutation-response',
       },
@@ -71,7 +104,7 @@ describe('mutation broadcast publish', () => {
   it('ignores invalid messages and detaches from the channel on close', () => {
     const channel = new FakeBroadcastChannel();
     const store = createQueryStore();
-    const broadcast = installMutationBroadcast({ channel, store });
+    const broadcast = installMutationBroadcast({ buildToken: TEST_BUILD, channel, store });
 
     channel.onmessage?.({
       data: {
@@ -95,14 +128,22 @@ describe('mutation broadcast publish', () => {
     const store = createQueryStore();
     const channel = new FakeBroadcastChannel();
     const onChanges = vi.fn();
-    const broadcast = installMutationBroadcast({ channel, onChanges, store });
+    const broadcast = installMutationBroadcast({
+      buildToken: TEST_BUILD,
+      channel,
+      onChanges,
+      store,
+    });
 
-    broadcast.publish('<kovo-query name="cart">{"count":5}</kovo-query>', [
-      { domain: 'cart', input: { productId: 'p1' } },
-    ] as never);
+    broadcast.publish(
+      '<kovo-query name="cart">{"count":5}</kovo-query>',
+      [{ domain: 'cart', input: { productId: 'p1' } }] as never,
+      TEST_BUILD,
+    );
     expect(channel.messages).toEqual([
       {
         body: '<kovo-query name="cart">{"count":5}</kovo-query>',
+        buildToken: TEST_BUILD,
         changes: [{ domain: 'cart' }],
         type: 'kovo:mutation-response',
       },
@@ -111,6 +152,7 @@ describe('mutation broadcast publish', () => {
     channel.onmessage?.({
       data: {
         body: '<kovo-query name="cart">{"count":6}</kovo-query>',
+        buildToken: TEST_BUILD,
         changes: [{ domain: 'cart', keys: ['cart_1'] }],
         type: 'kovo:mutation-response',
       },
@@ -132,11 +174,13 @@ describe('mutation broadcast publish', () => {
     rootB.targets.set('cart-badge', new FakeMorphTarget('<cart-badge>1</cart-badge>'));
 
     const broadcastA = installMutationBroadcast({
+      buildToken: TEST_BUILD,
       channel: channelA,
       onChanges: onChangesA,
       store: storeA,
     });
     installMutationBroadcast({
+      buildToken: TEST_BUILD,
       channel: channelB,
       onChanges: onChangesB,
       root: rootB,
@@ -149,6 +193,7 @@ describe('mutation broadcast publish', () => {
         '<kovo-fragment target="cart-badge"><cart-badge>5</cart-badge></kovo-fragment>',
       ].join('\n'),
       [{ domain: 'cart', keys: ['cart_1'] }],
+      TEST_BUILD,
     );
 
     expect(channelA.messages).toEqual([
@@ -157,6 +202,7 @@ describe('mutation broadcast publish', () => {
           '<kovo-query name="cart">{"count":5}</kovo-query>',
           '<kovo-fragment target="cart-badge"><cart-badge>5</cart-badge></kovo-fragment>',
         ].join('\n'),
+        buildToken: TEST_BUILD,
         changes: [{ domain: 'cart', keys: ['cart_1'] }],
         type: 'kovo:mutation-response',
       },
@@ -186,7 +232,7 @@ describe('mutation broadcast publish', () => {
     globalThis.BroadcastChannel = DefaultBroadcastChannel as never;
 
     try {
-      const setup = withDefaultMutationBroadcast({ root, store });
+      const setup = withDefaultMutationBroadcast({ buildToken: TEST_BUILD, root, store });
 
       expect(createdChannels).toHaveLength(1);
       const channel = createdChannels[0];
@@ -194,10 +240,15 @@ describe('mutation broadcast publish', () => {
       expect(channel?.name).toBe('kovo:mutation-response');
       expect(setup.options.broadcast).toBeDefined();
 
-      setup.options.broadcast?.publish('<kovo-query name="cart">{"count":1}</kovo-query>');
+      setup.options.broadcast?.publish(
+        '<kovo-query name="cart">{"count":1}</kovo-query>',
+        [],
+        TEST_BUILD,
+      );
       expect(channel?.messages).toEqual([
         {
           body: '<kovo-query name="cart">{"count":1}</kovo-query>',
+          buildToken: TEST_BUILD,
           changes: [],
           type: 'kovo:mutation-response',
         },
@@ -213,13 +264,19 @@ describe('mutation broadcast publish', () => {
   it('stamps the principal on publish and discards cross-principal rebroadcasts (bugs-1 F13)', () => {
     const channel = new FakeBroadcastChannel();
     const store = createQueryStore();
-    const broadcast = installMutationBroadcast({ channel, principal: 'session-A', store });
+    const broadcast = installMutationBroadcast({
+      buildToken: TEST_BUILD,
+      channel,
+      principal: 'session-A',
+      store,
+    });
 
     // publish carries the sender's principal fingerprint.
-    broadcast.publish('<kovo-query name="cart">{"count":1}</kovo-query>');
+    broadcast.publish('<kovo-query name="cart">{"count":1}</kovo-query>', [], TEST_BUILD);
     expect(channel.messages).toEqual([
       {
         body: '<kovo-query name="cart">{"count":1}</kovo-query>',
+        buildToken: TEST_BUILD,
         changes: [],
         principal: 'session-A',
         type: 'kovo:mutation-response',
@@ -231,6 +288,7 @@ describe('mutation broadcast publish', () => {
     channel.onmessage?.({
       data: {
         body: '<kovo-query name="cart">{"count":99}</kovo-query>',
+        buildToken: TEST_BUILD,
         changes: [],
         principal: 'session-B',
         type: 'kovo:mutation-response',
@@ -242,6 +300,7 @@ describe('mutation broadcast publish', () => {
     channel.onmessage?.({
       data: {
         body: '<kovo-query name="cart">{"count":2}</kovo-query>',
+        buildToken: TEST_BUILD,
         changes: [],
         principal: 'session-A',
         type: 'kovo:mutation-response',
@@ -257,7 +316,13 @@ describe('mutation broadcast publish', () => {
     const redirectedStore = createQueryStore();
     const onChanges = vi.fn();
     const redirectedOnChanges = vi.fn();
-    const options = { channel, onChanges, principal: 'session-A', store };
+    const options = {
+      buildToken: TEST_BUILD,
+      channel,
+      onChanges,
+      principal: 'session-A',
+      store,
+    };
     const broadcast = installMutationBroadcast(options);
 
     // SPEC §§6.6/9.3: a caller-controlled options object must not remain a
@@ -270,6 +335,7 @@ describe('mutation broadcast publish', () => {
     channel.onmessage?.({
       data: {
         body: '<kovo-query name="cart">{"count":99}</kovo-query>',
+        buildToken: TEST_BUILD,
         changes: [],
         principal: 'session-B',
         type: 'kovo:mutation-response',
@@ -280,6 +346,7 @@ describe('mutation broadcast publish', () => {
     channel.onmessage?.({
       data: {
         body: '<kovo-query name="cart">{"count":2}</kovo-query>',
+        buildToken: TEST_BUILD,
         changes: [{ domain: 'cart' }],
         principal: 'session-A',
         type: 'kovo:mutation-response',
@@ -290,10 +357,11 @@ describe('mutation broadcast publish', () => {
     expect(onChanges).toHaveBeenCalledWith([{ domain: 'cart' }]);
     expect(redirectedOnChanges).not.toHaveBeenCalled();
 
-    broadcast.publish('<kovo-query name="cart">{"count":1}</kovo-query>');
+    broadcast.publish('<kovo-query name="cart">{"count":1}</kovo-query>', [], TEST_BUILD);
     expect(channel.messages).toEqual([
       {
         body: '<kovo-query name="cart">{"count":1}</kovo-query>',
+        buildToken: TEST_BUILD,
         changes: [],
         principal: 'session-A',
         type: 'kovo:mutation-response',
@@ -312,7 +380,7 @@ describe('mutation broadcast publish', () => {
       const channel = new FakeBroadcastChannel();
       const store = createQueryStore();
       let reads = 0;
-      const options: Record<string, unknown> = { channel, store };
+      const options: Record<string, unknown> = { buildToken: TEST_BUILD, channel, store };
       Object.defineProperty(options, property, {
         configurable: true,
         enumerable: true,
@@ -333,19 +401,21 @@ describe('mutation broadcast publish', () => {
     const inheritedOnChanges = vi.fn();
     const options = Object.assign(
       Object.create({ onChanges: inheritedOnChanges, principal: 'session-B' }),
-      { channel, store },
+      { buildToken: TEST_BUILD, channel, store },
     );
     const broadcast = installMutationBroadcast(options);
 
-    broadcast.publish('<kovo-query name="cart">{"count":1}</kovo-query>');
+    broadcast.publish('<kovo-query name="cart">{"count":1}</kovo-query>', [], TEST_BUILD);
     expect(channel.messages[0]).toEqual({
       body: '<kovo-query name="cart">{"count":1}</kovo-query>',
+      buildToken: TEST_BUILD,
       changes: [],
       type: 'kovo:mutation-response',
     });
     channel.onmessage?.({
       data: {
         body: '<kovo-query name="cart">{"count":99}</kovo-query>',
+        buildToken: TEST_BUILD,
         changes: [{ domain: 'cart' }],
         principal: 'session-B',
         type: 'kovo:mutation-response',
@@ -371,11 +441,12 @@ describe('mutation broadcast publish', () => {
     const channel = new FakeBroadcastChannel();
     const store = createQueryStore();
     // Receiver installed with principal: undefined (anonymous page).
-    installMutationBroadcast({ channel, store });
+    installMutationBroadcast({ buildToken: TEST_BUILD, channel, store });
 
     channel.onmessage?.({
       data: {
         body: '<kovo-query name="cart">{"count":99}</kovo-query>',
+        buildToken: TEST_BUILD,
         changes: [],
         principal: 'session-B',
         type: 'kovo:mutation-response',

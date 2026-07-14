@@ -756,6 +756,8 @@ function installInlineKovoLoader(im) {
     const meta = bns.queryOne(root, 'meta[name="kovo-build"]');
     return meta ? bns.readAttribute(meta, 'content') || '' : '';
   };
+  // SPEC §6.6/§9.1.1: snapshot the page render-plan proof before authored modules can mutate DOM.
+  const pbt = kb();
   // SPEC §9.3: BroadcastChannel and enhanced navigation share one immutable page-load
   // principal. A live meta read after install is authored DOM, not principal authority.
   const sessionMeta = bns.queryOne(doc, 'meta[name="kovo-session"]');
@@ -965,9 +967,7 @@ function installInlineKovoLoader(im) {
   const inav = nav.handleClick;
   const sf = nav.saveScroll;
   const ng = (href) => {
-    if (globalThis.history?.scrollRestoration !== undefined) {
-      globalThis.history.scrollRestoration = 'auto';
-    }
+    bns.setHistoryScrollRestoration('auto');
     bns.navigateSameOrigin(href);
   };
   const indeterminateInputs = qa(
@@ -1019,7 +1019,7 @@ function installInlineKovoLoader(im) {
       bns.addLifecycleEventListener(globalThis, type, listener),
     applyBody: fab,
     buildHeader: bh,
-    currentBuild: kb,
+    currentBuild: (root) => root ? kb(root) : pbt,
     currentHref: () => bns.currentUrl()?.href,
     document: doc,
     encodeAttribute: ea,
@@ -1111,9 +1111,9 @@ function installInlineKovoLoader(im) {
       { createHTML: (html) => tts.createHTML(html), findFragmentTarget: ft, security: bns },
     );
   };
-  const ab = (body, build = kb()) => {
+  const ab = (body, build = pbt) => {
     const chunks = readInlineMutationResponseBodyChunks(body);
-    const skew = kb() && (!build || build !== kb());
+    const skew = pbt && (!build || build !== pbt);
     if (skew) {
       for (let index = 0; index < chunks.queries.length; index += 1) {
         const q = chunks.queries[index];
@@ -1344,9 +1344,11 @@ function installInlineKovoLoader(im) {
   };
   let bc;
   let broadcastRetired = false;
-  try {
-    bc = bns.createMutationBroadcastChannel('kovo:mutation-response');
-  } catch {}
+  if (pbt) {
+    try {
+      bc = bns.createMutationBroadcastChannel('kovo:mutation-response');
+    } catch {}
+  }
   if (bc) {
     bns.observePromiseRejection(
       bns.setMutationBroadcastMessageHandler(bc, (event) => {
@@ -1357,11 +1359,12 @@ function installInlineKovoLoader(im) {
       }, () => broadcastRetired),
     );
   }
-  const pb = (body, changes) => {
-    if (broadcastRetired || !bc) return;
+  const pb = (body, changes, responseBuild) => {
+    if (broadcastRetired || !bc || !pbt) return;
+    if (!responseBuild || responseBuild !== pbt) return;
     const envelope = bns.snapshotMutationBroadcastEnvelopeData({
       body,
-      ...(kb() ? { buildToken: kb() } : {}),
+      ...(responseBuild ? { buildToken: responseBuild } : {}),
       changes,
       ...(sfp === undefined ? {} : { principal: sfp }),
       type: 'kovo:mutation-response',
@@ -1471,7 +1474,7 @@ function installInlineKovoLoader(im) {
           // bugz-26 H6 / SPEC §14: validate the response build before acquiring a reader. A
           // missing/mismatched token must cancel unread bytes and hard-reload with zero apply.
           const responseBuild = bh(response);
-          if (kb() && (!responseBuild || responseBuild !== kb())) {
+          if (pbt && (!responseBuild || responseBuild !== pbt)) {
             await recoverStream(responseBody);
             return;
           }
@@ -1487,10 +1490,11 @@ function installInlineKovoLoader(im) {
           ng(ant(form, body));
           return;
         }
-        ab(text, bh(response));
+        const responseBuild = bh(response);
+        ab(text, responseBuild);
         const completedStatus = rsp(response, 200);
         if (completedStatus >= 200 && completedStatus < 300 && bns.readResponseField(response, 'ok') !== false) {
-          pb(text, changes);
+          pb(text, changes, responseBuild);
         }
       } catch (error) {
         if (error !== streamRecoveryError) fsb(form);

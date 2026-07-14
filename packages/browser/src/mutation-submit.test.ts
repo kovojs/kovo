@@ -17,6 +17,8 @@ import {
   FakeQueryPlanElement,
 } from './runtime-test-fakes.js';
 
+const TEST_BUILD = 'build-test';
+
 type FragmentSnapshot = {
   html: string;
   mode?: 'append' | 'prepend' | 'replace';
@@ -491,7 +493,7 @@ describe('enhanced mutation submit', () => {
   it('keeps the mutation principal live for a non-401 response with a stray reauth header', async () => {
     const store = createQueryStore();
     const channel = new FakeBroadcastChannel();
-    const broadcast = installMutationBroadcast({ channel, store });
+    const broadcast = installMutationBroadcast({ buildToken: TEST_BUILD, channel, store });
     const root = new FakeMorphRoot();
     const body = '<kovo-query name="account">{"owner":"same-principal"}</kovo-query>';
 
@@ -500,7 +502,9 @@ describe('enhanced mutation submit', () => {
       fetch: async () => ({
         headers: {
           get(name: string) {
-            return name.toLowerCase() === 'kovo-reauth' ? '/login' : null;
+            const normalized = name.toLowerCase();
+            if (normalized === 'kovo-reauth') return '/login';
+            return normalized === 'kovo-build' ? TEST_BUILD : null;
           },
         },
         ok: true,
@@ -509,6 +513,7 @@ describe('enhanced mutation submit', () => {
       }),
       form: { action: '/_m/account/update', method: 'post' },
       formData: new FormData(),
+      expectedBuildToken: TEST_BUILD,
       root,
       store,
     });
@@ -520,6 +525,7 @@ describe('enhanced mutation submit', () => {
     expect(channel.messages).toEqual([
       {
         body,
+        buildToken: TEST_BUILD,
         changes: [],
         type: 'kovo:mutation-response',
       },
@@ -529,7 +535,7 @@ describe('enhanced mutation submit', () => {
   it('submits enhanced mutation forms with live targets and applies the fragment response', async () => {
     const store = createQueryStore();
     const channel = new FakeBroadcastChannel();
-    const broadcast = installMutationBroadcast({ channel, store });
+    const broadcast = installMutationBroadcast({ buildToken: TEST_BUILD, channel, store });
     const root = new FakeMorphRoot();
     const count = new FakeQueryBindingElement('cart.count', { textContent: '0' });
     const summary = new FakeQueryPlanElement({ 'data-derive': 'cart.summary' });
@@ -561,6 +567,7 @@ describe('enhanced mutation submit', () => {
     const fetch = vi.fn(async (_url: string, options: EnhancedMutationFetchOptions) => ({
       headers: {
         get(name: string) {
+          if (name.toLowerCase() === 'kovo-build') return TEST_BUILD;
           return name === 'Kovo-Changes'
             ? '[{"domain":"cart","input":{"productId":"p1","quantity":"1"}}]'
             : null;
@@ -581,6 +588,7 @@ describe('enhanced mutation submit', () => {
       form: { action: '/_m/cart/add', method: 'post' },
       formData,
       broadcast,
+      expectedBuildToken: TEST_BUILD,
       idem: 'idem_01HX',
       morph(target, html) {
         observed.push(
@@ -640,6 +648,7 @@ describe('enhanced mutation submit', () => {
           '<kovo-fragment target="cart-badge"><cart-badge>1</cart-badge></kovo-fragment>',
           '<kovo-fragment target="recommendations"><section></section></kovo-fragment>',
         ].join('\n'),
+        buildToken: TEST_BUILD,
         changes: [{ domain: 'cart' }],
         type: 'kovo:mutation-response',
       },
@@ -653,13 +662,14 @@ describe('enhanced mutation submit', () => {
   it('ignores malformed Kovo-Changes headers while applying successful mutation bodies', async () => {
     const store = createQueryStore();
     const channel = new FakeBroadcastChannel();
-    const broadcast = installMutationBroadcast({ channel, store });
+    const broadcast = installMutationBroadcast({ buildToken: TEST_BUILD, channel, store });
     const root = new FakeMorphRoot();
     root.deps = [{ deps: 'cart', id: 'cart-badge', token: 'tok_cart' }];
     root.targets.set('cart-badge', new FakeMorphTarget());
     const fetch = vi.fn(async () => ({
       headers: {
         get(name: string) {
+          if (name.toLowerCase() === 'kovo-build') return TEST_BUILD;
           return name === 'Kovo-Changes' ? '[' : null;
         },
       },
@@ -676,6 +686,7 @@ describe('enhanced mutation submit', () => {
       form: { action: '/_m/cart/add', method: 'post' },
       formData: new FormData(),
       broadcast,
+      expectedBuildToken: TEST_BUILD,
       root,
       store,
     });
@@ -690,6 +701,7 @@ describe('enhanced mutation submit', () => {
           '<kovo-query name="cart">{"count":2}</kovo-query>',
           '<kovo-fragment target="cart-badge"><cart-badge>2</cart-badge></kovo-fragment>',
         ].join('\n'),
+        buildToken: TEST_BUILD,
         changes: [],
         type: 'kovo:mutation-response',
       },

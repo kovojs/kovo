@@ -140,6 +140,9 @@ export function createDocumentLifecycleRecovery(
     options,
     'wireKey',
   );
+  // SPEC §6.6/§9.1.1: the active render-plan token is page-load authority. Snapshot it once so
+  // authored DOM changes cannot weaken later visibility/pageshow recovery checks.
+  const pageBuild = currentBuild();
   const fqs: string[] = [];
   const isDeltaQuery = (query: { attrs: string; attributes?: readonly unknown[] }) =>
     readElementAttribute(query, 'delta').present;
@@ -158,9 +161,9 @@ export function createDocumentLifecycleRecovery(
         });
         const status = readResponseStatus(res);
         if (status === undefined || status >= 400) return;
-        const activeBuild = currentBuild();
+        const activeBuild = pageBuild;
         const responseBuild = buildHeader(res);
-        if (activeBuild && (!responseBuild || responseBuild !== activeBuild)) {
+        if (!activeBuild || !responseBuild || responseBuild !== activeBuild) {
           reload();
           return;
         }
@@ -189,9 +192,9 @@ export function createDocumentLifecycleRecovery(
         });
         const status = readResponseStatus(res);
         if (status === undefined || status >= 400) return;
-        const activeBuild = currentBuild();
+        const activeBuild = pageBuild;
         const responseBuild = buildHeader(res);
-        if (activeBuild && responseBuild && responseBuild !== activeBuild) {
+        if (!activeBuild || !responseBuild || responseBuild !== activeBuild) {
           reload();
           return;
         }
@@ -202,13 +205,21 @@ export function createDocumentLifecycleRecovery(
             lifecycleContains(text, '<kovo-query') ||
             lifecycleContains(text, '<kovo-text')
           ) {
-            applyBody(text, responseBuild || activeBuild);
+            // The response header is the transport proof. Never manufacture proof for fetched
+            // bytes from the page's token (SPEC §9.1.1/§14).
+            applyBody(text, responseBuild);
             return;
           }
           const nextDoc = parseHtmlDocument(text);
           if (!nextDoc) return;
-          const nextBuild = responseBuild || currentBuild(nextDoc);
-          if (activeBuild && (!nextBuild || nextBuild !== activeBuild)) {
+          const documentBuild = currentBuild(nextDoc);
+          if (
+            !activeBuild ||
+            !responseBuild ||
+            !documentBuild ||
+            responseBuild !== activeBuild ||
+            documentBuild !== activeBuild
+          ) {
             reload();
             return;
           }
@@ -232,7 +243,7 @@ export function createDocumentLifecycleRecovery(
                 '</kovo-fragment>';
             }
           }
-          if (fragments.length) applyBody(fragments, nextBuild || activeBuild);
+          if (fragments.length) applyBody(fragments, responseBuild);
         }
       } catch {}
     })();
@@ -280,7 +291,7 @@ export function createDocumentLifecycleRecovery(
     });
     // SPEC.md §8: guarded/session-dependent bfcache restores must revalidate
     // with a full server GET rather than presenting a persisted authenticated DOM.
-    if (queryOne(doc, 'meta[name="kovo-session"]')) {
+    if (queryOne(doc, 'meta[name="kovo-session-dependent"]')) {
       listen('pageshow', (event) => {
         if (readPageTransitionPersisted(event)) reload();
       });

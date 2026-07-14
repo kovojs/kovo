@@ -42,8 +42,8 @@ function withStubbedGlobals(
     };
     globalRecord.document = {
       querySelector(selector: string) {
-        return selector === 'meta[name="kovo-session"]' && options.sessionDependent
-          ? { getAttribute: (name: string) => (name === 'content' ? 'principal-fp' : null) }
+        return selector === 'meta[name="kovo-session-dependent"]' && options.sessionDependent
+          ? { getAttribute: (name: string) => (name === 'content' ? 'true' : null) }
           : null;
       },
     };
@@ -93,7 +93,7 @@ describe('loader query runtime bfcache reload (SPEC §780)', () => {
     withStubbedGlobals({ sessionDependent: false }, ({ pageShowListeners, reload }) => {
       installLoaderQueryRuntime({ root: new FakeRoot() });
 
-      // SPEC §780: no kovo-session posture -> the page stays fully bfcache-eligible (no reload).
+      // SPEC §8: no session-dependent posture -> the page stays fully bfcache-eligible.
       expect(pageShowListeners.has('pageshow')).toBe(false);
       expect(reload).not.toHaveBeenCalled();
     });

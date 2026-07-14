@@ -13,6 +13,14 @@ let inlineLoaderInstalled = false;
 let inlineImportModule: (url: string) => Promise<Record<string, unknown>> = async () => ({});
 let navigationFetchControl = globalThis.fetch as (...args: unknown[]) => unknown;
 const pinnedNavigationTestFetch = (...args: unknown[]) => navigationFetchControl(...args);
+const defaultNavigationViewTransition = (callback: () => void): object => {
+  callback();
+  return {};
+};
+let navigationViewTransitionControl: (callback: () => void) => unknown =
+  defaultNavigationViewTransition;
+const pinnedNavigationTestViewTransition = (callback: () => void): unknown =>
+  navigationViewTransitionControl(callback);
 
 function installNavigationLoader(): void {
   const selectedFetch = globalThis.fetch as (...args: unknown[]) => unknown;
@@ -22,6 +30,10 @@ function installNavigationLoader(): void {
   // transport identity across this file's singleton install while each case swaps only the
   // delegate selected before calling this helper.
   vi.stubGlobal('fetch', pinnedNavigationTestFetch);
+  Object.defineProperty(document, 'startViewTransition', {
+    configurable: true,
+    value: pinnedNavigationTestViewTransition,
+  });
   installInlineKovoLoader((url) => inlineImportModule(url));
   inlineLoaderInstalled = true;
 }
@@ -105,6 +117,7 @@ afterEach(() => {
   document.body.replaceChildren();
   localStorage.removeItem('theme');
   inlineImportModule = async () => ({});
+  navigationViewTransitionControl = defaultNavigationViewTransition;
   delete (globalThis as typeof globalThis & { __navDeferredApplied?: number }).__navDeferredApplied;
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
@@ -407,6 +420,7 @@ describe('browser inline loader enhanced navigation', () => {
       callback();
       return {};
     });
+    navigationViewTransitionControl = startViewTransition;
     Object.defineProperty(document, 'startViewTransition', {
       configurable: true,
       value: startViewTransition,
@@ -434,12 +448,71 @@ describe('browser inline loader enhanced navigation', () => {
     vi.spyOn(history, 'pushState').mockImplementation(() => undefined);
 
     installNavigationLoader();
+    const lateReplacement = vi.fn(() => ({
+      updateCallbackDone: new Promise<void>(() => undefined),
+    }));
+    Object.defineProperty(document, 'startViewTransition', {
+      configurable: true,
+      value: lateReplacement,
+    });
     dispatchAnchorLikeClick('/cart');
 
     await vi.waitFor(() => expect(document.title).toBe('Cart'));
 
     expect(startViewTransition).toHaveBeenCalledTimes(1);
+    expect(lateReplacement).not.toHaveBeenCalled();
     expect(document.querySelector('[kovo-nav-segment="page:/cart"]')?.textContent).toBe('Cart');
+  });
+
+  it('commits server truth when a captured view transition never invokes its callback', async () => {
+    document.head.innerHTML = [
+      '<meta name="kovo-build" content="build-a">',
+      '<title>Private</title>',
+    ].join('');
+    document.body.innerHTML = [
+      '<main kovo-nav-segment="layout:Account" kovo-nav-kind="layout" kovo-nav-name="Account">',
+      '<a id="refresh" href="/private?refresh=1">Refresh</a>',
+      '<section kovo-nav-segment="page:/private" kovo-nav-kind="page" kovo-nav-name="private"><p id="private-old">PRIVILEGED-OLD</p></section>',
+      '</main>',
+    ].join('');
+    const neverSettles = vi.fn(() => ({
+      updateCallbackDone: new Promise<void>(() => undefined),
+    }));
+    navigationViewTransitionControl = neverSettles;
+    Object.defineProperty(document, 'startViewTransition', {
+      configurable: true,
+      value: neverSettles,
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({
+        headers: { get: (name: string) => (name === 'content-type' ? 'text/html' : null) },
+        async text() {
+          return [
+            '<!doctype html><html><head>',
+            '<meta name="kovo-build" content="build-a">',
+            '<title>Revoked</title>',
+            '</head><body>',
+            '<main kovo-nav-segment="layout:Account" kovo-nav-kind="layout" kovo-nav-name="Account">',
+            '<a id="refresh" href="/private?refresh=1">Refresh</a>',
+            '<section kovo-nav-segment="page:/private" kovo-nav-kind="page" kovo-nav-name="private"><p id="revoked-next">ACCESS-REVOKED</p></section>',
+            '</main>',
+            '</body></html>',
+          ].join('');
+        },
+        url: new URL('/private?refresh=1', location.href).href,
+      })),
+    );
+    vi.stubGlobal('scrollTo', vi.fn());
+    vi.spyOn(history, 'pushState').mockImplementation(() => undefined);
+
+    installNavigationLoader();
+    dispatchAnchorLikeClick('/private?refresh=1');
+
+    await vi.waitFor(() => expect(document.title).toBe('Revoked'));
+    expect(neverSettles).toHaveBeenCalledOnce();
+    expect(document.querySelector('#private-old')).toBeNull();
+    expect(document.querySelector('#revoked-next')?.textContent).toBe('ACCESS-REVOKED');
   });
 
   it('executes deferred body scripts from full-document enhanced navigation targets', async () => {

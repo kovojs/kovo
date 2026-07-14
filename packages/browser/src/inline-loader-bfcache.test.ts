@@ -4,13 +4,13 @@ import { inlineSourceInstallCases, type InlineSourceInstall } from './inline-loa
 
 // SPEC.md §780: the inline loader (the production bootstrap shipped in document shells) carries the
 // SAME second bfcache defense as the modular loader. A persisted restore (event.persisted) of a
-// session-dependent document — one carrying the per-principal kovo-session fingerprint meta that
-// document-core stamps only for guarded/session-dependent docs — MUST revalidate with a full server
+// session-dependent document — one carrying the non-secret kovo-session-dependent posture meta
+// that also represents unresolved sessions — MUST revalidate with a full server
 // reload (location.reload) rather than presenting the prior principal's restored DOM. Anonymous
 // documents carry no such meta, so they do not register the reload defense. This drives every
 // generated/extracted installer variant so the regenerated inline-loader.ts artifact stays in
 // parity. Anonymous documents may still register query-refresh liveness listeners; the bfcache
-// reload defense stays gated on the kovo-session meta.
+// reload defense stays gated on the session-dependent posture meta.
 
 type Listener = (event: unknown) => void | Promise<void>;
 
@@ -38,8 +38,8 @@ function withInstalledInlineLoader(
     };
     globalRecord.document = {
       querySelector(selector: string) {
-        return selector === 'meta[name="kovo-session"]' && options.sessionDependent
-          ? { getAttribute: (name: string) => (name === 'content' ? 'principal-fp' : null) }
+        return selector === 'meta[name="kovo-session-dependent"]' && options.sessionDependent
+          ? { getAttribute: (name: string) => (name === 'content' ? 'true' : null) }
           : null;
       },
       querySelectorAll() {
@@ -75,7 +75,7 @@ describe.each(inlineSourceInstallCases)(
   (_label, install) => {
     it('reloads a persisted bfcache restore of a session-dependent document', () => {
       withInstalledInlineLoader({ sessionDependent: true, install }, ({ pageShow, reload }) => {
-        // The kovo-session meta is present, so the inline bootstrap registers the pageshow handler.
+        // The posture meta is present, so the inline bootstrap registers the pageshow handler.
         expect(pageShow).toBeTypeOf('function');
 
         pageShow?.({ persisted: true, type: 'pageshow' });

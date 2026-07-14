@@ -300,6 +300,10 @@ export async function renderAppRouteDocumentResponse({
       // resolved (a stamped `kovo-session` fingerprint) even under a non-rolling provider.
       // `renderRouteDocumentResponse` carries this floor onto file/stream outcomes too (M2).
       ...(noStore ? { noStore: true } : {}),
+      // SPEC §8: no-store is the server-side signal that this route document depends on session
+      // posture. Mirror it into a non-secret DOM marker so unresolved principals receive the same
+      // persisted-pageshow revalidation as fingerprinted principals.
+      ...(noStore ? { sessionDependent: true } : {}),
       ...((routeResponse.status === 404 && routeHasBoundary(route, 'notFound')) ||
       (routeResponse.status === 500 && routeHasBoundary(route, 'error'))
         ? { wrapNonOk: true }

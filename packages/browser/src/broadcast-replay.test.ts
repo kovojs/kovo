@@ -16,6 +16,7 @@ import {
 
 const restoreClientModuleManifest = installTestClientModuleManifest(['/c/cart-filter.client.js']);
 afterAll(restoreClientModuleManifest);
+const TEST_BUILD = 'build-test';
 
 // SPEC.md §9.1/§9.2: incoming broadcast replay enters the canonical mutation
 // response apply path (keyed query chunks, tolerant per-chunk error seam, query
@@ -30,11 +31,12 @@ describe('mutation broadcast replay', () => {
 
     store.subscribe('reviews', keyedPlan, 'product:p1');
     store.subscribe('reviews', unkeyedPlan);
-    installMutationBroadcast({ channel, store });
+    installMutationBroadcast({ buildToken: TEST_BUILD, channel, store });
 
     channel.onmessage?.({
       data: {
         body: '<kovo-query name="reviews" key="product:p1">{"items":[{"id":"r1"}]}</kovo-query>',
+        buildToken: TEST_BUILD,
         changes: [{ domain: 'product', keys: ['p1'] }],
         type: 'kovo:mutation-response',
       },
@@ -51,7 +53,7 @@ describe('mutation broadcast replay', () => {
     const channel = new FakeBroadcastChannel();
     const onError = vi.fn();
 
-    installMutationBroadcast({ channel, onError, store });
+    installMutationBroadcast({ buildToken: TEST_BUILD, channel, onError, store });
 
     channel.onmessage?.({
       data: {
@@ -59,6 +61,7 @@ describe('mutation broadcast replay', () => {
           '<kovo-query name="cart">{</kovo-query>',
           '<kovo-query name="product:p1">{"stock":8}</kovo-query>',
         ].join('\n'),
+        buildToken: TEST_BUILD,
         changes: [],
         type: 'kovo:mutation-response',
       },
@@ -84,6 +87,7 @@ describe('mutation broadcast replay', () => {
       applyQuery(query) {
         if (query.name === 'cart') throw applyError;
       },
+      buildToken: TEST_BUILD,
       channel,
       onError,
       store,
@@ -95,6 +99,7 @@ describe('mutation broadcast replay', () => {
           '<kovo-query name="cart">{"count":2}</kovo-query>',
           '<kovo-query name="product:p1">{"stock":8}</kovo-query>',
         ].join('\n'),
+        buildToken: TEST_BUILD,
         changes: [],
         type: 'kovo:mutation-response',
       },
@@ -137,6 +142,7 @@ describe('mutation broadcast replay', () => {
     expect(capturedSignal?.aborted).toBe(false);
 
     installMutationBroadcast({
+      buildToken: TEST_BUILD,
       channel,
       islandSignalScope,
       morph(target, html) {
@@ -150,6 +156,7 @@ describe('mutation broadcast replay', () => {
     channel.onmessage?.({
       data: {
         body: '<kovo-fragment target="cart-shell"><section></section></kovo-fragment>',
+        buildToken: TEST_BUILD,
         changes: [],
         type: 'kovo:mutation-response',
       },
@@ -267,7 +274,7 @@ describe('mutation broadcast replay', () => {
       store: senderStore,
     });
 
-    sender.publish('<kovo-query name="cart" delta>{"set":{"count":99}}</kovo-query>');
+    sender.publish('<kovo-query name="cart" delta>{"set":{"count":99}}</kovo-query>', [], 'N+1');
     const envelope = senderChannel.messages[0] as { buildToken?: string };
     expect(envelope.buildToken).toBe('N+1');
 
@@ -300,6 +307,7 @@ describe('mutation broadcast replay', () => {
     root.targets.set('cart-badge', new FakeMorphTarget('<cart-badge>0</cart-badge>'));
 
     installMutationBroadcast({
+      buildToken: TEST_BUILD,
       channel,
       morph(target, html) {
         observed.push(`morph:${count.textContent}:${summary.textContent}`);
@@ -325,6 +333,7 @@ describe('mutation broadcast replay', () => {
           '<kovo-query name="cart">{"count":6}</kovo-query>',
           '<kovo-fragment target="cart-badge"><cart-badge>6</cart-badge></kovo-fragment>',
         ].join('\n'),
+        buildToken: TEST_BUILD,
         changes: [],
         type: 'kovo:mutation-response',
       },

@@ -5,8 +5,8 @@ import { installBfcacheSessionReload } from './query-visible-return.js';
 // SPEC.md §780: the second bfcache defense. A bfcache restore bypasses the loader,
 // sessionProvider (§6.5), and the route guard, and some user agents (Safari/WebKit) keep a
 // `no-store` page in the in-memory bfcache. So a persisted restore (event.persisted === true)
-// of a SESSION-DEPENDENT document — one carrying the per-principal `kovo-session` fingerprint
-// meta that document-core stamps only for guarded/session-dependent docs — MUST revalidate with
+// of a SESSION-DEPENDENT document — one carrying the non-secret `kovo-session-dependent` posture
+// meta that document-core stamps for resolved OR unresolved session docs — MUST revalidate with
 // a full server reload rather than presenting the prior principal's restored DOM. Anonymous
 // documents carry no such meta and stay fully bfcache-eligible.
 
@@ -25,8 +25,8 @@ class FakePageShowTarget {
 function sessionMetaDocument(sessionDependent: boolean) {
   return {
     querySelector(selector: string) {
-      return selector === 'meta[name="kovo-session"]' && sessionDependent
-        ? { getAttribute: (name: string) => (name === 'content' ? 'principal-fp' : null) }
+      return selector === 'meta[name="kovo-session-dependent"]' && sessionDependent
+        ? { getAttribute: (name: string) => (name === 'content' ? 'true' : null) }
         : null;
     },
   };
@@ -43,7 +43,7 @@ describe('bfcache session reload (SPEC §780)', () => {
       reload,
     });
 
-    // The kovo-session meta is present, so the loader registers the second-defense handler.
+    // The posture meta is present, so the loader registers the second-defense handler.
     expect(target.listeners.has('pageshow')).toBe(true);
 
     target.listeners.get('pageshow')?.({ persisted: true, type: 'pageshow' });
@@ -72,7 +72,7 @@ describe('bfcache session reload (SPEC §780)', () => {
     expect(reload).toHaveBeenCalledTimes(1);
   });
 
-  it('registers no pageshow handler for an anonymous document (no kovo-session meta)', () => {
+  it('registers no pageshow handler for an anonymous document (no posture meta)', () => {
     const target = new FakePageShowTarget();
     const reload = vi.fn();
 

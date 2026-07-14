@@ -69,13 +69,14 @@ export function installEnhancedNavigationRuntime(
   ) {
     throw new TypeError('Kovo enhanced-navigation options are invalid.');
   }
-  const historyObject = globalThis.history;
   const sc: Record<string, [number, number]> = {};
   let cu = security.currentUrl()?.href ?? '';
   let ni = 0;
 
   const kb = (root: ParentNode = doc) =>
     security.readAttribute(security.queryOne(root, 'meta[name="kovo-build"]'), 'content') || '';
+  // SPEC §6.6/§9.1.1: the page build is loader authority, not mutable authored DOM.
+  const pageBuild = kb();
   const readSessionFingerprint = (root: ParentNode) =>
     security.readAttribute(security.queryOne(root, 'meta[name="kovo-session"]'), 'content') ??
     undefined;
@@ -143,9 +144,9 @@ export function installEnhancedNavigationRuntime(
     return false;
   };
   const ng = (href: string) => {
-    if (historyObject?.scrollRestoration !== undefined) {
-      historyObject.scrollRestoration = 'auto';
-    }
+    // Best effort only. A poisoned optional scroll setter must never run before or suppress the
+    // boot-pinned hard-navigation sink that retires stale server truth (SPEC §6.6/§8).
+    security.setHistoryScrollRestoration('auto');
     security.hardNavigate(href);
   };
   const sf = (href: string) => {
@@ -197,39 +198,7 @@ export function installEnhancedNavigationRuntime(
     }
     target.scrollIntoView?.();
   };
-  const vt = async (apply: () => void) => {
-    const start = doc.startViewTransition;
-    if (typeof start !== 'function') {
-      apply();
-      return;
-    }
-    let attempted = false;
-    let committed = false;
-    const commitOnce = () => {
-      if (attempted) return;
-      attempted = true;
-      apply();
-      committed = true;
-    };
-    try {
-      const transition = security.call<unknown>(start, doc, [commitOnce]);
-      const updateCallbackDone =
-        transition !== null && typeof transition === 'object'
-          ? (transition as { updateCallbackDone?: unknown }).updateCallbackDone
-          : undefined;
-      await updateCallbackDone;
-      // A late same-realm replacement can return a fulfilled lookalike without
-      // invoking the callback. Never advance URL/history while old server truth remains.
-      if (!attempted) commitOnce();
-      if (!committed) throw new TypeError('Kovo view-transition DOM commit failed.');
-    } catch (error) {
-      if (!attempted) {
-        commitOnce();
-        return;
-      }
-      throw error;
-    }
-  };
+  const vt = async (apply: () => void) => security.commitViewTransition(doc, apply);
   const navigate = async (href: string, pop = false) => {
     const navId = (ni += 1);
     try {
@@ -272,7 +241,7 @@ export function installEnhancedNavigationRuntime(
         !nextDocumentElement ||
         !currentBody ||
         !currentDocumentElement ||
-        kb() !== kb(nextDoc)
+        pageBuild !== kb(nextDoc)
       ) {
         throw Error();
       }
@@ -372,6 +341,7 @@ export function installEnhancedNavigationRuntime(
       const body =
         (security.readDocumentField(doc, 'body') as HTMLBodyElement | undefined) || triggerRoot;
       if (!body) throw Error();
+      const historyObject = globalThis.history;
       const historyPushState = historyObject?.pushState;
       if (!pop && historyObject && typeof historyPushState === 'function') {
         security.call(historyPushState, historyObject, [{}, '', finalUrl.href]);
@@ -453,9 +423,7 @@ export function installEnhancedNavigationRuntime(
     );
   }
 
-  if (globalThis.history?.scrollRestoration !== undefined) {
-    globalThis.history.scrollRestoration = 'manual';
-  }
+  security.setHistoryScrollRestoration('manual');
 
   const handlePopState = () => {
     sf(cu);

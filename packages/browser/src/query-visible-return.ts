@@ -305,7 +305,7 @@ function globalPageShowTarget(
   return target !== root && typeof target.addEventListener === 'function' ? target : undefined;
 }
 
-/** The `querySelector` slice used to detect the per-principal `kovo-session` posture meta. */
+/** The `querySelector` slice used to detect the non-secret session-dependent posture meta. */
 interface SessionMetaDocumentLike {
   querySelector(selector: string): AttributeReaderLike | null;
 }
@@ -317,8 +317,8 @@ interface SessionMetaDocumentLike {
  */
 export interface BfcacheSessionReloadOptions {
   /**
-   * SPEC §780: the document used to detect the per-principal `kovo-session` fingerprint meta
-   * that `document-core` stamps for session-dependent documents
+   * SPEC §8: the document used to detect the `kovo-session-dependent` posture meta that
+   * `document-core` stamps for guarded, resolved-session, and unresolved-session documents
    * (`packages/server/src/document-core.ts`). Defaults to the ambient `document`.
    */
   document?: SessionMetaDocumentLike;
@@ -345,11 +345,10 @@ export interface InstalledBfcacheSessionReload {
  * the server (a full GET that re-runs `sessionProvider` and the guard) rather than presenting the
  * restored DOM of the prior principal.
  *
- * Session-dependence is read from the per-principal `kovo-session` fingerprint meta that
- * `document-core` stamps only for guarded/session-dependent documents; an anonymous/exportable
- * document carries no such meta, so this handler is a no-op for it and the page stays fully
- * bfcache-eligible. This is a loader-level defense: it runs even when no query store is configured
- * (e.g. a query-less guarded route), and it adds no `unload` handler (SPEC §780).
+ * Session-dependence is read from the non-secret `kovo-session-dependent` posture meta. It is
+ * deliberately separate from the principal fingerprint because unresolved session carriers must
+ * also revalidate after bfcache restore. Anonymous/exportable documents carry no marker and stay
+ * fully bfcache-eligible. This adds no `unload` handler (SPEC §8).
  */
 export function installBfcacheSessionReload(
   options: BfcacheSessionReloadOptions = {},
@@ -358,8 +357,11 @@ export function installBfcacheSessionReload(
   const sessionDependent =
     sessionMetaDocument !== undefined &&
     (browserLifecycleSecurity
-      ? browserLifecycleSecurity.queryOne(sessionMetaDocument, 'meta[name="kovo-session"]') !== null
-      : sessionMetaDocument.querySelector('meta[name="kovo-session"]') !== null);
+      ? browserLifecycleSecurity.queryOne(
+          sessionMetaDocument,
+          'meta[name="kovo-session-dependent"]',
+        ) !== null
+      : sessionMetaDocument.querySelector('meta[name="kovo-session-dependent"]') !== null);
   const pageShowTarget = options.pageShowTarget ?? globalEventTarget();
   const reload = options.reload ?? globalLocationReload();
   const readPageTransitionPersisted =
@@ -367,7 +369,7 @@ export function installBfcacheSessionReload(
     browserLifecycleSecurity?.readPageTransitionPersisted ??
     readNonBrowserPageTransitionPersisted;
 
-  // SPEC §780: anonymous/exportable documents carry no `kovo-session` posture, so the handler is
+  // SPEC §8: anonymous/exportable documents carry no session-dependent posture, so the handler is
   // a no-op and the page remains fully bfcache-eligible.
   if (!sessionDependent || !pageShowTarget || !reload) {
     return { dispose() {} };

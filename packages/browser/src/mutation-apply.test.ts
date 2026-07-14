@@ -8,9 +8,15 @@ import {
   applyFetchedEnhancedMutationResponseToRuntime,
   type EnhancedMutationRuntimeApplyOptions,
 } from './mutation-apply.js';
+import { installMutationBroadcast } from './broadcast.js';
 import type { FetchedEnhancedMutation } from './mutation-fetch.js';
 import { createQueryStore } from './query-store.js';
-import { FakeMorphRoot, FakeMorphTarget, FakeQueryBindingElement } from './runtime-test-fakes.js';
+import {
+  FakeBroadcastChannel,
+  FakeMorphRoot,
+  FakeMorphTarget,
+  FakeQueryBindingElement,
+} from './runtime-test-fakes.js';
 
 type FragmentSnapshot = {
   html: string;
@@ -106,6 +112,7 @@ describe('enhanced mutation response apply orchestration', () => {
         '<kovo-fragment target="cart-badge"><span>2</span></kovo-fragment>',
       ].join(''),
       [{ domain: 'cart', keys: ['cart:1'] }],
+      undefined,
     );
     expect(broadcast.close).not.toHaveBeenCalled();
   });
@@ -219,6 +226,25 @@ describe('enhanced mutation response apply orchestration', () => {
     // Stale base across a deploy: never patched silently — refetch is delegated.
     expect(onDeltaMiss).toHaveBeenCalledWith('cart', undefined);
     expect(store.get('cart')).toEqual({ count: 2, items: [{ id: 'p1', qty: 1 }] });
+  });
+
+  it.each([
+    ['missing', undefined],
+    ['mismatched', 'build_B'],
+  ])('does not rebroadcast a successful response with %s build proof', (_label, buildToken) => {
+    const store = createQueryStore();
+    const channel = new FakeBroadcastChannel();
+    const broadcast = installMutationBroadcast({ buildToken: 'build_A', channel, store });
+
+    applyFetchedEnhancedMutationResponseToRuntime(
+      applyOptions({ broadcast, expectedBuildToken: 'build_A', store }),
+      fetchedMutation('<kovo-query name="account">{"secret":"new-build"}</kovo-query>', {
+        buildToken,
+      }),
+    );
+
+    expect(store.get('account')).toBeUndefined();
+    expect(channel.messages).toEqual([]);
   });
 
   it('routes a delta to onDeltaMiss when the client holds no base for the query', () => {

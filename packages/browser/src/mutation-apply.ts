@@ -160,5 +160,7 @@ function publishSuccessfulMutation(
 ): void {
   if (isFailedMutationResponse(fetched.response)) return;
 
-  options.broadcast?.publish(fetched.body, fetched.changes);
+  // SPEC §9.1.1/§14: the same response token that admitted direct server truth must travel to the
+  // broadcast boundary. The channel refuses missing/mismatched proof instead of restamping bytes.
+  options.broadcast?.publish(fetched.body, fetched.changes, fetched.buildToken);
 }

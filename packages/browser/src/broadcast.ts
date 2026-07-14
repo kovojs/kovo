@@ -25,7 +25,12 @@ export interface BroadcastLike {
 /** Runtime API used by Kovo applications and generated runtime integration. */
 export interface MutationBroadcast {
   close(): void;
-  publish(body: string, changes?: readonly MutationChangeRecord[]): void;
+  /** Publish only bytes whose response token was accepted by the direct apply boundary. */
+  publish(
+    body: string,
+    changes?: readonly MutationChangeRecord[],
+    responseBuildToken?: string,
+  ): void;
 }
 
 /** @internal Options for {@link installMutationBroadcast} (SPEC §9.1). */
@@ -101,6 +106,8 @@ export function withDefaultMutationBroadcast<Options extends DefaultMutationBroa
   if (options.broadcast) return { options };
 
   try {
+    const buildToken = options.buildToken ?? readPageBuildToken();
+    if (!buildToken) return { options };
     const channel =
       browserBroadcastSecurity.createMutationBroadcastChannel('kovo:mutation-response');
     if (!channel) return { options };
@@ -108,7 +115,7 @@ export function withDefaultMutationBroadcast<Options extends DefaultMutationBroa
       channel: channel as BroadcastLike,
       ...definedProps({
         applyQuery: options.applyQuery,
-        buildToken: options.buildToken,
+        buildToken,
         islandSignalScope: options.islandSignalScope,
         onDeltaMiss: options.onDeltaMiss,
         onError: options.broadcastOnError,
@@ -160,6 +167,7 @@ export function installMutationBroadcast(
   let retired = false;
   const onMessage = (event: { data: unknown }) => {
     if (retired) return;
+    if (!pageBuildToken) return;
     const data = browserBroadcastSecurity.snapshotMutationBroadcastEnvelope(event);
     if (!data) return;
     // bugs-1 F13 / SPEC §9.3: discard a rebroadcast from a different principal so one
@@ -213,14 +221,24 @@ export function installMutationBroadcast(
       retired = true;
       browserBroadcastSecurity.retireMutationBroadcastChannel(runtimeOptions.channel);
     },
-    publish(body: string, changes: readonly MutationChangeRecord[] = []) {
+    publish(
+      body: string,
+      changes: readonly MutationChangeRecord[] = [],
+      responseBuildToken?: string,
+    ) {
       if (retired) return;
+      // SPEC §9.1.1/§14: do not launder a missing/mismatched response proof by stamping the
+      // sender page token onto arbitrary bytes. Without both page and response proof, publish is
+      // disabled rather than creating an origin-wide unversioned authority channel.
+      if (responseBuildToken === undefined || responseBuildToken !== pageBuildToken) {
+        return;
+      }
       const envelope = browserBroadcastSecurity.snapshotMutationBroadcastEnvelopeData({
         body,
         // D3 / SPEC §9.1.1, §847, §14: stamp the sender's render-plan version token so
         // a receiver on a different build converts the body's delta chunks to misses
         // instead of merging a cross-build delta onto a stale base.
-        ...(pageBuildToken === undefined ? {} : { buildToken: pageBuildToken }),
+        ...(responseBuildToken === undefined ? {} : { buildToken: responseBuildToken }),
         changes: changes.flatMap((change) => {
           const sanitized = sanitizeMutationChangeRecord(change);
           return sanitized ? [sanitized] : [];

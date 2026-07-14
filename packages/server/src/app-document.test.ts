@@ -475,7 +475,7 @@ describe('sessionFingerprintFromRequest — session-anchored (K3, SPEC §9.3)', 
       url: new URL('https://example.test/'),
     });
 
-    expect(response.body).not.toContain('kovo-session');
+    expect(response.body).not.toContain('<meta name="kovo-session"');
   });
 
   it('fails closed for an unresolved session principal: no fingerprint, still no-store', async () => {
@@ -493,7 +493,8 @@ describe('sessionFingerprintFromRequest — session-anchored (K3, SPEC §9.3)', 
       url: new URL('https://example.test/'),
     });
 
-    expect(response.body).not.toContain('kovo-session');
+    expect(response.body).not.toContain('<meta name="kovo-session"');
+    expect(response.body).toContain('<meta name="kovo-session-dependent" content="true">');
     expect(headerValue(response.headers, 'cache-control')).toBe('no-store');
     expect(headerValue(response.headers, 'vary')).toContain('Cookie');
   });
@@ -510,7 +511,8 @@ describe('sessionFingerprintFromRequest — session-anchored (K3, SPEC §9.3)', 
       url: new URL('https://example.test/'),
     });
 
-    expect(response.body).not.toContain('kovo-session');
+    expect(response.body).not.toContain('<meta name="kovo-session"');
+    expect(response.body).not.toContain('<meta name="kovo-session-dependent"');
   });
 });
 

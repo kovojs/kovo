@@ -56,6 +56,8 @@ export type { EnhancedFormElementLike } from './mutation-form.js';
 export interface EnhancedMutationLoaderOptions {
   applyQuery?: QueryApplyInterposition;
   broadcast?: MutationBroadcast;
+  /** Construction-time page build proof used for response apply and broadcast parity. */
+  expectedBuildToken?: string;
   fetch: EnhancedMutationFetch;
   formData?: (form: EnhancedFormElementLike, event: DelegatedEvent) => unknown;
   idem?: () => string;
@@ -117,6 +119,7 @@ export async function dispatchEnhancedFormSubmit(
       ...definedProps({
         applyQuery: options.applyQuery,
         broadcast: options.broadcast,
+        expectedBuildToken: options.expectedBuildToken,
         idem: options.idem?.(),
         importModule: options.importModule,
         morph: options.morph,
