@@ -159,6 +159,7 @@ export function runStarterTypecheck(root: string): void {
     [
       '--ignoreConfig',
       '--noEmit',
+      '--allowImportingTsExtensions',
       '--jsx',
       'react-jsx',
       '--jsxImportSource',

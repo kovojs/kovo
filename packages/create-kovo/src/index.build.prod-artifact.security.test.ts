@@ -631,6 +631,7 @@ describe('create-kovo starter (build integration: production security artifacts)
     mkdirSync(tempParent, { recursive: true });
     const root = mkdtempSync(join(tempParent, 'create-kovo-prod-storage-mutation-write-'));
     const port = await reservePort();
+    const jar = new Map<string, string>();
     let server: ChildProcessWithoutNullStreams | undefined;
 
     try {
@@ -653,37 +654,65 @@ describe('create-kovo starter (build integration: production security artifacts)
       const output = collectOutput(server);
       const origin = `http://127.0.0.1:${port}`;
 
-      const initial = await fetchTextWhenReady(`${origin}/storage-mutation-proof`, output);
+      await fetchTextWhenReady(`${origin}/storage-mutation-proof`, output);
+      const initialResponse = await fetch(`${origin}/storage-mutation-proof`);
+      mergeCookies(jar, initialResponse.headers.getSetCookie());
+      const initial = await initialResponse.text();
       expect(initial).toContain('<p id="storage-put">missing</p>');
       expect(initial).toContain('<p id="storage-delete">present</p>');
+      const putForm = formHtmlByAction(
+        initial,
+        '/_m/storage-mutation-proof/storage-mutation-write',
+      );
 
       const put = await fetch(`${origin}/_m/storage-mutation-proof/storage-mutation-write`, {
-        body: new URLSearchParams({ mode: 'put' }),
+        body: new URLSearchParams({
+          csrf: fieldValue(putForm, 'csrf'),
+          'Kovo-Idem': fieldValue(putForm, 'Kovo-Idem'),
+          mode: 'put',
+        }),
         headers: {
           'content-type': 'application/x-www-form-urlencoded',
+          cookie: cookieHeader(jar),
           'Kovo-Fragment': 'true',
+          origin,
         },
         method: 'POST',
       });
       await put.text();
       expect(put.status).toBe(200);
-      const afterPut = await fetch(`${origin}/storage-mutation-proof`);
-      await expect(afterPut.text()).resolves.toContain('<p id="storage-put">present</p>');
+      const afterPut = await fetch(`${origin}/storage-mutation-proof`, {
+        headers: { cookie: cookieHeader(jar) },
+      });
+      const afterPutHtml = await afterPut.text();
+      expect(afterPutHtml).toContain('<p id="storage-put">present</p>');
+      const deleteForm = formHtmlByAction(
+        afterPutHtml,
+        '/_m/storage-mutation-proof/storage-mutation-write',
+      );
 
       const deleteResponse = await fetch(
         `${origin}/_m/storage-mutation-proof/storage-mutation-write`,
         {
-          body: new URLSearchParams({ mode: 'delete' }),
+          body: new URLSearchParams({
+            csrf: fieldValue(deleteForm, 'csrf'),
+            'Kovo-Idem': fieldValue(deleteForm, 'Kovo-Idem'),
+            mode: 'delete',
+          }),
           headers: {
             'content-type': 'application/x-www-form-urlencoded',
+            cookie: cookieHeader(jar),
             'Kovo-Fragment': 'true',
+            origin,
           },
           method: 'POST',
         },
       );
       await deleteResponse.text();
       expect(deleteResponse.status).toBe(200);
-      const afterDelete = await fetch(`${origin}/storage-mutation-proof`);
+      const afterDelete = await fetch(`${origin}/storage-mutation-proof`, {
+        headers: { cookie: cookieHeader(jar) },
+      });
       await expect(afterDelete.text()).resolves.toContain('<p id="storage-delete">missing</p>');
     } finally {
       await stopProcess(server);
