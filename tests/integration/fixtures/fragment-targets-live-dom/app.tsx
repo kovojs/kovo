@@ -1,43 +1,24 @@
-// SPEC.md §9.1: Kovo-Targets is collected from the live DOM, including patched-in targets.
+/** @jsxImportSource @kovojs/server */
+// SPEC.md §9.1: Kovo-Targets is collected from the live DOM, including a
+// nested target patched in by a generated, attested launcher rerender. The
+// nested target is observable but does not gain independent render authority.
 import { staticSql } from '@kovojs/test/internal/integration/fixture-abi';
 import { createApp, mutation, route, s } from '@kovojs/server';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
-async function readStage(db: KovoFixtureRequest['db']): Promise<number> {
-  const rows = await db.query<{ stage: number }>(
-    staticSql`select stage from live_dom_state where id = 1`,
-  );
-  return rows[0]?.stage ?? 0;
-}
-
-async function renderLauncher(db: KovoFixtureRequest['db']): Promise<string> {
-  const stage = await readStage(db);
-  const dynamic =
-    stage === 0
-      ? ''
-      : `<section kovo-fragment-target="dynamic-panel" kovo-deps="wire">
-          <output data-bind="wire.dynamic">Panel ${stage}</output>
-        </section>`;
-  return `<section kovo-fragment-target="launcher" kovo-c="live-launcher" kovo-deps="wire">
-    <output data-bind="wire.stage">Stage ${stage}</output>
-    ${dynamic}
-    <form method="post" action="/_m/fragment-targets-live-dom/advance" enhance data-mutation="fragment-targets-live-dom/advance">
-      <button type="submit">${stage === 0 ? 'Install panel' : 'Refresh panel'}</button>
-    </form>
-  </section>`;
-}
-
-async function renderDynamic(db: KovoFixtureRequest['db']): Promise<string> {
-  const stage = await readStage(db);
-  return `<section kovo-fragment-target="dynamic-panel" kovo-c="dynamic-panel" kovo-deps="wire"><output data-bind="wire.dynamic">Panel ${stage}</output></section>`;
-}
+import { Launcher } from './launcher';
+import { wireDomain, wireQuery } from './shared';
 
 export const advance = mutation('fragment-targets-live-dom/advance', {
   csrf: false,
   csrfJustification: 'fixture mutation has no ambient browser authority',
   defaultRedirectTo: '/',
   input: s.object({}),
-  registry: { tables: ['live_dom_state'] },
+  registry: {
+    queries: [wireQuery],
+    tables: ['live_dom_state'],
+    touches: [wireDomain],
+  },
   handler: async (_input: unknown, request: KovoFixtureRequest) => {
     await request.db.exec(staticSql`update live_dom_state set stage = stage + 1 where id = 1`);
     return {};
@@ -45,9 +26,11 @@ export const advance = mutation('fragment-targets-live-dom/advance', {
 });
 
 const homeRoute = route('/', {
-  page: async (_context, request: KovoFixtureRequest) => `<main>
-    <kovo-fragment target="launcher">${await renderLauncher(request.db)}</kovo-fragment>
-  </main>`,
+  page: () => (
+    <main>
+      <Launcher />
+    </main>
+  ),
 });
 
 const app = createApp({

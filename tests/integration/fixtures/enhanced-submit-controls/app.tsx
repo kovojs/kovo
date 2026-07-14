@@ -1,71 +1,43 @@
-// SPEC.md §6.3/§9.1: enhanced submission preserves real POST form markup, and
-// schema-coerced inputs remain observable on the server after enhancement.
+/** @jsxImportSource @kovojs/server */
+// SPEC.md §6.3/§9.1: enhanced submission preserves real POST form markup,
+// while the success response is generated from the mutation's changed domain and
+// the live query-backed component attested by the browser.
 import { staticSql } from '@kovojs/test/internal/integration/fixture-abi';
 import { createApp, mutation, route, s } from '@kovojs/server';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
-interface SubmissionRow {
-  [key: string]: unknown;
-  include_gift: number;
-  quantity: number;
-}
-
-async function readLatestSubmission(db: KovoFixtureRequest['db']): Promise<SubmissionRow | null> {
-  const rows = await db.query<SubmissionRow>(
-    staticSql`select quantity, include_gift from enhanced_submit_log order by id desc limit 1`,
-  );
-  return rows[0] ?? null;
-}
-
-async function renderInitialReport(db: KovoFixtureRequest['db']): Promise<string> {
-  const row = await readLatestSubmission(db);
-  if (!row) return '<output data-submit-report>no submissions yet</output>';
-  return `<output data-submit-report>
-    quantity=${row.quantity}; includeGift=${row.include_gift === 1 ? 'true' : 'false'}
-  </output>`;
-}
-
-function renderSubmittedReport(rawInput: FormData): string {
-  return `<output data-submit-report>
-    intent=${submittedValue(rawInput, 'intent')}; quantity=${submittedValue(rawInput, 'quantity')}; includeGift=${submittedValue(rawInput, 'includeGift')}; adminNote=${submittedValue(rawInput, 'adminNote')}
-  </output>`;
-}
-
-function submittedValue(rawInput: FormData, name: string): string {
-  const value = rawInput.get(name);
-  return typeof value === 'string' ? value : 'missing';
-}
+import { SubmitControls } from './submit-controls';
+import { submissionDomain, submissionQuery } from './shared';
 
 export const submitOrder = mutation('enhanced-submit-controls/submit', {
   csrf: false,
   csrfJustification: 'fixture mutation has no ambient browser authority',
   input: s.object({
     includeGift: s.boolean(),
+    intent: s.string(),
     quantity: s.number().int().min(1),
   }),
-  registry: { tables: ['enhanced_submit_log'] },
+  registry: {
+    queries: [submissionQuery],
+    tables: ['enhanced_submit_log'],
+    touches: [submissionDomain],
+  },
   handler: async (input, request: KovoFixtureRequest) => {
     await request.db.query({
-      text: 'insert into enhanced_submit_log (quantity, include_gift) values ($1, $2)',
-      values: [input.quantity, input.includeGift ? 1 : 0],
+      text: 'insert into enhanced_submit_log (quantity, include_gift, intent) values ($1, $2, $3)',
+      values: [input.quantity, input.includeGift ? 1 : 0, input.intent],
     });
     return {};
   },
 });
 
 const homeRoute = route('/', {
-  page: async (_context, request: KovoFixtureRequest) => `<main>
-    <h1>Enhanced submit controls</h1>
-    <form method="post" action="/_m/enhanced-submit-controls/submit" enhance
-      data-mutation="enhanced-submit-controls/submit" kovo-fragment-target="submit-controls-form">
-      <label>Quantity <input name="quantity" type="number" value="2" min="1" /></label>
-      <label><input name="includeGift" type="checkbox" value="true" checked /> Include gift wrap</label>
-      <input name="adminNote" value="do-not-include" disabled />
-      <button type="submit" name="intent" value="confirm">Submit order</button>
-      <button type="submit" name="intent" value="preview">Preview order</button>
-    </form>
-    <div kovo-fragment-target="submit-controls-report">${await renderInitialReport(request.db)}</div>
-  </main>`,
+  page: () => (
+    <main>
+      <h1>Enhanced submit controls</h1>
+      <SubmitControls />
+    </main>
+  ),
 });
 
 const app = createApp({
@@ -78,6 +50,7 @@ export default defineFixture({
   schema: `create table enhanced_submit_log (
     id integer primary key generated always as identity,
     quantity integer not null,
-    include_gift integer not null
+    include_gift integer not null,
+    intent text not null
   )`,
 });

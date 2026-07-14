@@ -69,7 +69,6 @@ test('resolves one session for each guarded route, query, and mutation request',
     'provider',
     'guard:mutation',
     'handler:mutation',
-    'response:mutation',
   ]);
   expect(await eventSubjects(request, 'mutation')).toEqual(['user-mutation']);
 });

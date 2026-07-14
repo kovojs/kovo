@@ -1,38 +1,11 @@
-// SPEC.md §4.4/§4.7: delegated handlers receive ctx.signal, and enhanced
-// fragment morphs that remove an island abort its loader-scoped lifecycle.
+/** @jsxImportSource @kovojs/server */
+// SPEC.md §4.4/§4.7/§9.1: delegated handlers receive ctx.signal, and
+// the generated live-component mutation response aborts an island it removes.
 import { staticSql } from '@kovojs/test/internal/integration/fixture-abi';
-import { createApp, mutation, route, s } from '@kovojs/server';
+import { createApp, mutation, route, s, stream } from '@kovojs/server';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
-type LifecycleStage = 'active' | 'replaced';
-
-async function readStage(db: KovoFixtureRequest['db']): Promise<LifecycleStage> {
-  const rows = await db.query<{ stage: LifecycleStage }>(
-    staticSql`select stage from lifecycle_state where id = 1`,
-  );
-  return rows[0]?.stage ?? 'active';
-}
-
-async function renderShell(db: KovoFixtureRequest['db']): Promise<string> {
-  const stage = await readStage(db);
-  if (stage === 'replaced') {
-    return `<section data-stage="replaced">
-      <replacement-runner-host kovo-c="replacement-runner">
-        <button type="button" data-replacement-runner on:click="/client.ts#startReplacementTask">
-        Replacement task
-        </button>
-      </replacement-runner-host>
-    </section>`;
-  }
-
-  return `<section data-stage="active">
-    <primary-runner-host kovo-c="primary-runner">
-      <button type="button" data-primary-runner on:click="/client.ts#startLongTask">
-      Start primary task
-      </button>
-    </primary-runner-host>
-  </section>`;
-}
+import { PrimaryRunner } from './primary-runner';
 
 export const swapIsland = mutation('loader-lifecycle/swap', {
   csrf: false,
@@ -43,17 +16,33 @@ export const swapIsland = mutation('loader-lifecycle/swap', {
     await request.db.exec(staticSql`update lifecycle_state set stage = 'replaced' where id = 1`);
     return {};
   },
+  async *stream() {
+    yield stream.fragment({
+      html: (
+        <replacement-runner-host data-stage="replaced">
+          <button type="button" data-replacement-runner on:click="/client.ts#startReplacementTask">
+            Replacement task
+          </button>
+        </replacement-runner-host>
+      ),
+      target: 'lifecycle-shell',
+    });
+  },
 });
 
 const homeRoute = route('/', {
-  page: async (_context, request: KovoFixtureRequest) => `<main>
-    <h1>Loader lifecycle</h1>
-    <p data-lifecycle-status>idle</p>
-    <div kovo-fragment-target="lifecycle-shell">${await renderShell(request.db)}</div>
-    <form method="post" action="/_m/loader-lifecycle/swap" enhance data-mutation="loader-lifecycle/swap">
-      <button type="submit">Swap island</button>
-    </form>
-  </main>`,
+  page: () => (
+    <main>
+      <h1>Loader lifecycle</h1>
+      <p data-lifecycle-status>idle</p>
+      <div kovo-fragment-target="lifecycle-shell">
+        <PrimaryRunner />
+      </div>
+      <form mutation={swapIsland} enhance stream>
+        <button type="submit">Swap island</button>
+      </form>
+    </main>
+  ),
 });
 
 const app = createApp({

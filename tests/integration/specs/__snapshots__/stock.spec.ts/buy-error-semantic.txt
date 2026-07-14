@@ -1,2 +1,10 @@
-<div data-error-code="OUT_OF_STOCK" data-error-path="quantity" kovo-fragment-target="buy-error" role="alert">
-  "Sold out (0 left)"
+<form action="/_m/stock/buy" kovo-c="buy-form" kovo-deps="item" kovo-fragment-target="buy-form" method="post">
+  <stock-badge>
+    <span>
+      "Stock:"
+    <output data-bind="item.stock">
+      "0"
+  <output data-error-code="OUT_OF_STOCK" role="alert">
+    "Sold out (0 left)"
+  <button type="submit">
+    "Buy"

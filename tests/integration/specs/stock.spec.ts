@@ -33,7 +33,7 @@ test('successful buy decrements; empty stock surfaces a typed error', async ({ p
   const rows = await kovoApp.db.query('select stock from item where id = 1');
   expect(rows[0]).toEqual({ stock: 0 });
 
-  expect(await kovoApp.semantic('[kovo-fragment-target="buy-error"]')).toMatchSnapshot(
+  expect(await kovoApp.semantic('[kovo-fragment-target="buy-form"]')).toMatchSnapshot(
     'buy-error.semantic.txt',
   );
 });

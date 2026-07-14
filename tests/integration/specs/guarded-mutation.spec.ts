@@ -48,6 +48,9 @@ test('guarded mutation reauths anonymous submits and permits signed-in writes', 
       path: '/',
     },
   ]);
+  // SPEC §9.1/§9.3: changing principal invalidates the anonymous page's live-target
+  // descriptor. Reload so the allowed submit carries a descriptor minted for Ada.
+  await page.reload();
 
   const allowedResponsePromise = page.waitForResponse(
     (response) =>

@@ -22,7 +22,7 @@ test('each declared error code renders the matching enhanced branch', async ({ p
   await expect(page.locator('[data-error-code="OUT_OF_STOCK"]')).toHaveText('Only 3 available');
   expect(await stockResponse.text()).not.toContain('Error:');
 
-  expect(await kovoApp.semantic('[kovo-fragment-target="checkout-error"]')).toMatchSnapshot(
+  expect(await kovoApp.semantic('[kovo-fragment-target="checkout-form"]')).toMatchSnapshot(
     'out-of-stock.semantic.txt',
   );
 
@@ -33,7 +33,7 @@ test('each declared error code renders the matching enhanced branch', async ({ p
   const rows = await kovoApp.db.query('select stock from inventory where id = 1');
   expect(rows[0]).toEqual({ stock: 3 });
 
-  expect(await kovoApp.semantic('[kovo-fragment-target="checkout-error"]')).toMatchSnapshot(
+  expect(await kovoApp.semantic('[kovo-fragment-target="checkout-form"]')).toMatchSnapshot(
     'card-declined.semantic.txt',
   );
 });

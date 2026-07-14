@@ -10,7 +10,7 @@ export const LateCard = component({
     }
   `,
   render: () => (
-    <section kovo-fragment-target="late-card">
+    <section>
       <div class="late-surface" data-late-card>
         Late styled card
       </div>

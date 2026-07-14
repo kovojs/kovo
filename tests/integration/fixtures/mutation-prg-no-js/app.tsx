@@ -1,5 +1,7 @@
+/** @jsxImportSource @kovojs/server */
 // Mutation wire fixture for SPEC.md §9.1 and §9.2: without Kovo-Fragment, the
 // mutation endpoint uses POST-redirect-GET on success and full-page errors.
+import { FormError } from '@kovojs/core';
 import { createApp, mutation, route, s } from '@kovojs/server';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
@@ -26,23 +28,26 @@ export const subscribe = mutation('newsletter/subscribe', {
 });
 
 const homeRoute = route('/', {
-  page: () => `<main>
-    <h1>Newsletter</h1>
-    <form method="post" action="/_m/newsletter/subscribe" data-mutation="newsletter/subscribe">
-      <label>Email <input name="email" type="email" value="ada@example.com" /></label>
-      <label>Seats <input name="seats" type="number" value="1" /></label>
-      <button type="submit">Subscribe</button>
-    </form>
-  </main>`,
+  page: () => (
+    <main>
+      <h1>Newsletter</h1>
+      <form mutation={subscribe}>
+        <label>
+          Email <input name="email" type="email" value="ada@example.com" />
+        </label>
+        <label>
+          Seats <input name="seats" type="number" value="1" />
+        </label>
+        <FormError code="ALREADY_SUBSCRIBED" message="Already subscribed" />
+        <button type="submit">Subscribe</button>
+      </form>
+    </main>
+  ),
 });
 
 const thanksRoute = route('/thanks', {
   page: () => '<main><h1>Subscribed</h1></main>',
 });
-
-function renderAlreadySubscribedPage(code: string): string {
-  return `<!doctype html><html><body><main><output role="alert" data-error-code="${code}">Already subscribed</output></main></body></html>`;
-}
 
 const app = createApp({
   mutations: [subscribe],

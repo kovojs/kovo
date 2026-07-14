@@ -21,13 +21,15 @@ test('raw no-JS POST redirects after commit', async ({ request, kovoApp }) => {
 test('raw no-JS POST renders typed errors as a full page', async ({ request, kovoApp }) => {
   const response = await request.post('/_m/newsletter/subscribe', {
     form: { email: 'taken@example.com', seats: '1' },
+    headers: { Referer: '/' },
     maxRedirects: 0,
   });
 
   expect(response.status()).toBe(422);
   expect(headerValues(response.headers(), 'content-type')).toEqual(['text/html; charset=utf-8']);
   const body = await response.text();
-  expect(body).toContain('<!doctype html><html><body>');
+  expect(body).toContain('<!doctype html><html');
+  expect(body).toContain('<body>');
   expect(body).toContain('data-error-code="ALREADY_SUBSCRIBED"');
   expect(body).toContain('Already subscribed');
 

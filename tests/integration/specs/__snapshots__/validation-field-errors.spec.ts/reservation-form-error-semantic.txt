@@ -1,8 +1,9 @@
-<form action="/_m/validation/reserve" kovo-fragment-target="reservation-form" method="post">
+<form action="/_m/validation/reserve" kovo-c="reservation-form" kovo-deps="reservationForm" kovo-fragment-target="reservation-form" method="post">
   <label>
     "Quantity"
     <input name="quantity" type="number" value="0">
-  <output data-error-path="quantity" role="alert">
-    "Expected number >= 1"
+  <span data-error-path="quantity">
+    <output data-error-code="VALIDATION" role="alert">
+      "Expected number >= 1"
   <button type="submit">
     "Reserve"

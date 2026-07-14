@@ -1,2 +1,8 @@
-<div data-error-code="OUT_OF_STOCK" kovo-fragment-target="checkout-error" role="alert">
-  "Only 3 available"
+<form action="/_m/checkout/submit" kovo-c="checkout-form" kovo-deps="checkoutForm" kovo-fragment-target="checkout-form" method="post">
+  <label>
+    "Quantity"
+    <input name="quantity" type="number" value="4">
+  <output data-error-code="OUT_OF_STOCK" role="alert">
+    "Only 3 available"
+  <button type="submit">
+    "Pay"

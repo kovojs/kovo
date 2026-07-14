@@ -1,36 +1,12 @@
-import {
-  createApp,
-  domain,
-  mutation,
-  query,
-  route,
-  s,
-  stream,
-  type QueryLoadContext,
-} from '@kovojs/server';
+/** @jsxImportSource @kovojs/server */
+import { createApp, mutation, route, s, stream } from '@kovojs/server';
 import { staticSql } from '@kovojs/test/internal/integration/fixture-abi';
 import { trustedHtml } from '@kovojs/browser';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
-interface MessageRow extends Record<string, unknown> {
-  body: string;
-  id: number;
-  role: 'assistant' | 'user';
-}
-
-const chatDomain = domain('chat');
-
-const chatQuery = query('chatMessages', {
-  load: async (_args: unknown, context?: QueryLoadContext<KovoFixtureRequest>) => ({
-    messages: await readMessages(context?.request.db),
-  }),
-  reads: [chatDomain],
-});
-
-async function readMessages(db: KovoFixtureRequest['db'] | undefined): Promise<MessageRow[]> {
-  if (!db) throw new Error('streaming chat fixture requires request.db');
-  return db.query<MessageRow>(staticSql`select id, role, body from messages order by id`);
-}
+import { Composer } from './composer';
+import { Messages } from './messages';
+import { chatDomain, chatQuery } from './shared';
 
 function escapeHtml(value: string): string {
   return value
@@ -38,37 +14,6 @@ function escapeHtml(value: string): string {
     .replaceAll('<', '&lt;')
     .replaceAll('>', '&gt;')
     .replaceAll('"', '&quot;');
-}
-
-function renderMessage(row: MessageRow): string {
-  const liveAttrs = row.role === 'assistant' ? ' aria-live="polite" aria-atomic="true"' : '';
-  return `<article data-message-id="${row.id}" data-role="${escapeHtml(row.role)}"${liveAttrs}>
-    <p>${escapeHtml(row.body)}</p>
-  </article>`;
-}
-
-async function renderMessages(db: KovoFixtureRequest['db']): Promise<string> {
-  const rows = await readMessages(db);
-  return `<section kovo-fragment-target="messages" kovo-deps="chat" aria-label="Messages">
-    ${rows.map(renderMessage).join('')}
-  </section>`;
-}
-
-function renderComposer(errorCode = ''): string {
-  return `<form
-    method="post"
-    action="/_m/chat/send"
-    enhance
-    data-mutation="chat/send"
-    data-mutation-stream="true"
-    kovo-fragment-target="composer"
-    kovo-deps="chat"
-  >
-    <label>Message <textarea name="body">show table</textarea></label>
-    <input type="hidden" name="turns" value="1" />
-    ${errorCode ? `<output role="alert" data-error-code="${escapeHtml(errorCode)}">Unable to send</output>` : ''}
-    <button type="submit">Send</button>
-  </form>`;
 }
 
 export const sendMessage = mutation('chat/send', {
@@ -153,16 +98,17 @@ export const sendMessage = mutation('chat/send', {
 });
 
 const homeRoute = route('/', {
-  page: async (_context, request: KovoFixtureRequest) => `<main>
-    <h1>Streaming chat</h1>
-    ${await renderMessages(request.db)}
-    ${renderComposer()}
-  </main>`,
+  page: () => (
+    <main>
+      <h1>Streaming chat</h1>
+      <Messages />
+      <Composer />
+    </main>
+  ),
 });
 
 const app = createApp({
   mutations: [sendMessage],
-  queries: [chatQuery],
   routes: [homeRoute],
 });
 

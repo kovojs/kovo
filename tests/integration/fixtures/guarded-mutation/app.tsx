@@ -1,9 +1,13 @@
+/** @jsxImportSource @kovojs/server */
 // SPEC §6.5 + §10.3: mutation guards run before the transaction/write path.
 // Unauthenticated enhanced failures return Kovo-Reauth; authenticated
 // authorization failures stay on typed mutation error fragments.
 import { staticSql } from '@kovojs/test/internal/integration/fixture-abi';
-import { createApp, csrfField, guards, mutation, route, s } from '@kovojs/server';
+import { createApp, guards, mutation, route, s } from '@kovojs/server';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
+
+import { GuardedPanel } from './guarded-panel';
+import { guardedCount, guardedCountQuery } from './shared';
 
 interface AuthSession {
   user: { id: string; roles: readonly string[] };
@@ -28,49 +32,37 @@ function readSessionCookie(request: Request): AuthSession | null {
   return id ? { user: { id, roles: [] } } : null;
 }
 
-async function readCount(db: KovoFixtureRequest['db']): Promise<number> {
-  const rows = await db.query<{ count: number }>(
-    staticSql`select count from guarded_counter where id = 1`,
-  );
-  return rows[0]?.count ?? 0;
-}
-
-async function renderStatus(db: KovoFixtureRequest['db']): Promise<string> {
-  const count = await readCount(db);
-  return `<output kovo-fragment-target="guarded-count" data-count>${count}</output>`;
-}
-
 export const guardedIncrement = mutation('guarded-mutation/increment', {
   defaultRedirectTo: '/',
   guard: guards.authed<AuthRequest>(),
   input: s.object({}),
-  registry: { tables: ['guarded_counter'] },
+  registry: {
+    queries: [guardedCountQuery],
+    tables: ['guarded_counter'],
+    touches: [guardedCount],
+  },
   transaction: async (_request, run) => run(_request),
-  handler: async (_input: unknown, request: AuthRequest) => {
+  handler: async (_input: unknown, request: AuthRequest, context) => {
     await request.db.exec(staticSql`update guarded_counter set count = count + 1 where id = 1`);
+    context.invalidate(guardedCount);
     return {};
   },
 });
 
 const homeRoute = route('/', {
-  page: async (_context, request: KovoFixtureRequest) => {
-    const status = await renderStatus(request.db);
-    return `<main>
+  page: () => (
+    <main>
       <h1>Guarded Mutation</h1>
-      ${status}
-      <div kovo-fragment-target="guarded-error"></div>
-      <form method="post" action="/_m/guarded-mutation/increment" enhance data-mutation="guarded-mutation/increment" kovo-deps="guarded-count">
-        ${csrfField(request, { ...csrf, audience: guardedIncrement.key })}
-        <button type="submit">Increment protected counter</button>
-      </form>
-    </main>`;
-  },
+      <GuardedPanel />
+    </main>
+  ),
 });
 
 export default defineFixture({
   app: createApp<AuthSession>({
     csrf,
     mutations: [guardedIncrement],
+    queries: [guardedCountQuery],
     routes: [homeRoute],
     sessionProvider: (request) => readSessionCookie(request),
   }),

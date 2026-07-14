@@ -1,2 +1,8 @@
-<div data-error-code="CARD_DECLINED" kovo-fragment-target="checkout-error" role="alert">
-  "Card declined"
+<form action="/_m/checkout/submit" kovo-c="checkout-form" kovo-deps="checkoutForm" kovo-fragment-target="checkout-form" method="post">
+  <label>
+    "Quantity"
+    <input name="quantity" type="number" value="2">
+  <output data-error-code="CARD_DECLINED" role="alert">
+    "Card declined"
+  <button type="submit">
+    "Pay"

@@ -4,13 +4,16 @@ import { expect, test } from '@kovojs/test/internal/integration';
 test.use({ kovoFixture: 'render-error-fragment' });
 
 test('returns render-error fragment after a committed mutation render failure', async ({
-  request,
+  page,
   kovoApp,
 }) => {
-  const response = await request.post('/_m/render-error-fragment/create', {
-    form: { id: 'r1', secret: 'committed-secret' },
-    headers: { 'Kovo-Fragment': 'true', 'Kovo-Targets': 'receipt' },
-  });
+  await page.goto('/');
+  const [response] = await Promise.all([
+    page.waitForResponse((candidate) =>
+      candidate.url().endsWith('/_m/render-error-fragment/create'),
+    ),
+    page.getByRole('button', { name: 'Create receipt' }).click(),
+  ]);
   const body = await response.text();
 
   expect(response.status()).toBe(500);

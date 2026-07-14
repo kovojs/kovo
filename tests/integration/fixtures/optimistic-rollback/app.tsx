@@ -1,3 +1,4 @@
+/** @jsxImportSource @kovojs/server */
 import {
   createApp,
   domain,
@@ -5,12 +6,14 @@ import {
   query,
   route,
   s,
-  type MutationFail,
   type QueryLoadContext,
 } from '@kovojs/server';
 import { staticSql } from '@kovojs/test/internal/integration/fixture-abi';
 import { renderQueryScript } from '@kovojs/test/internal/integration/fixture-abi';
+import { trustedHtml } from '@kovojs/browser';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
+
+import { OptimisticForm } from './optimistic-form';
 
 type CartSummary = Record<string, unknown> & {
   count: number;
@@ -55,16 +58,16 @@ const addItem = mutation('optimistic-rollback/add', {
 const homeRoute = route('/', {
   page: async (_context, request: KovoFixtureRequest) => {
     const cart = await readCart(request.db);
-    return `${renderQueryScript({ name: 'cart', value: cart })}
-    <script type="module" src="/client.ts"></script>
-    <main>
-      ${await renderCartPanel(request.db)}
-      <div id="cart-error" kovo-fragment-target="cart-error"></div>
-      <form id="optimistic-form" method="post" action="/_m/optimistic-rollback/add">
-        <input type="hidden" name="quantity" value="2">
-        <button type="submit">Add optimistically</button>
-      </form>
-    </main>`;
+    return (
+      <>
+        {trustedHtml(renderQueryScript({ name: 'cart', value: cart }))}
+        {trustedHtml('<script type="module" src="/client.ts"></script>')}
+        <main>
+          {trustedHtml(await renderCartPanel(request.db))}
+          <OptimisticForm />
+        </main>
+      </>
+    );
   },
 });
 

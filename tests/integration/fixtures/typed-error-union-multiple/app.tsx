@@ -1,8 +1,11 @@
+/** @jsxImportSource @kovojs/server */
 // Mutation wire fixture for SPEC.md §6.3 and §9.2: one mutation can expose
 // multiple declared typed errors and render the selected branch on the wire.
 import { staticSql } from '@kovojs/test/internal/integration/fixture-abi';
-import { createApp, mutation, route, s, type MutationFail } from '@kovojs/server';
+import { createApp, mutation, route, s } from '@kovojs/server';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
+
+import { CheckoutForm } from './checkout-form';
 
 export const checkout = mutation('checkout/submit', {
   csrf: false,
@@ -31,23 +34,13 @@ export const checkout = mutation('checkout/submit', {
 });
 
 const homeRoute = route('/', {
-  page: () => `<main>
-    <h1>Checkout</h1>
-    <div kovo-fragment-target="checkout-error"></div>
-    <form method="post" action="/_m/checkout/submit" enhance data-mutation="checkout/submit">
-      <label>Quantity <input name="quantity" type="number" value="1" /></label>
-      <button type="submit">Pay</button>
-    </form>
-  </main>`,
+  page: () => (
+    <main>
+      <h1>Checkout</h1>
+      <CheckoutForm />
+    </main>
+  ),
 });
-
-function renderCheckoutFailure(failure: MutationFail): string {
-  if (failure.error.code === 'OUT_OF_STOCK') {
-    const available = (failure.error.payload as { available?: number }).available ?? 0;
-    return `<div kovo-fragment-target="checkout-error" role="alert" data-error-code="OUT_OF_STOCK">Only ${available} available</div>`;
-  }
-  return '<div kovo-fragment-target="checkout-error" role="alert" data-error-code="CARD_DECLINED">Card declined</div>';
-}
 
 const app = createApp({
   mutations: [checkout],

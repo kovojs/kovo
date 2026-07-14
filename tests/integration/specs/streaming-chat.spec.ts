@@ -5,6 +5,11 @@ import { expect, test } from '@kovojs/test/internal/integration';
 test.use({ kovoFixture: 'streaming-chat' });
 
 async function postStreamingWire(request: APIRequestContext, body: string) {
+  const documentResponse = await request.get('/');
+  expect(documentResponse.status()).toBe(200);
+  const documentHtml = await documentResponse.text();
+  const messages = liveTarget(documentHtml, 'messages');
+  const composer = liveTarget(documentHtml, 'composer');
   const response = await request.post('/_m/chat/send', {
     form: { body, turns: '1' },
     headers: {
@@ -12,12 +17,29 @@ async function postStreamingWire(request: APIRequestContext, body: string) {
       'Kovo-Form-Target': 'composer',
       'Kovo-Fragment': 'true',
       'Kovo-Idem': crypto.randomUUID(),
-      'Kovo-Live-Targets': 'messages#messages:{}; composer#composer:{}',
+      'Kovo-Live-Targets': `${messages.descriptor}; ${composer.descriptor}`,
       'Kovo-Stream': 'true',
-      'Kovo-Targets': 'messages=chat; composer=chat',
+      'Kovo-Targets': `messages=${messages.deps}; composer=${composer.deps}`,
     },
   });
   return { response, wire: await response.text() };
+}
+
+function liveTarget(html: string, target: string): { deps: string; descriptor: string } {
+  const tag = html.match(new RegExp(`<[^>]*kovo-fragment-target="${target}"[^>]*>`))?.[0];
+  if (!tag) throw new Error(`expected generated ${target} live target`);
+  const component = attribute(tag, 'kovo-live-component');
+  const token = attribute(tag, 'kovo-live-token');
+  return {
+    deps: attribute(tag, 'kovo-deps'),
+    descriptor: `${target}#${component}@${token}:{}`,
+  };
+}
+
+function attribute(tag: string, name: string): string {
+  const value = tag.match(new RegExp(`${name}="([^"]+)"`))?.[1];
+  if (!value) throw new Error(`expected ${name} on generated live target`);
+  return value;
 }
 
 test('streams chat text through Kovo chunks and reconciles with server truth', async ({

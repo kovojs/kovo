@@ -1,7 +1,8 @@
 // Append-mode fixture: a mutation returns a kovo-fragment with mode="append",
 // so existing keyed rows stay connected while the new row is added (SPEC §9.1).
 import { staticSql } from '@kovojs/test/internal/integration/fixture-abi';
-import { createApp, mutation, route, s } from '@kovojs/server';
+import { trustedHtml } from '@kovojs/browser';
+import { createApp, mutation, route, s, stream } from '@kovojs/server';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 interface FeedRow {
@@ -51,7 +52,14 @@ export const loadMore = mutation('feed/load-more', {
       text: 'insert into feed (id, title) values ($1, $2)',
       values: [nextId, `Item ${nextId}`],
     });
-    return {};
+    return { row: { id: Number(nextId), title: `Item ${nextId}` } };
+  },
+  async *stream({ result }) {
+    yield stream.fragment({
+      html: trustedHtml(renderRow(result.value.row)),
+      mode: 'append',
+      target: 'feed',
+    });
   },
 });
 
@@ -60,7 +68,7 @@ const homeRoute = route('/', {
     const feed = await renderFeed(request.db);
     return `<main>
       <kovo-fragment target="feed">${feed}</kovo-fragment>
-      <form method="post" action="/_m/feed/load-more" enhance data-mutation="feed/load-more" kovo-deps="feed">
+      <form method="post" action="/_m/feed/load-more" enhance data-mutation="feed/load-more" data-mutation-stream="true" kovo-deps="feed">
         <button type="submit">Load more</button>
       </form>
     </main>`;

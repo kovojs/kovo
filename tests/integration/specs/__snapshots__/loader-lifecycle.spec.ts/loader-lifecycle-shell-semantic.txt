@@ -1,4 +1,3 @@
-<section>
-  <replacement-runner-host kovo-c="replacement-runner">
-    <button type="button">
-      "Replacement task"
+<replacement-runner-host>
+  <button type="button">
+    "Replacement task"
