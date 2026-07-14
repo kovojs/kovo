@@ -4437,6 +4437,221 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
     expect(rawEnvironmentValue.map((fact) => fact.sink)).toContain('node:process.env');
   });
 
+  it('keeps the exact mutation DB and serverValue grammar closed under adversarial carriers', () => {
+    const schemaSource = `
+      import { pgTable, text } from 'drizzle-orm/pg-core';
+      export const contacts = pgTable('contacts', {
+        id: text('id').primaryKey(),
+        email: text('email').notNull(),
+      });
+    `;
+    const mutationSource = ({
+      prelude = '',
+      read = `request.db.select().from(contacts).where(eq(contacts.email, email)).limit(1)`,
+      server = `serverValue(id, 'server-generated fixture id')`,
+      extraImport = '',
+    }: {
+      prelude?: string;
+      read?: string;
+      server?: string;
+      extraImport?: string;
+    } = {}) => `
+      import { mutation, publicAccess, s, serverValue } from '@kovojs/server';
+      import { eq } from 'drizzle-orm';
+      import { contacts } from './schema.js';
+      ${extraImport}
+      export const addContact = mutation({
+        access: publicAccess('fixture'),
+        input: s.object({ email: s.string() }),
+        async handler({ email }, request) {
+          ${prelude}
+          const rows = await ${read};
+          for (const row of rows) {
+            if (row) return { id: row.id };
+          }
+          const id = crypto.randomUUID();
+          await request.db.insert(contacts).values({
+            id: ${server},
+            email,
+          });
+          return { id };
+        },
+      });
+    `;
+
+    const direct = sinksForFiles([
+      { fileName: 'schema.ts', source: schemaSource },
+      { fileName: 'mutations.ts', source: mutationSource() },
+    ]);
+    expect(direct).toEqual([]);
+
+    const poisonings: ReadonlyArray<readonly [string, string]> = [
+      [
+        'request const alias Object.defineProperty',
+        `const alias = request; Object.defineProperty(alias, 'db', { value: {} });`,
+      ],
+      ['request const alias Reflect.set', `const alias = request; Reflect.set(alias, 'db', {});`],
+      ['request const alias delete', `const alias = request; delete alias.db;`],
+      ['request const alias assignment', `const alias = request; alias.db = alias.db;`],
+      [
+        'request object holder mutation',
+        `const holder = { request }; Reflect.set(holder.request, 'db', {});`,
+      ],
+      [
+        'request helper closure mutation',
+        `function poison(target: object) { Reflect.set(target, 'db', {}); } poison(request);`,
+      ],
+      [
+        'db destructuring alias mutation',
+        `const { db: aliasDb } = request; Object.defineProperty(aliasDb, 'select', { value() { return []; } });`,
+      ],
+      [
+        'db array alias mutation',
+        `const [aliasDb] = [request.db]; Reflect.set(aliasDb, 'select', () => []);`,
+      ],
+      [
+        'db prototype getter mutation',
+        `Object.defineProperty(Object.getPrototypeOf(request.db), 'select', { get() { return () => []; } });`,
+      ],
+      ['db nested prototype assignment', `request.db.__proto__.select = () => [];`],
+      [
+        'db defineProperties mutation',
+        `Object.defineProperties(request.db, { select: { value: () => [] } });`,
+      ],
+      [
+        'db Reflect.defineProperty mutation',
+        `Reflect.defineProperty(request.db, 'select', { value: () => [] });`,
+      ],
+    ];
+    const misses: string[] = [];
+    for (const [label, prelude] of poisonings) {
+      const facts = sinksForFiles([
+        { fileName: 'schema.ts', source: schemaSource },
+        { fileName: 'mutations.ts', source: mutationSource({ prelude }) },
+      ]);
+      if (facts.length === 0) misses.push(label);
+    }
+
+    const alternateReads: ReadonlyArray<readonly [string, string]> = [
+      [
+        'computed root method',
+        `request.db['select']().from(contacts).where(eq(contacts.email, email)).limit(1)`,
+      ],
+      [
+        'computed suffix method',
+        `request.db.select()['from'](contacts).where(eq(contacts.email, email)).limit(1)`,
+      ],
+      [
+        'Function.call root method',
+        `request.db.select.call(request.db).from(contacts).where(eq(contacts.email, email)).limit(1)`,
+      ],
+      [
+        'Function.apply root method',
+        `request.db.select.apply(request.db, []).from(contacts).where(eq(contacts.email, email)).limit(1)`,
+      ],
+      [
+        'Reflect.apply root method',
+        `Reflect.apply(request.db.select, request.db, []).from(contacts).where(eq(contacts.email, email)).limit(1)`,
+      ],
+      [
+        'destructured DB alias',
+        `(() => { const { db } = request; return db.select().from(contacts).where(eq(contacts.email, email)).limit(1); })()`,
+      ],
+      [
+        'helper closure DB alias',
+        `((db) => db.select().from(contacts).where(eq(contacts.email, email)).limit(1))(request.db)`,
+      ],
+    ];
+    for (const [label, read] of alternateReads) {
+      const facts = sinksForFiles([
+        { fileName: 'schema.ts', source: schemaSource },
+        { fileName: 'mutations.ts', source: mutationSource({ read }) },
+      ]);
+      if (facts.length === 0) misses.push(label);
+    }
+
+    const authorityValues: ReadonlyArray<readonly [string, string]> = [
+      [
+        'Cookie header in serverValue',
+        `serverValue(request.headers.get('Cookie'), 'server-generated fixture id')`,
+      ],
+      ['whole request in serverValue', `serverValue(request, 'server-generated fixture id')`],
+      [
+        'request carrier in serverValue object',
+        `serverValue({ request }, 'server-generated fixture id')`,
+      ],
+      [
+        'request carrier in serverValue closure',
+        `serverValue(() => request, 'server-generated fixture id')`,
+      ],
+      ['process object in serverValue', `serverValue(process, 'server-generated fixture id')`],
+      [
+        'process env object in serverValue',
+        `serverValue(process.env, 'server-generated fixture id')`,
+      ],
+      [
+        'process env in serverValue getter',
+        `serverValue({ get value() { return process.env.CONTACT_ID; } }, 'server-generated fixture id')`,
+      ],
+      [
+        'process env in serverValue proxy',
+        `serverValue(new Proxy({}, { get() { return process.env.CONTACT_ID; } }), 'server-generated fixture id')`,
+      ],
+      [
+        'process env in serverValue invoked closure',
+        `serverValue((() => process.env.CONTACT_ID)(), 'server-generated fixture id')`,
+      ],
+    ];
+    for (const [label, server] of authorityValues) {
+      const facts = sinksForFiles([
+        { fileName: 'schema.ts', source: schemaSource },
+        { fileName: 'mutations.ts', source: mutationSource({ server }) },
+      ]);
+      if (facts.length === 0) misses.push(label);
+    }
+
+    const crossFilePoisoning = sinksForFiles([
+      { fileName: 'schema.ts', source: schemaSource },
+      {
+        fileName: 'poison.ts',
+        source: `
+          export function poison(target: object) {
+            Object.defineProperty(target, 'db', { value: {} });
+          }
+        `,
+      },
+      {
+        fileName: 'mutations.ts',
+        source: mutationSource({
+          extraImport: `import { poison } from './poison.js';`,
+          prelude: `poison(request);`,
+        }),
+      },
+    ]);
+    if (crossFilePoisoning.length === 0) misses.push('cross-file request mutation');
+
+    const crossFileRead = sinksForFiles([
+      { fileName: 'schema.ts', source: schemaSource },
+      {
+        fileName: 'read.ts',
+        source: `
+          export function read(db: unknown, table: unknown) {
+            return (db as { select(): { from(table: unknown): unknown } }).select().from(table);
+          }
+        `,
+      },
+      {
+        fileName: 'mutations.ts',
+        source: mutationSource({
+          extraImport: `import { read } from './read.js';`,
+          read: `read(request.db, contacts)`,
+        }),
+      },
+    ]);
+    if (crossFileRead.length === 0) misses.push('cross-file DB helper');
+    expect(misses).toEqual([]);
+  });
+
   it('accepts only closed built-in Postgres column builders and exact references', () => {
     const safe = sinksFor(`
       import { pgTable, text } from 'drizzle-orm/pg-core';

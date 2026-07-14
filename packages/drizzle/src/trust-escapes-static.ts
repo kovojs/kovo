@@ -27,7 +27,15 @@ import {
   expressionResolvesToFrameworkExport,
   frameworkExport,
 } from './static/framework-identity.js';
-import { runtimeRegExpTest } from './runtime-security-intrinsics.js';
+import {
+  runtimeArrayLength,
+  runtimeArrayValue,
+  runtimeMap,
+  runtimeRegExpTest,
+  runtimeSet,
+  runtimeSetAdd,
+  runtimeSetHas,
+} from './runtime-security-intrinsics.js';
 
 /** @internal */
 export interface TrustEscapeSourceFileInput {
@@ -11465,7 +11473,12 @@ function requestExpressionIsProtocolSafe(
     const callee = unwrapStaticExpression(node.getExpression());
     if (callee.getKind() === SyntaxKind.ImportKeyword) return true;
     if (requestCallIsExactTrustedOutput(node)) return true;
-    if (requestCallIsExactServerValueOutput(node)) return true;
+    if (
+      requestCallIsExactServerValueOutput(node) &&
+      !requestExactServerValueCarriesRequestAuthority(node, callable, session)
+    ) {
+      return true;
+    }
     if (requestCallIsReviewedDrizzleDbReadChain(node, callable)) {
       const receiver = requestCallReceiver(callee);
       if (
@@ -15257,7 +15270,7 @@ function requestCallIsKnownSafe(
 
   if (requestCallIsExactServerValueOutput(call)) {
     scanRequestFunctionArguments(call, context);
-    return true;
+    return !requestExactServerValueCarriesRequestAuthority(call, callable, context.provenance);
   }
 
   if (requestCallIsPublicStyleCreate(call)) {
@@ -15623,6 +15636,151 @@ function requestExactRequestDbRootIsPristine(callable: RequestCallable): boolean
     const node = candidate ? unwrapStaticExpression(candidate) : undefined;
     return !!node && Node.isIdentifier(node) && node.getSymbol() === symbol;
   };
+  const isRequestCarrier = (candidate: Node | undefined): boolean => {
+    let node = candidate ? unwrapStaticExpression(candidate) : undefined;
+    while (
+      node &&
+      (Node.isPropertyAccessExpression(node) || Node.isElementAccessExpression(node))
+    ) {
+      node = unwrapStaticExpression(node.getExpression());
+    }
+    return !!node && Node.isIdentifier(node) && node.getSymbol() === symbol;
+  };
+  const containsRequestCarrier = (candidate: Node | undefined): boolean =>
+    requestExpressionContainsIdentityCarrier(candidate, isRequestCarrier, runtimeSet());
+  const nodesContainRequestCarrier = (nodes: readonly Node[], label: string): boolean => {
+    const length = runtimeArrayLength(nodes, label);
+    for (let index = 0; index < length; index += 1) {
+      if (containsRequestCarrier(runtimeArrayValue(nodes, index, label))) return true;
+    }
+    return false;
+  };
+  const nestedCallableCapturesRequest = (nodes: readonly Node[], label: string): boolean => {
+    const length = runtimeArrayLength(nodes, label);
+    for (let index = 0; index < length; index += 1) {
+      const nested = runtimeArrayValue(nodes, index, label);
+      const identifiers = nested.getDescendantsOfKind(SyntaxKind.Identifier);
+      const identifierLength = runtimeArrayLength(identifiers, `${label} identifiers`);
+      for (let identifierIndex = 0; identifierIndex < identifierLength; identifierIndex += 1) {
+        if (
+          runtimeArrayValue(identifiers, identifierIndex, `${label} identifiers`).getSymbol() ===
+          symbol
+        ) {
+          return true;
+        }
+      }
+    }
+    return false;
+  };
+
+  // The exact exception is intentionally narrower than general request provenance. If the root
+  // request object (or any of its live member carriers) is copied, captured, passed to authored
+  // code, or returned, that code can replace `request.db` or a reviewed Drizzle method through the
+  // alias before the direct-looking chain executes. Keep those shapes on the ordinary closed path.
+  const variableDeclarations = callable.body.getDescendantsOfKind(SyntaxKind.VariableDeclaration);
+  const variableDeclarationLength = runtimeArrayLength(
+    variableDeclarations,
+    'request DB variable declarations',
+  );
+  for (let index = 0; index < variableDeclarationLength; index += 1) {
+    const declaration = runtimeArrayValue(
+      variableDeclarations,
+      index,
+      'request DB variable declarations',
+    );
+    if (!nodeBelongsToRequestCallable(declaration, callable)) continue;
+    // Call results are data, not aliases: requestExpressionContainsIdentityCarrier deliberately
+    // does not descend into a CallExpression receiver. Its authored arguments are checked below.
+    if (containsRequestCarrier(declaration.getInitializer())) return false;
+  }
+  const carrierAssignments = callable.body.getDescendantsOfKind(SyntaxKind.BinaryExpression);
+  const carrierAssignmentLength = runtimeArrayLength(
+    carrierAssignments,
+    'request DB carrier assignments',
+  );
+  for (let index = 0; index < carrierAssignmentLength; index += 1) {
+    const assignment = runtimeArrayValue(
+      carrierAssignments,
+      index,
+      'request DB carrier assignments',
+    );
+    if (!nodeBelongsToRequestCallable(assignment, callable)) continue;
+    const operator = assignment.getOperatorToken().getKind();
+    if (operator < SyntaxKind.FirstAssignment || operator > SyntaxKind.LastAssignment) continue;
+    if (containsRequestCarrier(assignment.getRight())) return false;
+  }
+  const carrierCalls = callable.body.getDescendantsOfKind(SyntaxKind.CallExpression);
+  const carrierCallLength = runtimeArrayLength(carrierCalls, 'request DB carrier calls');
+  for (let index = 0; index < carrierCallLength; index += 1) {
+    const call = runtimeArrayValue(carrierCalls, index, 'request DB carrier calls');
+    if (!nodeBelongsToRequestCallable(call, callable)) continue;
+    if (nodesContainRequestCarrier(call.getArguments(), 'request DB call arguments')) return false;
+  }
+  const carrierConstructs = callable.body.getDescendantsOfKind(SyntaxKind.NewExpression);
+  const carrierConstructLength = runtimeArrayLength(
+    carrierConstructs,
+    'request DB carrier constructors',
+  );
+  for (let index = 0; index < carrierConstructLength; index += 1) {
+    const construct = runtimeArrayValue(
+      carrierConstructs,
+      index,
+      'request DB carrier constructors',
+    );
+    if (!nodeBelongsToRequestCallable(construct, callable)) continue;
+    if (nodesContainRequestCarrier(construct.getArguments(), 'request DB constructor arguments')) {
+      return false;
+    }
+  }
+  const carrierReturns = callable.body.getDescendantsOfKind(SyntaxKind.ReturnStatement);
+  const carrierReturnLength = runtimeArrayLength(carrierReturns, 'request DB carrier returns');
+  for (let index = 0; index < carrierReturnLength; index += 1) {
+    const returned = runtimeArrayValue(carrierReturns, index, 'request DB carrier returns');
+    if (!nodeBelongsToRequestCallable(returned, callable)) continue;
+    if (containsRequestCarrier(returned.getExpression())) return false;
+  }
+  const carrierLoops = callable.body.getDescendantsOfKind(SyntaxKind.ForOfStatement);
+  const carrierLoopLength = runtimeArrayLength(carrierLoops, 'request DB carrier loops');
+  for (let index = 0; index < carrierLoopLength; index += 1) {
+    const loop = runtimeArrayValue(carrierLoops, index, 'request DB carrier loops');
+    if (!nodeBelongsToRequestCallable(loop, callable)) continue;
+    if (containsRequestCarrier(loop.getExpression())) return false;
+  }
+  const carrierYields = callable.body.getDescendantsOfKind(SyntaxKind.YieldExpression);
+  const carrierYieldLength = runtimeArrayLength(carrierYields, 'request DB carrier yields');
+  for (let index = 0; index < carrierYieldLength; index += 1) {
+    const yielded = runtimeArrayValue(carrierYields, index, 'request DB carrier yields');
+    if (!nodeBelongsToRequestCallable(yielded, callable)) continue;
+    if (containsRequestCarrier(yielded.getExpression())) return false;
+  }
+  if (
+    nestedCallableCapturesRequest(
+      callable.body.getDescendantsOfKind(SyntaxKind.FunctionDeclaration),
+      'request DB nested function declarations',
+    ) ||
+    nestedCallableCapturesRequest(
+      callable.body.getDescendantsOfKind(SyntaxKind.ArrowFunction),
+      'request DB nested arrow functions',
+    ) ||
+    nestedCallableCapturesRequest(
+      callable.body.getDescendantsOfKind(SyntaxKind.FunctionExpression),
+      'request DB nested function expressions',
+    ) ||
+    nestedCallableCapturesRequest(
+      callable.body.getDescendantsOfKind(SyntaxKind.MethodDeclaration),
+      'request DB nested method declarations',
+    ) ||
+    nestedCallableCapturesRequest(
+      callable.body.getDescendantsOfKind(SyntaxKind.GetAccessor),
+      'request DB nested getters',
+    ) ||
+    nestedCallableCapturesRequest(
+      callable.body.getDescendantsOfKind(SyntaxKind.SetAccessor),
+      'request DB nested setters',
+    )
+  ) {
+    return false;
+  }
 
   for (const assignment of callable.body.getDescendantsOfKind(SyntaxKind.BinaryExpression)) {
     if (!nodeBelongsToRequestCallable(assignment, callable)) continue;
@@ -18355,6 +18513,55 @@ function requestCallIsExactServerValueOutput(call: Node): boolean {
     (Node.isStringLiteral(reason) || Node.isNoSubstitutionTemplateLiteral(reason)) &&
     runtimeRegExpTest(/\S/u, reason.getLiteralText())
   );
+}
+
+function requestExactServerValueCarriesRequestAuthority(
+  call: import('ts-morph').CallExpression,
+  callable: RequestCallable,
+  session: RequestProvenanceSession,
+): boolean {
+  const value = call.getArguments()[0];
+  if (!value) return true;
+  const requestSymbols = runtimeSet<string>();
+  const parameters = requestCallableParameters(callable.declaration);
+  const parameterLength = runtimeArrayLength(parameters, 'serverValue parameters');
+  for (let index = 0; index < parameterLength; index += 1) {
+    if (callable.rootParameterRoles?.[index] !== 'request') continue;
+    const name = runtimeArrayValue(parameters, index, 'serverValue parameters').getNameNode();
+    const symbol = Node.isIdentifier(name) ? name.getSymbol() : undefined;
+    if (symbol) runtimeSetAdd(requestSymbols, requestSymbolKey(symbol));
+  }
+  const carriesRootRequest = requestExpressionContainsIdentityCarrier(
+    value,
+    (candidate) => {
+      let node = candidate ? unwrapStaticExpression(candidate) : undefined;
+      while (
+        node &&
+        (Node.isPropertyAccessExpression(node) || Node.isElementAccessExpression(node))
+      ) {
+        node = unwrapStaticExpression(node.getExpression());
+      }
+      const symbol =
+        node && Node.isIdentifier(node) ? requestIdentifierValueSymbol(node) : undefined;
+      return !!symbol && runtimeSetHas(requestSymbols, requestSymbolKey(symbol));
+    },
+    runtimeSet(),
+  );
+  if (carriesRootRequest) return true;
+  const state: RequestWireAnalysisState = {
+    bindingKey: 'server-value',
+    bindings: runtimeMap(),
+    rootCallable: callable,
+    scopeCallable: callable,
+    session,
+  };
+  const authorities = requestWireAuthoritiesForExpression(value, state);
+  const authorityLength = runtimeArrayLength(authorities, 'serverValue request authorities');
+  for (let index = 0; index < authorityLength; index += 1) {
+    const authority = runtimeArrayValue(authorities, index, 'serverValue request authorities');
+    if (runtimeRegExpTest(/^client-wire\.request(?:\.|$)/u, authority.sink)) return true;
+  }
+  return false;
 }
 
 function requestCallIsPublicStyleCreate(call: Node): boolean {
