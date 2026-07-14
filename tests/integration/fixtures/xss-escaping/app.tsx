@@ -1,30 +1,16 @@
+/** @jsxImportSource @kovojs/server */
 import { staticSql } from '@kovojs/test/internal/integration/fixture-abi';
-import { createApp, mutation, route, s } from '@kovojs/server';
-import {
-  escapeAttribute,
-  escapeHtml,
-  renderQueryScript,
-} from '@kovojs/test/internal/integration/fixture-abi';
+import { createApp, mutation, route, s, trustedHtml } from '@kovojs/server';
+import { renderQueryScript } from '@kovojs/test/internal/integration/fixture-abi';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
-import { payloadQuery, readPayload, xssDomain, type PayloadResult } from './shared';
-import { XssCard } from './xss-card';
+import { payloadQuery, readPayload, xssDomain } from './shared';
+import { XssCard, XssResponseAuthority } from './xss-card';
 
 // Values the mutation writes — exercise the CLIENT update plan (textContent text
 // binding + kovoSafeUrl URL-scheme allowlist, packages/browser/src/security-output.ts).
 const XSS_TEXT = '<img src=x onerror="alert(1)">';
 const XSS_URL = 'javascript:alert(1)';
-
-function renderCardHtml(p: PayloadResult): string {
-  return `<xss-card kovo-deps="payload" kovo-fragment-target="xss-card">
-    <output data-bind="payload.text">${escapeHtml(p.text)}</output>
-    <a data-bind:href="payload.url" href="${escapeAttribute(p.url)}">link</a>
-  </xss-card>`;
-}
-
-function renderAuthoredTsxCardHtml(payload: PayloadResult): string {
-  return XssCard.definition.render({ payload }) as unknown as string;
-}
 
 export const updatePayload = mutation('xss/update', {
   csrf: false,
@@ -48,17 +34,17 @@ export const updatePayload = mutation('xss/update', {
 const homeRoute = route('/', {
   page: async (_context, request: KovoFixtureRequest) => {
     const payload = await readPayload(request.db);
-    const rendered = renderCardHtml(payload);
-    const authoredTsxRendered = renderAuthoredTsxCardHtml(payload);
-    return `${renderQueryScript({ name: 'payload', value: payload })}
-    <script type="module" src="/client.ts"></script>
-    <main>
-      <kovo-fragment target="xss-card">${rendered}</kovo-fragment>
-      <section id="tsx-authored-output-context">${authoredTsxRendered}</section>
-      <form method="post" action="/_m/xss/update" enhance data-mutation="xss/update" kovo-deps="payload">
-        <button type="submit">Inject</button>
-      </form>
-    </main>`;
+    return (
+      <main>
+        {trustedHtml(renderQueryScript({ name: 'payload', value: payload }))}
+        {trustedHtml('<script type="module" src="/client.ts"></script>')}
+        <XssCard />
+        <XssResponseAuthority />
+        <form mutation={updatePayload} enhance>
+          <button type="submit">Inject</button>
+        </form>
+      </main>
+    );
   },
 });
 

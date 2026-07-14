@@ -1,50 +1,11 @@
-import { staticSql } from '@kovojs/test/internal/integration/fixture-abi';
-import { createApp, domain, mutation, query, route, s } from '@kovojs/server';
-import { runQuery } from '@kovojs/test/internal/integration/fixture-abi';
-import {
-  escapeAttribute,
-  escapeHtml,
-  renderQueryScript,
-} from '@kovojs/test/internal/integration/fixture-abi';
+/** @jsxImportSource @kovojs/server */
+import { renderQueryScript, staticSql } from '@kovojs/test/internal/integration/fixture-abi';
+import { createApp, mutation, route, s, trustedHtml } from '@kovojs/server';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
-const productDomain = domain('product');
-
-interface ProductArgs {
-  id: string;
-  restock?: number;
-}
-
-interface ProductResult {
-  [key: string]: unknown;
-  id: string;
-  name: string;
-  stock: number;
-}
-
-async function readProduct(db: KovoFixtureRequest['db'], id: string): Promise<ProductResult> {
-  const rows = await db.query<ProductResult>({
-    text: 'select id, name, stock from product where id = $1',
-    values: [id],
-  });
-  return rows[0] ?? { id, name: 'Missing', stock: 0 };
-}
-
-export const productQuery = query('product', {
-  args: s.object({ id: s.string(), restock: s.number().int().min(0).default(0) }),
-  instanceKey: (input) => `product:${(input as ProductArgs).id}`,
-  load: (input: ProductArgs, context?: { request: KovoFixtureRequest }) =>
-    readProduct(context?.request.db as KovoFixtureRequest['db'], input.id),
-  reads: [productDomain],
-});
-
-async function renderCard(db: KovoFixtureRequest['db'], id: string): Promise<string> {
-  const product = await readProduct(db, id);
-  return `<product-card kovo-deps="product:${escapeAttribute(product.id)}" kovo-fragment-target="product-${escapeAttribute(product.id)}" data-product-id="${escapeAttribute(product.id)}">
-    <h2>${escapeHtml(product.name)}</h2>
-    <p>Stock <span data-bind="product.stock">${product.stock}</span></p>
-  </product-card>`;
-}
+import { ProductCard } from './product-card';
+import { productDomain, productQuery, readProduct } from './shared';
+import { StaticProductCard } from './static-product-card';
 
 export const restockProduct = mutation('multi-instance-query/restock', {
   csrf: false,
@@ -68,22 +29,22 @@ export const restockProduct = mutation('multi-instance-query/restock', {
 
 const homeRoute = route('/', {
   page: async (_context, request: KovoFixtureRequest) => {
-    const p1 = await runQuery(productQuery, { id: 'p1', restock: 0 }, request);
-    const p2 = await runQuery(productQuery, { id: 'p2', restock: 0 }, request);
-    if (!p1.ok || !p2.ok) return '<main>query error</main>';
-
-    return `${renderQueryScript({ key: 'product:p1', name: 'product', value: p1.value })}
-    ${renderQueryScript({ key: 'product:p2', name: 'product', value: p2.value })}
-    <script type="module" src="/client.ts"></script>
-    <main>
-      <kovo-fragment target="product-p1">${await renderCard(request.db, 'p1')}</kovo-fragment>
-      <kovo-fragment target="product-p2">${await renderCard(request.db, 'p2')}</kovo-fragment>
-      <form method="post" action="/_m/multi-instance-query/restock" enhance data-mutation="multi-instance-query/restock" kovo-deps="product">
-        <input type="hidden" name="id" value="p1" />
-        <input type="hidden" name="restock" value="5" />
-        <button type="submit">Restock Pen</button>
-      </form>
-    </main>`;
+    const p1 = await readProduct(request.db, 'p1');
+    const p2 = await readProduct(request.db, 'p2');
+    return (
+      <main>
+        {trustedHtml(renderQueryScript({ key: 'product:p1', name: 'product', value: p1 }))}
+        {trustedHtml(renderQueryScript({ key: 'product:p2', name: 'product', value: p2 }))}
+        {trustedHtml('<script type="module" src="/client.ts"></script>')}
+        <ProductCard key="p1" productId="p1" />
+        <StaticProductCard key="p2" productId="p2" />
+        <form mutation={restockProduct} enhance>
+          <input type="hidden" name="id" value="p1" />
+          <input type="hidden" name="restock" value="5" />
+          <button type="submit">Restock Pen</button>
+        </form>
+      </main>
+    );
   },
 });
 

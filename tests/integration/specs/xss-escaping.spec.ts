@@ -29,23 +29,19 @@ test('neutralizes injected HTML/JS across server render, JSON island, wire, and 
   expect(homeHtml).toContain('\\u003c/script>\\u003cscript>alert(2)\\u003c/script>');
   // The raw break-out sequence must NOT survive inside the island payload.
   expect(homeHtml).not.toContain('</script><script>alert(2)</script>');
-  // Server text binding (escapeHtml) renders the payload as entities, not markup.
+  // Compiler-generated server text binding renders the payload as entities, not markup.
   expect(homeHtml).toContain('&lt;/script&gt;&lt;script&gt;alert(2)&lt;/script&gt;');
 
   // DOM: the bound text is literal text content, not parsed elements.
-  const boundText = page.locator('xss-card output[data-bind="payload.text"]');
+  const boundText = page.locator('tsx-xss-card output[data-bind="payload.text"]');
   await expect(boundText).toHaveText('</script><script>alert(2)</script>');
-  const authoredTsxOutput = page.locator(
-    '#tsx-authored-output-context tsx-xss-card output[data-bind="payload.text"]',
-  );
-  await expect(authoredTsxOutput).toHaveText('</script><script>alert(2)</script>');
-  await expect(page.locator('#tsx-authored-output-context script')).toHaveCount(0);
+  await expect(page.locator('tsx-xss-card script')).toHaveCount(0);
   expect(homeHtml).toContain('<tsx-xss-card');
   expect(homeHtml).toContain(
     '<output data-bind="payload.text">&lt;/script&gt;&lt;script&gt;alert(2)&lt;/script&gt;</output>',
   );
   // Seeded href is the safe value as-is.
-  await expect(page.locator('xss-card a[data-bind\\:href="payload.url"]')).toHaveAttribute(
+  await expect(page.locator('tsx-xss-card a[data-bind\\:href="payload.url"]')).toHaveAttribute(
     'href',
     'https://example.com',
   );
@@ -64,11 +60,11 @@ test('neutralizes injected HTML/JS across server render, JSON island, wire, and 
 
   // Client text binding writes via textContent → the <img> is inert literal text.
   await expect(boundText).toHaveText('<img src=x onerror="alert(1)">');
-  await expect(page.locator('xss-card output[data-bind="payload.text"] img')).toHaveCount(0);
+  await expect(page.locator('tsx-xss-card output[data-bind="payload.text"] img')).toHaveCount(0);
 
   // F7 URL-scheme allowlist: client attribute binding routes href through
   // kovoSafeUrl, which rewrites the javascript: scheme to a safe `#`.
-  await expect(page.locator('xss-card a[data-bind\\:href="payload.url"]')).toHaveAttribute(
+  await expect(page.locator('tsx-xss-card a[data-bind\\:href="payload.url"]')).toHaveAttribute(
     'href',
     '#',
   );

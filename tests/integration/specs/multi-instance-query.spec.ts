@@ -27,8 +27,8 @@ test('keeps parameterized query instances distinct on the wire and applies only 
   const body = await response.text();
   expect(body).toMatch(/<kovo-query name="product" key="product:p1"[^>]*>/u);
   expect(body).not.toContain('key="product:p2"');
-  expect(body).not.toContain('<kovo-fragment target="product-p1">');
-  expect(body).not.toContain('<kovo-fragment target="product-p2">');
+  expect(body).toContain('<kovo-fragment target="product-card:p1">');
+  expect(body).not.toContain('<kovo-fragment target="product-card:p2">');
 
   await expect(page.locator('[data-product-id="p1"] [data-bind="product.stock"]')).toHaveText('7');
   await expect(page.locator('[data-product-id="p2"] [data-bind="product.stock"]')).toHaveText('9');

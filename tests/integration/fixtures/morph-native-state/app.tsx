@@ -27,9 +27,6 @@ const home = route('/', {
   page: () => (
     <main>
       <Panel />
-      <form mutation={bump} enhance>
-        <button type="submit">Bump</button>
-      </form>
     </main>
   ),
 });

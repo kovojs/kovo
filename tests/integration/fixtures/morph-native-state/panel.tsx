@@ -1,9 +1,12 @@
 /** @jsxImportSource @kovojs/server */
-import { component } from '@kovojs/core';
+import { component, form } from '@kovojs/core';
 
 import { panelQuery, type PanelResult } from './shared';
 
+const bumpForm = form<'morph-native-state/bump', Record<string, never>>('morph-native-state/bump');
+
 export const Panel = component({
+  mutations: { bump: bumpForm },
   queries: { panel: panelQuery },
   render: ({ panel }: { panel: PanelResult }) => (
     <section>
@@ -12,6 +15,9 @@ export const Panel = component({
         <p>Body</p>
       </details>
       <output data-testid="count">{panel.value}</output>
+      <form mutation={bumpForm} enhance>
+        <button type="submit">Bump</button>
+      </form>
     </section>
   ),
 });
