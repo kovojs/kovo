@@ -3179,7 +3179,7 @@ function approvedBuildSourcesVitePlugin(
 ): Plugin {
   const approvedByPath = buildCreateMap<string, string>();
   const appSourcePaths = buildCreateSet<string>();
-  const frameworkSourceRoots = kovoFrameworkSourceRoots(appModulePath);
+  const frameworkSourceRoots = kovoFrameworkSourceRoots();
   const approvedFiles = buildSnapshotDenseArray(sourceFiles, 'Approved build source files');
   const sourceRoot = dirname(appModulePath);
   for (let index = 0; index < approvedFiles.length; index += 1) {
@@ -3252,25 +3252,37 @@ function approvedBuildSourcesVitePlugin(
   };
 }
 
-function kovoFrameworkSourceRoots(appModulePath: string): readonly string[] {
-  const requireFromApp = createRequire(pathToFileURL(appModulePath));
+function kovoFrameworkSourceRoots(): readonly string[] {
   const roots: string[] = [];
-  for (let index = 0; index < kovoFrameworkSourcePackages.length; index += 1) {
-    const packageName = kovoFrameworkSourcePackages[index]!;
-    try {
-      const entry = resolve(requireFromApp.resolve(packageName));
-      const root = dirname(entry);
-      let duplicate = false;
-      for (let rootIndex = 0; rootIndex < roots.length; rootIndex += 1) {
-        if (roots[rootIndex] === root) {
-          duplicate = true;
-          break;
+  const visitedEntries = buildCreateSet<string>();
+  const trustedResolvers: NodeRequire[] = [requireFromCli];
+  for (let resolverIndex = 0; resolverIndex < trustedResolvers.length; resolverIndex += 1) {
+    const trustedResolver = trustedResolvers[resolverIndex]!;
+    for (let index = 0; index < kovoFrameworkSourcePackages.length; index += 1) {
+      const packageName = kovoFrameworkSourcePackages[index]!;
+      try {
+        const entry = resolve(trustedResolver.resolve(packageName));
+        if (buildSetHas(visitedEntries, entry)) continue;
+        buildSetAdd(visitedEntries, entry);
+        const root = dirname(entry);
+        let duplicate = false;
+        for (let rootIndex = 0; rootIndex < roots.length; rootIndex += 1) {
+          if (roots[rootIndex] === root) {
+            duplicate = true;
+            break;
+          }
         }
+        if (!duplicate) buildSecurityArrayAppend(roots, root, 'Kovo framework source roots');
+        buildSecurityArrayAppend(
+          trustedResolvers,
+          createRequire(pathToFileURL(entry)),
+          'Kovo framework package resolvers',
+        );
+      } catch {
+        // A package not reachable from this exact CLI/framework dependency context is not trusted.
+        // In particular, an app-planted package with a first-party-looking name remains subject to
+        // the ordinary approved-source snapshot rather than defining its own trust root.
       }
-      if (!duplicate) buildSecurityArrayAppend(roots, root, 'Kovo framework source roots');
-    } catch {
-      // An uninstalled optional first-party package contributes no trusted source root. If app
-      // resolution later produces code for it, the ordinary approved-source gate still applies.
     }
   }
   return buildSnapshotDenseArray(roots, 'Kovo framework source roots');
