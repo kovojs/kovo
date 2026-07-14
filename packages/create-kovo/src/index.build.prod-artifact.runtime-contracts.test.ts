@@ -9,8 +9,10 @@ import { describe, expect, it } from 'vitest';
 import { writeKovoProject } from './index.js';
 import {
   collectOutput,
+  cookieHeader,
   fetchTextWhenReady,
   linkStarterBuildDependencies,
+  mergeCookies,
   reservePort,
   stopProcess,
   withRepoBinOnPath,
@@ -50,6 +52,8 @@ describe('create-kovo starter (build integration: production runtime contract ar
 
       await fetchTextWhenReady(`${origin}/runtime-contracts-proof`, output);
       const page = await fetch(`${origin}/runtime-contracts-proof`);
+      const jar = new Map<string, string>();
+      mergeCookies(jar, page.headers.getSetCookie());
       const pageHtml = await page.text();
       expect(page.status).toBe(200);
       expect(page.headers.get('kovo-warn')).toBe('QUERY_LIST_LIMIT $.rows;limit=2');
@@ -81,6 +85,7 @@ describe('create-kovo starter (build integration: production runtime contract ar
         {
           body: refresh,
           headers: {
+            cookie: cookieHeader(jar),
             'Kovo-Current-Url': `${origin}/runtime-contracts-proof`,
             'Kovo-Fragment': 'true',
             'Kovo-Live-Targets': `${liveTarget}#${liveComponent}@${liveToken}:${liveProps}`,
@@ -90,7 +95,7 @@ describe('create-kovo starter (build integration: production runtime contract ar
         },
       );
       const mutationRefreshBody = await mutationRefresh.text();
-      expect(mutationRefresh.status).toBe(200);
+      expect(mutationRefresh.status, `${mutationRefreshBody}\n${output()}`).toBe(200);
       expect(mutationRefresh.headers.get('kovo-warn')).toContain('QUERY_LIST_LIMIT $.rows;limit=2');
       expect(mutationRefreshBody).toContain(
         '<kovo-query name="runtime-contract-proofs/warning-items-query">',
@@ -99,6 +104,35 @@ describe('create-kovo starter (build integration: production runtime contract ar
       expect(mutationRefreshBody).toContain('data-warning-count="2"');
       expect(mutationRefreshBody).toContain('item-0,item-1');
       expect(mutationRefreshBody).not.toContain('item-2');
+
+      const refreshedRoot = rootElementWithAttribute(
+        mutationRefreshBody,
+        'data-proof',
+        'runtime-contracts',
+      );
+      const refreshedTarget = requiredAttribute(refreshedRoot, 'kovo-fragment-target');
+      const refreshedComponent = requiredAttribute(refreshedRoot, 'kovo-live-component');
+      const refreshedToken = requiredAttribute(refreshedRoot, 'kovo-live-token');
+      const refreshedDeps = requiredAttribute(refreshedRoot, 'kovo-deps');
+      const refreshedProps = attributeValue(refreshedRoot, 'kovo-props') ?? '{}';
+      const secondRefresh = await fetch(
+        `${origin}/_m/runtime-contract-proofs/refresh-warning-items`,
+        {
+          body: new URLSearchParams({ reason: 'prod-artifact-second-refresh' }),
+          headers: {
+            cookie: cookieHeader(jar),
+            'Kovo-Current-Url': `${origin}/runtime-contracts-proof`,
+            'Kovo-Fragment': 'true',
+            'Kovo-Live-Targets': `${refreshedTarget}#${refreshedComponent}@${refreshedToken}:${refreshedProps}`,
+            'Kovo-Targets': `${refreshedTarget}=${refreshedDeps}`,
+          },
+          method: 'POST',
+        },
+      );
+      const secondRefreshBody = await secondRefresh.text();
+      expect(secondRefresh.status, `${secondRefreshBody}\n${output()}`).toBe(200);
+      expect(secondRefreshBody).toContain('<kovo-fragment');
+      expect(secondRefreshBody).toContain('data-warning-count="2"');
 
       const syncParse = await fetch(
         `${origin}/_q/runtime-contract-proofs/sync-verified-file-parse-query`,

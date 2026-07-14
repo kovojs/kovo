@@ -5,7 +5,7 @@ import { component, form } from '@kovojs/core';
 import { createApp, createRequestHandler } from './app.js';
 import { appLiveTargetAttestationAudience } from './live-target-app-identity.js';
 import { handleAppMutationRequest } from './app-mutation-request.js';
-import { csrfToken } from './csrf.js';
+import { csrfToken, resolveCsrfLiveTargetBinding } from './csrf.js';
 import { domain } from './domain.js';
 import { guard, guards } from './guards.js';
 import { stylesheet } from './hints.js';
@@ -767,6 +767,177 @@ describe('server app mutation request boundary', () => {
     expect(response.headers.get('Kovo-Warn')).toBe('QUERY_LIST_LIMIT $.rows;limit=2');
     expect(body).toContain('"label":"item-1"');
     expect(body).not.toContain('"label":"item-2"');
+  });
+
+  it('retains only anonymous live-target identity for csrf:false enhanced refreshes', async () => {
+    const catalog = domain('anonymous-catalog');
+    let queryClone: Request | undefined;
+    const catalogQuery = query('anonymousCatalogItems', {
+      load(_input: unknown, { request }: { request: Request }) {
+        queryClone = request.clone();
+        return { rows: [{ id: 1, label: 'anonymous item' }] };
+      },
+      reads: [catalog],
+    });
+    let handlerCookie: string | null | undefined;
+    const refreshCatalog = mutation('anonymous-catalog/refresh', {
+      csrf: false,
+      csrfJustification: 'public refresh proof changes no server or browser state',
+      input: s.object({ reason: s.string() }),
+      registry: { queries: [catalogQuery], touches: [catalog] },
+      handler(input, request) {
+        handlerCookie = (request as Request).headers.get('cookie');
+        return input;
+      },
+    });
+    const catalogPlanRenderer: LiveTargetRenderer = {
+      component: 'components/anonymous-catalog/list-plan',
+      mutationKeys: [],
+      queries: ['anonymousCatalogItems'],
+      queryDefinitions: [catalogQuery],
+      render: () => {
+        throw new Error('A query-plan target must not render a fragment.');
+      },
+      updateCoverage: 'plan',
+    };
+    const csrfSessionCookieReads: Array<string | null> = [];
+    const csrf = {
+      secret: 'anonymous-live-target-csrf-secret-0123456789',
+      sessionId(request: Request) {
+        const cookie = request.headers.get('cookie');
+        csrfSessionCookieReads.push(cookie);
+        return /(?:^|;\s*)sid=([^;]+)/u.exec(cookie ?? '')?.[1];
+      },
+    };
+    const app = withCompilerLiveTargetRenderers([catalogPlanRenderer], () =>
+      createApp({
+        csrf,
+        mutations: [refreshCatalog],
+        routes: [route('/catalog', { page: () => renderedHtml('<main>Catalog</main>') })],
+      }),
+    );
+    const sourceUrl = 'https://shop.example.test/catalog';
+    const anonymousSecret = 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
+    const sourceRequest = new Request(sourceUrl, {
+      headers: { cookie: `__Host-kovo_csrf=${anonymousSecret}` },
+    });
+    const descriptor = {
+      component: 'components/anonymous-catalog/list-plan',
+      props: {},
+      target: 'anonymous-catalog-list',
+    };
+    const attestation = createLiveTargetAttestation(descriptor, {
+      buildToken: appLiveTargetAttestationAudience(app),
+      csrf,
+      request: sourceRequest,
+      sourceUrl,
+    });
+    csrfSessionCookieReads.length = 0;
+    const form = new FormData();
+    form.set('reason', 'test');
+    const request = new Request('https://shop.example.test/_m/anonymous-catalog/refresh', {
+      body: form,
+      headers: {
+        cookie: `__Host-kovo_csrf=${anonymousSecret}`,
+        'Kovo-Current-Url': sourceUrl,
+        'Kovo-Fragment': 'true',
+        'Kovo-Live-Targets': `${descriptor.target}#${descriptor.component}@${attestation}:{}`,
+        'Kovo-Targets': `${descriptor.target}=anonymousCatalogItems`,
+      },
+      method: 'POST',
+    });
+
+    const response = await handleAppMutationRequest(
+      app,
+      request,
+      new URL(request.url),
+      'anonymous-catalog/refresh',
+    );
+    const body = await response.text();
+
+    expect(response.status, body).toBe(200);
+    expect(handlerCookie).toBeNull();
+    expect(csrfSessionCookieReads).toEqual([]);
+    expect(queryClone).toBeDefined();
+    expect(resolveCsrfLiveTargetBinding(queryClone!, csrf)).toBeUndefined();
+    expect(csrfSessionCookieReads).toEqual([null]);
+    csrfSessionCookieReads.length = 0;
+    expect(body).toContain(
+      '<kovo-query name="anonymousCatalogItems">{"rows":[{"id":1,"label":"anonymous item"}]}</kovo-query>',
+    );
+
+    const wrongCookieRequest = new Request(request.url, {
+      body: new URLSearchParams({ reason: 'wrong-cookie' }),
+      headers: {
+        cookie: '__Host-kovo_csrf=BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB',
+        'Kovo-Current-Url': sourceUrl,
+        'Kovo-Fragment': 'true',
+        'Kovo-Live-Targets': `${descriptor.target}#${descriptor.component}@${attestation}:{}`,
+        'Kovo-Targets': `${descriptor.target}=anonymousCatalogItems`,
+      },
+      method: 'POST',
+    });
+    const wrongCookieResponse = await handleAppMutationRequest(
+      app,
+      wrongCookieRequest,
+      new URL(wrongCookieRequest.url),
+      'anonymous-catalog/refresh',
+    );
+    await expect(wrongCookieResponse.text()).resolves.toBe('');
+    expect(handlerCookie).toBeNull();
+
+    const sessionSourceRequest = new Request(sourceUrl, {
+      headers: {
+        cookie: `__Host-kovo_csrf=${anonymousSecret}; sid=session-principal`,
+      },
+    });
+    const sessionAttestation = createLiveTargetAttestation(descriptor, {
+      buildToken: appLiveTargetAttestationAudience(app),
+      csrf,
+      request: sessionSourceRequest,
+      sourceUrl,
+    });
+    csrfSessionCookieReads.length = 0;
+    const sessionBoundRequest = new Request(request.url, {
+      body: new URLSearchParams({ reason: 'session-bound' }),
+      headers: {
+        cookie: `__Host-kovo_csrf=${anonymousSecret}; sid=session-principal`,
+        'Kovo-Current-Url': sourceUrl,
+        'Kovo-Fragment': 'true',
+        'Kovo-Live-Targets': `${descriptor.target}#${descriptor.component}@${sessionAttestation}:{}`,
+        'Kovo-Targets': `${descriptor.target}=anonymousCatalogItems`,
+      },
+      method: 'POST',
+    });
+    const sessionBoundResponse = await handleAppMutationRequest(
+      app,
+      sessionBoundRequest,
+      new URL(sessionBoundRequest.url),
+      'anonymous-catalog/refresh',
+    );
+    await expect(sessionBoundResponse.text()).resolves.toBe('');
+    expect(csrfSessionCookieReads).toEqual([]);
+
+    const noAnonymousCookieRequest = new Request(request.url, {
+      body: new URLSearchParams({ reason: 'session-cookie-only' }),
+      headers: {
+        cookie: 'sid=session-principal',
+        'Kovo-Current-Url': sourceUrl,
+        'Kovo-Fragment': 'true',
+        'Kovo-Live-Targets': `${descriptor.target}#${descriptor.component}@${sessionAttestation}:{}`,
+        'Kovo-Targets': `${descriptor.target}=anonymousCatalogItems`,
+      },
+      method: 'POST',
+    });
+    const noAnonymousCookieResponse = await handleAppMutationRequest(
+      app,
+      noAnonymousCookieRequest,
+      new URL(noAnonymousCookieRequest.url),
+      'anonymous-catalog/refresh',
+    );
+    await expect(noAnonymousCookieResponse.text()).resolves.toBe('');
+    expect(csrfSessionCookieReads.length).toBeGreaterThan(0);
+    expect(csrfSessionCookieReads.every((cookie) => cookie === null)).toBe(true);
   });
 
   it('inherits app and source-route stylesheets into generated enhanced failure fragments', async () => {

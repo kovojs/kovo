@@ -5,7 +5,11 @@ import {
   type MutationFail,
 } from './mutation.js';
 import type { LiveTargetRenderer } from './mutation-wire.js';
-import { mutationCsrfOptions } from './csrf.js';
+import {
+  inheritAnonymousCsrfLiveTargetBinding,
+  mutationCsrfOptions,
+  pinAnonymousCsrfLiveTargetBinding,
+} from './csrf.js';
 import { frameworkMutationFailurePageRenderer } from './mutation-failure-renderer-authority.js';
 import { methodNotAllowedWebResponse, serverResponseToWebResponse } from './response.js';
 import type { Schema } from './schema.js';
@@ -106,6 +110,11 @@ export async function handleAppMutationRequest(
   const authorityNeutralRequest = csrfExempt
     ? endpointRequestWithoutSession(request, { stripAuthorization: true })
     : request;
+  if (csrfExempt && app.csrf !== undefined) {
+    // Keep ambient browser authority out of the handler while retaining the one framework-owned
+    // anonymous identity needed to verify a live-target token minted by the source document.
+    pinAnonymousCsrfLiveTargetBinding(request, authorityNeutralRequest, app.csrf);
+  }
   const mutationRequest = await resolveKovoLifecycleRequest(authorityNeutralRequest, {
     // SPEC §9.5: attach the trustworthy client IP so a `guards.rateLimit({ per: 'ip' })` on this
     // mutation (e.g. a credential mutation) keys by IP. Reuses the coarse limiter's trusted source
@@ -525,6 +534,7 @@ function mutationSourceDocumentRequest(
     headers,
     method: 'GET',
   });
+  inheritAnonymousCsrfLiveTargetBinding(template, sourceRequest);
   copyRequestServerBindings(ingressRequest, sourceRequest);
   pinRequestIngressSurface(sourceRequest);
   return sourceRequest;

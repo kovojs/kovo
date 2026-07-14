@@ -14,11 +14,14 @@ import {
 } from './untrusted-request-body.js';
 import { isNativeRequest, requestForAuthorityNeutralMetadata } from './request-carrier.js';
 import {
+  createWitnessWeakMap,
   witnessCreateNullRecord,
   witnessGetOwnPropertyDescriptor,
   witnessIsArray,
   witnessObjectIs,
   witnessReflectApply,
+  witnessWeakMapGet,
+  witnessWeakMapSet,
 } from './security-witness-intrinsics.js';
 import {
   createSecurityMap,
@@ -42,6 +45,7 @@ const nativeRequestMethod = witnessGetOwnPropertyDescriptor(Request.prototype, '
 const nativeRequestUrl = witnessGetOwnPropertyDescriptor(Request.prototype, 'url')?.get;
 const nativeUrlOrigin = witnessGetOwnPropertyDescriptor(NativeURL.prototype, 'origin')?.get;
 const nativeStringToUpperCase = String.prototype.toUpperCase;
+const pinnedAnonymousLiveTargetBindings = createWitnessWeakMap<object, string>();
 if (
   typeof nativeRequestMethod !== 'function' ||
   typeof nativeRequestUrl !== 'function' ||
@@ -558,6 +562,33 @@ export function resolveCsrfLiveTargetBinding<Request>(
 }
 
 /**
+ * Carry only the framework-owned anonymous-CSRF identity from an ingress request onto an
+ * authority-neutral mutation request. The raw Cookie header and app session remain unavailable to
+ * a `csrf:false` handler, while a descriptor minted for the same anonymous document can still be
+ * verified (SPEC §6.6/§9.1/§9.3).
+ *
+ * @internal App mutation shell bridge; the binding is held out-of-band in a private WeakMap.
+ */
+export function pinAnonymousCsrfLiveTargetBinding(
+  ingressRequest: unknown,
+  authorityNeutralRequest: object,
+  options: Pick<CsrfOptions<unknown>, 'anonymousCookie'>,
+): void {
+  const binding = resolveAnonymousCsrfBinding(ingressRequest, options);
+  if (binding !== undefined) {
+    witnessWeakMapSet(pinnedAnonymousLiveTargetBindings, authorityNeutralRequest, binding.value);
+  }
+}
+
+/** @internal Preserve a previously pinned binding across framework-owned request carriers. */
+export function inheritAnonymousCsrfLiveTargetBinding(source: object, target: object): void {
+  const binding = witnessWeakMapGet(pinnedAnonymousLiveTargetBindings, source);
+  if (binding !== undefined) {
+    witnessWeakMapSet(pinnedAnonymousLiveTargetBindings, target, binding);
+  }
+}
+
+/**
  * Resolve or mint the live-target credential identity while rendering a framework response.
  *
  * First-anonymous renders reuse the JSX response's anonymous-binding cache and `Set-Cookie`
@@ -579,6 +610,13 @@ function resolveCsrfLiveTargetBindingInternal<Request>(
   options: Pick<CsrfOptions<Request>, 'anonymousCookie' | 'sessionId'>,
   mintAnonymousForResponse: boolean,
 ): CsrfLiveTargetBinding | undefined {
+  if ((typeof request === 'object' || typeof request === 'function') && request !== null) {
+    const pinnedAnonymous = witnessWeakMapGet(pinnedAnonymousLiveTargetBindings, request as object);
+    if (pinnedAnonymous !== undefined) {
+      return { kind: 'anonymous', value: pinnedAnonymous };
+    }
+  }
+
   // Live-target identity treats any defined session result as an attempted session principal.
   // The attestation sink applies the proven-principal classifier, so blank/reserved/malformed app
   // results cannot silently downgrade into an anonymous cookie scope.

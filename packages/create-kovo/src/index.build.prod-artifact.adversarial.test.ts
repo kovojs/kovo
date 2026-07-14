@@ -233,6 +233,8 @@ describe('create-kovo starter (build integration: adversarial production artifac
 
           await fetchTextWhenReady(`${origin}/runtime-contracts-proof`, output);
           const page = await fetch(`${origin}/runtime-contracts-proof`);
+          const runtimeJar = new Map<string, string>();
+          mergeCookies(runtimeJar, page.headers.getSetCookie());
           const pageHtml = await page.text();
           expect(page.status, pageHtml).toBe(200);
           expect(pageHtml).toContain('data-proof="runtime-contracts"');
@@ -248,6 +250,7 @@ describe('create-kovo starter (build integration: adversarial production artifac
               body: new URLSearchParams({ reason: 'm1-output-wire' }),
               headers: {
                 'content-type': 'application/x-www-form-urlencoded',
+                cookie: cookieHeader(runtimeJar),
                 'Kovo-Current-Url': `${origin}/runtime-contracts-proof`,
                 'Kovo-Fragment': 'true',
                 'Kovo-Live-Targets': `${liveTarget}#${liveComponent}@${liveToken}:${liveProps}`,

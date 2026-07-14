@@ -11,6 +11,7 @@ import {
   stampGuardFailureDocumentSecurityFloor,
 } from './document-core.js';
 import { managedDb, type ManagedDbMode } from './managed-db.js';
+import { inheritAnonymousCsrfLiveTargetBinding } from './csrf.js';
 import {
   authorityMetadataSource,
   pinnedRequestCarrier,
@@ -1441,6 +1442,9 @@ function requestWithProperty<Request, Key extends string, Value>(
   value: Value,
 ): Request & Record<Key, Value> {
   const carrier = pinnedRequestCarrier(request, [{ key, value }]) as Request & Record<Key, Value>;
+  if (isObjectLike(request)) {
+    inheritAnonymousCsrfLiveTargetBinding(request, carrier);
+  }
   registerAuthorityNeutralRequestMetadata(
     carrier as unknown as globalThis.Request,
     requestForAuthorityNeutralMetadata(request as unknown as globalThis.Request),
@@ -1459,6 +1463,9 @@ export function withoutRequestProperty<Request, Key extends PropertyKey>(
   key: Key,
 ): Request {
   const carrier = pinnedRequestCarrier(request, [], [key]);
+  if (isObjectLike(request)) {
+    inheritAnonymousCsrfLiveTargetBinding(request, carrier);
+  }
   registerAuthorityNeutralRequestMetadata(
     carrier as unknown as globalThis.Request,
     requestForAuthorityNeutralMetadata(request as unknown as globalThis.Request),
