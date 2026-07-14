@@ -182,6 +182,14 @@ const kovoFrameworkSourcePackages = [
   '@kovojs/ui',
 ] as const;
 
+// Resolve the framework graph while this bootstrap-first module is initializing. App evaluation
+// must not be able to rewrite package manifests and widen the later production-build exemption
+// (SPEC §5.2/§6.6).
+const trustedKovoFrameworkSourceRoots = resolveKovoFrameworkSourceRoots(
+  fileURLToPath(new URL('../index.ts', import.meta.url)),
+  requireFromCli,
+);
+
 const execFileAsync = promisify(execFile);
 
 function isKovoServerHandlerExternalDependency(id: string): boolean {
@@ -3179,7 +3187,7 @@ function approvedBuildSourcesVitePlugin(
 ): Plugin {
   const approvedByPath = buildCreateMap<string, string>();
   const appSourcePaths = buildCreateSet<string>();
-  const frameworkSourceRoots = kovoFrameworkSourceRoots();
+  const frameworkSourceRoots = trustedKovoFrameworkSourceRoots;
   const approvedFiles = buildSnapshotDenseArray(sourceFiles, 'Approved build source files');
   const sourceRoot = dirname(appModulePath);
   for (let index = 0; index < approvedFiles.length; index += 1) {
@@ -3252,17 +3260,38 @@ function approvedBuildSourcesVitePlugin(
   };
 }
 
-function kovoFrameworkSourceRoots(): readonly string[] {
+interface KovoFrameworkPackageContext {
+  readonly entry: string;
+  readonly manifest: Record<string, unknown>;
+  readonly resolver: NodeRequire;
+}
+
+function resolveKovoFrameworkSourceRoots(
+  cliEntry: string,
+  cliResolver: NodeRequire,
+): readonly string[] {
   const roots: string[] = [];
   const visitedEntries = buildCreateSet<string>();
-  const trustedResolvers: NodeRequire[] = [requireFromCli];
-  for (let resolverIndex = 0; resolverIndex < trustedResolvers.length; resolverIndex += 1) {
-    const trustedResolver = trustedResolvers[resolverIndex]!;
-    for (let index = 0; index < kovoFrameworkSourcePackages.length; index += 1) {
-      const packageName = kovoFrameworkSourcePackages[index]!;
+  const cliManifest = exactKovoFrameworkPackageManifest(cliEntry, '@kovojs/cli');
+  if (cliManifest === undefined) {
+    return buildSnapshotDenseArray(roots, 'Kovo framework source roots');
+  }
+  const contexts: KovoFrameworkPackageContext[] = [
+    { entry: cliEntry, manifest: cliManifest, resolver: cliResolver },
+  ];
+  for (let contextIndex = 0; contextIndex < contexts.length; contextIndex += 1) {
+    const context = contexts[contextIndex]!;
+    const dependencyNames = declaredKovoFrameworkDependencies(
+      context.manifest,
+      `Kovo framework package ${context.entry}`,
+    );
+    for (let index = 0; index < dependencyNames.length; index += 1) {
+      const packageName = dependencyNames[index]!;
       try {
-        const entry = resolve(trustedResolver.resolve(packageName));
+        const entry = resolve(context.resolver.resolve(packageName));
         if (buildSetHas(visitedEntries, entry)) continue;
+        const manifest = exactKovoFrameworkPackageManifest(entry, packageName);
+        if (manifest === undefined) continue;
         buildSetAdd(visitedEntries, entry);
         const root = dirname(entry);
         let duplicate = false;
@@ -3274,18 +3303,80 @@ function kovoFrameworkSourceRoots(): readonly string[] {
         }
         if (!duplicate) buildSecurityArrayAppend(roots, root, 'Kovo framework source roots');
         buildSecurityArrayAppend(
-          trustedResolvers,
-          createRequire(pathToFileURL(entry)),
-          'Kovo framework package resolvers',
+          contexts,
+          { entry, manifest, resolver: createRequire(pathToFileURL(entry)) },
+          'Kovo framework package contexts',
         );
       } catch {
-        // A package not reachable from this exact CLI/framework dependency context is not trusted.
-        // In particular, an app-planted package with a first-party-looking name remains subject to
-        // the ordinary approved-source snapshot rather than defining its own trust root.
+        // A declared package not reachable from this exact dependency context contributes no root.
       }
     }
   }
   return buildSnapshotDenseArray(roots, 'Kovo framework source roots');
+}
+
+function exactKovoFrameworkPackageManifest(
+  entry: string,
+  expectedName: string,
+): Record<string, unknown> | undefined {
+  let directory = dirname(resolve(entry));
+  for (let depth = 0; depth < 64; depth += 1) {
+    const manifestPath = join(directory, 'package.json');
+    const result = readJsonRecord(manifestPath);
+    if (result.ok) {
+      const name = buildOwnDataValue(result.value, 'name', `Kovo package manifest ${manifestPath}`);
+      return name === expectedName ? result.value : undefined;
+    }
+    if (result.error.kind !== 'not-found') return undefined;
+    const parent = dirname(directory);
+    if (parent === directory) return undefined;
+    directory = parent;
+  }
+  return undefined;
+}
+
+function declaredKovoFrameworkDependencies(
+  manifest: Record<string, unknown>,
+  label: string,
+): string[] {
+  const names: string[] = [];
+  for (const field of ['dependencies', 'peerDependencies'] as const) {
+    const dependencies = buildOwnDataValue(manifest, field, label);
+    if (dependencies === undefined) continue;
+    if (!isRecord(dependencies)) throw new TypeError(`${label}.${field} must be an own record.`);
+    const candidates = buildObjectKeys(dependencies);
+    for (let index = 0; index < candidates.length; index += 1) {
+      const candidate = candidates[index]!;
+      if (!isKovoFrameworkSourcePackage(candidate)) continue;
+      const range = buildOwnDataValue(dependencies, candidate, `${label}.${field}`);
+      if (typeof range !== 'string') {
+        throw new TypeError(`${label}.${field}.${candidate} must be a string.`);
+      }
+      let duplicate = false;
+      for (let nameIndex = 0; nameIndex < names.length; nameIndex += 1) {
+        if (names[nameIndex] === candidate) {
+          duplicate = true;
+          break;
+        }
+      }
+      if (!duplicate) {
+        buildSecurityArrayAppend(names, candidate, 'Declared Kovo framework dependencies');
+      }
+    }
+  }
+  return names;
+}
+
+function isKovoFrameworkSourcePackage(value: string): boolean {
+  for (let index = 0; index < kovoFrameworkSourcePackages.length; index += 1) {
+    if (kovoFrameworkSourcePackages[index] === value) return true;
+  }
+  return false;
+}
+
+/** @internal Packed-install regression seam for the SPEC §5.2/§6.6 source-root proof. */
+export function kovoFrameworkSourceRootsForTesting(cliEntry: string): readonly string[] {
+  return resolveKovoFrameworkSourceRoots(cliEntry, createRequire(pathToFileURL(cliEntry)));
 }
 
 function isKovoFrameworkSourcePath(roots: readonly string[], fileName: string): boolean {
