@@ -256,6 +256,13 @@ describe('createPostgresAppRuntimeDb', () => {
     const runtime = createPostgresAppRuntimeDb({ dataDir, driver: 'pglite', schema, seedSql });
 
     try {
+      // SPEC §10.3: the framework-owned aggregate is immutable even when app helpers retain it;
+      // request DB and replay authority cannot be replaced before createApp snapshots a provider.
+      expect(Object.isFrozen(runtime)).toBe(true);
+      const originalDb = runtime.db;
+      const poison = (value: typeof runtime) => Reflect.set(value, 'db', () => ({ forged: true }));
+      expect(poison(runtime)).toBe(false);
+      expect(runtime.db).toBe(originalDb);
       expect(isDurableCapabilityReplayStore(runtime.capabilityReplayStore)).toBe(true);
       expect(isDurableMutationReplayStore(runtime.mutationReplayStore)).toBe(true);
       expect(isDurableWebhookReplayStore(runtime.webhookReplayStore)).toBe(true);

@@ -56,6 +56,7 @@ describe('render-plan fingerprint and grammar version (D1, DEPLOY-3)', () => {
 
   it('buildToken() is never empty even with zero registered modules (DEPLOY-3)', () => {
     const registry = createMemoryVersionedClientModuleRegistry();
+    expect(Object.isFrozen(registry)).toBe(true);
     const token = registry.buildToken();
     expect(token).toBeTruthy();
     expect(token.length).toBeGreaterThan(0);

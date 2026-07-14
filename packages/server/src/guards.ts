@@ -35,7 +35,7 @@ import {
   type ResponseHeaders,
   type ServerResponseBase,
 } from './response.js';
-import type { Schema } from './schema.js';
+import { snapshotSchemaForRuntime, type Schema } from './schema.js';
 import {
   requestStateIsSafeInteger,
   requestStateIsSingleLeadingSlashPath,
@@ -1077,15 +1077,34 @@ function normalizeAuditExpression(
  * );
  */
 export function session<Value>(schema: Schema<Value>): SessionDefinition<Value> {
-  return {
+  const closedSchema = snapshotSchemaForRuntime(schema, 'session(schema)');
+  const parseOwned = (value: unknown): Value =>
+    snapshotPinnedLifecycleValue(closedSchema.parse(value)) as Value;
+  return witnessFreeze({
     parse(request) {
-      return schema.parse(request.session);
+      return parseOwned(request.session);
     },
-    provider(provider) {
-      return provider;
+    provider<RawRequest>(
+      provider: SessionProvider<RawRequest, Value>,
+    ): SessionProvider<RawRequest, Value> {
+      const validatedProvider = async (request: RawRequest) => {
+        const resolved = await provider(request);
+        const envelope = snapshotSessionProviderEnvelope(resolved);
+        if (envelope !== undefined) {
+          return witnessFreeze({
+            setCookies: envelope.setCookies,
+            value:
+              envelope.value === null || envelope.value === undefined
+                ? envelope.value
+                : parseOwned(envelope.value),
+          });
+        }
+        return resolved === null || resolved === undefined ? resolved : parseOwned(resolved);
+      };
+      return witnessFreeze(validatedProvider) as SessionProvider<RawRequest, Value>;
     },
-    schema,
-  };
+    schema: closedSchema,
+  }) as SessionDefinition<Value>;
 }
 
 export async function runGuard<Request>(

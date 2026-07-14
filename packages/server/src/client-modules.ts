@@ -240,7 +240,7 @@ export function createMemoryVersionedClientModuleRegistry(
   let buildTokenGeneration = 0;
   let lastTokenGeneration = -1;
 
-  return {
+  return witnessFreeze({
     buildToken() {
       // Recompute only when the registry changed since the last call.
       if (cachedBuildToken !== undefined && lastTokenGeneration === buildTokenGeneration) {
@@ -328,7 +328,7 @@ export function createMemoryVersionedClientModuleRegistry(
         status: 200,
       };
     },
-  };
+  });
 }
 
 /** @internal Render a versioned client-module response for the framework request shell. */

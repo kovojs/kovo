@@ -1501,7 +1501,7 @@ export function createPostgresAppRuntimeDb(
   });
   mintFrameworkDurableReplayStoreReceipt(webhookStore, 'webhook');
 
-  return {
+  return witnessFreeze({
     capabilityReplayStore: capabilityStore,
     db: dbForRequest,
     mutationReplayStore: mutationStore,
@@ -1527,7 +1527,7 @@ export function createPostgresAppRuntimeDb(
     },
     webhookReplayStore: webhookStore,
     close: () => client.close(),
-  };
+  });
 }
 
 function createPostgresSystemDb(db: KovoPostgresRuntimeDb): KovoPostgresSystemDb {

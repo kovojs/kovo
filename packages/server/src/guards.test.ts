@@ -755,6 +755,65 @@ describe('server guard and session primitives', () => {
     expect(() => appSession.parse({})).toThrow('Expected object input');
   });
 
+  it('validates and owns every session provider result through the declared schema', async () => {
+    // SPEC §6.5: provider TypeScript types are guardrails; the exact runtime schema owns the
+    // value that reaches guards and handlers, including async and cookie-envelope providers.
+    const appSession = session(
+      s.object({
+        user: s.object({ name: s.string() }),
+      }),
+    );
+    const plain = appSession.provider(() => ({
+      secret: 'must-not-survive',
+      user: { name: 'Ada' },
+    }));
+    const asyncProvider = appSession.provider(async () => ({ user: { name: 'Grace' } }));
+    const anonymous = appSession.provider(() => null);
+    const envelope = appSession.provider(() => ({
+      setCookies: ['sid=rotated; Path=/; HttpOnly'],
+      value: { secret: 'must-not-survive', user: { name: 'Alan' } },
+    }));
+
+    const plainValue = await plain({});
+    expect(plainValue).toEqual({ user: { name: 'Ada' } });
+    expect(Object.isFrozen(plainValue)).toBe(true);
+    expect(Object.isFrozen((plainValue as { user: object }).user)).toBe(true);
+    await expect(asyncProvider({})).resolves.toEqual({ user: { name: 'Grace' } });
+    await expect(anonymous({})).resolves.toBeNull();
+    const envelopeValue = await envelope({});
+    expect(envelopeValue).toEqual({
+      setCookies: ['sid=rotated; Path=/; HttpOnly'],
+      value: { user: { name: 'Alan' } },
+    });
+    expect(Object.isFrozen(envelopeValue)).toBe(true);
+    expect(Object.isFrozen((envelopeValue as { setCookies: object }).setCookies)).toBe(true);
+    expect(Object.isFrozen(appSession)).toBe(true);
+    expect(Object.isFrozen(plain)).toBe(true);
+  });
+
+  it('rejects accessors and owns a transparent Proxy result before request authority is attached', async () => {
+    // SPEC §6.5 / §6.6: provider output is untrusted app-realm data until schema parsing.
+    const appSession = session(s.object({ user: s.object({ name: s.string() }) }));
+    const accessorValue = {} as { user?: { name: string } };
+    Object.defineProperty(accessorValue, 'user', {
+      enumerable: true,
+      get() {
+        return { name: 'forged' };
+      },
+    });
+    const accessorProvider = appSession.provider(() => accessorValue as { user: { name: string } });
+    const source = { user: { name: 'validated' } };
+    const proxyProvider = appSession.provider(() => new Proxy(source, {}));
+
+    await expect(accessorProvider({})).rejects.toThrow();
+    const parsed = await proxyProvider({});
+    expect(parsed).toEqual({ user: { name: 'validated' } });
+    expect(parsed).not.toBe(source);
+    source.user.name = 'mutated-after-parse';
+    expect(parsed).toEqual({ user: { name: 'validated' } });
+    expect(Object.isFrozen(parsed)).toBe(true);
+  });
+
   it('guards mutations by session user role', async () => {
     const assertRolesRequired = () => {
       // @ts-expect-error guards.role() requires session.user.roles to be present in the request type.
