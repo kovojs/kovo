@@ -1999,6 +1999,69 @@ export default async function handler() {
     }
   });
 
+  it('pins emitted Node static-root identity and rejects hardlinked outside inodes', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kovo-node-static-root-identity-'));
+
+    try {
+      const build = await writeKovoNeutralBuild({
+        app: createApp({}),
+        outDir: join(root, '.kovo'),
+        serverHandlerSource: 'export default async () => new Response("handler");\n',
+      });
+      const nodeOutDir = join(root, 'node-output');
+      await node({ dockerfile: false }).emit!(build, {
+        declaredEnv: [],
+        log() {},
+        outDir: nodeOutDir,
+        readNeutral() {
+          return build;
+        },
+      });
+
+      const clientRoot = join(nodeOutDir, 'client');
+      const assets = join(clientRoot, 'assets');
+      const safeAsset = join(assets, 'root-swap.js');
+      const outsideSecret = join(root, 'outside-secret.js');
+      await mkdir(assets, { recursive: true });
+      await writeFile(safeAsset, 'SAFE_REVIEWED_STATIC_BYTES', 'utf8');
+      await writeFile(outsideSecret, 'OUTSIDE_HARDLINK_SECRET', 'utf8');
+      await link(outsideSecret, join(assets, 'hardlink.js'));
+
+      const serverSource = await readFile(join(nodeOutDir, 'server.mjs'), 'utf8');
+      expect(serverSource).toContain('staticRootRetainsIdentity(root, realRoot, rootStat)');
+      expect(serverSource).toContain("const links = ownDataValue(fileStat, 'nlink')");
+      expect(serverSource).toContain('links === 1');
+
+      const serverModule = (await import(
+        `${pathToFileURL(join(nodeOutDir, 'server.mjs')).href}?root-identity=${Date.now()}`
+      )) as { createKovoNodeServer(): Server };
+      const server = serverModule.createKovoNodeServer();
+      const baseUrl = await listen(server);
+
+      try {
+        const reviewed = await fetch(`${baseUrl}/assets/root-swap.js`);
+        expect(reviewed.status).toBe(200);
+        await expect(reviewed.text()).resolves.toBe('SAFE_REVIEWED_STATIC_BYTES');
+
+        const hardlink = await fetch(`${baseUrl}/assets/hardlink.js`);
+        expect(hardlink.status).toBe(404);
+        await expect(hardlink.text()).resolves.not.toContain('OUTSIDE_HARDLINK_SECRET');
+
+        await rename(clientRoot, `${clientRoot}.reviewed`);
+        await mkdir(join(clientRoot, 'assets'), { recursive: true });
+        await writeFile(safeAsset, 'ATTACKER_REPLACEMENT_BYTES', 'utf8');
+
+        const replacement = await fetch(`${baseUrl}/assets/root-swap.js`);
+        expect(replacement.status).toBe(404);
+        await expect(replacement.text()).resolves.not.toContain('ATTACKER_REPLACEMENT_BYTES');
+      } finally {
+        await close(server);
+      }
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
   it('pins emitted Node Response fields before authored getters can substitute output', async () => {
     const root = await mkdtemp(join(tmpdir(), 'kovo-node-response-intrinsics-'));
     const poisonGlobal = globalThis as typeof globalThis & {

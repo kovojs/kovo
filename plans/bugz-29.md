@@ -324,11 +324,15 @@ fails closed.
     readable JSON, defeating the browser's HttpOnly boundary. Both exact builds exited zero. SPEC
     §6.6 and §10.3 C9.
 
-- [ ] **H28 - The emitted Node static server pinned a root pathname but not its filesystem
+- [x] **H28 - The emitted Node static server pinned a root pathname but not its filesystem
       identity.**
   - After priming an asset, replacing the generated `client/` directory caused the live server to
     return attacker replacement JavaScript with status 200. This is a distinct root-identity member
-    of the H12 family. SPEC §6.6, §10.6.
+    of the H12 family.
+  - **Evidence:** the generated adapter now pins each static root at module boot, retires the
+    capability on device/inode drift, and rejects multi-link artifact files; the emitted-server
+    root-swap/hardlink regression and full `packages/server/src/build.test.ts` suite are 50/50
+    green. SPEC §6.6, §10.6.
 
 ## Medium
 

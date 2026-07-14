@@ -2952,6 +2952,7 @@ const statFilePath = importedStatFilePath;
 const nativeReflectApply = Reflect.apply;
 const nativeDecodeURIComponent = globalThis.decodeURIComponent;
 const nativeMapGet = NativeMap.prototype.get;
+const nativeMapHas = NativeMap.prototype.has;
 const nativeMapSet = NativeMap.prototype.set;
 const nativeObjectCreate = NativeObject.create;
 const nativeObjectDefineProperty = NativeObject.defineProperty;
@@ -2980,6 +2981,7 @@ const nativeServerResponseWriteHead = stablePrototypeFunction(ServerResponse.pro
 const nativeConsoleError = console.error;
 const immutableAssetPathPattern = new NativeRegExp(${immutableAssetPathPatternSourceLiteral}, ${immutableAssetPathPatternFlagsLiteral});
 const fsFileTypeMask = fsConstants.S_IFMT;
+const fsDirectoryFileType = fsConstants.S_IFDIR;
 const fsRegularFileType = fsConstants.S_IFREG;
 const fsReadOnlyNoFollowFlags = fsConstants.O_RDONLY |
   (typeof fsConstants.O_NOFOLLOW === 'number' ? fsConstants.O_NOFOLLOW : 0);
@@ -2995,6 +2997,8 @@ const staticErrorDocumentHeaders = ${staticErrorHeadersSource};
 const headersTimeoutMs = 10_000;
 const requestTimeoutMs = 30_000;
 const rootedFileCapabilities = new NativeMap();
+apply(nativeMapSet, rootedFileCapabilities, [clientRoot, await initializeRootedFileCapability(clientRoot)]);
+apply(nativeMapSet, rootedFileCapabilities, [staticRoot, await initializeRootedFileCapability(staticRoot)]);
 let handlerPromise;
 
 function apply(fn, receiver, args) {
@@ -3245,18 +3249,20 @@ async function serveRootedStaticFile(root, relativePath, headers) {
 
 async function rootedFileCapability(root) {
   let capability = apply(nativeMapGet, rootedFileCapabilities, [root]);
-  if (capability === undefined) {
-    capability = (async () => {
-      try {
-        return await rootedStaticFiles(root);
-      } catch (error) {
-        if (isMissingStaticRootError(error)) return undefined;
-        throw error;
-      }
-    })();
+  if (!apply(nativeMapHas, rootedFileCapabilities, [root])) {
+    capability = await initializeRootedFileCapability(root);
     apply(nativeMapSet, rootedFileCapabilities, [root, capability]);
   }
   return capability;
+}
+
+async function initializeRootedFileCapability(root) {
+  try {
+    return await rootedStaticFiles(root);
+  } catch (error) {
+    if (isMissingStaticRootError(error)) return undefined;
+    throw error;
+  }
 }
 
 function isMissingStaticRootError(error) {
@@ -3267,9 +3273,29 @@ function isMissingStaticRootError(error) {
 
 async function rootedStaticFiles(root) {
   const realRoot = await realpath(root);
+  const rootStat = await staticFilePathStat(realRoot);
+  if (
+    !directoryStaticFileStat(rootStat) ||
+    !(await staticRootRetainsIdentity(root, realRoot, rootStat))
+  ) {
+    throw new TypeError('Kovo static root identity is unavailable or unstable.');
+  }
+  let retired = false;
   return apply(nativeObjectFreeze, NativeObject, [{
     root: realRoot,
-    serve: (path, options) => serveRootedStaticFileBytes(realRoot, path, options),
+    async serve(path, options) {
+      if (retired) return undefined;
+      if (!(await staticRootRetainsIdentity(root, realRoot, rootStat))) {
+        retired = true;
+        return undefined;
+      }
+      const outcome = await serveRootedStaticFileBytes(realRoot, path, options);
+      if (!(await staticRootRetainsIdentity(root, realRoot, rootStat))) {
+        retired = true;
+        return undefined;
+      }
+      return outcome;
+    },
   }]);
 }
 
@@ -3378,7 +3404,19 @@ function closeStaticFileDescriptor(fileDescriptor) {
 function regularStaticFileStat(fileStat) {
   if (fileStat === undefined) return false;
   const mode = ownDataValue(fileStat, 'mode');
-  return typeof mode === 'number' && (mode & fsFileTypeMask) === fsRegularFileType;
+  const links = ownDataValue(fileStat, 'nlink');
+  // SPEC §10.6: a contained name with multiple links can alias an inode whose other name is
+  // outside the reviewed static root. Static artifacts are immutable single-link files; reject
+  // hardlinked entries at every pre-open/descriptor/post-open identity check.
+  return typeof mode === 'number' &&
+    (mode & fsFileTypeMask) === fsRegularFileType &&
+    links === 1;
+}
+
+function directoryStaticFileStat(fileStat) {
+  if (fileStat === undefined) return false;
+  const mode = ownDataValue(fileStat, 'mode');
+  return typeof mode === 'number' && (mode & fsFileTypeMask) === fsDirectoryFileType;
 }
 
 function sameStaticFileIdentity(left, right) {
@@ -3403,6 +3441,13 @@ async function staticPathRetainsIdentity(realRoot, resolved, expectedStat) {
   }
   const currentStat = await staticFilePathStat(currentResolved);
   return regularStaticFileStat(currentStat) && sameStaticFileIdentity(expectedStat, currentStat);
+}
+
+async function staticRootRetainsIdentity(root, realRoot, expectedStat) {
+  const currentResolved = await safeRealpath(root);
+  if (currentResolved === undefined || currentResolved !== realRoot) return false;
+  const currentStat = await staticFilePathStat(currentResolved);
+  return directoryStaticFileStat(currentStat) && sameStaticFileIdentity(expectedStat, currentStat);
 }
 
 function isStaticFileMissError(error) {
