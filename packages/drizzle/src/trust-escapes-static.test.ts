@@ -4034,6 +4034,173 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
     expect(facts).toEqual([]);
   });
 
+  it('recognizes the exact public starter style and render authoring surface', () => {
+    const facts = sinksFor(`
+      import { component, FormError } from '@kovojs/core';
+      import { mutation, mutationFormAttributes, publicAccess } from '@kovojs/server';
+      import * as style from '@kovojs/style';
+      import { defineTheme } from '@kovojs/style';
+      import { Badge } from '@kovojs/ui/badge';
+      import { Button } from '@kovojs/ui/button';
+      import { Card } from '@kovojs/ui/card';
+      const theme = defineTheme({ seed: '#6750A4' });
+      const styles = style.create({
+        root: {
+          backgroundColor: style.tokens.sys.color.surface,
+          borderRadius: style.tokens.sys.shape.cornerMedium,
+        },
+      });
+      const save = mutation({ access: publicAccess('test'), handler() { return { ok: true }; } });
+      const Local = component({ render: ({ value }) => <span style={styles.root}>{value}</span> });
+      export const view = component({ render: (_props, _slots, context) =>
+        Card.definition.render({ children: <main style={styles.root}>
+          <Local value="starter" />
+          {Badge.definition.render({ variant: 'neutral', children: 'ready' })}
+          <form {...mutationFormAttributes(save)}>
+            <FormError mutation={save} result={context.mutations?.save} />
+            {Button.definition.render({ type: 'submit', children: 'Save' })}
+          </form>
+        </main> })
+      });
+      void theme;
+    `);
+
+    expect(facts).toEqual([]);
+  });
+
+  it('keeps starter render provenance exact and scans values passed through it', () => {
+    const facts = sinksFor(`
+      import { query } from '@kovojs/server';
+      import * as style from '@kovojs/style';
+      import * as internalStyle from '@kovojs/style/internal';
+      import { Button } from '@kovojs/ui/button';
+      import { execFileSync } from 'node:child_process';
+      const FormError = ({ value }) => value;
+      const LocalButton = { definition: { render(value) { return value; } } };
+      export const unsafe = query({ load(input, context) {
+        const credential = context.request.headers.get('authorization');
+        const dynamic = style[input.method];
+        void dynamic;
+        void style;
+        internalStyle.createAtomicStyles({ color: 'red' });
+        Button.definition.render = () => execFileSync('mutated-ui-render');
+        const a = Button.definition.render({ children: credential });
+        const b = LocalButton.definition.render({ children: credential });
+        const c = <FormError value={credential} />;
+        return [a, b, c];
+      } });
+    `);
+
+    expect(facts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ sink: 'client-wire.request.header.Authorization' }),
+        expect.objectContaining({ sink: 'request-handler.opaque-call' }),
+        expect.objectContaining({ sink: 'request-handler.opaque-protocol' }),
+      ]),
+    );
+    expect(
+      facts.some(
+        (fact) =>
+          fact.sink === '@kovojs/style.[computed]' ||
+          fact.sink === '@kovojs/style.namespace' ||
+          fact.sink.includes('@kovojs/style/internal'),
+      ),
+    ).toBe(true);
+
+    const exactFormErrorLeak = sinksFor(`
+      import { FormError } from '@kovojs/core';
+      import { query } from '@kovojs/server';
+      export const unsafe = query({ load(_input, context) {
+        const credential = context.request.headers.get('authorization');
+        return <FormError failure={{ code: 'FAILED' }} message={credential} />;
+      } });
+    `);
+    expect(exactFormErrorLeak).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ sink: 'client-wire.request.header.Authorization' }),
+      ]),
+    );
+  });
+
+  it('does not turn reviewed JSX helper results or UI descriptors into ambient capabilities', () => {
+    const helperResults = sinksFor(`
+      import { mutation, mutationFormAttributes, publicAccess } from '@kovojs/server';
+      import * as style from '@kovojs/style';
+      import { execFileSync } from 'node:child_process';
+      const styles = style.create({ root: { color: 'red' } });
+      const save = mutation({ access: publicAccess('test'), handler() { return null; } });
+      export const unsafe = mutation({ access: publicAccess('test'), handler() {
+        const styleAttributes = style.attrs(styles.root);
+        const formAttributes = mutationFormAttributes(save);
+        Object.defineProperty(styleAttributes, 'evil', {
+          get() { return execFileSync('style-attrs-member'); },
+        });
+        Object.defineProperty(formAttributes, 'mutation', {
+          get() { return execFileSync('mutation-attrs-member'); },
+        });
+        return [styleAttributes.evil, formAttributes.mutation];
+      } });
+    `);
+    expect(
+      helperResults.filter((fact) => fact.sink === 'child_process.execFileSync'),
+    ).toHaveLength(2);
+    expect(helperResults).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ sink: 'request-handler.opaque-protocol' }),
+      ]),
+    );
+
+    const crossModuleUiMutation = sinksForFiles([
+      {
+        fileName: 'mutate.ts',
+        source: `
+          import { Button } from '@kovojs/ui/button';
+          Object.defineProperty(Button.definition, 'render', {
+            get() { return () => 'attacker-controlled'; },
+          });
+        `,
+      },
+      {
+        fileName: 'app.tsx',
+        source: `
+          import './mutate.js';
+          import { query } from '@kovojs/server';
+          import { Button } from '@kovojs/ui/button';
+          export const unsafe = query({ load() {
+            return Button.definition.render({ children: 'unsafe' });
+          } });
+        `,
+      },
+    ]);
+    expect(crossModuleUiMutation).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ sink: 'request-handler.opaque-call' }),
+        expect.objectContaining({ sink: 'request-handler.opaque-protocol' }),
+      ]),
+    );
+  });
+
+  it('keeps typeof results primitive without hiding getter execution', () => {
+    const facts = sinksFor(`
+      import carrier from 'opaque-carrier';
+      import { execFileSync } from 'node:child_process';
+      import { query } from '@kovojs/server';
+      const local = {
+        get secret() { execFileSync('typeof-getter'); return 'secret'; },
+      };
+      export const unsafe = query({ load() {
+        return [typeof local.secret, typeof carrier.secret];
+      } });
+    `);
+
+    expect(facts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ sink: 'child_process.execFileSync' }),
+        expect.objectContaining({ sink: 'request-handler.opaque-protocol' }),
+      ]),
+    );
+  });
+
   it('does not bless style lookalikes or stop scanning authored style arguments', () => {
     const packageLookalike = sinksFor(`
       import { query } from '@kovojs/server';

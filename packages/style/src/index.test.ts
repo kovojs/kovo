@@ -331,9 +331,26 @@ describe('@kovojs/style phase 1 runtime fork', () => {
     expect(tokens.ref.palette.primary[40]).toBe('var(--kovo-theme-ref-palette-primary-40)');
     expect(tokens.customColor('success').onColor).toBe('var(--kovo-theme-custom-success-on-color)');
     expect('component' in tokens).toBe(false);
+    expect(Object.isFrozen(tokens)).toBe(true);
+    expect(Object.isFrozen(tokens.sys)).toBe(true);
+    expect(Object.isFrozen(tokens.sys.color)).toBe(true);
+    expect(Reflect.set(tokens.sys.color, 'primary', 'attacker-controlled')).toBe(false);
     expect(metadataRules(styles.root.__rules).map((rule) => rule.value)).toContain(
       'var(--kovo-theme-sys-color-primary)',
     );
+  });
+
+  it('returns deeply frozen themes and frozen JSX attribute carriers', () => {
+    const theme = defineTheme({ seed: '#6750A4' });
+    const styles = create({ root: { color: tokens.sys.color.primary } });
+    const attributes = attrs(styles.root);
+
+    expect(Object.isFrozen(theme)).toBe(true);
+    expect(Object.isFrozen(theme.sys)).toBe(true);
+    expect(Object.isFrozen(theme.sys.color)).toBe(true);
+    expect(Reflect.set(theme.sys.color, 'primary', 'attacker-controlled')).toBe(false);
+    expect(Object.isFrozen(attributes)).toBe(true);
+    expect(Reflect.set(attributes, 'class', 'attacker-controlled')).toBe(false);
   });
 
   it('keeps component token refs on the internal style surface only', () => {

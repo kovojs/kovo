@@ -5672,6 +5672,14 @@ function scanRequestCallable(callable: RequestCallable, context: RequestProcessS
       continue;
     }
     if (requestCallIsReviewedPureDrizzleExpression(call)) continue;
+    if (
+      requestCallIsPublicStyleCreate(call) ||
+      requestCallIsReviewedPublicJsxAttributeHelper(call) ||
+      requestCallIsReviewedPublicUiRender(call)
+    ) {
+      scanRequestFunctionArguments(call, context);
+      continue;
+    }
 
     // Exact framework authority minters were classified above. Other package calls terminate at
     // their imported implementation, while local same-named wrappers remain traversable. There is
@@ -5792,6 +5800,26 @@ function scanRequestCallable(callable: RequestCallable, context: RequestProcessS
       ...root.getDescendantsOfKind(SyntaxKind.CallExpression),
     ])
     .filter((candidate) => nodeBelongsToRequestCallable(candidate, callable))
+    // JSX attribute names are grammar, not value references. In particular, `<div style={...}>`
+    // must not be confused with an in-scope `import * as style from '@kovojs/style'` namespace.
+    // The initializer remains in the scan and therefore retains ordinary provenance checks.
+    .filter((candidate) => {
+      const parent = candidate.getParent();
+      if (!Node.isIdentifier(candidate)) return true;
+      if (
+        Node.isJsxAttribute(parent) &&
+        requestNodesAreSame(parent.getNameNode(), candidate)
+      ) {
+        return false;
+      }
+      // Static object keys are likewise grammar. `{ style: styles.root }` must scan the value,
+      // while `{ [style]: value }` and shorthand `{ style }` remain real namespace references.
+      return !(
+        Node.isPropertyAssignment(parent) &&
+        !Node.isComputedPropertyName(parent.getNameNode()) &&
+        requestNodesAreSame(parent.getNameNode(), candidate)
+      );
+    })
     .sort((left, right) => left.getStart() - right.getStart() || left.getKind() - right.getKind());
   for (const reference of authorityReferences) {
     const rawAuthority = requestRawAuthorityForExpression(
@@ -7189,6 +7217,8 @@ function scanRequestGetterConsumer(
   scanRequestAllAuthoredAccessors(expression, context);
   if (
     proxy ||
+    (protocol === 'jsx-spread-getters' &&
+      requestCallIsReviewedPublicJsxAttributeHelper(expression)) ||
     requestExpressionIsProtocolSafe(expression, callable, new Set(), context.provenance)
   ) {
     return;
@@ -7920,6 +7950,10 @@ function scanRequestPropertyAccessProtocols(
     scanRequestSuperPropertyAccess(access, member, site, callable, context, write);
     return;
   }
+  // The starter renders the three reviewed UI descriptors through their frozen public
+  // `definition.render` entrypoint. Suppress only the exact, pristine call chain; local/bare
+  // lookalikes and any same- or cross-module member replacement stay opaque.
+  if (requestPropertyAccessBelongsToReviewedPublicUiRenderCall(access)) return;
   if (scanRequestProxyUse(receiver, site, context)) return;
   const accessors = write
     ? requestAccessorCallablesForExpression(receiver, member, new Set(), context.provenance)
@@ -8160,6 +8194,7 @@ function scanRequestOpaqueInternalMethodTarget(
     role === 'request' ||
     requestExpressionContainsClosedAuthority(receiver, new Set(), 0) ||
     requestExpressionIsSafeGlobalNamespace(receiver) ||
+    requestExpressionIsReviewedFrozenStyleValue(receiver) ||
     requestExpressionIsProtocolSafe(receiver, callable, new Set(), context.provenance) ||
     localContainer !== undefined ||
     safeGlobal ||
@@ -8598,7 +8633,8 @@ function requestExpressionIsProtocolSafe(
   if (
     Node.isTemplateExpression(node) ||
     Node.isPrefixUnaryExpression(node) ||
-    Node.isPostfixUnaryExpression(node)
+    Node.isPostfixUnaryExpression(node) ||
+    Node.isTypeOfExpression(node)
   ) {
     return true;
   }
@@ -8638,6 +8674,7 @@ function requestExpressionIsProtocolSafe(
     return requestExpressionIsProtocolSafe(node.getExpression(), callable, seen, session);
   }
   if (Node.isPropertyAccessExpression(node) || Node.isElementAccessExpression(node)) {
+    if (requestExpressionIsReviewedFrozenStyleValue(node)) return true;
     if (expressionResolvesToGlobalNamespace(node.getExpression(), 'Symbol', new Set(), 0)) {
       return true;
     }
@@ -8659,6 +8696,8 @@ function requestExpressionIsProtocolSafe(
     if (requestCallIsExactFrameworkNativePromise(node) || requestCallIsExactRespondMethod(node)) {
       return true;
     }
+    if (requestCallIsPublicStyleCreate(node)) return true;
+    if (requestCallIsReviewedPublicUiRender(node)) return true;
     if (
       Node.isIdentifier(callee) &&
       [...REQUEST_SAFE_GLOBAL_CALLABLES, 'Symbol'].includes(callee.getText()) &&
@@ -8984,6 +9023,22 @@ function scanRequestJsxComponents(
       scanRequestGetterConsumer(spread, element, callable, context, 'jsx-spread-getters');
     }
     if (requestJsxTagIsIntrinsic(tag)) continue;
+    if (requestJsxTagIsReviewedPublicComponent(tag)) {
+      for (const value of requestJsxValueExpressions(element)) {
+        scanRequestProxyUse(value, element, context);
+        if (!requestExpressionIsProtocolSafe(value, callable, new Set(), context.provenance)) {
+          for (const accessor of requestAccessorCallablesForExpression(
+            value,
+            undefined,
+            new Set(),
+            context.provenance,
+          )) {
+            scanRequestCallable(accessor, context);
+          }
+        }
+      }
+      continue;
+    }
     const resolution = resolveRequestCallable(tag, new Set(), 0, context.provenance);
     if (resolution.callables.length === 0) {
       if (resolution.opaqueModule !== undefined) {
@@ -9079,6 +9134,17 @@ function requestJsxTagIsIntrinsic(tag: Node): boolean {
   if (!Node.isIdentifier(tag)) return false;
   const text = tag.getText();
   return text.includes('-') || /^[a-z]/.test(text);
+}
+
+/** SPEC §13.1: these exact public components are framework-owned render primitives. */
+function requestJsxTagIsReviewedPublicComponent(tag: Node): boolean {
+  const imported = requestImportedModuleExportForExpression(
+    tag,
+    (specifier) => specifier === '@kovojs/core',
+    new Set(),
+    0,
+  );
+  return imported?.module === '@kovojs/core' && imported.exportName === 'FormError';
 }
 
 function requestCallableWithInvocationRoles(
@@ -9337,6 +9403,21 @@ function requestWireAuthoritiesForExpressionUncached(
         ...requestWireAuthoritiesForExpressions(node.getArguments(), state),
         requestOpaqueWireAuthority(node, 'value'),
       ]);
+    }
+    if (requestCallIsPublicStyleCreate(node)) {
+      return requestWireAuthoritiesForExpressions(node.getArguments(), state);
+    }
+    if (
+      requestCallIsReviewedPublicJsxAttributeHelper(node) &&
+      requestCallIsExactJsxSpreadExpression(node)
+    ) {
+      return requestWireAuthoritiesForExpressions(
+        requestCallIsPublicStyleAttrs(node) ? node.getArguments() : [],
+        state,
+      );
+    }
+    if (requestCallIsReviewedPublicUiRender(node)) {
+      return requestWireAuthoritiesForExpressions(node.getArguments(), state);
     }
     const headerCall = requestWireHeaderCallClassification(node, state);
     if (headerCall.handled) return headerCall.authority ? [headerCall.authority] : [];
@@ -10033,7 +10114,8 @@ function requestExpressionIsPlainWireValue(
     node.getKind() === SyntaxKind.NullKeyword ||
     Node.isTemplateExpression(node) ||
     Node.isPrefixUnaryExpression(node) ||
-    Node.isPostfixUnaryExpression(node)
+    Node.isPostfixUnaryExpression(node) ||
+    Node.isTypeOfExpression(node)
   ) {
     return true;
   }
@@ -10066,6 +10148,7 @@ function requestExpressionIsPlainWireValue(
     });
   }
   if (Node.isPropertyAccessExpression(node) || Node.isElementAccessExpression(node)) {
+    if (requestExpressionIsReviewedFrozenStyleValue(node)) return true;
     const role = requestExpressionRootParameterRole(node, state.rootCallable, new Set(), 0);
     return role === 'request' || requestRootRoleIncludesInput(role);
   }
@@ -10080,6 +10163,7 @@ function requestExpressionIsPlainWireValue(
     ) {
       return true;
     }
+    if (requestCallIsPublicStyleCreate(node)) return true;
     if (
       receiver &&
       expressionResolvesToGlobalNamespace(receiver, 'Promise', new Set(), 0) &&
@@ -10143,6 +10227,12 @@ function requestWireAuthoritiesForJsxElement(
   const opening = Node.isJsxElement(element) ? element.getOpeningElement() : element;
   const children = Node.isJsxElement(element) ? element.getJsxChildren() : [];
   if (requestJsxTagIsIntrinsic(tag)) {
+    return dedupeRequestWireAuthorities([
+      ...requestWireAuthoritiesForJsxAttributes(opening.getAttributes(), state),
+      ...requestWireAuthoritiesForJsxChildren(children, state),
+    ]);
+  }
+  if (requestJsxTagIsReviewedPublicComponent(tag)) {
     return dedupeRequestWireAuthorities([
       ...requestWireAuthoritiesForJsxAttributes(opening.getAttributes(), state),
       ...requestWireAuthoritiesForJsxChildren(children, state),
@@ -12136,6 +12226,21 @@ function requestCallIsKnownSafe(
   const receiver = requestCallReceiver(callee);
 
   if (requestCallIsPromiseSettlement(call, callable, context)) return true;
+
+  if (requestCallIsPublicStyleCreate(call)) {
+    scanRequestFunctionArguments(call, context);
+    return true;
+  }
+
+  if (requestCallIsReviewedPublicJsxAttributeHelper(call)) {
+    scanRequestFunctionArguments(call, context);
+    return true;
+  }
+
+  if (requestCallIsReviewedPublicUiRender(call)) {
+    scanRequestFunctionArguments(call, context);
+    return true;
+  }
 
   if (requestCallIsExactRunCommand(call)) {
     scanRequestFunctionArguments(call, context);
@@ -14200,6 +14305,464 @@ function requestExpressionResolvesToReviewedDrizzleTable(
   return false;
 }
 
+function requestCallIsPublicStyleCreate(call: Node): boolean {
+  const node = unwrapStaticExpression(call);
+  if (!Node.isCallExpression(node)) return false;
+  if (!requestSourceImportsExactExport(node, '@kovojs/style', 'create')) return false;
+  const imported = requestImportedModuleExportForExpression(
+    node.getExpression(),
+    (specifier) => specifier === '@kovojs/style',
+    new Set(),
+    0,
+  );
+  return imported?.module === '@kovojs/style' && imported.exportName === 'create';
+}
+
+const REQUEST_STYLE_CREATE_CALL_MEMO = new WeakMap<
+  object,
+  import('ts-morph').CallExpression | false
+>();
+const REQUEST_STYLE_CREATE_PRISTINE_MEMO = new WeakMap<object, boolean>();
+
+function requestStyleCreateCallForExpression(
+  expression: Node,
+  seen: Set<string>,
+): import('ts-morph').CallExpression | undefined {
+  const node = unwrapStaticExpression(expression);
+  const memoized = REQUEST_STYLE_CREATE_CALL_MEMO.get(node);
+  if (memoized !== undefined) return memoized || undefined;
+  const key = requestNodeIdentity(node);
+  if (seen.has(key)) return undefined;
+  seen.add(key);
+  if (Node.isCallExpression(node)) {
+    const result = requestCallIsPublicStyleCreate(node) ? node : undefined;
+    REQUEST_STYLE_CREATE_CALL_MEMO.set(node, result ?? false);
+    return result;
+  }
+  if (Node.isPropertyAccessExpression(node) || Node.isElementAccessExpression(node)) {
+    const result = requestStyleCreateCallForExpression(node.getExpression(), new Set(seen));
+    REQUEST_STYLE_CREATE_CALL_MEMO.set(node, result ?? false);
+    return result;
+  }
+  if (!Node.isIdentifier(node)) {
+    REQUEST_STYLE_CREATE_CALL_MEMO.set(node, false);
+    return undefined;
+  }
+  const symbol = requestIdentifierValueSymbol(node);
+  if (!symbol) {
+    REQUEST_STYLE_CREATE_CALL_MEMO.set(node, false);
+    return undefined;
+  }
+  for (const declaration of symbol.getDeclarations()) {
+    const initializer = valueDeclarationInitializer(declaration);
+    if (!initializer) continue;
+    const result = requestStyleCreateCallForExpression(initializer, new Set(seen));
+    if (result) {
+      REQUEST_STYLE_CREATE_CALL_MEMO.set(node, result);
+      return result;
+    }
+  }
+  REQUEST_STYLE_CREATE_CALL_MEMO.set(node, false);
+  return undefined;
+}
+
+function requestStyleCreateResultIsPristine(
+  create: import('ts-morph').CallExpression,
+): boolean {
+  const memoized = REQUEST_STYLE_CREATE_PRISTINE_MEMO.get(create);
+  if (memoized !== undefined) return memoized;
+  const referencesCreate = (expression: Node | undefined): boolean => {
+    if (!expression) return false;
+    const candidates = [
+      expression,
+      ...expression.getDescendants().filter(
+        (candidate) =>
+          Node.isIdentifier(candidate) ||
+          Node.isPropertyAccessExpression(candidate) ||
+          Node.isElementAccessExpression(candidate),
+      ),
+    ];
+    return candidates.some(
+      (candidate) => requestStyleCreateCallForExpression(candidate, new Set()) === create,
+    );
+  };
+  for (const sourceFile of create.getProject().getSourceFiles()) {
+    for (const assignment of sourceFile.getDescendantsOfKind(SyntaxKind.BinaryExpression)) {
+      const operator = assignment.getOperatorToken().getKind();
+      if (operator < SyntaxKind.FirstAssignment || operator > SyntaxKind.LastAssignment) continue;
+      if (referencesCreate(assignment.getLeft())) {
+        REQUEST_STYLE_CREATE_PRISTINE_MEMO.set(create, false);
+        return false;
+      }
+    }
+    for (const deletion of sourceFile.getDescendantsOfKind(SyntaxKind.DeleteExpression)) {
+      if (referencesCreate(deletion.getExpression())) {
+        REQUEST_STYLE_CREATE_PRISTINE_MEMO.set(create, false);
+        return false;
+      }
+    }
+    for (const mutation of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
+      const target = unwrapStaticExpression(mutation.getExpression());
+      const receiver = requestCallReceiver(target);
+      const member = requestStaticCallMember(target);
+      const [object] = mutation.getArguments();
+      if (!receiver || !member || !referencesCreate(object)) continue;
+      if (
+        (expressionResolvesToGlobalNamespace(receiver, 'Object', new Set(), 0) &&
+          ['assign', 'defineProperties', 'defineProperty', 'setPrototypeOf'].includes(member)) ||
+        (expressionResolvesToGlobalNamespace(receiver, 'Reflect', new Set(), 0) &&
+          ['defineProperty', 'deleteProperty', 'set', 'setPrototypeOf'].includes(member))
+      ) {
+        REQUEST_STYLE_CREATE_PRISTINE_MEMO.set(create, false);
+        return false;
+      }
+    }
+  }
+  REQUEST_STYLE_CREATE_PRISTINE_MEMO.set(create, true);
+  return true;
+}
+
+function requestExpressionIsReviewedFrozenStyleValue(expression: Node): boolean {
+  const create = requestStyleCreateCallForExpression(expression, new Set());
+  return !!create && requestStyleCreateResultIsPristine(create);
+}
+
+function requestCallIsPublicStyleAttrs(call: Node): boolean {
+  const node = unwrapStaticExpression(call);
+  if (!Node.isCallExpression(node)) return false;
+  if (!requestSourceImportsExactExport(node, '@kovojs/style', 'attrs')) return false;
+  const imported = requestImportedModuleExportForExpression(
+    node.getExpression(),
+    (specifier) => specifier === '@kovojs/style',
+    new Set(),
+    0,
+  );
+  return imported?.module === '@kovojs/style' && imported.exportName === 'attrs';
+}
+
+function requestCallIsPublicMutationFormAttributes(call: Node): boolean {
+  const node = unwrapStaticExpression(call);
+  if (!Node.isCallExpression(node)) return false;
+  if (
+    !requestSourceImportsExactExport(node, '@kovojs/server', 'mutationFormAttributes') &&
+    !requestSourceImportsExactExport(
+      node,
+      '@kovojs/server/api/data',
+      'mutationFormAttributes',
+    )
+  ) {
+    return false;
+  }
+  const imported = requestImportedModuleExportForExpression(
+    node.getExpression(),
+    (specifier) =>
+      specifier === '@kovojs/server' || specifier === '@kovojs/server/api/data',
+    new Set(),
+    0,
+  );
+  return !!(
+    imported &&
+    (imported.module === '@kovojs/server' || imported.module === '@kovojs/server/api/data') &&
+    imported.exportName === 'mutationFormAttributes'
+  );
+}
+
+function requestCallIsReviewedPublicJsxAttributeHelper(call: Node): boolean {
+  return requestCallIsPublicStyleAttrs(call) || requestCallIsPublicMutationFormAttributes(call);
+}
+
+function requestSourceImportsExactExport(
+  node: Node,
+  module: string,
+  exportName: string,
+): boolean {
+  return node
+    .getSourceFile()
+    .getImportDeclarations()
+    .some((declaration) => {
+      if (declaration.getModuleSpecifierValue() !== module) return false;
+      if (declaration.getNamespaceImport()) return true;
+      return declaration.getNamedImports().some((named) => named.getName() === exportName);
+    });
+}
+
+function requestCallIsExactJsxSpreadExpression(call: Node): boolean {
+  let node = unwrapStaticExpression(call);
+  while (
+    Node.isParenthesizedExpression(node.getParent()) ||
+    Node.isAsExpression(node.getParent()) ||
+    Node.isSatisfiesExpression(node.getParent())
+  ) {
+    node = node.getParent()!;
+  }
+  const parent = node.getParent();
+  return !!(
+    Node.isJsxSpreadAttribute(parent) &&
+    requestNodesAreSame(parent.getExpression(), node)
+  );
+}
+
+const REQUEST_COMPONENT_DESCRIPTOR_CALL_MEMO = new WeakMap<
+  object,
+  import('ts-morph').CallExpression | false
+>();
+const REQUEST_SOURCE_HAS_COMPONENT_IMPORT = new WeakMap<object, boolean>();
+
+function requestSourceHasComponentImport(node: Node): boolean {
+  const sourceFile = node.getSourceFile();
+  const memoized = REQUEST_SOURCE_HAS_COMPONENT_IMPORT.get(sourceFile);
+  if (memoized !== undefined) return memoized;
+  const found = sourceFile
+    .getImportDeclarations()
+    .some((declaration) => declaration.getModuleSpecifierValue() === '@kovojs/core');
+  REQUEST_SOURCE_HAS_COMPONENT_IMPORT.set(sourceFile, found);
+  return found;
+}
+
+function requestComponentDescriptorCallForExpression(
+  expression: Node,
+  seen: Set<string>,
+): import('ts-morph').CallExpression | undefined {
+  const node = unwrapStaticExpression(expression);
+  const memoized = REQUEST_COMPONENT_DESCRIPTOR_CALL_MEMO.get(node);
+  if (memoized !== undefined) return memoized || undefined;
+  const key = requestNodeIdentity(node);
+  if (seen.has(key)) return undefined;
+  seen.add(key);
+  if (Node.isCallExpression(node)) {
+    if (!requestSourceHasComponentImport(node)) {
+      REQUEST_COMPONENT_DESCRIPTOR_CALL_MEMO.set(node, false);
+      return undefined;
+    }
+    const imported = requestImportedModuleExportForExpression(
+      node.getExpression(),
+      (specifier) => specifier === '@kovojs/core',
+      new Set(),
+      0,
+    );
+    const result =
+      imported?.module === '@kovojs/core' && imported.exportName === 'component'
+        ? node
+        : undefined;
+    REQUEST_COMPONENT_DESCRIPTOR_CALL_MEMO.set(node, result ?? false);
+    return result;
+  }
+  if (!Node.isIdentifier(node)) {
+    REQUEST_COMPONENT_DESCRIPTOR_CALL_MEMO.set(node, false);
+    return undefined;
+  }
+  const symbol = requestIdentifierValueSymbol(node);
+  if (!symbol) {
+    REQUEST_COMPONENT_DESCRIPTOR_CALL_MEMO.set(node, false);
+    return undefined;
+  }
+  for (const declaration of symbol.getDeclarations()) {
+    const initializer = valueDeclarationInitializer(declaration);
+    if (!initializer) continue;
+    const descriptor = requestComponentDescriptorCallForExpression(initializer, new Set(seen));
+    if (descriptor) {
+      REQUEST_COMPONENT_DESCRIPTOR_CALL_MEMO.set(node, descriptor);
+      return descriptor;
+    }
+  }
+  REQUEST_COMPONENT_DESCRIPTOR_CALL_MEMO.set(node, false);
+  return undefined;
+}
+
+const REQUEST_COMPONENT_DESCRIPTOR_PRISTINE_MEMO = new WeakMap<object, boolean>();
+
+function requestComponentDescriptorIsPristine(
+  descriptor: import('ts-morph').CallExpression,
+): boolean {
+  const memoized = REQUEST_COMPONENT_DESCRIPTOR_PRISTINE_MEMO.get(descriptor);
+  if (memoized !== undefined) return memoized;
+  const sameDescriptorIn = (expression: Node | undefined): boolean => {
+    if (!expression) return false;
+    const identifiers = [
+      ...(Node.isIdentifier(expression) ? [expression] : []),
+      ...expression.getDescendantsOfKind(SyntaxKind.Identifier),
+    ];
+    return identifiers.some(
+      (identifier) =>
+        requestComponentDescriptorCallForExpression(identifier, new Set()) === descriptor,
+    );
+  };
+  for (const sourceFile of descriptor.getProject().getSourceFiles()) {
+    for (const assignment of sourceFile.getDescendantsOfKind(SyntaxKind.BinaryExpression)) {
+      const operator = assignment.getOperatorToken().getKind();
+      if (operator < SyntaxKind.FirstAssignment || operator > SyntaxKind.LastAssignment) continue;
+      if (sameDescriptorIn(assignment.getLeft())) {
+        REQUEST_COMPONENT_DESCRIPTOR_PRISTINE_MEMO.set(descriptor, false);
+        return false;
+      }
+    }
+    for (const deletion of sourceFile.getDescendantsOfKind(SyntaxKind.DeleteExpression)) {
+      if (sameDescriptorIn(deletion.getExpression())) {
+        REQUEST_COMPONENT_DESCRIPTOR_PRISTINE_MEMO.set(descriptor, false);
+        return false;
+      }
+    }
+    for (const mutation of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
+      const target = unwrapStaticExpression(mutation.getExpression());
+      const receiver = requestCallReceiver(target);
+      const member = requestStaticCallMember(target);
+      const [object] = mutation.getArguments();
+      if (!receiver || !member || !sameDescriptorIn(object)) continue;
+      if (
+        (expressionResolvesToGlobalNamespace(receiver, 'Object', new Set(), 0) &&
+          ['assign', 'defineProperties', 'defineProperty', 'setPrototypeOf'].includes(member)) ||
+        (expressionResolvesToGlobalNamespace(receiver, 'Reflect', new Set(), 0) &&
+          ['defineProperty', 'deleteProperty', 'set', 'setPrototypeOf'].includes(member))
+      ) {
+        REQUEST_COMPONENT_DESCRIPTOR_PRISTINE_MEMO.set(descriptor, false);
+        return false;
+      }
+    }
+  }
+  REQUEST_COMPONENT_DESCRIPTOR_PRISTINE_MEMO.set(descriptor, true);
+  return true;
+}
+
+interface RequestReviewedPublicUiComponent {
+  readonly exportName: 'Badge' | 'Button' | 'Card';
+  readonly module: '@kovojs/ui/badge' | '@kovojs/ui/button' | '@kovojs/ui/card';
+}
+
+const REQUEST_REVIEWED_PUBLIC_UI_COMPONENTS = new Map<
+  RequestReviewedPublicUiComponent['module'],
+  RequestReviewedPublicUiComponent['exportName']
+>([
+  ['@kovojs/ui/badge', 'Badge'],
+  ['@kovojs/ui/button', 'Button'],
+  ['@kovojs/ui/card', 'Card'],
+]);
+
+/**
+ * SPEC §13.1: recognize only the starter's reviewed public UI descriptor entrypoint. The package
+ * namespace and arbitrary descriptor members are deliberately not capabilities.
+ */
+function requestReviewedPublicUiComponentForExpression(
+  expression: Node,
+): RequestReviewedPublicUiComponent | undefined {
+  if (
+    ![...REQUEST_REVIEWED_PUBLIC_UI_COMPONENTS].some(([module, exportName]) =>
+      requestSourceImportsExactExport(expression, module, exportName),
+    )
+  ) {
+    return undefined;
+  }
+  const imported = requestImportedModuleExportForExpression(
+    expression,
+    (specifier) => REQUEST_REVIEWED_PUBLIC_UI_COMPONENTS.has(
+      specifier as RequestReviewedPublicUiComponent['module'],
+    ),
+    new Set(),
+    0,
+  );
+  if (!imported) return undefined;
+  const expected = REQUEST_REVIEWED_PUBLIC_UI_COMPONENTS.get(
+    imported.module as RequestReviewedPublicUiComponent['module'],
+  );
+  return expected === imported.exportName
+    ? {
+        exportName: expected,
+        module: imported.module as RequestReviewedPublicUiComponent['module'],
+      }
+    : undefined;
+}
+
+function requestCallIsReviewedPublicUiRender(
+  call: import('ts-morph').CallExpression,
+): boolean {
+  const callee = unwrapStaticExpression(call.getExpression());
+  if (
+    !Node.isPropertyAccessExpression(callee) &&
+    !Node.isElementAccessExpression(callee)
+  ) {
+    return false;
+  }
+  if (requestStaticCallMember(callee) !== 'render') return false;
+  const definition = unwrapStaticExpression(callee.getExpression());
+  if (
+    (!Node.isPropertyAccessExpression(definition) &&
+      !Node.isElementAccessExpression(definition)) ||
+    (Node.isPropertyAccessExpression(definition)
+      ? definition.getName()
+      : staticMemberName(definition.getArgumentExpression())) !== 'definition'
+  ) {
+    return false;
+  }
+  const component = unwrapStaticExpression(definition.getExpression());
+  const identity = requestReviewedPublicUiComponentForExpression(component);
+  return !!identity && requestReviewedPublicUiComponentIsPristine(call, identity);
+}
+
+function requestPropertyAccessBelongsToReviewedPublicUiRenderCall(access: Node): boolean {
+  let candidate = access;
+  while (true) {
+    const parent = candidate.getParent();
+    if (
+      (Node.isPropertyAccessExpression(parent) || Node.isElementAccessExpression(parent)) &&
+      requestNodesAreSame(parent.getExpression(), candidate)
+    ) {
+      candidate = parent;
+      continue;
+    }
+    if (
+      Node.isCallExpression(parent) &&
+      requestNodesAreSame(parent.getExpression(), candidate)
+    ) {
+      return requestCallIsReviewedPublicUiRender(parent);
+    }
+    return false;
+  }
+}
+
+function requestReviewedPublicUiComponentIsPristine(
+  call: import('ts-morph').CallExpression,
+  identity: RequestReviewedPublicUiComponent,
+): boolean {
+  const expressionContainsIdentity = (expression: Node | undefined): boolean => {
+    if (!expression) return false;
+    const identifiers = [
+      ...(Node.isIdentifier(expression) ? [expression] : []),
+      ...expression.getDescendantsOfKind(SyntaxKind.Identifier),
+    ];
+    return identifiers.some((identifier) => {
+      const imported = requestReviewedPublicUiComponentForExpression(identifier);
+      return imported?.module === identity.module && imported.exportName === identity.exportName;
+    });
+  };
+
+  // Scan the complete authoritative project, not merely the call's source file: a sibling module
+  // can import the same descriptor and install a getter or replacement before this request runs.
+  for (const sourceFile of call.getProject().getSourceFiles()) {
+    for (const assignment of sourceFile.getDescendantsOfKind(SyntaxKind.BinaryExpression)) {
+      const operator = assignment.getOperatorToken().getKind();
+      if (operator < SyntaxKind.FirstAssignment || operator > SyntaxKind.LastAssignment) continue;
+      if (expressionContainsIdentity(assignment.getLeft())) return false;
+    }
+    for (const deletion of sourceFile.getDescendantsOfKind(SyntaxKind.DeleteExpression)) {
+      if (expressionContainsIdentity(deletion.getExpression())) return false;
+    }
+    for (const mutation of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
+      const target = unwrapStaticExpression(mutation.getExpression());
+      const receiver = requestCallReceiver(target);
+      const member = requestStaticCallMember(target);
+      const [object] = mutation.getArguments();
+      if (!receiver || !member || !expressionContainsIdentity(object)) continue;
+      const objectMutation =
+        expressionResolvesToGlobalNamespace(receiver, 'Object', new Set(), 0) &&
+        ['assign', 'defineProperties', 'defineProperty', 'setPrototypeOf'].includes(member);
+      const reflectMutation =
+        expressionResolvesToGlobalNamespace(receiver, 'Reflect', new Set(), 0) &&
+        ['defineProperty', 'deleteProperty', 'set', 'setPrototypeOf'].includes(member);
+      if (objectMutation || reflectMutation) return false;
+    }
+  }
+  return true;
+}
+
 function requestExpressionContainsClosedAuthority(
   expression: Node,
   seen: Set<string>,
@@ -14994,11 +15557,17 @@ function resolveRequestCallableUncached(
       return resolveRequestCallable(callee.getExpression(), seen, depth + 1, session);
     }
 
-    const componentIdentity = canonicalFrameworkExportForExpression(callee);
+    const componentIdentity = requestImportedModuleExportForExpression(
+      callee,
+      (specifier) => specifier === '@kovojs/core',
+      new Set(),
+      0,
+    );
     if (
       componentIdentity?.module === '@kovojs/core' &&
       componentIdentity.exportName === 'component'
     ) {
+      if (!requestComponentDescriptorIsPristine(node)) return { callables: [] };
       const definition = resolveStaticObjectLiteral(node.getArguments()[0], new Set(), depth + 1);
       const render = definition ? requestStaticObjectProperty(definition, 'render') : undefined;
       if (render) {
@@ -15703,6 +16272,18 @@ function requestEnvironmentAuthorityForExpression(
 
   if (Node.isCallExpression(node) || Node.isNewExpression(node)) {
     if (Node.isCallExpression(node)) {
+      if (
+        requestCallIsPublicMutationFormAttributes(node) &&
+        requestCallIsExactJsxSpreadExpression(node)
+      ) {
+        return undefined;
+      }
+      const componentDescriptor = requestComponentDescriptorCallForExpression(node, new Set());
+      if (componentDescriptor && requestComponentDescriptorIsPristine(componentDescriptor)) {
+        // `component({...})` returns a frozen descriptor; its render callback is scanned when the
+        // exact descriptor is invoked. Configuration values are not themselves descriptor output.
+        return undefined;
+      }
       const reflective = requestReflectiveEnvironmentAuthority(node);
       if (reflective) return reflective;
       const resolution = resolveRequestCallable(node.getExpression(), new Set(), 0);

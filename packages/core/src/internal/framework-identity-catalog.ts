@@ -251,7 +251,7 @@ appendCatalogFactories(
   ['component', 'declareOffWire', 'publishToClient', 'trustedReveal'],
   coreAuthoring,
 );
-appendCatalogFactories(catalogEntries, ['attrs', 'create'], styleAuthoring);
+appendCatalogEntry(catalogEntries, styleAuthoring('create'));
 appendCatalogEntry(catalogEntries, serverRendering('safeRichHtml', '@kovojs/browser'));
 appendCatalogFactories(
   catalogEntries,

@@ -630,14 +630,14 @@ export function mutationFormAttributes<const Key extends string, Request = unkno
   assertMutationKey(definition);
   const fileFields =
     definition.fileFields ?? (definition.input ? mutationInputFileFields(definition.input) : []);
-  return {
+  return witnessFreeze({
     action: `/_m/${definition.key}`,
     'data-mutation': definition.key,
     enhance: true,
     ...(fileFields.length === 0 ? {} : { enctype: 'multipart/form-data' as const }),
     method: 'post',
     mutation: definition,
-  };
+  });
 }
 
 /**

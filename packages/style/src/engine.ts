@@ -468,7 +468,7 @@ export function attrs(...styles: readonly StyleInput[]): AttrsResult {
   if (merged.styleSrc) attrsResult[STYLE_SRC] = merged.styleSrc;
   if (styleOwnDataEntries(merged.inlineStyle, 'style.attrs inline style').length > 0)
     attrsResult.style = serializeInlineStyle(merged.inlineStyle);
-  return attrsResult;
+  return styleFreeze(attrsResult);
 }
 
 /**

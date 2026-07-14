@@ -387,13 +387,16 @@ describe('server mutation lifecycle', () => {
       },
     });
 
-    expect(mutationFormAttributes(addToCart)).toEqual({
+    const attributes = mutationFormAttributes(addToCart);
+    expect(attributes).toEqual({
       action: '/_m/cart/add',
       'data-mutation': 'cart/add',
       enhance: true,
       method: 'post',
       mutation: addToCart,
     });
+    expect(Object.isFrozen(attributes)).toBe(true);
+    expect(Reflect.set(attributes, 'mutation', { key: 'attacker-controlled' })).toBe(false);
     expect(renderMutationFormAttributes(addToCart)).toBe(
       'method="post" action="/_m/cart/add" enhance data-mutation="cart/add"',
     );

@@ -136,14 +136,12 @@ describe('framework identity resolver', () => {
       exportName: 'create',
       module: '@kovojs/style',
     });
-    expect(frameworkCatalogExportForModuleSpecifier('@kovojs/style', 'attrs')).toEqual({
-      exportName: 'attrs',
-      module: '@kovojs/style',
-    });
-    expect(frameworkCatalogExportsForModule('@kovojs/style')).toEqual(new Set(['attrs', 'create']));
+    expect(frameworkCatalogExportForModuleSpecifier('@kovojs/style', 'attrs')).toBeUndefined();
+    expect(frameworkCatalogExportsForModule('@kovojs/style')).toEqual(new Set(['create']));
     expect(
       frameworkCatalogExportForModuleSpecifier('@kovojs/style', 'defineTheme'),
     ).toBeUndefined();
+    expect(frameworkCatalogExportForModuleSpecifier('@kovojs/style', 'tokens')).toBeUndefined();
     expect(
       frameworkCatalogExportForModuleSpecifier('@kovojs/style/internal', 'createAtomicStyles'),
     ).toBeUndefined();
