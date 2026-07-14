@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { parseAuditFindings, verifyBuildScriptPolicy } from './supply-chain-gates.mjs';
+import {
+  parseAuditFindings,
+  verifyBuildScriptPolicy,
+  verifyNpmPublishAuthority,
+} from './supply-chain-gates.mjs';
 
 describe('supply-chain gates', () => {
   it('allows low production advisories while failing the configured severity floor', () => {
@@ -41,5 +45,23 @@ describe('supply-chain gates', () => {
         [{ name: '@kovojs/core', scripts: { postinstall: 'node install.js' } }],
       ),
     ).toThrow('Unapproved lifecycle scripts');
+  });
+
+  it('keeps npm mutation authority confined to the attested publisher', () => {
+    const publisher = {
+      path: 'scripts/publish-packed-packages.mjs',
+      text: `exec('vp', ['exec', 'npm', 'publish', tarball])`,
+    };
+    expect(() => verifyNpmPublishAuthority([publisher])).not.toThrow();
+    expect(() =>
+      verifyNpmPublishAuthority([
+        publisher,
+        {
+          path: 'scripts/alternate-publisher.mjs',
+          text: `execFileSync('npm', ['publish', '--access', 'public'])`,
+        },
+      ]),
+    ).toThrow('npm publish authority must be exactly');
+    expect(() => verifyNpmPublishAuthority([])).toThrow('npm publish authority must be exactly');
   });
 });

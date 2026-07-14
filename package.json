@@ -49,7 +49,6 @@
     "check:inline-loader:trusted-types": "pnpm --filter @kovojs/browser run check:inline-loader:trusted-types",
     "ci:timing-report": "node scripts/ci-timing-report.mjs",
     "bump": "node scripts/bump.mjs",
-    "release:bootstrap-placeholders": "node scripts/bootstrap-npm-placeholders.mjs",
     "docs:serve": "pnpm run check:build && pnpm --filter @kovojs/site run build && HOST=0.0.0.0 node site/scripts/serve.mjs",
     "perf:fcp": "node scripts/fcp-harness.mjs",
     "test": "vitest --run",

@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 
 import { isMainEntry, runGate } from './lib/cli-entry.mjs';
+import { collectFiles } from './lib/source-files.mjs';
 import { publicPackages, repoRoot } from './public-packages.mjs';
 
 const approvedBuiltDependencies = Object.freeze(['@node-rs/argon2', 'better-sqlite3']);
@@ -22,6 +23,10 @@ const lifecycleScriptNames = new Set([
   'publish',
   'postpublish',
 ]);
+const approvedNpmPublishAuthorities = Object.freeze(['scripts/publish-packed-packages.mjs']);
+const programmaticPublishPattern =
+  /\b(?:exec|execFile|execFileSync|spawn|spawnSync)\s*\(\s*['"](?:npm|pnpm|vp)['"][\s\S]{0,800}?['"]publish['"]/u;
+const shellPublishPattern = /(?:^|\s)(?:vp\s+exec\s+)?(?:npm|pnpm)\s+publish(?:\s|$)/mu;
 
 export function verifyBuildScriptPolicy(rootPackageJson, packageManifests) {
   const actual = [...(rootPackageJson.pnpm?.onlyBuiltDependencies ?? [])].sort(compareStrings);
@@ -42,6 +47,18 @@ export function verifyBuildScriptPolicy(rootPackageJson, packageManifests) {
   }
   if (findings.length > 0) {
     throw new Error(`Unapproved lifecycle scripts:\n  ${findings.join('\n  ')}`);
+  }
+}
+
+export function verifyNpmPublishAuthority(sources) {
+  const actual = sources
+    .filter(({ text }) => programmaticPublishPattern.test(text) || shellPublishPattern.test(text))
+    .map(({ path: filePath }) => filePath)
+    .sort(compareStrings);
+  if (JSON.stringify(actual) !== JSON.stringify(approvedNpmPublishAuthorities)) {
+    throw new Error(
+      `npm publish authority must be exactly ${JSON.stringify(approvedNpmPublishAuthorities)}; got ${JSON.stringify(actual)}`,
+    );
   }
 }
 
@@ -67,6 +84,7 @@ function main() {
     JSON.parse(readFileSync(path.join(repoRoot, 'packages', pkg.dir, 'package.json'), 'utf8')),
   );
   verifyBuildScriptPolicy(rootPackageJson, packageManifests);
+  verifyNpmPublishAuthority(readPublishAuthoritySources());
 
   const audit = JSON.parse(readAuditJson());
   const findings = parseAuditFindings(audit, process.env.KOVO_AUDIT_LEVEL ?? 'moderate');
@@ -77,6 +95,23 @@ function main() {
   }
 
   console.log('Supply-chain policy gates passed.');
+}
+
+function readPublishAuthoritySources() {
+  const files = collectFiles(repoRoot, ['scripts', '.github/workflows', 'packages'], {
+    includeFile: ({ relativePath }) =>
+      (/\.[cm]?[jt]s$/u.test(relativePath) &&
+        !/\.(?:test|spec)\.[cm]?[jt]s$/u.test(relativePath)) ||
+      /\.ya?ml$/u.test(relativePath) ||
+      relativePath.endsWith('/package.json'),
+    skipDirectory: ({ name }) => name === 'dist' || name === 'node_modules',
+  });
+  files.push('package.json');
+  files.sort(compareStrings);
+  return files.map((filePath) => ({
+    path: filePath,
+    text: readFileSync(path.join(repoRoot, filePath), 'utf8'),
+  }));
 }
 
 function readAuditJson() {
