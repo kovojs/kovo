@@ -29,6 +29,12 @@ import { renderedHtml } from '@kovojs/server/internal/html';
 import { kovo } from '@kovojs/server/vite';
 
 import { installEgressFloorSync } from '../../server/src/egress-bootstrap.js';
+import {
+  builtServerProcess,
+  closeBuiltServerProcess,
+  listenBuiltServerProcess,
+  type BuiltServerProcess,
+} from './built-server.test-support.js';
 import { main, mainAsync } from './index.js';
 
 const repoRoot = process.cwd();
@@ -95,12 +101,7 @@ describe('kovo build', () => {
       expect(handlerSource).not.toContain('pgsql-ast-parser');
       expect(handlerSource).not.toContain('kovo-managed-sql-parser');
 
-      const serverModule = (await import(
-        `${pathToFileURL(join(outDir, 'server/server.mjs')).href}?t=${Date.now()}`
-      )) as {
-        createKovoNodeServer(): Server;
-      };
-      const server = serverModule.createKovoNodeServer();
+      const server = builtServerProcess(join(outDir, 'server/server.mjs'));
       const origin = await listen(server);
 
       try {
@@ -197,12 +198,7 @@ export default createApp({
       const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
       expect(exitCode, errorOutput).toBe(0);
 
-      const serverModule = (await import(
-        `${pathToFileURL(join(outDir, 'server/server.mjs')).href}?t=${Date.now()}`
-      )) as {
-        createKovoNodeServer(): Server;
-      };
-      const server = serverModule.createKovoNodeServer();
+      const server = builtServerProcess(join(outDir, 'server/server.mjs'));
       const origin = await listen(server);
 
       try {
@@ -266,12 +262,7 @@ export default createApp({
       ).toBe(0);
       expect(stdout.mock.calls.map(([chunk]) => String(chunk)).join('')).toContain('PAGE /typed');
 
-      const serverModule = (await import(
-        `${pathToFileURL(join(outDir, 'server/server.mjs')).href}?t=${Date.now()}`
-      )) as {
-        createKovoNodeServer(): Server;
-      };
-      const server = serverModule.createKovoNodeServer();
+      const server = builtServerProcess(join(outDir, 'server/server.mjs'));
       const origin = await listen(server);
 
       try {
@@ -352,12 +343,7 @@ export function ContactCard(props: { name: string }) {
       expect(exitCode, errorOutput).toBe(0);
       expect(stderr).not.toHaveBeenCalled();
 
-      const serverModule = (await import(
-        `${pathToFileURL(join(outDir, 'server/server.mjs')).href}?t=${Date.now()}`
-      )) as {
-        createKovoNodeServer(): Server;
-      };
-      const server = serverModule.createKovoNodeServer();
+      const server = builtServerProcess(join(outDir, 'server/server.mjs'));
       const origin = await listen(server);
 
       try {
@@ -554,12 +540,7 @@ export default createApp({
       expect(stderr).not.toHaveBeenCalled();
       expect(existsSync(join(outDir, '.kovo/server/handler.mjs'))).toBe(true);
 
-      const serverModule = (await import(
-        `${pathToFileURL(join(outDir, 'server/server.mjs')).href}?t=${Date.now()}`
-      )) as {
-        createKovoNodeServer(): Server;
-      };
-      const server = serverModule.createKovoNodeServer();
+      const server = builtServerProcess(join(outDir, 'server/server.mjs'));
       const origin = await listen(server);
 
       try {
@@ -610,12 +591,7 @@ export default createApp({
       expect(exitCode, errorOutput).toBe(0);
       expect(stderr).not.toHaveBeenCalled();
 
-      const serverModule = (await import(
-        `${pathToFileURL(join(outDir, 'server/server.mjs')).href}?t=${Date.now()}`
-      )) as {
-        createKovoNodeServer(): Server;
-      };
-      const server = serverModule.createKovoNodeServer();
+      const server = builtServerProcess(join(outDir, 'server/server.mjs'));
       const addContactKey = fixtureDerivedRegistryKey(appPath, 'addContact');
       const contactsQueryKey = fixtureDerivedRegistryKey(
         join(root, 'src/contacts-query.ts'),
@@ -2291,12 +2267,7 @@ export default createApp({
         expect.objectContaining({ name: '/webhooks/payment', writes: ['payment'] }),
       );
 
-      const serverModule = (await import(
-        `${pathToFileURL(join(outDir, 'server/server.mjs')).href}?t=${Date.now()}`
-      )) as {
-        createKovoNodeServer(): Server;
-      };
-      const server = serverModule.createKovoNodeServer();
+      const server = builtServerProcess(join(outDir, 'server/server.mjs'));
       const origin = await listen(server);
       try {
         const body = JSON.stringify({ id: 'evt-1' });
@@ -2579,12 +2550,7 @@ export async function resetFixture() {
       expect(stderr).not.toHaveBeenCalled();
 
       const staticDocument = readFileSync(join(outDir, '.kovo/static/index.html'), 'utf8');
-      const serverModule = (await import(
-        `${pathToFileURL(join(outDir, 'server/server.mjs')).href}?t=${Date.now()}`
-      )) as {
-        createKovoNodeServer(): Server;
-      };
-      const builtServer = serverModule.createKovoNodeServer();
+      const builtServer = builtServerProcess(join(outDir, 'server/server.mjs'));
       const builtOrigin = await listen(builtServer);
 
       let builtDocument: string;
@@ -2718,12 +2684,7 @@ export const homeQuery = {
         /^\/assets\/fragments\/home-panel-home-panel-[a-f0-9]{64}\.css$/.test(href),
       );
 
-      const serverModule = (await import(
-        `${pathToFileURL(join(outDir, 'server/server.mjs')).href}?t=${Date.now()}`
-      )) as {
-        createKovoNodeServer(): Server;
-      };
-      const server = serverModule.createKovoNodeServer();
+      const server = builtServerProcess(join(outDir, 'server/server.mjs'));
       await withEnv({ KOVO_LIVE_TARGET_SECRET: BUILD_FIXTURE_LIVE_TARGET_SECRET }, async () => {
         const origin = await listen(server);
 
@@ -2813,12 +2774,7 @@ export const homeQuery = {
         /createRequire\([^)]*import\.meta\.url[^)]*\)\(["']undici["']\)/,
       );
 
-      const serverModule = (await import(
-        `${pathToFileURL(join(runtimeDir, 'server.mjs')).href}?t=${Date.now()}`
-      )) as {
-        createKovoNodeServer(): Server;
-      };
-      const server = serverModule.createKovoNodeServer();
+      const server = builtServerProcess(join(runtimeDir, 'server.mjs'));
       const origin = await listen(server);
 
       try {
@@ -4549,7 +4505,13 @@ export default createApp({
 `;
 }
 
-async function listen(server: Server): Promise<string> {
+function isBuiltServerProcess(server: Server | BuiltServerProcess): server is BuiltServerProcess {
+  return Object.hasOwn(server, 'entryPath');
+}
+
+async function listen(server: Server | BuiltServerProcess): Promise<string> {
+  if (isBuiltServerProcess(server)) return listenBuiltServerProcess(server);
+
   await new Promise<void>((resolve) => {
     server.listen(0, '127.0.0.1', resolve);
   });
@@ -4566,7 +4528,15 @@ async function listen(server: Server): Promise<string> {
   return origin;
 }
 
-async function close(server: Server): Promise<void> {
+async function close(server: Server | BuiltServerProcess): Promise<void> {
+  if (isBuiltServerProcess(server)) {
+    await closeBuiltServerProcess(server);
+    return;
+  }
+  await closeNodeServer(server);
+}
+
+async function closeNodeServer(server: Server): Promise<void> {
   await new Promise<void>((resolve, reject) => {
     server.close((error) => (error ? reject(error) : resolve()));
   });
