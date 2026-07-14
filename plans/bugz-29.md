@@ -174,8 +174,10 @@ fails closed.
     genuine `respond.file()` outcome could have its body, type, disposition, or exposed byte array
     replaced after construction. The exact emitted Node artifact returned the forged script as a
     200 `text/html` inline response. SPEC §2, §6.6, §9.1.
-  - **Evidence:** `c2cfad653`, `8a85243d7`; the focused filesystem/response/route/upload/emitted-
-    artifact matrix is 222/222 green and `check:sink-policy` passes.
+  - A residual omitted `etag`/`headers` snapshot field could also inherit late `Object.prototype`
+    policy and mint a forged 304 plus cache/header injection.
+  - **Evidence:** `c2cfad653`, `8a85243d7`, `dde7ab3d9`; exact-own null-prototype snapshots pass the
+    direct Web/document, full-handler, and emitted production-header artifact regressions.
 
 ## High
 
@@ -421,8 +423,11 @@ fails closed.
   - Stored metadata retained a surrogate-pair emoji that `Content-Disposition` passed to the Web
     `Response` ByteString sink, producing a stable 500 on every later capability download. SPEC
     §6.6, §9.1.
-  - **Evidence:** `c2cfad653`; the focused 222-test matrix serializes Unicode and malformed-surrogate
-    filenames into a valid ASCII fallback plus RFC 5987 filename.
+  - The emitted Node static server retained a separate raw-Unicode serializer after the first
+    runtime fix.
+  - **Evidence:** `c2cfad653`, `dde7ab3d9`; runtime and generated Node output share one bounded
+    surrogate-repairing ASCII-fallback/RFC 8187 serializer, proven by unit, build, and real starter
+    artifact tests.
 
 ## Low
 
@@ -436,8 +441,10 @@ fails closed.
   - A matching file ETag returned 304 without `Cache-Control: no-store` or `Vary: Cookie`; no
     concrete cross-principal body disclosure was reproduced, but the conditional path violated the
     guarded route cache contract. SPEC §9.4, §9.5.
-  - **Evidence:** `c2cfad653`; the focused 222-test matrix preserves the private cache floor on
-    witnessed file ETag 304 responses through route, response, and document conversion.
+  - The first fix covered only a legacy route guard, not route `access`, layout access/guards, or
+    parent layouts.
+  - **Evidence:** `c2cfad653`, `dde7ab3d9`; cache posture now mirrors the exact enforced route and
+    full parent-layout authorization graph, with source and emitted-artifact 200/304 controls.
 
 ## Closure gates
 
