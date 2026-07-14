@@ -38,6 +38,7 @@ import {
   compilerSha256Hex,
   compilerSnapshotDenseArray,
   compilerStringIncludes,
+  compilerStringCharCodeAt,
   compilerStringIndexOf,
   compilerStringEndsWith,
   compilerStringSlice,
@@ -4367,7 +4368,7 @@ function jsxElementModel(
     : '';
   const selfClosing = !ts.isJsxElement(node);
   const tag = openingElement.tagName.getText(sourceFile);
-  const componentTag = jsxTagIsComponent(tag);
+  const componentTag = jsxTagIsComponent(openingElement.tagName, tag);
   const unreviewedComponentTag =
     componentTag &&
     !jsxTagHasReviewedKovoUiEventBoundary(sourceFile, openingElement.tagName, tag, namedImports);
@@ -4443,8 +4444,15 @@ function jsxAttributeModels(
   return result;
 }
 
-function jsxTagIsComponent(tag: string): boolean {
-  return compilerStringIncludes(tag, '.') || compilerRegExpTest(/^[A-Z]/, tag);
+function jsxTagIsComponent(tagName: ts.JsxTagNameExpression, tag: string): boolean {
+  // TypeScript's JSX runtime treats namespaced and dashed names as intrinsic strings. A plain
+  // identifier is intrinsic only when it starts with ASCII lowercase; `_`, `$`, and every
+  // non-ASCII identifier are lexical component references even when they are not PascalCase.
+  // SPEC §5.2: a component callback prop must never reach host-event lowering by naming style.
+  if (ts.isJsxNamespacedName(tagName) || compilerStringIncludes(tag, '-')) return false;
+  if (!ts.isIdentifier(tagName)) return true;
+  const first = compilerStringCharCodeAt(tag, 0);
+  return first < 0x61 || first > 0x7a;
 }
 
 /**

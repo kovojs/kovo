@@ -106,8 +106,8 @@ function clientHandlerImportKey(moduleSpecifier: string, importedName: string): 
  *
  * SPEC §5.2: generated handlers never treat a relative module, bare package, package prefix,
  * default/namespace binding, or dynamic loader as browser-safe merely because it is called. An
- * unregistered named value may cross only through the separate `publishToClient(value, { reason })`
- * audit escape; that escape does not widen this executable-code registry.
+ * `publishToClient(value, { reason })` cannot authorize any import: its separate literal-data
+ * channel accepts only pristine same-file const primitives and never widens this registry.
  */
 export const reviewedClientHandlerImportTarget = securityClassifier(
   'compiler.client-handler-import.reviewed-target',

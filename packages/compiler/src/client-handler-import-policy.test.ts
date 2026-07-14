@@ -219,20 +219,15 @@ describe('exact client-handler executable import policy', () => {
     });
   });
 
-  it('preserves an audited publishToClient value import without granting callable authority', () => {
+  it('refuses an audited value import because module evaluation is executable authority', () => {
     const result = compile(`import { publishToClient } from '@kovojs/core';
       import { PUBLIC_VALUE } from './public-config.js';
       export const Page = component({ render: () => <button onClick={() =>
         publishToClient(PUBLIC_VALUE, { reason: 'public browser configuration' })}>Go</button> });`);
     const client = clientSource(result);
-    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).not.toContain('KV201');
-    expect(client).toContain('import { PUBLIC_VALUE } from "./public-config.js";');
-    expect(result.publishToClientFacts).toContainEqual(
-      expect.objectContaining({
-        localName: 'PUBLIC_VALUE',
-        reason: 'public browser configuration',
-      }),
-    );
+    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toContain('KV437');
+    expect(client).not.toContain('import { PUBLIC_VALUE } from "./public-config.js";');
+    expect(result.publishToClientFacts).toEqual([]);
   });
 
   it('blocks every handler sharing a globally withheld binding', () => {

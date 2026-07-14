@@ -59,10 +59,22 @@ There are four common lanes:
 - `untrusted(value)` marks request-derived input that still needs validation or escaping.
 - `redacted(value, { mask })` keeps a masked display form while preserving the real value for
   deliberate reveal.
-- `publishToClient(value, { reason })` is the audited escape for a value that really is safe in
-  client code, such as a publishable Stripe key.
+- `publishToClient(value, { reason })` publishes a same-file `const` string, number, boolean, or
+  `null`. Use it for inert labels and public build constants.
 - `declareOffWire(() => { ... }, { justification })` lets you do server-only secret work that never
   returns a value to the query wire.
+
+Keep the published value next to the handler so the compiler can copy data without importing code:
+
+```text
+const CHECKOUT_VERSION = 'v2';
+
+publishToClient(CHECKOUT_VERSION, { reason: 'public checkout protocol version' });
+```
+
+An imported value is refused even when wrapped. Importing its module would execute that module in
+the browser before any runtime check. Pass dynamic public data through component props or a query
+instead.
 
 Column-level secrecy lives in the schema annotation, not in query prose:
 
@@ -92,8 +104,8 @@ There are two failure modes to expect:
 - Runtime secret-box failures when a secret reaches JSON, headers, redirects, or another egress
   sink without an explicit reveal or redaction step.
 
-Do not solve either with a cast. Either remove the secret from the projection, reveal it in a
-reviewed place, or publish a truly public value with `publishToClient(...)`.
+Do not solve either with a cast. Remove the secret from the projection, reveal it in a reviewed
+place, or publish a same-file primitive constant. Use props or a query for dynamic public data.
 
 ## Next
 
@@ -109,6 +121,8 @@ Wire refusal text: `packages/core/src/internal/wire-json.ts` and
 `packages/core/src/internal/wire-json.test.ts`. Runtime sink refusal: `packages/server/src/secret-egress.ts`.
 Column-level secret and confidential-at-rest annotations: `packages/drizzle/src/drizzle-surface.ts`.
 `encryptAtRest(...)`: `packages/server/src/confidential-at-rest.ts`. Main diagnostic: KV435.
+`publishToClient(...)` accepts only a unique, pristine same-file `const` initialized to `string |
+number | boolean | null`; imported or mutable bindings fail closed under KV437 (SPEC §6.2/§6.6).
 
 API reference: [@kovojs/core](/api/core/), [@kovojs/drizzle](/api/drizzle/), [@kovojs/server](/api/server/).
 

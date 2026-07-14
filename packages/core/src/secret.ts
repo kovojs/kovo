@@ -611,21 +611,34 @@ export interface DeclareOffWireOptions {
  * Audited escape for the client-handler secret-emit gate (SPEC §6.6/§6.2; secure-framework Phase 4 /
  * Tier 0 item 3, KV437).
  *
- * A client event handler that captures a cross-module import in **value position**
- * (`() => sendPayment(STRIPE_SECRET_KEY)`) would otherwise leak the binding's evaluated value into
- * the browser bundle, so the compiler refuses to emit it (fail-closed, whole-channel). Wrapping the
- * value in `publishToClient(value, { reason })` is an explicit author assertion — **audit-grade,
- * NOT statically verified** — that this specific value is safe to ship. The compiler then allows the
- * capture to emit and records the site + reason for `kovo explain --capabilities`.
+ * A client event handler that captures a cross-module import in **value position** would otherwise
+ * evaluate that module in the browser, so the compiler refuses it even when wrapped. The only
+ * accepted client-handler shape is a unique, pristine same-file `const` initialized directly from
+ * the finite primitive grammar; the compiler snapshots that literal and records the site + reason
+ * for `kovo explain --capabilities`.
  *
  * This is the analogue of {@link trustedReveal} for the closure-capture channel: an assertion the
- * reviewer can see, not a proof. Reach for it only for genuinely public values the handler needs in
- * the browser (a publishable Stripe key, a public base URL); never to ship a real secret.
+ * reviewer can see. Reach for it only for inert same-file constants the handler needs in the
+ * browser (a public label or build protocol version); never to ship a real secret or runtime config.
  *
- * Runtime behavior is identity: it returns `value` unchanged. The wrapper exists for the compiler's
- * static recognition and for the audit ledger, not to transform the value.
+ * Runtime behavior is identity for the exact `string | number | boolean | null` data union. Every
+ * other value is rejected without reflection, excluding proxies, accessors, nested callables,
+ * coercion hooks, iterators, thenables, symbols, bigint, and undefined without executing them during
+ * validation. The matching input type is defense-in-depth; the compiler's same-file literal gate is
+ * the no-import-execution proof.
  */
-export function publishToClient<T>(value: T, options: PublishToClientOptions): T {
+export function publishToClient<T extends string | number | boolean | null>(
+  value: T,
+  options: PublishToClientOptions,
+): T {
+  if (
+    value !== null &&
+    typeof value !== 'string' &&
+    typeof value !== 'number' &&
+    typeof value !== 'boolean'
+  ) {
+    throw new TypeError('publishToClient accepts only string, number, boolean, or null.');
+  }
   const reason = ownSecretOption(options, 'reason', 'publishToClient reason');
   if (typeof reason !== 'string' || !securityStringTrim(reason)) {
     throw new Error('publishToClient requires a non-empty reason.');

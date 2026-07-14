@@ -966,6 +966,15 @@ review remains manual and is the point of the `reviewTrigger`. See `rules/depend
       "decision": "compiler.client-handler-import.validate"
     },
     {
+      "id": "compiler.client-handler-execution.validate",
+      "file": "packages/compiler/src/validate/client-capture.ts",
+      "name": "validateClientHandlerExecutionPolicy",
+      "kind": "classifier",
+      "classification": "advisory-static-classifier",
+      "wrapper": "securityClassifier",
+      "decision": "compiler.client-handler-execution.validate"
+    },
+    {
       "id": "compiler.trusted-html.validate",
       "file": "packages/compiler/src/validate/trusted-html-provenance.ts",
       "name": "validateTrustedHtmlProvenance",

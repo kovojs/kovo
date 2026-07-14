@@ -31,7 +31,6 @@ import {
   runtimeOutputHelpers,
   templateStampHtmlEscapeExpression,
 } from '../security/output-context.js';
-import { isCompilerAuditText } from '../security/audit-text.js';
 import {
   applySourceReplacements,
   dedupeBy,
@@ -788,17 +787,6 @@ function generatedHandlerModuleSpecifier(item: ClientImportDependency): string {
   // are intentionally insufficient.
   const provenance = compilerOwnDataValue(item, 'provenance', 'Client-handler import dependency');
   const kind = compilerOwnDataValue(provenance, 'kind', 'Client-handler import provenance');
-  if (kind === 'audited-published-value') {
-    const auditReason = compilerOwnDataValue(
-      provenance,
-      'auditReason',
-      'Audited client-handler import provenance',
-    );
-    if (typeof auditReason !== 'string' || !isCompilerAuditText(auditReason)) {
-      compilerFailClosed('Audited client-handler import provenance must carry valid audit text.');
-    }
-    return item.moduleSpecifier;
-  }
   if (kind !== 'reviewed-executable') {
     compilerFailClosed('Client-handler import provenance must have a reviewed discriminant.');
   }
@@ -845,7 +833,6 @@ function generatedHandlerModuleSpecifier(item: ClientImportDependency): string {
 function generatedHandlerImportedName(item: ClientImportDependency): string {
   const provenance = compilerOwnDataValue(item, 'provenance', 'Client-handler import dependency');
   const kind = compilerOwnDataValue(provenance, 'kind', 'Client-handler import provenance');
-  if (kind === 'audited-published-value') return item.importedName;
   if (kind !== 'reviewed-executable') {
     compilerFailClosed('Client-handler import provenance must have a reviewed discriminant.');
   }

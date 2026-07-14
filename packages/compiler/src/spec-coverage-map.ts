@@ -389,8 +389,7 @@ export const compilerSpecCoverageMap = [
       },
       {
         file: 'packages/compiler/src/client-secret-capture.test.ts',
-        testName:
-          'allows a publishToClient(captured, { reason }) escape: emits and records the fact',
+        testName: 'allows a publishToClient-wrapped pristine same-file const primitive',
       },
       {
         file: 'packages/compiler/src/query-bindings.test.ts',

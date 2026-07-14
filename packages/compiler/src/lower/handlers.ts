@@ -62,9 +62,10 @@ export function lowerEventHandlers(
   const handlers: HandlerLowering[] = [];
   const anonymousNameCounts = compilerCreateMap<string, number>();
   // SPEC §6.6/§6.2 + secure-framework Phase 4 / Tier 0 item 3: fail-closed, whole-channel emit gate.
-  // Only re-emit a captured cross-module import when it carries exact reviewed executable provenance
-  // or a publishToClient audit escape. Every closed handler is omitted wholesale, so neither a
-  // specifier nor an unbound body can reach generated browser artifacts.
+  // Re-emit a captured cross-module import only when it carries exact reviewed executable
+  // provenance. `publishToClient` is deliberately not import authority: it can emit only a
+  // compiler-proven same-file const primitive as literal data. Every closed handler is omitted
+  // wholesale, so neither an unreviewed specifier nor an unbound body reaches browser artifacts.
   const analysis = clientCaptureAnalysis ?? analyzeClientCaptures(model);
   const emitAllowedImports = analysis.emitAllowed;
   const emitImportProvenance = analysis.emitImportProvenance;
@@ -352,7 +353,7 @@ function clientImportDependencies(
   emitImportProvenance: ReadonlyMap<string, ClientImportDependencyProvenance>,
 ): { clientImports: readonly ClientImportDependency[] } | {} {
   // Fail-closed: a referenced named import is re-emitted ONLY when the whole-channel capture analysis
-  // proved it client-safe (exact reviewed identity or publishToClient-wrapped). A captured binding
+  // proved it carries an exact reviewed executable identity. A captured binding
   // (`() => sendPayment(STRIPE_SECRET_KEY)`) is value-position, so it is excluded from
   // `emitAllowedImports` and its `import { STRIPE_SECRET_KEY } from "…"` line is never written into
   // `*.client.js` — the bundler can no longer inline the evaluated secret. (KV437 from

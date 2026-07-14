@@ -136,6 +136,17 @@ ERROR KV234 package component prefix conflict.
 | SQL statement safety  | managed DB-handle contract (§10.2/§10.3)                    | executable SQL text reaches framework-managed DB handles only as typed builders, parameterized SQL values, or audited `trustedSql(...)`; scalar request data binds as parameters, while identifiers/keywords come from schema facts or typed allowlists (KV422)              |
 | Output safety         | binding sink + value brand (§4.8)                           | every binding/derive into an unsafe output context (raw HTML, URL-scheme attr, `on*`, `style`, `srcdoc`, script/JSON) is `trustedHtml`/`trustedUrl`-branded or it is KV236                                                                                                   |
 
+Client-handler publication has a deliberately narrower value grammar than the general JSON wire.
+`publishToClient(value, { reason })` accepts exactly `string | number | boolean | null`. It rejects
+every object, array, symbol, bigint, undefined, and function at runtime using only primitive
+classification, without reflecting over or coercing caller-owned values; its TypeScript signature
+exposes the same finite union as an author-time guardrail. In client-handler source, the compiler
+accepts only a unique, pristine same-file `const` initialized directly from that literal grammar and
+snapshots the literal into the generated module. An imported value, re-export, alias to an import,
+mutable binding, duplicate/shadowed binding, array, or object is refused even when wrapped, because
+evaluating its source module or carrier could itself execute authority. Only the finite reviewed
+client-handler import registry grants executable authority (§5.2, §6.6).
+
 ### 6.3 Mutation typing contract
 
 Where the mutation value is importable — server-rendered templates always can — `mutation={addToCart}`

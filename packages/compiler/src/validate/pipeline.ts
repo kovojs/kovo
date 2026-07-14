@@ -48,6 +48,7 @@ import { validateLiteralHrefs } from './navigation.js';
 import { validateOutputContexts } from '../security/output-context.js';
 import { queryShapeFactDiagnostics } from '../types.js';
 import {
+  validateClientHandlerExecutionPolicy,
   validateClientHandlerImportPolicy,
   validateClientHandlerSecretCapture,
 } from './client-capture.js';
@@ -165,6 +166,11 @@ const compilerValidators: readonly CompilerValidator[] = [
   // static spreads and reviewed UI primitives cannot bypass the exact client-import registry.
   mappedValidator(({ diagnostics, model }) =>
     validateClientHandlerImportPolicy(diagnostics, model),
+  ),
+  // SPEC §4.3/§5.2: an audited value never becomes callable authority, and dynamic-code
+  // constructor/prototype/timer paths remain outside the finite generated-handler ABI.
+  mappedValidator(({ diagnostics, model }) =>
+    validateClientHandlerExecutionPolicy(diagnostics, model),
   ),
   // SPEC §6.6/§9.5 + secure-framework Phase 6 (Tier 3): KV434 fires on the authored source so the
   // diagnostic site is the real `s.string().pattern(<non-literal>)` call — the compile-time half of

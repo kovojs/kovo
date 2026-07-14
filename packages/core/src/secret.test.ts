@@ -417,6 +417,88 @@ describe('runtime Untrusted provenance wrapper (SPEC §5.2 rule 11)', () => {
 });
 
 describe('runtime redacted PII wrapper (SPEC §6.6 defense-in-depth)', () => {
+  it('keeps publishToClient author-time construction value-only', () => {
+    const callable = (value: string): string => value;
+    class Constructable {}
+    const callableIntersection = callable as typeof callable & { label: string };
+    const unknownValue: unknown = 'public';
+    const compileOnly = (): void => {
+      // @ts-expect-error publishToClient is a primitive-data escape, never callable authority.
+      publishToClient(callable, { reason: 'functions require reviewed executable identity' });
+      // @ts-expect-error constructable values cannot cross the audited value-only escape.
+      publishToClient(Constructable, { reason: 'classes require reviewed executable identity' });
+      // @ts-expect-error objects can carry accessors, proxies, coercion hooks, and nested callables.
+      publishToClient({ public: 'value' }, { reason: 'objects are not primitive data' });
+      // @ts-expect-error arrays are objects and can carry iterators and prototype authority.
+      publishToClient(['public'], { reason: 'arrays are not primitive data' });
+      // @ts-expect-error callable intersections remain callable authority.
+      publishToClient(callableIntersection, { reason: 'intersections do not erase authority' });
+      // @ts-expect-error unknown must be narrowed to the exact primitive union first.
+      publishToClient(unknownValue, { reason: 'unknown is not proven primitive data' });
+      // @ts-expect-error nested values require an object carrier, which this API refuses.
+      publishToClient({ nested: 'public' }, { reason: 'nested data is not a primitive' });
+      // @ts-expect-error bigint is outside the compiler-snapshottable literal grammar.
+      publishToClient(1n, { reason: 'bigint is outside the emitted literal grammar' });
+      // @ts-expect-error undefined is not an explicit snapshottable publication value.
+      publishToClient(undefined, { reason: 'undefined is outside the emitted literal grammar' });
+    };
+    void compileOnly;
+
+    expect(publishToClient('public', { reason: 'ordinary public value' })).toBe('public');
+    expect(publishToClient(1, { reason: 'ordinary public value' })).toBe(1);
+    expect(publishToClient(true, { reason: 'ordinary public value' })).toBe(true);
+    expect(publishToClient(null, { reason: 'ordinary public value' })).toBeNull();
+  });
+
+  it('rejects non-primitive authority at runtime without inspecting it', () => {
+    const erasedPublish = publishToClient as (
+      value: unknown,
+      options: { reason: string },
+    ) => unknown;
+    let authorityExecuted = false;
+    const callableProxy = new Proxy(() => 'public', {});
+    const objectProxy = new Proxy(
+      { public: 'value' },
+      {
+        get: () => {
+          authorityExecuted = true;
+          throw new Error('proxy get executed');
+        },
+        ownKeys: () => {
+          authorityExecuted = true;
+          throw new Error('proxy ownKeys executed');
+        },
+      },
+    );
+    const accessor = Object.defineProperty({}, 'public', {
+      get: () => {
+        authorityExecuted = true;
+        throw new Error('accessor executed');
+      },
+    });
+    class Constructable {}
+    const anyObject: any = { nested: () => 'public' };
+
+    for (const value of [
+      () => 'public',
+      callableProxy,
+      Constructable,
+      objectProxy,
+      accessor,
+      Object.freeze({ nested: () => 'public' }),
+      ['public'],
+      Symbol('public'),
+      1n,
+      undefined,
+      anyObject,
+    ]) {
+      expect(() => erasedPublish(value, { reason: 'attempted callable publication' })).toThrow(
+        'publishToClient accepts only string, number, boolean, or null.',
+      );
+    }
+    expect(authorityExecuted).toBe(false);
+  });
+
   it('does not inherit redaction masks or audited escape reasons from Object.prototype', () => {
     Object.defineProperties(Object.prototype, {
       mask: { configurable: true, value: 'inherited-mask' },

@@ -152,7 +152,7 @@ export const Badge = component({
       expect(clientSource(source)).not.toContain('./analytics');
     });
 
-    it('allows a publishToClient-wrapped same-file module constant escape', () => {
+    it('allows a publishToClient-wrapped pristine same-file const primitive', () => {
       const source = `
 import { component, publishToClient } from '@kovojs/core';
 
@@ -176,9 +176,26 @@ export const Badge = component({
         moduleSpecifier: 'pay-button.tsx#module-scope',
         reason: 'label is public',
       });
+      const result = compile(source);
+      expect(
+        deriveAppGraph({
+          components: [
+            {
+              componentGraphFacts: result.componentGraphFacts,
+              publishToClientFacts: result.publishToClientFacts,
+            },
+          ],
+        }).graph.capabilities,
+      ).toContainEqual(
+        expect.objectContaining({
+          justification: 'label is public',
+          kind: 'publishToClient',
+          target: 'LABEL',
+        }),
+      );
     });
 
-    it('allows a publishToClient(captured, { reason }) escape: emits and records the fact', () => {
+    it('refuses a publishToClient-wrapped import before its module can execute', () => {
       const source = `
 import { component, publishToClient } from '@kovojs/core';
 import { STRIPE_PUBLISHABLE_KEY } from './config';
@@ -189,45 +206,18 @@ export const PayButton = component({
   ),
 });
 `;
-      // The audited escape allows emit (no KV437) and the specifier is published to the client.
-      expect(codes(source)).not.toContain('KV437');
+      expect(codes(source)).toContain('KV437');
       const client = clientSource(source);
-      expect(client).toContain('import { STRIPE_PUBLISHABLE_KEY } from "./config";');
+      expect(client).not.toContain('import { STRIPE_PUBLISHABLE_KEY } from "./config";');
 
-      // The fact (site + reason) is recorded for `kovo explain --capabilities`.
       const analysis = analyzeClientCaptures(parseComponentModule('pay-button.tsx', source));
-      expect(analysis.publishFacts).toHaveLength(1);
-      expect(analysis.publishFacts[0]).toMatchObject({
-        localName: 'STRIPE_PUBLISHABLE_KEY',
-        moduleSpecifier: './config',
-        reason: 'publishable key is public',
-        site: 'pay-button.tsx:7',
-      });
+      expect(analysis.publishFacts).toEqual([]);
 
       const result = compile(source);
-      expect(result.publishToClientFacts).toEqual(analysis.publishFacts);
-
-      expect(
-        deriveAppGraph({
-          components: [
-            {
-              componentGraphFacts: result.componentGraphFacts,
-              publishToClientFacts: result.publishToClientFacts,
-            },
-          ],
-        }).graph.capabilities,
-      ).toEqual([
-        {
-          justification: 'publishable key is public',
-          kind: 'publishToClient',
-          moduleSpecifier: './config',
-          site: 'pay-button.tsx:7',
-          target: 'STRIPE_PUBLISHABLE_KEY',
-        },
-      ]);
+      expect(result.publishToClientFacts).toEqual([]);
     });
 
-    it('allows publishToClient import aliases through framework identity', () => {
+    it('recognizes publishToClient aliases without granting import evaluation authority', () => {
       const source = `
 import { component, publishToClient as publish } from '@kovojs/core';
 import { STRIPE_PUBLISHABLE_KEY } from './config';
@@ -239,14 +229,11 @@ export const PayButton = component({
 });
 `;
       const result = compile(source);
-      expect(result.diagnostics.map((diagnostic) => diagnostic.code)).not.toContain('KV437');
-      expect(result.publishToClientFacts).toEqual([
-        expect.objectContaining({
-          localName: 'STRIPE_PUBLISHABLE_KEY',
-          reason: 'publishable key is public',
-        }),
-      ]);
-      expect(clientSource(source)).toContain('import { STRIPE_PUBLISHABLE_KEY } from "./config";');
+      expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toContain('KV437');
+      expect(result.publishToClientFacts).toEqual([]);
+      expect(clientSource(source)).not.toContain(
+        'import { STRIPE_PUBLISHABLE_KEY } from "./config";',
+      );
     });
 
     it('refuses namespace publishToClient calls because namespace authority is not exact', () => {
@@ -263,16 +250,11 @@ export const PayButton = component({
 `;
       const result = compile(source);
       expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toContain('KV201');
-      expect(result.publishToClientFacts).toEqual([
-        expect.objectContaining({
-          localName: 'STRIPE_PUBLISHABLE_KEY',
-          reason: 'publishable key is public',
-        }),
-      ]);
+      expect(result.publishToClientFacts).toEqual([]);
       expect(clientSource(source)).not.toContain('./config');
     });
 
-    it('allows publishToClient through a registered local re-export barrel', () => {
+    it('recognizes a re-exported publishToClient without publishing a second import', () => {
       const extraFiles = [
         {
           fileName: 'client-framework.ts',
@@ -291,13 +273,9 @@ export const PayButton = component({
 });
 `;
       const result = compile(source, extraFiles);
-      expect(result.diagnostics.map((diagnostic) => diagnostic.code)).not.toContain('KV437');
-      expect(result.publishToClientFacts).toEqual([
-        expect.objectContaining({
-          localName: 'STRIPE_PUBLISHABLE_KEY',
-          reason: 'publishable key is public',
-        }),
-      ]);
+      expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toContain('KV437');
+      expect(result.publishToClientFacts).toEqual([]);
+      expect(clientSource(source)).not.toContain('./config');
     });
 
     it('rejects a local publishToClient shadow even when the real import is present', () => {
@@ -323,13 +301,8 @@ export const AuditButton = component({
 `;
       const result = compile(source);
       const kv437 = result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV437');
-      expect(kv437).toHaveLength(1);
-      expect(result.publishToClientFacts).toEqual([
-        expect.objectContaining({
-          localName: 'STRIPE_PUBLISHABLE_KEY',
-          reason: 'publishable key is public',
-        }),
-      ]);
+      expect(kv437).toHaveLength(2);
+      expect(result.publishToClientFacts).toEqual([]);
     });
 
     it('rejects publishToClient escapes with a missing reason', () => {

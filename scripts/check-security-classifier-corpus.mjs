@@ -448,11 +448,47 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
     id: 'client-handler-import',
     marker: '@kovo-security-classifier-corpus client-handler-import',
     testFiles: [
+      'packages/compiler/src/client-handler-boundary-security.test.ts',
       'packages/compiler/src/client-handler-import-policy.test.ts',
       'packages/compiler/src/component-event-boundary-registry.test.ts',
       'packages/compiler/src/handler-lowering.test.ts',
     ],
     verdictAnchors: [
+      {
+        id: 'published-data-never-grants-import-authority',
+        file: 'packages/compiler/src/client-handler-boundary-security.test.ts',
+        snippets: [
+          'publishToClient value-only executable boundary',
+          'array destructuring alias',
+          'container member invocation',
+          'higher-order Promise callback',
+          'preserves an audited non-callable value',
+          'never emits an imported module for a published value assertion',
+          'snapshots one pristine same-file const',
+        ],
+      },
+      {
+        id: 'client-handler-dynamic-code-closed',
+        file: 'packages/compiler/src/client-handler-boundary-security.test.ts',
+        snippets: [
+          'client-handler dynamic-code boundary',
+          'async-generator constructor',
+          'constant-folded constructor property',
+          'reflective descriptor extraction',
+          'browser string-timer code',
+        ],
+      },
+      {
+        id: 'jsx-intrinsic-component-lexical-boundary',
+        file: 'packages/compiler/src/client-handler-boundary-security.test.ts',
+        snippets: [
+          'JSX intrinsic/component lexical boundary',
+          'leading underscore',
+          'non-ASCII lower-case letter',
+          'CJK identifier',
+          'preserves intrinsic host grammar',
+        ],
+      },
       {
         id: 'node-and-loader-authority-closed',
         file: 'packages/compiler/src/client-handler-import-policy.test.ts',
@@ -490,7 +526,7 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
         snippets: [
           'allows an exact reviewed Headless UI callable',
           'projects the canonical name into code and manifest',
-          'preserves an audited publishToClient value import',
+          'refuses an audited value import because module evaluation is executable authority',
           'tabsKeyDown as safeTabs',
         ],
       },

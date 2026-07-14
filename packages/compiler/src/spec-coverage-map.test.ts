@@ -325,7 +325,7 @@ describe('compiler SPEC coverage map', () => {
         {
           "accepted": [
             "allows an exact reviewed Headless UI callable and normalizes its module",
-            "allows a publishToClient(captured, { reason }) escape: emits and records the fact",
+            "allows a publishToClient-wrapped pristine same-file const primitive",
             "does not report KV435 for explicitly revealed query shape fields",
           ],
           "clause": "SPEC.md §6.6",
