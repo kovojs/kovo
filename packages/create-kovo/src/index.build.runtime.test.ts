@@ -20,7 +20,7 @@ import {
 import { buildReusableProductionArtifact, waitForTcpPort } from './index.build.test-support.js';
 
 describe('create-kovo starter (build integration: runtime and dev server)', () => {
-  it('does not seed the generated local demo credential when a production artifact boots', async () => {
+  it('keeps generated credentials out of artifacts and refuses insecure production SQLite boot', async () => {
     const root = mkdtempSync(join(tmpdir(), 'create-kovo-prod-demo-seed-'));
     const port = await reservePort();
     let prodServer: ChildProcessWithoutNullStreams | undefined;
@@ -56,62 +56,13 @@ describe('create-kovo starter (build integration: runtime and dev server)', () =
         },
       });
       const output = collectOutput(prodServer);
-      await waitForTcpPort('127.0.0.1', port, output);
+      const exit = await waitForChildExit(prodServer, output);
 
-      const origin = `http://127.0.0.1:${port}`;
-      const jar = new Map<string, string>();
-      const login = await fetch(`${origin}/login`);
-      mergeCookies(jar, login.headers.getSetCookie());
-      const loginHtml = await login.text();
-      const csrf = /name="csrf"\s+value="([^"]+)"/.exec(loginHtml)?.[1] ?? '';
-      const loginCookies = login.headers.getSetCookie().join('\n');
-
-      expect(login.status, `${loginHtml}\n${output()}`).toBe(200);
-      expect(csrf).toBeTruthy();
-      // SPEC §6.6/§9.1.1: a production anonymous credential response must be
-      // uncacheable and the browser binding must carry every session-cookie floor.
-      expect(login.headers.get('cache-control')).toBe('private, no-store');
-      expect(
-        login.headers
-          .get('vary')
-          ?.split(',')
-          .map((value) => value.trim()),
-      ).toContain('Cookie');
-      expect(loginCookies).toContain('__Host-kovo_csrf=');
-      expect(loginCookies).toContain('Path=/');
-      expect(loginCookies).toContain('HttpOnly');
-      expect(loginCookies).toContain('Secure');
-      expect(loginCookies).toContain('SameSite=Lax');
-
-      const signIn = await fetch(`${origin}/_m/auth/sign-in`, {
-        body: new URLSearchParams({
-          csrf,
-          email: 'demo@example.com',
-          next: '/',
-          password: generatedDemoPassword,
-        }),
-        headers: {
-          'content-type': 'application/x-www-form-urlencoded',
-          cookie: cookieHeader(jar),
-          origin,
-        },
-        method: 'POST',
-        redirect: 'manual',
-      });
-      mergeCookies(jar, signIn.headers.getSetCookie());
-      const signInBody = await signIn.text();
-
-      // SPEC §2/§6.6: a generated development credential must not become a production
-      // authentication path merely because the deployment copied the gitignored .env file.
-      expect(signIn.status, `${signInBody}\n${output()}`).toBe(422);
-      expect(signIn.headers.getSetCookie().join('\n')).not.toContain('better-auth.session_token');
-
-      const home = await fetch(`${origin}/`, {
-        headers: { cookie: cookieHeader(jar) },
-        redirect: 'manual',
-      });
-      expect(home.status).toBe(303);
-      expect(home.headers.get('location')).toBe('/login?next=%2F');
+      // SPEC §6.6/§10.3: the experimental SQLite scaffold owns only volatile replay
+      // state, so a production artifact with write-capable mutations must fail closed
+      // before it can expose the copied local demo credential as an auth path.
+      expect(exit.code, output()).not.toBe(0);
+      expect(output()).toMatch(/KV436.*volatile memory mutationReplayStore/);
     } finally {
       await stopProcess(prodServer);
       rmSync(root, { force: true, recursive: true });
@@ -451,4 +402,26 @@ function readUtf8Tree(root: string): string {
     else if (entry.isFile()) chunks.push(readFileSync(path, 'utf8'));
   }
   return chunks.join('\n');
+}
+
+async function waitForChildExit(
+  child: ChildProcessWithoutNullStreams,
+  output: () => string,
+  timeoutMs = 15_000,
+): Promise<{ code: number | null; signal: NodeJS.Signals | null }> {
+  if (child.exitCode !== null || child.signalCode !== null) {
+    return { code: child.exitCode, signal: child.signalCode };
+  }
+
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      child.removeListener('exit', onExit);
+      reject(new Error(`Timed out waiting for production artifact to exit.\n${output()}`));
+    }, timeoutMs);
+    const onExit = (code: number | null, signal: NodeJS.Signals | null) => {
+      clearTimeout(timer);
+      resolve({ code, signal });
+    };
+    child.once('exit', onExit);
+  });
 }

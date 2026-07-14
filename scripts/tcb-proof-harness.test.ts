@@ -154,10 +154,23 @@ describe('TCB proof: emitToWire finite egress model (DEC-K/A10)', () => {
   });
 
   it('preserves raw endpoint response bodies while enforcing HEAD/304 suppression', async () => {
-    const passthrough = new Response('raw', { headers: { 'content-type': 'text/plain' } });
-    expect(emitToWire(passthrough, 'raw-endpoint-response', { method: 'GET', status: 200 })).toBe(
-      passthrough,
-    );
+    const passthrough = new Response('raw', {
+      headers: { 'content-type': 'text/plain', 'x-endpoint': 'preserved' },
+      status: 201,
+      statusText: 'Created',
+    });
+    const finalized = emitToWire(passthrough, 'raw-endpoint-response', {
+      method: 'GET',
+      status: 201,
+    });
+    // SPEC §9.1/§9.5: the framework-owned final carrier is reconstructed after
+    // endpoint headers are inspected; preserve semantics, not app object identity.
+    expect(finalized).not.toBe(passthrough);
+    expect(finalized.status).toBe(201);
+    expect(finalized.statusText).toBe('Created');
+    expect(finalized.headers.get('content-type')).toContain('text/plain');
+    expect(finalized.headers.get('x-endpoint')).toBe('preserved');
+    await expect(finalized.text()).resolves.toBe('raw');
 
     const head = emitToWire(new Response('hidden'), 'raw-endpoint-response', {
       method: 'HEAD',

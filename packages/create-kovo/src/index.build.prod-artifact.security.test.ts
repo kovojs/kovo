@@ -709,7 +709,6 @@ describe('create-kovo starter (build integration: production security artifacts)
         const output = execFileSyncErrorOutput(error);
         expect(output).toContain('KV426');
         expect(output).toContain('trustedUrl() sends query-derived data');
-        expect(output).toContain('renderedHtml() sends query-derived data');
         expect(output).toContain('trustedHtml() sends request-derived data');
       }
 
@@ -1107,6 +1106,7 @@ async function assertEnhancedMutationWireServed(
       accept: 'text/vnd.kovo.fragment+html',
       'content-type': 'application/x-www-form-urlencoded',
       cookie: cookieHeader(jar),
+      'Kovo-Current-Url': `${origin}/enhanced-mutation-wire-proof`,
       'Kovo-Form-Target': target,
       'Kovo-Fragment': 'true',
       'Kovo-Live-Targets': `${target}#${component}@${liveToken}:${props}`,

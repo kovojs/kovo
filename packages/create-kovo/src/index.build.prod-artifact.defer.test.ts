@@ -164,16 +164,34 @@ async function readTextStreamWithFirstChunk(
   if (!response.body) throw new Error('Expected a streamed response body.');
   const reader = response.body.getReader();
   const startedAt = performance.now();
-  const first = await Promise.race([
-    reader.read(),
-    new Promise<never>((_resolve, reject) =>
-      setTimeout(() => reject(new Error('Timed out waiting for initial Defer shell chunk.')), 500),
-    ),
-  ]);
-  const firstChunkElapsedMs = performance.now() - startedAt;
-  if (first.done) throw new Error('Expected initial Defer shell chunk before stream close.');
   const decoder = new TextDecoder();
-  const chunks = [decoder.decode(first.value, { stream: true })];
+  const chunks: string[] = [];
+  let firstChunk = '';
+
+  // Fetch/Undici may split one server-enqueued shell across arbitrary transport chunks. The
+  // contract is that a complete pending Defer shell arrives before slow region work, not that it
+  // coincides with the first reader.read() boundary. Accumulate only until the first pending
+  // marker closes, under the same 500 ms budget, then continue reading the resolved stream.
+  while (!firstChunk.includes('</kovo-defer>')) {
+    const remainingMs = 500 - (performance.now() - startedAt);
+    if (remainingMs <= 0) {
+      throw new Error('Timed out waiting for initial Defer shell chunk.');
+    }
+    const next = await Promise.race([
+      reader.read(),
+      new Promise<never>((_resolve, reject) =>
+        setTimeout(
+          () => reject(new Error('Timed out waiting for initial Defer shell chunk.')),
+          remainingMs,
+        ),
+      ),
+    ]);
+    if (next.done) throw new Error('Expected initial Defer shell chunk before stream close.');
+    const decoded = decoder.decode(next.value, { stream: true });
+    chunks.push(decoded);
+    firstChunk += decoded;
+  }
+  const firstChunkElapsedMs = performance.now() - startedAt;
   for (;;) {
     const next = await reader.read();
     if (next.done) break;
@@ -181,7 +199,7 @@ async function readTextStreamWithFirstChunk(
   }
   const tail = decoder.decode();
   if (tail) chunks.push(tail);
-  return { firstChunk: chunks[0] ?? '', firstChunkElapsedMs, text: chunks.join('') };
+  return { firstChunk, firstChunkElapsedMs, text: chunks.join('') };
 }
 
 function addDeferProofRoutes(root: string): void {

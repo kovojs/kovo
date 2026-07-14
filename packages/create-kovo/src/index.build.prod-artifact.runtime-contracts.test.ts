@@ -81,6 +81,7 @@ describe('create-kovo starter (build integration: production runtime contract ar
         {
           body: refresh,
           headers: {
+            'Kovo-Current-Url': `${origin}/runtime-contracts-proof`,
             'Kovo-Fragment': 'true',
             'Kovo-Live-Targets': `${liveTarget}#${liveComponent}@${liveToken}:${liveProps}`,
             'Kovo-Targets': `${liveTarget}=${liveDeps}`,

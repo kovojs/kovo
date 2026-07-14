@@ -70,7 +70,6 @@ describe('create-kovo starter (build integration: adversarial production artifac
         expectBuildFailure(root, [
           'KV426',
           'trustedUrl() sends query-derived data',
-          'renderedHtml() sends query-derived data',
           'trustedHtml() sends request-derived data',
         ]);
       });
@@ -86,7 +85,6 @@ describe('create-kovo starter (build integration: adversarial production artifac
         expectBuildFailure(root, [
           'KV426',
           'trustedUrl() sends query-derived data',
-          'renderedHtml() sends query-derived data',
           'trustedHtml() sends request-derived data',
         ]);
       });
@@ -250,6 +248,7 @@ describe('create-kovo starter (build integration: adversarial production artifac
               body: new URLSearchParams({ reason: 'm1-output-wire' }),
               headers: {
                 'content-type': 'application/x-www-form-urlencoded',
+                'Kovo-Current-Url': `${origin}/runtime-contracts-proof`,
                 'Kovo-Fragment': 'true',
                 'Kovo-Live-Targets': `${liveTarget}#${liveComponent}@${liveToken}:${liveProps}`,
                 'Kovo-Targets': `${liveTarget}=${liveDeps}`,

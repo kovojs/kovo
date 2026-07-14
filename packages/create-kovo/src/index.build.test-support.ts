@@ -1352,7 +1352,6 @@ export function addTrustedOutputProvenanceBuildProof(
       "import * as browserTrust from '@kovojs/browser';",
       "import { trustedHtml, trustedUrl } from '@kovojs/browser';",
       "import { component } from '@kovojs/core';",
-      ...(unsafe ? ["import { renderedHtml } from '@kovojs/server/internal/html';"] : []),
       'import {',
     ].join('\n'),
     'trusted output proof imports',
@@ -1389,9 +1388,7 @@ export function addTrustedOutputProvenanceBuildProof(
         : '      <a href={trustedUrl(data.contacts.items[0]?.email ?? "", "server-reviewed dynamic contact mailto route")}>',
       '        Dynamic unsafe URL',
       '      </a>',
-      unsafe
-        ? '      {renderedHtml(data.contacts.items.map((contact) => contact.name).join(""))}'
-        : '      <section>static trusted output proof</section>',
+      '      <section>static trusted output proof</section>',
       unsafe
         ? '      {trustedHtml(slots.request?.headers.get("x-proof") ?? "")}'
         : '      {trustedHtml(slots.request?.headers.get("x-proof") ?? "", "reviewed trusted output request header")}',

@@ -993,9 +993,14 @@ describe('server app-shell public API barrels', () => {
     );
     expect(packageInternalExecutionApi).toEqual(internalExecutionApi);
     expect(moduleValueKeys(packageViteApi)).toEqual(['kovo']);
-    expect(packageViteApi.kovo).toBe(viteApi.kovo);
+    // The workspace export owns the source-loader boundary; published packages
+    // replace it with the built vite.mjs entry. Both must expose the same public
+    // plugin contract without requiring function-object identity (SPEC §9.5).
+    expect(packageViteApi.kovo).not.toBe(viteApi.kovo);
+    expect(packageViteApi.kovo({ app: './src/app.tsx' }).name).toBe('kovo');
+    expect(viteApi.kovo({ app: './src/app.tsx' }).name).toBe('kovo');
     expect(serverPackage.exports as Record<string, string>).toMatchObject({
-      './vite': './src/vite.ts',
+      './vite': './src/vite-source.ts',
     });
     expect(serverPackage.exports as Record<string, string>).not.toHaveProperty('./app-shell/vite');
 
