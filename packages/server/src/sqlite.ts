@@ -1,9 +1,6 @@
 import './security-bootstrap.js';
 
-import { mkdtempSync, rmSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import {
   DatabaseSync as NodeSqliteDatabaseSync,
   constants as nodeSqliteConstants,
@@ -68,14 +65,9 @@ type SqliteColumn = SqliteTableConfig['columns'][number];
 type SqliteForeignKey = SqliteTableConfig['foreignKeys'][number];
 
 const sqliteIsProxy = nodeUtilTypes.isProxy;
-const sqliteMkdtempSync = mkdtempSync;
-const sqliteRmSync = rmSync;
-const sqliteTmpdir = tmpdir;
-const sqliteJoin = join;
 const sqliteNodeDatabaseSync = NodeSqliteDatabaseSync;
-const sqliteProcess = process;
-const sqliteProcessOnce = sqliteProcess.once;
-const sqliteProcessRemoveListener = sqliteProcess.removeListener;
+const sqliteNodeDatabaseExec = NodeSqliteDatabaseSync.prototype.exec;
+const sqliteNodeDatabaseClose = NodeSqliteDatabaseSync.prototype.close;
 const sqliteConsole = console;
 const sqliteConsoleWarn = console.warn;
 const sqliteDatabasePragma = Database.prototype.pragma;
@@ -153,7 +145,7 @@ export type KovoSqliteDbProvider = FrameworkManagedDbProvider<BetterSQLite3Datab
 
 /** Frozen handles produced by the experimental single-principal SQLite runtime. */
 export interface KovoSqliteAppRuntime {
-  /** Close the framework-owned native client and remove its framework-owned temporary directory. */
+  /** Close the framework-owned in-memory native client. */
   close(): void;
   /** Opaque framework provider token. It is not callable and has no raw/native DB properties. */
   readonly db: KovoSqliteDbProvider;
@@ -238,26 +230,31 @@ export function createSqliteAppRuntime(
 
   // SPEC §6.6/§10.3 C9: this is the compiler-bound authorization witness. It must run before the
   // second Drizzle config extraction below (which may evaluate authored FK/extra-config callbacks)
-  // and before filesystem/native authority is created.
+  // and before native database authority is created.
   const metadata = runtimeDbMetadataForSchema(tableValues);
   const tables = snapshotTables(tableValues, metadata);
   const seeds = snapshotSeeds(optionalOption(source, 'seed'), tables);
+  const schemaDdl: string[] = [];
+  for (let index = 0; index < tables.length; index += 1) {
+    witnessArrayAppend(
+      schemaDdl,
+      sqliteCreateTableDdl(tables[index]!),
+      'SQLite runtime schema DDL',
+    );
+  }
+  const authorizerSchemaDdl = witnessFreeze(schemaDdl);
 
   warnExperimentalSqliteRuntime();
-  const sqliteDir = sqliteMkdtempSync(sqliteJoin(sqliteTmpdir(), 'kovo-sqlite-runtime-'));
-  const sqliteFile = sqliteJoin(sqliteDir, 'app.sqlite');
-  const cleanup = (): void => sqliteRmSync(sqliteDir, { force: true, recursive: true });
-  witnessReflectApply(sqliteProcessOnce, sqliteProcess, ['exit', cleanup]);
 
   let client: Database.Database | undefined;
   try {
     // Resolve the exact package-owned addon path without `bindings` stack inspection. Supported
     // runtime bootstrap locks Error.prepareStackTrace before app modules evaluate, so the driver's
     // legacy lazy locator is intentionally bypassed at this framework-owned construction sink.
-    client = new Database(sqliteFile, { nativeBinding: sqliteNativeBinding });
+    client = new Database(':memory:', { nativeBinding: sqliteNativeBinding });
     witnessReflectApply(sqliteDatabasePragma, client, ['foreign_keys = ON']);
-    for (let index = 0; index < tables.length; index += 1) {
-      witnessReflectApply(sqliteDatabaseExec, client, [sqliteCreateTableDdl(tables[index]!)]);
+    for (let index = 0; index < authorizerSchemaDdl.length; index += 1) {
+      witnessReflectApply(sqliteDatabaseExec, client, [authorizerSchemaDdl[index]!]);
     }
     seedSqliteTables(client, seeds);
 
@@ -273,7 +270,20 @@ export function createSqliteAppRuntime(
       normalizeTableName: normalizePolicyTable,
       sqliteAuthorizer: {
         constants: sqliteAuthorizerConstants,
-        openDatabase: () => new sqliteNodeDatabaseSync(sqliteFile),
+        openDatabase: () => {
+          const authorizerDatabase = new sqliteNodeDatabaseSync(':memory:');
+          try {
+            for (let index = 0; index < authorizerSchemaDdl.length; index += 1) {
+              witnessReflectApply(sqliteNodeDatabaseExec, authorizerDatabase, [
+                authorizerSchemaDdl[index]!,
+              ]);
+            }
+            return authorizerDatabase;
+          } catch (error) {
+            witnessReflectApply(sqliteNodeDatabaseClose, authorizerDatabase, []);
+            throw error;
+          }
+        },
       },
       sqliteColumnOrigins: client,
       tableNames(table) {
@@ -302,15 +312,10 @@ export function createSqliteAppRuntime(
       close(): void {
         if (closed) return;
         closed = true;
-        witnessReflectApply(sqliteProcessRemoveListener, sqliteProcess, ['exit', cleanup]);
         const closingClient = client;
         client = undefined;
-        try {
-          if (closingClient !== undefined) {
-            witnessReflectApply(sqliteDatabaseClose, closingClient, []);
-          }
-        } finally {
-          cleanup();
+        if (closingClient !== undefined) {
+          witnessReflectApply(sqliteDatabaseClose, closingClient, []);
         }
       },
       db: dbProvider,
@@ -323,12 +328,7 @@ export function createSqliteAppRuntime(
       },
     });
   } catch (error) {
-    witnessReflectApply(sqliteProcessRemoveListener, sqliteProcess, ['exit', cleanup]);
-    try {
-      if (client !== undefined) witnessReflectApply(sqliteDatabaseClose, client, []);
-    } finally {
-      cleanup();
-    }
+    if (client !== undefined) witnessReflectApply(sqliteDatabaseClose, client, []);
     throw error;
   }
 }
