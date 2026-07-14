@@ -160,7 +160,7 @@ describe('security-test-build-gate', () => {
       "dialect: 'sqlite'",
       "expect(output()).toContain('KV406')",
       "expect(output()).toContain('KV435')",
-      'expectAllowedReadShapes(origin, jar)',
+      'expectAllowedReadShapes(origin, jar, output)',
       'expectBlockedReadShapes(origin, jar)',
       'expectBlockedWrites(origin, jar, marker, output)',
       'expectStarterInScopeWrite(origin, jar, output, contactEmail)',
