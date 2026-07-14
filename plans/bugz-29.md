@@ -13,10 +13,10 @@ fails closed.
 
 | Severity | Families | Items  |
 | -------- | -------: | ------ |
-| Critical |       21 | C1-C21 |
-| High     |       24 | H1-H24 |
-| Medium   |       12 | M1-M12 |
-| Low      |        2 | L1-L2  |
+| Critical |       22 | C1-C22 |
+| High     |       28 | H1-H28 |
+| Medium   |       16 | M1-M16 |
+| Low      |        3 | L1-L3  |
 
 ## Critical
 
@@ -168,6 +168,13 @@ fails closed.
     manifest identity, rejects duplicate/escaping/symlinked paths, revalidates the real path,
     tarball hash, file list, and manifest, and compares already-published `dist.integrity`.
 
+- [ ] **C22 - Structurally forgeable and mutable route outcomes could mint same-origin active
+      content without the audited inline-response authority.**
+  - A plain `{ routeResponse: true, ... }` page value served attacker-authored inline HTML, while a
+    genuine `respond.file()` outcome could have its body, type, disposition, or exposed byte array
+    replaced after construction. The exact emitted Node artifact returned the forged script as a
+    200 `text/html` inline response. SPEC §2, §6.6, §9.1.
+
 ## High
 
 - [x] **H1 - Starter dependencies, tools, and CI actions were not fully immutable.**
@@ -298,6 +305,31 @@ fails closed.
     install-time fingerprint, and modular plus generated-inline regressions are green on Chromium,
     Firefox, and WebKit. SPEC §9.3.
 
+- [ ] **H25 - KV424 omitted server request roots and indirect authority references.**
+  - Real builds accepted request-controlled `child_process`, dynamic-code/worker, raw filesystem,
+    and path authority from mutation/query/route/endpoint/task/webhook closures, including ordinary
+    dependency helpers and callback/reference invocation shapes. SPEC §5.2, §6.6, §9.1.
+
+- [ ] **H26 - Framework authority constructors could be minted from request-derived roots and
+      allowlists.**
+  - `rootedFiles(params.root)` served bytes from an attacker-selected absolute root, and the same
+    provenance gap reaches command and filesystem-storage constructors unless their authority is
+    module/config-owned. The exact CLI build accepted and emitted the rooted-file exploit. SPEC
+    §6.6, §9.1, §10.6.
+
+- [ ] **H27 - Raw environment and credential sources could cross the public wire as ordinary
+      strings.**
+  - A public query returned `process.env.KOVO_ENV_SECRET_AUDIT` through the emitted `/_q` JSON wire;
+    a second emitted artifact reflected an inbound `Cookie: session=http-only-secret` value into
+    readable JSON, defeating the browser's HttpOnly boundary. Both exact builds exited zero. SPEC
+    §6.6 and §10.3 C9.
+
+- [ ] **H28 - The emitted Node static server pinned a root pathname but not its filesystem
+      identity.**
+  - After priming an asset, replacing the generated `client/` directory caused the live server to
+    return attacker replacement JavaScript with status 200. This is a distinct root-identity member
+    of the H12 family. SPEC §6.6, §10.6.
+
 ## Medium
 
 - [x] **M1 - PGlite declared-write verification attributed setup/seed writes to a request.**
@@ -357,6 +389,27 @@ fails closed.
     optional fields, retain defaults and explicitly present values, and the real typed-read wire
     regression plus schema/wire suites are 129/129 green. SPEC §6, §9.4.
 
+- [ ] **M13 - Closed build-time Vite environments retained their complete module graphs across
+      repeated commands.**
+  - The isolated CLI build suite exhausted the default 4 GiB heap. Forced-GC profiling retained
+    roughly 58 MiB per build in closed environment graphs while ts-morph retained about 1 MiB;
+    `server.close()` emptied evaluated modules but left roughly 350 graph nodes per environment.
+    SPEC §6.6 availability floor.
+
+- [ ] **M14 - Rooted file serving accepted outside-origin inodes hardlinked under its root.**
+  - A same-filesystem `link(outside/secret.txt, root/hardlink.txt)` bypassed the symlink/path
+    confinement that correctly rejected an escaping symbolic link. SPEC §6.6, §10.6.
+
+- [ ] **M15 - Active PDF documents were classified as passive inline-safe uploads.**
+  - A PDF carrying `/OpenAction`, `/JavaScript`, and `/JS` received
+    `{ contentType: "application/pdf", inlineSafe: true }`, bypassing KV428's passive-only default.
+    SPEC §6.6, §9.1.
+
+- [ ] **M16 - Unicode download filenames could create persistent Web-header failures.**
+  - Stored metadata retained a surrogate-pair emoji that `Content-Disposition` passed to the Web
+    `Response` ByteString sink, producing a stable 500 on every later capability download. SPEC
+    §6.6, §9.1.
+
 ## Low
 
 - [x] **L1 - Whitespace-only public-access reasons false-greened the authorization audit.**
@@ -364,6 +417,11 @@ fails closed.
 
 - [x] **L2 - Control-bearing public-access reasons could forge endpoint-audit output.**
   - **Evidence:** `f5ec993f7`; C0/DEL/line-separator controls are rejected before audit rendering.
+
+- [ ] **L3 - Guarded file 304 responses omitted the private cache floor.**
+  - A matching file ETag returned 304 without `Cache-Control: no-store` or `Vary: Cookie`; no
+    concrete cross-principal body disclosure was reproduced, but the conditional path violated the
+    guarded route cache contract. SPEC §9.4, §9.5.
 
 ## Closure gates
 
