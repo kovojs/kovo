@@ -4031,7 +4031,7 @@ function requestRetainedConfigOpaqueDerivation(
     const receiver = node.getExpression();
     if (
       member &&
-      ['db', 'mutationReplayStore', 'readonlyDb', 'ready'].includes(member) &&
+      ['db', 'mutationReplayStore', 'readonlyDb', 'ready', 'webhookReplayStore'].includes(member) &&
       requestExpressionResolvesToExactManagedAppRuntime(receiver, new Set()) &&
       requestExactManagedAppRuntimeIsPristine(receiver)
     ) {
@@ -4423,8 +4423,9 @@ function requestRetainedConfigInitialTargets(
     if (seen.has(symbolKey)) return targets;
     seen.add(symbolKey);
     if (
-      (['db', 'mutationReplayStore', 'readonlyDb', 'ready'] as const).some((member) =>
-        requestExpressionResolvesToExactManagedRuntimeMember(node, member, undefined, new Set()),
+      (['db', 'mutationReplayStore', 'readonlyDb', 'ready', 'webhookReplayStore'] as const).some(
+        (member) =>
+          requestExpressionResolvesToExactManagedRuntimeMember(node, member, undefined, new Set()),
       )
     ) {
       targets.add(symbolKey);
@@ -4501,7 +4502,7 @@ function requestRetainedConfigInitialTargets(
     // of createApp's retained config makes ordinary Drizzle reads look like table mutations.
     if (
       member &&
-      ['db', 'mutationReplayStore', 'readonlyDb', 'ready'].includes(member) &&
+      ['db', 'mutationReplayStore', 'readonlyDb', 'ready', 'webhookReplayStore'].includes(member) &&
       requestExpressionResolvesToExactManagedAppRuntime(receiver, new Set()) &&
       requestExactManagedAppRuntimeIsPristine(receiver)
     ) {
@@ -5923,7 +5924,10 @@ function requestExpressionMayBeExactManagedRuntimeMember(expression: Node): bool
     const member = Node.isPropertyAccessExpression(node)
       ? staticMemberName(node.getNameNode())
       : staticMemberName(node.getArgumentExpression());
-    return !!member && ['db', 'mutationReplayStore', 'readonlyDb', 'ready'].includes(member);
+    return (
+      !!member &&
+      ['db', 'mutationReplayStore', 'readonlyDb', 'ready', 'webhookReplayStore'].includes(member)
+    );
   }
   return !!(
     Node.isIdentifier(node) &&
@@ -5932,7 +5936,9 @@ function requestExpressionMayBeExactManagedRuntimeMember(expression: Node): bool
       'appRuntimeDbReady',
       'appRuntimeMutationReplayStore',
       'appRuntimeReadonlyDb',
+      'appRuntimeWebhookReplayStore',
       'mutationReplayStore',
+      'webhookReplayStore',
     ].includes(node.getText())
   );
 }
@@ -6491,21 +6497,40 @@ function requestCallIsExactBootOnlyGeneratedSetup(
   }
 }
 
-function requestExpressionResolvesToExactManagedMutationReplayStore(
+interface RequestManagedReplayStoreGrammar {
+  readonly exportedName: 'appRuntimeMutationReplayStore' | 'appRuntimeWebhookReplayStore';
+  readonly localName: 'mutationReplayStore' | 'webhookReplayStore';
+  readonly runtimeMember: 'mutationReplayStore' | 'webhookReplayStore';
+}
+
+const REQUEST_MANAGED_MUTATION_REPLAY_STORE = {
+  exportedName: 'appRuntimeMutationReplayStore',
+  localName: 'mutationReplayStore',
+  runtimeMember: 'mutationReplayStore',
+} as const satisfies RequestManagedReplayStoreGrammar;
+
+const REQUEST_MANAGED_WEBHOOK_REPLAY_STORE = {
+  exportedName: 'appRuntimeWebhookReplayStore',
+  localName: 'webhookReplayStore',
+  runtimeMember: 'webhookReplayStore',
+} as const satisfies RequestManagedReplayStoreGrammar;
+
+function requestExpressionResolvesToExactManagedReplayStore(
   expression: Node,
+  grammar: RequestManagedReplayStoreGrammar,
   seen: Set<string>,
 ): boolean {
   const node = unwrapStaticExpression(expression);
-  const key = `managed-mutation-replay-store:${requestNodeIdentity(node)}`;
+  const key = `managed-${grammar.runtimeMember}:${requestNodeIdentity(node)}`;
   if (seen.has(key)) return false;
   seen.add(key);
   if (!Node.isIdentifier(node)) return false;
   if (
-    node.getText() === 'appRuntimeMutationReplayStore' &&
+    node.getText() === grammar.exportedName &&
     requestIdentifierIsExactLocalNamedImport(
       node,
       './_kovo/app-runtime-db.js',
-      'appRuntimeMutationReplayStore',
+      grammar.exportedName,
     )
   ) {
     const symbol = requestIdentifierValueSymbol(node) ?? node.getSymbol();
@@ -6519,12 +6544,12 @@ function requestExpressionResolvesToExactManagedMutationReplayStore(
       declaration?.getVariableStatement()?.getDeclarationKind() === VariableDeclarationKind.Const &&
       member &&
       Node.isPropertyAccessExpression(member) &&
-      member.getName() === 'mutationReplayStore' &&
+      member.getName() === grammar.runtimeMember &&
       requestExpressionResolvesToExactManagedAppRuntime(member.getExpression(), new Set()) &&
       requestExactManagedAppRuntimeIsPristine(member.getExpression())
     );
   }
-  if (node.getText() !== 'mutationReplayStore') return false;
+  if (node.getText() !== grammar.localName) return false;
   const symbol = requestIdentifierValueSymbol(node) ?? node.getSymbol();
   if (!symbol) return false;
   const symbolKey = requestSymbolKey(symbol);
@@ -6537,7 +6562,7 @@ function requestExpressionResolvesToExactManagedMutationReplayStore(
   return (
     values.length > 0 &&
     values.every((value) =>
-      requestExpressionResolvesToExactManagedMutationReplayStore(value, new Set(seen)),
+      requestExpressionResolvesToExactManagedReplayStore(value, grammar, new Set(seen)),
     )
   );
 }
@@ -9279,17 +9304,22 @@ function scanRequestRootCallbackCandidate(
   spec: RequestRootCallbackSpec,
   context: RequestProcessScanContext,
 ): void {
-  const replayMember = callback.startsWith('mutationReplayStore.')
-    ? callback.slice('mutationReplayStore.'.length)
-    : undefined;
+  const replayGrammar = callback.startsWith('mutationReplayStore.')
+    ? REQUEST_MANAGED_MUTATION_REPLAY_STORE
+    : callback.startsWith('replayStore.')
+      ? REQUEST_MANAGED_WEBHOOK_REPLAY_STORE
+      : undefined;
+  const replayMember = replayGrammar ? callback.slice(callback.indexOf('.') + 1) : undefined;
   const replayAccess = unwrapStaticExpression(expression);
   if (
+    replayGrammar &&
     replayMember &&
     ['get', 'reserve', 'set'].includes(replayMember) &&
     Node.isPropertyAccessExpression(replayAccess) &&
     replayAccess.getName() === replayMember &&
-    requestExpressionResolvesToExactManagedMutationReplayStore(
+    requestExpressionResolvesToExactManagedReplayStore(
       replayAccess.getExpression(),
+      replayGrammar,
       new Set(),
     )
   ) {
@@ -10113,7 +10143,7 @@ function requestExactManagedAppRuntimeIsPristine(expression: Node): boolean {
 
 function requestExpressionResolvesToExactManagedRuntimeMember(
   expression: Node,
-  member: 'db' | 'mutationReplayStore' | 'readonlyDb' | 'ready',
+  member: 'db' | 'mutationReplayStore' | 'readonlyDb' | 'ready' | 'webhookReplayStore',
   expectedAlias: string | undefined,
   seen: Set<string>,
 ): boolean {
@@ -12890,13 +12920,14 @@ function scanRequestPropertyAccessProtocols(
   if (
     !write &&
     (requestPropertyAccessIsExactReviewedSchemaTable(access) ||
-      (['db', 'mutationReplayStore', 'readonlyDb', 'ready'] as const).some((runtimeMember) =>
-        requestExpressionResolvesToExactManagedRuntimeMember(
-          access,
-          runtimeMember,
-          undefined,
-          new Set(),
-        ),
+      (['db', 'mutationReplayStore', 'readonlyDb', 'ready', 'webhookReplayStore'] as const).some(
+        (runtimeMember) =>
+          requestExpressionResolvesToExactManagedRuntimeMember(
+            access,
+            runtimeMember,
+            undefined,
+            new Set(),
+          ),
       ) ||
       requestPropertyAccessIsExactBetterAuthSeedCallTarget(access) ||
       (['sessionProvider', 'signIn', 'signOut'] as const).some((bindingMember) =>
@@ -13593,13 +13624,14 @@ function requestExpressionIsProtocolSafe(
 
   if (
     (requestExpressionMayBeExactManagedRuntimeMember(node) &&
-      (['db', 'mutationReplayStore', 'readonlyDb', 'ready'] as const).some((runtimeMember) =>
-        requestExpressionResolvesToExactManagedRuntimeMember(
-          node,
-          runtimeMember,
-          undefined,
-          new Set(),
-        ),
+      (['db', 'mutationReplayStore', 'readonlyDb', 'ready', 'webhookReplayStore'] as const).some(
+        (runtimeMember) =>
+          requestExpressionResolvesToExactManagedRuntimeMember(
+            node,
+            runtimeMember,
+            undefined,
+            new Set(),
+          ),
       )) ||
     requestPropertyAccessIsExactBetterAuthSeedCallTarget(node) ||
     (requestExpressionMayBeExactBetterAuthBindingMember(node) &&

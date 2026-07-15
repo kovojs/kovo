@@ -4296,6 +4296,131 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
     );
   });
 
+  it('accepts the exact generated durable Postgres webhook replay-store grammar', () => {
+    const files = [
+      {
+        fileName: 'schema.ts',
+        source: `
+          import { pgTable, text } from 'drizzle-orm/pg-core';
+          export const contacts = pgTable('contacts', { id: text('id').primaryKey() });
+        `,
+      },
+      {
+        fileName: '_kovo/app-runtime-db-options.ts',
+        source: `
+          import { postgresAppRuntimeOptions, postgresSchemaModule } from '@kovojs/server';
+          import * as schema from '../schema.js';
+          export const appRuntimeSchema = postgresSchemaModule(schema);
+          const SEED_CONTACTS =
+            'INSERT INTO contacts (id, name, email, company) VALUES ' +
+            "('c1', 'Ada Lovelace', 'ada@example.com', 'Analytical Engines'), " +
+            "('c2', 'Grace Hopper', 'grace@example.com', 'Naval Systems'), " +
+            "('c3', 'Alan Turing', 'alan@example.com', 'Bletchley Park') " +
+            'ON CONFLICT (id) DO NOTHING;';
+          export const appRuntimeDbOptions = postgresAppRuntimeOptions({
+            schema: appRuntimeSchema,
+            seedSql: SEED_CONTACTS,
+          });
+        `,
+      },
+      {
+        fileName: '_kovo/app-runtime-db.ts',
+        source: `
+          import { createPostgresAppRuntimeDb } from '@kovojs/server';
+          import { appRuntimeDbOptions } from './app-runtime-db-options.js';
+          const appDatabase = createPostgresAppRuntimeDb(appRuntimeDbOptions);
+          export const appRuntimeWebhookReplayStore = appDatabase.webhookReplayStore;
+        `,
+      },
+      {
+        fileName: 'webhooks.ts',
+        source: `
+          import { publicAccess, s, webhook } from '@kovojs/server';
+          import { appRuntimeWebhookReplayStore } from './_kovo/app-runtime-db.js';
+          const webhookReplayStore = appRuntimeWebhookReplayStore;
+          export const hook = webhook('/webhooks/exact', {
+            access: publicAccess('exact generated replay-store fixture'),
+            handler() { return { ok: true }; },
+            idempotency(input) { return input.id; },
+            input: s.object({ id: s.string() }),
+            replayStore: webhookReplayStore,
+            verify: 'none',
+            verifyJustification: 'exact generated replay-store fixture',
+          });
+        `,
+      },
+    ];
+
+    // SPEC §10.3: production webhook replay truth must use the generated durable Postgres store.
+    expect(sinksForFiles(files)).toEqual([]);
+
+    const exactRuntimeSource = files.find(
+      (file) => file.fileName === '_kovo/app-runtime-db.ts',
+    )!.source;
+    const exactWebhookSource = files.find((file) => file.fileName === 'webhooks.ts')!.source;
+    const maliciousReplayStore = `{
+      get() { return eval('replay-get'); },
+      reserve() { return { abort() {}, commit() {} }; },
+      set() {},
+    }`;
+    const forgedGeneratedExport = files.map((file) =>
+      file.fileName === '_kovo/app-runtime-db.ts'
+        ? {
+            ...file,
+            source: exactRuntimeSource.replace(
+              'appDatabase.webhookReplayStore',
+              maliciousReplayStore,
+            ),
+          }
+        : file,
+    );
+    const forgedSiblingModule = [
+      ...files.map((file) =>
+        file.fileName === 'webhooks.ts'
+          ? {
+              ...file,
+              source: exactWebhookSource.replace(
+                "'./_kovo/app-runtime-db.js'",
+                "'./_kovo/forged-replay.js'",
+              ),
+            }
+          : file,
+      ),
+      {
+        fileName: '_kovo/forged-replay.ts',
+        source: `export const appRuntimeWebhookReplayStore = ${maliciousReplayStore};`,
+      },
+    ];
+    const reassignedAlias = files.map((file) =>
+      file.fileName === 'webhooks.ts'
+        ? {
+            ...file,
+            source: exactWebhookSource.replace(
+              'const webhookReplayStore = appRuntimeWebhookReplayStore;',
+              `let webhookReplayStore = appRuntimeWebhookReplayStore;
+               webhookReplayStore = ${maliciousReplayStore};`,
+            ),
+          }
+        : file,
+    );
+    for (const [label, variant] of [
+      ['forged generated export', forgedGeneratedExport],
+      ['forged sibling module', forgedSiblingModule],
+    ] as const) {
+      expect(sinksForFiles(variant), label).toEqual(
+        expect.arrayContaining([expect.objectContaining({ sink: 'eval' })]),
+      );
+    }
+    expect(sinksForFiles(reassignedAlias)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sink: 'request-handler.opaque-source',
+          source: '<opaque-retained-config-derivation>',
+        }),
+      ]),
+    );
+  });
+
   it('accepts only the exact declarative SQLite app runtime constructor grammar', () => {
     const source = (constructor: string, options: string, mutation = '') => `
       import { createApp } from '@kovojs/server';
