@@ -118,6 +118,21 @@ describe('create-kovo starter (build integration: adversarial production artifac
     240_000,
   );
 
+  it('M1:secret-wire fixture fails closed when the scaffold query helper anchor drifts', () => {
+    withProject('create-kovo-m1-secret-value-flow-drift-', undefined, (root) => {
+      const queriesPath = join(root, 'src/queries.ts');
+      const queries = readFileSync(queriesPath, 'utf8').replace(
+        'function requireAppQueryDb(context?: AppQueryLoadContext): Reader<AppDb> {',
+        'function renamedAppQueryDb(context?: AppQueryLoadContext): Reader<AppDb> {',
+      );
+      writeFileSync(queriesPath, queries, 'utf8');
+
+      expect(() => addAuthSecretLeakProof(root)).toThrowError(
+        'Expected scaffold anchor for auth secret proof query insertion.',
+      );
+    });
+  });
+
   it.each([...dialectSpecificRuntimeCases])(
     'M1:raw-sql covers raw SQL owner-write unsafe and trusted %s production siblings',
     (_label: string, dialect: CreateKovoDialect | undefined) => {
