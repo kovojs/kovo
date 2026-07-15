@@ -1136,10 +1136,13 @@ export function evaluateCustomRunnerBootstrapOrdering(readText) {
 
 function sourceStringArray(source, declarationName) {
   const escapedName = declarationName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const declaration = new RegExp(
-    `(?:const\\s+${escapedName}\\s*=|${escapedName}\\s*)[^\\[]*\\[([\\s\\S]*?)\\]`,
+  const declaredArray = new RegExp(
+    `(?:export\\s+)?const\\s+${escapedName}\\s*=[^\\[]*\\[([\\s\\S]*?)\\]`,
     'u',
   ).exec(source);
+  const declaration =
+    declaredArray ??
+    new RegExp(`${escapedName}\\s*[^\\[]*\\[([\\s\\S]*?)\\]`, 'u').exec(source);
   if (declaration === null) {
     const emptySet = new RegExp(
       `const\\s+${escapedName}\\s*=\\s*new\\s+Set(?:<[^>]+>)?\\(\\s*\\)`,

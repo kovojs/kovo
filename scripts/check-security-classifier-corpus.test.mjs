@@ -120,6 +120,9 @@ describe('check-security-classifier-corpus gate', () => {
         lockRequestSafeRuntimeRealm();
       `,
       'packages/drizzle/src/trust-escapes-static.ts': `
+        if (REQUEST_SAFE_GLOBAL_CALLABLES.has(name) || REQUEST_SAFE_GLOBAL_NAMESPACES.has(name)) {
+          const unrelatedRuntimeNames = ['fetch', 'globalThis', 'setTimeout'];
+        }
         const REQUEST_SAFE_GLOBAL_CALLABLES = new Set(['String', 'evil']);
         const REQUEST_SAFE_GLOBAL_NAMESPACES = new Set(['JSON']);
         const REQUEST_SAFE_GLOBAL_CONSTRUCTORS = new Set(['Response']);
