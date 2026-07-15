@@ -46,6 +46,9 @@ import {
   signInDemoUser,
 } from './index.build.test-support.js';
 
+const starterDbScopeContactEmail = 'starter-scope-proof-contact@example.com';
+const starterDbScopeMarker = 'starter-scope-proof-marker';
+
 describe('create-kovo starter (build integration: production security artifacts)', () => {
   it('fails the production build for a request-reachable no-row side-effect mutation with no access guard', () => {
     const root = mkdtempSync(join(tmpdir(), 'create-kovo-prod-missing-access-'));
@@ -374,8 +377,6 @@ describe('create-kovo starter (build integration: production security artifacts)
       });
       const output = collectOutput(server);
       const origin = `http://127.0.0.1:${port}`;
-      const marker = `starter-scope-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-      const contactEmail = `${marker}-contact@example.com`;
 
       await signInDemoUser(root, origin, jar, output);
 
@@ -387,7 +388,7 @@ describe('create-kovo starter (build integration: production security artifacts)
         body: new URLSearchParams({
           company: 'Scope Proof',
           csrf: fieldValue(addForm, 'csrf'),
-          email: contactEmail,
+          email: starterDbScopeContactEmail,
           'Kovo-Idem': fieldValue(addForm, 'Kovo-Idem'),
           name: 'Starter Scope Proof',
         }),
@@ -414,7 +415,7 @@ describe('create-kovo starter (build integration: production security artifacts)
           body: new URLSearchParams({
             csrf: fieldValue(proofForm, 'csrf'),
             'Kovo-Idem': fieldValue(proofForm, 'Kovo-Idem'),
-            marker,
+            marker: starterDbScopeMarker,
           }),
           headers: {
             'content-type': 'application/x-www-form-urlencoded',
@@ -426,14 +427,10 @@ describe('create-kovo starter (build integration: production security artifacts)
         });
         const body = await response.text();
         expect(response.status, `${key}: ${body}`).toBe(500);
-        expect(body).not.toContain(marker);
+        expect(body).not.toContain(starterDbScopeMarker);
       }
 
-      const statusResponse = await fetch(
-        `${origin}/api/starter-db-scope-proof?marker=${encodeURIComponent(
-          marker,
-        )}&contactEmail=${encodeURIComponent(contactEmail)}`,
-      );
+      const statusResponse = await fetch(`${origin}/api/starter-db-scope-proof`);
       const statusBody = await statusResponse.text();
       expect(statusResponse.status, statusBody).toBe(200);
       const status = JSON.parse(statusBody) as {

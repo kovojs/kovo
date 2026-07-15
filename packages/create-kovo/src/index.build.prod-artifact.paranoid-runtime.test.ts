@@ -75,6 +75,9 @@ const blockedWriteCases = [
   'paranoid-phase5-write-boundary-proof/phase5-governed-mass-assignment-proof',
 ] as const;
 
+const phase5WriteContactEmail = 'phase5-write-boundary-proof-contact@example.com';
+const phase5WriteMarker = 'phase5-write-boundary-proof';
+
 const POSTGRES_BINARIES = ['initdb', 'postgres'] as const;
 const postgresToolchain = localPostgresToolchain();
 const describeIfPostgres = postgresToolchain.available ? describe : describe.skip;
@@ -174,7 +177,7 @@ describe('create-kovo starter (build integration: paranoid runtime chokes)', () 
         await signInDemoUser(root, origin, jar, output);
         await expectPostgresEndpoint(origin, output);
         await expectPostgresReferenceMemberships(origin);
-        await expectPostgresReadonlyStatus(origin, marker);
+        await expectPostgresReadonlyStatus(origin);
         await expectPostgresWriteBoundary(origin, jar);
         await expectPostgresTaskAndWebhook(origin, jar, marker, output);
 
@@ -257,8 +260,6 @@ describe('create-kovo starter (build integration: paranoid runtime chokes)', () 
         },
       });
       const output = collectOutput(server);
-      const marker = `phase5-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-      const contactEmail = `${marker}-contact@example.com`;
 
       await signInDemoUser(root, origin, jar, output);
       await expectAuthorizationQueryShapes(origin, jar);
@@ -269,11 +270,11 @@ describe('create-kovo starter (build integration: paranoid runtime chokes)', () 
       await expectHiddenBuilderExpressionEndpoint(origin);
       await expectDeclaredRawReadEndpoint(origin);
       await expectUnderdeclaredRawReadEndpoint(origin);
-      await expectStarterInScopeWrite(origin, jar, output, contactEmail);
+      await expectStarterInScopeWrite(origin, jar, output);
       await expectAuthorizationEndpoint(origin);
       await expectAuthorizationStatus(origin);
-      await expectBlockedWrites(origin, jar, marker, output);
-      await expectWriteStatus(origin, marker, contactEmail, output);
+      await expectBlockedWrites(origin, jar, output);
+      await expectWriteStatus(origin, output);
 
       expect(output()).toContain('Kovo SQLite starter is experimental and single-principal only');
       expect(output()).toContain('KV435');
@@ -476,8 +477,8 @@ async function expectPostgresReferenceMemberships(origin: string): Promise<void>
   ]);
 }
 
-async function expectPostgresReadonlyStatus(origin: string, marker: string): Promise<void> {
-  const response = await fetch(`${origin}/api/phase5-pg-status?marker=${marker}`);
+async function expectPostgresReadonlyStatus(origin: string): Promise<void> {
+  const response = await fetch(`${origin}/api/phase5-pg-status`);
   const body = await response.text();
   expect(response.status, body).toBe(200);
   const status = JSON.parse(body) as {
@@ -554,7 +555,7 @@ async function expectPostgresTaskAndWebhook(
   const webhookBody = await webhookResponse.text();
   expect(webhookResponse.status, webhookBody).toBe(200);
 
-  await expectEventuallyPostgresEvent(origin, marker);
+  await expectEventuallyPostgresEvent(origin);
 }
 
 async function fetchMutationCsrf(
@@ -573,11 +574,11 @@ async function fetchMutationCsrf(
   return csrf;
 }
 
-async function expectEventuallyPostgresEvent(origin: string, marker: string): Promise<void> {
+async function expectEventuallyPostgresEvent(origin: string): Promise<void> {
   const deadline = Date.now() + 10_000;
   let lastBody = '';
   while (Date.now() < deadline) {
-    const response = await fetch(`${origin}/api/phase5-pg-status?marker=${marker}`);
+    const response = await fetch(`${origin}/api/phase5-pg-status`);
     lastBody = await response.text();
     expect(response.status, lastBody).toBe(200);
     const status = JSON.parse(lastBody) as { events: { id: string; label: string }[] };
@@ -770,7 +771,6 @@ async function expectStarterInScopeWrite(
   origin: string,
   jar: Map<string, string>,
   output: () => string,
-  contactEmail: string,
 ): Promise<void> {
   const homeHtml = await fetchTextWhenReady(`${origin}/`, output, {
     headers: { cookie: cookieHeader(jar) },
@@ -783,7 +783,7 @@ async function expectStarterInScopeWrite(
     body: new URLSearchParams({
       company: 'Phase 5.1 Scope Proof',
       csrf: fieldValue(addForm, 'csrf'),
-      email: contactEmail,
+      email: phase5WriteContactEmail,
       'Kovo-Idem': fieldValue(addForm, 'Kovo-Idem'),
       name: 'Phase 5.1 In Scope',
     }),
@@ -802,13 +802,12 @@ async function expectStarterInScopeWrite(
 async function expectBlockedWrites(
   origin: string,
   jar: Map<string, string>,
-  marker: string,
   output: () => string,
 ): Promise<void> {
   for (const key of blockedWriteCases) {
     const csrf = await fetchMutationCsrf(origin, jar, key);
     const response = await fetch(`${origin}/_m/${key}`, {
-      body: new URLSearchParams({ csrf, marker }),
+      body: new URLSearchParams({ csrf, marker: phase5WriteMarker }),
       headers: {
         'content-type': 'application/x-www-form-urlencoded',
         cookie: cookieHeader(jar),
@@ -820,7 +819,7 @@ async function expectBlockedWrites(
     const body = await response.text();
 
     expect(response.status, `${key}: ${body}\n${output()}`).toBe(500);
-    expect(body).not.toContain(marker);
+    expect(body).not.toContain(phase5WriteMarker);
     expect(body).not.toContain('runtime-secret-value');
     expect(body).not.toContain('phase5-builder-secret');
     expect(body).not.toContain('phase5-raw-secret');
@@ -1264,17 +1263,8 @@ async function onceExit(child: ChildProcessWithoutNullStreams): Promise<void> {
 
 void postgresToolchain;
 
-async function expectWriteStatus(
-  origin: string,
-  marker: string,
-  contactEmail: string,
-  output: () => string,
-): Promise<void> {
-  const writeStatusResponse = await fetch(
-    `${origin}/api/phase5-write-boundary-proof?marker=${encodeURIComponent(
-      marker,
-    )}&contactEmail=${encodeURIComponent(contactEmail)}`,
-  );
+async function expectWriteStatus(origin: string, output: () => string): Promise<void> {
+  const writeStatusResponse = await fetch(`${origin}/api/phase5-write-boundary-proof`);
   const writeStatusBody = await writeStatusResponse.text();
   expect(writeStatusResponse.status, `${writeStatusBody}\n${output()}`).toBe(200);
   const writeStatus = JSON.parse(writeStatusBody) as {
