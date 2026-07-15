@@ -313,6 +313,19 @@ const anonymousCarrier = await execution.resolveLifecycleRequest(
   { authCsrfId: 'framework-anonymous-1' },
   { principalPosture: { kind: 'anonymous' } },
 );
+const rawSessionCarrier = await execution.resolveLifecycleRequest(
+  { session: { id: 'raw-session-must-not-cross' } },
+  { principalPosture: { kind: 'anonymous' } },
+);
+let accessorHits = 0;
+const accessorRequest = {};
+Object.defineProperty(accessorRequest, 'session', {
+  enumerable: true,
+  get() { accessorHits += 1; return { id: 'accessor-session-must-not-cross' }; },
+});
+const accessorCarrier = await execution.resolveLifecycleRequest(accessorRequest, {
+  principalPosture: { kind: 'anonymous' },
+});
 let wrapperTrapHits = 0;
 let wrapperRejected = false;
 try {
@@ -332,9 +345,12 @@ try {
   foreignRejected = String(error?.message ?? error).includes('must not be a Proxy');
 }
 process.stdout.write(JSON.stringify({
-  anonymousBinding: csrf.sessionId(anonymousCarrier),
+  accessorBinding: csrf.sessionId(accessorCarrier) ?? null,
+  accessorHits,
+  anonymousBinding: csrf.sessionId(anonymousCarrier) ?? null,
   foreignRejected,
   foreignTrapHits,
+  rawSessionBinding: csrf.sessionId(rawSessionCarrier) ?? null,
   sessionBinding: csrf.sessionId(sessionCarrier),
   wrapperRejected,
   wrapperTrapHits,
@@ -356,9 +372,12 @@ process.stdout.write(JSON.stringify({
       );
       expect(result.status, result.stderr).toBe(0);
       expect(JSON.parse(result.stdout)).toEqual({
-        anonymousBinding: 'framework-anonymous-1',
+        accessorBinding: null,
+        accessorHits: 1,
+        anonymousBinding: null,
         foreignRejected: true,
         foreignTrapHits: 0,
+        rawSessionBinding: null,
         sessionBinding: 'framework-session-1',
         wrapperRejected: true,
         wrapperTrapHits: 0,

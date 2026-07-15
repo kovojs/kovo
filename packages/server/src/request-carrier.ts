@@ -354,7 +354,9 @@ function pinnedLifecycleIterationResult(done: boolean, value: unknown): Iterator
 }
 
 interface PinnedCarrierProperty {
+  readonly data: boolean;
   readonly enumerable: boolean;
+  readonly frameworkOwned: boolean;
   readonly own: boolean;
   readonly value: unknown;
 }
@@ -374,6 +376,7 @@ interface PinnedRequestCarrierSnapshot {
  * @internal
  */
 export interface PinnedRequestCarrierOwnData {
+  readonly frameworkOwned: boolean;
   readonly present: boolean;
   readonly value?: unknown;
 }
@@ -395,14 +398,21 @@ export function pinnedRequestCarrierOwnData(
   const snapshot = witnessWeakMapGet(pinnedRequestCarrierSnapshots, request);
   if (snapshot === undefined) return undefined;
   const captured = witnessMapGet(snapshot.properties, property);
+  const present = captured?.own === true && captured.data;
   const result = witnessCreateNullRecord<unknown>();
+  witnessDefineProperty(result, 'frameworkOwned', {
+    configurable: false,
+    enumerable: true,
+    value: present && captured.frameworkOwned,
+    writable: false,
+  });
   witnessDefineProperty(result, 'present', {
     configurable: false,
     enumerable: true,
-    value: captured?.own === true,
+    value: present,
     writable: false,
   });
-  if (captured?.own === true) {
+  if (present) {
     witnessDefineProperty(result, 'value', {
       configurable: false,
       enumerable: true,
@@ -478,7 +488,9 @@ export function pinnedRequestCarrier<Request>(
     const key = pinnedRequestPropertyKey(ownPinnedRequestEntryValue(descriptor.value, 'key'));
     if (!arrayHasPropertyKey(ownKeys, key)) appendPinnedRequestKey(ownKeys, key);
     witnessMapSet(properties, key, {
+      data: true,
       enumerable: true,
+      frameworkOwned: true,
       own: true,
       value: ownPinnedRequestEntryValue(descriptor.value, 'value'),
     });
@@ -575,7 +587,9 @@ function snapshotRequestOwnProperties(
     const value = 'value' in descriptor ? descriptor.value : witnessReflectGet(target, key, target);
     appendPinnedRequestKey(ownKeys, key);
     witnessMapSet(properties, key, {
+      data: 'value' in descriptor,
       enumerable: descriptor.enumerable ?? false,
+      frameworkOwned: false,
       own: true,
       value: pinRequestCarrierValue(value, target),
     });
@@ -615,7 +629,9 @@ function snapshotRequestInheritedProperties(
         continue;
       }
       witnessMapSet(properties, key, {
+        data: 'value' in descriptor,
         enumerable: false,
+        frameworkOwned: false,
         own: false,
         value: pinRequestCarrierValue(value, target),
       });

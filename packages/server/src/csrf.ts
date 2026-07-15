@@ -121,7 +121,10 @@ export function frameworkCsrfRequestSnapshot(
     throw new TypeError('Framework CSRF request carrier witness changed during inspection.');
   }
   const snapshot = witnessCreateNullRecord<unknown>();
-  if (session.present) {
+  // A carrier can snapshot raw own data or one-shot accessor output for ordinary request
+  // compatibility. Neither is authentication truth. Only the explicit framework override written
+  // after the session provider's bounded deep snapshot may become a CSRF session binding.
+  if (session.present && session.frameworkOwned) {
     witnessDefineProperty(snapshot, 'session', {
       configurable: false,
       enumerable: true,
@@ -129,7 +132,7 @@ export function frameworkCsrfRequestSnapshot(
       writable: false,
     });
   }
-  if (authCsrfId.present) {
+  if (authCsrfId.present && authCsrfId.frameworkOwned) {
     witnessDefineProperty(snapshot, 'authCsrfId', {
       configurable: false,
       enumerable: true,
