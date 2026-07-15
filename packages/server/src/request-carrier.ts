@@ -65,6 +65,7 @@ if (intrinsicArrayPrototypeCandidate === null) {
 const intrinsicArrayPrototype = intrinsicArrayPrototypeCandidate;
 const pinnedArrayPrototypeMethods = createWitnessMap<PropertyKey, Function>();
 const pinnedLifecycleArrays = createWitnessWeakSet<object>();
+const deeplySnapshotLifecycleArrays = createWitnessWeakSet<object>();
 const pinnedLifecycleArrayConstructor = witnessCreateNullRecord<unknown>();
 witnessDefineProperty(pinnedLifecycleArrayConstructor, Symbol.species, {
   configurable: false,
@@ -136,6 +137,12 @@ function snapshotPinnedLifecycleNode(
   if (typeof value === 'function') {
     throw new TypeError('Lifecycle session values cannot contain functions.');
   }
+  // Session definitions own provider output before the request lifecycle owns it again. Only
+  // arrays produced by a completed recursive snapshot are deep-closure receipts. Surface-pinned
+  // arrays returned by methods such as map() may still contain app-owned mutable elements and
+  // must flow through the recursive branch below (SPEC §6.5/§6.6 C9).
+  if (witnessIsArray(value) && witnessWeakSetHas(deeplySnapshotLifecycleArrays, value))
+    return value;
   if (depth > MAX_PINNED_LIFECYCLE_DEPTH || state.nodes >= MAX_PINNED_LIFECYCLE_NODES) {
     throw new TypeError('Lifecycle session values exceed the bounded data-tree limit.');
   }
@@ -144,6 +151,7 @@ function snapshotPinnedLifecycleNode(
   state.nodes += 1;
 
   if (witnessIsArray(value)) {
+    const hasFrameworkPinnedSurface = witnessWeakSetHas(pinnedLifecycleArrays, value);
     if (witnessGetPrototypeOf(value) !== intrinsicArrayPrototype) {
       throw new TypeError('Lifecycle session arrays must use the intrinsic array prototype.');
     }
@@ -173,11 +181,13 @@ function snapshotPinnedLifecycleNode(
       });
     }
     const ownKeys = witnessOwnKeys(value);
-    if (ownKeys.length !== lengthDescriptor.value + 1) {
+    if (!hasFrameworkPinnedSurface && ownKeys.length !== lengthDescriptor.value + 1) {
       throw new TypeError('Lifecycle session arrays cannot carry extra properties.');
     }
     installPinnedLifecycleArraySurface(clone);
-    return witnessFreeze(clone);
+    const deeplySnapshot = witnessFreeze(clone);
+    witnessWeakSetAdd(deeplySnapshotLifecycleArrays, deeplySnapshot);
+    return deeplySnapshot;
   }
 
   const prototype = witnessGetPrototypeOf(value);

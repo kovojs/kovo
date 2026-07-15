@@ -27,6 +27,7 @@ import {
 } from './guards.js';
 import { renderMutationResponse, renderNoJsMutationResponse, runMutation } from './mutation.js';
 import { query, runQuery } from './query.js';
+import { snapshotPinnedLifecycleValue } from './request-carrier.js';
 import { route, runRoutePage } from './route.js';
 import { s, type Schema } from './schema.js';
 import { testMutation as mutation } from './test-fixtures.js';
@@ -789,6 +790,33 @@ describe('server guard and session primitives', () => {
     expect(Object.isFrozen((envelopeValue as { setCookies: object }).setCookies)).toBe(true);
     expect(Object.isFrozen(appSession)).toBe(true);
     expect(Object.isFrozen(plain)).toBe(true);
+  });
+
+  it('accepts framework-pinned session arrays at the lifecycle second snapshot', async () => {
+    // SPEC §6.5/§6.6 C9: session(schema).provider() closes the value once, and the request
+    // lifecycle must recognize that module-private witness instead of treating the hardened
+    // array method surface as attacker-authored properties.
+    const appSession = session(s.object({ user: s.object({ roles: s.array(s.string()) }) }));
+    const provider = appSession.provider(() => ({ user: { roles: ['member'] } }));
+
+    await expect(resolveLifecycleRequest({}, { sessionProvider: provider })).resolves.toEqual({
+      session: { user: { roles: ['member'] } },
+    });
+  });
+
+  it('recursively owns mutable elements from surface-pinned derived arrays', () => {
+    // A derived array carries Kovo's pinned method surface but is not itself a deep-closure
+    // witness: map() can introduce captured mutable principals that must be copied and frozen.
+    const pinned = snapshotPinnedLifecycleValue(['member']);
+    const mutable = { role: 'member' };
+    const derived = pinned.map(() => mutable);
+    const second = snapshotPinnedLifecycleValue(derived);
+
+    expect(second).not.toBe(derived);
+    expect(Object.isFrozen(second)).toBe(true);
+    expect(Object.isFrozen(second[0])).toBe(true);
+    mutable.role = 'admin';
+    expect(second).toEqual([{ role: 'member' }]);
   });
 
   it('rejects accessors and owns a transparent Proxy result before request authority is attached', async () => {
