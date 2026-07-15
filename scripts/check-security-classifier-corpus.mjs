@@ -1141,8 +1141,7 @@ function sourceStringArray(source, declarationName) {
     'u',
   ).exec(source);
   const declaration =
-    declaredArray ??
-    new RegExp(`${escapedName}\\s*[^\\[]*\\[([\\s\\S]*?)\\]`, 'u').exec(source);
+    declaredArray ?? new RegExp(`${escapedName}\\s*[^\\[]*\\[([\\s\\S]*?)\\]`, 'u').exec(source);
   if (declaration === null) {
     const emptySet = new RegExp(
       `const\\s+${escapedName}\\s*=\\s*new\\s+Set(?:<[^>]+>)?\\(\\s*\\)`,

@@ -264,10 +264,7 @@ export function signingKeyRingFromSecret(secret: SigningSecret): SigningKeyRing 
  *
  * @internal Package-private server document sink; not part of the public entry point.
  */
-export function signSessionFingerprintWithSecret(
-  secret: SigningSecret,
-  principal: string,
-): string {
+export function signSessionFingerprintWithSecret(secret: SigningSecret, principal: string): string {
   const frameworkSource =
     typeof secret === 'object' && secret !== null
       ? witnessWeakMapGet(frameworkCsrfSigningSources, secret)
