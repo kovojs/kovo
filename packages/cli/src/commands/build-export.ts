@@ -1,9 +1,14 @@
 import { execFile as builtinExecFile } from 'node:child_process';
+import { hash as builtinHash } from 'node:crypto';
 import {
   existsSync as builtinExistsSync,
+  lstatSync as builtinLstatSync,
   mkdtempSync as builtinMkdtempSync,
   readFileSync as builtinReadFileSync,
+  readdirSync as builtinReaddirSync,
+  realpathSync as builtinRealpathSync,
   rmSync as builtinRmSync,
+  statSync as builtinStatSync,
   writeFileSync as builtinWriteFileSync,
 } from 'node:fs';
 import { readFile as builtinReadFile } from 'node:fs/promises';
@@ -132,7 +137,6 @@ import {
   buildRegExpReplace,
   buildSetAdd,
   buildSetHas,
-  buildSetNullPrototype,
   buildSnapshotDenseArray,
   buildStringIncludes,
   buildStringSplit,
@@ -142,11 +146,16 @@ import {
 } from './build-security-intrinsics.js';
 
 const execFile = builtinExecFile;
+const hash = builtinHash;
 const existsSync = builtinExistsSync;
+const lstatSync = builtinLstatSync;
 const mkdtempSync = builtinMkdtempSync;
 const readFile = builtinReadFile;
 const readFileSync = builtinReadFileSync;
+const readdirSync = builtinReaddirSync;
+const realpathSync = builtinRealpathSync;
 const rmSync = builtinRmSync;
+const statSync = builtinStatSync;
 const writeFileSync = builtinWriteFileSync;
 const createRequire = builtinCreateRequire;
 const tmpdir = builtinTmpdir;
@@ -181,6 +190,13 @@ const kovoFrameworkSourcePackages = [
   '@kovojs/style',
   '@kovojs/ui',
 ] as const;
+
+const KOVO_FRAMEWORK_SOURCE_MAX_CONTEXTS = 256;
+const KOVO_FRAMEWORK_SOURCE_MAX_DIRECTORIES = 20_000;
+const KOVO_FRAMEWORK_SOURCE_MAX_FILES = 40_000;
+const KOVO_FRAMEWORK_SOURCE_MAX_DEPTH = 64;
+const KOVO_FRAMEWORK_SOURCE_MAX_FILE_BYTES = 16 * 1024 * 1024;
+const KOVO_FRAMEWORK_SOURCE_MAX_TOTAL_BYTES = 256 * 1024 * 1024;
 
 // Resolve the framework graph while this bootstrap-first module is initializing. App evaluation
 // must not be able to rewrite package manifests and widen the later production-build exemption
@@ -3184,10 +3200,10 @@ function approvedBuildSourcesVitePlugin(
   buildRoot: string,
   sourceFiles: readonly BuildCheckSourceFile[],
   sourceLabel: 'app' | 'config' = 'app',
+  frameworkSourceRoots: readonly KovoFrameworkSourceRoot[] = trustedKovoFrameworkSourceRoots,
 ): Plugin {
   const approvedByPath = buildCreateMap<string, string>();
   const appSourcePaths = buildCreateSet<string>();
-  const frameworkSourceRoots = trustedKovoFrameworkSourceRoots;
   const approvedFiles = buildSnapshotDenseArray(sourceFiles, 'Approved build source files');
   const sourceRoot = dirname(appModulePath);
   for (let index = 0; index < approvedFiles.length; index += 1) {
@@ -3244,7 +3260,22 @@ function approvedBuildSourcesVitePlugin(
       const fileName = viteBuildSourceFileName(id);
       if (fileName === undefined || !isBuildSourceModulePath(fileName)) return null;
       const approved = buildMapHas(approvedByPath, fileName);
-      if (!approved && isKovoFrameworkSourcePath(frameworkSourceRoots, fileName)) return null;
+      if (!approved) {
+        const frameworkSource = classifyKovoFrameworkSourcePath(frameworkSourceRoots, fileName);
+        if (frameworkSource.kind === 'invalid') {
+          throw new Error(
+            `Kovo build refused unrecognized framework source ${relative(buildRoot, fileName) || fileName}; the file was not in the boot-time declared-package snapshot (SPEC §5.2/§6.6).`,
+          );
+        }
+        if (frameworkSource.kind === 'trusted') {
+          if (!kovoFrameworkSourceSnapshotMatches(frameworkSource.snapshot, code)) {
+            throw new Error(
+              `Kovo build refused changed framework source ${relative(buildRoot, fileName) || fileName}; its bytes no longer match the boot-time declared-package snapshot (SPEC §5.2/§6.6).`,
+            );
+          }
+          return null;
+        }
+      }
       if (!approved && !isBuildAppSourcePath(appSourceRoot, fileName)) return null;
       const displayName = relative(buildRoot, fileName) || fileName;
       if (!approved) {
@@ -3266,11 +3297,34 @@ interface KovoFrameworkPackageContext {
   readonly resolver: NodeRequire;
 }
 
+interface KovoFrameworkSourceRoot {
+  readonly device: bigint;
+  readonly files: ReadonlyMap<string, KovoFrameworkSourceFileSnapshot>;
+  readonly inode: bigint;
+  readonly path: string;
+}
+
+interface KovoFrameworkSourceFileSnapshot {
+  readonly byteLength: number;
+  readonly sha256: string;
+}
+
+interface KovoFrameworkSourceSnapshotBudget {
+  bytes: number;
+  directories: number;
+  files: number;
+}
+
 function resolveKovoFrameworkSourceRoots(
   cliEntry: string,
   cliResolver: NodeRequire,
-): readonly string[] {
-  const roots: string[] = [];
+): readonly KovoFrameworkSourceRoot[] {
+  const roots: KovoFrameworkSourceRoot[] = [];
+  const snapshotBudget: KovoFrameworkSourceSnapshotBudget = {
+    bytes: 0,
+    directories: 0,
+    files: 0,
+  };
   const visitedEntries = buildCreateSet<string>();
   const cliManifest = exactKovoFrameworkPackageManifest(cliEntry, '@kovojs/cli');
   if (cliManifest === undefined) {
@@ -3280,6 +3334,9 @@ function resolveKovoFrameworkSourceRoots(
     { entry: cliEntry, manifest: cliManifest, resolver: cliResolver },
   ];
   for (let contextIndex = 0; contextIndex < contexts.length; contextIndex += 1) {
+    if (contextIndex >= KOVO_FRAMEWORK_SOURCE_MAX_CONTEXTS) {
+      throw new TypeError('Kovo framework dependency graph exceeds the bounded context limit.');
+    }
     const context = contexts[contextIndex]!;
     const dependencyNames = declaredKovoFrameworkDependencies(
       context.manifest,
@@ -3287,32 +3344,157 @@ function resolveKovoFrameworkSourceRoots(
     );
     for (let index = 0; index < dependencyNames.length; index += 1) {
       const packageName = dependencyNames[index]!;
+      let entry: string;
       try {
-        const entry = resolve(context.resolver.resolve(packageName));
-        if (buildSetHas(visitedEntries, entry)) continue;
-        const manifest = exactKovoFrameworkPackageManifest(entry, packageName);
-        if (manifest === undefined) continue;
-        buildSetAdd(visitedEntries, entry);
-        const root = dirname(entry);
-        let duplicate = false;
-        for (let rootIndex = 0; rootIndex < roots.length; rootIndex += 1) {
-          if (roots[rootIndex] === root) {
-            duplicate = true;
-            break;
-          }
-        }
-        if (!duplicate) buildSecurityArrayAppend(roots, root, 'Kovo framework source roots');
-        buildSecurityArrayAppend(
-          contexts,
-          { entry, manifest, resolver: createRequire(pathToFileURL(entry)) },
-          'Kovo framework package contexts',
-        );
+        entry = realpathSync(resolve(context.resolver.resolve(packageName)));
       } catch {
         // A declared package not reachable from this exact dependency context contributes no root.
+        continue;
       }
+      if (buildSetHas(visitedEntries, entry)) continue;
+      const manifest = exactKovoFrameworkPackageManifest(entry, packageName);
+      if (manifest === undefined) continue;
+      buildSetAdd(visitedEntries, entry);
+      // Pin the canonical root now, before app/config evaluation. Re-resolving this path later
+      // would let evaluated code rename it and substitute a symlink that retargets existing
+      // framework trust (SPEC §5.2/§6.6).
+      const rootPath = realpathSync(dirname(entry));
+      const rootIdentity = kovoFrameworkSourceRootIdentity(rootPath);
+      if (rootIdentity === undefined) {
+        throw new TypeError(`Kovo framework source root ${rootPath} has no stable identity.`);
+      }
+      let duplicate = false;
+      for (let rootIndex = 0; rootIndex < roots.length; rootIndex += 1) {
+        if (roots[rootIndex]!.path === rootPath) {
+          duplicate = true;
+          break;
+        }
+      }
+      if (!duplicate) {
+        const files = snapshotKovoFrameworkSourceFiles(rootPath, snapshotBudget);
+        if (!buildMapHas(files, entry)) {
+          throw new TypeError(`Kovo framework entry ${entry} is absent from its source snapshot.`);
+        }
+        buildSecurityArrayAppend(
+          roots,
+          {
+            device: rootIdentity.device,
+            files,
+            inode: rootIdentity.inode,
+            path: rootPath,
+          },
+          'Kovo framework source roots',
+        );
+      }
+      buildSecurityArrayAppend(
+        contexts,
+        { entry, manifest, resolver: createRequire(pathToFileURL(entry)) },
+        'Kovo framework package contexts',
+      );
     }
   }
   return buildSnapshotDenseArray(roots, 'Kovo framework source roots');
+}
+
+function kovoFrameworkSourceRootIdentity(
+  root: string,
+): Pick<KovoFrameworkSourceRoot, 'device' | 'inode'> | undefined {
+  try {
+    const stats = statSync(root, { bigint: true });
+    const device = buildOwnDataValue(stats, 'dev', `Kovo framework source root ${root}`);
+    const inode = buildOwnDataValue(stats, 'ino', `Kovo framework source root ${root}`);
+    if (typeof device !== 'bigint' || typeof inode !== 'bigint') return undefined;
+    return { device, inode };
+  } catch {
+    return undefined;
+  }
+}
+
+function snapshotKovoFrameworkSourceFiles(
+  root: string,
+  budget: KovoFrameworkSourceSnapshotBudget,
+): ReadonlyMap<string, KovoFrameworkSourceFileSnapshot> {
+  const files = buildCreateMap<string, KovoFrameworkSourceFileSnapshot>();
+  const pending: Array<{ readonly depth: number; readonly path: string }> = [
+    { depth: 0, path: root },
+  ];
+  for (let pendingIndex = 0; pendingIndex < pending.length; pendingIndex += 1) {
+    const directory = pending[pendingIndex]!;
+    budget.directories += 1;
+    if (budget.directories > KOVO_FRAMEWORK_SOURCE_MAX_DIRECTORIES) {
+      throw new TypeError('Kovo framework source snapshot exceeds the directory limit.');
+    }
+    const entries = buildSnapshotDenseArray(
+      readdirSync(directory.path, { encoding: 'utf8' }),
+      `Kovo framework source directory ${directory.path}`,
+    );
+    for (let entryIndex = 0; entryIndex < entries.length; entryIndex += 1) {
+      const name = entries[entryIndex]!;
+      if (typeof name !== 'string' || name.length === 0 || name === '.' || name === '..') {
+        throw new TypeError(
+          `Kovo framework source directory ${directory.path} has an invalid entry.`,
+        );
+      }
+      const filePath = join(directory.path, name);
+      const stats = lstatSync(filePath, { bigint: true });
+      const mode = buildOwnDataValue(stats, 'mode', `Kovo framework source ${filePath}`);
+      if (typeof mode !== 'bigint') {
+        throw new TypeError(`Kovo framework source ${filePath} has invalid mode evidence.`);
+      }
+      const kind = mode & 0o170000n;
+      if (kind === 0o040000n) {
+        if (buildRegExpExec(/^node_modules$/iu, name) !== null) continue;
+        if (directory.depth >= KOVO_FRAMEWORK_SOURCE_MAX_DEPTH) {
+          throw new TypeError('Kovo framework source snapshot exceeds the depth limit.');
+        }
+        buildSecurityArrayAppend(
+          pending,
+          { depth: directory.depth + 1, path: filePath },
+          'Kovo framework source directories',
+        );
+        continue;
+      }
+      if (kind === 0o120000n) {
+        // A symlink never creates membership. An internal target is snapshotted at its canonical
+        // regular path; an external target remains outside the declared package root.
+        continue;
+      }
+      if (kind !== 0o100000n) {
+        throw new TypeError(`Kovo framework source ${filePath} is not a regular file.`);
+      }
+      const size = buildOwnDataValue(stats, 'size', `Kovo framework source ${filePath}`);
+      if (typeof size !== 'bigint' || size < 0n || size > 16_777_216n) {
+        throw new TypeError(`Kovo framework source ${filePath} exceeds the file byte limit.`);
+      }
+      budget.files += 1;
+      if (budget.files > KOVO_FRAMEWORK_SOURCE_MAX_FILES) {
+        throw new TypeError('Kovo framework source snapshot exceeds the file limit.');
+      }
+      const bytes = readFileSync(filePath);
+      const byteLength = buildByteLength(bytes);
+      if (byteLength > KOVO_FRAMEWORK_SOURCE_MAX_FILE_BYTES) {
+        throw new TypeError(`Kovo framework source ${filePath} exceeds the file byte limit.`);
+      }
+      budget.bytes += byteLength;
+      if (budget.bytes > KOVO_FRAMEWORK_SOURCE_MAX_TOTAL_BYTES) {
+        throw new TypeError('Kovo framework source snapshot exceeds the total byte limit.');
+      }
+      const canonicalPath = realpathSync(filePath);
+      if (!isBuildPathWithinRoot(root, canonicalPath)) {
+        throw new TypeError(`Kovo framework source ${filePath} escapes its package root.`);
+      }
+      const snapshot = { byteLength, sha256: hash('sha256', bytes, 'hex') };
+      if (
+        buildMapHas(files, canonicalPath) &&
+        (buildMapGet(files, canonicalPath)?.byteLength !== snapshot.byteLength ||
+          buildMapGet(files, canonicalPath)?.sha256 !== snapshot.sha256)
+      ) {
+        throw new TypeError(`Kovo framework source snapshot conflicts for ${canonicalPath}.`);
+      }
+      buildMapSet(files, canonicalPath, snapshot);
+    }
+  }
+  return files;
 }
 
 function exactKovoFrameworkPackageManifest(
@@ -3340,28 +3522,29 @@ function declaredKovoFrameworkDependencies(
   label: string,
 ): string[] {
   const names: string[] = [];
-  for (const field of ['dependencies', 'peerDependencies'] as const) {
-    const dependencies = buildOwnDataValue(manifest, field, label);
-    if (dependencies === undefined) continue;
-    if (!isRecord(dependencies)) throw new TypeError(`${label}.${field} must be an own record.`);
-    const candidates = buildObjectKeys(dependencies);
-    for (let index = 0; index < candidates.length; index += 1) {
-      const candidate = candidates[index]!;
-      if (!isKovoFrameworkSourcePackage(candidate)) continue;
-      const range = buildOwnDataValue(dependencies, candidate, `${label}.${field}`);
-      if (typeof range !== 'string') {
-        throw new TypeError(`${label}.${field}.${candidate} must be a string.`);
+  // Only package-owned dependencies extend the trusted framework graph. Peers are selected by the
+  // consuming app, and optional dependencies can likewise be substituted or omitted by the host;
+  // neither is framework-owned authority for the SPEC §5.2/§6.6 source exemption.
+  const dependencies = buildOwnDataValue(manifest, 'dependencies', label);
+  if (dependencies === undefined) return names;
+  if (!isRecord(dependencies)) throw new TypeError(`${label}.dependencies must be an own record.`);
+  const candidates = buildObjectKeys(dependencies);
+  for (let index = 0; index < candidates.length; index += 1) {
+    const candidate = candidates[index]!;
+    if (!isKovoFrameworkSourcePackage(candidate)) continue;
+    const range = buildOwnDataValue(dependencies, candidate, `${label}.dependencies`);
+    if (typeof range !== 'string') {
+      throw new TypeError(`${label}.dependencies.${candidate} must be a string.`);
+    }
+    let duplicate = false;
+    for (let nameIndex = 0; nameIndex < names.length; nameIndex += 1) {
+      if (names[nameIndex] === candidate) {
+        duplicate = true;
+        break;
       }
-      let duplicate = false;
-      for (let nameIndex = 0; nameIndex < names.length; nameIndex += 1) {
-        if (names[nameIndex] === candidate) {
-          duplicate = true;
-          break;
-        }
-      }
-      if (!duplicate) {
-        buildSecurityArrayAppend(names, candidate, 'Declared Kovo framework dependencies');
-      }
+    }
+    if (!duplicate) {
+      buildSecurityArrayAppend(names, candidate, 'Declared Kovo framework dependencies');
     }
   }
   return names;
@@ -3376,14 +3559,140 @@ function isKovoFrameworkSourcePackage(value: string): boolean {
 
 /** @internal Packed-install regression seam for the SPEC §5.2/§6.6 source-root proof. */
 export function kovoFrameworkSourceRootsForTesting(cliEntry: string): readonly string[] {
+  const trust = resolveKovoFrameworkSourceRoots(cliEntry, createRequire(pathToFileURL(cliEntry)));
+  const roots: string[] = [];
+  for (let index = 0; index < trust.length; index += 1) {
+    buildSecurityArrayAppend(roots, trust[index]!.path, 'Kovo framework source root paths');
+  }
+  return buildSnapshotDenseArray(roots, 'Kovo framework source root paths');
+}
+
+/** @internal Packed-install regression seam for source-path containment adversaries. */
+export function kovoFrameworkSourcePathForTesting(cliEntry: string, fileName: string): boolean {
+  return kovoFrameworkSourcePathMatchesSnapshot(
+    resolveKovoFrameworkSourceRoots(cliEntry, createRequire(pathToFileURL(cliEntry))),
+    resolve(fileName),
+  );
+}
+
+/** @internal Regression seam for roots captured before app/config evaluation. */
+export function kovoFrameworkSourceTrustForTesting(
+  cliEntry: string,
+): readonly KovoFrameworkSourceRoot[] {
   return resolveKovoFrameworkSourceRoots(cliEntry, createRequire(pathToFileURL(cliEntry)));
 }
 
-function isKovoFrameworkSourcePath(roots: readonly string[], fileName: string): boolean {
-  for (let index = 0; index < roots.length; index += 1) {
-    if (isBuildPathWithinRoot(roots[index]!, fileName)) return true;
+/** @internal Real-Vite regression seam for the SPEC §5.2/§6.6 framework-source sink. */
+export function kovoFrameworkSourceVitePluginForTesting(
+  cliEntry: string,
+  buildRoot: string,
+): Plugin {
+  return approvedBuildSourcesVitePlugin(
+    join(buildRoot, '.kovo-framework-source-test-app.mjs'),
+    buildRoot,
+    [],
+    'app',
+    resolveKovoFrameworkSourceRoots(cliEntry, createRequire(pathToFileURL(cliEntry))),
+  );
+}
+
+/** @internal Regression seam for trust captured before app/config evaluation. */
+export function kovoFrameworkSourcePathFromTrustForTesting(
+  roots: readonly KovoFrameworkSourceRoot[],
+  fileName: string,
+): boolean {
+  return kovoFrameworkSourcePathMatchesSnapshot(roots, resolve(fileName));
+}
+
+type KovoFrameworkSourceClassification =
+  | { readonly kind: 'invalid' }
+  | { readonly kind: 'outside' }
+  | {
+      readonly canonicalPath: string;
+      readonly kind: 'trusted';
+      readonly snapshot: KovoFrameworkSourceFileSnapshot;
+    };
+
+function classifyKovoFrameworkSourcePath(
+  roots: readonly KovoFrameworkSourceRoot[],
+  fileName: string,
+): KovoFrameworkSourceClassification {
+  let canonicalFileName: string;
+  try {
+    canonicalFileName = realpathSync(fileName);
+  } catch {
+    for (let index = 0; index < roots.length; index += 1) {
+      if (isBuildPathWithinRoot(roots[index]!.path, fileName)) return { kind: 'invalid' };
+    }
+    return { kind: 'outside' };
   }
-  return false;
+  let invalid = false;
+  for (let index = 0; index < roots.length; index += 1) {
+    const root = roots[index]!;
+    const lexicalInside = isBuildPathWithinRoot(root.path, fileName);
+    const canonicalInside = isBuildPathWithinRoot(root.path, canonicalFileName);
+    const currentIdentity = kovoFrameworkSourceRootIdentity(root.path);
+    if (
+      currentIdentity === undefined ||
+      currentIdentity.device !== root.device ||
+      currentIdentity.inode !== root.inode
+    ) {
+      if (lexicalInside || canonicalInside) invalid = true;
+      continue;
+    }
+    if (!canonicalInside) {
+      if (lexicalInside) invalid = true;
+      continue;
+    }
+    const segments = buildPathSegments(relative(root.path, canonicalFileName));
+    let crossesNestedDependencyBoundary = false;
+    for (let segmentIndex = 0; segmentIndex < segments.length; segmentIndex += 1) {
+      if (buildRegExpExec(/^node_modules$/iu, segments[segmentIndex]!) !== null) {
+        crossesNestedDependencyBoundary = true;
+        break;
+      }
+    }
+    // A declared root does not confer trust transitively on packages installed below it. If that
+    // nested package is independently declared and resolved, its own exact entry root appears in
+    // `roots` and a later iteration can accept it (SPEC §5.2/§6.6).
+    if (crossesNestedDependencyBoundary) {
+      invalid = true;
+      continue;
+    }
+    const snapshot = buildMapGet(root.files, canonicalFileName);
+    if (snapshot === undefined) {
+      invalid = true;
+      continue;
+    }
+    return { canonicalPath: canonicalFileName, kind: 'trusted', snapshot };
+  }
+  return invalid ? { kind: 'invalid' } : { kind: 'outside' };
+}
+
+function kovoFrameworkSourceSnapshotMatches(
+  snapshot: KovoFrameworkSourceFileSnapshot,
+  source: string | Uint8Array,
+): boolean {
+  return (
+    buildByteLength(source) === snapshot.byteLength &&
+    hash('sha256', source, 'hex') === snapshot.sha256
+  );
+}
+
+function kovoFrameworkSourcePathMatchesSnapshot(
+  roots: readonly KovoFrameworkSourceRoot[],
+  fileName: string,
+): boolean {
+  const classification = classifyKovoFrameworkSourcePath(roots, fileName);
+  if (classification.kind !== 'trusted') return false;
+  try {
+    return kovoFrameworkSourceSnapshotMatches(
+      classification.snapshot,
+      readFileSync(classification.canonicalPath),
+    );
+  } catch {
+    return false;
+  }
 }
 
 function unapprovedBuildSourceError(
