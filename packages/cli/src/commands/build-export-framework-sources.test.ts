@@ -433,6 +433,22 @@ describe('Kovo framework source roots', () => {
     }
   });
 
+  it('rejects changed packed text-asset bytes through the real Vite transform path', async () => {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), 'kovo-framework-mutated-asset-vite-')));
+    try {
+      const cli = writePackedPackage(root, '@kovojs/cli', { '@kovojs/server': '0.2.0' });
+      const server = writePackedPackage(root, '@kovojs/server');
+      const securityPlugin = kovoFrameworkSourceVitePluginForTesting(cli.entry, root);
+      writeFileSync(server.asset, '.packed { color: red; }\n', 'utf8');
+
+      await expect(
+        viteBuildPackedFramework(root, server.entry, join(root, 'out'), [securityPlugin]),
+      ).rejects.toThrow(/refused changed framework source/u);
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
   it('detects mutation through a hardlinked alias after bootstrap', () => {
     const root = realpathSync(mkdtempSync(join(tmpdir(), 'kovo-framework-hardlink-')));
     try {

@@ -3258,7 +3258,7 @@ function approvedBuildSourcesVitePlugin(
     },
     transform(code, id) {
       const fileName = viteBuildSourceFileName(id);
-      if (fileName === undefined || !isBuildSourceModulePath(fileName)) return null;
+      if (fileName === undefined) return null;
       const approved = buildMapHas(approvedByPath, fileName);
       if (!approved) {
         const frameworkSource = classifyKovoFrameworkSourcePath(frameworkSourceRoots, fileName);
@@ -3276,6 +3276,7 @@ function approvedBuildSourcesVitePlugin(
           return null;
         }
       }
+      if (!isBuildSourceModulePath(fileName)) return null;
       if (!approved && !isBuildAppSourcePath(appSourceRoot, fileName)) return null;
       const displayName = relative(buildRoot, fileName) || fileName;
       if (!approved) {
