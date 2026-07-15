@@ -14,6 +14,8 @@ export const requestSafeGlobalCallables = Object.freeze([
   'Boolean',
   'Number',
   'String',
+  'atob',
+  'btoa',
   'decodeURI',
   'decodeURIComponent',
   'encodeURI',
@@ -197,6 +199,7 @@ export const requestSafeGlobalConstructors = Object.freeze([
   'Request',
   'Response',
   'Set',
+  'SubtleCrypto',
   'SyntaxError',
   'TextDecoder',
   'TextEncoder',
@@ -382,6 +385,7 @@ export function lockRequestSafeRuntimeRealmWithInventory(
 ): void {
   const RuntimeGlobal = globalThis;
   const NativeArray = RuntimeGlobal.Array;
+  const NativeSubtleCrypto = RuntimeGlobal.crypto?.subtle;
   const NativeFormData = RuntimeGlobal.FormData;
   const NativeFunction = RuntimeGlobal.Function;
   const NativeHeaders = RuntimeGlobal.Headers;
@@ -1232,6 +1236,16 @@ export function lockRequestSafeRuntimeRealmWithInventory(
     }
     freezeTarget(value);
   };
+
+  // Better Auth and other framework-owned cryptographic boundaries resolve Web Crypto lazily.
+  // `crypto` itself is in the reviewed global inventory, but SubtleCrypto is returned through a
+  // prototype accessor and therefore is not an own namespace member for `lockNamespace()` to
+  // discover. Lock the boot-captured instance and its prototype now so later authored modules
+  // cannot receive raw key bytes through a replacement importKey/sign/verify/digest method
+  // (SPEC §6.6 rule 6).
+  if (typeof NativeSubtleCrypto === 'object' && NativeSubtleCrypto !== null) {
+    lockNamespace(NativeSubtleCrypto);
+  }
 
   // Iterator/generator prototypes are hidden intrinsics: no global constructor directly exposes
   // them, yet spread/for-of/Object.fromEntries and generator execution dispatch through their

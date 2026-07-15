@@ -215,8 +215,17 @@ process.stdout.write(await response.text());
 function nodePoisonPackageSource(): string {
   return `
 const NativeResponse = globalThis.Response;
+const nativeAtob = globalThis.atob;
+const nativeBtoa = globalThis.btoa;
+const NativeSubtleCrypto = globalThis.SubtleCrypto;
+const NativeTextEncoder = globalThis.TextEncoder;
 const nativeFetch = globalThis.fetch;
 const nativeSetTimeout = setTimeout;
+const nativeSubtleImportKey = globalThis.crypto.subtle.importKey;
+const nativeSubtleSign = globalThis.crypto.subtle.sign;
+const nativeTextEncoderEncode = globalThis.TextEncoder.prototype.encode;
+const nativeStringNormalize = globalThis.String.prototype.normalize;
+const subtlePrototype = Object.getPrototypeOf(globalThis.crypto.subtle);
 const nativeFunctionCall = Function.prototype.call;
 const nativeFunctionApply = Function.prototype.apply;
 const nativeFunctionBind = Function.prototype.bind;
@@ -233,8 +242,17 @@ function poisonAttempts() {
   };
   return [
     Reflect.set(globalThis, 'Response', class AttackerResponse {}),
+    Reflect.set(globalThis, 'atob', () => 'attacker-atob'),
+    Reflect.set(globalThis, 'btoa', () => 'attacker-btoa'),
+    Reflect.set(globalThis, 'SubtleCrypto', class AttackerSubtleCrypto {}),
+    Reflect.set(globalThis, 'TextEncoder', class AttackerTextEncoder {}),
     Reflect.set(globalThis, 'fetch', async () => new Response('attacker-fetch')),
     Reflect.set(globalThis, 'setTimeout', () => 0),
+    Reflect.set(subtlePrototype, 'importKey', async () => 'attacker-key'),
+    Reflect.set(subtlePrototype, 'sign', async () => new ArrayBuffer(0)),
+    Reflect.set(globalThis.crypto.subtle, 'importKey', async () => 'attacker-own-key'),
+    Reflect.set(globalThis.TextEncoder.prototype, 'encode', () => new Uint8Array()),
+    Reflect.set(globalThis.String.prototype, 'normalize', () => 'attacker-normalize'),
     Reflect.set(Function.prototype, 'call', () => 'attacker-call'),
     Reflect.set(Function.prototype, 'apply', () => 'attacker-apply'),
     Reflect.set(Function.prototype, 'bind', () => () => 'attacker-bind'),
@@ -271,6 +289,7 @@ async function safeBehavior() {
     array: [...['array-safe']][0],
     arrayFrom: Array.from(new Set(['array-from-safe']))[0],
     asyncGenerator: (await asyncGenerator.next()).value,
+    base64: atob(btoa('base64-safe')),
     bound: join.bind({ prefix: 'b' }, 'i')('n'),
     called: join.call({ prefix: 'c' }, 'a', 'l'),
     errorName: subclass.name,
@@ -288,8 +307,16 @@ export async function poisonResult() {
     deferredAttempts,
     exactIdentities: [
       globalThis.Response === NativeResponse,
+      globalThis.atob === nativeAtob,
+      globalThis.btoa === nativeBtoa,
+      globalThis.SubtleCrypto === NativeSubtleCrypto,
+      globalThis.TextEncoder === NativeTextEncoder,
       globalThis.fetch === nativeFetch,
       setTimeout === nativeSetTimeout,
+      globalThis.crypto.subtle.importKey === nativeSubtleImportKey,
+      globalThis.crypto.subtle.sign === nativeSubtleSign,
+      globalThis.TextEncoder.prototype.encode === nativeTextEncoderEncode,
+      globalThis.String.prototype.normalize === nativeStringNormalize,
       Function.prototype.call === nativeFunctionCall,
       Function.prototype.apply === nativeFunctionApply,
       Function.prototype.bind === nativeFunctionBind,
@@ -305,12 +332,28 @@ function generatedModulePoisonSource(): string {
   return `
 const kovoGeneratedModuleLockProof = (() => {
   const NativeResponse = globalThis.Response;
+  const nativeAtob = globalThis.atob;
+  const nativeBtoa = globalThis.btoa;
+  const NativeSubtleCrypto = globalThis.SubtleCrypto;
+  const NativeTextEncoder = globalThis.TextEncoder;
   const nativeFetch = globalThis.fetch;
   const nativeFunctionCall = Function.prototype.call;
+  const nativeSubtleImportKey = globalThis.crypto.subtle.importKey;
+  const nativeTextEncoderEncode = globalThis.TextEncoder.prototype.encode;
+  const nativeStringNormalize = globalThis.String.prototype.normalize;
+  const subtlePrototype = Object.getPrototypeOf(globalThis.crypto.subtle);
   const nativeArrayIteratorNext = Object.getPrototypeOf([][Symbol.iterator]()).next;
   const attempts = [
     Reflect.set(globalThis, 'Response', class AttackerAdapterResponse {}),
+    Reflect.set(globalThis, 'atob', () => 'attacker-adapter-atob'),
+    Reflect.set(globalThis, 'btoa', () => 'attacker-adapter-btoa'),
+    Reflect.set(globalThis, 'SubtleCrypto', class AttackerSubtleCrypto {}),
+    Reflect.set(globalThis, 'TextEncoder', class AttackerTextEncoder {}),
     Reflect.set(globalThis, 'fetch', async () => new Response('attacker-adapter-fetch')),
+    Reflect.set(subtlePrototype, 'importKey', async () => 'attacker-adapter-key'),
+    Reflect.set(globalThis.crypto.subtle, 'importKey', async () => 'attacker-adapter-own-key'),
+    Reflect.set(globalThis.TextEncoder.prototype, 'encode', () => new Uint8Array()),
+    Reflect.set(globalThis.String.prototype, 'normalize', () => 'attacker-normalize'),
     Reflect.set(Function.prototype, 'call', () => 'attacker-adapter-call'),
     Reflect.defineProperty(Array.from, 'call', {
       configurable: true,
@@ -327,13 +370,21 @@ const kovoGeneratedModuleLockProof = (() => {
     attempts,
     behavior: {
       array: [...['adapter-array-safe']][0],
+      base64: atob(btoa('adapter-base64-safe')),
       called: join.call({ prefix: 'a' }, 'd', 'apter-safe'),
       map: [...new Map([['field', 'adapter-map-safe']]).values()][0],
       matchAll: [...'adapter-match-safe'.matchAll(/match/g)][0][0],
     },
     exactIdentities: [
       globalThis.Response === NativeResponse,
+      globalThis.atob === nativeAtob,
+      globalThis.btoa === nativeBtoa,
+      globalThis.SubtleCrypto === NativeSubtleCrypto,
+      globalThis.TextEncoder === NativeTextEncoder,
       globalThis.fetch === nativeFetch,
+      globalThis.crypto.subtle.importKey === nativeSubtleImportKey,
+      globalThis.TextEncoder.prototype.encode === nativeTextEncoderEncode,
+      globalThis.String.prototype.normalize === nativeStringNormalize,
       Function.prototype.call === nativeFunctionCall,
       Object.getPrototypeOf([][Symbol.iterator]()).next === nativeArrayIteratorNext,
     ],
@@ -350,14 +401,15 @@ Object.defineProperty(globalThis, '__kovoGeneratedModuleLockProof', {
 
 function expectedGeneratedModuleProof(): unknown {
   return {
-    attempts: Array.from({ length: 8 }, () => false),
+    attempts: Array.from({ length: 16 }, () => false),
     behavior: {
       array: 'adapter-array-safe',
+      base64: 'adapter-base64-safe',
       called: 'adapter-safe',
       map: 'adapter-map-safe',
       matchAll: 'match',
     },
-    exactIdentities: [true, true, true, true],
+    exactIdentities: Array.from({ length: 11 }, () => true),
   };
 }
 
@@ -368,6 +420,7 @@ function expectedHandlerPoisonProof(): unknown {
       array: 'array-safe',
       arrayFrom: 'array-from-safe',
       asyncGenerator: 'async-generator-safe',
+      base64: 'base64-safe',
       bound: 'bin',
       called: 'cal',
       errorName: 'UndiciStyleError',
@@ -377,9 +430,9 @@ function expectedHandlerPoisonProof(): unknown {
       map: 'map-safe',
       matchAll: 'match',
     },
-    deferredAttempts: Array.from({ length: 15 }, () => false),
-    exactIdentities: [true, true, true, true, true, true, true],
-    topLevelAttempts: Array.from({ length: 15 }, () => false),
+    deferredAttempts: Array.from({ length: 24 }, () => false),
+    exactIdentities: Array.from({ length: 15 }, () => true),
+    topLevelAttempts: Array.from({ length: 24 }, () => false),
   };
 }
 

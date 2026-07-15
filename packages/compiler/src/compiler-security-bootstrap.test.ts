@@ -77,6 +77,19 @@ describe('compiler supported-runner security bootstrap', () => {
       lockRequestSafeRuntimeRealmWithInventory(requestSafeRuntimeInventory);
       const stateKey = Symbol.for('@kovojs/request-safe-runtime-lock/v1');
       const state = globalThis[stateKey];
+      const callables = state.inventory.globalCallables;
+      const atobDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'atob');
+      const btoaDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'btoa');
+      if (
+        !callables.includes('atob') ||
+        !callables.includes('btoa') ||
+        !atobDescriptor ||
+        atobDescriptor.writable !== false ||
+        !btoaDescriptor ||
+        btoaDescriptor.writable !== false
+      ) {
+        throw new Error('base64 globals are absent from the cross-bundle lock inventory');
+      }
       const mutationRejected = !Reflect.set(state, 'properties', []);
       const globalThisReplacementRejected = !Reflect.set(globalThis, 'globalThis', Object.create(null));
       lockRequestSafeRuntimeRealmWithInventory(requestSafeRuntimeInventory);

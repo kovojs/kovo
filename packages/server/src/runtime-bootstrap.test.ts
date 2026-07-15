@@ -206,6 +206,15 @@ process.exit(0);
         `const NativeResponse = globalThis.Response;
 const nativeFetch = globalThis.fetch;
 const nativeSetTimeout = setTimeout;
+const nativeAtob = globalThis.atob;
+const nativeBtoa = globalThis.btoa;
+const NativeSubtleCrypto = globalThis.SubtleCrypto;
+const NativeTextEncoder = globalThis.TextEncoder;
+const nativeSubtleImportKey = globalThis.crypto.subtle.importKey;
+const nativeSubtleSign = globalThis.crypto.subtle.sign;
+const nativeTextEncoderEncode = globalThis.TextEncoder.prototype.encode;
+const nativeStringNormalize = globalThis.String.prototype.normalize;
+const subtlePrototype = Object.getPrototypeOf(globalThis.crypto.subtle);
 const arrayIteratorPrototype = Object.getPrototypeOf([][Symbol.iterator]());
 const mapIteratorPrototype = Object.getPrototypeOf(new Map().entries());
 const matchAllIteratorPrototype = Object.getPrototypeOf('safe'.matchAll(/./g));
@@ -213,6 +222,15 @@ export const attempts = [
   Reflect.set(globalThis, 'Response', class AttackerResponse {}),
   Reflect.set(globalThis, 'fetch', async () => new Response('attacker')),
   Reflect.set(globalThis, 'setTimeout', () => 0),
+  Reflect.set(globalThis, 'atob', () => 'attacker-atob'),
+  Reflect.set(globalThis, 'btoa', () => 'attacker-btoa'),
+  Reflect.set(globalThis, 'SubtleCrypto', class AttackerSubtleCrypto {}),
+  Reflect.set(globalThis, 'TextEncoder', class AttackerTextEncoder {}),
+  Reflect.set(subtlePrototype, 'importKey', async () => 'attacker-key'),
+  Reflect.set(subtlePrototype, 'sign', async () => new ArrayBuffer(0)),
+  Reflect.set(globalThis.crypto.subtle, 'importKey', async () => 'attacker-own-key'),
+  Reflect.set(globalThis.TextEncoder.prototype, 'encode', () => new Uint8Array()),
+  Reflect.set(globalThis.String.prototype, 'normalize', () => 'attacker-normalize'),
   Reflect.set(Function.prototype, 'call', () => 'attacker-call'),
   Reflect.set(Function.prototype, 'apply', () => 'attacker-apply'),
   Reflect.set(Function.prototype, 'bind', () => () => 'attacker-bind'),
@@ -229,12 +247,21 @@ export const exact = [
   globalThis.Response === NativeResponse,
   globalThis.fetch === nativeFetch,
   setTimeout === nativeSetTimeout,
+  globalThis.atob === nativeAtob,
+  globalThis.btoa === nativeBtoa,
+  globalThis.SubtleCrypto === NativeSubtleCrypto,
+  globalThis.TextEncoder === NativeTextEncoder,
+  globalThis.crypto.subtle.importKey === nativeSubtleImportKey,
+  globalThis.crypto.subtle.sign === nativeSubtleSign,
+  globalThis.TextEncoder.prototype.encode === nativeTextEncoderEncode,
+  globalThis.String.prototype.normalize === nativeStringNormalize,
 ];
 function join(left, right) { return this.prefix + left + right; }
 const formData = new FormData();
 formData.append('field', 'form-safe');
 export const behavior = {
   array: [...['array-safe']][0],
+  base64: atob(btoa('base64-safe')),
   bound: join.bind({ prefix: 'b' }, 'i')('n'),
   called: join.call({ prefix: 'c' }, 'a', 'l'),
   formData: [...formData.entries()][0][1],
@@ -247,16 +274,17 @@ export const behavior = {
         poisonPath,
       );
       expect(result).toEqual({
-        attempts: [false, false, false, false, false, false, false, false, false, false],
+        attempts: Array.from({ length: 19 }, () => false),
         behavior: {
           array: 'array-safe',
+          base64: 'base64-safe',
           bound: 'bin',
           called: 'cal',
           formData: 'form-safe',
           map: 'map-safe',
           matchAll: 'match',
         },
-        exact: [true, true, true],
+        exact: Array.from({ length: 11 }, () => true),
       });
     } finally {
       rmSync(root, { force: true, recursive: true });
