@@ -309,24 +309,33 @@ fails closed.
     install-time fingerprint, and modular plus generated-inline regressions are green on Chromium,
     Firefox, and WebKit. SPEC §9.3.
 
-- [ ] **H25 - KV424 omitted server request roots and indirect authority references.**
+- [x] **H25 - KV424 omitted server request roots and indirect authority references.**
   - Real builds accepted request-controlled `child_process`, dynamic-code/worker, raw filesystem,
     and path authority from mutation/query/route/endpoint/task/webhook closures, including ordinary
     dependency helpers and callback/reference invocation shapes. SPEC §5.2, §6.6, §9.1.
+  - **Evidence:** `a803c2e14`, `bcf6a927f`, `e98a5e8f6`, and `fefbd70af` close every request root,
+    cross-module call graph, callback, reflective invocation, and generated-runtime grammar. The
+    exact-head `build-export-process-sink.test.ts` real-build matrix is 28/28 green.
 
-- [ ] **H26 - Framework authority constructors could be minted from request-derived roots and
+- [x] **H26 - Framework authority constructors could be minted from request-derived roots and
       allowlists.**
   - `rootedFiles(params.root)` served bytes from an attacker-selected absolute root, and the same
     provenance gap reaches command and filesystem-storage constructors unless their authority is
     module/config-owned. The exact CLI build accepted and emitted the rooted-file exploit. SPEC
     §6.6, §9.1, §10.6.
+  - **Evidence:** `a803c2e14`, `bcf6a927f`, and `e98a5e8f6` require closed module/config provenance
+    for file, storage, and command constructors while retaining literal module-scope controls. The
+    exact-head real-build process-sink matrix is 28/28 green.
 
-- [ ] **H27 - Raw environment and credential sources could cross the public wire as ordinary
+- [x] **H27 - Raw environment and credential sources could cross the public wire as ordinary
       strings.**
   - A public query returned `process.env.KOVO_ENV_SECRET_AUDIT` through the emitted `/_q` JSON wire;
     a second emitted artifact reflected an inbound `Cookie: session=http-only-secret` value into
     readable JSON, defeating the browser's HttpOnly boundary. Both exact builds exited zero. SPEC
     §6.6 and §10.3 C9.
+  - **Evidence:** `f8f262f25` tracks environment and request-credential values through aliases,
+    destructuring, helpers, callbacks, containers, transformations, and relative modules to every
+    public wire. The exact-head real-build process-sink matrix is 28/28 green.
 
 - [x] **H28 - The emitted Node static server pinned a root pathname but not its filesystem
       identity.**

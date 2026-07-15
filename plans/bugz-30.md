@@ -2,20 +2,20 @@
 
 **Date:** 2026-07-14
 
-**Scope:** Distinct security findings uncovered after the `bugz-29` checkpoint, through
-`8409f8053`. Rankings prioritize practical impact, then exploitability. `SPEC.md` §2, §5.2,
-§6.6, and §10.3 remain normative: authored code shares framework realms, structural markers are
-not proof, security facts must be snapshotted before authored evaluation, and uncertain boundary
-behavior fails closed. Open `bugz-29` items H25-H27 remain owned by that ledger and are not
-renumbered here.
+**Scope:** Distinct security findings uncovered after the `bugz-29` checkpoint, through the
+`bc353d331` integration checkpoint. Rankings prioritize practical impact, then exploitability.
+`SPEC.md` §2, §5.2, §6.6, and §10.3 remain normative: authored code shares framework realms,
+structural markers are not proof, security facts must be snapshotted before authored evaluation,
+and uncertain boundary behavior fails closed. Open `bugz-29` items H25-H27 remain owned by that
+ledger and are not renumbered here.
 
 ## Severity summary
 
 | Severity | Families | Items |
 | -------- | -------: | ----: |
-| Critical |        2 | C1-C2 |
-| High     |        5 | H1-H5 |
-| Medium   |        1 |    M1 |
+| Critical |        3 | C1-C3 |
+| High     |        7 | H1-H7 |
+| Medium   |        9 | M1-M9 |
 
 ## Critical
 
@@ -38,6 +38,17 @@ renumbered here.
     executable imports and withhold unproved value captures with KV201/KV437. The
     `client-handler-import-policy.test.ts` and `client-secret-capture.test.ts` adversarial matrices,
     generated registry integrity gate, and security-classifier corpus are green. SPEC §5.2, §6.6.
+
+- [x] **C3 - Generated database bootstrap values could retain or reconstruct privileged Postgres
+      authority across authored modules.**
+  - Structural runtime options, provisioning closures, principal factories, and helper-returned DB
+    chains let generated code keep repeatable system/owner authority or evade the intended closed
+    provider grammar after bootstrap.
+  - **Evidence:** `de6cbf8d7`, `fefbd70af`, `f6cc19876`, and `95f52b343` replace the generated
+    options/provisioning surface with opaque environment-owned providers and close direct, helper,
+    arbitrary-chain, and erased-TypeScript provenance. The exact Reader/receiver security matrices,
+    generated Postgres/SQLite scaffold typechecks, and capability census are green. SPEC §2, §5.2,
+    §6.6, §10.3.
 
 ## High
 
@@ -62,17 +73,19 @@ renumbered here.
     `build-export-framework-sources.test.ts` matrix covers every reproduced carrier plus genuine
     workspace, packed chunk, and text-asset controls. SPEC §2, §5.2, §6.6.
 
-- [ ] **H3 - Generated Postgres/SQLite auth, environment, and database-provider wiring retains raw
+- [x] **H3 - Generated Postgres/SQLite auth, environment, and database-provider wiring retains raw
       authority across authored modules.**
   - Starter auth modules still read mutable `process.env` for signing material/base URL, the
     Postgres system capability remains publicly consumable, and generated auth/request providers
     have not yet reached one opaque, parity-tested construction path. This is generated-runtime
     construction authority, distinct from `bugz-29` H27's raw environment-to-public-wire leak.
-  - **Partial evidence:** `7da41bc60` hides the generated Postgres request DB provider and
-    `311e7748d` establishes the SQLite opaque provider/system capability. Closure still requires
-    environment-owned auth constructors, an internal-only Postgres system capability, exact KV424
-    grammar, Postgres/SQLite production builds, and capability-census/API parity. SPEC §2, §6.6,
-    §10.3.
+  - **Evidence:** `7da41bc60`, `311e7748d`, `1334cb683`, `1647cd351`, `e481eedcf`,
+    `6b947be23`, `f6cc19876`, and `95f52b343` now hide both database dialects behind opaque providers,
+    move auth/CSRF inputs to environment-owned constructors, and remove raw environment reads and
+    repeatable seed/system-DB exports from generated production source. The exact Postgres contact
+    artifact and `index.build.prod-artifact.contacts.test.ts` SQLite add-contact artifact both build,
+    boot, authenticate, mutate, and persist through opaque providers; classifier corpus, capability
+    census, API surface, and packed auth parity are green. SPEC §2, §6.6, §10.3.
 
 - [x] **H4 - Broad retained-config exceptions treated aliased or replaceable DB/client-module
       carriers as framework-owned facts.**
@@ -92,6 +105,25 @@ renumbered here.
     `PRAGMA temp_store=MEMORY`; `sqlite.test.ts` proves an empty main filename and
     `temp_store = 2`, while the server filesystem-boundary gate remains green. SPEC §6.6, §10.3.
 
+- [x] **H6 - Better Auth could initialize after authored same-realm poisoning and retain deferred
+      secret-processing authority outside the bootstrap lock.**
+  - The package graph did not require bootstrap-first evaluation, and deferred crypto, password,
+    URL, RegExp, and environment decisions could first resolve after authored modules had run.
+  - **Evidence:** `7a0489570`, `94021384b`, and `525454a5c` lock the Better Auth graph before app
+    evaluation, pin its deferred crypto/password controls, and make absent or late bootstrap fail
+    closed. The exact shared-realm fixture, packed bootstrap suite, and complete Better Auth package
+    are 7/7 and 185/185 green. SPEC §2, §6.6, §10.3.
+
+- [x] **H7 - A late-mutated SQLite table identity could authorize one declared table while DML
+      executed against another.**
+  - After runtime construction, changing an enrolled table's Drizzle name or column graph kept the
+    original identity-based allowlist decision but redirected the reconstructed SQL table to a
+    victim relation.
+  - **Evidence:** `b525e890c` resolves private provenance only to a construction-time frozen DML
+    table/column graph. The late Name/Schema/BaseName/alias/Columns/column mutation matrix keeps every
+    victim empty; counterfeit, Proxy, and cross-copy identities fail closed. SPEC §6.6 C9/C15,
+    §10.3, §11.2.
+
 ## Medium
 
 - [x] **M1 - Reader provenance recovery false-positived ordinary reads and introduced an unbounded
@@ -101,17 +133,88 @@ renumbered here.
     imports for unrelated types and pushed a registry build beyond 12 minutes.
   - **Evidence:** `9dcf28a62` requires both the exact `@kovojs/server` import/re-export symbol and
     source type identity, while `cef328a41` fast-rejects non-`Reader` symbols before import lookup.
-    `index.identity-resolver.test.ts`, the 109 query-shape/receiver tests, `vp run
-    typecheck-examples`, and the 28.12-second StackOverflow registry build are green. SPEC §5.2,
-    §6.6.
+    `index.identity-resolver.test.ts`, the 109 query-shape/receiver tests, the VP
+    `typecheck-examples` task, and the 28.12-second StackOverflow registry build are green. SPEC
+    §5.2, §6.6.
+
+- [x] **M2 - Reader and generated DB provenance lost exact identity through type-only imports,
+      re-exports, helpers, and arbitrary receiver chains.**
+  - The classifier could reject genuine `Reader<Db>` values, crash on namespace forms, or accept a
+    helper-laundered retained DB receiver without the exact framework import identity.
+  - **Evidence:** `f6cc19876` exact-matches named/type-only Reader imports and re-exports while
+    closing helper and arbitrary-chain laundering. The receiver suite is 41/41 and the independent
+    identity/global matrix is 61/61 green. SPEC §5.2, §6.6.
+
+- [x] **M3 - Locked-global mutation escaped through syntax variants and erased TypeScript
+      declarations.**
+  - `globalThis`/`Reflect`/prototype mutations, delete/pattern/loop writes, and ambient or type-only
+    declarations could hide a write or make the classifier trust an authored replacement.
+  - **Evidence:** `f6cc19876` closes the full global-mutation and erased-declaration grammar. The
+    trust-classifier suite is 267/267 and its 400/1000-root scale subset remains within the recorded
+    low-second bounds. SPEC §2, §5.2, §6.6.
+
+- [x] **M4 - Nested lifecycle arrays retained mutable second-snapshot ownership.**
+  - A provider-derived array could be snapshotted once but retain nested app-owned values when a
+    later lifecycle layer rewrapped it, allowing post-guard mutation of principal-facing data.
+  - **Evidence:** `6ebedbf4e` preserves deep-snapshot ownership across lifecycle layering; the
+    request-proxy and packed bootstrap regressions are green. SPEC §6.6 C9, §9.5.
+
+- [x] **M5 - Opaque auth signing and pinned request carriers disagreed at framework-owned sinks.**
+  - Better Auth rejected Kovo's genuine lifecycle Proxy; the first bridge could have re-minted raw,
+    accessor, or foreign-Proxy values as CSRF authority. Separately, the narrow CSRF signer denied
+    the framework's fixed post-login session fingerprint and turned authenticated documents into
+    500 responses.
+  - **Evidence:** `cdcb10c38`, `6ecd7c82e`, `7da4329e0`, and `a4164f216` preserve exact carrier
+    provenance, reject re-minting and second-copy identities, keep generic session-fingerprint
+    signing denied, and add one package-private fixed-purpose document sink. The independent packed
+    adversarial matrix reports zero blockers; focused server/auth suites are green. SPEC §6.6 C9,
+    §9.3, §9.5.
+
+- [x] **M6 - The classifier-corpus gate could parse an earlier set reference as the reviewed
+      declaration.**
+  - A use of `REQUEST_SAFE_GLOBAL_*` before its `const` declaration redirected the source extractor
+    into an unrelated later array. That produced false failures here and could also hide an
+    over-broad classifier set when the unrelated array happened to remain within the lock inventory.
+  - **Evidence:** `ce78a467b` binds extraction to the exact exported/local `const` declaration and
+    adds a deceptive earlier-use regression. The gate unit suite is 7/7 and all eight security
+    corpora pass. SPEC §5.2, §6.6.
+
+- [x] **M7 - Sealing the SQLite driver disconnected async mutation transactions and reconstructed
+      table identity.**
+  - The finite `$client` facade withheld the native controls required by Kovo's private async
+    transaction bridge, so every async app mutation fell into the synchronous adapter and failed
+    before its handler started. After restoring that private association, the nested SQL membrane
+    also lost the reconstructed table's exact provenance and falsely rejected its declared write.
+  - **Evidence:** `6c51444ce` registers native transaction controls in a private WeakMap without
+    exposing `exec`/`inTransaction`, preserves canonical table-source edges, and adds an actual
+    `createSqliteAppRuntime` async mutation/commit regression. The integrated
+    SQLite/mutation/continuation/managed-DB matrix is 265/265 green, and the exact generated SQLite
+    add-contact artifact passes build integrity, boot, sign-in, mutation, and persisted rerender.
+    SPEC §6.6 C9, §10.3, §11.2.
+
+- [x] **M8 - A nested SQLite transaction opener self-queued behind its own mutation frame and
+      transaction-scoped authority remained callable after settlement.**
+  - Cast-based access to the handler's type-hidden `.transaction()` hung indefinitely, and retained
+    DB methods/builders could outlive the callback that owned their transaction.
+  - **Evidence:** `bc353d331` attaches a private scope token to handler DB descendants, rejects
+    nested openers synchronously with KV433, revokes captured DB/method/builder authority, and queues
+    unrelated roots by native-client identity. The 265-test matrix and independent five-case scope
+    audit are zero-blocker. SPEC §10.3, §11.2.
+
+- [x] **M9 - Managed DML on foreign-key-bearing SQLite tables failed before SQL execution.**
+  - The SQL membrane reconstructed schema-only FK/extra-config entities as DML authority, then
+    rejected the native Drizzle ForeignKey carrier for insert, update, and delete alike.
+  - **Evidence:** `69f5dd297` omits index/FK/check/extra-config carriers from the finite DML graph;
+    one real runtime regression executes insert, update, and delete on an FK-bearing child table.
+    The integrated 265-test matrix and server dist/DTS build are green. SPEC §6.6 C9, §10.3.
 
 ## Closure gates
 
-- [ ] Close H3 with the final generated Postgres/SQLite auth/env/provider commits, then prove exact
+- [x] Close H3 with the final generated Postgres/SQLite auth/env/provider commits, then prove exact
       generated production builds, a production-template raw-environment grep, KV424/classifier
       corpus results, capability census, API surface, and packed-runtime parity.
-- [ ] Resolve `bugz-29` H25-H27 in `plans/bugz-29.md`; do not claim their closure through this
-      ledger.
+- [x] Resolve `bugz-29` H25-H27 in `plans/bugz-29.md`; the exact-head real-build process-sink
+      matrix is 28/28 green.
 - [ ] Run the final exact-head static, paranoid, package, root-test, browser, integration, starter,
       `kovo check`, VP, API, publish, pack-security snapshot, performance, and diff gates.
 - [ ] Obtain explicit zero-new-finding conclusions on the final integrated head for runtime,
