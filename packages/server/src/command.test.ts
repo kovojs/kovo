@@ -223,10 +223,20 @@ describe('server command primitive', () => {
     try {
       const env = { ...process.env };
       delete env.NODE_OPTIONS;
-      const result = spawnSync(process.execPath, ['--input-type=module', '--eval', script], {
-        encoding: 'utf8',
-        env,
-      });
+      const result = spawnSync(
+        process.execPath,
+        [
+          '--disable-warning=ExperimentalWarning',
+          '--experimental-transform-types',
+          '--input-type=module',
+          '--eval',
+          script,
+        ],
+        {
+          encoding: 'utf8',
+          env,
+        },
+      );
       expect(result.stderr).toBe('');
       expect(result.status).toBe(0);
       expect(existsSync(markerPath)).toBe(false);
