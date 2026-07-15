@@ -6162,6 +6162,182 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
     expect(queryFirst).toEqual(endpointFirst);
   });
 
+  it('accepts exact pristine literal-only staticSql tags on reviewed DB SQL paths', () => {
+    const facts = sinksFor(`
+      import { staticSql, staticSql as literalSql } from '@kovojs/drizzle';
+      import * as drizzle from '@kovojs/drizzle';
+      import { mutation } from '@kovojs/server';
+      export const write = mutation({ async handler(_input, request) {
+        await request.db.execute(staticSql\`select 1\`);
+        await request.db.run(literalSql\`select 2\`);
+        await request.db.prepare(drizzle.staticSql\`select 3\`);
+        return { ok: true };
+      } });
+    `);
+
+    expect(facts).toEqual([]);
+  });
+
+  it('keeps non-exact, mutable, copied, wrapped, computed, and interpolated staticSql tags closed', () => {
+    const sources = [
+      [
+        'interpolated template',
+        `
+          import { staticSql } from '@kovojs/drizzle';
+          import { mutation } from '@kovojs/server';
+          export const write = mutation({ async handler(input, request) {
+            await request.db.execute(staticSql\`select \${input.id}\`);
+            return { ok: true };
+          } });
+        `,
+      ],
+      [
+        'copied tag',
+        `
+          import { staticSql } from '@kovojs/drizzle';
+          import { mutation } from '@kovojs/server';
+          const copied = staticSql;
+          export const write = mutation({ async handler(_input, request) {
+            await request.db.execute(copied\`select 1\`);
+            return { ok: true };
+          } });
+        `,
+      ],
+      [
+        'detached namespace tag',
+        `
+          import * as drizzle from '@kovojs/drizzle';
+          import { mutation } from '@kovojs/server';
+          const copied = drizzle.staticSql;
+          export const write = mutation({ async handler(_input, request) {
+            await request.db.execute(copied\`select 1\`);
+            return { ok: true };
+          } });
+        `,
+      ],
+      [
+        'wrapper tag',
+        `
+          import { staticSql } from '@kovojs/drizzle';
+          import { mutation } from '@kovojs/server';
+          const wrapped = (strings: TemplateStringsArray) => staticSql(strings);
+          export const write = mutation({ async handler(_input, request) {
+            await request.db.execute(wrapped\`select 1\`);
+            return { ok: true };
+          } });
+        `,
+      ],
+      [
+        'literal computed namespace member',
+        `
+          import * as drizzle from '@kovojs/drizzle';
+          import { mutation } from '@kovojs/server';
+          export const write = mutation({ async handler(_input, request) {
+            await request.db.execute(drizzle['staticSql']\`select 1\`);
+            return { ok: true };
+          } });
+        `,
+      ],
+      [
+        'dynamic computed namespace member',
+        `
+          import * as drizzle from '@kovojs/drizzle';
+          import { mutation } from '@kovojs/server';
+          const member = 'staticSql';
+          export const write = mutation({ async handler(_input, request) {
+            await request.db.execute(drizzle[member]\`select 1\`);
+            return { ok: true };
+          } });
+        `,
+      ],
+      [
+        'reassigned named-import alias',
+        `
+          import { staticSql } from '@kovojs/drizzle';
+          import { mutation } from '@kovojs/server';
+          const forged = (strings: TemplateStringsArray) => {
+            eval('mutable tag');
+            return strings;
+          };
+          let mutable = staticSql;
+          mutable = forged;
+          export const write = mutation({ async handler(_input, request) {
+            await request.db.execute(mutable\`select 1\`);
+            return { ok: true };
+          } });
+        `,
+      ],
+      [
+        'reassigned namespace member',
+        `
+          import * as drizzle from '@kovojs/drizzle';
+          import { mutation } from '@kovojs/server';
+          const forged = (strings: TemplateStringsArray) => {
+            eval('namespace tag');
+            return strings;
+          };
+          (drizzle as { staticSql: typeof forged }).staticSql = forged;
+          export const write = mutation({ async handler(_input, request) {
+            await request.db.execute(drizzle.staticSql\`select 1\`);
+            return { ok: true };
+          } });
+        `,
+      ],
+      [
+        'local lookalike',
+        `
+          import { mutation } from '@kovojs/server';
+          const staticSql = (strings: TemplateStringsArray) => {
+            eval('local tag');
+            return strings;
+          };
+          export const write = mutation({ async handler(_input, request) {
+            await request.db.execute(staticSql\`select 1\`);
+            return { ok: true };
+          } });
+        `,
+      ],
+    ] as const;
+
+    for (const [label, source] of sources) {
+      const facts = sinksFor(source);
+      expect(
+        facts.some((fact) => fact.sink === 'eval' || fact.sink.startsWith('request-handler.')),
+        `${label}: ${JSON.stringify(facts)}`,
+      ).toBe(true);
+    }
+  });
+
+  it('keeps staticSql results and opaque consumers closed outside the reviewed DB use', () => {
+    const wireFacts = sinksFor(`
+      import { staticSql } from '@kovojs/drizzle';
+      import { mutation } from '@kovojs/server';
+      export const write = mutation({ handler() {
+        return staticSql\`select 1\`;
+      } });
+    `);
+    expect(wireFacts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ sink: 'client-wire.request.opaque-tag-result' }),
+      ]),
+    );
+
+    const consumerFacts = sinksFor(`
+      import { staticSql } from '@kovojs/drizzle';
+      import { consume } from 'opaque-consumer';
+      import { mutation } from '@kovojs/server';
+      export const write = mutation({ handler() {
+        consume(staticSql\`select 1\`);
+        return { ok: true };
+      } });
+    `);
+    expect(consumerFacts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ sink: 'request-handler.opaque-package-call' }),
+      ]),
+    );
+  });
+
   it('accepts only exact canonical Kovo trusted SQL construction', () => {
     const safe = sinksFor(`
       import { sql, trustedSql } from '@kovojs/drizzle';

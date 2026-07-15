@@ -12924,11 +12924,13 @@ function scanRequestImplicitExecutionProtocols(
     if (
       reviewedDrizzleSql &&
       (requestTaggedTemplateIsReviewedDrizzleSql(reviewedDrizzleSql) ||
+        requestTaggedTemplateIsExactKovoStaticSql(reviewedDrizzleSql) ||
         requestTaggedTemplateIsExactKovoTrustedSqlInput(reviewedDrizzleSql))
     ) {
       // The specialized tagged-template scanner below validates the exact Drizzle tag and each
-      // interpolation. The same holds for an exact Kovo sql tag passed directly to trustedSql().
-      // Avoid applying ordinary JavaScript string-coercion semantics twice.
+      // interpolation. The same holds for exact Kovo staticSql and sql tags: staticSql admits no
+      // interpolation, while trustedSql's exact sql input is checked below. Avoid applying
+      // ordinary JavaScript string-coercion semantics twice.
       continue;
     }
     for (const span of template.getTemplateSpans()) {
@@ -14481,11 +14483,13 @@ function scanRequestTaggedTemplate(
     tag.getName() === 'raw' &&
     expressionResolvesToGlobalNamespace(tag.getExpression(), 'String', new Set(), 0);
   const safeDrizzleSql = requestTaggedTemplateIsReviewedDrizzleSql(tagged);
+  const safeKovoStaticSql = requestTaggedTemplateIsExactKovoStaticSql(tagged);
   const safeKovoTrustedSql = requestTaggedTemplateIsExactKovoTrustedSqlInput(tagged);
   if (
     resolution.callables.length === 0 &&
     !safeStringRaw &&
     !safeDrizzleSql &&
+    !safeKovoStaticSql &&
     !safeKovoTrustedSql
   ) {
     appendRequestProtocolFact(context, tagged, 'tagged-template', tag);
@@ -14663,6 +14667,18 @@ function scanRequestPropertyAccessProtocols(
       requestPropertyAccessIsExactUrlSearchParams(access, callable, context.provenance))
   ) {
     return;
+  }
+  if (!write && Node.isPropertyAccessExpression(access)) {
+    const tagged = access.getParentIfKind(SyntaxKind.TaggedTemplateExpression);
+    if (
+      tagged &&
+      requestNodesAreSame(tagged.getTag(), access) &&
+      requestTaggedTemplateIsExactKovoStaticSql(tagged)
+    ) {
+      // A pristine ESM namespace's exact `staticSql` member is the same literal-only constructor
+      // as a named import. The helper keeps computed access and every mutated namespace closed.
+      return;
+    }
   }
   if (
     !write &&
@@ -22747,6 +22763,27 @@ function requestTaggedTemplateIsReviewedDrizzleSql(
     requestExpressionIsDirectImportedExport(tagged.getTag(), 'drizzle-orm', 'sql') &&
     requestExactImportedCarrierIsPristine(tagged.getTag(), 'drizzle-orm', 'sql') &&
     requestReviewedDrizzleExpressionIsDirectDbArgument(tagged)
+  );
+}
+
+/**
+ * SPEC §10.2 / §2: `staticSql` is Kovo's literal-only SQL constructor. Its tag invocation is
+ * protocol-safe only when the source proves the exact, pristine framework export and the template
+ * has no substitutions. The returned SQL carrier is not made wire-safe here; public-result analysis
+ * still rejects it, and opaque consumers remain subject to their ordinary call/protocol gates.
+ */
+function requestTaggedTemplateIsExactKovoStaticSql(
+  tagged: import('ts-morph').TaggedTemplateExpression,
+): boolean {
+  if (!Node.isNoSubstitutionTemplateLiteral(tagged.getTemplate())) return false;
+  const tag = unwrapStaticExpression(tagged.getTag());
+  if (!Node.isIdentifier(tag) && !Node.isPropertyAccessExpression(tag)) {
+    return false;
+  }
+  if (Node.isPropertyAccessExpression(tag) && tag.getQuestionDotTokenNode()) return false;
+  return (
+    requestExpressionIsDirectImportedExport(tag, '@kovojs/drizzle', 'staticSql') &&
+    requestExactImportedCarrierIsPristine(tag, '@kovojs/drizzle', 'staticSql')
   );
 }
 
