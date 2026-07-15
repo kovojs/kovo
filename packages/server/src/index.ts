@@ -75,6 +75,7 @@ export { EgressBlockedError, EgressConfigError } from './egress.js';
 export type { EgressOptions, PrivateAddressClass } from './egress.js';
 export { createSigningKeyRing } from './keyring.js';
 export type {
+  FrameworkCsrfSigningSecret,
   SigningInput,
   SigningKey,
   SigningKeyRing,

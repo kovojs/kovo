@@ -1,6 +1,7 @@
 import type { KovoApp } from './app-types.js';
 import { isDocumentConfig } from './document-structured.js';
 import { isFrameworkManagedDbProvider } from './guards.js';
+import { isFrameworkCsrfSigningSecret } from './keyring.js';
 import {
   createWitnessWeakSet,
   witnessWeakSetAdd,
@@ -318,6 +319,7 @@ function isSigningSecret(value: unknown): boolean {
   return (
     typeof value === 'string' ||
     value instanceof Uint8Array ||
+    isFrameworkCsrfSigningSecret(value) ||
     (isRecord(value) &&
       ((typeof value.currentKeyId === 'string' &&
         typeof value.sign === 'function' &&

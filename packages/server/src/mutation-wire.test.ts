@@ -10,6 +10,7 @@ import {
 } from './mutation-wire.js';
 import { createMemoryMutationReplayStore } from './replay.js';
 import { registerFrameworkSessionPrincipalSnapshot } from './auth-principal.js';
+import { createFrameworkCsrfSigningSecret, createSigningKeyRing } from './keyring.js';
 
 describe('mutation wire headers', () => {
   it('reads enhanced mutation wire headers case-insensitively', () => {
@@ -133,6 +134,46 @@ describe('mutation wire headers', () => {
       submittedFormTarget: 'product-form:p1',
       targets: ['product-form:p1'],
     });
+  });
+
+  it('mints and verifies live-target attestations through scoped CSRF authority', () => {
+    const request = { sessionId: 's1' };
+    const csrf = {
+      secret: createFrameworkCsrfSigningSecret(
+        createSigningKeyRing({
+          keys: [
+            {
+              id: 'auth',
+              secret: 'scoped-live-target-secret-0123456789abcdef',
+              state: 'active',
+            },
+          ],
+        }),
+      ),
+      sessionId: (value: typeof request) => value.sessionId,
+    };
+    const descriptor = {
+      component: 'components/product-form/product-form',
+      props: { productId: 'p1' },
+      target: 'product-form:p1',
+    };
+    const token = createLiveTargetAttestation(descriptor, {
+      buildToken: 'scoped-build',
+      csrf,
+      request,
+    });
+    expect(
+      mutationWireRequestFromHeaders({
+        buildToken: 'scoped-build',
+        csrf,
+        headers: {
+          'Kovo-Live-Targets': `product-form:p1#components/product-form/product-form@${token}:{"productId":"p1"}`,
+        },
+        liveTargetAudience: 'scoped-build',
+        rawInput: {},
+        request,
+      }).liveTargetDescriptors,
+    ).toHaveLength(1);
   });
 
   it('drops unattested or wrong-principal live-target descriptors before query execution', () => {

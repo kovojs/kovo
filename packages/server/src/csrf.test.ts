@@ -11,6 +11,7 @@ import {
   verifyCsrfRequestOriginFloor,
 } from './csrf.js';
 import { runWithJsxRequestContext } from './jsx-context.js';
+import { createFrameworkCsrfSigningSecret, createSigningKeyRing } from './keyring.js';
 import {
   mutation as defineMutation,
   renderMutationResponse,
@@ -38,6 +39,29 @@ describe('csrf helpers', () => {
     if (!token) throw new Error(`expected hidden field value in ${html}`);
     return token;
   }
+
+  it('mints and verifies through an opaque framework CSRF signing capability', () => {
+    const scopedCsrf = {
+      field: 'csrf',
+      secret: createFrameworkCsrfSigningSecret(
+        createSigningKeyRing({
+          keys: [{ id: 'auth', secret: TEST_CSRF_SECRET, state: 'active' }],
+        }),
+      ),
+      sessionId(input: typeof request): string | undefined {
+        return input.sessionId;
+      },
+    };
+    const token = csrfToken(request, scopedCsrf, { audience: 'auth/sign-in' });
+    expect(
+      validateCsrfToken({ csrf: token }, request, scopedCsrf, { audience: 'auth/sign-in' }),
+    ).toBe(true);
+    expect(
+      validateCsrfToken({ csrf: token }, { sessionId: 'different-session' }, scopedCsrf, {
+        audience: 'auth/sign-in',
+      }),
+    ).toBe(false);
+  });
 
   it('renders an escaped hidden field for the signed session token', () => {
     const html = csrfField(request, csrf);

@@ -34,7 +34,7 @@ import { snapshotSchemaForRuntime, type Schema } from './schema.js';
 import type { AppDiagnostic, AppErrorShellOptions, AppTaskDeclaration } from './app-types.js';
 import type { CsrfAnonymousCookieOptions, CsrfOptions } from './csrf.js';
 import { snapshotStylesheetAsset, type StylesheetAsset } from './hints.js';
-import { signingKeyRingFromSecret } from './keyring.js';
+import { isFrameworkCsrfSigningSecret, signingKeyRingFromSecret } from './keyring.js';
 import { securityJsonStringify } from './response-security-intrinsics.js';
 import {
   createWitnessWeakMap,
@@ -482,7 +482,7 @@ export function snapshotAppCsrfOptions<Request>(
   // Resolve byte arrays and declarative key rings now. The resulting key-ring identity is pinned
   // in the frozen aggregate, so later mutation of authoring objects cannot swap signing material.
   const pinnedSecret =
-    typeof secret === 'string'
+    typeof secret === 'string' || isFrameworkCsrfSigningSecret(secret)
       ? secret
       : signingKeyRingFromSecret(secret as CsrfOptions<Request>['secret']);
   return witnessFreeze({

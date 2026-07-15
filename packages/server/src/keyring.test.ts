@@ -1,12 +1,99 @@
 import { describe, expect, it } from 'vitest';
 
-import { createSigningKeyRing, signingKeyRingFromSecret } from './keyring.js';
+import { signCapability } from './capability-url.js';
+import {
+  createFrameworkCsrfSigningSecret,
+  createSigningKeyRing,
+  isFrameworkCsrfSigningSecret,
+  isSigningKeyRing,
+  signingKeyRingFromSecret,
+} from './keyring.js';
 
 const OLD_SECRET = 'old-signing-secret-at-least-32-bytes';
 const NEW_SECRET = 'new-signing-secret-at-least-32-bytes';
 const DIFFERENT_SECRET = 'different-signing-secret-at-least-32-bytes';
 
 describe('SigningKeyRing', () => {
+  it('keeps framework CSRF authority opaque and refuses generic signing sinks', async () => {
+    const source = createSigningKeyRing({
+      keys: [{ id: 'auth', secret: NEW_SECRET, state: 'active' }],
+    });
+    const capability = createFrameworkCsrfSigningSecret(source);
+
+    expect(Object.isFrozen(capability)).toBe(true);
+    expect(Reflect.ownKeys(capability)).toEqual([]);
+    expect(capability).not.toHaveProperty('currentKeyId');
+    expect(capability).not.toHaveProperty('sign');
+    expect(capability).not.toHaveProperty('verify');
+    expect(isFrameworkCsrfSigningSecret(capability)).toBe(true);
+    expect(isSigningKeyRing(capability)).toBe(false);
+    expect(isFrameworkCsrfSigningSecret({} as unknown as typeof capability)).toBe(false);
+    expect(() => signingKeyRingFromSecret({} as unknown as typeof capability)).toThrow(
+      /exact framework-minted token/u,
+    );
+    await expect(signCapability(capability, { key: 'private/report.pdf' })).rejects.toThrow(
+      /only permits csrf, anonymous-csrf/u,
+    );
+  });
+
+  it('limits a framework CSRF token to CSRF and the exact live-target audience', () => {
+    const capability = createFrameworkCsrfSigningSecret(
+      createSigningKeyRing({
+        keys: [{ id: 'auth', secret: NEW_SECRET, state: 'active' }],
+      }),
+    );
+    const scoped = signingKeyRingFromSecret(capability);
+    for (const purpose of ['csrf', 'anonymous-csrf'] as const) {
+      const signed = scoped.sign({ audience: 'auth/sign-in', payload: 'binding-1', purpose });
+      expect(
+        scoped.verify({
+          audience: 'auth/sign-in',
+          keyId: signed.keyId,
+          payload: 'binding-1',
+          purpose,
+          signature: signed.signature,
+        }),
+      ).toEqual({ keyId: 'auth', ok: true });
+    }
+    expect(() =>
+      scoped.sign({
+        audience: 'storage-download',
+        payload: 'binding-1',
+        purpose: 'capability-url',
+      }),
+    ).toThrow(/only permits csrf, anonymous-csrf/u);
+    expect(() =>
+      scoped.sign({
+        audience: 'attacker-chosen-live-target',
+        payload: 'binding-1',
+        purpose: 'live-target-attestation',
+      }),
+    ).toThrow(/mutation-live-target/u);
+    expect(() =>
+      scoped.verify({
+        audience: 'storage-download',
+        payload: 'binding-1',
+        purpose: 'session-fingerprint',
+        signature: 'forged',
+      }),
+    ).toThrow(/only permits csrf, anonymous-csrf/u);
+
+    const live = scoped.sign({
+      audience: 'mutation-live-target',
+      payload: 'descriptor',
+      purpose: 'live-target-attestation',
+    });
+    expect(
+      scoped.verify({
+        audience: 'mutation-live-target',
+        keyId: live.keyId,
+        payload: 'descriptor',
+        purpose: 'live-target-attestation',
+        signature: live.signature,
+      }),
+    ).toEqual({ keyId: 'auth', ok: true });
+  });
+
   it('signs with the single active key and verifies with previous non-revoked keys', () => {
     const previousOnly = createSigningKeyRing({
       keys: [{ id: 'old', secret: OLD_SECRET, state: 'active' }],

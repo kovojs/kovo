@@ -1,5 +1,7 @@
 /* oxlint-disable typescript/unbound-method -- Boot-captured controls use pinned Reflect.apply. */
 
+import { types as nodeUtilTypes } from 'node:util';
+
 /** Boot-pinned controls for Better Auth redirect, schema, and session-evidence classification. */
 
 const NativeArray = globalThis.Array;
@@ -53,6 +55,7 @@ const nativeStringToLowerCase = NativeString.prototype.toLowerCase;
 const nativeStringToUpperCase = NativeString.prototype.toUpperCase;
 const nativeStringTrim = NativeString.prototype.trim;
 const nativeUrlProtocolGetter = getGetter(NativeURL.prototype, 'protocol');
+const nativeUtilIsProxy = nodeUtilTypes.isProxy;
 
 function apply<Return>(fn: Function, receiver: unknown, args: readonly unknown[]): Return {
   return nativeReflectApply(fn, receiver, args) as Return;
@@ -154,6 +157,8 @@ function capturedControlsAreSound(): boolean {
       apply(nativeNumberIsSafeInteger, NativeNumber, [1]) === true &&
       apply(nativeNumberIsSafeInteger, NativeNumber, [1.5]) === false &&
       readNativeUrlProtocol(new NativeURL('https://kovo.example/path')) === 'https:' &&
+      nativeUtilIsProxy({}) === false &&
+      nativeUtilIsProxy(new Proxy({}, {})) === true &&
       readNativeResponseStatus(response) === 201 &&
       readNativeResponseHeaders(response) !== undefined &&
       nativeResponseClone !== undefined &&
@@ -247,6 +252,9 @@ export function betterAuthOwnDataValue(
   property: PropertyKey,
   label: string,
 ): unknown {
+  if (nativeUtilIsProxy(source)) {
+    throw new NativeTypeError(`${label} must not be a Proxy.`);
+  }
   const before = betterAuthGetOwnPropertyDescriptor(source, property);
   const after = betterAuthGetOwnPropertyDescriptor(source, property);
   if (!sameDataDescriptor(before, after)) {
@@ -265,6 +273,9 @@ export function betterAuthOwnDataOption<Value>(
   property: PropertyKey,
   label: string,
 ): Value | undefined {
+  if (nativeUtilIsProxy(options)) {
+    throw new NativeTypeError(`${label} owner must not be a Proxy.`);
+  }
   const before = betterAuthGetOwnPropertyDescriptor(options, property);
   const after = betterAuthGetOwnPropertyDescriptor(options, property);
   if (!sameDataDescriptor(before, after)) {

@@ -1,9 +1,12 @@
 import { runtimeEnvironmentValue } from '@kovojs/server/internal/runtime-environment';
 import { createSigningKeyRing, type CsrfOptions } from '@kovojs/server';
+import { createFrameworkCsrfSigningSecret } from '@kovojs/server/internal/keyring';
 
 import {
   betterAuthFreezeOwn,
+  betterAuthObjectKeys,
   betterAuthOwnDataOption,
+  betterAuthOwnDataValue,
   betterAuthUrlProtocol,
 } from './internal/intrinsics.js';
 
@@ -12,13 +15,20 @@ const BETTER_AUTH_SECRET_MINIMUM_LENGTH = 32;
 const DEFAULT_BETTER_AUTH_URL = 'http://localhost:5173';
 const REPLACEMENT_SECRET = 'replace-with-a-deployed-secret';
 const REPLACEMENT_DEMO_PASSWORD = 'replace-with-a-local-demo-password';
+const BETTER_AUTH_CSRF_BINDING_MAXIMUM_LENGTH = 1_024;
 
-/** App callback/options used to build a CSRF config from boot-pinned signing material. */
-export interface BetterAuthEnvironmentCsrfOptions<Request> {
+/** Request fields the framework-owned Better Auth CSRF binding is permitted to inspect. */
+export interface BetterAuthCsrfRequestLike {
+  /** Anonymous pre-auth identity, when the request lifecycle has already resolved one. */
+  authCsrfId?: string | null;
+  /** Sanitized Better Auth session identity resolved by the framework session provider. */
+  session?: { id: string } | null;
+}
+
+/** Options used to build a CSRF config from boot-pinned signing material. */
+export interface BetterAuthEnvironmentCsrfOptions {
   /** Form field name used by generated credential mutations. */
   field: string;
-  /** Session/anonymous binding extractor retained by the frozen CSRF config. */
-  sessionId(request: Request): string | undefined;
 }
 
 /**
@@ -27,9 +37,9 @@ export interface BetterAuthEnvironmentCsrfOptions<Request> {
  * The raw environment string is consumed inside this first-party package and converted to an
  * opaque signing-key ring before the result crosses into generated source (SPEC §6.6 C9).
  */
-export function betterAuthCsrfFromEnvironment<Request>(
-  options: BetterAuthEnvironmentCsrfOptions<Request>,
-): Readonly<CsrfOptions<Request>> {
+export function betterAuthCsrfFromEnvironment<
+  Request extends BetterAuthCsrfRequestLike = BetterAuthCsrfRequestLike,
+>(options: BetterAuthEnvironmentCsrfOptions): Readonly<CsrfOptions<Request>> {
   if (typeof options !== 'object' || options === null) {
     throw new NativeTypeError('Better Auth environment CSRF options must be an object.');
   }
@@ -38,27 +48,68 @@ export function betterAuthCsrfFromEnvironment<Request>(
     'field',
     'Better Auth environment CSRF option field',
   );
-  const sessionId = betterAuthOwnDataOption<(request: Request) => string | undefined>(
-    options,
-    'sessionId',
-    'Better Auth environment CSRF option sessionId',
-  );
+  const optionKeys = betterAuthObjectKeys(options, 'Better Auth environment CSRF options');
+  if (optionKeys.length !== 1 || optionKeys[0] !== 'field') {
+    throw new NativeTypeError(
+      'Better Auth environment CSRF options accept only { field }; session binding is framework-owned (SPEC §6.6 C9).',
+    );
+  }
   if (typeof field !== 'string' || field.length === 0 || field.length > 256) {
     throw new NativeTypeError(
       'Better Auth environment CSRF field must be a non-empty string of at most 256 characters.',
     );
-  }
-  if (typeof sessionId !== 'function') {
-    throw new NativeTypeError('Better Auth environment CSRF sessionId must be a function.');
   }
   const secret = requiredBetterAuthEnvironmentSecret();
   const secretRing = createSigningKeyRing({
     keys: [{ id: 'better-auth-current', secret, state: 'active' }],
   });
   return betterAuthFreezeOwn(
-    { field, secret: secretRing, sessionId },
+    {
+      field,
+      secret: createFrameworkCsrfSigningSecret(secretRing),
+      sessionId: betterAuthEnvironmentCsrfSessionId,
+    },
     'Better Auth environment CSRF config',
-  );
+  ) as Readonly<CsrfOptions<Request>>;
+}
+
+function betterAuthEnvironmentCsrfSessionId(
+  request: BetterAuthCsrfRequestLike,
+): string | undefined {
+  if (typeof request !== 'object' || request === null) {
+    throw new NativeTypeError('Better Auth CSRF request must be an object.');
+  }
+  const session = betterAuthOwnDataValue(request, 'session', 'Better Auth CSRF request');
+  if (session !== undefined && session !== null) {
+    if (typeof session !== 'object') {
+      throw new NativeTypeError('Better Auth CSRF request.session must be an object or null.');
+    }
+    const sessionId = betterAuthOwnDataValue(session, 'id', 'Better Auth CSRF request.session');
+    return validatedBetterAuthCsrfBinding(sessionId, 'Better Auth CSRF request.session.id', false);
+  }
+  const authCsrfId = betterAuthOwnDataValue(request, 'authCsrfId', 'Better Auth CSRF request');
+  return validatedBetterAuthCsrfBinding(authCsrfId, 'Better Auth CSRF request.authCsrfId', true);
+}
+
+function validatedBetterAuthCsrfBinding(
+  value: unknown,
+  label: string,
+  optional: boolean,
+): string | undefined {
+  if (value === undefined || value === null) {
+    if (optional) return undefined;
+    throw new NativeTypeError(`${label} must be a non-empty string when session is present.`);
+  }
+  if (
+    typeof value !== 'string' ||
+    value.length === 0 ||
+    value.length > BETTER_AUTH_CSRF_BINDING_MAXIMUM_LENGTH
+  ) {
+    throw new NativeTypeError(
+      `${label} must be a non-empty string of at most ${BETTER_AUTH_CSRF_BINDING_MAXIMUM_LENGTH} characters.`,
+    );
+  }
+  return value;
 }
 
 /** Resolved raw values stay private to the two reviewed binding constructors. @internal */

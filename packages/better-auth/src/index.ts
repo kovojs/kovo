@@ -1,6 +1,6 @@
 export type { BetterAuthRoleRequest, BetterAuthRoleSession, BetterAuthRoleUser } from './guards.js';
 export { authed, role } from './guards.js';
-export type { BetterAuthEnvironmentCsrfOptions } from './environment.js';
+export type { BetterAuthCsrfRequestLike, BetterAuthEnvironmentCsrfOptions } from './environment.js';
 export { betterAuthCsrfFromEnvironment } from './environment.js';
 export type {
   BetterAuthDevelopmentSeed,

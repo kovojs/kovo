@@ -1,7 +1,9 @@
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 import {
   createWitnessSet,
+  createWitnessWeakMap,
   createWitnessWeakSet,
+  witnessCreateNullRecord,
   witnessDefineProperty,
   witnessFreeze,
   witnessGetOwnPropertyDescriptor,
@@ -12,6 +14,9 @@ import {
   witnessSetAdd,
   witnessSetHas,
   witnessString,
+  witnessWeakMapGet,
+  witnessWeakMapHas,
+  witnessWeakMapSet,
   witnessWeakSetAdd,
   witnessWeakSetHas,
 } from './security-witness-intrinsics.js';
@@ -87,8 +92,26 @@ export type SigningRejectReason =
   | 'revoked-key'
   | 'unknown-key';
 
+declare const frameworkCsrfSigningSecretBrand: unique symbol;
+
+/**
+ * Opaque framework-owned signing authority for CSRF and mutation live-target attestations.
+ *
+ * The public type lets a frozen {@link CsrfOptions} carry the capability without exposing a
+ * generic signer or raw key material. Runtime authority is an exact private-WeakMap identity;
+ * casts and structurally similar objects cannot mint a working token (SPEC §6.6 C9).
+ */
+export interface FrameworkCsrfSigningSecret {
+  readonly [frameworkCsrfSigningSecretBrand]: 'framework-csrf-signing-secret';
+}
+
 /** Accepted signing material for framework token helpers. */
-export type SigningSecret = string | Uint8Array | SigningKeyRing | SigningKeyRingOptions;
+export type SigningSecret =
+  | string
+  | Uint8Array
+  | SigningKeyRing
+  | SigningKeyRingOptions
+  | FrameworkCsrfSigningSecret;
 
 /** Declarative configuration for constructing a {@link SigningKeyRing}. */
 export interface SigningKeyRingOptions {
@@ -106,6 +129,7 @@ const nativeHmacDigest = stableSigningRingProperty(hmacControl, 'digest') as Fun
 const nativeHashUpdate = stableSigningRingProperty(hashControl, 'update') as Function;
 const nativeHashDigest = stableSigningRingProperty(hashControl, 'digest') as Function;
 const pinnedSigningKeyRings = createWitnessWeakSet<object>();
+const frameworkCsrfSigningSecrets = createWitnessWeakMap<object, SigningKeyRing>();
 
 if (!signingCryptoControlsAreSound()) {
   throw new TypeError(
@@ -171,9 +195,47 @@ export function createSigningKeyRing(options: SigningKeyRingOptions): SigningKey
   return exposeSigningKeyRing(new HmacSigningKeyRing(active, witnessFreeze(keys)));
 }
 
+/**
+ * Mint a zero-key CSRF/live-target signing token backed by the server package's private registry.
+ *
+ * @internal First-party integrations use the `@kovojs/server/internal/keyring` entry so packed
+ * server and integration bundles share this exact registry (SPEC §6.6 C9).
+ */
+export function createFrameworkCsrfSigningSecret(
+  source: SigningKeyRing,
+): FrameworkCsrfSigningSecret {
+  const token = witnessFreeze(witnessCreateNullRecord());
+  witnessWeakMapSet(
+    frameworkCsrfSigningSecrets,
+    token,
+    createFrameworkCsrfScopedSigningKeyRing(pinOpaqueSigningKeyRing(source)),
+  );
+  // The private WeakMap is the runtime proof. This assertion carries only the already-minted
+  // opaque identity through public CsrfOptions typing; no structural brand exists at runtime.
+  return token as unknown as FrameworkCsrfSigningSecret;
+}
+
+/** @internal Return whether a value is an exact framework-minted CSRF signing token. */
+export function isFrameworkCsrfSigningSecret(value: unknown): value is FrameworkCsrfSigningSecret {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    witnessWeakMapHas(frameworkCsrfSigningSecrets, value)
+  );
+}
+
 export function signingKeyRingFromSecret(secret: SigningSecret): SigningKeyRing {
+  if (typeof secret === 'object' && secret !== null) {
+    const scoped = witnessWeakMapGet(frameworkCsrfSigningSecrets, secret);
+    if (scoped !== undefined) return scoped;
+  }
   if (isSigningKeyRing(secret)) return pinOpaqueSigningKeyRing(secret);
   if (isSigningKeyRingOptions(secret)) return createSigningKeyRing(secret);
+  if (typeof secret === 'object' && secret !== null && !securityIsUint8Array(secret)) {
+    throw new TypeError(
+      'Framework signing capability is invalid; only an exact framework-minted token is accepted (SPEC §6.6 C9).',
+    );
+  }
   return createSigningKeyRing({
     keys: [{ id: 'current', secret, state: 'active' }],
   });
@@ -228,6 +290,45 @@ function exposeSigningKeyRing(source: SigningKeyRing): SigningKeyRing {
   });
   witnessWeakSetAdd(pinnedSigningKeyRings, pinned);
   return pinned;
+}
+
+function createFrameworkCsrfScopedSigningKeyRing(source: SigningKeyRing): SigningKeyRing {
+  const currentKeyId = stableSigningRingProperty(source, 'currentKeyId');
+  const sign = stableSigningRingProperty(source, 'sign');
+  const verify = stableSigningRingProperty(source, 'verify');
+  if (
+    typeof currentKeyId !== 'string' ||
+    typeof sign !== 'function' ||
+    typeof verify !== 'function'
+  ) {
+    throw new TypeError('Framework CSRF signing source must be a stable SigningKeyRing.');
+  }
+  const scoped = witnessFreeze({
+    currentKeyId,
+    sign(input: SigningInput): SigningResult {
+      assertFrameworkCsrfSigningScope(input);
+      return witnessReflectApply(sign, source, [input]);
+    },
+    verify(input: SigningVerifyInput): SigningVerifyResult {
+      assertFrameworkCsrfSigningScope(input);
+      return witnessReflectApply(verify, source, [input]);
+    },
+  });
+  witnessWeakSetAdd(pinnedSigningKeyRings, scoped);
+  return scoped;
+}
+
+function assertFrameworkCsrfSigningScope(input: SigningInput): void {
+  if (typeof input !== 'object' || input === null) {
+    throw new TypeError('Framework CSRF signing input must be an object.');
+  }
+  const purpose = stableOwnSigningKeyValue(input, 'purpose');
+  const audience = stableOwnSigningKeyValue(input, 'audience');
+  if (purpose === 'csrf' || purpose === 'anonymous-csrf') return;
+  if (purpose === 'live-target-attestation' && audience === 'mutation-live-target') return;
+  throw new TypeError(
+    'Framework CSRF signing capability only permits csrf, anonymous-csrf, and the mutation-live-target live-target attestation audience (SPEC §6.6 C9).',
+  );
 }
 
 function stableSigningRingProperty(source: object, property: PropertyKey): unknown {

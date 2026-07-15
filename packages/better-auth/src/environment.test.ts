@@ -44,11 +44,15 @@ process.env.KOVO_DEMO_PASSWORD = 'late-app-password';
 process.env.NODE_ENV = 'production';
 const internal = await import(${JSON.stringify(environmentUrl)});
 const resolved = internal.resolveBetterAuthEnvironment();
-const csrf = api.betterAuthCsrfFromEnvironment({ field: 'csrf', sessionId: () => undefined });
+const csrf = api.betterAuthCsrfFromEnvironment({ field: 'csrf' });
 process.stdout.write(JSON.stringify({
   baseURL: resolved.baseURL,
   csrfFrozen: Object.isFrozen(csrf),
   csrfHasRawSecret: typeof csrf.secret === 'string',
+  csrfSecretFrozen: Object.isFrozen(csrf.secret),
+  csrfSecretKeys: Reflect.ownKeys(csrf.secret),
+  sessionBinding: csrf.sessionId({ session: { id: 'session-1' }, authCsrfId: 'anonymous-1' }),
+  anonymousBinding: csrf.sessionId({ session: null, authCsrfId: 'anonymous-1' }),
   demoPassword: resolved.developmentSeed?.password,
   production: resolved.production,
   secret: resolved.secret,
@@ -76,10 +80,104 @@ process.stdout.write(JSON.stringify({
         baseURL: 'https://auth.operator.example',
         csrfFrozen: true,
         csrfHasRawSecret: false,
+        csrfSecretFrozen: true,
+        csrfSecretKeys: [],
+        sessionBinding: 'session-1',
+        anonymousBinding: 'anonymous-1',
         demoPassword: 'operator-demo-password',
         production: false,
         secret,
       });
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it('owns request binding and rejects authored callbacks, malformed sessions, and Proxies', () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-better-auth-csrf-binding-'));
+    try {
+      writeFileSync(
+        join(root, '.env'),
+        'BETTER_AUTH_SECRET=operator-auth-secret-0123456789abcdef0123456789\n',
+      );
+      const indexUrl = pathToFileURL(fileURLToPath(new URL('./index.ts', import.meta.url))).href;
+      const source = `
+import { existsSync } from 'node:fs';
+import { registerHooks } from 'node:module';
+registerHooks({
+  resolve(specifier, context, nextResolve) {
+    if (specifier.startsWith('.') && specifier.endsWith('.js') && context.parentURL) {
+      const candidate = new URL(specifier.replace(/\\.js$/, '.ts'), context.parentURL);
+      if (existsSync(candidate)) return nextResolve(candidate.href, context);
+    }
+    return nextResolve(specifier, context);
+  },
+});
+const api = await import(${JSON.stringify(indexUrl)});
+const csrf = api.betterAuthCsrfFromEnvironment({ field: 'csrf' });
+const failures = [];
+for (const request of [
+  { session: {} },
+  { session: { id: null }, authCsrfId: 'downgrade' },
+  { session: { id: '' }, authCsrfId: 'downgrade' },
+  { session: 'attacker', authCsrfId: 'downgrade' },
+  { session: null, authCsrfId: 42 },
+  { session: null, authCsrfId: '' },
+]) {
+  try { csrf.sessionId(request); failures.push('accepted'); }
+  catch (error) { failures.push(String(error)); }
+}
+let requestTrapHits = 0;
+let sessionTrapHits = 0;
+try {
+  csrf.sessionId(new Proxy({}, { getOwnPropertyDescriptor() { requestTrapHits += 1; return undefined; } }));
+} catch {}
+try {
+  csrf.sessionId({ session: new Proxy({}, { getOwnPropertyDescriptor() { sessionTrapHits += 1; return undefined; } }) });
+} catch {}
+let accessorHits = 0;
+const accessorRequest = {};
+Object.defineProperty(accessorRequest, 'session', { get() { accessorHits += 1; return { id: 'attacker' }; } });
+try { csrf.sessionId(accessorRequest); } catch {}
+let callbackRejected = false;
+try { api.betterAuthCsrfFromEnvironment({ field: 'csrf', sessionId: () => 'constant' }); }
+catch { callbackRejected = true; }
+process.stdout.write(JSON.stringify({
+  accessorHits,
+  callbackRejected,
+  failures,
+  requestTrapHits,
+  sessionTrapHits,
+}));
+`;
+      const environment = { ...process.env };
+      delete environment.BETTER_AUTH_SECRET;
+      delete environment.KOVO_CSRF_SECRET;
+      const result = spawnSync(
+        process.execPath,
+        [
+          '--disable-warning=ExperimentalWarning',
+          '--experimental-transform-types',
+          '--input-type=module',
+          '--eval',
+          source,
+        ],
+        { cwd: root, encoding: 'utf8', env: environment },
+      );
+      expect(result.status, result.stderr).toBe(0);
+      const output = JSON.parse(result.stdout) as {
+        accessorHits: number;
+        callbackRejected: boolean;
+        failures: string[];
+        requestTrapHits: number;
+        sessionTrapHits: number;
+      };
+      expect(output.accessorHits).toBe(0);
+      expect(output.callbackRejected).toBe(true);
+      expect(output.requestTrapHits).toBe(0);
+      expect(output.sessionTrapHits).toBe(0);
+      expect(output.failures).toHaveLength(6);
+      for (const failure of output.failures) expect(failure).toMatch(/^TypeError:/u);
     } finally {
       rmSync(root, { force: true, recursive: true });
     }

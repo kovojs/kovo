@@ -74,6 +74,9 @@ describe('custom runtime bootstrap entries', () => {
     expect(JSON.parse(sqliteBoundary.stdout)).toEqual({
       bindingKeys: ['seedDemoUser', 'sessionProvider', 'signIn', 'signOut'],
       bindingsFrozen: true,
+      csrfSecretOwnKeys: 0,
+      csrfSessionBinding: 'packed-session',
+      csrfTokenMinted: true,
       providerOwnKeys: 0,
       queryBodyIncludesSeed: true,
       queryStatus: 200,
@@ -448,6 +451,7 @@ function runPackedSqliteBoundaryChild(distRoot: string, betterAuthEntry: string)
     '@kovojs/server/internal/runtime-environment': pathToFileURL(
       join(distRoot, 'internal/runtime-environment.mjs'),
     ).href,
+    '@kovojs/server/internal/keyring': pathToFileURL(join(distRoot, 'internal/keyring.mjs')).href,
     '@kovojs/server/internal/sqlite': pathToFileURL(join(distRoot, 'internal/sqlite.mjs')).href,
     '@kovojs/server/internal/sqlite-capability': pathToFileURL(
       join(distRoot, 'internal/sqlite-capability.mjs'),
@@ -484,6 +488,9 @@ const runtime = sqlite.createSqliteAppRuntime({
   tables: [proof],
 });
 try {
+  const appCsrf = betterAuth.betterAuthCsrfFromEnvironment({ field: 'csrf' });
+  const csrfRequest = { session: { id: 'packed-session' } };
+  const packedCsrfToken = server.csrfToken(csrfRequest, appCsrf, { audience: 'auth/sign-in' });
   const bindings = betterAuth.createBetterAuthSqliteBindings({
     baseURL: 'http://localhost:5173',
     csrf: { secret: 'packed-csrf-secret-0123456789abcdef', sessionId: () => undefined },
@@ -516,6 +523,9 @@ try {
   process.stdout.write(JSON.stringify({
     bindingKeys: Object.keys(bindings).sort(),
     bindingsFrozen: Object.isFrozen(bindings),
+    csrfSecretOwnKeys: Reflect.ownKeys(appCsrf.secret).length,
+    csrfSessionBinding: appCsrf.sessionId(csrfRequest),
+    csrfTokenMinted: /^v1\\.[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+$/.test(packedCsrfToken),
     providerOwnKeys: Reflect.ownKeys(runtime.db).length,
     queryBodyIncludesSeed: body.includes('packed-seed-visible'),
     queryStatus: response.status,
@@ -533,6 +543,13 @@ try {
       '--eval',
       source,
     ],
-    { encoding: 'utf8', env: { ...process.env, NODE_ENV: 'development' } },
+    {
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        BETTER_AUTH_SECRET: 'packed-auth-secret-0123456789abcdef0123456789',
+        NODE_ENV: 'development',
+      },
+    },
   );
 }

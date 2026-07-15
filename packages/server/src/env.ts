@@ -1,6 +1,10 @@
 import type { Schema } from './schema.js';
 import { snapshotAuditJustification } from './audit-justification.js';
-import { isSigningKeyRing, SIGNING_SECRET_MIN_BYTES } from './keyring.js';
+import {
+  isFrameworkCsrfSigningSecret,
+  isSigningKeyRing,
+  SIGNING_SECRET_MIN_BYTES,
+} from './keyring.js';
 import {
   runtimeEnvironmentSnapshot,
   runtimeEnvironmentValue,
@@ -191,6 +195,9 @@ function validateFrameworkSecret(value: unknown, path: string, issues: EnvValida
   // No secret configured at all: not validated here. `csrf` is only consulted when an
   // app declares it; the gate fires on a *declared-but-weak* secret.
   if (value === undefined) return;
+  // Framework-owned opaque signing authority was validated before minting and deliberately
+  // exposes neither raw key material nor a generic signer (SPEC §6.6 C9).
+  if (isFrameworkCsrfSigningSecret(value)) return;
   // A custom SigningKeyRing deliberately hides raw key material. The crypto boundary in
   // keyring.ts enforces the floor for framework-created rings; external rings own their
   // material policy and are accepted as the first-class rotation interface.

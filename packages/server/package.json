@@ -30,6 +30,7 @@
     "./internal/escape": "./src/internal/escape.ts",
     "./internal/execution": "./src/internal/execution.ts",
     "./internal/html": "./src/internal/html.ts",
+    "./internal/keyring": "./src/internal/keyring.ts",
     "./internal/managed-db": "./src/internal/managed-db.ts",
     "./internal/postgres-capability": "./src/internal/postgres-capability.ts",
     "./internal/runtime-registry-wire": "./src/internal/runtime-registry-wire.ts",
@@ -125,6 +126,10 @@
         "types": "./dist/internal/html.d.mts",
         "default": "./dist/internal/html.mjs"
       },
+      "./internal/keyring": {
+        "types": "./dist/internal/keyring.d.mts",
+        "default": "./dist/internal/keyring.mjs"
+      },
       "./internal/managed-db": {
         "types": "./dist/internal/managed-db.d.mts",
         "default": "./dist/internal/managed-db.mjs"
@@ -176,7 +181,7 @@
     }
   },
   "scripts": {
-    "build:dist": "vp pack src/build-preset-internal.ts src/build.ts src/index.ts src/internal/app-shell-vite.ts src/internal/audit-facts.ts src/internal/build-context.ts src/internal/build.ts src/internal/capabilities.ts src/internal/client-modules.ts src/internal/csp.ts src/internal/csrf.ts src/internal/data-plane-static-analysis.ts src/internal/egress.ts src/internal/escape.ts src/internal/execution.ts src/internal/html.ts src/internal/managed-db.ts src/internal/postgres-capability.ts src/internal/route.ts src/internal/runtime-environment.ts src/internal/runtime-registry-wire.ts src/internal/sqlite-capability.ts src/internal/sqlite.ts src/internal/static-export.ts src/internal/vite-security-profile.ts src/internal/wire.ts src/jsx-runtime.ts src/runtime-bootstrap.ts src/sqlite.ts src/testing.ts src/vite.ts --dts",
+    "build:dist": "vp pack src/build-preset-internal.ts src/build.ts src/index.ts src/internal/app-shell-vite.ts src/internal/audit-facts.ts src/internal/build-context.ts src/internal/build.ts src/internal/capabilities.ts src/internal/client-modules.ts src/internal/csp.ts src/internal/csrf.ts src/internal/data-plane-static-analysis.ts src/internal/egress.ts src/internal/escape.ts src/internal/execution.ts src/internal/html.ts src/internal/keyring.ts src/internal/managed-db.ts src/internal/postgres-capability.ts src/internal/route.ts src/internal/runtime-environment.ts src/internal/runtime-registry-wire.ts src/internal/sqlite-capability.ts src/internal/sqlite.ts src/internal/static-export.ts src/internal/vite-security-profile.ts src/internal/wire.ts src/jsx-runtime.ts src/runtime-bootstrap.ts src/sqlite.ts src/testing.ts src/vite.ts --dts",
     "prepack": "pnpm run build:dist"
   },
   "dependencies": {
