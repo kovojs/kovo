@@ -441,7 +441,10 @@ function rebaseMovedGalleryInteractiveClientManifest(
   );
 }
 
-function compileGalleryInteractiveClientModule(
+/** @internal Compile a gallery client artifact with the same finite handler-project provenance as
+ * the server artifact. SPEC §5.2 requires a referenced handler export and its served module to be
+ * produced by one fail-closed compilation contract. */
+export function compileGalleryInteractiveClientModule(
   demoName: string,
   fileName: string,
 ): { manifest: GalleryClientModuleManifest; source: string } {
@@ -449,7 +452,22 @@ function compileGalleryInteractiveClientModule(
     path.join(repoRoot, 'examples/gallery/src/interactive', `${demoName}.tsx`),
     'utf8',
   );
-  const result = compileComponentModule({ fileName, source });
+  const projectDirectory = path.posix.dirname(path.posix.dirname(fileName));
+  const result = compileComponentModule({
+    extraFiles: galleryHandlerCompilerProjectFiles(projectDirectory),
+    fileName,
+    source,
+  } as Parameters<typeof compileComponentModule>[0] & {
+    extraFiles: readonly { fileName: string; source: string }[];
+  });
+  const errors = result.diagnostics.filter((diagnostic) => diagnostic.severity === 'error');
+  if (errors.length > 0) {
+    throw new Error(
+      `site app shell: gallery interactive demo ${demoName} client compilation failed:\n${errors
+        .map((diagnostic) => `${diagnostic.code}: ${diagnostic.message}`)
+        .join('\n')}`,
+    );
+  }
   const clientSource = result.files.find((file) => file.kind === 'client')?.source;
   if (clientSource === undefined) {
     throw new Error(

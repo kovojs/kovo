@@ -90,7 +90,11 @@ function capturedControlsAreSound(): boolean {
     const other = {};
     const value = {};
     class WitnessConstructedValue {
-      constructor(readonly witness: object) {}
+      readonly witness: object;
+
+      constructor(witness: object) {
+        this.witness = witness;
+      }
     }
     const constructed = apply<WitnessConstructedValue>(nativeReflectConstruct, NativeReflect, [
       WitnessConstructedValue,
