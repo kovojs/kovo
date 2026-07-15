@@ -12,9 +12,9 @@ import {
   execFileSyncErrorOutput,
 } from './index.build.test-support.js';
 
-function captureProductionBuildFailure(root: string): unknown {
+function captureProductionBuildFailure(build: () => void): unknown {
   try {
-    buildProductionArtifact(root);
+    build();
   } catch (error) {
     return error;
   }
@@ -67,9 +67,11 @@ describe('create-kovo starter (build integration: production raw-SQL artifacts)'
     try {
       writeKovoProject(root, { name: 'Prod Raw SQL Write Proof' });
       linkStarterBuildDependencies(root);
-      addRawSqlOwnerWriteProof(root);
+      addRawSqlOwnerWriteProof(root, { staticStatement: true });
 
-      const output = execFileSyncErrorOutput(captureProductionBuildFailure(root));
+      const output = execFileSyncErrorOutput(
+        captureProductionBuildFailure(() => buildProductionArtifact(root)),
+      );
       expect(output).toContain('KV414');
       expect(output).toContain('WRITE');
       expect(output).toContain('domain=raw-owner');

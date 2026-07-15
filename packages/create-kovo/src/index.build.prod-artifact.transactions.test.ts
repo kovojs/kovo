@@ -31,9 +31,9 @@ interface ReadonlyAttemptResponse {
   results?: Array<{ blocked: boolean; message: string; method: string }>;
 }
 
-function captureProductionBuildFailure(root: string): unknown {
+function captureProductionBuildFailure(build: () => void): unknown {
   try {
-    buildProductionArtifact(root);
+    build();
   } catch (error) {
     return error;
   }
@@ -352,7 +352,7 @@ describe('create-kovo starter (build integration: production transaction artifac
     }
   }, 120_000);
 
-  // @kovo-security-certifies KV422 managed-write-raw-driver-escape-prod-artifact
+  // @kovo-security-certifies KV424 managed-write-raw-driver-escape-prod-artifact
   it.each([
     { dialect: undefined, label: 'default' },
     { dialect: 'sqlite' as const, label: 'SQLite' },
@@ -371,9 +371,14 @@ describe('create-kovo starter (build integration: production transaction artifac
         linkStarterBuildDependencies(root);
         addRuntimeMutationSafetyProofs(root, { includeManagedWriteEscapeAttempt: true });
 
-        const output = execFileSyncErrorOutput(captureProductionBuildFailure(root));
+        const output = execFileSyncErrorOutput(
+          captureProductionBuildFailure(() => buildProductionArtifact(root)),
+        );
         expect(output).toContain('kovo build check preflight failed');
-        expect(output).toContain('KV406');
+        expect(output).toContain('KV424');
+        expect(output).toContain('sink=request-handler.opaque-call');
+        expect(output).toContain('source=closeRawClient');
+        expect(output).toContain('sink=request-handler.opaque-protocol');
         expect(output).toContain('runtime-safety-proofs.ts');
       } finally {
         rmSync(root, { force: true, recursive: true });
@@ -382,12 +387,12 @@ describe('create-kovo starter (build integration: production transaction artifac
     120_000,
   );
 
-  // @kovo-security-certifies KV330 webhook-transaction-raw-driver-escape-prod-artifact
+  // @kovo-security-certifies KV330 webhook-context-tx-raw-driver-escape-prod-artifact
   it.each([
     { dialect: undefined, label: 'default' },
     { dialect: 'sqlite' as const, label: 'SQLite' },
   ])(
-    'blocks $label webhook transaction raw-driver escapes before artifact emission',
+    'blocks $label webhook context.tx raw-driver escapes before artifact emission',
     ({ dialect }) => {
       const tempParent = tmpdir();
       mkdirSync(tempParent, { recursive: true });
@@ -404,7 +409,9 @@ describe('create-kovo starter (build integration: production transaction artifac
         expect(proofSource).toContain('context.tx as unknown as { $client: unknown }');
         expect(proofSource).toContain('context.tx as unknown as { session: unknown }');
 
-        const output = execFileSyncErrorOutput(captureProductionBuildFailure(root));
+        const output = execFileSyncErrorOutput(
+          captureProductionBuildFailure(() => buildProductionArtifact(root)),
+        );
         expect(output).toContain('kovo build check preflight failed');
         expect(output).toContain('KV330');
         expect(output).toContain('Direct db access in a webhook handler');

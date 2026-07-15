@@ -18,6 +18,9 @@ import { writeKovoProject, type CreateKovoDialect } from './index.js';
 import {
   addAuthSecretLeakProof,
   addEscapedAttackerTextProof,
+  addOpaqueStorageQueryWriteProof,
+  addOpaqueAuthSecretLeakProof,
+  addOpaqueTrustedOutputAuthorityProof,
   addRuntimeContractProofs,
   addRawSqlOwnerWriteProof,
   addStorageQueryWriteProof,
@@ -45,6 +48,14 @@ describe('create-kovo starter (build integration: adversarial production artifac
     ['sqlite', 'sqlite'],
   ] as const;
 
+  it('fails the diagnostic assertion when an unchanged production build succeeds', () => {
+    withProject('create-kovo-m1-build-failure-helper-green-', undefined, (root) => {
+      expect(() => expectBuildFailure(root, ['KV999_SENTINEL_MUST_NOT_SELF_SATISFY'])).toThrowError(
+        'Expected production build to fail, but it succeeded.',
+      );
+    });
+  }, 240_000);
+
   it.each([...dialectIndependentCompilerGateCases])(
     'M1:storage-write tracks storage write gates from current %s production source, not stale cache',
     (_label: string, dialect: CreateKovoDialect | undefined) => {
@@ -57,6 +68,24 @@ describe('create-kovo starter (build integration: adversarial production artifac
         buildProductionArtifact(root);
         addStorageQueryWriteProof(root);
         expectStorageWriteBuildFailure(root);
+      });
+    },
+    240_000,
+  );
+
+  it.each([...dialectIndependentCompilerGateCases])(
+    'M1:storage-write keeps opaque storage authority on the %s KV424 path',
+    (_label: string, dialect: CreateKovoDialect | undefined) => {
+      withProject(`create-kovo-m1-storage-${_label}-opaque-`, dialect, (root) => {
+        addOpaqueStorageQueryWriteProof(root);
+        expectBuildFailure(root, [
+          'KV424',
+          'source=createMemoryStorage',
+          'source=opaqueStorageWriteProbe.put.bind',
+          'source=storage[method]!',
+          'source=s.file().store',
+          'source=opaqueUploadStorageWriteProbe.upload',
+        ]);
       });
     },
     240_000,
@@ -93,6 +122,22 @@ describe('create-kovo starter (build integration: adversarial production artifac
   );
 
   it.each([...dialectIndependentCompilerGateCases])(
+    'M1:raw-html keeps opaque trusted output authority on the %s KV424 path',
+    (_label: string, dialect: CreateKovoDialect | undefined) => {
+      withProject(`create-kovo-m1-trusted-output-${_label}-opaque-`, dialect, (root) => {
+        addOpaqueTrustedOutputAuthorityProof(root);
+        expectBuildFailure(root, [
+          'KV424',
+          'source=browserTrust[dynamicTrustedUrlKey]',
+          'source=browserTrust[dynamicTrustedHtmlKey]',
+          'source=<unresolved-mutable-factory-provenance>',
+        ]);
+      });
+    },
+    240_000,
+  );
+
+  it.each([...dialectIndependentCompilerGateCases])(
     'M1:secret-wire blocks secret-column-to-wire value-flow in the %s production artifact',
     (_label: string, dialect: CreateKovoDialect | undefined) => {
       withProject(`create-kovo-m1-secret-value-flow-${_label}-red-`, dialect, (root) => {
@@ -100,19 +145,34 @@ describe('create-kovo starter (build integration: adversarial production artifac
         expectBuildFailure(root, [
           'KV435',
           'Secret query value reaches the client wire',
-          'queries/auth-secret-direct-leak-query.accessToken',
-          'queries/auth-secret-direct-leak-query.password',
-          'queries/auth-secret-transformed-leak-query.accessToken',
-          'queries/auth-secret-transformed-leak-query.password',
-          'queries/auth-secret-render-leak-query.renderPassword',
-          'queries/auth-secret-leak-query.accessToken',
-          'queries/auth-secret-leak-query.password',
+          'query="secrets0" path="secrets0.accessToken"',
+          'query="secrets0" path="secrets0.password"',
+          'query="secrets1" path="secrets1.accessToken"',
+          'query="secrets1" path="secrets1.password"',
+          'query="secrets2" path="secrets2.renderPassword"',
         ]);
       });
 
       withProject(`create-kovo-m1-secret-value-flow-${_label}-green-`, dialect, (root) => {
         addAuthSecretLeakProof(root, { leakToWire: false });
         buildProductionArtifact(root);
+      });
+    },
+    240_000,
+  );
+
+  it.each([...dialectIndependentCompilerGateCases])(
+    'M1:secret-wire keeps opaque credential laundering on the %s KV424 path',
+    (_label: string, dialect: CreateKovoDialect | undefined) => {
+      withProject(`create-kovo-m1-secret-value-flow-${_label}-opaque-`, dialect, (root) => {
+        addOpaqueAuthSecretLeakProof(root);
+        expectBuildFailure(root, [
+          'KV424',
+          'source=<property-setter:touchAuth>',
+          'source=createRequestHandler',
+          'source=secretById.set',
+          'sink=client-wire.request.opaque-value',
+        ]);
       });
     },
     240_000,
@@ -137,7 +197,7 @@ describe('create-kovo starter (build integration: adversarial production artifac
     'M1:raw-sql covers raw SQL owner-write unsafe and trusted %s production siblings',
     (_label: string, dialect: CreateKovoDialect | undefined) => {
       withProject(`create-kovo-m1-raw-sql-${_label}-red-`, dialect, (root) => {
-        addRawSqlOwnerWriteProof(root);
+        addRawSqlOwnerWriteProof(root, { staticStatement: true });
         expectBuildFailure(root, ['KV414', 'WRITE', 'domain=raw-owner']);
       });
 
@@ -415,14 +475,17 @@ function withProject(
 }
 
 function expectBuildFailure(root: string, expectedOutput: readonly string[]): void {
+  let output: string | undefined;
   try {
     buildProductionArtifact(root);
-    throw new Error(`Expected production build to fail with ${expectedOutput.join(', ')}.`);
   } catch (error) {
-    const output = execFileSyncErrorOutput(error);
-    for (const expected of expectedOutput) {
-      expect(output).toContain(expected);
-    }
+    output = execFileSyncErrorOutput(error);
+  }
+  if (output === undefined) {
+    throw new Error('Expected production build to fail, but it succeeded.');
+  }
+  for (const expected of expectedOutput) {
+    expect(output).toContain(expected);
   }
 }
 
@@ -431,12 +494,9 @@ function expectStorageWriteBuildFailure(root: string): void {
     'KV433',
     'storage-put-write-query',
     'storage-delete-write-query',
-    'storage-computed-write-query',
-    'storage-file-store-write-query',
     'storage-upload-write-query',
     'operation=put',
     'operation=delete',
-    'operation=store',
     'operation=upload',
   ]);
 }

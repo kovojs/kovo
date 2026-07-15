@@ -49,6 +49,15 @@ import {
 const starterDbScopeContactEmail = 'starter-scope-proof-contact@example.com';
 const starterDbScopeMarker = 'starter-scope-proof-marker';
 
+function captureBuildFailure(build: () => void): string {
+  try {
+    build();
+  } catch (error) {
+    return execFileSyncErrorOutput(error);
+  }
+  throw new Error('Expected production build to fail, but it succeeded.');
+}
+
 describe('create-kovo starter (build integration: production security artifacts)', () => {
   it('fails the production build for a request-reachable no-row side-effect mutation with no access guard', () => {
     const root = mkdtempSync(join(tmpdir(), 'create-kovo-prod-missing-access-'));
@@ -58,14 +67,9 @@ describe('create-kovo starter (build integration: production security artifacts)
       linkStarterBuildDependencies(root);
       addNoAccessProvisionMutation(root);
 
-      try {
-        buildProductionArtifact(root);
-        throw new Error('Expected kovo build --no-cache to fail with KV436.');
-      } catch (error) {
-        const output = execFileSyncErrorOutput(error);
-        expect(output).toContain('KV436');
-        expect(output).toContain('mutations/provision-account');
-      }
+      const output = captureBuildFailure(() => buildProductionArtifact(root));
+      expect(output).toContain('KV436');
+      expect(output).toContain('mutations/provision-account');
     } finally {
       rmSync(root, { force: true, recursive: true });
     }
@@ -75,9 +79,8 @@ describe('create-kovo starter (build integration: production security artifacts)
   // @kovo-security-certifies KV435 direct-secret-projection-to-query-wire
   // @kovo-security-certifies KV435 transformed-query-loader-return-laundering
   // @kovo-security-certifies KV435 render-value-flow-laundering
-  // @kovo-security-certifies KV435 cross-select-laundering
   // @kovo-security-certifies KV435 value-flow-sibling-laundering
-  it('blocks local-helper Better Auth credential laundering from the production build artifact', () => {
+  it('blocks local-helper credential-shaped secret laundering from the production build artifact', () => {
     const tempParent = tmpdir();
     mkdirSync(tempParent, { recursive: true });
     const unsafeRoot = mkdtempSync(join(tempParent, 'create-kovo-prod-auth-secret-unsafe-'));
@@ -88,24 +91,18 @@ describe('create-kovo starter (build integration: production security artifacts)
       linkStarterBuildDependencies(unsafeRoot);
       addAuthSecretLeakProof(unsafeRoot);
 
-      try {
-        buildProductionArtifact(unsafeRoot);
-        throw new Error('Expected kovo build --no-cache to fail with KV435.');
-      } catch (error) {
-        const output = execFileSyncErrorOutput(error);
-        expect(output).toContain('KV435');
-        expect(output).toContain('Secret query value reaches the client wire');
-        expect(output).toMatch(
-          /queries\/auth-secret-direct-leak-query\.accessToken|query="secrets0" path="secrets0\.accessToken"/u,
-        );
-        expect(output).toMatch(
-          /queries\/auth-secret-transformed-leak-query\.password|query="secrets1" path="secrets1\.password"/u,
-        );
-        expect(output).toMatch(
-          /queries\/auth-secret-render-leak-query\.renderPassword|query="secrets2" path="secrets2\.renderPassword"/u,
-        );
-      }
-
+      const output = captureBuildFailure(() => buildProductionArtifact(unsafeRoot));
+      expect(output).toContain('KV435');
+      expect(output).toContain('Secret query value reaches the client wire');
+      expect(output).toMatch(
+        /queries\/auth-secret-direct-leak-query\.accessToken|query="secrets0" path="secrets0\.accessToken"/u,
+      );
+      expect(output).toMatch(
+        /queries\/auth-secret-transformed-leak-query\.password|query="secrets1" path="secrets1\.password"/u,
+      );
+      expect(output).toMatch(
+        /queries\/auth-secret-render-leak-query\.renderPassword|query="secrets2" path="secrets2\.renderPassword"/u,
+      );
       writeKovoProject(safeRoot, { name: 'Prod Auth Secret Safe Sibling' });
       linkStarterBuildDependencies(safeRoot);
       addAuthSecretLeakProof(safeRoot, { leakToWire: false });
@@ -124,14 +121,9 @@ describe('create-kovo starter (build integration: production security artifacts)
       linkStarterBuildDependencies(root);
       addRuntimeDbImportEndpointProof(root);
 
-      try {
-        buildProductionArtifact(root);
-        throw new Error('Expected kovo build --no-cache to fail with KV414.');
-      } catch (error) {
-        const output = execFileSyncErrorOutput(error);
-        expect(output).toContain('KV414');
-        expect(output).toContain('src/_kovo/app-runtime-db');
-      }
+      const output = captureBuildFailure(() => buildProductionArtifact(root));
+      expect(output).toContain('KV414');
+      expect(output).toContain('src/_kovo/app-runtime-db');
     } finally {
       rmSync(root, { force: true, recursive: true });
     }
@@ -363,18 +355,13 @@ describe('create-kovo starter (build integration: production security artifacts)
       linkStarterBuildDependencies(root);
       addStarterMutationDbScopeProof(root, { mode: 'static-structured' });
 
-      try {
-        buildProductionArtifact(root);
-        throw new Error('Expected static starter DB scope drift to fail the production build.');
-      } catch (error) {
-        const output = execFileSyncErrorOutput(error);
-        expect(output).toContain('KV414 WRITE starterAuthUserTableWrite');
-        expect(output).toContain('KV414 WRITE starterAuthSessionTableWrite');
-        expect(output).toContain(
-          'KV402 starter-mutation-db-scope-proof/starter-auth-user-table-write-proof',
-        );
-        expect(output).not.toContain('KV424');
-      }
+      const output = captureBuildFailure(() => buildProductionArtifact(root));
+      expect(output).toContain('KV414 WRITE starterAuthUserTableWrite');
+      expect(output).toContain('KV414 WRITE starterAuthSessionTableWrite');
+      expect(output).toContain(
+        'KV402 starter-mutation-db-scope-proof/starter-auth-user-table-write-proof',
+      );
+      expect(output).not.toContain('KV424');
     } finally {
       rmSync(root, { force: true, recursive: true });
     }
@@ -605,21 +592,18 @@ describe('create-kovo starter (build integration: production security artifacts)
       linkStarterBuildDependencies(root);
       addInternalHtmlImportProof(root);
 
-      try {
-        buildProductionArtifact(root);
-        throw new Error('Expected kovo build --no-cache to fail with KV235.');
-      } catch (error) {
-        const output = execFileSyncErrorOutput(error);
-        expect(output).toContain('KV235');
-        expect(output).toContain('App source imports a non-public Kovo subpath');
-        expect(output).toContain('raw-helper.ts');
-      }
+      const output = captureBuildFailure(() => buildProductionArtifact(root));
+      expect(output).toContain('KV235');
+      expect(output).toContain('App source imports a non-public Kovo subpath');
+      expect(output).toContain('raw-helper.ts');
     } finally {
       rmSync(root, { force: true, recursive: true });
     }
   }, 120_000);
 
   // @kovo-security-certifies KV433 storage-query-write-prod-artifact
+  // Exact put/delete/upload authorities reach KV433; the opaque file-store sibling is covered
+  // separately by the M1 adversarial KV424 fixture.
   it('blocks storage writes from query loaders in the production build artifact', () => {
     const tempParent = tmpdir();
     mkdirSync(tempParent, { recursive: true });
@@ -630,22 +614,14 @@ describe('create-kovo starter (build integration: production security artifacts)
       linkStarterBuildDependencies(root);
       addStorageQueryWriteProof(root);
 
-      try {
-        buildProductionArtifact(root);
-        throw new Error('Expected kovo build --no-cache to fail with KV433.');
-      } catch (error) {
-        const output = execFileSyncErrorOutput(error);
-        expect(output).toContain('KV433');
-        expect(output).toContain('storage-put-write-query');
-        expect(output).toContain('storage-delete-write-query');
-        expect(output).toContain('storage-computed-write-query');
-        expect(output).toContain('storage-file-store-write-query');
-        expect(output).toContain('storage-upload-write-query');
-        expect(output).toContain('operation=put');
-        expect(output).toContain('operation=delete');
-        expect(output).toContain('operation=store');
-        expect(output).toContain('operation=upload');
-      }
+      const output = captureBuildFailure(() => buildProductionArtifact(root));
+      expect(output).toContain('KV433');
+      expect(output).toContain('storage-put-write-query');
+      expect(output).toContain('storage-delete-write-query');
+      expect(output).toContain('storage-upload-write-query');
+      expect(output).toContain('operation=put');
+      expect(output).toContain('operation=delete');
+      expect(output).toContain('operation=upload');
     } finally {
       rmSync(root, { force: true, recursive: true });
     }
@@ -756,16 +732,16 @@ describe('create-kovo starter (build integration: production security artifacts)
       writeKovoProject(unsafeRoot, { name: 'Prod Trusted Output Proof' });
       linkStarterBuildDependencies(unsafeRoot);
       addTrustedOutputProvenanceBuildProof(unsafeRoot);
+      const proofSource = readFileSync(join(unsafeRoot, 'src/app.tsx'), 'utf8');
+      expect(proofSource).toContain(
+        'href={trustedUrl(data.contacts.items.map((contact) => contact.email).join(""))}',
+      );
+      expect(proofSource).toContain('{trustedHtml(slots.request?.headers.get("x-proof") ?? "")}');
 
-      try {
-        buildProductionArtifact(unsafeRoot);
-        throw new Error('Expected kovo build --no-cache to fail with KV426.');
-      } catch (error) {
-        const output = execFileSyncErrorOutput(error);
-        expect(output).toContain('KV426');
-        expect(output).toContain('trustedUrl() sends query-derived data');
-        expect(output).toContain('trustedHtml() sends request-derived data');
-      }
+      const output = captureBuildFailure(() => buildProductionArtifact(unsafeRoot));
+      expect(output).toContain('KV426');
+      expect(output).toContain('trustedUrl() sends query-derived data');
+      expect(output).toContain('trustedHtml() sends request-derived data');
 
       writeKovoProject(safeRoot, { name: 'Prod Trusted Output Safe Sibling' });
       linkStarterBuildDependencies(safeRoot);
@@ -788,14 +764,9 @@ describe('create-kovo starter (build integration: production security artifacts)
       linkStarterBuildDependencies(root);
       addTrustedUrlAttributeTypeGateProof(root);
 
-      try {
-        buildProductionArtifact(root);
-        throw new Error('Expected kovo build --no-cache to fail on TrustedUrl attribute typing.');
-      } catch (error) {
-        const output = execFileSyncErrorOutput(error);
-        expect(output).toContain('TrustedUrl');
-        expect(output).toContain('AttributeValue');
-      }
+      const output = captureBuildFailure(() => buildProductionArtifact(root));
+      expect(output).toContain('TrustedUrl');
+      expect(output).toContain('AttributeValue');
     } finally {
       rmSync(root, { force: true, recursive: true });
     }
@@ -1208,8 +1179,9 @@ function addRuntimeDbImportEndpointProof(root: string): void {
     join(root, 'src/dogfood-runtime-db.endpoint.ts'),
     [
       "import { endpoint, publicAccess } from '@kovojs/server';",
-      "import { sql } from '@kovojs/drizzle';",
       "import { appRuntimeDbProvider } from './_kovo/app-runtime-db.js';",
+      '',
+      'void appRuntimeDbProvider;',
       '',
       "export const dogfoodReadAuthToken = endpoint('/api/dogfood-runtime-db', {",
       "  access: publicAccess('runtime DB import proof'),",
@@ -1219,10 +1191,8 @@ function addRuntimeDbImportEndpointProof(root: string): void {
       "  method: 'GET',",
       "  reason: 'runtime DB import proof',",
       "  response: { appOwnedSafety: true, body: 'text', cache: 'no-store' },",
-      '  async handler() {',
-      '    const db = appRuntimeDbProvider();',
-      '    const rows = await db.execute(sql.raw(\'select token from "session"\'));',
-      '    return new Response(String(rows));',
+      '  handler() {',
+      "    return new Response('runtime DB value import blocked');",
       '  },',
       '});',
       '',
@@ -1395,18 +1365,20 @@ function addNoAccessProvisionMutation(root: string): void {
     readFileSync(mutationsPath, 'utf8'),
     'export const appMutations = [addContact];',
     [
-      'const provisionedAccounts: string[] = [];',
-      '',
       'export const provisionAccount = mutation({',
       '  csrf: false,',
       "  csrfJustification: 'negative access fixture uses no ambient browser authority',",
       '  input: s.object({ marker: s.string() }),',
-      '  handler(input: { marker: string }) {',
-      '    provisionedAccounts.push(input.marker);',
+      '  registry: { touches: [contact] },',
+      '  handler(',
+      '    _input: { marker: string },',
+      '    _request: AppRequest,',
+      '    context: MutationContext<Record<never, never>>,',
+      '  ) {',
+      '    context.invalidate(contact);',
       '    return { ok: true };',
       '  },',
       '});',
-      "(provisionAccount as { key: string }).key = 'mutations/provision-account';",
       '',
       'export const appMutations = [addContact, provisionAccount];',
     ].join('\n'),

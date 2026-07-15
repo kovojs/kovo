@@ -191,7 +191,7 @@ export function addStorageQueryWriteProof(root: string): void {
   queries = replaceRequired(
     queries,
     "import { query, type JsonValue, type QueryLoadContext, type Reader } from '@kovojs/server';",
-    "import { createMemoryStorage, publicAccess, query, s, type JsonValue, type QueryLoadContext, type Reader } from '@kovojs/server';",
+    "import { publicAccess, query, type JsonValue, type QueryLoadContext, type Reader, type StorageCapability } from '@kovojs/server';",
     'storage query write proof import',
   );
   queries = replaceRequired(
@@ -200,17 +200,20 @@ export function addStorageQueryWriteProof(root: string): void {
     [
       'type AppQueryLoadContext = QueryLoadContext<AppQueryRequest, AppDb>;',
       '',
-      'const storageWriteProbe = createMemoryStorage();',
-      '',
-      'const uploadStorageWriteProbe = {',
-      '  upload: storageWriteProbe.put.bind(storageWriteProbe),',
+      'type AppStorageWriteQueryLoadContext = AppQueryLoadContext & StorageCapability;',
+      'type AppStorageUploadQueryLoadContext = AppQueryLoadContext & {',
+      '  upload(key: string, body: string): Promise<unknown>;',
       '};',
       '',
       'export const storagePutWriteQuery = query({',
       "  access: publicAccess('storage put write query proof'),",
       '  reads: [],',
-      '  async load(): Promise<{ ok: true }> {',
-      "    await storageWriteProbe.put('receipts/query-write-proof.txt', 'bad');",
+      '  async load(',
+      '    _input: unknown,',
+      '    storage?: AppStorageWriteQueryLoadContext,',
+      '  ): Promise<{ ok: true }> {',
+      "    if (!storage) throw new Error('storage query proof requires loader context');",
+      "    await storage.put('receipts/query-write-proof.txt', 'bad');",
       '    return { ok: true };',
       '  },',
       '});',
@@ -218,29 +221,12 @@ export function addStorageQueryWriteProof(root: string): void {
       'export const storageDeleteWriteQuery = query({',
       "  access: publicAccess('storage delete write query proof'),",
       '  reads: [],',
-      '  async load(): Promise<{ ok: true }> {',
-      "    await storageWriteProbe.delete('receipts/query-delete-proof.txt');",
-      '    return { ok: true };',
-      '  },',
-      '});',
-      '',
-      'export const storageComputedWriteQuery = query({',
-      "  access: publicAccess('storage computed write query proof'),",
-      '  reads: [],',
-      '  async load(): Promise<{ ok: true }> {',
-      "    const method = 'put' as string;",
-      '    const storage = storageWriteProbe as unknown as Record<string, (key: string, body: string) => Promise<unknown>>;',
-      "    await storage[method]!('receipts/query-computed-proof.txt', 'bad');",
-      '    return { ok: true };',
-      '  },',
-      '});',
-      '',
-      'export const storageFileStoreWriteQuery = query({',
-      "  access: publicAccess('storage file store write query proof'),",
-      '  reads: [],',
-      '  async load(): Promise<{ ok: true }> {',
-      "    const schema = s.file().store({ keyPrefix: 'receipts', storage: storageWriteProbe });",
-      "    await schema.parseAsync(new File(['bad'], 'query-store-proof.txt', { type: 'text/plain' }));",
+      '  async load(',
+      '    _input: unknown,',
+      '    storage?: AppStorageWriteQueryLoadContext,',
+      '  ): Promise<{ ok: true }> {',
+      "    if (!storage) throw new Error('storage query proof requires loader context');",
+      "    await storage.delete('receipts/query-delete-proof.txt');",
       '    return { ok: true };',
       '  },',
       '});',
@@ -248,8 +234,12 @@ export function addStorageQueryWriteProof(root: string): void {
       'export const storageUploadWriteQuery = query({',
       "  access: publicAccess('storage upload write query proof'),",
       '  reads: [],',
-      '  async load(): Promise<{ ok: true }> {',
-      "    await uploadStorageWriteProbe.upload('receipts/query-upload-proof.txt', 'bad');",
+      '  async load(',
+      '    _input: unknown,',
+      '    storageUpload?: AppStorageUploadQueryLoadContext,',
+      '  ): Promise<{ ok: true }> {',
+      "    if (!storageUpload) throw new Error('storage upload proof requires loader context');",
+      "    await storageUpload.upload('receipts/query-upload-proof.txt', 'bad');",
       '    return { ok: true };',
       '  },',
       '});',
@@ -263,14 +253,85 @@ export function addStorageQueryWriteProof(root: string): void {
   app = replaceRequired(
     app,
     "import { contactsQuery } from './queries.js';",
-    "import { contactsQuery, storageComputedWriteQuery, storageDeleteWriteQuery, storageFileStoreWriteQuery, storagePutWriteQuery, storageUploadWriteQuery } from './queries.js';",
+    "import { contactsQuery, storageDeleteWriteQuery, storagePutWriteQuery, storageUploadWriteQuery } from './queries.js';",
     'storage query write proof app import',
   );
   app = replaceRequired(
     app,
     '  queries: [contactsQuery],',
-    '  queries: [contactsQuery, storageComputedWriteQuery, storageDeleteWriteQuery, storageFileStoreWriteQuery, storagePutWriteQuery, storageUploadWriteQuery],',
+    '  queries: [contactsQuery, storageDeleteWriteQuery, storagePutWriteQuery, storageUploadWriteQuery],',
     'storage query write proof app registration',
+  );
+  writeFileSync(appPath, app, 'utf8');
+}
+
+export function addOpaqueStorageQueryWriteProof(root: string): void {
+  const queriesPath = join(root, 'src/queries.ts');
+  let queries = readFileSync(queriesPath, 'utf8');
+  queries = replaceRequired(
+    queries,
+    "import { query, type JsonValue, type QueryLoadContext, type Reader } from '@kovojs/server';",
+    "import { createMemoryStorage, publicAccess, query, s, type JsonValue, type QueryLoadContext, type Reader } from '@kovojs/server';",
+    'opaque storage query proof import',
+  );
+  queries = replaceRequired(
+    queries,
+    'type AppQueryLoadContext = QueryLoadContext<AppQueryRequest, AppDb>;',
+    [
+      'type AppQueryLoadContext = QueryLoadContext<AppQueryRequest, AppDb>;',
+      '',
+      'const opaqueStorageWriteProbe = createMemoryStorage();',
+      'const opaqueUploadStorageWriteProbe = {',
+      '  upload: opaqueStorageWriteProbe.put.bind(opaqueStorageWriteProbe),',
+      '};',
+      '',
+      'export const opaqueStorageComputedWriteQuery = query({',
+      "  access: publicAccess('opaque storage computed write query proof'),",
+      '  reads: [],',
+      '  async load(): Promise<{ ok: true }> {',
+      "    const method = 'put' as string;",
+      '    const storage = opaqueStorageWriteProbe as unknown as Record<string, (key: string, body: string) => Promise<unknown>>;',
+      "    await storage[method]!('receipts/query-computed-proof.txt', 'bad');",
+      '    return { ok: true };',
+      '  },',
+      '});',
+      '',
+      'export const opaqueStorageFileStoreWriteQuery = query({',
+      "  access: publicAccess('opaque storage file store write query proof'),",
+      '  reads: [],',
+      '  async load(): Promise<{ ok: true }> {',
+      "    const schema = s.file().store({ keyPrefix: 'receipts', storage: opaqueStorageWriteProbe });",
+      "    await schema.parseAsync(new File(['bad'], 'query-store-proof.txt', { type: 'text/plain' }));",
+      '    return { ok: true };',
+      '  },',
+      '});',
+      '',
+      'export const opaqueStorageUploadWriteQuery = query({',
+      "  access: publicAccess('opaque storage upload write query proof'),",
+      '  reads: [],',
+      '  async load(): Promise<{ ok: true }> {',
+      "    await opaqueUploadStorageWriteProbe.upload('receipts/query-upload-proof.txt', 'bad');",
+      '    return { ok: true };',
+      '  },',
+      '});',
+    ].join('\n'),
+    'opaque storage query proof query',
+  );
+  writeFileSync(queriesPath, queries, 'utf8');
+
+  const appPath = join(root, 'src/app.tsx');
+  let app = readFileSync(appPath, 'utf8');
+  app = replaceRequired(
+    app,
+    "import { contactsQuery } from './queries.js';",
+    "import { contactsQuery, opaqueStorageComputedWriteQuery, opaqueStorageFileStoreWriteQuery, opaqueStorageUploadWriteQuery } from './queries.js';",
+    'opaque storage query proof app import',
+  );
+  app = replaceRequired(
+    app,
+    '  queries: [contactsQuery],',
+    '  queries: [contactsQuery, opaqueStorageComputedWriteQuery, opaqueStorageFileStoreWriteQuery, opaqueStorageUploadWriteQuery],',
+    'opaque storage query proof app registration',
   );
   writeFileSync(appPath, app, 'utf8');
 }
@@ -361,9 +422,10 @@ export function addStorageMutationWriteProof(root: string): void {
 
 export function addRawSqlOwnerWriteProof(
   root: string,
-  options: { declareTables?: boolean; trusted?: boolean } = {},
+  options: { declareTables?: boolean; staticStatement?: boolean; trusted?: boolean } = {},
 ): void {
   const declareTables = options.declareTables !== false;
+  const staticStatement = options.staticStatement === true;
   const schemaPath = join(root, 'src/schema.ts');
   const schemaSource = readFileSync(schemaPath, 'utf8');
   const isSqlite = schemaSource.includes('sqliteTable(');
@@ -400,7 +462,9 @@ export function addRawSqlOwnerWriteProof(
     [
       options.trusted
         ? "import { sql, trustedSql } from '@kovojs/drizzle';"
-        : "import { sql } from '@kovojs/drizzle';",
+        : staticStatement
+          ? "import { staticSql } from '@kovojs/drizzle';"
+          : "import { sql } from '@kovojs/drizzle';",
       "import { domain, mutation, s, serverValue, type MutationContext } from '@kovojs/server';",
     ].join('\n'),
     'raw SQL proof server import',
@@ -418,19 +482,27 @@ export function addRawSqlOwnerWriteProof(
   mutations = replaceRequired(
     mutations,
     [
-      '  await db',
-      '    .insert(contacts)',
-      "    .values({ id: serverValue(id, 'server-generated contact id'), name, email, company });",
+      '  await db.insert(contacts).values({',
+      '    company: row.company,',
+      '    email: row.email,',
+      "    id: serverValue(id, 'server-generated contact id'),",
+      '    name: row.name,',
+      '  });',
     ].join('\n'),
     [
       `  await db.${rawSqlMethod}(`,
       options.trusted
-        ? "    trustedSql(sql`update raw_owners set label = ${company} where id = ${serverValue(id, 'server-generated contact id')}`, { justification: 'reviewed owner predicate' }),"
-        : "    sql`update raw_owners set label = ${company} where id = ${serverValue(id, 'server-generated contact id')}`,",
+        ? "    trustedSql(sql`update raw_owners set label = ${row.company} where id = ${serverValue(id, 'server-generated contact id')}`, { justification: 'reviewed owner predicate' }),"
+        : staticStatement
+          ? "    staticSql`update raw_owners set label = 'fixture' where id = 'fixture'`,"
+          : "    sql`update raw_owners set label = ${row.company} where id = ${serverValue(id, 'server-generated contact id')}`,",
       '  );',
-      '  await db',
-      '    .insert(contacts)',
-      "    .values({ id: serverValue(id, 'server-generated contact id'), name, email, company });",
+      '  await db.insert(contacts).values({',
+      '    company: row.company,',
+      '    email: row.email,',
+      "    id: serverValue(id, 'server-generated contact id'),",
+      '    name: row.name,',
+      '  });',
     ].join('\n'),
     'raw SQL proof contact insert anchor',
   );
@@ -853,7 +925,7 @@ export function addRuntimeMutationSafetyProofs(
     join(root, 'src/runtime-safety-proofs.ts'),
     [
       "import { sql, trustedSql } from '@kovojs/drizzle';",
-      "import { createMemoryWebhookReplayStore, domain, endpoint, mutation, publicAccess, s, serverValue, webhook, type MutationContext } from '@kovojs/server';",
+      `import { ${includeWebhookTransactionProof ? 'createMemoryWebhookReplayStore, ' : ''}domain, endpoint, mutation, publicAccess, s, serverValue, webhook, type MutationContext } from '@kovojs/server';`,
       '',
       "import { readonlyAppDb } from './db.js';",
       [
@@ -869,11 +941,11 @@ export function addRuntimeMutationSafetyProofs(
       "const publicProof = publicAccess('public production mutation safety regression proof');",
       "const txProof = domain('tx_proof');",
       'function write<Definition>(definition: Definition): Definition { return definition; }',
+      ...(includeWebhookTransactionProof
+        ? ['const webhookReplayStore = createMemoryWebhookReplayStore();']
+        : []),
       ...(includeWebhookTransactionProof || includeWebhookTxEscapeAttempt
-        ? [
-            'const webhookReplayStore = createMemoryWebhookReplayStore();',
-            'const webhookTxProofInput = s.object({ id: s.string() });',
-          ]
+        ? ['const webhookTxProofInput = s.object({ id: s.string() });']
         : []),
       ...(includeRawTableDrift || includeSqliteAuthorizerTriggerDrift
         ? [
@@ -893,48 +965,15 @@ export function addRuntimeMutationSafetyProofs(
       '',
       ...(includeManagedWriteEscapeAttempt
         ? [
-            'type ManagedWriteEscapeResult = { blocked: boolean; message: string; method: string };',
-            '',
-            'function managedWriteEscapeResult(',
-            '  method: string,',
-            '  run: () => unknown,',
-            '): ManagedWriteEscapeResult {',
-            '  try {',
-            '    void run();',
-            "    return { blocked: false, message: 'raw driver escape reached managed write handle', method };",
-            '  } catch (error) {',
-            '    const message = error instanceof Error ? error.message : String(error);',
-            '    const blocked = /raw driver escape|KV422/u.test(message);',
-            '    return { blocked, message, method };',
-            '  }',
-            '}',
-            '',
-            'function attemptManagedWriteClientEscape(request: AppRequest): ManagedWriteEscapeResult {',
-            "  return managedWriteEscapeResult('$client', () => {",
-            '    void (request.db as unknown as { $client: unknown }).$client;',
-            '  });',
-            '}',
-            '',
-            'function attemptManagedWriteSessionEscape(request: AppRequest): ManagedWriteEscapeResult {',
-            "  return managedWriteEscapeResult('session', () => {",
-            '    void (request.db as unknown as { session: unknown }).session;',
-            '  });',
-            '}',
-            '',
             'export const managedWriteEscapeAttempt = mutation({',
             '  access: publicProof,',
             '  input: s.object({ id: s.string() }),',
             "  registry: { tables: ['tx_proofs'], touches: [txProof] },",
             '  async handler(input: { id: string }, request: AppRequest) {',
-            '    const results = [',
-            '      attemptManagedWriteClientEscape(request),',
-            '      attemptManagedWriteSessionEscape(request),',
-            '    ];',
-            '    if (!results.every((result) => result.blocked)) {',
-            "      throw new Error(results.map((result) => `${result.method}: ${result.message}`).join('\\n'));",
-            '    }',
-            '    await insertTxProofRow(request.db, input.id);',
-            '    return { blocked: true, results };',
+            '    const closeRawClient = (request.db as unknown as { $client: { close(): unknown } }).$client.close;',
+            '    await closeRawClient();',
+            '    void input.id;',
+            '    return { ok: true };',
             '  },',
             '});',
             '',
@@ -1002,15 +1041,9 @@ export function addRuntimeMutationSafetyProofs(
         ? [
             "export const webhookTxEscapeAttempt = webhook('/webhooks/tx-escape', {",
             '  access: publicProof,',
-            '  idempotency: (input) => input.id,',
             '  input: webhookTxProofInput,',
-            '  replayStore: webhookReplayStore,',
-            '  async transaction(_context, run) {',
-            '    return run({ $client: {}, insert() {}, session: {} });',
-            '  },',
             "  verify: 'none',",
             "  verifyJustification: 'local production webhook transaction proof fixture',",
-            '  writes: [txProof],',
             '  async handler(input, context) {',
             '    void (context.tx as unknown as { $client: unknown }).$client;',
             '    void (context.tx as unknown as { session: unknown }).session;',
@@ -1322,9 +1355,10 @@ export function addInternalHtmlImportProof(root: string): void {
   writeFileSync(
     join(root, 'src/raw-helper.ts'),
     [
-      "import { renderedHtml } from '@kovojs/server/internal/html';",
+      "import type { RenderedHtml } from '@kovojs/server/internal/html';",
       '',
-      'export const rawUnescaped = (markup: string) => renderedHtml(markup);',
+      'export type RawInternalHtmlProof = RenderedHtml;',
+      "export const rawInternalHtmlProof = 'internal HTML import';",
       '',
     ].join('\n'),
     'utf8',
@@ -1336,13 +1370,13 @@ export function addInternalHtmlImportProof(root: string): void {
       "import { contactsQuery } from './queries.js';",
       [
         "import { contactsQuery } from './queries.js';",
-        "import { rawUnescaped } from './raw-helper.js';",
+        "import { rawInternalHtmlProof } from './raw-helper.js';",
       ].join('\n'),
     )
     .replace(
       '// Fail fast on schema/seed errors, then seed the local demo account when the',
       [
-        'void rawUnescaped;',
+        'void rawInternalHtmlProof;',
         '',
         '// Fail fast on schema/seed errors, then seed the local demo account when the',
       ].join('\n'),
@@ -1362,7 +1396,6 @@ export function addTrustedOutputProvenanceBuildProof(
     '/** @jsxImportSource @kovojs/server */\nimport {',
     [
       '/** @jsxImportSource @kovojs/server */',
-      "import * as browserTrust from '@kovojs/browser';",
       "import { trustedHtml, trustedUrl } from '@kovojs/browser';",
       "import { component } from '@kovojs/core';",
       'import {',
@@ -1379,10 +1412,6 @@ export function addTrustedOutputProvenanceBuildProof(
     app,
     ['function HomePage({ userName }: { userName: string }): string {', '  return ('].join('\n'),
     [
-      "const dynamicTrustedUrlKey: 'trustedUrl' = 'trustedUrl';",
-      "const dynamicTrustedHtmlKey: 'trustedHtml' = 'trustedHtml';",
-      'const trustedOutputAlias = { html: trustedHtml };',
-      '',
       'const TrustedOutputProvenanceProof = component({',
       '  queries: { contacts: contactsQuery },',
       '  render: (',
@@ -1396,21 +1425,10 @@ export function addTrustedOutputProvenanceBuildProof(
         : '      <a href={trustedUrl(data.contacts.items.map((contact) => contact.email).join(""), "server-reviewed contact mailto route")}>',
       '        Unsafe URL',
       '      </a>',
-      unsafe
-        ? '      <a href={browserTrust[dynamicTrustedUrlKey](data.contacts.items[0]?.email ?? "")}>'
-        : '      <a href={trustedUrl(data.contacts.items[0]?.email ?? "", "server-reviewed dynamic contact mailto route")}>',
-      '        Dynamic unsafe URL',
-      '      </a>',
       '      <section>static trusted output proof</section>',
       unsafe
         ? '      {trustedHtml(slots.request?.headers.get("x-proof") ?? "")}'
         : '      {trustedHtml(slots.request?.headers.get("x-proof") ?? "", "reviewed trusted output request header")}',
-      unsafe
-        ? '      {browserTrust[dynamicTrustedHtmlKey](slots.request?.headers.get("x-dynamic-proof") ?? "")}'
-        : '      {trustedHtml(slots.request?.headers.get("x-dynamic-proof") ?? "", "reviewed dynamic trusted output request header")}',
-      unsafe
-        ? '      {trustedOutputAlias.html(slots.request?.headers.get("x-object-proof") ?? "")}'
-        : '      {trustedHtml(slots.request?.headers.get("x-object-proof") ?? "", "reviewed object trusted output request header")}',
       '    </main>',
       '  ),',
       '});',
@@ -1437,6 +1455,78 @@ export function addTrustedOutputProvenanceBuildProof(
       "    route('/', {",
     ].join('\n'),
     'trusted output proof route',
+  );
+  writeFileSync(appPath, app, 'utf8');
+}
+
+export function addOpaqueTrustedOutputAuthorityProof(root: string): void {
+  const appPath = join(root, 'src/app.tsx');
+  let app = readFileSync(appPath, 'utf8');
+  app = replaceRequired(
+    app,
+    '/** @jsxImportSource @kovojs/server */\nimport {',
+    [
+      '/** @jsxImportSource @kovojs/server */',
+      "import * as browserTrust from '@kovojs/browser';",
+      "import { trustedHtml } from '@kovojs/browser';",
+      "import { component } from '@kovojs/core';",
+      'import {',
+    ].join('\n'),
+    'opaque trusted output proof imports',
+  );
+  app = replaceRequired(
+    app,
+    "import { contactsQuery } from './queries.js';",
+    "import { contactsQuery, type ContactListResult } from './queries.js';",
+    'opaque trusted output proof query type import',
+  );
+  app = replaceRequired(
+    app,
+    ['function HomePage({ userName }: { userName: string }): string {', '  return ('].join('\n'),
+    [
+      "const dynamicTrustedUrlKey: 'trustedUrl' = 'trustedUrl';",
+      "const dynamicTrustedHtmlKey: 'trustedHtml' = 'trustedHtml';",
+      'const trustedOutputAlias = { html: trustedHtml };',
+      '',
+      'const OpaqueTrustedOutputAuthorityProof = component({',
+      '  queries: { contacts: contactsQuery },',
+      '  render: (',
+      '    data: { contacts: ContactListResult },',
+      '    _state,',
+      '    slots: { request?: AppRequest },',
+      '  ) => (',
+      '    <main data-proof="opaque-trusted-output-authority">',
+      '      <a href={browserTrust[dynamicTrustedUrlKey](data.contacts.items[0]?.email ?? "")}>',
+      '        Dynamic trusted URL authority',
+      '      </a>',
+      '      {browserTrust[dynamicTrustedHtmlKey](slots.request?.headers.get("x-dynamic-proof") ?? "")}',
+      '      {trustedOutputAlias.html(slots.request?.headers.get("x-object-proof") ?? "")}',
+      '    </main>',
+      '  ),',
+      '});',
+      '',
+      'function HomePage({ userName }: { userName: string }): string {',
+      '  return (',
+    ].join('\n'),
+    'opaque trusted output proof component',
+  );
+  app = replaceRequired(
+    app,
+    "  routes: [\n    route('/', {",
+    [
+      '  routes: [',
+      "    route('/opaque-trusted-output-authority-proof', {",
+      "      access: publicAccess('public opaque trusted output authority proof'),",
+      "      meta: { title: 'Opaque trusted output authority proof' },",
+      '      layout: AppLayout,',
+      '      stylesheets,',
+      '      page() {',
+      '        return <OpaqueTrustedOutputAuthorityProof />;',
+      '      },',
+      '    }),',
+      "    route('/', {",
+    ].join('\n'),
+    'opaque trusted output proof route',
   );
   writeFileSync(appPath, app, 'utf8');
 }
@@ -1673,6 +1763,225 @@ export function addRuntimeContractProofs(root: string): void {
 }
 
 export function addAuthSecretLeakProof(root: string, options: { leakToWire?: boolean } = {}): void {
+  const leakToWire = options.leakToWire ?? true;
+  const queryNames = leakToWire
+    ? ['authSecretDirectLeakQuery', 'authSecretTransformedLeakQuery', 'authSecretRenderLeakQuery']
+    : ['authSecretLeakQuery'];
+  const queryProps = queryNames.map((_name, index) => `secrets${index}`);
+  const queryHelperAnchor =
+    'function requireAppQueryDb(context?: AppQueryLoadContext): Reader<AppDb> {';
+  const querySource = (
+    name: string,
+    rowType: 'AuthSecretLeakRow' | 'AuthSecretRenderLeakRow' | 'AuthSecretSafeRow',
+  ): string => {
+    const body =
+      rowType === 'AuthSecretSafeRow'
+        ? [
+            '    const items = await db',
+            '      .select({ id: authSecretWireProof.id })',
+            '      .from(authSecretWireProof);',
+          ]
+        : name === 'authSecretTransformedLeakQuery'
+          ? [
+              '    const wrapCredential = (value: string | null) => value;',
+              '    const [secretRow] = await db',
+              '      .select({',
+              '        accessToken: authSecretWireProof.accessToken,',
+              '        id: authSecretWireProof.id,',
+              '        password: authSecretWireProof.password,',
+              '      })',
+              '      .from(authSecretWireProof)',
+              '      .limit(1);',
+              '    const items: AuthSecretLeakRow[] = secretRow',
+              '      ? [',
+              '          {',
+              '            accessToken: wrapCredential(secretRow.accessToken),',
+              '            id: secretRow.id,',
+              '            password: wrapCredential(secretRow.password),',
+              '          },',
+              '        ]',
+              '      : [];',
+            ]
+          : name === 'authSecretRenderLeakQuery'
+            ? [
+                '    const items = await db',
+                '      .select({',
+                '        id: authSecretWireProof.id,',
+                '        renderPassword: authSecretWireProof.password,',
+                '      })',
+                '      .from(authSecretWireProof);',
+              ]
+            : [
+                '    const items = await db',
+                '      .select({',
+                '        accessToken: authSecretWireProof.accessToken,',
+                '        id: authSecretWireProof.id,',
+                '        password: authSecretWireProof.password,',
+                '      })',
+                '      .from(authSecretWireProof);',
+              ];
+
+    return [
+      `export const ${name} = query({`,
+      '  access: [appAuthed],',
+      "  reads: [domain('auth-secret-wire-proof')],",
+      `  async load(_input: unknown, context?: AppQueryLoadContext): Promise<{ readonly [key: string]: JsonValue; items: ${rowType}[] }> {`,
+      '    const db = context?.db;',
+      `    if (!db) throw new Error('${name} requires the framework-provided context.db');`,
+      ...body,
+      '    return { items };',
+      '  },',
+      '});',
+    ].join('\n');
+  };
+
+  const querySpecs = [
+    {
+      name: 'authSecretDirectLeakQuery',
+      rowType: 'AuthSecretLeakRow' as const,
+    },
+    {
+      name: 'authSecretTransformedLeakQuery',
+      rowType: 'AuthSecretLeakRow' as const,
+    },
+    {
+      name: 'authSecretRenderLeakQuery',
+      rowType: 'AuthSecretRenderLeakRow' as const,
+    },
+    {
+      name: 'authSecretLeakQuery',
+      rowType: leakToWire ? ('AuthSecretLeakRow' as const) : ('AuthSecretSafeRow' as const),
+    },
+  ].filter((spec) => queryNames.includes(spec.name));
+
+  const queriesPath = join(root, 'src/queries.ts');
+  const schemaPath = join(root, 'src/schema.ts');
+  let schema = readFileSync(schemaPath, 'utf8');
+  const tableFactory = schema.includes('sqliteTable(') ? 'sqliteTable' : 'pgTable';
+  schema = replaceRequired(
+    schema,
+    '// --- Auth infrastructure -------------------------------------------------------',
+    [
+      '// Credential-shaped secret table used only by the production wire proof. Keeping it out of',
+      "// Better Auth's retained authSchema aggregate isolates KV435 from the aggregate's KV424",
+      '// fail-closed authority posture.',
+      `export const authSecretWireProof = ${tableFactory}(`,
+      "  'auth_secret_wire_proof',",
+      '  {',
+      "    id: text('id').primaryKey(),",
+      "    accessToken: text('accessToken'),",
+      "    password: text('password'),",
+      '  },',
+      '  kovo({',
+      "    authzPolicy: 'build-only credential wire proof is guarded by the query access decision',",
+      "    domain: 'auth-secret-wire-proof',",
+      "    key: 'id',",
+      '    readOnly: true,',
+      "    secret: ['accessToken', 'password'],",
+      '  }),',
+      ');',
+      '',
+      '// --- Auth infrastructure -------------------------------------------------------',
+    ].join('\n'),
+    'auth secret wire proof schema',
+  );
+  writeFileSync(schemaPath, schema, 'utf8');
+
+  let queries = readFileSync(queriesPath, 'utf8');
+  queries = replaceRequired(
+    queries,
+    "import { query, type JsonValue, type QueryLoadContext, type Reader } from '@kovojs/server';",
+    "import { domain, query, type JsonValue, type QueryLoadContext, type Reader } from '@kovojs/server';",
+    'auth secret proof imports',
+  );
+  queries = replaceRequired(
+    queries,
+    "import { contacts } from './schema.js';",
+    "import { authSecretWireProof, contacts } from './schema.js';",
+    'auth secret proof schema import',
+  );
+  queries = replaceRequired(
+    queries,
+    queryHelperAnchor,
+    [
+      'export interface AuthSecretLeakRow {',
+      '  readonly [key: string]: JsonValue;',
+      '  accessToken: string | null;',
+      '  id: string;',
+      '  password: string | null;',
+      '}',
+      '',
+      'export interface AuthSecretRenderLeakRow {',
+      '  readonly [key: string]: JsonValue;',
+      '  id: string;',
+      '  renderPassword: string | null;',
+      '}',
+      '',
+      'export interface AuthSecretSafeRow {',
+      '  readonly [key: string]: JsonValue;',
+      '  id: string;',
+      '}',
+      '',
+      ...querySpecs.flatMap((spec) => [querySource(spec.name, spec.rowType), '']),
+      queryHelperAnchor,
+    ].join('\n'),
+    'auth secret proof query insertion',
+  );
+  writeFileSync(queriesPath, queries, 'utf8');
+
+  const appPath = join(root, 'src/app.tsx');
+  let app = readFileSync(appPath, 'utf8');
+  app = replaceRequired(
+    app,
+    '/** @jsxImportSource @kovojs/server */',
+    ['/** @jsxImportSource @kovojs/server */', "import { component } from '@kovojs/core';"].join(
+      '\n',
+    ),
+    'auth secret proof component import',
+  );
+  app = replaceRequired(
+    app,
+    "import { contactsQuery } from './queries.js';",
+    `import { contactsQuery, ${queryNames.join(', ')} } from './queries.js';`,
+    'auth secret proof query import',
+  );
+  app = replaceRequired(
+    app,
+    'function HomePage({ userName }: { userName: string }): string {',
+    [
+      'export const AuthSecretLeakProof = component({',
+      `  queries: { ${queryNames.map((name, index) => `${queryProps[index]}: ${name}`).join(', ')} },`,
+      '  render(data) {',
+      leakToWire
+        ? "    const renderValue = data.secrets2.items[0]?.renderPassword ?? 'redacted';"
+        : "    const renderValue = data.secrets0.items[0]?.id ?? 'redacted';",
+      '    return <main data-proof="auth-secret-wire">{renderValue}</main>;',
+      '  },',
+      '});',
+      '',
+      'function HomePage({ userName }: { userName: string }): string {',
+    ].join('\n'),
+    'auth secret proof component',
+  );
+  app = replaceRequired(
+    app,
+    '      <ContactsRegion />',
+    ['      <ContactsRegion />', '      <AuthSecretLeakProof />'].join('\n'),
+    'auth secret proof render',
+  );
+  app = replaceRequired(
+    app,
+    '  queries: [contactsQuery],',
+    `  queries: [contactsQuery, ${queryNames.join(', ')}],`,
+    'auth secret proof query registration',
+  );
+  writeFileSync(appPath, app, 'utf8');
+}
+
+export function addOpaqueAuthSecretLeakProof(
+  root: string,
+  options: { leakToWire?: boolean } = {},
+): void {
   const leakToWire = options.leakToWire ?? true;
   const unsafeQueryNames = [
     'authSecretDirectLeakQuery',

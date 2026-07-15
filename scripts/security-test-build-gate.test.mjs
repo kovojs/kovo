@@ -114,7 +114,7 @@ describe('security-test-build-gate', () => {
     expect(securityWrappingProofNeedles().sort()).toEqual([
       'query="secrets0" path="secrets0\\.accessToken"',
       'query="secrets1" path="secrets1\\.password"',
-      'query="secrets3" path="secrets3\\.accessToken"',
+      'query="secrets2" path="secrets2\\.renderPassword"',
       'trustedHtml() sends request-derived data',
       'trustedHtml() sends request-derived data',
     ]);
@@ -717,12 +717,12 @@ describe('security-test-build-gate', () => {
     });
   });
 
-  it('keeps the KV433 storage query write proof enrolled for every storage write verb', () => {
-    expect(
-      SECURITY_BUILD_PROOFS.find(
-        (proof) => proof.code === 'KV433' && proof.claimId === 'storage-query-write-prod-artifact',
-      ),
-    ).toMatchObject({
+  it('keeps the KV433 storage query write proof enrolled for exact put/delete/upload verbs', () => {
+    const proof = SECURITY_BUILD_PROOFS.find(
+      (candidate) =>
+        candidate.code === 'KV433' && candidate.claimId === 'storage-query-write-prod-artifact',
+    );
+    expect(proof).toMatchObject({
       buildInvocation: 'starter-build-production-artifact',
       proofFile: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
       requiredNeedles: expect.arrayContaining([
@@ -730,8 +730,64 @@ describe('security-test-build-gate', () => {
         'buildProductionArtifact(root)',
         'operation=put',
         'operation=delete',
-        'operation=store',
         'operation=upload',
+      ]),
+    });
+    expect(proof?.requiredNeedles).not.toContain('operation=store');
+  });
+
+  it('keeps the managed write raw-driver proof enrolled on its KV424 property-protocol path', () => {
+    expect(
+      SECURITY_BUILD_PROOFS.find(
+        (proof) =>
+          proof.code === 'KV424' &&
+          proof.claimId === 'managed-write-raw-driver-escape-prod-artifact',
+      ),
+    ).toMatchObject({
+      buildInvocation: 'starter-build-production-artifact',
+      proofFile: 'packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts',
+      requiredNeedles: expect.arrayContaining([
+        'addRuntimeMutationSafetyProofs(root, { includeManagedWriteEscapeAttempt: true })',
+        'captureProductionBuildFailure(() => buildProductionArtifact(root))',
+        'sink=request-handler.opaque-call',
+        'source=closeRawClient',
+        'sink=request-handler.opaque-protocol',
+      ]),
+    });
+  });
+
+  it('keeps the webhook raw-driver proof enrolled through the hardened production capture', () => {
+    expect(
+      SECURITY_BUILD_PROOFS.find(
+        (proof) =>
+          proof.code === 'KV330' &&
+          proof.claimId === 'webhook-context-tx-raw-driver-escape-prod-artifact',
+      ),
+    ).toMatchObject({
+      buildInvocation: 'starter-build-production-artifact',
+      proofFile: 'packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts',
+      requiredNeedles: expect.arrayContaining([
+        'addRuntimeMutationSafetyProofs(root, { includeWebhookTxEscapeAttempt: true })',
+        'captureProductionBuildFailure(() => buildProductionArtifact(root))',
+        'KV330',
+        'Direct db access in a webhook handler',
+      ]),
+    });
+  });
+
+  it('keeps the raw owner-table proof enrolled through static SQL and hardened capture', () => {
+    expect(
+      SECURITY_BUILD_PROOFS.find(
+        (proof) => proof.code === 'KV414' && proof.claimId === 'raw-sql-owner-write-prod-artifact',
+      ),
+    ).toMatchObject({
+      buildInvocation: 'starter-build-production-artifact',
+      proofFile: 'packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts',
+      requiredNeedles: expect.arrayContaining([
+        'addRawSqlOwnerWriteProof(root, { staticStatement: true })',
+        'captureProductionBuildFailure(() => buildProductionArtifact(root))',
+        'KV414',
+        'domain=raw-owner',
       ]),
     });
   });

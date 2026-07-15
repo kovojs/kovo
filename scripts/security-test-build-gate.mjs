@@ -10,6 +10,7 @@ export const SECURITY_BUILD_CERTIFICATION_CODES = [
   'KV235',
   'KV414',
   'KV422',
+  'KV424',
   'KV426',
   'KV433',
   'KV435',
@@ -89,8 +90,8 @@ export const SECURITY_WRAPPING_GRAMMAR = Object.freeze({
   forms: Object.freeze([
     {
       form: 'alias',
-      needle: 'query="secrets3" path="secrets3\\.accessToken"',
-      surface: 'KV435 cross-select alias/value merge',
+      needle: 'query="secrets2" path="secrets2\\.renderPassword"',
+      surface: 'KV435 renamed secret projection alias',
     },
     {
       form: 'component-prop',
@@ -360,7 +361,7 @@ export const SECURITY_BUILD_PROOFS = [
     proofFile: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
     sourceFile: 'packages/conformance-fixtures/src/metamorphic-recognition-fixtures.ts',
     testName:
-      'blocks local-helper Better Auth credential laundering from the production build artifact',
+      'blocks local-helper credential-shaped secret laundering from the production build artifact',
   },
   {
     buildInvocation: 'starter-build-production-artifact',
@@ -375,7 +376,7 @@ export const SECURITY_BUILD_PROOFS = [
     ],
     sourceFile: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
     testName:
-      'blocks local-helper Better Auth credential laundering from the production build artifact',
+      'blocks local-helper credential-shaped secret laundering from the production build artifact',
   },
   {
     buildInvocation: 'starter-build-production-artifact',
@@ -387,13 +388,11 @@ export const SECURITY_BUILD_PROOFS = [
       'buildProductionArtifact(unsafeRoot)',
       'KV435',
       'Secret query value reaches the client wire',
-      ...readSourceFamilyProofNeedles().filter((needle) =>
-        needle.startsWith('queries/auth-secret-direct-leak-query.'),
-      ),
+      ...readSourceFamilyProofNeedles().filter((needle) => needle.startsWith('query="secrets0"')),
     ],
     sourceFile: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
     testName:
-      'blocks local-helper Better Auth credential laundering from the production build artifact',
+      'blocks local-helper credential-shaped secret laundering from the production build artifact',
   },
   {
     buildInvocation: 'starter-build-production-artifact',
@@ -405,13 +404,11 @@ export const SECURITY_BUILD_PROOFS = [
       'buildProductionArtifact(unsafeRoot)',
       'KV435',
       'Secret query value reaches the client wire',
-      ...securityWrappingProofNeedles().filter((needle) =>
-        needle.startsWith('queries/auth-secret-transformed-leak-query.'),
-      ),
+      ...securityWrappingProofNeedles().filter((needle) => needle.startsWith('query="secrets1"')),
     ],
     sourceFile: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
     testName:
-      'blocks local-helper Better Auth credential laundering from the production build artifact',
+      'blocks local-helper credential-shaped secret laundering from the production build artifact',
   },
   {
     buildInvocation: 'starter-build-production-artifact',
@@ -427,25 +424,7 @@ export const SECURITY_BUILD_PROOFS = [
     ],
     sourceFile: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
     testName:
-      'blocks local-helper Better Auth credential laundering from the production build artifact',
-  },
-  {
-    buildInvocation: 'starter-build-production-artifact',
-    claimId: 'cross-select-laundering',
-    code: 'KV435',
-    proofFile: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
-    requiredNeedles: [
-      'addAuthSecretLeakProof(unsafeRoot)',
-      'buildProductionArtifact(unsafeRoot)',
-      'KV435',
-      'Secret query value reaches the client wire',
-      ...securityWrappingProofNeedles().filter((needle) =>
-        needle.startsWith('queries/auth-secret-leak-query.'),
-      ),
-    ],
-    sourceFile: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
-    testName:
-      'blocks local-helper Better Auth credential laundering from the production build artifact',
+      'blocks local-helper credential-shaped secret laundering from the production build artifact',
   },
   {
     buildInvocation: 'starter-build-production-artifact',
@@ -462,7 +441,7 @@ export const SECURITY_BUILD_PROOFS = [
     ],
     sourceFile: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
     testName:
-      'blocks local-helper Better Auth credential laundering from the production build artifact',
+      'blocks local-helper credential-shaped secret laundering from the production build artifact',
   },
   {
     buildInvocation: 'starter-build-production-artifact',
@@ -663,7 +642,7 @@ export const SECURITY_BUILD_PROOFS = [
     requiredNeedles: [
       "addStarterMutationDbScopeProof(root, { mode: 'static-structured' })",
       'buildProductionArtifact(root)',
-      'execFileSyncErrorOutput(error)',
+      'captureBuildFailure(() => buildProductionArtifact(root))',
       'KV414 WRITE starterAuthUserTableWrite',
       'KV414 WRITE starterAuthSessionTableWrite',
       'KV402 starter-mutation-db-scope-proof/starter-auth-user-table-write-proof',
@@ -762,13 +741,15 @@ export const SECURITY_BUILD_PROOFS = [
   {
     buildInvocation: 'starter-build-production-artifact',
     claimId: 'managed-write-raw-driver-escape-prod-artifact',
-    code: 'KV422',
+    code: 'KV424',
     proofFile: 'packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts',
     requiredNeedles: [
       'addRuntimeMutationSafetyProofs(root, { includeManagedWriteEscapeAttempt: true })',
-      'buildProductionArtifact(root)',
-      'Expected kovo build --no-cache to fail for managed raw-driver escape.',
-      'KV406',
+      'captureProductionBuildFailure(() => buildProductionArtifact(root))',
+      'KV424',
+      'sink=request-handler.opaque-call',
+      'source=closeRawClient',
+      'sink=request-handler.opaque-protocol',
       'runtime-safety-proofs.ts',
     ],
     sourceFile: 'packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts',
@@ -776,25 +757,22 @@ export const SECURITY_BUILD_PROOFS = [
   },
   {
     buildInvocation: 'starter-build-production-artifact',
-    claimId: 'webhook-transaction-raw-driver-escape-prod-artifact',
+    claimId: 'webhook-context-tx-raw-driver-escape-prod-artifact',
     code: 'KV330',
     proofFile: 'packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts',
     requiredNeedles: [
       'addRuntimeMutationSafetyProofs(root, { includeWebhookTxEscapeAttempt: true })',
-      'buildProductionArtifact(root)',
-      'Expected kovo build --no-cache to fail for webhook tx raw-driver escape.',
+      'captureProductionBuildFailure(() => buildProductionArtifact(root))',
       'KV330',
       'Direct db access in a webhook handler',
       'runtime-safety-proofs.ts',
     ],
     requiredProofFileNeedles: [
-      'includeWebhookTransactionProof',
-      'txProofWebhook',
       'context.tx as unknown as { $client: unknown }',
       'context.tx as unknown as { session: unknown }',
     ],
     sourceFile: 'packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts',
-    testName: 'blocks $label webhook transaction raw-driver escapes before artifact emission',
+    testName: 'blocks $label webhook context.tx raw-driver escapes before artifact emission',
   },
   {
     buildInvocation: 'starter-build-production-artifact',
@@ -802,9 +780,8 @@ export const SECURITY_BUILD_PROOFS = [
     code: 'KV414',
     proofFile: 'packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts',
     requiredNeedles: [
-      'addRawSqlOwnerWriteProof(root)',
-      'buildProductionArtifact(root)',
-      'Expected kovo build --no-cache to fail for raw owner-table write.',
+      'addRawSqlOwnerWriteProof(root, { staticStatement: true })',
+      'captureProductionBuildFailure(() => buildProductionArtifact(root))',
       'KV414',
       'domain=raw-owner',
     ],
@@ -822,7 +799,6 @@ export const SECURITY_BUILD_PROOFS = [
       'KV433',
       'operation=put',
       'operation=delete',
-      'operation=store',
       'operation=upload',
     ],
     sourceFile: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
@@ -839,9 +815,10 @@ export const SECURITY_BUILD_PROOFS = [
       'addTrustedOutputProvenanceBuildProof(safeRoot, { unsafe: false })',
       'buildReusableProductionArtifact(safeRoot)',
       'KV426',
-      ...trustedOutputSinkPositionProofNeedles(),
-      ...readSourceFamilyProofNeedles().filter((needle) => needle.includes('derived data')),
-      ...securityWrappingProofNeedles().filter((needle) => needle.includes('derived data')),
+      'href={trustedUrl(data.contacts.items.map((contact) => contact.email).join(""))}',
+      '{trustedHtml(slots.request?.headers.get("x-proof") ?? "")}',
+      'trustedUrl() sends query-derived data',
+      'trustedHtml() sends request-derived data',
     ],
     sourceFile: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
     testName: 'blocks trusted output provenance leaks through the production build artifact',
