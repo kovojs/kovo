@@ -72,6 +72,7 @@ describe('Better Auth SQLite bindings', () => {
             useSecureCookies: false,
           },
           database: { kind: 'sqlite-adapter' },
+          emailAndPassword: { autoSignIn: false, enabled: true },
           secret: strongSecretText,
           secrets: [{ value: strongSecretText, version: 0 }],
           trustedOrigins: [],

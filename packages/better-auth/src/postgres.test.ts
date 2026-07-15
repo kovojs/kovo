@@ -107,6 +107,7 @@ describe('Better Auth Postgres bindings', () => {
           useSecureCookies: true,
         },
         database: { kind: 'postgres-adapter' },
+        emailAndPassword: { autoSignIn: false, enabled: true },
         secret: strongSecretText,
         secrets: [{ value: strongSecretText, version: 0 }],
         trustedOrigins: [],

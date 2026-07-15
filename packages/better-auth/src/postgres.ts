@@ -226,7 +226,9 @@ export function createBetterAuthPostgresBindings<
     },
     baseURL,
     database,
-    emailAndPassword: { enabled: true },
+    // Seeding provisions a credential only. A session must require the explicit, CSRF-protected
+    // sign-in mutation rather than being created as a side effect of server boot (SPEC §6.6).
+    emailAndPassword: { autoSignIn: false, enabled: true },
     secret,
     secrets: [{ version: 0, value: secret }],
     trustedOrigins: [],
