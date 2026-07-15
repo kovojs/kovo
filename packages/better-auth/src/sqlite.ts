@@ -6,8 +6,16 @@ import { betterAuth, type Session, type User } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 
 import type { BetterAuthRequestLike } from './internal.js';
-import { betterAuthEnvironmentIsProduction, resolveBetterAuthEnvironment } from './environment.js';
-import { betterAuthFreezeOwn, betterAuthOwnDataOption } from './internal/intrinsics.js';
+import {
+  betterAuthEnvironmentIsProduction,
+  resolveBetterAuthEnvironment,
+  validateBetterAuthBaseUrl,
+} from './environment.js';
+import {
+  betterAuthFreezeOwn,
+  betterAuthOwnDataOption,
+  betterAuthUrlProtocol,
+} from './internal/intrinsics.js';
 import {
   callBetterAuthSignUpEmail,
   pinBetterAuthSignUpEmail,
@@ -146,7 +154,10 @@ export function createBetterAuthSqliteBindings<
     throw new NativeTypeError('Better Auth SQLite binding options must be an object.');
   }
 
-  const baseURL = requiredTextOption(options, 'baseURL');
+  const baseURL = validateBetterAuthBaseUrl(
+    requiredTextOption(options, 'baseURL'),
+    betterAuthEnvironmentIsProduction(),
+  );
   const csrf = requiredOption<CsrfOptions<Request>>(options, 'csrf');
   const mapSession = requiredOption<BetterAuthSessionMapper<Session, User, SessionValue>>(
     options,
@@ -176,11 +187,20 @@ export function createBetterAuthSqliteBindings<
     drizzleAdapter(db, { provider: 'sqlite', schema: pinnedSchema }),
   );
   const auth = betterAuth({
-    advanced: { disableCSRFCheck: true },
+    // The raw Better Auth router is unreachable. Kovo's fixed credential wrappers own the
+    // request-origin floor and never forward callback URLs (SPEC §6.6/§10.3 C9), so ambient
+    // Better Auth trusted-origin configuration must not become a second, widenable authority.
+    advanced: {
+      disableCSRFCheck: true,
+      disableOriginCheck: true,
+      useSecureCookies: betterAuthUrlProtocol(baseURL) === 'https:',
+    },
     baseURL,
     database,
     emailAndPassword: { enabled: true },
     secret,
+    secrets: [{ version: 0, value: secret }],
+    trustedOrigins: [],
   });
   const sessionProvider = betterAuthSession<Session, User, SessionValue>(auth, mapSession);
   const signIn = betterAuthSignInEmailMutation<'auth/sign-in', Request>(auth, {

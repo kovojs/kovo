@@ -183,6 +183,59 @@ process.stdout.write(JSON.stringify({
     }
   });
 
+  it('keeps the HTTP localhost default development-only and requires a canonical production HTTPS origin', () => {
+    expect(resolveEnvironmentInChild([])).toEqual({
+      baseURL: 'http://localhost:5173',
+      developmentSeed: false,
+      production: false,
+    });
+    expect(
+      resolveEnvironmentInChild([
+        'BETTER_AUTH_URL=https://auth.operator.example',
+        'KOVO_DEMO_PASSWORD=must-not-seed-in-production',
+        'NODE_ENV=production',
+      ]),
+    ).toEqual({
+      baseURL: 'https://auth.operator.example',
+      developmentSeed: false,
+      production: true,
+    });
+
+    expect(resolveEnvironmentInChild(['NODE_ENV=production'])).toEqual({
+      error: expect.stringMatching(/BETTER_AUTH_URL is required in production/u),
+    });
+    expect(
+      resolveEnvironmentInChild([
+        'BETTER_AUTH_URL=http://auth.operator.example',
+        'NODE_ENV=production',
+      ]),
+    ).toEqual({ error: expect.stringMatching(/must use HTTPS in production/u) });
+    for (const malformedUrl of [
+      'https://auth.operator.example/',
+      'https://user@auth.operator.example',
+      'https://auth.operator.example/path',
+      'https://auth.operator.example?tenant=one',
+      'https://auth.operator.example#fragment',
+    ]) {
+      expect(
+        resolveEnvironmentInChild([`BETTER_AUTH_URL="${malformedUrl}"`, 'NODE_ENV=production']),
+      ).toEqual({ error: expect.stringMatching(/canonical absolute HTTP\(S\) origin/u) });
+    }
+  });
+
+  it('rejects upstream Better Auth secret and trusted-origin environment authorities', () => {
+    expect(resolveEnvironmentInChild(['BETTER_AUTH_SECRETS=0:attacker-controlled-secret'])).toEqual(
+      {
+        error: expect.stringMatching(/BETTER_AUTH_SECRETS is not accepted/u),
+      },
+    );
+    expect(
+      resolveEnvironmentInChild(['BETTER_AUTH_TRUSTED_ORIGINS=https://attacker.example']),
+    ).toEqual({
+      error: expect.stringMatching(/BETTER_AUTH_TRUSTED_ORIGINS is not accepted/u),
+    });
+  });
+
   it('rejects a javascript URL after a late URL.protocol getter replacement', () => {
     const root = mkdtempSync(join(tmpdir(), 'kovo-better-auth-url-protocol-'));
     try {
@@ -240,10 +293,86 @@ try {
       );
       expect(result.status, result.stderr).toBe(0);
       expect(JSON.parse(result.stdout)).toEqual({
-        rejected: 'TypeError: BETTER_AUTH_URL must be an absolute HTTP(S) URL.',
+        rejected: 'TypeError: BETTER_AUTH_URL must be a canonical absolute HTTP(S) origin.',
       });
     } finally {
       rmSync(root, { force: true, recursive: true });
     }
   });
 });
+
+function resolveEnvironmentInChild(lines: readonly string[]): {
+  baseURL?: string;
+  developmentSeed?: boolean;
+  error?: unknown;
+  production?: boolean;
+} {
+  const root = mkdtempSync(join(tmpdir(), 'kovo-better-auth-environment-posture-'));
+  try {
+    writeFileSync(
+      join(root, '.env'),
+      ['BETTER_AUTH_SECRET=operator-auth-secret-0123456789abcdef0123456789', ...lines, ''].join(
+        '\n',
+      ),
+    );
+    const environmentUrl = pathToFileURL(
+      fileURLToPath(new URL('./environment.ts', import.meta.url)),
+    ).href;
+    const source = `
+import { existsSync } from 'node:fs';
+import { registerHooks } from 'node:module';
+registerHooks({
+  resolve(specifier, context, nextResolve) {
+    if (specifier.startsWith('.') && specifier.endsWith('.js') && context.parentURL) {
+      const candidate = new URL(specifier.replace(/\\.js$/, '.ts'), context.parentURL);
+      if (existsSync(candidate)) return nextResolve(candidate.href, context);
+    }
+    return nextResolve(specifier, context);
+  },
+});
+try {
+  const internal = await import(${JSON.stringify(environmentUrl)});
+  const resolved = internal.resolveBetterAuthEnvironment();
+  process.stdout.write(JSON.stringify({
+    baseURL: resolved.baseURL,
+    developmentSeed: resolved.developmentSeed !== undefined,
+    production: resolved.production,
+  }));
+} catch (error) {
+  process.stdout.write(JSON.stringify({ error: String(error) }));
+}
+`;
+    const environment = { ...process.env };
+    for (const name of [
+      'BETTER_AUTH_SECRET',
+      'BETTER_AUTH_SECRETS',
+      'BETTER_AUTH_TRUSTED_ORIGINS',
+      'BETTER_AUTH_URL',
+      'KOVO_CSRF_SECRET',
+      'KOVO_DEMO_PASSWORD',
+      'NODE_ENV',
+    ]) {
+      delete environment[name];
+    }
+    const result = spawnSync(
+      process.execPath,
+      [
+        '--disable-warning=ExperimentalWarning',
+        '--experimental-transform-types',
+        '--input-type=module',
+        '--eval',
+        source,
+      ],
+      { cwd: root, encoding: 'utf8', env: environment },
+    );
+    expect(result.status, result.stderr).toBe(0);
+    return JSON.parse(result.stdout) as {
+      baseURL?: string;
+      developmentSeed?: boolean;
+      error?: unknown;
+      production?: boolean;
+    };
+  } finally {
+    rmSync(root, { force: true, recursive: true });
+  }
+}

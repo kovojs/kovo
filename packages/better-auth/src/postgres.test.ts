@@ -4,12 +4,14 @@ import { join } from 'node:path';
 
 import {
   createPostgresAppRuntimeDb,
+  csrfToken,
   type KovoPostgresAppRuntimeDb,
   type KovoPostgresSystemDb,
 } from '@kovojs/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { kovo } from '../../drizzle/src/index.js';
+import { runMutation } from '../../server/src/mutation.js';
 import { pgTable, text } from '../../server/node_modules/drizzle-orm/pg-core/index.js';
 import {
   betterAuthPostgresSecret,
@@ -99,9 +101,15 @@ describe('Better Auth Postgres bindings', () => {
     expect(authMocks.drizzleAdapter).toHaveBeenCalledOnce();
     expect(authMocks.betterAuth).toHaveBeenCalledWith(
       expect.objectContaining({
-        advanced: { disableCSRFCheck: true },
+        advanced: {
+          disableCSRFCheck: true,
+          disableOriginCheck: true,
+          useSecureCookies: true,
+        },
         database: { kind: 'postgres-adapter' },
         secret: strongSecretText,
+        secrets: [{ value: strongSecretText, version: 0 }],
+        trustedOrigins: [],
       }),
     );
 
@@ -139,20 +147,67 @@ describe('Better Auth Postgres bindings', () => {
     expect(authMocks.betterAuth).not.toHaveBeenCalled();
   });
 
-  it('pins production posture before a late NODE_ENV mutation can re-enable fixed seeding', async () => {
+  it('pins secrets and rejects hostile origins after late upstream environment mutation', async () => {
+    const systemDb = await createSystemDb();
+    const csrf = {
+      field: 'csrf',
+      secret: strongSecretText,
+      sessionId: () => 'session-1',
+    };
+    const bindings = createBetterAuthPostgresBindings(
+      bindingOptions(systemDb, betterAuthPostgresSecret(strongSecretText), { csrf }),
+    );
+    const sameOriginRequest = new Request('https://app.example.test/login', {
+      headers: { origin: 'https://app.example.test' },
+      method: 'POST',
+    });
+    const token = csrfToken(sameOriginRequest, csrf, { audience: 'auth/sign-in' });
+    const previousSecrets = process.env.BETTER_AUTH_SECRETS;
+    const previousTrustedOrigins = process.env.BETTER_AUTH_TRUSTED_ORIGINS;
+    try {
+      // Better Auth reads these variables dynamically. Its router is unreachable and its origin
+      // authority is disabled; Kovo's mutation ingress remains the sole origin floor (SPEC §6.6).
+      process.env.BETTER_AUTH_SECRETS = '99:attacker-controlled-secret-value';
+      process.env.BETTER_AUTH_TRUSTED_ORIGINS = 'https://attacker.example';
+      const hostileRequest = new Request('https://app.example.test/login', {
+        headers: { origin: 'https://attacker.example' },
+        method: 'POST',
+      });
+
+      await expect(
+        runMutation(
+          bindings.signIn,
+          { csrf: token, email: 'ada@example.test', password: 'password' },
+          hostileRequest,
+        ),
+      ).resolves.toEqual({ error: { code: 'CSRF', payload: {} }, ok: false, status: 422 });
+      expect(authMocks.signInEmail).not.toHaveBeenCalled();
+      expect(authMocks.betterAuth).toHaveBeenCalledWith(
+        expect.objectContaining({
+          advanced: expect.objectContaining({ disableOriginCheck: true }),
+          secrets: [{ value: strongSecretText, version: 0 }],
+          trustedOrigins: [],
+        }),
+      );
+    } finally {
+      if (previousSecrets === undefined) delete process.env.BETTER_AUTH_SECRETS;
+      else process.env.BETTER_AUTH_SECRETS = previousSecrets;
+      if (previousTrustedOrigins === undefined) delete process.env.BETTER_AUTH_TRUSTED_ORIGINS;
+      else process.env.BETTER_AUTH_TRUSTED_ORIGINS = previousTrustedOrigins;
+    }
+  });
+
+  it('does not let a late NODE_ENV mutation change the boot-pinned seed posture', async () => {
     const systemDb = await createSystemDb();
     const previousNodeEnv = process.env.NODE_ENV;
     try {
-      process.env.NODE_ENV = 'production';
-      const productionApi = await import('./postgres.js?production-seed-posture');
-      process.env.NODE_ENV = 'development';
-
-      const bindings = productionApi.createBetterAuthPostgresBindings(
-        bindingOptions(systemDb, productionApi.betterAuthPostgresSecret(strongSecretText)),
+      const bindings = createBetterAuthPostgresBindings(
+        bindingOptions(systemDb, betterAuthPostgresSecret(strongSecretText)),
       );
+      process.env.NODE_ENV = 'production';
       await bindings.seedDemoUser();
 
-      expect(authMocks.signUpEmail).not.toHaveBeenCalled();
+      expect(authMocks.signUpEmail).toHaveBeenCalledOnce();
     } finally {
       if (previousNodeEnv === undefined) delete process.env.NODE_ENV;
       else process.env.NODE_ENV = previousNodeEnv;

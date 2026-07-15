@@ -7,7 +7,7 @@ import {
   betterAuthObjectKeys,
   betterAuthOwnDataOption,
   betterAuthOwnDataValue,
-  betterAuthUrlProtocol,
+  betterAuthUrlSnapshot,
 } from './internal/intrinsics.js';
 
 const NativeTypeError = globalThis.TypeError;
@@ -123,8 +123,16 @@ export interface BetterAuthResolvedEnvironment {
 /** Resolve auth values at constructor call time, after server bootstrap loaded and pinned `.env`. */
 export function resolveBetterAuthEnvironment(): BetterAuthResolvedEnvironment {
   const production = runtimeEnvironmentValue('NODE_ENV') === 'production';
+  assertNoUpstreamBetterAuthEnvironmentOverrides();
+  const configuredBaseURL = runtimeEnvironmentValue('BETTER_AUTH_URL');
+  if (production && configuredBaseURL === undefined) {
+    throw new NativeTypeError(
+      'BETTER_AUTH_URL is required in production and must be a canonical HTTPS origin (for example, https://app.example.com).',
+    );
+  }
   const baseURL = validateBetterAuthBaseUrl(
-    runtimeEnvironmentValue('BETTER_AUTH_URL') ?? DEFAULT_BETTER_AUTH_URL,
+    configuredBaseURL ?? DEFAULT_BETTER_AUTH_URL,
+    production,
   );
   const secret = requiredBetterAuthEnvironmentSecret();
   const password = runtimeEnvironmentValue('KOVO_DEMO_PASSWORD');
@@ -169,15 +177,38 @@ function requiredBetterAuthEnvironmentSecret(): string {
   return secret;
 }
 
-function validateBetterAuthBaseUrl(value: string): string {
-  let protocol: string;
+function assertNoUpstreamBetterAuthEnvironmentOverrides(): void {
+  for (const name of ['BETTER_AUTH_SECRETS', 'BETTER_AUTH_TRUSTED_ORIGINS'] as const) {
+    if (runtimeEnvironmentValue(name) !== undefined) {
+      throw new NativeTypeError(
+        `${name} is not accepted by Kovo's generated Better Auth boundary; configure the reviewed Kovo constructor instead (SPEC §6.6 C9).`,
+      );
+    }
+  }
+}
+
+/** Validate the canonical origin shared by generated and direct binding constructors. @internal */
+export function validateBetterAuthBaseUrl(value: string, production: boolean): string {
+  let snapshot: ReturnType<typeof betterAuthUrlSnapshot>;
   try {
-    protocol = betterAuthUrlProtocol(value);
+    snapshot = betterAuthUrlSnapshot(value);
   } catch {
-    throw new NativeTypeError('BETTER_AUTH_URL must be an absolute HTTP(S) URL.');
+    throw new NativeTypeError('BETTER_AUTH_URL must be a canonical absolute HTTP(S) origin.');
   }
-  if (protocol !== 'http:' && protocol !== 'https:') {
-    throw new NativeTypeError('BETTER_AUTH_URL must be an absolute HTTP(S) URL.');
+  if (
+    (snapshot.protocol !== 'http:' && snapshot.protocol !== 'https:') ||
+    snapshot.origin === 'null' ||
+    snapshot.username !== '' ||
+    snapshot.password !== '' ||
+    snapshot.pathname !== '/' ||
+    snapshot.search !== '' ||
+    snapshot.hash !== '' ||
+    value !== snapshot.origin
+  ) {
+    throw new NativeTypeError('BETTER_AUTH_URL must be a canonical absolute HTTP(S) origin.');
   }
-  return value;
+  if (production && snapshot.protocol !== 'https:') {
+    throw new NativeTypeError('BETTER_AUTH_URL must use HTTPS in production.');
+  }
+  return snapshot.origin;
 }

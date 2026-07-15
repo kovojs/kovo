@@ -54,7 +54,13 @@ const nativeStringSplit = NativeString.prototype.split;
 const nativeStringToLowerCase = NativeString.prototype.toLowerCase;
 const nativeStringToUpperCase = NativeString.prototype.toUpperCase;
 const nativeStringTrim = NativeString.prototype.trim;
+const nativeUrlHashGetter = getGetter(NativeURL.prototype, 'hash');
+const nativeUrlOriginGetter = getGetter(NativeURL.prototype, 'origin');
+const nativeUrlPasswordGetter = getGetter(NativeURL.prototype, 'password');
+const nativeUrlPathnameGetter = getGetter(NativeURL.prototype, 'pathname');
 const nativeUrlProtocolGetter = getGetter(NativeURL.prototype, 'protocol');
+const nativeUrlSearchGetter = getGetter(NativeURL.prototype, 'search');
+const nativeUrlUsernameGetter = getGetter(NativeURL.prototype, 'username');
 const nativeUtilIsProxy = nodeUtilTypes.isProxy;
 
 function apply<Return>(fn: Function, receiver: unknown, args: readonly unknown[]): Return {
@@ -83,6 +89,10 @@ function readNativeUrlProtocol(value: object): string | undefined {
   return nativeUrlProtocolGetter === undefined
     ? undefined
     : apply<string>(nativeUrlProtocolGetter, value, []);
+}
+
+function readNativeUrlPart(getter: Function | undefined, value: object): string | undefined {
+  return getter === undefined ? undefined : apply<string>(getter, value, []);
 }
 
 function capturedControlsAreSound(): boolean {
@@ -157,6 +167,10 @@ function capturedControlsAreSound(): boolean {
       apply(nativeNumberIsSafeInteger, NativeNumber, [1]) === true &&
       apply(nativeNumberIsSafeInteger, NativeNumber, [1.5]) === false &&
       readNativeUrlProtocol(new NativeURL('https://kovo.example/path')) === 'https:' &&
+      readNativeUrlPart(nativeUrlOriginGetter, new NativeURL('https://kovo.example/path')) ===
+        'https://kovo.example' &&
+      readNativeUrlPart(nativeUrlPathnameGetter, new NativeURL('https://kovo.example/path')) ===
+        '/path' &&
       nativeUtilIsProxy({}) === false &&
       nativeUtilIsProxy(new Proxy({}, {})) === true &&
       readNativeResponseStatus(response) === 201 &&
@@ -227,6 +241,39 @@ export function betterAuthUrlProtocol(value: string): string {
     throw new NativeTypeError('Kovo Better Auth URL protocol control is unavailable.');
   }
   return protocol;
+}
+
+/** @internal Parse an absolute URL into boot-captured security-relevant components. */
+export function betterAuthUrlSnapshot(value: string): {
+  hash: string;
+  origin: string;
+  password: string;
+  pathname: string;
+  protocol: string;
+  search: string;
+  username: string;
+} {
+  assertBetterAuthIntrinsics();
+  const url = new NativeURL(value);
+  const hash = readNativeUrlPart(nativeUrlHashGetter, url);
+  const origin = readNativeUrlPart(nativeUrlOriginGetter, url);
+  const password = readNativeUrlPart(nativeUrlPasswordGetter, url);
+  const pathname = readNativeUrlPart(nativeUrlPathnameGetter, url);
+  const protocol = readNativeUrlProtocol(url);
+  const search = readNativeUrlPart(nativeUrlSearchGetter, url);
+  const username = readNativeUrlPart(nativeUrlUsernameGetter, url);
+  if (
+    hash === undefined ||
+    origin === undefined ||
+    password === undefined ||
+    pathname === undefined ||
+    protocol === undefined ||
+    search === undefined ||
+    username === undefined
+  ) {
+    throw new NativeTypeError('Kovo Better Auth URL controls are unavailable.');
+  }
+  return { hash, origin, password, pathname, protocol, search, username };
 }
 
 export function betterAuthGetOwnPropertyDescriptor(
