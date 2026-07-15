@@ -14,6 +14,8 @@ import {
   installGeneratedTableSecurityManifestForCommand,
   registerGeneratedTableSecurityManifest,
 } from './generated-table-security-registry.js';
+import { resolveDbProvider } from './guards.js';
+import { managedDb } from './managed-db.js';
 import { createPostgresAppRuntimeDb } from './postgres-runtime.js';
 
 describe('generated table-security registry', () => {
@@ -65,18 +67,16 @@ describe('generated table-security registry', () => {
         writable: true,
       });
       await runtime.ready;
+      const request = {
+        principalPosture: actAsNonRequestPrincipal('u1', {
+          ingress: 'task',
+          operation: 'read',
+          surface: 'generated-table-security-registry mutation-after-snapshot regression',
+        }),
+      };
+      const reader = managedDb(await resolveDbProvider(runtime.db, request), 'read');
       await expect(
-        runtime
-          .db({
-            principalPosture: actAsNonRequestPrincipal('u1', {
-              ingress: 'task',
-              operation: 'read',
-              surface: 'generated-table-security-registry mutation-after-snapshot regression',
-            }),
-          })
-          .select({ id: shares.id })
-          .from(shares)
-          .orderBy(shares.id),
+        reader.select({ id: shares.id }).from(shares).orderBy(shares.id),
       ).resolves.toEqual([{ id: 's1' }]);
     } finally {
       Object.defineProperty(shares, Table.Symbol.ExtraConfigBuilder, {
