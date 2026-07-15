@@ -4157,6 +4157,53 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
       expect.arrayContaining([expect.objectContaining({ sink: 'client-wire.request.headers' })]),
     );
 
+    for (const { invocation, render } of [
+      {
+        invocation: '<Proof headers={request.headers} />',
+        render: `render({ headers }) {
+          let authorization = '';
+          headers.forEach((value, name) => {
+            if (name.toLowerCase() === 'authorization') authorization = value;
+          });
+          return <main>{authorization}</main>;
+        }`,
+      },
+      {
+        invocation: '<Proof bag={{ headers: request.headers }} />',
+        render: `render(data) {
+          let authorization = '';
+          data.bag.headers.forEach((value, name) => {
+            if (name.toLowerCase() === 'authorization') authorization = value;
+          });
+          return <main>{authorization}</main>;
+        }`,
+      },
+      {
+        invocation: '<Proof bag={{ headers: request.headers }} />',
+        render: `render(data) {
+          const bag = data.bag;
+          let authorization = '';
+          bag.headers.forEach((value, name) => {
+            if (name.toLowerCase() === 'authorization') authorization = value;
+          });
+          return <main>{authorization}</main>;
+        }`,
+      },
+    ]) {
+      const facts = sinksFor(`
+        /** @jsxImportSource @kovojs/server */
+        import { component } from '@kovojs/core';
+        import { route } from '@kovojs/server';
+        const Proof = component({ ${render} });
+        route('/', {
+          page(_context, request) { return ${invocation}; },
+        });
+      `);
+      expect(facts, `${render}\n${JSON.stringify(facts)}`).toEqual(
+        expect.arrayContaining([expect.objectContaining({ sink: 'client-wire.request.headers' })]),
+      );
+    }
+
     const customSlotChildrenLeak = sinksFor(`
       /** @jsxImportSource @kovojs/server */
       import { component } from '@kovojs/core';

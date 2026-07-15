@@ -16550,7 +16550,7 @@ function requestWireAuthoritiesForExpressionUncached(
       ? node.getName()
       : staticMemberName(node.getArgumentExpression());
     const boundProjection = member
-      ? requestWireProjectedStateBinding(receiver, member, state)
+      ? requestWireProjectedStateBinding(receiver, [member], state)
       : undefined;
     if (boundProjection) return requestWireAuthoritiesForExpression(boundProjection, state);
     const projected = member
@@ -17579,15 +17579,69 @@ function requestWireBindingsForJsxComponent(
 
 function requestWireProjectedStateBinding(
   expression: Node,
-  member: string,
+  path: readonly string[],
   state: RequestWireAnalysisState,
+  seen: Set<string> = new Set(),
+  depth = 0,
 ): Node | undefined {
-  const receiver = unwrapStaticExpression(expression);
-  const symbol = Node.isIdentifier(receiver) ? receiver.getSymbol() : undefined;
-  const binding = symbol ? state.bindings.get(requestSymbolKey(symbol)) : undefined;
-  return binding
-    ? requestWireProjectedExpression(binding.expression, [...binding.path, member], new Set(), 0)
-    : undefined;
+  if (depth > 64) return undefined;
+  const node = unwrapStaticExpression(expression);
+  const nodeKey = `state-binding:${requestNodeIdentity(node)}:${path.join('.')}`;
+  if (seen.has(nodeKey)) return undefined;
+  seen.add(nodeKey);
+  if (Node.isPropertyAccessExpression(node) || Node.isElementAccessExpression(node)) {
+    const member = Node.isPropertyAccessExpression(node)
+      ? staticMemberName(node.getNameNode())
+      : staticMemberName(node.getArgumentExpression());
+    return member
+      ? requestWireProjectedStateBinding(
+          node.getExpression(),
+          [member, ...path],
+          state,
+          seen,
+          depth + 1,
+        )
+      : undefined;
+  }
+  if (!Node.isIdentifier(node)) return undefined;
+  const symbol = node.getSymbol();
+  if (!symbol) return undefined;
+  const symbolKey = requestSymbolKey(symbol);
+  const binding = state.bindings.get(symbolKey);
+  if (binding) {
+    return requestWireProjectedExpression(
+      binding.expression,
+      [...binding.path, ...path],
+      new Set(),
+      0,
+    );
+  }
+  for (const declaration of symbol.getDeclarations()) {
+    if (Node.isBindingElement(declaration)) {
+      const projection = requestBindingElementProjection(declaration);
+      if (projection) {
+        const projected = requestWireProjectedStateBinding(
+          projection.expression,
+          [...projection.path, ...path],
+          state,
+          new Set(seen),
+          depth + 1,
+        );
+        if (projected) return projected;
+      }
+    }
+    const initializer = valueDeclarationInitializer(declaration);
+    if (!initializer) continue;
+    const projected = requestWireProjectedStateBinding(
+      initializer,
+      path,
+      state,
+      new Set(seen),
+      depth + 1,
+    );
+    if (projected) return projected;
+  }
+  return undefined;
 }
 
 function requestWireAuthoritiesForExpressions(
@@ -18469,7 +18523,7 @@ function requestWireCarrierForExpressionUncached(
     const memberCarrier = base ? requestWireCarrierForMember(base, member) : undefined;
     if (memberCarrier) return memberCarrier;
     const projected = member
-      ? requestWireProjectedStateBinding(node.getExpression(), member, state)
+      ? requestWireProjectedStateBinding(node.getExpression(), [member], state)
       : undefined;
     return projected ? requestWireCarrierForExpression(projected, state) : undefined;
   }
@@ -18639,6 +18693,11 @@ function requestWireCarrierForBoundValue(
   binding: RequestWireBinding,
   state: RequestWireAnalysisState,
 ): RequestWireCarrier | undefined {
+  const projected = requestWireProjectedExpression(binding.expression, binding.path, new Set(), 0);
+  if (projected) {
+    const projectedCarrier = requestWireCarrierForExpression(projected, state);
+    if (projectedCarrier) return projectedCarrier;
+  }
   let carrier = requestWireCarrierForExpression(binding.expression, state);
   for (const member of binding.path) {
     if (!carrier) return undefined;
