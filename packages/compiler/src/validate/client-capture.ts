@@ -680,6 +680,7 @@ function handlerDynamicCodeCallee(callee: ts.Expression, scopeBoundary: ts.Node)
     );
   }
   if (ts.isPropertyAccessExpression(callee)) {
+    if (!ts.isIdentifier(callee.name)) return false;
     const member = clientCaptureIdentifierName(callee.name);
     return (
       compilerSetHas(DYNAMIC_CODE_GLOBAL_IDENTIFIERS, member) &&
