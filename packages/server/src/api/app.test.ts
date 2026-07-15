@@ -427,6 +427,9 @@ type InternalVersionedClientModuleResponse =
 // eslint-disable-next-line no-unused-vars -- compile-time internal-boundary assertion only.
 type InternalRenderMutationCsrfField =
   typeof import('@kovojs/server/internal/csrf').renderMutationCsrfField;
+// eslint-disable-next-line no-unused-vars -- compile-time internal-boundary assertion only.
+type InternalFrameworkCsrfRequestSnapshot =
+  typeof import('@kovojs/server/internal/csrf').frameworkCsrfRequestSnapshot;
 // eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
 type RemovedFocusedNodeHandlerOptions =
   // @ts-expect-error SPEC.md §9.5: Node adapter companion types now have the root
@@ -949,6 +952,7 @@ describe('server app-shell public API barrels', () => {
     // A2: the per-submit Kovo-Idem hidden field is minted/rendered through the internal csrf subpath.
     expect(moduleValueKeys(packageInternalCsrfApi)).toEqual([
       'KOVO_IDEM_FIELD_NAME',
+      'frameworkCsrfRequestSnapshot',
       'mintIdemToken',
       'renderMutationCsrfField',
       'renderMutationIdemField',

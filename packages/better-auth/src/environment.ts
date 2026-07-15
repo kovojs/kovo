@@ -1,5 +1,6 @@
 import { runtimeEnvironmentValue } from '@kovojs/server/internal/runtime-environment';
 import { createSigningKeyRing, type CsrfOptions } from '@kovojs/server';
+import { frameworkCsrfRequestSnapshot } from '@kovojs/server/internal/csrf';
 import { createFrameworkCsrfSigningSecret } from '@kovojs/server/internal/keyring';
 
 import {
@@ -81,7 +82,13 @@ function betterAuthEnvironmentCsrfSessionId(
   if (typeof request !== 'object' || request === null) {
     throw new NativeTypeError('Better Auth CSRF request must be an object.');
   }
-  const session = betterAuthOwnDataValue(request, 'session', 'Better Auth CSRF request');
+  // Kovo lifecycle requests are privately witnessed snapshot Proxies. Read only the two reviewed
+  // fields through the server-owned witness; ordinary records retain the strict own-data path and
+  // every arbitrary/wrapper Proxy still reaches `betterAuthOwnDataValue` and fails before traps run
+  // (SPEC §6.6 C9).
+  const frameworkRequest = frameworkCsrfRequestSnapshot(request);
+  const requestSource = frameworkRequest ?? request;
+  const session = betterAuthOwnDataValue(requestSource, 'session', 'Better Auth CSRF request');
   if (session !== undefined && session !== null) {
     if (typeof session !== 'object') {
       throw new NativeTypeError('Better Auth CSRF request.session must be an object or null.');
@@ -89,7 +96,11 @@ function betterAuthEnvironmentCsrfSessionId(
     const sessionId = betterAuthOwnDataValue(session, 'id', 'Better Auth CSRF request.session');
     return validatedBetterAuthCsrfBinding(sessionId, 'Better Auth CSRF request.session.id', false);
   }
-  const authCsrfId = betterAuthOwnDataValue(request, 'authCsrfId', 'Better Auth CSRF request');
+  const authCsrfId = betterAuthOwnDataValue(
+    requestSource,
+    'authCsrfId',
+    'Better Auth CSRF request',
+  );
   return validatedBetterAuthCsrfBinding(authCsrfId, 'Better Auth CSRF request.authCsrfId', true);
 }
 

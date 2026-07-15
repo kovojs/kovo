@@ -17,10 +17,16 @@ import {
   readUntrustedRequestHeader,
   revealUntrustedRequestValue,
 } from './untrusted-request-body.js';
-import { isNativeRequest, requestForAuthorityNeutralMetadata } from './request-carrier.js';
+import {
+  isNativeRequest,
+  pinnedRequestCarrierOwnData,
+  requestForAuthorityNeutralMetadata,
+} from './request-carrier.js';
 import {
   createWitnessWeakMap,
   witnessCreateNullRecord,
+  witnessDefineProperty,
+  witnessFreeze,
   witnessGetOwnPropertyDescriptor,
   witnessIsArray,
   witnessObjectIs,
@@ -88,6 +94,50 @@ export interface CsrfOptions<Request> {
    * the header-based CSRF floor would otherwise reject. Flows from `createApp({ csrf })`.
    */
   trustedOrigins?: readonly string[];
+}
+
+/**
+ * Narrow request fields recovered from Kovo's privately witnessed lifecycle carrier.
+ *
+ * `undefined` means the input is not the exact framework-owned Proxy. A returned null-prototype,
+ * frozen record contains only own-data `session`/`authCsrfId` values from the carrier's original
+ * reflection snapshot (SPEC §6.6 C9).
+ *
+ * @internal First-party integration bridge; not exported from the public server root.
+ */
+export interface FrameworkCsrfRequestSnapshot {
+  readonly authCsrfId?: unknown;
+  readonly session?: unknown;
+}
+
+/** @internal See {@link FrameworkCsrfRequestSnapshot}. */
+export function frameworkCsrfRequestSnapshot(
+  request: unknown,
+): FrameworkCsrfRequestSnapshot | undefined {
+  const session = pinnedRequestCarrierOwnData(request, 'session');
+  if (session === undefined) return undefined;
+  const authCsrfId = pinnedRequestCarrierOwnData(request, 'authCsrfId');
+  if (authCsrfId === undefined) {
+    throw new TypeError('Framework CSRF request carrier witness changed during inspection.');
+  }
+  const snapshot = witnessCreateNullRecord<unknown>();
+  if (session.present) {
+    witnessDefineProperty(snapshot, 'session', {
+      configurable: false,
+      enumerable: true,
+      value: session.value,
+      writable: false,
+    });
+  }
+  if (authCsrfId.present) {
+    witnessDefineProperty(snapshot, 'authCsrfId', {
+      configurable: false,
+      enumerable: true,
+      value: authCsrfId.value,
+      writable: false,
+    });
+  }
+  return witnessFreeze(snapshot) as FrameworkCsrfRequestSnapshot;
 }
 
 /** A minted CSRF token plus the anonymous binding cookie the response must set, when needed. */

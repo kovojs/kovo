@@ -365,6 +365,55 @@ interface PinnedRequestCarrierSnapshot {
 }
 
 /**
+ * One own-data value recovered from a framework-owned pinned request carrier.
+ *
+ * The result is intentionally narrower than the carrier snapshot: first-party integrations may
+ * ask for one fixed property without receiving the request's other captured values or invoking a
+ * Proxy trap (SPEC §6.6 C9).
+ *
+ * @internal
+ */
+export interface PinnedRequestCarrierOwnData {
+  readonly present: boolean;
+  readonly value?: unknown;
+}
+
+/**
+ * Read one own-data property only when `request` is the exact Proxy minted by
+ * {@link pinnedRequestCarrier}. Arbitrary Proxies, wrappers around a genuine carrier, and ordinary
+ * objects return `undefined` without reflection or trap dispatch.
+ *
+ * @internal Server-internal bridge used to keep cross-package CSRF binding fail-closed.
+ */
+export function pinnedRequestCarrierOwnData(
+  request: unknown,
+  property: PropertyKey,
+): PinnedRequestCarrierOwnData | undefined {
+  if ((typeof request !== 'object' && typeof request !== 'function') || request === null) {
+    return undefined;
+  }
+  const snapshot = witnessWeakMapGet(pinnedRequestCarrierSnapshots, request);
+  if (snapshot === undefined) return undefined;
+  const captured = witnessMapGet(snapshot.properties, property);
+  const result = witnessCreateNullRecord<unknown>();
+  witnessDefineProperty(result, 'present', {
+    configurable: false,
+    enumerable: true,
+    value: captured?.own === true,
+    writable: false,
+  });
+  if (captured?.own === true) {
+    witnessDefineProperty(result, 'value', {
+      configurable: false,
+      enumerable: true,
+      value: captured.value,
+      writable: false,
+    });
+  }
+  return witnessFreeze(result) as PinnedRequestCarrierOwnData;
+}
+
+/**
  * Materialize a lifecycle request view from one exact reflection snapshot.
  *
  * Providers, guards, task hooks, and handlers share a realm. A nested request Proxy must therefore

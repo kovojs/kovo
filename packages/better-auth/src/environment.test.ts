@@ -9,6 +9,9 @@ import { describe, expect, it } from 'vitest';
 const runtimeBootstrapUrl = pathToFileURL(
   fileURLToPath(new URL('../../server/src/runtime-bootstrap.ts', import.meta.url)),
 ).href;
+const serverExecutionUrl = pathToFileURL(
+  fileURLToPath(new URL('../../server/src/internal/execution.ts', import.meta.url)),
+).href;
 
 describe('Better Auth boot-pinned environment boundary', () => {
   it('loads local .env before a bootstrap-first Better Auth import and ignores late app mutation', () => {
@@ -272,6 +275,94 @@ process.stdout.write(JSON.stringify({
       expect(output.sessionTrapHits).toBe(0);
       expect(output.failures).toHaveLength(6);
       for (const failure of output.failures) expect(failure).toMatch(/^TypeError:/u);
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it('accepts only the exact framework-pinned request Proxy without weakening Proxy rejection', () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-better-auth-framework-csrf-binding-'));
+    try {
+      writeFileSync(
+        join(root, '.env'),
+        'BETTER_AUTH_SECRET=operator-auth-secret-0123456789abcdef0123456789\n',
+      );
+      const indexUrl = pathToFileURL(fileURLToPath(new URL('./index.ts', import.meta.url))).href;
+      const source = `
+import { existsSync } from 'node:fs';
+import { registerHooks } from 'node:module';
+registerHooks({
+  resolve(specifier, context, nextResolve) {
+    if (specifier.startsWith('.') && specifier.endsWith('.js') && context.parentURL) {
+      const candidate = new URL(specifier.replace(/\\.js$/, '.ts'), context.parentURL);
+      if (existsSync(candidate)) return nextResolve(candidate.href, context);
+    }
+    return nextResolve(specifier, context);
+  },
+});
+await import(${JSON.stringify(runtimeBootstrapUrl)});
+const api = await import(${JSON.stringify(indexUrl)});
+const execution = await import(${JSON.stringify(serverExecutionUrl)});
+const csrf = api.betterAuthCsrfFromEnvironment({ field: 'csrf' });
+const providerSession = { id: 'framework-session-1' };
+const sessionCarrier = await execution.resolveLifecycleRequest({}, {
+  sessionProvider: () => providerSession,
+});
+providerSession.id = 'late-attacker-session';
+const anonymousCarrier = await execution.resolveLifecycleRequest(
+  { authCsrfId: 'framework-anonymous-1' },
+  { principalPosture: { kind: 'anonymous' } },
+);
+let wrapperTrapHits = 0;
+let wrapperRejected = false;
+try {
+  csrf.sessionId(new Proxy(sessionCarrier, {
+    getOwnPropertyDescriptor() { wrapperTrapHits += 1; return undefined; },
+  }));
+} catch (error) {
+  wrapperRejected = String(error?.message ?? error).includes('must not be a Proxy');
+}
+let foreignTrapHits = 0;
+let foreignRejected = false;
+try {
+  csrf.sessionId(new Proxy({}, {
+    getOwnPropertyDescriptor() { foreignTrapHits += 1; return undefined; },
+  }));
+} catch (error) {
+  foreignRejected = String(error?.message ?? error).includes('must not be a Proxy');
+}
+process.stdout.write(JSON.stringify({
+  anonymousBinding: csrf.sessionId(anonymousCarrier),
+  foreignRejected,
+  foreignTrapHits,
+  sessionBinding: csrf.sessionId(sessionCarrier),
+  wrapperRejected,
+  wrapperTrapHits,
+}));
+`;
+      const environment = { ...process.env };
+      delete environment.BETTER_AUTH_SECRET;
+      delete environment.KOVO_CSRF_SECRET;
+      const result = spawnSync(
+        process.execPath,
+        [
+          '--disable-warning=ExperimentalWarning',
+          '--experimental-transform-types',
+          '--input-type=module',
+          '--eval',
+          source,
+        ],
+        { cwd: root, encoding: 'utf8', env: environment },
+      );
+      expect(result.status, result.stderr).toBe(0);
+      expect(JSON.parse(result.stdout)).toEqual({
+        anonymousBinding: 'framework-anonymous-1',
+        foreignRejected: true,
+        foreignTrapHits: 0,
+        sessionBinding: 'framework-session-1',
+        wrapperRejected: true,
+        wrapperTrapHits: 0,
+      });
     } finally {
       rmSync(root, { force: true, recursive: true });
     }
