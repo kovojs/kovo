@@ -241,6 +241,7 @@ export const CartBadge = component({
         sourcePath,
         `
 import { component } from '@kovojs/core';
+import { tabsKeyDown } from '@kovojs/headless-ui/tabs';
 import { task } from '@kovojs/server';
 import { removeItem } from './actions';
 
@@ -252,7 +253,7 @@ export const RecordRemoval = task('tasks/record-removal', {
 });
 
 export const CartActions = component({
-  render: () => <button onClick={removeItem}>Remove</button>,
+  render: () => <button onClick={tabsKeyDown}>Remove</button>,
 });
 `,
         'utf8',
@@ -274,7 +275,12 @@ export const CartActions = component({
       ).resolves.toBe(0);
 
       expect(stderr).not.toHaveBeenCalled();
-      expect(readFileSync(clientPath, 'utf8')).toContain('CartActions$removeItem');
+      // SPEC §5.2 / §6.2: only exact generated-registry identities carry browser executable
+      // authority; the unrelated server mutation import remains confined to the task graph.
+      const clientSource = readFileSync(clientPath, 'utf8');
+      expect(clientSource).toContain('CartActions$tabsKeyDown');
+      expect(clientSource).toContain('from "@kovojs/headless-ui/generated";');
+      expect(clientSource).not.toContain('from "@kovojs/headless-ui/tabs";');
       expect(JSON.parse(readFileSync(factsPath, 'utf8'))).toMatchObject({
         componentGraphFacts: [{ exportName: 'CartActions' }],
         taskGraphFacts: [
@@ -356,7 +362,8 @@ export const PaymentButton = component({
       expect(stdout).not.toHaveBeenCalled();
       const output = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
       expect(output).toContain('ERROR KV437');
-      expect(output).toContain('SUMMARY artifacts=0 diagnostics=1');
+      expect(output).toContain('ERROR KV201');
+      expect(output).toContain('SUMMARY artifacts=0 diagnostics=2');
       expect(existsSync(outPath)).toBe(false);
       expect(existsSync(clientPath)).toBe(false);
     } finally {
@@ -378,12 +385,12 @@ export const PaymentButton = component({
         sourcePath,
         `
 import { component } from '@kovojs/core';
-import { removeItem } from './actions';
+import { tabsKeyDown } from '@kovojs/headless-ui/tabs';
 
 export const CartBadge = component({
   queries: { cart: {} },
   render: () => (
-    <button onClick={() => removeItem(state, item.id)}>
+    <button onClick={() => tabsKeyDown(state, item.id)}>
       <span data-bind="cart.count">2</span>
     </button>
   ),
