@@ -4878,15 +4878,16 @@ function requestCallIsExactBetterAuthCsrfFromEnvironment(
   const options = unwrapStaticExpression(call.getArguments()[0]!);
   if (!Node.isObjectLiteralExpression(options)) return false;
   const [field, ...extra] = options.getProperties();
+  const value = field && Node.isPropertyAssignment(field) ? field.getInitializer() : undefined;
   return !!(
     field &&
     extra.length === 0 &&
     Node.isPropertyAssignment(field) &&
     !Node.isComputedPropertyName(field.getNameNode()) &&
     staticMemberName(field.getNameNode()) === 'field' &&
-    field.getInitializer() &&
-    isStringLiteralLike(field.getInitializer()!) &&
-    field.getInitializer()!.getLiteralText() === 'csrf'
+    value &&
+    isStringLiteralLike(value) &&
+    value.getLiteralText() === 'csrf'
   );
 }
 
