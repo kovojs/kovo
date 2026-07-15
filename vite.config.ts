@@ -356,6 +356,7 @@ export default defineConfig({
       'packages/browser/src/internal/morph.ts',
       'packages/browser/src/internal/mutation.ts',
       'packages/server/src/runtime-bootstrap.ts',
+      'packages/server/src/sqlite.ts',
       'packages/server/src/api/app-shell/*.ts',
       'packages/server/src/internal/escape.ts',
       'packages/server/src/internal/execution.ts',
