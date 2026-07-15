@@ -8,10 +8,7 @@ import {
 } from '../security-witness-intrinsics.js';
 
 const postgresSystemDbBrand: unique symbol = Symbol('kovo.postgres-system-db');
-const postgresSystemDbValues = createWitnessWeakMap<
-  KovoPostgresSystemDb,
-  KovoPostgresRuntimeDb
->();
+const postgresSystemDbValues = createWitnessWeakMap<KovoPostgresSystemDb, KovoPostgresRuntimeDb>();
 const postgresAppRuntimeDbResolvers = createWitnessWeakMap<
   object,
   (request?: unknown) => KovoPostgresRuntimeDb
@@ -62,10 +59,7 @@ export function registerPostgresAppRuntimeDb(
 }
 
 /** @internal Resolve a Postgres runtime DB only for framework tests and first-party adapters. */
-export function usePostgresAppRuntimeDb(
-  runtime: object,
-  request?: unknown,
-): KovoPostgresRuntimeDb {
+export function usePostgresAppRuntimeDb(runtime: object, request?: unknown): KovoPostgresRuntimeDb {
   const resolver = witnessWeakMapGet(postgresAppRuntimeDbResolvers, runtime);
   if (resolver === undefined) {
     throw new Error(

@@ -1305,11 +1305,7 @@ export interface KovoPostgresAppRuntimeDb {
     options: PostgresPendingReplayReleaseOptions,
   ): Promise<boolean>;
   /** Framework-owned non-request DB capability for generated auth/seed wiring, still RLS-subject. */
-  systemDb(options: {
-    operation: 'write';
-    reason: string;
-    surface: string;
-  }): KovoPostgresSystemDb;
+  systemDb(options: { operation: 'write'; reason: string; surface: string }): KovoPostgresSystemDb;
   /** Framework-system durable webhook idempotency truth (SPEC §10.3). */
   readonly webhookReplayStore: WebhookReplayStore;
   close(): Promise<void>;
