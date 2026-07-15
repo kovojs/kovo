@@ -10108,56 +10108,6 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
     );
   });
 
-  it('elides only authored compiler-owned handlers across custom component boundaries', () => {
-    const direct = sinksFor(`
-      import { component } from '@kovojs/core';
-      import { route } from '@kovojs/server';
-      const Proof = component({ render: () => <main>proof</main> });
-      route('/', { page() {
-        return <Proof onClick={() => { const value = 1; void value; }} />;
-      } });
-    `);
-    expect(direct).toEqual([]);
-
-    const projected = sinksFor(`
-      import { component } from '@kovojs/core';
-      import { route } from '@kovojs/server';
-      const Proof = component({
-        render: (data) => <button onClick={data.onClick}>Run</button>,
-      });
-      route('/', { page() {
-        return <Proof onClick={() => { const value = 1; void value; }} />;
-      } });
-    `);
-    expect(projected).toEqual([]);
-
-    const timer = sinksFor(`
-      import { component } from '@kovojs/core';
-      import { route } from '@kovojs/server';
-      const Proof = component({ render: () => <main>proof</main> });
-      route('/', { page() {
-        return <Proof onClick={(data) => setTimeout(data.code)} />;
-      } });
-    `);
-    expect(timer).toEqual(
-      expect.arrayContaining([expect.objectContaining({ sink: 'setTimeout' })]),
-    );
-
-    const credential = sinksFor(`
-      import { component } from '@kovojs/core';
-      import { route } from '@kovojs/server';
-      const Proof = component({ render: () => <main>proof</main> });
-      route('/', { page(_context, request) {
-        return <Proof onClick={() => request.headers.get('authorization')} />;
-      } });
-    `);
-    expect(credential).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ sink: 'request-handler.opaque-protocol' }),
-      ]),
-    );
-  });
-
   it('resolves imported query declarations in createApp collections', () => {
     const facts = sinksForFiles([
       {

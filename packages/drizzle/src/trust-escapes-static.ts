@@ -17353,11 +17353,9 @@ function requestWireAuthoritiesForJsxElement(
   }
   // Custom component props and children can influence emitted HTML even when the render body uses
   // computed keys or provenance exceeds a locally recoverable property path. Census the authored
-  // call boundary as public wire in addition to following the nested render implementation. The
-  // one exception is an exact authored onX handler: the compiler replaces that function object
-  // with a generated client-module reference rather than serializing it as ordinary prop data.
+  // call boundary as public wire in addition to following the nested render implementation.
   const authorities: RequestWireAuthority[] = [
-    ...requestWireAuthoritiesForJsxAttributes(opening.getAttributes(), state, true),
+    ...requestWireAuthoritiesForJsxAttributes(opening.getAttributes(), state, false),
     ...requestWireAuthoritiesForJsxChildren(children, state),
   ];
   for (const callable of resolution.callables) {
@@ -17505,7 +17503,7 @@ function requestWireAuthoritiesForReviewedFormErrorMessage(
 function requestWireAuthoritiesForJsxAttributes(
   attributes: readonly import('ts-morph').JsxAttributeLike[],
   state: RequestWireAnalysisState,
-  customComponentBoundary = false,
+  allowCompilerOwnedEventHandlerElision = true,
 ): RequestWireAuthority[] {
   const authorities: RequestWireAuthority[] = [];
   for (const attribute of attributes) {
@@ -17518,11 +17516,11 @@ function requestWireAuthoritiesForJsxAttributes(
       const expression = initializer.getExpression();
       if (
         expression &&
-        !requestJsxEventHandlerIsCompilerOwned(
-          attribute,
-          expression,
-          state,
-          customComponentBoundary,
+        !(
+          allowCompilerOwnedEventHandlerElision &&
+          state.scopeCallable.compilerOwnedJsxEventHandlers &&
+          requestJsxAttributeIsCompilerOwnedEventHandler(attribute) &&
+          requestJsxEventHandlerIsAuthoredInCallable(expression, state.scopeCallable, state.session)
         )
       ) {
         authorities.push(...requestWireAuthoritiesForExpression(expression, state));
@@ -17530,31 +17528,6 @@ function requestWireAuthoritiesForJsxAttributes(
     }
   }
   return dedupeRequestWireAuthorities(authorities);
-}
-
-function requestJsxEventHandlerIsCompilerOwned(
-  attribute: import('ts-morph').JsxAttribute,
-  expression: Node,
-  state: RequestWireAnalysisState,
-  customComponentBoundary: boolean,
-): boolean {
-  if (!requestJsxAttributeIsCompilerOwnedEventHandler(attribute)) return false;
-  if (customComponentBoundary) {
-    return requestJsxEventHandlerIsAuthoredInCallable(
-      expression,
-      state.scopeCallable,
-      state.session,
-    );
-  }
-  if (!state.scopeCallable.compilerOwnedJsxEventHandlers) return false;
-  if (requestJsxEventHandlerIsAuthoredInCallable(expression, state.scopeCallable, state.session)) {
-    return true;
-  }
-  const projected = requestWireProjectedStateBinding(expression, [], state);
-  return !!(
-    projected &&
-    requestJsxEventHandlerIsAuthoredInCallable(projected, state.rootCallable, state.session)
-  );
 }
 
 function requestJsxEventHandlerIsAuthoredInCallable(
