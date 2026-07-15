@@ -37,31 +37,42 @@ import {
 } from './index.test-support.js';
 
 const blockedReadCases = [
-  'sqlite-secret-alias-egress',
-  'sqlite-secret-view-egress',
-  'sqlite-secret-derivation-egress',
-  'sqlite-secret-computed-egress',
-  'sqlite-secret-join-alias-egress',
-  'sqlite-secret-cte-egress',
-  'sqlite-secret-subquery-egress',
-  'sqlite-secret-union-egress',
-  'sqlite-secret-aggregate-egress',
+  'queries/sqlite-secret-alias-query',
+  'queries/sqlite-secret-derivation-query',
+  'queries/sqlite-secret-computed-query',
+  'queries/sqlite-secret-join-alias-query',
+  'queries/sqlite-secret-cte-query',
+  'queries/sqlite-secret-subquery-query',
+  'queries/sqlite-secret-union-query',
+  'queries/sqlite-secret-aggregate-query',
 ] as const;
 
 const allowedReadCases = [
-  { key: 'sqlite-secret-nonsecret-projection', leaksSecret: false, witness: 'public label' },
-  { key: 'sqlite-secret-computed-public', leaksSecret: false, witness: 'PUBLIC LABEL' },
-  { key: 'sqlite-secret-reveal', leaksSecret: true, witness: 'runtime-secret-value:revealed' },
+  {
+    key: 'queries/sqlite-secret-non-secret-projection-query',
+    leaksSecret: false,
+    witness: 'public label',
+  },
+  {
+    key: 'queries/sqlite-secret-computed-public-query',
+    leaksSecret: false,
+    witness: 'PUBLIC LABEL',
+  },
+  {
+    key: 'queries/sqlite-secret-reveal-query',
+    leaksSecret: true,
+    witness: 'runtime-secret-value:revealed',
+  },
 ] as const;
 
 const blockedWriteCases = [
-  'starter-db-scope/auth-user-table-write',
-  'starter-db-scope/auth-session-table-write',
-  'starter-db-scope/raw-auth-table-write',
-  'phase5-write-boundary/ddl-write',
-  'phase5-write-boundary/boxed-secret-builder',
-  'phase5-write-boundary/boxed-secret-raw',
-  'phase5-write-boundary/governed-mass-assignment',
+  'starter-mutation-db-scope-proof/starter-auth-user-table-write-proof',
+  'starter-mutation-db-scope-proof/starter-auth-session-table-write-proof',
+  'starter-mutation-db-scope-proof/starter-raw-auth-table-write-proof',
+  'paranoid-phase5-write-boundary-proof/phase5-ddl-write-proof',
+  'paranoid-phase5-write-boundary-proof/phase5-boxed-secret-builder-write-proof',
+  'paranoid-phase5-write-boundary-proof/phase5-boxed-secret-raw-write-proof',
+  'paranoid-phase5-write-boundary-proof/phase5-governed-mass-assignment-proof',
 ] as const;
 
 const POSTGRES_BINARIES = ['initdb', 'postgres'] as const;
@@ -147,7 +158,7 @@ describe('create-kovo starter (build integration: paranoid runtime chokes)', () 
           detached: process.platform !== 'win32',
           env: {
             ...withRepoBinOnPath(),
-            BETTER_AUTH_URL: `http://127.0.0.1:${port}`,
+            BETTER_AUTH_URL: `https://127.0.0.1:${port}`,
             HOST: '127.0.0.1',
             KOVO_DATABASE_URL: runtimeUrl,
             KOVO_DB_SYSTEM_URL: systemUrl,
@@ -210,7 +221,7 @@ describe('create-kovo starter (build integration: paranoid runtime chokes)', () 
         detached: process.platform !== 'win32',
         env: {
           ...withRepoBinOnPath(),
-          BETTER_AUTH_URL: 'http://127.0.0.1',
+          BETTER_AUTH_URL: 'https://127.0.0.1',
           HOST: '127.0.0.1',
           KOVO_PARANOID: '1',
           NODE_ENV: 'production',
@@ -346,7 +357,7 @@ describeIfPostgres(
           detached: process.platform !== 'win32',
           env: {
             ...withRepoBinOnPath(),
-            BETTER_AUTH_URL: `http://127.0.0.1:${port}`,
+            BETTER_AUTH_URL: `https://127.0.0.1:${port}`,
             HOST: '127.0.0.1',
             KOVO_DATABASE_URL: runtimeUrl,
             KOVO_DB_SYSTEM_URL: systemUrl,
@@ -488,8 +499,9 @@ async function expectPostgresWriteBoundary(
   origin: string,
   jar: Map<string, string>,
 ): Promise<void> {
-  const csrf = await fetchMutationCsrf(origin, jar, 'phase5-pg/cross-owner-order-write');
-  const crossOwnerWrite = await fetch(`${origin}/_m/phase5-pg/cross-owner-order-write`, {
+  const mutationKey = 'paranoid-phase5-postgres-proof/phase5-pg-cross-owner-order-write-proof';
+  const csrf = await fetchMutationCsrf(origin, jar, mutationKey);
+  const crossOwnerWrite = await fetch(`${origin}/_m/${mutationKey}`, {
     body: new URLSearchParams({ csrf, marker: 'phase5-pg-cross' }),
     headers: {
       'content-type': 'application/x-www-form-urlencoded',
@@ -518,8 +530,9 @@ async function expectPostgresTaskAndWebhook(
   marker: string,
   output: () => string,
 ): Promise<void> {
-  const csrf = await fetchMutationCsrf(origin, jar, 'phase5-pg/schedule-task');
-  const taskResponse = await fetch(`${origin}/_m/phase5-pg/schedule-task`, {
+  const mutationKey = 'paranoid-phase5-postgres-proof/phase5-pg-schedule-task';
+  const csrf = await fetchMutationCsrf(origin, jar, mutationKey);
+  const taskResponse = await fetch(`${origin}/_m/${mutationKey}`, {
     body: new URLSearchParams({ csrf, marker }),
     headers: {
       'content-type': 'application/x-www-form-urlencoded',
@@ -582,31 +595,27 @@ async function expectAuthorizationQueryShapes(
 ): Promise<void> {
   const cases = [
     {
-      key: 'phase5-authz-builder',
+      key: 'paranoid-phase5-authz-proof/phase5-authz-builder-query',
       allowed: 'owner-visible',
       visibleCrossOwner: 'cross-owner-hidden',
       status: 200,
     },
     {
-      key: 'phase5-authz-alias',
+      key: 'paranoid-phase5-authz-proof/phase5-authz-alias-query',
       allowed: 'owner-visible',
       visibleCrossOwner: 'cross-owner-hidden',
       status: 200,
     },
+    // The supported SQLite starter surface cannot author engine views. The Phase 5 Postgres
+    // production-artifact case above retains the real security-invoker view authorization proof.
     {
-      key: 'phase5-authz-view',
-      allowed: 'owner-visible',
-      visibleCrossOwner: 'cross-owner-hidden',
-      status: 200,
-    },
-    {
-      key: 'phase5-authz-compound',
+      key: 'paranoid-phase5-authz-proof/phase5-authz-compound-query',
       allowed: undefined,
       visibleCrossOwner: undefined,
       status: 500,
     },
     {
-      key: 'phase5-authz-owner-via',
+      key: 'paranoid-phase5-authz-proof/phase5-authz-child-query',
       allowed: 'owner-item',
       visibleCrossOwner: 'other-item',
       status: 200,

@@ -148,7 +148,7 @@ describeIfPostgres(
           detached: process.platform !== 'win32',
           env: {
             ...withRepoBinOnPath(),
-            BETTER_AUTH_URL: `http://127.0.0.1:${port}`,
+            BETTER_AUTH_URL: `https://127.0.0.1:${port}`,
             HOST: '127.0.0.1',
             KOVO_DATABASE_URL: runtimeUrl,
             KOVO_DB_SYSTEM_URL: systemUrl,

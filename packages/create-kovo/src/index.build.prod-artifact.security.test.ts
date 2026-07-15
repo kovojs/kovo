@@ -403,10 +403,10 @@ describe('create-kovo starter (build integration: production security artifacts)
       expect(addContact.status).toBe(303);
 
       const blockedMutations = [
-        'starter-db-scope/auth-user-table-write',
-        'starter-db-scope/auth-session-table-write',
-        'starter-db-scope/raw-auth-table-write',
-        'starter-db-scope/absent-tables-contact-write',
+        'starter-mutation-db-scope-proof/starter-auth-user-table-write-proof',
+        'starter-mutation-db-scope-proof/starter-auth-session-table-write-proof',
+        'starter-mutation-db-scope-proof/starter-raw-auth-table-write-proof',
+        'starter-mutation-db-scope-proof/starter-absent-tables-contact-write-proof',
       ] as const;
       for (const key of blockedMutations) {
         const proofForm = formHtmlByAction(homeHtml, `/_m/${key}`);
@@ -498,7 +498,9 @@ describe('create-kovo starter (build integration: production security artifacts)
       addSqliteRuntimeSecretProvenanceProof(root);
       const proofQueries = readFileSync(join(root, 'src/queries.ts'), 'utf8');
       expect(proofQueries).toContain('company: proof.classified');
-      expect(proofQueries).toContain('runtimeSecretViewProof.exposed');
+      // The hardened SQLite starter accepts only declarative tables and structured seed data.
+      // Actual view egress remains covered by the `runtime-secret-view-egress` Postgres artifact
+      // proof above; do not replace that engine view with a seeded table in this fixture.
       expect(proofQueries).toContain('substr(classified, 1, 7) as leaked');
       expect(proofQueries).toContain('classified as leaked from secret_cte');
       expect(proofQueries).toContain('(select classified from runtime_secret_proof) as leaked');
@@ -523,13 +525,12 @@ describe('create-kovo starter (build integration: production security artifacts)
 
       await signInDemoUser(root, origin, jar, output);
       for (const key of [
-        'sqlite-secret-alias-egress',
-        'sqlite-secret-view-egress',
-        'sqlite-secret-derivation-egress',
-        'sqlite-secret-join-alias-egress',
-        'sqlite-secret-cte-egress',
-        'sqlite-secret-mixed-chunk-egress',
-        'sqlite-secret-mixed-chunk-builder-egress',
+        'queries/sqlite-secret-alias-query',
+        'queries/sqlite-secret-derivation-query',
+        'queries/sqlite-secret-join-alias-query',
+        'queries/sqlite-secret-cte-query',
+        'queries/sqlite-secret-mixed-chunk-query',
+        'queries/sqlite-secret-mixed-chunk-builder-query',
       ]) {
         const response = await fetch(`${origin}/_q/${key}`, {
           headers: { cookie: cookieHeader(jar) },
@@ -540,28 +541,25 @@ describe('create-kovo starter (build integration: production security artifacts)
         expect(body).toMatch(/^\{"code":"(?:KV410|SERVER_ERROR)","payload":\{\}\}$/u);
         expect(body).not.toContain('runtime-secret-value');
       }
-      const publicProjectionResponse = await fetch(
-        `${origin}/_q/sqlite-secret-nonsecret-projection`,
-        {
-          headers: { cookie: cookieHeader(jar) },
-        },
-      );
+      const publicProjectionKey = 'queries/sqlite-secret-non-secret-projection-query';
+      const publicProjectionResponse = await fetch(`${origin}/_q/${publicProjectionKey}`, {
+        headers: { cookie: cookieHeader(jar) },
+      });
       const publicProjectionBody = await publicProjectionResponse.text();
 
       expect(publicProjectionResponse.status, publicProjectionBody).toBe(200);
-      expect(publicProjectionBody).toContain(
-        '<kovo-query name="sqlite-secret-nonsecret-projection"',
-      );
+      expect(publicProjectionBody).toContain(`<kovo-query name="${publicProjectionKey}"`);
       expect(publicProjectionBody).toContain('public label');
       expect(publicProjectionBody).not.toContain('runtime-secret-value');
 
-      const revealResponse = await fetch(`${origin}/_q/sqlite-secret-reveal`, {
+      const revealKey = 'queries/sqlite-secret-reveal-query';
+      const revealResponse = await fetch(`${origin}/_q/${revealKey}`, {
         headers: { cookie: cookieHeader(jar) },
       });
       const revealBody = await revealResponse.text();
 
       expect(revealResponse.status, revealBody).toBe(200);
-      expect(revealBody).toContain('<kovo-query name="sqlite-secret-reveal"');
+      expect(revealBody).toContain(`<kovo-query name="${revealKey}"`);
       expect(revealBody).toContain('runtime-secret-value:revealed');
     } finally {
       await stopProcess(server);
