@@ -132,6 +132,7 @@ const nativeHashUpdate = stableSigningRingProperty(hashControl, 'update') as Fun
 const nativeHashDigest = stableSigningRingProperty(hashControl, 'digest') as Function;
 const pinnedSigningKeyRings = createWitnessWeakSet<object>();
 const frameworkCsrfSigningSecrets = createWitnessWeakMap<object, SigningKeyRing>();
+const frameworkCsrfSigningSources = createWitnessWeakMap<object, SigningKeyRing>();
 
 if (!signingCryptoControlsAreSound()) {
   throw new TypeError(
@@ -214,10 +215,12 @@ export function createFrameworkCsrfSigningSecret(
   source: SigningKeyRing,
 ): FrameworkCsrfSigningSecret {
   const token = witnessFreeze(witnessCreateNullRecord());
+  const pinnedSource = pinOpaqueSigningKeyRing(source);
+  witnessWeakMapSet(frameworkCsrfSigningSources, token, pinnedSource);
   witnessWeakMapSet(
     frameworkCsrfSigningSecrets,
     token,
-    createFrameworkCsrfScopedSigningKeyRing(pinOpaqueSigningKeyRing(source)),
+    createFrameworkCsrfScopedSigningKeyRing(pinnedSource),
   );
   // The private WeakMap is the runtime proof. This assertion carries only the already-minted
   // opaque identity through public CsrfOptions typing; no structural brand exists at runtime.
@@ -248,6 +251,32 @@ export function signingKeyRingFromSecret(secret: SigningSecret): SigningKeyRing 
   return createSigningKeyRing({
     keys: [{ id: 'current', secret, state: 'active' }],
   });
+}
+
+/**
+ * Derive the browser coordination fingerprint through one fixed framework-owned signing sink.
+ *
+ * A generated auth binding carries only the opaque CSRF token, so ordinary callers must not gain
+ * the generic `session-fingerprint` purpose. The server document path nevertheless needs the same
+ * deployment-stable root to bind an already-proven principal across tabs. This helper recovers the
+ * hidden source only for the fixed purpose/audience pair and never returns the signer or key
+ * material (SPEC §6.6 C9, §9.3).
+ *
+ * @internal Package-private server document sink; not part of the public entry point.
+ */
+export function signSessionFingerprintWithSecret(
+  secret: SigningSecret,
+  principal: string,
+): string {
+  const frameworkSource =
+    typeof secret === 'object' && secret !== null
+      ? witnessWeakMapGet(frameworkCsrfSigningSources, secret)
+      : undefined;
+  return (frameworkSource ?? signingKeyRingFromSecret(secret)).sign({
+    audience: 'broadcast-channel-session-fingerprint',
+    payload: principal,
+    purpose: 'session-fingerprint',
+  }).signature;
 }
 
 export function isSigningKeyRing(value: unknown): value is SigningKeyRing {

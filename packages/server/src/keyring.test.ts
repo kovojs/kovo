@@ -6,6 +6,7 @@ import {
   createSigningKeyRing,
   isFrameworkCsrfSigningSecret,
   isSigningKeyRing,
+  signSessionFingerprintWithSecret,
   signingKeyRingFromSecret,
   type SigningInput,
   type SigningVerifyInput,
@@ -39,11 +40,10 @@ describe('SigningKeyRing', () => {
   });
 
   it('limits a framework CSRF token to CSRF and the exact live-target audience', () => {
-    const capability = createFrameworkCsrfSigningSecret(
-      createSigningKeyRing({
-        keys: [{ id: 'auth', secret: NEW_SECRET, state: 'active' }],
-      }),
-    );
+    const source = createSigningKeyRing({
+      keys: [{ id: 'auth', secret: NEW_SECRET, state: 'active' }],
+    });
+    const capability = createFrameworkCsrfSigningSecret(source);
     const scoped = signingKeyRingFromSecret(capability);
     for (const purpose of ['csrf', 'anonymous-csrf'] as const) {
       const signed = scoped.sign({ audience: 'auth/sign-in', payload: 'binding-1', purpose });
@@ -94,6 +94,23 @@ describe('SigningKeyRing', () => {
         signature: live.signature,
       }),
     ).toEqual({ keyId: 'auth', ok: true });
+
+    const fingerprint = signSessionFingerprintWithSecret(capability, 'principal-1');
+    expect(
+      source.verify({
+        audience: 'broadcast-channel-session-fingerprint',
+        payload: 'principal-1',
+        purpose: 'session-fingerprint',
+        signature: fingerprint,
+      }),
+    ).toEqual({ keyId: 'auth', ok: true });
+    expect(() =>
+      scoped.sign({
+        audience: 'broadcast-channel-session-fingerprint',
+        payload: 'principal-1',
+        purpose: 'session-fingerprint',
+      }),
+    ).toThrow(/only permits csrf, anonymous-csrf/u);
   });
 
   it('rejects hostile scoped-signing carriers before traps and forwards only a pinned snapshot', () => {

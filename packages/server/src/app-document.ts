@@ -11,7 +11,7 @@ import {
   stampCredentialBearingResponseCacheFloor,
 } from './document-core.js';
 import { forwardSetCookie } from './cookies.js';
-import { signingKeyRingFromSecret, type SigningSecret } from './keyring.js';
+import { signSessionFingerprintWithSecret, type SigningSecret } from './keyring.js';
 import {
   createSignUrl,
   storageDownloadEndpointInfo,
@@ -434,11 +434,7 @@ function createUnavailableSignUrl(message: string): ReturnType<typeof createSign
  * `principalPostureFromRequest`; unresolved session carriers intentionally do not reach this helper.
  */
 function hmacSessionFingerprint(input: string, secret: SigningSecret | undefined): string {
-  return signingKeyRingFromSecret(secret ?? fallbackBroadcastFingerprintSecret).sign({
-    audience: 'broadcast-channel-session-fingerprint',
-    payload: input,
-    purpose: 'session-fingerprint',
-  }).signature;
+  return signSessionFingerprintWithSecret(secret ?? fallbackBroadcastFingerprintSecret, input);
 }
 
 export async function renderAppErrorDocumentResponse(
