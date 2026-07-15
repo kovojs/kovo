@@ -408,7 +408,7 @@ export async function viteProductionEmitContractFact(
   const context =
     options.context ??
     ({
-      addToCart(id: unknown) {
+      tabsKeyDown(id: unknown) {
         cartEvents.push(id);
         return `added:${String(id)}`;
       },
@@ -449,7 +449,7 @@ export async function viteProductionEmitContractFact(
 
 const productCardSourceFixture = `
 import { component } from '@kovojs/core';
-import { addToCart } from './cart-actions';
+import { tabsKeyDown as addToCart } from '@kovojs/headless-ui/tabs';
 
 export const ProductCard = component({
   render: () => (

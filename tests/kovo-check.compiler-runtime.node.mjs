@@ -480,8 +480,16 @@ void test('D4 commerce adopt-dont-invent features stay represented', async () =>
     },
     translation: 'Cart (1)',
   });
+  const authenticatedSession = fact.guards.authenticatedSession;
+  assert.equal(Object.getPrototypeOf(authenticatedSession), null);
+  assert.equal(Object.isFrozen(authenticatedSession), true);
+  assert.equal(Object.getPrototypeOf(authenticatedSession.user), null);
+  assert.equal(Object.isFrozen(authenticatedSession.user), true);
   assert.deepEqual(fact.guards, {
-    authenticatedSession: { id: 's1', user: { id: 'u1' } },
+    authenticatedSession: nullPrototypeRecord({
+      id: 's1',
+      user: nullPrototypeRecord({ id: 'u1' }),
+    }),
     authedFailure: {
       kind: 'unauthenticated',
       payload: {},
