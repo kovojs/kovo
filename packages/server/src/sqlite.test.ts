@@ -663,9 +663,17 @@ describe('public SQLite runtime boundary (SPEC §6.6/§10.3)', () => {
       runtime = sqlitePublicApi.createSqliteAppRuntime({ tables: [parent, child] });
     } finally {
       for (const [owner, property, descriptor] of originals) {
-        if (descriptor !== undefined) Object.defineProperty(owner, property, descriptor);
+        // EventEmitter methods are inherited, so remove the own poison shadow when none existed.
+        if (descriptor === undefined) {
+          Reflect.deleteProperty(owner, property);
+        } else {
+          Object.defineProperty(owner, property, descriptor);
+        }
       }
       release();
+    }
+    for (const [owner, property, descriptor] of originals) {
+      expect(Object.getOwnPropertyDescriptor(owner, property)).toEqual(descriptor);
     }
     expect(poisoned).toBe(true);
     expect(runtime).toBeDefined();
