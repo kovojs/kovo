@@ -217,8 +217,9 @@ const command = cmd('/usr/bin/true', [], { allow });
 export const safeMutation = mutation({
   access: publicAccess('safe command capability'),
   input: s.object({}),
-  handler() {
-    return runCommand(command);
+  async handler() {
+    await runCommand(command);
+    return { ok: true };
   },
 });
 export default createApp({
@@ -415,7 +416,8 @@ export const safeFiles = mutation({
   input: s.object({}),
   async handler() {
     await storage.stat('fixed-key');
-    return { value: Boolean(files) };
+    void files;
+    return { value: true };
   },
 });
 export default createApp({

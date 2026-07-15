@@ -84,7 +84,7 @@ describe('@kovojs/drizzle capability-escape collector (SPEC §6.6, audit-only, M
 
   it('surfaces usePostgresSystemDb with a leading justification comment', () => {
     const capabilities = capabilitiesFor(`
-      import { usePostgresSystemDb } from '@kovojs/server';
+      import { usePostgresSystemDb } from '@kovojs/server/internal/postgres-capability';
       // justification: framework-owned system DB capability remains opaque
       export const run = usePostgresSystemDb(capability, (db) => db);
     `);

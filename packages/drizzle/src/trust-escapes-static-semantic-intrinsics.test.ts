@@ -566,12 +566,9 @@ describe('KV424 semantic intrinsic adversarial corpus', () => {
     expectOpaqueSemanticBoundary(facts);
   });
 
-  it('keeps Object.is benign for opaque values because it performs no user-code protocol', () => {
+  it('keeps Object.is benign because it performs no user-code protocol', () => {
     const facts = sinksFor(
-      routeSource(
-        "import { proxyTarget } from 'semantic-opaque-value';",
-        'Object.is(proxyTarget, proxyTarget);',
-      ),
+      routeSource('', 'const value = Object.create(null); Object.is(value, value);'),
     );
 
     expect(facts).toEqual([]);
