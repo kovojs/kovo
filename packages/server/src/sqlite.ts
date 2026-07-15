@@ -61,6 +61,7 @@ import {
   runtimeDbMetadataForSchema,
   type KovoSqliteAppRuntimeMetadata,
 } from './sqlite-runtime.js';
+import { registerFrameworkSqliteTransactionFacade } from './sql-safe-handle.js';
 
 export type { KovoSqliteSystemDb } from '@kovojs/server/internal/sqlite-capability';
 
@@ -322,6 +323,12 @@ export function createSqliteAppRuntime(
     ]);
     assertSqliteNativeDatabase(nativeDatabase, nativeControls);
     const client = createPinnedSqliteClient(nativeDatabase, nativeControls);
+    registerFrameworkSqliteTransactionFacade(
+      client,
+      nativeDatabase,
+      nativeControls.databaseExec,
+      () => sqliteNativeDatabaseInTransaction(nativeDatabase),
+    );
     witnessReflectApply(nativeControls.databaseExec, nativeDatabase, [
       'PRAGMA foreign_keys = ON; PRAGMA temp_store = MEMORY;',
     ]);

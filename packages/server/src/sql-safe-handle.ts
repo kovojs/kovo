@@ -141,6 +141,41 @@ const managedTransactionQueue = createWitnessWeakMap<object, Promise<void>>();
 const pinnedSqliteTransactionClients = createWitnessWeakMap<object, SqliteTransactionClient>();
 let sqliteSavepointId = 0;
 
+/**
+ * Bind a finite public-driver facade to its private native SQLite transaction controls.
+ *
+ * The public SQLite runtime deliberately withholds `exec` and `inTransaction` from Drizzle's
+ * `$client` facade. The mutation lifecycle still needs those already-pinned controls to keep an
+ * async handler inside one BEGIN/COMMIT/ROLLBACK frame. This private registry preserves that
+ * association without adding a raw driver property that app or adapter code can invoke (SPEC
+ * §6.6 C9, §10.3).
+ *
+ * @internal Package-private construction hook used only by sqlite.ts.
+ */
+export function registerFrameworkSqliteTransactionFacade(
+  facade: object,
+  source: object,
+  expectedExec: Function,
+  readInTransaction: () => boolean,
+): void {
+  const existingSource = witnessWeakMapGet(pinnedSqliteTransactionClients, source);
+  if (typeof expectedExec !== 'function' || typeof readInTransaction !== 'function') {
+    throw new TypeError('Framework SQLite transaction source has invalid native controls.');
+  }
+  const initialState = readInTransaction();
+  if (typeof initialState !== 'boolean') {
+    throw new TypeError('Framework SQLite transaction source has invalid transaction state.');
+  }
+  const pinned =
+    existingSource ?? witnessFreeze({ exec: expectedExec, readInTransaction, target: source });
+  const existingFacade = witnessWeakMapGet(pinnedSqliteTransactionClients, facade);
+  if (existingFacade !== undefined && existingFacade !== pinned) {
+    throw new TypeError('Framework SQLite transaction facade is already bound to another source.');
+  }
+  witnessWeakMapSet(pinnedSqliteTransactionClients, source, pinned);
+  witnessWeakMapSet(pinnedSqliteTransactionClients, facade, pinned);
+}
+
 const READ_SQL_BUILDER_FAST_PATH_METHODS = createWitnessSet<PropertyKey>();
 for (const method of ['$count', '$with', 'select', 'selectDistinct', 'selectDistinctOn']) {
   witnessSetAdd(READ_SQL_BUILDER_FAST_PATH_METHODS, method);
@@ -1038,6 +1073,7 @@ function reconstructNativeDrizzleTableEntity(
 
   const table = new Table(name, schema, baseName);
   witnessWeakMapSet(seen, value, table);
+  witnessWeakMapSet(frameworkCanonicalNativeSqlSources, table, value);
   witnessDefineProperty(table, DRIZZLE_TABLE_IS_ALIAS, { value: alias, writable: false });
   const tableDescriptors = witnessGetOwnPropertyDescriptors(value);
   const tableKeys = witnessOwnKeys(tableDescriptors);
@@ -2173,7 +2209,7 @@ function guardedTransactionMethod(
 
 type SqliteTransactionClient = {
   readonly exec: Function;
-  readonly inTransaction: PropertyDescriptor;
+  readonly readInTransaction: () => boolean;
   readonly target: Record<PropertyKey, unknown>;
 };
 
@@ -2208,9 +2244,11 @@ function sqliteTransactionClient(db: unknown): SqliteTransactionClient | undefin
   }
 
   const client = strictInheritedDataDescriptor(target, '$client');
+  const clientValue = client !== undefined && 'value' in client ? client.value : undefined;
   const pinned =
-    client !== undefined && 'value' in client
-      ? pinSqliteTransactionClient(client.value)
+    typeof clientValue === 'object' && clientValue !== null
+      ? (witnessWeakMapGet(pinnedSqliteTransactionClients, clientValue) ??
+        pinSqliteTransactionClient(clientValue))
       : undefined;
   if (pinned !== undefined) witnessWeakMapSet(pinnedSqliteTransactionClients, target, pinned);
   return pinned;
@@ -2239,7 +2277,10 @@ function pinSqliteTransactionClient(value: unknown): SqliteTransactionClient | u
     }
     return witnessFreeze({
       exec: exec.value,
-      inTransaction: witnessFreeze(inTransaction),
+      readInTransaction: () =>
+        'get' in inTransaction && typeof inTransaction.get === 'function'
+          ? witnessReflectApply(inTransaction.get, value, []) === true
+          : 'value' in inTransaction && inTransaction.value === true,
       target: value,
     });
   } catch {
@@ -2320,9 +2361,11 @@ async function runSqliteTransactionControl<Result>(
 }
 
 function readPinnedSqliteTransactionState(client: SqliteTransactionClient): boolean {
-  return 'get' in client.inTransaction && typeof client.inTransaction.get === 'function'
-    ? witnessReflectApply(client.inTransaction.get, client.target, []) === true
-    : 'value' in client.inTransaction && client.inTransaction.value === true;
+  const state = witnessReflectApply<unknown>(client.readInTransaction, undefined, []);
+  if (typeof state !== 'boolean') {
+    throw new TypeError('SQLite transaction state reader must return a boolean.');
+  }
+  return state;
 }
 
 async function runQueuedManagedTransaction<Result>(

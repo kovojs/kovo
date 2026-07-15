@@ -17,6 +17,7 @@
 
 import {
   createFrameworkManagedSqlDispatchProxy,
+  frameworkCanonicalNativeSqlSource,
   frameworkManagedSqlDispatchPropertyValue,
   frameworkManagedDbRawTarget,
   isFrameworkManagedSqlDispatchProxy,
@@ -390,7 +391,7 @@ export const createDeclaredWriteDb = securityClassifier(
         }
         if (isDeclaredWriteDrizzleMethod(prop) && typeof value === 'function') {
           return (table: unknown, ...args: unknown[]) => {
-            const names = safeOptions.tableNames(table);
+            const names = safeOptions.tableNames(frameworkCanonicalNativeSqlSource(table) ?? table);
             assertDeclaredWriteTablesAllowed(names, safeOptions, allowed);
             const builder = witnessReflectApply(value, target, prependManagedArgument(table, args));
             return prop === 'delete'

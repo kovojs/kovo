@@ -7,13 +7,17 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { kovo, sql, trustedSql } from '@kovojs/drizzle';
 import { Table } from 'drizzle-orm';
+import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
 import { integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 
 import * as sqlitePublicApi from '@kovojs/server/sqlite';
 import { useSqliteSystemDb } from '@kovojs/server/internal/sqlite-capability';
 import { installGeneratedTableSecurityManifestForCommand } from './generated-table-security-registry.js';
+import { domain } from './domain.js';
 import { resolveDbProvider } from './guards.js';
 import { managedDb } from './managed-db.js';
+import { mutation, runMutation } from './mutation.js';
+import { s } from './schema.js';
 
 const runtimes: Array<{ close(): void }> = [];
 const sqliteTestRequire = createRequire(import.meta.url);
@@ -875,6 +879,47 @@ describe('public SQLite runtime boundary (SPEC §6.6/§10.3)', () => {
       transactionKeys: ['default', 'deferred', 'exclusive', 'immediate'],
       transactionRawEscape: false,
     });
+  });
+
+  it('runs an async app mutation through the sealed SQLite client without exposing raw controls', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const prefix = `kovo_async_mutation_${Date.now()}`;
+    const schema = runtimeSchema(prefix);
+    const release = installGeneratedTableSecurityManifestForCommand(schema.manifest);
+    try {
+      const runtime = sqlitePublicApi.createSqliteAppRuntime({
+        tables: [schema.parent, schema.child],
+      });
+      runtimes.push(runtime);
+      const addParent = mutation('sqlite/async-parent', {
+        csrf: false,
+        csrfJustification: 'framework SQLite async transaction regression',
+        input: s.object({ id: s.string(), name: s.string() }),
+        registry: { tables: [`${prefix}_parent`], touches: [domain(`${prefix}_parent`)] },
+        async handler(input, request: { db: BetterSQLite3Database }) {
+          await request.db.insert(schema.parent).values(input);
+          await Promise.resolve();
+          return input.id;
+        },
+      });
+
+      await expect(
+        runMutation(addParent, { id: 'async-1', name: 'Async SQLite' }, {}, { db: runtime.db }),
+      ).resolves.toMatchObject({ ok: true, value: 'async-1' });
+
+      const capability = runtime.systemDb({
+        operation: 'write',
+        reason: 'Verify the committed async mutation row',
+        surface: 'sqlite.test#async-mutation',
+      });
+      expect(
+        useSqliteSystemDb(capability, (db) =>
+          db.select({ id: schema.parent.id, name: schema.parent.name }).from(schema.parent).all(),
+        ),
+      ).toEqual([{ id: 'async-1', name: 'Async SQLite' }]);
+    } finally {
+      release();
+    }
   });
 });
 
