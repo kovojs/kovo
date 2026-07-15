@@ -386,6 +386,11 @@ test('Vite source edits refresh rendered text and handler bodies through Kovo HM
   try {
     await page.goto(`${fixture.origin}/`);
     await expect(page.locator('#hmr-source-output')).toHaveText('Version before');
+    await page.locator('#hmr-source-button').click();
+    await expect(page.locator('#hmr-source-button')).toHaveAttribute(
+      'data-handler',
+      'handler before',
+    );
     await page.waitForTimeout(250);
 
     await page.locator('#hmr-source-input').focus();
@@ -408,6 +413,11 @@ test('Vite source edits refresh rendered text and handler bodies through Kovo HM
     await expect(page.locator('#hmr-source-output')).toHaveText('Version after');
     await expect(page.locator('#hmr-source-input')).toHaveValue('user draft');
     await expect(page.locator('#hmr-source-input')).toBeFocused();
+    await page.locator('#hmr-source-button').click();
+    await expect(page.locator('#hmr-source-button')).toHaveAttribute(
+      'data-handler',
+      'handler after',
+    );
     expect(page.url()).toBe(`${fixture.origin}/`);
   } finally {
     await fixture.close();
@@ -663,12 +673,6 @@ async function serveViteSourceEditFixture(options: {
     }),
     'utf8',
   );
-  await writeFile(
-    join(srcDir, 'hmr-handler.ts'),
-    'export function track(value: string) { return value; }\n',
-    'utf8',
-  );
-
   type ViteDevServer = {
     close(): Promise<void>;
     moduleGraph?: { invalidateAll(): void };
@@ -869,6 +873,7 @@ export default createApp({
 function kovoSourceEditFixturePlugin(options: { onModuleDiagnostics: OnModuleDiagnostics }): {
   configResolved(config: { root: string }): void;
   configureServer?: ReturnType<typeof kovoVitePlugin>['configureServer'];
+  enforce?: 'pre';
   handleHotUpdate?: ReturnType<typeof kovoVitePlugin>['handleHotUpdate'];
   name: string;
   transform: KovoVitePlugin['transform'];
@@ -878,6 +883,9 @@ function kovoSourceEditFixturePlugin(options: { onModuleDiagnostics: OnModuleDia
 
   return {
     configureServer: hmrTransport.configureServer,
+    // SPEC.md §5.2 / §9.5.1: authored TSX must reach Kovo before Vite lowers JSX, or host
+    // event props bypass compiler-owned handler refs and hit the KV236 runtime backstop.
+    enforce: hmrTransport.enforce,
     handleHotUpdate: hmrTransport.handleHotUpdate,
     name: 'kovo-source-edit-fixture',
     async transform(source, id) {
@@ -925,7 +933,6 @@ function hmrSourceCard(options: {
   return `/** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
 import { query } from '@kovojs/server';
-import { track } from './hmr-handler';
 
 const hmrQuery = query('hmr', {
   load() {
@@ -945,7 +952,9 @@ export const HmrSourceCard = component({
         id="hmr-source-button"
         kovo-key="button"
         type="button"
-        onClick={() => track(${JSON.stringify(options.handlerText)})}>
+        onClick={() => {
+          event.target.dataset.handler = ${JSON.stringify(options.handlerText)};
+        }}>
         Run
       </button>
     </section>
