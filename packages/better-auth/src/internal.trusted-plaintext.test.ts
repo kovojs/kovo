@@ -120,7 +120,6 @@ describe('Better Auth trusted plaintext zone', () => {
       'appSessionProvider',
       'appSignIn',
       'appSignOut',
-      'seedDemoUser',
     ];
     for (const template of [
       '../../create-kovo/templates/src/auth.ts',
