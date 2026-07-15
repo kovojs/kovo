@@ -17,7 +17,6 @@
 
 import {
   createFrameworkManagedSqlDispatchProxy,
-  frameworkCanonicalNativeSqlSource,
   frameworkManagedSqlDispatchPropertyValue,
   frameworkManagedDbRawTarget,
   isFrameworkManagedSqlDispatchProxy,
@@ -162,6 +161,8 @@ export interface GovernedWriteMetadata {
 
 /** Options for the framework-owned declared-write DB choke. */
 export interface DeclaredWriteDbOptions {
+  /** Resolve a caller table identity to the adapter's construction-time execution snapshot. */
+  canonicalizeTable?: (table: unknown) => unknown;
   dialectLabel: string;
   governedColumns?: GovernedWriteMetadata;
   normalizeTableName: (table: string) => string;
@@ -391,9 +392,17 @@ export const createDeclaredWriteDb = securityClassifier(
         }
         if (isDeclaredWriteDrizzleMethod(prop) && typeof value === 'function') {
           return (table: unknown, ...args: unknown[]) => {
-            const names = safeOptions.tableNames(frameworkCanonicalNativeSqlSource(table) ?? table);
+            const executionTable =
+              safeOptions.canonicalizeTable === undefined
+                ? table
+                : safeOptions.canonicalizeTable(table);
+            const names = safeOptions.tableNames(executionTable);
             assertDeclaredWriteTablesAllowed(names, safeOptions, allowed);
-            const builder = witnessReflectApply(value, target, prependManagedArgument(table, args));
+            const builder = witnessReflectApply(
+              value,
+              target,
+              prependManagedArgument(executionTable, args),
+            );
             return prop === 'delete'
               ? builder
               : declaredWriteBuilder(builder, prop, names, safeOptions);
@@ -665,9 +674,18 @@ function snapshotDeclaredWriteBoundary(
 }
 
 function snapshotDeclaredWriteOptions(options: DeclaredWriteDbOptions): DeclaredWriteDbOptions {
+  const canonicalizeTableControl = optionalOwnDataProperty(options, 'canonicalizeTable');
   const normalizeTableNameControl = ownFunctionDataProperty(options, 'normalizeTableName');
   const tableNames = ownFunctionDataProperty(options, 'tableNames');
   const runtime = witnessCreateNullRecord<unknown>() as unknown as DeclaredWriteDbOptions;
+  if (canonicalizeTableControl !== undefined) {
+    if (typeof canonicalizeTableControl !== 'function') {
+      throw new TypeError('canonicalizeTable must be an own function data property.');
+    }
+    runtime.canonicalizeTable = function canonicalizeDeclaredWriteTable(table) {
+      return witnessReflectApply(canonicalizeTableControl, options, [table]);
+    };
+  }
   runtime.dialectLabel = ownStringDataProperty(options, 'dialectLabel');
   runtime.normalizeTableName = function normalizeDeclaredWriteTable(table) {
     const normalized = witnessReflectApply<unknown>(normalizeTableNameControl, options, [table]);

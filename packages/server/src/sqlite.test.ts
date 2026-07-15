@@ -21,6 +21,7 @@ import { s } from './schema.js';
 
 const runtimes: Array<{ close(): void }> = [];
 const sqliteTestRequire = createRequire(import.meta.url);
+const drizzleTableName = Symbol.for('drizzle:Name');
 
 afterEach(() => {
   while (runtimes.length > 0) runtimes.pop()?.close();
@@ -918,6 +919,80 @@ describe('public SQLite runtime boundary (SPEC §6.6/§10.3)', () => {
         ),
       ).toEqual([{ id: 'async-1', name: 'Async SQLite' }]);
     } finally {
+      release();
+    }
+  });
+
+  it('executes the enrolled table snapshot after a late Drizzle table-name retarget', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const prefix = `kovo_late_table_retarget_${Date.now()}`;
+    const allowedName = `${prefix}_allowed`;
+    const victimName = `${prefix}_victim`;
+    const allowed = sqliteTable(
+      allowedName,
+      { id: text('id').primaryKey(), name: text('name').notNull() },
+      kovo({ domain: allowedName, key: 'id' }),
+    );
+    const victim = sqliteTable(
+      victimName,
+      { id: text('id').primaryKey(), name: text('name').notNull() },
+      kovo({ domain: victimName, key: 'id' }),
+    );
+    const release = installGeneratedTableSecurityManifestForCommand(
+      manifestFor([
+        {
+          columns: [
+            { key: 'id', name: 'id' },
+            { key: 'name', name: 'name' },
+          ],
+          name: allowedName,
+        },
+        {
+          columns: [
+            { key: 'id', name: 'id' },
+            { key: 'name', name: 'name' },
+          ],
+          name: victimName,
+        },
+      ]),
+    );
+    const originalName = Object.getOwnPropertyDescriptor(allowed, drizzleTableName)!;
+    try {
+      const runtime = sqlitePublicApi.createSqliteAppRuntime({ tables: [allowed, victim] });
+      runtimes.push(runtime);
+      Object.defineProperty(allowed, drizzleTableName, { ...originalName, value: victimName });
+      const write = mutation('sqlite/late-table-retarget', {
+        csrf: false,
+        csrfJustification: 'framework SQLite canonical table regression',
+        input: s.object({ id: s.string(), name: s.string() }),
+        registry: { tables: [allowedName], touches: [domain(allowedName)] },
+        async handler(input, request: { db: BetterSQLite3Database }) {
+          await request.db.insert(allowed).values(input);
+          return input.id;
+        },
+      });
+
+      await expect(
+        runMutation(write, { id: 'pinned', name: 'Pinned target' }, {}, { db: runtime.db }),
+      ).resolves.toMatchObject({ ok: true, value: 'pinned' });
+      Object.defineProperty(allowed, drizzleTableName, originalName);
+
+      const capability = runtime.systemDb({
+        operation: 'write',
+        reason: 'Verify late table retarget stays bound to its enrolled identity',
+        surface: 'sqlite.test#late-table-retarget',
+      });
+      expect(
+        useSqliteSystemDb(capability, (db) => ({
+          allowed: db.select().from(allowed).all(),
+          victim: db.select().from(victim).all(),
+        })),
+      ).toEqual({
+        allowed: [{ id: 'pinned', name: 'Pinned target' }],
+        victim: [],
+      });
+    } finally {
+      Object.defineProperty(allowed, drizzleTableName, originalName);
       release();
     }
   });

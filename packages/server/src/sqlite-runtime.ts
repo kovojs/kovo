@@ -66,6 +66,8 @@ export interface KovoSqliteColumnOriginClient {
 
 /** Options for wiring a generated SQLite starter database into Kovo's runtime DB boundary. */
 export interface KovoSqliteAppRuntimeOptions<Db extends object> {
+  /** Optional adapter-owned resolver for construction-time Drizzle table execution snapshots. */
+  canonicalizeTable?: (table: unknown) => unknown;
   /** Drizzle SQLite database handle created by the starter. */
   db: Db;
   /** Schema-derived metadata from `@kovojs/drizzle#extractKovoRuntimeDbMetadata`. */
@@ -118,6 +120,7 @@ export function createSqliteAppRuntimeDb<Db extends object>(
     throw new TypeError('SQLite runtime options must be a stable own-data record.');
   }
   const rawDb = requiredSqliteRuntimeValue(options, 'db');
+  const rawCanonicalizeTable = optionalSqliteRuntimeValue(options, 'canonicalizeTable');
   const rawMetadata = requiredSqliteRuntimeValue(options, 'metadata');
   const rawNormalizeTableName = requiredSqliteRuntimeValue(options, 'normalizeTableName');
   const rawSqliteAuthorizer = requiredSqliteRuntimeValue(options, 'sqliteAuthorizer');
@@ -126,6 +129,7 @@ export function createSqliteAppRuntimeDb<Db extends object>(
   if (
     typeof rawDb !== 'object' ||
     rawDb === null ||
+    (rawCanonicalizeTable !== undefined && typeof rawCanonicalizeTable !== 'function') ||
     typeof rawMetadata !== 'object' ||
     rawMetadata === null ||
     typeof rawNormalizeTableName !== 'function' ||
@@ -138,6 +142,7 @@ export function createSqliteAppRuntimeDb<Db extends object>(
     throw new TypeError('SQLite runtime options contain an invalid authority value.');
   }
   const db = rawDb as Db;
+  const canonicalizeTable = rawCanonicalizeTable as ((table: unknown) => unknown) | undefined;
   const metadata = snapshotSqliteRuntimeMetadata(rawMetadata as KovoSqliteAppRuntimeMetadata);
   const normalizeTableName = rawNormalizeTableName as (table: string) => string;
   const sqliteAuthorizer = rawSqliteAuthorizer as DeclaredWriteSqliteAuthorizerOptions;
@@ -160,6 +165,7 @@ export function createSqliteAppRuntimeDb<Db extends object>(
     () => readDb,
     (policy: Parameters<typeof createDeclaredWriteDb>[1]) =>
       createDeclaredWriteDb(db, policy, {
+        ...(canonicalizeTable === undefined ? {} : { canonicalizeTable }),
         dialectLabel: 'SQLite',
         governedColumns: metadata,
         normalizeTableName,
@@ -176,6 +182,7 @@ export function createSqliteAppRuntimeDb<Db extends object>(
     () => readDb,
     (policy: Parameters<typeof createDeclaredWriteDb>[1]) =>
       createDeclaredWriteDb(db, policy, {
+        ...(canonicalizeTable === undefined ? {} : { canonicalizeTable }),
         dialectLabel: 'SQLite',
         governedColumns: metadata,
         normalizeTableName,

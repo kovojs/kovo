@@ -61,7 +61,11 @@ import {
   runtimeDbMetadataForSchema,
   type KovoSqliteAppRuntimeMetadata,
 } from './sqlite-runtime.js';
-import { registerFrameworkSqliteTransactionFacade } from './sql-safe-handle.js';
+import {
+  frameworkCanonicalNativeSqlSource,
+  registerFrameworkSqliteTransactionFacade,
+  snapshotFrameworkNativeDrizzleTableForExecution,
+} from './sql-safe-handle.js';
 
 export type { KovoSqliteSystemDb } from '@kovojs/server/internal/sqlite-capability';
 
@@ -345,9 +349,15 @@ export function createSqliteAppRuntime(
     // without casting the façade into a broader raw-driver type.
     const db = witnessReflectApply<BetterSQLite3Database>(drizzle, undefined, [{ client }]);
     const tableNames = createWitnessWeakMap<object, readonly string[]>();
+    const executionTables = createWitnessWeakMap<object, object>();
     for (let index = 0; index < tables.length; index += 1) {
       const table = tables[index]!;
       witnessWeakMapSet(tableNames, table.table, witnessFreeze([normalizePolicyTable(table.name)]));
+      witnessWeakMapSet(
+        executionTables,
+        table.table,
+        snapshotFrameworkNativeDrizzleTableForExecution(table.table),
+      );
     }
     const runtime = createSqliteAppRuntimeDb({
       db,
@@ -393,13 +403,29 @@ export function createSqliteAppRuntime(
         },
       },
       sqliteColumnOrigins: client,
+      canonicalizeTable(table) {
+        const source = frameworkCanonicalNativeSqlSource(table) ?? table;
+        if ((typeof source !== 'object' && typeof source !== 'function') || source === null) {
+          throw new Error(
+            'KV406: SQLite declared-write table must be one of the runtime schema tables (SPEC §10.3/§11.2).',
+          );
+        }
+        const executionTable = witnessWeakMapGet(executionTables, source);
+        if (executionTable === undefined) {
+          throw new Error(
+            'KV406: SQLite declared-write table is outside the runtime schema (SPEC §10.3/§11.2).',
+          );
+        }
+        return executionTable;
+      },
       tableNames(table) {
         if ((typeof table !== 'object' && typeof table !== 'function') || table === null) {
           throw new Error(
             'KV406: SQLite declared-write table must be one of the runtime schema tables (SPEC §10.3/§11.2).',
           );
         }
-        const names = witnessWeakMapGet(tableNames, table);
+        const source = frameworkCanonicalNativeSqlSource(table) ?? table;
+        const names = witnessWeakMapGet(tableNames, source);
         if (names === undefined) {
           throw new Error(
             'KV406: SQLite declared-write table is outside the runtime schema (SPEC §10.3/§11.2).',

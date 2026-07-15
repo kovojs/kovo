@@ -359,6 +359,21 @@ export function frameworkCanonicalNativeSqlImmediateSource(value: unknown): obje
   return isRecord(value) ? witnessWeakMapGet(frameworkCanonicalNativeSqlSources, value) : undefined;
 }
 
+/**
+ * Reconstruct a native Drizzle table once for a framework adapter's construction-time execution
+ * witness. Later caller mutations are ignored: the adapter can resolve the private provenance edge
+ * back to the enrolled table identity while executing only this frozen graph (SPEC §6.6 C9/C15,
+ * §10.3).
+ *
+ * @internal Package-private adapter construction hook; not exported from a public barrel.
+ */
+export function snapshotFrameworkNativeDrizzleTableForExecution(value: unknown): object {
+  if (!isRecord(value) || !witnessSetHas(nativeDrizzleEntityKinds(value), 'Table')) {
+    throw nativeDrizzleProvenanceError();
+  }
+  return reconstructNativeDrizzleTableEntity(value, createWitnessWeakMap<object, unknown>(), false);
+}
+
 function wrapDbAdapter(
   db: object,
   mode: SqlSafetyMode,
@@ -1055,6 +1070,7 @@ function canonicalNativeDrizzleSchemaEntity(
 function reconstructNativeDrizzleTableEntity(
   value: object,
   seen: WeakMap<object, unknown>,
+  copyAncillaryProperties = true,
 ): object {
   const existing = witnessWeakMapGet(seen, value);
   if (isRecord(existing)) return existing;
@@ -1075,35 +1091,39 @@ function reconstructNativeDrizzleTableEntity(
   witnessWeakMapSet(seen, value, table);
   witnessWeakMapSet(frameworkCanonicalNativeSqlSources, table, value);
   witnessDefineProperty(table, DRIZZLE_TABLE_IS_ALIAS, { value: alias, writable: false });
-  const tableDescriptors = witnessGetOwnPropertyDescriptors(value);
-  const tableKeys = witnessOwnKeys(tableDescriptors);
-  for (let index = 0; index < tableKeys.length; index += 1) {
-    const keyDescriptor = witnessGetOwnPropertyDescriptor(tableKeys, index);
-    if (keyDescriptor === undefined || !('value' in keyDescriptor)) {
-      throw nativeDrizzleProvenanceError();
+  if (copyAncillaryProperties) {
+    const tableDescriptors = witnessGetOwnPropertyDescriptors(value);
+    const tableKeys = witnessOwnKeys(tableDescriptors);
+    for (let index = 0; index < tableKeys.length; index += 1) {
+      const keyDescriptor = witnessGetOwnPropertyDescriptor(tableKeys, index);
+      if (keyDescriptor === undefined || !('value' in keyDescriptor)) {
+        throw nativeDrizzleProvenanceError();
+      }
+      const property = keyDescriptor.value;
+      if (
+        property === DRIZZLE_TABLE_COLUMNS ||
+        property === DRIZZLE_TABLE_NAME ||
+        property === DRIZZLE_TABLE_SCHEMA ||
+        property === DRIZZLE_TABLE_BASE_NAME ||
+        property === DRIZZLE_TABLE_IS_ALIAS ||
+        witnessGetOwnPropertyDescriptor(columnsDescriptor.value, property) !== undefined
+      ) {
+        continue;
+      }
+      const descriptor = witnessReflectGet(tableDescriptors, property) as
+        | PropertyDescriptor
+        | undefined;
+      if (descriptor === undefined || !('value' in descriptor)) {
+        throw nativeDrizzleProvenanceError();
+      }
+      const copied = canonicalizeNativeDrizzleCountStar(descriptor.value, seen);
+      witnessDefineProperty(table, property, {
+        configurable: descriptor.configurable ?? false,
+        enumerable: descriptor.enumerable ?? false,
+        value: copied,
+        writable: descriptor.writable ?? false,
+      });
     }
-    const property = keyDescriptor.value;
-    if (
-      property === DRIZZLE_TABLE_COLUMNS ||
-      property === DRIZZLE_TABLE_NAME ||
-      property === DRIZZLE_TABLE_SCHEMA ||
-      property === DRIZZLE_TABLE_BASE_NAME ||
-      property === DRIZZLE_TABLE_IS_ALIAS ||
-      witnessGetOwnPropertyDescriptor(columnsDescriptor.value, property) !== undefined
-    ) {
-      continue;
-    }
-    const descriptor = witnessReflectGet(tableDescriptors, property) as
-      | PropertyDescriptor
-      | undefined;
-    if (descriptor === undefined || !('value' in descriptor)) throw nativeDrizzleProvenanceError();
-    const copied = canonicalizeNativeDrizzleCountStar(descriptor.value, seen);
-    witnessDefineProperty(table, property, {
-      configurable: descriptor.configurable ?? false,
-      enumerable: descriptor.enumerable ?? false,
-      value: copied,
-      writable: descriptor.writable ?? false,
-    });
   }
   const columns = witnessCreateNullRecord<object>();
   const keys = witnessObjectKeys(columnsDescriptor.value);
