@@ -19,6 +19,7 @@ import {
   type GalleryClientModuleManifest,
 } from '../../examples/gallery/src/client-module-manifest.js';
 import { galleryComponentCatalog } from '../../examples/gallery/src/component-catalog.js';
+import { galleryHandlerCompilerProjectFiles } from '../../examples/gallery/src/compiler-project.js';
 
 import type { GalleryRouteView } from './components/gallery.js';
 import type { DocsRouteContent } from './route-data.js';
@@ -141,19 +142,13 @@ async function ensureGalleryInteractiveServerArtifacts(): Promise<() => void> {
       path.join(repoRoot, 'examples/gallery/src/interactive', fileName),
       'utf8',
     );
-    const result = compileComponentModule({
-      fileName: `src/interactive/${fileName}`,
+    const serverSource = compileGalleryInteractiveServerModule(
+      `src/interactive/${fileName}`,
       source,
-    });
-    const serverFile = result.files.find((file) => file.kind === 'server');
-    if (serverFile === undefined) {
-      throw new Error(
-        `site app shell: gallery interactive demo ${fileName} produced no server module.`,
-      );
-    }
+    );
 
     const { renderSource } = (await import(
-      `data:text/javascript;base64,${Buffer.from(serverFile.source).toString('base64')}`
+      `data:text/javascript;base64,${Buffer.from(serverSource).toString('base64')}`
     )) as { renderSource: () => string };
     writeFileSync(
       path.join(generatedDir, fileName),
@@ -168,6 +163,35 @@ async function ensureGalleryInteractiveServerArtifacts(): Promise<() => void> {
       recursive: true,
     });
   };
+}
+
+/** @internal Build the temporary gallery server artifact with the same finite handler-project
+ * provenance as the registered client module. SPEC §5.2.1 and §9.5 require the rendered handler
+ * href and the immutable module served during export replay to name one production version. */
+export function compileGalleryInteractiveServerModule(fileName: string, source: string): string {
+  const result = compileComponentModule({
+    extraFiles: galleryHandlerCompilerProjectFiles(),
+    fileName,
+    source,
+  } as Parameters<typeof compileComponentModule>[0] & {
+    extraFiles: readonly { fileName: string; source: string }[];
+  });
+  const errors = result.diagnostics.filter((diagnostic) => diagnostic.severity === 'error');
+  if (errors.length > 0) {
+    throw new Error(
+      `site app shell: gallery interactive demo ${fileName} failed compilation:\n${errors
+        .map((diagnostic) => `${diagnostic.code}: ${diagnostic.message}`)
+        .join('\n')}`,
+    );
+  }
+
+  const serverFile = result.files.find((file) => file.kind === 'server');
+  if (serverFile === undefined) {
+    throw new Error(
+      `site app shell: gallery interactive demo ${fileName} produced no server module.`,
+    );
+  }
+  return serverFile.source;
 }
 
 interface SupportRegistration {
