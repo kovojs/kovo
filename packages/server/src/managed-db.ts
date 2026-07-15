@@ -412,15 +412,14 @@ export const createDeclaredWriteDb = securityClassifier(
           };
         }
         if (prop === 'transaction' && typeof value === 'function') {
-          return (callback: (tx: unknown) => unknown, ...args: unknown[]) => {
-            return runExactlyOnceAdapter(
+          return (callback: (tx: unknown) => unknown, ...args: unknown[]) =>
+            runExactlyOnceAdapter(
               (run) => witnessReflectApply(value, target, prependManagedArgument(run, args)),
               (tx: unknown) =>
                 witnessReflectApply(callback, undefined, [
                   createDeclaredWriteDb(tx as object, safePolicy, safeOptions),
                 ]),
             );
-          };
         }
         return typeof value === 'function'
           ? (...args: unknown[]) => witnessReflectApply(value, target, args)
