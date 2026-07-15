@@ -574,6 +574,28 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
         body,
       ).toContain('setTimeout');
     }
+
+    for (const setup of [
+      `function executor(resolve) { setTimeout(resolve, 1); }
+       export const unsafe = mutation({ handler(input) {
+         new Promise(executor);
+         executor(input.code);
+       } });`,
+      `const executor = (resolve) => setTimeout(resolve, 1);
+       const executorAlias = executor;
+       export const unsafe = mutation({ handler() {
+         return new Promise(executorAlias);
+       } });`,
+    ]) {
+      const facts = sinksFor(`
+        import { mutation } from '@kovojs/server';
+        ${setup}
+      `);
+      expect(
+        facts.map((fact) => fact.sink),
+        setup,
+      ).toContain('setTimeout');
+    }
   });
 
   it('closes process.getBuiltinModule, createRequire, and dynamic require resolution', () => {
@@ -4094,6 +4116,101 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
     ]);
     expect(crossFile).toEqual([]);
 
+    const customSlotCredentialLeak = sinksFor(`
+      /** @jsxImportSource @kovojs/server */
+      import { component } from '@kovojs/core';
+      import { publicAccess, route } from '@kovojs/server';
+      const Proof = component({
+        render(_data, _state, slots) {
+          const headers = slots.headers as Headers;
+          let authorization = '';
+          headers.forEach((value, name) => {
+            if (name.toLowerCase() === 'authorization') authorization = value;
+          });
+          return <main>{authorization}</main>;
+        },
+      });
+      route('/', {
+        access: publicAccess('fixture'),
+        page(_context, request) { return <Proof headers={request.headers} />; },
+      });
+    `);
+    expect(customSlotCredentialLeak, JSON.stringify(customSlotCredentialLeak)).toEqual(
+      expect.arrayContaining([expect.objectContaining({ sink: 'client-wire.request.headers' })]),
+    );
+
+    const customPropCredentialLeak = sinksFor(`
+      /** @jsxImportSource @kovojs/server */
+      import { route } from '@kovojs/server';
+      function Proof(data) {
+        let authorization = '';
+        data.headers.forEach((value, name) => {
+          if (name.toLowerCase() === 'authorization') authorization = value;
+        });
+        return <main>{authorization}</main>;
+      }
+      route('/', {
+        page(_context, request) { return <Proof headers={request.headers} />; },
+      });
+    `);
+    expect(customPropCredentialLeak, JSON.stringify(customPropCredentialLeak)).toEqual(
+      expect.arrayContaining([expect.objectContaining({ sink: 'client-wire.request.headers' })]),
+    );
+
+    const customSlotChildrenLeak = sinksFor(`
+      /** @jsxImportSource @kovojs/server */
+      import { component } from '@kovojs/core';
+      import { route } from '@kovojs/server';
+      const Proof = component({
+        render(_data, _state, slots) { return <main>{slots.children}</main>; },
+      });
+      route('/', {
+        page(_context, request) {
+          return <Proof>{request.headers.get('authorization')}</Proof>;
+        },
+      });
+    `);
+    expect(customSlotChildrenLeak, JSON.stringify(customSlotChildrenLeak)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ sink: 'client-wire.request.header.Authorization' }),
+      ]),
+    );
+
+    for (const render of [
+      `render(_data, _state, slots) {
+        const alias = slots;
+        alias.request.headers.set('x-proof', 'forged');
+        return <main>closed</main>;
+      }`,
+      `render(_data, _state, slots) {
+        const { ...rest } = slots;
+        rest.request.headers.set('x-proof', 'forged');
+        return <main>closed</main>;
+      }`,
+      `render(_data, _state, slots = {}) {
+        slots.unknown();
+        return <main>closed</main>;
+      }`,
+      `render(_data, _state, slots) {
+        const alias = slots;
+        alias.unknown();
+        return <main>closed</main>;
+      }`,
+      `render(_data, _state, ...slots) {
+        slots[0].unknown();
+        return <main>closed</main>;
+      }`,
+    ]) {
+      const facts = sinksFor(`
+        /** @jsxImportSource @kovojs/server */
+        import { component } from '@kovojs/core';
+        import { route } from '@kovojs/server';
+        const Proof = component({ ${render} });
+        route('/', { page() { return <Proof />; } });
+      `);
+      expect(facts.length, render).toBeGreaterThan(0);
+    }
+
     const dynamicNamespace = sinksFor(`
       /** @jsxImportSource @kovojs/server */
       import * as browserTrust from '@kovojs/browser';
@@ -4305,6 +4422,61 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
       ),
     );
     expect(exactAuthoredProvider).toEqual([]);
+
+    for (const provider of [
+      `appSession.provider(async (request) => {
+        request = new Request('https://forged.invalid/', {
+          headers: { cookie: request.headers.get('x-forged-cookie') ?? '' },
+        });
+        return bindings.sessionProvider(request);
+      })`,
+      `appSession.provider(async (request = new Request('https://forged.invalid/')) => {
+        return bindings.sessionProvider(request);
+      })`,
+      `appSession.provider(async (...requests) => {
+        return bindings.sessionProvider(requests[0]);
+      })`,
+      `appSession.provider(async (request) => {
+        const forwarded = request;
+        return bindings.sessionProvider(forwarded);
+      })`,
+      `appSession.provider(async (request) => {
+        request.headers = new Headers();
+        return bindings.sessionProvider(request);
+      })`,
+      `appSession.provider(async (request) => {
+        const forged = request.headers.get('x-forged-cookie') ?? '';
+        request.headers.set('cookie', forged);
+        return bindings.sessionProvider(request);
+      })`,
+      `appSession.provider(async (request) => {
+        const forged = request.headers.get('x-forged-cookie') ?? '';
+        const headers = request.headers;
+        headers.set('cookie', forged);
+        return bindings.sessionProvider(request);
+      })`,
+    ]) {
+      const facts = sinksForFiles(
+        exactEnvironmentBindingFiles.map((file) =>
+          file.fileName === 'app.tsx'
+            ? {
+                ...file,
+                source: file.source.replace(
+                  'appSession.provider(bindings.sessionProvider)',
+                  provider,
+                ),
+              }
+            : file,
+        ),
+      );
+      expect(facts, provider).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            sink: 'request-handler.opaque-call',
+          }),
+        ]),
+      );
+    }
 
     const hostileAuthoredProvider = sinksForFiles(
       exactEnvironmentBindingFiles.map((file) =>

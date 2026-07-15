@@ -6557,18 +6557,61 @@ function requestExpressionMayBeExactBetterAuthBindingMember(expression: Node): b
   );
 }
 
+function requestBetterAuthProviderRequestParameterIsPristine(
+  callable: RequestCallable,
+  session: RequestProvenanceSession,
+): import('ts-morph').Identifier | undefined {
+  const [parameter, ...extra] = requestCallableParameters(callable.declaration);
+  const name = parameter?.getNameNode();
+  const symbol = Node.isIdentifier(name) ? name.getSymbol() : undefined;
+  if (
+    !parameter ||
+    extra.length !== 0 ||
+    !Node.isIdentifier(name) ||
+    parameter.getInitializer() ||
+    parameter.getDotDotDotToken() ||
+    !symbol ||
+    requestAssignedBindingProjections(symbol, session).length !== 0
+  ) {
+    return undefined;
+  }
+
+  const hasRequestRole = (expression: Node): boolean =>
+    requestExpressionRootParameterRole(expression, callable, new Set(), 0) === 'request';
+  for (const assignment of callable.body.getDescendantsOfKind(SyntaxKind.BinaryExpression)) {
+    const operator = assignment.getOperatorToken().getKind();
+    if (
+      operator >= SyntaxKind.FirstAssignment &&
+      operator <= SyntaxKind.LastAssignment &&
+      hasRequestRole(assignment.getLeft())
+    ) {
+      return undefined;
+    }
+  }
+  return name;
+}
+
 function requestCallIsExactBetterAuthBindingInvocation(
   call: import('ts-morph').CallExpression,
   callable: RequestCallable,
   member: 'sessionProvider' | 'signIn' | 'signOut',
+  session: RequestProvenanceSession,
 ): boolean {
   const callee = unwrapStaticExpression(call.getExpression());
   const [request, ...extra] = call.getArguments();
+  const requestNode = request ? unwrapStaticExpression(request) : undefined;
+  const parameterName = requestBetterAuthProviderRequestParameterIsPristine(callable, session);
+  const parameterSymbol = parameterName?.getSymbol();
   return !!(
     request &&
     extra.length === 0 &&
+    parameterName &&
+    parameterSymbol &&
+    requestNode &&
+    Node.isIdentifier(requestNode) &&
+    requestNode.getSymbol() === parameterSymbol &&
     requestExpressionResolvesToExactBetterAuthBindingMember(callee, member, new Set()) &&
-    requestExpressionRootParameterRole(request, callable, new Set(), 0) === 'request'
+    requestExpressionRootParameterRole(requestNode, callable, new Set(), 0) === 'request'
   );
 }
 
@@ -6613,6 +6656,7 @@ function requestCallIsExactAuthoredBetterAuthSessionProviderDelegation(
       rootParameterRoles: ['request'],
     },
     'sessionProvider',
+    session,
   );
 }
 
@@ -15917,7 +15961,7 @@ function scanRequestJsxComponents(
       scanRequestCallable(
         {
           ...nested,
-          ...(propsArePlain
+          ...(propsArePlain && !nested.compilerOwnedJsxEventHandlers
             ? {
                 rootParameterRoles: requestCallableParameters(nested.declaration).map(
                   () => 'input' as const,
@@ -16505,6 +16549,10 @@ function requestWireAuthoritiesForExpressionUncached(
     const member = Node.isPropertyAccessExpression(node)
       ? node.getName()
       : staticMemberName(node.getArgumentExpression());
+    const boundProjection = member
+      ? requestWireProjectedStateBinding(receiver, member, state)
+      : undefined;
+    if (boundProjection) return requestWireAuthoritiesForExpression(boundProjection, state);
     const projected = member
       ? requestWireProjectedExpression(receiver, [member], new Set(), 0)
       : undefined;
@@ -17515,11 +17563,31 @@ function requestWireBindingsForJsxComponent(
   inherited: ReadonlyMap<string, RequestWireBinding>,
 ): ReadonlyMap<string, RequestWireBinding> {
   const bindings = new Map(inherited);
-  const parameter = requestCallableParameters(callable.declaration)[0];
-  if (parameter) {
+  // `component({ render(data, state, slots) {} })` receives authored JSX props in `slots`, while
+  // its data record can also carry authored props after runtime composition. Bind both exact
+  // parameters; an ordinary local JSX function receives props only in its first parameter.
+  const parameters = requestCallableParameters(callable.declaration);
+  const boundParameters = callable.compilerOwnedJsxEventHandlers
+    ? [parameters[0], parameters[2]]
+    : [parameters[0]];
+  for (const parameter of boundParameters) {
+    if (!parameter) continue;
     requestWireCollectPatternBindings(parameter.getNameNode(), element, [], bindings);
   }
   return bindings;
+}
+
+function requestWireProjectedStateBinding(
+  expression: Node,
+  member: string,
+  state: RequestWireAnalysisState,
+): Node | undefined {
+  const receiver = unwrapStaticExpression(expression);
+  const symbol = Node.isIdentifier(receiver) ? receiver.getSymbol() : undefined;
+  const binding = symbol ? state.bindings.get(requestSymbolKey(symbol)) : undefined;
+  return binding
+    ? requestWireProjectedExpression(binding.expression, [...binding.path, member], new Set(), 0)
+    : undefined;
 }
 
 function requestWireAuthoritiesForExpressions(
@@ -18391,12 +18459,19 @@ function requestWireCarrierForExpressionUncached(
     return requestWireCarrierForExpression(node.getExpression(), state);
   }
   if (Node.isPropertyAccessExpression(node) || Node.isElementAccessExpression(node)) {
-    const base = requestWireCarrierForExpression(node.getExpression(), state);
-    if (!base) return undefined;
     const member = Node.isPropertyAccessExpression(node)
       ? node.getName()
       : staticMemberName(node.getArgumentExpression());
-    return requestWireCarrierForMember(base, member);
+    if (requestExactComponentSlotProjectionRole(node, state.scopeCallable) === 'request') {
+      return 'request';
+    }
+    const base = requestWireCarrierForExpression(node.getExpression(), state);
+    const memberCarrier = base ? requestWireCarrierForMember(base, member) : undefined;
+    if (memberCarrier) return memberCarrier;
+    const projected = member
+      ? requestWireProjectedStateBinding(node.getExpression(), member, state)
+      : undefined;
+    return projected ? requestWireCarrierForExpression(projected, state) : undefined;
   }
   if (Node.isCallExpression(node)) {
     const callee = unwrapStaticExpression(node.getExpression());
@@ -18414,7 +18489,10 @@ function requestWireCarrierForExpressionUncached(
   const key = symbol ? requestSymbolKey(symbol) : undefined;
   if (key) {
     const binding = state.bindings.get(key);
-    if (binding) return requestWireCarrierForBoundValue(binding, state);
+    if (binding) {
+      const carrier = requestWireCarrierForBoundValue(binding, state);
+      if (carrier) return carrier;
+    }
   }
 
   const rootCarrier = requestWireRootCarrierForIdentifier(node, state.rootCallable);
@@ -19819,6 +19897,12 @@ function requestCallIsKnownSafe(
   ) {
     scanRequestFunctionArguments(call, context);
     return true;
+  }
+  if (callable.compilerOwnedJsxEventHandlers && requestRootRoleIncludesCapability(role)) {
+    // Component slot capability is a conservative unknown, not an ambient method grant. Only the
+    // exact direct framework-owned `slots.request` / `slots.forms` projections above receive a
+    // narrower role; aliases, defaults, rests, children, and custom slots stay fail-closed.
+    return false;
   }
   if (requestRootRoleIncludesCapability(role)) {
     if (!requestRootCapabilityMethodIsPristine(receiver, callable, context.provenance))
@@ -21384,7 +21468,7 @@ function requestCallIsPromiseSettlement(
 
 function requestCallableIsPromiseExecutor(
   callable: RequestCallable,
-  session: RequestProvenanceSession,
+  _session: RequestProvenanceSession,
 ): boolean {
   let expression = callable.declaration;
   while (
@@ -21402,20 +21486,10 @@ function requestCallableIsPromiseExecutor(
   ) {
     return true;
   }
-
-  return callable.declaration
-    .getSourceFile()
-    .getDescendantsOfKind(SyntaxKind.NewExpression)
-    .some((construct) => {
-      if (!requestNewExpressionIsGlobalPromise(construct)) return false;
-      const executor = construct.getArguments()[0];
-      return (
-        !!executor &&
-        resolveRequestCallable(executor, new Set(), 0, session).callables.some((candidate) =>
-          requestNodesAreSame(candidate.declaration, callable.declaration),
-        )
-      );
-    });
+  // Settlement authority belongs to this exact Promise-owned invocation, not to a function
+  // declaration merely referenced by some Promise construction elsewhere in the source file.
+  // Named/aliased executors can also be invoked with authored arguments, so they remain closed.
+  return false;
 }
 
 /**
@@ -25465,28 +25539,14 @@ function requestExactComponentSlotProjectionRole(
     const receiverSymbol = receiver.getSymbol();
     const parameterSymbol = parameterName.getSymbol();
     if (!receiverSymbol || !parameterSymbol || receiverSymbol !== parameterSymbol) return undefined;
-    return node.getName() === 'request' ? 'request' : 'input';
-  }
-  if (!Node.isIdentifier(node)) return undefined;
-  const symbol = node.getSymbol();
-  if (!symbol) return undefined;
-  if (Node.isIdentifier(parameterName)) {
-    return parameterName.getSymbol() === symbol ? 'input' : undefined;
-  }
-  if (!Node.isObjectBindingPattern(parameterName)) return undefined;
-  for (const element of parameterName.getElements()) {
-    if (
-      element.getInitializer() ||
-      element.getDotDotDotToken() ||
-      !Node.isIdentifier(element.getNameNode()) ||
-      element.getNameNode().getSymbol() !== symbol
-    ) {
-      continue;
-    }
-    return staticMemberName(element.getPropertyNameNode() ?? element.getNameNode()) === 'request'
+    return node.getName() === 'request'
       ? 'request'
-      : 'input';
+      : node.getName() === 'forms'
+        ? 'input'
+        : undefined;
   }
+  // Destructuring, aliases, defaults, and rests erase the exact framework-owned projection.
+  // Keep them on the conservative whole-slot capability role.
   return undefined;
 }
 
@@ -26256,8 +26316,9 @@ function requestComponentRenderCallable(callable: RequestCallable): RequestCalla
   return {
     ...callable,
     compilerOwnedJsxEventHandlers: true,
-    ...(parameters.length > 2 ? { rootCarriers: [{ carrier: 'context' as const, index: 2 }] } : {}),
-    rootParameterRoles: parameters.map(() => 'input' as const),
+    rootParameterRoles: parameters.map((_parameter, index) =>
+      index === 2 ? ('capability' as const) : ('input' as const),
+    ),
   };
 }
 
