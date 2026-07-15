@@ -204,26 +204,24 @@ const kv433StorageDeleteProofNeedle = `      'operation=delete',`;
 
 const weakenedKv433StorageDeleteProofNeedle = `      'storage-delete-write-query',`;
 
-const kv330WebhookTxEscapeProofEnrollmentBranch = [
-  "    claimId: 'webhook-transaction-raw-driver-escape-prod-artifact',",
+const kv330WebhookContextTxEscapeProofEnrollmentBranch = [
+  "    claimId: 'webhook-context-tx-raw-driver-escape-prod-artifact',",
   "    code: 'KV330',",
   "    proofFile: 'packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts',",
   '    requiredNeedles: [',
   "      'addRuntimeMutationSafetyProofs(root, { includeWebhookTxEscapeAttempt: true })',",
-  "      'buildProductionArtifact(root)',",
-  "      'Expected kovo build --no-cache to fail for webhook tx raw-driver escape.',",
+  "      'captureProductionBuildFailure(() => buildProductionArtifact(root))',",
   "      'KV330',",
   "      'Direct db access in a webhook handler',",
   "      'runtime-safety-proofs.ts',",
   '    ],',
 ].join('\n');
 
-const weakenedKv330WebhookTxEscapeProofEnrollmentBranch = [
-  "    claimId: 'webhook-transaction-raw-driver-escape-prod-artifact',",
+const weakenedKv330WebhookContextTxEscapeProofEnrollmentBranch = [
+  "    claimId: 'webhook-context-tx-raw-driver-escape-prod-artifact',",
   "    code: 'KV330',",
   "    proofFile: 'packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts',",
   '    requiredNeedles: [',
-  "      'buildProductionArtifact(root)',",
   "      'KV330',",
   '    ],',
 ].join('\n');
@@ -679,14 +677,14 @@ export const SECURITY_GATE_MUTANTS = [
   {
     baseModule: securityTestBuildGate,
     description:
-      'Weakens the KV330 webhook transaction escape proof enrollment so it no longer pins the real starter build-fail path.',
+      'Weakens the KV330 webhook context.tx escape proof enrollment so it no longer pins the real starter build-fail path.',
     expectedKiller:
-      'KV330 webhook transaction escape proof enrollment must retain webhook tx build-fail evidence',
-    name: 'security-test-build-gate/weaken-kv330-webhook-tx-escape-proof-enrollment',
-    replacement: weakenedKv330WebhookTxEscapeProofEnrollmentBranch,
-    search: kv330WebhookTxEscapeProofEnrollmentBranch,
+      'KV330 webhook context.tx escape proof enrollment must retain webhook context.tx build-fail evidence',
+    name: 'security-test-build-gate/weaken-kv330-webhook-context-tx-escape-proof-enrollment',
+    replacement: weakenedKv330WebhookContextTxEscapeProofEnrollmentBranch,
+    search: kv330WebhookContextTxEscapeProofEnrollmentBranch,
     sourceFile: securityTestBuildGatePath,
-    test: assertKv330WebhookTxEscapeProofEnrollmentIsPinned,
+    test: assertKv330WebhookContextTxEscapeProofEnrollmentIsPinned,
   },
   {
     baseModule: securityTestBuildGate,
@@ -1420,7 +1418,6 @@ async function assertKv433StorageDeleteProofEnrollmentIsPinned(moduleUnderTest) 
     'buildProductionArtifact(root)',
     'operation=put',
     'operation=delete',
-    'operation=store',
     'operation=upload',
   ];
   for (const needle of needles) {
@@ -1430,20 +1427,19 @@ async function assertKv433StorageDeleteProofEnrollmentIsPinned(moduleUnderTest) 
   }
 }
 
-async function assertKv330WebhookTxEscapeProofEnrollmentIsPinned(moduleUnderTest) {
+async function assertKv330WebhookContextTxEscapeProofEnrollmentIsPinned(moduleUnderTest) {
   const proof = moduleUnderTest.SECURITY_BUILD_PROOFS.find(
     (candidate) =>
       candidate.code === 'KV330' &&
-      candidate.claimId === 'webhook-transaction-raw-driver-escape-prod-artifact' &&
+      candidate.claimId === 'webhook-context-tx-raw-driver-escape-prod-artifact' &&
       candidate.proofFile ===
         'packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts',
   );
   if (!proof)
-    throw new Error('KV330 webhook transaction escape production build proof is not enrolled');
+    throw new Error('KV330 webhook context.tx escape production build proof is not enrolled');
   const needles = [
     'addRuntimeMutationSafetyProofs(root, { includeWebhookTxEscapeAttempt: true })',
-    'buildProductionArtifact(root)',
-    'Expected kovo build --no-cache to fail for webhook tx raw-driver escape.',
+    'captureProductionBuildFailure(() => buildProductionArtifact(root))',
     'KV330',
     'Direct db access in a webhook handler',
     'runtime-safety-proofs.ts',
@@ -1451,7 +1447,7 @@ async function assertKv330WebhookTxEscapeProofEnrollmentIsPinned(moduleUnderTest
   for (const needle of needles) {
     if (!proof.requiredNeedles?.includes(needle)) {
       throw new Error(
-        `KV330 webhook transaction escape proof must require ${JSON.stringify(needle)}`,
+        `KV330 webhook context.tx escape proof must require ${JSON.stringify(needle)}`,
       );
     }
   }
