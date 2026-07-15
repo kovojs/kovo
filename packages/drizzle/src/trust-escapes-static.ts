@@ -17351,7 +17351,13 @@ function requestWireAuthoritiesForJsxElement(
   if (resolution.callables.length === 0) {
     return [requestOpaqueWireAuthority(element, 'jsx-component')];
   }
-  const authorities: RequestWireAuthority[] = [];
+  // Custom component props and children can influence emitted HTML even when the render body uses
+  // computed keys or provenance exceeds a locally recoverable property path. Census the authored
+  // call boundary as public wire in addition to following the nested render implementation.
+  const authorities: RequestWireAuthority[] = [
+    ...requestWireAuthoritiesForJsxAttributes(opening.getAttributes(), state, false),
+    ...requestWireAuthoritiesForJsxChildren(children, state),
+  ];
   for (const callable of resolution.callables) {
     const bindings = requestWireBindingsForJsxComponent(callable, element, state.bindings);
     const nestedState: RequestWireAnalysisState = {
@@ -17497,6 +17503,7 @@ function requestWireAuthoritiesForReviewedFormErrorMessage(
 function requestWireAuthoritiesForJsxAttributes(
   attributes: readonly import('ts-morph').JsxAttributeLike[],
   state: RequestWireAnalysisState,
+  allowCompilerOwnedEventHandlerElision = true,
 ): RequestWireAuthority[] {
   const authorities: RequestWireAuthority[] = [];
   for (const attribute of attributes) {
@@ -17510,6 +17517,7 @@ function requestWireAuthoritiesForJsxAttributes(
       if (
         expression &&
         !(
+          allowCompilerOwnedEventHandlerElision &&
           state.scopeCallable.compilerOwnedJsxEventHandlers &&
           requestJsxAttributeIsCompilerOwnedEventHandler(attribute) &&
           requestJsxEventHandlerIsAuthoredInCallable(expression, state.scopeCallable, state.session)
@@ -17582,25 +17590,18 @@ function requestWireProjectedStateBinding(
   path: readonly string[],
   state: RequestWireAnalysisState,
   seen: Set<string> = new Set(),
-  depth = 0,
 ): Node | undefined {
-  if (depth > 64) return undefined;
   const node = unwrapStaticExpression(expression);
-  const nodeKey = `state-binding:${requestNodeIdentity(node)}:${path.join('.')}`;
+  const nodeKey = `state-binding:${requestNodeIdentity(node)}`;
   if (seen.has(nodeKey)) return undefined;
   seen.add(nodeKey);
+  if (!requestProvenanceStep(state.session, node)) return undefined;
   if (Node.isPropertyAccessExpression(node) || Node.isElementAccessExpression(node)) {
     const member = Node.isPropertyAccessExpression(node)
       ? staticMemberName(node.getNameNode())
       : staticMemberName(node.getArgumentExpression());
     return member
-      ? requestWireProjectedStateBinding(
-          node.getExpression(),
-          [member, ...path],
-          state,
-          seen,
-          depth + 1,
-        )
+      ? requestWireProjectedStateBinding(node.getExpression(), [member, ...path], state, seen)
       : undefined;
   }
   if (!Node.isIdentifier(node)) return undefined;
@@ -17625,20 +17626,13 @@ function requestWireProjectedStateBinding(
           [...projection.path, ...path],
           state,
           new Set(seen),
-          depth + 1,
         );
         if (projected) return projected;
       }
     }
     const initializer = valueDeclarationInitializer(declaration);
     if (!initializer) continue;
-    const projected = requestWireProjectedStateBinding(
-      initializer,
-      path,
-      state,
-      new Set(seen),
-      depth + 1,
-    );
+    const projected = requestWireProjectedStateBinding(initializer, path, state, new Set(seen));
     if (projected) return projected;
   }
   return undefined;

@@ -4204,6 +4204,106 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
       );
     }
 
+    for (const { invocation, render } of [
+      {
+        invocation: '<Proof headers={request.headers} />',
+        render: `render(data) {
+          const key = 'headers';
+          let authorization = '';
+          data[key].forEach((value, name) => {
+            if (name.toLowerCase() === 'authorization') authorization = value;
+          });
+          return <main>{authorization}</main>;
+        }`,
+      },
+      {
+        invocation: '<Proof bag={{ headers: request.headers }} />',
+        render: `render(data) {
+          const key = 'headers';
+          let authorization = '';
+          data.bag[key].forEach((value, name) => {
+            if (name.toLowerCase() === 'authorization') authorization = value;
+          });
+          return <main>{authorization}</main>;
+        }`,
+      },
+      {
+        invocation: '<Proof key="headers" headers={request.headers} />',
+        render: `render(data) {
+          let authorization = '';
+          data[data.key].forEach((value, name) => {
+            if (name.toLowerCase() === 'authorization') authorization = value;
+          });
+          return <main>{authorization}</main>;
+        }`,
+      },
+    ]) {
+      const facts = sinksFor(`
+        /** @jsxImportSource @kovojs/server */
+        import { component } from '@kovojs/core';
+        import { route } from '@kovojs/server';
+        const Proof = component({ ${render} });
+        route('/', {
+          page(_context, request) { return ${invocation}; },
+        });
+      `);
+      expect(facts, `${render}\n${JSON.stringify(facts)}`).toEqual(
+        expect.arrayContaining([expect.objectContaining({ sink: 'client-wire.request.headers' })]),
+      );
+    }
+
+    const deepMembers = Array.from({ length: 65 }, (_unused, index) => `p${index}`);
+    const deepProp = deepMembers.reduceRight(
+      (value, member) => `{ ${member}: ${value} }`,
+      'request.headers',
+    );
+    const deepComponentFacts = sinksFor(`
+      /** @jsxImportSource @kovojs/server */
+      import { component } from '@kovojs/core';
+      import { route } from '@kovojs/server';
+      const Proof = component({
+        render(data) {
+          let authorization = '';
+          data.bag.${deepMembers.join('.')}.forEach((value, name) => {
+            if (name.toLowerCase() === 'authorization') authorization = value;
+          });
+          return <main>{authorization}</main>;
+        },
+      });
+      route('/', {
+        page(_context, request) { return <Proof bag={${deepProp}} />; },
+      });
+    `);
+    expect(deepComponentFacts, JSON.stringify(deepComponentFacts)).toEqual(
+      expect.arrayContaining([expect.objectContaining({ sink: 'client-wire.request.headers' })]),
+    );
+
+    const componentAliases = Array.from(
+      { length: 64 },
+      (_unused, index) => `const alias${index} = ${index === 0 ? 'data' : `alias${index - 1}`};`,
+    ).join('\n');
+    const aliasedComponentFacts = sinksFor(`
+      /** @jsxImportSource @kovojs/server */
+      import { component } from '@kovojs/core';
+      import { route } from '@kovojs/server';
+      const Proof = component({
+        render(data) {
+          ${componentAliases}
+          let authorization = '';
+          alias63.headers.forEach((value, name) => {
+            if (name.toLowerCase() === 'authorization') authorization = value;
+          });
+          return <main>{authorization}</main>;
+        },
+      });
+      route('/', {
+        page(_context, request) { return <Proof headers={request.headers} />; },
+      });
+    `);
+    expect(aliasedComponentFacts, JSON.stringify(aliasedComponentFacts)).toEqual(
+      expect.arrayContaining([expect.objectContaining({ sink: 'client-wire.request.headers' })]),
+    );
+
     const customSlotChildrenLeak = sinksFor(`
       /** @jsxImportSource @kovojs/server */
       import { component } from '@kovojs/core';
