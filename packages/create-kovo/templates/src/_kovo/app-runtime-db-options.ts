@@ -1,4 +1,8 @@
-import { postgresSchemaModule, type KovoPostgresAppRuntimeOptions } from '@kovojs/server';
+import {
+  postgresAppRuntimeOptions,
+  postgresSchemaModule,
+  type KovoPostgresAppRuntimeOptions,
+} from '@kovojs/server';
 
 import * as schema from '../schema.js';
 
@@ -18,7 +22,7 @@ const SEED_CONTACTS =
  * Side-effect-light runtime config shared by app boot and `kovo db` commands.
  * The CLI imports this object without constructing the database or authentication runtime.
  */
-export const appRuntimeDbOptions = Object.freeze({
+export const appRuntimeDbOptions = postgresAppRuntimeOptions({
   schema: appRuntimeSchema,
   seedSql: SEED_CONTACTS,
 }) satisfies KovoPostgresAppRuntimeOptions;

@@ -152,7 +152,7 @@ export const CREATE_KOVO_REFERENCE = {
       anchor: 'generated-project',
       body: [
         'The scaffold writes the application source, Vite+/Kovo config, test files, README, CI workflow, and database-specific schema/auth/database files for the selected dialect. It also writes `.env`, `.env.example`, and `.gitignore`. By default, it initializes a Git repository after writing files; pass `--disable-git` to skip that step. If the target already sits under a Git or Mercurial repository, `create-kovo` leaves version control to the parent repository.',
-        'The `.env` file contains a per-project random `KOVO_CSRF_SECRET`; `.env` is gitignored, while `.env.example` keeps the deployment placeholder visible and documents the Postgres runtime/admin URL split, PGlite data dir, and driver overrides. The starter auth module fails closed when the secret is missing or still set to the placeholder.',
+        'The `.env` file contains a per-project random `KOVO_CSRF_SECRET`; `.env` is gitignored, while `.env.example` keeps the deployment placeholders visible and documents the required production `BETTER_AUTH_URL`, Postgres runtime/admin URL split, PGlite data dir, and driver overrides. Framework bootstrap loads and pins that environment before generated app modules run, and the Better Auth constructors fail closed when required secrets or production origin are missing or invalid.',
         'SQLite scaffolds are explicit opt-in: pass `--experimental-sqlite` with `--sqlite` or `--dialect sqlite`, or set `KOVO_EXPERIMENTAL_SQLITE=1`. The generated SQLite README repeats that it is a single-principal local-development scaffold, not the Postgres authorization/confidentiality posture.',
       ],
     },
@@ -231,6 +231,7 @@ const templateFiles: readonly TemplateFile[] = [
   'src/components/contacts.tsx',
   'src/components/auth-forms.tsx',
   'src/app.tsx',
+  'src/test-setup.ts',
   'src/app.test.ts',
   'src/endpoint-posture.test.ts',
   'src/theme.ts',
@@ -240,8 +241,9 @@ const templateFiles: readonly TemplateFile[] = [
 // SECURITY (SECURITY_FINDINGS.md M5): every scaffolded app must start with its own
 // strong, secret CSRF HMAC key — never a known constant from the template. We generate
 // a per-project random secret at scaffold time and write it into `.env` (gitignored),
-// while `src/auth.ts` reads `process.env.KOVO_CSRF_SECRET` and fails closed if it is
-// missing or still the placeholder.
+// while framework bootstrap loads and pins the environment before generated app modules run.
+// Better Auth's environment constructors validate the secret and fail closed if it is missing or
+// still the placeholder; app-authored source never reads the secret itself (SPEC §6.6/§10.3).
 export const csrfSecretEnvVar = 'KOVO_CSRF_SECRET';
 export const demoPasswordEnvVar = 'KOVO_DEMO_PASSWORD';
 const csrfSecretPlaceholder = 'replace-with-a-deployed-secret';
@@ -281,6 +283,9 @@ function renderEnvExampleFile(): string {
     '# Copy this file to .env and fill in real secrets before deploying.',
     '# Generate a strong CSRF secret with: openssl rand -base64 32',
     `${csrfSecretEnvVar}=${csrfSecretPlaceholder}`,
+    '',
+    '# Required in production: canonical public HTTPS origin used by Better Auth.',
+    'BETTER_AUTH_URL=https://app.example.com',
     '',
     '# Local default: leave the database URLs unset and Kovo uses embedded PGlite.',
     '# Set KOVO_DATABASE_URL for app boot + kovo db check on external Postgres.',

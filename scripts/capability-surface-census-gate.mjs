@@ -57,6 +57,10 @@ const sqliteRuntime = readRepoFile(
 const postgresAuth = readRepoFile('packages/create-kovo/templates/src/auth.ts');
 const sqliteAuth = readRepoFile('packages/create-kovo/templates/src/auth.sqlite.ts');
 const betterAuthPostgres = readRepoFile('packages/better-auth/src/postgres.ts');
+const betterAuthSqlite = readRepoFile('packages/better-auth/src/sqlite.ts');
+const serverRoot = readRepoFile('packages/server/src/index.ts');
+const postgresCapability = readRepoFile('packages/server/src/internal/postgres-capability.ts');
+const sqliteCapability = readRepoFile('packages/server/src/internal/sqlite-capability.ts');
 const soundSubset = readRepoFile('packages/create-kovo/templates/scripts/check-sound-subset.mjs');
 const sqlSafeHandle = readRepoFile('packages/server/src/sql-safe-handle.ts');
 
@@ -73,7 +77,12 @@ rejectPattern(
 requirePattern(
   postgresRuntime,
   /\bconst\s+authSystemDb\s*=\s*appDatabase\.systemDb\(\{/u,
-  'generated Postgres runtime must mint one module-private opaque auth system capability',
+  'generated Postgres runtime must mint a module-private opaque auth system capability',
+);
+requirePattern(
+  sqliteRuntime,
+  /\bconst\s+authSystemDb\s*=\s*appDatabase\.systemDb\(\{/u,
+  'generated SQLite runtime must mint a module-private opaque auth system capability',
 );
 requirePattern(
   betterAuthPostgres,
@@ -82,28 +91,28 @@ requirePattern(
 );
 requirePattern(
   postgresRuntime,
-  /import\s+\{[^}]*\bcreateBetterAuthPostgresBindings\b[^}]*\}\s+from\s+['"]@kovojs\/better-auth['"]/su,
-  'generated Postgres runtime must route adapter construction through @kovojs/better-auth',
+  /import\s+\{[^}]*\bcreateBetterAuthPostgresBindingsFromEnvironment\b[^}]*\}\s+from\s+['"]@kovojs\/better-auth['"]/su,
+  'generated Postgres runtime must route environment and adapter construction through @kovojs/better-auth',
 );
 requirePattern(
   sqliteRuntime,
-  /\bfunction\s+createAuthAdapter\(\):\s*ReturnType<typeof drizzleAdapter>/u,
-  'generated SQLite auth adapter factory must remain in the framework-owned runtime module',
+  /import\s+\{[^}]*\bcreateBetterAuthSqliteBindingsFromEnvironment\b[^}]*\}\s+from\s+['"]@kovojs\/better-auth['"]/su,
+  'generated SQLite runtime must route environment and adapter construction through @kovojs/better-auth',
 );
 rejectPattern(
   `${postgresRuntime}\n${sqliteRuntime}`,
-  /\bexport\s+function\s+createAuthAdapter\b/u,
-  'generated auth adapter factories must not cross the framework-owned runtime boundary',
+  /\b(?:createAuthAdapter|drizzleAdapter|usePostgresSystemDb|useSqliteSystemDb|betterAuth\s*\(|process\.env|loadEnvFile|betterAuth(?:Postgres|Sqlite)Secret)\b/u,
+  'generated runtimes must not read raw environment values or construct/unwrap raw auth adapters',
 );
 requirePattern(
   postgresRuntime,
-  /\bexport\s+function\s+createAppAuthBindings\([\s\S]{0,1200}?\bcreateBetterAuthPostgresBindings<[\s\S]{0,700}?\bsystemDb:\s*authSystemDb\b/u,
+  /\bexport\s+function\s+createAppAuthBindings\([\s\S]{0,1200}?\bcreateBetterAuthPostgresBindingsFromEnvironment<[\s\S]{0,700}?\bsystemDb:\s*authSystemDb\b/u,
   'generated Postgres runtime must pass only its opaque capability into the sanitized binding constructor',
 );
-rejectPattern(
-  postgresRuntime,
-  /\b(?:drizzleAdapter|usePostgresSystemDb|betterAuth\s*\()/u,
-  'generated Postgres runtime must not construct or unwrap the raw Better Auth adapter directly',
+requirePattern(
+  sqliteRuntime,
+  /\bexport\s+function\s+createAppAuthBindings\([\s\S]{0,1200}?\bcreateBetterAuthSqliteBindingsFromEnvironment<[\s\S]{0,700}?\bsystemDb:\s*authSystemDb\b/u,
+  'generated SQLite runtime must pass only its opaque capability into the sanitized binding constructor',
 );
 requirePattern(
   betterAuthPostgres,
@@ -111,34 +120,74 @@ requirePattern(
   'Better Auth Postgres constructor must return only the frozen sanitized binding record',
 );
 requirePattern(
-  sqliteRuntime,
-  /\bexport\s+function\s+createAppAuthBindings\([\s\S]{0,900}?\bdatabase:\s*createAuthAdapter\(\)/u,
-  'generated SQLite runtime must consume the private adapter inside createAppAuthBindings',
+  betterAuthSqlite,
+  /\buseSqliteSystemDb\(systemDb,\s*\(db\)\s*=>\s*\n?\s*drizzleAdapter\(db,\s*\{\s*provider:\s*'sqlite',\s*schema:\s*pinnedSchema\s*\}\)\s*,?\s*\)/u,
+  'Better Auth SQLite constructor must unwrap the system DB only at the adapter sink',
 );
 requirePattern(
   postgresAuth,
-  /import\s+\{\s*createAppAuthBindings\s*\}\s+from\s+['"]\.\/_kovo\/app-runtime-db\.js['"]/u,
-  'Postgres auth module must import only the sanitized auth-binding factory',
+  /import\s+\{\s*appRuntimeDbReady\s*,\s*createAppAuthBindings\s*\}\s+from\s+['"]\.\/_kovo\/app-runtime-db\.js['"]/u,
+  'Postgres auth module must import only readiness and the sanitized auth-binding factory',
 );
 requirePattern(
   sqliteAuth,
-  /import\s+\{\s*createAppAuthBindings\s*\}\s+from\s+['"]\.\/_kovo\/app-runtime-db\.js['"]/u,
-  'SQLite auth module must import only the sanitized auth-binding factory',
+  /import\s+\{\s*appRuntimeDbReady\s*,\s*createAppAuthBindings\s*\}\s+from\s+['"]\.\/_kovo\/app-runtime-db\.js['"]/u,
+  'SQLite auth module must import only readiness and the sanitized auth-binding factory',
 );
 rejectPattern(
   `${postgresAuth}\n${sqliteAuth}`,
-  /\b(?:appRuntime(?:AuthDb|DbProvider|ReadonlyDb)|createAuthAdapter|betterAuth|drizzleAdapter)\b/u,
-  'auth modules must not import or use raw runtime DB, adapter, or Better Auth capabilities',
+  /\b(?:appRuntime(?:AuthDb|DbProvider|ReadonlyDb)|createAuthAdapter|betterAuth|drizzleAdapter|process\.env|loadEnvFile)\b/u,
+  'auth modules must not import or use raw runtime DB, adapter, Better Auth, or environment capabilities',
+);
+requirePattern(
+  `${postgresAuth}\n${sqliteAuth}`,
+  /\bbetterAuthCsrfFromEnvironment\s*\(\{\s*field:\s*['"]csrf['"]\s*,?\s*\}\)/u,
+  'generated auth modules must use the exact field-only reviewed CSRF environment constructor',
+);
+requirePattern(
+  postgresRuntime,
+  /\bexport\s+const\s+appRuntimeDbProvider\s*=\s*appDatabase\.db\s*;/u,
+  'generated Postgres runtime must export only the opaque app DB provider token',
+);
+requirePattern(
+  sqliteRuntime,
+  /\bexport\s+const\s+appRuntimeDbProvider\s*=\s*appDatabase\.db\s*;/u,
+  'generated SQLite runtime must export only the opaque app DB provider token',
+);
+rejectPattern(
+  serverRoot,
+  /\busePostgresSystemDb\b/u,
+  'the public @kovojs/server root must not export the raw Postgres capability consumer',
+);
+requirePattern(
+  betterAuthPostgres,
+  /import\s+\{\s*usePostgresSystemDb\s*\}\s+from\s+['"]@kovojs\/server\/internal\/postgres-capability['"]/u,
+  'Better Auth Postgres must import the raw capability consumer only from the internal subpath',
+);
+requirePattern(
+  betterAuthSqlite,
+  /import\s+\{\s*useSqliteSystemDb\s*\}\s+from\s+['"]@kovojs\/server\/internal\/sqlite-capability['"]/u,
+  'Better Auth SQLite must import the raw capability consumer only from the internal subpath',
+);
+requirePattern(
+  postgresCapability,
+  /const\s+postgresSystemDbValues\s*=\s*createWitnessWeakMap<[\s\S]{0,3000}?export\s+function\s+usePostgresSystemDb<[\s\S]{0,500}?witnessWeakMapGet\(postgresSystemDbValues,\s*capability\)/u,
+  'the internal Postgres capability entry must own the module-private mint/consume registry',
+);
+requirePattern(
+  sqliteCapability,
+  /const\s+sqliteSystemDbValues\s*=\s*createWitnessWeakMap<[\s\S]{0,2000}?export\s+function\s+useSqliteSystemDb<[\s\S]{0,500}?witnessWeakMapGet\(sqliteSystemDbValues,\s*capability\)/u,
+  'the internal SQLite capability entry must own the module-private mint/consume registry',
 );
 requirePattern(
   soundSubset,
-  /\['src\/auth\.ts',\s+new Set\(\['createAppAuthBindings'\]\)\]/u,
-  'sound-subset allowlist must restrict src/auth.ts to createAppAuthBindings',
+  /\['src\/auth\.ts',\s+new Set\(\['appRuntimeDbReady',\s*'createAppAuthBindings'\]\)\]/u,
+  'sound-subset allowlist must restrict src/auth.ts to readiness and createAppAuthBindings',
 );
 requirePattern(
   soundSubset,
-  /\['src\/auth\.sqlite\.ts',\s+new Set\(\['createAppAuthBindings'\]\)\]/u,
-  'sound-subset allowlist must restrict src/auth.sqlite.ts to createAppAuthBindings',
+  /\['src\/auth\.sqlite\.ts',\s+new Set\(\['appRuntimeDbReady',\s*'createAppAuthBindings'\]\)\]/u,
+  'sound-subset allowlist must restrict src/auth.sqlite.ts to readiness and createAppAuthBindings',
 );
 requirePattern(
   sqlSafeHandle,

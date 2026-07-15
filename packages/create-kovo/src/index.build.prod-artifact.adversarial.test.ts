@@ -707,9 +707,9 @@ function addM1HeaderRedirectCapabilityProof(root: string): void {
       ].join('\n'),
     )
     .replace(
-      'const mutationReplayStore = appRuntimeMutationReplayStore();',
+      'const mutationReplayStore = appRuntimeMutationReplayStore;',
       [
-        'const mutationReplayStore = appRuntimeMutationReplayStore();',
+        'const mutationReplayStore = appRuntimeMutationReplayStore;',
         'const m1CapabilityStorage = createMemoryStorage();',
         "await m1CapabilityStorage.put('receipts/m1.txt', 'm1 capability secret\\n', {",
         "  contentType: 'text/plain',",

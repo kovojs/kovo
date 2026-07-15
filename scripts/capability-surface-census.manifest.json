@@ -4,24 +4,22 @@
     {
       "id": "generated-postgres-auth-adapter",
       "kind": "auth-adapter-db",
-      "authority": "Postgres system DB used only to construct Better Auth's Drizzle adapter",
-      "mint": "packages/better-auth/src/postgres.ts#createBetterAuthPostgresBindings",
-      "publicStatus": "raw adapter private; sanitized constructor public",
+      "authority": "Opaque Postgres system-write capability unwrapped only to construct Better Auth's Drizzle adapter",
+      "mint": "packages/server/src/postgres-runtime.ts#KovoPostgresAppRuntimeDb.systemDb",
+      "publicStatus": "opaque capability type public; raw consumer package-internal; sanitized environment constructor public",
       "allowedConsumers": ["packages/better-auth/src/postgres.ts#createBetterAuthPostgresBindings"],
-      "buildDiagnostic": "packages/create-kovo/templates/scripts/check-sound-subset.mjs permits src/auth.ts to import only the sanitized createAppAuthBindings facade",
-      "evidence": "vp exec pnpm exec vitest --run packages/create-kovo/src/index.test.ts --config ./vite.config.ts"
+      "buildDiagnostic": "capability census and starter sound-subset gates require generated code to pass only authSystemDb into createBetterAuthPostgresBindingsFromEnvironment",
+      "evidence": "packages/server/src/runtime-bootstrap.test.ts proves the packed server mint and packed Better Auth consumer share one private registry"
     },
     {
       "id": "generated-sqlite-auth-adapter",
       "kind": "auth-adapter-db",
-      "authority": "SQLite app DB used only to construct Better Auth's Drizzle adapter",
-      "mint": "packages/create-kovo/templates/src/_kovo/app-runtime-db.sqlite.ts#createAuthAdapter",
-      "publicStatus": "module-private",
-      "allowedConsumers": [
-        "packages/create-kovo/templates/src/_kovo/app-runtime-db.sqlite.ts#createAppAuthBindings"
-      ],
-      "buildDiagnostic": "packages/create-kovo/templates/scripts/check-sound-subset.mjs permits src/auth.sqlite.ts to import only the sanitized createAppAuthBindings facade",
-      "evidence": "vp exec pnpm exec vitest --run packages/create-kovo/src/index.test.ts --config ./vite.config.ts"
+      "authority": "Opaque SQLite system-write capability unwrapped only to construct Better Auth's Drizzle adapter",
+      "mint": "packages/server/src/sqlite.ts#KovoSqliteAppRuntime.systemDb",
+      "publicStatus": "opaque capability type public; raw consumer package-internal; sanitized environment constructor public",
+      "allowedConsumers": ["packages/better-auth/src/sqlite.ts#createBetterAuthSqliteBindings"],
+      "buildDiagnostic": "capability census and starter sound-subset gates require generated code to pass only authSystemDb into createBetterAuthSqliteBindingsFromEnvironment",
+      "evidence": "packages/server/src/runtime-bootstrap.test.ts proves the packed server mint and packed Better Auth consumer share one private registry"
     },
     {
       "id": "generated-postgres-readonly-db",
@@ -36,24 +34,24 @@
     {
       "id": "generated-postgres-request-db-provider",
       "kind": "request-db-provider",
-      "authority": "Postgres request-scoped DB provider consumed by createApp construction",
+      "authority": "Opaque Postgres request-scoped DB provider token consumed by createApp construction",
       "mint": "packages/create-kovo/templates/src/_kovo/app-runtime-db.ts#appRuntimeDbProvider",
-      "publicStatus": "framework-construction-factory",
+      "publicStatus": "non-callable framework-managed provider token",
       "allowedConsumers": ["packages/create-kovo/templates/src/app.tsx"],
       "buildDiagnostic": "packages/create-kovo/templates/scripts/check-sound-subset.mjs only permits appRuntimeDbProvider from src/app.tsx",
-      "evidence": "packages/create-kovo/src/index.test.ts rejects auth.ts importing appRuntimeDbProvider"
+      "evidence": "packages/create-kovo/src/index.test.ts asserts appRuntimeDbProvider is the opaque appDatabase.db token and rejects auth.ts importing it"
     },
     {
       "id": "server-system-db-capability",
       "kind": "system-db",
       "authority": "KovoPostgresAppRuntimeDb.systemDb mints system-principal DB access for framework construction paths",
       "mint": "packages/server/src/postgres-runtime.ts#systemDb",
-      "publicStatus": "runtime-method",
+      "publicStatus": "public write-only mint method and opaque capability type; raw consumer internal subpath only",
       "allowedConsumers": [
-        "generated authSystemDb passed only to @kovojs/better-auth createBetterAuthPostgresBindings and internal framework system paths"
+        "generated authSystemDb passed only to @kovojs/better-auth createBetterAuthPostgresBindingsFromEnvironment and internal framework system paths"
       ],
       "buildDiagnostic": "scripts/capability-surface-census-gate.mjs rejects generated raw system DB exports",
-      "evidence": "scripts/capability-surface-census-gate.mjs scans generated templates for raw systemDb exports"
+      "evidence": "scripts/capability-surface-census-gate.mjs rejects root usePostgresSystemDb exports and scans generated templates for raw systemDb exports/consumers"
     },
     {
       "id": "managed-sql-statement-identity",

@@ -83,6 +83,18 @@ describe('custom runtime bootstrap entries', () => {
       queryStatus: 200,
     });
 
+    const postgresBoundary = runPackedPostgresBoundaryChild(
+      distRoot,
+      fileURLToPath(new URL('../../better-auth/dist/index.mjs', import.meta.url)),
+    );
+    expect(postgresBoundary.status, postgresBoundary.stderr).toBe(0);
+    expect(JSON.parse(postgresBoundary.stdout)).toEqual({
+      bindingKeys: ['seedDemoUser', 'sessionProvider', 'signIn', 'signOut'],
+      bindingsFrozen: true,
+      forgedRejected: true,
+      providerOwnKeys: 0,
+    });
+
     const preloadedBetterAuthInternal = runPackedBetterAuthPreloadChild(
       distRoot,
       betterAuthDistRoot,
@@ -112,7 +124,7 @@ describe('custom runtime bootstrap entries', () => {
       ),
       secretCaptured: false,
     });
-  }, 30_000);
+  }, 60_000);
 
   it('refuses the public request-handler chokepoint when bootstrap is absent', () => {
     const appPath = fileURLToPath(new URL('./app.ts', import.meta.url));
@@ -507,6 +519,9 @@ function runPackedSqliteBoundaryChild(distRoot: string, betterAuthEntry: string)
       requireFromServerTest.resolve('drizzle-orm/sqlite-core'),
     ).href,
     '@kovojs/server': pathToFileURL(join(distRoot, 'index.mjs')).href,
+    '@kovojs/server/internal/csrf': pathToFileURL(join(distRoot, 'internal/csrf.mjs')).href,
+    '@kovojs/server/internal/execution': pathToFileURL(join(distRoot, 'internal/execution.mjs'))
+      .href,
     '@kovojs/server/internal/runtime-environment': pathToFileURL(
       join(distRoot, 'internal/runtime-environment.mjs'),
     ).href,
@@ -535,6 +550,7 @@ registerHooks({
 });
 await import(${JSON.stringify(bootstrapEntry)});
 const server = await import(${JSON.stringify(entries['@kovojs/server'])});
+const execution = await import(${JSON.stringify(entries['@kovojs/server/internal/execution'])});
 const sqlite = await import(${JSON.stringify(entries['@kovojs/server/sqlite'])});
 const betterAuth = await import(${JSON.stringify(betterAuthUrl)});
 const { sqliteTable, text } = await import('drizzle-orm/sqlite-core');
@@ -548,7 +564,9 @@ const runtime = sqlite.createSqliteAppRuntime({
 });
 try {
   const appCsrf = betterAuth.betterAuthCsrfFromEnvironment({ field: 'csrf' });
-  const csrfRequest = { session: { id: 'packed-session' } };
+  const csrfRequest = await execution.resolveLifecycleRequest({}, {
+    sessionProvider: () => ({ id: 'packed-session' }),
+  });
   const packedCsrfToken = server.csrfToken(csrfRequest, appCsrf, { audience: 'auth/sign-in' });
   const bindings = betterAuth.createBetterAuthSqliteBindings({
     baseURL: 'http://localhost:5173',
@@ -623,6 +641,7 @@ function runPackedBetterAuthPreloadChild(
   const secret = 'SUBPATH-WITNESS-SECRET-0123456789abcdef-RAW';
   const entries = {
     '@kovojs/server': pathToFileURL(join(distRoot, 'index.mjs')).href,
+    '@kovojs/server/internal/csrf': pathToFileURL(join(distRoot, 'internal/csrf.mjs')).href,
     '@kovojs/server/internal/execution': pathToFileURL(join(distRoot, 'internal/execution.mjs'))
       .href,
     '@kovojs/server/internal/keyring': pathToFileURL(join(distRoot, 'internal/keyring.mjs')).href,
@@ -713,5 +732,92 @@ process.stdout.write(JSON.stringify({
       encoding: 'utf8',
       env: { ...process.env, BETTER_AUTH_SECRET: secret, NODE_ENV: 'development' },
     },
+  );
+}
+
+function runPackedPostgresBoundaryChild(distRoot: string, betterAuthEntry: string) {
+  const entries = {
+    'drizzle-orm/pg-core': pathToFileURL(requireFromServerTest.resolve('drizzle-orm/pg-core')).href,
+    '@kovojs/server': pathToFileURL(join(distRoot, 'index.mjs')).href,
+    '@kovojs/server/internal/csrf': pathToFileURL(join(distRoot, 'internal/csrf.mjs')).href,
+    '@kovojs/server/internal/keyring': pathToFileURL(join(distRoot, 'internal/keyring.mjs')).href,
+    '@kovojs/server/internal/postgres-capability': pathToFileURL(
+      join(distRoot, 'internal/postgres-capability.mjs'),
+    ).href,
+    '@kovojs/server/internal/runtime-environment': pathToFileURL(
+      join(distRoot, 'internal/runtime-environment.mjs'),
+    ).href,
+  };
+  const bootstrapEntry = pathToFileURL(join(distRoot, 'runtime-bootstrap.mjs')).href;
+  const betterAuthUrl = pathToFileURL(betterAuthEntry).href;
+  const source = `
+import { existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { registerHooks } from 'node:module';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+registerHooks({
+  resolve(specifier, context, nextResolve) {
+    const mapped = ${JSON.stringify(entries)}[specifier];
+    if (mapped) return nextResolve(mapped, context);
+    if (specifier.startsWith('.') && specifier.endsWith('.js') && context.parentURL) {
+      const candidate = new URL(specifier.replace(/\\.js$/, '.ts'), context.parentURL);
+      if (existsSync(candidate)) return nextResolve(candidate.href, context);
+    }
+    return nextResolve(specifier, context);
+  },
+});
+await import(${JSON.stringify(bootstrapEntry)});
+const server = await import(${JSON.stringify(entries['@kovojs/server'])});
+const betterAuth = await import(${JSON.stringify(betterAuthUrl)});
+const { pgTable, text } = await import('drizzle-orm/pg-core');
+const proof = pgTable('kovo_packed_postgres_capability_proof', {
+  id: text('id').primaryKey(),
+});
+const dataDir = mkdtempSync(join(tmpdir(), 'kovo-packed-postgres-capability-'));
+const runtime = server.createPostgresAppRuntimeDb({ dataDir, driver: 'pglite', schema: { proof } });
+const bindingOptions = (systemDb) => ({
+  baseURL: 'http://localhost:5173',
+  csrf: { field: 'csrf', secret: 'packed-csrf-secret-0123456789abcdef', sessionId: () => undefined },
+  mapSession: ({ session, user }) => ({ id: session.id, user: { id: user.id } }),
+  schema: { proof },
+  secret: betterAuth.betterAuthPostgresSecret('packed-auth-secret-0123456789abcdef'),
+  signInAccess: server.publicAccess('packed Better Auth sign-in proof'),
+  signOutAccess: server.publicAccess('packed Better Auth sign-out proof'),
+  systemDb,
+});
+try {
+  await runtime.ready;
+  const bindings = betterAuth.createBetterAuthPostgresBindings(bindingOptions(runtime.systemDb({
+    operation: 'write',
+    reason: 'Packed Better Auth adapter construction proof',
+    surface: 'runtime-bootstrap.test#packed-postgres-auth',
+  })));
+  let forgedRejected = false;
+  try {
+    betterAuth.createBetterAuthPostgresBindings(bindingOptions({}));
+  } catch (error) {
+    forgedRejected = String(error?.message ?? error).includes('KV414');
+  }
+  process.stdout.write(JSON.stringify({
+    bindingKeys: Object.keys(bindings).sort(),
+    bindingsFrozen: Object.isFrozen(bindings),
+    forgedRejected,
+    providerOwnKeys: Reflect.ownKeys(runtime.db).length,
+  }));
+} finally {
+  await runtime.close();
+  rmSync(dataDir, { force: true, recursive: true });
+}
+`;
+  return spawnSync(
+    process.execPath,
+    [
+      '--disable-warning=ExperimentalWarning',
+      '--experimental-transform-types',
+      '--input-type=module',
+      '--eval',
+      source,
+    ],
+    { encoding: 'utf8', env: { ...process.env, NODE_ENV: 'development' } },
   );
 }

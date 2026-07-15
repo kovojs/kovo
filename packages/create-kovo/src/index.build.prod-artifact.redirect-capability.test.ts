@@ -155,9 +155,9 @@ function addRedirectAndCapabilityProof(root: string): void {
   );
   const withStorage = replaceRequired(
     withStorageImports,
-    'const mutationReplayStore = appRuntimeMutationReplayStore();',
+    'const mutationReplayStore = appRuntimeMutationReplayStore;',
     [
-      'const mutationReplayStore = appRuntimeMutationReplayStore();',
+      'const mutationReplayStore = appRuntimeMutationReplayStore;',
       'const capabilityProofStorage = createMemoryStorage();',
       "await capabilityProofStorage.put('receipts/ord_1.txt', 'capability secret\\n', {",
       "  contentType: 'text/plain',",

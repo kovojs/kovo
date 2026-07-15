@@ -12,5 +12,3 @@ export const appTheme = defineTheme({
     cornerSmall: '6px',
   },
 });
-
-export const appThemeCss = appTheme.css;

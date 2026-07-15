@@ -25,6 +25,7 @@ const SECURITY_SURFACE_FILES = new Set([
   'src/mutations.ts',
   'src/queries.ts',
   'src/schema.ts',
+  'src/test-setup.ts',
 ]);
 const SECURITY_SURFACE_ENROLLMENT_MESSAGE =
   'SPEC.md §6.6/§10.2/§10.3 sound subset must enroll the whole starter security surface';
@@ -33,18 +34,18 @@ const RUNTIME_DB_IMPORT_ALLOWLIST = new Map([
     'src/app.tsx',
     new Set(['appRuntimeDbProvider', 'appRuntimeDbReady', 'appRuntimeMutationReplayStore']),
   ],
-  ['src/auth.ts', new Set(['createAppAuthBindings'])],
-  ['src/auth.sqlite.ts', new Set(['createAppAuthBindings'])],
+  ['src/auth.ts', new Set(['appRuntimeDbReady', 'createAppAuthBindings'])],
+  ['src/auth.sqlite.ts', new Set(['appRuntimeDbReady', 'createAppAuthBindings'])],
   ['src/db.ts', new Set(['appRuntimeReadonlyDb'])],
   ['src/db.sqlite.ts', new Set(['appRuntimeReadonlyDb'])],
 ]);
 const RUNTIME_DB_IMPORT_MESSAGE =
   'SPEC.md §6.6 sound subset bans non-type imports of src/_kovo/app-runtime-db or src/_kovo/app-runtime-db-options outside framework-owned starter files';
 const AUTH_BINDING_FACTORY = 'createAppAuthBindings';
-const AUTH_BINDING_SAFE_MEMBERS = new Set(['seedDemoUser', 'sessionProvider', 'signIn', 'signOut']);
+const AUTH_BINDING_SAFE_MEMBERS = new Set(['sessionProvider', 'signIn', 'signOut']);
 const AUTH_BINDING_CONFINEMENT_MESSAGE =
   'SPEC.md §6.6/§10.3 confines the Better Auth instance and privileged adapter to the framework-owned runtime; ' +
-  'auth.ts may export only the returned sanitized session provider, credential mutations, and fixed demo-seed operation';
+  'auth.ts may export only the returned sanitized session provider and credential mutations; demo seeding must be one top-level awaited boot operation after appRuntimeDbReady';
 const QUERY_LOADER_RAW_SQL_MESSAGE =
   'SPEC.md §6.6/§10.2 sound subset bans raw SQL in query loaders on the common path; ' +
   'use Drizzle typed builders or route explicit raw SQL through trustedSql(...) so runtime chokes stay authoritative';
@@ -247,7 +248,11 @@ function reportRuntimeAuthCapabilityUseIfNeeded(ts, node, sourceFile, relativeFi
     const member = ts.isPropertyAccessExpression(node)
       ? node.name.text
       : stringLiteralText(ts, node.argumentExpression);
-    if (member === null || !AUTH_BINDING_SAFE_MEMBERS.has(member)) {
+    if (
+      member === null ||
+      (!AUTH_BINDING_SAFE_MEMBERS.has(member) &&
+        !(member === 'seedDemoUser' && isExactBootSeed(ts, node, sourceFile, runtimeAuth)))
+    ) {
       reportTypeScriptFinding(sourceFile, relativeFile, node, AUTH_BINDING_CONFINEMENT_MESSAGE);
     }
     return;
@@ -312,6 +317,49 @@ function reportRuntimeAuthCapabilityUseIfNeeded(ts, node, sourceFile, relativeFi
     return;
   }
   reportTypeScriptFinding(sourceFile, relativeFile, node, AUTH_BINDING_CONFINEMENT_MESSAGE);
+}
+
+function isExactBootSeed(ts, access, sourceFile, runtimeAuth) {
+  if (!ts.isPropertyAccessExpression(access) || access.name.text !== 'seedDemoUser') return false;
+  const call = access.parent;
+  if (!ts.isCallExpression(call) || call.expression !== access || call.arguments.length !== 0) {
+    return false;
+  }
+  const awaited = call.parent;
+  const statement = awaited && ts.isAwaitExpression(awaited) ? awaited.parent : undefined;
+  if (
+    !awaited ||
+    !statement ||
+    !ts.isExpressionStatement(statement) ||
+    statement.parent !== sourceFile
+  ) {
+    return false;
+  }
+  const index = sourceFile.statements.indexOf(statement);
+  const previous = index > 0 ? sourceFile.statements[index - 1] : undefined;
+  if (
+    !previous ||
+    !ts.isExpressionStatement(previous) ||
+    !ts.isAwaitExpression(previous.expression) ||
+    !ts.isIdentifier(previous.expression.expression) ||
+    previous.expression.expression.text !== 'appRuntimeDbReady'
+  ) {
+    return false;
+  }
+  let seedAccesses = 0;
+  const visit = (node) => {
+    if (
+      ts.isPropertyAccessExpression(node) &&
+      node.name.text === 'seedDemoUser' &&
+      ts.isIdentifier(node.expression) &&
+      runtimeAuth.containers.has(node.expression.text)
+    ) {
+      seedAccesses += 1;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  return seedAccesses === 1;
 }
 
 function resolvesToRuntimeAuthFactory(ts, expression, runtimeAuth) {

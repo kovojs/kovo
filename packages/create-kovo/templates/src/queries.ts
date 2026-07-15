@@ -1,4 +1,4 @@
-import { query, type JsonValue, type QueryLoadContext } from '@kovojs/server';
+import { query, type JsonValue, type QueryLoadContext, type Reader } from '@kovojs/server';
 
 import { appAuthed } from './auth.js';
 import type { AppDb } from './db.js';
@@ -35,11 +35,9 @@ type AppQueryLoadContext = QueryLoadContext<AppQueryRequest, AppDb>;
 export const contactsQuery = query({
   access: [appAuthed],
   async load(_input: unknown, context?: AppQueryLoadContext): Promise<ContactListResult> {
-    if (!context?.db) {
-      throw new Error('contacts query requires the framework-provided context.db');
-    }
+    const db = requireAppQueryDb(context);
     return {
-      items: await context.db
+      items: await db
         .select({
           id: contacts.id,
           name: contacts.name,
@@ -51,3 +49,11 @@ export const contactsQuery = query({
     };
   },
 });
+
+function requireAppQueryDb(context?: AppQueryLoadContext): Reader<AppDb> {
+  const db = context?.db;
+  if (!db) {
+    throw new Error('contacts query requires the framework-provided context.db');
+  }
+  return db;
+}

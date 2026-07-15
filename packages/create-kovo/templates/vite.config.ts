@@ -23,6 +23,10 @@ export default defineConfig({
     },
   },
   test: {
+    // Generated unit tests import the eager app aggregate. Install the test-only verdict shim in a
+    // global setup module so every test observes it before app/auth modules evaluate; production
+    // builds and servers never load this file.
+    setupFiles: ['./src/test-setup.ts'],
     server: {
       deps: {
         external: ['undici'],

@@ -26,6 +26,19 @@ export interface AddContactInput {
 
 const duplicateEmailError = s.object({ email: s.string() });
 
+async function writeContact(
+  db: AppRequest['db'],
+  row: { company: string; email: string; name: string },
+): Promise<void> {
+  const id = crypto.randomUUID();
+  await db.insert(contacts).values({
+    company: row.company,
+    email: row.email,
+    id: serverValue(id, 'server-generated contact id'),
+    name: row.name,
+  });
+}
+
 // One real write: validate input, guard it behind a session, insert a row, and
 // predict the optimistic list update. No-JS clients POST to the typed mutation
 // endpoint and get the refreshed page; `enhance` upgrades the same form to a fragment swap.
@@ -65,11 +78,8 @@ export const addContact = mutation({
     if (existing) {
       return context.fail('DUPLICATE_EMAIL', { email });
     }
-    const id = crypto.randomUUID();
-    await request.db
-      .insert(contacts)
-      .values({ id: serverValue(id, 'server-generated contact id'), name, email, company });
-    return { id };
+    await writeContact(request.db, { name, email, company });
+    return { ok: true };
   },
 });
 

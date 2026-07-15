@@ -349,9 +349,9 @@ function addHeaderSinkProofRoutes(root: string): void {
   );
   const withRawEndpoint = replaceRequired(
     withRespondImport,
-    'const mutationReplayStore = appRuntimeMutationReplayStore();',
+    'const mutationReplayStore = appRuntimeMutationReplayStore;',
     [
-      'const mutationReplayStore = appRuntimeMutationReplayStore();',
+      'const mutationReplayStore = appRuntimeMutationReplayStore;',
       "const rawHeaderProofVerifier = customVerifier('raw-header-proof', ({ headers }) =>",
       "  'get' in headers &&",
       "  typeof headers.get === 'function' &&",

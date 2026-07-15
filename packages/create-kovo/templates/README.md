@@ -75,8 +75,10 @@ emits a Node server under `dist/server` using the preset in `kovo.config.ts`
 (Node by default; uncomment Vercel or Cloudflare). The generated `serve` and
 `start` scripts set `NODE_ENV=production`; keep that posture in your process
 manager so production blocks private-network egress by default, emits `Secure`
-host-bound CSRF cookies, and refuses weak signing secrets. Set
-`KOVO_CSRF_SECRET`/`BETTER_AUTH_SECRET` to strong values in the target environment
+host-bound CSRF cookies, and refuses weak signing secrets. Production also
+requires `BETTER_AUTH_URL` to be the app's canonical public HTTPS origin (for
+example, `https://app.example.com`). Set `KOVO_CSRF_SECRET`/`BETTER_AUTH_SECRET`
+to strong values in the target environment
 (a fresh `KOVO_CSRF_SECRET` is generated into `.env` at scaffold time and is
 gitignored). If you add client islands, configure the `retention` option in
 `kovo.config.ts` once your deploy keeps prior `/c/__v/...` modules and prior-token

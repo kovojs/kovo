@@ -19,14 +19,9 @@ import {
   appSessionProvider,
   appSignIn,
   appSignOut,
-  seedDemoUser,
   type AppRequest,
 } from './auth.js';
-import {
-  appRuntimeDbProvider,
-  appRuntimeDbReady,
-  appRuntimeMutationReplayStore,
-} from './_kovo/app-runtime-db.js';
+import { appRuntimeDbProvider, appRuntimeMutationReplayStore } from './_kovo/app-runtime-db.js';
 import { addContact } from './mutations.js';
 import { contactsQuery } from './queries.js';
 import { appTheme } from './theme.js';
@@ -35,15 +30,11 @@ import { appTheme } from './theme.js';
 // by real Better Auth. `kovo({ app: '/src/app.tsx' })` (vite.config.ts) and `kovo
 // build ./src/app.tsx` both load this default export (SPEC.md §9.5).
 
-// Fail fast on schema/seed errors, then seed the local demo account when the
-// generated .env contains KOVO_DEMO_PASSWORD.
-await appRuntimeDbReady;
-await seedDemoUser();
-
 const stylesheets = [stylesheet('./styles.css', { theme: appTheme })] as const;
+const clientModules = createMemoryVersionedClientModuleRegistry();
 // SPEC §10.3: duplicate same-principal enhanced POSTs reserve and replay through durable
 // system-role Postgres truth, including across process restart and multiple replicas.
-const mutationReplayStore = appRuntimeMutationReplayStore();
+const mutationReplayStore = appRuntimeMutationReplayStore;
 
 const styles = style.create({
   shell: {
@@ -168,7 +159,7 @@ function HomePage({ userName }: { userName: string }): string {
 
 const app = createApp({
   appId: '{{app_id}}',
-  clientModules: createMemoryVersionedClientModuleRegistry(),
+  clientModules,
   csrf: appCsrf,
   db: appRuntimeDbProvider,
   document: { lang: 'en' },

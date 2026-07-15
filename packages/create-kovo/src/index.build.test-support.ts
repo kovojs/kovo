@@ -1901,14 +1901,14 @@ export function addSecretViewEgressProof(root: string): void {
   const runtimeDbPath = join(root, 'src/_kovo/app-runtime-db-options.ts');
   const runtimeDb = replaceRequired(
     readFileSync(runtimeDbPath, 'utf8'),
-    'export const appRuntimeDbOptions = Object.freeze({',
+    'export const appRuntimeDbOptions = postgresAppRuntimeOptions({',
     [
       'const SECRET_VIEW_EGRESS_SEED = [',
       '  \'CREATE OR REPLACE VIEW "account_secret_view" WITH (security_invoker=true) AS SELECT id, "userId", password FROM "account";\',',
       '  \'GRANT SELECT ON "account_secret_view" TO "kovo_reader";\',',
       '];',
       '',
-      'export const appRuntimeDbOptions = Object.freeze({',
+      'export const appRuntimeDbOptions = postgresAppRuntimeOptions({',
     ].join('\n'),
     'secret view proof runtime view DDL',
   );
@@ -2081,7 +2081,7 @@ export function addRuntimeSecretBoundaryProof(root: string): void {
   let runtimeDb = readFileSync(runtimeDbPath, 'utf8');
   runtimeDb = replaceRequired(
     runtimeDb,
-    'export const appRuntimeDbOptions = Object.freeze({',
+    'export const appRuntimeDbOptions = postgresAppRuntimeOptions({',
     [
       'const RUNTIME_SECRET_BOUNDARY_SEED = [',
       "  'INSERT INTO \"runtime_secret_proof\" (id, label, classified) VALUES (\\'s1\\', \\'public label\\', \\'runtime-secret-value\\') ON CONFLICT (id) DO NOTHING;',",
@@ -2095,7 +2095,7 @@ export function addRuntimeSecretBoundaryProof(root: string): void {
       '  \'GRANT SELECT ON "runtime_secret_proof_view" TO "kovo_reader";\',',
       '];',
       '',
-      'export const appRuntimeDbOptions = Object.freeze({',
+      'export const appRuntimeDbOptions = postgresAppRuntimeOptions({',
     ].join('\n'),
     'runtime secret proof seed',
   );
@@ -3741,7 +3741,7 @@ export function addPostgresParanoidPhase5DogfoodProof(root: string): void {
   let runtimeDbOptions = readFileSync(runtimeDbOptionsPath, 'utf8');
   runtimeDbOptions = replaceRequired(
     runtimeDbOptions,
-    'export const appRuntimeDbOptions = Object.freeze({',
+    'export const appRuntimeDbOptions = postgresAppRuntimeOptions({',
     [
       'const PHASE5_PG_PARANOID_SEED = [',
       "  \"INSERT INTO phase5_pg_orders (id, user_id, label, classified) VALUES ('phase5-pg-demo', 'demo-user', 'owner-visible', 'phase5-pg-secret-demo'), ('phase5-pg-other', 'other-user', 'cross-owner-hidden', 'phase5-pg-secret-other') ON CONFLICT (id) DO NOTHING;\",",
@@ -3751,7 +3751,7 @@ export function addPostgresParanoidPhase5DogfoodProof(root: string): void {
       '  "GRANT SELECT ON phase5_pg_order_view TO kovo_reader;",',
       '];',
       '',
-      'export const appRuntimeDbOptions = Object.freeze({',
+      'export const appRuntimeDbOptions = postgresAppRuntimeOptions({',
     ].join('\n'),
     'phase 5 postgres seed const',
   );
@@ -3766,10 +3766,8 @@ export function addPostgresParanoidPhase5DogfoodProof(root: string): void {
   const runtimeDbPath = join(root, 'src/_kovo/app-runtime-db.ts');
   let runtimeDb = readFileSync(runtimeDbPath, 'utf8');
   const mutationReplayExport = [
-    '/** Durable SPEC §10.3 mutation replay truth, reachable only through the framework system role. */',
-    'export function appRuntimeMutationReplayStore(): MutationReplayStore {',
-    '  return appDatabase.mutationReplayStore;',
-    '}',
+    '/** Durable SPEC §10.3 replay token; opaque and non-callable in app-authored modules. */',
+    'export const appRuntimeMutationReplayStore: MutationReplayStore = appDatabase.mutationReplayStore;',
   ].join('\n');
   runtimeDb = replaceRequired(
     runtimeDb,
@@ -3777,10 +3775,8 @@ export function addPostgresParanoidPhase5DogfoodProof(root: string): void {
     [
       mutationReplayExport,
       '',
-      '/** Durable SPEC §10.3 webhook replay truth for the Phase 5 production proof. */',
-      'export function appRuntimeWebhookReplayStore() {',
-      '  return appDatabase.webhookReplayStore;',
-      '}',
+      '/** Durable SPEC §10.3 webhook replay token for the Phase 5 production proof. */',
+      'export const appRuntimeWebhookReplayStore = appDatabase.webhookReplayStore;',
     ].join('\n'),
     'phase 5 postgres durable webhook replay export',
   );
@@ -4089,7 +4085,7 @@ export function addPostgresParanoidPhase5DogfoodProof(root: string): void {
       "  method: 'GET', reason: 'phase 5 postgres status proof', response: { appOwnedSafety: true, body: 'json', cache: 'no-store' },",
       '});',
       '',
-      'const webhookReplayStore = appRuntimeWebhookReplayStore();',
+      'const webhookReplayStore = appRuntimeWebhookReplayStore;',
       "export const phase5PgWebhook = webhook('/webhooks/phase5-pg-read', {",
       '  access: publicProof, idempotency: (input) => input.id, input: s.object({ id: s.string() }), replayStore: webhookReplayStore, verify: "none", verifyJustification: "local phase 5 postgres webhook proof", writes: [eventDomain],',
       '  async handler(input, context) {',
@@ -4227,7 +4223,7 @@ export function addPostgresParanoidFollowup8Shapes(root: string): void {
   );
   proof = replaceRequired(
     proof,
-    'const webhookReplayStore = appRuntimeWebhookReplayStore();',
+    'const webhookReplayStore = appRuntimeWebhookReplayStore;',
     [
       "export const phase5PgReferenceMembershipEndpoint = endpoint('/api/phase5-pg-reference-memberships', {",
       '  access: publicProof, auth: { justification: "public phase 5 postgres reference-membership proof", kind: "none" }, csrf: false, csrfJustification: "read-only phase 5 postgres reference-membership proof", db: true,',
@@ -4245,7 +4241,7 @@ export function addPostgresParanoidFollowup8Shapes(root: string): void {
       "  method: 'GET', reason: 'phase 5 postgres reference-membership proof', response: { appOwnedSafety: true, body: 'json', cache: 'no-store' },",
       '});',
       '',
-      'const webhookReplayStore = appRuntimeWebhookReplayStore();',
+      'const webhookReplayStore = appRuntimeWebhookReplayStore;',
     ].join('\n'),
     'phase 5 postgres followup 8 endpoint insertion',
   );
@@ -4299,152 +4295,6 @@ export async function signInDemoUser(
   mergeCookies(jar, signIn.headers.getSetCookie());
   const signInBody = await signIn.text();
   expect(signIn.status, `${signInBody}\n${output()}`).toBe(303);
-}
-
-/**
- * Add a real Better Auth sign-up mutation/form to a generated acceptance fixture.
- * Production starter boot must not seed the local demo credential, so tests that
- * need an authenticated principal provision one through the same CSRF-protected
- * credential mutation an application would expose explicitly.
- */
-export function addDemoUserProvisioningFlow(root: string): void {
-  const runtimeDbPath = join(root, 'src/_kovo/app-runtime-db.ts');
-  let runtimeDb = readFileSync(runtimeDbPath, 'utf8');
-  runtimeDb = replaceRequired(
-    runtimeDb,
-    '  betterAuthSignInEmailMutation,\n  betterAuthSignOutMutation,',
-    '  betterAuthSignInEmailMutation,\n  betterAuthSignOutMutation,\n  betterAuthSignUpEmailMutation,',
-    'demo-user provisioning Better Auth import',
-  );
-  runtimeDb = replaceRequired(
-    runtimeDb,
-    '  signInAccess: AccessDecision;\n  signOutAccess: AccessDecision;',
-    '  signInAccess: AccessDecision;\n  signOutAccess: AccessDecision;\n  signUpAccess: AccessDecision;',
-    'demo-user provisioning auth options',
-  );
-  runtimeDb = replaceRequired(
-    runtimeDb,
-    '  const signOut = betterAuthSignOutMutation<',
-    [
-      "  const signUp = betterAuthSignUpEmailMutation<'auth/sign-up', AppRequest>(auth, {",
-      '    access: options.signUpAccess,',
-      '    csrf: options.csrf,',
-      "    defaultRedirectTo: '/',",
-      '  });',
-      '  const signOut = betterAuthSignOutMutation<',
-    ].join('\n'),
-    'demo-user provisioning sign-up mutation',
-  );
-  runtimeDb = replaceRequired(
-    runtimeDb,
-    'return Object.freeze({ seedDemoUser, sessionProvider, signIn, signOut });',
-    'return Object.freeze({ seedDemoUser, sessionProvider, signIn, signOut, signUp });',
-    'demo-user provisioning binding export',
-  );
-  writeFileSync(runtimeDbPath, runtimeDb, 'utf8');
-
-  const authPath = join(root, 'src/auth.ts');
-  let auth = readFileSync(authPath, 'utf8');
-  auth = replaceRequired(
-    auth,
-    "  signInAccess: publicAccess('sign-in runs before authentication'),\n  signOutAccess: [appAuthed],",
-    "  signInAccess: publicAccess('sign-in runs before authentication'),\n  signOutAccess: [appAuthed],\n  signUpAccess: publicAccess('acceptance fixture provisions its principal explicitly'),",
-    'demo-user provisioning access posture',
-  );
-  auth = replaceRequired(
-    auth,
-    'export const appSignOut = authBindings.signOut;',
-    'export const appSignOut = authBindings.signOut;\nexport const appSignUp = authBindings.signUp;',
-    'demo-user provisioning authored export',
-  );
-  writeFileSync(authPath, auth, 'utf8');
-
-  const formsPath = join(root, 'src/components/auth-forms.tsx');
-  let forms = readFileSync(formsPath, 'utf8');
-  forms = replaceRequired(
-    forms,
-    "import { appSignIn, appSignOut } from '../auth.js';",
-    "import { appSignIn, appSignOut, appSignUp } from '../auth.js';",
-    'demo-user provisioning form import',
-  );
-  forms += [
-    '',
-    'export function DemoUserProvisioningForm(): string {',
-    '  return (',
-    '    <form mutation={appSignUp}>',
-    '      <input name="email" type="email" />',
-    '      <input name="name" type="text" />',
-    '      <input name="password" type="password" />',
-    '      <input name="next" type="hidden" value="/" />',
-    '      <button type="submit">Provision acceptance user</button>',
-    '    </form>',
-    '  );',
-    '}',
-    '',
-  ].join('\n');
-  writeFileSync(formsPath, forms, 'utf8');
-
-  const appPath = join(root, 'src/app.tsx');
-  let app = readFileSync(appPath, 'utf8');
-  app = replaceRequired(
-    app,
-    "import { LoginForm, SignOutForm } from './components/auth-forms.js';",
-    "import { DemoUserProvisioningForm, LoginForm, SignOutForm } from './components/auth-forms.js';",
-    'demo-user provisioning app form import',
-  );
-  app = replaceRequired(
-    app,
-    '  appSignIn,\n  appSignOut,',
-    '  appSignIn,\n  appSignOut,\n  appSignUp,',
-    'demo-user provisioning app auth import',
-  );
-  app = appendArrayEntry(app, 'mutations', 'appSignUp');
-  app = replaceRequired(
-    app,
-    '            <LoginForm />',
-    '            <LoginForm />\n            <DemoUserProvisioningForm />',
-    'demo-user provisioning login route',
-  );
-  writeFileSync(appPath, app, 'utf8');
-}
-
-export async function provisionDemoUser(
-  root: string,
-  origin: string,
-  output: () => string,
-): Promise<void> {
-  await fetchTextWhenReady(`${origin}/login`, output);
-  const jar = new Map<string, string>();
-  const loginResponse = await fetch(`${origin}/login`);
-  mergeCookies(jar, loginResponse.headers.getSetCookie());
-  const loginHtml = await loginResponse.text();
-  const signUpForm = formHtmlByAction(loginHtml, '/_m/auth/sign-up');
-  const csrf = fieldValue(signUpForm, 'csrf');
-  const demoPassword =
-    new RegExp(`^${demoPasswordEnvVar}=(.+)$`, 'm').exec(
-      readFileSync(join(root, '.env'), 'utf8'),
-    )?.[1] ?? '';
-  expect(csrf).toBeTruthy();
-  expect(demoPassword).toBeTruthy();
-
-  const signUp = await fetch(`${origin}/_m/auth/sign-up`, {
-    body: new URLSearchParams({
-      csrf,
-      email: 'demo@example.com',
-      name: 'Demo User',
-      next: '/',
-      password: demoPassword,
-    }),
-    headers: {
-      'content-type': 'application/x-www-form-urlencoded',
-      cookie: cookieHeader(jar),
-      origin,
-    },
-    method: 'POST',
-    redirect: 'manual',
-  });
-  const signUpBody = await signUp.text();
-  expect(signUp.status, `${signUpBody}\n${output()}`).toBe(303);
 }
 
 export function execFileSyncErrorOutput(error: unknown): string {

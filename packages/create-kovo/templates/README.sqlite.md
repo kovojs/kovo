@@ -64,8 +64,9 @@ shape.
 `kovo build ./src/app.tsx` reruns TypeScript and Kovo graph verification, then
 emits a self-contained server under `dist/server` using the preset in
 `kovo.config.ts` (Node by default; uncomment Vercel or Cloudflare). Set
-`KOVO_CSRF_SECRET`/`BETTER_AUTH_SECRET` to strong values in the target
-environment (a fresh `KOVO_CSRF_SECRET` is generated into `.env` at scaffold time
+`BETTER_AUTH_URL` to the app's canonical public HTTPS origin in production (for
+example, `https://app.example.com`), and set `KOVO_CSRF_SECRET`/`BETTER_AUTH_SECRET`
+to strong values in the target environment (a fresh `KOVO_CSRF_SECRET` is generated into `.env` at scaffold time
 and is gitignored). If you add client islands, configure the `retention` option in
 `kovo.config.ts` once your deploy keeps prior `/c/__v/...` modules and prior-token
 `/_q` reads available for at least 24 hours; otherwise `build:prod` fails KV417

@@ -17,13 +17,11 @@ import {
   withRepoBinOnPath,
 } from './index.test-support.js';
 import {
-  addDemoUserProvisioningFlow,
   attributeValue,
   buildReusableProductionArtifact,
   elementOpeningTagByAttribute,
   fieldValue,
   formHtmlByAction,
-  provisionDemoUser,
   signInDemoUser,
 } from './index.build.test-support.js';
 
@@ -178,7 +176,6 @@ describe('create-kovo starter (build integration: production contact artifacts)'
     try {
       writeKovoProject(root, { dialect: 'sqlite', name: 'Prod SQLite Add Contact Proof' });
       linkStarterBuildDependencies(root);
-      addDemoUserProvisioningFlow(root);
 
       buildReusableProductionArtifact(root);
 
@@ -196,7 +193,6 @@ describe('create-kovo starter (build integration: production contact artifacts)'
       const origin = `http://127.0.0.1:${port}`;
       const jar = new Map<string, string>();
 
-      await provisionDemoUser(root, origin, output);
       await signInDemoUser(root, origin, jar, output);
       const homeResponse = await fetch(`${origin}/`, {
         headers: { cookie: cookieHeader(jar) },

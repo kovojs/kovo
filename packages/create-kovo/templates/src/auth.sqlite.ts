@@ -1,17 +1,8 @@
-import { authed } from '@kovojs/better-auth';
-import { publicAccess, s, session, type CsrfOptions } from '@kovojs/server';
+import { authed, betterAuthCsrfFromEnvironment } from '@kovojs/better-auth';
+import { publicAccess, s, session } from '@kovojs/server';
 
-import { createAppAuthBindings } from './_kovo/app-runtime-db.js';
+import { appRuntimeDbReady, createAppAuthBindings } from './_kovo/app-runtime-db.js';
 import type { AppDb } from './db.js';
-
-// Load .env into process.env for runtimes that don't do it automatically (plain
-// `node`, the dev/test servers). In production, real env vars are already set, so
-// a missing .env is fine.
-try {
-  process.loadEnvFile?.();
-} catch {
-  // No .env file present — rely on the ambient environment.
-}
 
 // Real Better Auth is instantiated inside the framework-owned `_kovo` runtime module.
 // This app-authored module receives only sanitized session and credential-mutation
@@ -31,28 +22,13 @@ export interface AppRequest {
   session?: AppSession | null;
 }
 
-// The CSRF HMAC key. create-kovo writes a fresh per-project secret into .env;
-// fail closed rather than ship a known constant (SPEC.md §6.6).
-function requireAuthSecret(): string {
-  const secret = process.env.BETTER_AUTH_SECRET ?? process.env.KOVO_CSRF_SECRET;
-  if (!secret || secret === 'replace-with-a-deployed-secret') {
-    throw new Error(
-      'Set BETTER_AUTH_SECRET (or KOVO_CSRF_SECRET) to a strong random value (e.g. `openssl rand -base64 32`).',
-    );
-  }
-  return secret;
-}
-
-export const appCsrf = {
+// Framework bootstrap loads and pins the deployment environment before app modules run. The
+// constructor validates the CSRF secret and returns only its opaque, retained-config derivation.
+// Session/anonymous binding is package-owned; app source receives no signer or binding callback
+// (SPEC §6.6/§10.3).
+export const appCsrf = betterAuthCsrfFromEnvironment({
   field: 'csrf',
-  secret: requireAuthSecret(),
-  sessionId(request: AppRequest) {
-    // Once signed in, bind the token to the session. Before sign-in, return no
-    // app-owned binding so Kovo uses its framework-owned signed anonymous cookie
-    // for login forms (SPEC.md §6.6).
-    return request.session?.id ?? request.authCsrfId ?? undefined;
-  },
-} satisfies CsrfOptions<AppRequest>;
+});
 
 export const appSession = session(
   s.object({
@@ -69,9 +45,7 @@ export const appSession = session(
 export const appAuthed = authed<AppRequest>();
 
 const authBindings = createAppAuthBindings({
-  baseURL: process.env.BETTER_AUTH_URL ?? 'http://localhost:5173',
   csrf: appCsrf,
-  secret: requireAuthSecret(),
   signInAccess: publicAccess('sign-in runs before authentication'),
   signOutAccess: [appAuthed],
 });
@@ -79,4 +53,7 @@ const authBindings = createAppAuthBindings({
 export const appSessionProvider = appSession.provider(authBindings.sessionProvider);
 export const appSignIn = authBindings.signIn;
 export const appSignOut = authBindings.signOut;
-export const seedDemoUser = authBindings.seedDemoUser;
+// ESM evaluates this module once before app.tsx. Keep privileged demo-user setup as boot-only
+// top-level work and export no repeatable system-DB callable (SPEC §6.6/§10.3).
+await appRuntimeDbReady;
+await authBindings.seedDemoUser();

@@ -7,23 +7,17 @@ import {
   type MutationReplayStore,
 } from '@kovojs/server';
 
-import * as schema from '../schema.js';
+import { account, authSchema, contacts, session, user, verification } from '../schema.js';
 import type { AppReadonlyDb } from '../db.js';
 import type { AppRequest, AppSession } from '../auth.js';
 
 // SPEC §6.6/§10.3: generated source carries only declarative Drizzle tables, structured seed
 // rows, and opaque Kovo capabilities. Filesystem paths, native SQLite clients, Drizzle construction,
 // raw SQL/DDL, and Better Auth adapter authority remain inside first-party package boundaries.
-const APP_TABLES = [
-  schema.contacts,
-  schema.user,
-  schema.session,
-  schema.account,
-  schema.verification,
-] as const;
+const APP_TABLES = [contacts, user, session, account, verification] as const;
 const APP_SEED = [
   {
-    table: schema.contacts,
+    table: contacts,
     rows: [
       {
         company: 'Analytical Engines',
@@ -56,10 +50,8 @@ const authSystemDb = appDatabase.systemDb({
 
 export { declareSecretReadCapability };
 
-/** Volatile local-development mutation replay truth; production createApp() rejects it. */
-export function appRuntimeMutationReplayStore(): MutationReplayStore {
-  return appDatabase.mutationReplayStore;
-}
+/** Volatile local-development replay token; opaque and non-callable in app-authored modules. */
+export const appRuntimeMutationReplayStore: MutationReplayStore = appDatabase.mutationReplayStore;
 
 interface AppAuthBindingOptions {
   csrf: CsrfOptions<AppRequest>;
@@ -84,7 +76,7 @@ export function createAppAuthBindings(options: AppAuthBindingOptions) {
       id: authSession.id,
       user: { email: user.email, id: user.id, name: user.name },
     }),
-    schema: schema.authSchema,
+    schema: authSchema,
     signInAccess: options.signInAccess,
     signOutAccess: options.signOutAccess,
     systemDb: authSystemDb,
