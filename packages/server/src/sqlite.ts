@@ -323,11 +323,12 @@ export function createSqliteAppRuntime(
     ]);
     assertSqliteNativeDatabase(nativeDatabase, nativeControls);
     const client = createPinnedSqliteClient(nativeDatabase, nativeControls);
+    const transactionDatabase = nativeDatabase;
     registerFrameworkSqliteTransactionFacade(
       client,
-      nativeDatabase,
+      transactionDatabase,
       nativeControls.databaseExec,
-      () => sqliteNativeDatabaseInTransaction(nativeDatabase),
+      () => sqliteNativeDatabaseInTransaction(transactionDatabase),
     );
     witnessReflectApply(nativeControls.databaseExec, nativeDatabase, [
       'PRAGMA foreign_keys = ON; PRAGMA temp_store = MEMORY;',
