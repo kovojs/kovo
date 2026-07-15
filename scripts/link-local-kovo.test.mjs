@@ -24,7 +24,7 @@ function writeJson(filePath, value) {
 }
 
 describe('link-local-kovo', () => {
-  it('rewrites direct @kovojs icons and headless-ui dependencies to local links', () => {
+  it('rewrites direct Kovo packages and Drizzle to identity-safe local links', () => {
     const appRoot = tempDir('kovo-link-local-app-');
     const kovoRoot = tempDir('kovo-link-local-repo-');
     writeJson(path.join(appRoot, 'package.json'), {
@@ -32,6 +32,7 @@ describe('link-local-kovo', () => {
         '@kovojs/headless-ui': 'workspace:*',
         '@kovojs/icons': 'workspace:*',
         '@kovojs/ui': 'workspace:*',
+        'drizzle-orm': '1.0.0-rc.4',
       },
       devDependencies: {
         '@kovojs/core': 'workspace:*',
@@ -42,6 +43,10 @@ describe('link-local-kovo', () => {
         name: `@kovojs/${leaf}`,
       });
     }
+    writeJson(path.join(kovoRoot, 'packages/server/node_modules/drizzle-orm/package.json'), {
+      name: 'drizzle-orm',
+      version: '1.0.0-rc.4',
+    });
 
     execFileSync('node', [path.resolve('scripts/link-local-kovo.mjs'), appRoot, kovoRoot], {
       cwd: path.resolve('.'),
@@ -57,6 +62,9 @@ describe('link-local-kovo', () => {
     );
     expect(appPackage.dependencies['@kovojs/ui']).toMatch(
       /^link:\.\.\/kovo-link-local-repo-.*\/packages\/ui$/,
+    );
+    expect(appPackage.dependencies['drizzle-orm']).toMatch(
+      /^link:\.\.\/kovo-link-local-repo-.*\/packages\/server\/node_modules\/drizzle-orm$/,
     );
     expect(appPackage.devDependencies['@kovojs/core']).toMatch(
       /^link:\.\.\/kovo-link-local-repo-.*\/packages\/core$/,

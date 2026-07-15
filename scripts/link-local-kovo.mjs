@@ -43,6 +43,12 @@ for (const field of ['dependencies', 'devDependencies']) {
     if (!(packageName in deps)) continue;
     deps[packageName] = localPackageSpec(appRoot, kovoRoot, packageName);
   }
+  // SPEC §6.6/§10.3: the linked server's managed Drizzle handle and app-authored tables must use
+  // one physical Drizzle identity. Its fluent builders contain private fields, so independently
+  // installed copies at the same version are not type-compatible.
+  if ('drizzle-orm' in deps) {
+    deps['drizzle-orm'] = localDrizzleSpec(appRoot, kovoRoot);
+  }
 }
 
 writeFileSync(realPackageJsonPath, `${JSON.stringify(packageJson, null, 2)}\n`, 'utf8');
@@ -55,6 +61,16 @@ writeFileSync(
 function localPackageSpec(appRoot, kovoRoot, packageName) {
   const leaf = packageName.slice('@kovojs/'.length);
   return `link:${slashPath(relative(appRoot, resolve(kovoRoot, 'packages', leaf)))}`;
+}
+
+function localDrizzleSpec(appRoot, kovoRoot) {
+  const drizzleRoot = resolve(kovoRoot, 'packages/server/node_modules/drizzle-orm');
+  if (!existsSync(drizzleRoot)) {
+    fail(
+      `No monorepo Drizzle installation found at ${drizzleRoot}; run \`vp install --frozen-lockfile\` in ${kovoRoot} first.`,
+    );
+  }
+  return `link:${slashPath(relative(appRoot, realpathSync(drizzleRoot)))}`;
 }
 
 function slashPath(path) {
