@@ -37,6 +37,12 @@ describe('public SQLite runtime boundary (SPEC §6.6/§10.3)', () => {
     expect(JSON.parse(development.stdout)).toEqual({ created: true });
   });
 
+  it('pins native driver controls at framework-module evaluation before the first runtime call', () => {
+    const result = runSqliteNativeDriverOrderChild();
+    expect(result.status, result.stderr).toBe(0);
+    expect(JSON.parse(result.stdout)).toEqual({ created: true, poisonHits: 0 });
+  });
+
   it('keeps the main database and SQLite temporary storage in memory', () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {});
     const schema = runtimeSchema(`kovo_memory_posture_${Date.now()}`);
@@ -993,6 +999,88 @@ if (process.env.NODE_ENV === 'production') {
       cwd: fileURLToPath(new URL('../../..', import.meta.url)),
       encoding: 'utf8',
       env: { ...process.env, NODE_ENV: posture },
+    },
+  );
+}
+
+function runSqliteNativeDriverOrderChild() {
+  const sqliteUrl = pathToFileURL(fileURLToPath(new URL('./sqlite.ts', import.meta.url))).href;
+  const kovoDrizzleUrl = pathToFileURL(
+    fileURLToPath(new URL('../../drizzle/src/runtime.ts', import.meta.url)),
+  ).href;
+  const drizzleSqliteUrl = pathToFileURL(sqliteTestRequire.resolve('drizzle-orm/sqlite-core')).href;
+  const requireAnchor = fileURLToPath(import.meta.url);
+  const source = `
+import { existsSync } from 'node:fs';
+import { createRequire, registerHooks } from 'node:module';
+registerHooks({
+  resolve(specifier, context, nextResolve) {
+    if (specifier.startsWith('.') && specifier.endsWith('.js') && context.parentURL) {
+      const candidate = new URL(specifier.replace(/\\.js$/, '.ts'), context.parentURL);
+      if (existsSync(candidate)) return nextResolve(candidate.href, context);
+    }
+    return nextResolve(specifier, context);
+  },
+});
+// Import the framework boundary first. SPEC §6.6 rule 6 requires this evaluation to capture the
+// native addon controls before any body in the importing authored module can execute.
+const sqlite = await import(${JSON.stringify(sqliteUrl)});
+const require = createRequire(${JSON.stringify(requireAnchor)});
+const binding = require.resolve('better-sqlite3/build/Release/better_sqlite3.node');
+const addon = require(binding);
+const targets = [
+  [addon.Database.prototype, 'close'],
+  [addon.Database.prototype, 'exec'],
+  [addon.Database.prototype, 'prepare'],
+  [addon.Statement.prototype, 'all'],
+  [addon.Statement.prototype, 'columns'],
+  [addon.Statement.prototype, 'get'],
+  [addon.Statement.prototype, 'raw'],
+  [addon.Statement.prototype, 'run'],
+].map(([owner, property]) => [owner, property, Object.getOwnPropertyDescriptor(owner, property)]);
+let poisonHits = 0;
+for (const [owner, property, descriptor] of targets) {
+  Object.defineProperty(owner, property, {
+    ...descriptor,
+    value() {
+      poisonHits += 1;
+      throw new Error('pre-call native addon poison reached: ' + property);
+    },
+  });
+}
+let runtime;
+try {
+  const { kovo } = await import(${JSON.stringify(kovoDrizzleUrl)});
+  const { sqliteTable, text } = await import(${JSON.stringify(drizzleSqliteUrl)});
+  const table = sqliteTable(
+    'kovo_native_driver_order_proof',
+    { id: text('id').primaryKey() },
+    kovo({ domain: 'kovo_native_driver_order_proof', key: 'id' }),
+  );
+  runtime = sqlite.createSqliteAppRuntime({ tables: [table] });
+  runtime.close();
+  runtime = undefined;
+} finally {
+  runtime?.close();
+  for (const [owner, property, descriptor] of targets) {
+    Object.defineProperty(owner, property, descriptor);
+  }
+}
+process.stdout.write(JSON.stringify({ created: true, poisonHits }));
+`;
+  return spawnSync(
+    process.execPath,
+    [
+      '--disable-warning=ExperimentalWarning',
+      '--experimental-transform-types',
+      '--input-type=module',
+      '--eval',
+      source,
+    ],
+    {
+      cwd: fileURLToPath(new URL('../../..', import.meta.url)),
+      encoding: 'utf8',
+      env: { ...process.env, NODE_ENV: 'development' },
     },
   );
 }

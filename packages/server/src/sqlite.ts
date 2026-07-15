@@ -124,7 +124,6 @@ const SQLITE_MAX_SEED_CELLS = 100_000;
 const SQLITE_RUNTIME_WARNING =
   'Kovo SQLite starter is experimental and single-principal only: SQLite has no engine role/RLS layer, so Kovo owner scoping is not enforced. Use the default PGlite/Postgres runtime for multi-tenant authorization.';
 let sqliteRuntimeWarningPrinted = false;
-let sqliteNativeDriverControls: Readonly<SqliteNativeDriverControls> | undefined;
 
 /** A primitive accepted by the parameterized SQLite starter seed path. */
 export type KovoSqliteSeedValue = string | number | bigint | boolean | null;
@@ -258,6 +257,12 @@ interface SqliteTransactionStatements {
   readonly savepoint: SqlitePinnedStatement;
 }
 
+// SPEC §6.6 rule 6: capture the exact native driver constructors and finite method controls while
+// the framework SQLite module is evaluating, before any importing authored module body can run.
+// This loads and pins the addon only; database authority is still created later, after compiler
+// metadata and authored table snapshots have been validated by createSqliteAppRuntime().
+const sqliteNativeDriverControls = pinSqliteNativeDriverControls();
+
 /**
  * Create the opt-in SQLite starter runtime without giving generated source filesystem, native
  * driver, raw SQL, or database-construction authority.
@@ -283,10 +288,10 @@ export function createSqliteAppRuntime(
   // second Drizzle config extraction below (which may evaluate authored FK/extra-config callbacks)
   // and before native database authority is created.
   const metadata = runtimeDbMetadataForSchema(tableValues);
-  // Pin the package-owned native constructors and method controls after compiler metadata exists,
-  // but before the second config extraction can invoke authored callbacks. Loading the exact addon
-  // does not construct a database; the in-memory handle is created only after the schema snapshot.
-  const nativeControls = pinSqliteNativeDriverControls();
+  // Reuse the package-owned module-evaluation snapshot; do not discover native controls after any
+  // importing authored module body has had an opportunity to mutate the shared addon/prototypes.
+  // The in-memory database itself is still created only after the schema snapshot below.
+  const nativeControls = sqliteNativeDriverControls;
   const tables = snapshotTables(tableValues, metadata);
   const seeds = snapshotSeeds(optionalOption(source, 'seed'), tables);
   const schemaDdl: string[] = [];
@@ -430,7 +435,6 @@ export function createSqliteAppRuntime(
 }
 
 function pinSqliteNativeDriverControls(): Readonly<SqliteNativeDriverControls> {
-  if (sqliteNativeDriverControls !== undefined) return sqliteNativeDriverControls;
   const addonValue: unknown = sqliteModuleRequire(sqliteNativeBinding);
   if (typeof addonValue !== 'object' || addonValue === null || sqliteIsProxy(addonValue)) {
     throw new TypeError('KV414: better-sqlite3 native addon must be an exact object.');
@@ -540,7 +544,6 @@ function pinSqliteNativeDriverControls(): Readonly<SqliteNativeDriverControls> {
   pinOptionalSqliteNativeConstructor(addonValue, 'StatementIterator');
   pinOptionalSqliteNativeConstructor(addonValue, 'Backup');
   witnessFreeze(addonValue);
-  sqliteNativeDriverControls = controls;
   return controls;
 }
 
