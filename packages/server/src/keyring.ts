@@ -1,4 +1,5 @@
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
+import { types as nodeUtilTypes } from 'node:util';
 import {
   createWitnessSet,
   createWitnessWeakMap,
@@ -122,6 +123,7 @@ export interface SigningKeyRingOptions {
 const nativeCreateHash = createHash;
 const nativeCreateHmac = createHmac;
 const nativeTimingSafeEqual = timingSafeEqual;
+const nativeSigningIsProxy = nodeUtilTypes.isProxy;
 const hmacControl = nativeCreateHmac('sha256', 'kovo-intrinsic-control');
 const hashControl = nativeCreateHash('sha256');
 const nativeHmacUpdate = stableSigningRingProperty(hmacControl, 'update') as Function;
@@ -139,6 +141,13 @@ if (!signingCryptoControlsAreSound()) {
 
 function signingCryptoControlsAreSound(): boolean {
   try {
+    if (
+      witnessReflectApply<boolean>(nativeSigningIsProxy, nodeUtilTypes, [{}]) !== false ||
+      witnessReflectApply<boolean>(nativeSigningIsProxy, nodeUtilTypes, [new Proxy({}, {})]) !==
+        true
+    ) {
+      return false;
+    }
     const hmac = nativeCreateHmac('sha256', 'kovo-intrinsic-control');
     witnessReflectApply(nativeHmacUpdate, hmac, ['kovo-signing-control-v1']);
     if (
@@ -306,29 +315,89 @@ function createFrameworkCsrfScopedSigningKeyRing(source: SigningKeyRing): Signin
   const scoped = witnessFreeze({
     currentKeyId,
     sign(input: SigningInput): SigningResult {
-      assertFrameworkCsrfSigningScope(input);
-      return witnessReflectApply(sign, source, [input]);
+      const snapshot = snapshotFrameworkCsrfSigningInput(input);
+      return witnessReflectApply(sign, source, [snapshot]);
     },
     verify(input: SigningVerifyInput): SigningVerifyResult {
-      assertFrameworkCsrfSigningScope(input);
-      return witnessReflectApply(verify, source, [input]);
+      const snapshot = snapshotFrameworkCsrfSigningVerifyInput(input);
+      return witnessReflectApply(verify, source, [snapshot]);
     },
   });
   witnessWeakSetAdd(pinnedSigningKeyRings, scoped);
   return scoped;
 }
 
-function assertFrameworkCsrfSigningScope(input: SigningInput): void {
+function snapshotFrameworkCsrfSigningInput(input: SigningInput): SigningInput {
+  return snapshotFrameworkCsrfSigningCarrier(input, false) as SigningInput;
+}
+
+function snapshotFrameworkCsrfSigningVerifyInput(input: SigningVerifyInput): SigningVerifyInput {
+  return snapshotFrameworkCsrfSigningCarrier(input, true) as SigningVerifyInput;
+}
+
+function snapshotFrameworkCsrfSigningCarrier(
+  input: SigningInput | SigningVerifyInput,
+  verification: boolean,
+): SigningInput | SigningVerifyInput {
   if (typeof input !== 'object' || input === null) {
     throw new TypeError('Framework CSRF signing input must be an object.');
   }
+  if (witnessReflectApply<boolean>(nativeSigningIsProxy, nodeUtilTypes, [input])) {
+    throw new TypeError('Framework CSRF signing input must not be a Proxy.');
+  }
   const purpose = stableOwnSigningKeyValue(input, 'purpose');
   const audience = stableOwnSigningKeyValue(input, 'audience');
+  const payload = stableOwnSigningKeyValue(input, 'payload');
+  assertFrameworkCsrfSigningScope(purpose, audience);
+  if (typeof audience !== 'string') {
+    throw new TypeError('Framework CSRF signing audience must be a string.');
+  }
+  if (typeof payload !== 'string' && !securityIsUint8Array(payload)) {
+    throw new TypeError('Framework CSRF signing payload must be a string or Uint8Array.');
+  }
+
+  const snapshot = witnessCreateNullRecord<unknown>();
+  defineScopedSigningInputValue(snapshot, 'audience', audience);
+  defineScopedSigningInputValue(
+    snapshot,
+    'payload',
+    typeof payload === 'string' ? payload : securityBufferFrom(payload),
+  );
+  defineScopedSigningInputValue(snapshot, 'purpose', purpose);
+  if (verification) {
+    const signature = stableOwnSigningKeyValue(input, 'signature');
+    const keyId = stableOptionalOwnSigningKeyValue(input, 'keyId');
+    if (typeof signature !== 'string') {
+      throw new TypeError('Framework CSRF signing verification signature must be a string.');
+    }
+    if (keyId !== undefined && typeof keyId !== 'string') {
+      throw new TypeError('Framework CSRF signing verification keyId must be a string.');
+    }
+    if (keyId !== undefined) defineScopedSigningInputValue(snapshot, 'keyId', keyId);
+    defineScopedSigningInputValue(snapshot, 'signature', signature);
+  }
+  return witnessFreeze(snapshot) as unknown as SigningInput | SigningVerifyInput;
+}
+
+function assertFrameworkCsrfSigningScope(purpose: unknown, audience: unknown): void {
   if (purpose === 'csrf' || purpose === 'anonymous-csrf') return;
   if (purpose === 'live-target-attestation' && audience === 'mutation-live-target') return;
   throw new TypeError(
     'Framework CSRF signing capability only permits csrf, anonymous-csrf, and the mutation-live-target live-target attestation audience (SPEC §6.6 C9).',
   );
+}
+
+function defineScopedSigningInputValue(
+  target: Record<PropertyKey, unknown>,
+  property: PropertyKey,
+  value: unknown,
+): void {
+  witnessDefineProperty(target, property, {
+    configurable: false,
+    enumerable: true,
+    value,
+    writable: false,
+  });
 }
 
 function stableSigningRingProperty(source: object, property: PropertyKey): unknown {
@@ -360,6 +429,21 @@ function stableOwnSigningKeyValue(source: object, property: PropertyKey): unknow
   const before = witnessGetOwnPropertyDescriptor(source, property);
   const after = witnessGetOwnPropertyDescriptor(source, property);
   if (!sameSigningDataDescriptor(before, after) || before === undefined || !('value' in before)) {
+    throw new TypeError(
+      `Signing key ${witnessString(property)} must be a stable own data property.`,
+    );
+  }
+  return before.value;
+}
+
+function stableOptionalOwnSigningKeyValue(source: object, property: PropertyKey): unknown {
+  const before = witnessGetOwnPropertyDescriptor(source, property);
+  const after = witnessGetOwnPropertyDescriptor(source, property);
+  if (!sameSigningDataDescriptor(before, after)) {
+    throw new TypeError(`Signing key ${witnessString(property)} changed while it was inspected.`);
+  }
+  if (before === undefined) return undefined;
+  if (!('value' in before)) {
     throw new TypeError(
       `Signing key ${witnessString(property)} must be a stable own data property.`,
     );

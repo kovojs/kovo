@@ -7,6 +7,8 @@ import {
   isFrameworkCsrfSigningSecret,
   isSigningKeyRing,
   signingKeyRingFromSecret,
+  type SigningInput,
+  type SigningVerifyInput,
 } from './keyring.js';
 
 const OLD_SECRET = 'old-signing-secret-at-least-32-bytes';
@@ -92,6 +94,80 @@ describe('SigningKeyRing', () => {
         signature: live.signature,
       }),
     ).toEqual({ keyId: 'auth', ok: true });
+  });
+
+  it('rejects hostile scoped-signing carriers before traps and forwards only a pinned snapshot', () => {
+    let signInput: SigningInput | undefined;
+    let verifyInput: SigningVerifyInput | undefined;
+    const originalSignInput: SigningInput = {
+      audience: 'auth/sign-in',
+      payload: 'session-1',
+      purpose: 'csrf',
+    };
+    const originalVerifyInput: SigningVerifyInput = {
+      ...originalSignInput,
+      keyId: 'source',
+      signature: 'signature',
+    };
+    const capability = createFrameworkCsrfSigningSecret({
+      currentKeyId: 'source',
+      sign(input) {
+        signInput = input;
+        originalSignInput.audience = 'attacker-audience';
+        originalSignInput.purpose = 'capability-url';
+        return { keyId: 'source', signature: 'signature' };
+      },
+      verify(input) {
+        verifyInput = input;
+        originalVerifyInput.audience = 'attacker-audience';
+        originalVerifyInput.purpose = 'capability-url';
+        return { keyId: 'source', ok: true };
+      },
+    });
+    const scoped = signingKeyRingFromSecret(capability);
+
+    expect(scoped.sign(originalSignInput)).toEqual({ keyId: 'source', signature: 'signature' });
+    expect(signInput).not.toBe(originalSignInput);
+    expect(Object.getPrototypeOf(signInput!)).toBeNull();
+    expect(Object.isFrozen(signInput)).toBe(true);
+    expect(signInput).toMatchObject({ audience: 'auth/sign-in', purpose: 'csrf' });
+
+    expect(scoped.verify(originalVerifyInput)).toEqual({ keyId: 'source', ok: true });
+    expect(verifyInput).not.toBe(originalVerifyInput);
+    expect(Object.getPrototypeOf(verifyInput!)).toBeNull();
+    expect(Object.isFrozen(verifyInput)).toBe(true);
+    expect(verifyInput).toMatchObject({ audience: 'auth/sign-in', purpose: 'csrf' });
+
+    let proxyTrapHits = 0;
+    const hostile = new Proxy(
+      {},
+      {
+        get() {
+          proxyTrapHits += 1;
+          return 'capability-url';
+        },
+        getOwnPropertyDescriptor() {
+          proxyTrapHits += 1;
+          return { configurable: true, enumerable: true, value: 'csrf', writable: true };
+        },
+      },
+    ) as unknown as SigningInput;
+    expect(() => scoped.sign(hostile)).toThrow(/must not be a Proxy/u);
+    expect(() => scoped.verify(hostile as SigningVerifyInput)).toThrow(/must not be a Proxy/u);
+    expect(proxyTrapHits).toBe(0);
+
+    let accessorHits = 0;
+    const accessor = { audience: 'auth/sign-in', payload: 'session-1' } as Record<string, unknown>;
+    Object.defineProperty(accessor, 'purpose', {
+      get() {
+        accessorHits += 1;
+        return 'csrf';
+      },
+    });
+    expect(() => scoped.sign(accessor as unknown as SigningInput)).toThrow(
+      /stable own data property/u,
+    );
+    expect(accessorHits).toBe(0);
   });
 
   it('signs with the single active key and verifies with previous non-revoked keys', () => {
