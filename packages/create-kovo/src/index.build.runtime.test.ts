@@ -59,11 +59,13 @@ describe('create-kovo starter (build integration: runtime and dev server)', () =
       const output = collectOutput(prodServer);
       const exit = await waitForChildExit(prodServer, output);
 
-      // SPEC §6.6/§10.3: the experimental SQLite scaffold owns only volatile replay
-      // state, so a production artifact with write-capable mutations must fail closed
-      // before it can expose the copied local demo credential as an auth path.
+      // SPEC §6.6/§10.3: the experimental single-principal SQLite runtime has no
+      // production engine authorization/confidentiality boundary, so it must fail closed
+      // before the later volatile replay-store posture is even evaluated.
       expect(exit.code, output()).not.toBe(0);
-      expect(output()).toMatch(/KV436.*volatile memory mutationReplayStore/);
+      expect(output()).toMatch(
+        /KV414.*single-principal SQLite starter must not boot in production/,
+      );
     } finally {
       await stopProcess(prodServer);
       rmSync(root, { force: true, recursive: true });
@@ -169,21 +171,28 @@ describe('create-kovo starter (build integration: runtime and dev server)', () =
     mkdirSync(tempParent, { recursive: true });
     const root = mkdtempSync(join(tempParent, 'create-kovo-pg-ddl-'));
 
-    const runDdlProof = (query = ''): void => {
+    const runDdlProof = (probeNickname = false): void => {
       writeFileSync(
         join(root, 'src/ddl-proof.test.ts'),
         [
           "import { describe, expect, it } from 'vitest';",
-          "import { sql } from 'drizzle-orm';",
           "import { appRuntimeDbReady } from './_kovo/app-runtime-db.js';",
           "import { readonlyAppDb } from './db.js';",
+          "import { contacts } from './schema.js';",
           '',
           "describe('starter DDL proof', () => {",
           "  it('boots and exposes the expected schema', async () => {",
           '    await appRuntimeDbReady;',
-          query === ''
+          !probeNickname
             ? '    expect(true).toBe(true);'
-            : `    await readonlyAppDb.execute(sql\`${query}\`);`,
+            : [
+                '    // SPEC §10.3/KV433: schema probes stay on the read-only Drizzle surface.',
+                '    const rows = await readonlyAppDb',
+                '      .select({ nickname: contacts.nickname })',
+                '      .from(contacts)',
+                '      .limit(1);',
+                '    expect(rows).toEqual([{ nickname: null }]);',
+              ].join('\n'),
           '  });',
           '});',
           '',
@@ -211,7 +220,7 @@ describe('create-kovo starter (build integration: runtime and dev server)', () =
         "    company: text('company').notNull().default(''),\n    nickname: text('nickname'),",
       );
       writeFileSync(schemaPath, schemaWithDrift, 'utf8');
-      runDdlProof('select nickname from contacts limit 1');
+      runDdlProof(true);
 
       const schemaWithSerialAndOwnerFk = originalSchema
         .replace(
