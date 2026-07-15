@@ -645,6 +645,7 @@ describe('server app-shell public API barrels', () => {
     );
     expect(publicApi.webhook).toBe(routingApi.webhook);
     expect(publicApi.declarePublicRelation).toBe(dataApi.declarePublicRelation);
+    expect(publicApi.postgresAppRuntimeOptions).toBe(dataApi.postgresAppRuntimeOptions);
     expect(publicApi.declarePublicRead).toBe(dataApi.declarePublicRead);
     expect(publicApi.readonlyDb).toBe(dataApi.readonlyDb);
     expect(publicApi.customVerifier).toBe(coreCustomVerifier);

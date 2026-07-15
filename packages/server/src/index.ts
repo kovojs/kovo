@@ -18,6 +18,7 @@ export {
   declarePublicRelation,
   migratePostgresAppDb,
   planPostgresAppDbMigration,
+  postgresAppRuntimeOptions,
   postgresSchemaModule,
   provisionPostgresAppDb,
 } from './postgres-runtime.js';

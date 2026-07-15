@@ -77,6 +77,7 @@ import {
   securityJsonStringify,
   securityObjectKeys,
   securityRegExpTest,
+  securityString,
   securityStringIncludes,
   securityStringReplaceAll,
   securityStringSplit,
@@ -131,6 +132,28 @@ const SCHEMA_STATE_TABLE = 'kovo_schema_state';
 const postgresPinnedNodePools = createWitnessWeakMap<object, true>();
 const postgresPinnedNodeClients = createWitnessWeakMap<object, true>();
 const postgresNodeClientReleaseValues = createWitnessWeakMap<object, Function>();
+const postgresAppRuntimeOptionSnapshots = createWitnessWeakMap<
+  object,
+  Readonly<KovoPostgresAppRuntimeOptions>
+>();
+const POSTGRES_APP_RUNTIME_OPTION_KEYS = postgresStringSet([
+  'adminDatabaseUrl',
+  'adminRole',
+  'crossOwnerReadTables',
+  'databaseUrl',
+  'dataDir',
+  'driver',
+  'postureCheck',
+  'principalFromRequest',
+  'provisionOnBoot',
+  'publicRelations',
+  'readerRole',
+  'schema',
+  'seedSql',
+  'systemDatabaseUrl',
+  'systemRole',
+  'writerRole',
+]);
 const FRAMEWORK_INTERNAL_REACHABLE_TABLES = postgresStringSet([
   '_kovo_jobs',
   POSTGRES_REPLAY_TABLE,
@@ -824,7 +847,11 @@ function snapshotPostgresRuntimeConfigInput<Input extends PostgresRuntimeConfigI
   if (!isRecord(input)) {
     throw new TypeError('KV433: Postgres runtime options must be an own-data object.');
   }
-  const source = postgresOwnDataSnapshot(input, 'Postgres runtime options');
+  const storedSnapshot = witnessWeakMapGet(postgresAppRuntimeOptionSnapshots, input);
+  const source =
+    storedSnapshot === undefined
+      ? postgresOwnDataSnapshot(input, 'Postgres runtime options')
+      : storedSnapshot;
   const snapshot = witnessCreateNullRecord<unknown>();
   const keys = witnessOwnKeys(source);
   const keyCount = postgresDenseArrayLength(keys, 'Postgres runtime option keys');
@@ -869,6 +896,106 @@ function snapshotPostgresRuntimeConfigInput<Input extends PostgresRuntimeConfigI
     writable: true,
   });
   return witnessFreeze(snapshot) as Input;
+}
+
+function snapshotPublicPostgresAppRuntimeOptions(
+  input: KovoPostgresAppRuntimeOptions,
+): Readonly<KovoPostgresAppRuntimeOptions> {
+  if (!isRecord(input)) {
+    throw new TypeError('KV433: postgresAppRuntimeOptions() requires an own-data object.');
+  }
+  const source = postgresOwnDataSnapshot(input, 'Postgres app runtime options');
+  const snapshot = witnessCreateNullRecord<unknown>();
+  const keys = witnessOwnKeys(source);
+  const keyCount = postgresDenseArrayLength(keys, 'Postgres app runtime option keys');
+  let hasSchema = false;
+  for (let index = 0; index < keyCount; index += 1) {
+    const key = postgresDenseArrayValue(keys, index, 'Postgres app runtime option keys');
+    if (typeof key !== 'string' || !witnessSetHas(POSTGRES_APP_RUNTIME_OPTION_KEYS, key)) {
+      throw new TypeError(
+        `KV433: postgresAppRuntimeOptions() does not accept option ${securityString(key)} (SPEC §10.3).`,
+      );
+    }
+    const descriptor = witnessGetOwnPropertyDescriptor(source, key);
+    if (descriptor === undefined || !('value' in descriptor) || descriptor.enumerable !== true) {
+      throw new TypeError(
+        `KV433: postgresAppRuntimeOptions() option ${key} must be an enumerable own-data property.`,
+      );
+    }
+    const value = snapshotPublicPostgresAppRuntimeOptionValue(key, descriptor.value);
+    witnessDefineProperty(snapshot, key, {
+      configurable: true,
+      enumerable: true,
+      value,
+      writable: true,
+    });
+    if (key === 'schema') hasSchema = true;
+  }
+  if (!hasSchema) {
+    throw new TypeError('KV433: postgresAppRuntimeOptions() requires schema (SPEC §10.3).');
+  }
+  return witnessFreeze(snapshot) as Readonly<KovoPostgresAppRuntimeOptions>;
+}
+
+function snapshotPublicPostgresAppRuntimeOptionValue(key: string, value: unknown): unknown {
+  if (key === 'schema') {
+    if (!isRecord(value)) {
+      throw new TypeError('KV433: postgresAppRuntimeOptions() schema must be an own-data object.');
+    }
+    return postgresOwnDataSnapshot(value, 'Postgres app runtime schema');
+  }
+  if (key === 'seedSql') {
+    return snapshotPublicPostgresAppRuntimeSeedSql(value);
+  }
+  if (key === 'crossOwnerReadTables') {
+    return snapshotPublicPostgresAppRuntimeArray(
+      value,
+      'Postgres app runtime crossOwnerReadTables',
+      true,
+    );
+  }
+  if (key === 'publicRelations') {
+    return snapshotPublicPostgresAppRuntimeArray(
+      value,
+      'Postgres app runtime publicRelations',
+      false,
+    );
+  }
+  if (key === 'postureCheck' && value !== undefined) {
+    if (!isRecord(value) || securityArrayIsArray(value)) {
+      throw new TypeError(
+        'KV433: postgresAppRuntimeOptions() postureCheck must be an own-data object.',
+      );
+    }
+    return postgresOwnDataSnapshot(value, 'Postgres app runtime postureCheck');
+  }
+  return value;
+}
+
+function snapshotPublicPostgresAppRuntimeSeedSql(value: unknown): unknown {
+  if (value === undefined || typeof value === 'string') return value;
+  return snapshotPublicPostgresAppRuntimeArray(value, 'Postgres app runtime seedSql', true);
+}
+
+function snapshotPublicPostgresAppRuntimeArray(
+  value: unknown,
+  label: string,
+  requireStrings: boolean,
+): readonly unknown[] | undefined {
+  if (value === undefined) return undefined;
+  if (!securityArrayIsArray(value)) {
+    throw new TypeError(`${label} must be an array.`);
+  }
+  const snapshot: unknown[] = [];
+  const length = postgresDenseArrayLength(value, label);
+  for (let index = 0; index < length; index += 1) {
+    const entry = postgresDenseArrayValue(value, index, label);
+    if (requireStrings && typeof entry !== 'string') {
+      throw new TypeError(`${label} entries must be strings.`);
+    }
+    appendPostgresValue(snapshot, entry);
+  }
+  return witnessFreeze(snapshot);
 }
 
 function snapshotPostgresQueryRows<Row extends QueryResultRow>(
@@ -1218,6 +1345,27 @@ export interface KovoPostgresAppRuntimeOptions {
   publicRelations?: readonly KovoPostgresPublicRelationDeclaration[];
   seedSql?: string | readonly string[];
   writerRole?: string;
+}
+
+/**
+ * Capture generated Postgres runtime options through framework-owned intrinsics (SPEC §6.6/§10.3).
+ *
+ * Generated modules call this instead of ambient `Object.freeze(...)`. The constructor rejects
+ * Proxies, accessors, symbols, and unknown option keys; snapshots the schema and array-valued
+ * options; and returns an immutable null-prototype carrier. Runtime/provision/check consumers
+ * recover the module-private snapshot by carrier identity rather than re-reading app-held state.
+ * This authenticates the configuration carrier, not the safety of authored `seedSql` statements.
+ *
+ * @param options - Exact Postgres runtime options to pin before authored modules can mutate them.
+ * @returns A frozen carrier assignable anywhere `KovoPostgresAppRuntimeOptions` is accepted.
+ */
+export function postgresAppRuntimeOptions(
+  options: KovoPostgresAppRuntimeOptions,
+): Readonly<KovoPostgresAppRuntimeOptions> {
+  const snapshot = snapshotPublicPostgresAppRuntimeOptions(options);
+  const carrier = postgresOwnDataSnapshot(snapshot, 'Postgres app runtime options carrier');
+  witnessWeakMapSet(postgresAppRuntimeOptionSnapshots, carrier, snapshot);
+  return carrier;
 }
 
 /** Options accepted by {@link declarePublicRelation}. */
@@ -1635,8 +1783,11 @@ export async function checkPostgresAppDbPosture(
   options: KovoPostgresAppRuntimeOptions,
 ): Promise<KovoPostgresPostureReport> {
   assertManagedSqlParserAuthorityReady();
+  const storedOptions = isRecord(options)
+    ? witnessWeakMapGet(postgresAppRuntimeOptionSnapshots, options)
+    : undefined;
   const optionDriver = postgresOwnDataValue(
-    options as unknown as Record<PropertyKey, unknown>,
+    (storedOptions ?? options) as unknown as Record<PropertyKey, unknown>,
     'driver',
   );
   const safeOptions = snapshotPostgresRuntimeConfigInput(options, {
