@@ -105,6 +105,31 @@ export function sqliteResultColumns(client, sql) {
     expect(result.findings).toEqual([]);
   });
 
+  it('enrolls only the exact structured SQLite seed executor call', () => {
+    const files = {
+      'packages/server/src/sql-safe-handle.ts': `
+export function enforceManagedSql(statement, mode, writePolicy) {
+  return validate(statement, mode, writePolicy);
+}
+`,
+      'packages/server/src/sqlite.ts': `
+export function seedSqliteTables(client, sql) {
+  return client.prepare(sql);
+}
+`,
+    };
+    expect(runDefaultFixture(files).findings).toEqual([]);
+
+    files['packages/server/src/sqlite.ts'] = `
+export function seedSqliteTables(client, request) {
+  return client.prepare(request.sql);
+}
+`;
+    expect(runDefaultFixture(files).findings).toContain(
+      'packages/server/src/sqlite.ts:3: driver method/property .prepare must route through enforceManagedSql() in sql-safe-handle.ts or an audited durable-task internal SQL executor',
+    );
+  });
+
   it('rejects canary transaction and CTE handle execution outside the choke', () => {
     const result = runFixture({
       'packages/server/src/sql-safe-handle.ts': `

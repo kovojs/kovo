@@ -37,6 +37,13 @@ export const defaultAllowedDriverFiles = [
   'packages/server/src/task-queue.ts',
   'packages/server/src/task-cron.ts',
 ];
+const defaultAllowedDriverUses = [
+  {
+    call: 'client.prepare(sql)',
+    file: 'packages/server/src/sqlite.ts',
+    method: 'prepare',
+  },
+];
 export const defaultAllowedRawTargetFiles = [
   'packages/server/src/sql-safe-handle.ts',
   'packages/server/src/managed-db.ts',
@@ -134,7 +141,7 @@ export function checkSingleChoke(options = {}) {
     const allowedRawTargetFile = allowedRawTargetFiles.has(filePath);
 
     for (const match of sqlDriverPropertyUses(scanText)) {
-      if (!allowedDriverFile) {
+      if (!allowedDriverFile && !isExactAllowedDriverUse(filePath, scanText, match)) {
         findings.push(
           `${filePath}:${lineOf(sourceText, match.index)}: driver method/property .${match.name} must route through enforceManagedSql() in sql-safe-handle.ts or an audited durable-task internal SQL executor`,
         );
@@ -174,6 +181,16 @@ export function checkSingleChoke(options = {}) {
         ? 'OK DEC-J egress/DB exec sinks route through classified sole-door chokes'
         : `${findings.length} DEC-J sole-door violation(s)`,
   };
+}
+
+function isExactAllowedDriverUse(filePath, sourceText, match) {
+  for (const allowed of defaultAllowedDriverUses) {
+    if (allowed.file !== filePath || allowed.method !== match.name) continue;
+    if (sourceText.slice(match.index, match.index + allowed.call.length) !== allowed.call) continue;
+    if (sourceText.indexOf(allowed.call) !== sourceText.lastIndexOf(allowed.call)) return false;
+    return true;
+  }
+  return false;
 }
 
 export function main(options = {}) {
