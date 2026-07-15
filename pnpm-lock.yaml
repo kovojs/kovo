@@ -408,6 +408,9 @@ importers:
 
   packages/better-auth:
     dependencies:
+      '@kovojs/core':
+        specifier: workspace:*
+        version: link:../core
       '@kovojs/server':
         specifier: workspace:*
         version: link:../server

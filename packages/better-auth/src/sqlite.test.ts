@@ -5,6 +5,7 @@ import { sqliteTable, text } from '../../server/node_modules/drizzle-orm/sqlite-
 import {
   betterAuthSqliteSecret,
   createBetterAuthSqliteBindings,
+  createBetterAuthSqliteBindingsFromEnvironment,
   type BetterAuthSqliteBindingsOptions,
 } from './sqlite.js';
 
@@ -21,8 +22,13 @@ const authMocks = vi.hoisted(() => {
   };
 });
 
+const runtimeLockMocks = vi.hoisted(() => ({ assertLocked: vi.fn() }));
+
 vi.mock('better-auth', () => ({ betterAuth: authMocks.betterAuth }));
 vi.mock('better-auth/adapters/drizzle', () => ({ drizzleAdapter: authMocks.drizzleAdapter }));
+vi.mock('./internal/runtime-lock.js', () => ({
+  assertBetterAuthRuntimeRealmLocked: runtimeLockMocks.assertLocked,
+}));
 
 interface TestRequest {
   headers: Headers;
@@ -41,10 +47,36 @@ const proof = sqliteTable('kovo_better_auth_sqlite_posture', {
 
 afterEach(() => {
   vi.restoreAllMocks();
+  runtimeLockMocks.assertLocked.mockReset();
   for (const runtime of runtimes.splice(0)) runtime.close();
 });
 
 describe('Better Auth SQLite bindings', () => {
+  it('requires the persistent realm lock before direct or environment option reads', () => {
+    let optionTrapHits = 0;
+    const options = new Proxy(
+      {},
+      {
+        getOwnPropertyDescriptor() {
+          optionTrapHits += 1;
+          return undefined;
+        },
+      },
+    ) as BetterAuthSqliteBindingsOptions<TestRequest, TestSession>;
+
+    runtimeLockMocks.assertLocked.mockImplementationOnce(() => {
+      throw new TypeError('lock-first-sqlite-direct');
+    });
+    expect(() => createBetterAuthSqliteBindings(options)).toThrow('lock-first-sqlite-direct');
+    runtimeLockMocks.assertLocked.mockImplementationOnce(() => {
+      throw new TypeError('lock-first-sqlite-environment');
+    });
+    expect(() => createBetterAuthSqliteBindingsFromEnvironment(options)).toThrow(
+      'lock-first-sqlite-environment',
+    );
+    expect(optionTrapHits).toBe(0);
+  });
+
   it('pins secret and origin posture against late upstream environment mutation', () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {});
     const runtime = createSqliteAppRuntime({ tables: [proof] });
@@ -72,9 +104,14 @@ describe('Better Auth SQLite bindings', () => {
             useSecureCookies: false,
           },
           database: { kind: 'sqlite-adapter' },
-          emailAndPassword: { autoSignIn: false, enabled: true },
+          emailAndPassword: {
+            autoSignIn: false,
+            enabled: true,
+            password: { hash: expect.any(Function), verify: expect.any(Function) },
+          },
           secret: strongSecretText,
           secrets: [{ value: strongSecretText, version: 0 }],
+          telemetry: { enabled: false },
           trustedOrigins: [],
         }),
       );

@@ -6,8 +6,12 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
+const runtimeBootstrapUrl = pathToFileURL(
+  fileURLToPath(new URL('../../server/src/runtime-bootstrap.ts', import.meta.url)),
+).href;
+
 describe('Better Auth boot-pinned environment boundary', () => {
-  it('loads local .env before a Better Auth-first import and ignores late app mutation', () => {
+  it('loads local .env before a bootstrap-first Better Auth import and ignores late app mutation', () => {
     const root = mkdtempSync(join(tmpdir(), 'kovo-better-auth-environment-'));
     try {
       const secret = 'operator-auth-secret-0123456789abcdef0123456789';
@@ -37,6 +41,7 @@ registerHooks({
     return nextResolve(specifier, context);
   },
 });
+await import(${JSON.stringify(runtimeBootstrapUrl)});
 const api = await import(${JSON.stringify(indexUrl)});
 process.env.BETTER_AUTH_URL = 'javascript:late-app-mutation';
 process.env.BETTER_AUTH_SECRET = 'short';
@@ -93,6 +98,94 @@ process.stdout.write(JSON.stringify({
     }
   });
 
+  it('refuses environment CSRF before reading untrusted options without runner bootstrap', () => {
+    const indexUrl = pathToFileURL(fileURLToPath(new URL('./index.ts', import.meta.url))).href;
+    const source = `
+import { existsSync } from 'node:fs';
+import { registerHooks } from 'node:module';
+registerHooks({
+  resolve(specifier, context, nextResolve) {
+    if (specifier.startsWith('.') && specifier.endsWith('.js') && context.parentURL) {
+      const candidate = new URL(specifier.replace(/\\.js$/, '.ts'), context.parentURL);
+      if (existsSync(candidate)) return nextResolve(candidate.href, context);
+    }
+    return nextResolve(specifier, context);
+  },
+});
+let optionTrapHits = 0;
+let refusal = '';
+try {
+  await import(${JSON.stringify(indexUrl)});
+} catch (error) {
+  refusal = String(error?.message ?? error);
+}
+process.stdout.write(JSON.stringify({ optionTrapHits, refusal }));
+`;
+    const result = spawnSync(
+      process.execPath,
+      [
+        '--disable-warning=ExperimentalWarning',
+        '--experimental-transform-types',
+        '--input-type=module',
+        '--eval',
+        source,
+      ],
+      { encoding: 'utf8' },
+    );
+    expect(result.status, result.stderr).toBe(0);
+    expect(JSON.parse(result.stdout)).toEqual({
+      optionTrapHits: 0,
+      refusal: expect.stringContaining(
+        'refuses evaluation before the request-safe runtime realm lock',
+      ),
+    });
+  });
+
+  it('keeps a failed pre-lock package evaluation failed after a late bootstrap', () => {
+    const indexUrl = pathToFileURL(fileURLToPath(new URL('./index.ts', import.meta.url))).href;
+    const source = `
+import { existsSync } from 'node:fs';
+import { registerHooks } from 'node:module';
+registerHooks({
+  resolve(specifier, context, nextResolve) {
+    if (specifier.startsWith('.') && specifier.endsWith('.js') && context.parentURL) {
+      const candidate = new URL(specifier.replace(/\\.js$/, '.ts'), context.parentURL);
+      if (existsSync(candidate)) return nextResolve(candidate.href, context);
+    }
+    return nextResolve(specifier, context);
+  },
+});
+let initialRefusal = '';
+try { await import(${JSON.stringify(indexUrl)}); }
+catch (error) { initialRefusal = String(error?.message ?? error); }
+await import(${JSON.stringify(runtimeBootstrapUrl)});
+let lateRefusal = '';
+try { await import(${JSON.stringify(indexUrl)}); }
+catch (error) { lateRefusal = String(error?.message ?? error); }
+process.stdout.write(JSON.stringify({ initialRefusal, lateRefusal }));
+`;
+    const result = spawnSync(
+      process.execPath,
+      [
+        '--disable-warning=ExperimentalWarning',
+        '--experimental-transform-types',
+        '--input-type=module',
+        '--eval',
+        source,
+      ],
+      { encoding: 'utf8' },
+    );
+    expect(result.status, result.stderr).toBe(0);
+    expect(JSON.parse(result.stdout)).toEqual({
+      initialRefusal: expect.stringContaining(
+        'refuses evaluation before the request-safe runtime realm lock',
+      ),
+      lateRefusal: expect.stringContaining(
+        'refuses evaluation before the request-safe runtime realm lock',
+      ),
+    });
+  });
+
   it('owns request binding and rejects authored callbacks, malformed sessions, and Proxies', () => {
     const root = mkdtempSync(join(tmpdir(), 'kovo-better-auth-csrf-binding-'));
     try {
@@ -113,6 +206,7 @@ registerHooks({
     return nextResolve(specifier, context);
   },
 });
+await import(${JSON.stringify(runtimeBootstrapUrl)});
 const api = await import(${JSON.stringify(indexUrl)});
 const csrf = api.betterAuthCsrfFromEnvironment({ field: 'csrf' });
 const failures = [];
@@ -263,17 +357,18 @@ registerHooks({
     return nextResolve(specifier, context);
   },
 });
+await import(${JSON.stringify(runtimeBootstrapUrl)});
 await import(${JSON.stringify(indexUrl)});
-Object.defineProperty(URL.prototype, 'protocol', {
+const replacement = Reflect.defineProperty(URL.prototype, 'protocol', {
   configurable: true,
   get() { return 'https:'; },
 });
 const internal = await import(${JSON.stringify(environmentUrl)});
 try {
   const resolved = internal.resolveBetterAuthEnvironment();
-  process.stdout.write(JSON.stringify({ admitted: resolved.baseURL }));
+  process.stdout.write(JSON.stringify({ admitted: resolved.baseURL, replacement }));
 } catch (error) {
-  process.stdout.write(JSON.stringify({ rejected: String(error) }));
+  process.stdout.write(JSON.stringify({ rejected: String(error), replacement }));
 }
 `;
       const environment = { ...process.env };
@@ -294,6 +389,7 @@ try {
       expect(result.status, result.stderr).toBe(0);
       expect(JSON.parse(result.stdout)).toEqual({
         rejected: 'TypeError: BETTER_AUTH_URL must be a canonical absolute HTTP(S) origin.',
+        replacement: false,
       });
     } finally {
       rmSync(root, { force: true, recursive: true });
@@ -330,6 +426,7 @@ registerHooks({
     return nextResolve(specifier, context);
   },
 });
+await import(${JSON.stringify(runtimeBootstrapUrl)});
 try {
   const internal = await import(${JSON.stringify(environmentUrl)});
   const resolved = internal.resolveBetterAuthEnvironment();

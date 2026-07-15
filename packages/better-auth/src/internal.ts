@@ -1,3 +1,6 @@
+// The internal export is executable too; it must join the same package-entry ordering witness.
+import './internal/runtime-lock.js';
+
 import { publicAccess, type Domain } from '@kovojs/server';
 import {
   betterAuthAuthDomain,

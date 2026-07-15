@@ -1,5 +1,10 @@
 import { type Guard, guards as serverGuards } from '@kovojs/server';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+
+vi.mock('./internal/runtime-lock.js', () => ({
+  assertBetterAuthRuntimeRealmLocked: vi.fn(),
+}));
+
 import { type ActiveOrganizationRequest, activeOrganization, authed, role } from './internal.js';
 import { type AppRequest } from './test-fakes.js';
 

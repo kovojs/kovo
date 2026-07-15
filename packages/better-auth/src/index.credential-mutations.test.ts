@@ -1,6 +1,11 @@
 import { csrfToken, type CsrfOptions, type MutationDefinition, type Schema } from '@kovojs/server';
 import { runMutation } from '@kovojs/server/internal/execution';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+vi.mock('./internal/runtime-lock.js', () => ({
+  assertBetterAuthRuntimeRealmLocked: vi.fn(),
+}));
+
 import {
   betterAuthSignInEmailMutation,
   betterAuthSignOutMutation,

@@ -9,6 +9,7 @@ import {
   betterAuthOwnDataValue,
   betterAuthUrlSnapshot,
 } from './internal/intrinsics.js';
+import { assertBetterAuthRuntimeRealmLocked } from './internal/runtime-lock.js';
 
 const NativeTypeError = globalThis.TypeError;
 const BETTER_AUTH_SECRET_MINIMUM_LENGTH = 32;
@@ -40,6 +41,7 @@ export interface BetterAuthEnvironmentCsrfOptions {
 export function betterAuthCsrfFromEnvironment<
   Request extends BetterAuthCsrfRequestLike = BetterAuthCsrfRequestLike,
 >(options: BetterAuthEnvironmentCsrfOptions): Readonly<CsrfOptions<Request>> {
+  assertBetterAuthRuntimeRealmLocked();
   if (typeof options !== 'object' || options === null) {
     throw new NativeTypeError('Better Auth environment CSRF options must be an object.');
   }

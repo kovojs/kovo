@@ -1,4 +1,9 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+
+vi.mock('./internal/runtime-lock.js', () => ({
+  assertBetterAuthRuntimeRealmLocked: vi.fn(),
+}));
+
 import {
   type BetterAuthTable,
   annotateBetterAuthSchemaSource,

@@ -11,6 +11,10 @@ import {
 import { runMutation } from '../../server/src/mutation.js';
 import { betterAuthSqliteSecret, createBetterAuthSqliteBindings } from './sqlite.js';
 
+vi.mock('./internal/runtime-lock.js', () => ({
+  assertBetterAuthRuntimeRealmLocked: vi.fn(),
+}));
+
 const user = sqliteTable('user', {
   createdAt: integer('createdAt', { mode: 'timestamp_ms' }).notNull(),
   email: text('email').notNull().unique(),

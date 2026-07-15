@@ -16,6 +16,7 @@ import { pgTable, text } from '../../server/node_modules/drizzle-orm/pg-core/ind
 import {
   betterAuthPostgresSecret,
   createBetterAuthPostgresBindings,
+  createBetterAuthPostgresBindingsFromEnvironment,
   type BetterAuthPostgresBindingsOptions,
   type BetterAuthPostgresSecret,
 } from './postgres.js';
@@ -38,8 +39,13 @@ const authMocks = vi.hoisted(() => {
   };
 });
 
+const runtimeLockMocks = vi.hoisted(() => ({ assertLocked: vi.fn() }));
+
 vi.mock('better-auth', () => ({ betterAuth: authMocks.betterAuth }));
 vi.mock('better-auth/adapters/drizzle', () => ({ drizzleAdapter: authMocks.drizzleAdapter }));
+vi.mock('./internal/runtime-lock.js', () => ({
+  assertBetterAuthRuntimeRealmLocked: runtimeLockMocks.assertLocked,
+}));
 
 interface TestRequest {
   headers: Headers;
@@ -65,11 +71,37 @@ const bindingTestRows = pgTable(
 
 afterEach(async () => {
   vi.clearAllMocks();
+  runtimeLockMocks.assertLocked.mockReset();
   for (const runtime of runtimes.splice(0)) await runtime.close();
   for (const root of roots.splice(0)) rmSync(root, { force: true, recursive: true });
 });
 
 describe('Better Auth Postgres bindings', () => {
+  it('requires the persistent realm lock before direct or environment option reads', () => {
+    let optionTrapHits = 0;
+    const options = new Proxy(
+      {},
+      {
+        getOwnPropertyDescriptor() {
+          optionTrapHits += 1;
+          return undefined;
+        },
+      },
+    ) as BetterAuthPostgresBindingsOptions<TestRequest, TestSession>;
+
+    runtimeLockMocks.assertLocked.mockImplementationOnce(() => {
+      throw new TypeError('lock-first-postgres-direct');
+    });
+    expect(() => createBetterAuthPostgresBindings(options)).toThrow('lock-first-postgres-direct');
+    runtimeLockMocks.assertLocked.mockImplementationOnce(() => {
+      throw new TypeError('lock-first-postgres-environment');
+    });
+    expect(() => createBetterAuthPostgresBindingsFromEnvironment(options)).toThrow(
+      'lock-first-postgres-environment',
+    );
+    expect(optionTrapHits).toBe(0);
+  });
+
   it('requires the validating secret constructor and repeats its runtime floor at the sink', () => {
     expect(() => betterAuthPostgresSecret('too-short')).toThrow(/at least 32 characters/u);
     expect(betterAuthPostgresSecret(strongSecretText)).toBe(strongSecretText);
@@ -107,9 +139,14 @@ describe('Better Auth Postgres bindings', () => {
           useSecureCookies: true,
         },
         database: { kind: 'postgres-adapter' },
-        emailAndPassword: { autoSignIn: false, enabled: true },
+        emailAndPassword: {
+          autoSignIn: false,
+          enabled: true,
+          password: { hash: expect.any(Function), verify: expect.any(Function) },
+        },
         secret: strongSecretText,
         secrets: [{ value: strongSecretText, version: 0 }],
+        telemetry: { enabled: false },
         trustedOrigins: [],
       }),
     );

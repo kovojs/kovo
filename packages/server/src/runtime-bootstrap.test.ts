@@ -27,6 +27,7 @@ describe('custom runtime bootstrap entries', () => {
     expect(packedBetterAuth.status, `${packedBetterAuth.stdout}\n${packedBetterAuth.stderr}`).toBe(
       0,
     );
+    const betterAuthDistRoot = fileURLToPath(new URL('../../better-auth/dist', import.meta.url));
 
     const distRoot = join(serverRoot, 'dist');
     const omission = runPackedServerChild(distRoot, false);
@@ -68,7 +69,7 @@ describe('custom runtime bootstrap entries', () => {
 
     const sqliteBoundary = runPackedSqliteBoundaryChild(
       distRoot,
-      fileURLToPath(new URL('../../better-auth/dist/index.mjs', import.meta.url)),
+      join(betterAuthDistRoot, 'index.mjs'),
     );
     expect(sqliteBoundary.status, sqliteBoundary.stderr).toBe(0);
     expect(JSON.parse(sqliteBoundary.stdout)).toEqual({
@@ -80,6 +81,36 @@ describe('custom runtime bootstrap entries', () => {
       providerOwnKeys: 0,
       queryBodyIncludesSeed: true,
       queryStatus: 200,
+    });
+
+    const preloadedBetterAuthInternal = runPackedBetterAuthPreloadChild(
+      distRoot,
+      betterAuthDistRoot,
+      'internal',
+      'buffer',
+    );
+    expect(preloadedBetterAuthInternal.status, preloadedBetterAuthInternal.stderr).toBe(0);
+    expect(JSON.parse(preloadedBetterAuthInternal.stdout)).toMatchObject({
+      csrfCreated: false,
+      preloadRefusal: expect.stringContaining(
+        'refuses evaluation before the request-safe runtime realm lock',
+      ),
+      secretCaptured: false,
+    });
+
+    const preloadedBetterAuthRoot = runPackedBetterAuthPreloadChild(
+      distRoot,
+      betterAuthDistRoot,
+      'root',
+      'descriptor',
+    );
+    expect(preloadedBetterAuthRoot.status, preloadedBetterAuthRoot.stderr).toBe(0);
+    expect(JSON.parse(preloadedBetterAuthRoot.stdout)).toMatchObject({
+      csrfCreated: false,
+      preloadRefusal: expect.stringContaining(
+        'refuses evaluation before the request-safe runtime realm lock',
+      ),
+      secretCaptured: false,
     });
   }, 30_000);
 
@@ -561,6 +592,7 @@ try {
 } finally {
   runtime.close();
 }
+
 `;
   return spawnSync(
     process.execPath,
@@ -578,6 +610,108 @@ try {
         BETTER_AUTH_SECRET: 'packed-auth-secret-0123456789abcdef0123456789',
         NODE_ENV: 'development',
       },
+    },
+  );
+}
+
+function runPackedBetterAuthPreloadChild(
+  distRoot: string,
+  betterAuthDistRoot: string,
+  entry: 'internal' | 'root',
+  poison: 'buffer' | 'descriptor',
+) {
+  const secret = 'SUBPATH-WITNESS-SECRET-0123456789abcdef-RAW';
+  const entries = {
+    '@kovojs/server': pathToFileURL(join(distRoot, 'index.mjs')).href,
+    '@kovojs/server/internal/execution': pathToFileURL(join(distRoot, 'internal/execution.mjs'))
+      .href,
+    '@kovojs/server/internal/keyring': pathToFileURL(join(distRoot, 'internal/keyring.mjs')).href,
+    '@kovojs/server/internal/postgres-capability': pathToFileURL(
+      join(distRoot, 'internal/postgres-capability.mjs'),
+    ).href,
+    '@kovojs/server/internal/runtime-environment': pathToFileURL(
+      join(distRoot, 'internal/runtime-environment.mjs'),
+    ).href,
+    '@kovojs/server/internal/sqlite': pathToFileURL(join(distRoot, 'internal/sqlite.mjs')).href,
+    '@kovojs/server/internal/sqlite-capability': pathToFileURL(
+      join(distRoot, 'internal/sqlite-capability.mjs'),
+    ).href,
+    '@kovojs/server/internal/wire': pathToFileURL(join(distRoot, 'internal/wire.mjs')).href,
+  };
+  const bootstrapEntry = pathToFileURL(join(distRoot, 'runtime-bootstrap.mjs')).href;
+  const betterAuthInternalEntry = pathToFileURL(join(betterAuthDistRoot, 'internal.mjs')).href;
+  const betterAuthRootEntry = pathToFileURL(join(betterAuthDistRoot, 'index.mjs')).href;
+  const preloadEntry = entry === 'internal' ? betterAuthInternalEntry : betterAuthRootEntry;
+  const poisonInstall =
+    poison === 'buffer'
+      ? `const nativeControl = Buffer.from;
+Reflect.set(Buffer, 'from', function hostileBufferFrom(value, ...rest) {
+  if (typeof value === 'string') captures.push(value);
+  return Reflect.apply(nativeControl, Buffer, [value, ...rest]);
+});`
+      : `const nativeControl = Object.getOwnPropertyDescriptor;
+Reflect.set(Object, 'getOwnPropertyDescriptor', function hostileDescriptor(target, key) {
+  const descriptor = Reflect.apply(nativeControl, Object, [target, key]);
+  if (descriptor && typeof descriptor.value === 'string') captures.push(descriptor.value);
+  return descriptor;
+});`;
+  const poisonRestore =
+    poison === 'buffer'
+      ? `Reflect.set(Buffer, 'from', nativeControl);`
+      : `Reflect.set(Object, 'getOwnPropertyDescriptor', nativeControl);`;
+  const source = `
+import { existsSync } from 'node:fs';
+import { registerHooks } from 'node:module';
+registerHooks({
+  resolve(specifier, context, nextResolve) {
+    const mapped = ${JSON.stringify(entries)}[specifier];
+    if (mapped) return nextResolve(mapped, context);
+    if (specifier.startsWith('.') && specifier.endsWith('.js') && context.parentURL) {
+      const candidate = new URL(specifier.replace(/\\.js$/, '.ts'), context.parentURL);
+      if (existsSync(candidate)) return nextResolve(candidate.href, context);
+    }
+    return nextResolve(specifier, context);
+  },
+});
+const secret = ${JSON.stringify(secret)};
+const captures = [];
+${poisonInstall}
+let preloadRefusal = '';
+try { await import(${JSON.stringify(preloadEntry)}); }
+catch (error) { preloadRefusal = String(error?.message ?? error); }
+${poisonRestore}
+let bootstrapRefusal = '';
+try { await import(${JSON.stringify(bootstrapEntry)}); }
+catch (error) { bootstrapRefusal = String(error?.message ?? error); }
+let csrfCreated = false;
+let lateRefusal = '';
+try {
+  const api = await import(${JSON.stringify(betterAuthRootEntry)});
+  api.betterAuthCsrfFromEnvironment({ field: 'csrf' });
+  csrfCreated = true;
+} catch (error) {
+  lateRefusal = String(error?.message ?? error);
+}
+process.stdout.write(JSON.stringify({
+  bootstrapRefusal,
+  csrfCreated,
+  lateRefusal,
+  preloadRefusal,
+  secretCaptured: captures.some((value) => value.includes(secret)),
+}));
+`;
+  return spawnSync(
+    process.execPath,
+    [
+      '--disable-warning=ExperimentalWarning',
+      '--experimental-transform-types',
+      '--input-type=module',
+      '--eval',
+      source,
+    ],
+    {
+      encoding: 'utf8',
+      env: { ...process.env, BETTER_AUTH_SECRET: secret, NODE_ENV: 'development' },
     },
   );
 }

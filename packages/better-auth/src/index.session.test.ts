@@ -4,7 +4,12 @@ import {
   resolveLifecycleRequest,
   runEndpoint,
 } from '@kovojs/server/internal/execution';
-import { describe, expect, expectTypeOf, it } from 'vitest';
+import { describe, expect, expectTypeOf, it, vi } from 'vitest';
+
+vi.mock('./internal/runtime-lock.js', () => ({
+  assertBetterAuthRuntimeRealmLocked: vi.fn(),
+}));
+
 import { betterAuthSession, mount, type BetterAuthLike } from './index.js';
 import { betterAuthMountOperationContract } from './internal.js';
 import {

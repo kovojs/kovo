@@ -20,6 +20,8 @@ import {
   betterAuthOwnDataOption,
   betterAuthUrlProtocol,
 } from './internal/intrinsics.js';
+import { betterAuthHashPassword, betterAuthVerifyPassword } from './internal/password.js';
+import { assertBetterAuthRuntimeRealmLocked } from './internal/runtime-lock.js';
 import {
   callBetterAuthSignUpEmail,
   pinBetterAuthSignUpEmail,
@@ -140,6 +142,7 @@ export function createBetterAuthPostgresBindingsFromEnvironment<
 >(
   options: BetterAuthPostgresEnvironmentBindingsOptions<Request, SessionValue>,
 ): Readonly<BetterAuthPostgresBindings<Request, SessionValue, AuthenticatedRequest>> {
+  assertBetterAuthRuntimeRealmLocked();
   if (typeof options !== 'object' || options === null) {
     throw new NativeTypeError(
       'Better Auth Postgres environment binding options must be an object.',
@@ -179,6 +182,7 @@ export function createBetterAuthPostgresBindings<
 >(
   options: BetterAuthPostgresBindingsOptions<Request, SessionValue>,
 ): Readonly<BetterAuthPostgresBindings<Request, SessionValue, AuthenticatedRequest>> {
+  assertBetterAuthRuntimeRealmLocked();
   if (typeof options !== 'object' || options === null) {
     throw new NativeTypeError('Better Auth Postgres binding options must be an object.');
   }
@@ -228,9 +232,14 @@ export function createBetterAuthPostgresBindings<
     database,
     // Seeding provisions a credential only. A session must require the explicit, CSRF-protected
     // sign-in mutation rather than being created as a side effect of server boot (SPEC §6.6).
-    emailAndPassword: { autoSignIn: false, enabled: true },
+    emailAndPassword: {
+      autoSignIn: false,
+      enabled: true,
+      password: { hash: betterAuthHashPassword, verify: betterAuthVerifyPassword },
+    },
     secret,
     secrets: [{ version: 0, value: secret }],
+    telemetry: { enabled: false },
     trustedOrigins: [],
   });
   const sessionProvider = betterAuthSession<Session, User, SessionValue>(auth, mapSession);

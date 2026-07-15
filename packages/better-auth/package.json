@@ -26,10 +26,11 @@
     }
   },
   "scripts": {
-    "build:dist": "vp pack src/index.ts src/internal.ts --dts",
+    "build:dist": "vp pack src/index.ts src/internal.ts src/internal/runtime-lock.ts --dts",
     "prepack": "pnpm run build:dist"
   },
   "dependencies": {
+    "@kovojs/core": "workspace:*",
     "@kovojs/server": "workspace:*"
   },
   "devDependencies": {
