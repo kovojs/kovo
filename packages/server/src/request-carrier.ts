@@ -399,7 +399,7 @@ export function pinnedRequestCarrierOwnData(
   if (snapshot === undefined) return undefined;
   const captured = witnessMapGet(snapshot.properties, property);
   const present = captured?.own === true && captured.data;
-  const result = witnessCreateNullRecord<unknown>();
+  const result = witnessCreateWithPrototype<PinnedRequestCarrierOwnData>(null);
   witnessDefineProperty(result, 'frameworkOwned', {
     configurable: false,
     enumerable: true,
@@ -420,7 +420,7 @@ export function pinnedRequestCarrierOwnData(
       writable: false,
     });
   }
-  return witnessFreeze(result) as PinnedRequestCarrierOwnData;
+  return witnessFreeze(result);
 }
 
 /**
