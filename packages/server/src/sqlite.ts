@@ -49,6 +49,7 @@ import {
   witnessObjectIs,
   witnessOwnKeys,
   witnessReflectApply,
+  witnessReflectConstruct,
   witnessSetAdd,
   witnessSetHas,
   witnessSortStrings,
@@ -76,10 +77,7 @@ const sqliteNodeDatabasePrepare = NodeSqliteDatabaseSync.prototype.prepare;
 const sqliteNodeDatabaseSetAuthorizer = NodeSqliteDatabaseSync.prototype.setAuthorizer;
 const sqliteConsole = console;
 const sqliteConsoleWarn = console.warn;
-const sqliteDatabasePragma = Database.prototype.pragma;
-const sqliteDatabaseExec = Database.prototype.exec;
-const sqliteDatabasePrepare = Database.prototype.prepare;
-const sqliteDatabaseClose = Database.prototype.close;
+const sqliteDatabaseErrorConstructor = Database.SqliteError;
 const sqliteModuleRequire = createRequire(import.meta.url);
 const sqliteNativeBinding = sqliteModuleRequire.resolve(
   'better-sqlite3/build/Release/better_sqlite3.node',
@@ -126,6 +124,7 @@ const SQLITE_MAX_SEED_CELLS = 100_000;
 const SQLITE_RUNTIME_WARNING =
   'Kovo SQLite starter is experimental and single-principal only: SQLite has no engine role/RLS layer, so Kovo owner scoping is not enforced. Use the default PGlite/Postgres runtime for multi-tenant authorization.';
 let sqliteRuntimeWarningPrinted = false;
+let sqliteNativeDriverControls: Readonly<SqliteNativeDriverControls> | undefined;
 
 /** A primitive accepted by the parameterized SQLite starter seed path. */
 export type KovoSqliteSeedValue = string | number | bigint | boolean | null;
@@ -213,6 +212,52 @@ interface SqliteSeedSnapshot {
   readonly table: SqliteTableSnapshot;
 }
 
+interface SqliteNativeDriverControls {
+  readonly databaseClose: Function;
+  readonly databaseConstructor: Function;
+  readonly databaseExec: Function;
+  readonly databasePrepare: Function;
+  readonly databasePrototype: object;
+  readonly statementAll: Function;
+  readonly statementColumns: Function;
+  readonly statementGet: Function;
+  readonly statementRaw: Function;
+  readonly statementRun: Function;
+  readonly statementPrototype: object;
+}
+
+interface SqlitePinnedStatement {
+  all(...params: unknown[]): unknown;
+  columns(): unknown;
+  get(...params: unknown[]): unknown;
+  raw(toggleState?: boolean): SqlitePinnedStatement;
+  run(...params: unknown[]): unknown;
+}
+
+interface SqlitePinnedTransaction {
+  readonly default: (...params: unknown[]) => unknown;
+  readonly deferred: (...params: unknown[]) => unknown;
+  readonly exclusive: (...params: unknown[]) => unknown;
+  readonly immediate: (...params: unknown[]) => unknown;
+}
+
+interface SqlitePinnedClient {
+  prepare(sql: string): SqlitePinnedStatement;
+  transaction(callback: Function): SqlitePinnedTransaction;
+}
+
+interface SqliteTransactionStatements {
+  readonly begin: SqlitePinnedStatement;
+  readonly beginDeferred: SqlitePinnedStatement;
+  readonly beginExclusive: SqlitePinnedStatement;
+  readonly beginImmediate: SqlitePinnedStatement;
+  readonly commit: SqlitePinnedStatement;
+  readonly release: SqlitePinnedStatement;
+  readonly rollback: SqlitePinnedStatement;
+  readonly rollbackTo: SqlitePinnedStatement;
+  readonly savepoint: SqlitePinnedStatement;
+}
+
 /**
  * Create the opt-in SQLite starter runtime without giving generated source filesystem, native
  * driver, raw SQL, or database-construction authority.
@@ -238,6 +283,10 @@ export function createSqliteAppRuntime(
   // second Drizzle config extraction below (which may evaluate authored FK/extra-config callbacks)
   // and before native database authority is created.
   const metadata = runtimeDbMetadataForSchema(tableValues);
+  // Pin the package-owned native constructors and method controls after compiler metadata exists,
+  // but before the second config extraction can invoke authored callbacks. Loading the exact addon
+  // does not construct a database; the in-memory handle is created only after the schema snapshot.
+  const nativeControls = pinSqliteNativeDriverControls();
   const tables = snapshotTables(tableValues, metadata);
   const seeds = snapshotSeeds(optionalOption(source, 'seed'), tables);
   const schemaDdl: string[] = [];
@@ -252,20 +301,36 @@ export function createSqliteAppRuntime(
 
   warnExperimentalSqliteRuntime();
 
-  let client: Database.Database | undefined;
+  let nativeDatabase: object | undefined;
   try {
-    // Resolve the exact package-owned addon path without `bindings` stack inspection. Supported
-    // runtime bootstrap locks Error.prepareStackTrace before app modules evaluate, so the driver's
-    // legacy lazy locator is intentionally bypassed at this framework-owned construction sink.
-    client = new Database(':memory:', { nativeBinding: sqliteNativeBinding });
-    witnessReflectApply(sqliteDatabasePragma, client, ['foreign_keys = ON']);
-    witnessReflectApply(sqliteDatabasePragma, client, ['temp_store = MEMORY']);
+    // Construct the exact native addon directly. The public better-sqlite3 wrapper consults mutable
+    // String/Buffer/fs helpers after authored callbacks and would re-open a path authority channel.
+    nativeDatabase = witnessReflectConstruct(nativeControls.databaseConstructor, [
+      ':memory:',
+      ':memory:',
+      true,
+      false,
+      false,
+      5_000,
+      null,
+      null,
+    ]);
+    assertSqliteNativeDatabase(nativeDatabase, nativeControls);
+    const client = createPinnedSqliteClient(nativeDatabase, nativeControls);
+    witnessReflectApply(nativeControls.databaseExec, nativeDatabase, [
+      'PRAGMA foreign_keys = ON; PRAGMA temp_store = MEMORY;',
+    ]);
     for (let index = 0; index < authorizerSchemaDdl.length; index += 1) {
-      witnessReflectApply(sqliteDatabaseExec, client, [authorizerSchemaDdl[index]!]);
+      witnessReflectApply(nativeControls.databaseExec, nativeDatabase, [
+        authorizerSchemaDdl[index]!,
+      ]);
     }
     seedSqliteTables(client, seeds);
 
-    const db = drizzle({ client });
+    // Drizzle's declared type names the full public driver, but its adapter uses only this pinned
+    // prepare/transaction surface. Reflective invocation keeps that finite runtime boundary honest
+    // without casting the façade into a broader raw-driver type.
+    const db = witnessReflectApply<BetterSQLite3Database>(drizzle, undefined, [{ client }]);
     const tableNames = createWitnessWeakMap<object, readonly string[]>();
     for (let index = 0; index < tables.length; index += 1) {
       const table = tables[index]!;
@@ -341,10 +406,10 @@ export function createSqliteAppRuntime(
       close(): void {
         if (closed) return;
         closed = true;
-        const closingClient = client;
-        client = undefined;
-        if (closingClient !== undefined) {
-          witnessReflectApply(sqliteDatabaseClose, closingClient, []);
+        const closingDatabase = nativeDatabase;
+        nativeDatabase = undefined;
+        if (closingDatabase !== undefined) {
+          witnessReflectApply(nativeControls.databaseClose, closingDatabase, []);
         }
       },
       db: dbProvider,
@@ -357,8 +422,354 @@ export function createSqliteAppRuntime(
       },
     });
   } catch (error) {
-    if (client !== undefined) witnessReflectApply(sqliteDatabaseClose, client, []);
+    if (nativeDatabase !== undefined) {
+      witnessReflectApply(nativeControls.databaseClose, nativeDatabase, []);
+    }
     throw error;
+  }
+}
+
+function pinSqliteNativeDriverControls(): Readonly<SqliteNativeDriverControls> {
+  if (sqliteNativeDriverControls !== undefined) return sqliteNativeDriverControls;
+  const addonValue: unknown = sqliteModuleRequire(sqliteNativeBinding);
+  if (typeof addonValue !== 'object' || addonValue === null || sqliteIsProxy(addonValue)) {
+    throw new TypeError('KV414: better-sqlite3 native addon must be an exact object.');
+  }
+  const databaseConstructor = stableOwnDataFunction(
+    addonValue,
+    'Database',
+    'better-sqlite3 native Database constructor',
+  );
+  const statementConstructor = stableOwnDataFunction(
+    addonValue,
+    'Statement',
+    'better-sqlite3 native Statement constructor',
+  );
+  const databasePrototype = stableOwnDataObject(
+    databaseConstructor,
+    'prototype',
+    'better-sqlite3 native Database prototype',
+  );
+  const statementPrototype = stableOwnDataObject(
+    statementConstructor,
+    'prototype',
+    'better-sqlite3 native Statement prototype',
+  );
+  const controls = witnessFreeze({
+    databaseClose: stableOwnDataFunction(
+      databasePrototype,
+      'close',
+      'better-sqlite3 native Database.close',
+    ),
+    databaseConstructor,
+    databaseExec: stableOwnDataFunction(
+      databasePrototype,
+      'exec',
+      'better-sqlite3 native Database.exec',
+    ),
+    databasePrepare: stableOwnDataFunction(
+      databasePrototype,
+      'prepare',
+      'better-sqlite3 native Database.prepare',
+    ),
+    databasePrototype,
+    statementAll: stableOwnDataFunction(
+      statementPrototype,
+      'all',
+      'better-sqlite3 native Statement.all',
+    ),
+    statementColumns: stableOwnDataFunction(
+      statementPrototype,
+      'columns',
+      'better-sqlite3 native Statement.columns',
+    ),
+    statementGet: stableOwnDataFunction(
+      statementPrototype,
+      'get',
+      'better-sqlite3 native Statement.get',
+    ),
+    statementRaw: stableOwnDataFunction(
+      statementPrototype,
+      'raw',
+      'better-sqlite3 native Statement.raw',
+    ),
+    statementRun: stableOwnDataFunction(
+      statementPrototype,
+      'run',
+      'better-sqlite3 native Statement.run',
+    ),
+    statementPrototype,
+  } satisfies SqliteNativeDriverControls);
+
+  const initialized = optionalStableOwnDataValue(
+    addonValue,
+    'isInitialized',
+    'better-sqlite3 native addon initialization flag',
+  );
+  if (initialized !== true) {
+    if (initialized !== undefined && initialized !== false) {
+      throw new TypeError('KV414: better-sqlite3 native addon initialization flag is invalid.');
+    }
+    const setErrorConstructor = stableOwnDataFunction(
+      addonValue,
+      'setErrorConstructor',
+      'better-sqlite3 native error constructor control',
+    );
+    witnessReflectApply(setErrorConstructor, addonValue, [sqliteDatabaseErrorConstructor]);
+    witnessDefineProperty(addonValue, 'isInitialized', {
+      configurable: true,
+      enumerable: true,
+      value: true,
+      writable: true,
+    });
+  }
+  if (
+    stableOwnDataValue(
+      addonValue,
+      'isInitialized',
+      'better-sqlite3 native addon initialization flag',
+    ) !== true
+  ) {
+    throw new TypeError('KV414: better-sqlite3 native addon did not initialize safely.');
+  }
+
+  // Lock constructor-to-prototype identity before authored callbacks run. Method bodies remain
+  // usable by other package consumers, while every Kovo dispatch below uses the captured controls.
+  witnessFreeze(databaseConstructor);
+  witnessFreeze(statementConstructor);
+  pinOptionalSqliteNativeConstructor(addonValue, 'StatementIterator');
+  pinOptionalSqliteNativeConstructor(addonValue, 'Backup');
+  witnessFreeze(addonValue);
+  sqliteNativeDriverControls = controls;
+  return controls;
+}
+
+function pinOptionalSqliteNativeConstructor(addon: object, property: PropertyKey): void {
+  const value = optionalStableOwnDataValue(
+    addon,
+    property,
+    `better-sqlite3 native ${String(property)} constructor`,
+  );
+  if (value === undefined) return;
+  if (typeof value !== 'function') {
+    throw new TypeError(`KV414: better-sqlite3 native ${String(property)} must be a function.`);
+  }
+  witnessFreeze(value);
+}
+
+function assertSqliteNativeDatabase(
+  database: object,
+  controls: Readonly<SqliteNativeDriverControls>,
+): void {
+  if (
+    sqliteIsProxy(database) ||
+    !witnessObjectIs(witnessGetPrototypeOf(database), controls.databasePrototype) ||
+    stableOwnDataValue(database, 'memory', 'better-sqlite3 native Database.memory') !== true ||
+    stableOwnDataValue(database, 'readonly', 'better-sqlite3 native Database.readonly') !== false ||
+    stableOwnDataValue(database, 'open', 'better-sqlite3 native Database.open') !== true ||
+    stableOwnDataValue(database, 'name', 'better-sqlite3 native Database.name') !== ':memory:'
+  ) {
+    throw new TypeError(
+      'KV414: better-sqlite3 did not create the exact in-memory native database.',
+    );
+  }
+}
+
+function createPinnedSqliteClient(
+  database: object,
+  controls: Readonly<SqliteNativeDriverControls>,
+): Readonly<SqlitePinnedClient> {
+  let transactionStatements: Readonly<SqliteTransactionStatements> | undefined;
+  let client: Readonly<SqlitePinnedClient>;
+  const prepare = (sql: string): SqlitePinnedStatement => {
+    if (typeof sql !== 'string') throw new TypeError('SQLite prepare text must be a string.');
+    const statement = witnessReflectApply<unknown>(controls.databasePrepare, database, [
+      sql,
+      client,
+      false,
+    ]);
+    if (
+      typeof statement !== 'object' ||
+      statement === null ||
+      sqliteIsProxy(statement) ||
+      !witnessObjectIs(witnessGetPrototypeOf(statement), controls.statementPrototype)
+    ) {
+      throw new TypeError('KV414: better-sqlite3 prepare returned an invalid native statement.');
+    }
+    return createPinnedSqliteStatement(statement, controls);
+  };
+  const statements = (): Readonly<SqliteTransactionStatements> => {
+    if (transactionStatements !== undefined) return transactionStatements;
+    transactionStatements = witnessFreeze({
+      begin: prepare('BEGIN'),
+      beginDeferred: prepare('BEGIN DEFERRED'),
+      beginExclusive: prepare('BEGIN EXCLUSIVE'),
+      beginImmediate: prepare('BEGIN IMMEDIATE'),
+      commit: prepare('COMMIT'),
+      release: prepare('RELEASE SAVEPOINT "kovo.runtime.transaction"'),
+      rollback: prepare('ROLLBACK'),
+      rollbackTo: prepare('ROLLBACK TO SAVEPOINT "kovo.runtime.transaction"'),
+      savepoint: prepare('SAVEPOINT "kovo.runtime.transaction"'),
+    } satisfies SqliteTransactionStatements);
+    return transactionStatements;
+  };
+  client = witnessFreeze({
+    prepare,
+    transaction(callback: Function): SqlitePinnedTransaction {
+      if (typeof callback !== 'function') {
+        throw new TypeError('SQLite transaction callback must be a function.');
+      }
+      return createPinnedSqliteTransaction(database, callback, statements);
+    },
+  } satisfies SqlitePinnedClient);
+  return client;
+}
+
+function createPinnedSqliteStatement(
+  statement: object,
+  controls: Readonly<SqliteNativeDriverControls>,
+): Readonly<SqlitePinnedStatement> {
+  let facade: Readonly<SqlitePinnedStatement>;
+  facade = witnessFreeze({
+    all(...params: unknown[]): unknown {
+      return witnessReflectApply(controls.statementAll, statement, params);
+    },
+    columns(): unknown {
+      return witnessReflectApply(controls.statementColumns, statement, []);
+    },
+    get(...params: unknown[]): unknown {
+      return witnessReflectApply(controls.statementGet, statement, params);
+    },
+    raw(toggleState?: boolean): SqlitePinnedStatement {
+      if (toggleState === undefined) {
+        witnessReflectApply(controls.statementRaw, statement, []);
+      } else {
+        witnessReflectApply(controls.statementRaw, statement, [toggleState]);
+      }
+      return facade;
+    },
+    run(...params: unknown[]): unknown {
+      return witnessReflectApply(controls.statementRun, statement, params);
+    },
+  } satisfies SqlitePinnedStatement);
+  return facade;
+}
+
+function createPinnedSqliteTransaction(
+  database: object,
+  callback: Function,
+  statements: () => Readonly<SqliteTransactionStatements>,
+): Readonly<SqlitePinnedTransaction> {
+  return witnessFreeze({
+    default(this: unknown, ...params: unknown[]): unknown {
+      return runPinnedSqliteTransaction(database, callback, this, params, 'default', statements());
+    },
+    deferred(this: unknown, ...params: unknown[]): unknown {
+      return runPinnedSqliteTransaction(database, callback, this, params, 'deferred', statements());
+    },
+    exclusive(this: unknown, ...params: unknown[]): unknown {
+      return runPinnedSqliteTransaction(
+        database,
+        callback,
+        this,
+        params,
+        'exclusive',
+        statements(),
+      );
+    },
+    immediate(this: unknown, ...params: unknown[]): unknown {
+      return runPinnedSqliteTransaction(
+        database,
+        callback,
+        this,
+        params,
+        'immediate',
+        statements(),
+      );
+    },
+  } satisfies SqlitePinnedTransaction);
+}
+
+function runPinnedSqliteTransaction(
+  database: object,
+  callback: Function,
+  callbackThis: unknown,
+  params: readonly unknown[],
+  behavior: 'default' | 'deferred' | 'exclusive' | 'immediate',
+  statements: Readonly<SqliteTransactionStatements>,
+): unknown {
+  const nested = sqliteNativeDatabaseInTransaction(database);
+  const before = nested
+    ? statements.savepoint
+    : behavior === 'exclusive'
+      ? statements.beginExclusive
+      : behavior === 'immediate'
+        ? statements.beginImmediate
+        : behavior === 'deferred'
+          ? statements.beginDeferred
+          : statements.begin;
+  const after = nested ? statements.release : statements.commit;
+  const undo = nested ? statements.rollbackTo : statements.rollback;
+  runPinnedSqliteStatement(before);
+  try {
+    const result = witnessReflectApply<unknown>(callback, callbackThis, params);
+    assertSynchronousSqliteTransactionResult(result);
+    runPinnedSqliteStatement(after);
+    return result;
+  } catch (error) {
+    if (sqliteNativeDatabaseInTransaction(database)) {
+      runPinnedSqliteStatement(undo);
+      if (nested) runPinnedSqliteStatement(statements.release);
+    }
+    throw error;
+  }
+}
+
+function runPinnedSqliteStatement(statement: SqlitePinnedStatement): void {
+  const run = stableOwnDataFunction(statement, 'run', 'pinned SQLite transaction statement.run');
+  witnessReflectApply(run, statement, []);
+}
+
+function sqliteNativeDatabaseInTransaction(database: object): boolean {
+  const value = stableOwnDataValue(
+    database,
+    'inTransaction',
+    'better-sqlite3 native Database.inTransaction',
+  );
+  if (typeof value !== 'boolean') {
+    throw new TypeError('KV414: better-sqlite3 transaction state is invalid.');
+  }
+  return value;
+}
+
+function assertSynchronousSqliteTransactionResult(result: unknown): void {
+  if ((typeof result !== 'object' && typeof result !== 'function') || result === null) return;
+  if (sqliteIsProxy(result)) {
+    throw new TypeError('SQLite transaction callback must not return a Proxy or Promise.');
+  }
+  let owner: object | null = result;
+  for (let depth = 0; owner !== null && depth < 32; depth += 1) {
+    const before = witnessGetOwnPropertyDescriptor(owner, 'then');
+    const after = witnessGetOwnPropertyDescriptor(owner, 'then');
+    if (before !== undefined || after !== undefined) {
+      if (
+        before === undefined ||
+        after === undefined ||
+        !('value' in before) ||
+        !('value' in after) ||
+        !witnessObjectIs(before.value, after.value)
+      ) {
+        throw new TypeError('SQLite transaction callback result.then must be stable own data.');
+      }
+      if (typeof before.value === 'function') {
+        throw new TypeError('SQLite transaction callback must not return a Promise.');
+      }
+      return;
+    }
+    owner = witnessGetPrototypeOf(owner);
+  }
+  if (owner !== null) {
+    throw new TypeError('SQLite transaction callback result prototype chain is too deep.');
   }
 }
 
@@ -934,7 +1345,7 @@ function snapshotSeedRow(
   return witnessFreeze({ columns: witnessFreeze(columns), values: witnessFreeze(values) });
 }
 
-function seedSqliteTables(client: Database.Database, seeds: readonly SqliteSeedSnapshot[]): void {
+function seedSqliteTables(client: SqlitePinnedClient, seeds: readonly SqliteSeedSnapshot[]): void {
   for (let seedIndex = 0; seedIndex < seeds.length; seedIndex += 1) {
     const seed = seeds[seedIndex]!;
     for (let rowIndex = 0; rowIndex < seed.rows.length; rowIndex += 1) {
@@ -960,10 +1371,8 @@ function seedSqliteTables(client: Database.Database, seeds: readonly SqliteSeedS
         quotedColumns,
         ', ',
       )}) VALUES (${securityArrayJoin(placeholders, ', ')});`;
-      const statement = witnessReflectApply<Database.Statement>(sqliteDatabasePrepare, client, [
-        sql,
-      ]);
-      const run = stableOwnOrPrototypeFunction(statement, 'run', 'SQLite prepared statement.run');
+      const statement = client.prepare(sql);
+      const run = stableOwnDataFunction(statement, 'run', 'SQLite prepared statement.run');
       witnessReflectApply(run, statement, values);
     }
   }
@@ -1154,6 +1563,39 @@ function stableOwnDataValue<Source extends object, Key extends PropertyKey>(
   return before.value;
 }
 
+function optionalStableOwnDataValue(source: object, property: PropertyKey, label: string): unknown {
+  if (sqliteIsProxy(source)) throw new TypeError(`${label} owner must not be a Proxy.`);
+  const before = witnessGetOwnPropertyDescriptor(source, property);
+  const after = witnessGetOwnPropertyDescriptor(source, property);
+  if ((before === undefined) !== (after === undefined)) {
+    throw new TypeError(`${label} must be stable.`);
+  }
+  if (before === undefined) return undefined;
+  if (
+    after === undefined ||
+    !('value' in before) ||
+    !('value' in after) ||
+    !witnessObjectIs(before.value, after.value)
+  ) {
+    throw new TypeError(`${label} must be a stable own-data property.`);
+  }
+  return before.value;
+}
+
+function stableOwnDataFunction(source: object, property: PropertyKey, label: string): Function {
+  const value = stableOwnDataValue(source, property, label);
+  if (typeof value !== 'function') throw new TypeError(`${label} must be a function.`);
+  return value;
+}
+
+function stableOwnDataObject(source: object, property: PropertyKey, label: string): object {
+  const value = stableOwnDataValue(source, property, label);
+  if ((typeof value !== 'object' && typeof value !== 'function') || value === null) {
+    throw new TypeError(`${label} must be an object.`);
+  }
+  return value;
+}
+
 function snapshotDenseArray(value: unknown, label: string, maximum: number): readonly unknown[] {
   if (!witnessIsArray(value) || sqliteIsProxy(value)) {
     throw new TypeError(`${label} must be a dense own-data array.`);
@@ -1194,34 +1636,6 @@ function snapshotSystemDbOptions(options: {
   }
   snapshotAuditReason(snapshot.reason, 'SQLite system DB capability reason (SPEC §10.3)');
   snapshotAuditText(snapshot.surface, 'SQLite system DB capability surface (SPEC §10.3)');
-}
-
-function stableOwnOrPrototypeFunction(
-  source: object,
-  property: PropertyKey,
-  label: string,
-): Function {
-  let owner: object | null = source;
-  for (let depth = 0; owner !== null && depth < 16; depth += 1) {
-    const before = witnessGetOwnPropertyDescriptor(owner, property);
-    const after = witnessGetOwnPropertyDescriptor(owner, property);
-    if (before !== undefined || after !== undefined) {
-      if (
-        before === undefined ||
-        after === undefined ||
-        !('value' in before) ||
-        !('value' in after) ||
-        !witnessObjectIs(before.value, after.value) ||
-        typeof before.value !== 'function'
-      ) {
-        throw new TypeError(`${label} must be a stable data method.`);
-      }
-      return before.value;
-    }
-    const prototype = witnessGetPrototypeOf(owner);
-    owner = prototype;
-  }
-  throw new TypeError(`${label} is unavailable.`);
 }
 
 function warnExperimentalSqliteRuntime(): void {

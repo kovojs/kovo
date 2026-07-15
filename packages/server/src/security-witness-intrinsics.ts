@@ -20,6 +20,7 @@ const NativeReflect = globalThis.Reflect;
 const NativeRegExp = globalThis.RegExp;
 const NativeJSON = globalThis.JSON;
 const nativeReflectApply = NativeReflect.apply;
+const nativeReflectConstruct = NativeReflect.construct;
 const nativeReflectGet = NativeReflect.get;
 const nativeReflectOwnKeys = NativeReflect.ownKeys;
 const nativeArrayIsArray = NativeArray.isArray;
@@ -88,6 +89,20 @@ function capturedControlsAreSound(): boolean {
     const key = {};
     const other = {};
     const value = {};
+    class WitnessConstructedValue {
+      constructor(readonly witness: object) {}
+    }
+    const constructed = apply<WitnessConstructedValue>(nativeReflectConstruct, NativeReflect, [
+      WitnessConstructedValue,
+      [value],
+    ]);
+    if (
+      apply(nativeObjectGetPrototypeOf, NativeObject, [constructed]) !==
+        WitnessConstructedValue.prototype ||
+      constructed.witness !== value
+    ) {
+      return false;
+    }
 
     const weakMap = new NativeWeakMap<object, object>();
     apply(nativeWeakMapSet, weakMap, [key, value]);
@@ -461,6 +476,14 @@ export function witnessReflectApply<Return>(
 ): Return {
   assertSecurityWitnessIntrinsics();
   return apply(target, thisArgument, argumentsList);
+}
+
+export function witnessReflectConstruct<Return extends object>(
+  target: Function,
+  argumentsList: readonly unknown[],
+): Return {
+  assertSecurityWitnessIntrinsics();
+  return apply(nativeReflectConstruct, NativeReflect, [target, argumentsList]);
 }
 
 export function witnessProxy<Target extends object>(

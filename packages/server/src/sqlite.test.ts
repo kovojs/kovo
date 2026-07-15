@@ -711,6 +711,165 @@ describe('public SQLite runtime boundary (SPEC §6.6/§10.3)', () => {
     expect((readError as Error).message).toMatch(/outside the declared reads set/u);
     expect(childRows).toEqual([{ id: 'c1' }]);
   });
+
+  it('pins the finite better-sqlite3 client, statement, and transaction controls', () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const prefix = `kovo_driver_prepare_${Date.now()}`;
+    const BetterSqlite = sqliteTestRequire('better-sqlite3') as {
+      prototype: Record<PropertyKey, unknown>;
+    };
+    const nativeBinding = sqliteTestRequire.resolve(
+      'better-sqlite3/build/Release/better_sqlite3.node',
+    );
+    const nativeAddon = sqliteTestRequire(nativeBinding) as {
+      Database: { prototype: Record<PropertyKey, unknown> };
+      Statement: { prototype: Record<PropertyKey, unknown> };
+    };
+    const poisonTargets = [
+      [Reflect, 'construct'],
+      [BetterSqlite.prototype, 'prepare'],
+      [nativeAddon.Database.prototype, 'close'],
+      [nativeAddon.Database.prototype, 'exec'],
+      [nativeAddon.Database.prototype, 'prepare'],
+      [nativeAddon.Statement.prototype, 'all'],
+      [nativeAddon.Statement.prototype, 'columns'],
+      [nativeAddon.Statement.prototype, 'get'],
+      [nativeAddon.Statement.prototype, 'raw'],
+      [nativeAddon.Statement.prototype, 'run'],
+    ].map(([owner, property]) => {
+      const descriptor = Object.getOwnPropertyDescriptor(owner, property);
+      if (descriptor === undefined) {
+        throw new Error(`better-sqlite3 ${String(property)} control is unavailable`);
+      }
+      return [owner, property, descriptor] as const;
+    });
+    let poisonHits = 0;
+    let poisoned = false;
+    const parent = sqliteTable(
+      `${prefix}_parent`,
+      { id: text('id').primaryKey() },
+      kovo({ domain: `${prefix}_parent`, key: 'id' }),
+    );
+    const child = sqliteTable(
+      `${prefix}_child`,
+      {
+        id: text('id').primaryKey(),
+        parentId: text('parent_id').references(() => {
+          if (!poisoned) {
+            poisoned = true;
+            for (const [owner, property, descriptor] of poisonTargets) {
+              Object.defineProperty(owner, property, {
+                ...descriptor,
+                value: () => {
+                  poisonHits += 1;
+                  throw new Error(`late better-sqlite3 ${String(property)} poison reached`);
+                },
+              });
+            }
+          }
+          return parent.id;
+        }),
+      },
+      kovo({ domain: `${prefix}_child`, key: 'id' }),
+    );
+    const release = installGeneratedTableSecurityManifestForCommand(
+      manifestFor([
+        { columns: [{ key: 'id', name: 'id' }], name: `${prefix}_parent` },
+        {
+          columns: [
+            { key: 'id', name: 'id' },
+            { key: 'parentId', name: 'parent_id' },
+          ],
+          name: `${prefix}_child`,
+        },
+      ]),
+    );
+    let runtime: Readonly<sqlitePublicApi.KovoSqliteAppRuntime> | undefined;
+    let readError: unknown;
+    let rows: unknown;
+    let boundary: unknown;
+    try {
+      runtime = sqlitePublicApi.createSqliteAppRuntime({
+        seed: [{ rows: [{ id: 'p1' }], table: parent }],
+        tables: [parent, child],
+      });
+      const capability = runtime.systemDb({
+        operation: 'write',
+        reason: 'Exercise late better-sqlite3 prepare poisoning',
+        surface: 'sqlite.test#driver-prepare-poison',
+      });
+      try {
+        rows = useSqliteSystemDb(capability, (db) => {
+          const client = Reflect.get(db, '$client') as Record<PropertyKey, unknown>;
+          const clientPrepare = Reflect.get(client, 'prepare') as Function;
+          const clientTransaction = Reflect.get(client, 'transaction') as Function;
+          const statement = Reflect.apply(clientPrepare, client, [
+            `select id from "${prefix}_parent"`,
+          ]) as Record<PropertyKey, unknown>;
+          const statementRaw = Reflect.get(statement, 'raw') as Function;
+          const transaction = Reflect.apply(clientTransaction, client, [() => undefined]) as Record<
+            PropertyKey,
+            unknown
+          >;
+          boundary = {
+            clientFrozen: Object.isFrozen(client),
+            clientKeys: Reflect.ownKeys(client),
+            clientRawEscape:
+              Reflect.has(client, 'close') ||
+              Reflect.has(client, 'exec') ||
+              Reflect.has(client, 'pragma'),
+            rawReturnsStatement: Reflect.apply(statementRaw, statement, []) === statement,
+            statementFrozen: Object.isFrozen(statement),
+            statementKeys: Reflect.ownKeys(statement),
+            statementRawEscape: Reflect.has(statement, 'database'),
+            transactionFrozen: Object.isFrozen(transaction),
+            transactionKeys: Reflect.ownKeys(transaction),
+            transactionRawEscape: Reflect.has(transaction, 'database'),
+          };
+          expect(() =>
+            db.transaction((tx) => {
+              tx.insert(parent).values({ id: 'rolled-back' }).run();
+              throw new Error('exercise pinned transaction rollback');
+            }),
+          ).toThrow(/pinned transaction rollback/u);
+          return db.transaction(
+            (tx) => {
+              tx.insert(parent).values({ id: 'p2' }).run();
+              return tx.select({ id: parent.id }).from(parent).orderBy(parent.id).all();
+            },
+            { behavior: 'immediate' },
+          );
+        });
+      } catch (error) {
+        readError = error;
+      }
+    } finally {
+      try {
+        runtime?.close();
+      } finally {
+        for (const [owner, property, descriptor] of poisonTargets) {
+          Object.defineProperty(owner, property, descriptor);
+        }
+        release();
+      }
+    }
+    expect(poisoned).toBe(true);
+    expect(poisonHits).toBe(0);
+    expect(readError).toBeUndefined();
+    expect(rows).toEqual([{ id: 'p1' }, { id: 'p2' }]);
+    expect(boundary).toEqual({
+      clientFrozen: true,
+      clientKeys: ['prepare', 'transaction'],
+      clientRawEscape: false,
+      rawReturnsStatement: true,
+      statementFrozen: true,
+      statementKeys: ['all', 'columns', 'get', 'raw', 'run'],
+      statementRawEscape: false,
+      transactionFrozen: true,
+      transactionKeys: ['default', 'deferred', 'exclusive', 'immediate'],
+      transactionRawEscape: false,
+    });
+  });
 });
 
 function runtimeSchema(prefix: string) {
