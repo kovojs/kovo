@@ -17,6 +17,7 @@
 
 import {
   createFrameworkManagedSqlDispatchProxy,
+  frameworkCanonicalNativeSqlSource,
   frameworkManagedSqlDispatchPropertyValue,
   frameworkManagedDbRawTarget,
   isFrameworkManagedSqlDispatchProxy,
@@ -396,7 +397,9 @@ export const createDeclaredWriteDb = securityClassifier(
               safeOptions.canonicalizeTable === undefined
                 ? table
                 : safeOptions.canonicalizeTable(table);
-            const names = safeOptions.tableNames(executionTable);
+            const names = safeOptions.tableNames(
+              frameworkCanonicalNativeSqlSource(executionTable) ?? executionTable,
+            );
             assertDeclaredWriteTablesAllowed(names, safeOptions, allowed);
             const builder = witnessReflectApply(
               value,

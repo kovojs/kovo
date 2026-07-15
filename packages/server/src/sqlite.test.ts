@@ -6,7 +6,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { kovo, sql, trustedSql } from '@kovojs/drizzle';
-import { Table } from 'drizzle-orm';
+import { eq, Table } from 'drizzle-orm';
 import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
 import { integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 
@@ -918,6 +918,51 @@ describe('public SQLite runtime boundary (SPEC §6.6/§10.3)', () => {
           db.select({ id: schema.parent.id, name: schema.parent.name }).from(schema.parent).all(),
         ),
       ).toEqual([{ id: 'async-1', name: 'Async SQLite' }]);
+    } finally {
+      release();
+    }
+  });
+
+  it('executes insert, update, and delete on a foreign-key-bearing managed table', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const prefix = `kovo_fk_managed_dml_${Date.now()}`;
+    const schema = runtimeSchema(prefix);
+    const release = installGeneratedTableSecurityManifestForCommand(schema.manifest);
+    try {
+      const runtime = sqlitePublicApi.createSqliteAppRuntime({
+        seed: [{ rows: [{ id: 'parent-1', name: 'Parent' }], table: schema.parent }],
+        tables: [schema.parent, schema.child],
+      });
+      runtimes.push(runtime);
+      const exerciseChild = mutation('sqlite/fk-managed-dml', {
+        csrf: false,
+        csrfJustification: 'framework SQLite FK-bearing DML regression',
+        input: s.object({}),
+        registry: { tables: [`${prefix}_child`], touches: [domain(`${prefix}_child`)] },
+        async handler(_input, request: { db: BetterSQLite3Database }) {
+          await request.db.insert(schema.child).values({ id: 'child-1', parentId: 'parent-1' });
+          await request.db
+            .update(schema.child)
+            .set({ parentId: 'parent-1' })
+            .where(eq(schema.child.id, 'child-1'));
+          await request.db.delete(schema.child).where(eq(schema.child.id, 'child-1'));
+          return 'child-1';
+        },
+      });
+
+      await expect(runMutation(exerciseChild, {}, {}, { db: runtime.db })).resolves.toMatchObject({
+        ok: true,
+        value: 'child-1',
+      });
+
+      const capability = runtime.systemDb({
+        operation: 'write',
+        reason: 'Verify managed FK-bearing DML completed without retaining a child row',
+        surface: 'sqlite.test#fk-managed-dml',
+      });
+      expect(useSqliteSystemDb(capability, (db) => db.select().from(schema.child).all())).toEqual(
+        [],
+      );
     } finally {
       release();
     }

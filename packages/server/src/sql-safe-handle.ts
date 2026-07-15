@@ -1070,7 +1070,10 @@ function canonicalNativeDrizzleSchemaEntity(
 function reconstructNativeDrizzleTableEntity(
   value: object,
   seen: WeakMap<object, unknown>,
-  copyAncillaryProperties = true,
+  // Index, FK, check, and extra-config carriers describe schema construction; they are not DML
+  // execution authority. Omitting them keeps managed builders on the finite table/column graph and
+  // prevents an FK-bearing table from dragging unsupported executable metadata to the SQL sink.
+  copyAncillaryProperties = false,
 ): object {
   const existing = witnessWeakMapGet(seen, value);
   if (isRecord(existing)) return existing;
