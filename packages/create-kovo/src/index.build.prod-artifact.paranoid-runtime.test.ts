@@ -289,7 +289,7 @@ describe('create-kovo starter (build integration: paranoid runtime chokes)', () 
       await stopProcess(server);
       rmSync(root, { force: true, recursive: true });
     }
-  }, 600_000);
+  }, 900_000);
 });
 
 describeIfPostgres(

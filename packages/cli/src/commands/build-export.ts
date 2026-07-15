@@ -3204,6 +3204,7 @@ function approvedBuildSourcesVitePlugin(
 ): Plugin {
   const approvedByPath = buildCreateMap<string, string>();
   const appSourcePaths = buildCreateSet<string>();
+  const pinnedFrameworkSourcePaths = buildCreateSet<string>();
   const approvedFiles = buildSnapshotDenseArray(sourceFiles, 'Approved build source files');
   const sourceRoot = dirname(appModulePath);
   for (let index = 0; index < approvedFiles.length; index += 1) {
@@ -3233,6 +3234,36 @@ function approvedBuildSourcesVitePlugin(
   return {
     enforce: 'pre',
     name: 'kovo-approved-build-sources',
+    load(id) {
+      const fileName = viteBuildSourceFileName(id);
+      if (fileName === undefined || buildMapHas(approvedByPath, fileName)) return null;
+      const frameworkSource = classifyKovoFrameworkSourcePath(frameworkSourceRoots, fileName);
+      if (frameworkSource.kind === 'outside') return null;
+      if (frameworkSource.kind === 'invalid') {
+        throw new Error(
+          `Kovo build refused unrecognized framework source ${relative(buildRoot, fileName) || fileName}; the file was not in the boot-time declared-package snapshot (SPEC §5.2/§6.6).`,
+        );
+      }
+      let source: string;
+      try {
+        source = readFileSync(frameworkSource.canonicalPath, 'utf8');
+      } catch {
+        throw new Error(
+          `Kovo build refused unreadable framework source ${relative(buildRoot, fileName) || fileName}; its boot-time declared-package snapshot cannot be reconstructed (SPEC §5.2/§6.6).`,
+        );
+      }
+      if (!kovoFrameworkSourceSnapshotMatches(frameworkSource.snapshot, source)) {
+        throw new Error(
+          `Kovo build refused changed framework source ${relative(buildRoot, fileName) || fileName}; its bytes no longer match the boot-time declared-package snapshot (SPEC §5.2/§6.6).`,
+        );
+      }
+      buildSetAdd(pinnedFrameworkSourcePaths, frameworkSource.canonicalPath);
+      // Pin the exact boot-approved package bytes at Vite's load boundary. Dev/SSR dependency
+      // transforms can normalize already-built .mjs before user transform hooks run; comparing
+      // that normalized text to the package snapshot is both a false rejection and too late to
+      // prove which bytes entered the pipeline (SPEC §5.2/§6.6 rule 6, C15).
+      return source;
+    },
     async resolveId(source, importer) {
       if (
         importer === undefined ||
@@ -3268,9 +3299,9 @@ function approvedBuildSourcesVitePlugin(
           );
         }
         if (frameworkSource.kind === 'trusted') {
-          if (!kovoFrameworkSourceSnapshotMatches(frameworkSource.snapshot, code)) {
+          if (!buildSetHas(pinnedFrameworkSourcePaths, frameworkSource.canonicalPath)) {
             throw new Error(
-              `Kovo build refused changed framework source ${relative(buildRoot, fileName) || fileName}; its bytes no longer match the boot-time declared-package snapshot (SPEC §5.2/§6.6).`,
+              `Kovo build refused unpinned framework source ${relative(buildRoot, fileName) || fileName}; it did not cross the boot-time declared-package load boundary (SPEC §5.2/§6.6).`,
             );
           }
           return null;

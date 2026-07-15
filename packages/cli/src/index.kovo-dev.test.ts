@@ -288,9 +288,10 @@ export default config;\n`,
       ok: false,
     });
     expect(existsSync(marker)).toBe(false);
-    // This deliberately boots and rejects ten independent authored Vite config graphs. Keep the
-    // security cases serial, but leave headroom for the fully populated four-way CI test shard.
-  }, 90_000);
+    // This deliberately boots and rejects twelve independent authored Vite config graphs. Each
+    // child has its own 30-second bound; keep the security cases serial, while allowing a fully
+    // populated four-way CI shard enough aggregate wall-clock headroom.
+  }, 180_000);
 
   it('fails closed before a poison-first plugin can replace a live lowerer collection method', async () => {
     const root = devFixture('lowerer-poison');

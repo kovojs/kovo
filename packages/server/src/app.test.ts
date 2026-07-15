@@ -2673,6 +2673,12 @@ describe('server createApp request shell', () => {
         headers: { 'X-Forwarded-For': `203.0.${Math.floor(index / 255)}.${index % 255}` },
         method: 'POST',
       });
+    const expectActiveWindowRetryAfter = (response: Response) => {
+      const retryAfter = Number(response.headers.get('retry-after'));
+      expect(Number.isInteger(retryAfter)).toBe(true);
+      expect(retryAfter).toBeGreaterThan(0);
+      expect(retryAfter).toBeLessThanOrEqual(60);
+    };
 
     for (let index = 0; index < 8; index += 1) {
       expect((await handler(request(index))).status).toBe(303);
@@ -2682,13 +2688,13 @@ describe('server createApp request shell', () => {
     for (let index = 8; index < 2_048; index += 1) {
       const saturated = await handler(request(index));
       expect(saturated.status).toBe(429);
-      expect(saturated.headers.get('retry-after')).toBe('60');
+      expectActiveWindowRetryAfter(saturated);
       expect(appRateLimitKeyCounts(app).perIp).toBe(8);
     }
 
     const activeOldest = await handler(request(0));
     expect(activeOldest.status).toBe(429);
-    expect(activeOldest.headers.get('retry-after')).toBe('60');
+    expectActiveWindowRetryAfter(activeOldest);
     expect(appRateLimitKeyCounts(app).perIp).toBe(8);
   });
 

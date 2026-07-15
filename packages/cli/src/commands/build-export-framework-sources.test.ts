@@ -15,7 +15,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
-import { build as viteBuild, type Plugin } from 'vite-plus';
+import { build as viteBuild, createServer as createViteServer, type Plugin } from 'vite-plus';
 
 import {
   kovoFrameworkSourcePathFromTrustForTesting,
@@ -413,6 +413,30 @@ describe('Kovo framework source roots', () => {
         kovoFrameworkSourcePathForTesting(cli.entry, join(server.root, 'dist/theme.css.map')),
       ).toBe(true);
     } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it('pins packed framework bytes before Vite SSR dependency normalization', async () => {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), 'kovo-framework-packed-ssr-')));
+    let viteServer: Awaited<ReturnType<typeof createViteServer>> | undefined;
+    try {
+      const cli = writePackedPackage(root, '@kovojs/cli', { '@kovojs/server': '0.2.0' });
+      const server = writePackedPackage(root, '@kovojs/server');
+      viteServer = await createViteServer({
+        appType: 'custom',
+        configFile: false,
+        logLevel: 'silent',
+        plugins: [kovoFrameworkSourceVitePluginForTesting(cli.entry, root)],
+        root,
+        server: { hmr: false },
+        ssr: { noExternal: [/^@kovojs\//] },
+      });
+
+      const loaded = (await viteServer.ssrLoadModule(server.chunk)) as { packed?: unknown };
+      expect(loaded.packed).toBe(true);
+    } finally {
+      await viteServer?.close();
       rmSync(root, { force: true, recursive: true });
     }
   });

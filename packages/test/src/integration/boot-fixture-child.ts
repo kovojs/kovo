@@ -293,6 +293,7 @@ function fixtureAppPreparer(serverModule: unknown, managedDbModule: unknown): Fi
           'read',
           verifierFreeze({
             rawRead: verifierFreeze({
+              dialect: 'postgres',
               dialectLabel: 'PGlite integration fixture',
               executeMethod: 'query',
               normalizeTableName: normalizePgliteFixtureTableName,
