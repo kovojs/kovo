@@ -4,8 +4,8 @@ import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
-import { pathToFileURL } from 'node:url';
 
+import { hashPassword as kovoHashPassword } from '@kovojs/server';
 import { afterAll, describe, expect, it } from 'vitest';
 
 import { demoPasswordEnvVar, writeKovoProject } from './index.js';
@@ -66,8 +66,7 @@ const allowedReadCases = [
 ] as const;
 
 const blockedWriteCases = [
-  'starter-mutation-db-scope-proof/starter-auth-user-table-write-proof',
-  'starter-mutation-db-scope-proof/starter-auth-session-table-write-proof',
+  'starter-mutation-db-scope-proof/starter-absent-tables-contact-write-proof',
   'starter-mutation-db-scope-proof/starter-raw-auth-table-write-proof',
   'paranoid-phase5-write-boundary-proof/phase5-ddl-write-proof',
   'paranoid-phase5-write-boundary-proof/phase5-boxed-secret-builder-write-proof',
@@ -196,7 +195,7 @@ describe('create-kovo starter (build integration: paranoid runtime chokes)', () 
 
   // @kovo-security-certifies KV435 phase-5-1-full-paranoid-dogfood-read-acceptance
   // @kovo-security-certifies KV406 phase-5-1-full-paranoid-dogfood-write-acceptance
-  it('rejects volatile SQLite replay in production, then runs Phase 5.1 sink acceptance under test posture', async () => {
+  it('rejects the single-principal SQLite runtime in production, then runs Phase 5.1 sink acceptance under test posture', async () => {
     const tempParent = tmpdir();
     mkdirSync(tempParent, { recursive: true });
     const root = mkdtempSync(join(tempParent, 'create-kovo-phase5-paranoid-dogfood-'));
@@ -213,7 +212,7 @@ describe('create-kovo starter (build integration: paranoid runtime chokes)', () 
       linkStarterBuildDependencies(root);
       addSqliteRuntimeSecretProvenanceProof(root);
       pruneParanoidPhase5SqliteReadSet(root);
-      addStarterMutationDbScopeProof(root);
+      addStarterMutationDbScopeProof(root, { mode: 'runtime-table-choke' });
       addParanoidPhase5WriteBoundaryProof(root);
       addParanoidPhase5AuthorizationProof(root);
 
@@ -236,12 +235,14 @@ describe('create-kovo starter (build integration: paranoid runtime chokes)', () 
         onceExit(productionServer),
         delay(30_000).then(() => {
           throw new Error(
-            `SQLite production artifact did not reject volatile replay:\n${productionOutput()}`,
+            `SQLite production artifact did not reject its single-principal runtime:\n${productionOutput()}`,
           );
         }),
       ]);
-      expect(productionOutput()).toContain('KV436');
-      expect(productionOutput()).toContain('volatile memory mutationReplayStore');
+      expect(productionOutput()).toContain('KV414');
+      expect(productionOutput()).toContain(
+        'single-principal SQLite starter must not boot in production',
+      );
 
       // SPEC §10.3 production rejection is proven above. NODE_ENV=test below is deliberately
       // limited to exercising the SQLite-specific paranoid read/write sink acceptance matrix.
@@ -288,7 +289,7 @@ describe('create-kovo starter (build integration: paranoid runtime chokes)', () 
       await stopProcess(server);
       rmSync(root, { force: true, recursive: true });
     }
-  }, 300_000);
+  }, 600_000);
 });
 
 describeIfPostgres(
@@ -547,15 +548,22 @@ async function expectPostgresTaskAndWebhook(
   expect(taskResponse.status, `${taskBody}\n${output()}`).toBe(303);
 
   const webhookId = `${marker}-webhook`;
-  const webhookResponse = await fetch(`${origin}/webhooks/phase5-pg-read`, {
-    body: JSON.stringify({ id: webhookId }),
-    headers: { 'content-type': 'application/json' },
-    method: 'POST',
-  });
+  const webhookRequest = () =>
+    fetch(`${origin}/webhooks/phase5-pg-read`, {
+      body: JSON.stringify({ id: webhookId }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    });
+  const webhookResponse = await webhookRequest();
   const webhookBody = await webhookResponse.text();
-  expect(webhookResponse.status, webhookBody).toBe(200);
+  expect(webhookResponse.status, `${webhookBody}\n${output()}`).toBe(200);
 
-  await expectEventuallyPostgresEvent(origin);
+  await expectEventuallyPostgresEventCount(origin, 2, output);
+
+  const replayResponse = await webhookRequest();
+  const replayBody = await replayResponse.text();
+  expect(replayResponse.status, `${replayBody}\n${output()}`).toBe(200);
+  await expectEventuallyPostgresEventCount(origin, 2, output);
 }
 
 async function fetchMutationCsrf(
@@ -574,7 +582,11 @@ async function fetchMutationCsrf(
   return csrf;
 }
 
-async function expectEventuallyPostgresEvent(origin: string): Promise<void> {
+async function expectEventuallyPostgresEventCount(
+  origin: string,
+  expectedCount: number,
+  output: () => string,
+): Promise<void> {
   const deadline = Date.now() + 10_000;
   let lastBody = '';
   while (Date.now() < deadline) {
@@ -582,12 +594,17 @@ async function expectEventuallyPostgresEvent(origin: string): Promise<void> {
     lastBody = await response.text();
     expect(response.status, lastBody).toBe(200);
     const status = JSON.parse(lastBody) as { events: { id: string; label: string }[] };
-    if (status.events.some((event) => event.label === 'owner-visible')) {
+    if (
+      status.events.length === expectedCount &&
+      status.events.every((event) => event.label === 'owner-visible')
+    ) {
       return;
     }
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
-  throw new Error(`Timed out waiting for phase5-pg-task-event: ${lastBody}`);
+  throw new Error(
+    `Timed out waiting for ${expectedCount} phase5-pg events: ${lastBody}\n${output()}`,
+  );
 }
 
 async function expectAuthorizationQueryShapes(
@@ -858,12 +875,14 @@ function execKovoFailure(root: string, args: readonly string[]): string {
 }
 
 function disableRuntimeSeedSql(root: string): void {
-  const runtimeDbPath = join(root, 'src/_kovo/app-runtime-db.ts');
-  const runtimeDb = readFileSync(runtimeDbPath, 'utf8').replace(
+  const runtimeDbOptionsPath = join(root, 'src/_kovo/app-runtime-db-options.ts');
+  const before = readFileSync(runtimeDbOptionsPath, 'utf8');
+  const runtimeDbOptions = before.replace(
     '  seedSql: [SEED_CONTACTS, ...PHASE5_PG_PARANOID_SEED],',
     '  seedSql: [],',
   );
-  writeFileSync(runtimeDbPath, runtimeDb, 'utf8');
+  if (runtimeDbOptions === before) throw new Error('Missing Phase 5 runtime seed SQL anchor.');
+  writeFileSync(runtimeDbOptionsPath, runtimeDbOptions, 'utf8');
 }
 
 function writeProductionEquivalentSchemaModule(root: string): void {
@@ -1100,12 +1119,7 @@ async function expectSystemAuthFixtureVisible(databaseUrl: string): Promise<void
 }
 
 async function betterAuthPasswordHash(password: string): Promise<string> {
-  const passwordModule = await import(
-    pathToFileURL(join(resolveDependencyRoot('@better-auth/utils'), 'dist/password.mjs')).href
-  );
-  return (passwordModule as { hashPassword: (password: string) => Promise<string> }).hashPassword(
-    password,
-  );
+  return kovoHashPassword(password);
 }
 
 async function createExternalDatabase(

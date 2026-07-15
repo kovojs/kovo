@@ -475,6 +475,47 @@ describe('@kovojs/drizzle touch graph helpers', () => {
     ]);
   });
 
+  it('marks declared Domain reads immutable only when every project table in that domain is read-only', () => {
+    const facts = (includeWritableSibling: boolean) =>
+      extractQueryFactsFromProject({
+        files: [
+          {
+            fileName: 'notes.queries.ts',
+            source: `
+              import { domain, query, s } from '@kovojs/server';
+              export const notes = pgTable('notes', {
+                id: text('id').primaryKey(),
+              }, kovo({ domain: 'note', key: 'id', readOnly: true }));
+              ${
+                includeWritableSibling
+                  ? `export const noteDrafts = pgTable('note_drafts', {
+                       id: text('id').primaryKey(),
+                     }, kovo({ domain: 'note', key: 'id' }));`
+                  : ''
+              }
+              const noteDomain = domain('note');
+              export const noteIndex = query('notes/declared-domain', {
+                output: s.object({ items: s.array(s.string()) }),
+                reads: [noteDomain],
+                load() { return { items: [] }; },
+              });
+            `,
+          },
+        ],
+      });
+
+    expect(facts(false)).toEqual([
+      expect.objectContaining({
+        query: 'notes/declared-domain',
+        readOnlyDomains: ['note'],
+        reads: ['note'],
+      }),
+    ]);
+    expect(facts(true)).toEqual([
+      expect.not.objectContaining({ readOnlyDomains: expect.anything() }),
+    ]);
+  });
+
   it('extracts project query instance keys from static element access predicates', () => {
     const facts = extractQueryFactsFromProject({
       files: [

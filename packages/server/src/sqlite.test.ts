@@ -75,6 +75,96 @@ describe('public SQLite runtime boundary (SPEC §6.6/§10.3)', () => {
     }
   });
 
+  it('returns declared non-secret rawRead rows through the public runtime boundary', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const prefix = `kovo_raw_read_${Date.now()}`;
+    const parentName = `${prefix}_parent`;
+    const schema = runtimeSchema(prefix);
+    const release = installGeneratedTableSecurityManifestForCommand(schema.manifest);
+    try {
+      const runtime = sqlitePublicApi.createSqliteAppRuntime({
+        seed: [{ rows: [{ id: 'p1', name: 'Pinned parent' }], table: schema.parent }],
+        tables: [schema.parent, schema.child],
+      });
+      runtimes.push(runtime);
+      const rows = await runtime.readonlyDb.rawRead<{ id: string; label: string }>(
+        trustedSql(
+          sql`select id, name as label from ${sql.identifier(parentName, {
+            allow: [parentName],
+          })} where id = ${'p1'} order by id`,
+          { justification: 'declared parameterized non-secret SQLite rawRead regression' },
+        ),
+        { reads: [parentName] },
+      );
+
+      expect(rows).toEqual([{ id: 'p1', label: 'Pinned parent' }]);
+    } finally {
+      release();
+    }
+  });
+
+  it('keeps public rawRead behind managed and native SQLite read-only checks', () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const prefix = `kovo_raw_read_choke_${Date.now()}`;
+    const parentName = `${prefix}_parent`;
+    const childName = `${prefix}_child`;
+    const schema = runtimeSchema(prefix);
+    const release = installGeneratedTableSecurityManifestForCommand(schema.manifest);
+    try {
+      const runtime = sqlitePublicApi.createSqliteAppRuntime({
+        seed: [{ rows: [{ id: 'p1', name: 'Pinned parent' }], table: schema.parent }],
+        tables: [schema.parent, schema.child],
+      });
+      runtimes.push(runtime);
+
+      expect(() =>
+        runtime.readonlyDb.rawRead(
+          trustedSql(
+            sql.raw(`insert into ${parentName} (id, name) values ('p2', 'Injected') returning id`),
+            { justification: 'rawRead INSERT RETURNING rejection proof' },
+          ),
+          { reads: [parentName, childName] },
+        ),
+      ).toThrow(/KV433/u);
+      expect(() =>
+        runtime.readonlyDb.rawRead(
+          trustedSql(sql.raw('pragma foreign_keys = off'), {
+            justification: 'rawRead connection-state mutation rejection proof',
+          }),
+          { reads: [parentName, childName] },
+        ),
+      ).toThrow(/KV433/u);
+      expect(() =>
+        runtime.readonlyDb.rawRead(
+          trustedSql(sql.raw('pragma optimize'), {
+            justification: 'rawRead prepare-safe but stateful PRAGMA rejection proof',
+          }),
+          { reads: [parentName, childName] },
+        ),
+      ).toThrow(/KV433/u);
+
+      const capability = runtime.systemDb({
+        operation: 'write',
+        reason: 'Verify rawRead rejection left SQLite state unchanged',
+        surface: 'sqlite.test#raw-read-choke',
+      });
+      const state = useSqliteSystemDb(capability, (db) => ({
+        foreignKeys: db.get<{ foreign_keys: number }>(sql.raw('PRAGMA foreign_keys')),
+        rows: db.all<{ id: string }>(sql.raw(`select id from ${parentName} order by id`)),
+        stats: db.all<{ name: string }>(
+          sql.raw("select name from sqlite_master where name = 'sqlite_stat1'"),
+        ),
+      }));
+      expect(state).toEqual({
+        foreignKeys: { foreign_keys: 1 },
+        rows: [{ id: 'p1' }],
+        stats: [],
+      });
+    } finally {
+      release();
+    }
+  });
+
   it('exposes only an opaque provider/capability and seeds exact non-enumerable own keys', () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {});
     const schema = runtimeSchema('kovo_public_boundary');

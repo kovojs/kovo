@@ -92,6 +92,9 @@ function generatedSqliteRuntime(
   };
   return createSqliteAppRuntimeDb({
     db: raw,
+    executeRawRead() {
+      throw new Error('The governed Drizzle builder reproduction must not execute raw SQL.');
+    },
     metadata: extractKovoRuntimeDbMetadata(options.metadataTables ?? [accounts]),
     normalizeTableName: (table) => (table.includes('.') ? table : `main.${table}`),
     sqliteAuthorizer: {

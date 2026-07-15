@@ -4977,6 +4977,7 @@ function extractQueryFactsFromPreparedFiles(
         ...new Set([
           ...queryReadOnlyDomains(query.tableExpressions, fileTables),
           ...queryReadOnlyDomains(query.declaredReadExpressions, fileTables),
+          ...declaredReadOnlyDomains(query.declaredReadDomains, fileTables),
           ...localHelperSummary.reads
             .filter((read) => read.table.readOnly === true)
             .map((read) => extractedDomainKey(read.table.domain)),
@@ -5115,6 +5116,34 @@ function extractQueryFactsFromPreparedFiles(
   }
 
   return facts.sort((left, right) => left.query.localeCompare(right.query));
+}
+
+/**
+ * SPEC §10.2/§11.1: a declared Domain value carries no table identity. Preserve a read-only
+ * verdict only when the project proves that the domain exists and every table in that domain is
+ * immutable; unknown or mixed domains remain write-relevant and therefore fail closed to KV407.
+ */
+function declaredReadOnlyDomains(
+  declaredDomains: readonly string[],
+  tables: ReadonlyMap<string, readonly ExtractedTable[]>,
+): string[] {
+  const status = new Map<string, { allReadOnly: boolean; seen: boolean }>();
+  for (const candidates of tables.values()) {
+    for (const table of candidates) {
+      if (!isDomainExtractedTableAnnotation(table.annotation)) continue;
+      const domain = extractedDomainKey(table.annotation.domain);
+      const current = status.get(domain) ?? { allReadOnly: true, seen: false };
+      current.seen = true;
+      current.allReadOnly &&= table.annotation.readOnly === true;
+      status.set(domain, current);
+    }
+  }
+  return [...new Set(declaredDomains)]
+    .filter((domain) => {
+      const candidate = status.get(domain);
+      return candidate?.seen === true && candidate.allReadOnly;
+    })
+    .sort();
 }
 
 function secretProjectionBackstopDiagnostics(

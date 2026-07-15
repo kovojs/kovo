@@ -577,7 +577,7 @@ function isNullishType(type: MorphType): boolean {
     changed = false;
 
     for (const sourceFile of sourceFiles) {
-      for (const declaration of sourceFile.getVariableDeclarations()) {
+      for (const declaration of sourceFile.getDescendantsOfKind(SyntaxKind.VariableDeclaration)) {
         const aliasSymbolKey = resolvedSymbolKey(declaration.getNameNode().getSymbol());
         if (!aliasSymbolKey || namesBySymbol.has(aliasSymbolKey)) continue;
 

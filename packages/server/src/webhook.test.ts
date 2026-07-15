@@ -7,6 +7,7 @@ import './sql-parser-authority-bootstrap.js';
 import { createApp, createRequestHandler } from './app.js';
 import { domain } from './domain.js';
 import { runEndpoint, type EndpointRequest } from './endpoint.js';
+import { createFrameworkManagedDbProvider } from './guards.js';
 import { assignDerivedWebhookName } from './internal/wire.js';
 import { mutation } from './mutation.js';
 import { s, SchemaValidationError } from './schema.js';
@@ -647,6 +648,86 @@ describe('server webhook primitive', () => {
     expect(second.changes).toEqual([]);
     expect(second.response.status).toBe(200);
     expect(mutationWrites).toBe(1);
+  });
+
+  it('threads a framework-managed DB provider through a composed system mutation', async () => {
+    const replayStore = createMemoryWebhookReplayStore();
+    const eventDomain = domain('webhook-managed-provider-event');
+    const providerRequests: unknown[] = [];
+    const dbProvider = createFrameworkManagedDbProvider((request) => {
+      providerRequests.push(request);
+      return { provider: 'framework-managed' };
+    });
+    const recordEvent = mutation('webhook/managed-provider-event', {
+      csrf: false,
+      csrfJustification: 'composed webhook mutation has no browser authority',
+      handler(_input: { id: string }, request: { db: unknown }) {
+        return { hasDb: request.db !== undefined };
+      },
+      input: s.object({ id: s.string() }),
+      registry: { touches: [eventDomain] },
+    });
+    const managedWebhook = webhook('/webhooks/managed-provider', {
+      async handler(input, context) {
+        const system = context.declareSystemWrite(
+          'record a framework-managed provider webhook event',
+        );
+        return system.runMutation(recordEvent, input);
+      },
+      idempotency: (input) => input.id,
+      input: s.object({ id: s.string() }),
+      replayStore,
+      verify: 'none',
+      verifyJustification: 'fixture-only managed provider webhook regression',
+      writes: [eventDomain],
+    });
+    const handler = createRequestHandler(
+      createApp({ db: dbProvider, endpoints: [managedWebhook] }),
+    );
+
+    const response = await handler(
+      new Request('https://example.test/webhooks/managed-provider', {
+        body: JSON.stringify({ id: 'evt_managed_provider' }),
+        headers: { 'content-type': 'application/json' },
+        method: 'POST',
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.text()).resolves.toBe('ok');
+    expect(providerRequests).toHaveLength(1);
+    expect(providerRequests[0]).toMatchObject({
+      principalPosture: {
+        audit: { ingress: 'webhook', operation: 'write', surface: '/webhooks/managed-provider' },
+        kind: 'system',
+      },
+    });
+  });
+
+  it('rejects a forged object DB provider before webhook verification or handling', async () => {
+    let handlerCalls = 0;
+    const forgedProviderWebhook = webhook('/webhooks/forged-db-provider', {
+      handler() {
+        handlerCalls += 1;
+        return { ok: true };
+      },
+      input: s.object({}),
+      verify: 'none',
+      verifyJustification: 'fixture-only forged DB provider regression',
+    });
+
+    const result = await runWebhook(
+      forgedProviderWebhook,
+      new Request('https://example.test/webhooks/forged-db-provider', {
+        body: '{}',
+        headers: { 'content-type': 'application/json' },
+        method: 'POST',
+      }),
+      { mutationOptions: { db: Object.freeze(Object.create(null)) } } as never,
+    );
+
+    expect(result.response.status).toBe(500);
+    expect(handlerCalls).toBe(0);
   });
 
   it('does not let webhook options bypass a composed mutation guard', async () => {

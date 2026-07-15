@@ -37,6 +37,7 @@ import {
   type EndpointMount,
   type EndpointRequest,
 } from './endpoint.js';
+import { isFrameworkManagedDbProvider } from './guards.js';
 import {
   mergeResponseHeaders,
   retryAfterHeaders,
@@ -751,8 +752,10 @@ function snapshotRunWebhookOptions<Request extends EndpointRequest>(
   if (clientIp !== undefined && typeof clientIp !== 'function') {
     throw new TypeError('runWebhook().mutationOptions.clientIp must be a function.');
   }
-  if (db !== undefined && typeof db !== 'function') {
-    throw new TypeError('runWebhook().mutationOptions.db must be a function.');
+  if (db !== undefined && typeof db !== 'function' && !isFrameworkManagedDbProvider(db)) {
+    throw new TypeError(
+      'runWebhook().mutationOptions.db must be a function or framework-managed provider.',
+    );
   }
   if (onError !== undefined && typeof onError !== 'function') {
     throw new TypeError('runWebhook().mutationOptions.onError must be a function.');

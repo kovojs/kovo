@@ -1929,6 +1929,91 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
     expect(facts).toEqual([]);
   });
 
+  it('accepts only an exact mutation request scheduling a pristine local task with plain input', () => {
+    const safe = sinksFor(`
+      import { mutation, s, task } from '@kovojs/server';
+
+      export const reconcile = task('orders/reconcile', {
+        input: s.object({ id: s.string() }),
+        async run(_input) {},
+      });
+      export const enqueue = mutation({
+        input: s.object({ id: s.string() }),
+        async handler(input, request) {
+          await request.schedule(reconcile, { id: \`${'${input.id}'}-job\` });
+          return { ok: true };
+        },
+      });
+    `);
+    expect(safe).toEqual([]);
+
+    const unsafeSources = [
+      `
+        import { mutation, s, task } from '@kovojs/server';
+        const reconcile = task('orders/reconcile', { input: s.object({ id: s.string() }), async run() {} });
+        const alias = reconcile;
+        mutation({ input: s.object({ id: s.string() }), async handler(input, request) {
+          await request.schedule(alias, { id: input.id });
+          return { ok: true };
+        } });
+      `,
+      `
+        import { mutation, s, task } from '@kovojs/server';
+        const reconcile = task('orders/reconcile', { input: s.object({ id: s.string() }), async run() {} });
+        (reconcile as any).run = async () => {};
+        mutation({ input: s.object({ id: s.string() }), async handler(input, request) {
+          await request.schedule(reconcile, { id: input.id });
+          return { ok: true };
+        } });
+      `,
+      `
+        import { mutation, s, task } from '@kovojs/server';
+        const reconcile = task('orders/reconcile', { input: s.object({ id: s.string() }), async run() {} });
+        mutation({ input: s.object({ id: s.string(), method: s.string() }), async handler(input, request) {
+          await request[input.method](reconcile, { id: input.id });
+          return { ok: true };
+        } });
+      `,
+      `
+        import { mutation, s, task } from '@kovojs/server';
+        const reconcile = task('orders/reconcile', { input: s.object({ id: s.string() }), async run() {} });
+        mutation({ input: s.object({ id: s.string() }), async handler(input, request) {
+          const scheduler = request;
+          await scheduler.schedule(reconcile, { id: input.id });
+          return { ok: true };
+        } });
+      `,
+      `
+        import { mutation, s, task } from '@kovojs/server';
+        const reconcile = task('orders/reconcile', { input: s.object({ id: s.string() }), async run() {} });
+        mutation({ input: s.object({ id: s.string() }), async handler(input, request) {
+          await request.schedule(reconcile, { id: input.id }, {});
+          return { ok: true };
+        } });
+      `,
+      `
+        import { mutation, s, task } from '@kovojs/server';
+        const reconcile = task('orders/reconcile', { input: s.object({ id: s.string() }), async run() {} });
+        mutation({ input: s.object({ id: s.string() }), async handler(input, request) {
+          await request.schedule(reconcile, { id: input.id, run() {} });
+          return { ok: true };
+        } });
+      `,
+      `
+        import { mutation, s, task } from '@kovojs/server';
+        const reconcile = task('orders/reconcile', { input: s.object({ id: s.string() }), async run() {} });
+        mutation({ input: s.object({ id: s.string() }), async handler(input, request) {
+          await request.schedule(reconcile, { ...input });
+          return { ok: true };
+        } });
+      `,
+    ];
+    for (const source of unsafeSources) {
+      const facts = sinksFor(source);
+      expect(facts.length, source).toBeGreaterThan(0);
+    }
+  });
+
   it('keeps request-local intrinsic container mutation precise without losing wire authority', () => {
     const safe = sinksFor(`
       import { query } from '@kovojs/server';
@@ -3579,7 +3664,38 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
       sinksForFiles([
         queryFile,
         { fileName: 'mutations.ts', source: mutationSource('contactsQuery.key') },
+        {
+          fileName: 'components.ts',
+          source: `
+            import { component } from '@kovojs/core';
+            import { contactsQuery } from './queries.js';
+            export const Contacts = component({
+              queries: { contacts: contactsQuery },
+              render() { return null; },
+            });
+          `,
+        },
+        {
+          fileName: 'app.ts',
+          source: `
+            import { createApp } from '@kovojs/server';
+            import { contactsQuery } from './queries.js';
+            export default createApp({ queries: [contactsQuery], routes: [] });
+          `,
+        },
       ]),
+    ).toEqual([]);
+
+    expect(
+      sinksFor(`
+        import { mutation, publicAccess, query } from '@kovojs/server';
+        const phaseQuery = query({ load() { return { items: [] }; } });
+        export const run = mutation({
+          access: publicAccess('fixture'),
+          optimistic: { [phaseQuery.key]: 'await-fragment' },
+          handler() { return { ok: true }; },
+        });
+      `),
     ).toEqual([]);
 
     for (const [computedKey, setup] of [
@@ -3603,6 +3719,28 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
         continue;
       }
       expect(facts, `${setup}\n${computedKey}`).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            sink: 'request-handler.opaque-source',
+            source: '<opaque-retained-config-derivation>',
+          }),
+        ]),
+      );
+    }
+
+    for (const setup of [
+      `const queryAlias = contactsQuery;`,
+      `const queryBox = { value: contactsQuery };`,
+      `consume(contactsQuery);`,
+    ]) {
+      const facts = sinksForFiles([
+        queryFile,
+        {
+          fileName: 'mutations.ts',
+          source: mutationSource('contactsQuery.key', setup),
+        },
+      ]);
+      expect(facts, setup).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
             sink: 'request-handler.opaque-source',
@@ -3841,6 +3979,37 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
     ];
     const exactPostgres = sinksForFiles(exactPostgresFiles);
     expect(exactPostgres).toEqual([]);
+
+    const emptySeedPostgres = sinksForFiles(
+      exactPostgresFiles.map((file) =>
+        file.fileName === '_kovo/app-runtime-db-options.ts'
+          ? { ...file, source: file.source.replace('seedSql: SEED_CONTACTS', 'seedSql: []') }
+          : file,
+      ),
+    );
+    expect(emptySeedPostgres).toEqual([]);
+
+    const authoredSeedArray = sinksForFiles(
+      exactPostgresFiles.map((file) =>
+        file.fileName === '_kovo/app-runtime-db-options.ts'
+          ? {
+              ...file,
+              source: file.source.replace(
+                'seedSql: SEED_CONTACTS',
+                "seedSql: ['SELECT current_user']",
+              ),
+            }
+          : file,
+      ),
+    );
+    expect(authoredSeedArray).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sink: 'request-handler.opaque-call',
+          source: 'createPostgresAppRuntimeDb',
+        }),
+      ]),
+    );
 
     for (const [label, seedSequence] of [
       ['export alias', `export const appSeedDemoUser = bindings.seedDemoUser;`],
@@ -4435,31 +4604,43 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
       export default createApp({ db: runtime.db, routes: [] });
     `;
     const directImport = `import { createSqliteAppRuntime } from '@kovojs/server/sqlite';`;
-    expect(
-      sinksForFiles([
-        {
-          fileName: 'schema.ts',
-          source: `
+    const exactFiles = [
+      {
+        fileName: 'schema.ts',
+        source: `
+            import { kovo } from '@kovojs/drizzle';
             import { sqliteTable, text } from 'drizzle-orm/sqlite-core';
             export const contacts = sqliteTable('contacts', { id: text('id').primaryKey() });
+            export const contactNotes = sqliteTable(
+              'contact_notes',
+              { id: text('id').primaryKey(), contactId: text('contact_id').notNull() },
+              kovo({
+                domain: 'contact-note',
+                key: 'id',
+                ownerVia: { parent: contacts, fk: 'contactId', parentKey: 'id' },
+              }),
+            );
           `,
-        },
-        {
-          fileName: '_kovo/app-runtime-db.ts',
-          source: `
+      },
+      {
+        fileName: '_kovo/app-runtime-db.ts',
+        source: `
             ${directImport}
-            import { contacts } from '../schema.js';
-            const APP_TABLES = [contacts];
-            const APP_SEED = [{ table: contacts, rows: [{ id: 'c1' }] }];
+            import { contactNotes, contacts } from '../schema.js';
+            const APP_TABLES = [contacts, contactNotes];
+            const APP_SEED = [
+              { table: contacts, rows: [{ id: 'c1' }] },
+              { table: contactNotes, rows: [{ contact_id: 'c1', id: 'n1' }] },
+            ];
             const runtime = createSqliteAppRuntime({ seed: APP_SEED, tables: APP_TABLES });
             runtime.systemDb({ operation: 'write', reason: 'auth', surface: 'test' });
             export const appRuntimeDbProvider = runtime.db;
             export const appRuntimeMutationReplayStore = runtime.mutationReplayStore;
           `,
-        },
-        {
-          fileName: 'app.tsx',
-          source: `
+      },
+      {
+        fileName: 'app.tsx',
+        source: `
             import { createApp, createMemoryVersionedClientModuleRegistry } from '@kovojs/server';
             import {
               appRuntimeDbProvider,
@@ -4474,29 +4655,36 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
               routes: [],
             });
           `,
-        },
-        {
-          fileName: 'queries.ts',
-          source: `
+      },
+      {
+        fileName: 'queries.ts',
+        source: `
             import { query } from '@kovojs/server';
+            import { count, sql as drizzleSql } from 'drizzle-orm';
+            import { alias } from 'drizzle-orm/sqlite-core';
             import { contacts } from './schema.js';
             interface AppQueryLoadContext { db?: unknown }
             export const contactsQuery = query({
               async load(_input: unknown, context: AppQueryLoadContext) {
                 if (!context.db) throw new Error('missing db');
+                const owned = alias(contacts, 'owned_contacts');
                 return {
                   items: await context.db
-                    .select({ id: contacts.id })
-                    .from(contacts)
-                    .orderBy(contacts.id),
+                    .select({
+                      id: owned.id,
+                      label: drizzleSql<string>\`upper(\${owned.id})\`,
+                      total: count(),
+                    })
+                    .from(owned)
+                    .orderBy(owned.id),
                 };
               },
             });
           `,
-        },
-        {
-          fileName: 'mutations.ts',
-          source: `
+      },
+      {
+        fileName: 'mutations.ts',
+        source: `
             import { mutation } from '@kovojs/server';
             import { contacts } from './schema.js';
             export const addContact = mutation({
@@ -4506,9 +4694,135 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
               },
             });
           `,
-        },
-      ]),
-    ).toEqual([]);
+      },
+    ];
+    expect(sinksForFiles(exactFiles)).toEqual([]);
+
+    const exactSchema = exactFiles.find((file) => file.fileName === 'schema.ts')!.source;
+    for (const [label, schema] of [
+      [
+        'local alias',
+        exactSchema
+          .replace(
+            `export const contactNotes = sqliteTable(`,
+            `const contactParent = contacts;\nexport const contactNotes = sqliteTable(`,
+          )
+          .replace(`parent: contacts`, `parent: contactParent`),
+      ],
+      [
+        'mutated parent table',
+        `${exactSchema}\nObject.defineProperty(contacts, 'id', { value: { forged: true } });`,
+      ],
+      [
+        'imported lookalike',
+        exactSchema
+          .replace(
+            `import { kovo } from '@kovojs/drizzle';`,
+            `import { kovo } from '@kovojs/drizzle';\nimport { contacts as importedParent } from 'forged-schema';`,
+          )
+          .replace(`parent: contacts`, `parent: importedParent`),
+      ],
+      ['cyclic parent table', exactSchema.replace(`parent: contacts`, `parent: contactNotes`)],
+    ] as const) {
+      const variant = exactFiles.map((file) =>
+        file.fileName === 'schema.ts' ? { ...file, source: schema } : file,
+      );
+      const facts = sinksForFiles(variant);
+      expect(
+        facts.some(
+          (fact) =>
+            fact.site.startsWith('_kovo/app-runtime-db.ts:') &&
+            fact.source === 'createSqliteAppRuntime',
+        ),
+        label,
+      ).toBe(true);
+    }
+
+    for (const poison of [
+      `
+        import { contacts } from './schema.js';
+        Object.defineProperty(contacts, 'id', { value: { forged: true } });
+      `,
+      `
+        import { contacts } from './schema.js';
+        const escapedTable = contacts;
+        Object.defineProperty(escapedTable, 'id', { value: { forged: true } });
+      `,
+    ]) {
+      const crossModuleTablePoison = sinksForFiles([
+        ...exactFiles.map((file) =>
+          file.fileName === '_kovo/app-runtime-db.ts'
+            ? { ...file, source: `import '../poison-table.js';\n${file.source}` }
+            : file,
+        ),
+        { fileName: 'poison-table.ts', source: poison },
+      ]);
+      expect(crossModuleTablePoison).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            site: expect.stringMatching(/^_kovo\/app-runtime-db\.ts:/u),
+            source: 'createSqliteAppRuntime',
+          }),
+        ]),
+      );
+    }
+
+    const exactQueries = exactFiles.find((file) => file.fileName === 'queries.ts')!.source;
+    for (const [label, queries] of [
+      [
+        'dynamic alias name',
+        exactQueries.replace(
+          `alias(contacts, 'owned_contacts')`,
+          `alias(contacts, String(_input))`,
+        ),
+      ],
+      [
+        'aliased alias constructor',
+        exactQueries
+          .replace(`import { alias }`, `import { alias as makeAlias }`)
+          .replace(`alias(contacts, 'owned_contacts')`, `makeAlias(contacts, 'owned_contacts')`),
+      ],
+      [
+        'mutated alias result',
+        exactQueries.replace(
+          `const owned = alias(contacts, 'owned_contacts');`,
+          `const owned = alias(contacts, 'owned_contacts');\n                Object.defineProperty(owned, 'id', { value: contacts.id });`,
+        ),
+      ],
+      [
+        'detached count expression',
+        exactQueries.replace(
+          `return {`,
+          `const detachedCount = count();\n                return { detachedCount,`,
+        ),
+      ],
+      [
+        'detached SQL tag',
+        exactQueries
+          .replace(
+            `return {`,
+            `const detachedLabel = drizzleSql<string>\`upper(\${owned.id})\`;\n                return {`,
+          )
+          .replace(`label: drizzleSql<string>\`upper(\${owned.id})\``, `label: detachedLabel`),
+      ],
+      [
+        'escaped SQL carrier',
+        exactQueries.replace(
+          `const owned = alias(contacts, 'owned_contacts');`,
+          `const owned = alias(contacts, 'owned_contacts');\n                const leakedSql = drizzleSql;\n                void leakedSql;`,
+        ),
+      ],
+    ] as const) {
+      const facts = sinksForFiles(
+        exactFiles.map((file) =>
+          file.fileName === 'queries.ts' ? { ...file, source: queries } : file,
+        ),
+      );
+      expect(
+        facts.some((fact) => fact.site.startsWith('queries.ts:')),
+        `${label}: ${JSON.stringify(facts)}`,
+      ).toBe(true);
+    }
 
     for (const [constructor, options, mutation] of [
       [
@@ -4527,6 +4841,21 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
       [directImport, '{ tables: APP_TABLES }', ''],
       [directImport, '{ seed: APP_SEED, tables: makeTables() }', ''],
       [directImport, '{ seed: APP_SEED, tables: APP_TABLES }', `APP_TABLES.push(contacts);`],
+      [
+        directImport,
+        '{ seed: APP_SEED, tables: APP_TABLES }',
+        `const escapedTable = contacts; Object.defineProperty(escapedTable, 'id', { value: {} });`,
+      ],
+      [
+        directImport,
+        '{ seed: APP_SEED, tables: APP_TABLES }',
+        `function poisonTable(table) { Object.defineProperty(table, 'id', { value: {} }); } poisonTable(contacts);`,
+      ],
+      [
+        directImport,
+        '{ seed: APP_SEED, tables: APP_TABLES }',
+        `const tableBox = { value: contacts }; Object.defineProperty(tableBox.value, 'id', { value: {} });`,
+      ],
       [
         directImport,
         '{ seed: APP_SEED, tables: APP_TABLES }',
@@ -4578,6 +4907,9 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
       if (
         mutation.includes('getTables') ||
         mutation.includes('getSeed') ||
+        mutation.includes('escapedTable') ||
+        mutation.includes('poisonTable') ||
+        mutation.includes('tableBox') ||
         mutation.includes('escaped') ||
         mutation.includes('holder') ||
         mutation.includes('class Tables') ||
@@ -4620,6 +4952,1099 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
           sink: 'request-handler.opaque-source',
           source: '<opaque-retained-config-derivation>',
         }),
+      ]),
+    );
+  });
+
+  it('keeps exact generated Better Auth schema carriers inside SQLite runtime table proof', () => {
+    const schemaSource = `
+      import { sqliteTable, text } from 'drizzle-orm/sqlite-core';
+      export const user = sqliteTable('user', { id: text('id').primaryKey() });
+      export const session = sqliteTable('session', { id: text('id').primaryKey() });
+      export const account = sqliteTable('account', { id: text('id').primaryKey() });
+      export const verification = sqliteTable('verification', { id: text('id').primaryKey() });
+      export const authSchema = { user, session, account, verification };
+    `;
+    const files = (schema: string) => [
+      { fileName: 'schema.ts', source: schema },
+      {
+        fileName: '_kovo/app-runtime-db.ts',
+        source: `
+          import { createBetterAuthSqliteBindingsFromEnvironment } from '@kovojs/better-auth';
+          import { createSqliteAppRuntime } from '@kovojs/server/sqlite';
+          import { account, authSchema, session, user, verification } from '../schema.js';
+          const APP_TABLES = [user, session, account, verification];
+          const APP_SEED = [];
+          const runtime = createSqliteAppRuntime({ seed: APP_SEED, tables: APP_TABLES });
+          createBetterAuthSqliteBindingsFromEnvironment({ schema: authSchema });
+          export const appRuntimeDbProvider = runtime.db;
+        `,
+      },
+    ];
+    const runtimeConstructorFacts = (schema: string) =>
+      sinksForFiles(files(schema)).filter(
+        (fact) =>
+          fact.site.startsWith('_kovo/app-runtime-db.ts:') &&
+          fact.source === 'createSqliteAppRuntime',
+      );
+
+    expect(runtimeConstructorFacts(schemaSource)).toEqual([]);
+    for (const poison of [
+      `Object.defineProperty(authSchema, 'user', { value: {} });`,
+      `const escapedAuthSchema = authSchema; Object.defineProperty(escapedAuthSchema, 'user', { value: {} });`,
+    ]) {
+      expect(runtimeConstructorFacts(`${schemaSource}\n${poison}`), poison).not.toEqual([]);
+    }
+  });
+
+  it('accepts only exact generated readonly app DB read chains', () => {
+    const files = [
+      {
+        fileName: 'schema.ts',
+        source: `
+          import { sqliteTable, text } from 'drizzle-orm/sqlite-core';
+          export const contacts = sqliteTable('contacts', { id: text('id').primaryKey() });
+        `,
+      },
+      {
+        fileName: '_kovo/app-runtime-db.ts',
+        source: `
+          import { createSqliteAppRuntime } from '@kovojs/server/sqlite';
+          import { contacts } from '../schema.js';
+          const APP_TABLES = [contacts];
+          const APP_SEED = [{ table: contacts, rows: [{ id: 'c1' }] }];
+          const appDatabase = createSqliteAppRuntime({ seed: APP_SEED, tables: APP_TABLES });
+          export const appRuntimeReadonlyDb = appDatabase.readonlyDb;
+        `,
+      },
+      {
+        fileName: 'db.ts',
+        source: `
+          import { appRuntimeReadonlyDb } from './_kovo/app-runtime-db.js';
+          export const readonlyAppDb = appRuntimeReadonlyDb;
+        `,
+      },
+      {
+        fileName: 'queries.ts',
+        source: `
+          import { query } from '@kovojs/server';
+          import { readonlyAppDb } from './db.js';
+          import { contacts } from './schema.js';
+          export const contactCount = query({ async load() {
+            const rows = await readonlyAppDb.select({ id: contacts.id }).from(contacts);
+            return { total: rows.length };
+          } });
+        `,
+      },
+    ];
+
+    expect(sinksForFiles(files)).toEqual([]);
+    const unionQuery = `
+      import { query } from '@kovojs/server';
+      import { readonlyAppDb } from './db.js';
+      import { contacts } from './schema.js';
+      export const contactCount = query({ async load() {
+        const rows = await readonlyAppDb
+          .select({ id: contacts.id })
+          .from(contacts)
+          .union(readonlyAppDb.select({ id: contacts.id }).from(contacts));
+        return { total: rows.length };
+      } });
+    `;
+    expect(
+      sinksForFiles(
+        files.map((file) =>
+          file.fileName === 'queries.ts' ? { ...file, source: unionQuery } : file,
+        ),
+      ),
+    ).toEqual([]);
+    const computedUnionFacts = sinksForFiles(
+      files.map((file) =>
+        file.fileName === 'queries.ts'
+          ? { ...file, source: unionQuery.replace('.union(', "['union'](") }
+          : file,
+      ),
+    );
+    expect(
+      computedUnionFacts.some(
+        (fact) => fact.site.startsWith('queries.ts:') && fact.sink.startsWith('request-handler.'),
+      ),
+      JSON.stringify(computedUnionFacts),
+    ).toBe(true);
+    const mappedRowsQuery = `
+      import { query } from '@kovojs/server';
+      import { readonlyAppDb } from './db.js';
+      import { contacts } from './schema.js';
+      export const contactCount = query({ async load() {
+        const rows = await readonlyAppDb.select({ id: contacts.id }).from(contacts);
+        return { items: rows.map((row) => ({ id: row.id.toUpperCase() })) };
+      } });
+    `;
+    expect(
+      sinksForFiles(
+        files.map((file) =>
+          file.fileName === 'queries.ts' ? { ...file, source: mappedRowsQuery } : file,
+        ),
+      ),
+    ).toEqual([]);
+
+    const rawReadQuery = `
+      import { sql, trustedSql } from '@kovojs/drizzle';
+      import { query } from '@kovojs/server';
+      import { readonlyAppDb } from './db.js';
+      export const contactCount = query({ async load() {
+        const rows = await readonlyAppDb.rawRead<{ id: string }>(
+          trustedSql(sql.raw<{ id: string }>('select id from contacts'), {
+            justification: 'reviewed static contacts read',
+          }),
+          { reads: ['contacts'] },
+        );
+        return { total: rows.length };
+      } });
+    `;
+    const rawReadFiles = files.map((file) =>
+      file.fileName === 'queries.ts' ? { ...file, source: rawReadQuery } : file,
+    );
+    expect(sinksForFiles(rawReadFiles)).toEqual([]);
+    const rawReadEndpoint = `
+      import { sql, trustedSql } from '@kovojs/drizzle';
+      import { endpoint, publicAccess } from '@kovojs/server';
+      import { readonlyAppDb } from './db.js';
+      const rawReadPublic = publicAccess('reviewed public rawRead fixture');
+      export const contactsEndpoint = endpoint('/api/contacts', {
+        access: rawReadPublic,
+        auth: { justification: 'public read-only fixture', kind: 'none' },
+        csrf: false,
+        csrfJustification: 'read-only endpoint fixture',
+        async handler() {
+          const rows = await readonlyAppDb.rawRead<{ id: string }>(
+            trustedSql(sql.raw<{ id: string }>('select id from contacts'), {
+              justification: 'reviewed static contacts read',
+            }),
+            { reads: ['contacts'] },
+          );
+          return Response.json({ rows }, { headers: { 'Cache-Control': 'no-store' } });
+        },
+        method: 'GET',
+        reason: 'read-only contacts fixture',
+        response: { appOwnedSafety: true, body: 'json', cache: 'no-store' },
+      });
+    `;
+    const registeredRawReadEndpointFiles = [
+      ...files.map((file) => {
+        if (file.fileName === 'queries.ts') return { ...file, source: rawReadEndpoint };
+        if (file.fileName !== '_kovo/app-runtime-db.ts') return file;
+        return {
+          ...file,
+          source: file.source.replace(
+            'export const appRuntimeReadonlyDb = appDatabase.readonlyDb;',
+            `export const appRuntimeDbProvider = appDatabase.db;
+             export const appRuntimeReadonlyDb = appDatabase.readonlyDb;`,
+          ),
+        };
+      }),
+      {
+        fileName: 'app.ts',
+        source: `
+          import { createApp } from '@kovojs/server';
+          import { appRuntimeDbProvider } from './_kovo/app-runtime-db.js';
+          import { contactsEndpoint } from './queries.js';
+          export default createApp({
+            db: appRuntimeDbProvider,
+            endpoints: [contactsEndpoint],
+            routes: [],
+          });
+        `,
+      },
+    ];
+    expect(sinksForFiles(registeredRawReadEndpointFiles)).toEqual([]);
+    expect(
+      sinksForFiles([
+        ...rawReadFiles,
+        {
+          fileName: 'app.tsx',
+          source: `
+            import { createApp } from '@kovojs/server';
+            import { contactCount } from './queries.js';
+            export default createApp({ queries: [contactCount], routes: [] });
+          `,
+        },
+      ]),
+    ).toEqual([]);
+    const dormantTest = {
+      fileName: 'app.test.ts',
+      source: `
+        import { readonlyAppDb } from './db.js';
+        const testOnlyDbValues = [readonlyAppDb];
+        void testOnlyDbValues;
+      `,
+    };
+    expect(sinksForFiles([...rawReadFiles, dormantTest])).toEqual([]);
+    const importedTestFacts = sinksForFiles([
+      ...rawReadFiles.map((file) =>
+        file.fileName === 'queries.ts'
+          ? { ...file, source: `import './app.test.js';\n${file.source}` }
+          : file,
+      ),
+      dormantTest,
+    ]);
+    expect(
+      importedTestFacts.some(
+        (fact) => fact.site.startsWith('queries.ts:') && fact.sink.startsWith('request-handler.'),
+      ),
+      JSON.stringify(importedTestFacts),
+    ).toBe(true);
+
+    for (const [label, source] of [
+      [
+        'computed rawRead method',
+        rawReadQuery.replace('readonlyAppDb.rawRead', "readonlyAppDb['rawRead']"),
+      ],
+      [
+        'aliased rawRead method',
+        rawReadQuery.replace(
+          'const rows = await readonlyAppDb.rawRead',
+          'const rawRead = readonlyAppDb.rawRead;\n        const rows = await rawRead',
+        ),
+      ],
+      [
+        'dynamic read table',
+        rawReadQuery
+          .replace('async load()', 'async load(input)')
+          .replace("{ reads: ['contacts'] }", '{ reads: [input.table] }'),
+      ],
+      [
+        'spread read declaration',
+        rawReadQuery.replace("{ reads: ['contacts'] }", "{ ...{ reads: ['contacts'] } }"),
+      ],
+      [
+        'extra read option',
+        rawReadQuery.replace(
+          "{ reads: ['contacts'] }",
+          "{ reads: ['contacts'], reason: 'forged' }",
+        ),
+      ],
+      [
+        'dynamic raw SQL',
+        rawReadQuery
+          .replace('async load()', 'async load(input)')
+          .replace("sql.raw<{ id: string }>('select id from contacts')", 'sql.raw(input.sql)'),
+      ],
+    ] as const) {
+      const facts = sinksForFiles(
+        rawReadFiles.map((file) => (file.fileName === 'queries.ts' ? { ...file, source } : file)),
+      );
+      expect(
+        facts.some(
+          (fact) =>
+            fact.site.startsWith('queries.ts:') &&
+            (fact.sink === 'request-handler.opaque-call' ||
+              fact.sink === 'request-handler.opaque-protocol' ||
+              fact.sink === 'request-handler.opaque-source'),
+        ),
+        `${label}: ${JSON.stringify(facts)}`,
+      ).toBe(true);
+    }
+
+    for (const poison of [
+      `
+        import { readonlyAppDb } from './db.js';
+        Object.defineProperty(readonlyAppDb, 'select', { value: () => ({}) });
+      `,
+      `
+        import { readonlyAppDb as importedDb } from './db.js';
+        const escapedReadonlyDb = importedDb;
+        Object.defineProperty(escapedReadonlyDb, 'select', { value: () => ({}) });
+      `,
+    ]) {
+      const crossModuleReadonlyPoison = sinksForFiles([
+        ...files.map((file) =>
+          file.fileName === 'queries.ts'
+            ? { ...file, source: `import './poison-readonly.js';\n${file.source}` }
+            : file,
+        ),
+        { fileName: 'poison-readonly.ts', source: poison },
+      ]);
+      expect(
+        crossModuleReadonlyPoison.some(
+          (fact) =>
+            fact.site.startsWith('queries.ts:') &&
+            (fact.sink === 'request-handler.opaque-call' ||
+              fact.sink === 'request-handler.opaque-protocol' ||
+              fact.sink === 'request-handler.opaque-source'),
+        ),
+        JSON.stringify(crossModuleReadonlyPoison),
+      ).toBe(true);
+    }
+
+    const exactQuery = files.find((file) => file.fileName === 'queries.ts')!.source;
+    const exactDb = files.find((file) => file.fileName === 'db.ts')!.source;
+    const exactRuntime = files.find((file) => file.fileName === '_kovo/app-runtime-db.ts')!.source;
+    const queryVariants = [
+      [
+        'local alias',
+        exactQuery.replace(
+          'const rows = await readonlyAppDb',
+          'const db = readonlyAppDb;\n            const rows = await db',
+        ),
+      ],
+      [
+        'proxy alias',
+        exactQuery.replace(
+          'const rows = await readonlyAppDb',
+          'const db = new Proxy(readonlyAppDb, {});\n            const rows = await db',
+        ),
+      ],
+      [
+        'computed read method',
+        exactQuery.replace('readonlyAppDb.select', "readonlyAppDb['select']"),
+      ],
+      [
+        'call adapter',
+        exactQuery.replace(
+          'readonlyAppDb.select({ id: contacts.id })',
+          'readonlyAppDb.select.call(readonlyAppDb, { id: contacts.id })',
+        ),
+      ],
+      [
+        'write method',
+        exactQuery.replace(
+          'const rows = await readonlyAppDb.select({ id: contacts.id }).from(contacts);',
+          "await readonlyAppDb.insert(contacts).values({ id: 'c2' }); const rows: unknown[] = [];",
+        ),
+      ],
+    ] as const;
+    for (const [label, querySource] of queryVariants) {
+      const facts = sinksForFiles(
+        files.map((file) =>
+          file.fileName === 'queries.ts' ? { ...file, source: querySource } : file,
+        ),
+      );
+      expect(
+        facts.some(
+          (fact) =>
+            fact.site.startsWith('queries.ts:') &&
+            (fact.sink === 'request-handler.opaque-call' ||
+              fact.sink === 'request-handler.opaque-protocol' ||
+              fact.sink === 'request-handler.opaque-source'),
+        ),
+        `${label}: ${JSON.stringify(facts)}`,
+      ).toBe(true);
+    }
+
+    for (const [label, fileName, source] of [
+      [
+        'replaced read method',
+        'db.ts',
+        `${exactDb}\nObject.defineProperty(readonlyAppDb, 'select', { value: () => ({}) });`,
+      ],
+      [
+        'forged generated runtime export',
+        '_kovo/app-runtime-db.ts',
+        exactRuntime.replace(
+          'appDatabase.readonlyDb',
+          `{ select() { return { from() { eval('forged'); } }; } }`,
+        ),
+      ],
+    ] as const) {
+      const facts = sinksForFiles(
+        files.map((file) => (file.fileName === fileName ? { ...file, source } : file)),
+      );
+      expect(
+        facts.some(
+          (fact) =>
+            fact.site.startsWith('queries.ts:') &&
+            (fact.sink === 'request-handler.opaque-call' ||
+              fact.sink === 'request-handler.opaque-protocol' ||
+              fact.sink === 'request-handler.opaque-source'),
+        ),
+        `${label}: ${JSON.stringify(facts)}`,
+      ).toBe(true);
+    }
+  });
+
+  it('keeps Drizzle table-pristine verdicts fail-closed across shared-root scan order', () => {
+    const schema = {
+      fileName: 'schema.ts',
+      source: `
+        import { sqliteTable, text } from 'drizzle-orm/sqlite-core';
+        export const contacts = sqliteTable('contacts', { id: text('id').primaryKey() });
+      `,
+    };
+    const sharedSource = (registrations: string) => `
+      import { endpoint, query } from '@kovojs/server';
+      import { contacts } from './schema.js';
+      async function shared(first: any, db: any) {
+        const dormant = () => first.db.select({ id: contacts.id }).from(contacts);
+        void dormant;
+        return await db.select({ id: contacts.id }).from(contacts);
+      }
+      ${registrations}
+    `;
+    const endpoint = `export const endpointRoot = endpoint('/shared', { handler: shared });`;
+    const query = `export const queryRoot = query({ load: shared });`;
+    const tableFacts = (registrations: string) =>
+      sinksForFiles([schema, { fileName: 'shared.ts', source: sharedSource(registrations) }])
+        .filter(
+          (fact) =>
+            fact.site.startsWith('shared.ts:') &&
+            fact.sink === 'request-handler.opaque-protocol' &&
+            fact.source === '<property-getter:contacts>',
+        )
+        .map((fact) => `${fact.site}|${fact.sink}|${fact.source}`)
+        .sort();
+
+    const endpointFirst = tableFacts(`${endpoint}\n${query}`);
+    const queryFirst = tableFacts(`${query}\n${endpoint}`);
+    expect(endpointFirst.length).toBeGreaterThan(0);
+    expect(queryFirst).toEqual(endpointFirst);
+  });
+
+  it('accepts only exact canonical Kovo trusted SQL construction', () => {
+    const safe = sinksFor(`
+      import { sql, trustedSql } from '@kovojs/drizzle';
+      import { mutation, serverValue } from '@kovojs/server';
+      export const write = mutation({ handler(input) {
+        trustedSql(
+          sql\`update contacts set name = \${input.name} where id = \${serverValue('c1', 'server-owned id')}\`,
+          { justification: 'reviewed contact update' },
+        );
+        trustedSql(sql.raw<{ id: string }>('select id from contacts'), {
+          justification: 'reviewed static report',
+        });
+        return { ok: true };
+      } });
+    `);
+    expect(safe).toEqual([]);
+
+    for (const [label, statement, options = `{ justification: 'reviewed' }`] of [
+      ['dynamic raw text', `sql.raw(input.statement)`],
+      ['arbitrary statement', `input.statement`],
+      ['indirect statement', `statement`],
+      ['unreviewed Kovo constructor', `sql.identifier(input.name)`],
+      ['blank justification', `sql\`select 1\``, `{ justification: '   ' }`],
+      ['dynamic justification', `sql\`select 1\``, `{ justification: input.reason }`],
+      ['shorthand justification', `sql\`select 1\``, `{ justification }`],
+      ['computed justification', `sql\`select 1\``, `{ ['justification']: 'reviewed' }`],
+      ['spread options', `sql\`select 1\``, `{ ...{ justification: 'reviewed' } }`],
+      ['getter justification', `sql\`select 1\``, `{ get justification() { return 'reviewed'; } }`],
+    ] as const) {
+      const prelude =
+        label === 'indirect statement'
+          ? `const statement = sql\`select 1\`;`
+          : label === 'shorthand justification'
+            ? `const justification = 'reviewed';`
+            : '';
+      const facts = sinksFor(`
+        import { sql, trustedSql } from '@kovojs/drizzle';
+        import { mutation } from '@kovojs/server';
+        ${prelude}
+        export const write = mutation({ handler(input) {
+          trustedSql(${statement}, ${options});
+          return { ok: true };
+        } });
+      `);
+      expect(
+        facts.some(
+          (fact) =>
+            fact.source === 'trustedSql' ||
+            fact.source === 'sql.raw' ||
+            fact.source === '<tagged-template:sql>',
+        ),
+        `${label}: ${JSON.stringify(facts)}`,
+      ).toBe(true);
+    }
+
+    const hostileInterpolation = sinksFor(`
+      import { sql, trustedSql } from '@kovojs/drizzle';
+      import { mutation } from '@kovojs/server';
+      export const write = mutation({ handler() {
+        trustedSql(sql\`select \${{ [Symbol.toPrimitive]() { eval('owned'); return 1; } }}\`, {
+          justification: 'reviewed coercion proof',
+        });
+        return { ok: true };
+      } });
+    `);
+    expect(hostileInterpolation).toEqual(
+      expect.arrayContaining([expect.objectContaining({ sink: 'eval' })]),
+    );
+
+    for (const [label, source] of [
+      [
+        'aliased imports',
+        `
+          import { sql as querySql, trustedSql as reviewed } from '@kovojs/drizzle';
+          import { mutation } from '@kovojs/server';
+          export const write = mutation({ handler() {
+            reviewed(querySql\`select 1\`, { justification: 'reviewed' });
+            return { ok: true };
+          } });
+        `,
+      ],
+      [
+        'namespace import',
+        `
+          import * as drizzle from '@kovojs/drizzle';
+          import { mutation } from '@kovojs/server';
+          export const write = mutation({ handler() {
+            drizzle.trustedSql(drizzle.sql\`select 1\`, { justification: 'reviewed' });
+            return { ok: true };
+          } });
+        `,
+      ],
+      [
+        'local wrapper',
+        `
+          import { sql, trustedSql } from '@kovojs/drizzle';
+          import { mutation } from '@kovojs/server';
+          const reviewed = trustedSql;
+          export const write = mutation({ handler() {
+            reviewed(sql\`select 1\`, { justification: 'reviewed' });
+            return { ok: true };
+          } });
+        `,
+      ],
+      [
+        'call adapter',
+        `
+          import { sql, trustedSql } from '@kovojs/drizzle';
+          import { mutation } from '@kovojs/server';
+          export const write = mutation({ handler() {
+            trustedSql.call(undefined, sql\`select 1\`, { justification: 'reviewed' });
+            return { ok: true };
+          } });
+        `,
+      ],
+      [
+        'optional invocation',
+        `
+          import { sql, trustedSql } from '@kovojs/drizzle';
+          import { mutation } from '@kovojs/server';
+          export const write = mutation({ handler() {
+            trustedSql?.(sql\`select 1\`, { justification: 'reviewed' });
+            return { ok: true };
+          } });
+        `,
+      ],
+      [
+        'computed raw member',
+        `
+          import { sql, trustedSql } from '@kovojs/drizzle';
+          import { mutation } from '@kovojs/server';
+          export const write = mutation({ handler() {
+            trustedSql(sql['raw']('select 1'), { justification: 'reviewed' });
+            return { ok: true };
+          } });
+        `,
+      ],
+      [
+        'conditional statement',
+        `
+          import { sql, trustedSql } from '@kovojs/drizzle';
+          import { mutation } from '@kovojs/server';
+          export const write = mutation({ handler(input) {
+            trustedSql(input.ok ? sql\`select 1\` : sql\`select 2\`, { justification: 'reviewed' });
+            return { ok: true };
+          } });
+        `,
+      ],
+      [
+        'foreign SQL tag',
+        `
+          import { trustedSql } from '@kovojs/drizzle';
+          import { mutation } from '@kovojs/server';
+          import { sql } from 'drizzle-orm';
+          export const write = mutation({ handler() {
+            trustedSql(sql\`select 1\`, { justification: 'reviewed' });
+            return { ok: true };
+          } });
+        `,
+      ],
+      [
+        'extra argument',
+        `
+          import { sql, trustedSql } from '@kovojs/drizzle';
+          import { mutation } from '@kovojs/server';
+          export const write = mutation({ handler() {
+            trustedSql(sql\`select 1\`, { justification: 'reviewed' }, 'extra');
+            return { ok: true };
+          } });
+        `,
+      ],
+    ] as const) {
+      const facts = sinksFor(source);
+      expect(
+        facts.some(
+          (fact) =>
+            fact.source?.includes('trustedSql') ||
+            fact.source?.includes('tagged-template') ||
+            fact.source?.includes('sql'),
+        ),
+        `${label}: ${JSON.stringify(facts)}`,
+      ).toBe(true);
+    }
+
+    const leakedCarrier = sinksForFiles([
+      {
+        fileName: 'write.ts',
+        source: `
+          import { sql, trustedSql } from '@kovojs/drizzle';
+          import { mutation } from '@kovojs/server';
+          export const leakedSql = sql;
+          export const write = mutation({ handler() {
+            trustedSql(sql.raw('select 1'), { justification: 'reviewed' });
+            return { ok: true };
+          } });
+        `,
+      },
+      {
+        fileName: 'poison.ts',
+        source: `
+          import { leakedSql } from './write.js';
+          leakedSql.raw = () => ({ then() { eval('owned'); } });
+        `,
+      },
+    ]);
+    expect(leakedCarrier).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          site: expect.stringMatching(/^write\.ts:/u),
+          source: 'trustedSql',
+        }),
+      ]),
+    );
+
+    const mutatedStatement = sinksFor(`
+      import { sql, trustedSql } from '@kovojs/drizzle';
+      import { mutation } from '@kovojs/server';
+      export const write = mutation({ handler() {
+        const statement = trustedSql(sql.raw('select 1'), { justification: 'reviewed' });
+        Object.defineProperty(statement, 'then', {
+          get() { eval('owned'); return undefined; },
+        });
+        return statement;
+      } });
+    `);
+    expect(mutatedStatement).toEqual(
+      expect.arrayContaining([expect.objectContaining({ sink: 'eval' })]),
+    );
+  });
+
+  it('accepts only the exact pristine secret constructor as a protocol-safe value', () => {
+    const safe = sinksFor(`
+      import { secret } from '@kovojs/core';
+      import { sql, trustedSql } from '@kovojs/drizzle';
+      import { mutation } from '@kovojs/server';
+      export const write = mutation({ handler(input) {
+        trustedSql(sql\`insert into vault (classified) values (\${secret(input.value)})\`, {
+          justification: 'box classified mutation input before persistence',
+        });
+        return { ok: true };
+      } });
+    `);
+    expect(safe).toEqual([]);
+
+    for (const [label, source] of [
+      [
+        'aliased import',
+        `
+          import { secret as makeSecret } from '@kovojs/core';
+          import { sql, trustedSql } from '@kovojs/drizzle';
+          import { mutation } from '@kovojs/server';
+          export const write = mutation({ handler(input) {
+            trustedSql(sql\`select \${makeSecret(input.value)}\`, { justification: 'reviewed' });
+            return { ok: true };
+          } });
+        `,
+      ],
+      [
+        'namespace import',
+        `
+          import * as core from '@kovojs/core';
+          import { sql, trustedSql } from '@kovojs/drizzle';
+          import { mutation } from '@kovojs/server';
+          export const write = mutation({ handler(input) {
+            trustedSql(sql\`select \${core.secret(input.value)}\`, { justification: 'reviewed' });
+            return { ok: true };
+          } });
+        `,
+      ],
+      [
+        'local wrapper',
+        `
+          import { secret } from '@kovojs/core';
+          import { sql, trustedSql } from '@kovojs/drizzle';
+          import { mutation } from '@kovojs/server';
+          const makeSecret = secret;
+          export const write = mutation({ handler(input) {
+            trustedSql(sql\`select \${makeSecret(input.value)}\`, { justification: 'reviewed' });
+            return { ok: true };
+          } });
+        `,
+      ],
+      [
+        'call adapter',
+        `
+          import { secret } from '@kovojs/core';
+          import { sql, trustedSql } from '@kovojs/drizzle';
+          import { mutation } from '@kovojs/server';
+          export const write = mutation({ handler(input) {
+            trustedSql(sql\`select \${secret.call(undefined, input.value)}\`, { justification: 'reviewed' });
+            return { ok: true };
+          } });
+        `,
+      ],
+      [
+        'extra argument',
+        `
+          import { secret } from '@kovojs/core';
+          import { sql, trustedSql } from '@kovojs/drizzle';
+          import { mutation } from '@kovojs/server';
+          export const write = mutation({ handler(input) {
+            trustedSql(sql\`select \${secret(input.value, 'forged')}\`, { justification: 'reviewed' });
+            return { ok: true };
+          } });
+        `,
+      ],
+    ] as const) {
+      const facts = sinksFor(source);
+      expect(
+        facts.some(
+          (fact) =>
+            fact.site.startsWith('app.tsx:') &&
+            (fact.sink === 'request-handler.opaque-call' ||
+              fact.sink === 'request-handler.opaque-protocol' ||
+              fact.sink === 'request-handler.opaque-source' ||
+              fact.sink === 'request-handler.toPrimitive'),
+        ),
+        `${label}: ${JSON.stringify(facts)}`,
+      ).toBe(true);
+    }
+
+    const escapedCarrier = sinksForFiles([
+      {
+        fileName: 'write.ts',
+        source: `
+          import { secret } from '@kovojs/core';
+          import { sql, trustedSql } from '@kovojs/drizzle';
+          import { mutation } from '@kovojs/server';
+          export { secret };
+          export const write = mutation({ handler(input) {
+            trustedSql(sql\`select \${secret(input.value)}\`, { justification: 'reviewed' });
+            return { ok: true };
+          } });
+        `,
+      },
+      {
+        fileName: 'poison.ts',
+        source: `
+          import { secret } from './write.js';
+          Object.defineProperty(secret, 'call', { value() { eval('owned'); } });
+        `,
+      },
+    ]);
+    expect(escapedCarrier).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          site: expect.stringMatching(/^write\.ts:/u),
+          sink: expect.stringMatching(/^request-handler\./u),
+        }),
+      ]),
+    );
+  });
+
+  it('accepts only an exact direct declared secret-read statement and DB execution', () => {
+    const bridge = {
+      fileName: '_kovo/app-runtime-db.ts',
+      source: `
+        import { declareSecretReadCapability } from '@kovojs/server';
+        export { declareSecretReadCapability };
+      `,
+    };
+    const querySource = `
+      import { sql, trustedSql } from '@kovojs/drizzle';
+      import { declareSecretReadCapability, query } from '@kovojs/server';
+      export const secretRows = query({ async load(_input, context) {
+        if (context?.db === undefined) throw new Error('missing query DB');
+        const statement = trustedSql(sql.raw('select id, classified from runtime_secret_proof'), {
+          justification: 'reviewed raw secret read',
+        });
+        declareSecretReadCapability(statement, {
+          columns: ['classified'],
+          justification: 'audit classified values on the server',
+          source: 'runtime_secret_proof.classified',
+          table: 'runtime_secret_proof',
+        });
+        const rows = await (context.db as unknown as { all(value: unknown): Promise<unknown[]> }).all(statement);
+        return { items: rows };
+      } });
+    `;
+    const exactFiles = [{ fileName: 'queries.ts', source: querySource }];
+    expect(sinksForFiles(exactFiles)).toEqual([]);
+
+    const executeSource = querySource
+      .replace(
+        '{ all(value: unknown): Promise<unknown[]> }).all(statement)',
+        '{ execute(value: unknown): Promise<{ rows: unknown[] }> }).execute(statement)',
+      )
+      .replace('return { items: rows };', 'return { items: rows.rows };');
+    expect(sinksForFiles([{ fileName: 'queries.ts', source: executeSource }])).toEqual([]);
+
+    for (const [label, source] of [
+      [
+        'aliased package import',
+        querySource
+          .replace(
+            'import { declareSecretReadCapability, query }',
+            'import { declareSecretReadCapability as declareRead, query }',
+          )
+          .replace('declareSecretReadCapability(statement, {', 'declareRead(statement, {'),
+      ],
+      [
+        'namespace package import',
+        querySource
+          .replace(
+            "import { declareSecretReadCapability, query } from '@kovojs/server';",
+            "import * as server from '@kovojs/server';\n      import { query } from '@kovojs/server';",
+          )
+          .replace(
+            'declareSecretReadCapability(statement, {',
+            'server.declareSecretReadCapability(statement, {',
+          ),
+      ],
+      [
+        'generated bridge import',
+        querySource.replace(
+          "import { declareSecretReadCapability, query } from '@kovojs/server';",
+          "import { query } from '@kovojs/server';\n      import { declareSecretReadCapability } from './_kovo/app-runtime-db.js';",
+        ),
+      ],
+      [
+        'statement alias',
+        querySource
+          .replace(
+            'declareSecretReadCapability(statement, {',
+            'const escapedStatement = statement;\n        declareSecretReadCapability(statement, {',
+          )
+          .replace('}).all(statement);', '}).all(escapedStatement);'),
+      ],
+      [
+        'dynamic SQL',
+        querySource
+          .replace('async load(_input, context)', 'async load(input, context)')
+          .replace(
+            "sql.raw('select id, classified from runtime_secret_proof')",
+            'sql.raw(input.statement)',
+          ),
+      ],
+      [
+        'dynamic columns',
+        querySource
+          .replace('async load(_input, context)', 'async load(input, context)')
+          .replace("columns: ['classified']", 'columns: [input.column]'),
+      ],
+      [
+        'spread declaration',
+        querySource.replace("columns: ['classified'],", "...{ columns: ['classified'] },"),
+      ],
+      [
+        'extra declaration field',
+        querySource.replace(
+          "table: 'runtime_secret_proof',",
+          "table: 'runtime_secret_proof',\n          reason: 'forged',",
+        ),
+      ],
+      [
+        'execution before declaration',
+        querySource.replace(
+          /        declareSecretReadCapability\(statement, \{[\s\S]*?        \}\);\n        const rows = ([^;]+);/u,
+          "        const rows = $1;\n        declareSecretReadCapability(statement, {\n          columns: ['classified'],\n          justification: 'audit classified values on the server',\n          source: 'runtime_secret_proof.classified',\n          table: 'runtime_secret_proof',\n        });",
+        ),
+      ],
+      [
+        'computed execution method',
+        querySource.replace('}).all(statement)', "})['all'](statement)"),
+      ],
+      [
+        'extra execution argument',
+        querySource.replace('}).all(statement)', '}).all(statement, undefined)'),
+      ],
+      [
+        'opaque receiver',
+        querySource
+          .replace('async load(_input, context)', 'async load(input, context)')
+          .replace('(context.db as unknown as', '(input.db as unknown as'),
+      ],
+      [
+        'multiple executions',
+        querySource.replace(
+          'const rows = await',
+          'await (context.db as unknown as { all(value: unknown): Promise<unknown[]> }).all(statement);\n        const rows = await',
+        ),
+      ],
+    ] as const) {
+      const facts = sinksForFiles([
+        ...(label === 'generated bridge import' ? [bridge] : []),
+        { fileName: 'queries.ts', source },
+      ]);
+      expect(
+        facts.some(
+          (fact) =>
+            fact.site.startsWith('queries.ts:') &&
+            (fact.sink === 'request-handler.opaque-call' ||
+              fact.sink === 'request-handler.opaque-protocol' ||
+              fact.sink === 'request-handler.opaque-source' ||
+              fact.sink === 'request-handler.opaque-thenable'),
+        ),
+        `${label}: ${JSON.stringify(facts)}`,
+      ).toBe(true);
+    }
+
+    const poisonedPackageCarrier = sinksForFiles([
+      { fileName: 'queries.ts', source: querySource },
+      {
+        fileName: 'poison.ts',
+        source: `
+          export { declareSecretReadCapability } from '@kovojs/server';
+        `,
+      },
+    ]);
+    expect(
+      poisonedPackageCarrier.some(
+        (fact) => fact.site.startsWith('queries.ts:') && fact.sink.startsWith('request-handler.'),
+      ),
+      JSON.stringify(poisonedPackageCarrier),
+    ).toBe(true);
+  });
+
+  it('keeps exact trustedReveal audited without laundering its input authority', () => {
+    const safe = sinksFor(`
+      import { secret, trustedReveal } from '@kovojs/core';
+      import { query } from '@kovojs/server';
+      export const revealed = query({ load() {
+        const value = trustedReveal(secret('classified'), {
+          justification: 'publish the reviewed fixture value',
+          method: 'arbitrary-fn',
+          source: 'fixture.classified',
+        });
+        return { value: \`${'${value}'}:reviewed\` };
+      } });
+    `);
+    expect(safe).toEqual([]);
+
+    for (const [label, source] of [
+      [
+        'aliased import',
+        `
+          import { trustedReveal as reveal } from '@kovojs/core';
+          import { query } from '@kovojs/server';
+          export const exposed = query({ load(input) {
+            return reveal(input.value, { justification: 'reviewed' });
+          } });
+        `,
+      ],
+      [
+        'namespace import',
+        `
+          import * as core from '@kovojs/core';
+          import { query } from '@kovojs/server';
+          export const exposed = query({ load(input) {
+            return core.trustedReveal(input.value, { justification: 'reviewed' });
+          } });
+        `,
+      ],
+      [
+        'dynamic justification',
+        `
+          import { trustedReveal } from '@kovojs/core';
+          import { query } from '@kovojs/server';
+          export const exposed = query({ load(input) {
+            return trustedReveal(input.value, { justification: input.reason });
+          } });
+        `,
+      ],
+      [
+        'spread options',
+        `
+          import { trustedReveal } from '@kovojs/core';
+          import { query } from '@kovojs/server';
+          export const exposed = query({ load(input) {
+            return trustedReveal(input.value, { ...{ justification: 'reviewed' } });
+          } });
+        `,
+      ],
+      [
+        'invalid method',
+        `
+          import { trustedReveal } from '@kovojs/core';
+          import { query } from '@kovojs/server';
+          export const exposed = query({ load(input) {
+            return trustedReveal(input.value, { justification: 'reviewed', method: 'identity' });
+          } });
+        `,
+      ],
+      [
+        'extra option',
+        `
+          import { trustedReveal } from '@kovojs/core';
+          import { query } from '@kovojs/server';
+          export const exposed = query({ load(input) {
+            return trustedReveal(input.value, { justification: 'reviewed', reason: 'forged' });
+          } });
+        `,
+      ],
+    ] as const) {
+      const facts = sinksFor(source);
+      expect(
+        facts.some(
+          (fact) =>
+            fact.site.startsWith('app.tsx:') &&
+            (fact.sink === 'request-handler.opaque-call' ||
+              fact.sink === 'request-handler.opaque-protocol' ||
+              fact.sink === 'request-handler.opaque-source'),
+        ),
+        `${label}: ${JSON.stringify(facts)}`,
+      ).toBe(true);
+    }
+
+    for (const [label, value] of [
+      ['direct context authority', 'context'],
+      ['secret-wrapped context authority', 'secret(context)'],
+    ] as const) {
+      const facts = sinksFor(`
+        import { secret, trustedReveal, type Secret } from '@kovojs/core';
+        import { query } from '@kovojs/server';
+        export const exposed = query({ load(_input, context) {
+          return trustedReveal(${value} as unknown as Secret<unknown>, {
+            justification: 'attempted authority laundering proof',
+            method: 'arbitrary-fn',
+          });
+        } });
+      `);
+      expect(
+        facts.some(
+          (fact) =>
+            fact.sink.startsWith('client-wire.') || fact.sink === 'request-handler.opaque-protocol',
+        ),
+        `${label}: ${JSON.stringify(facts)}`,
+      ).toBe(true);
+    }
+
+    const hostileProtocol = sinksFor(`
+      import { trustedReveal, type Secret } from '@kovojs/core';
+      import { query } from '@kovojs/server';
+      export const exposed = query({ load() {
+        const hostile = {
+          [Symbol.toPrimitive]() { eval('owned'); return 'value'; },
+          then() { eval('assimilated'); },
+        };
+        return \`${"${trustedReveal(hostile as unknown as Secret<string>, { justification: 'reviewed' })}"}\`;
+      } });
+    `);
+    expect(hostileProtocol).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ sink: 'eval', source: "'owned'" }),
+        expect.objectContaining({ sink: 'eval', source: "'assimilated'" }),
       ]),
     );
   });
@@ -5899,6 +7324,131 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
     expect(rawEnvironmentValue.map((fact) => fact.sink)).toContain('node:process.env');
   });
 
+  it('accepts only exact relational query-builder reads of pristine reviewed tables', () => {
+    const schemaSource = `
+      import { pgTable, text } from 'drizzle-orm/pg-core';
+      export const users = pgTable('users', {
+        email: text('email').notNull(),
+        id: text('id').primaryKey(),
+      });
+    `;
+    const runtimeFiles = [
+      {
+        fileName: '_kovo/app-runtime-db-options.ts',
+        source: `
+          import { postgresAppRuntimeOptions, postgresSchemaModule } from '@kovojs/server';
+          import * as schema from '../schema.js';
+          export const appRuntimeSchema = postgresSchemaModule(schema);
+          export const appRuntimeDbOptions = postgresAppRuntimeOptions({
+            schema: appRuntimeSchema,
+            seedSql: [],
+          });
+        `,
+      },
+      {
+        fileName: '_kovo/app-runtime-db.ts',
+        source: `
+          import { createPostgresAppRuntimeDb } from '@kovojs/server';
+          import { appRuntimeDbOptions } from './app-runtime-db-options.js';
+          const appDatabase = createPostgresAppRuntimeDb(appRuntimeDbOptions);
+          export const appRuntimeDbProvider = appDatabase.db;
+        `,
+      },
+    ];
+    const querySource = (body: string, tableModule = './schema.js') => `
+      import { query } from '@kovojs/server';
+      import { users } from '${tableModule}';
+      export const usersQuery = query({
+        async load(_input, context) {
+          ${body}
+        },
+      });
+      function requireDb(context) {
+        const db = context?.db;
+        if (!db) throw new Error('missing db');
+        return db;
+      }
+    `;
+    const sinks = (
+      body: string,
+      options: { extraFiles?: { fileName: string; source: string }[]; tableModule?: string } = {},
+    ) =>
+      sinksForFiles([
+        { fileName: 'schema.ts', source: schemaSource },
+        ...runtimeFiles,
+        ...(options.extraFiles ?? []),
+        { fileName: 'queries.ts', source: querySource(body, options.tableModule) },
+      ]);
+
+    expect(
+      sinks(`
+        const db = requireDb(context);
+        const rows = await db.query.users.findMany({
+          columns: { email: true, id: true },
+        });
+        const first = await db.query.users.findFirst({ columns: { id: true } });
+        return { first, items: rows };
+      `),
+    ).toEqual([]);
+
+    const decoySource = `
+      import { pgTable, text } from 'drizzle-orm/pg-core';
+      export const users = pgTable('decoy_users', {
+        id: text('id').primaryKey(),
+      });
+    `;
+    expect(
+      sinks(`return context.db.query.users.findMany({ columns: { id: true } });`, {
+        extraFiles: [{ fileName: 'decoy.ts', source: decoySource }],
+        tableModule: './decoy.js',
+      }),
+      'same-name decoy import',
+    ).not.toEqual([]);
+
+    expect(
+      sinks(`
+        const users = pgTable('local_decoy_users', { id: text('id').primaryKey() });
+        return context.db.query.users.findMany({ columns: { id: true } });
+      `),
+      'same-name local decoy',
+    ).not.toEqual([]);
+
+    const hostile: ReadonlyArray<readonly [string, string]> = [
+      [
+        'computed table',
+        `const table = 'users'; return context.db.query[table].findMany({ columns: { id: true } });`,
+      ],
+      [
+        'computed method',
+        `const method = 'findMany'; return context.db.query.users[method]({ columns: { id: true } });`,
+      ],
+      [
+        'forged receiver',
+        `const db = { query: { users: { findMany() { return process.env.SECRET; } } } }; return db.query.users.findMany({ columns: { id: true } });`,
+      ],
+      ['callback option', `return context.db.query.users.findMany({ where: () => true });`],
+      [
+        'extra argument',
+        `return context.db.query.users.findMany({ columns: { id: true } }, { forged: true });`,
+      ],
+      [
+        'table mutation',
+        `users.id = { forged: true }; return context.db.query.users.findMany({ columns: { id: true } });`,
+      ],
+      [
+        'opaque table projection',
+        `const tables = { users }; const projected = tables.users; return context.db.query.projected.findMany({ columns: { id: true } });`,
+      ],
+      [
+        'relational method mutation',
+        `context.db.query.users.findMany = () => []; return context.db.query.users.findMany({ columns: { id: true } });`,
+      ],
+    ];
+    for (const [label, body] of hostile) {
+      expect(sinks(body), label).not.toEqual([]);
+    }
+  });
+
   it('accepts only a universally closed local mutation DB helper', () => {
     const schemaSource = `
       import { pgTable, text } from 'drizzle-orm/pg-core';
@@ -6087,6 +7637,53 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
         return db;
       `),
     ).toEqual([]);
+
+    const rawReadQuery = (statement: string, helperBody: string) => `
+      import { sql, trustedSql } from '@kovojs/drizzle';
+      import { query } from '@kovojs/server';
+      export const contactsQuery = query({
+        async load(input, context) {
+          const db = requireDb(context);
+          const items = await db.rawRead(
+            trustedSql(sql.raw(${statement}), { justification: 'reviewed contacts read' }),
+            { reads: ['contacts'] },
+          );
+          return { items };
+        },
+      });
+      function requireDb(context) {
+        ${helperBody}
+      }
+    `;
+    const strictHelper = `
+      const db = context?.db;
+      if (!db) throw new Error('missing db');
+      return db;
+    `;
+    expect(
+      sinksForFiles([
+        {
+          fileName: 'queries.ts',
+          source: rawReadQuery("'select id from contacts'", strictHelper),
+        },
+      ]),
+    ).toEqual([]);
+    expect(
+      sinksForFiles([
+        {
+          fileName: 'queries.ts',
+          source: rawReadQuery('input.statement', strictHelper),
+        },
+      ]),
+    ).not.toEqual([]);
+    expect(
+      sinksForFiles([
+        {
+          fileName: 'queries.ts',
+          source: rawReadQuery("'select id from contacts'", 'return context;'),
+        },
+      ]),
+    ).not.toEqual([]);
 
     for (const helperBody of [
       `

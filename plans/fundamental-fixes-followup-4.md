@@ -128,8 +128,10 @@ exactly where an irreducible author-time obligation remains.
     **Breaking-change migration:** today a missing `tables:` means _no_ write policy (`packages/server/src/mutation.ts:654`)
     and the starter `addContact` declares only `touches:` (`packages/create-kovo/templates/src/mutations.ts:71`); this
     plan makes absent-`tables:` fail-closed and updates the scaffold to declare `tables: ['contacts']` — existing apps
-    must add `tables:` to writing mutations. Closes `bugz-29` B3. Proven by a paranoid out-of-scope-write test on the
-    default mutation and by an absent-`tables:` mutation being write-denied.
+    must add `tables:` to writing mutations. Closes `bugz-29` B3. Proven at the correct enforcement layers:
+    statically visible auth-table writes fail the production build at KV402/KV414, while opaque raw SQL whose
+    observed table exceeds `tables:` and a contact write with absent `tables:` both reach the paranoid artifact and
+    fail closed at KV406.
   - **DEC-C.2 — A `Secret` box written into a non-secret column is refused at the DB-write boundary; raw-SQL writes
     fail closed; `reveal` is audited** (extends followup-3 DEC-C(4)). Builder writes inspect `.values()`/`.set()` args
     for `Secret` boxes and refuse (feasible). **Raw-SQL writes fail closed on any `Secret` bind parameter** — the

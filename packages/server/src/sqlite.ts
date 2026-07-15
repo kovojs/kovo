@@ -267,6 +267,10 @@ interface SqliteTransactionStatements {
 // This loads and pins the addon only; database authority is still created later, after compiler
 // metadata and authored table snapshots have been validated by createSqliteAppRuntime().
 const sqliteNativeDriverControls = pinSqliteNativeDriverControls();
+const sqlitePinnedStatementPostures = createWitnessWeakMap<
+  object,
+  Readonly<{ reader: boolean; readonly: boolean }>
+>();
 
 /**
  * Create the opt-in SQLite starter runtime without giving generated source filesystem, native
@@ -361,6 +365,17 @@ export function createSqliteAppRuntime(
     }
     const runtime = createSqliteAppRuntimeDb({
       db,
+      executeRawRead(statement) {
+        const prepared = client.prepare(statement.text);
+        const posture = witnessWeakMapGet(sqlitePinnedStatementPostures, prepared);
+        if (posture?.reader !== true || posture.readonly !== true) {
+          throw new Error(
+            'KV433: SQLite rawRead rejected a native statement that was not a read-only row-producing query (SPEC §10.3/§11.2).',
+          );
+        }
+        const all = stableOwnDataFunction(prepared, 'all', 'pinned SQLite rawRead statement.all');
+        return witnessReflectApply(all, prepared, snapshotSqliteRawReadParams(statement.params));
+      },
       metadata,
       normalizeTableName: normalizePolicyTable,
       sqliteAuthorizer: {
@@ -666,6 +681,15 @@ function createPinnedSqliteStatement(
   statement: object,
   controls: Readonly<SqliteNativeDriverControls>,
 ): Readonly<SqlitePinnedStatement> {
+  const reader = stableOwnDataValue(statement, 'reader', 'better-sqlite3 native Statement.reader');
+  const readonly = stableOwnDataValue(
+    statement,
+    'readonly',
+    'better-sqlite3 native Statement.readonly',
+  );
+  if (typeof reader !== 'boolean' || typeof readonly !== 'boolean') {
+    throw new TypeError('KV414: better-sqlite3 statement posture is invalid.');
+  }
   let facade: Readonly<SqlitePinnedStatement>;
   facade = witnessFreeze({
     all(...params: unknown[]): unknown {
@@ -689,7 +713,20 @@ function createPinnedSqliteStatement(
       return witnessReflectApply(controls.statementRun, statement, params);
     },
   } satisfies SqlitePinnedStatement);
+  witnessWeakMapSet(sqlitePinnedStatementPostures, facade, witnessFreeze({ reader, readonly }));
   return facade;
+}
+
+function snapshotSqliteRawReadParams(values: readonly unknown[]): unknown[] {
+  const snapshot: unknown[] = [];
+  for (let index = 0; index < values.length; index += 1) {
+    const descriptor = witnessGetOwnPropertyDescriptor(values, index);
+    if (descriptor === undefined || !('value' in descriptor)) {
+      throw new TypeError('SQLite rawRead parameters must be a dense own-data array.');
+    }
+    witnessArrayAppend(snapshot, descriptor.value, 'SQLite rawRead parameters');
+  }
+  return snapshot;
 }
 
 function createPinnedSqliteTransaction(

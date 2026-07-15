@@ -43,6 +43,13 @@ const defaultAllowedDriverUses = [
     file: 'packages/server/src/sqlite.ts',
     method: 'prepare',
   },
+  {
+    // SPEC §10.3/§11.2: rawRead reaches this pinned native sink only after managed-db's
+    // read classifier, the declared-table authorizer, and the SQLite reader/readonly posture gate.
+    call: 'client.prepare(statement.text)',
+    file: 'packages/server/src/sqlite.ts',
+    method: 'prepare',
+  },
 ];
 export const defaultAllowedRawTargetFiles = [
   'packages/server/src/sql-safe-handle.ts',

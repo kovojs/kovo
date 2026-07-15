@@ -312,6 +312,7 @@ function rawReadClient(client: PGlite, principal: string | undefined) {
     },
     {
       rawRead: {
+        dialect: 'postgres',
         dialectLabel: 'PGlite',
         executeMethod: 'query',
         normalizeTableName: (table) => table,

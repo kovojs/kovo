@@ -1,11 +1,6 @@
 import { createSqliteAppRuntime, type KovoSqliteSeed } from '@kovojs/server/sqlite';
 import { createBetterAuthSqliteBindingsFromEnvironment } from '@kovojs/better-auth';
-import {
-  declareSecretReadCapability,
-  type AccessDecision,
-  type CsrfOptions,
-  type MutationReplayStore,
-} from '@kovojs/server';
+import { type AccessDecision, type CsrfOptions, type MutationReplayStore } from '@kovojs/server';
 
 import { account, authSchema, contacts, session, user, verification } from '../schema.js';
 import type { AppReadonlyDb } from '../db.js';
@@ -47,8 +42,6 @@ const authSystemDb = appDatabase.systemDb({
   reason: 'Better Auth adapter manages local session tables before an app session exists',
   surface: 'src/_kovo/app-runtime-db.ts#createAppAuthBindings',
 });
-
-export { declareSecretReadCapability };
 
 /** Volatile local-development replay token; opaque and non-callable in app-authored modules. */
 export const appRuntimeMutationReplayStore: MutationReplayStore = appDatabase.mutationReplayStore;

@@ -41,7 +41,7 @@ Baseline: fresh `--sqlite` + `--dialect postgres` starters linked to local frame
   - Why it matters: the §11.2 `observed ⊆ declared` write-integrity contract is void for the default mutation shape; a mutation can write auth/session state it never declared, on a green paranoid build.
   - Repro evidence: reproduced under `KOVO_PARANOID=1`; an out-of-scope write to auth tables persisted (verifier CONFIRMED, paranoidConfirmed).
   - Acceptance: declared-write enforcement engages for the `touches:` shape (and every shape the scaffold emits), or the scaffold declares `tables:`; the runtime write choke must be live for the default mutation, proven by a paranoid-mode out-of-scope-write test on the generated app.
-  - Resolution: the production artifact case `enforces starter mutation DB table scope...` passed. Four out-of-scope/absent-table mutations return KV406 failures and a direct post-shutdown PGlite inspection proves no auth/session rows persisted.
+  - Resolution: the static production-artifact case rejects the visible auth `user`/`session` writes at KV402/KV414 before emission. The served paranoid artifact separately proves the runtime floor: an explicitly trusted raw-SQL write that declares `tables: ['contacts']` but targets `user`, plus a contact write with absent `tables:`, both return KV406; post-shutdown PGlite inspection proves the raw auth-user and absent-contact rows were not persisted.
 
 ## Refuted / Not Carried Forward
 
@@ -52,5 +52,5 @@ Baseline: fresh `--sqlite` + `--dialect postgres` starters linked to local frame
 ## Latest Verification
 
 - [x] `pnpm exec vitest run packages/server/src/secret-read-boundary.test.ts` — 39 tests passed, including raw aliases, derived expressions, and view carriers.
-- [x] Focused `index.build.prod-artifact.security.test.ts` cases — view-secret refusal, alias/derived boxing, and starter mutation table-scope enforcement passed on the built artifact.
-- [x] Direct post-shutdown PGlite inspection in the mutation-scope artifact proves rejected writes left no auth/session rows behind.
+- [x] Focused `index.build.prod-artifact.security.test.ts` cases — view-secret refusal, alias/derived boxing, static KV402/KV414 rejection, and runtime KV406 table-scope enforcement passed.
+- [x] Direct post-shutdown PGlite inspection in the runtime mutation-scope artifact proves the rejected raw auth-user and absent-contact writes left no rows behind.

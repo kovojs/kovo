@@ -139,6 +139,33 @@ describe('validateManagedSqlStatement runtime floor (SPEC §10.2/§6.6)', () => 
     });
   });
 
+  it('renders pinned recipe parameters for the selected SQL dialect', () => {
+    const statement = stampParameterizedSql(
+      {},
+      {},
+      {
+        kind: 'template',
+        strings: ['select id from products where id = ', ' and status = ', ''],
+        values: ['p1', 'active'],
+      },
+    );
+
+    expect(snapshotManagedSqlStatement(statement, 'postgres')).toMatchObject({
+      ok: true,
+      statement: {
+        text: 'select id from products where id = $1 and status = $2',
+        values: ['p1', 'active'],
+      },
+    });
+    expect(snapshotManagedSqlStatement(statement, 'sqlite')).toMatchObject({
+      ok: true,
+      statement: {
+        text: 'select id from products where id = ? and status = ?',
+        values: ['p1', 'active'],
+      },
+    });
+  });
+
   it('rejects an unbranded carrier whose values array has no SQL bind marker', () => {
     const result = validateManagedSqlStatement({
       text: "select * from products where id = 'already assembled'",

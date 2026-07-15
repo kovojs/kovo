@@ -231,7 +231,7 @@ export function paranoidGeneratorAcceptanceProofNeedles(options) {
     "dialect: 'sqlite'",
     'addSqliteRuntimeSecretProvenanceProof(root)',
     'pruneParanoidPhase5SqliteReadSet(root)',
-    'addStarterMutationDbScopeProof(root)',
+    "addStarterMutationDbScopeProof(root, { mode: 'runtime-table-choke' })",
     'addParanoidPhase5WriteBoundaryProof(root)',
     'buildParanoidProductionArtifact(root)',
     'expectBlockedReadShapes(origin, jar)',
@@ -526,7 +526,7 @@ export const SECURITY_BUILD_PROOFS = [
     ),
     sourceFile: 'packages/create-kovo/src/index.build.prod-artifact.paranoid-runtime.test.ts',
     testName:
-      'rejects volatile SQLite replay in production, then runs Phase 5.1 sink acceptance under test posture',
+      'rejects the single-principal SQLite runtime in production, then runs Phase 5.1 sink acceptance under test posture',
   },
   {
     buildInvocation: 'starter-build-production-artifact',
@@ -541,7 +541,7 @@ export const SECURITY_BUILD_PROOFS = [
     }),
     sourceFile: 'packages/create-kovo/src/index.build.prod-artifact.paranoid-runtime.test.ts',
     testName:
-      'rejects volatile SQLite replay in production, then runs Phase 5.1 sink acceptance under test posture',
+      'rejects the single-principal SQLite runtime in production, then runs Phase 5.1 sink acceptance under test posture',
   },
   {
     buildInvocation: 'starter-build-production-artifact',
@@ -657,16 +657,31 @@ export const SECURITY_BUILD_PROOFS = [
   },
   {
     buildInvocation: 'starter-build-production-artifact',
+    claimId: 'starter-auth-table-scope-static-gate',
+    code: 'KV414',
+    proofFile: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
+    requiredNeedles: [
+      "addStarterMutationDbScopeProof(root, { mode: 'static-structured' })",
+      'buildProductionArtifact(root)',
+      'execFileSyncErrorOutput(error)',
+      'KV414 WRITE starterAuthUserTableWrite',
+      'KV414 WRITE starterAuthSessionTableWrite',
+      'KV402 starter-mutation-db-scope-proof/starter-auth-user-table-write-proof',
+      "expect(output).not.toContain('KV424')",
+    ],
+    sourceFile: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
+    testName: 'rejects statically visible starter DB scope drift before artifact emission',
+  },
+  {
+    buildInvocation: 'starter-build-production-artifact',
     claimId: 'starter-mutation-db-scope-prod-artifact',
     code: 'KV406',
     proofFile: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
     requiredNeedles: [
-      'addStarterMutationDbScopeProof(root)',
+      "addStarterMutationDbScopeProof(root, { mode: 'runtime-table-choke' })",
       'buildParanoidProductionArtifact(root)',
-      'starter-mutation-db-scope-proof/starter-auth-user-table-write-proof',
-      'starter-mutation-db-scope-proof/starter-auth-session-table-write-proof',
-      'starter-mutation-db-scope-proof/starter-raw-auth-table-write-proof',
       'starter-mutation-db-scope-proof/starter-absent-tables-contact-write-proof',
+      'starter-mutation-db-scope-proof/starter-raw-auth-table-write-proof',
       'contactRows: 1',
       "expect(output()).toContain('KV406')",
       "expect(output()).toContain('declared mutation registry tables')",

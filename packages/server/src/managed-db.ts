@@ -20,6 +20,7 @@ import {
   frameworkCanonicalNativeSqlSource,
   frameworkManagedSqlDispatchPropertyValue,
   frameworkManagedDbRawTarget,
+  enforceManagedSql,
   isFrameworkManagedSqlDispatchProxy,
   isFrameworkManagedTestFixtureSqlDispatchProxy,
   managedSqlExecutionPolicy,
@@ -268,6 +269,8 @@ export interface RawReadDeclaration {
 
 /** Framework-owned rawRead enforcement options for a managed read handle. */
 export interface RawReadPolicyOptions {
+  /** Exact SQL dialect used by the fail-closed read classifier. */
+  dialect: 'postgres' | 'sqlite';
   dialectLabel: string;
   executeSql?: (statement: { params: readonly unknown[]; text: string }) => unknown;
   executeMethod?: 'all' | 'execute' | 'query' | 'values';
@@ -301,6 +304,8 @@ export interface CrossOwnerReadAuditFact {
 /** Framework-owned cross-owner read execution options. */
 export interface CrossOwnerReadPolicyOptions {
   adminClient?: object;
+  /** Exact SQL dialect used by the fail-closed read classifier. */
+  dialect: 'postgres' | 'sqlite';
   dialectLabel: string;
   executeSql?: (statement: { params: readonly unknown[]; text: string }) => unknown;
   executeMethod?: 'all' | 'execute' | 'query' | 'values';
@@ -1997,9 +2002,13 @@ function isDeclaredWriteDirectSqlMethod(
   );
 }
 
-function sqlCarrierFromValue(value: unknown, params: readonly unknown[]): SqlCarrier | undefined {
+function sqlCarrierFromValue(
+  value: unknown,
+  params: readonly unknown[],
+  dialect?: 'postgres' | 'sqlite',
+): SqlCarrier | undefined {
   if (typeof value === 'string') return { params, text: value };
-  const snapshot = snapshotManagedSqlStatement(value);
+  const snapshot = snapshotManagedSqlStatement(value, dialect);
   if (snapshot.ok) {
     return {
       params: snapshot.statement.values,
@@ -3193,12 +3202,17 @@ function snapshotRawReadPolicy(policy: RawReadPolicyOptions): RawReadPolicyOptio
     return value;
   };
   const ownerTables = optionalOwnDataProperty(policy, 'ownerTables');
+  const dialect = ownStringDataProperty(policy, 'dialect');
   const sqliteAuthorizer = optionalOwnDataProperty(policy, 'sqliteAuthorizer');
   const executeMethod = optionalOwnDataProperty(policy, 'executeMethod');
   const executeSql = optionalOwnDataProperty(policy, 'executeSql');
   if (ownerTables !== undefined) {
     snapshot.ownerTables = snapshotStringArray(ownerTables, 'rawRead owner tables');
   }
+  if (dialect !== 'postgres' && dialect !== 'sqlite') {
+    throw new TypeError('rawRead dialect is invalid.');
+  }
+  snapshot.dialect = dialect;
   if (sqliteAuthorizer !== undefined) {
     snapshot.sqliteAuthorizer = snapshotSqliteAuthorizer(
       sqliteAuthorizer as DeclaredWriteSqliteAuthorizerOptions,
@@ -3229,7 +3243,12 @@ function snapshotCrossOwnerReadPolicy(
 ): CrossOwnerReadPolicyOptions {
   const normalizeTableName = ownFunctionDataProperty(policy, 'normalizeTableName');
   const snapshot = witnessCreateNullRecord<unknown>() as unknown as CrossOwnerReadPolicyOptions;
+  const dialect = ownStringDataProperty(policy, 'dialect');
   snapshot.dialectLabel = ownStringDataProperty(policy, 'dialectLabel');
+  if (dialect !== 'postgres' && dialect !== 'sqlite') {
+    throw new TypeError('crossOwnerRead dialect is invalid.');
+  }
+  snapshot.dialect = dialect;
   snapshot.normalizeTableName = function normalizeCrossOwnerReadTable(table) {
     const value = witnessReflectApply<unknown>(normalizeTableName, policy, [table]);
     if (typeof value !== 'string') {
@@ -3385,7 +3404,7 @@ function rawReadCapability(
       );
     }
     const normalized = normalizedRawReadDeclaration(declaration);
-    const carrier = sqlCarrierFromValue(statement, []);
+    const carrier = sqlCarrierFromValue(statement, [], policy.dialect);
     if (carrier === undefined) {
       throw new Error(
         'KV410: rawRead requires a SQL statement whose table set can be checked against the declared reads (SPEC §10.2/§10.3).',
@@ -3393,6 +3412,15 @@ function rawReadCapability(
     }
     assertRawReadObservedTablesAllowed(carrier.text, normalized, policy);
     if (policy.executeSql !== undefined) {
+      // SPEC §10.3/§11.2: adapter-owned executors (for example the SQLite pinned native
+      // client and Postgres read-only role client) still sit behind the same syntactic read choke
+      // as managed DB methods. The callback receives only the descriptor-derived carrier below,
+      // never the authored SQL object.
+      enforceManagedSql(reconstructedDriverCarrier(carrier), 'enforce', {
+        capability: 'read',
+        dialect: policy.dialect,
+        engineReadonly: false,
+      });
       return witnessReflectApply(policy.executeSql, policy, [carrier]) as Promise<Row[]> | Row[];
     }
     const method = rawReadExecutionMethod(target, policy);
@@ -3415,7 +3443,7 @@ function crossOwnerReadCapability(
       );
     }
     const normalized = normalizedCrossOwnerReadDeclaration(declaration);
-    const carrier = sqlCarrierFromValue(statement, []);
+    const carrier = sqlCarrierFromValue(statement, [], policy.dialect);
     if (carrier === undefined) {
       throw new Error(
         'KV414: crossOwnerRead requires a SQL statement whose single table can be checked (SPEC §10.3).',
@@ -3436,6 +3464,11 @@ function crossOwnerReadCapability(
       );
     }
     assertCrossOwnerReadAllowed(observed, normalized, policy);
+    enforceManagedSql(reconstructedDriverCarrier(carrier), 'enforce', {
+      capability: 'read',
+      dialect: policy.dialect,
+      engineReadonly: false,
+    });
     recordCrossOwnerReadAuditFact(normalized, observed, policy);
     if (policy.executeSql !== undefined) {
       return witnessReflectApply(policy.executeSql, policy, [carrier]) as Promise<Row[]> | Row[];

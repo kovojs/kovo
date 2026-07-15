@@ -202,6 +202,12 @@ describe('create-kovo starter (build integration: production security artifacts)
       linkStarterBuildDependencies(root);
       addRuntimeSecretBoundaryProof(root);
       const proofQueries = readFileSync(join(root, 'src/queries.ts'), 'utf8');
+      const generatedRuntimeDb = readFileSync(join(root, 'src/_kovo/app-runtime-db.ts'), 'utf8');
+      expect(proofQueries).toContain(
+        "import { declareSecretReadCapability, query, s, type JsonValue, type QueryLoadContext, type Reader } from '@kovojs/server';",
+      );
+      expect(proofQueries).not.toContain("from './_kovo/app-runtime-db.js'");
+      expect(generatedRuntimeDb).not.toContain('declareSecretReadCapability');
       expect(proofQueries).toContain('classified: runtimeSecretProof.classified');
       expect(proofQueries).toContain('leaked: runtimeSecretFunctionProof.functionClassified');
       expect(proofQueries).toContain('runtimeSecretWholeProof.label');
@@ -348,6 +354,32 @@ describe('create-kovo starter (build integration: production security artifacts)
     }
   }, 240_000);
 
+  // @kovo-security-certifies KV414 starter-auth-table-scope-static-gate
+  it('rejects statically visible starter DB scope drift before artifact emission', () => {
+    const root = mkdtempSync(join(tmpdir(), 'create-kovo-prod-starter-db-scope-static-'));
+
+    try {
+      writeKovoProject(root, { name: 'Prod Starter Static DB Scope Proof' });
+      linkStarterBuildDependencies(root);
+      addStarterMutationDbScopeProof(root, { mode: 'static-structured' });
+
+      try {
+        buildProductionArtifact(root);
+        throw new Error('Expected static starter DB scope drift to fail the production build.');
+      } catch (error) {
+        const output = execFileSyncErrorOutput(error);
+        expect(output).toContain('KV414 WRITE starterAuthUserTableWrite');
+        expect(output).toContain('KV414 WRITE starterAuthSessionTableWrite');
+        expect(output).toContain(
+          'KV402 starter-mutation-db-scope-proof/starter-auth-user-table-write-proof',
+        );
+        expect(output).not.toContain('KV424');
+      }
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  }, 240_000);
+
   // @kovo-security-certifies KV406 starter-mutation-db-scope-prod-artifact
   it('enforces starter mutation DB table scope in paranoid production artifacts', async () => {
     const tempParent = tmpdir();
@@ -360,7 +392,7 @@ describe('create-kovo starter (build integration: production security artifacts)
     try {
       writeKovoProject(root, { name: 'Prod Starter DB Scope Proof' });
       linkStarterBuildDependencies(root);
-      addStarterMutationDbScopeProof(root);
+      addStarterMutationDbScopeProof(root, { mode: 'runtime-table-choke' });
 
       buildParanoidProductionArtifact(root);
 
@@ -404,10 +436,8 @@ describe('create-kovo starter (build integration: production security artifacts)
       expect(addContact.status).toBe(303);
 
       const blockedMutations = [
-        'starter-mutation-db-scope-proof/starter-auth-user-table-write-proof',
-        'starter-mutation-db-scope-proof/starter-auth-session-table-write-proof',
-        'starter-mutation-db-scope-proof/starter-raw-auth-table-write-proof',
         'starter-mutation-db-scope-proof/starter-absent-tables-contact-write-proof',
+        'starter-mutation-db-scope-proof/starter-raw-auth-table-write-proof',
       ] as const;
       for (const key of blockedMutations) {
         const proofForm = formHtmlByAction(homeHtml, `/_m/${key}`);
@@ -460,13 +490,13 @@ describe('create-kovo starter (build integration: production security artifacts)
       try {
         await raw.waitReady;
         const authUsers = await raw.query(
-          `select id from "user" where id in ('starter-scope-proof-auth-user', 'starter-scope-proof-raw-auth-user')`,
+          `select id from "user" where id = 'starter-scope-proof-raw-auth-user'`,
         );
-        const authSessions = await raw.query(
-          `select id from "session" where id = 'starter-scope-proof-auth-session'`,
+        const absentContacts = await raw.query(
+          `select id from contacts where id = 'starter-scope-proof-absent-contact'`,
         );
         expect(authUsers.rows).toEqual([]);
-        expect(authSessions.rows).toEqual([]);
+        expect(absentContacts.rows).toEqual([]);
       } finally {
         await raw.close();
       }

@@ -77,6 +77,7 @@ describe('@kovojs/test PGlite harness integration', () => {
 
       const reader = managedDb(db, 'read', {
         rawRead: {
+          dialect: 'postgres',
           dialectLabel: 'PGlite',
           executeMethod: 'query',
           normalizeTableName: (table) => table,

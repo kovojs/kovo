@@ -181,6 +181,64 @@ describe('@kovojs/drizzle touch graph helpers', () => {
     ]);
   });
 
+  it('resolves exact loader-local Drizzle aliases without trusting local lookalikes', () => {
+    const querySource = (aliasImport: string, aliasSetup: string) => `
+      ${aliasImport}
+
+      export const products = pgTable('products', {
+        id: text('id').primaryKey(),
+        stock: integer('stock').notNull(),
+      }, kovo({ domain: 'product', key: 'id' }));
+
+      export const productQuery = query('product/local-alias', {
+        load(_input, db: PgAsyncDatabase<any, any>) {
+          ${aliasSetup}
+          return db.select({ stock: productAlias.stock }).from(productAlias);
+        },
+      });
+    `;
+    const exactFacts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'product.query.ts',
+          source: querySource(
+            "import { alias as tableAlias, integer, pgTable, text, type PgAsyncDatabase } from 'drizzle-orm/pg-core';",
+            "const productAlias = tableAlias(products, 'p');",
+          ),
+        },
+      ],
+    });
+    expect(exactFacts).toHaveLength(1);
+    expect(exactFacts[0]).toMatchObject({
+      query: 'product/local-alias',
+      reads: ['product'],
+      shape: { stock: 'number' },
+    });
+    expect(exactFacts[0]).not.toHaveProperty('diagnostics');
+
+    const lookalikeFacts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'product.query.ts',
+          source: querySource(
+            "import { integer, pgTable, text, type PgAsyncDatabase } from 'drizzle-orm/pg-core';",
+            'function tableAlias<T>(table: T): T { return table; }\n          const productAlias = tableAlias(products);',
+          ),
+        },
+      ],
+    });
+    expect(lookalikeFacts[0]).toMatchObject({
+      diagnostics: expect.arrayContaining([
+        expect.objectContaining({
+          code: 'KV406',
+          message: expect.stringContaining('could not be resolved to a Drizzle table'),
+        }),
+      ]),
+      query: 'product/local-alias',
+      reads: [],
+    });
+  });
+
   it('does not fabricate project alias table facts from local alias helpers', () => {
     const graph = extractTouchGraphFromProject({
       files: [

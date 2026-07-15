@@ -464,7 +464,7 @@ export function snapshotManagedSqlStatement(
         ok: false,
       };
     }
-    const rendered = renderPinnedSqlCarrier(pinned);
+    const rendered = renderPinnedSqlCarrier(pinned, dialect);
     return managedSqlSnapshot(rendered.text, rendered.values, dialect, {
       allowEmptyValues: true,
       provenance: pinned.kind === 'fixed' ? 'trusted-separated-carrier' : 'pinned-kovo-recipe',
@@ -911,7 +911,10 @@ function pinnedSqlRecipe(chunks: readonly PinnedSqlChunk[]): PinnedSqlCarrier {
   });
 }
 
-function renderPinnedSqlCarrier(pinned: PinnedSqlCarrier): {
+function renderPinnedSqlCarrier(
+  pinned: PinnedSqlCarrier,
+  dialect: ManagedSqlDialect,
+): {
   readonly text: string;
   readonly values: readonly unknown[];
 } {
@@ -926,7 +929,7 @@ function renderPinnedSqlCarrier(pinned: PinnedSqlCarrier): {
       text += chunk.value;
     } else {
       securityArrayAppend(values, chunk.value);
-      text += `$${values.length}`;
+      text += dialect === 'sqlite' ? '?' : `$${values.length}`;
     }
   }
   return { text, values };

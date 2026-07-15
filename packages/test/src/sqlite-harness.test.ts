@@ -73,6 +73,7 @@ describe('@kovojs/test SQLite harness integration', () => {
 
       const reader = managedDb(db, 'read', {
         rawRead: {
+          dialect: 'sqlite',
           dialectLabel: 'SQLite',
           executeMethod: 'query',
           normalizeTableName: (table) => table.replace(/^main\./, ''),

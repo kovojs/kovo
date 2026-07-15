@@ -353,6 +353,30 @@ describe('framework-owned CSP reporting endpoint (OPP-14)', () => {
 });
 
 describe('server createApp request shell', () => {
+  it('registers an endpoint with a concrete DB context without widening it to unknown', () => {
+    interface TypedEndpointDb {
+      select(): { from(table: unknown): Promise<unknown[]> };
+    }
+
+    const typedEndpoint = endpoint<'/typed-endpoint-db', 'GET', 'exact', TypedEndpointDb>(
+      '/typed-endpoint-db',
+      {
+        db: true,
+        async handler(_request, context) {
+          const scoped = await context.actAs('typed-principal');
+          void scoped.db.read.select;
+          return Response.json({ ok: true });
+        },
+        method: 'GET',
+        reason: 'type-level concrete endpoint DB registration proof',
+        response: rawJsonResponse,
+      },
+    );
+
+    const app = createApp({ endpoints: [typedEndpoint] });
+    expect(app.endpoints).toHaveLength(1);
+  });
+
   it('keeps guarded file 200/304 responses private across route and parent-layout access graphs', async () => {
     const allowVictim = (request: Request) =>
       request.headers.get('x-principal') === 'victim' ? true : ({ kind: 'forbidden' } as const);

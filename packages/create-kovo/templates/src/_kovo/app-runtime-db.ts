@@ -1,6 +1,5 @@
 import {
   createPostgresAppRuntimeDb,
-  declareSecretReadCapability,
   type AccessDecision,
   type CsrfOptions,
   type MutationReplayStore,
@@ -20,8 +19,6 @@ const authSystemDb = appDatabase.systemDb({
   reason: 'Better Auth adapter manages session tables before an app session exists',
   surface: 'src/_kovo/app-runtime-db.ts#createAppAuthBindings',
 });
-
-export { declareSecretReadCapability };
 
 /** Durable SPEC §10.3 replay token; opaque and non-callable in app-authored modules. */
 export const appRuntimeMutationReplayStore: MutationReplayStore = appDatabase.mutationReplayStore;

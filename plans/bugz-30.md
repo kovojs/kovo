@@ -11,11 +11,11 @@ ledger and are not renumbered here.
 
 ## Severity summary
 
-| Severity | Families | Items |
-| -------- | -------: | ----: |
-| Critical |        3 | C1-C3 |
-| High     |        7 | H1-H7 |
-| Medium   |        9 | M1-M9 |
+| Severity | Families |  Items |
+| -------- | -------: | -----: |
+| Critical |        3 |  C1-C3 |
+| High     |        9 |  H1-H9 |
+| Medium   |       10 | M1-M10 |
 
 ## Critical
 
@@ -124,6 +124,34 @@ ledger and are not renumbered here.
     victim empty; counterfeit, Proxy, and cross-copy identities fail closed. SPEC §6.6 C9/C15,
     §10.3, §11.2.
 
+- [x] **H8 - SQLite raw reads could fail open during column-origin preparation and fail closed for
+      valid execution, while dialect-less policies broadened SQL purity.**
+  - The public SQLite runtime reconstructed a plain carrier that Drizzle could not execute, so a
+    declared `rawRead` returned HTTP 500. Worse, confidentiality inspection prepared SQL on the
+    live connection before the managed read classifier: `PRAGMA foreign_keys = OFF` changed
+    connection state even though the later KV433 choke rejected it. Parameterized tagged SQL used
+    Postgres `$N` binds, and omitted policy dialects admitted the union of SQLite/Postgres pure
+    functions.
+  - **Evidence:** the runtime now classifies before live `prepare()`, executes only through pinned
+    native controls whose statement is both `reader` and `readonly`, renders SQLite recipe binds as
+    `?`, and requires an exact policy dialect. `sqlite.test.ts` proves parameterized reads plus
+    `INSERT ... RETURNING`, mutating PRAGMA, and `PRAGMA optimize` rejection with unchanged rows,
+    foreign-key posture, and schema stats; the Phase 5.1 served-artifact acceptance and DEC-J
+    sole-door gate pass. SPEC §6.6, §10.3, §11.2.
+
+- [x] **H9 - The relational-query-builder KV424 grammar could bind `db.query.<name>` to an
+      unrelated same-name table instead of the app's runtime schema.**
+  - A decoy imported or local `pgTable` declaration could satisfy the new `findMany`/`findFirst`
+    table proof even though the runtime DB's property resolved through a different schema object.
+    That let an opaque relational read inherit trusted DB-row provenance from attacker-selected
+    columns.
+  - **Evidence:** `requestExactPostgresRuntimeSchemaSourceFileForProject` now resolves and memoizes
+    the one exact `createPostgresAppRuntimeDb` -> `postgresAppRuntimeOptions` ->
+    `postgresSchemaModule(namespace)` chain, and relational reads accept only the pristine export
+    from that exact namespace source. The canonical-schema positive plus imported/local decoy
+    negatives pass in the 277-case `trust-escapes-static.test.ts` suite; the exact generated
+    Postgres artifact passes KV424 and runtime acceptance. SPEC §6.6, §9.4, §10.3.
+
 ## Medium
 
 - [x] **M1 - Reader provenance recovery false-positived ordinary reads and introduced an unbounded
@@ -207,6 +235,18 @@ ledger and are not renumbered here.
   - **Evidence:** `69f5dd297` omits index/FK/check/extra-config carriers from the finite DML graph;
     one real runtime regression executes insert, update, and delete on an FK-bearing child table.
     The integrated 265-test matrix and server dist/DTS build are green. SPEC §6.6 C9, §10.3.
+
+- [x] **M10 - Composed webhooks rejected Kovo's own opaque managed DB provider before the handler
+      ran.**
+  - App dispatch correctly forwarded the framework-minted Postgres provider token, but
+    `runWebhook()` accepted only callback providers and collapsed the token validation failure into
+    an HTTP 500. Database-backed webhook mutations therefore could not use the framework's stronger
+    opaque provider posture.
+  - **Evidence:** webhook option snapshotting now accepts only a callback or the private-WeakMap
+    authenticated framework provider and still rejects structural object forgeries. The focused
+    app-dispatch regression proves a composed system mutation receives the managed DB; the exact
+    generated Postgres artifact proves an `actAs` task write, webhook write, and duplicate replay
+    produce exactly two rows. SPEC §6.6, §9.1, §10.3.
 
 ## Closure gates
 

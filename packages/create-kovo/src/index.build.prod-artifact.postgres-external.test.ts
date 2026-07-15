@@ -4,8 +4,8 @@ import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
-import { pathToFileURL } from 'node:url';
 
+import { hashPassword as kovoHashPassword } from '@kovojs/server';
 import { afterAll, describe, expect, it } from 'vitest';
 
 import { demoPasswordEnvVar, writeKovoProject } from './index.js';
@@ -462,12 +462,7 @@ async function seedDemoUser(databaseUrl: string, password: string): Promise<void
 }
 
 async function betterAuthPasswordHash(password: string): Promise<string> {
-  const passwordModule = await import(
-    pathToFileURL(join(resolveDependencyRoot('@better-auth/utils'), 'dist/password.mjs')).href
-  );
-  return (passwordModule as { hashPassword: (password: string) => Promise<string> }).hashPassword(
-    password,
-  );
+  return kovoHashPassword(password);
 }
 
 async function createExternalDatabase(

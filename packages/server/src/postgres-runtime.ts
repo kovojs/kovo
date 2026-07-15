@@ -4293,6 +4293,7 @@ function createRequestScopedReadonlyDb(
       ? undefined
       : {
           adminClient: adminReadDb as object,
+          dialect: 'postgres' as const,
           dialectLabel: client.label,
           executeSql: async (statement: { params: readonly unknown[]; text: string }) =>
             (
@@ -4307,6 +4308,7 @@ function createRequestScopedReadonlyDb(
           ...(scope.principal === undefined ? {} : { principal: scope.principal }),
         };
   const rawRead = {
+    dialect: 'postgres' as const,
     dialectLabel: client.label,
     executeSql: async (statement: { params: readonly unknown[]; text: string }) =>
       (await readSql.query(statement.text, snapshotPostgresQueryParams(statement.params))).rows,
@@ -4314,6 +4316,7 @@ function createRequestScopedReadonlyDb(
     ownerTables: postgresOwnerScopedTableNames(metadata),
   };
   const privilegedRawRead = {
+    dialect: 'postgres' as const,
     dialectLabel: client.label,
     executeSql: async (statement: { params: readonly unknown[]; text: string }) =>
       (await privilegedReadSql.query(statement.text, snapshotPostgresQueryParams(statement.params)))

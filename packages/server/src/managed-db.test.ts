@@ -283,6 +283,7 @@ function sqliteRawReadPolicy(
     _triggerOrView: string | null,
   ) => SQLITE_RAW_READ_CONSTANTS.SQLITE_OK;
   return {
+    dialect: 'sqlite' as const,
     dialectLabel: 'SQLite',
     executeMethod: 'all' as const,
     normalizeTableName: (table: string) => (table.includes('.') ? table : `main.${table}`),
@@ -750,6 +751,7 @@ wrapManagedDbForSqlSafety(raw, undefined, { capability: 'write' });
       },
       {
         rawRead: {
+          dialect: 'sqlite',
           dialectLabel: 'SQLite',
           executeMethod: 'query',
           normalizeTableName: (table) => table,
@@ -852,6 +854,7 @@ wrapManagedDbForSqlSafety(raw, undefined, { capability: 'write' });
     const log: string[] = [];
     const reader = readonlyDb(fakeDb(log), {
       rawRead: {
+        dialect: 'postgres',
         dialectLabel: 'Postgres',
         executeMethod: 'query',
         normalizeTableName: (table) => table,
@@ -895,6 +898,7 @@ wrapManagedDbForSqlSafety(raw, undefined, { capability: 'write' });
     const nativeMap = Array.prototype.map;
     const reader = readonlyDb(fakeDb([]), {
       rawRead: {
+        dialect: 'postgres',
         dialectLabel: 'Postgres',
         executeMethod: 'query',
         normalizeTableName: (table) => table,
@@ -943,6 +947,7 @@ wrapManagedDbForSqlSafety(raw, undefined, { capability: 'write' });
       },
       {
         rawRead: {
+          dialect: 'postgres',
           dialectLabel: 'Postgres',
           executeMethod: 'query',
           normalizeTableName: (table) => table,
@@ -980,6 +985,7 @@ wrapManagedDbForSqlSafety(raw, undefined, { capability: 'write' });
       },
       {
         rawRead: {
+          dialect: 'postgres',
           dialectLabel: 'Postgres',
           executeMethod: 'query',
           normalizeTableName: (table) => table,
@@ -1051,6 +1057,7 @@ wrapManagedDbForSqlSafety(raw, undefined, { capability: 'write' });
     const reader = managedDb(fakeDb([]), 'read', {
       crossOwnerRead: {
         adminClient,
+        dialect: 'postgres',
         dialectLabel: 'Postgres',
         executeMethod: 'query',
         hasRole: (role) => role === 'admin',
@@ -1101,6 +1108,42 @@ wrapManagedDbForSqlSafety(raw, undefined, { capability: 'write' });
     expect(observed).toEqual([{ text: 'select id from orders where id = $1', values: ['o1'] }]);
   });
 
+  it('keeps no-callback crossOwnerRead inside the managed read-only SQL choke', () => {
+    const observed: unknown[] = [];
+    const reader = managedDb(fakeDb([]), 'read', {
+      crossOwnerRead: {
+        adminClient: {
+          query(statement: unknown) {
+            observed.push(statement);
+            return [statement];
+          },
+        },
+        dialect: 'postgres',
+        dialectLabel: 'Postgres',
+        executeMethod: 'query',
+        hasRole: (role) => role === 'admin',
+        normalizeTableName: (table) => table,
+        ownerTables: ['orders'],
+      },
+    }) as unknown as {
+      crossOwnerRead(
+        statement: unknown,
+        declaration: { reads: readonly string[]; reason: string; role: 'admin' },
+      ): unknown;
+    };
+
+    expect(() =>
+      reader.crossOwnerRead(
+        stampTrustedSql(
+          { text: "select nextval('probe_seq') from orders", values: [] },
+          'volatile cross-owner read rejection proof',
+        ),
+        { reads: ['orders'], reason: 'support lookup', role: 'admin' },
+      ),
+    ).toThrow(/KV433/u);
+    expect(observed).toEqual([]);
+  });
+
   it('routes the exact authorized crossOwnerRead carrier without live Function.call', () => {
     const allowed = stampTrustedSql(
       { text: 'select id from orders', values: [] },
@@ -1118,6 +1161,7 @@ wrapManagedDbForSqlSafety(raw, undefined, { capability: 'write' });
     const reader = managedDb(fakeDb([]), 'read', {
       crossOwnerRead: {
         adminClient,
+        dialect: 'postgres',
         dialectLabel: 'Postgres',
         executeMethod: 'query',
         hasRole: (role) => role === 'admin',
@@ -2298,6 +2342,7 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
         log.push('readonly-target-created');
         return readonlyDb(fakeDb(log), {
           rawRead: {
+            dialect: 'postgres',
             dialectLabel: 'Postgres',
             executeMethod: 'query',
             normalizeTableName: (table) => table,
@@ -3276,6 +3321,9 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
     const db = drizzle({ client });
     const runtime = createSqliteAppRuntimeDb({
       db,
+      executeRawRead() {
+        throw new Error('The declared-read mismatch proof must reject before SQL execution.');
+      },
       metadata: {
         allColumnKeys: new Set(['id', 'secret']),
         columnSources: new Map(),
@@ -3292,7 +3340,11 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
         constants: nodeSqliteConstants,
         openDatabase: () => new NodeSqliteDatabaseSync(sqliteFile),
       },
-      sqliteColumnOrigins: client,
+      sqliteColumnOrigins: {
+        prepare(sql: string) {
+          return client.prepare(sql);
+        },
+      },
       tableNames: (table) => [`main.${getTableConfig(table as typeof allowed).name}`],
     });
     Object.defineProperty(runtime.db, kovoReadonlyDbHandle, {
@@ -3377,6 +3429,9 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
     try {
       runtime = createSqliteAppRuntimeDb({
         db,
+        executeRawRead() {
+          throw new Error('The handle-registration proof does not execute raw SQL.');
+        },
         metadata: {
           allColumnKeys: new Set(),
           columnSources: new Map(),

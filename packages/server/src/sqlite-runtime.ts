@@ -1,3 +1,4 @@
+import { frameworkTrustedSqlCarrier } from '@kovojs/core/internal/sql-safety';
 import {
   createDeclaredWriteDb,
   registerFrameworkManagedDbHooks,
@@ -6,6 +7,7 @@ import {
   type Reader,
 } from './managed-db.js';
 import { createSecretBoxingReadDb } from './secret-read-boundary.js';
+import { enforceManagedSql } from './sql-safe-handle.js';
 import { assertManagedSqlParserAuthorityReady } from './sql-parser-authority-bootstrap.js';
 import { extractCompilerBoundKovoRuntimeDbMetadata } from './generated-table-security-registry.js';
 import {
@@ -21,6 +23,7 @@ import {
   witnessIsArray,
   witnessMapSet,
   witnessObjectIs,
+  witnessReflectApply,
   witnessSetAdd,
 } from './security-witness-intrinsics.js';
 
@@ -70,6 +73,8 @@ export interface KovoSqliteAppRuntimeOptions<Db extends object> {
   canonicalizeTable?: (table: unknown) => unknown;
   /** Drizzle SQLite database handle created by the starter. */
   db: Db;
+  /** Adapter-owned raw-read executor backed by the starter's pinned native SQLite controls. */
+  executeRawRead: (statement: { params: readonly unknown[]; text: string }) => unknown;
   /** Schema-derived metadata from `@kovojs/drizzle#extractKovoRuntimeDbMetadata`. */
   metadata: KovoSqliteAppRuntimeMetadata;
   /** Normalize SQLite table names before policy comparisons. */
@@ -120,6 +125,7 @@ export function createSqliteAppRuntimeDb<Db extends object>(
     throw new TypeError('SQLite runtime options must be a stable own-data record.');
   }
   const rawDb = requiredSqliteRuntimeValue(options, 'db');
+  const rawExecuteRawRead = requiredSqliteRuntimeValue(options, 'executeRawRead');
   const rawCanonicalizeTable = optionalSqliteRuntimeValue(options, 'canonicalizeTable');
   const rawMetadata = requiredSqliteRuntimeValue(options, 'metadata');
   const rawNormalizeTableName = requiredSqliteRuntimeValue(options, 'normalizeTableName');
@@ -129,6 +135,7 @@ export function createSqliteAppRuntimeDb<Db extends object>(
   if (
     typeof rawDb !== 'object' ||
     rawDb === null ||
+    typeof rawExecuteRawRead !== 'function' ||
     (rawCanonicalizeTable !== undefined && typeof rawCanonicalizeTable !== 'function') ||
     typeof rawMetadata !== 'object' ||
     rawMetadata === null ||
@@ -142,17 +149,25 @@ export function createSqliteAppRuntimeDb<Db extends object>(
     throw new TypeError('SQLite runtime options contain an invalid authority value.');
   }
   const db = rawDb as Db;
+  const executeRawRead = rawExecuteRawRead as (statement: {
+    params: readonly unknown[];
+    text: string;
+  }) => unknown;
   const canonicalizeTable = rawCanonicalizeTable as ((table: unknown) => unknown) | undefined;
   const metadata = snapshotSqliteRuntimeMetadata(rawMetadata as KovoSqliteAppRuntimeMetadata);
   const normalizeTableName = rawNormalizeTableName as (table: string) => string;
   const sqliteAuthorizer = rawSqliteAuthorizer as DeclaredWriteSqliteAuthorizerOptions;
-  const sqliteColumnOrigins = rawSqliteColumnOrigins as KovoSqliteColumnOriginClient | undefined;
+  const sqliteColumnOrigins =
+    rawSqliteColumnOrigins === undefined
+      ? undefined
+      : readOnlySqliteColumnOriginClient(rawSqliteColumnOrigins as KovoSqliteColumnOriginClient);
   const tableNames = rawTableNames as (table: unknown) => readonly string[];
   const readDb = createSecretBoxingReadDb(
     readonlyDb(db, {
       rawRead: {
+        dialect: 'sqlite',
         dialectLabel: 'SQLite',
-        executeMethod: 'all',
+        executeSql: (statement) => witnessReflectApply(executeRawRead, undefined, [statement]),
         normalizeTableName,
         sqliteAuthorizer,
       },
@@ -194,6 +209,31 @@ export function createSqliteAppRuntimeDb<Db extends object>(
     db,
     providerDb,
     readonlyDb: readDb,
+  });
+}
+
+function readOnlySqliteColumnOriginClient(
+  client: KovoSqliteColumnOriginClient,
+): KovoSqliteColumnOriginClient {
+  const prepare = requiredSqliteRuntimeValue(client, 'prepare');
+  if (typeof prepare !== 'function') {
+    throw new TypeError('SQLite runtime column-origin prepare must be a function.');
+  }
+  return witnessFreeze({
+    prepare(sql: string): { columns?: () => unknown } {
+      // SPEC §10.3/§11.2: PRAGMA and other SQLite connection-state statements may take
+      // effect during prepare(). The confidentiality layer may inspect column origins only after
+      // the same managed read classifier that guards execution has accepted the SQL text.
+      enforceManagedSql(
+        frameworkTrustedSqlCarrier(
+          { text: sql, values: [] },
+          'framework reconstructed SQLite column-origin carrier (SPEC §10.3)',
+        ),
+        'enforce',
+        { capability: 'read', dialect: 'sqlite', engineReadonly: false },
+      );
+      return witnessReflectApply(prepare, client, [sql]) as { columns?: () => unknown };
+    },
   });
 }
 

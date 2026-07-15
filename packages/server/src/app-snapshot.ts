@@ -159,8 +159,8 @@ export function snapshotAppMutation(
   return declaration;
 }
 
-export function snapshotAppEndpoint(
-  source: EndpointDeclaration<string, EndpointMethod, EndpointMount>,
+export function snapshotAppEndpoint<Db>(
+  source: EndpointDeclaration<string, EndpointMethod, EndpointMount, Db>,
   context: AppDeclarationSnapshotContext,
 ): EndpointDeclaration<string, EndpointMethod, EndpointMount> {
   const object = requireDeclarationObject(source, 'endpoint');

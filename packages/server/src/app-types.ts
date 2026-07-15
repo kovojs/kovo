@@ -274,7 +274,14 @@ export interface CreateAppOptions<
    * justification }` opt-out; production refuses a missing/partial or unaudited-disabled floor.
    */
   egress?: AppEgressOptions;
-  endpoints?: readonly EndpointDeclaration<string, EndpointMethod, EndpointMount>[];
+  /**
+   * Endpoint declarations registered by the app. The endpoint DB parameter is intentionally
+   * erased to `never` at this SPEC §9.1/§10.3 storage boundary: registration snapshots
+   * declarations but never invokes a handler with an invented DB context. Using the bottom type
+   * preserves assignability for an endpoint's concrete `EndpointDbContext<Db>` without widening
+   * that context to `any`.
+   */
+  endpoints?: readonly EndpointDeclaration<string, EndpointMethod, EndpointMount, never>[];
   errorShells?: AppErrorShellOptions;
   mutations?: AppAuthoringDeclarations<AppMutationDeclaration<AppRequest>, AppRequest>;
   // SPEC §9.1/§10.3: apps inject a replay store so duplicate Kovo-Idem mutation requests
