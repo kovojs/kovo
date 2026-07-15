@@ -52,7 +52,7 @@
     "docs:serve": "pnpm run check:build && pnpm --filter @kovojs/site run build && HOST=0.0.0.0 node site/scripts/serve.mjs",
     "perf:fcp": "node scripts/fcp-harness.mjs",
     "test": "vitest --run",
-    "test:authz-paranoid": "KOVO_PARANOID=1 vitest --run packages/create-kovo/src/index.build.prod-artifact.paranoid-runtime.test.ts packages/server/src/postgres-grant-shape-fuzzer.test.ts",
+    "test:authz-paranoid": "KOVO_PARANOID=1 vitest --run --no-file-parallelism packages/create-kovo/src/index.build.prod-artifact.paranoid-runtime.test.ts packages/server/src/postgres-grant-shape-fuzzer.test.ts",
     "test:browser": "vp run browser",
     "test:gallery-browser": "pnpm --filter @kovojs/example-gallery run test:browser",
     "test:examples-live": "pnpm --filter @kovojs/site run test:examples-live",
