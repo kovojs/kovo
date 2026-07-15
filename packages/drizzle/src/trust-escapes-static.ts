@@ -1495,6 +1495,8 @@ interface RequestCallable {
    * data (SPEC §5.2 / §6.6).
    */
   readonly compilerOwnedJsxEventHandlers?: boolean;
+  /** Exact universally closed module-local helper reached only from declared framework roots. */
+  readonly declaredRootHelper?: boolean;
   readonly declaration: Node;
   readonly publicWire?: boolean;
   readonly publicWireMethods?: readonly string[];
@@ -1536,6 +1538,8 @@ interface RequestProvenanceSession {
   readonly callableSymbolMemo: Map<string, RequestCallableResolution>;
   readonly carrierActive: Set<string>;
   readonly carrierMemo: Map<string, RequestWireCarrier | null>;
+  readonly declaredRootHelperActive: Set<string>;
+  readonly declaredRootHelperMemo: Map<string, readonly RequestCallable[] | null>;
   readonly drizzleTablePristineMemo: Map<string, boolean>;
   exhaustedAt?: Node;
   readonly factoryActive: Set<string>;
@@ -1574,6 +1578,8 @@ function createRequestProvenanceSession(): RequestProvenanceSession {
     callableSymbolMemo: new Map(),
     carrierActive: new Set(),
     carrierMemo: new Map(),
+    declaredRootHelperActive: new Set(),
+    declaredRootHelperMemo: new Map(),
     drizzleTablePristineMemo: new Map(),
     factoryActive: new Set(),
     factoryMemo: new Map(),
@@ -4329,6 +4335,13 @@ function flushRequestRetainedConfigPristine(
       if (
         value &&
         requestRetainedConfigExpressionTargetsIdentity(value, targets, new Set(), 0) &&
+        !requestRetainedConfigReturnDoesNotCarryTarget(
+          value,
+          targets,
+          context.provenance,
+          new Set(),
+          0,
+        ) &&
         !(
           returnedValue &&
           Node.isCallExpression(returnedValue) &&
@@ -4409,6 +4422,14 @@ function requestRetainedConfigInitialTargets(
     const symbolKey = requestSymbolKey(symbol);
     if (seen.has(symbolKey)) return targets;
     seen.add(symbolKey);
+    if (
+      (['db', 'mutationReplayStore', 'readonlyDb', 'ready'] as const).some((member) =>
+        requestExpressionResolvesToExactManagedRuntimeMember(node, member, undefined, new Set()),
+      )
+    ) {
+      targets.add(symbolKey);
+      return targets;
+    }
     let retainedIdentity = false;
     for (const declaration of symbol.getDeclarations()) {
       if (Node.isClassDeclaration(declaration) || Node.isClassExpression(declaration)) {
@@ -4471,10 +4492,22 @@ function requestRetainedConfigInitialTargets(
     return targets;
   }
   if (Node.isPropertyAccessExpression(node) || Node.isElementAccessExpression(node)) {
-    collect(node.getExpression());
     const member = Node.isPropertyAccessExpression(node)
       ? staticMemberName(node.getNameNode())
       : staticMemberName(node.getArgumentExpression());
+    const receiver = node.getExpression();
+    // Exact managed-runtime members are opaque framework capabilities. Their construction inputs
+    // have dedicated closed grammars and pristine checks; recursively treating APP_TABLES as part
+    // of createApp's retained config makes ordinary Drizzle reads look like table mutations.
+    if (
+      member &&
+      ['db', 'mutationReplayStore', 'readonlyDb', 'ready'].includes(member) &&
+      requestExpressionResolvesToExactManagedAppRuntime(receiver, new Set()) &&
+      requestExactManagedAppRuntimeIsPristine(receiver)
+    ) {
+      return targets;
+    }
+    collect(node.getExpression());
     if (member) {
       collect(requestWireProjectedExpression(node.getExpression(), [member], new Set(), 0));
     }
@@ -4798,6 +4831,8 @@ function requestRetainedConfigCallIsReviewed(
   if (requestStaticFrameworkGuardIsClosed(call)) return true;
   if (requestVerifierFactoryName(call.getExpression())) return true;
   if (requestRetainedConfigDrizzleTableCallIsReviewed(call)) return true;
+  if (requestCallIsReviewedPureDrizzleExpression(call)) return true;
+  if (requestCallIsReviewedDrizzleDbDataCallInDeclaredRoot(call, session)) return true;
   if (
     requestExpressionIsDirectImportedExport(call.getExpression(), '@kovojs/style', 'defineTheme')
   ) {
@@ -4845,6 +4880,75 @@ function requestRetainedConfigCallIsReviewed(
     requestStaticCallMember(callee) === 'freeze' &&
     expressionResolvesToGlobalNamespace(receiver, 'Object', new Set(), 0)
   );
+}
+
+function requestRetainedConfigReturnDoesNotCarryTarget(
+  expression: Node,
+  targets: ReadonlySet<string>,
+  session: RequestProvenanceSession,
+  seen: Set<string>,
+  depth: number,
+): boolean {
+  if (depth > 64) return false;
+  const node = unwrapStaticExpression(expression);
+  const key = requestNodeIdentity(node);
+  if (seen.has(key)) return true;
+  seen.add(key);
+  if (
+    Node.isCallExpression(node) &&
+    requestCallIsReviewedDrizzleDbReadChainInDeclaredRoot(node, session)
+  ) {
+    return true;
+  }
+  if (Node.isAwaitExpression(node)) {
+    return requestRetainedConfigReturnDoesNotCarryTarget(
+      node.getExpression(),
+      targets,
+      session,
+      new Set(seen),
+      depth + 1,
+    );
+  }
+  if (Node.isObjectLiteralExpression(node)) {
+    return node.getProperties().every((property) => {
+      const value = requestHandlerPropertyExpression(property);
+      return (
+        !!value &&
+        requestRetainedConfigReturnDoesNotCarryTarget(
+          value,
+          targets,
+          session,
+          new Set(seen),
+          depth + 1,
+        )
+      );
+    });
+  }
+  if (Node.isArrayLiteralExpression(node)) {
+    return node
+      .getElements()
+      .every((element) =>
+        requestRetainedConfigReturnDoesNotCarryTarget(
+          Node.isSpreadElement(element) ? element.getExpression() : element,
+          targets,
+          session,
+          new Set(seen),
+          depth + 1,
+        ),
+      );
+  }
+  if (Node.isConditionalExpression(node)) {
+    return [node.getWhenTrue(), node.getWhenFalse()].every((branch) =>
+      requestRetainedConfigReturnDoesNotCarryTarget(
+        branch,
+        targets,
+        session,
+        new Set(seen),
+        depth + 1,
+      ),
+    );
+  }
+  return !requestRetainedConfigExpressionTargetsIdentity(node, targets, new Set(), 0);
 }
 
 function requestExactPristineDirectImport(
@@ -10439,8 +10543,18 @@ function scanRequestCallable(callable: RequestCallable, context: RequestProcessS
         invocation.args ?? call.getArguments(),
         callable,
       );
+      const helperContexts = requestExactClosedDeclaredRootHelperContexts(
+        invoked,
+        context.provenance,
+      );
+      const provenHelper = helperContexts?.find(
+        (candidate) =>
+          candidate.rootParameterRoles?.join(',') === invoked.rootParameterRoles?.join(','),
+      );
       scanRequestCallable(
-        callable.moduleInitializer ? { ...invoked, moduleInitializer: true } : invoked,
+        callable.moduleInitializer
+          ? { ...invoked, moduleInitializer: true }
+          : (provenHelper ?? invoked),
         context,
       );
     }
@@ -11012,6 +11126,7 @@ function scanRequestImplicitExecutionProtocols(
       ...root.getDescendantsOfKind(SyntaxKind.ForOfStatement),
     ]),
   )) {
+    scanRequestAssignmentTargetProtocols(loop.getInitializer(), loop, callable, context, false);
     scanRequestProtocolUse(
       loop.getExpression(),
       loop.getAwaitKeyword() ? ['@@asyncIterator', '@@iterator'] : ['@@iterator'],
@@ -11199,6 +11314,13 @@ function scanRequestImplicitExecutionProtocols(
     ]),
   )) {
     scanRequestProxyMutationTarget(deletion.getExpression(), deletion, context);
+    scanRequestAssignmentTargetProtocols(
+      deletion.getExpression(),
+      deletion,
+      callable,
+      context,
+      false,
+    );
     const target = unwrapStaticExpression(deletion.getExpression());
     if (Node.isPropertyAccessExpression(target) || Node.isElementAccessExpression(target)) {
       scanRequestOpaqueInternalMethodTarget(
@@ -11257,6 +11379,7 @@ function scanRequestImplicitExecutionProtocols(
       ...root.getDescendantsOfKind(SyntaxKind.ForInStatement),
     ]),
   )) {
+    scanRequestAssignmentTargetProtocols(loop.getInitializer(), loop, callable, context, false);
     scanRequestOpaqueInternalMethodTarget(
       loop.getExpression(),
       loop,
@@ -12668,6 +12791,14 @@ function scanRequestAssignmentTargetProtocols(
   readBeforeWrite: boolean,
 ): void {
   const node = unwrapStaticExpression(target);
+  if (
+    Node.isIdentifier(node) &&
+    requestGlobalBindingIsClassifierLocked(node.getText()) &&
+    unshadowedGlobalIdentifier(node, node.getText())
+  ) {
+    appendRequestProtocolFact(context, site, 'global-binding-setter', node);
+    return;
+  }
   if (Node.isPropertyAccessExpression(node) || Node.isElementAccessExpression(node)) {
     scanRequestPropertyAccessProtocols(node, site, callable, context, true);
     if (readBeforeWrite) {
@@ -12697,12 +12828,36 @@ function scanRequestAssignmentTargetProtocols(
   }
   if (Node.isObjectLiteralExpression(node)) {
     for (const property of node.getProperties()) {
+      if (Node.isShorthandPropertyAssignment(property)) {
+        const name = property.getNameNode();
+        const globalName = name.getText();
+        const valueSymbol = property.getValueSymbol();
+        const shadowed =
+          requestSymbolHasSameFileRuntimeBinding(valueSymbol, name) ||
+          requestIdentifierHasSameFileRuntimeBinding(name, globalName);
+        if (requestGlobalBindingIsClassifierLocked(globalName) && !shadowed) {
+          appendRequestProtocolFact(context, site, 'global-binding-setter', name);
+          continue;
+        }
+      }
       const nested = requestHandlerPropertyExpression(property);
       if (nested) {
         scanRequestAssignmentTargetProtocols(nested, site, callable, context, false);
       }
     }
   }
+}
+
+function requestGlobalBindingIsClassifierLocked(name: string): boolean {
+  return (
+    REQUEST_SAFE_GLOBAL_CALLABLES.has(name) ||
+    REQUEST_SAFE_GLOBAL_NAMESPACES.has(name) ||
+    REQUEST_SAFE_GLOBAL_CONSTRUCTORS.has(name) ||
+    ['queueMicrotask', 'setInterval', 'setTimeout', 'fetch', 'globalThis'].includes(name) ||
+    // Captured security intrinsics are rejected even on hosts where they are not generic request
+    // helpers. This keeps verifier/codec identity substitutions visible to KV424.
+    ['SubtleCrypto', 'atob', 'btoa'].includes(name)
+  );
 }
 
 function requestPropertyAccessIsDirectInvocationTarget(access: Node): boolean {
@@ -13057,6 +13212,13 @@ function scanRequestProtocolUse(
 ): void {
   const node = unwrapStaticExpression(expression);
   if (scanRequestProxyUse(node, site, context)) return;
+  if (
+    hooks.length === 1 &&
+    hooks[0] === 'then' &&
+    requestExpressionIsExactNativePromise(node, new Set(), context.provenance)
+  ) {
+    return;
+  }
 
   let resolved = false;
   if (
@@ -13535,9 +13697,9 @@ function requestExpressionIsProtocolSafe(
       const receiver = requestCallReceiver(callee);
       if (
         receiver &&
-        requestRootCapabilityMethodIsPristine(receiver, callable) &&
+        requestRootCapabilityMethodIsPristine(receiver, callable, session) &&
         (!requestExpressionResolvesToExactRequestDbCapability(receiver, callable, new Set()) ||
-          requestExactRequestDbRootIsPristine(callable))
+          requestExactRequestDbRootIsPristine(callable, session))
       ) {
         return true;
       }
@@ -14712,8 +14874,20 @@ function requestWireResultValueArguments(
 
   let callbackIndexes: readonly number[] = [];
   const receiverNode = unwrapStaticExpression(receiver);
+  const invocation = callee.getParentIfKind(SyntaxKind.CallExpression);
+  const inputCallable = [state.scopeCallable, state.rootCallable].find((candidate) =>
+    requestRootRoleIncludesInput(
+      requestExpressionRootParameterRole(receiverNode, candidate, new Set(), 0),
+    ),
+  );
+  const exactInputJsonArrayMethod = !!(
+    invocation &&
+    inputCallable &&
+    requestInputJsonReceiverIsPristine(receiverNode, invocation, inputCallable)
+  );
   if (
-    requestWireExpressionIsExactNativeArray(receiverNode, state, new Set()) &&
+    (requestWireExpressionIsExactNativeArray(receiverNode, state, new Set()) ||
+      exactInputJsonArrayMethod) &&
     [
       'every',
       'filter',
@@ -14829,6 +15003,19 @@ function requestExpressionIsExactNativePromise(
   }
   if (Node.isCallExpression(node)) {
     const callee = unwrapStaticExpression(node.getExpression());
+    const local = resolveRequestCallable(callee, new Set(), 0, session);
+    if (
+      local.opaqueModule === undefined &&
+      local.callables.length === 1 &&
+      Node.isFunctionDeclaration(local.callables[0]!.declaration) &&
+      local.callables[0]!.declaration.isAsync() &&
+      requestExactClosedDeclaredRootHelperContexts(local.callables[0]!, session)
+    ) {
+      // Async functions use the language's intrinsic Promise even if the ambient global binding
+      // is replaced. The closed-helper proof separately prevents authority laundering, while the
+      // ordinary callable scan still owns every effect in the helper body.
+      return true;
+    }
     const receiver = requestCallReceiver(callee);
     const member = requestStaticCallMember(callee);
     if (!receiver || !member) return false;
@@ -17498,13 +17685,24 @@ function requestCallIsKnownSafe(
   if (requestCallIsReviewedDrizzleDbDataCall(call, callable)) {
     if (
       requestExpressionResolvesToExactRequestDbCapability(receiver, callable, new Set()) &&
-      !requestExactRequestDbRootIsPristine(callable)
+      !requestExactRequestDbRootIsPristine(callable, context.provenance)
     ) {
       return false;
     }
-    if (!requestRootCapabilityMethodIsPristine(receiver, callable)) return false;
+    if (!requestRootCapabilityMethodIsPristine(receiver, callable, context.provenance))
+      return false;
     scanRequestFunctionArguments(call, context);
     return true;
+  }
+  if (
+    call
+      .getArguments()
+      .some((argument) => requestReviewedDrizzleTableForDirectReference(argument) !== undefined)
+  ) {
+    // A generic capability role must not launder a Drizzle table-bearing call after the exact DB
+    // grammar rejected it. Named write helpers acquire that role only through the universally
+    // closed declared-root proof above.
+    return false;
   }
   if (
     REQUEST_SAFE_FETCH_RESPONSE_METHODS.has(member) &&
@@ -17537,7 +17735,8 @@ function requestCallIsKnownSafe(
 
   const role = requestExpressionRootParameterRole(receiver, callable, new Set(), 0);
   if (requestRootRoleIncludesCapability(role)) {
-    if (!requestRootCapabilityMethodIsPristine(receiver, callable)) return false;
+    if (!requestRootCapabilityMethodIsPristine(receiver, callable, context.provenance))
+      return false;
     scanRequestFunctionArguments(call, context);
     return true;
   }
@@ -17695,7 +17894,10 @@ function requestExpressionResolvesToExactRequestDbCapability(
   );
 }
 
-function requestExactRequestDbRootIsPristine(callable: RequestCallable): boolean {
+function requestExactRequestDbRootIsPristine(
+  callable: RequestCallable,
+  session: RequestProvenanceSession,
+): boolean {
   const parameters = requestCallableParameters(callable.declaration);
   let requestParameter: (typeof parameters)[number] | undefined;
   for (let index = 0; index < parameters.length; index += 1) {
@@ -17796,7 +17998,35 @@ function requestExactRequestDbRootIsPristine(callable: RequestCallable): boolean
   for (let index = 0; index < carrierCallLength; index += 1) {
     const call = runtimeArrayValue(carrierCalls, index, 'request DB carrier calls');
     if (!nodeBelongsToRequestCallable(call, callable)) continue;
-    if (nodesContainRequestCarrier(call.getArguments(), 'request DB call arguments')) return false;
+    const args = call.getArguments();
+    const requestArgumentIndexes = args.flatMap((argument, argumentIndex) =>
+      containsRequestCarrier(argument) ? [argumentIndex] : [],
+    );
+    if (requestArgumentIndexes.length > 0) {
+      const resolution = resolveRequestCallable(call.getExpression(), new Set(), 0, session);
+      const helper = resolution.callables.length === 1 ? resolution.callables[0] : undefined;
+      const contexts = helper
+        ? requestExactClosedDeclaredRootHelperContexts(helper, session)
+        : undefined;
+      if (
+        !contexts ||
+        contexts.length === 0 ||
+        !requestArgumentIndexes.every((argumentIndex) =>
+          contexts.every(
+            (context) =>
+              context.rootParameterRoles?.[argumentIndex] === 'request' ||
+              (context.rootParameterRoles?.[argumentIndex] === 'capability' &&
+                requestExpressionResolvesToExactRequestDbCapability(
+                  args[argumentIndex]!,
+                  callable,
+                  new Set(),
+                )),
+          ),
+        )
+      ) {
+        return false;
+      }
+    }
   }
   const carrierConstructs = callable.body.getDescendantsOfKind(SyntaxKind.NewExpression);
   const carrierConstructLength = runtimeArrayLength(
@@ -18015,7 +18245,11 @@ function requestExpressionContainsIdentityCarrier(
   return false;
 }
 
-function requestRootCapabilityMethodIsPristine(receiver: Node, callable: RequestCallable): boolean {
+function requestRootCapabilityMethodIsPristine(
+  receiver: Node,
+  callable: RequestCallable,
+  session: RequestProvenanceSession,
+): boolean {
   const targetKey = requestRootCapabilityKey(receiver, callable, new Set());
   if (!targetKey) return false;
   const keyMayPrefix = (prefix: string, value: string): boolean => {
@@ -18122,14 +18356,31 @@ function requestRootCapabilityMethodIsPristine(receiver: Node, callable: Request
     }
   }
   for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
-    const matchingArguments = call
-      .getArguments()
-      .filter((argument) => expressionContainsTargetOrAncestorCarrier(argument));
-    if (matchingArguments.length === 0) continue;
+    const args = call.getArguments();
+    const matchingArgumentIndexes = args.flatMap((argument, index) =>
+      expressionContainsTargetOrAncestorCarrier(argument) ? [index] : [],
+    );
+    if (matchingArgumentIndexes.length === 0) continue;
     const exactRespondMember = requestCallIsExactRespondMethod(call)
       ? requestStaticCallMember(unwrapStaticExpression(call.getExpression()))
       : undefined;
     if (exactRespondMember === 'storedFile' && isTargetRoot(call.getArguments()[0])) {
+      continue;
+    }
+    const resolution = resolveRequestCallable(call.getExpression(), new Set(), 0, session);
+    const helper = resolution.callables.length === 1 ? resolution.callables[0] : undefined;
+    const contexts = helper
+      ? requestExactClosedDeclaredRootHelperContexts(helper, session)
+      : undefined;
+    const targetRole = requestExpressionRootParameterRole(receiver, callable, new Set(), 0);
+    if (
+      contexts &&
+      contexts.length > 0 &&
+      targetRole !== undefined &&
+      matchingArgumentIndexes.every((argumentIndex) =>
+        contexts.every((context) => context.rootParameterRoles?.[argumentIndex] === targetRole),
+      )
+    ) {
       continue;
     }
     return false;
@@ -18294,6 +18545,7 @@ function requestInputJsonReceiverIsPristine(
   }
   for (const jsx of body.getDescendantsOfKind(SyntaxKind.JsxExpression)) {
     const value = jsx.getExpression();
+    if (value && requestNodesAreSame(unwrapStaticExpression(value), call)) continue;
     if (value && hasInputRole(value)) return false;
   }
   for (const deletion of body.getDescendantsOfKind(SyntaxKind.DeleteExpression)) {
@@ -20222,6 +20474,7 @@ function requestCallIsReviewedDrizzleDbDataCall(
   call: import('ts-morph').CallExpression,
   callable: RequestCallable,
 ): boolean {
+  if (!callable.rootFactory && !callable.declaredRootHelper) return false;
   const callee = unwrapStaticExpression(call.getExpression());
   const receiver = requestCallReceiver(callee);
   const member = requestStaticCallMember(callee);
@@ -20486,15 +20739,27 @@ function requestCallIsReviewedDrizzleDbDataCallInDeclaredRoot(
   call: import('ts-morph').CallExpression,
   session: RequestProvenanceSession,
 ): boolean {
-  const owner = call.getFirstAncestor(
-    (ancestor) =>
-      Node.isArrowFunction(ancestor) ||
-      Node.isFunctionExpression(ancestor) ||
-      Node.isMethodDeclaration(ancestor),
-  );
-  if (!owner) return false;
-  const direct = requestCallableForFunctionNode(owner);
+  const direct = requestEnclosingCallable(call);
   if (!direct) return false;
+
+  const rootContexts = requestCallableDeclaredRootContexts(direct, session);
+  if (rootContexts.some((root) => requestCallIsReviewedDrizzleDbDataCall(call, root))) {
+    return true;
+  }
+
+  const helperContexts = requestExactClosedDeclaredRootHelperContexts(direct, session);
+  return !!(
+    helperContexts &&
+    helperContexts.length > 0 &&
+    helperContexts.every((helper) => requestCallIsReviewedDrizzleDbDataCall(call, helper))
+  );
+}
+
+function requestCallableDeclaredRootContexts(
+  direct: RequestCallable,
+  session: RequestProvenanceSession,
+): RequestCallable[] {
+  const owner = direct.declaration;
 
   let property:
     | import('ts-morph').MethodDeclaration
@@ -20511,25 +20776,139 @@ function requestCallIsReviewedDrizzleDbDataCallInDeclaredRoot(
       definition = parent.getParent();
     }
   }
-  if (!property || !Node.isObjectLiteralExpression(definition)) return false;
+  if (!property || !Node.isObjectLiteralExpression(definition)) return [];
   const callback = staticMemberName(requestObjectLiteralElementNameNode(property));
   const declarationCall = definition.getParentIfKind(SyntaxKind.CallExpression);
-  if (!callback || !declarationCall) return false;
+  if (!callback || !declarationCall) return [];
 
+  const contexts: RequestCallable[] = [];
   for (const invocation of requestHandlerFactoryInvocationsForCall(declarationCall, session)) {
     const spec = (invocation.factory.callbacks as readonly RequestRootCallbackSpec[]).find(
       (candidate) => candidate.property === callback,
     );
     if (!spec) continue;
-    const rootCallable: RequestCallable = {
+    contexts.push({
       ...direct,
       rootCallback: callback,
       rootFactory: invocation.factory.exportName,
       ...(spec.roles ? { rootParameterRoles: spec.roles } : {}),
-    };
-    return requestCallIsReviewedDrizzleDbDataCall(call, rootCallable);
+    });
   }
-  return false;
+  return contexts;
+}
+
+/**
+ * SPEC §6.6 / §9.4: mutation writes live in a named local helper, but that helper does not mint
+ * DB authority. Admit the role only when the complete value-use set is closed: one immutable,
+ * module-local function declaration; direct calls only; every call owned by an exact framework
+ * root; identical argument-derived roles; and no request/DB/table identity in the return channel.
+ */
+function requestExactClosedDeclaredRootHelperContexts(
+  direct: RequestCallable,
+  session: RequestProvenanceSession,
+): readonly RequestCallable[] | undefined {
+  const declaration = direct.declaration;
+  if (
+    !Node.isFunctionDeclaration(declaration) ||
+    declaration.getParent() !== declaration.getSourceFile() ||
+    declaration.getAsteriskToken() ||
+    declaration
+      .getModifiers()
+      .some((modifier) =>
+        [SyntaxKind.ExportKeyword, SyntaxKind.DefaultKeyword].includes(modifier.getKind()),
+      )
+  ) {
+    return undefined;
+  }
+  const name = declaration.getNameNode();
+  const symbol = name?.getSymbol();
+  if (!name || !symbol) return undefined;
+  const key = requestNodeIdentity(declaration);
+  const memoized = session.declaredRootHelperMemo.get(key);
+  if (memoized !== undefined) return memoized ?? undefined;
+  if (session.declaredRootHelperActive.has(key)) return undefined;
+  session.declaredRootHelperActive.add(key);
+
+  const reject = (): undefined => {
+    session.declaredRootHelperActive.delete(key);
+    session.declaredRootHelperMemo.set(key, null);
+    return undefined;
+  };
+  const parameters = requestCallableParameters(declaration);
+  if (
+    parameters.some(
+      (parameter) =>
+        !Node.isIdentifier(parameter.getNameNode()) ||
+        !!parameter.getInitializer() ||
+        !!parameter.getDotDotDotToken(),
+    )
+  ) {
+    return reject();
+  }
+  if (
+    symbol.getDeclarations().length !== 1 ||
+    !requestNodesAreSame(symbol.getDeclarations()[0], declaration)
+  ) {
+    return reject();
+  }
+  const returns = declaration
+    .getDescendantsOfKind(SyntaxKind.ReturnStatement)
+    .filter((statement) => nodeBelongsToRequestCallable(statement, direct));
+  if (returns.some((statement) => statement.getExpression() !== undefined)) return reject();
+
+  const invocations: import('ts-morph').CallExpression[] = [];
+  const symbolKey = requestSymbolKey(symbol);
+  for (const sourceFile of declaration.getProject().getSourceFiles()) {
+    for (const reference of sourceFile.getDescendantsOfKind(SyntaxKind.Identifier)) {
+      const candidate = requestIdentifierValueSymbol(reference) ?? reference.getSymbol();
+      if (!candidate || requestSymbolKey(candidate) !== symbolKey) continue;
+      if (requestNodesAreSame(reference, name)) continue;
+      const call = reference.getParentIfKind(SyntaxKind.CallExpression);
+      if (!call || !requestNodesAreSame(call.getExpression(), reference)) return reject();
+      invocations.push(call);
+    }
+  }
+  if (invocations.length === 0) return reject();
+
+  const contexts: RequestCallable[] = [];
+  let expectedRoles: string | undefined;
+  for (const call of invocations) {
+    if (!requestProvenanceStep(session, call)) return reject();
+    const resolution = resolveRequestCallable(call.getExpression(), new Set(), 0, session);
+    if (
+      resolution.opaqueModule !== undefined ||
+      resolution.callables.length !== 1 ||
+      !requestNodesAreSame(resolution.callables[0]?.declaration, declaration)
+    ) {
+      return reject();
+    }
+    const caller = requestEnclosingCallable(call);
+    if (!caller || !nodeBelongsToRequestCallable(call, caller)) return reject();
+    const roots = requestCallableDeclaredRootContexts(caller, session);
+    if (roots.length === 0) return reject();
+    const args = call.getArguments();
+    if (args.length !== parameters.length || args.some(Node.isSpreadElement)) return reject();
+    for (const root of roots) {
+      const roles: RequestRootParameterRole[] = [];
+      for (const argument of args) {
+        const role = requestExpressionRootParameterRole(argument, root, new Set(), 0);
+        if (role) {
+          roles.push(role);
+          continue;
+        }
+        if (!requestExpressionIsIntrinsicValue(argument, root, new Set(), 0)) return reject();
+        roles.push('input');
+      }
+      const roleKey = roles.join(',');
+      if (expectedRoles !== undefined && expectedRoles !== roleKey) return reject();
+      expectedRoles = roleKey;
+      contexts.push({ ...direct, declaredRootHelper: true, rootParameterRoles: roles });
+    }
+  }
+  if (contexts.length === 0) return reject();
+  session.declaredRootHelperActive.delete(key);
+  session.declaredRootHelperMemo.set(key, contexts);
+  return contexts;
 }
 
 function requestCallIsReviewedDrizzleDbReadChainInDeclaredRoot(
@@ -21379,6 +21758,15 @@ function requestExpressionRootParameterRole(
     return requestExpressionRootParameterRole(node.getExpression(), callable, seen, depth + 1);
   }
   if (Node.isPropertyAccessExpression(node) || Node.isElementAccessExpression(node)) {
+    const member = Node.isPropertyAccessExpression(node)
+      ? staticMemberName(node.getNameNode())
+      : staticMemberName(node.getArgumentExpression());
+    if (
+      member === 'db' &&
+      requestDirectRootRequestParameterKey(node.getExpression(), callable) !== undefined
+    ) {
+      return 'capability';
+    }
     return requestExpressionRootParameterRole(node.getExpression(), callable, seen, depth + 1);
   }
   if (Node.isCallExpression(node)) {
@@ -21416,7 +21804,12 @@ function requestExpressionRootParameterRole(
       resolvedOutputs.every(
         (candidate) =>
           candidate.role === first.role &&
-          requestHelperRoleOutputIsPristine(candidate.output, candidate.invoked),
+          requestHelperRoleOutputIsPristine(candidate.output, candidate.invoked) &&
+          (!requestRootRoleIncludesCapability(candidate.role) ||
+            requestHelperRoleOutputIsStrictCapabilityProjection(
+              candidate.output,
+              candidate.invoked,
+            )),
       )
       ? first.role
       : undefined;
@@ -21536,6 +21929,12 @@ function requestHelperRoleOutputIsPristine(output: Node, callable: RequestCallab
     ...callable.body.getDescendantsOfKind(SyntaxKind.PrefixUnaryExpression),
     ...callable.body.getDescendantsOfKind(SyntaxKind.PostfixUnaryExpression),
   ].filter(belongs)) {
+    if (
+      Node.isPrefixUnaryExpression(update) &&
+      update.getOperatorToken() === SyntaxKind.ExclamationToken
+    ) {
+      continue;
+    }
     if (containsRelated(update.getOperand())) return false;
   }
   for (const declaration of callable.body
@@ -21569,6 +21968,21 @@ function requestHelperRoleOutputIsPristine(output: Node, callable: RequestCallab
     if (construct.getArguments().some(containsRelated)) return false;
   }
   return true;
+}
+
+function requestHelperRoleOutputIsStrictCapabilityProjection(
+  output: Node,
+  callable: RequestCallable,
+): boolean {
+  const outputKey = requestRootCapabilityKey(output, callable, new Set());
+  if (!outputKey) return false;
+  return requestCallableParameters(callable.declaration).some((parameter, index) => {
+    if (!requestRootRoleIncludesCapability(callable.rootParameterRoles?.[index])) return false;
+    const name = parameter.getNameNode();
+    if (!Node.isIdentifier(name)) return false;
+    const parameterKey = requestRootCapabilityKey(name, callable, new Set());
+    return !!parameterKey && outputKey.startsWith(`${parameterKey}.`);
+  });
 }
 
 function requestRootRoleIncludesCapability(role: RequestRootParameterRole | undefined): boolean {
@@ -24879,11 +25293,93 @@ function dangerousCallSink(call: Node): DangerousSinkMatch | null {
 function unshadowedGlobalIdentifier(node: Node, expectedName: string): boolean {
   if (!Node.isIdentifier(node) || !identifierTextEquals(node, expectedName)) return false;
 
-  // Syntactic trust pass: global built-in/DOM recognizer only; local/imported shadows fail closed.
-  return !(node.getSymbol()?.getDeclarations() ?? []).some(
+  // Syntactic trust pass: global built-in/DOM recognizer only; emitted local/imported shadows fail
+  // closed. Ambient and type-only declarations do not create a JavaScript binding, so treating
+  // them as shadows would let their erased spelling hide the real global sink or mutation.
+  return !requestIdentifierHasSameFileRuntimeBinding(node, expectedName);
+}
+
+function requestIdentifierHasSameFileRuntimeBinding(node: Node, expectedName: string): boolean {
+  if (!Node.isIdentifier(node)) return false;
+  if (requestSymbolHasSameFileRuntimeBinding(node.getSymbol(), node)) return true;
+
+  // `Identifier#getSymbol()` may resolve an ambient/lib global (or be absent) for a write target
+  // even when a block-local value binding owns the spelling. Ask the checker for the symbols in
+  // the exact lexical scope as a second, independent recovery path. Filtering back to same-file
+  // runtime declarations preserves the classifier's ambient/type-only distinction.
+  return node
+    .getSymbolsInScope(ts.SymbolFlags.Value)
+    .filter((symbol) => symbol.getName() === expectedName)
+    .some((symbol) => requestSymbolHasSameFileRuntimeBinding(symbol, node));
+}
+
+function requestSymbolHasSameFileRuntimeBinding(
+  symbol: ReturnType<Node['getSymbol']>,
+  site: Node,
+): boolean {
+  return (symbol?.getDeclarations() ?? []).some(
     (declaration) =>
-      declaration.getSourceFile().getFilePath() === node.getSourceFile().getFilePath(),
+      declaration.getSourceFile().getFilePath() === site.getSourceFile().getFilePath() &&
+      requestDeclarationCreatesRuntimeBinding(declaration),
   );
+}
+
+function requestDeclarationCreatesRuntimeBinding(declaration: Node): boolean {
+  const sourceFile = declaration.getSourceFile();
+  if (sourceFile.isDeclarationFile()) return false;
+
+  for (const candidate of [declaration, ...declaration.getAncestors()]) {
+    if (
+      Node.isModuleDeclaration(candidate) &&
+      (candidate.hasDeclareKeyword() || isStringLiteralLike(candidate.getNameNode()))
+    ) {
+      return false;
+    }
+    if (Node.isVariableStatement(candidate) && candidate.hasDeclareKeyword()) return false;
+    if (
+      (Node.isFunctionDeclaration(candidate) ||
+        Node.isClassDeclaration(candidate) ||
+        Node.isEnumDeclaration(candidate)) &&
+      candidate.hasDeclareKeyword()
+    ) {
+      return false;
+    }
+  }
+
+  if (
+    Node.isInterfaceDeclaration(declaration) ||
+    Node.isTypeAliasDeclaration(declaration) ||
+    Node.isShorthandPropertyAssignment(declaration) ||
+    Node.isMethodSignature(declaration) ||
+    Node.isPropertySignature(declaration) ||
+    Node.isCallSignatureDeclaration(declaration) ||
+    Node.isConstructSignatureDeclaration(declaration) ||
+    Node.isTypeParameterDeclaration(declaration)
+  ) {
+    return false;
+  }
+  if (Node.isFunctionDeclaration(declaration)) return declaration.getBody() !== undefined;
+  if (Node.isImportSpecifier(declaration)) {
+    return !declaration.isTypeOnly() && !declaration.getImportDeclaration().isTypeOnly();
+  }
+  if (Node.isImportClause(declaration)) {
+    return !declaration.isTypeOnly();
+  }
+  if (Node.isNamespaceImport(declaration)) {
+    const imported = declaration.getFirstAncestorByKind(SyntaxKind.ImportDeclaration);
+    return imported ? !imported.isTypeOnly() : true;
+  }
+  if (Node.isImportEqualsDeclaration(declaration)) {
+    return !declaration.isTypeOnly();
+  }
+  if (Node.isExportSpecifier(declaration)) return false;
+  if (Node.isBindingElement(declaration)) {
+    const owner = declaration.getFirstAncestor(
+      (ancestor) => Node.isVariableDeclaration(ancestor) || Node.isParameterDeclaration(ancestor),
+    );
+    return owner ? requestDeclarationCreatesRuntimeBinding(owner) : true;
+  }
+  return true;
 }
 
 function identifierTextEquals(identifier: Node & { getText(): string }, expected: string): boolean {

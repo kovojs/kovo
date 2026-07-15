@@ -31,6 +31,47 @@ const kovoServerQueryTypes = {
   ].join('\n'),
 };
 
+function readerAliasQueryFacts(options: {
+  declarations?: readonly string[];
+  files?: readonly { fileName: string; source: string }[];
+  imports?: readonly string[];
+  readerType: string;
+}) {
+  return extractQueryFactsFromProject({
+    files: [
+      queryReceiverTypes,
+      ...(options.files ?? []),
+      {
+        fileName: 'reader-proof.queries.ts',
+        source: [
+          ...(options.imports ?? []),
+          'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+          '',
+          'type AppDb = PgAsyncDatabase<any, any>;',
+          ...(options.declarations ?? []),
+          `interface LoadContext { db?: ${options.readerType} }`,
+          '',
+          'export const readerProofRows = pgTable("reader_proof_rows", {',
+          '  id: text("id").primaryKey(),',
+          '}, kovo({ domain: "reader-proof", key: "id" }));',
+          '',
+          'export const readerProofQuery = query("reader-proof", {',
+          '  async load(_input: unknown, context?: LoadContext) {',
+          '    const db = requireDb(context);',
+          '    return db.select({ id: readerProofRows.id }).from(readerProofRows);',
+          '  },',
+          '});',
+          '',
+          `function requireDb(context?: LoadContext): ${options.readerType} {`,
+          '  if (!context?.db) throw new Error("missing reader");',
+          '  return context.db;',
+          '}',
+        ].join('\n'),
+      },
+    ],
+  });
+}
+
 describe('@kovojs/drizzle touch graph helpers', () => {
   it('does not fabricate project query facts from untyped shorthand query-loader receivers', () => {
     const facts = extractQueryFactsFromProject({
@@ -1101,6 +1142,119 @@ describe('@kovojs/drizzle touch graph helpers', () => {
       },
     ]);
     expect(diagnosticsForQueryFacts(facts)).toEqual([]);
+  });
+
+  it.each([
+    [
+      'renamed inline type import',
+      {
+        imports: ['import type { Reader as FrameworkReader } from "@kovojs/server";'],
+        readerType: 'FrameworkReader<AppDb>',
+      },
+    ],
+    [
+      'exact public re-export barrel',
+      {
+        files: [
+          {
+            fileName: 'reader-barrel.ts',
+            source: 'export type { Reader as FrameworkReader } from "@kovojs/server";',
+          },
+        ],
+        imports: ['import type { FrameworkReader } from "./reader-barrel.js";'],
+        readerType: 'FrameworkReader<AppDb>',
+      },
+    ],
+  ])('proves Kovo Reader identity through %s', (_label, options) => {
+    expect(readerAliasQueryFacts(options)).toEqual([
+      expect.objectContaining({
+        query: 'reader-proof',
+        reads: ['reader-proof'],
+        shape: { id: 'string' },
+      }),
+    ]);
+  });
+
+  it.each([
+    [
+      'local type alias',
+      {
+        declarations: ['type LocalReader<Db extends { select: unknown }> = Pick<Db, "select">;'],
+        readerType: 'LocalReader<AppDb>',
+      },
+    ],
+    [
+      'structural private-brand lookalike',
+      {
+        declarations: [
+          'declare const fakeReaderBrand: unique symbol;',
+          'type FakeReader<Db extends { select: unknown }> = Pick<Db, "select"> & {',
+          '  readonly [fakeReaderBrand]: { readonly db: Db; readonly scope: "framework-read-handle" };',
+          '};',
+        ],
+        readerType: 'FakeReader<AppDb>',
+      },
+    ],
+    [
+      'relative managed-db import',
+      {
+        imports: [
+          'import type { Reader as InternalReader } from "../../server/src/managed-db.js";',
+        ],
+        readerType: 'InternalReader<AppDb>',
+      },
+    ],
+    [
+      'bare lookalike package',
+      {
+        files: [
+          {
+            fileName: 'lookalike-server.d.ts',
+            source:
+              'declare module "@lookalike/server" { export type Reader<Db extends { select: unknown }> = Pick<Db, "select">; }',
+          },
+        ],
+        imports: ['import type { Reader as FakeReader } from "@lookalike/server";'],
+        readerType: 'FakeReader<AppDb>',
+      },
+    ],
+    [
+      'namespace import',
+      {
+        imports: ['import type * as server from "@kovojs/server";'],
+        readerType: 'server.Reader<AppDb>',
+      },
+    ],
+    [
+      'import-equals namespace',
+      {
+        imports: ['import server = require("@kovojs/server");'],
+        readerType: 'server.Reader<AppDb>',
+      },
+    ],
+    [
+      'mixed database union',
+      {
+        declarations: [
+          'interface FakeDb { select(value?: unknown): { from(table: unknown): Promise<unknown[]> } }',
+        ],
+        imports: ['import type { Reader as FrameworkReader } from "@kovojs/server";'],
+        readerType: 'FrameworkReader<AppDb | FakeDb>',
+      },
+    ],
+    [
+      'value-form import',
+      {
+        imports: ['import { Reader as FrameworkReader } from "@kovojs/server";'],
+        readerType: 'FrameworkReader<AppDb>',
+      },
+    ],
+  ])('does not promote %s to Kovo Reader receiver proof', (_label, options) => {
+    expect(readerAliasQueryFacts(options)).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ query: 'reader-proof', reads: ['reader-proof'] }),
+      ]),
+    );
   });
 
   it('keeps inline context.db query-loader reads in the owner-scope audit', () => {

@@ -309,14 +309,49 @@ function secretQueryShape(shape: QueryShape): QueryShape {
   }
 
   const readerIdentity = frameworkExport('@kovojs/server', 'Reader');
-  if (!typeAliasResolvesToFrameworkExport(type, readerIdentity, {}, location)) return false;
+  if (
+    !typeAliasResolvesToFrameworkExport(type, readerIdentity) &&
+    !(location && typeAliasMatchesExactNamedFrameworkImport(type, location, readerIdentity))
+  ) {
+    return false;
+  }
 
-  return type
-    .getAliasTypeArguments()
-    .some(
-      (argument) =>
-        isDrizzleDatabaseType(argument) || isUnresolvedDrizzleDatabaseTypeAlias(argument),
-    );
+  const [database, ...extra] = type.getAliasTypeArguments();
+  return !!(
+    database &&
+    extra.length === 0 &&
+    (isDrizzleDatabaseType(database) || isUnresolvedDrizzleDatabaseTypeAlias(database))
+  );
+}
+
+function typeAliasMatchesExactNamedFrameworkImport(
+  type: MorphType,
+  location: Node,
+  expected: ReturnType<typeof frameworkExport>,
+): boolean {
+  const target = type.getAliasSymbol();
+  if (!target) return false;
+
+  for (const declaration of location.getSourceFile().getImportDeclarations()) {
+    const clause = declaration.getImportClause();
+    for (const imported of declaration.getNamedImports()) {
+      // SPEC §6.6 / compiler hard rule 10: only an exact named type import can reconnect a
+      // resolved implementation alias to its public framework identity. Namespace/import-equals,
+      // relative paths, value aliases, and structural lookalikes do not establish authority.
+      if (!imported.isTypeOnly() && !clause?.isTypeOnly()) continue;
+      const local = imported.getAliasNode() ?? imported.getNameNode();
+      if (!expressionResolvesToFrameworkExport(local, expected)) continue;
+      const symbol = local.getSymbol();
+      if (!symbol) continue;
+      try {
+        const aliased = symbol.getAliasedSymbol();
+        if (aliased?.compilerSymbol === target.compilerSymbol) return true;
+      } catch {
+        // Unresolved or non-alias imports fail closed.
+      }
+    }
+  }
+  return false;
 }
 
 function isUnresolvedDrizzleDatabaseTypeAlias(type: MorphType): boolean {
@@ -388,7 +423,7 @@ function isNullishType(type: MorphType): boolean {
 
 /** @internal */ export function isDrizzleDatabaseTypeNode(typeNode: Node): boolean {
   if (typeNode.getKind() !== SyntaxKind.TypeReference) return false;
-  if (isDrizzleDatabaseType(typeNode.getType())) return true;
+  if (isDrizzleDatabaseType(typeNode.getType(), typeNode)) return true;
 
   const typeReference = typeNode.asKind(SyntaxKind.TypeReference);
   const typeNameSymbol = typeReference?.getTypeName().getSymbol();

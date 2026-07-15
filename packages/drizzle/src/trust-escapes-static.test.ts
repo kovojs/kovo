@@ -2,6 +2,7 @@ import * as nodeFs from 'node:fs';
 import * as nodeFsPromises from 'node:fs/promises';
 import { builtinModules as nodeBuiltinModules } from 'node:module';
 
+import { ts } from 'ts-morph';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -3208,6 +3209,206 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
     expect(safe.map((fact) => fact.sink)).not.toContain('request-handler.opaque-call');
   });
 
+  it.each([
+    'Set',
+    'Map',
+    'Object',
+    'TextEncoder',
+    'SubtleCrypto',
+    'atob',
+    'btoa',
+    'fetch',
+    'globalThis',
+  ])(
+    'rejects a bare reassignment of locked global %s without requiring a later intrinsic use',
+    (globalName) => {
+      const facts = sinksFor(`
+        const replacement = class Replacement {};
+        ${globalName} = replacement;
+      `);
+      expect(facts, `${globalName}: ${JSON.stringify(facts)}`).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            sink: 'request-handler.opaque-protocol',
+            source: `<global-binding-setter:${globalName}>`,
+          }),
+        ]),
+      );
+    },
+  );
+
+  it.each([
+    ['compound assignment', 'Set ||= PoisonSet;'],
+    ['prefix update', '++Set;'],
+    ['postfix update', 'Set++;'],
+    ['delete', 'delete Set;'],
+    ['array assignment pattern', '[Set] = [PoisonSet];'],
+    ['object assignment pattern', '({ value: Set } = { value: PoisonSet });'],
+    ['object shorthand assignment pattern', '({ Set } = { Set: PoisonSet });'],
+    ['object shorthand default assignment pattern', '({ Set = PoisonSet } = {});'],
+    ['for-of assignment target', 'for (Set of [PoisonSet]) break;'],
+    ['for-in assignment target', 'for (Set in { PoisonSet: 1 }) break;'],
+    ['for-of shorthand assignment target', 'for ({ Set } of [{ Set: PoisonSet }]) break;'],
+    ['for-of shorthand default assignment target', 'for ({ Set = PoisonSet } of [{}]) break;'],
+    ['for-in shorthand assignment target', 'for ({ Set } in { PoisonSet: 1 }) break;'],
+  ])('rejects a locked global through %s', (_label, mutation) => {
+    const facts = sinksFor(`
+      const NativeSet = Set;
+      class PoisonSet extends NativeSet {}
+      ${mutation}
+    `);
+    expect(facts, JSON.stringify(facts)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sink: 'request-handler.opaque-protocol',
+          source: '<global-binding-setter:Set>',
+        }),
+      ]),
+    );
+  });
+
+  it('preserves shadowed local bindings that share locked-global names', () => {
+    const facts = sinksFor(`
+      {
+        let Set = 1;
+        let TextEncoder = 2;
+        let atob = 3;
+        Set = 4;
+        TextEncoder++;
+        [atob] = [5];
+        ({ Set } = { Set: 6 });
+        ({ Set = 7 } = {});
+        for ({ Set } of [{ Set: 8 }]) break;
+        for ({ Set = 9 } of [{}]) break;
+      }
+    `);
+    expect(facts).toEqual([]);
+  });
+
+  it.each([
+    ['declare var', 'declare var Set: typeof NativeSet;'],
+    ['declare let', 'declare let Set: typeof NativeSet;'],
+    ['declare const', 'declare const Set: typeof NativeSet;'],
+    ['export declare var', 'export declare var Set: typeof NativeSet;'],
+    ['declare function', 'declare function Set(value?: unknown): void;'],
+    ['overload-only function', 'function Set(value?: unknown): void;'],
+    ['declare class', 'declare class Set {}'],
+    ['declare enum', 'declare enum Set { Value }'],
+    ['declare namespace', 'declare namespace Set {}'],
+    ['interface', 'interface Set {}'],
+    ['type alias', 'type Set = unknown;'],
+    ['type-only import', "import type { Set } from './types.js';"],
+    ['type-only namespace import', "import type * as Set from './types.js';"],
+    ['type-only import equals', "import type Set = require('./types.js');"],
+  ])('treats erased %s bindings as non-shadowing global assignments', (_label, declaration) => {
+    const source = `
+      const NativeSet = globalThis.Set;
+      class PoisonSet extends NativeSet {}
+      ${declaration}
+      Set = PoisonSet;
+    `;
+    const emitted = ts.transpileModule(source, {
+      compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
+    }).outputText;
+    expect(emitted).toMatch(/Set\s*=\s*PoisonSet/u);
+    expect(sinksFor(source)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sink: 'request-handler.opaque-protocol',
+          source: '<global-binding-setter:Set>',
+        }),
+      ]),
+    );
+  });
+
+  it('treats declare-global bindings as erased for direct and shorthand assignment targets', () => {
+    const source = `
+      export {};
+      const NativeSet = globalThis.Set;
+      class PoisonSet extends NativeSet {}
+      declare global { var Set: typeof NativeSet; }
+      Set = PoisonSet;
+      ({ Set } = { Set: PoisonSet });
+      for ({ Set = PoisonSet } of [{}]) break;
+    `;
+    const emitted = ts.transpileModule(source, {
+      compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
+    }).outputText;
+    expect(emitted).toMatch(/Set\s*=\s*PoisonSet/u);
+    expect(
+      sinksFor(source).filter((fact) => fact.source === '<global-binding-setter:Set>'),
+    ).toHaveLength(3);
+  });
+
+  it('keeps ambient eval visible while preserving a genuine emitted local shadow', () => {
+    const ambient = `
+      declare const eval: (source: string) => unknown;
+      eval(input);
+    `;
+    const emitted = ts.transpileModule(ambient, {
+      compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
+    }).outputText;
+    expect(emitted).toContain('eval(input)');
+    expect(sinksFor(ambient)).toEqual(
+      expect.arrayContaining([expect.objectContaining({ sink: 'eval', source: 'input' })]),
+    );
+
+    expect(
+      sinksFor(`
+        {
+          const eval = (source: string) => source;
+          eval(input);
+          let Set = class LocalSet {};
+          Set = class ReplacementSet {};
+        }
+      `),
+    ).toEqual([]);
+
+    const runtimeNamespace = sinksFor(`
+      import * as Set from './runtime.js';
+      Set = class ReplacementSet {};
+    `);
+    expect(runtimeNamespace).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ source: '<global-binding-setter:Set>' })]),
+    );
+  });
+
+  it('keeps exact component-input JSON array callbacks off the public wire', () => {
+    const facts = sinksFor(`
+      import { component } from '@kovojs/core';
+      import { createApp, route } from '@kovojs/server';
+      const ContactList = component({
+        render: ({ items }) => <ul>{items.map(() => <li>contact</li>)}</ul>,
+      });
+      export default createApp({
+        routes: [route('/', { page: () => <ContactList /> })],
+      });
+    `);
+    expect(facts).toEqual([]);
+  });
+
+  it.each(['of [PoisonSet]', 'in { PoisonSet: 1 }'])(
+    'traverses an authored setter used as a for-%s assignment target',
+    (loopTail) => {
+      const facts = sinksFor(`
+        import { execFileSync } from 'node:child_process';
+        const carrier = {
+          set Set(value) { execFileSync('loop-property-setter'); void value; },
+        };
+        class PoisonSet extends Set {}
+        for (carrier.Set ${loopTail}) break;
+      `);
+      expect(facts, JSON.stringify(facts)).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            sink: 'child_process.execFileSync',
+            source: "'loop-property-setter'",
+          }),
+        ]),
+      );
+    },
+  );
+
   it('closes pre-snapshot access-array push and index mutations', () => {
     const facts = sinksFor(`
       import { execFileSync } from 'node:child_process';
@@ -4122,9 +4323,9 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
           fileName: '_kovo/app-runtime-db.ts',
           source: `
             ${directImport}
-            import * as schema from '../schema.js';
-            const APP_TABLES = [schema.contacts];
-            const APP_SEED = [{ table: schema.contacts, rows: [{ id: 'c1' }] }];
+            import { contacts } from '../schema.js';
+            const APP_TABLES = [contacts];
+            const APP_SEED = [{ table: contacts, rows: [{ id: 'c1' }] }];
             const runtime = createSqliteAppRuntime({ seed: APP_SEED, tables: APP_TABLES });
             runtime.systemDb({ operation: 'write', reason: 'auth', surface: 'test' });
             export const appRuntimeDbProvider = runtime.db;
@@ -4158,7 +4359,25 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
             export const contactsQuery = query({
               async load(_input: unknown, context: AppQueryLoadContext) {
                 if (!context.db) throw new Error('missing db');
-                return await context.db.select({ id: contacts.id }).from(contacts).orderBy(contacts.id);
+                return {
+                  items: await context.db
+                    .select({ id: contacts.id })
+                    .from(contacts)
+                    .orderBy(contacts.id),
+                };
+              },
+            });
+          `,
+        },
+        {
+          fileName: 'mutations.ts',
+          source: `
+            import { mutation } from '@kovojs/server';
+            import { contacts } from './schema.js';
+            export const addContact = mutation({
+              async handler(input, request) {
+                await request.db.insert(contacts).values(input);
+                return { ok: true };
               },
             });
           `,
@@ -5553,6 +5772,261 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
       },
     ]);
     expect(rawEnvironmentValue.map((fact) => fact.sink)).toContain('node:process.env');
+  });
+
+  it('accepts only a universally closed local mutation DB helper', () => {
+    const schemaSource = `
+      import { pgTable, text } from 'drizzle-orm/pg-core';
+      export const contacts = pgTable('contacts', {
+        id: text('id').primaryKey(),
+        email: text('email').notNull(),
+      });
+    `;
+    const mutationSource = ({
+      declaration = 'async function writeContact(request, row) {',
+      helperBody = 'await request.db.insert(contacts).values(row);',
+      prelude = '',
+      invocation = 'await writeContact(request, { email });',
+    }: {
+      declaration?: string;
+      helperBody?: string;
+      prelude?: string;
+      invocation?: string;
+    } = {}) => `
+      import { mutation, publicAccess, s } from '@kovojs/server';
+      import { contacts } from './schema.js';
+      ${declaration}
+        ${helperBody}
+      }
+      ${prelude}
+      export const addContact = mutation({
+        access: publicAccess('fixture'),
+        csrf: false,
+        csrfJustification: 'fixture',
+        input: s.object({ email: s.string() }),
+        async handler({ email }, request) {
+          ${invocation}
+          return { ok: true };
+        },
+      });
+    `;
+    const sinks = (source: string) =>
+      sinksForFiles([
+        { fileName: 'schema.ts', source: schemaSource },
+        { fileName: 'mutations.ts', source },
+      ]);
+
+    expect(sinks(mutationSource())).toEqual([]);
+    expect(
+      sinks(
+        mutationSource({
+          declaration: 'async function writeContact(db, row) {',
+          helperBody: 'await db.insert(contacts).values(row);',
+          invocation:
+            'await request.db.select().from(contacts); await writeContact(request.db, { email });',
+        }),
+      ),
+    ).toEqual([]);
+
+    const hostile: ReadonlyArray<readonly [string, string]> = [
+      [
+        'exported helper',
+        mutationSource({ declaration: 'export async function writeContact(request, row) {' }),
+      ],
+      ['export-list helper', mutationSource({ prelude: 'export { writeContact };' })],
+      [
+        'aliased helper',
+        mutationSource({
+          invocation: 'const alias = writeContact; await alias(request, { email });',
+        }),
+      ],
+      [
+        'stored helper',
+        mutationSource({
+          prelude: 'const helpers = { writeContact };',
+          invocation: 'await helpers.writeContact(request, { email });',
+        }),
+      ],
+      [
+        'callback helper',
+        mutationSource({
+          invocation: '[{ email }].map((row) => writeContact(request, row));',
+        }),
+      ],
+      [
+        'Function.call helper',
+        mutationSource({
+          invocation: 'await writeContact.call(undefined, request, { email });',
+        }),
+      ],
+      ['request carrier return', mutationSource({ helperBody: 'return request.db;' })],
+      [
+        'recursive helper',
+        mutationSource({
+          helperBody:
+            "if (row.email === 'again') await writeContact(request, row);\n        await request.db.insert(contacts).values(row);",
+        }),
+      ],
+      [
+        'mixed root roles',
+        mutationSource({
+          invocation:
+            'await writeContact(request, { email }); await writeContact({ db: request.db }, { email });',
+        }),
+      ],
+    ];
+    for (const [label, source] of hostile) {
+      expect(sinks(source), label).not.toEqual([]);
+    }
+
+    const siblingExport = sinksForFiles([
+      { fileName: 'schema.ts', source: schemaSource },
+      {
+        fileName: 'write.ts',
+        source: `
+          import { contacts } from './schema.js';
+          export async function writeContact(request, row) {
+            await request.db.insert(contacts).values(row);
+          }
+        `,
+      },
+      {
+        fileName: 'mutations.ts',
+        source: `
+          import { mutation, publicAccess, s } from '@kovojs/server';
+          import { writeContact } from './write.js';
+          export const addContact = mutation({
+            access: publicAccess('fixture'),
+            csrf: false,
+            csrfJustification: 'fixture',
+            input: s.object({ email: s.string() }),
+            async handler({ email }, request) {
+              await writeContact(request, { email });
+              return { ok: true };
+            },
+          });
+        `,
+      },
+    ]);
+    expect(siblingExport).not.toEqual([]);
+  });
+
+  it('keeps generic non-table capability methods outside the Drizzle helper restriction', () => {
+    const facts = sinksFor(`
+      import { mutation, publicAccess, s } from '@kovojs/server';
+      function recordAudit(context) {
+        context.insert('plain audit marker');
+      }
+      export const addContact = mutation({
+        access: publicAccess('fixture'),
+        csrf: false,
+        csrfJustification: 'fixture',
+        input: s.object({ email: s.string() }),
+        handler(_input, _request, context) {
+          recordAudit(context);
+          return { ok: true };
+        },
+      });
+    `);
+    expect(facts).toEqual([]);
+  });
+
+  it('accepts only a pristine strict capability projection from a local query guard', () => {
+    const schemaSource = `
+      import { pgTable, text } from 'drizzle-orm/pg-core';
+      export const contacts = pgTable('contacts', { id: text('id').primaryKey() });
+    `;
+    const querySource = (helperBody: string) => `
+      import { query } from '@kovojs/server';
+      import { contacts } from './schema.js';
+      export const contactsQuery = query({
+        async load(_input, context) {
+          const db = requireDb(context);
+          return { items: await db.select({ id: contacts.id }).from(contacts) };
+        },
+      });
+      function requireDb(context) {
+        ${helperBody}
+      }
+    `;
+    const sinks = (helperBody: string) =>
+      sinksForFiles([
+        { fileName: 'schema.ts', source: schemaSource },
+        { fileName: 'queries.ts', source: querySource(helperBody) },
+      ]);
+
+    expect(
+      sinks(`
+        const db = context?.db;
+        if (!db) throw new Error('missing db');
+        return db;
+      `),
+    ).toEqual([]);
+
+    for (const helperBody of [
+      `
+        if (!context?.db) throw new Error('missing db');
+        if (!(context.db = context.fallbackDb)) throw new Error('missing fallback');
+        return context.db;
+      `,
+      `
+        if (!context?.db) throw new Error('missing db');
+        if (!(context.db++)) throw new Error('invalid db');
+        return context.db;
+      `,
+      `
+        return context;
+      `,
+    ]) {
+      expect(sinks(helperBody), helperBody).not.toEqual([]);
+    }
+  });
+
+  it.each([
+    ['unknown chain member', 'await request.db.evil().set({ email });'],
+    ['identity helper laundering', 'await identity(request.db).update(contacts).set({ email });'],
+    [
+      'computed chain member',
+      "const method = 'update'; await request.db[method](contacts).set({ email });",
+    ],
+    ['Function.call chain', 'await request.db.update.call(request.db, contacts).set({ email });'],
+    [
+      'Function.bind chain',
+      'const update = request.db.update.bind(request.db); await update(contacts).set({ email });',
+    ],
+  ])('keeps arbitrary DB chain laundering visible through %s', (_label, operation) => {
+    const facts = sinksForFiles([
+      {
+        fileName: 'schema.ts',
+        source: `
+          import { pgTable, text } from 'drizzle-orm/pg-core';
+          export const contacts = pgTable('contacts', {
+            id: text('id').primaryKey(),
+            email: text('email').notNull(),
+          });
+        `,
+      },
+      {
+        fileName: 'mutations.ts',
+        source: `
+          import { mutation, publicAccess, s } from '@kovojs/server';
+          import { contacts } from './schema.js';
+          function identity(value) { return value; }
+          export const addContact = mutation({
+            access: publicAccess('fixture'),
+            csrf: false,
+            csrfJustification: 'fixture',
+            input: s.object({ email: s.string() }),
+            async handler({ email }, request) {
+              ${operation}
+              return { ok: true };
+            },
+          });
+        `,
+      },
+    ]);
+    expect(facts, JSON.stringify(facts)).not.toEqual([]);
+    expect(facts.map((fact) => fact.sink)).toContain('request-handler.opaque-call');
   });
 
   it('keeps the exact mutation DB and serverValue grammar closed under adversarial carriers', () => {
