@@ -4,28 +4,29 @@ import { type ActiveOrganizationRequest, activeOrganization, authed, role } from
 import { type AppRequest } from './test-fakes.js';
 
 describe('guard bindings', () => {
-  it('pins server guard constructors before late shared-export replacement', async () => {
+  it('rejects late server-guard replacement and keeps adapter guards unchanged', async () => {
     const mutableGuards = serverGuards as unknown as {
       authed: typeof serverGuards.authed;
       role: typeof serverGuards.role;
     };
     const originalAuthed = mutableGuards.authed;
     const originalRole = mutableGuards.role;
-    let authedGuard: ReturnType<typeof authed<AppRequest>> | undefined;
-    let roleGuard: ReturnType<typeof role<AppRequest>> | undefined;
-    try {
+    expect(Object.isFrozen(serverGuards)).toBe(true);
+    expect(() => {
       mutableGuards.authed = (() => async () => true) as typeof serverGuards.authed;
+    }).toThrow(TypeError);
+    expect(() => {
       mutableGuards.role = (() => async () => true) as typeof serverGuards.role;
-      authedGuard = authed<AppRequest>();
-      roleGuard = role<AppRequest>('admin');
-    } finally {
-      mutableGuards.authed = originalAuthed;
-      mutableGuards.role = originalRole;
-    }
-    expect(await authedGuard?.({ session: null })).toMatchObject({
+    }).toThrow(TypeError);
+    expect(serverGuards.authed).toBe(originalAuthed);
+    expect(serverGuards.role).toBe(originalRole);
+
+    const authedGuard = authed<AppRequest>();
+    const roleGuard = role<AppRequest>('admin');
+    expect(await authedGuard({ session: null })).toMatchObject({
       kind: 'unauthenticated',
     });
-    expect(await roleGuard?.({ session: null })).toMatchObject({
+    expect(await roleGuard({ session: null })).toMatchObject({
       kind: 'unauthenticated',
     });
   });

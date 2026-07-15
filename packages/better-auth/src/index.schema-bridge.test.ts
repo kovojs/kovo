@@ -1255,39 +1255,32 @@ describe('schema bridge', () => {
     expect(verifierConfig.keyByTable).not.toHaveProperty('auth_session_state');
   });
 
-  it('does not let pairwise-stable modelName metadata drift after collision classification', () => {
-    function driftingModelName(initial: string): object {
-      let descriptorReads = 0;
-      return new Proxy(
-        { modelName: initial },
-        {
-          getOwnPropertyDescriptor(_target, property) {
-            if (property !== 'modelName') return undefined;
-            descriptorReads += 1;
-            return {
-              configurable: true,
-              enumerable: true,
-              value: descriptorReads <= 2 ? initial : 'auth_identity',
-              writable: true,
-            };
-          },
-        },
-      );
-    }
-
-    const verifierConfig = createBetterAuthDbVerificationConfig(
-      {},
+  it('rejects Proxy modelName metadata before adversarial descriptor traps', () => {
+    let descriptorReads = 0;
+    const driftingModelName = new Proxy(
+      { modelName: 'auth_sessions' },
       {
-        session: driftingModelName('auth_sessions'),
-        user: driftingModelName('auth_users'),
+        getOwnPropertyDescriptor() {
+          descriptorReads += 1;
+          return {
+            configurable: true,
+            enumerable: true,
+            value: 'auth_identity',
+            writable: true,
+          };
+        },
       },
     );
 
-    // SPEC §10.1/§11.2: a physical table name may not change between the collision gate and P9
-    // domain/key emission. `auth_identity` would otherwise inherit only the last logical table's
-    // authority even though both session and user metadata resolve to it during emission.
-    expect(verifierConfig.domainByTable).not.toHaveProperty('auth_identity');
-    expect(verifierConfig.keyByTable).not.toHaveProperty('auth_identity');
+    // SPEC §10.1/§11.2: table metadata is authorization input. A Proxy must be rejected before
+    // collision classification can observe attacker-controlled, time-varying physical names.
+    expect(() =>
+      createBetterAuthDbVerificationConfig(
+        {},
+        { session: driftingModelName, user: authTable([], 'auth_users') },
+      ),
+    ).toThrow(/Better Auth verifier metadata tables\.session must not be a Proxy/u);
+    expect(descriptorReads).toBe(0);
   });
 
   it('excludes aliases that collide with an implicit logical verifier table', () => {
