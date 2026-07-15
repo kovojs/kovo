@@ -70,6 +70,8 @@ import { isCompilerAuditText } from '../security/audit-text.js';
 
 const PUBLISH_TO_CLIENT_IDENTITY = frameworkExport('@kovojs/core', 'publishToClient');
 const PUBLISH_TO_CLIENT_REASON_PROPERTY = 'reason';
+const COMMONJS_REQUIRE_IDENTIFIER = 'require';
+const IMPORT_META_IDENTIFIER = 'meta';
 
 interface ImportBinding {
   source: 'import';
@@ -290,7 +292,7 @@ function commonJsRequirement(
   if (
     !ts.isCallExpression(current) ||
     !ts.isIdentifier(current.expression) ||
-    current.expression.text !== 'require'
+    clientCaptureIdentifierName(current.expression) !== COMMONJS_REQUIRE_IDENTIFIER
   ) {
     return undefined;
   }
@@ -313,6 +315,11 @@ function unwrapClientCaptureExpression(expression: ts.Expression): ts.Expression
     current = current.expression;
   }
   return current;
+}
+
+/** Parser-owned semantic identifier fact; post-parse policy never compares raw source slices. */
+function clientCaptureIdentifierName(identifier: ts.Identifier): string {
+  return ts.idText(identifier);
 }
 
 function moduleConstantBindings(model: ComponentModuleModel): ModuleConstantBinding[] {
@@ -528,6 +535,15 @@ compilerSetAdd(DYNAMIC_CODE_REFLECTION_METHODS, 'getOwnPropertyDescriptors');
 compilerSetAdd(DYNAMIC_CODE_REFLECTION_METHODS, 'getPrototypeOf');
 compilerSetAdd(DYNAMIC_CODE_REFLECTION_METHODS, 'setPrototypeOf');
 
+const DYNAMIC_CODE_GLOBAL_IDENTIFIERS = compilerCreateSet<string>();
+compilerSetAdd(DYNAMIC_CODE_GLOBAL_IDENTIFIERS, 'eval');
+compilerSetAdd(DYNAMIC_CODE_GLOBAL_IDENTIFIERS, 'Function');
+
+const GLOBAL_OBJECT_IDENTIFIERS = compilerCreateSet<string>();
+compilerSetAdd(GLOBAL_OBJECT_IDENTIFIERS, 'globalThis');
+compilerSetAdd(GLOBAL_OBJECT_IDENTIFIERS, 'self');
+compilerSetAdd(GLOBAL_OBJECT_IDENTIFIERS, 'window');
+
 const MAX_HANDLER_EXECUTION_POLICY_NODES = 100_000;
 
 /**
@@ -664,9 +680,10 @@ function handlerDynamicCodeCallee(callee: ts.Expression, scopeBoundary: ts.Node)
     );
   }
   if (ts.isPropertyAccessExpression(callee)) {
+    const member = clientCaptureIdentifierName(callee.name);
     return (
-      (callee.name.text === 'eval' || callee.name.text === 'Function') &&
-      handlerGlobalMemberName(callee.expression, callee.name.text, scopeBoundary) !== undefined
+      compilerSetHas(DYNAMIC_CODE_GLOBAL_IDENTIFIERS, member) &&
+      handlerGlobalMemberName(callee.expression, member, scopeBoundary) !== undefined
     );
   }
   if (ts.isElementAccessExpression(callee) && callee.argumentExpression) {
@@ -749,9 +766,7 @@ function handlerOwningDirectCall(callee: ts.Expression): ts.CallExpression | und
 }
 
 function handlerIdentifierNamesGlobalObject(identifier: ts.Identifier): boolean {
-  return (
-    identifier.text === 'globalThis' || identifier.text === 'self' || identifier.text === 'window'
-  );
+  return compilerSetHas(GLOBAL_OBJECT_IDENTIFIERS, clientCaptureIdentifierName(identifier));
 }
 
 function handlerIdentifierIsUnshadowedGlobal(
@@ -881,7 +896,7 @@ function moduleLoaderBinding(node: ts.Node): ImportBinding | undefined {
   if (
     ts.isMetaProperty(node) &&
     node.keywordToken === ts.SyntaxKind.ImportKeyword &&
-    node.name.text === 'meta'
+    clientCaptureIdentifierName(node.name) === IMPORT_META_IDENTIFIER
   ) {
     return {
       importedName: 'meta',
@@ -902,7 +917,10 @@ function moduleLoaderBinding(node: ts.Node): ImportBinding | undefined {
       source: 'import',
     };
   }
-  if (ts.isIdentifier(node.expression) && node.expression.text === 'require') {
+  if (
+    ts.isIdentifier(node.expression) &&
+    clientCaptureIdentifierName(node.expression) === COMMONJS_REQUIRE_IDENTIFIER
+  ) {
     const argument = node.arguments[0];
     return {
       importedName: '*',
