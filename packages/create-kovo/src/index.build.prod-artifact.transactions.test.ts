@@ -31,6 +31,15 @@ interface ReadonlyAttemptResponse {
   results?: Array<{ blocked: boolean; message: string; method: string }>;
 }
 
+function captureProductionBuildFailure(root: string): unknown {
+  try {
+    buildProductionArtifact(root);
+  } catch (error) {
+    return error;
+  }
+  throw new Error('Expected production build to fail.');
+}
+
 async function csrfProofSession(
   origin: string,
   action: string,
@@ -362,15 +371,10 @@ describe('create-kovo starter (build integration: production transaction artifac
         linkStarterBuildDependencies(root);
         addRuntimeMutationSafetyProofs(root, { includeManagedWriteEscapeAttempt: true });
 
-        try {
-          buildProductionArtifact(root);
-          throw new Error('Expected kovo build --no-cache to fail for managed raw-driver escape.');
-        } catch (error) {
-          const output = execFileSyncErrorOutput(error);
-          expect(output).toContain('kovo build check preflight failed');
-          expect(output).toContain('KV406');
-          expect(output).toContain('runtime-safety-proofs.ts');
-        }
+        const output = execFileSyncErrorOutput(captureProductionBuildFailure(root));
+        expect(output).toContain('kovo build check preflight failed');
+        expect(output).toContain('KV406');
+        expect(output).toContain('runtime-safety-proofs.ts');
       } finally {
         rmSync(root, { force: true, recursive: true });
       }
@@ -400,18 +404,11 @@ describe('create-kovo starter (build integration: production transaction artifac
         expect(proofSource).toContain('context.tx as unknown as { $client: unknown }');
         expect(proofSource).toContain('context.tx as unknown as { session: unknown }');
 
-        try {
-          buildProductionArtifact(root);
-          throw new Error(
-            'Expected kovo build --no-cache to fail for webhook tx raw-driver escape.',
-          );
-        } catch (error) {
-          const output = execFileSyncErrorOutput(error);
-          expect(output).toContain('kovo build check preflight failed');
-          expect(output).toContain('KV330');
-          expect(output).toContain('Direct db access in a webhook handler');
-          expect(output).toContain('runtime-safety-proofs.ts');
-        }
+        const output = execFileSyncErrorOutput(captureProductionBuildFailure(root));
+        expect(output).toContain('kovo build check preflight failed');
+        expect(output).toContain('KV330');
+        expect(output).toContain('Direct db access in a webhook handler');
+        expect(output).toContain('runtime-safety-proofs.ts');
       } finally {
         rmSync(root, { force: true, recursive: true });
       }

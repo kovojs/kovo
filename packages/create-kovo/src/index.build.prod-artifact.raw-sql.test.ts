@@ -12,6 +12,15 @@ import {
   execFileSyncErrorOutput,
 } from './index.build.test-support.js';
 
+function captureProductionBuildFailure(root: string): unknown {
+  try {
+    buildProductionArtifact(root);
+  } catch (error) {
+    return error;
+  }
+  throw new Error('Expected production build to fail.');
+}
+
 describe('create-kovo starter (build integration: production raw-SQL artifacts)', () => {
   it('patches raw owner-table proof into multiline mutation registries', () => {
     const tempParent = tmpdir();
@@ -60,15 +69,10 @@ describe('create-kovo starter (build integration: production raw-SQL artifacts)'
       linkStarterBuildDependencies(root);
       addRawSqlOwnerWriteProof(root);
 
-      try {
-        buildProductionArtifact(root);
-        throw new Error('Expected kovo build --no-cache to fail for raw owner-table write.');
-      } catch (error) {
-        const output = execFileSyncErrorOutput(error);
-        expect(output).toContain('KV414');
-        expect(output).toContain('WRITE');
-        expect(output).toContain('domain=raw-owner');
-      }
+      const output = execFileSyncErrorOutput(captureProductionBuildFailure(root));
+      expect(output).toContain('KV414');
+      expect(output).toContain('WRITE');
+      expect(output).toContain('domain=raw-owner');
     } finally {
       rmSync(root, { force: true, recursive: true });
     }
