@@ -139,6 +139,8 @@ export type AsyncMutationTransactionCapableDb = {
 
 const managedTransactionQueue = createWitnessWeakMap<object, Promise<void>>();
 const pinnedSqliteTransactionClients = createWitnessWeakMap<object, SqliteTransactionClient>();
+const activeManagedSqliteTransactionScopes = createWitnessWeakSet<object>();
+const managedSqliteTransactionScopeByMethodCache = createWitnessWeakMap<object, object>();
 let sqliteSavepointId = 0;
 
 /**
@@ -381,6 +383,7 @@ function wrapDbAdapter(
   methodCache: WeakMap<object, Map<PropertyKey, Function>>,
   writePolicy: ManagedSqlWritePolicy | undefined,
   strictSqlTarget: boolean,
+  sqliteTransactionScope?: object,
 ): object {
   const cached = witnessWeakMapGet(proxyCache, db);
   if (cached) return cached;
@@ -394,16 +397,20 @@ function wrapDbAdapter(
       return false;
     },
     get(target, prop) {
+      assertManagedSqliteTransactionScopeActive(sqliteTransactionScope);
       if (prop === kovoAsyncMutationTransaction) {
         if (writePolicy?.capability === 'read') return undefined;
         const transactionControlTarget = frameworkManagedDbRawTarget(target) ?? target;
         if (!sqliteTransactionClient(transactionControlTarget)) return undefined;
-        return <Result>(callback: (transactionDb: unknown) => Promise<Result>) =>
-          runSqliteAsyncTransaction(
+        return <Result>(callback: (transactionDb: unknown) => Promise<Result>) => {
+          if (sqliteTransactionScope !== undefined) throw nestedSqliteTransactionOpenerError();
+          return runManagedSqliteAsyncTransaction(
             transactionControlTarget,
-            wrapTransactionDb(transactionControlTarget, mode, proxyCache, methodCache, writePolicy),
+            mode,
+            writePolicy,
             callback,
           );
+        };
       }
 
       if (writePolicy !== undefined && isManagedRawDriverEscapeProperty(prop)) {
@@ -434,7 +441,15 @@ function wrapDbAdapter(
       }
 
       if (isNestedSqlHandleProperty(prop) && typeof value === 'object' && value !== null) {
-        return wrapDbAdapter(value, mode, proxyCache, methodCache, writePolicy, true);
+        return wrapDbAdapter(
+          value,
+          mode,
+          proxyCache,
+          methodCache,
+          writePolicy,
+          true,
+          sqliteTransactionScope,
+        );
       }
 
       if (
@@ -451,7 +466,15 @@ function wrapDbAdapter(
         typeof value === 'object' &&
         value !== null
       ) {
-        return wrapDbAdapter(value, mode, proxyCache, methodCache, writePolicy, true);
+        return wrapDbAdapter(
+          value,
+          mode,
+          proxyCache,
+          methodCache,
+          writePolicy,
+          true,
+          sqliteTransactionScope,
+        );
       }
 
       if (
@@ -484,7 +507,15 @@ function wrapDbAdapter(
               const result = witnessReflectApply<unknown>(value, invocationTarget, callArgs);
               if (isRecord(result) && (isManagedDbAdapterLike(result) || isSqlHandleLike(result))) {
                 witnessWeakSetAdd(relationalManagedSqlTargets, result);
-                return wrapDbAdapter(result, mode, proxyCache, methodCache, writePolicy, true);
+                return wrapDbAdapter(
+                  result,
+                  mode,
+                  proxyCache,
+                  methodCache,
+                  writePolicy,
+                  true,
+                  sqliteTransactionScope,
+                );
               }
               return result;
             },
@@ -522,6 +553,7 @@ function wrapDbAdapter(
             proxyCache,
             methodCache,
             writePolicy,
+            sqliteTransactionScope,
           ),
         );
       }
@@ -535,6 +567,7 @@ function wrapDbAdapter(
             proxyCache,
             methodCache,
             writePolicy,
+            sqliteTransactionScope,
           ),
         );
       }
@@ -566,6 +599,7 @@ function wrapDbAdapter(
           methodCache,
           writePolicy,
           strictSqlTarget,
+          sqliteTransactionScope,
         );
       });
     },
@@ -582,6 +616,7 @@ function wrapDbAdapter(
       return false;
     },
     set(target, property, value) {
+      assertManagedSqliteTransactionScopeActive(sqliteTransactionScope);
       return setManagedSqlDataProperty(target, property, value, writePolicy, strictSqlTarget);
     },
     setPrototypeOf() {
@@ -782,7 +817,15 @@ function wrapSqlBuilderSafety(
           target,
           guardedSqlBuilderArguments(args),
         );
-        return isRecord(result) && !isSqlBuilderTerminalMethod(prop)
+        const transactionScope = witnessWeakMapGet(
+          managedSqliteTransactionScopeByMethodCache,
+          methodCache,
+        );
+        const scopedBuilderResult =
+          transactionScope !== undefined &&
+          isRecord(result) &&
+          (isManagedDbAdapterLike(result) || isSqlHandleLike(result));
+        return isRecord(result) && (!isSqlBuilderTerminalMethod(prop) || scopedBuilderResult)
           ? wrapSqlBuilderSafety(result, proxyCache, methodCache, secretWriteBoundary)
           : result;
       });
@@ -1963,6 +2006,7 @@ function guardedWriteWithMethod(
   proxyCache: WeakMap<object, object>,
   methodCache: WeakMap<object, Map<PropertyKey, Function>>,
   writePolicy: ManagedSqlWritePolicy | undefined,
+  sqliteTransactionScope?: object,
 ): Function {
   return (...args: unknown[]) => {
     const builder = witnessReflectApply<unknown>(value, target, args);
@@ -1974,6 +2018,7 @@ function guardedWriteWithMethod(
           methodCache,
           writePolicy,
           writePolicy !== undefined,
+          sqliteTransactionScope,
         )
       : builder;
   };
@@ -2026,6 +2071,7 @@ function guardedUnknownSqlMethod(
   methodCache: WeakMap<object, Map<PropertyKey, Function>>,
   writePolicy: ManagedSqlWritePolicy | undefined,
   strictSqlTarget: boolean,
+  sqliteTransactionScope?: object,
 ): Function {
   return (...args: unknown[]) => {
     const snappedArgs = snapshotAmbiguousSqlMethodArguments(
@@ -2041,7 +2087,15 @@ function guardedUnknownSqlMethod(
       writePolicy,
     );
     return isRecord(result) && (isManagedDbAdapterLike(result) || isSqlHandleLike(result))
-      ? wrapDbAdapter(result, mode, proxyCache, methodCache, writePolicy, strictSqlTarget)
+      ? wrapDbAdapter(
+          result,
+          mode,
+          proxyCache,
+          methodCache,
+          writePolicy,
+          strictSqlTarget,
+          sqliteTransactionScope,
+        )
       : result;
   };
 }
@@ -2195,6 +2249,7 @@ function guardedTransactionMethod(
   proxyCache: WeakMap<object, object>,
   methodCache: WeakMap<object, Map<PropertyKey, Function>>,
   writePolicy: ManagedSqlWritePolicy | undefined,
+  sqliteTransactionScope?: object,
 ): Function {
   return (callback: unknown, ...args: unknown[]) => {
     if (writePolicy?.capability === 'read') {
@@ -2207,14 +2262,14 @@ function guardedTransactionMethod(
         'KV422: managed DB transactions require a callback; non-callback transaction overloads cannot bind statements to the declared SQL policy (SPEC §10.2/§10.3/§11.2).',
       );
     }
+    if (sqliteTransactionScope !== undefined && sqliteTransactionClient(target)) {
+      throw nestedSqliteTransactionOpenerError();
+    }
     if (args.length === 0) {
-      const sqlite = runSqliteAsyncTransaction(
-        target,
-        wrapTransactionDb(target, mode, proxyCache, methodCache, writePolicy),
-        (tx) =>
-          witnessReflectApply<Promise<unknown>>(nativePromiseResolve, NativePromise, [
-            witnessReflectApply(callback, undefined, [tx]),
-          ]),
+      const sqlite = runManagedSqliteAsyncTransaction(target, mode, writePolicy, (tx) =>
+        witnessReflectApply<Promise<unknown>>(nativePromiseResolve, NativePromise, [
+          witnessReflectApply(callback, undefined, [tx]),
+        ]),
       );
       if (sqlite) return sqlite;
     }
@@ -2244,9 +2299,67 @@ export function runSqliteAsyncTransaction<Result>(
   const client = sqliteTransactionClient(db);
   if (!client) return undefined;
 
-  const queueTarget = (typeof db === 'object' && db !== null ? db : client.target) as object;
-  return runQueuedManagedTransaction(queueTarget, () =>
+  return runQueuedManagedTransaction(client.target, () =>
     runSqliteTransactionControl(client, () => callback(transactionDb)),
+  );
+}
+
+function runManagedSqliteAsyncTransaction<Result>(
+  db: object,
+  mode: SqlSafetyMode,
+  writePolicy: ManagedSqlWritePolicy | undefined,
+  callback: (transactionDb: unknown) => Promise<Result>,
+): Promise<Result> | undefined {
+  const target = frameworkManagedDbRawTarget(db) ?? db;
+  const client = sqliteTransactionClient(target);
+  if (!client) return undefined;
+
+  // SPEC §10.3: the handler receives an exact transaction-scoped descendant whose public type
+  // hides transaction openers. The private scope token is the runtime ownership floor: it rejects
+  // a JavaScript-level nested opener immediately and revokes captured handles/builders as soon as
+  // the callback settles. Root callers still serialize on the native client identity.
+  const scope = witnessFreeze(witnessCreateNullRecord());
+  const methodCache = createWitnessWeakMap<object, Map<PropertyKey, Function>>();
+  witnessWeakMapSet(managedSqliteTransactionScopeByMethodCache, methodCache, scope);
+  const transactionDb = wrapTransactionDb(
+    target,
+    mode,
+    createWitnessWeakMap<object, object>(),
+    methodCache,
+    writePolicy,
+    scope,
+  );
+  return runQueuedManagedTransaction(client.target, () =>
+    runSqliteTransactionControl(client, () =>
+      runWithinManagedSqliteTransactionScope(scope, transactionDb, callback),
+    ),
+  );
+}
+
+async function runWithinManagedSqliteTransactionScope<Result>(
+  scope: object,
+  transactionDb: unknown,
+  callback: (transactionDb: unknown) => Promise<Result>,
+): Promise<Result> {
+  witnessWeakSetAdd(activeManagedSqliteTransactionScopes, scope);
+  try {
+    return await callback(transactionDb);
+  } finally {
+    witnessWeakSetDelete(activeManagedSqliteTransactionScopes, scope);
+  }
+}
+
+function assertManagedSqliteTransactionScopeActive(scope: object | undefined): void {
+  if (scope !== undefined && !witnessWeakSetHas(activeManagedSqliteTransactionScopes, scope)) {
+    throw new Error(
+      'KV433: SQLite transaction-scoped DB authority expired when its owning callback settled (SPEC §10.3/§11.2).',
+    );
+  }
+}
+
+function nestedSqliteTransactionOpenerError(): Error {
+  return new Error(
+    'KV433: SQLite mutation handlers cannot open nested transactions from a transaction-scoped DB; the framework owns the mutation transaction (SPEC §10.3/§11.2).',
   );
 }
 
@@ -2468,6 +2581,7 @@ function wrapTransactionDb(
   proxyCache: WeakMap<object, object>,
   methodCache: WeakMap<object, Map<PropertyKey, Function>>,
   writePolicy: ManagedSqlWritePolicy | undefined,
+  sqliteTransactionScope?: object,
 ): unknown {
   if (!isRecord(tx)) return tx;
   if (writePolicy === undefined && !isManagedDbAdapterLike(tx)) return tx;
@@ -2478,6 +2592,7 @@ function wrapTransactionDb(
     methodCache,
     writePolicy,
     managedSqlRootIsStrict(tx, writePolicy),
+    sqliteTransactionScope,
   );
 }
 
@@ -2905,7 +3020,15 @@ function cachedSqlSafetyMethod(
   const cached = witnessMapGet(targetCache, prop);
   if (cached) return cached;
 
-  const next = factory();
+  const method = factory();
+  const scope = witnessWeakMapGet(managedSqliteTransactionScopeByMethodCache, cache);
+  const next =
+    scope === undefined
+      ? method
+      : (...args: unknown[]) => {
+          assertManagedSqliteTransactionScopeActive(scope);
+          return witnessReflectApply(method, undefined, args);
+        };
   witnessMapSet(targetCache, prop, next);
   return next;
 }

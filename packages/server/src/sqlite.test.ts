@@ -1041,6 +1041,89 @@ describe('public SQLite runtime boundary (SPEC §6.6/§10.3)', () => {
       release();
     }
   });
+
+  it('rejects nested SQLite openers and revokes captured transaction-scoped write handles', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const prefix = `kovo_scoped_async_mutation_${Date.now()}`;
+    const schema = runtimeSchema(prefix);
+    const release = installGeneratedTableSecurityManifestForCommand(schema.manifest);
+    let handlerCalls = 0;
+    let rollbackHandlerCalls = 0;
+    let retainedDb: BetterSQLite3Database | undefined;
+    let retainedBuilder: { run(): unknown } | undefined;
+    let retainedInsert: Function | undefined;
+    try {
+      const runtime = sqlitePublicApi.createSqliteAppRuntime({
+        tables: [schema.parent, schema.child],
+      });
+      runtimes.push(runtime);
+      const addParent = mutation('sqlite/scoped-async-parent', {
+        csrf: false,
+        csrfJustification: 'framework SQLite transaction ownership regression',
+        input: s.object({ id: s.string() }),
+        registry: { tables: [`${prefix}_parent`], touches: [domain(`${prefix}_parent`)] },
+        async handler(input, request: { db: BetterSQLite3Database }) {
+          handlerCalls += 1;
+          // MutationRequestDb omits transaction openers at the type level (SPEC §10.3). This
+          // deliberately broader test annotation exercises the JavaScript/runtime floor.
+          expect(() => request.db.transaction(async () => undefined)).toThrow(
+            /framework owns the mutation transaction/u,
+          );
+          retainedDb = request.db;
+          retainedBuilder = request.db
+            .insert(schema.parent)
+            .values({ id: `${input.id}-stale-builder`, name: 'Must never execute' }) as unknown as {
+            run(): unknown;
+          };
+          retainedInsert = request.db.insert as unknown as Function;
+          await request.db
+            .insert(schema.parent)
+            .values({ id: `${input.id}-commit`, name: 'Outer commit' });
+          return input.id;
+        },
+      });
+      const failAfterWrite = mutation('sqlite/scoped-async-parent-rollback', {
+        csrf: false,
+        csrfJustification: 'framework SQLite outer rollback regression',
+        input: s.object({ id: s.string() }),
+        registry: { tables: [`${prefix}_parent`], touches: [domain(`${prefix}_parent`)] },
+        async handler(input, request: { db: BetterSQLite3Database }) {
+          rollbackHandlerCalls += 1;
+          await request.db
+            .insert(schema.parent)
+            .values({ id: `${input.id}-rollback`, name: 'Must roll back with outer frame' });
+          throw new Error('roll back outer transaction');
+        },
+      });
+
+      await expect(
+        runMutation(addParent, { id: 'async-1' }, {}, { db: runtime.db }),
+      ).resolves.toMatchObject({ ok: true, value: 'async-1' });
+      expect(() => retainedDb?.insert(schema.parent)).toThrow(/authority expired/u);
+      expect(() => retainedBuilder?.run()).toThrow(/authority expired/u);
+      expect(() => Reflect.apply(retainedInsert!, undefined, [schema.parent])).toThrow(
+        /authority expired/u,
+      );
+      await expect(
+        runMutation(failAfterWrite, { id: 'doomed' }, {}, { db: runtime.db }),
+      ).rejects.toThrow(/roll back outer transaction/u);
+
+      expect(handlerCalls).toBe(1);
+      expect(rollbackHandlerCalls).toBe(1);
+      const capability = runtime.systemDb({
+        operation: 'write',
+        reason: 'Verify scoped async transaction commit and rollback behavior',
+        surface: 'sqlite.test#scoped-async-mutation',
+      });
+      expect(
+        useSqliteSystemDb(capability, (db) =>
+          db.select({ id: schema.parent.id }).from(schema.parent).orderBy(schema.parent.id).all(),
+        ),
+      ).toEqual([{ id: 'async-1-commit' }]);
+    } finally {
+      release();
+    }
+  });
 });
 
 function runtimeSchema(prefix: string) {

@@ -5062,6 +5062,92 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
     client.close();
   });
 
+  it('rejects nested SQLite openers from the exact transaction-scoped descendant', async () => {
+    // SPEC §10.3: the mutation transaction belongs to the framework. The handler type hides the
+    // opener, and this is the runtime floor for JavaScript/cast-based access.
+    type AsyncTransactionHandle = {
+      [kovoAsyncMutationTransaction]?: <Result>(
+        callback: (transactionDb: unknown) => Promise<Result>,
+      ) => Promise<Result>;
+    };
+    const client = new Database(':memory:');
+    try {
+      const handle = managedDb(client, 'write', {
+        sqlWritePolicy: { dialect: 'sqlite', tables: [], touches: [] },
+      }) as Database & AsyncTransactionHandle;
+      const rootTransaction = handle[kovoAsyncMutationTransaction];
+      expect(rootTransaction).toBeTypeOf('function');
+
+      let retainedHandle: AsyncTransactionHandle | undefined;
+      await rootTransaction!(async (transactionDb) => {
+        const scopedHandle = transactionDb as AsyncTransactionHandle;
+        retainedHandle = scopedHandle;
+        const nestedTransaction = scopedHandle[kovoAsyncMutationTransaction];
+        expect(nestedTransaction).toBeTypeOf('function');
+        expect(() => nestedTransaction!(async () => undefined)).toThrow(
+          /framework owns the mutation transaction/u,
+        );
+      });
+
+      expect(() => retainedHandle?.[kovoAsyncMutationTransaction]?.(async () => undefined)).toThrow(
+        /authority expired/u,
+      );
+    } finally {
+      client.close();
+    }
+  });
+
+  it('keeps unrelated root SQLite transactions queued while an async frame is active', async () => {
+    type AsyncTransactionHandle = {
+      [kovoAsyncMutationTransaction]?: <Result>(
+        callback: (transactionDb: unknown) => Promise<Result>,
+      ) => Promise<Result>;
+    };
+    const client = new Database(':memory:');
+    try {
+      const firstHandle = managedDb(drizzle({ client }), 'write', {
+        sqlWritePolicy: { dialect: 'sqlite', tables: [], touches: [] },
+      }) as ReturnType<typeof drizzle> & AsyncTransactionHandle;
+      const secondHandle = managedDb(drizzle({ client }), 'write', {
+        sqlWritePolicy: { dialect: 'sqlite', tables: [], touches: [] },
+      }) as ReturnType<typeof drizzle> & AsyncTransactionHandle;
+      const firstTransaction = firstHandle[kovoAsyncMutationTransaction];
+      const secondTransaction = secondHandle[kovoAsyncMutationTransaction];
+      expect(firstTransaction).toBeTypeOf('function');
+      expect(secondTransaction).toBeTypeOf('function');
+
+      const order: string[] = [];
+      let markFirstStarted!: () => void;
+      let releaseFirst!: () => void;
+      const firstStarted = new Promise<void>((resolve) => {
+        markFirstStarted = resolve;
+      });
+      const firstGate = new Promise<void>((resolve) => {
+        releaseFirst = resolve;
+      });
+      const first = firstTransaction!(async () => {
+        order.push('first:start');
+        markFirstStarted();
+        await firstGate;
+        order.push('first:end');
+      });
+      await firstStarted;
+      expect(client.inTransaction).toBe(true);
+      const second = secondTransaction!(async () => {
+        order.push('second');
+      });
+      await Promise.resolve();
+      expect(order).toEqual(['first:start']);
+
+      releaseFirst();
+      await Promise.all([first, second]);
+      expect(order).toEqual(['first:start', 'first:end', 'second']);
+      expect(client.inTransaction).toBe(false);
+    } finally {
+      client.close();
+    }
+  });
+
   it('C147 pins Promise resolution so rejected async SQLite handlers always roll back', async () => {
     const client = new Database(':memory:');
     const nativeResolve = Promise.resolve;
