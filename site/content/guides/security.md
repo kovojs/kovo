@@ -97,20 +97,15 @@ export const commerceSession = session(
 
 ## Resolve the session with a provider
 
-Session provenance is an application capability, not a framework-owned identity system. The app
-declares a `sessionProvider` in the request shell; Kovo runs it once per request, before any route,
-query, or mutation guard, and exposes the result as `req.session`. The provider's return type must be
-assignable to the session schema under static checking; browser input still crosses the runtime
-validators:
+The app declares a `sessionProvider` in the request shell. Kovo runs it once per request, before any
+route, query, or mutation guard, and exposes the validated result as `req.session`. The provider's
+return type must be assignable to the session schema under static checking; browser input still
+crosses the runtime validators. The generated Better Auth integration returns a sanitized provider,
+not the raw auth instance:
 
-```ts
-// the provider adapts your auth library to the declared session shape
-export const commerceSessionProvider = commerceSession.provider(
-  betterAuthSession(commerceBetterAuth, ({ session: authSession, user }) => ({
-    id: authSession.id,
-    user: { id: user.id, roles: user.roles },
-  })),
-);
+```text
+// authBindings comes from the framework-owned generated auth/database boundary
+export const commerceSessionProvider = commerceSession.provider(authBindings.sessionProvider);
 
 // wired into the request shell alongside routes, mutations, and the db provider
 createApp({
@@ -172,31 +167,20 @@ unguarded `args.userId`.
 mutation POST. When `req.session` exists, the token is bound to that session. When the user is
 anonymous, it is bound to a framework-owned signed-cookie secret so login, signup, and password-reset
 forms are protected before there is a session. Note the wire field name is
-`kovo-csrf`; the app-side config object carries a `field` (e.g. `'csrf'`) plus the signing `secret`
-and a `sessionId` resolver:
+the configured field (`csrf` in the starter). The generated Better Auth helper consumes boot-pinned
+signing material and owns session/anonymous binding. App source receives no raw secret, generic
+signer, or custom binding callback:
 
 ```ts
-export const commerceCsrf = {
-  field: 'csrf',
-  secret: process.env.BETTER_AUTH_SECRET ?? process.env.KOVO_CSRF_SECRET!,
-  sessionId(request: CommerceRequest) {
-    return request.session?.id;
-  },
-};
+import { betterAuthCsrfFromEnvironment } from '@kovojs/better-auth';
+
+export const commerceCsrf = betterAuthCsrfFromEnvironment({ field: 'csrf' });
 
 export const addToCart = mutation({ csrf: commerceCsrf /* … */ });
 ```
 
-You render the field with `csrfField`, though enhanced forms emit it for you:
-
-```ts
-import { csrfField } from '@kovojs/server';
-
-const csrf = csrfField(request, {
-  ...commerceCsrf,
-  mutation: addToCart,
-}); // → <input type="hidden" name="csrf" value="…">
-```
+Kovo emits the hidden field for mutation forms. Do not copy the returned configuration into a raw
+object or try to recover its signing material.
 
 CSRF stays on for server-rendered mutation endpoints. The only opt-out is `csrf: false` on an
 individual mutation, reserved for non-browser or externally authenticated endpoints. A `csrf: false`

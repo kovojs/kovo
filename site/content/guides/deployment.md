@@ -146,45 +146,12 @@ the `sessionProvider`. `toNodeHandler()` adapts its Web-standard `Request -> Res
 import '@kovojs/server/runtime-bootstrap';
 
 import { createServer } from 'node:http';
-import { createApp, createRequestHandler, toNodeHandler } from '@kovojs/server';
+import { createRequestHandler, toNodeHandler } from '@kovojs/server';
 
-const app = createApp({ routes, mutations, queries });
+import app from './app.js';
+
 const handler = toNodeHandler(createRequestHandler(app));
 createServer(handler).listen(Number(process.env.PORT ?? 3000));
-```
-
-The production entrypoint usually adds database setup, session resolution, CSRF secrets, and early
-hints:
-
-```ts
-// server.ts — production entrypoint
-import '@kovojs/server/runtime-bootstrap';
-
-import { createServer } from 'node:http';
-import { createApp, createRequestHandler, toNodeHandler } from '@kovojs/server';
-
-import { routes, mutations, queries } from './app.js';
-import { connectDb } from './db.js';
-import { sessionProvider } from './session.js';
-
-const db = await connectDb(process.env.DATABASE_URL!);
-
-const app = createApp({
-  db: () => db,
-  routes,
-  mutations,
-  queries,
-  // Runs once before route/query/mutation guards; return null for anonymous.
-  sessionProvider,
-  csrf: {
-    secret: process.env.BETTER_AUTH_SECRET ?? process.env.KOVO_CSRF_SECRET!,
-    sessionId: (request: AppRequest) => request.session?.id,
-  },
-});
-
-const handler = toNodeHandler(createRequestHandler(app), { earlyHints: true });
-const port = Number(process.env.PORT ?? 3000);
-createServer(handler).listen(port, () => console.log(`listening on :${port}`));
 ```
 
 That side-effect import must be the literal first import in a custom entry module. It locks Kovo's
@@ -193,6 +160,10 @@ Kovo-generated deployment entries install the same bootstrap automatically. The 
 boot check detects an omitted bootstrap; it cannot authenticate earlier evaluation in the same
 JavaScript realm. Importing app or package code first and bootstrapping later is unsupported
 privileged-host misuse, not a repair path—restart the process with the documented order.
+
+The generated `app` already carries its database provider, session provider, CSRF configuration,
+routes, queries, and mutations. Keep signing secrets and system database handles inside the
+framework-owned generated boundary instead of rebuilding that configuration in the runner.
 
 The instance pins nothing per-request: `sessionProvider` reads whatever your auth layer stored (a
 signed cookie, a session row), so any instance answers any request and you scale by adding instances.
@@ -219,9 +190,9 @@ instance-specific — the same image runs behind a load balancer unchanged.
 | Variable                           | Owner              | Required when                                                                        |
 | ---------------------------------- | ------------------ | ------------------------------------------------------------------------------------ |
 | `DATABASE_URL`                     | Your `db` provider | The app opens a remote database connection.                                          |
-| `KOVO_CSRF_SECRET`                 | Kovo CSRF          | Always set for deployed mutation forms.                                              |
-| `BETTER_AUTH_SECRET`               | Better Auth        | Set when using Better Auth; the scaffold also accepts it as the CSRF HMAC secret.    |
-| `BETTER_AUTH_URL`                  | Better Auth        | Set when the public origin is not `http://localhost:5173`.                           |
+| `KOVO_CSRF_SECRET`                 | Kovo CSRF          | Strong fallback signing secret; at least 32 characters in generated auth apps.       |
+| `BETTER_AUTH_SECRET`               | Better Auth        | Strong signing secret; at least 32 characters when set.                              |
+| `BETTER_AUTH_URL`                  | Better Auth        | Required in production; a canonical HTTPS origin such as `https://app.example.com`.  |
 | `PORT`                             | Node preset        | Optional; defaults to `3000`.                                                        |
 | `HOST`                             | Node preset        | Optional; defaults to `0.0.0.0` in emitted Node servers.                             |
 | `NODE_ENV`                         | Runtime posture    | Set to `production` for secure-cookie and boot-secret floors.                        |
@@ -229,9 +200,10 @@ instance-specific — the same image runs behind a load balancer unchanged.
 | `VERCEL`, `CLOUDFLARE`, `CF_PAGES` | Host detection     | Read by `kovo build` when no preset is configured.                                   |
 | `KOVO_SQL_GUARD`                   | Raw SQL migration  | Temporary fail-open escape for unmanaged raw SQL sinks; managed sinks still enforce. |
 
-`KOVO_CSRF_SECRET` is the scaffold's local-development name. The generated auth adapter reads
-`BETTER_AUTH_SECRET ?? KOVO_CSRF_SECRET`, so one strong deployment secret can back both Better Auth
-and Kovo's CSRF HMAC, or you can split them by wiring separate values in your app config.
+`KOVO_CSRF_SECRET` is the scaffold's local-development name. The generated auth boundary reads
+`BETTER_AUTH_SECRET ?? KOVO_CSRF_SECRET` after bootstrap and does not return the raw value to app
+source. Do not set `BETTER_AUTH_SECRETS` or `BETTER_AUTH_TRUSTED_ORIGINS`; generated apps reject
+those upstream override variables.
 
 ## Liveness in the technical preview
 

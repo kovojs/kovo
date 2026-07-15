@@ -24,10 +24,13 @@ my-app/
 |   `-- check-sound-subset.mjs
 |-- vite.config.ts          # Vite+ build/test config; kovo dev loads it only with --config
 |-- src/
+|   |-- _kovo/
+|   |   |-- app-runtime-db-options.ts # validated schema and boot/CLI database options
+|   |   `-- app-runtime-db.ts         # framework-owned database and auth boundary
 |   |-- app.tsx             # createApp(), routes, layout, request shell
 |   |-- app.test.ts         # focused app smoke test
-|   |-- auth.ts             # Better Auth + Kovo session/mutation adapters
-|   |-- db.ts               # Drizzle database setup and seed data
+|   |-- auth.ts             # typed session, guard, CSRF, and sanitized auth bindings
+|   |-- db.ts               # app-facing read-only Drizzle value
 |   |-- endpoint-posture.test.ts
 |   |-- mutations.ts        # guarded add-contact mutation
 |   |-- queries.ts          # typed contact query
@@ -76,23 +79,25 @@ and uses the same `layout()` and stylesheet declaration on both pages.
 
 `src/auth.ts` wires Better Auth through `@kovojs/better-auth`:
 
-- `betterAuthSession()` adapts Better Auth's session into `request.session`.
-- `betterAuthSignInEmailMutation()` and `betterAuthSignOutMutation()` create ordinary Kovo
-  mutations for the auth forms.
-- CSRF tokens bind to an anonymous id before login and to the session id after login.
-- `seedDemoUser()` creates `demo@example.com` with the random `KOVO_DEMO_PASSWORD` from the
-  generated, gitignored `.env` file for a fresh `pnpm run dev`.
+- `betterAuthCsrfFromEnvironment({ field: 'csrf' })` returns an opaque CSRF configuration. The
+  signing secret and session-binding callback stay package-owned.
+- `createAppAuthBindings()` returns only a sanitized session provider plus sign-in and sign-out
+  mutations. The raw Better Auth instance and writable system database never enter app source.
+- CSRF tokens bind to a framework-owned anonymous id before login and to the session id after login.
+- Boot-only `seedDemoUser()` creates the `demo@example.com` credential with the random
+  `KOVO_DEMO_PASSWORD`. It creates no session; sign-in still requires the CSRF-protected mutation.
 
 `create-kovo` writes a fresh `KOVO_CSRF_SECRET` and local-only `KOVO_DEMO_PASSWORD` into `.env` and
 refuses to let the app run with the CSRF placeholder. In production, set `BETTER_AUTH_SECRET` or
-`KOVO_CSRF_SECRET` through the platform's secret store and leave `KOVO_DEMO_PASSWORD` unset.
+`KOVO_CSRF_SECRET` through the platform's secret store, set `BETTER_AUTH_URL` to the canonical HTTPS
+origin, and leave `KOVO_DEMO_PASSWORD` unset.
 
 ## Data, queries, and mutations
 
 `src/schema.ts` declares the app table and the Better Auth tables. The contact table is annotated so
-the compiler can connect writes to query refreshes. `src/db.ts` creates the Drizzle database and
-seeds local data. `src/queries.ts` owns the contact read; `src/mutations.ts` owns the guarded
-add-contact write.
+the compiler can connect writes to query refreshes. The generated `_kovo` runtime creates the
+database and performs fixed boot-only seeding; `src/db.ts` exposes its read-only app value.
+`src/queries.ts` owns the contact read; `src/mutations.ts` owns the guarded add-contact write.
 
 When adding product data, keep the same separation:
 

@@ -951,6 +951,7 @@ export const PGlite: any;
 export const assertMutationError: any;
 export const authed: <Request = any>() => any;
 export const betterAuth: any;
+export const betterAuthCsrfFromEnvironment: <Request = any>(options: { field: string }) => any;
 export const betterAuthSession: any;
 export const betterAuthSignInEmailMutation: any;
 export const betterAuthSignOutMutation: any;
@@ -997,6 +998,7 @@ export type SelectTriggerAttributeOptions = any;
 export type StaticExportOptions = any;
 export type StyleInput = any;
 export type CsrfOptions<Request = any> = any;
+export type SigningKeyRing = any;
 
 export class ComponentXmlError extends Error {}
 export const BodyEnd: any;
@@ -1004,6 +1006,7 @@ export const Button: any;
 export const Defer: any;
 export const Document: any;
 export const FontPreload: any;
+export const FormError: any;
 export const Head: any;
 export const InlineScript: any;
 export const Link: any;

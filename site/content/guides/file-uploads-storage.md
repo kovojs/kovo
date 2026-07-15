@@ -112,13 +112,21 @@ adapter in deployed apps.
 To serve the file back, mount a storage download endpoint and mint the URL from request context:
 
 ```ts
-import { createMemoryStorage, createStorageDownloadEndpoint, route } from '@kovojs/server';
+import {
+  createMemoryStorage,
+  createStorageDownloadEndpoint,
+  route,
+  type SigningKeyRing,
+} from '@kovojs/server';
 
 const avatarStorage = createMemoryStorage();
+// Construct this opaque ring in lock-first deployment configuration from a dedicated
+// download-signing secret. Do not reuse a CSRF or auth key.
+declare const downloadSigningKeys: SigningKeyRing;
 
 export const avatarDownloads = createStorageDownloadEndpoint({
   basePath: '/downloads/avatars',
-  secret: process.env.KOVO_CSRF_SECRET!,
+  secret: downloadSigningKeys,
   storage: avatarStorage,
 });
 

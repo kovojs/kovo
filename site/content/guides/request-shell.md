@@ -26,8 +26,11 @@ export default createApp({
 
 Then add the document, session, error, and limit policy around that core:
 
-```ts
+```text
 import { BodyEnd, Document, FontPreload, Head, InlineScript } from '@kovojs/server';
+
+import { appCsrf, appSessionProvider } from './auth.js';
+import { appRuntimeDbProvider } from './_kovo/app-runtime-db.js';
 
 const appDocument = (
   <Document lang="en">
@@ -48,12 +51,9 @@ export default createApp({
   mutations,
   queries,
   endpoints,
-  db: () => db,
-  sessionProvider,
-  csrf: {
-    secret: process.env.BETTER_AUTH_SECRET ?? process.env.KOVO_CSRF_SECRET!,
-    sessionId: (request: AppRequest) => request.session?.id,
-  },
+  db: appRuntimeDbProvider,
+  sessionProvider: appSessionProvider,
+  csrf: appCsrf,
   document: appDocument,
   errorShells: {
     notFound: NotFoundShell,

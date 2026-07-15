@@ -1,221 +1,21 @@
 ---
 title: Better Auth integration
-description: Wire Better Auth into Kovo's starter, keep auth writes isolated, and guard routes and mutations with typed sessions.
+description: Use Kovo's generated Better Auth boundary for sessions, credential mutations, CSRF, and production-safe configuration.
 order: 2.6
 ---
 
 # Better Auth integration
 
-Use this when you want Better Auth to own browser sessions in a Kovo app. The happy path is the
-starter `create-kovo` already ships: Better Auth owns the cookies and auth tables, Kovo owns the
-typed session, CSRF, guards, and route/mutation wiring.
+Use the generated integration when you want email-and-password sessions in a Kovo app. The starter
+keeps Better Auth's secret, raw router, and writable database adapter behind a framework-owned
+module. Your app receives a session provider and two ordinary Kovo mutations: sign in and sign out.
 
-If you already have another session source and only need route guards, start with
+If you already have another session source, start with
 [Security & authorization](/guides/security/) instead.
 
-## Wire the starter
+## Scaffold the integration
 
-`create-kovo` already splits the auth integration into a few small files:
-
-| File                            | Role                                                                                                   |
-| ------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| `src/schema.ts`                 | App tables plus Better Auth's `user` / `session` / `account` / `verification` tables.                  |
-| `src/db.ts`                     | The app-facing read surface: `readonlyAppDb`.                                                          |
-| `src/_kovo/app-runtime-db.ts`   | The framework-owned runtime handles, including Better Auth's writable `appRuntimeAuthDb`.              |
-| `src/auth.ts`                   | Better Auth config, typed Kovo session, CSRF config, auth mutations, and the shared `appAuthed` guard. |
-| `src/components/auth-forms.tsx` | Login form and `FormError` binding for invalid credentials.                                            |
-| `src/app.tsx`                   | `sessionProvider`, guarded routes, Better Auth mounts, and mutation registration in the request shell. |
-
-Start by keeping the auth wiring in one shared `src/auth.ts` module. This is the same shape the
-starter uses, with one addition: `appSignUp`.
-
-The smallest Kovo-facing piece is the session provider:
-
-```ts
-import { betterAuthSession, type BetterAuthLike } from '@kovojs/better-auth';
-
-type Auth = BetterAuthLike<{ id: string }, { id: string; email: string; name?: string | null }>;
-declare const appSession: { provider(value: unknown): unknown };
-declare const auth: Auth;
-
-export const appSessionProvider = appSession.provider(
-  betterAuthSession(auth, ({ session: authSession, user }) => ({
-    id: authSession.id,
-    user: { id: user.id, email: user.email, name: user.name ?? user.email },
-  })),
-);
-```
-
-Here is the full starter-shaped module:
-
-```text
-// Adapted from packages/create-kovo/templates/src/auth.ts.
-import { betterAuth } from 'better-auth';
-import { drizzleAdapter } from 'better-auth/adapters/drizzle';
-import {
-  authed as betterAuthAuthed,
-  betterAuthSession,
-  betterAuthSignInEmailMutation,
-  betterAuthSignOutMutation,
-  betterAuthSignUpEmailMutation,
-  type BetterAuthSessionPayload,
-} from '@kovojs/better-auth';
-import { publicAccess, s, session, type CsrfOptions } from '@kovojs/server';
-
-import { appRuntimeAuthDb } from './_kovo/app-runtime-db.js';
-import { authSchema } from './schema.js';
-
-export interface AppSession {
-  id: string;
-  user: {
-    id: string;
-    email: string;
-    name: string;
-    roles?: readonly ('admin' | 'member')[];
-  };
-}
-
-export interface AppRequest {
-  db: AppDb;
-  headers: Headers;
-  authCsrfId?: string | null;
-  session?: AppSession | null;
-}
-
-interface BetterAuthAppSession {
-  id: string;
-}
-
-interface BetterAuthAppUser {
-  id: string;
-  email: string;
-  name?: string | null;
-  roles?: readonly ('admin' | 'member')[] | null;
-}
-
-function requireAuthSecret(): string {
-  const secret = process.env.BETTER_AUTH_SECRET ?? process.env.KOVO_CSRF_SECRET;
-  if (!secret || secret === 'replace-with-a-deployed-secret') {
-    throw new Error(
-      'Set BETTER_AUTH_SECRET (or KOVO_CSRF_SECRET) to a strong random value.',
-    );
-  }
-  return secret;
-}
-
-export const appCsrf = {
-  field: 'csrf',
-  secret: requireAuthSecret(),
-  sessionId(request: AppRequest) {
-    // Before sign-in Kovo binds CSRF to its own anonymous cookie. After sign-in,
-    // bind to the real session id.
-    return request.session?.id ?? request.authCsrfId ?? undefined;
-  },
-} satisfies CsrfOptions<AppRequest>;
-
-export const appSession = session(
-  s.object({
-    id: s.string(),
-    user: s.object({
-      id: s.string(),
-      email: s.string(),
-      name: s.string(),
-    }),
-  }),
-);
-
-const auth = betterAuth({
-  baseURL: process.env.BETTER_AUTH_URL ?? 'http://localhost:5173',
-  secret: requireAuthSecret(),
-  emailAndPassword: { enabled: true },
-  // Kovo already stamps and verifies CSRF for its mutation forms.
-  advanced: { disableCSRFCheck: true },
-  database: drizzleAdapter(appRuntimeAuthDb, { provider: 'pg', schema: authSchema }),
-});
-export { auth };
-
-function mapBetterAuthSession(
-  value: BetterAuthSessionPayload<BetterAuthAppSession, BetterAuthAppUser>,
-): AppSession {
-  return {
-    id: value.session.id,
-    user: {
-      id: value.user.id,
-      email: value.user.email,
-      name: value.user.name ?? value.user.email,
-      ...(value.user.roles === undefined || value.user.roles === null
-        ? {}
-        : { roles: value.user.roles }),
-    },
-  };
-}
-
-export const appSessionProvider = appSession.provider(
-  betterAuthSession<BetterAuthAppSession, BetterAuthAppUser, AppSession, AppRequest>(
-    auth,
-    mapBetterAuthSession,
-  ),
-);
-
-export const appAuthed = betterAuthAuthed<AppRequest>();
-
-export const appSignIn = betterAuthSignInEmailMutation<'auth/sign-in', AppRequest>(auth, {
-  access: publicAccess('sign-in runs before authentication'),
-  csrf: appCsrf,
-  defaultRedirectTo: '/',
-});
-
-export const appSignUp = betterAuthSignUpEmailMutation<'auth/sign-up', AppRequest>(auth, {
-  access: publicAccess('sign-up runs before authentication'),
-  csrf: appCsrf,
-  defaultRedirectTo: '/',
-});
-
-export const appSignOut = betterAuthSignOutMutation<
-  'auth/sign-out',
-  AppRequest,
-  AppRequest & { session: AppSession }
->(auth, {
-  csrf: appCsrf,
-  defaultRedirectTo: '/login',
-  guard: appAuthed,
-});
-```
-
-Use the shared guard in the request shell, then keep the page-level redirect as the no-JS fallback:
-
-```text
-// Adapted from packages/create-kovo/templates/src/app.tsx.
-import { createApp, redirect, route } from '@kovojs/server';
-import { mount } from '@kovojs/better-auth';
-
-const app = createApp({
-  csrf: appCsrf,
-  db: appRuntimeDbProvider,
-  endpoints: [
-    mount('/api/auth', auth, { method: 'GET' }),
-  ],
-  mutations: [addContact, appSignIn, appSignUp, appSignOut],
-  sessionProvider: appSessionProvider,
-  routes: [
-    route('/', {
-      access: { guards: [{ guard: appAuthed, name: 'appAuthed' }], kind: 'guard-chain' },
-      guard: appAuthed,
-      page(_context, request: AppRequest) {
-        if (!request.session) return redirect('/login', {});
-        return <HomePage request={request} />;
-      },
-    }),
-  ],
-});
-```
-
-That is the default-deny shape to copy: one shared `appAuthed`, declared once on the route or
-mutation, then reused everywhere private.
-
-## Run it
-
-Scaffold the starter, add `appSignUp` if you want first-user registration, then run the app:
+Create an app and run it:
 
 ```sh
 pnpm create kovo my-app
@@ -224,66 +24,144 @@ pnpm install
 pnpm run dev
 ```
 
-Then check the whole loop:
+Open `/`. The guarded route redirects to `/login`. Sign in as `demo@example.com` with the random
+`KOVO_DEMO_PASSWORD` written to the generated, gitignored `.env` file.
 
-1. Open `/`. The guarded route redirects you to `/login`.
-2. Submit the sign-up form, or sign in with `demo@example.com` and the generated `KOVO_DEMO_PASSWORD`
-   from `.env`.
-3. In the Network panel, inspect the `/_m/auth/sign-in` or `/_m/auth/sign-up` response. You should
-   see Better Auth's `Set-Cookie` header and a redirect to `/`.
-4. Follow the redirect back to `/`. The same guarded route now renders because `appAuthed` sees
-   `request.session`.
-
-What is nice here is that the login form and the guarded page are ordinary Kovo surfaces. No custom
-auth middleware is hiding off to the side.
-
-## Add the production shape
-
-### Keep auth writes off the app read handle
-
-The starter does not pass one wide-open database handle everywhere.
-
-```text
-// Adapted from packages/create-kovo/templates/src/db.ts and src/_kovo/app-runtime-db.ts.
-export const readonlyAppDb: AppReadonlyDb = appRuntimeReadonlyDb;
-
-export const appRuntimeAuthDb: AppDb = lazyAppDatabaseValue(() =>
-  getAppDatabase().systemDb({
-    operation: 'write',
-    reason: 'Better Auth adapter manages session tables before an app session exists',
-    surface: 'src/auth.ts',
-  }),
-);
-```
-
-Use `readonlyAppDb` for queries and app-authored reads. Keep `appRuntimeAuthDb` inside `src/auth.ts`
-for the Better Auth adapter. That matches the starter's provenance comments and keeps the auth
-library's pre-session writes out of your app-facing read surface.
-
-### Mount Better Auth's callback handler
-
-Kovo mutations are the right place for browser credential forms. Better Auth's own redirect protocol
-handler belongs on a mounted endpoint instead:
+The app-authored part of `src/auth.ts` is deliberately small:
 
 ```ts
-import { mount, type BetterAuthMountLike } from '@kovojs/better-auth';
-import { createApp } from '@kovojs/server';
+import { authed, betterAuthCsrfFromEnvironment } from '@kovojs/better-auth';
+import { s, session } from '@kovojs/server';
 
-declare const auth: BetterAuthMountLike;
+export const appCsrf = betterAuthCsrfFromEnvironment({ field: 'csrf' });
+export const appSession = session(
+  s.object({ id: s.string(), user: s.object({ id: s.string(), email: s.string() }) }),
+);
+export const appAuthed = authed<AppRequest>();
+```
+
+The same module asks the generated runtime boundary for sanitized bindings:
+
+```text
+import { publicAccess } from '@kovojs/server';
+
+import { appRuntimeDbReady, createAppAuthBindings } from './_kovo/app-runtime-db.js';
+
+const authBindings = createAppAuthBindings({
+  csrf: appCsrf,
+  signInAccess: publicAccess('sign-in runs before authentication'),
+  signOutAccess: [appAuthed],
+});
+
+export const appSessionProvider = appSession.provider(authBindings.sessionProvider);
+export const appSignIn = authBindings.signIn;
+export const appSignOut = authBindings.signOut;
+
+await appRuntimeDbReady;
+await authBindings.seedDemoUser();
+```
+
+Keep the two awaits as boot-only top-level work. Do not export `seedDemoUser`, alias it, or call it
+from a request path. In production it is disabled. In development it creates a credential without
+creating a session; the user still has to submit the CSRF-protected sign-in form.
+
+## Wire the request shell
+
+Register the generated values like any other Kovo session, CSRF configuration, and mutations:
+
+```tsx
+import { createApp, redirect, route } from '@kovojs/server';
+
+declare const appAuthed: any;
+declare const appCsrf: any;
+declare const appRuntimeDbProvider: any;
+declare const appSessionProvider: any;
+declare const appSignIn: any;
+declare const appSignOut: any;
+declare const addContact: any;
+declare function HomePage(props: { userName: string }): string;
 
 const app = createApp({
-  endpoints: [mount('/api/auth', auth, { method: 'GET' })],
+  csrf: appCsrf,
+  db: appRuntimeDbProvider,
+  mutations: [addContact, appSignIn, appSignOut],
+  sessionProvider: appSessionProvider,
+  routes: [
+    route('/', {
+      access: [appAuthed],
+      page(_context, request: AppRequest) {
+        if (!request.session) return redirect('/login', {});
+        return <HomePage userName={request.session.user.name} />;
+      },
+    }),
+  ],
 });
 ```
 
-Use `GET` for the usual OAuth callback flow. If a provider posts back to the mount prefix, declare a
-second mount with `method: 'POST'`. `mount()` always records the path as a CSRF-exempt endpoint
-because the forgery protection there is Better Auth's provider `state`, not Kovo's mutation token.
+The route access decision is the security boundary. The redirect is the no-JavaScript experience
+for an anonymous visitor.
 
-### Add role-based guards after the session guard
+## Keep the generated boundary intact
 
-Start private pages with `appAuthed`. Layer role checks on top when the page is not for every signed-in
-user:
+The starter splits responsibility across these files:
+
+| File                                  | Role                                                                           |
+| ------------------------------------- | ------------------------------------------------------------------------------ |
+| `src/auth.ts`                         | Session schema, guard, opaque CSRF configuration, and sanitized auth bindings. |
+| `src/_kovo/app-runtime-db-options.ts` | Validated schema and seed configuration for boot and `kovo db`.                |
+| `src/_kovo/app-runtime-db.ts`         | Framework-owned database and Better Auth construction boundary.                |
+| `src/db.ts`                           | App-facing read-only database value.                                           |
+| `src/app.tsx`                         | Request shell, guarded routes, and credential mutation registration.           |
+
+Do not replace this with a raw `betterAuth()` call in `src/auth.ts`. Do not export the system
+database, Better Auth instance, signing secret, environment reader, or a generic signing helper.
+The generated boundary consumes an opaque system-database capability and returns only frozen,
+sanitized bindings.
+
+The Postgres and SQLite starters use the same public shape. `create-kovo --sqlite` swaps the
+generated database and schema modules without widening the values available to app source.
+
+## Configure production
+
+Set these values in the deployment secret store:
+
+```dotenv
+NODE_ENV=production
+BETTER_AUTH_URL=https://app.example.com
+BETTER_AUTH_SECRET=<at-least-32-characters-of-random-material>
+```
+
+`BETTER_AUTH_URL` is required in production. It must be a canonical HTTPS origin: no path, query,
+fragment, credentials, or trailing slash. The generated boundary accepts `BETTER_AUTH_SECRET`, or
+falls back to `KOVO_CSRF_SECRET`, and uses the value without exposing it to generated app code.
+
+Do not set `BETTER_AUTH_SECRETS` or `BETTER_AUTH_TRUSTED_ORIGINS`. Kovo rejects those upstream
+override variables because they would create a second authority outside the reviewed constructor.
+The integration also pins secure-cookie posture, disables Better Auth telemetry, and routes password
+hashing and verification through Kovo's pinned Argon2 implementation.
+
+### Start custom runners lock-first
+
+Kovo-generated server entries install the runtime lock automatically. A custom Node entry must make
+the bootstrap its literal first import:
+
+```ts
+import '@kovojs/server/runtime-bootstrap';
+
+import { createServer } from 'node:http';
+import { createRequestHandler, toNodeHandler } from '@kovojs/server';
+import app from './app.js';
+
+createServer(toNodeHandler(createRequestHandler(app))).listen(3000);
+```
+
+The Better Auth Postgres and SQLite constructors refuse to read options or secrets before this lock
+is installed. Importing app or auth code first and bootstrapping later is unsupported; restart the
+process with the correct import order.
+
+## Add a role guard
+
+Start private pages with `appAuthed`. Add a role check when a page is not for every signed-in user:
 
 ```tsx
 import { role } from '@kovojs/better-auth';
@@ -292,83 +170,49 @@ import { route } from '@kovojs/server';
 declare function AdminPage(props: { email: string }): string;
 
 export const adminRoute = route('/admin', {
-  guard: role<AppRequest>('admin'),
+  access: [role<AppRequest>('admin')],
   page(_context, request: AppRequest) {
     return <AdminPage email={request.session?.user.email ?? ''} />;
   },
 });
 ```
 
-`role()` denies anonymous callers as unauthenticated and signed-in non-admins as unauthorized. That
-keeps the redirect-vs-403 split in one guard vocabulary.
+`role()` reports anonymous callers as unauthenticated and signed-in callers without the role as
+unauthorized.
 
-### Keep the sign-out and rolling-session headers
+## Handle invalid credentials
 
-`betterAuthSignOutMutation()` does more than redirect. It forwards Better Auth's clearing
-`Set-Cookie` headers and adds:
+Keep the error in the form. The starter binds `FormError` to the real mutation export:
 
-```http
-Clear-Site-Data: "cookies", "storage", "executionContexts"
+```tsx
+import { FormError } from '@kovojs/core';
+
+<form mutation={appSignIn}>
+  <input type="hidden" name="next" value="/" />
+  <input name="email" type="email" autocomplete="email" required />
+  <input name="password" type="password" autocomplete="current-password" required />
+  <FormError code="INVALID_CREDENTIALS" message="Invalid email or password." />
+  <button type="submit">Sign in</button>
+</form>;
 ```
 
-`betterAuthSession()` also calls `auth.api.getSession({ headers, returnHeaders: true })`. When
-Better Auth refreshes a rolling session or writes its cookie cache on an authenticated GET, Kovo
-forwards those refresh `Set-Cookie` headers through the session provider response channel. Do not
-drop those headers in a custom adapter or proxy layer, or active users will age out at the original
-session boundary.
-
-## Handle failure
-
-Keep invalid credentials in the form itself. The starter already does this with `FormError`:
-
-```text
-// Adapted from packages/create-kovo/templates/src/components/auth-forms.tsx.
-/** @jsxImportSource @kovojs/server */
-import { component, FormError, type ComponentRenderSlots } from '@kovojs/core';
-
-import { appSignIn } from '../auth.js';
-
-type LoginFormSlots = ComponentRenderSlots<{ appSignIn: typeof appSignIn }>;
-
-export const LoginForm = component({
-  mutations: { appSignIn },
-  render: (_queries, _state, _slots: LoginFormSlots) => (
-    <form mutation={appSignIn}>
-      <input type="hidden" name="next" value="/" />
-      <input name="email" type="email" autocomplete="email" required />
-      <input name="password" type="password" autocomplete="current-password" required />
-      <FormError
-        code="INVALID_CREDENTIALS"
-        message="Invalid email or password."
-      />
-      <button type="submit">Sign in</button>
-    </form>
-  ),
-});
-```
-
-That failure code comes straight from `betterAuthSignInEmailMutation()` and
-`betterAuthSignUpEmailMutation()`. Keep the form bound to the real mutation export and Kovo will
-render the same `INVALID_CREDENTIALS` state on the enhanced path and the full-page no-JS path.
+Kovo renders the same failure on enhanced and full-page submissions. Sign-out also forwards Better
+Auth's cookie-clearing headers. Keep both operations behind the generated bindings instead of
+reimplementing their response handling.
 
 ## Next
 
-- [Security & authorization](/guides/security/) - route guards, `role()`, CSRF posture, and the
-  access audits behind this guide.
-- [Project structure](/getting-started/project-structure/) - where the starter keeps `src/auth.ts`,
-  `src/db.ts`, and the generated runtime files.
-- [Endpoints & webhooks](/guides/endpoints-webhooks/) - when a raw `endpoint()` or verifier is the
-  better fit than a typed mutation.
+- [Security & authorization](/guides/security/) - add owner-scoped reads and review access decisions.
+- [Project structure](/getting-started/project-structure/) - see where the generated runtime files live.
+- [Deployment](/guides/deployment/) - set the production origin, secret, and lock-first entrypoint.
 
 <details>
 <summary>Spec & diagnostics</summary>
 
-Typed sessions, auth redirects, and mutation reauth flow: SPEC §6.5. CSRF is default-on for
-mutation forms, including anonymous login/signup, and `csrf: false` is reserved for non-mutation
-surfaces such as Better Auth callback mounts: SPEC §6.6. Mutation header forwarding, endpoint
-mounts, and the request shell live in SPEC §9.1 and §9.5. Default-deny access decisions live in
-SPEC §10.2.
+Typed sessions, anonymous CSRF binding, and credential mutation behavior: SPEC §6.6. Capability
+ownership and the no-raw-secret/no-system-database boundary: SPEC §10.3 C9. Default-deny access
+decisions: SPEC §10.2. Custom runner bootstrap order: SPEC §9.5.
 
-API reference: [@kovojs/better-auth](/api/better-auth/), [@kovojs/core](/api/core/), [@kovojs/server](/api/server/).
+API reference: [@kovojs/better-auth](/api/better-auth/), [@kovojs/server](/api/server/).
 
 </details>
