@@ -182,12 +182,13 @@ export function typeAliasResolvesToFrameworkExport(
   // are intentionally not framework identity, so recover provenance only from an exact import (or
   // exact relative re-export chain) in the authored module and require that import to alias the
   // same compiler symbol as this type. An unused genuine import cannot bless a local lookalike.
-  const targetKeys = new Set(
-    symbols.flatMap((symbol) => {
-      if (!symbol) return [];
-      return [symbolKey(safeAliasedSymbol(symbol) ?? symbol)];
-    }),
+  const targetSymbols = symbols.flatMap((symbol) =>
+    symbol ? [safeAliasedSymbol(symbol) ?? symbol] : [],
   );
+  // This function is reached for every type considered by project analysis. Reject unrelated
+  // aliases before walking imports so exact Reader provenance stays linear in actual Reader uses.
+  if (!targetSymbols.some((symbol) => symbol.getName() === expected.exportName)) return false;
+  const targetKeys = new Set(targetSymbols.map(symbolKey));
   for (const declaration of location.getSourceFile().getImportDeclarations()) {
     for (const named of declaration.getNamedImports()) {
       const localSymbol =
