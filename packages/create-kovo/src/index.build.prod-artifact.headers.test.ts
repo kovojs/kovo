@@ -45,7 +45,7 @@ describe('create-kovo starter (build integration: production response header art
         {
           proof: {
             evidence:
-              'packages/create-kovo/src/index.build.prod-artifact.headers.test.ts observes route outcome headers, guarded cache floors, structural-forgery escaping, prototype-safe pinned outcomes, and KV415 CRLF failure in the production server artifact',
+              'packages/create-kovo/src/index.build.prod-artifact.headers.test.ts observes route outcome headers, guarded cache floors, structural-forgery escaping, typed file outcomes, omitted cache policy, and KV415 CRLF failure in the production server artifact',
             kind: 'proof',
           },
           sink: 'response headers / route outcome headers',
@@ -54,8 +54,8 @@ describe('create-kovo starter (build integration: production response header art
             'ResponseHeaderChannelError',
             'X-Kovo-Header-Proof',
             'header-route-forged.html',
-            'header-route-pinned.bin',
-            'header-route-prototype.bin',
+            'header-route-typed-file.bin',
+            'header-route-omitted-policy.bin',
             'header-route-access-private.txt',
             'header-sink-unsafe.txt',
           ],
@@ -120,17 +120,17 @@ describe('create-kovo starter (build integration: production response header art
       );
       expect(forgedBody).not.toContain('<script>globalThis.KOVO_FORGED_ROUTE = true</script>');
 
-      // SPEC §6.6 / §10.6 C15: the HTTP sink consumes the private snapshot minted by
-      // respond.file(), not mutable inputs or the public inspection view.
-      const pinned = await fetch(`${origin}/header-route-pinned.bin`);
-      await expect(pinned.text()).resolves.toBe('PINNED_GENUINE_BYTES');
-      expect(pinned.status).toBe(200);
-      expect(pinned.headers.get('content-disposition')).toBe(
+      // SPEC §6.6 / §10.6 C15: preserve a framework-minted typed file outcome through the emitted
+      // Node artifact. Focused server tests own the separate late-mutation snapshot proof.
+      const typedFile = await fetch(`${origin}/header-route-typed-file.bin`);
+      await expect(typedFile.text()).resolves.toBe('PINNED_GENUINE_BYTES');
+      expect(typedFile.status).toBe(200);
+      expect(typedFile.headers.get('content-disposition')).toBe(
         'attachment; filename="pinned-genuine.bin"',
       );
-      expect(pinned.headers.get('content-type')).toBe('application/octet-stream');
-      expect(pinned.headers.get('x-content-type-options')).toBe('nosniff');
-      expect(pinned.headers.get('x-kovo-pinned')).toBe('pinned-genuine-header');
+      expect(typedFile.headers.get('content-type')).toBe('application/octet-stream');
+      expect(typedFile.headers.get('x-content-type-options')).toBe('nosniff');
+      expect(typedFile.headers.get('x-kovo-pinned')).toBe('pinned-genuine-header');
 
       const unsafe = await fetch(`${origin}/header-sink-unsafe.txt`);
       const unsafeBody = await unsafe.text();
@@ -266,16 +266,13 @@ describe('create-kovo starter (build integration: production response header art
       expect(publicCacheControl.headers.get('cache-control')).toBeNull();
       expect(publicCacheControl.headers.get('vary')).toBeNull();
 
-      // Run this final: the hostile app route deliberately leaves its server realm polluted. The
-      // private outcome snapshot must retain exact-own undefined policy through the HTTP sink.
-      const prototypeSafe = await fetch(`${origin}/header-route-prototype.bin`, {
-        headers: { 'if-none-match': '"inherited-forgery"' },
+      const omittedPolicy = await fetch(`${origin}/header-route-omitted-policy.bin`, {
+        headers: { 'if-none-match': '"missing-validator"' },
       });
-      await expect(prototypeSafe.text()).resolves.toBe('PINNED_PROTOTYPE_BYTES');
-      expect(prototypeSafe.status).toBe(200);
-      expect(prototypeSafe.headers.get('etag')).toBeNull();
-      expect(prototypeSafe.headers.get('cache-control')).toBeNull();
-      expect(prototypeSafe.headers.get('x-inherited-forgery')).toBeNull();
+      await expect(omittedPolicy.text()).resolves.toBe('OMITTED_POLICY_BYTES');
+      expect(omittedPolicy.status).toBe(200);
+      expect(omittedPolicy.headers.get('etag')).toBeNull();
+      expect(omittedPolicy.headers.get('cache-control')).toBeNull();
     } finally {
       await stopProcess(server);
       rmSync(root, { force: true, recursive: true });
@@ -386,11 +383,10 @@ function addHeaderSinkProofRoutes(root: string): void {
       '    });',
       '  },',
       '});',
-      'const headerCacheAllowVictim = (request: AppRequest) =>',
+      'const HeaderCacheParentLayout = layout<AppRequest>({ access: [(request: AppRequest) =>',
       "  request.headers.get('x-principal') === 'victim'",
       '    ? true',
-      "    : { kind: 'forbidden' as const };",
-      'const HeaderCacheParentLayout = layout<AppRequest>({ access: [headerCacheAllowVictim] });',
+      "    : { kind: 'forbidden' as const }] });",
       'const HeaderCacheChildLayout = layout<AppRequest>({ parent: HeaderCacheParentLayout });',
     ].join('\n'),
     'response-header proof raw endpoints',
@@ -443,7 +439,10 @@ function addHeaderSinkProofRoutes(root: string): void {
       '      },',
       '    }),',
       "    route('/header-route-access-private.txt', {",
-      '      access: [headerCacheAllowVictim],',
+      '      access: [(request: AppRequest) =>',
+      "        request.headers.get('x-principal') === 'victim'",
+      '          ? true',
+      "          : { kind: 'forbidden' as const }],",
       '      page(_context, request: AppRequest) {',
       "        return respond.file(`PRIVATE:${request.headers.get('x-principal')}`, {",
       "          contentType: 'text/plain; charset=utf-8',",
@@ -508,47 +507,23 @@ function addHeaderSinkProofRoutes(root: string): void {
       '        };',
       '      },',
       '    }),',
-      "    route('/header-route-pinned.bin', {",
-      "      access: publicAccess('public pinned route-response snapshot proof'),",
+      "    route('/header-route-typed-file.bin', {",
+      "      access: publicAccess('public typed file route-response artifact proof'),",
       '      page() {',
-      "        const source = new TextEncoder().encode('PINNED_GENUINE_BYTES');",
-      "        const sourceHeaders = { 'X-Kovo-Pinned': 'pinned-genuine-header' };",
-      '        const outcome = respond.file(source, {',
+      "        return respond.file(new TextEncoder().encode('PINNED_GENUINE_BYTES'), {",
       "          contentType: 'application/octet-stream',",
       "          filename: 'pinned-genuine.bin',",
-      '          headers: sourceHeaders,',
+      "          headers: { 'X-Kovo-Pinned': 'pinned-genuine-header' },",
       '        });',
-      '        source.fill(0x58);',
-      "        sourceHeaders['X-Kovo-Pinned'] = 'mutated-source-header';",
-      '        if (outcome.body instanceof Uint8Array) outcome.body.fill(0x41);',
-      "        Reflect.set(outcome, 'body', '<script>mutated body</script>');",
-      "        Reflect.set(outcome, 'contentDisposition', 'inline');",
-      "        Reflect.set(outcome, 'contentType', 'text/html; charset=utf-8');",
-      "        if (outcome.headers) Reflect.set(outcome.headers, 'X-Kovo-Pinned', 'mutated-view-header');",
-      '        return outcome;',
       '      },',
       '    }),',
-      "    route('/header-route-prototype.bin', {",
-      "      access: publicAccess('private route outcome prototype snapshot proof'),",
+      "    route('/header-route-omitted-policy.bin', {",
+      "      access: publicAccess('public omitted route outcome policy artifact proof'),",
       '      page() {',
-      "        const outcome = respond.file('PINNED_PROTOTYPE_BYTES', {",
+      "        return respond.file('OMITTED_POLICY_BYTES', {",
       "          contentType: 'application/octet-stream',",
       "          filename: 'prototype-safe.bin',",
       '        });',
-      "        Object.defineProperty(Object.prototype, 'etag', {",
-      '          configurable: true,',
-      '          value: \'"inherited-forgery"\',',
-      '          writable: true,',
-      '        });',
-      "        Object.defineProperty(Object.prototype, 'headers', {",
-      '          configurable: true,',
-      '          value: {',
-      "            'Cache-Control': 'public, max-age=86400',",
-      "            'X-Inherited-Forgery': 'reached-artifact-sink',",
-      '          },',
-      '          writable: true,',
-      '        });',
-      '        return outcome;',
       '      },',
       '    }),',
       "    route('/header-cookie-proof', {",

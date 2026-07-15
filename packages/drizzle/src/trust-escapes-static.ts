@@ -934,7 +934,7 @@ const REQUEST_NODE_PROCESS_INERT_EXPORTS = new Set([
 ]);
 const REQUEST_NO_INERT_EXPORTS = new Set<string>();
 
-type RequestRootParameterRole = 'capability' | 'hybrid' | 'input' | 'request';
+type RequestRootParameterRole = 'capability' | 'hybrid' | 'input' | 'request' | 'stream-controller';
 
 type RequestWireCarrier =
   | 'context'
@@ -994,6 +994,7 @@ const REQUEST_HANDLER_FACTORIES = [
         roles: ['input', 'capability'],
       },
       {
+        carriers: [{ carrier: 'context', index: 0 }],
         kind: 'record',
         property: 'errorShells',
         publicWire: true,
@@ -4155,6 +4156,12 @@ function requestExactQueryKeyBindingIsPristine(
     !!(
       (requestExactPristineDirectImport(call.getExpression(), '@kovojs/core', 'component') &&
         requestExactImportedCarrierIsPristine(call.getExpression(), '@kovojs/core', 'component')) ||
+      (requestExactPristineDirectImport(call.getExpression(), '@kovojs/server', 'mutation') &&
+        requestExactImportedCarrierIsPristine(
+          call.getExpression(),
+          '@kovojs/server',
+          'mutation',
+        )) ||
       (requestExactPristineDirectImport(call.getExpression(), '@kovojs/server', 'createApp') &&
         requestExactImportedCarrierIsPristine(call.getExpression(), '@kovojs/server', 'createApp'))
     );
@@ -4906,8 +4913,15 @@ function requestCallIsExactMutationTaskSchedule(
   ) {
     return false;
   }
-  const [taskDeclaration, input, ...extra] = call.getArguments();
-  if (!taskDeclaration || !input || extra.length !== 0) return false;
+  const [taskDeclaration, input, options, ...extra] = call.getArguments();
+  if (
+    !taskDeclaration ||
+    !input ||
+    extra.length !== 0 ||
+    (options !== undefined && !requestExactMutationTaskScheduleOptionsArePlain(options, session))
+  ) {
+    return false;
+  }
 
   const direct = requestEnclosingCallable(call);
   if (!direct || !nodeBelongsToRequestCallable(call, direct)) return false;
@@ -4926,6 +4940,343 @@ function requestCallIsExactMutationTaskSchedule(
   }
 
   return requestExpressionIsExactLocalTaskDeclaration(taskDeclaration, session);
+}
+
+/**
+ * SPEC §9.6: scheduling options are a finite data record, not an extensible callback bag. Keep
+ * this grammar narrower than the task input grammar so a new option cannot silently become an
+ * app-authored hook or accessor. The values still use the same schema-derived plain-data proof.
+ */
+function requestExactMutationTaskScheduleOptionsArePlain(
+  expression: Node,
+  session: RequestProvenanceSession,
+): boolean {
+  const options = unwrapStaticExpression(expression);
+  if (!Node.isObjectLiteralExpression(options)) return false;
+  const direct = requestEnclosingCallable(options);
+  if (!direct || !nodeBelongsToRequestCallable(options, direct)) return false;
+  const roots = requestCallableDeclaredRootContexts(direct, session).filter(
+    (root) => root.rootFactory === 'mutation' && root.rootCallback === 'handler',
+  );
+  if (roots.length !== 1) return false;
+
+  const seenNames = new Set<string>();
+  for (const property of options.getProperties()) {
+    if (!Node.isPropertyAssignment(property) && !Node.isShorthandPropertyAssignment(property)) {
+      return false;
+    }
+    const name = requestObjectLiteralElementNameNode(property);
+    const member = name && !Node.isComputedPropertyName(name) ? staticMemberName(name) : undefined;
+    if (
+      !member ||
+      !['afterMs', 'at', 'coalesce', 'key'].includes(member) ||
+      seenNames.has(member)
+    ) {
+      return false;
+    }
+    seenNames.add(member);
+    const value = Node.isPropertyAssignment(property)
+      ? property.getInitializer()
+      : property.getNameNode();
+    if (
+      !value ||
+      !roots.every((root) =>
+        requestExactMutationTaskScheduleInputIsPlain(value, root, session, new Set()),
+      )
+    ) {
+      return false;
+    }
+    if (
+      member === 'coalesce' &&
+      !['debounce', 'throttle'].includes(requestStaticStringExpressionValue(value) ?? '')
+    ) {
+      return false;
+    }
+  }
+  return !(seenNames.has('afterMs') && seenNames.has('at'));
+}
+
+/**
+ * SPEC §9.6: cancellation consumes only the opaque handle minted by an exact schedule call in
+ * the same mutation handler. This intentionally rejects aliases of the request capability, forged
+ * handle records, mutable bindings, and handles imported from another module.
+ */
+function requestCallIsExactMutationTaskCancel(
+  call: import('ts-morph').CallExpression,
+  session: RequestProvenanceSession,
+): boolean {
+  const callee = unwrapStaticExpression(call.getExpression());
+  if (
+    !Node.isPropertyAccessExpression(callee) ||
+    callee.getQuestionDotTokenNode() ||
+    call.getQuestionDotTokenNode() ||
+    callee.getName() !== 'cancel'
+  ) {
+    return false;
+  }
+  const [handle, ...extra] = call.getArguments();
+  if (!handle || extra.length !== 0) return false;
+
+  const direct = requestEnclosingCallable(call);
+  if (!direct || !nodeBelongsToRequestCallable(call, direct)) return false;
+  const roots = requestCallableDeclaredRootContexts(direct, session).filter(
+    (root) => root.rootFactory === 'mutation' && root.rootCallback === 'handler',
+  );
+  if (
+    roots.length !== 1 ||
+    !roots.every(
+      (root) => requestDirectRootRequestParameterKey(callee.getExpression(), root) !== undefined,
+    )
+  ) {
+    return false;
+  }
+
+  const identifier = unwrapStaticExpression(handle);
+  if (!Node.isIdentifier(identifier)) return false;
+  const symbol = requestIdentifierValueSymbol(identifier) ?? identifier.getSymbol();
+  if (!symbol || requestAssignedBindingProjections(symbol, session).length !== 0) return false;
+  const declarations = symbol.getDeclarations().filter(Node.isVariableDeclaration);
+  const [declaration] = declarations;
+  if (
+    declarations.length !== 1 ||
+    !declaration ||
+    !nodeBelongsToRequestCallable(declaration, direct) ||
+    declaration.getVariableStatement()?.getDeclarationKind() !== VariableDeclarationKind.Const
+  ) {
+    return false;
+  }
+  const initializer = declaration.getInitializer();
+  const initial = initializer ? unwrapStaticExpression(initializer) : undefined;
+  const scheduled =
+    initial && Node.isAwaitExpression(initial)
+      ? unwrapStaticExpression(initial.getExpression())
+      : initial;
+  return !!(
+    scheduled &&
+    Node.isCallExpression(scheduled) &&
+    requestCallIsExactMutationTaskSchedule(scheduled, session)
+  );
+}
+
+function requestExpressionIsExactLocalFrameworkDeclaration(
+  expression: Node,
+  factory: 'mutation' | 'query',
+  session: RequestProvenanceSession,
+): boolean {
+  const node = unwrapStaticExpression(expression);
+  if (!Node.isIdentifier(node)) return false;
+  const symbol = requestIdentifierValueSymbol(node) ?? node.getSymbol();
+  if (!symbol || requestAssignedBindingProjections(symbol, session).length !== 0) return false;
+  const declarations = symbol.getDeclarations().filter(Node.isVariableDeclaration);
+  const [declaration] = declarations;
+  if (
+    declarations.length !== 1 ||
+    !declaration ||
+    declaration.getVariableStatement()?.getDeclarationKind() !== VariableDeclarationKind.Const ||
+    declaration.getVariableStatement()?.getParent() !== declaration.getSourceFile()
+  ) {
+    return false;
+  }
+  const initializer = declaration.getInitializer();
+  const declarationCall = initializer ? unwrapStaticExpression(initializer) : undefined;
+  if (
+    !declarationCall ||
+    !Node.isCallExpression(declarationCall) ||
+    !requestExactPristineDirectImport(declarationCall.getExpression(), '@kovojs/server', factory) ||
+    !requestExactImportedCarrierIsPristine(
+      declarationCall.getExpression(),
+      '@kovojs/server',
+      factory,
+    )
+  ) {
+    return false;
+  }
+  const [definition, ...extra] = declarationCall.getArguments();
+  return !!(
+    definition &&
+    Node.isObjectLiteralExpression(unwrapStaticExpression(definition)) &&
+    extra.length === 0 &&
+    requestHandlerFactoryInvocationsForCall(declarationCall, session).some(
+      (invocation) => invocation.factory.exportName === factory,
+    ) &&
+    requestRetainedConfigOpaqueDerivation(definition, session) === undefined
+  );
+}
+
+function requestTaskRootForExactCapabilityCall(
+  call: import('ts-morph').CallExpression,
+  session: RequestProvenanceSession,
+): RequestCallable | undefined {
+  const direct = requestEnclosingCallable(call);
+  if (!direct || !nodeBelongsToRequestCallable(call, direct)) return undefined;
+  const roots = requestCallableDeclaredRootContexts(direct, session).filter(
+    (root) => root.rootFactory === 'task' && root.rootCallback === 'run',
+  );
+  return roots.length === 1 ? roots[0] : undefined;
+}
+
+function requestExpressionIsExactTaskContextReceiver(
+  expression: Node,
+  root: RequestCallable,
+  session: RequestProvenanceSession,
+): boolean {
+  const receiver = unwrapStaticExpression(expression);
+  if (requestExpressionIsDirectRootParameterWithRole(receiver, root, 'capability')) {
+    return requestRootCapabilityMethodIsPristine(receiver, root, session);
+  }
+  if (!Node.isCallExpression(receiver)) return false;
+  const posture = unwrapStaticExpression(receiver.getExpression());
+  if (
+    !Node.isPropertyAccessExpression(posture) ||
+    posture.getQuestionDotTokenNode() ||
+    receiver.getQuestionDotTokenNode() ||
+    !['actAs', 'declareSystemRead', 'declareSystemWrite'].includes(posture.getName()) ||
+    receiver.getArguments().length !== 1
+  ) {
+    return false;
+  }
+  const context = posture.getExpression();
+  return !!(
+    requestExpressionIsDirectRootParameterWithRole(context, root, 'capability') &&
+    requestRootCapabilityMethodIsPristine(context, root, session) &&
+    requestExactMutationTaskScheduleInputIsPlain(
+      receiver.getArguments()[0]!,
+      root,
+      session,
+      new Set(),
+    )
+  );
+}
+
+function requestExpressionIsDirectRootParameterWithRole(
+  expression: Node,
+  callable: RequestCallable,
+  role: RequestRootParameterRole,
+): boolean {
+  const node = unwrapStaticExpression(expression);
+  if (!Node.isIdentifier(node)) return false;
+  const symbol = node.getSymbol();
+  if (!symbol || requestAssignedBindingProjections(symbol).length > 0) return false;
+  return requestCallableParameters(callable.declaration).some((parameter, index) => {
+    const name = parameter.getNameNode();
+    return !!(
+      Node.isIdentifier(name) &&
+      name.getSymbol() === symbol &&
+      !parameter.getInitializer() &&
+      !parameter.getDotDotDotToken() &&
+      callable.rootParameterRoles?.[index] === role
+    );
+  });
+}
+
+/** SPEC §9.6 / §10.3: task composition stays on exact framework declarations and posture. */
+function requestCallIsExactTaskComposition(
+  call: import('ts-morph').CallExpression,
+  session: RequestProvenanceSession,
+): boolean {
+  const callee = unwrapStaticExpression(call.getExpression());
+  if (
+    !Node.isPropertyAccessExpression(callee) ||
+    callee.getQuestionDotTokenNode() ||
+    call.getQuestionDotTokenNode() ||
+    !['runMutation', 'runQuery'].includes(callee.getName())
+  ) {
+    return false;
+  }
+  const [definition, input, ...extra] = call.getArguments();
+  if (!definition || !input || extra.length !== 0) return false;
+  const root = requestTaskRootForExactCapabilityCall(call, session);
+  if (
+    !root ||
+    !requestExpressionIsExactTaskContextReceiver(callee.getExpression(), root, session)
+  ) {
+    return false;
+  }
+  const factory = callee.getName() === 'runMutation' ? 'mutation' : 'query';
+  return !!(
+    requestExpressionIsExactLocalFrameworkDeclaration(definition, factory, session) &&
+    requestExactMutationTaskScheduleInputIsPlain(input, root, session, new Set())
+  );
+}
+
+/** SPEC §9.6: a task can schedule only an exact task from its direct framework context. */
+function requestCallIsExactTaskSchedule(
+  call: import('ts-morph').CallExpression,
+  session: RequestProvenanceSession,
+): boolean {
+  const callee = unwrapStaticExpression(call.getExpression());
+  if (
+    !Node.isPropertyAccessExpression(callee) ||
+    callee.getQuestionDotTokenNode() ||
+    call.getQuestionDotTokenNode() ||
+    callee.getName() !== 'schedule'
+  ) {
+    return false;
+  }
+  const [taskDeclaration, input, options, ...extra] = call.getArguments();
+  if (!taskDeclaration || !input || extra.length !== 0) return false;
+  const root = requestTaskRootForExactCapabilityCall(call, session);
+  return !!(
+    root &&
+    requestExpressionIsExactTaskContextReceiver(callee.getExpression(), root, session) &&
+    requestExpressionIsExactLocalTaskDeclaration(taskDeclaration, session) &&
+    requestExactMutationTaskScheduleInputIsPlain(input, root, session, new Set()) &&
+    (options === undefined || requestExactTaskScheduleOptionsArePlain(options, root, session))
+  );
+}
+
+function requestCallUsesSensitiveTaskCapabilityShape(
+  call: import('ts-morph').CallExpression,
+  session: RequestProvenanceSession,
+): boolean {
+  const callee = unwrapStaticExpression(call.getExpression());
+  const member = requestStaticCallMember(callee);
+  const receiver = requestCallReceiver(callee);
+  const root = requestTaskRootForExactCapabilityCall(call, session);
+  return !!(
+    root &&
+    receiver &&
+    member &&
+    ['runMutation', 'runQuery', 'schedule'].includes(member) &&
+    requestExpressionRootParameterRole(receiver, root, new Set(), 0) === 'capability'
+  );
+}
+
+function requestExactTaskScheduleOptionsArePlain(
+  expression: Node,
+  root: RequestCallable,
+  session: RequestProvenanceSession,
+): boolean {
+  const options = unwrapStaticExpression(expression);
+  if (!Node.isObjectLiteralExpression(options)) return false;
+  const seenNames = new Set<string>();
+  for (const property of options.getProperties()) {
+    if (!Node.isPropertyAssignment(property) && !Node.isShorthandPropertyAssignment(property)) {
+      return false;
+    }
+    const name = requestObjectLiteralElementNameNode(property);
+    const member = name && !Node.isComputedPropertyName(name) ? staticMemberName(name) : undefined;
+    if (
+      !member ||
+      !['afterMs', 'at', 'coalesce', 'key'].includes(member) ||
+      seenNames.has(member)
+    ) {
+      return false;
+    }
+    seenNames.add(member);
+    const value = Node.isPropertyAssignment(property)
+      ? property.getInitializer()
+      : property.getNameNode();
+    if (
+      !value ||
+      !requestExactMutationTaskScheduleInputIsPlain(value, root, session, new Set()) ||
+      (member === 'coalesce' &&
+        !['debounce', 'throttle'].includes(requestStaticStringExpressionValue(value) ?? ''))
+    ) {
+      return false;
+    }
+  }
+  return !(seenNames.has('afterMs') && seenNames.has('at'));
 }
 
 function requestExpressionIsExactLocalTaskDeclaration(
@@ -5090,6 +5441,7 @@ function requestRetainedConfigCallIsReviewed(
   call: import('ts-morph').CallExpression,
   session: RequestProvenanceSession,
 ): boolean {
+  if (requestCallIsExactAuthoredBetterAuthSessionProviderDelegation(call, session)) return true;
   if (requestCallIsExactBootOnlyGeneratedSetup(call, session)) return true;
   if (requestCallIsExactMemoryClientModuleRegistryConstructor(call, session)) return true;
   if (requestCallIsExactClosedMemoryClientModuleRegistryPut(call, session)) return true;
@@ -5110,7 +5462,14 @@ function requestRetainedConfigCallIsReviewed(
   if (requestCallIsExactReviewedRawRead(call, session)) return true;
   if (requestCallIsExactDeclaredSecretReadDeclaration(call)) return true;
   if (requestCallIsExactDeclaredSecretReadExecution(call, session)) return true;
-  if (requestCallIsExactMutationTaskSchedule(call, session)) return true;
+  if (requestCallIsExactMutationDomainInvalidate(call, session)) return true;
+  if (
+    requestCallIsExactMutationTaskSchedule(call, session) ||
+    requestCallIsExactMutationTaskCancel(call, session) ||
+    requestCallIsExactTaskComposition(call, session) ||
+    requestCallIsExactTaskSchedule(call, session)
+  )
+    return true;
   if (
     requestExpressionIsDirectImportedExport(call.getExpression(), '@kovojs/style', 'defineTheme')
   ) {
@@ -5174,7 +5533,8 @@ function requestRetainedConfigReturnDoesNotCarryTarget(
   seen.add(key);
   if (
     Node.isCallExpression(node) &&
-    (requestCallIsReviewedDrizzleDbReadChainInDeclaredRoot(node, session) ||
+    (requestCallIsExactAuthoredBetterAuthSessionProviderDelegation(node, session) ||
+      requestCallIsReviewedDrizzleDbReadChainInDeclaredRoot(node, session) ||
       requestCallIsExactReviewedDrizzleRelationalReadInDeclaredRoot(node, session) ||
       requestCallIsExactReviewedRawRead(node, session) ||
       requestCallIsExactDeclaredSecretReadExecution(node, session))
@@ -6197,6 +6557,65 @@ function requestExpressionMayBeExactBetterAuthBindingMember(expression: Node): b
   );
 }
 
+function requestCallIsExactBetterAuthBindingInvocation(
+  call: import('ts-morph').CallExpression,
+  callable: RequestCallable,
+  member: 'sessionProvider' | 'signIn' | 'signOut',
+): boolean {
+  const callee = unwrapStaticExpression(call.getExpression());
+  const [request, ...extra] = call.getArguments();
+  return !!(
+    request &&
+    extra.length === 0 &&
+    requestExpressionResolvesToExactBetterAuthBindingMember(callee, member, new Set()) &&
+    requestExpressionRootParameterRole(request, callable, new Set(), 0) === 'request'
+  );
+}
+
+/**
+ * SPEC §8.7: an authored session provider may fall through to the framework-generated Better Auth
+ * binding. Keep this as an exact delegation edge: the callback must be the direct argument of the
+ * reviewed `session(...).provider(...)` declaration and it may pass only that callback's request
+ * parameter to the pristine generated binding.
+ */
+function requestCallIsExactAuthoredBetterAuthSessionProviderDelegation(
+  call: import('ts-morph').CallExpression,
+  session: RequestProvenanceSession,
+): boolean {
+  const direct = requestEnclosingCallable(call);
+  if (!direct) return false;
+
+  let callbackExpression = direct.declaration;
+  while (
+    Node.isParenthesizedExpression(callbackExpression.getParent()) ||
+    Node.isAsExpression(callbackExpression.getParent()) ||
+    Node.isSatisfiesExpression(callbackExpression.getParent())
+  ) {
+    callbackExpression = callbackExpression.getParent()!;
+  }
+  const providerCall = callbackExpression.getParent();
+  if (
+    !Node.isCallExpression(providerCall) ||
+    providerCall.getArguments()[0] !== callbackExpression ||
+    !requestCallIsExactBetterAuthSessionProvider(providerCall, session)
+  ) {
+    return false;
+  }
+
+  return requestCallIsExactBetterAuthBindingInvocation(
+    call,
+    {
+      ...direct,
+      publicWirePaths: [['setCookies']],
+      rootCallback: 'sessionProvider',
+      rootCarriers: [{ carrier: 'request', index: 0 }],
+      rootFactory: 'createApp',
+      rootParameterRoles: ['request'],
+    },
+    'sessionProvider',
+  );
+}
+
 function requestExpressionMayBeExactManagedRuntimeMember(expression: Node): boolean {
   const node = unwrapStaticExpression(expression);
   if (Node.isPropertyAccessExpression(node) || Node.isElementAccessExpression(node)) {
@@ -6289,12 +6708,42 @@ function requestCallIsExactBetterAuthSessionProvider(
   if (!Node.isPropertyAccessExpression(callee) || callee.getName() !== 'provider') return false;
   const receiver = callee.getExpression();
   const [provider, ...extra] = call.getArguments();
+  const authoredProvider = provider ? requestCallableForFunctionNode(provider) : undefined;
   return !!(
     provider &&
     extra.length === 0 &&
     requestExpressionResolvesToExactSessionDescriptor(receiver, session, new Set()) &&
     requestExactBetterAuthEnvironmentBindingsArePristine(receiver) &&
-    requestExpressionResolvesToExactBetterAuthBindingMember(provider, 'sessionProvider', new Set())
+    (requestExpressionResolvesToExactBetterAuthBindingMember(
+      provider,
+      'sessionProvider',
+      new Set(),
+    ) ||
+      (authoredProvider &&
+        requestCallableParameters(authoredProvider.declaration).length === 1 &&
+        Node.isIdentifier(
+          requestCallableParameters(authoredProvider.declaration)[0]!.getNameNode(),
+        )))
+  );
+}
+
+function scanRequestExactBetterAuthSessionProvider(
+  call: import('ts-morph').CallExpression,
+  context: RequestProcessScanContext,
+): void {
+  const provider = call.getArguments()[0];
+  const authoredProvider = provider ? requestCallableForFunctionNode(provider) : undefined;
+  if (!authoredProvider) return;
+  scanRequestCallable(
+    {
+      ...authoredProvider,
+      publicWirePaths: [['setCookies']],
+      rootCallback: 'sessionProvider',
+      rootCarriers: [{ carrier: 'request', index: 0 }],
+      rootFactory: 'createApp',
+      rootParameterRoles: ['request'],
+    },
+    context,
   );
 }
 
@@ -6334,6 +6783,36 @@ function requestExpressionResolvesToExactBetterAuthSessionProvider(
       requestExpressionResolvesToExactBetterAuthSessionProvider(value, session, new Set(seen)),
     )
   );
+}
+
+function requestAuthoredBetterAuthSessionProviderCallbacks(
+  expression: Node,
+  session: RequestProvenanceSession,
+  seen: Set<string>,
+): RequestCallable[] {
+  const node = unwrapStaticExpression(expression);
+  const key = `authored-session-provider:${requestNodeIdentity(node)}`;
+  if (seen.has(key)) return [];
+  seen.add(key);
+  if (Node.isCallExpression(node)) {
+    if (!requestCallIsExactBetterAuthSessionProvider(node, session)) return [];
+    const provider = node.getArguments()[0];
+    const callable = provider ? requestCallableForFunctionNode(provider) : undefined;
+    return callable ? [callable] : [];
+  }
+  if (!Node.isIdentifier(node)) return [];
+  const symbol = requestIdentifierValueSymbol(node) ?? node.getSymbol();
+  if (!symbol) return [];
+  const symbolKey = requestSymbolKey(symbol);
+  if (seen.has(symbolKey)) return [];
+  seen.add(symbolKey);
+  return symbol
+    .getDeclarations()
+    .map(valueDeclarationInitializer)
+    .filter((initializer): initializer is Node => initializer !== undefined)
+    .flatMap((initializer) =>
+      requestAuthoredBetterAuthSessionProviderCallbacks(initializer, session, new Set(seen)),
+    );
 }
 
 function requestCallIsExactBetterAuthSeed(call: import('ts-morph').CallExpression): boolean {
@@ -9626,6 +10105,23 @@ function scanRequestRootCallbackCandidate(
       new Set(),
     )
   ) {
+    for (const callable of requestAuthoredBetterAuthSessionProviderCallbacks(
+      expression,
+      context.provenance,
+      new Set(),
+    )) {
+      scanRequestCallable(
+        {
+          ...callable,
+          ...(spec.publicWirePaths ? { publicWirePaths: spec.publicWirePaths } : {}),
+          rootCallback: callback,
+          ...(spec.carriers ? { rootCarriers: spec.carriers } : {}),
+          rootFactory: factory,
+          ...(spec.roles ? { rootParameterRoles: spec.roles } : {}),
+        },
+        context,
+      );
+    }
     return;
   }
   const direct = requestCallableForFunctionNode(expression);
@@ -10131,6 +10627,14 @@ function requestCallIsExactRespondMethod(call: import('ts-morph').CallExpression
     REQUEST_REVIEWED_RESPOND_METHODS.has(member) &&
     requestExpressionIsDirectImportedExport(receiver, '@kovojs/server', 'respond') &&
     requestExactImportedCarrierIsPristine(receiver, '@kovojs/server', 'respond')
+  );
+}
+
+function requestCallIsExactNotFound(call: import('ts-morph').CallExpression): boolean {
+  return !!(
+    call.getArguments().length === 0 &&
+    requestExactPristineDirectImport(call.getExpression(), '@kovojs/server', 'notFound') &&
+    requestExactImportedCarrierIsPristine(call.getExpression(), '@kovojs/server', 'notFound')
   );
 }
 
@@ -11323,7 +11827,11 @@ function requestCallIsReviewedRouteOutcome(
   call: import('ts-morph').CallExpression,
   callable: RequestCallable,
 ): boolean {
-  if (!requestCallIsExactRespondMethod(call) && !requestCallIsExactClosedRedirect(call)) {
+  if (
+    !requestCallIsExactRespondMethod(call) &&
+    !requestCallIsExactClosedRedirect(call) &&
+    !requestCallIsExactNotFound(call)
+  ) {
     return false;
   }
   return (
@@ -11551,7 +12059,10 @@ function scanRequestCallable(callable: RequestCallable, context: RequestProcessS
         staticReceiver &&
         callbackArgumentIndexes &&
         callbackArgumentIndexes.length > 0 &&
-        requestExpressionIsReviewedDbRowArray(staticReceiver, callable, context, new Set())
+        (requestExpressionIsReviewedDbRowArray(staticReceiver, callable, context, new Set()) ||
+          requestRootRoleIncludesInput(
+            requestExpressionRootParameterRole(staticReceiver, callable, new Set(), 0),
+          ))
           ? new Set(callbackArgumentIndexes)
           : undefined;
       for (const [index, argument] of call.getArguments().entries()) {
@@ -11577,7 +12088,7 @@ function scanRequestCallable(callable: RequestCallable, context: RequestProcessS
       continue;
     }
 
-    const timerAuthority = requestStringTimerAuthorityForCall(call);
+    const timerAuthority = requestStringTimerAuthorityForCall(call, callable, context.provenance);
     if (timerAuthority) {
       const [source] = call.getArguments();
       appendRequestAuthorityFact(context, call, timerAuthority, source);
@@ -11840,7 +12351,7 @@ function scanRequestCallable(callable: RequestCallable, context: RequestProcessS
       appendRequestAuthorityFact(context, reference, rawAuthority, reference);
       continue;
     }
-    const timerAuthority = requestEscapedTimerAuthorityForExpression(reference);
+    const timerAuthority = requestEscapedTimerAuthorityForExpression(reference, context.provenance);
     if (timerAuthority) {
       appendRequestAuthorityFact(context, reference, timerAuthority, reference);
       continue;
@@ -14061,7 +14572,14 @@ function requestGlobalBindingIsClassifierLocked(name: string): boolean {
     REQUEST_SAFE_GLOBAL_CALLABLES.has(name) ||
     REQUEST_SAFE_GLOBAL_NAMESPACES.has(name) ||
     REQUEST_SAFE_GLOBAL_CONSTRUCTORS.has(name) ||
-    ['queueMicrotask', 'setInterval', 'setTimeout', 'fetch', 'globalThis'].includes(name) ||
+    [
+      'ReadableStream',
+      'queueMicrotask',
+      'setInterval',
+      'setTimeout',
+      'fetch',
+      'globalThis',
+    ].includes(name) ||
     // Captured security intrinsics are rejected even on hosts where they are not generic request
     // helpers. This keeps verifier/codec identity substitutions visible to KV424.
     ['SubtleCrypto', 'atob', 'btoa'].includes(name)
@@ -14095,6 +14613,13 @@ function scanRequestPropertyAccessProtocols(
   const member = Node.isPropertyAccessExpression(access)
     ? access.getName()
     : staticMemberName(access.getArgumentExpression());
+  if (
+    !write &&
+    (requestPropertyAccessIsExactRequestPrimitive(access, callable) ||
+      requestPropertyAccessIsExactUrlSearchParams(access, callable, context.provenance))
+  ) {
+    return;
+  }
   if (
     !write &&
     (requestPropertyAccessIsExactReviewedSchemaTable(access) ||
@@ -14832,6 +15357,12 @@ function requestExpressionIsProtocolSafe(
   ) {
     return true;
   }
+  // SPEC §5.2: authored TSX is compiler input, not an app-minted thenable/protocol object. JSX
+  // component identities and prop callbacks are still reviewed independently by
+  // scanRequestJsxComponents(), and public-wire authority is owned by the JSX wire pass.
+  if (Node.isJsxElement(node) || Node.isJsxSelfClosingElement(node) || Node.isJsxFragment(node)) {
+    return true;
+  }
   if (
     Node.isTemplateExpression(node) ||
     Node.isPrefixUnaryExpression(node) ||
@@ -14877,6 +15408,12 @@ function requestExpressionIsProtocolSafe(
   }
   if (Node.isPropertyAccessExpression(node) || Node.isElementAccessExpression(node)) {
     if (requestExpressionIsReviewedFrozenStyleValue(node)) return true;
+    if (
+      requestPropertyAccessIsExactRequestPrimitive(node, callable) ||
+      requestPropertyAccessIsExactUrlSearchParams(node, callable, session)
+    ) {
+      return true;
+    }
     if (expressionResolvesToGlobalNamespace(node.getExpression(), 'Symbol', new Set(), 0)) {
       return true;
     }
@@ -14886,22 +15423,41 @@ function requestExpressionIsProtocolSafe(
   }
   if (Node.isNewExpression(node)) {
     const callee = unwrapStaticExpression(node.getExpression());
+    if (
+      Node.isIdentifier(callee) &&
+      callee.getText() === 'ReadableStream' &&
+      requestExactReadableStreamSourceCallbacks(node, session) !== undefined
+    ) {
+      return true;
+    }
     return !!(
       Node.isIdentifier(callee) &&
-      ['Array', 'Promise'].includes(callee.getText()) &&
-      unshadowedGlobalIdentifier(callee, callee.getText())
+      REQUEST_SAFE_GLOBAL_CONSTRUCTORS.has(callee.getText()) &&
+      unshadowedGlobalIdentifier(callee, callee.getText()) &&
+      !requestGlobalIntrinsicBindingIsMutated(callee.getText(), node.getSourceFile())
     );
   }
   if (Node.isCallExpression(node)) {
     const callee = unwrapStaticExpression(node.getExpression());
     if (callee.getKind() === SyntaxKind.ImportKeyword) return true;
+    if (requestCallIsExactAuthoredBetterAuthSessionProviderDelegation(node, session)) return true;
+    if (requestCallIsExactReadableStreamControllerMethod(node, callable)) return true;
     if (requestCallIsExactKovoTrustedSql(node) || requestCallIsExactKovoSqlRawInput(node)) {
       return true;
     }
     if (requestCallIsExactReviewedRawRead(node, session)) return true;
     if (requestCallIsExactDeclaredSecretReadDeclaration(node)) return true;
     if (requestCallIsExactDeclaredSecretReadExecution(node, session)) return true;
-    if (requestCallIsExactMutationTaskSchedule(node, session)) return true;
+    if (requestCallIsExactMutationDomainInvalidate(node, session)) return true;
+    if (requestCallUsesMutationDomainInvalidateShape(node)) return false;
+    if (
+      requestCallIsExactMutationTaskSchedule(node, session) ||
+      requestCallIsExactMutationTaskCancel(node, session) ||
+      requestCallIsExactTaskComposition(node, session) ||
+      requestCallIsExactTaskSchedule(node, session)
+    )
+      return true;
+    if (requestCallUsesSensitiveTaskCapabilityShape(node, session)) return false;
     if (requestCallIsExactTrustedOutput(node)) return true;
     if (requestCallIsExactSecretOutput(node)) return true;
     const revealed = requestExactTrustedRevealOutput(node);
@@ -14928,7 +15484,11 @@ function requestExpressionIsProtocolSafe(
         return true;
       }
     }
-    if (requestCallIsExactFrameworkNativePromise(node) || requestCallIsExactRespondMethod(node)) {
+    if (
+      requestCallIsExactFrameworkNativePromise(node) ||
+      requestCallIsExactRespondMethod(node) ||
+      requestCallIsExactNotFound(node)
+    ) {
       return true;
     }
     if (requestCallIsPublicStyleCreate(node)) return true;
@@ -14960,6 +15520,25 @@ function requestExpressionIsProtocolSafe(
       return true;
     }
     if (receiver && member) {
+      if (
+        member === 'encode' &&
+        node.getArguments().length <= 1 &&
+        requestExpressionIsExactTextEncoder(receiver, callable, session, new Set())
+      ) {
+        return true;
+      }
+      if (
+        ['get', 'has'].includes(member) &&
+        requestExpressionIsExactUrlSearchParams(receiver, callable, session)
+      ) {
+        return true;
+      }
+      if (
+        ['get', 'set'].includes(member) &&
+        requestExpressionIsClosedModuleLocalMap(receiver, callable, session)
+      ) {
+        return true;
+      }
       if (member === 'join' && Node.isArrayLiteralExpression(unwrapStaticExpression(receiver))) {
         return true;
       }
@@ -15007,6 +15586,13 @@ function requestExpressionIsProtocolSafe(
     }
     if (receiver) {
       const role = requestExpressionRootParameterRole(receiver, callable, new Set(), 0);
+      if (
+        role === 'stream-controller' &&
+        member &&
+        ['close', 'enqueue', 'error'].includes(member)
+      ) {
+        return true;
+      }
       if (
         requestRootRoleIncludesCapability(role) ||
         requestRootRoleIncludesInput(role) ||
@@ -15258,6 +15844,31 @@ function scanRequestJsxComponents(
       scanRequestGetterConsumer(spread, element, callable, context, 'jsx-spread-getters');
     }
     if (requestJsxTagIsIntrinsic(tag)) continue;
+    if (requestJsxTagIsExactDefer(tag)) {
+      const attributes = requestExactDeferAttributes(element, context.provenance);
+      if (!attributes) {
+        appendRequestProtocolFact(context, element, 'jsx-component', tag);
+        continue;
+      }
+      for (const [name, value] of attributes) {
+        scanRequestProxyUse(value, element, context);
+        scanRequestCallableValuesInExpression(value, context, name === 'render');
+        if (
+          name !== 'render' &&
+          !requestExpressionIsProtocolSafe(value, callable, new Set(), context.provenance)
+        ) {
+          for (const accessor of requestAccessorCallablesForExpression(
+            value,
+            undefined,
+            new Set(),
+            context.provenance,
+          )) {
+            scanRequestCallable(accessor, context);
+          }
+        }
+      }
+      continue;
+    }
     if (requestJsxTagIsReviewedPublicComponent(tag)) {
       for (const value of requestJsxValueExpressions(element)) {
         scanRequestProxyUse(value, element, context);
@@ -15416,6 +16027,46 @@ function requestJsxTagIsIntrinsic(tag: Node): boolean {
   if (!Node.isIdentifier(tag)) return false;
   const text = tag.getText();
   return text.includes('-') || /^[a-z]/.test(text);
+}
+
+/** SPEC §10.6: `<Defer>` is an exact framework-owned streaming primitive, not an authored call. */
+function requestJsxTagIsExactDefer(tag: Node): boolean {
+  return !!(
+    requestExactPristineDirectImport(tag, '@kovojs/server', 'Defer') &&
+    requestExactImportedCarrierIsPristine(tag, '@kovojs/server', 'Defer')
+  );
+}
+
+function requestExactDeferAttributes(
+  element: import('ts-morph').JsxElement | import('ts-morph').JsxSelfClosingElement,
+  session: RequestProvenanceSession,
+): ReadonlyMap<string, Node> | undefined {
+  if (!Node.isJsxSelfClosingElement(element)) return undefined;
+  const values = new Map<string, Node>();
+  for (const attribute of element.getAttributes()) {
+    if (!Node.isJsxAttribute(attribute)) return undefined;
+    const name = staticMemberName(attribute.getNameNode());
+    if (!name || !['fallback', 'priority', 'render', 'target'].includes(name) || values.has(name)) {
+      return undefined;
+    }
+    const initializer = attribute.getInitializer();
+    if (!initializer) return undefined;
+    if (Node.isStringLiteral(initializer)) {
+      if (name === 'fallback' || name === 'render') return undefined;
+      values.set(name, initializer);
+      continue;
+    }
+    if (!Node.isJsxExpression(initializer) || !initializer.getExpression()) return undefined;
+    values.set(name, initializer.getExpression()!);
+  }
+  if (![...['fallback', 'render', 'target']].every((name) => values.has(name))) {
+    return undefined;
+  }
+  const render = values.get('render')!;
+  const resolution = resolveRequestCallable(render, new Set(), 0, session);
+  return resolution.callables.length === 1 && resolution.opaqueModule === undefined
+    ? values
+    : undefined;
 }
 
 /** SPEC §13.1: these exact public components are framework-owned render primitives. */
@@ -15701,7 +16352,7 @@ function requestWireAuthoritiesForExpressionUncached(
     if (revealed) return requestWireAuthoritiesForExpression(revealed, state, routeOutcomePosition);
     if (
       requestCallIsExactFrameworkNativePromise(node) ||
-      (requestCallIsExactRespondMethod(node) &&
+      ((requestCallIsExactRespondMethod(node) || requestCallIsExactNotFound(node)) &&
         (!routeOutcomePosition || !requestCallIsReviewedRouteOutcome(node, state.rootCallable)))
     ) {
       return dedupeRequestWireAuthorities([
@@ -15976,8 +16627,16 @@ function requestWireCallbackOutputAuthorities(
   const receiver = requestCallReceiver(callee);
   const member = requestStaticCallMember(callee);
   const indexes: number[] = [];
+  const inputCallable = receiver
+    ? [state.scopeCallable, state.rootCallable].find((candidate) =>
+        requestRootRoleIncludesInput(
+          requestExpressionRootParameterRole(receiver, candidate, new Set(), 0),
+        ),
+      )
+    : undefined;
   const callbackParametersAreInput = !!(
-    receiver && requestWireExpressionIsExactNativeArray(receiver, state, new Set())
+    receiver &&
+    (requestWireExpressionIsExactNativeArray(receiver, state, new Set()) || inputCallable)
   );
 
   if (
@@ -16111,11 +16770,7 @@ function requestWireResultValueArguments(
       requestExpressionRootParameterRole(receiverNode, candidate, new Set(), 0),
     ),
   );
-  const exactInputJsonArrayMethod = !!(
-    invocation &&
-    inputCallable &&
-    requestInputJsonReceiverIsPristine(receiverNode, invocation, inputCallable)
-  );
+  const exactInputJsonArrayMethod = !!(invocation && inputCallable);
   if (
     (requestWireExpressionIsExactNativeArray(receiverNode, state, new Set()) ||
       exactInputJsonArrayMethod) &&
@@ -16247,7 +16902,14 @@ function requestExpressionIsExactNativePromise(
       return requestExpressionIsExactNativePromise(revealed, new Set(seen), session);
     }
     if (requestCallIsExactDeclaredSecretReadExecution(node, session)) return true;
-    if (requestCallIsExactMutationTaskSchedule(node, session)) return true;
+    if (requestCallIsExactAuthoredBetterAuthSessionProviderDelegation(node, session)) return true;
+    if (
+      requestCallIsExactMutationTaskSchedule(node, session) ||
+      requestCallIsExactMutationTaskCancel(node, session) ||
+      requestCallIsExactTaskComposition(node, session) ||
+      requestCallIsExactTaskSchedule(node, session)
+    )
+      return true;
     if (requestCallIsExactReviewedDrizzleRelationalReadInDeclaredRoot(node, session)) return true;
     const callee = unwrapStaticExpression(node.getExpression());
     const local = resolveRequestCallable(callee, new Set(), 0, session);
@@ -16630,6 +17292,9 @@ function requestWireAuthoritiesForJsxElement(
       ...requestWireAuthoritiesForJsxChildren(children, state),
     ]);
   }
+  if (requestJsxTagIsExactDefer(tag)) {
+    return requestWireAuthoritiesForExactDefer(element, state);
+  }
   if (requestJsxTagIsReviewedPublicComponent(tag)) {
     return requestWireAuthoritiesForReviewedFormError(element, state);
   }
@@ -16651,6 +17316,39 @@ function requestWireAuthoritiesForJsxElement(
     for (const output of requestWireOutputExpressions(callable)) {
       authorities.push(...requestWireAuthoritiesForExpression(output, nestedState));
     }
+  }
+  return dedupeRequestWireAuthorities(authorities);
+}
+
+function requestWireAuthoritiesForExactDefer(
+  element: import('ts-morph').JsxElement | import('ts-morph').JsxSelfClosingElement,
+  state: RequestWireAnalysisState,
+): RequestWireAuthority[] {
+  const attributes = requestExactDeferAttributes(element, state.session);
+  if (!attributes) return [requestOpaqueWireAuthority(element, 'jsx-component')];
+  const authorities: RequestWireAuthority[] = [];
+  for (const [name, value] of attributes) {
+    if (name === 'render') {
+      const resolution = resolveRequestCallable(value, new Set(), 0, state.session);
+      if (resolution.callables.length !== 1 || resolution.opaqueModule !== undefined) {
+        authorities.push(requestOpaqueWireAuthority(value, 'defer-render'));
+        continue;
+      }
+      for (const callable of resolution.callables) {
+        const nestedState: RequestWireAnalysisState = {
+          bindingKey: state.bindingKey,
+          bindings: state.bindings,
+          rootCallable: state.rootCallable,
+          scopeCallable: callable,
+          session: state.session,
+        };
+        for (const output of requestWireOutputExpressions(callable)) {
+          authorities.push(...requestWireAuthoritiesForExpression(output, nestedState));
+        }
+      }
+      continue;
+    }
+    authorities.push(...requestWireAuthoritiesForExpression(value, state));
   }
   return dedupeRequestWireAuthorities(authorities);
 }
@@ -18729,6 +19427,15 @@ const REQUEST_REVIEWED_LOCAL_ARRAY_METHODS = new Set([
   'unshift',
 ]);
 
+const REQUEST_REVIEWED_LOCAL_ARRAY_RESULT_METHODS = new Set([
+  'concat',
+  'filter',
+  'flatMap',
+  'map',
+  'sort',
+  'toSorted',
+]);
+
 const REQUEST_CALLBACK_ARGUMENTS = new Map<string, readonly number[]>([
   ['catch', [0]],
   ['every', [0]],
@@ -18764,6 +19471,14 @@ function requestCallIsKnownSafe(
   const receiver = requestCallReceiver(callee);
 
   if (requestCallIsPromiseSettlement(call, callable, context)) return true;
+  if (requestCallIsExactAuthoredBetterAuthSessionProviderDelegation(call, context.provenance)) {
+    scanRequestFunctionArguments(call, context);
+    return true;
+  }
+  if (requestCallIsExactReadableStreamControllerMethod(call, callable)) {
+    scanRequestFunctionArguments(call, context);
+    return true;
+  }
 
   if (callable.moduleInitializer && requestCallIsExactBetterAuthCsrfFromEnvironment(call)) {
     scanRequestExactBetterAuthCsrfFromEnvironment(call, context);
@@ -18783,6 +19498,13 @@ function requestCallIsKnownSafe(
   }
   if (callable.moduleInitializer && requestCallIsExactSessionDescriptor(call, context.provenance)) {
     scanRequestExactSessionDescriptor(call, context);
+    return true;
+  }
+  if (
+    callable.moduleInitializer &&
+    requestCallIsExactBetterAuthSessionProvider(call, context.provenance)
+  ) {
+    scanRequestExactBetterAuthSessionProvider(call, context);
     return true;
   }
   if (callable.moduleInitializer && requestCallIsExactSqliteRuntimeConstructor(call)) {
@@ -18807,10 +19529,18 @@ function requestCallIsKnownSafe(
     return true;
   }
 
-  if (requestCallIsExactMutationTaskSchedule(call, context.provenance)) {
+  if (
+    requestCallIsExactMutationTaskSchedule(call, context.provenance) ||
+    requestCallIsExactMutationTaskCancel(call, context.provenance) ||
+    requestCallIsExactMutationDomainInvalidate(call, context.provenance) ||
+    requestCallIsExactTaskComposition(call, context.provenance) ||
+    requestCallIsExactTaskSchedule(call, context.provenance)
+  ) {
     scanRequestFunctionArguments(call, context);
     return true;
   }
+  if (requestCallUsesMutationDomainInvalidateShape(call)) return false;
+  if (requestCallUsesSensitiveTaskCapabilityShape(call, context.provenance)) return false;
 
   if (
     requestCallIsExactDeclaredSecretReadDeclaration(call) ||
@@ -18871,6 +19601,10 @@ function requestCallIsKnownSafe(
     scanRequestFunctionArguments(call, context);
     return true;
   }
+  if (requestCallIsExactNotFound(call)) {
+    if (!requestRespondOutcomeCallIsWholeFunctionReturn(call, callable)) return false;
+    return true;
+  }
   if (requestCallIsExactRespondMethod(call)) {
     if (!requestRespondOutcomeCallIsWholeFunctionReturn(call, callable)) return false;
     scanRequestFunctionArguments(call, context);
@@ -18912,6 +19646,14 @@ function requestCallIsKnownSafe(
   }
 
   if (receiver && member) {
+    if (
+      member === 'encode' &&
+      call.getArguments().length <= 1 &&
+      requestExpressionIsExactTextEncoder(receiver, callable, context.provenance, new Set())
+    ) {
+      scanRequestFunctionArguments(call, context);
+      return true;
+    }
     const localContainer = requestLocalIntrinsicContainerKind(
       receiver,
       callable,
@@ -18924,10 +19666,20 @@ function requestCallIsKnownSafe(
         : localContainer === 'map'
           ? new Set(['get', 'set'])
           : localContainer === 'url-search-params'
-            ? new Set(['append', 'toString'])
+            ? new Set(['append', 'get', 'has', 'toString'])
             : undefined;
     if (reviewedMethods?.has(member)) {
+      // An exact input-role array crossed Kovo's plain-data boundary. Its own method cannot carry
+      // executable input state; authored assignments, reflective writes, prototype poisoning, and
+      // helper escapes are scanned independently and remain permanent adversarial regressions.
+      const exactInputArray = !!(
+        localContainer === 'array' &&
+        requestRootRoleIncludesInput(
+          requestExpressionRootParameterRole(receiver, callable, new Set(), 0),
+        )
+      );
       if (
+        !exactInputArray &&
         !requestLocalIntrinsicContainerIsPristine(
           receiver,
           call,
@@ -18957,7 +19709,12 @@ function requestCallIsKnownSafe(
         if (member === 'toLocaleString') {
           scanRequestIterableValueProtocols(receiver, 'locale-string', call, callable, context);
         }
-        if (requestExpressionIsReviewedDbRowArray(receiver, callable, context, new Set())) {
+        if (
+          requestExpressionIsReviewedDbRowArray(receiver, callable, context, new Set()) ||
+          requestRootRoleIncludesInput(
+            requestExpressionRootParameterRole(receiver, callable, new Set(), 0),
+          )
+        ) {
           return requestReviewedDbRowCallbacksAreClosed(call, member, context);
         }
         scanRequestFunctionArguments(call, context);
@@ -18983,7 +19740,7 @@ function requestCallIsKnownSafe(
   for (const callbackGlobal of ['queueMicrotask', 'setInterval', 'setTimeout'] as const) {
     if (!expressionResolvesToGlobalCallable(callee, callbackGlobal, new Set(), 0, false)) continue;
     scanRequestFunctionArguments(call, context);
-    return requestKnownCallbacksAreClosed(call, callbackGlobal, context);
+    return requestKnownCallbacksAreClosed(call, callbackGlobal, context, callable);
   }
 
   if (!receiver || !member) return false;
@@ -19054,6 +19811,15 @@ function requestCallIsKnownSafe(
   }
 
   const role = requestExpressionRootParameterRole(receiver, callable, new Set(), 0);
+  if (
+    role === 'stream-controller' &&
+    ['close', 'enqueue', 'error'].includes(member) &&
+    ((member === 'close' && call.getArguments().length === 0) ||
+      (member !== 'close' && call.getArguments().length === 1))
+  ) {
+    scanRequestFunctionArguments(call, context);
+    return true;
+  }
   if (requestRootRoleIncludesCapability(role)) {
     if (!requestRootCapabilityMethodIsPristine(receiver, callable, context.provenance))
       return false;
@@ -19874,6 +20640,248 @@ function requestInputJsonReceiverIsPristine(
   return hasInputRole(receiver);
 }
 
+function requestPropertyAccessIsExactRequestPrimitive(
+  access: import('ts-morph').PropertyAccessExpression | import('ts-morph').ElementAccessExpression,
+  callable: RequestCallable,
+): boolean {
+  const member = Node.isPropertyAccessExpression(access)
+    ? access.getName()
+    : staticMemberName(access.getArgumentExpression());
+  const receiver = access.getExpression();
+  return !!(
+    member &&
+    ['method', 'url'].includes(member) &&
+    requestExpressionRootParameterRole(receiver, callable, new Set(), 0) === 'request' &&
+    !requestGlobalIntrinsicBindingIsMutated('Request', access.getSourceFile())
+  );
+}
+
+function requestExpressionIsExactUrlInstance(
+  expression: Node,
+  callable: RequestCallable,
+  session: RequestProvenanceSession,
+  seen: Set<string>,
+): boolean {
+  const node = unwrapStaticExpression(expression);
+  const key = `url-instance:${requestNodeIdentity(node)}`;
+  if (seen.has(key)) return false;
+  seen.add(key);
+  if (Node.isNewExpression(node)) {
+    const callee = unwrapStaticExpression(node.getExpression());
+    return !!(
+      Node.isIdentifier(callee) &&
+      callee.getText() === 'URL' &&
+      unshadowedGlobalIdentifier(callee, 'URL') &&
+      !requestGlobalIntrinsicBindingIsMutated('URL', node.getSourceFile()) &&
+      node.getArguments().length >= 1 &&
+      node.getArguments().length <= 2 &&
+      node
+        .getArguments()
+        .every((argument) =>
+          requestExpressionIsProtocolSafe(argument, callable, new Set(seen), session),
+        )
+    );
+  }
+  if (!Node.isIdentifier(node)) return false;
+  const symbol = requestIdentifierValueSymbol(node) ?? node.getSymbol();
+  if (!symbol || requestAssignedBindingProjections(symbol, session).length !== 0) return false;
+  const symbolKey = requestSymbolKey(symbol);
+  if (seen.has(symbolKey)) return false;
+  seen.add(symbolKey);
+  const declarations = symbol.getDeclarations();
+  return !!(
+    declarations.length > 0 &&
+    declarations.every((declaration) => {
+      if (
+        !Node.isVariableDeclaration(declaration) ||
+        !nodeBelongsToRequestCallable(declaration, callable) ||
+        declaration.getVariableStatement()?.getDeclarationKind() !== VariableDeclarationKind.Const
+      ) {
+        return false;
+      }
+      const initializer = declaration.getInitializer();
+      return !!(
+        initializer &&
+        requestExpressionIsExactUrlInstance(initializer, callable, session, new Set(seen))
+      );
+    })
+  );
+}
+
+function requestExpressionIsExactTextEncoder(
+  expression: Node,
+  callable: RequestCallable,
+  session: RequestProvenanceSession,
+  seen: Set<string>,
+): boolean {
+  const node = unwrapStaticExpression(expression);
+  const key = `text-encoder:${requestNodeIdentity(node)}`;
+  if (seen.has(key)) return false;
+  seen.add(key);
+  if (Node.isNewExpression(node)) {
+    const callee = unwrapStaticExpression(node.getExpression());
+    return !!(
+      node.getArguments().length === 0 &&
+      Node.isIdentifier(callee) &&
+      callee.getText() === 'TextEncoder' &&
+      unshadowedGlobalIdentifier(callee, 'TextEncoder') &&
+      !requestGlobalIntrinsicBindingIsMutated('TextEncoder', node.getSourceFile())
+    );
+  }
+  if (!Node.isIdentifier(node)) return false;
+  const symbol = requestIdentifierValueSymbol(node) ?? node.getSymbol();
+  if (!symbol || requestAssignedBindingProjections(symbol, session).length !== 0) return false;
+  const symbolKey = requestSymbolKey(symbol);
+  if (seen.has(symbolKey)) return false;
+  seen.add(symbolKey);
+  const declarations = symbol.getDeclarations();
+  return !!(
+    declarations.length > 0 &&
+    declarations.every((declaration) => {
+      if (
+        !Node.isVariableDeclaration(declaration) ||
+        !nodeBelongsToRequestCallable(declaration, callable) ||
+        declaration.getVariableStatement()?.getDeclarationKind() !== VariableDeclarationKind.Const
+      ) {
+        return false;
+      }
+      const initializer = declaration.getInitializer();
+      return !!(
+        initializer &&
+        requestExpressionIsExactTextEncoder(initializer, callable, session, new Set(seen))
+      );
+    })
+  );
+}
+
+function requestPropertyAccessIsExactUrlSearchParams(
+  access: import('ts-morph').PropertyAccessExpression | import('ts-morph').ElementAccessExpression,
+  callable: RequestCallable,
+  session: RequestProvenanceSession,
+): boolean {
+  const member = Node.isPropertyAccessExpression(access)
+    ? access.getName()
+    : staticMemberName(access.getArgumentExpression());
+  return !!(
+    member === 'searchParams' &&
+    requestExpressionIsExactUrlInstance(access.getExpression(), callable, session, new Set())
+  );
+}
+
+function requestExpressionIsExactUrlSearchParams(
+  expression: Node,
+  callable: RequestCallable,
+  session: RequestProvenanceSession,
+  seen: Set<string> = new Set(),
+): boolean {
+  const node = unwrapStaticExpression(expression);
+  const nodeKey = `url-search-params:${requestNodeIdentity(node)}`;
+  if (seen.has(nodeKey)) return false;
+  seen.add(nodeKey);
+  if (Node.isPropertyAccessExpression(node) || Node.isElementAccessExpression(node)) {
+    return requestPropertyAccessIsExactUrlSearchParams(node, callable, session);
+  }
+  if (Node.isNewExpression(node)) {
+    const callee = unwrapStaticExpression(node.getExpression());
+    return !!(
+      Node.isIdentifier(callee) &&
+      callee.getText() === 'URLSearchParams' &&
+      unshadowedGlobalIdentifier(callee, 'URLSearchParams') &&
+      !requestGlobalIntrinsicBindingIsMutated('URLSearchParams', node.getSourceFile()) &&
+      node.getArguments().length <= 1 &&
+      node
+        .getArguments()
+        .every((argument) =>
+          requestExpressionIsProtocolSafe(argument, callable, new Set(seen), session),
+        )
+    );
+  }
+  if (!Node.isIdentifier(node)) return false;
+  const symbol = requestIdentifierValueSymbol(node) ?? node.getSymbol();
+  if (!symbol || requestAssignedBindingProjections(symbol, session).length !== 0) return false;
+  const declarations = symbol.getDeclarations();
+  return !!(
+    declarations.length > 0 &&
+    declarations.every((declaration) => {
+      if (
+        !Node.isVariableDeclaration(declaration) ||
+        !nodeBelongsToRequestCallable(declaration, callable) ||
+        declaration.getVariableStatement()?.getDeclarationKind() !== VariableDeclarationKind.Const
+      ) {
+        return false;
+      }
+      const initializer = declaration.getInitializer();
+      return !!(
+        initializer &&
+        requestExpressionIsExactUrlSearchParams(initializer, callable, session, new Set(seen))
+      );
+    })
+  );
+}
+
+function requestExpressionIsClosedModuleLocalMap(
+  expression: Node,
+  _callable: RequestCallable,
+  session: RequestProvenanceSession,
+): boolean {
+  const node = unwrapStaticExpression(expression);
+  if (!Node.isIdentifier(node)) return false;
+  const symbol = requestIdentifierValueSymbol(node) ?? node.getSymbol();
+  if (!symbol || requestAssignedBindingProjections(symbol, session).length !== 0) return false;
+  const declarations = symbol.getDeclarations().filter(Node.isVariableDeclaration);
+  const [declaration] = declarations;
+  const initializer = declaration?.getInitializer();
+  const construct = initializer ? unwrapStaticExpression(initializer) : undefined;
+  if (
+    declarations.length !== 1 ||
+    !declaration ||
+    declaration.getVariableStatement()?.getDeclarationKind() !== VariableDeclarationKind.Const ||
+    declaration.getVariableStatement()?.getParent() !== declaration.getSourceFile() ||
+    !construct ||
+    !Node.isNewExpression(construct) ||
+    construct.getArguments().length !== 0
+  ) {
+    return false;
+  }
+  const callee = unwrapStaticExpression(construct.getExpression());
+  if (
+    !Node.isIdentifier(callee) ||
+    callee.getText() !== 'Map' ||
+    !unshadowedGlobalIdentifier(callee, 'Map') ||
+    requestGlobalIntrinsicBindingIsMutated('Map', construct.getSourceFile())
+  ) {
+    return false;
+  }
+
+  const target = requestSymbolKey(symbol);
+  const references = declaration
+    .getProject()
+    .getSourceFiles()
+    .flatMap((sourceFile) => sourceFile.getDescendantsOfKind(SyntaxKind.Identifier))
+    .filter((identifier) => {
+      const candidate = requestIdentifierValueSymbol(identifier) ?? identifier.getSymbol();
+      return !!candidate && requestSymbolKey(candidate) === target;
+    });
+  return references.every((reference) => {
+    if (requestNodesAreSame(reference, declaration.getNameNode())) return true;
+    const memberAccess = reference.getParent();
+    if (
+      !Node.isPropertyAccessExpression(memberAccess) ||
+      !requestNodesAreSame(memberAccess.getExpression(), reference) ||
+      !['get', 'set'].includes(memberAccess.getName())
+    ) {
+      return false;
+    }
+    const call = memberAccess.getParentIfKind(SyntaxKind.CallExpression);
+    if (!call || !requestNodesAreSame(call.getExpression(), memberAccess)) return false;
+    const owner = requestEnclosingCallable(call);
+    if (!owner || !nodeBelongsToRequestCallable(call, owner)) return false;
+    return requestCallableDeclaredRootContexts(owner, session).some(
+      (root) => root.rootFactory === 'task' && root.rootCallback === 'run',
+    );
+  });
+}
+
 type RequestLocalIntrinsicContainerKind = 'array' | 'map' | 'url-search-params';
 const REQUEST_REVIEWED_DB_ROW_ARRAY_MEMO = new WeakMap<object, Map<string, boolean>>();
 
@@ -19974,6 +20982,14 @@ function requestLocalIntrinsicContainerKind(
   if (seen.has(nodeKey)) return undefined;
   seen.add(nodeKey);
   if (Node.isArrayLiteralExpression(node)) return 'array';
+  // Component query data and other exact input roots have crossed Kovo's plain public-data wire.
+  // Treat array-only operations as inert even when the static type is unavailable to this pass:
+  // a non-array JSON value can only throw, not supply an executable method/getter.
+  if (
+    requestRootRoleIncludesInput(requestExpressionRootParameterRole(node, callable, new Set(), 0))
+  ) {
+    return 'array';
+  }
   if (Node.isAwaitExpression(node)) {
     return requestLocalIntrinsicContainerKind(
       node.getExpression(),
@@ -19982,7 +20998,24 @@ function requestLocalIntrinsicContainerKind(
       new Set(seen),
     );
   }
+  if (
+    (Node.isPropertyAccessExpression(node) || Node.isElementAccessExpression(node)) &&
+    requestPropertyAccessIsExactUrlSearchParams(node, callable, context.provenance)
+  ) {
+    return 'url-search-params';
+  }
   if (Node.isCallExpression(node)) {
+    const callee = unwrapStaticExpression(node.getExpression());
+    const receiver = requestCallReceiver(callee);
+    const member = requestStaticCallMember(callee);
+    if (
+      receiver &&
+      member &&
+      REQUEST_REVIEWED_LOCAL_ARRAY_RESULT_METHODS.has(member) &&
+      requestLocalIntrinsicContainerKind(receiver, callable, context, new Set(seen)) === 'array'
+    ) {
+      return 'array';
+    }
     if (
       requestCallIsReviewedDrizzleDbReadChain(node, callable) ||
       requestCallIsReviewedDrizzleDbReadChainInDeclaredRoot(node, context.provenance) ||
@@ -20019,6 +21052,7 @@ function requestLocalIntrinsicContainerKind(
   if (!Node.isIdentifier(node)) return undefined;
   const symbol = node.getSymbol();
   if (!symbol) return undefined;
+  if (requestExpressionIsClosedModuleLocalMap(node, callable, context.provenance)) return 'map';
   const symbolKey = requestSymbolKey(symbol);
   if (seen.has(symbolKey)) return undefined;
   seen.add(symbolKey);
@@ -20363,7 +21397,7 @@ function requestCallableIsPromiseExecutor(
   const parent = expression.getParent();
   if (
     Node.isNewExpression(parent) &&
-    parent.getArguments()[0] === expression &&
+    requestNodesAreSame(parent.getArguments()[0], expression) &&
     requestNewExpressionIsGlobalPromise(parent)
   ) {
     return true;
@@ -20380,6 +21414,40 @@ function requestCallableIsPromiseExecutor(
         resolveRequestCallable(executor, new Set(), 0, session).callables.some((candidate) =>
           requestNodesAreSame(candidate.declaration, callable.declaration),
         )
+      );
+    });
+}
+
+/**
+ * ECMAScript supplies the first two callbacks to an exact native Promise executor. Passing one
+ * directly to a timer is still a function callback, not the timer's string-eval overload. Aliases,
+ * defaults/rest parameters, reassignment, shadowed/replaced Promise constructors, and non-executor
+ * callables remain closed.
+ */
+function requestExpressionIsExactPromiseSettlementCallback(
+  expression: Node,
+  callable: RequestCallable,
+  session: RequestProvenanceSession,
+): boolean {
+  const identifier = unwrapStaticExpression(expression);
+  if (
+    !Node.isIdentifier(identifier) ||
+    requestGlobalIntrinsicBindingIsMutated('Promise', identifier.getSourceFile()) ||
+    !requestCallableIsPromiseExecutor(callable, session)
+  ) {
+    return false;
+  }
+  const symbol = identifier.getSymbol();
+  if (!symbol || requestAssignedBindingProjections(symbol, session).length !== 0) return false;
+  return requestCallableParameters(callable.declaration)
+    .slice(0, 2)
+    .some((parameter) => {
+      const name = parameter.getNameNode();
+      return !!(
+        Node.isIdentifier(name) &&
+        name.getSymbol() === symbol &&
+        !parameter.getInitializer() &&
+        !parameter.getDotDotDotToken()
       );
     });
 }
@@ -21974,6 +23042,98 @@ function requestCallIsExactClosedDomainDeclaration(
   return args.length <= 1 && args.every(requestExpressionIsClosedStaticData);
 }
 
+function requestExactLocalDomainCallForExpression(
+  expression: Node,
+  session: RequestProvenanceSession,
+): import('ts-morph').CallExpression | undefined {
+  const identifier = unwrapStaticExpression(expression);
+  if (!Node.isIdentifier(identifier)) return undefined;
+  const symbol = requestIdentifierValueSymbol(identifier) ?? identifier.getSymbol();
+  if (!symbol || requestAssignedBindingProjections(symbol, session).length !== 0) return undefined;
+  const declarations = symbol.getDeclarations().filter(Node.isVariableDeclaration);
+  const [declaration] = declarations;
+  if (
+    declarations.length !== 1 ||
+    !declaration ||
+    declaration.getVariableStatement()?.getDeclarationKind() !== VariableDeclarationKind.Const ||
+    declaration.getVariableStatement()?.getParent() !== declaration.getSourceFile()
+  ) {
+    return undefined;
+  }
+  const initializer = declaration.getInitializer();
+  const call = initializer ? unwrapStaticExpression(initializer) : undefined;
+  return call &&
+    Node.isCallExpression(call) &&
+    requestCallIsExactClosedDomainDeclaration(call) &&
+    requestExactPristineDirectImport(call.getExpression(), '@kovojs/server', 'domain') &&
+    requestExactImportedCarrierIsPristine(call.getExpression(), '@kovojs/server', 'domain')
+    ? call
+    : undefined;
+}
+
+function requestCallIsExactMutationDomainInvalidateForTarget(
+  call: import('ts-morph').CallExpression,
+  target: import('ts-morph').CallExpression,
+  session: RequestProvenanceSession,
+): boolean {
+  const callee = unwrapStaticExpression(call.getExpression());
+  if (
+    !Node.isPropertyAccessExpression(callee) ||
+    callee.getQuestionDotTokenNode() ||
+    call.getQuestionDotTokenNode() ||
+    callee.getName() !== 'invalidate'
+  ) {
+    return false;
+  }
+  const [domainValue, ...extra] = call.getArguments();
+  if (
+    !domainValue ||
+    extra.length !== 0 ||
+    !requestNodesAreSame(requestExactLocalDomainCallForExpression(domainValue, session), target)
+  ) {
+    return false;
+  }
+  const direct = requestEnclosingCallable(call);
+  if (!direct || !nodeBelongsToRequestCallable(call, direct)) return false;
+  const roots = requestCallableDeclaredRootContexts(direct, session).filter(
+    (root) => root.rootFactory === 'mutation' && root.rootCallback === 'handler',
+  );
+  return !!(
+    roots.length === 1 &&
+    roots.every(
+      (root) =>
+        requestExpressionIsDirectRootParameterWithRole(
+          callee.getExpression(),
+          root,
+          'capability',
+        ) && requestRootCapabilityMethodIsPristine(callee.getExpression(), root, session),
+    )
+  );
+}
+
+/** SPEC §9.4: mutations invalidate only one exact pristine framework domain declaration. */
+function requestCallIsExactMutationDomainInvalidate(
+  call: import('ts-morph').CallExpression,
+  session: RequestProvenanceSession,
+): boolean {
+  const [domainValue] = call.getArguments();
+  const target = domainValue
+    ? requestExactLocalDomainCallForExpression(domainValue, session)
+    : undefined;
+  return !!(
+    target &&
+    requestCallIsExactMutationDomainInvalidateForTarget(call, target, session) &&
+    requestExactDomainResultIsPristine(target, session)
+  );
+}
+
+function requestCallUsesMutationDomainInvalidateShape(
+  call: import('ts-morph').CallExpression,
+): boolean {
+  const callee = unwrapStaticExpression(call.getExpression());
+  return !!requestCallReceiver(callee) && requestStaticCallMember(callee) === 'invalidate';
+}
+
 function requestExpressionResolvesToExactDomainCall(
   expression: Node,
   target: import('ts-morph').CallExpression,
@@ -22024,7 +23184,11 @@ function requestExpressionResolvesToExactDomainCall(
   return false;
 }
 
-function requestDomainValueContainerIsReviewed(expression: Node): boolean {
+function requestDomainValueContainerIsReviewed(
+  expression: Node,
+  target: import('ts-morph').CallExpression,
+  session: RequestProvenanceSession,
+): boolean {
   let current = expression;
   while (true) {
     const parent = current.getParent();
@@ -22057,12 +23221,16 @@ function requestDomainValueContainerIsReviewed(expression: Node): boolean {
           '@kovojs/server',
           exportName,
         ),
-      )
+      ) ||
+      requestCallIsExactMutationDomainInvalidateForTarget(parent, target, session)
     );
   }
 }
 
-function requestExactDomainResultIsPristine(target: import('ts-morph').CallExpression): boolean {
+function requestExactDomainResultIsPristine(
+  target: import('ts-morph').CallExpression,
+  session: RequestProvenanceSession = createRequestProvenanceSession(),
+): boolean {
   const resolves = (candidate: Node | undefined): boolean =>
     !!candidate && requestExpressionResolvesToExactDomainCall(candidate, target, new Set());
   const contains = (candidate: Node | undefined): boolean =>
@@ -22106,7 +23274,10 @@ function requestExactDomainResultIsPristine(target: import('ts-morph').CallExpre
     }
     for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
       for (const argument of call.getArguments()) {
-        if (contains(argument) && !requestDomainValueContainerIsReviewed(argument)) {
+        if (
+          contains(argument) &&
+          !requestDomainValueContainerIsReviewed(argument, target, session)
+        ) {
           return false;
         }
       }
@@ -22120,7 +23291,11 @@ function requestExactDomainResultIsPristine(target: import('ts-morph').CallExpre
             : Node.isSpreadAssignment(property)
               ? property.getExpression()
               : undefined;
-        if (value && contains(value) && !requestDomainValueContainerIsReviewed(value)) {
+        if (
+          value &&
+          contains(value) &&
+          !requestDomainValueContainerIsReviewed(value, target, session)
+        ) {
           return false;
         }
       }
@@ -22128,7 +23303,8 @@ function requestExactDomainResultIsPristine(target: import('ts-morph').CallExpre
     for (const array of sourceFile.getDescendantsOfKind(SyntaxKind.ArrayLiteralExpression)) {
       for (const element of array.getElements()) {
         const value = Node.isSpreadElement(element) ? element.getExpression() : element;
-        if (contains(value) && !requestDomainValueContainerIsReviewed(value)) return false;
+        if (contains(value) && !requestDomainValueContainerIsReviewed(value, target, session))
+          return false;
       }
     }
     for (const returned of sourceFile.getDescendantsOfKind(SyntaxKind.ReturnStatement)) {
@@ -23779,6 +24955,13 @@ function requestConstructorIsKnownSafe(
   }
   if (
     Node.isIdentifier(callee) &&
+    callee.getText() === 'ReadableStream' &&
+    unshadowedGlobalIdentifier(callee, 'ReadableStream')
+  ) {
+    return requestReadableStreamConstructorIsClosed(construct, context);
+  }
+  if (
+    Node.isIdentifier(callee) &&
     REQUEST_SAFE_GLOBAL_CONSTRUCTORS.has(callee.getText()) &&
     unshadowedGlobalIdentifier(callee, callee.getText())
   ) {
@@ -23788,6 +24971,148 @@ function requestConstructorIsKnownSafe(
     );
   }
   return requestKnownLocalClassConstructorIsClosed(callee, callable, context);
+}
+
+/**
+ * SPEC §6.6: Web stream source callbacks are an intrinsic callback record, but the controller is
+ * not ambient framework capability. Give only the exact controller parameter its finite role and
+ * keep accessors, spreads, computed hooks, custom strategies, and unknown source keys closed.
+ */
+function requestReadableStreamConstructorIsClosed(
+  construct: import('ts-morph').NewExpression,
+  context: RequestProcessScanContext,
+): boolean {
+  const callbacks = requestExactReadableStreamSourceCallbacks(construct, context.provenance);
+  if (!callbacks) return false;
+  for (const { callable, role } of callbacks) {
+    scanRequestCallable(
+      {
+        ...callable,
+        rootParameterRoles: [role],
+      },
+      context,
+    );
+  }
+  return true;
+}
+
+interface RequestReadableStreamSourceCallback {
+  readonly callable: RequestCallable;
+  readonly role: 'input' | 'stream-controller';
+}
+
+function requestExactReadableStreamSourceCallbacks(
+  construct: import('ts-morph').NewExpression,
+  session: RequestProvenanceSession,
+): readonly RequestReadableStreamSourceCallback[] | undefined {
+  const callee = unwrapStaticExpression(construct.getExpression());
+  if (
+    !Node.isIdentifier(callee) ||
+    callee.getText() !== 'ReadableStream' ||
+    !unshadowedGlobalIdentifier(callee, 'ReadableStream') ||
+    requestGlobalIntrinsicBindingIsMutated('ReadableStream', construct.getSourceFile()) ||
+    construct.getArguments().length > 1
+  ) {
+    return undefined;
+  }
+  const source = construct.getArguments()[0];
+  if (!source) return [];
+  const record = unwrapStaticExpression(source);
+  if (!Node.isObjectLiteralExpression(record)) return undefined;
+
+  const callbacks: RequestReadableStreamSourceCallback[] = [];
+  const seenMembers = new Set<string>();
+  for (const property of record.getProperties()) {
+    const name = requestObjectLiteralElementNameNode(property);
+    const member = name && !Node.isComputedPropertyName(name) ? staticMemberName(name) : undefined;
+    if (
+      !member ||
+      !['autoAllocateChunkSize', 'cancel', 'pull', 'start', 'type'].includes(member) ||
+      seenMembers.has(member)
+    ) {
+      return undefined;
+    }
+    seenMembers.add(member);
+    if (['start', 'pull', 'cancel'].includes(member)) {
+      const callback = requestHandlerPropertyExpression(property);
+      const direct = requestCallableForFunctionNode(property);
+      const callables = direct
+        ? [direct]
+        : callback
+          ? resolveRequestCallable(callback, new Set(), 0, session).callables
+          : [];
+      if (callables.length !== 1) return undefined;
+      const parameters = requestCallableParameters(callables[0]!.declaration);
+      if (
+        parameters.length > 1 ||
+        parameters.some(
+          (parameter) =>
+            !Node.isIdentifier(parameter.getNameNode()) ||
+            parameter.getInitializer() !== undefined ||
+            parameter.isRestParameter(),
+        )
+      ) {
+        return undefined;
+      }
+      callbacks.push({
+        callable: callables[0]!,
+        role: member === 'cancel' ? 'input' : 'stream-controller',
+      });
+      continue;
+    }
+    const value = requestHandlerPropertyExpression(property);
+    if (!value || !requestExpressionIsClosedStaticData(value)) return undefined;
+  }
+  return callbacks;
+}
+
+function requestCallIsExactReadableStreamControllerMethod(
+  call: import('ts-morph').CallExpression,
+  callable: RequestCallable,
+): boolean {
+  const callee = unwrapStaticExpression(call.getExpression());
+  const receiver = requestCallReceiver(callee);
+  const member = requestStaticCallMember(callee);
+  if (
+    !receiver ||
+    !Node.isIdentifier(unwrapStaticExpression(receiver)) ||
+    !member ||
+    !['close', 'enqueue', 'error'].includes(member) ||
+    !(
+      (member === 'close' && call.getArguments().length === 0) ||
+      (member !== 'close' && call.getArguments().length === 1)
+    )
+  ) {
+    return false;
+  }
+  const declaration = callable.declaration;
+  if (
+    !Node.isMethodDeclaration(declaration) ||
+    !['pull', 'start'].includes(staticMemberName(declaration.getNameNode()) ?? '')
+  ) {
+    return false;
+  }
+  const parameter = declaration.getParameters()[0]?.getNameNode();
+  if (
+    !parameter ||
+    !Node.isIdentifier(parameter) ||
+    !requestBindingNameContainsIdentifier(parameter, unwrapStaticExpression(receiver))
+  ) {
+    return false;
+  }
+  const record = declaration.getParentIfKind(SyntaxKind.ObjectLiteralExpression);
+  const construct = record?.getParentIfKind(SyntaxKind.NewExpression);
+  const constructor = construct ? unwrapStaticExpression(construct.getExpression()) : undefined;
+  return !!(
+    record &&
+    construct &&
+    construct.getArguments()[0] === record &&
+    constructor &&
+    Node.isIdentifier(constructor) &&
+    constructor.getText() === 'ReadableStream' &&
+    unshadowedGlobalIdentifier(constructor, 'ReadableStream') &&
+    !requestGlobalIntrinsicBindingIsMutated('ReadableStream', construct.getSourceFile())
+  );
 }
 
 function requestKnownLocalClassConstructorIsClosed(
@@ -23887,6 +25212,7 @@ function requestKnownCallbacksAreClosed(
   expression: import('ts-morph').CallExpression | import('ts-morph').NewExpression,
   member: string | undefined,
   context: RequestProcessScanContext,
+  caller?: RequestCallable,
 ): boolean {
   if (!member) return true;
   const indexes = requestCallbackArgumentIndexes(expression, member);
@@ -23908,6 +25234,12 @@ function requestKnownCallbacksAreClosed(
       continue;
     }
     if (requestExpressionIsProvablyNonCallable(callback)) continue;
+    if (
+      caller &&
+      requestExpressionIsExactPromiseSettlementCallback(callback, caller, context.provenance)
+    ) {
+      continue;
+    }
     return false;
   }
   return true;
@@ -23989,6 +25321,10 @@ function requestExpressionRootParameterRole(
 ): RequestRootParameterRole | undefined {
   if (!callable.rootFactory && !callable.rootParameterRoles) return undefined;
   const node = unwrapStaticExpression(expression);
+  const componentSlotRole = requestExactComponentSlotProjectionRole(node, callable);
+  if (componentSlotRole) return componentSlotRole;
+  const errorShellRole = requestExactErrorShellProjectionRole(node, callable);
+  if (errorShellRole) return errorShellRole;
   if (Node.isAwaitExpression(node)) {
     return requestExpressionRootParameterRole(node.getExpression(), callable, seen, depth + 1);
   }
@@ -24107,6 +25443,108 @@ function requestExpressionRootParameterRole(
     seen.add(key);
   }
   return requestExpressionRootParameterRole(initializer, callable, seen, depth + 1);
+}
+
+/**
+ * SPEC §13.1: a component slot record is plain compiler-owned input except for its one exact
+ * `request` projection. Do not turn the whole slot bag into a capability: unknown/computed slot
+ * methods must still resolve to reviewed authored callables or fail closed.
+ */
+function requestExactComponentSlotProjectionRole(
+  expression: Node,
+  callable: RequestCallable,
+): RequestRootParameterRole | undefined {
+  if (!callable.compilerOwnedJsxEventHandlers) return undefined;
+  const parameter = requestCallableParameters(callable.declaration)[2];
+  if (!parameter || parameter.getInitializer() || parameter.getDotDotDotToken()) return undefined;
+  const parameterName = parameter.getNameNode();
+  const node = unwrapStaticExpression(expression);
+  if (Node.isPropertyAccessExpression(node)) {
+    const receiver = unwrapStaticExpression(node.getExpression());
+    if (!Node.isIdentifier(receiver) || !Node.isIdentifier(parameterName)) return undefined;
+    const receiverSymbol = receiver.getSymbol();
+    const parameterSymbol = parameterName.getSymbol();
+    if (!receiverSymbol || !parameterSymbol || receiverSymbol !== parameterSymbol) return undefined;
+    return node.getName() === 'request' ? 'request' : 'input';
+  }
+  if (!Node.isIdentifier(node)) return undefined;
+  const symbol = node.getSymbol();
+  if (!symbol) return undefined;
+  if (Node.isIdentifier(parameterName)) {
+    return parameterName.getSymbol() === symbol ? 'input' : undefined;
+  }
+  if (!Node.isObjectBindingPattern(parameterName)) return undefined;
+  for (const element of parameterName.getElements()) {
+    if (
+      element.getInitializer() ||
+      element.getDotDotDotToken() ||
+      !Node.isIdentifier(element.getNameNode()) ||
+      element.getNameNode().getSymbol() !== symbol
+    ) {
+      continue;
+    }
+    return staticMemberName(element.getPropertyNameNode() ?? element.getNameNode()) === 'request'
+      ? 'request'
+      : 'input';
+  }
+  return undefined;
+}
+
+/**
+ * SPEC §9.5: an error-shell context is a finite record. Its `request` projection keeps request
+ * authority while `status` is plain framework-produced input. Do not grant those roles through a
+ * default/rest/nested pattern or a computed member; the generic capability role remains the
+ * fail-closed fallback for every other projection.
+ */
+function requestExactErrorShellProjectionRole(
+  expression: Node,
+  callable: RequestCallable,
+): RequestRootParameterRole | undefined {
+  if (callable.rootFactory !== 'createApp' || !callable.rootCallback?.startsWith('errorShells.')) {
+    return undefined;
+  }
+  const [parameter, ...extra] = requestCallableParameters(callable.declaration);
+  if (
+    !parameter ||
+    extra.length !== 0 ||
+    parameter.getInitializer() ||
+    parameter.getDotDotDotToken()
+  ) {
+    return undefined;
+  }
+  const parameterName = parameter.getNameNode();
+  const roleForMember = (member: string | undefined): RequestRootParameterRole | undefined =>
+    member === 'request' ? 'request' : member === 'status' ? 'input' : undefined;
+  const node = unwrapStaticExpression(expression);
+  if (Node.isPropertyAccessExpression(node) || Node.isElementAccessExpression(node)) {
+    const receiver = unwrapStaticExpression(node.getExpression());
+    const name = parameterName;
+    if (!Node.isIdentifier(receiver) || !Node.isIdentifier(name)) return undefined;
+    const receiverSymbol = receiver.getSymbol();
+    const parameterSymbol = name.getSymbol();
+    if (!receiverSymbol || !parameterSymbol || receiverSymbol !== parameterSymbol) return undefined;
+    const member = Node.isPropertyAccessExpression(node)
+      ? node.getName()
+      : staticMemberName(node.getArgumentExpression());
+    return roleForMember(member);
+  }
+  if (!Node.isIdentifier(node) || !Node.isObjectBindingPattern(parameterName)) {
+    return undefined;
+  }
+  const symbol = node.getSymbol();
+  if (!symbol) return undefined;
+  for (const element of parameterName.getElements()) {
+    if (
+      element.getInitializer() ||
+      element.getDotDotDotToken() ||
+      !Node.isIdentifier(element.getNameNode()) ||
+      element.getNameNode().getSymbol() !== symbol
+    ) {
+      continue;
+    }
+    return roleForMember(staticMemberName(element.getPropertyNameNode() ?? element.getNameNode()));
+  }
+  return undefined;
 }
 
 function requestBindingNameContainsIdentifier(name: Node, target: Node): boolean {
@@ -24388,13 +25826,24 @@ interface RequestRawAuthority {
   readonly safePath: string;
 }
 
-function requestStringTimerAuthorityForCall(call: Node): RequestRawAuthority | undefined {
+function requestStringTimerAuthorityForCall(
+  call: Node,
+  callable?: RequestCallable,
+  session?: RequestProvenanceSession,
+): RequestRawAuthority | undefined {
   if (!Node.isCallExpression(call)) return undefined;
   const [callback] = call.getArguments();
   if (callback) {
     if (Node.isArrowFunction(callback) || Node.isFunctionExpression(callback)) return undefined;
     const resolution = resolveRequestCallable(callback, new Set(), 0);
     if (resolution.callables.length > 0) return undefined;
+    if (
+      callable &&
+      session &&
+      requestExpressionIsExactPromiseSettlementCallback(callback, callable, session)
+    ) {
+      return undefined;
+    }
   }
   for (const timer of ['setInterval', 'setTimeout'] as const) {
     if (expressionResolvesToGlobalCallable(call.getExpression(), timer, new Set(), 0)) {
@@ -24409,6 +25858,7 @@ function requestStringTimerAuthorityForCall(call: Node): RequestRawAuthority | u
 
 function requestEscapedTimerAuthorityForExpression(
   expression: Node,
+  session?: RequestProvenanceSession,
 ): RequestRawAuthority | undefined {
   const node = unwrapStaticExpression(expression);
   const parent = node.getParent();
@@ -24427,6 +25877,14 @@ function requestEscapedTimerAuthorityForExpression(
       if (callback) {
         if (Node.isArrowFunction(callback) || Node.isFunctionExpression(callback)) return undefined;
         if (resolveRequestCallable(callback, new Set(), 0).callables.length > 0) return undefined;
+        const callable = requestEnclosingCallable(parent);
+        if (
+          callable &&
+          session &&
+          requestExpressionIsExactPromiseSettlementCallback(callback, callable, session)
+        ) {
+          return undefined;
+        }
       }
     }
     return {
@@ -24725,27 +26183,13 @@ function resolveRequestCallableUncached(
           const resolved = resolveRequestCallable(expression, new Set(seen), depth + 1, session);
           return {
             ...resolved,
-            callables: resolved.callables.map((callable) => ({
-              ...callable,
-              compilerOwnedJsxEventHandlers: true,
-              rootParameterRoles: requestCallableParameters(callable.declaration).map(
-                () => 'input' as const,
-              ),
-            })),
+            callables: resolved.callables.map(requestComponentRenderCallable),
           };
         }
         const directRender = requestCallableForFunctionNode(render);
         if (directRender) {
           return {
-            callables: [
-              {
-                ...directRender,
-                compilerOwnedJsxEventHandlers: true,
-                rootParameterRoles: requestCallableParameters(directRender.declaration).map(
-                  () => 'input' as const,
-                ),
-              },
-            ],
+            callables: [requestComponentRenderCallable(directRender)],
           };
         }
       }
@@ -24799,6 +26243,21 @@ function resolveRequestCallableUncached(
   return {
     callables: [],
     ...optionalOpaqueModule(opaqueBareModuleForExpression(node, new Set(), 0)),
+  };
+}
+
+/**
+ * SPEC §13.1: component query data, state, and the slot record are compiler-produced public
+ * values. A separate exact projection rule above preserves only `slots.request` as request
+ * authority; the context carrier below exists solely for the public-wire header census.
+ */
+function requestComponentRenderCallable(callable: RequestCallable): RequestCallable {
+  const parameters = requestCallableParameters(callable.declaration);
+  return {
+    ...callable,
+    compilerOwnedJsxEventHandlers: true,
+    ...(parameters.length > 2 ? { rootCarriers: [{ carrier: 'context' as const, index: 2 }] } : {}),
+    rootParameterRoles: parameters.map(() => 'input' as const),
   };
 }
 

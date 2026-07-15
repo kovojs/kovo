@@ -543,12 +543,17 @@ describe('server response adapters', () => {
 
   it('consumes the private pinned route-outcome snapshot, not exposed mutable fields', async () => {
     const source = new TextEncoder().encode('SAFE_ATTACHMENT_BYTES');
-    const outcome = respond.file(source, {
+    const sourceHeaders = { 'X-Audit': 'safe' };
+    const sourceOptions = {
       contentType: 'application/octet-stream',
       filename: 'safe.bin',
-      headers: { 'X-Audit': 'safe' },
-    });
+      headers: sourceHeaders,
+    };
+    const outcome = respond.file(source, sourceOptions);
     source.fill(0x58);
+    sourceHeaders['X-Audit'] = 'mutated-source-header';
+    sourceOptions.contentType = 'text/html; charset=utf-8';
+    sourceOptions.filename = 'mutated.html';
     (outcome.body as Uint8Array).fill(0x41);
     expect(Reflect.set(outcome, 'contentDisposition', 'inline')).toBe(false);
     expect(Reflect.set(outcome, 'contentType', 'text/html')).toBe(false);
