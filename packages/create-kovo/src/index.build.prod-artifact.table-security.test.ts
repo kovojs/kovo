@@ -1,24 +1,19 @@
-import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { setTimeout as delay } from 'node:timers/promises';
 
 import { describe, expect, it } from 'vitest';
 
 import { writeKovoProject } from './index.js';
-import { buildParanoidProductionArtifact } from './index.build.test-support.js';
 import {
-  collectOutput,
-  linkStarterBuildDependencies,
-  stopProcess,
-  withRepoBinOnPath,
-} from './index.test-support.js';
+  buildParanoidProductionArtifact,
+  execFileSyncErrorOutput,
+} from './index.build.test-support.js';
+import { linkStarterBuildDependencies } from './index.test-support.js';
 
 describe('create-kovo production table-security provenance', () => {
-  it('rejects an exact Drizzle annotation-slot replacement across production bundle copies', async () => {
+  it('rejects an exact Drizzle annotation-slot replacement during paranoid preflight', () => {
     const root = mkdtempSync(join(tmpdir(), 'create-kovo-table-security-slot-'));
-    let server: ChildProcessWithoutNullStreams | undefined;
 
     try {
       mkdirSync(root, { recursive: true });
@@ -32,31 +27,19 @@ describe('create-kovo production table-security provenance', () => {
         'utf8',
       );
 
-      buildParanoidProductionArtifact(root);
+      let output: string | undefined;
+      try {
+        buildParanoidProductionArtifact(root);
+      } catch (error) {
+        output = execFileSyncErrorOutput(error);
+      }
 
-      server = spawn(process.execPath, ['dist/server/server.mjs'], {
-        cwd: root,
-        detached: process.platform !== 'win32',
-        env: {
-          ...withRepoBinOnPath(),
-          HOST: '127.0.0.1',
-          KOVO_PARANOID: '1',
-          NODE_ENV: 'production',
-          PORT: '0',
-        },
-      });
-      const output = collectOutput(server);
-      await Promise.race([
-        new Promise<void>((resolve) => server?.once('exit', () => resolve())),
-        delay(30_000).then(() => {
-          throw new Error(`Forged production server did not exit:\n${output()}`);
-        }),
-      ]);
-
-      expect(output()).toContain('KV414: runtime Drizzle table security for contacts');
-      expect(output()).toContain('compiler-derived manifest');
+      expect(output, 'forged Drizzle metadata must fail paranoid preflight').toBeDefined();
+      expect(output).toContain('KV424');
+      expect(output).toContain('source=Reflect.get');
+      expect(output).toContain('sink=request-handler.opaque-protocol');
+      expect(output).toContain('source=<Object.defineProperty-target:contacts>');
     } finally {
-      await stopProcess(server);
       rmSync(root, { force: true, recursive: true });
     }
   }, 180_000);

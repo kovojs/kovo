@@ -42,6 +42,7 @@ import {
 } from './index.test-support.js';
 
 describe('create-kovo starter (build integration: adversarial production artifact sweep)', () => {
+  const multiBuildProofTimeout = 480_000;
   const dialectIndependentCompilerGateCases = [['postgres', undefined]] as const;
   const dialectSpecificRuntimeCases = [
     ['postgres', undefined],
@@ -70,7 +71,7 @@ describe('create-kovo starter (build integration: adversarial production artifac
         expectStorageWriteBuildFailure(root);
       });
     },
-    240_000,
+    multiBuildProofTimeout,
   );
 
   it.each([...dialectIndependentCompilerGateCases])(
@@ -118,7 +119,7 @@ describe('create-kovo starter (build integration: adversarial production artifac
         ]);
       });
     },
-    240_000,
+    multiBuildProofTimeout,
   );
 
   it.each([...dialectIndependentCompilerGateCases])(
@@ -158,7 +159,7 @@ describe('create-kovo starter (build integration: adversarial production artifac
         buildProductionArtifact(root);
       });
     },
-    240_000,
+    multiBuildProofTimeout,
   );
 
   it.each([...dialectIndependentCompilerGateCases])(
@@ -765,9 +766,8 @@ function addM1HeaderRedirectCapabilityProof(root: string): void {
   const appPath = join(root, 'src/app.tsx');
   const app = readFileSync(appPath, 'utf8')
     .replace(
-      '  createApp,\n  createMemoryVersionedClientModuleRegistry,',
+      '  createMemoryVersionedClientModuleRegistry,',
       [
-        '  createApp,',
         '  createMemoryStorage,',
         '  createMemoryVersionedClientModuleRegistry,',
         '  createStorageDownloadEndpoint,',

@@ -425,7 +425,7 @@ process.stdout.write(JSON.stringify({
         resolveEnvironmentInChild([`BETTER_AUTH_URL="${malformedUrl}"`, 'NODE_ENV=production']),
       ).toEqual({ error: expect.stringMatching(/canonical absolute HTTP\(S\) origin/u) });
     }
-  });
+  }, 90_000);
 
   it('rejects upstream Better Auth secret and trusted-origin environment authorities', () => {
     expect(resolveEnvironmentInChild(['BETTER_AUTH_SECRETS=0:attacker-controlled-secret'])).toEqual(

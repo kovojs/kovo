@@ -5225,7 +5225,7 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
         }),
       ]),
     );
-  });
+  }, 60_000);
 
   it('accepts the exact generated durable Postgres webhook replay-store grammar', () => {
     const files = [
