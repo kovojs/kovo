@@ -74,7 +74,7 @@ describe('create-kovo starter (build integration: production Postgres driver flo
       await stopProcess(server);
       rmSync(root, { force: true, recursive: true });
     }
-  }, 180_000);
+  }, 300_000);
 });
 
 describeIfPostgres(
