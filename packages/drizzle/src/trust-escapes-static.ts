@@ -1554,12 +1554,14 @@ interface RequestProvenanceSession {
   readonly factoryMemo: Map<string, readonly RequestHandlerFactoryName[]>;
   readonly factorySymbolActive: Set<string>;
   readonly factorySymbolMemo: Map<string, readonly RequestHandlerFactoryName[]>;
+  readonly guardCallbackPristineMemo: Map<string, boolean>;
   readonly moduleMethodMemo: Map<string, string | null>;
   readonly mutableFactoryReadActive: Set<string>;
   readonly mutableFactoryReadMemo: Map<string, RequestMutableFactoryRead>;
   readonly mutationInvocationActive: Set<string>;
   readonly mutationInvocationMemo: Map<string, readonly Node[]>;
   readonly memoryClientModuleRegistryPristineMemo: Map<string, boolean>;
+  readonly memoryWebhookReplayStorePristineMemo: Map<string, boolean>;
   readonly promiseSettlementCallables: Set<string>;
   readonly prototypeSourceActive: Set<string>;
   readonly prototypeSourceMemo: Map<string, readonly Node[]>;
@@ -1593,12 +1595,14 @@ function createRequestProvenanceSession(): RequestProvenanceSession {
     factoryMemo: new Map(),
     factorySymbolActive: new Set(),
     factorySymbolMemo: new Map(),
+    guardCallbackPristineMemo: new Map(),
     moduleMethodMemo: new Map(),
     mutableFactoryReadActive: new Set(),
     mutableFactoryReadMemo: new Map(),
     mutationInvocationActive: new Set(),
     mutationInvocationMemo: new Map(),
     memoryClientModuleRegistryPristineMemo: new Map(),
+    memoryWebhookReplayStorePristineMemo: new Map(),
     promiseSettlementCallables: new Set(),
     prototypeSourceActive: new Set(),
     prototypeSourceMemo: new Map(),
@@ -5465,13 +5469,18 @@ function requestRetainedConfigCallIsReviewed(
   if (requestCallIsExactAuthoredBetterAuthSessionProviderDelegation(call, session)) return true;
   if (requestCallIsExactBootOnlyGeneratedSetup(call, session)) return true;
   if (requestCallIsExactMemoryClientModuleRegistryConstructor(call, session)) return true;
+  if (requestCallIsExactMemoryWebhookReplayStoreConstructor(call, session)) return true;
   if (requestCallIsExactClosedMemoryClientModuleRegistryPut(call, session)) return true;
   if (requestCallIsExactClosedStylesheet(call)) return true;
   if (requestBuildConfigConstructorCallIsClosed(call)) return true;
   if (requestCallIsExactClosedRedirect(call)) return true;
   if (requestCallIsExactPostgresSchemaModule(call)) return true;
   if (requestHandlerFactoryInvocationsForCall(call, session).length > 0) return true;
-  if (requestStaticFrameworkGuardIsClosed(call)) return true;
+  if (
+    requestStaticFrameworkGuardIsClosed(call) ||
+    requestExactGuardsAllComposition(call, session) !== undefined
+  )
+    return true;
   if (requestVerifierFactoryName(call.getExpression())) return true;
   if (requestRetainedConfigDrizzleTableCallIsReviewed(call)) return true;
   if (requestCallIsReviewedPureDrizzleExpression(call)) return true;
@@ -7399,6 +7408,149 @@ function requestExpressionResolvesToExactManagedReplayStore(
 }
 
 /**
+ * SPEC §6.6 / §9.1: the technical-preview in-memory webhook replay store is executable
+ * retained config. Keep its static exception narrower than the durable generated-store grammar:
+ * one unexported module-top-level const, an exact zero-argument constructor, and direct retention
+ * only in an exact webhook `replayStore` field. Production durability policy remains a separate
+ * build decision; this exception proves only that the constructor itself is not an unregistered
+ * app sink.
+ */
+function requestCallIsExactMemoryWebhookReplayStoreConstructor(
+  call: import('ts-morph').CallExpression,
+  session: RequestProvenanceSession,
+): boolean {
+  const declaration = requestExactMemoryWebhookReplayStoreDeclaration(call);
+  return !!declaration && requestMemoryWebhookReplayStoreIsPristine(declaration, session);
+}
+
+function requestExactMemoryWebhookReplayStoreDeclaration(
+  call: import('ts-morph').CallExpression,
+): import('ts-morph').VariableDeclaration | undefined {
+  if (
+    call.getQuestionDotTokenNode() ||
+    call.getArguments().length !== 0 ||
+    !requestExactPristineDirectImport(
+      call.getExpression(),
+      '@kovojs/server',
+      'createMemoryWebhookReplayStore',
+    )
+  ) {
+    return undefined;
+  }
+
+  const declaration = call.getFirstAncestorByKind(SyntaxKind.VariableDeclaration);
+  const statement = declaration?.getVariableStatement();
+  const initializer = declaration?.getInitializer();
+  if (
+    !declaration ||
+    !statement ||
+    statement.getDeclarationKind() !== VariableDeclarationKind.Const ||
+    statement.isExported() ||
+    !Node.isSourceFile(statement.getParent()) ||
+    !Node.isIdentifier(declaration.getNameNode()) ||
+    !initializer ||
+    !requestNodesAreSame(unwrapStaticExpression(initializer), call)
+  ) {
+    return undefined;
+  }
+  return declaration;
+}
+
+function requestExpressionResolvesToExactMemoryWebhookReplayStore(
+  expression: Node,
+  session: RequestProvenanceSession,
+): boolean {
+  const node = unwrapStaticExpression(expression);
+  if (!Node.isIdentifier(node)) return false;
+  const symbol = requestIdentifierValueSymbol(node) ?? node.getSymbol();
+  if (!symbol || requestAssignedBindingProjections(symbol, session).length !== 0) return false;
+  const declarations = symbol.getDeclarations();
+  const [declaration] = declarations;
+  if (declarations.length !== 1 || !declaration || !Node.isVariableDeclaration(declaration)) {
+    return false;
+  }
+  const initializer = declaration.getInitializer();
+  const call = initializer ? unwrapStaticExpression(initializer) : undefined;
+  return !!(
+    call &&
+    Node.isCallExpression(call) &&
+    requestExactMemoryWebhookReplayStoreDeclaration(call) === declaration &&
+    requestMemoryWebhookReplayStoreIsPristine(declaration, session)
+  );
+}
+
+function requestMemoryWebhookReplayStoreIsPristine(
+  declaration: import('ts-morph').VariableDeclaration,
+  session: RequestProvenanceSession,
+): boolean {
+  const key = requestNodeIdentity(declaration);
+  const memoized = session.memoryWebhookReplayStorePristineMemo.get(key);
+  if (memoized !== undefined) return memoized;
+  const name = declaration.getNameNode();
+  const symbol = Node.isIdentifier(name) ? name.getSymbol() : undefined;
+  if (!symbol || symbol.getDeclarations().length !== 1) {
+    session.memoryWebhookReplayStorePristineMemo.set(key, false);
+    return false;
+  }
+
+  const symbolKey = requestSymbolKey(symbol);
+  let reviewedUses = 0;
+  for (const sourceFile of declaration.getProject().getSourceFiles()) {
+    for (const identifier of sourceFile.getDescendantsOfKind(SyntaxKind.Identifier)) {
+      const candidate = requestIdentifierValueSymbol(identifier) ?? identifier.getSymbol();
+      if (!candidate || requestSymbolKey(candidate) !== symbolKey) continue;
+      if (requestNodesAreSame(identifier, name)) continue;
+      if (!requestMemoryWebhookReplayStoreWebhookUseIsReviewed(identifier)) {
+        session.memoryWebhookReplayStorePristineMemo.set(key, false);
+        return false;
+      }
+      reviewedUses += 1;
+    }
+  }
+  const pristine = reviewedUses > 0;
+  session.memoryWebhookReplayStorePristineMemo.set(key, pristine);
+  return pristine;
+}
+
+function requestMemoryWebhookReplayStoreWebhookUseIsReviewed(
+  identifier: import('ts-morph').Identifier,
+): boolean {
+  const parent = identifier.getParent();
+  const property =
+    parent &&
+    ((Node.isPropertyAssignment(parent) &&
+      parent.getInitializer() &&
+      requestNodesAreSame(unwrapStaticExpression(parent.getInitializer()!), identifier)) ||
+      (Node.isShorthandPropertyAssignment(parent) &&
+        requestNodesAreSame(parent.getNameNode(), identifier)))
+      ? parent
+      : undefined;
+  const name = property ? requestObjectLiteralElementNameNode(property) : undefined;
+  if (
+    !property ||
+    !name ||
+    Node.isComputedPropertyName(name) ||
+    staticMemberName(name) !== 'replayStore'
+  ) {
+    return false;
+  }
+  const definition = property.getParentIfKind(SyntaxKind.ObjectLiteralExpression);
+  const call = definition?.getParentIfKind(SyntaxKind.CallExpression);
+  const args = call?.getArguments();
+  return !!(
+    definition &&
+    call &&
+    args?.length === 2 &&
+    args[0] &&
+    isStringLiteralLike(unwrapStaticExpression(args[0])) &&
+    args[1] &&
+    requestNodesAreSame(unwrapStaticExpression(args[1]), definition) &&
+    !call.getQuestionDotTokenNode() &&
+    requestExactPristineDirectImport(call.getExpression(), '@kovojs/server', 'webhook')
+  );
+}
+
+/**
  * SPEC §9.5: generated client modules may be registered before the app declaration, but the
  * audit-only request classifier must not turn an arbitrary mutable registry into retained-config
  * authority. Admit only the generated grammar: one unexported module-top-level const created by
@@ -7836,7 +7988,7 @@ function requestRootPropertyCandidates(
       if (
         candidates.length === 0 &&
         !current.object &&
-        !requestKnownFrameworkMemberIsClosed(current.source, name, new Set())
+        !requestKnownFrameworkMemberIsClosed(current.source, name, context.provenance, new Set())
       ) {
         const opaque = opaqueBareModuleForExpression(current.source, new Set(), 0);
         if (opaque) appendOpaqueRequestHandlerFact(context, current.source, opaque);
@@ -7962,12 +8114,19 @@ function requestKnownFactoryMemberCandidates(
 function requestKnownFrameworkMemberIsClosed(
   expression: Node,
   member: string,
+  session: RequestProvenanceSession,
   seen: Set<string>,
 ): boolean {
   const node = unwrapStaticExpression(expression);
   const nodeKey = `${requestNodeIdentity(node)}:${member}`;
   if (seen.has(nodeKey)) return false;
   seen.add(nodeKey);
+  if (
+    ['get', 'reserve', 'set'].includes(member) &&
+    requestExpressionResolvesToExactMemoryWebhookReplayStore(node, session)
+  ) {
+    return true;
+  }
   if (Node.isCallExpression(node)) {
     const callee = unwrapStaticExpression(node.getExpression());
     const verifierFactory = requestVerifierFactoryName(callee);
@@ -7988,7 +8147,7 @@ function requestKnownFrameworkMemberIsClosed(
   }
   if (Node.isConditionalExpression(node)) {
     return [node.getWhenTrue(), node.getWhenFalse()].every((branch) =>
-      requestKnownFrameworkMemberIsClosed(branch, member, new Set(seen)),
+      requestKnownFrameworkMemberIsClosed(branch, member, session, new Set(seen)),
     );
   }
   if (Node.isNewExpression(node)) {
@@ -8003,7 +8162,7 @@ function requestKnownFrameworkMemberIsClosed(
   return symbol.getDeclarations().some((declaration) => {
     const initializer = valueDeclarationInitializer(declaration);
     return initializer
-      ? requestKnownFrameworkMemberIsClosed(initializer, member, new Set(seen))
+      ? requestKnownFrameworkMemberIsClosed(initializer, member, session, new Set(seen))
       : false;
   });
 }
@@ -10135,6 +10294,28 @@ function scanRequestRootCallbackCandidate(
   spec: RequestRootCallbackSpec,
   context: RequestProcessScanContext,
 ): void {
+  const guardComposition = requestExactGuardsAllComposition(expression, context.provenance);
+  if (guardComposition) {
+    // SPEC §6.6 / §10.3: `guards.all(...)` itself is framework-owned, but each local guard
+    // remains authored request-reachable code. Scan the exact pristine callbacks with the same
+    // request role as the composed guard instead of laundering their bodies through the combiner.
+    for (const callable of guardComposition) {
+      scanRequestCallable(
+        {
+          ...callable,
+          ...(spec.publicWire ? { publicWire: true } : {}),
+          ...(spec.publicWireMethods ? { publicWireMethods: spec.publicWireMethods } : {}),
+          ...(spec.publicWirePaths ? { publicWirePaths: spec.publicWirePaths } : {}),
+          rootCallback: callback,
+          ...(spec.carriers ? { rootCarriers: spec.carriers } : {}),
+          rootFactory: factory,
+          ...(spec.roles ? { rootParameterRoles: spec.roles } : {}),
+        },
+        context,
+      );
+    }
+    return;
+  }
   const replayGrammar = callback.startsWith('mutationReplayStore.')
     ? REQUEST_MANAGED_MUTATION_REPLAY_STORE
     : callback.startsWith('replayStore.')
@@ -10301,6 +10482,119 @@ function requestStaticCallbackValueIsClosed(
     }
   }
   return false;
+}
+
+/**
+ * SPEC §6.6 / §10.3: admit guard composition only through the exact pristine namespace and
+ * only while every authored callback has a complete, module-local value-use graph. The callback
+ * bodies remain ordinary request roots and are scanned by `scanRequestRootCallbackCandidate`.
+ */
+function requestExactGuardsAllComposition(
+  expression: Node,
+  session: RequestProvenanceSession,
+): readonly RequestCallable[] | undefined {
+  const node = unwrapStaticExpression(expression);
+  if (!Node.isCallExpression(node) || !requestCallUsesExactGuardsAllCallee(node)) return undefined;
+  const args = node.getArguments();
+  if (args.length === 0 || args.some(Node.isSpreadElement)) return undefined;
+
+  const callbacks: RequestCallable[] = [];
+  for (const argument of args) {
+    if (requestStaticFrameworkGuardIsClosed(argument)) continue;
+    const callable = requestExactLocalGuardCallback(argument, session);
+    if (!callable) return undefined;
+    callbacks.push(callable);
+  }
+  return callbacks.length > 0 ? callbacks : undefined;
+}
+
+function requestCallUsesExactGuardsAllCallee(call: import('ts-morph').CallExpression): boolean {
+  const callee = unwrapStaticExpression(call.getExpression());
+  if (
+    !Node.isPropertyAccessExpression(callee) ||
+    callee.getQuestionDotTokenNode() ||
+    call.getQuestionDotTokenNode() ||
+    callee.getName() !== 'all'
+  ) {
+    return false;
+  }
+  const receiver = callee.getExpression();
+  return !!(
+    requestExpressionIsDirectImportedExport(receiver, '@kovojs/server', 'guards') &&
+    requestExactImportedCarrierIsPristine(receiver, '@kovojs/server', 'guards')
+  );
+}
+
+function requestExactLocalGuardCallback(
+  expression: Node,
+  session: RequestProvenanceSession,
+): RequestCallable | undefined {
+  const identifier = unwrapStaticExpression(expression);
+  if (!Node.isIdentifier(identifier)) return undefined;
+  const symbol = requestIdentifierValueSymbol(identifier) ?? identifier.getSymbol();
+  if (!symbol || requestAssignedBindingProjections(symbol, session).length !== 0) return undefined;
+  const declarations = symbol.getDeclarations();
+  const [declaration] = declarations;
+  if (declarations.length !== 1 || !declaration || !Node.isVariableDeclaration(declaration)) {
+    return undefined;
+  }
+  const statement = declaration.getVariableStatement();
+  const name = declaration.getNameNode();
+  const initializer = declaration.getInitializer();
+  const callback = initializer ? unwrapStaticExpression(initializer) : undefined;
+  if (
+    !statement ||
+    statement.getDeclarationKind() !== VariableDeclarationKind.Const ||
+    statement.isExported() ||
+    !Node.isSourceFile(statement.getParent()) ||
+    !Node.isIdentifier(name) ||
+    declaration.getSourceFile() !== identifier.getSourceFile() ||
+    !callback ||
+    (!Node.isArrowFunction(callback) && !Node.isFunctionExpression(callback)) ||
+    (Node.isFunctionExpression(callback) && !!callback.getAsteriskToken())
+  ) {
+    return undefined;
+  }
+  const callable = requestCallableForFunctionNode(callback);
+  const parameters = callable ? requestCallableParameters(callable.declaration) : [];
+  if (
+    !callable ||
+    parameters.length > 1 ||
+    parameters.some(
+      (parameter) =>
+        !Node.isIdentifier(parameter.getNameNode()) ||
+        !!parameter.getInitializer() ||
+        !!parameter.getDotDotDotToken(),
+    )
+  ) {
+    return undefined;
+  }
+
+  const key = requestNodeIdentity(declaration);
+  const memoized = session.guardCallbackPristineMemo.get(key);
+  if (memoized !== undefined) return memoized ? callable : undefined;
+  const symbolKey = requestSymbolKey(symbol);
+  let reviewedUses = 0;
+  for (const sourceFile of declaration.getProject().getSourceFiles()) {
+    for (const reference of sourceFile.getDescendantsOfKind(SyntaxKind.Identifier)) {
+      const candidate = requestIdentifierValueSymbol(reference) ?? reference.getSymbol();
+      if (!candidate || requestSymbolKey(candidate) !== symbolKey) continue;
+      if (requestNodesAreSame(reference, name)) continue;
+      const call = reference.getParentIfKind(SyntaxKind.CallExpression);
+      if (
+        !call ||
+        !call.getArguments().some((argument) => requestNodesAreSame(argument, reference)) ||
+        !requestCallUsesExactGuardsAllCallee(call)
+      ) {
+        session.guardCallbackPristineMemo.set(key, false);
+        return undefined;
+      }
+      reviewedUses += 1;
+    }
+  }
+  const pristine = reviewedUses > 0;
+  session.guardCallbackPristineMemo.set(key, pristine);
+  return pristine ? callable : undefined;
 }
 
 function requestStaticFrameworkGuardIsClosed(expression: Node): boolean {

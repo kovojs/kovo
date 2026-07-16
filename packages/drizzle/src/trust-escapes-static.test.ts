@@ -5370,6 +5370,91 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
     );
   }, 60_000);
 
+  it('accepts only an exact module-local memory webhook replay store retained by webhook', () => {
+    const source = ({
+      declaration = 'const memoryReplay = createMemoryWebhookReplayStore();',
+      extra = '',
+      replayProperty = 'replayStore: memoryReplay,',
+    }: {
+      declaration?: string;
+      extra?: string;
+      replayProperty?: string;
+    } = {}) => `
+      import {
+        createMemoryWebhookReplayStore,
+        publicAccess,
+        s,
+        webhook,
+      } from '@kovojs/server';
+      ${declaration}
+      ${extra}
+      export const hook = webhook('/webhooks/memory', {
+        access: publicAccess('memory replay classifier fixture'),
+        handler() { return { ok: true }; },
+        idempotency(input) { return input.id; },
+        input: s.object({ id: s.string() }),
+        ${replayProperty}
+        verify: 'none',
+        verifyJustification: 'memory replay classifier fixture',
+      });
+    `;
+
+    // SPEC §6.6 / §9.1: this is a classifier exception for exact framework config, not a
+    // production-durability exemption. The normal production policy still rejects volatile truth.
+    expect(sinksFor(source())).toEqual([]);
+
+    for (const [label, candidate] of [
+      [
+        'inline constructor',
+        source({
+          declaration: '',
+          replayProperty: 'replayStore: createMemoryWebhookReplayStore(),',
+        }),
+      ],
+      [
+        'exported binding',
+        source({ declaration: 'export const memoryReplay = createMemoryWebhookReplayStore();' }),
+      ],
+      ['export list', source({ extra: 'export { memoryReplay };' })],
+      [
+        'alias',
+        source({
+          extra: 'const alias = memoryReplay;',
+          replayProperty: 'replayStore: alias,',
+        }),
+      ],
+      ['member mutation', source({ extra: 'memoryReplay.get = async () => undefined;' })],
+      [
+        'reflective mutation',
+        source({
+          extra: `Object.defineProperty(memoryReplay, 'get', { value: async () => undefined });`,
+        }),
+      ],
+      [
+        'constructor options',
+        source({
+          declaration: 'const memoryReplay = createMemoryWebhookReplayStore({ maxEntries: 10 });',
+        }),
+      ],
+      [
+        'Function.call constructor',
+        source({
+          declaration: 'const memoryReplay = createMemoryWebhookReplayStore.call(undefined);',
+        }),
+      ],
+      [
+        'computed retention',
+        source({
+          extra: `const replayKey = 'replayStore';`,
+          replayProperty: '[replayKey]: memoryReplay,',
+        }),
+      ],
+      ['wrong retention field', source({ replayProperty: 'mutationReplayStore: memoryReplay,' })],
+    ] as const) {
+      expect(sinksFor(candidate), label).not.toEqual([]);
+    }
+  });
+
   it('accepts the exact generated durable Postgres webhook replay-store grammar', () => {
     const files = [
       {
@@ -9655,9 +9740,20 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
     expect(condition.length).toBeGreaterThan(0);
   });
 
-  it('does not bless composite or proxied guard construction', () => {
-    // SPEC §6.6: only the finite, exact guard constructors reviewed by the classifier are
-    // closed. Composition and Proxy preserve arbitrary callback/protocol execution surfaces.
+  it('accepts only exact guards.all compositions over universally closed local callbacks', () => {
+    // SPEC §6.6 / §10.3: the combiner does not launder authored guard bodies. The callback
+    // remains an ordinary request root, while its complete value-use graph must stay local and
+    // direct so aliases, computed dispatch, and Function protocol calls remain fail-closed.
+    const safe = sinksFor(`
+      import { guards, query } from '@kovojs/server';
+      const customGuard = () => true;
+      export const guarded = query({
+        guard: guards.all(customGuard, guards.rateLimit({ max: 10, per: 'global' })),
+        load() { return { ok: true }; },
+      });
+    `);
+    expect(safe).toEqual([]);
+
     const composite = sinksFor(`
       import { execFileSync } from 'node:child_process';
       import { guards, query } from '@kovojs/server';
@@ -9670,11 +9766,73 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
     expect(composite).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          sink: 'request-handler.opaque-source',
-          source: '<dynamic-callback>',
+          sink: 'child_process.execFileSync',
+          source: "'composite-guard'",
         }),
       ]),
     );
+
+    const imported = sinksForFiles([
+      { fileName: 'guard.ts', source: `export const customGuard = () => true;` },
+      {
+        fileName: 'app.ts',
+        source: `
+          import { guards, query } from '@kovojs/server';
+          import { customGuard } from './guard.js';
+          export const guarded = query({
+            guard: guards.all(customGuard, guards.rateLimit({ max: 10, per: 'global' })),
+            load() { return true; },
+          });
+        `,
+      },
+    ]);
+    expect(imported).not.toEqual([]);
+
+    for (const source of [
+      `
+        import { guards, query } from '@kovojs/server';
+        let customGuard = () => true;
+        export const guarded = query({ guard: guards.all(customGuard), load() { return true; } });
+      `,
+      `
+        import { guards, query } from '@kovojs/server';
+        const customGuard = () => true;
+        const alias = customGuard;
+        export const guarded = query({ guard: guards.all(customGuard), load() { return alias(); } });
+      `,
+      `
+        import { guards, query } from '@kovojs/server';
+        export const customGuard = () => true;
+        export const guarded = query({ guard: guards.all(customGuard), load() { return true; } });
+      `,
+      `
+        import { guards, query } from '@kovojs/server';
+        const customGuard = () => true;
+        export const guarded = query({ guard: guards['all'](customGuard), load() { return true; } });
+      `,
+      `
+        import { guards, query } from '@kovojs/server';
+        const customGuard = () => true;
+        export const guarded = query({ guard: guards.all.call(guards, customGuard), load() { return true; } });
+      `,
+      `
+        import { guards, query } from '@kovojs/server';
+        const customGuard = () => true;
+        const dynamicGuard = () => true;
+        export const guarded = query({
+          guard: guards.all(customGuard, dynamicGuard()),
+          load() { return true; },
+        });
+      `,
+      `
+        import { guards, query } from '@kovojs/server';
+        const customGuard = () => true;
+        Object.defineProperty(customGuard, 'apply', { value: () => true });
+        export const guarded = query({ guard: guards.all(customGuard), load() { return true; } });
+      `,
+    ]) {
+      expect(sinksFor(source)).not.toEqual([]);
+    }
 
     const proxied = sinksFor(`
       import { guards, query } from '@kovojs/server';
