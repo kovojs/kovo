@@ -13,10 +13,10 @@ inside its owning settlement boundary.
 
 ## Severity summary
 
-| Severity | Families | Items  |
-| -------- | -------: | ------ |
-| Critical |        3 | C1-C3  |
-| High     |        1 | H1     |
+| Severity | Families | Items |
+| -------- | -------: | ----- |
+| Critical |        3 | C1-C3 |
+| High     |        1 | H1    |
 
 ## Critical
 
@@ -33,13 +33,17 @@ inside its owning settlement boundary.
     class Deferred {
       static then(resolve: (value: { ok: true }) => void): void {
         resolve({ ok: true });
-        queueMicrotask(() => { void fetch('https://example.test/late'); });
+        queueMicrotask(() => {
+          void fetch('https://example.test/late');
+        });
       }
     }
     Object.defineProperty(Promise, 'resolve', { value: () => Deferred });
     task('intrinsic-member', {
       input: s.object({}),
-      async run() { return Promise.resolve(); },
+      async run() {
+        return Promise.resolve();
+      },
     });
     ```
 
@@ -65,15 +69,20 @@ inside its owning settlement boundary.
 
     ```ts
     import { s, task } from '@kovojs/server';
-    task('callback-carrier', { input: s.object({}), async run(_input, context) {
-      class Deferred {
-        static then(resolve: (value: { ok: true }) => void): void {
-          resolve({ ok: true });
-          queueMicrotask(() => { void context.fetch('https://example.test/late'); });
+    task('callback-carrier', {
+      input: s.object({}),
+      async run(_input, context) {
+        class Deferred {
+          static then(resolve: (value: { ok: true }) => void): void {
+            resolve({ ok: true });
+            queueMicrotask(() => {
+              void context.fetch('https://example.test/late');
+            });
+          }
         }
-      }
-      return Promise.resolve(1).then(() => [Deferred].at(0));
-    } });
+        return Promise.resolve(1).then(() => [Deferred].at(0));
+      },
+    });
     ```
 
   - **Evidence:** the e71 collector returned `[]` for direct `return Deferred`, a const alias,
@@ -104,18 +113,26 @@ inside its owning settlement boundary.
     class Deferred {
       static then(resolve: (value: { ok: true }) => void): void {
         resolve({ ok: true });
-        queueMicrotask(() => { void fetch('https://example.test/late'); });
+        queueMicrotask(() => {
+          void fetch('https://example.test/late');
+        });
       }
     }
 
-    task('x', { input: s.object({ value: s.string() }), async run(input) {
-      Object.defineProperty(input, 'value', { value: Deferred });
-      return input.value;
-    } });
+    task('x', {
+      input: s.object({ value: s.string() }),
+      async run(input) {
+        Object.defineProperty(input, 'value', { value: Deferred });
+        return input.value;
+      },
+    });
 
-    task('y', { input: s.object({ values: s.array(s.string()) }), async run(input) {
-      return input.values.map(() => Deferred)[0];
-    } });
+    task('y', {
+      input: s.object({ values: s.array(s.string()) }),
+      async run(input) {
+        return input.values.map(() => Deferred)[0];
+      },
+    });
     ```
 
   - **Evidence:** on clean e71, an 18-case async-root matrix returned `[]` for property/whole
@@ -136,9 +153,7 @@ inside its owning settlement boundary.
   - A returned class thenable could resolve first, instantiate itself in a queued microtask, and
     execute otherwise-reviewed request body, storage, DB, task composition/scheduling, webhook,
     invalidation/change-record, cookie, or failure authority from instance fields.
-  - **Evidence:** e71's `rejects composition and scheduling across deferred class execution
-    boundaries`, `rejects every exact root allowlist across deferred class execution boundaries`,
-    and `rejects deferred root authority while keeping the same immediate calls accepted` tests
-    passed 3/3. A same-session collector repro emitted `request-handler.opaque-call` for both
-    `request.text` and `context.storage.get`, while the immediate controls remain accepted. SPEC
-    §6.6, §9.1, §9.6.
+  - **Evidence:** e71's deferred-class composition, scheduling, exact-root allowlist, and
+    immediate-control regression tests passed 3/3. A same-session collector repro emitted
+    `request-handler.opaque-call` for both `request.text` and `context.storage.get`, while the
+    immediate controls remain accepted. SPEC §6.6, §9.1, §9.6.
