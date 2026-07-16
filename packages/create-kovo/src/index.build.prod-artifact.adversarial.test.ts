@@ -194,6 +194,14 @@ describe('create-kovo starter (build integration: adversarial production artifac
     });
   });
 
+  it('M1:output-wire fixtures use canonical safe authored shapes', () => {
+    withProject('create-kovo-m1-output-wire-authored-shapes-', undefined, (root) => {
+      addRuntimeContractProofs(root);
+      addM1HeaderRedirectCapabilityProof(root);
+      assertM1OutputWireFixtureUsesSafeAuthoredShapes(root);
+    });
+  });
+
   it.each([...dialectSpecificRuntimeCases])(
     'M1:raw-sql covers raw SQL owner-write unsafe and trusted %s production siblings',
     (_label: string, dialect: CreateKovoDialect | undefined) => {
@@ -245,6 +253,7 @@ describe('create-kovo starter (build integration: adversarial production artifac
           addM1DeferAndShellProof(root);
           addM1HeaderRedirectCapabilityProof(root);
           addM1ClientDeriveProof(root);
+          assertM1OutputWireFixtureUsesSafeAuthoredShapes(root);
           configureNodeRetention(root);
           // This single synthetic graph combines every M1 output sink with both
           // generated auth schemas. Give its no-cache proof a bounded verifier
@@ -387,10 +396,13 @@ describe('create-kovo starter (build integration: adversarial production artifac
           mergeCookies(headerCookieJar, cookieForm.headers.getSetCookie());
           const cookieFormHtml = await cookieForm.text();
           const headerCookieCsrf = /name="csrf"\s+value="([^"]+)"/.exec(cookieFormHtml)?.[1];
+          const headerCookieAction = attributeValue(cookieFormHtml, 'action');
           expect(cookieForm.status, cookieFormHtml).toBe(200);
           expect(headerCookieCsrf).toBeTruthy();
+          expect(headerCookieAction).toBeTruthy();
+          if (!headerCookieAction) throw new Error('Expected M1 header cookie form action.');
 
-          const cookie = await fetch(`${origin}/_m/m1/header-cookie-proof`, {
+          const cookie = await fetch(`${origin}${headerCookieAction}`, {
             body: new URLSearchParams({
               'Kovo-Idem': `m1-cookie-${Date.now()}`,
               csrf: headerCookieCsrf ?? '',
@@ -410,7 +422,7 @@ describe('create-kovo starter (build integration: adversarial production artifac
             expect.stringContaining('m1_cookie=safe'),
           ]);
 
-          const unsafeCookie = await fetch(`${origin}/_m/m1/header-cookie-proof`, {
+          const unsafeCookie = await fetch(`${origin}${headerCookieAction}`, {
             body: new URLSearchParams({
               'Kovo-Idem': `m1-unsafe-cookie-${Date.now()}`,
               csrf: headerCookieCsrf ?? '',
@@ -757,7 +769,6 @@ function addM1HeaderRedirectCapabilityProof(root: string): void {
       '    return { ok: true };',
       '  },',
       '});',
-      "m1HeaderCookieProof.key = 'm1/header-cookie-proof';",
       '',
     ].join('\n'),
     'utf8',
@@ -770,6 +781,7 @@ function addM1HeaderRedirectCapabilityProof(root: string): void {
       [
         '  createMemoryStorage,',
         '  createMemoryVersionedClientModuleRegistry,',
+        '  createSigningKeyRing,',
         '  createStorageDownloadEndpoint,',
       ].join('\n'),
     )
@@ -785,6 +797,15 @@ function addM1HeaderRedirectCapabilityProof(root: string): void {
       'const mutationReplayStore = appRuntimeMutationReplayStore;',
       [
         'const mutationReplayStore = appRuntimeMutationReplayStore;',
+        'const m1CapabilitySigningKeys = createSigningKeyRing({',
+        '  keys: [',
+        '    {',
+        "      id: 'm1-capability',",
+        "      secret: 'm1-capability-test-signing-material-2026',",
+        "      state: 'active',",
+        '    },',
+        '  ],',
+        '});',
         'const m1CapabilityStorage = createMemoryStorage();',
         "await m1CapabilityStorage.put('receipts/m1.txt', 'm1 capability secret\\n', {",
         "  contentType: 'text/plain',",
@@ -792,7 +813,7 @@ function addM1HeaderRedirectCapabilityProof(root: string): void {
         '});',
         'const m1CapabilityEndpoint = createStorageDownloadEndpoint({',
         "  basePath: '/m1-capability-download',",
-        '  secret: appCsrf.secret,',
+        '  secret: m1CapabilitySigningKeys,',
         '  storage: m1CapabilityStorage,',
         '});',
       ].join('\n'),
@@ -841,6 +862,22 @@ function addM1HeaderRedirectCapabilityProof(root: string): void {
       ].join('\n'),
     );
   writeFileSync(appPath, app, 'utf8');
+}
+
+function assertM1OutputWireFixtureUsesSafeAuthoredShapes(root: string): void {
+  const app = readFileSync(join(root, 'src/app.tsx'), 'utf8');
+  const headerProof = readFileSync(join(root, 'src/m1-header-proof.tsx'), 'utf8');
+  const runtimeProofs = readFileSync(join(root, 'src/runtime-contract-proofs.tsx'), 'utf8');
+
+  expect(app).toContain('const m1CapabilitySigningKeys = createSigningKeyRing({');
+  expect(app).toContain('secret: m1CapabilitySigningKeys,');
+  expect(app).not.toContain('secret: appCsrf.secret,');
+  expect(headerProof).toContain('export const m1HeaderCookieProof = mutation({');
+  expect(headerProof).not.toContain('m1HeaderCookieProof.key =');
+  expect(headerProof).not.toContain("'m1/header-cookie-proof'");
+  expect(runtimeProofs).toContain('rows: [0, 1, 2, 3].map((id) => ({ id, label: `item-${id}` })),');
+  expect(runtimeProofs).toContain('    } catch {');
+  expect(runtimeProofs).not.toContain('error instanceof Error');
 }
 
 function addM1ClientDeriveProof(root: string): void {
