@@ -2357,6 +2357,44 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
     }
   });
 
+  it('accepts only exact mutation composition through the direct webhook context', () => {
+    const safe = sinksFor(`
+      import { mutation, s, webhook } from '@kovojs/server';
+      const record = mutation({
+        input: s.object({ id: s.string() }),
+        handler(input) { return { id: input.id }; },
+      });
+      export const incoming = webhook('/events', {
+        input: s.object({ id: s.string() }),
+        verify: 'none',
+        verifyJustification: 'local exact composition proof',
+        async handler(input, context) {
+          await context.actAs('reviewed-principal').runMutation(record, { id: input.id });
+          return { ok: true };
+        },
+      });
+    `);
+    expect(safe).toEqual([]);
+
+    for (const body of [
+      `const alias = record; await context.actAs('reviewed').runMutation(alias, { id: input.id });`,
+      `const alias = context; await alias.runMutation(record, { id: input.id });`,
+      `await context.actAs('reviewed')[input.method](record, { id: input.id });`,
+    ]) {
+      const facts = sinksFor(`
+        import { mutation, s, webhook } from '@kovojs/server';
+        const record = mutation({ input: s.object({ id: s.string() }), handler(input) { return input; } });
+        webhook('/events', {
+          input: s.object({ id: s.string(), method: s.string(), principal: s.string() }),
+          verify: 'none',
+          verifyJustification: 'negative composition proof',
+          async handler(input, context) { ${body} },
+        });
+      `);
+      expect(facts.length, body).toBeGreaterThan(0);
+    }
+  });
+
   it('accepts exact Request URL parsing without opening shadowed constructors or getters', () => {
     const safe = sinksFor(`
       import { endpoint } from '@kovojs/server';
@@ -9868,6 +9906,223 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
       `,
     ]) {
       expect(sinksFor(source), source).not.toEqual([]);
+    }
+  });
+
+  it('keeps exact stored-file parsing separate from opaque storage authority', () => {
+    const documented = sinksFor(`
+      import { createMemoryStorage, mutation, s } from '@kovojs/server';
+      const inlineStorage = createMemoryStorage();
+      const retainedStorage = createMemoryStorage();
+      const avatarSchema = s.file()
+        .maxBytes(2_000_000)
+        .accept(['image/png'])
+        .store({ storage: retainedStorage });
+      export const inlineUpload = mutation({
+        input: s.object({
+          avatar: s.file()
+            .maxBytes(2_000_000)
+            .accept(['image/png'])
+            .store({ storage: inlineStorage }),
+        }),
+        handler({ avatar }) { return { key: avatar.key }; },
+      });
+      export const retainedUpload = mutation({
+        input: s.object({ avatar: avatarSchema }),
+        handler({ avatar }) { return { key: avatar.key }; },
+      });
+    `);
+    expect(documented).toEqual([]);
+
+    const mixed = sinksFor(`
+      import { createMemoryStorage, query, s } from '@kovojs/server';
+      const exactStorage = createMemoryStorage();
+      const opaqueStorage = createMemoryStorage();
+      const opaqueUpload = { upload: opaqueStorage.put.bind(opaqueStorage) };
+      export const exact = query({ async load(input) {
+        const schema = s.file().store({ keyPrefix: 'receipts', storage: exactStorage });
+        const stored = await schema.parseAsync(input.file);
+        return { key: stored.key };
+      } });
+      export const opaque = query({ async load() {
+        await opaqueUpload.upload('receipts/unsafe.txt', 'unsafe');
+        return { ok: true };
+      } });
+    `);
+    expect(
+      mixed.filter((fact) =>
+        ['createMemoryStorage', 's.file().store', 'schema.parseAsync'].includes(fact.source ?? ''),
+      ),
+    ).toEqual([]);
+    expect(mixed).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sink: 'request-handler.opaque-call',
+          source: 'opaqueStorage.put.bind',
+        }),
+        expect.objectContaining({
+          sink: 'request-handler.opaque-call',
+          source: 'opaqueUpload.upload',
+        }),
+      ]),
+    );
+
+    for (const [label, declaration, expression] of [
+      [
+        'aliased config',
+        `const options = { keyPrefix: 'receipts', storage: storage };`,
+        `s.file().store(options).parseAsync(input.file)`,
+      ],
+      [
+        'computed store',
+        ``,
+        `s.file()['store']({ keyPrefix: 'receipts', storage: storage }).parseAsync(input.file)`,
+      ],
+      [
+        'escaped schema',
+        `const schema = s.file().store({ keyPrefix: 'receipts', storage: storage }); const escaped = schema;`,
+        `escaped.parseAsync(input.file)`,
+      ],
+      [
+        'mutated schema',
+        `const schema = s.file().store({ keyPrefix: 'receipts', storage: storage }); schema.parseAsync = input.parse;`,
+        `schema.parseAsync(input.file)`,
+      ],
+    ] as const) {
+      const facts = sinksFor(`
+        import { createMemoryStorage, query, s } from '@kovojs/server';
+        const storage = createMemoryStorage();
+        export const unsafe = query({ async load(input) {
+          ${declaration}
+          return ${expression};
+        } });
+      `);
+      expect(facts.length, `${label}: ${JSON.stringify(facts)}`).toBeGreaterThan(0);
+    }
+
+    for (const [label, setup, expression] of [
+      [
+        'computed maxBytes refinement',
+        ``,
+        `s.file()['maxBytes'](2_000_000).accept(['image/png']).store({ storage: storage })`,
+      ],
+      [
+        'computed accept refinement',
+        ``,
+        `s.file().maxBytes(2_000_000)['accept'](['image/png']).store({ storage: storage })`,
+      ],
+      [
+        'aliased builder',
+        `const file = s.file();`,
+        `file.maxBytes(2_000_000).accept(['image/png']).store({ storage: storage })`,
+      ],
+      [
+        'dynamic maxBytes',
+        `const maxBytes = 2_000_000;`,
+        `s.file().maxBytes(maxBytes).accept(['image/png']).store({ storage: storage })`,
+      ],
+      [
+        'dynamic acceptance',
+        `const types = ['image/png'];`,
+        `s.file().maxBytes(2_000_000).accept(types).store({ storage: storage })`,
+      ],
+    ] as const) {
+      const facts = sinksFor(`
+        import { createMemoryStorage, mutation, s } from '@kovojs/server';
+        const storage = createMemoryStorage();
+        ${setup}
+        const schema = ${expression};
+        export const unsafe = mutation({
+          input: s.object({ avatar: schema }),
+          handler({ avatar }) { return { key: avatar.key }; },
+        });
+      `);
+      expect(facts.length, `${label}: ${JSON.stringify(facts)}`).toBeGreaterThan(0);
+    }
+
+    for (const [label, source] of [
+      [
+        'exported storage',
+        `
+          import { createMemoryStorage, query, s } from '@kovojs/server';
+          export const storage = createMemoryStorage();
+          export const unsafe = query({ async load(input) {
+            return s.file().store({ storage: storage }).parseAsync(input.file);
+          } });
+        `,
+      ],
+      [
+        'aliased storage',
+        `
+          import { createMemoryStorage, query, s } from '@kovojs/server';
+          const storage = createMemoryStorage();
+          const alias = storage;
+          export const unsafe = query({ async load(input) {
+            return s.file().store({ storage: alias }).parseAsync(input.file);
+          } });
+        `,
+      ],
+      [
+        'computed storage member',
+        `
+          import { createMemoryStorage, query, s } from '@kovojs/server';
+          const storage = createMemoryStorage();
+          const put = storage['put'];
+          void put;
+          export const unsafe = query({ async load(input) {
+            return s.file().store({ storage: storage }).parseAsync(input.file);
+          } });
+        `,
+      ],
+      [
+        'mutated storage property',
+        `
+          import { createMemoryStorage, query, s } from '@kovojs/server';
+          const storage = createMemoryStorage();
+          storage.put = async () => ({ key: 'forged' });
+          export const unsafe = query({ async load(input) {
+            return s.file().store({ storage: storage }).parseAsync(input.file);
+          } });
+        `,
+      ],
+      [
+        'structural storage capability',
+        `
+          import { query, s } from '@kovojs/server';
+          const storage = { async put() { return { key: 'forged' }; } };
+          export const unsafe = query({ async load(input) {
+            return s.file().store({ storage: storage }).parseAsync(input.file);
+          } });
+        `,
+      ],
+      [
+        'post-construction escape',
+        `
+          import { createMemoryStorage, query, s } from '@kovojs/server';
+          const storage = createMemoryStorage();
+          const escaped = storage;
+          void escaped;
+          export const unsafe = query({ async load(input) {
+            return s.file().store({ storage: storage }).parseAsync(input.file);
+          } });
+        `,
+      ],
+      [
+        'multiple retained consumers',
+        `
+          import { createMemoryStorage, query, s } from '@kovojs/server';
+          const storage = createMemoryStorage();
+          export const left = query({ async load(input) {
+            return s.file().store({ keyPrefix: 'left', storage: storage }).parseAsync(input.file);
+          } });
+          export const right = query({ async load(input) {
+            return s.file().store({ keyPrefix: 'right', storage: storage }).parseAsync(input.file);
+          } });
+        `,
+      ],
+    ] as const) {
+      const facts = sinksFor(source);
+      expect(facts.length, `${label}: ${JSON.stringify(facts)}`).toBeGreaterThan(0);
     }
   });
 

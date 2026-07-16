@@ -280,6 +280,7 @@ export function addOpaqueStorageQueryWriteProof(root: string): void {
     [
       'type AppQueryLoadContext = QueryLoadContext<AppQueryRequest, AppDb>;',
       '',
+      'const canonicalFileStoreWriteProbe = createMemoryStorage();',
       'const opaqueStorageWriteProbe = createMemoryStorage();',
       'const opaqueUploadStorageWriteProbe = {',
       '  upload: opaqueStorageWriteProbe.put.bind(opaqueStorageWriteProbe),',
@@ -300,7 +301,7 @@ export function addOpaqueStorageQueryWriteProof(root: string): void {
       "  access: publicAccess('opaque storage file store write query proof'),",
       '  reads: [],',
       '  async load(): Promise<{ ok: true }> {',
-      "    const schema = s.file().store({ keyPrefix: 'receipts', storage: opaqueStorageWriteProbe });",
+      "    const schema = s.file().store({ keyPrefix: 'receipts', storage: canonicalFileStoreWriteProbe });",
       "    await schema.parseAsync(new File(['bad'], 'query-store-proof.txt', { type: 'text/plain' }));",
       '    return { ok: true };',
       '  },',

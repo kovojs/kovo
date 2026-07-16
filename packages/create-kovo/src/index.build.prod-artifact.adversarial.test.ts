@@ -79,14 +79,15 @@ describe('create-kovo starter (build integration: adversarial production artifac
     (_label: string, dialect: CreateKovoDialect | undefined) => {
       withProject(`create-kovo-m1-storage-${_label}-opaque-`, dialect, (root) => {
         addOpaqueStorageQueryWriteProof(root);
-        expectBuildFailure(root, [
+        const output = expectBuildFailure(root, [
           'KV424',
-          'source=createMemoryStorage',
           'source=opaqueStorageWriteProbe.put.bind',
           'source=storage[method]!',
-          'source=s.file().store',
           'source=opaqueUploadStorageWriteProbe.upload',
         ]);
+        expect(output).not.toContain('source=createMemoryStorage');
+        expect(output).not.toContain('source=s.file().store');
+        expect(output).not.toContain('source=schema.parseAsync');
       });
     },
     240_000,
@@ -487,7 +488,7 @@ function withProject(
   }
 }
 
-function expectBuildFailure(root: string, expectedOutput: readonly string[]): void {
+function expectBuildFailure(root: string, expectedOutput: readonly string[]): string {
   let output: string | undefined;
   try {
     buildProductionArtifact(root);
@@ -500,6 +501,7 @@ function expectBuildFailure(root: string, expectedOutput: readonly string[]): vo
   for (const expected of expectedOutput) {
     expect(output).toContain(expected);
   }
+  return output;
 }
 
 function expectStorageWriteBuildFailure(root: string): void {

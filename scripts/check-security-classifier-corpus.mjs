@@ -409,6 +409,28 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
         ],
       },
       {
+        id: 'stored-file-retained-authority-exact-grammar',
+        file: 'packages/drizzle/src/trust-escapes-static.test.ts',
+        snippets: [
+          'keeps exact stored-file parsing separate from opaque storage authority',
+          '.maxBytes(2_000_000)',
+          ".accept(['image/png'])",
+          "const schema = s.file().store({ keyPrefix: 'receipts', storage: exactStorage })",
+          "'computed maxBytes refinement'",
+          "'computed accept refinement'",
+          "'aliased builder'",
+          "'dynamic maxBytes'",
+          "'dynamic acceptance'",
+          "'exported storage'",
+          "'aliased storage'",
+          "'computed storage member'",
+          "'mutated storage property'",
+          "'structural storage capability'",
+          "'post-construction escape'",
+          "'multiple retained consumers'",
+        ],
+      },
+      {
         id: 'request-minted-framework-authority-superset',
         file: 'packages/drizzle/src/trust-escapes-static.test.ts',
         snippets: [
