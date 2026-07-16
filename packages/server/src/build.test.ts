@@ -3580,6 +3580,8 @@ export default async function handler(request) {
           'main = "./worker.mjs"',
           'compatibility_date = "2026-06-18"',
           'compatibility_flags = ["nodejs_compat"]',
+          '# Security: Kovo supports public Cloudflare edge ingress only.',
+          '# HTTP Service Binding ingress is unsupported; use only Cloudflare edge routes.',
           '',
           '[assets]',
           'directory = "./client"',
@@ -3680,7 +3682,7 @@ export default async function handler(request) {
     }
   });
 
-  it('binds Cloudflare direct-edge IPs and isolates Worker subrequests from mutable x-real-ip', async () => {
+  it('binds canonical Cloudflare edge IPs and rejects every ambiguous Worker signal', async () => {
     const root = await mkdtemp(join(tmpdir(), 'kovo-cloudflare-ingress-authority-'));
 
     try {
@@ -3711,46 +3713,82 @@ export default async function handler(request) {
       const workerPath = join(outDir, 'worker.mjs');
       const workerSource = await readFile(workerPath, 'utf8');
       expect(workerSource).toContain('cloudflareRequestForDispatch(request)');
+      expect(workerSource).toContain('does not support HTTP Service Binding ingress');
       expect(workerSource.indexOf('cloudflareRequestForDispatch(request)')).toBeLessThan(
         workerSource.indexOf('await loadHandler()'),
       );
 
-      const [edgeA, edgeB, edgeARepeat, workerA, workerB, malformed, missing] =
-        runGeneratedCloudflareWorker(workerPath, [
-          {
-            headers: { 'cf-connecting-ip': '203.0.113.20' },
-            url: 'https://worker.test/rate',
+      const [
+        edgeA,
+        edgeB,
+        spoofedWorkerHeader,
+        edgeARepeat,
+        rotatedRealIpA,
+        rotatedRealIpB,
+        crossZoneSentinel,
+        malformed,
+        nonIpLiteral,
+        missing,
+        ipv6Expanded,
+        ipv6Canonical,
+      ] = runGeneratedCloudflareWorker(workerPath, [
+        {
+          headers: { 'cf-connecting-ip': '203.0.113.20' },
+          url: 'https://worker.test/rate',
+        },
+        {
+          headers: { 'cf-connecting-ip': '203.0.113.21' },
+          url: 'https://worker.test/rate',
+        },
+        {
+          headers: {
+            'cf-connecting-ip': '203.0.113.20',
+            // Cloudflare does not promise to strip a direct caller's CF-Worker header. Presence
+            // must reject, rather than grant the caller a second admitted rate-limit identity.
+            'cf-worker': 'attacker.example',
           },
-          {
-            headers: { 'cf-connecting-ip': '203.0.113.21' },
-            url: 'https://worker.test/rate',
+          url: 'https://worker.test/rate',
+        },
+        {
+          headers: { 'cf-connecting-ip': '203.0.113.20' },
+          url: 'https://worker.test/rate',
+        },
+        {
+          headers: {
+            'cf-connecting-ip': '198.51.100.30',
+            'x-real-ip': '198.51.100.30',
           },
-          {
-            headers: { 'cf-connecting-ip': '203.0.113.20' },
-            url: 'https://worker.test/rate',
+          url: 'https://worker.test/rate',
+        },
+        {
+          headers: {
+            'cf-connecting-ip': '198.51.100.99',
+            'x-real-ip': '198.51.100.99',
           },
-          {
-            headers: {
-              'cf-connecting-ip': '198.51.100.30',
-              'cf-worker': 'same-zone.example',
-              'x-real-ip': '198.51.100.30',
-            },
-            url: 'https://worker.test/rate',
-          },
-          {
-            headers: {
-              'cf-connecting-ip': '198.51.100.99',
-              'cf-worker': 'same-zone.example',
-              'x-real-ip': '198.51.100.99',
-            },
-            url: 'https://worker.test/rate',
-          },
-          {
-            headers: { 'cf-connecting-ip': '203.0.113.40, 203.0.113.41' },
-            url: 'https://worker.test/rate',
-          },
-          { url: 'https://worker.test/rate' },
-        ]);
+          url: 'https://worker.test/rate',
+        },
+        {
+          headers: { 'cf-connecting-ip': '2a06:98c0:3600::103' },
+          url: 'https://worker.test/rate',
+        },
+        {
+          headers: { 'cf-connecting-ip': '203.0.113.40, 203.0.113.41' },
+          url: 'https://worker.test/rate',
+        },
+        {
+          headers: { 'cf-connecting-ip': 'not-an-ip' },
+          url: 'https://worker.test/rate',
+        },
+        { cloudflareClientIp: false, url: 'https://worker.test/rate' },
+        {
+          headers: { 'cf-connecting-ip': '2001:0db8:0000:0000:0000:0000:0000:0001' },
+          url: 'https://worker.test/rate',
+        },
+        {
+          headers: { 'cf-connecting-ip': '2001:db8::1' },
+          url: 'https://worker.test/rate',
+        },
+      ]);
 
       expect(edgeA!.response.status).toBe(200);
       await expect(edgeA!.response.text()).resolves.toBe('203.0.113.20');
@@ -3759,15 +3797,24 @@ export default async function handler(request) {
       expect(edgeARepeat!.response.status).toBe(429);
       await expect(edgeARepeat!.response.text()).resolves.toBe('203.0.113.20');
 
-      expect(workerA!.response.status).toBe(200);
-      await expect(workerA!.response.text()).resolves.toBe('cloudflare:worker-subrequest');
-      expect(workerB!.response.status).toBe(429);
-      await expect(workerB!.response.text()).resolves.toBe('cloudflare:worker-subrequest');
+      for (const rejected of [
+        spoofedWorkerHeader,
+        rotatedRealIpA,
+        rotatedRealIpB,
+        crossZoneSentinel,
+        malformed,
+        nonIpLiteral,
+        missing,
+      ]) {
+        expect(rejected!.response.status).toBe(403);
+        expect(rejected!.response.headers.get('cache-control')).toBe('no-store');
+        await expect(rejected!.response.text()).resolves.toBe('');
+      }
 
-      expect(malformed!.response.status).toBe(200);
-      await expect(malformed!.response.text()).resolves.toBe('cloudflare:unresolved-client');
-      expect(missing!.response.status).toBe(429);
-      await expect(missing!.response.text()).resolves.toBe('cloudflare:unresolved-client');
+      expect(ipv6Expanded!.response.status).toBe(200);
+      await expect(ipv6Expanded!.response.text()).resolves.toBe('2001:db8::1');
+      expect(ipv6Canonical!.response.status).toBe(429);
+      await expect(ipv6Canonical!.response.text()).resolves.toBe('2001:db8::1');
     } finally {
       await rm(root, { force: true, recursive: true });
     }
@@ -3826,6 +3873,8 @@ export default async function handler(request) {
 main = "./worker.mjs"
 compatibility_date = "2026-06-18"
 compatibility_flags = ["nodejs_compat"]
+# Security: Kovo supports public Cloudflare edge ingress only.
+# HTTP Service Binding ingress is unsupported; use only Cloudflare edge routes.
 
 [assets]
 directory = "./client"
@@ -4368,6 +4417,8 @@ interface GeneratedWorkerAssetResponse {
 interface GeneratedWorkerRequest {
   readonly asset?: GeneratedWorkerAssetResponse;
   readonly body?: string;
+  /** `false` simulates caller-constructed ingress without Cloudflare edge metadata. */
+  readonly cloudflareClientIp?: false | string;
   readonly headers?: Readonly<Record<string, string>>;
   readonly method?: string;
   readonly url: string;
@@ -4506,7 +4557,10 @@ for (const probe of requests) {
   };
   const response = await worker.fetch(new Request(probe.url, {
     body: probe.body,
-    headers: probe.headers,
+    headers: probe.cloudflareClientIp === false ? probe.headers : {
+      'cf-connecting-ip': probe.cloudflareClientIp ?? '203.0.113.254',
+      ...probe.headers,
+    },
     method: probe.method,
   }), env);
   results.push({

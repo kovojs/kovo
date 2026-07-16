@@ -207,7 +207,9 @@ process.stdout.write(JSON.stringify({
 function cloudflareRuntimeProbe(workerPath: string): string {
   return `
 const module = await import(${JSON.stringify(pathToFileURL(workerPath).href)});
-const response = await module.default.fetch(new Request('https://worker.test/'), {});
+const response = await module.default.fetch(new Request('https://worker.test/', {
+  headers: { 'cf-connecting-ip': '203.0.113.254' },
+}), {});
 process.stdout.write(await response.text());
 `;
 }

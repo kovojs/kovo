@@ -1814,10 +1814,14 @@ const nativeResponseHeadersGetter = nativeObjectGetOwnPropertyDescriptor(NativeR
 const nativeResponseStatusGetter = nativeObjectGetOwnPropertyDescriptor(NativeResponse.prototype, 'status').get;
 const nativeResponseStatusTextGetter = nativeObjectGetOwnPropertyDescriptor(NativeResponse.prototype, 'statusText').get;
 const nativeStringIndexOf = String.prototype.indexOf;
+const nativeStringSlice = String.prototype.slice;
 const nativeStringStartsWith = String.prototype.startsWith;
 const nativeStringTrim = String.prototype.trim;
+const nativeUrlHostnameGetter = nativeObjectGetOwnPropertyDescriptor(NativeURL.prototype, 'hostname').get;
 const nativeUrlPathnameGetter = nativeObjectGetOwnPropertyDescriptor(NativeURL.prototype, 'pathname').get;
 const immutableAssetPathPattern = new NativeRegExp(${immutableAssetPathPatternSourceLiteral}, ${immutableAssetPathPatternFlagsLiteral});
+const ipv4AddressPattern = new NativeRegExp('^(?:0|[1-9][0-9]{0,2})(?:[.](?:0|[1-9][0-9]{0,2})){3}$', 'u');
+const ipv6AddressPattern = new NativeRegExp('^[0-9A-Fa-f:.]+$', 'u');
 const clientModuleHeaders = ${clientModuleHeadersSource};
 const immutableAssetHeaders = ${immutableAssetHeadersSource};
 const revalidatingAssetHeaders = ${revalidatingAssetHeadersSource};
@@ -1861,6 +1865,13 @@ export default {
     }
 
     const dispatchRequest = cloudflareRequestForDispatch(request);
+    if (dispatchRequest === undefined) {
+      return new NativeResponse(null, {
+        headers: { 'cache-control': 'no-store' },
+        status: 403,
+        statusText: 'Forbidden',
+      });
+    }
     const handler = await loadHandler();
     return handler(dispatchRequest);
   },
@@ -1890,17 +1901,26 @@ function ownDataValue(value, property) {
 
 function cloudflareRequestForDispatch(request) {
   const headers = apply(nativeRequestHeadersGetter, request, []);
-  const workerSubrequest =
+  // Cloudflare documents that a direct edge request has no x-real-ip, same-zone Worker
+  // subrequests derive CF-Connecting-IP from caller-mutable x-real-ip, and cross-zone Worker
+  // subrequests use the fixed IPv6 sentinel below. CF-Worker is added to fetch() subrequests, but
+  // Cloudflare does not promise to strip a direct caller's header of that name. Every such signal
+  // is therefore rejection-only: it must never mint an alternate admitted rate-limit identity.
+  if (
     apply(nativeHeadersGet, headers, ['cf-worker']) !== null ||
-    apply(nativeHeadersGet, headers, ['x-real-ip']) !== null;
-  // Cloudflare documents that same-zone Worker subrequests derive CF-Connecting-IP from the
-  // caller-mutable x-real-ip header. Give every Worker subrequest a separate stable identity so
-  // changing that header cannot rotate the default per-IP bucket. Direct edge requests instead
-  // receive Cloudflare's single authenticated CF-Connecting-IP value.
-  const clientIp = workerSubrequest
-    ? 'cloudflare:worker-subrequest'
-    : platformSingleHeaderValue(apply(nativeHeadersGet, headers, ['cf-connecting-ip'])) ??
-      'cloudflare:unresolved-client';
+    apply(nativeHeadersGet, headers, ['x-real-ip']) !== null
+  ) {
+    return undefined;
+  }
+  const clientIp = canonicalPlatformIpAddress(
+    apply(nativeHeadersGet, headers, ['cf-connecting-ip']),
+  );
+  if (clientIp === undefined || clientIp === '2a06:98c0:3600::103') return undefined;
+
+  // HTTP Service Bindings can deliver a caller-constructed Request to this same default fetch
+  // entrypoint, and Cloudflare documents no authenticated invocation-kind bit on that Request.
+  // Kovo consequently does not support HTTP Service Binding ingress here. A separate gateway must
+  // establish caller authority with platform-authenticated ctx.props before entering an app.
   const dispatchRequest = new NativeRequest(request);
   apply(nativeObjectDefineProperty, NativeObject, [dispatchRequest, '__kovoPeerAddress', {
     configurable: false,
@@ -1909,6 +1929,30 @@ function cloudflareRequestForDispatch(request) {
     writable: false,
   }]);
   return dispatchRequest;
+}
+
+function canonicalPlatformIpAddress(value) {
+  const candidate = platformSingleHeaderValue(value);
+  if (candidate === undefined || candidate.length > 45) return undefined;
+  try {
+    if (apply(nativeRegExpExec, ipv4AddressPattern, [candidate]) !== null) {
+      const parsed = new NativeURL('http://' + candidate + '/');
+      const canonical = apply(nativeUrlHostnameGetter, parsed, []);
+      return canonical === candidate ? canonical : undefined;
+    }
+    if (
+      apply(nativeStringIndexOf, candidate, [':']) !== -1 &&
+      apply(nativeRegExpExec, ipv6AddressPattern, [candidate]) !== null
+    ) {
+      const parsed = new NativeURL('http://[' + candidate + ']/');
+      const hostname = apply(nativeUrlHostnameGetter, parsed, []);
+      const canonical = apply(nativeStringSlice, hostname, [1, -1]);
+      return canonical === '' ? undefined : canonical;
+    }
+  } catch {
+    return undefined;
+  }
+  return undefined;
 }
 
 function platformSingleHeaderValue(value) {
@@ -2084,6 +2128,8 @@ function wranglerTomlSource(options: CloudflarePresetOptions): string {
       'main = "./worker.mjs"',
       `compatibility_date = ${tomlString(compatibilityDate)}`,
       'compatibility_flags = ["nodejs_compat"]',
+      '# Security: Kovo supports public Cloudflare edge ingress only.',
+      '# HTTP Service Binding ingress is unsupported; use only Cloudflare edge routes.',
       '',
       '[assets]',
       'directory = "./client"',
