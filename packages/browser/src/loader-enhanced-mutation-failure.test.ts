@@ -10,8 +10,8 @@ import {
 } from './runtime-test-fakes.js';
 
 // SPEC.md §4.4: failed enhanced submits clear pending state and route through the
-// configured error seam (per-mutation onError or loader onError with native
-// fallback); split from the submit and broadcast seams in the sibling
+// configured error seam (per-mutation onError or loader onError with server-truth
+// recovery); split from the submit and broadcast seams in the sibling
 // loader-enhanced-mutation-*.test.ts files.
 describe('loader enhanced mutation failures', () => {
   it('reports enhanced loader submit failures after preventing native submit', async () => {
@@ -77,6 +77,7 @@ describe('loader enhanced mutation failures', () => {
     expect(onError).toHaveBeenCalledWith(error, form);
     expect(loaderOnError).not.toHaveBeenCalled();
     expect(requestSubmit).not.toHaveBeenCalled();
+    expect(form.getAttribute('data-error-code')).toBe('NETWORK_ERROR');
     expect(importModule).not.toHaveBeenCalled();
     expect(pendingForm.attributes).not.toHaveProperty('kovo-pending');
     expect(pendingForm.attributes).not.toHaveProperty('aria-busy');
@@ -126,7 +127,7 @@ describe('loader enhanced mutation failures', () => {
     });
   });
 
-  it('falls back to native submit when unhandled enhanced submits fail', async () => {
+  it('never replays an ambiguous failed POST under a second idempotency key', async () => {
     const loaderRoot = new FakeRoot();
     const mutationRoot = new FakeMorphRoot();
     const store = createQueryStore();
@@ -134,6 +135,11 @@ describe('loader enhanced mutation failures', () => {
     const onError = vi.fn();
     const requestSubmit = vi.fn();
     const error = new Error('network down');
+    const freshIdem = '00000000-0000-4000-8000-000000000111';
+    const formData = new FormData();
+    formData.set('Kovo-Idem', 'idem_rendered_old');
+    const attempts: Array<{ bodyIdem: FormDataEntryValue | null; headerIdem: string | undefined }> =
+      [];
     const form = Object.assign(
       new FakeFormElement(
         { enhance: '', 'data-mutation': 'cart/add' },
@@ -147,10 +153,15 @@ describe('loader enhanced mutation failures', () => {
 
     installKovoLoader({
       enhancedMutations: {
-        fetch: vi.fn(async () => {
+        fetch: vi.fn(async (_url, init) => {
+          attempts.push({
+            bodyIdem: (init.body as FormData).get('Kovo-Idem'),
+            headerIdem: init.headers['Kovo-Idem'],
+          });
           throw error;
         }),
-        formData: () => new FormData(),
+        formData: () => formData,
+        idem: () => freshIdem,
         root: mutationRoot,
         store,
       },
@@ -168,7 +179,9 @@ describe('loader enhanced mutation failures', () => {
     ).resolves.toBeUndefined();
 
     expect(preventDefault).toHaveBeenCalledTimes(1);
-    expect(requestSubmit).toHaveBeenCalledTimes(1);
+    expect(requestSubmit).not.toHaveBeenCalled();
+    expect(attempts).toEqual([{ bodyIdem: freshIdem, headerIdem: freshIdem }]);
+    expect(form.getAttribute('data-error-code')).toBe('NETWORK_ERROR');
     expect(onError).toHaveBeenCalledWith(error, {
       event: { preventDefault, target: form, type: 'submit' },
       phase: 'enhanced-mutation',

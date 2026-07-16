@@ -419,8 +419,10 @@ export function installEnhancedNavigationRuntime(
       return false;
     }
     const currentUrl = security.currentUrl();
+    const documentBase = security.documentBaseUrl();
     const href = security.readAttribute(anchor, 'href') ?? readOwnNavigationString(anchor, 'href');
-    const url = currentUrl && href ? security.parseUrl(href, currentUrl.href) : undefined;
+    const url =
+      currentUrl && documentBase && href ? security.parseUrl(href, documentBase.href) : undefined;
     // SPEC §§6.3/6.6/8: origin equality is not enough for enhanced document transport. Opaque
     // schemes can compare `null === null`, while same-origin blob URLs are not server documents.
     if (

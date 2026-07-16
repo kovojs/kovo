@@ -608,6 +608,7 @@ describe('inline loader enhanced submit source', () => {
         FormData: globalRecord.FormData,
         addEventListener: globalRecord.addEventListener,
         document: globalRecord.document,
+        dispatchEvent: globalRecord.dispatchEvent,
         fetch: globalRecord.fetch,
         importModule: globalRecord.__kovoInlineImport,
         location: globalRecord.location,
@@ -641,6 +642,7 @@ describe('inline loader enhanced submit source', () => {
             return [];
           },
         };
+        globalRecord.dispatchEvent = () => true;
         globalRecord.fetch = vi.fn(async () =>
           mutationResponse('/_m/account/update', {
             headers: {
@@ -692,6 +694,7 @@ describe('inline loader enhanced submit source', () => {
           FormData: originals.FormData,
           addEventListener: originals.addEventListener,
           document: originals.document,
+          dispatchEvent: originals.dispatchEvent,
           fetch: originals.fetch,
           location: originals.location,
         });
@@ -1184,8 +1187,13 @@ describe('inline loader enhanced submit source', () => {
           await new Promise((resolve) => setTimeout(resolve, 0));
 
           expect(text).not.toHaveBeenCalled();
-          expect(requestSubmit).toHaveBeenCalledWith(submitter);
-          expect(attributes.has('data-kovo-native-fallback')).toBe(false);
+          expect(requestSubmit).not.toHaveBeenCalled();
+          expect(attributes).toEqual(
+            new Map([
+              ['data-error-code', 'NETWORK_ERROR'],
+              ['kovo-error', ''],
+            ]),
+          );
         }
       } finally {
         Object.assign(globalRecord, {

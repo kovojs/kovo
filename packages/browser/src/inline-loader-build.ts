@@ -1337,20 +1337,15 @@ function installInlineKovoLoader(im) {
       bns.releaseStreamReader(reader);
     }
   };
-  const fsb = (form, submitter) => {
-    let marked = false;
-    try {
-      bns.setElementAttribute(form, 'data-kovo-native-fallback', '');
-      marked = true;
-    } catch {}
-    if (marked) {
-      try {
-        if (bns.requestSubmitForm(form, submitter)) return;
-      } finally {
-        try {
-          bns.removeElementAttribute(form, 'data-kovo-native-fallback');
-        } catch {}
-      }
+  const recoverMutation = (form, transport) => {
+    // SPEC §§9.1/10.3: a transport failure is ambiguous after dispatch. Native resubmission could
+    // execute the mutation again under a different fresh replay key, so recover only through the
+    // canonical source-document GET selected before preventDefault.
+    bns.setHistoryScrollRestoration('auto');
+    if (bns.navigateSameOrigin(transport.sourceUrl)) return;
+    if (bns.hasReloadControl()) {
+      bns.reload();
+      return;
     }
     try {
       bns.setElementAttribute(form, 'data-error-code', 'NETWORK_ERROR');
@@ -1459,7 +1454,12 @@ function installInlineKovoLoader(im) {
       submitterAction ??
       ras(form, 'action') ??
       '';
-    const action = bns.parseUrl(rawAction || current.href, current.href);
+    const documentBase = bns.documentBaseUrl();
+    if (!documentBase) return;
+    const action = bns.parseUrl(
+      rawAction || current.href,
+      rawAction ? documentBase.href : current.href,
+    );
     // SPEC §§6.3/6.6/9.1: equality of two serialized opaque null origins is not same-origin
     // proof for the credential-bearing relative fetch performed below.
     if (
@@ -1487,14 +1487,21 @@ function installInlineKovoLoader(im) {
     return bns.lower(bns.trim(separator < 0 ? contentType : bns.slice(contentType, 0, separator)));
   };
   const sef = (event, form, submitter, transport) => {
-    if (!bns.preventDelegatedEventDefault(event)) return;
     const streaming = bns.readAttribute(form, 'data-mutation-stream') !== null;
-    const body = bns.createFormData(form, submitter);
-    // SPEC §10.3: the rendered hidden value is the no-JS retry token, not a form-instance
-    // constant. Every enhanced logical submit mints fresh authority and commits that exact value
-    // to both the body field and header through the boot-captured FormData setter.
-    const idem = ci();
-    bns.setFormDataValue(body, 'Kovo-Idem', idem);
+    let body;
+    let idem;
+    try {
+      body = bns.createFormData(form, submitter);
+      // SPEC §10.3: the rendered hidden value is the no-JS retry token, not a form-instance
+      // constant. Every enhanced logical submit mints fresh authority and commits that exact value
+      // to both the body field and header through the boot-captured FormData setter.
+      idem = ci();
+      bns.setFormDataValue(body, 'Kovo-Idem', idem);
+    } catch {
+      // Preparation is known to precede dispatch, so leave the native event and rendered token.
+      return;
+    }
+    if (!bns.preventDelegatedEventDefault(event)) return;
     void (async () => {
       try {
         const response = await bns.fetchValue(transport.action, {
@@ -1586,7 +1593,7 @@ function installInlineKovoLoader(im) {
           pb(text, changes, responseBuild);
         }
       } catch (error) {
-        if (error !== streamRecoveryError) fsb(form, submitter);
+        if (error !== streamRecoveryError) recoverMutation(form, transport);
       }
     })();
   };
@@ -1920,6 +1927,7 @@ function installInlineKovoBootstrap(runtimeUrl, runtimeImport) {
   const nativeNodeListLength = capturedGetter(globalThis.NodeList?.prototype, 'length');
   const nativeNodeListItem = capturedMethod(globalThis.NodeList?.prototype, 'item');
   const nativeIsConnected = capturedGetter(globalThis.Node?.prototype, 'isConnected');
+  const nativeNodeBaseUri = capturedGetter(globalThis.Node?.prototype, 'baseURI');
   const nativeUrlHref = capturedGetter(globalThis.URL?.prototype, 'href');
   const nativeUrlOrigin = capturedGetter(globalThis.URL?.prototype, 'origin');
   const nativeUrlPathname = capturedGetter(globalThis.URL?.prototype, 'pathname');
@@ -1933,6 +1941,10 @@ function installInlineKovoBootstrap(runtimeUrl, runtimeImport) {
   const nativeLocationProtocol = capturedGetter(browserLocation, 'protocol');
   const nativeLocationSearch = capturedGetter(browserLocation, 'search');
   const nativeLocationAssign = capturedMethod(browserLocation, 'assign');
+  const nativeEffectiveOrigin = capturedGetter(globalThis, 'origin');
+  const effectiveOriginBootValue = nativeEffectiveOrigin
+    ? undefined
+    : ownValue(globalThis, 'origin');
   let nativeRequestSubmit;
   let submitControlsReady = false;
   try {
@@ -2001,6 +2013,7 @@ function installInlineKovoBootstrap(runtimeUrl, runtimeImport) {
       typeof nativeNodeListLength !== 'function' ||
       typeof nativeNodeListItem !== 'function' ||
       typeof nativeIsConnected !== 'function' ||
+      typeof nativeNodeBaseUri !== 'function' ||
       typeof nativeUrlHref !== 'function' ||
       typeof nativeUrlOrigin !== 'function' ||
       typeof nativeUrlPathname !== 'function' ||
@@ -2012,7 +2025,9 @@ function installInlineKovoBootstrap(runtimeUrl, runtimeImport) {
       typeof nativeLocationPathname !== 'function' ||
       typeof nativeLocationProtocol !== 'function' ||
       typeof nativeLocationSearch !== 'function' ||
-      typeof nativeLocationAssign !== 'function'
+      typeof nativeLocationAssign !== 'function' ||
+      (typeof nativeEffectiveOrigin !== 'function' &&
+        typeof effectiveOriginBootValue !== 'string')
     ) {
       throw new TypeError('Kovo bootstrap replay controls are unavailable.');
     }
@@ -2055,6 +2070,7 @@ function installInlineKovoBootstrap(runtimeUrl, runtimeImport) {
       hasAttributeControl.called !== true ||
       hasAttributeControl.value !== false ||
       readCaptured(replayControl, nativeIsConnected, 'isConnected') !== false ||
+      typeof readCaptured(doc, nativeNodeBaseUri, 'baseURI') !== 'string' ||
       readCaptured(urlControl, nativeUrlHref, 'href') !==
         'https://kovo.invalid/control?ready=1#ok' ||
       readCaptured(urlControl, nativeUrlOrigin, 'origin') !== 'https://kovo.invalid' ||
@@ -2066,7 +2082,10 @@ function installInlineKovoBootstrap(runtimeUrl, runtimeImport) {
       typeof readCaptured(browserLocation, nativeLocationOrigin, 'origin') !== 'string' ||
       typeof readCaptured(browserLocation, nativeLocationPathname, 'pathname') !== 'string' ||
       typeof readCaptured(browserLocation, nativeLocationProtocol, 'protocol') !== 'string' ||
-      typeof readCaptured(browserLocation, nativeLocationSearch, 'search') !== 'string'
+      typeof readCaptured(browserLocation, nativeLocationSearch, 'search') !== 'string' ||
+      typeof (nativeEffectiveOrigin
+        ? readCaptured(globalThis, nativeEffectiveOrigin, 'origin')
+        : effectiveOriginBootValue) !== 'string'
     ) {
       throw new TypeError('Kovo bootstrap event controls are unavailable.');
     }
@@ -2174,11 +2193,17 @@ function installInlineKovoBootstrap(runtimeUrl, runtimeImport) {
     const pathname = readCaptured(browserLocation, nativeLocationPathname, 'pathname');
     const protocol = readCaptured(browserLocation, nativeLocationProtocol, 'protocol');
     const search = readCaptured(browserLocation, nativeLocationSearch, 'search');
+    const effectiveOrigin = nativeEffectiveOrigin
+      ? readCaptured(globalThis, nativeEffectiveOrigin, 'origin')
+      : effectiveOriginBootValue;
     return typeof href === 'string' &&
       typeof origin === 'string' &&
       typeof pathname === 'string' &&
       typeof protocol === 'string' &&
-      typeof search === 'string'
+      typeof search === 'string' &&
+      typeof effectiveOrigin === 'string' &&
+      effectiveOrigin !== 'null' &&
+      effectiveOrigin === origin
       ? { href, origin, pathname, protocol, search }
       : undefined;
   };
@@ -2303,9 +2328,10 @@ function installInlineKovoBootstrap(runtimeUrl, runtimeImport) {
       return;
     }
     const location = currentLocation();
+    const documentBase = readCaptured(doc, nativeNodeBaseUri, 'baseURI');
     const href = readAttribute(anchor, 'href');
-    if (!location || !href) return;
-    const url = parseUrl(href, location.href);
+    if (!location || typeof documentBase !== 'string' || !documentBase || !href) return;
+    const url = parseUrl(href, documentBase);
     if (
       !url ||
       location.origin === 'null' ||
@@ -2341,7 +2367,12 @@ function installInlineKovoBootstrap(runtimeUrl, runtimeImport) {
       submitterAction ??
       readAttribute(form, 'action') ??
       '';
-    const action = parseUrl(rawAction || location.href, location.href);
+    const documentBase = readCaptured(doc, nativeNodeBaseUri, 'baseURI');
+    if (typeof documentBase !== 'string' || !documentBase) return;
+    const action = parseUrl(
+      rawAction || location.href,
+      rawAction ? documentBase : location.href,
+    );
     // SPEC §§6.3/6.6/9.1: paint-first takeover enforces the same non-opaque network floor as the
     // deferred runtime before suppressing native submission.
     if (

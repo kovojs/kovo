@@ -72,6 +72,54 @@ async function installGeneratedInlineLoader(
   if (scriptError) throw scriptError;
 }
 
+async function runSandboxOriginProbe(
+  mode: 'full' | 'paint',
+  source: string,
+): Promise<{
+  clickPrevented: boolean;
+  effectiveOrigin: string;
+  fetchCalls: number;
+  importCalls: number;
+  locationOrigin: string;
+  submitPrevented: boolean;
+}> {
+  const frame = document.createElement('iframe');
+  frame.sandbox.add('allow-scripts', 'allow-forms');
+  const id = `sandbox-origin-${frames.length}`;
+  const loaded = new Promise<void>((resolve) => {
+    frame.addEventListener('load', () => resolve(), { once: true });
+  });
+  frame.src = `/__kovo_inline_security_fixture?sandbox-origin-probe=${frames.length}`;
+  frames.push(frame);
+  document.body.append(frame);
+  await loaded;
+  const result = new Promise<{
+    clickPrevented: boolean;
+    effectiveOrigin: string;
+    fetchCalls: number;
+    importCalls: number;
+    locationOrigin: string;
+    submitPrevented: boolean;
+  }>((resolve, reject) => {
+    const listener = (event: MessageEvent) => {
+      const value = event.data as { error?: unknown; id?: unknown; type?: unknown };
+      if (
+        event.source !== frame.contentWindow ||
+        value?.type !== 'kovo:sandbox-origin-result' ||
+        value.id !== id
+      ) {
+        return;
+      }
+      window.removeEventListener('message', listener);
+      if (value.error) reject(new Error(String(value.error)));
+      else resolve(event.data);
+    };
+    window.addEventListener('message', listener);
+  });
+  frame.contentWindow?.postMessage({ id, mode, source, type: 'kovo:sandbox-origin-probe' }, '*');
+  return result;
+}
+
 function responseHeaders(build: string | undefined, contentType = 'text/html') {
   return {
     get(name: string) {
@@ -380,6 +428,17 @@ it.each(['data:/_m/chat', 'blob:/_m/chat', 'file:/_m/chat'])(
   },
 );
 
+it('rejects enhanced authority in an opaque-origin sandboxed network document', async () => {
+  const result = await runSandboxOriginProbe('full', inlineKovoLoaderInstallerSource);
+
+  expect(result.locationOrigin).toBe(location.origin);
+  expect(result.effectiveOrigin).toBe('null');
+  expect(result.submitPrevented).toBe(false);
+  expect(result.clickPrevented).toBe(false);
+  expect(result.fetchCalls).toBe(0);
+  expect(result.importCalls).toBe(0);
+});
+
 it.each([
   ['empty formaction', 'formaction=""'],
   ['empty formmethod', 'formmethod=""'],
@@ -413,6 +472,96 @@ it.each([
     expect(fetch).not.toHaveBeenCalled();
   },
 );
+
+it('matches the live document base for mutation and navigation targets', async () => {
+  const harness = await createFrame(
+    [
+      '<form data-mutation="delete" action="/_m/delete" method="post">',
+      '<button id="delete" formaction="_m/delete" formmethod="post">delete</button>',
+      '</form>',
+      '<a id="account" href="account">account</a>',
+    ].join(''),
+    '<base href="/safe/">',
+  );
+  const fetch = vi.fn(() => new Promise<Response>(() => {}));
+  (harness.window as unknown as Record<string, unknown>).fetch = fetch;
+  await installGeneratedInlineLoader(harness.window);
+
+  const form = harness.window.document.querySelector('form');
+  const submitter = harness.window.document.querySelector<HTMLButtonElement>('#delete');
+  const anchor = harness.window.document.querySelector<HTMLAnchorElement>('#account');
+  if (!form || !submitter || !anchor) throw new Error('missing document-base fixture');
+  expect(new harness.window.URL(submitter.formAction).pathname).toBe('/safe/_m/delete');
+  expect(new harness.window.URL(anchor.href).pathname).toBe('/safe/account');
+
+  const submitEvent = new harness.window.SubmitEvent('submit', {
+    bubbles: true,
+    cancelable: true,
+    submitter,
+  });
+  form.dispatchEvent(submitEvent);
+  const clickEvent = new harness.window.MouseEvent('click', { bubbles: true, cancelable: true });
+  anchor.dispatchEvent(clickEvent);
+
+  expect(submitEvent.defaultPrevented).toBe(false);
+  expect(clickEvent.defaultPrevented).toBe(true);
+  expect(fetch).toHaveBeenCalledTimes(1);
+  expect(fetch.mock.calls[0]?.[0]).toBe(`${harness.window.location.origin}/safe/account`);
+});
+
+it('recovers an ambiguous mutation failure with one POST and one fresh replay key', async () => {
+  const renderedIdem = 'idem_rendered_old';
+  const harness = await createFrame(
+    [
+      '<form data-mutation="delete" action="/_m/delete" method="post">',
+      `<input name="Kovo-Idem" value="${renderedIdem}">`,
+      '<button>delete</button>',
+      '</form>',
+    ].join(''),
+    '',
+  );
+  const form = harness.window.document.querySelector<HTMLFormElement>('form');
+  if (!form) throw new Error('missing no-replay mutation fixture');
+  const getDescriptor = Object.getOwnPropertyDescriptor(harness.window.FormData.prototype, 'get');
+  if (!getDescriptor || !('value' in getDescriptor) || typeof getDescriptor.value !== 'function') {
+    throw new Error('missing frame FormData getter');
+  }
+  let submitEvents = 0;
+  form.addEventListener('submit', (event) => {
+    submitEvents += 1;
+    // Keep the vulnerable requestSubmit retry inside the fixture so it can be counted exactly.
+    if (submitEvents > 1) event.preventDefault();
+  });
+  const attempts: Array<{ bodyIdem: unknown; headerIdem: unknown }> = [];
+  const fetch = vi.fn(
+    async (_url: string, init: { body: unknown; headers: Record<string, string> }) => {
+      attempts.push({
+        bodyIdem: Reflect.apply(getDescriptor.value, init.body, ['Kovo-Idem']),
+        headerIdem: init.headers['Kovo-Idem'],
+      });
+      return {
+        headers: responseHeaders(undefined, 'text/html'),
+        ok: true,
+        status: 200,
+        async text() {
+          return '<html>not fragment truth</html>';
+        },
+        url: `${harness.window.location.origin}/_m/delete`,
+      };
+    },
+  );
+  (harness.window as unknown as Record<string, unknown>).fetch = fetch;
+
+  await installGeneratedInlineLoader(harness.window);
+  form.dispatchEvent(new harness.window.SubmitEvent('submit', { bubbles: true, cancelable: true }));
+
+  await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+  await vi.waitFor(() => expect(harness.loadCount()).toBeGreaterThan(1));
+  expect(attempts).toHaveLength(1);
+  expect(attempts[0]?.bodyIdem).toBe(attempts[0]?.headerIdem);
+  expect(attempts[0]?.bodyIdem).not.toBe(renderedIdem);
+  expect(submitEvents).toBe(1);
+});
 
 it('leaves opaque data-document navigation native without fetching it', async () => {
   const attackDocument = encodeURIComponent(
@@ -752,7 +901,7 @@ it.each([
   },
 );
 
-it('pins deferred-runtime native submit before a late prototype replacement', async () => {
+it('never consults deferred-runtime native submit after an ambiguous POST failure', async () => {
   const harness = await createFrame(
     [
       '<iframe hidden name="kovo-c210-deferred-sink"></iframe>',
@@ -786,15 +935,7 @@ it('pins deferred-runtime native submit before a late prototype replacement', as
       new harness.window.SubmitEvent('submit', { bubbles: true, cancelable: true }),
     );
 
-    await vi.waitFor(() => {
-      let navigated = false;
-      try {
-        navigated = sink.contentWindow?.location.pathname === '/_m/deferred-runtime';
-      } catch {
-        navigated = true;
-      }
-      expect(navigated).toBe(true);
-    });
+    await vi.waitFor(() => expect(harness.loadCount()).toBeGreaterThan(1));
     expect(poisonedRequestSubmit).not.toHaveBeenCalled();
   } finally {
     Object.defineProperty(prototype, 'requestSubmit', descriptor);

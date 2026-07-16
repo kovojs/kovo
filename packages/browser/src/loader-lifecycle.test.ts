@@ -7,6 +7,7 @@ import {
   installExecutionTriggers,
 } from './loader-lifecycle.js';
 import { createQueryStore } from './query-store.js';
+import { fallbackEnhancedMutationSubmit } from './mutation-form.js';
 import {
   FakeElement,
   FakeFormElement,
@@ -171,12 +172,66 @@ describe('loader lifecycle', () => {
 
     expect(preventDefault).toHaveBeenCalledTimes(1);
     expect(fetch).toHaveBeenCalledWith('/_m/cart/add', expect.objectContaining({ method: 'POST' }));
-    expect(form.submitted).toBe(true);
+    expect(form.submitted).toBe(false);
+    expect(form.getAttribute('data-error-code')).toBe('NETWORK_ERROR');
     expect(importModule).not.toHaveBeenCalled();
     expect(onError).toHaveBeenCalledWith(fetchError, {
       event: expect.objectContaining({ type: 'submit' }),
       phase: 'enhanced-mutation',
     });
+  });
+
+  it('keeps one synchronous requestSubmit fallback out of both delegated submit gates', async () => {
+    const root = new FakeRoot();
+    const form = new FakeFormElement(
+      {
+        'data-mutation': 'cart/add',
+        enhance: '',
+        'on:submit': '/c/cart.js#submit',
+      },
+      { action: '/_m/cart/add', method: 'post' },
+    );
+    const preventDefault = vi.fn();
+    let fallbackLifecycle: Promise<void> | undefined;
+    const requestSubmit = vi.fn(() => {
+      fallbackLifecycle = root.listeners.get('submit')?.({
+        preventDefault,
+        target: form,
+        type: 'submit',
+      }) as Promise<void> | undefined;
+    });
+    Object.assign(form, { requestSubmit });
+    const fetch = vi.fn(async () => ({
+      headers: { get: () => 'text/vnd.kovo.fragment+html' },
+      ok: true,
+      status: 200,
+      async text() {
+        return '';
+      },
+      url: 'http://localhost/_m/cart/add',
+    }));
+    const importModule = vi.fn(async () => ({ submit: vi.fn() }));
+
+    installDelegatedEventLifecycle({
+      enhancedMutations: {
+        fetch,
+        formData: () => new FormData(),
+        root: root as never,
+        store: createQueryStore(),
+      },
+      events: ['submit'],
+      importModule,
+      islandSignalScope: createIslandSignalScope(),
+      root,
+    });
+
+    fallbackEnhancedMutationSubmit(form);
+    await fallbackLifecycle;
+
+    expect(requestSubmit).toHaveBeenCalledOnce();
+    expect(preventDefault).not.toHaveBeenCalled();
+    expect(fetch).not.toHaveBeenCalled();
+    expect(importModule).not.toHaveBeenCalled();
   });
 
   it('does not run idle handler after dispose (K5 post-dispose guard)', async () => {

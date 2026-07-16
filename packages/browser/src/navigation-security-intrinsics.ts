@@ -232,6 +232,7 @@ export function createBrowserNavigationSecurityControls(
     ? valueMethod(NativeNode.prototype, 'insertBefore')
     : undefined;
   const nodeChildNodes = NativeNode ? getter(NativeNode.prototype, 'childNodes') : undefined;
+  const nodeBaseUri = NativeNode ? getter(NativeNode.prototype, 'baseURI') : undefined;
   const nodeContains = NativeNode ? valueMethod(NativeNode.prototype, 'contains') : undefined;
   const nodeIsConnected = NativeNode ? getter(NativeNode.prototype, 'isConnected') : undefined;
   const nodeTextContent = NativeNode ? getter(NativeNode.prototype, 'textContent') : undefined;
@@ -476,6 +477,11 @@ export function createBrowserNavigationSecurityControls(
   const locationObject = scope.location;
   const documentObject = scope.document;
   const historyObject = scope.history;
+  // A sandboxed network document can expose an HTTPS Location while its effective origin is the
+  // opaque string `null`. Capture the Window/WorkerGlobalScope origin control independently so a
+  // URL-origin comparison can never stand in for the document's actual authority.
+  const effectiveOriginGetter = stableGetter(scope, 'origin');
+  const effectiveOriginBootValue = effectiveOriginGetter ? undefined : readOwnData(scope, 'origin');
   // SPEC §6.6/§8: enhanced-navigation recovery remains framework authority after authored
   // modules execute. Capture these optional browser controls once; live document/history reads
   // would let a late same-realm replacement retain stale privileged DOM.
@@ -2225,7 +2231,52 @@ export function createBrowserNavigationSecurityControls(
     if (claimedOrigin !== undefined && claimedOrigin !== parsed.origin) return undefined;
     const claimedProtocol = readLocationString('protocol');
     if (claimedProtocol !== undefined && claimedProtocol !== parsed.protocol) return undefined;
+    if (NativeDocument) {
+      const effectiveOrigin = readEffectiveOrigin();
+      if (
+        effectiveOrigin === undefined ||
+        effectiveOrigin === 'null' ||
+        effectiveOrigin !== parsed.origin
+      ) {
+        return undefined;
+      }
+    }
     return parsed;
+  }
+
+  function readEffectiveOrigin(): string | undefined {
+    let value: unknown;
+    try {
+      value = effectiveOriginGetter
+        ? apply(effectiveOriginGetter, scope, [])
+        : effectiveOriginBootValue;
+    } catch {
+      return undefined;
+    }
+    return typeof value === 'string' ? value : undefined;
+  }
+
+  /**
+   * Return the document URL base used by native relative URL attributes.
+   *
+   * SPEC §§6.3/7/8/9.1: form and anchor eligibility must agree with the browser's native target
+   * even when a same-origin `<base>` changes relative-URL resolution. The platform getter is
+   * captured at construction so a later prototype replacement cannot select a different endpoint.
+   * Browser-free structural runtimes have no Document/Node authority and use the current URL as
+   * their deterministic base.
+   */
+  function documentBaseUrl(): NavigationUrlFacts | undefined {
+    const location = currentUrl();
+    if (!NativeDocument) return location ?? parseUrl('http://localhost/');
+    if (!controlsSound || !documentObject || !nodeBaseUri) return undefined;
+    try {
+      const value = apply<unknown>(nodeBaseUri, documentObject, []);
+      return typeof value === 'string' && value.length > 0
+        ? parseUrl(value, location?.href)
+        : undefined;
+    } catch {
+      return undefined;
+    }
   }
 
   function lower(value: string): string {
@@ -3006,6 +3057,7 @@ export function createBrowserNavigationSecurityControls(
         ) {
           return false;
         }
+        if (readEffectiveOrigin() === undefined) return false;
         // SPEC §6.6/§8: prove that the exact real-document query and EventTarget controls used
         // for bfcache enrollment preserve platform receiver and add/remove/dispatch semantics.
         const queriedRoot = apply<unknown>(documentQuerySelector, documentObject, ['html']);
@@ -3257,6 +3309,7 @@ export function createBrowserNavigationSecurityControls(
           !nodeCloneNode ||
           !nodeAppendChild ||
           !nodeInsertBefore ||
+          !nodeBaseUri ||
           !nodeChildNodes ||
           !nodeContains ||
           !nodeIsConnected ||
@@ -3581,6 +3634,7 @@ export function createBrowserNavigationSecurityControls(
     currentUrl,
     decodeComponent,
     decodeText,
+    documentBaseUrl,
     dispatchCustomEvent,
     fetchDocument,
     fetchWith,

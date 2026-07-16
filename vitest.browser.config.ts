@@ -9,12 +9,84 @@ export default defineConfig({
       name: 'kovo-browser-frame-fixture',
       configureServer(server) {
         server.middlewares.use((request, response, next) => {
+          if (request.url?.startsWith('/safe/account')) {
+            response.statusCode = 200;
+            response.setHeader('Content-Type', 'text/html; charset=utf-8');
+            response.end(
+              `<!doctype html><script>parent.postMessage({ type: 'kovo:safe-account' }, '*');</script>`,
+            );
+            return;
+          }
           if (!request.url?.startsWith('/__kovo_inline_security_fixture')) {
             next();
             return;
           }
           response.statusCode = 200;
           response.setHeader('Content-Type', 'text/html; charset=utf-8');
+          const fixtureUrl = new URL(request.url, 'http://localhost');
+          if (fixtureUrl.searchParams.has('sandbox-origin-probe')) {
+            response.end(`<!doctype html><html><head>
+              <link data-kovo-module-allowlist="/c/allowed.js">
+            </head><body>
+              <form data-mutation="delete" action="/_m/delete" method="post"><button>delete</button></form>
+              <a id="account" href="/account">account</a>
+              <button id="handler" on:click="/c/allowed.js#run">handler</button>
+              <script>
+                addEventListener('message', (message) => {
+                  const data = message.data;
+                  if (!data || data.type !== 'kovo:sandbox-origin-probe') return;
+                  let fetchCalls = 0;
+                  let importCalls = 0;
+                  globalThis.fetch = () => {
+                    fetchCalls += 1;
+                    return new Promise(() => {});
+                  };
+                  globalThis.__kovoSandboxImport = () => {
+                    importCalls += 1;
+                    return Promise.resolve({ run() {} });
+                  };
+                  globalThis.requestAnimationFrame = () => 1;
+                  try {
+                    if (data.mode === 'paint') {
+                      (0, eval)('(' + data.source + ")('/c/runtime.js',globalThis.__kovoSandboxImport);");
+                    } else {
+                      (0, eval)('(' + data.source + ')(globalThis.__kovoSandboxImport);');
+                    }
+                    const form = document.querySelector('form');
+                    const submit = new SubmitEvent('submit', { bubbles: true, cancelable: true });
+                    form.dispatchEvent(submit);
+                    const anchor = document.querySelector('#account');
+                    const click = new MouseEvent('click', { bubbles: true, cancelable: true });
+                    anchor.dispatchEvent(click);
+                    if (data.mode !== 'paint') {
+                      document.querySelector('#handler').dispatchEvent(
+                        new MouseEvent('click', { bubbles: true, cancelable: true }),
+                      );
+                    }
+                    setTimeout(() => {
+                      parent.postMessage({
+                        clickPrevented: click.defaultPrevented,
+                        effectiveOrigin: globalThis.origin,
+                        fetchCalls,
+                        id: data.id,
+                        importCalls,
+                        locationOrigin: location.origin,
+                        submitPrevented: submit.defaultPrevented,
+                        type: 'kovo:sandbox-origin-result',
+                      }, '*');
+                    }, 0);
+                  } catch (error) {
+                    parent.postMessage({
+                      error: String(error && error.message || error),
+                      id: data.id,
+                      type: 'kovo:sandbox-origin-result',
+                    }, '*');
+                  }
+                });
+              </script>
+            </body></html>`);
+            return;
+          }
           response.end('<!doctype html><html><head></head><body></body></html>');
         });
       },

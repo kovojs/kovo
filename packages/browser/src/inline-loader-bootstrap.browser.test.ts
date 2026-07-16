@@ -50,6 +50,58 @@ async function networkFrame(body: string): Promise<Window & typeof globalThis> {
   return frameWindow as Window & typeof globalThis;
 }
 
+async function runPaintSandboxOriginProbe(): Promise<{
+  clickPrevented: boolean;
+  effectiveOrigin: string;
+  fetchCalls: number;
+  importCalls: number;
+  locationOrigin: string;
+  submitPrevented: boolean;
+}> {
+  const frame = document.createElement('iframe');
+  frame.sandbox.add('allow-scripts', 'allow-forms');
+  const id = `paint-sandbox-origin-${networkFrameId++}`;
+  const loaded = new Promise<void>((resolve) => {
+    frame.addEventListener('load', () => resolve(), { once: true });
+  });
+  frame.src = `/__kovo_inline_security_fixture?sandbox-origin-probe=${networkFrameId}`;
+  document.body.append(frame);
+  await loaded;
+  const result = new Promise<{
+    clickPrevented: boolean;
+    effectiveOrigin: string;
+    fetchCalls: number;
+    importCalls: number;
+    locationOrigin: string;
+    submitPrevented: boolean;
+  }>((resolve, reject) => {
+    const listener = (event: MessageEvent) => {
+      const value = event.data as { error?: unknown; id?: unknown; type?: unknown };
+      if (
+        event.source !== frame.contentWindow ||
+        value?.type !== 'kovo:sandbox-origin-result' ||
+        value.id !== id
+      ) {
+        return;
+      }
+      window.removeEventListener('message', listener);
+      if (value.error) reject(new Error(String(value.error)));
+      else resolve(event.data);
+    };
+    window.addEventListener('message', listener);
+  });
+  frame.contentWindow?.postMessage(
+    {
+      id,
+      mode: 'paint',
+      source: inlineKovoLoaderBootstrapInstallerSource,
+      type: 'kovo:sandbox-origin-probe',
+    },
+    '*',
+  );
+  return result;
+}
+
 async function nativeSubmitFixture(token: string): Promise<{
   form: HTMLFormElement;
   sink: HTMLIFrameElement;
@@ -550,6 +602,17 @@ describe('browser inline loader bootstrap', () => {
     },
   );
 
+  it('rejects paint-first authority in an opaque-origin sandboxed network document', async () => {
+    const result = await runPaintSandboxOriginProbe();
+
+    expect(result.locationOrigin).toBe(location.origin);
+    expect(result.effectiveOrigin).toBe('null');
+    expect(result.submitPrevented).toBe(false);
+    expect(result.clickPrevented).toBe(false);
+    expect(result.fetchCalls).toBe(0);
+    expect(result.importCalls).toBe(0);
+  });
+
   it.each([
     ['empty formaction', 'formaction=""'],
     ['empty formmethod', 'formmethod=""'],
@@ -586,6 +649,59 @@ describe('browser inline loader bootstrap', () => {
       expect(runtimeImport).not.toHaveBeenCalled();
     },
   );
+
+  it('matches the live document base during paint-first capture', async () => {
+    const frameWindow = await networkFrame(
+      [
+        '<form data-mutation="delete" action="/_m/delete" method="post">',
+        '<button id="delete" formaction="_m/delete" formmethod="post">delete</button>',
+        '</form>',
+        '<a id="account" href="account">account</a>',
+      ].join(''),
+    );
+    const base = frameWindow.document.createElement('base');
+    base.href = '/safe/';
+    frameWindow.document.head.prepend(base);
+    const runtimeImport = vi.fn(async () => {
+      throw new Error('runtime unavailable');
+    });
+    const globalRecord = frameWindow as unknown as Record<string, unknown>;
+    globalRecord.__kovoBaseRuntimeImport = runtimeImport;
+    globalRecord.requestAnimationFrame = () => 1;
+    const script = frameWindow.document.createElement('script');
+    script.textContent = `(${inlineKovoLoaderBootstrapInstallerSource})('/c/runtime.js',globalThis.__kovoBaseRuntimeImport);`;
+    frameWindow.document.head.append(script);
+
+    const form = frameWindow.document.querySelector('form');
+    const submitter = frameWindow.document.querySelector<HTMLButtonElement>('#delete');
+    const anchor = frameWindow.document.querySelector<HTMLAnchorElement>('#account');
+    if (!form || !submitter || !anchor)
+      throw new Error('missing paint-first document-base fixture');
+    expect(new frameWindow.URL(submitter.formAction).pathname).toBe('/safe/_m/delete');
+    expect(new frameWindow.URL(anchor.href).pathname).toBe('/safe/account');
+
+    const submitEvent = new frameWindow.SubmitEvent('submit', {
+      bubbles: true,
+      cancelable: true,
+      submitter,
+    });
+    form.dispatchEvent(submitEvent);
+    const safeNavigation = new Promise<void>((resolve) => {
+      const listener = (event: MessageEvent) => {
+        if (event.source !== frameWindow || event.data?.type !== 'kovo:safe-account') return;
+        window.removeEventListener('message', listener);
+        resolve();
+      };
+      window.addEventListener('message', listener);
+    });
+    const clickEvent = new frameWindow.MouseEvent('click', { bubbles: true, cancelable: true });
+    anchor.dispatchEvent(clickEvent);
+
+    expect(submitEvent.defaultPrevented).toBe(false);
+    expect(clickEvent.defaultPrevented).toBe(true);
+    expect(runtimeImport).toHaveBeenCalledTimes(1);
+    await safeNavigation;
+  });
 
   it('leaves opaque data-document navigation native during paint-first capture', async () => {
     const frame = document.createElement('iframe');

@@ -1,13 +1,39 @@
 import { afterEach, expect, it, vi } from 'vitest';
 
 import { fetchEnhancedMutation } from './mutation-fetch.js';
-import { fallbackEnhancedMutationSubmit } from './mutation-form.js';
+import {
+  fallbackEnhancedMutationSubmit,
+  readEligibleEnhancedMutationTransport,
+} from './mutation-form.js';
 
 const initialBody = document.body.innerHTML;
+const initialHead = document.head.innerHTML;
+const initialUrl = location.href;
 
 afterEach(() => {
   document.body.innerHTML = initialBody;
+  document.head.innerHTML = initialHead;
+  history.replaceState({}, '', initialUrl);
   vi.restoreAllMocks();
+});
+
+it('matches native submitter action resolution through the document base URL', () => {
+  history.replaceState({}, '', '/cart');
+  const base = document.createElement('base');
+  base.href = '/safe/';
+  document.head.prepend(base);
+  const form = document.createElement('form');
+  form.setAttribute('data-mutation', 'delete');
+  form.action = '/_m/delete';
+  form.method = 'post';
+  const submitter = document.createElement('button');
+  submitter.setAttribute('formaction', '_m/delete');
+  submitter.setAttribute('formmethod', 'post');
+  form.append(submitter);
+  document.body.append(form);
+
+  expect(new URL(submitter.formAction).pathname).toBe('/safe/_m/delete');
+  expect(readEligibleEnhancedMutationTransport(form, submitter)).toBeUndefined();
 });
 
 it('pins modular native submit before a late prototype replacement', async () => {

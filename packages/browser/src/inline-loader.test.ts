@@ -17,6 +17,7 @@ describe('inline loader source', () => {
       mouseEvent: globalRecord.MouseEvent,
       node: globalRecord.Node,
       nodeList: globalRecord.NodeList,
+      origin: globalRecord.origin,
       removeEventListener: globalRecord.removeEventListener,
       requestAnimationFrame: globalRecord.requestAnimationFrame,
       submitEvent: globalRecord.SubmitEvent,
@@ -25,6 +26,10 @@ describe('inline loader source', () => {
     const rafCallbacks: Function[] = [];
     const importModule = vi.fn(async () => ({}));
     class FakeElement extends EventTarget {
+      get baseURI(): string {
+        return 'http://app.test/';
+      }
+
       get isConnected(): boolean {
         return false;
       }
@@ -144,6 +149,7 @@ describe('inline loader source', () => {
       globalRecord.SubmitEvent = FakeSubmitEvent;
       globalRecord.document = new FakeDocument();
       globalRecord.location = new FakeLocation();
+      globalRecord.origin = 'http://app.test';
 
       runInThisContext(createInlineKovoLoaderSource(' globalThis.__kovoInlineImport '));
 
@@ -161,6 +167,7 @@ describe('inline loader source', () => {
         MouseEvent: originals.mouseEvent,
         Node: originals.node,
         NodeList: originals.nodeList,
+        origin: originals.origin,
         removeEventListener: originals.removeEventListener,
         requestAnimationFrame: originals.requestAnimationFrame,
         SubmitEvent: originals.submitEvent,

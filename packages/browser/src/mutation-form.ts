@@ -66,6 +66,11 @@ export function fallbackEnhancedMutationSubmit(
   form.setAttribute?.('kovo-error', '');
 }
 
+/** @internal Test whether this form is emitting its one synchronous native fallback submit. */
+export function isEnhancedMutationNativeFallback(form: EnhancedFormElementLike): boolean {
+  return securitySetHas(nativeFallbackForms, form);
+}
+
 /** @internal Consume the one native fallback submit emitted by requestSubmit(). */
 export function consumeEnhancedMutationNativeFallback(form: EnhancedFormElementLike): boolean {
   if (!securitySetHas(nativeFallbackForms, form)) return false;
@@ -116,7 +121,14 @@ export function readEligibleEnhancedMutationTransport(
   const current =
     browserFormSecurity.currentUrl() ?? browserFormSecurity.parseUrl('http://localhost/');
   if (!current) return undefined;
-  const action = browserFormSecurity.parseUrl(rawAction || current.href, current.href);
+  const documentBase = browserFormSecurity.documentBaseUrl();
+  if (!documentBase) return undefined;
+  // Empty action attributes have special native current-document semantics; non-empty relative
+  // attributes resolve against Document.baseURI (including a same-origin `<base>`), not Location.
+  const action = browserFormSecurity.parseUrl(
+    rawAction || current.href,
+    rawAction ? documentBase.href : current.href,
+  );
   // SPEC §§6.3/6.6/9.1: `data:`, `blob:`, `file:`, and `about:` URLs can all serialize origin as
   // `null`. Equality between two opaque origins is not same-origin proof for credentialed fetch.
   if (
@@ -139,6 +151,26 @@ export function readEligibleEnhancedMutationTransport(
     origin: current.origin,
     sourceUrl: current.origin + current.pathname + current.search,
   };
+}
+
+/**
+ * @internal Recover server truth after an enhanced mutation may already have reached the server.
+ *
+ * Re-submitting the form here would create a second logical POST and can mint a different replay
+ * key. A canonical GET navigation to the snapshotted source document is the only automatic
+ * recovery; environments without a navigation control receive a visible form failure instead.
+ */
+export function recoverEnhancedMutationDocument(
+  form: EnhancedFormElementLike,
+  transport: EnhancedMutationTransport,
+): void {
+  if (browserFormSecurity.navigateSameOrigin(transport.sourceUrl)) return;
+  if (browserFormSecurity.hasReloadControl()) {
+    browserFormSecurity.reload();
+    return;
+  }
+  form.setAttribute?.('data-error-code', 'NETWORK_ERROR');
+  form.setAttribute?.('kovo-error', '');
 }
 
 export function isEligibleEnhancedMutationForm(

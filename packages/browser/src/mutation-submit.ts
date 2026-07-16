@@ -15,12 +15,14 @@ import {
 import {
   closestEnhancedMutationForm,
   consumeEnhancedMutationNativeFallback,
-  fallbackEnhancedMutationSubmit,
+  isEnhancedMutationNativeFallback,
   readEligibleEnhancedMutationTransport,
+  recoverEnhancedMutationDocument,
   updateUploadProgressElements,
   type EnhancedFormElementLike,
   type EnhancedMutationTransport,
 } from './mutation-form.js';
+import { createMutationIdem } from './mutation-response.js';
 import {
   applyStreamingFetchedEnhancedMutationResponseToRuntime,
   applyFetchedEnhancedMutationResponseToRuntime,
@@ -66,8 +68,8 @@ export interface EnhancedMutationLoaderOptions {
   importModule?: ImportHandlerModule;
   morph?: MorphFragment;
   /**
-   * Handles enhanced form submit failures after preventDefault. When present,
-   * the form layer owns the error and native submit fallback is skipped.
+   * Handles enhanced form submit failures after preventDefault. Server-truth document recovery
+   * still runs because the framework cannot know whether the POST reached the server.
    *
    * SPEC.md section 9.2 keeps enhanced and no-JS form paths equivalent; this
    * hook is the enhanced path's reporting seam for failed fragment submissions.
@@ -84,7 +86,7 @@ interface EnhancedFormSubmitHooks {
   onAppliedQueries?: (queries: readonly string[]) => void;
 }
 
-/** @internal Handle a delegated form submit as an enhanced mutation, falling back to native submit (SPEC §9.2). */
+/** @internal Handle a delegated form submit as an enhanced mutation (SPEC §§9.1-9.2). */
 export async function dispatchEnhancedFormSubmit(
   event: DelegatedEvent,
   options: EnhancedMutationLoaderOptions | undefined,
@@ -97,18 +99,24 @@ export async function dispatchEnhancedFormSubmit(
 
   const form = closestEnhancedMutationForm(eventFacts.target);
   if (!form) return false;
-  if (consumeEnhancedMutationNativeFallback(form)) return false;
+  // requestSubmit() synchronously emits one browser-owned fallback event. Treat it as consumed so
+  // neither enhanced transport nor an authored delegated submit handler can re-enter it.
+  if (consumeEnhancedMutationNativeFallback(form)) return true;
   const transport = readEligibleEnhancedMutationTransport(form, eventFacts.submitter);
   if (!transport) return false;
 
+  // Construct fallible request authority before suppressing the browser's native path. If this
+  // preparation fails, the submit event remains unprevented and retains the rendered no-JS token.
+  const formData = options.formData
+    ? options.formData(form, event)
+    : formDataForSubmit(form, eventFacts.submitter);
+  const idem = options.idem?.() ?? createMutationIdem();
   if (!preventRuntimeDelegatedEventDefault(event)) return false;
   try {
     const applied = await submitEnhancedMutation({
       fetch: options.fetch,
       form,
-      formData: options.formData
-        ? options.formData(form, event)
-        : formDataForSubmit(form, eventFacts.submitter),
+      formData,
       ...(options.onError
         ? {
             onError(error) {
@@ -124,7 +132,7 @@ export async function dispatchEnhancedFormSubmit(
         applyQuery: options.applyQuery,
         broadcast: options.broadcast,
         expectedBuildToken: options.expectedBuildToken,
-        idem: options.idem?.(),
+        idem,
         importModule: options.importModule,
         morph: options.morph,
         pendingQueries: options.pendingRoot ? readDeps(form.getAttribute('kovo-deps')) : undefined,
@@ -138,9 +146,10 @@ export async function dispatchEnhancedFormSubmit(
     });
     hooks.onAppliedQueries?.(applied.queries);
   } catch (error) {
+    // The request may have committed before a network, response-proof, media-type, or apply
+    // failure became observable. Never turn that ambiguity into a second POST with a new idem.
+    recoverEnhancedMutationDocument(form, transport);
     if (options.onError) return true;
-
-    fallbackEnhancedMutationSubmit(form, eventFacts.submitter);
     throw error;
   }
   return true;
@@ -156,7 +165,8 @@ export function isEnhancedSubmitEvent(
   if (!eventFacts || eventFacts.type !== 'submit') return false;
 
   const form = closestEnhancedMutationForm(eventFacts.target);
-  if (form === null || consumeEnhancedMutationNativeFallback(form)) return false;
+  // Classification must not consume the marker before dispatch sees the same synchronous event.
+  if (form === null || isEnhancedMutationNativeFallback(form)) return false;
   return readEligibleEnhancedMutationTransport(form, eventFacts.submitter) !== undefined;
 }
 

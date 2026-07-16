@@ -222,7 +222,7 @@ describe('loader enhanced mutation submits', () => {
     },
   );
 
-  it('preserves the original submitter when enhanced transport falls back to native submission', async () => {
+  it('does not replay a failed enhanced transport through native submission', async () => {
     const loaderRoot = new FakeRoot();
     const fetchError = new Error('offline');
     const fetch = vi.fn(async () => {
@@ -267,7 +267,8 @@ describe('loader enhanced mutation submits', () => {
     });
 
     expect(preventDefault).toHaveBeenCalledTimes(1);
-    expect(requestSubmit).toHaveBeenCalledWith(submitter);
+    expect(requestSubmit).not.toHaveBeenCalled();
+    expect(form.getAttribute('data-error-code')).toBe('NETWORK_ERROR');
   });
 
   it('renders upload progress as indeterminate when total bytes are unknown', async () => {
