@@ -41,6 +41,15 @@ import {
   withRepoBinOnPath,
 } from './index.test-support.js';
 
+const BUGZ31_GLOBAL_MEMBER_CARRIER_PROOFS = [
+  'ordinary-carriers',
+  'projection-carriers',
+  'assignment-targets',
+  'loop-and-exhaustion-targets',
+] as const;
+
+type Bugz31GlobalMemberCarrierProof = (typeof BUGZ31_GLOBAL_MEMBER_CARRIER_PROOFS)[number];
+
 describe('create-kovo starter (build integration: adversarial production artifact sweep)', () => {
   const multiBuildProofTimeout = 480_000;
   const dialectIndependentCompilerGateCases = [['postgres', undefined]] as const;
@@ -235,6 +244,23 @@ describe('create-kovo starter (build integration: adversarial production artifac
           'concurrency annotation is dynamic or statically unresolved',
           'table=contacts',
           'column=company',
+        ]);
+      });
+    },
+    300_000,
+  );
+
+  it.each([...BUGZ31_GLOBAL_MEMBER_CARRIER_PROOFS])(
+    'bugz-31: exact global member %s fail closed in a production artifact',
+    (proof: Bugz31GlobalMemberCarrierProof) => {
+      withProject(`create-kovo-bugz31-${proof}-red-`, undefined, (root) => {
+        addBugz31GlobalMemberCarrierProof(root, proof);
+        expectBuildFailure(root, [
+          'KV424',
+          'source=Promise.resolve',
+          'source=Response.json',
+          'source=Array.isArray',
+          'source=JSON.stringify',
         ]);
       });
     },
@@ -748,6 +774,147 @@ function addBugz31GlobalMemberLockdownProof(root: string): void {
   writeFileSync(
     appPath,
     app.replace(anchor, `${anchor}\nimport './bugz31-intrinsic-member-proof.js';`),
+    'utf8',
+  );
+}
+
+function addBugz31GlobalMemberCarrierProof(
+  root: string,
+  proof: Bugz31GlobalMemberCarrierProof,
+): void {
+  const deferredClass = [
+    'export class Bugz31Deferred {',
+    '  static then(resolve: (value: { ok: true }) => void): void {',
+    '    resolve({ ok: true });',
+    "    queueMicrotask(() => { void fetch('https://example.test/late'); });",
+    '  }',
+    '}',
+  ];
+  let poison: string[];
+  let promisePrelude = '';
+  let arrayPrelude = '';
+  switch (proof) {
+    case 'ordinary-carriers':
+      poison = [
+        ...deferredClass,
+        'const promiseHolder = { value: Promise };',
+        'promiseHolder.value.resolve =',
+        '  (() => Bugz31Deferred) as unknown as typeof Promise.resolve;',
+        'const responseHolder = { value: Response };',
+        "Object.defineProperty(responseHolder.value, 'json', { value: () => Bugz31Deferred });",
+        'const arrayHolder = { value: Array };',
+        'Object.defineProperties(arrayHolder.value, {',
+        '  isArray: { value: (() => Bugz31Deferred) as unknown as typeof Array.isArray },',
+        '});',
+        'const jsonHolder = { value: JSON };',
+        'Object.assign(jsonHolder.value, {',
+        '  stringify: (() => Bugz31Deferred) as unknown as typeof JSON.stringify,',
+        '});',
+      ];
+      break;
+    case 'projection-carriers':
+      poison = [
+        ...deferredClass,
+        'const promiseHolder = { value: Promise };',
+        "const namespaceKey: keyof typeof promiseHolder = 'value';",
+        "const memberKey: keyof typeof Promise = 'resolve';",
+        'promiseHolder[namespaceKey][memberKey] =',
+        '  (() => Bugz31Deferred) as unknown as typeof Promise.resolve;',
+        'const { value: responseNamespace } = { value: Response };',
+        'const { defineProperty: replaceMember } = Object;',
+        "replaceMember(responseNamespace, 'json', { value: () => Bugz31Deferred });",
+        'const arrayCarrier = [[Array]];',
+        'arrayCarrier[0]![0]!.isArray =',
+        '  (() => Bugz31Deferred) as unknown as typeof Array.isArray;',
+        '({ stringify: JSON.stringify } = {',
+        '  stringify: (() => Bugz31Deferred) as unknown as typeof JSON.stringify,',
+        '});',
+      ];
+      break;
+    case 'assignment-targets':
+      poison = [
+        ...deferredClass,
+        '[Promise.resolve] = [',
+        '  (() => Bugz31Deferred) as unknown as typeof Promise.resolve,',
+        '];',
+        '({ nested: { json: Response.json } } = {',
+        '  nested: {',
+        '    json: (() => Bugz31Deferred) as unknown as typeof Response.json,',
+        '  },',
+        '});',
+        'for (Array.isArray of [',
+        '  (() => Bugz31Deferred) as unknown as typeof Array.isArray,',
+        ']) { break; }',
+        'for ((JSON.stringify as any) in { poisoned: true }) { break; }',
+      ];
+      break;
+    case 'loop-and-exhaustion-targets': {
+      const aliases = Array.from(
+        { length: 40 },
+        (_value, index) => `const jsonAlias${index + 1} = jsonAlias${index};`,
+      );
+      poison = [
+        ...deferredClass,
+        'for ({ nested: { json: Response.json } } of [{',
+        '  nested: {',
+        '    json: (() => Bugz31Deferred) as unknown as typeof Response.json,',
+        '  },',
+        '}]) { break; }',
+        'const jsonAlias0 = JSON;',
+        ...aliases,
+        "Object.defineProperty(jsonAlias40, 'stringify', { value: () => Bugz31Deferred });",
+      ];
+      promisePrelude =
+        'for await (Promise.resolve of [(() => Bugz31Deferred) as unknown as typeof Promise.resolve]) { break; }';
+      arrayPrelude =
+        'for await ([Array.isArray] of [[(() => Bugz31Deferred) as unknown as typeof Array.isArray] as [typeof Array.isArray]]) { break; }';
+      break;
+    }
+  }
+
+  writeFileSync(
+    join(root, 'src/bugz31-member-carrier-poison.ts'),
+    `${poison.join('\n')}\n`,
+    'utf8',
+  );
+  writeFileSync(
+    join(root, 'src/bugz31-member-carrier-proof.ts'),
+    [
+      "import { s, task } from '@kovojs/server';",
+      "import { Bugz31Deferred } from './bugz31-member-carrier-poison.js';",
+      '',
+      "task('bugz31-carrier-promise-resolve', {",
+      '  input: s.object({}),',
+      `  async run() { ${promisePrelude} return Promise.resolve(); },`,
+      '});',
+      "task('bugz31-carrier-response-json', {",
+      '  input: s.object({}),',
+      '  async run() { return Response.json({ ok: true }); },',
+      '});',
+      "task('bugz31-carrier-array-is-array', {",
+      '  input: s.object({}),',
+      `  async run() { ${arrayPrelude} return Array.isArray([]); },`,
+      '});',
+      "task('bugz31-carrier-json-stringify', {",
+      '  input: s.object({}),',
+      '  async run() { return JSON.stringify({ ok: true }); },',
+      '});',
+      '',
+      'void Bugz31Deferred;',
+      '',
+    ].join('\n'),
+    'utf8',
+  );
+
+  const appPath = join(root, 'src/app.tsx');
+  const app = readFileSync(appPath, 'utf8');
+  const anchor = "import { appTheme } from './theme.js';";
+  if (!app.includes(anchor)) {
+    throw new Error('Expected scaffold app import anchor for bugz-31 carrier proof.');
+  }
+  writeFileSync(
+    appPath,
+    app.replace(anchor, `${anchor}\nimport './bugz31-member-carrier-proof.js';`),
     'utf8',
   );
 }

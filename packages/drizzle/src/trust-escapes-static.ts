@@ -23508,6 +23508,232 @@ const requestGlobalIntrinsicMutationMemo = new WeakMap<SourceFile, Map<string, b
 
 const requestGlobalNamespaceMemberMutationMemo = new WeakMap<Project, Map<string, boolean>>();
 
+const REQUEST_EXACT_GLOBAL_PROVENANCE_DEPTH = 32;
+
+type RequestExactGlobalProvenance = 'exhausted' | 'match' | 'miss';
+
+interface RequestTransparentProjectionResult {
+  readonly candidates: readonly Node[];
+  readonly exhausted: boolean;
+}
+
+function mergeRequestExactGlobalProvenance(
+  verdicts: readonly RequestExactGlobalProvenance[],
+): RequestExactGlobalProvenance {
+  if (verdicts.includes('match')) return 'match';
+  return verdicts.includes('exhausted') ? 'exhausted' : 'miss';
+}
+
+function mergeRequestTransparentProjections(
+  projections: readonly RequestTransparentProjectionResult[],
+): RequestTransparentProjectionResult {
+  return {
+    candidates: dedupeRequestNodes(projections.flatMap((projection) => projection.candidates)),
+    exhausted: projections.some((projection) => projection.exhausted),
+  };
+}
+
+function requestTransparentProjectionPath(
+  expression: Node,
+  path: readonly (string | undefined)[],
+  seen: Set<string>,
+  depth: number,
+): RequestTransparentProjectionResult {
+  let projected: RequestTransparentProjectionResult = {
+    candidates: [expression],
+    exhausted: false,
+  };
+  for (const [index, member] of path.entries()) {
+    const inheritedExhaustion = projected.exhausted;
+    const next = mergeRequestTransparentProjections(
+      projected.candidates.map((candidate) =>
+        requestTransparentProjectionCandidates(candidate, member, new Set(seen), depth + index + 1),
+      ),
+    );
+    projected = {
+      candidates: next.candidates,
+      exhausted: inheritedExhaustion || next.exhausted,
+    };
+    if (projected.candidates.length === 0) break;
+  }
+  return projected;
+}
+
+/**
+ * Follow finite authored object/array carriers. Opaque values are ordinary misses; only a cycle or
+ * bounded-provenance exhaustion is `exhausted`, which the mutation verdict treats as fail closed.
+ */
+function requestTransparentProjectionCandidates(
+  expression: Node,
+  member: string | undefined,
+  seen: Set<string>,
+  depth: number,
+): RequestTransparentProjectionResult {
+  if (depth > REQUEST_EXACT_GLOBAL_PROVENANCE_DEPTH) {
+    return { candidates: [], exhausted: true };
+  }
+  const node = unwrapStaticExpression(expression);
+  if (Node.isConditionalExpression(node)) {
+    return mergeRequestTransparentProjections([
+      requestTransparentProjectionCandidates(node.getWhenTrue(), member, new Set(seen), depth + 1),
+      requestTransparentProjectionCandidates(node.getWhenFalse(), member, new Set(seen), depth + 1),
+    ]);
+  }
+  if (
+    Node.isBinaryExpression(node) &&
+    (node.getOperatorToken().getKind() === SyntaxKind.CommaToken ||
+      node.getOperatorToken().getKind() === SyntaxKind.BarBarToken ||
+      node.getOperatorToken().getKind() === SyntaxKind.AmpersandAmpersandToken ||
+      node.getOperatorToken().getKind() === SyntaxKind.QuestionQuestionToken)
+  ) {
+    return mergeRequestTransparentProjections([
+      requestTransparentProjectionCandidates(node.getLeft(), member, new Set(seen), depth + 1),
+      requestTransparentProjectionCandidates(node.getRight(), member, new Set(seen), depth + 1),
+    ]);
+  }
+  if (Node.isPropertyAccessExpression(node) || Node.isElementAccessExpression(node)) {
+    const projectedMember = Node.isPropertyAccessExpression(node)
+      ? node.getName()
+      : staticMemberName(node.getArgumentExpression());
+    const receiver = requestTransparentProjectionCandidates(
+      node.getExpression(),
+      projectedMember,
+      new Set(seen),
+      depth + 1,
+    );
+    return mergeRequestTransparentProjections([
+      { candidates: [], exhausted: receiver.exhausted },
+      ...receiver.candidates.map((candidate) =>
+        requestTransparentProjectionCandidates(candidate, member, new Set(seen), depth + 1),
+      ),
+    ]);
+  }
+  if (Node.isObjectLiteralExpression(node)) {
+    const projections: RequestTransparentProjectionResult[] = [];
+    let opaqueProperty = false;
+    for (const property of node.getProperties()) {
+      if (Node.isSpreadAssignment(property)) {
+        projections.push(
+          requestTransparentProjectionCandidates(
+            property.getExpression(),
+            member,
+            new Set(seen),
+            depth + 1,
+          ),
+        );
+        continue;
+      }
+      const propertyName = staticMemberName(requestObjectLiteralElementNameNode(property));
+      if (member !== undefined && propertyName !== undefined && propertyName !== member) continue;
+      if (Node.isPropertyAssignment(property)) {
+        const initializer = property.getInitializer();
+        if (initializer) projections.push({ candidates: [initializer], exhausted: false });
+        continue;
+      }
+      if (Node.isShorthandPropertyAssignment(property)) {
+        projections.push({ candidates: [property.getNameNode()], exhausted: false });
+        continue;
+      }
+      // Accessors/methods are not transparent carriers. Their possible value therefore cannot
+      // silently turn a bounded-provenance failure into a pristine native-member verdict.
+      opaqueProperty = true;
+    }
+    return mergeRequestTransparentProjections([
+      ...projections,
+      { candidates: [], exhausted: opaqueProperty },
+    ]);
+  }
+  if (Node.isArrayLiteralExpression(node)) {
+    const elements = node.getElements();
+    if (member !== undefined) {
+      const index = Number(member);
+      if (!Number.isSafeInteger(index) || index < 0) {
+        return { candidates: [], exhausted: false };
+      }
+      let offset = 0;
+      for (const element of elements) {
+        if (Node.isSpreadElement(element)) {
+          return { candidates: [], exhausted: true };
+        }
+        if (offset === index) {
+          return Node.isOmittedExpression(element)
+            ? { candidates: [], exhausted: false }
+            : { candidates: [element], exhausted: false };
+        }
+        offset += 1;
+      }
+      return { candidates: [], exhausted: false };
+    }
+    return mergeRequestTransparentProjections(
+      elements.map((element) => {
+        if (Node.isOmittedExpression(element)) {
+          return { candidates: [], exhausted: false };
+        }
+        return Node.isSpreadElement(element)
+          ? requestTransparentProjectionCandidates(
+              element.getExpression(),
+              undefined,
+              new Set(seen),
+              depth + 1,
+            )
+          : { candidates: [element], exhausted: false };
+      }),
+    );
+  }
+  if (!Node.isIdentifier(node)) return { candidates: [], exhausted: false };
+  const symbol = requestIdentifierValueSymbol(node);
+  if (!symbol) return { candidates: [], exhausted: false };
+  const key = `transparent-projection:${member ?? '*'}:${requestSymbolKey(symbol)}`;
+  if (seen.has(key)) return { candidates: [], exhausted: true };
+  seen.add(key);
+  const projections: RequestTransparentProjectionResult[] = [];
+  for (const declaration of symbol.getDeclarations()) {
+    if (Node.isBindingElement(declaration)) {
+      const binding = requestBindingElementProjection(declaration);
+      if (binding) {
+        projections.push(
+          requestTransparentProjectionPath(
+            binding.expression,
+            [...binding.path, member],
+            new Set(seen),
+            depth + 1,
+          ),
+        );
+      }
+      continue;
+    }
+    const initializer = valueDeclarationInitializer(declaration);
+    if (initializer) {
+      projections.push(
+        requestTransparentProjectionCandidates(initializer, member, new Set(seen), depth + 1),
+      );
+    }
+  }
+  for (const assigned of requestAssignedBindingProjections(symbol)) {
+    projections.push(
+      requestTransparentProjectionPath(
+        assigned.expression,
+        [...assigned.path, member],
+        new Set(seen),
+        depth + 1,
+      ),
+    );
+  }
+  return mergeRequestTransparentProjections(projections);
+}
+
+function requestExactGlobalProvenanceForProjection(
+  projection: RequestTransparentProjectionResult,
+  seen: Set<string>,
+  depth: number,
+  resolver: (candidate: Node, seen: Set<string>, depth: number) => RequestExactGlobalProvenance,
+): RequestExactGlobalProvenance {
+  return mergeRequestExactGlobalProvenance([
+    ...(projection.exhausted ? (['exhausted'] as const) : []),
+    ...projection.candidates.map((candidate) => resolver(candidate, new Set(seen), depth + 1)),
+  ]);
+}
+
 /**
  * Resolve the exact realm global object through authored aliases without granting authority to
  * arbitrary structural lookalikes. This resolver is deliberately independent of the mutation
@@ -23517,20 +23743,37 @@ function requestExpressionResolvesToExactGlobalObject(
   expression: Node,
   seen: Set<string>,
   depth: number,
-): boolean {
-  if (depth > 32) return false;
+): RequestExactGlobalProvenance {
+  if (depth > REQUEST_EXACT_GLOBAL_PROVENANCE_DEPTH) return 'exhausted';
   const node = unwrapStaticExpression(expression);
   if (
     (Node.isIdentifier(node) && unshadowedGlobalIdentifier(node, 'globalThis')) ||
     (Node.isIdentifier(node) && unshadowedGlobalIdentifier(node, 'global'))
   ) {
-    return true;
+    return 'match';
+  }
+  if (Node.isPropertyAccessExpression(node) || Node.isElementAccessExpression(node)) {
+    const member = Node.isPropertyAccessExpression(node)
+      ? node.getName()
+      : staticMemberName(node.getArgumentExpression());
+    const projection = requestTransparentProjectionCandidates(
+      node.getExpression(),
+      member,
+      new Set(seen),
+      depth + 1,
+    );
+    return requestExactGlobalProvenanceForProjection(
+      projection,
+      seen,
+      depth,
+      requestExpressionResolvesToExactGlobalObject,
+    );
   }
   if (Node.isConditionalExpression(node)) {
-    return (
-      requestExpressionResolvesToExactGlobalObject(node.getWhenTrue(), new Set(seen), depth + 1) ||
-      requestExpressionResolvesToExactGlobalObject(node.getWhenFalse(), new Set(seen), depth + 1)
-    );
+    return mergeRequestExactGlobalProvenance([
+      requestExpressionResolvesToExactGlobalObject(node.getWhenTrue(), new Set(seen), depth + 1),
+      requestExpressionResolvesToExactGlobalObject(node.getWhenFalse(), new Set(seen), depth + 1),
+    ]);
   }
   if (
     Node.isBinaryExpression(node) &&
@@ -23539,24 +23782,63 @@ function requestExpressionResolvesToExactGlobalObject(
       node.getOperatorToken().getKind() === SyntaxKind.AmpersandAmpersandToken ||
       node.getOperatorToken().getKind() === SyntaxKind.QuestionQuestionToken)
   ) {
-    return (
-      requestExpressionResolvesToExactGlobalObject(node.getLeft(), new Set(seen), depth + 1) ||
-      requestExpressionResolvesToExactGlobalObject(node.getRight(), new Set(seen), depth + 1)
+    return mergeRequestExactGlobalProvenance([
+      requestExpressionResolvesToExactGlobalObject(node.getLeft(), new Set(seen), depth + 1),
+      requestExpressionResolvesToExactGlobalObject(node.getRight(), new Set(seen), depth + 1),
+    ]);
+  }
+  if (!Node.isIdentifier(node)) return 'miss';
+  const symbol = requestIdentifierValueSymbol(node);
+  if (!symbol) return 'miss';
+  const key = `global-object:${requestSymbolKey(symbol)}`;
+  if (seen.has(key)) return 'exhausted';
+  seen.add(key);
+  const verdicts: RequestExactGlobalProvenance[] = [];
+  for (const declaration of symbol.getDeclarations()) {
+    if (Node.isBindingElement(declaration)) {
+      const binding = requestBindingElementProjection(declaration);
+      if (binding) {
+        const projection = requestTransparentProjectionPath(
+          binding.expression,
+          binding.path,
+          new Set(seen),
+          depth + 1,
+        );
+        verdicts.push(
+          requestExactGlobalProvenanceForProjection(
+            projection,
+            seen,
+            depth,
+            requestExpressionResolvesToExactGlobalObject,
+          ),
+        );
+      }
+      continue;
+    }
+    const initializer = valueDeclarationInitializer(declaration);
+    if (initializer) {
+      verdicts.push(
+        requestExpressionResolvesToExactGlobalObject(initializer, new Set(seen), depth + 1),
+      );
+    }
+  }
+  for (const assigned of requestAssignedBindingProjections(symbol)) {
+    const projection = requestTransparentProjectionPath(
+      assigned.expression,
+      assigned.path,
+      new Set(seen),
+      depth + 1,
+    );
+    verdicts.push(
+      requestExactGlobalProvenanceForProjection(
+        projection,
+        seen,
+        depth,
+        requestExpressionResolvesToExactGlobalObject,
+      ),
     );
   }
-  if (!Node.isIdentifier(node)) return false;
-  const symbol = requestIdentifierValueSymbol(node);
-  if (!symbol) return false;
-  const key = `global-object:${requestSymbolKey(symbol)}`;
-  if (seen.has(key)) return false;
-  seen.add(key);
-  return symbol.getDeclarations().some((declaration) => {
-    const initializer = valueDeclarationInitializer(declaration);
-    return !!(
-      initializer &&
-      requestExpressionResolvesToExactGlobalObject(initializer, new Set(seen), depth + 1)
-    );
-  });
+  return mergeRequestExactGlobalProvenance(verdicts);
 }
 
 /** Exact global namespace identity used only to find authored writes (SPEC §6.6 rule 6). */
@@ -23565,36 +23847,61 @@ function requestExpressionResolvesToExactGlobalNamespaceForMutation(
   namespace: string,
   seen: Set<string>,
   depth: number,
-): boolean {
-  if (depth > 32) return false;
+): RequestExactGlobalProvenance {
+  if (depth > REQUEST_EXACT_GLOBAL_PROVENANCE_DEPTH) return 'exhausted';
   const node = unwrapStaticExpression(expression);
-  if (unshadowedGlobalIdentifier(node, namespace)) return true;
+  if (unshadowedGlobalIdentifier(node, namespace)) return 'match';
   if (Node.isPropertyAccessExpression(node) || Node.isElementAccessExpression(node)) {
     const member = Node.isPropertyAccessExpression(node)
       ? node.getName()
       : staticMemberName(node.getArgumentExpression());
-    if (
-      member === namespace &&
-      requestExpressionResolvesToExactGlobalObject(node.getExpression(), new Set(seen), depth + 1)
-    ) {
-      return true;
+    const verdicts: RequestExactGlobalProvenance[] = [];
+    if (member === undefined || member === namespace) {
+      verdicts.push(
+        requestExpressionResolvesToExactGlobalObject(
+          node.getExpression(),
+          new Set(seen),
+          depth + 1,
+        ),
+      );
     }
+    const projection = requestTransparentProjectionCandidates(
+      node.getExpression(),
+      member,
+      new Set(seen),
+      depth + 1,
+    );
+    verdicts.push(
+      requestExactGlobalProvenanceForProjection(
+        projection,
+        seen,
+        depth,
+        (candidate, next, nextDepth) =>
+          requestExpressionResolvesToExactGlobalNamespaceForMutation(
+            candidate,
+            namespace,
+            next,
+            nextDepth,
+          ),
+      ),
+    );
+    return mergeRequestExactGlobalProvenance(verdicts);
   }
   if (Node.isConditionalExpression(node)) {
-    return (
+    return mergeRequestExactGlobalProvenance([
       requestExpressionResolvesToExactGlobalNamespaceForMutation(
         node.getWhenTrue(),
         namespace,
         new Set(seen),
         depth + 1,
-      ) ||
+      ),
       requestExpressionResolvesToExactGlobalNamespaceForMutation(
         node.getWhenFalse(),
         namespace,
         new Set(seen),
         depth + 1,
-      )
-    );
+      ),
+    ]);
   }
   if (
     Node.isBinaryExpression(node) &&
@@ -23603,53 +23910,106 @@ function requestExpressionResolvesToExactGlobalNamespaceForMutation(
       node.getOperatorToken().getKind() === SyntaxKind.AmpersandAmpersandToken ||
       node.getOperatorToken().getKind() === SyntaxKind.QuestionQuestionToken)
   ) {
-    return (
+    return mergeRequestExactGlobalProvenance([
       requestExpressionResolvesToExactGlobalNamespaceForMutation(
         node.getLeft(),
         namespace,
         new Set(seen),
         depth + 1,
-      ) ||
+      ),
       requestExpressionResolvesToExactGlobalNamespaceForMutation(
         node.getRight(),
         namespace,
         new Set(seen),
         depth + 1,
-      )
-    );
+      ),
+    ]);
   }
-  if (!Node.isIdentifier(node)) return false;
+  if (!Node.isIdentifier(node)) return 'miss';
   const symbol = requestIdentifierValueSymbol(node);
-  if (!symbol) return false;
+  if (!symbol) return 'miss';
   const key = `global-namespace:${namespace}:${requestSymbolKey(symbol)}`;
-  if (seen.has(key)) return false;
+  if (seen.has(key)) return 'exhausted';
   seen.add(key);
-  return symbol.getDeclarations().some((declaration) => {
+  const verdicts: RequestExactGlobalProvenance[] = [];
+  for (const declaration of symbol.getDeclarations()) {
     if (Node.isBindingElement(declaration)) {
-      const projection = requestBindingElementProjection(declaration);
-      if (
-        projection?.path.length === 1 &&
-        projection.path[0] === namespace &&
-        requestExpressionResolvesToExactGlobalObject(
-          projection.expression,
+      const binding = requestBindingElementProjection(declaration);
+      if (binding) {
+        if (binding.path.at(-1) === namespace) {
+          const receiver = requestTransparentProjectionPath(
+            binding.expression,
+            binding.path.slice(0, -1),
+            new Set(seen),
+            depth + 1,
+          );
+          verdicts.push(
+            requestExactGlobalProvenanceForProjection(
+              receiver,
+              seen,
+              depth,
+              requestExpressionResolvesToExactGlobalObject,
+            ),
+          );
+        }
+        const projection = requestTransparentProjectionPath(
+          binding.expression,
+          binding.path,
           new Set(seen),
           depth + 1,
-        )
-      ) {
-        return true;
+        );
+        verdicts.push(
+          requestExactGlobalProvenanceForProjection(
+            projection,
+            seen,
+            depth,
+            (candidate, next, nextDepth) =>
+              requestExpressionResolvesToExactGlobalNamespaceForMutation(
+                candidate,
+                namespace,
+                next,
+                nextDepth,
+              ),
+          ),
+        );
       }
+      continue;
     }
     const initializer = valueDeclarationInitializer(declaration);
-    return !!(
-      initializer &&
-      requestExpressionResolvesToExactGlobalNamespaceForMutation(
-        initializer,
-        namespace,
-        new Set(seen),
-        depth + 1,
-      )
+    if (initializer) {
+      verdicts.push(
+        requestExpressionResolvesToExactGlobalNamespaceForMutation(
+          initializer,
+          namespace,
+          new Set(seen),
+          depth + 1,
+        ),
+      );
+    }
+  }
+  for (const assigned of requestAssignedBindingProjections(symbol)) {
+    const projection = requestTransparentProjectionPath(
+      assigned.expression,
+      assigned.path,
+      new Set(seen),
+      depth + 1,
     );
-  });
+    verdicts.push(
+      requestExactGlobalProvenanceForProjection(
+        projection,
+        seen,
+        depth,
+        (candidate, next, nextDepth) =>
+          requestExpressionResolvesToExactGlobalNamespaceForMutation(
+            candidate,
+            namespace,
+            next,
+            nextDepth,
+          ),
+      ),
+    );
+  }
+  return mergeRequestExactGlobalProvenance(verdicts);
 }
 
 function requestExpressionResolvesToExactGlobalNamespaceMemberForMutation(
@@ -23658,76 +24018,189 @@ function requestExpressionResolvesToExactGlobalNamespaceMemberForMutation(
   member: string,
   seen: Set<string>,
   depth: number,
-): boolean {
-  if (depth > 32) return false;
+): RequestExactGlobalProvenance {
+  if (depth > REQUEST_EXACT_GLOBAL_PROVENANCE_DEPTH) return 'exhausted';
   const node = unwrapStaticExpression(expression);
   if (Node.isPropertyAccessExpression(node) || Node.isElementAccessExpression(node)) {
     const candidate = Node.isPropertyAccessExpression(node)
       ? node.getName()
       : staticMemberName(node.getArgumentExpression());
-    if (
-      candidate === member &&
-      requestExpressionResolvesToExactGlobalNamespaceForMutation(
-        node.getExpression(),
-        namespace,
-        new Set(seen),
-        depth + 1,
-      )
-    ) {
-      return true;
+    const verdicts: RequestExactGlobalProvenance[] = [];
+    if (candidate === undefined || candidate === member) {
+      verdicts.push(
+        requestExpressionResolvesToExactGlobalNamespaceForMutation(
+          node.getExpression(),
+          namespace,
+          new Set(seen),
+          depth + 1,
+        ),
+      );
     }
+    const projection = requestTransparentProjectionCandidates(
+      node.getExpression(),
+      candidate,
+      new Set(seen),
+      depth + 1,
+    );
+    verdicts.push(
+      requestExactGlobalProvenanceForProjection(projection, seen, depth, (value, next, nextDepth) =>
+        requestExpressionResolvesToExactGlobalNamespaceMemberForMutation(
+          value,
+          namespace,
+          member,
+          next,
+          nextDepth,
+        ),
+      ),
+    );
+    return mergeRequestExactGlobalProvenance(verdicts);
   }
   if (Node.isCallExpression(node)) {
     const callee = unwrapStaticExpression(node.getExpression());
     const receiver = requestCallReceiver(callee);
-    if (
-      receiver &&
-      requestStaticCallMember(callee) === 'bind' &&
-      requestExpressionResolvesToExactGlobalNamespaceMemberForMutation(
+    if (receiver && requestStaticCallMember(callee) === 'bind') {
+      const bound = requestExpressionResolvesToExactGlobalNamespaceMemberForMutation(
         receiver,
         namespace,
         member,
         new Set(seen),
         depth + 1,
-      )
-    ) {
-      return true;
+      );
+      if (bound !== 'miss') return bound;
     }
   }
-  if (!Node.isIdentifier(node)) return false;
-  const symbol = requestIdentifierValueSymbol(node);
-  if (!symbol) return false;
-  const key = `global-member:${namespace}.${member}:${requestSymbolKey(symbol)}`;
-  if (seen.has(key)) return false;
-  seen.add(key);
-  return symbol.getDeclarations().some((declaration) => {
-    if (Node.isBindingElement(declaration)) {
-      const projection = requestBindingElementProjection(declaration);
-      if (
-        projection?.path.length === 1 &&
-        projection.path[0] === member &&
-        requestExpressionResolvesToExactGlobalNamespaceForMutation(
-          projection.expression,
-          namespace,
-          new Set(seen),
-          depth + 1,
-        )
-      ) {
-        return true;
-      }
-    }
-    const initializer = valueDeclarationInitializer(declaration);
-    return !!(
-      initializer &&
+  if (Node.isConditionalExpression(node)) {
+    return mergeRequestExactGlobalProvenance([
       requestExpressionResolvesToExactGlobalNamespaceMemberForMutation(
-        initializer,
+        node.getWhenTrue(),
         namespace,
         member,
         new Set(seen),
         depth + 1,
-      )
+      ),
+      requestExpressionResolvesToExactGlobalNamespaceMemberForMutation(
+        node.getWhenFalse(),
+        namespace,
+        member,
+        new Set(seen),
+        depth + 1,
+      ),
+    ]);
+  }
+  if (
+    Node.isBinaryExpression(node) &&
+    (node.getOperatorToken().getKind() === SyntaxKind.CommaToken ||
+      node.getOperatorToken().getKind() === SyntaxKind.BarBarToken ||
+      node.getOperatorToken().getKind() === SyntaxKind.AmpersandAmpersandToken ||
+      node.getOperatorToken().getKind() === SyntaxKind.QuestionQuestionToken)
+  ) {
+    return mergeRequestExactGlobalProvenance([
+      requestExpressionResolvesToExactGlobalNamespaceMemberForMutation(
+        node.getLeft(),
+        namespace,
+        member,
+        new Set(seen),
+        depth + 1,
+      ),
+      requestExpressionResolvesToExactGlobalNamespaceMemberForMutation(
+        node.getRight(),
+        namespace,
+        member,
+        new Set(seen),
+        depth + 1,
+      ),
+    ]);
+  }
+  if (!Node.isIdentifier(node)) return 'miss';
+  const symbol = requestIdentifierValueSymbol(node);
+  if (!symbol) return 'miss';
+  const key = `global-member:${namespace}.${member}:${requestSymbolKey(symbol)}`;
+  if (seen.has(key)) return 'exhausted';
+  seen.add(key);
+  const verdicts: RequestExactGlobalProvenance[] = [];
+  for (const declaration of symbol.getDeclarations()) {
+    if (Node.isBindingElement(declaration)) {
+      const binding = requestBindingElementProjection(declaration);
+      if (binding) {
+        if (binding.path.at(-1) === member) {
+          const receiver = requestTransparentProjectionPath(
+            binding.expression,
+            binding.path.slice(0, -1),
+            new Set(seen),
+            depth + 1,
+          );
+          verdicts.push(
+            requestExactGlobalProvenanceForProjection(
+              receiver,
+              seen,
+              depth,
+              (value, next, nextDepth) =>
+                requestExpressionResolvesToExactGlobalNamespaceForMutation(
+                  value,
+                  namespace,
+                  next,
+                  nextDepth,
+                ),
+            ),
+          );
+        }
+        const projection = requestTransparentProjectionPath(
+          binding.expression,
+          binding.path,
+          new Set(seen),
+          depth + 1,
+        );
+        verdicts.push(
+          requestExactGlobalProvenanceForProjection(
+            projection,
+            seen,
+            depth,
+            (value, next, nextDepth) =>
+              requestExpressionResolvesToExactGlobalNamespaceMemberForMutation(
+                value,
+                namespace,
+                member,
+                next,
+                nextDepth,
+              ),
+          ),
+        );
+      }
+      continue;
+    }
+    const initializer = valueDeclarationInitializer(declaration);
+    if (initializer) {
+      verdicts.push(
+        requestExpressionResolvesToExactGlobalNamespaceMemberForMutation(
+          initializer,
+          namespace,
+          member,
+          new Set(seen),
+          depth + 1,
+        ),
+      );
+    }
+  }
+  for (const assigned of requestAssignedBindingProjections(symbol)) {
+    const projection = requestTransparentProjectionPath(
+      assigned.expression,
+      assigned.path,
+      new Set(seen),
+      depth + 1,
     );
-  });
+    verdicts.push(
+      requestExactGlobalProvenanceForProjection(projection, seen, depth, (value, next, nextDepth) =>
+        requestExpressionResolvesToExactGlobalNamespaceMemberForMutation(
+          value,
+          namespace,
+          member,
+          next,
+          nextDepth,
+        ),
+      ),
+    );
+  }
+  return mergeRequestExactGlobalProvenance(verdicts);
 }
 
 function requestGlobalNamespaceMemberIsMutated(
@@ -23749,28 +24222,127 @@ function requestGlobalNamespaceMemberIsMutated(
   return result;
 }
 
+function requestMutationTargetMatchesExactGlobalMember(
+  expression: Node | undefined,
+  namespace: string,
+  member: string,
+  depth: number,
+): RequestExactGlobalProvenance {
+  if (!expression) return 'miss';
+  if (depth > REQUEST_EXACT_GLOBAL_PROVENANCE_DEPTH) return 'exhausted';
+  const target = unwrapStaticExpression(expression);
+  if (Node.isPropertyAccessExpression(target) || Node.isElementAccessExpression(target)) {
+    const assignedMember = Node.isPropertyAccessExpression(target)
+      ? target.getName()
+      : staticMemberName(target.getArgumentExpression());
+    if (assignedMember !== undefined && assignedMember !== member) return 'miss';
+    return requestExpressionResolvesToExactGlobalNamespaceForMutation(
+      target.getExpression(),
+      namespace,
+      new Set(),
+      depth + 1,
+    );
+  }
+  if (
+    Node.isBinaryExpression(target) &&
+    target.getOperatorToken().getKind() === SyntaxKind.EqualsToken
+  ) {
+    return requestMutationTargetMatchesExactGlobalMember(
+      target.getLeft(),
+      namespace,
+      member,
+      depth + 1,
+    );
+  }
+  if (Node.isObjectLiteralExpression(target)) {
+    return mergeRequestExactGlobalProvenance(
+      target.getProperties().map((property) => {
+        if (Node.isSpreadAssignment(property)) {
+          return requestMutationTargetMatchesExactGlobalMember(
+            property.getExpression(),
+            namespace,
+            member,
+            depth + 1,
+          );
+        }
+        if (Node.isPropertyAssignment(property)) {
+          return requestMutationTargetMatchesExactGlobalMember(
+            property.getInitializer(),
+            namespace,
+            member,
+            depth + 1,
+          );
+        }
+        return 'miss';
+      }),
+    );
+  }
+  if (Node.isArrayLiteralExpression(target)) {
+    return mergeRequestExactGlobalProvenance(
+      target.getElements().map((element) => {
+        if (Node.isOmittedExpression(element)) return 'miss';
+        return requestMutationTargetMatchesExactGlobalMember(
+          Node.isSpreadElement(element) ? element.getExpression() : element,
+          namespace,
+          member,
+          depth + 1,
+        );
+      }),
+    );
+  }
+  if (Node.isObjectBindingPattern(target) || Node.isArrayBindingPattern(target)) {
+    return mergeRequestExactGlobalProvenance(
+      target.getElements().map((element) => {
+        if (Node.isOmittedExpression(element)) return 'miss';
+        return requestMutationTargetMatchesExactGlobalMember(
+          element.getNameNode(),
+          namespace,
+          member,
+          depth + 1,
+        );
+      }),
+    );
+  }
+  return 'miss';
+}
+
+function requestExactGlobalMutationMethods(
+  callee: Node,
+  namespace: 'Object' | 'Reflect',
+  methods: readonly string[],
+): { readonly exhausted: boolean; readonly matches: readonly string[] } {
+  const verdicts = methods.map((method) => ({
+    method,
+    verdict: requestExpressionResolvesToExactGlobalNamespaceMemberForMutation(
+      callee,
+      namespace,
+      method,
+      new Set(),
+      0,
+    ),
+  }));
+  return {
+    exhausted: verdicts.some(({ verdict }) => verdict === 'exhausted'),
+    matches: verdicts.filter(({ verdict }) => verdict === 'match').map(({ method }) => method),
+  };
+}
+
 function requestGlobalNamespaceMemberIsMutatedUncached(
   namespace: string,
   member: string,
   project: Project,
 ): boolean {
-  const targetIsNamespace = (candidate: Node | undefined): boolean =>
-    !!candidate &&
-    requestExpressionResolvesToExactGlobalNamespaceForMutation(candidate, namespace, new Set(), 0);
-  const targetIsMember = (candidate: Node | undefined): boolean => {
-    if (!candidate) return false;
-    const target = unwrapStaticExpression(candidate);
-    if (!Node.isPropertyAccessExpression(target) && !Node.isElementAccessExpression(target)) {
-      return false;
-    }
-    const assignedMember = Node.isPropertyAccessExpression(target)
-      ? target.getName()
-      : staticMemberName(target.getArgumentExpression());
-    return (
-      (assignedMember === undefined || assignedMember === member) &&
-      targetIsNamespace(target.getExpression())
-    );
-  };
+  const targetNamespaceProvenance = (candidate: Node | undefined): RequestExactGlobalProvenance =>
+    candidate
+      ? requestExpressionResolvesToExactGlobalNamespaceForMutation(
+          candidate,
+          namespace,
+          new Set(),
+          0,
+        )
+      : 'miss';
+  const targetIsMember = (candidate: Node | undefined): boolean =>
+    requestMutationTargetMatchesExactGlobalMember(candidate, namespace, member, 0) !== 'miss';
   const objectHasMemberOrUnknown = (candidate: Node | undefined): boolean => {
     if (!candidate) return true;
     const object = resolveStaticObjectLiteral(candidate, new Set(), 0);
@@ -23797,28 +24369,38 @@ function requestGlobalNamespaceMemberIsMutatedUncached(
     ]) {
       if (targetIsMember(update.getOperand())) return true;
     }
+    for (const loop of file.getDescendantsOfKind(SyntaxKind.ForOfStatement)) {
+      if (targetIsMember(loop.getInitializer())) return true;
+    }
+    for (const loop of file.getDescendantsOfKind(SyntaxKind.ForInStatement)) {
+      if (targetIsMember(loop.getInitializer())) return true;
+    }
     for (const call of file.getDescendantsOfKind(SyntaxKind.CallExpression)) {
       const callee = unwrapStaticExpression(call.getExpression());
       const [target, propertyOrSource] = call.getArguments();
-      if (!targetIsNamespace(target)) continue;
-      const objectMethod = ['assign', 'defineProperties', 'defineProperty'].find((candidate) =>
-        requestExpressionResolvesToExactGlobalNamespaceMemberForMutation(
-          callee,
-          'Object',
-          candidate,
-          new Set(),
-          0,
-        ),
-      );
-      const reflectMethod = ['defineProperty', 'deleteProperty', 'set'].find((candidate) =>
-        requestExpressionResolvesToExactGlobalNamespaceMemberForMutation(
-          callee,
-          'Reflect',
-          candidate,
-          new Set(),
-          0,
-        ),
-      );
+      const targetVerdict = targetNamespaceProvenance(target);
+      if (targetVerdict === 'miss') continue;
+      const objectMethods = requestExactGlobalMutationMethods(callee, 'Object', [
+        'assign',
+        'defineProperties',
+        'defineProperty',
+      ]);
+      const reflectMethods = requestExactGlobalMutationMethods(callee, 'Reflect', [
+        'defineProperty',
+        'deleteProperty',
+        'set',
+      ]);
+      const matchedMethods = [...objectMethods.matches, ...reflectMethods.matches];
+      if (matchedMethods.length === 0) {
+        if (objectMethods.exhausted || reflectMethods.exhausted) return true;
+        continue;
+      }
+      if (targetVerdict === 'exhausted' || matchedMethods.length > 1) return true;
+      const [matchedMethod] = matchedMethods;
+      if (!matchedMethod) continue;
+      const objectMethod = objectMethods.matches.includes(matchedMethod)
+        ? matchedMethod
+        : undefined;
       if (objectMethod === 'assign') {
         if (call.getArguments().slice(1).some(objectHasMemberOrUnknown)) return true;
         continue;
@@ -23827,7 +24409,7 @@ function requestGlobalNamespaceMemberIsMutatedUncached(
         if (objectHasMemberOrUnknown(propertyOrSource)) return true;
         continue;
       }
-      if (objectMethod === 'defineProperty' || reflectMethod !== undefined) {
+      if (objectMethod === 'defineProperty' || reflectMethods.matches.length > 0) {
         const propertyName = staticMemberName(propertyOrSource);
         if (propertyName === undefined || propertyName === member) return true;
       }
