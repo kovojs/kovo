@@ -1863,6 +1863,46 @@ export default createApp({
     }
   });
 
+  it('runs Drizzle security extractors before artifact emission', async () => {
+    const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-kv414-preflight-'));
+    const appPath = join(root, 'app.ts');
+    const outDir = join(root, 'dist');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    try {
+      mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
+      symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
+      symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
+      symlinkSync(join(repoRoot, 'packages/drizzle'), join(root, 'node_modules/@kovojs/drizzle'));
+      symlinkSync(
+        join(repoRoot, 'packages/drizzle/node_modules/drizzle-orm'),
+        join(root, 'node_modules/drizzle-orm'),
+      );
+      writeClientEntry(root);
+      writeFileSync(appPath, kv414PreflightAppModuleSource(), 'utf8');
+      writeKv414PreflightStaticSources(root);
+
+      const exitCode = await withCwd(root, () =>
+        mainAsync(['build', './app.ts', '--out', './dist', '--no-cache']),
+      );
+      const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
+      expect(exitCode).toBe(1);
+      expect(stdout).not.toHaveBeenCalled();
+      expect(errorOutput).toContain('kovo build check preflight failed');
+      // SPEC §10.3: the production build must preserve the source-derived query key and reject
+      // an owner-table read selected only by client arguments as KV414.
+      expect(errorOutput).toMatch(
+        /ERROR KV414 QUERY account-query\/account-by-id domain=account key=arg:id scope=args .*Owner-table access is not scoped to the session principal \(IDOR\)/,
+      );
+      expect(existsSync(outDir)).toBe(false);
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { force: true, recursive: true });
+    }
+  }, 90_000);
+
   it('fails closed on opaque Drizzle query protocols before artifact emission', async () => {
     const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-security-preflight-'));
     const appPath = join(root, 'app.mjs');
@@ -3826,6 +3866,23 @@ export default createApp({
 `;
 }
 
+function kv414PreflightAppModuleSource(): string {
+  return `
+import { createApp, publicAccess, route } from '@kovojs/server';
+import { accountById } from './account-query.js';
+
+export default createApp({
+  queries: [accountById],
+  routes: [
+    route('/', {
+      access: publicAccess('KV414 build preflight fixture'),
+      page: () => '<main>KV414 build preflight</main>',
+    }),
+  ],
+});
+`;
+}
+
 function handlerWriteSinkPreflightAppModuleSource(): string {
   return `
 import { createApp, createMemoryWebhookReplayStore, mutation, s, task, webhook } from '@kovojs/server';
@@ -4105,6 +4162,51 @@ function writeSecurityPreflightStaticSources(root: string): void {
       ') {',
       '  await db.update(accounts).set({ stock: sql`${accounts.stock} - ${input.qty}` }).where(eq(accounts.id, input.id));',
       '}',
+      '',
+    ].join('\n'),
+    'utf8',
+  );
+}
+
+function writeKv414PreflightStaticSources(root: string): void {
+  writeFileSync(
+    join(root, 'schema.ts'),
+    [
+      'import { pgTable, text } from "drizzle-orm/pg-core";',
+      'import { kovo } from "@kovojs/drizzle";',
+      '',
+      'export const accounts = pgTable("accounts", {',
+      '  id: text("id").primaryKey(),',
+      '  ownerId: text("owner_id").notNull(),',
+      '}, kovo({ domain: "account", key: (table) => table.id, owner: (table) => table.ownerId }));',
+      '',
+    ].join('\n'),
+    'utf8',
+  );
+  writeFileSync(
+    join(root, 'account-query.ts'),
+    [
+      'import { eq } from "drizzle-orm";',
+      'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+      'import { query, s, type QueryLoadContext, type Reader } from "@kovojs/server";',
+      'import { accounts } from "./schema.js";',
+      '',
+      'type AppDb = PgAsyncDatabase<unknown, unknown>;',
+      'type AppQueryLoadContext = QueryLoadContext<unknown, AppDb>;',
+      '',
+      'function requireDb(context?: AppQueryLoadContext): Reader<AppDb> {',
+      '  const db = context?.db;',
+      '  if (!db) throw new Error("KV414 build proof requires context.db");',
+      '  return db;',
+      '}',
+      '',
+      'export const accountById = query({',
+      '  output: s.object({ id: s.string() }),',
+      '  async load(input: { id: string }, context?: AppQueryLoadContext) {',
+      '    const db = requireDb(context);',
+      '    return db.select({ id: accounts.id }).from(accounts).where(eq(accounts.id, input.id));',
+      '  },',
+      '});',
       '',
     ].join('\n'),
     'utf8',
