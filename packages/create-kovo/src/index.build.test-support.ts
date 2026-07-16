@@ -864,36 +864,33 @@ export function addRuntimeMutationSafetyProofs(
   const runtimeDbPath = join(root, 'src/_kovo/app-runtime-db.ts');
   const runtimeDbSource = readFileSync(runtimeDbPath, 'utf8');
   const runtimeDb = isSqlite
-    ? runtimeDbSource
-        .replace(
-          '  "CREATE TABLE contacts (id text PRIMARY KEY, name text NOT NULL, email text NOT NULL, company text NOT NULL DEFAULT \'\');",\n  // Better Auth tables',
+    ? replaceRequired(
+        replaceRequired(
+          runtimeDbSource,
+          "import { account, authSchema, contacts, session, user, verification } from '../schema.js';",
           [
-            '  "CREATE TABLE contacts (id text PRIMARY KEY, name text NOT NULL, email text NOT NULL, company text NOT NULL DEFAULT \'\');",',
-            '  "CREATE TABLE tx_proofs (id text PRIMARY KEY);",',
-            '  "CREATE TABLE raw_runtime_drift (id text PRIMARY KEY, label text NOT NULL DEFAULT \'\');",',
-            ...(includeSqliteAuthorizerTriggerDrift
-              ? [
-                  '  "CREATE TABLE kovo_authorizer_declared (id text PRIMARY KEY, label text NOT NULL DEFAULT \'\');",',
-                  '  "CREATE TABLE kovo_authorizer_side_effects (id text PRIMARY KEY, label text NOT NULL DEFAULT \'\');",',
-                  "  \"INSERT INTO kovo_authorizer_declared (id, label) VALUES ('a1', 'before');\",",
-                  '  "CREATE TRIGGER kovo_authorizer_side_effect AFTER UPDATE ON kovo_authorizer_declared BEGIN INSERT INTO kovo_authorizer_side_effects (id, label) VALUES (new.id, new.label); END;",',
-                ]
-              : []),
-            '  // Better Auth tables',
+            "import * as schema from '../schema.js';",
+            "import { account, authSchema, contacts, session, user, verification } from '../schema.js';",
           ].join('\n'),
-        )
-        .replace(
-          'const SCHEMA_TABLES = [\n  schema.contacts,',
-          [
-            'const SCHEMA_TABLES = [',
-            '  schema.contacts,',
-            '  schema.txProofs,',
-            '  schema.rawRuntimeDrift,',
-            ...(includeSqliteAuthorizerTriggerDrift
-              ? ['  schema.sqliteAuthorizerDeclared,', '  schema.sqliteAuthorizerSideEffects,']
-              : []),
-          ].join('\n'),
-        )
+          'runtime mutation safety SQLite schema namespace import',
+        ),
+        'const APP_TABLES = [contacts, user, session, account, verification] as const;',
+        [
+          'const APP_TABLES = [',
+          '  contacts,',
+          '  schema.txProofs,',
+          '  schema.rawRuntimeDrift,',
+          ...(includeSqliteAuthorizerTriggerDrift
+            ? ['  schema.sqliteAuthorizerDeclared,', '  schema.sqliteAuthorizerSideEffects,']
+            : []),
+          '  user,',
+          '  session,',
+          '  account,',
+          '  verification,',
+          '] as const;',
+        ].join('\n'),
+        'runtime mutation safety SQLite table registration',
+      )
     : runtimeDbSource
         .replace(
           "import { account, contacts, session, user, verification } from '../schema.js';",
