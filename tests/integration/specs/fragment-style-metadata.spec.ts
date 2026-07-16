@@ -5,21 +5,27 @@ test.use({ kovoFixture: 'fragment-style-metadata' });
 test('late mutation fragments request compiler-metadata styles without duplicate links', async ({
   page,
   kovoApp,
+  request,
 }) => {
+  // Read the wire through Playwright's API client rather than Chromium's CDP response cache. A
+  // loaded browser shard may discard an enhanced-navigation body before `Response.text()` can
+  // retrieve it even when the read starts from `waitForResponse`.
+  const wireResponse = await request.post('/_m/fragment-style-metadata/reveal', {
+    form: {},
+    headers: {
+      Accept: 'text/vnd.kovo.fragment+html; stream=1',
+      'Kovo-Fragment': 'true',
+      'Kovo-Stream': 'true',
+    },
+  });
+  expect(wireResponse.status()).toBe(200);
+  const wire = await wireResponse.text();
+  expect(wire.match(/href="\/assets\/late-card\.css"/g)).toHaveLength(1);
+
   await page.goto('/');
   await expect(page.locator('link[rel="stylesheet"][href="/assets/late-card.css"]')).toHaveCount(0);
 
-  // Start reading as soon as Chromium reports the response. Deferring `text()` until after the
-  // enhanced click settles lets CDP discard the completed resource body under a loaded CI shard.
-  const responseBody = page
-    .waitForResponse(
-      (candidate) =>
-        candidate.url().endsWith('/_m/fragment-style-metadata/reveal') &&
-        candidate.status() === 200,
-    )
-    .then((response) => response.text());
   await page.getByRole('button', { name: 'Reveal card' }).click();
-  expect((await responseBody).match(/href="\/assets\/late-card\.css"/g)).toHaveLength(1);
 
   const card = page.locator('[data-late-card]');
   await expect(card).toHaveText('Late styled card');
