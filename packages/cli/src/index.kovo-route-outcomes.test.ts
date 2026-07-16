@@ -114,10 +114,9 @@ export default createApp({
       writeFileSync(
         appPath,
         `
-import { createApp, publicAccess, rootedFiles as openRoot, route } from '@kovojs/server';
+import { createApp, publicAccess, rootedFiles, route } from '@kovojs/server';
 
-const makeDocsRoot = openRoot;
-const docs = await makeDocsRoot(${JSON.stringify(docsRoot)});
+const docs = await rootedFiles(${JSON.stringify(docsRoot)});
 
 export default createApp({
   routes: [

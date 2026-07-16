@@ -1504,6 +1504,8 @@ interface RequestCallable {
   /** Exact universally closed module-local helper reached only from declared framework roots. */
   readonly declaredRootHelper?: boolean;
   readonly declaration: Node;
+  /** Exact component-render lexical owner for an inline/local callable (SPEC §4.1 / §6.6). */
+  readonly lexicalParent?: RequestCallable;
   readonly publicWire?: boolean;
   readonly publicWireMethods?: readonly string[];
   readonly publicWirePaths?: readonly (readonly string[])[];
@@ -10690,6 +10692,115 @@ function requestCallIsExactFrameworkNativePromise(
   );
 }
 
+function requestCallIsExactRootedFilesServeOutcome(
+  call: import('ts-morph').CallExpression,
+): boolean {
+  const callee = unwrapStaticExpression(call.getExpression());
+  const receiver = requestCallReceiver(callee);
+  if (!receiver || requestStaticCallMember(callee) !== 'serve') return false;
+  const binding = requestExactModuleScopeRootedFilesBinding(receiver, new Set());
+  return !!binding && requestRootedFilesBindingServeUsesAreClosed(binding);
+}
+
+/**
+ * `rootedFiles(...).serve(...)` is a framework response outcome only when the authority was minted
+ * once into an unexported top-level const from the exact import and every use of that handle is the
+ * terminal `serve` call. This preserves SPEC §4.8's static-root rule without blessing aliases,
+ * descriptor replacement, or a request-selected root.
+ */
+function requestExactModuleScopeRootedFilesBinding(
+  expression: Node,
+  seen: Set<string>,
+): import('ts-morph').VariableDeclaration | undefined {
+  const node = unwrapStaticExpression(expression);
+  if (Node.isAwaitExpression(node)) {
+    return requestExactModuleScopeRootedFilesBinding(node.getExpression(), seen);
+  }
+  if (Node.isCallExpression(node)) {
+    if (
+      node.getArguments().length !== 1 ||
+      !requestExpressionIsDirectImportedExport(
+        node.getExpression(),
+        '@kovojs/server',
+        'rootedFiles',
+      ) ||
+      !requestModuleInitializerFrameworkAuthorityCallIsClosed(node)
+    ) {
+      return undefined;
+    }
+    let current: Node = node;
+    let parent = current.getParent();
+    while (
+      Node.isAwaitExpression(parent) ||
+      Node.isParenthesizedExpression(parent) ||
+      Node.isAsExpression(parent) ||
+      Node.isSatisfiesExpression(parent) ||
+      Node.isTypeAssertion(parent) ||
+      Node.isNonNullExpression(parent)
+    ) {
+      current = parent;
+      parent = current.getParent();
+    }
+    if (
+      !Node.isVariableDeclaration(parent) ||
+      !requestNodesAreSame(parent.getInitializer(), current)
+    ) {
+      return undefined;
+    }
+    const statement = parent.getVariableStatement();
+    return statement &&
+      statement.getDeclarationKind() === VariableDeclarationKind.Const &&
+      statement.getParent() === parent.getSourceFile() &&
+      !statement.isExported() &&
+      Node.isIdentifier(parent.getNameNode())
+      ? parent
+      : undefined;
+  }
+  if (!Node.isIdentifier(node)) return undefined;
+  const symbol = requestIdentifierValueSymbol(node) ?? node.getSymbol();
+  if (!symbol) return undefined;
+  const key = requestSymbolKey(symbol);
+  if (seen.has(key)) return undefined;
+  seen.add(key);
+  const declarations = symbol.getDeclarations().filter(Node.isVariableDeclaration);
+  if (declarations.length !== 1) return undefined;
+  const declaration = declarations[0]!;
+  const initializer = declaration.getInitializer();
+  const resolved = initializer
+    ? requestExactModuleScopeRootedFilesBinding(initializer, new Set(seen))
+    : undefined;
+  return resolved && requestNodesAreSame(resolved, declaration) ? declaration : undefined;
+}
+
+function requestRootedFilesBindingServeUsesAreClosed(
+  declaration: import('ts-morph').VariableDeclaration,
+): boolean {
+  const name = declaration.getNameNode();
+  const symbol = Node.isIdentifier(name) ? name.getSymbol() : undefined;
+  if (!symbol) return false;
+  const symbolKey = requestSymbolKey(symbol);
+  for (const sourceFile of declaration.getProject().getSourceFiles()) {
+    for (const identifier of sourceFile.getDescendantsOfKind(SyntaxKind.Identifier)) {
+      const candidate = requestIdentifierValueSymbol(identifier) ?? identifier.getSymbol();
+      if (!candidate || requestSymbolKey(candidate) !== symbolKey) continue;
+      if (requestNodesAreSame(identifier, name)) continue;
+      const access = identifier.getParent();
+      if (
+        !Node.isPropertyAccessExpression(access) ||
+        !requestNodesAreSame(access.getExpression(), identifier) ||
+        access.getName() !== 'serve'
+      ) {
+        return false;
+      }
+      const call = access.getParent();
+      if (!Node.isCallExpression(call) || !requestNodesAreSame(call.getExpression(), access)) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
 function requestExpressionContainsExactFrameworkNativePromise(
   expression: Node,
   seen: Set<string>,
@@ -11874,7 +11985,8 @@ function requestCallIsReviewedRouteOutcome(
   if (
     !requestCallIsExactRespondMethod(call) &&
     !requestCallIsExactClosedRedirect(call) &&
-    !requestCallIsExactNotFound(call)
+    !requestCallIsExactNotFound(call) &&
+    !requestCallIsExactRootedFilesServeOutcome(call)
   ) {
     return false;
   }
@@ -11955,7 +12067,7 @@ function requestObjectLiteralElementNameNode(
 }
 
 function scanRequestCallable(callable: RequestCallable, context: RequestProcessScanContext): void {
-  const key = `${callable.declaration.getSourceFile().getFilePath()}:${callable.declaration.getStart()}:${callable.rootFactory ?? 'nested'}:${callable.rootCallback ?? (callable.moduleInitializer ? 'module-initializer' : 'helper')}:${callable.rootParameterRoles?.join(',') ?? 'untyped'}`;
+  const key = `${callable.declaration.getSourceFile().getFilePath()}:${callable.declaration.getStart()}:${callable.rootFactory ?? 'nested'}:${callable.rootCallback ?? (callable.moduleInitializer ? 'module-initializer' : 'helper')}:${callable.rootParameterRoles?.join(',') ?? 'untyped'}:${callable.lexicalParent ? requestNodeIdentity(callable.lexicalParent.declaration) : 'no-lexical-parent'}`;
   if (context.scanned.has(key)) return;
   context.scanned.add(key);
 
@@ -12233,7 +12345,8 @@ function scanRequestCallable(callable: RequestCallable, context: RequestProcessS
       context.provenance,
     );
     const invocation = requestNormalizedCall(call);
-    for (const nested of resolution.callables) {
+    for (const resolvedNested of resolution.callables) {
+      const nested = requestCallableWithLexicalParent(resolvedNested, callable);
       if (callable.moduleInitializer && nested.rootFactory) {
         // Framework descriptor callbacks are deferred even when provenance discovers the factory
         // through an indirect container. The ordinary retained-config/root pass scans those
@@ -14663,7 +14776,8 @@ function scanRequestPropertyAccessProtocols(
     : staticMemberName(access.getArgumentExpression());
   if (
     !write &&
-    (requestPropertyAccessIsExactRequestPrimitive(access, callable) ||
+    (requestExactLexicalComponentSlotProjectionRole(access, callable) !== undefined ||
+      requestPropertyAccessIsExactRequestPrimitive(access, callable) ||
       requestPropertyAccessIsExactUrlSearchParams(access, callable, context.provenance))
   ) {
     return;
@@ -15700,6 +15814,7 @@ function requestExpressionIsProtocolSafe(
   }
   if (!Node.isIdentifier(node)) return false;
   if (unshadowedGlobalIdentifier(node, 'undefined')) return true;
+  if (requestIdentifierIsReviewedImportedPlainDataRecord(node)) return true;
   if (requestIdentifierIsImportedMutableContainer(node)) return false;
   const role = requestExpressionRootParameterRole(node, callable, new Set(), 0);
   if (requestRootRoleIncludesInput(role)) return true;
@@ -16119,7 +16234,7 @@ function requestExactDeferAttributes(
     if (!Node.isJsxExpression(initializer) || !initializer.getExpression()) return undefined;
     values.set(name, initializer.getExpression()!);
   }
-  if (![...['fallback', 'render', 'target']].every((name) => values.has(name))) {
+  if (!['fallback', 'render', 'target'].every((name) => values.has(name))) {
     return undefined;
   }
   const render = values.get('render')!;
@@ -16157,6 +16272,21 @@ function requestCallableWithInvocationRoles(
     },
   );
   return roles.length > 0 ? { ...callable, rootParameterRoles: roles } : callable;
+}
+
+function requestCallableWithLexicalParent(
+  callable: RequestCallable,
+  parent: RequestCallable,
+): RequestCallable {
+  const componentRender = parent.compilerOwnedJsxEventHandlers ? parent : parent.lexicalParent;
+  if (!componentRender) return callable;
+  const lexicallyNested = callable.declaration
+    .getAncestors()
+    .some((ancestor) => requestNodesAreSame(ancestor, componentRender.declaration));
+  // Point every closure directly at the canonical component render. Do not build an invocation-
+  // role-dependent lexical chain: the same nested declaration may be reached with multiple helper
+  // argument roles, and collapsing those contexts would make the scan order security-significant.
+  return lexicallyNested ? { ...callable, lexicalParent: componentRender } : callable;
 }
 
 interface RequestWireBinding {
@@ -16410,15 +16540,21 @@ function requestWireAuthoritiesForExpressionUncached(
   if (Node.isCallExpression(node)) {
     const revealed = requestExactTrustedRevealOutput(node);
     if (revealed) return requestWireAuthoritiesForExpression(revealed, state, routeOutcomePosition);
+    const reviewedRouteOutcome = requestCallIsReviewedRouteOutcome(node, state.rootCallable);
     if (
       requestCallIsExactFrameworkNativePromise(node) ||
-      ((requestCallIsExactRespondMethod(node) || requestCallIsExactNotFound(node)) &&
-        (!routeOutcomePosition || !requestCallIsReviewedRouteOutcome(node, state.rootCallable)))
+      ((requestCallIsExactRespondMethod(node) ||
+        requestCallIsExactNotFound(node) ||
+        requestCallIsExactRootedFilesServeOutcome(node)) &&
+        (!routeOutcomePosition || !reviewedRouteOutcome))
     ) {
       return dedupeRequestWireAuthorities([
         ...requestWireAuthoritiesForExpressions(node.getArguments(), state),
         requestOpaqueWireAuthority(node, 'value'),
       ]);
+    }
+    if (routeOutcomePosition && reviewedRouteOutcome) {
+      return requestWireAuthoritiesForExpressions(node.getArguments(), state);
     }
     if (requestCallIsPublicStyleCreate(node)) {
       return requestWireAuthoritiesForExpressions(node.getArguments(), state);
@@ -16475,7 +16611,13 @@ function requestWireAuthoritiesForExpressionUncached(
     const resolution = resolveRequestCallable(callee, new Set(), 0, state.session);
     if (resolution.callables.length > 0) {
       const authorities: RequestWireAuthority[] = [];
-      for (const nested of resolution.callables) {
+      for (const resolvedNested of resolution.callables) {
+        const lexicalNested = requestCallableWithLexicalParent(resolvedNested, state.scopeCallable);
+        const nested = requestCallableWithInvocationRoles(
+          lexicalNested,
+          invocationArguments,
+          state.scopeCallable,
+        );
         const bindings = requestWireBindingsForCall(nested, invocationArguments, state.bindings);
         const nestedState: RequestWireAnalysisState = {
           bindingKey: requestWireBindingKey(bindings),
@@ -18230,7 +18372,12 @@ function requestWireIterationValues(
     if (resolution.callables.length > 0) {
       const candidates: RequestWireIterationCandidate[] = [];
       let handled = true;
-      for (const callable of resolution.callables) {
+      for (const resolvedCallable of resolution.callables) {
+        const callable = requestCallableWithInvocationRoles(
+          requestCallableWithLexicalParent(resolvedCallable, state.scopeCallable),
+          invocation.args ?? node.getArguments(),
+          state.scopeCallable,
+        );
         const bindings = requestWireBindingsForCall(
           callable,
           invocation.args ?? node.getArguments(),
@@ -18303,8 +18450,10 @@ function requestWireIterationValues(
       };
     }
     if (
-      requestRootRoleIncludesInput(
-        requestExpressionRootParameterRole(node, state.rootCallable, new Set(), 0),
+      [state.scopeCallable, state.rootCallable].some((callable) =>
+        requestRootRoleIncludesInput(
+          requestExpressionRootParameterRole(node, callable, new Set(), 0),
+        ),
       )
     ) {
       return { candidates: [], handled: true };
@@ -18312,8 +18461,10 @@ function requestWireIterationValues(
   }
 
   if (
-    requestRootRoleIncludesInput(
-      requestExpressionRootParameterRole(node, state.rootCallable, new Set(), 0),
+    [state.scopeCallable, state.rootCallable].some((callable) =>
+      requestRootRoleIncludesInput(
+        requestExpressionRootParameterRole(node, callable, new Set(), 0),
+      ),
     )
   ) {
     return { candidates: [], handled: true };
@@ -18526,7 +18677,10 @@ function requestWireCarrierForExpressionUncached(
     const member = Node.isPropertyAccessExpression(node)
       ? node.getName()
       : staticMemberName(node.getArgumentExpression());
-    if (requestExactComponentSlotProjectionRole(node, state.scopeCallable) === 'request') {
+    if (
+      (requestExactComponentSlotProjectionRole(node, state.scopeCallable) ??
+        requestExactLexicalComponentSlotProjectionRole(node, state.scopeCallable)) === 'request'
+    ) {
       return 'request';
     }
     const base = requestWireCarrierForExpression(node.getExpression(), state);
@@ -25483,12 +25637,21 @@ function requestExpressionRootParameterRole(
   seen: Set<string>,
   depth: number,
 ): RequestRootParameterRole | undefined {
-  if (!callable.rootFactory && !callable.rootParameterRoles) return undefined;
+  if (!callable.rootFactory && !callable.rootParameterRoles && !callable.lexicalParent) {
+    return undefined;
+  }
   const node = unwrapStaticExpression(expression);
   const componentSlotRole = requestExactComponentSlotProjectionRole(node, callable);
   if (componentSlotRole) return componentSlotRole;
   const errorShellRole = requestExactErrorShellProjectionRole(node, callable);
   if (errorShellRole) return errorShellRole;
+  // Preserve only the canonical component render's public query/state values and its exact
+  // `slots.request` projection through lexical closures. A bare third parameter remains an
+  // ungrantable capability, so nested code cannot turn custom slots into ambient authority.
+  const lexicalRole = callable.lexicalParent
+    ? requestExpressionRootParameterRole(node, callable.lexicalParent, new Set(seen), depth + 1)
+    : undefined;
+  if (lexicalRole === 'input' || lexicalRole === 'request') return lexicalRole;
   if (Node.isAwaitExpression(node)) {
     return requestExpressionRootParameterRole(node.getExpression(), callable, seen, depth + 1);
   }
@@ -25638,6 +25801,15 @@ function requestExactComponentSlotProjectionRole(
   // Destructuring, aliases, defaults, and rests erase the exact framework-owned projection.
   // Keep them on the conservative whole-slot capability role.
   return undefined;
+}
+
+function requestExactLexicalComponentSlotProjectionRole(
+  expression: Node,
+  callable: RequestCallable,
+): RequestRootParameterRole | undefined {
+  return callable.lexicalParent
+    ? requestExactComponentSlotProjectionRole(expression, callable.lexicalParent)
+    : undefined;
 }
 
 /**
@@ -28605,6 +28777,174 @@ function requestIdentifierIsImportedMutableContainer(identifier: Node): boolean 
       node.getKind() === SyntaxKind.NullKeyword
     );
   });
+}
+
+const REQUEST_REVIEWED_IMPORTED_PLAIN_DATA_RECORD_MEMO = new WeakMap<
+  object,
+  Map<string, boolean>
+>();
+
+/**
+ * SPEC §4.1 / §6.6: a relative import is not safe merely because its initializer is an object
+ * literal. Admit the narrow mutable-record pattern used by app-owned in-memory fixtures only when
+ * the exported binding is one top-level const closed-data record and every project reference is a
+ * static own-data-property read or a primitive-preserving numeric update. Descriptor/prototype
+ * mutation, aliasing, spreading, computed access, getters, and whole-record escape all stay closed.
+ */
+function requestIdentifierIsReviewedImportedPlainDataRecord(identifier: Node): boolean {
+  if (!Node.isIdentifier(identifier)) return false;
+  const importSymbol = identifier.getSymbol();
+  if (
+    !importSymbol ||
+    !importSymbol.getDeclarations().some((declaration) => {
+      const importDeclaration = declaration.getFirstAncestorByKind(SyntaxKind.ImportDeclaration);
+      return importDeclaration?.getModuleSpecifierValue().startsWith('.') === true;
+    })
+  ) {
+    return false;
+  }
+
+  const valueSymbol = requestIdentifierValueSymbol(identifier);
+  if (!valueSymbol) return false;
+  const symbolKey = requestSymbolKey(valueSymbol);
+  const project = identifier.getProject();
+  let projectMemo = REQUEST_REVIEWED_IMPORTED_PLAIN_DATA_RECORD_MEMO.get(project);
+  if (!projectMemo) {
+    projectMemo = new Map();
+    REQUEST_REVIEWED_IMPORTED_PLAIN_DATA_RECORD_MEMO.set(project, projectMemo);
+  }
+  const memoized = projectMemo.get(symbolKey);
+  if (memoized !== undefined) return memoized;
+  // Seed the conservative result before walking project-wide aliases/references.
+  projectMemo.set(symbolKey, false);
+
+  const declarations = valueSymbol.getDeclarations().filter(Node.isVariableDeclaration);
+  const [declaration] = declarations;
+  const statement = declaration?.getVariableStatement();
+  const initializer = declaration?.getInitializer();
+  if (
+    declarations.length !== 1 ||
+    !declaration ||
+    !statement ||
+    statement.getDeclarationKind() !== VariableDeclarationKind.Const ||
+    statement.getParent() !== declaration.getSourceFile() ||
+    !initializer ||
+    !Node.isObjectLiteralExpression(unwrapStaticExpression(initializer))
+  ) {
+    return false;
+  }
+
+  const record = unwrapStaticExpression(initializer);
+  if (!Node.isObjectLiteralExpression(record)) return false;
+  const properties = new Map<string, Node>();
+  for (const property of record.getProperties()) {
+    if (!Node.isPropertyAssignment(property)) return false;
+    const member = staticMemberName(property.getNameNode());
+    const value = property.getInitializer();
+    if (
+      !member ||
+      member === '__proto__' ||
+      !value ||
+      properties.has(member) ||
+      !requestExpressionIsClosedStaticScalar(value)
+    ) {
+      return false;
+    }
+    properties.set(member, unwrapStaticExpression(value));
+  }
+  if (properties.size === 0) return false;
+
+  const numericAssignmentOperators = new Set([
+    SyntaxKind.AsteriskAsteriskEqualsToken,
+    SyntaxKind.AsteriskEqualsToken,
+    SyntaxKind.SlashEqualsToken,
+    SyntaxKind.PercentEqualsToken,
+    SyntaxKind.PlusEqualsToken,
+    SyntaxKind.MinusEqualsToken,
+    SyntaxKind.LessThanLessThanEqualsToken,
+    SyntaxKind.GreaterThanGreaterThanEqualsToken,
+    SyntaxKind.GreaterThanGreaterThanGreaterThanEqualsToken,
+    SyntaxKind.AmpersandEqualsToken,
+    SyntaxKind.BarEqualsToken,
+    SyntaxKind.CaretEqualsToken,
+  ]);
+  const referenceIsClosed = (reference: import('ts-morph').Identifier): boolean => {
+    if (requestNodesAreSame(reference, declaration.getNameNode())) return true;
+    if (reference.getFirstAncestorByKind(SyntaxKind.ImportSpecifier)) {
+      return true;
+    }
+    const access = reference.getParent();
+    if (
+      !Node.isPropertyAccessExpression(access) ||
+      !requestNodesAreSame(access.getExpression(), reference)
+    ) {
+      return false;
+    }
+    const member = staticMemberName(access.getNameNode());
+    const initialValue = member ? properties.get(member) : undefined;
+    if (!member || !initialValue) return false;
+
+    const parent = access.getParent();
+    if (Node.isDeleteExpression(parent) && requestNodesAreSame(parent.getExpression(), access)) {
+      return false;
+    }
+    if (
+      (Node.isPrefixUnaryExpression(parent) || Node.isPostfixUnaryExpression(parent)) &&
+      requestNodesAreSame(parent.getOperand(), access)
+    ) {
+      return (
+        Node.isNumericLiteral(initialValue) &&
+        [SyntaxKind.PlusPlusToken, SyntaxKind.MinusMinusToken].includes(parent.getOperatorToken())
+      );
+    }
+    if (
+      Node.isBinaryExpression(parent) &&
+      requestNodesAreSame(parent.getLeft(), access) &&
+      parent.getOperatorToken().getKind() >= SyntaxKind.FirstAssignment &&
+      parent.getOperatorToken().getKind() <= SyntaxKind.LastAssignment
+    ) {
+      const operator = parent.getOperatorToken().getKind();
+      if (operator === SyntaxKind.EqualsToken) {
+        const next = unwrapStaticExpression(parent.getRight());
+        return (
+          (Node.isNumericLiteral(initialValue) && Node.isNumericLiteral(next)) ||
+          ((Node.isStringLiteral(initialValue) ||
+            Node.isNoSubstitutionTemplateLiteral(initialValue)) &&
+            (Node.isStringLiteral(next) || Node.isNoSubstitutionTemplateLiteral(next))) ||
+          ((Node.isTrueLiteral(initialValue) || Node.isFalseLiteral(initialValue)) &&
+            (Node.isTrueLiteral(next) || Node.isFalseLiteral(next)))
+        );
+      }
+      return (
+        Node.isNumericLiteral(initialValue) &&
+        numericAssignmentOperators.has(operator) &&
+        Node.isNumericLiteral(unwrapStaticExpression(parent.getRight()))
+      );
+    }
+    return true;
+  };
+
+  for (const sourceFile of project.getSourceFiles()) {
+    for (const reference of sourceFile.getDescendantsOfKind(SyntaxKind.Identifier)) {
+      const candidate = requestIdentifierValueSymbol(reference) ?? reference.getSymbol();
+      if (!candidate || requestSymbolKey(candidate) !== symbolKey) continue;
+      if (!referenceIsClosed(reference)) return false;
+    }
+  }
+  projectMemo.set(symbolKey, true);
+  return true;
+}
+
+function requestExpressionIsClosedStaticScalar(expression: Node): boolean {
+  const node = unwrapStaticExpression(expression);
+  return (
+    Node.isStringLiteral(node) ||
+    Node.isNoSubstitutionTemplateLiteral(node) ||
+    Node.isNumericLiteral(node) ||
+    Node.isTrueLiteral(node) ||
+    Node.isFalseLiteral(node) ||
+    node.getKind() === SyntaxKind.NullKeyword
+  );
 }
 
 function requestBindingIdentifierNames(name: Node): string[] {
