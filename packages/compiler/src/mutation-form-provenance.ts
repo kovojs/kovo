@@ -11,6 +11,16 @@ export type MutationFormControlAttributeName =
   | 'enhance'
   | 'mutation';
 
+export type MutationFormTransportAttributeName = 'action' | 'enctype' | 'method';
+
+export type MutationSubmitterTransportAttributeName =
+  | 'form'
+  | 'formaction'
+  | 'formenctype'
+  | 'formmethod'
+  | 'formnovalidate'
+  | 'formtarget';
+
 /**
  * SPEC §5.2 rule 10 / §6.3: these JSX/wire names opt a form into Kovo mutation dispatch or
  * identify that dispatch. Treat their spelling case-insensitively because HTML parsing folds
@@ -38,11 +48,42 @@ export function mutationFormControlAttributeName(
 export function mutationFormProvenanceAttributeName(name: string): string | null {
   const control = mutationFormControlAttributeName(name);
   if (control !== null) return control;
+  const formTransport = mutationFormTransportAttributeName(name);
+  if (formTransport !== null) return formTransport;
+  return mutationSubmitterTransportAttributeName(name);
+}
+
+export function mutationFormTransportAttributeName(
+  name: string,
+): MutationFormTransportAttributeName | null {
   switch (compilerStringToLowerCase(name)) {
     case 'action':
       return 'action';
+    case 'enctype':
+      return 'enctype';
     case 'method':
       return 'method';
+    default:
+      return null;
+  }
+}
+
+export function mutationSubmitterTransportAttributeName(
+  name: string,
+): MutationSubmitterTransportAttributeName | null {
+  switch (compilerStringToLowerCase(name)) {
+    case 'form':
+      return 'form';
+    case 'formaction':
+      return 'formaction';
+    case 'formenctype':
+      return 'formenctype';
+    case 'formmethod':
+      return 'formmethod';
+    case 'formnovalidate':
+      return 'formnovalidate';
+    case 'formtarget':
+      return 'formtarget';
     default:
       return null;
   }
@@ -62,10 +103,16 @@ export function isImportedMutationFormAttributesCall(attribute: JsxSpreadAttribu
   );
 }
 
+/** Parser-owned HTML intrinsic identity; component spellings never receive this fact. */
+export function isIntrinsicHtmlElement(element: JsxElementModel, name: string): boolean {
+  return element.intrinsicTagName === name;
+}
+
 /** Compiler-owned mutation binding provenance shared by lowering, emit, and validation. */
 export function enhancedMutationFormBinding(
   element: JsxElementModel,
 ): { end: number; localName: string; start: number } | null {
+  if (!isIntrinsicHtmlElement(element, 'form')) return null;
   const attributes = compilerSnapshotDenseArray(
     element.attributes,
     'Mutation form binding attributes',

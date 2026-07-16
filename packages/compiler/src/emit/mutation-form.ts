@@ -19,6 +19,10 @@ import {
 } from '../compiler-security-intrinsics.js';
 import type { GeneratedOutputWriteFact } from '../output-context-facts.js';
 import {
+  isIntrinsicHtmlElement,
+  mutationSubmitterTransportAttributeName,
+} from '../mutation-form-provenance.js';
+import {
   mutationInputFactsFromSource,
   type LocalMutationInputFact,
 } from '../scan/mutation-inputs.js';
@@ -69,7 +73,12 @@ function mutationFormAttribute(
   const attributes = compilerSnapshotDenseArray(element.attributes, 'Mutation form attributes');
   for (let index = 0; index < attributes.length; index += 1) {
     const attribute = attributes[index]!;
-    if (attribute.name === name) return attribute;
+    if (
+      attribute.name === name ||
+      (element.intrinsicTagName !== undefined && compilerStringToLowerCase(attribute.name) === name)
+    ) {
+      return attribute;
+    }
   }
   return undefined;
 }
@@ -177,7 +186,7 @@ export function mutationFormExplainFacts(
 
   for (let formIndex = 0; formIndex < elements.length; formIndex += 1) {
     const form = elements[formIndex]!;
-    if (form.tag !== 'form') continue;
+    if (!isIntrinsicHtmlElement(form, 'form')) continue;
     const binding = enhancedMutationFormBinding(form);
     if (!binding) continue;
 
@@ -402,12 +411,17 @@ function formControlElements(
   const elements = compilerSnapshotDenseArray(model.jsxElements, 'Mutation form controls');
   for (let index = 0; index < elements.length; index += 1) {
     const element = elements[index]!;
-    if (element.tag !== 'input' && element.tag !== 'select' && element.tag !== 'textarea') continue;
+    if (
+      !isIntrinsicHtmlElement(element, 'input') &&
+      !isIntrinsicHtmlElement(element, 'select') &&
+      !isIntrinsicHtmlElement(element, 'textarea')
+    )
+      continue;
     if (element.start < form.openingEnd || element.end > formEnd) continue;
     if (mutationFormAttribute(element, 'disabled')) continue;
     const rawType = staticStringAttributeValue(mutationFormAttribute(element, 'type'));
     const type = rawType === null ? undefined : compilerStringToLowerCase(rawType);
-    if (element.tag === 'input' && type === 'hidden') continue;
+    if (isIntrinsicHtmlElement(element, 'input') && type === 'hidden') continue;
     if (staticStringAttributeValue(mutationFormAttribute(element, 'name')) !== name) continue;
     compilerArrayAppend(
       controls,
@@ -614,7 +628,7 @@ function repeatableMutationFormDiagnostic(
   element: JsxElementModel,
   options: { fileName: string; registryFacts?: RegistryFacts; source: string } | undefined,
 ): CompilerDiagnostic | null {
-  if (!options || element.tag !== 'form' || !element.repeatable) return null;
+  if (!options || !isIntrinsicHtmlElement(element, 'form') || !element.repeatable) return null;
   if (mutationFormAttribute(element, 'key')) return null;
 
   const binding = enhancedMutationFormBinding(element);
@@ -640,7 +654,7 @@ function mutationFormFieldDiagnostics(
   element: JsxElementModel,
   options: { fileName: string; registryFacts?: RegistryFacts; source: string },
 ): CompilerDiagnostic[] {
-  if (element.tag !== 'form') return [];
+  if (!isIntrinsicHtmlElement(element, 'form')) return [];
 
   const binding = enhancedMutationFormBinding(element);
   if (!binding) return [];
@@ -768,10 +782,10 @@ function successfulFormControls(
     const element = elements[elementIndex]!;
     if (element === form) continue;
     if (
-      element.tag !== 'button' &&
-      element.tag !== 'input' &&
-      element.tag !== 'select' &&
-      element.tag !== 'textarea'
+      !isIntrinsicHtmlElement(element, 'button') &&
+      !isIntrinsicHtmlElement(element, 'input') &&
+      !isIntrinsicHtmlElement(element, 'select') &&
+      !isIntrinsicHtmlElement(element, 'textarea')
     ) {
       continue;
     }
@@ -904,18 +918,21 @@ function mutationSubmitterTransportOverrideDiagnostics(
   options: { fileName: string; source: string },
 ): CompilerDiagnostic[] {
   const diagnostics: CompilerDiagnostic[] = [];
-  const overrideNames = ['formaction', 'formAction', 'formmethod', 'formMethod'];
-  for (let index = 0; index < overrideNames.length; index += 1) {
-    const name = overrideNames[index]!;
-    const attribute = mutationFormAttribute(element, name);
-    if (!attribute) continue;
+  const attributes = compilerSnapshotDenseArray(
+    element.attributes,
+    'Mutation submitter transport attributes',
+  );
+  for (let index = 0; index < attributes.length; index += 1) {
+    const attribute = attributes[index]!;
+    const transport = mutationSubmitterTransportAttributeName(attribute.name);
+    if (transport !== 'formaction' && transport !== 'formmethod') continue;
     compilerArrayAppend(
       diagnostics,
       formFieldDiagnostic(
         options,
         attribute.start,
         attribute.end - attribute.start,
-        `${name} cannot override a typed enhanced mutation transport; use a separate native form for a different action or method`,
+        `${attribute.name} cannot override a typed enhanced mutation transport; use a separate native form for a different action or method`,
       ),
       'Compiler packages/compiler/src/emit/mutation-form.ts collection',
     );
@@ -946,7 +963,7 @@ function unsupportedControlDiagnostics(
     );
   }
 
-  if (element.tag === 'input' && type === 'file') {
+  if (isIntrinsicHtmlElement(element, 'input') && type === 'file') {
     compilerArrayAppend(
       diagnostics,
       formFieldDiagnostic(
@@ -959,7 +976,7 @@ function unsupportedControlDiagnostics(
     );
   }
 
-  if (element.tag === 'input' && (type === 'checkbox' || type === 'radio')) {
+  if (isIntrinsicHtmlElement(element, 'input') && (type === 'checkbox' || type === 'radio')) {
     compilerArrayAppend(
       diagnostics,
       formFieldDiagnostic(
@@ -972,7 +989,7 @@ function unsupportedControlDiagnostics(
     );
   }
 
-  if (element.tag === 'select' && mutationFormAttribute(element, 'multiple')) {
+  if (isIntrinsicHtmlElement(element, 'select') && mutationFormAttribute(element, 'multiple')) {
     compilerArrayAppend(
       diagnostics,
       formFieldDiagnostic(

@@ -443,11 +443,16 @@ export function isKovoControlAttributeName(name: string): boolean {
 /**
  * @internal Compiler-injected reconstruction boundary for a dynamic intrinsic-element JSX
  * spread. Only ordinary presentation/semantic attributes cross the boundary; Kovo control-plane
- * attributes are omitted regardless of the carrier's prototype, getters, or key casing. The
+ * attributes are omitted regardless of the carrier's prototype, getters, or key casing. A
+ * compiler-selected mutation transport boundary additionally removes native form/submitter
+ * override attributes so a late spread cannot replace generated action/method authority. The
  * returned null-prototype snapshot also pins the values consumed by the JSX renderer so a mutable
  * caller carrier is never re-read after classification (SPEC §6.6 rule 5).
  */
-export function kovoSafeJsxSpread(value: unknown): Record<string, unknown> {
+export function kovoSafeJsxSpread(
+  value: unknown,
+  transportBoundary?: 'mutation-form' | 'mutation-submitter',
+): Record<string, unknown> {
   const safe = witnessCreateNullRecord<Record<string, unknown>>();
   if ((typeof value !== 'object' || value === null) && typeof value !== 'function') return safe;
 
@@ -458,9 +463,29 @@ export function kovoSafeJsxSpread(value: unknown): Record<string, unknown> {
     const descriptor = witnessGetOwnPropertyDescriptor(value, name);
     if (descriptor === undefined || !('value' in descriptor)) continue;
     if (isKovoControlAttributeName(name)) continue;
+    if (isMutationTransportOverrideAttributeName(name, transportBoundary)) continue;
     safe[name] = descriptor.value;
   }
   return safe;
+}
+
+function isMutationTransportOverrideAttributeName(
+  name: string,
+  boundary: 'mutation-form' | 'mutation-submitter' | undefined,
+): boolean {
+  if (boundary === undefined) return false;
+  const lower = witnessStringToLowerCase(name);
+  if (boundary === 'mutation-form') {
+    return lower === 'action' || lower === 'enctype' || lower === 'method';
+  }
+  return (
+    lower === 'form' ||
+    lower === 'formaction' ||
+    lower === 'formenctype' ||
+    lower === 'formmethod' ||
+    lower === 'formnovalidate' ||
+    lower === 'formtarget'
+  );
 }
 
 /**

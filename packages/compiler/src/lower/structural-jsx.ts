@@ -41,9 +41,12 @@ import type { StaticLiteralValue } from '../scan/object.js';
 import {
   enhancedMutationFormBinding,
   isImportedMutationFormAttributesCall,
+  isIntrinsicHtmlElement,
   isMutationFormAttributesSpread,
   mutationFormControlAttributeName,
   mutationFormProvenanceAttributeName,
+  mutationFormTransportAttributeName,
+  mutationSubmitterTransportAttributeName,
 } from '../mutation-form-provenance.js';
 import { runtimeOutputHelpers, stylePropertyExpression } from '../security/output-context.js';
 import {
@@ -339,6 +342,7 @@ function mutationFormProvenanceDiagnostics(
   options: StructuralJsxLoweringOptions,
 ): CompilerDiagnostic[] {
   const diagnostics: CompilerDiagnostic[] = [];
+  const mutationForms: JsxIrElement[] = [];
   const elementLength = compilerArrayLength(elements, 'Mutation form provenance elements');
   for (let elementIndex = 0; elementIndex < elementLength; elementIndex += 1) {
     const element = compilerOwnDataValue(
@@ -347,9 +351,12 @@ function mutationFormProvenanceDiagnostics(
       'Mutation form provenance elements',
     ) as JsxIrElement;
     const source = element.element;
-    if (source.tag !== 'form') continue;
+    if (!isIntrinsicHtmlElement(source, 'form')) continue;
 
     const binding = enhancedMutationFormBinding(source);
+    if (binding !== null) {
+      appendCompilerFact(mutationForms, element, 'Proven mutation form elements');
+    }
     const attributeLength = compilerArrayLength(
       source.attributes,
       'Mutation form provenance attributes',
@@ -363,7 +370,11 @@ function mutationFormProvenanceDiagnostics(
       const provenanceName = mutationFormProvenanceAttributeName(attribute.name);
       if (provenanceName === null || mutationFormControlIsStaticallyAbsent(attribute)) continue;
       const control = mutationFormControlAttributeName(provenanceName);
-      if (control === null && binding === null) continue;
+      const transport = mutationFormTransportAttributeName(provenanceName);
+      if (control === null && (transport === null || binding === null)) continue;
+      // A literal enctype remains supported by the direct mutation lowering, which validates the
+      // multipart case. Only spread-derived enctype is unprovable and reconstructed below.
+      if (transport === 'enctype') continue;
       if (control === 'mutation' && binding?.start === attribute.start) continue;
       if (control === 'enhance' && binding !== null) continue;
       appendCompilerFact(
@@ -413,7 +424,10 @@ function mutationFormProvenanceDiagnostics(
       const forbidden: string[] = [];
       for (let controlIndex = 0; controlIndex < controls.length; controlIndex += 1) {
         const name = controls[controlIndex]!;
-        if (mutationFormControlAttributeName(name) !== null || binding !== null) {
+        if (
+          mutationFormControlAttributeName(name) !== null ||
+          (binding !== null && mutationFormTransportAttributeName(name) !== null)
+        ) {
           appendCompilerFact(forbidden, name, 'Forbidden spread mutation form controls');
         }
       }
@@ -430,7 +444,90 @@ function mutationFormProvenanceDiagnostics(
       removeJsxIrSourceAttribute(element, spread);
     }
   }
+
+  for (let elementIndex = 0; elementIndex < elementLength; elementIndex += 1) {
+    const element = compilerOwnDataValue(
+      elements,
+      elementIndex,
+      'Mutation submitter provenance elements',
+    ) as JsxIrElement;
+    if (
+      !isIntrinsicHtmlElement(element.element, 'button') &&
+      !isIntrinsicHtmlElement(element.element, 'input')
+    ) {
+      continue;
+    }
+    const associatedMutationForm = mutationFormForSubmitter(element, mutationForms);
+    const spreads = compilerSnapshotDenseArray(
+      element.element.spreadAttributes,
+      'Mutation submitter provenance spreads',
+    );
+    for (let spreadIndex = 0; spreadIndex < spreads.length; spreadIndex += 1) {
+      const spread = spreads[spreadIndex]!;
+      const controls = compilerSnapshotDenseArray(
+        spread.mutationFormControlNames ?? [],
+        'Mutation submitter spread control names',
+      );
+      let carriesFormAssociation = false;
+      for (let controlIndex = 0; controlIndex < controls.length; controlIndex += 1) {
+        if (mutationSubmitterTransportAttributeName(controls[controlIndex]!) === 'form') {
+          carriesFormAssociation = true;
+          break;
+        }
+      }
+      // A spread can make an otherwise external submitter target a typed form by supplying its
+      // `form` attribute together with transport overrides. The value may be dynamic, so the
+      // compiler cannot safely decide that it names some other form.
+      if (
+        associatedMutationForm === null &&
+        (mutationForms.length === 0 || !carriesFormAssociation)
+      ) {
+        continue;
+      }
+      const forbidden: string[] = [];
+      for (let controlIndex = 0; controlIndex < controls.length; controlIndex += 1) {
+        const name = controls[controlIndex]!;
+        if (mutationSubmitterTransportAttributeName(name) !== null) {
+          appendCompilerFact(forbidden, name, 'Forbidden submitter spread transport names');
+        }
+      }
+      if (forbidden.length === 0) continue;
+      appendCompilerFact(
+        diagnostics,
+        mutationFormProvenanceDiagnostic(
+          options,
+          spread,
+          `caller-owned submitter spread overrides typed mutation transport (${compilerArrayJoin(forbidden, ', ')}); remove form transport attributes or use a separate native form`,
+        ),
+        'Mutation form provenance diagnostics',
+      );
+      removeJsxIrSourceAttribute(element, spread);
+    }
+  }
   return diagnostics;
+}
+
+function mutationFormForSubmitter(
+  element: JsxIrElement,
+  mutationForms: readonly JsxIrElement[],
+): JsxIrElement | null {
+  if (
+    !isIntrinsicHtmlElement(element.element, 'button') &&
+    !isIntrinsicHtmlElement(element.element, 'input')
+  ) {
+    return null;
+  }
+  const controlFormId = staticAttributeString(element, 'form');
+  const forms = compilerSnapshotDenseArray(mutationForms, 'Proven mutation submitter forms');
+  for (let index = 0; index < forms.length; index += 1) {
+    const form = forms[index]!;
+    const source = form.element;
+    const descendant =
+      element.element.start >= source.openingEnd && element.element.end <= source.closingStart;
+    const formId = staticAttributeString(form, 'id');
+    if (descendant || (controlFormId !== null && formId === controlFormId)) return form;
+  }
+  return null;
 }
 
 function removeJsxIrSourceAttribute(
@@ -504,6 +601,14 @@ function lowerDynamicJsxSpreads(elements: readonly JsxIrElement[]): boolean {
       'Dynamic spread JSX elements',
     ) as JsxIrElement;
     if (isComponentTag(element.tag)) continue;
+    const transportBoundary = isIntrinsicHtmlElement(element.element, 'form')
+      ? enhancedMutationFormBinding(element.element) === null
+        ? undefined
+        : 'mutation-form'
+      : isIntrinsicHtmlElement(element.element, 'button') ||
+          isIntrinsicHtmlElement(element.element, 'input')
+        ? 'mutation-submitter'
+        : undefined;
     const attributeLength = compilerArrayLength(element.attributes, 'Dynamic spread attributes');
     for (let attributeIndex = 0; attributeIndex < attributeLength; attributeIndex += 1) {
       const attribute = compilerOwnDataValue(
@@ -519,10 +624,14 @@ function lowerDynamicJsxSpreads(elements: readonly JsxIrElement[]): boolean {
       if (!source || 'name' in source) continue;
       if (isMutationFormAttributesSpread(source)) continue;
 
-      attribute.name = `...kovoSafeJsxSpread(${source.expression})`;
+      const expression =
+        transportBoundary === undefined
+          ? `...kovoSafeJsxSpread(${source.expression})`
+          : `...kovoSafeJsxSpread(${source.expression}, '${transportBoundary}')`;
+      attribute.name = expression;
       attribute.value = {
         kind: 'expression',
-        source: `...kovoSafeJsxSpread(${source.expression})`,
+        source: expression,
       };
       attribute.ownership = 'generated';
       attribute.provenance = {
@@ -1534,11 +1643,20 @@ function primitiveReactiveComponentForTag(
 }
 
 function staticAttributeString(element: JsxIrElement, name: string): string | null {
-  const attribute = findSourceAttribute(
-    element.element.attributes,
-    name,
-    'Static source attributes',
-  );
+  let attribute = findSourceAttribute(element.element.attributes, name, 'Static source attributes');
+  if (!attribute && element.element.intrinsicTagName !== undefined) {
+    const attributes = compilerSnapshotDenseArray(
+      element.element.attributes,
+      'Static intrinsic source attributes',
+    );
+    for (let index = 0; index < attributes.length; index += 1) {
+      const candidate = attributes[index]!;
+      if (compilerStringToLowerCase(candidate.name) === name) {
+        attribute = candidate;
+        break;
+      }
+    }
+  }
   if (!attribute) return null;
   if (attribute.value !== undefined) return attribute.value;
   return staticStringValue(attribute.expressionStaticValue);

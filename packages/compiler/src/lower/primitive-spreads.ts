@@ -14,7 +14,11 @@ import {
   compilerRegExpTest,
   compilerStringTrim,
 } from '../compiler-security-intrinsics.js';
-import { mutationFormControlAttributeName } from '../mutation-form-provenance.js';
+import {
+  isIntrinsicHtmlElement,
+  mutationFormControlAttributeName,
+  mutationSubmitterTransportAttributeName,
+} from '../mutation-form-provenance.js';
 
 export function lowerPrimitiveSpreads(elements: readonly JsxIrElement[]): void {
   const elementLength = compilerArrayLength(elements, 'Static spread JSX elements');
@@ -37,7 +41,20 @@ export function lowerPrimitiveSpreads(elements: readonly JsxIrElement[]): void {
       // SPEC §5.2 rule 10 / §6.3: never expand a caller-owned form spread into mutation authority.
       // The following dynamic-spread pass reconstructs it through kovoSafeJsxSpread(), which strips
       // these names even when compilation continues only to display the KV242 diagnostic.
-      if (element.tag === 'form' && hasMutationFormControlEntry(source.objectEntries)) continue;
+      if (
+        isIntrinsicHtmlElement(element.element, 'form') &&
+        hasMutationFormControlEntry(source.objectEntries)
+      )
+        continue;
+      // Form association is document-wide: a submitter rendered by another component can target a
+      // typed mutation form by id. Keep spread-derived submitter transport behind the runtime
+      // reconstruction boundary even when this module contains no visible mutation form.
+      if (
+        (isIntrinsicHtmlElement(element.element, 'button') ||
+          isIntrinsicHtmlElement(element.element, 'input')) &&
+        hasMutationSubmitterTransportEntry(source.objectEntries)
+      )
+        continue;
       const attrs = spreadObjectAttributes(source.objectEntries);
       if (attrs === null) continue;
       const next: JsxIrAttribute[] = [];
@@ -77,6 +94,19 @@ function hasMutationFormControlEntry(entries: readonly { key: string }[]): boole
       'Static spread mutation form controls',
     ) as (typeof entries)[number];
     if (mutationFormControlAttributeName(entry.key) !== null) return true;
+  }
+  return false;
+}
+
+function hasMutationSubmitterTransportEntry(entries: readonly { key: string }[]): boolean {
+  const length = compilerArrayLength(entries, 'Static spread mutation submitter transport');
+  for (let index = 0; index < length; index += 1) {
+    const entry = compilerOwnDataValue(
+      entries,
+      index,
+      'Static spread mutation submitter transport',
+    ) as (typeof entries)[number];
+    if (mutationSubmitterTransportAttributeName(entry.key) !== null) return true;
   }
   return false;
 }

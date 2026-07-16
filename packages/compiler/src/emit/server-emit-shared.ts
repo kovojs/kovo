@@ -15,6 +15,7 @@ import {
   compilerSnapshotDenseArray,
   compilerStringReplaceAll,
   compilerStringStartsWith,
+  compilerStringToLowerCase,
   compilerStringTrim,
 } from '../compiler-security-intrinsics.js';
 import { diagnosticFor, type CompilerDiagnostic } from '../diagnostics.js';
@@ -26,7 +27,10 @@ import type { ComponentModuleModel, JsxAttributeModel, JsxElementModel } from '.
 import { componentOptionObjectEntries, componentRenderSlotsParam } from '../scan/parse.js';
 import { mutationInputFactsFromSource } from '../scan/mutation-inputs.js';
 import { deriveMutationKey } from '../mutation-names.js';
-import { enhancedMutationFormBinding } from '../mutation-form-provenance.js';
+import {
+  enhancedMutationFormBinding,
+  isIntrinsicHtmlElement,
+} from '../mutation-form-provenance.js';
 import { escapeAttribute, kebabCase, type SourceReplacement } from '../shared.js';
 import type { MutationInputFieldFact, RegistryFacts } from '../types.js';
 
@@ -37,7 +41,12 @@ function serverEmitAttribute(
   const attributes = compilerSnapshotDenseArray(element.attributes, 'Server emit JSX attributes');
   for (let index = 0; index < attributes.length; index += 1) {
     const attribute = attributes[index]!;
-    if (attribute.name === name) return attribute;
+    if (
+      attribute.name === name ||
+      (element.intrinsicTagName !== undefined && compilerStringToLowerCase(attribute.name) === name)
+    ) {
+      return attribute;
+    }
   }
   return undefined;
 }
@@ -94,7 +103,7 @@ export function enclosingEnhancedMutationForm(
   for (let index = 0; index < elements.length; index += 1) {
     const element = elements[index]!;
     if (
-      element.tag === 'form' &&
+      isIntrinsicHtmlElement(element, 'form') &&
       child.start >= element.openingEnd &&
       child.end <= element.closingStart &&
       enhancedMutationFormBinding(element) !== null &&
@@ -200,7 +209,7 @@ export function enhancedMutationFormLowering(
   element: JsxElementModel,
   options?: { fileName?: string; registryFacts?: RegistryFacts; source?: string },
 ): EnhancedMutationFormLowering | null {
-  if (element.tag !== 'form') return null;
+  if (!isIntrinsicHtmlElement(element, 'form')) return null;
 
   const mutationAttribute = serverEmitAttribute(element, 'mutation');
   if (!mutationAttribute?.expressionBareIdentifierName) return null;
@@ -525,7 +534,11 @@ export function enhancedMutationFormConflicts(
   const conflicts: EnhancedMutationFormConflict[] = [];
   for (let index = 0; index < attributes.length; index += 1) {
     const attribute = attributes[index]!;
-    if (compilerSetHas(names, attribute.name))
+    const attributeName =
+      element.intrinsicTagName === undefined
+        ? attribute.name
+        : compilerStringToLowerCase(attribute.name);
+    if (compilerSetHas(names, attributeName))
       compilerArrayAppend(
         conflicts,
         { attribute },

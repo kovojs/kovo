@@ -1573,6 +1573,32 @@ export const ProductList = component({
     ]);
   });
 
+  it('ASCII-folds intrinsic host tags without classifying component references as HTML', () => {
+    const source = `
+export const TagIdentity = component({
+  render: () => (
+    <section>
+      <fOrm />
+      <iNput />
+      <Form />
+      <ui.form />
+      <custom-element />
+    </section>
+  ),
+});
+`;
+    const elements = jsxElements(parseComponentModule('tag-identity.tsx', source));
+
+    expect(elements.map((element) => [element.tag, element.intrinsicTagName])).toEqual([
+      ['section', 'section'],
+      ['fOrm', 'form'],
+      ['iNput', 'input'],
+      ['Form', undefined],
+      ['ui.form', undefined],
+      ['custom-element', 'custom-element'],
+    ]);
+  });
+
   it('exposes static JSX spread entries only when every runtime property is modelled (M3)', () => {
     const source = `
 const labelName = 'aria-label';

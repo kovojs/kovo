@@ -582,6 +582,41 @@ export const ForgedMutationForms = component({
     ]);
   });
 
+  it('applies mutation provenance to ASCII-mixed intrinsic forms but not components', () => {
+    const result = compileComponentModule({
+      fileName: 'mixed-case-mutation-forms.tsx',
+      source: `
+const spreadControls = { enhance: true, ['DATA-MUTATION']: 'owned' };
+
+export const MixedCaseMutationForms = component({
+  render: () => (
+    <section>
+      <fOrm enhance DATA-MUTATION="owned" method="post" action="/_m/owned" />
+      <fOrm {...spreadControls} />
+      <Form enhance data-mutation="component-prop" />
+    </section>
+  ),
+});
+`,
+    });
+    const messages = result.diagnostics
+      .filter((diagnostic) => diagnostic.code === 'KV242')
+      .map((diagnostic) => diagnostic.message);
+    const serverSource = result.files.find((file) => file.kind === 'server')?.source ?? '';
+
+    expect(messages).toHaveLength(3);
+    expect(messages).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('authored enhance requires'),
+        expect.stringContaining('raw data-mutation'),
+        expect.stringContaining('(enhance, data-mutation)'),
+      ]),
+    );
+    expect(serverSource).not.toContain('<fOrm enhance');
+    expect(serverSource).not.toContain('{...spreadControls}');
+    expect(serverSource).toContain('<Form enhance data-mutation="component-prop" />');
+  });
+
   it('reports KV242 before forged spread controls can become mutation provenance', () => {
     const result = compileComponentModule({
       fileName: 'forged-mutation-spreads.tsx',
@@ -643,6 +678,7 @@ export const ProvenMutationForms = component({
   render: () => (
     <section>
       <form enhance mutation={save} />
+      <fOrm enhance mutation={save} />
       <form enhance {...formAttributes(save)} />
     </section>
   ),
@@ -652,7 +688,9 @@ export const ProvenMutationForms = component({
     const serverSource = result.files.find((file) => file.kind === 'server')?.source ?? '';
 
     expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV242')).toEqual([]);
-    expect(serverSource).toContain('action="/_m/account/save" data-mutation="account/save"');
+    expect(
+      serverSource.match(/action="\/_m\/account\/save" data-mutation="account\/save"/g),
+    ).toHaveLength(2);
     expect(serverSource).toContain('{...formAttributes(save)}');
     expect(serverSource).not.toContain('kovoSafeJsxSpread(formAttributes(save))');
   });
@@ -718,6 +756,7 @@ export const MutationTransportOverrides = component({
       <form enhance mutation={save} action="https://outside.example/save" method="get" />
       <form enhance {...formAttributes(save)} action="/checkout" method="get" />
       <form mutation={save} {...transportOverrides} />
+      <fOrm mutation={save} ACTION="https://outside.example/mixed" METHOD="get" />
     </section>
   ),
 });
@@ -728,12 +767,12 @@ export const MutationTransportOverrides = component({
       .map((diagnostic) => diagnostic.message);
     const serverSource = result.files.find((file) => file.kind === 'server')?.source ?? '';
 
-    expect(messages).toHaveLength(5);
+    expect(messages).toHaveLength(7);
     expect(messages.filter((message) => message.includes('authored action cannot'))).toHaveLength(
-      2,
+      3,
     );
     expect(messages.filter((message) => message.includes('authored method cannot'))).toHaveLength(
-      2,
+      3,
     );
     expect(messages).toEqual(
       expect.arrayContaining([
@@ -744,8 +783,94 @@ export const MutationTransportOverrides = component({
     expect(serverSource).not.toContain('<form enhance action="https://outside.example/save"');
     expect(serverSource).not.toContain('<form enhance action="/checkout"');
     expect(serverSource).not.toContain('{...transportOverrides}');
-    expect(serverSource.match(/action="\/_m\/account\/save"/g)).toHaveLength(2);
+    expect(serverSource.match(/action="\/_m\/account\/save"/g)).toHaveLength(3);
     expect(serverSource).toContain('{...formAttributes(save)}');
+  });
+
+  it('reconstructs dynamic typed-form and submitter spreads without transport authority', () => {
+    const result = compileComponentModule({
+      fileName: 'dynamic-mutation-transport-spreads.tsx',
+      source: `
+const staticSubmitterOverride = { formAction: 'https://outside.example/save', ['FORMMETHOD']: 'get' };
+const externalStaticOverride = { form: 'save-form', formAction: 'https://outside.example/external' };
+
+export const save = mutation('account/save', {
+  input: s.object({ intent: s.string().optional() }),
+  handler() {
+    return null;
+  },
+});
+
+export const DynamicMutationTransportSpreads = component({
+  render: ({ formAttrs, buttonAttrs, externalAttrs, inputAttrs, transportName, transportValue }) => (
+    <section>
+      <form id="save-form" mutation={save} {...formAttrs}>
+        <button name="intent" value="save" {...buttonAttrs}>Save</button>
+        <button {...{ [transportName]: transportValue }}>Computed</button>
+        <input type="submit" {...inputAttrs} />
+        <button {...staticSubmitterOverride}>Static override</button>
+        <button FORMAction="/preview" FORMMETHOD="get">Direct override</button>
+      </form>
+      <button {...externalAttrs}>Dynamic external association</button>
+      <button {...externalStaticOverride}>Static external association</button>
+      <button FORM="save-form" FORMACTION="/mixed-preview">Mixed-case external association</button>
+      <form {...formAttrs} mutation={save} />
+    </section>
+  ),
+});
+`,
+    });
+    const messages = result.diagnostics
+      .filter((diagnostic) => diagnostic.code === 'KV242')
+      .map((diagnostic) => diagnostic.message);
+    const serverSource = result.files.find((file) => file.kind === 'server')?.source ?? '';
+
+    expect(messages).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining(
+          'caller-owned submitter spread overrides typed mutation transport (formaction, formmethod)',
+        ),
+        expect.stringContaining('FORMAction cannot override'),
+        expect.stringContaining('FORMMETHOD cannot override'),
+        expect.stringContaining(
+          'caller-owned submitter spread overrides typed mutation transport (form, formaction)',
+        ),
+        expect.stringContaining('FORMACTION cannot override'),
+        expect.stringContaining('external form-associated controls are not supported'),
+      ]),
+    );
+    expect(serverSource).toContain("{...kovoSafeJsxSpread(formAttrs, 'mutation-form')}");
+    expect(serverSource).toContain("{...kovoSafeJsxSpread(buttonAttrs, 'mutation-submitter')}");
+    expect(serverSource).toContain(
+      "{...kovoSafeJsxSpread({ [transportName]: transportValue }, 'mutation-submitter')}",
+    );
+    expect(serverSource).toContain("{...kovoSafeJsxSpread(inputAttrs, 'mutation-submitter')}");
+    expect(serverSource).toContain("{...kovoSafeJsxSpread(externalAttrs, 'mutation-submitter')}");
+    expect(serverSource).not.toContain('{...staticSubmitterOverride}');
+    expect(serverSource).not.toContain('{...externalStaticOverride}');
+    expect(serverSource.match(/action="\/_m\/account\/save"/g)).toHaveLength(2);
+  });
+
+  it('reconstructs statically shaped submitter spreads even without a local mutation form', () => {
+    const result = compileComponentModule({
+      fileName: 'standalone-submitter-transport-spread.tsx',
+      source: `
+export const StandaloneSubmitter = component({
+  render: ({ targetFormId, targetAction }) => (
+    <button {...{ class: 'save', form: targetFormId, formAction: targetAction, formMethod: 'post' }}>
+      Save
+    </button>
+  ),
+});
+`,
+    });
+    const serverSource = result.files.find((file) => file.kind === 'server')?.source ?? '';
+
+    expect(serverSource).toContain(
+      "{...kovoSafeJsxSpread({ class: 'save', form: targetFormId, formAction: targetAction, formMethod: 'post' }, 'mutation-submitter')}",
+    );
+    expect(serverSource).not.toContain('formAction={targetAction}');
+    expect(serverSource).not.toContain('formMethod="post"');
   });
 
   it('lowers field and form error helpers to the enclosing mutation failure slot', () => {

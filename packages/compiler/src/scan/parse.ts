@@ -4506,6 +4506,7 @@ function jsxElementModel(
     ...jsxChildFacts(node, sourceFile),
     closingStart,
     end: node.getEnd(),
+    ...(componentTag ? {} : { intrinsicTagName: compilerStringToLowerCase(tag) }),
     openingEnd: openingElement.getEnd(),
     openingTagNameEnd: openingElement.tagName.getEnd(),
     openingTagNameStart: openingElement.tagName.getStart(sourceFile),

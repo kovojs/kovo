@@ -26,6 +26,7 @@ import {
   compilerStringSlice,
   compilerStringSplit,
   compilerStringStartsWith,
+  compilerStringToLowerCase,
   compilerStringTrim,
 } from '../compiler-security-intrinsics.js';
 import {
@@ -35,6 +36,7 @@ import {
   renderMergedAttributes,
 } from '../lower/attribute-merge.js';
 import { buildStaticHref } from '../lower/navigation.js';
+import { isIntrinsicHtmlElement } from '../mutation-form-provenance.js';
 import {
   componentOptionObjectKeys,
   componentRenderHostElement,
@@ -81,7 +83,12 @@ function semanticAttribute(element: JsxElementModel, name: string): JsxAttribute
   const attributes = compilerSnapshotDenseArray(element.attributes, 'Semantic JSX attributes');
   for (let index = 0; index < attributes.length; index += 1) {
     const attribute = attributes[index]!;
-    if (attribute.name === name) return attribute;
+    if (
+      attribute.name === name ||
+      (element.intrinsicTagName !== undefined && compilerStringToLowerCase(attribute.name) === name)
+    ) {
+      return attribute;
+    }
   }
   return undefined;
 }
@@ -537,7 +544,7 @@ function renderSemanticAttributes(
       continue;
     }
     if (
-      element.tag === 'form' &&
+      isIntrinsicHtmlElement(element, 'form') &&
       attribute.name === 'mutation' &&
       hasGeneratedMutationFormAttributes(element)
     ) {
@@ -597,7 +604,11 @@ function semanticFieldErrorDescribedByAttribute(
   control: JsxElementModel,
   index: SemanticRenderIndex,
 ): string | null {
-  if (control.tag !== 'input' && control.tag !== 'select' && control.tag !== 'textarea')
+  if (
+    !isIntrinsicHtmlElement(control, 'input') &&
+    !isIntrinsicHtmlElement(control, 'select') &&
+    !isIntrinsicHtmlElement(control, 'textarea')
+  )
     return null;
   const name = staticStringAttributeValue(semanticAttribute(control, 'name'));
   if (!name) return null;
@@ -607,7 +618,7 @@ function semanticFieldErrorDescribedByAttribute(
   for (let index = 0; index < elements.length; index += 1) {
     const element = elements[index]!;
     if (
-      element.tag === 'form' &&
+      isIntrinsicHtmlElement(element, 'form') &&
       control.start >= element.openingEnd &&
       control.end <= element.closingStart &&
       (form === undefined || element.start > form.start)

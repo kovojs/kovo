@@ -246,6 +246,12 @@ export interface JsxElementModel {
   childNonWhitespaceCount: number;
   closingStart: number;
   end: number;
+  /**
+   * ASCII-folded intrinsic tag identity. Absent for lexical component references, including
+   * PascalCase identifiers and member expressions, so HTML case folding cannot turn a component
+   * into a framework-owned host boundary.
+   */
+  intrinsicTagName?: string;
   openingEnd: number;
   openingTagNameEnd: number;
   openingTagNameStart: number;

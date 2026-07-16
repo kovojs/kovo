@@ -497,7 +497,7 @@ export const SpreadSafe = component({
     );
   });
 
-  it('reconstructs dynamic intrinsic spreads without Kovo control attributes (M3)', () => {
+  it('reconstructs dynamic submitter spreads without Kovo control or transport attributes (M3)', () => {
     const result = compileComponentModule({
       fileName: 'dynamic-control-spread.tsx',
       source: `
@@ -514,7 +514,9 @@ export const DynamicControlSpread = component({
     expect(serverSource).toContain(
       "import { kovoSafeJsxSpread } from '@kovojs/server/internal/escape';",
     );
-    expect(serverSource).toContain('{...kovoSafeJsxSpread(profile.attributes)}');
+    expect(serverSource).toContain(
+      "{...kovoSafeJsxSpread(profile.attributes, 'mutation-submitter')}",
+    );
     expect(serverSource).toMatch(/on:click="\/c\/.*#DynamicControlSpread\$button_click"/);
   });
 

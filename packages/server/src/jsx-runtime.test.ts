@@ -582,6 +582,37 @@ describe('server jsx runtime', () => {
     expect(safe['kovo-param-types']).toBeUndefined();
   });
 
+  it('removes mutation transport overrides at compiler-selected spread boundaries', () => {
+    const record = {
+      ACTION: 'https://outside.example/save',
+      class: 'primary',
+      enctype: 'text/plain',
+      form: 'outside',
+      formAction: 'https://outside.example/submit',
+      FORMENCTYPE: 'text/plain',
+      formMethod: 'get',
+      formNoValidate: true,
+      formTarget: '_blank',
+      method: 'get',
+    };
+
+    expect(kovoSafeJsxSpread(record, 'mutation-form')).toEqual({
+      class: 'primary',
+      form: 'outside',
+      formAction: 'https://outside.example/submit',
+      FORMENCTYPE: 'text/plain',
+      formMethod: 'get',
+      formNoValidate: true,
+      formTarget: '_blank',
+    });
+    expect(kovoSafeJsxSpread(record, 'mutation-submitter')).toEqual({
+      ACTION: 'https://outside.example/save',
+      class: 'primary',
+      enctype: 'text/plain',
+      method: 'get',
+    });
+  });
+
   it('keeps spread control-plane filtering pinned after object and string prototype changes', () => {
     const originalCreate = Object.create;
     const originalKeys = Object.keys;
