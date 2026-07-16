@@ -3370,6 +3370,25 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
         sink: 'request-handler.opaque-protocol',
       }),
     );
+
+    const chainLength = 70;
+    const longChain = sinksFor(`
+      import { s, task } from '@kovojs/server';
+      task('map/long-chain', { input: s.object({}), run() {
+        ${Array.from({ length: chainLength }, (_, index) => `const map${index} = new Map();`).join('\n')}
+        ${Array.from(
+          { length: chainLength - 1 },
+          (_, index) => `map${index}.set('key', map${index + 1}.get('key'));`,
+        ).join('\n')}
+        map${chainLength - 1}.set('key', 'safe');
+        return map0.get('key');
+      } });
+    `);
+    expect(longChain).toContainEqual(
+      expect.objectContaining({
+        sink: 'request-handler.opaque-protocol',
+      }),
+    );
   });
 
   it('resolves returned class values through import and re-export aliases', () => {

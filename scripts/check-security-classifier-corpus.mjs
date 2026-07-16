@@ -668,6 +668,7 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
           "values.set('key', values.get('key'))",
           "left.set('key', right.get('key'))",
           "right.set('key', left.get('key'))",
+          'const chainLength = 70',
           "source: '<class-thenable:DeferredValue>'",
         ],
       },

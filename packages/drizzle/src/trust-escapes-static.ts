@@ -14419,6 +14419,7 @@ const REQUEST_COERCION_ASSIGNMENT_OPERATORS = new Set<SyntaxKind>([
 ]);
 
 const REQUEST_TO_PRIMITIVE_HOOKS = ['@@toPrimitive', 'valueOf', 'toString'] as const;
+const REQUEST_LOCAL_MAP_PROTOCOL_DEPTH = 64;
 
 /**
  * Finite request-reachable implicit-execution gate (SPEC §6.6). JavaScript syntax can invoke
@@ -16847,6 +16848,10 @@ function scanRequestProtocolUse(
       ? requestExactLocalMapGetStoredValues(node, callable, context.provenance)
       : undefined;
   if (localMapValues) {
+    if (localMapSeen.size >= REQUEST_LOCAL_MAP_PROTOCOL_DEPTH) {
+      appendRequestProtocolFact(context, site, hooks.join('|'), node);
+      return;
+    }
     const mapKey = `local-map-protocol:${requestNodeIdentity(node)}`;
     if (localMapSeen.has(mapKey)) {
       appendRequestProtocolFact(context, site, hooks.join('|'), node);
