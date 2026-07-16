@@ -9771,6 +9771,186 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
     }
   });
 
+  it('accepts only the exact module-scope storage download capability grammar', () => {
+    const safe = sinksFor(`
+      import {
+        createApp,
+        createMemoryStorage,
+        createSigningKeyRing,
+        createStorageDownloadEndpoint,
+      } from '@kovojs/server';
+
+      const signingKeys = createSigningKeyRing({
+        keys: [{
+          id: 'download-2026',
+          secret: 'download-test-signing-material-2026',
+          state: 'active',
+        }],
+      });
+      const storage = createMemoryStorage();
+      await storage.put('receipts/proof.txt', 'proof', {
+        contentType: 'text/plain',
+        metadata: { filename: 'proof.txt' },
+      });
+      const download = createStorageDownloadEndpoint({
+        basePath: '/download',
+        secret: signingKeys,
+        storage,
+      });
+      export default createApp({ endpoints: [download] });
+    `);
+    expect(safe).toEqual([]);
+
+    for (const source of [
+      `
+        import { createSigningKeyRing } from '@kovojs/server';
+        const mint = createSigningKeyRing;
+        const signingKeys = mint({
+          keys: [{ id: 'download-2026', secret: 'download-test-signing-material-2026', state: 'active' }],
+        });
+      `,
+      `
+        import { createSigningKeyRing } from '@kovojs/server';
+        const secret = process.env.DOWNLOAD_SECRET;
+        const signingKeys = createSigningKeyRing({
+          keys: [{ id: 'download-2026', secret, state: 'active' }],
+        });
+      `,
+      `
+        import { createMemoryStorage } from '@kovojs/server';
+        export const storage = createMemoryStorage();
+      `,
+      `
+        import { createMemoryStorage } from '@kovojs/server';
+        const storage = createMemoryStorage();
+        await storage['put']('receipts/proof.txt', 'proof');
+      `,
+      `
+        import { createMemoryStorage } from '@kovojs/server';
+        const storage = createMemoryStorage();
+        await storage.put.call(storage, 'receipts/proof.txt', 'proof');
+      `,
+      `
+        import { createMemoryStorage } from '@kovojs/server';
+        const storage = createMemoryStorage();
+        storage.put = async () => ({ key: 'forged' });
+        await storage.put('receipts/proof.txt', 'proof');
+      `,
+      `
+        import {
+          createApp,
+          createMemoryStorage,
+          createSigningKeyRing,
+          createStorageDownloadEndpoint,
+        } from '@kovojs/server';
+        const signingKeys = createSigningKeyRing({
+          keys: [{ id: 'download-2026', secret: 'download-test-signing-material-2026', state: 'active' }],
+        });
+        const storage = createMemoryStorage();
+        const options = { secret: signingKeys, storage };
+        const download = createStorageDownloadEndpoint(options);
+        export default createApp({ endpoints: [download] });
+      `,
+      `
+        import {
+          createApp,
+          createMemoryStorage,
+          createSigningKeyRing,
+          createStorageDownloadEndpoint,
+        } from '@kovojs/server';
+        const signingKeys = createSigningKeyRing({
+          keys: [{ id: 'download-2026', secret: 'download-test-signing-material-2026', state: 'active' }],
+        });
+        const storage = createMemoryStorage();
+        const download = createStorageDownloadEndpoint({ secret: signingKeys, storage });
+        const escaped = download;
+        export default createApp({ endpoints: [escaped] });
+      `,
+    ]) {
+      expect(sinksFor(source), source).not.toEqual([]);
+    }
+  });
+
+  it('accepts only an exact pristine route-page context.signUrl capability result', () => {
+    const safe = sinksFor(`
+      import { publicAccess, route } from '@kovojs/server';
+      export const capabilityPage = route('/capability', {
+        access: publicAccess('capability proof'),
+        async page(context) {
+          const signed = await context.signUrl({
+            expiresIn: 60_000,
+            key: 'receipts/proof.txt',
+            method: 'GET',
+            oneTime: false,
+            scope: 'tenant-1',
+          });
+          return <main>
+            <a href={signed.url}>{signed.key}</a>
+            <output>{signed.oneTime ? signed.token : signed.url}</output>
+          </main>;
+        },
+      });
+    `);
+    expect(safe).toEqual([]);
+
+    for (const body of [
+      `const signed = await context['signUrl']({ key: 'receipts/proof.txt' }); return signed.url;`,
+      `const signUrl = context.signUrl; const signed = await signUrl({ key: 'receipts/proof.txt' }); return signed.url;`,
+      `const signed = await context.signUrl.call(context, { key: 'receipts/proof.txt' }); return signed.url;`,
+      `const options = { key: 'receipts/proof.txt' }; const signed = await context.signUrl(options); return signed.url;`,
+      `const signed = await context.signUrl({ key: input.key }); return signed.url;`,
+      `context.signUrl = async () => ({ url: '/forged' }); const signed = await context.signUrl({ key: 'receipts/proof.txt' }); return signed.url;`,
+      `const signed = await context.signUrl({ key: 'receipts/proof.txt' }, input); return signed.url;`,
+      `const signed = await context.signUrl({ key: 'receipts/proof.txt' }); return signed.constructor;`,
+    ]) {
+      const facts = sinksFor(`
+        import { publicAccess, route } from '@kovojs/server';
+        export const unsafe = route('/unsafe', {
+          access: publicAccess('negative capability proof'),
+          async page(input) { const context = input; ${body} },
+        });
+      `);
+      expect(facts, body).not.toEqual([]);
+    }
+  });
+
+  it('accepts only exact s.file().accept(...).parse/parseAsync calls', () => {
+    const safe = sinksFor(`
+      import { query, s } from '@kovojs/server';
+      export const fileProof = query({
+        async load(input) {
+          s.file().accept(['image/png']).parse(input.file);
+          const file = await s.file().accept(['text/plain']).parseAsync(input.file);
+          return { name: file.name, type: file.type };
+        },
+      });
+    `);
+    expect(safe).toEqual([]);
+
+    for (const expression of [
+      `s.file().accept(types).parse(input.file)`,
+      `s.file()['accept'](['image/png']).parse(input.file)`,
+      `s.file().accept(['image/png'])['parse'](input.file)`,
+      `s.file().accept(['image/png']).parse(input.file, input.extra)`,
+      `s.file().accept(['image/png']).parseAsync(input.file, input.extra)`,
+      `s.file().accept(['image/png']).parse.call(undefined, input.file)`,
+      `s.file().accept(['image/png']).parseAsync.call(undefined, input.file)`,
+      `schema.parse(input.file)`,
+      `parse(input.file)`,
+    ]) {
+      const setup = expression.startsWith('schema.')
+        ? `const schema = s.file().accept(['image/png']);`
+        : expression.startsWith('parse(')
+          ? `const parse = s.file().accept(['image/png']).parse;`
+          : `const types = input.types;`;
+      const facts = sinksFor(`
+        import { query, s } from '@kovojs/server';
+        export const unsafe = query({ load(input) { ${setup} return ${expression}; } });
+      `);
+      expect(facts, expression).not.toEqual([]);
+    }
+  });
+
   it('rejects side effects in exact static access values and conditional tests', () => {
     const argument = sinksFor(`
       import { execFileSync } from 'node:child_process';

@@ -1560,6 +1560,7 @@ interface RequestProvenanceSession {
   readonly mutableFactoryReadMemo: Map<string, RequestMutableFactoryRead>;
   readonly mutationInvocationActive: Set<string>;
   readonly mutationInvocationMemo: Map<string, readonly Node[]>;
+  readonly exactCapabilityBindingMemo: Map<string, boolean>;
   readonly memoryClientModuleRegistryPristineMemo: Map<string, boolean>;
   readonly memoryWebhookReplayStorePristineMemo: Map<string, boolean>;
   readonly promiseSettlementCallables: Set<string>;
@@ -1601,6 +1602,7 @@ function createRequestProvenanceSession(): RequestProvenanceSession {
     mutableFactoryReadMemo: new Map(),
     mutationInvocationActive: new Set(),
     mutationInvocationMemo: new Map(),
+    exactCapabilityBindingMemo: new Map(),
     memoryClientModuleRegistryPristineMemo: new Map(),
     memoryWebhookReplayStorePristineMemo: new Map(),
     promiseSettlementCallables: new Set(),
@@ -5471,6 +5473,10 @@ function requestRetainedConfigCallIsReviewed(
   if (requestCallIsExactMemoryClientModuleRegistryConstructor(call, session)) return true;
   if (requestCallIsExactMemoryWebhookReplayStoreConstructor(call, session)) return true;
   if (requestCallIsExactClosedMemoryClientModuleRegistryPut(call, session)) return true;
+  if (requestCallIsExactSigningKeyRingConstructor(call, session)) return true;
+  if (requestCallIsExactMemoryStorageConstructor(call, session)) return true;
+  if (requestCallIsExactMemoryStoragePut(call, session)) return true;
+  if (requestCallIsExactStorageDownloadEndpoint(call, session)) return true;
   if (requestCallIsExactClosedStylesheet(call)) return true;
   if (requestBuildConfigConstructorCallIsClosed(call)) return true;
   if (requestCallIsExactClosedRedirect(call)) return true;
@@ -7770,6 +7776,467 @@ function requestMemoryClientModuleRegistryCreateAppUseIsReviewed(
   );
 }
 
+/**
+ * SPEC §6.6 / §9.1: capability-download setup is admitted only as one exact immutable source
+ * grammar. The runtime still owns the security proof; this audit classifier merely avoids
+ * reporting canonical framework construction as opaque while preserving a closed use graph.
+ */
+function requestExactModuleScopeConstCallDeclaration(
+  call: import('ts-morph').CallExpression,
+  exportName: 'createMemoryStorage' | 'createSigningKeyRing' | 'createStorageDownloadEndpoint',
+): import('ts-morph').VariableDeclaration | undefined {
+  if (!requestExactPristineDirectImport(call.getExpression(), '@kovojs/server', exportName)) {
+    return undefined;
+  }
+  const declaration = call.getFirstAncestorByKind(SyntaxKind.VariableDeclaration);
+  const statement = declaration?.getVariableStatement();
+  const initializer = declaration?.getInitializer();
+  if (
+    !declaration ||
+    !statement ||
+    statement.getDeclarationKind() !== VariableDeclarationKind.Const ||
+    statement.isExported() ||
+    statement.getParent() !== declaration.getSourceFile() ||
+    !Node.isIdentifier(declaration.getNameNode()) ||
+    !initializer ||
+    !requestNodesAreSame(unwrapStaticExpression(initializer), call)
+  ) {
+    return undefined;
+  }
+  const symbol = declaration.getNameNode().getSymbol();
+  return symbol && symbol.getDeclarations().length === 1 ? declaration : undefined;
+}
+
+function requestExactPropertyAssignmentMap(
+  expression: Node,
+  allowed: ReadonlySet<string>,
+): ReadonlyMap<string, Node> | undefined {
+  const object = unwrapStaticExpression(expression);
+  if (!Node.isObjectLiteralExpression(object)) return undefined;
+  const values = new Map<string, Node>();
+  for (const property of object.getProperties()) {
+    if (
+      !Node.isPropertyAssignment(property) ||
+      Node.isComputedPropertyName(property.getNameNode())
+    ) {
+      return undefined;
+    }
+    const name = staticMemberName(property.getNameNode());
+    const value = property.getInitializer();
+    if (!name || !allowed.has(name) || values.has(name) || !value) return undefined;
+    values.set(name, value);
+  }
+  return values;
+}
+
+function requestExactBindingReferences(
+  declaration: import('ts-morph').VariableDeclaration,
+): import('ts-morph').Identifier[] | undefined {
+  const name = declaration.getNameNode();
+  const symbol = Node.isIdentifier(name) ? name.getSymbol() : undefined;
+  if (!symbol || requestAssignedBindingProjections(symbol).length !== 0) return undefined;
+  const symbolKey = requestSymbolKey(symbol);
+  const references: import('ts-morph').Identifier[] = [];
+  for (const sourceFile of declaration.getProject().getSourceFiles()) {
+    for (const identifier of sourceFile.getDescendantsOfKind(SyntaxKind.Identifier)) {
+      const candidate = requestIdentifierValueSymbol(identifier) ?? identifier.getSymbol();
+      if (!candidate || requestSymbolKey(candidate) !== symbolKey) continue;
+      if (requestNodesAreSame(identifier, name)) continue;
+      references.push(identifier);
+    }
+  }
+  return references;
+}
+
+function requestExactSigningKeyRingOptions(expression: Node): boolean {
+  const options = requestExactPropertyAssignmentMap(expression, new Set(['keys']));
+  const keys = options?.get('keys');
+  const array = keys ? unwrapStaticExpression(keys) : undefined;
+  if (!options || options.size !== 1 || !array || !Node.isArrayLiteralExpression(array)) {
+    return false;
+  }
+  const elements = array.getElements();
+  if (elements.length === 0 || elements.length > 16) return false;
+  const ids = new Set<string>();
+  let active = 0;
+  for (const element of elements) {
+    if (Node.isSpreadElement(element) || Node.isOmittedExpression(element)) return false;
+    const key = requestExactPropertyAssignmentMap(element, new Set(['id', 'secret', 'state']));
+    const id = key?.get('id');
+    const secret = key?.get('secret');
+    const state = key?.get('state');
+    const idValue = id ? unwrapStaticExpression(id) : undefined;
+    const secretValue = secret ? unwrapStaticExpression(secret) : undefined;
+    const stateValue = state ? unwrapStaticExpression(state) : undefined;
+    if (
+      !key ||
+      key.size !== 3 ||
+      !isStringLiteralLike(idValue) ||
+      !isStringLiteralLike(secretValue) ||
+      !isStringLiteralLike(stateValue)
+    ) {
+      return false;
+    }
+    const idText = idValue.getLiteralText();
+    const secretText = secretValue.getLiteralText();
+    const stateText = stateValue.getLiteralText();
+    if (
+      !runtimeRegExpTest(/^[A-Za-z0-9_-]+$/u, idText) ||
+      ids.has(idText) ||
+      secretText.length < 32 ||
+      !['active', 'previous', 'revoked'].includes(stateText)
+    ) {
+      return false;
+    }
+    ids.add(idText);
+    if (stateText === 'active') active += 1;
+  }
+  return active === 1;
+}
+
+function requestReferenceIsExactStorageEndpointProperty(
+  reference: import('ts-morph').Identifier,
+  propertyName: 'secret' | 'storage',
+): boolean {
+  const parent = reference.getParent();
+  const property =
+    parent &&
+    ((Node.isPropertyAssignment(parent) &&
+      requestNodesAreSame(parent.getInitializer(), reference)) ||
+      (Node.isShorthandPropertyAssignment(parent) &&
+        requestNodesAreSame(parent.getNameNode(), reference)))
+      ? parent
+      : undefined;
+  if (
+    !property ||
+    Node.isComputedPropertyName(property.getNameNode()) ||
+    staticMemberName(property.getNameNode()) !== propertyName
+  ) {
+    return false;
+  }
+  const object = property.getParentIfKind(SyntaxKind.ObjectLiteralExpression);
+  const call = object?.getParentIfKind(SyntaxKind.CallExpression);
+  return !!(
+    object &&
+    call &&
+    call.getArguments().length === 1 &&
+    requestNodesAreSame(call.getArguments()[0], object) &&
+    requestExactPristineDirectImport(
+      call.getExpression(),
+      '@kovojs/server',
+      'createStorageDownloadEndpoint',
+    )
+  );
+}
+
+function requestSigningKeyRingBindingIsPristine(
+  declaration: import('ts-morph').VariableDeclaration,
+  session: RequestProvenanceSession,
+): boolean {
+  const memoKey = `signing-ring:${requestNodeIdentity(declaration)}`;
+  const memoized = session.exactCapabilityBindingMemo.get(memoKey);
+  if (memoized !== undefined) return memoized;
+  session.exactCapabilityBindingMemo.set(memoKey, false);
+  const references = requestExactBindingReferences(declaration);
+  const pristine = !!(
+    references &&
+    references.length === 1 &&
+    requestReferenceIsExactStorageEndpointProperty(references[0]!, 'secret')
+  );
+  session.exactCapabilityBindingMemo.set(memoKey, pristine);
+  return pristine;
+}
+
+function requestExactSigningKeyRingDeclarationForExpression(
+  expression: Node,
+  session: RequestProvenanceSession,
+): import('ts-morph').VariableDeclaration | undefined {
+  const node = unwrapStaticExpression(expression);
+  let declaration: import('ts-morph').VariableDeclaration | undefined;
+  if (Node.isCallExpression(node)) {
+    declaration = requestExactModuleScopeConstCallDeclaration(node, 'createSigningKeyRing');
+  } else if (Node.isIdentifier(node)) {
+    const symbol = requestIdentifierValueSymbol(node) ?? node.getSymbol();
+    const declarations = symbol?.getDeclarations().filter(Node.isVariableDeclaration) ?? [];
+    const initializer = declarations[0]?.getInitializer();
+    const call = initializer ? unwrapStaticExpression(initializer) : undefined;
+    if (declarations.length === 1 && call && Node.isCallExpression(call)) {
+      declaration = requestExactModuleScopeConstCallDeclaration(call, 'createSigningKeyRing');
+    }
+  }
+  const initializer = declaration?.getInitializer();
+  const call = initializer ? unwrapStaticExpression(initializer) : undefined;
+  const options = call && Node.isCallExpression(call) ? call.getArguments() : [];
+  return declaration &&
+    call &&
+    Node.isCallExpression(call) &&
+    options.length === 1 &&
+    requestExactSigningKeyRingOptions(options[0]!) &&
+    requestSigningKeyRingBindingIsPristine(declaration, session)
+    ? declaration
+    : undefined;
+}
+
+function requestCallIsExactSigningKeyRingConstructor(
+  call: import('ts-morph').CallExpression,
+  session: RequestProvenanceSession,
+): boolean {
+  const declaration = requestExactModuleScopeConstCallDeclaration(call, 'createSigningKeyRing');
+  return !!(
+    declaration &&
+    call.getArguments().length === 1 &&
+    requestExactSigningKeyRingOptions(call.getArguments()[0]!) &&
+    requestSigningKeyRingBindingIsPristine(declaration, session)
+  );
+}
+
+function requestCallIsExactModuleTopLevelEffect(call: import('ts-morph').CallExpression): boolean {
+  let current: Node = call;
+  let parent = current.getParent();
+  while (
+    Node.isAwaitExpression(parent) ||
+    Node.isParenthesizedExpression(parent) ||
+    Node.isAsExpression(parent) ||
+    Node.isSatisfiesExpression(parent) ||
+    Node.isTypeAssertion(parent) ||
+    Node.isNonNullExpression(parent)
+  ) {
+    current = parent;
+    parent = current.getParent();
+  }
+  return !!(
+    Node.isExpressionStatement(parent) &&
+    requestNodesAreSame(parent.getExpression(), current) &&
+    parent.getParent() === parent.getSourceFile()
+  );
+}
+
+function requestMemoryStoragePutUseIsExact(
+  reference: import('ts-morph').Identifier,
+  declaration: import('ts-morph').VariableDeclaration,
+): boolean {
+  const access = reference.getParentIfKind(SyntaxKind.PropertyAccessExpression);
+  const call = access?.getParentIfKind(SyntaxKind.CallExpression);
+  if (
+    !access ||
+    access.getQuestionDotTokenNode() ||
+    access.getName() !== 'put' ||
+    !requestNodesAreSame(access.getExpression(), reference) ||
+    !call ||
+    call.getQuestionDotTokenNode() ||
+    !requestNodesAreSame(call.getExpression(), access) ||
+    !requestCallIsExactModuleTopLevelEffect(call)
+  ) {
+    return false;
+  }
+  const [key, body, options, ...extra] = call.getArguments();
+  const keyValue = key ? unwrapStaticExpression(key) : undefined;
+  return !!(
+    isStringLiteralLike(keyValue) &&
+    body &&
+    extra.length === 0 &&
+    keyValue.getLiteralText().length > 0 &&
+    requestExpressionIsClosedStaticData(body) &&
+    (options === undefined || requestExpressionIsClosedStaticData(options)) &&
+    requestExactMemoryStorageDeclarationForExpression(reference) === declaration
+  );
+}
+
+function requestMemoryStorageBindingIsPristine(
+  declaration: import('ts-morph').VariableDeclaration,
+  session: RequestProvenanceSession,
+): boolean {
+  const memoKey = `memory-storage:${requestNodeIdentity(declaration)}`;
+  const memoized = session.exactCapabilityBindingMemo.get(memoKey);
+  if (memoized !== undefined) return memoized;
+  session.exactCapabilityBindingMemo.set(memoKey, false);
+  const references = requestExactBindingReferences(declaration);
+  let endpointUses = 0;
+  const pristine = !!references?.every((reference) => {
+    if (requestMemoryStoragePutUseIsExact(reference, declaration)) return true;
+    if (requestReferenceIsExactStorageEndpointProperty(reference, 'storage')) {
+      endpointUses += 1;
+      return true;
+    }
+    return false;
+  });
+  const result = pristine && endpointUses === 1;
+  session.exactCapabilityBindingMemo.set(memoKey, result);
+  return result;
+}
+
+function requestExactMemoryStorageDeclarationForExpression(
+  expression: Node,
+): import('ts-morph').VariableDeclaration | undefined {
+  const node = unwrapStaticExpression(expression);
+  if (Node.isCallExpression(node)) {
+    return node.getArguments().length === 0
+      ? requestExactModuleScopeConstCallDeclaration(node, 'createMemoryStorage')
+      : undefined;
+  }
+  if (!Node.isIdentifier(node)) return undefined;
+  const symbol = requestIdentifierValueSymbol(node) ?? node.getSymbol();
+  const declarations = symbol?.getDeclarations().filter(Node.isVariableDeclaration) ?? [];
+  const initializer = declarations[0]?.getInitializer();
+  const call = initializer ? unwrapStaticExpression(initializer) : undefined;
+  return declarations.length === 1 &&
+    call &&
+    Node.isCallExpression(call) &&
+    call.getArguments().length === 0
+    ? requestExactModuleScopeConstCallDeclaration(call, 'createMemoryStorage')
+    : undefined;
+}
+
+function requestCallIsExactMemoryStorageConstructor(
+  call: import('ts-morph').CallExpression,
+  session: RequestProvenanceSession,
+): boolean {
+  const declaration = requestExactMemoryStorageDeclarationForExpression(call);
+  return !!declaration && requestMemoryStorageBindingIsPristine(declaration, session);
+}
+
+function requestCallIsExactMemoryStoragePut(
+  call: import('ts-morph').CallExpression,
+  session: RequestProvenanceSession,
+): boolean {
+  const callee = unwrapStaticExpression(call.getExpression());
+  if (!Node.isPropertyAccessExpression(callee) || callee.getName() !== 'put') return false;
+  const receiver = unwrapStaticExpression(callee.getExpression());
+  if (!Node.isIdentifier(receiver)) return false;
+  const declaration = requestExactMemoryStorageDeclarationForExpression(receiver);
+  return !!(
+    declaration &&
+    requestMemoryStoragePutUseIsExact(receiver, declaration) &&
+    requestMemoryStorageBindingIsPristine(declaration, session)
+  );
+}
+
+function requestStorageEndpointSecretIsExact(
+  expression: Node,
+  session: RequestProvenanceSession,
+): boolean {
+  const node = unwrapStaticExpression(expression);
+  if (isStringLiteralLike(node)) return node.getLiteralText().length >= 32;
+  return requestExactSigningKeyRingDeclarationForExpression(node, session) !== undefined;
+}
+
+function requestStorageDownloadEndpointConfigIsExact(
+  expression: Node,
+  session: RequestProvenanceSession,
+): boolean {
+  const object = unwrapStaticExpression(expression);
+  if (!Node.isObjectLiteralExpression(object)) return false;
+  const options = new Map<string, Node>();
+  for (const property of object.getProperties()) {
+    if (!Node.isPropertyAssignment(property) && !Node.isShorthandPropertyAssignment(property)) {
+      return false;
+    }
+    const name = staticMemberName(property.getNameNode());
+    const value = Node.isPropertyAssignment(property)
+      ? property.getInitializer()
+      : property.getNameNode();
+    if (!name || !['basePath', 'secret', 'storage'].includes(name) || options.has(name) || !value) {
+      return false;
+    }
+    options.set(name, value);
+  }
+  const secret = options?.get('secret');
+  const storage = options?.get('storage');
+  const basePath = options?.get('basePath');
+  if (
+    !options ||
+    !secret ||
+    !storage ||
+    !requestStorageEndpointSecretIsExact(secret, session) ||
+    (basePath !== undefined && !isStringLiteralLike(unwrapStaticExpression(basePath)))
+  ) {
+    return false;
+  }
+  const storageDeclaration = requestExactMemoryStorageDeclarationForExpression(storage);
+  return !!(
+    storageDeclaration && requestMemoryStorageBindingIsPristine(storageDeclaration, session)
+  );
+}
+
+function requestStorageEndpointCreateAppUseIsExact(
+  reference: import('ts-morph').Identifier,
+): boolean {
+  const array = reference.getParentIfKind(SyntaxKind.ArrayLiteralExpression);
+  const property = array?.getParentIfKind(SyntaxKind.PropertyAssignment);
+  if (
+    !array ||
+    !property ||
+    !array.getElements().some((element) => requestNodesAreSame(element, reference)) ||
+    Node.isComputedPropertyName(property.getNameNode()) ||
+    staticMemberName(property.getNameNode()) !== 'endpoints' ||
+    !requestNodesAreSame(property.getInitializer(), array)
+  ) {
+    return false;
+  }
+  const options = property.getParentIfKind(SyntaxKind.ObjectLiteralExpression);
+  const call = options?.getParentIfKind(SyntaxKind.CallExpression);
+  return !!(
+    options &&
+    call &&
+    call.getArguments().length === 1 &&
+    requestNodesAreSame(call.getArguments()[0], options) &&
+    requestExactPristineDirectImport(call.getExpression(), '@kovojs/server', 'createApp')
+  );
+}
+
+function requestStorageEndpointBindingIsPristine(
+  declaration: import('ts-morph').VariableDeclaration,
+  session: RequestProvenanceSession,
+): boolean {
+  const memoKey = `storage-endpoint:${requestNodeIdentity(declaration)}`;
+  const memoized = session.exactCapabilityBindingMemo.get(memoKey);
+  if (memoized !== undefined) return memoized;
+  session.exactCapabilityBindingMemo.set(memoKey, false);
+  const references = requestExactBindingReferences(declaration);
+  const pristine = !!(
+    references &&
+    references.length === 1 &&
+    requestStorageEndpointCreateAppUseIsExact(references[0]!)
+  );
+  session.exactCapabilityBindingMemo.set(memoKey, pristine);
+  return pristine;
+}
+
+function requestCallIsExactStorageDownloadEndpoint(
+  call: import('ts-morph').CallExpression,
+  session: RequestProvenanceSession,
+): boolean {
+  const declaration = requestExactModuleScopeConstCallDeclaration(
+    call,
+    'createStorageDownloadEndpoint',
+  );
+  return !!(
+    declaration &&
+    call.getArguments().length === 1 &&
+    requestStorageDownloadEndpointConfigIsExact(call.getArguments()[0]!, session) &&
+    requestStorageEndpointBindingIsPristine(declaration, session)
+  );
+}
+
+function requestExpressionIsExactStorageDownloadEndpoint(
+  expression: Node,
+  session: RequestProvenanceSession,
+): boolean {
+  const node = unwrapStaticExpression(expression);
+  if (Node.isCallExpression(node)) return requestCallIsExactStorageDownloadEndpoint(node, session);
+  if (!Node.isIdentifier(node)) return false;
+  const symbol = requestIdentifierValueSymbol(node) ?? node.getSymbol();
+  const declarations = symbol?.getDeclarations().filter(Node.isVariableDeclaration) ?? [];
+  const initializer = declarations[0]?.getInitializer();
+  const call = initializer ? unwrapStaticExpression(initializer) : undefined;
+  return !!(
+    declarations.length === 1 &&
+    call &&
+    Node.isCallExpression(call) &&
+    requestCallIsExactStorageDownloadEndpoint(call, session)
+  );
+}
+
 function requestCallIsExactClosedStylesheet(call: import('ts-morph').CallExpression): boolean {
   const callee = unwrapStaticExpression(call.getExpression());
   if (
@@ -8241,6 +8708,219 @@ function requestFrameworkSchemaBuilderCallIsPristine(
   const pristine = requestFrameworkSchemaBuilderPrototypesArePristine(call);
   session.schemaBuilderPristineMemo.set(projectKey, pristine);
   return pristine;
+}
+
+function requestFileAcceptanceIsExact(expression: Node): boolean {
+  const array = unwrapStaticExpression(expression);
+  if (!Node.isArrayLiteralExpression(array)) return false;
+  const elements = array.getElements();
+  if (elements.length === 0 || elements.length > 256) return false;
+  return elements.every((element) => {
+    if (Node.isSpreadElement(element) || Node.isOmittedExpression(element)) return false;
+    const value = unwrapStaticExpression(element);
+    return !!(
+      isStringLiteralLike(value) &&
+      value.getLiteralText().length <= 256 &&
+      runtimeRegExpTest(/^[a-z0-9!#$&^_.+-]+\/[a-z0-9!#$&^_.+-]+$/iu, value.getLiteralText())
+    );
+  });
+}
+
+function requestCallIsExactAcceptedFileParse(
+  call: import('ts-morph').CallExpression,
+  session: RequestProvenanceSession,
+): boolean {
+  const parseCallee = unwrapStaticExpression(call.getExpression());
+  if (
+    !Node.isPropertyAccessExpression(parseCallee) ||
+    parseCallee.getQuestionDotTokenNode() ||
+    !['parse', 'parseAsync'].includes(parseCallee.getName()) ||
+    call.getQuestionDotTokenNode() ||
+    call.getArguments().length !== 1
+  ) {
+    return false;
+  }
+  const acceptCall = unwrapStaticExpression(parseCallee.getExpression());
+  if (!Node.isCallExpression(acceptCall) || acceptCall.getArguments().length !== 1) return false;
+  const acceptCallee = unwrapStaticExpression(acceptCall.getExpression());
+  if (
+    !Node.isPropertyAccessExpression(acceptCallee) ||
+    acceptCallee.getQuestionDotTokenNode() ||
+    acceptCallee.getName() !== 'accept' ||
+    acceptCall.getQuestionDotTokenNode() ||
+    !requestFileAcceptanceIsExact(acceptCall.getArguments()[0]!)
+  ) {
+    return false;
+  }
+  const fileCall = unwrapStaticExpression(acceptCallee.getExpression());
+  if (!Node.isCallExpression(fileCall) || fileCall.getArguments().length !== 0) return false;
+  const fileCallee = unwrapStaticExpression(fileCall.getExpression());
+  if (
+    !Node.isPropertyAccessExpression(fileCallee) ||
+    fileCallee.getQuestionDotTokenNode() ||
+    fileCallee.getName() !== 'file' ||
+    fileCall.getQuestionDotTokenNode() ||
+    !requestFrameworkSchemaNamespaceIsPristine(fileCallee.getExpression())
+  ) {
+    return false;
+  }
+  return requestFrameworkSchemaBuilderCallIsPristine(acceptCall, session);
+}
+
+function requestCallIsExactAcceptedFileParseAsync(
+  call: import('ts-morph').CallExpression,
+  session: RequestProvenanceSession,
+): boolean {
+  const callee = unwrapStaticExpression(call.getExpression());
+  return !!(
+    Node.isPropertyAccessExpression(callee) &&
+    callee.getName() === 'parseAsync' &&
+    requestCallIsExactAcceptedFileParse(call, session)
+  );
+}
+
+const REQUEST_SIGN_URL_RESULT_FIELDS = new Set(['key', 'oneTime', 'token', 'url']);
+
+function requestRoutePageRootForSignUrl(
+  call: import('ts-morph').CallExpression,
+  session: RequestProvenanceSession,
+  knownRoot?: RequestCallable,
+): RequestCallable | undefined {
+  const roots = knownRoot
+    ? [knownRoot]
+    : (() => {
+        const direct = requestEnclosingCallable(call);
+        return direct ? requestCallableDeclaredRootContexts(direct, session) : [];
+      })();
+  const exact = roots.filter(
+    (root) => root.rootFactory === 'route' && root.rootCallback === 'page',
+  );
+  return exact.length === 1 ? exact[0] : undefined;
+}
+
+function requestSignUrlOptionsAreExact(expression: Node): boolean {
+  const values = requestExactPropertyAssignmentMap(
+    expression,
+    new Set(['expiresIn', 'key', 'method', 'oneTime', 'scope']),
+  );
+  const key = values?.get('key');
+  const keyValue = key ? unwrapStaticExpression(key) : undefined;
+  if (!values || !isStringLiteralLike(keyValue)) return false;
+  const keyText = keyValue.getLiteralText();
+  if (keyText.length === 0 || keyText.length > 1_024) return false;
+  const method = values.get('method');
+  const methodValue = method ? unwrapStaticExpression(method) : undefined;
+  if (
+    method !== undefined &&
+    (!isStringLiteralLike(methodValue) || methodValue.getLiteralText() !== 'GET')
+  ) {
+    return false;
+  }
+  const scope = values.get('scope');
+  const scopeValue = scope ? unwrapStaticExpression(scope) : undefined;
+  if (
+    scope !== undefined &&
+    (!isStringLiteralLike(scopeValue) || scopeValue.getLiteralText().length > 1_024)
+  ) {
+    return false;
+  }
+  const oneTime = values.get('oneTime');
+  if (
+    oneTime !== undefined &&
+    !Node.isTrueLiteral(unwrapStaticExpression(oneTime)) &&
+    !Node.isFalseLiteral(unwrapStaticExpression(oneTime))
+  ) {
+    return false;
+  }
+  const expiresIn = values.get('expiresIn');
+  if (expiresIn !== undefined) {
+    const value = unwrapStaticExpression(expiresIn);
+    if (!Node.isNumericLiteral(value)) return false;
+    const milliseconds = Number(value.getText().replaceAll('_', ''));
+    if (!Number.isSafeInteger(milliseconds) || milliseconds <= 0 || milliseconds > 86_400_000) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function requestCallUsesRoutePageSignUrlShape(
+  call: import('ts-morph').CallExpression,
+  root: RequestCallable,
+): boolean {
+  const callee = unwrapStaticExpression(call.getExpression());
+  const receiver = requestCallReceiver(callee);
+  return !!(
+    receiver &&
+    requestStaticCallMember(callee) === 'signUrl' &&
+    requestRootRoleIncludesCapability(
+      requestExpressionRootParameterRole(receiver, root, new Set(), 0),
+    )
+  );
+}
+
+function requestCallIsExactRoutePageSignUrl(
+  call: import('ts-morph').CallExpression,
+  session: RequestProvenanceSession,
+  knownRoot?: RequestCallable,
+): boolean {
+  const callee = unwrapStaticExpression(call.getExpression());
+  if (
+    !Node.isPropertyAccessExpression(callee) ||
+    callee.getQuestionDotTokenNode() ||
+    callee.getName() !== 'signUrl' ||
+    call.getQuestionDotTokenNode() ||
+    call.getArguments().length !== 1 ||
+    !requestSignUrlOptionsAreExact(call.getArguments()[0]!)
+  ) {
+    return false;
+  }
+  const root = requestRoutePageRootForSignUrl(call, session, knownRoot);
+  const receiver = unwrapStaticExpression(callee.getExpression());
+  if (!root || !Node.isIdentifier(receiver)) return false;
+  const parameter = requestCallableParameters(root.declaration)[0];
+  const name = parameter?.getNameNode();
+  return !!(
+    parameter &&
+    !parameter.getInitializer() &&
+    !parameter.getDotDotDotToken() &&
+    Node.isIdentifier(name) &&
+    name.getSymbol() &&
+    receiver.getSymbol() === name.getSymbol() &&
+    root.rootParameterRoles?.[0] === 'hybrid' &&
+    requestRootCapabilityMethodIsPristine(receiver, root, session)
+  );
+}
+
+function requestExpressionResolvesToExactSignUrlResult(
+  expression: Node,
+  session: RequestProvenanceSession,
+  seen: Set<string>,
+): boolean {
+  const node = unwrapStaticExpression(expression);
+  const nodeKey = `sign-url-result:${requestNodeIdentity(node)}`;
+  if (seen.has(nodeKey)) return false;
+  seen.add(nodeKey);
+  if (Node.isAwaitExpression(node)) {
+    const awaited = unwrapStaticExpression(node.getExpression());
+    return !!(
+      Node.isCallExpression(awaited) && requestCallIsExactRoutePageSignUrl(awaited, session)
+    );
+  }
+  if (!Node.isIdentifier(node)) return false;
+  const symbol = requestIdentifierValueSymbol(node) ?? node.getSymbol();
+  if (!symbol || requestAssignedBindingProjections(symbol, session).length !== 0) return false;
+  const declarations = symbol.getDeclarations();
+  if (declarations.length !== 1 || !Node.isVariableDeclaration(declarations[0])) return false;
+  const declaration = declarations[0];
+  if (declaration.getVariableStatement()?.getDeclarationKind() !== VariableDeclarationKind.Const) {
+    return false;
+  }
+  const initializer = declaration.getInitializer();
+  return !!(
+    initializer &&
+    requestExpressionResolvesToExactSignUrlResult(initializer, session, new Set(seen))
+  );
 }
 
 function requestFrameworkSchemaBuilderBaseReceiver(
@@ -10012,6 +10692,15 @@ function requestDeclarationDefinitions(
     (requestExpressionResolvesToExactBetterAuthBindingMember(node, 'signIn', new Set()) ||
       requestExpressionResolvesToExactBetterAuthBindingMember(node, 'signOut', new Set()))
   ) {
+    return [];
+  }
+  if (
+    (factory === 'endpoint' || factory === 'webhook') &&
+    requestExpressionIsExactStorageDownloadEndpoint(node, context.provenance)
+  ) {
+    // Framework-owned endpoint: its verify-before-read handler has no app callback body to scan.
+    // The sibling endpoint/webhook collection pass must also recognize it as reviewed rather than
+    // inventing an unresolved declaration for the same descriptor.
     return [];
   }
   const object = resolveStaticObjectLiteral(node, new Set(), 0);
@@ -15896,6 +16585,11 @@ function requestExpressionIsProtocolSafe(
   }
   if (Node.isPropertyAccessExpression(node) || Node.isElementAccessExpression(node)) {
     if (requestExpressionIsReviewedFrozenStyleValue(node)) return true;
+    if (requestExpressionResolvesToExactSignUrlResult(node.getExpression(), session, new Set())) {
+      return !!(
+        Node.isPropertyAccessExpression(node) && REQUEST_SIGN_URL_RESULT_FIELDS.has(node.getName())
+      );
+    }
     if (
       requestPropertyAccessIsExactRequestPrimitive(node, callable) ||
       requestPropertyAccessIsExactUrlSearchParams(node, callable, session)
@@ -15928,6 +16622,16 @@ function requestExpressionIsProtocolSafe(
   if (Node.isCallExpression(node)) {
     const callee = unwrapStaticExpression(node.getExpression());
     if (callee.getKind() === SyntaxKind.ImportKeyword) return true;
+    if (requestCallIsExactAcceptedFileParse(node, session)) return true;
+    if (requestCallIsExactMemoryStoragePut(node, session)) return true;
+    if (requestCallIsExactRoutePageSignUrl(node, session, callable)) return true;
+    if (requestCallUsesRoutePageSignUrlShape(node, callable)) return false;
+    if (
+      requestExpressionIsFrameworkSchemaBuilderCall(node) &&
+      requestFrameworkSchemaBuilderCallIsPristine(node, session)
+    ) {
+      return true;
+    }
     if (requestCallIsExactAuthoredBetterAuthSessionProviderDelegation(node, session)) return true;
     if (requestCallIsExactReadableStreamControllerMethod(node, callable)) return true;
     if (requestCallIsExactKovoTrustedSql(node) || requestCallIsExactKovoSqlRawInput(node)) {
@@ -16855,6 +17559,10 @@ function requestWireAuthoritiesForExpressionUncached(
   if (Node.isCallExpression(node)) {
     const revealed = requestExactTrustedRevealOutput(node);
     if (revealed) return requestWireAuthoritiesForExpression(revealed, state, routeOutcomePosition);
+    if (requestCallIsExactAcceptedFileParse(node, state.session)) {
+      return requestWireAuthoritiesForExpressions(node.getArguments(), state);
+    }
+    if (requestCallIsExactRoutePageSignUrl(node, state.session)) return [];
     const reviewedRouteOutcome = requestCallIsReviewedRouteOutcome(node, state.rootCallable);
     if (
       requestCallIsExactFrameworkNativePromise(node) ||
@@ -17017,6 +17725,12 @@ function requestWireAuthoritiesForExpressionUncached(
 
   if (Node.isPropertyAccessExpression(node) || Node.isElementAccessExpression(node)) {
     const receiver = node.getExpression();
+    if (requestExpressionResolvesToExactSignUrlResult(receiver, state.session, new Set())) {
+      return Node.isPropertyAccessExpression(node) &&
+        REQUEST_SIGN_URL_RESULT_FIELDS.has(node.getName())
+        ? []
+        : [requestOpaqueWireAuthority(node, 'capability-result-field')];
+    }
     const receiverCarrier = requestWireCarrierForExpression(receiver, state, new Set(), 0);
     if (receiverCarrier) return [];
     const member = Node.isPropertyAccessExpression(node)
@@ -17421,6 +18135,13 @@ function requestExpressionIsExactNativePromise(
     const revealed = requestExactTrustedRevealOutput(node);
     if (revealed) {
       return requestExpressionIsExactNativePromise(revealed, new Set(seen), session);
+    }
+    if (
+      requestCallIsExactAcceptedFileParseAsync(node, session) ||
+      requestCallIsExactMemoryStoragePut(node, session) ||
+      requestCallIsExactRoutePageSignUrl(node, session)
+    ) {
+      return true;
     }
     if (requestCallIsExactDeclaredSecretReadExecution(node, session)) return true;
     if (requestCallIsExactAuthoredBetterAuthSessionProviderDelegation(node, session)) return true;
@@ -20092,6 +20813,22 @@ function requestCallIsKnownSafe(
     return true;
   }
   if (requestCallIsExactReadableStreamControllerMethod(call, callable)) {
+    scanRequestFunctionArguments(call, context);
+    return true;
+  }
+  if (
+    requestCallIsExactAcceptedFileParse(call, context.provenance) ||
+    requestCallIsExactMemoryStoragePut(call, context.provenance) ||
+    requestCallIsExactRoutePageSignUrl(call, context.provenance, callable)
+  ) {
+    scanRequestFunctionArguments(call, context);
+    return true;
+  }
+  if (requestCallUsesRoutePageSignUrlShape(call, callable)) return false;
+  if (
+    requestExpressionIsFrameworkSchemaBuilderCall(call) &&
+    requestFrameworkSchemaBuilderCallIsPristine(call, context.provenance)
+  ) {
     scanRequestFunctionArguments(call, context);
     return true;
   }
