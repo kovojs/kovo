@@ -5156,29 +5156,55 @@ function requestCompositionRootForExactCapabilityCall(
   return roots.length === 1 ? roots[0] : undefined;
 }
 
-function requestExpressionIsExactTaskContextReceiver(
+type RequestCompositionMethod = 'runMutation' | 'runQuery' | 'schedule';
+type RequestCompositionPosture = 'actAs' | 'declareSystemRead' | 'declareSystemWrite';
+
+interface RequestExactCompositionPostureScope {
+  readonly declaration: import('ts-morph').VariableDeclaration;
+  readonly posture: RequestCompositionPosture;
+}
+
+function requestCompositionMethodIsAllowed(
+  root: RequestCallable,
+  method: RequestCompositionMethod,
+  posture?: RequestCompositionPosture,
+): boolean {
+  if (root.rootFactory === 'task' && root.rootCallback === 'run') {
+    if (!posture) return true;
+    if (method === 'schedule') return false;
+    if (posture === 'actAs') return true;
+    if (posture === 'declareSystemRead') return method === 'runQuery';
+    return method === 'runMutation';
+  }
+  if (root.rootFactory === 'webhook' && root.rootCallback === 'handler') {
+    if (method !== 'runMutation') return false;
+    return posture === undefined || posture === 'actAs' || posture === 'declareSystemWrite';
+  }
+  return false;
+}
+
+function requestExactCompositionPosture(
   expression: Node,
   root: RequestCallable,
   session: RequestProvenanceSession,
-): boolean {
+): RequestCompositionPosture | undefined {
   const receiver = unwrapStaticExpression(expression);
-  if (requestExpressionIsDirectRootParameterWithRole(receiver, root, 'capability')) {
-    return requestRootCapabilityMethodIsPristine(receiver, root, session);
-  }
-  if (!Node.isCallExpression(receiver)) return false;
-  const posture = unwrapStaticExpression(receiver.getExpression());
+  if (!Node.isCallExpression(receiver)) return undefined;
+  const postureAccess = unwrapStaticExpression(receiver.getExpression());
   if (
-    !Node.isPropertyAccessExpression(posture) ||
-    posture.getQuestionDotTokenNode() ||
+    !Node.isPropertyAccessExpression(postureAccess) ||
+    postureAccess.getQuestionDotTokenNode() ||
     receiver.getQuestionDotTokenNode() ||
-    !['actAs', 'declareSystemRead', 'declareSystemWrite'].includes(posture.getName()) ||
     receiver.getArguments().length !== 1
   ) {
-    return false;
+    return undefined;
   }
-  const context = posture.getExpression();
-  return !!(
-    requestExpressionIsDirectRootParameterWithRole(context, root, 'capability') &&
+  const posture = postureAccess.getName();
+  if (posture !== 'actAs' && posture !== 'declareSystemRead' && posture !== 'declareSystemWrite') {
+    return undefined;
+  }
+  const context = postureAccess.getExpression();
+  return requestExpressionIsDirectRootParameterWithRole(context, root, 'capability') &&
     requestRootCapabilityMethodIsPristine(context, root, session) &&
     requestExactMutationTaskScheduleInputIsPlain(
       receiver.getArguments()[0]!,
@@ -5186,6 +5212,110 @@ function requestExpressionIsExactTaskContextReceiver(
       session,
       new Set(),
     )
+    ? posture
+    : undefined;
+}
+
+function requestExactCompositionPostureScopeForIdentifier(
+  identifier: import('ts-morph').Identifier,
+  root: RequestCallable,
+  session: RequestProvenanceSession,
+): RequestExactCompositionPostureScope | undefined {
+  const symbol = requestIdentifierValueSymbol(identifier) ?? identifier.getSymbol();
+  if (!symbol || requestAssignedBindingProjections(symbol, session).length !== 0) return undefined;
+  const declarations = symbol.getDeclarations();
+  const [declaration] = declarations;
+  if (!declaration || declarations.length !== 1 || !Node.isVariableDeclaration(declaration)) {
+    return undefined;
+  }
+  const statement = declaration.getVariableStatement();
+  const name = declaration.getNameNode();
+  const initializer = declaration.getInitializer();
+  const posture = initializer
+    ? requestExactCompositionPosture(initializer, root, session)
+    : undefined;
+  if (
+    !statement ||
+    statement.getDeclarationKind() !== VariableDeclarationKind.Const ||
+    statement.getDeclarations().length !== 1 ||
+    statement.isExported() ||
+    !Node.isIdentifier(name) ||
+    name.getSymbol() !== symbol ||
+    !initializer ||
+    posture === undefined ||
+    !nodeBelongsToRequestCallable(declaration, root)
+  ) {
+    return undefined;
+  }
+  return { declaration, posture };
+}
+
+function requestCompositionPostureScopeBindingIsPristine(
+  scope: RequestExactCompositionPostureScope,
+  root: RequestCallable,
+  session: RequestProvenanceSession,
+): boolean {
+  const memoKey = `composition-posture:${requestNodeIdentity(scope.declaration)}:${requestNodeIdentity(root.declaration)}`;
+  const memoized = session.exactCapabilityBindingMemo.get(memoKey);
+  if (memoized !== undefined) return memoized;
+  // Fail closed while enumerating the complete symbol reference graph. This also prevents a
+  // recursive alias/reference shape from being accepted through re-entry.
+  session.exactCapabilityBindingMemo.set(memoKey, false);
+  const references = requestExactBindingReferences(scope.declaration);
+  const statementEnd =
+    scope.declaration.getVariableStatement()?.getEnd() ?? Number.MAX_SAFE_INTEGER;
+  const pristine = !!(
+    references &&
+    references.length > 0 &&
+    references.every((reference) => {
+      const access = reference.getParentIfKind(SyntaxKind.PropertyAccessExpression);
+      const call = access?.getParentIfKind(SyntaxKind.CallExpression);
+      if (
+        reference.getStart() <= statementEnd ||
+        !access ||
+        access.getQuestionDotTokenNode() ||
+        !requestNodesAreSame(access.getExpression(), reference) ||
+        !call ||
+        call.getQuestionDotTokenNode() ||
+        !requestNodesAreSame(call.getExpression(), access) ||
+        !nodeBelongsToRequestCallable(call, root)
+      ) {
+        return false;
+      }
+      const method = access.getName();
+      return !!(
+        (method === 'runMutation' || method === 'runQuery') &&
+        requestCompositionMethodIsAllowed(root, method, scope.posture)
+      );
+    })
+  );
+  session.exactCapabilityBindingMemo.set(memoKey, pristine);
+  return pristine;
+}
+
+function requestExpressionIsExactTaskContextReceiver(
+  expression: Node,
+  root: RequestCallable,
+  session: RequestProvenanceSession,
+  method: RequestCompositionMethod,
+): boolean {
+  const receiver = unwrapStaticExpression(expression);
+  if (requestExpressionIsDirectRootParameterWithRole(receiver, root, 'capability')) {
+    return (
+      requestCompositionMethodIsAllowed(root, method) &&
+      requestRootCapabilityMethodIsPristine(receiver, root, session)
+    );
+  }
+  if (Node.isCallExpression(receiver)) {
+    const posture = requestExactCompositionPosture(receiver, root, session);
+    return !!posture && requestCompositionMethodIsAllowed(root, method, posture);
+  }
+  if (!Node.isIdentifier(receiver) || method === 'schedule') return false;
+  const scope = requestExactCompositionPostureScopeForIdentifier(receiver, root, session);
+  return !!(
+    scope &&
+    requestCompositionMethodIsAllowed(root, method, scope.posture) &&
+    requestCompositionPostureScopeBindingIsPristine(scope, root, session)
   );
 }
 
@@ -5216,11 +5346,12 @@ function requestCallIsExactTaskComposition(
   session: RequestProvenanceSession,
 ): boolean {
   const callee = unwrapStaticExpression(call.getExpression());
+  const method = Node.isPropertyAccessExpression(callee) ? callee.getName() : undefined;
   if (
     !Node.isPropertyAccessExpression(callee) ||
     callee.getQuestionDotTokenNode() ||
     call.getQuestionDotTokenNode() ||
-    !['runMutation', 'runQuery'].includes(callee.getName())
+    (method !== 'runMutation' && method !== 'runQuery')
   ) {
     return false;
   }
@@ -5229,11 +5360,11 @@ function requestCallIsExactTaskComposition(
   const root = requestCompositionRootForExactCapabilityCall(call, session);
   if (
     !root ||
-    !requestExpressionIsExactTaskContextReceiver(callee.getExpression(), root, session)
+    !requestExpressionIsExactTaskContextReceiver(callee.getExpression(), root, session, method)
   ) {
     return false;
   }
-  const factory = callee.getName() === 'runMutation' ? 'mutation' : 'query';
+  const factory = method === 'runMutation' ? 'mutation' : 'query';
   return !!(
     requestExpressionIsExactLocalFrameworkDeclaration(definition, factory, session) &&
     requestExactMutationTaskScheduleInputIsPlain(input, root, session, new Set())
@@ -5259,7 +5390,12 @@ function requestCallIsExactTaskSchedule(
   const root = requestTaskRootForExactCapabilityCall(call, session);
   return !!(
     root &&
-    requestExpressionIsExactTaskContextReceiver(callee.getExpression(), root, session) &&
+    requestExpressionIsExactTaskContextReceiver(
+      callee.getExpression(),
+      root,
+      session,
+      'schedule',
+    ) &&
     requestExpressionIsExactLocalTaskDeclaration(taskDeclaration, session) &&
     requestExactMutationTaskScheduleInputIsPlain(input, root, session, new Set()) &&
     (options === undefined || requestExactTaskScheduleOptionsArePlain(options, root, session))

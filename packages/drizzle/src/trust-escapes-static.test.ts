@@ -2285,7 +2285,7 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
     }
   });
 
-  it('accepts only exact task composition through the direct framework task context', () => {
+  it('accepts only exact task composition through pristine task context and posture scopes', () => {
     const safe = sinksFor(`
       import { mutation, query, s, task } from '@kovojs/server';
       const attempts = new Map<string, number>();
@@ -2314,6 +2314,13 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
           await context.runMutation(namedRecord, { id: input.id });
           await context.runQuery(inspect, { id: input.id });
           await context.runQuery(namedInspect, { id: input.id });
+          const principal = context.actAs('reusable-reviewed-principal');
+          await principal.runMutation(record, { id: input.id });
+          await principal.runQuery(inspect, { id: input.id });
+          const systemRead = context.declareSystemRead('read-only reconciliation proof');
+          await systemRead.runQuery(inspect, { id: input.id });
+          const systemWrite = context.declareSystemWrite('write reconciliation proof');
+          await systemWrite.runMutation(record, { id: input.id });
           await context.schedule(follow, { id: input.id }, { afterMs: 1 });
         },
       });
@@ -2370,6 +2377,10 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
         verifyJustification: 'local exact composition proof',
         async handler(input, context) {
           await context.actAs('reviewed-principal').runMutation(record, { id: input.id });
+          const principal = context.actAs('reusable-reviewed-principal');
+          await principal.runMutation(record, { id: input.id });
+          const systemWrite = context.declareSystemWrite('write webhook reconciliation proof');
+          await systemWrite.runMutation(record, { id: input.id });
           return { ok: true };
         },
       });
@@ -2392,6 +2403,237 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
         });
       `);
       expect(facts.length, body).toBeGreaterThan(0);
+    }
+  });
+
+  it('keeps reusable posture-scope bindings on a finite closed composition grammar', () => {
+    const unsafeTaskBodies = [
+      [
+        'mutable or reassigned binding',
+        `let principal = context.actAs('reviewed');
+         principal = context.actAs('other');
+         await principal.runMutation(record, { id: input.id });`,
+      ],
+      [
+        'second binding alias',
+        `const principal = context.actAs('reviewed');
+         const alias = principal;
+         await alias.runMutation(record, { id: input.id });`,
+      ],
+      [
+        'destructured method',
+        `const principal = context.actAs('reviewed');
+         const { runMutation } = principal;
+         void runMutation;
+         await principal.runMutation(record, { id: input.id });`,
+      ],
+      [
+        'bound method',
+        `const principal = context.actAs('reviewed');
+         const bound = principal.runMutation.bind(principal);
+         void bound;
+         await principal.runMutation(record, { id: input.id });`,
+      ],
+      [
+        'computed composition member',
+        `const principal = context.actAs('reviewed');
+         await principal[input.method](record, { id: input.id });`,
+      ],
+      [
+        'optional composition member',
+        `const principal = context.actAs('reviewed');
+         await principal?.runMutation(record, { id: input.id });`,
+      ],
+      [
+        'passed scope',
+        `const principal = context.actAs('reviewed');
+         function consume(_value: unknown) {}
+         consume(principal);
+         await principal.runMutation(record, { id: input.id });`,
+      ],
+      [
+        'stored scope',
+        `const principal = context.actAs('reviewed');
+         const escaped = { principal };
+         void escaped;
+         await principal.runMutation(record, { id: input.id });`,
+      ],
+      [
+        'returned scope',
+        `const principal = context.actAs('reviewed');
+         function escape() { return principal; }
+         void escape;
+         await principal.runMutation(record, { id: input.id });`,
+      ],
+      [
+        'spread scope',
+        `const principal = context.actAs('reviewed');
+         const escaped = { ...principal };
+         void escaped;
+         await principal.runMutation(record, { id: input.id });`,
+      ],
+      [
+        'nested callback capture',
+        `const principal = context.actAs('reviewed');
+         queueMicrotask(() => { void principal.runMutation(record, { id: input.id }); });
+         await principal.runMutation(record, { id: input.id });`,
+      ],
+      [
+        'method mutation',
+        `const principal = context.actAs('reviewed');
+         principal.runMutation = async () => ({ id: 'replaced' });
+         await principal.runMutation(record, { id: input.id });`,
+      ],
+      [
+        'prototype mutation',
+        `const principal = context.actAs('reviewed');
+         Object.setPrototypeOf(principal, null);
+         await principal.runMutation(record, { id: input.id });`,
+      ],
+      [
+        'aliased context initializer',
+        `const alias = context;
+         const principal = alias.actAs('reviewed');
+         await principal.runMutation(record, { id: input.id });`,
+      ],
+      [
+        'aliased posture method initializer',
+        `const actAs = context.actAs;
+         const principal = actAs('reviewed');
+         await principal.runMutation(record, { id: input.id });`,
+      ],
+      [
+        'multiple const declarations',
+        `const principal = context.actAs('reviewed'), marker = input.id;
+         void marker;
+         await principal.runMutation(record, { id: input.id });`,
+      ],
+      [
+        'read posture used for mutation',
+        `const systemRead = context.declareSystemRead('read only');
+         await systemRead.runMutation(record, { id: input.id });`,
+      ],
+      [
+        'write posture used for query',
+        `const systemWrite = context.declareSystemWrite('write only');
+         await systemWrite.runQuery(inspect, { id: input.id });`,
+      ],
+      [
+        'inline read posture used for mutation',
+        `await context.declareSystemRead('read only').runMutation(record, { id: input.id });`,
+      ],
+      [
+        'inline write posture used for query',
+        `await context.declareSystemWrite('write only').runQuery(inspect, { id: input.id });`,
+      ],
+      [
+        'posture scope used for scheduling',
+        `const principal = context.actAs('reviewed');
+         await principal.schedule(follow, { id: input.id });`,
+      ],
+      [
+        'inline posture used for scheduling',
+        `await context.actAs('reviewed').schedule(follow, { id: input.id });`,
+      ],
+      [
+        'definition alias through reusable scope',
+        `const principal = context.actAs('reviewed');
+         const alias = record;
+         await principal.runMutation(alias, { id: input.id });`,
+      ],
+      [
+        'opaque input through reusable scope',
+        `const principal = context.actAs('reviewed');
+         await principal.runMutation(record, { ...input });`,
+      ],
+      [
+        'extra composition argument',
+        `const principal = context.actAs('reviewed');
+         await principal.runMutation(record, { id: input.id }, {});`,
+      ],
+    ] as const;
+
+    for (const [label, body] of unsafeTaskBodies) {
+      const facts = sinksFor(`
+        import { mutation, query, s, task } from '@kovojs/server';
+        const record = mutation({
+          input: s.object({ id: s.string() }),
+          handler(input) { return { id: input.id }; },
+        });
+        const inspect = query({
+          args: s.object({ id: s.string() }),
+          load(input) { return { id: input.id }; },
+        });
+        const follow = task('orders/follow', {
+          input: s.object({ id: s.string(), method: s.string() }),
+          async run(input, context) { ${body} },
+        });
+      `);
+      expect(facts.length, label).toBeGreaterThan(0);
+    }
+
+    const unsafeWebhookBodies = [
+      [
+        'webhook mutable binding',
+        `let principal = context.actAs('reviewed');
+         principal = context.actAs('other');
+         await principal.runMutation(record, { id: input.id });`,
+      ],
+      [
+        'webhook second alias',
+        `const principal = context.actAs('reviewed');
+         const alias = principal;
+         await alias.runMutation(record, { id: input.id });`,
+      ],
+      [
+        'webhook nested capture',
+        `const principal = context.actAs('reviewed');
+         queueMicrotask(() => { void principal.runMutation(record, { id: input.id }); });
+         await principal.runMutation(record, { id: input.id });`,
+      ],
+      [
+        'webhook principal query',
+        `const principal = context.actAs('reviewed');
+         await principal.runQuery(inspect, { id: input.id });`,
+      ],
+      [
+        'webhook system-write query',
+        `const systemWrite = context.declareSystemWrite('write only');
+         await systemWrite.runQuery(inspect, { id: input.id });`,
+      ],
+      [
+        'webhook system-read mutation',
+        `const systemRead = context.declareSystemRead('read only');
+         await systemRead.runMutation(record, { id: input.id });`,
+      ],
+      ['webhook direct query', `await context.runQuery(inspect, { id: input.id });`],
+      [
+        'webhook aliased context initializer',
+        `const alias = context;
+         const principal = alias.actAs('reviewed');
+         await principal.runMutation(record, { id: input.id });`,
+      ],
+    ] as const;
+
+    for (const [label, body] of unsafeWebhookBodies) {
+      const facts = sinksFor(`
+        import { mutation, query, s, webhook } from '@kovojs/server';
+        const record = mutation({
+          input: s.object({ id: s.string() }),
+          handler(input) { return { id: input.id }; },
+        });
+        const inspect = query({
+          args: s.object({ id: s.string() }),
+          load(input) { return { id: input.id }; },
+        });
+        webhook('/events', {
+          input: s.object({ id: s.string() }),
+          verify: 'none',
+          verifyJustification: 'negative reusable posture-scope proof',
+          async handler(input, context) { ${body} },
+        });
+      `);
+      expect(facts.length, label).toBeGreaterThan(0);
     }
   });
 

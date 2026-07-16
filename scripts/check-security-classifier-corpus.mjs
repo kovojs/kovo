@@ -528,6 +528,23 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
           '<opaque-module-initializer:@kovojs/server/internal/postgres-capability>',
         ],
       },
+      {
+        id: 'reusable-posture-scope-closed-grammar',
+        file: 'packages/drizzle/src/trust-escapes-static.test.ts',
+        snippets: [
+          'keeps reusable posture-scope bindings on a finite closed composition grammar',
+          "const principal = context.actAs('reusable-reviewed-principal')",
+          "const systemRead = context.declareSystemRead('read-only reconciliation proof')",
+          "const systemWrite = context.declareSystemWrite('write reconciliation proof')",
+          'const alias = principal;',
+          'const { runMutation } = principal;',
+          'queueMicrotask(() => { void principal.runMutation',
+          'Object.setPrototypeOf(principal, null);',
+          "await context.declareSystemRead('read only').runMutation",
+          "await context.declareSystemWrite('write only').runQuery",
+          "await context.actAs('reviewed').schedule",
+        ],
+      },
     ],
   },
   {
