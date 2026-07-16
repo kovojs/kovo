@@ -260,7 +260,13 @@ function readDirectEnhancedMutationTransport(
   // Internal/programmatic callers may enter below delegated interception, but they still receive
   // the same fail-closed /_m/ POST transport floor. Delegated browser submits additionally require
   // compiler-owned data-mutation identity in mutation-form.ts before preventDefault.
-  const current = security.currentUrl() ?? security.parseUrl('http://localhost/');
+  // Keep the direct/programmatic path on the same effective-origin floor as delegated submits.
+  // Only browser-free callers retain the deterministic localhost base used by structural tests.
+  const current =
+    security.currentUrl() ??
+    (bootMutationFetchSecurity === undefined
+      ? security.parseUrl('http://localhost/')
+      : undefined);
   if (!current) return undefined;
   const method = form.getAttribute?.('method') ?? form.method ?? 'post';
   const rawAction = form.getAttribute?.('action') ?? form.action;

@@ -13,6 +13,7 @@ import { closestRuntimeElement } from './runtime-dom-security.js';
 // C210 / SPEC §6.6/§9.2: capture native form submission while the framework module graph loads,
 // before authored client code can replace HTMLFormElement.prototype.submit.
 const browserFormSecurity = createBrowserNavigationSecurityControls();
+const browserFormDocumentRealm = typeof document !== 'undefined';
 
 export const enhancedMutationFormSelector = 'form[enhance],form[data-enhance],form[data-mutation]';
 
@@ -118,8 +119,14 @@ export function readEligibleEnhancedMutationTransport(
     browserFormSecurity.readAttribute(form, 'action') ??
     ownStringData(form, 'action') ??
     '';
+  // A browser document without the effective-origin witness is opaque/sandboxed authority, not a
+  // localhost document. Structural browser-free callers get their deterministic fallback from the
+  // navigation controls themselves; this browser transport choke must fail closed (SPEC §6.6/§9.1).
   const current =
-    browserFormSecurity.currentUrl() ?? browserFormSecurity.parseUrl('http://localhost/');
+    browserFormSecurity.currentUrl() ??
+    (browserFormDocumentRealm
+      ? undefined
+      : browserFormSecurity.parseUrl('http://localhost/'));
   if (!current) return undefined;
   const documentBase = browserFormSecurity.documentBaseUrl();
   if (!documentBase) return undefined;

@@ -73,6 +73,29 @@ export default defineConfig({
                       });
                       return;
                     }
+                    if (data.mode === 'module-form') {
+                      import('/packages/browser/src/mutation-form.ts').then((module) => {
+                        const form = document.querySelector('form');
+                        form.setAttribute('action', 'http://localhost/_m/delete');
+                        const transportAllowed =
+                          module.readEligibleEnhancedMutationTransport(form) !== undefined;
+                        parent.postMessage({
+                          effectiveOrigin: globalThis.origin,
+                          fetchCalls,
+                          id: data.id,
+                          locationOrigin: location.origin,
+                          transportAllowed,
+                          type: 'kovo:sandbox-origin-result',
+                        }, '*');
+                      }, (error) => {
+                        parent.postMessage({
+                          error: String(error && error.message || error),
+                          id: data.id,
+                          type: 'kovo:sandbox-origin-result',
+                        }, '*');
+                      });
+                      return;
+                    }
                     if (data.mode === 'paint') {
                       (0, eval)('(' + data.source + ")('/c/runtime.js',globalThis.__kovoSandboxImport);");
                     } else {
