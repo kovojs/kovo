@@ -137,6 +137,7 @@ export const ProductPage = component({
   it('keeps the JSX IR structural phase order explicit', () => {
     expect(structuralJsxPhaseOrder).toMatchInlineSnapshot(`
       [
+        "mutation-form-provenance",
         "primitive-spreads",
         "dynamic-spread-control-boundary",
         "primitive-composition",

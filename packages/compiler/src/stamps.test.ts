@@ -556,6 +556,198 @@ export const ProductGrid = component({
     ]);
   });
 
+  it('reports KV242 for raw enhanced-mutation markers without typed ownership', () => {
+    const result = compileComponentModule({
+      fileName: 'forged-mutation-forms.tsx',
+      source: `
+export const ForgedMutationForms = component({
+  render: () => (
+    <section>
+      <form enhance />
+      <form data-enhance />
+      <form data-mutation="cart/add" />
+      <form DATA-MUTATION-STREAM />
+      <form enhance={false} data-mutation={null} />
+    </section>
+  ),
+});
+`,
+    });
+
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV242')).toEqual([
+      expect.objectContaining({ message: expect.stringContaining('authored enhance requires') }),
+      expect.objectContaining({ message: expect.stringContaining('raw data-enhance') }),
+      expect.objectContaining({ message: expect.stringContaining('raw data-mutation') }),
+      expect.objectContaining({ message: expect.stringContaining('raw data-mutation-stream') }),
+    ]);
+  });
+
+  it('reports KV242 before forged spread controls can become mutation provenance', () => {
+    const result = compileComponentModule({
+      fileName: 'forged-mutation-spreads.tsx',
+      source: `
+const mutationName = 'data-mutation';
+const directControls = { enhance: true, [mutationName]: 'cart/add' };
+const aliasedControls = directControls;
+const partialControls = { ...profileAttrs, ['DATA-ENHANCE']: true };
+
+export const ForgedMutationSpreads = component({
+  render: () => (
+    <section>
+      <form {...directControls} />
+      <form {...aliasedControls} />
+      <form {...partialControls} />
+      <form {...{ get ['DATA-MUTATION-STREAM']() { return true; } }} />
+      <form {...{ [dynamicName]: true }} />
+    </section>
+  ),
+});
+`,
+    });
+    const messages = result.diagnostics
+      .filter((diagnostic) => diagnostic.code === 'KV242')
+      .map((diagnostic) => diagnostic.message);
+    const serverSource = result.files.find((file) => file.kind === 'server')?.source ?? '';
+
+    expect(messages).toHaveLength(4);
+    expect(messages).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('caller-owned JSX spread carries Kovo mutation controls'),
+        expect.stringContaining('(enhance, data-mutation)'),
+        expect.stringContaining('(data-enhance)'),
+        expect.stringContaining('(data-mutation-stream)'),
+      ]),
+    );
+    expect(serverSource.match(/<form \/>/g)).toHaveLength(4);
+    expect(serverSource).not.toContain('{...directControls}');
+    expect(serverSource).not.toContain('{...aliasedControls}');
+    expect(serverSource).not.toContain('{...partialControls}');
+    expect(serverSource).not.toContain("{...{ get ['DATA-MUTATION-STREAM']()");
+    expect(serverSource).toContain('{...kovoSafeJsxSpread({ [dynamicName]: true })}');
+  });
+
+  it('preserves direct typed and exact framework-helper mutation provenance', () => {
+    const result = compileComponentModule({
+      fileName: 'proven-mutation-forms.tsx',
+      source: `
+import { mutationFormAttributes as formAttributes } from '@kovojs/server';
+
+export const save = mutation('account/save', {
+  input: s.object({}),
+  handler() {
+    return null;
+  },
+});
+
+export const ProvenMutationForms = component({
+  render: () => (
+    <section>
+      <form enhance mutation={save} />
+      <form enhance {...formAttributes(save)} />
+    </section>
+  ),
+});
+`,
+    });
+    const serverSource = result.files.find((file) => file.kind === 'server')?.source ?? '';
+
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV242')).toEqual([]);
+    expect(serverSource).toContain('action="/_m/account/save" data-mutation="account/save"');
+    expect(serverSource).toContain('{...formAttributes(save)}');
+    expect(serverSource).not.toContain('kovoSafeJsxSpread(formAttributes(save))');
+  });
+
+  it('rejects unprovable helper arguments and does not trust shadowed helper imports', () => {
+    const result = compileComponentModule({
+      fileName: 'unproven-mutation-helper.tsx',
+      source: `
+import { mutationFormAttributes as formAttributes } from '@kovojs/server';
+
+export const save = mutation('account/save', {
+  input: s.object({}),
+  handler() {
+    return null;
+  },
+});
+
+export const UnprovenMutationHelper = component({
+  render: () => (
+    <form {...formAttributes(selectMutation(save))} />
+  ),
+});
+
+export const ShadowedMutationHelper = component({
+  render: () => {
+    const formAttributes = (value) => ({ enhance: true, 'data-mutation': value });
+    return <form {...formAttributes('forged')} />;
+  },
+});
+`,
+    });
+    const messages = result.diagnostics
+      .filter((diagnostic) => diagnostic.code === 'KV242')
+      .map((diagnostic) => diagnostic.message);
+    const serverSource = result.files.find((file) => file.kind === 'server')?.source ?? '';
+
+    expect(messages).toEqual([
+      expect.stringContaining(
+        'mutationFormAttributes(...) requires a bare mutation binding so the compiler can prove its mutation identity',
+      ),
+    ]);
+    expect(serverSource).not.toContain('{...formAttributes(selectMutation(save))}');
+    expect(serverSource).toContain("{...kovoSafeJsxSpread(formAttributes('forged'))}");
+  });
+
+  it('reports KV242 and removes authored transport overrides from proven mutation forms', () => {
+    const result = compileComponentModule({
+      fileName: 'mutation-transport-overrides.tsx',
+      source: `
+import { mutationFormAttributes as formAttributes } from '@kovojs/server';
+
+const transportOverrides = { action: 'https://outside.example/save', method: 'get' };
+export const save = mutation('account/save', {
+  input: s.object({}),
+  handler() {
+    return null;
+  },
+});
+
+export const MutationTransportOverrides = component({
+  render: () => (
+    <section>
+      <form enhance mutation={save} action="https://outside.example/save" method="get" />
+      <form enhance {...formAttributes(save)} action="/checkout" method="get" />
+      <form mutation={save} {...transportOverrides} />
+    </section>
+  ),
+});
+`,
+    });
+    const messages = result.diagnostics
+      .filter((diagnostic) => diagnostic.code === 'KV242')
+      .map((diagnostic) => diagnostic.message);
+    const serverSource = result.files.find((file) => file.kind === 'server')?.source ?? '';
+
+    expect(messages).toHaveLength(5);
+    expect(messages.filter((message) => message.includes('authored action cannot'))).toHaveLength(
+      2,
+    );
+    expect(messages.filter((message) => message.includes('authored method cannot'))).toHaveLength(
+      2,
+    );
+    expect(messages).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('caller-owned JSX spread carries Kovo mutation controls'),
+        expect.stringContaining('(action, method)'),
+      ]),
+    );
+    expect(serverSource).not.toContain('<form enhance action="https://outside.example/save"');
+    expect(serverSource).not.toContain('<form enhance action="/checkout"');
+    expect(serverSource).not.toContain('{...transportOverrides}');
+    expect(serverSource.match(/action="\/_m\/account\/save"/g)).toHaveLength(2);
+    expect(serverSource).toContain('{...formAttributes(save)}');
+  });
+
   it('lowers field and form error helpers to the enclosing mutation failure slot', () => {
     const result = compileComponentModule({
       fileName: 'product-grid.tsx',

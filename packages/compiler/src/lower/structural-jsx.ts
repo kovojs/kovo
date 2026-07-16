@@ -38,6 +38,13 @@ import type {
   SourceSpan,
 } from '../scan/parse.js';
 import type { StaticLiteralValue } from '../scan/object.js';
+import {
+  enhancedMutationFormBinding,
+  isImportedMutationFormAttributesCall,
+  isMutationFormAttributesSpread,
+  mutationFormControlAttributeName,
+  mutationFormProvenanceAttributeName,
+} from '../mutation-form-provenance.js';
 import { runtimeOutputHelpers, stylePropertyExpression } from '../security/output-context.js';
 import {
   bindPropStampAttributeName,
@@ -153,6 +160,7 @@ export interface StructuralJsxLowering {
 }
 
 export const structuralJsxPhaseOrder = [
+  'mutation-form-provenance',
   'primitive-spreads',
   'dynamic-spread-control-boundary',
   'primitive-composition',
@@ -184,6 +192,11 @@ export function lowerStructuralJsx(
   const boundElementStarts = compilerCreateSet<number>();
   let needsStylePropertyHelper = false;
 
+  appendCompilerFacts(
+    diagnostics,
+    mutationFormProvenanceDiagnostics(tree.elements, options),
+    'Mutation form provenance diagnostics',
+  );
   lowerPrimitiveSpreads(tree.elements);
   const needsSafeJsxSpreadHelper = lowerDynamicJsxSpreads(tree.elements);
   appendCompilerFacts(
@@ -316,6 +329,145 @@ export function lowerStructuralJsx(
   };
 }
 
+/**
+ * SPEC §5.2 rule 10 / §6.3: enhancement and mutation identity are compiler-owned consequences of
+ * a typed mutation binding. Diagnose authored wire stamps before static spread expansion and the
+ * structural reparse can erase their caller-owned provenance.
+ */
+function mutationFormProvenanceDiagnostics(
+  elements: readonly JsxIrElement[],
+  options: StructuralJsxLoweringOptions,
+): CompilerDiagnostic[] {
+  const diagnostics: CompilerDiagnostic[] = [];
+  const elementLength = compilerArrayLength(elements, 'Mutation form provenance elements');
+  for (let elementIndex = 0; elementIndex < elementLength; elementIndex += 1) {
+    const element = compilerOwnDataValue(
+      elements,
+      elementIndex,
+      'Mutation form provenance elements',
+    ) as JsxIrElement;
+    const source = element.element;
+    if (source.tag !== 'form') continue;
+
+    const binding = enhancedMutationFormBinding(source);
+    const attributeLength = compilerArrayLength(
+      source.attributes,
+      'Mutation form provenance attributes',
+    );
+    for (let attributeIndex = 0; attributeIndex < attributeLength; attributeIndex += 1) {
+      const attribute = compilerOwnDataValue(
+        source.attributes,
+        attributeIndex,
+        'Mutation form provenance attributes',
+      ) as JsxAttributeModel;
+      const provenanceName = mutationFormProvenanceAttributeName(attribute.name);
+      if (provenanceName === null || mutationFormControlIsStaticallyAbsent(attribute)) continue;
+      const control = mutationFormControlAttributeName(provenanceName);
+      if (control === null && binding === null) continue;
+      if (control === 'mutation' && binding?.start === attribute.start) continue;
+      if (control === 'enhance' && binding !== null) continue;
+      appendCompilerFact(
+        diagnostics,
+        mutationFormProvenanceDiagnostic(
+          options,
+          attribute,
+          control === null
+            ? `authored ${provenanceName} cannot override compiler-owned typed mutation transport; use a separate native form for a different action or method`
+            : control === 'mutation' || control === 'enhance'
+              ? `authored ${control} requires a direct mutation={mutationValue} binding or an exact @kovojs/server mutationFormAttributes(...) spread`
+              : `raw ${control} is framework-owned mutation transport metadata; remove it and let mutation={...} or mutationFormAttributes(...) derive the transport`,
+        ),
+        'Mutation form provenance diagnostics',
+      );
+      removeJsxIrSourceAttribute(element, attribute);
+    }
+
+    const spreadLength = compilerArrayLength(
+      source.spreadAttributes,
+      'Mutation form provenance spreads',
+    );
+    for (let spreadIndex = 0; spreadIndex < spreadLength; spreadIndex += 1) {
+      const spread = compilerOwnDataValue(
+        source.spreadAttributes,
+        spreadIndex,
+        'Mutation form provenance spreads',
+      ) as (typeof source.spreadAttributes)[number];
+      if (isMutationFormAttributesSpread(spread)) continue;
+      if (isImportedMutationFormAttributesCall(spread)) {
+        appendCompilerFact(
+          diagnostics,
+          mutationFormProvenanceDiagnostic(
+            options,
+            spread,
+            'mutationFormAttributes(...) requires a bare mutation binding so the compiler can prove its mutation identity',
+          ),
+          'Mutation form provenance diagnostics',
+        );
+        removeJsxIrSourceAttribute(element, spread);
+        continue;
+      }
+      const controls = compilerSnapshotDenseArray(
+        spread.mutationFormControlNames ?? [],
+        'Spread mutation form control names',
+      );
+      const forbidden: string[] = [];
+      for (let controlIndex = 0; controlIndex < controls.length; controlIndex += 1) {
+        const name = controls[controlIndex]!;
+        if (mutationFormControlAttributeName(name) !== null || binding !== null) {
+          appendCompilerFact(forbidden, name, 'Forbidden spread mutation form controls');
+        }
+      }
+      if (forbidden.length === 0) continue;
+      appendCompilerFact(
+        diagnostics,
+        mutationFormProvenanceDiagnostic(
+          options,
+          spread,
+          `caller-owned JSX spread carries Kovo mutation controls (${compilerArrayJoin(forbidden, ', ')}); use direct mutation={mutationValue} or the exact @kovojs/server mutationFormAttributes(...) helper`,
+        ),
+        'Mutation form provenance diagnostics',
+      );
+      removeJsxIrSourceAttribute(element, spread);
+    }
+  }
+  return diagnostics;
+}
+
+function removeJsxIrSourceAttribute(
+  element: JsxIrElement,
+  source: JsxAttributeModel | JsxElementModel['spreadAttributes'][number],
+): void {
+  const retained: JsxIrAttribute[] = [];
+  const attributes = compilerSnapshotDenseArray(
+    element.attributes,
+    'Mutation form retained IR attributes',
+  );
+  for (let index = 0; index < attributes.length; index += 1) {
+    const attribute = attributes[index]!;
+    if (attribute.source !== source) {
+      appendCompilerFact(retained, attribute, 'Mutation form retained IR attributes');
+    }
+  }
+  if (retained.length === attributes.length) return;
+  element.attributes = retained;
+  markJsxIrChanged(element);
+}
+
+function mutationFormControlIsStaticallyAbsent(attribute: JsxAttributeModel): boolean {
+  return attribute.expressionStaticValue === false || attribute.expressionStaticValue === null;
+}
+
+function mutationFormProvenanceDiagnostic(
+  options: StructuralJsxLoweringOptions,
+  span: { end: number; start: number },
+  detail: string,
+): CompilerDiagnostic {
+  return {
+    ...diagnosticFor(options.fileName, 'KV242', options.source, span.start, span.end - span.start),
+    message: `${diagnosticDefinitions.KV242.message} ${detail}`,
+  };
+}
+
 function hasCompilerEscapeImport(model: ComponentModuleModel, importedName: string): boolean {
   const importLength = compilerArrayLength(model.namedImports, 'Compiler named imports');
   for (let importIndex = 0; importIndex < importLength; importIndex += 1) {
@@ -365,12 +517,7 @@ function lowerDynamicJsxSpreads(elements: readonly JsxIrElement[]): boolean {
       // runtime control-name boundary. Do not use the presence of a partial `objectEntries` bag as
       // provenance: that was the M3 residual for `{ ...callerAttrs, noop() {} }`.
       if (!source || 'name' in source) continue;
-      if (
-        source.expressionCallImportedName === 'mutationFormAttributes' &&
-        source.expressionCallModuleSpecifier === '@kovojs/server'
-      ) {
-        continue;
-      }
+      if (isMutationFormAttributesSpread(source)) continue;
 
       attribute.name = `...kovoSafeJsxSpread(${source.expression})`;
       attribute.value = {

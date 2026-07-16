@@ -228,6 +228,12 @@ export interface JsxSpreadAttributeModel {
   expressionCallName?: string;
   expressionBareIdentifierName?: string;
   expressionIsBareIdentifier?: boolean;
+  /**
+   * SPEC §5.2 typed parser fact for statically visible mutation-control/transport names carried by
+   * this spread, including incomplete object literals and module-scope aliases. Lowering consumes
+   * this instead of re-reading spread expression text after parse.
+   */
+  mutationFormControlNames?: readonly string[];
   objectEntries?: readonly ObjectLiteralEntry[];
   start: number;
 }

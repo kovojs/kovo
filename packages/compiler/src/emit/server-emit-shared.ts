@@ -26,6 +26,7 @@ import type { ComponentModuleModel, JsxAttributeModel, JsxElementModel } from '.
 import { componentOptionObjectEntries, componentRenderSlotsParam } from '../scan/parse.js';
 import { mutationInputFactsFromSource } from '../scan/mutation-inputs.js';
 import { deriveMutationKey } from '../mutation-names.js';
+import { enhancedMutationFormBinding } from '../mutation-form-provenance.js';
 import { escapeAttribute, kebabCase, type SourceReplacement } from '../shared.js';
 import type { MutationInputFieldFact, RegistryFacts } from '../types.js';
 
@@ -597,42 +598,7 @@ export function localMutationKey(
   return null;
 }
 
-export function enhancedMutationFormBinding(
-  element: JsxElementModel,
-): { end: number; localName: string; start: number } | null {
-  const mutationAttribute = serverEmitAttribute(element, 'mutation');
-  if (mutationAttribute?.expressionBareIdentifierName) {
-    return {
-      end: mutationAttribute.end,
-      localName: mutationAttribute.expressionBareIdentifierName,
-      start: mutationAttribute.start,
-    };
-  }
-
-  const spreads = compilerSnapshotDenseArray(
-    element.spreadAttributes,
-    'Mutation form spread attributes',
-  );
-  let spread: (typeof spreads)[number] | undefined;
-  for (let index = 0; index < spreads.length; index += 1) {
-    const attribute = spreads[index]!;
-    if (
-      attribute.expressionCallImportedName === 'mutationFormAttributes' &&
-      attribute.expressionCallModuleSpecifier === '@kovojs/server' &&
-      attribute.expressionCallArgumentBareIdentifierName
-    ) {
-      spread = attribute;
-      break;
-    }
-  }
-  if (!spread?.expressionCallArgumentBareIdentifierName) return null;
-
-  return {
-    end: spread.end,
-    localName: spread.expressionCallArgumentBareIdentifierName,
-    start: spread.start,
-  };
-}
+export { enhancedMutationFormBinding };
 
 export function staticStringAttributeValue(
   attribute: JsxAttributeModel | undefined,

@@ -1,0 +1,99 @@
+import {
+  compilerSnapshotDenseArray,
+  compilerStringToLowerCase,
+} from './compiler-security-intrinsics.js';
+import type { JsxElementModel, JsxSpreadAttributeModel } from './scan/model.js';
+
+export type MutationFormControlAttributeName =
+  | 'data-enhance'
+  | 'data-mutation'
+  | 'data-mutation-stream'
+  | 'enhance'
+  | 'mutation';
+
+/**
+ * SPEC §5.2 rule 10 / §6.3: these JSX/wire names opt a form into Kovo mutation dispatch or
+ * identify that dispatch. Treat their spelling case-insensitively because HTML parsing folds
+ * attribute names before the browser loader matches them.
+ */
+export function mutationFormControlAttributeName(
+  name: string,
+): MutationFormControlAttributeName | null {
+  switch (compilerStringToLowerCase(name)) {
+    case 'data-enhance':
+      return 'data-enhance';
+    case 'data-mutation':
+      return 'data-mutation';
+    case 'data-mutation-stream':
+      return 'data-mutation-stream';
+    case 'enhance':
+      return 'enhance';
+    case 'mutation':
+      return 'mutation';
+    default:
+      return null;
+  }
+}
+
+export function mutationFormProvenanceAttributeName(name: string): string | null {
+  const control = mutationFormControlAttributeName(name);
+  if (control !== null) return control;
+  switch (compilerStringToLowerCase(name)) {
+    case 'action':
+      return 'action';
+    case 'method':
+      return 'method';
+    default:
+      return null;
+  }
+}
+
+export function isMutationFormAttributesSpread(attribute: JsxSpreadAttributeModel): boolean {
+  return (
+    isImportedMutationFormAttributesCall(attribute) &&
+    attribute.expressionCallArgumentBareIdentifierName !== undefined
+  );
+}
+
+export function isImportedMutationFormAttributesCall(attribute: JsxSpreadAttributeModel): boolean {
+  return (
+    attribute.expressionCallImportedName === 'mutationFormAttributes' &&
+    attribute.expressionCallModuleSpecifier === '@kovojs/server'
+  );
+}
+
+/** Compiler-owned mutation binding provenance shared by lowering, emit, and validation. */
+export function enhancedMutationFormBinding(
+  element: JsxElementModel,
+): { end: number; localName: string; start: number } | null {
+  const attributes = compilerSnapshotDenseArray(
+    element.attributes,
+    'Mutation form binding attributes',
+  );
+  for (let index = 0; index < attributes.length; index += 1) {
+    const attribute = attributes[index]!;
+    if (attribute.name !== 'mutation' || !attribute.expressionBareIdentifierName) continue;
+    return {
+      end: attribute.end,
+      localName: attribute.expressionBareIdentifierName,
+      start: attribute.start,
+    };
+  }
+
+  const spreads = compilerSnapshotDenseArray(
+    element.spreadAttributes,
+    'Mutation form binding spread attributes',
+  );
+  for (let index = 0; index < spreads.length; index += 1) {
+    const spread = spreads[index]!;
+    if (!isMutationFormAttributesSpread(spread)) continue;
+    const localName = spread.expressionCallArgumentBareIdentifierName;
+    if (localName === undefined) continue;
+    return {
+      end: spread.end,
+      localName,
+      start: spread.start,
+    };
+  }
+  return null;
+}

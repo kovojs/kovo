@@ -1612,6 +1612,41 @@ export const SpreadShapes = component({
     ]);
   });
 
+  it('records mutation form controls across partial spreads, aliases, and static computed names', () => {
+    const source = `
+const mutationName = 'data-mutation';
+const directControls = { enhance: true, [mutationName]: 'cart/add' };
+const aliasedControls = directControls;
+const partialControls = { ...profileAttrs, ['DATA-ENHANCE']: true };
+const transportOverrides = { action: '/checkout', method: 'get' };
+
+export const SpreadForms = component({
+  render: () => (
+    <section>
+      <form {...directControls} />
+      <form {...aliasedControls} />
+      <form {...partialControls} />
+      <form {...{ get ['DATA-MUTATION-STREAM']() { return true; } }} />
+      <form {...transportOverrides} />
+      <form {...{ [dynamicName]: true }} />
+    </section>
+  ),
+});
+`;
+    const controls = jsxElements(parseComponentModule('spread-forms.tsx', source))
+      .filter((element) => element.tag === 'form')
+      .map((element) => element.spreadAttributes[0]?.mutationFormControlNames);
+
+    expect(controls).toEqual([
+      ['enhance', 'data-mutation'],
+      ['enhance', 'data-mutation'],
+      ['data-enhance'],
+      ['data-mutation-stream'],
+      ['action', 'method'],
+      undefined,
+    ]);
+  });
+
   it('records the render slots parameter for compiler-bound form helpers', () => {
     const source = `
 export const ProductList = component({

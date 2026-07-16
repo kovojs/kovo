@@ -49,6 +49,7 @@ import {
   compilerStringTrim,
 } from '../compiler-security-intrinsics.js';
 import { deriveMutationKey } from '../mutation-names.js';
+import { mutationFormProvenanceAttributeName } from '../mutation-form-provenance.js';
 import { deriveRegistryIdentity } from '../registry-identities.js';
 import { normalizeComponentFileName } from '../shared.js';
 import { ensureTypescriptRuntime, hasModifier } from '../ts-api.js';
@@ -300,6 +301,7 @@ export function parseComponentModule(
   const taskRunHandlers: TaskRunHandlerModel[] = [];
   const webhookHandlers: WebhookHandlerModel[] = [];
   const moduleScopeObjectEntries = moduleScopeObjectEntryModels(sourceFile, source);
+  const moduleScopeMutationFormControlNames = moduleScopeMutationFormControlNameModels(sourceFile);
   const domainBindings = domainBindingKeys(sourceFile);
 
   const visit = (node: ts.Node): void => {
@@ -336,7 +338,14 @@ export function parseComponentModule(
     if (ts.isJsxElement(node) || ts.isJsxSelfClosingElement(node)) {
       compilerArrayAppend(
         jsxElements,
-        jsxElementModel(sourceFile, source, node, moduleScopeObjectEntries, namedImports),
+        jsxElementModel(
+          sourceFile,
+          source,
+          node,
+          moduleScopeObjectEntries,
+          moduleScopeMutationFormControlNames,
+          namedImports,
+        ),
         'JSX element models',
       );
     }
@@ -596,6 +605,122 @@ function moduleScopeObjectEntryModels(
   }
 
   return objectEntries;
+}
+
+function moduleScopeMutationFormControlNameModels(
+  sourceFile: ts.SourceFile,
+): ReadonlyMap<string, readonly string[]> {
+  const staticStringValues = moduleScopeStaticStringValues(sourceFile);
+  const controlsByBinding = compilerCreateMap<string, readonly string[]>();
+  const statementLength = compilerArrayLength(
+    sourceFile.statements,
+    'Module-scope mutation form control declarations',
+  );
+  for (let statementIndex = 0; statementIndex < statementLength; statementIndex += 1) {
+    const statement = compilerOwnDataValue(
+      sourceFile.statements,
+      statementIndex,
+      'Module-scope mutation form control declarations',
+    ) as ts.Statement | undefined;
+    if (!statement) {
+      throw new TypeError(
+        `Module-scope mutation form control declarations[${statementIndex}] must be own data.`,
+      );
+    }
+    if (!ts.isVariableStatement(statement)) continue;
+    const declarationLength = compilerArrayLength(
+      statement.declarationList.declarations,
+      'Module-scope mutation form control bindings',
+    );
+    for (let declarationIndex = 0; declarationIndex < declarationLength; declarationIndex += 1) {
+      const declaration = compilerOwnDataValue(
+        statement.declarationList.declarations,
+        declarationIndex,
+        'Module-scope mutation form control bindings',
+      ) as ts.VariableDeclaration | undefined;
+      if (!declaration) {
+        throw new TypeError(
+          `Module-scope mutation form control bindings[${declarationIndex}] must be own data.`,
+        );
+      }
+      if (!ts.isIdentifier(declaration.name) || declaration.initializer === undefined) continue;
+      const names = mutationFormControlNamesFromExpression(
+        declaration.initializer,
+        staticStringValues,
+        controlsByBinding,
+      );
+      if (names.length > 0) compilerMapSet(controlsByBinding, declaration.name.text, names);
+    }
+  }
+  return controlsByBinding;
+}
+
+function mutationFormControlNamesFromExpression(
+  expression: ts.Expression,
+  staticStringValues: ReadonlyMap<string, string>,
+  controlsByBinding: ReadonlyMap<string, readonly string[]>,
+): string[] {
+  const unwrapped = unwrapExpression(expression);
+  if (ts.isIdentifier(unwrapped)) {
+    return snapshotCompilerModelArray(
+      compilerMapGet(controlsByBinding, unwrapped.text) ?? [],
+      'Aliased mutation form control names',
+    );
+  }
+  if (!ts.isObjectLiteralExpression(unwrapped)) return [];
+
+  const names: string[] = [];
+  const seen = compilerCreateSet<string>();
+  const propertyLength = compilerArrayLength(
+    unwrapped.properties,
+    'Mutation form control object properties',
+  );
+  for (let propertyIndex = 0; propertyIndex < propertyLength; propertyIndex += 1) {
+    const property = compilerOwnDataValue(
+      unwrapped.properties,
+      propertyIndex,
+      'Mutation form control object properties',
+    ) as ts.ObjectLiteralElementLike | undefined;
+    if (!property) {
+      throw new TypeError(
+        `Mutation form control object properties[${propertyIndex}] must be own data.`,
+      );
+    }
+    if (ts.isSpreadAssignment(property)) {
+      appendUniqueMutationFormControlNames(
+        names,
+        seen,
+        mutationFormControlNamesFromExpression(
+          property.expression,
+          staticStringValues,
+          controlsByBinding,
+        ),
+      );
+      continue;
+    }
+    const name = mutationFormProvenanceAttributeName(
+      propertyNameText(property.name, { staticStringValues }) ?? '',
+    );
+    if (name !== null && !compilerSetHas(seen, name)) {
+      compilerSetAdd(seen, name);
+      compilerArrayAppend(names, name, 'Mutation form control names');
+    }
+  }
+  return names;
+}
+
+function appendUniqueMutationFormControlNames(
+  target: string[],
+  seen: Set<string>,
+  values: readonly string[],
+): void {
+  const snapshot = compilerSnapshotDenseArray(values, 'Nested mutation form control names');
+  for (let index = 0; index < snapshot.length; index += 1) {
+    const value = snapshot[index]!;
+    if (compilerSetHas(seen, value)) continue;
+    compilerSetAdd(seen, value);
+    compilerArrayAppend(target, value, 'Mutation form control names');
+  }
 }
 
 function moduleScopeStaticStringValues(sourceFile: ts.SourceFile): ReadonlyMap<string, string> {
@@ -4357,6 +4482,7 @@ function jsxElementModel(
   source: string,
   node: ts.JsxElement | ts.JsxSelfClosingElement,
   moduleScopeObjectEntries: ReadonlyMap<string, readonly ObjectLiteralEntry[]>,
+  moduleScopeMutationFormControlNames: ReadonlyMap<string, readonly string[]>,
   namedImports: readonly NamedImportModel[],
 ): JsxElementModel {
   const openingElement = ts.isJsxElement(node) ? node.openingElement : node;
@@ -4395,6 +4521,7 @@ function jsxElementModel(
       source,
       openingElement,
       moduleScopeObjectEntries,
+      moduleScopeMutationFormControlNames,
       namedImports,
       unreviewedComponentTag,
     ),
@@ -4498,6 +4625,7 @@ function jsxSpreadAttributeModels(
   source: string,
   openingElement: ts.JsxOpeningElement | ts.JsxSelfClosingElement,
   moduleScopeObjectEntries: ReadonlyMap<string, readonly ObjectLiteralEntry[]>,
+  moduleScopeMutationFormControlNames: ReadonlyMap<string, readonly string[]>,
   namedImports: readonly NamedImportModel[],
   unreviewedComponentTag: boolean,
 ): JsxElementModel['spreadAttributes'][number][] {
@@ -4516,10 +4644,11 @@ function jsxSpreadAttributeModels(
     const unwrapped = unwrapExpression(expression);
     const bareIdentifierName = ts.isIdentifier(unwrapped) ? unwrapped.text : undefined;
     const callExpression = ts.isCallExpression(unwrapped) ? unwrapped : undefined;
-    const callName =
+    const callIdentifier =
       callExpression && ts.isIdentifier(callExpression.expression)
-        ? callExpression.expression.text
+        ? callExpression.expression
         : undefined;
+    const callName = callIdentifier?.text;
     let callImport: NamedImportModel | undefined;
     const importLength = compilerArrayLength(namedImports, 'Named imports');
     for (let importIndex = 0; importIndex < importLength; importIndex += 1) {
@@ -4527,7 +4656,11 @@ function jsxSpreadAttributeModels(
         | NamedImportModel
         | undefined;
       if (!candidate) throw new TypeError(`Named imports[${importIndex}] must be own data.`);
-      if (candidate.localName === callName) {
+      if (
+        candidate.localName === callName &&
+        callIdentifier !== undefined &&
+        !identifierIsShadowedBeforeScope(callIdentifier, undefined, sourceFile)
+      ) {
         callImport = candidate;
         break;
       }
@@ -4545,6 +4678,18 @@ function jsxSpreadAttributeModels(
       : bareIdentifierName === undefined
         ? undefined
         : compilerMapGet(moduleScopeObjectEntries, bareIdentifierName);
+    const mutationFormControlNames = ts.isObjectLiteralExpression(unwrapped)
+      ? mutationFormControlNamesFromExpression(
+          unwrapped,
+          moduleScopeStaticStringValues(sourceFile),
+          moduleScopeMutationFormControlNames,
+        )
+      : bareIdentifierName === undefined
+        ? []
+        : snapshotCompilerModelArray(
+            compilerMapGet(moduleScopeMutationFormControlNames, bareIdentifierName) ?? [],
+            'JSX spread mutation form control names',
+          );
     const componentEventPropNames = unreviewedComponentTag
       ? componentEventPropNamesForEntries(objectEntries)
       : undefined;
@@ -4572,6 +4717,7 @@ function jsxSpreadAttributeModels(
               expressionBareIdentifierName: bareIdentifierName,
               expressionIsBareIdentifier: true,
             }),
+        ...(mutationFormControlNames.length === 0 ? {} : { mutationFormControlNames }),
         ...(objectEntries === undefined ? {} : { objectEntries }),
         start: property.getStart(sourceFile),
       },
