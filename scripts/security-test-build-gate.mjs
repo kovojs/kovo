@@ -728,15 +728,20 @@ export const SECURITY_BUILD_PROOFS = [
     code: 'KV433',
     proofFile: 'packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts',
     requiredNeedles: [
-      'includeReadonlyMutationAttempt: true',
-      'includeWebhookTransactionProof: true',
-      'buildReusableProductionArtifact(root)',
-      'expectReadonlyAttemptBlocked(origin)',
+      'includeReadonlyRuntimeChokeProbe: true',
+      'buildParanoidProductionArtifact(root)',
+      '/_q/runtime-safety-proofs/readonly-runtime-choke-probe',
+      'expect(before.count).toBe(0)',
+      'expect(after.count).toBe(0)',
+      "expect(output()).toContain('KV433')",
     ],
-    requiredProofFileNeedles: ['/api/readonly-mutation-attempt', 'futureStatement'],
+    requiredProofFileNeedles: [
+      'blocks $label readonly DB computed-method escapes before artifact emission',
+      'source=sqlMethod',
+    ],
     sourceFile: 'packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts',
     testName:
-      'rolls back default mutation transactions and executes webhook mutation composition in the production build artifact',
+      'keeps the production readonly DB floor active when KV433 static findings are advisory',
   },
   {
     buildInvocation: 'starter-build-production-artifact',

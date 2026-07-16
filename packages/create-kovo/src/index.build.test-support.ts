@@ -790,6 +790,7 @@ export interface RuntimeMutationSafetyProofOptions {
   includeManagedWriteEscapeAttempt?: boolean;
   includeRawTableDrift?: boolean;
   includeReadonlyMutationAttempt?: boolean;
+  includeReadonlyRuntimeChokeProbe?: boolean;
   includeSqliteAuthorizerTriggerDrift?: boolean;
   includeWebhookTransactionProof?: boolean;
   includeWebhookTxEscapeAttempt?: boolean;
@@ -802,6 +803,7 @@ export function addRuntimeMutationSafetyProofs(
   const includeManagedWriteEscapeAttempt = options.includeManagedWriteEscapeAttempt === true;
   const includeRawTableDrift = options.includeRawTableDrift === true;
   const includeReadonlyMutationAttempt = options.includeReadonlyMutationAttempt === true;
+  const includeReadonlyRuntimeChokeProbe = options.includeReadonlyRuntimeChokeProbe === true;
   const includeSqliteAuthorizerTriggerDrift = options.includeSqliteAuthorizerTriggerDrift === true;
   const includeWebhookTransactionProof = options.includeWebhookTransactionProof === true;
   const includeWebhookTxEscapeAttempt = options.includeWebhookTxEscapeAttempt === true;
@@ -923,9 +925,9 @@ export function addRuntimeMutationSafetyProofs(
     join(root, 'src/runtime-safety-proofs.ts'),
     [
       "import { sql, trustedSql } from '@kovojs/drizzle';",
-      `import { ${includeWebhookTransactionProof ? 'createMemoryWebhookReplayStore, ' : ''}domain, endpoint, mutation, publicAccess, s, serverValue, webhook, type MutationContext } from '@kovojs/server';`,
+      `import { ${includeWebhookTransactionProof ? 'createMemoryWebhookReplayStore, ' : ''}domain, endpoint, mutation, publicAccess, ${includeReadonlyRuntimeChokeProbe ? 'query, ' : ''}s, serverValue, webhook, type MutationContext${includeReadonlyRuntimeChokeProbe ? ', type QueryLoadContext' : ''} } from '@kovojs/server';`,
       '',
-      "import { readonlyAppDb } from './db.js';",
+      `import { readonlyAppDb${includeReadonlyRuntimeChokeProbe ? ', type AppDb' : ''} } from './db.js';`,
       [
         'import {',
         '  rawRuntimeDrift,',
@@ -934,6 +936,9 @@ export function addRuntimeMutationSafetyProofs(
         "} from './schema.js';",
       ].join('\n'),
       "import type { AppRequest } from './auth.js';",
+      ...(includeReadonlyRuntimeChokeProbe
+        ? ['type RuntimeSafetyQueryContext = QueryLoadContext<AppRequest, AppDb>;']
+        : []),
       '',
       'const runtimeTableDriftError = s.object({ message: s.string() });',
       "const publicProof = publicAccess('public production mutation safety regression proof');",
@@ -1243,6 +1248,24 @@ export function addRuntimeMutationSafetyProofs(
             '',
           ]
         : []),
+      ...(includeReadonlyRuntimeChokeProbe
+        ? [
+            'export const readonlyRuntimeChokeProbe = query({',
+            '  access: publicProof,',
+            '  reads: [txProof],',
+            '  async load(_input: unknown, context?: RuntimeSafetyQueryContext): Promise<{ ok: true }> {',
+            '    const reader = context?.db;',
+            "    if (!reader) throw new Error('readonly runtime choke probe requires context.db');",
+            '    // SPEC §6.6/§10.3: this deliberate cast proves the runtime KV433 floor remains',
+            '    // authoritative when paranoid mode makes the dedicated static KV433 finding advisory.',
+            '    const db = reader as unknown as AppDb;',
+            "    await db.insert(txProofs).values({ id: 'readonly-runtime-choke-must-not-write' });",
+            '    return { ok: true };',
+            '  },',
+            '});',
+            '',
+          ]
+        : []),
     ].join('\n'),
     'utf8',
   );
@@ -1281,6 +1304,7 @@ export function addRuntimeMutationSafetyProofs(
     'failAfterWrite',
     ...(includeManagedWriteEscapeAttempt ? ['managedWriteEscapeAttempt'] : []),
     ...(includeReadonlyMutationAttempt ? ['readonlyMutationAttemptEndpoint'] : []),
+    ...(includeReadonlyRuntimeChokeProbe ? ['readonlyRuntimeChokeProbe'] : []),
     'rawRuntimeDriftCountEndpoint',
     ...(includeRawTableDrift ? ['rawTableDrift'] : []),
     ...(includeSqliteAuthorizerTriggerDrift ? ['sqliteAuthorizerSideEffectCountEndpoint'] : []),
@@ -1309,6 +1333,10 @@ export function addRuntimeMutationSafetyProofs(
     'appSignIn',
     'appSignOut',
   ];
+  const runtimeSafetyQueries = [
+    'contactsQuery',
+    ...(includeReadonlyRuntimeChokeProbe ? ['readonlyRuntimeChokeProbe'] : []),
+  ];
 
   const appPath = join(root, 'src/app.tsx');
   const app = readFileSync(appPath, 'utf8')
@@ -1333,6 +1361,7 @@ export function addRuntimeMutationSafetyProofs(
       'mutations: [addContact, appSignIn, appSignOut],',
       `mutations: [${runtimeSafetyMutations.join(', ')}],`,
     )
+    .replace('queries: [contactsQuery],', `queries: [${runtimeSafetyQueries.join(', ')}],`)
     .replace(
       "  routes: [\n    route('/', {",
       [

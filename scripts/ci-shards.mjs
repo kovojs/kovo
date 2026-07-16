@@ -222,6 +222,13 @@ const STARTER_ENTRIES = [
     seconds: 78,
   },
   {
+    id: 'transaction-readonly-runtime-floor',
+    file: 'packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts',
+    testName:
+      'keeps the production readonly DB floor active when KV433 static findings are advisory',
+    seconds: 60,
+  },
+  {
     id: 'transaction-managed-write-escape-default',
     file: 'packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts',
     testName: "blocks managed write raw-driver escapes before 'default' artifact emission",
@@ -249,7 +256,7 @@ const STARTER_ENTRIES = [
     id: 'transaction-sqlite-served-artifact',
     file: 'packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts',
     testName:
-      'keeps SQLite readonly handles isolated and executes webhook mutation composition in the production artifact',
+      'serves SQLite readonly reads and executes webhook mutation composition in the production artifact',
     seconds: 71,
   },
   {

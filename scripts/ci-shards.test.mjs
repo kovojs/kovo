@@ -358,7 +358,7 @@ describe('ci-shards', () => {
       entries.map((entry) => entry.id).toSorted(compareStrings),
     );
     expect(shards.map((shard) => shard.seconds)).toEqual([
-      399, 403, 400, 372, 378, 377, 374, 377, 417, 383,
+      399, 414, 405, 379, 378, 414, 374, 377, 417, 383,
     ]);
   });
 
@@ -492,6 +492,7 @@ describe('ci-shards', () => {
       'transaction-managed-write-escape-sqlite',
       'transaction-readonly-escape-default',
       'transaction-readonly-escape-sqlite',
+      'transaction-readonly-runtime-floor',
       'transaction-sqlite-served-artifact',
       'transaction-webhook-escape-default',
       'transaction-webhook-escape-sqlite',
@@ -508,7 +509,8 @@ describe('ci-shards', () => {
         "create-kovo starter > blocks managed write raw-driver escapes before 'SQLite' artifact emission",
         "create-kovo starter > blocks 'default' readonly DB computed-method escapes before artifact emission",
         "create-kovo starter > blocks 'SQLite' readonly DB computed-method escapes before artifact emission",
-        'create-kovo starter > keeps SQLite readonly handles isolated and executes webhook mutation composition in the production artifact',
+        'create-kovo starter > keeps the production readonly DB floor active when KV433 static findings are advisory',
+        'create-kovo starter > serves SQLite readonly reads and executes webhook mutation composition in the production artifact',
         "create-kovo starter > blocks 'default' webhook context.tx raw-driver escapes before artifact emission",
         "create-kovo starter > blocks 'SQLite' webhook context.tx raw-driver escapes before artifact emission",
       ],

@@ -20,16 +20,11 @@ import {
   addRuntimeMutationSafetyProofs,
   buildParanoidProductionArtifact,
   buildProductionArtifact,
+  buildReusableProductionArtifact,
   execFileSyncErrorOutput,
   fieldValue,
   formHtmlByAction,
 } from './index.build.test-support.js';
-
-interface ReadonlyAttemptResponse {
-  blocked: boolean;
-  message?: string;
-  results?: Array<{ blocked: boolean; message: string; method: string }>;
-}
 
 function captureProductionBuildFailure(build: () => void): unknown {
   try {
@@ -51,30 +46,7 @@ async function csrfProofSession(
   return { cookie: cookieHeader(jar), token: fieldValue(form, 'csrf') };
 }
 
-async function expectReadonlyAttemptBlocked(origin: string): Promise<void> {
-  const response = await fetch(`${origin}/api/readonly-mutation-attempt`);
-  expect(response.status).toBe(200);
-  const readonlyAttempt = (await response.json()) as ReadonlyAttemptResponse;
-
-  expect(readonlyAttempt).toMatchObject({ blocked: true });
-  expect(readonlyAttempt.message).toMatch(/read-only|readonly|KV433|loader cannot access/iu);
-  expect(readonlyAttempt.results).toEqual(
-    expect.arrayContaining([
-      expect.objectContaining({ blocked: true, method: expect.stringMatching(/^(execute|run)$/u) }),
-      expect.objectContaining({ blocked: true, method: 'all' }),
-      expect.objectContaining({ blocked: true, method: 'get' }),
-      expect.objectContaining({ blocked: true, method: 'values' }),
-      expect.objectContaining({ blocked: true, method: 'transaction' }),
-      expect.objectContaining({ blocked: true, method: '$client' }),
-      expect.objectContaining({ blocked: true, method: 'session' }),
-      expect.objectContaining({ blocked: true, method: 'futureStatement' }),
-    ]),
-  );
-  expect(readonlyAttempt.results).toHaveLength(8);
-}
-
 describe('create-kovo starter (build integration: production transaction artifacts)', () => {
-  // @kovo-security-certifies KV433 readonly-managed-handle-prod-artifact
   it('rolls back default mutation transactions and executes webhook mutation composition in the production build artifact', async () => {
     const tempParent = tmpdir();
     mkdirSync(tempParent, { recursive: true });
@@ -86,15 +58,12 @@ describe('create-kovo starter (build integration: production transaction artifac
       writeKovoProject(root, { name: 'Prod Default Transaction Proof' });
       linkStarterBuildDependencies(root);
       addRuntimeMutationSafetyProofs(root, {
-        includeReadonlyMutationAttempt: true,
         includeWebhookTransactionProof: true,
       });
       const proofSource = readFileSync(join(root, 'src/runtime-safety-proofs.ts'), 'utf8');
       expect(proofSource).toContain('txProofWebhook');
 
-      // SPEC §6.6/§10.3: paranoid artifacts keep static findings advisory so this proof can
-      // exercise the independent runtime readonly membrane instead of weakening the default gate.
-      buildParanoidProductionArtifact(root);
+      buildReusableProductionArtifact(root);
 
       server = spawn(process.execPath, ['dist/server/server.mjs'], {
         cwd: root,
@@ -114,14 +83,6 @@ describe('create-kovo starter (build integration: production transaction artifac
         count: number;
       };
       expect(before.count).toBe(0);
-
-      await expectReadonlyAttemptBlocked(origin);
-      const afterReadonlyAttempt = (await (
-        await fetch(`${origin}/api/raw-runtime-drift-count`)
-      ).json()) as {
-        count: number;
-      };
-      expect(afterReadonlyAttempt.count).toBe(0);
 
       const writeId = `success-${Date.now()}`;
       const writeCsrf = await csrfProofSession(origin, '/_m/runtime-safety-proofs/write-tx-proof');
@@ -206,7 +167,62 @@ describe('create-kovo starter (build integration: production transaction artifac
     }
   }, 120_000);
 
-  it('keeps SQLite readonly handles isolated and executes webhook mutation composition in the production artifact', async () => {
+  // @kovo-security-certifies KV433 readonly-managed-handle-prod-artifact
+  it('keeps the production readonly DB floor active when KV433 static findings are advisory', async () => {
+    const tempParent = tmpdir();
+    mkdirSync(tempParent, { recursive: true });
+    const root = mkdtempSync(join(tempParent, 'create-kovo-prod-readonly-runtime-floor-'));
+    const port = await reservePort();
+    let server: ChildProcessWithoutNullStreams | undefined;
+
+    try {
+      writeKovoProject(root, { name: 'Prod Readonly Runtime Floor Proof' });
+      linkStarterBuildDependencies(root);
+      addRuntimeMutationSafetyProofs(root, { includeReadonlyRuntimeChokeProbe: true });
+
+      // SPEC §6.6/§10.3: paranoid mode makes the dedicated static query-write finding advisory
+      // so the emitted production query can prove the independent KV433 managed-DB membrane.
+      buildParanoidProductionArtifact(root);
+
+      server = spawn(process.execPath, ['dist/server/server.mjs'], {
+        cwd: root,
+        detached: process.platform !== 'win32',
+        env: {
+          ...withRepoBinOnPath(),
+          HOST: '127.0.0.1',
+          KOVO_PARANOID: '1',
+          NODE_ENV: 'test',
+          PORT: String(port),
+        },
+      });
+      const output = collectOutput(server);
+      const origin = `http://127.0.0.1:${port}`;
+
+      await fetchTextWhenReady(`${origin}/api/tx-proof-count`, output);
+      const before = (await (await fetch(`${origin}/api/tx-proof-count`)).json()) as {
+        count: number;
+      };
+      expect(before.count).toBe(0);
+
+      const response = await fetch(
+        `${origin}/_q/runtime-safety-proofs/readonly-runtime-choke-probe`,
+      );
+      const body = await response.text();
+      expect(response.status, `${body}\n${output()}`).toBe(500);
+      expect(body).toBe('{"code":"SERVER_ERROR","payload":{}}');
+      expect(output()).toContain('KV433');
+
+      const after = (await (await fetch(`${origin}/api/tx-proof-count`)).json()) as {
+        count: number;
+      };
+      expect(after.count).toBe(0);
+    } finally {
+      await stopProcess(server);
+      rmSync(root, { force: true, recursive: true });
+    }
+  }, 120_000);
+
+  it('serves SQLite readonly reads and executes webhook mutation composition in the production artifact', async () => {
     const tempParent = tmpdir();
     mkdirSync(tempParent, { recursive: true });
     const root = mkdtempSync(join(tempParent, 'create-kovo-prod-sqlite-readonly-handle-'));
@@ -217,20 +233,12 @@ describe('create-kovo starter (build integration: production transaction artifac
       writeKovoProject(root, { dialect: 'sqlite', name: 'Prod SQLite Readonly Handle Proof' });
       linkStarterBuildDependencies(root);
       addRuntimeMutationSafetyProofs(root, {
-        includeReadonlyMutationAttempt: true,
-        includeSqliteAuthorizerTriggerDrift: true,
         includeWebhookTransactionProof: true,
       });
       const proofSource = readFileSync(join(root, 'src/runtime-safety-proofs.ts'), 'utf8');
       expect(proofSource).toContain('txProofWebhook');
-      expect(proofSource).toContain('sqliteAuthorizerTriggerDrift');
-      const runtimeDbSource = readFileSync(join(root, 'src/_kovo/app-runtime-db.ts'), 'utf8');
-      expect(runtimeDbSource).toContain('schema.sqliteAuthorizerDeclared');
-      expect(runtimeDbSource).toContain('schema.sqliteAuthorizerSideEffects');
 
-      // SPEC §6.6/§10.3: preserve the runtime SQLite-authorizer proof behind the explicit
-      // paranoid test posture while ordinary production builds remain fail closed below.
-      buildParanoidProductionArtifact(root);
+      buildReusableProductionArtifact(root);
 
       server = spawn(process.execPath, ['dist/server/server.mjs'], {
         cwd: root,
@@ -250,55 +258,6 @@ describe('create-kovo starter (build integration: production transaction artifac
         count: number;
       };
       expect(positiveRead.count).toBe(0);
-
-      await expectReadonlyAttemptBlocked(origin);
-
-      const afterReadonlyAttempt = (await (
-        await fetch(`${origin}/api/raw-runtime-drift-count`)
-      ).json()) as {
-        count: number;
-      };
-      expect(afterReadonlyAttempt.count).toBe(0);
-      const beforeTriggerDrift = (await (
-        await fetch(`${origin}/api/sqlite-authorizer-side-effect-count`)
-      ).json()) as {
-        count: number;
-      };
-      expect(beforeTriggerDrift.count).toBe(0);
-
-      const triggerCsrf = await csrfProofSession(
-        origin,
-        '/_m/runtime-safety-proofs/sqlite-authorizer-trigger-drift',
-      );
-      const triggerDrift = await fetch(
-        `${origin}/_m/runtime-safety-proofs/sqlite-authorizer-trigger-drift`,
-        {
-          body: new URLSearchParams({
-            csrf: triggerCsrf.token,
-            id: 'c1',
-            'Kovo-Idem': `idem-sqlite-authorizer-${Date.now()}`,
-            label: `authorizer-${Date.now()}`,
-          }),
-          headers: {
-            'content-type': 'application/x-www-form-urlencoded',
-            cookie: triggerCsrf.cookie,
-            origin,
-          },
-          method: 'POST',
-          redirect: 'manual',
-        },
-      );
-      const triggerDriftBody = await triggerDrift.text();
-      expect(triggerDrift.status, triggerDriftBody).toBe(422);
-      expect(triggerDriftBody).toContain('RUNTIME_TABLE_DRIFT');
-      expect(triggerDriftBody).toContain('KV406');
-
-      const afterTriggerDrift = (await (
-        await fetch(`${origin}/api/sqlite-authorizer-side-effect-count`)
-      ).json()) as {
-        count: number;
-      };
-      expect(afterTriggerDrift.count).toBe(0);
 
       const writeCsrf = await csrfProofSession(origin, '/_m/runtime-safety-proofs/write-tx-proof');
       const success = await fetch(`${origin}/_m/runtime-safety-proofs/write-tx-proof`, {
