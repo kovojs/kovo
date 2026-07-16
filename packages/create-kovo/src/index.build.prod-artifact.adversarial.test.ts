@@ -777,10 +777,10 @@ function addM1HeaderRedirectCapabilityProof(root: string): void {
   const appPath = join(root, 'src/app.tsx');
   const app = readFileSync(appPath, 'utf8')
     .replace(
-      '  createMemoryVersionedClientModuleRegistry,',
+      '  createApp,',
       [
+        '  createApp,',
         '  createMemoryStorage,',
-        '  createMemoryVersionedClientModuleRegistry,',
         '  createSigningKeyRing,',
         '  createStorageDownloadEndpoint,',
       ].join('\n'),
@@ -869,6 +869,9 @@ function assertM1OutputWireFixtureUsesSafeAuthoredShapes(root: string): void {
   const headerProof = readFileSync(join(root, 'src/m1-header-proof.tsx'), 'utf8');
   const runtimeProofs = readFileSync(join(root, 'src/runtime-contract-proofs.tsx'), 'utf8');
 
+  expect(app).toMatch(
+    /import \{[\s\S]*?createMemoryStorage,[\s\S]*?createSigningKeyRing,[\s\S]*?createStorageDownloadEndpoint,[\s\S]*?\} from '@kovojs\/server';/u,
+  );
   expect(app).toContain('const m1CapabilitySigningKeys = createSigningKeyRing({');
   expect(app).toContain('secret: m1CapabilitySigningKeys,');
   expect(app).not.toContain('secret: appCsrf.secret,');
