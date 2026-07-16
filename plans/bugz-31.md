@@ -58,13 +58,14 @@ inside its owning settlement boundary.
     replacement before granting the reviewed call result; add all four variants to the KV424
     corpus and the production-artifact paranoid gate.
 
-- [ ] **C2 - Framework and native-Promise assimilation accept authored class thenables through
-      aliases, carriers, and callback results, allowing authority after settlement.**
-  - The classifier does not treat a returned class value as executable `then` authority when it is
-    direct, const-aliased, selected through an array/object/helper carrier, or returned by a native
-    Promise callback. Sync framework roots additionally omit the assimilation check entirely,
-    including for imported/re-exported classes. Container helpers such as `.at()`, `.slice()`,
-    `.find()`, `.map()`, and `Reflect.get()` expand the silent carrier set.
+- [ ] **C2 - Framework and native-Promise assimilation still accept authored class thenables
+      through opaque helper, container-method, and callback results, allowing authority after
+      settlement.**
+  - Direct and statically transparent class values now fail closed, including pristine const
+    aliases, direct object/array projections and destructuring, expression carriers,
+    imports/re-exports, and sync framework-root outputs. Opaque helper and container-method results
+    remain open, as do values returned by native-Promise callbacks. Examples include `.at()`,
+    `.slice()`, `.find()`, `.map()`, `Reflect.get()`, and `then`/`catch`/`finally` callbacks.
   - **Representative repro:**
 
     ```ts
@@ -86,13 +87,18 @@ inside its owning settlement boundary.
     ```
 
   - **Evidence:** the e71 collector returned `[]` for direct `return Deferred`, a const alias,
-    `[Deferred].at(0)`, and the Promise-callback repro. Independent matrices also reproduced
-    sync-root imported/re-exported classes; helper aggregate/local/getter/assigned/rest/async/method
-    returns; object/array projection, array spread, async-IIFE, conditional/logical/comma/equals and
-    `||=`/`&&=`/`??=` carriers; `slice`/`find`/`map`, `Reflect.get`; and
-    `then`/`catch`/`finally` callbacks. The same runtime trace places late authority after framework
-    settlement. The async imported-class control already emits a generic `then` fact. SPEC §6.6,
-    §9.1, §9.6.
+    `[Deferred].at(0)`, and the Promise-callback repro. The same runtime trace places late authority
+    after framework settlement. The transparent slice is now closed; a fresh 9bed matrix still
+    reproduces helper-return, container-method, and callback-result carriers. SPEC §6.6, §9.1,
+    §9.6.
+  - [x] Close direct and transparent assimilation paths: direct classes, pristine const aliases,
+        direct object/array projections and const destructuring, conditional/logical/comma/simple
+        assignment outputs, imported/renamed/default/re-export aliases, and sync framework roots.
+    - **Evidence:** the focused transparent-class/import regression matrix, full trust-escape suite,
+      classifier corpus, and Phase 5 Postgres production-artifact harness pass at `f38b41220`.
+  - [ ] Close opaque helper-return, container-method, and native-Promise callback carriers,
+        including `.at()`, `.slice()`, `.find()`, `.map()`, `Reflect.get()`, and
+        `then`/`catch`/`finally` outputs.
   - **Acceptance:** make every framework/native-Promise assimilation site fail closed unless the
     value is proven non-thenable or is an exact framework/native outcome whose identity is pinned;
     cover sync and async request roots, promise settlement callbacks, imports/re-exports, dynamic
