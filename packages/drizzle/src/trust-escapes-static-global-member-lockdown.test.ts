@@ -397,4 +397,410 @@ describe('KV424 exact global namespace-member lockdown', () => {
 
     expect(facts).toEqual([]);
   });
+
+  it.each([
+    [
+      'mutable optional property',
+      `const holder: { promise?: PromiseConstructor } = {};
+       holder.promise = Promise;
+       Object.defineProperty(holder.promise, 'resolve', { value: () => Deferred });`,
+    ],
+    [
+      'nested mutable property',
+      `const holder: { nested: { promise?: PromiseConstructor } } = { nested: {} };
+       holder.nested.promise = Promise;
+       Reflect.set(holder.nested.promise, 'resolve', () => Deferred);`,
+    ],
+    [
+      'Object.assign carrier installation',
+      `const holder: { promise?: PromiseConstructor } = {};
+       Object.assign(holder, { promise: Promise });
+       Object.defineProperty(holder.promise, 'resolve', { value: () => Deferred });`,
+    ],
+    [
+      'Object.defineProperty carrier installation',
+      `const holder: { promise?: PromiseConstructor } = {};
+       Object.defineProperty(holder, 'promise', { value: Promise });
+       Object.defineProperty(holder.promise, 'resolve', { value: () => Deferred });`,
+    ],
+    [
+      'Object.defineProperty getter carrier installation',
+      `const holder: { promise?: PromiseConstructor } = {};
+       Object.defineProperty(holder, 'promise', { get: () => Promise });
+       Object.defineProperty(holder.promise, 'resolve', { value: () => Deferred });`,
+    ],
+    [
+      'Object.defineProperty method-getter carrier installation',
+      `const holder: { promise?: PromiseConstructor } = {};
+       Object.defineProperty(holder, 'promise', { get() { return Promise; } });
+       Object.defineProperty(holder.promise, 'resolve', { value: () => Deferred });`,
+    ],
+    [
+      'Object.defineProperties carrier installation',
+      `const holder: { promise?: PromiseConstructor } = {};
+       Object.defineProperties(holder, { promise: { value: Promise } });
+       Object.defineProperty(holder.promise, 'resolve', { value: () => Deferred });`,
+    ],
+    [
+      'Reflect.set carrier installation',
+      `const holder: { promise?: PromiseConstructor } = {};
+       Reflect.set(holder, 'promise', Promise);
+       Object.defineProperty(holder.promise, 'resolve', { value: () => Deferred });`,
+    ],
+    [
+      'Object.setPrototypeOf carrier installation',
+      `const holder: { promise?: PromiseConstructor } = {};
+       Object.setPrototypeOf(holder, { promise: Promise });
+       Object.defineProperty(holder.promise, 'resolve', { value: () => Deferred });`,
+    ],
+    [
+      'Reflect.setPrototypeOf carrier installation',
+      `const holder: { promise?: PromiseConstructor } = {};
+       Reflect.setPrototypeOf(holder, { promise: Promise });
+       Object.defineProperty(holder.promise, 'resolve', { value: () => Deferred });`,
+    ],
+    [
+      'Object.create carrier installation',
+      `const holder: { promise?: PromiseConstructor } = Object.create({ promise: Promise });
+       Object.defineProperty(holder.promise, 'resolve', { value: () => Deferred });`,
+    ],
+  ])('rejects a namespace installed through %s', (_label, prelude) => {
+    const facts = sinksFor(`
+      import { s, task } from '@kovojs/server';
+      class Deferred {
+        static then(resolve: (value: { ok: true }) => void): void {
+          resolve({ ok: true });
+          queueMicrotask(() => { void fetch('https://example.test/late'); });
+        }
+      }
+      ${prelude}
+      task('mutable-carrier-member-lockdown', {
+        input: s.object({}),
+        async run() { return Promise.resolve(); },
+      });
+    `);
+
+    expectExactMemberRejected(facts, 'Promise.resolve');
+  });
+
+  it.each([
+    [
+      'object binding default',
+      `const { promise = Promise }: { promise?: PromiseConstructor } = {};
+       Object.defineProperty(promise, 'resolve', { value: () => Deferred });`,
+    ],
+    [
+      'array binding default',
+      `const [promise = Promise]: [PromiseConstructor?] = [];
+       Object.defineProperty(promise, 'resolve', { value: () => Deferred });`,
+    ],
+    [
+      'assignment result',
+      `let promise: PromiseConstructor;
+       Object.defineProperty((promise = Promise), 'resolve', { value: () => Deferred });`,
+    ],
+    [
+      'logical assignment result',
+      `let promise: PromiseConstructor | undefined;
+       Object.defineProperty((promise ??= Promise), 'resolve', { value: () => Deferred });`,
+    ],
+  ])('rejects a namespace reached through a %s', (_label, prelude) => {
+    const facts = sinksFor(`
+      import { s, task } from '@kovojs/server';
+      class Deferred {
+        static then(resolve: (value: { ok: true }) => void): void {
+          resolve({ ok: true });
+          queueMicrotask(() => { void fetch('https://example.test/late'); });
+        }
+      }
+      ${prelude}
+      task('default-and-assignment-result-lockdown', {
+        input: s.object({}),
+        async run() { return Promise.resolve(); },
+      });
+    `);
+
+    expectExactMemberRejected(facts, 'Promise.resolve');
+  });
+
+  it.each([
+    [
+      'array for-of binding',
+      `for (const promise of [Promise]) {
+         Object.defineProperty(promise, 'resolve', { value: () => Deferred });
+       }`,
+    ],
+    [
+      'Set for-of binding',
+      `for (const promise of new Set([Promise])) {
+         Object.defineProperty(promise, 'resolve', { value: () => Deferred });
+       }`,
+    ],
+    [
+      'destructured for-of binding',
+      `for (const [promise] of [[Promise]]) {
+         Object.defineProperty(promise, 'resolve', { value: () => Deferred });
+       }`,
+    ],
+    [
+      'array callback parameter',
+      `[Promise].forEach((promise) => {
+         Object.defineProperty(promise, 'resolve', { value: () => Deferred });
+       });`,
+    ],
+  ])('rejects a namespace reaching a %s', (_label, prelude) => {
+    const facts = sinksFor(`
+      import { s, task } from '@kovojs/server';
+      class Deferred {
+        static then(resolve: (value: { ok: true }) => void): void {
+          resolve({ ok: true });
+          queueMicrotask(() => { void fetch('https://example.test/late'); });
+        }
+      }
+      ${prelude}
+      task('iteration-member-lockdown', {
+        input: s.object({}),
+        async run() { return Promise.resolve(); },
+      });
+    `);
+
+    expectExactMemberRejected(facts, 'Promise.resolve');
+  });
+
+  it('rejects a namespace passed into a local mutation helper', () => {
+    const facts = sinksFor(`
+      import { s, task } from '@kovojs/server';
+      class Deferred {
+        static then(resolve: (value: { ok: true }) => void): void {
+          resolve({ ok: true });
+          queueMicrotask(() => { void fetch('https://example.test/late'); });
+        }
+      }
+      function replace(target: PromiseConstructor): void {
+        Object.defineProperty(target, 'resolve', { value: () => Deferred });
+      }
+      replace(Promise);
+      task('local-helper-member-lockdown', {
+        input: s.object({}),
+        async run() { return Promise.resolve(); },
+      });
+    `);
+
+    expectExactMemberRejected(facts, 'Promise.resolve');
+  });
+
+  it('rejects a namespace substituted into an authored callback parameter', () => {
+    const facts = sinksFor(`
+      import { s, task } from '@kovojs/server';
+      class Deferred {
+        static then(resolve: (value: { ok: true }) => void): void {
+          resolve({ ok: true });
+          queueMicrotask(() => { void fetch('https://example.test/late'); });
+        }
+      }
+      function visit(
+        value: PromiseConstructor,
+        callback: (value: PromiseConstructor) => void,
+      ): void {
+        callback(value);
+      }
+      const replace = (promise: PromiseConstructor): void => {
+        Object.defineProperty(promise, 'resolve', { value: () => Deferred });
+      };
+      visit(Promise, replace);
+      task('callback-parameter-member-lockdown', {
+        input: s.object({}),
+        async run() { return Promise.resolve(); },
+      });
+    `);
+
+    expectExactMemberRejected(facts, 'Promise.resolve');
+  });
+
+  it.each([
+    ['at', `[Promise].at(0)`],
+    ['slice', `[Promise].slice(0)[0]`],
+    ['shifted slice', `[{ local: true }, Promise].slice(1)[0]`],
+    ['spread', `[{ local: true }, ...[Promise]][1]`],
+    ['find', `[Promise].find(() => true)`],
+    ['map', `[Promise].map((value) => value)[0]`],
+  ])('rejects a namespace reached through Array.%s', (_label, receiver) => {
+    const facts = sinksFor(`
+      import { s, task } from '@kovojs/server';
+      class Deferred {
+        static then(resolve: (value: { ok: true }) => void): void {
+          resolve({ ok: true });
+          queueMicrotask(() => { void fetch('https://example.test/late'); });
+        }
+      }
+      Object.defineProperty(${receiver}, 'resolve', { value: () => Deferred });
+      task('array-method-member-lockdown', {
+        input: s.object({}),
+        async run() { return Promise.resolve(); },
+      });
+    `);
+
+    expectExactMemberRejected(facts, 'Promise.resolve');
+  });
+
+  it.each([
+    ['hexadecimal to decimal', `const holder = { 0x0: Promise };`, `holder[0]`],
+    ['decimal to hexadecimal', `const holder = { 0: Promise };`, `holder[0x0]`],
+  ])('canonicalizes %s numeric carrier keys', (_label, prelude, receiver) => {
+    const facts = sinksFor(`
+      import { s, task } from '@kovojs/server';
+      class Deferred {
+        static then(resolve: (value: { ok: true }) => void): void {
+          resolve({ ok: true });
+          queueMicrotask(() => { void fetch('https://example.test/late'); });
+        }
+      }
+      ${prelude}
+      Object.defineProperty(${receiver}, 'resolve', { value: () => Deferred });
+      task('numeric-key-member-lockdown', {
+        input: s.object({}),
+        async run() { return Promise.resolve(); },
+      });
+    `);
+
+    expectExactMemberRejected(facts, 'Promise.resolve');
+  });
+
+  it.each([
+    ['named barrel', `export { replace } from './ops.js';`],
+    ['export-star barrel', `export * from './ops.js';`],
+    ['default-as-named barrel', `export { default as replace } from './ops.js';`],
+  ])('rejects Promise passed through an imported %s mutation wrapper', (_label, barrel) => {
+    const defaultExport = _label === 'default-as-named barrel' ? 'export default replace;' : '';
+    const facts = sinksForFiles([
+      {
+        fileName: 'ops.ts',
+        source: `
+          export function replace(target: PromiseConstructor, value: () => unknown): void {
+            Object.defineProperty(target, 'resolve', { value });
+          }
+          ${defaultExport}
+        `,
+      },
+      { fileName: 'barrel.ts', source: barrel },
+      {
+        fileName: 'app.ts',
+        source: `
+          import { replace } from './barrel.js';
+          import { s, task } from '@kovojs/server';
+          class Deferred {
+            static then(resolve: (value: { ok: true }) => void): void {
+              resolve({ ok: true });
+              queueMicrotask(() => { void fetch('https://example.test/late'); });
+            }
+          }
+          replace(Promise, () => Deferred);
+          task('imported-wrapper-member-lockdown', {
+            input: s.object({}),
+            async run() { return Promise.resolve(); },
+          });
+        `,
+      },
+    ]);
+
+    expectExactMemberRejected(facts, 'Promise.resolve');
+  });
+
+  it('keeps an authored getter returning a local lookalike from poisoning the global member', () => {
+    const facts = sinksFor(`
+      import { s, task } from '@kovojs/server';
+      const LocalPromise = { resolve: () => ({ ok: true }) };
+      const holder = { get promise() { return LocalPromise; } };
+      Object.defineProperty(holder.promise, 'resolve', { value: () => ({ ok: true }) });
+      task('local-getter-lookalike', {
+        input: s.object({}),
+        async run() { return Promise.resolve({ ok: true }); },
+      });
+    `);
+
+    expect(facts).toEqual([]);
+  });
+
+  it('does not close the global member for helper and callback substitution of local lookalikes', () => {
+    const facts = sinksFor(`
+      import { s, task } from '@kovojs/server';
+      const LocalPromise = { resolve: () => ({ ok: true }) };
+      function visit(
+        value: typeof LocalPromise,
+        callback: (value: typeof LocalPromise) => void,
+      ): void {
+        callback(value);
+      }
+      const replace = (promise: typeof LocalPromise): void => {
+        Object.defineProperty(promise, 'resolve', { value: () => ({ ok: true }) });
+      };
+      visit(LocalPromise, replace);
+      task('local-callback-lookalike', {
+        input: s.object({}),
+        async run() { return Promise.resolve({ ok: true }); },
+      });
+    `);
+
+    expect(facts.some((fact) => fact.source === 'Promise.resolve')).toBe(false);
+  });
+
+  it('keeps reusable helper return substitution call-site-sensitive', () => {
+    const facts = sinksFor(`
+      import { s, task } from '@kovojs/server';
+      const LocalPromise = { resolve: () => ({ ok: true }) };
+      function identity<T>(value: T): T { return value; }
+      void identity(Promise);
+      Object.defineProperty(identity(LocalPromise), 'resolve', {
+        value: () => ({ ok: true }),
+      });
+      task('local-helper-return-lookalike', {
+        input: s.object({}),
+        async run() { return Promise.resolve({ ok: true }); },
+      });
+    `);
+
+    expect(facts.some((fact) => fact.source === 'Promise.resolve')).toBe(false);
+  });
+
+  it('keeps cyclic exact-global aliases sound and bounded', () => {
+    const startedAt = performance.now();
+    const facts = sinksFor(`
+      import { s, task } from '@kovojs/server';
+      function noop(value: PromiseConstructor): void { void value; }
+      let root!: PromiseConstructor;
+      let cycle!: PromiseConstructor;
+      root = true ? cycle : Promise;
+      cycle = root;
+      noop(root);
+      Object.defineProperty(cycle, 'resolve', { value: () => ({ ok: true }) });
+      task('cyclic-exact-global-alias', {
+        input: s.object({}),
+        async run() { return Promise.resolve({ ok: true }); },
+      });
+    `);
+
+    expectExactMemberRejected(facts, 'Promise.resolve');
+    expect(performance.now() - startedAt).toBeLessThan(2_000);
+  });
+
+  it('keeps diamond alias provenance bounded', () => {
+    const aliases = Array.from(
+      { length: 18 },
+      (_value, index) => `const alias${index + 1} = true ? alias${index} : alias${index};`,
+    ).join('\n');
+    const startedAt = performance.now();
+    const facts = sinksFor(`
+      import { s, task } from '@kovojs/server';
+      const alias0 = Promise;
+      ${aliases}
+      Object.defineProperty(alias18, 'resolve', { value: () => ({ ok: true }) });
+      task('bounded-diamond-provenance', {
+        input: s.object({}),
+        async run() { return Promise.resolve({ ok: true }); },
+      });
+    `);
+
+    expectExactMemberRejected(facts, 'Promise.resolve');
+    expect(performance.now() - startedAt).toBeLessThan(2_000);
+  });
 });

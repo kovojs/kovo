@@ -797,19 +797,18 @@ function addBugz31GlobalMemberCarrierProof(
     case 'ordinary-carriers':
       poison = [
         ...deferredClass,
-        'const promiseHolder = { value: Promise };',
-        'promiseHolder.value.resolve =',
-        '  (() => Bugz31Deferred) as unknown as typeof Promise.resolve;',
-        'const responseHolder = { value: Response };',
-        "Object.defineProperty(responseHolder.value, 'json', { value: () => Bugz31Deferred });",
-        'const arrayHolder = { value: Array };',
-        'Object.defineProperties(arrayHolder.value, {',
-        '  isArray: { value: (() => Bugz31Deferred) as unknown as typeof Array.isArray },',
-        '});',
-        'const jsonHolder = { value: JSON };',
-        'Object.assign(jsonHolder.value, {',
-        '  stringify: (() => Bugz31Deferred) as unknown as typeof JSON.stringify,',
-        '});',
+        'const promiseHolder: { value?: PromiseConstructor } = {};',
+        'promiseHolder.value = Promise;',
+        "Object.defineProperty(promiseHolder.value!, 'resolve', { value: () => Bugz31Deferred });",
+        'const responseHolder: { value?: typeof Response } = {};',
+        "Object.defineProperty(responseHolder, 'value', { get: () => Response });",
+        "Object.defineProperty(responseHolder.value!, 'json', { value: () => Bugz31Deferred });",
+        'const arrayHolder: { value?: ArrayConstructor } = {};',
+        'Object.assign(arrayHolder, { value: Array });',
+        "Reflect.set(arrayHolder.value!, 'isArray', () => Bugz31Deferred);",
+        'const jsonHolder: { value?: JSON } = {};',
+        'Reflect.setPrototypeOf(jsonHolder, { value: JSON });',
+        "Object.defineProperty(jsonHolder.value!, 'stringify', { value: () => Bugz31Deferred });",
       ];
       break;
     case 'projection-carriers':
