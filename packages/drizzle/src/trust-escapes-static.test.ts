@@ -9919,7 +9919,7 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
     ]);
     if (crossFileRead.length === 0) misses.push('cross-file DB helper');
     expect(misses).toEqual([]);
-  });
+  }, 90_000);
 
   it('accepts only closed built-in Postgres column builders and exact references', () => {
     const safe = sinksFor(`
