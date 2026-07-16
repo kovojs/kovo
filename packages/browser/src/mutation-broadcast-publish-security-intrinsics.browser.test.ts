@@ -26,6 +26,21 @@ function fragmentBody(value: string): string {
   ].join('');
 }
 
+async function createSameOriginFrame(html: string): Promise<HTMLIFrameElement> {
+  const frame = document.createElement('iframe');
+  const framePath = `/__kovo_mutation_broadcast_fixture?case=${frames.length}`;
+  frames.push(frame);
+  document.body.append(frame);
+  const frameWindow = frame.contentWindow;
+  if (!frameWindow) throw new Error('mutation broadcast frame unavailable');
+  frameWindow.document.open();
+  frameWindow.document.write(html);
+  frameWindow.document.close();
+  frameWindow.history.replaceState(null, '', framePath);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  return frame;
+}
+
 function stripPrincipalPostMessage(prototype: BroadcastChannel): {
   calls(): number;
   restore(): void;
@@ -96,40 +111,32 @@ it('keeps modular publish on the witnessed postMessage after late principal stri
 });
 
 it('keeps generated publish on the witnessed postMessage after late principal stripping poison', async () => {
-  const senderFrame = document.createElement('iframe');
-  senderFrame.srcdoc = [
-    '<!doctype html><html><head>',
-    `<meta name="kovo-build" content="${BUILD_TOKEN}">`,
-    '<meta name="kovo-session" content="session-A"></head><body>',
-    '<form enhance action="/_m/private" method="post"><button>send</button></form>',
-    '<section kovo-fragment-target="private">SENDER INITIAL</section>',
-    '</body></html>',
-  ].join('');
-  const anonymousFrame = document.createElement('iframe');
-  anonymousFrame.srcdoc = [
-    '<!doctype html><html><head>',
-    `<meta name="kovo-build" content="${BUILD_TOKEN}">`,
-    '</head><body>',
-    '<section kovo-fragment-target="private">ANONYMOUS INITIAL</section>',
-    '</body></html>',
-  ].join('');
-  const samePrincipalFrame = document.createElement('iframe');
-  samePrincipalFrame.srcdoc = [
-    '<!doctype html><html><head>',
-    `<meta name="kovo-build" content="${BUILD_TOKEN}">`,
-    '<meta name="kovo-session" content="session-A"></head><body>',
-    '<section kovo-fragment-target="private">SESSION-A INITIAL</section>',
-    '</body></html>',
-  ].join('');
-  frames.push(senderFrame, anonymousFrame, samePrincipalFrame);
-  const loaded = [senderFrame, anonymousFrame, samePrincipalFrame].map(
-    (frame) =>
-      new Promise<void>((resolve) =>
-        frame.addEventListener('load', () => resolve(), { once: true }),
-      ),
+  const [senderFrame, anonymousFrame, samePrincipalFrame] = await Promise.all(
+    [
+      [
+        '<!doctype html><html><head>',
+        `<meta name="kovo-build" content="${BUILD_TOKEN}">`,
+        '<meta name="kovo-session" content="session-A"></head><body>',
+        '<form enhance data-mutation="private" action="/_m/private" method="post"><button>send</button></form>',
+        '<section kovo-fragment-target="private">SENDER INITIAL</section>',
+        '</body></html>',
+      ].join(''),
+      [
+        '<!doctype html><html><head>',
+        `<meta name="kovo-build" content="${BUILD_TOKEN}">`,
+        '</head><body>',
+        '<section kovo-fragment-target="private">ANONYMOUS INITIAL</section>',
+        '</body></html>',
+      ].join(''),
+      [
+        '<!doctype html><html><head>',
+        `<meta name="kovo-build" content="${BUILD_TOKEN}">`,
+        '<meta name="kovo-session" content="session-A"></head><body>',
+        '<section kovo-fragment-target="private">SESSION-A INITIAL</section>',
+        '</body></html>',
+      ].join(''),
+    ].map(createSameOriginFrame),
   );
-  document.body.append(senderFrame, anonymousFrame, samePrincipalFrame);
-  await Promise.all(loaded);
 
   const senderWindow = senderFrame.contentWindow as Window & typeof globalThis;
   const anonymousWindow = anonymousFrame.contentWindow as Window & typeof globalThis;
@@ -158,16 +165,16 @@ it('keeps generated publish on the witnessed postMessage after late principal st
   });
   senderDocument.body.prepend(queryPoisonTrigger);
   let responseValue = 'BASELINE SESSION-A PRIVATE';
-  (senderWindow as unknown as Record<string, unknown>).fetch = vi.fn(
-    async () =>
-      new senderWindow.Response(fragmentBody(responseValue), {
-        headers: {
-          'Content-Type': 'text/vnd.kovo.fragment+html',
-          'Kovo-Build': BUILD_TOKEN,
-        },
-        status: 200,
-      }),
-  );
+  (senderWindow as unknown as Record<string, unknown>).fetch = vi.fn(async () => ({
+    headers: new senderWindow.Headers({
+      'Content-Type': 'text/vnd.kovo.fragment+html',
+      'Kovo-Build': BUILD_TOKEN,
+    }),
+    ok: true,
+    status: 200,
+    text: async () => fragmentBody(responseValue),
+    url: `${senderWindow.location.origin}/_m/private`,
+  }));
   for (const frameWindow of [senderWindow, anonymousWindow, samePrincipalWindow]) {
     (frameWindow as unknown as Record<string, unknown>).__kovoC151Import = async () => ({});
     const script = frameWindow.document.createElement('script');

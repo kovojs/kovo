@@ -2174,7 +2174,17 @@ describe('browser inline loader enhanced navigation', () => {
     const fetch = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
       if (init?.method === 'POST') {
         return {
-          headers: { get: (name: string) => (name === 'Kovo-Build' ? 'build-a' : null) },
+          headers: {
+            get(name: string) {
+              if (name.toLowerCase() === 'content-type') {
+                return 'text/vnd.kovo.fragment+html';
+              }
+              if (name.toLowerCase() === 'kovo-build') return 'build-a';
+              return null;
+            },
+          },
+          ok: true,
+          status: 200,
           async text() {
             return [
               '<kovo-fragment target="cart-badge">',
@@ -2182,6 +2192,7 @@ describe('browser inline loader enhanced navigation', () => {
               '</kovo-fragment>',
             ].join('');
           },
+          url: new URL('/_m/cart/add', location.href).href,
         };
       }
 
@@ -2195,7 +2206,7 @@ describe('browser inline loader enhanced navigation', () => {
             '</head><body>',
             '<main kovo-nav-segment="layout:Shop" kovo-nav-kind="layout" kovo-nav-name="Shop" kovo-fragment-target="layout-shell" kovo-live-component="layout-shell/layout-shell" kovo-live-token="tok_layout" kovo-deps="viewer">',
             '<section kovo-nav-segment="page:/cart" kovo-nav-kind="page" kovo-nav-name="page">',
-            '<form id="cart-form" enhance action="/_m/cart/add" method="post" kovo-fragment-target="cart-form">',
+            '<form id="cart-form" enhance data-mutation="cart/add" action="/_m/cart/add" method="post" kovo-fragment-target="cart-form">',
             '<button type="submit">Save</button>',
             '</form>',
             '<section kovo-fragment-target="cart-badge" kovo-live-component="cart-badge/cart-badge" kovo-live-token="tok_cart" kovo-deps="cart">Cart</section>',

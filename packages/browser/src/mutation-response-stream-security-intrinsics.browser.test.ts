@@ -25,6 +25,21 @@ function mutationWire(value: string): string {
   ].join('');
 }
 
+async function createSameOriginFrame(html: string): Promise<HTMLIFrameElement> {
+  const frame = document.createElement('iframe');
+  const framePath = `/__kovo_stream_security_fixture?case=${frames.length}`;
+  frames.push(frame);
+  document.body.append(frame);
+  const frameWindow = frame.contentWindow;
+  if (!frameWindow) throw new Error('stream security frame unavailable');
+  frameWindow.document.open();
+  frameWindow.document.write(html);
+  frameWindow.document.close();
+  frameWindow.history.replaceState(null, '', framePath);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  return frame;
+}
+
 function substituteReader(
   Stream: typeof ReadableStream,
   Encoder: typeof TextEncoder,
@@ -125,19 +140,14 @@ it('keeps modular streamed query bytes authoritative after late String.slice poi
 it('pins the generated inline streaming mutation reader before a late getReader substitution', async () => {
   // SPEC §5.2/§6.6: the generated artifact consumes the same witnessed reader
   // controls; this exercises the shipped source rather than hand-authored IR.
-  const frame = document.createElement('iframe');
-  frame.srcdoc = [
-    '<!doctype html><html><head></head><body>',
-    '<form enhance data-mutation-stream action="/_m/chat" method="post"><button>send</button></form>',
-    '<section kovo-fragment-target="messages">INITIAL SERVER TRUTH</section>',
-    '</body></html>',
-  ].join('');
-  frames.push(frame);
-  const loaded = new Promise<void>((resolve) =>
-    frame.addEventListener('load', () => resolve(), { once: true }),
+  const frame = await createSameOriginFrame(
+    [
+      '<!doctype html><html><head></head><body>',
+      '<form enhance data-mutation="chat" data-mutation-stream action="/_m/chat" method="post"><button>send</button></form>',
+      '<section kovo-fragment-target="messages">INITIAL SERVER TRUTH</section>',
+      '</body></html>',
+    ].join(''),
   );
-  document.body.append(frame);
-  await loaded;
   const frameWindow = frame.contentWindow as Window & typeof globalThis;
   const frameDocument = frameWindow.document;
   const safeBody = new frameWindow.ReadableStream<Uint8Array>({
@@ -146,13 +156,15 @@ it('pins the generated inline streaming mutation reader before a late getReader 
       controller.close();
     },
   });
-  (frameWindow as unknown as Record<string, unknown>).fetch = vi.fn(
-    async () =>
-      new frameWindow.Response(safeBody, {
-        headers: { 'Content-Type': 'text/vnd.kovo.fragment+html; stream=1' },
-        status: 200,
-      }),
-  );
+  (frameWindow as unknown as Record<string, unknown>).fetch = vi.fn(async () => ({
+    body: safeBody,
+    headers: new frameWindow.Headers({
+      'Content-Type': 'text/vnd.kovo.fragment+html; stream=1',
+    }),
+    ok: true,
+    status: 200,
+    url: `${frameWindow.location.origin}/_m/chat`,
+  }));
   (frameWindow as unknown as Record<string, unknown>).__kovoStreamSecurityImport = async () => ({});
   const script = frameDocument.createElement('script');
   script.textContent = `(${inlineKovoLoaderInstallerSource})(globalThis.__kovoStreamSecurityImport);`;
