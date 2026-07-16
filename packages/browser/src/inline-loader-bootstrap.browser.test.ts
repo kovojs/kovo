@@ -30,6 +30,25 @@ function runNextRaf(callbacks: FrameRequestCallback[]): void {
 }
 
 let submitSinkId = 0;
+let networkFrameId = 0;
+
+async function networkFrame(body: string): Promise<Window & typeof globalThis> {
+  const frame = document.createElement('iframe');
+  let loads = 0;
+  frame.addEventListener('load', () => {
+    loads += 1;
+  });
+  frame.src = `/__kovo_inline_security_fixture?bootstrap=${networkFrameId++}`;
+  document.body.append(frame);
+  await vi.waitFor(() => expect(loads).toBe(1));
+  const frameWindow = frame.contentWindow;
+  if (!frameWindow) throw new Error('missing network bootstrap iframe window');
+  frameWindow.document.open();
+  frameWindow.document.write(`<!doctype html><html><head></head><body>${body}</body></html>`);
+  frameWindow.document.close();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  return frameWindow as Window & typeof globalThis;
+}
 
 async function nativeSubmitFixture(token: string): Promise<{
   form: HTMLFormElement;
@@ -524,6 +543,43 @@ describe('browser inline loader bootstrap', () => {
       const form = frameWindow.document.querySelector('form');
       if (!form) throw new Error('missing opaque bootstrap mutation form');
       const event = new frameWindow.SubmitEvent('submit', { bubbles: true, cancelable: true });
+      form.dispatchEvent(event);
+
+      expect(event.defaultPrevented).toBe(false);
+      expect(runtimeImport).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([
+    ['empty formaction', 'formaction=""'],
+    ['empty formmethod', 'formmethod=""'],
+    ['empty formaction and formmethod', 'formaction="" formmethod=""'],
+  ] as const)(
+    'does not capture a submitter with %s during paint-first takeover',
+    async (_name, submitterAttributes) => {
+      const frameWindow = await networkFrame(
+        [
+          '<form data-mutation="delete" action="/_m/delete" method="post">',
+          `<button id="delete" ${submitterAttributes}>delete</button>`,
+          '</form>',
+        ].join(''),
+      );
+      const runtimeImport = vi.fn(() => new Promise<Record<string, unknown>>(() => {}));
+      const globalRecord = frameWindow as unknown as Record<string, unknown>;
+      globalRecord.__kovoSubmitterRuntimeImport = runtimeImport;
+      globalRecord.requestAnimationFrame = () => 1;
+      const script = frameWindow.document.createElement('script');
+      script.textContent = `(${inlineKovoLoaderBootstrapInstallerSource})('/c/runtime.js',globalThis.__kovoSubmitterRuntimeImport);`;
+      frameWindow.document.head.append(script);
+
+      const form = frameWindow.document.querySelector('form');
+      const submitter = frameWindow.document.querySelector<HTMLButtonElement>('#delete');
+      if (!form || !submitter) throw new Error('missing paint-first submitter override fixture');
+      const event = new frameWindow.SubmitEvent('submit', {
+        bubbles: true,
+        cancelable: true,
+        submitter,
+      });
       form.dispatchEvent(event);
 
       expect(event.defaultPrevented).toBe(false);

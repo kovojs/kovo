@@ -130,6 +130,18 @@ describe('inline loader build source', () => {
     expect(inlineKovoLoaderStubInstallerReadableSource).toContain(
       "location.protocol !== 'http:' && location.protocol !== 'https:'",
     );
+    expect(inlineKovoLoaderInstallerReadableSource).toContain(
+      "ras(submitter, 'formmethod') ?? ras(submitter, 'formMethod')",
+    );
+    expect(inlineKovoLoaderInstallerReadableSource).toContain(
+      "ras(submitter, 'formaction') ?? ras(submitter, 'formAction')",
+    );
+    expect(inlineKovoLoaderStubInstallerReadableSource).toContain(
+      "readAttribute(submitter, 'formmethod') ?? readAttribute(submitter, 'formMethod')",
+    );
+    expect(inlineKovoLoaderStubInstallerReadableSource).toContain(
+      "readAttribute(submitter, 'formaction') ?? readAttribute(submitter, 'formAction')",
+    );
   });
 
   it('requires HTTP(S) for generated document navigation and module imports', () => {

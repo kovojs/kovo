@@ -1020,6 +1020,25 @@ describe('inline loader enhanced submit source', () => {
               name === 'formaction' ? 'https://attacker.test/_m/cart/add' : null,
           },
         },
+        {
+          form: typedForm,
+          submitter: {
+            getAttribute: (name: string) => (name === 'formaction' ? '' : null),
+          },
+        },
+        {
+          form: typedForm,
+          submitter: {
+            getAttribute: (name: string) => (name === 'formmethod' ? '' : null),
+          },
+        },
+        {
+          form: typedForm,
+          submitter: {
+            getAttribute: (name: string) =>
+              name === 'formaction' || name === 'formmethod' ? '' : null,
+          },
+        },
       ];
 
       try {

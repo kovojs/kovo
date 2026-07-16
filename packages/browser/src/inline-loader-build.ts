@@ -1445,13 +1445,19 @@ function installInlineKovoLoader(im) {
     const mutation = ras(form, 'data-mutation');
     const current = bns.currentUrl();
     if (!mutation || !current) return;
+    const submitterMethod = submitter
+      ? ras(submitter, 'formmethod') ?? ras(submitter, 'formMethod')
+      : undefined;
     const method =
-      (submitter && (ras(submitter, 'formmethod') || ras(submitter, 'formMethod'))) ||
-      ras(form, 'method') ||
+      submitterMethod ??
+      ras(form, 'method') ??
       'get';
+    const submitterAction = submitter
+      ? ras(submitter, 'formaction') ?? ras(submitter, 'formAction')
+      : undefined;
     const rawAction =
-      (submitter && (ras(submitter, 'formaction') || ras(submitter, 'formAction'))) ||
-      ras(form, 'action') ||
+      submitterAction ??
+      ras(form, 'action') ??
       '';
     const action = bns.parseUrl(rawAction || current.href, current.href);
     // SPEC §§6.3/6.6/9.1: equality of two serialized opaque null origins is not same-origin
@@ -2321,15 +2327,19 @@ function installInlineKovoBootstrap(runtimeUrl, runtimeImport) {
     const location = currentLocation();
     if (!mutation || !location) return;
     const submitter = facts.submitter;
+    const submitterMethod = submitter
+      ? readAttribute(submitter, 'formmethod') ?? readAttribute(submitter, 'formMethod')
+      : undefined;
     const method =
-      (submitter &&
-        (readAttribute(submitter, 'formmethod') || readAttribute(submitter, 'formMethod'))) ||
-      readAttribute(form, 'method') ||
+      submitterMethod ??
+      readAttribute(form, 'method') ??
       'get';
+    const submitterAction = submitter
+      ? readAttribute(submitter, 'formaction') ?? readAttribute(submitter, 'formAction')
+      : undefined;
     const rawAction =
-      (submitter &&
-        (readAttribute(submitter, 'formaction') || readAttribute(submitter, 'formAction'))) ||
-      readAttribute(form, 'action') ||
+      submitterAction ??
+      readAttribute(form, 'action') ??
       '';
     const action = parseUrl(rawAction || location.href, location.href);
     // SPEC §§6.3/6.6/9.1: paint-first takeover enforces the same non-opaque network floor as the

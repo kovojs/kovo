@@ -380,6 +380,40 @@ it.each(['data:/_m/chat', 'blob:/_m/chat', 'file:/_m/chat'])(
   },
 );
 
+it.each([
+  ['empty formaction', 'formaction=""'],
+  ['empty formmethod', 'formmethod=""'],
+  ['empty formaction and formmethod', 'formaction="" formmethod=""'],
+] as const)(
+  'leaves a submitter with %s native in the generated mutation loader',
+  async (_name, submitterAttributes) => {
+    const harness = await createFrame(
+      [
+        '<form data-mutation="delete" action="/_m/delete" method="post">',
+        `<button id="delete" ${submitterAttributes}>delete</button>`,
+        '</form>',
+      ].join(''),
+      '',
+    );
+    const fetch = vi.fn();
+    (harness.window as unknown as Record<string, unknown>).fetch = fetch;
+    await installGeneratedInlineLoader(harness.window);
+
+    const form = harness.window.document.querySelector('form');
+    const submitter = harness.window.document.querySelector<HTMLButtonElement>('#delete');
+    if (!form || !submitter) throw new Error('missing submitter override fixture');
+    const event = new harness.window.SubmitEvent('submit', {
+      bubbles: true,
+      cancelable: true,
+      submitter,
+    });
+    form.dispatchEvent(event);
+
+    expect(event.defaultPrevented).toBe(false);
+    expect(fetch).not.toHaveBeenCalled();
+  },
+);
+
 it('leaves opaque data-document navigation native without fetching it', async () => {
   const attackDocument = encodeURIComponent(
     [
