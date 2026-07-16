@@ -9,7 +9,7 @@ import { submitOptimisticEnhancedMutation } from './mutation-optimistic.js';
 import { MutationQueue } from './mutation-queue.js';
 import { OptimisticRebaser } from './optimism.js';
 import { createQueryStore } from './query-store.js';
-import { FakeMorphRoot } from './runtime-test-fakes.js';
+import { FakeMorphRoot, mutationTestResponse } from './runtime-test-fakes.js';
 
 describe('optimistic enhanced mutation queueing', () => {
   afterEach(() => {
@@ -47,11 +47,11 @@ describe('optimistic enhanced mutation queueing', () => {
         order.push('1:released');
       }
 
-      return {
+      return mutationTestResponse('/_m/cart/add', {
         async text() {
           return `<kovo-query name="cart">{"count":${quantity === '1' ? 1 : 3}}</kovo-query>`;
         },
-      };
+      });
     });
 
     const firstFormData = new FormData();
@@ -121,11 +121,13 @@ describe('optimistic enhanced mutation queueing', () => {
     const rebaser = new OptimisticRebaser(store);
     const root = new FakeMorphRoot();
     store.set('cart', { count: 0 });
-    const fetch = vi.fn(async () => ({
-      async text() {
-        return '<kovo-query name="cart">{"count":2}</kovo-query>';
-      },
-    }));
+    const fetch = vi.fn(async () =>
+      mutationTestResponse('/_m/cart/add', {
+        async text() {
+          return '<kovo-query name="cart">{"count":2}</kovo-query>';
+        },
+      }),
+    );
 
     const result = submitOptimisticEnhancedMutation({
       fetch,
@@ -185,11 +187,11 @@ describe('optimistic enhanced mutation queueing', () => {
         return new Promise<EnhancedMutationResponseLike>(() => {});
       }
 
-      return {
+      return mutationTestResponse('/_m/cart/add', {
         async text() {
           return '<kovo-query name="cart">{"count":2}</kovo-query>';
         },
-      };
+      });
     });
 
     const firstFormData = new FormData();
@@ -279,18 +281,18 @@ describe('optimistic enhanced mutation queueing', () => {
         await new Promise<void>((resolve) => {
           releaseFirst = resolve;
         });
-        return {
+        return mutationTestResponse('/_m/cart/add', {
           async text() {
             return '<kovo-query name="cart">{"count":1}</kovo-query>';
           },
-        };
+        });
       }
 
-      return {
+      return mutationTestResponse('/_m/cart/add', {
         async text() {
           return '<kovo-query name="cart">{"count":2}</kovo-query>';
         },
-      };
+      });
     });
 
     const firstFormData = new FormData();

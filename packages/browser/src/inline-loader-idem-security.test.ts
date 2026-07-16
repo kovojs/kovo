@@ -42,6 +42,7 @@ it.each(inlineSourceInstallCases)(
     const form = {
       action: '/_m/cart/add',
       getAttribute(name: string) {
+        if (name === 'data-mutation') return 'cart/add';
         return name === 'data-enhance' ? '' : null;
       },
       method: 'post',
@@ -68,7 +69,15 @@ it.each(inlineSourceInstallCases)(
       globalRecord.fetch = vi.fn(
         async (_url: string, options: { body: TestFormData; headers: Record<string, string> }) => {
           requests.push(options);
-          return { headers: { get: () => null }, status: 204, text: async () => '' };
+          return {
+            headers: {
+              get: (name: string) =>
+                name.toLowerCase() === 'content-type' ? 'text/vnd.kovo.fragment+html' : null,
+            },
+            status: 204,
+            text: async () => '',
+            url: 'https://kovo.test/_m/cart/add',
+          };
         },
       );
       globalRecord.history = {};

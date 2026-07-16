@@ -116,6 +116,7 @@ export async function expectInlineResponseApplyParity(
     document: globalRecord.document,
     fetch: globalRecord.fetch,
     importModule: globalRecord.__kovoInlineImport,
+    location: globalRecord.location,
   };
   const listeners = new Map<string, (event: unknown) => void>();
   interface InlineParityTarget {
@@ -237,7 +238,15 @@ export async function expectInlineResponseApplyParity(
       }
     };
     globalRecord.FormData = function FormData() {
-      return {};
+      const values = new Map<string, unknown>();
+      return {
+        get(name: string) {
+          return values.get(name) ?? null;
+        },
+        set(name: string, value: unknown) {
+          values.set(name, value);
+        },
+      };
     };
     globalRecord.CustomEvent = class CustomEvent {
       detail: unknown;
@@ -285,10 +294,22 @@ export async function expectInlineResponseApplyParity(
       },
     };
     globalRecord.fetch = vi.fn(async () => ({
+      headers: {
+        get(name: string) {
+          return name.toLowerCase() === 'content-type' ? 'text/vnd.kovo.fragment+html' : null;
+        },
+      },
       async text() {
         return body;
       },
+      url: 'https://kovo.test/_m/cart/add',
     }));
+    globalRecord.location = {
+      href: 'https://kovo.test/cart',
+      origin: 'https://kovo.test',
+      pathname: '/cart',
+      search: '',
+    };
 
     installSource(
       vi.fn(async () => ({})),
@@ -308,6 +329,7 @@ export async function expectInlineResponseApplyParity(
             ? {
                 action: '/_m/cart/add',
                 getAttribute(name: string) {
+                  if (name === 'data-mutation') return 'cart/add';
                   return name === 'enhance' ? '' : null;
                 },
                 method: 'post',
@@ -357,6 +379,7 @@ export async function expectInlineResponseApplyParity(
       dispatchEvent: originals.dispatchEvent,
       document: originals.document,
       fetch: originals.fetch,
+      location: originals.location,
     });
     if (originals.importModule === undefined) {
       delete globalRecord.__kovoInlineImport;

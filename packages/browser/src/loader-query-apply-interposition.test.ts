@@ -8,6 +8,7 @@ import {
   FakeMorphTarget,
   FakeQueryBindingElement,
   FakeRoot,
+  mutationTestResponse,
 } from './runtime-test-fakes.js';
 
 describe('loader query apply interposition', () => {
@@ -95,19 +96,24 @@ describe('loader query apply interposition', () => {
       store.set(query.name, { count: Number(query.value.count) + 10 }, query.key);
       return { value: store.get(query.name, query.key) };
     });
-    const form = new FakeFormElement({ enhance: '' }, { action: '/_m/cart/add', method: 'post' });
-    const fetch = vi.fn(async () => ({
-      headers: {
-        get() {
-          return null;
+    const form = new FakeFormElement(
+      { enhance: '', 'data-mutation': 'cart/add' },
+      { action: '/_m/cart/add', method: 'post' },
+    );
+    const fetch = vi.fn(async () =>
+      mutationTestResponse('/_m/cart/add', {
+        headers: {
+          get() {
+            return null;
+          },
         },
-      },
-      text: async () =>
-        [
-          '<kovo-query name="cart">{"count":2}</kovo-query>',
-          '<kovo-fragment target="cart-badge"><cart-badge>server</cart-badge></kovo-fragment>',
-        ].join('\n'),
-    }));
+        text: async () =>
+          [
+            '<kovo-query name="cart">{"count":2}</kovo-query>',
+            '<kovo-fragment target="cart-badge"><cart-badge>server</cart-badge></kovo-fragment>',
+          ].join('\n'),
+      }),
+    );
     const observedDuringMorph: string[] = [];
     mutationRoot.bindings.push(count);
     mutationRoot.targets.set('cart-badge', new FakeMorphTarget());

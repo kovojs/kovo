@@ -8,6 +8,7 @@ import {
   FakeMorphTarget,
   FakeRoot,
   installTestClientModuleManifest,
+  mutationTestResponse,
 } from './runtime-test-fakes.js';
 
 const restoreClientModuleManifest = installTestClientModuleManifest([
@@ -82,7 +83,7 @@ describe('delegated loader lifecycle', () => {
       'on:click': '/c/cart-filter.client.js#mount',
     });
     const form = new FakeFormElement(
-      { enhance: '' },
+      { enhance: '', 'data-mutation': 'cart/filter' },
       {
         action: '/_m/cart/filter',
         method: 'post',
@@ -94,16 +95,18 @@ describe('delegated loader lifecycle', () => {
     );
     const loader = installKovoLoader({
       enhancedMutations: {
-        fetch: vi.fn(async () => ({
-          headers: {
-            get() {
-              return null;
+        fetch: vi.fn(async () =>
+          mutationTestResponse('/_m/cart/filter', {
+            headers: {
+              get() {
+                return null;
+              },
             },
-          },
-          async text() {
-            return '<kovo-fragment target="cart-shell"><section></section></kovo-fragment>';
-          },
-        })),
+            async text() {
+              return '<kovo-fragment target="cart-shell"><section></section></kovo-fragment>';
+            },
+          }),
+        ),
         formData: () => new FormData(),
         root: mutationRoot,
         store,

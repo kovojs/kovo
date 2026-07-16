@@ -7,6 +7,7 @@ import {
   FakeMorphRoot,
   FakeQueryBindingElement,
   FakeRoot,
+  mutationTestResponse,
 } from './runtime-test-fakes.js';
 
 describe('loader visible-return refetch', () => {
@@ -32,16 +33,18 @@ describe('loader visible-return refetch', () => {
         textContent: '{"count":1}',
       },
     ];
-    const mutationFetch = vi.fn(async () => ({
-      headers: {
-        get() {
-          return null;
+    const mutationFetch = vi.fn(async () =>
+      mutationTestResponse('/_m/recommendations/refresh', {
+        headers: {
+          get() {
+            return null;
+          },
         },
-      },
-      async text() {
-        return '<kovo-query name="recommendations">{"items":["p1"]}</kovo-query>';
-      },
-    }));
+        async text() {
+          return '<kovo-query name="recommendations">{"items":["p1"]}</kovo-query>';
+        },
+      }),
+    );
     const refetchFetch = vi.fn(async (url: string) => ({
       status: 200,
       text: async () =>

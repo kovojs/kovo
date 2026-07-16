@@ -44,16 +44,21 @@ async function installStreamHarness(
   const form = {
     action: '/_m/chat',
     getAttribute(name: string) {
+      if (name === 'data-mutation') return 'chat';
       if (name === 'data-mutation-stream' || name === 'enhance') return '';
       return null;
     },
     method: 'post',
-    submit: formSubmit,
+    requestSubmit: formSubmit,
   };
 
   vi.stubGlobal('BroadcastChannel', undefined);
   vi.stubGlobal('FormData', function FormData() {
-    return { get: () => null };
+    const values = new Map<string, unknown>();
+    return {
+      get: (name: string) => values.get(name) ?? null,
+      set: (name: string, value: unknown) => values.set(name, value),
+    };
   });
   vi.stubGlobal('addEventListener', (type: string, listener: (event: unknown) => void) => {
     listeners.set(type, listener);
@@ -99,7 +104,24 @@ async function installStreamHarness(
   });
   vi.stubGlobal(
     'fetch',
-    vi.fn(async () => response),
+    vi.fn(async () => {
+      const responseRecord = response as {
+        headers?: { get?(name: string): string | null };
+        [key: string]: unknown;
+      };
+      return {
+        ...responseRecord,
+        headers: {
+          get(name: string) {
+            if (name.toLowerCase() === 'content-type') {
+              return 'text/vnd.kovo.fragment+html';
+            }
+            return responseRecord.headers?.get?.(name) ?? null;
+          },
+        },
+        url: 'https://kovo.test/_m/chat',
+      };
+    }),
   );
   vi.stubGlobal('history', {});
   vi.stubGlobal('location', {

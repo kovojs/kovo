@@ -7,7 +7,7 @@ import { form, type FormFailure, type Route } from '@kovojs/core';
 
 import { createQueryStore } from './client.js';
 import { createSubmitContext } from './submit-context.js';
-import { FakeMorphRoot } from './runtime-test-fakes.js';
+import { FakeMorphRoot, mutationTestResponse } from './runtime-test-fakes.js';
 
 type FragmentSnapshot = {
   html: string;
@@ -57,12 +57,14 @@ describe('submit context failure parsing', () => {
 
       expect(failure.payload.availableQuantity).toBeTypeOf('number');
     });
-    const fetch = vi.fn(async () => ({
-      status: 422,
-      async text() {
-        return '<kovo-fragment target="error"><output role="alert" data-error-code="OUT_OF_STOCK">{"availableQuantity":0}</output></kovo-fragment>';
-      },
-    }));
+    const fetch = vi.fn(async () =>
+      mutationTestResponse('/_m/cart/add', {
+        status: 422,
+        async text() {
+          return '<kovo-fragment target="error"><output role="alert" data-error-code="OUT_OF_STOCK">{"availableQuantity":0}</output></kovo-fragment>';
+        },
+      }),
+    );
     const ctx = createSubmitContext({ fetch, root, store });
 
     const result = await ctx.submit(addToCart, {
@@ -91,12 +93,14 @@ describe('submit context failure parsing', () => {
     const store = createQueryStore();
     const root = new FakeMorphRoot();
     const onError = vi.fn();
-    const fetch = vi.fn(async () => ({
-      status: 422,
-      async text() {
-        return '<kovo-error data-debug="quantity > stock">{"code":"OUT_OF_STOCK","payload":{"availableQuantity":0}}</kovo-error>';
-      },
-    }));
+    const fetch = vi.fn(async () =>
+      mutationTestResponse('/_m/cart/add', {
+        status: 422,
+        async text() {
+          return '<kovo-error data-debug="quantity > stock">{"code":"OUT_OF_STOCK","payload":{"availableQuantity":0}}</kovo-error>';
+        },
+      }),
+    );
     const ctx = createSubmitContext({ fetch, root, store });
 
     await ctx.submit(addToCart, {
@@ -119,12 +123,14 @@ describe('submit context failure parsing', () => {
     const store = createQueryStore();
     const root = new FakeMorphRoot();
     const onError = vi.fn();
-    const fetch = vi.fn(async () => ({
-      status: 422,
-      async text() {
-        return '<kovo-fragment target="error"><output role="alert" data-debug="quantity > stock" data-error-code="OUT_OF_STOCK">{"availableQuantity":0}</output></kovo-fragment>';
-      },
-    }));
+    const fetch = vi.fn(async () =>
+      mutationTestResponse('/_m/cart/add', {
+        status: 422,
+        async text() {
+          return '<kovo-fragment target="error"><output role="alert" data-debug="quantity > stock" data-error-code="OUT_OF_STOCK">{"availableQuantity":0}</output></kovo-fragment>';
+        },
+      }),
+    );
     const ctx = createSubmitContext({ fetch, root, store });
 
     await ctx.submit(addToCart, {
@@ -147,12 +153,14 @@ describe('submit context failure parsing', () => {
     const store = createQueryStore();
     const root = new FakeMorphRoot();
     const onError = vi.fn();
-    const fetch = vi.fn(async () => ({
-      status: 422,
-      async text() {
-        return '<kovo-fragment target="product-form:p1"><output role="alert" data-error-path="quantity">Expected number &gt;= 1</output></kovo-fragment>';
-      },
-    }));
+    const fetch = vi.fn(async () =>
+      mutationTestResponse('/_m/cart/add', {
+        status: 422,
+        async text() {
+          return '<kovo-fragment target="product-form:p1"><output role="alert" data-error-path="quantity">Expected number &gt;= 1</output></kovo-fragment>';
+        },
+      }),
+    );
     const ctx = createSubmitContext({ fetch, root, store });
 
     await ctx.submit(addToCart, {
@@ -175,12 +183,14 @@ describe('submit context failure parsing', () => {
     const store = createQueryStore();
     const root = new FakeMorphRoot();
     const onError = vi.fn();
-    const fetch = vi.fn(async () => ({
-      status: 422,
-      async text() {
-        return '<kovo-fragment target="product-form:p1"><output role="alert" data-debug="quantity > min" data-error-path="quantity">Expected number &gt;= 1</output></kovo-fragment>';
-      },
-    }));
+    const fetch = vi.fn(async () =>
+      mutationTestResponse('/_m/cart/add', {
+        status: 422,
+        async text() {
+          return '<kovo-fragment target="product-form:p1"><output role="alert" data-debug="quantity > min" data-error-path="quantity">Expected number &gt;= 1</output></kovo-fragment>';
+        },
+      }),
+    );
     const ctx = createSubmitContext({ fetch, root, store });
 
     await ctx.submit(addToCart, {

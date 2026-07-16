@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import type { EnhancedMutationFetchOptions } from './mutation-fetch.js';
+import type {
+  EnhancedMutationFetchOptions,
+  EnhancedMutationResponseLike,
+} from './mutation-fetch.js';
 import { submitOptimisticEnhancedMutation } from './mutation-optimistic.js';
 import { installPagehideOptimismCleanup, OptimisticRebaser } from './optimism.js';
 import { stampPendingQueries } from './pending.js';
@@ -10,6 +13,7 @@ import {
   FakePendingElement,
   FakePendingRoot,
   FakeRoot,
+  mutationTestResponse,
 } from './runtime-test-fakes.js';
 
 describe('optimistic enhanced mutation pagehide cleanup', () => {
@@ -34,16 +38,16 @@ describe('optimistic enhanced mutation pagehide cleanup', () => {
 
     const fetch = vi.fn(
       async (_url: string, options: EnhancedMutationFetchOptions) =>
-        new Promise<{
-          text(): Promise<string>;
-        }>((resolve) => {
+        new Promise<EnhancedMutationResponseLike>((resolve) => {
           expect(options.keepalive).toBe(true);
           releaseFetch = () => {
-            resolve({
-              async text() {
-                return '<kovo-query name="cart">{"count":2}</kovo-query>';
-              },
-            });
+            resolve(
+              mutationTestResponse('/_m/cart/add', {
+                async text() {
+                  return '<kovo-query name="cart">{"count":2}</kovo-query>';
+                },
+              }),
+            );
           };
         }),
     );
@@ -90,6 +94,7 @@ describe('optimistic enhanced mutation pagehide cleanup', () => {
       body: formData,
       headers: {
         Accept: 'text/vnd.kovo.fragment+html',
+        'Kovo-Current-Url': 'http://localhost/',
         'Kovo-Fragment': 'true',
         'Kovo-Idem': 'idem_bfcache',
         'Kovo-Live-Targets': '',

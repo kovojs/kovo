@@ -8,6 +8,7 @@ import {
   FakeMorphRoot,
   FakeMorphTarget,
   FakeRoot,
+  mutationTestResponse,
 } from './runtime-test-fakes.js';
 
 const TEST_BUILD = 'build-test';
@@ -68,17 +69,19 @@ describe('loader enhanced mutation broadcasts', () => {
           method: 'post',
         },
       );
-      const fetch = vi.fn(async () => ({
-        headers: {
-          get: (name: string) => (name.toLowerCase() === 'kovo-build' ? TEST_BUILD : null),
-        },
-        async text() {
-          return [
-            '<kovo-query name="cart">{"count":4}</kovo-query>',
-            '<kovo-fragment target="cart-badge"><cart-badge>4</cart-badge></kovo-fragment>',
-          ].join('\n');
-        },
-      }));
+      const fetch = vi.fn(async () =>
+        mutationTestResponse('/_m/cart/add', {
+          headers: {
+            get: (name: string) => (name.toLowerCase() === 'kovo-build' ? TEST_BUILD : null),
+          },
+          async text() {
+            return [
+              '<kovo-query name="cart">{"count":4}</kovo-query>',
+              '<kovo-fragment target="cart-badge"><cart-badge>4</cart-badge></kovo-fragment>',
+            ].join('\n');
+          },
+        }),
+      );
 
       mutationRootA.deps = [{ deps: 'cart', id: 'cart-badge' }];
       mutationRootB.deps = [{ deps: 'cart', id: 'cart-badge' }];

@@ -10,6 +10,7 @@ import {
   FakeMorphTarget,
   FakePendingElement,
   FakePendingRoot,
+  mutationTestResponse,
 } from './runtime-test-fakes.js';
 
 describe('optimistic enhanced mutation failure handling', () => {
@@ -86,11 +87,11 @@ describe('optimistic enhanced mutation failure handling', () => {
       rebaser.add('idem_second', { quantity: 5 }, optimistic);
       expect(store.get('cart')).toEqual({ count: 7 });
 
-      return {
+      return mutationTestResponse('/_m/cart/add', {
         async text() {
           return '<kovo-fragment target="cart-badge"><cart-badge>stale</cart-badge></kovo-fragment>';
         },
-      };
+      });
     });
 
     const result = await submitOptimisticEnhancedMutation({
@@ -133,11 +134,13 @@ describe('optimistic enhanced mutation failure handling', () => {
     store.set('productGrid', { products: [{ id: 'p1', stock: 2 }] });
 
     const result = await submitOptimisticEnhancedMutation({
-      fetch: vi.fn(async () => ({
-        async text() {
-          return '<kovo-fragment target="product-grid"><section>stale</section></kovo-fragment>';
-        },
-      })),
+      fetch: vi.fn(async () =>
+        mutationTestResponse('/_m/cart/add', {
+          async text() {
+            return '<kovo-fragment target="product-grid"><section>stale</section></kovo-fragment>';
+          },
+        }),
+      ),
       form: { action: '/_m/cart/add', method: 'post' },
       formData: new FormData(),
       idem: 'idem_await_fragment_missing_truth',
@@ -182,14 +185,16 @@ describe('optimistic enhanced mutation failure handling', () => {
     store.set('productGrid', { products: [{ id: 'p1', stock: 2 }] });
 
     const result = await submitOptimisticEnhancedMutation({
-      fetch: vi.fn(async () => ({
-        async text() {
-          return [
-            '<kovo-query name="productGrid">{"products":[{"id":"p1","stock":1}]}</kovo-query>',
-            '<kovo-fragment target="product-grid"><section>fresh</section></kovo-fragment>',
-          ].join('\n');
-        },
-      })),
+      fetch: vi.fn(async () =>
+        mutationTestResponse('/_m/cart/add', {
+          async text() {
+            return [
+              '<kovo-query name="productGrid">{"products":[{"id":"p1","stock":1}]}</kovo-query>',
+              '<kovo-fragment target="product-grid"><section>fresh</section></kovo-fragment>',
+            ].join('\n');
+          },
+        }),
+      ),
       form: { action: '/_m/cart/add', method: 'post' },
       formData: new FormData(),
       idem: 'idem_await_fragment_server_truth',
@@ -227,14 +232,16 @@ describe('optimistic enhanced mutation failure handling', () => {
     store.set('cart', { count: 0 });
 
     const result = await submitOptimisticEnhancedMutation({
-      fetch: vi.fn(async () => ({
-        async text() {
-          return [
-            '<kovo-query name="cart">{</kovo-query>',
-            '<kovo-fragment target="cart-badge"><cart-badge>stale</cart-badge></kovo-fragment>',
-          ].join('\n');
-        },
-      })),
+      fetch: vi.fn(async () =>
+        mutationTestResponse('/_m/cart/add', {
+          async text() {
+            return [
+              '<kovo-query name="cart">{</kovo-query>',
+              '<kovo-fragment target="cart-badge"><cart-badge>stale</cart-badge></kovo-fragment>',
+            ].join('\n');
+          },
+        }),
+      ),
       form: { action: '/_m/cart/add', method: 'post' },
       formData: new FormData(),
       idem: 'idem_malformed_optimistic',
@@ -298,13 +305,15 @@ describe('optimistic enhanced mutation failure handling', () => {
 
     // m2 predicts +5 on enqueue (→ 6), then the server rejects it (422).
     await submitOptimisticEnhancedMutation({
-      fetch: vi.fn(async () => ({
-        ok: false,
-        status: 422,
-        async text() {
-          return '';
-        },
-      })),
+      fetch: vi.fn(async () =>
+        mutationTestResponse('/_m/cart/add', {
+          ok: false,
+          status: 422,
+          async text() {
+            return '';
+          },
+        }),
+      ),
       form: { action: '/_m/cart/add', method: 'post' },
       formData: new FormData(),
       idem: 'm2',
@@ -331,13 +340,15 @@ describe('optimistic enhanced mutation failure handling', () => {
     root.deps = [{ id: 'cart-form' }];
     root.targets.set('cart-form', new FakeMorphTarget());
     store.set('cart', { count: 1 });
-    const fetch = vi.fn(async () => ({
-      ok: false,
-      status: 422,
-      async text() {
-        return '<kovo-fragment target="cart-form"><form>Out of stock</form></kovo-fragment>';
-      },
-    }));
+    const fetch = vi.fn(async () =>
+      mutationTestResponse('/_m/cart/add', {
+        ok: false,
+        status: 422,
+        async text() {
+          return '<kovo-fragment target="cart-form"><form>Out of stock</form></kovo-fragment>';
+        },
+      }),
+    );
 
     const result = await submitOptimisticEnhancedMutation({
       fetch,

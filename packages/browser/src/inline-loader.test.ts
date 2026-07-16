@@ -67,7 +67,7 @@ describe('inline loader source', () => {
       }
     }
     class FakeHTMLFormElement extends FakeElement {
-      submit(): void {
+      requestSubmit(): void {
         if (!(this instanceof FakeHTMLFormElement)) throw new TypeError('invalid form receiver');
       }
     }

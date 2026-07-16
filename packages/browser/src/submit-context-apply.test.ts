@@ -8,6 +8,7 @@ import {
   FakeMorphTarget,
   FakeQueryBindingElement,
   FakeQueryPlanElement,
+  mutationTestResponse,
 } from './runtime-test-fakes.js';
 
 declare module '@kovojs/core' {
@@ -40,14 +41,14 @@ describe('submit context apply', () => {
       expect(body.get('productId')).toBe('p1');
       expect(body.get('quantity')).toBe('2');
 
-      return {
+      return mutationTestResponse('/_m/cart/add', {
         async text() {
           return [
             '<kovo-query name="cart">{"count":2}</kovo-query>',
             '<kovo-fragment target="cart-badge"><cart-badge>2</cart-badge></kovo-fragment>',
           ].join('\n');
         },
-      };
+      });
     });
     const ctx = createSubmitContext({
       fetch,
@@ -78,6 +79,7 @@ describe('submit context apply', () => {
       body: expect.any(FormData),
       headers: {
         Accept: 'text/vnd.kovo.fragment+html',
+        'Kovo-Current-Url': 'http://localhost/',
         'Kovo-Fragment': 'true',
         'Kovo-Idem': 'idem_ctx',
         'Kovo-Live-Targets': 'cart-badge#cart-badge@tok_cart:{}',

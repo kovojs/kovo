@@ -12,6 +12,7 @@ import {
   FakePendingRoot,
   FakeQueryBindingElement,
   FakeQueryPlanElement,
+  mutationTestResponse,
 } from './runtime-test-fakes.js';
 
 describe('optimistic enhanced mutation submission', () => {
@@ -33,16 +34,17 @@ describe('optimistic enhanced mutation submission', () => {
     try {
       const result = await submitOptimisticEnhancedMutation({
         broadcast,
-        fetch: async () => ({
-          headers: {
-            get(name: string) {
-              return name.toLowerCase() === 'kovo-session-transition' ? 'reload' : null;
+        fetch: async () =>
+          mutationTestResponse('/_m/auth/custom-sign-in', {
+            headers: {
+              get(name: string) {
+                return name.toLowerCase() === 'kovo-session-transition' ? 'reload' : null;
+              },
             },
-          },
-          ok: true,
-          status: 200,
-          text,
-        }),
+            ok: true,
+            status: 200,
+            text,
+          }),
         form: { action: '/_m/auth/custom-sign-in', method: 'post' },
         formData: new FormData(),
         input: { owner: 'pending-user' },
@@ -98,7 +100,7 @@ describe('optimistic enhanced mutation submission', () => {
         'kovo-pending': '',
       });
 
-      return {
+      return mutationTestResponse('/_m/cart/add', {
         headers: {
           get(name: string) {
             if (name === 'Kovo-Changes') {
@@ -114,7 +116,7 @@ describe('optimistic enhanced mutation submission', () => {
             '<kovo-fragment target="cart-badge"><cart-badge>4</cart-badge></kovo-fragment>',
           ].join('\n');
         },
-      };
+      });
     });
 
     const result = await submitOptimisticEnhancedMutation({
@@ -171,14 +173,14 @@ describe('optimistic enhanced mutation submission', () => {
         items: [{ id: 'r1' }, { id: 'draft' }],
       });
 
-      return {
+      return mutationTestResponse('/_m/reviews/add', {
         async text() {
           return [
             '<kovo-query name="reviews" key="product:p1">{"items":[{"id":"r1"},{"id":"server"}]}</kovo-query>',
             '<kovo-fragment target="reviews:p1"><section>Reviews ready</section></kovo-fragment>',
           ].join('\n');
         },
-      };
+      });
     });
 
     const result = await submitOptimisticEnhancedMutation({
@@ -225,20 +227,22 @@ describe('optimistic enhanced mutation submission', () => {
     const rebaser = new OptimisticRebaser(store);
     store.set('cart', { count: 5, items: [{ kovoKey: 'a' }] });
 
-    const fetch = vi.fn(async () => ({
-      async text() {
-        // Steady-state prod encoding: a delta chunk that overwrites `count` (a
-        // non-collection field, sent whole under `set`) and upserts the `items`
-        // collection. The merge against the held base must produce the FULL value;
-        // the held base for future deltas and the rebaser server-truth baseline
-        // must both be that merged value, never the raw {set}/{lists} envelope.
-        return [
-          '<kovo-query name="cart" delta>',
-          '{"set":{"count":6},"lists":{"items":{"key":"kovoKey","upsert":[{"kovoKey":"b"}]}}}',
-          '</kovo-query>',
-        ].join('');
-      },
-    }));
+    const fetch = vi.fn(async () =>
+      mutationTestResponse('/_m/cart/add', {
+        async text() {
+          // Steady-state prod encoding: a delta chunk that overwrites `count` (a
+          // non-collection field, sent whole under `set`) and upserts the `items`
+          // collection. The merge against the held base must produce the FULL value;
+          // the held base for future deltas and the rebaser server-truth baseline
+          // must both be that merged value, never the raw {set}/{lists} envelope.
+          return [
+            '<kovo-query name="cart" delta>',
+            '{"set":{"count":6},"lists":{"items":{"key":"kovoKey","upsert":[{"kovoKey":"b"}]}}}',
+            '</kovo-query>',
+          ].join('');
+        },
+      }),
+    );
 
     await submitOptimisticEnhancedMutation({
       fetch,
@@ -291,14 +295,14 @@ describe('optimistic enhanced mutation submission', () => {
       rebaser.add('idem_second', { quantity: 5 }, optimistic);
       expect(store.get('cart')).toEqual({ count: 7 });
 
-      return {
+      return mutationTestResponse('/_m/cart/add', {
         async text() {
           return [
             '<kovo-query name="cart">{"count":2}</kovo-query>',
             '<kovo-fragment target="cart-badge"><cart-badge>server</cart-badge></kovo-fragment>',
           ].join('\n');
         },
-      };
+      });
     });
 
     await submitOptimisticEnhancedMutation({

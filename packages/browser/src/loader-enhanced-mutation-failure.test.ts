@@ -24,13 +24,14 @@ describe('loader enhanced mutation failures', () => {
     const preventDefault = vi.fn();
     const importModule = vi.fn();
     const onError = vi.fn();
-    const submit = vi.fn();
+    const requestSubmit = vi.fn();
     const error = new Error('network down');
     const formData = new FormData();
     const form = Object.assign(
       new FakeFormElement(
         {
           enhance: '',
+          'data-mutation': 'cart/add',
           'kovo-deps': 'cart',
         },
         {
@@ -38,7 +39,7 @@ describe('loader enhanced mutation failures', () => {
           method: 'post',
         },
       ),
-      { submit },
+      { requestSubmit },
     );
     mutationRoot.deps = [{ deps: 'cart', id: 'cart-badge' }];
     const fetch = vi.fn(async () => {
@@ -75,7 +76,7 @@ describe('loader enhanced mutation failures', () => {
     expect(fetch).toHaveBeenCalledTimes(1);
     expect(onError).toHaveBeenCalledWith(error, form);
     expect(loaderOnError).not.toHaveBeenCalled();
-    expect(submit).not.toHaveBeenCalled();
+    expect(requestSubmit).not.toHaveBeenCalled();
     expect(importModule).not.toHaveBeenCalled();
     expect(pendingForm.attributes).not.toHaveProperty('kovo-pending');
     expect(pendingForm.attributes).not.toHaveProperty('aria-busy');
@@ -89,7 +90,7 @@ describe('loader enhanced mutation failures', () => {
     const onError = vi.fn();
     const error = new Error('network down');
     const form = new FakeFormElement(
-      { enhance: '' },
+      { enhance: '', 'data-mutation': 'cart/add' },
       {
         action: '/_m/cart/add',
         method: 'post',
@@ -131,17 +132,17 @@ describe('loader enhanced mutation failures', () => {
     const store = createQueryStore();
     const preventDefault = vi.fn();
     const onError = vi.fn();
-    const submit = vi.fn();
+    const requestSubmit = vi.fn();
     const error = new Error('network down');
     const form = Object.assign(
       new FakeFormElement(
-        { enhance: '' },
+        { enhance: '', 'data-mutation': 'cart/add' },
         {
           action: '/_m/cart/add',
           method: 'post',
         },
       ),
-      { submit },
+      { requestSubmit },
     );
 
     installKovoLoader({
@@ -167,7 +168,7 @@ describe('loader enhanced mutation failures', () => {
     ).resolves.toBeUndefined();
 
     expect(preventDefault).toHaveBeenCalledTimes(1);
-    expect(submit).toHaveBeenCalledTimes(1);
+    expect(requestSubmit).toHaveBeenCalledTimes(1);
     expect(onError).toHaveBeenCalledWith(error, {
       event: { preventDefault, target: form, type: 'submit' },
       phase: 'enhanced-mutation',
