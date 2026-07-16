@@ -4954,6 +4954,7 @@ function requestCallIsExactMutationTaskSchedule(
     roots.length !== 1 ||
     !roots.every(
       (root) =>
+        requestCallIsInImmediateRootExecution(call, root) &&
         requestDirectRootRequestParameterKey(callee.getExpression(), root) !== undefined &&
         requestExactMutationTaskScheduleInputIsPlain(input, root, session, new Set()),
     )
@@ -5047,7 +5048,9 @@ function requestCallIsExactMutationTaskCancel(
   if (
     roots.length !== 1 ||
     !roots.every(
-      (root) => requestDirectRootRequestParameterKey(callee.getExpression(), root) !== undefined,
+      (root) =>
+        requestCallIsInImmediateRootExecution(call, root) &&
+        requestDirectRootRequestParameterKey(callee.getExpression(), root) !== undefined,
     )
   ) {
     return false;
@@ -5164,6 +5167,51 @@ interface RequestExactCompositionPostureScope {
   readonly posture: RequestCompositionPosture;
 }
 
+/**
+ * SPEC §6.6 / §9.1 / §9.4 / §9.6: exact request-root capability and reviewed local-state calls
+ * use an immediate-root grammar.
+ * A nested function is an ordinary deferred callable, while a class is also an execution
+ * boundary even when the composition call appears outside a method body: instance-field
+ * initializers run later when an instance is constructed. Reject every class boundary rather
+ * than trying to distinguish eager static fields, computed names, decorators, and heritage
+ * expressions from deferred instance fields. In particular, this prevents a returned thenable
+ * class from resolving the handler and instantiating a scope-capturing field after settlement.
+ */
+function requestCallIsInImmediateRootExecution(
+  call: import('ts-morph').CallExpression,
+  root: RequestCallable,
+): boolean {
+  for (const ancestor of call.getAncestors()) {
+    if (requestNodesAreSame(ancestor, root.declaration)) return true;
+    if (
+      Node.isClassDeclaration(ancestor) ||
+      Node.isClassExpression(ancestor) ||
+      requestCallableForFunctionNode(ancestor)
+    ) {
+      return false;
+    }
+  }
+  return false;
+}
+
+function requestCallCrossesDeferredRootAuthorityBoundary(
+  call: import('ts-morph').CallExpression,
+  root: RequestCallable,
+): boolean {
+  // Request/capability projections are lifecycle authority, including generic framework
+  // capabilities whose method names are intentionally open and exact request.db chains. A class
+  // field can defer such a call past an async handler's thenable settlement, so no allowlist may
+  // accept that receiver across the class boundary (SPEC §6.6 / §9.1 / §9.6).
+  const receiver = requestCallReceiver(unwrapStaticExpression(call.getExpression()));
+  if (!receiver || requestCallIsInImmediateRootExecution(call, root)) return false;
+  const role = requestExpressionRootParameterRole(receiver, root, new Set(), 0);
+  return (
+    role === 'request' ||
+    requestRootRoleIncludesCapability(role) ||
+    requestExpressionResolvesToExactRequestDbCapability(receiver, root, new Set())
+  );
+}
+
 function requestCompositionMethodIsAllowed(
   root: RequestCallable,
   method: RequestCompositionMethod,
@@ -5278,7 +5326,8 @@ function requestCompositionPostureScopeBindingIsPristine(
         !call ||
         call.getQuestionDotTokenNode() ||
         !requestNodesAreSame(call.getExpression(), access) ||
-        !nodeBelongsToRequestCallable(call, root)
+        !nodeBelongsToRequestCallable(call, root) ||
+        !requestCallIsInImmediateRootExecution(call, root)
       ) {
         return false;
       }
@@ -5360,6 +5409,7 @@ function requestCallIsExactTaskComposition(
   const root = requestCompositionRootForExactCapabilityCall(call, session);
   if (
     !root ||
+    !requestCallIsInImmediateRootExecution(call, root) ||
     !requestExpressionIsExactTaskContextReceiver(callee.getExpression(), root, session, method)
   ) {
     return false;
@@ -5390,6 +5440,7 @@ function requestCallIsExactTaskSchedule(
   const root = requestTaskRootForExactCapabilityCall(call, session);
   return !!(
     root &&
+    requestCallIsInImmediateRootExecution(call, root) &&
     requestExpressionIsExactTaskContextReceiver(
       callee.getExpression(),
       root,
@@ -16960,6 +17011,7 @@ function requestExpressionIsProtocolSafe(
     );
   }
   if (Node.isCallExpression(node)) {
+    if (requestCallCrossesDeferredRootAuthorityBoundary(node, callable)) return false;
     const callee = unwrapStaticExpression(node.getExpression());
     if (callee.getKind() === SyntaxKind.ImportKeyword) return true;
     if (
@@ -21157,6 +21209,8 @@ function requestCallIsKnownSafe(
   const member = requestStaticCallMember(callee);
   const receiver = requestCallReceiver(callee);
 
+  if (requestCallCrossesDeferredRootAuthorityBoundary(call, callable)) return false;
+
   if (requestCallIsPromiseSettlement(call, callable, context)) return true;
   if (requestCallIsExactAuthoredBetterAuthSessionProviderDelegation(call, context.provenance)) {
     scanRequestFunctionArguments(call, context);
@@ -22594,7 +22648,10 @@ function requestExpressionIsClosedModuleLocalMap(
     const owner = requestEnclosingCallable(call);
     if (!owner || !nodeBelongsToRequestCallable(call, owner)) return false;
     return requestCallableDeclaredRootContexts(owner, session).some(
-      (root) => root.rootFactory === 'task' && root.rootCallback === 'run',
+      (root) =>
+        root.rootFactory === 'task' &&
+        root.rootCallback === 'run' &&
+        requestCallIsInImmediateRootExecution(call, root),
     );
   });
 }
@@ -24830,11 +24887,13 @@ function requestCallIsExactMutationDomainInvalidateForTarget(
     roots.length === 1 &&
     roots.every(
       (root) =>
+        requestCallIsInImmediateRootExecution(call, root) &&
         requestExpressionIsDirectRootParameterWithRole(
           callee.getExpression(),
           root,
           'capability',
-        ) && requestRootCapabilityMethodIsPristine(callee.getExpression(), root, session),
+        ) &&
+        requestRootCapabilityMethodIsPristine(callee.getExpression(), root, session),
     )
   );
 }
@@ -24893,6 +24952,7 @@ function requestCallIsExactWebhookRecordChangeForTarget(
     roots.length === 1 &&
     roots.every(
       (root) =>
+        requestCallIsInImmediateRootExecution(call, root) &&
         requestExpressionIsDirectRootParameterWithRole(
           callee.getExpression(),
           root,
@@ -25881,7 +25941,12 @@ function requestExactClosedDeclaredRootHelperContexts(
     const caller = requestEnclosingCallable(call);
     if (!caller || !nodeBelongsToRequestCallable(call, caller)) return reject();
     const roots = requestCallableDeclaredRootContexts(caller, session);
-    if (roots.length === 0) return reject();
+    if (
+      roots.length === 0 ||
+      !roots.every((root) => requestCallIsInImmediateRootExecution(call, root))
+    ) {
+      return reject();
+    }
     const args = call.getArguments();
     if (args.length !== parameters.length || args.some(Node.isSpreadElement)) return reject();
     for (const root of roots) {

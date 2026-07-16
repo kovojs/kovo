@@ -2637,6 +2637,515 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
     }
   });
 
+  it('rejects composition and scheduling across deferred class execution boundaries', () => {
+    const deferredTaskFacts = sinksFor(`
+      import { mutation, s, task } from '@kovojs/server';
+      const record = mutation({
+        input: s.object({ id: s.string() }),
+        handler(input) { return { id: input.id }; },
+      });
+      task('orders/deferred-class', {
+        input: s.object({ id: s.string() }),
+        async run(input, context) {
+          const principal = context.actAs('reviewed-task-principal');
+          class DeferredTaskMutation {
+            readonly result = principal.runMutation(record, { id: input.id });
+            static then(resolve: (value: undefined) => void) {
+              resolve(undefined);
+              queueMicrotask(() => { void new this(); });
+            }
+          }
+          return DeferredTaskMutation;
+        },
+      });
+    `);
+    expect(deferredTaskFacts).toContainEqual(
+      expect.objectContaining({
+        sink: 'request-handler.opaque-call',
+        source: 'principal.runMutation',
+      }),
+    );
+
+    const deferredWebhookFacts = sinksFor(`
+      import { mutation, s, webhook } from '@kovojs/server';
+      const record = mutation({
+        input: s.object({ id: s.string() }),
+        handler(input) { return { id: input.id }; },
+      });
+      webhook('/events/deferred-class', {
+        input: s.object({ id: s.string() }),
+        verify: 'none',
+        verifyJustification: 'deferred class boundary proof',
+        async handler(input, context) {
+          const principal = context.actAs('reviewed-webhook-principal');
+          const DeferredWebhookMutation = class {
+            readonly result = principal.runMutation(record, { id: input.id });
+            static then(resolve: (value: { ok: true }) => void) {
+              resolve({ ok: true });
+              queueMicrotask(() => { void new this(); });
+            }
+          };
+          return DeferredWebhookMutation;
+        },
+      });
+    `);
+    expect(deferredWebhookFacts).toContainEqual(
+      expect.objectContaining({
+        sink: 'request-handler.opaque-call',
+        source: 'principal.runMutation',
+      }),
+    );
+
+    const deferredInlineFacts = sinksFor(`
+      import { mutation, s, task } from '@kovojs/server';
+      const record = mutation({
+        input: s.object({ id: s.string() }),
+        handler(input) { return { id: input.id }; },
+      });
+      const follow = task('orders/follow', {
+        input: s.object({ id: s.string() }),
+        async run() {},
+      });
+      task('orders/deferred-inline-class', {
+        input: s.object({ id: s.string() }),
+        async run(input, context) {
+          const DeferredInlineMutation = class {
+            readonly directResult = context.runMutation(record, { id: input.id });
+            readonly inlineResult = context
+              .actAs('reviewed-inline-principal')
+              .runMutation(record, { id: input.id });
+            readonly scheduled = context.schedule(follow, { id: input.id });
+            static then(resolve: (value: undefined) => void) {
+              resolve(undefined);
+              queueMicrotask(() => { void new this(); });
+            }
+          };
+          return DeferredInlineMutation;
+        },
+      });
+    `);
+    expect(deferredInlineFacts).toContainEqual(
+      expect.objectContaining({
+        sink: 'request-handler.opaque-call',
+        source: expect.stringContaining('reviewed-inline-principal'),
+      }),
+    );
+    expect(deferredInlineFacts).toContainEqual(
+      expect.objectContaining({
+        sink: 'request-handler.opaque-call',
+        source: 'context.runMutation',
+      }),
+    );
+    expect(deferredInlineFacts).toContainEqual(
+      expect.objectContaining({
+        sink: 'request-handler.opaque-call',
+        source: 'context.schedule',
+      }),
+    );
+
+    const deferredMutationScheduleFacts = sinksFor(`
+      import { mutation, s, task } from '@kovojs/server';
+      const follow = task('orders/mutation-follow', {
+        input: s.object({ id: s.string() }),
+        async run() {},
+      });
+      mutation({
+        input: s.object({ id: s.string() }),
+        async handler(input, request) {
+          const handle = await request.schedule(follow, { id: input.id });
+          class DeferredMutationSchedule {
+            readonly scheduled = request.schedule(follow, { id: input.id });
+            readonly cancelled = request.cancel(handle);
+            static then(resolve: (value: { ok: true }) => void) {
+              resolve({ ok: true });
+              queueMicrotask(() => { void new this(); });
+            }
+          }
+          return DeferredMutationSchedule;
+        },
+      });
+    `);
+    expect(deferredMutationScheduleFacts).toContainEqual(
+      expect.objectContaining({
+        sink: 'request-handler.opaque-call',
+        source: 'request.schedule',
+      }),
+    );
+    expect(deferredMutationScheduleFacts).toContainEqual(
+      expect.objectContaining({
+        sink: 'request-handler.opaque-call',
+        source: 'request.cancel',
+      }),
+    );
+  });
+
+  it('rejects every exact root allowlist across deferred class execution boundaries', () => {
+    const deferredInvalidateFacts = sinksFor(`
+      import { domain, mutation, s } from '@kovojs/server';
+      const orders = domain('orders');
+      mutation({
+        input: s.object({ id: s.string() }),
+        handler(input, _request, context) {
+          class DeferredInvalidate {
+            readonly result = context.invalidate(orders);
+            static then(resolve: (value: { ok: true }) => void) {
+              resolve({ ok: true });
+              queueMicrotask(() => { void new this(); });
+            }
+          }
+          return DeferredInvalidate;
+        },
+      });
+    `);
+    expect(deferredInvalidateFacts).toContainEqual(
+      expect.objectContaining({
+        sink: 'request-handler.opaque-call',
+        source: 'context.invalidate',
+      }),
+    );
+
+    const deferredRecordChangeFacts = sinksFor(`
+      import {
+        createMemoryWebhookReplayStore,
+        domain,
+        publicAccess,
+        s,
+        webhook,
+      } from '@kovojs/server';
+      const orders = domain('orders');
+      const replayStore = createMemoryWebhookReplayStore();
+      webhook('/events/deferred-record-change', {
+        access: publicAccess('deferred recordChange boundary proof'),
+        input: s.object({ id: s.string() }),
+        idempotency: (input) => input.id,
+        replayStore,
+        verify: 'none',
+        verifyJustification: 'deferred recordChange boundary proof',
+        writes: [orders],
+        handler(input, context) {
+          class DeferredRecordChange {
+            readonly result = context.recordChange(orders, { keys: [input.id] });
+            static then(resolve: (value: { ok: true }) => void) {
+              resolve({ ok: true });
+              queueMicrotask(() => { void new this(); });
+            }
+          }
+          return DeferredRecordChange;
+        },
+      });
+    `);
+    expect(deferredRecordChangeFacts).toContainEqual(
+      expect.objectContaining({
+        sink: 'request-handler.opaque-call',
+        source: 'context.recordChange',
+      }),
+    );
+
+    const deferredTaskMapFacts = sinksFor(`
+      import { s, task } from '@kovojs/server';
+      const attempts = new Map<string, number>();
+      task('orders/deferred-map', {
+        input: s.object({ id: s.string() }),
+        async run(input) {
+          class DeferredTaskMap {
+            readonly result = attempts.set(input.id, 1);
+            static then(resolve: (value: undefined) => void) {
+              resolve(undefined);
+              queueMicrotask(() => { void new this(); });
+            }
+          }
+          return DeferredTaskMap;
+        },
+      });
+    `);
+    expect(deferredTaskMapFacts).toContainEqual(
+      expect.objectContaining({
+        sink: 'request-handler.opaque-call',
+        source: 'attempts.set',
+      }),
+    );
+
+    const deferredHelperFacts = sinksForFiles([
+      {
+        fileName: 'schema.ts',
+        source: `
+          import { pgTable, text } from 'drizzle-orm/pg-core';
+          export const contacts = pgTable('contacts', {
+            id: text('id').primaryKey(),
+            email: text('email').notNull(),
+          });
+        `,
+      },
+      {
+        fileName: 'mutations.ts',
+        source: `
+          import { mutation, publicAccess, s } from '@kovojs/server';
+          import { contacts } from './schema.js';
+          async function writeContact(request, row) {
+            await request.db.insert(contacts).values(row);
+          }
+          mutation({
+            access: publicAccess('deferred helper boundary proof'),
+            csrf: false,
+            csrfJustification: 'deferred helper boundary proof',
+            input: s.object({ email: s.string() }),
+            async handler({ email }, request) {
+              class DeferredHelper {
+                readonly result = writeContact(request, { email });
+                static then(resolve: (value: { ok: true }) => void) {
+                  resolve({ ok: true });
+                  queueMicrotask(() => { void new this(); });
+                }
+              }
+              return DeferredHelper;
+            },
+          });
+        `,
+      },
+    ]);
+    // Rejecting the deferred invocation withholds the helper's declared-root role, so its DB
+    // operation is reported at the authority-bearing sink rather than at the local function call.
+    expect(deferredHelperFacts).toContainEqual(
+      expect.objectContaining({
+        sink: 'request-handler.opaque-call',
+        source: 'request.db.insert',
+      }),
+    );
+  });
+
+  it('rejects deferred root authority while keeping the same immediate calls accepted', () => {
+    const expectOpaqueSource = (facts: ReturnType<typeof sinksFor>, source: string): void => {
+      expect(facts).toContainEqual(
+        expect.objectContaining({ sink: 'request-handler.opaque-call', source }),
+      );
+    };
+    const schemaSource = `
+      import { pgTable, text } from 'drizzle-orm/pg-core';
+      export const contacts = pgTable('contacts', {
+        id: text('id').primaryKey(),
+        email: text('email'),
+      });
+    `;
+
+    const immediateDbFacts = sinksForFiles([
+      { fileName: 'schema.ts', source: schemaSource },
+      {
+        fileName: 'data.ts',
+        source: `
+          import { mutation, query, s } from '@kovojs/server';
+          import { contacts } from './schema.js';
+          mutation({
+            input: s.object({ email: s.string() }),
+            async handler({ email }, request) {
+              await request.db.insert(contacts).values({ email });
+              return { ok: true };
+            },
+          });
+          query({
+            async load(_input, context) {
+              return context.db.select({ id: contacts.id }).from(contacts);
+            },
+          });
+        `,
+      },
+    ]);
+    expect(immediateDbFacts).toEqual([]);
+
+    const deferredDbFacts = sinksForFiles([
+      { fileName: 'schema.ts', source: schemaSource },
+      {
+        fileName: 'data.ts',
+        source: `
+          import { mutation, query, s } from '@kovojs/server';
+          import { contacts } from './schema.js';
+          mutation({
+            input: s.object({ email: s.string() }),
+            handler({ email }, request) {
+              class DeferredDbWrite {
+                readonly result = request.db.insert(contacts).values({ email });
+                static then(resolve: (value: { ok: true }) => void) {
+                  resolve({ ok: true });
+                  queueMicrotask(() => { void new this(); });
+                }
+              }
+              return DeferredDbWrite;
+            },
+          });
+          query({
+            load(_input, context) {
+              class DeferredDbRead {
+                readonly result = context.db.select({ id: contacts.id }).from(contacts);
+                static then(resolve: (value: readonly unknown[]) => void) {
+                  resolve([]);
+                  queueMicrotask(() => { void new this(); });
+                }
+              }
+              return DeferredDbRead;
+            },
+          });
+        `,
+      },
+    ]);
+    expectOpaqueSource(deferredDbFacts, 'request.db.insert');
+    expectOpaqueSource(deferredDbFacts, 'context.db.select');
+
+    const immediateEndpointFacts = sinksFor(`
+      import { endpoint } from '@kovojs/server';
+      endpoint('/immediate-io', {
+        async handler(request, context) {
+          await request.text();
+          await context.storage.get('fixed-key');
+          return new Response('ok');
+        },
+      });
+    `);
+    expect(immediateEndpointFacts).toEqual([]);
+
+    const deferredEndpointFacts = sinksFor(`
+      import { endpoint } from '@kovojs/server';
+      endpoint('/deferred-io', {
+        handler(request, context) {
+          class DeferredEndpointIo {
+            readonly body = request.text();
+            readonly stored = context.storage.get('fixed-key');
+            static then(resolve: (value: Response) => void) {
+              resolve(new Response('ok'));
+              queueMicrotask(() => { void new this(); });
+            }
+          }
+          return DeferredEndpointIo;
+        },
+      });
+    `);
+    expectOpaqueSource(deferredEndpointFacts, 'request.text');
+    expectOpaqueSource(deferredEndpointFacts, 'context.storage.get');
+
+    const immediateTaskFacts = sinksFor(`
+      import { s, task } from '@kovojs/server';
+      task('orders/immediate-fetch', {
+        input: s.object({ id: s.string() }),
+        async run(_input, context) {
+          await context.fetch('https://example.test/immediate');
+        },
+      });
+    `);
+    expect(immediateTaskFacts).toEqual([]);
+
+    const deferredTaskFacts = sinksFor(`
+      import { s, task } from '@kovojs/server';
+      task('orders/deferred-fetch', {
+        input: s.object({ id: s.string() }),
+        run(_input, context) {
+          class DeferredFetch {
+            readonly result = context.fetch('https://example.test/deferred');
+            static then(resolve: (value: undefined) => void) {
+              resolve(undefined);
+              queueMicrotask(() => { void new this(); });
+            }
+          }
+          return DeferredFetch;
+        },
+      });
+    `);
+    expectOpaqueSource(deferredTaskFacts, 'context.fetch');
+
+    const webhookPrelude = `
+      import {
+        createMemoryWebhookReplayStore,
+        publicAccess,
+        s,
+        webhook,
+      } from '@kovojs/server';
+      import { contacts } from './schema.js';
+      const replayStore = createMemoryWebhookReplayStore();
+    `;
+    const immediateWebhookFacts = sinksForFiles([
+      { fileName: 'schema.ts', source: schemaSource },
+      {
+        fileName: 'webhook.ts',
+        source: `${webhookPrelude}
+          webhook('/events/immediate-root-authority', {
+            access: publicAccess('immediate root authority proof'),
+            input: s.object({ id: s.string() }),
+            idempotency: (input) => input.id,
+            replayStore,
+            verify: 'none',
+            verifyJustification: 'immediate root authority proof',
+            async handler(input, context) {
+              await context.request.text();
+              await context.tx.insert(contacts).values({ id: input.id });
+              return context.fail('reviewed', { id: input.id });
+            },
+          });
+        `,
+      },
+    ]);
+    expect(immediateWebhookFacts).toEqual([]);
+
+    const deferredWebhookFacts = sinksForFiles([
+      { fileName: 'schema.ts', source: schemaSource },
+      {
+        fileName: 'webhook.ts',
+        source: `${webhookPrelude}
+          webhook('/events/deferred-root-authority', {
+            access: publicAccess('deferred root authority proof'),
+            input: s.object({ id: s.string() }),
+            idempotency: (input) => input.id,
+            replayStore,
+            verify: 'none',
+            verifyJustification: 'deferred root authority proof',
+            handler(input, context) {
+              class DeferredWebhookAuthority {
+                readonly body = context.request.text();
+                readonly written = context.tx.insert(contacts).values({ id: input.id });
+                readonly failure = context.fail('deferred', { id: input.id });
+                static then(resolve: (value: { ok: true }) => void) {
+                  resolve({ ok: true });
+                  queueMicrotask(() => { void new this(); });
+                }
+              }
+              return DeferredWebhookAuthority;
+            },
+          });
+        `,
+      },
+    ]);
+    expectOpaqueSource(deferredWebhookFacts, 'context.request.text');
+    expectOpaqueSource(deferredWebhookFacts, 'context.tx.insert');
+    expectOpaqueSource(deferredWebhookFacts, 'context.fail');
+
+    const immediateOutcomeFacts = sinksFor(`
+      import { mutation } from '@kovojs/server';
+      mutation({
+        handler(_input, _request, context) {
+          context.insert('immediate marker');
+          context.setCookie?.('proof', '1');
+          return { ok: true };
+        },
+      });
+    `);
+    expect(immediateOutcomeFacts).toEqual([]);
+
+    const deferredOutcomeFacts = sinksFor(`
+      import { mutation } from '@kovojs/server';
+      mutation({
+        handler(_input, _request, context) {
+          class DeferredOutcomeAuthority {
+            readonly inserted = context.insert('deferred marker');
+            readonly cookie = context.setCookie?.('proof', '1');
+            static then(resolve: (value: { ok: true }) => void) {
+              resolve({ ok: true });
+              queueMicrotask(() => { void new this(); });
+            }
+          }
+          return DeferredOutcomeAuthority;
+        },
+      });
+    `);
+    expectOpaqueSource(deferredOutcomeFacts, 'context.insert');
+    expectOpaqueSource(deferredOutcomeFacts, 'context.setCookie');
+  });
+
   it('accepts exact Request URL parsing without opening shadowed constructors or getters', () => {
     const safe = sinksFor(`
       import { endpoint } from '@kovojs/server';
