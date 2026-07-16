@@ -36,9 +36,10 @@ platform or browser primitive that actually supplied it.
     HTTP; a legitimate HTTPS `Origin` plus valid CSRF token received 422 and the response omitted
     HSTS. Explicit `trustedProxy`/native-HTTPS controls admitted both clients and returned 200 with
     the secure-request posture.
-  - **SPEC conflict:** §9.5 requires the default coarse limiter to enforce a real per-IP budget;
-    CSRF and secure-response posture must operate on the external request origin, not the internal
-    bridge hop. This is distinct from `bugz-4` M10's forwarded-chain parsing bug: no attacker-selected
+  - **SPEC conflict:** §6.6 and §9.1 require the CSRF Origin floor and request security facts to
+    fail closed on the actual external request, while §9.5 requires the default coarse limiter to
+    enforce a real per-IP budget. Neither contract can use the internal bridge hop as the external
+    client. This is distinct from `bugz-4` M10's forwarded-chain parsing bug: no attacker-selected
     hop is trusted here; the Vercel preset never converts authenticated platform facts into Kovo's
     trusted request metadata.
   - **Acceptance:** the Vercel adapter must derive client IP and scheme from Vercel-authenticated
@@ -50,7 +51,7 @@ platform or browser primitive that actually supplied it.
 
 - [ ] **M1 - Enhanced mutation dispatch ignores submitter `formaction`/`formmethod` and can run the
       destructive base mutation instead of the native preview action.**
-      `packages/browser/src/{mutation-submit.ts:85-107,mutation-fetch.ts:121-155,inline-loader-build.ts:1423-1451,inline-loader-build.ts:2235-2272}`;
+      `packages/browser/src/{mutation-submit.ts:85-107,mutation-submit.ts:135-139,mutation-form.ts:28-33,mutation-fetch.ts:121-155,inline-loader-build.ts:1423-1451,inline-loader-build.ts:2235-2272}`;
       `packages/compiler/src/emit/server-emit-shared.ts:513-534`
   - Both runtimes use the submitter only while constructing `FormData`, then dispatch with the base
     form's action/method. The compiler accepts submitter overrides inside a typed enhanced mutation,
@@ -72,8 +73,11 @@ platform or browser primitive that actually supplied it.
 - [ ] **M2 - The Cloudflare preset omits the platform client IP, silently disabling default per-IP
       load shedding.** `packages/server/src/{build.ts:1724-1795,app-load-shed.ts:1026-1065}`
   - The Worker passes the native `Request` directly to the app. Kovo has neither a peer-address
-    binding nor a preset-owned extractor for Cloudflare's authenticated `CF-Connecting-IP`, while
-    the safe generic default correctly refuses to trust arbitrary forwarded headers.
+    binding nor a preset-owned extractor for direct Cloudflare-edge `CF-Connecting-IP`, while the
+    safe generic default correctly refuses to trust arbitrary forwarded headers. The preset also
+    does not distinguish direct edge ingress from same-zone Worker subrequests, where
+    [Cloudflare documents](https://developers.cloudflare.com/fundamentals/reference/http-headers/#cf-connecting-ip-in-worker-subrequests)
+    that `CF-Connecting-IP` reflects Worker-mutable `x-real-ip`.
   - **Verified:** two requests with the same `CF-Connecting-IP` were both admitted under a one-request
     per-IP budget and allocated zero per-IP keys. Supplying an explicit `requestLimits.clientIp`
     extractor made the second request return 429.
@@ -81,9 +85,11 @@ platform or browser primitive that actually supplied it.
     distinct from H1 because Cloudflare loses the dimension entirely rather than collapsing clients
     through a Node bridge, and from `bugz-4` M10 because the authenticated Cloudflare field is never
     parsed at all.
-  - **Acceptance:** the Cloudflare preset must bind the platform-authenticated client IP as a private
-    framework fact and prove same-client throttling/distinct-client separation without making raw
-    `CF-Connecting-IP` trusted on non-Cloudflare adapters.
+  - **Acceptance:** the Cloudflare preset must bind direct-edge platform-authenticated client IP as
+    a private framework fact and prove same-client throttling/distinct-client separation without
+    making raw `CF-Connecting-IP` trusted on non-Cloudflare adapters. Same-zone Worker subrequests
+    must fail closed for user-IP limiting or receive a separate non-user identity that cannot be
+    rotated through `x-real-ip`; direct-edge and subrequest cases need distinct regressions.
 
 - [ ] **M3 - Endpoint CSRF and effect posture classify only four unsafe verbs and let nominally safe
       methods retain write/browser-state authority.**
@@ -100,24 +106,32 @@ platform or browser primitive that actually supplied it.
     bypass from `bugz-3` L16.
   - **SPEC conflict:** §9.1 requires endpoint auth/CSRF/effect posture to remain explicit and §11.4
     defines the printed endpoint audit as the verification surface. A label of `checked` is false
-    when the declared method bypasses the check. This is distinct from `bugz-28` H13's mutable method
-    canonicalizer: exact pristine methods take the wrong policy branch.
-  - **Acceptance:** default unknown/custom methods to unsafe and CSRF-checked; make an explicit safe
-    method set reader-only and browser-state-effect-free unless an executable verifier authorizes the
-    effect; print safe methods as not applicable rather than checked; cover custom verbs, GET/HEAD,
-    Writer acquisition, retained Authorization, and `Set-Cookie` in runtime and audit tests.
+    when the declared method bypasses the check, while the effect contract for nominally safe methods
+    is currently underspecified. This is distinct from `bugz-28` H13's mutable method canonicalizer:
+    exact pristine methods take the wrong policy branch.
+  - **Acceptance:** first update `spec/09-wire-protocol.md` §9.1 with a closed safe-method/effect
+    contract and `spec/11-verification.md` §11.4 with an audit vocabulary that distinguishes an
+    executed CSRF check from the new safe-method posture. Then default unknown/custom methods to
+    unsafe and CSRF-checked, make the normative safe set reader-only and browser-state-effect-free
+    unless an executable verifier authorizes the effect, and replace the unconditional `checked`
+    label with the vocabulary the updated SPEC defines. Cover custom verbs, GET/HEAD, Writer
+    acquisition, retained Authorization, and `Set-Cookie` in runtime and audit tests.
 
 - [ ] **M4 - Both enhanced mutation runtimes send the browser fragment in `Kovo-Current-Url`, and
-      the server preserves it into handlers and redirects.**
+      the server exposes it to handlers and some fallback redirects.**
       `packages/browser/src/{mutation-fetch.ts:121-140,inline-loader-build.ts:1423-1447}`;
       `packages/server/src/{app-mutation-request.ts:404-428,app-document.ts:614-617,mutation-wire.ts:947-955}`
   - Both clients serialize `location.href` rather than origin/path/query. The server accepts the
-    same-origin value with its hash, uses it as mutation current/source URL, exposes the unchanged
-    header to ordinary mutation code, and includes the hash in default redirect targets. Live-target
-    attestation canonicalization strips the fragment, so a fragment-bearing request still verifies.
+    same-origin value with its hash, uses it as mutation current/source URL, and exposes the unchanged
+    header to ordinary mutation code. When Referer is missing or unusable, the default redirect also
+    falls back to that hash-bearing current URL. Live-target attestation canonicalization strips the
+    fragment, so a fragment-bearing request still verifies.
   - **Verified:** real Chromium sent `#access_token=...` in the enhanced header while the native
-    Referer omitted it. The handler read the exact secret-bearing value and the no-JS redirect helper
-    produced `/settings#...`; direct server reproduction returned 303 with the same fragment.
+    Referer omitted it, and the mutation handler read the exact secret-bearing value. Separately, a
+    synthetic/custom no-JS request with no usable Referer produced a default 303
+    `Location: /settings#...`. A normal request with usable Referer prefers that Referer, and the
+    official enhanced path consumes a fragment response rather than this PRG redirect; the direct
+    handler disclosure remains unconditional on those redirect preconditions.
   - **SPEC conflict:** §9.1 explicitly defines the canonical source-document URL as origin, path,
     and query, **never the fragment**. This is distinct from prior URL-redaction findings: the client
     actively promotes browser-only fragment data onto the HTTP wire.
@@ -125,13 +139,16 @@ platform or browser primitive that actually supplied it.
     fragment-bearing values at server ingress as defense in depth, and prove OAuth/history/inherited
     hashes never reach a handler, attestation input, or redirect.
 
-- [ ] **M5 - The generated inline loader enhances external and non-mutation forms, leaks Kovo
-      request metadata, and trusts the foreign mutation response inside the app origin.**
-      `packages/browser/src/{mutation-form.ts:43-61,inline-loader-build.ts:1120-1190,inline-loader-build.ts:1423-1451,inline-loader-build.ts:1548-1561}`
+- [ ] **M5 - The inline loader enhances external/non-mutation forms, while both mutation runtimes
+      trust foreign or wrong-media responses inside the app origin.**
+      `packages/browser/src/{mutation-form.ts:43-61,mutation-fetch.ts:151-245,navigation-security-intrinsics.ts:2459-2469,inline-loader-build.ts:1120-1190,inline-loader-build.ts:1423-1451,inline-loader-build.ts:1548-1561}`;
+      `packages/compiler/src/{emit/server-emit-shared.ts:197-245,emit/server-emit-shared.ts:513-534,emit/mutation-form.ts:426-493}`
   - The modular runtime limits enhancement to same-origin POST `/_m/` forms; the inline runtime
     intercepts every form carrying an enhancement marker. The compiler accepts raw enhanced
-    non-mutation/external actions, and the inline response path does not require the final response
-    URL to remain same-origin before applying Kovo fragments/text/renderer directives.
+    non-mutation/external actions. After a request is admitted, **both** modular and inline response
+    paths consume Kovo response vocabulary without requiring the final response URL to remain
+    same-origin or the response to carry the mutation media type; the modular response membrane
+    already snapshots URL and headers, so the missing validation is not a carrier limitation.
   - **Verified:** with an explicitly permitted CSP `connect-src` and CORS-open receiver, a pristine
     compiled external form POSTed the full current URL, target/dependency/live-attestation/props
     metadata, form target, fresh idempotency value, and body to another origin. A Kovo-shaped foreign
@@ -141,11 +158,13 @@ platform or browser primitive that actually supplied it.
   - **SPEC conflict:** §7 limits L2 to mutations, §9.1 defines the enhanced wire as `POST /_m/<key>`,
     and the full server response is the authority for mutation reconciliation. This is distinct from
     `bugz-28` H23's intrinsic-poisoned enhanced navigation: the generated pristine mutation loader
-    omits the eligibility/final-origin gates that its modular sibling already implements.
-  - **Acceptance:** share one exact modular/generated eligibility predicate, diagnose `enhance` on
-    raw forms without typed mutation ownership, require the final response URL to remain same-origin
-    and carry the mutation media type before consuming any Kovo response vocabulary, and retain
-    native form fallback for ineligible forms.
+    omits the modular initial-form eligibility gate, while both pristine mutation runtimes omit the
+    final-response origin/media gates.
+  - **Acceptance:** share the modular same-origin `POST /_m/` initial-form predicate with the
+    generated/bootstrap path; compiler lowering must reject raw `enhance` without typed mutation
+    ownership and typed external/non-mutation overrides. Independently, both modular and inline
+    response paths must require the final response URL to remain same-origin and the exact mutation
+    media type before consuming any Kovo vocabulary, with native form fallback for ineligible forms.
 
 ## Duplicate and control review
 
