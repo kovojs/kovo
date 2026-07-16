@@ -16841,6 +16841,21 @@ function scanRequestProtocolUse(
     return;
   }
 
+  const localMapValues =
+    hooks.length === 1 && hooks[0] === 'then'
+      ? requestExactLocalMapGetStoredValues(node, callable, context.provenance)
+      : undefined;
+  if (localMapValues) {
+    // SPEC §6.6 / §9.6: an exact request-local Map is only a transparent carrier. Its
+    // retrieved value still crosses the framework's thenable-assimilation boundary, so inspect
+    // every statically possible stored value instead of either rejecting ordinary local state or
+    // blessing the container as a whole.
+    for (const value of localMapValues) {
+      scanRequestProtocolUse(value, hooks, site, callable, context);
+    }
+    return;
+  }
+
   const protocolSources = hooks.includes('then')
     ? requestThenableProtocolSources(node, context.provenance, new Set())
     : [node, ...requestProtocolPrototypeSources(node, new Set())];
@@ -22997,6 +23012,99 @@ function requestExpressionIsClosedModuleLocalMap(
         requestCallIsInImmediateRootExecution(call, root),
     );
   });
+}
+
+/**
+ * Resolve the finite value set behind an exact request-local `Map#get` without treating Map as a
+ * generic authority carrier. Any alias, escape, reflective access, reassignment, subclass, or
+ * cross-root use closes the proof; callers must recursively inspect the returned values.
+ */
+function requestExactLocalMapGetStoredValues(
+  expression: Node,
+  callable: RequestCallable,
+  session: RequestProvenanceSession,
+): Node[] | undefined {
+  const node = unwrapStaticExpression(expression);
+  if (!Node.isCallExpression(node)) return undefined;
+  const callee = unwrapStaticExpression(node.getExpression());
+  const receiver = requestCallReceiver(callee);
+  if (!receiver || requestStaticCallMember(callee) !== 'get' || node.getArguments().length !== 1) {
+    return undefined;
+  }
+  const target = unwrapStaticExpression(receiver);
+  if (!Node.isIdentifier(target)) return undefined;
+  const symbol = requestIdentifierValueSymbol(target) ?? target.getSymbol();
+  if (!symbol || requestAssignedBindingProjections(symbol, session).length !== 0) return undefined;
+  const declarations = symbol.getDeclarations().filter(Node.isVariableDeclaration);
+  const [declaration] = declarations;
+  const initializer = declaration?.getInitializer();
+  const construct = initializer ? unwrapStaticExpression(initializer) : undefined;
+  if (
+    declarations.length !== 1 ||
+    !declaration ||
+    !nodeBelongsToRequestCallable(declaration, callable) ||
+    declaration.getVariableStatement()?.getDeclarationKind() !== VariableDeclarationKind.Const ||
+    !construct ||
+    !Node.isNewExpression(construct) ||
+    construct.getArguments().length !== 0
+  ) {
+    return undefined;
+  }
+  const constructor = unwrapStaticExpression(construct.getExpression());
+  if (
+    !Node.isIdentifier(constructor) ||
+    constructor.getText() !== 'Map' ||
+    !unshadowedGlobalIdentifier(constructor, 'Map') ||
+    requestGlobalIntrinsicBindingIsMutated('Map', construct.getSourceFile())
+  ) {
+    return undefined;
+  }
+
+  const targetKey = requestSymbolKey(symbol);
+  const references = declaration
+    .getSourceFile()
+    .getDescendantsOfKind(SyntaxKind.Identifier)
+    .filter((identifier) => {
+      const candidate = requestIdentifierValueSymbol(identifier) ?? identifier.getSymbol();
+      return !!candidate && requestSymbolKey(candidate) === targetKey;
+    });
+  const storedValues: Node[] = [];
+  for (const reference of references) {
+    if (requestNodesAreSame(reference, declaration.getNameNode())) continue;
+    const memberAccess = reference.getParent();
+    if (
+      (!Node.isPropertyAccessExpression(memberAccess) &&
+        !Node.isElementAccessExpression(memberAccess)) ||
+      !requestNodesAreSame(memberAccess.getExpression(), reference)
+    ) {
+      return undefined;
+    }
+    const member = staticMemberName(
+      Node.isPropertyAccessExpression(memberAccess)
+        ? memberAccess.getNameNode()
+        : memberAccess.getArgumentExpression(),
+    );
+    if (member !== 'get' && member !== 'set') return undefined;
+    const call = memberAccess.getParentIfKind(SyntaxKind.CallExpression);
+    if (
+      !call ||
+      !requestNodesAreSame(call.getExpression(), memberAccess) ||
+      !nodeBelongsToRequestCallable(call, callable) ||
+      (member === 'get' && call.getArguments().length !== 1) ||
+      (member === 'set' && call.getArguments().length !== 2)
+    ) {
+      return undefined;
+    }
+    if (member === 'set') {
+      const storedValue = call.getArguments()[1]!;
+      // Do not recursively chase a self-referential carrier (`map.set(key, map.get(key))`).
+      // Opaque aliases and helper-produced cycles already close above; direct cycles must do the
+      // same instead of exhausting the classifier stack.
+      if (requestExpressionReferencesSymbol(storedValue, targetKey)) return undefined;
+      storedValues.push(storedValue);
+    }
+  }
+  return storedValues;
 }
 
 type RequestLocalIntrinsicContainerKind = 'array' | 'map' | 'url-search-params';

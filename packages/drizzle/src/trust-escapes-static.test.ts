@@ -3311,6 +3311,51 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
     ).toBeGreaterThanOrEqual(11);
   });
 
+  it('opens exact local Map reads while retaining stored thenable assimilation', () => {
+    const safe = sinksFor(`
+      import { s, task } from '@kovojs/server';
+      task('map/safe', { input: s.object({}), run() {
+        const values = new Map();
+        values.set('key', 'safe');
+        return values.get('key');
+      } });
+    `);
+    expect(safe).toEqual([]);
+
+    const unsafe = sinksFor(`
+      import { s, task } from '@kovojs/server';
+      task('map/thenable', { input: s.object({}), run() {
+        class DeferredValue {
+          static then(resolve: (value: { ok: true }) => void) { resolve({ ok: true }); }
+        }
+        const values = new Map();
+        values.set('key', DeferredValue);
+        return values.get('key');
+      } });
+    `);
+    expect(unsafe).toContainEqual(
+      expect.objectContaining({
+        sink: 'request-handler.opaque-protocol',
+        source: '<class-thenable:DeferredValue>',
+      }),
+    );
+
+    const cyclic = sinksFor(`
+      import { s, task } from '@kovojs/server';
+      task('map/cyclic', { input: s.object({}), run() {
+        const values = new Map();
+        values.set('key', values.get('key'));
+        return values.get('key');
+      } });
+    `);
+    expect(cyclic).toContainEqual(
+      expect.objectContaining({
+        sink: 'request-handler.opaque-protocol',
+        source: "<then:values.get('key')>",
+      }),
+    );
+  });
+
   it('resolves returned class values through import and re-export aliases', () => {
     const facts = sinksForFiles([
       {
