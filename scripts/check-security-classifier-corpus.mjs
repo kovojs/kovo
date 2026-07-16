@@ -305,7 +305,10 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
   {
     id: 'kv424-request-process',
     marker: '@kovo-security-classifier-corpus kv424-request-process',
-    testFiles: ['packages/drizzle/src/trust-escapes-static.test.ts'],
+    testFiles: [
+      'packages/drizzle/src/trust-escapes-static.test.ts',
+      'packages/drizzle/src/index.toctou-readonly.test.ts',
+    ],
     verdictAnchors: [
       {
         id: 'existing-dangerous-sink-closed-verdicts',
@@ -428,6 +431,34 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
           "'structural storage capability'",
           "'post-construction escape'",
           "'multiple retained consumers'",
+        ],
+      },
+      {
+        id: 'memory-storage-direct-method-exact-grammar',
+        file: 'packages/drizzle/src/trust-escapes-static.test.ts',
+        snippets: [
+          'accepts exact direct memory-storage methods without opening capability carriers',
+          "await storage.put('receipts/delete-target.txt', 'delete target')",
+          "await storage.delete('receipts/delete-target.txt')",
+          "await storage.get('receipts/write-target.txt')",
+          "'aliased binding'",
+          "'computed method'",
+          "'extracted method'",
+          "'reassigned method'",
+          'export const storage = createMemoryStorage()',
+          'declare const storage:',
+          "storage.put('receipts/proof.txt', execFileSync('storage-module-authority'))",
+          "Promise.resolve().then(() => storage.put('receipts/query-write.txt', 'bad'))",
+        ],
+      },
+      {
+        id: 'memory-storage-direct-method-query-write-denial',
+        file: 'packages/drizzle/src/index.toctou-readonly.test.ts',
+        snippets: [
+          'flags query() loaders that reach storage put/delete authority',
+          'import { createMemoryStorage, query } from "@kovojs/server";',
+          'const storage = createMemoryStorage();',
+          'operationProvenance',
         ],
       },
       {

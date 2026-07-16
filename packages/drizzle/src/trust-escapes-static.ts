@@ -4410,10 +4410,10 @@ function flushRequestRetainedConfigPristine(
         .some((argument) =>
           requestRetainedConfigExpressionTargetsIdentity(argument, targets, new Set(), 0),
         );
-      if (
-        (receiverTargets || argumentTargets) &&
-        !requestRetainedConfigCallIsReviewed(call, context.provenance)
-      ) {
+      const reviewedRetainedConfigCall =
+        requestRetainedConfigCallIsReviewed(call, context.provenance) ||
+        requestCallIsExactMemoryStorageDirectMethod(call, context.provenance);
+      if ((receiverTargets || argumentTargets) && !reviewedRetainedConfigCall) {
         reject(call);
         scanRequestRetainedConfigMutationCallables(call, context);
       }
@@ -8346,6 +8346,89 @@ function requestCallIsExactMemoryStoragePut(
     declaration &&
     requestMemoryStoragePutUseIsExact(receiver, declaration) &&
     requestMemoryStorageBindingIsPristine(declaration, session)
+  );
+}
+
+const REQUEST_MEMORY_STORAGE_DIRECT_METHODS = new Set(['delete', 'get', 'put', 'stat', 'stream']);
+
+function requestMemoryStorageDirectMethodUseIsExact(
+  reference: import('ts-morph').Identifier,
+  declaration: import('ts-morph').VariableDeclaration,
+): boolean {
+  const access = reference.getParentIfKind(SyntaxKind.PropertyAccessExpression);
+  const call = access?.getParentIfKind(SyntaxKind.CallExpression);
+  return !!(
+    access &&
+    !access.getQuestionDotTokenNode() &&
+    REQUEST_MEMORY_STORAGE_DIRECT_METHODS.has(access.getName()) &&
+    requestNodesAreSame(access.getExpression(), reference) &&
+    call &&
+    !call.getQuestionDotTokenNode() &&
+    requestNodesAreSame(call.getExpression(), access) &&
+    requestExactMemoryStorageDeclarationForExpression(reference) === declaration
+  );
+}
+
+function requestMemoryStorageDirectBindingIsPristine(
+  declaration: import('ts-morph').VariableDeclaration,
+  session: RequestProvenanceSession,
+): boolean {
+  const memoKey = `memory-storage-direct:${requestNodeIdentity(declaration)}`;
+  const memoized = session.exactCapabilityBindingMemo.get(memoKey);
+  if (memoized !== undefined) return memoized;
+  session.exactCapabilityBindingMemo.set(memoKey, false);
+  const references = requestExactBindingReferences(declaration);
+  const result = !!(
+    references &&
+    references.length > 0 &&
+    references.every((reference) =>
+      requestMemoryStorageDirectMethodUseIsExact(reference, declaration),
+    )
+  );
+  session.exactCapabilityBindingMemo.set(memoKey, result);
+  return result;
+}
+
+/**
+ * SPEC §6.6 / §9.4: a pristine framework-owned storage capability is a reviewed sink. Keep this
+ * admission to direct calls on one non-exported module-scope binding so aliases,
+ * extracted/computed methods, reassignment, and structural lookalikes remain opaque. Writes are
+ * narrower still: one closed-static module seed or immediate execution in an exact mutation
+ * handler. Deferred query callbacks therefore retain KV424 as KV433's fail-closed backstop.
+ */
+function requestCallIsExactMemoryStorageDirectMethod(
+  call: import('ts-morph').CallExpression,
+  session: RequestProvenanceSession,
+): boolean {
+  const callee = unwrapStaticExpression(call.getExpression());
+  if (
+    !Node.isPropertyAccessExpression(callee) ||
+    !REQUEST_MEMORY_STORAGE_DIRECT_METHODS.has(callee.getName())
+  ) {
+    return false;
+  }
+  const receiver = unwrapStaticExpression(callee.getExpression());
+  if (!Node.isIdentifier(receiver)) return false;
+  const declaration = requestExactMemoryStorageDeclarationForExpression(receiver);
+  if (
+    !declaration ||
+    !requestMemoryStorageDirectMethodUseIsExact(receiver, declaration) ||
+    !requestMemoryStorageDirectBindingIsPristine(declaration, session)
+  ) {
+    return false;
+  }
+
+  const method = callee.getName();
+  if (['get', 'stat', 'stream'].includes(method)) return true;
+  if (method === 'put' && requestMemoryStoragePutUseIsExact(receiver, declaration)) return true;
+
+  const direct = requestEnclosingCallable(call);
+  if (!direct || !nodeBelongsToRequestCallable(call, direct)) return false;
+  const roots = requestCallableDeclaredRootContexts(direct, session).filter(
+    (root) => root.rootFactory === 'mutation' && root.rootCallback === 'handler',
+  );
+  return !!(
+    roots.length === 1 && roots.every((root) => requestCallIsInImmediateRootExecution(call, root))
   );
 }
 
@@ -17019,7 +17102,11 @@ function requestExpressionIsProtocolSafe(
       requestCallIsExactStoredFileParseAsync(node, session)
     )
       return true;
-    if (requestCallIsExactMemoryStoragePut(node, session)) return true;
+    if (
+      requestCallIsExactMemoryStoragePut(node, session) ||
+      requestCallIsExactMemoryStorageDirectMethod(node, session)
+    )
+      return true;
     if (requestCallIsExactRoutePageSignUrl(node, session, callable)) return true;
     if (requestCallUsesRoutePageSignUrlShape(node, callable)) return false;
     if (requestCallIsExactStoredFileSchemaBuilder(node, session)) return true;
@@ -18541,6 +18628,7 @@ function requestExpressionIsExactNativePromise(
       requestCallIsExactAcceptedFileParseAsync(node, session) ||
       requestCallIsExactStoredFileParseAsync(node, session) ||
       requestCallIsExactMemoryStoragePut(node, session) ||
+      requestCallIsExactMemoryStorageDirectMethod(node, session) ||
       requestCallIsExactRoutePageSignUrl(node, session)
     ) {
       return true;
@@ -21224,6 +21312,7 @@ function requestCallIsKnownSafe(
     requestCallIsExactAcceptedFileParse(call, context.provenance) ||
     requestCallIsExactStoredFileParseAsync(call, context.provenance) ||
     requestCallIsExactMemoryStoragePut(call, context.provenance) ||
+    requestCallIsExactMemoryStorageDirectMethod(call, context.provenance) ||
     requestCallIsExactRoutePageSignUrl(call, context.provenance, callable)
   ) {
     scanRequestFunctionArguments(call, context);

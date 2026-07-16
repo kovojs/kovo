@@ -762,8 +762,8 @@ describe('KV433 read-only query handle (Stage 2: static no-write-reachable)', ()
   it('flags query() loaders that reach storage put/delete authority', () => {
     const result = reach(
       [
-        'import type { StorageCapability } from "@kovojs/core";',
-        'declare const storage: StorageCapability;',
+        'import { createMemoryStorage, query } from "@kovojs/server";',
+        'const storage = createMemoryStorage();',
         'export const downloads = query("downloads", {',
         '  load: async () => {',
         '    await storage.put("receipts/a.txt", "A");',

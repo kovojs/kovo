@@ -10877,6 +10877,122 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
     }
   });
 
+  it('accepts exact direct memory-storage methods without opening capability carriers', () => {
+    const exact = sinksFor(`
+      import { createMemoryStorage, mutation, route, s } from '@kovojs/server';
+      const storage = createMemoryStorage();
+      await storage.put('receipts/delete-target.txt', 'delete target');
+      export const write = mutation({
+        input: s.object({ mode: s.string() }),
+        async handler(input) {
+          if (input.mode === 'put') {
+            await storage.put('receipts/write-target.txt', input.mode);
+          } else {
+            await storage.delete('receipts/delete-target.txt');
+          }
+          return { ok: true };
+        },
+      });
+      export const status = route('/storage', {
+        async page() {
+          const value = await storage.get('receipts/write-target.txt');
+          const metadata = await storage.stat('receipts/write-target.txt');
+          const stream = await storage.stream('receipts/write-target.txt');
+          return {
+            hasMetadata: metadata !== undefined,
+            hasStream: stream !== undefined,
+            present: value !== undefined,
+          };
+        },
+      });
+    `);
+    expect(exact).toEqual([]);
+
+    for (const [label, setup, call] of [
+      ['aliased binding', 'const escaped = storage;', "escaped.put('receipts/proof.txt', 'proof')"],
+      ['computed method', '', "storage['put']('receipts/proof.txt', 'proof')"],
+      ['extracted method', 'const put = storage.put;', "put('receipts/proof.txt', 'proof')"],
+      [
+        'reassigned method',
+        'storage.put = async () => ({ key: "forged" });',
+        "storage.put('receipts/proof.txt', 'proof')",
+      ],
+    ] as const) {
+      const facts = sinksFor(`
+        import { createMemoryStorage, mutation } from '@kovojs/server';
+        const storage = createMemoryStorage();
+        ${setup}
+        export const write = mutation({
+          async handler() {
+            await ${call};
+            return { ok: true };
+          },
+        });
+      `);
+      expect(facts.length, `${label}: ${JSON.stringify(facts)}`).toBeGreaterThan(0);
+    }
+
+    const exported = sinksFor(`
+      import { createMemoryStorage, mutation } from '@kovojs/server';
+      export const storage = createMemoryStorage();
+      export const write = mutation({
+        async handler() {
+          await storage.delete('receipts/proof.txt');
+          return { ok: true };
+        },
+      });
+    `);
+    expect(exported.length).toBeGreaterThan(0);
+
+    const structural = sinksFor(`
+      import { mutation } from '@kovojs/server';
+      declare const storage: {
+        put(key: string, body: string): Promise<unknown>;
+      };
+      export const write = mutation({
+        async handler() {
+          await storage.put('receipts/proof.txt', 'proof');
+          return { ok: true };
+        },
+      });
+    `);
+    expect(structural.length).toBeGreaterThan(0);
+
+    const nestedModuleAuthority = sinksFor(`
+      import { execFileSync } from 'node:child_process';
+      import { createMemoryStorage } from '@kovojs/server';
+      const storage = createMemoryStorage();
+      storage.put('receipts/proof.txt', execFileSync('storage-module-authority'));
+    `);
+    expect(nestedModuleAuthority).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sink: 'child_process.execFileSync',
+          source: "'storage-module-authority'",
+        }),
+      ]),
+    );
+
+    const deferredQueryWrite = sinksFor(`
+      import { createMemoryStorage, query } from '@kovojs/server';
+      const storage = createMemoryStorage();
+      export const unsafe = query({
+        async load() {
+          await Promise.resolve().then(() => storage.put('receipts/query-write.txt', 'bad'));
+          return { ok: true };
+        },
+      });
+    `);
+    expect(deferredQueryWrite).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sink: 'request-handler.opaque-call',
+          source: 'storage.put',
+        }),
+      ]),
+    );
+  });
+
   it('accepts only an exact pristine route-page context.signUrl capability result', () => {
     const safe = sinksFor(`
       import { publicAccess, route } from '@kovojs/server';
