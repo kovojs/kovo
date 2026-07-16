@@ -2191,6 +2191,7 @@ import {
 } from '@kovojs/server';
 
 const payment = domain('payment');
+const paymentWebhookReplayStore = createMemoryWebhookReplayStore();
 
 const paymentWebhook = webhook('/webhooks/payment', {
   handler() {
@@ -2199,7 +2200,7 @@ const paymentWebhook = webhook('/webhooks/payment', {
   idempotency: (input) => input.id,
   input: s.object({ id: s.string() }),
   path: '/webhooks/payment',
-  replayStore: createMemoryWebhookReplayStore(),
+  replayStore: paymentWebhookReplayStore,
   verify: hmacSignature({
     encoding: 'hex',
     header: 'x-signature',
@@ -3829,6 +3830,7 @@ function handlerWriteSinkPreflightAppModuleSource(): string {
   return `
 import { createApp, createMemoryWebhookReplayStore, mutation, s, task, webhook } from '@kovojs/server';
 
+const webhookReplayStore = createMemoryWebhookReplayStore();
 const appDb = {
   insert() {
     return { values() {} };
@@ -3862,7 +3864,7 @@ const paymentWebhook = webhook('/webhooks/payment', {
   },
   idempotency: (input) => input.id,
   input: s.object({ id: s.string() }),
-  replayStore: createMemoryWebhookReplayStore(),
+  replayStore: webhookReplayStore,
   verify: 'none',
   verifyJustification: 'build preflight regression fixture',
 });
@@ -3881,6 +3883,7 @@ import { createApp, createMemoryWebhookReplayStore, domain, s, webhook } from '@
 
 const contact = domain('model/contact');
 const billing = domain('billing');
+const webhookReplayStore = createMemoryWebhookReplayStore();
 
 const paymentWebhook = webhook('/webhooks/payment', {
   access: { kind: 'public', reason: 'build preflight regression fixture' },
@@ -3891,7 +3894,7 @@ const paymentWebhook = webhook('/webhooks/payment', {
   },
   idempotency: (input) => input.id,
   input: s.object({ id: s.string(), kind: s.string().optional() }),
-  replayStore: createMemoryWebhookReplayStore(),
+  replayStore: webhookReplayStore,
   verify: 'none',
   verifyJustification: 'build preflight regression fixture',
   writes: [contact],
