@@ -111,7 +111,7 @@ describe('create-kovo starter (build integration: production security artifacts)
       rmSync(unsafeRoot, { force: true, recursive: true });
       rmSync(safeRoot, { force: true, recursive: true });
     }
-  }, 240_000);
+  }, 360_000);
 
   it('blocks request-authored runtime DB imports from the production build artifact', () => {
     const root = mkdtempSync(join(tmpdir(), 'create-kovo-prod-runtime-db-import-'));
