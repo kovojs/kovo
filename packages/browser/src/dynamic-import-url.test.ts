@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { parseKovoModuleRef } from '@kovojs/core/internal/module-ref';
 
@@ -68,6 +68,37 @@ describe('Kovo dynamic import URL guard', () => {
     expect(isAllowedKovoDynamicImportUrl('data:text/javascript,export{}')).toBe(false);
     expect(isAllowedKovoDynamicImportUrl('https://cdn.example.test/c/cart.client.js')).toBe(false);
     expect(isAllowedKovoDynamicImportUrl('/assets/cart.js')).toBe(false);
+  });
+
+  it('rejects manifest-listed non-network modules in opaque documents', async () => {
+    const locationDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'location');
+    Object.defineProperty(globalThis, 'location', {
+      configurable: true,
+      value: { href: 'about:srcdoc', origin: 'null' },
+    });
+    vi.resetModules();
+    try {
+      const { isAllowedKovoDynamicImportUrl: isAllowedInOpaqueDocument } =
+        await import('./dynamic-import-url.js');
+      const dataModule = 'data:/c/attacker.client.js';
+      expect(isAllowedInOpaqueDocument(dataModule, { allowedModuleUrls: [dataModule] })).toBe(
+        false,
+      );
+
+      Object.defineProperty(globalThis, 'location', {
+        configurable: true,
+        value: { href: 'https://kovo.test/account', origin: 'https://kovo.test' },
+      });
+      expect(
+        isAllowedInOpaqueDocument('/c/account.client.js', {
+          allowedModuleUrls: ['/c/account.client.js'],
+        }),
+      ).toBe(true);
+    } finally {
+      if (locationDescriptor) Object.defineProperty(globalThis, 'location', locationDescriptor);
+      else Reflect.deleteProperty(globalThis, 'location');
+      vi.resetModules();
+    }
   });
 
   it('allows same-origin source modules only on local dev origins', () => {

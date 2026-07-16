@@ -328,7 +328,13 @@ function installInlineKovoLoader(im) {
       if (!l) return false;
       const p = bns.parseUrl(url, l.href);
       if (!p) return false;
-      if (p.origin !== l.origin) return false;
+      if (
+        l.origin === 'null' ||
+        (l.protocol !== 'http:' && l.protocol !== 'https:') ||
+        p.origin === 'null' ||
+        (p.protocol !== 'http:' && p.protocol !== 'https:') ||
+        p.origin !== l.origin
+      ) return false;
       const pn = p.pathname;
       if (
         bns.regExpTest(/^http:\/\/(?:localhost|127\.0\.0\.1|\[::1\])(?::\d+)?$/, p.origin) &&
@@ -359,6 +365,8 @@ function installInlineKovoLoader(im) {
             const u = bns.parseUrl(href, l.href);
             if (
               u &&
+              u.origin !== 'null' &&
+              (u.protocol === 'http:' || u.protocol === 'https:') &&
               u.origin === l.origin &&
               bns.indexOf(u.pathname, '/c/') === 0 &&
               u.origin + u.pathname + u.search === k
@@ -2292,7 +2300,14 @@ function installInlineKovoBootstrap(runtimeUrl, runtimeImport) {
     const href = readAttribute(anchor, 'href');
     if (!location || !href) return;
     const url = parseUrl(href, location.href);
-    if (!url || url.origin !== location.origin) return;
+    if (
+      !url ||
+      location.origin === 'null' ||
+      (location.protocol !== 'http:' && location.protocol !== 'https:') ||
+      url.origin === 'null' ||
+      (url.protocol !== 'http:' && url.protocol !== 'https:') ||
+      url.origin !== location.origin
+    ) return;
     if (url.pathname === location.pathname && url.search === location.search && url.hash) return;
     return { href: url.href, target, type: 'click' };
   };

@@ -57,9 +57,10 @@ async function createOpaqueFrame(body: string): Promise<FrameHarness> {
 
 async function installGeneratedInlineLoader(
   frameWindow: Window & typeof globalThis,
+  importModule: (url: string) => Promise<Record<string, unknown>> = async () => ({}),
 ): Promise<void> {
   const globalRecord = frameWindow as unknown as Record<string, unknown>;
-  globalRecord.__kovoBrowserTestImport = async () => ({});
+  globalRecord.__kovoBrowserTestImport = importModule;
   let scriptError: unknown;
   frameWindow.addEventListener('error', (event) => {
     scriptError = event.error ?? event.message;
@@ -378,6 +379,112 @@ it.each(['data:/_m/chat', 'blob:/_m/chat', 'file:/_m/chat'])(
     expect(fetch).not.toHaveBeenCalled();
   },
 );
+
+it('leaves opaque data-document navigation native without fetching it', async () => {
+  const attackDocument = encodeURIComponent(
+    [
+      '<!doctype html><html><head><meta name="kovo-build" content="build-a"></head><body>',
+      '<main kovo-nav-segment="layout:opaque" kovo-nav-kind="layout" kovo-nav-name="opaque">',
+      '<p id="opaque-navigation-attack">ATTACKER DOCUMENT</p>',
+      '</main></body></html>',
+    ].join(''),
+  );
+  const href = `data:text/html,${attackDocument}`;
+  const harness = await createOpaqueFrame(
+    [
+      '<meta name="kovo-build" content="build-a">',
+      '<main kovo-nav-segment="layout:opaque" kovo-nav-kind="layout" kovo-nav-name="opaque">',
+      `<a id="opaque-navigation" href="${href}">navigate</a>`,
+      '<p id="opaque-navigation-safe">SERVER SAFE</p>',
+      '</main>',
+    ].join(''),
+  );
+  const fetch = vi.fn(() => new Promise<Response>(() => {}));
+  (harness.window as unknown as Record<string, unknown>).fetch = fetch;
+  await installGeneratedInlineLoader(harness.window);
+
+  const anchor = harness.window.document.querySelector<HTMLAnchorElement>('#opaque-navigation');
+  if (!anchor) throw new Error('missing opaque navigation anchor');
+  let preventedByKovo = false;
+  anchor.addEventListener(
+    'click',
+    (event) => {
+      preventedByKovo = event.defaultPrevented;
+      event.preventDefault();
+    },
+    { once: true },
+  );
+  anchor.dispatchEvent(new harness.window.MouseEvent('click', { bubbles: true, cancelable: true }));
+
+  expect(harness.window.location.origin).toBe('null');
+  expect(new harness.window.URL(href).origin).toBe('null');
+  expect(preventedByKovo).toBe(false);
+  expect(fetch).not.toHaveBeenCalled();
+  expect(harness.window.document.querySelector('#opaque-navigation-safe')?.textContent).toBe(
+    'SERVER SAFE',
+  );
+});
+
+it('leaves same-origin blob-document navigation native without fetching it', async () => {
+  const harness = await createFrame('<a id="blob-navigation">navigate</a>', '');
+  const href = harness.window.URL.createObjectURL(
+    new harness.window.Blob(['<!doctype html><html><body>ATTACKER DOCUMENT</body></html>'], {
+      type: 'text/html',
+    }),
+  );
+  const anchor = harness.window.document.querySelector<HTMLAnchorElement>('#blob-navigation');
+  if (!anchor) throw new Error('missing blob navigation anchor');
+  anchor.href = href;
+  const fetch = vi.fn(() => new Promise<Response>(() => {}));
+  (harness.window as unknown as Record<string, unknown>).fetch = fetch;
+  try {
+    await installGeneratedInlineLoader(harness.window);
+    let preventedByKovo = false;
+    anchor.addEventListener(
+      'click',
+      (event) => {
+        preventedByKovo = event.defaultPrevented;
+        event.preventDefault();
+      },
+      { once: true },
+    );
+    anchor.dispatchEvent(
+      new harness.window.MouseEvent('click', { bubbles: true, cancelable: true }),
+    );
+
+    const blobUrl = new harness.window.URL(href);
+    expect(blobUrl.origin).toBe(harness.window.location.origin);
+    expect(blobUrl.protocol).toBe('blob:');
+    expect(preventedByKovo).toBe(false);
+    expect(fetch).not.toHaveBeenCalled();
+  } finally {
+    harness.window.URL.revokeObjectURL(href);
+  }
+});
+
+it('rejects manifest-listed data modules in an opaque generated loader', async () => {
+  const moduleUrl = 'data:/c/attacker.client.js';
+  const harness = await createOpaqueFrame(
+    [
+      `<meta data-kovo-module-allowlist="${moduleUrl}">`,
+      `<button id="opaque-module" on:click="${moduleUrl}#run">run</button>`,
+    ].join(''),
+  );
+  const run = vi.fn();
+  const importModule = vi.fn(async () => ({ run }));
+  await installGeneratedInlineLoader(harness.window, importModule);
+
+  harness.window.document
+    .querySelector('#opaque-module')
+    ?.dispatchEvent(new harness.window.MouseEvent('click', { bubbles: true, cancelable: true }));
+  await Promise.resolve();
+  await Promise.resolve();
+
+  expect(harness.window.location.origin).toBe('null');
+  expect(new harness.window.URL(moduleUrl).origin).toBe('null');
+  expect(importModule).not.toHaveBeenCalled();
+  expect(run).not.toHaveBeenCalled();
+});
 
 it('keeps generated query and live-target recovery on the captured response transport', async () => {
   const harness = await createFrame(

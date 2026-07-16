@@ -531,6 +531,100 @@ describe('browser inline loader bootstrap', () => {
     },
   );
 
+  it('leaves opaque data-document navigation native during paint-first capture', async () => {
+    const frame = document.createElement('iframe');
+    const loaded = new Promise<void>((resolve) => {
+      frame.addEventListener('load', () => resolve(), { once: true });
+    });
+    const attackDocument = encodeURIComponent(
+      '<!doctype html><html><body><p id="paint-first-attack">ATTACK</p></body></html>',
+    );
+    const href = `data:text/html,${attackDocument}`;
+    frame.srcdoc = `<!doctype html><html><head></head><body><a id="opaque-anchor" href="${href}">navigate</a></body></html>`;
+    document.body.append(frame);
+    await loaded;
+    const frameWindow = frame.contentWindow;
+    if (!frameWindow) throw new Error('missing opaque paint-first navigation window');
+    const runtimeImport = vi.fn(() => new Promise<Record<string, unknown>>(() => {}));
+    const globalRecord = frameWindow as unknown as Record<string, unknown>;
+    globalRecord.__kovoOpaqueRuntimeImport = runtimeImport;
+    globalRecord.requestAnimationFrame = () => 1;
+    const script = frameWindow.document.createElement('script');
+    script.textContent = `(${inlineKovoLoaderBootstrapInstallerSource})('/c/runtime.js',globalThis.__kovoOpaqueRuntimeImport);`;
+    frameWindow.document.head.append(script);
+
+    const anchor = frameWindow.document.querySelector<HTMLAnchorElement>('#opaque-anchor');
+    if (!anchor) throw new Error('missing opaque paint-first navigation anchor');
+    let preventedByKovo = false;
+    anchor.addEventListener(
+      'click',
+      (event) => {
+        preventedByKovo = event.defaultPrevented;
+        event.preventDefault();
+      },
+      { once: true },
+    );
+    anchor.dispatchEvent(new frameWindow.MouseEvent('click', { bubbles: true, cancelable: true }));
+
+    expect(frameWindow.location.origin).toBe('null');
+    expect(new frameWindow.URL(href).origin).toBe('null');
+    expect(preventedByKovo).toBe(false);
+    expect(runtimeImport).not.toHaveBeenCalled();
+  });
+
+  it('leaves same-origin blob-document navigation native during paint-first capture', async () => {
+    const frame = document.createElement('iframe');
+    let loads = 0;
+    frame.addEventListener('load', () => {
+      loads += 1;
+    });
+    frame.src = '/__kovo_inline_security_fixture?case=paint-first-blob-navigation';
+    document.body.append(frame);
+    await vi.waitFor(() => expect(loads).toBe(1));
+    const frameWindow = frame.contentWindow;
+    if (!frameWindow) throw new Error('missing blob paint-first navigation window');
+    frameWindow.document.open();
+    frameWindow.document.write('<!doctype html><html><head></head><body></body></html>');
+    frameWindow.document.close();
+    const href = frameWindow.URL.createObjectURL(
+      new frameWindow.Blob(['<!doctype html><html><body>ATTACKER DOCUMENT</body></html>'], {
+        type: 'text/html',
+      }),
+    );
+    const anchor = frameWindow.document.createElement('a');
+    anchor.href = href;
+    frameWindow.document.body.append(anchor);
+    const runtimeImport = vi.fn(() => new Promise<Record<string, unknown>>(() => {}));
+    const globalRecord = frameWindow as unknown as Record<string, unknown>;
+    globalRecord.__kovoBlobRuntimeImport = runtimeImport;
+    globalRecord.requestAnimationFrame = () => 1;
+    try {
+      const script = frameWindow.document.createElement('script');
+      script.textContent = `(${inlineKovoLoaderBootstrapInstallerSource})('/c/runtime.js',globalThis.__kovoBlobRuntimeImport);`;
+      frameWindow.document.head.append(script);
+      let preventedByKovo = false;
+      anchor.addEventListener(
+        'click',
+        (event) => {
+          preventedByKovo = event.defaultPrevented;
+          event.preventDefault();
+        },
+        { once: true },
+      );
+      anchor.dispatchEvent(
+        new frameWindow.MouseEvent('click', { bubbles: true, cancelable: true }),
+      );
+
+      const blobUrl = new frameWindow.URL(href);
+      expect(blobUrl.origin).toBe(frameWindow.location.origin);
+      expect(blobUrl.protocol).toBe('blob:');
+      expect(preventedByKovo).toBe(false);
+      expect(runtimeImport).not.toHaveBeenCalled();
+    } finally {
+      frameWindow.URL.revokeObjectURL(href);
+    }
+  });
+
   it('falls back to native submit when the early runtime import fails', async () => {
     installRafQueue();
     const { form, sink } = await nativeSubmitFixture('runtime-import-rejected');

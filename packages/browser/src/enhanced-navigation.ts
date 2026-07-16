@@ -209,7 +209,17 @@ export function installEnhancedNavigationRuntime(
     try {
       const currentUrl = security.currentUrl();
       const requestedUrl = currentUrl ? security.parseUrl(href, currentUrl.href) : undefined;
-      if (!currentUrl || !requestedUrl || requestedUrl.origin !== currentUrl.origin) throw Error();
+      if (
+        !currentUrl ||
+        !requestedUrl ||
+        currentUrl.origin === 'null' ||
+        (currentUrl.protocol !== 'http:' && currentUrl.protocol !== 'https:') ||
+        requestedUrl.origin === 'null' ||
+        (requestedUrl.protocol !== 'http:' && requestedUrl.protocol !== 'https:') ||
+        requestedUrl.origin !== currentUrl.origin
+      ) {
+        throw Error();
+      }
       const response = await security.fetchDocument(requestedUrl.href, acceptHeader);
       if (navId !== ni) return;
       const responseUrl = security.readResponseField(response, 'url');
@@ -223,6 +233,8 @@ export function installEnhancedNavigationRuntime(
       const contentType = security.readHeader(response, 'content-type');
       if (
         !finalUrl ||
+        finalUrl.origin === 'null' ||
+        (finalUrl.protocol !== 'http:' && finalUrl.protocol !== 'https:') ||
         finalUrl.origin !== currentUrl.origin ||
         !security.isHtmlContentType(contentType)
       ) {
@@ -409,7 +421,19 @@ export function installEnhancedNavigationRuntime(
     const currentUrl = security.currentUrl();
     const href = security.readAttribute(anchor, 'href') ?? readOwnNavigationString(anchor, 'href');
     const url = currentUrl && href ? security.parseUrl(href, currentUrl.href) : undefined;
-    if (!currentUrl || !url || url.origin !== currentUrl.origin) return false;
+    // SPEC §§6.3/6.6/8: origin equality is not enough for enhanced document transport. Opaque
+    // schemes can compare `null === null`, while same-origin blob URLs are not server documents.
+    if (
+      !currentUrl ||
+      !url ||
+      currentUrl.origin === 'null' ||
+      (currentUrl.protocol !== 'http:' && currentUrl.protocol !== 'https:') ||
+      url.origin === 'null' ||
+      (url.protocol !== 'http:' && url.protocol !== 'https:') ||
+      url.origin !== currentUrl.origin
+    ) {
+      return false;
+    }
     if (url.pathname === currentUrl.pathname && url.search === currentUrl.search && url.hash) {
       return false;
     }

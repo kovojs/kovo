@@ -149,8 +149,9 @@ export function isAllowedKovoDynamicImportUrl(
   options: DynamicImportUrlOptions = {},
 ): boolean {
   const parsed = parseImportUrl(url);
-  if (!parsed) return false;
-  if (urlOrigin(parsed) !== currentOrigin()) return false;
+  const origin = currentNetworkOrigin();
+  if (!parsed || origin === undefined || !isNetworkModuleUrl(parsed)) return false;
+  if (urlOrigin(parsed) !== origin) return false;
   if (isAllowedLocalDevSourceModuleUrl(parsed)) return true;
   if (!securityStringStartsWith(urlPathname(parsed), '/c/')) return false;
 
@@ -205,15 +206,16 @@ function currentHref(): string {
   );
 }
 
-function currentOrigin(): string {
-  return (
-    dynamicImportBrowserSecurity?.currentUrl()?.origin ??
-    lateStructuralLocationField('origin') ??
-    urlOrigin(new IntrinsicURL(currentHref()))
-  );
+function currentNetworkOrigin(): string | undefined {
+  try {
+    const current = new IntrinsicURL(currentHref());
+    return isNetworkModuleUrl(current) ? urlOrigin(current) : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
-function lateStructuralLocationField(property: 'href' | 'origin'): string | undefined {
+function lateStructuralLocationField(property: 'href'): string | undefined {
   const location = (globalThis as { location?: unknown }).location;
   if (location === null || typeof location !== 'object') return undefined;
   const descriptor = securityGetOwnPropertyDescriptor(location, property);
@@ -225,6 +227,8 @@ function lateStructuralLocationField(property: 'href' | 'origin'): string | unde
 function allowedClientModuleUrlManifest(explicit?: readonly string[]): Set<string> {
   const values = explicit ?? documentModulepreloadClientModules();
   if (!values || values.length === 0) return securitySet();
+  const origin = currentNetworkOrigin();
+  if (origin === undefined) return securitySet();
 
   const allowed = securitySet<string>();
   for (let index = 0; index < values.length; index += 1) {
@@ -232,8 +236,8 @@ function allowedClientModuleUrlManifest(explicit?: readonly string[]): Set<strin
     if (!entry.ok || typeof entry.value !== 'string') continue;
     const value = entry.value;
     const parsed = parseImportUrl(value);
-    if (!parsed) continue;
-    if (urlOrigin(parsed) !== currentOrigin()) continue;
+    if (!parsed || !isNetworkModuleUrl(parsed)) continue;
+    if (urlOrigin(parsed) !== origin) continue;
     if (!securityStringStartsWith(urlPathname(parsed), '/c/')) continue;
     securitySetAdd(allowed, canonicalImportUrl(parsed));
   }
@@ -311,6 +315,11 @@ function readModuleMarkerAttribute(marker: object, name: string): string | null 
 
 function canonicalImportUrl(url: URL): string {
   return `${urlOrigin(url)}${urlPathname(url)}${urlSearch(url)}`;
+}
+
+function isNetworkModuleUrl(url: URL): boolean {
+  const protocol = urlProtocol(url);
+  return urlOrigin(url) !== 'null' && (protocol === 'http:' || protocol === 'https:');
 }
 
 function urlOrigin(url: URL): string {

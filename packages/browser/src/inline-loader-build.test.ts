@@ -132,6 +132,24 @@ describe('inline loader build source', () => {
     );
   });
 
+  it('requires HTTP(S) for generated document navigation and module imports', () => {
+    // SPEC §§4.7, 6.3, 6.6, 8: code and document truth must come from compiler-authorized
+    // same-origin network URLs, never opaque data/file URLs or same-origin blob documents.
+    expect(inlineKovoLoaderInstallerReadableSource).toContain("p.origin === 'null'");
+    expect(inlineKovoLoaderInstallerReadableSource).toContain(
+      "p.protocol !== 'http:' && p.protocol !== 'https:'",
+    );
+    expect(inlineKovoLoaderInstallerReadableSource).toContain("requestedUrl.origin === 'null'");
+    expect(inlineKovoLoaderInstallerReadableSource).toContain(
+      "requestedUrl.protocol !== 'http:' && requestedUrl.protocol !== 'https:'",
+    );
+    expect(inlineKovoLoaderInstallerReadableSource).toContain("finalUrl.origin === 'null'");
+    expect(inlineKovoLoaderStubInstallerReadableSource).toContain("url.origin === 'null'");
+    expect(inlineKovoLoaderStubInstallerReadableSource).toContain(
+      "url.protocol !== 'http:' && url.protocol !== 'https:'",
+    );
+  });
+
   it('generates inline fragment-target escaping from the modular helper', () => {
     // SPEC.md §9.1: inline and modular fragment-target lookup must escape selectors identically.
     expect(inlineFragmentTargetEscapeReadableSource).toContain('function escapeCssString(value)');

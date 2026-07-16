@@ -682,6 +682,46 @@ describe('inline loader enhanced navigation fallback', () => {
   );
 
   it.each(inlineSourceInstallCases)(
+    'rejects same-origin blob HTML as final server-document truth through %s',
+    async (_name, installSource) => {
+      const replaceWith = vi.fn();
+      const currentSegment = new TestNavSegment(
+        {
+          'kovo-nav-kind': 'layout',
+          'kovo-nav-name': 'current',
+          'kovo-nav-segment': 'layout:current',
+        },
+        '<main>current</main>',
+      );
+      const attackerSegment = new TestNavSegment(
+        {
+          'kovo-nav-kind': 'layout',
+          'kovo-nav-name': 'attacker',
+          'kovo-nav-segment': 'layout:attacker',
+        },
+        '<main><script>attacker()</script></main>',
+      );
+
+      await withEnhancedNavigationHarness(installSource, {
+        currentDocument: createTestShell({ replaceWith, segments: [currentSegment] }),
+        documents: [createTestShell({ segments: [attackerSegment] })],
+        fetch: vi.fn(async () => ({
+          headers: { get: () => 'text/html; charset=utf-8' },
+          text: async () => '<!doctype html><html><body>attacker</body></html>',
+          url: 'blob:http://app.test/attacker-document',
+        })),
+        href: 'http://app.test/account',
+        async assert({ assign, preventDefault, pushState }) {
+          await vi.waitFor(() => expect(assign).toHaveBeenCalledWith('http://app.test/account'));
+          expect(preventDefault).toHaveBeenCalledOnce();
+          expect(replaceWith).not.toHaveBeenCalled();
+          expect(pushState).not.toHaveBeenCalled();
+        },
+      });
+    },
+  );
+
+  it.each(inlineSourceInstallCases)(
     'leaves ineligible anchor clicks native through %s',
     async (_name, installSource) => {
       const globalRecord = globalThis as unknown as Record<string, unknown>;
