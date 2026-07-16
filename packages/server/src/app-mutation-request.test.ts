@@ -345,6 +345,11 @@ describe('server app mutation request boundary', () => {
     },
     {
       expected: '/',
+      headers: { Referer: '//attacker.test/phish#private-browser-state' },
+      name: 'scheme-relative Referer',
+    },
+    {
+      expected: '/',
       headers: { Referer: 'https://attacker.test/phish#private-browser-state' },
       name: 'cross-origin Referer',
     },
