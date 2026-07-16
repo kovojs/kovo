@@ -660,6 +660,18 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
         ],
       },
       {
+        id: 'local-map-assimilation-carrier-boundary',
+        file: 'packages/drizzle/src/trust-escapes-static.test.ts',
+        snippets: [
+          'opens exact local Map reads while retaining stored thenable assimilation',
+          "values.set('key', DeferredValue)",
+          "values.set('key', values.get('key'))",
+          "left.set('key', right.get('key'))",
+          "right.set('key', left.get('key'))",
+          "source: '<class-thenable:DeferredValue>'",
+        ],
+      },
+      {
         id: 'authored-session-provider-class-boundary',
         file: 'packages/drizzle/src/trust-escapes-static.test.ts',
         snippets: [
