@@ -92,7 +92,8 @@ const STARTER_ENTRIES = [
   {
     id: 'security-auth-helper',
     file: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
-    testName: 'Better Auth credential laundering',
+    testName:
+      'blocks local-helper credential-shaped secret laundering from the production build artifact',
     seconds: 147,
   },
   {
@@ -223,31 +224,44 @@ const STARTER_ENTRIES = [
   {
     id: 'transaction-managed-write-escape-default',
     file: 'packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts',
-    testName: 'managed write raw-driver escapes before default',
+    testName: "blocks managed write raw-driver escapes before 'default' artifact emission",
     seconds: 70,
   },
   {
     id: 'transaction-managed-write-escape-sqlite',
     file: 'packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts',
-    testName: 'managed write raw-driver escapes before SQLite',
+    testName: "blocks managed write raw-driver escapes before 'SQLite' artifact emission",
+    seconds: 70,
+  },
+  {
+    id: 'transaction-readonly-escape-default',
+    file: 'packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts',
+    testName: "blocks 'default' readonly DB computed-method escapes before artifact emission",
+    seconds: 70,
+  },
+  {
+    id: 'transaction-readonly-escape-sqlite',
+    file: 'packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts',
+    testName: "blocks 'SQLite' readonly DB computed-method escapes before artifact emission",
     seconds: 70,
   },
   {
     id: 'transaction-sqlite-served-artifact',
     file: 'packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts',
-    testName: 'SQLite readonly handles isolated and executes webhook transactions',
+    testName:
+      'keeps SQLite readonly handles isolated and executes webhook mutation composition in the production artifact',
     seconds: 71,
   },
   {
     id: 'transaction-webhook-escape-default',
     file: 'packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts',
-    testName: 'default webhook transaction raw-driver escapes',
+    testName: "blocks 'default' webhook context.tx raw-driver escapes before artifact emission",
     seconds: 70,
   },
   {
     id: 'transaction-webhook-escape-sqlite',
     file: 'packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts',
-    testName: 'SQLite webhook transaction raw-driver escapes',
+    testName: "blocks 'SQLite' webhook context.tx raw-driver escapes before artifact emission",
     seconds: 70,
   },
   {
@@ -611,20 +625,93 @@ export async function starterShardNeedsPacked(file) {
   return manifest.entries.some((entry) => entry.needsPacked);
 }
 
-export async function runStarterShard(file) {
+export async function runStarterShard(file, options = {}) {
   const manifest = await readStarterShardManifest(file);
+  const spawn = options.spawnSync ?? spawnSync;
   for (const group of groupStarterEntriesForExecution(manifest.entries)) {
+    const collectedTestNames = collectStarterGroupTestNames(group, spawn);
+    validateStarterGroupTestFilters(group, collectedTestNames);
     const args = starterGroupVitestArgs(group);
     process.stderr.write(
       `\n[starter:${group.map((entry) => entry.id).join(',')}] vp ${args.join(' ')}\n`,
     );
-    const result = spawnSync('vp', args, { stdio: 'inherit' });
-    if (result.error) throw result.error;
-    if (result.status !== 0) {
+    const result = spawn('vp', args, { stdio: 'inherit' });
+    if (result.error) {
       throw new Error(
-        `Starter entries ${group.map((entry) => entry.id).join(', ')} failed with exit code ${result.status}`,
+        `Starter entries ${group.map((entry) => entry.id).join(', ')} could not start: ${result.error.message}`,
+        { cause: result.error },
       );
     }
+    if (result.status !== 0) {
+      throw new Error(
+        `Starter entries ${group.map((entry) => entry.id).join(', ')} failed with ${starterSpawnOutcome(result)}`,
+      );
+    }
+  }
+}
+
+export function collectStarterGroupTestNames(group, spawn = spawnSync) {
+  if (group.length === 0) throw new Error('Starter execution group cannot be empty.');
+  const file = group[0].file;
+  const result = spawn('vp', ['exec', 'vitest', 'list', file, '--json'], {
+    encoding: 'utf8',
+    maxBuffer: 16 * 1024 * 1024,
+  });
+  if (result.error) {
+    throw new Error(
+      `Starter test collection for ${file} could not start: ${result.error.message}`,
+      {
+        cause: result.error,
+      },
+    );
+  }
+  if (result.status !== 0) {
+    throw new Error(
+      `Starter test collection for ${file} failed with ${starterSpawnOutcome(result)}`,
+    );
+  }
+
+  let collected;
+  try {
+    collected = JSON.parse(String(result.stdout ?? ''));
+  } catch (error) {
+    throw new Error(`Starter test collection for ${file} returned invalid JSON`, { cause: error });
+  }
+  if (
+    !Array.isArray(collected) ||
+    collected.some((test) => !test || typeof test !== 'object' || typeof test.name !== 'string')
+  ) {
+    throw new Error(`Starter test collection for ${file} returned an invalid test list`);
+  }
+  if (collected.length === 0) {
+    throw new Error(`Starter test collection for ${file} returned zero tests`);
+  }
+  return collected.map((test) => test.name);
+}
+
+export function validateStarterGroupTestFilters(group, collectedTestNames) {
+  if (group.length === 0) throw new Error('Starter execution group cannot be empty.');
+  const file = group[0].file;
+  const unmatched = [];
+  for (const entry of group) {
+    if (!entry.testName) continue;
+    let pattern;
+    try {
+      pattern = new RegExp(entry.testName);
+    } catch (error) {
+      throw new Error(
+        `Starter entry ${entry.id} has invalid testName regex ${JSON.stringify(entry.testName)}`,
+        { cause: error },
+      );
+    }
+    if (!collectedTestNames.some((testName) => pattern.test(testName))) {
+      unmatched.push(`${entry.id}=${JSON.stringify(entry.testName)}`);
+    }
+  }
+  if (unmatched.length > 0) {
+    throw new Error(
+      `Starter test filters matched zero collected tests in ${file}: ${unmatched.join(', ')}`,
+    );
   }
 }
 
@@ -685,6 +772,14 @@ export function starterGroupVitestArgs(group) {
 function starterTestNamePattern(testNames) {
   if (testNames.length === 1) return testNames[0];
   return testNames.map(escapeRegExp).join('|');
+}
+
+function starterSpawnOutcome(result) {
+  if (result.status !== null && result.status !== undefined) {
+    return `exit code ${result.status}`;
+  }
+  if (result.signal) return `signal ${result.signal}`;
+  return 'an unknown process status';
 }
 
 function starterManifestName({ mode, index, count }) {

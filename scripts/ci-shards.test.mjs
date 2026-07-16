@@ -15,11 +15,13 @@ import {
   groupStarterEntriesForExecution,
   includeVitest,
   mergeDurationHistory,
+  runStarterShard,
   starterEntries,
   starterEntriesForMode,
   starterGroupVitestArgs,
   starterShardNeedsPacked,
   unknownDurationSeconds,
+  validateStarterGroupTestFilters,
   validateShardAssignment,
   writeShardManifests,
 } from './ci-shards.mjs';
@@ -356,7 +358,7 @@ describe('ci-shards', () => {
       entries.map((entry) => entry.id).toSorted(compareStrings),
     );
     expect(shards.map((shard) => shard.seconds)).toEqual([
-      381, 361, 363, 372, 371, 370, 373, 374, 396, 379,
+      399, 403, 400, 372, 378, 377, 374, 377, 417, 383,
     ]);
   });
 
@@ -458,23 +460,201 @@ describe('ci-shards', () => {
       ]),
     ).toEqual(['exec', 'vitest', '--run', 'whole-file.test.ts']);
   });
+
+  it('fails closed before execution when a starter filter matches no collected test', async () => {
+    const manifest = await starterManifest([
+      { file: 'stale.test.ts', id: 'stale-entry', testName: 'renamed proof' },
+    ]);
+    const calls = [];
+    const spawnSync = (command, args, options) => {
+      calls.push({ args, command, options });
+      return {
+        status: 0,
+        stderr: '',
+        stdout: JSON.stringify([{ file: '/repo/stale.test.ts', name: 'suite > current proof' }]),
+      };
+    };
+
+    await expect(runStarterShard(manifest, { spawnSync })).rejects.toThrow(
+      'Starter test filters matched zero collected tests in stale.test.ts: stale-entry="renamed proof"',
+    );
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toMatchObject({
+      args: ['exec', 'vitest', 'list', 'stale.test.ts', '--json'],
+      command: 'vp',
+    });
+  });
+
+  it('matches every corrected starter filter against the current quoted test titles', async () => {
+    const correctedIds = new Set([
+      'security-auth-helper',
+      'transaction-managed-write-escape-default',
+      'transaction-managed-write-escape-sqlite',
+      'transaction-readonly-escape-default',
+      'transaction-readonly-escape-sqlite',
+      'transaction-sqlite-served-artifact',
+      'transaction-webhook-escape-default',
+      'transaction-webhook-escape-sqlite',
+    ]);
+    const entries = starterEntries().filter((entry) => correctedIds.has(entry.id));
+    expect(entries).toHaveLength(correctedIds.size);
+    const manifest = await starterManifest(entries);
+    const collectedByFile = {
+      'packages/create-kovo/src/index.build.prod-artifact.security.test.ts': [
+        'create-kovo starter > blocks local-helper credential-shaped secret laundering from the production build artifact',
+      ],
+      'packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts': [
+        "create-kovo starter > blocks managed write raw-driver escapes before 'default' artifact emission",
+        "create-kovo starter > blocks managed write raw-driver escapes before 'SQLite' artifact emission",
+        "create-kovo starter > blocks 'default' readonly DB computed-method escapes before artifact emission",
+        "create-kovo starter > blocks 'SQLite' readonly DB computed-method escapes before artifact emission",
+        'create-kovo starter > keeps SQLite readonly handles isolated and executes webhook mutation composition in the production artifact',
+        "create-kovo starter > blocks 'default' webhook context.tx raw-driver escapes before artifact emission",
+        "create-kovo starter > blocks 'SQLite' webhook context.tx raw-driver escapes before artifact emission",
+      ],
+    };
+    const calls = [];
+    const spawnSync = (command, args) => {
+      calls.push({ args, command });
+      if (args[2] === 'list') {
+        const file = args[3];
+        return {
+          status: 0,
+          stderr: '',
+          stdout: JSON.stringify(
+            collectedByFile[file].map((name) => ({ file: `/repo/${file}`, name })),
+          ),
+        };
+      }
+      return { status: 0 };
+    };
+
+    await expect(runStarterShard(manifest, { spawnSync })).resolves.toBeUndefined();
+    expect(calls.filter((call) => call.args[2] === 'list')).toHaveLength(2);
+    expect(
+      calls.filter((call) => call.args[1] === 'vitest' && call.args[2] === '--run'),
+    ).toHaveLength(2);
+  });
+
+  it('applies each configured starter filter as a regular expression', () => {
+    expect(() =>
+      validateStarterGroupTestFilters(
+        [{ file: 'proof.test.ts', id: 'regex-entry', testName: 'proof (one|two)$' }],
+        ['suite > proof two'],
+      ),
+    ).not.toThrow();
+  });
+
+  it('keeps file-wide starter entries supported after live test collection', async () => {
+    const manifest = await starterManifest([{ file: 'whole-file.test.ts', id: 'whole-file' }]);
+    const calls = [];
+    const spawnSync = (command, args) => {
+      calls.push({ args, command });
+      if (args[2] === 'list') {
+        return {
+          status: 0,
+          stderr: '',
+          stdout: JSON.stringify([
+            { file: '/repo/whole-file.test.ts', name: 'whole file > first proof' },
+          ]),
+        };
+      }
+      return { status: 0 };
+    };
+
+    await expect(runStarterShard(manifest, { spawnSync })).resolves.toBeUndefined();
+    expect(calls[1]).toMatchObject({
+      args: ['exec', 'vitest', '--run', 'whole-file.test.ts'],
+      command: 'vp',
+    });
+  });
+
+  it('fails closed when starter test collection cannot start or returns invalid output', async () => {
+    const manifest = await starterManifest([
+      { file: 'proof.test.ts', id: 'proof', testName: 'current proof' },
+    ]);
+
+    await expect(
+      runStarterShard(manifest, {
+        spawnSync: () => ({ error: new Error('spawn ENOENT'), status: null }),
+      }),
+    ).rejects.toThrow('Starter test collection for proof.test.ts could not start: spawn ENOENT');
+    await expect(
+      runStarterShard(manifest, {
+        spawnSync: () => ({ status: 2, stderr: 'collection failed', stdout: '' }),
+      }),
+    ).rejects.toThrow('Starter test collection for proof.test.ts failed with exit code 2');
+    await expect(
+      runStarterShard(manifest, {
+        spawnSync: () => ({ status: 0, stderr: '', stdout: 'not-json' }),
+      }),
+    ).rejects.toThrow('Starter test collection for proof.test.ts returned invalid JSON');
+  });
+
+  it('fails closed when the validated starter test process cannot start', async () => {
+    const manifest = await starterManifest([
+      { file: 'proof.test.ts', id: 'proof', testName: 'current proof' },
+    ]);
+    let call = 0;
+    const spawnSync = () => {
+      call += 1;
+      if (call === 1) {
+        return {
+          status: 0,
+          stderr: '',
+          stdout: JSON.stringify([{ file: '/repo/proof.test.ts', name: 'suite > current proof' }]),
+        };
+      }
+      return { error: new Error('spawn EACCES'), status: null };
+    };
+
+    await expect(runStarterShard(manifest, { spawnSync })).rejects.toThrow(
+      'Starter entries proof could not start: spawn EACCES',
+    );
+
+    call = 0;
+    const exitedSpawnSync = () => {
+      call += 1;
+      if (call === 1) {
+        return {
+          status: 0,
+          stderr: '',
+          stdout: JSON.stringify([{ file: '/repo/proof.test.ts', name: 'suite > current proof' }]),
+        };
+      }
+      return { status: 7 };
+    };
+    await expect(runStarterShard(manifest, { spawnSync: exitedSpawnSync })).rejects.toThrow(
+      'Starter entries proof failed with exit code 7',
+    );
+  });
 });
 
 function compareStrings(a, b) {
   return a.localeCompare(b);
 }
 
+let fixtureSequence = 0;
+
 async function fixtureRoot() {
-  return mkdir(
-    path.join(process.env.RUNNER_TEMP ?? tmpdir(), `kovo-ci-shards-${process.pid}-${Date.now()}`),
-    {
-      recursive: true,
-    },
+  fixtureSequence += 1;
+  const root = path.join(
+    process.env.RUNNER_TEMP ?? tmpdir(),
+    `kovo-ci-shards-${process.pid}-${Date.now()}-${fixtureSequence}`,
   );
+  await mkdir(root, { recursive: true });
+  return root;
 }
 
 async function writeFixture(rootDir, relativePath, source) {
   const filePath = path.join(rootDir, relativePath);
   await mkdir(path.dirname(filePath), { recursive: true });
   await writeFile(filePath, source);
+}
+
+async function starterManifest(entries) {
+  const root = await fixtureRoot();
+  const file = path.join(root, 'starter.json');
+  await writeFile(file, `${JSON.stringify({ entries, kind: 'starter' })}\n`);
+  return file;
 }
