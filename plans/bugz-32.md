@@ -24,7 +24,7 @@ platform or browser primitive that actually supplied it.
 
 ## High
 
-- [ ] **H1 - The Vercel preset loses platform-authenticated client IP and HTTPS provenance.**
+- [x] **H1 - The Vercel preset loses platform-authenticated client IP and HTTPS provenance.**
       `packages/server/src/{build.ts:1044-1091,build.ts:1150-1181,build.ts:1519-1534,build.ts:1665-1695,app-load-shed.ts:1026-1041}`
   - The generated function converts Vercel's bridged Node request with
     `nodeRequestToWebRequest(nodeRequest, {}, nodeResponse)`. The bridge's loopback peer becomes the
@@ -46,6 +46,8 @@ platform or browser primitive that actually supplied it.
     metadata, bind them as framework-owned request facts before dispatch, and prove distinct-client
     rate buckets plus external-HTTPS CSRF/HSTS behavior. Direct Node deployments must continue to
     ignore spoofable forwarded headers unless explicitly configured.
+  - **Fixed:** `845cde7a2`; independent adapter review returned `NO MERGE BLOCKER`, and
+    `vitest build{,-runtime-lockdown}.test.ts` passed 55/55 against the integrated commit.
 
 ## Medium
 
@@ -70,7 +72,7 @@ platform or browser primitive that actually supplied it.
     form, and preserve the submitter when falling back to native submission. Browser tests must prove
     Preview never invokes the base mutation with or without the loader.
 
-- [ ] **M2 - The Cloudflare preset omits the platform client IP, silently disabling default per-IP
+- [x] **M2 - The Cloudflare preset omits the platform client IP, silently disabling default per-IP
       load shedding.** `packages/server/src/{build.ts:1724-1795,app-load-shed.ts:1026-1065}`
   - The Worker passes the native `Request` directly to the app. Kovo has neither a peer-address
     binding nor a preset-owned extractor for direct Cloudflare-edge `CF-Connecting-IP`, while the
@@ -90,6 +92,9 @@ platform or browser primitive that actually supplied it.
     making raw `CF-Connecting-IP` trusted on non-Cloudflare adapters. Same-zone Worker subrequests
     must fail closed for user-IP limiting or receive a separate non-user identity that cannot be
     rotated through `x-real-ip`; direct-edge and subrequest cases need distinct regressions.
+  - **Fixed:** `845cde7a2` + `b01d6d3ba`; independent re-review confirmed ambiguous Worker ingress
+    fails before handler import and canonical IP spellings share the same limiter bucket; the
+    integrated build/runtime-lockdown suite passed 55/55.
 
 - [ ] **M3 - Endpoint CSRF and effect posture classify only four unsafe verbs and let nominally safe
       methods retain write/browser-state authority.**
