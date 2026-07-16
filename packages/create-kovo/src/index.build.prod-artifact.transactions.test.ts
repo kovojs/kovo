@@ -18,8 +18,8 @@ import {
 } from './index.test-support.js';
 import {
   addRuntimeMutationSafetyProofs,
+  buildParanoidProductionArtifact,
   buildProductionArtifact,
-  buildReusableProductionArtifact,
   execFileSyncErrorOutput,
   fieldValue,
   formHtmlByAction,
@@ -92,7 +92,9 @@ describe('create-kovo starter (build integration: production transaction artifac
       const proofSource = readFileSync(join(root, 'src/runtime-safety-proofs.ts'), 'utf8');
       expect(proofSource).toContain('txProofWebhook');
 
-      buildReusableProductionArtifact(root);
+      // SPEC §6.6/§10.3: paranoid artifacts keep static findings advisory so this proof can
+      // exercise the independent runtime readonly membrane instead of weakening the default gate.
+      buildParanoidProductionArtifact(root);
 
       server = spawn(process.execPath, ['dist/server/server.mjs'], {
         cwd: root,
@@ -226,7 +228,9 @@ describe('create-kovo starter (build integration: production transaction artifac
       expect(runtimeDbSource).toContain('schema.sqliteAuthorizerDeclared');
       expect(runtimeDbSource).toContain('schema.sqliteAuthorizerSideEffects');
 
-      buildReusableProductionArtifact(root);
+      // SPEC §6.6/§10.3: preserve the runtime SQLite-authorizer proof behind the explicit
+      // paranoid test posture while ordinary production builds remain fail closed below.
+      buildParanoidProductionArtifact(root);
 
       server = spawn(process.execPath, ['dist/server/server.mjs'], {
         cwd: root,
@@ -351,6 +355,39 @@ describe('create-kovo starter (build integration: production transaction artifac
       rmSync(root, { force: true, recursive: true });
     }
   }, 120_000);
+
+  it.each([
+    { dialect: undefined, label: 'default' },
+    { dialect: 'sqlite' as const, label: 'SQLite' },
+  ])(
+    'blocks $label readonly DB computed-method escapes before artifact emission',
+    ({ dialect }) => {
+      const tempParent = tmpdir();
+      mkdirSync(tempParent, { recursive: true });
+      const root = mkdtempSync(join(tempParent, 'create-kovo-prod-readonly-method-escape-'));
+
+      try {
+        writeKovoProject(root, {
+          ...(dialect === undefined ? {} : { dialect }),
+          name: 'Prod Readonly Method Escape Proof',
+        });
+        linkStarterBuildDependencies(root);
+        addRuntimeMutationSafetyProofs(root, { includeReadonlyMutationAttempt: true });
+
+        const output = execFileSyncErrorOutput(
+          captureProductionBuildFailure(() => buildProductionArtifact(root)),
+        );
+        expect(output).toContain('kovo build check preflight failed');
+        expect(output).toContain('KV424');
+        expect(output).toContain('sink=request-handler.opaque-call');
+        expect(output).toContain('source=sqlMethod');
+        expect(output).toContain('runtime-safety-proofs.ts');
+      } finally {
+        rmSync(root, { force: true, recursive: true });
+      }
+    },
+    120_000,
+  );
 
   // @kovo-security-certifies KV424 managed-write-raw-driver-escape-prod-artifact
   it.each([
