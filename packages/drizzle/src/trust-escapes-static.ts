@@ -16821,6 +16821,7 @@ function scanRequestProtocolUse(
   site: Node,
   callable: RequestCallable,
   context: RequestProcessScanContext,
+  localMapSeen: Set<string> = new Set(),
 ): void {
   const node = unwrapStaticExpression(expression);
   if (scanRequestProxyUse(node, site, context)) return;
@@ -16846,12 +16847,19 @@ function scanRequestProtocolUse(
       ? requestExactLocalMapGetStoredValues(node, callable, context.provenance)
       : undefined;
   if (localMapValues) {
+    const mapKey = `local-map-protocol:${requestNodeIdentity(node)}`;
+    if (localMapSeen.has(mapKey)) {
+      appendRequestProtocolFact(context, site, hooks.join('|'), node);
+      return;
+    }
+    const nextMapSeen = new Set(localMapSeen);
+    nextMapSeen.add(mapKey);
     // SPEC §6.6 / §9.6: an exact request-local Map is only a transparent carrier. Its
     // retrieved value still crosses the framework's thenable-assimilation boundary, so inspect
     // every statically possible stored value instead of either rejecting ordinary local state or
     // blessing the container as a whole.
     for (const value of localMapValues) {
-      scanRequestProtocolUse(value, hooks, site, callable, context);
+      scanRequestProtocolUse(value, hooks, site, callable, context, nextMapSeen);
     }
     return;
   }

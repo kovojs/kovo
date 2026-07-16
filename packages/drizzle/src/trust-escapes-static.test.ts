@@ -3354,6 +3354,22 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
         source: "<then:values.get('key')>",
       }),
     );
+
+    const mutuallyCyclic = sinksFor(`
+      import { s, task } from '@kovojs/server';
+      task('map/mutually-cyclic', { input: s.object({}), run() {
+        const left = new Map();
+        const right = new Map();
+        left.set('key', right.get('key'));
+        right.set('key', left.get('key'));
+        return left.get('key');
+      } });
+    `);
+    expect(mutuallyCyclic).toContainEqual(
+      expect.objectContaining({
+        sink: 'request-handler.opaque-protocol',
+      }),
+    );
   });
 
   it('resolves returned class values through import and re-export aliases', () => {
