@@ -44,6 +44,7 @@ import {
 const BUGZ31_GLOBAL_MEMBER_CARRIER_PROOFS = [
   'ordinary-carriers',
   'projection-carriers',
+  'array-result-carriers',
   'assignment-targets',
   'loop-and-exhaustion-targets',
 ] as const;
@@ -250,6 +251,7 @@ describe('create-kovo starter (build integration: adversarial production artifac
     300_000,
   );
 
+  // @kovo-security-certifies KV424 exact-global-array-carrier-family-prod-artifact
   it.each([...BUGZ31_GLOBAL_MEMBER_CARRIER_PROOFS])(
     'bugz-31: exact global member %s fail closed in a production artifact',
     (proof: Bugz31GlobalMemberCarrierProof) => {
@@ -827,6 +829,23 @@ function addBugz31GlobalMemberCarrierProof(
         '  (() => Bugz31Deferred) as unknown as typeof Array.isArray;',
         '({ stringify: JSON.stringify } = {',
         '  stringify: (() => Bugz31Deferred) as unknown as typeof JSON.stringify,',
+        '});',
+      ];
+      break;
+    case 'array-result-carriers':
+      poison = [
+        ...deferredClass,
+        "Object.defineProperty([Promise].filter(() => true)[0]!, 'resolve', {",
+        '  value: () => Bugz31Deferred,',
+        '});',
+        "Object.defineProperty([Response, Response].reduce((_accumulator, value) => value), 'json', {",
+        '  value: () => Bugz31Deferred,',
+        '});',
+        "Object.defineProperty([Array, Array].reduceRight((_accumulator, value) => value), 'isArray', {",
+        '  value: () => Bugz31Deferred,',
+        '});',
+        "Object.defineProperty([JSON].findLast(() => true)!, 'stringify', {",
+        '  value: () => Bugz31Deferred,',
         '});',
       ];
       break;

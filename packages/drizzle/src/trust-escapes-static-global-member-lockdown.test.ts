@@ -25,6 +25,41 @@ function expectExactMemberRejected(
   );
 }
 
+const EXACT_GLOBAL_MEMBER_CASES = [
+  ['Promise', 'resolve', 'Promise.resolve({ ok: true })', 'Promise.resolve'],
+  ['Response', 'json', 'Response.json({ ok: true })', 'Response.json'],
+  ['Array', 'isArray', 'Array.isArray([])', 'Array.isArray'],
+  ['JSON', 'stringify', 'JSON.stringify({ ok: true })', 'JSON.stringify'],
+] as const;
+
+// This is the complete carrier/result subset of REQUEST_REVIEWED_LOCAL_ARRAY_METHODS plus the
+// already-reviewed at/slice element projections. Boolean, index, string, and void results cannot
+// retain an exact namespace value.
+const EXACT_GLOBAL_ARRAY_CARRIER_CASES = [
+  ['at', (namespace: string) => `[${namespace}].at(0)!`],
+  ['slice', (namespace: string) => `[${namespace}].slice(0)[0]!`],
+  ['find', (namespace: string) => `[${namespace}].find(() => true)!`],
+  ['findLast', (namespace: string) => `[{ local: true }, ${namespace}].findLast(() => true)!`],
+  ['pop', (namespace: string) => `[${namespace}].pop()!`],
+  ['shift', (namespace: string) => `[${namespace}].shift()!`],
+  [
+    'reduce',
+    (namespace: string) => `[{ local: true }, ${namespace}].reduce((_accumulator, value) => value)`,
+  ],
+  [
+    'reduceRight',
+    (namespace: string) =>
+      `[${namespace}, { local: true }].reduceRight((_accumulator, value) => value)`,
+  ],
+  ['concat receiver', (namespace: string) => `[${namespace}].concat([])[0]!`],
+  ['concat argument', (namespace: string) => `[].concat([${namespace}] as never[])[0]!`],
+  ['filter', (namespace: string) => `[${namespace}].filter(() => true)[0]!`],
+  ['flatMap', (namespace: string) => `[${namespace}].flatMap((value) => [value])[0]!`],
+  ['map', (namespace: string) => `[${namespace}].map((value) => value)[0]!`],
+  ['sort', (namespace: string) => `[${namespace}].sort()[0]!`],
+  ['toSorted', (namespace: string) => `[${namespace}].toSorted()[0]!`],
+] as const;
+
 // @kovo-security-classifier-corpus kv424-request-global-member-lockdown
 // SPEC §6.6: a reviewed global member is executable authority only while its exact
 // framework-locked identity remains pristine across the complete authored module graph.
@@ -643,6 +678,74 @@ describe('KV424 exact global namespace-member lockdown', () => {
     expectExactMemberRejected(facts, 'Promise.resolve');
   });
 
+  it.each(EXACT_GLOBAL_ARRAY_CARRIER_CASES)(
+    'rejects all four exact members reached through the reviewed Array %s carrier/result',
+    (_label, carrier) => {
+      const poisons = EXACT_GLOBAL_MEMBER_CASES.map(
+        ([namespace, member]) =>
+          `Object.defineProperty(${carrier(namespace)}, '${member}', { value: () => Deferred });`,
+      ).join('\n');
+      const tasks = EXACT_GLOBAL_MEMBER_CASES.map(
+        ([_namespace, _member, invocation], index) => `
+          task('array-carrier-family-${index}', {
+            input: s.object({}),
+            async run() { return ${invocation}; },
+          });`,
+      ).join('\n');
+      const facts = sinksFor(`
+        import { s, task } from '@kovojs/server';
+        class Deferred {
+          static then(resolve: (value: { ok: true }) => void): void {
+            resolve({ ok: true });
+            queueMicrotask(() => { void fetch('https://example.test/late'); });
+          }
+        }
+        ${poisons}
+        ${tasks}
+      `);
+
+      for (const [, , , source] of EXACT_GLOBAL_MEMBER_CASES) {
+        expectExactMemberRejected(facts, source);
+      }
+    },
+  );
+
+  it('keeps every reviewed Array carrier/result method open for local lookalikes', () => {
+    const localNamespaces = [
+      ['LocalPromise', 'resolve'],
+      ['LocalResponse', 'json'],
+      ['LocalArray', 'isArray'],
+      ['LocalJson', 'stringify'],
+    ] as const;
+    const localMutations = EXACT_GLOBAL_ARRAY_CARRIER_CASES.flatMap(([_label, carrier]) =>
+      localNamespaces.map(
+        ([namespace, member]) =>
+          `(${carrier(namespace)} as Record<string, unknown>)['${member}'] = () => ({ ok: true });`,
+      ),
+    ).join('\n');
+    const facts = sinksFor(`
+      import { s, task } from '@kovojs/server';
+      const LocalPromise = { resolve: () => ({ ok: true }) };
+      const LocalResponse = { json: () => ({ ok: true }) };
+      const LocalArray = { isArray: () => true };
+      const LocalJson = { stringify: () => 'ok' };
+      ${localMutations}
+      task('local-array-carrier-family', {
+        input: s.object({}),
+        async run() {
+          void Response.json({ ok: true });
+          void Array.isArray([]);
+          void JSON.stringify({ ok: true });
+          return Promise.resolve({ ok: true });
+        },
+      });
+    `);
+
+    for (const [, , , source] of EXACT_GLOBAL_MEMBER_CASES) {
+      expect(facts.some((fact) => fact.source === source)).toBe(false);
+    }
+  });
+
   it.each([
     ['hexadecimal to decimal', `const holder = { 0x0: Promise };`, `holder[0]`],
     ['decimal to hexadecimal', `const holder = { 0: Promise };`, `holder[0x0]`],
@@ -744,6 +847,52 @@ describe('KV424 exact global namespace-member lockdown', () => {
     expect(facts.some((fact) => fact.source === 'Promise.resolve')).toBe(false);
   });
 
+  it('keeps reusable callback-helper substitution bound to the actual safe invocation', () => {
+    const facts = sinksFor(`
+      import { s, task } from '@kovojs/server';
+      type Namespace = { resolve: (...args: never[]) => unknown };
+      const LocalPromise: Namespace = { resolve: () => ({ ok: true }) };
+      function visit(value: Namespace, callback: (value: Namespace) => void): void {
+        callback(value);
+      }
+      const noop = (promise: Namespace): void => { void promise; };
+      const replace = (promise: Namespace): void => {
+        Object.defineProperty(promise, 'resolve', { value: () => ({ ok: true }) });
+      };
+      visit(Promise, noop);
+      visit(LocalPromise, replace);
+      task('call-site-sensitive-local-callback', {
+        input: s.object({}),
+        async run() { return Promise.resolve({ ok: true }); },
+      });
+    `);
+
+    expect(facts.some((fact) => fact.source === 'Promise.resolve')).toBe(false);
+  });
+
+  it('closes reusable callback-helper substitution at the actually poisoned invocation', () => {
+    const facts = sinksFor(`
+      import { s, task } from '@kovojs/server';
+      type Namespace = { resolve: (...args: never[]) => unknown };
+      const LocalPromise: Namespace = { resolve: () => ({ ok: true }) };
+      function visit(value: Namespace, callback: (value: Namespace) => void): void {
+        callback(value);
+      }
+      const noop = (promise: Namespace): void => { void promise; };
+      const replace = (promise: Namespace): void => {
+        Object.defineProperty(promise, 'resolve', { value: () => ({ ok: true }) });
+      };
+      visit(LocalPromise, noop);
+      visit(Promise, replace);
+      task('call-site-sensitive-global-callback', {
+        input: s.object({}),
+        async run() { return Promise.resolve({ ok: true }); },
+      });
+    `);
+
+    expectExactMemberRejected(facts, 'Promise.resolve');
+  });
+
   it('keeps reusable helper return substitution call-site-sensitive', () => {
     const facts = sinksFor(`
       import { s, task } from '@kovojs/server';
@@ -802,5 +951,40 @@ describe('KV424 exact global namespace-member lockdown', () => {
 
     expectExactMemberRejected(facts, 'Promise.resolve');
     expect(performance.now() - startedAt).toBeLessThan(2_000);
+  });
+
+  it('indexes 400/800 distinct exact-global helper safe misses with near-linear bounded scaling', () => {
+    const run = (count: number): number => {
+      const helpers = Array.from(
+        { length: count },
+        (_value, index) => `
+          function replace${index}(target: typeof LocalPromise): void {
+            Object.defineProperty(target, 'resolve', { value: () => ({ ok: true }) });
+          }`,
+      ).join('\n');
+      const calls = Array.from(
+        { length: count },
+        (_value, index) => `replace${index}(LocalPromise);`,
+      ).join('\n');
+      const startedAt = performance.now();
+      const facts = sinksFor(`
+        const LocalPromise = { resolve: () => ({ ok: true }) };
+        ${helpers}
+        function retainDistinctSafeMissCalls(): void {
+          ${calls}
+        }
+        void retainDistinctSafeMissCalls;
+        void Promise.resolve({ ok: true });
+      `);
+      const elapsed = performance.now() - startedAt;
+      expect(facts).toEqual([]);
+      return elapsed;
+    };
+
+    const fourHundredMs = run(400);
+    const eightHundredMs = run(800);
+    expect(fourHundredMs).toBeLessThan(4_000);
+    expect(eightHundredMs).toBeLessThan(6_000);
+    expect(eightHundredMs).toBeLessThan(Math.max(1_000, fourHundredMs * 3));
   });
 });

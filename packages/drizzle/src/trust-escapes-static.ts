@@ -23673,22 +23673,49 @@ const requestGlobalNamespaceMemberMutationMemo = new WeakMap<Project, Map<string
 
 const REQUEST_EXACT_GLOBAL_PROVENANCE_DEPTH = 32;
 
+/**
+ * Finite Array result grammar that can retain an exact namespace value. Keep this aligned with
+ * REQUEST_REVIEWED_LOCAL_ARRAY_METHODS/RESULT_METHODS: boolean/index/string/void results cannot
+ * carry a namespace, while these element and array results can (SPEC §6.6 rule 6).
+ */
+const REQUEST_EXACT_GLOBAL_ARRAY_ELEMENT_METHODS = new Set(['find', 'findLast', 'pop', 'shift']);
+const REQUEST_EXACT_GLOBAL_ARRAY_RECEIVER_RESULT_METHODS = new Set([
+  'filter',
+  'slice',
+  'sort',
+  'toSorted',
+]);
+const REQUEST_EXACT_GLOBAL_ARRAY_REDUCER_METHODS = new Set(['reduce', 'reduceRight']);
+
 type RequestExactGlobalProvenance = 'cycle' | 'exhausted' | 'match' | 'miss';
 
 interface RequestExactGlobalValueSession {
   readonly active: Set<string>;
   readonly bindingContextKeys: string[];
   readonly bindingFrames: Map<string, RequestExactGlobalBoundInput | null>[];
-  readonly callableSession: RequestProvenanceSession;
+  readonly callIndex: RequestExactGlobalCallIndex;
   evaluationDepth: number;
   readonly locationsActive: Set<string>;
   readonly locationsMemo: Map<string, readonly RequestGlobalStorageLocation[]>;
   readonly memo: Map<string, RequestExactGlobalProvenance>;
   readonly namespace: string;
-  readonly parameterInputsMemo: Map<string, readonly Node[]>;
   readonly project: Project;
   readonly projectionActive: Set<string>;
   readonly projectionMemo: Map<string, RequestExactGlobalProvenance>;
+}
+
+interface RequestExactGlobalCallbackUse {
+  readonly argumentIndex: number;
+  readonly call: import('ts-morph').CallExpression;
+  readonly helpers: readonly RequestCallable[];
+}
+
+interface RequestExactGlobalCallIndex {
+  built: boolean;
+  building: boolean;
+  readonly callbackUses: Map<string, RequestExactGlobalCallbackUse[]>;
+  readonly callableSession: RequestProvenanceSession;
+  readonly parameterInputs: Map<string, Node[]>;
 }
 
 interface RequestGlobalStorageLocation {
@@ -23705,6 +23732,7 @@ const REQUEST_EXACT_GLOBAL_VALUE_SESSIONS = new WeakMap<
   Project,
   Map<string, RequestExactGlobalValueSession>
 >();
+const REQUEST_EXACT_GLOBAL_CALL_INDEXES = new WeakMap<Project, RequestExactGlobalCallIndex>();
 
 const REQUEST_EXACT_GLOBAL_OBJECT = '<exact-global-object>';
 const REQUEST_EXACT_GLOBAL_MEMBER_PREFIX = '<exact-global-member>:';
@@ -23738,17 +23766,27 @@ function requestExactGlobalValueSession(
   }
   let session = projectSessions.get(namespace);
   if (!session) {
+    let callIndex = REQUEST_EXACT_GLOBAL_CALL_INDEXES.get(project);
+    if (!callIndex) {
+      callIndex = {
+        built: false,
+        building: false,
+        callbackUses: new Map(),
+        callableSession: createRequestProvenanceSession(),
+        parameterInputs: new Map(),
+      };
+      REQUEST_EXACT_GLOBAL_CALL_INDEXES.set(project, callIndex);
+    }
     session = {
       active: new Set(),
       bindingContextKeys: [],
       bindingFrames: [],
-      callableSession: createRequestProvenanceSession(),
+      callIndex,
       evaluationDepth: 0,
       locationsActive: new Set(),
       locationsMemo: new Map(),
       memo: new Map(),
       namespace,
-      parameterInputsMemo: new Map(),
       project,
       projectionActive: new Set(),
       projectionMemo: new Map(),
@@ -23776,6 +23814,18 @@ function requestMergeExactGlobalDependencies(
   return mergeRequestExactGlobalProvenance(dependencies);
 }
 
+function requestExactGlobalCallableDependencies(
+  resolution: RequestCallableResolution,
+  session: RequestExactGlobalValueSession,
+  visit: (callable: RequestCallable) => readonly RequestExactGlobalProvenance[],
+): RequestExactGlobalProvenance[] {
+  const dependencies = resolution.callables.flatMap(visit);
+  if (session.callIndex.callableSession.exhaustedAt !== undefined) {
+    dependencies.push('exhausted');
+  }
+  return dependencies;
+}
+
 function requestExactGlobalBindingContextKey(session: RequestExactGlobalValueSession): string {
   return session.bindingContextKeys.length > 0 ? `:${session.bindingContextKeys.join('/')}` : '';
 }
@@ -23796,7 +23846,7 @@ function requestExactGlobalBoundParameterInput(
 
 function requestWithExactGlobalCallableInputs<T>(
   callable: RequestCallable,
-  inputs: readonly RequestExactGlobalBoundInput[],
+  inputs: readonly (RequestExactGlobalBoundInput | undefined)[],
   contextKey: string,
   session: RequestExactGlobalValueSession,
   run: () => T,
@@ -23929,7 +23979,7 @@ function requestExpressionResolvesToExactGlobalValueUncached(
         depth + 1,
       );
     }
-    if (receiver && member === 'find') {
+    if (receiver && REQUEST_EXACT_GLOBAL_ARRAY_ELEMENT_METHODS.has(member ?? '')) {
       return requestProjectedExpressionResolvesToExactGlobalValue(
         receiver,
         [undefined],
@@ -23940,9 +23990,17 @@ function requestExpressionResolvesToExactGlobalValueUncached(
     if (receiver && member === 'map') {
       return requestArrayMapOutputsResolveToExactGlobalValue(node, [], session, depth + 1);
     }
-    const resolutions = resolveRequestCallable(callee, new Set(), 0, session.callableSession);
+    if (receiver && REQUEST_EXACT_GLOBAL_ARRAY_REDUCER_METHODS.has(member ?? '')) {
+      return requestArrayReduceOutputsResolveToExactGlobalValue(node, [], session, depth + 1);
+    }
+    const resolutions = resolveRequestCallable(
+      callee,
+      new Set(),
+      0,
+      session.callIndex.callableSession,
+    );
     return requestMergeExactGlobalDependencies(
-      resolutions.callables.flatMap((callable) =>
+      requestExactGlobalCallableDependencies(resolutions, session, (callable) =>
         requestWithExactGlobalCallableInputs(
           callable,
           node.getArguments().map((argument) => ({ expression: argument, path: [] })),
@@ -24009,8 +24067,10 @@ function requestExpressionResolvesToExactGlobalValueUncached(
           requestExpressionResolvesToExactGlobalValue(fallback, session, depth + 1),
         );
       }
+      const parameterInputs = requestExactGlobalParameterInputs(declaration, session);
+      if (parameterInputs.exhausted) dependencies.push('exhausted');
       dependencies.push(
-        ...requestExactGlobalParameterInputs(declaration, session).map((input) =>
+        ...parameterInputs.inputs.map((input) =>
           requestExpressionResolvesToExactGlobalValue(input, session, depth + 1),
         ),
       );
@@ -24296,7 +24356,25 @@ function requestProjectedExpressionResolvesToExactGlobalValueUncached(
         ? requestProjectedExpressionResolvesToExactGlobalValue(prototype, path, session, depth + 1)
         : 'miss';
     }
-    if (receiver && callMember === 'slice') {
+    if (receiver && callMember === 'at') {
+      const [index] = node.getArguments();
+      const projected = index ? requestCanonicalStaticMemberName(index) : undefined;
+      return requestProjectedExpressionResolvesToExactGlobalValue(
+        receiver,
+        [projected, ...path],
+        session,
+        depth + 1,
+      );
+    }
+    if (receiver && REQUEST_EXACT_GLOBAL_ARRAY_ELEMENT_METHODS.has(callMember ?? '')) {
+      return requestProjectedExpressionResolvesToExactGlobalValue(
+        receiver,
+        [undefined, ...path],
+        session,
+        depth + 1,
+      );
+    }
+    if (receiver && REQUEST_EXACT_GLOBAL_ARRAY_RECEIVER_RESULT_METHODS.has(callMember ?? '')) {
       return requestProjectedExpressionResolvesToExactGlobalValue(
         receiver,
         [undefined, ...rest],
@@ -24307,9 +24385,28 @@ function requestProjectedExpressionResolvesToExactGlobalValueUncached(
     if (receiver && callMember === 'map') {
       return requestArrayMapOutputsResolveToExactGlobalValue(node, rest, session, depth + 1);
     }
-    const resolution = resolveRequestCallable(callee, new Set(), 0, session.callableSession);
+    if (receiver && callMember === 'flatMap') {
+      return requestArrayMapOutputsResolveToExactGlobalValue(
+        node,
+        [undefined, ...rest],
+        session,
+        depth + 1,
+      );
+    }
+    if (receiver && callMember === 'concat') {
+      return requestArrayConcatOutputsResolveToExactGlobalValue(node, rest, session, depth + 1);
+    }
+    if (receiver && REQUEST_EXACT_GLOBAL_ARRAY_REDUCER_METHODS.has(callMember ?? '')) {
+      return requestArrayReduceOutputsResolveToExactGlobalValue(node, path, session, depth + 1);
+    }
+    const resolution = resolveRequestCallable(
+      callee,
+      new Set(),
+      0,
+      session.callIndex.callableSession,
+    );
     return requestMergeExactGlobalDependencies(
-      resolution.callables.flatMap((callable) =>
+      requestExactGlobalCallableDependencies(resolution, session, (callable) =>
         requestWithExactGlobalCallableInputs(
           callable,
           node.getArguments().map((argument) => ({ expression: argument, path: [] })),
@@ -24369,8 +24466,10 @@ function requestProjectedExpressionResolvesToExactGlobalValueUncached(
             ),
           );
         }
+        const parameterInputs = requestExactGlobalParameterInputs(declaration, session);
+        if (parameterInputs.exhausted) dependencies.push('exhausted');
         dependencies.push(
-          ...requestExactGlobalParameterInputs(declaration, session).map((input) =>
+          ...parameterInputs.inputs.map((input) =>
             requestProjectedExpressionResolvesToExactGlobalValue(input, path, session, depth + 1),
           ),
         );
@@ -24446,38 +24545,63 @@ function requestCallableOutputExpressions(callable: RequestCallable): Node[] {
 function requestExactGlobalParameterInputs(
   parameter: import('ts-morph').ParameterDeclaration,
   session: RequestExactGlobalValueSession,
-): readonly Node[] {
+): { readonly exhausted: boolean; readonly inputs: readonly Node[] } {
+  requestEnsureExactGlobalCallIndex(session);
   const key = requestNodeIdentity(parameter);
-  const cached = session.parameterInputsMemo.get(key);
-  if (cached) return cached;
-  const declaration = parameter.getParent();
-  const parameters = requestCallableParameters(declaration);
-  const index = parameters.indexOf(parameter);
-  if (index < 0) return [];
-  const target = requestNodeIdentity(declaration);
-  const inputs: Node[] = [];
-  for (const file of session.project.getSourceFiles()) {
-    for (const call of file.getDescendantsOfKind(SyntaxKind.CallExpression)) {
-      const resolution = resolveRequestCallable(
-        call.getExpression(),
-        new Set(),
-        0,
-        session.callableSession,
-      );
-      if (
-        !resolution.callables.some(
-          (callable) => requestNodeIdentity(callable.declaration) === target,
-        )
-      ) {
-        continue;
-      }
-      const argument = call.getArguments()[index];
-      if (argument) inputs.push(argument);
-    }
-  }
+  const inputs = session.callIndex.parameterInputs.get(key);
+  const exhausted =
+    session.callIndex.building || session.callIndex.callableSession.exhaustedAt !== undefined;
+  if (!inputs) return { exhausted, inputs: [] };
   const result = dedupeRequestNodes(inputs);
-  session.parameterInputsMemo.set(key, result);
-  return result;
+  session.callIndex.parameterInputs.set(key, result);
+  return { exhausted, inputs: result };
+}
+
+/**
+ * Build one reverse call graph for the whole project. The former per-parameter full-project walk
+ * made N unrelated helper parameters inspect N call sites each; exact-global safe misses are now
+ * one linear indexing pass plus O(1) parameter lookup.
+ */
+function requestEnsureExactGlobalCallIndex(session: RequestExactGlobalValueSession): void {
+  const index = session.callIndex;
+  if (index.built || index.building) return;
+  index.building = true;
+  try {
+    for (const file of session.project.getSourceFiles()) {
+      for (const call of file.getDescendantsOfKind(SyntaxKind.CallExpression)) {
+        const helpers = resolveRequestCallable(
+          call.getExpression(),
+          new Set(),
+          0,
+          index.callableSession,
+        );
+        for (const helper of helpers.callables) {
+          const parameters = requestCallableParameters(helper.declaration);
+          for (const [parameterIndex, parameter] of parameters.entries()) {
+            const argument = call.getArguments()[parameterIndex];
+            if (!argument) continue;
+            const key = requestNodeIdentity(parameter);
+            const inputs = index.parameterInputs.get(key) ?? [];
+            inputs.push(argument);
+            index.parameterInputs.set(key, inputs);
+          }
+        }
+
+        for (const [argumentIndex, argument] of call.getArguments().entries()) {
+          const callbacks = resolveRequestCallable(argument, new Set(), 0, index.callableSession);
+          for (const callback of callbacks.callables) {
+            const key = requestNodeIdentity(callback.declaration);
+            const uses = index.callbackUses.get(key) ?? [];
+            uses.push({ argumentIndex, call, helpers: helpers.callables });
+            index.callbackUses.set(key, uses);
+          }
+        }
+      }
+    }
+    index.built = true;
+  } finally {
+    index.building = false;
+  }
 }
 
 function requestExactGlobalCallbackParameterInput(
@@ -24491,33 +24615,49 @@ function requestExactGlobalCallbackParameterInput(
   if (parameterIndex < 0) return undefined;
   const callbackIdentity = requestNodeIdentity(declaration);
   const verdicts: RequestExactGlobalProvenance[] = [];
-  for (const file of session.project.getSourceFiles()) {
-    for (const call of file.getDescendantsOfKind(SyntaxKind.CallExpression)) {
-      for (const [argumentIndex, argument] of call.getArguments().entries()) {
-        const argumentResolution = resolveRequestCallable(
-          argument,
-          new Set(),
-          0,
-          session.callableSession,
+  requestEnsureExactGlobalCallIndex(session);
+  for (const use of session.callIndex.callbackUses.get(callbackIdentity) ?? []) {
+    const { argumentIndex, call, helpers } = use;
+    const callee = unwrapStaticExpression(call.getExpression());
+    const receiver = requestCallReceiver(callee);
+    const member = requestStaticCallMember(callee);
+    if (argumentIndex === 0 && receiver && member) {
+      if (
+        parameterIndex === 0 &&
+        [
+          'every',
+          'filter',
+          'find',
+          'findIndex',
+          'findLast',
+          'findLastIndex',
+          'flatMap',
+          'forEach',
+          'map',
+          'some',
+        ].includes(member)
+      ) {
+        verdicts.push(
+          requestProjectedExpressionResolvesToExactGlobalValue(
+            receiver,
+            [undefined],
+            session,
+            depth + 1,
+          ),
         );
-        if (
-          !argumentResolution.callables.some(
-            (callable) => requestNodeIdentity(callable.declaration) === callbackIdentity,
-          )
-        ) {
-          continue;
-        }
-
-        const callee = unwrapStaticExpression(call.getExpression());
-        const receiver = requestCallReceiver(callee);
-        const member = requestStaticCallMember(callee);
-        if (
-          argumentIndex === 0 &&
-          parameterIndex === 0 &&
-          receiver &&
-          member &&
-          ['every', 'filter', 'find', 'findIndex', 'forEach', 'map', 'some'].includes(member)
-        ) {
+      }
+      if (['sort', 'toSorted'].includes(member) && parameterIndex <= 1) {
+        verdicts.push(
+          requestProjectedExpressionResolvesToExactGlobalValue(
+            receiver,
+            [undefined],
+            session,
+            depth + 1,
+          ),
+        );
+      }
+      if (REQUEST_EXACT_GLOBAL_ARRAY_REDUCER_METHODS.has(member)) {
+        if (parameterIndex === 1) {
           verdicts.push(
             requestProjectedExpressionResolvesToExactGlobalValue(
               receiver,
@@ -24527,31 +24667,52 @@ function requestExactGlobalCallbackParameterInput(
             ),
           );
         }
-
-        const helpers = resolveRequestCallable(callee, new Set(), 0, session.callableSession);
-        for (const helper of helpers.callables) {
-          const callbackParameter = requestCallableParameters(helper.declaration)[argumentIndex];
-          const callbackName = callbackParameter?.getNameNode();
-          const callbackSymbol = callbackName
-            ? requestIdentifierValueSymbol(callbackName)
-            : undefined;
-          if (!callbackSymbol) continue;
-          const callbackKey = requestSymbolKey(callbackSymbol);
-          for (const invocation of helper.body.getDescendantsOfKind(SyntaxKind.CallExpression)) {
-            if (!nodeBelongsToRequestCallable(invocation, helper)) continue;
-            const invoked = unwrapStaticExpression(invocation.getExpression());
-            const invokedSymbol = Node.isIdentifier(invoked)
-              ? requestIdentifierValueSymbol(invoked)
-              : undefined;
-            if (!invokedSymbol || requestSymbolKey(invokedSymbol) !== callbackKey) continue;
-            const input = invocation.getArguments()[parameterIndex];
-            if (input) {
-              verdicts.push(requestExpressionResolvesToExactGlobalValue(input, session, depth + 1));
-            }
-          }
+        if (parameterIndex === 0) {
+          const initial = call.getArguments()[1];
+          verdicts.push(
+            initial
+              ? requestExpressionResolvesToExactGlobalValue(initial, session, depth + 1)
+              : requestProjectedExpressionResolvesToExactGlobalValue(
+                  receiver,
+                  [undefined],
+                  session,
+                  depth + 1,
+                ),
+          );
         }
       }
     }
+
+    for (const helper of helpers) {
+      const callbackParameter = requestCallableParameters(helper.declaration)[argumentIndex];
+      const callbackName = callbackParameter?.getNameNode();
+      const callbackSymbol = callbackName ? requestIdentifierValueSymbol(callbackName) : undefined;
+      if (!callbackSymbol) continue;
+      const callbackKey = requestSymbolKey(callbackSymbol);
+      for (const invocation of helper.body.getDescendantsOfKind(SyntaxKind.CallExpression)) {
+        if (!nodeBelongsToRequestCallable(invocation, helper)) continue;
+        const invoked = unwrapStaticExpression(invocation.getExpression());
+        const invokedSymbol = Node.isIdentifier(invoked)
+          ? requestIdentifierValueSymbol(invoked)
+          : undefined;
+        if (!invokedSymbol || requestSymbolKey(invokedSymbol) !== callbackKey) continue;
+        const input = invocation.getArguments()[parameterIndex];
+        if (input) {
+          verdicts.push(
+            requestWithExactGlobalCallableInputs(
+              helper,
+              call.getArguments().map((argument) => ({ expression: argument, path: [] })),
+              `callback-call:${requestNodeIdentity(call)}:${requestNodeIdentity(helper.declaration)}`,
+              session,
+              () => requestExpressionResolvesToExactGlobalValue(input, session, depth + 1),
+            ),
+          );
+        }
+      }
+    }
+  }
+  if (session.callIndex.building || session.callIndex.callableSession.exhaustedAt !== undefined) {
+    verdicts.push('exhausted');
   }
   return verdicts.length > 0 ? requestMergeExactGlobalDependencies(verdicts) : undefined;
 }
@@ -24636,12 +24797,21 @@ function requestArrayMapOutputsResolveToExactGlobalValue(
   const [callback] = call.getArguments();
   const receiver = requestCallReceiver(unwrapStaticExpression(call.getExpression()));
   if (!callback || !receiver) return 'miss';
-  const resolution = resolveRequestCallable(callback, new Set(), 0, session.callableSession);
+  const resolution = resolveRequestCallable(
+    callback,
+    new Set(),
+    0,
+    session.callIndex.callableSession,
+  );
   return requestMergeExactGlobalDependencies(
-    resolution.callables.flatMap((callable) =>
+    requestExactGlobalCallableDependencies(resolution, session, (callable) =>
       requestWithExactGlobalCallableInputs(
         callable,
-        [{ expression: receiver, path: [undefined] }],
+        [
+          { expression: receiver, path: [undefined] },
+          undefined,
+          { expression: receiver, path: [] },
+        ],
         `array-callback:${requestNodeIdentity(call)}:${requestNodeIdentity(callable.declaration)}`,
         session,
         () =>
@@ -24651,6 +24821,101 @@ function requestArrayMapOutputsResolveToExactGlobalValue(
       ),
     ),
   );
+}
+
+function requestArrayConcatOutputsResolveToExactGlobalValue(
+  call: import('ts-morph').CallExpression,
+  rest: readonly (string | undefined)[],
+  session: RequestExactGlobalValueSession,
+  depth: number,
+): RequestExactGlobalProvenance {
+  const receiver = requestCallReceiver(unwrapStaticExpression(call.getExpression()));
+  if (!receiver) return 'miss';
+  const candidates: RequestExactGlobalProvenance[] = [
+    requestProjectedExpressionResolvesToExactGlobalValue(
+      receiver,
+      [undefined, ...rest],
+      session,
+      depth + 1,
+    ),
+  ];
+  for (const argument of call.getArguments()) {
+    // concat preserves scalar arguments and flattens array arguments by one level. Structural
+    // types can make either branch applicable, so retain both finite projections.
+    candidates.push(
+      requestProjectedExpressionResolvesToExactGlobalValue(argument, rest, session, depth + 1),
+      requestProjectedExpressionResolvesToExactGlobalValue(
+        argument,
+        [undefined, ...rest],
+        session,
+        depth + 1,
+      ),
+    );
+  }
+  return requestMergeExactGlobalDependencies(candidates);
+}
+
+function requestArrayReduceOutputsResolveToExactGlobalValue(
+  call: import('ts-morph').CallExpression,
+  path: readonly (string | undefined)[],
+  session: RequestExactGlobalValueSession,
+  depth: number,
+): RequestExactGlobalProvenance {
+  const [callback, initial] = call.getArguments();
+  const receiver = requestCallReceiver(unwrapStaticExpression(call.getExpression()));
+  if (!callback || !receiver) return 'miss';
+  const seed: RequestExactGlobalBoundInput = initial
+    ? { expression: initial, path: [] }
+    : { expression: receiver, path: [undefined] };
+  const receiverNode = unwrapStaticExpression(receiver);
+  const literalLength = Node.isArrayLiteralExpression(receiverNode)
+    ? receiverNode.getElements().some((element) => Node.isSpreadElement(element))
+      ? undefined
+      : receiverNode.getElements().length
+    : undefined;
+  const dependencies: RequestExactGlobalProvenance[] = [];
+  if (
+    literalLength === undefined ||
+    (initial !== undefined ? literalLength === 0 : literalLength <= 1)
+  ) {
+    dependencies.push(
+      requestProjectedExpressionResolvesToExactGlobalValue(
+        seed.expression,
+        [...seed.path, ...path],
+        session,
+        depth + 1,
+      ),
+    );
+  }
+  const resolution = resolveRequestCallable(
+    callback,
+    new Set(),
+    0,
+    session.callIndex.callableSession,
+  );
+  if (session.callIndex.callableSession.exhaustedAt !== undefined) {
+    dependencies.push('exhausted');
+  }
+  for (const callable of resolution.callables) {
+    dependencies.push(
+      ...requestWithExactGlobalCallableInputs(
+        callable,
+        [
+          seed,
+          { expression: receiver, path: [undefined] },
+          undefined,
+          { expression: receiver, path: [] },
+        ],
+        `array-reducer:${requestNodeIdentity(call)}:${requestNodeIdentity(callable.declaration)}`,
+        session,
+        () =>
+          requestCallableOutputExpressions(callable).map((output) =>
+            requestProjectedExpressionResolvesToExactGlobalValue(output, path, session, depth + 1),
+          ),
+      ),
+    );
+  }
+  return requestMergeExactGlobalDependencies(dependencies);
 }
 
 function requestGlobalStorageLocations(
@@ -24937,9 +25202,9 @@ function requestDescriptorGetterVerdicts(
   const resolution = direct
     ? { callables: [direct] }
     : expression
-      ? resolveRequestCallable(expression, new Set(), 0, session.callableSession)
+      ? resolveRequestCallable(expression, new Set(), 0, session.callIndex.callableSession)
       : { callables: [] };
-  return resolution.callables.flatMap((callable) =>
+  return requestExactGlobalCallableDependencies(resolution, session, (callable) =>
     requestCallableOutputExpressions(callable).map((output) =>
       requestProjectedExpressionResolvesToExactGlobalValue(output, rest, session, depth + 1),
     ),
