@@ -197,6 +197,56 @@ describe('server app matched dispatch boundary', () => {
     });
   });
 
+  it('rejects structural GET routing authority over a declared POST Writer before dispatch', () => {
+    let handlerCalls = 0;
+    let providerCalls = 0;
+    const declaredPost = endpoint('/orders/structural-method-divergence', {
+      csrf: false,
+      csrfJustification: 'signed machine write fixture',
+      db: true,
+      async handler(_request, context) {
+        handlerCalls += 1;
+        const scoped = await context.actAs('attacker-selected-principal');
+        return new Response(String(scoped.db.write));
+      },
+      method: 'POST',
+      reason: 'structural endpoint effective-method regression',
+      response: rawTextResponse,
+    });
+    const structural = {
+      ...declaredPost,
+      allowedMethods: ['GET'],
+    } as typeof declaredPost;
+
+    expect(() =>
+      createApp({
+        db() {
+          providerCalls += 1;
+          return {};
+        },
+        endpoints: [structural],
+      }),
+    ).toThrow(
+      'Kovo endpoint declarations cannot provide allowedMethods; request routing derives the effective method set from the canonical declared method',
+    );
+    expect(providerCalls).toBe(0);
+    expect(handlerCalls).toBe(0);
+  });
+
+  it('rejects cast structural lowercase endpoint methods while assembling the app', () => {
+    const declaredGet = endpoint('/status/lowercase-structural-method', {
+      handler: () => new Response('must-not-dispatch'),
+      method: 'GET',
+      reason: 'lowercase structural endpoint method regression',
+      response: rawTextResponse,
+    });
+    const structural = { ...declaredGet, method: 'get' } as unknown as typeof declaredGet;
+
+    expect(() => createApp({ endpoints: [structural] })).toThrow(
+      'Kovo endpoint declaration method must use its canonical uppercase spelling',
+    );
+  });
+
   it('keeps safe endpoint DB authority reader-only while retaining explicit Authorization', async () => {
     const providerRequests: unknown[] = [];
     const rawDb = {

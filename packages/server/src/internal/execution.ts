@@ -1,9 +1,8 @@
 export { accessDecisionFor } from '../access.js';
 export { accessFactsFromApp } from '../access-graph.js';
 export {
-  frameworkEndpoint,
   endpointMatches,
-  pinEndpointBrowserCredentialDelegation,
+  frameworkBetterAuthEndpoint,
   runEndpoint,
   type EndpointRequest,
 } from '../endpoint.js';

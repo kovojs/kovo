@@ -121,7 +121,12 @@ export async function dispatchMatchedAppRequest({
     });
     const authFailure = await runEndpointAuth(match.endpoint, endpointRequest);
     if (authFailure) return finalizeRawWebResponse(authFailure, request);
-    const csrfFailure = await validateEndpointCsrf(match.endpoint, request, app.csrf, exactMethod);
+    const csrfFailure = await validateEndpointCsrf(
+      match.endpoint,
+      request,
+      app.csrf,
+      match.endpoint.method,
+    );
     if (csrfFailure) return finalizeRawWebResponse(csrfFailure, request);
     if (isWebhookEndpoint(match.endpoint)) {
       const accessFailure = await runEndpointAccessDecision(match.endpoint, endpointRequest);

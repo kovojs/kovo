@@ -98,6 +98,10 @@ type RootKovoPostgresSystemDb = import('@kovojs/server').KovoPostgresSystemDb;
 type RemovedRootUsePostgresSystemDb =
   // @ts-expect-error SPEC §6.6/§10.3: raw capability consumers are package-internal.
   typeof import('@kovojs/server').usePostgresSystemDb;
+// eslint-disable-next-line no-unused-vars -- compile-time authority-boundary assertion only.
+type RemovedPublishedEndpointBrowserCredentialWitness =
+  // @ts-expect-error SPEC §6.6/§9.1: app-authored modules cannot mint the private witness.
+  typeof import('@kovojs/server/internal/execution').pinEndpointBrowserCredentialDelegation;
 // eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
 type RootAppErrorShellOptions = import('../index.js').AppErrorShellOptions;
 const removedRootLiveTargetRendererOption: import('../index.js').CreateAppOptions = {
@@ -978,11 +982,10 @@ describe('server app-shell public API barrels', () => {
       'endpointMatches',
       'explainGuard',
       'extractCompilerBoundKovoRuntimeDbMetadata',
-      'frameworkEndpoint',
+      'frameworkBetterAuthEndpoint',
       'guardAuditName',
       'installGeneratedTableSecurityManifestForCommand',
       'invalidate',
-      'pinEndpointBrowserCredentialDelegation',
       'registerGeneratedMutationTouchRegistry',
       'registerGeneratedQueryReadRegistry',
       'registerGeneratedTableSecurityManifest',
@@ -994,6 +997,9 @@ describe('server app-shell public API barrels', () => {
       'runRoutePage',
     ]);
     expect(packageInternalExecutionApi).not.toHaveProperty('managedDb');
+    expect(packageInternalExecutionApi).not.toHaveProperty(
+      'pinEndpointBrowserCredentialDelegation',
+    );
     expect(packageInternalExecutionApi).not.toHaveProperty(
       'createFrameworkManagedSqlDispatchProxy',
     );

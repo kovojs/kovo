@@ -316,6 +316,65 @@ export function frameworkEndpoint<
   return witnessFreeze(declaration) as EndpointDeclaration<Path, Method, Mount, Db>;
 }
 
+/**
+ * Construct the closed prefix endpoint used by the framework-owned Better Auth callback adapter.
+ * Unlike the private witness pin, this API cannot bless an existing app declaration or select a
+ * different response/mount posture: it owns the declaration from construction through freeze and
+ * fixes the redirect/no-store contract used by `@kovojs/better-auth` (SPEC §6.6/§9.1).
+ *
+ * @internal
+ */
+export function frameworkBetterAuthEndpoint<
+  const Path extends string,
+  const Method extends EndpointMethod = EndpointMethod,
+>(
+  path: Path,
+  options: {
+    access?: AccessDecision;
+    auth: EndpointAuthDeclaration;
+    csrfJustification: string;
+    handler: EndpointHandler;
+    method: Method;
+  },
+): EndpointDeclaration<Path, Method, 'prefix'> {
+  const access = stableEndpointValue(options, 'access') as AccessDecision | undefined;
+  const auth = stableRequiredEndpointValue(options, 'auth') as EndpointAuthDeclaration;
+  const csrfJustification = stableRequiredEndpointValue(options, 'csrfJustification') as string;
+  const handler = stableRequiredEndpointValue(options, 'handler') as EndpointHandler;
+  const method = stableRequiredEndpointValue(options, 'method') as Method;
+  return frameworkEndpoint(
+    path,
+    {
+      ...(access === undefined ? {} : { access }),
+      auth,
+      csrf: false,
+      csrfJustification,
+      handler,
+      method,
+      mount: 'prefix',
+      mountJustification: 'better-auth owns provider callback subpaths under this mount',
+      reason: 'better-auth provider redirect and callback mount',
+      response: {
+        appOwnedSafety: true,
+        body: 'redirect',
+        cache: 'no-store',
+        reservedHeaders: ['Location', 'Set-Cookie'],
+      },
+    },
+    (declaration) => {
+      const snapshot = endpointAuthSnapshotFor(declaration);
+      if (
+        snapshot.valid &&
+        snapshot.auth !== undefined &&
+        snapshot.auth.kind !== 'none' &&
+        snapshot.verify === undefined
+      ) {
+        pinEndpointBrowserCredentialDelegation(declaration);
+      }
+    },
+  );
+}
+
 function constructEndpointDeclaration<
   const Path extends string,
   const Method extends EndpointMethod = EndpointMethod,
@@ -999,7 +1058,14 @@ export function endpointMatches(
   input: { method?: string; pathname: string },
 ): boolean {
   if (input.method !== undefined) {
-    if (definition.method.toUpperCase() !== input.method.toUpperCase()) return false;
+    const declaredMethod = canonicalRequestMethod(definition.method);
+    const requestMethod = canonicalRequestMethod(input.method);
+    if (
+      requestMethod !== declaredMethod &&
+      !(declaredMethod === 'GET' && requestMethod === 'HEAD')
+    ) {
+      return false;
+    }
   }
 
   if (definition.mount === 'prefix') {

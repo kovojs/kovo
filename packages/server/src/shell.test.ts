@@ -204,6 +204,38 @@ describe('server app shell dispatch table', () => {
     });
   });
 
+  it('derives effective endpoint methods only from the canonical declaration method', () => {
+    const update = endpoint('/account/method-authority', {
+      csrf: false,
+      csrfJustification: 'machine endpoint shell fixture',
+      handler: () => new Response('updated'),
+      method: 'POST',
+      reason: 'single endpoint method authority regression',
+      response: rawTextResponse,
+    });
+    const structural = { ...update, allowedMethods: ['GET'] };
+
+    expect(
+      matchShellDispatch({
+        endpoints: [structural],
+        method: 'GET',
+        pathname: '/account/method-authority',
+      }),
+    ).toMatchObject({
+      allowedMethods: ['POST'],
+      endpoint: structural,
+      kind: 'endpoint',
+      methodAllowed: false,
+    });
+    expect(
+      matchShellDispatch({
+        endpoints: [structural],
+        method: 'POST',
+        pathname: '/account/method-authority',
+      }),
+    ).toMatchObject({ endpoint: structural, kind: 'endpoint', methodAllowed: true });
+  });
+
   it('cannot cross-bind endpoint posture or authorize a method through Array.find/some poisoning', () => {
     const publicMachineEndpoint = endpoint('/machine', {
       csrf: false,

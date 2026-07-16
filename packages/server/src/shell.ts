@@ -14,7 +14,6 @@ import { witnessStringStartsWith } from './security-witness-intrinsics.js';
  * consumers, not app authors.
  */
 export interface EndpointLike {
-  allowedMethods?: readonly string[];
   method?: string;
   mount: 'exact' | 'prefix';
   path: string;
@@ -239,7 +238,6 @@ export function matchShellDispatch<
 }
 
 function endpointAllowedMethods(endpoint: EndpointLike): readonly string[] {
-  if (endpoint.allowedMethods !== undefined) return endpoint.allowedMethods;
   if (endpoint.method === undefined) return [];
   const method = canonicalRequestMethod(endpoint.method);
   return method === 'GET' ? ['GET', 'HEAD'] : [method];

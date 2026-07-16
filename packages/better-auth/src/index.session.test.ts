@@ -410,6 +410,9 @@ describe('browser redirect protocol mount', () => {
     expect(
       endpointMatches(authEndpoint, { method: 'GET', pathname: '/auth/callback/github' }),
     ).toBe(true);
+    expect(
+      endpointMatches(authEndpoint, { method: 'HEAD', pathname: '/auth/callback/github' }),
+    ).toBe(true);
     expect(endpointMatches(authEndpoint, { method: 'POST', pathname: '/auth/saml/acs' })).toBe(
       false,
     );

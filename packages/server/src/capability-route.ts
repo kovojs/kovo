@@ -150,7 +150,6 @@ export interface StorageDownloadEndpointInfo {
 }
 
 type StorageDownloadEndpointDeclaration = EndpointDeclaration<string, 'GET', 'prefix'> & {
-  allowedMethods?: readonly ['GET', 'HEAD'];
   [STORAGE_DOWNLOAD_ENDPOINT_INFO]?: StorageDownloadEndpointInfo;
 };
 
@@ -585,12 +584,6 @@ export function createStorageDownloadEndpoint(
     },
     (frameworkDeclaration) => {
       pinEndpointSelfVerifyingAuth(frameworkDeclaration);
-      capabilityDefineProperty(frameworkDeclaration, 'allowedMethods', {
-        configurable: false,
-        enumerable: false,
-        value: capabilityFreeze(['GET', 'HEAD']) satisfies readonly ['GET', 'HEAD'],
-        writable: false,
-      });
       capabilityDefineProperty(frameworkDeclaration, STORAGE_DOWNLOAD_ENDPOINT_INFO, {
         configurable: false,
         enumerable: false,
@@ -680,4 +673,19 @@ export function storageDownloadEndpointInfo(
     definition as StorageDownloadEndpointDeclaration,
     STORAGE_DOWNLOAD_ENDPOINT_INFO,
   ) as StorageDownloadEndpointInfo | undefined;
+}
+
+/** @internal Copy the private storage-download route identity onto an app snapshot. */
+export function copyStorageDownloadEndpointInfo(
+  source: EndpointDeclaration<string, EndpointMethod, EndpointMount>,
+  target: EndpointDeclaration<string, EndpointMethod, EndpointMount>,
+): void {
+  const info = storageDownloadEndpointInfo(source);
+  if (info === undefined) return;
+  capabilityDefineProperty(target, STORAGE_DOWNLOAD_ENDPOINT_INFO, {
+    configurable: false,
+    enumerable: false,
+    value: info,
+    writable: false,
+  });
 }

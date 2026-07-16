@@ -33,9 +33,11 @@ import { layout, route, type LayoutDeclaration } from './route.js';
 import { snapshotSchemaForRuntime, type Schema } from './schema.js';
 import type { AppDiagnostic, AppErrorShellOptions, AppTaskDeclaration } from './app-types.js';
 import type { CsrfAnonymousCookieOptions, CsrfOptions } from './csrf.js';
+import { copyStorageDownloadEndpointInfo } from './capability-route.js';
 import { snapshotStylesheetAsset, type StylesheetAsset } from './hints.js';
 import { isFrameworkCsrfSigningSecret, signingKeyRingFromSecret } from './keyring.js';
 import { securityJsonStringify } from './response-security-intrinsics.js';
+import { canonicalRequestMethod } from './request-method.js';
 import {
   createWitnessWeakMap,
   createWitnessWeakSet,
@@ -68,6 +70,20 @@ if (!nativeArrayIsArray([]) || nativeArrayIsArray({})) {
   throw new TypeError('Kovo app array controls were modified before framework initialization.');
 }
 const EMPTY_OMITTED_PROPERTIES = createWitnessSet<PropertyKey>();
+const ENDPOINT_DECLARATION_SNAPSHOT_FIELDS = witnessFreeze([
+  'csrf',
+  'db',
+  'handler',
+  'method',
+  'mount',
+  'mountJustification',
+  'name',
+  'path',
+  'reason',
+  'response',
+  'webhook',
+  'webhookDefinition',
+] satisfies readonly PropertyKey[]);
 
 /** One assembly-local identity map keeps nested layout/mutation query references canonical. */
 export interface AppDeclarationSnapshotContext {
@@ -170,11 +186,36 @@ export function snapshotAppEndpoint<Db>(
   const access = accessDecisionFor(
     object as EndpointDeclaration<string, EndpointMethod, EndpointMount>,
   );
-  const record = snapshotOwnDataRecord(
+  const sourceRecord = snapshotOwnDataRecord(
     object,
     'endpoint declaration',
     omittedProperties('access', 'auth'),
   );
+  if (witnessGetOwnPropertyDescriptor(sourceRecord, 'allowedMethods') !== undefined) {
+    throw new TypeError(
+      'Kovo endpoint declarations cannot provide allowedMethods; request routing derives the effective method set from the canonical declared method (SPEC §9.1).',
+    );
+  }
+  const record = witnessCreateNullRecord<any>();
+  for (let index = 0; index < ENDPOINT_DECLARATION_SNAPSHOT_FIELDS.length; index += 1) {
+    const property = ENDPOINT_DECLARATION_SNAPSHOT_FIELDS[index]!;
+    const descriptor = witnessGetOwnPropertyDescriptor(sourceRecord, property);
+    if (descriptor === undefined || !('value' in descriptor)) continue;
+    witnessDefineProperty(record, property, {
+      configurable: true,
+      enumerable: descriptor.enumerable === true,
+      value: descriptor.value,
+      writable: true,
+    });
+  }
+  if (typeof record.method !== 'string' || record.method === '') {
+    throw new TypeError('Kovo endpoint declarations require a non-empty own-data method.');
+  }
+  if (canonicalRequestMethod(record.method) !== record.method) {
+    throw new TypeError(
+      'Kovo endpoint declaration method must use its canonical uppercase spelling (SPEC §9.1).',
+    );
+  }
   record.reason = snapshotAuditReason(record.reason, 'app endpoint snapshot (SPEC §9.1)');
   if (record.mountJustification !== undefined) {
     record.mountJustification = snapshotAuditJustification(
@@ -221,6 +262,10 @@ export function snapshotAppEndpoint<Db>(
     EndpointMount
   >;
   copyEndpointAuthSnapshot(object as object & { auth?: EndpointAuthDeclaration }, declaration);
+  copyStorageDownloadEndpointInfo(
+    object as EndpointDeclaration<string, EndpointMethod, EndpointMount>,
+    declaration,
+  );
   witnessFreeze(declaration);
   witnessWeakMapSet(context.endpoints, object, declaration);
   witnessWeakMapSet(context.endpoints, declaration, declaration);
