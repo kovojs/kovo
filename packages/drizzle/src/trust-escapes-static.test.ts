@@ -157,6 +157,59 @@ describe('@kovojs/drizzle trust-escape collector (KV426, audit-only)', () => {
     ]);
   });
 
+  it('shares exact barrel trust identity with request analysis without opening hidden callees', () => {
+    const barrelFiles = [
+      {
+        fileName: 'browser-root.ts',
+        source: "export { trustedHtml, trustedUrl } from '@kovojs/browser';",
+      },
+      {
+        fileName: 'browser-barrel.ts',
+        source: "export * from './browser-root.js';",
+      },
+    ] as const;
+    const exact = sinksForFiles([
+      ...barrelFiles,
+      {
+        fileName: 'app.ts',
+        source: `
+          import { query } from '@kovojs/server';
+          import { trustedHtml, trustedUrl } from './browser-barrel.js';
+          export const promo = query({ load(input) {
+            return { body: trustedHtml(input.body), href: trustedUrl(input.href) };
+          } });
+        `,
+      },
+    ]);
+    expect(exact).toEqual([]);
+
+    for (const hiddenBody of [
+      `const trust = { html: trustedHtml }; return trust.html(input.body);`,
+      `const key = 'trustedHtml'; return browser[key](input.body);`,
+      `return [trustedHtml][0](input.body);`,
+    ]) {
+      const hidden = sinksForFiles([
+        ...barrelFiles,
+        {
+          fileName: 'app.ts',
+          source: `
+            import { query } from '@kovojs/server';
+            import { trustedHtml } from './browser-barrel.js';
+            import * as browser from './browser-barrel.js';
+            export const promo = query({ load(input) { ${hiddenBody} } });
+          `,
+        },
+      ]);
+      expect(hidden, hiddenBody).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            sink: expect.stringMatching(/^request-handler\.opaque-/u),
+          }),
+        ]),
+      );
+    }
+  });
+
   it('does not collect local shadows as framework trust escapes', () => {
     const escapes = trustEscapesFor(`
       function trustedHtml(value: string) { return value; }

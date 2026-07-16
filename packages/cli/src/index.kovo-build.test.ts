@@ -1863,7 +1863,7 @@ export default createApp({
     }
   });
 
-  it('runs Drizzle security extractors before artifact emission', async () => {
+  it('fails closed on opaque Drizzle query protocols before artifact emission', async () => {
     const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-security-preflight-'));
     const appPath = join(root, 'app.mjs');
     const outDir = join(root, 'dist');
@@ -1885,11 +1885,10 @@ export default createApp({
       expect(exitCode).toBe(1);
       expect(stdout).not.toHaveBeenCalled();
       expect(errorOutput).toContain('kovo build check preflight failed');
-      expect(errorOutput).toContain('ERROR KV414 QUERY accountById');
-      expect(errorOutput).toContain('ERROR KV414 QUERY inlineContextAccountById');
-      expect(errorOutput).toContain('ERROR KV438 WRITE updateRole');
-      expect(errorOutput).toContain('ERROR KV433 QUERY badRead');
-      expect(errorOutput).toContain('ERROR KV429 WRITE decrementStock');
+      expect(errorOutput).toMatch(
+        /ERROR KV424 security\.ts:\d+ sink=request-handler\.opaque-protocol source=<property-getter:accounts>/,
+      );
+      expect(errorOutput.match(/ERROR KV424 security\.ts/g) ?? []).toHaveLength(3);
       expect(existsSync(outDir)).toBe(false);
     } finally {
       stdout.mockRestore();
@@ -1971,7 +1970,7 @@ export default createApp({
 
   it('resolves local trustedHtml/trustedUrl barrels during production build preflight', async () => {
     const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-trustedhtml-barrel-'));
-    const appPath = join(root, 'app.ts');
+    const appPath = join(root, 'app.tsx');
     const outDir = join(root, 'dist');
     const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
     const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
@@ -1980,6 +1979,7 @@ export default createApp({
       mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
       symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
       symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
+      symlinkSync(join(repoRoot, 'packages/core'), join(root, 'node_modules/@kovojs/core'));
       writeClientEntry(root);
       writeFileSync(appPath, trustedHtmlBarrelPreflightAppModuleSource(), 'utf8');
       writeFileSync(
@@ -1990,7 +1990,7 @@ export default createApp({
       writeFileSync(join(root, 'promo.tsx'), trustedHtmlBarrelPreflightComponentSource(), 'utf8');
 
       const exitCode = await withCwd(root, () =>
-        mainAsync(['build', './app.ts', '--out', './dist', '--no-cache']),
+        mainAsync(['build', './app.tsx', '--out', './dist', '--no-cache']),
       );
       const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
       expect(exitCode).toBe(1);
@@ -2008,7 +2008,7 @@ export default createApp({
 
   it('resolves star trustedHtml/trustedUrl barrels and literal element access during production build preflight', async () => {
     const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-trustedhtml-star-barrel-'));
-    const appPath = join(root, 'app.ts');
+    const appPath = join(root, 'app.tsx');
     const outDir = join(root, 'dist');
     const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
     const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
@@ -2017,6 +2017,7 @@ export default createApp({
       mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
       symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
       symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
+      symlinkSync(join(repoRoot, 'packages/core'), join(root, 'node_modules/@kovojs/core'));
       writeClientEntry(root);
       writeFileSync(appPath, trustedHtmlBarrelPreflightAppModuleSource(), 'utf8');
       writeFileSync(
@@ -2032,7 +2033,7 @@ export default createApp({
       );
 
       const exitCode = await withCwd(root, () =>
-        mainAsync(['build', './app.ts', '--out', './dist', '--no-cache']),
+        mainAsync(['build', './app.tsx', '--out', './dist', '--no-cache']),
       );
       const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
       expect(exitCode).toBe(1);
@@ -2048,9 +2049,9 @@ export default createApp({
     }
   }, 90_000);
 
-  it('fails hidden trustedHtml/trustedUrl callee shapes during production build preflight', async () => {
+  it('fails hidden trustedHtml/trustedUrl callee shapes closed during production build preflight', async () => {
     const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-trustedhtml-hidden-callee-'));
-    const appPath = join(root, 'app.ts');
+    const appPath = join(root, 'app.tsx');
     const outDir = join(root, 'dist');
     const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
     const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
@@ -2059,6 +2060,7 @@ export default createApp({
       mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
       symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
       symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
+      symlinkSync(join(repoRoot, 'packages/core'), join(root, 'node_modules/@kovojs/core'));
       writeClientEntry(root);
       writeFileSync(appPath, trustedHtmlBarrelPreflightAppModuleSource(), 'utf8');
       writeFileSync(
@@ -2068,14 +2070,20 @@ export default createApp({
       );
 
       const exitCode = await withCwd(root, () =>
-        mainAsync(['build', './app.ts', '--out', './dist', '--no-cache']),
+        mainAsync(['build', './app.tsx', '--out', './dist', '--no-cache']),
       );
       const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
       expect(exitCode).toBe(1);
       expect(stdout).not.toHaveBeenCalled();
       expect(errorOutput).toContain('kovo build check preflight failed');
-      expect(errorOutput).toMatch(/ERROR KV426 promo\.tsx:\d+:\d+/);
-      expect(errorOutput.match(/ERROR KV426 promo\.tsx/g) ?? []).toHaveLength(5);
+      expect(errorOutput).toMatch(
+        /ERROR KV424 promo\.tsx:\d+ sink=request-handler\.opaque-call source=\(\{ \.\.\.trust \}\)\.html/,
+      );
+      expect(errorOutput).toContain('source=[trustedHtml][0]');
+      expect(errorOutput).toContain('source=(() => trustedHtml)()');
+      expect(errorOutput).toContain('source=new R().html');
+      expect(errorOutput).toContain('source=({ ...trust }).url');
+      expect(errorOutput.match(/ERROR KV424 promo\.tsx/g) ?? []).toHaveLength(8);
       expect(existsSync(outDir)).toBe(false);
     } finally {
       stdout.mockRestore();
@@ -3772,22 +3780,11 @@ export default createApp({
 
 function securityPreflightAppModuleSource(): string {
   return `
-import { createApp, query, route, s } from '@kovojs/server';
-
-const accountById = query('accountById', {
-  access: { kind: 'public', reason: 'security preflight fixture' },
-  load: (input) => ({ id: input?.id ?? 'a1' }),
-  output: s.object({ id: s.string() }),
-});
-
-const badRead = query('badRead', {
-  access: { kind: 'public', reason: 'security preflight fixture' },
-  load: (input) => ({ id: input?.id ?? 'a1' }),
-  output: s.object({ id: s.string() }),
-});
+import { createApp, route } from '@kovojs/server';
+import { accountById, badRead, inlineContextAccountById } from './security.js';
 
 export default createApp({
-  queries: [accountById, badRead],
+  queries: [accountById, inlineContextAccountById, badRead],
   routes: [
     route('/', {
       access: { kind: 'public', reason: 'security preflight fixture' },
@@ -3878,13 +3875,15 @@ export default createApp({
 
 function trustedHtmlBarrelPreflightAppModuleSource(): string {
   return `
+/** @jsxImportSource @kovojs/server */
 import { createApp, publicAccess, route, trustedHtml } from '@kovojs/server';
+import { Promo } from './promo.js';
 
 export default createApp({
   routes: [
     route('/', {
       access: publicAccess('trustedHtml barrel build preflight fixture'),
-      page: () => trustedHtml('<main>Home</main>', 'trustedHtml barrel build preflight fixture'),
+      page: () => <main>{trustedHtml('<h1>Home</h1>', 'trustedHtml barrel build preflight fixture')}<Promo /></main>,
     }),
   ],
 });
@@ -3893,7 +3892,9 @@ export default createApp({
 
 function trustedHtmlBarrelPreflightComponentSource(): string {
   return `
-import { component, publicAccess, query, s } from '@kovojs/server';
+/** @jsxImportSource @kovojs/server */
+import { component } from '@kovojs/core';
+import { publicAccess, query, s } from '@kovojs/server';
 import { trustedHtml, trustedUrl } from './safe-html.js';
 
 export const postQuery = query('post', {
@@ -3916,7 +3917,9 @@ export const Promo = component({
 
 function trustedHtmlStarBarrelElementAccessPreflightComponentSource(): string {
   return `
-import { component, publicAccess, query, s } from '@kovojs/server';
+/** @jsxImportSource @kovojs/server */
+import { component } from '@kovojs/core';
+import { publicAccess, query, s } from '@kovojs/server';
 import * as browser from '@kovojs/browser';
 import * as safeHtml from './safe-html.js';
 
@@ -3942,7 +3945,9 @@ export const Promo = component({
 
 function trustedHtmlHiddenCalleePreflightComponentSource(): string {
   return `
-import { component, publicAccess, query, s } from '@kovojs/server';
+/** @jsxImportSource @kovojs/server */
+import { component } from '@kovojs/core';
+import { publicAccess, query, s } from '@kovojs/server';
 import { trustedHtml, trustedUrl } from '@kovojs/browser';
 
 const trust = { html: trustedHtml, url: trustedUrl };

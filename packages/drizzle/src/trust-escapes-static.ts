@@ -24630,13 +24630,21 @@ function requestCallIsExactKovoTrustedSql(call: import('ts-morph').CallExpressio
 
 function requestCallIsExactTrustedOutput(call: Node): boolean {
   if (!Node.isCallExpression(call)) return false;
-  const identity = requestImportedModuleExportForExpression(
-    call.getExpression(),
-    (specifier) => specifier === '@kovojs/browser' || specifier === '@kovojs/server',
-    new Set(),
-    0,
+  const callee = call.getExpression();
+  return (
+    expressionResolvesToFrameworkExport(
+      callee,
+      frameworkExport('@kovojs/browser', 'trustedHtml'),
+    ) ||
+    expressionResolvesToFrameworkExport(callee, frameworkExport('@kovojs/browser', 'trustedUrl')) ||
+    expressionResolvesToFrameworkExport(
+      callee,
+      frameworkExport('@kovojs/browser', 'safeRichHtml'),
+    ) ||
+    expressionResolvesToFrameworkExport(callee, frameworkExport('@kovojs/server', 'trustedHtml')) ||
+    expressionResolvesToFrameworkExport(callee, frameworkExport('@kovojs/server', 'trustedUrl')) ||
+    expressionResolvesToFrameworkExport(callee, frameworkExport('@kovojs/server', 'safeRichHtml'))
   );
-  return !!identity && ['safeRichHtml', 'trustedHtml', 'trustedUrl'].includes(identity.exportName);
 }
 
 function requestCallIsExactSecretOutput(call: Node): boolean {
