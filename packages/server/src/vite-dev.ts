@@ -843,7 +843,7 @@ function hmrRefreshTargetUrl(
   }
 
   const requestHref = requestUrl(request);
-  const targetUrl = viteDevUrlSnapshot(target, requestHref);
+  const targetUrl = canonicalViteDevDocumentUrl(viteDevUrlSnapshot(target, requestHref));
   if (targetUrl.origin !== viteDevUrlSnapshot(requestHref).origin || isKovoHmrRequest(targetUrl)) {
     return hmrRefreshTextResponse(
       'Kovo HMR refresh current document URL is not refreshable.',
@@ -857,6 +857,10 @@ function hmrRefreshTargetUrl(
   }
 
   return targetUrl;
+}
+
+function canonicalViteDevDocumentUrl(url: RequestUrlSnapshot): RequestUrlSnapshot {
+  return viteDevUrlSnapshot(url.origin + url.pathname + url.search);
 }
 
 function hmrTargetNodeRequest(
@@ -1252,15 +1256,16 @@ async function refreshLiveTargets(event) {
   const live = liveTargets();
   if (typeof apply !== "function" || live.length === 0) return reload();
 
-  const url = new URL("${kovoHmrLiveTargetRefreshPath}", location.href);
-  url.searchParams.set("url", location.href);
+  const currentUrl = location.origin + location.pathname + location.search;
+  const url = new URL("${kovoHmrLiveTargetRefreshPath}", currentUrl);
+  url.searchParams.set("url", currentUrl);
   const build = currentBuild();
   if (build) url.searchParams.set("oldBuild", build);
   if (event?.oldFactHash) url.searchParams.set("oldFactHash", event.oldFactHash);
 
   const response = await fetch(url, {
     headers: {
-      "Kovo-Current-Url": location.href,
+      "Kovo-Current-Url": currentUrl,
       "Kovo-Fragment": "true",
       "Kovo-Live-Targets": live.join("; "),
       "Kovo-Targets": dependencyTargets().join(";"),
@@ -1285,14 +1290,15 @@ hot.on("kovo:component-render", (event) => {
   refreshLiveTargets(event).catch(reload);
 });
 async function refreshRoute() {
-  const url = new URL("${kovoHmrRouteRefreshPath}", location.href);
-  url.searchParams.set("url", location.href);
+  const currentUrl = location.origin + location.pathname + location.search;
+  const url = new URL("${kovoHmrRouteRefreshPath}", currentUrl);
+  url.searchParams.set("url", currentUrl);
   const build = currentBuild();
   if (build) url.searchParams.set("oldBuild", build);
   const response = await fetch(url, {
     headers: {
       Accept: "text/html",
-      "Kovo-Current-Url": location.href,
+      "Kovo-Current-Url": currentUrl,
     },
   });
   const contentType = response.headers.get("Content-Type") || "";

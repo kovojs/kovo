@@ -49,7 +49,7 @@ describe('browser inline loader response apply', () => {
     ].join('\n');
     const root = document.createElement('main');
     root.innerHTML = [
-      '<form enhance action="/cart" method="post">',
+      '<form enhance data-mutation="cart/add" action="/_m/cart/add" method="post">',
       '<section kovo-c="cart-form">',
       '<label kovo-key="label">Quantity</label>',
       '<div kovo-key="panel" class="scroll-panel"><p class="scroll-panel-fill">Panel</p></div>',
@@ -70,6 +70,7 @@ describe('browser inline loader response apply', () => {
     panel.scrollTop = 4;
 
     const fetch = vi.fn(async () => ({
+      headers: new Headers({ 'Content-Type': 'text/vnd.kovo.fragment+html' }),
       async text() {
         textarea.focus();
         textarea.setSelectionRange(1, 3, 'forward');
@@ -83,6 +84,7 @@ describe('browser inline loader response apply', () => {
           '</kovo-fragment>',
         ].join('');
       },
+      url: new URL('/_m/cart/add', location.href).href,
     }));
     vi.stubGlobal('fetch', fetch);
 
@@ -106,7 +108,7 @@ describe('browser inline loader response apply', () => {
   it('applies fragments to explicit fragment targets before conflicting component stamps', async () => {
     const root = document.createElement('main');
     root.innerHTML = [
-      '<form enhance action="/cart" method="post">',
+      '<form enhance data-mutation="cart/add" action="/_m/cart/add" method="post">',
       '<section kovo-fragment-target="cart" kovo-deps="cart">old cart</section>',
       '<aside kovo-c="cart">wrong target</aside>',
       '</form>',
@@ -119,6 +121,7 @@ describe('browser inline loader response apply', () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(async () => ({
+        headers: new Headers({ 'Content-Type': 'text/vnd.kovo.fragment+html' }),
         async text() {
           return [
             '<kovo-fragment target="cart">',
@@ -126,6 +129,7 @@ describe('browser inline loader response apply', () => {
             '</kovo-fragment>',
           ].join('');
         },
+        url: new URL('/_m/cart/add', location.href).href,
       })),
     );
 
@@ -141,7 +145,7 @@ describe('browser inline loader response apply', () => {
   it('applies selector-invalid id and fragment-target values through escaped lookup', async () => {
     const root = document.createElement('main');
     root.innerHTML = [
-      '<form enhance action="/cart" method="post">',
+      '<form enhance data-mutation="cart/add" action="/_m/cart/add" method="post">',
       "<section id='target\"bad-id'>old id</section>",
       "<section kovo-fragment-target='target\"bad-fragment'>old fragment target</section>",
       '</form>',
@@ -154,6 +158,7 @@ describe('browser inline loader response apply', () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(async () => ({
+        headers: new Headers({ 'Content-Type': 'text/vnd.kovo.fragment+html' }),
         async text() {
           return [
             "<kovo-fragment target='target\"bad-id'>",
@@ -164,6 +169,7 @@ describe('browser inline loader response apply', () => {
             '</kovo-fragment>',
           ].join('');
         },
+        url: new URL('/_m/cart/add', location.href).href,
       })),
     );
 
@@ -343,7 +349,7 @@ describe('browser inline loader response apply', () => {
     ].join('');
     const root = document.createElement('main');
     root.innerHTML = [
-      '<form enhance action="/cart" method="post">',
+      '<form enhance data-mutation="cart/add" action="/_m/cart/add" method="post">',
       '<section kovo-fragment-target="cart">old cart</section>',
       '</form>',
     ].join('');
@@ -353,6 +359,9 @@ describe('browser inline loader response apply', () => {
       vi.fn(async () => ({
         headers: {
           get(name: string) {
+            if (name.toLowerCase() === 'content-type') {
+              return 'text/vnd.kovo.fragment+html';
+            }
             if (name === 'Kovo-Build') return 'build-a';
             if (name === 'Kovo-Changes') return JSON.stringify([{ domain: 'cart' }]);
             return null;
@@ -363,6 +372,7 @@ describe('browser inline loader response apply', () => {
         async text() {
           return '<kovo-fragment target="cart"><section kovo-fragment-target="cart">fresh cart</section></kovo-fragment>';
         },
+        url: new URL('/_m/cart/add', location.href).href,
       })),
     );
 

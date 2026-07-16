@@ -991,6 +991,11 @@ describe('server app shell Vite dev seam', () => {
       expect(clientBody).toContain('hot.on("kovo:diagnostics"');
       expect(clientBody).toContain('/@kovo/hmr/refresh/route');
       expect(clientBody).toContain('/@kovo/hmr/refresh/live-targets');
+      expect(clientBody).toContain(
+        'const currentUrl = location.origin + location.pathname + location.search;',
+      );
+      expect(clientBody).not.toContain('"Kovo-Current-Url": location.href');
+      expect(clientBody).not.toContain('url.searchParams.set("url", location.href)');
     } finally {
       String.prototype.replace = originalStringReplace;
       globalThis.Response = NativeResponse;
@@ -1007,11 +1012,13 @@ describe('server app shell Vite dev seam', () => {
       source: 'export const cart = true;',
       version: 'cart-v1',
     });
+    let observedRequest: Request | undefined;
     const app = createApp({
       clientModules,
       routes: [
         route('/cart', {
-          page() {
+          page(_input, request) {
+            observedRequest = request.clone();
             return renderedHtml('<main>Cart refresh</main>');
           },
         }),
@@ -1047,9 +1054,16 @@ describe('server app shell Vite dev seam', () => {
         });
       });
 
-      const response = await fetch(
-        `http://127.0.0.1:${(server.address() as AddressInfo).port}/@kovo/hmr/refresh/route?url=/cart&oldBuild=old-build`,
-      );
+      const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+      const endpoint = new URL('/@kovo/hmr/refresh/route', origin);
+      endpoint.searchParams.set('url', `${origin}/cart?tab=summary#private-browser-state`);
+      endpoint.searchParams.set('oldBuild', 'old-build');
+      const response = await fetch(endpoint, {
+        headers: {
+          'Kovo-Current-Url': `${origin}/cart?tab=summary#private-browser-state`,
+          'X-App-Context': 'retained',
+        },
+      });
       const body = await response.text();
 
       expect(response.status).toBe(200);
@@ -1062,6 +1076,10 @@ describe('server app shell Vite dev seam', () => {
       expect(body).toContain('<meta name="kovo-build" content="');
       expect(body).toContain('<script type="module" src="/@kovo/hmr-client"></script>');
       expect(body).toContain('<main>Cart refresh</main>');
+      expect(observedRequest?.url).toBe(`${origin}/cart?tab=summary`);
+      expect(observedRequest?.url).not.toContain('#');
+      expect(observedRequest?.headers.get('Kovo-Current-Url')).toBeNull();
+      expect(observedRequest?.headers.get('X-App-Context')).toBe('retained');
     } finally {
       await new Promise<void>((resolve, reject) => {
         server.close((error) => (error ? reject(error) : resolve()));
@@ -1223,7 +1241,7 @@ describe('server app shell Vite dev seam', () => {
           authorization: 'Bearer retained',
           cookie: 'session=retained',
           'Content-Type': 'application/json',
-          'Kovo-Current-Url': '/cart?tab=summary',
+          'Kovo-Current-Url': '/cart?tab=summary#private-browser-state',
           'Kovo-Fragment': 'true',
           'Kovo-Live-Targets': `${attestedLiveTargetHeader('cart-badge', 'src/components/CartBadge', appLiveTargetAttestationAudience(app), { count: 3 }, `${origin}/cart?tab=summary`)}`,
           origin: 'https://attacker.invalid',

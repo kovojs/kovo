@@ -21,8 +21,8 @@ it('pins modular native submit before a late prototype replacement', async () =>
   document.body.append(sink);
   await initialLoad;
   const form = document.createElement('form');
-  form.action = '/favicon.ico';
-  form.method = 'get';
+  form.action = '/_m/modular-runtime';
+  form.method = 'post';
   form.target = sink.name;
   const marker = document.createElement('input');
   marker.name = 'kovo-c210';
@@ -30,14 +30,14 @@ it('pins modular native submit before a late prototype replacement', async () =>
   form.append(marker);
   document.body.append(form);
 
-  const descriptor = Object.getOwnPropertyDescriptor(HTMLFormElement.prototype, 'submit');
+  const descriptor = Object.getOwnPropertyDescriptor(HTMLFormElement.prototype, 'requestSubmit');
   if (!descriptor || !('value' in descriptor) || typeof descriptor.value !== 'function') {
-    throw new Error('native modular form submit unavailable');
+    throw new Error('native modular form requestSubmit unavailable');
   }
-  const poisonedSubmit = vi.fn();
-  Object.defineProperty(HTMLFormElement.prototype, 'submit', {
+  const poisonedRequestSubmit = vi.fn();
+  Object.defineProperty(HTMLFormElement.prototype, 'requestSubmit', {
     ...descriptor,
-    value: poisonedSubmit,
+    value: poisonedRequestSubmit,
   });
   try {
     fallbackEnhancedMutationSubmit(form);
@@ -45,17 +45,15 @@ it('pins modular native submit before a late prototype replacement', async () =>
     await vi.waitFor(() => {
       let navigated = false;
       try {
-        navigated =
-          sink.contentWindow?.location.pathname === '/favicon.ico' &&
-          sink.contentWindow.location.search.includes('kovo-c210=modular-runtime');
+        navigated = sink.contentWindow?.location.pathname === '/_m/modular-runtime';
       } catch {
         navigated = true;
       }
       expect(navigated).toBe(true);
     });
-    expect(poisonedSubmit).not.toHaveBeenCalled();
+    expect(poisonedRequestSubmit).not.toHaveBeenCalled();
   } finally {
-    Object.defineProperty(HTMLFormElement.prototype, 'submit', descriptor);
+    Object.defineProperty(HTMLFormElement.prototype, 'requestSubmit', descriptor);
   }
 });
 
@@ -87,7 +85,15 @@ it('refreshes modular idempotency truth through the boot-pinned FormData setter'
         expect(Reflect.apply(getDescriptor.value, options.body, ['Kovo-Idem'])).toBe(
           options.headers['Kovo-Idem'],
         );
-        return new Response(null, { status: 204 });
+        return {
+          headers: new Headers({ 'Content-Type': 'text/vnd.kovo.fragment+html' }),
+          ok: true,
+          status: 204,
+          async text() {
+            return '';
+          },
+          url: new URL('/_m/comment/post', location.href).href,
+        };
       },
     );
 

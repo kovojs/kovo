@@ -1,5 +1,32 @@
 import type { DelegatedEvent, EventElementLike } from './events.js';
 
+export function mutationTestResponse<ResponseShape extends object>(
+  path: string,
+  response: ResponseShape,
+  origin = 'http://localhost',
+): ResponseShape & {
+  headers: { get(name: string): string | null };
+  url: string;
+} {
+  const responseRecord = response as ResponseShape & {
+    headers?: { get?(name: string): string | null };
+    url?: string;
+  };
+  const responseHeaders = responseRecord.headers;
+  return {
+    ...response,
+    headers: {
+      get(name: string) {
+        if (name.toLowerCase() === 'content-type') {
+          return 'text/vnd.kovo.fragment+html';
+        }
+        return responseHeaders?.get?.(name) ?? null;
+      },
+    },
+    url: responseRecord.url || `${origin}${path}`,
+  };
+}
+
 /** Install a compiler-shaped modulepreload registry for browser-free runtime tests. */
 export function installTestClientModuleManifest(urls: readonly string[]): () => void {
   const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'document');
@@ -107,6 +134,7 @@ export class FakeFormElement extends FakeElement {
   method?: string;
   progressElements: FakeElement[] = [];
   submitted = false;
+  submitter: unknown;
 
   constructor(attributes: Record<string, string>, options: { action: string; method?: string }) {
     super(attributes);
@@ -122,6 +150,11 @@ export class FakeFormElement extends FakeElement {
 
   submit(): void {
     this.submitted = true;
+  }
+
+  requestSubmit(submitter?: unknown): void {
+    this.submitted = true;
+    this.submitter = submitter;
   }
 }
 

@@ -49,6 +49,9 @@ describe('loader enhanced mutation submits', () => {
     const fetch = vi.fn(async (_url: string, options: EnhancedMutationFetchOptions) => ({
       headers: {
         get(name: string) {
+          if (name.toLowerCase() === 'content-type') {
+            return 'text/vnd.kovo.fragment+html';
+          }
           return name === 'Kovo-Changes' ? '[{"domain":"cart","input":{"productId":"p1"}}]' : null;
         },
       },
@@ -63,6 +66,7 @@ describe('loader enhanced mutation submits', () => {
           '<kovo-fragment target="cart-badge"><cart-badge>1</cart-badge></kovo-fragment>',
         ].join('\n');
       },
+      url: 'http://localhost/_m/cart/add',
     }));
 
     installKovoLoader({
@@ -91,6 +95,7 @@ describe('loader enhanced mutation submits', () => {
       body: formData,
       headers: {
         Accept: 'text/vnd.kovo.fragment+html',
+        'Kovo-Current-Url': 'http://localhost/',
         'Kovo-Fragment': 'true',
         'Kovo-Idem': 'idem_loader',
         'Kovo-Live-Targets': 'cart-badge#cart-badge@tok_cart:{}',
@@ -130,13 +135,14 @@ describe('loader enhanced mutation submits', () => {
     const formData = { kind: 'submitter-aware-form-data' };
     const fetch = vi.fn(async () => ({
       headers: {
-        get() {
-          return null;
+        get(name: string) {
+          return name.toLowerCase() === 'content-type' ? 'text/vnd.kovo.fragment+html' : null;
         },
       },
       async text() {
         return '';
       },
+      url: 'http://localhost/_m/cart/add',
     }));
 
     try {
@@ -172,6 +178,98 @@ describe('loader enhanced mutation submits', () => {
     }
   });
 
+  it.each([
+    ['a non-mutation formaction', { formaction: '/checkout' }],
+    ['a cross-origin formaction', { formaction: 'https://attacker.test/_m/cart/add' }],
+    ['a non-POST formmethod', { formmethod: 'get' }],
+  ])(
+    'leaves typed mutation submitters with %s to native submission',
+    async (_label, attributes) => {
+      const loaderRoot = new FakeRoot();
+      const fetch = vi.fn();
+      const preventDefault = vi.fn();
+      const form = new FakeFormElement(
+        {
+          enhance: '',
+          'data-mutation': 'cart/add',
+        },
+        {
+          action: '/_m/cart/add',
+          method: 'post',
+        },
+      );
+      const submitter = new FakeElement(attributes);
+
+      installKovoLoader({
+        enhancedMutations: {
+          fetch,
+          root: new FakeMorphRoot(),
+          store: createQueryStore(),
+        },
+        importModule: vi.fn(),
+        root: loaderRoot,
+      });
+
+      await loaderRoot.listeners.get('submit')?.({
+        preventDefault,
+        submitter,
+        target: form,
+        type: 'submit',
+      });
+
+      expect(preventDefault).not.toHaveBeenCalled();
+      expect(fetch).not.toHaveBeenCalled();
+    },
+  );
+
+  it('preserves the original submitter when enhanced transport falls back to native submission', async () => {
+    const loaderRoot = new FakeRoot();
+    const fetchError = new Error('offline');
+    const fetch = vi.fn(async () => {
+      throw fetchError;
+    });
+    const preventDefault = vi.fn();
+    const form = new FakeFormElement(
+      {
+        enhance: '',
+        'data-mutation': 'cart/add',
+      },
+      {
+        action: '/_m/cart/add',
+        method: 'post',
+      },
+    );
+    const submitter = new FakeElement({ name: 'intent', value: 'preview' });
+    const requestSubmit = vi.fn();
+    Object.defineProperty(form, 'requestSubmit', {
+      configurable: true,
+      value: requestSubmit,
+      writable: true,
+    });
+
+    installKovoLoader({
+      enhancedMutations: {
+        fetch,
+        formData: () => new FormData(),
+        root: new FakeMorphRoot(),
+        store: createQueryStore(),
+      },
+      importModule: vi.fn(),
+      onError: vi.fn(),
+      root: loaderRoot,
+    });
+
+    await loaderRoot.listeners.get('submit')?.({
+      preventDefault,
+      submitter,
+      target: form,
+      type: 'submit',
+    });
+
+    expect(preventDefault).toHaveBeenCalledTimes(1);
+    expect(requestSubmit).toHaveBeenCalledWith(submitter);
+  });
+
   it('renders upload progress as indeterminate when total bytes are unknown', async () => {
     const loaderRoot = new FakeRoot();
     const mutationRoot = new FakeMorphRoot();
@@ -193,14 +291,15 @@ describe('loader enhanced mutation submits', () => {
     form.progressElements = [progressElement];
     const fetch = vi.fn(async (_url: string, options: EnhancedMutationFetchOptions) => ({
       headers: {
-        get() {
-          return null;
+        get(name: string) {
+          return name.toLowerCase() === 'content-type' ? 'text/vnd.kovo.fragment+html' : null;
         },
       },
       async text() {
         options.onUploadProgress?.({ loaded: 512 });
         return '<kovo-query name="cart">{"count":1}</kovo-query>';
       },
+      url: 'http://localhost/_m/cart/add',
     }));
 
     installKovoLoader({

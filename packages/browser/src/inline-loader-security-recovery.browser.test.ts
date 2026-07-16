@@ -16,15 +16,20 @@ async function createFrame(body: string, head: string): Promise<FrameHarness> {
   frame.addEventListener('load', () => {
     loads += 1;
   });
-  frame.srcdoc = `<!doctype html><html><head>${head}</head><body>${body}</body></html>`;
+  frame.src = `/__kovo_inline_security_fixture?case=${frames.length}`;
   frames.push(frame);
   document.body.append(frame);
   await vi.waitFor(() => expect(loads).toBe(1));
   const frameWindow = frame.contentWindow;
   if (!frameWindow) throw new Error('missing iframe window');
+  frameWindow.document.open();
+  frameWindow.document.write(`<!doctype html><html><head>${head}</head><body>${body}</body></html>`);
+  frameWindow.document.close();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  const baselineLoads = loads;
   return {
     frame,
-    loadCount: () => loads,
+    loadCount: () => loads - baselineLoads + 1,
     window: frameWindow as Window & typeof globalThis,
   };
 }
@@ -286,25 +291,27 @@ it('keeps generated mutation on the response transport captured at boot', async 
     [
       '<main kovo-nav-segment="layout:a" kovo-nav-kind="layout" kovo-nav-name="a">',
       '<section kovo-fragment-target="account">INITIAL</section>',
-      '<form enhance action="/_m/account" method="post"><button>save</button></form>',
+      '<form enhance data-mutation="account" action="/_m/account" method="post"><button>save</button></form>',
       '</main>',
     ].join(''),
     '<meta name="kovo-build" content="build-a">',
   );
   const globalRecord = harness.window as unknown as Record<string, unknown>;
   const safeFetch = vi.fn(async () => ({
-    headers: responseHeaders('build-a'),
+    headers: responseHeaders('build-a', 'text/vnd.kovo.fragment+html'),
     ok: true,
     status: 200,
     async text() {
       return '<kovo-fragment target="account"><section kovo-fragment-target="account">MUTATION SERVER SAFE</section></kovo-fragment>';
     },
+    url: `${harness.window.location.origin}/_m/account`,
   }));
   const attackFetch = vi.fn(async () => ({
-    headers: responseHeaders('build-a'),
+    headers: responseHeaders('build-a', 'text/vnd.kovo.fragment+html'),
     async text() {
       return '<kovo-fragment target="account"><section kovo-fragment-target="account">ATTACKER</section></kovo-fragment>';
     },
+    url: `${harness.window.location.origin}/_m/account`,
   }));
   globalRecord.fetch = safeFetch;
 
@@ -367,7 +374,7 @@ it('retires the old channel when mutable session meta is forged to match the nex
   const harness = await createFrame(
     [
       '<main kovo-nav-segment="layout:a" kovo-nav-kind="layout" kovo-nav-name="a">',
-      '<a id="switch" href="about:srcdoc?kovo-session=b">switch</a>',
+      '<a id="switch" href="/__kovo_inline_security_fixture?kovo-session=b">switch</a>',
       '<section kovo-fragment-target="account">A INITIAL</section>',
       '</main>',
     ].join(''),
@@ -413,7 +420,7 @@ it('retires the old channel when mutable session meta is forged to match the nex
       Reflect.apply(nativeClose, this, []);
     },
   });
-  const targetUrl = 'about:srcdoc?kovo-session=b';
+  const targetUrl = `${harness.window.location.origin}/__kovo_inline_security_fixture?kovo-session=b`;
   (harness.window as unknown as Record<string, unknown>).fetch = vi.fn(async () => ({
     headers: responseHeaders('build-a'),
     async text() {
@@ -471,7 +478,7 @@ it.each([
   async (_posture, responseBuild) => {
     const harness = await createFrame(
       [
-        '<form enhance data-mutation-stream action="/_m/chat" method="post"><button>send</button></form>',
+        '<form enhance data-mutation="chat" data-mutation-stream action="/_m/chat" method="post"><button>send</button></form>',
         '<section kovo-fragment-target="messages">OLD BUILD TRUTH</section>',
       ].join(''),
       '<meta name="kovo-build" content="build-old">',
@@ -482,9 +489,10 @@ it.each([
     const body = new harness.window.ReadableStream<Uint8Array>({ cancel });
     (harness.window as unknown as Record<string, unknown>).fetch = vi.fn(async () => ({
       body,
-      headers: responseHeaders(responseBuild),
+      headers: responseHeaders(responseBuild, 'text/vnd.kovo.fragment+html'),
       ok: true,
       status: 200,
+      url: `${harness.window.location.origin}/_m/chat`,
     }));
 
     await installGeneratedInlineLoader(harness.window);
@@ -522,7 +530,7 @@ it.each([
   async (_name, fragment, terminator) => {
     const harness = await createFrame(
       [
-        '<form enhance data-mutation-stream action="/_m/chat" method="post"><button>send</button></form>',
+        '<form enhance data-mutation="chat" data-mutation-stream action="/_m/chat" method="post"><button>send</button></form>',
         '<section kovo-fragment-target="messages">AUTHORITATIVE</section>',
       ].join(''),
       '<meta name="kovo-build" content="build-a">',
@@ -532,14 +540,15 @@ it.each([
     let nativeSubmitCalls = 0;
     const form = oldDocument.querySelector<HTMLFormElement>('form');
     if (!form) throw new Error('missing stream form');
-    form.submit = () => {
+    form.requestSubmit = () => {
       nativeSubmitCalls += 1;
     };
     (harness.window as unknown as Record<string, unknown>).fetch = vi.fn(async () => ({
       body: frameStream(harness.window, [fragment, ...(terminator ? [terminator] : [])]),
-      headers: responseHeaders('build-a'),
+      headers: responseHeaders('build-a', 'text/vnd.kovo.fragment+html'),
       ok: true,
       status: 200,
+      url: `${harness.window.location.origin}/_m/chat`,
     }));
 
     await installGeneratedInlineLoader(harness.window);
@@ -557,7 +566,7 @@ it('pins deferred-runtime native submit before a late prototype replacement', as
   const harness = await createFrame(
     [
       '<iframe hidden name="kovo-c210-deferred-sink"></iframe>',
-      '<form enhance action="/favicon.ico" method="get" target="kovo-c210-deferred-sink">',
+      '<form enhance data-mutation="deferred-runtime" action="/_m/deferred-runtime" method="post" target="kovo-c210-deferred-sink">',
       '<input name="kovo-c210" value="deferred-runtime">',
       '<button>send</button>',
       '</form>',
@@ -571,14 +580,17 @@ it('pins deferred-runtime native submit before a late prototype replacement', as
     throw new Error('mutation fetch failed');
   });
   const prototype = harness.window.HTMLFormElement.prototype;
-  const descriptor = Object.getOwnPropertyDescriptor(prototype, 'submit');
+  const descriptor = Object.getOwnPropertyDescriptor(prototype, 'requestSubmit');
   if (!descriptor || !('value' in descriptor) || typeof descriptor.value !== 'function') {
-    throw new Error('native deferred form submit unavailable');
+    throw new Error('native deferred form requestSubmit unavailable');
   }
-  const poisonedSubmit = vi.fn();
+  const poisonedRequestSubmit = vi.fn();
 
   await installGeneratedInlineLoader(harness.window);
-  Object.defineProperty(prototype, 'submit', { ...descriptor, value: poisonedSubmit });
+  Object.defineProperty(prototype, 'requestSubmit', {
+    ...descriptor,
+    value: poisonedRequestSubmit,
+  });
   try {
     form.dispatchEvent(
       new harness.window.SubmitEvent('submit', { bubbles: true, cancelable: true }),
@@ -587,24 +599,22 @@ it('pins deferred-runtime native submit before a late prototype replacement', as
     await vi.waitFor(() => {
       let navigated = false;
       try {
-        navigated =
-          sink.contentWindow?.location.pathname === '/favicon.ico' &&
-          sink.contentWindow.location.search.includes('kovo-c210=deferred-runtime');
+        navigated = sink.contentWindow?.location.pathname === '/_m/deferred-runtime';
       } catch {
         navigated = true;
       }
       expect(navigated).toBe(true);
     });
-    expect(poisonedSubmit).not.toHaveBeenCalled();
+    expect(poisonedRequestSubmit).not.toHaveBeenCalled();
   } finally {
-    Object.defineProperty(prototype, 'submit', descriptor);
+    Object.defineProperty(prototype, 'requestSubmit', descriptor);
   }
 });
 
 it('keeps complete same-build stream behavior without hard recovery', async () => {
   const harness = await createFrame(
     [
-      '<form enhance data-mutation-stream action="/_m/chat" method="post"><button>send</button></form>',
+      '<form enhance data-mutation="chat" data-mutation-stream action="/_m/chat" method="post"><button>send</button></form>',
       '<section kovo-fragment-target="messages">AUTHORITATIVE</section>',
     ].join(''),
     '<meta name="kovo-build" content="build-a">',
@@ -615,9 +625,10 @@ it('keeps complete same-build stream behavior without hard recovery', async () =
       '<kovo-fragment target="messages" mode="append"><article>CONFIRMED</article></kovo-fragment>',
       '<kovo-done reason="complete"></kovo-done>',
     ]),
-    headers: responseHeaders('build-a'),
+    headers: responseHeaders('build-a', 'text/vnd.kovo.fragment+html'),
     ok: true,
     status: 200,
+    url: `${harness.window.location.origin}/_m/chat`,
   }));
 
   await installGeneratedInlineLoader(harness.window);

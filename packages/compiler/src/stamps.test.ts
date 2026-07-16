@@ -831,6 +831,44 @@ export const AddToCartForm = component({
     );
   });
 
+  it('reports KV242 when submit controls override a typed mutation transport', () => {
+    const result = compileComponentModule({
+      fileName: 'add-to-cart-form.tsx',
+      source: `
+export const addToCart = mutation({
+  input: s.object({ intent: s.string().optional() }),
+  handler() {
+    return null;
+  },
+});
+
+export const AddToCartForm = component({
+  render: () => (
+    <form enhance mutation={addToCart}>
+      <button name="intent" value="preview" formaction="/preview">Preview elsewhere</button>
+      <button formMethod="get">Search instead</button>
+    </form>
+  ),
+});
+`,
+    });
+
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV242')).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          message: expect.stringContaining(
+            'formaction cannot override a typed enhanced mutation transport',
+          ),
+        }),
+        expect.objectContaining({
+          message: expect.stringContaining(
+            'formMethod cannot override a typed enhanced mutation transport',
+          ),
+        }),
+      ]),
+    );
+  });
+
   it('reports KV242 for external form-associated mutation controls', () => {
     const result = compileComponentModule({
       fileName: 'add-to-cart-form.tsx',

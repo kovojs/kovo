@@ -23,6 +23,55 @@ class InertBroadcastChannel {
   }
 }
 
+interface InlineMutationResponse {
+  headers?: { get(name: string): string | null };
+  url?: string;
+  [key: string]: unknown;
+}
+
+function mutationResponse(path: string, response: InlineMutationResponse): InlineMutationResponse {
+  const responseHeaders = response.headers;
+  const location = (globalThis as unknown as { location?: { origin?: unknown } }).location;
+  const origin = typeof location?.origin === 'string' ? location.origin : 'http://localhost';
+  return {
+    ...response,
+    headers: {
+      ...responseHeaders,
+      get(name: string) {
+        if (name.toLowerCase() === 'content-type') {
+          return 'text/vnd.kovo.fragment+html';
+        }
+        return responseHeaders?.get(name) ?? null;
+      },
+    },
+    url: response.url ?? `${origin}${path}`,
+  };
+}
+
+function mutationFormAttribute(
+  mutation: string,
+  name: string,
+  extra: Readonly<Record<string, string>> = {},
+): string | null {
+  if (name === 'data-mutation') return mutation;
+  return Object.prototype.hasOwnProperty.call(extra, name) ? (extra[name] ?? null) : null;
+}
+
+function createStructuralFormData(): {
+  get(name: string): unknown;
+  set(name: string, value: unknown): void;
+} {
+  const values = new Map<string, unknown>();
+  return {
+    get(name: string) {
+      return values.get(name) ?? null;
+    },
+    set(name: string, value: unknown) {
+      values.set(name, value);
+    },
+  };
+}
+
 function poisonMutationArrayMethods(): () => void {
   const methods = ['every', 'filter', 'flatMap'] as const;
   const descriptors = methods.map((name) => {
@@ -73,7 +122,7 @@ describe('inline loader enhanced submit source', () => {
       const form = {
         action: '/_m/auth/custom-sign-in',
         getAttribute(name: string) {
-          return name === 'data-enhance' ? '' : null;
+          return mutationFormAttribute('auth/custom-sign-in', name);
         },
         method: 'post',
       };
@@ -95,20 +144,22 @@ describe('inline loader enhanced submit source', () => {
             return [];
           },
         };
-        globalRecord.fetch = vi.fn(async () => ({
-          headers: {
-            get(name: string) {
-              const normalized = name.toLowerCase();
-              if (normalized === 'kovo-session-transition') return 'reload';
-              if (normalized === 'kovo-reauth') return '//evil.example/phish';
-              if (normalized === 'location') return 'https://evil.example/phish';
-              return null;
+        globalRecord.fetch = vi.fn(async () =>
+          mutationResponse('/_m/auth/custom-sign-in', {
+            headers: {
+              get(name: string) {
+                const normalized = name.toLowerCase();
+                if (normalized === 'kovo-session-transition') return 'reload';
+                if (normalized === 'kovo-reauth') return '//evil.example/phish';
+                if (normalized === 'location') return 'https://evil.example/phish';
+                return null;
+              },
             },
-          },
-          ok: false,
-          status: 401,
-          text,
-        }));
+            ok: false,
+            status: 401,
+            text,
+          }),
+        );
         globalRecord.location = {
           href: 'https://kovo.test/login',
           origin: 'https://kovo.test',
@@ -222,7 +273,7 @@ describe('inline loader enhanced submit source', () => {
         const form = {
           action: '/_m/auth/sign-in',
           getAttribute(name: string) {
-            return name === 'data-enhance' ? '' : null;
+            return mutationFormAttribute('auth/sign-in', name);
           },
           method: 'post',
         };
@@ -244,10 +295,12 @@ describe('inline loader enhanced submit source', () => {
               return [];
             },
           };
-          globalRecord.fetch = vi.fn(async () => ({
-            ...response,
-            text,
-          }));
+          globalRecord.fetch = vi.fn(async () =>
+            mutationResponse('/_m/auth/sign-in', {
+              ...response,
+              text,
+            }),
+          );
           globalRecord.location = {
             assign,
             href: 'https://kovo.test/login?next=%2F',
@@ -333,7 +386,7 @@ describe('inline loader enhanced submit source', () => {
         const form = {
           action: '/_m/auth/sign-in',
           getAttribute(name: string) {
-            return name === 'data-enhance' ? '' : null;
+            return mutationFormAttribute('auth/sign-in', name);
           },
           method: 'post',
         };
@@ -359,16 +412,18 @@ describe('inline loader enhanced submit source', () => {
               return [];
             },
           };
-          globalRecord.fetch = vi.fn(async () => ({
-            headers: {
-              get(name: string) {
-                return name.toLowerCase() === 'kovo-changes' ? '[{"domain":"auth"}]' : null;
+          globalRecord.fetch = vi.fn(async () =>
+            mutationResponse('/_m/auth/sign-in', {
+              headers: {
+                get(name: string) {
+                  return name.toLowerCase() === 'kovo-changes' ? '[{"domain":"auth"}]' : null;
+                },
               },
-            },
-            ok: true,
-            status: 200,
-            text,
-          }));
+              ok: true,
+              status: 200,
+              text,
+            }),
+          );
           globalRecord.location = {
             assign,
             hash: '',
@@ -463,7 +518,7 @@ describe('inline loader enhanced submit source', () => {
         const form = {
           action: '/_m/cart/add',
           getAttribute(name: string) {
-            return name === 'data-enhance' ? '' : null;
+            return mutationFormAttribute('cart/add', name);
           },
           method: 'post',
         };
@@ -485,15 +540,17 @@ describe('inline loader enhanced submit source', () => {
               return [];
             },
           };
-          globalRecord.fetch = vi.fn(async () => ({
-            headers: {
-              get(name: string) {
-                return name.toLowerCase() === 'kovo-reauth' ? reauth : null;
+          globalRecord.fetch = vi.fn(async () =>
+            mutationResponse('/_m/cart/add', {
+              headers: {
+                get(name: string) {
+                  return name.toLowerCase() === 'kovo-reauth' ? reauth : null;
+                },
               },
-            },
-            status: 401,
-            text: vi.fn(async () => '<kovo-fragment target="cart">wrong</kovo-fragment>'),
-          }));
+              status: 401,
+              text: vi.fn(async () => '<kovo-fragment target="cart">wrong</kovo-fragment>'),
+            }),
+          );
           globalRecord.location = {
             assign,
             href: 'https://kovo.test/cart',
@@ -562,7 +619,7 @@ describe('inline loader enhanced submit source', () => {
       const form = {
         action: '/_m/account/update',
         getAttribute(name: string) {
-          return name === 'data-enhance' ? '' : null;
+          return mutationFormAttribute('account/update', name);
         },
         method: 'post',
       };
@@ -584,19 +641,21 @@ describe('inline loader enhanced submit source', () => {
             return [];
           },
         };
-        globalRecord.fetch = vi.fn(async () => ({
-          headers: {
-            get(name: string) {
-              const normalized = name.toLowerCase();
-              if (normalized === 'kovo-reauth') return '/login';
-              if (normalized === 'kovo-build') return 'build-A';
-              return null;
+        globalRecord.fetch = vi.fn(async () =>
+          mutationResponse('/_m/account/update', {
+            headers: {
+              get(name: string) {
+                const normalized = name.toLowerCase();
+                if (normalized === 'kovo-reauth') return '/login';
+                if (normalized === 'kovo-build') return 'build-A';
+                return null;
+              },
             },
-          },
-          ok: true,
-          status: 200,
-          text,
-        }));
+            ok: true,
+            status: 200,
+            text,
+          }),
+        );
         globalRecord.location = {
           assign,
           href: 'https://kovo.test/account',
@@ -666,7 +725,7 @@ describe('inline loader enhanced submit source', () => {
         const form = {
           action: variant === 'reauth' ? '/_m/cart/add' : '/_m/auth/sign-in',
           getAttribute(name: string) {
-            return name === 'data-enhance' ? '' : null;
+            return mutationFormAttribute(variant === 'reauth' ? 'cart/add' : 'auth/sign-in', name);
           },
           method: 'post',
         };
@@ -684,22 +743,24 @@ describe('inline loader enhanced submit source', () => {
             listeners.set(type, listener);
           };
           globalRecord.document = { querySelectorAll: () => [] };
-          globalRecord.fetch = vi.fn(async () => ({
-            headers: {
-              get(name: string) {
-                if (variant === 'reauth' && name === 'Kovo-Reauth') {
-                  return '//evil.example/phish';
-                }
-                if (variant === 'auth-success' && name === 'Kovo-Changes') {
-                  return '[{"domain":"auth"}]';
-                }
-                return null;
+          globalRecord.fetch = vi.fn(async () =>
+            mutationResponse(variant === 'reauth' ? '/_m/cart/add' : '/_m/auth/sign-in', {
+              headers: {
+                get(name: string) {
+                  if (variant === 'reauth' && name === 'Kovo-Reauth') {
+                    return '//evil.example/phish';
+                  }
+                  if (variant === 'auth-success' && name === 'Kovo-Changes') {
+                    return '[{"domain":"auth"}]';
+                  }
+                  return null;
+                },
               },
-            },
-            ok: true,
-            status: variant === 'reauth' ? 401 : 200,
-            text: async () => '',
-          }));
+              ok: true,
+              status: variant === 'reauth' ? 401 : 200,
+              text: async () => '',
+            }),
+          );
           globalRecord.location = {
             assign,
             hash: '',
@@ -777,9 +838,12 @@ describe('inline loader enhanced submit source', () => {
       const form = {
         action: '/_m/cart/add',
         getAttribute(name: string) {
-          return name === 'data-enhance' ? '' : null;
+          return mutationFormAttribute('cart/add', name);
         },
         method: 'post',
+        removeAttribute(name: string) {
+          attributes.delete(name);
+        },
         setAttribute(name: string, value: string) {
           attributes.set(name, value);
         },
@@ -909,6 +973,219 @@ describe('inline loader enhanced submit source', () => {
   );
 
   it.each(inlineSourceInstallCases)(
+    'requires compiler-owned same-origin POST mutation transport through %s',
+    async (_name, installSource) => {
+      const originals = {
+        FormData: globalRecord.FormData,
+        addEventListener: globalRecord.addEventListener,
+        document: globalRecord.document,
+        fetch: globalRecord.fetch,
+        importModule: globalRecord.__kovoInlineImport,
+        location: globalRecord.location,
+      };
+      const listeners = new Map<string, (event: unknown) => void>();
+      const fetch = vi.fn(async () => mutationResponse('/_m/cart/add', { text: async () => '' }));
+      const typedForm = {
+        action: '/_m/cart/add',
+        getAttribute(name: string) {
+          return mutationFormAttribute('cart/add', name, { enhance: '' });
+        },
+        method: 'post',
+      };
+      const candidates = [
+        {
+          form: {
+            action: '/_m/cart/add',
+            getAttribute: (name: string) => (name === 'enhance' ? '' : null),
+            method: 'post',
+          },
+          submitter: undefined,
+        },
+        {
+          form: typedForm,
+          submitter: {
+            getAttribute: (name: string) => (name === 'formaction' ? '/checkout' : null),
+          },
+        },
+        {
+          form: typedForm,
+          submitter: {
+            getAttribute: (name: string) => (name === 'formmethod' ? 'get' : null),
+          },
+        },
+        {
+          form: typedForm,
+          submitter: {
+            getAttribute: (name: string) =>
+              name === 'formaction' ? 'https://attacker.test/_m/cart/add' : null,
+          },
+        },
+      ];
+
+      try {
+        globalRecord.FormData = function FormData() {
+          return createStructuralFormData();
+        };
+        globalRecord.addEventListener = (type: string, listener: (event: unknown) => void) => {
+          listeners.set(type, listener);
+        };
+        globalRecord.document = { querySelectorAll: () => [] };
+        globalRecord.fetch = fetch;
+        globalRecord.location = {
+          hash: '#private',
+          href: 'https://kovo.test/account?tab=security#private',
+          origin: 'https://kovo.test',
+          pathname: '/account',
+          search: '?tab=security',
+        };
+
+        installSource(
+          vi.fn(async () => ({})),
+          globalRecord,
+        );
+
+        for (const candidate of candidates) {
+          const preventDefault = vi.fn();
+          listeners.get('submit')?.({
+            preventDefault,
+            submitter: candidate.submitter,
+            target: {
+              closest: () => candidate.form,
+            },
+            type: 'submit',
+          });
+          expect(preventDefault).not.toHaveBeenCalled();
+        }
+
+        const preventDefault = vi.fn();
+        listeners.get('submit')?.({
+          preventDefault,
+          submitter: { getAttribute: () => null },
+          target: { closest: () => typedForm },
+          type: 'submit',
+        });
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(preventDefault).toHaveBeenCalledTimes(1);
+        expect(fetch).toHaveBeenCalledTimes(1);
+        expect(fetch).toHaveBeenCalledWith(
+          '/_m/cart/add',
+          expect.objectContaining({
+            headers: expect.objectContaining({
+              'Kovo-Current-Url': 'https://kovo.test/account?tab=security',
+            }),
+            method: 'POST',
+          }),
+        );
+      } finally {
+        Object.assign(globalRecord, {
+          FormData: originals.FormData,
+          addEventListener: originals.addEventListener,
+          document: originals.document,
+          fetch: originals.fetch,
+          location: originals.location,
+        });
+        if (originals.importModule === undefined) {
+          delete globalRecord.__kovoInlineImport;
+        } else {
+          globalRecord.__kovoInlineImport = originals.importModule;
+        }
+      }
+    },
+  );
+
+  it.each(inlineSourceInstallCases)(
+    'rejects unproven inline mutation responses before apply through %s',
+    async (_name, installSource) => {
+      const originals = {
+        FormData: globalRecord.FormData,
+        addEventListener: globalRecord.addEventListener,
+        document: globalRecord.document,
+        fetch: globalRecord.fetch,
+        importModule: globalRecord.__kovoInlineImport,
+        location: globalRecord.location,
+      };
+
+      try {
+        for (const response of [
+          {
+            headers: { get: () => 'text/vnd.kovo.fragment+html' },
+            url: 'https://attacker.test/_m/cart/add',
+          },
+          {
+            headers: { get: () => 'text/html' },
+            url: 'https://kovo.test/_m/cart/add',
+          },
+        ]) {
+          const listeners = new Map<string, (event: unknown) => void>();
+          const text = vi.fn(async () => '<kovo-fragment target="cart">unsafe</kovo-fragment>');
+          const requestSubmit = vi.fn();
+          const attributes = new Map<string, string>();
+          const form = {
+            action: '/_m/cart/add',
+            getAttribute(name: string) {
+              return mutationFormAttribute('cart/add', name, { enhance: '' });
+            },
+            method: 'post',
+            removeAttribute(name: string) {
+              attributes.delete(name);
+            },
+            requestSubmit,
+            setAttribute(name: string, value: string) {
+              attributes.set(name, value);
+            },
+          };
+          const submitter = { getAttribute: () => null };
+          globalRecord.FormData = function FormData() {
+            return createStructuralFormData();
+          };
+          globalRecord.addEventListener = (type: string, listener: (event: unknown) => void) => {
+            listeners.set(type, listener);
+          };
+          globalRecord.document = { querySelectorAll: () => [] };
+          globalRecord.fetch = vi.fn(async () => ({ ...response, text }));
+          globalRecord.location = {
+            hash: '',
+            href: 'https://kovo.test/cart',
+            origin: 'https://kovo.test',
+            pathname: '/cart',
+            search: '',
+          };
+
+          installSource(
+            vi.fn(async () => ({})),
+            globalRecord,
+          );
+          listeners.get('submit')?.({
+            preventDefault: vi.fn(),
+            submitter,
+            target: { closest: () => form },
+            type: 'submit',
+          });
+          await new Promise((resolve) => setTimeout(resolve, 0));
+
+          expect(text).not.toHaveBeenCalled();
+          expect(requestSubmit).toHaveBeenCalledWith(submitter);
+          expect(attributes.has('data-kovo-native-fallback')).toBe(false);
+        }
+      } finally {
+        Object.assign(globalRecord, {
+          FormData: originals.FormData,
+          addEventListener: originals.addEventListener,
+          document: originals.document,
+          fetch: originals.fetch,
+          location: originals.location,
+        });
+        if (originals.importModule === undefined) {
+          delete globalRecord.__kovoInlineImport;
+        } else {
+          globalRecord.__kovoInlineImport = originals.importModule;
+        }
+      }
+    },
+  );
+
+  it.each(inlineSourceInstallCases)(
     'keeps enhanced form request targets in parity with modular submit through %s',
     async (_name, installSource) => {
       // SPEC.md §4.4: enhanced form headers are part of the always-loaded loader contract.
@@ -917,7 +1194,7 @@ describe('inline loader enhanced submit source', () => {
         action: '/_m/cart/add',
         getAttribute(name: string) {
           if (name === 'id') return 'your-answer';
-          return name === 'enhance' ? '' : null;
+          return mutationFormAttribute('cart/add', name, { enhance: '' });
         },
         id: { toString: () => '[object HTMLInputElement]' },
         method: 'post',
@@ -945,16 +1222,19 @@ describe('inline loader enhanced submit source', () => {
       ];
       const modularRoot = new InlineParityRoot();
       const parityIdem = '00000000-0000-4000-8000-000000000003';
-      const modularFetch = vi.fn(async (_url: string, _options: EnhancedMutationFetchOptions) => ({
-        headers: {
-          get() {
-            return null;
+      const modularFetch = vi.fn(async (_url: string, _options: EnhancedMutationFetchOptions) =>
+        mutationResponse('/_m/cart/add', {
+          headers: {
+            get() {
+              return null;
+            },
           },
-        },
-        async text() {
-          return '';
-        },
-      }));
+          async text() {
+            return '';
+          },
+          url: 'http://localhost/_m/cart/add',
+        }),
+      );
       modularRoot.deps = targetDeps;
 
       await submitEnhancedMutation({
@@ -978,11 +1258,13 @@ describe('inline loader enhanced submit source', () => {
       };
       const listeners = new Map<string, (event: unknown) => void>();
       const preventDefault = vi.fn();
-      const inlineFetch = vi.fn(async (_url: string, _options: EnhancedMutationFetchOptions) => ({
-        async text() {
-          return '';
-        },
-      }));
+      const inlineFetch = vi.fn(async (_url: string, _options: EnhancedMutationFetchOptions) =>
+        mutationResponse('/_m/cart/add', {
+          async text() {
+            return '';
+          },
+        }),
+      );
 
       try {
         let randomUuidCall = 0;
@@ -1053,7 +1335,17 @@ describe('inline loader enhanced submit source', () => {
 
         expect(preventDefault).toHaveBeenCalledTimes(1);
         const inlineRequest = inlineFetch.mock.calls[0];
-        expect(inlineRequest).toEqual(modularFetch.mock.calls[0]);
+        const modularRequest = modularFetch.mock.calls[0];
+        expect(inlineRequest).toEqual([
+          modularRequest?.[0],
+          {
+            ...modularRequest?.[1],
+            headers: {
+              ...modularRequest?.[1].headers,
+              'Kovo-Current-Url': 'https://kovo.test/',
+            },
+          },
+        ]);
         expect(inlineRequest?.[1].headers['Kovo-Targets']).toBe(
           'cart-badge=cart; inventory=inventory stock; standalone-target; cart-summary=cart summary',
         );
@@ -1100,16 +1392,18 @@ describe('inline loader enhanced submit source', () => {
       const form = {
         action: '/_m/cart/add',
         getAttribute(name: string) {
-          return name === 'enhance' ? '' : null;
+          return mutationFormAttribute('cart/add', name, { enhance: '' });
         },
         method: 'post',
       };
       const submitter = { name: 'intent', value: 'preview' };
-      const inlineFetch = vi.fn(async () => ({
-        async text() {
-          return '';
-        },
-      }));
+      const inlineFetch = vi.fn(async () =>
+        mutationResponse('/_m/cart/add', {
+          async text() {
+            return '';
+          },
+        }),
+      );
 
       try {
         globalRecord.FormData = function FormData(...args: unknown[]) {
@@ -1209,6 +1503,7 @@ describe('inline loader enhanced submit source', () => {
       const form = {
         action: '/_m/chat/send',
         getAttribute(name: string) {
+          if (name === 'data-mutation') return 'chat/send';
           if (name === 'data-mutation-stream') return 'true';
           if (name === 'kovo-fragment-target') return 'composer';
           return null;
@@ -1249,7 +1544,7 @@ describe('inline loader enhanced submit source', () => {
           controller.close();
         },
       });
-      const inlineFetch = vi.fn(async () => ({ body }));
+      const inlineFetch = vi.fn(async () => mutationResponse('/_m/chat/send', { body }));
 
       try {
         globalRecord.FormData = function FormData() {
@@ -1390,6 +1685,7 @@ describe('inline loader enhanced submit source', () => {
       const form = {
         action: '/_m/chat/send',
         getAttribute(name: string) {
+          if (name === 'data-mutation') return 'chat/send';
           if (name === 'data-mutation-stream') return 'true';
           if (name === 'kovo-fragment-target') return 'composer';
           return null;
@@ -1421,7 +1717,7 @@ describe('inline loader enhanced submit source', () => {
           controller.close();
         },
       });
-      const inlineFetch = vi.fn(async () => ({ body }));
+      const inlineFetch = vi.fn(async () => mutationResponse('/_m/chat/send', { body }));
 
       try {
         globalRecord.CustomEvent = class CustomEvent {
@@ -1542,6 +1838,7 @@ describe('inline loader enhanced submit source', () => {
       const form = {
         action: '/_m/chat/send',
         getAttribute(name: string) {
+          if (name === 'data-mutation') return 'chat/send';
           if (name === 'data-mutation-stream') return 'true';
           if (name === 'kovo-fragment-target') return 'composer';
           return formAttrs.get(name) ?? null;
@@ -1581,7 +1878,7 @@ describe('inline loader enhanced submit source', () => {
             return [];
           },
         };
-        globalRecord.fetch = vi.fn(async () => ({ body }));
+        globalRecord.fetch = vi.fn(async () => mutationResponse('/_m/chat/send', { body }));
         globalRecord.location = {
           hash: '',
           href: 'https://kovo.test/chat',
@@ -1696,7 +1993,7 @@ describe('inline loader enhanced submit source', () => {
                   return '<kovo-query name="cart">{"count":3}</kovo-query>';
                 },
               }
-            : {
+            : mutationResponse('/_m/cart/add', {
                 headers: {
                   get(name: string) {
                     if (name === 'Kovo-Build') return 'build-A';
@@ -1708,7 +2005,7 @@ describe('inline loader enhanced submit source', () => {
                 async text() {
                   return '<kovo-query name="cart" delta>{"set":{"count":3}}</kovo-query>';
                 },
-              },
+              }),
         );
         globalRecord.fetch = fetch;
 
@@ -1724,7 +2021,7 @@ describe('inline loader enhanced submit source', () => {
                 ? {
                     action: '/_m/cart/add',
                     getAttribute(name: string) {
-                      return name === 'enhance' ? '' : null;
+                      return mutationFormAttribute('cart/add', name, { enhance: '' });
                     },
                     method: 'post',
                   }
@@ -1822,13 +2119,15 @@ describe('inline loader enhanced submit source', () => {
             return [];
           },
         };
-        const fetch = vi.fn(async () => ({
-          headers: { get: (name: string) => (name === 'Kovo-Build' ? 'build-A' : null) },
-          status: 200,
-          async text() {
-            return '<kovo-query name="cart" key="cart delta fresh">{"count":3}</kovo-query>';
-          },
-        }));
+        const fetch = vi.fn(async () =>
+          mutationResponse('/_m/cart/add', {
+            headers: { get: (name: string) => (name === 'Kovo-Build' ? 'build-A' : null) },
+            status: 200,
+            async text() {
+              return '<kovo-query name="cart" key="cart delta fresh">{"count":3}</kovo-query>';
+            },
+          }),
+        );
         globalRecord.fetch = fetch;
 
         installSource(
@@ -1843,7 +2142,7 @@ describe('inline loader enhanced submit source', () => {
                 ? {
                     action: '/_m/cart/add',
                     getAttribute(name: string) {
-                      return name === 'enhance' ? '' : null;
+                      return mutationFormAttribute('cart/add', name, { enhance: '' });
                     },
                     method: 'post',
                   }
@@ -1917,7 +2216,13 @@ describe('inline loader enhanced submit source', () => {
           listeners.set(type, listener);
         };
         globalRecord.dispatchEvent = vi.fn();
-        globalRecord.location = { reload };
+        globalRecord.location = {
+          href: 'https://kovo.test/cart',
+          origin: 'https://kovo.test',
+          pathname: '/cart',
+          reload,
+          search: '',
+        };
         globalRecord.document = {
           getElementById(id: string) {
             return id === 'cart-panel' ? target : null;
@@ -1931,13 +2236,15 @@ describe('inline loader enhanced submit source', () => {
             return [];
           },
         };
-        globalRecord.fetch = vi.fn(async () => ({
-          headers: { get: (name: string) => (name === 'Kovo-Build' ? 'build-B' : null) },
-          status: 200,
-          async text() {
-            return '<kovo-fragment target="cart-panel" mode="append"><section>wrong-build</section></kovo-fragment>';
-          },
-        }));
+        globalRecord.fetch = vi.fn(async () =>
+          mutationResponse('/_m/cart/add', {
+            headers: { get: (name: string) => (name === 'Kovo-Build' ? 'build-B' : null) },
+            status: 200,
+            async text() {
+              return '<kovo-fragment target="cart-panel" mode="append"><section>wrong-build</section></kovo-fragment>';
+            },
+          }),
+        );
 
         installSource(
           vi.fn(async () => ({})),
@@ -1951,7 +2258,7 @@ describe('inline loader enhanced submit source', () => {
                 ? {
                     action: '/_m/cart/add',
                     getAttribute(name: string) {
-                      return name === 'enhance' ? '' : null;
+                      return mutationFormAttribute('cart/add', name, { enhance: '' });
                     },
                     method: 'post',
                   }
@@ -2057,7 +2364,9 @@ describe('inline loader enhanced submit source', () => {
             return [];
           },
         };
-        globalRecord.fetch = vi.fn(async () => ({ body, status: 200 }));
+        globalRecord.fetch = vi.fn(async () =>
+          mutationResponse('/_m/chat/send', { body, status: 200 }),
+        );
 
         installSource(
           vi.fn(async () => ({})),
@@ -2071,6 +2380,7 @@ describe('inline loader enhanced submit source', () => {
                 ? {
                     action: '/_m/chat/send',
                     getAttribute(name: string) {
+                      if (name === 'data-mutation') return 'chat/send';
                       if (name === 'data-mutation-stream') return 'true';
                       if (name === 'enhance') return '';
                       return null;

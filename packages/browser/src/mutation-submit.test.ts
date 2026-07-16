@@ -47,6 +47,27 @@ function mutationSubmitSnapshot<
   };
 }
 
+function mutationResponse<
+  Response extends {
+    headers?: { get(name: string): string | null };
+    url?: string;
+  },
+>(path: string, response: Response, origin = 'http://localhost'): Response & { url: string } {
+  const headers = response.headers;
+  return {
+    ...response,
+    headers: {
+      get(name: string) {
+        if (name.toLowerCase() === 'content-type') {
+          return 'text/vnd.kovo.fragment+html; charset=utf-8';
+        }
+        return headers?.get(name) ?? null;
+      },
+    },
+    url: response.url ?? `${origin}${path}`,
+  };
+}
+
 describe('enhanced mutation submit', () => {
   it('pins principal retirement across in-flight submit option and method mutation', async () => {
     const store = createQueryStore();
@@ -87,18 +108,20 @@ describe('enhanced mutation submit', () => {
       const pending = submitEnhancedMutation(options);
       options.broadcast = replacementBroadcast;
       broadcast.close = vi.fn();
-      resolveFetch({
-        headers: {
-          get(name: string) {
-            return name.toLowerCase() === 'kovo-session-transition' ? 'reload' : null;
+      resolveFetch(
+        mutationResponse('/_m/auth/custom-sign-in', {
+          headers: {
+            get(name: string) {
+              return name.toLowerCase() === 'kovo-session-transition' ? 'reload' : null;
+            },
           },
-        },
-        ok: true,
-        status: 200,
-        async text() {
-          return '';
-        },
-      });
+          ok: true,
+          status: 200,
+          async text() {
+            return '';
+          },
+        }),
+      );
       await pending;
     } finally {
       Object.defineProperty(globalThis, 'location', {
@@ -132,16 +155,17 @@ describe('enhanced mutation submit', () => {
     try {
       const result = await submitEnhancedMutation({
         broadcast,
-        fetch: async () => ({
-          headers: {
-            get(name: string) {
-              return name.toLowerCase() === 'kovo-session-transition' ? 'reload' : null;
+        fetch: async () =>
+          mutationResponse('/_m/auth/custom-sign-in', {
+            headers: {
+              get(name: string) {
+                return name.toLowerCase() === 'kovo-session-transition' ? 'reload' : null;
+              },
             },
-          },
-          ok: true,
-          status: 200,
-          text,
-        }),
+            ok: true,
+            status: 200,
+            text,
+          }),
         form: { action: '/_m/auth/custom-sign-in', method: 'post' },
         formData: new FormData(),
         root,
@@ -225,10 +249,9 @@ describe('enhanced mutation submit', () => {
         },
       });
       const text = vi.fn(async () => '<kovo-fragment target="auth">stale</kovo-fragment>');
-      const fetch = vi.fn(async () => ({
-        ...response,
-        text,
-      }));
+      const fetch = vi.fn(async () =>
+        mutationResponse('/_m/auth/sign-in', { ...response, text }, 'https://kovo.test'),
+      );
 
       try {
         const result = await submitEnhancedMutation({
@@ -282,16 +305,18 @@ describe('enhanced mutation submit', () => {
     const formData = new FormData();
     formData.set('next', '/dashboard?tab=home');
     const text = vi.fn(async () => '');
-    const fetch = vi.fn(async () => ({
-      headers: {
-        get(name: string) {
-          return name.toLowerCase() === 'kovo-changes' ? '[{"domain":"auth"}]' : null;
+    const fetch = vi.fn(async () =>
+      mutationResponse('/_m/auth/sign-in', {
+        headers: {
+          get(name: string) {
+            return name.toLowerCase() === 'kovo-changes' ? '[{"domain":"auth"}]' : null;
+          },
         },
-      },
-      ok: true,
-      status: 200,
-      text,
-    }));
+        ok: true,
+        status: 200,
+        text,
+      }),
+    );
 
     try {
       const result = await submitEnhancedMutation({
@@ -343,16 +368,18 @@ describe('enhanced mutation submit', () => {
     });
     const formData = new FormData();
     formData.set('next', 'https://evil.example/account');
-    const fetch = vi.fn(async () => ({
-      headers: {
-        get(name: string) {
-          return name.toLowerCase() === 'kovo-changes' ? '[{"domain":"auth"}]' : null;
+    const fetch = vi.fn(async () =>
+      mutationResponse('/_m/auth/sign-in', {
+        headers: {
+          get(name: string) {
+            return name.toLowerCase() === 'kovo-changes' ? '[{"domain":"auth"}]' : null;
+          },
         },
-      },
-      ok: true,
-      status: 200,
-      text: vi.fn(async () => ''),
-    }));
+        ok: true,
+        status: 200,
+        text: vi.fn(async () => ''),
+      }),
+    );
 
     try {
       await submitEnhancedMutation({
@@ -391,15 +418,17 @@ describe('enhanced mutation submit', () => {
       value: { assign },
     });
     const text = vi.fn(async () => '<kovo-fragment target="cart">wrong</kovo-fragment>');
-    const fetch = vi.fn(async () => ({
-      headers: {
-        get(name: string) {
-          return name.toLowerCase() === 'kovo-reauth' ? '/login?next=%2Fcart' : null;
+    const fetch = vi.fn(async () =>
+      mutationResponse('/_m/cart/add', {
+        headers: {
+          get(name: string) {
+            return name.toLowerCase() === 'kovo-reauth' ? '/login?next=%2Fcart' : null;
+          },
         },
-      },
-      status: 401,
-      text,
-    }));
+        status: 401,
+        text,
+      }),
+    );
 
     try {
       const result = await submitEnhancedMutation({
@@ -458,15 +487,17 @@ describe('enhanced mutation submit', () => {
       configurable: true,
       value: { assign },
     });
-    const fetch = vi.fn(async () => ({
-      headers: {
-        get(name: string) {
-          return name.toLowerCase() === 'kovo-reauth' ? reauth : null;
+    const fetch = vi.fn(async () =>
+      mutationResponse('/_m/cart/add', {
+        headers: {
+          get(name: string) {
+            return name.toLowerCase() === 'kovo-reauth' ? reauth : null;
+          },
         },
-      },
-      status: 401,
-      text: vi.fn(async () => '<kovo-fragment target="cart">wrong</kovo-fragment>'),
-    }));
+        status: 401,
+        text: vi.fn(async () => '<kovo-fragment target="cart">wrong</kovo-fragment>'),
+      }),
+    );
 
     try {
       await submitEnhancedMutation({
@@ -499,18 +530,19 @@ describe('enhanced mutation submit', () => {
 
     const result = await submitEnhancedMutation({
       broadcast,
-      fetch: async () => ({
-        headers: {
-          get(name: string) {
-            const normalized = name.toLowerCase();
-            if (normalized === 'kovo-reauth') return '/login';
-            return normalized === 'kovo-build' ? TEST_BUILD : null;
+      fetch: async () =>
+        mutationResponse('/_m/account/update', {
+          headers: {
+            get(name: string) {
+              const normalized = name.toLowerCase();
+              if (normalized === 'kovo-reauth') return '/login';
+              return normalized === 'kovo-build' ? TEST_BUILD : null;
+            },
           },
-        },
-        ok: true,
-        status: 200,
-        text: async () => body,
-      }),
+          ok: true,
+          status: 200,
+          text: async () => body,
+        }),
       form: { action: '/_m/account/update', method: 'post' },
       formData: new FormData(),
       expectedBuildToken: TEST_BUILD,
@@ -564,24 +596,26 @@ describe('enhanced mutation submit', () => {
     const formData = new FormData();
     formData.set('productId', 'p1');
     formData.set('quantity', '1');
-    const fetch = vi.fn(async (_url: string, options: EnhancedMutationFetchOptions) => ({
-      headers: {
-        get(name: string) {
-          if (name.toLowerCase() === 'kovo-build') return TEST_BUILD;
-          return name === 'Kovo-Changes'
-            ? '[{"domain":"cart","input":{"productId":"p1","quantity":"1"}}]'
-            : null;
+    const fetch = vi.fn(async (_url: string, options: EnhancedMutationFetchOptions) =>
+      mutationResponse('/_m/cart/add', {
+        headers: {
+          get(name: string) {
+            if (name.toLowerCase() === 'kovo-build') return TEST_BUILD;
+            return name === 'Kovo-Changes'
+              ? '[{"domain":"cart","input":{"productId":"p1","quantity":"1"}}]'
+              : null;
+          },
         },
-      },
-      async text() {
-        options.onUploadProgress?.({ loaded: 512, total: 1024 });
-        return [
-          '<kovo-query name="cart">{"count":1}</kovo-query>',
-          '<kovo-fragment target="cart-badge"><cart-badge>1</cart-badge></kovo-fragment>',
-          '<kovo-fragment target="recommendations"><section></section></kovo-fragment>',
-        ].join('\n');
-      },
-    }));
+        async text() {
+          options.onUploadProgress?.({ loaded: 512, total: 1024 });
+          return [
+            '<kovo-query name="cart">{"count":1}</kovo-query>',
+            '<kovo-fragment target="cart-badge"><cart-badge>1</cart-badge></kovo-fragment>',
+            '<kovo-fragment target="recommendations"><section></section></kovo-fragment>',
+          ].join('\n');
+        },
+      }),
+    );
 
     const result = await submitEnhancedMutation({
       fetch,
@@ -621,6 +655,7 @@ describe('enhanced mutation submit', () => {
       body: formData,
       headers: {
         Accept: 'text/vnd.kovo.fragment+html',
+        'Kovo-Current-Url': 'http://localhost/',
         'Kovo-Fragment': 'true',
         'Kovo-Idem': 'idem_01HX',
         'Kovo-Live-Targets':
@@ -666,20 +701,22 @@ describe('enhanced mutation submit', () => {
     const root = new FakeMorphRoot();
     root.deps = [{ deps: 'cart', id: 'cart-badge', token: 'tok_cart' }];
     root.targets.set('cart-badge', new FakeMorphTarget());
-    const fetch = vi.fn(async () => ({
-      headers: {
-        get(name: string) {
-          if (name.toLowerCase() === 'kovo-build') return TEST_BUILD;
-          return name === 'Kovo-Changes' ? '[' : null;
+    const fetch = vi.fn(async () =>
+      mutationResponse('/_m/cart/add', {
+        headers: {
+          get(name: string) {
+            if (name.toLowerCase() === 'kovo-build') return TEST_BUILD;
+            return name === 'Kovo-Changes' ? '[' : null;
+          },
         },
-      },
-      async text() {
-        return [
-          '<kovo-query name="cart">{"count":2}</kovo-query>',
-          '<kovo-fragment target="cart-badge"><cart-badge>2</cart-badge></kovo-fragment>',
-        ].join('\n');
-      },
-    }));
+        async text() {
+          return [
+            '<kovo-query name="cart">{"count":2}</kovo-query>',
+            '<kovo-fragment target="cart-badge"><cart-badge>2</cart-badge></kovo-fragment>',
+          ].join('\n');
+        },
+      }),
+    );
 
     const result = await submitEnhancedMutation({
       fetch,
@@ -714,19 +751,21 @@ describe('enhanced mutation submit', () => {
     const onError = vi.fn();
     root.deps = [{ deps: 'cart', id: 'cart-badge', token: 'tok_cart' }];
     root.targets.set('cart-badge', new FakeMorphTarget());
-    const fetch = vi.fn(async () => ({
-      headers: {
-        get(name: string) {
-          return name === 'Kovo-Changes' ? '[' : null;
+    const fetch = vi.fn(async () =>
+      mutationResponse('/_m/cart/add', {
+        headers: {
+          get(name: string) {
+            return name === 'Kovo-Changes' ? '[' : null;
+          },
         },
-      },
-      async text() {
-        return [
-          '<kovo-query name="cart">{"count":2}</kovo-query>',
-          '<kovo-fragment target="cart-badge"><cart-badge>2</cart-badge></kovo-fragment>',
-        ].join('\n');
-      },
-    }));
+        async text() {
+          return [
+            '<kovo-query name="cart">{"count":2}</kovo-query>',
+            '<kovo-fragment target="cart-badge"><cart-badge>2</cart-badge></kovo-fragment>',
+          ].join('\n');
+        },
+      }),
+    );
 
     const result = await submitEnhancedMutation({
       fetch,
@@ -786,18 +825,20 @@ describe('enhanced mutation submit', () => {
     const root = new FakeMorphRoot();
     root.deps = [{ id: 'cart-form' }];
     root.targets.set('cart-form', new FakeMorphTarget());
-    const fetch = vi.fn(async () => ({
-      headers: {
-        get() {
-          return null;
+    const fetch = vi.fn(async () =>
+      mutationResponse('/_m/cart/add', {
+        headers: {
+          get() {
+            return null;
+          },
         },
-      },
-      ok: false,
-      status: 422,
-      async text() {
-        return '<kovo-fragment target="cart-form"><form>Out of stock</form></kovo-fragment>';
-      },
-    }));
+        ok: false,
+        status: 422,
+        async text() {
+          return '<kovo-fragment target="cart-form"><form>Out of stock</form></kovo-fragment>';
+        },
+      }),
+    );
 
     const result = await submitEnhancedMutation({
       fetch,
@@ -820,13 +861,15 @@ describe('enhanced mutation submit', () => {
       async () =>
         '<kovo-fragment target="composer"><form><output role="alert">failed</output></form></kovo-fragment>',
     );
-    const fetch = vi.fn(async () => ({
-      body: new ReadableStream<Uint8Array>(),
-      headers: { get: () => null },
-      ok: false,
-      status: 422,
-      text,
-    }));
+    const fetch = vi.fn(async () =>
+      mutationResponse('/_m/chat/send', {
+        body: new ReadableStream<Uint8Array>(),
+        headers: { get: () => null },
+        ok: false,
+        status: 422,
+        text,
+      }),
+    );
 
     const result = await submitEnhancedMutation({
       fetch,
@@ -860,33 +903,35 @@ describe('enhanced mutation submit', () => {
     const text = vi.fn(async () => {
       throw new Error('streaming submit should not buffer text()');
     });
-    const fetch = vi.fn(async (_url: string, _options: EnhancedMutationFetchOptions) => ({
-      body: new ReadableStream<Uint8Array>({
-        start(controller) {
-          const encoder = new TextEncoder();
-          controller.enqueue(
-            encoder.encode(
-              '<kovo-fragment target="messages" mode="append"><article data-stream-text="assistant:a1"></article></kovo-fragment>',
-            ),
-          );
-          controller.enqueue(
-            encoder.encode(
-              '<kovo-text target="assistant:a1">Hello</kovo-text><kovo-query name="chat">{"count":1}</kovo-query>',
-            ),
-          );
-          // I1 (SPEC §9.1:810): a confirmed stream terminates with <kovo-done> (reason
-          // defaults to "complete"); the server always emits it on a clean completion.
-          controller.enqueue(encoder.encode('<kovo-done></kovo-done>'));
-          controller.close();
+    const fetch = vi.fn(async (_url: string, _options: EnhancedMutationFetchOptions) =>
+      mutationResponse('/_m/chat/send', {
+        body: new ReadableStream<Uint8Array>({
+          start(controller) {
+            const encoder = new TextEncoder();
+            controller.enqueue(
+              encoder.encode(
+                '<kovo-fragment target="messages" mode="append"><article data-stream-text="assistant:a1"></article></kovo-fragment>',
+              ),
+            );
+            controller.enqueue(
+              encoder.encode(
+                '<kovo-text target="assistant:a1">Hello</kovo-text><kovo-query name="chat">{"count":1}</kovo-query>',
+              ),
+            );
+            // I1 (SPEC §9.1:810): a confirmed stream terminates with <kovo-done> (reason
+            // defaults to "complete"); the server always emits it on a clean completion.
+            controller.enqueue(encoder.encode('<kovo-done></kovo-done>'));
+            controller.close();
+          },
+        }),
+        headers: {
+          get(name: string) {
+            return name === 'Kovo-Changes' ? '[{"domain":"chat"}]' : null;
+          },
         },
+        text,
       }),
-      headers: {
-        get(name: string) {
-          return name === 'Kovo-Changes' ? '[{"domain":"chat"}]' : null;
-        },
-      },
-      text,
-    }));
+    );
 
     const result = await submitEnhancedMutation({
       fetch,
@@ -907,6 +952,7 @@ describe('enhanced mutation submit', () => {
       body: expect.any(FormData),
       headers: {
         Accept: 'text/vnd.kovo.fragment+html; stream=1',
+        'Kovo-Current-Url': 'http://localhost/',
         'Kovo-Fragment': 'true',
         'Kovo-Idem': 'idem_stream_01',
         'Kovo-Live-Targets': '',

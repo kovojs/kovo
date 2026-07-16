@@ -297,6 +297,88 @@ describe('server app mutation request boundary', () => {
     expect(response.headers.get('location')).toBe('/cart');
   });
 
+  it('canonicalizes the reserved current-URL header before mutation code can observe it', async () => {
+    let observedCurrentUrl: string | null | undefined;
+    const save = mutation('account/save', {
+      csrf: false,
+      csrfJustification: 'test fixture uses a non-browser caller',
+      handler(_input, request) {
+        observedCurrentUrl = (request as Request).headers.get('Kovo-Current-Url');
+        return {};
+      },
+      input: s.object({}),
+    });
+    const app = createApp({ mutations: [save] });
+    const request = new Request('https://shop.example.test/_m/account/save', {
+      body: new FormData(),
+      headers: {
+        'Kovo-Current-Url': 'https://shop.example.test/account?tab=security#private-browser-state',
+      },
+      method: 'POST',
+    });
+
+    const response = await handleAppMutationRequest(
+      app,
+      request,
+      new URL(request.url),
+      'account/save',
+    );
+
+    expect(observedCurrentUrl).toBe('https://shop.example.test/account?tab=security');
+    expect(request.headers.get('Kovo-Current-Url')).toBe(
+      'https://shop.example.test/account?tab=security',
+    );
+    expect(response.headers.get('location')).toBe('/account?tab=security');
+    expect(response.headers.get('location')).not.toContain('#');
+  });
+
+  it.each([
+    {
+      expected: '/cart?step=1',
+      headers: { Referer: 'https://shop.example.test/cart?step=1#private-browser-state' },
+      name: 'same-origin Referer',
+    },
+    {
+      expected: '/',
+      headers: { Referer: 'http://[' },
+      name: 'invalid Referer',
+    },
+    {
+      expected: '/',
+      headers: { Referer: 'https://attacker.test/phish#private-browser-state' },
+      name: 'cross-origin Referer',
+    },
+    { expected: '/', headers: undefined, name: 'missing source headers' },
+  ])(
+    'derives the default no-JS redirect from canonical source truth for $name',
+    async (testCase) => {
+      const save = mutation('account/no-js-save', {
+        csrf: false,
+        csrfJustification: 'test fixture uses a non-browser caller',
+        handler: () => ({}),
+        input: s.object({}),
+      });
+      const app = createApp({ mutations: [save] });
+      const request = new Request('https://shop.example.test/_m/account/no-js-save', {
+        body: new FormData(),
+        ...(testCase.headers === undefined ? {} : { headers: testCase.headers }),
+        method: 'POST',
+      });
+
+      const response = await handleAppMutationRequest(
+        app,
+        request,
+        new URL(request.url),
+        'account/no-js-save',
+      );
+
+      expect(response.status).toBe(303);
+      expect(response.headers.get('location')).toBe(testCase.expected);
+      expect(response.headers.get('location')).not.toContain('#');
+      expect(response.headers.get('location')).not.toContain('private-browser-state');
+    },
+  );
+
   it('uses mutation-level dynamic redirectTo without an app-authored response switch', async () => {
     const signIn = mutation('auth/sign-in', {
       csrf: false,

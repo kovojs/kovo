@@ -344,6 +344,9 @@ export function createBrowserNavigationSecurityControls(
   const htmlFormSubmit = NativeHTMLFormElement
     ? valueMethod(NativeHTMLFormElement.prototype, 'submit')
     : undefined;
+  const htmlFormRequestSubmit = NativeHTMLFormElement
+    ? valueMethod(NativeHTMLFormElement.prototype, 'requestSubmit')
+    : undefined;
   const htmlCollectionLength = NativeHTMLCollection
     ? getter(NativeHTMLCollection.prototype, 'length')
     : undefined;
@@ -1143,6 +1146,27 @@ export function createBrowserNavigationSecurityControls(
     if (typeof submit !== 'function') return false;
     try {
       apply(submit, form, []);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  function requestSubmitForm(form: unknown, submitter?: unknown): boolean {
+    if (!controlsSound || form === null || typeof form !== 'object') return false;
+    if (htmlFormRequestSubmit) {
+      try {
+        apply(htmlFormRequestSubmit, form, submitter === undefined ? [] : [submitter]);
+        return true;
+      } catch {}
+    }
+
+    // Explicit structural seam for browser-free conformance fakes. Real forms always use the
+    // boot-captured platform method so an authored `requestSubmit` property is never authority.
+    const requestSubmit = readOwnData(form, 'requestSubmit');
+    if (typeof requestSubmit !== 'function') return false;
+    try {
+      apply(requestSubmit, form, submitter === undefined ? [] : [submitter]);
       return true;
     } catch {
       return false;
@@ -3202,6 +3226,7 @@ export function createBrowserNavigationSecurityControls(
           !formDataGet ||
           !formDataSet ||
           !htmlFormSubmit ||
+          !htmlFormRequestSubmit ||
           !documentCreateElement ||
           !elementSetAttribute ||
           !elementGetAttribute ||
@@ -3616,6 +3641,7 @@ export function createBrowserNavigationSecurityControls(
     snapshotMutationBroadcastEnvelopeData,
     snapshotMutationBroadcastEnvelope,
     setMutationBroadcastMessageHandler,
+    requestSubmitForm,
     submitForm,
     postMutationBroadcastEnvelope,
     observePromiseRejection,

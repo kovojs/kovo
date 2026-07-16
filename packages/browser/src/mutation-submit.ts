@@ -14,10 +14,12 @@ import {
 } from './mutation-fetch.js';
 import {
   closestEnhancedMutationForm,
+  consumeEnhancedMutationNativeFallback,
   fallbackEnhancedMutationSubmit,
-  isEligibleEnhancedMutationForm,
+  readEligibleEnhancedMutationTransport,
   updateUploadProgressElements,
   type EnhancedFormElementLike,
+  type EnhancedMutationTransport,
 } from './mutation-form.js';
 import {
   applyStreamingFetchedEnhancedMutationResponseToRuntime,
@@ -95,7 +97,9 @@ export async function dispatchEnhancedFormSubmit(
 
   const form = closestEnhancedMutationForm(eventFacts.target);
   if (!form) return false;
-  if (!isEligibleEnhancedMutationForm(form)) return false;
+  if (consumeEnhancedMutationNativeFallback(form)) return false;
+  const transport = readEligibleEnhancedMutationTransport(form, eventFacts.submitter);
+  if (!transport) return false;
 
   if (!preventRuntimeDelegatedEventDefault(event)) return false;
   try {
@@ -130,12 +134,13 @@ export async function dispatchEnhancedFormSubmit(
       root: options.root,
       store: options.store,
       islandSignalScope,
+      transport,
     });
     hooks.onAppliedQueries?.(applied.queries);
   } catch (error) {
     if (options.onError) return true;
 
-    fallbackEnhancedMutationSubmit(form);
+    fallbackEnhancedMutationSubmit(form, eventFacts.submitter);
     throw error;
   }
   return true;
@@ -151,7 +156,8 @@ export function isEnhancedSubmitEvent(
   if (!eventFacts || eventFacts.type !== 'submit') return false;
 
   const form = closestEnhancedMutationForm(eventFacts.target);
-  return form !== null && isEligibleEnhancedMutationForm(form);
+  if (form === null || consumeEnhancedMutationNativeFallback(form)) return false;
+  return readEligibleEnhancedMutationTransport(form, eventFacts.submitter) !== undefined;
 }
 
 function formDataForSubmit(form: EnhancedFormElementLike, submitter: unknown): FormData {
@@ -205,6 +211,8 @@ export interface EnhancedMutationSubmitOptions {
   queryPlans?: CompiledQueryUpdatePlans;
   root: MorphRoot & TargetCollectorRoot;
   store: QueryStore;
+  /** Effective submitter transport snapshotted before preventDefault (SPEC §§6.3, 7, 9.1). */
+  transport?: EnhancedMutationTransport;
 }
 
 /** @internal Submit an enhanced mutation and apply the response to the runtime (SPEC §9.1). */

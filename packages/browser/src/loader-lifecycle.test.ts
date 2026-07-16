@@ -125,6 +125,7 @@ describe('loader lifecycle', () => {
     const root = new FakeRoot();
     const form = new FakeFormElement(
       {
+        'data-mutation': 'cart/add',
         enhance: '',
         'on:submit': '/c/cart.js#submit',
       },
@@ -133,10 +134,10 @@ describe('loader lifecycle', () => {
         method: 'post',
       },
     );
-    // C210: browser-free structural fakes use an explicit own-data submit seam; inherited
+    // C210: browser-free structural fakes use an explicit own-data requestSubmit seam; inherited
     // methods are deliberately ignored so a poisoned prototype cannot own fallback navigation.
     Object.assign(form, {
-      submit() {
+      requestSubmit() {
         form.submitted = true;
       },
     });

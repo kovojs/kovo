@@ -45,6 +45,19 @@ describe('enhanced mutation form helpers', () => {
       ).toBe(false);
       expect(
         isEligibleEnhancedMutationForm(
+          new FakeFormElement({ enhance: '' }, { action: '/_m/cart/add', method: 'post' }),
+        ),
+      ).toBe(false);
+      expect(
+        isEligibleEnhancedMutationForm(
+          new FakeFormElement(
+            { 'data-mutation': 'cart/add' },
+            { action: '/_m/cart/other', method: 'post' },
+          ),
+        ),
+      ).toBe(false);
+      expect(
+        isEligibleEnhancedMutationForm(
           new FakeFormElement(
             { 'data-mutation': 'cart/add' },
             { action: '/_m/cart/add', method: 'get' },
@@ -59,6 +72,40 @@ describe('enhanced mutation form helpers', () => {
           ),
         ),
       ).toBe(false);
+    } finally {
+      Object.defineProperty(globalThis, 'location', {
+        configurable: true,
+        value: previousLocation,
+      });
+    }
+  });
+
+  it('derives submitter action and method overrides before interception', () => {
+    const previousLocation = globalThis.location;
+    Object.defineProperty(globalThis, 'location', {
+      configurable: true,
+      value: new URL('https://shop.example.test/cart#private-client-state'),
+    });
+    const form = new FakeFormElement(
+      { 'data-mutation': 'cart/add' },
+      { action: '/_m/cart/add', method: 'post' },
+    );
+    try {
+      expect(
+        isEligibleEnhancedMutationForm(
+          form,
+          new FakeElement({ formaction: '/checkout', name: 'intent', value: 'checkout' }),
+        ),
+      ).toBe(false);
+      expect(isEligibleEnhancedMutationForm(form, new FakeElement({ formmethod: 'get' }))).toBe(
+        false,
+      );
+      expect(
+        isEligibleEnhancedMutationForm(
+          form,
+          new FakeElement({ formaction: '/_m/cart/add', formmethod: 'post' }),
+        ),
+      ).toBe(true);
     } finally {
       Object.defineProperty(globalThis, 'location', {
         configurable: true,
@@ -109,18 +156,19 @@ describe('enhanced mutation form helpers', () => {
     }
   });
 
-  it('falls back to native submit or visible form error attributes', () => {
-    const submit = vi.fn();
+  it('falls back through requestSubmit with the original submitter or visible form errors', () => {
+    const requestSubmit = vi.fn();
     const nativeForm = new FakeFormElement(
       { 'data-mutation': 'cart/add' },
       { action: '/_m/cart/add' },
     );
-    Object.assign(nativeForm, { submit });
+    Object.assign(nativeForm, { requestSubmit });
 
-    fallbackEnhancedMutationSubmit(nativeForm);
-    expect(submit).toHaveBeenCalledTimes(1);
+    const submitter = new FakeElement({ formaction: '/checkout', formmethod: 'post' });
+    fallbackEnhancedMutationSubmit(nativeForm, submitter);
+    expect(requestSubmit).toHaveBeenCalledWith(submitter);
 
-    let inheritedSubmitReads = 0;
+    let inheritedRequestSubmitReads = 0;
     const inheritedSubmitForm = new FakeFormElement(
       { 'data-mutation': 'cart/add' },
       { action: '/_m/cart/add' },
@@ -128,17 +176,17 @@ describe('enhanced mutation form helpers', () => {
     Object.setPrototypeOf(
       inheritedSubmitForm,
       Object.create(FakeFormElement.prototype, {
-        submit: {
+        requestSubmit: {
           configurable: true,
           get() {
-            inheritedSubmitReads += 1;
-            return submit;
+            inheritedRequestSubmitReads += 1;
+            return requestSubmit;
           },
         },
       }),
     );
     fallbackEnhancedMutationSubmit(inheritedSubmitForm);
-    expect(inheritedSubmitReads).toBe(0);
+    expect(inheritedRequestSubmitReads).toBe(0);
     expect(inheritedSubmitForm.getAttribute('data-error-code')).toBe('NETWORK_ERROR');
 
     const syntheticForm = Object.assign(new FakeElement({ 'data-mutation': 'cart/add' }), {

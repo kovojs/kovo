@@ -96,6 +96,18 @@ export async function handleAppMutationRequest(
     );
   }
 
+  const sourceUrl = mutationSourceUrl(request, url);
+  // SPEC §9.1: Kovo-Current-Url is a framework-reserved canonical document URL. Fragments are
+  // browser-local state; normalize the value before lifecycle providers or the mutation handler can
+  // observe ingress headers, including for forged non-browser requests.
+  if (requestHeader(request, 'kovo-current-url') !== null) {
+    securityHeadersSet(
+      requestHeaders(request),
+      'Kovo-Current-Url',
+      requestUrlSnapshot(sourceUrl).href,
+    );
+  }
+
   // SPEC §6.6/§9.1 (defense-in-depth for KV418): a `csrf: false` mutation skips the synchronizer
   // token, so it MUST be served with no ambient session — cookies are not interpreted, mirroring
   // the §9.1 endpoint() guarantee (endpoints likewise never resolve `sessionProvider`, see
@@ -128,7 +140,6 @@ export async function handleAppMutationRequest(
     idempotency: { mode: app.mutationReplayStore === undefined ? 'none' : 'replay-store' },
     surface: 'mutation',
   });
-  const sourceUrl = mutationSourceUrl(request, url);
   const sourceRequest = mutationSourceDocumentRequest(authorityNeutralRequest, request, sourceUrl);
 
   const bodyResult = await readUntrustedRequestBody(mutationRequest);
@@ -142,7 +153,6 @@ export async function handleAppMutationRequest(
         mutation,
         mutationRequest,
         sourceRequest,
-        url,
         sourceUrl,
         ingressMethod,
       );
@@ -197,7 +207,7 @@ export async function handleAppMutationRequest(
   const fallbackRedirectTo =
     mutation.redirectTo ??
     mutation.defaultRedirectTo ??
-    defaultMutationRedirectTo(mutationRequest, appRequestUrl(sourceUrl));
+    defaultMutationRedirectTo(appRequestUrl(sourceUrl));
   const failureStylesheets = mergedStylesheets(inheritedStylesheets, undefined);
 
   const endpointResponse = await renderMutationEndpointResponse(requestMutation, {
@@ -253,7 +263,6 @@ async function renderPreBodyCsrfFailure(
   mutation: AppMutationDeclaration,
   request: Request,
   sourceRequest: Request,
-  url: URL,
   sourceUrl: URL,
   ingressMethod: string,
 ): Promise<Response> {
@@ -289,7 +298,7 @@ async function renderPreBodyCsrfFailure(
     redirectTo:
       mutation.redirectTo ??
       mutation.defaultRedirectTo ??
-      defaultMutationRedirectTo(request, appRequestUrl(url)),
+      defaultMutationRedirectTo(appRequestUrl(sourceUrl)),
     ...(inheritedStylesheets.length === 0 ? {} : { failureStylesheets: inheritedStylesheets }),
     ...(defaultFailurePageRenderer === undefined
       ? {}
@@ -401,30 +410,30 @@ function stylesheetCriticalCssIsAlreadyLoaded(
   );
 }
 
-function defaultMutationRedirectTo(request: Request, currentUrl: string): string {
-  const referer = requestHeader(request, 'referer');
-  if (referer) {
-    try {
-      const url = requestCreateUrl(referer);
-      return appRequestUrl(url);
-    } catch {
-      return referer;
-    }
-  }
-
+function defaultMutationRedirectTo(currentUrl: string): string {
+  // `currentUrl` already came through mutationSourceUrl's same-origin parse and fragment-stripping
+  // gate. Never re-read or reflect the raw Referer into a Location response.
   return securityStringStartsWith(currentUrl, '/_m/') ? '/' : currentUrl;
 }
 
 function mutationSourceUrl(request: Request, mutationUrl: URL): URL {
+  const canonicalMutationUrl = canonicalSourceDocumentUrl(mutationUrl);
   const source = requestHeader(request, 'kovo-current-url') ?? requestHeader(request, 'referer');
-  if (!source) return mutationUrl;
+  if (!source) return canonicalMutationUrl;
   try {
     const mutationSnapshot = requestUrlSnapshot(mutationUrl);
     const url = requestCreateUrl(source, mutationSnapshot.href);
-    return requestUrlSnapshot(url).origin === mutationSnapshot.origin ? url : mutationUrl;
+    return requestUrlSnapshot(url).origin === mutationSnapshot.origin
+      ? canonicalSourceDocumentUrl(url)
+      : canonicalMutationUrl;
   } catch {
-    return mutationUrl;
+    return canonicalMutationUrl;
   }
+}
+
+function canonicalSourceDocumentUrl(url: URL): URL {
+  const snapshot = requestUrlSnapshot(url);
+  return requestCreateUrl(snapshot.origin + snapshot.pathname + snapshot.search);
 }
 
 function defaultAppMutationFailurePageRenderer(

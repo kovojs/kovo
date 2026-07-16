@@ -7,6 +7,10 @@ import { definedProps } from './defined-props.js';
 import { createBrowserNavigationSecurityControls } from './navigation-security-intrinsics.js';
 import { sanitizeAuthNavigationTarget, sanitizeReauthDirective } from './reauth-directive.js';
 import {
+  readEligibleEnhancedMutationTransport,
+  type EnhancedMutationTransport,
+} from './mutation-form.js';
+import {
   securityGetOwnPropertyDescriptor,
   securityWeakMap,
   securityWeakMapGet,
@@ -82,6 +86,8 @@ export interface FetchEnhancedMutationOptions {
   root: TargetCollectorRoot;
   signal?: AbortSignal;
   streaming?: boolean;
+  /** Effective submitter transport snapshotted before preventDefault. */
+  transport?: EnhancedMutationTransport;
 }
 
 export interface FetchedEnhancedMutation {
@@ -120,9 +126,11 @@ export async function fetchEnhancedMutation(
   const streaming = options.streaming === true;
   const targetSnapshot = readLiveTargetSnapshot(options.root);
   const submittedFormTarget = readSubmittedFormTarget(form);
-  const formAction = form.action;
-  const formMethod = form.method;
-  if (typeof fetchMutation !== 'function' || typeof formAction !== 'string') {
+  const transport =
+    options.transport ??
+    readEligibleEnhancedMutationTransport(form) ??
+    readDirectEnhancedMutationTransport(form, security);
+  if (typeof fetchMutation !== 'function' || transport === undefined) {
     throw new TypeError('Kovo enhanced mutation transport is invalid.');
   }
   const headers: Record<string, string> = {
@@ -132,12 +140,9 @@ export async function fetchEnhancedMutation(
     'Kovo-Live-Targets': targetSnapshot.liveHeader,
     'Kovo-Targets': targetSnapshot.header,
   };
-  const currentUrl = security.currentUrl();
-  if (currentUrl !== undefined) {
-    // SPEC §6.6/§9.1: bind server-side live-target verification and query rendering to the exact
-    // document context that minted the descriptor instead of the mutation endpoint URL.
-    headers['Kovo-Current-Url'] = currentUrl.href;
-  }
+  // SPEC §9.1: bind response-side rendering to the canonical source document. URL fragments are
+  // browser-local state and must never cross the reserved request-header boundary.
+  headers['Kovo-Current-Url'] = transport.sourceUrl;
   if (submittedFormTarget !== undefined) {
     headers['Kovo-Form-Target'] = submittedFormTarget;
   }
@@ -148,13 +153,14 @@ export async function fetchEnhancedMutation(
   // membrane as generated/global fetch. This pins the callable selected for this submit, rejects
   // foreign promises, and snapshots native or explicit own-data response facts before any sink
   // decision observes them.
-  const response = (await security.fetchWith(fetchMutation, undefined, formAction, {
+  const response = (await security.fetchWith(fetchMutation, undefined, transport.action, {
     body: formData,
     headers,
     keepalive: !streaming,
-    method: security.upper(formMethod ?? 'post'),
+    method: transport.method,
     ...definedProps({ onUploadProgress, signal }),
   })) as EnhancedMutationResponseLike;
+  assertSameOriginMutationResponse(response, transport, security);
   const failed = isFailedBoundMutationResponse(response, security);
   securityWeakMapSet(mutationResponseFailures, response, failed);
   const sessionTransition = readSessionTransition(response, security);
@@ -201,6 +207,7 @@ export async function fetchEnhancedMutation(
       targets: targetSnapshot.targets,
     };
   }
+  assertMutationFragmentContentType(response, security);
   const changesHeader = security.readHeader(response, 'Kovo-Changes');
   const changes = readMutationChangeHeader(
     { headers: { get: (name) => (name === 'Kovo-Changes' ? (changesHeader ?? null) : null) } },
@@ -243,6 +250,70 @@ export async function fetchEnhancedMutation(
     ...(usesStreamBody ? { streamBody: responseBody } : {}),
     targets: targetSnapshot.targets,
   };
+}
+
+function readDirectEnhancedMutationTransport(
+  form: EnhancedFormLike,
+  security: BrowserNavigationSecurityControls,
+): EnhancedMutationTransport | undefined {
+  // Internal/programmatic callers may enter below delegated interception, but they still receive
+  // the same fail-closed /_m/ POST transport floor. Delegated browser submits additionally require
+  // compiler-owned data-mutation identity in mutation-form.ts before preventDefault.
+  const current = security.currentUrl() ?? security.parseUrl('http://localhost/');
+  if (!current) return undefined;
+  const method = form.getAttribute?.('method') ?? form.method ?? 'post';
+  const rawAction = form.getAttribute?.('action') ?? form.action;
+  const action = security.parseUrl(rawAction, current.href);
+  if (
+    security.upper(method) !== 'POST' ||
+    !action ||
+    action.origin !== current.origin ||
+    security.slice(action.pathname, 0, 4) !== '/_m/' ||
+    action.search !== '' ||
+    action.hash !== ''
+  ) {
+    return undefined;
+  }
+  return {
+    action: action.pathname,
+    method: 'POST',
+    origin: current.origin,
+    sourceUrl: current.origin + current.pathname + current.search,
+  };
+}
+
+function assertSameOriginMutationResponse(
+  response: EnhancedMutationResponseLike,
+  transport: EnhancedMutationTransport,
+  security: BrowserNavigationSecurityControls,
+): void {
+  const finalUrl = security.readResponseField(response, 'url');
+  const parsed =
+    typeof finalUrl === 'string' && finalUrl !== ''
+      ? security.parseUrl(finalUrl, transport.sourceUrl)
+      : undefined;
+  if (!parsed || parsed.origin !== transport.origin) {
+    throw new TypeError(
+      'Kovo refused an enhanced mutation response without same-origin URL proof.',
+    );
+  }
+}
+
+function assertMutationFragmentContentType(
+  response: EnhancedMutationResponseLike,
+  security: BrowserNavigationSecurityControls,
+): void {
+  const contentType = security.readHeader(response, 'Content-Type');
+  const separator = typeof contentType === 'string' ? security.indexOf(contentType, ';') : -1;
+  const mediaType =
+    typeof contentType === 'string'
+      ? security.lower(
+          security.trim(separator < 0 ? contentType : security.slice(contentType, 0, separator)),
+        )
+      : '';
+  if (mediaType !== 'text/vnd.kovo.fragment+html') {
+    throw new TypeError('Kovo refused a non-fragment enhanced mutation response.');
+  }
 }
 
 function readSessionTransition(

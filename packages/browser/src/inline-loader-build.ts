@@ -1329,8 +1329,21 @@ function installInlineKovoLoader(im) {
       bns.releaseStreamReader(reader);
     }
   };
-  const fsb = (form) => {
-    if (bns.submitForm(form)) return;
+  const fsb = (form, submitter) => {
+    let marked = false;
+    try {
+      bns.setElementAttribute(form, 'data-kovo-native-fallback', '');
+      marked = true;
+    } catch {}
+    if (marked) {
+      try {
+        if (bns.requestSubmitForm(form, submitter)) return;
+      } finally {
+        try {
+          bns.removeElementAttribute(form, 'data-kovo-native-fallback');
+        } catch {}
+      }
+    }
     try {
       bns.setElementAttribute(form, 'data-error-code', 'NETWORK_ERROR');
       bns.setElementAttribute(form, 'kovo-error', '');
@@ -1420,7 +1433,40 @@ function installInlineKovoLoader(im) {
     }
     return false;
   };
-  const sef = (event, form, submitter) => {
+  const emt = (form, submitter) => {
+    const mutation = ras(form, 'data-mutation');
+    const current = bns.currentUrl();
+    if (!mutation || !current) return;
+    const method =
+      (submitter && (ras(submitter, 'formmethod') || ras(submitter, 'formMethod'))) ||
+      ras(form, 'method') ||
+      'get';
+    const rawAction =
+      (submitter && (ras(submitter, 'formaction') || ras(submitter, 'formAction'))) ||
+      ras(form, 'action') ||
+      '';
+    const action = bns.parseUrl(rawAction || current.href, current.href);
+    if (
+      bns.upper(method) !== 'POST' ||
+      !action ||
+      action.origin !== current.origin ||
+      action.pathname !== '/_m/' + mutation ||
+      action.search ||
+      action.hash
+    ) return;
+    return {
+      action: action.pathname,
+      method: 'POST',
+      origin: current.origin,
+      sourceUrl: current.origin + current.pathname + current.search,
+    };
+  };
+  const mt = (response) => {
+    const contentType = bns.readHeader(response, 'Content-Type') || '';
+    const separator = bns.indexOf(contentType, ';');
+    return bns.lower(bns.trim(separator < 0 ? contentType : bns.slice(contentType, 0, separator)));
+  };
+  const sef = (event, form, submitter, transport) => {
     if (!bns.preventDelegatedEventDefault(event)) return;
     const streaming = bns.readAttribute(form, 'data-mutation-stream') !== null;
     const body = bns.createFormData(form, submitter);
@@ -1429,17 +1475,16 @@ function installInlineKovoLoader(im) {
     // to both the body field and header through the boot-captured FormData setter.
     const idem = ci();
     bns.setFormDataValue(body, 'Kovo-Idem', idem);
-    const sourceUrl = bns.currentUrl()?.href;
     void (async () => {
       try {
-        const response = await bns.fetchValue(ras(form, 'action') || '', {
+        const response = await bns.fetchValue(transport.action, {
           body,
           headers: {
             Accept: streaming
               ? 'text/vnd.kovo.fragment+html; stream=1'
               : 'text/vnd.kovo.fragment+html',
             'Kovo-Form-Target': targetIdentity(form),
-            ...(sourceUrl ? { 'Kovo-Current-Url': sourceUrl } : {}),
+            'Kovo-Current-Url': transport.sourceUrl,
             'Kovo-Fragment': 'true',
             'Kovo-Idem': ss(idem),
             'Kovo-Live-Targets': sj(rlt(), '; '),
@@ -1447,8 +1492,15 @@ function installInlineKovoLoader(im) {
             'Kovo-Targets': sj(rt(), '; '),
           },
           keepalive: !streaming,
-          method: bns.upper(ras(form, 'method') || 'post'),
+          method: transport.method,
         });
+        const responseUrl = bns.readResponseField(response, 'url');
+        const finalUrl = typeof responseUrl === 'string' && responseUrl
+          ? bns.parseUrl(responseUrl, transport.sourceUrl)
+          : undefined;
+        if (!finalUrl || finalUrl.origin !== transport.origin) {
+          throw new TypeError('Kovo refused an enhanced mutation response without same-origin URL proof.');
+        }
         const status = rsp(response);
         // SPEC §9.3: retirement wins over every redirect/body channel; a response carrying
         // conflicting metadata cannot keep the old page-load principal alive.
@@ -1465,7 +1517,6 @@ function installInlineKovoLoader(im) {
           return;
         }
         const redirected = bns.readResponseField(response, 'redirected') === true;
-        const responseUrl = bns.readResponseField(response, 'url');
         const redirect = status >= 300 && status < 400
           ? bns.readHeader(response, 'Location')
           : redirected && typeof responseUrl === 'string'
@@ -1474,6 +1525,9 @@ function installInlineKovoLoader(im) {
         if (redirect) {
           ng(redirect);
           return;
+        }
+        if (mt(response) !== 'text/vnd.kovo.fragment+html') {
+          throw new TypeError('Kovo refused a non-fragment enhanced mutation response.');
         }
         const responseBody = bns.readResponseField(response, 'body');
         const failed = status >= 400 || bns.readResponseField(response, 'ok') === false;
@@ -1507,7 +1561,7 @@ function installInlineKovoLoader(im) {
           pb(text, changes, responseBuild);
         }
       } catch (error) {
-        if (error !== streamRecoveryError) fsb(form);
+        if (error !== streamRecoveryError) fsb(form, submitter);
       }
     })();
   };
@@ -1556,7 +1610,13 @@ function installInlineKovoLoader(im) {
         'form[enhance],form[data-enhance],form[data-mutation]',
       );
       if (form) {
-        sef(event, form, eventFacts.submitter);
+        if (bns.readAttribute(form, 'data-kovo-native-fallback') !== null) {
+          bns.removeElementAttribute(form, 'data-kovo-native-fallback');
+          return;
+        }
+        const transport = emt(form, eventFacts.submitter);
+        if (!transport) return;
+        sef(event, form, eventFacts.submitter, transport);
         return;
       }
     }
@@ -1742,8 +1802,8 @@ export function buildInlineKovoLoaderStubInstallerReadableSource(): string {
 /* SPEC.md §4.4: tiny paint-first bootstrap; imports the full runtime after paint or interaction. */
 function installInlineKovoBootstrap(runtimeUrl, runtimeImport) {
   const doc = document;
-  // C210 / SPEC §6.6/§9.2: pin and witness the real form-submit fallback before deferred runtime
-  // loading gives authored code a chance to replace HTMLFormElement.prototype.submit.
+  // SPEC §§6.3, 7, 9.1: pin requestSubmit before deferred runtime loading. Native fallback must
+  // preserve the triggering submitter and its platform validation/transport semantics.
   const rap = Reflect.apply;
   const gopd = Object.getOwnPropertyDescriptor;
   const gpo = Object.getPrototypeOf;
@@ -1801,7 +1861,6 @@ function installInlineKovoBootstrap(runtimeUrl, runtimeImport) {
       return { called: false, value: undefined };
     }
   };
-  const submitControl = doc.createElement('form');
   const replayControl = doc.createElement('button');
   // SPEC.md §4.4/§6.6: bootstrap replay runs before the deferred runtime can protect the realm.
   // Capture and witness every replay control now so a late prototype/global replacement cannot
@@ -1847,23 +1906,22 @@ function installInlineKovoBootstrap(runtimeUrl, runtimeImport) {
   const nativeLocationPathname = capturedGetter(browserLocation, 'pathname');
   const nativeLocationSearch = capturedGetter(browserLocation, 'search');
   const nativeLocationAssign = capturedMethod(browserLocation, 'assign');
-  let nativeSubmit;
+  let nativeRequestSubmit;
   let submitControlsReady = false;
   try {
-    const submitDescriptor = gopd(globalThis.HTMLFormElement?.prototype, 'submit');
-    nativeSubmit = submitDescriptor && 'value' in submitDescriptor
+    const submitDescriptor = gopd(globalThis.HTMLFormElement?.prototype, 'requestSubmit');
+    nativeRequestSubmit = submitDescriptor && 'value' in submitDescriptor
       ? submitDescriptor.value
       : undefined;
     if (
-      typeof nativeSubmit !== 'function' ||
+      typeof nativeRequestSubmit !== 'function' ||
       rap((left, right) => left + right, undefined, [2, 3]) !== 5 ||
       gopd({ marker: 'submit-control' }, 'marker')?.value !== 'submit-control'
     ) {
       throw new TypeError('Kovo bootstrap form submit controls are unavailable.');
     }
-    rap(nativeSubmit, submitControl, []);
     try {
-      rap(nativeSubmit, {}, []);
+      rap(nativeRequestSubmit, {}, []);
     } catch {
       submitControlsReady = true;
     }
@@ -2014,15 +2072,15 @@ function installInlineKovoBootstrap(runtimeUrl, runtimeImport) {
   if (!replayControlsReady) {
     throw new TypeError('Kovo bootstrap replay controls are unavailable.');
   }
-  const submitForm = (form) => {
+  const requestSubmitForm = (form, submitter) => {
     try {
-      rap(nativeSubmit, form, []);
+      rap(nativeRequestSubmit, form, submitter === undefined ? [] : [submitter]);
       return true;
     } catch {}
-    const ownSubmit = gopd(form, 'submit');
+    const ownSubmit = gopd(form, 'requestSubmit');
     if (!ownSubmit || !('value' in ownSubmit) || typeof ownSubmit.value !== 'function') return false;
     try {
-      rap(ownSubmit.value, form, []);
+      rap(ownSubmit.value, form, submitter === undefined ? [] : [submitter]);
       return true;
     } catch {
       return false;
@@ -2222,7 +2280,31 @@ function installInlineKovoBootstrap(runtimeUrl, runtimeImport) {
       facts.target,
       'form[enhance],form[data-enhance],form[data-mutation]',
     );
-    return form ? { submitter: facts.submitter, target: form, type: 'submit' } : undefined;
+    if (!form) return;
+    const mutation = readAttribute(form, 'data-mutation');
+    const location = currentLocation();
+    if (!mutation || !location) return;
+    const submitter = facts.submitter;
+    const method =
+      (submitter &&
+        (readAttribute(submitter, 'formmethod') || readAttribute(submitter, 'formMethod'))) ||
+      readAttribute(form, 'method') ||
+      'get';
+    const rawAction =
+      (submitter &&
+        (readAttribute(submitter, 'formaction') || readAttribute(submitter, 'formAction'))) ||
+      readAttribute(form, 'action') ||
+      '';
+    const action = parseUrl(rawAction || location.href, location.href);
+    if (
+      method !== 'post' ||
+      !action ||
+      action.origin !== location.origin ||
+      action.pathname !== '/_m/' + mutation ||
+      action.search ||
+      action.hash
+    ) return;
+    return { submitter, target: form, type: 'submit' };
   };
   const authoredClick = (facts) => {
     if (
@@ -2268,7 +2350,12 @@ function installInlineKovoBootstrap(runtimeUrl, runtimeImport) {
   const fallback = (item) => {
     if (!isConnected(item.target)) return;
     if (item.type === 'submit') {
-      if (!submitForm(item.target)) replay(item);
+      if (!requestSubmitForm(item.target, item.submitter)) {
+        try {
+          setAttribute(item.target, 'data-error-code', 'NETWORK_ERROR');
+          setAttribute(item.target, 'kovo-error', '');
+        } catch {}
+      }
       return;
     }
     if (item.href) rap(nativeLocationAssign, browserLocation, [item.href]);

@@ -645,13 +645,22 @@ function mutationFormFieldDiagnostics(
   const binding = enhancedMutationFormBinding(element);
   if (!binding) return [];
 
-  const mutation = mutationInputFactForForm(model, binding.localName, options);
-  if (!mutation) return [];
-
   const controls = compilerSnapshotDenseArray(
     successfulFormControls(model, element, options),
     'Successful mutation form controls',
   );
+  const diagnostics: CompilerDiagnostic[] = [];
+  for (let index = 0; index < controls.length; index += 1) {
+    appendMutationValues(
+      diagnostics,
+      controls[index]!.diagnostics,
+      'Mutation form control diagnostics',
+    );
+  }
+
+  const mutation = mutationInputFactForForm(model, binding.localName, options);
+  if (!mutation) return diagnostics;
+
   const fields = compilerSnapshotDenseArray(mutation.fields, 'Mutation form schema fields');
   const fieldNames = compilerCreateSet<string>();
   const fieldNameList: string[] = [];
@@ -665,11 +674,9 @@ function mutationFormFieldDiagnostics(
     );
   }
   const controlNames = compilerCreateSet<string>();
-  const diagnostics: CompilerDiagnostic[] = [];
   for (let index = 0; index < controls.length; index += 1) {
     const control = controls[index]!;
     compilerSetAdd(controlNames, control.name);
-    appendMutationValues(diagnostics, control.diagnostics, 'Mutation form control diagnostics');
   }
 
   for (let index = 0; index < controls.length; index += 1) {
@@ -776,7 +783,7 @@ function successfulFormControls(
     if (!descendant && (!formId || externalForm !== formId)) continue;
 
     const nameAttribute = mutationFormAttribute(element, 'name');
-    const diagnostics: CompilerDiagnostic[] = [];
+    const diagnostics = mutationSubmitterTransportOverrideDiagnostics(element, options);
     if (!descendant || externalFormAttribute) {
       compilerArrayAppend(
         diagnostics,
@@ -791,7 +798,21 @@ function successfulFormControls(
     }
 
     const name = staticStringAttributeValue(nameAttribute);
-    if (!nameAttribute) continue;
+    if (!nameAttribute) {
+      if (diagnostics.length > 0) {
+        compilerArrayAppend(
+          controls,
+          {
+            diagnostics,
+            length: element.openingTagNameEnd - element.openingTagNameStart,
+            name: '',
+            start: element.openingTagNameStart,
+          },
+          'Compiler packages/compiler/src/emit/mutation-form.ts collection',
+        );
+      }
+      continue;
+    }
     if (!name) {
       compilerArrayAppend(
         diagnostics,
@@ -876,6 +897,30 @@ function successfulFormControls(
     );
   }
   return result;
+}
+
+function mutationSubmitterTransportOverrideDiagnostics(
+  element: JsxElementModel,
+  options: { fileName: string; source: string },
+): CompilerDiagnostic[] {
+  const diagnostics: CompilerDiagnostic[] = [];
+  const overrideNames = ['formaction', 'formAction', 'formmethod', 'formMethod'];
+  for (let index = 0; index < overrideNames.length; index += 1) {
+    const name = overrideNames[index]!;
+    const attribute = mutationFormAttribute(element, name);
+    if (!attribute) continue;
+    compilerArrayAppend(
+      diagnostics,
+      formFieldDiagnostic(
+        options,
+        attribute.start,
+        attribute.end - attribute.start,
+        `${name} cannot override a typed enhanced mutation transport; use a separate native form for a different action or method`,
+      ),
+      'Compiler packages/compiler/src/emit/mutation-form.ts collection',
+    );
+  }
+  return diagnostics;
 }
 
 function unsupportedControlDiagnostics(

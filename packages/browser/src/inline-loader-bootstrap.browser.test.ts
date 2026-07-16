@@ -43,8 +43,9 @@ async function nativeSubmitFixture(token: string): Promise<{
   await initialLoad;
   const form = document.createElement('form');
   form.setAttribute('enhance', '');
-  form.action = '/favicon.ico';
-  form.method = 'get';
+  form.setAttribute('data-mutation', token);
+  form.action = `/_m/${token}`;
+  form.method = 'post';
   form.target = sink.name;
   const marker = document.createElement('input');
   marker.name = 'kovo-c210';
@@ -58,9 +59,7 @@ async function expectNativeSubmit(sink: HTMLIFrameElement, token: string): Promi
   await vi.waitFor(() => {
     let navigated = false;
     try {
-      navigated =
-        sink.contentWindow?.location.pathname === '/favicon.ico' &&
-        sink.contentWindow.location.search.includes(`kovo-c210=${token}`);
+      navigated = sink.contentWindow?.location.pathname === `/_m/${token}`;
     } catch {
       // Firefox gives the favicon response an opaque origin inside the Vitest sandbox. Initial
       // about:blank is readable, so losing access is itself proof that native submission navigated.
@@ -462,7 +461,9 @@ describe('browser inline loader bootstrap', () => {
     installRafQueue();
     const form = document.createElement('form');
     form.setAttribute('enhance', '');
-    form.action = '/save';
+    form.setAttribute('data-mutation', 'save');
+    form.action = '/_m/save';
+    form.method = 'post';
     let runtimeInstalled = false;
     let replayedSubmits = 0;
     form.addEventListener('submit', (event) => {
@@ -535,11 +536,11 @@ describe('browser inline loader bootstrap', () => {
   it('pins native submit before a late prototype replacement during rejected import fallback', async () => {
     installRafQueue();
     const { form, sink } = await nativeSubmitFixture('late-prototype-poison');
-    const descriptor = Object.getOwnPropertyDescriptor(HTMLFormElement.prototype, 'submit');
+    const descriptor = Object.getOwnPropertyDescriptor(HTMLFormElement.prototype, 'requestSubmit');
     if (!descriptor || !('value' in descriptor) || typeof descriptor.value !== 'function') {
-      throw new Error('native form submit unavailable');
+      throw new Error('native form requestSubmit unavailable');
     }
-    const poisonedSubmit = vi.fn();
+    const poisonedRequestSubmit = vi.fn();
 
     installInlineKovoBootstrap(
       '/c/__v/runtime/kovo-runtime.client.js',
@@ -547,27 +548,27 @@ describe('browser inline loader bootstrap', () => {
         throw new Error('load failed');
       }),
     );
-    Object.defineProperty(HTMLFormElement.prototype, 'submit', {
+    Object.defineProperty(HTMLFormElement.prototype, 'requestSubmit', {
       ...descriptor,
-      value: poisonedSubmit,
+      value: poisonedRequestSubmit,
     });
     try {
       form.dispatchEvent(new SubmitEvent('submit', { bubbles: true, cancelable: true }));
 
       await expectNativeSubmit(sink, 'late-prototype-poison');
-      expect(poisonedSubmit).not.toHaveBeenCalled();
+      expect(poisonedRequestSubmit).not.toHaveBeenCalled();
     } finally {
-      Object.defineProperty(HTMLFormElement.prototype, 'submit', descriptor);
+      Object.defineProperty(HTMLFormElement.prototype, 'requestSubmit', descriptor);
     }
   });
 
-  it('rejects bootstrap installation when native submit was poisoned before capture', () => {
+  it('rejects bootstrap installation when native requestSubmit was poisoned before capture', () => {
     installRafQueue();
-    const descriptor = Object.getOwnPropertyDescriptor(HTMLFormElement.prototype, 'submit');
+    const descriptor = Object.getOwnPropertyDescriptor(HTMLFormElement.prototype, 'requestSubmit');
     if (!descriptor || !('value' in descriptor) || typeof descriptor.value !== 'function') {
-      throw new Error('native form submit unavailable');
+      throw new Error('native form requestSubmit unavailable');
     }
-    Object.defineProperty(HTMLFormElement.prototype, 'submit', {
+    Object.defineProperty(HTMLFormElement.prototype, 'requestSubmit', {
       ...descriptor,
       value() {},
     });
@@ -579,7 +580,7 @@ describe('browser inline loader bootstrap', () => {
         ),
       ).toThrow(/bootstrap form submit controls are unavailable/);
     } finally {
-      Object.defineProperty(HTMLFormElement.prototype, 'submit', descriptor);
+      Object.defineProperty(HTMLFormElement.prototype, 'requestSubmit', descriptor);
     }
   });
 
