@@ -96,6 +96,10 @@ inside its owning settlement boundary.
         assignment outputs, imported/renamed/default/re-export aliases, and sync framework roots.
     - **Evidence:** the focused transparent-class/import regression matrix, full trust-escape suite,
       classifier corpus, and Phase 5 Postgres production-artifact harness pass at `f38b41220`.
+  - [x] Close exact request-local `Map#get` carriers without blessing stored values or unbounded
+        carrier graphs.
+    - **Evidence:** the benign/stored-class/direct-cycle/mutual-cycle/depth matrix, full 307-test
+      trust suite, and `check:security-classifier-corpus` pass at `4f714b2b8`.
   - [ ] Close opaque helper-return, container-method, and native-Promise callback carriers,
         including `.at()`, `.slice()`, `.find()`, `.map()`, `Reflect.get()`, and
         `then`/`catch`/`finally` outputs.
