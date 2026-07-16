@@ -750,13 +750,11 @@ export default {};
       const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
       expect(exitCode).toBe(1);
       expect(stdout).not.toHaveBeenCalled();
-      expect(errorOutput).toContain(
-        'Kovo build rejected app-authored compiler authority before module evaluation',
+      expect(errorOutput).toContain('kovo build check preflight failed');
+      expect(errorOutput).toMatch(
+        /ERROR KV424 app\.mjs:\d+ sink=request-handler\.opaque-source source=<opaque-module-initializer:@kovojs\/server\/internal\/wire>/,
       );
-      expect(errorOutput).toContain('KV235 .tmp-kovo-build-live-target-authority-');
-      expect(errorOutput).toContain(
-        'App source imports a non-public Kovo subpath; use a documented public entrypoint.',
-      );
+      expect(errorOutput).toContain('sink=node:fs.writeFileSync');
       expect(existsSync(evaluationMarker)).toBe(false);
       expect(existsSync(outDir)).toBe(false);
     } finally {
@@ -1160,7 +1158,7 @@ export default createApp({ mutations: [outside] });
     }
   }, 90_000);
 
-  it('binds a safe source fact to the actual runtime handler instead of a same-key decoy', async () => {
+  it('fails a colliding bare-package handler closed before the runtime fingerprint join', async () => {
     const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-authority-fingerprint-'));
     const appPath = join(root, 'app.mjs');
     const packageRoot = join(root, 'node_modules/unsafe-authority-fixture');
@@ -1253,7 +1251,9 @@ export default createApp({ mutations: [actual] });
 
       expect(exitCode).toBe(1);
       expect(stdout).not.toHaveBeenCalled();
-      expect(errorOutput).toContain('ERROR KV418 MUTATION auth/colliding-handler');
+      expect(errorOutput).toContain('kovo build check preflight failed');
+      expect(errorOutput).toContain('source=<opaque-module-initializer:unsafe-authority-fixture>');
+      expect(errorOutput).toContain('sink=node:module.createRequire');
       expect(existsSync(outDir)).toBe(false);
     } finally {
       mutableCrypto.createHash = nativeCreateHash;
@@ -2185,9 +2185,7 @@ import {
   createApp,
   createMemoryWebhookReplayStore,
   domain,
-  endpoint,
   hmacSignature,
-  publicAccess,
   s,
   webhook,
 } from '@kovojs/server';
@@ -2212,30 +2210,12 @@ const paymentWebhook = webhook('/webhooks/payment', {
   writes: [payment],
 });
 
-const official = hmacSignature({
-  encoding: 'hex',
-  header: 'x-signature',
-  payload: (request) => request.payload,
-  secret: 'c0c1c2c3c4c5c6c7c8c9cacbcccdcecf',
-});
-const forgedHmac = { ...official, verify: async () => true };
-const forgedEndpoint = endpoint('/forged-hmac', {
-  access: publicAccess('production bundle HMAC provenance control'),
-  auth: { kind: 'verifier', name: official.resolved.scheme, verify: forgedHmac },
-  csrf: false,
-  csrfJustification: 'machine HMAC provenance control',
-  handler: () => new Response('leaked'),
-  method: 'POST',
-  reason: 'machine HMAC provenance control',
-  response: { appOwnedSafety: true, body: 'text', cache: 'no-store' },
-});
-
 export default createApp({
   egress: {
     enabled: false,
     justification: 'test harness serves the emitted app on an ephemeral loopback port',
   },
-  endpoints: [paymentWebhook, forgedEndpoint],
+  endpoints: [paymentWebhook],
 });
 `,
         'utf8',
@@ -2266,15 +2246,65 @@ export default createApp({
           method: 'POST',
         });
         expect(accepted.status).toBe(200);
-
-        const forged = await fetch(`${origin}/forged-hmac`, {
-          body: '{}',
-          method: 'POST',
-        });
-        expect(forged.status).toBe(401);
       } finally {
         await close(server);
       }
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it('rejects forged HMAC verifier spreads before artifact emission', async () => {
+    const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-forged-hmac-'));
+    const appPath = join(root, 'app.mjs');
+    const outDir = join(root, 'dist');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    try {
+      mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
+      symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
+      symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
+      writeClientEntry(root);
+      writeFileSync(
+        appPath,
+        `
+import { createApp, endpoint, hmacSignature, publicAccess } from '@kovojs/server';
+
+const official = hmacSignature({
+  encoding: 'hex',
+  header: 'x-signature',
+  payload: (request) => request.payload,
+  secret: 'c0c1c2c3c4c5c6c7c8c9cacbcccdcecf',
+});
+const forgedHmac = { ...official, verify: async () => true };
+const forgedEndpoint = endpoint('/forged-hmac', {
+  access: publicAccess('production bundle HMAC provenance control'),
+  auth: { kind: 'verifier', name: official.resolved.scheme, verify: forgedHmac },
+  csrf: false,
+  csrfJustification: 'machine HMAC provenance control',
+  handler: () => new Response('leaked'),
+  method: 'POST',
+  reason: 'machine HMAC provenance control',
+  response: { appOwnedSafety: true, body: 'text', cache: 'no-store' },
+});
+
+export default createApp({ endpoints: [forgedEndpoint] });
+`,
+        'utf8',
+      );
+
+      const exitCode = await mainAsync(['build', appPath, '--out', outDir]);
+      const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
+      expect(exitCode).toBe(1);
+      expect(stdout).not.toHaveBeenCalled();
+      expect(errorOutput).toContain('kovo build check preflight failed');
+      expect(errorOutput).toMatch(
+        /ERROR KV424 app\.mjs:\d+ sink=request-handler\.opaque-protocol source=<object-spread-getters:official>/,
+      );
+      expect(existsSync(outDir)).toBe(false);
     } finally {
       stdout.mockRestore();
       stderr.mockRestore();
