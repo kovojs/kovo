@@ -16851,11 +16851,45 @@ function requestThenableProtocolSources(
       );
     }
   }
+  if (Node.isCallExpression(node)) {
+    const member = requestStaticCallMember(unwrapStaticExpression(node.getExpression()));
+    if (member && REQUEST_ROOT_ROLE_AUTHORED_OUTPUT_METHODS.has(member)) {
+      for (const candidate of requestRootRoleAuthoredResultCandidates(node, member, session)) {
+        sources.push(
+          ...requestThenableProtocolSources(candidate.expression, session, new Set(seen)),
+        );
+      }
+    }
+  }
   if (Node.isPropertyAccessExpression(node) || Node.isElementAccessExpression(node)) {
     const member = Node.isPropertyAccessExpression(node)
       ? staticMemberName(node.getNameNode())
       : staticMemberName(node.getArgumentExpression());
     if (member !== undefined) {
+      const owner = unwrapStaticExpression(node.getExpression());
+      if (Node.isCallExpression(owner)) {
+        const ownerMember = requestStaticCallMember(unwrapStaticExpression(owner.getExpression()));
+        if (ownerMember && REQUEST_ROOT_ROLE_AUTHORED_OUTPUT_METHODS.has(ownerMember)) {
+          for (const candidate of requestRootRoleAuthoredResultCandidates(
+            owner,
+            ownerMember,
+            session,
+          )) {
+            sources.push(
+              ...requestThenableProtocolSources(candidate.expression, session, new Set(seen)),
+            );
+            const selected = requestWireProjectedExpression(
+              candidate.expression,
+              [member],
+              new Set(),
+              0,
+            );
+            if (selected) {
+              sources.push(...requestThenableProtocolSources(selected, session, new Set(seen)));
+            }
+          }
+        }
+      }
       const projected = requestWireProjectedExpression(
         node.getExpression(),
         [member],
@@ -17706,6 +17740,29 @@ function requestExpressionIsProtocolSafeUncached(
     }
     if (receiver) {
       const role = requestExpressionRootParameterRole(receiver, callable, new Set(), 0);
+      if (
+        requestRootRoleIncludesInput(role) &&
+        member !== undefined &&
+        REQUEST_ROOT_ROLE_AUTHORED_OUTPUT_METHODS.has(member)
+      ) {
+        const candidates = requestRootRoleAuthoredResultCandidates(node, member, session);
+        if (candidates.length > 0) {
+          return candidates.every((candidate) =>
+            requestExpressionIsProtocolSafe(
+              candidate.expression,
+              candidate.callable,
+              new Set(seen),
+              session,
+            ),
+          );
+        }
+        const first = node.getArguments()[0];
+        return (
+          ['match', 'matchAll', 'replace', 'replaceAll', 'search', 'split'].includes(member) &&
+          first !== undefined &&
+          requestExpressionIsProvablyNonCallable(first)
+        );
+      }
       if (
         role === 'stream-controller' &&
         member &&
@@ -30269,6 +30326,394 @@ function requestCallReceiver(callee: Node): Node | undefined {
     : undefined;
 }
 
+const REQUEST_ROOT_ROLE_AUTHORED_OUTPUT_METHODS = new Set([
+  'concat',
+  'flatMap',
+  'map',
+  'match',
+  'matchAll',
+  'reduce',
+  'reduceRight',
+  'replace',
+  'replaceAll',
+  'search',
+  'split',
+  'toSpliced',
+  'with',
+]);
+
+const REQUEST_ROOT_ROLE_MUTATING_METHODS = new Set([
+  'add',
+  'clear',
+  'copyWithin',
+  'delete',
+  'fill',
+  'pop',
+  'push',
+  'reverse',
+  'set',
+  'shift',
+  'sort',
+  'splice',
+  'unshift',
+]);
+
+interface RequestRootRoleAuthoredResultCandidate {
+  readonly callable: RequestCallable;
+  readonly expression: Node;
+}
+
+function requestRootRoleAuthoredResultCandidates(
+  call: import('ts-morph').CallExpression,
+  member: string,
+  session: RequestProvenanceSession,
+): RequestRootRoleAuthoredResultCandidate[] {
+  const candidates: RequestRootRoleAuthoredResultCandidate[] = [];
+  const enclosing = requestEnclosingCallable(call) ?? { body: call, declaration: call };
+  if (member === 'concat') {
+    for (const argument of call.getArguments()) {
+      const value = unwrapStaticExpression(argument);
+      if (Node.isArrayLiteralExpression(value)) {
+        for (const element of value.getElements()) {
+          if (!Node.isOmittedExpression(element)) {
+            candidates.push({
+              callable: enclosing,
+              expression: Node.isSpreadElement(element) ? element.getExpression() : element,
+            });
+          }
+        }
+      } else {
+        candidates.push({ callable: enclosing, expression: argument });
+      }
+    }
+    return candidates;
+  }
+  if (member === 'toSpliced') {
+    for (const argument of call.getArguments().slice(2)) {
+      candidates.push({ callable: enclosing, expression: argument });
+    }
+    return candidates;
+  }
+  if (member === 'with') {
+    const replacement = call.getArguments()[1];
+    if (replacement) candidates.push({ callable: enclosing, expression: replacement });
+    return candidates;
+  }
+  if (['flatMap', 'map', 'reduce', 'reduceRight'].includes(member)) {
+    const callback = call.getArguments()[0];
+    if (callback) {
+      for (const nested of resolveRequestCallable(callback, new Set(), 0, session).callables) {
+        const reviewed: RequestCallable = {
+          ...nested,
+          rootParameterRoles: requestCallableParameters(nested.declaration).map(() => 'input'),
+        };
+        for (const output of requestWireOutputExpressions(reviewed)) {
+          const value = unwrapStaticExpression(output);
+          if (member === 'flatMap' && Node.isArrayLiteralExpression(value)) {
+            for (const element of value.getElements()) {
+              if (!Node.isOmittedExpression(element)) {
+                candidates.push({
+                  callable: reviewed,
+                  expression: Node.isSpreadElement(element) ? element.getExpression() : element,
+                });
+              }
+            }
+          } else {
+            candidates.push({ callable: reviewed, expression: output });
+          }
+        }
+      }
+    }
+    if ((member === 'reduce' || member === 'reduceRight') && call.getArguments()[1]) {
+      candidates.push({
+        callable: enclosing,
+        expression: call.getArguments()[1]!,
+      });
+    }
+    return candidates;
+  }
+
+  const hook =
+    member === 'replace' || member === 'replaceAll'
+      ? '@@replace'
+      : member === 'match'
+        ? '@@match'
+        : member === 'matchAll'
+          ? '@@matchAll'
+          : member === 'search'
+            ? '@@search'
+            : member === 'split'
+              ? '@@split'
+              : undefined;
+  const protocol = call.getArguments()[0];
+  if (!hook || !protocol) return candidates;
+  for (const nested of requestAccessorCallablesForExpression(protocol, hook, new Set(), session)) {
+    for (const output of requestWireOutputExpressions(nested)) {
+      candidates.push({ callable: nested, expression: output });
+    }
+  }
+  return candidates;
+}
+
+const REQUEST_ROOT_ROLE_PRISTINE_MEMO = new WeakMap<object, Map<string, boolean>>();
+const REQUEST_ROOT_ROLE_PRISTINE_ACTIVE = new WeakMap<object, Set<string>>();
+
+/**
+ * Trusted input/request roles describe framework-provided values, not mutable authored storage.
+ * Once the exact binding (or a live projection/alias) is written or escapes to an unresolved
+ * helper, later reads must return to the conservative provenance path (SPEC §6.6 / §9.1 / §9.6).
+ */
+function requestRootRoleIdentifierIsPristine(expression: Node, callable: RequestCallable): boolean {
+  const node = unwrapStaticExpression(expression);
+  if (!Node.isIdentifier(node)) return false;
+  const symbol = node.getSymbol();
+  if (!symbol) return false;
+  return requestRootRoleBindingIsPristine(symbol, callable);
+}
+
+function requestRootRoleBindingIsPristine(
+  symbol: NonNullable<ReturnType<Node['getSymbol']>>,
+  callable: RequestCallable,
+): boolean {
+  const project = callable.declaration.getProject();
+  const key = `${requestNodeIdentity(callable.declaration)}:${requestSymbolKey(symbol)}`;
+  let memo = REQUEST_ROOT_ROLE_PRISTINE_MEMO.get(project);
+  if (!memo) {
+    memo = new Map();
+    REQUEST_ROOT_ROLE_PRISTINE_MEMO.set(project, memo);
+  }
+  const cached = memo.get(key);
+  if (cached !== undefined) return cached;
+  let active = REQUEST_ROOT_ROLE_PRISTINE_ACTIVE.get(project);
+  if (!active) {
+    active = new Set();
+    REQUEST_ROOT_ROLE_PRISTINE_ACTIVE.set(project, active);
+  }
+  if (active.has(key)) return false;
+  active.add(key);
+
+  const result = requestRootRoleBindingIsPristineUncached(symbol, callable);
+  active.delete(key);
+  memo.set(key, result);
+  return result;
+}
+
+function requestRootRoleBindingIsPristineUncached(
+  symbol: NonNullable<ReturnType<Node['getSymbol']>>,
+  callable: RequestCallable,
+): boolean {
+  const carrierKeys = new Set([requestSymbolKey(symbol)]);
+  const belongs = (candidate: Node): boolean => nodeBelongsToRequestCallable(candidate, callable);
+  const directCarrierBase = (candidate: Node | undefined): string | undefined => {
+    if (!candidate) return undefined;
+    let node = unwrapStaticExpression(candidate);
+    while (
+      Node.isPropertyAccessExpression(node) ||
+      Node.isElementAccessExpression(node) ||
+      Node.isAwaitExpression(node)
+    ) {
+      node = unwrapStaticExpression(node.getExpression());
+    }
+    if (!Node.isIdentifier(node)) return undefined;
+    const shorthand = node.getParentIfKind(SyntaxKind.ShorthandPropertyAssignment);
+    const candidateSymbol = shorthand?.getValueSymbol() ?? node.getSymbol();
+    return candidateSymbol ? requestSymbolKey(candidateSymbol) : undefined;
+  };
+  const directCarrier = (candidate: Node | undefined): boolean => {
+    const base = directCarrierBase(candidate);
+    return base !== undefined && carrierKeys.has(base);
+  };
+  const containsCarrier = (candidate: Node | undefined): boolean =>
+    requestExpressionContainsIdentityCarrier(candidate, directCarrier, new Set());
+
+  // Track exact const aliases of the live value/projection. Const aggregates and destructuring
+  // bindings remain usable, but they also remain live carriers: a later write through one must
+  // invalidate the trusted root. Mutable aliases fail closed immediately.
+  const declarations = callable.body
+    .getDescendantsOfKind(SyntaxKind.VariableDeclaration)
+    .filter(belongs);
+  const aliases = new Map<string, string[]>();
+  for (const declaration of declarations) {
+    const initializer = declaration.getInitializer();
+    const name = declaration.getNameNode();
+    if (
+      !initializer ||
+      !Node.isIdentifier(name) ||
+      declaration.getVariableStatement()?.getDeclarationKind() !== VariableDeclarationKind.Const
+    ) {
+      continue;
+    }
+    const base = directCarrierBase(initializer);
+    const alias = name.getSymbol();
+    if (!base || !alias) continue;
+    const values = aliases.get(base) ?? [];
+    values.push(requestSymbolKey(alias));
+    aliases.set(base, values);
+  }
+  const queue = [...carrierKeys];
+  for (let index = 0; index < queue.length; index += 1) {
+    for (const alias of aliases.get(queue[index]!) ?? []) {
+      if (carrierKeys.has(alias)) continue;
+      carrierKeys.add(alias);
+      queue.push(alias);
+    }
+  }
+  for (const declaration of declarations) {
+    const initializer = declaration.getInitializer();
+    if (!initializer || !containsCarrier(initializer)) continue;
+    const name = declaration.getNameNode();
+    if (
+      declaration.getVariableStatement()?.getDeclarationKind() !== VariableDeclarationKind.Const
+    ) {
+      return false;
+    }
+    const names = Node.isIdentifier(name)
+      ? [name]
+      : name.getDescendantsOfKind(SyntaxKind.Identifier);
+    for (const identifier of names) {
+      const alias = identifier.getSymbol();
+      if (alias) carrierKeys.add(requestSymbolKey(alias));
+    }
+  }
+
+  const targetWritesCarrier = (candidate: Node | undefined): boolean => {
+    if (!candidate) return false;
+    const node = unwrapStaticExpression(candidate);
+    if (Node.isIdentifier(node)) {
+      const target = node.getSymbol();
+      return !!target && carrierKeys.has(requestSymbolKey(target));
+    }
+    if (Node.isPropertyAccessExpression(node) || Node.isElementAccessExpression(node)) {
+      return targetWritesCarrier(node.getExpression());
+    }
+    if (
+      Node.isBinaryExpression(node) &&
+      node.getOperatorToken().getKind() === SyntaxKind.EqualsToken
+    ) {
+      return targetWritesCarrier(node.getLeft());
+    }
+    if (Node.isObjectLiteralExpression(node)) {
+      return node.getProperties().some((property) => {
+        if (Node.isSpreadAssignment(property)) {
+          return targetWritesCarrier(property.getExpression());
+        }
+        return targetWritesCarrier(requestHandlerPropertyExpression(property));
+      });
+    }
+    if (Node.isArrayLiteralExpression(node)) {
+      return node
+        .getElements()
+        .some((element) =>
+          Node.isOmittedExpression(element)
+            ? false
+            : targetWritesCarrier(
+                Node.isSpreadElement(element) ? element.getExpression() : element,
+              ),
+        );
+    }
+    if (Node.isObjectBindingPattern(node) || Node.isArrayBindingPattern(node)) {
+      return node
+        .getElements()
+        .some((element) =>
+          Node.isOmittedExpression(element) ? false : targetWritesCarrier(element.getNameNode()),
+        );
+    }
+    return false;
+  };
+
+  for (const assignment of callable.body
+    .getDescendantsOfKind(SyntaxKind.BinaryExpression)
+    .filter(belongs)) {
+    const operator = assignment.getOperatorToken().getKind();
+    if (operator < SyntaxKind.FirstAssignment || operator > SyntaxKind.LastAssignment) continue;
+    if (targetWritesCarrier(assignment.getLeft()) || containsCarrier(assignment.getRight())) {
+      return false;
+    }
+  }
+  for (const deletion of callable.body
+    .getDescendantsOfKind(SyntaxKind.DeleteExpression)
+    .filter(belongs)) {
+    if (targetWritesCarrier(deletion.getExpression())) return false;
+  }
+  for (const update of [
+    ...callable.body.getDescendantsOfKind(SyntaxKind.PrefixUnaryExpression),
+    ...callable.body.getDescendantsOfKind(SyntaxKind.PostfixUnaryExpression),
+  ].filter(belongs)) {
+    if (
+      Node.isPrefixUnaryExpression(update) &&
+      update.getOperatorToken() === SyntaxKind.ExclamationToken
+    ) {
+      continue;
+    }
+    if (targetWritesCarrier(update.getOperand())) return false;
+  }
+  for (const loop of [
+    ...callable.body.getDescendantsOfKind(SyntaxKind.ForOfStatement),
+    ...callable.body.getDescendantsOfKind(SyntaxKind.ForInStatement),
+  ].filter(belongs)) {
+    if (targetWritesCarrier(loop.getInitializer())) return false;
+  }
+
+  for (const call of callable.body
+    .getDescendantsOfKind(SyntaxKind.CallExpression)
+    .filter(belongs)) {
+    const callee = unwrapStaticExpression(call.getExpression());
+    const receiver = requestCallReceiver(callee);
+    const member = requestStaticCallMember(callee);
+    const [target] = call.getArguments();
+    if (target && containsCarrier(target) && receiver && member) {
+      const objectGlobal = expressionResolvesToGlobalNamespace(receiver, 'Object', new Set(), 0);
+      const reflectGlobal = expressionResolvesToGlobalNamespace(receiver, 'Reflect', new Set(), 0);
+      if (
+        (objectGlobal &&
+          ['assign', 'defineProperties', 'defineProperty', 'setPrototypeOf'].includes(member)) ||
+        (reflectGlobal &&
+          ['defineProperty', 'deleteProperty', 'set', 'setPrototypeOf'].includes(member))
+      ) {
+        return false;
+      }
+    }
+
+    if (
+      receiver &&
+      containsCarrier(receiver) &&
+      (member === undefined || REQUEST_ROOT_ROLE_MUTATING_METHODS.has(member))
+    ) {
+      return false;
+    }
+
+    const carrierArgumentIndexes = call
+      .getArguments()
+      .flatMap((argument, index) => (containsCarrier(argument) ? [index] : []));
+    if (carrierArgumentIndexes.length === 0) continue;
+    if (!Node.isIdentifier(callee)) continue;
+    const calleeSymbol = callee.getSymbol();
+    const inspectableLocalHelper = calleeSymbol?.getDeclarations().some((declaration) => {
+      if (declaration.getSourceFile().isDeclarationFile()) return false;
+      if (Node.isFunctionDeclaration(declaration)) return true;
+      const initializer = valueDeclarationInitializer(declaration);
+      const value = initializer ? unwrapStaticExpression(initializer) : undefined;
+      return !!value && (Node.isArrowFunction(value) || Node.isFunctionExpression(value));
+    });
+    if (!inspectableLocalHelper) continue;
+    const resolution = resolveRequestCallable(callee, new Set(), 0);
+    // Opaque/package/framework calls are classified independently at the call site. The role
+    // invalidation pass only needs to look through inspectable authored helpers, whose call may
+    // otherwise be considered closed while it mutates the trusted carrier by reference.
+    if (resolution.callables.length === 0) continue;
+    for (const nested of resolution.callables) {
+      const parameters = requestCallableParameters(nested.declaration);
+      for (const index of carrierArgumentIndexes) {
+        const parameter = parameters[index];
+        const name = parameter?.getNameNode();
+        if (!name || !Node.isIdentifier(name) || !name.getSymbol()) return false;
+        if (!requestRootRoleBindingIsPristine(name.getSymbol()!, nested)) return false;
+      }
+    }
+  }
+  return true;
+}
+
 function requestExpressionRootParameterRole(
   expression: Node,
   callable: RequestCallable,
@@ -30308,7 +30753,20 @@ function requestExpressionRootParameterRole(
   if (Node.isCallExpression(node)) {
     const receiver = requestCallReceiver(unwrapStaticExpression(node.getExpression()));
     if (receiver) {
-      return requestExpressionRootParameterRole(receiver, callable, seen, depth + 1);
+      const receiverRole = requestExpressionRootParameterRole(receiver, callable, seen, depth + 1);
+      const member = requestStaticCallMember(unwrapStaticExpression(node.getExpression()));
+      // SPEC §6.6 / §9.1 / §9.6: a callback or string protocol owns these results. The receiver's
+      // trusted input role says nothing about an authored callback/protocol return value, so do
+      // not launder that output through the receiver merely because the native method was called
+      // on validated input.
+      if (
+        requestRootRoleIncludesInput(receiverRole) &&
+        member !== undefined &&
+        REQUEST_ROOT_ROLE_AUTHORED_OUTPUT_METHODS.has(member)
+      ) {
+        return undefined;
+      }
+      return receiverRole;
     }
 
     // Preserve a root role only through an inspectable local helper whose every return carries
@@ -30360,14 +30818,25 @@ function requestExpressionRootParameterRole(
     scopeCallable: callable,
   });
   if (wireCarrier === 'context') return 'capability';
-  if (wireCarrier === 'verification') return 'input';
-  if (wireCarrier) return 'request';
+  if (wireCarrier === 'verification') {
+    return requestRootRoleIdentifierIsPristine(node, callable) ? 'input' : undefined;
+  }
+  if (wireCarrier) {
+    return requestRootRoleIdentifierIsPristine(node, callable) ? 'request' : undefined;
+  }
 
   const parameters = requestCallableParameters(callable.declaration);
   for (const [index, parameter] of parameters.entries()) {
     const name = parameter.getNameNode();
     if (requestBindingNameContainsIdentifier(name, node)) {
-      return callable.rootParameterRoles?.[index] ?? 'capability';
+      const role = callable.rootParameterRoles?.[index] ?? 'capability';
+      if (
+        (role === 'input' || role === 'request' || role === 'hybrid') &&
+        !requestRootRoleIdentifierIsPristine(node, callable)
+      ) {
+        return undefined;
+      }
+      return role;
     }
   }
 

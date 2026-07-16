@@ -3391,6 +3391,187 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
     );
   });
 
+  it('invalidates trusted input roles after direct, reflective, loop, and helper writes', () => {
+    const mutations = [
+      ['property assignment', 'input.value = DeferredValue;'],
+      ['whole assignment', 'input = { value: DeferredValue, values: [] };'],
+      ['array destructuring assignment', '[input.value] = [DeferredValue];'],
+      ['object destructuring assignment', '({ value: input.value } = { value: DeferredValue });'],
+      ['Object.assign', 'Object.assign(input, { value: DeferredValue });'],
+      ['Object.defineProperty', "Object.defineProperty(input, 'value', { value: DeferredValue });"],
+      ['Reflect.set', "Reflect.set(input, 'value', DeferredValue);"],
+      ['for-of assignment', 'for (input.value of [DeferredValue]) {}'],
+      [
+        'aggregate helper escape',
+        'const poison = (target: typeof input) => { target.value = DeferredValue; }; poison(input);',
+      ],
+      [
+        'aliased helper escape',
+        'const poison = (target: typeof input) => { target.value = DeferredValue; }; const alias = poison; alias(input);',
+      ],
+      [
+        'object-method helper escape',
+        'const helpers = { poison(target: typeof input) { target.value = DeferredValue; } }; helpers.poison(input);',
+      ],
+      [
+        'inline helper escape',
+        '((target: typeof input) => { target.value = DeferredValue; })(input);',
+      ],
+      [
+        'Function.call helper escape',
+        'const poison = (target: typeof input) => { target.value = DeferredValue; }; poison.call(undefined, input);',
+      ],
+      [
+        'Reflect.apply helper escape',
+        'const poison = (target: typeof input) => { target.value = DeferredValue; }; Reflect.apply(poison, undefined, [input]);',
+      ],
+      [
+        'nested aggregate helper escape',
+        'const poison = (box: { input: typeof input }) => { box.input.value = DeferredValue; }; poison({ input });',
+      ],
+      ['aggregate carrier write', 'const box = { input }; box.input.value = DeferredValue;'],
+      ['array carrier write', 'const [target] = [input]; target.value = DeferredValue;'],
+      [
+        'destructured projection write',
+        'const { values } = input; values[0] = DeferredValue as unknown as string;',
+      ],
+      [
+        'projection alias write',
+        'const values = input.values; values[0] = DeferredValue as unknown as string;',
+      ],
+    ] as const;
+
+    for (const [label, mutation] of mutations) {
+      const facts = sinksFor(`
+        import { s, task } from '@kovojs/server';
+        task('root-input/${label}', {
+          input: s.object({ value: s.string(), values: s.array(s.string()) }),
+          run(input) {
+            class DeferredValue {
+              static then(resolve: (value: { ok: true }) => void) { resolve({ ok: true }); }
+            }
+            ${mutation}
+            return input.value;
+          },
+        });
+      `);
+      expect(
+        facts.some(
+          (fact) =>
+            fact.sink === 'request-handler.opaque-protocol' ||
+            fact.sink === 'request-handler.opaque-call',
+        ),
+        `${label}: ${JSON.stringify(facts)}`,
+      ).toBe(true);
+    }
+
+    const requestMutation = sinksFor(`
+      import { query } from '@kovojs/server';
+      query({ load(_input, { request }) {
+        class DeferredValue {
+          static then(resolve: (value: { ok: true }) => void) { resolve({ ok: true }); }
+        }
+        Object.defineProperty(request, 'json', { value: () => DeferredValue });
+        return request.json();
+      } });
+    `);
+    expect(requestMutation).toContainEqual(
+      expect.objectContaining({ sink: 'request-handler.opaque-protocol' }),
+    );
+  });
+
+  it('derives input callback, inserted-value, and string-protocol results from authored outputs', () => {
+    const carriers = [
+      ['Array.concat', 'return input.values.concat([DeferredValue as unknown as string])[0];'],
+      ['Array.map', 'return input.values.map(() => DeferredValue)[0];'],
+      ['Array.flatMap', 'return input.values.flatMap(() => [DeferredValue])[0];'],
+      ['Array.reduce', 'return input.values.reduce(() => DeferredValue, DeferredValue);'],
+      ['Array.reduceRight', 'return input.values.reduceRight(() => DeferredValue, DeferredValue);'],
+      [
+        'Array.toSpliced',
+        'return input.values.toSpliced(0, 0, DeferredValue as unknown as string)[0];',
+      ],
+      ['Array.with', 'return input.values.with(0, DeferredValue as unknown as string)[0];'],
+      [
+        'Symbol.match',
+        'const protocol = { [Symbol.match]() { return DeferredValue; } }; return input.value.match(protocol);',
+      ],
+      [
+        'Symbol.replace',
+        "const protocol = { [Symbol.replace]() { return DeferredValue; } }; return input.value.replace(protocol, 'safe');",
+      ],
+      [
+        'Symbol.split',
+        'const protocol = { [Symbol.split]() { return [DeferredValue]; } }; return input.value.split(protocol)[0];',
+      ],
+    ] as const;
+
+    for (const [label, statement] of carriers) {
+      const facts = sinksFor(`
+        import { s, task } from '@kovojs/server';
+        task('root-output/${label}', {
+          input: s.object({ value: s.string(), values: s.array(s.string()) }),
+          run(input) {
+            class DeferredValue {
+              static then(resolve: (value: { ok: true }) => void) { resolve({ ok: true }); }
+            }
+            ${statement}
+          },
+        });
+      `);
+      expect(
+        facts.some((fact) => fact.sink === 'request-handler.opaque-protocol'),
+        `${label}: ${JSON.stringify(facts)}`,
+      ).toBe(true);
+    }
+  });
+
+  it('keeps immutable input projections open while retaining opaque carrier controls', () => {
+    const safe = sinksFor(`
+      import { s, task } from '@kovojs/server';
+      task('root-input/safe', {
+        input: s.object({ value: s.string(), values: s.array(s.string()) }),
+        run(input) { return { value: input.value, first: input.values[0] }; },
+      });
+    `);
+    expect(safe).toEqual([]);
+
+    const callSiteSafe = sinksFor(`
+      import { s, task } from '@kovojs/server';
+      task('root-input/call-site-safe', {
+        input: s.object({ value: s.string(), values: s.array(s.string()) }),
+        run(input) {
+          const project = (target: { value: string }) => target.value;
+          project({ value: 'local' });
+          const copy = { value: input.value, values: [...input.values] };
+          return { projected: project(input), copy };
+        },
+      });
+    `);
+    expect(callSiteSafe).toEqual([]);
+
+    const unsafe = sinksFor(`
+      import { s, task } from '@kovojs/server';
+      declare function opaque(): unknown;
+      declare function mutate(value: unknown): void;
+      const values = new Map();
+      class DeferredValue {
+        static then(resolve: (value: { ok: true }) => void) { resolve({ ok: true }); }
+      }
+      values.set('key', DeferredValue);
+      task('root-input/opaque-call', { input: s.object({}), run() { return opaque(); } });
+      task('root-input/opaque-input', { input: s.object({}), run(input) { mutate(input); return input; } });
+      task('root-input/module-map', { input: s.object({}), run() { return values.get('key'); } });
+    `);
+    expect(unsafe).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ sink: 'request-handler.opaque-call', source: 'opaque' }),
+        expect.objectContaining({ sink: 'request-handler.opaque-call', source: 'mutate' }),
+        expect.objectContaining({ sink: 'request-handler.opaque-protocol' }),
+      ]),
+    );
+  });
+
   it('resolves returned class values through import and re-export aliases', () => {
     const facts = sinksForFiles([
       {

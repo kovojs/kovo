@@ -271,6 +271,22 @@ describe('create-kovo starter (build integration: adversarial production artifac
     300_000,
   );
 
+  // @kovo-security-certifies KV424 trusted-input-provenance-prod-artifact
+  it('bugz-31: trusted input mutation and authored result laundering fail the production build', () => {
+    withProject('create-kovo-bugz31-root-provenance-red-', undefined, (root) => {
+      addBugz31TrustedInputProvenanceProof(root);
+      expectBuildFailure(root, [
+        'KV424',
+        'sink=request-handler.opaque-protocol',
+        'source=<Object.defineProperty-target:input>',
+        'source=<class-thenable:input.values.concat',
+        'source=<class-thenable:input.values.map',
+        'source=<class-thenable:input.value.replace',
+        'bugz31-root-provenance-proof.ts',
+      ]);
+    });
+  }, 300_000);
+
   // @kovo-security-certifies KV424 exact-global-namespace-member-lockdown-prod-artifact
   it.each([...dialectIndependentCompilerGateCases])(
     'bugz-31: exact global namespace-member replacements fail the %s production build',
@@ -778,6 +794,68 @@ function addBugz31GlobalMemberLockdownProof(root: string): void {
   writeFileSync(
     appPath,
     app.replace(anchor, `${anchor}\nimport './bugz31-intrinsic-member-proof.js';`),
+    'utf8',
+  );
+}
+
+function addBugz31TrustedInputProvenanceProof(root: string): void {
+  writeFileSync(
+    join(root, 'src/bugz31-root-provenance-proof.ts'),
+    [
+      "import { s, task } from '@kovojs/server';",
+      '',
+      'class Bugz31InputDeferred {',
+      '  static then(resolve: (value: { ok: true }) => void): void {',
+      '    resolve({ ok: true });',
+      "    queueMicrotask(() => { void fetch('https://example.test/late'); });",
+      '  }',
+      '}',
+      '',
+      "task('bugz31-root-mutation', {",
+      '  input: s.object({ value: s.string() }),',
+      '  run(input) {',
+      "    Object.defineProperty(input, 'value', { value: Bugz31InputDeferred });",
+      '    return input.value;',
+      '  },',
+      '});',
+      '',
+      "task('bugz31-root-map-output', {",
+      '  input: s.object({ values: s.array(s.string()) }),',
+      '  run(input) {',
+      '    return input.values.map(() => Bugz31InputDeferred as unknown as string)[0];',
+      '  },',
+      '});',
+      '',
+      "task('bugz31-root-concat-output', {",
+      '  input: s.object({ values: s.array(s.string()) }),',
+      '  run(input) {',
+      '    return input.values.concat([Bugz31InputDeferred as unknown as string])[0];',
+      '  },',
+      '});',
+      '',
+      "task('bugz31-root-protocol-output', {",
+      '  input: s.object({ value: s.string() }),',
+      '  run(input) {',
+      '    const protocol = {',
+      '      [Symbol.replace]() { return Bugz31InputDeferred as unknown as string; },',
+      '    };',
+      "    return input.value.replace(protocol as unknown as RegExp, 'safe');",
+      '  },',
+      '});',
+      '',
+    ].join('\n'),
+    'utf8',
+  );
+
+  const appPath = join(root, 'src/app.tsx');
+  const app = readFileSync(appPath, 'utf8');
+  const anchor = "import { appTheme } from './theme.js';";
+  if (!app.includes(anchor)) {
+    throw new Error('Expected scaffold app import anchor for bugz-31 root provenance proof.');
+  }
+  writeFileSync(
+    appPath,
+    app.replace(anchor, `${anchor}\nimport './bugz31-root-provenance-proof.js';`),
     'utf8',
   );
 }
