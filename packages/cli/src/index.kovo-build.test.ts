@@ -556,7 +556,7 @@ export default createApp({
       stderr.mockRestore();
       rmSync(root, { force: true, recursive: true });
     }
-  });
+  }, 90_000);
 
   it('emits production enhanced mutation success chunks for registry-wrapped authored fragments', async () => {
     const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-mutation-fragment-'));

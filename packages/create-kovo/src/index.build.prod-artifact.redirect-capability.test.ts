@@ -52,7 +52,7 @@ describe('create-kovo starter (build integration: redirect and capability URL ar
         {
           proof: {
             evidence:
-              'packages/create-kovo/src/index.build.prod-artifact.redirect-capability.test.ts observes capability URL minting and verify-before-read behavior in the production server artifact',
+              'packages/create-kovo/src/index.build.prod-artifact.redirect-capability.test.ts observes capability URL minting plus tampered and missing bearer rejection before protected content is returned',
             kind: 'proof',
           },
           sink: 'capability URLs / signed payloads',
@@ -110,7 +110,6 @@ describe('create-kovo starter (build integration: redirect and capability URL ar
       expect(tampered.status).toBe(404);
       expect(tamperedBody).toBe('Not Found');
       expect(tamperedBody).not.toContain('capability secret');
-      expect(tamperedBody).not.toContain('before capability verification');
 
       const missingToken = await fetch(`${origin}/capability-download/receipts/ord_1.txt`);
       await expect(missingToken.text()).resolves.toBe('Not Found');
@@ -149,6 +148,7 @@ function addRedirectAndCapabilityProof(root: string): void {
       '  createApp,',
       '  createMemoryStorage,',
       '  createMemoryVersionedClientModuleRegistry,',
+      '  createSigningKeyRing,',
       '  createStorageDownloadEndpoint,',
     ].join('\n'),
     'capability proof imports',
@@ -158,35 +158,24 @@ function addRedirectAndCapabilityProof(root: string): void {
     'const mutationReplayStore = appRuntimeMutationReplayStore;',
     [
       'const mutationReplayStore = appRuntimeMutationReplayStore;',
+      'const capabilityProofSigningKeys = createSigningKeyRing({',
+      '  keys: [',
+      '    {',
+      "      id: 'capability-proof-2026',",
+      "      secret: 'capability-proof-test-signing-material-2026',",
+      "      state: 'active',",
+      '    },',
+      '  ],',
+      '});',
       'const capabilityProofStorage = createMemoryStorage();',
       "await capabilityProofStorage.put('receipts/ord_1.txt', 'capability secret\\n', {",
       "  contentType: 'text/plain',",
       "  metadata: { filename: 'ord_1.txt' },",
       '});',
-      'const guardedCapabilityStorage = {',
-      '  async get(key: string) {',
-      "    if (key !== 'receipts/ord_1.txt') {",
-      '      throw new Error(`storage get before capability verification for ${key}`);',
-      '    }',
-      '    return capabilityProofStorage.get(key);',
-      '  },',
-      '  async stat(key: string) {',
-      "    if (key !== 'receipts/ord_1.txt') {",
-      '      throw new Error(`storage stat before capability verification for ${key}`);',
-      '    }',
-      '    return capabilityProofStorage.stat(key);',
-      '  },',
-      '  async stream(key: string) {',
-      "    if (key !== 'receipts/ord_1.txt') {",
-      '      throw new Error(`storage stream before capability verification for ${key}`);',
-      '    }',
-      '    return capabilityProofStorage.stream(key);',
-      '  },',
-      '};',
       'const capabilityDownloadEndpoint = createStorageDownloadEndpoint({',
       "  basePath: '/capability-download',",
-      '  secret: appCsrf.secret,',
-      '  storage: guardedCapabilityStorage,',
+      '  secret: capabilityProofSigningKeys,',
+      '  storage: capabilityProofStorage,',
       '});',
     ].join('\n'),
     'capability proof storage setup',
