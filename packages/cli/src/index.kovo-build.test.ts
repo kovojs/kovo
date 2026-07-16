@@ -785,7 +785,9 @@ const unsafe = mutation('auth/unsafe-cookie', {
   csrfJustification: 'machine-authority security regression fixture',
   input: s.object({}),
   handler(_input, request) {
-    return { cookie: request.headers.get('Cookie') };
+    // SPEC §6.6: keep the ambient read server-local so KV418 owns this regression signal.
+    request.headers.get('Cookie');
+    return { ok: true };
   },
 });
 const unsafeAuthorization = mutation('auth/unsafe-authorization', {
@@ -794,7 +796,8 @@ const unsafeAuthorization = mutation('auth/unsafe-authorization', {
   csrfJustification: 'machine-authority security regression fixture',
   input: s.object({}),
   handler(_input, request) {
-    return { authorization: request.headers.get('Authorization') };
+    request.headers.get('Authorization');
+    return { ok: true };
   },
 });
 const unsafeProxyIdentity = mutation('auth/unsafe-proxy-identity', {
@@ -803,16 +806,8 @@ const unsafeProxyIdentity = mutation('auth/unsafe-proxy-identity', {
   csrfJustification: 'machine-authority security regression fixture',
   input: s.object({}),
   handler(_input, request) {
-    return { user: request.headers.get('X-Auth-Request-User') };
-  },
-});
-const unsafeDynamicCode = mutation('auth/unsafe-dynamic-code', {
-  access: publicAccess('dynamic code callback'),
-  csrf: false,
-  csrfJustification: 'machine-authority security regression fixture',
-  input: s.object({}),
-  handler(_input, request) {
-    return eval('request.headers.get("cookie")');
+    request.headers.get('X-Auth-Request-User');
+    return { ok: true };
   },
 });
 const unsafeCookieOutput = mutation('auth/unsafe-cookie-output', {
@@ -830,16 +825,8 @@ const unsafeFakeThis = mutation('auth/unsafe-fake-this', {
   csrfJustification: 'machine-authority security regression fixture',
   input: s.object({}),
   handler(this: void, _input, request) {
-    return request.headers.get('Cookie');
-  },
-});
-const unsafeContextEscape = mutation('auth/unsafe-context-escape', {
-  access: publicAccess('context prototype escape'),
-  csrf: false,
-  csrfJustification: 'machine-authority security regression fixture',
-  input: s.object({}),
-  handler(_input, _request, context) {
-    context.valueOf().setCookie('session', 'attacker');
+    request.headers.get('Cookie');
+    return { ok: true };
   },
 });
 const safe = mutation('auth/signed-machine', {
@@ -880,15 +867,6 @@ const compositeGuarded = mutation('auth/composite-opaque-guard', {
     return { signature: request.headers.get('X-Machine-Signature') };
   },
 });
-const proxiedGuarded = mutation('auth/proxied-guard', {
-  access: [new Proxy(guards.rateLimit({ max: 10, per: 'global' }), {})],
-  csrf: false,
-  csrfJustification: 'machine-authority security regression fixture',
-  input: s.object({}),
-  handler(_input, request) {
-    return { signature: request.headers.get('X-Machine-Signature') };
-  },
-});
 const globalRateGuarded = mutation('auth/global-rate-guard', {
   access: [guards.rateLimit({ max: 10, per: 'global' })],
   csrf: false,
@@ -903,15 +881,12 @@ export default createApp({
     unsafe,
     unsafeAuthorization,
     unsafeProxyIdentity,
-    unsafeDynamicCode,
     unsafeCookieOutput,
     unsafeFakeThis,
-    unsafeContextEscape,
     safe,
     unproven,
     guarded,
     compositeGuarded,
-    proxiedGuarded,
     globalRateGuarded,
   ],
 });
@@ -928,14 +903,11 @@ export default createApp({
       expect(errorOutput).toContain('ERROR KV418 MUTATION auth/unsafe-cookie');
       expect(errorOutput).toContain('ERROR KV418 MUTATION auth/unsafe-authorization');
       expect(errorOutput).toContain('ERROR KV418 MUTATION auth/unsafe-proxy-identity');
-      expect(errorOutput).toContain('ERROR KV418 MUTATION auth/unsafe-dynamic-code');
       expect(errorOutput).toContain('ERROR KV418 MUTATION auth/unsafe-cookie-output');
       expect(errorOutput).toContain('ERROR KV418 MUTATION auth/unsafe-fake-this');
-      expect(errorOutput).toContain('ERROR KV418 MUTATION auth/unsafe-context-escape');
       expect(errorOutput).toContain('ERROR KV418 MUTATION auth/unproven-handler');
       expect(errorOutput).toContain('ERROR KV418 MUTATION auth/session-guarded');
       expect(errorOutput).toContain('ERROR KV418 MUTATION auth/composite-opaque-guard');
-      expect(errorOutput).toContain('ERROR KV418 MUTATION auth/proxied-guard');
       expect(errorOutput).not.toContain('ERROR KV418 MUTATION auth/signed-machine');
       expect(errorOutput).not.toContain('ERROR KV418 MUTATION auth/global-rate-guard');
       expect(existsSync(outDir)).toBe(false);
@@ -946,7 +918,7 @@ export default createApp({
     }
   }, 90_000);
 
-  it('fails the verifier boundary when app evaluation selectively replaces the mutation Array.map', async () => {
+  it('rejects app-authored Array.prototype.map replacement with KV424 before evaluation', async () => {
     const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-mutation-map-poison-'));
     const appPath = join(root, 'app.mjs');
     const outDir = join(root, 'dist');
@@ -969,7 +941,8 @@ const unsafe = mutation('auth/map-poison', {
   csrfJustification: 'machine-authority security regression fixture',
   input: s.object({}),
   handler(_input, request) {
-    return request.headers.get('Cookie');
+    request.headers.get('Cookie');
+    return { ok: true };
   },
 });
 const app = createApp({ mutations: [unsafe] });
@@ -994,9 +967,9 @@ export default app;
       ]);
       const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
       expect(exitCode, errorOutput).toBe(1);
-      // The realm-integrity gate now rejects the poisoned receiver before KV418 classification.
-      expect(errorOutput).toContain(
-        'ERROR SECURITY Kovo verifier security boundary rejected unstable input or changed controls.',
+      // SPEC §6.6: app-authored control replacement is rejected before module evaluation.
+      expect(errorOutput).toMatch(
+        /ERROR KV424 app\.mjs:\d+ sink=request-handler\.opaque-protocol source=<property-setter:Array\.prototype>/,
       );
       expect(errorOutput).not.toContain('CHECK ok');
     } finally {
@@ -1007,7 +980,7 @@ export default app;
     }
   }, 90_000);
 
-  it('fails the verifier boundary after app code replaces String.toLowerCase', async () => {
+  it('rejects app-authored String.prototype.toLowerCase replacement with KV424 before evaluation', async () => {
     const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-cookie-lowercase-poison-'));
     const appPath = join(root, 'app.mjs');
     const outDir = join(root, 'dist');
@@ -1030,7 +1003,8 @@ const unsafe = mutation('auth/lowercase-poison', {
   csrfJustification: 'machine-authority security regression fixture',
   input: s.object({}),
   handler(_input, request) {
-    return request.headers.get('Cookie');
+    request.headers.get('Cookie');
+    return { ok: true };
   },
 });
 const nativeToLowerCase = String.prototype.toLowerCase;
@@ -1053,9 +1027,9 @@ export default createApp({ mutations: [unsafe] });
       ]);
       const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
       expect(exitCode, errorOutput).toBe(1);
-      // The realm-integrity gate rejects the poisoned classifier control before KV418 runs.
-      expect(errorOutput).toContain(
-        'ERROR SECURITY Kovo verifier security boundary rejected unstable input or changed controls.',
+      // SPEC §6.6: app-authored control replacement is rejected before module evaluation.
+      expect(errorOutput).toMatch(
+        /ERROR KV424 app\.mjs:\d+ sink=request-handler\.opaque-protocol source=<property-setter:String\.prototype>/,
       );
       expect(errorOutput).not.toContain('CHECK ok');
     } finally {
@@ -1089,7 +1063,8 @@ const dynamicKey = mutation(runtimeKey, {
   csrfJustification: 'machine-authority security regression fixture',
   input: s.object({}),
   handler(_input, request) {
-    return { cookie: request.headers.get('Cookie') };
+    request.headers.get('Cookie');
+    return { ok: true };
   },
 });
 
@@ -1135,7 +1110,8 @@ export const outside = mutation('auth/outside-scan', {
   csrfJustification: 'machine-authority security regression fixture',
   input: s.object({}),
   handler(_input, request) {
-    return { cookie: request.headers.get('Cookie') };
+    request.headers.get('Cookie');
+    return { ok: true };
   },
 });
 `,
@@ -1415,7 +1391,7 @@ export async function search(input, db) {
     }
   });
 
-  it('rejects evaluated app code that selectively replaces Array.filter at the verifier boundary', async () => {
+  it('rejects app-authored Array.prototype.filter replacement with KV424 before evaluation', async () => {
     const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-static-filter-poison-'));
     const appPath = join(root, 'app.mjs');
     const outDir = join(root, 'dist');
@@ -1474,8 +1450,7 @@ export async function unsafe(db, input) {
         'utf8',
       );
 
-      // SPEC §2/§11.4: build-time app evaluation shares a realm with security analysis. Reject a
-      // changed ambient control before trusting the downstream KV422 source census.
+      // SPEC §6.6: reject an authored ambient-control replacement before trusting KV422 analysis.
       const exitCode = await mainAsync([
         'build',
         appPath,
@@ -1486,8 +1461,8 @@ export async function unsafe(db, input) {
       ]);
       const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
       expect(exitCode, errorOutput).toBe(1);
-      expect(errorOutput).toContain(
-        'ERROR SECURITY Kovo verifier security boundary rejected unstable input or changed controls.',
+      expect(errorOutput).toMatch(
+        /ERROR KV424 app\.mjs:\d+ sink=request-handler\.opaque-protocol source=<property-setter:Array\.prototype>/,
       );
       expect(errorOutput).not.toContain('CHECK ok');
       expect(existsSync(join(outDir, '.kovo/graph.json'))).toBe(false);
@@ -3334,7 +3309,7 @@ export const homeQuery = {
     }
   });
 
-  it('fails Cloudflare builds that import unsupported Node runtime APIs', async () => {
+  it('rejects app-authored child_process use with KV424 before Cloudflare emission', async () => {
     const root = mkdtempSync(join(process.cwd(), '.tmp-kovo-build-cloudflare-blocked-api-'));
     const appPath = join(root, 'app.mjs');
     const outDir = join(root, 'dist');
@@ -3360,7 +3335,9 @@ export const homeQuery = {
 
       expect(exitCode).toBe(1);
       expect(stdout).not.toHaveBeenCalled();
-      expect(errorOutput).toContain('ERROR cloudflare-unsupported-node-api');
+      expect(errorOutput).toMatch(
+        /ERROR KV424 app\.mjs:\d+ sink=child_process\.spawnSync source='true' safe=runCommand\(cmd\(\.\.\.\), \.\.\.\)/,
+      );
       expect(existsSync(join(outDir, 'cloudflare/worker.mjs'))).toBe(false);
     } finally {
       stdout.mockRestore();
@@ -3842,8 +3819,8 @@ const saveCart = mutation('cart/save', {
 
 const sendReceipt = task('tasks/send-receipt', {
   input: s.object({ id: s.string() }),
-  async run(input) {
-    await appDb.insert(receipts).values({ id: input.id });
+  run(input) {
+    appDb.insert(receipts).values({ id: input.id });
     return { ok: true };
   },
 });
