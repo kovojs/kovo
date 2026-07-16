@@ -5493,6 +5493,7 @@ function requestRetainedConfigCallIsReviewed(
   if (requestCallIsExactDeclaredSecretReadDeclaration(call)) return true;
   if (requestCallIsExactDeclaredSecretReadExecution(call, session)) return true;
   if (requestCallIsExactMutationDomainInvalidate(call, session)) return true;
+  if (requestCallIsExactWebhookRecordChange(call, session)) return true;
   if (
     requestCallIsExactMutationTaskSchedule(call, session) ||
     requestCallIsExactMutationTaskCancel(call, session) ||
@@ -15937,6 +15938,8 @@ function requestExpressionIsProtocolSafe(
     if (requestCallIsExactDeclaredSecretReadExecution(node, session)) return true;
     if (requestCallIsExactMutationDomainInvalidate(node, session)) return true;
     if (requestCallUsesMutationDomainInvalidateShape(node)) return false;
+    if (requestCallIsExactWebhookRecordChange(node, session)) return true;
+    if (requestCallUsesWebhookRecordChangeShape(node)) return false;
     if (
       requestCallIsExactMutationTaskSchedule(node, session) ||
       requestCallIsExactMutationTaskCancel(node, session) ||
@@ -20146,6 +20149,7 @@ function requestCallIsKnownSafe(
     requestCallIsExactMutationTaskSchedule(call, context.provenance) ||
     requestCallIsExactMutationTaskCancel(call, context.provenance) ||
     requestCallIsExactMutationDomainInvalidate(call, context.provenance) ||
+    requestCallIsExactWebhookRecordChange(call, context.provenance) ||
     requestCallIsExactTaskComposition(call, context.provenance) ||
     requestCallIsExactTaskSchedule(call, context.provenance)
   ) {
@@ -20153,6 +20157,7 @@ function requestCallIsKnownSafe(
     return true;
   }
   if (requestCallUsesMutationDomainInvalidateShape(call)) return false;
+  if (requestCallUsesWebhookRecordChangeShape(call)) return false;
   if (requestCallUsesSensitiveTaskCapabilityShape(call, context.provenance)) return false;
 
   if (
@@ -23764,6 +23769,74 @@ function requestCallUsesMutationDomainInvalidateShape(
   return !!requestCallReceiver(callee) && requestStaticCallMember(callee) === 'invalidate';
 }
 
+function requestCallIsExactWebhookRecordChangeForTarget(
+  call: import('ts-morph').CallExpression,
+  target: import('ts-morph').CallExpression,
+  session: RequestProvenanceSession,
+): boolean {
+  const callee = unwrapStaticExpression(call.getExpression());
+  if (
+    !Node.isPropertyAccessExpression(callee) ||
+    callee.getQuestionDotTokenNode() ||
+    call.getQuestionDotTokenNode() ||
+    callee.getName() !== 'recordChange'
+  ) {
+    return false;
+  }
+  const [domainValue, options, ...extra] = call.getArguments();
+  if (
+    !domainValue ||
+    extra.length !== 0 ||
+    !requestNodesAreSame(requestExactLocalDomainCallForExpression(domainValue, session), target)
+  ) {
+    return false;
+  }
+  const direct = requestEnclosingCallable(call);
+  if (!direct || !nodeBelongsToRequestCallable(call, direct)) return false;
+  const roots = requestCallableDeclaredRootContexts(direct, session).filter(
+    (root) => root.rootFactory === 'webhook' && root.rootCallback === 'handler',
+  );
+  return !!(
+    roots.length === 1 &&
+    roots.every(
+      (root) =>
+        requestExpressionIsDirectRootParameterWithRole(
+          callee.getExpression(),
+          root,
+          'capability',
+        ) &&
+        requestRootCapabilityMethodIsPristine(callee.getExpression(), root, session) &&
+        (options === undefined ||
+          requestExactMutationTaskScheduleInputIsPlain(options, root, session, new Set())),
+    )
+  );
+}
+
+/**
+ * SPEC §9.1 / §10.3: webhook change recording is one exact framework capability call. KV402
+ * owns declared-write membership; this classifier proves only the pristine context method,
+ * module-local domain identity, and plain change options needed to reach that specialized gate.
+ */
+function requestCallIsExactWebhookRecordChange(
+  call: import('ts-morph').CallExpression,
+  session: RequestProvenanceSession,
+): boolean {
+  const [domainValue] = call.getArguments();
+  const target = domainValue
+    ? requestExactLocalDomainCallForExpression(domainValue, session)
+    : undefined;
+  return !!(
+    target &&
+    requestCallIsExactWebhookRecordChangeForTarget(call, target, session) &&
+    requestExactDomainResultIsPristine(target, session)
+  );
+}
+
+function requestCallUsesWebhookRecordChangeShape(call: import('ts-morph').CallExpression): boolean {
+  const callee = unwrapStaticExpression(call.getExpression());
+  return !!requestCallReceiver(callee) && requestStaticCallMember(callee) === 'recordChange';
+}
+
 function requestExpressionResolvesToExactDomainCall(
   expression: Node,
   target: import('ts-morph').CallExpression,
@@ -23845,14 +23918,15 @@ function requestDomainValueContainerIsReviewed(
     }
     return (
       requestExpressionIsDirectImportedExport(parent.getExpression(), '@kovojs/drizzle', 'kovo') ||
-      ['mutation', 'query'].some((exportName) =>
+      ['mutation', 'query', 'webhook'].some((exportName) =>
         requestExpressionIsDirectImportedExport(
           parent.getExpression(),
           '@kovojs/server',
           exportName,
         ),
       ) ||
-      requestCallIsExactMutationDomainInvalidateForTarget(parent, target, session)
+      requestCallIsExactMutationDomainInvalidateForTarget(parent, target, session) ||
+      requestCallIsExactWebhookRecordChangeForTarget(parent, target, session)
     );
   }
 }

@@ -9380,6 +9380,63 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
     }
   });
 
+  it('accepts only exact webhook recordChange capability calls for pristine local domains', () => {
+    const source = (recordChange: string, extra = '') => `
+      import {
+        createMemoryWebhookReplayStore,
+        domain,
+        publicAccess,
+        s,
+        webhook,
+      } from '@kovojs/server';
+      const contact = domain('model/contact');
+      const replayStore = createMemoryWebhookReplayStore();
+      ${extra}
+      export const payment = webhook('/webhooks/payment', {
+        access: publicAccess('recordChange classifier fixture'),
+        handler(input, context) {
+          ${recordChange}
+          return { ok: true };
+        },
+        idempotency: (input) => input.id,
+        input: s.object({ id: s.string() }),
+        replayStore,
+        verify: 'none',
+        verifyJustification: 'recordChange classifier fixture',
+        writes: [contact],
+      });
+    `;
+
+    expect(sinksFor(source(`context.recordChange(contact, { keys: [input.id] });`))).toEqual([]);
+
+    for (const [label, recordChange, extra] of [
+      [
+        'context alias',
+        `const alias = context; alias.recordChange(contact, { keys: [input.id] });`,
+        '',
+      ],
+      ['computed dispatch', `context['recordChange'](contact, { keys: [input.id] });`, ''],
+      [
+        'domain alias',
+        `const alias = contact; context.recordChange(alias, { keys: [input.id] });`,
+        '',
+      ],
+      ['dynamic domain', `context.recordChange(input.domain, { keys: [input.id] });`, ''],
+      [
+        'Function.call dispatch',
+        `context.recordChange.call(context, contact, { keys: [input.id] });`,
+        '',
+      ],
+      [
+        'method mutation',
+        `context.recordChange(contact, { keys: [input.id] });`,
+        `Object.defineProperty(Object.prototype, 'recordChange', { value() {} });`,
+      ],
+    ] as const) {
+      expect(sinksFor(source(recordChange, extra)), label).not.toEqual([]);
+    }
+  });
+
   it('rejects direct, container-laundered, and captured DB capability mutation', () => {
     for (const body of [
       `
