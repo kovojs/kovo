@@ -376,6 +376,112 @@ describe('enhanced mutation fetch', () => {
     }
   });
 
+  it.each(['data:/_m/chat', 'blob:/_m/chat', 'file:/_m/chat'])(
+    'rejects opaque-origin direct mutation action %s before credential-bearing fetch',
+    async (action) => {
+      const originalLocation = globalThis.location;
+      const fetch = vi.fn();
+      Object.defineProperty(globalThis, 'location', {
+        configurable: true,
+        value: new URL('about:srcdoc'),
+      });
+      try {
+        await expect(
+          fetchEnhancedMutation({
+            fetch,
+            form: {
+              action,
+              getAttribute(name: string) {
+                if (name === 'action') return action;
+                if (name === 'method') return 'post';
+                return null;
+              },
+              method: 'post',
+            },
+            formData: new FormData(),
+            root: new FakeTargetRoot([]),
+          }),
+        ).rejects.toThrow(/enhanced mutation transport is invalid/u);
+        expect(fetch).not.toHaveBeenCalled();
+      } finally {
+        Object.defineProperty(globalThis, 'location', {
+          configurable: true,
+          value: originalLocation,
+        });
+      }
+    },
+  );
+
+  it('rejects a caller-supplied opaque-origin mutation transport', async () => {
+    const fetch = vi.fn();
+
+    await expect(
+      fetchEnhancedMutation({
+        fetch,
+        form: typedMutationForm('chat'),
+        formData: new FormData(),
+        root: new FakeTargetRoot([]),
+        transport: {
+          action: '/_m/chat',
+          method: 'POST',
+          origin: 'null',
+          sourceUrl: 'about:srcdoc',
+        },
+      }),
+    ).rejects.toThrow(/enhanced mutation transport is invalid/u);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it.each(['http:', 'https:'])(
+    'preserves ordinary %s direct enhanced mutation transport',
+    async (protocol) => {
+      const originalLocation = globalThis.location;
+      const origin = `${protocol}//kovo.test`;
+      const fetch = vi.fn(async () => ({
+        headers: fragmentHeaders(),
+        ok: true,
+        status: 204,
+        text: async () => '',
+        url: `${origin}/_m/chat`,
+      }));
+      Object.defineProperty(globalThis, 'location', {
+        configurable: true,
+        value: new URL(`${origin}/chat?room=security#private`),
+      });
+      try {
+        await fetchEnhancedMutation({
+          fetch,
+          form: {
+            action: '/_m/chat',
+            getAttribute(name: string) {
+              if (name === 'action') return '/_m/chat';
+              if (name === 'method') return 'post';
+              return null;
+            },
+            method: 'post',
+          },
+          formData: new FormData(),
+          root: new FakeTargetRoot([]),
+        });
+
+        expect(fetch).toHaveBeenCalledWith(
+          '/_m/chat',
+          expect.objectContaining({
+            headers: expect.objectContaining({
+              'Kovo-Current-Url': `${origin}/chat?room=security`,
+            }),
+            method: 'POST',
+          }),
+        );
+      } finally {
+        Object.defineProperty(globalThis, 'location', {
+          configurable: true,
+          value: originalLocation,
+        });
+      }
+    },
+  );
+
   it('rejects cross-origin final responses and non-mutation media before body apply', async () => {
     const crossOriginText = vi.fn(async () => '<kovo-fragment target="cart">bad</kovo-fragment>');
     await expect(

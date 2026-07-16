@@ -126,10 +126,11 @@ export async function fetchEnhancedMutation(
   const streaming = options.streaming === true;
   const targetSnapshot = readLiveTargetSnapshot(options.root);
   const submittedFormTarget = readSubmittedFormTarget(form);
-  const transport =
+  const transportCandidate =
     options.transport ??
     readEligibleEnhancedMutationTransport(form) ??
     readDirectEnhancedMutationTransport(form, security);
+  const transport = snapshotEnhancedMutationTransport(transportCandidate, security);
   if (typeof fetchMutation !== 'function' || transport === undefined) {
     throw new TypeError('Kovo enhanced mutation transport is invalid.');
   }
@@ -264,9 +265,15 @@ function readDirectEnhancedMutationTransport(
   const method = form.getAttribute?.('method') ?? form.method ?? 'post';
   const rawAction = form.getAttribute?.('action') ?? form.action;
   const action = security.parseUrl(rawAction, current.href);
+  // SPEC §§6.3/6.6/9.1: opaque URL origins all serialize as `null`; equality alone would let a
+  // non-network action authorize a relative, credential-bearing mutation fetch.
   if (
     security.upper(method) !== 'POST' ||
     !action ||
+    current.origin === 'null' ||
+    (current.protocol !== 'http:' && current.protocol !== 'https:') ||
+    action.origin === 'null' ||
+    (action.protocol !== 'http:' && action.protocol !== 'https:') ||
     action.origin !== current.origin ||
     security.slice(action.pathname, 0, 4) !== '/_m/' ||
     action.search !== '' ||
@@ -282,6 +289,48 @@ function readDirectEnhancedMutationTransport(
   };
 }
 
+function snapshotEnhancedMutationTransport(
+  transport: EnhancedMutationTransport | undefined,
+  security: BrowserNavigationSecurityControls,
+): EnhancedMutationTransport | undefined {
+  if (!transport || typeof transport !== 'object') return undefined;
+  const readOwnString = (property: keyof EnhancedMutationTransport): string | undefined => {
+    const descriptor = security.getOwnSecurityPropertyDescriptor(transport, property);
+    return descriptor && 'value' in descriptor && typeof descriptor.value === 'string'
+      ? descriptor.value
+      : undefined;
+  };
+  const actionValue = readOwnString('action');
+  const method = readOwnString('method');
+  const origin = readOwnString('origin');
+  const sourceUrl = readOwnString('sourceUrl');
+  if (!actionValue || method !== 'POST' || !origin || !sourceUrl || origin === 'null') {
+    return undefined;
+  }
+  const source = security.parseUrl(sourceUrl);
+  const action = source ? security.parseUrl(actionValue, source.href) : undefined;
+  // Re-prove even caller-supplied snapshots at the last transport choke. Besides rejecting opaque
+  // schemes, own-data reads prevent accessors or later mutation from changing authorized facts.
+  if (
+    !source ||
+    !action ||
+    source.origin === 'null' ||
+    (source.protocol !== 'http:' && source.protocol !== 'https:') ||
+    action.origin === 'null' ||
+    (action.protocol !== 'http:' && action.protocol !== 'https:') ||
+    source.origin !== origin ||
+    action.origin !== origin ||
+    sourceUrl !== source.origin + source.pathname + source.search ||
+    actionValue !== action.pathname ||
+    security.slice(action.pathname, 0, 4) !== '/_m/' ||
+    action.search !== '' ||
+    action.hash !== ''
+  ) {
+    return undefined;
+  }
+  return { action: action.pathname, method: 'POST', origin, sourceUrl };
+}
+
 function assertSameOriginMutationResponse(
   response: EnhancedMutationResponseLike,
   transport: EnhancedMutationTransport,
@@ -292,7 +341,12 @@ function assertSameOriginMutationResponse(
     typeof finalUrl === 'string' && finalUrl !== ''
       ? security.parseUrl(finalUrl, transport.sourceUrl)
       : undefined;
-  if (!parsed || parsed.origin !== transport.origin) {
+  if (
+    !parsed ||
+    parsed.origin === 'null' ||
+    (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') ||
+    parsed.origin !== transport.origin
+  ) {
     throw new TypeError(
       'Kovo refused an enhanced mutation response without same-origin URL proof.',
     );

@@ -3,6 +3,7 @@ export interface NavigationUrlFacts {
   href: string;
   origin: string;
   pathname: string;
+  protocol: string;
   search: string;
 }
 
@@ -150,6 +151,7 @@ export function createBrowserNavigationSecurityControls(
   const urlHref = urlPrototype ? getter(urlPrototype, 'href') : undefined;
   const urlOrigin = urlPrototype ? getter(urlPrototype, 'origin') : undefined;
   const urlPathname = urlPrototype ? getter(urlPrototype, 'pathname') : undefined;
+  const urlProtocol = urlPrototype ? getter(urlPrototype, 'protocol') : undefined;
   const urlSearch = urlPrototype ? getter(urlPrototype, 'search') : undefined;
   const urlHash = urlPrototype ? getter(urlPrototype, 'hash') : undefined;
   const headersGet = NativeHeaders ? valueMethod(NativeHeaders.prototype, 'get') : undefined;
@@ -492,6 +494,7 @@ export function createBrowserNavigationSecurityControls(
   const locationHref = locationObject ? stableGetter(locationObject, 'href') : undefined;
   const locationOrigin = locationObject ? stableGetter(locationObject, 'origin') : undefined;
   const locationPathname = locationObject ? stableGetter(locationObject, 'pathname') : undefined;
+  const locationProtocol = locationObject ? stableGetter(locationObject, 'protocol') : undefined;
   const locationSearch = locationObject ? stableGetter(locationObject, 'search') : undefined;
   const locationAssign = locationObject ? stableMethod(locationObject, 'assign') : undefined;
   const locationReload = locationObject ? stableMethod(locationObject, 'reload') : undefined;
@@ -1732,7 +1735,7 @@ export function createBrowserNavigationSecurityControls(
   }
 
   function readLocationString(
-    property: 'hash' | 'href' | 'origin' | 'pathname' | 'search',
+    property: 'hash' | 'href' | 'origin' | 'pathname' | 'protocol' | 'search',
   ): string | undefined {
     if (!locationObject) return undefined;
     const fieldGetter =
@@ -1744,7 +1747,9 @@ export function createBrowserNavigationSecurityControls(
             ? locationOrigin
             : property === 'pathname'
               ? locationPathname
-              : locationSearch;
+              : property === 'protocol'
+                ? locationProtocol
+                : locationSearch;
     let value: unknown;
     try {
       value = fieldGetter
@@ -2197,6 +2202,7 @@ export function createBrowserNavigationSecurityControls(
       href: readUrlField(urlHref, value),
       origin: readUrlField(urlOrigin, value),
       pathname: readUrlField(urlPathname, value),
+      protocol: readUrlField(urlProtocol, value),
       search: readUrlField(urlSearch, value),
     };
   }
@@ -2217,6 +2223,8 @@ export function createBrowserNavigationSecurityControls(
     if (!parsed) return undefined;
     const claimedOrigin = readLocationString('origin');
     if (claimedOrigin !== undefined && claimedOrigin !== parsed.origin) return undefined;
+    const claimedProtocol = readLocationString('protocol');
+    if (claimedProtocol !== undefined && claimedProtocol !== parsed.protocol) return undefined;
     return parsed;
   }
 
@@ -2802,6 +2810,7 @@ export function createBrowserNavigationSecurityControls(
         !urlHref ||
         !urlOrigin ||
         !urlPathname ||
+        !urlProtocol ||
         !urlSearch ||
         !urlHash ||
         !NativeTextDecoder ||
@@ -2837,6 +2846,7 @@ export function createBrowserNavigationSecurityControls(
         control.href !== 'https://kovo.test/safe?q=1#hash' ||
         control.origin !== 'https://kovo.test' ||
         control.pathname !== '/safe' ||
+        control.protocol !== 'https:' ||
         control.search !== '?q=1' ||
         control.hash !== '#hash' ||
         crossOrigin.origin !== 'https://evil.example'

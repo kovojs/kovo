@@ -115,6 +115,23 @@ describe('inline loader build source', () => {
     );
   });
 
+  it('requires non-opaque HTTP(S) mutation transports in both inline takeover stages', () => {
+    // SPEC §§6.3, 6.6, 9.1: opaque schemes all serialize their URL origin as `null`; equality of
+    // two opaque origins is not same-origin proof for a credential-bearing enhanced mutation.
+    expect(inlineKovoLoaderInstallerReadableSource).toContain("current.origin === 'null'");
+    expect(inlineKovoLoaderInstallerReadableSource).toContain(
+      "current.protocol !== 'http:' && current.protocol !== 'https:'",
+    );
+    expect(inlineKovoLoaderInstallerReadableSource).toContain("action.origin === 'null'");
+    expect(inlineKovoLoaderInstallerReadableSource).toContain(
+      "action.protocol !== 'http:' && action.protocol !== 'https:'",
+    );
+    expect(inlineKovoLoaderStubInstallerReadableSource).toContain("location.origin === 'null'");
+    expect(inlineKovoLoaderStubInstallerReadableSource).toContain(
+      "location.protocol !== 'http:' && location.protocol !== 'https:'",
+    );
+  });
+
   it('generates inline fragment-target escaping from the modular helper', () => {
     // SPEC.md §9.1: inline and modular fragment-target lookup must escape selectors identically.
     expect(inlineFragmentTargetEscapeReadableSource).toContain('function escapeCssString(value)');

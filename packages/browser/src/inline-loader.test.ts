@@ -112,6 +112,10 @@ describe('inline loader source', () => {
         return this.#url.pathname;
       }
 
+      get protocol(): string {
+        return this.#url.protocol;
+      }
+
       get search(): string {
         return this.#url.search;
       }

@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { installInlineKovoBootstrap } from './inline-loader.js';
+import {
+  inlineKovoLoaderBootstrapInstallerSource,
+  installInlineKovoBootstrap,
+} from './inline-loader.js';
 
 declare global {
   // eslint-disable-next-line no-var
@@ -486,6 +489,47 @@ describe('browser inline loader bootstrap', () => {
     expect(runtimeImport).toHaveBeenCalledTimes(1);
     await vi.waitFor(() => expect(replayedSubmits).toBe(1));
   });
+
+  it.each(['data:/_m/chat', 'blob:/_m/chat', 'file:/_m/chat'])(
+    'does not capture %s mutation actions from an opaque paint-first document',
+    async (action) => {
+      const frame = document.createElement('iframe');
+      const loaded = new Promise<void>((resolve) => {
+        frame.addEventListener('load', () => resolve(), { once: true });
+      });
+      frame.srcdoc = [
+        '<!doctype html><html><head></head><body>',
+        `<form enhance data-mutation="chat" action="${action}" method="post"><button>send</button></form>`,
+        '</body></html>',
+      ].join('');
+      document.body.append(frame);
+      await loaded;
+      const frameWindow = frame.contentWindow;
+      if (!frameWindow) throw new Error('missing opaque bootstrap iframe window');
+      const globalRecord = frameWindow as unknown as Record<string, unknown>;
+      const runtimeImport = vi.fn(async () => ({}));
+      expect(frameWindow.location.href).toBe('about:srcdoc');
+      expect(frameWindow.location.origin).toBe('null');
+      const actionUrl = new frameWindow.URL(action, frameWindow.location.href);
+      expect(actionUrl.protocol).toBe(action.slice(0, action.indexOf(':') + 1));
+      expect(action.startsWith('file:') ? ['null', 'file://'] : ['null']).toContain(
+        actionUrl.origin,
+      );
+      globalRecord.__kovoOpaqueRuntimeImport = runtimeImport;
+      globalRecord.requestAnimationFrame = () => 1;
+      const script = frameWindow.document.createElement('script');
+      script.textContent = `(${inlineKovoLoaderBootstrapInstallerSource})('/c/runtime.js',globalThis.__kovoOpaqueRuntimeImport);`;
+      frameWindow.document.head.append(script);
+
+      const form = frameWindow.document.querySelector('form');
+      if (!form) throw new Error('missing opaque bootstrap mutation form');
+      const event = new frameWindow.SubmitEvent('submit', { bubbles: true, cancelable: true });
+      form.dispatchEvent(event);
+
+      expect(event.defaultPrevented).toBe(false);
+      expect(runtimeImport).not.toHaveBeenCalled();
+    },
+  );
 
   it('falls back to native submit when the early runtime import fails', async () => {
     installRafQueue();

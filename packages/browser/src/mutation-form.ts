@@ -117,8 +117,14 @@ export function readEligibleEnhancedMutationTransport(
     browserFormSecurity.currentUrl() ?? browserFormSecurity.parseUrl('http://localhost/');
   if (!current) return undefined;
   const action = browserFormSecurity.parseUrl(rawAction || current.href, current.href);
+  // SPEC §§6.3/6.6/9.1: `data:`, `blob:`, `file:`, and `about:` URLs can all serialize origin as
+  // `null`. Equality between two opaque origins is not same-origin proof for credentialed fetch.
   if (
     action === undefined ||
+    current.origin === 'null' ||
+    (current.protocol !== 'http:' && current.protocol !== 'https:') ||
+    action.origin === 'null' ||
+    (action.protocol !== 'http:' && action.protocol !== 'https:') ||
     action.origin !== current.origin ||
     action.pathname !== `/_m/${mutationKey}` ||
     action.search !== '' ||

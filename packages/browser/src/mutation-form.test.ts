@@ -80,6 +80,45 @@ describe('enhanced mutation form helpers', () => {
     }
   });
 
+  it('rejects opaque-source scheme confusion while preserving HTTPS interception', async () => {
+    const previousLocation = globalThis.location;
+    vi.resetModules();
+    Object.defineProperty(globalThis, 'location', {
+      configurable: true,
+      value: new URL('about:srcdoc'),
+    });
+    try {
+      const { isEligibleEnhancedMutationForm: isEligibleWithOpaqueLocation } =
+        await import('./mutation-form.js');
+      for (const action of ['data:/_m/chat', 'blob:/_m/chat', 'file:/_m/chat']) {
+        expect(
+          isEligibleWithOpaqueLocation(
+            new FakeFormElement({ 'data-mutation': 'chat' }, { action, method: 'post' }),
+          ),
+        ).toBe(false);
+      }
+
+      vi.resetModules();
+      Object.defineProperty(globalThis, 'location', {
+        configurable: true,
+        value: new URL('https://kovo.test/chat'),
+      });
+      const { isEligibleEnhancedMutationForm: isEligibleWithHttpsLocation } =
+        await import('./mutation-form.js');
+      expect(
+        isEligibleWithHttpsLocation(
+          new FakeFormElement({ 'data-mutation': 'chat' }, { action: '/_m/chat', method: 'post' }),
+        ),
+      ).toBe(true);
+    } finally {
+      Object.defineProperty(globalThis, 'location', {
+        configurable: true,
+        value: previousLocation,
+      });
+      vi.resetModules();
+    }
+  });
+
   it('derives submitter action and method overrides before interception', () => {
     const previousLocation = globalThis.location;
     Object.defineProperty(globalThis, 'location', {

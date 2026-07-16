@@ -36,6 +36,25 @@ async function createFrame(body: string, head: string): Promise<FrameHarness> {
   };
 }
 
+async function createOpaqueFrame(body: string): Promise<FrameHarness> {
+  const frame = document.createElement('iframe');
+  let loads = 0;
+  frame.addEventListener('load', () => {
+    loads += 1;
+  });
+  frame.srcdoc = `<!doctype html><html><head></head><body>${body}</body></html>`;
+  frames.push(frame);
+  document.body.append(frame);
+  await vi.waitFor(() => expect(loads).toBe(1));
+  const frameWindow = frame.contentWindow;
+  if (!frameWindow) throw new Error('missing opaque iframe window');
+  return {
+    frame,
+    loadCount: () => loads,
+    window: frameWindow as Window & typeof globalThis,
+  };
+}
+
 async function installGeneratedInlineLoader(
   frameWindow: Window & typeof globalThis,
 ): Promise<void> {
@@ -331,6 +350,34 @@ it('keeps generated mutation on the response transport captured at boot', async 
   expect(safeFetch).toHaveBeenCalledTimes(1);
   expect(attackFetch).not.toHaveBeenCalled();
 });
+
+it.each(['data:/_m/chat', 'blob:/_m/chat', 'file:/_m/chat'])(
+  'leaves %s mutation actions native in an opaque generated-loader document',
+  async (action) => {
+    const harness = await createOpaqueFrame(
+      `<form enhance data-mutation="chat" action="${action}" method="post"><button>send</button></form>`,
+    );
+    const fetch = vi.fn();
+    (harness.window as unknown as Record<string, unknown>).fetch = fetch;
+    expect(harness.window.location.href).toBe('about:srcdoc');
+    expect(harness.window.location.origin).toBe('null');
+    const actionUrl = new harness.window.URL(action, harness.window.location.href);
+    expect(actionUrl.protocol).toBe(action.slice(0, action.indexOf(':') + 1));
+    expect(action.startsWith('file:') ? ['null', 'file://'] : ['null']).toContain(actionUrl.origin);
+
+    await installGeneratedInlineLoader(harness.window);
+    const form = harness.window.document.querySelector('form');
+    if (!form) throw new Error('missing opaque mutation form');
+    const event = new harness.window.SubmitEvent('submit', {
+      bubbles: true,
+      cancelable: true,
+    });
+    form.dispatchEvent(event);
+
+    expect(event.defaultPrevented).toBe(false);
+    expect(fetch).not.toHaveBeenCalled();
+  },
+);
 
 it('keeps generated query and live-target recovery on the captured response transport', async () => {
   const harness = await createFrame(
