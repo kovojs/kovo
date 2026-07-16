@@ -23,7 +23,9 @@ async function createFrame(body: string, head: string): Promise<FrameHarness> {
   const frameWindow = frame.contentWindow;
   if (!frameWindow) throw new Error('missing iframe window');
   frameWindow.document.open();
-  frameWindow.document.write(`<!doctype html><html><head>${head}</head><body>${body}</body></html>`);
+  frameWindow.document.write(
+    `<!doctype html><html><head>${head}</head><body>${body}</body></html>`,
+  );
   frameWindow.document.close();
   await new Promise((resolve) => setTimeout(resolve, 0));
   const baselineLoads = loads;
