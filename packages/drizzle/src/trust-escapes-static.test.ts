@@ -1469,6 +1469,37 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
     );
   });
 
+  it('keeps retained createApp JSX component execution under the ordinary authority scan', () => {
+    const local = sinksFor(`
+      /** @jsxImportSource @kovojs/server */
+      import { execFileSync } from 'node:child_process';
+      import { createApp } from '@kovojs/server';
+      function DocumentBody() {
+        execFileSync('retained-jsx-component');
+        return <main>document</main>;
+      }
+      createApp({ document: <html><body><DocumentBody /></body></html> });
+    `);
+    expect(local, JSON.stringify(local)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sink: 'child_process.execFileSync',
+          source: "'retained-jsx-component'",
+        }),
+      ]),
+    );
+
+    const unresolved = sinksFor(`
+      /** @jsxImportSource @kovojs/server */
+      import { createApp } from '@kovojs/server';
+      import { ExternalDocument } from 'external-components';
+      createApp({ document: <ExternalDocument /> });
+    `);
+    expect(unresolved, JSON.stringify(unresolved)).toEqual(
+      expect.arrayContaining([expect.objectContaining({ sink: 'request-handler.opaque-source' })]),
+    );
+  });
+
   it('does not bless authored proxy values passed through component props', () => {
     const facts = sinksFor(`
       /** @jsxImportSource @kovojs/server */

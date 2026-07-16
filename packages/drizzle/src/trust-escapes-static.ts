@@ -3896,6 +3896,10 @@ function scanRequestRetainedConfigPristine(
     appendOpaqueRequestHandlerFact(context, opaque, '<opaque-retained-config-derivation>');
     return;
   }
+  // Static JSX can be retained by createApp/document descriptors even though the module-
+  // initializer pass does not execute custom component bodies. Route the reachable tree through
+  // the ordinary JSX resolver so local bodies and unresolved package tags remain KV424-visible.
+  scanRequestJsxComponents({ body: expression, declaration: expression }, context);
   for (const target of requestRetainedConfigInitialTargets(expression, new Set(), 0)) {
     context.retainedConfigTargets.add(target);
   }
