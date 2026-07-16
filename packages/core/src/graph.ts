@@ -429,7 +429,7 @@ export interface EndpointExplain {
   body?: string;
   bodySize?: string;
   cache?: string;
-  csrf?: 'checked' | 'exempt';
+  csrf?: 'checked' | 'exempt' | 'safe:read-only';
   csrfJustification?: string;
   dynamicExports?: readonly string[];
   files?: readonly string[];
@@ -942,8 +942,8 @@ function snapshotEndpointDerivation(
     `${label}.csrf`,
     budget,
   );
-  if (csrf !== undefined && csrf !== 'checked' && csrf !== 'exempt') {
-    throw new TypeError(`Kovo graph ${label}.csrf must be checked or exempt.`);
+  if (csrf !== undefined && csrf !== 'checked' && csrf !== 'exempt' && csrf !== 'safe:read-only') {
+    throw new TypeError(`Kovo graph ${label}.csrf must be checked, exempt, or safe:read-only.`);
   }
   const surface = snapshotOptionalGraphString(
     ownGraphData(value, 'surface', `${label}.surface`),
@@ -1530,6 +1530,7 @@ function endpointAuthPostureFact(
 ): AuthPostureFact {
   const kind = endpoint.surface === 'webhook' ? 'webhook' : 'endpoint';
   const name = endpoint.name ?? endpoint.path;
+  const methodPosture = endpointDefaultCsrfPosture(endpoint.method);
   return {
     detail: joinGraphStrings(
       [
@@ -1537,7 +1538,7 @@ function endpointAuthPostureFact(
         `path=${endpoint.path}`,
         `mount=${endpoint.mount ?? 'exact'}`,
         `auth=${endpointAuthDetail(endpoint)}`,
-        `csrf=${endpoint.csrf ?? 'checked'}`,
+        `csrf=${methodPosture === 'safe:read-only' ? methodPosture : (endpoint.csrf ?? methodPosture)}`,
       ],
       ' ',
     ),
@@ -1549,6 +1550,12 @@ function endpointAuthPostureFact(
     name,
     source: 'access-posture',
   };
+}
+
+function endpointDefaultCsrfPosture(method: string | undefined): 'checked' | 'safe:read-only' {
+  return method === 'GET' || method === 'HEAD' || method === 'OPTIONS'
+    ? 'safe:read-only'
+    : 'checked';
 }
 
 function mutationAuthPostureFact(

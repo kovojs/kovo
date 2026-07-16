@@ -1178,7 +1178,7 @@ void test('P8 component explain includes handler, derive, trigger, and merge fac
         body: '-',
         bodySize: '-',
         cache: '-',
-        csrf: 'checked',
+        csrf: 'safe:read-only',
         dynamic: [],
         endpoint: 'health',
         files: [],
@@ -1229,7 +1229,7 @@ void test('P8 component explain includes handler, derive, trigger, and merge fac
       {
         fields: {
           auth: '-',
-          csrf: 'checked',
+          csrf: 'safe:read-only',
           method: 'GET',
           mount: 'exact',
           path: '/health',

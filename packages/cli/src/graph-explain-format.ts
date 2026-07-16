@@ -978,8 +978,16 @@ export function endpointAuth(endpoint: CoreGraph.EndpointExplain): string {
 }
 
 export function endpointCsrf(endpoint: CoreGraph.EndpointExplain): string {
-  if (endpoint.csrf !== 'exempt') return endpoint.csrf ?? 'checked';
+  const methodPosture = endpointDefaultCsrf(endpoint.method);
+  if (methodPosture === 'safe:read-only') return methodPosture;
+  if (endpoint.csrf !== 'exempt') return endpoint.csrf ?? methodPosture;
   return `exempt:${endpoint.csrfJustification ?? '-'}`;
+}
+
+function endpointDefaultCsrf(method: string | undefined): 'checked' | 'safe:read-only' {
+  return method === 'GET' || method === 'HEAD' || method === 'OPTIONS'
+    ? 'safe:read-only'
+    : 'checked';
 }
 
 /**

@@ -650,8 +650,7 @@ export const save = mutation('cart/save', {
         endpoints: [
           {
             auth: 'none',
-            csrf: 'exempt',
-            csrfJustification: 'oauth callback',
+            csrf: 'safe:read-only',
             method: 'GET',
             mount: 'prefix',
             name: 'auth/mount',
@@ -674,7 +673,7 @@ export const save = mutation('cart/save', {
     expect(result.output).toMatchInlineSnapshot(`
       "kovo-explain/v1
       UNGUARDED
-      ENDPOINT auth/mount method=GET path=/auth mount=prefix auth=none csrf=exempt:oauth callback
+      ENDPOINT auth/mount method=GET path=/auth mount=prefix auth=none csrf=safe:read-only
       SUMMARY total=1
       "
     `);
@@ -772,7 +771,7 @@ export const save = mutation('cart/save', {
           {
             auth: 'none',
             authJustification: 'public uptime probe',
-            csrf: 'checked',
+            csrf: 'safe:read-only',
             method: 'GET',
             name: 'health',
             path: '/healthz',
@@ -891,7 +890,7 @@ export const save = mutation('cart/save', {
             body: 'bytes',
             bodySize: 'stream',
             cache: 'private,no-store',
-            csrf: 'checked',
+            csrf: 'safe:read-only',
             files: ['inventory.bin'],
             headers: ['Content-Disposition', 'Content-Type'],
             method: 'GET',
@@ -905,7 +904,7 @@ export const save = mutation('cart/save', {
             authJustification: 'public uptime probe',
             body: 'json',
             cache: 'no-store',
-            csrf: 'checked',
+            csrf: 'safe:read-only',
             method: 'GET',
             name: 'health',
             path: '/healthz',
@@ -930,8 +929,8 @@ export const save = mutation('cart/save', {
       ENDPOINTS
       ENDPOINT app-shell/order-paid surface=webhook method=POST path=/webhooks/order-paid mount=exact auth=verifier:stripe-signature csrf=exempt:signed stripe webhook cache=no-store body=raw bodySize=1mb rateLimit=webhook:stripe headers=Stripe-Signature files=- dynamic=- writes=order
       ENDPOINT echo surface=endpoint method=POST path=/api/echo-json mount=exact auth=public:public echo endpoint is CSRF checked csrf=checked cache=no-store body=json bodySize=- rateLimit=- headers=- files=- dynamic=- writes=-
-      ENDPOINT health surface=endpoint method=GET path=/healthz mount=exact auth=none:public uptime probe csrf=checked cache=no-store body=json bodySize=- rateLimit=- headers=- files=- dynamic=- writes=-
-      ENDPOINT inventory/download surface=route-file method=GET path=/downloads/inventory.bin mount=exact auth=custom:api-key csrf=checked cache=private,no-store body=bytes bodySize=stream rateLimit=download:user headers=Content-Disposition,Content-Type files=inventory.bin dynamic=- writes=-
+      ENDPOINT health surface=endpoint method=GET path=/healthz mount=exact auth=none:public uptime probe csrf=safe:read-only cache=no-store body=json bodySize=- rateLimit=- headers=- files=- dynamic=- writes=-
+      ENDPOINT inventory/download surface=route-file method=GET path=/downloads/inventory.bin mount=exact auth=custom:api-key csrf=safe:read-only cache=private,no-store body=bytes bodySize=stream rateLimit=download:user headers=Content-Disposition,Content-Type files=inventory.bin dynamic=- writes=-
       SUMMARY total=4
       "
     `);

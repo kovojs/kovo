@@ -21,6 +21,7 @@ import {
 } from './endpoint-auth-proof.js';
 import { pinRequestIngressSurface, requestVerifierInput } from './app-load-shed.js';
 import { requestClone } from './request-body-intrinsics.js';
+import { canonicalRequestMethod, isSafeEndpointMethod } from './request-method.js';
 import { securityNumberIsInteger } from './response-security-intrinsics.js';
 import type { RedirectLocationAllowlistEntry } from './response.js';
 import {
@@ -46,8 +47,19 @@ import {
 
 export type { RedirectLocationAllowlistEntry } from './response.js';
 
-/** HTTP method for an endpoint; arbitrary strings are allowed for custom verbs. */
-export type EndpointMethod = 'DELETE' | 'GET' | 'PATCH' | 'POST' | 'PUT' | (string & {});
+/** Canonical uppercase HTTP method for an endpoint; custom verbs are allowed. */
+export type EndpointMethod =
+  | 'DELETE'
+  | 'GET'
+  | 'HEAD'
+  | 'OPTIONS'
+  | 'PATCH'
+  | 'POST'
+  | 'PUT'
+  | (string & {});
+
+/** Closed safe-method set whose framework-owned endpoint capabilities are read-only (SPEC §9.1). */
+export type EndpointSafeMethod = 'GET' | 'HEAD' | 'OPTIONS';
 
 /** Whether an endpoint matches an exact path or a path prefix. */
 export type EndpointMount = 'exact' | 'prefix';
@@ -88,7 +100,7 @@ export interface EndpointResponsePosture {
   reservedHeaders?: readonly string[];
 }
 
-/** Records an explicit, justified opt-out of default-on CSRF for an endpoint (SPEC §6.6). */
+/** Records an explicit, justified opt-out of default-on CSRF for an unsafe endpoint (SPEC §6.6). */
 export interface EndpointCsrfExemption {
   exempt: true;
   justification: string;
@@ -144,30 +156,40 @@ export type EndpointDbProviderRequest = EndpointRequest & {
   readonly principalPosture: NonRequestPrincipalPosture;
 };
 
-/** Principal-scoped endpoint DB capabilities. */
-export interface EndpointDbScope<Db = unknown> {
+/**
+ * Principal-scoped endpoint DB capabilities. Safe methods receive only `read`; a statically known
+ * unsafe method receives `write` too. The runtime independently enforces the same split (SPEC
+ * §9.1), so this conditional type is defense-in-depth rather than the security proof.
+ */
+export type EndpointDbScope<Db = unknown, Method extends EndpointMethod = EndpointSafeMethod> = {
   readonly db: {
     readonly read: Reader<Db>;
-    readonly write: Writer<Db>;
-  };
-}
+  } & (string extends Method
+    ? object
+    : Uppercase<Method> extends EndpointSafeMethod
+      ? object
+      : { readonly write: Writer<Db> });
+};
 
 /** Context exposed only to `endpoint(..., { db: true, handler(req, ctx) { ... } })`. */
-export interface EndpointDbContext<Db = unknown> {
+export interface EndpointDbContext<
+  Db = unknown,
+  Method extends EndpointMethod = EndpointSafeMethod,
+> {
   /**
    * SPEC §10.3 DEC-H: endpoints do not inherit a session principal. App code must derive and
    * validate the owner id from its own endpoint auth before receiving managed DB capabilities.
    */
-  actAs(principalId: string): Promise<EndpointDbScope<Db>>;
+  actAs(principalId: string): Promise<EndpointDbScope<Db, Method>>;
 }
 
 /** An endpoint handler: maps a session-free `Request` to a `Response`. */
 export type EndpointHandler = (request: EndpointRequest) => Promise<Response> | Response;
 
 /** An endpoint handler that opted into an explicit principal-scoped DB context. */
-export type EndpointDbHandler<Db = unknown> = (
+export type EndpointDbHandler<Db = unknown, Method extends EndpointMethod = EndpointSafeMethod> = (
   request: EndpointRequest,
-  context: EndpointDbContext<Db>,
+  context: EndpointDbContext<Db, Method>,
 ) => Promise<Response> | Response;
 
 interface EndpointDefinitionBase<Method extends EndpointMethod> {
@@ -184,7 +206,7 @@ export interface EndpointDbDefinitionBase<Method extends EndpointMethod, Db = un
   access?: AccessDecision;
   auth?: EndpointAuthDeclaration;
   db: true;
-  handler: EndpointDbHandler<Db>;
+  handler: EndpointDbHandler<Db, Method>;
   method: Method;
   response: EndpointResponsePosture;
 }
@@ -204,7 +226,7 @@ interface EndpointCsrfExempt {
   csrfJustification: string;
 }
 
-/** The body passed to `endpoint()`: handler, method/mount, and the CSRF default-or-exempt choice. */
+/** The body passed to `endpoint()`: handler, method/mount, and the unsafe-method CSRF choice. */
 export type EndpointDefinition<
   Method extends EndpointMethod = EndpointMethod,
   Mount extends EndpointMount = 'exact',
@@ -223,7 +245,7 @@ export interface EndpointDeclaration<
   Db = unknown,
 > extends Endpoint<Path, Method, Mount> {
   db?: true;
-  handler: EndpointHandler | EndpointDbHandler<Db>;
+  handler: EndpointHandler | EndpointDbHandler<Db, EndpointMethod>;
 }
 
 /**
@@ -232,8 +254,9 @@ export interface EndpointDeclaration<
  * escape hatch for machine traffic (webhooks, APIs) that bypasses the page/query
  * pipeline, so every declaration carries audit metadata: explicit `method`,
  * endpoint-level `reason`, raw response posture, and a prefix mount
- * justification when `mount: 'prefix'` is used. CSRF is default-on — opt out
- * with `csrf: false` plus a justification (SPEC §6.6 and §9.1).
+ * justification when `mount: 'prefix'` is used. Unsafe methods are CSRF-default-on; the closed
+ * GET/HEAD/OPTIONS set is reader-only and browser-state-effect-free. Opt an unsafe method out with
+ * `csrf: false` plus a justification (SPEC §6.6 and §9.1).
  *
  * @param path - The path the endpoint mounts at.
  * @param definition - The `handler`, method, audit metadata, optional `mount`, `auth`, and CSRF opt-out.
@@ -320,6 +343,9 @@ function constructEndpointDeclaration<
 
   if (typeof method !== 'string' || method === '') {
     throw new TypeError('endpoint() requires a non-empty method');
+  }
+  if (canonicalRequestMethod(method) !== method) {
+    throw new TypeError('endpoint() method must use its canonical uppercase spelling');
   }
   if (typeof handler !== 'function') {
     throw new TypeError('endpoint() requires an own data handler function');
@@ -880,7 +906,7 @@ function createEndpointDbContext<Db>(
   request: EndpointRequest,
   definition: EndpointDeclaration<string, EndpointMethod, EndpointMount>,
   options: EndpointRunOptions<Db>,
-): EndpointDbContext<Db> {
+): EndpointDbContext<Db, EndpointMethod> {
   return {
     async actAs(principalId) {
       if (options.db === undefined) {
@@ -888,19 +914,18 @@ function createEndpointDbContext<Db>(
           'endpoint({ db: true }) requires createApp({ db }) before ctx.actAs(id) can resolve a managed endpoint DB handle (SPEC §10.3 DEC-H).',
         );
       }
+      const safeMethod = isSafeEndpointMethod(definition.method);
       const principalPosture = actAsNonRequestPrincipal(principalId, {
         ingress: 'endpoint',
-        operation: 'read',
+        operation: safeMethod ? 'read' : 'write',
         surface: definition.path,
       });
       const dbRequest = requestWithEndpointPrincipalPosture(request, principalPosture);
       const rawDb = await resolveDbProvider(options.db, dbRequest);
-      return {
-        db: {
-          read: managedDb(rawDb, 'read'),
-          write: managedDb(rawDb, 'write'),
-        },
-      };
+      const db = witnessCreateNullRecord<unknown>();
+      db.read = managedDb(rawDb, 'read');
+      if (!safeMethod) db.write = managedDb(rawDb, 'write');
+      return { db } as EndpointDbScope<Db, EndpointMethod>;
     },
   };
 }

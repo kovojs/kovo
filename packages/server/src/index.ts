@@ -471,6 +471,7 @@ export type {
   EndpointResponseBody,
   EndpointResponseBodyPosture,
   EndpointResponsePosture,
+  EndpointSafeMethod,
   ForbiddenContext,
   ForbiddenDenial,
   ForbiddenRenderer,

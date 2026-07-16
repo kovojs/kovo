@@ -1914,7 +1914,11 @@ function isGuardAccessDecisionValue(access: AccessDecision): access is readonly 
 }
 
 function endpointCheckFact(endpoint: KovoApp['endpoints'][number]): CoreGraph.EndpointExplain {
-  const csrf = endpoint.csrf?.exempt === true ? 'exempt' : 'checked';
+  const csrf = endpointSafeMethod(endpoint.method)
+    ? 'safe:read-only'
+    : endpoint.csrf?.exempt === true
+      ? 'exempt'
+      : 'checked';
   const name = endpointWebhookName(endpoint);
   return {
     appOwnedSafety: endpoint.response.appOwnedSafety,
@@ -1944,6 +1948,10 @@ function endpointCheckFact(endpoint: KovoApp['endpoints'][number]): CoreGraph.En
     surface: 'webhook' in endpoint && endpoint.webhook === true ? 'webhook' : 'endpoint',
     ...endpointWrites(endpoint),
   };
+}
+
+function endpointSafeMethod(method: string): boolean {
+  return method === 'GET' || method === 'HEAD' || method === 'OPTIONS';
 }
 
 function endpointResponseBodyPosture(

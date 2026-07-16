@@ -142,7 +142,7 @@ describe('server app matched dispatch boundary', () => {
     expect(dbProviderCalls).toBe(0);
   });
 
-  it('threads an actAs-scoped endpoint principal to the db provider and managed handles', async () => {
+  it('threads an unsafe endpoint actAs principal to read/write managed handles', async () => {
     const providerRequests: unknown[] = [];
     const rawDb = {
       insert() {
@@ -153,12 +153,14 @@ describe('server app matched dispatch boundary', () => {
       },
     };
     const status = endpoint('/orders', {
+      csrf: false,
+      csrfJustification: 'machine-authenticated write-scope fixture',
       db: true,
       async handler(_request, context) {
         const scoped = await context.actAs('user-1');
         return new Response(`${scoped.db.read.select()}:${scoped.db.write.insert()}`);
       },
-      method: 'GET',
+      method: 'POST',
       reason: 'orders endpoint actAs scoped db test',
       response: rawTextResponse,
     });
@@ -172,7 +174,7 @@ describe('server app matched dispatch boundary', () => {
         return { user: { id: 'ambient-session-user' } };
       },
     });
-    const request = new Request('https://shop.example.test/orders');
+    const request = new Request('https://shop.example.test/orders', { method: 'POST' });
 
     const response = await dispatchMatchedAppRequest(matchedAppRequest(app, request));
 
@@ -189,9 +191,62 @@ describe('server app matched dispatch boundary', () => {
     };
     expect('session' in providerRequest).toBe(false);
     expect(providerRequest.principalPosture).toMatchObject({
-      audit: { ingress: 'endpoint', surface: '/orders' },
+      audit: { ingress: 'endpoint', operation: 'write', surface: '/orders' },
       kind: 'act-as',
       principal: 'user-1',
+    });
+  });
+
+  it('keeps safe endpoint DB authority reader-only while retaining explicit Authorization', async () => {
+    const providerRequests: unknown[] = [];
+    const rawDb = {
+      insert() {
+        return 'write-must-not-run';
+      },
+      select() {
+        return 'read-ok';
+      },
+    };
+    const status = endpoint('/orders/read-only', {
+      db: true,
+      async handler(request, context) {
+        const scoped = await context.actAs('reader-1');
+        // @ts-expect-error SPEC §9.1: safe endpoint methods do not expose a Writer.
+        const write = scoped.db.write;
+        return new Response(
+          `${scoped.db.read.select()}:${String(write)}:${request.headers.get('authorization')}`,
+        );
+      },
+      method: 'GET',
+      reason: 'safe endpoint reader-only capability proof',
+      response: rawTextResponse,
+    });
+    const app = createApp({
+      db(request) {
+        providerRequests.push(request);
+        return rawDb;
+      },
+      endpoints: [status],
+    });
+
+    const response = await dispatchMatchedAppRequest(
+      matchedAppRequest(
+        app,
+        new Request('https://shop.example.test/orders/read-only', {
+          headers: { Authorization: 'Bearer explicit-machine-token' },
+        }),
+      ),
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.text()).resolves.toBe('read-ok:undefined:Bearer explicit-machine-token');
+    expect(providerRequests).toHaveLength(1);
+    expect(providerRequests[0]).toMatchObject({
+      principalPosture: {
+        audit: { ingress: 'endpoint', operation: 'read', surface: '/orders/read-only' },
+        kind: 'act-as',
+        principal: 'reader-1',
+      },
     });
   });
 
@@ -262,6 +317,14 @@ describe('server app matched dispatch boundary', () => {
 
   it('finalizes raw endpoint Set-Cookie and redirect headers at the app shell boundary', async () => {
     const cookieEndpoint = endpoint('/raw-cookie', {
+      auth: {
+        kind: 'custom',
+        name: 'raw-cookie-finalization',
+        verify: customVerifier(
+          'raw-cookie-finalization',
+          (request) => request.headers.get('x-cookie-proof') === 'accepted',
+        ),
+      },
       handler() {
         return new Response('cookie', {
           headers: {
@@ -326,7 +389,12 @@ describe('server app matched dispatch boundary', () => {
     });
 
     const cookie = await dispatchMatchedAppRequest(
-      matchedAppRequest(app, new Request('https://shop.example.test/raw-cookie')),
+      matchedAppRequest(
+        app,
+        new Request('https://shop.example.test/raw-cookie', {
+          headers: { 'X-Cookie-Proof': 'accepted' },
+        }),
+      ),
     );
     expect(await cookie.text()).toBe('cookie');
     const cookies = cookie.headers.getSetCookie();
@@ -384,7 +452,7 @@ describe('server app matched dispatch boundary', () => {
     await expect(response.text()).resolves.toBe('ok');
   });
 
-  it.each(['POST', 'PUT', 'PATCH', 'DELETE'])(
+  it.each(['POST', 'PUT', 'PATCH', 'DELETE', 'MKCOL', 'PURGE'])(
     'enforces default endpoint CSRF before %s handler dispatch',
     async (method) => {
       let handlerCalls = 0;
@@ -412,6 +480,32 @@ describe('server app matched dispatch boundary', () => {
       expect(response.status).toBe(422);
       await expect(response.text()).resolves.toBe('CSRF');
       expect(handlerCalls).toBe(0);
+    },
+  );
+
+  it.each(['GET', 'HEAD', 'OPTIONS'])(
+    'treats the closed safe endpoint method %s as read-only rather than CSRF-checked',
+    async (method) => {
+      let handlerCalls = 0;
+      const readOnly = endpoint('/safe-method', {
+        handler() {
+          handlerCalls += 1;
+          return new Response('read-only');
+        },
+        method,
+        reason: 'closed safe-method runtime proof',
+        response: rawTextResponse,
+      });
+      const app = createApp({
+        csrf: { secret: ENDPOINT_CSRF_SECRET, sessionId: () => 's1' },
+        endpoints: [readOnly],
+      });
+      const request = new Request('https://shop.example.test/safe-method', { method });
+
+      const response = await dispatchMatchedAppRequest(matchedAppRequest(app, request));
+
+      expect(response.status).toBe(200);
+      expect(handlerCalls).toBe(1);
     },
   );
 
@@ -472,6 +566,32 @@ describe('server app matched dispatch boundary', () => {
 
     expect(response.status).toBe(200);
     await expect(response.text()).resolves.toBe('updated');
+    expect(handlerCalls).toBe(1);
+  });
+
+  it('allows an unsafe custom endpoint method only when its default CSRF check succeeds', async () => {
+    let handlerCalls = 0;
+    const purge = endpoint('/cache/product', {
+      handler() {
+        handlerCalls += 1;
+        return new Response('purged');
+      },
+      method: 'PURGE',
+      reason: 'custom unsafe-method CSRF acceptance proof',
+      response: rawTextResponse,
+    });
+    const csrf = { secret: ENDPOINT_CSRF_SECRET, sessionId: () => 's1' };
+    const app = createApp({ csrf, endpoints: [purge] });
+    const request = new Request('https://shop.example.test/cache/product', {
+      body: new URLSearchParams({ 'kovo-csrf': csrfToken({} as Request, csrf) }),
+      headers: { Origin: 'https://shop.example.test' },
+      method: 'PURGE',
+    });
+
+    const response = await dispatchMatchedAppRequest(matchedAppRequest(app, request));
+
+    expect(response.status).toBe(200);
+    await expect(response.text()).resolves.toBe('purged');
     expect(handlerCalls).toBe(1);
   });
 

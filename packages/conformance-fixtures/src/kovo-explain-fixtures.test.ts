@@ -441,7 +441,7 @@ describe('@kovojs/test kovo explain fixture seam', () => {
         [
           'kovo-explain/v1',
           'UNGUARDED',
-          'ENDPOINT health method=GET path=/health mount=exact auth=- csrf=checked',
+          'ENDPOINT health method=GET path=/health mount=exact auth=- csrf=safe:read-only',
           'MUTATION cart/add guards=- writes=cart invalidates=- manual-invalidates=-',
           'PAGE /cart guards=- queries=cart',
           'QUERY cart guards=- reads=cart',
@@ -451,7 +451,13 @@ describe('@kovojs/test kovo explain fixture seam', () => {
       ),
     ).toEqual([
       {
-        fields: { auth: '-', csrf: 'checked', method: 'GET', mount: 'exact', path: '/health' },
+        fields: {
+          auth: '-',
+          csrf: 'safe:read-only',
+          method: 'GET',
+          mount: 'exact',
+          path: '/health',
+        },
         target: 'health',
         targetKind: 'ENDPOINT',
       },

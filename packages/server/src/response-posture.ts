@@ -43,6 +43,7 @@ import type {
   EndpointResponseBody,
   EndpointResponseBodyPosture,
 } from './endpoint.js';
+import { isSafeEndpointMethod } from './request-method.js';
 import {
   createWitnessSet,
   createWitnessWeakSet,
@@ -643,7 +644,9 @@ function assertEndpointBrowserStateResponsePosture(
   response: Response,
   request: Request | undefined,
 ): void {
-  if (definition.csrf?.exempt !== true) return;
+  const safeMethod = isSafeEndpointMethod(definition.method);
+  const csrfExempt = definition.csrf?.exempt === true;
+  if (!safeMethod && !csrfExempt) return;
   const headers = readNativeResponseHeaders(response);
   const browserStateHeaders: string[] = [];
   if (nativeHeaderHas(headers, 'Set-Cookie')) {
@@ -656,7 +659,7 @@ function assertEndpointBrowserStateResponsePosture(
   if (endpointBrowserStateAuthExecuted(definition, request)) return;
 
   throw endpointPostureError(definition, [
-    `${joinResponsePostureValues(browserStateHeaders, ' and ')} requires an executable non-ambient verifier or a framework-owned self-verifying handler on a csrf:false endpoint`,
+    `${joinResponsePostureValues(browserStateHeaders, ' and ')} requires an executable non-ambient verifier or a framework-owned self-verifying handler on a ${safeMethod ? 'safe-method' : 'csrf:false'} endpoint`,
   ]);
 }
 

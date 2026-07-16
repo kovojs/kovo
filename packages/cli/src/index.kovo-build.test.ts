@@ -2199,6 +2199,12 @@ export default createApp({ endpoints: [download] });
       expect(exitCode, errorOutput).toBe(0);
       expect(errorOutput).not.toContain('KV423');
       expect(errorOutput).not.toContain('KV436');
+      const graph = JSON.parse(readFileSync(join(outDir, '.kovo/graph.json'), 'utf8')) as {
+        endpoints?: { csrf?: string; method?: string }[];
+      };
+      expect(graph.endpoints).toContainEqual(
+        expect.objectContaining({ csrf: 'safe:read-only', method: 'GET' }),
+      );
     } finally {
       stdout.mockRestore();
       stderr.mockRestore();

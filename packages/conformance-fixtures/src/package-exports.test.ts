@@ -1263,7 +1263,7 @@ describe('@kovojs/test package subpath exports', () => {
         [
           'kovo-explain/v1',
           'ENDPOINTS',
-          'ENDPOINT reports/export surface=route-file method=GET path=/exports/reports.ndjson mount=exact auth=authed csrf=checked cache=private,no-store body=bytes bodySize=stream rateLimit=export:user headers=Content-Type files=reports.ndjson dynamic=- writes=-',
+          'ENDPOINT reports/export surface=route-file method=GET path=/exports/reports.ndjson mount=exact auth=authed csrf=safe:read-only cache=private,no-store body=bytes bodySize=stream rateLimit=export:user headers=Content-Type files=reports.ndjson dynamic=- writes=-',
           '',
         ].join('\n'),
       ),
@@ -1273,7 +1273,7 @@ describe('@kovojs/test package subpath exports', () => {
         body: 'bytes',
         bodySize: 'stream',
         cache: 'private,no-store',
-        csrf: 'checked',
+        csrf: 'safe:read-only',
         dynamic: [],
         endpoint: 'reports/export',
         files: ['reports.ndjson'],

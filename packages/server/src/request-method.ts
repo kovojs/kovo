@@ -1,3 +1,5 @@
+/* oxlint-disable typescript/unbound-method -- Boot-captured string control is invoked through pinned Reflect.apply. */
+
 import { witnessReflectApply } from './security-witness-intrinsics.js';
 
 const nativeStringToUpperCase = String.prototype.toUpperCase;
@@ -12,4 +14,10 @@ export function canonicalRequestMethod(method: string): string {
     throw new TypeError('Kovo request method classification controls are unavailable.');
   }
   return witnessReflectApply<string>(nativeStringToUpperCase, method, []);
+}
+
+/** @internal Whether a method is in SPEC §9.1's complete safe-method set. */
+export function isSafeEndpointMethod(method: string): boolean {
+  const canonical = canonicalRequestMethod(method);
+  return canonical === 'GET' || canonical === 'HEAD' || canonical === 'OPTIONS';
 }

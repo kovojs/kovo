@@ -29,7 +29,7 @@ import {
 import { appTaskScheduler } from './task-runtime.js';
 import { readCsrfCarrierFromRequest } from './untrusted-request-body.js';
 import { runWebhook, type WebhookDeclaration } from './webhook.js';
-import { canonicalRequestMethod } from './request-method.js';
+import { canonicalRequestMethod, isSafeEndpointMethod } from './request-method.js';
 import {
   requestDecodeURIComponent,
   requestMethod,
@@ -210,8 +210,9 @@ async function validateEndpointCsrf(
 }
 
 function requiresCsrf(method: string): boolean {
-  const upper = canonicalRequestMethod(method);
-  return upper === 'POST' || upper === 'PUT' || upper === 'PATCH' || upper === 'DELETE';
+  // SPEC §9.1: GET/HEAD/OPTIONS are the complete safe set. An extension method unknown to Kovo
+  // is unsafe, never an implicit CSRF bypass.
+  return !isSafeEndpointMethod(method);
 }
 
 function endpointCsrfFailureResponse(request: Pick<Request, 'method'>): Response {

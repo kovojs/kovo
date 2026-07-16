@@ -37,6 +37,7 @@ export type {
   EndpointResponseBody,
   EndpointResponseBodyPosture,
   EndpointResponsePosture,
+  EndpointSafeMethod,
   RedirectLocationAllowlistEntry,
 } from '../endpoint.js';
 export { guard, guards, session } from '../guards.js';

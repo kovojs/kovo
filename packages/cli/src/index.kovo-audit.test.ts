@@ -43,8 +43,7 @@ describe('kovo audit', () => {
         endpoints: [
           {
             auth: 'none',
-            csrf: 'exempt',
-            csrfJustification: 'oauth callback',
+            csrf: 'safe:read-only',
             method: 'GET',
             name: 'auth/callback',
             path: '/auth/callback',
@@ -64,7 +63,7 @@ describe('kovo audit', () => {
       output: [
         'kovo-audit/v1',
         'UNGUARDED',
-        'ENDPOINT auth/callback method=GET path=/auth/callback mount=exact auth=none csrf=exempt:oauth callback',
+        'ENDPOINT auth/callback method=GET path=/auth/callback mount=exact auth=none csrf=safe:read-only',
         'SUMMARY unguarded=1 manual-invalidates=0',
         '',
       ].join('\n'),

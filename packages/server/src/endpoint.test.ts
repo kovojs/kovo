@@ -96,6 +96,14 @@ describe('server endpoints', () => {
     expect(assertMissingAuditMetadataRejected).toBeTypeOf('function');
     expect(assertPrefixMountNeedsJustification).toBeTypeOf('function');
     expect(assertNoAmbientSession).toBeTypeOf('function');
+    expect(() =>
+      endpoint('/bad/lowercase-method', {
+        handler: () => new Response('bad'),
+        method: 'get',
+        reason: 'non-canonical endpoint method proof',
+        response: rawTextResponse,
+      }),
+    ).toThrow('canonical uppercase');
   });
 
   it('ignores inherited endpoint posture and refuses accessors without invoking them', () => {
@@ -699,6 +707,28 @@ describe('server endpoints', () => {
     });
     await expect(runEndpointAuth(verified, verifiedRequest)).resolves.toBeUndefined();
     await expect(runEndpoint(verified, verifiedRequest)).resolves.toMatchObject({ status: 200 });
+  });
+
+  it('blocks browser-state output from a safe method without an executed verifier', async () => {
+    const unsafe = endpoint('/read/browser-state', {
+      handler: () =>
+        new Response('ok', {
+          headers: {
+            'Clear-Site-Data': '"cookies"',
+            'Set-Cookie': 'sid=attacker; Path=/',
+          },
+        }),
+      method: 'GET',
+      reason: 'safe-method browser-state negative proof',
+      response: {
+        ...rawTextResponse,
+        reservedHeaders: ['Clear-Site-Data', 'Set-Cookie'],
+      },
+    });
+
+    await expect(
+      runEndpoint(unsafe, new Request('https://example.test/read/browser-state')),
+    ).rejects.toThrow(/safe-method endpoint/u);
   });
 
   it('still blocks csrf-exempt browser-state output after app code hides Headers membership', () => {

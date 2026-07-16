@@ -1282,7 +1282,7 @@ export const ProductGrid = component({
         source: 'access-posture',
       },
       {
-        detail: 'method=GET path=/healthz mount=exact auth=none csrf=checked',
+        detail: 'method=GET path=/healthz mount=exact auth=none csrf=safe:read-only',
         guarded: false,
         kind: 'endpoint',
         name: '/healthz',
