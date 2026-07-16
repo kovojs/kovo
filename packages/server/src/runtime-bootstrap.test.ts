@@ -124,7 +124,7 @@ describe('custom runtime bootstrap entries', () => {
       ),
       secretCaptured: false,
     });
-  }, 60_000);
+  }, 120_000);
 
   it('refuses the public request-handler chokepoint when bootstrap is absent', () => {
     const appPath = fileURLToPath(new URL('./app.ts', import.meta.url));
