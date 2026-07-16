@@ -124,9 +124,7 @@ export function readEligibleEnhancedMutationTransport(
   // navigation controls themselves; this browser transport choke must fail closed (SPEC §6.6/§9.1).
   const current =
     browserFormSecurity.currentUrl() ??
-    (browserFormDocumentRealm
-      ? undefined
-      : browserFormSecurity.parseUrl('http://localhost/'));
+    (browserFormDocumentRealm ? undefined : browserFormSecurity.parseUrl('http://localhost/'));
   if (!current) return undefined;
   const documentBase = browserFormSecurity.documentBaseUrl();
   if (!documentBase) return undefined;

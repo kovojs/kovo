@@ -264,9 +264,7 @@ function readDirectEnhancedMutationTransport(
   // Only browser-free callers retain the deterministic localhost base used by structural tests.
   const current =
     security.currentUrl() ??
-    (bootMutationFetchSecurity === undefined
-      ? security.parseUrl('http://localhost/')
-      : undefined);
+    (bootMutationFetchSecurity === undefined ? security.parseUrl('http://localhost/') : undefined);
   if (!current) return undefined;
   const method = form.getAttribute?.('method') ?? form.method ?? 'post';
   const rawAction = form.getAttribute?.('action') ?? form.action;
