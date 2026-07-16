@@ -191,24 +191,30 @@ function isLocalDevOrigin(url: URL): boolean {
 
 function parseImportUrl(value: string): URL | null {
   if (!capturedUrlControlsSound) return null;
+  const base = currentHref();
+  if (base === undefined) return null;
   try {
-    return new IntrinsicURL(value, currentHref());
+    return new IntrinsicURL(value, base);
   } catch {
     return null;
   }
 }
 
-function currentHref(): string {
-  return (
-    dynamicImportBrowserSecurity?.currentUrl()?.href ??
-    lateStructuralLocationField('href') ??
-    'http://localhost/'
-  );
+function currentHref(): string | undefined {
+  // SPEC §5.2.1/§6.6: in a browser realm, the effective-origin witness is authoritative. Never
+  // turn its opaque/sandbox rejection into a structural location or localhost fallback. The
+  // non-browser fallback only supplies a deterministic base to unit/SSR callers with no document.
+  if (dynamicImportBrowserSecurity !== undefined) {
+    return dynamicImportBrowserSecurity.currentUrl()?.href;
+  }
+  return lateStructuralLocationField('href') ?? 'http://localhost/';
 }
 
 function currentNetworkOrigin(): string | undefined {
+  const href = currentHref();
+  if (href === undefined) return undefined;
   try {
-    const current = new IntrinsicURL(currentHref());
+    const current = new IntrinsicURL(href);
     return isNetworkModuleUrl(current) ? urlOrigin(current) : undefined;
   } catch {
     return undefined;

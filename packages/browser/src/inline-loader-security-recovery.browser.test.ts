@@ -73,7 +73,7 @@ async function installGeneratedInlineLoader(
 }
 
 async function runSandboxOriginProbe(
-  mode: 'full' | 'paint',
+  mode: 'full' | 'module' | 'paint',
   source: string,
 ): Promise<{
   clickPrevented: boolean;
@@ -81,6 +81,7 @@ async function runSandboxOriginProbe(
   fetchCalls: number;
   importCalls: number;
   locationOrigin: string;
+  moduleAllowed?: boolean;
   submitPrevented: boolean;
 }> {
   const frame = document.createElement('iframe');
@@ -99,6 +100,7 @@ async function runSandboxOriginProbe(
     fetchCalls: number;
     importCalls: number;
     locationOrigin: string;
+    moduleAllowed?: boolean;
     submitPrevented: boolean;
   }>((resolve, reject) => {
     const listener = (event: MessageEvent) => {
@@ -437,6 +439,14 @@ it('rejects enhanced authority in an opaque-origin sandboxed network document', 
   expect(result.clickPrevented).toBe(false);
   expect(result.fetchCalls).toBe(0);
   expect(result.importCalls).toBe(0);
+});
+
+it('rejects modular import authority in an opaque-origin sandboxed network document', async () => {
+  const result = await runSandboxOriginProbe('module', '');
+
+  expect(result.locationOrigin).toBe(location.origin);
+  expect(result.effectiveOrigin).toBe('null');
+  expect(result.moduleAllowed).toBe(false);
 });
 
 it.each([

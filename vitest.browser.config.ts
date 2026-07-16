@@ -9,6 +9,10 @@ export default defineConfig({
       name: 'kovo-browser-frame-fixture',
       configureServer(server) {
         server.middlewares.use((request, response, next) => {
+          // The opaque-origin sandbox probe imports the real modular browser guard. Let that
+          // null-origin document fetch Vite's transformed module graph; authority is still denied
+          // by the guard under test, not by an earlier CORS transport failure.
+          response.setHeader('Access-Control-Allow-Origin', '*');
           if (request.url?.startsWith('/safe/account')) {
             response.statusCode = 200;
             response.setHeader('Content-Type', 'text/html; charset=utf-8');
@@ -47,6 +51,28 @@ export default defineConfig({
                   };
                   globalThis.requestAnimationFrame = () => 1;
                   try {
+                    if (data.mode === 'module') {
+                      import('/packages/browser/src/dynamic-import-url.ts').then((module) => {
+                        const moduleAllowed = module.isAllowedKovoDynamicImportUrl(
+                          '/c/allowed.js',
+                          { allowedModuleUrls: ['/c/allowed.js'] },
+                        );
+                        parent.postMessage({
+                          effectiveOrigin: globalThis.origin,
+                          id: data.id,
+                          locationOrigin: location.origin,
+                          moduleAllowed,
+                          type: 'kovo:sandbox-origin-result',
+                        }, '*');
+                      }, (error) => {
+                        parent.postMessage({
+                          error: String(error && error.message || error),
+                          id: data.id,
+                          type: 'kovo:sandbox-origin-result',
+                        }, '*');
+                      });
+                      return;
+                    }
                     if (data.mode === 'paint') {
                       (0, eval)('(' + data.source + ")('/c/runtime.js',globalThis.__kovoSandboxImport);");
                     } else {
