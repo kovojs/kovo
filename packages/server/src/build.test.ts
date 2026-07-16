@@ -25,11 +25,13 @@ import { connect as netConnect } from 'node:net';
 import type { Socket } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { Readable } from 'node:stream';
 import { pathToFileURL } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 import * as packageBuildApi from '@kovojs/server/build';
-import { createApp } from './app.js';
+import { createApp, createRequestHandler } from './app.js';
+import { resolveRequestClientIp } from './app-load-shed.js';
 import { computeRenderPlanFingerprint } from './client-modules.js';
 import { renderedHtml } from './html.js';
 import { route } from './route.js';
@@ -50,6 +52,8 @@ import {
 import { query } from './query.js';
 import { s } from './schema.js';
 import { task } from './api/data.js';
+import { verifyCsrfRequestOriginFloor } from './csrf.js';
+import { isTrustedSecureRequest } from './request-scheme.js';
 
 const runtimeClientModulePath = /^\/c\/__v\/[^/]+\/kovo-runtime\.client\.js$/;
 const runtimeClientModuleFile = /^c\/__v\/[^/]+\/kovo-runtime\.client\.js$/;
@@ -63,6 +67,7 @@ interface NodeAdapterModule {
     options?: { trustedProxy?: boolean },
     response?: ServerResponse,
   ): Request;
+  vercelRequestToWebRequest(request: IncomingMessage, response?: ServerResponse): Request;
   writeWebResponseToNode(
     response: Response,
     nodeResponse: ServerResponse,
@@ -2980,6 +2985,110 @@ export default async function handler(request) {
     }
   });
 
+  it('binds Vercel edge client IP and HTTPS provenance before request-shell dispatch', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kovo-vercel-ingress-authority-'));
+
+    try {
+      const build = await writeKovoNeutralBuild({
+        app: createApp({}),
+        outDir: join(root, '.kovo'),
+        serverHandlerSource: 'export default async () => new Response("ok");\n',
+      });
+      const outDir = join(root, '.vercel/output');
+      await vercel().emit!(build, {
+        declaredEnv: [],
+        log() {},
+        outDir,
+        readNeutral: () => build,
+      });
+      const functionSource = await readFile(join(outDir, 'functions/kovo.func/index.cjs'), 'utf8');
+      expect(functionSource).toContain('vercelRequestToWebRequest(nodeRequest, nodeResponse)');
+      expect(
+        functionSource.indexOf('vercelRequestToWebRequest(nodeRequest, nodeResponse)'),
+      ).toBeLessThan(functionSource.indexOf('await loadHandler()'));
+      const adapter = (await import(
+        `${pathToFileURL(join(outDir, 'functions/kovo.func/node-adapter.mjs')).href}?authority=${Date.now()}`
+      )) as NodeAdapterModule;
+      const cartQuery = query('adapter/vercel-client-ip', {
+        load: () => ({ ok: true }),
+        reads: [],
+      });
+      const app = createApp({
+        queries: [cartQuery],
+        requestLimits: {
+          global: false,
+          maxBodyBytes: false,
+          mutations: { global: false, perIp: false },
+          perIp: false,
+          queries: { global: false, perIp: { max: 1, windowMs: 60_000 } },
+        },
+      });
+      const handler = createRequestHandler(app);
+      const vercelRequest = (
+        clientIp: string,
+        options: { method?: string; origin?: string; scheme?: string } = {},
+      ) =>
+        adapter.vercelRequestToWebRequest(
+          platformBridgeRequest({
+            headers: {
+              ...(options.origin === undefined ? {} : { origin: options.origin }),
+              // The ordinary X-Forwarded-For value is deliberately contradictory. Vercel's
+              // reserved x-vercel-forwarded-for is the stable platform fact when a customer puts
+              // another proxy in front of the deployment.
+              'x-forwarded-for': '198.51.100.250',
+              'x-forwarded-proto': options.scheme ?? 'https',
+              'x-vercel-forwarded-for': clientIp,
+            },
+            method: options.method,
+            url: '/_q/adapter/vercel-client-ip',
+          }),
+        );
+
+      const firstClient = vercelRequest('203.0.113.10');
+      expect(resolveRequestClientIp(app, firstClient)).toBe('203.0.113.10');
+      expect(firstClient.url).toBe('https://shop.example.test/_q/adapter/vercel-client-ip');
+      expect((await handler(firstClient)).status).toBe(200);
+      expect((await handler(vercelRequest('203.0.113.11'))).status).toBe(200);
+      expect((await handler(vercelRequest('203.0.113.10'))).status).toBe(429);
+
+      const secureMutation = vercelRequest('203.0.113.12', {
+        method: 'POST',
+        origin: 'https://shop.example.test',
+      });
+      expect(isTrustedSecureRequest(secureMutation)).toBe(true);
+      expect(verifyCsrfRequestOriginFloor(secureMutation, { trustedOrigins: [] })).toBe(true);
+
+      const ambiguousScheme = vercelRequest('203.0.113.13', {
+        method: 'POST',
+        origin: 'https://shop.example.test',
+        scheme: 'https, http',
+      });
+      expect(isTrustedSecureRequest(ambiguousScheme)).toBe(false);
+      expect(verifyCsrfRequestOriginFloor(ambiguousScheme, { trustedOrigins: [] })).toBe(false);
+
+      const genericNodeRequest = adapter.nodeRequestToWebRequest(
+        platformBridgeRequest({
+          headers: {
+            'cf-connecting-ip': '203.0.113.99',
+            'x-forwarded-for': '203.0.113.98',
+            'x-forwarded-proto': 'https',
+            'x-vercel-forwarded-for': '203.0.113.97',
+          },
+          url: '/_q/adapter/vercel-client-ip',
+        }),
+      );
+      expect(genericNodeRequest.url).toBe('http://shop.example.test/_q/adapter/vercel-client-ip');
+      expect(resolveRequestClientIp(app, genericNodeRequest)).toBe('127.0.0.1');
+
+      const ambiguousClient = vercelRequest('203.0.113.20, 198.51.100.2');
+      expect(resolveRequestClientIp(app, ambiguousClient)).toBe('vercel:unresolved-client');
+      expect((await handler(ambiguousClient)).status).toBe(200);
+      expect((await handler(vercelRequest('unknown, client'))).status).toBe(429);
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
   it('lets presets prefer a proven static-only neutral build', async () => {
     const root = await mkdtemp(join(tmpdir(), 'kovo-static-preset-'));
 
@@ -3571,6 +3680,99 @@ export default async function handler(request) {
     }
   });
 
+  it('binds Cloudflare direct-edge IPs and isolates Worker subrequests from mutable x-real-ip', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kovo-cloudflare-ingress-authority-'));
+
+    try {
+      const build = await writeKovoNeutralBuild({
+        app: createApp({}),
+        outDir: join(root, '.kovo'),
+        serverHandlerSource: `
+const buckets = new Map();
+export default async function handler(request) {
+  const descriptor = Object.getOwnPropertyDescriptor(request, '__kovoPeerAddress');
+  if (!descriptor || typeof descriptor.value !== 'string') {
+    return new Response('missing platform client identity', { status: 500 });
+  }
+  const key = descriptor.value;
+  const count = (buckets.get(key) ?? 0) + 1;
+  buckets.set(key, count);
+  return new Response(key, { status: count > 1 ? 429 : 200 });
+}
+`,
+      });
+      const outDir = join(root, 'cloudflare-output');
+      await cloudflare().emit!(build, {
+        declaredEnv: [],
+        log() {},
+        outDir,
+        readNeutral: () => build,
+      });
+      const workerPath = join(outDir, 'worker.mjs');
+      const workerSource = await readFile(workerPath, 'utf8');
+      expect(workerSource).toContain('cloudflareRequestForDispatch(request)');
+      expect(workerSource.indexOf('cloudflareRequestForDispatch(request)')).toBeLessThan(
+        workerSource.indexOf('await loadHandler()'),
+      );
+
+      const [edgeA, edgeB, edgeARepeat, workerA, workerB, malformed, missing] =
+        runGeneratedCloudflareWorker(workerPath, [
+          {
+            headers: { 'cf-connecting-ip': '203.0.113.20' },
+            url: 'https://worker.test/rate',
+          },
+          {
+            headers: { 'cf-connecting-ip': '203.0.113.21' },
+            url: 'https://worker.test/rate',
+          },
+          {
+            headers: { 'cf-connecting-ip': '203.0.113.20' },
+            url: 'https://worker.test/rate',
+          },
+          {
+            headers: {
+              'cf-connecting-ip': '198.51.100.30',
+              'cf-worker': 'same-zone.example',
+              'x-real-ip': '198.51.100.30',
+            },
+            url: 'https://worker.test/rate',
+          },
+          {
+            headers: {
+              'cf-connecting-ip': '198.51.100.99',
+              'cf-worker': 'same-zone.example',
+              'x-real-ip': '198.51.100.99',
+            },
+            url: 'https://worker.test/rate',
+          },
+          {
+            headers: { 'cf-connecting-ip': '203.0.113.40, 203.0.113.41' },
+            url: 'https://worker.test/rate',
+          },
+          { url: 'https://worker.test/rate' },
+        ]);
+
+      expect(edgeA!.response.status).toBe(200);
+      await expect(edgeA!.response.text()).resolves.toBe('203.0.113.20');
+      expect(edgeB!.response.status).toBe(200);
+      await expect(edgeB!.response.text()).resolves.toBe('203.0.113.21');
+      expect(edgeARepeat!.response.status).toBe(429);
+      await expect(edgeARepeat!.response.text()).resolves.toBe('203.0.113.20');
+
+      expect(workerA!.response.status).toBe(200);
+      await expect(workerA!.response.text()).resolves.toBe('cloudflare:worker-subrequest');
+      expect(workerB!.response.status).toBe(429);
+      await expect(workerB!.response.text()).resolves.toBe('cloudflare:worker-subrequest');
+
+      expect(malformed!.response.status).toBe(200);
+      await expect(malformed!.response.text()).resolves.toBe('cloudflare:unresolved-client');
+      expect(missing!.response.status).toBe(429);
+      await expect(missing!.response.text()).resolves.toBe('cloudflare:unresolved-client');
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
   it('C208 keeps reviewed Wrangler config after route-time Array.join and option mutation', async () => {
     const root = await mkdtemp(join(tmpdir(), 'kovo-cloudflare-wrangler-assembly-'));
     const originalJoin = Array.prototype.join;
@@ -4107,6 +4309,25 @@ function adapterParityRequest(): IncomingMessage {
     method: 'GET',
     socket,
     url: '/from-url?x=1',
+  }) as IncomingMessage;
+}
+
+function platformBridgeRequest(options: {
+  headers: Readonly<Record<string, string>>;
+  method?: string;
+  peerAddress?: string;
+  url: string;
+}): IncomingMessage {
+  const socket = Object.assign(new EventEmitter(), {
+    encrypted: false,
+    remoteAddress: options.peerAddress ?? '127.0.0.1',
+  }) as Socket & { encrypted?: boolean };
+  return Object.assign(Readable.from([]), {
+    headers: { host: 'shop.example.test', ...options.headers },
+    httpVersion: '1.1',
+    method: options.method ?? 'GET',
+    socket,
+    url: options.url,
   }) as IncomingMessage;
 }
 

@@ -1036,6 +1036,7 @@ const nativeUrlHrefGetter = nativeObjectGetOwnPropertyDescriptor(NativeURL.proto
 const nativeUrlOriginGetter = nativeObjectGetOwnPropertyDescriptor(NativeURL.prototype, 'origin').get;
 const nativeUrlPathnameGetter = nativeObjectGetOwnPropertyDescriptor(NativeURL.prototype, 'pathname').get;
 const nativeUrlSearchGetter = nativeObjectGetOwnPropertyDescriptor(NativeURL.prototype, 'search').get;
+const nativeStringIndexOf = String.prototype.indexOf;
 const nativeStringTrim = String.prototype.trim;
 const bodylessMethods = new Set(['GET', 'HEAD']);
 const requestTargetAnalysisOrigin = 'https://kovo.invalid';
@@ -1045,6 +1046,38 @@ export function nodeRequestToWebRequest(nodeRequest, options = {}, nodeResponse)
   if (nodeResponse) pinNodeResponseTransport(nodeResponse);
   const pinnedNodeRequest = snapshotNodeRequest(nodeRequest);
   const pinnedOptions = snapshotNodeHandlerOptions(options);
+  return nodeRequestToWebRequestFromSnapshot(
+    pinnedNodeRequest,
+    pinnedOptions,
+    nodeResponse,
+    pinnedNodeRequest.peerAddress,
+  );
+}
+
+// Vercel overwrites its forwarding metadata at the platform edge. Keep that authority in this
+// preset-only adapter path: the generic Node conversion above must continue to treat forwarded
+// headers as caller-controlled unless its operator explicitly opts into trustedProxy.
+export function vercelRequestToWebRequest(nodeRequest, nodeResponse) {
+  if (nodeResponse) pinNodeResponseTransport(nodeResponse);
+  const pinnedNodeRequest = snapshotNodeRequest(nodeRequest);
+  const scheme = platformSingleHeaderValue(pinnedNodeRequest.headers['x-forwarded-proto']);
+  const clientIp =
+    platformSingleHeaderValue(pinnedNodeRequest.headers['x-vercel-forwarded-for']) ??
+    'vercel:unresolved-client';
+  return nodeRequestToWebRequestFromSnapshot(
+    pinnedNodeRequest,
+    { trustedProxy: scheme === 'http' || scheme === 'https' },
+    nodeResponse,
+    clientIp,
+  );
+}
+
+function nodeRequestToWebRequestFromSnapshot(
+  pinnedNodeRequest,
+  pinnedOptions,
+  nodeResponse,
+  clientIp,
+) {
   if (unsafeReservedMutationRequestTarget(pinnedNodeRequest.rawTarget)) {
     throw new TypeError('Reserved mutation request targets must use their canonical raw path.');
   }
@@ -1057,6 +1090,7 @@ export function nodeRequestToWebRequest(nodeRequest, options = {}, nodeResponse)
       apply(nativeAbortControllerAbort, controller, []);
     }
   };
+  const nodeRequest = pinnedNodeRequest.carrier;
   const socket = pinnedNodeRequest.socket;
   apply(nativeIncomingMessageOnce, nodeRequest, ['aborted', abort]);
   apply(nativeIncomingMessageOnce, nodeRequest, ['close', abort]);
@@ -1082,10 +1116,12 @@ export function nodeRequestToWebRequest(nodeRequest, options = {}, nodeResponse)
   };
 
   const request = constructNativeRequest(nodeRequestUrl(pinnedNodeRequest, pinnedOptions), init);
-  if (pinnedNodeRequest.peerAddress) {
+  if (clientIp) {
     apply(nativeObjectDefineProperty, Object, [request, '__kovoPeerAddress', {
-      configurable: true,
-      value: pinnedNodeRequest.peerAddress,
+      configurable: false,
+      enumerable: false,
+      value: clientIp,
+      writable: false,
     }]);
   }
   return request;
@@ -1118,6 +1154,31 @@ function optionalOwnDataProperty(value, property) {
     throw new TypeError('Kovo Node adapter options must be own data properties.');
   }
   return own.value;
+}
+
+function platformSingleHeaderValue(value) {
+  let candidate;
+  if (typeof value === 'string') {
+    candidate = value;
+  } else if (apply(nativeArrayIsArray, NativeArray, [value])) {
+    if (value.length !== 1) return undefined;
+    const first = apply(nativeObjectGetOwnPropertyDescriptor, Object, [value, 0]);
+    if (first === undefined || !('value' in first) || typeof first.value !== 'string') {
+      return undefined;
+    }
+    candidate = first.value;
+  } else {
+    return undefined;
+  }
+  const trimmed = apply(nativeStringTrim, candidate, []);
+  if (
+    trimmed === '' ||
+    trimmed.length > 128 ||
+    apply(nativeStringIndexOf, trimmed, [',']) !== -1
+  ) {
+    return undefined;
+  }
+  return trimmed;
 }
 
 function snapshotNodeRequest(nodeRequest) {
@@ -1679,16 +1740,19 @@ module.exports = async function kovoVercelFunction(nodeRequest, nodeResponse) {
   try {
     const {
       armIncompleteNodeRequestClose,
-      nodeRequestToWebRequest,
       nodeRequestTransportMetadata,
       rejectUnsafeNodeMutationTarget,
+      vercelRequestToWebRequest,
       writeWebResponseToNode,
     } = await loadNodeAdapter();
     closeIncompleteRequest = armIncompleteNodeRequestClose;
     if (rejectUnsafeNodeMutationTarget(nodeRequest, nodeResponse)) return;
     const transport = nodeRequestTransportMetadata(nodeRequest);
+    // Vercel documents x-vercel-forwarded-for and x-forwarded-proto as edge-overwritten request
+    // facts. Bind them before app dispatch instead of keying security posture on the loopback
+    // bridge hop (SPEC §6.6 rule 5; §9.5 pre-dispatch per-IP load shedding).
+    const request = vercelRequestToWebRequest(nodeRequest, nodeResponse);
     const handler = await loadHandler();
-    const request = nodeRequestToWebRequest(nodeRequest, {}, nodeResponse);
     const response = await handler(request);
     closeIncompleteRequest(nodeRequest, nodeResponse);
     await writeWebResponseToNode(response, nodeResponse, transport.method, {
@@ -1734,19 +1798,24 @@ const NativeURL = globalThis.URL;
 const nativeReflectApply = Reflect.apply;
 const nativeHeadersAppend = NativeHeaders.prototype.append;
 const nativeHeadersForEach = NativeHeaders.prototype.forEach;
+const nativeHeadersGet = NativeHeaders.prototype.get;
 const nativeHeadersGetSetCookie = NativeHeaders.prototype.getSetCookie;
 const nativeHeadersSet = NativeHeaders.prototype.set;
+const nativeObjectDefineProperty = NativeObject.defineProperty;
 const nativeObjectGetOwnPropertyDescriptor = NativeObject.getOwnPropertyDescriptor;
 const nativeObjectIs = NativeObject.is;
 const nativeObjectKeys = NativeObject.keys;
 const nativeRegExpExec = NativeRegExp.prototype.exec;
+const nativeRequestHeadersGetter = nativeObjectGetOwnPropertyDescriptor(NativeRequest.prototype, 'headers').get;
 const nativeRequestMethodGetter = nativeObjectGetOwnPropertyDescriptor(NativeRequest.prototype, 'method').get;
 const nativeRequestUrlGetter = nativeObjectGetOwnPropertyDescriptor(NativeRequest.prototype, 'url').get;
 const nativeResponseBodyGetter = nativeObjectGetOwnPropertyDescriptor(NativeResponse.prototype, 'body').get;
 const nativeResponseHeadersGetter = nativeObjectGetOwnPropertyDescriptor(NativeResponse.prototype, 'headers').get;
 const nativeResponseStatusGetter = nativeObjectGetOwnPropertyDescriptor(NativeResponse.prototype, 'status').get;
 const nativeResponseStatusTextGetter = nativeObjectGetOwnPropertyDescriptor(NativeResponse.prototype, 'statusText').get;
+const nativeStringIndexOf = String.prototype.indexOf;
 const nativeStringStartsWith = String.prototype.startsWith;
+const nativeStringTrim = String.prototype.trim;
 const nativeUrlPathnameGetter = nativeObjectGetOwnPropertyDescriptor(NativeURL.prototype, 'pathname').get;
 const immutableAssetPathPattern = new NativeRegExp(${immutableAssetPathPatternSourceLiteral}, ${immutableAssetPathPatternFlagsLiteral});
 const clientModuleHeaders = ${clientModuleHeadersSource};
@@ -1791,8 +1860,9 @@ export default {
       }
     }
 
+    const dispatchRequest = cloudflareRequestForDispatch(request);
     const handler = await loadHandler();
-    return handler(request);
+    return handler(dispatchRequest);
   },
 };
 
@@ -1816,6 +1886,42 @@ function ownDataValue(value, property) {
     return undefined;
   }
   return before.value;
+}
+
+function cloudflareRequestForDispatch(request) {
+  const headers = apply(nativeRequestHeadersGetter, request, []);
+  const workerSubrequest =
+    apply(nativeHeadersGet, headers, ['cf-worker']) !== null ||
+    apply(nativeHeadersGet, headers, ['x-real-ip']) !== null;
+  // Cloudflare documents that same-zone Worker subrequests derive CF-Connecting-IP from the
+  // caller-mutable x-real-ip header. Give every Worker subrequest a separate stable identity so
+  // changing that header cannot rotate the default per-IP bucket. Direct edge requests instead
+  // receive Cloudflare's single authenticated CF-Connecting-IP value.
+  const clientIp = workerSubrequest
+    ? 'cloudflare:worker-subrequest'
+    : platformSingleHeaderValue(apply(nativeHeadersGet, headers, ['cf-connecting-ip'])) ??
+      'cloudflare:unresolved-client';
+  const dispatchRequest = new NativeRequest(request);
+  apply(nativeObjectDefineProperty, NativeObject, [dispatchRequest, '__kovoPeerAddress', {
+    configurable: false,
+    enumerable: false,
+    value: clientIp,
+    writable: false,
+  }]);
+  return dispatchRequest;
+}
+
+function platformSingleHeaderValue(value) {
+  if (typeof value !== 'string') return undefined;
+  const trimmed = apply(nativeStringTrim, value, []);
+  if (
+    trimmed === '' ||
+    trimmed.length > 128 ||
+    apply(nativeStringIndexOf, trimmed, [',']) !== -1
+  ) {
+    return undefined;
+  }
+  return trimmed;
 }
 
 async function importHandler() {
