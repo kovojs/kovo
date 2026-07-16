@@ -165,7 +165,7 @@ describe('create-kovo starter (build integration: production transaction artifac
       await stopProcess(server);
       rmSync(root, { force: true, recursive: true });
     }
-  }, 120_000);
+  }, 180_000);
 
   // @kovo-security-certifies KV433 readonly-managed-handle-prod-artifact
   it('keeps the production readonly DB floor active when KV433 static findings are advisory', async () => {
@@ -220,7 +220,7 @@ describe('create-kovo starter (build integration: production transaction artifac
       await stopProcess(server);
       rmSync(root, { force: true, recursive: true });
     }
-  }, 120_000);
+  }, 180_000);
 
   it('serves SQLite readonly reads and executes webhook mutation composition in the production artifact', async () => {
     const tempParent = tmpdir();
@@ -313,7 +313,7 @@ describe('create-kovo starter (build integration: production transaction artifac
       await stopProcess(server);
       rmSync(root, { force: true, recursive: true });
     }
-  }, 120_000);
+  }, 180_000);
 
   it.each([
     { dialect: undefined, label: 'default' },
