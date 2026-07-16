@@ -241,6 +241,24 @@ describe('create-kovo starter (build integration: adversarial production artifac
     300_000,
   );
 
+  // @kovo-security-certifies KV424 exact-global-namespace-member-lockdown-prod-artifact
+  it.each([...dialectIndependentCompilerGateCases])(
+    'bugz-31: exact global namespace-member replacements fail the %s production build',
+    (_label: string, dialect: CreateKovoDialect | undefined) => {
+      withProject(`create-kovo-bugz31-intrinsic-member-${_label}-red-`, dialect, (root) => {
+        addBugz31GlobalMemberLockdownProof(root);
+        expectBuildFailure(root, [
+          'KV424',
+          'source=Promise.resolve',
+          'source=Response.json',
+          'source=Array.isArray',
+          'source=JSON.stringify',
+        ]);
+      });
+    },
+    300_000,
+  );
+
   it.each([...dialectSpecificRuntimeCases])(
     'M1:output-wire tracks output-wire sinks after a warmed %s prod build',
     async (_label: string, dialect: CreateKovoDialect | undefined) => {
@@ -658,6 +676,78 @@ function addBugz25ToctouProof(root: string): void {
       '}',
       '',
     ].join('\n'),
+    'utf8',
+  );
+}
+
+function addBugz31GlobalMemberLockdownProof(root: string): void {
+  writeFileSync(
+    join(root, 'src/bugz31-intrinsic-alias.ts'),
+    'export const promiseNamespace = Promise;\n',
+    'utf8',
+  );
+  writeFileSync(
+    join(root, 'src/bugz31-intrinsic-barrel.ts'),
+    "export { promiseNamespace as runtimePromise } from './bugz31-intrinsic-alias.js';\n",
+    'utf8',
+  );
+  writeFileSync(
+    join(root, 'src/bugz31-intrinsic-poison.ts'),
+    [
+      "import { runtimePromise } from './bugz31-intrinsic-barrel.js';",
+      '',
+      'export class Bugz31Deferred {',
+      '  static then(resolve: (value: { ok: true }) => void): void {',
+      '    resolve({ ok: true });',
+      "    queueMicrotask(() => { void fetch('https://example.test/late'); });",
+      '  }',
+      '}',
+      '',
+      'const promiseAlias = runtimePromise;',
+      "Object.defineProperty(promiseAlias, 'resolve', { value: () => Bugz31Deferred });",
+      "Object.defineProperty(Response, 'json', { value: () => Bugz31Deferred });",
+      "Object.defineProperty(Array, 'isArray', { value: () => Bugz31Deferred });",
+      "Object.defineProperty(JSON, 'stringify', { value: () => Bugz31Deferred });",
+      '',
+    ].join('\n'),
+    'utf8',
+  );
+  writeFileSync(
+    join(root, 'src/bugz31-intrinsic-member-proof.ts'),
+    [
+      "import { s, task } from '@kovojs/server';",
+      "import './bugz31-intrinsic-poison.js';",
+      '',
+      "task('bugz31-promise-resolve', {",
+      '  input: s.object({}),',
+      '  async run() { return Promise.resolve(); },',
+      '});',
+      "task('bugz31-response-json', {",
+      '  input: s.object({}),',
+      '  async run() { return Response.json({ ok: true }); },',
+      '});',
+      "task('bugz31-array-is-array', {",
+      '  input: s.object({}),',
+      '  async run() { return Array.isArray([]); },',
+      '});',
+      "task('bugz31-json-stringify', {",
+      '  input: s.object({}),',
+      '  async run() { return JSON.stringify({ ok: true }); },',
+      '});',
+      '',
+    ].join('\n'),
+    'utf8',
+  );
+
+  const appPath = join(root, 'src/app.tsx');
+  const app = readFileSync(appPath, 'utf8');
+  const anchor = "import { appTheme } from './theme.js';";
+  if (!app.includes(anchor)) {
+    throw new Error('Expected scaffold app import anchor for bugz-31 intrinsic proof.');
+  }
+  writeFileSync(
+    appPath,
+    app.replace(anchor, `${anchor}\nimport './bugz31-intrinsic-member-proof.js';`),
     'utf8',
   );
 }

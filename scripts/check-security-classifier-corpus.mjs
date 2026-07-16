@@ -685,6 +685,28 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
     ],
   },
   {
+    id: 'kv424-request-global-member-lockdown',
+    marker: '@kovo-security-classifier-corpus kv424-request-global-member-lockdown',
+    testFiles: ['packages/drizzle/src/trust-escapes-static-global-member-lockdown.test.ts'],
+    verdictAnchors: [
+      {
+        id: 'exact-global-member-replacement-superset',
+        file: 'packages/drizzle/src/trust-escapes-static-global-member-lockdown.test.ts',
+        snippets: [
+          'rejects an Object.defineProperty replacement of %s.%s',
+          "['Promise', 'resolve', 'Promise.resolve()', 'Promise.resolve']",
+          "['Response', 'json', 'Response.json({ ok: true })', 'Response.json']",
+          "['Array', 'isArray', 'Array.isArray([])', 'Array.isArray']",
+          "['JSON', 'stringify', 'JSON.stringify({ ok: true })', 'JSON.stringify']",
+          'rejects a reviewed member changed through %s',
+          'rejects an aliased and cross-module Promise.resolve replacement',
+          "export { promiseNamespace as runtimePromise } from './intrinsic-alias.js'",
+          'keeps pristine reviewed members and local lookalikes open',
+        ],
+      },
+    ],
+  },
+  {
     id: 'client-handler-import',
     marker: '@kovo-security-classifier-corpus client-handler-import',
     testFiles: [

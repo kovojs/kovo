@@ -14962,7 +14962,8 @@ function scanRequestCallProtocols(
   const receiver = requestCallReceiver(callee);
   const member = requestStaticCallMember(callee);
   const args = invocation.args ?? call.getArguments();
-  const globalNamespace = receiver ? requestGlobalNamespaceName(receiver) : undefined;
+  const globalNamespace =
+    receiver && member ? requestGlobalNamespaceName(receiver, member) : undefined;
 
   if (
     (expressionResolvesToGlobalCallable(rawCallee, 'setTimeout', new Set(), 0, false) ||
@@ -17499,8 +17500,8 @@ function requestExpressionIsProtocolSafe(
         return true;
       }
       if (
-        (expressionResolvesToGlobalNamespace(receiver, 'Object', new Set(), 0) ||
-          expressionResolvesToGlobalNamespace(receiver, 'Reflect', new Set(), 0)) &&
+        (requestGlobalNamespaceMemberIsPristine(receiver, 'Object', member) ||
+          requestGlobalNamespaceMemberIsPristine(receiver, 'Reflect', member)) &&
         ['create', 'setPrototypeOf'].includes(member) &&
         node
           .getArguments()
@@ -17511,25 +17512,25 @@ function requestExpressionIsProtocolSafe(
         return true;
       }
       if (
-        expressionResolvesToGlobalNamespace(receiver, 'JSON', new Set(), 0) &&
+        requestGlobalNamespaceMemberIsPristine(receiver, 'JSON', member) &&
         (member === 'parse' || member === 'stringify')
       ) {
         return true;
       }
       if (
-        expressionResolvesToGlobalNamespace(receiver, 'Array', new Set(), 0) &&
+        requestGlobalNamespaceMemberIsPristine(receiver, 'Array', member) &&
         (member === 'isArray' || member === 'of')
       ) {
         return true;
       }
       if (
-        expressionResolvesToGlobalNamespace(receiver, 'Response', new Set(), 0) &&
+        requestGlobalNamespaceMemberIsPristine(receiver, 'Response', member) &&
         ['error', 'json', 'redirect'].includes(member)
       ) {
         return true;
       }
       if (
-        expressionResolvesToGlobalNamespace(receiver, 'Promise', new Set(), 0) &&
+        requestGlobalNamespaceMemberIsPristine(receiver, 'Promise', member) &&
         ['all', 'allSettled', 'any', 'race', 'reject', 'resolve'].includes(member) &&
         node
           .getArguments()
@@ -18938,7 +18939,7 @@ function requestExpressionIsExactNativePromise(
     const member = requestStaticCallMember(callee);
     if (!receiver || !member) return false;
     if (
-      expressionResolvesToGlobalNamespace(receiver, 'Promise', new Set(), 0) &&
+      requestGlobalNamespaceMemberIsPristine(receiver, 'Promise', member) &&
       !requestGlobalIntrinsicBindingIsMutated('Promise', node.getSourceFile()) &&
       ['all', 'allSettled', 'any', 'race', 'reject', 'resolve'].includes(member)
     ) {
@@ -19238,7 +19239,8 @@ function requestExpressionIsPlainWireValue(
       return true;
     if (
       receiver &&
-      expressionResolvesToGlobalNamespace(receiver, 'Promise', new Set(), 0) &&
+      member &&
+      requestGlobalNamespaceMemberIsPristine(receiver, 'Promise', member) &&
       ['all', 'allSettled', 'any', 'race', 'reject', 'resolve'].includes(member ?? '')
     ) {
       return node
@@ -23503,6 +23505,347 @@ function requestExpressionReferencesSymbol(expression: Node, target: string): bo
 }
 
 const requestGlobalIntrinsicMutationMemo = new WeakMap<SourceFile, Map<string, boolean>>();
+
+const requestGlobalNamespaceMemberMutationMemo = new WeakMap<Project, Map<string, boolean>>();
+
+/**
+ * Resolve the exact realm global object through authored aliases without granting authority to
+ * arbitrary structural lookalikes. This resolver is deliberately independent of the mutation
+ * verdicts below: it identifies what a write targets, never whether a later read is safe.
+ */
+function requestExpressionResolvesToExactGlobalObject(
+  expression: Node,
+  seen: Set<string>,
+  depth: number,
+): boolean {
+  if (depth > 32) return false;
+  const node = unwrapStaticExpression(expression);
+  if (
+    (Node.isIdentifier(node) && unshadowedGlobalIdentifier(node, 'globalThis')) ||
+    (Node.isIdentifier(node) && unshadowedGlobalIdentifier(node, 'global'))
+  ) {
+    return true;
+  }
+  if (Node.isConditionalExpression(node)) {
+    return (
+      requestExpressionResolvesToExactGlobalObject(node.getWhenTrue(), new Set(seen), depth + 1) ||
+      requestExpressionResolvesToExactGlobalObject(node.getWhenFalse(), new Set(seen), depth + 1)
+    );
+  }
+  if (
+    Node.isBinaryExpression(node) &&
+    (node.getOperatorToken().getKind() === SyntaxKind.CommaToken ||
+      node.getOperatorToken().getKind() === SyntaxKind.BarBarToken ||
+      node.getOperatorToken().getKind() === SyntaxKind.AmpersandAmpersandToken ||
+      node.getOperatorToken().getKind() === SyntaxKind.QuestionQuestionToken)
+  ) {
+    return (
+      requestExpressionResolvesToExactGlobalObject(node.getLeft(), new Set(seen), depth + 1) ||
+      requestExpressionResolvesToExactGlobalObject(node.getRight(), new Set(seen), depth + 1)
+    );
+  }
+  if (!Node.isIdentifier(node)) return false;
+  const symbol = requestIdentifierValueSymbol(node);
+  if (!symbol) return false;
+  const key = `global-object:${requestSymbolKey(symbol)}`;
+  if (seen.has(key)) return false;
+  seen.add(key);
+  return symbol.getDeclarations().some((declaration) => {
+    const initializer = valueDeclarationInitializer(declaration);
+    return !!(
+      initializer &&
+      requestExpressionResolvesToExactGlobalObject(initializer, new Set(seen), depth + 1)
+    );
+  });
+}
+
+/** Exact global namespace identity used only to find authored writes (SPEC §6.6 rule 6). */
+function requestExpressionResolvesToExactGlobalNamespaceForMutation(
+  expression: Node,
+  namespace: string,
+  seen: Set<string>,
+  depth: number,
+): boolean {
+  if (depth > 32) return false;
+  const node = unwrapStaticExpression(expression);
+  if (unshadowedGlobalIdentifier(node, namespace)) return true;
+  if (Node.isPropertyAccessExpression(node) || Node.isElementAccessExpression(node)) {
+    const member = Node.isPropertyAccessExpression(node)
+      ? node.getName()
+      : staticMemberName(node.getArgumentExpression());
+    if (
+      member === namespace &&
+      requestExpressionResolvesToExactGlobalObject(node.getExpression(), new Set(seen), depth + 1)
+    ) {
+      return true;
+    }
+  }
+  if (Node.isConditionalExpression(node)) {
+    return (
+      requestExpressionResolvesToExactGlobalNamespaceForMutation(
+        node.getWhenTrue(),
+        namespace,
+        new Set(seen),
+        depth + 1,
+      ) ||
+      requestExpressionResolvesToExactGlobalNamespaceForMutation(
+        node.getWhenFalse(),
+        namespace,
+        new Set(seen),
+        depth + 1,
+      )
+    );
+  }
+  if (
+    Node.isBinaryExpression(node) &&
+    (node.getOperatorToken().getKind() === SyntaxKind.CommaToken ||
+      node.getOperatorToken().getKind() === SyntaxKind.BarBarToken ||
+      node.getOperatorToken().getKind() === SyntaxKind.AmpersandAmpersandToken ||
+      node.getOperatorToken().getKind() === SyntaxKind.QuestionQuestionToken)
+  ) {
+    return (
+      requestExpressionResolvesToExactGlobalNamespaceForMutation(
+        node.getLeft(),
+        namespace,
+        new Set(seen),
+        depth + 1,
+      ) ||
+      requestExpressionResolvesToExactGlobalNamespaceForMutation(
+        node.getRight(),
+        namespace,
+        new Set(seen),
+        depth + 1,
+      )
+    );
+  }
+  if (!Node.isIdentifier(node)) return false;
+  const symbol = requestIdentifierValueSymbol(node);
+  if (!symbol) return false;
+  const key = `global-namespace:${namespace}:${requestSymbolKey(symbol)}`;
+  if (seen.has(key)) return false;
+  seen.add(key);
+  return symbol.getDeclarations().some((declaration) => {
+    if (Node.isBindingElement(declaration)) {
+      const projection = requestBindingElementProjection(declaration);
+      if (
+        projection?.path.length === 1 &&
+        projection.path[0] === namespace &&
+        requestExpressionResolvesToExactGlobalObject(
+          projection.expression,
+          new Set(seen),
+          depth + 1,
+        )
+      ) {
+        return true;
+      }
+    }
+    const initializer = valueDeclarationInitializer(declaration);
+    return !!(
+      initializer &&
+      requestExpressionResolvesToExactGlobalNamespaceForMutation(
+        initializer,
+        namespace,
+        new Set(seen),
+        depth + 1,
+      )
+    );
+  });
+}
+
+function requestExpressionResolvesToExactGlobalNamespaceMemberForMutation(
+  expression: Node,
+  namespace: string,
+  member: string,
+  seen: Set<string>,
+  depth: number,
+): boolean {
+  if (depth > 32) return false;
+  const node = unwrapStaticExpression(expression);
+  if (Node.isPropertyAccessExpression(node) || Node.isElementAccessExpression(node)) {
+    const candidate = Node.isPropertyAccessExpression(node)
+      ? node.getName()
+      : staticMemberName(node.getArgumentExpression());
+    if (
+      candidate === member &&
+      requestExpressionResolvesToExactGlobalNamespaceForMutation(
+        node.getExpression(),
+        namespace,
+        new Set(seen),
+        depth + 1,
+      )
+    ) {
+      return true;
+    }
+  }
+  if (Node.isCallExpression(node)) {
+    const callee = unwrapStaticExpression(node.getExpression());
+    const receiver = requestCallReceiver(callee);
+    if (
+      receiver &&
+      requestStaticCallMember(callee) === 'bind' &&
+      requestExpressionResolvesToExactGlobalNamespaceMemberForMutation(
+        receiver,
+        namespace,
+        member,
+        new Set(seen),
+        depth + 1,
+      )
+    ) {
+      return true;
+    }
+  }
+  if (!Node.isIdentifier(node)) return false;
+  const symbol = requestIdentifierValueSymbol(node);
+  if (!symbol) return false;
+  const key = `global-member:${namespace}.${member}:${requestSymbolKey(symbol)}`;
+  if (seen.has(key)) return false;
+  seen.add(key);
+  return symbol.getDeclarations().some((declaration) => {
+    if (Node.isBindingElement(declaration)) {
+      const projection = requestBindingElementProjection(declaration);
+      if (
+        projection?.path.length === 1 &&
+        projection.path[0] === member &&
+        requestExpressionResolvesToExactGlobalNamespaceForMutation(
+          projection.expression,
+          namespace,
+          new Set(seen),
+          depth + 1,
+        )
+      ) {
+        return true;
+      }
+    }
+    const initializer = valueDeclarationInitializer(declaration);
+    return !!(
+      initializer &&
+      requestExpressionResolvesToExactGlobalNamespaceMemberForMutation(
+        initializer,
+        namespace,
+        member,
+        new Set(seen),
+        depth + 1,
+      )
+    );
+  });
+}
+
+function requestGlobalNamespaceMemberIsMutated(
+  namespace: string,
+  member: string,
+  sourceFile: SourceFile,
+): boolean {
+  const project = sourceFile.getProject();
+  let memo = requestGlobalNamespaceMemberMutationMemo.get(project);
+  if (!memo) {
+    memo = new Map();
+    requestGlobalNamespaceMemberMutationMemo.set(project, memo);
+  }
+  const key = `${namespace}.${member}`;
+  const cached = memo.get(key);
+  if (cached !== undefined) return cached;
+  const result = requestGlobalNamespaceMemberIsMutatedUncached(namespace, member, project);
+  memo.set(key, result);
+  return result;
+}
+
+function requestGlobalNamespaceMemberIsMutatedUncached(
+  namespace: string,
+  member: string,
+  project: Project,
+): boolean {
+  const targetIsNamespace = (candidate: Node | undefined): boolean =>
+    !!candidate &&
+    requestExpressionResolvesToExactGlobalNamespaceForMutation(candidate, namespace, new Set(), 0);
+  const targetIsMember = (candidate: Node | undefined): boolean => {
+    if (!candidate) return false;
+    const target = unwrapStaticExpression(candidate);
+    if (!Node.isPropertyAccessExpression(target) && !Node.isElementAccessExpression(target)) {
+      return false;
+    }
+    const assignedMember = Node.isPropertyAccessExpression(target)
+      ? target.getName()
+      : staticMemberName(target.getArgumentExpression());
+    return (
+      (assignedMember === undefined || assignedMember === member) &&
+      targetIsNamespace(target.getExpression())
+    );
+  };
+  const objectHasMemberOrUnknown = (candidate: Node | undefined): boolean => {
+    if (!candidate) return true;
+    const object = resolveStaticObjectLiteral(candidate, new Set(), 0);
+    if (!object) return true;
+    return object.getProperties().some((property) => {
+      if (Node.isSpreadAssignment(property)) return true;
+      const propertyName = staticMemberName(requestObjectLiteralElementNameNode(property));
+      return propertyName === undefined || propertyName === member;
+    });
+  };
+
+  for (const file of project.getSourceFiles()) {
+    for (const assignment of file.getDescendantsOfKind(SyntaxKind.BinaryExpression)) {
+      const operator = assignment.getOperatorToken().getKind();
+      if (operator < SyntaxKind.FirstAssignment || operator > SyntaxKind.LastAssignment) continue;
+      if (targetIsMember(assignment.getLeft())) return true;
+    }
+    for (const deletion of file.getDescendantsOfKind(SyntaxKind.DeleteExpression)) {
+      if (targetIsMember(deletion.getExpression())) return true;
+    }
+    for (const update of [
+      ...file.getDescendantsOfKind(SyntaxKind.PrefixUnaryExpression),
+      ...file.getDescendantsOfKind(SyntaxKind.PostfixUnaryExpression),
+    ]) {
+      if (targetIsMember(update.getOperand())) return true;
+    }
+    for (const call of file.getDescendantsOfKind(SyntaxKind.CallExpression)) {
+      const callee = unwrapStaticExpression(call.getExpression());
+      const [target, propertyOrSource] = call.getArguments();
+      if (!targetIsNamespace(target)) continue;
+      const objectMethod = ['assign', 'defineProperties', 'defineProperty'].find((candidate) =>
+        requestExpressionResolvesToExactGlobalNamespaceMemberForMutation(
+          callee,
+          'Object',
+          candidate,
+          new Set(),
+          0,
+        ),
+      );
+      const reflectMethod = ['defineProperty', 'deleteProperty', 'set'].find((candidate) =>
+        requestExpressionResolvesToExactGlobalNamespaceMemberForMutation(
+          callee,
+          'Reflect',
+          candidate,
+          new Set(),
+          0,
+        ),
+      );
+      if (objectMethod === 'assign') {
+        if (call.getArguments().slice(1).some(objectHasMemberOrUnknown)) return true;
+        continue;
+      }
+      if (objectMethod === 'defineProperties') {
+        if (objectHasMemberOrUnknown(propertyOrSource)) return true;
+        continue;
+      }
+      if (objectMethod === 'defineProperty' || reflectMethod !== undefined) {
+        const propertyName = staticMemberName(propertyOrSource);
+        if (propertyName === undefined || propertyName === member) return true;
+      }
+    }
+  }
+  return false;
+}
+
+function requestGlobalNamespaceMemberIsPristine(
+  receiver: Node,
+  namespace: string,
+  member: string,
+): boolean {
+  return (
+    expressionResolvesToGlobalNamespace(receiver, namespace, new Set(), 0) &&
+    !requestGlobalNamespaceMemberIsMutated(namespace, member, receiver.getSourceFile())
+  );
+}
 
 function requestGlobalIntrinsicBindingIsMutated(name: string, sourceFile: SourceFile): boolean {
   let sourceMemo = requestGlobalIntrinsicMutationMemo.get(sourceFile);
@@ -28074,18 +28417,20 @@ function requestExpressionIsSafeGlobalNamespace(expression: Node): boolean {
 }
 
 function requestGlobalNamespaceMemberIsReviewed(receiver: Node, member: string): boolean {
-  const namespace = requestGlobalNamespaceName(receiver);
+  const namespace = requestGlobalNamespaceName(receiver, member);
   return !!namespace && !!REQUEST_REVIEWED_GLOBAL_NAMESPACE_MEMBERS.get(namespace)?.has(member);
 }
 
-function requestGlobalNamespaceName(receiver: Node): string | undefined {
+function requestGlobalNamespaceName(receiver: Node, member?: string): string | undefined {
   const node = unwrapStaticExpression(receiver);
   if (!Node.isIdentifier(node) || !unshadowedGlobalIdentifier(node, node.getText())) {
     return undefined;
   }
   const namespace = node.getText();
   return REQUEST_SAFE_GLOBAL_NAMESPACES.has(namespace) &&
-    !requestGlobalIntrinsicBindingIsMutated(namespace, node.getSourceFile())
+    !requestGlobalIntrinsicBindingIsMutated(namespace, node.getSourceFile()) &&
+    (member === undefined ||
+      !requestGlobalNamespaceMemberIsMutated(namespace, member, node.getSourceFile()))
     ? namespace
     : undefined;
 }
@@ -28133,7 +28478,8 @@ function requestExpressionIsIntrinsicValue(
       return true;
     }
     const receiver = requestCallReceiver(callee);
-    return !!receiver && requestExpressionIsSafeGlobalNamespace(receiver);
+    const member = requestStaticCallMember(callee);
+    return !!(receiver && member && requestGlobalNamespaceMemberIsReviewed(receiver, member));
   }
   if (Node.isPropertyAccessExpression(node) || Node.isElementAccessExpression(node)) {
     return requestExpressionIsIntrinsicValue(node.getExpression(), callable, seen, depth + 1);
