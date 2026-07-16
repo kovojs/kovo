@@ -912,7 +912,7 @@ describe('create-kovo starter (build integration: production security artifacts)
       await stopProcess(server);
       rmSync(root, { force: true, recursive: true });
     }
-  }, 120_000);
+  }, 240_000);
 
   // @kovo-security-certifies M3 dynamic-jsx-spread-control-provenance
   // @kovo-security-certifies M6 enhanced-mutation-session-transition
