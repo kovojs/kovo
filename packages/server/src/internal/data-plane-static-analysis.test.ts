@@ -583,6 +583,35 @@ export const status = query({
     }
   });
 
+  it('resolves JS-spelled imports to the exact TS or TSX source closure in bundler order', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kovo-data-plane-source-graph-tsx-'));
+    const appPath = join(root, 'app.ts');
+    try {
+      await Promise.all([
+        writeFile(
+          appPath,
+          [`import './document.js';`, `import './prefer-ts.js';`, `import './legacy.js';`].join(
+            '\n',
+          ),
+          'utf8',
+        ),
+        writeFile(join(root, 'document.tsx'), 'export const Document = <main />;\n', 'utf8'),
+        writeFile(join(root, 'prefer-ts.ts'), 'export const selected = "ts";\n', 'utf8'),
+        writeFile(join(root, 'prefer-ts.tsx'), 'export const selected = <main />;\n', 'utf8'),
+        writeFile(join(root, 'legacy.js'), 'export const legacy = true;\n', 'utf8'),
+      ]);
+      const { buildCheckSourceGraphFiles } = await loadSubject();
+
+      expect(
+        buildCheckSourceGraphFiles(appPath, root)
+          .map((file) => file.fileName)
+          .sort(),
+      ).toEqual(['app.ts', 'document.tsx', 'legacy.js', 'prefer-ts.ts']);
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
   it('derives compiler-owned table security from a test-named runtime schema module', async () => {
     const root = await mkdtemp(join(tmpdir(), 'kovo-data-plane-test-name-'));
     const srcDir = join(root, 'src');

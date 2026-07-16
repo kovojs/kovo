@@ -592,7 +592,10 @@ export default createApp({
       expect(stderr).not.toHaveBeenCalled();
 
       const server = builtServerProcess(join(outDir, 'server/server.mjs'));
-      const addContactKey = fixtureDerivedRegistryKey(appPath, 'addContact');
+      const addContactKey = fixtureDerivedRegistryKey(
+        join(root, 'src/contacts-query.ts'),
+        'addContact',
+      );
       const contactsQueryKey = fixtureDerivedRegistryKey(
         join(root, 'src/contacts-query.ts'),
         'contactsQuery',
@@ -3413,23 +3416,9 @@ export default createApp({
 function registryWrappedFragmentBuildAppSource(): string {
   return `
 /** @jsxImportSource @kovojs/server */
-import { createApp, mutation, route, s } from '@kovojs/server';
+import { createApp, route } from '@kovojs/server';
 import { ContactsRegion } from './components/contacts-region.js';
-import { contactDomain, contactsDb, contactsQuery } from './contacts-query.js';
-
-export const addContact = mutation({
-  access: { kind: 'public', reason: 'build fixture mutation' },
-  input: s.object({}),
-  optimistic: { [contactsQuery.key]: 'await-fragment' },
-  registry: {
-    queries: [contactsQuery],
-    touches: [contactDomain],
-  },
-  handler() {
-    contactsDb.count += 1;
-    return {};
-  },
-});
+import { addContact, contactsQuery } from './contacts-query.js';
 
 export default createApp({
   csrf: {
@@ -3454,15 +3443,28 @@ export default createApp({
 
 function registryWrappedContactsQuerySource(): string {
   return `
-import { domain, query, s } from '@kovojs/server';
+import { domain, mutation, query, s } from '@kovojs/server';
 
 export const contactDomain = domain();
-export const contactsDb = { count: 0 };
+let contactsCount = 0;
 export const contactsQuery = query({
   access: { kind: 'public', reason: 'build fixture query' },
-  load: () => ({ count: contactsDb.count }),
+  load: () => ({ count: contactsCount }),
   output: s.object({ count: s.number() }),
   reads: [contactDomain],
+});
+export const addContact = mutation({
+  access: { kind: 'public', reason: 'build fixture mutation' },
+  input: s.object({}),
+  optimistic: { [contactsQuery.key]: 'await-fragment' },
+  registry: {
+    queries: [contactsQuery],
+    touches: [contactDomain],
+  },
+  handler() {
+    contactsCount += 1;
+    return {};
+  },
 });
 `;
 }
@@ -4190,8 +4192,6 @@ const searchStyles = style.create(
   { namespace: 'document-search', source: 'document-template.tsx' },
 );
 
-const searchDialogClass = style.attrs(searchStyles.dialog).class ?? '';
-
 export const siteDocument = (
   <Document lang="en">
     <BodyEnd>
@@ -4201,7 +4201,7 @@ export const siteDocument = (
 );
 
 function SearchDialog(): string {
-  return <dialog id="search" class={searchDialogClass}>Search</dialog>;
+  return <dialog id="search" {...style.attrs(searchStyles.dialog)}>Search</dialog>;
 }
 `,
     'utf8',

@@ -2209,7 +2209,15 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
         input: s.object({ id: s.string() }),
         handler(input) { return { id: input.id }; },
       });
+      const namedRecord = mutation('records/create', {
+        input: s.object({ id: s.string() }),
+        handler(input) { return { id: input.id }; },
+      });
       const inspect = query({
+        args: s.object({ id: s.string() }),
+        load(input) { return { id: input.id }; },
+      });
+      const namedInspect = query('records/inspect', {
         args: s.object({ id: s.string() }),
         load(input) { return { id: input.id }; },
       });
@@ -2219,7 +2227,9 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
           const attempt = (attempts.get(input.id) ?? 0) + 1;
           attempts.set(input.id, attempt);
           await context.actAs('reviewed-principal').runMutation(record, { id: input.id });
+          await context.runMutation(namedRecord, { id: input.id });
           await context.runQuery(inspect, { id: input.id });
+          await context.runQuery(namedInspect, { id: input.id });
           await context.schedule(follow, { id: input.id }, { afterMs: 1 });
         },
       });
@@ -2241,6 +2251,25 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
         });
       `);
       expect(facts.length, body).toBeGreaterThan(0);
+    }
+
+    for (const declaration of [
+      `const key = Math.random() > 0.5 ? 'records/left' : 'records/right';\nconst record = mutation(key, { input: s.object({ id: s.string() }), handler(input) { return input; } });`,
+      `const makeMutation = mutation;\nconst record = makeMutation('records/create', { input: s.object({ id: s.string() }), handler(input) { return input; } });`,
+      `const record = mutation.call(null, 'records/create', { input: s.object({ id: s.string() }), handler(input) { return input; } });`,
+      `const record = mutation('records/create', { input: s.object({ id: s.string() }), handler(input) { return input; } }, {});`,
+    ]) {
+      const facts = sinksFor(`
+        import { mutation, s, task } from '@kovojs/server';
+        ${declaration}
+        task('orders/follow', {
+          input: s.object({ id: s.string() }),
+          async run(input, context) {
+            await context.runMutation(record, { id: input.id });
+          },
+        });
+      `);
+      expect(facts.length, declaration).toBeGreaterThan(0);
     }
   });
 
@@ -10262,95 +10291,6 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
           expect.objectContaining({ sink: 'request-handler.opaque-call', source: 'value.trim' }),
         ]),
       );
-    }
-  });
-
-  it('accepts a pristine imported const record with primitive-preserving own-property updates', () => {
-    const facts = sinksForFiles([
-      {
-        fileName: 'state.ts',
-        source: `
-          export const contactsDb = { count: 0 };
-        `,
-      },
-      {
-        fileName: 'app.ts',
-        source: `
-          import { mutation, query } from '@kovojs/server';
-          import { contactsDb } from './state.js';
-          export const contacts = query({ load() { return { count: contactsDb.count }; } });
-          export const add = mutation({ handler() {
-            contactsDb.count += 1;
-            return { count: contactsDb.count };
-          } });
-        `,
-      },
-    ]);
-
-    expect(facts).toEqual([]);
-  });
-
-  it('keeps imported const record proof scalar, static, unaliased, and descriptor-pristine', () => {
-    const variants = [
-      {
-        label: 'whole-record alias',
-        state: `export const contactsDb = { count: 0 };`,
-        use: `const alias = contactsDb; return { count: alias.count };`,
-      },
-      {
-        label: 'spread',
-        state: `export const contactsDb = { count: 0 };`,
-        use: `return { ...contactsDb };`,
-      },
-      {
-        label: 'dynamic key',
-        state: `export const contactsDb = { count: 0 };`,
-        use: `return { count: contactsDb[input.key] };`,
-      },
-      {
-        label: 'descriptor mutation',
-        state: `export const contactsDb = { count: 0 };`,
-        setup: `Object.defineProperty(contactsDb, 'count', { get() { return 1; } });`,
-        use: `return { count: contactsDb.count };`,
-      },
-      {
-        label: 'prototype mutation',
-        state: `export const contactsDb = { count: 0 };`,
-        setup: `Object.setPrototypeOf(contactsDb, { count: 1 });`,
-        use: `return { count: contactsDb.count };`,
-      },
-      {
-        label: 'argument escape',
-        state: `export const contactsDb = { count: 0 };`,
-        setup: `function retain(value) { globalThis.retained = value; } retain(contactsDb);`,
-        use: `return { count: contactsDb.count };`,
-      },
-      {
-        label: 're-exported alias',
-        state: `const contactsDb = { count: 0 }; export { contactsDb, contactsDb as alias };`,
-        use: `return { count: contactsDb.count };`,
-      },
-      {
-        label: 'nested identity',
-        state: `export const contactsDb = { nested: { count: 0 } };`,
-        use: `const alias = contactsDb.nested; return { count: alias.count };`,
-      },
-    ] as const;
-
-    for (const variant of variants) {
-      const facts = sinksForFiles([
-        { fileName: 'state.ts', source: variant.state },
-        {
-          fileName: 'app.ts',
-          source: `
-            import { mutation } from '@kovojs/server';
-            import { contactsDb } from './state.js';
-            ${'setup' in variant ? variant.setup : ''}
-            export const inspect = mutation({ handler(input) { ${variant.use} } });
-          `,
-        },
-      ]);
-      expect(facts.length, variant.label).toBeGreaterThan(0);
     }
   });
 

@@ -1185,13 +1185,15 @@ function relativeSourceModuleCandidates(
   }
 
   const candidates: string[] = [];
-  const mappedTypeScriptPath = mappedTypeScriptSourcePath(base);
-  if (mappedTypeScriptPath !== undefined) {
-    staticAnalysisArrayAppend(
-      candidates,
-      mappedTypeScriptPath,
-      'Static-analysis import candidates',
-    );
+  const mappedTypeScriptPaths = mappedTypeScriptSourcePaths(base);
+  if (mappedTypeScriptPaths.length > 0) {
+    for (let index = 0; index < mappedTypeScriptPaths.length; index += 1) {
+      staticAnalysisArrayAppend(
+        candidates,
+        mappedTypeScriptPaths[index]!,
+        'Static-analysis import candidates',
+      );
+    }
     staticAnalysisArrayAppend(candidates, base, 'Static-analysis import candidates');
     return candidates;
   }
@@ -1223,20 +1225,24 @@ function relativeSourceModuleCandidates(
   return candidates;
 }
 
-function mappedTypeScriptSourcePath(fileName: string): string | undefined {
+function mappedTypeScriptSourcePaths(fileName: string): string[] {
   if (staticAnalysisStringEndsWith(fileName, '.mjs')) {
-    return `${staticAnalysisStringSlice(fileName, 0, -4)}.mts`;
+    return [`${staticAnalysisStringSlice(fileName, 0, -4)}.mts`];
   }
   if (staticAnalysisStringEndsWith(fileName, '.cjs')) {
-    return `${staticAnalysisStringSlice(fileName, 0, -4)}.cts`;
+    return [`${staticAnalysisStringSlice(fileName, 0, -4)}.cts`];
   }
   if (staticAnalysisStringEndsWith(fileName, '.jsx')) {
-    return `${staticAnalysisStringSlice(fileName, 0, -4)}.tsx`;
+    return [`${staticAnalysisStringSlice(fileName, 0, -4)}.tsx`];
   }
   if (staticAnalysisStringEndsWith(fileName, '.js')) {
-    return `${staticAnalysisStringSlice(fileName, 0, -3)}.ts`;
+    const stem = staticAnalysisStringSlice(fileName, 0, -3);
+    // Match TypeScript/Bundler resolution order. A JS-spelled authored import may resolve to a
+    // TSX source module; omitting that candidate would leave executed code outside KV424's exact
+    // immutable pre-evaluation snapshot.
+    return [`${stem}.ts`, `${stem}.tsx`];
   }
-  return undefined;
+  return [];
 }
 
 function pathIsWithinDataPlaneBoundary(root: string, target: string): boolean {

@@ -3988,6 +3988,16 @@ function requestRetainedConfigOpaqueDerivation(
     }
     return close(firstOpaque(values));
   }
+  if (Node.isJsxElement(node) || Node.isJsxSelfClosingElement(node) || Node.isJsxFragment(node)) {
+    // SPEC §5.2: authored JSX is compiler input, not an opaque retained runtime object. Retain
+    // only expression holes whose own config derivation is closed; the ordinary module/request
+    // scans still own custom-component callables and authority references inside the tree.
+    const values = node.getDescendantsOfKind(SyntaxKind.JsxExpression).flatMap((expression) => {
+      const value = expression.getExpression();
+      return value ? [value] : [];
+    });
+    return close(firstOpaque(values));
+  }
   if (Node.isIdentifier(node)) {
     const symbol = requestIdentifierValueSymbol(node) ?? node.getSymbol();
     if (!symbol) return close(node);
@@ -5093,11 +5103,16 @@ function requestExpressionIsExactLocalFrameworkDeclaration(
   ) {
     return false;
   }
-  const [definition, ...extra] = declarationCall.getArguments();
+  const args = declarationCall.getArguments();
+  const definition =
+    args.length === 1
+      ? args[0]
+      : args.length === 2 && isStringLiteralLike(args[0]!)
+        ? args[1]
+        : undefined;
   return !!(
     definition &&
     Node.isObjectLiteralExpression(unwrapStaticExpression(definition)) &&
-    extra.length === 0 &&
     requestHandlerFactoryInvocationsForCall(declarationCall, session).some(
       (invocation) => invocation.factory.exportName === factory,
     ) &&
@@ -15814,7 +15829,6 @@ function requestExpressionIsProtocolSafe(
   }
   if (!Node.isIdentifier(node)) return false;
   if (unshadowedGlobalIdentifier(node, 'undefined')) return true;
-  if (requestIdentifierIsReviewedImportedPlainDataRecord(node)) return true;
   if (requestIdentifierIsImportedMutableContainer(node)) return false;
   const role = requestExpressionRootParameterRole(node, callable, new Set(), 0);
   if (requestRootRoleIncludesInput(role)) return true;
@@ -28777,174 +28791,6 @@ function requestIdentifierIsImportedMutableContainer(identifier: Node): boolean 
       node.getKind() === SyntaxKind.NullKeyword
     );
   });
-}
-
-const REQUEST_REVIEWED_IMPORTED_PLAIN_DATA_RECORD_MEMO = new WeakMap<
-  object,
-  Map<string, boolean>
->();
-
-/**
- * SPEC §4.1 / §6.6: a relative import is not safe merely because its initializer is an object
- * literal. Admit the narrow mutable-record pattern used by app-owned in-memory fixtures only when
- * the exported binding is one top-level const closed-data record and every project reference is a
- * static own-data-property read or a primitive-preserving numeric update. Descriptor/prototype
- * mutation, aliasing, spreading, computed access, getters, and whole-record escape all stay closed.
- */
-function requestIdentifierIsReviewedImportedPlainDataRecord(identifier: Node): boolean {
-  if (!Node.isIdentifier(identifier)) return false;
-  const importSymbol = identifier.getSymbol();
-  if (
-    !importSymbol ||
-    !importSymbol.getDeclarations().some((declaration) => {
-      const importDeclaration = declaration.getFirstAncestorByKind(SyntaxKind.ImportDeclaration);
-      return importDeclaration?.getModuleSpecifierValue().startsWith('.') === true;
-    })
-  ) {
-    return false;
-  }
-
-  const valueSymbol = requestIdentifierValueSymbol(identifier);
-  if (!valueSymbol) return false;
-  const symbolKey = requestSymbolKey(valueSymbol);
-  const project = identifier.getProject();
-  let projectMemo = REQUEST_REVIEWED_IMPORTED_PLAIN_DATA_RECORD_MEMO.get(project);
-  if (!projectMemo) {
-    projectMemo = new Map();
-    REQUEST_REVIEWED_IMPORTED_PLAIN_DATA_RECORD_MEMO.set(project, projectMemo);
-  }
-  const memoized = projectMemo.get(symbolKey);
-  if (memoized !== undefined) return memoized;
-  // Seed the conservative result before walking project-wide aliases/references.
-  projectMemo.set(symbolKey, false);
-
-  const declarations = valueSymbol.getDeclarations().filter(Node.isVariableDeclaration);
-  const [declaration] = declarations;
-  const statement = declaration?.getVariableStatement();
-  const initializer = declaration?.getInitializer();
-  if (
-    declarations.length !== 1 ||
-    !declaration ||
-    !statement ||
-    statement.getDeclarationKind() !== VariableDeclarationKind.Const ||
-    statement.getParent() !== declaration.getSourceFile() ||
-    !initializer ||
-    !Node.isObjectLiteralExpression(unwrapStaticExpression(initializer))
-  ) {
-    return false;
-  }
-
-  const record = unwrapStaticExpression(initializer);
-  if (!Node.isObjectLiteralExpression(record)) return false;
-  const properties = new Map<string, Node>();
-  for (const property of record.getProperties()) {
-    if (!Node.isPropertyAssignment(property)) return false;
-    const member = staticMemberName(property.getNameNode());
-    const value = property.getInitializer();
-    if (
-      !member ||
-      member === '__proto__' ||
-      !value ||
-      properties.has(member) ||
-      !requestExpressionIsClosedStaticScalar(value)
-    ) {
-      return false;
-    }
-    properties.set(member, unwrapStaticExpression(value));
-  }
-  if (properties.size === 0) return false;
-
-  const numericAssignmentOperators = new Set([
-    SyntaxKind.AsteriskAsteriskEqualsToken,
-    SyntaxKind.AsteriskEqualsToken,
-    SyntaxKind.SlashEqualsToken,
-    SyntaxKind.PercentEqualsToken,
-    SyntaxKind.PlusEqualsToken,
-    SyntaxKind.MinusEqualsToken,
-    SyntaxKind.LessThanLessThanEqualsToken,
-    SyntaxKind.GreaterThanGreaterThanEqualsToken,
-    SyntaxKind.GreaterThanGreaterThanGreaterThanEqualsToken,
-    SyntaxKind.AmpersandEqualsToken,
-    SyntaxKind.BarEqualsToken,
-    SyntaxKind.CaretEqualsToken,
-  ]);
-  const referenceIsClosed = (reference: import('ts-morph').Identifier): boolean => {
-    if (requestNodesAreSame(reference, declaration.getNameNode())) return true;
-    if (reference.getFirstAncestorByKind(SyntaxKind.ImportSpecifier)) {
-      return true;
-    }
-    const access = reference.getParent();
-    if (
-      !Node.isPropertyAccessExpression(access) ||
-      !requestNodesAreSame(access.getExpression(), reference)
-    ) {
-      return false;
-    }
-    const member = staticMemberName(access.getNameNode());
-    const initialValue = member ? properties.get(member) : undefined;
-    if (!member || !initialValue) return false;
-
-    const parent = access.getParent();
-    if (Node.isDeleteExpression(parent) && requestNodesAreSame(parent.getExpression(), access)) {
-      return false;
-    }
-    if (
-      (Node.isPrefixUnaryExpression(parent) || Node.isPostfixUnaryExpression(parent)) &&
-      requestNodesAreSame(parent.getOperand(), access)
-    ) {
-      return (
-        Node.isNumericLiteral(initialValue) &&
-        [SyntaxKind.PlusPlusToken, SyntaxKind.MinusMinusToken].includes(parent.getOperatorToken())
-      );
-    }
-    if (
-      Node.isBinaryExpression(parent) &&
-      requestNodesAreSame(parent.getLeft(), access) &&
-      parent.getOperatorToken().getKind() >= SyntaxKind.FirstAssignment &&
-      parent.getOperatorToken().getKind() <= SyntaxKind.LastAssignment
-    ) {
-      const operator = parent.getOperatorToken().getKind();
-      if (operator === SyntaxKind.EqualsToken) {
-        const next = unwrapStaticExpression(parent.getRight());
-        return (
-          (Node.isNumericLiteral(initialValue) && Node.isNumericLiteral(next)) ||
-          ((Node.isStringLiteral(initialValue) ||
-            Node.isNoSubstitutionTemplateLiteral(initialValue)) &&
-            (Node.isStringLiteral(next) || Node.isNoSubstitutionTemplateLiteral(next))) ||
-          ((Node.isTrueLiteral(initialValue) || Node.isFalseLiteral(initialValue)) &&
-            (Node.isTrueLiteral(next) || Node.isFalseLiteral(next)))
-        );
-      }
-      return (
-        Node.isNumericLiteral(initialValue) &&
-        numericAssignmentOperators.has(operator) &&
-        Node.isNumericLiteral(unwrapStaticExpression(parent.getRight()))
-      );
-    }
-    return true;
-  };
-
-  for (const sourceFile of project.getSourceFiles()) {
-    for (const reference of sourceFile.getDescendantsOfKind(SyntaxKind.Identifier)) {
-      const candidate = requestIdentifierValueSymbol(reference) ?? reference.getSymbol();
-      if (!candidate || requestSymbolKey(candidate) !== symbolKey) continue;
-      if (!referenceIsClosed(reference)) return false;
-    }
-  }
-  projectMemo.set(symbolKey, true);
-  return true;
-}
-
-function requestExpressionIsClosedStaticScalar(expression: Node): boolean {
-  const node = unwrapStaticExpression(expression);
-  return (
-    Node.isStringLiteral(node) ||
-    Node.isNoSubstitutionTemplateLiteral(node) ||
-    Node.isNumericLiteral(node) ||
-    Node.isTrueLiteral(node) ||
-    Node.isFalseLiteral(node) ||
-    node.getKind() === SyntaxKind.NullKeyword
-  );
 }
 
 function requestBindingIdentifierNames(name: Node): string[] {
