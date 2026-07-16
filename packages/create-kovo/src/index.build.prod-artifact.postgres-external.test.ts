@@ -108,7 +108,7 @@ describeIfPostgres(
         linkStarterBuildDependencies(root);
         writeProductionEquivalentSchemaModule(root);
         writeStarterPostgresMigration(root);
-        allowExternalPostgresEgress(root);
+        allowExternalPostgresEgress(root, cluster.port);
         buildReusableProductionArtifact(root);
 
         await createExternalDatabase(cluster, { adminRole, database, runtimeRole });
@@ -152,7 +152,6 @@ describeIfPostgres(
             HOST: '127.0.0.1',
             KOVO_DATABASE_URL: runtimeUrl,
             KOVO_DB_SYSTEM_URL: systemUrl,
-            KOVO_EXTERNAL_POSTGRES_ALLOW_INTERNAL: `127.0.0.1:${cluster.port}`,
             NODE_ENV: 'production',
             PORT: String(port),
           },
@@ -280,16 +279,15 @@ function execKovo(root: string, args: readonly string[]): string {
   }) as string;
 }
 
-function allowExternalPostgresEgress(root: string): void {
+function allowExternalPostgresEgress(root: string, postgresPort: number): void {
+  const postgresDestinationLiteral = JSON.stringify(`127.0.0.1:${postgresPort}`);
   const appPath = join(root, 'src/app.tsx');
   const source = readFileSync(appPath, 'utf8').replace(
     '  db: appRuntimeDbProvider,\n',
     [
       '  db: appRuntimeDbProvider,',
       '  egress: {',
-      '    allowInternal: process.env.KOVO_EXTERNAL_POSTGRES_ALLOW_INTERNAL',
-      '      ? [process.env.KOVO_EXTERNAL_POSTGRES_ALLOW_INTERNAL]',
-      '      : [],',
+      `    allowInternal: [${postgresDestinationLiteral}],`,
       '  },',
     ].join('\n') + '\n',
   );
