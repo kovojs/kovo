@@ -3049,6 +3049,83 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
     `);
     expectOpaqueSource(deferredTaskFacts, 'context.fetch');
 
+    const immediateGlobalFetchFacts = sinksFor(`
+      import { s, task } from '@kovojs/server';
+      task('orders/immediate-global-fetch', {
+        input: s.object({}),
+        async run() { await fetch('https://example.test/immediate-global'); },
+      });
+    `);
+    expect(immediateGlobalFetchFacts).toEqual([]);
+
+    const deferredGlobalFetchFacts = sinksFor(`
+      import { s, task } from '@kovojs/server';
+      task('orders/deferred-global-fetch', {
+        input: s.object({}),
+        run() {
+          class DeferredGlobalFetch {
+            readonly result = fetch('https://example.test/deferred-global');
+            static then(resolve: (value: undefined) => void) {
+              resolve(undefined);
+              queueMicrotask(() => { void new this(); });
+            }
+          }
+          return DeferredGlobalFetch;
+        },
+      });
+    `);
+    expectOpaqueSource(deferredGlobalFetchFacts, 'fetch');
+
+    const immediateRunCommandFacts = sinksFor(`
+      import { commandAllowlist, cmd, runCommand, s, task } from '@kovojs/server';
+      const allow = commandAllowlist(['/usr/bin/true'], { justification: 'immediate command' });
+      const command = cmd('/usr/bin/true', [], { allow });
+      task('orders/immediate-command', {
+        input: s.object({}),
+        run() { return runCommand(command); },
+      });
+    `);
+    expect(immediateRunCommandFacts).toEqual([]);
+
+    const deferredRunCommandFacts = sinksFor(`
+      import { commandAllowlist, cmd, runCommand, s, task } from '@kovojs/server';
+      const allow = commandAllowlist(['/usr/bin/true'], { justification: 'deferred command' });
+      const command = cmd('/usr/bin/true', [], { allow });
+      task('orders/deferred-command', {
+        input: s.object({}),
+        run() {
+          class DeferredRunCommand {
+            readonly result = runCommand(command);
+            static then(resolve: (value: undefined) => void) {
+              resolve(undefined);
+              queueMicrotask(() => { void new this(); });
+            }
+          }
+          return DeferredRunCommand;
+        },
+      });
+    `);
+    expectOpaqueSource(deferredRunCommandFacts, 'runCommand');
+
+    const deferredFetchResponseFacts = sinksFor(`
+      import { s, task } from '@kovojs/server';
+      task('orders/deferred-fetch-response', {
+        input: s.object({}),
+        async run() {
+          const response = await fetch('https://example.test/response');
+          class DeferredFetchResponse {
+            readonly body = response.text();
+            static then(resolve: (value: undefined) => void) {
+              resolve(undefined);
+              queueMicrotask(() => { void new this(); });
+            }
+          }
+          return DeferredFetchResponse;
+        },
+      });
+    `);
+    expectOpaqueSource(deferredFetchResponseFacts, 'response.text');
+
     const webhookPrelude = `
       import {
         createMemoryWebhookReplayStore,
@@ -3144,6 +3221,186 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
     `);
     expectOpaqueSource(deferredOutcomeFacts, 'context.insert');
     expectOpaqueSource(deferredOutcomeFacts, 'context.setCookie');
+  });
+
+  it('refuses transparent class values at framework assimilation boundaries', () => {
+    const facts = sinksFor(`
+      import { s, task } from '@kovojs/server';
+
+      class DeferredValue {
+        static then(resolve: (value: { ok: true }) => void) { resolve({ ok: true }); }
+      }
+      const Alias = DeferredValue;
+
+      task('classes/direct', { input: s.object({}), run() { return DeferredValue; } });
+      task('classes/alias', { input: s.object({}), run() { return Alias; } });
+      task('classes/object', {
+        input: s.object({}), run() { return { value: DeferredValue }.value; },
+      });
+      task('classes/array', {
+        input: s.object({}), run() { return [DeferredValue][0]; },
+      });
+      task('classes/destructured-object', {
+        input: s.object({}), run() {
+          const { value } = { value: DeferredValue };
+          return value;
+        },
+      });
+      task('classes/destructured-array', {
+        input: s.object({}), run() {
+          const [value] = [DeferredValue];
+          return value;
+        },
+      });
+      task('classes/conditional', {
+        input: s.object({ flag: s.boolean() }), run(input) {
+          return input.flag ? DeferredValue : { ok: true };
+        },
+      });
+      task('classes/logical', {
+        input: s.object({ flag: s.boolean() }), run(input) {
+          return input.flag && DeferredValue;
+        },
+      });
+      task('classes/comma', {
+        input: s.object({}), run() { return (0, DeferredValue); },
+      });
+      task('classes/assignment', {
+        input: s.object({}), run() { let value; return (value = DeferredValue); },
+      });
+      task('classes/late-authority', {
+        input: s.object({}), run(_input, context) {
+          class DeferredLateAuthority {
+            static then(resolve: (value: { ok: true }) => void) {
+              resolve({ ok: true });
+              queueMicrotask(() => { void context.storage.get('after-settlement'); });
+            }
+          }
+          return DeferredLateAuthority;
+        },
+      });
+    `);
+
+    for (const source of [
+      'DeferredValue',
+      'Alias',
+      '{ value: DeferredValue }.value',
+      '[DeferredValue][0]',
+      'value',
+      'input.flag ? DeferredValue : { ok: true }',
+      'input.flag && DeferredValue',
+      '0, DeferredValue',
+      'value = DeferredValue',
+      'DeferredLateAuthority',
+    ]) {
+      expect(
+        facts.some(
+          (fact) =>
+            fact.sink === 'request-handler.opaque-protocol' &&
+            fact.source === `<class-thenable:${source}>`,
+        ),
+        `${source}: ${JSON.stringify(facts)}`,
+      ).toBe(true);
+    }
+    expect(
+      facts.filter(
+        (fact) =>
+          fact.sink === 'request-handler.opaque-protocol' &&
+          fact.source?.startsWith('<class-thenable:'),
+      ).length,
+    ).toBeGreaterThanOrEqual(11);
+  });
+
+  it('resolves returned class values through import and re-export aliases', () => {
+    const facts = sinksForFiles([
+      {
+        fileName: 'classes.ts',
+        source: `
+          export class NamedDeferred {
+            static then(resolve: (value: undefined) => void) { resolve(undefined); }
+          }
+          export const LocalAlias = NamedDeferred;
+          export default class DefaultDeferred {
+            static then(resolve: (value: undefined) => void) { resolve(undefined); }
+          }
+        `,
+      },
+      {
+        fileName: 'named-barrel.ts',
+        source: `export { NamedDeferred as RenamedDeferred } from './classes.js';`,
+      },
+      { fileName: 'star-barrel.ts', source: `export * from './classes.js';` },
+      {
+        fileName: 'default-barrel.ts',
+        source: `export { default } from './classes.js';`,
+      },
+      {
+        fileName: 'app.ts',
+        source: `
+          import { s, task } from '@kovojs/server';
+          import { RenamedDeferred } from './named-barrel.js';
+          import { LocalAlias, NamedDeferred as ImportedAlias } from './star-barrel.js';
+          import DefaultAlias from './default-barrel.js';
+          const AppAlias = ImportedAlias;
+          task('classes/imported', { input: s.object({}), run() { return ImportedAlias; } });
+          task('classes/app-alias', { input: s.object({}), run() { return AppAlias; } });
+          task('classes/exported-alias', { input: s.object({}), run() { return LocalAlias; } });
+          task('classes/renamed', { input: s.object({}), run() { return RenamedDeferred; } });
+          task('classes/default', { input: s.object({}), run() { return DefaultAlias; } });
+        `,
+      },
+    ]);
+
+    for (const source of [
+      'ImportedAlias',
+      'AppAlias',
+      'LocalAlias',
+      'RenamedDeferred',
+      'DefaultAlias',
+    ]) {
+      expect(facts).toContainEqual(
+        expect.objectContaining({
+          sink: 'request-handler.opaque-protocol',
+          source: `<class-thenable:${source}>`,
+        }),
+      );
+    }
+  });
+
+  it('keeps non-assimilated local work and exact framework outcomes open', () => {
+    const facts = sinksFor(`
+      import { endpoint, notFound, redirect, respond, s, task } from '@kovojs/server';
+      function pureHelper() { return 1; }
+      task('classes/immediate-pure', {
+        input: s.object({ key: s.string() }),
+        run(input) {
+          class ImmediateValue { readonly value = pureHelper(); }
+          void new ImmediateValue();
+          const cache: Record<string, number> = {};
+          cache[input.key] = 1;
+          return { ok: true };
+        },
+      });
+      task('classes/native-promise', {
+        input: s.object({}), run() { return Promise.resolve({ ok: true }); },
+      });
+      endpoint('/response', { handler() { return new Response('ok'); } });
+      endpoint('/redirect', { handler() { return redirect('/login', {}); } });
+      endpoint('/missing', { handler() { return notFound(); } });
+      endpoint('/file', {
+        handler() { return respond.file('safe', { contentType: 'text/plain' }); },
+      });
+      endpoint('/stream', {
+        handler() { return respond.stream('safe', { contentType: 'text/plain' }); },
+      });
+      endpoint('/storage', {
+        async handler(_request, context) {
+          await context.storage.get('fixed-key');
+          return new Response('ok');
+        },
+      });
+    `);
+    expect(facts).toEqual([]);
   });
 
   it('accepts exact Request URL parsing without opening shadowed constructors or getters', () => {
@@ -5502,6 +5759,35 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
     );
     expect(exactAuthoredProvider).toEqual([]);
 
+    const deferredAuthoredProvider = sinksForFiles(
+      exactEnvironmentBindingFiles.map((file) =>
+        file.fileName === 'app.tsx'
+          ? {
+              ...file,
+              source: file.source.replace(
+                'appSession.provider(bindings.sessionProvider)',
+                `appSession.provider(async (request) => {
+                  class DeferredSessionProvider {
+                    readonly result = bindings.sessionProvider(request);
+                    static then(resolve: (value: null) => void) {
+                      resolve(null);
+                      queueMicrotask(() => { void new this(); });
+                    }
+                  }
+                  return DeferredSessionProvider;
+                })`,
+              ),
+            }
+          : file,
+      ),
+    );
+    expect(deferredAuthoredProvider).toContainEqual(
+      expect.objectContaining({
+        sink: 'request-handler.opaque-call',
+        source: 'bindings.sessionProvider',
+      }),
+    );
+
     for (const provider of [
       `appSession.provider(async (request) => {
         request = new Request('https://forged.invalid/', {
@@ -6818,6 +7104,36 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
     ];
 
     expect(sinksForFiles(files)).toEqual([]);
+    const deferredManagedReadFacts = sinksForFiles(
+      files.map((file) =>
+        file.fileName === 'queries.ts'
+          ? {
+              ...file,
+              source: `
+                import { query } from '@kovojs/server';
+                import { readonlyAppDb } from './db.js';
+                import { contacts } from './schema.js';
+                export const contactCount = query({ load() {
+                  class DeferredManagedRead {
+                    readonly rows = readonlyAppDb.select({ id: contacts.id }).from(contacts);
+                    static then(resolve: (value: { total: number }) => void) {
+                      resolve({ total: 0 });
+                      queueMicrotask(() => { void new this(); });
+                    }
+                  }
+                  return DeferredManagedRead;
+                } });
+              `,
+            }
+          : file,
+      ),
+    );
+    expect(deferredManagedReadFacts).toContainEqual(
+      expect.objectContaining({
+        sink: 'request-handler.opaque-call',
+        source: 'readonlyAppDb.select',
+      }),
+    );
     const unionQuery = `
       import { query } from '@kovojs/server';
       import { readonlyAppDb } from './db.js';

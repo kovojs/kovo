@@ -5199,16 +5199,31 @@ function requestCallCrossesDeferredRootAuthorityBoundary(
   root: RequestCallable,
 ): boolean {
   // Request/capability projections are lifecycle authority, including generic framework
-  // capabilities whose method names are intentionally open and exact request.db chains. A class
-  // field can defer such a call past an async handler's thenable settlement, so no allowlist may
-  // accept that receiver across the class boundary (SPEC §6.6 / §9.1 / §9.6).
+  // capabilities whose method names are intentionally open, exact request.db chains, exact
+  // managed application DBs, and live outbound response bodies. A class field can defer such a
+  // call past an async handler's thenable settlement, so no allowlist may accept that receiver
+  // across the class boundary (SPEC §6.6 / §9.1 / §9.6).
   const receiver = requestCallReceiver(unwrapStaticExpression(call.getExpression()));
-  if (!receiver || requestCallIsInImmediateRootExecution(call, root)) return false;
+  const immediate = requestCallIsInImmediateRootExecution(call, root);
+  if (requestCallIsGovernedFetch(call)) return !root.moduleInitializer && !immediate;
+  if (!receiver || immediate) return false;
   const role = requestExpressionRootParameterRole(receiver, root, new Set(), 0);
   return (
     role === 'request' ||
     requestRootRoleIncludesCapability(role) ||
-    requestExpressionResolvesToExactRequestDbCapability(receiver, root, new Set())
+    requestExpressionResolvesToExactRequestDbCapability(receiver, root, new Set()) ||
+    requestCallIsExactManagedReadonlyDbRead(call) ||
+    requestCallIsExactManagedReadonlyRawRead(call) ||
+    requestExpressionResolvesToExactManagedReadonlyDb(receiver, new Set()) ||
+    requestExpressionResolvesToExactManagedRuntimeMember(receiver, 'db', undefined, new Set()) ||
+    requestExpressionResolvesToExactManagedRuntimeMember(
+      receiver,
+      'readonlyDb',
+      undefined,
+      new Set(),
+    ) ||
+    requestExpressionResolvesToExactManagedAppRuntime(receiver, new Set()) ||
+    requestExpressionIsFetchResponse(receiver, new Set())
   );
 }
 
@@ -6888,18 +6903,17 @@ function requestCallIsExactAuthoredBetterAuthSessionProviderDelegation(
     return false;
   }
 
-  return requestCallIsExactBetterAuthBindingInvocation(
-    call,
-    {
-      ...direct,
-      publicWirePaths: [['setCookies']],
-      rootCallback: 'sessionProvider',
-      rootCarriers: [{ carrier: 'request', index: 0 }],
-      rootFactory: 'createApp',
-      rootParameterRoles: ['request'],
-    },
-    'sessionProvider',
-    session,
+  const providerRoot: RequestCallable = {
+    ...direct,
+    publicWirePaths: [['setCookies']],
+    rootCallback: 'sessionProvider',
+    rootCarriers: [{ carrier: 'request', index: 0 }],
+    rootFactory: 'createApp',
+    rootParameterRoles: ['request'],
+  };
+  return (
+    requestCallIsInImmediateRootExecution(call, providerRoot) &&
+    requestCallIsExactBetterAuthBindingInvocation(call, providerRoot, 'sessionProvider', session)
   );
 }
 
@@ -13791,7 +13805,13 @@ function scanRequestCallable(callable: RequestCallable, context: RequestProcessS
     }
 
     const fetchInvocation = requestGovernedFetchInvocation(call);
-    if (fetchInvocation) {
+    if (
+      fetchInvocation &&
+      (callable.moduleInitializer || requestCallIsInImmediateRootExecution(call, callable))
+    ) {
+      // SPEC §6.6 / §9.1 / §9.6: governed fetch is request-lifecycle authority. Only its
+      // immediate request-root grammar may consume it; module initialization has no handler
+      // settlement boundary and keeps its existing reviewed-fetch behavior.
       scanOutboundFetchConfidentiality(call, fetchInvocation.args, callable, context);
       scanRequestGovernedFetchProtocols(call, fetchInvocation.args, callable, context);
       continue;
@@ -14468,7 +14488,9 @@ function scanRequestImplicitExecutionProtocols(
     }
   }
 
-  if (requestCallableIsAsync(callable)) {
+  // Async functions and framework request roots both assimilate their returned result. A sync
+  // framework callback may therefore expose the same authored-thenable temporal boundary.
+  if (requestCallableIsAsync(callable) || callable.rootFactory !== undefined) {
     for (const output of requestWireOutputExpressions(callable)) {
       if (
         Node.isYieldExpression(output.getParent()) ||
@@ -16588,6 +16610,211 @@ function scanRequestSuperPropertyAccess(
   }
 }
 
+/**
+ * SPEC §6.6 / §9.1 / §9.6: framework roots and native Promises assimilate returned values. A
+ * class value is executable authority, not wire data: a static/inherited/mutated `then` hook can
+ * settle first and instantiate hidden fields later. Resolve only finite, transparent provenance
+ * so ordinary objects and immediately constructed classes do not become false positives.
+ */
+function requestClassDeclarationsForAssimilationSource(
+  expression: Node,
+  session: RequestProvenanceSession,
+  seen: Set<string>,
+): Array<import('ts-morph').ClassDeclaration | import('ts-morph').ClassExpression> {
+  const node = unwrapStaticExpression(expression);
+  const nodeKey = `assimilation-class:${requestNodeIdentity(node)}`;
+  if (seen.has(nodeKey) || !requestProvenanceStep(session, node)) return [];
+  seen.add(nodeKey);
+
+  if (Node.isClassDeclaration(node) || Node.isClassExpression(node)) return [node];
+  if (Node.isConditionalExpression(node)) {
+    return dedupeRequestClassDeclarations([
+      ...requestClassDeclarationsForAssimilationSource(node.getWhenTrue(), session, new Set(seen)),
+      ...requestClassDeclarationsForAssimilationSource(node.getWhenFalse(), session, new Set(seen)),
+    ]);
+  }
+  if (Node.isBinaryExpression(node)) {
+    const operator = node.getOperatorToken().getKind();
+    if (operator === SyntaxKind.CommaToken || operator === SyntaxKind.EqualsToken) {
+      return requestClassDeclarationsForAssimilationSource(node.getRight(), session, new Set(seen));
+    }
+    if (
+      operator === SyntaxKind.BarBarToken ||
+      operator === SyntaxKind.AmpersandAmpersandToken ||
+      operator === SyntaxKind.QuestionQuestionToken
+    ) {
+      return dedupeRequestClassDeclarations([
+        ...requestClassDeclarationsForAssimilationSource(node.getLeft(), session, new Set(seen)),
+        ...requestClassDeclarationsForAssimilationSource(node.getRight(), session, new Set(seen)),
+      ]);
+    }
+    return [];
+  }
+  if (!Node.isIdentifier(node)) return [];
+
+  const symbol = requestIdentifierValueSymbol(node);
+  if (!symbol) return [];
+  const symbolKey = requestSymbolKey(symbol);
+  if (seen.has(symbolKey)) return [];
+  seen.add(symbolKey);
+  const declarations = symbol.getDeclarations();
+  if (declarations.length !== 1) return [];
+  const declaration = declarations[0]!;
+  if (Node.isClassDeclaration(declaration) || Node.isClassExpression(declaration)) {
+    return [declaration];
+  }
+
+  // A const binding may expose mutable class members, but its value identity cannot be replaced.
+  // Ignore member projections while rejecting any whole-binding assignment.
+  if (requestAssignedBindingProjections(symbol, session).some(({ path }) => path.length === 0)) {
+    return [];
+  }
+  if (Node.isVariableDeclaration(declaration)) {
+    if (
+      declaration.getVariableStatement()?.getDeclarationKind() !== VariableDeclarationKind.Const
+    ) {
+      return [];
+    }
+    const initializer = declaration.getInitializer();
+    return initializer
+      ? requestClassDeclarationsForAssimilationSource(initializer, session, new Set(seen))
+      : [];
+  }
+  if (Node.isBindingElement(declaration)) {
+    const owner = declaration.getFirstAncestorByKind(SyntaxKind.VariableDeclaration);
+    if (owner?.getVariableStatement()?.getDeclarationKind() !== VariableDeclarationKind.Const) {
+      return [];
+    }
+    const projection = requestBindingElementProjection(declaration);
+    const projected = projection
+      ? requestWireProjectedExpression(projection.expression, projection.path, new Set(), 0)
+      : undefined;
+    return projected
+      ? requestClassDeclarationsForAssimilationSource(projected, session, new Set(seen))
+      : [];
+  }
+  return [];
+}
+
+function dedupeRequestClassDeclarations(
+  declarations: readonly (
+    | import('ts-morph').ClassDeclaration
+    | import('ts-morph').ClassExpression
+  )[],
+): Array<import('ts-morph').ClassDeclaration | import('ts-morph').ClassExpression> {
+  return [
+    ...new Map(
+      declarations.map((declaration) => [requestNodeIdentity(declaration), declaration]),
+    ).values(),
+  ];
+}
+
+/** Follow only statically transparent carriers into a thenable assimilation site. */
+function requestThenableProtocolSources(
+  expression: Node,
+  session: RequestProvenanceSession,
+  seen: Set<string>,
+): Node[] {
+  const node = unwrapStaticExpression(expression);
+  const key = `thenable-source:${requestNodeIdentity(node)}`;
+  if (seen.has(key) || !requestProvenanceStep(session, node)) return [];
+  seen.add(key);
+  const sources = [node, ...requestProtocolPrototypeSources(node, new Set())];
+  if (Node.isConditionalExpression(node)) {
+    sources.push(
+      ...requestThenableProtocolSources(node.getWhenTrue(), session, new Set(seen)),
+      ...requestThenableProtocolSources(node.getWhenFalse(), session, new Set(seen)),
+    );
+  }
+  if (Node.isAwaitExpression(node)) {
+    sources.push(...requestThenableProtocolSources(node.getExpression(), session, new Set(seen)));
+  }
+  if (Node.isBinaryExpression(node)) {
+    const operator = node.getOperatorToken().getKind();
+    if (operator === SyntaxKind.CommaToken || operator === SyntaxKind.EqualsToken) {
+      sources.push(...requestThenableProtocolSources(node.getRight(), session, new Set(seen)));
+    } else if (
+      operator === SyntaxKind.AmpersandAmpersandToken ||
+      operator === SyntaxKind.BarBarToken ||
+      operator === SyntaxKind.QuestionQuestionToken
+    ) {
+      sources.push(
+        ...requestThenableProtocolSources(node.getLeft(), session, new Set(seen)),
+        ...requestThenableProtocolSources(node.getRight(), session, new Set(seen)),
+      );
+    }
+  }
+  if (Node.isPropertyAccessExpression(node) || Node.isElementAccessExpression(node)) {
+    const member = Node.isPropertyAccessExpression(node)
+      ? staticMemberName(node.getNameNode())
+      : staticMemberName(node.getArgumentExpression());
+    if (member !== undefined) {
+      const projected = requestWireProjectedExpression(
+        node.getExpression(),
+        [member],
+        new Set(),
+        0,
+      );
+      if (projected) {
+        sources.push(...requestThenableProtocolSources(projected, session, new Set(seen)));
+      }
+      for (const accessor of requestAccessorCallablesForExpression(
+        node.getExpression(),
+        member,
+        new Set(),
+        session,
+      )) {
+        for (const output of requestWireOutputExpressions(accessor)) {
+          sources.push(...requestThenableProtocolSources(output, session, new Set(seen)));
+        }
+      }
+    }
+  }
+  return dedupeRequestNodes(sources);
+}
+
+function requestClassDeclarationsAtAssimilation(
+  expression: Node,
+  session: RequestProvenanceSession,
+): Array<import('ts-morph').ClassDeclaration | import('ts-morph').ClassExpression> {
+  return dedupeRequestClassDeclarations(
+    requestThenableProtocolSources(expression, session, new Set()).flatMap((source) =>
+      requestClassDeclarationsForAssimilationSource(source, session, new Set()),
+    ),
+  );
+}
+
+/** Avoid a second protocol diagnostic when an inspectable helper output is already a hard sink. */
+function requestThenableOutputContainsClosedAuthority(
+  expression: Node,
+  session: RequestProvenanceSession,
+  seen: Set<string>,
+): boolean {
+  const node = unwrapStaticExpression(expression);
+  if (requestExpressionContainsClosedAuthority(node, new Set(), 0)) return true;
+  if (!Node.isCallExpression(node)) return false;
+  const key = `thenable-primary-authority:${requestNodeIdentity(node)}`;
+  if (seen.has(key)) return false;
+  seen.add(key);
+  const resolution = resolveRequestCallable(node.getExpression(), new Set(), 0, session);
+  return resolution.callables.some((callable) => {
+    const callableKey = `thenable-primary-authority:${requestNodeIdentity(callable.declaration)}`;
+    if (seen.has(callableKey)) return false;
+    seen.add(callableKey);
+    const calls = [
+      ...(Node.isCallExpression(callable.body) ? [callable.body] : []),
+      ...callable.body
+        .getDescendantsOfKind(SyntaxKind.CallExpression)
+        .filter((call) => nodeBelongsToRequestCallable(call, callable)),
+    ];
+    return calls.some(
+      (call) =>
+        requestExpressionContainsClosedAuthority(call, new Set(), 0) ||
+        requestThenableOutputContainsClosedAuthority(call, session, new Set(seen)),
+    );
+  });
+}
+
 function scanRequestProtocolUse(
   expression: Node,
   hooks: readonly string[],
@@ -16604,8 +16831,26 @@ function scanRequestProtocolUse(
   ) {
     return;
   }
+  if (
+    hooks.length === 1 &&
+    hooks[0] === 'then' &&
+    requestThenableOutputContainsClosedAuthority(node, context.provenance, new Set())
+  ) {
+    // The primary authority sink already rejects this root. Do not add a redundant assimilation
+    // diagnostic or re-walk a potentially long local/module alias chain.
+    return;
+  }
 
-  let resolved = false;
+  const protocolSources = hooks.includes('then')
+    ? requestThenableProtocolSources(node, context.provenance, new Set())
+    : [node, ...requestProtocolPrototypeSources(node, new Set())];
+  const classValues = hooks.includes('then')
+    ? requestClassDeclarationsAtAssimilation(node, context.provenance)
+    : [];
+  let resolved = classValues.length > 0;
+  if (classValues.length > 0) {
+    appendRequestProtocolFact(context, site, 'class-thenable', node);
+  }
   if (
     Node.isCallExpression(node) &&
     hooks.some((hook) => hook === '@@iterator' || hook === '@@asyncIterator')
@@ -16625,21 +16870,23 @@ function scanRequestProtocolUse(
       scanRequestCallable(nested, context);
     }
   }
-  const protocolSources = [node, ...requestProtocolPrototypeSources(node, new Set())];
   for (const hook of hooks) {
     const callables = protocolSources.flatMap((source) =>
       requestAccessorCallablesForExpression(source, hook, new Set(), context.provenance),
     );
-    if (Node.isIdentifier(node)) {
-      for (const assigned of requestAssignedMemberExpressions(
-        node,
-        hook,
-        site.getStart(),
-        context.provenance,
-      )) {
-        callables.push(
-          ...resolveRequestCallable(assigned, new Set(), 0, context.provenance).callables,
-        );
+    for (const source of protocolSources) {
+      const candidate = unwrapStaticExpression(source);
+      if (Node.isIdentifier(candidate)) {
+        for (const assigned of requestAssignedMemberExpressions(
+          candidate,
+          hook,
+          site.getStart(),
+          context.provenance,
+        )) {
+          callables.push(
+            ...resolveRequestCallable(assigned, new Set(), 0, context.provenance).callables,
+          );
+        }
       }
     }
     for (const nested of dedupeRequestCallables(callables)) {
@@ -16654,6 +16901,7 @@ function scanRequestProtocolUse(
 
   if (
     !resolved &&
+    !(hooks.length === 1 && hooks[0] === 'then' && Node.isArrayLiteralExpression(node)) &&
     !requestExpressionIsProtocolSafe(node, callable, new Set(), context.provenance)
   ) {
     appendRequestProtocolFact(context, site, hooks.join('|'), node);
@@ -17165,6 +17413,7 @@ function requestExpressionIsProtocolSafe(
     }
     if (
       requestCallIsExactFrameworkNativePromise(node) ||
+      requestCallIsExactClosedRedirect(node) ||
       requestCallIsExactRespondMethod(node) ||
       requestCallIsExactNotFound(node)
     ) {
@@ -21440,6 +21689,11 @@ function requestCallIsKnownSafe(
   }
 
   if (requestCallIsExactRunCommand(call)) {
+    // Exact command construction proves which process may run, not whether it can run after the
+    // request root has settled (SPEC §6.6 / §9.1 / §9.6).
+    if (!callable.moduleInitializer && !requestCallIsInImmediateRootExecution(call, callable)) {
+      return false;
+    }
     scanRequestFunctionArguments(call, context);
     return true;
   }
