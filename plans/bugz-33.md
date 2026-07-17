@@ -14,7 +14,7 @@ rendering, Better Auth, and managed SQL.
 
 | Severity | Open | Closed |
 | -------- | ---: | -----: |
-| High     |    0 |      9 |
+| High     |    1 |      9 |
 | Medium   |    0 |     15 |
 | Low      |    0 |      3 |
 
@@ -115,6 +115,16 @@ rendering, Better Auth, and managed SQL.
   - **Evidence:** egress/bootstrap/Postgres runtime matrix 192/192; real PostgreSQL 18 literal,
     hostname, reconnect, and TLS reconnect probes 2/2; all 11 classifier corpora plus egress, API,
     and TCB boundary gates passed.
+
+- [ ] **H10 - Sibling subdomains could shadow first-party Better Auth session cookies.**
+  - HTTPS bindings used a `__Secure-` session-cookie name. A sibling subdomain could plant an older
+    valid attacker session with `Domain=.example.com`; browser ordering sent it before the victim's
+    host-only cookie, and Better Auth selected the first duplicate value.
+  - **Evidence:** a real SQLite Better Auth lifecycle resolved a victim request as the attacker's
+    account after victim sign-in when both same-name cookies were present.
+  - **Open:** use exact browser-enforced `__Host-` cookie names across first-party SQLite/Postgres
+    bindings, keep Better Auth's read/write names aligned, and prove login, session reads, logout,
+    HTTPS posture, and duplicate-cookie rejection/precedence controls (SPEC §6.5/§6.6).
 
 ## Medium
 
@@ -315,5 +325,5 @@ rendering, Better Auth, and managed SQL.
   egress, API, and TCB boundary gates passed.
 - Better Auth/SQLite/PGlite matrix: 200/200; real PostgreSQL and multi-process SQLite concurrency
   each admitted 3/20 with one row; replay 429-abort regression, dist, API, and TCB gates passed.
-- All confirmed findings are closed; final exact-tip remote-boundary review remains open until the
-  parallel fresh passes and full repository gates complete without a new reachable issue.
+- Final exact-tip remote-boundary review remains open until H10 lands and the parallel fresh passes
+  plus full repository gates complete without a new reachable issue.
