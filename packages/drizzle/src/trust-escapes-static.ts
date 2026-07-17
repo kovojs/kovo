@@ -10498,6 +10498,35 @@ function requestMutableFactoryReadForCall(
       );
     }
     if (
+      kind === 'array' &&
+      [
+        'concat',
+        'copyWithin',
+        'filter',
+        'find',
+        'findLast',
+        'flat',
+        'pop',
+        'reverse',
+        'shift',
+        'slice',
+        'sort',
+        'splice',
+        'toReversed',
+        'toSorted',
+        'toSpliced',
+        'with',
+      ].includes(method)
+    ) {
+      return requestMutableFactoryContainerValues(
+        receiver,
+        call.getStart(),
+        undefined,
+        true,
+        session,
+      );
+    }
+    if (
       (kind === 'array' || kind === 'set') &&
       (method === 'entries' || method === 'values' || method === 'keys' || method === 'toArray')
     ) {
@@ -15516,6 +15545,10 @@ function scanRequestThenableCallbackOutput(
   context: RequestProcessScanContext,
 ): void {
   if (scanRequestProxyUse(output, site, context)) return;
+  const classValues = requestClassDeclarationsAtAssimilation(output, context.provenance);
+  if (classValues.length > 0) {
+    appendRequestProtocolFact(context, site, 'class-thenable', output);
+  }
   const thenCallables = requestAccessorCallablesForExpression(
     output,
     'then',
@@ -16821,42 +16854,97 @@ function requestThenableProtocolSources(
   expression: Node,
   session: RequestProvenanceSession,
   seen: Set<string>,
+  state?: RequestWireAnalysisState,
 ): Node[] {
   const node = unwrapStaticExpression(expression);
-  const key = `thenable-source:${requestNodeIdentity(node)}`;
+  const key = `thenable-source:${requestNodeIdentity(node)}:${state?.bindingKey ?? 'root'}`;
   if (seen.has(key) || !requestProvenanceStep(session, node)) return [];
   seen.add(key);
   const sources = [node, ...requestProtocolPrototypeSources(node, new Set(), session)];
+  const bound = state ? requestWireProjectedStateBinding(node, [], state, new Set()) : undefined;
+  if (bound && !requestNodesAreSame(bound, node)) {
+    sources.push(...requestThenableProtocolSources(bound, session, new Set(seen), state));
+  }
   if (Node.isConditionalExpression(node)) {
     sources.push(
-      ...requestThenableProtocolSources(node.getWhenTrue(), session, new Set(seen)),
-      ...requestThenableProtocolSources(node.getWhenFalse(), session, new Set(seen)),
+      ...requestThenableProtocolSources(node.getWhenTrue(), session, new Set(seen), state),
+      ...requestThenableProtocolSources(node.getWhenFalse(), session, new Set(seen), state),
     );
   }
   if (Node.isAwaitExpression(node)) {
-    sources.push(...requestThenableProtocolSources(node.getExpression(), session, new Set(seen)));
+    sources.push(
+      ...requestThenableProtocolSources(node.getExpression(), session, new Set(seen), state),
+    );
   }
   if (Node.isBinaryExpression(node)) {
     const operator = node.getOperatorToken().getKind();
     if (operator === SyntaxKind.CommaToken || operator === SyntaxKind.EqualsToken) {
-      sources.push(...requestThenableProtocolSources(node.getRight(), session, new Set(seen)));
+      sources.push(
+        ...requestThenableProtocolSources(node.getRight(), session, new Set(seen), state),
+      );
     } else if (
       operator === SyntaxKind.AmpersandAmpersandToken ||
       operator === SyntaxKind.BarBarToken ||
       operator === SyntaxKind.QuestionQuestionToken
     ) {
       sources.push(
-        ...requestThenableProtocolSources(node.getLeft(), session, new Set(seen)),
-        ...requestThenableProtocolSources(node.getRight(), session, new Set(seen)),
+        ...requestThenableProtocolSources(node.getLeft(), session, new Set(seen), state),
+        ...requestThenableProtocolSources(node.getRight(), session, new Set(seen), state),
       );
     }
   }
   if (Node.isCallExpression(node)) {
-    const member = requestStaticCallMember(unwrapStaticExpression(node.getExpression()));
+    const callee = unwrapStaticExpression(node.getExpression());
+    const member = requestStaticCallMember(callee);
+    const receiver = requestCallReceiver(callee);
+    if (
+      receiver &&
+      member === 'get' &&
+      requestGlobalNamespaceMemberIsPristine(receiver, 'Reflect', member)
+    ) {
+      const [target, property] = node.getArguments();
+      const projectedMember = staticMemberName(property);
+      const projected =
+        target && projectedMember !== undefined
+          ? requestWireProjectedExpression(target, [projectedMember], new Set(), 0)
+          : undefined;
+      if (projected) {
+        sources.push(...requestThenableProtocolSources(projected, session, new Set(seen), state));
+      }
+    }
+    const mutableRead = requestMutableFactoryReadForCall(node, session);
+    if (
+      mutableRead.recognized &&
+      member !== undefined &&
+      ['at', 'find', 'findLast', 'pop', 'shift'].includes(member)
+    ) {
+      if (mutableRead.opaqueAt) sources.push(mutableRead.opaqueAt);
+      for (const value of mutableRead.values) {
+        sources.push(...requestThenableProtocolSources(value, session, new Set(seen), state));
+      }
+    }
     if (member && REQUEST_ROOT_ROLE_AUTHORED_OUTPUT_METHODS.has(member)) {
       for (const candidate of requestRootRoleAuthoredResultCandidates(node, member, session)) {
         sources.push(
-          ...requestThenableProtocolSources(candidate.expression, session, new Set(seen)),
+          ...requestThenableProtocolSources(candidate.expression, session, new Set(seen), state),
+        );
+      }
+    }
+    const invocation = requestNormalizedCall(node);
+    for (const callable of resolveRequestCallable(invocation.target, new Set(), 0, session)
+      .callables) {
+      const args = invocation.args ?? node.getArguments();
+      const bindings = requestWireBindingsForCall(callable, args, state?.bindings ?? new Map());
+      const nestedState: RequestWireAnalysisState = {
+        bindingKey: requestWireBindingKey(bindings),
+        bindings,
+        rootCallable: state?.rootCallable ?? callable,
+        session,
+        scopeCallable: callable,
+      };
+      for (const output of requestWireOutputExpressions(callable)) {
+        sources.push(
+          ...requestThenableProtocolSources(output, session, new Set(seen), nestedState),
         );
       }
     }
@@ -16868,6 +16956,19 @@ function requestThenableProtocolSources(
     if (member !== undefined) {
       const owner = unwrapStaticExpression(node.getExpression());
       if (Node.isCallExpression(owner)) {
+        const mutableRead = requestMutableFactoryReadForCall(owner, session);
+        if (mutableRead.recognized) {
+          if (mutableRead.opaqueAt) sources.push(mutableRead.opaqueAt);
+          for (const value of mutableRead.values) {
+            sources.push(...requestThenableProtocolSources(value, session, new Set(seen), state));
+            const selected = requestWireProjectedExpression(value, [member], new Set(), 0);
+            if (selected) {
+              sources.push(
+                ...requestThenableProtocolSources(selected, session, new Set(seen), state),
+              );
+            }
+          }
+        }
         const ownerMember = requestStaticCallMember(unwrapStaticExpression(owner.getExpression()));
         if (ownerMember && REQUEST_ROOT_ROLE_AUTHORED_OUTPUT_METHODS.has(ownerMember)) {
           for (const candidate of requestRootRoleAuthoredResultCandidates(
@@ -16876,7 +16977,12 @@ function requestThenableProtocolSources(
             session,
           )) {
             sources.push(
-              ...requestThenableProtocolSources(candidate.expression, session, new Set(seen)),
+              ...requestThenableProtocolSources(
+                candidate.expression,
+                session,
+                new Set(seen),
+                state,
+              ),
             );
             const selected = requestWireProjectedExpression(
               candidate.expression,
@@ -16885,7 +16991,9 @@ function requestThenableProtocolSources(
               0,
             );
             if (selected) {
-              sources.push(...requestThenableProtocolSources(selected, session, new Set(seen)));
+              sources.push(
+                ...requestThenableProtocolSources(selected, session, new Set(seen), state),
+              );
             }
           }
         }
@@ -16897,7 +17005,7 @@ function requestThenableProtocolSources(
         0,
       );
       if (projected) {
-        sources.push(...requestThenableProtocolSources(projected, session, new Set(seen)));
+        sources.push(...requestThenableProtocolSources(projected, session, new Set(seen), state));
       }
       for (const accessor of requestAccessorCallablesForExpression(
         node.getExpression(),
@@ -16906,7 +17014,7 @@ function requestThenableProtocolSources(
         session,
       )) {
         for (const output of requestWireOutputExpressions(accessor)) {
-          sources.push(...requestThenableProtocolSources(output, session, new Set(seen)));
+          sources.push(...requestThenableProtocolSources(output, session, new Set(seen), state));
         }
       }
     }
@@ -16952,6 +17060,99 @@ function requestThenableOutputContainsClosedAuthority(
       (call) =>
         requestExpressionContainsClosedAuthority(call, new Set(), 0) ||
         requestThenableOutputContainsClosedAuthority(call, session, new Set(seen)),
+    );
+  });
+}
+
+function requestInspectableThenableCallOutputIsPlain(
+  expression: Node,
+  rootCallable: RequestCallable,
+  session: RequestProvenanceSession,
+): boolean {
+  const node = unwrapStaticExpression(expression);
+  if (!Node.isCallExpression(node)) return false;
+  const state: RequestWireAnalysisState = {
+    bindingKey: 'thenable-plain-root',
+    bindings: new Map(),
+    rootCallable,
+    scopeCallable: rootCallable,
+    session,
+  };
+  const invocation = requestNormalizedCall(node);
+  const resolution = resolveRequestCallable(invocation.target, new Set(), 0, session);
+  if (resolution.callables.length === 0 || resolution.opaqueModule !== undefined) return false;
+  const args = invocation.args ?? node.getArguments();
+  return resolution.callables.every((callable) => {
+    const bindings = requestWireBindingsForCall(callable, args, state.bindings);
+    const nestedState: RequestWireAnalysisState = {
+      bindingKey: requestWireBindingKey(bindings),
+      bindings,
+      rootCallable,
+      session,
+      scopeCallable: callable,
+    };
+    const outputs = requestWireOutputExpressions(callable);
+    return (
+      outputs.length > 0 &&
+      outputs.every((output) =>
+        requestInspectableThenableOutputIsPlain(output, nestedState, new Set()),
+      )
+    );
+  });
+}
+
+function requestInspectableThenableOutputIsPlain(
+  expression: Node,
+  state: RequestWireAnalysisState,
+  seen: Set<string>,
+): boolean {
+  const node = unwrapStaticExpression(expression);
+  const key = `thenable-plain-output:${requestNodeIdentity(node)}:${state.bindingKey}`;
+  if (seen.has(key) || !requestProvenanceStep(state.session, node)) return false;
+  seen.add(key);
+  if (requestExpressionIsPlainWireValue(node, state, new Set())) return true;
+  if (Node.isConditionalExpression(node)) {
+    return (
+      requestInspectableThenableOutputIsPlain(node.getWhenTrue(), state, new Set(seen)) &&
+      requestInspectableThenableOutputIsPlain(node.getWhenFalse(), state, new Set(seen))
+    );
+  }
+  if (Node.isBinaryExpression(node)) {
+    const operator = node.getOperatorToken().getKind();
+    if (operator === SyntaxKind.CommaToken || operator === SyntaxKind.EqualsToken) {
+      return requestInspectableThenableOutputIsPlain(node.getRight(), state, new Set(seen));
+    }
+    if (
+      operator === SyntaxKind.AmpersandAmpersandToken ||
+      operator === SyntaxKind.BarBarToken ||
+      operator === SyntaxKind.QuestionQuestionToken
+    ) {
+      return (
+        requestInspectableThenableOutputIsPlain(node.getLeft(), state, new Set(seen)) &&
+        requestInspectableThenableOutputIsPlain(node.getRight(), state, new Set(seen))
+      );
+    }
+  }
+  if (!Node.isCallExpression(node)) return false;
+  const invocation = requestNormalizedCall(node);
+  const resolution = resolveRequestCallable(invocation.target, new Set(), 0, state.session);
+  if (resolution.callables.length === 0 || resolution.opaqueModule !== undefined) return false;
+  const args = invocation.args ?? node.getArguments();
+  return resolution.callables.every((callable) => {
+    const bindings = requestWireBindingsForCall(callable, args, state.bindings);
+    const nestedState: RequestWireAnalysisState = {
+      bindingKey: requestWireBindingKey(bindings),
+      bindings,
+      rootCallable: state.rootCallable,
+      session: state.session,
+      scopeCallable: callable,
+    };
+    const outputs = requestWireOutputExpressions(callable);
+    return (
+      outputs.length > 0 &&
+      outputs.every((output) =>
+        requestInspectableThenableOutputIsPlain(output, nestedState, new Set(seen)),
+      )
     );
   });
 }
@@ -17067,8 +17268,14 @@ function scanRequestProtocolUse(
     if (scanRequestProtocolPrototypeMutations(hook, site, context)) resolved = true;
   }
 
+  const provenPlainHelperOutput =
+    hooks.length === 1 &&
+    hooks[0] === 'then' &&
+    requestInspectableThenableCallOutputIsPlain(node, callable, context.provenance);
+
   if (
     !resolved &&
+    !provenPlainHelperOutput &&
     !(hooks.length === 1 && hooks[0] === 'then' && Node.isArrayLiteralExpression(node)) &&
     !requestExpressionIsProtocolSafe(node, callable, new Set(), context.provenance)
   ) {
@@ -19381,7 +19588,7 @@ function requestExpressionIsPlainWireValue(
   seen: Set<string>,
 ): boolean {
   const node = unwrapStaticExpression(expression);
-  const key = `plain-wire:${requestNodeIdentity(node)}`;
+  const key = `plain-wire:${requestNodeIdentity(node)}:${state.bindingKey}`;
   if (seen.has(key)) return false;
   seen.add(key);
   if (
@@ -19398,6 +19605,10 @@ function requestExpressionIsPlainWireValue(
     Node.isTypeOfExpression(node)
   ) {
     return true;
+  }
+  const bound = requestWireProjectedStateBinding(node, [], state, new Set());
+  if (bound && !requestNodesAreSame(bound, node)) {
+    return requestExpressionIsPlainWireValue(bound, state, new Set(seen));
   }
   if (Node.isArrayLiteralExpression(node)) {
     return node

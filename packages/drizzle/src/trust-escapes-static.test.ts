@@ -3311,6 +3311,213 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
     ).toBeGreaterThanOrEqual(11);
   });
 
+  it('refuses helper, container, reflective, and native-Promise class assimilation', () => {
+    const carriers = [
+      ['local helper', 'const reveal = () => DeferredValue; return reveal();'],
+      ['object method', 'const box = { reveal() { return DeferredValue; } }; return box.reveal();'],
+      [
+        'identity helper',
+        'function identity<T>(value: T) { return value; } return identity(DeferredValue);',
+      ],
+      [
+        'projecting helper',
+        'function reveal<T>(box: { value: T }) { return box.value; } return reveal({ value: DeferredValue });',
+      ],
+      [
+        'call-site-sensitive helper',
+        "function identity<T>(value: T) { return value; } void identity('safe'); return identity(DeferredValue);",
+      ],
+      ['Array.at', 'return [DeferredValue].at(0);'],
+      ['Array.concat', 'return [DeferredValue].concat([])[0];'],
+      ['Array.filter', 'return [DeferredValue].filter(() => true)[0];'],
+      ['Array.slice', 'return [DeferredValue].slice(0)[0];'],
+      ['Array.find', 'return [DeferredValue].find(() => true);'],
+      ['Array.findLast', 'return [DeferredValue].findLast(() => true);'],
+      ['Array.map', 'return [0].map(() => DeferredValue)[0];'],
+      ['Array.pop', 'return [DeferredValue].pop();'],
+      ['Array.shift', 'return [DeferredValue].shift();'],
+      ['Array.from', 'return Array.from([DeferredValue])[0];'],
+      ['Reflect.get', "return Reflect.get({ value: DeferredValue }, 'value');"],
+      ['Promise.then', 'return Promise.resolve(1).then(() => DeferredValue);'],
+      ['Promise.catch', "return Promise.reject('x').catch(() => DeferredValue);"],
+      ['Promise.finally', 'return Promise.resolve(1).finally(() => DeferredValue);'],
+      [
+        'Promise callback container',
+        'return Promise.resolve(1).then(() => [DeferredValue].at(0));',
+      ],
+    ] as const;
+
+    const missing: Array<{ facts: ReturnType<typeof sinksFor>; label: string }> = [];
+    for (const [label, statement] of carriers) {
+      const facts = sinksFor(`
+        import { s, task } from '@kovojs/server';
+        task('classes/${label}', { input: s.object({}), run() {
+          class DeferredValue {
+            static then(resolve: (value: { ok: true }) => void) { resolve({ ok: true }); }
+          }
+          ${statement}
+        } });
+      `);
+      if (
+        !facts.some(
+          (fact) =>
+            fact.sink === 'request-handler.opaque-protocol' &&
+            fact.source?.startsWith('<class-thenable:'),
+        )
+      ) {
+        missing.push({ facts, label });
+      }
+    }
+    expect(missing).toEqual([]);
+
+    const safe = sinksFor(`
+      import { s, task } from '@kovojs/server';
+      task('classes/safe-helper', { input: s.object({}), run() {
+        const reveal = () => ({ ok: true });
+        return reveal();
+      } });
+      task('classes/safe-object-method', { input: s.object({}), run() {
+        const box = { reveal() { return { ok: true }; } };
+        return box.reveal();
+      } });
+      task('classes/safe-identity-helper', { input: s.object({}), run() {
+        function identity<T>(value: T) { return value; }
+        return identity({ ok: true });
+      } });
+      task('classes/safe-projecting-helper', { input: s.object({}), run() {
+        function reveal<T>(box: { value: T }) { return box.value; }
+        return reveal({ value: { ok: true } });
+      } });
+      task('classes/safe-array-methods', { input: s.object({}), run() {
+        return {
+          at: [1].at(0),
+          concat: [1].concat([2])[0],
+          filter: [1].filter(() => true)[0],
+          find: [1].find(() => true),
+          map: [1].map((value) => ({ value }))[0],
+          slice: [1].slice(0)[0],
+        };
+      } });
+      task('classes/safe-reflection', { input: s.object({}), run() {
+        return {
+          reflected: Reflect.get({ value: 1 }, 'value'),
+        };
+      } });
+      task('classes/safe-promise-then', { input: s.object({}), run() {
+        return Promise.resolve(1).then((value) => ({ value }));
+      } });
+      task('classes/safe-promise-catch', { input: s.object({}), run() {
+        return Promise.reject('expected').catch(() => ({ ok: true }));
+      } });
+      task('classes/safe-promise-finally', { input: s.object({}), run() {
+        return Promise.resolve(1).finally(() => ({ ok: true }));
+      } });
+    `);
+    expect(safe).toEqual([]);
+  });
+
+  it('follows imported helper and re-export outputs into class assimilation', () => {
+    const facts = sinksForFiles([
+      {
+        fileName: 'helpers.ts',
+        source: `
+          class DeferredValue {
+            static then(resolve: (value: { ok: true }) => void) { resolve({ ok: true }); }
+          }
+          export function reveal() { return DeferredValue; }
+          export function identity<T>(value: T) { return value; }
+        `,
+      },
+      {
+        fileName: 'barrel.ts',
+        source: `export { identity, reveal as revealDeferred } from './helpers.js';`,
+      },
+      {
+        fileName: 'app.ts',
+        source: `
+          import { s, task } from '@kovojs/server';
+          import { identity, revealDeferred } from './barrel.js';
+          class DeferredValue {
+            static then(resolve: (value: { ok: true }) => void) { resolve({ ok: true }); }
+          }
+          task('classes/import-helper', {
+            input: s.object({}), run() { return revealDeferred(); },
+          });
+          task('classes/import-identity', {
+            input: s.object({}), run() { return identity(DeferredValue); },
+          });
+          task('classes/import-promise-callback', {
+            input: s.object({}), run() { return Promise.resolve(1).then(revealDeferred); },
+          });
+        `,
+      },
+    ]);
+
+    expect(facts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sink: 'request-handler.opaque-protocol',
+          source: '<class-thenable:revealDeferred()>',
+        }),
+        expect.objectContaining({
+          sink: 'request-handler.opaque-protocol',
+        }),
+      ]),
+    );
+
+    const safe = sinksForFiles([
+      {
+        fileName: 'helpers.ts',
+        source: `export function identity<T>(value: T) { return value; }`,
+      },
+      {
+        fileName: 'app.ts',
+        source: `
+          import { s, task } from '@kovojs/server';
+          import { identity } from './helpers.js';
+          task('classes/import-safe-helper', {
+            input: s.object({}), run() { return identity({ ok: true }); },
+          });
+        `,
+      },
+    ]);
+    expect(safe).toEqual([]);
+  });
+
+  it('fails closed for classes with assigned, descriptor, and inherited then hooks', () => {
+    const facts = sinksFor(`
+      import { s, task } from '@kovojs/server';
+      task('classes/assigned-then', { input: s.object({}), run() {
+        class DeferredValue {}
+        DeferredValue.then = (resolve: (value: { ok: true }) => void) => resolve({ ok: true });
+        const reveal = () => DeferredValue;
+        return reveal();
+      } });
+      task('classes/descriptor-then', { input: s.object({}), run() {
+        class DeferredValue {}
+        Object.defineProperty(DeferredValue, 'then', {
+          value(resolve: (value: { ok: true }) => void) { resolve({ ok: true }); },
+        });
+        return [DeferredValue].at(0);
+      } });
+      task('classes/inherited-then', { input: s.object({}), run() {
+        class ThenBase {
+          static then(resolve: (value: { ok: true }) => void) { resolve({ ok: true }); }
+        }
+        class DeferredValue extends ThenBase {}
+        return Promise.resolve(1).then(() => DeferredValue);
+      } });
+    `);
+
+    expect(
+      facts.filter(
+        (fact) =>
+          fact.sink === 'request-handler.opaque-protocol' &&
+          fact.source?.startsWith('<class-thenable:'),
+      ),
+    ).toHaveLength(3);
+  });
+
   it('opens exact local Map reads while retaining stored thenable assimilation', () => {
     const safe = sinksFor(`
       import { s, task } from '@kovojs/server';

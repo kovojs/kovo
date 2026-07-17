@@ -271,6 +271,21 @@ describe('create-kovo starter (build integration: adversarial production artifac
     300_000,
   );
 
+  // @kovo-security-certifies KV424 helper-assimilation-prod-artifact
+  it('bugz-31: helper, container, reflection, and Promise callback assimilation fail the production build', () => {
+    withProject('create-kovo-bugz31-assimilation-red-', undefined, (root) => {
+      addBugz31AssimilationProof(root);
+      expectBuildFailure(root, [
+        'KV424',
+        'sink=request-handler.opaque-protocol',
+        'source=<class-thenable:reveal()>',
+        'source=<class-thenable:identity(Bugz31AssimilationDeferred)>',
+        'source=<class-thenable:Reflect.get',
+        'bugz31-assimilation-proof.ts',
+      ]);
+    });
+  }, 300_000);
+
   // @kovo-security-certifies KV424 trusted-input-provenance-prod-artifact
   // @kovo-security-certifies KV424 call-derived-reference-alias-prod-artifact
   it('bugz-31: trusted input mutation and authored result laundering fail the production build', () => {
@@ -796,6 +811,68 @@ function addBugz31GlobalMemberLockdownProof(root: string): void {
   writeFileSync(
     appPath,
     app.replace(anchor, `${anchor}\nimport './bugz31-intrinsic-member-proof.js';`),
+    'utf8',
+  );
+}
+
+function addBugz31AssimilationProof(root: string): void {
+  writeFileSync(
+    join(root, 'src/bugz31-assimilation-proof.ts'),
+    [
+      "import { s, task } from '@kovojs/server';",
+      '',
+      'class Bugz31AssimilationDeferred {',
+      '  static then(resolve: (value: { ok: true }) => void): void {',
+      '    resolve({ ok: true });',
+      "    queueMicrotask(() => { void fetch('https://example.test/late'); });",
+      '  }',
+      '}',
+      '',
+      "task('bugz31-assimilation-helper', {",
+      '  input: s.object({}),',
+      '  run() {',
+      '    const reveal = () => Bugz31AssimilationDeferred;',
+      '    return reveal();',
+      '  },',
+      '});',
+      '',
+      "task('bugz31-assimilation-identity', {",
+      '  input: s.object({}),',
+      '  run() {',
+      '    function identity<T>(value: T): T { return value; }',
+      '    return identity(Bugz31AssimilationDeferred);',
+      '  },',
+      '});',
+      '',
+      "task('bugz31-assimilation-reflect', {",
+      '  input: s.object({}),',
+      '  run() {',
+      "    return Reflect.get({ value: Bugz31AssimilationDeferred }, 'value');",
+      '  },',
+      '});',
+      '',
+      "task('bugz31-assimilation-promise-callback', {",
+      '  input: s.object({}),',
+      '  run() {',
+      '    return Promise.resolve(1).then(() => [',
+      '      Bugz31AssimilationDeferred as unknown as { ok: true },',
+      '    ].at(0));',
+      '  },',
+      '});',
+      '',
+    ].join('\n'),
+    'utf8',
+  );
+
+  const appPath = join(root, 'src/app.tsx');
+  const app = readFileSync(appPath, 'utf8');
+  const anchor = "import { appTheme } from './theme.js';";
+  if (!app.includes(anchor)) {
+    throw new Error('Expected scaffold app import anchor for bugz-31 assimilation proof.');
+  }
+  writeFileSync(
+    appPath,
+    app.replace(anchor, `${anchor}\nimport './bugz31-assimilation-proof.js';`),
     'utf8',
   );
 }
