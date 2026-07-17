@@ -15,7 +15,7 @@ rendering, Better Auth, and managed SQL.
 | Severity | Open | Closed |
 | -------- | ---: | -----: |
 | High     |    0 |      7 |
-| Medium   |    1 |      6 |
+| Medium   |    2 |      6 |
 | Low      |    0 |      3 |
 
 ## High
@@ -139,7 +139,19 @@ rendering, Better Auth, and managed SQL.
     receive the router's `429`; a control sent through `auth.handler` does.
   - **Open:** route credential attempts through a framework-pinned handler request, preserve Kovo's
     CSRF and origin boundary, derive rather than trust client identity, use durable multi-instance
-    limiter state for framework-owned bindings, and prove bounded fresh-key storage.
+    limiter state for framework-owned bindings, and map transient `429` responses without replaying
+    them as settled credential outcomes.
+
+- [ ] **M8 - Better Auth's database limiter admitted remotely unbounded persistent keys.**
+  - Better Auth 1.6.17 creates a row for every fresh client-IP/path key before route resolution.
+    Unique trusted identities on a fixed sign-in path and one identity requesting unique missing GET
+    mount suffixes both grew the table. Fresh-key admission did not prune stale rows; revisiting one
+    expired key instead launched an unbounded global deletion.
+  - **Evidence:** a real SQLite repro grew 64 sign-in rows plus 64 distinct `404` mount-path rows,
+    then admitted row 129 without pruning any stale row.
+  - **Open:** replace native database storage at Kovo-owned bindings with an atomic multi-instance
+    store that bounds key admission and cleanup work across credential and arbitrary mount paths,
+    uses database time, and fails closed at its resource ceiling.
 
 ## Low
 
