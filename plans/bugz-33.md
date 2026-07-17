@@ -14,7 +14,7 @@ rendering, Better Auth, and managed SQL.
 
 | Severity | Open | Closed |
 | -------- | ---: | -----: |
-| High     |    2 |     15 |
+| High     |    1 |     16 |
 | Medium   |    2 |     15 |
 | Low      |    0 |      3 |
 
@@ -204,7 +204,7 @@ rendering, Better Auth, and managed SQL.
     separate production replay-store provenance trace found no remote path for choosing stored
     header names; production accepts only the ACL-audited framework Postgres store.
 
-- [ ] **H16 - A misbound authenticated CSRF session could collapse replay scope across users.**
+- [x] **H16 - A misbound authenticated CSRF session could collapse replay scope across users.**
   - Generic CSRF configuration treated an empty or missing `sessionId` as an anonymous browser
     binding even after Kovo had independently proved an authenticated principal. Mutation replay
     then preferred that anonymous binding over the proven principal, so two users sharing the
@@ -213,9 +213,13 @@ rendering, Better Auth, and managed SQL.
   - **Evidence:** a real sequential Alice-to-Bob mutation reproduced one handler call and replayed
     Alice's `Set-Cookie` response to Bob with both an omitted session id and an empty-string session
     id; both requests passed their own authenticated guard and returned `303`.
-  - **Open:** reject missing authenticated and malformed generic session bindings, domain-separate
-    anonymous/session credentials, and include independently proven principal identity in replay
-    scope while preserving the declared anonymous flow.
+  - **Fixed:** `aa60ea172` rejects missing authenticated and malformed generic bindings,
+    domain-separates anonymous/session credentials, and binds replay to the independently proven
+    principal. `627af6e03` de-duplicates that principal, rejects mismatches, and caps every raw
+    identity component before durable-store or handler access.
+  - **Evidence:** Alice/Bob cross-account and maximum/oversized identity regressions passed in the
+    combined exact-tip security matrix (378/378); maximum enhanced/no-JS raw scopes are
+    3,158/3,163 code units under the 4,096-code-unit store ceiling.
 
 - [ ] **H17 - Public raw endpoint responses could cache and replay credential state.**
   - A verifier-authorized raw `GET` endpoint could declare and emit `Cache-Control: public` with
