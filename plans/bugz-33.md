@@ -14,7 +14,7 @@ rendering, Better Auth, and managed SQL.
 
 | Severity | Open | Closed |
 | -------- | ---: | -----: |
-| High     |    0 |     10 |
+| High     |    1 |     10 |
 | Medium   |    0 |     15 |
 | Low      |    0 |      3 |
 
@@ -129,6 +129,18 @@ rendering, Better Auth, and managed SQL.
   - **Evidence:** real two-account SQLite login/read and legacy sibling-cookie control passed;
     Better Auth matrix 199/199 and combined auth/CSRF/replay/webhook matrix 297/297; dist, API, TCB,
     security-guarantee, wire, and mutation gates passed.
+
+- [ ] **H11 - Non-local Postgres credentials could travel without authenticated TLS.**
+  - External runtime, admin, system, and CLI database URLs passed directly to pinned node-postgres.
+    An absent/disabled SSL mode permitted cleartext, while `no-verify` and libpq-compatible
+    `require` permitted encryption without authenticating the server. Runtime data and privileged
+    provisioning credentials were therefore exposed to an on-path attacker.
+  - **Evidence:** pinned pg connection parameters selected cleartext for absent/disabled modes and
+    `rejectUnauthorized: false` for the unauthenticated modes; the real local TLS cluster accepted
+    those weaker connections before the gate.
+  - **Open:** require exact authenticated `sslmode=verify-full` for every non-loopback/non-Unix
+    runtime/admin/system/CLI URL, fail before any socket or credential use, and retain cleartext only
+    for genuinely local loopback/Unix development endpoints (SPEC §6.6/§9.4/§10.3).
 
 ## Medium
 
@@ -331,6 +343,5 @@ rendering, Better Auth, and managed SQL.
   API, and TCB gates passed.
 - Better Auth/SQLite/PGlite matrix: 200/200; real PostgreSQL and multi-process SQLite concurrency
   each admitted 3/20 with one row; replay 429-abort regression, dist, API, and TCB gates passed.
-- All confirmed findings are closed; final exact-tip remote-boundary review remains open until the
-  database transport hypothesis, parallel fresh passes, and full gates complete without a new
-  reachable issue.
+- Final exact-tip remote-boundary review remains open until H11 lands and the remaining fresh
+  rendering/static pass plus full gates complete without a new reachable issue.
