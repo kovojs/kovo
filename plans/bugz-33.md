@@ -15,7 +15,7 @@ rendering, Better Auth, and managed SQL.
 | Severity | Open | Closed |
 | -------- | ---: | -----: |
 | High     |    0 |      7 |
-| Medium   |    3 |      6 |
+| Medium   |    2 |      7 |
 | Low      |    0 |      3 |
 
 ## High
@@ -153,7 +153,7 @@ rendering, Better Auth, and managed SQL.
     store that bounds key admission and cleanup work across credential and arbitrary mount paths,
     uses database time, and fails closed at its resource ceiling.
 
-- [ ] **M9 - Direct HTTP/2 peers could forge or suppress HTTPS transport posture with
+- [x] **M9 - Direct HTTP/2 peers could forge or suppress HTTPS transport posture with
       `:scheme`.**
   - The generic Node HTTP/2 conversion treated the request-target pseudo-header as trusted
     transport evidence. A cleartext h2c client could supply `:scheme: https`, while an encrypted
@@ -161,9 +161,11 @@ rendering, Better Auth, and managed SQL.
     posture without an authenticated proxy boundary.
   - **Evidence:** a real `http2.createServer()` h2c request reached the Kovo handler as
     `https://app.example/transport-proof`; the encrypted-socket control was downgraded to `http`.
-  - **Open:** derive direct-request scheme from socket encryption, admit forwarded scheme only
-    after explicit `trustedProxy` authentication, and prove parity in source and emitted
-    Node/Vercel adapters (SPEC §9.5; RFC 9113 §8.3.1).
+  - **Fixed:** `4c4123764` derives direct-request scheme from socket encryption and admits
+    forwarded/pseudo-header scheme only after explicit `trustedProxy` authentication, with parity
+    in source and emitted Node/Vercel adapters (SPEC §9.5; RFC 9113 §8.3.1).
+  - **Evidence:** Node/scheme/build matrix 97/97; cookie/CSRF/response-posture matrix 163/163;
+    server dist, wire-output boundary, and API-surface gates passed.
 
 ## Low
 
