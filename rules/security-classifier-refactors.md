@@ -28,6 +28,7 @@ In-scope classifiers for this rule:
 - [ ] Outbound IP/egress classification (`packages/server/src/egress.ts`).
 - [ ] Better Auth credential/secret classification
       (`packages/better-auth/src/internal.ts`).
+- [ ] CSRF session/anonymous principal binding (`packages/server/src/csrf.ts`).
 - [ ] Sink registry policy (`packages/core/src/internal/source-sink-registry.ts` and
       `packages/core/src/internal/sink-policy.ts`).
 - [ ] Postgres identity and authorization posture.

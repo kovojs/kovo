@@ -371,6 +371,22 @@ describe('server mutation replay store', () => {
     expect(replayStore.get('scope', 'idem\0tail')).toEqual(second);
   });
 
+  it('length-frames mutation identity and CSRF session scope without delimiter collisions', async () => {
+    const first = await mutationReplayContext(false, {
+      idem: replayIdem('idem_scope_frame_first'),
+      mutationKey: 'account',
+      request: { sessionId: 'save\0alice' },
+    });
+    const second = await mutationReplayContext(false, {
+      idem: replayIdem('idem_scope_frame_second'),
+      mutationKey: 'account\0save',
+      request: { sessionId: 'alice' },
+    });
+
+    // Both pairs produced `account\0save\0alice` under the former delimiter concatenation.
+    expect(first.scope).not.toBe(second.scope);
+  });
+
   it('rejects replay-scope accessors before principal checks can observe different ids', async () => {
     let reads = 0;
     const request = {

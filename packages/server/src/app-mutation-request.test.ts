@@ -7,7 +7,7 @@ import { appLiveTargetAttestationAudience } from './live-target-app-identity.js'
 import { handleAppMutationRequest } from './app-mutation-request.js';
 import { csrfToken, mintIdemToken, resolveCsrfLiveTargetBinding } from './csrf.js';
 import { domain } from './domain.js';
-import { guard, guards } from './guards.js';
+import { guard, guards, resolveLifecycleRequest } from './guards.js';
 import { stylesheet } from './hints.js';
 import { renderedHtml } from './html.js';
 import { assignDerivedComponentName } from './internal/wire.js';
@@ -19,6 +19,7 @@ import {
 } from './live-target-registry.js';
 import { mutation } from './mutation.js';
 import { query } from './query.js';
+import { createMemoryMutationReplayStore } from './replay.js';
 import { route } from './route.js';
 import { s } from './schema.js';
 import { createLiveTargetAttestation, type LiveTargetRenderer } from './mutation-wire.js';
@@ -1072,7 +1073,16 @@ describe('server app mutation request boundary', () => {
     // synchronizer token is stamped into the form and validated before the guard chain.
     const seen: string[] = [];
     let sessionReads = 0;
-    const csrf = { secret: 'mutation-session-once-secret-key-0123456789', sessionId: () => 's1' };
+    type MutationSession = { id: string; user: { id: string } };
+    type MutationRequest = Request & { session?: MutationSession | null };
+    const csrf = {
+      secret: 'mutation-session-once-secret-key-0123456789',
+      sessionId: (request: MutationRequest) => request.session?.id,
+    };
+    const sessionProvider = () => {
+      sessionReads += 1;
+      return { id: 's1', user: { id: 'u1' } } satisfies MutationSession;
+    };
     const addToCart = mutation('cart/add', {
       guard: guards.authed(),
       input: s.object({ productId: s.string() }),
@@ -1088,14 +1098,17 @@ describe('server app mutation request boundary', () => {
     const app = createApp({
       csrf,
       mutations: [addToCart],
-      sessionProvider() {
-        sessionReads += 1;
-        return { user: { id: 'u1' } };
-      },
+      sessionProvider,
     });
+    const renderRequest = await resolveLifecycleRequest(
+      new Request('https://shop.example.test/cart'),
+      { sessionProvider },
+    );
+    const renderedToken = csrfToken(renderRequest, csrf, { audience: 'cart/add' });
+    sessionReads = 0;
     const form = new FormData();
     form.set('productId', 'p1');
-    form.set('kovo-csrf', csrfToken({}, csrf, { audience: 'cart/add' }));
+    form.set('kovo-csrf', renderedToken);
     const request = new Request('https://shop.example.test/_m/cart/add?from=button', {
       body: form,
       headers: { origin: 'https://shop.example.test' },
@@ -1109,6 +1122,79 @@ describe('server app mutation request boundary', () => {
     expect(sessionReads).toBe(1);
     expect(seen).toEqual(['handler:u1:p1']);
     expect('session' in request).toBe(false);
+  });
+
+  it('keeps shared CSRF rotation ids and replay records bound to the current framework principal', async () => {
+    // SPEC §6.6/§10.3: session/rotation identity and authorization principal are independent.
+    // Even a misconfigured provider that shares the former must not let Bob validate or replay
+    // Alice's private response/browser-state effects.
+    type SharedSession = { id: string; user: { id: string } };
+    type SharedRequest = Request & { session?: SharedSession | null };
+    const csrf = {
+      secret: 'shared-rotation-principal-secret-0123456789abcdef',
+      sessionId: (request: SharedRequest) => request.session?.id,
+    };
+    const sessionProvider = (request: Request): SharedSession | null => {
+      const userId = request.headers.get('x-user');
+      return userId === null ? null : { id: 'shared-rotation', user: { id: userId } };
+    };
+    const handlerUsers: string[] = [];
+    const save = mutation('account/save', {
+      guard: guards.authed(),
+      input: s.object({ value: s.string() }),
+      redirectTo: '/done',
+      handler(input, request, context) {
+        const userId = (request as SharedRequest).session!.user.id;
+        handlerUsers.push(userId);
+        context.setCookie('seen-user', userId);
+        return input;
+      },
+    });
+    const app = createApp({
+      csrf,
+      mutationReplayStore: createMemoryMutationReplayStore(),
+      mutations: [save],
+      sessionProvider,
+    });
+    const tokenFor = async (userId: string) => {
+      const renderRequest = await resolveLifecycleRequest(
+        new Request('https://shop.example.test/account', {
+          headers: { 'x-user': userId },
+        }),
+        { sessionProvider },
+      );
+      return csrfToken(renderRequest, csrf, { audience: save.key });
+    };
+    const idem = mintIdemToken();
+    const submit = async (userId: string, token: string) => {
+      const body = new FormData();
+      body.set('value', 'same-input');
+      body.set('kovo-csrf', token);
+      body.set('Kovo-Idem', idem);
+      const request = new Request('https://shop.example.test/_m/account/save', {
+        body,
+        headers: { origin: 'https://shop.example.test', 'x-user': userId },
+        method: 'POST',
+      });
+      return handleAppMutationRequest(app, request, new URL(request.url), save.key);
+    };
+
+    const aliceToken = await tokenFor('alice');
+    const alice = await submit('alice', aliceToken);
+    const crossPrincipal = await submit('bob', aliceToken);
+    const bob = await submit('bob', await tokenFor('bob'));
+
+    expect(alice.status).toBe(303);
+    expect(crossPrincipal.status).toBe(422);
+    expect(crossPrincipal.headers.getSetCookie()).toEqual([]);
+    expect(bob.status).toBe(303);
+    expect(alice.headers.getSetCookie()).toEqual([
+      '__Host-seen-user=alice; Path=/; HttpOnly; Secure; SameSite=Lax',
+    ]);
+    expect(bob.headers.getSetCookie()).toEqual([
+      '__Host-seen-user=bob; Path=/; HttpOnly; Secure; SameSite=Lax',
+    ]);
+    expect(handlerUsers).toEqual(['alice', 'bob']);
   });
 
   it('authorizes and reruns mutation failure UI against the canonical source GET request', async () => {

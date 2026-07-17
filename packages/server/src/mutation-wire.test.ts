@@ -484,7 +484,7 @@ describe('mutation wire headers', () => {
     ).toEqual([]);
   });
 
-  it('fails closed when live-target attestation is asked to use an unresolved principal', () => {
+  it('treats a standalone opaque live-target rotation id as callback-declared authority', () => {
     const request = { sessionId: 'unknown' };
     const csrf = {
       secret: 'live-target-secret-0123456789abcdef',
@@ -496,9 +496,11 @@ describe('mutation wire headers', () => {
       target: 'product-form:p1',
     };
 
-    expect(() =>
-      createLiveTargetAttestation(descriptor, { buildToken: 'build-a', csrf, request }),
-    ).toThrow(/unresolved session principal/);
+    const attestation = createLiveTargetAttestation(descriptor, {
+      buildToken: 'build-a',
+      csrf,
+      request,
+    });
 
     expect(
       mutationWireRequestFromHeaders({
@@ -506,13 +508,12 @@ describe('mutation wire headers', () => {
         liveTargetAudience: 'build-a',
         csrf,
         headers: {
-          'Kovo-Live-Targets':
-            'product-form:p1#components/product-form/product-form@attested:{"productId":"p1"}',
+          'Kovo-Live-Targets': `product-form:p1#components/product-form/product-form@${attestation}:{"productId":"p1"}`,
         },
         rawInput: {},
         request,
       }).liveTargetDescriptors,
-    ).toEqual([]);
+    ).toHaveLength(1);
   });
 
   it('attests no-CSRF live-target descriptors with a deployment-stable secret (M8)', () => {

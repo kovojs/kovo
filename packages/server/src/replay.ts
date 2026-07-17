@@ -621,7 +621,9 @@ function composeMutationReplayScope(
   mutationKey: string | undefined,
 ): string | null {
   if (sessionScope === null) return null;
-  return mutationKey === undefined ? sessionScope : `${mutationKey}\0${sessionScope}`;
+  return mutationKey === undefined
+    ? sessionScope
+    : requestStateExactCompositeKey(mutationKey, sessionScope);
 }
 
 export async function readMutationReplay<Response extends MutationReplayResponse>(
@@ -788,8 +790,12 @@ function mutationReplayScope<Request>(
   csrf: CsrfReplayScope<Request>,
   request: Request,
 ): string | null {
-  const csrfBinding = csrf === false ? undefined : resolveCsrfReplayBinding(request, csrf);
-  if (csrfBinding) return csrfBinding;
+  if (csrf !== false) {
+    // A protected mutation's replay authority is exactly the validated CSRF/principal binding.
+    // Never fall back to a structurally observed request.sessionId after that binding failed
+    // closed; doing so would reopen an anonymous/shared namespace behind the CSRF gate.
+    return resolveCsrfReplayBinding(request, csrf) ?? null;
+  }
 
   if (typeof request !== 'object' || request === null) return null;
   const sessionId = stableMutationReplayRequestValue(request, 'sessionId');

@@ -1,6 +1,10 @@
 import { isUntrusted, revealUntrusted } from '@kovojs/core';
 import { assertHtmlElementWireValueStable } from '@kovojs/core/internal/semantic-attributes';
 
+import {
+  frameworkSessionPrincipalPostureFromRequest,
+  principalPostureFromRequest,
+} from './auth-principal.js';
 import type { CookieOptions } from './cookies.js';
 import { serializeCookie } from './cookies.js';
 import { escapeWireAttribute } from './html.js';
@@ -49,9 +53,9 @@ import {
   securityRandomBytes,
   securityRegExpTest,
   securityStringSplit,
-  securityStringStartsWith,
   securityUint8ArrayLength,
 } from './response-security-intrinsics.js';
+import { requestStateExactCompositeKey } from './request-state-intrinsics.js';
 import { mintMutationIdemToken } from './mutation-idem.js';
 
 const NativeURL = globalThis.URL;
@@ -83,11 +87,16 @@ export interface CsrfAnonymousCookieOptions {
 
 /** CSRF config: a `secret`, a session extractor, and optional anonymous form binding. */
 export interface CsrfOptions<Request> {
-  /** Configure or disable the anonymous CSRF cookie used when `sessionId` returns undefined. */
+  /** Configure or disable the anonymous CSRF cookie used for a genuinely anonymous request. */
   anonymousCookie?: CsrfAnonymousCookieOptions | false;
   /** Form field name used as the default signing audience when no narrower sink audience is supplied. */
   field?: string;
   secret: SigningSecret;
+  /**
+   * Return the request's stable opaque 1..1,024-character session/rotation id, or `undefined` only
+   * when the request is anonymous. A framework-resolved authenticated session that returns
+   * `undefined`, a non-string/empty id, or an id longer than 1,024 characters fails closed.
+   */
   sessionId: (request: Request) => string | undefined;
   /**
    * Allowlist of cross-origin origins permitted to make unsafe-verb requests (SPEC §6.6/§9.1). Each
@@ -227,7 +236,7 @@ export function csrfToken<Request>(
   const binding = resolveCsrfBinding(request, options);
   if (!binding) throw new Error('csrfToken requires a session id or anonymous CSRF cookie');
 
-  return createCsrfToken(binding.value, options.secret, resolveCsrfAudience(options, context));
+  return createCsrfToken(binding, options.secret, resolveCsrfAudience(options, context));
 }
 
 /**
@@ -247,7 +256,7 @@ export function mintCsrfToken<Request>(
   const binding = resolveCsrfBinding(request, options, { mintAnonymous: true });
   if (!binding) throw new Error('mintCsrfToken requires a session id or anonymous CSRF cookie');
   return {
-    token: createCsrfToken(binding.value, options.secret, resolveCsrfAudience(options, context)),
+    token: createCsrfToken(binding, options.secret, resolveCsrfAudience(options, context)),
     ...(binding.setCookie === undefined ? {} : { setCookie: binding.setCookie }),
   };
 }
@@ -337,7 +346,7 @@ export function renderMutationCsrfField<Request>(definition: {
   });
   if (!binding) return '';
   if (binding.setCookie) context.onCsrfSetCookie?.(binding.setCookie);
-  return csrfFieldForBinding(binding.value, csrf, csrfAudience(csrf, key));
+  return csrfFieldForBinding(binding, csrf, csrfAudience(csrf, key));
 }
 
 /** @internal Pin mutation-local CSRF authority before the declaration receives its witness. */
@@ -597,8 +606,8 @@ export function validateCsrfToken<Request>(
   return (
     signingKeyRingFromSecret(options.secret).verify({
       audience: csrfAudience(options, context.audience),
-      payload: binding.value,
-      purpose: csrfPurpose(binding.value),
+      payload: binding.framed,
+      purpose: csrfPurpose(binding.kind),
       signature: submittedMac,
     }).ok === true
   );
@@ -638,14 +647,23 @@ export function mutationCsrfOptions<Request>(
 }
 
 interface CsrfBinding {
+  framed: string;
+  kind: 'anonymous' | 'session';
   setCookie?: string;
+  /** Raw cookie secret or app session/rotation id. Never use directly as a cross-kind key. */
   value: string;
 }
 
 const DEFAULT_ANONYMOUS_CSRF_COOKIE = 'kovo_csrf';
+const MAX_CSRF_SESSION_ID_LENGTH = 1_024;
+
+type CsrfSessionBindingResolution =
+  | { kind: 'absent' }
+  | { kind: 'binding'; value: CsrfBinding }
+  | { kind: 'invalid' };
 
 function csrfFieldForBinding<Request>(
-  binding: string,
+  binding: CsrfBinding,
   options: CsrfOptions<Request> & { field?: string },
   audience: string,
 ): string {
@@ -711,9 +729,65 @@ function resolveCsrfBinding<Request>(
   options: Pick<CsrfOptions<Request>, 'anonymousCookie' | 'sessionId'>,
   mintOptions: { anonymousCache?: Map<string, CsrfBinding>; mintAnonymous?: boolean } = {},
 ): CsrfBinding | undefined {
-  const sessionId = options.sessionId(request);
-  if (sessionId) return { value: sessionId };
+  const session = resolveCsrfSessionBinding(request, options);
+  if (session.kind === 'binding') return session.value;
+  if (session.kind === 'invalid') return undefined;
   return resolveAnonymousCsrfBinding(request, options, mintOptions);
+}
+
+function resolveCsrfSessionBinding<Request>(
+  request: Request,
+  options: Pick<CsrfOptions<Request>, 'sessionId'>,
+): CsrfSessionBindingResolution {
+  // Pin framework-owned principal truth before invoking the app callback. A lifecycle carrier has
+  // an explicit three-valued session posture; only its anonymous verdict may use the anonymous
+  // cookie namespace. Standalone csrfToken()/validateCsrfToken() helper requests have no framework
+  // posture, so their callback remains the declared authority (SPEC §6.5/§6.6).
+  const frameworkPosture = frameworkSessionPrincipalPostureFromRequest(request);
+  if (frameworkPosture?.kind === 'unresolved') return { kind: 'invalid' };
+
+  const sessionId = options.sessionId(request);
+  if (frameworkPosture?.kind === 'anonymous') {
+    return sessionId === undefined ? { kind: 'absent' } : { kind: 'invalid' };
+  }
+  if (sessionId === undefined) {
+    return frameworkPosture?.kind === 'proven' ? { kind: 'invalid' } : { kind: 'absent' };
+  }
+  if (!isValidCsrfSessionId(sessionId)) return { kind: 'invalid' };
+
+  return {
+    kind: 'binding',
+    value: createCsrfBinding(
+      'session',
+      sessionId,
+      frameworkPosture?.kind === 'proven' ? frameworkPosture.principal : undefined,
+    ),
+  };
+}
+
+function isValidCsrfSessionId(value: unknown): value is string {
+  // This is a credential-rotation identifier, not an authorization principal. Its contents stay
+  // opaque and are exact length-framed below; only the type and storage-amplification bounds are
+  // semantic here. In particular, text such as "anonymous" is safe in the session domain.
+  return (
+    typeof value === 'string' && value.length >= 1 && value.length <= MAX_CSRF_SESSION_ID_LENGTH
+  );
+}
+
+function createCsrfBinding(
+  kind: CsrfBinding['kind'],
+  value: string,
+  frameworkPrincipal?: string,
+): CsrfBinding {
+  const credential = requestStateExactCompositeKey(`csrf-binding-v2:${kind}`, value);
+  const framed =
+    frameworkPrincipal === undefined
+      ? credential
+      : requestStateExactCompositeKey(
+          credential,
+          requestStateExactCompositeKey('csrf-framework-principal-v2', frameworkPrincipal),
+        );
+  return { framed, kind, value };
 }
 
 function resolveAnonymousCsrfBinding<Request>(
@@ -730,7 +804,7 @@ function resolveAnonymousCsrfBinding<Request>(
   // binding round-trips, falling back to the bare name for the dev/no-Secure case and for cookies
   // minted before the floor existed.
   const existing = readAnonymousCsrfCookie(request, name);
-  if (isUsableAnonymousSigningSecret(existing)) return { value: `anonymous:${existing}` };
+  if (isUsableAnonymousSigningSecret(existing)) return createCsrfBinding('anonymous', existing);
   if (!mintOptions.mintAnonymous) return undefined;
 
   const cookie = buildAnonymousCsrfCookieOptions(request, cookieOptions);
@@ -742,13 +816,13 @@ function resolveAnonymousCsrfBinding<Request>(
   if (cached) return cached;
 
   const anonymousSecret = securityBufferToString(securityRandomBytes(32), 'base64url');
-  const value = `anonymous:${anonymousSecret}`;
+  const binding = createCsrfBinding('anonymous', anonymousSecret);
   if (mintOptions.anonymousCache !== undefined) {
-    securityMapSet(mintOptions.anonymousCache, cacheKey, { value });
+    securityMapSet(mintOptions.anonymousCache, cacheKey, binding);
   }
   return {
+    ...binding,
     setCookie: serializeCookie(name, anonymousSecret, cookie),
-    value,
   };
 }
 
@@ -766,12 +840,25 @@ export function resolveCsrfReplayBinding<Request>(
   request: Request,
   options: Pick<CsrfOptions<Request>, 'anonymousCookie' | 'sessionId'>,
 ): string | undefined {
-  return resolveCsrfBinding(request, options)?.value;
+  const binding = resolveCsrfBinding(request, options);
+  if (binding === undefined) return undefined;
+
+  // Replay independently composes the credential-rotation binding with the pinned authorization
+  // principal. The CSRF binding already carries a framework lifecycle principal when one exists;
+  // this second exact frame keeps replay sound for every other independently proven request shape
+  // and makes the `(principal, mutation, idem)` invariant explicit at its storage boundary.
+  const posture = principalPostureFromRequest(request);
+  return posture.kind === 'proven'
+    ? requestStateExactCompositeKey(
+        binding.framed,
+        requestStateExactCompositeKey('csrf-replay-principal-v2', posture.principal),
+      )
+    : binding.framed;
 }
 
 interface CsrfLiveTargetBinding {
+  framed: string;
   kind: 'anonymous' | 'session';
-  value: string;
 }
 
 /**
@@ -842,18 +929,28 @@ function resolveCsrfLiveTargetBindingInternal<Request>(
   if ((typeof request === 'object' || typeof request === 'function') && request !== null) {
     const pinnedAnonymous = witnessWeakMapGet(pinnedAnonymousLiveTargetBindings, request as object);
     if (pinnedAnonymous !== undefined) {
-      return { kind: 'anonymous', value: pinnedAnonymous };
+      const binding = createCsrfBinding('anonymous', pinnedAnonymous);
+      return { framed: binding.framed, kind: binding.kind };
     }
   }
 
-  // Live-target identity treats any defined session result as an attempted session principal.
-  // The attestation sink applies the proven-principal classifier, so blank/reserved/malformed app
-  // results cannot silently downgrade into an anonymous cookie scope.
-  const sessionId = options.sessionId(request);
-  if (sessionId !== undefined) return { kind: 'session', value: sessionId };
+  const session = resolveCsrfSessionBinding(request, options);
+  if (session.kind === 'binding') {
+    return {
+      framed: session.value.framed,
+      kind: session.value.kind,
+    };
+  }
+  if (session.kind === 'invalid') {
+    throw new TypeError(
+      'live-target attestation cannot use an unresolved session principal or invalid CSRF session binding.',
+    );
+  }
 
   const existing = resolveAnonymousCsrfBinding(request, options);
-  if (existing !== undefined) return { kind: 'anonymous', value: existing.value };
+  if (existing !== undefined) {
+    return { framed: existing.framed, kind: existing.kind };
+  }
   if (!mintAnonymousForResponse || options.anonymousCookie === false) return undefined;
 
   const context = currentJsxFrameworkContext();
@@ -875,7 +972,7 @@ function resolveCsrfLiveTargetBindingInternal<Request>(
   });
   if (binding === undefined) return undefined;
   if (binding.setCookie !== undefined) context.onCsrfSetCookie(binding.setCookie);
-  return { kind: 'anonymous', value: binding.value };
+  return { framed: binding.framed, kind: binding.kind };
 }
 
 function anonymousCsrfCacheKey(name: string, cookie: CookieOptions): string {
@@ -929,12 +1026,12 @@ function requestIsHttps(request: unknown): boolean {
 const CSRF_MASKED_TOKEN_VERSION = 'v1';
 const CSRF_MAC_BYTES = 32;
 
-function createCsrfToken(binding: string, secret: SigningSecret, audience: string): string {
+function createCsrfToken(binding: CsrfBinding, secret: SigningSecret, audience: string): string {
   const mac = securityBufferFrom(
     signingKeyRingFromSecret(secret).sign({
       audience,
-      payload: binding,
-      purpose: csrfPurpose(binding),
+      payload: binding.framed,
+      purpose: csrfPurpose(binding.kind),
     }).signature,
     'base64url',
   );
@@ -1025,8 +1122,10 @@ export function currentSigningSecret(secret: SigningSecret): string {
     : securityBufferToString(securityBufferFrom(current.secret), 'base64url');
 }
 
-function csrfPurpose(binding: string): string {
-  return securityStringStartsWith(binding, 'anonymous:') ? 'anonymous-csrf' : 'csrf';
+function csrfPurpose(kind: CsrfBinding['kind']): string {
+  // The framework signing capability intentionally exposes only these two reviewed purposes.
+  // Cross-kind/version separation lives in the exact length-framed payload.
+  return kind === 'anonymous' ? 'anonymous-csrf' : 'csrf';
 }
 
 function csrfAudience(options: { field?: string }, audience?: string): string {

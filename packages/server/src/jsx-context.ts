@@ -34,6 +34,8 @@ export interface JsxFrameworkContext {
 }
 
 export interface JsxAnonymousCsrfBinding {
+  framed: string;
+  kind: 'anonymous';
   value: string;
 }
 

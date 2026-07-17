@@ -1318,6 +1318,62 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
     ],
   },
   {
+    id: 'csrf-principal-binding',
+    marker: '@kovo-security-classifier-corpus csrf-principal-binding',
+    testFiles: [
+      'packages/server/src/csrf.test.ts',
+      'packages/server/src/app-mutation-request.test.ts',
+      'packages/server/src/replay.test.ts',
+      'packages/better-auth/src/environment.test.ts',
+    ],
+    verdictAnchors: [
+      {
+        id: 'bounded-generic-session-id-and-framework-posture',
+        file: 'packages/server/src/csrf.test.ts',
+        snippets: [
+          'accepts bounded opaque session ids and never downgrades malformed ids to a cookie',
+          'fails closed instead of using anonymous CSRF for proven, unresolved, or contradictory framework sessions',
+          "'x'.repeat(1_025)",
+        ],
+      },
+      {
+        id: 'session-anonymous-domain-separation',
+        file: 'packages/server/src/csrf.test.ts',
+        snippets: [
+          'length-frames session and anonymous bindings so namespace-shaped ids cannot collide',
+          'namespacedSessionId',
+        ],
+      },
+      {
+        id: 'replay-scope-length-framing',
+        file: 'packages/server/src/replay.test.ts',
+        snippets: [
+          'length-frames mutation identity and CSRF session scope without delimiter collisions',
+          "mutationKey: 'account\\0save'",
+          "request: { sessionId: 'save\\0alice' }",
+        ],
+      },
+      {
+        id: 'cross-principal-csrf-and-replay-isolation',
+        file: 'packages/server/src/app-mutation-request.test.ts',
+        snippets: [
+          'keeps shared CSRF rotation ids and replay records bound to the current framework principal',
+          'expect(crossPrincipal.status).toBe(422)',
+          "expect(handlerUsers).toEqual(['alice', 'bob'])",
+        ],
+      },
+      {
+        id: 'better-auth-session-id-floor',
+        file: 'packages/better-auth/src/environment.test.ts',
+        snippets: [
+          'owns request binding and rejects authored callbacks, malformed sessions, and Proxies',
+          '{ session: {} }',
+          "{ session: { id: '' }, authCsrfId: 'downgrade' }",
+        ],
+      },
+    ],
+  },
+  {
     id: 'mutation-idem',
     marker: '@kovo-security-classifier-corpus mutation-idem',
     testFiles: [

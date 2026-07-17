@@ -4,7 +4,6 @@ import type { JsonValue, Redirect } from '@kovojs/core';
 import { assertAndCloneJsonValue, canonicalJsonStringify } from '@kovojs/core/internal/json';
 import {
   frameworkSessionPrincipalPostureFromRequest,
-  isProvenPrincipal,
   principalPostureFromRequest,
 } from './auth-principal.js';
 import {
@@ -917,12 +916,10 @@ function liveTargetAttestationIdentity<Request>(
       : mintAnonymousForResponse
         ? mintCsrfLiveTargetBindingForResponse(options.request, options.csrf)
         : resolveCsrfLiveTargetBinding(options.request, options.csrf);
-  if (csrfIdentity?.kind === 'session' && !isProvenPrincipal(csrfIdentity.value)) {
-    throw new Error(
-      'live-target attestation cannot use an unresolved session principal from the CSRF binding.',
-    );
-  }
-  const csrfPrincipal = csrfIdentity?.value;
+  // `framed` domain-separates session and anonymous CSRF identities and, for framework lifecycle
+  // requests, includes the independently pinned principal. A session id whose raw text resembles
+  // an anonymous-cookie namespace can therefore never recreate the same attestation payload.
+  const csrfPrincipal = csrfIdentity?.framed;
 
   // A deployment may use the framework-owned live-target secret without configuring a global
   // CSRF keyring (for example when mutations own their CSRF posture). The route and mutation

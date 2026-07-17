@@ -18,6 +18,7 @@ import {
   renderNoJsMutationResponse,
   runMutation,
 } from './mutation.js';
+import { resolveLifecycleRequest } from './guards.js';
 import type { MutationReplayStore } from './replay.js';
 import { s } from './schema.js';
 
@@ -25,6 +26,7 @@ const TEST_CSRF_SECRET = 'test-csrf-secret-0123456789abcdef012345';
 const ANONYMOUS_CSRF_SECRET = 'anonymous-csrf-secret-0123456789abcdef';
 
 describe('csrf helpers', () => {
+  // @kovo-security-classifier-corpus csrf-principal-binding
   const request = { sessionId: 'session-1' };
   const csrf = {
     field: 'csrf<input>',
@@ -117,6 +119,150 @@ describe('csrf helpers', () => {
     expect(validateCsrfToken({ 'csrf<input>': token }, request, csrf)).toBe(true);
     expect(validateCsrfToken({ 'csrf<input>': `${token}x` }, request, csrf)).toBe(false);
     expect(validateCsrfToken({ 'csrf<input>': token }, { sessionId: '' }, csrf)).toBe(false);
+  });
+
+  it('C13 accepts bounded opaque session ids and never downgrades malformed ids to a cookie', () => {
+    const cookieRequest = new Request('https://shop.example.test/form', {
+      headers: {
+        cookie: '__Host-kovo_csrf=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+      },
+    });
+    const invalidIds = ['', 'x'.repeat(1_025)];
+
+    for (const invalidId of invalidIds) {
+      expect(() =>
+        csrfToken(cookieRequest, {
+          secret: TEST_CSRF_SECRET,
+          sessionId: () => invalidId,
+        }),
+      ).toThrow(/requires a session id or anonymous CSRF cookie/u);
+    }
+
+    const nonStringId = {
+      secret: TEST_CSRF_SECRET,
+      sessionId: () => 42,
+    };
+    expect(() =>
+      // @ts-expect-error Exercise the runtime floor for an untyped JavaScript configuration.
+      csrfToken(cookieRequest, nonStringId),
+    ).toThrow(/requires a session id or anonymous CSRF cookie/u);
+
+    for (const validId of ['s', 'anonymous', ' unknown ', 's'.repeat(1_024)]) {
+      const bounded = {
+        secret: TEST_CSRF_SECRET,
+        sessionId: () => validId,
+      };
+      const token = csrfToken({}, bounded, { audience: 'account/save' });
+      expect(
+        validateCsrfToken({ 'kovo-csrf': token }, {}, bounded, { audience: 'account/save' }),
+      ).toBe(true);
+    }
+  });
+
+  it('fails closed instead of using anonymous CSRF for proven, unresolved, or contradictory framework sessions', async () => {
+    type LifecycleSession = { id?: string; user?: { id: string } };
+    type LifecycleRequest = Request & { session?: LifecycleSession | null };
+    const secret = 'framework-session-binding-secret-0123456789abcdef';
+    const anonymousCsrf = {
+      secret,
+      sessionId: (_request: LifecycleRequest) => undefined,
+    };
+    const minted = mintCsrfToken(new Request('https://shop.example.test/form'), anonymousCsrf, {
+      audience: 'account/save',
+    });
+    const cookie = minted.setCookie?.split(';', 1)[0];
+    if (cookie === undefined) throw new TypeError('expected anonymous CSRF cookie');
+    const post = () =>
+      new Request('https://shop.example.test/_m/account/save', {
+        headers: { cookie, origin: 'https://shop.example.test' },
+        method: 'POST',
+      });
+    const proven = await resolveLifecycleRequest(post(), {
+      sessionProvider: () => ({ user: { id: 'alice' } }),
+    });
+    const unresolved = await resolveLifecycleRequest(post(), {
+      sessionProvider: () => ({ id: 'rotation-only' }),
+    });
+    const anonymous = await resolveLifecycleRequest(post(), {
+      sessionProvider: () => null,
+    });
+    const extracted = {
+      secret,
+      sessionId: (request: LifecycleRequest) => request.session?.id,
+    };
+
+    expect(
+      validateCsrfToken({ 'kovo-csrf': minted.token }, proven, extracted, {
+        audience: 'account/save',
+      }),
+    ).toBe(false);
+    expect(
+      validateCsrfToken(
+        { 'kovo-csrf': minted.token },
+        proven,
+        { ...extracted, sessionId: () => '' },
+        { audience: 'account/save' },
+      ),
+    ).toBe(false);
+    expect(
+      validateCsrfToken({ 'kovo-csrf': minted.token }, anonymous, extracted, {
+        audience: 'account/save',
+      }),
+    ).toBe(true);
+    expect(
+      validateCsrfToken(
+        { 'kovo-csrf': minted.token },
+        proven,
+        { ...extracted, sessionId: () => 'x'.repeat(1_025) },
+        { audience: 'account/save' },
+      ),
+    ).toBe(false);
+    expect(
+      validateCsrfToken(
+        { 'kovo-csrf': minted.token },
+        unresolved,
+        { ...extracted, sessionId: () => 'rotation-only' },
+        { audience: 'account/save' },
+      ),
+    ).toBe(false);
+    expect(
+      validateCsrfToken(
+        { 'kovo-csrf': minted.token },
+        anonymous,
+        { ...extracted, sessionId: () => 'contradictory-session' },
+        { audience: 'account/save' },
+      ),
+    ).toBe(false);
+  });
+
+  it('length-frames session and anonymous bindings so namespace-shaped ids cannot collide', () => {
+    type SessionRequest = Request & { session?: { id: string } };
+    const anonymousSecret = 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
+    const namespacedSessionId = `anonymous:${anonymousSecret}`;
+    const namespacedCsrf = {
+      secret: TEST_CSRF_SECRET,
+      sessionId: (request: SessionRequest) => request.session?.id,
+    };
+    const anonymousRequest = new Request('https://shop.example.test/form', {
+      headers: { cookie: `__Host-kovo_csrf=${anonymousSecret}` },
+    });
+    const anonymousToken = csrfToken(anonymousRequest, namespacedCsrf, {
+      audience: 'account/save',
+    });
+    const sessionRequest = new Request('https://shop.example.test/_m/account/save', {
+      headers: { origin: 'https://shop.example.test' },
+      method: 'POST',
+    }) as SessionRequest;
+    Object.defineProperty(sessionRequest, 'session', {
+      enumerable: true,
+      value: { id: namespacedSessionId },
+    });
+
+    expect(
+      validateCsrfToken({ 'kovo-csrf': anonymousToken }, sessionRequest, namespacedCsrf, {
+        audience: 'account/save',
+      }),
+    ).toBe(false);
   });
 
   it('rejects inherited and accessor-backed CSRF authority without invoking getters', () => {
