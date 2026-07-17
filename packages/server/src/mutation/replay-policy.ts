@@ -26,7 +26,9 @@ import {
   witnessIsArray,
   witnessObjectIs,
 } from '../security-witness-intrinsics.js';
-import { securityStringStartsWith } from '../response-security-intrinsics.js';
+import { securityRegExpTest, securityStringStartsWith } from '../response-security-intrinsics.js';
+
+const MUTATION_IDEM_TOKEN_PATTERN = /^[A-Za-z0-9_-]{1,1024}$/u;
 
 export type MutationLifecycleReplayReservation<Response> = {
   abort?(): Promise<void> | void;
@@ -91,7 +93,9 @@ export function enhancedMutationReplayPolicy<Request>(mode: {
   mutationKey: string;
   request: MutationWireRequest<Request>;
 }): MutationLifecycleReplayPolicy<BufferedMutationWireResponse> | undefined {
-  if (!mode.request.idem || !mode.request.replayStore) return undefined;
+  if (!mode.request.idem) return undefined;
+  if (!mutationIdemTokenIsValid(mode.request.idem)) return invalidMutationIdemReplayPolicy();
+  if (!mode.request.replayStore) return undefined;
   let context: ReturnType<typeof mutationReplayContext> | undefined;
   const replayContext = () =>
     (context ??= mutationReplayContext(mode.csrf ?? false, {
@@ -133,7 +137,9 @@ export function noJsMutationReplayPolicy<Request, Value>(mode: {
 }): MutationLifecycleReplayPolicy<NoJsMutationResponse> | undefined {
   // A2 (SPEC §10.3:1063/1151): derive the idem from the hidden `Kovo-Idem` form field.
   const idem = mode.request.idem ?? readNoJsIdemField(mode.request.rawInput);
-  if (!idem || !mode.request.replayStore) return undefined;
+  if (!idem) return undefined;
+  if (!mutationIdemTokenIsValid(idem)) return invalidMutationIdemReplayPolicy();
+  if (!mode.request.replayStore) return undefined;
 
   let context: ReturnType<typeof mutationReplayContext> | undefined;
   const replayContext = () =>
@@ -181,6 +187,23 @@ export function noJsMutationReplayPolicy<Request, Value>(mode: {
         kind: 'reserved',
         reservation: noJsReplayReservation(result.reservation),
       };
+    },
+  };
+}
+
+function mutationIdemTokenIsValid(value: string): boolean {
+  // SPEC §10.3: bound the client-controlled replay key before any volatile, custom, or durable
+  // store sees it. The framework's UUID/base64url mints are a strict subset of this grammar.
+  return securityRegExpTest(MUTATION_IDEM_TOKEN_PATTERN, value);
+}
+
+function invalidMutationIdemReplayPolicy<Response>(): MutationLifecycleReplayPolicy<Response> {
+  return {
+    read() {
+      throw new MutationReplayConflictError();
+    },
+    reserve() {
+      return { kind: 'conflict' };
     },
   };
 }

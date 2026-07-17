@@ -613,6 +613,33 @@ describe('no-JS mutation responses', () => {
     expect(writes).toEqual(['silent-a@example.test']);
   });
 
+  it('rejects an oversized no-JS Kovo-Idem before store or handler execution', async () => {
+    const handler = vi.fn((input: { email: string }) => input);
+    const storeGet = vi.fn(() => undefined);
+    const storeReserve = vi.fn(() => undefined);
+    const addContact = mutation('contacts/bounded-idem', {
+      input: s.object({ email: s.string() }),
+      handler,
+    });
+    const form = new FormData();
+    form.set('email', 'bounded@example.test');
+    form.set(KOVO_IDEM_FIELD_NAME, 'a'.repeat(1_025));
+
+    const response = await renderMutationEndpointResponse(addContact, {
+      headers: new Headers(),
+      rawInput: form,
+      redirectTo: '/contacts',
+      replayStore: { get: storeGet, reserve: storeReserve, set() {} },
+      request: { sessionId: 's1' },
+    });
+
+    expect(response.status).toBe(422);
+    expect(response.body).toContain('data-error-code="IDEMPOTENCY_CONFLICT"');
+    expect(storeGet).not.toHaveBeenCalled();
+    expect(storeReserve).not.toHaveBeenCalled();
+    expect(handler).not.toHaveBeenCalled();
+  });
+
   it('rejects no-JS Kovo-Idem collisions when parsed FormData fields are tagged untrusted', async () => {
     const writes: string[] = [];
     const addContact = mutation('contacts/add-tagged', {

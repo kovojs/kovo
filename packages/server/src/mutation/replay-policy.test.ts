@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
+// @kovo-security-classifier-corpus mutation-idem
+
+import { KOVO_IDEM_FIELD_NAME } from '../csrf.js';
+import { MutationReplayConflictError } from '../replay.js';
 import type { MutationEndpointReplayResponse, NoJsMutationRequest } from '../mutation-wire.js';
 import {
   isEnhancedReplayResponse,
@@ -8,6 +12,84 @@ import {
 } from './replay-policy.js';
 
 describe('mutation replay response authority', () => {
+  it.each([
+    ['oversized', 'a'.repeat(1_025)],
+    ['non-base64url', 'idem with spaces'],
+  ])('rejects a supplied %s no-JS token before replay-store access', async (_label, idem) => {
+    let storeCalls = 0;
+    const replayStore = {
+      get() {
+        storeCalls += 1;
+        return undefined;
+      },
+      reserve() {
+        storeCalls += 1;
+        return undefined;
+      },
+      set() {
+        storeCalls += 1;
+      },
+    };
+    const request = {
+      rawInput: { [KOVO_IDEM_FIELD_NAME]: idem },
+      redirectTo: '/',
+      replayStore,
+      request: {},
+    } as NoJsMutationRequest<object, unknown>;
+    const policy = noJsMutationReplayPolicy({
+      csrf: false,
+      mutationKey: 'settings/update',
+      request,
+    });
+
+    expect(() => policy?.read()).toThrow(MutationReplayConflictError);
+    expect(storeCalls).toBe(0);
+  });
+
+  it('rejects an invalid supplied token even when replay storage is disabled', async () => {
+    const request = {
+      rawInput: { [KOVO_IDEM_FIELD_NAME]: 'a'.repeat(1_025) },
+      redirectTo: '/',
+      request: {},
+    } as NoJsMutationRequest<object, unknown>;
+    const policy = noJsMutationReplayPolicy({
+      csrf: false,
+      mutationKey: 'settings/update',
+      request,
+    });
+
+    expect(() => policy?.read()).toThrow(MutationReplayConflictError);
+  });
+
+  it('admits the 1,024-character base64url boundary to replay storage', async () => {
+    let observedIdem: string | undefined;
+    const replayStore = {
+      get(_scope: string, idem: string) {
+        observedIdem = idem;
+        return undefined;
+      },
+      reserve() {
+        return undefined;
+      },
+      set() {},
+    };
+    const idem = 'a'.repeat(1_024);
+    const request = {
+      rawInput: { [KOVO_IDEM_FIELD_NAME]: idem },
+      redirectTo: '/',
+      replayStore,
+      request: {},
+    } as NoJsMutationRequest<object, unknown>;
+    const policy = noJsMutationReplayPolicy({
+      csrf: false,
+      mutationKey: 'settings/update',
+      request,
+    });
+
+    await expect(policy?.read()).resolves.toBeUndefined();
+    expect(observedIdem).toBe(idem);
+  });
+
   it('classifies only stable own-data response vocabulary under poisoned string intrinsics', () => {
     const originalStartsWith = String.prototype.startsWith;
     let noJs = true;

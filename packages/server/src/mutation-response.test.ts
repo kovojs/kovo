@@ -1262,6 +1262,24 @@ describe('server mutation primitives', () => {
     expect(handler).toHaveBeenCalledOnce();
   });
 
+  it('rejects an invalid enhanced Kovo-Idem before handler execution without a replay store', async () => {
+    const handler = vi.fn((input: { productId: string }) => input);
+    const addToCart = mutation('cart/invalid-idem', {
+      input: s.object({ productId: s.string() }),
+      handler,
+    });
+
+    const response = await renderMutationResponse(addToCart, {
+      idem: 'not a base64url token',
+      rawInput: { productId: 'p1' },
+      request: { sessionId: 's1' },
+    });
+
+    expect(response.status).toBe(422);
+    expect(response.body).toContain('data-error-code="IDEMPOTENCY_CONFLICT"');
+    expect(handler).not.toHaveBeenCalled();
+  });
+
   it('renders a defined error when a post-commit rerun query fails', async () => {
     const cart = domain('cart');
     const cartQuery = query('cart', {
