@@ -361,6 +361,34 @@ export function frameworkCanonicalNativeSqlImmediateSource(value: unknown): obje
   return isRecord(value) ? witnessWeakMapGet(frameworkCanonicalNativeSqlSources, value) : undefined;
 }
 
+/** Resolve the pinned physical table name for a framework-reconstructed Drizzle column. @internal */
+export function frameworkCanonicalNativeSqlColumnTableName(value: unknown): string | undefined {
+  if (
+    !isRecord(value) ||
+    witnessWeakMapGet(frameworkCanonicalNativeSqlSources, value) === undefined
+  ) {
+    return undefined;
+  }
+  const tableDescriptor = witnessGetOwnPropertyDescriptor(value, 'table');
+  if (
+    tableDescriptor === undefined ||
+    !('value' in tableDescriptor) ||
+    !isRecord(tableDescriptor.value) ||
+    witnessWeakMapGet(frameworkCanonicalNativeSqlSources, tableDescriptor.value) === undefined
+  ) {
+    return undefined;
+  }
+  const baseNameDescriptor = witnessGetOwnPropertyDescriptor(
+    tableDescriptor.value,
+    DRIZZLE_TABLE_BASE_NAME,
+  );
+  return baseNameDescriptor !== undefined &&
+    'value' in baseNameDescriptor &&
+    typeof baseNameDescriptor.value === 'string'
+    ? baseNameDescriptor.value
+    : undefined;
+}
+
 /**
  * Reconstruct a native Drizzle table once for a framework adapter's construction-time execution
  * witness. Later caller mutations are ignored: the adapter can resolve the private provenance edge

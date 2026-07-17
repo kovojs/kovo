@@ -28,6 +28,7 @@ import {
   witnessWeakMapSet,
 } from './security-witness-intrinsics.js';
 import {
+  frameworkCanonicalNativeSqlColumnTableName,
   frameworkCanonicalNativeSqlImmediateSource,
   frameworkCanonicalNativeSqlSource,
   frameworkManagedDbRawTarget,
@@ -154,6 +155,7 @@ interface PinnedRelationalReadQuery {
   readonly nestedResultKeys: ReadonlySet<string>;
   readonly opaqueResultKeys: ReadonlySet<string>;
   readonly preparedTerminals: ReadonlySet<string>;
+  readonly rootTableName: string | undefined;
   execute(property: PropertyKey, args: readonly unknown[]): unknown;
 }
 
@@ -765,7 +767,7 @@ function wrapReadSurface(
       (result: unknown) => boxSecretReadRows(result, metadata, inheritedBoundary),
     ]);
   }
-  const relationalQuery = inheritedRelationalQuery ?? pinRelationalReadQuery(value);
+  const relationalQuery = inheritedRelationalQuery ?? pinRelationalReadQuery(value, metadata);
   return witnessProxy(value, {
     get(target, prop, receiver) {
       const item = witnessReflectGet(target, prop, receiver);
@@ -941,6 +943,28 @@ function selectedProjectionReadBoundary(
       continue;
     }
     if (isColumnLike(field)) {
+      const canonicalTableName = frameworkCanonicalNativeSqlColumnTableName(field);
+      if (canonicalTableName !== undefined) {
+        const columnName = optionalOwnDataValue(field, 'name');
+        const tableSecretColumnNames = witnessMapGet(
+          metadata.secretColumnNamesByTable as Map<string, ReadonlySet<string>>,
+          canonicalTableName,
+        );
+        if (typeof columnName !== 'string') {
+          witnessSetAdd(opaqueResultKeys, key);
+        } else if (
+          tableSecretColumnNames !== undefined &&
+          witnessSetHas(tableSecretColumnNames as Set<string>, columnName)
+        ) {
+          witnessSetAdd(secretResultKeys, key);
+        } else if (
+          tableSecretColumnNames === undefined &&
+          witnessSetHas(metadata.secretTableNames as Set<string>, canonicalTableName)
+        ) {
+          witnessSetAdd(opaqueResultKeys, key);
+        }
+        continue;
+      }
       const canonicalSecret = canonicalColumnSecretVerdict(field, metadata);
       if (canonicalSecret === true) witnessSetAdd(secretResultKeys, key);
       else if (canonicalSecret === undefined && referencesSecretTable) {
@@ -960,7 +984,10 @@ function selectedProjectionReadBoundary(
   };
 }
 
-function pinRelationalReadQuery(value: object): PinnedRelationalReadQuery | undefined {
+function pinRelationalReadQuery(
+  value: object,
+  metadata: SecretReadMetadata,
+): PinnedRelationalReadQuery | undefined {
   const queryTarget = frameworkManagedDbRawTarget(value) ?? value;
   const configValue = optionalOwnDataValue(queryTarget, 'config');
   const tableConfig = optionalOwnDataValue(queryTarget, 'tableConfig');
@@ -998,6 +1025,7 @@ function pinRelationalReadQuery(value: object): PinnedRelationalReadQuery | unde
     nestedResultKeys: posture.nestedResultKeys,
     opaqueResultKeys: posture.opaqueResultKeys,
     preparedTerminals,
+    rootTableName: relationalRootTableName(tableConfig, metadata),
     execute(property: PropertyKey, args: readonly unknown[]) {
       if (args.length > 1) {
         throw new TypeError('Relational query terminals accept at most one placeholder bag.');
@@ -1026,6 +1054,33 @@ function pinRelationalReadQuery(value: object): PinnedRelationalReadQuery | unde
       return witnessReflectApply(sync, result, []);
     },
   });
+}
+
+function relationalRootTableName(
+  tableConfig: Record<string, unknown>,
+  metadata: SecretReadMetadata,
+): string | undefined {
+  const table = optionalOwnDataValue(tableConfig, 'table');
+  if (!isObjectLike(table)) return undefined;
+  const keys = witnessObjectKeys(table);
+  let tableName: string | undefined;
+  for (let index = 0; index < keys.length; index += 1) {
+    const descriptor = witnessGetOwnPropertyDescriptor(table, keys[index]!);
+    if (descriptor === undefined || !('value' in descriptor)) return undefined;
+    if (!isObjectLike(descriptor.value)) continue;
+    const sourceIdentity = frameworkCanonicalNativeSqlSource(descriptor.value) ?? descriptor.value;
+    const source = witnessMapGet(
+      metadata.columnSources as Map<object, SecretReadColumnSource>,
+      sourceIdentity,
+    );
+    if (source === undefined) {
+      if (isColumnLike(descriptor.value)) return undefined;
+      continue;
+    }
+    if (tableName !== undefined && tableName !== source.table) return undefined;
+    tableName = source.table;
+  }
+  return tableName;
 }
 
 function createPinnedRelationalPreparedFacade(
@@ -1106,15 +1161,39 @@ function relationalReadBoundary(
   query: PinnedRelationalReadQuery | undefined,
   metadata: SecretReadMetadata,
 ): SecretReadBoundary {
-  return query === undefined
-    ? emptyReadBoundary()
-    : {
-        ...emptyReadBoundary(),
-        opaqueResultKeys: query.opaqueResultKeys,
-        secretColumnKeys: metadata.secretColumnKeys,
-        secretColumnNames: metadata.secretColumnNames,
-        secretColumnScopeKnown: true,
-      };
+  if (query === undefined) return emptyReadBoundary();
+  const empty = emptyReadBoundary();
+  const canScopeToRoot =
+    query.rootTableName !== undefined && witnessSetSize(query.nestedResultKeys) === 0;
+  const rootSecretColumnKeys =
+    query.rootTableName === undefined
+      ? undefined
+      : witnessMapGet(
+          metadata.secretColumnKeysByTable as Map<string, ReadonlySet<string>>,
+          query.rootTableName,
+        );
+  const rootSecretColumnNames =
+    query.rootTableName === undefined
+      ? undefined
+      : witnessMapGet(
+          metadata.secretColumnNamesByTable as Map<string, ReadonlySet<string>>,
+          query.rootTableName,
+        );
+  return {
+    ...empty,
+    opaqueResultKeys: query.opaqueResultKeys,
+    // A flat relational result belongs to one pinned Drizzle table. Scope same-named columns to
+    // that table so an unrelated whole-secret table (for example rateLimit.id) cannot taint a
+    // public phase5_pg_orders.id. Nested relation payloads retain the conservative global union
+    // until each nested result key carries its own table provenance (SPEC §6.6 C9, §10.3).
+    secretColumnKeys: canScopeToRoot
+      ? (rootSecretColumnKeys ?? empty.secretColumnKeys)
+      : metadata.secretColumnKeys,
+    secretColumnNames: canScopeToRoot
+      ? (rootSecretColumnNames ?? empty.secretColumnNames)
+      : metadata.secretColumnNames,
+    secretColumnScopeKnown: true,
+  };
 }
 
 function readBuilderTerminalMode(

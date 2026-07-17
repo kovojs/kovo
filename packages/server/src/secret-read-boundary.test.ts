@@ -6,7 +6,7 @@ import Database from 'better-sqlite3';
 import { defineRelations, sql as drizzleSql } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
 import { drizzle as drizzlePostgres } from 'drizzle-orm/pglite';
-import { pgTable, text as pgText } from 'drizzle-orm/pg-core';
+import { alias, pgTable, text as pgText } from 'drizzle-orm/pg-core';
 import { sqliteTable, text } from 'drizzle-orm/sqlite-core';
 import {
   createSecretBoxingReadDb,
@@ -715,6 +715,86 @@ describe('secret read boundary', () => {
         .execute({});
       expect(preparedPublic[0]!.label).toBe('public-label');
       expect(isSecret(preparedPublic[0]!.label)).toBe(false);
+    } finally {
+      await client.close();
+    }
+  });
+
+  it('scopes same-named secret columns to pinned tables across Postgres read shapes', async () => {
+    const client = new PGlite();
+    try {
+      await client.exec(
+        [
+          'create table public_records (id text primary key, label text not null, classified text not null)',
+          'create table whole_secret_records (id text primary key, classified text not null)',
+          "insert into public_records values ('p1', 'public-label', 'public-record-secret')",
+          "insert into whole_secret_records values ('s1', 'victim-secret')",
+          'create view public_record_view as select id, label from public_records',
+        ].join(';'),
+      );
+      const publicRecords = pgTable(
+        'public_records',
+        {
+          classified: pgText('classified').notNull(),
+          id: pgText('id').primaryKey(),
+          label: pgText('label').notNull(),
+        },
+        kovo({ domain: 'public-record', key: 'id', secret: ['classified'] }),
+      );
+      const wholeSecretRecords = pgTable(
+        'whole_secret_records',
+        {
+          classified: pgText('classified').notNull(),
+          id: pgText('id').primaryKey(),
+        },
+        kovo({ domain: 'whole-secret-record', key: 'id', secret: true }),
+      );
+      const relations = defineRelations({ publicRecords, wholeSecretRecords }, () => ({}));
+      const publicRecordView = pgTable('public_record_view', {
+        id: pgText('id').primaryKey(),
+        label: pgText('label').notNull(),
+      });
+      const raw = drizzlePostgres({ client, relations });
+      const safe = wrapManagedDbForSqlSafety(
+        raw,
+        'enforce',
+        managedSqlExecutionPolicy({ capability: 'read' }),
+      );
+      const db = createSecretBoxingReadDb(
+        safe,
+        extractKovoRuntimeDbMetadata([publicRecords, wholeSecretRecords]),
+        {
+          executeSql: async (statement) =>
+            (await client.query(statement.text, [...statement.params])).rows,
+        },
+      );
+
+      const publicRows = await db.query.publicRecords.findMany({
+        columns: { id: true, label: true },
+      });
+      const publicRecordsAlias = alias(publicRecords, 'public_records_alias');
+      const aliasRows = await db
+        .select({ id: publicRecordsAlias.id, label: publicRecordsAlias.label })
+        .from(publicRecordsAlias);
+      const aliasSecretRows = await db
+        .select({ classified: publicRecordsAlias.classified })
+        .from(publicRecordsAlias);
+      const viewRows = await db
+        .select({ id: publicRecordView.id, label: publicRecordView.label })
+        .from(publicRecordView);
+      const secretRows = await db.query.wholeSecretRecords.findMany({
+        columns: { id: true },
+      });
+
+      expect(publicRows).toEqual([{ id: 'p1', label: 'public-label' }]);
+      expect(aliasRows).toEqual([{ id: 'p1', label: 'public-label' }]);
+      expect(viewRows).toEqual([{ id: 'p1', label: 'public-label' }]);
+      expect(isSecret(publicRows[0]?.id)).toBe(false);
+      expect(isSecret(aliasRows[0]?.id)).toBe(false);
+      expect(isSecret(aliasSecretRows[0]?.classified)).toBe(true);
+      expect(isSecret(viewRows[0]?.id)).toBe(false);
+      expect(() => JSON.stringify({ aliasRows, publicRows, viewRows })).not.toThrow();
+      expect(isSecret(secretRows[0]?.id)).toBe(true);
     } finally {
       await client.close();
     }
