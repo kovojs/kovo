@@ -504,9 +504,13 @@ async function expectPostgresWriteBoundary(
   jar: Map<string, string>,
 ): Promise<void> {
   const mutationKey = 'paranoid-phase5-postgres-proof/phase5-pg-cross-owner-order-write-proof';
-  const csrf = await fetchMutationCsrf(origin, jar, mutationKey);
+  const fields = await fetchMutationFields(origin, jar, mutationKey);
   const crossOwnerWrite = await fetch(`${origin}/_m/${mutationKey}`, {
-    body: new URLSearchParams({ csrf, marker: 'phase5-pg-cross' }),
+    body: new URLSearchParams({
+      csrf: fields.csrf,
+      'Kovo-Idem': fields.idem,
+      marker: 'phase5-pg-cross',
+    }),
     headers: {
       'content-type': 'application/x-www-form-urlencoded',
       cookie: cookieHeader(jar),
@@ -535,9 +539,9 @@ async function expectPostgresTaskAndWebhook(
   output: () => string,
 ): Promise<void> {
   const mutationKey = 'paranoid-phase5-postgres-proof/phase5-pg-schedule-task';
-  const csrf = await fetchMutationCsrf(origin, jar, mutationKey);
+  const fields = await fetchMutationFields(origin, jar, mutationKey);
   const taskResponse = await fetch(`${origin}/_m/${mutationKey}`, {
-    body: new URLSearchParams({ csrf, marker }),
+    body: new URLSearchParams({ csrf: fields.csrf, 'Kovo-Idem': fields.idem, marker }),
     headers: {
       'content-type': 'application/x-www-form-urlencoded',
       cookie: cookieHeader(jar),
@@ -569,11 +573,13 @@ async function expectPostgresTaskAndWebhook(
   await expectEventuallyPostgresEventCount(origin, 2, output);
 }
 
-async function fetchMutationCsrf(
+async function fetchMutationFields(
   origin: string,
   jar: Map<string, string>,
   mutation: string,
-): Promise<string> {
+): Promise<{ csrf: string; idem: string }> {
+  // SPEC §10.3: a no-JS browser submission carries both the CSRF binding and the per-submit
+  // idempotency token emitted by the framework-authored form.
   const response = await fetch(`${origin}/`, {
     headers: { cookie: cookieHeader(jar) },
   });
@@ -581,8 +587,10 @@ async function fetchMutationCsrf(
   expect(response.status, body).toBe(200);
   const form = formHtmlByAction(body, `/_m/${mutation}`);
   const csrf = fieldValue(form, 'csrf');
+  const idem = fieldValue(form, 'Kovo-Idem');
   expect(csrf).toBeTruthy();
-  return csrf;
+  expect(idem).toMatch(/^v1_\d{13}_[0-9a-f]{32}$/u);
+  return { csrf, idem };
 }
 
 async function expectEventuallyPostgresEventCount(
@@ -825,9 +833,13 @@ async function expectBlockedWrites(
   output: () => string,
 ): Promise<void> {
   for (const key of blockedWriteCases) {
-    const csrf = await fetchMutationCsrf(origin, jar, key);
+    const fields = await fetchMutationFields(origin, jar, key);
     const response = await fetch(`${origin}/_m/${key}`, {
-      body: new URLSearchParams({ csrf, marker: phase5WriteMarker }),
+      body: new URLSearchParams({
+        csrf: fields.csrf,
+        'Kovo-Idem': fields.idem,
+        marker: phase5WriteMarker,
+      }),
       headers: {
         'content-type': 'application/x-www-form-urlencoded',
         cookie: cookieHeader(jar),
