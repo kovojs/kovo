@@ -108,7 +108,7 @@ const WEBHOOK_REPLAY_MAX_FUTURE_SKEW_MS = 5 * 60_000;
 declare const webhookTxDbBrand: unique symbol;
 declare const webhookReplayIdentityBrand: unique symbol;
 
-/** HTTP statuses a webhook failure replay response may store and replay (SPEC §9.1). */
+/** HTTP statuses a typed webhook failure response may carry (SPEC §9.1). */
 export type WebhookFailureStatus = 400 | 401 | 422 | 429 | 500;
 
 /** HTTP status a successful webhook replay response stores and replays (SPEC §9.1). */
@@ -1630,11 +1630,27 @@ export async function runWebhook<
     };
   } catch (error) {
     if (isWebhookRollback(error)) {
+      const failureResponse = webhookFailWireResponse(error.failure, replayIdentity?.key);
+
+      // SPEC §9.1: fail() makes provider retry semantics explicit. A 429 or 500 is a
+      // retryable answer, so committing it as replay truth would permanently turn every
+      // redelivery into the same transient failure without re-running the rolled-back handler.
+      // Release the claim exactly like an unexpected pre-commit handler failure. Deterministic
+      // 4xx outcomes remain replayable so duplicates cannot repeatedly execute app code.
+      if (error.failure.status === 429 || error.failure.status === 500) {
+        await reservation?.abort?.();
+        return {
+          changes: [],
+          replayed: false,
+          response: responseFromWire(failureResponse),
+        };
+      }
+
       const response = await storeWebhookReplay(
         definition.replayStore,
         replayScope,
         replayIdentity,
-        webhookFailWireResponse(error.failure, replayIdentity?.key),
+        failureResponse,
         reservation,
       );
 

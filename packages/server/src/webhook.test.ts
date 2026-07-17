@@ -1557,6 +1557,107 @@ describe('server webhook primitive', () => {
     expect(steps).toEqual(['begin', 'rollback']);
   });
 
+  it.each([429, 500] as const)(
+    'does not retain a retryable context.fail() %s as committed replay truth',
+    async (status) => {
+      const replayStore = createMemoryWebhookReplayStore();
+      let handlerCalls = 0;
+      const retryableWebhook = webhook('/webhooks/retryable-failure', {
+        handler(input, context) {
+          handlerCalls += 1;
+          if (handlerCalls === 1) {
+            return context.fail(
+              'TEMPORARILY_UNAVAILABLE',
+              { id: input.id },
+              status === 429 ? { retryAfter: 1, status } : { status },
+            );
+          }
+          return { received: input.id };
+        },
+        idempotency: (input) => testWebhookReplayIdentity(input.id),
+        input: s.object({ id: s.string() }),
+        replayStore,
+        verify: customVerifier(
+          'authenticated-retryable-failure',
+          (request) => request.headers.get('x-provider-signature') === 'accepted',
+        ),
+      });
+      const body = JSON.stringify({ id: `evt_retryable_${status}` });
+      const makeRequest = () =>
+        new Request('https://example.test/webhooks/retryable-failure', {
+          body,
+          headers: { 'x-provider-signature': 'accepted' },
+          method: 'POST',
+        });
+
+      const first = await runWebhook(retryableWebhook, makeRequest());
+      const retry = await runWebhook(retryableWebhook, makeRequest());
+
+      expect(first.replayed).toBe(false);
+      expect(first.response.status).toBe(status);
+      if (status === 429) expect(first.response.headers.get('retry-after')).toBe('1');
+      expect(retry.replayed).toBe(false);
+      expect(retry.response.status).toBe(200);
+      expect(handlerCalls).toBe(2);
+    },
+  );
+
+  it('releases a retryable failure after a concurrent duplicate fails closed', async () => {
+    const replayStore = createDurableWebhookReplayStore();
+    let handlerCalls = 0;
+    let resolveEntered = (): void => undefined;
+    const entered = new Promise<void>((resolve) => (resolveEntered = resolve));
+    let releaseHandler = (): void => undefined;
+    const released = new Promise<void>((resolve) => (releaseHandler = resolve));
+    const retryableWebhook = webhook('/webhooks/concurrent-retryable-failure', {
+      async handler(input, context) {
+        handlerCalls += 1;
+        if (handlerCalls === 1) {
+          resolveEntered();
+          await released;
+          return context.fail(
+            'TEMPORARILY_UNAVAILABLE',
+            { id: input.id },
+            { retryAfter: 5, status: 429 },
+          );
+        }
+        return { received: input.id };
+      },
+      idempotency: (input) => testWebhookReplayIdentity(input.id),
+      input: s.object({ id: s.string() }),
+      replayStore,
+      verify: customVerifier(
+        'authenticated-concurrent-retryable-failure',
+        (request) => request.headers.get('x-provider-signature') === 'accepted',
+      ),
+    });
+    const body = JSON.stringify({ id: 'evt_concurrent_retryable' });
+    const makeRequest = () =>
+      new Request('https://example.test/webhooks/concurrent-retryable-failure', {
+        body,
+        headers: { 'x-provider-signature': 'accepted' },
+        method: 'POST',
+      });
+
+    const pendingFirst = runWebhook(retryableWebhook, makeRequest());
+    await entered;
+    const concurrent = await runWebhook(retryableWebhook, makeRequest());
+    expect(concurrent.response.status).toBe(429);
+    expect(concurrent.response.headers.get('retry-after')).toBe('1');
+    expect(handlerCalls).toBe(1);
+
+    releaseHandler();
+    const first = await pendingFirst;
+    expect(first.response.status).toBe(429);
+    expect(first.response.headers.get('retry-after')).toBe('5');
+    expect(first.replayed).toBe(false);
+
+    const retry = await runWebhook(retryableWebhook, makeRequest());
+    expect(retry.response.status).toBe(200);
+    expect(retry.replayed).toBe(false);
+    expect(handlerCalls).toBe(2);
+  });
+
   it('recognizes only context.fail() outcomes as framework rollback authority', async () => {
     const structural = {
       error: { code: 'FORGED_FAILURE', payload: { attacker: true } },
