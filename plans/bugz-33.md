@@ -15,7 +15,7 @@ rendering, Better Auth, and managed SQL.
 | Severity | Open | Closed |
 | -------- | ---: | -----: |
 | High     |    1 |      7 |
-| Medium   |    1 |     12 |
+| Medium   |    0 |     13 |
 | Low      |    0 |      3 |
 
 ## High
@@ -224,15 +224,18 @@ rendering, Better Auth, and managed SQL.
   - **Evidence:** real-wire/live/generated Node and Vercel authority matrix 97/97; broader
     adapter/mutation/CSRF/cookie/posture matrix 244/244; server dist, wire, API, and VP gates passed.
 
-- [ ] **M13 - Trusted proxy schemes silently coerced malformed values to HTTP.**
+- [x] **M13 - Trusted proxy schemes silently coerced malformed values to HTTP.**
   - With `trustedProxy` enabled, present noncanonical `:scheme` values were read through a generic
     header helper and every value other than exact `https` became `http`. A malformed trusted field
     could therefore suppress secure-cookie and HSTS posture rather than fail closed.
   - **Evidence:** real h2c `:scheme: javascript` reached the handler as an HTTP URL; an encrypted
     carrier with the same present-invalid field was also downgraded. Vercel's edge XFP path had the
     equivalent present-invalid fallback.
-  - **Open:** validate exact trusted scheme fields, reject malformed scalar/array values across
-    live and emitted adapters, and retain the already-proven closest-hop XFP semantics (SPEC §9.5).
+  - **Fixed:** `403cdaa11` fail-closes present-invalid HTTP/2 pseudo-schemes and Vercel edge XFP,
+    normalizes valid pseudo-scheme casing, preserves the closest-hop XFP rule, and keeps live and
+    emitted adapters in parity (SPEC §9.5).
+  - **Evidence:** Node/request-scheme/build matrix 106/106; cookie/CSRF/response-posture/document
+    matrix 163/163; server dist, wire, API, and VP gates passed.
 
 ## Low
 
@@ -264,7 +267,8 @@ rendering, Better Auth, and managed SQL.
 - Document/app-document focused matrix: 96/96.
 - Normalized raw-target Node/build parity matrix: 95/95; wire-output boundary gate passed.
 - Host-authority live/generated matrix: 97/97; wire-output boundary gate passed.
+- Trusted-scheme live/generated matrix: 106/106; wire-output boundary gate passed.
 - Better Auth/SQLite/PGlite matrix: 200/200; real PostgreSQL and multi-process SQLite concurrency
   each admitted 3/20 with one row; replay 429-abort regression, dist, API, and TCB gates passed.
-- Final exact-tip remote-boundary review remains open until H8 and M13 land and the parallel fresh
-  passes find no new remotely reachable issue.
+- Final exact-tip remote-boundary review remains open until H8 lands and the parallel fresh passes
+  find no new remotely reachable issue.
