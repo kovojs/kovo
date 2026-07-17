@@ -498,6 +498,33 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
     ],
   },
   {
+    id: 'runtime-secret-provenance',
+    marker: '@kovo-security-classifier-corpus runtime-secret-provenance',
+    testFiles: ['packages/server/src/secret-read-boundary.test.ts'],
+    verdictAnchors: [
+      {
+        id: 'pinned-table-same-name-scope',
+        file: 'packages/server/src/secret-read-boundary.test.ts',
+        snippets: [
+          'scopes same-named secret columns to pinned tables across Postgres read shapes',
+          'expect(() => JSON.stringify({ aliasRows, publicRows, viewRows })).not.toThrow()',
+          'expect(isSecret(aliasSecretRows[0]?.classified)).toBe(true)',
+          'expect(isSecret(secretRows[0]?.id)).toBe(true)',
+        ],
+      },
+      {
+        id: 'nested-and-opaque-closed-controls',
+        file: 'packages/server/src/secret-read-boundary.test.ts',
+        snippets: [
+          'deep-boxes relational namespaces and parameter-bearing prepared terminals',
+          'expect(isSecret(first?.derived)).toBe(true)',
+          'expect(isSecret(parent.secrets[0]!.classified)).toBe(true)',
+          'refuses raw secret-table reads without a declared capability',
+        ],
+      },
+    ],
+  },
+  {
     id: 'response-transport-headers',
     marker: '@kovo-security-classifier-corpus response-transport-headers',
     testFiles: [

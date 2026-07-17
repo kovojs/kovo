@@ -16,6 +16,8 @@ import {
 } from './secret-read-boundary.js';
 import { managedSqlExecutionPolicy, wrapManagedDbForSqlSafety } from './sql-safe-handle.js';
 
+// @kovo-security-classifier-corpus runtime-secret-provenance
+
 const secretColumn = { name: 'classified' };
 const publicColumn = { name: 'label' };
 const metricColumn = { name: 'amount' };
