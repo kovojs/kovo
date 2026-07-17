@@ -44,6 +44,10 @@ and carried by generated registries and internal wire references (`/_m/*`, `/_q/
 `<kovo-query>`, replay scopes, touch graphs). App-authored TSX and server modules do not write
 registry-name strings merely to repeat facts the compiler can derive; emitted IR may retain residual
 strings only when those strings are validated against the generated graph (§4.8, §6.1, §11.3).
+Every mutation registry identity is a non-empty string of at most 1,024 JavaScript code units. The
+compiler/runtime assignment boundary MUST enforce that ceiling before consuming an unkeyed
+declaration or composing replay scope, so a source-derived name cannot overflow durable identity
+storage.
 Explicit strings remain appropriate for conceptual groupings that intentionally span declarations and
 are not one declaration's identity, such as a shared mutation queue (§10.4).
 

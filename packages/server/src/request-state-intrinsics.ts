@@ -320,6 +320,34 @@ export function requestStateRightmostForwardedForValue(value: string | null): st
 
 const MAX_RATE_LIMIT_KEY_LENGTH = 1_024;
 
+/**
+ * Shared upper bound for raw identity components that are canonically length-framed into a
+ * mutation replay scope. Three maximum-sized components must remain below the durable Postgres
+ * store's 4,096-code-unit raw scope ceiling even after framing and the no-JS namespace prefix.
+ */
+export const MAX_MUTATION_REPLAY_IDENTITY_COMPONENT_LENGTH = 1_024;
+
+export function requestStateIsBoundedMutationReplayIdentity(value: unknown): value is string {
+  assertRequestStateIntrinsics();
+  return (
+    typeof value === 'string' &&
+    value.length >= 1 &&
+    value.length <= MAX_MUTATION_REPLAY_IDENTITY_COMPONENT_LENGTH
+  );
+}
+
+export function requestStateBoundedMutationReplayIdentity(
+  value: unknown,
+  description: string,
+): string {
+  if (!requestStateIsBoundedMutationReplayIdentity(value)) {
+    throw new TypeError(
+      `${description} must be a 1..${MAX_MUTATION_REPLAY_IDENTITY_COMPONENT_LENGTH}-code-unit string.`,
+    );
+  }
+  return value;
+}
+
 export function requestStateOptionalRateLimitKey(
   value: unknown,
   description: string,

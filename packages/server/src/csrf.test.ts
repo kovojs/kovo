@@ -159,6 +159,73 @@ describe('csrf helpers', () => {
     }
   });
 
+  it('accepts a 1,024-code-unit framework principal and rejects 1,025 before anonymous fallback', async () => {
+    type PrincipalSession = { id: string; user: { id: string } };
+    type PrincipalRequest = Request & { session?: PrincipalSession | null };
+    const sessionId = 's'.repeat(1_024);
+    const boundedCsrf = {
+      secret: TEST_CSRF_SECRET,
+      sessionId: (candidate: PrincipalRequest) => candidate.session?.id,
+    };
+    const lifecycleRequest = async (principal: string) =>
+      resolveLifecycleRequest(new Request('https://shop.example.test/account'), {
+        sessionProvider: () => ({ id: sessionId, user: { id: principal } }),
+      });
+    const accepted = await lifecycleRequest('p'.repeat(1_024));
+    const token = csrfToken(accepted, boundedCsrf, { audience: 'account/save' });
+
+    expect(
+      validateCsrfToken({ 'kovo-csrf': token }, accepted, boundedCsrf, {
+        audience: 'account/save',
+      }),
+    ).toBe(true);
+
+    const oversized = await lifecycleRequest('p'.repeat(1_025));
+    expect(() => csrfToken(oversized, boundedCsrf, { audience: 'account/save' })).toThrow(
+      /requires a session id or anonymous CSRF cookie/u,
+    );
+    expect(() => mintCsrfToken(oversized, boundedCsrf, { audience: 'account/save' })).toThrow(
+      /requires a session id or anonymous CSRF cookie/u,
+    );
+  });
+
+  it('accepts at most 1,024 anonymous-cookie code units and keeps framework mints at 43', () => {
+    const anonymousOptions = {
+      secret: TEST_CSRF_SECRET,
+      sessionId: () => undefined,
+    };
+    const requestWith = (secret: string) =>
+      new Request('https://shop.example.test/account', {
+        headers: { cookie: `__Host-kovo_csrf=${secret}` },
+      });
+    const maximum = 'A'.repeat(1_024);
+    const maximumRequest = requestWith(maximum);
+    const maximumToken = csrfToken(maximumRequest, anonymousOptions, {
+      audience: 'account/save',
+    });
+    expect(
+      validateCsrfToken({ 'kovo-csrf': maximumToken }, maximumRequest, anonymousOptions, {
+        audience: 'account/save',
+      }),
+    ).toBe(true);
+
+    const oversized = requestWith('A'.repeat(1_025));
+    expect(() => csrfToken(oversized, anonymousOptions, { audience: 'account/save' })).toThrow(
+      /requires a session id or anonymous CSRF cookie/u,
+    );
+    expect(() => mintCsrfToken(oversized, anonymousOptions, { audience: 'account/save' })).toThrow(
+      /requires a session id or anonymous CSRF cookie/u,
+    );
+
+    const minted = mintCsrfToken(
+      new Request('https://shop.example.test/account'),
+      anonymousOptions,
+      { audience: 'account/save' },
+    );
+    const mintedSecret = minted.setCookie?.split('=', 2)[1]?.split(';', 1)[0];
+    expect(mintedSecret).toHaveLength(43);
+  });
+
   it('fails closed instead of using anonymous CSRF for proven, unresolved, or contradictory framework sessions', async () => {
     type LifecycleSession = { id?: string; user?: { id: string } };
     type LifecycleRequest = Request & { session?: LifecycleSession | null };

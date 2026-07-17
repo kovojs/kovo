@@ -1324,6 +1324,8 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
       'packages/server/src/csrf.test.ts',
       'packages/server/src/app-mutation-request.test.ts',
       'packages/server/src/replay.test.ts',
+      'packages/server/src/mutation/replay-policy.test.ts',
+      'packages/server/src/mutation.test.ts',
       'packages/better-auth/src/environment.test.ts',
     ],
     verdictAnchors: [
@@ -1354,12 +1356,57 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
         ],
       },
       {
+        id: 'bounded-replay-scope-budget',
+        file: 'packages/server/src/replay.test.ts',
+        snippets: [
+          'uses one embedded framework principal and one standalone replay principal within the durable scope budget',
+          'toHaveLength(3_158)',
+          'rejects a changed embedded framework principal before returning a replay scope',
+        ],
+      },
+      {
+        id: 'bounded-nojs-replay-scope-budget',
+        file: 'packages/server/src/mutation/replay-policy.test.ts',
+        snippets: [
+          'keeps the maximum framework identity within the no-JS durable scope budget',
+          'toHaveLength(3_163)',
+          'rejects an oversized mutation identity before no-JS replay-store access',
+        ],
+      },
+      {
+        id: 'bounded-csrf-principal-and-anonymous-secret',
+        file: 'packages/server/src/csrf.test.ts',
+        snippets: [
+          'accepts a 1,024-code-unit framework principal and rejects 1,025 before anonymous fallback',
+          'accepts at most 1,024 anonymous-cookie code units and keeps framework mints at 43',
+          "'A'.repeat(1_025)",
+        ],
+      },
+      {
+        id: 'bounded-source-derived-mutation-identity',
+        file: 'packages/server/src/mutation.test.ts',
+        snippets: [
+          'bounds compiler-derived mutation keys to 1,024 code units before consuming the definition',
+          "'m'.repeat(1_025)",
+          "defineMutation('m'.repeat(1_025)",
+        ],
+      },
+      {
         id: 'cross-principal-csrf-and-replay-isolation',
         file: 'packages/server/src/app-mutation-request.test.ts',
         snippets: [
           'keeps shared CSRF rotation ids and replay records bound to the current framework principal',
           'expect(crossPrincipal.status).toBe(422)',
           "expect(handlerUsers).toEqual(['alice', 'bob'])",
+        ],
+      },
+      {
+        id: 'oversized-principal-fails-before-effects',
+        file: 'packages/server/src/app-mutation-request.test.ts',
+        snippets: [
+          'rejects an oversized framework principal before replay-store or handler execution',
+          'expect(replayStore.get).not.toHaveBeenCalled()',
+          'expect(handler).not.toHaveBeenCalled()',
         ],
       },
       {

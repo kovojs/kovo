@@ -55,7 +55,12 @@ import {
   securityStringSplit,
   securityUint8ArrayLength,
 } from './response-security-intrinsics.js';
-import { requestStateExactCompositeKey } from './request-state-intrinsics.js';
+import {
+  MAX_MUTATION_REPLAY_IDENTITY_COMPONENT_LENGTH,
+  requestStateBoundedMutationReplayIdentity,
+  requestStateExactCompositeKey,
+  requestStateIsBoundedMutationReplayIdentity,
+} from './request-state-intrinsics.js';
 import { mintMutationIdemToken } from './mutation-idem.js';
 
 const NativeURL = globalThis.URL;
@@ -647,6 +652,8 @@ export function mutationCsrfOptions<Request>(
 }
 
 interface CsrfBinding {
+  /** Principal already embedded in `framed`; replay must not append it a second time. */
+  embeddedFrameworkPrincipal?: string;
   framed: string;
   kind: 'anonymous' | 'session';
   setCookie?: string;
@@ -655,7 +662,7 @@ interface CsrfBinding {
 }
 
 const DEFAULT_ANONYMOUS_CSRF_COOKIE = 'kovo_csrf';
-const MAX_CSRF_SESSION_ID_LENGTH = 1_024;
+const MAX_CSRF_SESSION_ID_LENGTH = MAX_MUTATION_REPLAY_IDENTITY_COMPONENT_LENGTH;
 
 type CsrfSessionBindingResolution =
   | { kind: 'absent' }
@@ -754,14 +761,18 @@ function resolveCsrfSessionBinding<Request>(
     return frameworkPosture?.kind === 'proven' ? { kind: 'invalid' } : { kind: 'absent' };
   }
   if (!isValidCsrfSessionId(sessionId)) return { kind: 'invalid' };
+  const frameworkPrincipal =
+    frameworkPosture?.kind === 'proven' ? frameworkPosture.principal : undefined;
+  if (
+    frameworkPrincipal !== undefined &&
+    !requestStateIsBoundedMutationReplayIdentity(frameworkPrincipal)
+  ) {
+    return { kind: 'invalid' };
+  }
 
   return {
     kind: 'binding',
-    value: createCsrfBinding(
-      'session',
-      sessionId,
-      frameworkPosture?.kind === 'proven' ? frameworkPosture.principal : undefined,
-    ),
+    value: createCsrfBinding('session', sessionId, frameworkPrincipal),
   };
 }
 
@@ -787,7 +798,12 @@ function createCsrfBinding(
           credential,
           requestStateExactCompositeKey('csrf-framework-principal-v2', frameworkPrincipal),
         );
-  return { framed, kind, value };
+  return {
+    ...(frameworkPrincipal === undefined ? {} : { embeddedFrameworkPrincipal: frameworkPrincipal }),
+    framed,
+    kind,
+    value,
+  };
 }
 
 function resolveAnonymousCsrfBinding<Request>(
@@ -804,7 +820,11 @@ function resolveAnonymousCsrfBinding<Request>(
   // binding round-trips, falling back to the bare name for the dev/no-Secure case and for cookies
   // minted before the floor existed.
   const existing = readAnonymousCsrfCookie(request, name);
-  if (isUsableAnonymousSigningSecret(existing)) return createCsrfBinding('anonymous', existing);
+  if (existing !== undefined) {
+    return isUsableAnonymousSigningSecret(existing)
+      ? createCsrfBinding('anonymous', existing)
+      : undefined;
+  }
   if (!mintOptions.mintAnonymous) return undefined;
 
   const cookie = buildAnonymousCsrfCookieOptions(request, cookieOptions);
@@ -843,15 +863,27 @@ export function resolveCsrfReplayBinding<Request>(
   const binding = resolveCsrfBinding(request, options);
   if (binding === undefined) return undefined;
 
-  // Replay independently composes the credential-rotation binding with the pinned authorization
-  // principal. The CSRF binding already carries a framework lifecycle principal when one exists;
-  // this second exact frame keeps replay sound for every other independently proven request shape
-  // and makes the `(principal, mutation, idem)` invariant explicit at its storage boundary.
+  // A framework lifecycle binding already embeds its pinned principal. Repeating the same value
+  // here wastes the durable store's 4,096-code-unit raw-scope budget; require the current pinned
+  // posture to match that metadata exactly and consume the canonical binding once. Standalone
+  // request shapes have no embedded framework principal, so replay independently adds a bounded
+  // proven principal when one exists.
   const posture = principalPostureFromRequest(request);
+  if (binding.embeddedFrameworkPrincipal !== undefined) {
+    if (posture.kind !== 'proven' || posture.principal !== binding.embeddedFrameworkPrincipal) {
+      throw new TypeError(
+        'CSRF replay binding principal changed after the framework principal was embedded.',
+      );
+    }
+    return binding.framed;
+  }
   return posture.kind === 'proven'
     ? requestStateExactCompositeKey(
         binding.framed,
-        requestStateExactCompositeKey('csrf-replay-principal-v2', posture.principal),
+        requestStateExactCompositeKey(
+          'csrf-replay-principal-v2',
+          requestStateBoundedMutationReplayIdentity(posture.principal, 'CSRF replay principal'),
+        ),
       )
     : binding.framed;
 }
@@ -1016,7 +1048,11 @@ function readCookieValue(request: unknown, name: string): string | undefined {
 }
 
 function isUsableAnonymousSigningSecret(value: string | undefined): value is string {
-  return value !== undefined && securityRegExpTest(/^[A-Za-z0-9_-]{32,}$/, value);
+  return (
+    value !== undefined &&
+    value.length <= MAX_MUTATION_REPLAY_IDENTITY_COMPONENT_LENGTH &&
+    securityRegExpTest(/^[A-Za-z0-9_-]{32,}$/, value)
+  );
 }
 
 function requestIsHttps(request: unknown): boolean {

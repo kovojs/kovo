@@ -52,6 +52,7 @@ import {
   witnessWeakSetHas,
 } from './security-witness-intrinsics.js';
 import {
+  requestStateBoundedMutationReplayIdentity,
   requestStateExactCompositeKey,
   requestStateIgnorePromiseRejection,
   requestStateIsSafeInteger,
@@ -620,10 +621,14 @@ function composeMutationReplayScope(
   sessionScope: string | null,
   mutationKey: string | undefined,
 ): string | null {
+  const boundedMutationKey =
+    mutationKey === undefined
+      ? undefined
+      : requestStateBoundedMutationReplayIdentity(mutationKey, 'Mutation replay identity');
   if (sessionScope === null) return null;
-  return mutationKey === undefined
+  return boundedMutationKey === undefined
     ? sessionScope
-    : requestStateExactCompositeKey(mutationKey, sessionScope);
+    : requestStateExactCompositeKey(boundedMutationKey, sessionScope);
 }
 
 export async function readMutationReplay<Response extends MutationReplayResponse>(

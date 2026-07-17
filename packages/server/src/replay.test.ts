@@ -4,7 +4,8 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { untrusted } from '@kovojs/core';
 
-import { csrfToken, mintCsrfField, type CsrfOptions } from './csrf.js';
+import { registerFrameworkSessionPrincipalSnapshot } from './auth-principal.js';
+import { csrfToken, mintCsrfField, resolveCsrfReplayBinding, type CsrfOptions } from './csrf.js';
 import { domain } from './domain.js';
 import { renderMutationResponse as renderMutationResponseBase } from './mutation.js';
 import { query } from './query.js';
@@ -385,6 +386,79 @@ describe('server mutation replay store', () => {
 
     // Both pairs produced `account\0save\0alice` under the former delimiter concatenation.
     expect(first.scope).not.toBe(second.scope);
+  });
+
+  it('uses one embedded framework principal and one standalone replay principal within the durable scope budget', async () => {
+    type PrincipalRequest = {
+      session: { id: string; user: { id: string } };
+    };
+    const sessionId = 's'.repeat(1_024);
+    const principal = 'p'.repeat(1_024);
+    const mutationKey = 'm'.repeat(1_024);
+    const csrf = {
+      secret: 'replay-scope-budget-secret-0123456789abcdef',
+      sessionId: (candidate: PrincipalRequest) => candidate.session.id,
+    };
+    const frameworkRequest: PrincipalRequest = {
+      session: { id: sessionId, user: { id: principal } },
+    };
+    registerFrameworkSessionPrincipalSnapshot(frameworkRequest, frameworkRequest.session);
+
+    expect(resolveCsrfReplayBinding(frameworkRequest, csrf)).toHaveLength(2_124);
+    const frameworkContext = await mutationReplayContext(csrf, {
+      mutationKey,
+      request: frameworkRequest,
+    });
+    expect(frameworkContext.scope).toHaveLength(3_158);
+
+    const standaloneRequest: PrincipalRequest = {
+      session: { id: sessionId, user: { id: principal } },
+    };
+    expect(resolveCsrfReplayBinding(standaloneRequest, csrf)).toHaveLength(2_121);
+  });
+
+  it('rejects a changed embedded framework principal before returning a replay scope', () => {
+    type PrincipalRequest = {
+      session: { id: string; user: { id: string } };
+    };
+    const request: PrincipalRequest = {
+      session: { id: 'rotation', user: { id: 'alice' } },
+    };
+    registerFrameworkSessionPrincipalSnapshot(request, request.session);
+    const csrf = {
+      secret: 'replay-principal-mismatch-secret-0123456789abcdef',
+      sessionId(candidate: PrincipalRequest) {
+        registerFrameworkSessionPrincipalSnapshot(candidate, {
+          id: 'rotation',
+          user: { id: 'bob' },
+        });
+        return candidate.session.id;
+      },
+    };
+
+    expect(() => resolveCsrfReplayBinding(request, csrf)).toThrow(
+      /principal changed after the framework principal was embedded/u,
+    );
+  });
+
+  it('rejects 1,025-code-unit replay principals and mutation identities before store use', async () => {
+    const oversizedPrincipalRequest = {
+      session: { id: 'rotation', user: { id: 'p'.repeat(1_025) } },
+    };
+    const csrf = {
+      secret: 'replay-component-bound-secret-0123456789abcdef',
+      sessionId: (candidate: typeof oversizedPrincipalRequest) => candidate.session.id,
+    };
+
+    expect(() => resolveCsrfReplayBinding(oversizedPrincipalRequest, csrf)).toThrow(
+      /CSRF replay principal must be a 1\.\.1024-code-unit string/u,
+    );
+    await expect(
+      mutationReplayContext(false, {
+        mutationKey: 'm'.repeat(1_025),
+        request: { sessionId: 'session' },
+      }),
+    ).rejects.toThrow(/Mutation replay identity must be a 1\.\.1024-code-unit string/u);
   });
 
   it('rejects replay-scope accessors before principal checks can observe different ids', async () => {

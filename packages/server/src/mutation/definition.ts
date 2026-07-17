@@ -13,6 +13,7 @@ import type { Domain } from '../domain.js';
 import type { Guard, RequestLifecycleOptions } from '../guards.js';
 import { escapeWireAttribute } from '../html.js';
 import type { ErrorBoundaryRenderer, FragmentRenderer } from '../mutation-wire.js';
+import { requestStateBoundedMutationReplayIdentity } from '../request-state-intrinsics.js';
 import { mutationInputFileFields, type InferSchema, type Schema } from '../schema.js';
 import {
   createWitnessWeakMap,
@@ -551,12 +552,11 @@ export function mutation(
     if (definition === undefined) {
       throw new TypeError('mutation(key, definition) requires a definition object.');
     }
+    const key = requestStateBoundedMutationReplayIdentity(keyOrDefinition, 'mutation registry key');
     const closedDefinition = snapshotMutationDefinition(definition);
     const fileFields = witnessFreeze(mutationInputFileFields(closedDefinition.input));
     const queue =
-      closedDefinition.queue === true
-        ? keyOrDefinition
-        : normalizeMutationQueue(closedDefinition.queue);
+      closedDefinition.queue === true ? key : normalizeMutationQueue(closedDefinition.queue);
     return markDeclaredMutationDefinition(
       pinAccessDecision(
         {
@@ -564,12 +564,12 @@ export function mutation(
           ...(fileFields.length === 0
             ? {}
             : { enctype: 'multipart/form-data' as const, fileFields }),
-          key: keyOrDefinition,
+          key,
           ...(queue === undefined ? {} : { queue }),
         } as MutationDefinition<string> & { key: string },
         closedDefinition.access,
       ),
-      { key: keyOrDefinition, state: 'keyed' },
+      { key, state: 'keyed' },
     ) as MutationDefinition<string> & MutationFormDefinition<string>;
   }
 
@@ -650,9 +650,10 @@ export function assignDerivedMutationKey<Mutation extends MutationDefinition<str
   definition: Mutation,
   key: string,
 ): Mutation {
-  if (!key) {
-    throw new TypeError('assignDerivedMutationKey() requires a non-empty mutation key.');
-  }
+  const boundedKey = requestStateBoundedMutationReplayIdentity(
+    key,
+    'assignDerivedMutationKey() mutation key',
+  );
   if (typeof definition !== 'object' || definition === null || witnessIsArray(definition)) {
     throw new TypeError(
       'assignDerivedMutationKey() requires the exact unkeyed definition returned by mutation().',
@@ -661,7 +662,7 @@ export function assignDerivedMutationKey<Mutation extends MutationDefinition<str
   const declarationWitness = witnessWeakMapGet(declaredMutationDefinitions, definition);
   if (declarationWitness?.state === 'keyed') {
     throw new TypeError(
-      `Cannot assign derived mutation key "${key}" to mutation already keyed as "${declarationWitness.key}".`,
+      `Cannot assign derived mutation key "${boundedKey}" to mutation already keyed as "${declarationWitness.key}".`,
     );
   }
   if (declarationWitness?.state !== 'unkeyed') {
@@ -677,17 +678,17 @@ export function assignDerivedMutationKey<Mutation extends MutationDefinition<str
     definition as Omit<MutationDefinition<any, any, any, any, any, any>, 'key'>,
   );
   const queue =
-    closedDefinition.queue === true ? key : normalizeMutationQueue(closedDefinition.queue);
+    closedDefinition.queue === true ? boundedKey : normalizeMutationQueue(closedDefinition.queue);
   return markDeclaredMutationDefinition(
     pinAccessDecision(
       {
         ...closedDefinition,
-        key,
+        key: boundedKey,
         ...(queue === undefined ? {} : { queue }),
       } as MutationDefinition<string> & { key: string },
       closedDefinition.access,
     ),
-    { key, state: 'keyed' },
+    { key: boundedKey, state: 'keyed' },
   ) as Mutation;
 }
 

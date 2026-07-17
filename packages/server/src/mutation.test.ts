@@ -476,6 +476,36 @@ describe('server mutation lifecycle', () => {
     );
   });
 
+  it('bounds compiler-derived mutation keys to 1,024 code units before consuming the definition', () => {
+    const definition = () =>
+      defineMutation({
+        csrf: false,
+        csrfJustification: 'bounded generated mutation key fixture',
+        input: s.object({}),
+        handler() {
+          return 'ok';
+        },
+      });
+    const maximum = assignDerivedMutationKey(definition(), 'm'.repeat(1_024));
+    expect(maximum.key).toHaveLength(1_024);
+
+    const retryable = definition();
+    expect(() => assignDerivedMutationKey(retryable, 'm'.repeat(1_025))).toThrow(
+      /mutation key must be a 1\.\.1024-code-unit string/u,
+    );
+    expect(assignDerivedMutationKey(retryable, 'account/save').key).toBe('account/save');
+    expect(() =>
+      defineMutation('m'.repeat(1_025), {
+        csrf: false,
+        csrfJustification: 'bounded direct mutation key fixture',
+        input: s.object({}),
+        handler() {
+          return 'unreachable';
+        },
+      }),
+    ).toThrow(/mutation registry key must be a 1\.\.1024-code-unit string/u);
+  });
+
   it('rejects conflicting compiler-derived mutation keys', () => {
     const addToCart = defineMutation({
       csrf: false,

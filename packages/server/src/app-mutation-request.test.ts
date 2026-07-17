@@ -1197,6 +1197,59 @@ describe('server app mutation request boundary', () => {
     expect(handlerUsers).toEqual(['alice', 'bob']);
   });
 
+  it('rejects an oversized framework principal before replay-store or handler execution', async () => {
+    type OversizedSession = { id: string; user: { id: string } };
+    type OversizedRequest = Request & { session?: OversizedSession | null };
+    const principal = 'p'.repeat(1_025);
+    const csrf = {
+      secret: 'oversized-framework-principal-secret-0123456789abcdef',
+      sessionId: (request: OversizedRequest) => request.session?.id,
+    };
+    const replayStore = {
+      get: vi.fn(() => undefined),
+      reserve: vi.fn(() => undefined),
+      set: vi.fn(),
+    };
+    const handler = vi.fn((input: { value: string }) => input);
+    const save = mutation('account/oversized-principal', {
+      guard: guards.authed(),
+      handler,
+      input: s.object({ value: s.string() }),
+      redirectTo: '/done',
+    });
+    const app = createApp({
+      csrf,
+      mutationReplayStore: replayStore,
+      mutations: [save],
+      sessionProvider: () => ({ id: 'rotation', user: { id: principal } }),
+    });
+    // A standalone helper has no framework lifecycle principal metadata and can mint the former
+    // session-id-only shape. Dispatch must still reject the framework-resolved oversized principal
+    // rather than falling back to anonymous CSRF or touching replay/handler authority.
+    const token = csrfToken(
+      { session: { id: 'rotation', user: { id: principal } } } as OversizedRequest,
+      csrf,
+      { audience: save.key },
+    );
+    const body = new FormData();
+    body.set('value', 'blocked');
+    body.set('kovo-csrf', token);
+    body.set('Kovo-Idem', mintIdemToken());
+    const request = new Request('https://shop.example.test/_m/account/oversized-principal', {
+      body,
+      headers: { origin: 'https://shop.example.test' },
+      method: 'POST',
+    });
+
+    const response = await handleAppMutationRequest(app, request, new URL(request.url), save.key);
+
+    expect(response.status).toBe(422);
+    expect(replayStore.get).not.toHaveBeenCalled();
+    expect(replayStore.reserve).not.toHaveBeenCalled();
+    expect(replayStore.set).not.toHaveBeenCalled();
+    expect(handler).not.toHaveBeenCalled();
+  });
+
   it('authorizes and reruns mutation failure UI against the canonical source GET request', async () => {
     const events: string[] = [];
     const sourceRequests: Request[] = [];

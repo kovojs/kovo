@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 
 // @kovo-security-classifier-corpus mutation-idem
 
-import { KOVO_IDEM_FIELD_NAME } from '../csrf.js';
+import { registerFrameworkSessionPrincipalSnapshot } from '../auth-principal.js';
+import { csrfToken, KOVO_IDEM_FIELD_NAME } from '../csrf.js';
 import { mintMutationIdemToken } from '../mutation-idem.js';
 import { MutationReplayConflictError } from '../replay.js';
 import type {
@@ -184,6 +185,84 @@ describe('mutation replay response authority', () => {
 
     await expect(policy?.read()).resolves.toBeUndefined();
     expect(observedIdem).toBe(idem);
+  });
+
+  it('keeps the maximum framework identity within the no-JS durable scope budget', async () => {
+    type PrincipalRequest = {
+      session: { id: string; user: { id: string } };
+    };
+    const mutationKey = 'm'.repeat(1_024);
+    const request: PrincipalRequest = {
+      session: {
+        id: 's'.repeat(1_024),
+        user: { id: 'p'.repeat(1_024) },
+      },
+    };
+    registerFrameworkSessionPrincipalSnapshot(request, request.session);
+    const csrf = {
+      secret: 'nojs-replay-scope-budget-secret-0123456789abcdef',
+      sessionId: (candidate: PrincipalRequest) => candidate.session.id,
+    };
+    const idem = mintMutationIdemToken();
+    let observedScope: string | undefined;
+    const replayStore = {
+      get(scope: string) {
+        observedScope = scope;
+        return undefined;
+      },
+      reserve() {
+        return undefined;
+      },
+      set() {},
+    };
+    const policy = noJsMutationReplayPolicy({
+      csrf,
+      mutationKey,
+      request: {
+        rawInput: {
+          [KOVO_IDEM_FIELD_NAME]: idem,
+          'kovo-csrf': csrfToken(request, csrf, { audience: mutationKey }),
+        },
+        redirectTo: '/',
+        replayStore,
+        request,
+      } as NoJsMutationRequest<PrincipalRequest, unknown>,
+    });
+
+    await expect(policy?.read()).resolves.toBeUndefined();
+    expect(observedScope).toHaveLength(3_163);
+  });
+
+  it('rejects an oversized mutation identity before no-JS replay-store access', async () => {
+    let storeCalls = 0;
+    const replayStore = {
+      get() {
+        storeCalls += 1;
+        return undefined;
+      },
+      reserve() {
+        storeCalls += 1;
+        return undefined;
+      },
+      set() {
+        storeCalls += 1;
+      },
+    };
+    const policy = noJsMutationReplayPolicy({
+      csrf: false,
+      mutationKey: 'm'.repeat(1_025),
+      request: {
+        rawInput: { [KOVO_IDEM_FIELD_NAME]: mintMutationIdemToken() },
+        redirectTo: '/',
+        replayStore,
+        request: {},
+      } as NoJsMutationRequest<object, unknown>,
+    });
+
+    await expect(policy?.read()).rejects.toThrow(
+      /Mutation replay identity must be a 1\.\.1024-code-unit string/u,
+    );
+    expect(storeCalls).toBe(0);
   });
 
   it('classifies only stable own-data response vocabulary under poisoned string intrinsics', () => {
