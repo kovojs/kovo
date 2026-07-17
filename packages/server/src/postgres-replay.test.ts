@@ -240,8 +240,8 @@ describe('Postgres durable replay stores', () => {
   });
 
   it('fails closed when durable mutation replay truth reaches the default admission ceiling', async () => {
-    const { executor } = await runtimeAt(dataDir());
-    const store = createPostgresMutationReplayStoreFromExecutor(executor, { pendingWaitMs: 0 });
+    const { executor, runtime } = await runtimeAt(dataDir());
+    const store = runtime.mutationReplayStore;
 
     for (let index = 0; index < 1_000; index += 1) {
       const reservation = await store.reserve('public:save', `idem-${index}`, `fingerprint-${index}`);
@@ -255,6 +255,25 @@ describe('Postgres durable replay stores', () => {
 
     const persisted = await executor.execute<{ count: number }>({
       text: "SELECT COUNT(*)::int AS count FROM public._kovo_replay WHERE surface = 'mutation'",
+      values: [],
+    });
+    expect(persisted.rows).toEqual([{ count: 1_000 }]);
+  });
+
+  it('fails closed when durable webhook replay truth reaches the default admission ceiling', async () => {
+    const { executor, runtime } = await runtimeAt(dataDir());
+    const store = runtime.webhookReplayStore;
+
+    for (let index = 0; index < 1_000; index += 1) {
+      const reservation = await store.reserve('public:provider', `event-${index}`);
+      expect(reservation).toBeDefined();
+      await reservation?.commit({ body: 'ok', headers: {}, status: 200 });
+    }
+
+    await expect(store.reserve('public:provider', 'event-over-capacity')).resolves.toBeUndefined();
+
+    const persisted = await executor.execute<{ count: number }>({
+      text: "SELECT COUNT(*)::int AS count FROM public._kovo_replay WHERE surface = 'webhook'",
       values: [],
     });
     expect(persisted.rows).toEqual([{ count: 1_000 }]);
