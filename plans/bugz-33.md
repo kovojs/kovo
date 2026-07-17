@@ -14,7 +14,7 @@ rendering, Better Auth, and managed SQL.
 
 | Severity | Open | Closed |
 | -------- | ---: | -----: |
-| High     |    2 |     10 |
+| High     |    1 |     11 |
 | Medium   |    0 |     15 |
 | Low      |    0 |      3 |
 
@@ -142,7 +142,7 @@ rendering, Better Auth, and managed SQL.
     runtime/admin/system/CLI URL, fail before any socket or credential use, and retain cleartext only
     for genuinely local loopback/Unix development endpoints (SPEC §6.6/§9.4/§10.3).
 
-- [ ] **H12 - SVG SMIL transfer attributes could animate a link into a JavaScript URL.**
+- [x] **H12 - SVG SMIL transfer attributes could animate a link into a JavaScript URL.**
   - Server JSX and browser fragment/live-binding sinks treated SVG `<animate>`/`<set>` transfer
     attributes as ordinary text. Remotely controlled `attributeName="href"` combined with
     `values`/`to` could materialize a `javascript:` URL on an ancestor SVG link after Kovo's initial
@@ -150,9 +150,12 @@ rendering, Better Auth, and managed SQL.
   - **Evidence:** a real Chromium reproduction changed the ancestor SVG `<a>` target through SMIL
     and set an attacker-controlled DOM marker on activation. CSP could mask the execution, but the
     contextual-output guarantee cannot delegate this sink proof to CSP (SPEC §4.8/§5.2).
-  - **Open:** enforce one shared fail-closed cross-attribute policy for server rendering and browser
-    fragment/live-binding updates, including namespace/casing and all SMIL transfer-value forms,
-    with server/browser parity and real-browser exploit regressions.
+  - **Fixed:** `0c63d004c` disables generic SVG SMIL execution primitives at compiler and server
+    render time, then inerts them before fragment adoption or live-binding updates (SPEC
+    §4.8/§5.2 rule 10).
+  - **Evidence:** focused compiler/runtime matrix 165/165; response-fragment exploit regressions
+    42/42 across Chromium, Firefox, and WebKit; all 11 classifier corpora plus inline-artifact,
+    API-surface, SPEC, and fail-closed gates passed at the integrated checkpoint.
 
 ## Medium
 
