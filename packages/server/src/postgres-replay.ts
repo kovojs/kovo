@@ -576,9 +576,12 @@ function persistedReplayKeyPart(value: string): string {
 
 function persistedReplayFingerprint(fingerprint: string | undefined): string | null {
   if (fingerprint === undefined) return null;
-  if (fingerprint === '' || fingerprint.length > 1_024) {
-    throw new TypeError('Postgres replay fingerprint must be 1..1024 characters.');
+  if (fingerprint === '') {
+    throw new TypeError('Postgres replay fingerprint must be non-empty.');
   }
+  // Unlike the bounded client-supplied replay id, this is Kovo's canonical representation of the
+  // already body-budgeted request. It can legitimately exceed 1 KiB and is reduced to a fixed-width
+  // digest before SQL, so imposing the id-token limit here made memory and Postgres stores disagree.
   return persistedReplayKeyPart(fingerprint);
 }
 

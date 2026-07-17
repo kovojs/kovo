@@ -303,6 +303,19 @@ describe('Postgres durable replay stores', () => {
     );
   });
 
+  it('accepts canonical request fingerprints larger than the replay-key token budget', async () => {
+    const { executor } = await runtimeAt(dataDir());
+    const store = createPostgresMutationReplayStoreFromExecutor(executor, { pendingWaitMs: 0 });
+    const fingerprint = JSON.stringify({ value: 'x'.repeat(4_096) });
+    const reservation = await store.reserve('scope', 'idem-large-fingerprint', fingerprint);
+    expect(reservation).toBeDefined();
+    await reservation?.commit(mutationResponse('large-fingerprint'));
+
+    await expect(store.get('scope', 'idem-large-fingerprint', fingerprint)).resolves.toEqual(
+      mutationResponse('large-fingerprint'),
+    );
+  });
+
   it('persists webhook response truth independently from mutation keys', async () => {
     const { executor } = await runtimeAt(dataDir());
     const mutationStore = createPostgresMutationReplayStoreFromExecutor(executor, {
