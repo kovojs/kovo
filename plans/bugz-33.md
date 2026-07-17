@@ -15,7 +15,7 @@ rendering, Better Auth, and managed SQL.
 | Severity | Open | Closed |
 | -------- | ---: | -----: |
 | High     |    0 |      7 |
-| Medium   |    2 |      9 |
+| Medium   |    1 |     11 |
 | Low      |    0 |      3 |
 
 ## High
@@ -133,25 +133,32 @@ rendering, Better Auth, and managed SQL.
     facts, recheck at reservation/settlement, and preserve pending ambiguity.
   - **Evidence:** webhook/API matrix 72/72 and integrated replay matrix 229/229.
 
-- [ ] **M7 - Packaged Better Auth credential mutations bypass Better Auth's router rate limiter.**
+- [x] **M7 - Packaged Better Auth credential mutations bypass Better Auth's router rate limiter.**
   - The wrappers call `auth.api.signInEmail` and `auth.api.signUpEmail` directly. Better Auth 1.6.17
     applies its limiter at router ingress, so repeated remote credential attempts through Kovo never
     receive the router's `429`; a control sent through `auth.handler` does.
-  - **Open:** route credential attempts through a framework-pinned handler request, preserve Kovo's
-    CSRF and origin boundary, derive rather than trust client identity, use durable multi-instance
-    limiter state for framework-owned bindings, and map transient `429` responses without replaying
-    them as settled credential outcomes.
+  - **Fixed:** `81807f30d` routes credential attempts through a captured Better Auth handler using a
+    fresh synthetic POST, an allowlisted header bag, and only Kovo's lifecycle-resolved `clientIp`.
+    It preserves routed `429` responses and throws on storage/provider `5xx` failures so replay
+    reservations remain retryable. `cbc167db5` pins the reviewed credential rules to Kovo's atomic
+    first-party limiter storage.
+  - **Evidence:** Better Auth/SQLite/PGlite matrix 200/200; replay A5 429-abort regression 1/1; both
+    package dist builds, API-surface, and TCB-boundary gates passed.
 
-- [ ] **M8 - Better Auth's database limiter admitted remotely unbounded persistent keys.**
+- [x] **M8 - Better Auth's database limiter admitted remotely unbounded persistent keys.**
   - Better Auth 1.6.17 creates a row for every fresh client-IP/path key before route resolution.
     Unique trusted identities on a fixed sign-in path and one identity requesting unique missing GET
     mount suffixes both grew the table. Fresh-key admission did not prune stale rows; revisiting one
     expired key instead launched an unbounded global deletion.
   - **Evidence:** a real SQLite repro grew 64 sign-in rows plus 64 distinct `404` mount-path rows,
     then admitted row 129 without pruning any stale row.
-  - **Open:** replace native database storage at Kovo-owned bindings with an atomic multi-instance
-    store that bounds key admission and cleanup work across credential and arbitrary mount paths,
-    uses database time, and fails closed at its resource ceiling.
+  - **Fixed:** `cbc167db5` replaces native runtime storage with exact POST-only credential rules,
+    disables arbitrary mount-path keys, maps raw identities through a domain-separated secret HMAC
+    into a fixed 65,536-bucket namespace, and consumes each bucket through one conditional
+    database-clock upsert. Collisions aggregate attempts and therefore fail closed.
+  - **Evidence:** real PostgreSQL two-consumer 20-way concurrency admitted 3 and denied 17 with one
+    row/count 3 and no uniqueness error; independent multi-process SQLite produced the same 3/17
+    result. Unknown, encoded, and GET mount paths produced zero limiter rows.
 
 - [x] **M9 - Direct HTTP/2 peers could forge or suppress HTTPS transport posture with
       `:scheme`.**
@@ -193,6 +200,17 @@ rendering, Better Auth, and managed SQL.
   - **Evidence:** direct/live/generated Node and Vercel target-parity matrix 95/95; wire-output
     boundary gate passed.
 
+- [ ] **M12 - HTTP/1 Host authority could disagree across raw-header and WHATWG parsing.**
+  - Node accepts delimiter-bearing Host values such as `victim.example@evil.example` and
+    `victim.example/ignored`. Kovo preserved that raw Host for application policy while WHATWG URL
+    construction interpreted userinfo or path semantics, producing a different request authority;
+    generated static selection could also run before any authority parse.
+  - **Evidence:** a real HTTP/1 socket reached the handler with divergent raw Host and request URL;
+    HTTP/2 rejects the same delimiters at its transport parser.
+  - **Open:** validate one canonical HTTP authority before static selection and request assembly,
+    preserve valid hostname/port and bracketed-IPv6 controls, and prove live/generated adapter
+    parity (SPEC §9.5).
+
 ## Low
 
 - [x] **L1 - The Vercel preset copied framework metadata files into the public static root.**
@@ -222,4 +240,7 @@ rendering, Better Auth, and managed SQL.
 - Capability/route/Postgres focused matrix: 106/106.
 - Document/app-document focused matrix: 96/96.
 - Normalized raw-target Node/build parity matrix: 95/95; wire-output boundary gate passed.
-- Final exact-tip remote-boundary review remains open until M7 and current regression repairs land.
+- Better Auth/SQLite/PGlite matrix: 200/200; real PostgreSQL and multi-process SQLite concurrency
+  each admitted 3/20 with one row; replay 429-abort regression, dist, API, and TCB gates passed.
+- Final exact-tip remote-boundary review remains open until M12 lands and a fresh pass finds no new
+  remotely reachable issue.
