@@ -75,6 +75,63 @@ describe('temporal/provenance combined blockers', () => {
        Object.defineProperties(Holder, { promise: { value: Promise } });
        Object.defineProperty((Holder as any).promise, 'resolve', { value: () => Deferred });`,
     ],
+    [
+      'computed static field',
+      `const key = 'promise';
+       class Holder { static [key] = Promise; }
+       Object.defineProperty((Holder as any).promise, 'resolve', { value: () => Deferred });`,
+    ],
+    [
+      'computed static assignment',
+      `const key = 'promise';
+       class Holder {}
+       (Holder as any)[key] = Promise;
+       Object.defineProperty((Holder as any).promise, 'resolve', { value: () => Deferred });`,
+    ],
+    [
+      'computed Reflect.set static field',
+      `const key = 'promise';
+       class Holder {}
+       Reflect.set(Holder, key, Promise);
+       Object.defineProperty((Holder as any).promise, 'resolve', { value: () => Deferred });`,
+    ],
+    [
+      'mutable computed static field',
+      `let key = 'promise';
+       class Holder { static [key] = Promise; }
+       Object.defineProperty((Holder as any).promise, 'resolve', { value: () => Deferred });`,
+    ],
+    [
+      'deleted static shadow',
+      `class Base { static promise = Promise; }
+       class Holder extends Base { static promise = { resolve: () => ({ ok: true }) }; }
+       delete (Holder as any).promise;
+       Object.defineProperty((Holder as any).promise, 'resolve', { value: () => Deferred });`,
+    ],
+    [
+      'reassigned computed static assignment',
+      `let key = 'other';
+       key = 'promise';
+       class Holder {}
+       (Holder as any)[key] = Promise;
+       Object.defineProperty((Holder as any).promise, 'resolve', { value: () => Deferred });`,
+    ],
+    [
+      'reassigned computed Reflect.set field',
+      `let key = 'other';
+       key = 'promise';
+       class Holder {}
+       Reflect.set(Holder, key, Promise);
+       Object.defineProperty((Holder as any).promise, 'resolve', { value: () => Deferred });`,
+    ],
+    [
+      'reassigned computed descriptor field',
+      `let key = 'other';
+       key = 'promise';
+       class Holder {}
+       Object.defineProperty(Holder, key, { value: Promise });
+       Object.defineProperty((Holder as any).promise, 'resolve', { value: () => Deferred });`,
+    ],
   ])('C1 preserves Promise identity through a class %s', (_label, poison) => {
     const facts = sinksFor(`
       import { s, task } from '@kovojs/server';
@@ -99,6 +156,29 @@ describe('temporal/provenance combined blockers', () => {
         }),
       ]),
     );
+  });
+
+  it('fails closed for a conditional computed class-static carrier', () => {
+    const facts = sinksFor(`
+      const key = Math.random() >= 0 ? 'promise' : 'other';
+      class Holder { static [key] = Promise; }
+      Object.defineProperty((Holder as any).promise, 'resolve', { value: () => ({ ok: true }) });
+      void Promise.resolve({ ok: true });
+    `);
+
+    expectOpaqueBoundary(facts);
+  });
+
+  it('fails closed for a reassigned computed class-static carrier', () => {
+    const facts = sinksFor(`
+      let key = 'other';
+      key = 'promise';
+      class Holder { static [key] = Promise; }
+      Object.defineProperty((Holder as any).promise, 'resolve', { value: () => ({ ok: true }) });
+      void Promise.resolve({ ok: true });
+    `);
+
+    expectOpaqueBoundary(facts);
   });
 
   it.each([
@@ -133,6 +213,13 @@ describe('temporal/provenance combined blockers', () => {
          },
        };
        return value;`,
+    ],
+    [
+      'deleted inherited-class shadow',
+      `class Base { static value = DeferredValue; }
+       class Child extends Base { static value = { ok: true }; }
+       delete (Child as any).value;
+       return Child.value;`,
     ],
   ])('C2 rejects %s', (_label, statement) => {
     const facts = sinksFor(`
@@ -205,6 +292,16 @@ describe('temporal/provenance combined blockers', () => {
        class Child {}
        Object.setPrototypeOf(Child, Base);
        Object.defineProperty(Child, 'value', { value: { ok: true } });`,
+    ],
+    [
+      'method',
+      `class Base { static value = DeferredValue; }
+       class Child extends Base { static value() { return { ok: true }; } }`,
+    ],
+    [
+      'setter',
+      `class Base { static value = DeferredValue; }
+       class Child extends Base { static set value(_next: unknown) {} }`,
     ],
   ])('does not inherit a shadowed unsafe static %s', (_label, setup) => {
     const facts = sinksFor(`

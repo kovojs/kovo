@@ -10041,7 +10041,7 @@ function requestAssignedMemberIndex(
       expressionResolvesToGlobalNamespace(receiver, 'Reflect', new Set(), 0)
     ) {
       const [assigned, property, value] = call.getArguments();
-      const member = requestCallableMemberName(property);
+      const member = requestReflectivePropertyName(property);
       if (assigned && member !== undefined && value) add(assigned, member, value, call);
       continue;
     }
@@ -17529,17 +17529,27 @@ function requestStaticMemberAssimilationSources(
   for (const declaration of classes) {
     const own: Node[] = [];
     for (const property of declaration.getProperties()) {
-      if (!property.isStatic() || requestCallableMemberName(property.getNameNode()) !== member) {
+      if (!property.isStatic() || requestClassStaticMemberName(property.getNameNode()) !== member) {
         continue;
       }
       const initializer = property.getInitializer();
       if (initializer) own.push(initializer);
     }
     for (const getter of declaration.getGetAccessors()) {
-      if (!getter.isStatic() || requestCallableMemberName(getter.getNameNode()) !== member)
+      if (!getter.isStatic() || requestClassStaticMemberName(getter.getNameNode()) !== member)
         continue;
       const callable = requestCallableForFunctionNode(getter);
       if (callable) own.push(...requestWireOutputExpressions(callable));
+    }
+    for (const method of declaration.getMethods()) {
+      if (method.isStatic() && requestClassStaticMemberName(method.getNameNode()) === member) {
+        own.push(method);
+      }
+    }
+    for (const setter of declaration.getSetAccessors()) {
+      if (setter.isStatic() && requestClassStaticMemberName(setter.getNameNode()) === member) {
+        own.push(setter);
+      }
     }
     const name = declaration.getNameNode();
     if (name) {
@@ -17563,7 +17573,9 @@ function requestStaticMemberAssimilationSources(
     // member, a dangerous base member is unreachable through `Child.member` (SPEC §6.6 C1/C2).
     if (own.length > 0) {
       sources.push(...own);
-      continue;
+      if (!requestClassStaticMemberMayBeDeleted(declaration, member, snapshotBoundary, session)) {
+        continue;
+      }
     }
     for (const prototype of requestClassStaticPrototypeSources(
       declaration,
@@ -17582,6 +17594,54 @@ function requestStaticMemberAssimilationSources(
     }
   }
   return dedupeRequestNodes(sources);
+}
+
+function requestClassStaticMemberMayBeDeleted(
+  declaration: import('ts-morph').ClassDeclaration | import('ts-morph').ClassExpression,
+  member: string,
+  snapshotBoundary: number,
+  session: RequestProvenanceSession,
+): boolean {
+  const matchesDeclaration = (candidate: Node | undefined): boolean =>
+    !!candidate &&
+    requestDirectClassDeclarationsForExpression(candidate, new Set()).some((resolved) =>
+      requestNodesAreSame(resolved, declaration),
+    );
+  const sourceFile = declaration.getSourceFile();
+  for (const deletion of sourceFile.getDescendantsOfKind(SyntaxKind.DeleteExpression)) {
+    if (!requestMutationMayExecuteBefore(deletion, snapshotBoundary, session)) continue;
+    const target = unwrapStaticExpression(deletion.getExpression());
+    if (!Node.isPropertyAccessExpression(target) && !Node.isElementAccessExpression(target)) {
+      continue;
+    }
+    const deletedMember = Node.isPropertyAccessExpression(target)
+      ? requestCallableMemberName(target.getNameNode())
+      : requestCallableMemberName(target.getArgumentExpression());
+    if (
+      (deletedMember === undefined || deletedMember === member) &&
+      matchesDeclaration(target.getExpression())
+    ) {
+      return true;
+    }
+  }
+  for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
+    if (!requestMutationMayExecuteBefore(call, snapshotBoundary, session)) continue;
+    const callee = unwrapStaticExpression(call.getExpression());
+    const receiver = requestCallReceiver(callee);
+    if (
+      !receiver ||
+      requestStaticCallMember(callee) !== 'deleteProperty' ||
+      !expressionResolvesToGlobalNamespace(receiver, 'Reflect', new Set(), 0)
+    ) {
+      continue;
+    }
+    const [target, property] = call.getArguments();
+    const deletedMember = requestReflectivePropertyName(property);
+    if (matchesDeclaration(target) && (deletedMember === undefined || deletedMember === member)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function requestDefinedGetterExpressionsBefore(
@@ -17631,6 +17691,183 @@ function requestDirectClassDeclarationsForExpression(
     }
   }
   return dedupeRequestClassDeclarations(classes);
+}
+
+function requestClassStaticMemberProjectionIsOpaque(
+  expression: Node,
+  member: string,
+  snapshotBoundary: number,
+  session: RequestProvenanceSession,
+  seen: Set<string>,
+): boolean {
+  const node = unwrapStaticExpression(expression);
+  const nodeKey = `opaque-static-member:${requestNodeIdentity(node)}:${member}`;
+  if (seen.has(nodeKey) || !requestProvenanceStep(session, node)) return true;
+  seen.add(nodeKey);
+  if (Node.isConditionalExpression(node)) {
+    return [node.getWhenTrue(), node.getWhenFalse()].some((branch) =>
+      requestClassStaticMemberProjectionIsOpaque(
+        branch,
+        member,
+        snapshotBoundary,
+        session,
+        new Set(seen),
+      ),
+    );
+  }
+  const classes = requestDirectClassDeclarationsForExpression(node, new Set());
+  if (classes.length === 0) return false;
+
+  for (const declaration of classes) {
+    const declaredMembers = [
+      ...declaration.getProperties(),
+      ...declaration.getGetAccessors(),
+      ...declaration.getSetAccessors(),
+      ...declaration.getMethods(),
+    ].filter((candidate) => candidate.isStatic());
+    if (
+      declaredMembers.some(
+        (candidate) => requestClassStaticMemberName(candidate.getNameNode()) === undefined,
+      )
+    ) {
+      return true;
+    }
+
+    const matchesDeclaration = (candidate: Node | undefined): boolean =>
+      !!candidate &&
+      requestDirectClassDeclarationsForExpression(candidate, new Set()).some((resolved) =>
+        requestNodesAreSame(resolved, declaration),
+      );
+    const sourceFile = declaration.getSourceFile();
+    for (const assignment of sourceFile.getDescendantsOfKind(SyntaxKind.BinaryExpression)) {
+      const operator = assignment.getOperatorToken().getKind();
+      if (
+        operator < SyntaxKind.FirstAssignment ||
+        operator > SyntaxKind.LastAssignment ||
+        !requestMutationMayExecuteBefore(assignment, snapshotBoundary, session)
+      ) {
+        continue;
+      }
+      const target = unwrapStaticExpression(assignment.getLeft());
+      if (!Node.isPropertyAccessExpression(target) && !Node.isElementAccessExpression(target)) {
+        continue;
+      }
+      const assignedMember = Node.isPropertyAccessExpression(target)
+        ? requestCallableMemberName(target.getNameNode())
+        : requestCallableMemberName(target.getArgumentExpression());
+      if (assignedMember === undefined && matchesDeclaration(target.getExpression())) return true;
+    }
+    for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
+      if (!requestMutationMayExecuteBefore(call, snapshotBoundary, session)) continue;
+      const callee = unwrapStaticExpression(call.getExpression());
+      const receiver = requestCallReceiver(callee);
+      if (!receiver) continue;
+      const method = requestStaticCallMember(callee);
+      const objectGlobal = expressionResolvesToGlobalNamespace(receiver, 'Object', new Set(), 0);
+      const reflectGlobal = expressionResolvesToGlobalNamespace(receiver, 'Reflect', new Set(), 0);
+      const [target, property, ...rest] = call.getArguments();
+      if (!matchesDeclaration(target)) continue;
+      if (
+        ((reflectGlobal && method === 'set') ||
+          ((objectGlobal || reflectGlobal) && method === 'defineProperty')) &&
+        requestReflectivePropertyName(property) === undefined
+      ) {
+        return true;
+      }
+      if (objectGlobal && method === 'defineProperties') {
+        const descriptors = property
+          ? resolveStaticObjectLiteral(property, new Set(), 0)
+          : undefined;
+        if (
+          !descriptors ||
+          descriptors
+            .getProperties()
+            .some(
+              (entry) =>
+                Node.isSpreadAssignment(entry) ||
+                requestCallableMemberName(requestObjectLiteralElementNameNode(entry)) === undefined,
+            )
+        ) {
+          return true;
+        }
+      }
+      if (objectGlobal && method === 'assign') {
+        for (const source of [property, ...rest]) {
+          const object = source ? resolveStaticObjectLiteral(source, new Set(), 0) : undefined;
+          if (
+            !object ||
+            object
+              .getProperties()
+              .some(
+                (entry) =>
+                  Node.isSpreadAssignment(entry) ||
+                  requestCallableMemberName(requestObjectLiteralElementNameNode(entry)) ===
+                    undefined,
+              )
+          ) {
+            return true;
+          }
+        }
+      }
+    }
+
+    const name = declaration.getNameNode();
+    const knownOwn =
+      declaredMembers.some(
+        (candidate) => requestClassStaticMemberName(candidate.getNameNode()) === member,
+      ) ||
+      (!!name &&
+        (requestAssignedMemberExpressions(name, member, snapshotBoundary, session).length > 0 ||
+          requestDefinedGetterExpressionsBefore(name, member, snapshotBoundary, session).length >
+            0 ||
+          requestDefinedStaticDataPropertyExpressions(name, member, snapshotBoundary, session)
+            .length > 0));
+    if (
+      knownOwn &&
+      !requestClassStaticMemberMayBeDeleted(declaration, member, snapshotBoundary, session)
+    ) {
+      continue;
+    }
+    for (const prototype of requestClassStaticPrototypeSources(
+      declaration,
+      snapshotBoundary,
+      session,
+    )) {
+      const prototypeClasses = requestDirectClassDeclarationsForExpression(prototype, new Set());
+      if (prototypeClasses.length > 0) {
+        if (
+          requestClassStaticMemberProjectionIsOpaque(
+            prototype,
+            member,
+            snapshotBoundary,
+            session,
+            new Set(seen),
+          )
+        ) {
+          return true;
+        }
+        continue;
+      }
+      const prototypeNode = unwrapStaticExpression(prototype);
+      if (prototypeNode.getKind() === SyntaxKind.NullKeyword) continue;
+      const object = resolveStaticObjectLiteral(prototypeNode, new Set(), 0);
+      if (!object) return true;
+      const properties = object.getProperties();
+      if (
+        properties.some(
+          (property) =>
+            Node.isSpreadAssignment(property) ||
+            requestCallableMemberName(requestObjectLiteralElementNameNode(property)) ===
+              undefined ||
+            requestCallableMemberName(requestObjectLiteralElementNameNode(property)) ===
+              '__proto__',
+        )
+      ) {
+        return true;
+      }
+    }
+  }
+  return false;
 }
 
 function requestClassStaticPrototypeSources(
@@ -17724,7 +17961,7 @@ function requestDefinedStaticDataPropertyExpressions(
         : undefined;
     const memberDescriptor = descriptors
       ? requestStaticObjectProperty(descriptors, member)
-      : requestCallableMemberName(property) === member
+      : requestReflectivePropertyName(property) === member
         ? descriptor
         : undefined;
     const value = memberDescriptor ? requestStaticDescriptorValue(memberDescriptor) : undefined;
@@ -18322,13 +18559,13 @@ function requestProtocolPrototypeMutations(
     const [target, property, descriptorOrValue] = call.getArguments();
     if (!target || !requestExpressionIsKnownGlobalPrototype(target, new Set())) continue;
     if (reflectGlobal && method === 'set') {
-      const member = requestCallableMemberName(property);
+      const member = requestReflectivePropertyName(property);
       if (member === hook && descriptorOrValue) candidates.push(descriptorOrValue);
       else if (member === undefined) opaqueSites.push(call);
       continue;
     }
     if ((objectGlobal || reflectGlobal) && method === 'defineProperty') {
-      const member = requestCallableMemberName(property);
+      const member = requestReflectivePropertyName(property);
       if (member === hook && descriptorOrValue) {
         const descriptor = resolveStaticObjectLiteral(descriptorOrValue, new Set(), 0);
         const value = descriptor ? requestStaticObjectProperty(descriptor, 'value') : undefined;
@@ -22569,7 +22806,7 @@ function requestDefinedGetterExpressions(owner: Node, member: string | undefined
       const [target, property, descriptor] = call.getArguments();
       if (!target) continue;
       if ((objectGlobal || reflectGlobal) && method === 'defineProperty') {
-        add(target, requestCallableMemberName(property), descriptorGetter(descriptor));
+        add(target, requestReflectivePropertyName(property), descriptorGetter(descriptor));
         continue;
       }
       if (!objectGlobal || method !== 'defineProperties' || !property) continue;
@@ -26213,19 +26450,28 @@ function requestProjectedExpressionResolvesToExactGlobalValueUncached(
     member !== undefined &&
     requestDirectClassDeclarationsForExpression(node, new Set()).length > 0
   ) {
+    const snapshotBoundary = node.getStart();
     const staticSources = requestClassStaticMemberAssimilationSources(
       node,
       member,
-      node.getStart(),
+      snapshotBoundary,
       session.callIndex.callableSession,
     );
-    if (staticSources.length > 0) {
-      return requestMergeExactGlobalDependencies(
-        staticSources.map((source) =>
-          requestProjectedExpressionResolvesToExactGlobalValue(source, rest, session, depth + 1),
-        ),
-      );
+    const dependencies = staticSources.map((source) =>
+      requestProjectedExpressionResolvesToExactGlobalValue(source, rest, session, depth + 1),
+    );
+    if (
+      requestClassStaticMemberProjectionIsOpaque(
+        node,
+        member,
+        snapshotBoundary,
+        session.callIndex.callableSession,
+        new Set(),
+      )
+    ) {
+      dependencies.push('exhausted');
     }
+    if (dependencies.length > 0) return requestMergeExactGlobalDependencies(dependencies);
   }
   if (Node.isObjectLiteralExpression(node)) {
     const dependencies: RequestExactGlobalProvenance[] = [];
@@ -28358,13 +28604,13 @@ function requestClassPrototypeMutationCallables(
       const [target, property, descriptorOrValue] = call.getArguments();
       if (!target || !requestExpressionResolvesToClassPrototype(target, classes)) continue;
       if (reflectGlobal && method === 'set') {
-        if (requestCallableMemberName(property) === member && descriptorOrValue) {
+        if (requestReflectivePropertyName(property) === member && descriptorOrValue) {
           candidates.push(descriptorOrValue);
         }
         continue;
       }
       if ((objectGlobal || reflectGlobal) && method === 'defineProperty') {
-        if (requestCallableMemberName(property) === member && descriptorOrValue) {
+        if (requestReflectivePropertyName(property) === member && descriptorOrValue) {
           const value = requestStaticDescriptorValue(descriptorOrValue);
           if (value) candidates.push(value);
         }
@@ -36258,6 +36504,71 @@ function requestCallableMemberName(node: Node | undefined): string | undefined {
     expressionResolvesToGlobalNamespace(expression.getExpression(), 'Symbol', new Set(), 0)
     ? `@@${member}`
     : undefined;
+}
+
+/** A Reflect/Object property-key argument is a value, never the source identifier's spelling. */
+function requestReflectivePropertyName(node: Node | undefined): string | undefined {
+  if (!node) return undefined;
+  const value = requestStablePropertyKeyValue(node);
+  if (value !== undefined) return value;
+  const candidate = unwrapStaticExpression(node);
+  if (Node.isNumericLiteral(candidate)) return candidate.getText();
+  return Node.isPropertyAccessExpression(candidate) || Node.isElementAccessExpression(candidate)
+    ? requestCallableMemberName(candidate)
+    : undefined;
+}
+
+/** Class computed names are evaluated values, while ordinary config keys remain fail-closed. */
+function requestClassStaticMemberName(node: Node | undefined): string | undefined {
+  const callable = requestCallableMemberName(node);
+  if (callable !== undefined || !node || !Node.isComputedPropertyName(node)) return callable;
+  return requestStablePropertyKeyValue(node.getExpression());
+}
+
+function requestStablePropertyKeyValue(
+  expression: Node,
+  seen: Set<string> = new Set(),
+  depth = 0,
+): string | undefined {
+  if (depth > REQUEST_EXACT_GLOBAL_PROVENANCE_DEPTH) return undefined;
+  const node = unwrapStaticExpression(expression);
+  if (Node.isStringLiteral(node) || Node.isNoSubstitutionTemplateLiteral(node)) {
+    return node.getLiteralText();
+  }
+  if (Node.isNumericLiteral(node)) return node.getText();
+  if (Node.isIdentifier(node)) {
+    const symbol = requestIdentifierValueSymbol(node);
+    if (!symbol) return undefined;
+    const symbolKey = requestSymbolKey(symbol);
+    if (seen.has(symbolKey)) return undefined;
+    seen.add(symbolKey);
+    if (requestAssignedBindingProjections(symbol).some(({ path }) => path.length === 0)) {
+      return undefined;
+    }
+    const declarations = symbol.getDeclarations();
+    if (
+      declarations.length === 0 ||
+      declarations.some((declaration) => !Node.isVariableDeclaration(declaration))
+    ) {
+      return undefined;
+    }
+    const values = declarations.map((declaration) => {
+      const initializer = valueDeclarationInitializer(declaration);
+      return initializer
+        ? requestStablePropertyKeyValue(initializer, new Set(seen), depth + 1)
+        : undefined;
+    });
+    const [value] = values;
+    return value !== undefined && values.every((candidate) => candidate === value)
+      ? value
+      : undefined;
+  }
+  if (Node.isBinaryExpression(node) && node.getOperatorToken().getKind() === SyntaxKind.PlusToken) {
+    const left = requestStablePropertyKeyValue(node.getLeft(), new Set(seen), depth + 1);
+    const right = requestStablePropertyKeyValue(node.getRight(), new Set(seen), depth + 1);
+    return left === undefined || right === undefined ? undefined : `${left}${right}`;
+  }
+  return undefined;
 }
 
 function requestStaticStringExpressionValue(expression: Node): string | undefined {
