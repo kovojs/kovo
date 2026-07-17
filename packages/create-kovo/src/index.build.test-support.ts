@@ -2864,10 +2864,11 @@ export function addSqliteRuntimeSecretProvenanceProof(root: string): void {
 
   const runtimeDbPath = join(root, 'src/_kovo/app-runtime-db.ts');
   let runtimeDb = readFileSync(runtimeDbPath, 'utf8');
-  runtimeDb = replaceRequired(
+  runtimeDb = addNamedImportSpecifiersRequired(
     runtimeDb,
-    "import { account, authSchema, contacts, rateLimit, session, user, verification } from '../schema.js';",
-    "import { account, authSchema, contacts, rateLimit, runtimeSecretJoinProof, runtimeSecretProof, session, user, verification } from '../schema.js';",
+    '../schema.js',
+    ['account', 'authSchema', 'contacts', 'rateLimit', 'session', 'user', 'verification'],
+    ['runtimeSecretJoinProof', 'runtimeSecretProof'],
     'sqlite runtime secret provenance schema import',
   );
   runtimeDb = replaceRequired(
@@ -3662,10 +3663,21 @@ export function addParanoidPhase5AuthorizationProof(root: string): void {
 
   const runtimeDbPath = join(root, 'src/_kovo/app-runtime-db.ts');
   let runtimeDb = readFileSync(runtimeDbPath, 'utf8');
-  runtimeDb = replaceRequired(
+  runtimeDb = addNamedImportSpecifiersRequired(
     runtimeDb,
-    "import { account, authSchema, contacts, rateLimit, runtimeSecretJoinProof, runtimeSecretProof, session, user, verification } from '../schema.js';",
-    "import { account, authSchema, contacts, phase5AuthzItems, phase5AuthzOrders, rateLimit, runtimeSecretJoinProof, runtimeSecretProof, session, user, verification } from '../schema.js';",
+    '../schema.js',
+    [
+      'account',
+      'authSchema',
+      'contacts',
+      'rateLimit',
+      'runtimeSecretJoinProof',
+      'runtimeSecretProof',
+      'session',
+      'user',
+      'verification',
+    ],
+    ['phase5AuthzItems', 'phase5AuthzOrders'],
     'phase 5.1 authorization schema import',
   );
   runtimeDb = replaceRequired(
@@ -4619,6 +4631,49 @@ function replaceRequired(
 ): string {
   if (!source.includes(search)) throw new Error(`Expected scaffold anchor for ${label}.`);
   return source.replace(search, replacement);
+}
+
+function addNamedImportSpecifiersRequired(
+  source: string,
+  moduleSpecifier: string,
+  requiredSpecifiers: readonly string[],
+  addedSpecifiers: readonly string[],
+  label: string,
+): string {
+  // Scaffold formatting can move a named import between one and many lines as bindings change.
+  // Match the declaration shape while still requiring the bindings that make the proof valid.
+  const importPattern = new RegExp(
+    `import\\s*\\{([^}]*)\\}\\s*from\\s*(['"])${escapeRegExp(moduleSpecifier)}\\2;`,
+    'gu',
+  );
+  const matches = [...source.matchAll(importPattern)];
+  if (matches.length !== 1 || matches[0]?.index === undefined) {
+    throw new Error(`Expected one named scaffold import for ${label}.`);
+  }
+
+  const match = matches[0];
+  const existingSpecifiers = (match[1] ?? '')
+    .split(',')
+    .map((specifier) => specifier.trim())
+    .filter((specifier) => specifier.length > 0);
+  if (existingSpecifiers.some((specifier) => !/^[A-Za-z_$][A-Za-z0-9_$]*$/u.test(specifier))) {
+    throw new Error(`Expected simple named scaffold specifiers for ${label}.`);
+  }
+  for (const requiredSpecifier of requiredSpecifiers) {
+    if (!existingSpecifiers.includes(requiredSpecifier)) {
+      throw new Error(
+        `Expected scaffold import ${moduleSpecifier} to include ${requiredSpecifier} for ${label}.`,
+      );
+    }
+  }
+
+  const mergedSpecifiers = [...existingSpecifiers];
+  for (const addedSpecifier of addedSpecifiers) {
+    if (!mergedSpecifiers.includes(addedSpecifier)) mergedSpecifiers.push(addedSpecifier);
+  }
+  const quote = match[2] ?? "'";
+  const replacement = `import { ${mergedSpecifiers.join(', ')} } from ${quote}${moduleSpecifier}${quote};`;
+  return `${source.slice(0, match.index)}${replacement}${source.slice(match.index + match[0].length)}`;
 }
 
 function assertRequiredScaffoldAnchor(source: string, search: string, label: string): void {
