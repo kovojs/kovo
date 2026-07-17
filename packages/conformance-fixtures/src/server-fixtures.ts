@@ -673,9 +673,15 @@ export async function serverCommerceAdoptDontInventBehaviorFact(
   };
   const progressElement = element({ 'kovo-upload-progress': '', max: '100', value: '0' });
   const pendingElement = element({ 'kovo-deps': 'order' });
+  const commerceTransport = {
+    action: '/_m/order/receipt',
+    method: 'POST' as const,
+    origin: 'https://commerce.kovo.test',
+    sourceUrl: 'https://commerce.kovo.test/cart',
+  };
   const form = {
     ...element({ 'data-mutation': 'order/receipt', enhance: '', 'kovo-deps': 'order' }),
-    action: '/_m/order/receipt',
+    action: commerceTransport.action,
     method: 'post',
     querySelectorAll(selector: string) {
       return selector === '[kovo-upload-progress]' ? [progressElement] : [];
@@ -692,13 +698,22 @@ export async function serverCommerceAdoptDontInventBehaviorFact(
   let pendingDuringResponse: string | null = null;
 
   await runtime.submitEnhancedMutation({
-    fetch: async (_url: unknown, options: { onUploadProgress?: (progress: any) => void }) => ({
-      headers: { get: () => null },
+    fetch: async (url: string, options: { onUploadProgress?: (progress: any) => void }) => ({
+      headers: {
+        get(name: string) {
+          return name.toLowerCase() === 'content-type'
+            ? 'text/vnd.kovo.fragment+html; charset=utf-8'
+            : null;
+        },
+      },
       async text() {
         options.onUploadProgress?.({ loaded: 32, total: 64 });
         pendingDuringResponse = pendingElement.getAttribute('kovo-pending');
         return '<kovo-query name="receipt">{"ok":true}</kovo-query>';
       },
+      // SPEC §9.1: model the browser's final Response.url so the fixture exercises, rather
+      // than bypasses, the same-origin mutation-response proof.
+      url: new URL(url, commerceTransport.origin).href,
     }),
     form,
     formData: receiptForm,
@@ -711,6 +726,7 @@ export async function serverCommerceAdoptDontInventBehaviorFact(
     pendingRoot: mutationRoot,
     root: mutationRoot,
     store: runtime.createQueryStore(),
+    transport: commerceTransport,
   });
 
   const product = runtime.domain('product');
