@@ -613,7 +613,10 @@ describe('no-JS mutation responses', () => {
     expect(writes).toEqual(['silent-a@example.test']);
   });
 
-  it('rejects an oversized no-JS Kovo-Idem before store or handler execution', async () => {
+  it.each([
+    ['empty', ''],
+    ['oversized', 'a'.repeat(1_025)],
+  ])('rejects an %s no-JS Kovo-Idem before store or handler execution', async (_label, idem) => {
     const handler = vi.fn((input: { email: string }) => input);
     const storeGet = vi.fn(() => undefined);
     const storeReserve = vi.fn(() => undefined);
@@ -623,7 +626,7 @@ describe('no-JS mutation responses', () => {
     });
     const form = new FormData();
     form.set('email', 'bounded@example.test');
-    form.set(KOVO_IDEM_FIELD_NAME, 'a'.repeat(1_025));
+    form.set(KOVO_IDEM_FIELD_NAME, idem);
 
     const response = await renderMutationEndpointResponse(addContact, {
       headers: new Headers(),

@@ -13,6 +13,7 @@ import {
 
 describe('mutation replay response authority', () => {
   it.each([
+    ['empty', ''],
     ['oversized', 'a'.repeat(1_025)],
     ['non-base64url', 'idem with spaces'],
   ])('rejects a supplied %s no-JS token before replay-store access', async (_label, idem) => {
@@ -44,6 +45,49 @@ describe('mutation replay response authority', () => {
 
     expect(() => policy?.read()).toThrow(MutationReplayConflictError);
     expect(storeCalls).toBe(0);
+  });
+
+  it.each([
+    ['non-string', 42],
+    ['duplicated', ['first', 'second']],
+  ])('rejects a supplied %s no-JS field shape', async (_label, idem) => {
+    const request = {
+      rawInput: { [KOVO_IDEM_FIELD_NAME]: idem },
+      redirectTo: '/',
+      request: {},
+    } as NoJsMutationRequest<object, unknown>;
+    const policy = noJsMutationReplayPolicy({
+      csrf: false,
+      mutationKey: 'settings/update',
+      request,
+    });
+
+    expect(() => policy?.read()).toThrow(MutationReplayConflictError);
+  });
+
+  it('rejects an accessor-backed no-JS field without invoking it or trusting a header fallback', () => {
+    let reads = 0;
+    const rawInput = Object.defineProperty({}, KOVO_IDEM_FIELD_NAME, {
+      enumerable: true,
+      get() {
+        reads += 1;
+        return 'attacker-idem';
+      },
+    });
+    const request = {
+      idem: 'valid_header_fallback',
+      rawInput,
+      redirectTo: '/',
+      request: {},
+    } as NoJsMutationRequest<object, unknown>;
+    const policy = noJsMutationReplayPolicy({
+      csrf: false,
+      mutationKey: 'settings/update',
+      request,
+    });
+
+    expect(() => policy?.read()).toThrow(MutationReplayConflictError);
+    expect(reads).toBe(0);
   });
 
   it('rejects an invalid supplied token even when replay storage is disabled', async () => {

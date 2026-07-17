@@ -93,8 +93,9 @@ export function enhancedMutationReplayPolicy<Request>(mode: {
   mutationKey: string;
   request: MutationWireRequest<Request>;
 }): MutationLifecycleReplayPolicy<BufferedMutationWireResponse> | undefined {
-  if (!mode.request.idem) return undefined;
-  if (!mutationIdemTokenIsValid(mode.request.idem)) return invalidMutationIdemReplayPolicy();
+  const idem: unknown = mode.request.idem;
+  if (idem === undefined) return undefined;
+  if (!mutationIdemTokenIsValid(idem)) return invalidMutationIdemReplayPolicy();
   if (!mode.request.replayStore) return undefined;
   let context: ReturnType<typeof mutationReplayContext> | undefined;
   const replayContext = () =>
@@ -135,9 +136,12 @@ export function noJsMutationReplayPolicy<Request, Value>(mode: {
   mutationKey: string;
   request: NoJsMutationRequest<Request, Value>;
 }): MutationLifecycleReplayPolicy<NoJsMutationResponse> | undefined {
-  // A2 (SPEC §10.3:1063/1151): derive the idem from the hidden `Kovo-Idem` form field.
-  const idem = mode.request.idem ?? readNoJsIdemField(mode.request.rawInput);
-  if (!idem) return undefined;
+  // A2 (SPEC §10.3): the framework-authored hidden field is authoritative when supplied; the
+  // header is only its fallback. Preserve presence separately from truthiness so an empty,
+  // duplicated, accessor-backed, or otherwise malformed field cannot disable replay validation.
+  const formIdem = readNoJsIdemField(mode.request.rawInput);
+  const idem: unknown = formIdem.present ? formIdem.value : mode.request.idem;
+  if (!formIdem.present && idem === undefined) return undefined;
   if (!mutationIdemTokenIsValid(idem)) return invalidMutationIdemReplayPolicy();
   if (!mode.request.replayStore) return undefined;
 
@@ -191,10 +195,10 @@ export function noJsMutationReplayPolicy<Request, Value>(mode: {
   };
 }
 
-function mutationIdemTokenIsValid(value: string): boolean {
+function mutationIdemTokenIsValid(value: unknown): value is string {
   // SPEC §10.3: bound the client-controlled replay key before any volatile, custom, or durable
   // store sees it. The framework's UUID/base64url mints are a strict subset of this grammar.
-  return securityRegExpTest(MUTATION_IDEM_TOKEN_PATTERN, value);
+  return typeof value === 'string' && securityRegExpTest(MUTATION_IDEM_TOKEN_PATTERN, value);
 }
 
 function invalidMutationIdemReplayPolicy<Response>(): MutationLifecycleReplayPolicy<Response> {
@@ -296,17 +300,27 @@ function noJsReplayReservation(
   };
 }
 
-function readNoJsIdemField(rawInput: unknown): string | undefined {
-  if (typeof rawInput !== 'object' || rawInput === null) return undefined;
+interface MutationIdemFieldSnapshot {
+  readonly present: boolean;
+  readonly value: unknown;
+}
+
+function readNoJsIdemField(rawInput: unknown): MutationIdemFieldSnapshot {
+  if (typeof rawInput !== 'object' || rawInput === null) {
+    return { present: false, value: undefined };
+  }
   let record: Record<string, unknown>;
   try {
     record = formLikeToRecord(rawInput);
   } catch {
-    return undefined;
+    return { present: false, value: undefined };
   }
-  const rawValue = record[KOVO_IDEM_FIELD_NAME];
+  const descriptor = witnessGetOwnPropertyDescriptor(record, KOVO_IDEM_FIELD_NAME);
+  if (descriptor === undefined) return { present: false, value: undefined };
+  if (!('value' in descriptor)) return { present: true, value: undefined };
+  const rawValue = descriptor.value;
   const value = isUntrusted(rawValue)
     ? revealUntrusted(rawValue, 'validated request-derived no-js idempotency token')
     : rawValue;
-  return typeof value === 'string' && value !== '' ? value : undefined;
+  return { present: true, value };
 }
