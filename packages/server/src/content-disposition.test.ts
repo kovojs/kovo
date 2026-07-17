@@ -33,6 +33,33 @@ describe('shared Content-Disposition filename serializer', () => {
     );
   });
 
+  it('neutralizes Unicode bidirectional formatting controls before filename serialization', () => {
+    const bidirectionalControls = [
+      '\u061c',
+      '\u200e',
+      '\u200f',
+      '\u202a',
+      '\u202b',
+      '\u202c',
+      '\u202d',
+      '\u202e',
+      '\u2066',
+      '\u2067',
+      '\u2068',
+      '\u2069',
+    ];
+
+    for (const control of bidirectionalControls) {
+      expect(contentDispositionWithFilename('attachment', `left${control}right.exe`)).toBe(
+        'attachment; filename="left_right.exe"',
+      );
+    }
+
+    expect(contentDispositionWithFilename('attachment', 'invoice\u202efdp.exe')).toBe(
+      'attachment; filename="invoice_fdp.exe"',
+    );
+  });
+
   it('repairs lone surrogates before encoding so Node accepts the header', () => {
     const values = [
       contentDispositionWithFilename('inline', 'broken-\ud800.txt'),

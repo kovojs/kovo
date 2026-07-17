@@ -24,6 +24,16 @@ export function createContentDispositionWithFilename(
   const slice = operations.slice;
   const trim = operations.trim;
 
+  function isBidirectionalFormattingControl(code: number): boolean {
+    return (
+      code === 0x061c ||
+      code === 0x200e ||
+      code === 0x200f ||
+      (code >= 0x202a && code <= 0x202e) ||
+      (code >= 0x2066 && code <= 0x2069)
+    );
+  }
+
   return function contentDispositionWithFilename(
     disposition: 'attachment' | 'inline',
     filename: string,
@@ -62,7 +72,14 @@ export function createContentDispositionWithFilename(
         continue;
       }
       previousWasSeparator = false;
-      normalized += code <= 0x1f || code === 0x7f ? '_' : slice(filename, index, index + 1);
+      // SPEC §6.6 / §9.1: filename* is browser-visible authority, not harmless metadata. WebKit
+      // preserves Unicode bidi formatting controls in its suggested download name, so replace the
+      // complete directional-formatting set before either the ASCII fallback or RFC 8187 value is
+      // constructed. Keeping this inside the factory preserves the live/generated Node sink parity.
+      normalized +=
+        code <= 0x1f || code === 0x7f || isBidirectionalFormattingControl(code)
+          ? '_'
+          : slice(filename, index, index + 1);
       normalizedInputLength += 1;
     }
     normalized = trim(normalized);

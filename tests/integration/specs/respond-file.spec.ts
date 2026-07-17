@@ -33,3 +33,21 @@ test('guarded file response returns attachment headers and supports ETag 304', a
   expect(notModified.status()).toBe(304);
   expect(await notModified.text()).toBe('');
 });
+
+test('download filenames neutralize bidi overrides in browser download UX', async ({
+  kovoApp,
+  page,
+}) => {
+  await page
+    .context()
+    .addCookies([{ name: 'respond_file_session', url: kovoApp.origin, value: '1' }]);
+  await page.setContent(
+    `<a id="bidi-download" href="${kovoApp.origin}/downloads/bidi-file">download</a>`,
+  );
+
+  const [download] = await Promise.all([
+    page.waitForEvent('download'),
+    page.locator('#bidi-download').click(),
+  ]);
+  expect(download.suggestedFilename()).toBe('invoice_fdp.exe');
+});

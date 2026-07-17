@@ -225,9 +225,26 @@ function stripUnsafeFilenameCharacters(value: string): string {
   for (let index = 0; index < value.length; index += 1) {
     const code = securityStringCharCodeAt(value, index);
     if (code <= 0x1f || code === 0x7f || code === 0x22 || code === 0x5c) continue;
+    // SPEC §6.6 / §9.1: preserve a visible separator where a remote filename tried to alter the
+    // display direction. The shared Content-Disposition sink repeats this floor so metadata from
+    // non-upload storage adapters cannot reintroduce a WebKit filename-spoofing control.
+    if (isBidirectionalFilenameControl(code)) {
+      output += '_';
+      continue;
+    }
     output += securityStringSlice(value, index, index + 1);
   }
   return output;
+}
+
+function isBidirectionalFilenameControl(code: number): boolean {
+  return (
+    code === 0x061c ||
+    code === 0x200e ||
+    code === 0x200f ||
+    (code >= 0x202a && code <= 0x202e) ||
+    (code >= 0x2066 && code <= 0x2069)
+  );
 }
 
 /**

@@ -217,6 +217,7 @@ describe('source/sink inventory', () => {
     expect(searchableCorpus).toContain('javascript:');
     expect(searchableCorpus).toContain('protocol-relative //host');
     expect(searchableCorpus).toContain('CR/LF/NUL/DEL/control chars');
+    expect(searchableCorpus).toContain('Unicode bidi filename spoofing');
     expect(searchableCorpus).toContain('webhook signature over prettified body');
     expect(searchableCorpus).toContain('cross-principal BroadcastChannel envelope');
     expect(searchableCorpus).toContain('hostile Kovo-Targets');

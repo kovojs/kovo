@@ -16,6 +16,7 @@ const CROSS_ENGINE = [
   /browser-engine-degradation-matrix\.spec\.ts/,
   /counter\.spec\.ts/,
   /binding-text-attr\.spec\.ts/,
+  /respond-file\.spec\.ts/,
 ];
 
 export default defineConfig({

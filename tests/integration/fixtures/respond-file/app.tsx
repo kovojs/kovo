@@ -24,9 +24,18 @@ const exportRoute = route('/downloads/orders.pdf', {
     }),
 });
 
+const bidiFilenameRoute = route('/downloads/bidi-file', {
+  guard: guards.authed<FileRequest>(),
+  page: () =>
+    respond.file('MZ harmless repro', {
+      contentType: 'application/octet-stream',
+      filename: 'invoice\u202efdp.exe',
+    }),
+});
+
 export default defineFixture({
   app: createApp<FileSession>({
-    routes: [exportRoute],
+    routes: [exportRoute, bidiFilenameRoute],
     sessionProvider: (request) => readSessionCookie(request),
   }),
 });

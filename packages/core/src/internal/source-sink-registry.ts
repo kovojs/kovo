@@ -245,7 +245,7 @@ const sourceSinkInventory: readonly SourceSinkInventoryEntry[] = [
     guard:
       'direct-app-header-allowlist+dedicated-field-options+typed-cookie-builder+transport-owned-header-deny-set',
     runtimeGuard:
-      'reject-unknown-direct-app-names+reject-cr-lf-nul-controls+reject-framing-hop-by-hop+structural-cookie-serialization+browser-state-private-no-store-floor+static-export-browser-state-rejection+adapter-browser-state-private-no-store-floor',
+      'reject-unknown-direct-app-names+reject-cr-lf-nul-controls+content-disposition-bidi-neutralization+reject-framing-hop-by-hop+structural-cookie-serialization+browser-state-private-no-store-floor+static-export-browser-state-rejection+adapter-browser-state-private-no-store-floor',
     schema:
       'mutation-response-header-channel|route-outcome-direct-headers(Cache-Control,Last-Modified,Vary)|configured-error-shell-direct-headers(Cache-Control,Last-Modified,Vary)|raw-endpoint-Response|static-export-headers|Set-Cookie|Clear-Site-Data|Content-Type|ETag|Content-Disposition|Location|Retry-After|Kovo-*|Content-Length|Connection|Keep-Alive|Proxy-Connection|TE|Trailer|Transfer-Encoding|Upgrade|Proxy-Authenticate|Proxy-Authorization|HTTP2-Settings|Node-Bun-Workers-header-conversion',
     sink: 'http.header.cookie',
@@ -306,7 +306,7 @@ const sourceSinkInventory: readonly SourceSinkInventoryEntry[] = [
     firstParser: 'FileSchema+storage-key-parser+static-export-route-graph',
     guard: 'path-containment+attachment-nosniff+static-export-reference-check',
     runtimeGuard:
-      'safe-content-disposition+reserved-dynamic-endpoint-refusal+storage-key-validation',
+      'safe-content-disposition+upload-and-wire-bidi-filename-neutralization+reserved-dynamic-endpoint-refusal+storage-key-validation',
     schema:
       'FileSchema|StoredFile|upload-schema-storage|storage-keys-metadata|filesystem-S3-adapters|respond.file|respond.stream|static-export-output-paths|Vite-manifest-asset-copies|generated-graph-output-files|static-export-route-paths-assets-manifests|storage-key|content-disposition-filename',
     sink: 'file.storage.static-export',
@@ -460,6 +460,7 @@ const redCorpus: readonly SourceSinkCorpusEntry[] = [
       'multi-cookie injection',
       'semicolon cookie value',
       'quoted filename breakout',
+      'Unicode bidi filename spoofing',
       'bad header names',
       'reserved Kovo-* writes',
       'unknown structured app header names',
@@ -534,6 +535,10 @@ const redCorpus: readonly SourceSinkCorpusEntry[] = [
     family: 'file.storage.static-export',
     negativeTestEvidence: [
       'packages/core/src/storage.test.ts',
+      'packages/server/src/content-disposition.test.ts',
+      'packages/server/src/upload-sniff.test.ts',
+      'packages/server/src/response.test.ts',
+      'packages/server/src/build.test.ts',
       'packages/server/src/static-export-route-guards.test.ts',
       'packages/server/src/static-export-output.test.ts',
     ],
@@ -547,6 +552,7 @@ const redCorpus: readonly SourceSinkCorpusEntry[] = [
       'content-disposition injection',
       'oversized uploads',
       'metadata control chars',
+      'Unicode bidi filename spoofing',
       'Vite manifest path escapes',
       'cache ref tampering',
       'reserved dynamic endpoint references',

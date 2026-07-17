@@ -1760,6 +1760,15 @@ export default async function handler(request) {
         `inline; filename="emoji-_.txt"; filename*=UTF-8''emoji-%F0%9F%92%A3.txt`,
       );
       await expect(unicodeResponse.text()).resolves.toBe('unicode-asset');
+
+      const bidiFileName = 'invoice\u202efdp.exe';
+      await writeFile(join(nodeOutDir, 'client', 'assets', bidiFileName), 'bidi-asset');
+      const bidiResponse = await fetch(`${baseUrl}/assets/${encodeURIComponent(bidiFileName)}`);
+      expect(bidiResponse.status).toBe(200);
+      expect(bidiResponse.headers.get('content-disposition')).toBe(
+        'inline; filename="invoice_fdp.exe"',
+      );
+      await expect(bidiResponse.text()).resolves.toBe('bidi-asset');
     } finally {
       if (server !== undefined) await server.close();
       await rm(root, { force: true, recursive: true });

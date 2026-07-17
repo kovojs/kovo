@@ -913,6 +913,23 @@ describe('server response adapters', () => {
     expect(explicit.contentDisposition).toBe('attachment; filename="a__b.txt"');
   });
 
+  it('neutralizes stored and explicit bidi filename controls at the response sink', async () => {
+    const storage = createMemoryStorage();
+    await storage.put('uploads/bidi', 'MZ harmless repro', {
+      contentType: 'application/octet-stream',
+      metadata: { filename: 'invoice\u202efdp.exe' },
+    });
+
+    const stored = await respond.storedFile(storage, 'uploads/bidi');
+    expect(stored?.contentDisposition).toBe('attachment; filename="invoice_fdp.exe"');
+
+    const explicit = respond.file('MZ harmless repro', {
+      contentType: 'application/octet-stream',
+      filename: 'invoice\u202efdp.exe',
+    });
+    expect(explicit.contentDisposition).toBe('attachment; filename="invoice_fdp.exe"');
+  });
+
   it('serializes Unicode and malformed-surrogate filenames without a persistent header failure', async () => {
     const storage = createMemoryStorage();
     await storage.put('uploads/unicode', '%PDF-1.7', {
