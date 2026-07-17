@@ -52,6 +52,7 @@ import {
   securityStringStartsWith,
   securityUint8ArrayLength,
 } from './response-security-intrinsics.js';
+import { mintMutationIdemToken } from './mutation-idem.js';
 
 const NativeURL = globalThis.URL;
 const nativeRequestMethod = witnessGetOwnPropertyDescriptor(Request.prototype, 'method')?.get;
@@ -495,12 +496,12 @@ export const KOVO_IDEM_FIELD_NAME = 'Kovo-Idem';
 
 /**
  * @internal Mint a fresh ≥128-bit cryptographically-random idempotency token for a
- * no-JS mutation form (SPEC.md §10.3:1063/1065 — "atomic reservation for **all**
- * mutation paths" including no-JS). Sixteen exact random bytes preserve the normative
- * 128-bit floor; unlike an RFC v4 UUID, no entropy bits are consumed by format markers.
+ * no-JS mutation form (SPEC.md §10.3). The versioned token carries server issue time plus
+ * sixteen exact random bytes, preserving the normative 128-bit nonce floor without counting
+ * UUID version/variant marker bits as entropy.
  */
 export function mintIdemToken(): string {
-  return securityBufferToString(securityRandomBytes(16), 'base64url');
+  return mintMutationIdemToken();
 }
 
 /**

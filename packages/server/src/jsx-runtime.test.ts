@@ -228,8 +228,8 @@ describe('server jsx runtime', () => {
         'p1',
       ),
     );
-    // SPEC.md §10.3:1063/1065: mutation forms include a per-submit Kovo-Idem field
-    // (value is a fresh UUID each render, so we match the structure not the exact value).
+    // SPEC §10.3: mutation forms include a fresh server-time Kovo-Idem token on each render,
+    // so match the field structure rather than one exact random value.
     expect(formHtml).toMatch(
       /^<form kovo-key="p1" enhance method="post" action="\/_m\/cart\/add" data-mutation="cart\/add"><input type="hidden" name="kovo-form-key" value="p1"><input type="hidden" name="Kovo-Idem" value="[^"]+"><\/form>$/,
     );
@@ -437,8 +437,7 @@ describe('server jsx runtime', () => {
       ),
     );
 
-    // SPEC.md §10.3:1063/1065: mutation forms include a per-submit Kovo-Idem field
-    // alongside the CSRF field. The idem value is a fresh UUID each render.
+    // SPEC §10.3: mutation forms include a fresh server-time Kovo-Idem token alongside CSRF.
     expect(
       validateCsrfToken({ csrf: hiddenInputValue(rendered, 'csrf') }, request, csrf, {
         audience: 'cart/add',
@@ -1426,8 +1425,9 @@ describe('server jsx runtime', () => {
     const rendered = html(jsx('form', { mutation: addToCart, children: '' }));
     const match = /name="Kovo-Idem" value="([^"]+)"/.exec(rendered);
     expect(match).not.toBeNull();
-    expect(match![1]).toMatch(/^[A-Za-z0-9_-]{22}$/u);
-    expect(Buffer.from(match![1]!, 'base64url')).toHaveLength(16);
+    const token = /^v1_([0-9]{13})_([0-9a-f]{32})$/u.exec(match![1]!);
+    expect(token).not.toBeNull();
+    expect(Buffer.from(token![2]!, 'hex')).toHaveLength(16);
   });
 
   it('A2: each render mints a distinct Kovo-Idem value (per-submit freshness)', () => {

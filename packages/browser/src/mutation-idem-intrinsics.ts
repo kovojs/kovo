@@ -1,13 +1,15 @@
 /**
- * Boot-pinned cryptographic source for SPEC §10.3 mutation idempotency tokens.
+ * Boot-pinned cryptographic and clock sources for SPEC §10.3 mutation idempotency tokens.
  *
- * The inline loader and modular client both share a realm with application code. They therefore
- * retain and semantically check the cryptographic functions instead of consulting live `crypto`
- * properties at submit time or falling back to a predictable clock/counter.
+ * Server-stamped enhanced forms preserve their token's issued-at value and replace only the
+ * 128-bit nonce. Direct seedless APIs use the captured client clock because no server timestamp
+ * exists to preserve.
  *
  * @internal
  */
 export function createMutationIdemSecurityControls(scope: typeof globalThis = globalThis) {
+  const NativeDate = scope.Date ?? Date;
+  const NativeNumber = Number;
   const NativeObject = Object;
   const NativeReflect = Reflect;
   const NativeString = String;
@@ -15,8 +17,10 @@ export function createMutationIdemSecurityControls(scope: typeof globalThis = gl
   const nativeReflectApply = NativeReflect.apply;
   const nativeObjectGetOwnPropertyDescriptor = NativeObject.getOwnPropertyDescriptor;
   const nativeObjectGetPrototypeOf = NativeObject.getPrototypeOf;
+  const nativeNumberIsSafeInteger = NativeNumber.isSafeInteger;
   const nativeStringCharCodeAt = NativeString.prototype.charCodeAt;
-  const nativeStringToLowerCase = NativeString.prototype.toLowerCase;
+  const nativeStringFromCharCode = NativeString.fromCharCode;
+  const nativeStringSlice = NativeString.prototype.slice;
   const cryptoObject = scope.crypto;
 
   function apply<Return>(method: Function, receiver: unknown, args: readonly unknown[]): Return {
@@ -51,8 +55,8 @@ export function createMutationIdemSecurityControls(scope: typeof globalThis = gl
     return undefined;
   }
 
-  const randomUuid = cryptoObject ? stableMethod(cryptoObject, 'randomUUID') : undefined;
   const getRandomValues = cryptoObject ? stableMethod(cryptoObject, 'getRandomValues') : undefined;
+  const dateNow = stableMethod(NativeDate, 'now');
   const uint8ArrayByteLength = stableGetter(NativeUint8Array.prototype, 'byteLength');
 
   function baseControlsAreSound(): boolean {
@@ -64,8 +68,10 @@ export function createMutationIdemSecurityControls(scope: typeof globalThis = gl
         found !== undefined &&
         'value' in found &&
         found.value === true &&
+        apply<boolean>(nativeNumberIsSafeInteger, NativeNumber, [42]) === true &&
+        apply<boolean>(nativeNumberIsSafeInteger, NativeNumber, [4.2]) === false &&
         apply<number>(nativeStringCharCodeAt, 'a', [0]) === 0x61 &&
-        apply<string>(nativeStringToLowerCase, 'AB', []) === 'ab'
+        apply<string>(nativeStringSlice, 'kovo', [1, 3]) === 'ov'
       );
     } catch {
       return false;
@@ -74,79 +80,10 @@ export function createMutationIdemSecurityControls(scope: typeof globalThis = gl
 
   const baseControlsSound = baseControlsAreSound();
 
-  function isHex(code: number): boolean {
-    return (
-      (code >= 0x30 && code <= 0x39) ||
-      (code >= 0x41 && code <= 0x46) ||
-      (code >= 0x61 && code <= 0x66)
-    );
-  }
-
   function hexDigit(value: number): string {
-    switch (value) {
-      case 0:
-        return '0';
-      case 1:
-        return '1';
-      case 2:
-        return '2';
-      case 3:
-        return '3';
-      case 4:
-        return '4';
-      case 5:
-        return '5';
-      case 6:
-        return '6';
-      case 7:
-        return '7';
-      case 8:
-        return '8';
-      case 9:
-        return '9';
-      case 10:
-        return 'a';
-      case 11:
-        return 'b';
-      case 12:
-        return 'c';
-      case 13:
-        return 'd';
-      case 14:
-        return 'e';
-      case 15:
-        return 'f';
-      default:
-        throw new TypeError('Kovo mutation idempotency produced an invalid hexadecimal nibble.');
-    }
-  }
-
-  function validUuid(value: unknown): value is string {
-    if (typeof value !== 'string' || value.length !== 36) return false;
-    for (let index = 0; index < value.length; index += 1) {
-      if (index === 8 || index === 13 || index === 18 || index === 23) {
-        if (value[index] !== '-') return false;
-        continue;
-      }
-      const code = apply<number>(nativeStringCharCodeAt, value, [index]);
-      if (!isHex(code)) return false;
-    }
-    const version = value[14];
-    const variant = apply<string>(nativeStringToLowerCase, value[19] || '', []);
-    return (
-      version === '4' && (variant === '8' || variant === '9' || variant === 'a' || variant === 'b')
-    );
-  }
-
-  function uuidControlIsSound(): boolean {
-    if (!baseControlsSound || !randomUuid || !cryptoObject) return false;
-    try {
-      const first = apply<unknown>(randomUuid, cryptoObject, []);
-      const second = apply<unknown>(randomUuid, cryptoObject, []);
-      return validUuid(first) && validUuid(second) && first !== second;
-    } catch {
-      return false;
-    }
+    return value < 10
+      ? apply<string>(NativeString, undefined, [value])
+      : apply<string>(nativeStringFromCharCode, NativeString, [0x61 + value - 10]);
   }
 
   function randomValuesControlIsSound(): boolean {
@@ -190,40 +127,83 @@ export function createMutationIdemSecurityControls(scope: typeof globalThis = gl
     }
   }
 
-  const uuidSound = uuidControlIsSound();
   const randomValuesSound = randomValuesControlIsSound();
 
-  function createMutationIdem(): string {
-    if (uuidSound && randomUuid && cryptoObject) {
-      const value = apply<unknown>(randomUuid, cryptoObject, []);
-      if (validUuid(value)) return value;
-      throw new TypeError('Kovo mutation randomUUID control returned an invalid token.');
+  function timestampFromToken(value: unknown): string | undefined {
+    if (typeof value !== 'string' || value.length !== 49) return undefined;
+    if (
+      apply<number>(nativeStringCharCodeAt, value, [0]) !== 0x76 ||
+      apply<number>(nativeStringCharCodeAt, value, [1]) !== 0x31 ||
+      apply<number>(nativeStringCharCodeAt, value, [2]) !== 0x5f ||
+      apply<number>(nativeStringCharCodeAt, value, [16]) !== 0x5f
+    ) {
+      return undefined;
     }
-    if (randomValuesSound && getRandomValues && cryptoObject && uint8ArrayByteLength) {
-      const bytes = new NativeUint8Array(16);
-      if (apply<unknown>(getRandomValues, cryptoObject, [bytes]) !== bytes) {
-        throw new TypeError('Kovo mutation getRandomValues control returned an invalid result.');
-      }
-      const byteLength = apply<unknown>(uint8ArrayByteLength, bytes, []);
-      if (byteLength !== 16) {
-        throw new TypeError(
-          'Kovo mutation getRandomValues control returned an invalid byte length.',
-        );
-      }
-      let hex = '';
-      for (let index = 0; index < byteLength; index += 1) {
-        const byte = bytes[index];
-        if (typeof byte !== 'number') {
-          throw new TypeError('Kovo mutation getRandomValues control returned invalid bytes.');
-        }
-        hex += hexDigit((byte >>> 4) & 0x0f) + hexDigit(byte & 0x0f);
-      }
-      return 'idem_' + hex;
+    for (let index = 3; index < 16; index += 1) {
+      const code = apply<number>(nativeStringCharCodeAt, value, [index]);
+      if (code < 0x30 || code > 0x39) return undefined;
     }
-    throw new Error(
-      'Kovo mutation idempotency requires a verified cryptographic source (crypto.randomUUID or crypto.getRandomValues); SPEC §10.3 forbids a predictable token.',
-    );
+    for (let index = 17; index < 49; index += 1) {
+      const code = apply<number>(nativeStringCharCodeAt, value, [index]);
+      if (!((code >= 0x30 && code <= 0x39) || (code >= 0x61 && code <= 0x66))) {
+        return undefined;
+      }
+    }
+    return apply(nativeStringSlice, value, [3, 16]);
   }
 
-  return { createMutationIdem };
+  function currentTimestamp(): string {
+    if (!baseControlsSound || !dateNow) {
+      throw new Error('Kovo mutation idempotency requires a verified client clock.');
+    }
+    const now = apply<unknown>(dateNow, NativeDate, []);
+    if (
+      typeof now !== 'number' ||
+      !apply<boolean>(nativeNumberIsSafeInteger, NativeNumber, [now]) ||
+      now < 1_000_000_000_000 ||
+      now > 9_999_999_999_999
+    ) {
+      throw new TypeError('Kovo mutation idempotency clock is outside the 13-digit epoch range.');
+    }
+    return apply(NativeString, undefined, [now]);
+  }
+
+  function mintWithTimestamp(timestamp: string): string {
+    if (!randomValuesSound || !getRandomValues || !cryptoObject || !uint8ArrayByteLength) {
+      throw new Error(
+        'Kovo mutation idempotency requires a verified 128-bit cryptographic source (crypto.getRandomValues).',
+      );
+    }
+    const bytes = new NativeUint8Array(16);
+    if (apply<unknown>(getRandomValues, cryptoObject, [bytes]) !== bytes) {
+      throw new TypeError('Kovo mutation getRandomValues control returned an invalid result.');
+    }
+    const byteLength = apply<unknown>(uint8ArrayByteLength, bytes, []);
+    if (byteLength !== 16) {
+      throw new TypeError('Kovo mutation getRandomValues control returned an invalid byte length.');
+    }
+    let nonce = '';
+    for (let index = 0; index < byteLength; index += 1) {
+      const byte = bytes[index];
+      if (typeof byte !== 'number') {
+        throw new TypeError('Kovo mutation getRandomValues control returned invalid bytes.');
+      }
+      nonce += hexDigit((byte >>> 4) & 0x0f) + hexDigit(byte & 0x0f);
+    }
+    return 'v1_' + timestamp + '_' + nonce;
+  }
+
+  function createMutationIdem(): string {
+    return mintWithTimestamp(currentTimestamp());
+  }
+
+  function refreshMutationIdem(seed: unknown): string {
+    const timestamp = timestampFromToken(seed);
+    if (timestamp === undefined) {
+      throw new TypeError('Kovo enhanced mutation requires a canonical server-stamped token.');
+    }
+    return mintWithTimestamp(timestamp);
+  }
+
+  return { createMutationIdem, refreshMutationIdem };
 }

@@ -13,7 +13,7 @@ import {
 import { renderComponentMutationFailure } from './component-render.js';
 import { domain } from './domain.js';
 import { renderedHtml } from './html.js';
-import { csrfToken } from './csrf.js';
+import { csrfToken, mintIdemToken } from './csrf.js';
 import { createMemoryMutationReplayStore } from './replay.js';
 import { query } from './query.js';
 import { s } from './schema.js';
@@ -1176,8 +1176,9 @@ describe('server mutation primitives', () => {
       handler,
     });
     const replayStore = createMemoryMutationReplayStore();
+    const idem = mintIdemToken();
     const request = {
-      headers: { 'Kovo-Fragment': 'true', 'Kovo-Idem': 'idem_enhanced_success_01' },
+      headers: { 'Kovo-Fragment': 'true', 'Kovo-Idem': idem },
       rawInput: { productId: 'p1' },
       redirectTo: '/cart',
       replayStore,
@@ -1217,7 +1218,7 @@ describe('server mutation primitives', () => {
       handler,
     });
     const request = {
-      idem: 'idem_exempt_browser_state',
+      idem: mintIdemToken(),
       rawInput: { productId: 'p1' },
       replayStore,
       request: { sessionId: 'machine-replay-scope' },
@@ -1244,9 +1245,10 @@ describe('server mutation primitives', () => {
       handler,
     });
     const replayStore = createMemoryMutationReplayStore();
+    const idem = mintIdemToken();
     const submit = (productId: string) =>
       renderMutationEndpointResponse(addToCart, {
-        headers: { 'Kovo-Fragment': 'true', 'Kovo-Idem': 'idem_enhanced_conflict_01' },
+        headers: { 'Kovo-Fragment': 'true', 'Kovo-Idem': idem },
         rawInput: { productId },
         redirectTo: '/cart',
         replayStore,
@@ -1264,11 +1266,16 @@ describe('server mutation primitives', () => {
 
   it.each([
     ['empty', ''],
-    ['non-base64url', 'not a base64url token'],
+    ['legacy timeless', 'idem_0123456789abcdef0123456789abcdef'],
+    ['stale', 'v1_1000000000000_0123456789abcdef0123456789abcdef'],
+    ['far-future', 'v1_9999999999999_0123456789abcdef0123456789abcdef'],
   ])(
-    'rejects an invalid enhanced Kovo-Idem (%s) before handler execution without a replay store',
+    'rejects an invalid enhanced Kovo-Idem (%s) before replay-store or handler execution',
     async (_label, idem) => {
       const handler = vi.fn((input: { productId: string }) => input);
+      const storeGet = vi.fn();
+      const storeReserve = vi.fn();
+      const storeSet = vi.fn();
       const addToCart = mutation('cart/invalid-idem', {
         input: s.object({ productId: s.string() }),
         handler,
@@ -1277,11 +1284,19 @@ describe('server mutation primitives', () => {
       const response = await renderMutationResponse(addToCart, {
         idem,
         rawInput: { productId: 'p1' },
+        replayStore: {
+          get: storeGet,
+          reserve: storeReserve,
+          set: storeSet,
+        },
         request: { sessionId: 's1' },
       });
 
       expect(response.status).toBe(422);
       expect(response.body).toContain('data-error-code="IDEMPOTENCY_CONFLICT"');
+      expect(storeGet).not.toHaveBeenCalled();
+      expect(storeReserve).not.toHaveBeenCalled();
+      expect(storeSet).not.toHaveBeenCalled();
       expect(handler).not.toHaveBeenCalled();
     },
   );
@@ -2053,10 +2068,11 @@ describe('server mutation primitives', () => {
         yield stream.text('assistant:a1', 'first response only');
       },
     });
+    const idem = mintIdemToken();
     const request = {
       headers: {
         'Kovo-Fragment': 'true',
-        'Kovo-Idem': 'idem_stream',
+        'Kovo-Idem': idem,
         'Kovo-Stream': 'true',
       },
       rawInput: { body: 'Hi' },
@@ -2102,10 +2118,11 @@ describe('server mutation primitives', () => {
         yield stream.text('assistant:a1', 'settled once');
       },
     });
+    const idem = mintIdemToken();
     const request = {
       headers: {
         'Kovo-Fragment': 'true',
-        'Kovo-Idem': 'idem_slow_stream',
+        'Kovo-Idem': idem,
         'Kovo-Stream': 'true',
       },
       rawInput: { body: 'Hi' },

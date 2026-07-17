@@ -15,6 +15,8 @@ import {
   FakeRoot,
 } from './runtime-test-fakes.js';
 
+const RENDERED_IDEM = 'v1_1750000000000_000102030405060708090a0b0c0d0e0f';
+
 // SPEC.md §4.4: enhanced-form submit interception and upload-progress reflection
 // stay in the always-loaded loader path; split from the failure and broadcast
 // seams in the sibling loader-enhanced-mutation-*.test.ts files.
@@ -46,6 +48,7 @@ describe('loader enhanced mutation submits', () => {
     mutationRoot.deps = [{ deps: 'cart', id: 'cart-badge', token: 'tok_cart' }];
     mutationRoot.targets.set('cart-badge', new FakeMorphTarget());
     formData.set('productId', 'p1');
+    formData.set('Kovo-Idem', RENDERED_IDEM);
     const fetch = vi.fn(async (_url: string, options: EnhancedMutationFetchOptions) => ({
       headers: {
         get(name: string) {
@@ -73,7 +76,6 @@ describe('loader enhanced mutation submits', () => {
       enhancedMutations: {
         fetch,
         formData: () => formData,
-        idem: () => 'idem_loader',
         onUploadProgress: uploadProgress,
         pendingRoot,
         root: mutationRoot,
@@ -91,13 +93,15 @@ describe('loader enhanced mutation submits', () => {
 
     expect(preventDefault).toHaveBeenCalledTimes(1);
     expect(importModule).not.toHaveBeenCalled();
+    const submittedIdem = formData.get('Kovo-Idem');
+    expect(submittedIdem).toMatch(/^v1_1750000000000_[0-9a-f]{32}$/u);
     expect(fetch).toHaveBeenCalledWith('/_m/cart/add', {
       body: formData,
       headers: {
         Accept: 'text/vnd.kovo.fragment+html',
         'Kovo-Current-Url': 'http://localhost/',
         'Kovo-Fragment': 'true',
-        'Kovo-Idem': 'idem_loader',
+        'Kovo-Idem': submittedIdem,
         'Kovo-Live-Targets': 'cart-badge#cart-badge@tok_cart:{}',
         'Kovo-Targets': 'cart-badge=cart',
       },
@@ -132,7 +136,16 @@ describe('loader enhanced mutation submits', () => {
     const submitter = new FakeElement({ name: 'intent', value: 'preview' });
     const constructedArgs: unknown[][] = [];
     const originalFormData = globalThis.FormData;
-    const formData = { kind: 'submitter-aware-form-data' };
+    const formData = {
+      idem: RENDERED_IDEM,
+      kind: 'submitter-aware-form-data',
+      get(name: string) {
+        return name === 'Kovo-Idem' ? this.idem : null;
+      },
+      set(name: string, value: string) {
+        if (name === 'Kovo-Idem') this.idem = value;
+      },
+    };
     const fetch = vi.fn(async () => ({
       headers: {
         get(name: string) {
@@ -247,10 +260,12 @@ describe('loader enhanced mutation submits', () => {
       writable: true,
     });
 
+    const formData = new FormData();
+    formData.set('Kovo-Idem', RENDERED_IDEM);
     installKovoLoader({
       enhancedMutations: {
         fetch,
-        formData: () => new FormData(),
+        formData: () => formData,
         root: new FakeMorphRoot(),
         store: createQueryStore(),
       },
@@ -278,6 +293,7 @@ describe('loader enhanced mutation submits', () => {
     const preventDefault = vi.fn();
     const importModule = vi.fn();
     const formData = new FormData();
+    formData.set('Kovo-Idem', RENDERED_IDEM);
     const form = new FakeFormElement(
       {
         enhance: '',

@@ -26,9 +26,8 @@ import {
   witnessIsArray,
   witnessObjectIs,
 } from '../security-witness-intrinsics.js';
-import { securityRegExpTest, securityStringStartsWith } from '../response-security-intrinsics.js';
-
-const MUTATION_IDEM_TOKEN_PATTERN = /^[A-Za-z0-9_-]{1,1024}$/u;
+import { securityStringStartsWith } from '../response-security-intrinsics.js';
+import { validateMutationIdemToken } from '../mutation-idem.js';
 
 export type MutationLifecycleReplayReservation<Response> = {
   abort?(): Promise<void> | void;
@@ -95,12 +94,14 @@ export function enhancedMutationReplayPolicy<Request>(mode: {
 }): MutationLifecycleReplayPolicy<BufferedMutationWireResponse> | undefined {
   const idem: unknown = mode.request.idem;
   if (idem === undefined) return undefined;
-  if (!mutationIdemTokenIsValid(idem)) return invalidMutationIdemReplayPolicy();
+  const idemFacts = validateMutationIdemToken(idem);
+  if (idemFacts === undefined) return invalidMutationIdemReplayPolicy();
   if (!mode.request.replayStore) return undefined;
   let context: ReturnType<typeof mutationReplayContext> | undefined;
   const replayContext = () =>
     (context ??= mutationReplayContext(mode.csrf ?? false, {
       ...mode.request,
+      idem: idemFacts.token,
       mutationKey: mode.mutationKey,
     }));
   return {
@@ -142,13 +143,14 @@ export function noJsMutationReplayPolicy<Request, Value>(mode: {
   const formIdem = readNoJsIdemField(mode.request.rawInput);
   const idem: unknown = formIdem.present ? formIdem.value : mode.request.idem;
   if (!formIdem.present && idem === undefined) return undefined;
-  if (!mutationIdemTokenIsValid(idem)) return invalidMutationIdemReplayPolicy();
+  const idemFacts = validateMutationIdemToken(idem);
+  if (idemFacts === undefined) return invalidMutationIdemReplayPolicy();
   if (!mode.request.replayStore) return undefined;
 
   let context: ReturnType<typeof mutationReplayContext> | undefined;
   const replayContext = () =>
     (context ??= mutationReplayContext(mode.csrf ?? false, {
-      idem,
+      idem: idemFacts.token,
       mutationKey: mode.mutationKey,
       rawInput: mode.request.rawInput,
       request: mode.request.request,
@@ -163,7 +165,11 @@ export function noJsMutationReplayPolicy<Request, Value>(mode: {
     async read() {
       const context = await replayContext();
       const scope = context.scope === null ? `nojs:${mode.mutationKey}` : `nojs:${context.scope}`;
-      const response = await mode.request.replayStore?.get(scope, idem, context.fingerprint);
+      const response = await mode.request.replayStore?.get(
+        scope,
+        idemFacts.token,
+        context.fingerprint,
+      );
       return noJsReplayResponseOrConflict(
         response === undefined ? undefined : snapshotMutationReplayResponse(response),
       );
@@ -176,7 +182,7 @@ export function noJsMutationReplayPolicy<Request, Value>(mode: {
         NoJsMutationReplayReservation
       >({
         fingerprint: context.fingerprint,
-        idem,
+        idem: idemFacts.token,
         scope,
         store: mode.request.replayStore,
       });
@@ -193,12 +199,6 @@ export function noJsMutationReplayPolicy<Request, Value>(mode: {
       };
     },
   };
-}
-
-function mutationIdemTokenIsValid(value: unknown): value is string {
-  // SPEC §10.3: bound the client-controlled replay key before any volatile, custom, or durable
-  // store sees it. The framework's UUID/base64url mints are a strict subset of this grammar.
-  return typeof value === 'string' && securityRegExpTest(MUTATION_IDEM_TOKEN_PATTERN, value);
 }
 
 function invalidMutationIdemReplayPolicy<Response>(): MutationLifecycleReplayPolicy<Response> {

@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 import { describe, expect, it, vi } from 'vitest';
 
 import { untrusted } from '@kovojs/core';
@@ -25,6 +27,12 @@ import { s } from './schema.js';
 import { testMutation as mutation } from './test-fixtures.js';
 
 const replayTestBuildToken = 'replay-test-build';
+const replayTestIssuedAt = Date.now();
+
+function replayIdem(label: string): string {
+  const nonce = createHash('sha256').update(label).digest('hex').slice(0, 32);
+  return `v1_${replayTestIssuedAt}_${nonce}`;
+}
 
 function withReplayTestBuildToken<T extends { buildToken?: string }>(
   request: T,
@@ -433,7 +441,7 @@ describe('server mutation response replay', () => {
       },
     });
     const request = {
-      idem: 'idem_01',
+      idem: replayIdem('idem_01'),
       rawInput: { productId: 'p1' },
       replayStore,
       request: { sessionId: 's1' },
@@ -446,13 +454,13 @@ describe('server mutation response replay', () => {
 
     expect(writes).toBe(1);
     expect(second).toEqual({
-      body: '<kovo-query name="cart" settles="idem_01">{"count":1}</kovo-query>',
+      body: `<kovo-query name="cart" settles="${replayIdem('idem_01')}">{"count":1}</kovo-query>`,
       headers: {
         'Cache-Control': 'private, no-store',
         'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
         'Kovo-Build': 'replay-test-build',
         'Kovo-Changes': '[{"domain":"cart"}]',
-        'Kovo-Idem': 'idem_01',
+        'Kovo-Idem': replayIdem('idem_01'),
         Vary: 'Cookie',
       },
       status: 200,
@@ -486,7 +494,7 @@ describe('server mutation response replay', () => {
       },
     });
     const request = {
-      idem: 'idem_concurrent_handler',
+      idem: replayIdem('idem_concurrent_handler'),
       rawInput: { productId: 'p1' },
       replayStore,
       request: { sessionId: 's1' },
@@ -505,7 +513,7 @@ describe('server mutation response replay', () => {
     expect(writes).toBe(1);
     expect(firstResponse).toEqual(secondResponse);
     expect(firstResponse).toMatchObject({
-      body: '<kovo-query name="cart" settles="idem_concurrent_handler">{"count":1}</kovo-query>',
+      body: `<kovo-query name="cart" settles="${replayIdem('idem_concurrent_handler')}">{"count":1}</kovo-query>`,
       status: 200,
     });
   });
@@ -528,7 +536,7 @@ describe('server mutation response replay', () => {
     });
     const submit = () =>
       renderMutationResponse(signUp, {
-        idem: 'idem_anonymous_signup',
+        idem: replayIdem('idem_anonymous_signup'),
         rawInput: { csrf: anonymous.token(), email: 'person@example.test' },
         replayStore,
         request: anonymous.request,
@@ -571,7 +579,7 @@ describe('server mutation response replay', () => {
     });
     const addSubmit = (anonymous: ReturnType<typeof anonymousCsrfRequest>) =>
       renderMutationResponse(add, {
-        idem: 'idem_shared_anonymous',
+        idem: replayIdem('idem_shared_anonymous'),
         rawInput: { csrf: anonymous.token(), productId: 'p1' },
         replayStore,
         request: anonymous.request,
@@ -580,7 +588,7 @@ describe('server mutation response replay', () => {
     await addSubmit(firstAnonymous);
     await addSubmit(secondAnonymous);
     await renderMutationResponse(remove, {
-      idem: 'idem_shared_anonymous',
+      idem: replayIdem('idem_shared_anonymous'),
       rawInput: {
         csrf: csrfToken(firstAnonymous.request, firstAnonymous.csrf, {
           mutation: 'cart/remove',
@@ -612,7 +620,7 @@ describe('server mutation response replay', () => {
     });
     const submit = (productId: string) =>
       renderMutationResponse(add, {
-        idem: 'idem_anonymous_conflict',
+        idem: replayIdem('idem_anonymous_conflict'),
         rawInput: { csrf: anonymous.token(), productId },
         replayStore,
         request: anonymous.request,
@@ -638,7 +646,7 @@ describe('server mutation response replay', () => {
       },
     });
     const baseRequest = {
-      idem: 'idem_reused_body',
+      idem: replayIdem('idem_reused_body'),
       replayStore,
       request: { sessionId: 's1' },
     };
@@ -660,7 +668,7 @@ describe('server mutation response replay', () => {
         'Cache-Control': 'private, no-store',
         'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
         'Kovo-Build': 'replay-test-build',
-        'Kovo-Idem': 'idem_reused_body',
+        'Kovo-Idem': replayIdem('idem_reused_body'),
         Vary: 'Cookie',
       },
       status: 422,
@@ -685,7 +693,7 @@ describe('server mutation response replay', () => {
       },
     });
     const baseRequest = {
-      idem: 'idem_formdata_body',
+      idem: replayIdem('idem_formdata_body'),
       replayStore,
       request: { sessionId: 's1' },
     };
@@ -723,7 +731,7 @@ describe('server mutation response replay', () => {
       },
     });
     const baseRequest = {
-      idem: 'idem_formdata_replay',
+      idem: replayIdem('idem_formdata_replay'),
       replayStore,
       request: { sessionId: 's1' },
     };
@@ -758,7 +766,7 @@ describe('server mutation response replay', () => {
       },
     });
     const request = {
-      idem: 'idem_upload_bytes',
+      idem: replayIdem('idem_upload_bytes'),
       replayStore,
       request: { sessionId: 's1' },
     };
@@ -959,7 +967,7 @@ describe('server mutation response replay', () => {
 
     await expect(
       renderMutationResponse(upload, {
-        idem: 'idem_broken_upload',
+        idem: replayIdem('idem_broken_upload'),
         rawInput: { upload: brokenUpload },
         replayStore,
         request: { sessionId: 's1' },
@@ -988,7 +996,7 @@ describe('server mutation response replay', () => {
     });
 
     const response = await renderMutationResponse(upload, {
-      idem: 'idem_csrf_upload',
+      idem: replayIdem('idem_csrf_upload'),
       rawInput: {
         csrf: 'invalid',
         upload: {
@@ -1058,7 +1066,7 @@ describe('server mutation response replay', () => {
     const secondBody = bodyFor();
 
     const first = await mutationReplayContext(csrf, {
-      idem: 'idem_rotating_csrf',
+      idem: replayIdem('idem_rotating_csrf'),
       mutationKey: 'cart/add',
       rawInput: firstBody,
       replayStore,
@@ -1066,7 +1074,7 @@ describe('server mutation response replay', () => {
       requestFingerprint: await canonicalRequestFingerprint(firstBody),
     });
     const second = await mutationReplayContext(csrf, {
-      idem: 'idem_rotating_csrf',
+      idem: replayIdem('idem_rotating_csrf'),
       mutationKey: 'cart/add',
       rawInput: secondBody,
       replayStore,
@@ -1096,7 +1104,7 @@ describe('server mutation response replay', () => {
     });
     const contextFor = (rawInput: unknown) =>
       mutationReplayContext(csrf, {
-        idem: 'idem_proxy_snapshot',
+        idem: replayIdem('idem_proxy_snapshot'),
         mutationKey: 'cart/add',
         rawInput,
         replayStore,
@@ -1131,7 +1139,7 @@ describe('server mutation response replay', () => {
       },
     });
     const baseRequest = {
-      idem: 'idem_shared',
+      idem: replayIdem('idem_shared'),
       rawInput: { productId: 'p1' },
       replayStore,
       request: { sessionId: 's1' },
@@ -1198,7 +1206,7 @@ describe('server mutation response replay', () => {
       },
     });
     const request = {
-      idem: 'idem_race',
+      idem: replayIdem('idem_race'),
       rawInput: { productId: 'p1' },
       replayStore,
       request: { sessionId: 's1' },
@@ -1226,7 +1234,11 @@ describe('server mutation response replay', () => {
         return input;
       },
     });
-    const base = { idem: 'idem_validation_abort', replayStore, request: { sessionId: 's1' } };
+    const base = {
+      idem: replayIdem('idem_validation_abort'),
+      replayStore,
+      request: { sessionId: 's1' },
+    };
 
     await expect(
       renderMutationResponse(addToCart, { ...base, rawInput: { quantity: 1 } }),
@@ -1268,7 +1280,7 @@ describe('server mutation response replay', () => {
       },
     });
     const request = {
-      idem: 'idem_pending_query',
+      idem: replayIdem('idem_pending_query'),
       rawInput: { productId: 'p1' },
       replayStore,
       request: { sessionId: 's1' },
@@ -1286,25 +1298,25 @@ describe('server mutation response replay', () => {
     queryRelease.resolve();
     await expect(Promise.all([first, second])).resolves.toEqual([
       {
-        body: '<kovo-query name="cart" settles="idem_pending_query">{"count":1}</kovo-query>',
+        body: `<kovo-query name="cart" settles="${replayIdem('idem_pending_query')}">{"count":1}</kovo-query>`,
         headers: {
           'Cache-Control': 'private, no-store',
           'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
           'Kovo-Build': 'replay-test-build',
           'Kovo-Changes': '[{"domain":"cart"}]',
-          'Kovo-Idem': 'idem_pending_query',
+          'Kovo-Idem': replayIdem('idem_pending_query'),
           Vary: 'Cookie',
         },
         status: 200,
       },
       {
-        body: '<kovo-query name="cart" settles="idem_pending_query">{"count":1}</kovo-query>',
+        body: `<kovo-query name="cart" settles="${replayIdem('idem_pending_query')}">{"count":1}</kovo-query>`,
         headers: {
           'Cache-Control': 'private, no-store',
           'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
           'Kovo-Build': 'replay-test-build',
           'Kovo-Changes': '[{"domain":"cart"}]',
-          'Kovo-Idem': 'idem_pending_query',
+          'Kovo-Idem': replayIdem('idem_pending_query'),
           Vary: 'Cookie',
         },
         status: 200,
@@ -1343,7 +1355,7 @@ describe('server mutation response replay', () => {
           target: 'cart-badge',
         },
       ],
-      idem: 'idem_pending_fragment',
+      idem: replayIdem('idem_pending_fragment'),
       rawInput: { productId: 'p1' },
       replayStore,
       request: { sessionId: 's1' },
@@ -1367,7 +1379,7 @@ describe('server mutation response replay', () => {
           'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
           'Kovo-Build': 'replay-test-build',
           'Kovo-Changes': '[{"domain":"cart"}]',
-          'Kovo-Idem': 'idem_pending_fragment',
+          'Kovo-Idem': replayIdem('idem_pending_fragment'),
           Vary: 'Cookie',
         },
         status: 200,
@@ -1379,7 +1391,7 @@ describe('server mutation response replay', () => {
           'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
           'Kovo-Build': 'replay-test-build',
           'Kovo-Changes': '[{"domain":"cart"}]',
-          'Kovo-Idem': 'idem_pending_fragment',
+          'Kovo-Idem': replayIdem('idem_pending_fragment'),
           Vary: 'Cookie',
         },
         status: 200,
@@ -1406,7 +1418,7 @@ describe('server mutation response replay', () => {
       },
     });
     const request = {
-      idem: 'idem_pending_failure',
+      idem: replayIdem('idem_pending_failure'),
       rawInput: { productId: 'p1' },
       renderFailureFragment: async () => {
         renders += 1;
@@ -1434,7 +1446,7 @@ describe('server mutation response replay', () => {
           'Cache-Control': 'private, no-store',
           'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
           'Kovo-Build': 'replay-test-build',
-          'Kovo-Idem': 'idem_pending_failure',
+          'Kovo-Idem': replayIdem('idem_pending_failure'),
           Vary: 'Cookie',
         },
         status: 422,
@@ -1445,7 +1457,7 @@ describe('server mutation response replay', () => {
           'Cache-Control': 'private, no-store',
           'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
           'Kovo-Build': 'replay-test-build',
-          'Kovo-Idem': 'idem_pending_failure',
+          'Kovo-Idem': replayIdem('idem_pending_failure'),
           Vary: 'Cookie',
         },
         status: 422,
@@ -1469,7 +1481,7 @@ describe('server mutation response replay', () => {
       },
     });
     const request = {
-      idem: 'idem_422',
+      idem: replayIdem('idem_422'),
       rawInput: { productId: 'p1' },
       replayStore,
       request: { sessionId: 's1' },
@@ -1484,7 +1496,7 @@ describe('server mutation response replay', () => {
         'Cache-Control': 'private, no-store',
         'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
         'Kovo-Build': 'replay-test-build',
-        'Kovo-Idem': 'idem_422',
+        'Kovo-Idem': replayIdem('idem_422'),
         Vary: 'Cookie',
       },
       status: 422,
@@ -1503,7 +1515,7 @@ describe('server mutation response replay', () => {
       },
     });
     const baseRequest = {
-      idem: 'idem_validation',
+      idem: replayIdem('idem_validation'),
       replayStore,
       request: { sessionId: 's1' },
     };
@@ -1559,7 +1571,7 @@ describe('server mutation response replay', () => {
     });
 
     const response = await renderMutationResponse(addToCart, {
-      idem: 'idem_01',
+      idem: replayIdem('idem_01'),
       rawInput: { productId: 'p1' },
       replayStore,
       request,
@@ -1605,19 +1617,19 @@ describe('server mutation response replay', () => {
     const requestB = { session: { id: 's2' } };
 
     const first = await renderMutationResponse(addToCart, {
-      idem: 'idem_shared',
+      idem: replayIdem('idem_shared'),
       rawInput: { csrf: csrfToken(requestA, csrf, { audience: 'cart/add' }), productId: 'p1' },
       replayStore,
       request: requestA,
     });
     const second = await renderMutationResponse(addToCart, {
-      idem: 'idem_shared',
+      idem: replayIdem('idem_shared'),
       rawInput: { csrf: csrfToken(requestB, csrf, { audience: 'cart/add' }), productId: 'p1' },
       replayStore,
       request: requestB,
     });
     const replayedFirst = await renderMutationResponse(addToCart, {
-      idem: 'idem_shared',
+      idem: replayIdem('idem_shared'),
       rawInput: { csrf: csrfToken(requestA, csrf, { audience: 'cart/add' }), productId: 'p1' },
       replayStore,
       request: requestA,
@@ -1655,19 +1667,19 @@ describe('server mutation response replay', () => {
     const requestB = { session: { id: 's2' } };
 
     const first = await renderMutationResponse(addToCart, {
-      idem: 'idem_shared',
+      idem: replayIdem('idem_shared'),
       rawInput: { productId: 'p1' },
       replayStore,
       request: requestA,
     });
     const second = await renderMutationResponse(addToCart, {
-      idem: 'idem_shared',
+      idem: replayIdem('idem_shared'),
       rawInput: { productId: 'p1' },
       replayStore,
       request: requestB,
     });
     const replayedFirst = await renderMutationResponse(addToCart, {
-      idem: 'idem_shared',
+      idem: replayIdem('idem_shared'),
       rawInput: { productId: 'p1' },
       replayStore,
       request: requestA,
@@ -1702,7 +1714,7 @@ describe('server mutation response replay', () => {
           target: 'cart-badge',
         },
       ],
-      idem: 'idem_render_failure',
+      idem: replayIdem('idem_render_failure'),
       rawInput: { productId: 'p1' },
       replayStore,
       request: { sessionId: 's1' },
@@ -1720,7 +1732,7 @@ describe('server mutation response replay', () => {
         'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
         'Kovo-Build': 'replay-test-build',
         'Kovo-Changes': '[{"domain":"cart"}]',
-        'Kovo-Idem': 'idem_render_failure',
+        'Kovo-Idem': replayIdem('idem_render_failure'),
         Vary: 'Cookie',
       },
       status: 500,
@@ -1746,7 +1758,7 @@ describe('server mutation response replay', () => {
 
     // First request: authorized — handler runs, response committed to replay.
     const first = await renderMutationResponse(protectedMutation, {
-      idem: 'idem_a1',
+      idem: replayIdem('idem_a1'),
       rawInput: { productId: 'p1' },
       replayStore,
       request: { authed: true, sessionId: 's1' },
@@ -1756,7 +1768,7 @@ describe('server mutation response replay', () => {
 
     // Second request: same idem, now unauthorized — must NOT replay the cached 200.
     const second = await renderMutationResponse(protectedMutation, {
-      idem: 'idem_a1',
+      idem: replayIdem('idem_a1'),
       rawInput: { productId: 'p1' },
       replayStore,
       request: { authed: false, sessionId: 's1' },
@@ -1796,7 +1808,7 @@ describe('server mutation response replay', () => {
       },
     });
     const base = {
-      idem: 'idem_a5',
+      idem: replayIdem('idem_a5'),
       rawInput: { productId: 'p1' },
       replayStore,
       request: { sessionId: 's5' },
@@ -1885,7 +1897,7 @@ describe('server mutation response replay', () => {
     });
 
     const response = await renderMutationResponse(addToCart, {
-      idem: 'new-idem',
+      idem: replayIdem('new-idem-pending'),
       rawInput: { productId: 'p1' },
       replayStore,
       request: { sessionId: 's1' },
@@ -1912,7 +1924,7 @@ describe('server mutation response replay', () => {
     });
 
     const response = await renderMutationResponse(addToCart, {
-      idem: 'new-idem',
+      idem: replayIdem('new-idem-retained'),
       rawInput: { productId: 'p1' },
       replayStore,
       request: { sessionId: 's1' },

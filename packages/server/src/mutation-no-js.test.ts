@@ -3,7 +3,13 @@ import { trustedHtml } from '@kovojs/browser';
 import { component, form } from '@kovojs/core';
 
 import { renderComponentMutationFailure } from './component-render.js';
-import { csrfToken, KOVO_IDEM_FIELD_NAME, mintCsrfField, type CsrfOptions } from './csrf.js';
+import {
+  csrfToken,
+  KOVO_IDEM_FIELD_NAME,
+  mintCsrfField,
+  mintIdemToken,
+  type CsrfOptions,
+} from './csrf.js';
 import { renderedHtml } from './html.js';
 import { renderMutationEndpointResponse, renderNoJsMutationResponse } from './mutation.js';
 import { createMemoryMutationReplayStore } from './replay.js';
@@ -294,7 +300,7 @@ describe('no-JS mutation responses', () => {
     };
 
     const base = {
-      idem: 'idem_nojs_01',
+      idem: mintIdemToken(),
       rawInput: { productId: 'p1' },
       redirectTo: '/cart',
       replayStore: noJsReplayStore,
@@ -337,7 +343,7 @@ describe('no-JS mutation responses', () => {
       handler,
     });
     const request = {
-      idem: 'idem_exempt_nojs_browser_state',
+      idem: mintIdemToken(),
       rawInput: { productId: 'p1' },
       redirectTo: '/done',
       replayStore,
@@ -372,10 +378,11 @@ describe('no-JS mutation responses', () => {
         return input;
       },
     });
+    const idem = mintIdemToken();
     const rawInput = () => {
       const body = new FormData();
       body.set('csrf', anonymous.token());
-      body.set(KOVO_IDEM_FIELD_NAME, 'idem_anonymous_nojs');
+      body.set(KOVO_IDEM_FIELD_NAME, idem);
       body.set('email', 'person@example.test');
       return body;
     };
@@ -438,7 +445,7 @@ describe('no-JS mutation responses', () => {
     };
 
     const base = {
-      idem: 'idem_gap42',
+      idem: mintIdemToken(),
       rawInput: { value: 'hello' },
       redirectTo: '/done',
       replayStore: noJsReplayStore,
@@ -474,7 +481,7 @@ describe('no-JS mutation responses', () => {
     };
 
     const response = await renderNoJsMutationResponse(addToCart, {
-      idem: 'idem_saturated',
+      idem: mintIdemToken(),
       rawInput: { productId: 'p1' },
       redirectTo: '/cart',
       replayStore: noJsReplayStore,
@@ -518,11 +525,12 @@ describe('no-JS mutation responses', () => {
     });
 
     const store = createMemoryMutationReplayStore();
+    const idem = mintIdemToken();
     const submit = () => {
       const form = new FormData();
       form.set('amount', '100');
       // The per-submit idem the no-JS form stamps in its hidden field (SPEC §10.3:1063/1065).
-      form.set(KOVO_IDEM_FIELD_NAME, 'idem_nojs_endpoint_01');
+      form.set(KOVO_IDEM_FIELD_NAME, idem);
       return renderMutationEndpointResponse(extWrite, {
         headers: new Headers(), // no Kovo-Fragment header -> no-JS POST-redirect-GET branch
         rawInput: form,
@@ -554,7 +562,7 @@ describe('no-JS mutation responses', () => {
       handler,
     });
     const replayStore = createMemoryMutationReplayStore();
-    const idem = 'idem_mode_scope_01';
+    const idem = mintIdemToken();
     const enhanced = await renderMutationEndpointResponse(addToCart, {
       buildToken: 'mode-scope-build',
       headers: { 'Kovo-Fragment': 'true', 'Kovo-Idem': idem },
@@ -591,10 +599,11 @@ describe('no-JS mutation responses', () => {
       },
     });
     const replayStore = createMemoryMutationReplayStore();
+    const idem = mintIdemToken();
     const submit = (email: string) => {
       const form = new FormData();
       form.set('email', email);
-      form.set(KOVO_IDEM_FIELD_NAME, 'idem_nojs_conflict_01');
+      form.set(KOVO_IDEM_FIELD_NAME, idem);
       return renderMutationEndpointResponse(addContact, {
         headers: new Headers(),
         rawInput: form,
@@ -616,6 +625,9 @@ describe('no-JS mutation responses', () => {
   it.each([
     ['empty', ''],
     ['oversized', 'a'.repeat(1_025)],
+    ['legacy timeless', 'idem_0123456789abcdef0123456789abcdef'],
+    ['stale', 'v1_1000000000000_0123456789abcdef0123456789abcdef'],
+    ['far-future', 'v1_9999999999999_0123456789abcdef0123456789abcdef'],
   ])('rejects an %s no-JS Kovo-Idem before store or handler execution', async (_label, idem) => {
     const handler = vi.fn((input: { email: string }) => input);
     const storeGet = vi.fn(() => undefined);
@@ -653,10 +665,11 @@ describe('no-JS mutation responses', () => {
       },
     });
     const replayStore = createMemoryMutationReplayStore();
+    const idem = mintIdemToken();
     const submit = (email: string) => {
       const form = new FormData();
       form.set('email', email);
-      form.set(KOVO_IDEM_FIELD_NAME, 'idem_nojs_tagged_conflict_01');
+      form.set(KOVO_IDEM_FIELD_NAME, idem);
       return renderMutationEndpointResponse(addContact, {
         headers: new Headers(),
         rawInput: tagUntrustedRequestValue(form),

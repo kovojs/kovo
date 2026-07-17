@@ -9,6 +9,14 @@ import {
   FakeRoot,
 } from './runtime-test-fakes.js';
 
+const RENDERED_IDEM = 'v1_1750000000000_000102030405060708090a0b0c0d0e0f';
+
+function renderedFormData(): FormData {
+  const formData = new FormData();
+  formData.set('Kovo-Idem', RENDERED_IDEM);
+  return formData;
+}
+
 // SPEC.md §4.4: failed enhanced submits clear pending state and route through the
 // configured error seam (per-mutation onError or loader onError with server-truth
 // recovery); split from the submit and broadcast seams in the sibling
@@ -26,7 +34,7 @@ describe('loader enhanced mutation failures', () => {
     const onError = vi.fn();
     const requestSubmit = vi.fn();
     const error = new Error('network down');
-    const formData = new FormData();
+    const formData = renderedFormData();
     const form = Object.assign(
       new FakeFormElement(
         {
@@ -103,7 +111,7 @@ describe('loader enhanced mutation failures', () => {
         fetch: vi.fn(async () => {
           throw error;
         }),
-        formData: () => new FormData(),
+        formData: renderedFormData,
         root: mutationRoot,
         store,
       },
@@ -135,9 +143,7 @@ describe('loader enhanced mutation failures', () => {
     const onError = vi.fn();
     const requestSubmit = vi.fn();
     const error = new Error('network down');
-    const freshIdem = '00000000-0000-4000-8000-000000000111';
-    const formData = new FormData();
-    formData.set('Kovo-Idem', 'idem_rendered_old');
+    const formData = renderedFormData();
     const attempts: Array<{ bodyIdem: FormDataEntryValue | null; headerIdem: string | undefined }> =
       [];
     const form = Object.assign(
@@ -161,7 +167,6 @@ describe('loader enhanced mutation failures', () => {
           throw error;
         }),
         formData: () => formData,
-        idem: () => freshIdem,
         root: mutationRoot,
         store,
       },
@@ -180,7 +185,9 @@ describe('loader enhanced mutation failures', () => {
 
     expect(preventDefault).toHaveBeenCalledTimes(1);
     expect(requestSubmit).not.toHaveBeenCalled();
-    expect(attempts).toEqual([{ bodyIdem: freshIdem, headerIdem: freshIdem }]);
+    expect(attempts).toHaveLength(1);
+    expect(attempts[0]?.bodyIdem).toMatch(/^v1_1750000000000_[0-9a-f]{32}$/u);
+    expect(attempts[0]?.headerIdem).toBe(attempts[0]?.bodyIdem);
     expect(form.getAttribute('data-error-code')).toBe('NETWORK_ERROR');
     expect(onError).toHaveBeenCalledWith(error, {
       event: { preventDefault, target: form, type: 'submit' },

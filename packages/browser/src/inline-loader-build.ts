@@ -232,7 +232,7 @@ function installInlineKovoLoader(im) {
     }
     return joined;
   };
-  const ci = () => mis.createMutationIdem();
+  const ci = (seed) => mis.refreshMutationIdem(seed);
   const rh = (el) =>
     bns.closestElement(el, '[kovo-state]') ??
     (bns.readAttribute(el, 'kovo-state') === null ? null : el);
@@ -1495,7 +1495,7 @@ function installInlineKovoLoader(im) {
       // SPEC §10.3: the rendered hidden value is the no-JS retry token, not a form-instance
       // constant. Every enhanced logical submit mints fresh authority and commits that exact value
       // to both the body field and header through the boot-captured FormData setter.
-      idem = ci();
+      idem = ci(bns.readFormDataValue(body, 'Kovo-Idem'));
       bns.setFormDataValue(body, 'Kovo-Idem', idem);
     } catch {
       // Preparation is known to precede dispatch, so leave the native event and rendered token.

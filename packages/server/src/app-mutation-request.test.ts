@@ -5,7 +5,7 @@ import { component, form } from '@kovojs/core';
 import { createApp, createRequestHandler } from './app.js';
 import { appLiveTargetAttestationAudience } from './live-target-app-identity.js';
 import { handleAppMutationRequest } from './app-mutation-request.js';
-import { csrfToken, resolveCsrfLiveTargetBinding } from './csrf.js';
+import { csrfToken, mintIdemToken, resolveCsrfLiveTargetBinding } from './csrf.js';
 import { domain } from './domain.js';
 import { guard, guards } from './guards.js';
 import { stylesheet } from './hints.js';
@@ -1349,7 +1349,7 @@ describe('server app mutation request boundary', () => {
       body: form,
       headers: {
         'Kovo-Fragment': 'true',
-        'Kovo-Idem': 'idem-1',
+        'Kovo-Idem': mintIdemToken(),
         origin: 'https://example.test',
       },
       method: 'POST',

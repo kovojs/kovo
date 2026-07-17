@@ -520,7 +520,8 @@ describe('enhanced mutation fetch', () => {
 
   it('replaces the hidden Kovo-Idem form field with a fresh enhanced-submit token', async () => {
     const formData = new FormData();
-    formData.set('Kovo-Idem', 'idem_hidden_field');
+    const renderedIdem = 'v1_1750000000000_000102030405060708090a0b0c0d0e0f';
+    formData.set('Kovo-Idem', renderedIdem);
     const root = new FakeTargetRoot([]);
     const fetch = vi.fn(async (_url: string, _options: EnhancedMutationFetchOptions) => ({
       headers: fragmentHeaders(),
@@ -541,10 +542,12 @@ describe('enhanced mutation fetch', () => {
       '/_m/comment/post',
       expect.objectContaining({
         body: formData,
-        headers: expect.objectContaining({ 'Kovo-Idem': expect.stringMatching(/^[0-9a-f-]{36}$/) }),
+        headers: expect.objectContaining({
+          'Kovo-Idem': expect.stringMatching(/^v1_1750000000000_[0-9a-f]{32}$/u),
+        }),
       }),
     );
-    expect(fetched.idem).not.toBe('idem_hidden_field');
+    expect(fetched.idem).not.toBe(renderedIdem);
     expect(formData.get('Kovo-Idem')).toBe(fetched.idem);
   });
 
@@ -555,7 +558,9 @@ describe('enhanced mutation fetch', () => {
       fetchEnhancedMutation({
         fetch,
         form: typedMutationForm('comment/post'),
-        formData: { get: () => 'idem_stale_render' },
+        formData: {
+          get: () => 'v1_1750000000000_000102030405060708090a0b0c0d0e0f',
+        },
         root: new FakeTargetRoot([]),
       }),
     ).rejects.toThrow(/form-data setter control is unavailable/u);

@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 // @kovo-security-classifier-corpus mutation-idem
 
 import { KOVO_IDEM_FIELD_NAME } from '../csrf.js';
+import { mintMutationIdemToken } from '../mutation-idem.js';
 import { MutationReplayConflictError } from '../replay.js';
 import type { MutationEndpointReplayResponse, NoJsMutationRequest } from '../mutation-wire.js';
 import {
@@ -15,7 +16,9 @@ describe('mutation replay response authority', () => {
   it.each([
     ['empty', ''],
     ['oversized', 'a'.repeat(1_025)],
-    ['non-base64url', 'idem with spaces'],
+    ['legacy timeless', 'idem_0123456789abcdef0123456789abcdef'],
+    ['stale', 'v1_1000000000000_0123456789abcdef0123456789abcdef'],
+    ['far-future', 'v1_9999999999999_0123456789abcdef0123456789abcdef'],
   ])('rejects a supplied %s no-JS token before replay-store access', async (_label, idem) => {
     let storeCalls = 0;
     const replayStore = {
@@ -75,7 +78,7 @@ describe('mutation replay response authority', () => {
       },
     });
     const request = {
-      idem: 'valid_header_fallback',
+      idem: mintMutationIdemToken(),
       rawInput,
       redirectTo: '/',
       request: {},
@@ -105,7 +108,7 @@ describe('mutation replay response authority', () => {
     expect(() => policy?.read()).toThrow(MutationReplayConflictError);
   });
 
-  it('admits the 1,024-character base64url boundary to replay storage', async () => {
+  it('admits one canonical fresh token to replay storage', async () => {
     let observedIdem: string | undefined;
     const replayStore = {
       get(_scope: string, idem: string) {
@@ -117,7 +120,7 @@ describe('mutation replay response authority', () => {
       },
       set() {},
     };
-    const idem = 'a'.repeat(1_024);
+    const idem = mintMutationIdemToken();
     const request = {
       rawInput: { [KOVO_IDEM_FIELD_NAME]: idem },
       redirectTo: '/',
@@ -209,7 +212,7 @@ describe('mutation replay response authority', () => {
       set() {},
     };
     const request = {
-      idem: 'idem-1',
+      idem: mintMutationIdemToken(),
       rawInput: {},
       redirectTo: '/',
       replayStore,

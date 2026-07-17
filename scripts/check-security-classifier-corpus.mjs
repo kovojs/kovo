@@ -1017,12 +1017,12 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
     ],
     verdictAnchors: [
       {
-        id: 'bounded-base64url-wire-token',
+        id: 'bounded-time-scoped-wire-token',
         file: 'packages/server/src/mutation/replay-policy.test.ts',
         snippets: [
           'rejects a supplied %s no-JS token before replay-store access',
           'rejects an invalid supplied token even when replay storage is disabled',
-          'admits the 1,024-character base64url boundary to replay storage',
+          'admits one canonical fresh token to replay storage',
         ],
       },
       {

@@ -1,5 +1,9 @@
 import type { RuntimeErrorReporter } from './error-policy.js';
-import { createMutationIdem, readMutationChangeHeader } from './mutation-response.js';
+import {
+  createMutationIdem,
+  readMutationChangeHeader,
+  refreshMutationIdem,
+} from './mutation-response.js';
 import { readLiveTargetSnapshot } from './mutation-targets.js';
 import type { TargetCollectorRoot } from './mutation-targets.js';
 import type { MutationChangeRecord } from './optimism.js';
@@ -111,7 +115,7 @@ export async function fetchEnhancedMutation(
   const fetchMutation = options.fetch;
   const form = options.form;
   const formData = options.formData;
-  const idem = requestedIdem ?? options.idem ?? createMutationIdem();
+  const idem = requestedIdem ?? options.idem ?? createEnhancedMutationIdem(options.formData, false);
   // SPEC §10.3: enhanced submits replace the rendered no-JS token for every logical submit. The
   // exact same fresh value must cross both carriers because replay parsers may inspect either the
   // stamped body field or the enhanced header.
@@ -266,6 +270,21 @@ export async function fetchEnhancedMutation(
     ...(usesStreamBody ? { streamBody: responseBody } : {}),
     targets: targetSnapshot.targets,
   };
+}
+
+/**
+ * @internal Mint enhanced-submit nonce authority from the server-stamped hidden field.
+ * Direct APIs with no seed may use the boot-pinned client clock; delegated form paths require
+ * the server stamp so a long-lived document cannot silently extend its retry horizon.
+ */
+export function createEnhancedMutationIdem(formData: unknown, requireServerSeed: boolean): string {
+  const security = bootMutationFetchSecurity ?? createBrowserNavigationSecurityControls();
+  const seed = security.readFormDataValue(formData, 'Kovo-Idem');
+  if (seed === undefined || seed === null) {
+    if (requireServerSeed) return refreshMutationIdem(seed);
+    return createMutationIdem();
+  }
+  return refreshMutationIdem(seed);
 }
 
 function readDirectEnhancedMutationTransport(

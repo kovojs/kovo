@@ -137,9 +137,12 @@ function readDenseArray(value: unknown): { length: number; value: readonly unkno
 
 /** @internal Mint a fresh high-entropy `Kovo-Idem` value for each logical submit (SPEC §10.3 line 1065). */
 export function createMutationIdem(): string {
-  // SPEC.md §10.3 line 1065 (normative): the client MUST mint a fresh high-entropy token
-  // (≥128 bits from a cryptographic source) for each logical submit. randomUUID is preferred;
-  // when it is unavailable we fall back to 16 cryptographic-random bytes (still ≥128 bits) — never
-  // to a predictable Date.now()+counter, which would weaken the per-(principal,mutation,idem) replay key.
+  // SPEC §10.3: a direct seedless call uses the boot-pinned clock and exactly 16 bytes from
+  // getRandomValues. UUID v4 exposes only 122 random bits after its format markers.
   return mutationIdemSecurity.createMutationIdem();
+}
+
+/** @internal Replace a server-stamped token's nonce while preserving its issued-at horizon. */
+export function refreshMutationIdem(seed: unknown): string {
+  return mutationIdemSecurity.refreshMutationIdem(seed);
 }

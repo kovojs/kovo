@@ -7,9 +7,12 @@ import {
   type EnhancedMutationAppliedResult,
   type MutationRuntimeApplyHooks,
 } from './mutation-apply.js';
-import { fetchEnhancedMutation, isFailedMutationResponse } from './mutation-fetch.js';
+import {
+  createEnhancedMutationIdem,
+  fetchEnhancedMutation,
+  isFailedMutationResponse,
+} from './mutation-fetch.js';
 import type { MutationQueue } from './mutation-queue.js';
-import { createMutationIdem } from './mutation-response.js';
 import type { EnhancedMutationSubmitOptions } from './mutation-submit.js';
 import { optimisticChangeFromInput, resolveOptimisticKeys } from './optimism.js';
 import type {
@@ -61,7 +64,7 @@ export async function submitOptimisticEnhancedMutation<Input>(
 > {
   options = definedProps(options) as OptimisticEnhancedMutationSubmitOptions<Input>;
   const retirePrincipal = captureSessionTransitionPrincipalRetirement(options);
-  const idem = options.idem ?? createMutationIdem();
+  const idem = options.idem ?? createEnhancedMutationIdem(options.formData, false);
   const queryNames = securityObjectKeys(options.optimistic.transforms);
   const optimisticChange = optimisticChangeFromInput(options.input, options.change);
   const optimisticKeys = resolveOptimisticKeys(options.optimistic, optimisticChange);

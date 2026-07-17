@@ -7,6 +7,7 @@ import type { MorphFragment, MorphRoot } from './morph.js';
 import type { MutationBroadcast } from './broadcast.js';
 import type { TargetCollectorRoot } from './mutation-targets.js';
 import {
+  createEnhancedMutationIdem,
   fetchEnhancedMutation,
   type EnhancedFormLike,
   type EnhancedMutationFetch,
@@ -22,7 +23,6 @@ import {
   type EnhancedFormElementLike,
   type EnhancedMutationTransport,
 } from './mutation-form.js';
-import { createMutationIdem } from './mutation-response.js';
 import {
   applyStreamingFetchedEnhancedMutationResponseToRuntime,
   applyFetchedEnhancedMutationResponseToRuntime,
@@ -64,7 +64,6 @@ export interface EnhancedMutationLoaderOptions {
   expectedBuildToken?: string;
   fetch: EnhancedMutationFetch;
   formData?: (form: EnhancedFormElementLike, event: DelegatedEvent) => unknown;
-  idem?: () => string;
   importModule?: ImportHandlerModule;
   morph?: MorphFragment;
   /**
@@ -110,7 +109,7 @@ export async function dispatchEnhancedFormSubmit(
   const formData = options.formData
     ? options.formData(form, event)
     : formDataForSubmit(form, eventFacts.submitter);
-  const idem = options.idem?.() ?? createMutationIdem();
+  const idem = createEnhancedMutationIdem(formData, true);
   if (!preventRuntimeDelegatedEventDefault(event)) return false;
   try {
     const applied = await submitEnhancedMutation({

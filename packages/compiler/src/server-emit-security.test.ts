@@ -147,13 +147,15 @@ export const AddToCartForm = component({
     const field = renderMutationIdemField();
     const match = /value="([^"]+)"/.exec(field);
     expect(match).not.toBeNull();
-    // C22 requires 128 random bits. The server renders the 16-byte value as unpadded base64url.
-    expect(match![1]).toMatch(/^[A-Za-z0-9_-]{22}$/u);
+    // SPEC §10.3: the server stamp carries 13-digit issue time plus exactly 16 random bytes.
+    const token = /^v1_([0-9]{13})_([0-9a-f]{32})$/u.exec(match![1]!);
+    expect(token).not.toBeNull();
+    expect(Buffer.from(token![2]!, 'hex')).toHaveLength(16);
   });
 
   it('A2: Kovo-Idem value differs across two renders (per-submit freshness)', () => {
-    // Each no-JS form render mints a fresh UUID so Back-resubmit uses a different
-    // idem and gets deduped independently by the replay store.
+    // Each no-JS form render mints a fresh nonce so Back-resubmit uses a different
+    // logical token while preserving the server-time horizon.
     const field1 = renderMutationIdemField();
     const field2 = renderMutationIdemField();
     expect(field1).toContain('name="Kovo-Idem"');

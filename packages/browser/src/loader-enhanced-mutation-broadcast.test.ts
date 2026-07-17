@@ -59,6 +59,7 @@ describe('loader enhanced mutation broadcasts', () => {
       const storeA = createQueryStore();
       const storeB = createQueryStore();
       const formData = new FormData();
+      formData.set('Kovo-Idem', 'v1_1750000000000_000102030405060708090a0b0c0d0e0f');
       const form = new FakeFormElement(
         {
           enhance: '',
@@ -92,7 +93,6 @@ describe('loader enhanced mutation broadcasts', () => {
         enhancedMutations: {
           fetch,
           formData: () => formData,
-          idem: () => 'idem_auto_broadcast',
           root: mutationRootB,
           store: storeB,
         },
@@ -103,7 +103,6 @@ describe('loader enhanced mutation broadcasts', () => {
         enhancedMutations: {
           fetch,
           formData: () => formData,
-          idem: () => 'idem_auto_broadcast',
           root: mutationRootA,
           store: storeA,
         },

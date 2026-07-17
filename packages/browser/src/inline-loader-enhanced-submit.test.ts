@@ -29,6 +29,8 @@ interface InlineMutationResponse {
   [key: string]: unknown;
 }
 
+const RENDERED_IDEM = 'v1_1750000000000_000102030405060708090a0b0c0d0e0f';
+
 function mutationResponse(path: string, response: InlineMutationResponse): InlineMutationResponse {
   const responseHeaders = response.headers;
   const location = (globalThis as unknown as { location?: { origin?: unknown } }).location;
@@ -57,11 +59,12 @@ function mutationFormAttribute(
   return Object.prototype.hasOwnProperty.call(extra, name) ? (extra[name] ?? null) : null;
 }
 
-function createStructuralFormData(): {
+function createStructuralFormData(initial: Readonly<Record<string, unknown>> = {}): {
   get(name: string): unknown;
   set(name: string, value: unknown): void;
 } {
-  const values = new Map<string, unknown>();
+  const values = new Map<string, unknown>([['Kovo-Idem', RENDERED_IDEM]]);
+  for (const [name, value] of Object.entries(initial)) values.set(name, value);
   return {
     get(name: string) {
       return values.get(name) ?? null;
@@ -129,7 +132,7 @@ describe('inline loader enhanced submit source', () => {
 
       try {
         globalRecord.FormData = function FormData() {
-          return { get: () => null };
+          return createStructuralFormData();
         };
         globalRecord.addEventListener = (type: string, listener: (event: unknown) => void) => {
           listeners.set(type, listener);
@@ -280,7 +283,7 @@ describe('inline loader enhanced submit source', () => {
 
         try {
           globalRecord.FormData = function FormData() {
-            return {};
+            return createStructuralFormData();
           };
           globalRecord.addEventListener = (type: string, listener: (event: unknown) => void) => {
             listeners.set(type, listener);
@@ -393,11 +396,7 @@ describe('inline loader enhanced submit source', () => {
 
         try {
           globalRecord.FormData = function FormData() {
-            return {
-              get(name: string) {
-                return name === 'next' ? next : null;
-              },
-            };
+            return createStructuralFormData({ next });
           };
           globalRecord.addEventListener = (type: string, listener: (event: unknown) => void) => {
             listeners.set(type, listener);
@@ -525,7 +524,7 @@ describe('inline loader enhanced submit source', () => {
 
         try {
           globalRecord.FormData = function FormData() {
-            return {};
+            return createStructuralFormData();
           };
           globalRecord.addEventListener = (type: string, listener: (event: unknown) => void) => {
             listeners.set(type, listener);
@@ -627,7 +626,7 @@ describe('inline loader enhanced submit source', () => {
 
       try {
         globalRecord.FormData = function FormData() {
-          return { get: () => null };
+          return createStructuralFormData();
         };
         globalRecord.addEventListener = (type: string, listener: (event: unknown) => void) => {
           listeners.set(type, listener);
@@ -734,13 +733,9 @@ describe('inline loader enhanced submit source', () => {
         };
         try {
           globalRecord.FormData = function FormData() {
-            return {
-              get(name: string) {
-                return name === 'next' && variant === 'auth-success'
-                  ? '/\\evil.example/phish'
-                  : null;
-              },
-            };
+            return createStructuralFormData(
+              variant === 'auth-success' ? { next: '/\\evil.example/phish' } : {},
+            );
           };
           globalRecord.addEventListener = (type: string, listener: (event: unknown) => void) => {
             listeners.set(type, listener);
@@ -854,7 +849,7 @@ describe('inline loader enhanced submit source', () => {
 
       try {
         globalRecord.FormData = function FormData() {
-          return {};
+          return createStructuralFormData();
         };
         globalRecord.addEventListener = (type: string, listener: (event: unknown) => void) => {
           listeners.set(type, listener);
@@ -1216,7 +1211,7 @@ describe('inline loader enhanced submit source', () => {
     'keeps enhanced form request targets in parity with modular submit through %s',
     async (_name, installSource) => {
       // SPEC.md §4.4: enhanced form headers are part of the always-loaded loader contract.
-      const formData = { kind: 'form-data' };
+      const formData = Object.assign(createStructuralFormData(), { kind: 'form-data' });
       const form = {
         action: '/_m/cart/add',
         getAttribute(name: string) {
@@ -1248,7 +1243,9 @@ describe('inline loader enhanced submit source', () => {
         },
       ];
       const modularRoot = new InlineParityRoot();
-      const parityIdem = '00000000-0000-4000-8000-000000000003';
+      // The inline security controls consume two boot witnesses, then the submit receives the
+      // third deterministic 16-byte sample while preserving the rendered timestamp.
+      const parityIdem = 'v1_1750000000000_03030303030303030303030303030303';
       const modularFetch = vi.fn(async (_url: string, _options: EnhancedMutationFetchOptions) =>
         mutationResponse('/_m/cart/add', {
           headers: {
@@ -1294,13 +1291,14 @@ describe('inline loader enhanced submit source', () => {
       );
 
       try {
-        let randomUuidCall = 0;
+        let randomValuesCall = 0;
         Object.defineProperty(globalThis, 'crypto', {
           configurable: true,
           value: {
-            randomUUID: () => {
-              randomUuidCall += 1;
-              return `00000000-0000-4000-8000-${String(randomUuidCall).padStart(12, '0')}`;
+            getRandomValues(values: Uint8Array) {
+              randomValuesCall += 1;
+              values.fill(randomValuesCall);
+              return values;
             },
           },
         });
@@ -1415,7 +1413,9 @@ describe('inline loader enhanced submit source', () => {
       };
       const listeners = new Map<string, (event: unknown) => void>();
       const constructedArgs: unknown[][] = [];
-      const formData = { kind: 'submitter-aware-form-data' };
+      const formData = Object.assign(createStructuralFormData(), {
+        kind: 'submitter-aware-form-data',
+      });
       const form = {
         action: '/_m/cart/add',
         getAttribute(name: string) {
@@ -1513,7 +1513,7 @@ describe('inline loader enhanced submit source', () => {
       const listeners = new Map<string, (event: unknown) => void>();
       const nativeTextDecoderDecode = TextDecoder.prototype.decode;
       const nativeStringSlice = String.prototype.slice;
-      const formData = { kind: 'stream-form-data' };
+      const formData = Object.assign(createStructuralFormData(), { kind: 'stream-form-data' });
       const rendererReference = '/c/client.ts#renderMarkdownStream';
       const streamTargetAttrs = new Map<string, string>([
         ['data-stream-renderer', rendererReference],
@@ -1682,7 +1682,9 @@ describe('inline loader enhanced submit source', () => {
         importModule: globalRecord.__kovoInlineImport,
       };
       const listeners = new Map<string, (event: unknown) => void>();
-      const formData = { kind: 'coalesced-stream-form-data' };
+      const formData = Object.assign(createStructuralFormData(), {
+        kind: 'coalesced-stream-form-data',
+      });
       const streamTargetAttrs = new Map<string, string>([
         ['data-stream-renderer', '/c/client.ts#renderMarkdownStream'],
       ]);
@@ -1859,7 +1861,9 @@ describe('inline loader enhanced submit source', () => {
         location: globalRecord.location,
       };
       const listeners = new Map<string, (event: unknown) => void>();
-      const formData = { kind: 'missing-target-stream-form-data' };
+      const formData = Object.assign(createStructuralFormData(), {
+        kind: 'missing-target-stream-form-data',
+      });
       const formAttrs = new Map<string, string>();
       const reload = vi.fn();
       const form = {
@@ -1983,7 +1987,7 @@ describe('inline loader enhanced submit source', () => {
           }
         };
         globalRecord.FormData = function FormData() {
-          return {};
+          return createStructuralFormData();
         };
         globalRecord.addEventListener = (type: string, listener: (event: unknown) => void) => {
           listeners.set(type, listener);
@@ -2124,7 +2128,7 @@ describe('inline loader enhanced submit source', () => {
           }
         };
         globalRecord.FormData = function FormData() {
-          return {};
+          return createStructuralFormData();
         };
         globalRecord.addEventListener = (type: string, listener: (event: unknown) => void) => {
           listeners.set(type, listener);
@@ -2237,7 +2241,7 @@ describe('inline loader enhanced submit source', () => {
           }
         };
         globalRecord.FormData = function FormData() {
-          return {};
+          return createStructuralFormData();
         };
         globalRecord.addEventListener = (type: string, listener: (event: unknown) => void) => {
           listeners.set(type, listener);
@@ -2371,7 +2375,7 @@ describe('inline loader enhanced submit source', () => {
           }
         };
         globalRecord.FormData = function FormData() {
-          return {};
+          return createStructuralFormData();
         };
         globalRecord.addEventListener = (type: string, listener: (event: unknown) => void) => {
           listeners.set(type, listener);

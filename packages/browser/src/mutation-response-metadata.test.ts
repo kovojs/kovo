@@ -34,8 +34,8 @@ describe('mutation response metadata', () => {
 
   it('mints Kovo-Idem from a cryptographic source (≥128-bit), never a predictable fallback', () => {
     // SPEC.md §10.3 line 1065 (normative): the client MUST mint a fresh high-entropy token
-    // (≥128 bits from a cryptographic source) per logical submit. randomUUID is preferred; absent
-    // it, getRandomValues must be used — NEVER a predictable Date.now()+counter.
+    // (≥128 bits from a cryptographic source) per logical submit. A UUID v4 has only 122 random
+    // bits, so the nonce always comes from 16 bytes of getRandomValues.
     const cryptoDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'crypto');
 
     try {
@@ -45,8 +45,8 @@ describe('mutation response metadata', () => {
         value: { randomUUID: () => '00000000-0000-4000-8000-000000000000' },
       });
       const second = createMutationIdem();
-      expect(first).toMatch(/^(?:[0-9a-f-]{36}|idem_[0-9a-f]{32})$/i);
-      expect(second).toMatch(/^(?:[0-9a-f-]{36}|idem_[0-9a-f]{32})$/i);
+      expect(first).toMatch(/^v1_[0-9]{13}_[0-9a-f]{32}$/u);
+      expect(second).toMatch(/^v1_[0-9]{13}_[0-9a-f]{32}$/u);
       expect(second).not.toBe(first);
 
       let randomCall = 0;
@@ -62,7 +62,7 @@ describe('mutation response metadata', () => {
         },
       } as typeof globalThis);
       const fallback = randomControls.createMutationIdem();
-      expect(fallback).toMatch(/^idem_[0-9a-f]{32}$/); // 16 bytes = 128 bits of hex
+      expect(fallback).toMatch(/^v1_[0-9]{13}_[0-9a-f]{32}$/u); // 16 bytes = 128 bits
       expect(fallback).not.toMatch(/loyw3v28/); // not Date.now()-derived
 
       // No cryptographic source at all → throw rather than degrade to a predictable token.

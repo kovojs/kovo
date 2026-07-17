@@ -25,7 +25,7 @@ it.each(inlineSourceInstallCases)(
     };
     const listeners = new Map<string, (event: unknown) => void>();
     class TestFormData {
-      value = 'idem_stale_render';
+      value = 'v1_1750000000000_000102030405060708090a0b0c0d0e0f';
 
       get(name: string) {
         return name === 'Kovo-Idem' ? this.value : null;
@@ -125,8 +125,10 @@ it.each(inlineSourceInstallCases)(
       await Promise.resolve();
 
       // Two boot probes consume calls 1/2; the logical submit receives call 3 (0x33..0x42).
-      expect(requests[0]?.headers['Kovo-Idem']).toBe('idem_333435363738393a3b3c3d3e3f404142');
-      expect(requests[0]?.body.value).toBe('idem_333435363738393a3b3c3d3e3f404142');
+      expect(requests[0]?.headers['Kovo-Idem']).toBe(
+        'v1_1750000000000_333435363738393a3b3c3d3e3f404142',
+      );
+      expect(requests[0]?.body.value).toBe('v1_1750000000000_333435363738393a3b3c3d3e3f404142');
       listeners.get('submit')?.({
         preventDefault: vi.fn(),
         target: {
@@ -141,8 +143,10 @@ it.each(inlineSourceInstallCases)(
       await Promise.resolve();
       await Promise.resolve();
 
-      expect(requests[1]?.headers['Kovo-Idem']).toBe('idem_4445464748494a4b4c4d4e4f50515253');
-      expect(requests[1]?.body.value).toBe('idem_4445464748494a4b4c4d4e4f50515253');
+      expect(requests[1]?.headers['Kovo-Idem']).toBe(
+        'v1_1750000000000_4445464748494a4b4c4d4e4f50515253',
+      );
+      expect(requests[1]?.body.value).toBe('v1_1750000000000_4445464748494a4b4c4d4e4f50515253');
       expect(requests[1]?.headers['Kovo-Idem']).not.toBe(requests[0]?.headers['Kovo-Idem']);
       expect(poisonedFormDataSetCalls).toBe(0);
     } finally {
