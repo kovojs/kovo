@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-17
 
-**Status:** Active remediation
+**Status:** Remediated; final exact-tip verification and publication pending
 **Baseline:** `4403ce7401760725836332aedb3031e1c0833cfe`
 
 **Scope:** Fresh remotely reachable and framework-authority findings after `bugz-32`. Deliberate
@@ -15,7 +15,7 @@ rendering, Better Auth, and managed SQL.
 | Severity | Open | Closed |
 | -------- | ---: | -----: |
 | High     |    0 |     17 |
-| Medium   |    2 |     18 |
+| Medium   |    0 |     20 |
 | Low      |    0 |      4 |
 
 ## High
@@ -403,7 +403,7 @@ rendering, Better Auth, and managed SQL.
   - **Evidence:** real HTTP/1+h2 normal-body, client-destroy, and live/emitted complete/incomplete
     close matrix 101/101; server dist, wire, API, and VP gates passed.
 
-- [ ] **M16 - Windows CLI environment snapshots could retarget database commands by omission.**
+- [x] **M16 - Windows CLI environment snapshots could retarget database commands by omission.**
   - The supported CLI runner and its direct-dispatch fallback copied Windows environment entries
     into case-sensitive null-prototype records. Mixed-case `KOVO_DATABASE_URL`,
     `KOVO_ADMIN_DATABASE_URL`, `KOVO_RUNTIME_DATABASE_URL`, or `KOVO_DB_DRIVER` spellings that the
@@ -412,19 +412,21 @@ rendering, Better Auth, and managed SQL.
   - **Evidence:** a platform-independent injected-source reproduction made every uppercase CLI
     lookup miss mixed-case operator keys even though Windows resolves those names
     case-insensitively (SPEC §6.6 operator-environment trust root).
-  - **Open:** give both command-entry snapshots Windows-equivalent lookup and collision refusal,
-    then prove the database URL/driver and security-posture reads without changing non-Windows
-    spelling semantics.
+  - **Fixed:** `50bbebfec` routes both command-entry snapshots through one invocation-environment
+    classifier with Windows-equivalent case-folded lookup and fail-closed collision refusal while
+    preserving non-Windows spelling semantics (SPEC §6.6).
+  - **Evidence:** exact-tip CLI/create-kovo matrix 162/162; all 16 C13 corpora passed.
 
-- [ ] **M17 - Invalid CLI database-driver authority silently selected local PGlite.**
+- [x] **M17 - Invalid CLI database-driver authority silently selected local PGlite.**
   - CLI target selection recognized the supported driver strings but let every other defined
     `KOVO_DB_DRIVER` value fall through automatic target detection. With no database URL, an
     operator typo therefore became an explicit PGlite override instead of matching server boot's
     fail-closed driver validation (SPEC §6.6).
   - **Evidence:** `KOVO_DB_DRIVER=bogus kovo db check` reported `DRIVER pglite` and selected a local
     data directory rather than rejecting the invalid authority before target access.
-  - **Open:** centralize exact CLI driver parsing and reject every defined unsupported value across
-    check, generate, migrate, and provision before any default target can be selected.
+  - **Fixed:** `d40bf8363` centralizes exact CLI driver parsing and rejects every defined unsupported
+    value across check, generate, migrate, and provision before target selection (SPEC §6.6).
+  - **Evidence:** exact-tip CLI/create-kovo matrix 162/162; all 16 C13 corpora passed.
 
 - [x] **M18 - Trusted-proxy client ports split one IP across per-IP rate-limit buckets.**
   - The built-in trusted-proxy resolver returned the complete rightmost RFC 7239 `Forwarded for=`
@@ -528,5 +530,6 @@ rendering, Better Auth, and managed SQL.
   6/6 across Chromium, Firefox, and WebKit; all 15 C13 corpora passed.
 - Trusted-client-IP live/real-proxy matrix: 54/54 plus generated production Node 1/1; all 16 C13
   corpora passed.
-- Final exact-tip remote-boundary review remains open until the fresh parser/browser-content passes
-  and full serial gates complete without a new remotely reachable issue.
+- Windows environment/database-driver CLI matrix: 162/162; all 16 exact-tip C13 corpora passed.
+- Publication remains pending until the exact-tip broad gates, `origin/main` push, GitHub
+  Actions/Pages monitoring, and post-green no-find pass complete.
