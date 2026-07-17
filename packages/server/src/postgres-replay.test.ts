@@ -328,6 +328,33 @@ describe('Postgres durable replay stores', () => {
     });
   });
 
+  it('keeps lone-surrogate replay keys distinct from valid replacement characters', async () => {
+    const { executor } = await runtimeAt(dataDir());
+    const store = createPostgresMutationReplayStoreFromExecutor(executor, { pendingWaitMs: 0 });
+    const loneSurrogate = '\ud800';
+    const replacementCharacter = '\ufffd';
+    const loneReservation = await store.reserve('scope', loneSurrogate);
+    const replacementReservation = await store.reserve('scope', replacementCharacter);
+    expect(loneReservation).toBeDefined();
+    expect(replacementReservation).toBeDefined();
+    await loneReservation?.commit(mutationResponse('lone-surrogate'));
+    await replacementReservation?.commit(mutationResponse('replacement-character'));
+
+    await expect(store.get('scope', loneSurrogate)).resolves.toEqual(
+      mutationResponse('lone-surrogate'),
+    );
+    await expect(store.get('scope', replacementCharacter)).resolves.toEqual(
+      mutationResponse('replacement-character'),
+    );
+
+    const rows = await executor.execute<{ idem: string }>({
+      text: "SELECT idem FROM public._kovo_replay WHERE surface = 'mutation' ORDER BY idem",
+      values: [],
+    });
+    expect(rows.rows).toHaveLength(2);
+    expect(new Set(rows.rows.map((row) => row.idem)).size).toBe(2);
+  });
+
   it('canonicalizes NUL-delimited framework scopes without aliasing literal escape text', async () => {
     const { executor } = await runtimeAt(dataDir());
     const store = createPostgresMutationReplayStoreFromExecutor(executor, { pendingWaitMs: 0 });

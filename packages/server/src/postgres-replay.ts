@@ -550,8 +550,11 @@ function assertReplayKey(scope: string, idem: string): void {
 
 /**
  * PostgreSQL text cannot represent NUL, while framework-owned composite scopes deliberately use
- * NUL as an unambiguous separator. Hash the URI-canonical form so every well-formed JavaScript
- * string has a fixed-width database identity and raw attacker-controlled keys are never persisted.
+ * NUL as an unambiguous separator. Hash the URI-canonical form so ordinary JavaScript strings keep
+ * their existing fixed-width database identity and raw attacker-controlled keys are never
+ * persisted. URI encoding rejects lone UTF-16 surrogates, so those exact code units use a
+ * domain-separated UTF-16LE representation instead of aliasing the replacement character or
+ * throwing only in the Postgres backend.
  */
 function persistedReplayKey(scope: string, idem: string): { idem: string; scope: string } {
   assertReplayKey(scope, idem);
@@ -562,7 +565,13 @@ function persistedReplayKey(scope: string, idem: string): { idem: string; scope:
 }
 
 function persistedReplayKeyPart(value: string): string {
-  return `sha256:${securitySha256Base64(securityEncodeURIComponent(value))}`;
+  let canonical: string;
+  try {
+    canonical = securityEncodeURIComponent(value);
+  } catch {
+    canonical = `utf16le:${securityBufferToString(securityBufferFrom(value, 'utf16le'), 'base64')}`;
+  }
+  return `sha256:${securitySha256Base64(canonical)}`;
 }
 
 function persistedReplayFingerprint(fingerprint: string | undefined): string | null {
