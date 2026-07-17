@@ -1,4 +1,5 @@
 import { parseKovoModuleRef, type KovoModuleRef } from '@kovojs/core/internal/module-ref';
+import { isBlockedSvgSmilElementName } from '@kovojs/core/internal/sink-policy';
 
 import { applyBindProp, BIND_PROP_PREFIX } from './bind-prop.js';
 import { domAttributes } from './dom-like.js';
@@ -848,6 +849,7 @@ function writeQueryPlanElement(element: QueryBindingElement, rendered: string): 
 }
 
 function removeBoundAttribute(element: QueryBindingElement, name: string): void {
+  if (inertBlockedSvgSmilBindingElement(element)) return;
   // SPEC §5.2.4: closing a <dialog> by removing `open` never exits the top layer;
   // route through dialog.close() so a show-modal dialog leaves the top layer.
   if (name === 'open' && reconcileDialogOpen(element, null)) return;
@@ -928,6 +930,7 @@ function reconcileDialogOpen(element: QueryBindingElement, value: unknown): bool
 }
 
 function setBoundAttribute(element: QueryBindingElement, name: string, value: unknown): void {
+  if (inertBlockedSvgSmilBindingElement(element)) return;
   // J3 (SPEC §4.6/§4.8): HTML boolean-presence attributes must remove on false/null/undefined,
   // and set to '' (present) on any other value including true, '', and non-null strings.
   // This covers both query-source raw booleans and state-derive '' / null patterns.
@@ -1135,17 +1138,7 @@ function matchingBindingAttributes(
   element: QueryBindingElement,
   prefix: string,
 ): Array<{ name: string; value: string }> {
-  let attributes: Array<{ name: string; value: string }>;
-  if (browserQueryBindingSecurity?.isPlatformElement(element)) {
-    attributes = browserQueryBindingSecurity.snapshotElementAttributes(element);
-  } else {
-    const descriptor = securityGetOwnPropertyDescriptor(element, 'attributes');
-    attributes = domAttributes(
-      descriptor && 'value' in descriptor
-        ? (descriptor.value as QueryBindingElement['attributes'])
-        : undefined,
-    );
-  }
+  const attributes = bindingElementAttributes(element);
   const matches: Array<{ name: string; value: string }> = [];
   for (let index = 0; index < attributes.length; index += 1) {
     const attribute = attributes[index];
@@ -1158,4 +1151,34 @@ function matchingBindingAttributes(
     }
   }
   return matches;
+}
+
+function bindingElementAttributes(
+  element: QueryBindingElement,
+): Array<{ name: string; value: string }> {
+  if (browserQueryBindingSecurity?.isPlatformElement(element)) {
+    return browserQueryBindingSecurity.snapshotElementAttributes(element);
+  }
+  const descriptor = securityGetOwnPropertyDescriptor(element, 'attributes');
+  return domAttributes(
+    descriptor && 'value' in descriptor
+      ? (descriptor.value as QueryBindingElement['attributes'])
+      : undefined,
+  );
+}
+
+/**
+ * SPEC.md §4.8 / §5.2 rule 10: a live binding can change a SMIL target before or after its
+ * transfer value. Removing the whole attribute set makes both transition orders inert and also
+ * retires the binding stamps so a later commit cannot rebuild the primitive.
+ */
+function inertBlockedSvgSmilBindingElement(element: QueryBindingElement): boolean {
+  const tagName = readBindingTagName(element);
+  if (tagName === undefined || !isBlockedSvgSmilElementName(tagName)) return false;
+  const attributes = bindingElementAttributes(element);
+  for (let index = 0; index < attributes.length; index += 1) {
+    const attribute = attributes[index];
+    if (attribute) removeBindingAttribute(element, attribute.name);
+  }
+  return true;
 }

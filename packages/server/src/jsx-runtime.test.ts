@@ -1041,6 +1041,48 @@ describe('server jsx runtime', () => {
     ).toBe('<button on:click="/c/client.js#run">Run</button>');
   });
 
+  it('H12 rejects SVG SMIL animation primitives before transfer attributes can reach HTML', () => {
+    const payload = "javascript:(document.body.dataset.kovoSmilXss='yes',void 0)";
+    const transfers = ['values', 'from', 'to', 'by'] as const;
+
+    for (const tag of [
+      'animate',
+      'animateColor',
+      'animateMotion',
+      'animateTransform',
+      'discard',
+      'set',
+      'AnImAtE',
+    ] as const) {
+      for (const transfer of transfers) {
+        expect(
+          html(
+            jsx(tag, {
+              ATTRIBUTENAME: 'xlink:href',
+              href: '#sibling-target',
+              [transfer]: payload,
+            }),
+          ),
+        ).toBe('');
+      }
+    }
+
+    expect(
+      html(
+        jsx('svg', {
+          children: [
+            jsx('a', { id: 'sibling-target', children: 'target' }),
+            jsx('set', {
+              attributeName: 'href',
+              href: '#sibling-target',
+              to: payload,
+            }),
+          ],
+        }),
+      ),
+    ).toBe('<svg><a id="sibling-target">target</a></svg>');
+  });
+
   it('refuses spread-delivered executable attributes from the final runtime attribute set', () => {
     const spread = {
       content: '0; url=javascript:alert(1)',

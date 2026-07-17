@@ -369,6 +369,16 @@ const RUNTIME_GENERATED_HELPERS: Readonly<Record<string, string>> = {
     }
   };
   const writeAttr = (element, name, input) => {
+    // SPEC §4.8 / §5.2 rule 10: generic SVG SMIL target/value writes form one temporal
+    // executable sink. Compiler validation rejects these elements; keep the emitted update runtime
+    // fail-closed if a diagnostic-bearing artifact is nevertheless evaluated.
+    const tag = String(element?.tagName ?? '').toLowerCase();
+    if (/^(?:animate|animatecolor|animatemotion|animatetransform|discard|set)$/.test(tag)) {
+      for (const attribute of Array.from(element.attributes ?? [])) {
+        element.removeAttribute?.(attribute.name);
+      }
+      return;
+    }
     if (/^on[^:]|^(srcdoc|dangerouslysetinnerhtml|innerhtml|outerhtml|inserthtml|insertadjacenthtml)$/i.test(name)) {
       element.removeAttribute?.(name);
       return;

@@ -1,4 +1,5 @@
 import {
+  BLOCKED_SVG_SMIL_ELEMENT_NAMES,
   createRenderedFragmentHtml,
   decideRuntimeAttributeWrite,
   type RenderedFragmentHtml,
@@ -7,6 +8,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { installInlineKovoLoader } from './inline-loader.js';
 import { DomMorphTarget } from './morph.js';
+import { applyStateBindings } from './query-bindings.js';
 import {
   __responseFragmentApplySanitizerParityForTests,
   applyHtmlResponseFragments,
@@ -55,6 +57,69 @@ function readSanitizedAttribute(element: Element | null, name: string): string |
 const fragmentHtml = (html: string): RenderedFragmentHtml => createRenderedFragmentHtml(html);
 
 describe('browser response fragment apply', () => {
+  it('H12 inerts real SVG SMIL ancestor and href-targeted sibling XSS before Chromium click', async () => {
+    const target = document.createElement('section');
+    target.setAttribute('kovo-fragment-target', 'smil-target');
+    document.body.append(target);
+    delete document.body.dataset.kovoSmilXss;
+
+    const payload = "javascript:(document.body.dataset.kovoSmilXss='yes',void 0)";
+    const html = [
+      '<section kovo-fragment-target="smil-target">',
+      '<svg xmlns="http://www.w3.org/2000/svg">',
+      '<a id="ancestor-target"><text x="10" y="20">ancestor</text>',
+      `<animate ATTRIBUTENAME="href" values="${payload}" begin="0s" dur="1s" fill="freeze" />`,
+      '</a>',
+      '<a id="sibling-target"><text x="10" y="40">sibling</text></a>',
+      `<animate href="#sibling-target" attributeName="href" from="/safe" to="${payload}" begin="0s" dur="1s" fill="freeze" />`,
+      `<set href="#sibling-target" attributeName="xlink:href" to="${payload}" begin="0s" />`,
+      `<animate href="#sibling-target" attributeName="href" by="${payload}" begin="0s" dur="1s" />`,
+      `<animate href="#sibling-target" attributeName="href" values="/safe;${payload}" begin="0s" dur="1s" />`,
+      '</svg>',
+      '</section>',
+    ].join('');
+
+    applyHtmlResponseFragments([{ html: fragmentHtml(html), target: 'smil-target' }], (name) =>
+      document.querySelector(`[kovo-fragment-target="${name}"]`),
+    );
+
+    const animations = [...document.querySelectorAll('animate, set')];
+    expect(animations).toHaveLength(5);
+    for (const animation of animations) {
+      expect(animation.attributes).toHaveLength(0);
+      expect(animation.childNodes).toHaveLength(0);
+    }
+
+    // Chromium materializes the vulnerable animated javascript: URL only after a SMIL tick.
+    // Dispatching the click exercises the actual SVG link default action, not a string assertion.
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    for (const link of document.querySelectorAll('svg a')) {
+      link.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+    }
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(document.body.dataset.kovoSmilXss).toBeUndefined();
+  });
+
+  it('H12 closes both live-binding target/value transition orders on SMIL elements', async () => {
+    const root = document.createElement('div');
+    root.innerHTML = [
+      '<svg>',
+      '<animate attributeName="opacity" values="0;1" data-bind:attributeName="state.target" data-bind:values="state.payload"></animate>',
+      '<set attributeName="href" to="/safe" data-bind:to="state.payload" data-bind:attributeName="state.target"></set>',
+      '</svg>',
+    ].join('');
+    document.body.append(root);
+
+    await applyStateBindings(root, {
+      payload: "javascript:(document.body.dataset.kovoSmilXss='state',void 0)",
+      target: 'xlink:href',
+    });
+
+    for (const animation of root.querySelectorAll('animate, set')) {
+      expect(animation.attributes).toHaveLength(0);
+    }
+  });
+
   it('morphs the fragment root instead of leading stylesheet links', () => {
     const target = document.createElement('div');
     target.setAttribute('kovo-fragment-target', 'cart-badge');
@@ -298,6 +363,35 @@ describe('browser response fragment apply', () => {
     }
   });
 
+  it('H12 keeps the extracted inline fragment path on the same SMIL ban', async () => {
+    const target = document.createElement('div');
+    target.setAttribute('kovo-fragment-target', 'inline-smil');
+    document.body.append(target);
+    delete document.body.dataset.kovoSmilXss;
+    installInlineKovoLoader(async () => ({}));
+
+    const payload = "javascript:(document.body.dataset.kovoSmilXss='inline-fragment',void 0)";
+    (globalThis as unknown as { __kovo_a?: (body: string) => void }).__kovo_a?.(
+      [
+        '<kovo-fragment target="inline-smil">',
+        '<div kovo-fragment-target="inline-smil"><svg>',
+        '<a id="inline-smil-link"><text>click</text>',
+        `<animate attributeName="href" values="${payload}" begin="0s" dur="1s" fill="freeze"></animate>`,
+        '</a></svg></div>',
+        '</kovo-fragment>',
+      ].join(''),
+    );
+
+    const animation = document.querySelector('animate');
+    expect(animation?.attributes).toHaveLength(0);
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    document
+      .querySelector('#inline-smil-link')
+      ?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(document.body.dataset.kovoSmilXss).toBeUndefined();
+  });
+
   it('keeps focused sanitizer helper outputs in parity with shared URL/srcset/CSS decisions', () => {
     for (const testCase of sinkParityCases) {
       const decision = decideRuntimeAttributeWrite(testCase.name, testCase.value);
@@ -316,6 +410,20 @@ describe('browser response fragment apply', () => {
         ).toBe(decision.action !== 'allow');
       }
     }
+
+    for (const name of BLOCKED_SVG_SMIL_ELEMENT_NAMES) {
+      expect(__responseFragmentApplySanitizerParityForTests.isBlockedSvgSmilElementName(name)).toBe(
+        true,
+      );
+      expect(
+        __responseFragmentApplySanitizerParityForTests.isBlockedSvgSmilElementName(
+          name.toUpperCase(),
+        ),
+      ).toBe(true);
+    }
+    expect(__responseFragmentApplySanitizerParityForTests.isBlockedSvgSmilElementName('svg')).toBe(
+      false,
+    );
   });
 });
 

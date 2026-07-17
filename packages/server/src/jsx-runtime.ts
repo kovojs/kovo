@@ -19,6 +19,7 @@ import {
 } from '@kovojs/core/internal/semantic-attributes';
 import {
   drainRuntimeSinkSecurityEvent,
+  isBlockedSvgSmilElementName,
   type RuntimeSinkSecurityEvent,
 } from '@kovojs/core/internal/sink-policy';
 import {
@@ -191,6 +192,22 @@ export function jsx(
   // not depend on authored casing. Function-valued `<Form>` components returned above never enter
   // this string-host branch.
   const intrinsicType = formHelperStringToLowerCase(type);
+  // SPEC.md §4.8 / §5.2 rule 10: generic SVG SMIL elements can transfer values into an
+  // ancestor or href-targeted sibling's executable attribute after per-attribute checks have
+  // finished. Their target/value attributes can also arrive in either live-update order. Kovo's
+  // technical-preview contract therefore disables the primitive instead of trying to preserve a
+  // browser-specific temporal allowlist.
+  if (isBlockedSvgSmilElementName(intrinsicType)) {
+    drainRuntimeSinkSecurityEvent(
+      runtimeElementSinkEvent(
+        `<${intrinsicType}>`,
+        'raw-html',
+        intrinsicType,
+        'SVG SMIL animation elements are disabled because they can transfer values into executable attributes',
+      ),
+    );
+    return renderedHtml('');
+  }
   // SPEC §13.2/§6.6: cross-attribute browser semantics must classify the same immutable
   // own-data props snapshot that the HTML sink consumes. In particular, hidden `_charset_`
   // controls substitute their authored value during native form entry-list construction.

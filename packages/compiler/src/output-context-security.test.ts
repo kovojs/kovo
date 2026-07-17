@@ -5,6 +5,56 @@ import { assertFixpoint, compileComponentModule } from './index.js';
 const kv236 = 'Unsafe output context requires an explicit trusted Kovo escape hatch.';
 
 describe('compiler output-context security', () => {
+  it.each(['values', 'from', 'to', 'by'] as const)(
+    'H12 rejects dynamic SVG SMIL %s transfers with KV236 before runtime',
+    (transfer) => {
+      const result = compileComponentModule({
+        fileName: `smil-${transfer}.tsx`,
+        source: `
+export const SmilTransfer = component({
+  render: ({ state }) => (
+    <svg>
+      <a id="sibling-target">target</a>
+      <animate href="#sibling-target" attributeName={state.target} ${transfer}={state.payload} />
+      <set href="#sibling-target" attributeName="xlink:href" data-bind:${transfer}="state.payload" />
+    </svg>
+  ),
+});
+`,
+      });
+
+      const smilDiagnostics = result.diagnostics.filter(
+        (diagnostic) =>
+          diagnostic.code === 'KV236' && diagnostic.message.includes('SMIL can transfer values'),
+      );
+      expect(smilDiagnostics).toHaveLength(2);
+      expect(smilDiagnostics.map((diagnostic) => diagnostic.message)).toEqual([
+        expect.stringContaining('SVG <animate> is disabled'),
+        expect.stringContaining('SVG <set> is disabled'),
+      ]);
+    },
+  );
+
+  it('H12 rejects even apparently benign generic SMIL instead of preserving an unprovable temporal API', () => {
+    const result = compileComponentModule({
+      fileName: 'smil-opacity.tsx',
+      source: `
+export const SmilOpacity = component({
+  render: () => <svg><animate attributeName="opacity" values="0;1" /></svg>,
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'KV236',
+          message: expect.stringContaining('SVG <animate> is disabled'),
+        }),
+      ]),
+    );
+  });
+
   it('keeps text and title/aria attributes in safe output contexts', () => {
     const result = compileComponentModule({
       fileName: 'product-card.tsx',

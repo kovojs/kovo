@@ -4,6 +4,7 @@ import {
   type FrameworkIdentityTypeScript,
 } from '@kovojs/core/internal/framework-identity';
 import { hasUnsafeUrlScheme } from '@kovojs/core/internal/security-url';
+import { isBlockedSvgSmilElementName } from '@kovojs/core/internal/sink-policy';
 import {
   htmlAttributeWireValuePosture,
   htmlElementWireValueIssue,
@@ -261,6 +262,31 @@ function validateElementAttributes(
   const found: CompilerDiagnostic[] = [];
   let hasExternalEscape = false;
   const attributeLength = compilerArrayLength(element.attributes, 'Element attributes');
+  if (
+    element.intrinsicTagName !== undefined &&
+    isBlockedSvgSmilElementName(element.intrinsicTagName)
+  ) {
+    compilerArrayAppend(
+      found,
+      {
+        ...diagnostics.at(
+          'KV236',
+          {
+            start: element.start,
+            length: element.openingEnd - element.start,
+          },
+          `SVG <${element.intrinsicTagName}> is disabled because SMIL can transfer values into URL, event-handler, or style sinks`,
+        ),
+        help: [
+          'Blocked reason: SVG SMIL values/from/to/by and attributeName are one temporal sink; per-attribute escaping cannot prove their browser execution order or href-targeted destination.',
+          'Fixes: use Kovo state plus property-level CSS/DOM updates, or render a non-animated SVG representation.',
+          'SPEC §4.8 and §5.2 rule 10 require contextual output safety and fail-closed dynamic sinks.',
+          'Escape: there is no plain JSX suppression for disabled SVG SMIL elements.',
+        ].join('\n'),
+      },
+      'SVG SMIL element diagnostics',
+    );
+  }
   appendOutputItems(
     found,
     validateCrossAttributeWireSemantics(diagnostics, element),

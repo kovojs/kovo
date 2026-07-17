@@ -48,14 +48,38 @@ export const SAFE_URL_SCHEMES = freezeSecurityValue([
   'ftp',
 ] as const);
 
+/**
+ * @internal SVG SMIL elements Kovo refuses to render or adopt.
+ *
+ * SPEC.md §4.8 / §5.2 rule 10: generic SMIL animation can transfer `values`, `from`,
+ * `to`, or `by` into another element's URL/event/style attribute after ordinary per-attribute
+ * output checks have completed. The target may also change over time through live bindings.
+ * Kovo is in technical preview, so the framework fails closed on the animation primitive rather
+ * than maintaining a browser-specific cross-attribute execution model.
+ */
+export const BLOCKED_SVG_SMIL_ELEMENT_NAMES = freezeSecurityValue([
+  'animate',
+  'animatecolor',
+  'animatemotion',
+  'animatetransform',
+  'discard',
+  'set',
+] as const);
+
 const urlAttributeNames = securitySetOf<string>(URL_ATTRIBUTE_NAMES);
 const safeUrlSchemes = securitySetOf<string>(SAFE_URL_SCHEMES);
+const blockedSvgSmilElementNames = securitySetOf<string>(BLOCKED_SVG_SMIL_ELEMENT_NAMES);
 const urlSchemePattern = /^([a-zA-Z][a-zA-Z0-9+.-]*):/;
 const htmlColonReferencePattern = /&(?:#0*58(?![0-9])|#[xX]0*3[aA](?![0-9a-fA-F])|colon);?/;
 
 /** @internal True when an HTML attribute is URL-bearing and needs scheme checks. */
 export function isUrlAttributeName(name: string): boolean {
   return securitySetHas(urlAttributeNames, securityStringToLowerCase(name));
+}
+
+/** @internal True when an intrinsic element is a disabled SVG SMIL execution primitive. */
+export function isBlockedSvgSmilElementName(name: string): boolean {
+  return securitySetHas(blockedSvgSmilElementNames, securityStringToLowerCase(name));
 }
 
 /**

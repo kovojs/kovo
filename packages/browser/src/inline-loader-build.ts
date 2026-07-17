@@ -477,8 +477,25 @@ function installInlineKovoLoader(im) {
     return bindings;
   };
   const ba = (el) => bindingAttributes(el, 'data-bind:');
+  const isBlockedSmil = (el) => {
+    const tag = bns.lower(bns.readElementTagName(el) || '');
+    return tag === 'animate' || tag === 'animatecolor' || tag === 'animatemotion' ||
+      tag === 'animatetransform' || tag === 'discard' || tag === 'set';
+  };
+  const inertBlockedSmil = (el) => {
+    if (!isBlockedSmil(el)) return false;
+    // SPEC.md §4.8 / §5.2 rule 10: target and transfer bindings may commit in either
+    // order. Clear the complete SMIL primitive, including its binding stamps, on the first write.
+    const attributes = bns.snapshotElementAttributes(el);
+    for (let index = 0; index < attributes.length; index += 1) {
+      const attribute = attributes[index];
+      if (attribute) bns.removeElementAttribute(el, attribute.name);
+    }
+    return true;
+  };
   const wa = (el, name, val) => {
     const n = bns.lower(name);
+    if (inertBlockedSmil(el)) return;
     // SPEC.md section 5.2.4: a dialog opened via the native show-modal invoker
     // lives in the top layer. Toggling its open attribute alone never exits the
     // top layer (it stays :modal with an inert backdrop intercepting every

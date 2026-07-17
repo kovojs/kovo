@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
+import { BLOCKED_SVG_SMIL_ELEMENT_NAMES } from '@kovojs/core/internal/sink-policy';
+
 import {
   dispatchInlineDelegatedClick,
   inlineSourceInstallCases,
@@ -8,7 +10,10 @@ import {
 class BoundTriggerElement {
   attributes: Array<{ name: string; value: string }>;
 
-  constructor(private readonly attrs: Record<string, string>) {
+  constructor(
+    private readonly attrs: Record<string, string>,
+    readonly tagName = 'DIV',
+  ) {
     this.attributes = Object.entries(attrs).map(([name, value]) => ({ name, value }));
   }
 
@@ -165,6 +170,65 @@ describe('inline loader output security', () => {
       expect(element.getAttribute('srcset')).toBe('/safe.png 1x');
       expect(element.getAttribute('style')).toBeNull();
       expect(element.getAttribute('xlink:href')).toBe('#');
+    });
+
+    it(`${label}: H12 inerts SMIL target/value bindings in either transition order`, async () => {
+      const payload = "javascript:(document.body.dataset.kovoSmilXss='inline',void 0)";
+      for (const [index, transfer] of ['values', 'from', 'to', 'by'].entries()) {
+        for (const targetFirst of [true, false]) {
+          const bindings = targetFirst
+            ? {
+                'data-bind:attributeName': 'state.target',
+                [`data-bind:${transfer}`]: 'state.payload',
+              }
+            : {
+                [`data-bind:${transfer}`]: 'state.payload',
+                'data-bind:attributeName': 'state.target',
+              };
+          const element = new BoundTriggerElement(
+            {
+              ATTRIBUTENAME: targetFirst ? 'opacity' : 'href',
+              [transfer]: targetFirst ? '0;1' : payload,
+              ...bindings,
+              'kovo-state': JSON.stringify({ payload, target: 'xlink:href' }),
+              'on:click': '/c/client.js#commitSmil',
+            },
+            index % 2 === 0 ? 'animate' : 'SET',
+          );
+
+          await dispatchInlineDelegatedClick(
+            element,
+            async () => ({ commitSmil() {} }),
+            installSource,
+            ['/c/client.js'],
+          );
+
+          expect(
+            element.attributes,
+            `${transfer}/${targetFirst ? 'target-first' : 'value-first'}`,
+          ).toEqual([]);
+        }
+      }
+
+      for (const tagName of BLOCKED_SVG_SMIL_ELEMENT_NAMES) {
+        const element = new BoundTriggerElement(
+          {
+            attributeName: 'opacity',
+            'data-bind:values': 'state.payload',
+            'kovo-state': JSON.stringify({ payload: '0;1' }),
+            'on:click': '/c/client.js#commitSmil',
+            values: '0;1',
+          },
+          tagName.toUpperCase(),
+        );
+        await dispatchInlineDelegatedClick(
+          element,
+          async () => ({ commitSmil() {} }),
+          installSource,
+          ['/c/client.js'],
+        );
+        expect(element.attributes, tagName).toEqual([]);
+      }
     });
 
     it(`${label}: preserves relative URLs with a colon in a path segment (bugz L4 uu regex parity)`, async () => {

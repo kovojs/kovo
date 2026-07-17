@@ -319,6 +319,7 @@ function sa(
   v: string,
   security: HtmlResponseFragmentSecurityControls,
 ): void {
+  if (inertBlockedSvgSmilElement(e, security)) return;
   const n = security.lower(name);
   if (r(n)) {
     security.removeElementAttribute(e, name);
@@ -370,11 +371,46 @@ function isUrlAttributeName(n: string): boolean {
   );
 }
 
+function isBlockedSvgSmilTagName(
+  name: string | undefined,
+  security: HtmlResponseFragmentSecurityControls,
+): boolean {
+  const n = security.lower(name ?? '');
+  return (
+    n === 'animate' ||
+    n === 'animatecolor' ||
+    n === 'animatemotion' ||
+    n === 'animatetransform' ||
+    n === 'discard' ||
+    n === 'set'
+  );
+}
+
+/**
+ * SPEC.md §4.8 / §5.2 rule 10: SMIL's target and transfer attributes form one temporal
+ * executable sink, including href-targeted siblings. Strip the complete primitive before a parsed
+ * response tree is adopted; retaining selected "safe" attributes would re-open ordering attacks.
+ */
+function inertBlockedSvgSmilElement(
+  element: Element,
+  security: HtmlResponseFragmentSecurityControls,
+): boolean {
+  if (!isBlockedSvgSmilTagName(security.readElementTagName(element), security)) return false;
+  const attributes = security.snapshotElementAttributes(element);
+  for (let index = 0; index < attributes.length; index += 1) {
+    const attribute = attributes[index];
+    if (attribute) security.removeElementAttribute(element, attribute.name);
+  }
+  security.replaceElementChildren(element, []);
+  return true;
+}
+
 function g(e: Element, security: HtmlResponseFragmentSecurityControls): Element {
   const descendants = security.queryAllElements(e, '*');
   for (let elementIndex = -1; elementIndex < descendants.length; elementIndex += 1) {
     const x = elementIndex < 0 ? e : descendants[elementIndex];
     if (!x) continue;
+    if (inertBlockedSvgSmilElement(x, security)) continue;
     const attributes = security.snapshotElementAttributes(x);
     for (let attributeIndex = 0; attributeIndex < attributes.length; attributeIndex += 1) {
       const attribute = attributes[attributeIndex];
@@ -496,6 +532,10 @@ export const __responseFragmentApplySanitizerParityForTests = {
   },
   hasUnsafeUrlScheme(value: string): boolean {
     return w(value, createBrowserNavigationSecurityControls());
+  },
+  isBlockedSvgSmilElementName(value: string): boolean {
+    const security = createBrowserNavigationSecurityControls();
+    return isBlockedSvgSmilTagName(value, security);
   },
   sanitizeAttribute(e: Element, name: string, value: string): void {
     sa(e, name, value, createBrowserNavigationSecurityControls());

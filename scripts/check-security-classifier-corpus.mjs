@@ -223,10 +223,20 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
     id: 'sink-registry',
     marker: '@kovo-security-classifier-corpus sink-registry',
     testFiles: [
+      'packages/core/src/sink-policy.test.ts',
       'packages/core/src/internal/source-sink-registry.test.ts',
       'scripts/check-sink-policy-gate.test.mjs',
     ],
     verdictAnchors: [
+      {
+        id: 'svg-smil-temporal-sink-regression',
+        file: 'packages/core/src/sink-policy.test.ts',
+        snippets: [
+          'fails closed on SVG SMIL execution primitives independent of authored casing',
+          'expect(isBlockedSvgSmilElementName(name)).toBe(true)',
+          'expect(isBlockedSvgSmilElementName(name.toUpperCase())).toBe(true)',
+        ],
+      },
       {
         id: 'redirect-url-mechanism',
         file: 'packages/core/src/internal/source-sink-registry.test.ts',
