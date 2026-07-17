@@ -1788,6 +1788,72 @@ export default async function handler(request) {
     }
   });
 
+  it('does not expose generated static metadata through encoded separator aliases', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kovo-node-static-metadata-alias-'));
+
+    try {
+      const build = await writeKovoNeutralBuild({
+        app: createApp({}),
+        outDir: join(root, '.kovo'),
+        serverHandlerSource:
+          'export default async function handler() { return new Response("dynamic fallback"); }\n',
+      });
+      const nodeOutDir = join(root, 'node-output');
+      await node({ dockerfile: false }).emit!(build, {
+        declaredEnv: [],
+        log() {},
+        outDir: nodeOutDir,
+        readNeutral() {
+          return build;
+        },
+      });
+
+      const metadataSecret = 'KOVO_STATIC_METADATA_MUST_NOT_BE_PUBLIC';
+      await mkdir(join(nodeOutDir, 'static'), { recursive: true });
+      await writeFile(join(nodeOutDir, 'static', '_headers'), metadataSecret, 'utf8');
+      await writeFile(
+        join(nodeOutDir, 'static', 'kovo-static-manifest.json'),
+        metadataSecret,
+        'utf8',
+      );
+      await mkdir(join(nodeOutDir, 'static', 'assets'), { recursive: true });
+      await writeFile(
+        join(nodeOutDir, 'static', 'assets', 'root-confusion.js'),
+        metadataSecret,
+        'utf8',
+      );
+      await writeFile(join(nodeOutDir, 'static', 'public.txt'), 'public control', 'utf8');
+
+      const server = await startGeneratedNodeServer(join(nodeOutDir, 'server.mjs'));
+      try {
+        const direct = await fetch(`${server.baseUrl}/_headers`);
+        await expect(direct.text()).resolves.not.toContain(metadataSecret);
+
+        for (const path of [
+          '/x%2f..%2f_headers',
+          '/x%2F..%2F_headers',
+          '/x%5c..%5c_headers',
+          '/x%2f..%2fkovo-static-manifest.json',
+          '/x%2f..%2fassets%2froot-confusion.js',
+        ]) {
+          const encodedAlias = await rawHttpExchange(
+            server.baseUrl,
+            `GET ${path} HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n`,
+          );
+          expect(encodedAlias, path).not.toContain(metadataSecret);
+        }
+
+        const publicControl = await fetch(`${server.baseUrl}/public.txt`);
+        expect(publicControl.status).toBe(200);
+        await expect(publicControl.text()).resolves.toBe('public control');
+      } finally {
+        await server.close();
+      }
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
   it('keeps emitted Node static-file confinement after an authored handler poisons globals', async () => {
     const root = await mkdtemp(join(tmpdir(), 'kovo-node-static-intrinsics-'));
 

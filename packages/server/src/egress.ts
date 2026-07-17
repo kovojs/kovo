@@ -866,12 +866,15 @@ function classifyIpv6Bytes(ip: Ipv6Bytes): PrivateAddressClass {
   if ((firstWord & 0xfe00) === 0xfc00) return 'unique-local'; // fc00::/7
   if ((firstWord & 0xffc0) === 0xfec0) return 'special-use'; // fec0::/10 site-local
   if ((bytes[0] ?? 0) === 0xff) return 'special-use'; // multicast ff00::/8
-  if ((firstWord & 0xfff0) === 0x2000 && (wordAt(bytes, 1) & 0xfff0) === 0x0020) {
-    return 'special-use'; // 2001:20::/28 ORCHIDv2
-  }
+  // SPEC §6.6 denies IANA-special destinations by default. The IPv6 Special-Purpose Address
+  // Registry reserves all of 2001::/23 for IETF protocol assignments (including benchmarking,
+  // ORCHID, and Teredo) and 3fff::/20 for documentation. Keep those ranges closed before the
+  // broad 2000::/3 global-unicast fallback; an operator can still name an intentional target in
+  // egress.allowInternal.
+  if (firstWord === 0x2001 && (wordAt(bytes, 1) & 0xfe00) === 0) return 'special-use';
+  if (firstWord === 0x3fff && (wordAt(bytes, 1) & 0xf000) === 0) return 'special-use';
   if (firstWord === 0x2001 && wordAt(bytes, 1) === 0x0db8) return 'special-use'; // docs
   if (firstWord === 0x2002) return 'special-use'; // 6to4
-  if (firstWord === 0x2001 && wordAt(bytes, 1) === 0x0000) return 'special-use'; // Teredo/IETF
 
   // Fail closed: only genuine global unicast is public, after extracting/denying special forms.
   if ((firstWord & 0xe000) === 0x2000) return 'public'; // 2000::/3

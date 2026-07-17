@@ -170,6 +170,26 @@ describe('IPv6 classifier corpus (SPEC §6.6 decision rule)', () => {
     expect(classifyIp('2606:4700:4700::1111')).toBe('public');
   });
 
+  it('denies IANA special-purpose IPv6 destinations before the global-unicast fallback', () => {
+    const specialPurpose = [
+      '2001:2::1', // benchmarking
+      '2001:10::1', // deprecated ORCHID
+      '2001:100::1', // IETF protocol assignments
+      '3fff::1', // documentation
+    ];
+
+    for (const resolvedIp of specialPurpose) {
+      expect(classifyIp(resolvedIp), resolvedIp).toBe('special-use');
+      expect(
+        evaluateEgress({ host: resolvedIp, port: 443, resolvedIp, policy: emptyPolicy() }),
+        resolvedIp,
+      ).toMatchObject({ classification: 'special-use' });
+    }
+
+    expect(classifyIp('2001:200::1')).toBe('public'); // immediately after 2001::/23
+    expect(classifyIp('3fff:1000::1')).toBe('public'); // immediately after 3fff::/20
+  });
+
   it('classifies ISATAP embedded IPv4 forms by their low-32 IPv4 address', () => {
     expect(classifyIp('2001:4860::0:5efe:10.0.0.1')).toBe('private-rfc1918');
     expect(classifyIp('2001:4860::0:5efe:0a00:0001')).toBe('private-rfc1918');
@@ -237,6 +257,16 @@ describe('IPv6 classifier corpus (SPEC §6.6 decision rule)', () => {
       { name: 'site-local', words: [0xfec0, 0, 0, 0, 0, 0, 0, 1], expected: 'special-use' },
       { name: 'multicast', words: [0xff02, 0, 0, 0, 0, 0, 0, 1], expected: 'special-use' },
       { name: 'documentation', words: [0x2001, 0x0db8, 0, 0, 0, 0, 0, 1], expected: 'special-use' },
+      {
+        name: 'IETF protocol assignment',
+        words: [0x2001, 0x0100, 0, 0, 0, 0, 0, 1],
+        expected: 'special-use',
+      },
+      {
+        name: 'documentation 3fff::/20',
+        words: [0x3fff, 0, 0, 0, 0, 0, 0, 1],
+        expected: 'special-use',
+      },
       { name: 'ORCHIDv2', words: [0x2001, 0x0020, 0, 0, 0, 0, 0, 1], expected: 'special-use' },
       { name: '6to4', words: [0x2002, 0xc000, 0x0201, 0, 0, 0, 0, 1], expected: 'special-use' },
       { name: 'Teredo', words: [0x2001, 0, 0, 0, 0, 0, 0, 1], expected: 'special-use' },

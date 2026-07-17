@@ -3214,6 +3214,7 @@ const nativeServerResponseHeadersSentGetter = stablePrototypeGetter(ServerRespon
 const nativeServerResponseWriteHead = stablePrototypeFunction(ServerResponse.prototype, 'writeHead');
 const nativeConsoleError = console.error;
 const immutableAssetPathPattern = new NativeRegExp(${immutableAssetPathPatternSourceLiteral}, ${immutableAssetPathPatternFlagsLiteral});
+const encodedStaticPathSeparatorPattern = new NativeRegExp('%(?:2f|5c)', 'iu');
 const fsFileTypeMask = fsConstants.S_IFMT;
 const fsDirectoryFileType = fsConstants.S_IFDIR;
 const fsRegularFileType = fsConstants.S_IFREG;
@@ -3456,7 +3457,14 @@ async function maybeServeStatic(rawTarget, method, nodeResponse) {
 function staticPathname(rawTarget) {
   try {
     const parsed = new NativeURL(rawTarget, 'http://kovo.local');
-    return apply(nativeUrlPathnameGetter, parsed, []);
+    const pathname = apply(nativeUrlPathnameGetter, parsed, []);
+    // SPEC §6.6/§9.5/§10.6: classify the same path shape that the filesystem sink will consume.
+    // Percent-encoded slash/backslash bytes otherwise remain invisible while selecting the static
+    // root and reserved metadata policy, then become separators in staticRelativePath(). That let
+    // /x%2f..%2f_headers bypass the direct _headers denial and publish deployment metadata.
+    return apply(nativeRegExpExec, encodedStaticPathSeparatorPattern, [pathname]) === null
+      ? pathname
+      : undefined;
   } catch {
     return undefined;
   }
@@ -3524,6 +3532,7 @@ function isMissingStaticRootError(error) {
 
 async function rootedStaticFiles(root) {
   const realRoot = await realpath(root);
+  const blocksStaticMetadata = root === staticRoot;
   const rootStat = await staticFilePathStat(realRoot);
   if (
     !directoryStaticFileStat(rootStat) ||
@@ -3540,7 +3549,12 @@ async function rootedStaticFiles(root) {
         retired = true;
         return undefined;
       }
-      const outcome = await serveRootedStaticFileBytes(realRoot, path, options);
+      const outcome = await serveRootedStaticFileBytes(
+        realRoot,
+        path,
+        options,
+        blocksStaticMetadata,
+      );
       if (!(await staticRootRetainsIdentity(root, realRoot, rootStat))) {
         retired = true;
         return undefined;
@@ -3550,11 +3564,21 @@ async function rootedStaticFiles(root) {
   }]);
 }
 
-async function serveRootedStaticFileBytes(realRoot, requestedPath, options) {
+async function serveRootedStaticFileBytes(realRoot, requestedPath, options, blocksStaticMetadata) {
   const candidate = rootedStaticCandidate(realRoot, requestedPath);
   if (candidate === undefined) return undefined;
   const resolved = await safeRealpath(candidate);
   if (resolved === undefined || !containsPath(realRoot, resolved)) return undefined;
+  // Keep the denial bound to the canonical sink path as well as the URL classifier. Filesystems
+  // may fold spellings (for example trailing dots on Windows); no alias of deploy metadata is a
+  // public static asset even when its request spelling passed an earlier platform parser.
+  if (
+    blocksStaticMetadata &&
+    (resolved === pathResolve(realRoot, '_headers') ||
+      resolved === pathResolve(realRoot, 'kovo-static-manifest.json'))
+  ) {
+    return undefined;
+  }
   const expectedStat = await staticFilePathStat(resolved);
   if (!regularStaticFileStat(expectedStat)) return undefined;
 

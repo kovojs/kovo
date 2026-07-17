@@ -166,6 +166,16 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
         snippets: ["classifyIp('0xA9FEA9FE')", "'metadata'"],
       },
       {
+        id: 'iana-ipv6-special-purpose-regression',
+        file: 'packages/server/src/egress.test.ts',
+        snippets: [
+          "'2001:2::1'",
+          "'2001:100::1'",
+          "'3fff::1'",
+          "classification: 'special-use'",
+        ],
+      },
+      {
         id: 'azure-identity-endpoint-provider-separation',
         file: 'packages/server/src/egress.test.ts',
         snippets: [
@@ -239,6 +249,17 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
           'keeps the generated Node static-file allowance tied to fd identity revalidation',
           'readFileDescriptor(fileDescriptor, callback)',
           'body: await readFile(resolved)',
+        ],
+      },
+      {
+        id: 'generated-static-encoded-separator-regression',
+        file: 'packages/server/src/build.test.ts',
+        snippets: [
+          'does not expose generated static metadata through encoded separator aliases',
+          "'/x%2f..%2f_headers'",
+          "'/x%5c..%5c_headers'",
+          "'/x%2f..%2fkovo-static-manifest.json'",
+          "'/x%2f..%2fassets%2froot-confusion.js'",
         ],
       },
     ],
