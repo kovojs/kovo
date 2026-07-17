@@ -3293,6 +3293,14 @@ export default async function handler(request) {
       await expect(
         readFile(join(cloudflareOutDir, 'client/index.html'), 'utf8'),
       ).resolves.toContain('Static Home');
+      // Cloudflare consumes `_headers` as non-public host configuration, but every ordinary file in
+      // the ASSETS directory is public. Preserve the sidecar and omit Kovo's build manifest.
+      await expect(readFile(join(cloudflareOutDir, 'client/_headers'), 'utf8')).resolves.toContain(
+        'x-content-type-options: nosniff',
+      );
+      await expect(
+        readFile(join(cloudflareOutDir, 'client/kovo-static-manifest.json'), 'utf8'),
+      ).rejects.toThrow();
       await expect(readFile(join(cloudflareOutDir, 'worker.mjs'), 'utf8')).rejects.toThrow();
       await expect(readFile(join(cloudflareOutDir, 'wrangler.toml'), 'utf8')).resolves.toContain(
         'directory = "./client"',
@@ -3485,26 +3493,47 @@ export default async function handler(request) {
       await expect(
         readFile(join(cloudflareOutDir, 'client/static/index.html'), 'utf8'),
       ).resolves.toContain('Static Route');
+      await expect(readFile(join(cloudflareOutDir, 'client/_headers'), 'utf8')).resolves.toContain(
+        'x-content-type-options: nosniff',
+      );
+      await expect(
+        readFile(join(cloudflareOutDir, 'client/kovo-static-manifest.json'), 'utf8'),
+      ).rejects.toThrow();
       await expect(readFile(join(cloudflareOutDir, 'worker.mjs'), 'utf8')).resolves.toContain(
         "ownDataValue(env, 'ASSETS')",
       );
 
-      const [staticWorkerProbe, dynamicWorkerProbe] = runGeneratedCloudflareWorker(
-        join(cloudflareOutDir, 'worker.mjs'),
-        [
-          {
-            asset: {
-              body: '<main>Static Route</main>',
-              headers: { 'content-type': 'text/html; charset=utf-8' },
-            },
-            url: 'https://worker.test/static',
+      const [
+        staticWorkerProbe,
+        dynamicWorkerProbe,
+        manifestWorkerProbe,
+        headersWorkerProbe,
+        encodedManifestWorkerProbe,
+      ] = runGeneratedCloudflareWorker(join(cloudflareOutDir, 'worker.mjs'), [
+        {
+          asset: {
+            body: '<main>Static Route</main>',
+            headers: { 'content-type': 'text/html; charset=utf-8' },
           },
-          {
-            asset: { body: 'Not Found', status: 404 },
-            url: 'https://worker.test/dynamic',
-          },
-        ],
-      );
+          url: 'https://worker.test/static',
+        },
+        {
+          asset: { body: 'Not Found', status: 404 },
+          url: 'https://worker.test/dynamic',
+        },
+        {
+          asset: { body: '{"version":"kovo-neutral-build/v1"}' },
+          url: 'https://worker.test/kovo-static-manifest.json',
+        },
+        {
+          asset: { body: 'INTERNAL_HEADER_POLICY' },
+          url: 'https://worker.test/_headers',
+        },
+        {
+          asset: { body: '{"version":"kovo-neutral-build/v1"}' },
+          url: 'https://worker.test/x%2f..%2fkovo-static-manifest.json',
+        },
+      ]);
       const staticWorkerResponse = staticWorkerProbe!.response;
       await expect(staticWorkerResponse.text()).resolves.toContain('Static Route');
       expect(staticWorkerResponse.headers.get('cache-control')).toBeNull();
@@ -3514,6 +3543,17 @@ export default async function handler(request) {
 
       const dynamicWorkerResponse = dynamicWorkerProbe!.response;
       await expect(dynamicWorkerResponse.text()).resolves.toBe('dynamic:/dynamic');
+
+      for (const metadataProbe of [
+        manifestWorkerProbe!,
+        headersWorkerProbe!,
+        encodedManifestWorkerProbe!,
+      ]) {
+        expect(metadataProbe.assetCalls).toBe(0);
+        const body = await metadataProbe.response.text();
+        expect(body).not.toContain('kovo-neutral-build/v1');
+        expect(body).not.toContain('INTERNAL_HEADER_POLICY');
+      }
     } finally {
       await rm(root, { force: true, recursive: true });
     }

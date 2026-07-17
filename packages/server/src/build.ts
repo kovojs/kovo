@@ -403,7 +403,7 @@ async function emitVercelPreset(
       outDir,
       'static',
       'vercel static output',
-      true,
+      'vercel',
     );
     await writePresetArtifacts(
       outDir,
@@ -489,6 +489,7 @@ async function emitCloudflarePreset(
       outDir,
       'client',
       'cloudflare static output',
+      'cloudflare',
     );
     await writePresetArtifacts(
       outDir,
@@ -563,7 +564,7 @@ async function writePresetStaticFiles(
       outDir,
       targetDirectory,
       `${preset} static output`,
-      preset === 'vercel',
+      preset === 'vercel' || preset === 'cloudflare' ? preset : undefined,
     );
   }
   await writePresetDirectory(build.clientDir, outDir, targetDirectory, `${preset} client output`);
@@ -859,7 +860,7 @@ async function writePresetDirectory(
   outDir: string,
   targetDirectory: string,
   label: string,
-  omitVercelStaticMetadata = false,
+  staticMetadataPolicy?: 'cloudflare' | 'vercel',
 ): Promise<void> {
   const source = createFrameworkOutputFileSystemBoundary(sourceDir);
   await source.ensureDirectory();
@@ -871,7 +872,7 @@ async function writePresetDirectory(
     targetDirectory,
     label,
     entries,
-    omitVercelStaticMetadata,
+    staticMetadataPolicy,
   );
   await writePresetArtifacts(outDir, entries, label);
 }
@@ -883,7 +884,7 @@ async function appendPresetDirectoryEntries(
   targetDirectory: string,
   label: string,
   entries: ArtifactOutputEntry[],
-  omitVercelStaticMetadata: boolean,
+  staticMetadataPolicy: 'cloudflare' | 'vercel' | undefined,
 ): Promise<void> {
   const snapshot = snapshotBuildArray(children, `${label} source directory entries`);
   for (let index = 0; index < snapshot.length; index += 1) {
@@ -896,20 +897,21 @@ async function appendPresetDirectoryEntries(
         targetDirectory,
         label,
         entries,
-        omitVercelStaticMetadata,
+        staticMetadataPolicy,
       );
       continue;
     }
     if (entry.kind !== 'file') {
       throw new Error(`Kovo ${label} refuses non-regular source entry '${entry.relativePath}'.`);
     }
-    // Vercel's Build Output API publishes every file under static/ unchanged at the deployment
-    // root. `_headers` is a Netlify/Cloudflare host sidecar and the manifest is Kovo build
-    // metadata; Vercel already receives the equivalent policy through config.json, so neither
-    // file may cross into its public static primitive (SPEC §6.6/§9.5/§14).
+    // SPEC §6.6/§9.5/§14: preset asset directories are public primitives, so the Kovo build
+    // manifest must never cross into either Vercel static output or Cloudflare ASSETS. `_headers`
+    // remains load-bearing Cloudflare host configuration (and Cloudflare reserves it from public
+    // asset serving), while Vercel receives the equivalent policy through config.json and omits it.
     if (
-      omitVercelStaticMetadata &&
-      (entry.relativePath === '_headers' || entry.relativePath === 'kovo-static-manifest.json')
+      staticMetadataPolicy !== undefined &&
+      (entry.relativePath === 'kovo-static-manifest.json' ||
+        (staticMetadataPolicy === 'vercel' && entry.relativePath === '_headers'))
     ) {
       continue;
     }
@@ -1869,6 +1871,7 @@ const NativeRegExp = globalThis.RegExp;
 const NativeRequest = globalThis.Request;
 const NativeResponse = globalThis.Response;
 const NativeURL = globalThis.URL;
+const nativeDecodeURIComponent = globalThis.decodeURIComponent;
 const nativeReflectApply = Reflect.apply;
 const nativeHeadersAppend = NativeHeaders.prototype.append;
 const nativeHeadersForEach = NativeHeaders.prototype.forEach;
@@ -1923,7 +1926,9 @@ export default {
     const url = new NativeURL(requestUrl);
     const pathname = apply(nativeUrlPathnameGetter, url, []);
     const assets = ownDataValue(env, 'ASSETS');
-    if (isBodylessMethod(method) && assets !== undefined) {
+    // Cloudflare consumes _headers as host configuration, and Kovo's static manifest is build
+    // metadata. Neither path is an ASSETS response; leave mixed-app dynamic fallback intact.
+    if (isBodylessMethod(method) && !isStaticMetadataPath(pathname) && assets !== undefined) {
       const assetFetch = ownDataValue(assets, 'fetch');
       if (typeof assetFetch !== 'function') {
         throw new TypeError('Kovo Cloudflare ASSETS binding requires an own fetch method.');
@@ -2110,6 +2115,18 @@ function cloneHeaders(source) {
 
 function isBodylessMethod(method) {
   return method === 'GET' || method === 'HEAD';
+}
+
+function isStaticMetadataPath(pathname) {
+  try {
+    const decoded = apply(nativeDecodeURIComponent, undefined, [pathname]);
+    const normalized = new NativeURL(decoded, 'https://kovo.invalid');
+    const normalizedPathname = apply(nativeUrlPathnameGetter, normalized, []);
+    return normalizedPathname === '/_headers' ||
+      normalizedPathname === '/kovo-static-manifest.json';
+  } catch {
+    return false;
+  }
 }
 
 function applyHeaders(headers, policy) {
