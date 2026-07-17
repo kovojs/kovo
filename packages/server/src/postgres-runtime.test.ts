@@ -33,7 +33,9 @@ import {
   type KovoPostgresRuntimeDb,
 } from './postgres-runtime.js';
 import { PostgresDurableTaskQueue, createDurableTaskSqlExecutor } from './task-queue.js';
+import { mintMutationIdemToken } from './mutation-idem.js';
 import { isDurableMutationReplayStore } from './replay.js';
+import { replayMutationWireBody } from './response.js';
 import { isDurableWebhookReplayStore } from './webhook.js';
 
 const notes = pgTable(
@@ -301,7 +303,7 @@ describe('createPostgresAppRuntimeDb', () => {
     expect(report.issues).toEqual([]);
   });
 
-  it('fails posture on weakened capability replay constraints, column type, and cleanup index', async () => {
+  it('fails posture on weakened temporal replay constraints, column type, and cleanup index', async () => {
     const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-replay-shape-'));
     roots.push(dataDir);
     const initial = createPostgresAppRuntimeDb({ dataDir, driver: 'pglite', schema });
@@ -313,12 +315,12 @@ describe('createPostgresAppRuntimeDb', () => {
       [
         'ALTER TABLE _kovo_replay DROP CONSTRAINT _kovo_replay_surface_check;',
         'ALTER TABLE _kovo_replay DROP CONSTRAINT _kovo_replay_expires_at_check;',
-        'ALTER TABLE _kovo_replay DROP CONSTRAINT _kovo_replay_capability_expiry_check;',
-        'DROP INDEX _kovo_replay_capability_expiry_idx;',
+        'ALTER TABLE _kovo_replay DROP CONSTRAINT _kovo_replay_surface_state_expiry_check;',
+        'DROP INDEX _kovo_replay_committed_expiry_idx;',
         "ALTER TABLE _kovo_replay ADD CONSTRAINT _kovo_replay_surface_check CHECK (surface IN ('capability', 'mutation', 'webhook', 'attacker'));",
         'ALTER TABLE _kovo_replay ADD CONSTRAINT _kovo_replay_expires_at_check CHECK (expires_at IS NULL OR expires_at >= 0);',
-        'ALTER TABLE _kovo_replay ADD CONSTRAINT _kovo_replay_capability_expiry_check CHECK (expires_at IS NULL OR expires_at IS NOT NULL);',
-        "CREATE INDEX _kovo_replay_capability_expiry_idx ON _kovo_replay (created_at) WHERE surface = 'capability';",
+        'ALTER TABLE _kovo_replay ADD CONSTRAINT _kovo_replay_surface_state_expiry_check CHECK (expires_at IS NULL OR expires_at IS NOT NULL);',
+        "CREATE INDEX _kovo_replay_committed_expiry_idx ON _kovo_replay (created_at) WHERE state = 'committed';",
       ].join(' '),
     );
     await weakened.close();
@@ -343,12 +345,12 @@ describe('createPostgresAppRuntimeDb', () => {
     await wrongType.exec(
       [
         'ALTER TABLE _kovo_replay DROP CONSTRAINT _kovo_replay_expires_at_check;',
-        'ALTER TABLE _kovo_replay DROP CONSTRAINT _kovo_replay_capability_expiry_check;',
-        'DROP INDEX _kovo_replay_capability_expiry_idx;',
+        'ALTER TABLE _kovo_replay DROP CONSTRAINT _kovo_replay_surface_state_expiry_check;',
+        'DROP INDEX _kovo_replay_committed_expiry_idx;',
         'ALTER TABLE _kovo_replay ALTER COLUMN expires_at TYPE text USING expires_at::text;',
         "ALTER TABLE _kovo_replay ADD CONSTRAINT _kovo_replay_expires_at_check CHECK (expires_at IS NULL OR expires_at <> '');",
-        'ALTER TABLE _kovo_replay ADD CONSTRAINT _kovo_replay_capability_expiry_check CHECK (expires_at IS NULL OR expires_at IS NOT NULL);',
-        "CREATE INDEX _kovo_replay_capability_expiry_idx ON _kovo_replay (expires_at) WHERE surface = 'capability';",
+        'ALTER TABLE _kovo_replay ADD CONSTRAINT _kovo_replay_surface_state_expiry_check CHECK (expires_at IS NULL OR expires_at IS NOT NULL);',
+        "CREATE INDEX _kovo_replay_committed_expiry_idx ON _kovo_replay (surface, expires_at) WHERE state = 'committed';",
       ].join(' '),
     );
     await wrongType.close();
@@ -363,6 +365,83 @@ describe('createPostgresAppRuntimeDb', () => {
     );
   });
 
+  it('reports and rejects legacy mutation truth without authenticated expiry', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-replay-cutover-'));
+    roots.push(dataDir);
+    const initial = createPostgresAppRuntimeDb({ dataDir, driver: 'pglite', schema });
+    await initial.ready;
+    const idem = mintMutationIdemToken();
+    const reservation = await initial.mutationReplayStore.reserve('legacy', idem, 'fingerprint');
+    expect(reservation).toBeDefined();
+    await reservation?.commit({
+      body: replayMutationWireBody('', { reason: 'Postgres legacy-cutover posture fixture' }),
+      headers: {},
+      status: 200,
+    });
+    await initial.close();
+
+    const legacy = new PGlite(dataDir);
+    await legacy.exec(
+      [
+        'ALTER TABLE _kovo_replay DROP CONSTRAINT _kovo_replay_surface_state_expiry_check;',
+        "UPDATE _kovo_replay SET expires_at = NULL WHERE surface = 'mutation'",
+      ].join(' '),
+    );
+    await legacy.close();
+
+    await expect(
+      checkPostgresAppDbPosture({ dataDir, driver: 'pglite', schema }),
+    ).resolves.toMatchObject({
+      ok: false,
+      issues: expect.arrayContaining([
+        expect.objectContaining({ code: 'KV433_REPLAY_STORE_CUTOVER' }),
+      ]),
+    });
+
+    const rejected = createPostgresAppRuntimeDb({ dataDir, driver: 'pglite', schema });
+    try {
+      await expect(rejected.ready).rejects.toThrow(
+        /KV433_REPLAY_STORE_CUTOVER[\s\S]*operator cutover/u,
+      );
+    } finally {
+      await rejected.close();
+    }
+  });
+
+  it('fails posture and repairs a weakened or incomplete replay rollback watermark', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-replay-watermark-'));
+    roots.push(dataDir);
+    const initial = createPostgresAppRuntimeDb({ dataDir, driver: 'pglite', schema });
+    await initial.ready;
+    await initial.close();
+
+    const weakened = new PGlite(dataDir);
+    await weakened.exec(
+      [
+        'ALTER TABLE _kovo_replay_reclaimed DROP CONSTRAINT _kovo_replay_reclaimed_value_check;',
+        'ALTER TABLE _kovo_replay_reclaimed ADD CONSTRAINT _kovo_replay_reclaimed_value_check CHECK (reclaimed_through >= -1);',
+        "DELETE FROM _kovo_replay_reclaimed WHERE surface = 'webhook'",
+      ].join(' '),
+    );
+    await weakened.close();
+
+    await expect(
+      checkPostgresAppDbPosture({ dataDir, driver: 'pglite', schema }),
+    ).resolves.toMatchObject({
+      ok: false,
+      issues: expect.arrayContaining([
+        expect.objectContaining({ code: 'KV433_REPLAY_STORE_SCHEMA' }),
+      ]),
+    });
+
+    const repaired = createPostgresAppRuntimeDb({ dataDir, driver: 'pglite', schema });
+    await repaired.ready;
+    await repaired.close();
+    await expect(
+      checkPostgresAppDbPosture({ dataDir, driver: 'pglite', schema }),
+    ).resolves.toMatchObject({ ok: true, issues: [] });
+  });
+
   it('fails posture when durable replay admission or response-storage bounds are weakened', async () => {
     const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-replay-capacity-'));
     roots.push(dataDir);
@@ -374,11 +453,15 @@ describe('createPostgresAppRuntimeDb', () => {
     await weakened.exec(
       [
         'ALTER TABLE _kovo_replay DROP CONSTRAINT _kovo_replay_admission_slot_check;',
+        'ALTER TABLE _kovo_replay DROP CONSTRAINT _kovo_replay_state_response_check;',
         'ALTER TABLE _kovo_replay DROP CONSTRAINT _kovo_replay_response_size_check;',
         'DROP INDEX _kovo_replay_admission_slot_idx;',
+        'DROP INDEX _kovo_replay_committed_expiry_idx;',
         "ALTER TABLE _kovo_replay ADD CONSTRAINT _kovo_replay_admission_slot_check CHECK (surface = 'capability' OR admission_slot > 0);",
+        'ALTER TABLE _kovo_replay ADD CONSTRAINT _kovo_replay_state_response_check CHECK (state IS NOT NULL);',
         'ALTER TABLE _kovo_replay ADD CONSTRAINT _kovo_replay_response_size_check CHECK (response_body IS NULL OR response_body IS NOT NULL);',
-        "CREATE INDEX _kovo_replay_admission_slot_idx ON _kovo_replay (surface) WHERE surface IN ('mutation', 'webhook');",
+        "CREATE UNIQUE INDEX _kovo_replay_admission_slot_idx ON _kovo_replay (surface, admission_slot) WHERE surface IN ('mutation', 'webhook');",
+        "CREATE INDEX _kovo_replay_committed_expiry_idx ON _kovo_replay (surface, expires_at) WHERE surface = 'capability';",
       ].join(' '),
     );
     await weakened.close();
@@ -422,14 +505,15 @@ describe('createPostgresAppRuntimeDb', () => {
 
     const repaired = createPostgresAppRuntimeDb({ dataDir, driver: 'pglite', schema });
     await repaired.ready;
+    const idem = mintMutationIdemToken();
     const owner = await repaired.mutationReplayStore.reserve(
       'session:save',
-      'same-idem',
+      idem,
       'same-fingerprint',
     );
     const duplicate = await repaired.mutationReplayStore.reserve(
       'session:save',
-      'same-idem',
+      idem,
       'same-fingerprint',
     );
     expect(owner).toBeDefined();
@@ -454,9 +538,9 @@ describe('createPostgresAppRuntimeDb', () => {
       [
         'ALTER TABLE _kovo_replay DROP CONSTRAINT _kovo_replay_pkey;',
         'INSERT INTO _kovo_replay ',
-        '(surface, scope, idem, fingerprint, generation, state, admission_slot) VALUES ',
-        "('mutation', 'same-scope', 'same-idem', NULL, 'generation-1', 'pending', 1),",
-        "('mutation', 'same-scope', 'same-idem', NULL, 'generation-2', 'pending', 2)",
+        '(surface, scope, idem, fingerprint, generation, state, admission_slot, expires_at) VALUES ',
+        "('mutation', 'same-scope', 'same-idem', NULL, 'generation-1', 'pending', 1, 9999999999999),",
+        "('mutation', 'same-scope', 'same-idem', NULL, 'generation-2', 'pending', 2, 9999999999999)",
       ].join(' '),
     );
     await weakened.close();
@@ -485,7 +569,10 @@ describe('createPostgresAppRuntimeDb', () => {
         'GRANT UPDATE (state, response_body, response_headers, response_status, committed_at) ',
         'ON _kovo_replay TO kovo_writer;',
         'GRANT TRUNCATE ON _kovo_replay TO kovo_writer;',
-        'GRANT TRIGGER ON _kovo_replay TO kovo_system',
+        'GRANT TRIGGER ON _kovo_replay TO kovo_system;',
+        'GRANT SELECT (reclaimed_through) ON _kovo_replay_reclaimed TO kovo_writer;',
+        'GRANT INSERT (surface, reclaimed_through) ON _kovo_replay_reclaimed TO kovo_writer;',
+        'GRANT DELETE ON _kovo_replay_reclaimed TO kovo_system',
       ].join(' '),
     );
     await weakened.close();

@@ -63,6 +63,7 @@ import {
   POSTGRES_REPLAY_MAX_RESPONSE_BODY_STORAGE_BYTES,
   POSTGRES_REPLAY_MAX_RESPONSE_HEADER_BYTES,
   POSTGRES_REPLAY_TABLE,
+  POSTGRES_REPLAY_WATERMARK_TABLE,
   releasePostgresPendingReplayFromExecutor,
   type PostgresPendingReplayReleaseOptions,
   type PostgresPendingReplayTarget,
@@ -88,7 +89,7 @@ import {
   securityStringTrim,
 } from './response-security-intrinsics.js';
 import { createSecretBoxingReadDb } from './secret-read-boundary.js';
-import type { WebhookReplayStore } from './webhook.js';
+import { WEBHOOK_REPLAY_HORIZON_MS, type WebhookReplayStore } from './webhook.js';
 import {
   createWitnessMap,
   createWitnessSet,
@@ -160,6 +161,7 @@ const POSTGRES_APP_RUNTIME_OPTION_KEYS = postgresStringSet([
 const FRAMEWORK_INTERNAL_REACHABLE_TABLES = postgresStringSet([
   '_kovo_jobs',
   POSTGRES_REPLAY_TABLE,
+  POSTGRES_REPLAY_WATERMARK_TABLE,
   '_kovo_task_cron_occurrences',
   SCHEMA_STATE_TABLE,
 ]);
@@ -2953,10 +2955,11 @@ async function provisionPostgresFrameworkReplayStore(
         'response_status integer,',
         'admission_slot integer,',
         'expires_at bigint,',
+        'occurred_at bigint,',
         'created_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,',
         'committed_at timestamptz,',
         'PRIMARY KEY (surface, scope, idem),',
-        'CHECK (',
+        `CONSTRAINT ${quoteIdent(`${POSTGRES_REPLAY_TABLE}_state_response_check`)} CHECK (`,
         "(state = 'pending' AND response_body IS NULL AND response_headers IS NULL AND response_status IS NULL AND committed_at IS NULL)",
         'OR',
         "(state = 'committed' AND response_body IS NOT NULL AND response_headers IS NOT NULL AND response_status IS NOT NULL AND committed_at IS NOT NULL)",
@@ -2967,18 +2970,45 @@ async function provisionPostgresFrameworkReplayStore(
     ),
   );
   await client.exec(`ALTER TABLE ${table} ADD COLUMN IF NOT EXISTS expires_at bigint`);
+  await client.exec(`ALTER TABLE ${table} ADD COLUMN IF NOT EXISTS occurred_at bigint`);
   await client.exec(`ALTER TABLE ${table} ADD COLUMN IF NOT EXISTS admission_slot integer`);
+  // SPEC §10.3: pre-horizon mutation/webhook rows carry no authenticated expiry. Inferring one
+  // from created_at, committed_at, or current time would either delete durable execution truth too
+  // early or extend a replay key beyond the signed identity. Empty legacy tables migrate; non-empty
+  // timeless surfaces require an explicit operator cutover instead of silent truth fabrication.
+  const timelessResult = await client.query<{ timeless_rows: string }>(
+    `SELECT COUNT(*)::text AS timeless_rows FROM ${table} ` +
+      "WHERE surface IN ('mutation', 'webhook') AND expires_at IS NULL",
+  );
+  const timelessRow =
+    postgresDenseArrayLength(timelessResult.rows, 'Postgres replay timeless-row preflight') === 0
+      ? undefined
+      : postgresDenseArrayValue(timelessResult.rows, 0, 'Postgres replay timeless-row preflight');
+  const timelessCount =
+    timelessRow === undefined ? undefined : postgresOwnDataValue(timelessRow, 'timeless_rows');
+  if (timelessCount !== '0') {
+    throw new Error(
+      'KV433_REPLAY_STORE_CUTOVER: public._kovo_replay contains legacy mutation/webhook truth without authenticated expires_at; preserve or reconcile those rows, then perform an explicit operator cutover before provisioning the replay horizon schema.',
+    );
+  }
   const identityConstraint = quoteIdent(`${POSTGRES_REPLAY_TABLE}_pkey`);
   await client.exec(`ALTER TABLE ${table} DROP CONSTRAINT IF EXISTS ${identityConstraint}`);
   await client.exec(
     `ALTER TABLE ${table} ADD CONSTRAINT ${identityConstraint} ` +
       'PRIMARY KEY (surface, scope, idem)',
   );
+  const admissionConstraint = quoteIdent(`${POSTGRES_REPLAY_TABLE}_admission_slot_check`);
+  await client.exec(`ALTER TABLE ${table} DROP CONSTRAINT IF EXISTS ${admissionConstraint}`);
+  await client.exec(
+    `UPDATE ${table} SET admission_slot = NULL ` +
+      "WHERE state = 'committed' AND admission_slot IS NOT NULL",
+  );
   await client.exec(
     `WITH ranked AS (` +
       `SELECT ctid, ROW_NUMBER() OVER (` +
       `PARTITION BY surface ORDER BY created_at, scope, idem)::integer AS admission_slot ` +
-      `FROM ${table} WHERE surface IN ('mutation', 'webhook') AND admission_slot IS NULL` +
+      `FROM ${table} WHERE surface IN ('mutation', 'webhook') ` +
+      "AND state = 'pending' AND admission_slot IS NULL" +
       `) UPDATE ${table} AS replay_row SET admission_slot = ranked.admission_slot ` +
       `FROM ranked WHERE replay_row.ctid = ranked.ctid`,
   );
@@ -2994,19 +3024,31 @@ async function provisionPostgresFrameworkReplayStore(
     `ALTER TABLE ${table} ADD CONSTRAINT ${expiryConstraint} ` +
       'CHECK (expires_at IS NULL OR expires_at > 0)',
   );
-  const capabilityConstraint = quoteIdent(`${POSTGRES_REPLAY_TABLE}_capability_expiry_check`);
-  await client.exec(`ALTER TABLE ${table} DROP CONSTRAINT IF EXISTS ${capabilityConstraint}`);
+  const legacyCapabilityConstraint = quoteIdent(`${POSTGRES_REPLAY_TABLE}_capability_expiry_check`);
+  await client.exec(`ALTER TABLE ${table} DROP CONSTRAINT IF EXISTS ${legacyCapabilityConstraint}`);
+  const surfaceStateConstraint = quoteIdent(`${POSTGRES_REPLAY_TABLE}_surface_state_expiry_check`);
+  await client.exec(`ALTER TABLE ${table} DROP CONSTRAINT IF EXISTS ${surfaceStateConstraint}`);
   await client.exec(
-    `ALTER TABLE ${table} ADD CONSTRAINT ${capabilityConstraint} CHECK (` +
-      "(surface = 'capability' AND state = 'committed' AND expires_at IS NOT NULL) OR " +
-      "(surface IN ('mutation', 'webhook') AND expires_at IS NULL))",
+    `ALTER TABLE ${table} ADD CONSTRAINT ${surfaceStateConstraint} CHECK (` +
+      "(surface = 'capability' AND state = 'committed' AND expires_at IS NOT NULL AND occurred_at IS NULL) OR " +
+      "(surface = 'mutation' AND expires_at IS NOT NULL AND occurred_at IS NULL) OR " +
+      `(surface = 'webhook' AND expires_at IS NOT NULL AND occurred_at IS NOT NULL ` +
+      `AND expires_at = occurred_at + ${WEBHOOK_REPLAY_HORIZON_MS}))`,
   );
-  const admissionConstraint = quoteIdent(`${POSTGRES_REPLAY_TABLE}_admission_slot_check`);
-  await client.exec(`ALTER TABLE ${table} DROP CONSTRAINT IF EXISTS ${admissionConstraint}`);
   await client.exec(
     `ALTER TABLE ${table} ADD CONSTRAINT ${admissionConstraint} CHECK (` +
-      "(surface = 'capability' AND admission_slot IS NULL) OR " +
-      `(surface IN ('mutation', 'webhook') AND admission_slot BETWEEN 1 AND ${POSTGRES_REPLAY_MAX_ENTRIES}))`,
+      "(state = 'committed' AND admission_slot IS NULL) OR " +
+      `(state = 'pending' AND surface IN ('mutation', 'webhook') AND ` +
+      `admission_slot BETWEEN 1 AND ${POSTGRES_REPLAY_MAX_ENTRIES}))`,
+  );
+  const stateResponseConstraint = quoteIdent(`${POSTGRES_REPLAY_TABLE}_state_response_check`);
+  await client.exec(`ALTER TABLE ${table} DROP CONSTRAINT IF EXISTS ${stateResponseConstraint}`);
+  await client.exec(
+    `ALTER TABLE ${table} ADD CONSTRAINT ${stateResponseConstraint} CHECK (` +
+      "(state = 'pending' AND response_body IS NULL AND response_headers IS NULL " +
+      'AND response_status IS NULL AND committed_at IS NULL) OR ' +
+      "(state = 'committed' AND response_body IS NOT NULL AND response_headers IS NOT NULL " +
+      'AND response_status IS NOT NULL AND committed_at IS NOT NULL))',
   );
   const responseSizeConstraint = quoteIdent(`${POSTGRES_REPLAY_TABLE}_response_size_check`);
   await client.exec(`ALTER TABLE ${table} DROP CONSTRAINT IF EXISTS ${responseSizeConstraint}`);
@@ -3022,8 +3064,14 @@ async function provisionPostgresFrameworkReplayStore(
     )}`,
   );
   await client.exec(
-    `CREATE INDEX ${quoteIdent(`${POSTGRES_REPLAY_TABLE}_capability_expiry_idx`)} ` +
-      `ON ${table} (expires_at) WHERE surface = 'capability'`,
+    `DROP INDEX IF EXISTS ${quoteQualified(
+      'public',
+      `${POSTGRES_REPLAY_TABLE}_committed_expiry_idx`,
+    )}`,
+  );
+  await client.exec(
+    `CREATE INDEX ${quoteIdent(`${POSTGRES_REPLAY_TABLE}_committed_expiry_idx`)} ` +
+      `ON ${table} (surface, expires_at) WHERE state = 'committed'`,
   );
   await client.exec(
     `DROP INDEX IF EXISTS ${quoteQualified(
@@ -3033,9 +3081,57 @@ async function provisionPostgresFrameworkReplayStore(
   );
   await client.exec(
     `CREATE UNIQUE INDEX ${quoteIdent(`${POSTGRES_REPLAY_TABLE}_admission_slot_idx`)} ` +
-      `ON ${table} (surface, admission_slot) WHERE surface IN ('mutation', 'webhook')`,
+      `ON ${table} (surface, admission_slot) ` +
+      `WHERE surface IN ('mutation', 'webhook') AND state = 'pending'`,
+  );
+  const watermarkTable = quoteQualified('public', POSTGRES_REPLAY_WATERMARK_TABLE);
+  const watermarkIdentityConstraint = quoteIdent(`${POSTGRES_REPLAY_WATERMARK_TABLE}_pkey`);
+  const watermarkSurfaceConstraint = quoteIdent(`${POSTGRES_REPLAY_WATERMARK_TABLE}_surface_check`);
+  const watermarkValueConstraint = quoteIdent(`${POSTGRES_REPLAY_WATERMARK_TABLE}_value_check`);
+  await client.exec(
+    postgresJoin(
+      [
+        `CREATE TABLE IF NOT EXISTS ${watermarkTable} (`,
+        'surface text NOT NULL,',
+        'reclaimed_through bigint NOT NULL DEFAULT 0,',
+        `CONSTRAINT ${watermarkIdentityConstraint} PRIMARY KEY (surface),`,
+        `CONSTRAINT ${watermarkSurfaceConstraint} CHECK (` +
+          "surface IN ('capability', 'mutation', 'webhook')),",
+        `CONSTRAINT ${watermarkValueConstraint} CHECK (reclaimed_through >= 0))`,
+      ],
+      ' ',
+    ),
+  );
+  await client.exec(
+    `ALTER TABLE ${watermarkTable} DROP CONSTRAINT IF EXISTS ${watermarkIdentityConstraint}`,
+  );
+  await client.exec(
+    `ALTER TABLE ${watermarkTable} ADD CONSTRAINT ${watermarkIdentityConstraint} ` +
+      'PRIMARY KEY (surface)',
+  );
+  await client.exec(
+    `ALTER TABLE ${watermarkTable} DROP CONSTRAINT IF EXISTS ${watermarkSurfaceConstraint}`,
+  );
+  await client.exec(
+    `ALTER TABLE ${watermarkTable} ADD CONSTRAINT ${watermarkSurfaceConstraint} ` +
+      "CHECK (surface IN ('capability', 'mutation', 'webhook'))",
+  );
+  await client.exec(
+    `ALTER TABLE ${watermarkTable} DROP CONSTRAINT IF EXISTS ${watermarkValueConstraint}`,
+  );
+  await client.exec(
+    `ALTER TABLE ${watermarkTable} ADD CONSTRAINT ${watermarkValueConstraint} ` +
+      'CHECK (reclaimed_through >= 0)',
+  );
+  await client.exec(
+    `INSERT INTO ${watermarkTable} AS watermark (surface, reclaimed_through) ` +
+      `SELECT canonical.surface, FLOOR(EXTRACT(EPOCH FROM CURRENT_TIMESTAMP) * 1000)::bigint ` +
+      `FROM (VALUES ('capability'), ('mutation'), ('webhook')) AS canonical(surface) ` +
+      `ON CONFLICT (surface) DO UPDATE SET reclaimed_through = GREATEST(` +
+      `watermark.reclaimed_through, EXCLUDED.reclaimed_through)`,
   );
   await client.exec(`REVOKE ALL ON TABLE ${table} FROM PUBLIC`);
+  await client.exec(`REVOKE ALL ON TABLE ${watermarkTable} FROM PUBLIC`);
   const deniedRoles = [config.readerRole, config.writerRole, config.adminRole, config.systemRole];
   if (runtimeLoginRole !== undefined) appendPostgresDenseValue(deniedRoles, runtimeLoginRole);
   const seen = createWitnessSet<string>();
@@ -3044,9 +3140,13 @@ async function provisionPostgresFrameworkReplayStore(
     if (witnessSetHas(seen, role)) continue;
     witnessSetAdd(seen, role);
     await client.exec(`REVOKE ALL ON TABLE ${table} FROM ${quoteIdent(role)}`);
+    await client.exec(`REVOKE ALL ON TABLE ${watermarkTable} FROM ${quoteIdent(role)}`);
   }
   await client.exec(
     `GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE ${table} TO ${quoteIdent(config.systemRole)}`,
+  );
+  await client.exec(
+    `GRANT SELECT, UPDATE ON TABLE ${watermarkTable} TO ${quoteIdent(config.systemRole)}`,
   );
 }
 
@@ -3062,33 +3162,57 @@ interface PostgresReplayPrivilegeRow {
   can_trigger: boolean;
   can_truncate: boolean;
   can_update: boolean;
+  watermark_can_any_column_insert: boolean;
+  watermark_can_any_column_references: boolean;
+  watermark_can_any_column_select: boolean;
+  watermark_can_any_column_update: boolean;
+  watermark_can_delete: boolean;
+  watermark_can_insert: boolean;
+  watermark_can_references: boolean;
+  watermark_can_select: boolean;
+  watermark_can_trigger: boolean;
+  watermark_can_truncate: boolean;
+  watermark_can_update: boolean;
 }
 
 interface PostgresReplayShapeRow {
   exact_admission_constraint: boolean;
   exact_admission_index: boolean;
   exact_admission_column: boolean;
-  exact_capability_constraint: boolean;
+  exact_committed_expiry_index: boolean;
   exact_expiry_constraint: boolean;
-  exact_expiry_index: boolean;
   exact_expiry_column: boolean;
   exact_identity_constraint: boolean;
+  exact_occurrence_column: boolean;
   exact_response_constraint: boolean;
+  exact_state_response_constraint: boolean;
   exact_surface_constraint: boolean;
+  exact_surface_state_constraint: boolean;
+}
+
+interface PostgresReplayWatermarkShapeRow {
+  exact_identity_constraint: boolean;
+  exact_rows: boolean;
+  exact_surface_column: boolean;
+  exact_surface_constraint: boolean;
+  exact_value_column: boolean;
+  exact_value_constraint: boolean;
 }
 
 const POSTGRES_REPLAY_SURFACE_CONSTRAINT =
   "CHECK ((surface = ANY (ARRAY['capability'::text, 'mutation'::text, 'webhook'::text])))";
 const POSTGRES_REPLAY_EXPIRY_CONSTRAINT = 'CHECK (((expires_at IS NULL) OR (expires_at > 0)))';
-const POSTGRES_REPLAY_CAPABILITY_CONSTRAINT =
-  "CHECK ((((surface = 'capability'::text) AND (state = 'committed'::text) AND (expires_at IS NOT NULL)) OR ((surface = ANY (ARRAY['mutation'::text, 'webhook'::text])) AND (expires_at IS NULL))))";
+const POSTGRES_REPLAY_SURFACE_STATE_CONSTRAINT = `CHECK ((((surface = 'capability'::text) AND (state = 'committed'::text) AND (expires_at IS NOT NULL) AND (occurred_at IS NULL)) OR ((surface = 'mutation'::text) AND (expires_at IS NOT NULL) AND (occurred_at IS NULL)) OR ((surface = 'webhook'::text) AND (expires_at IS NOT NULL) AND (occurred_at IS NOT NULL) AND (expires_at = (occurred_at + '${WEBHOOK_REPLAY_HORIZON_MS}'::bigint)))))`;
 const POSTGRES_REPLAY_ADMISSION_CONSTRAINT =
-  "CHECK ((((surface = 'capability'::text) AND (admission_slot IS NULL)) OR ((surface = ANY (ARRAY['mutation'::text, 'webhook'::text])) AND ((admission_slot >= 1) AND (admission_slot <= 1000)))))";
+  "CHECK ((((state = 'committed'::text) AND (admission_slot IS NULL)) OR ((state = 'pending'::text) AND (surface = ANY (ARRAY['mutation'::text, 'webhook'::text])) AND ((admission_slot >= 1) AND (admission_slot <= 1000)))))";
+const POSTGRES_REPLAY_STATE_RESPONSE_CONSTRAINT =
+  "CHECK ((((state = 'pending'::text) AND (response_body IS NULL) AND (response_headers IS NULL) AND (response_status IS NULL) AND (committed_at IS NULL)) OR ((state = 'committed'::text) AND (response_body IS NOT NULL) AND (response_headers IS NOT NULL) AND (response_status IS NOT NULL) AND (committed_at IS NOT NULL))))";
 const POSTGRES_REPLAY_RESPONSE_CONSTRAINT =
   'CHECK ((((response_body IS NULL) OR (octet_length(response_body) <= 1398104)) AND ((response_headers IS NULL) OR (octet_length(response_headers) <= 65536))))';
-const POSTGRES_REPLAY_CAPABILITY_INDEX_PREDICATE = "(surface = 'capability'::text)";
+const POSTGRES_REPLAY_COMMITTED_INDEX_PREDICATE = "(state = 'committed'::text)";
 const POSTGRES_REPLAY_ADMISSION_INDEX_PREDICATE =
-  "(surface = ANY (ARRAY['mutation'::text, 'webhook'::text]))";
+  "((surface = ANY (ARRAY['mutation'::text, 'webhook'::text])) AND (state = 'pending'::text))";
+const POSTGRES_REPLAY_WATERMARK_VALUE_CONSTRAINT = 'CHECK ((reclaimed_through >= 0))';
 
 async function postgresReplayStorePostureIssues(
   client: RuntimeTransactionClient,
@@ -3115,6 +3239,38 @@ async function postgresReplayStorePostureIssues(
   }
 
   const issues: KovoPostgresPostureIssue[] = [];
+  const watermarkRelation = await safeQuery<{ exists: boolean }>(
+    client,
+    "SELECT to_regclass('public._kovo_replay_reclaimed') IS NOT NULL AS exists",
+  );
+  const watermarkRelationRow =
+    watermarkRelation === undefined ||
+    postgresDenseArrayLength(watermarkRelation.rows, 'Postgres replay watermark relation') === 0
+      ? undefined
+      : postgresDenseArrayValue(watermarkRelation.rows, 0, 'Postgres replay watermark relation');
+  if (watermarkRelationRow?.exists !== true) {
+    appendPostgresDenseValue(issues, {
+      code: 'KV433_REPLAY_STORE_SCHEMA',
+      detail:
+        'public._kovo_replay_reclaimed is missing; provision the durable replay rollback watermark before boot',
+    });
+  }
+  const timeless = await safeQuery<{ timeless_rows: boolean }>(
+    client,
+    "SELECT EXISTS (SELECT 1 FROM public._kovo_replay WHERE surface IN ('mutation', 'webhook') AND expires_at IS NULL) AS timeless_rows",
+  );
+  const timelessRow =
+    timeless === undefined ||
+    postgresDenseArrayLength(timeless.rows, 'Postgres replay timeless posture rows') === 0
+      ? undefined
+      : postgresDenseArrayValue(timeless.rows, 0, 'Postgres replay timeless posture rows');
+  if (timelessRow?.timeless_rows === true) {
+    appendPostgresDenseValue(issues, {
+      code: 'KV433_REPLAY_STORE_CUTOVER',
+      detail:
+        'public._kovo_replay contains legacy mutation/webhook truth without authenticated expires_at; reconcile and explicitly cut over those rows before enabling bounded replay cleanup',
+    });
+  }
   const shape = await safeQuery<PostgresReplayShapeRow>(
     client,
     postgresJoin(
@@ -3126,6 +3282,13 @@ async function postgresReplayStorePostureIssues(
         "AND column_row.attname = 'expires_at' AND column_row.attnum > 0",
         'AND NOT column_row.attisdropped AND NOT column_row.attnotnull',
         "AND format_type(column_row.atttypid, column_row.atttypmod) = 'bigint') AS exact_expiry_column,",
+        'EXISTS (SELECT 1 FROM pg_attribute AS column_row',
+        'JOIN pg_class AS relation_row ON relation_row.oid = column_row.attrelid',
+        'JOIN pg_namespace AS namespace_row ON namespace_row.oid = relation_row.relnamespace',
+        "WHERE namespace_row.nspname = 'public' AND relation_row.relname = '_kovo_replay'",
+        "AND column_row.attname = 'occurred_at' AND column_row.attnum > 0",
+        'AND NOT column_row.attisdropped AND NOT column_row.attnotnull',
+        "AND format_type(column_row.atttypid, column_row.atttypmod) = 'bigint') AS exact_occurrence_column,",
         'EXISTS (SELECT 1 FROM pg_attribute AS column_row',
         'JOIN pg_class AS relation_row ON relation_row.oid = column_row.attrelid',
         'JOIN pg_namespace AS namespace_row ON namespace_row.oid = relation_row.relnamespace',
@@ -3171,8 +3334,8 @@ async function postgresReplayStorePostureIssues(
         "WHERE namespace_row.nspname = 'public' AND relation_row.relname = '_kovo_replay'",
         "AND constraint_row.contype = 'c' AND constraint_row.convalidated",
         'AND NOT constraint_row.condeferrable AND NOT constraint_row.condeferred',
-        "AND constraint_row.conname = '_kovo_replay_capability_expiry_check'",
-        'AND pg_get_constraintdef(constraint_row.oid) = $3) AS exact_capability_constraint,',
+        "AND constraint_row.conname = '_kovo_replay_surface_state_expiry_check'",
+        'AND pg_get_constraintdef(constraint_row.oid) = $3) AS exact_surface_state_constraint,',
         'EXISTS (SELECT 1 FROM pg_constraint AS constraint_row',
         'JOIN pg_class AS relation_row ON relation_row.oid = constraint_row.conrelid',
         'JOIN pg_namespace AS namespace_row ON namespace_row.oid = relation_row.relnamespace',
@@ -3187,22 +3350,33 @@ async function postgresReplayStorePostureIssues(
         "WHERE namespace_row.nspname = 'public' AND relation_row.relname = '_kovo_replay'",
         "AND constraint_row.contype = 'c' AND constraint_row.convalidated",
         'AND NOT constraint_row.condeferrable AND NOT constraint_row.condeferred',
+        "AND constraint_row.conname = '_kovo_replay_state_response_check'",
+        'AND pg_get_constraintdef(constraint_row.oid) = $5) AS exact_state_response_constraint,',
+        'EXISTS (SELECT 1 FROM pg_constraint AS constraint_row',
+        'JOIN pg_class AS relation_row ON relation_row.oid = constraint_row.conrelid',
+        'JOIN pg_namespace AS namespace_row ON namespace_row.oid = relation_row.relnamespace',
+        "WHERE namespace_row.nspname = 'public' AND relation_row.relname = '_kovo_replay'",
+        "AND constraint_row.contype = 'c' AND constraint_row.convalidated",
+        'AND NOT constraint_row.condeferrable AND NOT constraint_row.condeferred',
         "AND constraint_row.conname = '_kovo_replay_response_size_check'",
-        'AND pg_get_constraintdef(constraint_row.oid) = $5) AS exact_response_constraint,',
+        'AND pg_get_constraintdef(constraint_row.oid) = $6) AS exact_response_constraint,',
         'EXISTS (SELECT 1 FROM pg_index AS index_row',
         'JOIN pg_class AS index_relation ON index_relation.oid = index_row.indexrelid',
         'JOIN pg_class AS table_relation ON table_relation.oid = index_row.indrelid',
         'JOIN pg_namespace AS namespace_row ON namespace_row.oid = table_relation.relnamespace',
         'JOIN pg_am AS access_method ON access_method.oid = index_relation.relam',
-        'JOIN pg_attribute AS indexed_column ON indexed_column.attrelid = table_relation.oid',
-        'AND indexed_column.attnum = index_row.indkey[0]',
+        'JOIN pg_attribute AS surface_column ON surface_column.attrelid = table_relation.oid',
+        'AND surface_column.attnum = index_row.indkey[0]',
+        'JOIN pg_attribute AS expiry_column ON expiry_column.attrelid = table_relation.oid',
+        'AND expiry_column.attnum = index_row.indkey[1]',
         "WHERE namespace_row.nspname = 'public' AND table_relation.relname = '_kovo_replay'",
-        "AND index_relation.relname = '_kovo_replay_capability_expiry_idx'",
-        "AND access_method.amname = 'btree' AND indexed_column.attname = 'expires_at'",
-        'AND index_row.indnatts = 1 AND index_row.indnkeyatts = 1',
+        "AND index_relation.relname = '_kovo_replay_committed_expiry_idx'",
+        "AND access_method.amname = 'btree' AND surface_column.attname = 'surface'",
+        "AND expiry_column.attname = 'expires_at'",
+        'AND index_row.indnatts = 2 AND index_row.indnkeyatts = 2',
         'AND index_row.indexprs IS NULL AND NOT index_row.indisunique',
         'AND index_row.indisvalid AND index_row.indisready AND index_row.indislive',
-        'AND pg_get_expr(index_row.indpred, index_row.indrelid) = $6) AS exact_expiry_index,',
+        'AND pg_get_expr(index_row.indpred, index_row.indrelid) = $7) AS exact_committed_expiry_index,',
         'EXISTS (SELECT 1 FROM pg_index AS index_row',
         'JOIN pg_class AS index_relation ON index_relation.oid = index_row.indexrelid',
         'JOIN pg_class AS table_relation ON table_relation.oid = index_row.indrelid',
@@ -3219,17 +3393,18 @@ async function postgresReplayStorePostureIssues(
         'AND index_row.indnatts = 2 AND index_row.indnkeyatts = 2',
         'AND index_row.indexprs IS NULL AND index_row.indisunique',
         'AND index_row.indisvalid AND index_row.indisready AND index_row.indislive',
-        'AND pg_get_expr(index_row.indpred, index_row.indrelid) = $7) AS exact_admission_index',
+        'AND pg_get_expr(index_row.indpred, index_row.indrelid) = $8) AS exact_admission_index',
       ],
       ' ',
     ),
     [
       POSTGRES_REPLAY_SURFACE_CONSTRAINT,
       POSTGRES_REPLAY_EXPIRY_CONSTRAINT,
-      POSTGRES_REPLAY_CAPABILITY_CONSTRAINT,
+      POSTGRES_REPLAY_SURFACE_STATE_CONSTRAINT,
       POSTGRES_REPLAY_ADMISSION_CONSTRAINT,
+      POSTGRES_REPLAY_STATE_RESPONSE_CONSTRAINT,
       POSTGRES_REPLAY_RESPONSE_CONSTRAINT,
-      POSTGRES_REPLAY_CAPABILITY_INDEX_PREDICATE,
+      POSTGRES_REPLAY_COMMITTED_INDEX_PREDICATE,
       POSTGRES_REPLAY_ADMISSION_INDEX_PREDICATE,
     ],
   );
@@ -3243,16 +3418,89 @@ async function postgresReplayStorePostureIssues(
     shapeRow.exact_admission_index !== true ||
     shapeRow.exact_identity_constraint !== true ||
     shapeRow.exact_response_constraint !== true ||
+    shapeRow.exact_state_response_constraint !== true ||
     shapeRow.exact_expiry_column !== true ||
+    shapeRow.exact_occurrence_column !== true ||
     shapeRow.exact_surface_constraint !== true ||
     shapeRow.exact_expiry_constraint !== true ||
-    shapeRow.exact_capability_constraint !== true ||
-    shapeRow.exact_expiry_index !== true
+    shapeRow.exact_surface_state_constraint !== true ||
+    shapeRow.exact_committed_expiry_index !== true
   ) {
     appendPostgresDenseValue(issues, {
       code: 'KV433_REPLAY_STORE_SCHEMA',
       detail:
         'public._kovo_replay must have the exact replay-identity primary key, expiry/admission columns, capability/mutation/webhook constraints, and bounded cleanup/admission indexes; run the current framework provisioner',
+    });
+  }
+  const watermarkShape = await safeQuery<PostgresReplayWatermarkShapeRow>(
+    client,
+    postgresJoin(
+      [
+        'SELECT EXISTS (SELECT 1 FROM pg_attribute AS column_row',
+        'JOIN pg_class AS relation_row ON relation_row.oid = column_row.attrelid',
+        'JOIN pg_namespace AS namespace_row ON namespace_row.oid = relation_row.relnamespace',
+        "WHERE namespace_row.nspname = 'public' AND relation_row.relname = '_kovo_replay_reclaimed'",
+        "AND column_row.attname = 'surface' AND column_row.attnum > 0",
+        'AND NOT column_row.attisdropped AND column_row.attnotnull',
+        "AND format_type(column_row.atttypid, column_row.atttypmod) = 'text') AS exact_surface_column,",
+        'EXISTS (SELECT 1 FROM pg_attribute AS column_row',
+        'JOIN pg_class AS relation_row ON relation_row.oid = column_row.attrelid',
+        'JOIN pg_namespace AS namespace_row ON namespace_row.oid = relation_row.relnamespace',
+        "WHERE namespace_row.nspname = 'public' AND relation_row.relname = '_kovo_replay_reclaimed'",
+        "AND column_row.attname = 'reclaimed_through' AND column_row.attnum > 0",
+        'AND NOT column_row.attisdropped AND column_row.attnotnull',
+        "AND format_type(column_row.atttypid, column_row.atttypmod) = 'bigint') AS exact_value_column,",
+        'EXISTS (SELECT 1 FROM pg_constraint AS constraint_row',
+        'JOIN pg_class AS relation_row ON relation_row.oid = constraint_row.conrelid',
+        'JOIN pg_namespace AS namespace_row ON namespace_row.oid = relation_row.relnamespace',
+        'JOIN pg_attribute AS surface_column ON surface_column.attrelid = relation_row.oid',
+        'AND surface_column.attnum = constraint_row.conkey[1]',
+        "WHERE namespace_row.nspname = 'public' AND relation_row.relname = '_kovo_replay_reclaimed'",
+        "AND constraint_row.contype = 'p' AND constraint_row.convalidated",
+        'AND NOT constraint_row.condeferrable AND NOT constraint_row.condeferred',
+        "AND constraint_row.conname = '_kovo_replay_reclaimed_pkey'",
+        'AND cardinality(constraint_row.conkey) = 1',
+        "AND surface_column.attname = 'surface') AS exact_identity_constraint,",
+        'EXISTS (SELECT 1 FROM pg_constraint AS constraint_row',
+        'JOIN pg_class AS relation_row ON relation_row.oid = constraint_row.conrelid',
+        'JOIN pg_namespace AS namespace_row ON namespace_row.oid = relation_row.relnamespace',
+        "WHERE namespace_row.nspname = 'public' AND relation_row.relname = '_kovo_replay_reclaimed'",
+        "AND constraint_row.contype = 'c' AND constraint_row.convalidated",
+        'AND NOT constraint_row.condeferrable AND NOT constraint_row.condeferred',
+        "AND constraint_row.conname = '_kovo_replay_reclaimed_surface_check'",
+        'AND pg_get_constraintdef(constraint_row.oid) = $1) AS exact_surface_constraint,',
+        'EXISTS (SELECT 1 FROM pg_constraint AS constraint_row',
+        'JOIN pg_class AS relation_row ON relation_row.oid = constraint_row.conrelid',
+        'JOIN pg_namespace AS namespace_row ON namespace_row.oid = relation_row.relnamespace',
+        "WHERE namespace_row.nspname = 'public' AND relation_row.relname = '_kovo_replay_reclaimed'",
+        "AND constraint_row.contype = 'c' AND constraint_row.convalidated",
+        'AND NOT constraint_row.condeferrable AND NOT constraint_row.condeferred',
+        "AND constraint_row.conname = '_kovo_replay_reclaimed_value_check'",
+        'AND pg_get_constraintdef(constraint_row.oid) = $2) AS exact_value_constraint,',
+        'EXISTS (SELECT 1 FROM public._kovo_replay_reclaimed HAVING COUNT(*) = 3',
+        "AND COUNT(*) FILTER (WHERE surface IN ('capability', 'mutation', 'webhook')) = 3) AS exact_rows",
+      ],
+      ' ',
+    ),
+    [POSTGRES_REPLAY_SURFACE_CONSTRAINT, POSTGRES_REPLAY_WATERMARK_VALUE_CONSTRAINT],
+  );
+  const watermarkShapeRow =
+    watermarkShape === undefined ||
+    postgresDenseArrayLength(watermarkShape.rows, 'Postgres replay watermark shape rows') === 0
+      ? undefined
+      : postgresDenseArrayValue(watermarkShape.rows, 0, 'Postgres replay watermark shape rows');
+  if (
+    watermarkShapeRow?.exact_surface_column !== true ||
+    watermarkShapeRow.exact_value_column !== true ||
+    watermarkShapeRow.exact_identity_constraint !== true ||
+    watermarkShapeRow.exact_surface_constraint !== true ||
+    watermarkShapeRow.exact_value_constraint !== true ||
+    watermarkShapeRow.exact_rows !== true
+  ) {
+    appendPostgresDenseValue(issues, {
+      code: 'KV433_REPLAY_STORE_SCHEMA',
+      detail:
+        'public._kovo_replay_reclaimed must hold exactly one non-negative monotonic watermark for capability, mutation, and webhook replay cleanup',
     });
   }
   const roles: { allow: boolean; role: string }[] = [
@@ -3283,7 +3531,18 @@ async function postgresReplayStorePostureIssues(
           "has_any_column_privilege($1, 'public._kovo_replay', 'SELECT') AS can_any_column_select,",
           "has_any_column_privilege($1, 'public._kovo_replay', 'INSERT') AS can_any_column_insert,",
           "has_any_column_privilege($1, 'public._kovo_replay', 'UPDATE') AS can_any_column_update,",
-          "has_any_column_privilege($1, 'public._kovo_replay', 'REFERENCES') AS can_any_column_references",
+          "has_any_column_privilege($1, 'public._kovo_replay', 'REFERENCES') AS can_any_column_references,",
+          "has_table_privilege($1, 'public._kovo_replay_reclaimed', 'SELECT') AS watermark_can_select,",
+          "has_table_privilege($1, 'public._kovo_replay_reclaimed', 'INSERT') AS watermark_can_insert,",
+          "has_table_privilege($1, 'public._kovo_replay_reclaimed', 'UPDATE') AS watermark_can_update,",
+          "has_table_privilege($1, 'public._kovo_replay_reclaimed', 'DELETE') AS watermark_can_delete,",
+          "has_table_privilege($1, 'public._kovo_replay_reclaimed', 'TRUNCATE') AS watermark_can_truncate,",
+          "has_table_privilege($1, 'public._kovo_replay_reclaimed', 'REFERENCES') AS watermark_can_references,",
+          "has_table_privilege($1, 'public._kovo_replay_reclaimed', 'TRIGGER') AS watermark_can_trigger,",
+          "has_any_column_privilege($1, 'public._kovo_replay_reclaimed', 'SELECT') AS watermark_can_any_column_select,",
+          "has_any_column_privilege($1, 'public._kovo_replay_reclaimed', 'INSERT') AS watermark_can_any_column_insert,",
+          "has_any_column_privilege($1, 'public._kovo_replay_reclaimed', 'UPDATE') AS watermark_can_any_column_update,",
+          "has_any_column_privilege($1, 'public._kovo_replay_reclaimed', 'REFERENCES') AS watermark_can_any_column_references",
         ],
         ' ',
       ),
@@ -3310,6 +3569,18 @@ async function postgresReplayStorePostureIssues(
       privilegeRow.can_references === false &&
       privilegeRow.can_trigger === false &&
       privilegeRow.can_any_column_references === false;
+    const watermarkHasAll =
+      privilegeRow.watermark_can_select === true &&
+      privilegeRow.watermark_can_update === true &&
+      privilegeRow.watermark_can_insert === false &&
+      privilegeRow.watermark_can_delete === false &&
+      privilegeRow.watermark_can_truncate === false &&
+      privilegeRow.watermark_can_references === false &&
+      privilegeRow.watermark_can_trigger === false &&
+      privilegeRow.watermark_can_any_column_select === true &&
+      privilegeRow.watermark_can_any_column_insert === false &&
+      privilegeRow.watermark_can_any_column_update === true &&
+      privilegeRow.watermark_can_any_column_references === false;
     const hasAny =
       privilegeRow.can_select === true ||
       privilegeRow.can_insert === true ||
@@ -3321,13 +3592,24 @@ async function postgresReplayStorePostureIssues(
       privilegeRow.can_any_column_select === true ||
       privilegeRow.can_any_column_insert === true ||
       privilegeRow.can_any_column_update === true ||
-      privilegeRow.can_any_column_references === true;
-    if ((expected.allow && !hasAll) || (!expected.allow && hasAny)) {
+      privilegeRow.can_any_column_references === true ||
+      privilegeRow.watermark_can_select === true ||
+      privilegeRow.watermark_can_insert === true ||
+      privilegeRow.watermark_can_update === true ||
+      privilegeRow.watermark_can_delete === true ||
+      privilegeRow.watermark_can_truncate === true ||
+      privilegeRow.watermark_can_references === true ||
+      privilegeRow.watermark_can_trigger === true ||
+      privilegeRow.watermark_can_any_column_select === true ||
+      privilegeRow.watermark_can_any_column_insert === true ||
+      privilegeRow.watermark_can_any_column_update === true ||
+      privilegeRow.watermark_can_any_column_references === true;
+    if ((expected.allow && (!hasAll || !watermarkHasAll)) || (!expected.allow && hasAny)) {
       appendPostgresDenseValue(issues, {
         code: 'KV433_REPLAY_STORE_ACL',
         detail: expected.allow
-          ? `${expected.role} must have exactly SELECT, INSERT, UPDATE, DELETE on public._kovo_replay`
-          : `${expected.role} must not have effective access to public._kovo_replay`,
+          ? `${expected.role} must have exactly SELECT, INSERT, UPDATE, DELETE on public._kovo_replay and SELECT, UPDATE on public._kovo_replay_reclaimed`
+          : `${expected.role} must not have effective access to the replay truth or reclamation-watermark relations`,
       });
     }
   }

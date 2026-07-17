@@ -4,6 +4,7 @@ import { mintFrameworkDurableReplayStoreReceipt } from '@kovojs/core/internal/se
 
 import { snapshotAuditJustification } from './audit-justification.js';
 import type { CapabilityReplayStore } from './capability-url.js';
+import { parseMutationIdemToken } from './mutation-idem.js';
 import {
   MutationReplayConflictError,
   snapshotMutationReplayResponse,
@@ -36,7 +37,10 @@ import type {
   DurableTaskStatusSqlResult,
 } from './task-observability.js';
 import {
+  snapshotWebhookReplayIdentity,
   snapshotWebhookReplayResponse,
+  WebhookReplayIdentityConflictError,
+  type WebhookReplayIdentity,
   type WebhookReplayReservation,
   type WebhookReplayStore,
   type WebhookWireResponse,
@@ -44,6 +48,8 @@ import {
 
 /** Framework-owned durable replay relation provisioned with the Postgres runtime (SPEC §10.3). */
 export const POSTGRES_REPLAY_TABLE = '_kovo_replay';
+/** Durable monotonic floor preventing reclaimed truth from reviving after database clock rollback. */
+export const POSTGRES_REPLAY_WATERMARK_TABLE = '_kovo_replay_reclaimed';
 /** Hard database admission-slot ceiling shared by provisioning and runtime validation. */
 export const POSTGRES_REPLAY_MAX_ENTRIES = 1_000;
 /** Maximum raw UTF-16LE response-body bytes admitted to one durable replay row. */
@@ -57,12 +63,21 @@ export const POSTGRES_REPLAY_MAX_RESPONSE_HEADER_BYTES = 65_536;
 export type PostgresReplaySurface = 'capability' | 'mutation' | 'webhook';
 
 interface PostgresReplayRow {
+  expires_at: string;
   fingerprint: string | null;
   generation: string;
+  is_unexpired: boolean;
+  occurred_at: string | null;
   response_body: string | null;
   response_headers: string | null;
   response_status: number | null;
   state: string;
+}
+
+interface PostgresReplayIdentity {
+  expiresAtMs: number;
+  idem: string;
+  occurredAtMs: number | null;
 }
 
 interface SettledReplayResponse {
@@ -77,7 +92,7 @@ export interface PostgresReplayStoreOptions {
   pendingWaitMs?: number;
   /** Delay between durable pending-row polls. */
   pollIntervalMs?: number;
-  /** Maximum retained pending or committed keys for this replay surface. */
+  /** Maximum simultaneous pending claims for this replay surface. */
   maxEntries?: number;
   /** Maximum UTF-16LE bytes retained for one replay response body. */
   maxResponseBodyBytes?: number;
@@ -107,9 +122,10 @@ const DEFAULT_MAX_RESPONSE_HEADER_BYTES = POSTGRES_REPLAY_MAX_RESPONSE_HEADER_BY
 /**
  * Create a durable mutation replay store over a framework-system Postgres SQL executor.
  *
- * Reservation ownership is a unique `(surface, scope, idem)` row. Committed rows never expire,
- * and a process crash leaves the row pending, so another replica fails closed instead of executing
- * the mutation again across the transaction/response settlement window (SPEC §10.3).
+ * Reservation ownership is a unique `(surface, scope, idem)` row. Pending rows survive process
+ * crashes, while committed rows remain through their exact token horizon and can be reclaimed only
+ * behind the durable per-surface watermark. This prevents another replica from executing the
+ * mutation across the settlement window or after database-clock rollback (SPEC §10.3).
  */
 /** @internal Construct only from a framework-owned system DB capability wrapper. */
 export function createPostgresMutationReplayStoreFromExecutor(
@@ -119,20 +135,23 @@ export function createPostgresMutationReplayStoreFromExecutor(
   const runtime = createPostgresReplayRuntime(executor, options);
   const store: MutationReplayStore = {
     async get(scope: string, idem: string, fingerprint?: string) {
-      const row = await runtime.readSettled('mutation', scope, idem, fingerprint);
+      const identity = mutationReplayIdentity(idem);
+      const row = await runtime.readSettled('mutation', scope, identity, fingerprint);
       return row === undefined ? undefined : mutationResponseFromRow(row);
     },
     async reserve(scope: string, idem: string, fingerprint?: string) {
-      const generation = await runtime.reserve('mutation', scope, idem, fingerprint);
+      const identity = mutationReplayIdentity(idem);
+      const generation = await runtime.reserve('mutation', scope, identity, fingerprint);
       return generation === undefined
         ? undefined
-        : mutationReservation(runtime, scope, idem, fingerprint, generation);
+        : mutationReservation(runtime, scope, identity, fingerprint, generation);
     },
     async set(scope: string, idem: string, response: MutationReplayResponse, fingerprint?: string) {
+      const identity = mutationReplayIdentity(idem);
       await runtime.settleWithoutReservation(
         'mutation',
         scope,
-        idem,
+        identity,
         fingerprint,
         mutationResponseForStorage(response),
       );
@@ -151,21 +170,33 @@ export function createPostgresWebhookReplayStoreFromExecutor(
 ): WebhookReplayStore {
   const runtime = createPostgresReplayRuntime(executor, options);
   const store: WebhookReplayStore = {
-    async get(scope: string, idem: string) {
-      const row = await runtime.readSettled('webhook', scope, idem, undefined);
+    async get(scope: string, source: WebhookReplayIdentity) {
+      const identity = postgresWebhookReplayIdentity(
+        source,
+        'Postgres webhook replay get() identity',
+      );
+      const row = await runtime.readSettled('webhook', scope, identity, undefined);
       return row === undefined ? undefined : webhookResponseFromRow(row);
     },
-    async reserve(scope: string, idem: string) {
-      const generation = await runtime.reserve('webhook', scope, idem, undefined);
+    async reserve(scope: string, source: WebhookReplayIdentity) {
+      const identity = postgresWebhookReplayIdentity(
+        source,
+        'Postgres webhook replay reserve() identity',
+      );
+      const generation = await runtime.reserve('webhook', scope, identity, undefined);
       return generation === undefined
         ? undefined
-        : webhookReservation(runtime, scope, idem, generation);
+        : webhookReservation(runtime, scope, identity, generation);
     },
-    async set(scope: string, idem: string, response: WebhookWireResponse) {
+    async set(scope: string, source: WebhookReplayIdentity, response: WebhookWireResponse) {
+      const identity = postgresWebhookReplayIdentity(
+        source,
+        'Postgres webhook replay set() identity',
+      );
       await runtime.settleWithoutReservation(
         'webhook',
         scope,
-        idem,
+        identity,
         undefined,
         webhookResponseForStorage(response),
       );
@@ -201,25 +232,21 @@ export function createPostgresCapabilityReplayStoreFromExecutor(
       ) {
         return false;
       }
-      await sql.execute<{ generation: string }>({
-        text:
-          'DELETE FROM public._kovo_replay WHERE (surface, scope, idem) IN (' +
-          'SELECT surface, scope, idem FROM public._kovo_replay ' +
-          "WHERE surface = 'capability' " +
-          'AND expires_at <= FLOOR(EXTRACT(EPOCH FROM CURRENT_TIMESTAMP) * 1000)::bigint ' +
-          'ORDER BY expires_at LIMIT 1024) ' +
-          'RETURNING generation',
-        values: [],
-      });
+      await retirePostgresCommittedReplay(sql, 'capability');
       const persistedId = persistedReplayKeyPart(id);
       const generation = securityRandomUuid();
       const result = await sql.execute<{ generation: string }>({
         text:
+          'WITH locked_watermark AS MATERIALIZED (' +
+          'SELECT reclaimed_through FROM public._kovo_replay_reclaimed ' +
+          "WHERE surface = 'capability' FOR UPDATE) " +
           'INSERT INTO public._kovo_replay ' +
           '(surface, scope, idem, fingerprint, generation, state, response_body, ' +
           'response_headers, response_status, expires_at, committed_at) ' +
           "SELECT 'capability', $1, $2, NULL, $3, 'committed', $4, '{}', 204, $5, CURRENT_TIMESTAMP " +
+          'FROM locked_watermark ' +
           'WHERE $5::bigint > FLOOR(EXTRACT(EPOCH FROM CURRENT_TIMESTAMP) * 1000)::bigint ' +
+          'AND $5::bigint > locked_watermark.reclaimed_through ' +
           'ON CONFLICT DO NOTHING RETURNING generation',
         values: [persistedScope, persistedId, generation, securityString(expiresAt), expiresAt],
       });
@@ -235,6 +262,63 @@ export function createPostgresCapabilityReplayStoreFromExecutor(
   const closedStore = witnessFreeze(store);
   mintFrameworkDurableReplayStoreReceipt(closedStore, 'capability');
   return closedStore;
+}
+
+interface PostgresReplayCleanupRow {
+  deleted_count: number;
+  reclaimed_through: string;
+}
+
+/**
+ * Delete one bounded committed batch and monotonically record exactly how far truth was reclaimed.
+ *
+ * The watermark row is locked before candidate selection and remains locked through deletion and
+ * advancement. Fresh claims lock the same row, so a database-clock rollback cannot race cleanup
+ * and recreate an exact key whose committed truth has already been removed (SPEC §10.3).
+ */
+async function retirePostgresCommittedReplay(
+  sql: DurableTaskStatusSqlExecutor,
+  surface: PostgresReplaySurface,
+): Promise<void> {
+  const result = await sql.execute<PostgresReplayCleanupRow>({
+    text:
+      'WITH locked_watermark AS MATERIALIZED (' +
+      'SELECT reclaimed_through FROM public._kovo_replay_reclaimed ' +
+      'WHERE surface = $1 FOR UPDATE), ' +
+      'expired AS MATERIALIZED (' +
+      'SELECT replay.scope, replay.idem, replay.expires_at ' +
+      'FROM public._kovo_replay AS replay CROSS JOIN locked_watermark ' +
+      "WHERE replay.surface = $1 AND replay.state = 'committed' " +
+      'AND replay.expires_at <= FLOOR(EXTRACT(EPOCH FROM CURRENT_TIMESTAMP) * 1000)::bigint ' +
+      'ORDER BY replay.expires_at, replay.scope, replay.idem LIMIT 1024), ' +
+      'deleted AS (' +
+      'DELETE FROM public._kovo_replay AS replay USING expired ' +
+      'WHERE replay.surface = $1 AND replay.scope = expired.scope AND replay.idem = expired.idem ' +
+      'AND replay.expires_at = expired.expires_at RETURNING replay.expires_at), ' +
+      'advanced AS (' +
+      'UPDATE public._kovo_replay_reclaimed AS watermark SET reclaimed_through = GREATEST(' +
+      'watermark.reclaimed_through, COALESCE((SELECT MAX(expires_at) FROM deleted), ' +
+      'watermark.reclaimed_through)) FROM locked_watermark ' +
+      'WHERE watermark.surface = $1 RETURNING watermark.reclaimed_through) ' +
+      'SELECT reclaimed_through::text AS reclaimed_through, ' +
+      '(SELECT COUNT(*)::int FROM deleted) AS deleted_count FROM advanced',
+    values: [surface],
+  });
+  const rows = replayRows(result, 'Postgres replay committed-expiry cleanup result');
+  const row = rows.length === 1 ? rows[0] : undefined;
+  const reclaimedThrough =
+    row === undefined ? undefined : stableReplayRowValue(row, 'reclaimed_through');
+  const deletedCount = row === undefined ? undefined : stableReplayRowValue(row, 'deleted_count');
+  if (
+    row === undefined ||
+    typeof reclaimedThrough !== 'string' ||
+    typeof deletedCount !== 'number'
+  ) {
+    throw new Error('Postgres replay committed-expiry cleanup lost its durable watermark row.');
+  }
+  if (deletedCount < 0 || deletedCount > 1_024) {
+    throw new Error('Postgres replay committed-expiry cleanup exceeded its database batch.');
+  }
 }
 
 /**
@@ -274,34 +358,34 @@ export async function releasePostgresPendingReplayFromExecutor(
 
 interface PostgresReplayRuntime {
   abort(
-    surface: PostgresReplaySurface,
+    surface: Exclude<PostgresReplaySurface, 'capability'>,
     scope: string,
-    idem: string,
+    identity: PostgresReplayIdentity,
     generation: string,
   ): Promise<void>;
   commit(
-    surface: PostgresReplaySurface,
+    surface: Exclude<PostgresReplaySurface, 'capability'>,
     scope: string,
-    idem: string,
+    identity: PostgresReplayIdentity,
     generation: string,
     response: SettledReplayResponse,
   ): Promise<void>;
   readSettled(
-    surface: PostgresReplaySurface,
+    surface: Exclude<PostgresReplaySurface, 'capability'>,
     scope: string,
-    idem: string,
+    identity: PostgresReplayIdentity,
     fingerprint: string | undefined,
   ): Promise<PostgresReplayRow | undefined>;
   reserve(
-    surface: PostgresReplaySurface,
+    surface: Exclude<PostgresReplaySurface, 'capability'>,
     scope: string,
-    idem: string,
+    identity: PostgresReplayIdentity,
     fingerprint: string | undefined,
   ): Promise<string | undefined>;
   settleWithoutReservation(
-    surface: PostgresReplaySurface,
+    surface: Exclude<PostgresReplaySurface, 'capability'>,
     scope: string,
-    idem: string,
+    identity: PostgresReplayIdentity,
     fingerprint: string | undefined,
     response: SettledReplayResponse,
   ): Promise<void>;
@@ -337,45 +421,70 @@ function createPostgresReplayRuntime(
   }
 
   const readRow = async (
-    surface: PostgresReplaySurface,
+    surface: Exclude<PostgresReplaySurface, 'capability'>,
     scope: string,
-    idem: string,
+    identity: PostgresReplayIdentity,
   ): Promise<PostgresReplayRow | undefined> => {
-    const persisted = persistedReplayKey(scope, idem);
+    const persisted = persistedReplayKey(scope, identity.idem);
     const result = await sql.execute<PostgresReplayRow>({
       text:
-        'SELECT fingerprint, generation, response_body, response_headers, response_status, state ' +
+        'SELECT expires_at::text AS expires_at, fingerprint, generation, ' +
+        '(expires_at > FLOOR(EXTRACT(EPOCH FROM CURRENT_TIMESTAMP) * 1000)::bigint) AS is_unexpired, ' +
+        'occurred_at::text AS occurred_at, response_body, response_headers, response_status, state ' +
         'FROM public._kovo_replay WHERE surface = $1 AND scope = $2 AND idem = $3',
       values: [surface, persisted.scope, persisted.idem],
     });
     const rows = replayRows(result, 'Postgres replay lookup result');
     if (rows.length === 0) return undefined;
     if (rows.length !== 1) throw new Error('Postgres replay lookup returned duplicate truth rows.');
-    return snapshotPostgresReplayRow(rows[0]);
+    const row = snapshotPostgresReplayRow(rows[0]);
+    assertReplayIdentity(surface, row, identity);
+    return row;
+  };
+
+  const retireExpiredCommitted = async (
+    surface: Exclude<PostgresReplaySurface, 'capability'>,
+  ): Promise<void> => {
+    await retirePostgresCommittedReplay(sql, surface);
   };
 
   return witnessFreeze({
-    async abort(surface, scope, idem, generation) {
-      const persisted = persistedReplayKey(scope, idem);
+    async abort(surface, scope, identity, generation) {
+      const persisted = persistedReplayKey(scope, identity.idem);
       const result = await sql.execute<{ generation: string }>({
         text:
           'DELETE FROM public._kovo_replay ' +
           "WHERE surface = $1 AND scope = $2 AND idem = $3 AND generation = $4 AND state = 'pending' " +
+          'AND expires_at = $5::bigint AND occurred_at IS NOT DISTINCT FROM $6::bigint ' +
           'RETURNING generation',
-        values: [surface, persisted.scope, persisted.idem, generation],
+        values: [
+          surface,
+          persisted.scope,
+          persisted.idem,
+          generation,
+          identity.expiresAtMs,
+          identity.occurredAtMs,
+        ],
       });
       const rows = replayRows(result, 'Postgres replay abort result');
       if (rows.length > 1) throw new Error('Postgres replay abort changed duplicate truth rows.');
     },
-    async commit(surface, scope, idem, generation, response) {
-      const persisted = persistedReplayKey(scope, idem);
+    async commit(surface, scope, identity, generation, response) {
+      const persisted = persistedReplayKey(scope, identity.idem);
       const headers = serializeReplayHeaders(response.headers, maxResponseHeaderBytes);
       const body = serializeReplayBody(response.body, maxResponseBodyBytes);
       const result = await sql.execute<{ generation: string }>({
         text:
+          'WITH locked_watermark AS MATERIALIZED (' +
+          'SELECT reclaimed_through FROM public._kovo_replay_reclaimed ' +
+          'WHERE surface = $1 FOR UPDATE) ' +
           "UPDATE public._kovo_replay SET state = 'committed', response_body = $5, " +
-          'response_headers = $6, response_status = $7, committed_at = CURRENT_TIMESTAMP ' +
+          'response_headers = $6, response_status = $7, committed_at = CURRENT_TIMESTAMP, ' +
+          'admission_slot = NULL ' +
           "WHERE surface = $1 AND scope = $2 AND idem = $3 AND generation = $4 AND state = 'pending' " +
+          'AND expires_at = $8::bigint AND occurred_at IS NOT DISTINCT FROM $9::bigint ' +
+          'AND expires_at > FLOOR(EXTRACT(EPOCH FROM CURRENT_TIMESTAMP) * 1000)::bigint ' +
+          'AND expires_at > (SELECT reclaimed_through FROM locked_watermark) ' +
           'RETURNING generation',
         values: [
           surface,
@@ -385,6 +494,8 @@ function createPostgresReplayRuntime(
           body,
           headers,
           response.status,
+          identity.expiresAtMs,
+          identity.occurredAtMs,
         ],
       });
       const rows = replayRows(result, 'Postgres replay commit result');
@@ -394,14 +505,17 @@ function createPostgresReplayRuntime(
         );
       }
     },
-    async readSettled(surface, scope, idem, fingerprint) {
+    async readSettled(surface, scope, identity, fingerprint) {
+      await retireExpiredCommitted(surface);
       const persistedFingerprint = persistedReplayFingerprint(fingerprint);
       const startedAt = requestStateNow();
       for (;;) {
-        const row = await readRow(surface, scope, idem);
+        const row = await readRow(surface, scope, identity);
         if (row === undefined) return undefined;
         assertReplayFingerprint(row.fingerprint, persistedFingerprint);
-        if (row.state === 'committed') return assertSettledReplayRow(row);
+        if (row.state === 'committed') {
+          return row.is_unexpired ? assertSettledReplayRow(row) : undefined;
+        }
         if (row.state !== 'pending') throw new Error('Postgres replay row has an invalid state.');
         const elapsed = requestStateNow() - startedAt;
         if (elapsed >= pendingWaitMs) return undefined;
@@ -409,18 +523,25 @@ function createPostgresReplayRuntime(
         await replayDelay(pollIntervalMs < remaining ? pollIntervalMs : remaining);
       }
     },
-    async reserve(surface, scope, idem, fingerprint) {
-      const persisted = persistedReplayKey(scope, idem);
+    async reserve(surface, scope, identity, fingerprint) {
+      await retireExpiredCommitted(surface);
+      const persisted = persistedReplayKey(scope, identity.idem);
       const persistedFingerprint = persistedReplayFingerprint(fingerprint);
       const generation = securityRandomUuid();
       const result = await sql.execute<{ generation: string }>({
         text:
+          'WITH locked_watermark AS MATERIALIZED (' +
+          'SELECT reclaimed_through FROM public._kovo_replay_reclaimed ' +
+          'WHERE surface = $1 FOR UPDATE) ' +
           'INSERT INTO public._kovo_replay ' +
-          '(surface, scope, idem, fingerprint, generation, state, admission_slot) ' +
-          "SELECT $1, $2, $3, $4, $5, 'pending', candidate.slot " +
-          'FROM generate_series(1, $6::integer) AS candidate(slot) ' +
-          'WHERE NOT EXISTS (SELECT 1 FROM public._kovo_replay AS occupied ' +
-          'WHERE occupied.surface = $1 AND occupied.admission_slot = candidate.slot) ' +
+          '(surface, scope, idem, fingerprint, generation, state, admission_slot, expires_at, occurred_at) ' +
+          "SELECT $1, $2, $3, $4, $5, 'pending', candidate.slot, $7::bigint, $8::bigint " +
+          'FROM locked_watermark CROSS JOIN generate_series(1, $6::integer) AS candidate(slot) ' +
+          'WHERE $7::bigint > FLOOR(EXTRACT(EPOCH FROM CURRENT_TIMESTAMP) * 1000)::bigint ' +
+          'AND $7::bigint > locked_watermark.reclaimed_through ' +
+          'AND NOT EXISTS (SELECT 1 FROM public._kovo_replay AS occupied ' +
+          "WHERE occupied.surface = $1 AND occupied.state = 'pending' " +
+          'AND occupied.admission_slot = candidate.slot) ' +
           'ORDER BY candidate.slot LIMIT 1 ' +
           'ON CONFLICT DO NOTHING RETURNING generation',
         values: [
@@ -430,11 +551,13 @@ function createPostgresReplayRuntime(
           persistedFingerprint,
           generation,
           maxEntries,
+          identity.expiresAtMs,
+          identity.occurredAtMs,
         ],
       });
       const rows = replayRows(result, 'Postgres replay reserve result');
       if (rows.length === 0) {
-        const existing = await readRow(surface, scope, idem);
+        const existing = await readRow(surface, scope, identity);
         if (existing !== undefined) {
           assertReplayFingerprint(existing.fingerprint, persistedFingerprint);
         }
@@ -446,20 +569,24 @@ function createPostgresReplayRuntime(
       }
       return generation;
     },
-    async settleWithoutReservation(surface, scope, idem, fingerprint, response) {
-      const persisted = persistedReplayKey(scope, idem);
+    async settleWithoutReservation(surface, scope, identity, fingerprint, response) {
+      await retireExpiredCommitted(surface);
+      const persisted = persistedReplayKey(scope, identity.idem);
       const persistedFingerprint = persistedReplayFingerprint(fingerprint);
       const generation = securityRandomUuid();
       const result = await sql.execute<{ generation: string }>({
         text:
+          'WITH locked_watermark AS MATERIALIZED (' +
+          'SELECT reclaimed_through FROM public._kovo_replay_reclaimed ' +
+          'WHERE surface = $1 FOR UPDATE) ' +
           'INSERT INTO public._kovo_replay ' +
           '(surface, scope, idem, fingerprint, generation, state, response_body, ' +
-          'response_headers, response_status, committed_at, admission_slot) ' +
-          "SELECT $1, $2, $3, $4, $5, 'committed', $6, $7, $8, CURRENT_TIMESTAMP, candidate.slot " +
-          'FROM generate_series(1, $9::integer) AS candidate(slot) ' +
-          'WHERE NOT EXISTS (SELECT 1 FROM public._kovo_replay AS occupied ' +
-          'WHERE occupied.surface = $1 AND occupied.admission_slot = candidate.slot) ' +
-          'ORDER BY candidate.slot LIMIT 1 ' +
+          'response_headers, response_status, committed_at, expires_at, occurred_at) ' +
+          "SELECT $1, $2, $3, $4, $5, 'committed', $6, $7, $8, CURRENT_TIMESTAMP, " +
+          '$9::bigint, $10::bigint ' +
+          'FROM locked_watermark ' +
+          'WHERE $9::bigint > FLOOR(EXTRACT(EPOCH FROM CURRENT_TIMESTAMP) * 1000)::bigint ' +
+          'AND $9::bigint > locked_watermark.reclaimed_through ' +
           'ON CONFLICT DO NOTHING RETURNING generation',
         values: [
           surface,
@@ -470,7 +597,8 @@ function createPostgresReplayRuntime(
           serializeReplayBody(response.body, maxResponseBodyBytes),
           serializeReplayHeaders(response.headers, maxResponseHeaderBytes),
           response.status,
-          maxEntries,
+          identity.expiresAtMs,
+          identity.occurredAtMs,
         ],
       });
       const rows = replayRows(result, 'Postgres replay direct settlement result');
@@ -478,15 +606,20 @@ function createPostgresReplayRuntime(
       if (rows.length > 1) {
         throw new Error('Postgres replay direct settlement created duplicate truth rows.');
       }
-      const existing = await readRow(surface, scope, idem);
+      const existing = await readRow(surface, scope, identity);
       if (existing === undefined) {
-        throw new Error('Postgres replay direct settlement lost its durable truth row.');
+        throw new Error(
+          'Postgres replay direct settlement identity is expired or unavailable at database time.',
+        );
       }
       assertReplayFingerprint(existing.fingerprint, persistedFingerprint);
       if (existing.state !== 'committed') {
         throw new Error(
           'Postgres replay key is pending; direct settlement refused to overwrite it.',
         );
+      }
+      if (!existing.is_unexpired) {
+        throw new Error('Postgres replay direct settlement found only expired committed truth.');
       }
     },
   });
@@ -495,27 +628,27 @@ function createPostgresReplayRuntime(
 function mutationReservation(
   runtime: PostgresReplayRuntime,
   scope: string,
-  idem: string,
+  identity: PostgresReplayIdentity,
   fingerprint: string | undefined,
   generation: string,
 ): MutationReplayReservation {
   return witnessFreeze({
-    abort: () => runtime.abort('mutation', scope, idem, generation),
+    abort: () => runtime.abort('mutation', scope, identity, generation),
     commit: (response: MutationReplayResponse) =>
-      runtime.commit('mutation', scope, idem, generation, mutationResponseForStorage(response)),
+      runtime.commit('mutation', scope, identity, generation, mutationResponseForStorage(response)),
   });
 }
 
 function webhookReservation(
   runtime: PostgresReplayRuntime,
   scope: string,
-  idem: string,
+  identity: PostgresReplayIdentity,
   generation: string,
 ): WebhookReplayReservation {
   return witnessFreeze({
-    abort: () => runtime.abort('webhook', scope, idem, generation),
+    abort: () => runtime.abort('webhook', scope, identity, generation),
     commit: (response: WebhookWireResponse) =>
-      runtime.commit('webhook', scope, idem, generation, webhookResponseForStorage(response)),
+      runtime.commit('webhook', scope, identity, generation, webhookResponseForStorage(response)),
   });
 }
 
@@ -609,6 +742,47 @@ function parseReplayBody(body: string): string {
 
 function assertReplayFingerprint(stored: string | null, expected: string | null): void {
   if (stored !== expected) throw new MutationReplayConflictError();
+}
+
+function mutationReplayIdentity(idem: string): PostgresReplayIdentity {
+  const facts = parseMutationIdemToken(idem);
+  if (facts === undefined) {
+    throw new TypeError(
+      'Postgres mutation replay requires the canonical framework idempotency token grammar.',
+    );
+  }
+  return witnessFreeze({
+    expiresAtMs: facts.expiresAtMs,
+    idem: facts.token,
+    occurredAtMs: null,
+  });
+}
+
+function postgresWebhookReplayIdentity(
+  source: WebhookReplayIdentity,
+  label: string,
+): PostgresReplayIdentity {
+  const identity = snapshotWebhookReplayIdentity(source, label);
+  return witnessFreeze({
+    expiresAtMs: identity.expiresAtMs,
+    idem: identity.key,
+    occurredAtMs: identity.occurredAtMs,
+  });
+}
+
+function assertReplayIdentity(
+  surface: Exclude<PostgresReplaySurface, 'capability'>,
+  row: PostgresReplayRow,
+  expected: PostgresReplayIdentity,
+): void {
+  const expectedExpiry = securityString(expected.expiresAtMs);
+  const expectedOccurrence =
+    expected.occurredAtMs === null ? null : securityString(expected.occurredAtMs);
+  if (row.expires_at === expectedExpiry && row.occurred_at === expectedOccurrence) return;
+  if (surface === 'webhook') throw new WebhookReplayIdentityConflictError();
+  throw new Error(
+    'Postgres mutation replay expiry does not match the canonical idempotency token.',
+  );
 }
 
 function assertReplayKey(scope: string, idem: string): void {
@@ -734,15 +908,21 @@ function snapshotPostgresReplayRow(source: PostgresReplayRow | undefined): Postg
   if (typeof source !== 'object' || source === null || witnessIsArray(source)) {
     throw new TypeError('Postgres replay row must be a record.');
   }
+  const expiresAt = stableReplayRowValue(source, 'expires_at');
   const fingerprint = stableReplayRowValue(source, 'fingerprint');
   const generation = stableReplayRowValue(source, 'generation');
+  const isUnexpired = stableReplayRowValue(source, 'is_unexpired');
+  const occurredAt = stableReplayRowValue(source, 'occurred_at');
   const responseBody = stableReplayRowValue(source, 'response_body');
   const responseHeaders = stableReplayRowValue(source, 'response_headers');
   const responseStatus = stableReplayRowValue(source, 'response_status');
   const state = stableReplayRowValue(source, 'state');
   if (
+    typeof expiresAt !== 'string' ||
     (fingerprint !== null && typeof fingerprint !== 'string') ||
     typeof generation !== 'string' ||
+    typeof isUnexpired !== 'boolean' ||
+    (occurredAt !== null && typeof occurredAt !== 'string') ||
     (responseBody !== null && typeof responseBody !== 'string') ||
     (responseHeaders !== null && typeof responseHeaders !== 'string') ||
     (responseStatus !== null && typeof responseStatus !== 'number') ||
@@ -751,8 +931,11 @@ function snapshotPostgresReplayRow(source: PostgresReplayRow | undefined): Postg
     throw new TypeError('Postgres replay row has invalid scalar values.');
   }
   return witnessFreeze({
+    expires_at: expiresAt,
     fingerprint,
     generation,
+    is_unexpired: isUnexpired,
+    occurred_at: occurredAt,
     response_body: responseBody,
     response_headers: responseHeaders,
     response_status: responseStatus,
