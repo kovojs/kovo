@@ -1304,9 +1304,7 @@ function appendMutationDocumentImplementation(
   compilerSetDelete(active, identity);
 }
 
-type MutationDocumentOutputNode =
-  | MutationDocumentElementNode
-  | MutationDocumentExpressionNode;
+type MutationDocumentOutputNode = MutationDocumentElementNode | MutationDocumentExpressionNode;
 
 interface MutationDocumentElementNode {
   readonly children: readonly MutationDocumentOutputNode[];
@@ -1390,7 +1388,10 @@ function appendMutationDocumentExpressionOutput(
     return;
   }
   if (ts.isJsxFragment(value)) {
-    const children = compilerSnapshotDenseArray(value.children, 'Mutation document fragment children');
+    const children = compilerSnapshotDenseArray(
+      value.children,
+      'Mutation document fragment children',
+    );
     for (let index = 0; index < children.length; index += 1) {
       const child = children[index]!;
       if (ts.isJsxElement(child) || ts.isJsxSelfClosingElement(child)) {
