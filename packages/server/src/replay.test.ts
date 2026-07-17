@@ -63,6 +63,39 @@ function deferred<Value = void>(): {
   return { promise, reject, resolve };
 }
 
+/** Non-blocking durable-store analogue: pending rows are joined by reserve/read retry + 429. */
+function createDurableMutationReplayStore(): MutationReplayStore {
+  const rows = new Map<
+    string,
+    { committed?: MutationReplayResponse; fingerprint: string | undefined }
+  >();
+  const keyFor = (scope: string, idem: string) => `${scope.length}:${scope}${idem.length}:${idem}`;
+  return {
+    get(scope, idem) {
+      return rows.get(keyFor(scope, idem))?.committed;
+    },
+    reserve(scope, idem, fingerprint) {
+      const key = keyFor(scope, idem);
+      if (rows.has(key)) return undefined;
+      const row: { committed?: MutationReplayResponse; fingerprint: string | undefined } = {
+        fingerprint,
+      };
+      rows.set(key, row);
+      return {
+        abort() {
+          if (rows.get(key) === row) rows.delete(key);
+        },
+        commit(response) {
+          row.committed = response;
+        },
+      };
+    },
+    set(scope, idem, response, fingerprint) {
+      rows.set(keyFor(scope, idem), { committed: response, fingerprint });
+    },
+  };
+}
+
 function anonymousCsrfRequest(mutationKey: string): {
   csrf: CsrfOptions<Request>;
   request: Request;
@@ -1801,6 +1834,68 @@ describe('server mutation response replay', () => {
       status: 500,
     });
     expect(second).toEqual(first);
+  });
+
+  it('keeps the replay claim pending when commit acknowledgement fails after callback success', async () => {
+    const replayStore = createDurableMutationReplayStore();
+    let writes = 0;
+    const charge = mutation('billing/charge', {
+      input: s.object({ chargeId: s.string() }),
+      async transaction(request, run) {
+        await run(request);
+        // Model a database COMMIT that succeeded before its driver connection lost the reply.
+        throw new Error('commit acknowledgement lost');
+      },
+      handler(input) {
+        writes += 1;
+        return input;
+      },
+    });
+    const request = {
+      idem: replayIdem('ambiguous-transaction-settlement'),
+      onError() {},
+      rawInput: { chargeId: 'charge_1' },
+      replayStore,
+      request: { sessionId: 'billing-session' },
+    };
+
+    const first = await renderMutationResponse(charge, request);
+    const retry = await renderMutationResponse(charge, request);
+
+    expect(first.status).toBe(500);
+    expect(retry.status).toBe(429);
+    expect(retry.headers['Retry-After']).toBe('1');
+    expect(writes).toBe(1);
+  });
+
+  it('still releases the replay claim when the transaction callback itself fails', async () => {
+    const replayStore = createDurableMutationReplayStore();
+    let attempts = 0;
+    const retryable = mutation('billing/retryable', {
+      input: s.object({ chargeId: s.string() }),
+      async transaction(request, run) {
+        return run(request);
+      },
+      handler(input) {
+        attempts += 1;
+        if (attempts === 1) throw new Error('callback rolled back');
+        return input;
+      },
+    });
+    const request = {
+      idem: replayIdem('proven-callback-rollback'),
+      onError() {},
+      rawInput: { chargeId: 'charge_2' },
+      replayStore,
+      request: { sessionId: 'billing-session' },
+    };
+
+    const first = await renderMutationResponse(retryable, request);
+    const retry = await renderMutationResponse(retryable, request);
+
+    expect(first.status).toBe(500);
+    expect(retry.status).toBe(200);
+    expect(attempts).toBe(2);
   });
 
   // A1 (SPEC §10.3:1061): a replay hit must re-evaluate the session-bound guard chain

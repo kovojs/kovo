@@ -21,6 +21,32 @@ export interface ExactlyOnceContinuationStatus {
 }
 
 /**
+ * The transaction callback completed successfully, but its adapter failed before confirming the
+ * surrounding transaction outcome. The application write may already have committed, so replay
+ * callers must retain their pending claim instead of treating this like a proven rollback
+ * (SPEC §10.3).
+ *
+ * @internal Package-private lifecycle signal; not part of the public server entrypoint.
+ */
+const ambiguousAdapterSettlements = new WeakSet<object>();
+
+class ExactlyOnceAdapterSettlementAmbiguousError extends Error {
+  constructor(cause: unknown) {
+    super(
+      'Transaction adapter failed after its callback completed; exactly one invocation could not be confirmed and commit outcome is ambiguous.',
+      { cause },
+    );
+    this.name = 'ExactlyOnceAdapterSettlementAmbiguousError';
+    ambiguousAdapterSettlements.add(this);
+  }
+}
+
+/** @internal Identify the framework-owned ambiguous-settlement signal at replay catch sites. */
+export function isExactlyOnceAdapterSettlementAmbiguousError(value: unknown): value is Error {
+  return typeof value === 'object' && value !== null && ambiguousAdapterSettlements.has(value);
+}
+
+/**
  * Revocable exactly-once gate for framework continuations handed to app/driver adapters at the
  * SPEC §10.3 transaction and §11.4 webhook authority boundaries.
  *
@@ -158,10 +184,22 @@ export async function runExactlyOnceAdapter<Argument, Result, AdapterResult>(
   // invocation exists, cardinality/observation violations remain authoritative and fail closed.
   if (failed && status.invocations === 0) throw failure;
   if (status.violated) {
+    if (callbackCompleted) {
+      throw new ExactlyOnceAdapterSettlementAmbiguousError(
+        failed
+          ? failure
+          : new NativeTypeError(
+              'Framework continuation adapter did not await exactly one invocation.',
+            ),
+      );
+    }
     throw new NativeTypeError('Framework continuation adapter must await exactly one invocation.');
   }
   if (!failed && status.callbackFailed) throw status.callbackFailure;
-  if (failed) throw failure;
+  if (failed) {
+    if (callbackCompleted) throw new ExactlyOnceAdapterSettlementAmbiguousError(failure);
+    throw failure;
+  }
   if (!callbackCompleted) {
     throw new NativeTypeError('Framework continuation did not produce a callback result.');
   }

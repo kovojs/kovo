@@ -2104,6 +2104,39 @@ describe('server webhook primitive', () => {
     expect(sideEffects).toBe(1);
   });
 
+  it('keeps the event claim pending when commit acknowledgement fails after callback success', async () => {
+    const replayStore = createDurableWebhookReplayStore();
+    let writes = 0;
+    const charge = webhook('/webhooks/ambiguous-charge', {
+      handler() {
+        writes += 1;
+        return { ok: true };
+      },
+      idempotency: (input) => testWebhookReplayIdentity(input.id),
+      input: s.object({ id: s.string() }),
+      replayStore,
+      async transaction(context, run) {
+        await run(context);
+        // Model a database COMMIT that succeeded before its driver connection lost the reply.
+        throw new Error('commit acknowledgement lost');
+      },
+      verify: 'none',
+      verifyJustification: 'fixture-only webhook test',
+    });
+    const body = JSON.stringify({ id: 'evt_ambiguous_charge' });
+    const makeRequest = () =>
+      new Request('https://example.test/webhooks/ambiguous-charge', { body, method: 'POST' });
+
+    const first = await runWebhook(charge, makeRequest());
+    const retry = await runWebhook(charge, makeRequest());
+
+    expect(first.response.status).toBe(500);
+    expect(first.replayed).toBe(false);
+    expect(retry.response.status).toBe(429);
+    expect(retry.response.headers.get('retry-after')).toBe('1');
+    expect(writes).toBe(1);
+  });
+
   it('fails closed before webhook execution when retained replay truth fills capacity', async () => {
     const replayStore = createPublicMemoryWebhookReplayStore({ maxEntries: 1 });
     const retainedIdentity = testWebhookReplayIdentity('retained-event');
@@ -2150,6 +2183,9 @@ describe('server webhook primitive', () => {
       idempotency: (input) => testWebhookReplayIdentity(input.id),
       input: s.object({ id: s.string() }),
       replayStore,
+      async transaction(_context, run) {
+        return run({});
+      },
       verify: 'none',
       verifyJustification: 'fixture-only test webhook',
     });

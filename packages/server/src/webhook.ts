@@ -25,7 +25,10 @@ import {
   type AccessDecision,
 } from './access.js';
 import type { Domain } from './domain.js';
-import { runExactlyOnceAdapter } from './exactly-once-continuation.js';
+import {
+  isExactlyOnceAdapterSettlementAmbiguousError,
+  runExactlyOnceAdapter,
+} from './exactly-once-continuation.js';
 import { runMutation, type RunMutationOptions } from './mutation.js';
 import {
   endpointRequestWithoutSession,
@@ -1642,10 +1645,13 @@ export async function runWebhook<
       };
     }
 
-    // A4 (SPEC §9.1:850): on an unexpected exception, abort the reservation so
-    // a provider retry can re-run the handler fresh. Only explicit fail()/
-    // WebhookRollback results and successes get committed to the replay store.
-    if (!handlerCommitted) await reservation?.abort?.();
+    // A4 (SPEC §9.1/§10.3): a callback/handler failure proves the transaction did not
+    // complete and releases the claim for a corrected provider retry. A successful callback
+    // followed by an adapter/COMMIT rejection is different: its database outcome is ambiguous, so
+    // preserve the pending claim exactly like any other post-commit settlement failure.
+    if (!handlerCommitted && !isExactlyOnceAdapterSettlementAmbiguousError(error)) {
+      await reservation?.abort?.();
+    }
 
     return {
       changes: [],

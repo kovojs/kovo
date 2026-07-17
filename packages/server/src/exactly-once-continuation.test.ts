@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { runExactlyOnceAdapter } from './exactly-once-continuation.js';
+import {
+  isExactlyOnceAdapterSettlementAmbiguousError,
+  runExactlyOnceAdapter,
+} from './exactly-once-continuation.js';
 
 describe('framework continuation transaction boundary', () => {
   it('accepts one awaited invocation', async () => {
@@ -54,6 +57,25 @@ describe('framework continuation transaction boundary', () => {
         (value: string) => value,
       ),
     ).rejects.toBe(setupFailure);
+  });
+
+  it('classifies an adapter failure after callback success as an ambiguous settlement', async () => {
+    const commitAcknowledgementFailure = new Error('commit acknowledgement lost');
+    let observed: unknown;
+    try {
+      await runExactlyOnceAdapter(
+        async (run) => {
+          await run('input');
+          throw commitAcknowledgementFailure;
+        },
+        (value) => `${value}:committed`,
+      );
+    } catch (error) {
+      observed = error;
+    }
+
+    expect(isExactlyOnceAdapterSettlementAmbiguousError(observed)).toBe(true);
+    expect((observed as Error).cause).toBe(commitAcknowledgementFailure);
   });
 
   it('does not start work when an adapter discards the lazy result', async () => {

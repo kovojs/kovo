@@ -2,7 +2,10 @@ import { isUntrusted, revealUntrusted, type JsonValue } from '@kovojs/core';
 
 import { accessDecisionFor } from './access.js';
 import { requestPrincipalSnapshot } from './auth-principal.js';
-import { runExactlyOnceAdapter } from './exactly-once-continuation.js';
+import {
+  isExactlyOnceAdapterSettlementAmbiguousError,
+  runExactlyOnceAdapter,
+} from './exactly-once-continuation.js';
 import {
   forwardSetCookie,
   serializeCookieForTrustedRequest,
@@ -361,7 +364,13 @@ async function runMutationLifecycleHandler<
   try {
     result = await runMutation(definition, rawInput, request, options);
   } catch (error) {
-    await state.reservation?.abort?.();
+    // SPEC §10.3: a successful transaction callback followed by an adapter/COMMIT rejection is
+    // ambiguous, not a proven rollback. Preserve its pending replay claim so a remote retry cannot
+    // execute work that the database may already have committed. Setup and callback failures still
+    // abort, because their transaction never produced a successful callback result.
+    if (!isExactlyOnceAdapterSettlementAmbiguousError(error)) {
+      await state.reservation?.abort?.();
+    }
     if (!state.catchHandlerErrors) throw error;
     return { error, kind: 'handler-error', reservation: state.reservation };
   }
