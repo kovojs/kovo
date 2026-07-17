@@ -82,6 +82,7 @@ interface RateLimitDecision {
 const DEFAULT_WINDOW_MS = 60_000;
 const DEFAULT_MAX_RATE_KEYS = 10_000;
 const DEFAULT_MAX_BODY_BYTES = 1_048_576;
+const MAX_REQUEST_BODY_CHUNKS = 4_096;
 const DEFAULT_MAX_QUERY_LIST_ITEMS = 100;
 const DEFAULT_GLOBAL_RATE: ResolvedAppRateLimitOptions = witnessFreeze({
   max: 20_000,
@@ -722,10 +723,11 @@ async function readLimitedArrayBuffer(
     [],
   );
   const chunks: Uint8Array[] = [];
+  let chunkCount = 0;
   let total = 0;
 
   try {
-    for (let count = 0; count <= 1_000_000; count += 1) {
+    while (true) {
       const result = await witnessReflectApply<Promise<ReadableStreamReadResult<Uint8Array>>>(
         nativeStreamReaderRead,
         reader,
@@ -736,6 +738,16 @@ async function readLimitedArrayBuffer(
       const value = ownDataProperty(result, 'value');
       if (done !== false || typeof value !== 'object' || value === null) {
         throw new TypeError('Kovo received an invalid request body stream chunk.');
+      }
+      chunkCount += 1;
+      if (chunkCount > MAX_REQUEST_BODY_CHUNKS) {
+        const cancellation = witnessReflectApply<Promise<unknown>>(
+          nativeStreamReaderCancel,
+          reader,
+          [],
+        );
+        requestStateIgnorePromiseRejection(cancellation);
+        throw new RequestBodyLimitExceededError(maxBodyBytes);
       }
       let length: number;
       try {
@@ -754,9 +766,6 @@ async function readLimitedArrayBuffer(
       }
       total += length;
       appendLoadShedValue(chunks, value as Uint8Array);
-      if (count === 1_000_000) {
-        throw new TypeError('Kovo refused a request body with too many stream chunks.');
-      }
     }
   } finally {
     witnessReflectApply(nativeStreamReaderReleaseLock, reader, []);

@@ -48,6 +48,7 @@ const NativeUint8Array = globalThis.Uint8Array;
 const NativeURL = globalThis.URL;
 const NativeURLSearchParams = globalThis.URLSearchParams;
 const nativeIteratorSymbol: typeof Symbol.iterator = Symbol.iterator;
+const MAX_REQUEST_BODY_CHUNKS = 4_096;
 
 const nativeDecodeURIComponent = globalThis.decodeURIComponent;
 const nativeFunctionHasInstance = NativeFunction.prototype[Symbol.hasInstance];
@@ -464,9 +465,10 @@ async function requestBytesUnchecked(request: Request): Promise<Uint8Array> {
     [],
   );
   const chunks: Uint8Array[] = [];
+  let chunkCount = 0;
   let total = 0;
   try {
-    for (let count = 0; count <= 1_000_000; count += 1) {
+    while (true) {
       const result = await witnessReflectApply<Promise<ReadableStreamReadResult<Uint8Array>>>(
         nativeStreamReaderRead,
         reader,
@@ -476,15 +478,16 @@ async function requestBytesUnchecked(request: Request): Promise<Uint8Array> {
       if (result.done !== false || !isInstanceUnchecked(NativeUint8Array, result.value)) {
         throw new TypeError('Kovo received an invalid request body stream chunk.');
       }
+      chunkCount += 1;
+      if (chunkCount > MAX_REQUEST_BODY_CHUNKS) {
+        throw new TypeError('Kovo refused a request body with too many stream chunks.');
+      }
       const length = typedArrayLengthUnchecked(result.value);
       if (length > 9_007_199_254_740_991 - total) {
         throw new TypeError('Kovo refused an unbounded request body stream.');
       }
       total += length;
       securityArrayPush(chunks, result.value);
-      if (count === 1_000_000) {
-        throw new TypeError('Kovo refused a request body with too many stream chunks.');
-      }
     }
   } finally {
     witnessReflectApply(nativeStreamReaderReleaseLock, reader, []);

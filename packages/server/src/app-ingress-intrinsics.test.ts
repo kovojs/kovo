@@ -209,6 +209,66 @@ describe('request ingress intrinsic authority', () => {
     }
   });
 
+  it('rejects excessive endpoint body chunking before handler execution', async () => {
+    let handlerCalls = 0;
+    const echo = endpoint('/intrinsics/chunk-budget', {
+      access: publicAccess('body chunk-budget regression'),
+      csrf: false,
+      csrfJustification: 'machine body chunk-budget regression',
+      handler() {
+        handlerCalls += 1;
+        return new Response('unexpected');
+      },
+      method: 'POST',
+      reason: 'body chunk-budget regression',
+      response: { appOwnedSafety: true, body: 'text', cache: 'no-store' },
+    });
+    const handler = createRequestHandler(createApp({ endpoints: [echo] }));
+    let pulls = 0;
+    const body = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        if (pulls < 4_097) {
+          pulls += 1;
+          controller.enqueue(new Uint8Array());
+          return;
+        }
+        controller.close();
+      },
+    });
+    const request = new Request('https://kovo.local/intrinsics/chunk-budget', {
+      body,
+      duplex: 'half',
+      method: 'POST',
+    } as RequestInit & { duplex: 'half' });
+
+    const response = await handler(request);
+
+    expect(response.status).toBe(413);
+    expect(handlerCalls).toBe(0);
+
+    let boundaryPulls = 0;
+    const boundaryBody = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        if (boundaryPulls < 4_096) {
+          boundaryPulls += 1;
+          controller.enqueue(new Uint8Array());
+          return;
+        }
+        controller.close();
+      },
+    });
+    const boundaryResponse = await handler(
+      new Request('https://kovo.local/intrinsics/chunk-budget', {
+        body: boundaryBody,
+        duplex: 'half',
+        method: 'POST',
+      } as RequestInit & { duplex: 'half' }),
+    );
+
+    expect(boundaryResponse.status).toBe(200);
+    expect(handlerCalls).toBe(1);
+  });
+
   it('cannot substitute a valid victim CSRF body before mutation parsing', async () => {
     const calls: string[] = [];
     const csrf = {

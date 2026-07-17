@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { csrfToken, validateCsrfToken } from './csrf.js';
 import {
   assertRequestBodyAsyncIntrinsics,
+  requestJson,
   requestSerializeUrlSearchParamsEntries,
   requestUrlSearchParamsEntries,
 } from './request-body-intrinsics.js';
@@ -20,6 +21,51 @@ import {
 const intrinsicModuleUrl = new URL('./request-body-intrinsics.ts', import.meta.url).href;
 
 describe('request body carrier intrinsic closure', () => {
+  it('bounds direct request-body parsing by stream chunk count', async () => {
+    let pulls = 0;
+    const body = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        if (pulls < 4_097) {
+          pulls += 1;
+          controller.enqueue(new Uint8Array());
+          return;
+        }
+        controller.close();
+      },
+    });
+    const request = new Request('https://kovo.local/chunk-budget', {
+      body,
+      duplex: 'half',
+      method: 'POST',
+    } as RequestInit & { duplex: 'half' });
+
+    await expect(requestJson(request)).rejects.toThrow(/too many stream chunks/u);
+
+    let boundaryPulls = 0;
+    const boundaryBody = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        if (boundaryPulls < 4_095) {
+          boundaryPulls += 1;
+          controller.enqueue(new Uint8Array());
+          return;
+        }
+        if (boundaryPulls === 4_095) {
+          boundaryPulls += 1;
+          controller.enqueue(new TextEncoder().encode('{}'));
+          return;
+        }
+        controller.close();
+      },
+    });
+    const boundaryRequest = new Request('https://kovo.local/chunk-budget', {
+      body: boundaryBody,
+      duplex: 'half',
+      method: 'POST',
+    } as RequestInit & { duplex: 'half' });
+
+    await expect(requestJson(boundaryRequest)).resolves.toEqual({});
+  });
+
   it('pins URLSearchParams entry and serialization controls for guarded query input', () => {
     const submitted = new URLSearchParams([['token', 'attacker-submitted']]);
     const victim = new URLSearchParams([['token', 'victim-capability']]);
