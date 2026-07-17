@@ -15,7 +15,7 @@ rendering, Better Auth, and managed SQL.
 | Severity | Open | Closed |
 | -------- | ---: | -----: |
 | High     |    0 |      7 |
-| Medium   |    3 |      8 |
+| Medium   |    2 |      9 |
 | Low      |    0 |      3 |
 
 ## High
@@ -180,16 +180,18 @@ rendering, Better Auth, and managed SQL.
   - **Evidence:** combined live/internal/emitted and security-consumer matrix 263/263; server dist,
     wire-output boundary, API-surface, and static/type gates passed.
 
-- [ ] **M11 - Scheme-bearing mutation targets could disagree across raw and WHATWG parsing.**
+- [x] **M11 - Scheme-bearing mutation targets could disagree across raw and WHATWG parsing.**
   - The raw reserved-mutation classifier hand-split absolute-form targets, while request assembly
     used the WHATWG URL parser. Node accepted extra authority slashes that made the first parser see
     a non-reserved path and the second normalize to `/_m/...`, crossing the canonical mutation
     boundary and enabling proxy/backend policy differentials.
   - **Evidence:** real HTTP/1 `POST http:////attacker.test/_m/a/b` returned `303` and invoked the
     mutation before the fix; live direct and emitted Node/Vercel parity controls failed too.
-  - **Open:** classify scheme-bearing raw targets with the exact parser used for request assembly,
-    reject every reserved mutation alias before dispatch, and preserve canonical origin-form
-    mutation behavior (SPEC §6.6/§9.2/§9.5).
+  - **Fixed:** `d074924ae` classifies scheme-bearing targets with the same WHATWG parser used by
+    request assembly, rejects normalized reserved aliases and malformed absolute targets before
+    dispatch, and preserves canonical origin-form mutation behavior (SPEC §6.6/§9.2/§9.5).
+  - **Evidence:** direct/live/generated Node and Vercel target-parity matrix 95/95; wire-output
+    boundary gate passed.
 
 ## Low
 
@@ -219,4 +221,5 @@ rendering, Better Auth, and managed SQL.
 - Durable Postgres/webhook/replay focused matrix: 229/229.
 - Capability/route/Postgres focused matrix: 106/106.
 - Document/app-document focused matrix: 96/96.
+- Normalized raw-target Node/build parity matrix: 95/95; wire-output boundary gate passed.
 - Final exact-tip remote-boundary review remains open until M7 and current regression repairs land.
