@@ -106,7 +106,7 @@ describe('custom runtime bootstrap entries', () => {
     );
     expect(sqliteBoundary.status, sqliteBoundary.stderr).toBe(0);
     expect(JSON.parse(sqliteBoundary.stdout)).toEqual({
-      bindingKeys: ['seedDemoUser', 'sessionProvider', 'signIn', 'signOut'],
+      bindingKeys: ['mountAdapter', 'seedDemoUser', 'sessionProvider', 'signIn', 'signOut'],
       bindingsFrozen: true,
       csrfSecretOwnKeys: 0,
       csrfSessionBinding: 'packed-session',
@@ -122,7 +122,7 @@ describe('custom runtime bootstrap entries', () => {
     );
     expect(postgresBoundary.status, postgresBoundary.stderr).toBe(0);
     expect(JSON.parse(postgresBoundary.stdout)).toEqual({
-      bindingKeys: ['seedDemoUser', 'sessionProvider', 'signIn', 'signOut'],
+      bindingKeys: ['mountAdapter', 'seedDemoUser', 'sessionProvider', 'signIn', 'signOut'],
       bindingsFrozen: true,
       forgedRejected: true,
       providerOwnKeys: 0,

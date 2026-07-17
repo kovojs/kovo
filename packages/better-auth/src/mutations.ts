@@ -1,5 +1,4 @@
 import { mutation } from '@kovojs/server';
-import { assignDerivedMutationKey } from '@kovojs/server/internal/wire';
 import type { MutationDefinition } from '@kovojs/server';
 
 import {
@@ -44,26 +43,6 @@ const NativeError = Error;
 const betterAuthCredentialBoundaryFailureMessage =
   'Better Auth credential provider failed inside the trusted plaintext boundary.';
 
-type MutationWithAssignedKey<Definition, Key extends string> =
-  Definition extends MutationDefinition<
-    string,
-    infer InputSchema,
-    infer Errors,
-    infer Request,
-    infer Value,
-    infer GuardedRequest
-  >
-    ? MutationDefinition<Key, InputSchema, Errors, Request, Value, GuardedRequest> & { key: Key }
-    : Definition & { key: Key };
-
-function assignBetterAuthMutationKey<Key extends string, Definition extends { key: string }>(
-  definition: Definition,
-  key: Key,
-): MutationWithAssignedKey<Definition, Key> {
-  assignDerivedMutationKey(definition as unknown as MutationDefinition<string>, key);
-  return definition as unknown as MutationWithAssignedKey<Definition, Key>;
-}
-
 function betterAuthCredentialBoundaryFailure(): Error {
   return new NativeError(betterAuthCredentialBoundaryFailureMessage);
 }
@@ -102,48 +81,45 @@ export function betterAuthSignInEmailMutation<
     '/',
   );
   const key = betterAuthOwnDataOption<Key>(options, 'key', 'Better Auth credential option key');
-  return assignBetterAuthMutationKey(
-    mutation({
-      ...credentialMutationDefinitionOptions(
-        'signInEmail',
-        options as BetterAuthCredentialMutationInternalOptions<Key, Request, GuardedRequest>,
-      ),
-      errors: betterAuthCredentialMutationErrors,
-      input: betterAuthSignInEmailInput,
-      redirectTo: (result: { value: BetterAuthCredentialMutationValue<'signed-in'> }) =>
-        result.value.redirectTo,
-      async handler(input, request, context) {
-        try {
-          const response = await callBetterAuthSignInEmail(
-            pinnedAuth,
-            {
-              email: input.email,
-              password: input.password,
-            },
-            request.headers,
-          );
+  return mutation(key ?? ('auth/sign-in' as Key), {
+    ...credentialMutationDefinitionOptions(
+      'signInEmail',
+      options as BetterAuthCredentialMutationInternalOptions<Key, Request, GuardedRequest>,
+    ),
+    errors: betterAuthCredentialMutationErrors,
+    input: betterAuthSignInEmailInput,
+    redirectTo: (result: { value: BetterAuthCredentialMutationValue<'signed-in'> }) =>
+      result.value.redirectTo,
+    async handler(input, request, context) {
+      try {
+        const response = await callBetterAuthSignInEmail(
+          pinnedAuth,
+          {
+            email: input.email,
+            password: input.password,
+          },
+          request.headers,
+        );
 
-          const success = await resolveBetterAuthCredentialSuccess(response, context, {
-            redirectTo: redirectPath(input.next, defaultRedirectTo),
-            status: 'signed-in',
-          });
+        const success = await resolveBetterAuthCredentialSuccess(response, context, {
+          redirectTo: redirectPath(input.next, defaultRedirectTo),
+          status: 'signed-in',
+        });
 
-          if (success === null) {
-            return context.fail('INVALID_CREDENTIALS', {});
-          }
-
-          return success;
-        } catch (error) {
-          if (isBetterAuthCredentialFailureError(error)) {
-            return context.fail('INVALID_CREDENTIALS', {});
-          }
-
-          throw betterAuthCredentialBoundaryFailure();
+        if (success === null) {
+          return context.fail('INVALID_CREDENTIALS', {});
         }
-      },
-    }),
-    key ?? ('auth/sign-in' as Key),
-  );
+
+        return success;
+      } catch (error) {
+        if (isBetterAuthCredentialFailureError(error)) {
+          return context.fail('INVALID_CREDENTIALS', {});
+        }
+
+        throw betterAuthCredentialBoundaryFailure();
+      }
+    },
+  });
 }
 
 /**
@@ -178,49 +154,46 @@ export function betterAuthSignUpEmailMutation<
     '/',
   );
   const key = betterAuthOwnDataOption<Key>(options, 'key', 'Better Auth credential option key');
-  return assignBetterAuthMutationKey(
-    mutation({
-      ...credentialMutationDefinitionOptions(
-        'signUpEmail',
-        options as BetterAuthCredentialMutationInternalOptions<Key, Request, GuardedRequest>,
-      ),
-      errors: betterAuthCredentialMutationErrors,
-      input: betterAuthSignUpEmailInput,
-      redirectTo: (result: { value: BetterAuthCredentialMutationValue<'signed-up'> }) =>
-        result.value.redirectTo,
-      async handler(input, request, context) {
-        try {
-          const response = await callBetterAuthSignUpEmail(
-            pinnedAuth,
-            {
-              email: input.email,
-              name: input.name,
-              password: input.password,
-            },
-            request.headers,
-          );
+  return mutation(key ?? ('auth/sign-up' as Key), {
+    ...credentialMutationDefinitionOptions(
+      'signUpEmail',
+      options as BetterAuthCredentialMutationInternalOptions<Key, Request, GuardedRequest>,
+    ),
+    errors: betterAuthCredentialMutationErrors,
+    input: betterAuthSignUpEmailInput,
+    redirectTo: (result: { value: BetterAuthCredentialMutationValue<'signed-up'> }) =>
+      result.value.redirectTo,
+    async handler(input, request, context) {
+      try {
+        const response = await callBetterAuthSignUpEmail(
+          pinnedAuth,
+          {
+            email: input.email,
+            name: input.name,
+            password: input.password,
+          },
+          request.headers,
+        );
 
-          const success = await resolveBetterAuthCredentialSuccess(response, context, {
-            redirectTo: redirectPath(input.next, defaultRedirectTo),
-            status: 'signed-up',
-          });
+        const success = await resolveBetterAuthCredentialSuccess(response, context, {
+          redirectTo: redirectPath(input.next, defaultRedirectTo),
+          status: 'signed-up',
+        });
 
-          if (success === null) {
-            return context.fail('INVALID_CREDENTIALS', {});
-          }
-
-          return success;
-        } catch (error) {
-          if (isBetterAuthCredentialFailureError(error)) {
-            return context.fail('INVALID_CREDENTIALS', {});
-          }
-
-          throw betterAuthCredentialBoundaryFailure();
+        if (success === null) {
+          return context.fail('INVALID_CREDENTIALS', {});
         }
-      },
-    }),
-    key ?? ('auth/sign-up' as Key),
-  );
+
+        return success;
+      } catch (error) {
+        if (isBetterAuthCredentialFailureError(error)) {
+          return context.fail('INVALID_CREDENTIALS', {});
+        }
+
+        throw betterAuthCredentialBoundaryFailure();
+      }
+    },
+  });
 }
 
 /**
@@ -255,50 +228,47 @@ export function betterAuthSignOutMutation<
     '/login',
   );
   const key = betterAuthOwnDataOption<Key>(options, 'key', 'Better Auth credential option key');
-  return assignBetterAuthMutationKey(
-    mutation({
-      ...credentialMutationDefinitionOptions(
-        'signOut',
-        options as BetterAuthCredentialMutationInternalOptions<Key, Request, GuardedRequest>,
-      ),
-      errors: {},
-      input: betterAuthSignOutInput,
-      redirectTo: (result: { value: BetterAuthCredentialMutationValue<'signed-out'> }) =>
-        result.value.redirectTo,
-      async handler(_input, request, context) {
-        try {
-          const response: BetterAuthResponseLike = await callBetterAuthSignOut(
-            pinnedAuth,
-            request.headers,
-          );
+  return mutation(key ?? ('auth/sign-out' as Key), {
+    ...credentialMutationDefinitionOptions(
+      'signOut',
+      options as BetterAuthCredentialMutationInternalOptions<Key, Request, GuardedRequest>,
+    ),
+    errors: {},
+    input: betterAuthSignOutInput,
+    redirectTo: (result: { value: BetterAuthCredentialMutationValue<'signed-out'> }) =>
+      result.value.redirectTo,
+    async handler(_input, request, context) {
+      try {
+        const response: BetterAuthResponseLike = await callBetterAuthSignOut(
+          pinnedAuth,
+          request.headers,
+        );
 
-          // SPEC §6.5/§9.1: a resolved provider promise is not revocation evidence. Bind the
-          // exact boot-pinned Response facts and require a successful status before clearing any
-          // browser state or publishing the framework-owned signed-out outcome. Deferred response
-          // inspection and cookie forwarding remain inside the opaque plaintext boundary too.
-          const status = betterAuthResponseStatus(response);
-          const responseHeaders = betterAuthResponseHeaders(response);
-          if (
-            status === undefined ||
-            status < 200 ||
-            status >= 300 ||
-            responseHeaders === undefined
-          ) {
-            throw betterAuthCredentialBoundaryFailure();
-          }
-
-          forwardBetterAuthSetCookie(responseHeaders, context);
-          setSessionRevocationClearSiteData(context);
-
-          return {
-            redirectTo: defaultRedirectTo,
-            status: 'signed-out' as const,
-          };
-        } catch {
+        // SPEC §6.5/§9.1: a resolved provider promise is not revocation evidence. Bind the
+        // exact boot-pinned Response facts and require a successful status before clearing any
+        // browser state or publishing the framework-owned signed-out outcome. Deferred response
+        // inspection and cookie forwarding remain inside the opaque plaintext boundary too.
+        const status = betterAuthResponseStatus(response);
+        const responseHeaders = betterAuthResponseHeaders(response);
+        if (
+          status === undefined ||
+          status < 200 ||
+          status >= 300 ||
+          responseHeaders === undefined
+        ) {
           throw betterAuthCredentialBoundaryFailure();
         }
-      },
-    }),
-    key ?? ('auth/sign-out' as Key),
-  );
+
+        forwardBetterAuthSetCookie(responseHeaders, context);
+        setSessionRevocationClearSiteData(context);
+
+        return {
+          redirectTo: defaultRedirectTo,
+          status: 'signed-out' as const,
+        };
+      } catch {
+        throw betterAuthCredentialBoundaryFailure();
+      }
+    },
+  });
 }
