@@ -15,7 +15,7 @@ rendering, Better Auth, and managed SQL.
 | Severity | Open | Closed |
 | -------- | ---: | -----: |
 | High     |    0 |     17 |
-| Medium   |    0 |     20 |
+| Medium   |    0 |     21 |
 | Low      |    0 |      4 |
 
 ## High
@@ -471,6 +471,25 @@ rendering, Better Auth, and managed SQL.
     over-breadth RFC 7239 elements (SPEC §9.5).
   - **Evidence:** integrated conflicting-family/global-floor and bounded-parser regressions passed
     in the 54/54 focused matrix; all 16 C13 corpora passed.
+
+- [x] **M21 - Split-authority Postgres posture checks did not bind the privileged audit to the
+      authenticated runtime session.**
+  - Standalone `kovo db check` discarded a supplied admin URL when a runtime URL was also present,
+    then tried to inspect the private replay-watermark rows through the deliberately denied runtime
+    role. The related privileged boot/check path derived the audited runtime role from URL text
+    without first witnessing the ordinary connection's live `current_user`/`session_user`, so a
+    startup role setting could make app SQL execute under a different role than the one the
+    privileged catalog audit classified (SPEC §10.3 C9/C10).
+  - **Evidence:** the exact external provision → runtime-check lifecycle failed KV433 despite three
+    canonical watermarks; a real Postgres URL with `options=-c role=kovo_admin` made the old split
+    path audit the nominal runtime username instead of the elevated live session.
+  - **Fixed:** `31eea79b0` preserves both runtime and admin authority for standalone checks and uses
+    admin/system authority only for private exact posture facts. `9232f87bf` first witnesses the
+    ordinary connection in a pinned read-only transaction, rejects `current_user != session_user`,
+    and carries that proven identity into the privileged audit without broadening runtime grants.
+  - **Evidence:** external Postgres standalone/boot identity-skew suite 5/5; exact generated
+    provision → check → boot regression 1/1; CLI DB matrix 17/17; the 16-corpus C13 gate now requires
+    the live identity-skew control via `9ee00a336`.
 
 ## Low
 
