@@ -101,9 +101,13 @@ describe('csrf helpers', () => {
   it('mints distinct no-JS replay tokens with the exact 128-bit entropy floor', () => {
     const first = mintIdemToken();
     const second = mintIdemToken();
+    const firstMatch = /^v1_([0-9]{13})_([0-9a-f]{32})$/u.exec(first);
+    const secondMatch = /^v1_([0-9]{13})_([0-9a-f]{32})$/u.exec(second);
 
-    expect(first).toMatch(/^[A-Za-z0-9_-]{22}$/u);
-    expect(Buffer.from(first, 'base64url')).toHaveLength(16);
+    expect(firstMatch).not.toBeNull();
+    expect(secondMatch).not.toBeNull();
+    expect(Buffer.from(firstMatch![2]!, 'hex')).toHaveLength(16);
+    expect(Buffer.from(secondMatch![2]!, 'hex')).toHaveLength(16);
     expect(second).not.toBe(first);
   });
 

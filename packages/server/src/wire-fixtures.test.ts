@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { readFile } from 'node:fs/promises';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 
+import { mintIdemToken } from './csrf.js';
 import { renderDeferredStream } from './deferred-stream.js';
 import { domain } from './domain.js';
 import {
@@ -23,6 +24,8 @@ import {
 
 const wireFixtureBuildToken = 'wire-fixture-test-build';
 const wireFixtureLiveTargetAuthority = createLiveTargetTestAuthority(wireFixtureBuildToken);
+const wireFixtureEnhancedIdem = mintIdemToken();
+const wireFixtureValidationIdem = mintIdemToken();
 
 describe('server wire fixture contracts', () => {
   it('matches the typed read wire fixture response byte-for-byte', async () => {
@@ -90,7 +93,7 @@ describe('server wire fixture contracts', () => {
     const response = expectBufferedWireResponse(
       await renderMutationResponse(addToCart, {
         buildToken: wireFixtureBuildToken,
-        idem: 'idem_01HX',
+        idem: wireFixtureEnhancedIdem,
         liveTargetDescriptors: [
           {
             attestation: createLiveTargetAttestation(
@@ -291,7 +294,7 @@ describe('server wire fixture contracts', () => {
       await renderMutationResponse(addToCart, {
         buildToken: wireFixtureBuildToken,
         failureTarget: 'product-form:p1',
-        idem: 'idem_01HY',
+        idem: wireFixtureValidationIdem,
         liveTargetAttestationAuthority: wireFixtureLiveTargetAuthority.authority,
         liveTargetAudience: wireFixtureLiveTargetAuthority.audience,
         rawInput: { productId: 'p1', quantity: 99 },
@@ -566,6 +569,7 @@ async function fetchWireFixture(
 function readFixtureRequests(
   fixture: string,
 ): { body: string; headers: Record<string, string>; method: string; path: string }[] {
+  fixture = materializeWireFixture(fixture);
   const requests = [];
   let cursor = 0;
 
@@ -631,6 +635,7 @@ function expectBufferedWireResponse<
 function readFixtureResponses(
   fixture: string,
 ): { body: string; headers: Record<string, string>; statusLine: string }[] {
+  fixture = materializeWireFixture(fixture);
   const responses: { body: string; headers: Record<string, string>; statusLine: string }[] = [];
   let cursor = 0;
 
@@ -663,6 +668,12 @@ function readFixtureResponses(
     responses.push({ body, headers, statusLine });
     cursor = nextRequestStart === -1 ? fixture.length : nextRequestStart + 1;
   }
+}
+
+function materializeWireFixture(fixture: string): string {
+  return fixture
+    .replaceAll('idem_01HX', wireFixtureEnhancedIdem)
+    .replaceAll('idem_01HY', wireFixtureValidationIdem);
 }
 
 function trimFixtureResponseBody(body: string): string {
