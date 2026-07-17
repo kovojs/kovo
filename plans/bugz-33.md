@@ -14,7 +14,7 @@ rendering, Better Auth, and managed SQL.
 
 | Severity | Open | Closed |
 | -------- | ---: | -----: |
-| High     |    1 |      7 |
+| High     |    1 |      8 |
 | Medium   |    0 |     13 |
 | Low      |    0 |      3 |
 
@@ -90,15 +90,27 @@ rendering, Better Auth, and managed SQL.
   - **Evidence:** focused exactly-once/mutation/webhook replay matrix 138/138; server dist/DTS and
     API-surface checks passed.
 
-- [ ] **H8 - Transient authenticated webhook failures were committed as long-lived replay truth.**
+- [x] **H8 - Transient authenticated webhook failures were committed as long-lived replay truth.**
   - A webhook handler returning `context.fail(...)` with status `429` or `500` rolled back its work
     but still settled the replay reservation with that response. Provider retries then replayed the
     cached failure for the full retention horizon instead of rerunning the handler.
   - **Evidence:** real signed webhook requests with an in-memory replay store reproduced
     `retry.replayed === true` for both transient statuses before the fix.
-  - **Open:** abort replay reservations for retryable `429`/`500` handler outcomes while retaining
-    deterministic client failures, and prove sequential and concurrent provider retries rerun only
-    when safe (SPEC §9.1.1/§10.3).
+  - **Fixed:** `00a1f37d5` aborts replay reservations for retryable `429`/`500` handler outcomes while
+    retaining deterministic `400`/`401`/`422` replay truth (SPEC §9.1.1/§10.3).
+  - **Evidence:** signed sequential and durable concurrent duplicate/retry regressions passed in
+    the webhook matrix 72/72; server dist, API, wire, security-guarantee, and mutation gates passed.
+
+- [ ] **H9 - Configured database authority leaked into process-global outbound networking.**
+  - Registering a private Postgres endpoint admitted its host and port through the egress floor for
+    ordinary global fetch, Node HTTP, and raw TCP. A remotely influenced generic egress sink could
+    therefore reuse framework-granted database reachability without going through the managed
+    Postgres driver boundary.
+  - **Evidence:** with a private Postgres URL configured, generic process-global network primitives
+    reached the same private host/port before the fix.
+  - **Open:** bind database egress authority to framework-created Postgres sockets, keep generic
+    fetch/HTTP/TCP denied, and prove managed database connectivity still works across bootstrap and
+    runtime paths (SPEC §6.6/§9.4/§9.5).
 
 ## Medium
 
@@ -268,7 +280,8 @@ rendering, Better Auth, and managed SQL.
 - Normalized raw-target Node/build parity matrix: 95/95; wire-output boundary gate passed.
 - Host-authority live/generated matrix: 97/97; wire-output boundary gate passed.
 - Trusted-scheme live/generated matrix: 106/106; wire-output boundary gate passed.
+- Webhook signed replay/retry matrix: 72/72; wire-output boundary gate passed.
 - Better Auth/SQLite/PGlite matrix: 200/200; real PostgreSQL and multi-process SQLite concurrency
   each admitted 3/20 with one row; replay 429-abort regression, dist, API, and TCB gates passed.
-- Final exact-tip remote-boundary review remains open until H8 lands and the parallel fresh passes
+- Final exact-tip remote-boundary review remains open until H9 lands and the parallel fresh passes
   find no new remotely reachable issue.
