@@ -14,7 +14,7 @@ rendering, Better Auth, and managed SQL.
 
 | Severity | Open | Closed |
 | -------- | ---: | -----: |
-| High     |    3 |     13 |
+| High     |    2 |     14 |
 | Medium   |    1 |     15 |
 | Low      |    0 |      3 |
 
@@ -174,7 +174,7 @@ rendering, Better Auth, and managed SQL.
   - **Evidence:** platform-independent mixed-case production/TLS posture regressions 5/5 passed;
     M16 separately tracks the two CLI-owned invocation snapshots discovered by the post-fix audit.
 
-- [ ] **H14 - Route response headers could desynchronize keep-alive HTTP responses.**
+- [x] **H14 - Route response headers could desynchronize keep-alive HTTP responses.**
   - `respond.file()`/`respond.stream()` accepted caller-supplied `Content-Length` and hop-by-hop
     fields, while the final Web-to-Node adapter streamed the actual body unchanged. A remotely
     derived header bag could therefore make a proxy/cache parse different response boundaries from
@@ -182,9 +182,11 @@ rendering, Better Auth, and managed SQL.
   - **Evidence:** a real Node keep-alive reproduction emitted `Content-Length: 0`, then
     `HELLOHTTP/1.1 200...` for two pipelined requests on the same socket. Kovo's typed-header sink
     inventory promises framework-owned response framing (SPEC §6.6/§9.5/§10.3 C9).
-  - **Open:** reserve all framing and hop-by-hop headers across structured and raw response paths,
-    generated adapters, and HTTP versions; fail before write and add wire-level desynchronization
-    regressions.
+  - **Fixed:** `97871d177` reserves framing and hop-by-hop fields across structured, raw, static,
+    generated, Node, Vercel, HTTP/1, and HTTP/2 response paths; framework-owned framing is added
+    only after app metadata passes KV415.
+  - **Evidence:** focused route/static/generated/wire matrix 216/216, all 12 security-classifier
+    corpora, API-surface, and real pipelined response-boundary regressions passed.
 
 - [ ] **H15 - Structured route responses bypassed KV415's typed header-name allowlist.**
   - `respond.file()` and `respond.stream()` accepted an arbitrary `Record<string, string>` even
