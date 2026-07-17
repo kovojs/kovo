@@ -16,7 +16,7 @@ rendering, Better Auth, and managed SQL.
 | -------- | ---: | -----: |
 | High     |    0 |     17 |
 | Medium   |    2 |     15 |
-| Low      |    0 |      3 |
+| Low      |    1 |      3 |
 
 ## High
 
@@ -427,6 +427,16 @@ rendering, Better Auth, and managed SQL.
     check, generate, migrate, and provision before any default target can be selected.
 
 ## Low
+
+- [ ] **L4 - Stored upload filenames could preserve Unicode bidi spoofing into WebKit downloads.**
+  - Upload filename sanitization removed paths and C0 controls but retained directional formatting
+    controls in RFC 8187 `filename*`. A remote uploader could use U+202E to make a downloaded
+    executable's trailing name appear reversed in WebKit download UX (SPEC §6.6/§9.1).
+  - **Evidence:** the exact stored-file serializer emitted
+    `filename*=UTF-8''invoice%E2%80%AEfdp.exe`; Playwright WebKit preserved U+202E in its suggested
+    filename while Chromium and Firefox selected the ASCII fallback.
+  - **Open:** neutralize Unicode bidi formatting controls at the shared runtime/generated
+    Content-Disposition sink and at upload metadata ingestion, with browser and generated parity.
 
 - [x] **L1 - The Vercel preset copied framework metadata files into the public static root.**
   - `_headers` and `kovo-static-manifest.json` disclosed internal deploy/header metadata even though
