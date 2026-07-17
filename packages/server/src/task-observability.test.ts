@@ -263,7 +263,50 @@ describe('durable task observability (SPEC §9.6)', () => {
     expect(statements[0]!.text).toContain('task_key = $1');
     expect(statements[0]!.text).toContain('status = any($2::text[])');
     expect(statements[0]!.text).toContain('limit $3 offset $4');
+    expect(statements[0]!.text).toContain('NULL AS args');
+    expect(statements[0]!.text).toContain('NULL AS last_error');
     expect(statements[0]!.values).toEqual(['email.send', ['failed', 'dead'], 5, 0]);
+  });
+
+  it('bounds operator selectors and pagination before invoking the SQL executor', async () => {
+    let executeCalls = 0;
+    const status = createDurableTaskStatus({
+      async execute() {
+        executeCalls += 1;
+        return { rows: [] };
+      },
+    });
+
+    await expect(status.get('')).rejects.toThrow(/handle id must be 1\.\.4096/u);
+    await expect(
+      status.list({ ids: Array.from({ length: 101 }, (_, index) => `job_${index}`) }),
+    ).rejects.toThrow(/ids may contain at most 100/u);
+    await expect(status.list({ ids: ['x'.repeat(4_097)] })).rejects.toThrow(
+      /ids\[0\] must be 1\.\.4096/u,
+    );
+    await expect(status.list({ task: 'x'.repeat(4_097) })).rejects.toThrow(
+      /task must be 1\.\.4096/u,
+    );
+    await expect(status.list({ limit: 1_001 })).rejects.toThrow(/limit.*0 through 1000/u);
+    await expect(status.list({ limit: -1 })).rejects.toThrow(/limit.*0 through 1000/u);
+    await expect(status.list({ offset: 100_001 })).rejects.toThrow(/offset.*0 through 100000/u);
+    await expect(
+      status.list({ status: Array.from({ length: 7 }, () => 'ready') as never }),
+    ).rejects.toThrow(/at most 6 statuses/u);
+    expect(executeCalls).toBe(0);
+  });
+
+  it('preserves an explicit zero-row SQL limit', async () => {
+    const statements: DurableTaskStatusSqlStatement[] = [];
+    const status = createDurableTaskStatus({
+      async execute(statement) {
+        statements.push(statement);
+        return { rows: [] };
+      },
+    });
+
+    await expect(status.list({ limit: 0 })).resolves.toEqual([]);
+    expect(statements[0]!.values).toEqual([0, 0]);
   });
 
   it('rejects accessor-backed SQL rows without invoking the getter', async () => {

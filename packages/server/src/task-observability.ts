@@ -14,7 +14,6 @@ import {
   taskFreeze,
   taskIsArray,
   taskIsRecord,
-  taskMax,
   taskNewDate,
   taskNumberIsSafeInteger,
   taskOwnDataValue,
@@ -27,6 +26,13 @@ import {
   taskStableOwnFunction,
   taskString,
 } from './task-security-intrinsics.js';
+
+const DURABLE_TASK_STATUS_DEFAULT_LIMIT = 100;
+const DURABLE_TASK_STATUS_MAX_FILTER_IDS = 100;
+const DURABLE_TASK_STATUS_MAX_LIMIT = 1_000;
+const DURABLE_TASK_STATUS_MAX_OFFSET = 100_000;
+const DURABLE_TASK_STATUS_MAX_SELECTOR_LENGTH = 4_096;
+const DURABLE_TASK_STATUS_COUNT = 6;
 
 /** Persisted durable-task job states visible through the SPEC §9.6 status surface. */
 export type DurableTaskObservedStatus =
@@ -55,7 +61,11 @@ export interface DurableTaskStatusSqlExecutor {
   ): Promise<DurableTaskStatusSqlResult<Row>>;
 }
 
-/** Filters accepted by the durable-task status and failure inspection surface. */
+/**
+ * Filters accepted by the operator-only durable-task status surface. Pagination and selector
+ * inputs are runtime-bounded so an accidentally request-exposed inspector cannot issue an
+ * unbounded `_kovo_jobs` scan.
+ */
 export interface DurableTaskStatusFilters {
   readonly ids?: readonly string[];
   readonly task?: string;
@@ -107,7 +117,7 @@ export interface DurableTaskStatusJob {
   readonly leaseOwner?: string;
 }
 
-/** Framework-owned durable-task status reader for SPEC §9.6 operational visibility. */
+/** Framework-owned, operator-only durable-task status reader for SPEC §9.6 visibility. */
 export interface DurableTaskStatusSurface {
   get(
     handle: TaskHandle | string,
@@ -120,7 +130,7 @@ export interface DurableTaskStatusSurface {
 }
 
 /**
- * Framework-owned inspection facade for durable tasks (SPEC §9.6). It reads the
+ * Framework-owned, operator-only inspection facade for durable tasks (SPEC §9.6). It reads the
  * persisted job rows directly for deployed Postgres artifacts, or a read-only
  * snapshot in memory tests, and redacts serialized args and failure text unless callers
  * explicitly request them for privileged diagnostics.
@@ -158,6 +168,7 @@ function statusHandleId(handle: TaskHandle | string): string {
   if (typeof id !== 'string') {
     throw new TypeError('Durable task status handles require an own string id.');
   }
+  assertStatusSelector(id, 'handle id');
   return id;
 }
 
@@ -194,11 +205,17 @@ function snapshotStatusFilters(
     if (!taskIsArray(idsSource)) {
       throw new TypeError('Durable task status ids must be a dense own-data string array.');
     }
+    if (idsSource.length > DURABLE_TASK_STATUS_MAX_FILTER_IDS) {
+      throw new TypeError(
+        `Durable task status ids may contain at most ${DURABLE_TASK_STATUS_MAX_FILTER_IDS} entries.`,
+      );
+    }
     const values = taskSnapshotCollection<unknown>(idsSource, 'Durable task status ids');
     for (let index = 0; index < values.length; index += 1) {
       if (typeof values[index] !== 'string') {
         throw new TypeError('Durable task status ids must be a dense own-data string array.');
       }
+      assertStatusSelector(values[index] as string, `ids[${index}]`);
     }
     ids = taskFreeze(values as string[]);
   }
@@ -206,16 +223,32 @@ function snapshotStatusFilters(
   if (task !== undefined && typeof task !== 'string') {
     throw new TypeError('Durable task status task must be a string.');
   }
-  if (limit !== undefined && !taskNumberIsSafeInteger(limit)) {
-    throw new TypeError('Durable task status limit must be a safe integer.');
+  if (task !== undefined) assertStatusSelector(task, 'task');
+  if (
+    limit !== undefined &&
+    (!taskNumberIsSafeInteger(limit) || limit < 0 || limit > DURABLE_TASK_STATUS_MAX_LIMIT)
+  ) {
+    throw new TypeError(
+      `Durable task status limit must be an integer from 0 through ${DURABLE_TASK_STATUS_MAX_LIMIT}.`,
+    );
   }
-  if (offset !== undefined && !taskNumberIsSafeInteger(offset)) {
-    throw new TypeError('Durable task status offset must be a safe integer.');
+  if (
+    offset !== undefined &&
+    (!taskNumberIsSafeInteger(offset) || offset < 0 || offset > DURABLE_TASK_STATUS_MAX_OFFSET)
+  ) {
+    throw new TypeError(
+      `Durable task status offset must be an integer from 0 through ${DURABLE_TASK_STATUS_MAX_OFFSET}.`,
+    );
   }
 
   let status: DurableTaskObservedStatus | readonly DurableTaskObservedStatus[] | undefined;
   if (statusSource !== undefined) {
     if (taskIsArray(statusSource)) {
+      if (statusSource.length > DURABLE_TASK_STATUS_COUNT) {
+        throw new TypeError(
+          `Durable task status filters may contain at most ${DURABLE_TASK_STATUS_COUNT} statuses.`,
+        );
+      }
       const values = taskSnapshotCollection<unknown>(statusSource, 'Durable task status filters');
       for (let index = 0; index < values.length; index += 1) {
         taskArraySet(values, index, observedStatusValue(values[index]));
@@ -234,6 +267,14 @@ function snapshotStatusFilters(
     ...(offset === undefined ? {} : { offset }),
     ...(includeArgs ? { includeArgs: true } : {}),
   });
+}
+
+function assertStatusSelector(value: string, label: string): void {
+  if (value.length === 0 || value.length > DURABLE_TASK_STATUS_MAX_SELECTOR_LENGTH) {
+    throw new TypeError(
+      `Durable task status ${label} must be 1..${DURABLE_TASK_STATUS_MAX_SELECTOR_LENGTH} characters.`,
+    );
+  }
 }
 
 function createStatusReader(
@@ -296,8 +337,8 @@ function listSnapshotJobs(
   const filterIds = filters.ids ?? [];
   for (let index = 0; index < filterIds.length; index += 1) taskSetAdd(ids, filterIds[index]!);
   const statuses = statusFilter(filters.status);
-  const offset = taskMax(0, taskFloor(filters.offset ?? 0));
-  const limit = taskMax(0, taskFloor(filters.limit ?? 100));
+  const offset = taskFloor(filters.offset ?? 0);
+  const limit = taskFloor(filters.limit ?? DURABLE_TASK_STATUS_DEFAULT_LIMIT);
   const selected: DurableTaskStatusJob[] = [];
   for (let index = 0; index < snapshotJobs.length; index += 1) {
     const job = snapshotJobs[index]!;
@@ -338,14 +379,14 @@ function sqlListJobsStatement(filters: DurableTaskStatusFilters): {
     taskArrayPush(clauses, `status = any($${values.length}::text[])`);
   }
 
-  taskArrayPush(values, taskMax(1, taskFloor(filters.limit ?? 100)));
+  taskArrayPush(values, taskFloor(filters.limit ?? DURABLE_TASK_STATUS_DEFAULT_LIMIT));
   const limitPlaceholder = `$${values.length}`;
-  taskArrayPush(values, taskMax(0, taskFloor(filters.offset ?? 0)));
+  taskArrayPush(values, taskFloor(filters.offset ?? 0));
   const offsetPlaceholder = `$${values.length}`;
 
   return {
-    text: `select id, task_key, args, run_at, logical_key, status, attempts, created_at, updated_at,
-  leased_until, lease_owner, last_error
+    text: `select id, task_key, ${filters.includeArgs === true ? 'args' : 'NULL AS args'}, run_at, logical_key, status, attempts, created_at, updated_at,
+  leased_until, lease_owner, ${filters.includeArgs === true ? 'last_error' : 'NULL AS last_error'}
 from _kovo_jobs
 ${clauses.length === 0 ? '' : `where ${joinClauses(clauses)}`}
 order by updated_at desc, created_at desc
