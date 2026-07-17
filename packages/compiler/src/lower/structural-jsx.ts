@@ -1,3 +1,5 @@
+import ts from 'typescript';
+
 import {
   knownQueryNames,
   queryNameFromPath,
@@ -8,6 +10,11 @@ import {
   reactivePropertyAccessesForJsxExpression,
 } from '../analyze/reactive-aliases.js';
 import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
+import {
+  expressionResolvesToFrameworkExport,
+  frameworkExport,
+  type FrameworkIdentityTypeScript,
+} from '@kovojs/core/internal/framework-identity';
 import { diagnosticFor } from '../diagnostics.js';
 import type { CompilerDiagnostic } from '../diagnostics.js';
 import {
@@ -29,14 +36,17 @@ import {
   type JsxIrElement,
   type JsxIrExpression,
 } from '../jsx-ir.js';
-import type {
-  ComponentModuleModel,
-  JsxAttributeModel,
-  JsxElementModel,
-  JsxExpressionModel,
-  ObjectLiteralEntry,
-  SourceSpan,
+import {
+  parseComponentModule,
+  type ComponentModuleModel,
+  type JsxAttributeModel,
+  type JsxElementModel,
+  type JsxExpressionModel,
+  type ObjectLiteralEntry,
+  type SourceSpan,
 } from '../scan/parse.js';
+/* Parser-owned intrinsic identity is mandatory for the component traversal below. */
+import type { CompileComponentOptions, StateDeriveFact, ViewTransitionStamp } from '../types.js';
 import type { StaticLiteralValue } from '../scan/object.js';
 import {
   enhancedMutationFormBinding,
@@ -54,11 +64,11 @@ import {
   bindPropStampAttributeName,
   escapeAttribute,
   isPropertyAuthoritativeAttribute,
+  normalizeComponentFileName,
   outputWriteFact,
   sanitizeIdentifier,
   type SourceReplacement,
 } from '../shared.js';
-import type { CompileComponentOptions, StateDeriveFact, ViewTransitionStamp } from '../types.js';
 import { executableJavaScriptExpression } from '../javascript-expression.js';
 import {
   compilerArrayJoin,
@@ -115,8 +125,12 @@ export type StructuralJsxLoweringOptions = Pick<
   CompileComponentOptions,
   'fileName' | 'queryShapeFacts' | 'queryShapes' | 'registryFacts' | 'source'
 > & {
+  /** @internal Project files pinned by the compiler/Vite caller for source component proof. */
+  extraFiles?: readonly { readonly fileName: string; readonly source: string }[];
   skipInlineAttributeDeriveSpans?: readonly SourceSpan[];
 };
+
+const KOVO_COMPONENT_IDENTITY = frameworkExport('@kovojs/core', 'component');
 
 interface InlineAttributeDerive {
   attribute: JsxAttributeModel;
@@ -484,8 +498,10 @@ function mutationFormProvenanceDiagnostics(
     const directTransport = mutationSubmitterDirectTransport(element.element);
     if (
       associatedMutationForm === null &&
+      mutationForms.length > 0 &&
       directTransport.hasFormAssociation &&
-      directTransport.overrides.length > 0
+      directTransport.overrides.length > 0 &&
+      !submitterTargetsProvenSeparateNativeForm(element, elements, mutationForms)
     ) {
       for (
         let overrideIndex = 0;
@@ -558,6 +574,67 @@ function mutationFormProvenanceDiagnostics(
   return diagnostics;
 }
 
+function submitterTargetsProvenSeparateNativeForm(
+  submitter: JsxIrElement,
+  elements: readonly JsxIrElement[],
+  mutationForms: readonly JsxIrElement[],
+): boolean {
+  const formId = staticAttributeString(submitter, 'form');
+  if (formId === null || formId.length === 0) return false;
+  const allElements = compilerSnapshotDenseArray(elements, 'Native form association elements');
+  const typedForms = compilerSnapshotDenseArray(mutationForms, 'Typed mutation forms');
+  let matches = 0;
+  for (let index = 0; index < allElements.length; index += 1) {
+    const candidate = allElements[index]!;
+    if (!isIntrinsicHtmlElement(candidate.element, 'form')) continue;
+    if (formAssociationIdIsDynamic(candidate)) return false;
+    if (staticAttributeString(candidate, 'id') !== formId) continue;
+    let typed = false;
+    for (let typedIndex = 0; typedIndex < typedForms.length; typedIndex += 1) {
+      if (typedForms[typedIndex] === candidate) {
+        typed = true;
+        break;
+      }
+    }
+    if (typed || formIsNestedInTypedMutationForm(candidate, typedForms)) return false;
+    matches += 1;
+    if (matches > 1) return false;
+  }
+  return matches === 1;
+}
+
+function formAssociationIdIsDynamic(form: JsxIrElement): boolean {
+  if (form.element.spreadAttributes.length > 0) return true;
+  const attributes = compilerSnapshotDenseArray(
+    form.element.attributes,
+    'Native form association attributes',
+  );
+  for (let index = 0; index < attributes.length; index += 1) {
+    const attribute = attributes[index]!;
+    if (compilerStringToLowerCase(attribute.name) !== 'id') continue;
+    if (mutationFormControlIsStaticallyAbsent(attribute)) return false;
+    return attribute.value === undefined && typeof attribute.expressionStaticValue !== 'string';
+  }
+  return false;
+}
+
+function formIsNestedInTypedMutationForm(
+  form: JsxIrElement,
+  mutationForms: readonly JsxIrElement[],
+): boolean {
+  const typedForms = compilerSnapshotDenseArray(
+    mutationForms,
+    'Native form association typed forms',
+  );
+  for (let index = 0; index < typedForms.length; index += 1) {
+    const typed = typedForms[index]!.element;
+    if (form.element.start >= typed.openingEnd && form.element.end <= typed.closingStart) {
+      return true;
+    }
+  }
+  return false;
+}
+
 function mutationFormForSubmitter(
   element: JsxIrElement,
   mutationForms: readonly JsxIrElement[],
@@ -611,8 +688,6 @@ function componentMutationSubmitterOverrideDiagnostics(
   options: StructuralJsxLoweringOptions,
 ): CompilerDiagnostic[] {
   const diagnostics: CompilerDiagnostic[] = [];
-  const pending: string[] = [];
-  const seen = compilerCreateSet<string>();
   const elementSnapshot = compilerSnapshotDenseArray(
     elements,
     'Component mutation submitter elements',
@@ -621,6 +696,7 @@ function componentMutationSubmitterOverrideDiagnostics(
     mutationForms,
     'Component mutation submitter forms',
   );
+  const project = mutationComponentProject(model, options);
 
   for (let formIndex = 0; formIndex < formSnapshot.length; formIndex += 1) {
     const form = formSnapshot[formIndex]!.element;
@@ -629,68 +705,452 @@ function componentMutationSubmitterOverrideDiagnostics(
       if (
         candidate.element.start < form.openingEnd ||
         candidate.element.end > form.closingStart ||
-        !isComponentTag(candidate.tag)
+        candidate.element.intrinsicTagName !== undefined
       ) {
         continue;
       }
-      appendCompilerFact(pending, candidate.tag, 'Nested mutation form components');
-    }
-  }
-
-  const components = compilerSnapshotDenseArray(
-    model.components,
-    'Component mutation submitter definitions',
-  );
-  for (let pendingIndex = 0; pendingIndex < pending.length; pendingIndex += 1) {
-    const localName = pending[pendingIndex]!;
-    if (compilerSetHas(seen, localName)) continue;
-    compilerSetAdd(seen, localName);
-
-    let component: (typeof components)[number] | undefined;
-    for (let componentIndex = 0; componentIndex < components.length; componentIndex += 1) {
-      if (components[componentIndex]!.localName === localName) {
-        component = components[componentIndex];
-        break;
-      }
-    }
-    const componentStart = component?.localNameSpan?.start;
-    if (component === undefined || componentStart === undefined) continue;
-
-    for (let elementIndex = 0; elementIndex < elementSnapshot.length; elementIndex += 1) {
-      const candidate = elementSnapshot[elementIndex]!;
-      if (
-        candidate.element.start < componentStart ||
-        candidate.element.end > component.declarationEnd
-      ) {
-        continue;
-      }
-      if (isComponentTag(candidate.tag)) {
-        appendCompilerFact(pending, candidate.tag, 'Nested mutation form components');
-        continue;
-      }
-      if (
-        !isIntrinsicHtmlElement(candidate.element, 'button') &&
-        !isIntrinsicHtmlElement(candidate.element, 'input')
-      ) {
-        continue;
-      }
-      const transport = mutationSubmitterDirectTransport(candidate.element);
-      for (let overrideIndex = 0; overrideIndex < transport.overrides.length; overrideIndex += 1) {
-        const attribute = transport.overrides[overrideIndex]!;
-        appendCompilerFact(
-          diagnostics,
-          mutationFormProvenanceDiagnostic(
-            options,
-            attribute,
-            `component-rendered ${attribute.name} cannot override a typed mutation form transport; use a separate native form`,
-          ),
-          'Component mutation submitter diagnostics',
-        );
-      }
+      inspectMutationComponent(
+        project.root,
+        candidate.tag,
+        candidate.element,
+        compilerCreateSet<string>(),
+        project,
+        options,
+        diagnostics,
+      );
     }
   }
 
   return diagnostics;
+}
+
+interface MutationComponentSource {
+  readonly fileName: string;
+  readonly model: ComponentModuleModel;
+  readonly source: string;
+}
+
+interface MutationComponentProject {
+  readonly files: readonly MutationComponentSource[];
+  readonly root: MutationComponentSource;
+}
+
+interface MutationComponentImplementation {
+  readonly body: ts.ConciseBody;
+  readonly source: MutationComponentSource;
+}
+
+function mutationComponentProject(
+  model: ComponentModuleModel,
+  options: StructuralJsxLoweringOptions,
+): MutationComponentProject {
+  const root: MutationComponentSource = {
+    fileName: normalizeComponentFileName(options.fileName),
+    model,
+    source: options.source,
+  };
+  const files: MutationComponentSource[] = [root];
+  const extraFiles = compilerSnapshotDenseArray(
+    options.extraFiles ?? [],
+    'Mutation component project files',
+  );
+  for (let index = 0; index < extraFiles.length; index += 1) {
+    const file = extraFiles[index]!;
+    const fileName = normalizeComponentFileName(file.fileName);
+    if (fileName === root.fileName) continue;
+    appendCompilerFact(
+      files,
+      {
+        fileName,
+        model: parseComponentModule(fileName, file.source, {
+          frameworkIdentityFiles: extraFiles,
+        }),
+        source: file.source,
+      },
+      'Mutation component project models',
+    );
+  }
+  return { files, root };
+}
+
+function inspectMutationComponent(
+  from: MutationComponentSource,
+  tag: string,
+  rootSpan: { readonly end: number; readonly start: number },
+  seen: Set<string>,
+  project: MutationComponentProject,
+  options: StructuralJsxLoweringOptions,
+  diagnostics: CompilerDiagnostic[],
+): void {
+  if (compilerOwnedMutationFormHelper(from.model, tag)) return;
+  const implementation = resolveMutationComponent(from, tag, project);
+  if (implementation === null) {
+    appendCompilerFact(
+      diagnostics,
+      mutationFormProvenanceDiagnostic(
+        options,
+        rootSpan,
+        `component-rendered <${tag}> cannot be resolved to pinned source while nested in a typed mutation form`,
+      ),
+      'Unresolved mutation form component diagnostics',
+    );
+    return;
+  }
+  const identity = `${implementation.source.fileName}:${tag}:${implementation.body.getStart(implementation.source.model.sourceFile)}`;
+  if (compilerSetHas(seen, identity)) {
+    appendCompilerFact(
+      diagnostics,
+      mutationFormProvenanceDiagnostic(
+        options,
+        rootSpan,
+        `component-rendered <${tag}> has recursive output that cannot be proven free of mutation submitter overrides`,
+      ),
+      'Recursive mutation form component diagnostics',
+    );
+    return;
+  }
+  if (!componentBodyHasClosedJsxReturns(implementation.body)) {
+    appendCompilerFact(
+      diagnostics,
+      mutationFormProvenanceDiagnostic(
+        options,
+        rootSpan,
+        `component-rendered <${tag}> has an output path that is not statically resolvable JSX`,
+      ),
+      'Opaque mutation form component diagnostics',
+    );
+    return;
+  }
+
+  compilerSetAdd(seen, identity);
+  const bodyStart = implementation.body.getStart(implementation.source.model.sourceFile);
+  const bodyEnd = implementation.body.getEnd();
+  const candidates = compilerSnapshotDenseArray(
+    implementation.source.model.jsxElements,
+    'Resolved mutation component JSX elements',
+  );
+  for (let index = 0; index < candidates.length; index += 1) {
+    const candidate = candidates[index]!;
+    if (candidate.start < bodyStart || candidate.end > bodyEnd) continue;
+    if (candidate.intrinsicTagName === undefined) {
+      inspectMutationComponent(
+        implementation.source,
+        candidate.tag,
+        rootSpan,
+        seen,
+        project,
+        options,
+        diagnostics,
+      );
+      continue;
+    }
+    if (
+      !isIntrinsicHtmlElement(candidate, 'button') &&
+      !isIntrinsicHtmlElement(candidate, 'input')
+    ) {
+      continue;
+    }
+    const transport = mutationSubmitterDirectTransport(candidate);
+    for (let overrideIndex = 0; overrideIndex < transport.overrides.length; overrideIndex += 1) {
+      const attribute = transport.overrides[overrideIndex]!;
+      appendCompilerFact(
+        diagnostics,
+        mutationFormProvenanceDiagnostic(
+          options,
+          implementation.source === project.root ? attribute : rootSpan,
+          `component-rendered ${attribute.name} cannot override a typed mutation form transport; use a separate native form`,
+        ),
+        'Component mutation submitter diagnostics',
+      );
+    }
+    const spreads = compilerSnapshotDenseArray(
+      candidate.spreadAttributes,
+      'Resolved mutation component submitter spreads',
+    );
+    for (let spreadIndex = 0; spreadIndex < spreads.length; spreadIndex += 1) {
+      const spread = spreads[spreadIndex]!;
+      const names = compilerSnapshotDenseArray(
+        spread.mutationFormControlNames ?? [],
+        'Resolved mutation component spread controls',
+      );
+      const overrides: string[] = [];
+      for (let nameIndex = 0; nameIndex < names.length; nameIndex += 1) {
+        const transportName = mutationSubmitterTransportAttributeName(names[nameIndex]!);
+        if (transportName !== null && transportName !== 'form') {
+          appendCompilerFact(overrides, names[nameIndex]!, 'Component submitter spread overrides');
+        }
+      }
+      if (overrides.length === 0) continue;
+      appendCompilerFact(
+        diagnostics,
+        mutationFormProvenanceDiagnostic(
+          options,
+          implementation.source === project.root ? spread : rootSpan,
+          `component-rendered submitter spread cannot override typed mutation transport (${compilerArrayJoin(overrides, ', ')})`,
+        ),
+        'Component mutation submitter spread diagnostics',
+      );
+    }
+  }
+}
+
+function compilerOwnedMutationFormHelper(model: ComponentModuleModel, tag: string): boolean {
+  const imports = compilerSnapshotDenseArray(model.namedImports, 'Mutation form helper imports');
+  for (let index = 0; index < imports.length; index += 1) {
+    const entry = imports[index]!;
+    if (
+      entry.localName === tag &&
+      entry.moduleSpecifier === '@kovojs/core' &&
+      (entry.importedName === 'FieldError' || entry.importedName === 'FormError')
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function resolveMutationComponent(
+  from: MutationComponentSource,
+  tag: string,
+  project: MutationComponentProject,
+): MutationComponentImplementation | null {
+  if (compilerStringIncludes(tag, '.')) return null;
+  const local = localMutationComponentImplementation(from, tag);
+  if (local !== null) return local;
+
+  const imports = compilerSnapshotDenseArray(from.model.namedImports, 'Mutation component imports');
+  for (let index = 0; index < imports.length; index += 1) {
+    const entry = imports[index]!;
+    if (entry.localName !== tag || !compilerStringStartsWith(entry.moduleSpecifier, '.')) continue;
+    const target = mutationComponentImportSource(from.fileName, entry.moduleSpecifier, project);
+    if (target === null) return null;
+    const localName = exportedMutationComponentLocalName(target, entry.importedName);
+    return localName === null ? null : localMutationComponentImplementation(target, localName);
+  }
+  return null;
+}
+
+function localMutationComponentImplementation(
+  source: MutationComponentSource,
+  localName: string,
+): MutationComponentImplementation | null {
+  const statements = compilerSnapshotDenseArray(
+    source.model.sourceFile.statements,
+    'Mutation component source statements',
+  );
+  for (let statementIndex = 0; statementIndex < statements.length; statementIndex += 1) {
+    const statement = statements[statementIndex]!;
+    if (
+      ts.isFunctionDeclaration(statement) &&
+      statement.name?.text === localName &&
+      statement.body
+    ) {
+      return { body: statement.body, source };
+    }
+    if (!ts.isVariableStatement(statement)) continue;
+    const declarations = compilerSnapshotDenseArray(
+      statement.declarationList.declarations,
+      'Mutation component declarations',
+    );
+    for (let index = 0; index < declarations.length; index += 1) {
+      const declaration = declarations[index]!;
+      if (!ts.isIdentifier(declaration.name) || declaration.name.text !== localName) continue;
+      const body = mutationComponentBodyFromInitializer(source, declaration.initializer);
+      return body === null ? null : { body, source };
+    }
+  }
+  return null;
+}
+
+function mutationComponentBodyFromInitializer(
+  source: MutationComponentSource,
+  initializer: ts.Expression | undefined,
+): ts.ConciseBody | null {
+  if (initializer === undefined) return null;
+  const expression = unwrapMutationComponentExpression(initializer);
+  if (ts.isArrowFunction(expression) || ts.isFunctionExpression(expression)) return expression.body;
+  if (
+    !ts.isCallExpression(expression) ||
+    !expressionResolvesToFrameworkExport(
+      ts as FrameworkIdentityTypeScript,
+      source.model.sourceFile,
+      expression.expression,
+      KOVO_COMPONENT_IDENTITY,
+      { legacyGlobals: [KOVO_COMPONENT_IDENTITY] },
+    )
+  ) {
+    return null;
+  }
+  const options = expression.arguments[0];
+  if (!options || !ts.isObjectLiteralExpression(options)) return null;
+  const properties = compilerSnapshotDenseArray(options.properties, 'Component render properties');
+  for (let index = 0; index < properties.length; index += 1) {
+    const property = properties[index]!;
+    if (
+      !ts.isPropertyAssignment(property) ||
+      property.name.getText(source.model.sourceFile) !== 'render'
+    ) {
+      continue;
+    }
+    const render = unwrapMutationComponentExpression(property.initializer);
+    return ts.isArrowFunction(render) || ts.isFunctionExpression(render) ? render.body : null;
+  }
+  return null;
+}
+
+function unwrapMutationComponentExpression(expression: ts.Expression): ts.Expression {
+  let current = expression;
+  while (
+    ts.isParenthesizedExpression(current) ||
+    ts.isAsExpression(current) ||
+    ts.isSatisfiesExpression(current) ||
+    ts.isNonNullExpression(current) ||
+    ts.isTypeAssertionExpression(current)
+  ) {
+    current = current.expression;
+  }
+  return current;
+}
+
+function componentBodyHasClosedJsxReturns(body: ts.ConciseBody): boolean {
+  if (!ts.isBlock(body)) return componentReturnExpressionIsClosed(body);
+  let closed = true;
+  const visit = (node: ts.Node): void => {
+    if (!closed) return;
+    if (node !== body && ts.isFunctionLike(node)) return;
+    if (ts.isReturnStatement(node)) {
+      if (node.expression !== undefined && !componentReturnExpressionIsClosed(node.expression)) {
+        closed = false;
+      }
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(body);
+  return closed;
+}
+
+function componentReturnExpressionIsClosed(expression: ts.Expression): boolean {
+  const value = unwrapMutationComponentExpression(expression);
+  if (
+    ts.isJsxElement(value) ||
+    ts.isJsxSelfClosingElement(value) ||
+    ts.isJsxFragment(value) ||
+    value.kind === ts.SyntaxKind.NullKeyword ||
+    value.kind === ts.SyntaxKind.FalseKeyword ||
+    value.kind === ts.SyntaxKind.TrueKeyword ||
+    ts.isStringLiteralLike(value) ||
+    ts.isNumericLiteral(value)
+  ) {
+    return true;
+  }
+  if (ts.isConditionalExpression(value)) {
+    return (
+      componentReturnExpressionIsClosed(value.whenTrue) &&
+      componentReturnExpressionIsClosed(value.whenFalse)
+    );
+  }
+  if (ts.isArrayLiteralExpression(value)) {
+    const elements = compilerSnapshotDenseArray(value.elements, 'Component return array');
+    for (let index = 0; index < elements.length; index += 1) {
+      const element = elements[index]!;
+      if (ts.isOmittedExpression(element) || ts.isSpreadElement(element)) return false;
+      if (!componentReturnExpressionIsClosed(element)) return false;
+    }
+    return true;
+  }
+  return false;
+}
+
+function exportedMutationComponentLocalName(
+  source: MutationComponentSource,
+  exportedName: string,
+): string | null {
+  const statements = compilerSnapshotDenseArray(
+    source.model.sourceFile.statements,
+    'Exported mutation component statements',
+  );
+  for (let index = 0; index < statements.length; index += 1) {
+    const statement = statements[index]!;
+    if (
+      ts.isFunctionDeclaration(statement) &&
+      statement.name?.text === exportedName &&
+      mutationComponentHasExportModifier(statement)
+    ) {
+      return exportedName;
+    }
+    if (ts.isVariableStatement(statement) && mutationComponentHasExportModifier(statement)) {
+      const declarations = compilerSnapshotDenseArray(
+        statement.declarationList.declarations,
+        'Exported mutation component declarations',
+      );
+      for (
+        let declarationIndex = 0;
+        declarationIndex < declarations.length;
+        declarationIndex += 1
+      ) {
+        const declaration = declarations[declarationIndex]!;
+        if (ts.isIdentifier(declaration.name) && declaration.name.text === exportedName) {
+          return exportedName;
+        }
+      }
+    }
+    if (
+      ts.isExportDeclaration(statement) &&
+      statement.moduleSpecifier === undefined &&
+      statement.exportClause !== undefined &&
+      ts.isNamedExports(statement.exportClause)
+    ) {
+      const elements = compilerSnapshotDenseArray(
+        statement.exportClause.elements,
+        'Mutation component export specifiers',
+      );
+      for (let elementIndex = 0; elementIndex < elements.length; elementIndex += 1) {
+        const element = elements[elementIndex]!;
+        if (element.name.text === exportedName) return element.propertyName?.text ?? exportedName;
+      }
+    }
+  }
+  return null;
+}
+
+function mutationComponentHasExportModifier(node: ts.Node): boolean {
+  const modifiers = (node as { readonly modifiers?: readonly ts.Modifier[] }).modifiers;
+  if (modifiers === undefined) return false;
+  const snapshot = compilerSnapshotDenseArray(modifiers, 'Mutation component modifiers');
+  for (let index = 0; index < snapshot.length; index += 1) {
+    if (snapshot[index]!.kind === ts.SyntaxKind.ExportKeyword) return true;
+  }
+  return false;
+}
+
+function mutationComponentImportSource(
+  fromFileName: string,
+  specifier: string,
+  project: MutationComponentProject,
+): MutationComponentSource | null {
+  const parts = compilerStringSplit(fromFileName, '/');
+  const directoryParts: string[] = [];
+  for (let index = 0; index < parts.length - 1; index += 1) {
+    appendCompilerFact(directoryParts, parts[index]!, 'Mutation component import directory');
+  }
+  const target = normalizeComponentFileName(
+    `${compilerArrayJoin(directoryParts, '/')}/${specifier}`,
+  );
+  const targetStem = mutationComponentSourceStem(target);
+  const files = compilerSnapshotDenseArray(project.files, 'Mutation component project sources');
+  for (let index = 0; index < files.length; index += 1) {
+    const file = files[index]!;
+    const fileStem = mutationComponentSourceStem(file.fileName);
+    if (file.fileName === target || fileStem === targetStem || fileStem === `${targetStem}/index`) {
+      return file;
+    }
+  }
+  return null;
+}
+
+function mutationComponentSourceStem(fileName: string): string {
+  return compilerRegExpReplace(/(?:\.d)?\.[cm]?[jt]sx?$/i, fileName, '');
 }
 
 function removeJsxIrSourceAttribute(
@@ -763,7 +1223,7 @@ function lowerDynamicJsxSpreads(elements: readonly JsxIrElement[]): boolean {
       elementIndex,
       'Dynamic spread JSX elements',
     ) as JsxIrElement;
-    if (isComponentTag(element.tag)) continue;
+    if (element.element.intrinsicTagName === undefined) continue;
     const transportBoundary = isIntrinsicHtmlElement(element.element, 'form')
       ? enhancedMutationFormBinding(element.element) === null
         ? undefined

@@ -924,8 +924,11 @@ function mutationSubmitterTransportOverrideDiagnostics(
   );
   for (let index = 0; index < attributes.length; index += 1) {
     const attribute = attributes[index]!;
+    if (attribute.expressionStaticValue === false || attribute.expressionStaticValue === null) {
+      continue;
+    }
     const transport = mutationSubmitterTransportAttributeName(attribute.name);
-    if (transport !== 'formaction' && transport !== 'formmethod') continue;
+    if (transport === null || transport === 'form') continue;
     compilerArrayAppend(
       diagnostics,
       formFieldDiagnostic(
