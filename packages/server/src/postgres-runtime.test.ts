@@ -363,6 +363,43 @@ describe('createPostgresAppRuntimeDb', () => {
     );
   });
 
+  it('fails posture when durable replay admission or response-storage bounds are weakened', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-replay-capacity-'));
+    roots.push(dataDir);
+    const initial = createPostgresAppRuntimeDb({ dataDir, driver: 'pglite', schema });
+    await initial.ready;
+    await initial.close();
+
+    const weakened = new PGlite(dataDir);
+    await weakened.exec(
+      [
+        'ALTER TABLE _kovo_replay DROP CONSTRAINT _kovo_replay_admission_slot_check;',
+        'ALTER TABLE _kovo_replay DROP CONSTRAINT _kovo_replay_response_size_check;',
+        'DROP INDEX _kovo_replay_admission_slot_idx;',
+        "ALTER TABLE _kovo_replay ADD CONSTRAINT _kovo_replay_admission_slot_check CHECK (surface = 'capability' OR admission_slot > 0);",
+        'ALTER TABLE _kovo_replay ADD CONSTRAINT _kovo_replay_response_size_check CHECK (response_body IS NULL OR response_body IS NOT NULL);',
+        "CREATE INDEX _kovo_replay_admission_slot_idx ON _kovo_replay (surface) WHERE surface IN ('mutation', 'webhook');",
+      ].join(' '),
+    );
+    await weakened.close();
+
+    await expect(
+      checkPostgresAppDbPosture({ dataDir, driver: 'pglite', schema }),
+    ).resolves.toMatchObject({
+      ok: false,
+      issues: expect.arrayContaining([
+        expect.objectContaining({ code: 'KV433_REPLAY_STORE_SCHEMA' }),
+      ]),
+    });
+
+    const repaired = createPostgresAppRuntimeDb({ dataDir, driver: 'pglite', schema });
+    await repaired.ready;
+    await repaired.close();
+    await expect(
+      checkPostgresAppDbPosture({ dataDir, driver: 'pglite', schema }),
+    ).resolves.toMatchObject({ ok: true, issues: [] });
+  });
+
   it('does not dispatch a one-shot Array.join poison while committing owner RLS', async () => {
     const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-policy-primordial-'));
     roots.push(dataDir);

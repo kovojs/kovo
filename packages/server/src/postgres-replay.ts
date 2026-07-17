@@ -44,6 +44,14 @@ import {
 
 /** Framework-owned durable replay relation provisioned with the Postgres runtime (SPEC §10.3). */
 export const POSTGRES_REPLAY_TABLE = '_kovo_replay';
+/** Hard database admission-slot ceiling shared by provisioning and runtime validation. */
+export const POSTGRES_REPLAY_MAX_ENTRIES = 1_000;
+/** Maximum raw UTF-16LE response-body bytes admitted to one durable replay row. */
+export const POSTGRES_REPLAY_MAX_RESPONSE_BODY_BYTES = 1_048_576;
+/** Maximum base64 bytes persisted for one bounded durable replay response body. */
+export const POSTGRES_REPLAY_MAX_RESPONSE_BODY_STORAGE_BYTES = 1_398_104;
+/** Maximum UTF-8 bytes persisted for one durable replay response header snapshot. */
+export const POSTGRES_REPLAY_MAX_RESPONSE_HEADER_BYTES = 65_536;
 
 /** Durable replay namespace; capability, mutation, and webhook keys cannot collide. */
 export type PostgresReplaySurface = 'capability' | 'mutation' | 'webhook';
@@ -69,6 +77,12 @@ export interface PostgresReplayStoreOptions {
   pendingWaitMs?: number;
   /** Delay between durable pending-row polls. */
   pollIntervalMs?: number;
+  /** Maximum retained pending or committed keys for this replay surface. */
+  maxEntries?: number;
+  /** Maximum UTF-16LE bytes retained for one replay response body. */
+  maxResponseBodyBytes?: number;
+  /** Maximum UTF-8 bytes retained for one replay response header snapshot. */
+  maxResponseHeaderBytes?: number;
 }
 
 /** Explicit target for operator reconciliation of a crash-orphaned pending replay claim. */
@@ -86,6 +100,9 @@ export interface PostgresPendingReplayReleaseOptions {
 
 const DEFAULT_PENDING_WAIT_MS = 1_000;
 const DEFAULT_POLL_INTERVAL_MS = 25;
+const DEFAULT_MAX_ENTRIES = 1_000;
+const DEFAULT_MAX_RESPONSE_BODY_BYTES = POSTGRES_REPLAY_MAX_RESPONSE_BODY_BYTES;
+const DEFAULT_MAX_RESPONSE_HEADER_BYTES = POSTGRES_REPLAY_MAX_RESPONSE_HEADER_BYTES;
 
 /**
  * Create a durable mutation replay store over a framework-system Postgres SQL executor.
@@ -203,7 +220,7 @@ export function createPostgresCapabilityReplayStoreFromExecutor(
           'response_headers, response_status, expires_at, committed_at) ' +
           "SELECT 'capability', $1, $2, NULL, $3, 'committed', $4, '{}', 204, $5, CURRENT_TIMESTAMP " +
           'WHERE $5::bigint > FLOOR(EXTRACT(EPOCH FROM CURRENT_TIMESTAMP) * 1000)::bigint ' +
-          'ON CONFLICT (surface, scope, idem) DO NOTHING RETURNING generation',
+          'ON CONFLICT DO NOTHING RETURNING generation',
         values: [persistedScope, persistedId, generation, securityString(expiresAt), expiresAt],
       });
       const rows = replayRows(result, 'Postgres capability replay consume result');
@@ -298,8 +315,25 @@ function createPostgresReplayRuntime(
   const pendingWaitMs = optionalReplayDuration(options, 'pendingWaitMs') ?? DEFAULT_PENDING_WAIT_MS;
   const pollIntervalMs =
     optionalReplayDuration(options, 'pollIntervalMs') ?? DEFAULT_POLL_INTERVAL_MS;
+  const maxEntries =
+    optionalReplayBound(options, 'maxEntries', POSTGRES_REPLAY_MAX_ENTRIES) ?? DEFAULT_MAX_ENTRIES;
+  const maxResponseBodyBytes =
+    optionalReplayBound(options, 'maxResponseBodyBytes', POSTGRES_REPLAY_MAX_RESPONSE_BODY_BYTES) ??
+    DEFAULT_MAX_RESPONSE_BODY_BYTES;
+  const maxResponseHeaderBytes =
+    optionalReplayBound(
+      options,
+      'maxResponseHeaderBytes',
+      POSTGRES_REPLAY_MAX_RESPONSE_HEADER_BYTES,
+    ) ?? DEFAULT_MAX_RESPONSE_HEADER_BYTES;
   if (pollIntervalMs === 0) {
     throw new TypeError('Postgres replay pollIntervalMs must be greater than zero.');
+  }
+  if (maxEntries === 0) {
+    throw new TypeError('Postgres replay maxEntries must be greater than zero.');
+  }
+  if (maxResponseBodyBytes === 0 || maxResponseHeaderBytes === 0) {
+    throw new TypeError('Postgres replay response byte limits must be greater than zero.');
   }
 
   const readRow = async (
@@ -335,8 +369,8 @@ function createPostgresReplayRuntime(
     },
     async commit(surface, scope, idem, generation, response) {
       const persisted = persistedReplayKey(scope, idem);
-      const headers = serializeReplayHeaders(response.headers);
-      const body = serializeReplayBody(response.body);
+      const headers = serializeReplayHeaders(response.headers, maxResponseHeaderBytes);
+      const body = serializeReplayBody(response.body, maxResponseBodyBytes);
       const result = await sql.execute<{ generation: string }>({
         text:
           "UPDATE public._kovo_replay SET state = 'committed', response_body = $5, " +
@@ -382,10 +416,21 @@ function createPostgresReplayRuntime(
       const result = await sql.execute<{ generation: string }>({
         text:
           'INSERT INTO public._kovo_replay ' +
-          '(surface, scope, idem, fingerprint, generation, state) ' +
-          "VALUES ($1, $2, $3, $4, $5, 'pending') " +
-          'ON CONFLICT (surface, scope, idem) DO NOTHING RETURNING generation',
-        values: [surface, persisted.scope, persisted.idem, persistedFingerprint, generation],
+          '(surface, scope, idem, fingerprint, generation, state, admission_slot) ' +
+          "SELECT $1, $2, $3, $4, $5, 'pending', candidate.slot " +
+          'FROM generate_series(1, $6::integer) AS candidate(slot) ' +
+          'WHERE NOT EXISTS (SELECT 1 FROM public._kovo_replay AS occupied ' +
+          'WHERE occupied.surface = $1 AND occupied.admission_slot = candidate.slot) ' +
+          'ORDER BY candidate.slot LIMIT 1 ' +
+          'ON CONFLICT DO NOTHING RETURNING generation',
+        values: [
+          surface,
+          persisted.scope,
+          persisted.idem,
+          persistedFingerprint,
+          generation,
+          maxEntries,
+        ],
       });
       const rows = replayRows(result, 'Postgres replay reserve result');
       if (rows.length === 0) {
@@ -409,18 +454,23 @@ function createPostgresReplayRuntime(
         text:
           'INSERT INTO public._kovo_replay ' +
           '(surface, scope, idem, fingerprint, generation, state, response_body, ' +
-          'response_headers, response_status, committed_at) ' +
-          "VALUES ($1, $2, $3, $4, $5, 'committed', $6, $7, $8, CURRENT_TIMESTAMP) " +
-          'ON CONFLICT (surface, scope, idem) DO NOTHING RETURNING generation',
+          'response_headers, response_status, committed_at, admission_slot) ' +
+          "SELECT $1, $2, $3, $4, $5, 'committed', $6, $7, $8, CURRENT_TIMESTAMP, candidate.slot " +
+          'FROM generate_series(1, $9::integer) AS candidate(slot) ' +
+          'WHERE NOT EXISTS (SELECT 1 FROM public._kovo_replay AS occupied ' +
+          'WHERE occupied.surface = $1 AND occupied.admission_slot = candidate.slot) ' +
+          'ORDER BY candidate.slot LIMIT 1 ' +
+          'ON CONFLICT DO NOTHING RETURNING generation',
         values: [
           surface,
           persisted.scope,
           persisted.idem,
           persistedFingerprint,
           generation,
-          serializeReplayBody(response.body),
-          serializeReplayHeaders(response.headers),
+          serializeReplayBody(response.body, maxResponseBodyBytes),
+          serializeReplayHeaders(response.headers, maxResponseHeaderBytes),
           response.status,
+          maxEntries,
         ],
       });
       const rows = replayRows(result, 'Postgres replay direct settlement result');
@@ -499,6 +549,15 @@ function replayResponseFromRow(row: PostgresReplayRow): SettledReplayResponse {
   if (row.response_body === null || row.response_headers === null || row.response_status === null) {
     throw new Error('Committed Postgres replay truth is missing its response snapshot.');
   }
+  if (row.response_body.length > POSTGRES_REPLAY_MAX_RESPONSE_BODY_STORAGE_BYTES) {
+    throw new Error('Committed Postgres replay response body exceeds its storage bound.');
+  }
+  if (
+    securityUint8ArrayLength(securityBufferFrom(row.response_headers, 'utf8')) >
+    POSTGRES_REPLAY_MAX_RESPONSE_HEADER_BYTES
+  ) {
+    throw new Error('Committed Postgres replay response headers exceed their storage bound.');
+  }
   return {
     body: parseReplayBody(row.response_body),
     headers: securityJsonParse(row.response_headers),
@@ -513,15 +572,22 @@ function assertSettledReplayRow(row: PostgresReplayRow): PostgresReplayRow {
   return row;
 }
 
-function serializeReplayHeaders(headers: unknown): string {
+function serializeReplayHeaders(headers: unknown, maxBytes: number): string {
   const serialized = securityJsonStringify(headers);
   if (serialized === undefined)
     throw new TypeError('Replay response headers are not serializable.');
+  if (securityUint8ArrayLength(securityBufferFrom(serialized, 'utf8')) > maxBytes) {
+    throw new RangeError('Replay response headers exceed the durable storage byte limit.');
+  }
   return serialized;
 }
 
-function serializeReplayBody(body: string): string {
-  return securityBufferToString(securityBufferFrom(body, 'utf16le'), 'base64');
+function serializeReplayBody(body: string, maxBytes: number): string {
+  const bytes = securityBufferFrom(body, 'utf16le');
+  if (securityUint8ArrayLength(bytes) > maxBytes) {
+    throw new RangeError('Replay response body exceeds the durable storage byte limit.');
+  }
+  return securityBufferToString(bytes, 'base64');
 }
 
 function parseReplayBody(body: string): string {
@@ -607,6 +673,18 @@ function optionalReplayDuration(
     throw new TypeError(`Postgres replay ${property} must be a stable non-negative integer.`);
   }
   return before.value;
+}
+
+function optionalReplayBound(
+  source: PostgresReplayStoreOptions,
+  property: 'maxEntries' | 'maxResponseBodyBytes' | 'maxResponseHeaderBytes',
+  hardMaximum: number,
+): number | undefined {
+  const value = optionalReplayDuration(source, property);
+  if (value !== undefined && value > hardMaximum) {
+    throw new TypeError(`Postgres replay ${property} must not exceed ${hardMaximum}.`);
+  }
+  return value;
 }
 
 function snapshotReplaySqlExecutor(

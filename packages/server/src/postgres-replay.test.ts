@@ -244,7 +244,11 @@ describe('Postgres durable replay stores', () => {
     const store = runtime.mutationReplayStore;
 
     for (let index = 0; index < 1_000; index += 1) {
-      const reservation = await store.reserve('public:save', `idem-${index}`, `fingerprint-${index}`);
+      const reservation = await store.reserve(
+        'public:save',
+        `idem-${index}`,
+        `fingerprint-${index}`,
+      );
       expect(reservation).toBeDefined();
       await reservation?.commit(mutationResponse('saved'));
     }
@@ -277,6 +281,80 @@ describe('Postgres durable replay stores', () => {
       values: [],
     });
     expect(persisted.rows).toEqual([{ count: 1_000 }]);
+  });
+
+  it('serializes cross-replica admission and preserves duplicate truth at capacity', async () => {
+    const { executor } = await runtimeAt(dataDir());
+    const first = createPostgresMutationReplayStoreFromExecutor(executor, {
+      maxEntries: 1,
+      pendingWaitMs: 0,
+    });
+    const replica = createPostgresMutationReplayStoreFromExecutor(executor, {
+      maxEntries: 1,
+      pendingWaitMs: 0,
+    });
+
+    const reservations = await Promise.all([
+      first.reserve('public:save', 'idem-a', 'fingerprint-a'),
+      replica.reserve('public:save', 'idem-b', 'fingerprint-b'),
+    ]);
+    const admitted = reservations.filter((reservation) => reservation !== undefined);
+    expect(admitted).toHaveLength(1);
+    const admittedIndex = reservations[0] === undefined ? 1 : 0;
+    const admittedIdem = admittedIndex === 0 ? 'idem-a' : 'idem-b';
+    const admittedFingerprint = admittedIndex === 0 ? 'fingerprint-a' : 'fingerprint-b';
+    await admitted[0]?.commit(mutationResponse('settled-at-capacity'));
+
+    await expect(first.reserve('public:save', 'idem-c', 'fingerprint-c')).resolves.toBeUndefined();
+    await expect(replica.get('public:save', admittedIdem, admittedFingerprint)).resolves.toEqual(
+      mutationResponse('settled-at-capacity'),
+    );
+  });
+
+  it('releases only an aborted pending row admission slot', async () => {
+    const { executor } = await runtimeAt(dataDir());
+    const store = createPostgresWebhookReplayStoreFromExecutor(executor, {
+      maxEntries: 1,
+      pendingWaitMs: 0,
+    });
+    const first = await store.reserve('provider', 'event-a');
+    expect(first).toBeDefined();
+    await expect(store.reserve('provider', 'event-b')).resolves.toBeUndefined();
+
+    await first?.abort?.();
+    const replacement = await store.reserve('provider', 'event-b');
+    expect(replacement).toBeDefined();
+    await replacement?.commit({ body: 'ok', headers: {}, status: 200 });
+  });
+
+  it('rejects oversized durable response snapshots before writing committed truth', async () => {
+    const { executor } = await runtimeAt(dataDir());
+    const bodyStore = createPostgresMutationReplayStoreFromExecutor(executor, {
+      maxResponseBodyBytes: 4,
+      pendingWaitMs: 0,
+    });
+    const bodyReservation = await bodyStore.reserve('scope', 'body-limit');
+    await expect(bodyReservation?.commit(mutationResponse('abc'))).rejects.toThrow(
+      /body exceeds the durable storage byte limit/u,
+    );
+
+    const headerStore = createPostgresWebhookReplayStoreFromExecutor(executor, {
+      maxResponseHeaderBytes: 8,
+      pendingWaitMs: 0,
+    });
+    const headerReservation = await headerStore.reserve('scope', 'header-limit');
+    await expect(
+      headerReservation?.commit({ body: '', headers: { 'X-Test': 'value' }, status: 200 }),
+    ).rejects.toThrow(/headers exceed the durable storage byte limit/u);
+
+    const rows = await executor.execute<{ committed: number; pending: number }>({
+      text:
+        "SELECT COUNT(*) FILTER (WHERE state = 'committed')::int AS committed, " +
+        "COUNT(*) FILTER (WHERE state = 'pending')::int AS pending " +
+        "FROM public._kovo_replay WHERE surface IN ('mutation', 'webhook')",
+      values: [],
+    });
+    expect(rows.rows).toEqual([{ committed: 0, pending: 2 }]);
   });
 
   it('keeps a crash-orphaned pending row fail-closed across restart until exact reconciliation', async () => {
