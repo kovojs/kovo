@@ -6,6 +6,7 @@ import {
 import { hasUnsafeUrlScheme } from '@kovojs/core/internal/security-url';
 import {
   htmlAttributeWireValuePosture,
+  htmlElementWireValueIssue,
   htmlTextWireValuePosture,
   htmlWireValueIssue,
   type HtmlWireValuePosture,
@@ -259,6 +260,11 @@ function validateElementAttributes(
   const found: CompilerDiagnostic[] = [];
   let hasExternalEscape = false;
   const attributeLength = compilerArrayLength(element.attributes, 'Element attributes');
+  appendOutputItems(
+    found,
+    validateCrossAttributeWireSemantics(diagnostics, element),
+    'Cross-attribute wire diagnostics',
+  );
   for (let index = 0; index < attributeLength; index += 1) {
     const attribute = outputArrayValue(element.attributes, index, 'Element attributes');
     if (attribute.name === 'external') {
@@ -425,6 +431,138 @@ function validateElementAttributes(
   );
 
   return found;
+}
+
+type StaticRenderedAttributeValue =
+  | { kind: 'known'; value: string }
+  | { kind: 'omitted' }
+  | { kind: 'unknown' };
+
+interface StaticRenderedAttributeState {
+  key: string;
+  value: StaticRenderedAttributeValue;
+}
+
+/**
+ * SPEC §13.2/§6.6: prove browser rules whose decision depends on an element's combined
+ * attributes. JSX spreads apply in source order to a case-sensitive JS props object, while HTML
+ * consumes the first emitted duplicate after ASCII case folding. Reconstruct only this narrow
+ * `type`/`name` state from parser-owned facts; an opaque spread or dynamic effective value defers
+ * to the runtime sink rather than manufacturing a static proof.
+ */
+function validateCrossAttributeWireSemantics(
+  diagnostics: DiagnosticFactory,
+  element: JsxElementModel,
+): CompilerDiagnostic[] {
+  if (element.intrinsicTagName !== 'input') return [];
+  const values = staticEffectiveInputWireAttributes(element);
+  if (values === undefined) return [];
+  const issue = htmlElementWireValueIssue('input', values.type, values.name);
+  if (issue === undefined) return [];
+  return [
+    {
+      ...diagnostics.at('KV236', {
+        start: element.start,
+        length: element.openingEnd - element.start,
+      }),
+      help: [
+        'Blocked reason: HTML reserves an ASCII-case-insensitive `_charset_` name on hidden inputs and replaces its submitted value with the selected encoding label.',
+        'Fixes: rename the field, or use a non-hidden ordinary `_charset_` control only when its authored value is intentional business input.',
+        'SPEC §13.2 requires hidden submitted identity to remain the same string; SPEC §6.6 requires the browser sink to fail closed.',
+        'Escape: there is no suppression for a browser-reserved submitted control.',
+      ].join('\n'),
+      message: `Unsafe server HTML wire value in <input> attributes (${issue}); native form construction would replace the authored hidden value.`,
+    },
+  ];
+}
+
+function staticEffectiveInputWireAttributes(
+  element: JsxElementModel,
+): { name?: string; type?: string } | undefined {
+  const states: StaticRenderedAttributeState[] = [];
+  let attributeIndex = 0;
+  let spreadIndex = 0;
+  const attributeLength = compilerArrayLength(element.attributes, 'Input wire attributes');
+  const spreadLength = compilerArrayLength(element.spreadAttributes, 'Input wire spreads');
+
+  while (attributeIndex < attributeLength || spreadIndex < spreadLength) {
+    const attribute =
+      attributeIndex < attributeLength
+        ? outputArrayValue(element.attributes, attributeIndex, 'Input wire attributes')
+        : undefined;
+    const spread =
+      spreadIndex < spreadLength
+        ? outputArrayValue(element.spreadAttributes, spreadIndex, 'Input wire spreads')
+        : undefined;
+    if (attribute !== undefined && (spread === undefined || attribute.start < spread.start)) {
+      setStaticRenderedAttribute(states, attribute.name, staticDirectAttributeValue(attribute));
+      attributeIndex += 1;
+      continue;
+    }
+    if (spread === undefined) break;
+    if (spread.objectEntries === undefined) return undefined;
+    const entryLength = compilerArrayLength(spread.objectEntries, 'Input wire spread entries');
+    for (let entryIndex = 0; entryIndex < entryLength; entryIndex += 1) {
+      const entry = outputArrayValue(spread.objectEntries, entryIndex, 'Input wire spread entries');
+      setStaticRenderedAttribute(states, entry.key, staticSpreadAttributeValue(entry));
+    }
+    spreadIndex += 1;
+  }
+
+  const type = effectiveStaticRenderedAttribute(states, 'type');
+  const name = effectiveStaticRenderedAttribute(states, 'name');
+  if (type.kind === 'unknown' || name.kind === 'unknown') return undefined;
+  return {
+    ...(name.kind === 'known' ? { name: name.value } : {}),
+    ...(type.kind === 'known' ? { type: type.value } : {}),
+  };
+}
+
+function staticDirectAttributeValue(attribute: JsxAttributeModel): StaticRenderedAttributeValue {
+  if (attribute.value !== undefined) return { kind: 'known', value: attribute.value };
+  const value = attribute.expressionStaticValue;
+  if (value === false || value === null) return { kind: 'omitted' };
+  if (typeof value === 'string') return { kind: 'known', value };
+  if (value !== undefined) return { kind: 'known', value: '' };
+  if (attribute.expression !== undefined) return { kind: 'unknown' };
+  return { kind: 'known', value: '' };
+}
+
+function staticSpreadAttributeValue(entry: ObjectLiteralEntry): StaticRenderedAttributeValue {
+  return entry.staticStringValue === undefined
+    ? { kind: 'unknown' }
+    : { kind: 'known', value: entry.staticStringValue };
+}
+
+function setStaticRenderedAttribute(
+  states: StaticRenderedAttributeState[],
+  key: string,
+  value: StaticRenderedAttributeValue,
+): void {
+  const folded = compilerStringToLowerCase(key);
+  if (folded !== 'name' && folded !== 'type') return;
+  const length = compilerArrayLength(states, 'Static rendered input attributes');
+  for (let index = 0; index < length; index += 1) {
+    const state = outputArrayValue(states, index, 'Static rendered input attributes');
+    if (state.key !== key) continue;
+    state.value = value;
+    return;
+  }
+  compilerArrayAppend(states, { key, value }, 'Static rendered input attributes');
+}
+
+function effectiveStaticRenderedAttribute(
+  states: readonly StaticRenderedAttributeState[],
+  expectedName: 'name' | 'type',
+): StaticRenderedAttributeValue {
+  const length = compilerArrayLength(states, 'Static effective input attributes');
+  for (let index = 0; index < length; index += 1) {
+    const state = outputArrayValue(states, index, 'Static effective input attributes');
+    if (compilerStringToLowerCase(state.key) !== expectedName) continue;
+    if (state.value.kind === 'omitted') continue;
+    return state.value;
+  }
+  return { kind: 'omitted' };
 }
 
 function validateWireStableAttribute(

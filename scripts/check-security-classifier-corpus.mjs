@@ -1025,6 +1025,8 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
           "'nul'",
           "'unpaired-surrogate'",
           'rejects only option fallback whitespace that the browser strips or collapses',
+          'pins the cross-attribute hidden _charset_ substitution without widening ordinary fields',
+          "'reserved-charset-hidden-control'",
         ],
       },
       {
@@ -1033,6 +1035,7 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
         snippets: [
           'fails closed for a runtime-dynamic %s',
           'guards the generated kovo-form-key as a successful submitted value',
+          'rejects a reserved _charset_ hidden value with %s before native form submission rewrites it',
           'rejects trusted raw HTML where parsing derives a submitted text value',
           'record&#13;1',
         ],
@@ -1054,6 +1057,7 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
           'server HTML identity diagnostics',
           'rejects compiler-known %s before server render',
           'checks static intrinsic spread values through the same wire predicate',
+          'rejects the reserved _charset_ hidden-value rewrite from %s',
           'accepts wire-stable DOM and submitted identities',
         ],
       },

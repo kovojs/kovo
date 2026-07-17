@@ -5,8 +5,10 @@ import {
   BEHAVIORAL_SEMANTIC_ATTRIBUTES,
   GENERATED_ONLY_SEMANTIC_ATTRIBUTES,
   GENERATED_ONLY_SEMANTIC_ATTRIBUTE_PREFIXES,
+  assertHtmlElementWireValueStable,
   assertHtmlWireValueStable,
   htmlAttributeWireValuePosture,
+  htmlElementWireValueIssue,
   htmlTextWireValuePosture,
   htmlWireValueIssue,
   isGeneratedOnlySemanticAttribute,
@@ -81,5 +83,21 @@ describe('semantic attribute policy authority', () => {
     ]) {
       expect(htmlWireValueIssue(unstable, 'option-fallback')).toBe('option-whitespace');
     }
+  });
+
+  it('pins the cross-attribute hidden _charset_ substitution without widening ordinary fields', () => {
+    // SPEC §13.2/§6.6: HTML replaces this hidden control's submitted value with `UTF-8`.
+    expect(htmlElementWireValueIssue('input', 'hidden', '_charset_')).toBe(
+      'reserved-charset-hidden-control',
+    );
+    expect(htmlElementWireValueIssue('INPUT', 'HiDdEn', '_ChArSeT_')).toBe(
+      'reserved-charset-hidden-control',
+    );
+    expect(htmlElementWireValueIssue('input', 'text', '_charset_')).toBeUndefined();
+    expect(htmlElementWireValueIssue('input', 'hidden', 'charset')).toBeUndefined();
+    expect(htmlElementWireValueIssue('kovo-input', 'hidden', '_charset_')).toBeUndefined();
+    expect(() =>
+      assertHtmlElementWireValueStable('input', 'hidden', '_charset_', 'test hidden control'),
+    ).toThrow(/KV236.*_charset_.*SPEC §13\.2.*SPEC §6\.6/u);
   });
 });

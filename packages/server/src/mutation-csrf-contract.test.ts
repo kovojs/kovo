@@ -63,6 +63,22 @@ describe('mutation CSRF posture contract (SPEC §6.6/§9.1)', () => {
     expect(declared.csrfJustification).toBe('signed inventory gateway');
   });
 
+  it.each(['_charset_', '_ChArSeT_'])(
+    'rejects browser-reserved mutation CSRF field %s during declaration snapshot',
+    (field) => {
+      expect(() =>
+        mutation('browser/write', {
+          ...definitionBody,
+          csrf: {
+            field,
+            secret: 'mutation-csrf-field-secret-0123456789abcdef',
+            sessionId: () => 'session-1',
+          },
+        }),
+      ).toThrow(/KV236.*_charset_.*SPEC §13\.2.*SPEC §6\.6/u);
+    },
+  );
+
   it('revalidates forged structural declarations at the app snapshot boundary', () => {
     expect(() =>
       snapshotAppMutation(

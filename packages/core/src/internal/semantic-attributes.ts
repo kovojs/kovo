@@ -150,6 +150,9 @@ export type HtmlWireValueIssue =
   | 'option-whitespace'
   | 'unpaired-surrogate';
 
+/** @internal A lossy browser rule that depends on more than one HTML attribute. */
+export type HtmlElementWireValueIssue = 'reserved-charset-hidden-control';
+
 /**
  * @internal Find the first lossy HTML/form wire condition in a server-authored string.
  *
@@ -219,6 +222,43 @@ export function assertHtmlWireValueStable(
     );
   }
   return value;
+}
+
+/**
+ * @internal Classify browser rewrites that require an element's combined attribute posture.
+ *
+ * HTML reserves an ASCII-case-insensitive `_charset_` name on hidden inputs. During native form
+ * entry-list construction the browser replaces that control's authored value with the selected
+ * encoding label (currently `UTF-8`). Character-by-character value validation cannot observe this
+ * cross-attribute substitution, so compiler and runtime sinks share this exact tuple predicate.
+ */
+export function htmlElementWireValueIssue(
+  tagName: string,
+  typeValue: string | undefined,
+  nameValue: string | undefined,
+): HtmlElementWireValueIssue | undefined {
+  if (securityStringToLowerCase(tagName) !== 'input') return undefined;
+  if (typeValue === undefined || securityStringToLowerCase(typeValue) !== 'hidden') {
+    return undefined;
+  }
+  if (nameValue === undefined || securityStringToLowerCase(nameValue) !== '_charset_') {
+    return undefined;
+  }
+  return 'reserved-charset-hidden-control';
+}
+
+/** @internal Fail closed before a browser-reserved control can substitute submitted authority. */
+export function assertHtmlElementWireValueStable(
+  tagName: string,
+  typeValue: string | undefined,
+  nameValue: string | undefined,
+  sink: string,
+): void {
+  const issue = htmlElementWireValueIssue(tagName, typeValue, nameValue);
+  if (issue === undefined) return;
+  throw new TypeError(
+    `KV236: ${sink} cannot combine <input type="hidden"> with the reserved name "_charset_" (${issue}); native form construction substitutes the encoding label, violating SPEC §13.2 and the SPEC §6.6 fail-closed sink boundary.`,
+  );
 }
 
 /**

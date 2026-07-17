@@ -711,6 +711,21 @@ describe('server createApp request shell', () => {
     expect(html).not.toContain('/mutated.css');
   });
 
+  it.each(['_charset_', '_ChArSeT_'])(
+    'rejects browser-reserved app CSRF field %s during app construction',
+    (field) => {
+      expect(() =>
+        createApp({
+          csrf: {
+            field,
+            secret: 'app-csrf-field-secret-0123456789abcdef',
+            sessionId: () => 'session-1',
+          },
+        }),
+      ).toThrow(/KV236.*_charset_.*SPEC §13\.2.*SPEC §6\.6/u);
+    },
+  );
+
   it('cannot substitute a validated CSRF trusted origin through an inherited array setter', () => {
     const nativeDefineProperty = Object.defineProperty;
     const previous = nativeDefineProperty

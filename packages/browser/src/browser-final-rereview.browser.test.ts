@@ -178,18 +178,40 @@ it('shows option fallback collapse and explicit-value select identity', () => {
   expect(submitted.get('unicode')).toBe('record😀1');
 });
 
-it('shows the reserved _charset_ control overwrites a stable hidden value', () => {
+it.each([
+  ['exact spelling', 'hidden', '_charset_'],
+  ['ASCII-mixed spelling', 'HiDdEn', '_ChArSeT_'],
+])(
+  'shows the reserved _charset_ control overwrites a stable hidden value with %s',
+  (_label, type, name) => {
+    document.body.innerHTML = `
+    <form>
+      <input type="${type}" name="${name}" value="record-1">
+    </form>
+  `;
+    const form = document.querySelector<HTMLFormElement>('form');
+    const input = document.querySelector<HTMLInputElement>('input');
+    if (!form || !input) throw new Error('missing _charset_ fixture');
+
+    // The source/DOM value is stable, but HTML's entry-list construction reserves this exact hidden
+    // control name and replaces the submitted value with the selected encoding label.
+    expect(input.value).toBe('record-1');
+    expect(new FormData(form).get(name)).toBe('UTF-8');
+  },
+);
+
+it('keeps non-hidden and non-reserved _charset_ neighbors unchanged', () => {
   document.body.innerHTML = `
     <form>
-      <input type="hidden" name="_charset_" value="record-1">
+      <input type="text" name="_charset_" value="record-1">
+      <input type="hidden" name="charset" value="record-2">
     </form>
   `;
   const form = document.querySelector<HTMLFormElement>('form');
-  const input = document.querySelector<HTMLInputElement>('input');
-  if (!form || !input) throw new Error('missing _charset_ fixture');
+  if (!form) throw new Error('missing _charset_ precision fixture');
 
-  // The source/DOM value is stable, but HTML's entry-list construction reserves this exact hidden
-  // control name and replaces the submitted value with the selected encoding label.
-  expect(input.value).toBe('record-1');
-  expect(new FormData(form).get('_charset_')).toBe('UTF-8');
+  expect([...new FormData(form).entries()]).toEqual([
+    ['_charset_', 'record-1'],
+    ['charset', 'record-2'],
+  ]);
 });

@@ -291,13 +291,45 @@ export const View = component({
     ).toEqual([]);
   });
 
-  it('rejects the reserved _charset_ hidden-value rewrite before server render', () => {
+  it.each([
+    ['direct attributes', '<input type="hidden" name="_charset_" value="record-1" />'],
+    ['ASCII-mixed attributes', '<iNpUt TyPe="HiDdEn" NaMe="_ChArSeT_" value="record-1" />'],
+    [
+      'one static spread',
+      '<input {...{ type: "hidden", name: "_charset_", value: "record-1" }} />',
+    ],
+    ['direct type plus spread name', '<input type="hidden" {...{ name: "_charset_" }} />'],
+    ['spread type plus direct name', '<input {...{ type: "hidden" }} name="_charset_" />'],
+    [
+      'first case-folded browser attribute',
+      '<input TYPE="hidden" {...{ type: "text", name: "_charset_" }} />',
+    ],
+  ])('rejects the reserved _charset_ hidden-value rewrite from %s', (_label, element) => {
+    const diagnostics = kv236(`
+export const View = component({
+  render: () => <form>${element}</form>,
+});
+`);
+    expect(diagnostics).not.toEqual([]);
+    expect(diagnostics[0]?.message).toContain('reserved-charset-hidden-control');
+    expect(diagnostics[0]?.help).toContain('SPEC §13.2');
+    expect(diagnostics[0]?.help).toContain('SPEC §6.6');
+  });
+
+  it('preserves non-hidden, non-reserved, and definitely-overridden _charset_ neighbors', () => {
     expect(
       kv236(`
 export const View = component({
-  render: () => <form><input type="hidden" name="_charset_" value="record-1" /></form>,
+  render: () => <form>
+    <input type="text" name="_charset_" value="record-1" />
+    <input type="hidden" name="charset" value="record-2" />
+    <input {...{ type: "text", name: "_charset_" }} value="record-3" />
+    <input {...{ type: "hidden", name: "_charset_" }} type="text" value="record-4" />
+    <input type="hidden" name="_charset_" {...{ type: "text" }} value="record-5" />
+    <input TYPE="text" {...{ type: "hidden", name: "_charset_" }} value="record-6" />
+  </form>,
 });
 `),
-    ).not.toEqual([]);
+    ).toEqual([]);
   });
 });

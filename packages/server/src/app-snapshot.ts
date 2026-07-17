@@ -4,6 +4,7 @@ import {
   type WebhookVerifier,
 } from '@kovojs/core';
 import { isFrameworkHmacSignatureVerifier } from '@kovojs/core/internal/verifier';
+import { assertHtmlElementWireValueStable } from '@kovojs/core/internal/semantic-attributes';
 import { accessDecisionFor, pinAccessDecision, type AccessDecision } from './access.js';
 import {
   snapshotAuditJustification,
@@ -495,6 +496,9 @@ export function snapshotAppCsrfOptions<Request>(
   const field = stableOwnDataValue(object, 'field', 'app.csrf.field');
   if (field !== undefined && typeof field !== 'string') {
     throw new TypeError('app.csrf.field must be a stable string data property.');
+  }
+  if (field !== undefined) {
+    assertHtmlElementWireValueStable('input', 'hidden', field, 'app.csrf.field');
   }
   const trustedOriginsSource = stableOwnDataValue(
     object,

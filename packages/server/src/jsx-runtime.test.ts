@@ -290,12 +290,53 @@ describe('server jsx runtime', () => {
     ).toThrow(/kovo-form-key.*\(line-feed\)/u);
   });
 
-  it('rejects a reserved _charset_ hidden value before native form submission rewrites it', () => {
-    // SPEC §13.2 requires identity-bearing hidden values to reach native form submission as the
-    // same string. HTML reserves this exact name and substitutes the encoding label instead.
+  it.each([
+    ['exact spelling', 'input', 'hidden', '_charset_'],
+    ['ASCII-mixed spelling', 'INPUT', 'HiDdEn', '_ChArSeT_'],
+  ])(
+    'rejects a reserved _charset_ hidden value with %s before native form submission rewrites it',
+    (_label, tag, type, name) => {
+      // SPEC §13.2 requires identity-bearing hidden values to reach native form submission as the
+      // same string. HTML reserves this exact name and substitutes the encoding label instead.
+      expect(() => html(jsx(tag, { type, name, value: 'record-1' }))).toThrow(
+        /KV236.*_charset_.*SPEC §13\.2/u,
+      );
+    },
+  );
+
+  it('keeps non-hidden and non-reserved submitted controls precise', () => {
+    expect(html(jsx('input', { type: 'text', name: '_charset_', value: 'record-1' }))).toBe(
+      '<input type="text" name="_charset_" value="record-1">',
+    );
+    expect(html(jsx('input', { type: 'hidden', name: 'charset', value: 'record-1' }))).toBe(
+      '<input type="hidden" name="charset" value="record-1">',
+    );
+  });
+
+  it('uses browser-effective case-folded attribute names and first-duplicate semantics', () => {
     expect(() =>
-      html(jsx('input', { type: 'hidden', name: '_charset_', value: 'record-1' })),
-    ).toThrow(/KV236.*_charset_.*SPEC §13\.2/u);
+      html(jsx('input', { TyPe: 'HiDdEn', NaMe: '_ChArSeT_', value: 'record-1' })),
+    ).toThrow(/KV236.*_charset_/u);
+    expect(() =>
+      html(
+        jsx('input', {
+          TYPE: 'hidden',
+          type: 'text',
+          name: '_charset_',
+          value: 'record-2',
+        }),
+      ),
+    ).toThrow(/KV236.*_charset_/u);
+    expect(
+      html(
+        jsx('input', {
+          TYPE: 'text',
+          type: 'hidden',
+          name: '_charset_',
+          value: 'record-3',
+        }),
+      ),
+    ).toBe('<input TYPE="text" type="hidden" name="_charset_" value="record-3">');
   });
 
   it('rejects trusted raw HTML where parsing derives a submitted text value', () => {

@@ -71,6 +71,22 @@ describe('csrf helpers', () => {
     expect(validateCsrfToken({ 'csrf<input>': token }, request, csrf)).toBe(true);
   });
 
+  it.each(['_charset_', '_ChArSeT_'])(
+    'rejects browser-reserved CSRF field %s before token or hidden-field construction',
+    (field) => {
+      const reserved = { ...csrf, field };
+      expect(() => csrfToken(request, reserved)).toThrow(
+        /KV236.*_charset_.*SPEC §13\.2.*SPEC §6\.6/u,
+      );
+      expect(() => mintCsrfToken(request, reserved)).toThrow(/KV236.*_charset_/u);
+      expect(() => csrfField(request, reserved)).toThrow(/KV236.*_charset_/u);
+      expect(() => mintCsrfField(request, reserved)).toThrow(/KV236.*_charset_/u);
+      expect(() => validateCsrfToken({ [field]: 'forged' }, request, reserved)).toThrow(
+        /KV236.*_charset_/u,
+      );
+    },
+  );
+
   it('BREACH-masks CSRF tokens with fresh per-token randomness for the same binding', () => {
     const first = csrfToken(request, csrf);
     const second = csrfToken(request, csrf);

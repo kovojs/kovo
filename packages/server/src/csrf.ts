@@ -1,4 +1,5 @@
 import { isUntrusted, revealUntrusted } from '@kovojs/core';
+import { assertHtmlElementWireValueStable } from '@kovojs/core/internal/semantic-attributes';
 
 import type { CookieOptions } from './cookies.js';
 import { serializeCookie } from './cookies.js';
@@ -221,6 +222,7 @@ export function csrfToken<Request>(
   // (rules/api-surface.md); structurally identical to the private `CsrfAudienceContext`.
   context: { audience?: string; mutation?: string | { readonly key: string } } = {},
 ): string {
+  assertCsrfFieldName(options.field ?? 'kovo-csrf', 'CSRF options.field');
   const binding = resolveCsrfBinding(request, options);
   if (!binding) throw new Error('csrfToken requires a session id or anonymous CSRF cookie');
 
@@ -240,6 +242,7 @@ export function mintCsrfToken<Request>(
   options: CsrfOptions<Request>,
   context: { audience?: string; mutation?: string | { readonly key: string } } = {},
 ): MintedCsrfToken {
+  assertCsrfFieldName(options.field ?? 'kovo-csrf', 'CSRF options.field');
   const binding = resolveCsrfBinding(request, options, { mintAnonymous: true });
   if (!binding) throw new Error('mintCsrfToken requires a session id or anonymous CSRF cookie');
   return {
@@ -369,6 +372,7 @@ export function snapshotMutationCsrfOptions<Request>(
   if (field !== undefined && typeof field !== 'string') {
     throw new TypeError('Mutation CSRF options.field must be a stable string data property.');
   }
+  if (field !== undefined) assertCsrfFieldName(field, 'Mutation CSRF options.field');
   const stableTrustedOrigins = snapshotMutationTrustedOrigins(trustedOrigins);
   const stableSecret =
     typeof secret === 'string' || isFrameworkCsrfSigningSecret(secret)
@@ -574,6 +578,7 @@ export function validateCsrfToken<Request>(
   options: CsrfOptions<Request>,
   context: { audience?: string } = {},
 ): boolean {
+  assertCsrfFieldName(options.field ?? 'kovo-csrf', 'CSRF options.field');
   // SPEC §6.6/§9.1: run the fail-closed header floor BEFORE the synchronizer-token check so an
   // unsafe-verb cross-site request is rejected even if it somehow carries a valid token. Uniform
   // across mutations + endpoints + the /_q/ channel because every path routes through here.
@@ -650,11 +655,16 @@ function csrfFieldForBinding<Request>(
 }
 
 function renderHiddenSubmittedField(name: string, value: string): string {
+  assertCsrfFieldName(name, 'CSRF hidden field name');
   return `<input type="hidden" name="${escapeWireAttribute(
     name,
     'submitted-control',
     'hidden input name',
   )}" value="${escapeWireAttribute(value, 'submitted-control', 'hidden input value')}">`;
+}
+
+function assertCsrfFieldName(field: string, sink: string): void {
+  assertHtmlElementWireValueStable('input', 'hidden', field, sink);
 }
 
 /**

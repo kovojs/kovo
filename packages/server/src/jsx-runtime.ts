@@ -12,6 +12,7 @@ import type { TrustedHtml, TrustedUrl } from '@kovojs/browser';
 import { ErrorBoundary, FieldError, FormError } from '@kovojs/core';
 import { isUrlAttributeName } from '@kovojs/core/internal/security-url';
 import {
+  assertHtmlElementWireValueStable,
   assertHtmlWireValueStable,
   htmlAttributeWireValuePosture,
   htmlTextWireValuePosture,
@@ -190,6 +191,10 @@ export function jsx(
   // not depend on authored casing. Function-valued `<Form>` components returned above never enter
   // this string-host branch.
   const intrinsicType = formHelperStringToLowerCase(type);
+  // SPEC §13.2/§6.6: cross-attribute browser semantics must classify the same immutable
+  // own-data props snapshot that the HTML sink consumes. In particular, hidden `_charset_`
+  // controls substitute their authored value during native form entry-list construction.
+  assertIntrinsicElementWireValueStable(intrinsicType, intrinsicProps);
   const attributes = renderJsxAttributes(intrinsicType, intrinsicProps, key);
   if (isVoidElement(intrinsicType)) return renderedHtml(`<${type}${attributes}>`);
 
@@ -430,6 +435,39 @@ function renderJsxAttributes(type: string, props: JsxProps, jsxKey?: unknown): s
   if (finalStyle && !renderedStyle) rendered += ` style="${escapeAttribute(finalStyle)}"`;
 
   return rendered;
+}
+
+function assertIntrinsicElementWireValueStable(type: string, props: JsxProps): void {
+  if (type !== 'input') return;
+  assertHtmlElementWireValueStable(
+    type,
+    firstRenderedAttributeValue(props, 'type'),
+    firstRenderedAttributeValue(props, 'name'),
+    '<input> submitted control',
+  );
+}
+
+/**
+ * Return the browser-effective first attribute value for an ASCII-case-insensitive HTML name.
+ * `props` is already the frozen own-data snapshot made by `jsx()`. HTML ignores later duplicate
+ * attributes after ASCII case-folding, while the JSX object itself can contain differently-cased
+ * keys, so this scan follows the exact renderer order instead of indexing one spelling.
+ */
+function firstRenderedAttributeValue(props: JsxProps, expectedName: string): string | undefined {
+  const names = formHelperObjectKeys(props);
+  for (let index = 0; index < names.length; index += 1) {
+    const name = formHelperOwnDataValue(names, index);
+    if (typeof name !== 'string' || formHelperStringToLowerCase(name) !== expectedName) continue;
+    const value = formHelperOwnDataValue(props, name);
+    if (value === false || value === null || value === undefined) continue;
+    if (isKovoTrustedUrl(value)) continue;
+    if (!safeRuntimeAttributeName(name)) continue;
+    if (value === true) return '';
+    // Only a primitive string can serialize to either reserved keyword exactly. Numbers and
+    // object JSON encodings remain first-attribute blockers but cannot spell `hidden`/`_charset_`.
+    return typeof value === 'string' ? value : '';
+  }
+  return undefined;
 }
 
 function mergedStyle(...values: Array<string | undefined>): string {
