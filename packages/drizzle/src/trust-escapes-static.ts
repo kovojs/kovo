@@ -10036,6 +10036,16 @@ function requestAssignedMemberIndex(
     const callee = unwrapStaticExpression(call.getExpression());
     const receiver = requestCallReceiver(callee);
     if (
+      receiver &&
+      requestStaticCallMember(callee) === 'set' &&
+      expressionResolvesToGlobalNamespace(receiver, 'Reflect', new Set(), 0)
+    ) {
+      const [assigned, property, value] = call.getArguments();
+      const member = requestCallableMemberName(property);
+      if (assigned && member !== undefined && value) add(assigned, member, value, call);
+      continue;
+    }
+    if (
       !receiver ||
       requestStaticCallMember(callee) !== 'assign' ||
       !expressionResolvesToGlobalNamespace(receiver, 'Object', new Set(), 0)
@@ -16773,6 +16783,14 @@ function scanRequestOpaqueInternalMethodTarget(
     requestExpressionIsSafeGlobalNamespace(receiver) ||
     requestExpressionIsReviewedFrozenStyleValue(receiver) ||
     requestExpressionIsProtocolSafe(receiver, callable, new Set(), context.provenance) ||
+    requestExpressionIsProvablyOrdinaryMutationTarget(
+      receiver,
+      callable,
+      context,
+      requestExactGlobalValueSession(receiver.getProject(), REQUEST_EXACT_GLOBAL_OBJECT),
+      new Set(),
+      0,
+    ) ||
     localContainer !== undefined ||
     safeGlobal ||
     requestClassDeclarationsForExpression(receiver, new Set()).length > 0
@@ -16780,6 +16798,364 @@ function scanRequestOpaqueInternalMethodTarget(
     return;
   }
   appendRequestProtocolFact(context, site, protocol, receiver);
+}
+
+/**
+ * Prove that a reflective write target is an ordinary locally constructed object. This is a
+ * positive, call-site-closed proof: request roots, imported values, Proxies, unresolved spreads,
+ * exported parameters, and budget exhaustion remain opaque (SPEC §6.6 rule 6). The exact-global
+ * reverse call index supplies finite destructuring/rest projections without confusing a local
+ * structural lookalike with a realm intrinsic.
+ */
+function requestExpressionIsProvablyOrdinaryMutationTarget(
+  expression: Node,
+  callable: RequestCallable,
+  context: RequestProcessScanContext,
+  session: RequestExactGlobalValueSession,
+  seen: Set<string>,
+  depth: number,
+): boolean {
+  if (depth > REQUEST_EXACT_GLOBAL_PROVENANCE_DEPTH) return false;
+  const node = unwrapStaticExpression(expression);
+  const key = `ordinary-mutation-target:${requestNodeIdentity(node)}${requestExactGlobalBindingContextKey(session)}`;
+  if (seen.has(key) || !requestProvenanceStep(context.provenance, node)) return false;
+  seen.add(key);
+
+  if (Node.isObjectLiteralExpression(node) || Node.isArrayLiteralExpression(node)) return true;
+  if (Node.isAwaitExpression(node)) {
+    return requestExpressionIsProvablyOrdinaryMutationTarget(
+      node.getExpression(),
+      callable,
+      context,
+      session,
+      new Set(seen),
+      depth + 1,
+    );
+  }
+  if (Node.isConditionalExpression(node)) {
+    return [node.getWhenTrue(), node.getWhenFalse()].every((branch) =>
+      requestExpressionIsProvablyOrdinaryMutationTarget(
+        branch,
+        callable,
+        context,
+        session,
+        new Set(seen),
+        depth + 1,
+      ),
+    );
+  }
+  if (Node.isBinaryExpression(node)) {
+    const operator = node.getOperatorToken().getKind();
+    if (
+      operator === SyntaxKind.EqualsToken ||
+      operator === SyntaxKind.CommaToken ||
+      (operator >= SyntaxKind.FirstAssignment && operator <= SyntaxKind.LastAssignment)
+    ) {
+      return requestExpressionIsProvablyOrdinaryMutationTarget(
+        node.getRight(),
+        callable,
+        context,
+        session,
+        new Set(seen),
+        depth + 1,
+      );
+    }
+    if (
+      operator === SyntaxKind.BarBarToken ||
+      operator === SyntaxKind.AmpersandAmpersandToken ||
+      operator === SyntaxKind.QuestionQuestionToken
+    ) {
+      return [node.getLeft(), node.getRight()].every((branch) =>
+        requestExpressionIsProvablyOrdinaryMutationTarget(
+          branch,
+          callable,
+          context,
+          session,
+          new Set(seen),
+          depth + 1,
+        ),
+      );
+    }
+  }
+
+  const projection = requestStaticExpressionProjection(node);
+  if (projection) {
+    const base = unwrapStaticExpression(projection.base);
+    if (Node.isIdentifier(base)) {
+      const projected = requestIdentifierIsProvablyOrdinaryMutationTarget(
+        base,
+        projection.path,
+        callable,
+        context,
+        session,
+        new Set(seen),
+        depth + 1,
+      );
+      if (projected !== undefined) return projected;
+    }
+    if (projection.path.some((member) => member === undefined)) return false;
+    const selected = requestWireProjectedExpression(
+      projection.base,
+      projection.path as readonly string[],
+      new Set(),
+      0,
+    );
+    return (
+      !!selected &&
+      requestExpressionIsProvablyOrdinaryMutationTarget(
+        selected,
+        callable,
+        context,
+        session,
+        new Set(seen),
+        depth + 1,
+      )
+    );
+  }
+
+  if (Node.isCallExpression(node)) {
+    const invocation = requestNormalizedCall(node);
+    const inputs = requestExactGlobalInputsForArguments(
+      invocation.args ?? node.getArguments(),
+      session.callIndex.callableSession,
+    );
+    if (!inputs.handled) return false;
+    const resolution = resolveRequestCallable(
+      invocation.target,
+      new Set(),
+      0,
+      session.callIndex.callableSession,
+    );
+    return (
+      resolution.callables.length > 0 &&
+      resolution.opaqueModule === undefined &&
+      resolution.callables.every((nested) => {
+        const outputs = requestCallableOutputExpressions(nested);
+        return (
+          outputs.length > 0 &&
+          requestWithExactGlobalCallableInputs(
+            nested,
+            inputs.inputs,
+            `ordinary-target-call:${requestNodeIdentity(node)}:${requestNodeIdentity(nested.declaration)}`,
+            session,
+            () =>
+              outputs.every((output) =>
+                requestExpressionIsProvablyOrdinaryMutationTarget(
+                  output,
+                  nested,
+                  context,
+                  session,
+                  new Set(seen),
+                  depth + 1,
+                ),
+              ),
+          )
+        );
+      })
+    );
+  }
+
+  if (!Node.isIdentifier(node)) return false;
+  return (
+    requestIdentifierIsProvablyOrdinaryMutationTarget(
+      node,
+      [],
+      callable,
+      context,
+      session,
+      new Set(seen),
+      depth + 1,
+    ) ?? false
+  );
+}
+
+function requestIdentifierIsProvablyOrdinaryMutationTarget(
+  identifier: import('ts-morph').Identifier,
+  path: readonly (string | undefined)[],
+  callable: RequestCallable,
+  context: RequestProcessScanContext,
+  session: RequestExactGlobalValueSession,
+  seen: Set<string>,
+  depth: number,
+): boolean | undefined {
+  const symbol = requestIdentifierValueSymbol(identifier);
+  if (!symbol) return undefined;
+  if (
+    requestAssignedBindingProjections(symbol, context.provenance).some(
+      ({ path }) => path.length === 0,
+    )
+  ) {
+    return false;
+  }
+  const declarations = symbol.getDeclarations();
+  if (declarations.length === 0) return undefined;
+  const verdicts = declarations.map((declaration): boolean | undefined => {
+    if (Node.isParameterDeclaration(declaration)) {
+      const bound = requestExactGlobalBoundDeclarationInput(declaration, session);
+      if (bound.found) {
+        return (
+          !!bound.input &&
+          requestBoundInputIsProvablyOrdinaryMutationTarget(
+            bound.input,
+            path,
+            callable,
+            context,
+            session,
+            new Set(seen),
+            depth + 1,
+          )
+        );
+      }
+      if (!requestParameterHasClosedLocalCallSites(declaration)) return false;
+      const inputs = requestExactGlobalParameterInputs(declaration, session);
+      return (
+        !inputs.exhausted &&
+        inputs.inputs.length > 0 &&
+        inputs.inputs.every((input) =>
+          requestBoundInputIsProvablyOrdinaryMutationTarget(
+            input,
+            path,
+            callable,
+            context,
+            session,
+            new Set(seen),
+            depth + 1,
+          ),
+        )
+      );
+    }
+    if (Node.isBindingElement(declaration)) {
+      const owner = requestExactGlobalBindingSteps(declaration)?.owner;
+      if (Node.isParameterDeclaration(owner) && !requestParameterHasClosedLocalCallSites(owner)) {
+        return false;
+      }
+      const inputs = requestExactGlobalBindingElementInputs(declaration, session);
+      return (
+        !inputs.exhausted &&
+        inputs.inputs.length > 0 &&
+        inputs.inputs.every((input) =>
+          requestBoundInputIsProvablyOrdinaryMutationTarget(
+            input,
+            path,
+            callable,
+            context,
+            session,
+            new Set(seen),
+            depth + 1,
+          ),
+        )
+      );
+    }
+    if (!Node.isVariableDeclaration(declaration)) return undefined;
+    if (
+      declaration.getVariableStatement()?.getDeclarationKind() !== VariableDeclarationKind.Const
+    ) {
+      return false;
+    }
+    const initializer = declaration.getInitializer();
+    if (!initializer) return false;
+    return requestBoundInputIsProvablyOrdinaryMutationTarget(
+      { expression: initializer, path: [] },
+      path,
+      callable,
+      context,
+      session,
+      new Set(seen),
+      depth + 1,
+    );
+  });
+  return verdicts.every((verdict) => verdict === true);
+}
+
+function requestParameterHasClosedLocalCallSites(
+  parameter: import('ts-morph').ParameterDeclaration,
+): boolean {
+  const owner = parameter.getParent();
+  if (Node.isFunctionDeclaration(owner)) {
+    return !owner.isExported() && !owner.isDefaultExport();
+  }
+  const statement = owner.getFirstAncestorByKind(SyntaxKind.VariableStatement);
+  return !!statement && !statement.isExported() && !statement.isDefaultExport();
+}
+
+function requestBoundInputIsProvablyOrdinaryMutationTarget(
+  input: RequestExactGlobalBoundInput,
+  path: readonly (string | undefined)[],
+  callable: RequestCallable,
+  context: RequestProcessScanContext,
+  session: RequestExactGlobalValueSession,
+  seen: Set<string>,
+  depth: number,
+): boolean {
+  if (input.opaque) return false;
+  if (input.alternatives) {
+    return (
+      input.alternatives.length > 0 &&
+      input.alternatives.every((alternative) =>
+        requestBoundInputIsProvablyOrdinaryMutationTarget(
+          alternative,
+          [...input.path, ...path],
+          callable,
+          context,
+          session,
+          new Set(seen),
+          depth + 1,
+        ),
+      )
+    );
+  }
+  const projectedPath = [...input.path, ...path];
+  if (input.objectRest && projectedPath.length === 0) return true;
+  if (input.objectRest) return false;
+  if (input.elements) {
+    if (projectedPath.length === 0) return true;
+    const [member, ...rest] = projectedPath;
+    const candidates =
+      member === undefined
+        ? input.elements.filter(
+            (candidate): candidate is RequestExactGlobalBoundInput => candidate !== undefined,
+          )
+        : /^(?:0|[1-9][0-9]*)$/u.test(member)
+          ? [input.elements[Number(member)]].filter(
+              (candidate): candidate is RequestExactGlobalBoundInput => candidate !== undefined,
+            )
+          : [];
+    return (
+      candidates.length > 0 &&
+      candidates.every((candidate) =>
+        requestBoundInputIsProvablyOrdinaryMutationTarget(
+          candidate,
+          rest,
+          callable,
+          context,
+          session,
+          new Set(seen),
+          depth + 1,
+        ),
+      )
+    );
+  }
+  if (projectedPath.some((member) => member === undefined)) return false;
+  const selected =
+    projectedPath.length === 0
+      ? input.expression
+      : requestWireProjectedExpression(
+          input.expression,
+          projectedPath as readonly string[],
+          new Set(),
+          0,
+        );
+  return (
+    !!selected &&
+    requestExpressionIsProvablyOrdinaryMutationTarget(
+      selected,
+      callable,
+      context,
+      session,
+      new Set(seen),
+      depth + 1,
+    )
+  );
 }
 
 function scanRequestSuperPropertyAccess(
@@ -17109,34 +17485,203 @@ function requestClassStaticMemberAssimilationSources(
   snapshotBoundary: number,
   session: RequestProvenanceSession,
 ): Node[] {
-  const classes = requestClassDeclarationsForExpression(expression, new Set());
-  if (classes.length === 0) return [];
+  return requestStaticMemberAssimilationSources(
+    expression,
+    member,
+    snapshotBoundary,
+    session,
+    new Set(),
+  );
+}
+
+function requestStaticMemberAssimilationSources(
+  expression: Node,
+  member: string,
+  snapshotBoundary: number,
+  session: RequestProvenanceSession,
+  seen: Set<string>,
+): Node[] {
+  const node = unwrapStaticExpression(expression);
+  const key = `static-member-source:${requestNodeIdentity(node)}:${member}`;
+  if (seen.has(key) || !requestProvenanceStep(session, node)) return [];
+  seen.add(key);
+  if (Node.isConditionalExpression(node)) {
+    return dedupeRequestNodes(
+      [node.getWhenTrue(), node.getWhenFalse()].flatMap((branch) =>
+        requestStaticMemberAssimilationSources(
+          branch,
+          member,
+          snapshotBoundary,
+          session,
+          new Set(seen),
+        ),
+      ),
+    );
+  }
+
+  const classes = requestDirectClassDeclarationsForExpression(node, new Set());
+  if (classes.length === 0) {
+    const projected = requestWireProjectedExpression(node, [member], new Set(), 0);
+    return projected ? [projected] : [];
+  }
   const sources: Node[] = [];
   for (const declaration of classes) {
+    const own: Node[] = [];
     for (const property of declaration.getProperties()) {
       if (!property.isStatic() || requestCallableMemberName(property.getNameNode()) !== member) {
         continue;
       }
       const initializer = property.getInitializer();
-      if (initializer) sources.push(initializer);
+      if (initializer) own.push(initializer);
     }
     for (const getter of declaration.getGetAccessors()) {
       if (!getter.isStatic() || requestCallableMemberName(getter.getNameNode()) !== member)
         continue;
       const callable = requestCallableForFunctionNode(getter);
-      if (callable) sources.push(...requestWireOutputExpressions(callable));
+      if (callable) own.push(...requestWireOutputExpressions(callable));
     }
     const name = declaration.getNameNode();
-    if (!name) continue;
-    sources.push(...requestAssignedMemberExpressions(name, member, snapshotBoundary, session));
-    for (const getter of requestDefinedGetterExpressions(name, member)) {
-      for (const callable of resolveRequestCallable(getter, new Set(), 0, session).callables) {
-        sources.push(...requestWireOutputExpressions(callable));
+    if (name) {
+      own.push(...requestAssignedMemberExpressions(name, member, snapshotBoundary, session));
+      for (const getter of requestDefinedGetterExpressionsBefore(
+        name,
+        member,
+        snapshotBoundary,
+        session,
+      )) {
+        for (const callable of resolveRequestCallable(getter, new Set(), 0, session).callables) {
+          own.push(...requestWireOutputExpressions(callable));
+        }
       }
+      own.push(
+        ...requestDefinedStaticDataPropertyExpressions(name, member, snapshotBoundary, session),
+      );
     }
-    sources.push(
-      ...requestDefinedStaticDataPropertyExpressions(name, member, snapshotBoundary, session),
+
+    // JavaScript static inheritance is shadowing, not a union. Once the subclass has an exact own
+    // member, a dangerous base member is unreachable through `Child.member` (SPEC §6.6 C1/C2).
+    if (own.length > 0) {
+      sources.push(...own);
+      continue;
+    }
+    for (const prototype of requestClassStaticPrototypeSources(
+      declaration,
+      snapshotBoundary,
+      session,
+    )) {
+      sources.push(
+        ...requestStaticMemberAssimilationSources(
+          prototype,
+          member,
+          snapshotBoundary,
+          session,
+          new Set(seen),
+        ),
+      );
+    }
+  }
+  return dedupeRequestNodes(sources);
+}
+
+function requestDefinedGetterExpressionsBefore(
+  owner: Node,
+  member: string,
+  snapshotBoundary: number,
+  session: RequestProvenanceSession,
+): Node[] {
+  return requestDefinedGetterExpressions(owner, member).filter((getter) => {
+    const mutation = getter.getFirstAncestorByKind(SyntaxKind.CallExpression);
+    return !mutation || requestMutationMayExecuteBefore(mutation, snapshotBoundary, session);
+  });
+}
+
+function requestDirectClassDeclarationsForExpression(
+  expression: Node,
+  seen: Set<string>,
+): Array<import('ts-morph').ClassDeclaration | import('ts-morph').ClassExpression> {
+  const node = unwrapStaticExpression(expression);
+  const nodeKey = `direct-class:${requestNodeIdentity(node)}`;
+  if (seen.has(nodeKey)) return [];
+  seen.add(nodeKey);
+  if (Node.isClassDeclaration(node) || Node.isClassExpression(node)) return [node];
+  if (Node.isConditionalExpression(node)) {
+    return dedupeRequestClassDeclarations(
+      [node.getWhenTrue(), node.getWhenFalse()].flatMap((branch) =>
+        requestDirectClassDeclarationsForExpression(branch, new Set(seen)),
+      ),
     );
+  }
+  if (!Node.isIdentifier(node)) return [];
+  const symbol = node.getSymbol();
+  if (!symbol) return [];
+  const symbolKey = requestSymbolKey(symbol);
+  if (seen.has(symbolKey)) return [];
+  seen.add(symbolKey);
+  const classes: Array<import('ts-morph').ClassDeclaration | import('ts-morph').ClassExpression> =
+    [];
+  for (const declaration of symbol.getDeclarations()) {
+    if (Node.isClassDeclaration(declaration) || Node.isClassExpression(declaration)) {
+      classes.push(declaration);
+      continue;
+    }
+    const initializer = valueDeclarationInitializer(declaration);
+    if (initializer) {
+      classes.push(...requestDirectClassDeclarationsForExpression(initializer, new Set(seen)));
+    }
+  }
+  return dedupeRequestClassDeclarations(classes);
+}
+
+function requestClassStaticPrototypeSources(
+  declaration: import('ts-morph').ClassDeclaration | import('ts-morph').ClassExpression,
+  snapshotBoundary: number,
+  session: RequestProvenanceSession,
+): Node[] {
+  const sources: Node[] = [];
+  const heritage = declaration.getExtends()?.getExpression();
+  if (heritage) sources.push(heritage);
+  const name = declaration.getNameNode();
+  if (!name) return sources;
+  const matchesDeclaration = (candidate: Node | undefined): boolean =>
+    !!candidate &&
+    requestDirectClassDeclarationsForExpression(candidate, new Set()).some((resolved) =>
+      requestNodesAreSame(resolved, declaration),
+    );
+  const sourceFile = declaration.getSourceFile();
+  for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
+    if (!requestMutationMayExecuteBefore(call, snapshotBoundary, session)) continue;
+    const callee = unwrapStaticExpression(call.getExpression());
+    const receiver = requestCallReceiver(callee);
+    if (
+      !receiver ||
+      requestStaticCallMember(callee) !== 'setPrototypeOf' ||
+      (!expressionResolvesToGlobalNamespace(receiver, 'Object', new Set(), 0) &&
+        !expressionResolvesToGlobalNamespace(receiver, 'Reflect', new Set(), 0))
+    ) {
+      continue;
+    }
+    const [target, prototype] = call.getArguments();
+    if (matchesDeclaration(target) && prototype) sources.push(prototype);
+  }
+  for (const assignment of sourceFile.getDescendantsOfKind(SyntaxKind.BinaryExpression)) {
+    if (
+      assignment.getOperatorToken().getKind() !== SyntaxKind.EqualsToken ||
+      !requestMutationMayExecuteBefore(assignment, snapshotBoundary, session)
+    ) {
+      continue;
+    }
+    const target = unwrapStaticExpression(assignment.getLeft());
+    if (!Node.isPropertyAccessExpression(target) && !Node.isElementAccessExpression(target)) {
+      continue;
+    }
+    const member = requestCallableMemberName(
+      Node.isPropertyAccessExpression(target)
+        ? target.getNameNode()
+        : target.getArgumentExpression(),
+    );
+    if (member === '__proto__' && matchesDeclaration(target.getExpression())) {
+      sources.push(assignment.getRight());
+    }
   }
   return dedupeRequestNodes(sources);
 }
@@ -17147,34 +17692,41 @@ function requestDefinedStaticDataPropertyExpressions(
   snapshotBoundary: number,
   session: RequestProvenanceSession,
 ): Node[] {
-  const classes = requestClassDeclarationsForExpression(owner, new Set());
+  const classes = requestDirectClassDeclarationsForExpression(owner, new Set());
   if (classes.length === 0) return [];
   const values: Node[] = [];
   for (const call of owner.getSourceFile().getDescendantsOfKind(SyntaxKind.CallExpression)) {
     if (!requestMutationMayExecuteBefore(call, snapshotBoundary, session)) continue;
     const callee = unwrapStaticExpression(call.getExpression());
     const receiver = requestCallReceiver(callee);
+    const method = requestStaticCallMember(callee);
     if (
       !receiver ||
-      requestStaticCallMember(callee) !== 'defineProperty' ||
-      !(
-        expressionResolvesToGlobalNamespace(receiver, 'Object', new Set(), 0) ||
-        expressionResolvesToGlobalNamespace(receiver, 'Reflect', new Set(), 0)
-      )
+      (method !== 'defineProperty' && method !== 'defineProperties') ||
+      (!expressionResolvesToGlobalNamespace(receiver, 'Object', new Set(), 0) &&
+        !expressionResolvesToGlobalNamespace(receiver, 'Reflect', new Set(), 0))
     ) {
       continue;
     }
     const [target, property, descriptor] = call.getArguments();
     if (
       !target ||
-      requestCallableMemberName(property) !== member ||
-      !requestClassDeclarationsForExpression(target, new Set()).some((candidate) =>
+      !requestDirectClassDeclarationsForExpression(target, new Set()).some((candidate) =>
         classes.some((declaration) => requestNodesAreSame(candidate, declaration)),
       )
     ) {
       continue;
     }
-    const value = descriptor ? requestStaticDescriptorValue(descriptor) : undefined;
+    const descriptors =
+      method === 'defineProperties' && property
+        ? resolveStaticObjectLiteral(property, new Set(), 0)
+        : undefined;
+    const memberDescriptor = descriptors
+      ? requestStaticObjectProperty(descriptors, member)
+      : requestCallableMemberName(property) === member
+        ? descriptor
+        : undefined;
+    const value = memberDescriptor ? requestStaticDescriptorValue(memberDescriptor) : undefined;
     if (value) values.push(value);
   }
   return dedupeRequestNodes(values);
@@ -17476,17 +18028,26 @@ function requestProtocolPrototypeSourcesUncached(
     );
   }
   if (Node.isIdentifier(node) && node.getSymbol()) {
-    return dedupeRequestNodes(
-      node
-        .getSymbol()!
-        .getDeclarations()
-        .flatMap((declaration) => {
-          const initializer = valueDeclarationInitializer(declaration);
-          return initializer
-            ? requestProtocolPrototypeSources(initializer, new Set(seen), session)
-            : [];
-        }),
-    );
+    const symbol = node.getSymbol()!;
+    const declarations = symbol.getDeclarations();
+    const sources = declarations.flatMap((declaration) => {
+      const initializer = valueDeclarationInitializer(declaration);
+      return initializer
+        ? requestProtocolPrototypeSources(initializer, new Set(seen), session)
+        : [];
+    });
+    for (const sourceFile of new Set(
+      declarations.map((declaration) => declaration.getSourceFile()),
+    )) {
+      for (const prototype of requestPrototypeMutationsForSymbol(
+        sourceFile,
+        requestSymbolKey(symbol),
+      )) {
+        sources.push(prototype);
+        sources.push(...requestProtocolPrototypeSources(prototype, new Set(seen), session));
+      }
+    }
+    return dedupeRequestNodes(sources);
   }
   if (!Node.isCallExpression(node)) return [];
   const callee = unwrapStaticExpression(node.getExpression());
@@ -25645,6 +26206,24 @@ function requestProjectedExpressionResolvesToExactGlobalValueUncached(
           depth + 1,
         ),
       ]);
+    }
+  }
+  if (
+    member !== undefined &&
+    requestDirectClassDeclarationsForExpression(node, new Set()).length > 0
+  ) {
+    const staticSources = requestClassStaticMemberAssimilationSources(
+      node,
+      member,
+      node.getStart(),
+      session.callIndex.callableSession,
+    );
+    if (staticSources.length > 0) {
+      return requestMergeExactGlobalDependencies(
+        staticSources.map((source) =>
+          requestProjectedExpressionResolvesToExactGlobalValue(source, rest, session, depth + 1),
+        ),
+      );
     }
   }
   if (Node.isObjectLiteralExpression(node)) {
