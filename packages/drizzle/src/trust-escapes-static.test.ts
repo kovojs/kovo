@@ -3518,6 +3518,280 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
     ).toHaveLength(3);
   });
 
+  it('applies JavaScript-exact default and rest bindings at thenable assimilation sites', () => {
+    const carriers = [
+      [
+        'omitted identifier',
+        `function reveal(value = DeferredValue) { return value; } return reveal();`,
+      ],
+      [
+        'undefined identifier',
+        `function reveal(value = DeferredValue) { return value; } return reveal(undefined);`,
+      ],
+      [
+        'object parameter',
+        `function reveal({ value }: any = { value: DeferredValue }) { return value; } return reveal();`,
+      ],
+      [
+        'object property',
+        `function reveal({ value = DeferredValue }: any) { return value; } return reveal({ value: undefined });`,
+      ],
+      [
+        'nested object',
+        `function reveal({ box: { value = DeferredValue } = {} }: any = {}) { return value; } return reveal({});`,
+      ],
+      [
+        'array parameter',
+        `function reveal([value]: any[] = [DeferredValue]) { return value; } return reveal();`,
+      ],
+      [
+        'array nested rest',
+        `function reveal([value = DeferredValue, ...rest]: any[] = []) { return rest.length ? rest[0] : value; } return reveal([]);`,
+      ],
+      [
+        'rest parameter index',
+        `function reveal(...values: any[]) { return values[0]; } return reveal(DeferredValue);`,
+      ],
+      [
+        'array supplied rest',
+        `function reveal([head, ...values]: any[]) { return values[0]; } return reveal([{ ok: true }, DeferredValue]);`,
+      ],
+      [
+        'rest dynamic at',
+        `function reveal(index: number, ...values: any[]) { return values.at(index); } return reveal(Number('1'), { ok: true }, DeferredValue);`,
+      ],
+      [
+        'object method',
+        `const box = { reveal(value = DeferredValue) { return value; } }; return box.reveal();`,
+      ],
+      [
+        'bound helper',
+        `function reveal(value = DeferredValue) { return value; } const bound = reveal.bind(null); return bound();`,
+      ],
+      [
+        'empty spread',
+        `function reveal(value = DeferredValue) { return value; } return reveal(...[]);`,
+      ],
+      [
+        'undefined spread',
+        `function reveal(value = DeferredValue) { return value; } return reveal(...[undefined]);`,
+      ],
+      [
+        'nested helper',
+        `function inner(value = DeferredValue) { return value; } function outer() { return inner(); } return outer();`,
+      ],
+      [
+        'cyclic carrier',
+        `const box: any = {}; box.self = box; box.value = DeferredValue; function read(value = box) { return value.self.value; } return read();`,
+      ],
+      [
+        'Promise then default',
+        `return Promise.resolve(undefined).then((value = DeferredValue) => value);`,
+      ],
+      [
+        'Promise catch default',
+        `return Promise.reject(undefined).catch((value = DeferredValue) => value);`,
+      ],
+      [
+        'Promise finally default',
+        `return Promise.resolve(1).finally((value = DeferredValue) => value);`,
+      ],
+      [
+        'Promise nested helper',
+        `function reveal(value = DeferredValue) { return value; } return Promise.resolve(1).then(() => reveal());`,
+      ],
+    ] as const;
+
+    const missing = carriers.flatMap(([label, statement]) => {
+      const facts = sinksFor(`
+        import { s, task } from '@kovojs/server';
+        task('classes/defaults/${label}', { input: s.object({}), run() {
+          class DeferredValue {
+            static then(resolve: (value: { ok: true }) => void) { resolve({ ok: true }); }
+          }
+          ${statement}
+        } });
+      `);
+      return facts.some(
+        (fact) =>
+          fact.sink === 'request-handler.opaque-protocol' &&
+          fact.source?.startsWith('<class-thenable:'),
+      )
+        ? []
+        : [{ facts, label }];
+    });
+    expect(missing).toEqual([]);
+
+    const safe = sinksFor(`
+      import { s, task } from '@kovojs/server';
+      class DeferredValue {
+        static then(resolve: (value: { ok: true }) => void) { resolve({ ok: true }); }
+      }
+      task('classes/default-safe-identifier', { input: s.object({}), run() {
+        function reveal(value = DeferredValue) { return value; }
+        return reveal({ ok: true });
+      } });
+      task('classes/default-safe-object', { input: s.object({}), run() {
+        function reveal({ value = DeferredValue }: any = {}) { return value; }
+        return reveal({ value: { ok: true } });
+      } });
+      task('classes/default-safe-array', { input: s.object({}), run() {
+        function reveal([value = DeferredValue]: any[] = []) { return value; }
+        return reveal([{ ok: true }]);
+      } });
+      task('classes/default-safe-bound', { input: s.object({}), run() {
+        function reveal(value = DeferredValue) { return value; }
+        const bound = reveal.bind(null, { ok: true });
+        return bound();
+      } });
+      task('classes/default-safe-rest', { input: s.object({}), run() {
+        function head(...values: any[]) { return values.at(0); }
+        return head({ ok: true }, DeferredValue);
+      } });
+      task('classes/default-safe-promise', { input: s.object({}), run() {
+        return Promise.resolve(1).then((value = DeferredValue) => value);
+      } });
+      task('classes/default-safe-promise-helper', { input: s.object({}), run() {
+        function identity<T>(value: T) { return value; }
+        return Promise.resolve(1).then(() => identity({ ok: true }));
+      } });
+    `);
+    expect(safe.filter((fact) => fact.sink === 'request-handler.opaque-protocol')).toEqual([]);
+  });
+
+  it('follows default bindings through named, default, and re-exported helpers', () => {
+    const facts = sinksForFiles([
+      {
+        fileName: 'helpers.ts',
+        source: `
+          export class DeferredValue {
+            static then(resolve: (value: { ok: true }) => void) { resolve({ ok: true }); }
+          }
+          export function reveal(value = DeferredValue) { return value; }
+          export default reveal;
+        `,
+      },
+      {
+        fileName: 'barrel.ts',
+        source: `export { default, reveal as revealNamed } from './helpers.js';`,
+      },
+      {
+        fileName: 'app.ts',
+        source: `
+          import { s, task } from '@kovojs/server';
+          import revealDefault, { revealNamed } from './barrel.js';
+          task('classes/default-import-named', {
+            input: s.object({}), run() { return revealNamed(); },
+          });
+          task('classes/default-import-default', {
+            input: s.object({}), run() { return revealDefault(undefined); },
+          });
+          task('classes/default-import-safe', {
+            input: s.object({}), run() { return revealNamed({ ok: true }); },
+          });
+        `,
+      },
+    ]);
+    expect(
+      facts.filter(
+        (fact) =>
+          fact.sink === 'request-handler.opaque-protocol' &&
+          fact.source?.startsWith('<class-thenable:'),
+      ),
+    ).toHaveLength(2);
+  });
+
+  it('follows local class heritage for static assimilation projections', () => {
+    const carriers = [
+      [
+        'getter',
+        `class Base { static get value() { return DeferredValue; } } class Child extends Base {} return Child.value;`,
+      ],
+      [
+        'alias',
+        `class Base { static get value() { return DeferredValue; } } class Child extends Base {} const Alias = Child; return Alias.value;`,
+      ],
+      [
+        'field',
+        `class Base { static value = DeferredValue; } class Child extends Base {} return Child.value;`,
+      ],
+      [
+        'assignment',
+        `class Base {} Base.value = DeferredValue; class Child extends Base {} return Child.value;`,
+      ],
+      [
+        'descriptor',
+        `class Base {} Object.defineProperty(Base, 'value', { get() { return DeferredValue; } }); class Child extends Base {} return Child.value;`,
+      ],
+    ] as const;
+    const missing = carriers.flatMap(([label, statement]) => {
+      const facts = sinksFor(`
+        import { s, task } from '@kovojs/server';
+        task('classes/inherited/${label}', { input: s.object({}), run() {
+          class DeferredValue {
+            static then(resolve: (value: { ok: true }) => void) { resolve({ ok: true }); }
+          }
+          ${statement}
+        } });
+      `);
+      return facts.some(
+        (fact) =>
+          fact.sink === 'request-handler.opaque-protocol' &&
+          fact.source?.startsWith('<class-thenable:'),
+      )
+        ? []
+        : [{ facts, label }];
+    });
+    expect(missing).toEqual([]);
+
+    const safe = sinksFor(`
+      import { s, task } from '@kovojs/server';
+      task('classes/inherited-safe', { input: s.object({}), run() {
+        class Base { static get value() { return { ok: true }; } }
+        class Child extends Base {}
+        const Alias = Child;
+        return Alias.value;
+      } });
+    `);
+    expect(safe).toEqual([]);
+  });
+
+  it('keeps call-site-bound thenable helper proof within a bounded scaling envelope', () => {
+    const helperCount = 128;
+    const helpers = Array.from({ length: helperCount }, (_, index) =>
+      index === helperCount - 1
+        ? `function h${index}<T>(value: T) { return value; }`
+        : `function h${index}<T>(value: T) { return h${index + 1}(value); }`,
+    ).join('\n');
+    const startedAt = performance.now();
+    const safe = sinksFor(`
+      import { s, task } from '@kovojs/server';
+      task('classes/scaling-safe', { input: s.object({}), run() {
+        ${helpers}
+        return h0({ ok: true });
+      } });
+    `);
+    const unsafe = sinksFor(`
+      import { s, task } from '@kovojs/server';
+      task('classes/scaling-unsafe', { input: s.object({}), run() {
+        class DeferredValue {
+          static then(resolve: (value: { ok: true }) => void) { resolve({ ok: true }); }
+        }
+        ${helpers}
+        return h0(DeferredValue);
+      } });
+    `);
+    expect(safe).toEqual([]);
+    expect(
+      unsafe.some(
+        (fact) =>
+          fact.sink === 'request-handler.opaque-protocol' &&
+          fact.source?.startsWith('<class-thenable:'),
+      ),
+    ).toBe(true);
+    expect(performance.now() - startedAt).toBeLessThan(8_000);
+  });
+
   it('opens exact local Map reads while retaining stored thenable assimilation', () => {
     const safe = sinksFor(`
       import { s, task } from '@kovojs/server';
