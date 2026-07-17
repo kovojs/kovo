@@ -74,3 +74,38 @@ it.each([
   expect(new FormData(submitter.form, submitter).get('kovo-csrf')).toBe('victim-csrf-token');
   expect(submitter.formAction).toBe('https://outside.example/collect');
 });
+
+it.each([
+  ['NUL replacement', 'record\u0000a', 'record\ufffda'],
+  ['CR preprocessing', 'record\ra', 'record\na'],
+  ['CRLF preprocessing', 'record\r\na', 'record\na'],
+  ['lone surrogate UTF-8 replacement', 'record\ud800a', 'record\ufffda'],
+])(
+  'reproduces a %s collision across keyed row, fragment, and submitted record identity',
+  (_label, authoredId, wireId) => {
+    const authoredHtml = `
+      <form kovo-key="${authoredId}" kovo-fragment-target="edit:${authoredId}">
+        <input type="hidden" name="kovo-form-key" value="${authoredId}">
+        <input type="hidden" name="recordId" value="${authoredId}">
+      </form>
+      <form kovo-key="${wireId}" kovo-fragment-target="edit:${wireId}">
+        <input type="hidden" name="kovo-form-key" value="${wireId}">
+        <input type="hidden" name="recordId" value="${wireId}">
+      </form>
+    `;
+    document.body.innerHTML = new TextDecoder().decode(new TextEncoder().encode(authoredHtml));
+
+    const forms = document.querySelectorAll<HTMLFormElement>('form');
+    const sourceDistinctRecord = forms.item(0);
+    const replacementRecord = forms.item(1);
+    expect(sourceDistinctRecord.getAttribute('kovo-key')).toBe(wireId);
+    expect(replacementRecord.getAttribute('kovo-key')).toBe(wireId);
+    expect(sourceDistinctRecord.getAttribute('kovo-fragment-target')).toBe(`edit:${wireId}`);
+    expect(replacementRecord.getAttribute('kovo-fragment-target')).toBe(`edit:${wireId}`);
+
+    const submitted = new FormData(sourceDistinctRecord);
+    expect(submitted.get('kovo-form-key')).toBe(wireId);
+    expect(submitted.get('recordId')).toBe(wireId);
+    expect(submitted.get('recordId')).not.toBe(authoredId);
+  },
+);
