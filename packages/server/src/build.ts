@@ -1427,9 +1427,15 @@ function unsafeReservedMutationRequestTarget(rawTarget) {
   const rootedPathname = rootedRawRequestTargetPath(comparablePathname);
   let normalizedPathname;
   try {
-    normalizedPathname = urlPathname(new NativeURL(rootedPathname, requestTargetAnalysisOrigin));
+    // SPEC §9.5: use the same URL parser as request assembly for absolute-form targets. Node
+    // accepts extra authority slashes such as http:////host/_m/...; splitting only on ://
+    // observes a different pathname from the one that dispatch will receive.
+    normalizedPathname = urlPathname(absoluteForm
+      ? new NativeURL(rawTarget)
+      : new NativeURL(rootedPathname, requestTargetAnalysisOrigin));
   } catch {
-    return false;
+    // Invalid scheme-bearing targets fail before an origin callback or Request authority is used.
+    return absoluteForm;
   }
   if (!isReservedMutationPath(normalizedPathname)) return false;
   return absoluteForm || pathname !== normalizedPathname || rawRequestTargetHasBackslash(pathname) || rawRequestTargetHasEncodedPathControl(pathname);

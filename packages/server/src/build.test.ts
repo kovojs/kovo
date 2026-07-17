@@ -4488,6 +4488,14 @@ async function expectEmittedAdapterParity(adapter: NodeAdapterModule): Promise<v
     '\\_m\\a\\b',
     'http://attacker.test/_m/a/b',
     'https://h2.example.test/_m/a/b',
+    'http:///attacker.test/_m/a/b',
+    'http:////attacker.test/_m/a/b',
+    'http://///attacker.test/_m/a/b',
+    'https:////attacker.test/_m/a/b',
+    'http:/attacker.test/_m/a/b',
+    'http:attacker.test/_m/a/b',
+    'http:\\\\attacker.test\\_m\\a\\b',
+    'foo:/_m/a/b',
     'http://proxy.invalid\\_m\\a\\%2e\\b',
   ]) {
     const unsafeMutationRequest = adapterParityRequest();
@@ -4497,6 +4505,21 @@ async function expectEmittedAdapterParity(adapter: NodeAdapterModule): Promise<v
       'Reserved mutation request targets must use their canonical raw path.',
     );
   }
+
+  let invalidTargetOriginCalls = 0;
+  for (const target of ['http://[::1', 'https://attacker.test:99999/_m/a/b', 'foo://[']) {
+    const invalidAbsoluteRequest = adapterParityRequest();
+    invalidAbsoluteRequest.url = target;
+    expect(() =>
+      adapter.nodeRequestToWebRequest(invalidAbsoluteRequest, {
+        origin() {
+          invalidTargetOriginCalls += 1;
+          return 'https://h2.example.test';
+        },
+      }),
+    ).toThrow('Reserved mutation request targets must use their canonical raw path.');
+  }
+  expect(invalidTargetOriginCalls).toBe(0);
 
   const originalIncludes = String.prototype.includes;
   const originalRegExpTest = RegExp.prototype.test;

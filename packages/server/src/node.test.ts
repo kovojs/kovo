@@ -982,6 +982,10 @@ describe('toNodeHandler incomplete request transport closure', () => {
       '/_m/x/a/../b',
       'http://proxy.invalid/_m/a/%2e/b',
       'http://attacker.test/_m/a/b',
+      'http:///attacker.test/_m/a/b',
+      'http:////attacker.test/_m/a/b',
+      'http://///attacker.test/_m/a/b',
+      'https:////attacker.test/_m/a/b',
     ];
     aliases.push(`${server.origin}/_m/a/b`);
 
@@ -1023,6 +1027,14 @@ describe('toNodeHandler incomplete request transport closure', () => {
       '\\_m\\a\\b',
       'http://attacker.test/_m/a/b',
       'https://internal.example/_m/a/b',
+      'http:///attacker.test/_m/a/b',
+      'http:////attacker.test/_m/a/b',
+      'http://///attacker.test/_m/a/b',
+      'https:////attacker.test/_m/a/b',
+      'http:/attacker.test/_m/a/b',
+      'http:attacker.test/_m/a/b',
+      'http:\\\\attacker.test\\_m\\a\\b',
+      'foo:/_m/a/b',
       'http://proxy.invalid\\_m\\a\\%2e\\b',
     ]) {
       const request = nodeRequest(target);
@@ -1035,6 +1047,16 @@ describe('toNodeHandler incomplete request transport closure', () => {
     expect(
       nodeRequestToWebRequest(nodeRequest('/_m/a/b'), { origin: 'https://internal.example' }).url,
     ).toBe('https://internal.example/_m/a/b');
+  });
+
+  it('fails closed on invalid scheme-bearing targets before consulting request authority', () => {
+    const origin = vi.fn(() => 'https://internal.example');
+    for (const target of ['http://[::1', 'https://attacker.test:99999/_m/a/b', 'foo://[']) {
+      expect(() => nodeRequestToWebRequest(nodeRequest(target), { origin })).toThrow(
+        'Reserved mutation request targets must use their canonical raw path.',
+      );
+    }
+    expect(origin).not.toHaveBeenCalled();
   });
 
   it('keeps raw mutation target classification after String, RegExp, and Math poisoning', () => {

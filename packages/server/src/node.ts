@@ -944,9 +944,19 @@ function unsafeReservedMutationRequestTarget(rawTarget: string): boolean {
   const rootedPathname = rootedRawRequestTargetPath(comparablePathname);
   let normalizedPathname: string;
   try {
-    normalizedPathname = urlPathname(new NativeURL(rootedPathname, requestTargetAnalysisOrigin));
+    // SPEC §9.5: classify an absolute-form target with the exact parser that later assembles the
+    // Web Request. Extra authority slashes such as `http:////host/_m/...` are accepted by Node and
+    // collapse before dispatch; a hand-rolled `://` split otherwise sees the wrong pathname and
+    // lets an alias cross the reserved mutation boundary.
+    normalizedPathname = urlPathname(
+      absoluteForm
+        ? new NativeURL(rawTarget)
+        : new NativeURL(rootedPathname, requestTargetAnalysisOrigin),
+    );
   } catch {
-    return false;
+    // A scheme-bearing target that cannot survive the same URL parse must fail before an
+    // operator-supplied origin callback or Request authority is consulted.
+    return absoluteForm;
   }
   if (!isReservedMutationPath(normalizedPathname)) return false;
 
