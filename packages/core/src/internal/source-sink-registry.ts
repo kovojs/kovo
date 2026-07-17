@@ -245,7 +245,7 @@ const sourceSinkInventory: readonly SourceSinkInventoryEntry[] = [
     guard:
       'direct-app-header-allowlist+dedicated-field-options+typed-cookie-builder+transport-owned-header-deny-set',
     runtimeGuard:
-      'reject-unknown-direct-app-names+reject-cr-lf-nul-controls+reject-framing-hop-by-hop+structural-cookie-serialization+browser-state-private-no-store-floor',
+      'reject-unknown-direct-app-names+reject-cr-lf-nul-controls+reject-framing-hop-by-hop+structural-cookie-serialization+browser-state-private-no-store-floor+static-export-browser-state-rejection+adapter-browser-state-private-no-store-floor',
     schema:
       'mutation-response-header-channel|route-outcome-direct-headers(Cache-Control,Last-Modified,Vary)|configured-error-shell-direct-headers(Cache-Control,Last-Modified,Vary)|raw-endpoint-Response|static-export-headers|Set-Cookie|Clear-Site-Data|Content-Type|ETag|Content-Disposition|Location|Retry-After|Kovo-*|Content-Length|Connection|Keep-Alive|Proxy-Connection|TE|Trailer|Transfer-Encoding|Upgrade|Proxy-Authenticate|Proxy-Authorization|HTTP2-Settings|Node-Bun-Workers-header-conversion',
     sink: 'http.header.cookie',
@@ -257,6 +257,10 @@ const sourceSinkInventory: readonly SourceSinkInventoryEntry[] = [
       existingEvidence.response,
       'packages/server/src/response-posture.test.ts',
       'packages/server/src/app-dispatch.test.ts',
+      'packages/server/src/node.test.ts',
+      'packages/server/src/build.test.ts',
+      'packages/server/src/static-export-headers.test.ts',
+      'packages/server/src/static-export-response.test.ts',
     ],
     trust: 'transport-metadata',
   },
@@ -817,22 +821,30 @@ const boundaryCrossingInventory: readonly BoundaryCrossingSinkInventoryEntry[] =
       'packages/server/src/response.test.ts',
       'packages/server/src/app-document.test.ts',
       'packages/server/src/response-posture.test.ts',
+      'packages/server/src/node.test.ts',
+      'packages/server/src/build.test.ts',
+      'packages/server/src/static-export-headers.test.ts',
+      'packages/server/src/static-export-response.test.ts',
       'packages/create-kovo/src/index.build.prod-artifact.headers.test.ts',
     ],
     inventoryFamily: 'http.header.cookie',
     mechanism: 'own',
     mechanismDetail:
-      'Direct app inputs pass an exact metadata allowlist before framework fields are assembled; typed and raw finalization then own controls, the browser-state private/no-store floor, and the transport-owned framing/hop-by-hop deny set before adapter mutation.',
+      'Direct app inputs pass an exact metadata allowlist before framework fields are assembled; static export rejects durable browser-state instructions, while typed, raw, live-adapter, and generated-adapter finalization own the browser-state private/no-store floor and the transport-owned framing/hop-by-hop deny set before transport mutation.',
     proofEvidence: [
       'packages/server/src/response-app-headers.test.ts',
       'packages/server/src/response.test.ts',
       'packages/server/src/app-document.test.ts',
       'packages/server/src/response-posture.test.ts',
+      'packages/server/src/node.test.ts',
+      'packages/server/src/build.test.ts',
+      'packages/server/src/static-export-headers.test.ts',
+      'packages/server/src/static-export-response.test.ts',
       'packages/create-kovo/src/index.build.prod-artifact.headers.test.ts',
     ],
     sink: 'http response headers',
     soleDoor:
-      'respond/error-shell app-header classifiers, then finalizeResponseHeaders/finalizeRawResponseHeaders and the shared transport-header classifier at static and adapter sinks',
+      'respond/error-shell app-header classifiers, then finalizeResponseHeaders/finalizeRawResponseHeaders, static browser-state rejection, and live/generated adapter cache-floor plus transport-header sinks',
     specAnchor: 'spec/09-wire-protocol.md §9.1; spec/11-diagnostics.md KV415',
   },
   {

@@ -119,9 +119,22 @@ describe('boundary crossing sink inventory', () => {
     expect(headerInventory?.schema).toContain('Set-Cookie|Clear-Site-Data');
     expect(headerInventory?.testEvidence).toContain('packages/server/src/response-posture.test.ts');
     expect(headerInventory?.testEvidence).toContain('packages/server/src/app-dispatch.test.ts');
+    expect(headerInventory?.testEvidence).toContain('packages/server/src/node.test.ts');
+    expect(headerInventory?.testEvidence).toContain('packages/server/src/build.test.ts');
+    expect(headerInventory?.testEvidence).toContain(
+      'packages/server/src/static-export-headers.test.ts',
+    );
+    expect(headerInventory?.testEvidence).toContain(
+      'packages/server/src/static-export-response.test.ts',
+    );
+    expect(headerInventory?.runtimeGuard).toContain('static-export-browser-state-rejection');
+    expect(headerInventory?.runtimeGuard).toContain(
+      'adapter-browser-state-private-no-store-floor',
+    );
     expect(headerCorpus?.payloads).toContain(
       'public cache policy with Set-Cookie or Clear-Site-Data',
     );
     expect(boundary?.mechanismDetail).toContain('browser-state private/no-store floor');
+    expect(boundary?.mechanismDetail).toContain('static export rejects');
   });
 });

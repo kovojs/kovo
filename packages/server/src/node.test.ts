@@ -299,6 +299,44 @@ describe('server node adapter', () => {
     }
   });
 
+  it('prevents a public browser-state response from crossing the public toNodeHandler edge', async () => {
+    const server = await serveWithNode(
+      toNodeHandler(
+        async (request) =>
+          new Response('signed in', {
+            headers: {
+              'Cache-Control': 'public, max-age=3600',
+              'Content-Type': 'text/plain; charset=utf-8',
+              Vary: 'Accept-Language',
+              ...(new URL(request.url).pathname === '/clear'
+                ? { 'Clear-Site-Data': '"storage"' }
+                : { 'Set-Cookie': 'session=abc; HttpOnly; Path=/' }),
+            },
+          }),
+      ),
+    );
+
+    try {
+      const cookieResponse = await fetch(`${server.origin}/cookie`, {
+        headers: { 'Accept-Encoding': 'gzip' },
+      });
+      expect(cookieResponse.headers.get('cache-control')).toBe('private, no-store');
+      expect(cookieResponse.headers.get('vary')).toBe('Accept-Language, Cookie');
+      expect(cookieResponse.headers.get('set-cookie')).toBe('session=abc; HttpOnly; Path=/');
+      expect(cookieResponse.headers.get('content-encoding')).toBeNull();
+
+      const clearResponse = await fetch(`${server.origin}/clear`, {
+        headers: { 'Accept-Encoding': 'gzip' },
+      });
+      expect(clearResponse.headers.get('cache-control')).toBe('private, no-store');
+      expect(clearResponse.headers.get('vary')).toBe('Accept-Language, Cookie');
+      expect(clearResponse.headers.get('clear-site-data')).toBe('"storage"');
+      expect(clearResponse.headers.get('content-encoding')).toBeNull();
+    } finally {
+      await server.close();
+    }
+  });
+
   it('rejects malformed or duplicate HTTP/1 authorities before app dispatch', async () => {
     const handler = vi.fn(async (request: Request) =>
       Response.json({ host: request.headers.get('host'), url: request.url }),
@@ -1366,6 +1404,37 @@ describe('responseHeadersToNodeHeaders (B1)', () => {
     expect(cookies[0]).toBe('session=abc; HttpOnly; Path=/');
     expect(cookies[1]).toBe('csrf=xyz; SameSite=Strict; Path=/');
   });
+
+  it.each([
+    ['Set-Cookie', 'session=abc; HttpOnly; Path=/'],
+    ['Clear-Site-Data', '"cookies", "storage"'],
+  ])(
+    'forces the browser-state cache floor before the Node adapter writes %s',
+    async (name, value) => {
+      const response = new Response(null, {
+        headers: {
+          'Cache-Control': 'public, max-age=3600',
+          [name]: value,
+          Vary: 'Accept-Language',
+        },
+        status: 204,
+      });
+
+      let capturedHeaders: Record<string, string | string[]> | undefined;
+      const nodeResponse = {
+        end: vi.fn(),
+        writeHead(_status: number, _statusText: string, headers: Record<string, string | string[]>) {
+          capturedHeaders = headers;
+          return this;
+        },
+      } as unknown as ServerResponse;
+
+      await writeWebResponseToNode(response, nodeResponse, 'GET');
+
+      expect(capturedHeaders?.['cache-control']).toBe('private, no-store');
+      expect(capturedHeaders?.vary).toBe('Accept-Language, Cookie');
+    },
+  );
 
   it('rejects app-authored framing before HTTP/1.0, HTTP/1.1, or HTTP/2 adapter writes', async () => {
     for (const httpVersion of ['1.0', '1.1', '2.0']) {

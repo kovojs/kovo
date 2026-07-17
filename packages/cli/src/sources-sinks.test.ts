@@ -135,6 +135,8 @@ describe('source/sink inventory', () => {
     expect(searchableInventory).toContain('Set-Cookie');
     expect(searchableInventory).toContain('Clear-Site-Data');
     expect(searchableInventory).toContain('browser-state-private-no-store-floor');
+    expect(searchableInventory).toContain('static-export-browser-state-rejection');
+    expect(searchableInventory).toContain('adapter-browser-state-private-no-store-floor');
     expect(searchableInventory).toContain('Content-Type');
     expect(searchableInventory).toContain('Content-Disposition');
     expect(searchableInventory).toContain('Retry-After');

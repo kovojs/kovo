@@ -109,12 +109,15 @@ describe('server static export replay response boundary', () => {
     ).rejects.toThrow(/missing its Kovo-Build transport proof/u);
   });
 
-  it('rejects static route document response headers that cannot be exported', async () => {
+  it.each([
+    ['Set-Cookie', 'sid=1; Path=/'],
+    ['Clear-Site-Data', '"cookies"'],
+  ])('rejects a static route document carrying %s', async (name, value) => {
     await expect(
       readStaticExportReplayedResponse({
         kind: 'route-document',
         response: frameworkDocumentResponse('<main>Docs</main>', {
-          headers: { 'Content-Type': 'text/html; charset=utf-8', 'Set-Cookie': 'sid=1; Path=/' },
+          headers: { 'Content-Type': 'text/html; charset=utf-8', [name]: value },
         }),
         routePath: '/docs',
       }),
@@ -123,7 +126,7 @@ describe('server static export replay response boundary', () => {
       diagnostics: [
         {
           code: 'KV229',
-          message: expect.stringContaining('static export artifacts cannot carry Set-Cookie'),
+          message: expect.stringContaining(`static export artifacts cannot carry ${name}`),
           routePath: '/docs',
         },
       ],

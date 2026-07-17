@@ -1024,7 +1024,9 @@ const nativeUrlGlobalDescriptor = nativeObjectGetOwnPropertyDescriptor(globalThi
 const nativeSetHas = Set.prototype.has;
 const nativeHeadersAppend = NativeHeaders.prototype.append;
 const nativeHeadersForEach = NativeHeaders.prototype.forEach;
+const nativeHeadersGet = NativeHeaders.prototype.get;
 const nativeHeadersGetSetCookie = NativeHeaders.prototype.getSetCookie;
+const nativeHeadersHas = NativeHeaders.prototype.has;
 const nativeHeadersSet = NativeHeaders.prototype.set;
 const nativeResponseBodyGetter = nativeObjectGetOwnPropertyDescriptor(NativeResponse.prototype, 'body').get;
 const nativeResponseHeadersGetter = nativeObjectGetOwnPropertyDescriptor(NativeResponse.prototype, 'headers').get;
@@ -1596,6 +1598,7 @@ export async function writeWebResponseToNode(response, nodeResponse, method = 'G
   const pinnedResponse = snapshotWebResponse(response);
   const responseHeaders = pinnedResponse.headers;
   assertSafeTransportResponseHeaderEntries(transportResponseHeaderEntries(responseHeaders));
+  stampBrowserStateResponseCacheFloor(responseHeaders);
   if (nodeResponse.shouldKeepAlive === false && options.httpVersion !== '2.0') {
     apply(nativeHeadersSet, responseHeaders, ['connection', 'close']);
   }
@@ -1608,6 +1611,37 @@ export async function writeWebResponseToNode(response, nodeResponse, method = 'G
   }
 
   await pipeline(apply(nativeReadableFromWeb, Readable, [pinnedResponse.body]), nodeResponse);
+}
+
+// SPEC §9.1: this emitted adapter is the last authoritative header boundary for both generated
+// Node and Vercel runtimes. Browser-state responses cannot retain an authored public cache policy.
+function stampBrowserStateResponseCacheFloor(headers) {
+  if (!apply(nativeHeadersHas, headers, ['set-cookie']) &&
+      !apply(nativeHeadersHas, headers, ['clear-site-data'])) return;
+
+  apply(nativeHeadersSet, headers, ['cache-control', 'private, no-store']);
+  const vary = apply(nativeHeadersGet, headers, ['vary']);
+  if (vary === null ||
+      (!commaSeparatedHeaderHasToken(vary, 'cookie') &&
+       !commaSeparatedHeaderHasToken(vary, '*'))) {
+    apply(nativeHeadersSet, headers, ['vary', vary === null || apply(nativeStringTrim, vary, []) === ''
+      ? 'Cookie'
+      : vary + ', Cookie']);
+  }
+}
+
+function commaSeparatedHeaderHasToken(value, expected) {
+  let start = 0;
+  while (start <= value.length) {
+    const separator = apply(nativeStringIndexOf, value, [',', start]);
+    const end = separator < 0 ? value.length : separator;
+    const token = apply(nativeStringToLowerCase,
+      apply(nativeStringTrim, apply(nativeStringSlice, value, [start, end]), []), []);
+    if (token === expected) return true;
+    if (separator < 0) return false;
+    start = separator + 1;
+  }
+  return false;
 }
 
 function snapshotWebResponse(response) {

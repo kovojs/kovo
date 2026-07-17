@@ -802,6 +802,7 @@ export async function writeWebResponseToNode(
     nodeTransportHeaderEntries(pinnedResponse.headers),
     classifyNodeTransportResponseHeaders,
   );
+  stampBrowserStateResponseCacheFloor(pinnedResponse.headers);
   const compression = responseCompression(pinnedResponse, options, method);
   const responseHeaders = pinnedResponse.headers;
   if (nodeResponseShouldKeepAlive(nodeResponse) === false && options.httpVersion !== '2.0') {
@@ -850,6 +851,25 @@ export async function writeWebResponseToNode(
     await nativePipeline(source, nativeCreateGzip(), nodeResponse);
   } else {
     await nativePipeline(source, nodeResponse);
+  }
+}
+
+/**
+ * SPEC §9.1: the Node adapter is the last authoritative header boundary for a generic
+ * Request -> Response handler as well as for createRequestHandler(). RFC 9111 §7.3 does not make
+ * Set-Cookie inhibit storage, and a cached Clear-Site-Data instruction is destructive, so neither
+ * response may retain an authored public cache posture at writeHead().
+ */
+function stampBrowserStateResponseCacheFloor(headers: Headers): void {
+  if (!hasHeader(headers, 'Set-Cookie') && !hasHeader(headers, 'Clear-Site-Data')) return;
+
+  setHeader(headers, 'Cache-Control', 'private, no-store');
+  const vary = getHeader(headers, 'Vary');
+  if (
+    vary === null ||
+    (!commaSeparatedTokenContains(vary, 'cookie') && !commaSeparatedTokenContains(vary, '*'))
+  ) {
+    appendVary(headers, 'Cookie');
   }
 }
 

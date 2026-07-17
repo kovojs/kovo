@@ -42,10 +42,14 @@ describe('server static export header sink', () => {
     ).toThrow(/KV435 Secret query value reaches the client wire/);
   });
 
-  it('rejects Set-Cookie and framework-reserved Kovo headers', () => {
+  it('rejects browser-state and framework-reserved Kovo headers', () => {
     expect(() =>
       staticExportHeaders({ 'Set-Cookie': 'sid=1; Path=/' }, { path: '/assets/app.css' }),
     ).toThrow(/cannot carry Set-Cookie/);
+
+    expect(() =>
+      staticExportHeaders({ 'Clear-Site-Data': '"cookies"' }, { path: '/assets/app.css' }),
+    ).toThrow(/cannot carry Clear-Site-Data/);
 
     expect(() =>
       staticExportHeaders({ 'Kovo-Build': 'build-a' }, { path: '/assets/app.css' }),

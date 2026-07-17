@@ -4759,6 +4759,9 @@ async function expectEmittedAdapterParity(adapter: NodeAdapterModule): Promise<v
     'session=s1; Path=/; HttpOnly',
     'csrf=c1; Path=/; SameSite=Strict',
   ]);
+  expect(emittedHeaders['clear-site-data']).toBe('"cookies", "storage"');
+  expect(emittedHeaders['cache-control']).toBe('private, no-store');
+  expect(emittedHeaders.vary).toBe('Accept-Language, Cookie');
 
   for (const writeResponse of [liveWriteWebResponseToNode, adapter.writeWebResponseToNode]) {
     for (const httpVersion of ['1.0', '1.1', '2.0']) {
@@ -4835,6 +4838,9 @@ async function capturedNodeHeaders(
   const response = new Response(null, { status: 204 });
   response.headers.append('set-cookie', 'session=s1; Path=/; HttpOnly');
   response.headers.append('set-cookie', 'csrf=c1; Path=/; SameSite=Strict');
+  response.headers.set('clear-site-data', '"cookies", "storage"');
+  response.headers.set('cache-control', 'public, max-age=3600');
+  response.headers.set('vary', 'Accept-Language');
   response.headers.set('x-from-test', 'kept');
   let captured: Record<string, string | string[]> = {};
   const nodeResponse = {
