@@ -12,7 +12,7 @@ import { handleAppStartupErrorResponse } from './app-request.js';
 import { MAX_REQUEST_QUERY_ENTRIES } from './request-url-limits.js';
 import { versionedClientModuleHref } from './client-modules.js';
 import { KOVO_CSP_REPORT_ENDPOINT } from './csp.js';
-import { csrfToken } from './csrf.js';
+import { csrfToken, mintIdemToken } from './csrf.js';
 import { kovoSecurityReportSnapshot, resetKovoSecurityReportsForTest } from './reporting.js';
 import { domain } from './domain.js';
 import {
@@ -23,7 +23,7 @@ import {
 } from './endpoint.js';
 import { registerGeneratedMutationTouchRegistry } from './generated-mutation-registry.js';
 import { registerGeneratedQueryReadRegistry } from './generated-query-registry.js';
-import { guards } from './guards.js';
+import { guards, resolveLifecycleRequest } from './guards.js';
 import { mutation } from './mutation.js';
 import { assignDerivedQueryKey, query } from './query.js';
 import {
@@ -3211,6 +3211,7 @@ describe('server createApp request shell', () => {
         return `<cart-badge>${request.db.select().count}:${request.session?.user.id}</cart-badge>`;
       },
     };
+    const sessionProvider = () => ({ user: { id: 'u1' } });
     const app = withCompilerLiveTargetRenderers([cartRenderer], () =>
       createApp({
         csrf,
@@ -3239,7 +3240,7 @@ describe('server createApp request shell', () => {
             },
           }),
         ],
-        sessionProvider: () => ({ user: { id: 'u1' } }),
+        sessionProvider,
       }),
     );
     const handler = createRequestHandler(app);
@@ -3255,15 +3256,32 @@ describe('server createApp request shell', () => {
     );
 
     const form = new FormData();
+    const idem = mintIdemToken();
+    // SPEC §6.6/§10.3: render-time CSRF authority includes the framework-proven principal.
+    const renderRequest = await resolveLifecycleRequest(
+      new Request('https://example.test/cart'),
+      { sessionProvider },
+    );
     form.set('quantity', '2');
-    form.set('kovo-csrf', csrfToken({}, csrf, { audience: 'cart/add' }));
+    form.set('kovo-csrf', csrfToken(renderRequest, csrf, { audience: 'cart/add' }));
+    form.set('Kovo-Idem', idem);
+    const cartAttestation = createLiveTargetAttestation(
+      { component: 'components/cart/badge', props: {}, target: 'cart' },
+      {
+        buildToken: appLiveTargetAttestationAudience(app),
+        csrf,
+        request: renderRequest,
+        sourceUrl: 'https://example.test/cart',
+      },
+    );
     const mutationResponse = await handler(
       new Request('https://example.test/_m/cart/add', {
         body: form,
         headers: {
           'Kovo-Current-Url': 'https://example.test/cart',
           'Kovo-Fragment': 'true',
-          'Kovo-Live-Targets': `${attestedLiveTargetHeader('cart', 'components/cart/badge', appLiveTargetAttestationAudience(app), {}, csrf, 'https://example.test/cart', 'u1')}`,
+          'Kovo-Idem': idem,
+          'Kovo-Live-Targets': `cart#components/cart/badge@${cartAttestation}:{}`,
           'Kovo-Targets': 'cart=cart',
           origin: 'https://example.test',
         },
@@ -3271,10 +3289,14 @@ describe('server createApp request shell', () => {
       }),
     );
 
-    expect(mutationResponse.status).toBe(200);
-    await expect(mutationResponse.text()).resolves.toBe(
+    const mutationBody = await mutationResponse.text();
+    expect(mutationResponse.status, mutationBody).toBe(200);
+    expect(
+      mutationBody,
+      JSON.stringify({ headers: [...mutationResponse.headers], reads: db.reads, state: db.state }),
+    ).toBe(
       [
-        '<kovo-query name="cart">{"count":3}</kovo-query>',
+        `<kovo-query name="cart" settles="${idem}">{"count":3}</kovo-query>`,
         '<kovo-fragment target="cart"><cart-badge>3:u1</cart-badge></kovo-fragment>',
       ].join('\n'),
     );
