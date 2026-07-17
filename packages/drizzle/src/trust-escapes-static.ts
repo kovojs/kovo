@@ -30455,6 +30455,385 @@ function requestRootRoleAuthoredResultCandidates(
   return candidates;
 }
 
+type RequestRootRoleReferenceKind = 'direct' | 'shallow-array';
+
+interface RequestRootRoleReferencePlan {
+  readonly fromDirect?: RequestRootRoleReferenceKind;
+  readonly fromShallowArray?: RequestRootRoleReferenceKind;
+  readonly source: string;
+}
+
+function requestRootRoleArrayElementProjectionMayAlias(
+  expression: import('ts-morph').ElementAccessExpression,
+): boolean {
+  const member = requestCanonicalStaticMemberName(expression.getArgumentExpression());
+  return member === undefined || /^(?:0|[1-9][0-9]*)$/.test(member);
+}
+
+function requestRootRoleExpressionAliasesParameter(
+  expression: Node,
+  parameterKey: string,
+  session: RequestProvenanceSession,
+  seen: Set<string>,
+  depth: number,
+): boolean {
+  const node = unwrapStaticExpression(expression);
+  if (depth > 64 || !requestProvenanceStep(session, node)) {
+    session.exhaustedAt ??= node;
+    return true;
+  }
+  const nodeKey = requestNodeIdentity(node);
+  if (seen.has(nodeKey)) return false;
+  seen.add(nodeKey);
+  if (Node.isIdentifier(node)) {
+    const symbol = node.getSymbol();
+    if (!symbol) return false;
+    const symbolKey = requestSymbolKey(symbol);
+    if (symbolKey === parameterKey) return true;
+    for (const declaration of symbol.getDeclarations()) {
+      if (
+        !Node.isVariableDeclaration(declaration) ||
+        declaration.getVariableStatement()?.getDeclarationKind() !== VariableDeclarationKind.Const
+      ) {
+        continue;
+      }
+      const initializer = declaration.getInitializer();
+      if (
+        initializer &&
+        requestRootRoleExpressionAliasesParameter(
+          initializer,
+          parameterKey,
+          session,
+          new Set(seen),
+          depth + 1,
+        )
+      ) {
+        return true;
+      }
+    }
+    return false;
+  }
+  if (Node.isAwaitExpression(node)) {
+    return requestRootRoleExpressionAliasesParameter(
+      node.getExpression(),
+      parameterKey,
+      session,
+      new Set(seen),
+      depth + 1,
+    );
+  }
+  if (Node.isConditionalExpression(node)) {
+    return [node.getWhenTrue(), node.getWhenFalse()].some((candidate) =>
+      requestRootRoleExpressionAliasesParameter(
+        candidate,
+        parameterKey,
+        session,
+        new Set(seen),
+        depth + 1,
+      ),
+    );
+  }
+  if (Node.isBinaryExpression(node)) {
+    const operator = node.getOperatorToken().getKind();
+    if (
+      operator === SyntaxKind.BarBarToken ||
+      operator === SyntaxKind.AmpersandAmpersandToken ||
+      operator === SyntaxKind.QuestionQuestionToken
+    ) {
+      return [node.getLeft(), node.getRight()].some((candidate) =>
+        requestRootRoleExpressionAliasesParameter(
+          candidate,
+          parameterKey,
+          session,
+          new Set(seen),
+          depth + 1,
+        ),
+      );
+    }
+    if (operator === SyntaxKind.CommaToken || operator === SyntaxKind.EqualsToken) {
+      return requestRootRoleExpressionAliasesParameter(
+        node.getRight(),
+        parameterKey,
+        session,
+        new Set(seen),
+        depth + 1,
+      );
+    }
+  }
+  return false;
+}
+
+function requestRootRoleFlatMapOutputAliasesParameter(
+  expression: Node,
+  parameterKey: string,
+  session: RequestProvenanceSession,
+  seen: Set<string>,
+  depth: number,
+): boolean {
+  const node = unwrapStaticExpression(expression);
+  if (
+    requestRootRoleExpressionAliasesParameter(node, parameterKey, session, new Set(seen), depth + 1)
+  ) {
+    return true;
+  }
+  if (depth > 64 || !requestProvenanceStep(session, node)) {
+    session.exhaustedAt ??= node;
+    return true;
+  }
+  const nodeKey = requestNodeIdentity(node);
+  if (seen.has(nodeKey)) return false;
+  seen.add(nodeKey);
+  if (Node.isArrayLiteralExpression(node)) {
+    return node.getElements().some((element) => {
+      if (Node.isOmittedExpression(element)) return false;
+      const value = Node.isSpreadElement(element) ? element.getExpression() : element;
+      return requestRootRoleExpressionAliasesParameter(
+        value,
+        parameterKey,
+        session,
+        new Set(seen),
+        depth + 1,
+      );
+    });
+  }
+  if (Node.isConditionalExpression(node)) {
+    return [node.getWhenTrue(), node.getWhenFalse()].some((candidate) =>
+      requestRootRoleFlatMapOutputAliasesParameter(
+        candidate,
+        parameterKey,
+        session,
+        new Set(seen),
+        depth + 1,
+      ),
+    );
+  }
+  if (Node.isIdentifier(node)) {
+    const symbol = node.getSymbol();
+    if (!symbol) return false;
+    return symbol.getDeclarations().some((declaration) => {
+      if (
+        !Node.isVariableDeclaration(declaration) ||
+        declaration.getVariableStatement()?.getDeclarationKind() !== VariableDeclarationKind.Const
+      ) {
+        return false;
+      }
+      const initializer = declaration.getInitializer();
+      return !!(
+        initializer &&
+        requestRootRoleFlatMapOutputAliasesParameter(
+          initializer,
+          parameterKey,
+          session,
+          new Set(seen),
+          depth + 1,
+        )
+      );
+    });
+  }
+  return false;
+}
+
+function requestRootRoleArrayCallbackAliasParameters(
+  call: import('ts-morph').CallExpression,
+  member: 'flatMap' | 'map' | 'reduce',
+  session: RequestProvenanceSession,
+): readonly number[] {
+  const relevant = member === 'reduce' ? [0, 1, 3] : [0, 2];
+  const callback = call.getArguments()[0];
+  if (!callback) return relevant;
+  const resolution = resolveRequestCallable(callback, new Set(), 0, session);
+  if (session.exhaustedAt !== undefined || resolution.callables.length === 0) return relevant;
+  const aliases = new Set<number>();
+  for (const callable of resolution.callables) {
+    const parameters = requestCallableParameters(callable.declaration);
+    const outputs = requestWireOutputExpressions(callable);
+    for (const index of relevant) {
+      const parameter = parameters[index];
+      if (!parameter) continue;
+      const name = parameter.getNameNode();
+      if (!name || !Node.isIdentifier(name) || !name.getSymbol()) {
+        aliases.add(index);
+        continue;
+      }
+      const parameterKey = requestSymbolKey(name.getSymbol()!);
+      const outputAliases = outputs.some((output) =>
+        member === 'flatMap'
+          ? requestRootRoleFlatMapOutputAliasesParameter(
+              output,
+              parameterKey,
+              session,
+              new Set(),
+              0,
+            )
+          : requestRootRoleExpressionAliasesParameter(output, parameterKey, session, new Set(), 0),
+      );
+      if (outputAliases) aliases.add(index);
+    }
+  }
+  return [...aliases];
+}
+
+function requestRootRoleReferencePlans(
+  expression: Node,
+  session: RequestProvenanceSession,
+  callbackMemo: Map<string, readonly number[]>,
+  seen: Set<string>,
+  depth: number,
+): RequestRootRoleReferencePlan[] {
+  const node = unwrapStaticExpression(expression);
+  if (depth > 64 || !requestProvenanceStep(session, node)) {
+    session.exhaustedAt ??= node;
+    return [];
+  }
+  const nodeKey = requestNodeIdentity(node);
+  if (seen.has(nodeKey)) return [];
+  seen.add(nodeKey);
+  if (Node.isIdentifier(node)) {
+    const shorthand = node.getParentIfKind(SyntaxKind.ShorthandPropertyAssignment);
+    const symbol = shorthand?.getValueSymbol() ?? node.getSymbol();
+    return symbol
+      ? [
+          {
+            fromDirect: 'direct',
+            fromShallowArray: 'shallow-array',
+            source: requestSymbolKey(symbol),
+          },
+        ]
+      : [];
+  }
+  if (Node.isAwaitExpression(node)) {
+    return requestRootRoleReferencePlans(
+      node.getExpression(),
+      session,
+      callbackMemo,
+      new Set(seen),
+      depth + 1,
+    );
+  }
+  if (Node.isConditionalExpression(node)) {
+    return [node.getWhenTrue(), node.getWhenFalse()].flatMap((candidate) =>
+      requestRootRoleReferencePlans(candidate, session, callbackMemo, new Set(seen), depth + 1),
+    );
+  }
+  if (Node.isBinaryExpression(node)) {
+    const operator = node.getOperatorToken().getKind();
+    if (
+      operator === SyntaxKind.BarBarToken ||
+      operator === SyntaxKind.AmpersandAmpersandToken ||
+      operator === SyntaxKind.QuestionQuestionToken
+    ) {
+      return [node.getLeft(), node.getRight()].flatMap((candidate) =>
+        requestRootRoleReferencePlans(candidate, session, callbackMemo, new Set(seen), depth + 1),
+      );
+    }
+    if (operator === SyntaxKind.CommaToken || operator === SyntaxKind.EqualsToken) {
+      return requestRootRoleReferencePlans(
+        node.getRight(),
+        session,
+        callbackMemo,
+        new Set(seen),
+        depth + 1,
+      );
+    }
+  }
+  if (Node.isPropertyAccessExpression(node) || Node.isElementAccessExpression(node)) {
+    const selectsArrayElement =
+      Node.isElementAccessExpression(node) && requestRootRoleArrayElementProjectionMayAlias(node);
+    return requestRootRoleReferencePlans(
+      node.getExpression(),
+      session,
+      callbackMemo,
+      new Set(seen),
+      depth + 1,
+    ).map((plan) => ({
+      ...(plan.fromDirect === undefined ? {} : { fromDirect: 'direct' as const }),
+      ...(plan.fromShallowArray === undefined || !selectsArrayElement
+        ? {}
+        : { fromShallowArray: 'direct' as const }),
+      source: plan.source,
+    }));
+  }
+  if (!Node.isCallExpression(node)) return [];
+  const callee = unwrapStaticExpression(node.getExpression());
+  const receiver = requestCallReceiver(callee);
+  const member = requestStaticCallMember(callee);
+  if (
+    !receiver ||
+    !member ||
+    !['filter', 'find', 'findLast', 'flatMap', 'map', 'reduce'].includes(member)
+  ) {
+    return [];
+  }
+  const receiverPlans = requestRootRoleReferencePlans(
+    receiver,
+    session,
+    callbackMemo,
+    new Set(seen),
+    depth + 1,
+  );
+  if (member === 'find' || member === 'findLast') {
+    return receiverPlans.map((plan) => ({
+      ...(plan.fromDirect === undefined ? {} : { fromDirect: 'direct' as const }),
+      ...(plan.fromShallowArray === undefined ? {} : { fromShallowArray: 'direct' as const }),
+      source: plan.source,
+    }));
+  }
+  if (member === 'filter') {
+    return receiverPlans.map((plan) => ({
+      ...(plan.fromDirect === undefined ? {} : { fromDirect: 'shallow-array' as const }),
+      ...(plan.fromShallowArray === undefined
+        ? {}
+        : { fromShallowArray: 'shallow-array' as const }),
+      source: plan.source,
+    }));
+  }
+
+  const callbackKey = `${member}:${requestNodeIdentity(node)}`;
+  let aliasParameters = callbackMemo.get(callbackKey);
+  if (!aliasParameters) {
+    aliasParameters = requestRootRoleArrayCallbackAliasParameters(
+      node,
+      member as 'flatMap' | 'map' | 'reduce',
+      session,
+    );
+    callbackMemo.set(callbackKey, aliasParameters);
+  }
+  if (member === 'map' || member === 'flatMap') {
+    if (!aliasParameters.some((index) => index === 0 || index === 2)) return [];
+    return receiverPlans.map((plan) => ({
+      ...(plan.fromDirect === undefined ? {} : { fromDirect: 'shallow-array' as const }),
+      ...(plan.fromShallowArray === undefined
+        ? {}
+        : { fromShallowArray: 'shallow-array' as const }),
+      source: plan.source,
+    }));
+  }
+
+  const plans: RequestRootRoleReferencePlan[] = [];
+  if (aliasParameters.some((index) => index === 1 || index === 3)) {
+    plans.push(
+      ...receiverPlans.map((plan) => ({
+        ...(plan.fromDirect === undefined ? {} : { fromDirect: 'direct' as const }),
+        ...(plan.fromShallowArray === undefined ? {} : { fromShallowArray: 'direct' as const }),
+        source: plan.source,
+      })),
+    );
+  }
+  if (aliasParameters.includes(0)) {
+    const initial = node.getArguments()[1];
+    plans.push(
+      ...(initial
+        ? requestRootRoleReferencePlans(initial, session, callbackMemo, new Set(seen), depth + 1)
+        : receiverPlans.map((plan) => ({
+            ...(plan.fromDirect === undefined ? {} : { fromDirect: 'direct' as const }),
+            ...(plan.fromShallowArray === undefined ? {} : { fromShallowArray: 'direct' as const }),
+            source: plan.source,
+          }))),
+    );
+  }
+  return plans;
+}
+
 const REQUEST_ROOT_ROLE_PRISTINE_MEMO = new WeakMap<object, Map<string, boolean>>();
 const REQUEST_ROOT_ROLE_PRISTINE_ACTIVE = new WeakMap<object, Set<string>>();
 
@@ -30502,37 +30881,22 @@ function requestRootRoleBindingIsPristineUncached(
   symbol: NonNullable<ReturnType<Node['getSymbol']>>,
   callable: RequestCallable,
 ): boolean {
-  const carrierKeys = new Set([requestSymbolKey(symbol)]);
+  const rootKey = requestSymbolKey(symbol);
+  const carrierKinds = new Map<string, RequestRootRoleReferenceKind>([[rootKey, 'direct']]);
+  const referenceSession = createRequestProvenanceSession();
+  const callbackMemo = new Map<string, readonly number[]>();
   const belongs = (candidate: Node): boolean => nodeBelongsToRequestCallable(candidate, callable);
-  const directCarrierBase = (candidate: Node | undefined): string | undefined => {
-    if (!candidate) return undefined;
-    let node = unwrapStaticExpression(candidate);
-    while (
-      Node.isPropertyAccessExpression(node) ||
-      Node.isElementAccessExpression(node) ||
-      Node.isAwaitExpression(node)
-    ) {
-      node = unwrapStaticExpression(node.getExpression());
-    }
-    if (!Node.isIdentifier(node)) return undefined;
-    const shorthand = node.getParentIfKind(SyntaxKind.ShorthandPropertyAssignment);
-    const candidateSymbol = shorthand?.getValueSymbol() ?? node.getSymbol();
-    return candidateSymbol ? requestSymbolKey(candidateSymbol) : undefined;
-  };
-  const directCarrier = (candidate: Node | undefined): boolean => {
-    const base = directCarrierBase(candidate);
-    return base !== undefined && carrierKeys.has(base);
-  };
-  const containsCarrier = (candidate: Node | undefined): boolean =>
-    requestExpressionContainsIdentityCarrier(candidate, directCarrier, new Set());
 
-  // Track exact const aliases of the live value/projection. Const aggregates and destructuring
-  // bindings remain usable, but they also remain live carriers: a later write through one must
-  // invalidate the trusted root. Mutable aliases fail closed immediately.
+  // Build a reverse dependency graph once, then propagate the two reference kinds with a
+  // worklist. This keeps long reverse-ordered alias chains linear instead of repeatedly walking
+  // every declaration while distinguishing a copied Array container from its retained elements.
   const declarations = callable.body
     .getDescendantsOfKind(SyntaxKind.VariableDeclaration)
     .filter(belongs);
-  const aliases = new Map<string, string[]>();
+  const rulesBySource = new Map<
+    string,
+    Array<{ readonly plan: RequestRootRoleReferencePlan; readonly target: string }>
+  >();
   for (const declaration of declarations) {
     const initializer = declaration.getInitializer();
     const name = declaration.getNameNode();
@@ -30543,21 +30907,76 @@ function requestRootRoleBindingIsPristineUncached(
     ) {
       continue;
     }
-    const base = directCarrierBase(initializer);
     const alias = name.getSymbol();
-    if (!base || !alias) continue;
-    const values = aliases.get(base) ?? [];
-    values.push(requestSymbolKey(alias));
-    aliases.set(base, values);
-  }
-  const queue = [...carrierKeys];
-  for (let index = 0; index < queue.length; index += 1) {
-    for (const alias of aliases.get(queue[index]!) ?? []) {
-      if (carrierKeys.has(alias)) continue;
-      carrierKeys.add(alias);
-      queue.push(alias);
+    if (!alias) continue;
+    const target = requestSymbolKey(alias);
+    const plans = requestRootRoleReferencePlans(
+      initializer,
+      referenceSession,
+      callbackMemo,
+      new Set(),
+      0,
+    );
+    const seenPlans = new Set<string>();
+    for (const plan of plans) {
+      const planKey = `${plan.source}:${plan.fromDirect ?? ''}:${plan.fromShallowArray ?? ''}`;
+      if (seenPlans.has(planKey)) continue;
+      seenPlans.add(planKey);
+      const rules = rulesBySource.get(plan.source) ?? [];
+      rules.push({ plan, target });
+      rulesBySource.set(plan.source, rules);
     }
   }
+  const queue = [rootKey];
+  let queueIndex = 0;
+  const addCarrierKind = (target: string, kind: RequestRootRoleReferenceKind): void => {
+    const current = carrierKinds.get(target);
+    const next = current === 'direct' || kind === 'direct' ? 'direct' : 'shallow-array';
+    if (current === next) return;
+    carrierKinds.set(target, next);
+    queue.push(target);
+  };
+  const drainCarrierQueue = (): void => {
+    while (queueIndex < queue.length) {
+      const source = queue[queueIndex++]!;
+      const kind = carrierKinds.get(source);
+      if (!kind) continue;
+      for (const { plan, target } of rulesBySource.get(source) ?? []) {
+        const output = kind === 'direct' ? plan.fromDirect : plan.fromShallowArray;
+        if (output) addCarrierKind(target, output);
+      }
+    }
+  };
+  drainCarrierQueue();
+
+  const referenceKind = (candidate: Node | undefined): RequestRootRoleReferenceKind | undefined => {
+    if (!candidate) return undefined;
+    const plans = requestRootRoleReferencePlans(
+      candidate,
+      referenceSession,
+      callbackMemo,
+      new Set(),
+      0,
+    );
+    let result: RequestRootRoleReferenceKind | undefined;
+    for (const plan of plans) {
+      const source = carrierKinds.get(plan.source);
+      if (!source) continue;
+      const output = source === 'direct' ? plan.fromDirect : plan.fromShallowArray;
+      if (output === 'direct') return 'direct';
+      if (output === 'shallow-array') result = output;
+    }
+    return result;
+  };
+  const directCarrier = (candidate: Node | undefined): boolean =>
+    referenceKind(candidate) === 'direct';
+  const anyCarrier = (candidate: Node | undefined): boolean =>
+    referenceKind(candidate) !== undefined;
+  const containsCarrier = (candidate: Node | undefined): boolean =>
+    requestExpressionContainsIdentityCarrier(candidate, anyCarrier, new Set());
+
+  // Const aggregates and destructuring bindings remain live carriers. Mutable aliases fail
+  // closed immediately; exact shallow Array results retain only their selected elements.
   for (const declaration of declarations) {
     const initializer = declaration.getInitializer();
     if (!initializer || !containsCarrier(initializer)) continue;
@@ -30570,21 +30989,33 @@ function requestRootRoleBindingIsPristineUncached(
     const names = Node.isIdentifier(name)
       ? [name]
       : name.getDescendantsOfKind(SyntaxKind.Identifier);
+    const initializerKind = referenceKind(initializer);
     for (const identifier of names) {
       const alias = identifier.getSymbol();
-      if (alias) carrierKeys.add(requestSymbolKey(alias));
+      if (!alias) continue;
+      const kind =
+        initializerKind === 'shallow-array' &&
+        Node.isArrayBindingPattern(name) &&
+        identifier.getFirstAncestorByKind(SyntaxKind.BindingElement)?.getDotDotDotToken()
+          ? 'shallow-array'
+          : initializerKind === 'shallow-array' && Node.isIdentifier(name)
+            ? 'shallow-array'
+            : 'direct';
+      addCarrierKind(requestSymbolKey(alias), kind);
     }
+    drainCarrierQueue();
   }
+  if (referenceSession.exhaustedAt !== undefined) return false;
 
   const targetWritesCarrier = (candidate: Node | undefined): boolean => {
     if (!candidate) return false;
     const node = unwrapStaticExpression(candidate);
     if (Node.isIdentifier(node)) {
       const target = node.getSymbol();
-      return !!target && carrierKeys.has(requestSymbolKey(target));
+      return !!target && carrierKinds.get(requestSymbolKey(target)) === 'direct';
     }
     if (Node.isPropertyAccessExpression(node) || Node.isElementAccessExpression(node)) {
-      return targetWritesCarrier(node.getExpression());
+      return directCarrier(node.getExpression());
     }
     if (
       Node.isBinaryExpression(node) &&
@@ -30661,7 +31092,7 @@ function requestRootRoleBindingIsPristineUncached(
     const receiver = requestCallReceiver(callee);
     const member = requestStaticCallMember(callee);
     const [target] = call.getArguments();
-    if (target && containsCarrier(target) && receiver && member) {
+    if (target && directCarrier(target) && receiver && member) {
       const objectGlobal = expressionResolvesToGlobalNamespace(receiver, 'Object', new Set(), 0);
       const reflectGlobal = expressionResolvesToGlobalNamespace(receiver, 'Reflect', new Set(), 0);
       if (
@@ -30676,7 +31107,7 @@ function requestRootRoleBindingIsPristineUncached(
 
     if (
       receiver &&
-      containsCarrier(receiver) &&
+      directCarrier(receiver) &&
       (member === undefined || REQUEST_ROOT_ROLE_MUTATING_METHODS.has(member))
     ) {
       return false;
@@ -30696,7 +31127,7 @@ function requestRootRoleBindingIsPristineUncached(
       return !!value && (Node.isArrowFunction(value) || Node.isFunctionExpression(value));
     });
     if (!inspectableLocalHelper) continue;
-    const resolution = resolveRequestCallable(callee, new Set(), 0);
+    const resolution = resolveRequestCallable(callee, new Set(), 0, referenceSession);
     // Opaque/package/framework calls are classified independently at the call site. The role
     // invalidation pass only needs to look through inspectable authored helpers, whose call may
     // otherwise be considered closed while it mutates the trusted carrier by reference.
@@ -30711,7 +31142,7 @@ function requestRootRoleBindingIsPristineUncached(
       }
     }
   }
-  return true;
+  return referenceSession.exhaustedAt === undefined;
 }
 
 function requestExpressionRootParameterRole(

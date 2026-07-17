@@ -3572,6 +3572,127 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
     );
   });
 
+  it('invalidates trusted roots through reference-preserving Array call results', () => {
+    const aliases = [
+      ['find', 'input.items.find(() => true)!'],
+      ['findLast', 'input.items.findLast(() => true)!'],
+      ['filter element', 'input.items.filter(() => true)[0]!'],
+      ['identity reduce', 'input.items.reduce((_previous, value) => value)'],
+      ['identity map element', 'input.items.map((value) => value)[0]!'],
+      ['identity flatMap element', 'input.items.flatMap((value) => [value])[0]!'],
+    ] as const;
+    const writes = [
+      ['direct', 'alias.value = DeferredValue as unknown as string;'],
+      ['Object.defineProperty', "Object.defineProperty(alias, 'value', { value: DeferredValue });"],
+      ['Reflect.set', "Reflect.set(alias, 'value', DeferredValue);"],
+    ] as const;
+
+    // SPEC §6.6 / C9: a shallow native carrier cannot sever a live object reference from its
+    // framework-validated root. Every supported write form must invalidate that root proof.
+    for (const [aliasLabel, aliasExpression] of aliases) {
+      for (const [writeLabel, write] of writes) {
+        const facts = sinksFor(`
+          import { s, task } from '@kovojs/server';
+          task('root-call-alias/${aliasLabel}/${writeLabel}', {
+            input: s.object({ items: s.array(s.object({ value: s.string() })) }),
+            run(input) {
+              class DeferredValue {
+                static then(resolve: (value: { ok: true }) => void) { resolve({ ok: true }); }
+              }
+              const alias = ${aliasExpression};
+              ${write}
+              return input.items[0]!.value;
+            },
+          });
+        `);
+        expect(
+          facts.some(
+            (fact) =>
+              fact.sink === 'request-handler.opaque-protocol' ||
+              fact.sink === 'request-handler.opaque-call',
+          ),
+          `${aliasLabel}/${writeLabel}: ${JSON.stringify(facts)}`,
+        ).toBe(true);
+      }
+    }
+  });
+
+  it('keeps copied Array containers and fresh callback results out of the root alias set', () => {
+    const controls = [
+      [
+        'local find result',
+        "const local = [{ value: 'safe' }]; const alias = local.find(() => true)!; alias.value = 'local';",
+      ],
+      [
+        'filtered container slot',
+        "const copy = input.items.filter(() => true); copy[0] = { value: 'replacement' }; copy.push({ value: 'local' });",
+      ],
+      [
+        'fresh map result',
+        "const alias = input.items.map((value) => ({ value: value.value }))[0]!; alias.value = 'local';",
+      ],
+      [
+        'nested map copy',
+        "const alias = input.items.map((value) => [value])[0]!; (alias as unknown as { value: string }).value = 'local';",
+      ],
+      [
+        'fresh flatMap result',
+        "const alias = input.items.flatMap(() => [{ value: 'safe' }])[0]!; alias.value = 'local';",
+      ],
+      [
+        'fresh reduce result',
+        "const alias = input.items.reduce(() => ({ value: 'safe' }), { value: 'seed' }); alias.value = 'local';",
+      ],
+      [
+        'fresh reduce accumulator',
+        "const alias = input.items.reduce((previous) => previous, { value: 'seed' }); alias.value = 'local';",
+      ],
+    ] as const;
+
+    for (const [label, statement] of controls) {
+      const facts = sinksFor(`
+        import { s, task } from '@kovojs/server';
+        task('root-call-alias-safe/${label}', {
+          input: s.object({ items: s.array(s.object({ value: s.string() })) }),
+          run(input) {
+            ${statement}
+            return input.items[0]!.value;
+          },
+        });
+      `);
+      expect(facts, `${label}: ${JSON.stringify(facts)}`).toEqual([]);
+    }
+  });
+
+  it('keeps four hundred unrelated alias-plan safe misses bounded and fail closed', () => {
+    const locals = Array.from(
+      { length: 400 },
+      (_value, index) => `const local${index} = { value: 'safe' }; void local${index};`,
+    ).join('\n');
+    const startedAt = performance.now();
+    const facts = sinksFor(`
+      import { s, task } from '@kovojs/server';
+      task('root-call-alias/bounded-safe-misses', {
+        input: s.object({ items: s.array(s.object({ value: s.string() })) }),
+        run(input) {
+          class DeferredValue {
+            static then(resolve: (value: { ok: true }) => void) { resolve({ ok: true }); }
+          }
+          ${locals}
+          const alias = input.items.find(() => true)!;
+          Reflect.set(alias, 'value', DeferredValue);
+          return input.items[0]!.value;
+        },
+      });
+    `);
+
+    expect(facts).toContainEqual(
+      expect.objectContaining({ sink: 'request-handler.opaque-protocol' }),
+    );
+    expect(facts.some((fact) => fact.sink === 'request-handler.provenance-budget')).toBe(false);
+    expect(performance.now() - startedAt).toBeLessThan(6_000);
+  });
+
   it('resolves returned class values through import and re-export aliases', () => {
     const facts = sinksForFiles([
       {

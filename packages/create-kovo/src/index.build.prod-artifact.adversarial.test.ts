@@ -272,6 +272,7 @@ describe('create-kovo starter (build integration: adversarial production artifac
   );
 
   // @kovo-security-certifies KV424 trusted-input-provenance-prod-artifact
+  // @kovo-security-certifies KV424 call-derived-reference-alias-prod-artifact
   it('bugz-31: trusted input mutation and authored result laundering fail the production build', () => {
     withProject('create-kovo-bugz31-root-provenance-red-', undefined, (root) => {
       addBugz31TrustedInputProvenanceProof(root);
@@ -279,6 +280,7 @@ describe('create-kovo starter (build integration: adversarial production artifac
         'KV424',
         'sink=request-handler.opaque-protocol',
         'source=<Object.defineProperty-target:input>',
+        'source=<Object.defineProperty-target:alias>',
         'source=<class-thenable:input.values.concat',
         'source=<class-thenable:input.values.map',
         'source=<class-thenable:input.value.replace',
@@ -823,6 +825,15 @@ function addBugz31TrustedInputProvenanceProof(root: string): void {
       '  input: s.object({ values: s.array(s.string()) }),',
       '  run(input) {',
       '    return input.values.map(() => Bugz31InputDeferred as unknown as string)[0];',
+      '  },',
+      '});',
+      '',
+      "task('bugz31-root-call-alias', {",
+      '  input: s.object({ items: s.array(s.object({ value: s.string() })) }),',
+      '  run(input) {',
+      '    const alias = input.items.findLast(() => true)!;',
+      "    Object.defineProperty(alias, 'value', { value: Bugz31InputDeferred });",
+      '    return input.items[0]!.value;',
       '  },',
       '});',
       '',
