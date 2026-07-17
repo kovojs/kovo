@@ -402,9 +402,8 @@ describe('server mutation lifecycle', () => {
     );
   });
 
-  it('rejects getter-bearing retained mutation fields without invoking them', () => {
+  it('freezes every keyed mutation authority field against retargeting', () => {
     for (const property of ['key', 'input', 'fileFields', 'csrf'] as const) {
-      let reads = 0;
       const definition = defineMutation('proof/write', {
         csrf: false,
         csrfJustification: 'test fixture probes retained mutation descriptors',
@@ -413,19 +412,18 @@ describe('server mutation lifecycle', () => {
           return null;
         },
       });
-      Object.defineProperty(definition, property, {
-        configurable: true,
-        enumerable: true,
-        get() {
-          reads += 1;
-          return property === 'key' ? 'attacker/write' : undefined;
-        },
-      });
-
-      expect(() => mutationFormAttributes(definition as never)).toThrow(
-        new RegExp(`definition\\.${property} must be a stable own data property`, 'u'),
-      );
-      expect(reads).toBe(0);
+      const before = Reflect.getOwnPropertyDescriptor(definition, property);
+      expect(Object.isFrozen(definition)).toBe(true);
+      expect(Reflect.set(definition, property, 'attacker/write')).toBe(false);
+      expect(Reflect.deleteProperty(definition, property)).toBe(before === undefined);
+      expect(
+        Reflect.defineProperty(definition, property, {
+          configurable: true,
+          get: () => 'attacker/write',
+        }),
+      ).toBe(false);
+      expect(Reflect.getOwnPropertyDescriptor(definition, property)).toEqual(before);
+      expect(mutationFormAttributes(definition).action).toBe('/_m/proof/write');
     }
   });
 
@@ -441,19 +439,23 @@ describe('server mutation lifecycle', () => {
   });
 
   it('uses compiler-derived keys on object-form mutation values', () => {
-    const addToCart = assignDerivedMutationKey(
-      defineMutation({
-        csrf: false,
-        csrfJustification: 'test fixture uses a non-browser caller',
-        input: s.object({ productId: s.string() }),
-        queue: true,
-        handler() {
-          return 'ok';
-        },
-      }),
-      'components/cart/add-to-cart',
-    );
+    const pending = defineMutation({
+      csrf: false,
+      csrfJustification: 'test fixture uses a non-browser caller',
+      input: s.object({ productId: s.string() }),
+      queue: true,
+      handler() {
+        return 'ok';
+      },
+    });
+    const addToCart = assignDerivedMutationKey(pending, 'components/cart/add-to-cart');
 
+    expect(Object.isFrozen(pending)).toBe(true);
+    expect(Object.isFrozen(addToCart)).toBe(true);
+    expect(addToCart).not.toBe(pending);
+    expect(Reflect.set(pending, 'key', 'attacker/write')).toBe(false);
+    expect(Reflect.set(addToCart, 'key', 'attacker/write')).toBe(false);
+    expect(Reflect.deleteProperty(addToCart, 'key')).toBe(false);
     expect(addToCart.queue).toBe('components/cart/add-to-cart');
     expect(mutationFormAttributes(addToCart)).toMatchObject({
       action: '/_m/components/cart/add-to-cart',
@@ -462,6 +464,15 @@ describe('server mutation lifecycle', () => {
     });
     expect(renderMutationFormAttributes(addToCart)).toContain(
       'action="/_m/components/cart/add-to-cart"',
+    );
+    expect(() => mutationFormAttributes({ ...addToCart } as never)).toThrow(
+      'mutationFormAttributes() requires the exact definition returned by mutation().',
+    );
+    expect(() => mutationFormAttributes(new Proxy(addToCart, {}) as never)).toThrow(
+      'mutationFormAttributes() requires the exact definition returned by mutation().',
+    );
+    expect(() => assignDerivedMutationKey(pending, 'components/cart/other')).toThrow(
+      /transition is one-shot/,
     );
   });
 
@@ -475,11 +486,36 @@ describe('server mutation lifecycle', () => {
       },
     });
 
-    assignDerivedMutationKey(addToCart, 'components/cart/add-to-cart');
+    const keyed = assignDerivedMutationKey(addToCart, 'components/cart/add-to-cart');
 
-    expect(() => assignDerivedMutationKey(addToCart, 'components/cart/other-add-to-cart')).toThrow(
+    expect(() => assignDerivedMutationKey(keyed, 'components/cart/other-add-to-cart')).toThrow(
       'Cannot assign derived mutation key "components/cart/other-add-to-cart" to mutation already keyed as "components/cart/add-to-cart".',
     );
+  });
+
+  it('rejects caller-authored framework key fields before witnessing a definition', () => {
+    expect(() =>
+      defineMutation({
+        csrf: false,
+        csrfJustification: 'runtime forgery probe',
+        handler() {
+          return null;
+        },
+        input: s.object({}),
+        key: 'attacker/write',
+      } as never),
+    ).toThrow('mutation() definition.key is framework-owned');
+    expect(() =>
+      defineMutation('proof/write', {
+        csrf: false,
+        csrfJustification: 'runtime forgery probe',
+        handler() {
+          return null;
+        },
+        input: s.object({}),
+        key: 'attacker/write',
+      } as never),
+    ).toThrow('mutation() definition.key is framework-owned');
   });
 
   it('fails closed when object-form mutation values are used before compiler key derivation', () => {

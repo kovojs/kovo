@@ -8,14 +8,14 @@ import type {
 import type { ChangeRecord, InvalidateOptions, MutationTouchSite } from '../change-record.js';
 import { pinAccessDecision, type AccessDecision } from '../access.js';
 import type { CookieOptions } from '../cookies.js';
-import type { CsrfOptions } from '../csrf.js';
+import { snapshotMutationCsrfOptions, type CsrfOptions } from '../csrf.js';
 import type { Domain } from '../domain.js';
 import type { Guard, RequestLifecycleOptions } from '../guards.js';
 import { escapeAttribute } from '../html.js';
 import type { ErrorBoundaryRenderer, FragmentRenderer } from '../mutation-wire.js';
 import { mutationInputFileFields, type InferSchema, type Schema } from '../schema.js';
 import {
-  createWitnessWeakSet,
+  createWitnessWeakMap,
   witnessCreateNullRecord,
   witnessDefineProperty,
   witnessFreeze,
@@ -23,8 +23,8 @@ import {
   witnessIsArray,
   witnessObjectIs,
   witnessOwnKeys,
-  witnessWeakSetAdd,
-  witnessWeakSetHas,
+  witnessWeakMapGet,
+  witnessWeakMapSet,
 } from '../security-witness-intrinsics.js';
 import type { TaskDefinition, TaskHandle } from '../task.js';
 import type { DurableTaskEnqueueInput } from '../task-queue.js';
@@ -37,22 +37,30 @@ declare const mutationFormDefinitionBrand: unique symbol;
 // Keep the authority mint in the same private module scope as mutation(). If it lived in a shared
 // helper module, a production bundler would need to export the mint to this chunk and an app could
 // import that generated file by absolute URL even though package exports hide it.
-const declaredMutationDefinitions = createWitnessWeakSet<object>();
+type DeclaredMutationDefinitionWitness =
+  | { readonly state: 'consumed' }
+  | { readonly state: 'keyed'; readonly key: string }
+  | { readonly state: 'unkeyed' };
+
+const declaredMutationDefinitions = createWitnessWeakMap<
+  object,
+  DeclaredMutationDefinitionWitness
+>();
 
 function markDeclaredMutationDefinition<Definition extends object>(
   definition: Definition,
+  witness: Extract<DeclaredMutationDefinitionWitness, { readonly state: 'keyed' | 'unkeyed' }>,
 ): Definition {
-  witnessWeakSetAdd(declaredMutationDefinitions, definition);
-  return definition;
+  const frozen = witnessFreeze(definition);
+  witnessWeakMapSet(declaredMutationDefinitions, frozen, witnessFreeze(witness));
+  return frozen;
 }
 
 /** @internal Test exact mutation() identity without exposing the authority mint. */
 export function isDeclaredMutationDefinition(value: unknown): value is object {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    witnessWeakSetHas(declaredMutationDefinitions, value)
-  );
+  if (typeof value !== 'object' || value === null) return false;
+  const witness = witnessWeakMapGet(declaredMutationDefinitions, value);
+  return witness?.state === 'keyed' || witness?.state === 'unkeyed';
 }
 
 /**
@@ -545,7 +553,7 @@ export function mutation(
       throw new TypeError('mutation(key, definition) requires a definition object.');
     }
     const closedDefinition = snapshotMutationDefinition(definition);
-    const fileFields = mutationInputFileFields(closedDefinition.input);
+    const fileFields = witnessFreeze(mutationInputFileFields(closedDefinition.input));
     const queue =
       closedDefinition.queue === true
         ? keyOrDefinition
@@ -562,15 +570,17 @@ export function mutation(
         } as MutationDefinition<string> & { key: string },
         closedDefinition.access,
       ),
+      { key: keyOrDefinition, state: 'keyed' },
     ) as MutationDefinition<string> & MutationFormDefinition<string>;
   }
 
   // SPEC §6.3: app authors may write `mutation({ input, handler })`; the stable wire key is
   // source-derived by the compiler because runtime JavaScript cannot prove export binding names.
-  // Compiler-emitted IR assigns `.key` immediately after the declaration. Until then, helpers that
-  // need a wire endpoint fail closed through `assertMutationKey`.
+  // Compiler-emitted IR consumes this frozen declaration and returns a separately frozen keyed
+  // definition. Until then, helpers that need a wire endpoint fail closed through
+  // `assertMutationKey`; there is never a caller-writable key or queue transition window.
   const closedDefinition = snapshotMutationDefinition(keyOrDefinition);
-  const fileFields = mutationInputFileFields(closedDefinition.input);
+  const fileFields = witnessFreeze(mutationInputFileFields(closedDefinition.input));
   const queue = normalizeMutationQueue(closedDefinition.queue);
   return markDeclaredMutationDefinition(
     pinAccessDecision(
@@ -581,6 +591,7 @@ export function mutation(
       } as MutationDefinition<string> & { key: string },
       closedDefinition.access,
     ),
+    { state: 'unkeyed' },
   ) as MutationDefinition<string> & MutationFormDefinition<string>;
 }
 
@@ -596,6 +607,11 @@ function snapshotMutationDefinition(
   for (let index = 0; index < keys.length; index += 1) {
     const key = keys[index]!;
     if (typeof key !== 'string') continue;
+    if (key === 'key') {
+      throw new TypeError(
+        'mutation() definition.key is framework-owned; pass an explicit key argument or let the compiler derive it.',
+      );
+    }
     const before = witnessGetOwnPropertyDescriptor(source, key);
     const after = witnessGetOwnPropertyDescriptor(source, key);
     if (
@@ -609,10 +625,14 @@ function snapshotMutationDefinition(
     if (!witnessObjectIs(before.value, after.value)) {
       throw new TypeError(`mutation() definition.${key} changed during validation.`);
     }
+    const stableValue =
+      key === 'csrf' && typeof before.value === 'object' && before.value !== null
+        ? snapshotMutationCsrfOptions(before.value as CsrfOptions<unknown>)
+        : before.value;
     witnessDefineProperty(snapshot, key, {
       configurable: true,
       enumerable: before.enumerable === true,
-      value: before.value,
+      value: stableValue,
       writable: true,
     });
   }
@@ -634,19 +654,42 @@ export function assignDerivedMutationKey<Mutation extends MutationDefinition<str
   if (!key) {
     throw new TypeError('assignDerivedMutationKey() requires a non-empty mutation key.');
   }
-  if (typeof definition.key === 'string' && definition.key.length > 0 && definition.key !== key) {
+  if (typeof definition !== 'object' || definition === null || witnessIsArray(definition)) {
     throw new TypeError(
-      `Cannot assign derived mutation key "${key}" to mutation already keyed as "${definition.key}".`,
+      'assignDerivedMutationKey() requires the exact unkeyed definition returned by mutation().',
     );
   }
-  definition.key = key;
-  if (definition.queue === true) definition.queue = key;
-  else {
-    const queue = normalizeMutationQueue(definition.queue);
-    if (queue === undefined) delete definition.queue;
-    else definition.queue = queue;
+  const declarationWitness = witnessWeakMapGet(declaredMutationDefinitions, definition);
+  if (declarationWitness?.state === 'keyed') {
+    throw new TypeError(
+      `Cannot assign derived mutation key "${key}" to mutation already keyed as "${declarationWitness.key}".`,
+    );
   }
-  return definition;
+  if (declarationWitness?.state !== 'unkeyed') {
+    throw new TypeError(
+      'assignDerivedMutationKey() requires a fresh unkeyed mutation() definition; the transition is one-shot.',
+    );
+  }
+
+  // Consume before reconstruction. Any getter/descriptor failure below permanently closes this
+  // transition instead of allowing a caller to mutate and retry the same witnessed declaration.
+  witnessWeakMapSet(declaredMutationDefinitions, definition, witnessFreeze({ state: 'consumed' }));
+  const closedDefinition = snapshotMutationDefinition(
+    definition as Omit<MutationDefinition<any, any, any, any, any, any>, 'key'>,
+  );
+  const queue =
+    closedDefinition.queue === true ? key : normalizeMutationQueue(closedDefinition.queue);
+  return markDeclaredMutationDefinition(
+    pinAccessDecision(
+      {
+        ...closedDefinition,
+        key,
+        ...(queue === undefined ? {} : { queue }),
+      } as MutationDefinition<string> & { key: string },
+      closedDefinition.access,
+    ),
+    { key, state: 'keyed' },
+  ) as Mutation;
 }
 
 /**

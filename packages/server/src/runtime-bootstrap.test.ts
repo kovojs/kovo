@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -11,6 +11,39 @@ const requireFromServerTest = createRequire(import.meta.url);
 const viteEntryUrl = pathToFileURL(requireFromServerTest.resolve('vite')).href;
 
 describe('custom runtime bootstrap entries', () => {
+  it('keeps packed mutation identity bound while private minting stays unexported', () => {
+    const serverRoot = fileURLToPath(new URL('..', import.meta.url));
+    const packed = spawnSync('pnpm', ['run', 'build:dist'], {
+      cwd: serverRoot,
+      encoding: 'utf8',
+    });
+    expect(packed.status, `${packed.stdout}\n${packed.stderr}`).toBe(0);
+
+    const distRoot = join(serverRoot, 'dist');
+    const mutationAuthorityChunks = packedMutationDefinitionChunks(distRoot);
+    for (let index = 0; index < mutationAuthorityChunks.length; index += 1) {
+      expect(readFileSync(mutationAuthorityChunks[index]!, 'utf8')).not.toMatch(
+        /export\s*\{[^}]*\bmarkDeclaredMutationDefinition\b[^}]*\}/su,
+      );
+    }
+    const mutationAuthority = runPackedMutationAuthorityChild(distRoot, mutationAuthorityChunks);
+    expect(mutationAuthority.status, mutationAuthority.stderr).toBe(0);
+    expect(JSON.parse(mutationAuthority.stdout)).toEqual({
+      action: '/_m/account/save',
+      chunkApisResolved: true,
+      cloneRejected: true,
+      definitionFrozen: true,
+      deleteRejected: true,
+      descriptorRejected: true,
+      markExported: false,
+      pendingFrozen: true,
+      proxyRejected: true,
+      retargetRejected: true,
+      transitionFresh: true,
+      transitionOneShot: true,
+    });
+  }, 120_000);
+
   it('shares framework singleton state across the real packed entries', () => {
     const serverRoot = fileURLToPath(new URL('..', import.meta.url));
     const packed = spawnSync('pnpm', ['run', 'build:dist'], {
@@ -364,6 +397,97 @@ await server.ssrLoadModule(${JSON.stringify(bootstrapPath)});
     }
   });
 });
+
+function packedMutationDefinitionChunks(distRoot: string): string[] {
+  const files = readdirSync(distRoot, { recursive: true }) as string[];
+  const chunks: string[] = [];
+  for (let index = 0; index < files.length; index += 1) {
+    const relative = files[index]!;
+    if (!relative.endsWith('.mjs')) continue;
+    const file = join(distRoot, relative);
+    if (readFileSync(file, 'utf8').includes('function markDeclaredMutationDefinition')) {
+      chunks.push(file);
+    }
+  }
+  if (chunks.length === 0) {
+    throw new Error('packed server dist has no private mutation-definition authority chunk');
+  }
+  return chunks;
+}
+
+function runPackedMutationAuthorityChild(distRoot: string, definitionChunks: readonly string[]) {
+  const rootEntry = pathToFileURL(join(distRoot, 'index.mjs')).href;
+  const wireEntry = pathToFileURL(join(distRoot, 'internal/wire.mjs')).href;
+  const bootstrapEntry = pathToFileURL(join(distRoot, 'runtime-bootstrap.mjs')).href;
+  const chunkEntries = definitionChunks.map((file) => pathToFileURL(file).href);
+  const source = `
+import { existsSync } from 'node:fs';
+import { registerHooks } from 'node:module';
+registerHooks({
+  resolve(specifier, context, nextResolve) {
+    if (specifier.startsWith('.') && specifier.endsWith('.js') && context.parentURL) {
+      const candidate = new URL(specifier.replace(/\\.js$/, '.ts'), context.parentURL);
+      if (existsSync(candidate)) return nextResolve(candidate.href, context);
+    }
+    return nextResolve(specifier, context);
+  },
+});
+await import(${JSON.stringify(bootstrapEntry)});
+const root = await import(${JSON.stringify(rootEntry)});
+const wire = await import(${JSON.stringify(wireEntry)});
+const chunks = await Promise.all(
+  ${JSON.stringify(chunkEntries)}.map((entry) => import(entry)),
+);
+const chunkValues = chunks.flatMap((chunk) => Object.values(chunk));
+const mutation = chunkValues.find((value) => value === root.mutation);
+const assignDerivedMutationKey = chunkValues.find(
+  (value) => value === wire.assignDerivedMutationKey,
+);
+const mutationFormAttributes = chunkValues.find(
+  (value) => value === root.mutationFormAttributes,
+);
+const chunkApisResolved =
+  typeof mutation === 'function' &&
+  typeof assignDerivedMutationKey === 'function' &&
+  typeof mutationFormAttributes === 'function';
+if (!chunkApisResolved) throw new Error('packed mutation authority chunk omitted its public ABI');
+const pending = mutation({
+  csrf: false,
+  csrfJustification: 'packed mutation authority proof',
+  input: root.s.object({}),
+  handler() { return null; },
+});
+const definition = assignDerivedMutationKey(pending, 'account/save');
+let transitionOneShot = false;
+let cloneRejected = false;
+let proxyRejected = false;
+try { assignDerivedMutationKey(pending, 'account/retarget'); } catch { transitionOneShot = true; }
+try { mutationFormAttributes({ ...definition }); } catch { cloneRejected = true; }
+try { mutationFormAttributes(new Proxy(definition, {})); } catch { proxyRejected = true; }
+const attributes = mutationFormAttributes(definition);
+process.stdout.write(JSON.stringify({
+  action: attributes.action,
+  chunkApisResolved,
+  cloneRejected,
+  definitionFrozen: Object.isFrozen(definition),
+  deleteRejected: !Reflect.deleteProperty(definition, 'key'),
+  descriptorRejected: !Reflect.defineProperty(definition, 'key', { value: 'account/retarget' }),
+  markExported: chunks.some((chunk) =>
+    Object.prototype.hasOwnProperty.call(chunk, 'markDeclaredMutationDefinition'),
+  ),
+  pendingFrozen: Object.isFrozen(pending),
+  proxyRejected,
+  retargetRejected: !Reflect.set(definition, 'key', 'account/retarget'),
+  transitionFresh: definition !== pending,
+  transitionOneShot,
+}));
+`;
+  return spawnSync(
+    process.execPath,
+    ['--disable-warning=ExperimentalWarning', '--input-type=module', '--eval', source],
+    { encoding: 'utf8' },
+  );
+}
 
 function runStaticBootstrapProof(bootstrapPath: string, poisonPath: string): unknown {
   const source = `

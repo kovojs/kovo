@@ -21,6 +21,7 @@ import { mergeQueryUpdatePlans, mergeStyleUpdateCoverage } from './compile-resul
 import { snapshotCompileComponentOptions } from './compile-options.js';
 import { createCompileFactLedger, type CompileFactSnapshot } from './compile-fact-ledger.js';
 import {
+  compilerArrayAppend,
   compilerArrayIsArray,
   compilerArrayJoin,
   compilerArrayLength,
@@ -741,7 +742,7 @@ function emitServerPhase(
   );
   serverRenderReplacements = compilerAppendDense(
     serverRenderReplacements,
-    derivedMutationKeyAssignments(lowered.model, parsed.options.fileName),
+    derivedMutationKeyAssignments(lowered.model, parsed.options.fileName, lowered.source),
     'Derived mutation-key replacements',
   );
   serverRenderReplacements = compilerAppendDense(
@@ -772,7 +773,7 @@ function emitServerPhase(
           (componentFact) => componentFact.names.registryKey === fact.component,
         )?.component?.localName ?? parsed.componentName,
       liveTargetFacts: registryCss.liveTargetFacts,
-      source: insertDerivedQueryKeyImport(patchedServerSource, lowered.model),
+      source: insertDerivedWireKeyImports(patchedServerSource, lowered.model),
     }),
   );
 
@@ -1450,6 +1451,7 @@ function componentDescriptorNameAssignments(
 function derivedMutationKeyAssignments(
   model: ComponentModuleModel,
   fileName: string,
+  source: string,
 ): SourceReplacement[] {
   return compilerFlatMapDense(model.calls, 'Derived mutation-key calls', (call) => {
     if (!isExportedObjectFormMutationCall(model, call)) return [];
@@ -1458,8 +1460,8 @@ function derivedMutationKeyAssignments(
     return [
       {
         end: call.end,
-        replacement: `\n${call.exportedConstName}.key = ${derivedKey};\nif (${call.exportedConstName}.queue === true) ${call.exportedConstName}.queue = ${derivedKey};`,
-        start: call.end,
+        replacement: `${derivedMutationKeyHelper}(${compilerStringSlice(source, call.start, call.end)}, ${derivedKey})`,
+        start: call.start,
       },
     ];
   });
@@ -1478,8 +1480,9 @@ function isExportedObjectFormMutationCall(
   );
 }
 
+const derivedMutationKeyHelper = '__kovoAssignDerivedMutationKey';
 const derivedQueryKeyHelper = '__kovoAssignDerivedQueryKey';
-const derivedQueryKeyWireModule = '@kovojs/server/internal/wire';
+const derivedWireKeyModule = '@kovojs/server/internal/wire';
 
 function derivedQueryKeyAssignments(
   model: ComponentModuleModel,
@@ -1500,19 +1503,31 @@ function derivedQueryKeyAssignments(
   );
 }
 
-function insertDerivedQueryKeyImport(source: string, model: ComponentModuleModel): string {
-  if (exportedObjectFirstQueryCalls(model).length === 0) return source;
+function insertDerivedWireKeyImports(source: string, model: ComponentModuleModel): string {
+  const imports: string[] = [];
   if (
-    compilerSomeDense(
-      model.namedImports,
-      'Derived query-key helper imports',
-      (entry) =>
-        entry.moduleSpecifier === derivedQueryKeyWireModule &&
-        entry.localName === derivedQueryKeyHelper,
-    )
+    compilerSomeDense(model.calls, 'Derived mutation-key calls', (call) =>
+      isExportedObjectFormMutationCall(model, call),
+    ) &&
+    !hasDerivedWireImport(model, derivedMutationKeyHelper)
   ) {
-    return source;
+    compilerArrayAppend(
+      imports,
+      `assignDerivedMutationKey as ${derivedMutationKeyHelper}`,
+      'Derived wire-key imports',
+    );
   }
+  if (
+    exportedObjectFirstQueryCalls(model).length > 0 &&
+    !hasDerivedWireImport(model, derivedQueryKeyHelper)
+  ) {
+    compilerArrayAppend(
+      imports,
+      `assignDerivedQueryKey as ${derivedQueryKeyHelper}`,
+      'Derived wire-key imports',
+    );
+  }
+  if (imports.length === 0) return source;
 
   const sourceFile = parseSourceFile('lowered.tsx', source);
   const statements = compilerSnapshotDenseArray(sourceFile.statements, 'Lowered source statements');
@@ -1523,11 +1538,19 @@ function insertDerivedQueryKeyImport(source: string, model: ComponentModuleModel
       break;
     }
   }
-  const importLine = `import { assignDerivedQueryKey as ${derivedQueryKeyHelper} } from '${derivedQueryKeyWireModule}';\n`;
+  const importLine = `import { ${compilerArrayJoin(imports, ', ')} } from '${derivedWireKeyModule}';\n`;
   if (importDeclarationEnd > 0) {
     return `${compilerStringSlice(source, 0, importDeclarationEnd)}\n${importLine}${compilerStringSlice(source, importDeclarationEnd)}`;
   }
   return `${importLine}${source}`;
+}
+
+function hasDerivedWireImport(model: ComponentModuleModel, localName: string): boolean {
+  return compilerSomeDense(
+    model.namedImports,
+    'Derived wire-key helper imports',
+    (entry) => entry.moduleSpecifier === derivedWireKeyModule && entry.localName === localName,
+  );
 }
 
 function exportedObjectFirstQueryCalls(model: ComponentModuleModel) {

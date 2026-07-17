@@ -56,6 +56,7 @@ const NativeURL = globalThis.URL;
 const nativeRequestMethod = witnessGetOwnPropertyDescriptor(Request.prototype, 'method')?.get;
 const nativeRequestUrl = witnessGetOwnPropertyDescriptor(Request.prototype, 'url')?.get;
 const nativeUrlOrigin = witnessGetOwnPropertyDescriptor(NativeURL.prototype, 'origin')?.get;
+const nativeNumberIsSafeInteger = Number.isSafeInteger;
 const pinnedAnonymousLiveTargetBindings = createWitnessWeakMap<object, string>();
 if (
   typeof nativeRequestMethod !== 'function' ||
@@ -332,7 +333,10 @@ export function renderMutationCsrfField<Request>(definition: {
   return csrfFieldForBinding(binding.value, csrf, csrfAudience(csrf, key));
 }
 
-function snapshotMutationCsrfOptions<Request>(source: CsrfOptions<Request>): CsrfOptions<Request> {
+/** @internal Pin mutation-local CSRF authority before the declaration receives its witness. */
+export function snapshotMutationCsrfOptions<Request>(
+  source: CsrfOptions<Request>,
+): CsrfOptions<Request> {
   if (typeof source !== 'object' || source === null || witnessIsArray(source)) {
     throw new TypeError('Mutation CSRF options must be a stable own-data object.');
   }
@@ -346,25 +350,73 @@ function snapshotMutationCsrfOptions<Request>(source: CsrfOptions<Request>): Csr
     if (witnessIsArray(anonymousCookie)) {
       throw new TypeError('Mutation CSRF options.anonymousCookie must be an own-data object.');
     }
-    stableAnonymousCookie = {
+    stableAnonymousCookie = witnessFreeze({
       maxAge: mutationCsrfAnonymousOwnDataValue(anonymousCookie, 'maxAge'),
       name: mutationCsrfAnonymousOwnDataValue(anonymousCookie, 'name'),
       path: mutationCsrfAnonymousOwnDataValue(anonymousCookie, 'path'),
       sameSite: mutationCsrfAnonymousOwnDataValue(anonymousCookie, 'sameSite'),
       secure: mutationCsrfAnonymousOwnDataValue(anonymousCookie, 'secure'),
-    };
+    });
   }
-  return {
+  if (secret === undefined || typeof sessionId !== 'function') {
+    throw new TypeError(
+      'Mutation CSRF options must expose stable secret and sessionId data properties.',
+    );
+  }
+  if (field !== undefined && typeof field !== 'string') {
+    throw new TypeError('Mutation CSRF options.field must be a stable string data property.');
+  }
+  const stableTrustedOrigins = snapshotMutationTrustedOrigins(trustedOrigins);
+  const stableSecret =
+    typeof secret === 'string' || isFrameworkCsrfSigningSecret(secret)
+      ? secret
+      : signingKeyRingFromSecret(secret as SigningSecret);
+  return witnessFreeze({
     ...(stableAnonymousCookie === undefined
       ? {}
       : { anonymousCookie: stableAnonymousCookie as CsrfAnonymousCookieOptions | false }),
     ...(field === undefined ? {} : { field: field as string }),
-    secret: secret as SigningSecret,
+    secret: stableSecret,
     sessionId: sessionId as (request: Request) => string | undefined,
-    ...(trustedOrigins === undefined
-      ? {}
-      : { trustedOrigins: trustedOrigins as readonly string[] }),
-  };
+    ...(stableTrustedOrigins === undefined ? {} : { trustedOrigins: stableTrustedOrigins }),
+  });
+}
+
+function snapshotMutationTrustedOrigins(source: unknown): readonly string[] | undefined {
+  if (source === undefined) return undefined;
+  if (!witnessIsArray(source)) {
+    throw new TypeError('Mutation CSRF options.trustedOrigins must be a stable dense array.');
+  }
+  const length = witnessGetOwnPropertyDescriptor(source, 'length');
+  if (
+    length === undefined ||
+    !('value' in length) ||
+    !nativeNumberIsSafeInteger(length.value) ||
+    length.value < 0 ||
+    length.value > 100_000
+  ) {
+    throw new TypeError('Mutation CSRF options.trustedOrigins must be a bounded dense array.');
+  }
+  const origins: string[] = [];
+  for (let index = 0; index < length.value; index += 1) {
+    const descriptor = witnessGetOwnPropertyDescriptor(source, index);
+    if (
+      descriptor === undefined ||
+      !('value' in descriptor) ||
+      typeof descriptor.value !== 'string'
+    ) {
+      throw new TypeError(
+        'Mutation CSRF options.trustedOrigins must contain stable own-data strings.',
+      );
+    }
+    witnessDefineProperty(origins, index, {
+      configurable: true,
+      enumerable: true,
+      value: descriptor.value,
+      writable: true,
+    });
+  }
+  return witnessFreeze(origins);
 }
 
 function mutationCsrfOptionOwnDataValue(

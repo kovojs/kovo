@@ -840,12 +840,10 @@ export const ProductGrid = component({
 `,
     });
 
-    expect(result.loweredSource).toContain(
-      'addToCart.key = "components/product-grid/add-to-cart";',
-    );
-    expect(result.loweredSource).toContain(
-      'if (addToCart.queue === true) addToCart.queue = "components/product-grid/add-to-cart";',
-    );
+    expect(result.loweredSource).toContain('__kovoAssignDerivedMutationKey(mutation({');
+    expect(result.loweredSource).toContain('}), "components/product-grid/add-to-cart")');
+    expect(result.loweredSource).not.toContain('addToCart.key =');
+    expect(result.loweredSource).not.toContain('addToCart.queue =');
     expect(result.loweredSource).toContain('action="/_m/components/product-grid/add-to-cart"');
     expect(result.loweredSource).toContain('data-mutation="components/product-grid/add-to-cart"');
     expect(result.componentGraphFacts[0]?.mutationForms).toEqual([
@@ -882,12 +880,10 @@ export const ProductGrid = component({
 `,
     });
 
-    expect(result.loweredSource).toContain(
-      'addToCart.key = "components/product-grid/add-to-cart";',
-    );
-    expect(result.loweredSource).toContain(
-      'if (addToCart.queue === true) addToCart.queue = "components/product-grid/add-to-cart";',
-    );
+    expect(result.loweredSource).toContain('__kovoAssignDerivedMutationKey(mutationAlias({');
+    expect(result.loweredSource).toContain('}), "components/product-grid/add-to-cart")');
+    expect(result.loweredSource).not.toContain('addToCart.key =');
+    expect(result.loweredSource).not.toContain('addToCart.queue =');
   });
 
   it('does not assign derived mutation keys to local mutation lookalikes', () => {
