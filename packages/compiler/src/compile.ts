@@ -724,6 +724,9 @@ function emitServerPhase(
             : [],
       ),
       fileName: parsed.options.fileName,
+      ...(parsed.compileOptions.extraFiles?.length
+        ? { extraFiles: parsed.compileOptions.extraFiles }
+        : {}),
       registryComponentName: primaryComponentNames.registryKey,
       ...(parsed.compileOptions.registryFacts
         ? { registryFacts: parsed.compileOptions.registryFacts }

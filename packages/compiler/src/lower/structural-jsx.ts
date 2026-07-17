@@ -88,6 +88,7 @@ import {
   compilerRegExpReplace,
   compilerRegExpTest,
   compilerSetAdd,
+  compilerSetDelete,
   compilerSetForEach,
   compilerSetHas,
   compilerSnapshotDenseArray,
@@ -501,7 +502,8 @@ function mutationFormProvenanceDiagnostics(
       mutationForms.length > 0 &&
       directTransport.hasFormAssociation &&
       directTransport.overrides.length > 0 &&
-      !submitterTargetsProvenSeparateNativeForm(element, elements, mutationForms)
+      !submitterTargetsProvenSeparateNativeForm(element, elements, mutationForms) &&
+      !mutationDocumentControlTargetsProvenSeparateNativeForm(model, element.element, options)
     ) {
       for (
         let overrideIndex = 0;
@@ -570,6 +572,11 @@ function mutationFormProvenanceDiagnostics(
     diagnostics,
     componentMutationSubmitterOverrideDiagnostics(elements, model, mutationForms, options),
     'Component mutation submitter diagnostics',
+  );
+  appendCompilerFacts(
+    diagnostics,
+    documentMutationFormOwnershipDiagnostics(model, options),
+    'Document mutation form ownership diagnostics',
   );
   return diagnostics;
 }
@@ -740,6 +747,46 @@ interface MutationComponentImplementation {
   readonly source: MutationComponentSource;
 }
 
+interface MutationDocumentElementInstance {
+  readonly componentDepth: number;
+  readonly diagnosticSpan: SourceSpan;
+  readonly element: JsxElementModel;
+  readonly nearestForm: MutationDocumentFormInstance | undefined;
+  readonly source: MutationComponentSource;
+}
+
+interface MutationDocumentFormInstance extends MutationDocumentElementInstance {
+  readonly id: string | null;
+  readonly idIsDynamic: boolean;
+  readonly typed: boolean;
+}
+
+interface MutationDocumentControlInstance extends MutationDocumentElementInstance {
+  readonly formAttribute?: JsxAttributeModel;
+  readonly formSpreadAssociation: 'known' | 'possible' | null;
+}
+
+interface MutationDocumentOpaqueInstance {
+  readonly diagnosticSpan: SourceSpan;
+  readonly inheritedForm: MutationDocumentFormInstance | undefined;
+  readonly tag: string;
+}
+
+interface MutationDocumentCensus {
+  readonly controls: readonly MutationDocumentControlInstance[];
+  readonly forms: readonly MutationDocumentFormInstance[];
+  readonly opaque: readonly MutationDocumentOpaqueInstance[];
+}
+
+/** @internal One statically reachable successful control owned by a local typed form instance. */
+export interface MutationDocumentReachableControl {
+  readonly componentRendered: boolean;
+  readonly diagnosticSpan: SourceSpan;
+  readonly element: JsxElementModel;
+  readonly explicitFormAssociation: boolean;
+  readonly fileName: string;
+}
+
 function mutationComponentProject(
   model: ComponentModuleModel,
   options: StructuralJsxLoweringOptions,
@@ -773,6 +820,591 @@ function mutationComponentProject(
   return { files, root };
 }
 
+function documentMutationFormOwnershipDiagnostics(
+  model: ComponentModuleModel,
+  options: StructuralJsxLoweringOptions,
+): CompilerDiagnostic[] {
+  const diagnostics: CompilerDiagnostic[] = [];
+  const seen = compilerCreateSet<string>();
+  const censuses = mutationDocumentCensuses(model, options);
+  for (let censusIndex = 0; censusIndex < censuses.length; censusIndex += 1) {
+    const census = censuses[censusIndex]!;
+    const forms = compilerSnapshotDenseArray(census.forms, 'Document mutation ownership forms');
+    const controls = compilerSnapshotDenseArray(
+      census.controls,
+      'Document mutation ownership controls',
+    );
+    const typedForms: MutationDocumentFormInstance[] = [];
+    for (let formIndex = 0; formIndex < forms.length; formIndex += 1) {
+      const form = forms[formIndex]!;
+      if (form.typed) {
+        appendCompilerFact(typedForms, form, 'Document typed mutation forms');
+      }
+    }
+    let hasDefiniteFormAssociation = false;
+    for (let controlIndex = 0; controlIndex < controls.length; controlIndex += 1) {
+      if (mutationDocumentControlHasDefiniteFormAssociation(controls[controlIndex]!)) {
+        hasDefiniteFormAssociation = true;
+        break;
+      }
+    }
+    if (typedForms.length === 0 && !hasDefiniteFormAssociation) continue;
+
+    const opaque = compilerSnapshotDenseArray(census.opaque, 'Document mutation opaque output');
+    for (let opaqueIndex = 0; opaqueIndex < opaque.length; opaqueIndex += 1) {
+      const candidate = opaque[opaqueIndex]!;
+      // The descendant-only classifier already owns this exact closed verdict. This census adds
+      // the sibling/document-wide relation that the descendant walk cannot observe.
+      if (candidate.inheritedForm?.typed === true) continue;
+      appendMutationDocumentDiagnostic(
+        diagnostics,
+        seen,
+        options,
+        candidate.diagnosticSpan,
+        `component-rendered <${candidate.tag}> has opaque, cyclic, or unresolved output while the document carries typed-form ownership; pin the component source and make every form/control association static`,
+      );
+    }
+
+    let hasDynamicFormId = false;
+    for (let formIndex = 0; formIndex < forms.length; formIndex += 1) {
+      if (forms[formIndex]!.idIsDynamic) {
+        hasDynamicFormId = true;
+        break;
+      }
+    }
+
+    for (let controlIndex = 0; controlIndex < controls.length; controlIndex += 1) {
+      const control = controls[controlIndex]!;
+      const formAttribute = documentControlFormAttribute(control);
+      if (formAttribute === undefined && control.formSpreadAssociation === null) continue;
+      const formId =
+        control.formSpreadAssociation !== null
+          ? null
+          : documentStaticAttributeString(formAttribute);
+      const matches: MutationDocumentFormInstance[] = [];
+      if (formId !== null && formId.length > 0) {
+        for (let formIndex = 0; formIndex < forms.length; formIndex += 1) {
+          const form = forms[formIndex]!;
+          if (form.id === formId) {
+            appendCompilerFact(matches, form, 'Document form association matches');
+          }
+        }
+      }
+      const unique = matches.length === 1 && !hasDynamicFormId ? matches[0] : undefined;
+      const preservesTypedOwner =
+        control.formSpreadAssociation === null &&
+        control.nearestForm?.typed === true &&
+        unique === control.nearestForm;
+      if (preservesTypedOwner) continue;
+      const reassignsTypedDescendant =
+        control.nearestForm?.typed === true && unique !== control.nearestForm;
+      const targetsTypedForm = unique?.typed === true;
+      const targetsFormNestedInTypedForm = unique?.nearestForm?.typed === true;
+      const provenSeparateNative =
+        unique !== undefined &&
+        !unique.typed &&
+        !targetsFormNestedInTypedForm &&
+        control.nearestForm?.typed !== true;
+      if (provenSeparateNative) continue;
+      if (
+        typedForms.length === 0 &&
+        !reassignsTypedDescendant &&
+        !targetsTypedForm &&
+        !targetsFormNestedInTypedForm
+      ) {
+        continue;
+      }
+
+      const associationName =
+        control.formSpreadAssociation !== null
+          ? 'form from a dynamic or caller-owned JSX spread'
+          : (formAttribute?.name ?? 'form');
+      const reason = reassignsTypedDescendant
+        ? `${associationName} changes a control rendered inside a typed mutation form to a different owner`
+        : targetsTypedForm
+          ? `${associationName} attaches a component-rendered control to a typed mutation form from outside its proven descendants`
+          : `${associationName} cannot be resolved to one statically separate native form across component output`;
+      appendMutationDocumentDiagnostic(
+        diagnostics,
+        seen,
+        options,
+        control.diagnosticSpan,
+        `${reason}; keep successful controls inside the typed form or use one uniquely identified native form`,
+      );
+    }
+  }
+  return diagnostics;
+}
+
+function appendMutationDocumentDiagnostic(
+  diagnostics: CompilerDiagnostic[],
+  seen: Set<string>,
+  options: StructuralJsxLoweringOptions,
+  span: SourceSpan,
+  detail: string,
+): void {
+  const identity = `${span.start}:${span.end}:${detail}`;
+  if (compilerSetHas(seen, identity)) return;
+  compilerSetAdd(seen, identity);
+  appendCompilerFact(
+    diagnostics,
+    mutationFormProvenanceDiagnostic(options, span, detail),
+    'Document mutation form diagnostics',
+  );
+}
+
+/**
+ * Return the controls that the statically reachable component graph assigns to one local form.
+ * Emit uses this alongside the lexical control scan so imported fields participate in the same
+ * required/unknown/repeated-field proof (SPEC §§5.2, 6.3, and 9.1).
+ *
+ * @internal
+ */
+export function mutationDocumentReachableControlsForForm(
+  model: ComponentModuleModel,
+  form: JsxElementModel,
+  options: StructuralJsxLoweringOptions,
+): readonly MutationDocumentReachableControl[] {
+  const result: MutationDocumentReachableControl[] = [];
+  const censuses = mutationDocumentCensuses(model, options);
+  for (let censusIndex = 0; censusIndex < censuses.length; censusIndex += 1) {
+    const census = censuses[censusIndex]!;
+    let targetForm: MutationDocumentFormInstance | undefined;
+    const forms = compilerSnapshotDenseArray(census.forms, 'Reachable mutation form owners');
+    for (let formIndex = 0; formIndex < forms.length; formIndex += 1) {
+      const candidate = forms[formIndex]!;
+      if (candidate.source.model === model && candidate.element === form) {
+        targetForm = candidate;
+        break;
+      }
+    }
+    if (targetForm === undefined) continue;
+    const controls = compilerSnapshotDenseArray(
+      census.controls,
+      'Reachable mutation form controls',
+    );
+    for (let controlIndex = 0; controlIndex < controls.length; controlIndex += 1) {
+      const control = controls[controlIndex]!;
+      const owner = mutationDocumentControlOwner(census, control);
+      if (owner !== targetForm) continue;
+      appendCompilerFact(
+        result,
+        {
+          componentRendered: control.componentDepth > targetForm.componentDepth,
+          diagnosticSpan: control.diagnosticSpan,
+          element: control.element,
+          explicitFormAssociation: mutationDocumentControlHasFormAssociation(control),
+          fileName: control.source.fileName,
+        },
+        'Reachable mutation form controls',
+      );
+    }
+    // Every occurrence of one statically authored form has the same closed component output.
+    // Selecting one occurrence avoids multiplying field counts when another exported root also
+    // renders the component, while retaining repeated child-component instances within the form.
+    return result;
+  }
+  return result;
+}
+
+function mutationDocumentControlTargetsProvenSeparateNativeForm(
+  model: ComponentModuleModel,
+  element: JsxElementModel,
+  options: StructuralJsxLoweringOptions,
+): boolean {
+  const censuses = mutationDocumentCensuses(model, options);
+  let observed = false;
+  for (let censusIndex = 0; censusIndex < censuses.length; censusIndex += 1) {
+    const census = censuses[censusIndex]!;
+    if (census.opaque.length > 0) return false;
+    const controls = compilerSnapshotDenseArray(
+      census.controls,
+      'Separate native form document controls',
+    );
+    for (let controlIndex = 0; controlIndex < controls.length; controlIndex += 1) {
+      const control = controls[controlIndex]!;
+      if (control.source.model !== model || control.element !== element) continue;
+      observed = true;
+      const owner = mutationDocumentControlOwner(census, control);
+      if (
+        owner === undefined ||
+        owner.typed ||
+        owner.nearestForm?.typed === true ||
+        control.nearestForm?.typed === true
+      ) {
+        return false;
+      }
+    }
+  }
+  return observed;
+}
+
+function mutationDocumentCensuses(
+  model: ComponentModuleModel,
+  options: StructuralJsxLoweringOptions,
+): MutationDocumentCensus[] {
+  const project = mutationComponentProject(model, options);
+  const roots: MutationComponentImplementation[] = [];
+  const rootIdentities = compilerCreateSet<string>();
+  const components = compilerSnapshotDenseArray(
+    project.root.model.components,
+    'Mutation document root components',
+  );
+  for (let index = 0; index < components.length; index += 1) {
+    const localName = components[index]!.localName;
+    if (localName === undefined) continue;
+    const implementation = localMutationComponentImplementation(project.root, localName);
+    if (implementation === null) continue;
+    const identity = mutationComponentImplementationIdentity(implementation);
+    if (compilerSetHas(rootIdentities, identity)) continue;
+    compilerSetAdd(rootIdentities, identity);
+    appendCompilerFact(roots, implementation, 'Mutation document root implementations');
+  }
+
+  const censuses: MutationDocumentCensus[] = [];
+  for (let rootIndex = 0; rootIndex < roots.length; rootIndex += 1) {
+    const mutable = {
+      controls: [] as MutationDocumentControlInstance[],
+      forms: [] as MutationDocumentFormInstance[],
+      opaque: [] as MutationDocumentOpaqueInstance[],
+    };
+    appendMutationDocumentImplementation(
+      roots[rootIndex]!,
+      undefined,
+      0,
+      {
+        end: roots[rootIndex]!.body.getEnd(),
+        start: roots[rootIndex]!.body.getStart(project.root.model.sourceFile),
+      },
+      compilerCreateSet<string>(),
+      project,
+      options,
+      mutable,
+    );
+    appendCompilerFact(censuses, mutable, 'Mutation document censuses');
+  }
+  return censuses;
+}
+
+function appendMutationDocumentImplementation(
+  implementation: MutationComponentImplementation,
+  inheritedForm: MutationDocumentFormInstance | undefined,
+  componentDepth: number,
+  rootSpan: SourceSpan,
+  active: Set<string>,
+  project: MutationComponentProject,
+  options: StructuralJsxLoweringOptions,
+  census: {
+    controls: MutationDocumentControlInstance[];
+    forms: MutationDocumentFormInstance[];
+    opaque: MutationDocumentOpaqueInstance[];
+  },
+): void {
+  const identity = mutationComponentImplementationIdentity(implementation);
+  if (compilerSetHas(active, identity) || !componentBodyHasClosedJsxReturns(implementation.body)) {
+    appendCompilerFact(
+      census.opaque,
+      {
+        diagnosticSpan: rootSpan,
+        inheritedForm,
+        tag: mutationImplementationDisplayName(implementation),
+      },
+      'Mutation document opaque implementations',
+    );
+    return;
+  }
+  compilerSetAdd(active, identity);
+  const roots = mutationImplementationElementTree(implementation);
+  for (let index = 0; index < roots.length; index += 1) {
+    appendMutationDocumentElement(
+      roots[index]!,
+      implementation.source,
+      inheritedForm,
+      componentDepth,
+      rootSpan,
+      active,
+      project,
+      options,
+      census,
+    );
+  }
+  compilerSetDelete(active, identity);
+}
+
+interface MutationDocumentElementNode {
+  readonly children: MutationDocumentElementNode[];
+  readonly element: JsxElementModel;
+}
+
+function mutationImplementationElementTree(
+  implementation: MutationComponentImplementation,
+): MutationDocumentElementNode[] {
+  const bodyStart = implementation.body.getStart(implementation.source.model.sourceFile);
+  const bodyEnd = implementation.body.getEnd();
+  const all = compilerSnapshotDenseArray(
+    implementation.source.model.jsxElements,
+    'Mutation document implementation elements',
+  );
+  const nodes: MutationDocumentElementNode[] = [];
+  for (let index = 0; index < all.length; index += 1) {
+    const element = all[index]!;
+    if (element.start < bodyStart || element.end > bodyEnd) continue;
+    appendCompilerFact(
+      nodes,
+      { children: [], element },
+      'Mutation document implementation element nodes',
+    );
+  }
+  const roots: MutationDocumentElementNode[] = [];
+  for (let childIndex = 0; childIndex < nodes.length; childIndex += 1) {
+    const child = nodes[childIndex]!;
+    let parent: MutationDocumentElementNode | undefined;
+    let parentWidth: number | undefined;
+    for (let parentIndex = 0; parentIndex < nodes.length; parentIndex += 1) {
+      if (parentIndex === childIndex) continue;
+      const candidate = nodes[parentIndex]!;
+      if (!mutationDocumentElementContains(candidate.element, child.element)) continue;
+      const width = candidate.element.end - candidate.element.start;
+      if (parentWidth === undefined || width < parentWidth) {
+        parent = candidate;
+        parentWidth = width;
+      }
+    }
+    if (parent === undefined) {
+      appendCompilerFact(roots, child, 'Mutation document root elements');
+    } else {
+      appendCompilerFact(parent.children, child, 'Mutation document child elements');
+    }
+  }
+  return roots;
+}
+
+function mutationDocumentElementContains(parent: JsxElementModel, child: JsxElementModel): boolean {
+  if (parent.selfClosing) return false;
+  return child.start >= parent.openingEnd && child.end <= parent.closingStart;
+}
+
+function appendMutationDocumentElement(
+  node: MutationDocumentElementNode,
+  source: MutationComponentSource,
+  inheritedForm: MutationDocumentFormInstance | undefined,
+  componentDepth: number,
+  rootSpan: SourceSpan,
+  active: Set<string>,
+  project: MutationComponentProject,
+  options: StructuralJsxLoweringOptions,
+  census: {
+    controls: MutationDocumentControlInstance[];
+    forms: MutationDocumentFormInstance[];
+    opaque: MutationDocumentOpaqueInstance[];
+  },
+): void {
+  const element = node.element;
+  const diagnosticSpan = source === project.root ? element : rootSpan;
+  let childForm = inheritedForm;
+  if (element.intrinsicTagName !== undefined) {
+    if (isIntrinsicHtmlElement(element, 'form')) {
+      const idAttribute = mutationDocumentAttribute(element, 'id');
+      const id = documentStaticAttributeString(idAttribute);
+      const form: MutationDocumentFormInstance = {
+        componentDepth,
+        diagnosticSpan,
+        element,
+        id,
+        idIsDynamic:
+          element.spreadAttributes.length > 0 ||
+          (idAttribute !== undefined &&
+            !mutationFormControlIsStaticallyAbsent(idAttribute) &&
+            id === null),
+        nearestForm: inheritedForm,
+        source,
+        typed: mutationDocumentFormIsTyped(source, element, options),
+      };
+      appendCompilerFact(census.forms, form, 'Mutation document forms');
+      childForm = form;
+    } else if (mutationDocumentElementIsSuccessfulControl(element)) {
+      appendCompilerFact(
+        census.controls,
+        {
+          componentDepth,
+          diagnosticSpan,
+          element,
+          ...(mutationDocumentAttribute(element, 'form') === undefined
+            ? {}
+            : { formAttribute: mutationDocumentAttribute(element, 'form') }),
+          formSpreadAssociation: mutationDocumentControlSpreadAssociation(element),
+          nearestForm: inheritedForm,
+          source,
+        },
+        'Mutation document controls',
+      );
+    }
+  } else if (!compilerOwnedMutationFormHelper(source.model, element.tag)) {
+    const invocationSpan = source === project.root ? element : rootSpan;
+    const implementation = resolveMutationComponent(source, element.tag, project);
+    if (implementation === null) {
+      appendCompilerFact(
+        census.opaque,
+        { diagnosticSpan: invocationSpan, inheritedForm, tag: element.tag },
+        'Mutation document opaque components',
+      );
+    } else {
+      appendMutationDocumentImplementation(
+        implementation,
+        inheritedForm,
+        componentDepth + 1,
+        invocationSpan,
+        active,
+        project,
+        options,
+        census,
+      );
+    }
+  }
+
+  const children = compilerSnapshotDenseArray(node.children, 'Mutation document child nodes');
+  for (let index = 0; index < children.length; index += 1) {
+    appendMutationDocumentElement(
+      children[index]!,
+      source,
+      childForm,
+      componentDepth,
+      rootSpan,
+      active,
+      project,
+      options,
+      census,
+    );
+  }
+}
+
+function mutationDocumentFormIsTyped(
+  source: MutationComponentSource,
+  form: JsxElementModel,
+  options: StructuralJsxLoweringOptions,
+): boolean {
+  const binding = enhancedMutationFormBinding(form);
+  return (
+    binding !== null &&
+    localMutationKey(source.model, binding.localName, options.registryFacts, source.fileName) !==
+      null
+  );
+}
+
+function mutationDocumentElementIsSuccessfulControl(element: JsxElementModel): boolean {
+  return (
+    isIntrinsicHtmlElement(element, 'button') ||
+    isIntrinsicHtmlElement(element, 'input') ||
+    isIntrinsicHtmlElement(element, 'select') ||
+    isIntrinsicHtmlElement(element, 'textarea')
+  );
+}
+
+function mutationDocumentAttribute(
+  element: JsxElementModel,
+  name: string,
+): JsxAttributeModel | undefined {
+  const attributes = compilerSnapshotDenseArray(element.attributes, 'Mutation document attributes');
+  for (let index = 0; index < attributes.length; index += 1) {
+    const attribute = attributes[index]!;
+    if (compilerStringToLowerCase(attribute.name) === name) return attribute;
+  }
+  return undefined;
+}
+
+function documentStaticAttributeString(attribute: JsxAttributeModel | undefined): string | null {
+  if (attribute === undefined || mutationFormControlIsStaticallyAbsent(attribute)) return null;
+  if (attribute.value !== undefined) return attribute.value;
+  return typeof attribute.expressionStaticValue === 'string'
+    ? attribute.expressionStaticValue
+    : null;
+}
+
+function documentControlFormAttribute(
+  control: MutationDocumentControlInstance,
+): JsxAttributeModel | undefined {
+  const attribute = control.formAttribute;
+  return attribute === undefined || mutationFormControlIsStaticallyAbsent(attribute)
+    ? undefined
+    : attribute;
+}
+
+function mutationDocumentControlHasFormAssociation(
+  control: MutationDocumentControlInstance,
+): boolean {
+  return (
+    documentControlFormAttribute(control) !== undefined || control.formSpreadAssociation !== null
+  );
+}
+
+function mutationDocumentControlHasDefiniteFormAssociation(
+  control: MutationDocumentControlInstance,
+): boolean {
+  return (
+    documentControlFormAttribute(control) !== undefined || control.formSpreadAssociation === 'known'
+  );
+}
+
+function mutationDocumentControlSpreadAssociation(
+  element: JsxElementModel,
+): 'known' | 'possible' | null {
+  const spreads = compilerSnapshotDenseArray(
+    element.spreadAttributes,
+    'Mutation document control spreads',
+  );
+  let result: 'possible' | null = null;
+  for (let spreadIndex = 0; spreadIndex < spreads.length; spreadIndex += 1) {
+    const spread = spreads[spreadIndex]!;
+    const names = compilerSnapshotDenseArray(
+      spread.mutationFormControlNames ?? [],
+      'Mutation document spread control names',
+    );
+    for (let nameIndex = 0; nameIndex < names.length; nameIndex += 1) {
+      if (mutationSubmitterTransportAttributeName(names[nameIndex]!) === 'form') return 'known';
+    }
+    // Only a complete inline object literal proves the absence of a `form` property. Identifier
+    // aliases remain mutable at render time, and calls/dynamic spreads have no closed key census.
+    if (spread.objectEntries === undefined || spread.expressionIsBareIdentifier === true) {
+      result = 'possible';
+    }
+  }
+  return result;
+}
+
+function mutationDocumentControlOwner(
+  census: MutationDocumentCensus,
+  control: MutationDocumentControlInstance,
+): MutationDocumentFormInstance | undefined {
+  if (control.formSpreadAssociation !== null) return undefined;
+  const formAttribute = documentControlFormAttribute(control);
+  if (formAttribute === undefined) return control.nearestForm;
+  const formId = documentStaticAttributeString(formAttribute);
+  if (formId === null || formId.length === 0) return undefined;
+  const forms = compilerSnapshotDenseArray(census.forms, 'Mutation document owner forms');
+  let owner: MutationDocumentFormInstance | undefined;
+  for (let index = 0; index < forms.length; index += 1) {
+    const form = forms[index]!;
+    if (form.idIsDynamic) return undefined;
+    if (form.id !== formId) continue;
+    if (owner !== undefined) return undefined;
+    owner = form;
+  }
+  return owner;
+}
+
+function mutationComponentImplementationIdentity(
+  implementation: MutationComponentImplementation,
+): string {
+  return `${implementation.source.fileName}:${implementation.body.getStart(implementation.source.model.sourceFile)}`;
+}
+
+function mutationImplementationDisplayName(
+  implementation: MutationComponentImplementation,
+): string {
+  const start = implementation.body.getStart(implementation.source.model.sourceFile);
+  return `${implementation.source.fileName}:${start}`;
+}
+
 function inspectMutationComponent(
   from: MutationComponentSource,
   tag: string,
@@ -796,7 +1428,7 @@ function inspectMutationComponent(
     );
     return;
   }
-  const identity = `${implementation.source.fileName}:${tag}:${implementation.body.getStart(implementation.source.model.sourceFile)}`;
+  const identity = mutationComponentImplementationIdentity(implementation);
   if (compilerSetHas(seen, identity)) {
     appendCompilerFact(
       diagnostics,
@@ -892,6 +1524,7 @@ function inspectMutationComponent(
       );
     }
   }
+  compilerSetDelete(seen, identity);
 }
 
 function compilerOwnedMutationFormHelper(model: ComponentModuleModel, tag: string): boolean {
@@ -924,10 +1557,58 @@ function resolveMutationComponent(
     if (entry.localName !== tag || !compilerStringStartsWith(entry.moduleSpecifier, '.')) continue;
     const target = mutationComponentImportSource(from.fileName, entry.moduleSpecifier, project);
     if (target === null) return null;
+    if (entry.importedName === 'default') return defaultMutationComponentImplementation(target);
     const localName = exportedMutationComponentLocalName(target, entry.importedName);
     return localName === null ? null : localMutationComponentImplementation(target, localName);
   }
+  const statements = compilerSnapshotDenseArray(
+    from.model.sourceFile.statements,
+    'Mutation component default imports',
+  );
+  for (let index = 0; index < statements.length; index += 1) {
+    const statement = statements[index]!;
+    if (
+      !ts.isImportDeclaration(statement) ||
+      statement.importClause?.name?.text !== tag ||
+      !ts.isStringLiteral(statement.moduleSpecifier) ||
+      !compilerStringStartsWith(statement.moduleSpecifier.text, '.')
+    ) {
+      continue;
+    }
+    const target = mutationComponentImportSource(
+      from.fileName,
+      statement.moduleSpecifier.text,
+      project,
+    );
+    return target === null ? null : defaultMutationComponentImplementation(target);
+  }
   return null;
+}
+
+function defaultMutationComponentImplementation(
+  source: MutationComponentSource,
+): MutationComponentImplementation | null {
+  const statements = compilerSnapshotDenseArray(
+    source.model.sourceFile.statements,
+    'Default mutation component statements',
+  );
+  for (let index = 0; index < statements.length; index += 1) {
+    const statement = statements[index]!;
+    if (
+      ts.isFunctionDeclaration(statement) &&
+      mutationComponentHasModifier(statement, ts.SyntaxKind.DefaultKeyword) &&
+      mutationComponentHasExportModifier(statement) &&
+      statement.body
+    ) {
+      return { body: statement.body, source };
+    }
+    if (ts.isExportAssignment(statement) && !statement.isExportEquals) {
+      const body = mutationComponentBodyFromInitializer(source, statement.expression);
+      if (body !== null) return { body, source };
+    }
+  }
+  const localName = exportedMutationComponentLocalName(source, 'default');
+  return localName === null ? null : localMutationComponentImplementation(source, localName);
 }
 
 function localMutationComponentImplementation(
@@ -1115,11 +1796,15 @@ function exportedMutationComponentLocalName(
 }
 
 function mutationComponentHasExportModifier(node: ts.Node): boolean {
+  return mutationComponentHasModifier(node, ts.SyntaxKind.ExportKeyword);
+}
+
+function mutationComponentHasModifier(node: ts.Node, kind: ts.SyntaxKind): boolean {
   const modifiers = (node as { readonly modifiers?: readonly ts.Modifier[] }).modifiers;
   if (modifiers === undefined) return false;
   const snapshot = compilerSnapshotDenseArray(modifiers, 'Mutation component modifiers');
   for (let index = 0; index < snapshot.length; index += 1) {
-    if (snapshot[index]!.kind === ts.SyntaxKind.ExportKeyword) return true;
+    if (snapshot[index]!.kind === kind) return true;
   }
   return false;
 }
@@ -1139,14 +1824,24 @@ function mutationComponentImportSource(
   );
   const targetStem = mutationComponentSourceStem(target);
   const files = compilerSnapshotDenseArray(project.files, 'Mutation component project sources');
+  const exact: MutationComponentSource[] = [];
+  const directStem: MutationComponentSource[] = [];
+  const indexStem: MutationComponentSource[] = [];
   for (let index = 0; index < files.length; index += 1) {
     const file = files[index]!;
+    if (compilerRegExpTest(/\.d\.[cm]?[jt]sx?$/i, file.fileName)) continue;
     const fileStem = mutationComponentSourceStem(file.fileName);
-    if (file.fileName === target || fileStem === targetStem || fileStem === `${targetStem}/index`) {
-      return file;
+    if (file.fileName === target) {
+      appendCompilerFact(exact, file, 'Exact mutation component import sources');
+    } else if (fileStem === targetStem) {
+      appendCompilerFact(directStem, file, 'Direct-stem mutation component import sources');
+    } else if (fileStem === `${targetStem}/index`) {
+      appendCompilerFact(indexStem, file, 'Index mutation component import sources');
     }
   }
-  return null;
+  if (exact.length > 0) return exact.length === 1 ? exact[0]! : null;
+  if (directStem.length > 0) return directStem.length === 1 ? directStem[0]! : null;
+  return indexStem.length === 1 ? indexStem[0]! : null;
 }
 
 function mutationComponentSourceStem(fileName: string): string {

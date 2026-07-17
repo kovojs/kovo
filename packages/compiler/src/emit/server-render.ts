@@ -98,6 +98,7 @@ export function serverRenderLowering(
   options?: {
     clientHref?: string;
     componentStampTargets?: readonly ServerRenderComponentStampTarget[];
+    extraFiles?: readonly { readonly fileName: string; readonly source: string }[];
     fileName: string;
     registryComponentName?: string;
     registryFacts?: RegistryFacts;
@@ -114,6 +115,7 @@ function serverRenderPatches(
   options?: {
     clientHref?: string;
     componentStampTargets?: readonly ServerRenderComponentStampTarget[];
+    extraFiles?: readonly { readonly fileName: string; readonly source: string }[];
     fileName: string;
     registryComponentName?: string;
     registryFacts?: RegistryFacts;

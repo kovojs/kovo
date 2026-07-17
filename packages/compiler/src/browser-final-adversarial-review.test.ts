@@ -106,6 +106,18 @@ export const View = component({ render: () => <form mutation={save}><Unsafe /></
         { fileName: 'src/submitters.tsx', source: 'export const Unsafe = () => <button />;' },
       ],
     ],
+    [
+      'ambiguous extensionless component import',
+      `import { Ambiguous } from './ambiguous';
+export const View = component({ render: () => <form mutation={save}><Ambiguous /></form> });`,
+      [
+        { fileName: 'src/ambiguous.ts', source: 'export function Ambiguous() { return null; }' },
+        {
+          fileName: 'src/ambiguous.tsx',
+          source: 'export function Ambiguous() { return <button formtarget="_blank" />; }',
+        },
+      ],
+    ],
   ])('fails closed for a %s', (_label, view, extraFiles) => {
     expect(
       kv242(`${mutationDeclaration}\n${view}`, extraFiles as readonly ExtraFile[]),
@@ -133,6 +145,104 @@ export const View = component({ render: () => <>
 </> });
 `);
     expect(duplicate).not.toEqual([]);
+  });
+
+  it('keeps a uniquely identified imported native form disjoint', () => {
+    expect(
+      kv242(
+        `
+import NativePreview from './native-preview';
+${mutationDeclaration}
+export const View = component({ render: () => <>
+  <form mutation={save}><button>Save</button></form>
+  <NativePreview />
+  <button form="preview" formaction="/preview/compact" formmethod="get">Preview</button>
+</> });
+`,
+        [
+          {
+            fileName: 'src/native-preview.tsx',
+            source:
+              'export default function NativePreview() { return <form id="preview" action="/preview" method="get" />; }',
+          },
+        ],
+      ),
+    ).toEqual([]);
+  });
+
+  it('keeps an imported external control assigned to one local native form disjoint', () => {
+    expect(
+      kv242(
+        `
+import { NativePreviewButton } from './native-preview-button';
+${mutationDeclaration}
+export const View = component({ render: () => <>
+  <form mutation={save}><button>Save</button></form>
+  <form id="preview" action="/preview" method="get" />
+  <NativePreviewButton />
+</> });
+`,
+        [
+          {
+            fileName: 'src/native-preview-button.tsx',
+            source: `export const NativePreviewButton = () => (
+  <button form="preview" formaction="/preview/compact" formmethod="get">Preview</button>
+);`,
+          },
+        ],
+      ),
+    ).toEqual([]);
+  });
+
+  it('includes default-imported successful controls in required-field analysis', () => {
+    expect(
+      kv242(
+        `
+import EmailField from './email-field';
+export const save = mutation('account/save', {
+  input: s.object({ email: s.string() }),
+  handler() { return null; },
+});
+export const View = component({
+  render: () => <form mutation={save}><EmailField /></form>,
+});
+`,
+        [
+          {
+            fileName: 'src/email-field.tsx',
+            source:
+              'export default function EmailField() { return <input name="email" type="email" />; }',
+          },
+        ],
+      ),
+    ).toEqual([]);
+  });
+
+  it('distinguishes repeated component instances from a component cycle', () => {
+    expect(
+      kv242(`
+${mutationDeclaration}
+function SafeSubmitter() { return <button type="submit">Save</button>; }
+export const View = component({
+  render: () => <form mutation={save}><SafeSubmitter /><SafeSubmitter /></form>,
+});
+`),
+    ).toEqual([]);
+  });
+
+  it('counts repeated component-rendered fields as repeated successful controls', () => {
+    expect(
+      kv242(`
+export const save = mutation('account/save', {
+  input: s.object({ email: s.string() }),
+  handler() { return null; },
+});
+function EmailField() { return <input name="email" type="email" />; }
+export const View = component({
+  render: () => <form mutation={save}><EmailField /><EmailField /></form>,
+});
+`),
+    ).not.toEqual([]);
   });
 
   it('rejects an imported sibling submitter associated to a typed form', () => {
@@ -202,5 +312,77 @@ export const View = component({ render: () => <>
       ],
     );
     expect(diagnostics).not.toEqual([]);
+  });
+
+  it.each([
+    ['an explicit association without a transport override', 'form="account-save"'],
+    ['a known form association spread', '{...{ form: "account-save" }}'],
+    ['an opaque caller-owned spread', '{...props}'],
+  ])('rejects an imported sibling control carrying %s', (_label, attributes) => {
+    expect(
+      kv242(
+        `
+import { ExternalControl } from './external-control';
+${mutationDeclaration}
+export const View = component({ render: () => <>
+  <form id="account-save" mutation={save}><button>Save</button></form>
+  <ExternalControl />
+</> });
+`,
+        [
+          {
+            fileName: 'src/external-control.tsx',
+            source: `export const ExternalControl = (props) => <input ${attributes} name="email" />;`,
+          },
+        ],
+      ),
+    ).not.toEqual([]);
+  });
+
+  it('preserves closed form-free spreads', () => {
+    expect(
+      kv242(
+        `
+import { SafeField } from './safe-field';
+${mutationDeclaration}
+export const View = component({ render: () =>
+  <form id="account-save" mutation={save}>
+    <SafeField />
+  </form>
+});
+`,
+        [
+          {
+            fileName: 'src/safe-field.tsx',
+            source: `export const SafeField = () => <button {...{ class: 'field' }}>Safe</button>;`,
+          },
+        ],
+      ),
+    ).toEqual([]);
+  });
+
+  it('rejects an opaque spread on a direct typed-form control', () => {
+    expect(
+      kv242(`
+${mutationDeclaration}
+const props = getRuntimeProps();
+export const View = component({ render: () =>
+  <form mutation={save}><button {...props}>Save</button></form>
+});
+`),
+    ).not.toEqual([]);
+  });
+
+  it('fails closed for a cyclic sibling next to a typed form', () => {
+    expect(
+      kv242(`
+${mutationDeclaration}
+function RecursiveSibling() { return <RecursiveSibling />; }
+export const View = component({ render: () => <>
+  <form id="account-save" mutation={save}><button>Save</button></form>
+  <RecursiveSibling />
+</> });
+`),
+    ).not.toEqual([]);
   });
 });
