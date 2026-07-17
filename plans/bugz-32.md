@@ -41,7 +41,7 @@ after `bugz-31`. All six reproduced families are closed.
   - **Evidence:** independent re-review and the 55/55 generated-adapter suite.
 
 - [x] **M3 - Endpoint CSRF/effect posture recognized only four unsafe verbs and let safe methods
-  retain write/browser-state authority.**
+      retain write/browser-state authority.**
   - **Fixed:** `05eb90f78`, `b7a1de4e3`, and `71b51311b` define the closed safe-method set, gate
     unknown/custom methods, remove safe-method Writer/browser-state authority without an executable
     verifier, and print `csrf=safe:read-only` instead of the false `checked` claim.
@@ -54,7 +54,7 @@ after `bugz-31`. All six reproduced families are closed.
     `7d394096e` proves redirect isolation.
 
 - [x] **M5 - Inline enhancement admitted foreign/non-mutation forms and both runtimes trusted
-  wrong-origin or wrong-media responses.**
+      wrong-origin or wrong-media responses.**
   - A CORS-enabled foreign endpoint could receive mutation metadata/body and return Kovo-shaped UI
     vocabulary for application inside the app origin.
   - **Fixed:** `4f56f14a0`, `85d88f616`, `461a797d1`, `335e9cb31`, `65018b3aa`, and the ownership

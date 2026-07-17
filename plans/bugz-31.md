@@ -12,11 +12,11 @@ same-realm dependencies.
 
 ## Resolution
 
-| Classification | Open | Closed |
-| -------------- | ---: | -----: |
-| Remote security defect | 0 | 1 |
-| Supported-subset defense-in-depth | 0 | 3 |
-| Privileged same-realm non-finding | 0 | 3 |
+| Classification                    | Open | Closed |
+| --------------------------------- | ---: | -----: |
+| Remote security defect            |    0 |      1 |
+| Supported-subset defense-in-depth |    0 |      3 |
+| Privileged same-realm non-finding |    0 |      3 |
 
 - [x] **H1 - Reject direct deferred-class authority after request/task settlement.**
   - Direct and transparent class/thenable returns that schedule request, storage, DB, task,
@@ -25,7 +25,7 @@ same-realm dependencies.
     `d8437c98c`; `pnpm run check:security-classifier-corpus` passes at the integrated tip.
 
 - [x] **C1-C3 reassessment - Do not treat deliberate same-realm JavaScript compromise as a remote
-  framework vulnerability.**
+      framework vulnerability.**
   - The remaining repros install or manufacture an authored callable `then`, replace reviewed
     globals, mutate trusted carriers, and schedule ambient `fetch` from trusted app/dependency code.
     Remote request bytes neither provide nor recover that callable.
@@ -36,7 +36,7 @@ same-realm dependencies.
     deliberate trusted-code installation and rejected the proposed ~952-line partial effect model.
 
 - [x] **Retain the landed finite classifier improvements as defense-in-depth without overstating
-  their guarantee.**
+      their guarantee.**
   - Exact global-member replacement, mutated-root provenance, common helper/container carriers,
     and authored thenable settlement receive additional diagnostics through
     `d4c6717ec..d8437c98c`.
