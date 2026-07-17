@@ -15,7 +15,7 @@ rendering, Better Auth, and managed SQL.
 | Severity | Open | Closed |
 | -------- | ---: | -----: |
 | High     |    0 |      9 |
-| Medium   |    1 |     14 |
+| Medium   |    0 |     15 |
 | Low      |    0 |      3 |
 
 ## High
@@ -265,16 +265,17 @@ rendering, Better Auth, and managed SQL.
   - **Evidence:** real-wire/live/generated Node matrix 99/99; server dist, wire, API, and VP gates
     passed.
 
-- [ ] **M15 - Normal Node request completion falsely aborted the Web request signal.**
+- [x] **M15 - Normal Node request completion falsely aborted the Web request signal.**
   - The adapter mapped every `IncomingMessage` `close` event to `Request.signal.abort()`, but Node
     emits `close` after a normally consumed request body. A valid remote POST could therefore mark
     itself aborted before downstream fetch/database work and trigger cancellation paths intended
     only for client disconnects.
   - **Evidence:** a real POST body was read successfully, then the handler observed
     `signal.aborted === true` both immediately and after a delay despite normal client completion.
-  - **Open:** treat request `close` as an abort only when native completion evidence is false, keep
-    explicit request/socket aborts unconditional, and prove live/emitted normal-POST and disconnect
-    parity (SPEC §9.5).
+  - **Fixed:** `eb11cfcb4` treats request `close` as an abort only when native completion evidence is
+    false; explicit request aborts and socket closes remain unconditional (SPEC §9.5).
+  - **Evidence:** real HTTP/1+h2 normal-body, client-destroy, and live/emitted complete/incomplete
+    close matrix 101/101; server dist, wire, API, and VP gates passed.
 
 ## Low
 
@@ -308,10 +309,11 @@ rendering, Better Auth, and managed SQL.
 - Host-authority live/generated matrix: 97/97; wire-output boundary gate passed.
 - Trusted-scheme live/generated matrix: 106/106; wire-output boundary gate passed.
 - Missing-authority real/live/generated matrix: 99/99; wire-output boundary gate passed.
+- Request-signal completion/disconnect matrix: 101/101; wire-output boundary gate passed.
 - Webhook signed replay/retry matrix: 72/72; wire-output boundary gate passed.
 - Database socket-provenance matrix: 192/192 plus real PostgreSQL reconnect/TLS 2/2; classifier,
   egress, API, and TCB boundary gates passed.
 - Better Auth/SQLite/PGlite matrix: 200/200; real PostgreSQL and multi-process SQLite concurrency
   each admitted 3/20 with one row; replay 429-abort regression, dist, API, and TCB gates passed.
-- Final exact-tip remote-boundary review remains open until M15 lands and the parallel fresh passes
-  find no new remotely reachable issue.
+- All confirmed findings are closed; final exact-tip remote-boundary review remains open until the
+  parallel fresh passes and full repository gates complete without a new reachable issue.
