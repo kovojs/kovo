@@ -122,13 +122,22 @@ framework surface:
 
 ```text
 // Source-verified shape from packages/server/src/task-queue.ts and task-observability.ts
-import { createDurableTaskSqlExecutor, createDurableTaskStatus } from '@kovojs/server';
+import { createDurableTaskStatus } from '@kovojs/server';
 
-declare const db: { query(text: string, values?: readonly unknown[]): Promise<{ rows: unknown[] }> };
+declare const operatorDb: {
+  query(text: string, values?: readonly unknown[]): Promise<{ rows: unknown[] }>;
+};
 
-const status = createDurableTaskStatus(createDurableTaskSqlExecutor(db));
+const status = createDurableTaskStatus({
+  async execute({ text, values }) {
+    return operatorDb.query(text, [...values]);
+  },
+});
 await status.listFailures({ includeArgs: true, limit: 20 });
 ```
+
+Build this in an operator-only process with its own database client. Do not wire it to a
+request-scoped `request.db`; that handle deliberately cannot be unwrapped into arbitrary SQL.
 
 ## Handle failure
 

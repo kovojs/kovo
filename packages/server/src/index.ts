@@ -169,7 +169,6 @@ export { toNodeHandler } from './node.js';
 export { exportStaticApp } from './static-export-public.js';
 export { StaticExportError } from './static-export-diagnostics.js';
 export { createDurableTaskStatus } from './task-observability.js';
-export { createDurableTaskSqlExecutor } from './task-queue.js';
 export type {
   DurableTaskObservedStatus,
   DurableTaskStatusFilters,

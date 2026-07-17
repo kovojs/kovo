@@ -81,7 +81,6 @@ import * as staticExportOrchestratorApi from '../static-export-public.js';
 import * as staticExportOutputApi from '../static-export-output.js';
 import * as staticExportResultApi from '../static-export-result.js';
 import * as taskObservabilityApi from '../task-observability.js';
-import * as taskQueueApi from '../task-queue.js';
 import * as uploadSniffApi from '../upload-sniff.js';
 import * as viteApi from '../vite.js';
 import * as viteDevApi from '../vite-dev.js';
@@ -597,7 +596,6 @@ describe('server app-shell public API barrels', () => {
       mintCsrfField: dataApi.mintCsrfField,
       mintCsrfToken: dataApi.mintCsrfToken,
       StaticExportError: staticExportDiagnosticsApi.StaticExportError,
-      createDurableTaskSqlExecutor: taskQueueApi.createDurableTaskSqlExecutor,
       createDurableTaskStatus: taskObservabilityApi.createDurableTaskStatus,
       toNodeHandler: nodeSourceApi.toNodeHandler,
     }).filter((key) => !renderingSubpathOnlyValues.has(key));
@@ -644,7 +642,9 @@ describe('server app-shell public API barrels', () => {
     expect(publicApi.createMemoryVersionedClientModuleRegistry).toBe(
       internalClientModulesApi.createMemoryVersionedClientModuleRegistry,
     );
-    expect(publicApi.createDurableTaskSqlExecutor).toBe(taskQueueApi.createDurableTaskSqlExecutor);
+    // SPEC §6.6/§10.3: the raw-client adapter unwraps managed request DB handles for framework
+    // queue plumbing, so it must never be reachable from the app-facing package root.
+    expect(publicApi).not.toHaveProperty('createDurableTaskSqlExecutor');
     // SPEC §10.3: structural SQL executors cannot mint authenticated replay-store authority.
     expect(publicApi).not.toHaveProperty('createPostgresCapabilityReplayStore');
     expect(publicApi).not.toHaveProperty('createPostgresMutationReplayStore');
