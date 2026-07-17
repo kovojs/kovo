@@ -185,10 +185,17 @@ describe('Better Auth Postgres bindings', () => {
     expect(authMocks.betterAuth).toHaveBeenCalledWith(
       expect.objectContaining({
         advanced: {
+          cookiePrefix: '__Host-better-auth',
+          defaultCookieAttributes: {
+            httpOnly: true,
+            path: '/',
+            sameSite: 'lax',
+            secure: true,
+          },
           disableCSRFCheck: true,
           disableOriginCheck: true,
           ipAddress: { ipAddressHeaders: ['x-kovo-client-ip'] },
-          useSecureCookies: true,
+          useSecureCookies: false,
         },
         database: { kind: 'postgres-adapter' },
         emailAndPassword: {

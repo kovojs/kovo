@@ -85,6 +85,97 @@ afterEach(() => {
 });
 
 describe('Better Auth development seed session posture', () => {
+  it('uses an exact __Host- cookie so a sibling-domain session cannot replace a later sign-in', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const runtime = createSqliteAppRuntime({ tables: Object.values(authSchema) });
+    runtimes.push(runtime);
+    const systemDb = runtime.systemDb({
+      operation: 'write',
+      reason: 'Reproduce sibling-domain session cookie precedence',
+      surface: 'packages/better-auth/src/sqlite.seed-session.test.ts',
+    });
+    const csrf = {
+      field: 'csrf',
+      secret: 'Kovo-Cookie-Toss-Csrf-0a1B2c3D4e5F6g7H8i9J',
+      sessionId: () => 'cookie-toss-pre-auth-principal',
+    };
+    const createBindings = (email: string, name: string, password: string) =>
+      createBetterAuthSqliteBindings({
+        baseURL: 'https://app.example.test',
+        csrf,
+        developmentSeed: { email, name, password },
+        mapSession: ({ session: authSession, user: authUser }) => ({
+          id: authSession.id,
+          user: { email: authUser.email, id: authUser.id, name: authUser.name },
+        }),
+        schema: authSchema,
+        secret: betterAuthSqliteSecret(authSecret),
+        signInAccess: { kind: 'public', reason: 'cookie-toss repro sign-in' },
+        signOutAccess: { kind: 'public', reason: 'cookie-toss repro sign-out' },
+        systemDb,
+      });
+    const victim = createBindings('victim@example.com', 'Victim', 'Victim-password-123!');
+    const attacker = createBindings('attacker@example.com', 'Attacker', 'Attacker-password-123!');
+    await victim.seedDemoUser();
+    await attacker.seedDemoUser();
+
+    const signInCookie = async (
+      bindings: typeof victim,
+      email: string,
+      password: string,
+    ): Promise<{ pair: string; setCookie: string }> => {
+      const request = new Request('https://app.example.test/_m/auth/sign-in', {
+        headers: { origin: 'https://app.example.test' },
+        method: 'POST',
+      });
+      const token = csrfToken(request, csrf, { audience: 'auth/sign-in' });
+      const result = await runMutation(bindings.signIn, { csrf: token, email, password }, request, {
+        clientIp: () => '127.0.0.1',
+      });
+      expect(result).toMatchObject({ ok: true, value: { status: 'signed-in' } });
+      const setCookies = result.ok ? result.responseHeaders?.['Set-Cookie'] : undefined;
+      expect(setCookies).toEqual(
+        expect.arrayContaining([expect.stringContaining('session_token=')]),
+      );
+      const setCookie = setCookies?.find((cookie) => cookie.includes('session_token='));
+      if (setCookie === undefined) throw new Error('expected Better Auth session Set-Cookie');
+      const pair = setCookie.split(';', 1)[0];
+      if (pair === undefined) throw new Error('expected Better Auth session cookie pair');
+      return { pair, setCookie };
+    };
+
+    const victimCookie = await signInCookie(victim, 'victim@example.com', 'Victim-password-123!');
+    const attackerCookie = await signInCookie(
+      attacker,
+      'attacker@example.com',
+      'Attacker-password-123!',
+    );
+    expect(victimCookie.pair.split('=', 1)[0]).toBe('__Host-better-auth.session_token');
+    expect(victimCookie.setCookie).toContain('; Path=/');
+    expect(victimCookie.setCookie).toContain('; HttpOnly');
+    expect(victimCookie.setCookie).toContain('; Secure');
+    expect(victimCookie.setCookie).not.toContain('; Domain=');
+    expect(attackerCookie.pair.split('=', 1)[0]).toBe('__Host-better-auth.session_token');
+
+    // A sibling can still plant a Domain cookie under a `__Secure-` name, including a valid signed
+    // value from its own account. It cannot plant the exact `__Host-` name that this binding reads:
+    // browsers reject `__Host-` cookies carrying Domain, so the sibling-settable name is irrelevant.
+    const siblingCookie = attackerCookie.pair.replace(
+      /^__Host-better-auth\.session_token=/u,
+      '__Secure-better-auth.session_token=',
+    );
+    const resolved = await victim.sessionProvider(
+      new Request('https://app.example.test/', {
+        headers: { cookie: `${siblingCookie}; ${victimCookie.pair}` },
+      }),
+    );
+    const value =
+      resolved !== null && typeof resolved === 'object' && 'value' in resolved
+        ? resolved.value
+        : resolved;
+    expect(value).toMatchObject({ user: { email: 'victim@example.com' } });
+  });
+
   it('creates only the credential until the CSRF-protected sign-in mutation runs', async () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {});
     const runtime = createSqliteAppRuntime({ tables: Object.values(authSchema) });

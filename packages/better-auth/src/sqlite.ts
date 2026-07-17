@@ -11,11 +11,8 @@ import {
   resolveBetterAuthEnvironment,
   validateBetterAuthBaseUrl,
 } from './environment.js';
-import {
-  betterAuthFreezeOwn,
-  betterAuthOwnDataOption,
-  betterAuthUrlProtocol,
-} from './internal/intrinsics.js';
+import { betterAuthFixedCookieSecurity } from './internal/cookie-security.js';
+import { betterAuthFreezeOwn, betterAuthOwnDataOption } from './internal/intrinsics.js';
 import { betterAuthHashPassword, betterAuthVerifyPassword } from './internal/password.js';
 import { assertBetterAuthRuntimeRealmLocked } from './internal/runtime-lock.js';
 import { createBetterAuthSqliteRateLimitStorage } from './internal/sqlite-rate-limit-storage.js';
@@ -200,10 +197,10 @@ export function createBetterAuthSqliteBindings<
     // GET-only callback adapter; fixed credential wrappers own unsafe-method ingress (SPEC
     // §6.6/§10.3 C9), so ambient trusted-origin configuration cannot become widenable authority.
     advanced: {
+      ...betterAuthFixedCookieSecurity(baseURL),
       disableCSRFCheck: true,
       disableOriginCheck: true,
       ipAddress: { ipAddressHeaders: ['x-kovo-client-ip'] },
-      useSecureCookies: betterAuthUrlProtocol(baseURL) === 'https:',
     },
     baseURL,
     database,
