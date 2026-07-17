@@ -3258,10 +3258,9 @@ describe('server createApp request shell', () => {
     const form = new FormData();
     const idem = mintIdemToken();
     // SPEC §6.6/§10.3: render-time CSRF authority includes the framework-proven principal.
-    const renderRequest = await resolveLifecycleRequest(
-      new Request('https://example.test/cart'),
-      { sessionProvider },
-    );
+    const renderRequest = await resolveLifecycleRequest(new Request('https://example.test/cart'), {
+      sessionProvider,
+    });
     form.set('quantity', '2');
     form.set('kovo-csrf', csrfToken(renderRequest, csrf, { audience: 'cart/add' }));
     form.set('Kovo-Idem', idem);

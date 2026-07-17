@@ -8160,7 +8160,9 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
       '{ user, session, account, verification, rateLimit }',
       '{ user, session, account, verification, rateLimit, audit: rateLimit }',
     );
-    expect(runtimeConstructorFacts(unexpectedEntry), 'unexpected auth schema entry').not.toEqual([]);
+    expect(runtimeConstructorFacts(unexpectedEntry), 'unexpected auth schema entry').not.toEqual(
+      [],
+    );
   });
 
   it('accepts only exact generated readonly app DB read chains', () => {
@@ -11519,11 +11521,7 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
         "const principal = 'request-derived';",
       ],
       ['copied SQL tag', 'authzPolicy: copiedSql`false`', 'const copiedSql = sql;'],
-      [
-        'computed policy property',
-        '[policyKey]: sql`false`',
-        "const policyKey = 'authzPolicy';",
-      ],
+      ['computed policy property', '[policyKey]: sql`false`', "const policyKey = 'authzPolicy';"],
     ] as const) {
       expect(sinksFor(schema(policy, prelude)).length, label).toBeGreaterThan(0);
     }

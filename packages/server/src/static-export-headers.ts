@@ -241,8 +241,7 @@ function normalizeStaticExportHeaderName(
     throw staticExportHeaderError(options, `KV415 ${transportViolation.detail}`);
   }
   if (normalizedName === 'set-cookie' || normalizedName === 'clear-site-data') {
-    const browserStateHeader =
-      normalizedName === 'set-cookie' ? 'Set-Cookie' : 'Clear-Site-Data';
+    const browserStateHeader = normalizedName === 'set-cookie' ? 'Set-Cookie' : 'Clear-Site-Data';
     throw staticExportHeaderError(
       options,
       `static export artifacts cannot carry ${browserStateHeader} because durable static files have no response-specific browser-state channel.`,

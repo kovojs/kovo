@@ -30316,11 +30316,7 @@ function requestDrizzleKovoConfigValueIsClosed(
   if (path.length === 2 && path[0] === 'ownerVia' && path[1] === 'parent') {
     return requestDrizzleOwnerViaParentTableIsClosed(node, seenTables);
   }
-  if (
-    path.length === 1 &&
-    path[0] === 'authzPolicy' &&
-    Node.isTaggedTemplateExpression(node)
-  ) {
+  if (path.length === 1 && path[0] === 'authzPolicy' && Node.isTaggedTemplateExpression(node)) {
     return requestTaggedTemplateIsExactDrizzleAuthzPolicy(node);
   }
   if (requestExpressionIsClosedStaticData(node)) return true;
