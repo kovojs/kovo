@@ -8123,7 +8123,8 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
       export const session = sqliteTable('session', { id: text('id').primaryKey() });
       export const account = sqliteTable('account', { id: text('id').primaryKey() });
       export const verification = sqliteTable('verification', { id: text('id').primaryKey() });
-      export const authSchema = { user, session, account, verification };
+      export const rateLimit = sqliteTable('rateLimit', { id: text('id').primaryKey() });
+      export const authSchema = { user, session, account, verification, rateLimit };
     `;
     const files = (schema: string) => [
       { fileName: 'schema.ts', source: schema },
@@ -8132,8 +8133,8 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
         source: `
           import { createBetterAuthSqliteBindingsFromEnvironment } from '@kovojs/better-auth';
           import { createSqliteAppRuntime } from '@kovojs/server/sqlite';
-          import { account, authSchema, session, user, verification } from '../schema.js';
-          const APP_TABLES = [user, session, account, verification];
+          import { account, authSchema, rateLimit, session, user, verification } from '../schema.js';
+          const APP_TABLES = [user, session, account, verification, rateLimit];
           const APP_SEED = [];
           const runtime = createSqliteAppRuntime({ seed: APP_SEED, tables: APP_TABLES });
           createBetterAuthSqliteBindingsFromEnvironment({ schema: authSchema });
@@ -8155,6 +8156,11 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
     ]) {
       expect(runtimeConstructorFacts(`${schemaSource}\n${poison}`), poison).not.toEqual([]);
     }
+    const unexpectedEntry = schemaSource.replace(
+      '{ user, session, account, verification, rateLimit }',
+      '{ user, session, account, verification, rateLimit, audit: rateLimit }',
+    );
+    expect(runtimeConstructorFacts(unexpectedEntry), 'unexpected auth schema entry').not.toEqual([]);
   });
 
   it('accepts only exact generated readonly app DB read chains', () => {
@@ -11475,6 +11481,67 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
       } });
     `);
     expect(dynamicRuntimeImport.length).toBeGreaterThan(0);
+  });
+
+  it('keeps the stock rate-limit authorization declaration on exact table provenance', () => {
+    const schema = (policy: string, prelude = '') => `
+      import { kovo } from '@kovojs/drizzle';
+      import { sql } from 'drizzle-orm';
+      import { bigint, integer, pgTable, text } from 'drizzle-orm/pg-core';
+      import { query } from '@kovojs/server';
+      ${prelude}
+      const rateLimit = pgTable(
+        'rateLimit',
+        {
+          id: text('id').primaryKey(),
+          key: text('key').notNull().unique(),
+          count: integer('count').notNull(),
+          lastRequest: bigint('lastRequest', { mode: 'number' }).notNull(),
+        },
+        kovo({
+          ${policy},
+          domain: 'auth-rate-limit',
+          key: 'id',
+          secret: true,
+        }),
+      );
+      export const byKey = query({ load(_input, context) {
+        return context.db.select({ id: rateLimit.id }).from(rateLimit);
+      } });
+    `;
+
+    expect(sinksFor(schema('authzPolicy: sql`false`'))).toEqual([]);
+
+    for (const [label, policy, prelude] of [
+      [
+        'interpolated policy',
+        'authzPolicy: sql`owner_id = ${principal}`',
+        "const principal = 'request-derived';",
+      ],
+      ['copied SQL tag', 'authzPolicy: copiedSql`false`', 'const copiedSql = sql;'],
+      [
+        'computed policy property',
+        '[policyKey]: sql`false`',
+        "const policyKey = 'authzPolicy';",
+      ],
+    ] as const) {
+      expect(sinksFor(schema(policy, prelude)).length, label).toBeGreaterThan(0);
+    }
+
+    const detached = sinksFor(`
+      import { kovo } from '@kovojs/drizzle';
+      import { sql } from 'drizzle-orm';
+      import { pgTable, text } from 'drizzle-orm/pg-core';
+      import { query } from '@kovojs/server';
+      const config = {
+        authzPolicy: sql\`false\`, domain: 'auth-rate-limit', key: 'id', secret: true,
+      };
+      const rateLimit = pgTable('rateLimit', { id: text('id').primaryKey() }, kovo(config));
+      export const byKey = query({ load(_input, context) {
+        return context.db.select({ id: rateLimit.id }).from(rateLimit);
+      } });
+    `);
+    expect(detached.length).toBeGreaterThan(0);
   });
 
   it('accepts exact pristine domain config and rejects opaque or mutated aliases', () => {

@@ -29534,7 +29534,11 @@ function requestDrizzleTableReferenceIsExactGeneratedAuthSchemaEntry(
   ) {
     return false;
   }
-  const expected = ['user', 'session', 'account', 'verification'] as const;
+  // Better Auth's generated schema includes the optional database-backed rate limiter. Keep the
+  // exact, ordered carrier grammar aligned with the stock schema; admitting this one table here
+  // does not grant arbitrary schema-object membership because every entry still has to resolve to
+  // its reviewed local pgTable/sqliteTable declaration and the whole carrier remains pristine.
+  const expected = ['user', 'session', 'account', 'verification', 'rateLimit'] as const;
   const properties = object.getProperties();
   let previous = -1;
   if (
@@ -29962,6 +29966,49 @@ function requestTaggedTemplateIsReviewedDrizzleSql(
 }
 
 /**
+ * SPEC §6.6 / §10.3: the compiler-bound table authorization policy admits an exact,
+ * no-substitution Drizzle `sql` template. This is declaration metadata rather than a request DB
+ * argument, so classify it by its complete source provenance: pristine direct package import,
+ * literal-only template, exact `authzPolicy` property, exact Kovo annotation, and the annotation's
+ * exact reviewed table-factory position. Local copies, interpolation, spreads, computed
+ * properties, detached config, and non-table consumers remain closed.
+ */
+function requestTaggedTemplateIsExactDrizzleAuthzPolicy(
+  tagged: import('ts-morph').TaggedTemplateExpression,
+): boolean {
+  if (
+    !Node.isNoSubstitutionTemplateLiteral(tagged.getTemplate()) ||
+    !requestExpressionIsDirectImportedExport(tagged.getTag(), 'drizzle-orm', 'sql') ||
+    !requestExactImportedCarrierIsPristine(tagged.getTag(), 'drizzle-orm', 'sql')
+  ) {
+    return false;
+  }
+  const property = tagged.getParentIfKind(SyntaxKind.PropertyAssignment);
+  const config = property?.getParentIfKind(SyntaxKind.ObjectLiteralExpression);
+  const kovoCall = config?.getParentIfKind(SyntaxKind.CallExpression);
+  const tableCall = kovoCall?.getParentIfKind(SyntaxKind.CallExpression);
+  return !!(
+    property &&
+    !Node.isComputedPropertyName(property.getNameNode()) &&
+    staticMemberName(property.getNameNode()) === 'authzPolicy' &&
+    property.getInitializer() &&
+    requestNodesAreSame(unwrapStaticExpression(property.getInitializer()!), tagged) &&
+    config &&
+    kovoCall &&
+    !kovoCall.getQuestionDotTokenNode() &&
+    kovoCall.getArguments().length === 1 &&
+    requestNodesAreSame(unwrapStaticExpression(kovoCall.getArguments()[0]!), config) &&
+    requestExpressionIsDirectImportedExport(kovoCall.getExpression(), '@kovojs/drizzle', 'kovo') &&
+    requestExactImportedCarrierIsPristine(kovoCall.getExpression(), '@kovojs/drizzle', 'kovo') &&
+    tableCall &&
+    !tableCall.getQuestionDotTokenNode() &&
+    tableCall.getArguments().length === 3 &&
+    requestNodesAreSame(unwrapStaticExpression(tableCall.getArguments()[2]!), kovoCall) &&
+    requestCallUsesExactReviewedDrizzleTableFactory(tableCall)
+  );
+}
+
+/**
  * SPEC §10.2 / §2: `staticSql` is Kovo's literal-only SQL constructor. Its tag invocation is
  * protocol-safe only when the source proves the exact, pristine framework export and the template
  * has no substitutions. The returned SQL carrier is not made wire-safe here; public-result analysis
@@ -30130,7 +30177,11 @@ function requestDrizzleColumnBuilderProtocolsArePristine(
         new Set(),
         0,
       );
-      if (imported?.exportName === 'sql' && !requestTaggedTemplateIsReviewedDrizzleSql(tagged)) {
+      if (
+        imported?.exportName === 'sql' &&
+        !requestTaggedTemplateIsReviewedDrizzleSql(tagged) &&
+        !requestTaggedTemplateIsExactDrizzleAuthzPolicy(tagged)
+      ) {
         pristine = false;
         break;
       }
@@ -30264,6 +30315,13 @@ function requestDrizzleKovoConfigValueIsClosed(
   const node = unwrapStaticExpression(expression);
   if (path.length === 2 && path[0] === 'ownerVia' && path[1] === 'parent') {
     return requestDrizzleOwnerViaParentTableIsClosed(node, seenTables);
+  }
+  if (
+    path.length === 1 &&
+    path[0] === 'authzPolicy' &&
+    Node.isTaggedTemplateExpression(node)
+  ) {
+    return requestTaggedTemplateIsExactDrizzleAuthzPolicy(node);
   }
   if (requestExpressionIsClosedStaticData(node)) return true;
   if (Node.isIdentifier(node)) {

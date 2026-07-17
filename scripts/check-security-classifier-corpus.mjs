@@ -860,6 +860,17 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
         ],
       },
       {
+        id: 'drizzle-authz-policy-and-generated-auth-schema-provenance',
+        file: 'packages/drizzle/src/trust-escapes-static.test.ts',
+        snippets: [
+          'keeps the stock rate-limit authorization declaration on exact table provenance',
+          'authzPolicy: sql`false`',
+          'authzPolicy: copiedSql`false`',
+          "[policyKey]: sql`false`",
+          'export const authSchema = { user, session, account, verification, rateLimit };',
+        ],
+      },
+      {
         id: 'generated-retained-key-unary-and-jsx-helper-closure',
         file: 'packages/drizzle/src/trust-escapes-static.test.ts',
         snippets: [
