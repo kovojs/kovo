@@ -7,6 +7,7 @@ import {
   s,
   session,
 } from '@kovojs/server';
+import type { MutationFormDefinition } from '@kovojs/server';
 import { trustedHtml } from '@kovojs/browser';
 import {
   authed,
@@ -247,7 +248,9 @@ export function renderReferenceLogoutForm(request: ReferenceRequest): string {
   })}<button type="submit">Sign out</button></form>`;
 }
 
-function renderReferenceMutationFormAttributes(mutation: { key: string }): string {
+function renderReferenceMutationFormAttributes<Request>(
+  mutation: MutationFormDefinition<string, Request>,
+): string {
   const attrs = mutationFormAttributes(mutation);
   return [
     `method="${attrs.method}"`,

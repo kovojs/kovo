@@ -402,12 +402,11 @@ export type MutationCsrfDeclaration<Request = unknown> =
  * carried on a {@link MutationFormAttributes} `mutation` field so the server JSX runtime
  * can inject the CSRF token into an enhanced form (SPEC §6.3/§9.1).
  */
-export interface MutationFormDefinition<Key extends string = string, Request = unknown> {
+export interface MutationFormDefinition<Key extends string = string, Request = never> {
   readonly [mutationFormDefinitionBrand]: 'kovo-mutation-form-definition';
   csrf?: CsrfOptions<Request> | false;
   enctype?: 'multipart/form-data';
   fileFields?: readonly string[];
-  input?: Schema<unknown>;
   key: Key;
 }
 

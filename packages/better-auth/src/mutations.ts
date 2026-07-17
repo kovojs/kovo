@@ -1,5 +1,5 @@
-import { mutation } from '@kovojs/server';
-import type { MutationDefinition } from '@kovojs/server';
+import type { MutationDefinition, MutationFormDefinition } from '@kovojs/server';
+import { createBetterAuthCredentialMutation } from '@kovojs/server/internal/better-auth';
 
 import {
   betterAuthCredentialMutationErrors,
@@ -70,7 +70,8 @@ export function betterAuthSignInEmailMutation<
   Request,
   BetterAuthCredentialMutationValue<'signed-in'>,
   GuardedRequest
-> & { key: Key } {
+> &
+  MutationFormDefinition<Key, Request> {
   const pinnedAuth = pinBetterAuthSignInEmail(auth);
   const defaultRedirectTo = redirectPath(
     betterAuthOwnDataOption<string>(
@@ -81,7 +82,7 @@ export function betterAuthSignInEmailMutation<
     '/',
   );
   const key = betterAuthOwnDataOption<Key>(options, 'key', 'Better Auth credential option key');
-  return mutation(key ?? ('auth/sign-in' as Key), {
+  return createBetterAuthCredentialMutation(key ?? ('auth/sign-in' as Key), {
     ...credentialMutationDefinitionOptions(
       'signInEmail',
       options as BetterAuthCredentialMutationInternalOptions<Key, Request, GuardedRequest>,
@@ -143,7 +144,8 @@ export function betterAuthSignUpEmailMutation<
   Request,
   BetterAuthCredentialMutationValue<'signed-up'>,
   GuardedRequest
-> & { key: Key } {
+> &
+  MutationFormDefinition<Key, Request> {
   const pinnedAuth = pinBetterAuthSignUpEmail(auth);
   const defaultRedirectTo = redirectPath(
     betterAuthOwnDataOption<string>(
@@ -154,7 +156,7 @@ export function betterAuthSignUpEmailMutation<
     '/',
   );
   const key = betterAuthOwnDataOption<Key>(options, 'key', 'Better Auth credential option key');
-  return mutation(key ?? ('auth/sign-up' as Key), {
+  return createBetterAuthCredentialMutation(key ?? ('auth/sign-up' as Key), {
     ...credentialMutationDefinitionOptions(
       'signUpEmail',
       options as BetterAuthCredentialMutationInternalOptions<Key, Request, GuardedRequest>,
@@ -217,7 +219,8 @@ export function betterAuthSignOutMutation<
   Request,
   BetterAuthCredentialMutationValue<'signed-out'>,
   GuardedRequest
-> & { key: Key } {
+> &
+  MutationFormDefinition<Key, Request> {
   const pinnedAuth = pinBetterAuthSignOut(auth);
   const defaultRedirectTo = redirectPath(
     betterAuthOwnDataOption<string>(
@@ -228,7 +231,7 @@ export function betterAuthSignOutMutation<
     '/login',
   );
   const key = betterAuthOwnDataOption<Key>(options, 'key', 'Better Auth credential option key');
-  return mutation(key ?? ('auth/sign-out' as Key), {
+  return createBetterAuthCredentialMutation(key ?? ('auth/sign-out' as Key), {
     ...credentialMutationDefinitionOptions(
       'signOut',
       options as BetterAuthCredentialMutationInternalOptions<Key, Request, GuardedRequest>,

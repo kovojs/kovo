@@ -1225,6 +1225,7 @@ function appendMutationDocumentRouteRoots(
         );
         for (let index = 0; index < properties.length; index += 1) {
           const property = properties[index]!;
+          if (ts.isSpreadAssignment(property)) continue;
           if (mutationDocumentPropertyName(property.name) !== 'page') continue;
           let implementation: MutationComponentImplementation | null = null;
           if (ts.isPropertyAssignment(property)) {
