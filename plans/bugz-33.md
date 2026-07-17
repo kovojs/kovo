@@ -15,7 +15,7 @@ rendering, Better Auth, and managed SQL.
 | Severity | Open | Closed |
 | -------- | ---: | -----: |
 | High     |    0 |     17 |
-| Medium   |    3 |     16 |
+| Medium   |    4 |     16 |
 | Low      |    0 |      4 |
 
 ## High
@@ -453,6 +453,18 @@ rendering, Better Auth, and managed SQL.
     content is removed across live and compiler paths (SPEC §5.2 rule 11).
   - **Evidence:** focused compiler/runtime/source-sink tests 135/135; the exact production plugin
     regression passed 6/6 across Chromium, Firefox, and WebKit; all 15 C13 corpora passed.
+
+- [ ] **M20 - Conflicting forwarded-header families could shadow a proxy-owned rate identity.**
+  - With `trustedProxy: true`, the built-in resolver preferred `X-Forwarded-For` over
+    `X-Real-IP` over RFC 7239 `Forwarded`. A proxy that authored only `Forwarded` but left an
+    incoming `X-Forwarded-For` header intact therefore let a remote client rotate the higher-priority
+    value while Kovo ignored the stable proxy-owned address (SPEC §9.5).
+  - **Evidence:** with one stable `Forwarded: for=203.0.113.80`, changing only attacker-supplied XFF
+    values changed `resolveRequestClientIp()` from `198.51.100.1` to `198.51.100.2`. The mandatory
+    global budget remained enforced, but the per-IP shell and guard buckets could be split.
+  - **Open:** reject multi-family client-IP authority as ambiguous, fall back to peer/global
+    admission, and prove the conflict path plus strict RFC 7239 malformed/duplicate-parameter
+    rejection in the C13 corpus.
 
 ## Low
 
