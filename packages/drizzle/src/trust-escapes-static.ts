@@ -16978,6 +16978,7 @@ function requestIdentifierIsProvablyOrdinaryMutationTarget(
   seen: Set<string>,
   depth: number,
 ): boolean | undefined {
+  if (requestIdentifierIsImportedMutableContainer(identifier)) return false;
   const symbol = requestIdentifierValueSymbol(identifier);
   if (!symbol) return undefined;
   if (

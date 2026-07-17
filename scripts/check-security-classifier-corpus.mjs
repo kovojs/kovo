@@ -307,6 +307,7 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
     marker: '@kovo-security-classifier-corpus kv424-request-process',
     testFiles: [
       'packages/drizzle/src/trust-escapes-static.test.ts',
+      'packages/drizzle/src/trust-escapes-static-temporal-integration.test.ts',
       'packages/drizzle/src/index.toctou-readonly.test.ts',
     ],
     verdictAnchors: [
@@ -733,6 +734,20 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
         ],
       },
       {
+        id: 'temporal-prototype-and-local-target-boundary',
+        file: 'packages/drizzle/src/trust-escapes-static-temporal-integration.test.ts',
+        snippets: [
+          'C2 rejects %s',
+          'Object.setPrototypeOf with a class',
+          '__proto__ assignment on a plain thenable',
+          'keeps an ordinary local destructured mutation helper open',
+          'keeps an unresolved %s reflective target closed',
+          "'validated input'",
+          "'Proxy'",
+          "'exported helper parameter'",
+        ],
+      },
+      {
         id: 'authored-session-provider-class-boundary',
         file: 'packages/drizzle/src/trust-escapes-static.test.ts',
         snippets: [
@@ -747,7 +762,10 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
   {
     id: 'kv424-request-global-member-lockdown',
     marker: '@kovo-security-classifier-corpus kv424-request-global-member-lockdown',
-    testFiles: ['packages/drizzle/src/trust-escapes-static-global-member-lockdown.test.ts'],
+    testFiles: [
+      'packages/drizzle/src/trust-escapes-static-global-member-lockdown.test.ts',
+      'packages/drizzle/src/trust-escapes-static-temporal-integration.test.ts',
+    ],
     verdictAnchors: [
       {
         id: 'exact-global-member-replacement-superset',
@@ -818,6 +836,19 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
           'keeps 120 distinct iterable and parameter-pattern safe misses bounded',
           'indexes 400/800 distinct exact-global helper safe misses with near-linear bounded scaling',
           'retainDistinctSafeMissCalls',
+        ],
+      },
+      {
+        id: 'class-static-exact-global-carrier-superset',
+        file: 'packages/drizzle/src/trust-escapes-static-temporal-integration.test.ts',
+        snippets: [
+          'C1 preserves Promise identity through a class %s',
+          'own static getter',
+          'inherited static field',
+          'Reflect.set static field',
+          'defineProperties static field',
+          'does not inherit a shadowed unsafe static %s',
+          'does not apply a later class-static %s to an earlier local write',
         ],
       },
     ],
