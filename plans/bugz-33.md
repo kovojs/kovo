@@ -15,7 +15,7 @@ rendering, Better Auth, and managed SQL.
 | Severity | Open | Closed |
 | -------- | ---: | -----: |
 | High     |    3 |     11 |
-| Medium   |    0 |     15 |
+| Medium   |    1 |     15 |
 | Low      |    0 |      3 |
 
 ## High
@@ -341,6 +341,19 @@ rendering, Better Auth, and managed SQL.
     false; explicit request aborts and socket closes remain unconditional (SPEC §9.5).
   - **Evidence:** real HTTP/1+h2 normal-body, client-destroy, and live/emitted complete/incomplete
     close matrix 101/101; server dist, wire, API, and VP gates passed.
+
+- [ ] **M16 - Windows CLI environment snapshots could retarget database commands by omission.**
+  - The supported CLI runner and its direct-dispatch fallback copied Windows environment entries
+    into case-sensitive null-prototype records. Mixed-case `KOVO_DATABASE_URL`,
+    `KOVO_ADMIN_DATABASE_URL`, `KOVO_RUNTIME_DATABASE_URL`, or `KOVO_DB_DRIVER` spellings that the
+    host accepts could therefore disappear from `kovo db` authority resolution, causing a command
+    to fail or select its local/default posture instead of the operator's intended database.
+  - **Evidence:** a platform-independent injected-source reproduction made every uppercase CLI
+    lookup miss mixed-case operator keys even though Windows resolves those names
+    case-insensitively (SPEC §6.6 operator-environment trust root).
+  - **Open:** give both command-entry snapshots Windows-equivalent lookup and collision refusal,
+    then prove the database URL/driver and security-posture reads without changing non-Windows
+    spelling semantics.
 
 ## Low
 
