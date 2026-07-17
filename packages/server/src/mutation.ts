@@ -5,7 +5,7 @@ import { requestPrincipalSnapshot } from './auth-principal.js';
 import { runExactlyOnceAdapter } from './exactly-once-continuation.js';
 import {
   forwardSetCookie,
-  serializeCookie,
+  serializeCookieForTrustedRequest,
   type CookieOptions,
   type ForwardSetCookiePosture,
 } from './cookies.js';
@@ -488,7 +488,12 @@ async function runMutationWithTrackedInput<
   // the raw single-string overload has been removed to prevent arbitrary attribute injection.
   function setCookie(name: string, value: string, options?: CookieOptions): void {
     assertBrowserStateMutationAllowed('context.setCookie()');
-    const cookie = serializeCookie(name, value, options);
+    const cookie = serializeCookieForTrustedRequest(
+      name,
+      value,
+      options,
+      isTrustedSecureRequest(lifecycleRequest),
+    );
     appendResponseHeader(responseHeaders, 'Set-Cookie', cookie);
   }
 

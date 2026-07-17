@@ -6,6 +6,7 @@ import {
   forwardSetCookie,
   normalizeForwardedSetCookie,
   serializeCookie,
+  serializeCookieForTrustedRequest,
   unsafeCookie,
   validateRawSetCookie,
 } from './cookies.js';
@@ -315,6 +316,19 @@ describe('cookie security floor (SF Phase 5, SPEC §6.6/§9.1)', () => {
     expect(serializeCookie('sid', 'abc', { class: 'session' })).toBe(
       'sid=abc; Path=/; HttpOnly; SameSite=Lax',
     );
+  });
+
+  it('forces Secure from trusted HTTPS posture without rewriting author cookie options', () => {
+    process.env.NODE_ENV = 'development';
+    expect(serializeCookieForTrustedRequest('sid', 'abc', { class: 'session' }, true)).toBe(
+      '__Host-sid=abc; Path=/; HttpOnly; Secure; SameSite=Lax',
+    );
+    expect(serializeCookieForTrustedRequest('sid', 'abc', { class: 'session' }, false)).toBe(
+      'sid=abc; Path=/; HttpOnly; SameSite=Lax',
+    );
+    expect(() =>
+      serializeCookieForTrustedRequest('sid', 'abc', { class: 'session', secure: false }, true),
+    ).toThrow(CookieDowngradeError);
   });
 
   // M1 (SPEC §6.6/§9.1, KV432): `productionSecure:false` is a credential Secure downgrade routed

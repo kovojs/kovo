@@ -433,6 +433,7 @@ function applyCookieFloor(
   name: string,
   cookieClass: CookieClass,
   options: CookieOptions,
+  secureRequest: boolean,
 ): {
   httpOnly: boolean | undefined;
   sameSite: 'lax' | 'none' | 'strict' | undefined;
@@ -454,13 +455,13 @@ function applyCookieFloor(
   }
 
   // The credential `Secure` floor is ENGAGED when any of: the runtime is production (`NODE_ENV`),
-  // the caller forces it (`productionSecure: true`), or the caller signals an HTTPS request
-  // (`secure: true`). SPEC §6.6/§9.1, bugz-3 L1: an HTTPS request forces `Secure` regardless of
-  // `NODE_ENV`, so the floor no longer depends SOLELY on a free-form env string. A dev-localhost
-  // carve-out remains: a plain-http request with no force engages no `Secure`, so localhost-http dev
-  // login keeps working (an unconditional `Secure` would also break non-localhost http dev).
+  // the caller forces it (`productionSecure: true`), the caller explicitly requests `Secure`, or
+  // the framework supplies a trusted HTTPS request signal. SPEC §6.6/§9.1, bugz-3 L1: an HTTPS
+  // request forces `Secure` regardless of `NODE_ENV`, so the floor no longer depends solely on a
+  // free-form env string. A dev-localhost carve-out remains: a plain-http request with no force
+  // engages no `Secure`, so localhost-http dev login keeps working.
   const secureForced = options.secure === true || options.productionSecure === true;
-  const secureRequired = secureForced || isProductionRuntime();
+  const secureRequired = secureRequest || secureForced || isProductionRuntime();
 
   // Detect explicit insecure downgrades of the credential floor.
   const httpOnlyDowngrade = options.httpOnly === false;
@@ -544,6 +545,32 @@ function applyCookieNamePrefix(
 }
 
 export function serializeCookie(name: string, value: string, options: CookieOptions = {}): string {
+  return serializeCookieWithRequestPosture(name, value, options, false);
+}
+
+/**
+ * Serialize a typed cookie with the framework adapter's trusted request-scheme posture.
+ *
+ * @internal First-party mutation bridge; not exported from the public server root.
+ */
+export function serializeCookieForTrustedRequest(
+  name: string,
+  value: string,
+  options: CookieOptions | undefined,
+  secureRequest: boolean,
+): string {
+  if (typeof secureRequest !== 'boolean') {
+    throw new TypeError('Trusted cookie request posture must be a boolean.');
+  }
+  return serializeCookieWithRequestPosture(name, value, options ?? {}, secureRequest);
+}
+
+function serializeCookieWithRequestPosture(
+  name: string,
+  value: string,
+  options: CookieOptions,
+  secureRequest: boolean,
+): string {
   const closedOptions = snapshotCookieOptions(options);
   assertCookieName(name);
   // SPEC §9.1.1:846: reject any control character (B4) before encoding; then
@@ -561,7 +588,7 @@ export function serializeCookie(name: string, value: string, options: CookieOpti
   // open on any unrecognized credential name like `access_token`/`jwt`/`bearer`).
   const cookieClass = closedOptions.class ?? 'session';
   const isCredential = isCredentialClass(cookieClass);
-  const floored = applyCookieFloor(name, cookieClass, closedOptions);
+  const floored = applyCookieFloor(name, cookieClass, closedOptions, secureRequest);
   const effectiveName = applyCookieNamePrefix(name, cookieClass, floored, closedOptions);
 
   const encodedValue = securityEncodeURIComponent(value);

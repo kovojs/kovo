@@ -733,6 +733,61 @@ describe('server node adapter', () => {
       await server.close();
     }
   });
+
+  // SPEC §6.6/§9.1: the adapter-proven HTTPS scheme, not NODE_ENV alone, owns the credential
+  // cookie Secure floor. The plain-http server is the localhost-development falsifying control.
+  it('forces the credential cookie floor from the trusted HTTPS adapter scheme', async () => {
+    const csrf = {
+      secret: 'node-https-cookie-floor-secret-0123456789',
+      sessionId: () => 'session-1',
+    };
+    const setSession = mutation('auth/set-session', {
+      input: s.object({ value: s.string() }),
+      handler(input, _request, context) {
+        context.setCookie('sid', input.value, { class: 'session' });
+        return input;
+      },
+    });
+    const handler = createRequestHandler(createApp({ csrf, mutations: [setSession] }));
+    const secureServer = await serveWithNode(
+      toNodeHandler(handler, { origin: 'https://app.example' }),
+    );
+    const plainServer = await serveWithNode(toNodeHandler(handler));
+    const body = formBody({
+      'kovo-csrf': csrfToken({}, csrf, { mutation: setSession }),
+      value: 'session-token',
+    });
+
+    try {
+      const secureResponse = await secureServer.fetch('/_m/auth/set-session', {
+        body,
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          Origin: 'https://app.example',
+        },
+        method: 'POST',
+      });
+      const plainResponse = await plainServer.fetch('/_m/auth/set-session', {
+        body,
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          Origin: plainServer.origin,
+        },
+        method: 'POST',
+      });
+
+      expect(secureResponse.status).toBe(303);
+      expect(secureResponse.headers['set-cookie']).toEqual([
+        '__Host-sid=session-token; Path=/; HttpOnly; Secure; SameSite=Lax',
+      ]);
+      expect(plainResponse.status).toBe(303);
+      expect(plainResponse.headers['set-cookie']).toEqual([
+        'sid=session-token; Path=/; HttpOnly; SameSite=Lax',
+      ]);
+    } finally {
+      await Promise.all([secureServer.close(), plainServer.close()]);
+    }
+  });
 });
 
 describe('toNodeHandler incomplete request transport closure', () => {
