@@ -15,7 +15,7 @@ rendering, Better Auth, and managed SQL.
 | Severity | Open | Closed |
 | -------- | ---: | -----: |
 | High     |    0 |      7 |
-| Medium   |    2 |      8 |
+| Medium   |    3 |      8 |
 | Low      |    0 |      3 |
 
 ## High
@@ -179,6 +179,17 @@ rendering, Better Auth, and managed SQL.
     of falling through to another HTTPS signal (SPEC §9.5).
   - **Evidence:** combined live/internal/emitted and security-consumer matrix 263/263; server dist,
     wire-output boundary, API-surface, and static/type gates passed.
+
+- [ ] **M11 - Scheme-bearing mutation targets could disagree across raw and WHATWG parsing.**
+  - The raw reserved-mutation classifier hand-split absolute-form targets, while request assembly
+    used the WHATWG URL parser. Node accepted extra authority slashes that made the first parser see
+    a non-reserved path and the second normalize to `/_m/...`, crossing the canonical mutation
+    boundary and enabling proxy/backend policy differentials.
+  - **Evidence:** real HTTP/1 `POST http:////attacker.test/_m/a/b` returned `303` and invoked the
+    mutation before the fix; live direct and emitted Node/Vercel parity controls failed too.
+  - **Open:** classify scheme-bearing raw targets with the exact parser used for request assembly,
+    reject every reserved mutation alias before dispatch, and preserve canonical origin-form
+    mutation behavior (SPEC §6.6/§9.2/§9.5).
 
 ## Low
 
