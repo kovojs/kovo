@@ -469,6 +469,42 @@ describe('createPostgresAppRuntimeDb', () => {
     }
   });
 
+  it('detects and revokes non-system replay privileges granted to app roles', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-replay-column-acl-'));
+    roots.push(dataDir);
+    const initial = createPostgresAppRuntimeDb({ dataDir, driver: 'pglite', schema });
+    await initial.ready;
+    await initial.close();
+
+    const weakened = new PGlite(dataDir);
+    await weakened.exec(
+      [
+        'GRANT SELECT (scope) ON _kovo_replay TO kovo_writer;',
+        'GRANT INSERT (surface, scope, idem, fingerprint, generation, state, admission_slot) ',
+        'ON _kovo_replay TO kovo_writer;',
+        'GRANT UPDATE (state, response_body, response_headers, response_status, committed_at) ',
+        'ON _kovo_replay TO kovo_writer;',
+        'GRANT TRUNCATE ON _kovo_replay TO kovo_writer;',
+        'GRANT TRIGGER ON _kovo_replay TO kovo_system',
+      ].join(' '),
+    );
+    await weakened.close();
+
+    await expect(
+      checkPostgresAppDbPosture({ dataDir, driver: 'pglite', schema }),
+    ).resolves.toMatchObject({
+      ok: false,
+      issues: expect.arrayContaining([expect.objectContaining({ code: 'KV433_REPLAY_STORE_ACL' })]),
+    });
+
+    const repaired = createPostgresAppRuntimeDb({ dataDir, driver: 'pglite', schema });
+    await repaired.ready;
+    await repaired.close();
+    await expect(
+      checkPostgresAppDbPosture({ dataDir, driver: 'pglite', schema }),
+    ).resolves.toMatchObject({ ok: true, issues: [] });
+  });
+
   it('does not dispatch a one-shot Array.join poison while committing owner RLS', async () => {
     const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-policy-primordial-'));
     roots.push(dataDir);

@@ -3051,9 +3051,16 @@ async function provisionPostgresFrameworkReplayStore(
 }
 
 interface PostgresReplayPrivilegeRow {
+  can_any_column_insert: boolean;
+  can_any_column_references: boolean;
+  can_any_column_select: boolean;
+  can_any_column_update: boolean;
   can_delete: boolean;
   can_insert: boolean;
+  can_references: boolean;
   can_select: boolean;
+  can_trigger: boolean;
+  can_truncate: boolean;
   can_update: boolean;
 }
 
@@ -3269,7 +3276,14 @@ async function postgresReplayStorePostureIssues(
           "SELECT has_table_privilege($1, 'public._kovo_replay', 'SELECT') AS can_select,",
           "has_table_privilege($1, 'public._kovo_replay', 'INSERT') AS can_insert,",
           "has_table_privilege($1, 'public._kovo_replay', 'UPDATE') AS can_update,",
-          "has_table_privilege($1, 'public._kovo_replay', 'DELETE') AS can_delete",
+          "has_table_privilege($1, 'public._kovo_replay', 'DELETE') AS can_delete,",
+          "has_table_privilege($1, 'public._kovo_replay', 'TRUNCATE') AS can_truncate,",
+          "has_table_privilege($1, 'public._kovo_replay', 'REFERENCES') AS can_references,",
+          "has_table_privilege($1, 'public._kovo_replay', 'TRIGGER') AS can_trigger,",
+          "has_any_column_privilege($1, 'public._kovo_replay', 'SELECT') AS can_any_column_select,",
+          "has_any_column_privilege($1, 'public._kovo_replay', 'INSERT') AS can_any_column_insert,",
+          "has_any_column_privilege($1, 'public._kovo_replay', 'UPDATE') AS can_any_column_update,",
+          "has_any_column_privilege($1, 'public._kovo_replay', 'REFERENCES') AS can_any_column_references",
         ],
         ' ',
       ),
@@ -3291,17 +3305,28 @@ async function postgresReplayStorePostureIssues(
       privilegeRow.can_select === true &&
       privilegeRow.can_insert === true &&
       privilegeRow.can_update === true &&
-      privilegeRow.can_delete === true;
+      privilegeRow.can_delete === true &&
+      privilegeRow.can_truncate === false &&
+      privilegeRow.can_references === false &&
+      privilegeRow.can_trigger === false &&
+      privilegeRow.can_any_column_references === false;
     const hasAny =
       privilegeRow.can_select === true ||
       privilegeRow.can_insert === true ||
       privilegeRow.can_update === true ||
-      privilegeRow.can_delete === true;
+      privilegeRow.can_delete === true ||
+      privilegeRow.can_truncate === true ||
+      privilegeRow.can_references === true ||
+      privilegeRow.can_trigger === true ||
+      privilegeRow.can_any_column_select === true ||
+      privilegeRow.can_any_column_insert === true ||
+      privilegeRow.can_any_column_update === true ||
+      privilegeRow.can_any_column_references === true;
     if ((expected.allow && !hasAll) || (!expected.allow && hasAny)) {
       appendPostgresDenseValue(issues, {
         code: 'KV433_REPLAY_STORE_ACL',
         detail: expected.allow
-          ? `${expected.role} must have SELECT, INSERT, UPDATE, DELETE on public._kovo_replay`
+          ? `${expected.role} must have exactly SELECT, INSERT, UPDATE, DELETE on public._kovo_replay`
           : `${expected.role} must not have effective access to public._kovo_replay`,
       });
     }
