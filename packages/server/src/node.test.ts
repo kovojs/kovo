@@ -122,6 +122,28 @@ describe('server node adapter', () => {
     expect(nodeRequestToWebRequest(request, { trustedProxy: true }).url).toBe(
       'https://app.example/account',
     );
+
+    const cleartextHttp2 = nodeRequest('/h2-cleartext');
+    cleartextHttp2.headers = {
+      ':authority': 'app.example',
+      ':scheme': 'https',
+    };
+    (cleartextHttp2.socket as Socket & { encrypted?: boolean }).encrypted = false;
+    expect(nodeRequestToWebRequest(cleartextHttp2).url).toBe('http://app.example/h2-cleartext');
+    expect(nodeRequestToWebRequest(cleartextHttp2, { trustedProxy: true }).url).toBe(
+      'https://app.example/h2-cleartext',
+    );
+
+    const encryptedHttp2 = nodeRequest('/h2-encrypted');
+    encryptedHttp2.headers = {
+      ':authority': 'app.example',
+      ':scheme': 'http',
+    };
+    (encryptedHttp2.socket as Socket & { encrypted?: boolean }).encrypted = true;
+    expect(nodeRequestToWebRequest(encryptedHttp2).url).toBe('https://app.example/h2-encrypted');
+    expect(nodeRequestToWebRequest(encryptedHttp2, { trustedProxy: true }).url).toBe(
+      'http://app.example/h2-encrypted',
+    );
   });
 
   it('threads the socket peer address into default pre-dispatch per-IP limiting', async () => {
@@ -1238,6 +1260,45 @@ describe('nodeRequestToWebRequest HTTP/2 pseudo-headers (E2)', () => {
         host: 'trusted.example',
         url: 'http://trusted.example/authority',
       });
+    } finally {
+      client.close();
+      await new Promise<void>((resolve, reject) =>
+        server.close((error) => (error ? reject(error) : resolve())),
+      );
+    }
+  });
+
+  it('does not treat a peer-supplied HTTP/2 :scheme as transport proof', async () => {
+    // SPEC §9.5 / RFC 9113 §8.3.1: :scheme is request-target control data, not authenticated
+    // transport state. A cleartext h2 peer can spell `https` itself, so the generic adapter must
+    // derive its scheme from the socket unless the operator explicitly enables trusted-proxy input.
+    const nodeHandler = toNodeHandler(async (request) => new Response(request.url));
+    const server = createHttp2Server((request, response) => {
+      void (nodeHandler as (q: unknown, s: unknown) => unknown)(request, response);
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const address = server.address() as AddressInfo;
+    const client = http2Connect(`http://127.0.0.1:${address.port}`);
+
+    try {
+      const body = await new Promise<string>((resolve, reject) => {
+        const request = client.request({
+          ':authority': 'app.example',
+          ':method': 'GET',
+          ':path': '/transport-proof',
+          ':scheme': 'https',
+        });
+        let received = '';
+        request.setEncoding('utf8');
+        request.on('data', (chunk: string) => {
+          received += chunk;
+        });
+        request.on('end', () => resolve(received));
+        request.on('error', reject);
+        request.end();
+      });
+
+      expect(body).toBe('http://app.example/transport-proof');
     } finally {
       client.close();
       await new Promise<void>((resolve, reject) =>

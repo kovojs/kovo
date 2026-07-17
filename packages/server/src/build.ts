@@ -1654,7 +1654,11 @@ function defaultOrigin(nodeRequest, options) {
   const forwardedProto = options.trustedProxy
     ? firstHeaderValue(nodeRequest.headers['x-forwarded-proto'])
     : undefined;
-  const pseudoScheme = firstHeaderValue(nodeRequest.headers[':scheme']);
+  // SPEC §9.5 / RFC 9113 §8.3.1: :scheme is peer-supplied request-target control data, not proof
+  // that this hop is encrypted. Accept it only with explicit trusted-proxy posture.
+  const pseudoScheme = options.trustedProxy
+    ? firstHeaderValue(nodeRequest.headers[':scheme'])
+    : undefined;
   const proto =
     forwardedProto ??
     pseudoScheme ??

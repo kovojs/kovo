@@ -4403,6 +4403,13 @@ function withNoStylesheetCallerFile<T>(callback: () => T): T {
 }
 
 async function expectEmittedAdapterParity(adapter: NodeAdapterModule): Promise<void> {
+  const untrustedLiveRequest = liveNodeRequestToWebRequest(adapterParityRequest());
+  const untrustedEmittedRequest = adapter.nodeRequestToWebRequest(adapterParityRequest());
+  // SPEC §9.5 / RFC 9113 §8.3.1: a peer controls `:scheme`; neither the live nor generated
+  // adapter may treat `https` on cleartext HTTP/2 as proof without trusted-proxy posture.
+  expect(untrustedLiveRequest.url).toBe('http://h2.example.test/from-url?x=1');
+  expect(untrustedEmittedRequest.url).toBe(untrustedLiveRequest.url);
+
   const liveRequest = liveNodeRequestToWebRequest(adapterParityRequest(), { trustedProxy: true });
   const emittedRequest = adapter.nodeRequestToWebRequest(adapterParityRequest(), {
     trustedProxy: true,

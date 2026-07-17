@@ -1394,7 +1394,13 @@ function defaultOrigin(request: PinnedNodeRequest, options: PinnedNodeHandlerOpt
   const forwardedProto = options.trustedProxy
     ? firstHeaderValue(request.headers['x-forwarded-proto'])
     : undefined;
-  const pseudoScheme = firstHeaderValue(request.headers[':scheme']);
+  // SPEC §9.5 / RFC 9113 §8.3.1: `:scheme` is request-target control data supplied by the peer,
+  // not transport authentication. A cleartext h2c peer can spell `https`, and a TLS peer can
+  // spell `http`. Only accept it under the same explicit trusted-proxy posture as forwarded
+  // scheme metadata; otherwise the socket is the adapter-owned security authority.
+  const pseudoScheme = options.trustedProxy
+    ? firstHeaderValue(request.headers[':scheme'])
+    : undefined;
   const proto = forwardedProto ?? pseudoScheme ?? (request.encrypted ? 'https' : 'http');
 
   return `${proto === 'https' ? 'https' : 'http'}://${host}`;

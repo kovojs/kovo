@@ -8,6 +8,21 @@ function nodeRequest(headers: Record<string, string | string[] | undefined>): In
 }
 
 describe('trusted request scheme provenance', () => {
+  it('does not promote peer-supplied HTTP/2 scheme control data without trusted-proxy posture', () => {
+    // SPEC §9.5: adapter-owned socket state remains authoritative absent explicit proxy trust.
+    const request = nodeRequest({ ':scheme': 'https' });
+
+    expect(trustedNodeRequestScheme(request)).toBe('http');
+    expect(trustedNodeRequestScheme(request, { trustedProxy: true })).toBe('https');
+  });
+
+  it('keeps an encrypted transport secure when peer control data spells http', () => {
+    const request = nodeRequest({ ':scheme': 'http' });
+    (request.socket as { encrypted?: boolean }).encrypted = true;
+
+    expect(trustedNodeRequestScheme(request)).toBe('https');
+  });
+
   it('keeps trusted proxy header authority under late Array.isArray poison', () => {
     const request = nodeRequest({ 'x-forwarded-proto': ['https', 'http'] });
     const originalIsArray = Array.isArray;

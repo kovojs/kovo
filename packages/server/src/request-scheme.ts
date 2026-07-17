@@ -41,9 +41,15 @@ export function trustedNodeRequestScheme(
   const forwardedProto = options.trustedProxy
     ? firstHeaderValue(request.headers['x-forwarded-proto'])
     : undefined;
+  // SPEC §9.5 / RFC 9113 §8.3.1: `:scheme` is peer-supplied request-target control data, not
+  // proof that this hop is encrypted. Treat it like other proxy-carried scheme metadata and
+  // accept it only when the operator explicitly opts into trusted-proxy posture.
+  const pseudoScheme = options.trustedProxy
+    ? firstHeaderValue(pseudoHeaders[':scheme'])
+    : undefined;
   const scheme =
     forwardedProto ??
-    firstHeaderValue(pseudoHeaders[':scheme']) ??
+    pseudoScheme ??
     ((request.socket as { encrypted?: boolean }).encrypted ? 'https' : 'http');
   return scheme === 'https' ? 'https' : 'http';
 }
