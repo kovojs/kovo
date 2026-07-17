@@ -4098,6 +4098,109 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
     }
   });
 
+  it('invalidates trusted roots through shallow iterable and local-helper carriers', () => {
+    const aliases = [
+      ['toSorted element', 'const alias = input.items.toSorted(() => 0)[0]!;'],
+      ['spread element', 'const alias = [...input.items][0]!;'],
+      ['Array.of spread element', 'const alias = Array.of(...input.items)[0]!;'],
+      ['filter plus spread element', 'const alias = [...input.items.filter(() => true)][0]!;'],
+      ['Set spread element', 'const alias = [...new Set(input.items)][0]!;'],
+      [
+        'destructured helper result',
+        `function identity<T>(value: T) { return [value] as const; }
+         const [alias] = identity(input.items[0]!);`,
+      ],
+    ] as const;
+
+    for (const [label, setup] of aliases) {
+      const facts = sinksFor(`
+        import { s, task } from '@kovojs/server';
+        task('root-shallow-alias/${label}', {
+          input: s.object({ items: s.array(s.object({ value: s.string() })) }),
+          run(input) {
+            class DeferredValue {
+              static then(resolve: (value: { ok: true }) => void) { resolve({ ok: true }); }
+            }
+            ${setup}
+            alias.value = DeferredValue as unknown as string;
+            return input.items[0]!.value;
+          },
+        });
+      `);
+      expect(
+        facts.some(
+          (fact) =>
+            fact.sink === 'request-handler.opaque-protocol' ||
+            fact.sink === 'request-handler.opaque-call',
+        ),
+        `${label}: ${JSON.stringify(facts)}`,
+      ).toBe(true);
+    }
+  });
+
+  it('keeps shallow carrier containers and fresh helper outputs out of the root alias set', () => {
+    const controls = [
+      `const copy = input.items.toSorted(() => 0); copy[0] = { value: 'replacement' };`,
+      `const copy = [...input.items]; copy[0] = { value: 'replacement' };`,
+      `const copy = Array.of(...input.items); copy[0] = { value: 'replacement' };`,
+      `const copy = [...input.items.filter(() => true)]; copy[0] = { value: 'replacement' };`,
+      `const copy = [...new Set(input.items)]; copy[0] = { value: 'replacement' };`,
+      `function identity<T>(value: T) { return [value] as const; }
+       const copy = identity(input.items[0]!); (copy as { value: string }[])[0] = { value: 'local' };`,
+      `function clone(value: { value: string }) { return [{ value: value.value }]; }
+       const [alias] = clone(input.items[0]!); alias.value = 'local';`,
+      `const local = [{ value: 'safe' }]; const alias = [...local][0]!; alias.value = 'local';`,
+    ] as const;
+
+    for (const statement of controls) {
+      const facts = sinksFor(`
+        import { s, task } from '@kovojs/server';
+        task('root-shallow-alias-safe', {
+          input: s.object({ items: s.array(s.object({ value: s.string() })) }),
+          run(input) {
+            ${statement}
+            return input.items[0]!.value;
+          },
+        });
+      `);
+      expect(facts, `${statement}: ${JSON.stringify(facts)}`).toEqual([]);
+    }
+  });
+
+  it('keeps opaque and cyclic local-helper carrier results fail closed', () => {
+    const opaque = sinksFor(`
+      import { s, task } from '@kovojs/server';
+      declare function opaque<T>(value: T): readonly [T];
+      task('root-shallow-alias-opaque', {
+        input: s.object({ items: s.array(s.object({ value: s.string() })) }),
+        run(input) {
+          const [alias] = opaque(input.items[0]!);
+          alias.value = 'changed';
+          return input.items[0]!.value;
+        },
+      });
+    `);
+    expect(opaque).toEqual(
+      expect.arrayContaining([expect.objectContaining({ sink: 'request-handler.opaque-call' })]),
+    );
+
+    const cyclic = sinksFor(`
+      import { s, task } from '@kovojs/server';
+      task('root-shallow-alias-cycle', {
+        input: s.object({ items: s.array(s.object({ value: s.string() })) }),
+        run(input) {
+          function identity<T>(value: T): readonly [T] {
+            return input.items.length > 1 ? [value] : identity(value);
+          }
+          const [alias] = identity(input.items[0]!);
+          alias.value = 'changed';
+          return input.items[0]!.value;
+        },
+      });
+    `);
+    expect(cyclic.length).toBeGreaterThan(0);
+  });
+
   it('keeps copied Array containers and fresh callback results out of the root alias set', () => {
     const controls = [
       [

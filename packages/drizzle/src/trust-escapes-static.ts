@@ -31870,6 +31870,44 @@ interface RequestRootRoleReferencePlan {
   readonly source: string;
 }
 
+function requestRootRoleMappedReferencePlan(
+  plan: RequestRootRoleReferencePlan,
+  transform: (kind: RequestRootRoleReferenceKind) => RequestRootRoleReferenceKind | undefined,
+): RequestRootRoleReferencePlan | undefined {
+  const fromDirect = plan.fromDirect ? transform(plan.fromDirect) : undefined;
+  const fromShallowArray = plan.fromShallowArray ? transform(plan.fromShallowArray) : undefined;
+  return fromDirect || fromShallowArray
+    ? {
+        ...(fromDirect ? { fromDirect } : {}),
+        ...(fromShallowArray ? { fromShallowArray } : {}),
+        source: plan.source,
+      }
+    : undefined;
+}
+
+function requestRootRoleComposeReferencePlans(
+  output: RequestRootRoleReferencePlan,
+  input: RequestRootRoleReferencePlan,
+): RequestRootRoleReferencePlan | undefined {
+  const project = (
+    kind: RequestRootRoleReferenceKind | undefined,
+  ): RequestRootRoleReferenceKind | undefined =>
+    kind === 'direct'
+      ? output.fromDirect
+      : kind === 'shallow-array'
+        ? output.fromShallowArray
+        : undefined;
+  const fromDirect = project(input.fromDirect);
+  const fromShallowArray = project(input.fromShallowArray);
+  return fromDirect || fromShallowArray
+    ? {
+        ...(fromDirect ? { fromDirect } : {}),
+        ...(fromShallowArray ? { fromShallowArray } : {}),
+        source: input.source,
+      }
+    : undefined;
+}
+
 function requestRootRoleArrayElementProjectionMayAlias(
   expression: import('ts-morph').ElementAccessExpression,
 ): boolean {
@@ -32143,6 +32181,49 @@ function requestRootRoleReferencePlans(
       );
     }
   }
+  if (Node.isArrayLiteralExpression(node)) {
+    return node.getElements().flatMap((element) => {
+      if (Node.isOmittedExpression(element)) return [];
+      const spread = Node.isSpreadElement(element);
+      const value = spread ? element.getExpression() : element;
+      return requestRootRoleReferencePlans(
+        value,
+        session,
+        callbackMemo,
+        new Set(seen),
+        depth + 1,
+      ).flatMap((plan) => {
+        const mapped = requestRootRoleMappedReferencePlan(plan, (kind) =>
+          spread || kind === 'direct' ? 'shallow-array' : undefined,
+        );
+        return mapped ? [mapped] : [];
+      });
+    });
+  }
+  if (Node.isNewExpression(node)) {
+    const constructor = unwrapStaticExpression(node.getExpression());
+    if (
+      !Node.isIdentifier(constructor) ||
+      constructor.getText() !== 'Set' ||
+      !unshadowedGlobalIdentifier(constructor, 'Set') ||
+      requestGlobalIntrinsicBindingIsMutated('Set', node.getSourceFile())
+    ) {
+      return [];
+    }
+    const iterable = node.getArguments()[0];
+    return iterable
+      ? requestRootRoleReferencePlans(
+          iterable,
+          session,
+          callbackMemo,
+          new Set(seen),
+          depth + 1,
+        ).flatMap((plan) => {
+          const mapped = requestRootRoleMappedReferencePlan(plan, () => 'shallow-array');
+          return mapped ? [mapped] : [];
+        })
+      : [];
+  }
   if (Node.isPropertyAccessExpression(node) || Node.isElementAccessExpression(node)) {
     const selectsArrayElement =
       Node.isElementAccessExpression(node) && requestRootRoleArrayElementProjectionMayAlias(node);
@@ -32152,24 +32233,82 @@ function requestRootRoleReferencePlans(
       callbackMemo,
       new Set(seen),
       depth + 1,
-    ).map((plan) => ({
-      ...(plan.fromDirect === undefined ? {} : { fromDirect: 'direct' as const }),
-      ...(plan.fromShallowArray === undefined || !selectsArrayElement
-        ? {}
-        : { fromShallowArray: 'direct' as const }),
-      source: plan.source,
-    }));
+    ).flatMap((plan) => {
+      const mapped = requestRootRoleMappedReferencePlan(plan, (kind) =>
+        selectsArrayElement ? 'direct' : kind === 'direct' ? 'direct' : undefined,
+      );
+      return mapped ? [mapped] : [];
+    });
   }
   if (!Node.isCallExpression(node)) return [];
   const callee = unwrapStaticExpression(node.getExpression());
   const receiver = requestCallReceiver(callee);
   const member = requestStaticCallMember(callee);
   if (
+    receiver &&
+    member === 'of' &&
+    requestGlobalNamespaceMemberIsPristine(receiver, 'Array', member)
+  ) {
+    return node.getArguments().flatMap((argument) => {
+      const spread = Node.isSpreadElement(argument);
+      const value = spread ? argument.getExpression() : argument;
+      return requestRootRoleReferencePlans(
+        value,
+        session,
+        callbackMemo,
+        new Set(seen),
+        depth + 1,
+      ).flatMap((plan) => {
+        const mapped = requestRootRoleMappedReferencePlan(plan, (kind) =>
+          spread || kind === 'direct' ? 'shallow-array' : undefined,
+        );
+        return mapped ? [mapped] : [];
+      });
+    });
+  }
+  if (
     !receiver ||
     !member ||
-    !['filter', 'find', 'findLast', 'flatMap', 'map', 'reduce'].includes(member)
+    !['filter', 'find', 'findLast', 'flatMap', 'map', 'reduce', 'toSorted'].includes(member)
   ) {
-    return [];
+    const invocation = requestNormalizedCall(node);
+    const args = invocation.args ?? node.getArguments();
+    const resolution = resolveRequestCallable(invocation.target, new Set(), 0, session);
+    if (resolution.opaqueModule !== undefined || resolution.callables.length === 0) return [];
+    const plans: RequestRootRoleReferencePlan[] = [];
+    for (const callable of resolution.callables) {
+      const parameters = requestCallableParameters(callable.declaration);
+      const parameterIndexes = new Map<string, number>();
+      for (const [index, parameter] of parameters.entries()) {
+        const name = parameter.getNameNode();
+        const symbol = Node.isIdentifier(name) ? name.getSymbol() : undefined;
+        if (symbol) parameterIndexes.set(requestSymbolKey(symbol), index);
+      }
+      for (const output of requestWireOutputExpressions(callable)) {
+        for (const outputPlan of requestRootRoleReferencePlans(
+          output,
+          session,
+          callbackMemo,
+          new Set(seen),
+          depth + 1,
+        )) {
+          const index = parameterIndexes.get(outputPlan.source);
+          const argument = index === undefined ? undefined : args[index];
+          if (!argument) continue;
+          for (const inputPlan of requestRootRoleReferencePlans(
+            Node.isSpreadElement(argument) ? argument.getExpression() : argument,
+            session,
+            callbackMemo,
+            new Set(seen),
+            depth + 1,
+          )) {
+            const composed = requestRootRoleComposeReferencePlans(outputPlan, inputPlan);
+            if (composed) plans.push(composed);
+          }
+        }
+      }
+    }
+    return plans;
   }
   const receiverPlans = requestRootRoleReferencePlans(
     receiver,
@@ -32185,7 +32324,7 @@ function requestRootRoleReferencePlans(
       source: plan.source,
     }));
   }
-  if (member === 'filter') {
+  if (member === 'filter' || member === 'toSorted') {
     return receiverPlans.map((plan) => ({
       ...(plan.fromDirect === undefined ? {} : { fromDirect: 'shallow-array' as const }),
       ...(plan.fromShallowArray === undefined
