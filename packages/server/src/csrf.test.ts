@@ -818,12 +818,26 @@ describe('CSRF Origin / Sec-Fetch-Site floor', () => {
     }
   });
 
-  it('classifies POST through its captured uppercase control', () => {
-    const request = post({ origin: 'https://evil.example.test' });
+  it.each(['POST', 'PUT', 'PATCH', 'DELETE', 'MKCOL', 'PURGE', 'purge'])(
+    'classifies %s as unsafe through the shared endpoint method classifier',
+    (method) => {
+      const request = new Request('https://shop.example.test/_m/cart/add', {
+        headers: { origin: 'https://evil.example.test' },
+        method,
+      });
+      expect(verifyCsrfRequestOriginFloor(request, csrf)).toBe(false);
+    },
+  );
+
+  it('keeps custom-method classification pinned after String.prototype.toUpperCase changes', () => {
+    const request = new Request('https://shop.example.test/_m/cart/add', {
+      headers: { origin: 'https://evil.example.test' },
+      method: 'PURGE',
+    });
     const originalToUpperCase = String.prototype.toUpperCase;
     try {
       String.prototype.toUpperCase = function () {
-        return String(this) === 'POST' ? 'GET' : originalToUpperCase.call(this);
+        return String(this) === 'PURGE' ? 'GET' : originalToUpperCase.call(this);
       };
       expect(verifyCsrfRequestOriginFloor(request, csrf)).toBe(false);
     } finally {
@@ -869,13 +883,16 @@ describe('CSRF Origin / Sec-Fetch-Site floor', () => {
     ).toBe(true);
   });
 
-  it('does not gate safe verbs', () => {
-    const get = new Request('https://shop.example.test/_q/cart', {
-      headers: { 'sec-fetch-site': 'cross-site' },
-      method: 'GET',
-    });
-    expect(verifyCsrfRequestOriginFloor(get, csrf)).toBe(true);
-  });
+  it.each(['GET', 'HEAD', 'OPTIONS', 'get'])(
+    'does not gate the complete safe-method set (%s)',
+    (method) => {
+      const request = new Request('https://shop.example.test/_q/cart', {
+        headers: { 'sec-fetch-site': 'cross-site' },
+        method,
+      });
+      expect(verifyCsrfRequestOriginFloor(request, csrf)).toBe(true);
+    },
+  );
 
   it('does not gate plain-object request shapes (direct runMutation API)', () => {
     expect(verifyCsrfRequestOriginFloor({ session: { id: 's1' } }, csrf)).toBe(true);

@@ -645,6 +645,37 @@ describe('server app matched dispatch boundary', () => {
     expect(handlerCalls).toBe(1);
   });
 
+  it.each([undefined, 'https://evil.example.test'])(
+    'rejects a valid-token custom endpoint request whose Origin is %s',
+    async (origin) => {
+      let handlerCalls = 0;
+      const purge = endpoint('/cache/product', {
+        handler() {
+          handlerCalls += 1;
+          return new Response('purged');
+        },
+        method: 'PURGE',
+        reason: 'custom unsafe-method CSRF origin-floor proof',
+        response: rawTextResponse,
+      });
+      const csrf = { secret: ENDPOINT_CSRF_SECRET, sessionId: () => 's1' };
+      const app = createApp({ csrf, endpoints: [purge] });
+      const headers = new Headers();
+      if (origin !== undefined) headers.set('Origin', origin);
+      const request = new Request('https://shop.example.test/cache/product', {
+        body: new URLSearchParams({ 'kovo-csrf': csrfToken({} as Request, csrf) }),
+        headers,
+        method: 'PURGE',
+      });
+
+      const response = await dispatchMatchedAppRequest(matchedAppRequest(app, request));
+
+      expect(response.status).toBe(422);
+      await expect(response.text()).resolves.toBe('CSRF');
+      expect(handlerCalls).toBe(0);
+    },
+  );
+
   it('L15: accepts a JSON endpoint POST whose valid kovo-csrf token rides in the JSON body (SPEC §9.1)', async () => {
     // bugz-3 L15: default endpoint CSRF read the token only via formData(), which throws on
     // an application/json body, so a legitimate JSON endpoint POST (SPEC.md §9.1 routes

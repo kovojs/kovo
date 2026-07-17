@@ -22,6 +22,7 @@ import {
   pinnedRequestCarrierOwnData,
   requestForAuthorityNeutralMetadata,
 } from './request-carrier.js';
+import { isSafeEndpointMethod } from './request-method.js';
 import {
   createWitnessWeakMap,
   witnessCreateNullRecord,
@@ -55,13 +56,11 @@ const NativeURL = globalThis.URL;
 const nativeRequestMethod = witnessGetOwnPropertyDescriptor(Request.prototype, 'method')?.get;
 const nativeRequestUrl = witnessGetOwnPropertyDescriptor(Request.prototype, 'url')?.get;
 const nativeUrlOrigin = witnessGetOwnPropertyDescriptor(NativeURL.prototype, 'origin')?.get;
-const nativeStringToUpperCase = String.prototype.toUpperCase;
 const pinnedAnonymousLiveTargetBindings = createWitnessWeakMap<object, string>();
 if (
   typeof nativeRequestMethod !== 'function' ||
   typeof nativeRequestUrl !== 'function' ||
   typeof nativeUrlOrigin !== 'function' ||
-  witnessReflectApply(nativeStringToUpperCase, 'post', []) !== 'POST' ||
   witnessReflectApply(nativeUrlOrigin, new NativeURL('https://kovo.invalid/path'), []) !==
     'https://kovo.invalid'
 ) {
@@ -456,18 +455,8 @@ export function renderMutationIdemField(): string {
 }
 
 /**
- * The unsafe HTTP verbs (state-changing) that the CSRF floor applies to (SPEC §6.6/§9.1). Safe verbs
- * (GET/HEAD/OPTIONS/TRACE) are not gated by the header floor.
- */
-function isUnsafeVerb(method: string | undefined): boolean {
-  if (method === undefined) return false;
-  const upper = witnessReflectApply<string>(nativeStringToUpperCase, method, []);
-  return upper === 'POST' || upper === 'PUT' || upper === 'PATCH' || upper === 'DELETE';
-}
-
-/**
  * Header-based CSRF floor (SPEC §6.6/§9.1): a fail-closed second floor that runs BEFORE the
- * synchronizer-token check on unsafe-verb requests, catching up to SvelteKit/Remix/Rails which all
+ * synchronizer-token check on unsafe-method requests, catching up to SvelteKit/Remix/Rails which all
  * ship an Origin/`Sec-Fetch-Site` floor in addition to a token.
  *
  * Decision (runtime defense-in-depth, sound at this sink):
@@ -488,7 +477,9 @@ export function verifyCsrfRequestOriginFloor<RawRequest>(
   if (!isNativeRequest(request)) return true;
   const nativeRequest = requestForAuthorityNeutralMetadata(request);
   const requestMethod = witnessReflectApply<string>(nativeRequestMethod!, nativeRequest, []);
-  if (!isUnsafeVerb(requestMethod)) return true;
+  // SPEC §9.1: GET/HEAD/OPTIONS are the complete safe set. Reuse endpoint dispatch's classifier so
+  // extension methods cannot require a token while silently skipping the independent Origin floor.
+  if (isSafeEndpointMethod(requestMethod)) return true;
 
   const originInput = readUntrustedRequestHeader(nativeRequest, 'origin');
 
