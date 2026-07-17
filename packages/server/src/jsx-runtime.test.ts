@@ -1165,6 +1165,72 @@ describe('server jsx runtime', () => {
     ).toBe('<meta httpEquiv="ReFrEsH">');
   });
 
+  it('classifies meta refresh from the browser-effective first ASCII-case-folded attribute', () => {
+    const target = '0; url=https://attacker.example/phish';
+
+    expect(
+      html(
+        jsx('meta', {
+          'HTTP-EQUIV': 'refresh',
+          'http-equiv': 'not-refresh',
+          content: target,
+        }),
+      ),
+    ).toBe('<meta HTTP-EQUIV="refresh" http-equiv="not-refresh">');
+    expect(
+      html(
+        jsx('meta', {
+          'http-equiv': 'not-refresh',
+          'HTTP-EQUIV': 'refresh',
+          content: target,
+        }),
+      ),
+    ).toBe(
+      '<meta http-equiv="not-refresh" HTTP-EQUIV="refresh" content="0; url=https://attacker.example/phish">',
+    );
+    expect(
+      html(
+        jsx('meta', {
+          'HTTP-EQUIV': undefined,
+          'http-equiv': 'refresh',
+          content: target,
+        }),
+      ),
+    ).toBe('<meta http-equiv="refresh">');
+    expect(
+      html(
+        jsx('meta', {
+          'HTTP-EQUIV': false,
+          'http-equiv': 'refresh',
+          content: target,
+        }),
+      ),
+    ).toBe('<meta http-equiv="refresh">');
+    expect(
+      html(
+        jsx('meta', {
+          'HTTP-EQUIV': true,
+          'http-equiv': 'refresh',
+          content: 'ordinary',
+        }),
+      ),
+    ).toBe('<meta HTTP-EQUIV http-equiv="refresh" content="ordinary">');
+    expect(html(jsx('meta', { 'HtTp-EqUiV': 'ReFrEsH', CONTENT: target }))).toBe(
+      '<meta HtTp-EqUiV="ReFrEsH">',
+    );
+    expect(
+      html(
+        jsx('meta', {
+          ...kovoSafeJsxSpread({
+            'HTTP-EQUIV': 'refresh',
+            'http-equiv': 'not-refresh',
+            content: target,
+          }),
+        }),
+      ),
+    ).toBe('<meta HTTP-EQUIV="refresh" http-equiv="not-refresh">');
+  });
+
   it('escapes synthetic future attributes by default', () => {
     expect(
       html(

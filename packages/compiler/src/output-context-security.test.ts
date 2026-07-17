@@ -570,6 +570,24 @@ export const DynamicControlSpread = component({
     expect(serverSource).toMatch(/on:click="\/c\/.*#DynamicControlSpread\$button_click"/);
   });
 
+  it('keeps dynamic meta attributes behind the runtime pair sink through render equivalence', () => {
+    const result = compileComponentModule({
+      fileName: 'persisted-meta.tsx',
+      source: `
+export const PersistedMeta = component({
+  queries: { page: pageQuery },
+  render: ({ page }) => <meta {...page.remoteMeta} />,
+});
+`,
+    });
+    const serverSource = result.files.find((file) => file.kind === 'server')?.source ?? '';
+
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV236')).toEqual([]);
+    expect(result.loweredSource).toContain('{...kovoSafeJsxSpread(page.remoteMeta)}');
+    expect(serverSource).toContain('{...kovoSafeJsxSpread(page.remoteMeta)}');
+    expect(result.renderEquivalenceChecks.every(({ ok }) => ok)).toBe(true);
+  });
+
   it.each([
     {
       name: 'pure nested spread',

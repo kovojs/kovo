@@ -409,6 +409,15 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
         snippets: ["['redirect URL', 'reconstruct']"],
       },
       {
+        id: 'meta-refresh-first-attribute-pair',
+        file: 'packages/core/src/internal/source-sink-registry.test.ts',
+        snippets: [
+          'keeps browser-effective meta refresh pairing in the C13 HTML sink corpus',
+          'server-meta-refresh-first-attribute-pair',
+          'ASCII-case duplicate meta refresh navigation',
+        ],
+      },
+      {
         id: 'outbound-egress-mechanism',
         file: 'packages/core/src/internal/source-sink-registry.test.ts',
         snippets: ["['outbound egress request', 'own']"],
@@ -1545,6 +1554,16 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
           'skips an undefined exact-key value before applying case-folded duplicate semantics',
           'rejects trusted raw HTML where parsing derives a submitted text value',
           'record&#13;1',
+        ],
+      },
+      {
+        id: 'runtime-meta-refresh-first-attribute-verdict',
+        file: 'packages/server/src/jsx-runtime.test.ts',
+        snippets: [
+          'classifies meta refresh from the browser-effective first ASCII-case-folded attribute',
+          "'HTTP-EQUIV': 'refresh'",
+          "'http-equiv': 'not-refresh'",
+          'kovoSafeJsxSpread',
         ],
       },
       {

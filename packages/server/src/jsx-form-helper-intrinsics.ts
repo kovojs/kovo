@@ -358,6 +358,19 @@ export function formHelperStringToLowerCase(value: string): string {
   return apply(nativeStringToLowerCase, value, []);
 }
 
+export function formHelperAsciiCaseInsensitiveEqual(left: string, right: string): boolean {
+  assertJsxFormHelperIntrinsics();
+  if (left.length !== right.length) return false;
+  for (let index = 0; index < left.length; index += 1) {
+    const leftCode = apply<number>(nativeStringCharCodeAt, left, [index]);
+    const rightCode = apply<number>(nativeStringCharCodeAt, right, [index]);
+    const foldedLeft = leftCode >= 0x41 && leftCode <= 0x5a ? leftCode + 0x20 : leftCode;
+    const foldedRight = rightCode >= 0x41 && rightCode <= 0x5a ? rightCode + 0x20 : rightCode;
+    if (foldedLeft !== foldedRight) return false;
+  }
+  return true;
+}
+
 export function formHelperStringSlice(value: string, start: number, end?: number): string {
   assertJsxFormHelperIntrinsics();
   return end === undefined

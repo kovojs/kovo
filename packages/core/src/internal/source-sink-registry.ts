@@ -151,7 +151,8 @@ const sourceSinkInventory: readonly SourceSinkInventoryEntry[] = [
     escapeHatch: 'trustedHtml|trustedUrl',
     firstParser: 'tsx-lowered-output-context',
     guard: `contextual-encoding+url-scheme-allowlist:${SAFE_URL_SCHEMES.join('|')}`,
-    runtimeGuard: 'server-renderer+browser-output-helpers-drop-unsafe-url-attrs',
+    runtimeGuard:
+      'server-renderer+browser-output-helpers-drop-unsafe-url-attrs+server-meta-refresh-first-attribute-pair',
     schema: [
       `compiler-output-context-facts:urlAttrs=${URL_ATTRIBUTE_NAMES.join('|')}`,
       'JSX-text',
@@ -165,6 +166,7 @@ const sourceSinkInventory: readonly SourceSinkInventoryEntry[] = [
       'kovo-text',
       'srcdoc',
       'event-handler-attributes',
+      'meta-refresh-first-http-equiv-pair',
       'live-property-writes',
       'template-stamps',
       'rich-text-registry',
@@ -173,7 +175,12 @@ const sourceSinkInventory: readonly SourceSinkInventoryEntry[] = [
     source:
       'server-render|client-query|client-state|template-stamp|data-stream-text|streamed-model-output|compiler-read-app-source|db-user-text',
     specAnchor: 'SPEC.md#4.8;SPEC.md#5.2',
-    testEvidence: [existingEvidence.outputContext, existingEvidence.browserOutput],
+    testEvidence: [
+      existingEvidence.outputContext,
+      existingEvidence.browserOutput,
+      'packages/server/src/jsx-runtime.test.ts',
+      'tests/integration/specs/meta-refresh-sink.spec.ts',
+    ],
     trust: 'untrusted-unless-branded',
   },
   {
@@ -395,6 +402,8 @@ const redCorpus: readonly SourceSinkCorpusEntry[] = [
     negativeTestEvidence: [
       'packages/compiler/src/output-context-security.test.ts',
       'packages/browser/src/mutation-response-dom.browser.test.ts',
+      'packages/server/src/jsx-runtime.test.ts',
+      'tests/integration/specs/meta-refresh-sink.spec.ts',
     ],
     payloads: [
       '<script>',
@@ -404,6 +413,7 @@ const redCorpus: readonly SourceSinkCorpusEntry[] = [
       'raw JSON breakout',
       'srcdoc',
       'event attributes',
+      'ASCII-case duplicate meta refresh navigation',
       'SVG payload',
       'nested fragment payload',
       'streamed model text',

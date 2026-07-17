@@ -128,13 +128,30 @@ describe('boundary crossing sink inventory', () => {
       'packages/server/src/static-export-response.test.ts',
     );
     expect(headerInventory?.runtimeGuard).toContain('static-export-browser-state-rejection');
-    expect(headerInventory?.runtimeGuard).toContain(
-      'adapter-browser-state-private-no-store-floor',
-    );
+    expect(headerInventory?.runtimeGuard).toContain('adapter-browser-state-private-no-store-floor');
     expect(headerCorpus?.payloads).toContain(
       'public cache policy with Set-Cookie or Clear-Site-Data',
     );
     expect(boundary?.mechanismDetail).toContain('browser-state private/no-store floor');
     expect(boundary?.mechanismDetail).toContain('static export rejects');
+  });
+
+  it('keeps browser-effective meta refresh pairing in the C13 HTML sink corpus', () => {
+    const htmlInventory = frameworkSourceSinkInventory().find(
+      (entry) => entry.sink === 'html.dom.output',
+    );
+    const htmlCorpus = sourceSinkRedCorpus().find((entry) => entry.family === 'html.dom.output');
+
+    expect(htmlInventory?.runtimeGuard).toContain('server-meta-refresh-first-attribute-pair');
+    expect(htmlInventory?.schema).toContain('meta-refresh-first-http-equiv-pair');
+    expect(htmlInventory?.testEvidence).toContain('packages/server/src/jsx-runtime.test.ts');
+    expect(htmlInventory?.testEvidence).toContain(
+      'tests/integration/specs/meta-refresh-sink.spec.ts',
+    );
+    expect(htmlCorpus?.payloads).toContain('ASCII-case duplicate meta refresh navigation');
+    expect(htmlCorpus?.negativeTestEvidence).toContain('packages/server/src/jsx-runtime.test.ts');
+    expect(htmlCorpus?.negativeTestEvidence).toContain(
+      'tests/integration/specs/meta-refresh-sink.spec.ts',
+    );
   });
 });

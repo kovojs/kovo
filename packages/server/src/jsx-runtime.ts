@@ -53,6 +53,7 @@ import {
   structuredMutationFormHelperOperation,
 } from './jsx-form-helper.js';
 import {
+  formHelperAsciiCaseInsensitiveEqual,
   formHelperCreateRecord,
   formHelperDefineArrayValue,
   formHelperDefineDataProperty,
@@ -474,7 +475,9 @@ function firstRenderedAttributeValue(props: JsxProps, expectedName: string): str
   const names = formHelperObjectKeys(props);
   for (let index = 0; index < names.length; index += 1) {
     const name = formHelperOwnDataValue(names, index);
-    if (typeof name !== 'string' || formHelperStringToLowerCase(name) !== expectedName) continue;
+    if (typeof name !== 'string' || !formHelperAsciiCaseInsensitiveEqual(name, expectedName)) {
+      continue;
+    }
     const value = formHelperOwnDataValue(props, name);
     if (value === false || value === null || value === undefined) continue;
     if (isKovoTrustedUrl(value)) continue;
@@ -892,13 +895,19 @@ function renderContextualAttributeValue(
 }
 
 function isMetaRefreshContentAttribute(type: string, props: JsxProps, name: string): boolean {
-  return (
-    formHelperStringToLowerCase(type) === 'meta' &&
-    formHelperStringToLowerCase(name) === 'content' &&
-    formHelperStringToLowerCase(
-      attributeText('http-equiv', props['http-equiv'] ?? props['httpEquiv']),
-    ) === 'refresh'
-  );
+  if (
+    !formHelperAsciiCaseInsensitiveEqual(type, 'meta') ||
+    !formHelperAsciiCaseInsensitiveEqual(name, 'content')
+  ) {
+    return false;
+  }
+  const browserHttpEquiv = firstRenderedAttributeValue(props, 'http-equiv');
+  // Keep the long-standing JSX `httpEquiv` guard when no browser-recognized hyphenated attribute
+  // is emitted. Once a real `http-equiv` exists, its first rendered ASCII-case duplicate owns the
+  // browser decision and a later exact/camel spelling cannot override it (SPEC §5.2 rule 11).
+  const effectiveHttpEquiv =
+    browserHttpEquiv ?? attributeText('httpEquiv', formHelperOwnDataValue(props, 'httpEquiv'));
+  return formHelperAsciiCaseInsensitiveEqual(effectiveHttpEquiv, 'refresh');
 }
 
 function runtimeElementSinkEvent(
